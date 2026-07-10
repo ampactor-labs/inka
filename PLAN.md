@@ -700,6 +700,45 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > time in project history, dying at the FIRST FN BODY: indirect call type
 > mismatch in emit_const → emit_float_const.**
 >
+> **▶▶▶ THE SUMMIT (2026-07-10): m4 EXISTS, ASSEMBLES (1.88MB), diff(m3,m4) =
+> 2,715 lines of 409,629 (99.3% fixpoint convergence) — and the BATTERY THROUGH
+> m3 IS 8/8 RUNGS + 51/51 MICROS (was 0/47): the correctness half of
+> first-light is GREEN for the first time in project history.** Three roots in
+> one arc, each probe-pinned then one-line-or-one-fold fixed:
+> **(1) emit_float_const's f: Float pin (defdc91)** — the forward-ref param
+> floor; the "13-fn f64-param-drop" was 12/13 my census regex's dot-blindness
+> (`local_wat_name`'s `$f.f64` mangle — every sig-parsing regex needs `[\w.]+`;
+> verify the INSTRUMENT before the claim).
+> **(2) variant allocation = the width-summed fold (328acb2)** — LMakeVariant
+> alloc'd `4 + n*4` while its store fold writes f64 payloads as 8 aligned inline
+> bytes: every f64-payload variant under-allocated, the next alloc clobbered the
+> payload's high half, and EVERY FLOAT LITERAL m3 EVER LEXED collapsed to ~0.0
+> (probe chain: `2.5` → `(f64.const 0.0)`; parse_float's input byte-perfect;
+> int_part/dot_pos/frac/base ALL correct inside parse_float_body — the value
+> died between mk_tok and push_tok's next alloc). Size is now
+> `product_byte_size_acc(fields, 0, n, 4)` — one fold, four readers (store,
+> size, variant_payload_offset, eq/match-bind). With it, m4 generation
+> COMPLETED end-to-end for the first time (exit 0, 403k lines).
+> **(3) interpolation assembles in source order (4486a44)** —
+> lower_string_interpolation folded from `head = last(fragments)`, so every
+> baked str_concat tree put the FINAL fragment first ("$ft_{codes}_{rc}" →
+> `d$ft_iiiid_`, m4's first assembly wall). The seed's own $lower_make_string
+> is source-ordered, so m2's strings were always fine and the wheel's copy was
+> never order-gated (the fold crucibles — sums, lengths — are order-invisible;
+> mn-interp-order=10 now gates it byte-exactly). This ONE fix collapsed the m4
+> diff 204,293 → 2,715 and dissolved Face B AND Face C (rw_const_fold was
+> downstream of the rotated/corrupted values, never its own face).
+> **THE REMAINING ROAD TO diff-EMPTY: 284 fns, ONE class** — `str_eq` vs
+> `list_eq` vs `i32.eq` dispatch flips: sites where m2's and m3's inference of
+> the same wheel resolve `==`'s operand differently (the ~26k-unresolved-handle
+> population making different proof-becomes-dispatch calls per generation).
+> This is `Hβ.infer.order-free-live-row`'s endgame with its census in hand:
+> when the two generations' inference AGREES, the fixpoint closes. Remaining
+> named residue: the 5 field-offset floors (render_audit ×4), handler
+> pre-registration (E_MissingVariable 139), trailing-zero trim,
+> int-splice-empty. first-light = diff(m3,m4) empty AND battery green through
+> m3 — the second half is DONE; the first is 2,715 lines away.**
+
 > **THE m4 FACE WAS ONE FN — emit_float_const's forward-ref param floor (the
 > "13-fn census" REFUTED: 12 of 13 were the census REGEX's dot-blindness).**
 > `\(param \$\w+` stops at the `.` in the two-width mangle (`$f.f64`), so

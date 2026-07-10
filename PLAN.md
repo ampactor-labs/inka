@@ -700,28 +700,29 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > time in project history, dying at the FIRST FN BODY: indirect call type
 > mismatch in emit_const → emit_float_const.**
 >
-> **THE STANDING m4 FACE — m3's definition emit DROPS f64-width PARAMS (13-fn
-> census, exact).** m3 defines `$emit_float_const (param i32 i32 i32)` while its
-> own callsite uses `$ft_idi_i` (i32 f64 i32 → i32) — the mismatch. The
-> param-width census (python over both wats' `(func (param…))` sigs): 13 fns
-> disagree and EVERY disagreement is m3 missing exactly its f64 params —
-> float_to_str m2=(i32,f64)/m3=(i32); scan_frac_part lost both f64s, kept all
-> four i32s; float_is_nan drops f despite its authored `f: Float` pin. The
-> wheel's param emitter produces f64 fine when M2 runs it (every float micro
-> through m2 green) — m3's OWN COMPILED COPY drops the RF64 arm: the
-> m2-works/m3-diverges recursion one level up, likely the Repr-ADT match
-> dispatch inside m3 (Face-B-adjacent — m3's small-ADT match behavior). FAST
-> REPRO: head-15000 of the wheel through m3 traps identically in ~1 min (the
-> earlier "truncation ghost" was THIS face — a truncated input stays under 2GB,
-> so the exhaustion never masked it). NEXT: extract m3's $emit_param_type (and
-> walk_locals' param walk) vs m2's; the divergence in its Repr match is the
-> cut.** m2-gen E_MissingVariable 139, top = HANDLER decl names = the
-> pre_register HandlerDeclStmt gap. SEQUENCE: the f64-param-drop (the m4
-> blocker, fast repro) → Face B (emitted-text fragment glue, "i32call_7" —
-> plausibly the SAME small-ADT dispatch family) → Face C (rw_const_fold on +rt)
-> → the 5 field-offset floors (render_audit ×4) → handler pre-registration →
-> trailing-zero trim. first-light = diff(m3,m4) empty AND battery green
-> through m3.**
+> **THE m4 FACE WAS ONE FN — emit_float_const's forward-ref param floor (the
+> "13-fn census" REFUTED: 12 of 13 were the census REGEX's dot-blindness).**
+> `\(param \$\w+` stops at the `.` in the two-width mangle (`$f.f64`), so
+> float_to_str/the scan family/the float predicates all LOOKED param-dropped
+> while their m3 headers are correct (`(param $f.f64 f64)`). The dot-aware
+> census (`[\w.]+`) finds EXACTLY ONE genuine divergence: m3 defines
+> `$emit_float_const (param i32 i32 i32)` while its emit_const callsite uses
+> `$ft_idi_i` (i32 f64 i32 → i32) — the first-fn-body ft mismatch that stops
+> m4 generation. ROOT: `f`'s only unpinned grounding flows through
+> float_to_str, defined in strings.mn — AFTER wasm.mn in the sorted wheel —
+> so the forward-ref pre-scheme's fresh param var never grounds the
+> DEFINITION (floored RI32) while the CALLSITE reads the literal's proven
+> Float. FIX: the `f: Float` Intent-Boundary pin (the float_render_positive
+> precedent), one annotation. Instrument lesson banked: verify the
+> INSTRUMENT before the claim — one raw-header grep refuted the sweep; and
+> WAT names may carry dots (`local_wat_name`'s width mangle), so every
+> sig-parsing regex needs `[\w.]+`.** m2-gen E_MissingVariable 139, top =
+> HANDLER decl names = the pre_register HandlerDeclStmt gap. SEQUENCE: the
+> emit_float_const pin's march (does m4 gen pass the first fn body → next
+> face) → Face B (emitted-text fragment glue, "i32call_7") → Face C
+> (rw_const_fold on +rt) → the 5 field-offset floors (render_audit ×4) →
+> handler pre-registration → trailing-zero trim. first-light = diff(m3,m4)
+> empty AND battery green through m3.**
 
 > **▶▶▶ THE m3 CONCAT FLOORS = MULTI-PAYLOAD EFFECT FRAGMENTATION; the fix is PROVEN
 > (E_UnresolvedType 332→4) but the accumulation SEAM corrupts the heap — reverted to

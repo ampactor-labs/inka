@@ -3197,7 +3197,15 @@ fn emit_const(v, h) = match v {
 // literal's handle; RV128 broadcasts the scalar across four lanes (a literal
 // in lane context is the uniform splat). A pointer-repr (RI32) at a float
 // literal is an upstream type error — loud floor, never a fabricated zero.
-fn emit_float_const(f, r) = match r {
+// f: Float — the Intent Boundary pin (the float_render_positive precedent).
+// f's only unpinned grounding flows through float_to_str, defined in
+// lib/runtime/strings.mn, which sorts AFTER this file in the wheel — a
+// forward reference whose pre-scheme carries fresh param vars, so at wheel
+// scale the definition floored f to i32 while emit_const's callsite read the
+// literal's proven Float ($ft_idi_i): m4 generation's first-fn-body ft
+// mismatch, the ONE genuine param-width divergence in the dot-aware
+// m2-vs-m3 census (2026-07-10).
+fn emit_float_const(f: Float, r) = match r {
   RF64 => {
     wat_emit("    (f64.const ")
     wat_emit(float_to_str(f))

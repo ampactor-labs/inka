@@ -1349,7 +1349,15 @@ fn emit_memory_decl() = {
   // when SharedMemory effects are absent. Per
   // protocol_bootstrap_wasi_threads_substrate.md cascade Stage 2.
   wat_emit("  (import \"wasi\" \"thread-spawn\" (func $wasi_thread_spawn (param i32) (result i32)))\n")
-  wat_emit("  (memory (export \"memory\") 32768 65536 shared)\n")
+  // Initial = max = 65536 pages (4GB, the wasm32 ceiling — the seed's own
+  // proven size). 32768 initial silently starved a wheel-scale compile: the
+  // bump allocator never grows memory, so the first record allocated past
+  // 2GB "succeeded" arithmetically and the first READ of it trapped OOB —
+  // m3's m4-generation died in reach's str_eq with structurally-perfect
+  // operands (2026-07-09; three probe cycles found no corruption because
+  // there was none). Shared requires a max; initial == max means the line
+  // never moves under any thread.
+  wat_emit("  (memory (export \"memory\") 65536 65536 shared)\n")
   // Bump heap starts at 1MB. The 64KB..1MB region holds static
   // string data (W5) and can accommodate future static tables.
   // $heap_ptr is read+written through atomic.rmw on the threading

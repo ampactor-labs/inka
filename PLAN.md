@@ -700,6 +700,34 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > time in project history, dying at the FIRST FN BODY: indirect call type
 > mismatch in emit_const → emit_float_const.**
 >
+> **▶▶▶ THE BOOT ERA (2026-07-10, 77da34d + b72590d — same day as first
+> light).** The seed LEFT THE LOOP: `boot/mentl.wasm` IS first light (sha
+> b3314001…, provenance + re-pin recipe in boot/PROVENANCE.md), and every tool
+> boots from it — verify.sh (no seed build; the census is now the compiler's
+> own count on the wheel), march-gate.sh (m2 := boot(wheel): every rung and
+> micro runs through a WHEEL-emitted compiler, strictly stronger), and
+> march.sh, which ASSERTS `m2 == m3` ON EVERY RUN — the fixpoint RATCHET, a
+> two-generation loop (measured: "✓✓ FIXED POINT holds", 8/8 + 52/52 through
+> it). `--from-seed` everywhere walks the cold ladder (band J,
+> diverse-double-compilation keeps the recipe). **And band M's first artifact
+> exists: `ide/` — mentl edit in the browser, RUNNING THE FIXPOINT COMPILER
+> ITSELF** (a 512MB-initial repack, derivation in ide/README.md): the
+> keystroke→compile→project loop live (fresh instance per compile — the bump
+> allocator never frees, so instantiation IS the reset), clickable
+> diagnostics that jump to the source line, the emitted WAT + stats, six
+> demos, the five verbs and `??` accented. Verified headlessly under V8
+> (`node ide/test-shim.mjs`) + serve.py's COOP/COEP (shared memory needs
+> cross-origin isolation). Run: `python3 ide/serve.py` →
+> localhost:7378/ide/. Named follow-up: `Hβ.felt.ide-run-in-page` (an
+> in-browser assembler). **The boot-era frontier, measured on day one:**
+> `mn-multishot` = exit 10 (want 30) — the seed GATE dissolved but the
+> wheel's multi-shot producer is genuinely dormant (lower still fabricates
+> OneShot; band B's reify is the first real dig of the era — the multi-shot
+> exploration itself). `mn-float-arith` = assembly `expected [i32] but got
+> [f64]` at a call — the callsite-result-width family
+> (`Hβ.m2.callsite-result-width`), fast repro via run-micro. Both named,
+> neither chased same-day.**
+
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own
 > hands — identical sha256 (`0536240b…`) on both 410,732-line wats; provenance
@@ -1955,6 +1983,12 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 ## §8 · Verification surface
 
 ```
+# ── the BOOT ERA (post-first-light, 2026-07-10): boot/mentl.wasm IS the compiler ──
+bash tools/verify.sh           # the floor: micros through boot + the wheel self-census (the pre-commit hook)
+bash tools/march-gate.sh --micros   # rungs + battery through boot's wheel-emitted m2
+bash tools/march.sh            # THE RATCHET: boot→m2→m3, ASSERTS m2 == m3 (every wheel change holds the fixpoint)
+python3 ide/serve.py           # mentl edit in the browser (localhost:7378/ide/) — the fixpoint compiler live
+#   --from-seed on any of the three walks the cold hand-WAT ladder (band J archaeology)
 bash tools/state.sh            # seed build · wheel census · micro battery · FIXED-POINT m3==m4 (run FIRST)
 bash tools/state.sh --quick    # census + micros only (one wasmtime pass)
 bash tools/march-gate.sh       # the LIVE m2 rung scoreboard (7 pass / 1 fail; hof-map the open rung)

@@ -3297,8 +3297,15 @@ fn lower_string_interpolation(handle, lowered_fragments) = {
   } else if len(fragments) == 1 {
     last(fragments)
   } else {
-    let head = last(fragments)
-    let rest = drop_last(fragments)
+    // Left-assembly from the FIRST fragment: acc ++ frag in source order.
+    // head = last(fragments) baked the FINAL fragment first — every
+    // interpolation m2 lowered into m3 came out rotated ("$ft_{codes}_{rc}"
+    // rendered d$ft_iiiid_, m4.wat line 13's assembly failure once m4
+    // existed at all, 2026-07-10). The seed's own $lower_make_string
+    // assembles source-order, so m2's OWN strings were fine and the
+    // wheel's copy was never order-gated (mn-interp-order now gates it).
+    let head = list_index(fragments, 0)
+    let rest = slice(fragments, 1, len(fragments))
     fold(head, (acc, frag) =>
       LCall(handle, LGlobal(handle, "str_concat"), [acc, frag]), rest)
   }

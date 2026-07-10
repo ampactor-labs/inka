@@ -658,14 +658,42 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 >   through m3.
 > - **Face C — rw_const_fold trap:** every +rt compile through m3 traps in the
 >   e-graph's const-fold rewrite. Un-dug; census after B.
-> Floor census UNCHANGED at 14 concat + 5 field-offset — the alias fix neither grew
-> nor shrank the ++ class, so the three pins stand as named residue and the class
-> still belongs to the state→param root (band D). m2-gen diagnostics: E_UnresolvedType
-> 26,898 / E_MissingVariable 139, top names = HANDLER decls (diagnostics_handler ×22,
-> env_handler ×12, verify_ledger, wasi_filesystem, wasi_threads) = the KNOWN
-> pre_register HandlerDeclStmt gap — now the top m2-tier cut. SEQUENCE (post-A):
-> the CONCAT ROOT (band D, now the LIVE m4 blocker at lower_pipe) → B (pure rungs
-> through m3) → C (rw_const_fold) → handler pre-registration.
+> **THE CONCAT-FLOOR CLASS IS EXTINCT — 14 → 0 (581a92f + c595cc5, same day).**
+> The 14 floors mapped to three homes, each a distinct dishonesty, each fixed at
+> its source: (1) lower_pipe + driver_partition_peel — LCall/LTailCall/LSuspend
+> args and LMakeVariant fields were declared bare `List`, an UNREGISTERED nominal
+> that erases the element type at the declaration (grep `type List` = zero hits);
+> `[LowExpr]` + the driver's `[String]`/`[[String]]` pins ground them (crucible
+> mn-adt-list-payload=3: the bare-List twin traps 134, the honest decl runs). (2)
+> the render family (9 floors) — int_to_str/float_to_str/float_format_* build
+> flat strings by ADDRESS ARITHMETIC (`p + 4` types the value a word), so `++`'s
+> sequence proof CANNOT arrive until §4① String=[Byte]; eleven `-> String`
+> return-pin attempts were REFUTED at the artifact (they CONFLICT with the
+> Int-typed bodies — +58 recovered mismatches, floors unmoved) and the honest
+> today-form is `str_concat` BY NAME (the names_concat precedent — the author
+> states the representation; no dispatch, no guess; §4① residue). (3)
+> render_gradients' join fold → `str_concat_all` (one home). **Grounding the
+> floors gave the family its FIRST-EVER execution, which found float_is_inf
+> comparing against `1.79…e308` — TFloatLit has NO exponent form (SYNTAX §Token
+> enumeration), so `e308` lexed as an IDENTIFIER and every finite float rendered
+> "Inf". Fixed with the IEEE identity `f == f && f - f != f - f` (the only
+> e-notation literal in the wheel, censused; float_is_nan already the sibling).**
+> Crucible mn-float-render=3 (trim-invariant). Named cosmetic residue: the
+> 17-significant-digit untrimmed tail (`2.5000000000000000`).
+>
+> **THE m4 FRONTIER AFTER (march 2026-07-09 late): m3 409,567 lines clean, ZERO
+> concat floors, 5 field-offset floors (render_audit ×4 +
+> ls_current_lambda_handle_loop). m4 gen runs read→lex→parse→infer→LOWER→
+> REACHABILITY and traps OOB in `byte_at ← str_eq_loop ← reach_has_loop ←
+> reach_enqueue` — a reach name-entry is not a valid string pointer (m2 runs the
+> identical source clean; the m2-works/m3-diverges class again). A conditional
+> huge-pointer probe in m3's str_eq_loop is the standing instrument. Wheel
+> PREFIXES trap differently (head-15000: ft-mismatch in emit_const) — truncation
+> ghosts, not faces; probe the full wheel only.** m2-gen E_MissingVariable 139,
+> top = HANDLER decl names = the pre_register HandlerDeclStmt gap. SEQUENCE: the
+> reach str_eq OOB (the m4 blocker) → Face B (emitted-text fragment glue,
+> "i32call_7" — gates the pure rungs through m3) → Face C (rw_const_fold on +rt)
+> → the 5 field-offset floors → handler pre-registration → trailing-zero trim.
 > first-light = diff(m3,m4) empty AND battery green through m3.**
 
 > **▶▶▶ THE m3 CONCAT FLOORS = MULTI-PAYLOAD EFFECT FRAGMENTATION; the fix is PROVEN

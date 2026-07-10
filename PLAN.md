@@ -683,18 +683,45 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 >
 > **THE m4 FRONTIER AFTER (march 2026-07-09 late): m3 409,567 lines clean, ZERO
 > concat floors, 5 field-offset floors (render_audit ×4 +
-> ls_current_lambda_handle_loop). m4 gen runs read→lex→parse→infer→LOWER→
-> REACHABILITY and traps OOB in `byte_at ← str_eq_loop ← reach_has_loop ←
-> reach_enqueue` — a reach name-entry is not a valid string pointer (m2 runs the
-> identical source clean; the m2-works/m3-diverges class again). A conditional
-> huge-pointer probe in m3's str_eq_loop is the standing instrument. Wheel
-> PREFIXES trap differently (head-15000: ft-mismatch in emit_const) — truncation
-> ghosts, not faces; probe the full wheel only.** m2-gen E_MissingVariable 139,
-> top = HANDLER decl names = the pre_register HandlerDeclStmt gap. SEQUENCE: the
-> reach str_eq OOB (the m4 blocker) → Face B (emitted-text fragment glue,
-> "i32call_7" — gates the pure rungs through m3) → Face C (rw_const_fold on +rt)
-> → the 5 field-offset floors → handler pre-registration → trailing-zero trim.
-> first-light = diff(m3,m4) empty AND battery green through m3.**
+> ls_current_lambda_handle_loop).**
+>
+> **THE REACH OOB WAS MEMORY EXHAUSTION, NOT CORRUPTION — CLOSED (2fc7544).**
+> Three binary-probe cycles (huge-pointer threshold, exact `memory.size` bound,
+> view-field validation) found structurally perfect operands because nothing was
+> corrupt: the wheel emitted `(memory 32768 65536 shared)` — 2GB initial — while
+> the seed gives m2 the full 65536 pages, and the bump allocator NEVER grows
+> memory, so a wheel-scale compile "allocated" past 2GB arithmetically and the
+> first READ trapped (in reach's str_eq, whatever happened to live past the
+> line). One line: initial = max = 65536 (wasm.mn). The probe lesson: when
+> operands keep proving clean, suspect the SUBSTRATE bounds — the two layers'
+> module preambles diff in one grep. **WITH 4GB, m4 GENERATION RAN THE FULL
+> PIPELINE — read, lex, parse, infer, lower, reachability — AND EMITTED 6,788
+> LINES of m4.wat (type section, imports, memory, data, globals) for the first
+> time in project history, dying at the FIRST FN BODY: indirect call type
+> mismatch in emit_const → emit_float_const.**
+>
+> **THE STANDING m4 FACE — m3's definition emit DROPS f64-width PARAMS (13-fn
+> census, exact).** m3 defines `$emit_float_const (param i32 i32 i32)` while its
+> own callsite uses `$ft_idi_i` (i32 f64 i32 → i32) — the mismatch. The
+> param-width census (python over both wats' `(func (param…))` sigs): 13 fns
+> disagree and EVERY disagreement is m3 missing exactly its f64 params —
+> float_to_str m2=(i32,f64)/m3=(i32); scan_frac_part lost both f64s, kept all
+> four i32s; float_is_nan drops f despite its authored `f: Float` pin. The
+> wheel's param emitter produces f64 fine when M2 runs it (every float micro
+> through m2 green) — m3's OWN COMPILED COPY drops the RF64 arm: the
+> m2-works/m3-diverges recursion one level up, likely the Repr-ADT match
+> dispatch inside m3 (Face-B-adjacent — m3's small-ADT match behavior). FAST
+> REPRO: head-15000 of the wheel through m3 traps identically in ~1 min (the
+> earlier "truncation ghost" was THIS face — a truncated input stays under 2GB,
+> so the exhaustion never masked it). NEXT: extract m3's $emit_param_type (and
+> walk_locals' param walk) vs m2's; the divergence in its Repr match is the
+> cut.** m2-gen E_MissingVariable 139, top = HANDLER decl names = the
+> pre_register HandlerDeclStmt gap. SEQUENCE: the f64-param-drop (the m4
+> blocker, fast repro) → Face B (emitted-text fragment glue, "i32call_7" —
+> plausibly the SAME small-ADT dispatch family) → Face C (rw_const_fold on +rt)
+> → the 5 field-offset floors (render_audit ×4) → handler pre-registration →
+> trailing-zero trim. first-light = diff(m3,m4) empty AND battery green
+> through m3.**
 
 > **▶▶▶ THE m3 CONCAT FLOORS = MULTI-PAYLOAD EFFECT FRAGMENTATION; the fix is PROVEN
 > (E_UnresolvedType 332→4) but the accumulation SEAM corrupts the heap — reverted to

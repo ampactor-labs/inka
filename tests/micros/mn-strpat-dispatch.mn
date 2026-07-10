@@ -1,0 +1,13 @@
+// String-literal patterns HIT: the pattern-position literal is the same
+// interned constant the expression position emits, compared str_eq. The
+// wheel's emit floored pattern strings to address 0 (walk_lemit_arms never
+// interned them), so every arm missed and wildcards swallowed the dispatch —
+// infer_seq_op typed every len/slice/... call TList, the 284-fn eq-dispatch
+// flip census between m3 and m4 (2026-07-10). 22+11+33 = 66.
+fn pick(s: String) = match s {
+  "alpha" => 11,
+  "beta"  => 22,
+  _       => 33
+}
+
+fn main() = pick("beta") + pick("alpha") + pick("gamma")

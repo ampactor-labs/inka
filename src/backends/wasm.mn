@@ -664,9 +664,31 @@ fn walk_lemit_list_loop(exprs, i) = {
 // structural — nothing to collect. The let-IS-match dissolution routes
 // destructure-let bodies through arms, so this descent is load-bearing.
 fn walk_lemit_arms(arms) = each((arm) => {
-  let (_, body) = arm
+  let (pat, body) = arm
+  walk_lemit_pat(pat)
   walk_lemit_expr(body)
 }, arms)
+
+// Pattern literals are emit-read graph content too: a string literal in
+// pattern position interns through the SAME visit_string the expression
+// position fires — emit_low_value_const reads it back via string_offset.
+// walk_lemit_arms dropped the pat, so pattern strings never interned and
+// the LPLit emit floored to address 0: every string-literal match in m3
+// missed every arm — infer_seq_op's dispatch fell to its wildcard, typing
+// every len/slice/... call TList, the 284-fn eq-dispatch flip census that
+// stood between m3 and m4 (2026-07-10).
+fn walk_lemit_pat(pat) = match pat {
+  LPLit(LString(s)) => visit_string(s),
+  LPLit(_)          => (),
+  LPCon(_, _, subs) => each(walk_lemit_pat, subs),
+  LPTuple(elems)    => each((e) => { let (_, _, sp) = e
+                                     walk_lemit_pat(sp) }, elems),
+  LPList(prefix, _) => each(walk_lemit_pat, prefix),
+  LPRecord(fs)      => each((f) => { let (_, _, sp) = f
+                                     walk_lemit_pat(sp) }, fs),
+  LPAlt(branches)   => each(walk_lemit_pat, branches),
+  _                 => ()
+}
 
 // Emit `(global $s<n> (mut i32) (i32.const 0))` for each unique
 // state slot. Globals initialize to 0 — the convention for "no
@@ -6053,7 +6075,19 @@ fn emit_low_value_const(lv) = match lv {
     wat_emit(float_to_str(f))
     wat_emit(")\n")
   },
-  LString(_) => wat_emit("    (i32.const 0) ;; string literal pattern unsupported\n")
+  // A string literal in pattern position is the SAME interned constant the
+  // expression position emits (emit_const's LString arm) — walk_lemit_pat
+  // registered it through visit_string, string_offset reads it back. The
+  // prior `(i32.const 0)` floor made every string-pattern compare
+  // str_eq(operand, address-0): every arm missed, wildcards swallowed the
+  // dispatch, and infer_seq_op typed every len/slice/... call TList — the
+  // eq-dispatch flips that stood between m3 and m4 (2026-07-10).
+  LString(s) => {
+    let offset = string_offset(s)
+    wat_emit("    (i32.const ")
+    wat_emit(int_to_str(offset))
+    wat_emit(")\n")
+  }
 }
 
 // The repr a low-value (a literal) projects: a float literal is RF64 (the

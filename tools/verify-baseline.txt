@@ -355,3 +355,4 @@ micro:effectful-tail=7
 micro:adt-list-payload=3
 micro:float-render=3
 micro:interp-order=10
+micro:strpat-dispatch=66

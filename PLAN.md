@@ -630,14 +630,25 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > **THE MARCH AFTER (2026-07-09): m2 103,601 lines; m3 409,553 lines, exit 0, NO
 > trap. m4 generation now TRAPS exit 134 — call stack exhausted in iterate_from —
 > and the battery-through-m3 is 0/47 on TWO NEW faces (not the old concat wall):**
-> - **Face A — EVIDENCE-TAIL (the m4 blocker, pinned by one measurement):** m2's
->   iterate_from carries 1× return_call_indirect (the seed builds the sst_ evidence
->   clone, then TAIL-calls); m3's carries 0 (three plain call_indirects) — **the
->   wheel's LSuspend / evidence-threading call is never emitted in tail form**, so
->   the Iterate resume chain burns a frame per element and the wheel's 36,743-line
->   stmt list exhausts the stack. New peer: `Hβ.emit.evidence-tail-call` — emit the
->   clone-then-return_call the seed already proves; Law-7 gate: tail-dropping a
->   MultiShot resume frame is forbidden (cardinality read live at the site).
+> - **Face A — EVIDENCE-TAIL: CLOSED (2158c4e, same day).** mark_tail had no
+>   LSuspend arm, so evidence-threading recursions stayed plain call_indirect
+>   (m2's iterate_from carried the seed's 1× return_call_indirect; m3's had 0).
+>   LSuspend gains a sixth field `tail: Bool` — mark_tail the ONE writer, the
+>   arity change over a new node so no walker's wildcard swallows it (the TCont
+>   lockstep precedent; 19 sites moved together); the emit's dispatch picks
+>   return_call_indirect when tail (the sst_ clone is argument computation — the
+>   seed's clone-then-tail form). Sound for every resume discipline: a
+>   return_call gives the callee the caller's continuation, and continuations
+>   here are heap records, never native-stack captures. Crucible
+>   mn-effectful-tail=7 (200k-deep with-Tick tail recursion; was exit 134
+>   stack-exhausted). m2-tier 8/8 + 48/48. **THE MARCH AFTER: m3 now reads,
+>   lexes, parses, and INFERS the whole 36,754-line wheel — m4 gen traps in
+>   m3's own LOWER (`lower_pipe`, an `unreachable`): one of lower_pipe's four
+>   `++ on unresolved element type` concat floors EXECUTES.** The m4 blocker
+>   has CONVERGED onto the known 14-floor concat class (band D / the state→param
+>   root) — no longer latent, now the live frontier. lower_pipe's floors are the
+>   pipe hole-completion appends (`args ++ [lo_l]`); the root question is why
+>   the args list's element type is unresolved at m2's compile of the wheel.
 > - **Face B — EMITTED-TEXT FRAGMENT GLUE:** m3-as-compiler emits malformed WAT for
 >   even pure rungs — `unexpected token "i32call_7"` (a locals decl and the next
 >   fragment glued, separator lost). The view-splice-following-chunk class
@@ -652,8 +663,9 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > still belongs to the state→param root (band D). m2-gen diagnostics: E_UnresolvedType
 > 26,898 / E_MissingVariable 139, top names = HANDLER decls (diagnostics_handler ×22,
 > env_handler ×12, verify_ledger, wasi_filesystem, wasi_threads) = the KNOWN
-> pre_register HandlerDeclStmt gap — now the top m2-tier cut. SEQUENCE: A (m4
-> blocker) → B (pure rungs through m3) → C → handler pre-registration.
+> pre_register HandlerDeclStmt gap — now the top m2-tier cut. SEQUENCE (post-A):
+> the CONCAT ROOT (band D, now the LIVE m4 blocker at lower_pipe) → B (pure rungs
+> through m3) → C (rw_const_fold) → handler pre-registration.
 > first-light = diff(m3,m4) empty AND battery green through m3.**
 
 > **▶▶▶ THE m3 CONCAT FLOORS = MULTI-PAYLOAD EFFECT FRAGMENTATION; the fix is PROVEN

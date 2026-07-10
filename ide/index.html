@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mentl edit — the medium, compiled by itself</title>
+<style>
+  :root {
+    --bg: #0a0d13; --bg2: #0f1420; --bg3: #131a2a; --line: #1d2740;
+    --fg: #c8d3e8; --dim: #5d6b8a; --faint: #38425c;
+    --teal: #2dd4bf; --cyan: #67e8f9; --mag: #e879f9; --amber: #fbbf24;
+    --red: #f87171; --green: #4ade80; --violet: #a78bfa;
+    --mono: "Berkeley Mono", "JetBrains Mono", "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg); font-family: var(--mono);
+    font-size: 13px; display: flex; flex-direction: column; overflow: hidden;
+  }
+  /* ── header ─────────────────────────────────────────────── */
+  header {
+    display: flex; align-items: center; gap: 14px; padding: 10px 16px;
+    border-bottom: 1px solid var(--line); background: var(--bg2); flex: none;
+  }
+  .mark { font-size: 15px; font-weight: 700; letter-spacing: .18em; }
+  .mark .m { background: linear-gradient(90deg, var(--teal), var(--mag));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .tag { color: var(--dim); font-size: 11px; }
+  .plaque {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    font-size: 10.5px; color: var(--dim); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 10px; background: var(--bg);
+  }
+  .plaque b { color: var(--teal); font-weight: 600; }
+  .plaque code { color: var(--faint); }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
+  #dot.busy { background: var(--amber); animation: pulse 1s infinite; }
+  #dot.ok { background: var(--green); }
+  #dot.diag { background: var(--amber); }
+  #dot.bad { background: var(--red); }
+  @keyframes pulse { 50% { opacity: .4; } }
+  /* ── toolbar ────────────────────────────────────────────── */
+  .bar {
+    display: flex; align-items: center; gap: 10px; padding: 7px 16px;
+    border-bottom: 1px solid var(--line); background: var(--bg2); flex: none;
+  }
+  select, button, label.tgl {
+    background: var(--bg3); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 5px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  button:hover, select:hover { border-color: var(--teal); }
+  button.primary { border-color: var(--teal); color: var(--teal); }
+  label.tgl { display: flex; align-items: center; gap: 6px; user-select: none; }
+  .bar .stats { margin-left: auto; color: var(--dim); font-size: 11px; display: flex; gap: 16px; }
+  .bar .stats b { color: var(--cyan); font-weight: 600; }
+  /* ── main split ─────────────────────────────────────────── */
+  main { flex: 1; display: flex; min-height: 0; }
+  .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .pane + .pane { border-left: 1px solid var(--line); }
+  /* editor: textarea over highlighted pre */
+  .edwrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+  .edwrap pre, .edwrap textarea {
+    position: absolute; inset: 0; padding: 14px 16px 40vh; margin: 0;
+    font: 13px/1.55 var(--mono); white-space: pre; overflow: auto;
+    tab-size: 2; border: 0; outline: 0; resize: none;
+  }
+  .edwrap pre { pointer-events: none; color: var(--fg); }
+  .edwrap textarea {
+    background: transparent; color: transparent; caret-color: var(--cyan);
+    z-index: 2; scrollbar-width: thin;
+  }
+  .edwrap textarea::selection { background: rgba(103,232,249,.18); }
+  /* token colors — the five verbs get the accent treatment */
+  .tk-kw { color: var(--mag); }
+  .tk-verb { color: var(--teal); font-weight: 700; }
+  .tk-hole { color: var(--amber); font-weight: 700; text-shadow: 0 0 8px rgba(251,191,36,.5); }
+  .tk-str { color: #a5d6a7; }
+  .tk-spl { color: var(--cyan); }
+  .tk-num { color: #f0abfc; }
+  .tk-ty { color: var(--violet); }
+  .tk-cm { color: var(--faint); font-style: italic; }
+  .tk-fx { color: var(--cyan); }
+  .ln-bad { background: rgba(248,113,113,.12); outline: 1px solid rgba(248,113,113,.25); }
+  /* right pane tabs */
+  .tabs { display: flex; border-bottom: 1px solid var(--line); background: var(--bg2); flex: none; }
+  .tabs div { padding: 8px 16px; color: var(--dim); cursor: pointer; font-size: 12px; border-bottom: 2px solid transparent; }
+  .tabs div.on { color: var(--teal); border-bottom-color: var(--teal); }
+  .tabs div .n { margin-left: 6px; font-size: 10px; color: var(--bg); background: var(--dim); border-radius: 8px; padding: 1px 6px; }
+  .tabs div.on .n { background: var(--teal); }
+  .panel { flex: 1; overflow: auto; display: none; min-height: 0; }
+  .panel.on { display: block; }
+  #watout { padding: 14px 16px; white-space: pre; color: var(--dim); font-size: 12px; line-height: 1.5; }
+  #watout .w-hd { color: var(--cyan); }
+  /* diagnostics list */
+  .diag { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .diag:hover { background: var(--bg3); }
+  .diag .code { font-weight: 700; }
+  .diag.E .code { color: var(--red); } .diag.W .code { color: var(--amber); } .diag.T .code, .diag.P .code { color: var(--cyan); }
+  .diag .at { color: var(--faint); font-size: 11px; margin-left: 8px; }
+  .diag .msg { color: var(--dim); margin-top: 3px; font-size: 12px; }
+  .empty { padding: 40px; text-align: center; color: var(--faint); }
+  .empty .big { font-size: 28px; margin-bottom: 10px; }
+  footer {
+    flex: none; padding: 6px 16px; border-top: 1px solid var(--line);
+    background: var(--bg2); color: var(--faint); font-size: 10.5px;
+    display: flex; gap: 18px;
+  }
+  footer span b { color: var(--dim); font-weight: 600; }
+  #err-banner { display:none; padding: 12px 16px; background: #2a1215; color: var(--red);
+    border-bottom: 1px solid #7f1d1d; font-size: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <div class="mark"><span class="m">MENTL</span> <span style="font-size:12px">edit</span></div>
+  <div class="tag">the medium, compiled by itself · this page runs the fixpoint compiler</div>
+  <div class="plaque"><span>first light</span><b>m₃ = m₄</b><code>0536240b…</code><span>2026-07-10</span><div id="dot"></div></div>
+</header>
+<div id="err-banner"></div>
+<div class="bar">
+  <select id="demo"></select>
+  <button class="primary" id="compile">compile ⌘⏎</button>
+  <label class="tgl"><input type="checkbox" id="live" checked> live</label>
+  <label class="tgl"><input type="checkbox" id="rt" checked> link runtime</label>
+  <button id="dl">download .wat</button>
+  <div class="stats">
+    <span>compile <b id="ms">—</b></span>
+    <span>wat <b id="lines">—</b> lines</span>
+    <span>fns <b id="fns">—</b></span>
+  </div>
+</div>
+<main>
+  <div class="pane">
+    <div class="edwrap">
+      <pre id="hl" aria-hidden="true"></pre>
+      <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    </div>
+  </div>
+  <div class="pane">
+    <div class="tabs">
+      <div data-p="pdiag" class="on">diagnostics <span class="n" id="ndiag">0</span></div>
+      <div data-p="pwat">emitted WAT</div>
+    </div>
+    <div class="panel on" id="pdiag"><div class="empty"><div class="big">🐙</div>write mentl on the left —<br>the compiler speaks here</div></div>
+    <div class="panel" id="pwat"><div id="watout"></div></div>
+  </div>
+</main>
+<footer>
+  <span><b>compiler</b> mentl-ide.wasm — the first-light wheel (512MB-initial repack of the pinned boot)</span>
+  <span><b>loop</b> keystroke → compile → project (proto mentl edit)</span>
+  <span><b>run</b> download the .wat and `wat2wasm … && wasmtime run …` — in-browser assembly is a named follow-up</span>
+</footer>
+<script>
+"use strict";
+/* ── demos ─────────────────────────────────────────────────── */
+const DEMOS = {
+"pipes & fold — the verbs": `// The five verbs draw the topology; |> is hole-completion.
+fn main() with Memory + Alloc =
+  [1, 2, 3, 4, 5]
+    |> map((x) => x * x)
+    |> filter((x) => x > 3)
+    |> fold(0, (acc, x) => acc + x)
+`,
+"effects & a handler": `// An effect is declared, performed as a bare call, and absorbed
+// by ~> — the one install verb. State evolves on resume.
+effect Tick {
+  tick() -> Int
+}
+
+handler ticky with n = 0 {
+  tick() => resume(n) with n = n + 1
+}
+
+fn spin(rounds, acc) with Tick =
+  if rounds == 0 { acc } else { spin(rounds - 1, acc + tick()) }
+
+fn main() = { spin(5, 0) } ~> ticky
+`,
+"constant-stack effectful recursion": `// 200,000 evidence-threading tail calls, constant stack —
+// the clone-then-return_call the fixpoint compiler emits.
+effect Tick { tick() -> Int }
+handler ticky { tick() => resume(1) }
+
+fn spin(n) with Tick = if n == 0 { 7 } else {
+  tick()
+  spin(n - 1)
+}
+
+fn main() = { spin(200000) } ~> ticky
+`,
+"floats render (first light's last dragon)": `// Every float literal used to die at ~0.0 in the self-compiled
+// wheel (a variant record 4 bytes too small). Now: real f64.
+fn main() with Memory + Alloc = byte_len(float_to_str(2.5))
+`,
+"ADTs & string patterns": `// String-literal patterns are interned constants compared
+// structurally — the fix that closed the fixed point.
+type Cmd = Go | Stop | Other
+
+fn parse_cmd(s: String) = match s {
+  "go"   => Go,
+  "stop" => Stop,
+  _      => Other
+}
+
+fn score(c) = match c { Go => 10, Stop => 20, Other => 30 }
+
+fn main() = score(parse_cmd("go")) + score(parse_cmd("stop")) + score(parse_cmd("hm"))
+`,
+"refined types": `// A refined alias narrows Int by predicate; annotations are
+// Intent Boundaries the graph verifies, never ceremony.
+type VO = Int where 0 <= self
+
+fn clampish(a: VO, b: VO) = if a >= b { a } else { b }
+
+fn main() = clampish(4200, 5000)
+`,
+};
+/* ── mn syntax highlighter (display-only; the parser is the wasm) ── */
+const KW = /\b(fn|let|if|else|match|type|effect|handler|with|resume|import|where|own|ref|Pure|true|false)\b/y;
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;");}
+function highlight(src){
+  let out = "", i = 0, badLines = window.__badLines || new Set();
+  const lines = src.split("\n");
+  for (let li = 0; li < lines.length; li++){
+    let line = lines[li], h = "";
+    let j = 0;
+    while (j < line.length){
+      const rest = line.slice(j);
+      let m;
+      if ((m = rest.match(/^\/\/.*/))) { h += `<span class="tk-cm">${esc(m[0])}</span>`; j += m[0].length; continue; }
+      if ((m = rest.match(/^"(?:[^"\\]|\\.)*"?/))) {
+        // splice-aware string render
+        let s = m[0], inner = "";
+        inner = esc(s).replace(/\{[^}]*\}/g, x => `</span><span class="tk-spl">${x}</span><span class="tk-str">`);
+        h += `<span class="tk-str">${inner}</span>`; j += s.length; continue;
+      }
+      if ((m = rest.match(/^(\|>|<\||><|~>|<~)/))) { h += `<span class="tk-verb">${esc(m[0])}</span>`; j += m[0].length; continue; }
+      if ((m = rest.match(/^\?\?/))) { h += `<span class="tk-hole">??</span>`; j += 2; continue; }
+      if ((m = rest.match(/^[0-9][0-9_]*(\.[0-9][0-9_]*)?/))) { h += `<span class="tk-num">${m[0]}</span>`; j += m[0].length; continue; }
+      KW.lastIndex = 0;
+      if ((m = rest.match(/^(fn|let|if|else|match|type|effect|handler|with|resume|import|where|own|ref|Pure|true|false)\b/))) {
+        h += `<span class="tk-kw">${m[0]}</span>`; j += m[0].length; continue;
+      }
+      if ((m = rest.match(/^![A-Z][A-Za-z0-9_]*/))) { h += `<span class="tk-fx">${esc(m[0])}</span>`; j += m[0].length; continue; }
+      if ((m = rest.match(/^[A-Z][A-Za-z0-9_]*/))) { h += `<span class="tk-ty">${m[0]}</span>`; j += m[0].length; continue; }
+      if ((m = rest.match(/^[a-z_][A-Za-z0-9_]*/))) { h += esc(m[0]); j += m[0].length; continue; }
+      h += esc(rest[0]); j += 1;
+    }
+    out += badLines.has(li + 1) ? `<span class="ln-bad">${h}\n</span>` : h + "\n";
+  }
+  return out;
+}
+/* ── WASI shim (identical surface to ide/test-shim.mjs) ─────── */
+function makeWasi(sourceBytes){
+  let srcPos = 0, mem = null;
+  const out = [], err = [];
+  const view = () => new DataView(mem.buffer);
+  const bytes = () => new Uint8Array(mem.buffer);
+  const imports = {
+    wasi_snapshot_preview1: {
+      proc_exit(code){ const e = new Error("exit"); e.exitCode = code; throw e; },
+      fd_write(fd, iovs, n, outp){
+        const v = view(); let total = 0;
+        for (let i = 0; i < n; i++){
+          const p = v.getUint32(iovs + 8*i, true), l = v.getUint32(iovs + 8*i + 4, true);
+          (fd === 2 ? err : out).push(bytes().slice(p, p + l)); total += l;
+        }
+        v.setUint32(outp, total, true); return 0;
+      },
+      fd_read(fd, iovs, n, outp){
+        if (fd !== 0) return 8;
+        const v = view(); let total = 0;
+        for (let i = 0; i < n && srcPos < sourceBytes.length; i++){
+          const p = v.getUint32(iovs + 8*i, true), l = v.getUint32(iovs + 8*i + 4, true);
+          const k = Math.min(l, sourceBytes.length - srcPos);
+          bytes().set(sourceBytes.subarray(srcPos, srcPos + k), p);
+          srcPos += k; total += k;
+        }
+        v.setUint32(outp, total, true); return 0;
+      },
+      fd_close: () => 0,
+      path_open: () => 44, path_filestat_get: () => 44,
+      path_create_directory: () => 44, path_unlink_file: () => 44, path_rename: () => 44,
+    },
+    wasi: { "thread-spawn": () => -1 },
+  };
+  return { imports, bind(i){ mem = i.exports.memory; }, out, err };
+}
+const td = new TextDecoder(), te = new TextEncoder();
+const cat = cs => { const n = cs.reduce((a,c)=>a+c.length,0); const b = new Uint8Array(n); let o=0; for(const c of cs){b.set(c,o);o+=c.length;} return b; };
+/* ── boot ──────────────────────────────────────────────────── */
+let MODULE = null, RT = "";
+const $ = id => document.getElementById(id);
+async function boot(){
+  try {
+    if (!crossOriginIsolated) throw new Error("page is not cross-origin isolated — start it with ide/serve.py (the compiler's shared memory needs COOP/COEP headers)");
+    const [wasm, ...libs] = await Promise.all([
+      fetch("mentl-ide.wasm").then(r => { if(!r.ok) throw new Error("mentl-ide.wasm missing"); return r.arrayBuffer(); }),
+      ...["../lib/runtime/memory.mn","../lib/runtime/strings.mn","../lib/runtime/lists.mn","../lib/prelude.mn"]
+        .map(u => fetch(u).then(r => r.ok ? r.text() : "")),
+    ]);
+    RT = libs.join("\n");
+    MODULE = await WebAssembly.compile(wasm);
+    $("dot").className = "ok";
+    compile();
+  } catch (e) {
+    const b = $("err-banner"); b.style.display = "block";
+    b.textContent = "boot failed: " + e.message;
+    $("dot").className = "bad";
+  }
+}
+/* ── compile loop ──────────────────────────────────────────── */
+let busy = false, again = false;
+async function compile(){
+  if (!MODULE) return;
+  if (busy){ again = true; return; }
+  busy = true; $("dot").className = "busy";
+  const user = $("src").value;
+  const full = ($("rt").checked ? RT + "\n" : "") + user;
+  const rtLines = $("rt").checked ? RT.split("\n").length + 1 : 0;
+  const wasi = makeWasi(te.encode(full));
+  const t0 = performance.now();
+  let exitCode = 0, trapped = null;
+  try {
+    const inst = await WebAssembly.instantiate(MODULE, wasi.imports);
+    wasi.bind(inst);
+    try { inst.exports._start(); } catch (e){ if (e.exitCode === undefined) trapped = e; else exitCode = e.exitCode; }
+  } catch (e) { trapped = e; }
+  const ms = (performance.now() - t0).toFixed(0);
+  const wat = td.decode(cat(wasi.out));
+  const diags = td.decode(cat(wasi.err));
+  render(user, wat, diags, ms, rtLines, exitCode, trapped);
+  busy = false;
+  if (again){ again = false; compile(); }
+}
+/* ── diagnostics parsing + render ──────────────────────────── */
+function parseDiags(text, rtLines){
+  const out = []; let rtNoise = 0;
+  for (const line of text.split("\n")){
+    const m = line.match(/^(\w+): ((?:E|W|T|P)_\w+)\s*(\w*):?\s*(.*?)(?:\s+at\s+(\d+):(\d+)[-\d:]*)?\s*$/);
+    if (!m) { if (line.trim()) out.push({stage:"", code:"·", msg: line, line: null}); continue; }
+    const rawLn = m[5] ? parseInt(m[5], 10) : null;
+    // Diagnostics whose span lands inside the LINKED RUNTIME are the runtime's
+    // own standalone-compile noise (the wheel normally compiles src+lib whole),
+    // not the user's program — counted, never listed.
+    if (rawLn !== null && rawLn <= rtLines) { rtNoise++; continue; }
+    const ln = rawLn === null ? null : rawLn - rtLines;
+    out.push({ stage: m[1], code: m[2], msg: m[4], line: ln, col: m[6] ? parseInt(m[6],10) : null });
+  }
+  out.rtNoise = rtNoise;
+  return out;
+}
+function render(user, wat, diagText, ms, rtLines, exitCode, trapped){
+  $("ms").textContent = ms + " ms";
+  $("lines").textContent = wat ? wat.split("\n").length : 0;
+  $("fns").textContent = (wat.match(/\(func \$/g) || []).length;
+  const ds = parseDiags(diagText, rtLines);
+  if (trapped) ds.unshift({stage:"trap", code:"E_CompilerTrap", msg: String(trapped.message||trapped), line:null});
+  window.__badLines = new Set(ds.filter(d => d.line).map(d => d.line));
+  $("hl").innerHTML = highlight(user);
+  $("ndiag").textContent = ds.length;
+  $("dot").className = trapped ? "bad" : ds.some(d => d.code.startsWith("E")) ? "diag" : "ok";
+  const p = $("pdiag");
+  const noise = ds.rtNoise ? `<div style="padding:8px 14px;color:var(--faint);font-size:10.5px;border-bottom:1px solid var(--line)">${ds.rtNoise} runtime-internal diagnostics hidden (the linked stdlib compiled standalone)</div>` : "";
+  if (!ds.length){
+    p.innerHTML = noise + `<div class="empty"><div class="big">✓</div>clean — the graph is coherent<br><span style="font-size:11px;color:var(--faint)">${$("lines").textContent} lines of WAT in ${ms} ms</span></div>`;
+  } else {
+    p.innerHTML = noise + ds.map((d,i) =>
+      `<div class="diag ${d.code[0]}" data-l="${d.line||""}">
+        <span class="code">${d.code}</span><span class="at">${d.stage}${d.line ? " · line " + d.line : ""}</span>
+        <div class="msg">${esc(d.msg)}</div></div>`).join("");
+    p.querySelectorAll(".diag[data-l]").forEach(el => el.onclick = () => jump(parseInt(el.dataset.l,10)));
+  }
+  const w = $("watout");
+  w.textContent = wat || "(no output)";
+}
+function jump(line){
+  if (!line) return;
+  const ta = $("src");
+  const idx = ta.value.split("\n").slice(0, line - 1).join("\n").length;
+  ta.focus(); ta.setSelectionRange(idx, idx);
+  const lh = 13 * 1.55;
+  ta.scrollTop = Math.max(0, (line - 6) * lh);
+  syncScroll();
+}
+/* ── wiring ────────────────────────────────────────────────── */
+function syncScroll(){ $("hl").scrollTop = $("src").scrollTop; $("hl").scrollLeft = $("src").scrollLeft; }
+$("src").addEventListener("scroll", syncScroll);
+let deb = null;
+$("src").addEventListener("input", () => {
+  $("hl").innerHTML = highlight($("src").value);
+  if ($("live").checked){ clearTimeout(deb); deb = setTimeout(compile, 700); }
+});
+$("src").addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter"){ e.preventDefault(); compile(); }
+  if (e.key === "Tab"){ e.preventDefault();
+    const ta = e.target, s = ta.selectionStart;
+    ta.setRangeText("  ", s, ta.selectionEnd, "end");
+    ta.dispatchEvent(new Event("input"));
+  }
+});
+$("compile").onclick = compile;
+$("dl").onclick = () => {
+  const blob = new Blob([$("watout").textContent], {type: "text/plain"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "out.wat"; a.click();
+};
+document.querySelectorAll(".tabs div").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tabs div").forEach(x => x.classList.remove("on"));
+  document.querySelectorAll(".panel").forEach(x => x.classList.remove("on"));
+  t.classList.add("on"); $(t.dataset.p).classList.add("on");
+});
+const sel = $("demo");
+for (const name of Object.keys(DEMOS)){ const o = document.createElement("option"); o.textContent = name; sel.appendChild(o); }
+sel.onchange = () => { $("src").value = DEMOS[sel.value]; $("hl").innerHTML = highlight($("src").value); compile(); };
+$("src").value = DEMOS[Object.keys(DEMOS)[0]];
+$("hl").innerHTML = highlight($("src").value);
+boot();
+</script>
+</body>
+</html>

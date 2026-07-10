@@ -249,8 +249,8 @@ type LowExpr
   | LUpval(Int, Int)
   | LBinOp(Int, BinOp, LowExpr, LowExpr)
   | LUnaryOp(Int, UnaryOp, LowExpr)
-  | LCall(Int, LowExpr, List)                  // monomorphic direct call
-  | LTailCall(Int, LowExpr, List)
+  | LCall(Int, LowExpr, [LowExpr])             // monomorphic direct call
+  | LTailCall(Int, LowExpr, [LowExpr])
   | LReturn(Int, LowExpr)
   | LMakeClosure(Int, LowFn, List, List)         // handle, fn, captures, ev_slots
   // VALUE-position reference to an EXISTING named fn that DISPATCHES effects —
@@ -293,9 +293,9 @@ type LowExpr
   // layer (RV128 repr) meeting the `><` parallel verb at the SPACE axis.
   | LSimdLanes(Int, List)                      // handle, [lane_value] (≤4 f32 branch results → v128)
   | LMakeRecord(Int, List)                     // handle, [field_value] sorted by field name
-  | LMakeVariant(Int, TagId, List)             // handle, tag_id, field exprs
+  | LMakeVariant(Int, TagId, [LowExpr])        // handle, tag_id, field exprs
   | LMatch(Int, LowExpr, List)
-  | LSuspend(Int, Int, LowExpr, List, List, Bool)   // handle, op_h, fn_expr, args, ev_slots, tail — mark_tail is the ONE writer of tail=true; emit renders return_call_indirect (the seed's clone-then-tail-call form; without it every evidence-threading recursion burned a frame per step — m3's iterate_from stack exhaustion, 2026-07-09)
+  | LSuspend(Int, Int, LowExpr, [LowExpr], List, Bool)   // handle, op_h, fn_expr, args, ev_slots, tail — mark_tail is the ONE writer of tail=true; emit renders return_call_indirect (the seed's clone-then-tail-call form; without it every evidence-threading recursion burned a frame per step — m3's iterate_from stack exhaustion, 2026-07-09)
   // ~> desugaring. ONE handler record (handler IS state IS closure IS
   // evidence): [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous][captured_evs].
   //   4th = handler_name ("" for anonymous — no `_state_g` global).

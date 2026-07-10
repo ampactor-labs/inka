@@ -1,0 +1,12 @@
+// A declared payload carries its element type: `Mk(Int, [Item])` gives the
+// destructured xs a proven [Item], so `++` grounds to the list
+// representation. The bare-`List` spelling of this same decl erased the
+// element at the declaration and the identical append floored to
+// emit_concat_unresolved (exit 134) — the class behind m3's lower_pipe /
+// render-family concat floors (2026-07-09).
+type Item = It(Int)
+type Box = Mk(Int, [Item])
+
+fn grow(b, x) = match b { Mk(n, xs) => xs ++ [x] }   // drift-audit: ignore — one append, no loop; the micro gates the payload element PROOF (the bare-List decl floored this exact shape)
+
+fn main() = len(grow(Mk(5, [It(1), It(2)]), It(9)))

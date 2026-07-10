@@ -217,7 +217,10 @@ fn driver_partition_layers(ref modules_with_deps) with Memory + Alloc = {
   driver_partition_peel(modules_with_deps, [], [])
 }
 
-fn driver_partition_peel(ref remaining, ref processed, ref layers_rev)
+// processed / layers_rev pinned (the Intent Boundary): both thread from []
+// through the recursion, so their element types have no other source — an
+// unpinned `processed ++ layer_names` floored the concat in m3's copy.
+fn driver_partition_peel(ref remaining, ref processed: [String], ref layers_rev: [[String]])
   with Memory + Alloc = {
   if len(remaining) == 0 { reverse(layers_rev) }
   else {

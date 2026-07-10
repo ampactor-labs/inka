@@ -54,10 +54,26 @@ for a in "$@"; do
 done
 
 if [ "$DO_BUILD" = 1 ]; then
-  echo "── seed ──"
-  bash bootstrap/build.sh >/dev/null 2>&1 || { echo "✗ seed build FAILED"; exit 1; }
-  echo "── m2 (seed compiles the wheel) ──"
-  bash tools/probe.sh m2 | tail -2 || exit 1
+  if [ "${FROM_SEED:-0}" = 1 ]; then
+    echo "── seed ──"
+    bash bootstrap/build.sh >/dev/null 2>&1 || { echo "✗ seed build FAILED"; exit 1; }
+    echo "── m2 (seed compiles the wheel) ──"
+    bash tools/probe.sh m2 | tail -2 || exit 1
+  else
+    # Post-first-light default: m2 := boot(wheel) — the pinned fixpoint
+    # wheel compiles the wheel (boot/PROVENANCE.md), so every rung and
+    # micro below runs through a WHEEL-emitted compiler. FROM_SEED=1
+    # restores the seed-sparked path (band J archaeology).
+    echo "── m2 (boot — the pinned fixpoint wheel — compiles the wheel) ──"
+    { find src -name '*.mn' | sort | xargs cat
+      find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; } > "$OUT/wheel.mn"
+    "$WT" run "${WT_RUN_FLAGS[@]}" boot/mentl.wasm < "$OUT/wheel.mn" > "$OUT/m2.wat" 2> "$OUT/m2.err"
+    rc=$?
+    echo "m2: exit=$rc, $(wc -l < "$OUT/m2.wat" 2>/dev/null) lines"
+    [ "$rc" = 0 ] || { echo "✗ m2 generation TRAPPED"; exit 1; }
+    "${W2W[@]}" "$OUT/m2.wat" -o "$OUT/m2.wasm" 2> "$OUT/m2w.err" || { echo "✗ m2 wat2wasm FAILED"; head -5 "$OUT/m2w.err"; exit 1; }
+    echo "✓ m2.wasm ($(stat -c%s "$OUT/m2.wasm") bytes)"
+  fi
 fi
 [ -f "$OUT/m2.wasm" ] || { echo "✗ no m2.wasm — run without --no-build"; exit 1; }
 # GATE_WASM: the compiler-under-test. Default m2 (seed-sparked wheel); point it

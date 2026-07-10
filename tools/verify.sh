@@ -35,11 +35,20 @@ fail=0
 [[ -f "$BASELINE" ]] || { say "verify: baseline missing: $BASELINE"; exit 2; }
 [[ -x "$WT" ]] || { say "verify: wasmtime not found at $WT (set WASMTIME_BIN)"; exit 2; }
 
-# 1. Seed builds.
-if ! bash bootstrap/build.sh >/tmp/verify_build.log 2>&1; then
-  say "✗ seed build FAILED (tail /tmp/verify_build.log):"; tail -3 /tmp/verify_build.log; exit 1
+# 1. The compiler exists. Default: the pinned fixpoint wheel (boot/ —
+#    first light 2026-07-10; boot/PROVENANCE.md). --from-seed builds and
+#    uses the hand-WAT seed instead (cold-bootstrap archaeology, band J).
+BOOT="boot/mentl.wasm"
+if [[ "${1:-}" == "--from-seed" ]]; then
+  if ! bash bootstrap/build.sh >/tmp/verify_build.log 2>&1; then
+    say "✗ seed build FAILED (tail /tmp/verify_build.log):"; tail -3 /tmp/verify_build.log; exit 1
+  fi
+  say "✓ seed builds"
+  BOOT="bootstrap/mentl.wasm"
 fi
-say "✓ seed builds"
+[[ -f "$BOOT" ]] || { say "verify: compiler missing: $BOOT"; exit 2; }
+export MENTL_BOOT="$BOOT"
+say "✓ compiler: $BOOT"
 
 # 2. Micro battery — each line `micro:NAME=EXPECTED_EXIT` in the baseline.
 while IFS= read -r line; do
@@ -55,12 +64,12 @@ done < <(grep -E '^micro:' "$BASELINE")
 #    shadow.
 { find src -name '*.mn' | sort | xargs cat; \
   find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; } > /tmp/verify_wheel.mn
-if wt_run bootstrap/mentl.wasm < /tmp/verify_wheel.mn \
+if wt_run "$BOOT" < /tmp/verify_wheel.mn \
       > /tmp/verify_m2.wat 2>/tmp/verify_m2.err; then
-  census=$(grep -cE '^(E_|W_)' /tmp/verify_m2.err)
-  say "· census $census (shadow — the seed's view of the wheel; informational)"
+  census=$(grep -cE '(^|: )(E_|W_)' /tmp/verify_m2.err)   # the wheel prefixes stages ('infer: E_…'); the seed printed bare
+  say "· census $census (the compiler's own diagnostic count on the wheel; informational)"
 else
-  say "✗ seed TRAPPED compiling the wheel (tail /tmp/verify_m2.err):"; tail -3 /tmp/verify_m2.err; fail=1
+  say "✗ compiler TRAPPED compiling the wheel (tail /tmp/verify_m2.err):"; tail -3 /tmp/verify_m2.err; fail=1
 fi
 
 if [[ "$fail" -ne 0 ]]; then

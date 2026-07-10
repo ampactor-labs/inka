@@ -18,10 +18,16 @@ cd "$(dirname "$0")/.." || exit 2
 source "$(dirname "$0")/wt-env.sh"   # WT, WT_RUN_FLAGS, W2W — the one home
 OUT="${MARCH_OUT:-$(pwd)/.build/march}"; mkdir -p "$OUT"
 WHEEL="$OUT/wheel.mn"
-BUILD=1; FIXPOINT=0
+# Post-first-light default: boot from the PINNED FIXPOINT WHEEL
+# (boot/mentl.wasm — boot/PROVENANCE.md). m2 := boot(wheel) is wheel-emitted,
+# so m2 == m3 IS the fixed point (the seed-era "NOT m2 == m3" compared a
+# SEED-emitted m2 and retired with the seed). --from-seed walks the cold
+# ladder (build seed, seed→m2, m2→m3[, m3→m4]) — band J archaeology.
+BUILD=1; FIXPOINT=0; FROM_SEED=0
 for a in "$@"; do case "$a" in
-  --no-build) BUILD=0 ;;
-  --fixpoint) FIXPOINT=1 ;;
+  --no-build)  BUILD=0 ;;
+  --fixpoint)  FIXPOINT=1 ;;
+  --from-seed) FROM_SEED=1 ;;
   *) echo "march: unknown arg '$a'" >&2; exit 2 ;;
 esac; done
 
@@ -64,14 +70,21 @@ pin_trap() {  # pin_trap <wasm> <err> — auto-disassemble the trap site from th
   find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; } > "$WHEEL"
 echo "wheel: $(wc -l < "$WHEEL") lines"
 
-if [ "$BUILD" = 1 ]; then
-  if bash bootstrap/build.sh > "$OUT/seedbuild.log" 2>&1; then
-    echo "✓ seed build ($(grep -oE 'mentl.wasm \([0-9]+ bytes\)' "$OUT/seedbuild.log" | tail -1))"
-  else echo "✗ seed build FAILED:"; tail -15 "$OUT/seedbuild.log"; exit 1; fi
+if [ "$FROM_SEED" = 1 ]; then
+  if [ "$BUILD" = 1 ]; then
+    if bash bootstrap/build.sh > "$OUT/seedbuild.log" 2>&1; then
+      echo "✓ seed build ($(grep -oE 'mentl.wasm \([0-9]+ bytes\)' "$OUT/seedbuild.log" | tail -1))"
+    else echo "✗ seed build FAILED:"; tail -15 "$OUT/seedbuild.log"; exit 1; fi
+  fi
+  BOOT=bootstrap/mentl.wasm
+else
+  BOOT=boot/mentl.wasm
+  [ -f "$BOOT" ] || { echo "✗ no $BOOT (boot/PROVENANCE.md) — or use --from-seed"; exit 1; }
+  echo "✓ boot: $BOOT (the pinned fixpoint wheel)"
 fi
 
-# ── m2: seed compiles the wheel (the load-bearing emit — m2 is seed-output) ──
-gen bootstrap/mentl.wasm "$OUT/m2.wat" "$OUT/m2.err"; m2rc=$?
+# ── m2: the boot compiler compiles the wheel ──
+gen "$BOOT" "$OUT/m2.wat" "$OUT/m2.err"; m2rc=$?
 echo "m2: exit=$m2rc, $(wc -l < "$OUT/m2.wat" 2>/dev/null) lines"
 if [ "$m2rc" != 0 ]; then echo "✗ m2 generation TRAPPED:"; trap_lines "$OUT/m2.err" | head -6; exit 1; fi
 if ! "${W2W[@]}" "$OUT/m2.wat" -o "$OUT/m2.wasm" 2> "$OUT/m2w.err"; then
@@ -100,7 +113,21 @@ else
   echo "✓ GATE: m3 clean (no trap)"
 fi
 
-# ── m3 == m4 fixed point (first-light's correctness-paired half) ──
+# ── the FIXPOINT RATCHET ──
+# Boot path: m2 and m3 are BOTH wheel-emitted, so m2 == m3 is the fixed
+# point — asserted on every run (the ratchet law: every wheel change holds
+# m_n == m_{n+1}). --fixpoint extends the chain one more generation (m4)
+# for the paranoid triple. Seed path (--from-seed): m2 is seed-emitted, so
+# the fixpoint is m3 == m4 (the original first-light form) — needs --fixpoint.
+fixok=1
+if [ "$FROM_SEED" = 0 ] && [ "$m3rc" = 0 ]; then
+  if diff -q "$OUT/m2.wat" "$OUT/m3.wat" >/dev/null 2>&1; then
+    echo "✓✓ FIXED POINT holds: m2 == m3"
+  else
+    echo "✗ RATCHET: m2 ≠ m3 ($(diff "$OUT/m2.wat" "$OUT/m3.wat" 2>/dev/null | grep -c '^[<>]') diff lines) — the wheel no longer reproduces itself"
+    fixok=0
+  fi
+fi
 if [ "$FIXPOINT" = 1 ] && [ "$m3rc" = 0 ]; then
   if "${W2W[@]}" "$OUT/m3.wat" -o "$OUT/m3.wasm" 2>/dev/null; then
     gen "$OUT/m3.wasm" "$OUT/m4.wat" "$OUT/m4.err"; m4rc=$?
@@ -108,7 +135,8 @@ if [ "$FIXPOINT" = 1 ] && [ "$m3rc" = 0 ]; then
       echo "✓✓ FIRST LIGHT: m3 == m4 (fixed point)"
     else
       echo "· m3 ≠ m4 ($(diff "$OUT/m3.wat" "$OUT/m4.wat" 2>/dev/null | grep -c '^[<>]') diff lines; m4 exit=$m4rc)"
+      fixok=0
     fi
   fi
 fi
-[ -z "$TRAP" ] && [ "$m3rc" = 0 ]
+[ -z "$TRAP" ] && [ "$m3rc" = 0 ] && [ "$fixok" = 1 ]

@@ -10,17 +10,19 @@ set -u
 MICRO="$1"; EXPECT="${2:-}"
 shift 2 2>/dev/null || shift 1
 LIBS=("$@")
-SEED="bootstrap/mentl.wasm"
+# The compiler under test: the pinned fixpoint wheel (boot/PROVENANCE.md).
+# MENTL_BOOT=bootstrap/mentl.wasm walks the cold seed path (archaeology).
+BOOT="${MENTL_BOOT:-boot/mentl.wasm}"
 source "$(dirname "$0")/wt-env.sh"   # wt_run, wt_asm — the one home
 # Honor TMPDIR (state.sh points it at a luks build dir); never hardwire the
 # RAM-backed tmpfs — wasmtime's shared-memory partition exhausts its quota.
 base="${TMPDIR:-/tmp}/$(basename "$MICRO" .mn)"
 
-cat "${LIBS[@]}" "$MICRO" 2>/dev/null | wt_run "$SEED" > "$base.wat" 2> "$base.err"
+cat "${LIBS[@]}" "$MICRO" 2>/dev/null | wt_run "$BOOT" > "$base.wat" 2> "$base.err"
 compile_exit=$?
 diags=$(grep -c '^[EW]_' "$base.err" || true)
 if [ $compile_exit -ne 0 ]; then
-  echo "FAIL(compile) $MICRO: seed exit=$compile_exit diags=$diags"
+  echo "FAIL(compile) $MICRO: compiler exit=$compile_exit diags=$diags"
   tail -4 "$base.err"; exit 1
 fi
 if ! wt_asm "$base.wat" "$base.wasm" 2> "$base.w2e"; then

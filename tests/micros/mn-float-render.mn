@@ -1,0 +1,18 @@
+// The render family EXECUTES: float_to_str(2.5) begins "2.5" and
+// int_to_str(-47) is three bytes. Before 2026-07-09 this path was
+// unreachable-by-floor (the ++ operands never proved a representation), and
+// once grounded it rendered every finite float as "Inf" — float_is_inf
+// compared against 1.79…e308, whose `e308` lexed as an IDENTIFIER (TFloatLit
+// has no exponent form). Trim-invariant on purpose: the 17-significant-digit
+// tail (2.5000000000000000) is named cosmetic residue, not gated here.
+fn main() with Memory + Alloc = {
+  if float_is_inf(2.5) { 90 }
+  else if float_is_nan(2.5) { 91 }
+  else {
+    let s = float_to_str(2.5)
+    if byte_at(s, 0) == 50 && byte_at(s, 1) == 46 && byte_at(s, 2) == 53 {
+      byte_len(int_to_str(0 - 47))
+    }
+    else { 92 }
+  }
+}

@@ -380,7 +380,7 @@ fn str_unescape_into(s, i, n, dest, w) with Memory + Alloc =
 // int_to_str — decimal representation of a signed 32-bit integer.
 // Handles negative numbers and zero correctly.
 // Digit-wise: no sprintf, no lookup table beyond '0'+digit.
-fn int_to_str(n) -> String with Memory + Alloc = {
+fn int_to_str(n) with Memory + Alloc = {
   if n == 0 { str_of_single_byte(48) }             // "0"
   else if n == 0 - 2147483648 {
     // INT_MIN can't be negated in i32 (0 - INT_MIN = INT_MIN).
@@ -404,7 +404,11 @@ fn int_to_str(n) -> String with Memory + Alloc = {
     let neg = str_of_single_byte(45)               // "-"
     let abs = 0 - n
     let digits = int_to_str_positive(abs)
-    neg ++ digits
+    // str_concat by NAME: the builders assemble flat strings by address
+    // arithmetic, so `p + 4` types the value a word and `++`'s sequence
+    // proof cannot arrive until String = [Byte] lands (PLAN §4①, band D).
+    // The author states the representation; no dispatch, no guess.
+    str_concat(neg, digits)
   }
   else { int_to_str_positive(n) }
 }
@@ -433,14 +437,14 @@ handler show_default {
 
 fn to_string(x) with Show = show_word(x)
 
-fn str_of_single_byte(b) -> String with Memory + Alloc = {
+fn str_of_single_byte(b) with Memory + Alloc = {
   let ptr = alloc(5)
   store_i32(ptr, 1)
   store_i8(ptr + 4, b)
   ptr
 }
 
-fn int_to_str_positive(n) -> String with Memory + Alloc = {
+fn int_to_str_positive(n) with Memory + Alloc = {
   // Worst case: 10 decimal digits for i32 max (2147483647).
   // Write digits right-to-left into a 10-byte scratch area, then copy.
   let scratch = alloc(14)                  // 4 header + 10 digit bytes
@@ -472,7 +476,7 @@ fn int_write_digits(buf, pos, n) with Memory + Alloc = {
 //
 // NOT an alias of int_to_str. Float and Int are distinct types with
 // distinct bit representations and distinct printing requirements.
-fn float_to_str(f) -> String with Memory + Alloc = {
+fn float_to_str(f) with Memory + Alloc = {
   if float_is_nan(f) { str_literal_5("NaN") }
   else if float_is_inf(f) {
     if float_is_negative(f) { str_literal_5("-Inf") }
@@ -488,7 +492,7 @@ fn float_to_str(f) -> String with Memory + Alloc = {
     let rendered = float_render_positive(abs_f)
     if sign == 1 {
       let minus = str_of_single_byte(45)
-      minus ++ rendered
+      str_concat(minus, rendered)   // named representation — see int_to_str
     }
     else { rendered }
   }
@@ -497,7 +501,7 @@ fn float_to_str(f) -> String with Memory + Alloc = {
 // str_literal_5: allocate a small constant string from bytes.
 // Caller encodes the string as individual byte arguments.
 // Used only for the handful of float sentinels above.
-fn str_literal_5(s) -> String with Memory + Alloc = {
+fn str_literal_5(s) with Memory + Alloc = {
   // s is already an Mentl string literal — return it directly.
   // In the final form the compiler interns literals at compile time;
   // at bootstrap this is a heap-allocated flat string via the parser.
@@ -516,7 +520,7 @@ fn str_literal_5(s) -> String with Memory + Alloc = {
 // i32.div_s against extract_digits' f64 slot (m3's one residual mismatch).
 // The inference-order completion is the named band
 // Hβ.infer.scc-ordered-walk; the pin is the Intent Boundary bridging it.
-fn float_render_positive(f: Float) -> String with Memory + Alloc = {
+fn float_render_positive(f: Float) with Memory + Alloc = {
   let exp = float_floor_log10(f)
   let digits = float_extract_digits(f / float_pow10(exp), 0, 17, make_list(0))
   float_format_digits(digits, exp)
@@ -558,14 +562,14 @@ fn float_extract_digits(scaled: Float, count, max_digits, acc) with Memory + All
 
 // float_format_digits: format a digit list and exponent into a decimal string.
 // Uses fixed notation for -4 <= exp <= 14, scientific otherwise.
-fn float_format_digits(digits, exp) -> String with Memory + Alloc = {
+fn float_format_digits(digits, exp) with Memory + Alloc = {
   if exp >= 0 - 4 && exp <= 14 {
     float_format_fixed(digits, exp)
   }
   else { float_format_scientific(digits, exp) }
 }
 
-fn float_format_fixed(digits, exp) -> String with Memory + Alloc = {
+fn float_format_fixed(digits, exp) with Memory + Alloc = {
   // exp=2 and digits=[1,2,3] → "123.0"
   // exp=0 and digits=[1,2,3] → "1.23"
   // exp=-1 and digits=[1,2,3] → "0.123"
@@ -577,22 +581,23 @@ fn float_format_fixed(digits, exp) -> String with Memory + Alloc = {
     let dot = str_of_single_byte(46)            // "."
     let leading = float_zero_pad(0 - int_digits)  // |int_digits| zeros // drift-audit: ignore
     let frac = float_digits_to_str(digits, 0, 17)
+    // named representation (see int_to_str): word-built strings, §4① residue
     zero
-      ++ dot
-      ++ leading
-      ++ frac
+      |> str_concat(??, dot)
+      |> str_concat(??, leading)
+      |> str_concat(??, frac)
   } else {
     let int_part = float_digits_to_str(digits, 0, int_digits)
     let frac_part = float_digits_to_str(digits, int_digits, 17)
     let dot = str_of_single_byte(46)
     int_part
-      ++ dot
-      ++ frac_part
+      |> str_concat(??, dot)
+      |> str_concat(??, frac_part)
   }
 }
 
 // Build a string of n '0' characters for fractional padding.
-fn float_zero_pad(n) -> String with Memory + Alloc = {
+fn float_zero_pad(n) with Memory + Alloc = {
   if n <= 0 { str_of_single_byte(48) |> str_slice(??, 0, 0) }
   else {
     let dest = alloc(4 + n)
@@ -610,18 +615,18 @@ fn float_fill_zeros(ptr, i, n) with Memory = {
   }
 }
 
-fn float_format_scientific(digits, exp) -> String with Memory + Alloc = {
+fn float_format_scientific(digits, exp) with Memory + Alloc = {
   let mantissa = float_format_fixed(digits, 0)
   let e_char = str_of_single_byte(101)             // 'e'
   let exp_str = int_to_str(exp)
   mantissa
-    ++ e_char
-    ++ exp_str
+    |> str_concat(??, e_char)
+    |> str_concat(??, exp_str)
 }
 
 // float_digits_to_str: convert a slice of the digit list to a string.
 // Pads with '0' if the requested range exceeds available digits.
-fn float_digits_to_str(digits, start, end) -> String with Memory + Alloc = {
+fn float_digits_to_str(digits, start, end) with Memory + Alloc = {
   if start >= end { str_of_single_byte(48) }       // "0" minimum
   else {
     let len = end - start
@@ -675,7 +680,13 @@ fn float_pow10(exp) with Memory + Alloc = {
 // The NaN idiom is Float-only by meaning: at i32, ne(f, f) is
 // constantly false and detects nothing. The pin states the domain.
 fn float_is_nan(f: Float) = f != f
-fn float_is_inf(f)      = f > 1.7976931348623157e308 || f < 0.0 - 1.7976931348623157e308
+// IEEE identity, no threshold literal: finite f has f - f == 0.0; ±Inf has
+// Inf - Inf = NaN (never equal to itself); NaN fails the f == f guard. The
+// prior form compared against 1.79…e308 — but TFloatLit has NO exponent form
+// (SYNTAX §Token enumeration), so `e308` lexed as an IDENTIFIER, the compare
+// went through a recovered E_MissingVariable, and every finite float rendered
+// "Inf" (unreached until the render floors grounded, 2026-07-09).
+fn float_is_inf(f: Float)  = f == f && f - f != f - f
 fn float_is_zero(f)     = f == 0.0 || f == 0.0 - 0.0
 fn float_is_negative(f) = if f < 0.0 { 1 } else { if float_is_negative_zero(f) { 1 } else { 0 } }
 fn float_is_negative_zero(f) = f == 0.0 - 0.0 && 1.0 / f < 0.0

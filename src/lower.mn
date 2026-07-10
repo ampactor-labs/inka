@@ -295,7 +295,7 @@ type LowExpr
   | LMakeRecord(Int, List)                     // handle, [field_value] sorted by field name
   | LMakeVariant(Int, TagId, List)             // handle, tag_id, field exprs
   | LMatch(Int, LowExpr, List)
-  | LSuspend(Int, Int, LowExpr, List, List)    // handle, op_h, fn_expr, args, ev_slots
+  | LSuspend(Int, Int, LowExpr, List, List, Bool)   // handle, op_h, fn_expr, args, ev_slots, tail — mark_tail is the ONE writer of tail=true; emit renders return_call_indirect (the seed's clone-then-tail-call form; without it every evidence-threading recursion burned a frame per step — m3's iterate_from stack exhaustion, 2026-07-09)
   // ~> desugaring. ONE handler record (handler IS state IS closure IS
   // evidence): [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous][captured_evs].
   //   4th = handler_name ("" for anonymous — no `_state_g` global).
@@ -439,7 +439,7 @@ fn lexpr_handle(e) with Pure = match e {
   LMakeRecord(h, _)       => h,
   LMakeVariant(h, _, _)   => h,
   LMatch(h, _, _)         => h,
-  LSuspend(h, _, _, _, _) => h,
+  LSuspend(h, _, _, _, _, _) => h,
   LHandleWith(h, _, _, _, _, _, _) => h,
   LFeedback(h, _, _)      => h,
   LFeedbackPrior(h)       => h,
@@ -569,6 +569,12 @@ fn lexpr_ty(e) with LookupTy = {
 // FnStmt / LambdaExpr / handler-arm-body lowering after lower_expr.
 fn mark_tail(e) with Memory + Alloc = match e {
   LCall(h, fn_, args)         => LTailCall(h, fn_, args),
+  // An evidence-threading call in tail position stays LSuspend — the sst_
+  // clone is argument computation — but the dispatch becomes a TAIL call.
+  // Without this arm the wildcard kept it plain and every effectful
+  // recursion (iterate_from over the 36k-line wheel) burned a frame per
+  // step: m3's m4-generation stack exhaustion, 2026-07-09.
+  LSuspend(h, o, f, args, ev, _) => LSuspend(h, o, f, args, ev, true),
   LIf(h, cond, then_b, else_b) =>
     LIf(h, cond, mark_tail_last_in(then_b), mark_tail_last_in(else_b)),
   LBlock(h, stmts) => LBlock(h, mark_tail_last_in(stmts)),
@@ -680,7 +686,7 @@ fn lower_call_default(handle, f, fh, lo_args) = {
   if len(ev_slots) == 0 {
     LCall(handle, lo_f, lo_args)
   } else {
-    LSuspend(handle, fh, lo_f, lo_args, ev_slots)
+    LSuspend(handle, fh, lo_f, lo_args, ev_slots, false)
   }
 }
 
@@ -1812,9 +1818,9 @@ fn lower_pipe(kind, left, right, handle) = match kind {
         if hole_at >= 0      { LCall(ch, fn_, splice_at(args, hole_at, lo_l)) }
         else if is_partial   { LCall(ch, fn_, args ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node, not a loop accumulator
         else                 { LCall(handle, lo_r, [lo_l]) },
-      LSuspend(sh, oph, fnx, args, evs) =>
-        if hole_at >= 0      { LSuspend(sh, oph, fnx, splice_at(args, hole_at, lo_l), evs) }
-        else if is_partial   { LSuspend(sh, oph, fnx, args ++ [lo_l], evs) }   // drift-audit: ignore — one completion per pipe node
+      LSuspend(sh, oph, fnx, args, evs, tl) =>
+        if hole_at >= 0      { LSuspend(sh, oph, fnx, splice_at(args, hole_at, lo_l), evs, tl) }
+        else if is_partial   { LSuspend(sh, oph, fnx, args ++ [lo_l], evs, tl) }   // drift-audit: ignore — one completion per pipe node
         else                 { LCall(handle, lo_r, [lo_l]) },
       LMakeVariant(vh, tag, vargs) =>
         if hole_at >= 0      { LMakeVariant(vh, tag, splice_at(vargs, hole_at, lo_l)) }
@@ -1828,7 +1834,7 @@ fn lower_pipe(kind, left, right, handle) = match kind {
         // callee is reused; the fork reads the stage node's own type.
         let evs = derive_ev_slots(rfh)
         if len(evs) == 0 { LCall(handle, lo_r, [lo_l]) }
-        else             { LSuspend(handle, rfh, lo_r, [lo_l], evs) }
+        else             { LSuspend(handle, rfh, lo_r, [lo_l], evs, false) }
       }
     }
   },
@@ -3761,7 +3767,7 @@ fn reach_names_expr(expr, acc) = match expr {
   LMakeRecord(_h, fs)       => reach_names_list(fs, acc),
   LMakeVariant(_h, _t, fs)  => reach_names_list(fs, acc),
   LMatch(_h, s, arms)       => reach_match_arms(arms, reach_names_expr(s, acc)),
-  LSuspend(_h, o, f, args, ev) =>
+  LSuspend(_h, o, f, args, ev, _) =>
     reach_names_list(ev,
       reach_names_list(args, reach_names_expr(f, [o] ++ acc))),
   LFeedback(_h, b, s)       => reach_names_expr(s, reach_names_expr(b, acc)),

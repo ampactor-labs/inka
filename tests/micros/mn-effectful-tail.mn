@@ -1,0 +1,22 @@
+// An effectful fn's tail self-call must emit as a TAIL call — the sst_
+// evidence clone is argument computation, then return_call_indirect (the
+// seed's proven form). The regression this gates: the wheel's mark_tail
+// rewrote LCall→LTailCall but had no LSuspend arm, so every
+// evidence-threading recursion burned a frame per step — m3's iterate_from
+// exhausted the call stack compiling the 36k-line wheel (the 2026-07-09
+// m4 blocker). 200000 frames overflow wasmtime's stack; constant-stack
+// tail emission returns 7.
+effect Tick {
+  tick() -> Int
+}
+
+handler ticky {
+  tick() => resume(1)
+}
+
+fn spin(n) with Tick = if n == 0 { 7 } else {
+  tick()
+  spin(n - 1)
+}
+
+fn main() = { spin(200000) } ~> ticky

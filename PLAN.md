@@ -871,7 +871,17 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > trap with composition), k3 (op-args as the yield packet; arm-state commit;
 > `Hβ.infer.tail-recursion-resume-cardinality` co-lands — backtrack and
 > enumerate_inhabitants flip MultiShot on the mechanism that can carry them),
-> then the boot re-pin so the IDE's pinned compiler carries the producer.**
+> then the boot re-pin so the IDE's pinned compiler carries the producer.
+> **THE k2/k3 DESIGN IS BANKED, TWICE-REFUTED (287521d, 2026-07-11):
+> `docs/research/multishot-general-design.md` — 8 scouts + a first-principles
+> challenger + 2 independent refuters; every fork ruled with its decisive
+> artifact fact (the prove-absence can_yield gate, the evidence-layer
+> capability mark, the self-re-composing composer, re-install-in-k,
+> dynamic dispatch in resumed segments, the JOIN world). The flip-list is
+> censused complete (exactly choose + enumerate_inhabitants; 364 resume
+> sites swept); the cut ships only with mn-backtrack-full green (backtrack
+> is DEAD CODE in the wheel — no wheel gate can see it). Build order M1 →
+> M2 → M3 lives in the doc.**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

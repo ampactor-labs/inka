@@ -1416,7 +1416,7 @@ fn lower_op_default_handler(op_name) =
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
-        EffectOpScheme(_, default_handler, ambiguous) =>
+        EffectOpScheme(_, default_handler, ambiguous, _) =>
           // field_name_eq forces str_eq (a bare `== ""` is pointer-eq under the
           // seed — §9 name-compare class); default_handler "" ⇒ unset.
           if ambiguous || field_name_eq(default_handler, "") { None } else { Some(default_handler) },
@@ -1445,13 +1445,31 @@ fn lookup_parent_effect(op_name) = {
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
-        EffectOpScheme(ename, _, _) => Some(ename),
+        EffectOpScheme(ename, _, _, _) => Some(ename),
         _ => None
       }
     },
     None => None
   }
 }
+
+// The op's resume cardinality, PROJECTED off its EffectOpScheme — inference
+// wrote it (draw_op_edges joined every handler arm's Usage grade); lower reads
+// it live here, the TIME-axis twin of resume_world_of reading the world off the
+// arm fn's row. An op with no scheme (should not happen for a real perform)
+// floors to OneShot — the direct-return fast path, sound because a genuine
+// multi-shot arm always carries a MultiShot scheme by the monotone join.
+fn op_resume_discipline(op_name) =
+  match env_lookup(op_name) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        EffectOpScheme(_, _, _, disc) => disc,
+        _ => OneShot
+      }
+    },
+    None => OneShot
+  }
 
 
 // Lower walk — exhaustive, live
@@ -1597,7 +1615,7 @@ fn lower_expr_body(e, handle, span) = match e {
           // zero-arg call (already reported there) lowers to the empty
           // record, never a garbage read past an empty args list.
           if len(lo_args) == 0 { LMakeRecord(handle, []) } else { list_index(lo_args, 0) },
-        Some(EffectOpScheme(_, _, _)) =>
+        Some(EffectOpScheme(_, _, _, _)) =>
           // Row-guided dispatch per SUBSTRATE.md §"Three Tiers of
           // Effect Compilation". The row IS the evidence contract:
           //   - Effect in declared row → Tier 2: LEvPerform (handler
@@ -2663,11 +2681,12 @@ fn lower_one_arm_decl(arm: {args: [String], body: N, op_name: String}, discrimin
   // around arm body lowering so lower_expr's ResumeExpr arm resolves
   // `with field = NEW` updates' slot offsets via current_state_fields()
   // AND its representation via current_resume_discipline(). The cardinality
-  // is READ LIVE from the arm body — `infer_resume_cardinality` is a pure
-  // graph projection (the body IS the contract, SYNTAX.md «Resume discipline»),
-  // so lower computes it at the site instead of reading the deleted write-only
-  // `resume_kinds` ledger (Anchor 1, Carried-Truth — the fix is LESS code).
-  let disc = infer_resume_cardinality(arm.body)
+  // is PROJECTED off the op's EffectOpScheme — inference wrote it there
+  // (draw_op_edges joined every handler arm's resume_grade), so lower reads
+  // the proven fact live, the way it reads repr off a type or world off a row.
+  // No second hand-walk: the deleted infer_resume_cardinality re-derived this
+  // at the wrong layer over a broken buffer (the mn-multishot dormancy).
+  let disc = op_resume_discipline(arm.op_name)
   let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names, disc))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
   ls_exit_frame()
   // fence = nstate + total_arms; the arm's LEvPerform reads land on the
@@ -2754,8 +2773,14 @@ fn lower_resume_oneshot(handle, val, state_updates) = {
 // dispatches call_indirect on fn_ptr@0 (the closure-call path, wasm.mn) —
 // Koka evidence-passing, never a vtable.
 fn lower_resume_multishot(handle, val, state_updates) = {
-  let arm_name = ls_outer_fn_name()      // drift-audit: ignore — sequenced effectful frame read (LowerScope)
-  let resume_fn_name = "__k_{arm_name}_{int_to_str(handle)}"
+  // The resumption fn's name is keyed on the resume SITE (its handle) — the one
+  // globally-unique, always-valid discriminator (mint gives a fresh handle per
+  // resume, so two resumes in one arm get distinct fns). The prior form spliced
+  // ls_outer_fn_name() for readability, but that read returns a 1-byte NULL in
+  // the multishot lowering context (the arm frame's name does not reach here) —
+  // an invalid WAT identifier that the never-exercised producer path baked in.
+  // The handle carries the identity; the decoration was the non-ultimate part.
+  let resume_fn_name = "__k_{int_to_str(handle)}"
   let fields = current_state_fields()    // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
   // The resumption prologue: commit the snapshot, return the resumed value.
   // The resumed value is the resumption fn's single parameter `__resume_in`.

@@ -906,6 +906,12 @@ fn state_field_init(f: {init: N, name: String}) -> N = f.init
 // minted in parse_handler_arm) — same pin, same discipline.
 fn handler_arm_op_name(a: {args: List, body: N, op_name: String}) -> String = a.op_name
 
+// The arm's body node — the typed projection draw_op_edges folds the resume
+// Usage grade over (the arm-record type only resolves in a scope that closed
+// {args, body, op_name}, so this annotated accessor reads it from any context,
+// exactly as handler_arm_op_name reads the op name).
+fn handler_arm_body(a: {args: List, body: N, op_name: String}) -> N = a.body
+
 fn parse_handler_state_fields(ref tokens, pos) = {
   let name = ident_at(tokens, pos)
   let p_eq = expect(tokens, skip_ws(tokens, pos + 1), TEq)

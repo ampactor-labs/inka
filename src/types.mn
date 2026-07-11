@@ -259,18 +259,41 @@ fn mk_param(name, ty) = TParam(name, ty, Unmarked, Unmarked, None)
 // ─── Resume discipline (spec 02 · Affect POPL 2025) ────────────────
 // Continuations discriminated at the type level so handler elimination
 // (spec 05) and multi-shot × arena (Arc F.4) have the type hook. The
-// discipline is INFERRED from each handler arm body — the infer pass
-// counts resume call sites under control-flow analysis (loops /
-// recursion → MultiShot; single-branch single-call → OneShot;
-// branch-disjoint single-call → OneShot; gradient-undecided →
-// Either) and attaches the result to the EffectOpScheme. There is
-// no @resume= annotation; the body IS the contract per
-// protocol_cursor_is_the_substrate.md.
+// discipline is INFERRED — infer computes each arm's resume `Usage`
+// grade (below) and JOINS it onto the op's EffectOpScheme; lower
+// PROJECTS it at the resume site (OneShot → the ~85% direct-return
+// floor, MultiShot → the reified heap continuation). There is no
+// @resume= annotation; the body IS the contract per
+// protocol_cursor_is_the_substrate.md. The write is inference's (the
+// one writer), read live by lower — never a second hand-walk at lower.
 
 type ResumeDiscipline
   = OneShot
   | MultiShot
   | Either
+
+// ─── Usage — the coeffect multiplicity grade {0, 1, ω} ─────────────
+// How many times a value is used, as a join-semilattice. THE shared
+// use-count lattice of the medium: OWNERSHIP reads it on a param's
+// VarRefs (own.mn classify_usage: 0/1/2+ → Unmarked/Own/Ref — arm 5)
+// and RESUME CARDINALITY reads it on an arm's ResumeExprs (0/1/≥2 →
+// OneShot/OneShot/MultiShot — the TIME axis). One lattice, two
+// projections: the continuation is just a value, and its multiplicity
+// IS its ownership grade — `own`/consumed-once ↔ OneShot, `ref`/shared
+// ↔ MultiShot. No other effect-handler language shares these (Koka /
+// Effekt compute resumption multiplicity as a bespoke analysis); here
+// they are one read of a value's use-count. `usage_seq` (⊗) composes
+// sequentially — two uses on one path is UMany; `usage_join` (⊔)
+// alternates — disjoint branches join, not add (only one branch runs),
+// so a branch-and-resume-once arm keeps the OneShot fast path.
+// (Ownership's own.mn classifier is the syntactic-count shadow of this
+// grade; unifying them onto one `count_uses(is_use, body)` is the named
+// peer Hβ.infer.usage-grade-unifies-cardinality-ownership.)
+
+type Usage
+  = UZero
+  | UOne
+  | UMany
 
 // ─── Scheme (spec 04) — let-generalization ─────────────────────────
 // Forall(quantified_handles, body_type). A monomorphic binding is
@@ -292,15 +315,21 @@ type Scheme
 //   total_variants is the count over the declaring type — enables
 //     pattern-exhaustiveness as a graph read at infer_match_arms.
 //
-// EffectOpScheme(effect_name, default_handler, ambiguous): the op binding
-// IS the dispatch fact. effect_name is the declaring effect — read to know
-// which effect this op participates in without re-inspecting the row.
+// EffectOpScheme(effect_name, default_handler, ambiguous, disc): the op
+// binding IS the dispatch fact. effect_name is the declaring effect — read to
+// know which effect this op participates in without re-inspecting the row.
 // default_handler is the UNIQUE handler that declares an arm for this op,
 // drawn as an edge at register_handler ("" until then); ambiguous is True
 // once a SECOND distinct handler also declares it. lower reads them to cash
 // a non-lexical perform of a uniquely-handled op to a direct call against
 // the singleton's $<hname>_state_g home (never a threaded ev-slot copy —
-// Carried-Truth); an ambiguous op threads evidence instead.
+// Carried-Truth); an ambiguous op threads evidence instead. disc is the op's
+// resume cardinality — the JOIN of every handler arm's Usage grade (MultiShot
+// iff some arm resumes twice on one path, else OneShot): the op-level join
+// is SOUND for lowering every arm (never under-classifies a genuine
+// multi-shot, which would truncate the continuation — the mn-multishot bug),
+// and preserves the fast path for always-one-shot ops (the vast majority).
+// Written by draw_op_edges, projected by lower's op_resume_discipline.
 //
 // EffectDeclKind(op_names) is the effect declaration itself.
 // `env_lookup("Iterate")` reads this to know the effect's ops
@@ -315,7 +344,7 @@ type Scheme
 type SchemeKind
   = FnScheme                                     // tag 0
   | ConstructorScheme(TagId, Int)                // tag 1
-  | EffectOpScheme(String, String, Bool)         // tag 2 — (effect_name, default_handler, ambiguous)
+  | EffectOpScheme(String, String, Bool, ResumeDiscipline)   // tag 2 — (effect_name, default_handler, ambiguous, resume cardinality — the join over handlers' arm grades)
   | RecordSchemeKind(List)                       // tag 3 — [(field_name, ty)]
   | EffectDeclKind(List)                         // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
   | HandlerKind(Int, List, List, List)           // tag 6 — (residual_row_handle, config, state, arms)

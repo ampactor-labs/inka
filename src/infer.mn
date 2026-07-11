@@ -3138,7 +3138,9 @@ fn register_one_op(effect_name, eff_name, op) = {
   env_extend(op_name,
     Forall(qvars, TFun(params, ret_type, row)),
     Declared(op_name),
-    EffectOpScheme(effect_name, "", false))
+    // OneShot is the join identity (grade UZero → OneShot): an op with no
+    // handler stays the fast path; each handler's arm joins its grade in.
+    EffectOpScheme(effect_name, "", false, OneShot))
 }
 
 // The handler's effect name, read LIVE from the op→effect edge (§2 follow-the-
@@ -3156,8 +3158,8 @@ fn derive_handler_ename(arms, fallback: String) =
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
-        EffectOpScheme(en, _, _) => en,
-        _                        => derive_handler_ename(drop_last(arms), fallback)
+        EffectOpScheme(en, _, _, _) => en,
+        _                           => derive_handler_ename(drop_last(arms), fallback)
       }
     },
     None => derive_handler_ename(drop_last(arms), fallback)
@@ -3180,12 +3182,12 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
   // direct application without intermediate call.
   //
   // Per protocol_cursor_is_the_substrate.md (2026-05-07) Phase B:
-  // each arm's resume cardinality is INFERRED from the body via
-  // $infer_resume_cardinality below; results attach to the
-  // corresponding op's TCont in the EffectOpScheme so lower picks
-  // Tier 1 (OneShot direct call) vs Tier 3 (heap continuation) per
-  // proven cardinality. There is no @resume= annotation; the body
-  // IS the contract.
+  // each arm's resume cardinality is INFERRED from the body as a Usage
+  // grade (resume_grade below); draw_op_edges joins it onto the op's
+  // EffectOpScheme so lower picks Tier 1 (OneShot direct call) vs Tier 3
+  // (heap continuation) per proven cardinality — projected off the op's
+  // type, never re-walked at lower. There is no @resume= annotation; the
+  // body IS the contract.
   // The handler's effect IS the effect that DECLARES its arm ops, read LIVE from
   // the env (§2 follow-the-edge: the op→effect edge carries the identity; the
   // parser names no effect, leaving ename "" — parser.mn:881). Derived HERE, not
@@ -3241,12 +3243,17 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
     Forall(inst_vars, scheme_body),
     Declared(hname),
     HandlerKind(r_handle, config, state, arms))
-  // Resume cardinality is NOT bound here: the body IS the contract, so the
-  // cardinality is a pure projection of the arm body (infer_resume_cardinality)
-  // that lower reads LIVE at the resume site — no side-ledger between infer and
-  // lower (the deleted `resume_kinds` was write-only, zero readers; Anchor 1,
-  // Carried-Truth — the fix is LESS code). STEP 5 attaches it to the op's TCont
-  // for cross-context unification (E_ResumeWorldMismatch) — peer
+  // Resume cardinality IS written here, on the op's EffectOpScheme (draw_op_edges
+  // below joins each arm's resume_grade). The body IS the contract, so the
+  // cardinality is inferred from the arm body — but it is a TYPE-LEVEL fact (the
+  // op's continuation multiplicity), so its home is the op's scheme in the graph,
+  // NOT a hand-walk lower re-does per resume (the deleted infer_resume_cardinality
+  // was that re-walk, at the wrong layer, over a broken immutable-buffer collector
+  // that never accumulated its pushes — the mn-multishot dormancy). Inference is
+  // the one writer; lower PROJECTS disc off the scheme (op_resume_discipline), the
+  // way it projects repr off a type and world off a row. Not a side-ledger: the
+  // scheme is the op's type home, the one graph. STEP 5's TCont carries the same
+  // disc for cross-context unification (E_ResumeWorldMismatch) — peer
   // Hβ.types.tcont-carries-cardinality-and-world.
   // Typed-resume arm typing (SUBSTRATE.md primitive #2): every arm
   // body walks under the law with one per-decl handle-result S.
@@ -3317,18 +3324,27 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
 fn draw_op_edges(arms, hname) = {
   if len(arms) == 0 { () }
   else {
-    let op_name = handler_arm_op_name(last(arms))
+    let arm = last(arms)
+    let op_name = handler_arm_op_name(arm)
+    // The arm's resume cardinality, computed from the body infer just typed
+    // (resume_grade — the Usage fold), JOINED onto the op's scheme. This is
+    // the write: cardinality is inference's, carried on the op's type, read
+    // live by lower — no second hand-walk at lower. The join is monotone
+    // toward MultiShot, so a re-drawn arm only ever raises disc.
+    let arm_disc = usage_to_disc(resume_grade(handler_arm_body(arm)))
     match env_lookup(op_name) {
       Some(entry) => {
         let (scheme, reason, kind) = entry
         match kind {
-          EffectOpScheme(ename, cur_default, ambiguous) =>
-            if ambiguous || field_name_eq(cur_default, hname) { () }
-            else if field_name_eq(cur_default, "") {
-              env_extend(op_name, scheme, reason, EffectOpScheme(ename, hname, false))
-            } else {
-              env_extend(op_name, scheme, reason, EffectOpScheme(ename, cur_default, true))
-            },
+          EffectOpScheme(ename, cur_default, ambiguous, cur_disc) => {
+            let disc = disc_join(cur_disc, arm_disc)
+            // default/ambiguous evolve as before; disc always joins in.
+            let (nd, na) =
+              if ambiguous || field_name_eq(cur_default, hname) { (cur_default, ambiguous) }
+              else if field_name_eq(cur_default, "") { (hname, false) }
+              else { (cur_default, true) }
+            env_extend(op_name, scheme, reason, EffectOpScheme(ename, nd, na, disc))
+          },
           _ => ()
         }
       },
@@ -3361,291 +3377,123 @@ fn bind_handler_state_names(state_binds, hname, span: ValidSpan) =
       Located(span, LetBinding(name, Declared(hname))), FnScheme)
   }, state_binds)
 
-// $infer_resume_cardinality — Phase B substrate. Replaces the
-// @resume= annotation that was erased from all effect declarations
-// across the wheel — cardinality is a graph property of the arm
-// body, not an authored annotation. Per
-// protocol_cursor_is_the_substrate.md (2026-05-07).
+// ─── Resume cardinality — the arm's continuation multiplicity (Usage) ─────
 //
-// Walks the arm body collecting ResumeExpr handles; classifies via
-// control-flow detection (loop ancestry) + branch disjointness:
-//
-//   • zero resume sites               → OneShot (catch_abort shape)
-//   • one site, not under loop        → OneShot
-//   • one site under loop ancestor    → MultiShot
-//   • multiple sites, branch-disjoint → OneShot (one per path)
-//   • multiple sites, not disjoint    → MultiShot
-//
-// Drift refused: 1 (no vtable; structural NodeKind walk); 6 (no
-// primitive-type-special-case for resume — every arm body classified
-// uniformly); 8 (no count-as-string; ResumeDiscipline IS the ADT).
-fn infer_resume_cardinality(arm_body) with GraphRead = {
-  let resume_sites = collect_resume_sites(arm_body)
-  if len(resume_sites) == 0 { OneShot }
-  else if len(resume_sites) == 1 {
-    let site = last(resume_sites)
-    if has_loop_ancestor(site, arm_body) { MultiShot }
-    else { OneShot }
-  }
-  else if all_disjoint_branches(resume_sites, arm_body) { OneShot }
-  else { MultiShot }
+// resume_grade folds the arm body to its Usage grade (types.mn): each
+// `resume` is UOne; sequential composition ⊗-combines (two resumes on ONE
+// path → UMany → MultiShot); alternation ⊔-joins (disjoint branches → the
+// join, so `if c {resume(a)} else {resume(b)}` stays UOne → OneShot — the
+// ~85% direct-return fast path survives a branchy one-shot arm). This IS
+// ownership's use-count (own.mn classify_usage) with `resume` as the counted
+// use: cardinality and ownership are ONE lattice (types.mn Usage), arm 5 and
+// the TIME axis reading the same value-multiplicity. ONE pure compositional
+// fold over the arm structure infer just typed — no buffer, no O(N²)
+// pairwise-disjoint scan, no second walk. (The deleted 12-fn collector used a
+// Buffer whose `buf_push` returned a NEW record the walk discarded, so pushes
+// never accumulated: every arm classified 0-site → OneShot and the multi-shot
+// producer stayed dormant — mn-multishot exit 10 not 30.) Drift refused: 1
+// (structural fold, no vtable); 8 (Usage / ResumeDiscipline are ADTs, never
+// counts-as-int). A continuation re-invoked by a passed lambda or a
+// tail-recursive self-call reads as its STRUCTURAL grade — the named edge peer
+// Hβ.infer.tail-recursion-resume-cardinality (the old walk was no better: it
+// only detected a never-emitted NLoopExpr ancestor).
+
+fn usage_seq(a, b) = match a {
+  UZero => b,
+  UMany => UMany,
+  UOne  => match b { UZero => UOne, _ => UMany }
 }
 
-// Walk arm body's NExpr collecting ResumeExpr handles. Buffer<Handle>
-// per Hβ.runtime.buffer-substrate; freeze to clean List on return.
-// Drift refused: 7 (one Buffer, not parallel arrays); 9 (every
-// container NExpr arm enumerated explicitly, no _ wildcard
-// fabricating ()).
-fn collect_resume_sites(arm_body) with GraphRead = {
-  let buf = buf_make()   // drift-audit: ignore (buf borrowed by walk then frozen — reuse, Anchor 6)
-  collect_resume_walk(buf, arm_body)
-  buf_freeze(buf)
+fn usage_join(a, b) = match a {
+  UZero => b,
+  UMany => UMany,
+  UOne  => match b { UMany => UMany, _ => UOne }
 }
 
-fn collect_resume_walk(buf, node) with GraphRead = {
-  let N(body, _, h) = node
+fn usage_to_disc(u) = match u {
+  UMany => MultiShot,
+  _     => OneShot
+}
+
+// disc_join — the monotone op-level join: OneShot is the identity, MultiShot
+// absorbs. Either is never produced by resume_grade, so it passes b through.
+fn disc_join(a, b) = match a {
+  MultiShot => MultiShot,
+  OneShot   => b,
+  Either    => b
+}
+
+fn resume_grade(node) = {
+  let N(body, _, _) = node
   match body {
-    NExpr(ResumeExpr(_, _)) => buf_push(buf, h),
-    NExpr(BlockExpr(stmts, final)) => {
-      each((s) => collect_resume_walk(buf, s), stmts)
-      collect_resume_walk(buf, final)
-    },
-    NExpr(IfExpr(c, t, e)) => {
-      collect_resume_walk(buf, c)
-      collect_resume_walk(buf, t)
-      collect_resume_walk(buf, e)
-    },
-    NExpr(MatchExpr(scrut, arms)) => {
-      collect_resume_walk(buf, scrut)
-      // arms are (pat, body) tuples (parse_match_arms) — destructure,
-      // never a field read on the pair
-      each(((_, b)) => collect_resume_walk(buf, b), arms)
-    },
-    NExpr(CallExpr(f, args)) => {
-      collect_resume_walk(buf, f)
-      each((a) => collect_resume_walk(buf, a), args)
-    },
-    NExpr(BinOpExpr(_, l, r)) => {
-      collect_resume_walk(buf, l)
-      collect_resume_walk(buf, r)
-    },
-    NExpr(UnaryOpExpr(_, x)) => collect_resume_walk(buf, x),
-    NExpr(LambdaExpr(_, body)) => collect_resume_walk(buf, body),
-    NExpr(MakeListExpr(elems)) =>
-      each((e) => collect_resume_walk(buf, e), elems),
-    NExpr(MakeTupleExpr(elems)) =>
-      each((e) => collect_resume_walk(buf, e), elems),
-    NExpr(MakeRecordExpr(fields)) =>
-      each(((_, v)) => collect_resume_walk(buf, v), fields),
-    NExpr(RecordUpdateExpr(base, fields)) => {
-      collect_resume_walk(buf, base)
-      each(((_, v)) => collect_resume_walk(buf, v), fields)
-    },
-    NExpr(NamedRecordExpr(_, fields)) =>
-      each(((_, v)) => collect_resume_walk(buf, v), fields),
-    NExpr(FieldExpr(b, _)) => collect_resume_walk(buf, b),
-    NExpr(IndexExpr(receiver, index)) => {
-      collect_resume_walk(buf, receiver)
-      collect_resume_walk(buf, index)
-    },
-    NExpr(PipeExpr(_, l, r)) => {
-      collect_resume_walk(buf, l)
-      collect_resume_walk(buf, r)
-    },
-    NExpr(MakeStringExpr(frags)) =>
-      // Interpolation fragments are nodes (literal chunks + splice
-      // exprs) — a splice carries any expression, so the walk
-      // descends. This was face 8's floor: handler-arm bodies render
-      // through "{…}" splices constantly, and the missing arm hit the
-      // exhaustive-match unreachable at the wheel's first such arm.
-      each((f) => collect_resume_walk(buf, f), frags),
-    NStmt(LetStmt(_, v)) => collect_resume_walk(buf, v),
-    NStmt(ExprStmt(e)) => collect_resume_walk(buf, e),
-    // A nested fn's body walks like a lambda's: a resume inside it
-    // resolves to the enclosing arm's continuation.
-    NStmt(FnStmt(_, _, _, _, b)) => collect_resume_walk(buf, b),
-    // Decl statements nested in an arm block carry no resume of THIS
-    // arm's continuation — a nested handler's resumes are its own
-    // cardinality question, answered at its own decl walk.
-    NStmt(TypeDefStmt(_, _))              => (),
-    NStmt(EffectDeclStmt(_, _))           => (),
-    NStmt(HandlerDeclStmt(_, _, _, _, _)) => (),
-    NStmt(ImportStmt(_))                  => (),
-    NStmt(RefineStmt(_, _, _))            => (),
-    NStmt(AliasStmt(_, _))                => (),
-    // Leaves: literals, var refs, holes, placeholders, unit — no
-    // children carry a body that could contain ResumeExpr.
-    NExpr(LitInt(_))    => (),
-    NExpr(LitFloat(_))  => (),
-    NExpr(LitString(_)) => (),
-    NExpr(LitBool(_))   => (),
-    NExpr(LitUnit)      => (),
-    NExpr(VarRef(_))    => (),
-    NExpr(ExprPlaceholder) => (),
-    NExpr(LabeledArg(_, v)) => collect_resume_walk(buf, v),
-    NHole(_) => (),
-    NPat(_)  => (),
-    NModule(_) => (),
-    NTypeAnn(_) => ()    // a Ty, not an expr — no child to carry a resume
+    NExpr(ResumeExpr(_, _))               => UOne,
+    NExpr(BlockExpr(stmts, final))        => usage_seq(grade_nodes(stmts), resume_grade(final)),
+    NExpr(IfExpr(c, t, e))                => usage_seq(resume_grade(c), usage_join(resume_grade(t), resume_grade(e))),
+    NExpr(MatchExpr(scrut, arms))         => usage_seq(resume_grade(scrut), grade_join_arms(arms)),
+    NExpr(CallExpr(f, args))              => usage_seq(resume_grade(f), grade_nodes(args)),
+    NExpr(BinOpExpr(_, l, r))             => usage_seq(resume_grade(l), resume_grade(r)),
+    NExpr(UnaryOpExpr(_, x))              => resume_grade(x),
+    NExpr(LambdaExpr(_, lbody))           => resume_grade(lbody),
+    NExpr(MakeListExpr(elems))            => grade_nodes(elems),
+    NExpr(MakeTupleExpr(elems))           => grade_nodes(elems),
+    NExpr(MakeRecordExpr(fields))         => grade_fields(fields),
+    NExpr(RecordUpdateExpr(base, fields)) => usage_seq(resume_grade(base), grade_fields(fields)),
+    NExpr(NamedRecordExpr(_, fields))     => grade_fields(fields),
+    NExpr(FieldExpr(b, _))                => resume_grade(b),
+    NExpr(IndexExpr(receiver, index))     => usage_seq(resume_grade(receiver), resume_grade(index)),
+    NExpr(PipeExpr(_, l, r))              => usage_seq(resume_grade(l), resume_grade(r)),
+    NExpr(MakeStringExpr(frags))          => grade_nodes(frags),
+    NExpr(LabeledArg(_, v))               => resume_grade(v),
+    NStmt(LetStmt(_, v))                  => resume_grade(v),
+    NStmt(ExprStmt(e))                    => resume_grade(e),
+    NStmt(FnStmt(_, _, _, _, b))          => resume_grade(b),
+    // Decls nested in an arm carry no resume of THIS arm's continuation; leaves
+    // carry no children. Both are the grade identity UZero (explicit, never a
+    // wildcard fabricating a grade for an un-enumerated child-bearing variant).
+    NStmt(TypeDefStmt(_, _))              => UZero,
+    NStmt(EffectDeclStmt(_, _))           => UZero,
+    NStmt(HandlerDeclStmt(_, _, _, _, _)) => UZero,
+    NStmt(ImportStmt(_))                  => UZero,
+    NStmt(RefineStmt(_, _, _))            => UZero,
+    NStmt(AliasStmt(_, _))                => UZero,
+    NExpr(LitInt(_))                      => UZero,
+    NExpr(LitFloat(_))                    => UZero,
+    NExpr(LitString(_))                   => UZero,
+    NExpr(LitBool(_))                     => UZero,
+    NExpr(LitUnit)                        => UZero,
+    NExpr(VarRef(_))                      => UZero,
+    NExpr(ExprPlaceholder)                => UZero,
+    NHole(_)                              => UZero,
+    NPat(_)                               => UZero,
+    NModule(_)                            => UZero,
+    NTypeAnn(_)                           => UZero
   }
 }
 
-// Loop-ancestry detection. Mentl has LoopExpr (lib/runtime/iterate.mn
-// surface) but in the type-graph it surfaces via tail-recursion in
-// CallExpr — a fn that calls itself in tail position with the
-// resume site inside its body produces effective MultiShot
-// cardinality. Today: structural NLoopExpr ancestor; tail-recursion
-// detection is the gradient-undecided case, peer follow-up
-// `Hβ.infer.tail-recursion-resume-cardinality`.
-fn has_loop_ancestor(target_handle, node) with GraphRead = {
-  let N(body, _, h) = node
-  if h == target_handle { false }
-  else { match body {
-    NExpr(BlockExpr(stmts, final)) =>
-      any(stmts, (s) => has_loop_ancestor(target_handle, s)) ||
-      has_loop_ancestor(target_handle, final),
-    NExpr(IfExpr(c, t, e)) =>
-      has_loop_ancestor(target_handle, c) ||
-      has_loop_ancestor(target_handle, t) ||
-      has_loop_ancestor(target_handle, e),
-    NExpr(MatchExpr(scrut, arms)) =>
-      has_loop_ancestor(target_handle, scrut) ||
-      any(arms, ((_, b)) => has_loop_ancestor(target_handle, b)),
-    NExpr(LambdaExpr(_, body)) => has_loop_ancestor(target_handle, body),
-    NExpr(IndexExpr(receiver, index)) =>
-      has_loop_ancestor(target_handle, receiver) ||
-      has_loop_ancestor(target_handle, index),
-    NStmt(LetStmt(_, v)) => has_loop_ancestor(target_handle, v),
-    NStmt(ExprStmt(e)) => has_loop_ancestor(target_handle, e),
-    _ => false
-  } }
-}
+// Sequential composition over a node list (block stmts, call args, list
+// elems, string frags): all execute on one path, so ⊗-combine. last/drop_last
+// are the O(1) snoc-end reads, so the fold is O(N); usage_seq is order-
+// insensitive (UMany absorbs, UZero is identity), so last-first is fine.
+fn grade_nodes(nodes) =
+  if len(nodes) == 0 { UZero }
+  else { usage_seq(resume_grade(last(nodes)), grade_nodes(drop_last(nodes))) }
 
-// Multiple resume sites — disjoint-branch check. Pairwise: each
-// pair lies in disjoint branches of some common If/Match ancestor.
-// O(N²) over resume sites; N is bounded small (typical handler
-// arm has ≤ a few resume sites).
-fn all_disjoint_branches(sites, root) with GraphRead = {
-  pairwise_disjoint_loop(sites, root)
-}
-
-fn pairwise_disjoint_loop(sites, root) with GraphRead = {
-  if len(sites) <= 1 { true }
+// Alternation over match arms ((pat, body) tuples): exactly one arm runs, so
+// ⊔-join their grades — two resumes in sibling arms is still one per path.
+fn grade_join_arms(arms) =
+  if len(arms) == 0 { UZero }
   else {
-    let head = last(sites)
-    let tail = drop_last(sites)
-    all(tail, (s) => disjoint_branches(head, s, root)) &&
-    pairwise_disjoint_loop(tail, root)
+    let (_, b) = last(arms)
+    usage_join(resume_grade(b), grade_join_arms(drop_last(arms)))
   }
-}
 
-fn disjoint_branches(a, b, root) with GraphRead = {
-  let lca = lowest_common_ancestor(a, b, root)
-  let N(body, _, _) = lca
-  match body {
-    NExpr(IfExpr(_, t, e)) =>
-      (contains_handle(t, a) && contains_handle(e, b)) ||
-      (contains_handle(t, b) && contains_handle(e, a)),
-    NExpr(MatchExpr(_, arms)) => {
-      let arm_a = arm_index_containing(arms, a)
-      let arm_b = arm_index_containing(arms, b)
-      arm_a != arm_b
-    },
-    NExpr(BlockExpr(_, _)) => false,    // sequential — not disjoint
-    _ => false
-  }
-}
-
-// Helpers for branch-disjointness detection. Each is a small graph
-// walk; named peer `Hβ.infer.resume-cardinality-helpers` covers the
-// production substrate (lowest-common-ancestor + handle-containment +
-// arm-index-containing). For Phase B today the helpers exist as
-// dream-code interfaces; their bodies fold into named peers as the
-// inference cascade matures past simple OneShot/MultiShot binary.
-fn contains_handle(node, target_handle) with GraphRead = {
-  let N(body, _, h) = node
-  if h == target_handle { true }
-  else { match body {
-    NExpr(BlockExpr(stmts, final)) =>
-      any(stmts, (s) => contains_handle(s, target_handle)) ||
-      contains_handle(final, target_handle),
-    NExpr(IfExpr(c, t, e)) =>
-      contains_handle(c, target_handle) ||
-      contains_handle(t, target_handle) ||
-      contains_handle(e, target_handle),
-    NExpr(MatchExpr(scrut, arms)) =>
-      contains_handle(scrut, target_handle) ||
-      any(arms, ((_, b)) => contains_handle(b, target_handle)),
-    NExpr(CallExpr(f, args)) =>
-      contains_handle(f, target_handle) ||
-      any(args, (a) => contains_handle(a, target_handle)),
-    NExpr(BinOpExpr(_, l, r)) =>
-      contains_handle(l, target_handle) ||
-      contains_handle(r, target_handle),
-    NExpr(UnaryOpExpr(_, x)) => contains_handle(x, target_handle),
-    NExpr(LambdaExpr(_, body)) => contains_handle(body, target_handle),
-    NExpr(IndexExpr(receiver, index)) =>
-      contains_handle(receiver, target_handle) ||
-      contains_handle(index, target_handle),
-    NExpr(ResumeExpr(_, _)) => false,   // leaf for our purposes
-    NStmt(LetStmt(_, v)) => contains_handle(v, target_handle),
-    NStmt(ExprStmt(e)) => contains_handle(e, target_handle),
-    _ => false
-  } }
-}
-
-fn lowest_common_ancestor(a, b, root) with GraphRead = {
-  // Find the deepest node that contains both a and b. If a child
-  // of root contains both, recurse into that child; else root is
-  // the LCA. O(N) per call; root walks once.
-  let N(body, _, _) = root
-  let descendant_lca = match body {
-    NExpr(BlockExpr(stmts, final)) =>
-      lca_among_children(push(stmts, final), a, b),
-    NExpr(IfExpr(c, t, e)) => lca_among_children([c, t, e], a, b),
-    NExpr(MatchExpr(scrut, arms)) =>
-      lca_among_children([scrut] ++ map(arms, (arm) => { let (_, body) = arm; body }), a, b),
-    NExpr(CallExpr(f, args)) => lca_among_children([f] ++ args, a, b),
-    NExpr(BinOpExpr(_, l, r)) => lca_among_children([l, r], a, b),
-    NExpr(UnaryOpExpr(_, x)) => lca_among_children([x], a, b),
-    NExpr(LambdaExpr(_, body)) => lca_among_children([body], a, b),
-    NExpr(IndexExpr(receiver, index)) =>
-      lca_among_children([receiver, index], a, b),
-    NStmt(LetStmt(_, v)) => lca_among_children([v], a, b),
-    NStmt(ExprStmt(e)) => lca_among_children([e], a, b),
-    _ => None
-  }
-  match descendant_lca {
-    Some(child_lca) => child_lca,
-    None => root
-  }
-}
-
-fn lca_among_children(children, a, b) with GraphRead = {
-  if len(children) == 0 { None }
+// Record fields ((name, value) tuples) all evaluate on one path — ⊗ the values.
+fn grade_fields(fields) =
+  if len(fields) == 0 { UZero }
   else {
-    let head = last(children)
-    let tail = drop_last(children)
-    if contains_handle(head, a) && contains_handle(head, b) {
-      Some(lowest_common_ancestor(a, b, head))
-    } else {
-      lca_among_children(tail, a, b)
-    }
+    let (_, v) = last(fields)
+    usage_seq(resume_grade(v), grade_fields(drop_last(fields)))
   }
-}
-
-fn arm_index_containing(arms, target_handle) with GraphRead = {
-  arm_index_loop(arms, target_handle, 0)
-}
-
-fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
-  if len(arms) == 0 { -1 }
-  else {
-    let (_, body) = last(arms)   // match arm is a (pat, body) tuple — positional, not a named record
-    if contains_handle(body, target_handle) { idx }
-    else { arm_index_loop(drop_last(arms), target_handle, idx + 1) }
-  }
-}
 
 // The inference primitive — every emergent property is cursor-
 // projected from body structure, never authored as annotation. Per
@@ -3666,7 +3514,16 @@ fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
 //     infer_ownership. `Unmarked`-marked params get classify_usage
 //     which counts var-uses in the body: 0 → Unmarked; 1 → Own
 //     (affine consume); ≥2 → Ref (borrowed). Authored `own`/`ref`
-//     is a constraint over the inferred form.
+//     is a constraint over the inferred form. THIS IS THE SAME
+//     use-count lattice as resume cardinality: ownership reads the
+//     grade (types.mn Usage) on a param's VarRefs, cardinality reads
+//     it on an arm's ResumeExprs — UZero/UOne/UMany projecting to
+//     Unmarked/Own/Ref and OneShot/OneShot/MultiShot respectively.
+//     The continuation is just a value; its multiplicity IS its
+//     ownership grade. resume_grade folds the grade compositionally
+//     (⊗ sequence, ⊔ alternation); classify_usage counts syntactically
+//     — collapsing both onto one `count_uses(is_use, body)` is the
+//     named peer Hβ.infer.usage-grade-unifies-cardinality-ownership.
 //
 //   • Refinement narrowing (Peer 3 — this section) — flow-sensitive
 //     predicate inference. Each narrowing site (if/match/assert)

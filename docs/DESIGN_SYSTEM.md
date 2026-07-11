@@ -518,6 +518,13 @@ tinted Mentl Mono with a small octopus glyph. Never a third voice.
 
 ## 9 · Product surface — the web IDE / playground (the hero)
 
+> **Deep companion:** `docs/MENTL_EDIT.md` — the interaction architecture
+> (what an IDE *is* when the program is a graph): the anti-IDE dissolution
+> table, the five signature interactions (fill-and-resume, constraint
+> sculpting, the Why walk, reality scrubbing, the proof surface), domain
+> projections, sessions-as-images, and the substrate gates per surface.
+> This section is the visual sketch; that document is the semantics.
+
 > This is the artifact to design most vividly. It is the first impression, the
 > demo, and the proof. **A URL where you type `with !Alloc` and watch Mentl
 > physically re-arrange your code's topology in real time.** It runs entirely in

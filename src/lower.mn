@@ -145,6 +145,25 @@ fn handler_decl_of(hname) =
     None => None
   }
 
+// The handler's MultiShot-classified op names, projected live from its decl
+// arms + the op scheme's disc (band B k1 — the ONE decider walk_locals and
+// the LHandleWith emit both read). [] for an unknown/anonymous name, so an
+// ungated install keeps the existing emission byte-for-byte (Law 7); the
+// anonymous-install-of-a-MultiShot-handler form is the named floor
+// Hβ.lower.multishot-anonymous-install (its yield trips the _start backstop,
+// loud, never a silent dummy).
+fn multishot_ops_of(hname) =
+  match handler_decl_of(hname) {
+    Some((_, _, arms)) =>
+      arms
+        |> filter((a) => match op_resume_discipline(handler_arm_op_name(a)) {
+             MultiShot => true,
+             _         => false
+           })
+        |> map(handler_arm_op_name),
+    None => []
+  }
+
 // Lowered state-field inits for a handler, projected live from its decl.
 fn lookup_handler_state_inits_of(hname) =
   match handler_decl_of(hname) {
@@ -264,6 +283,17 @@ type LowExpr
   // fn-value stays bare LGlobal (len(ev)==0, Law 7); the CALLEE position stays
   // bare LGlobal (lower_callee_ref collapses an LFnRef callee).
   | LFnRef(Int, String, List)                    // handle, fn-name, ev_slots
+  // The YIELD of a MultiShot perform (band B, continuation-reification k1):
+  // (frame_node, op_name, k_expr). frame_node = the REWRITTEN FRAME's tail
+  // node — the yield's dummy returns through the frame's own result width
+  // (never the perform's; a Float-tailed frame keeps its f64 ft). k_expr =
+  // LMakeContinuation (the real yield: k → $yield_k, interned op →
+  // $yield_op, 1 → $yield_flag, width-aware dummy) or LConst(_, LInt(0))
+  // (the LOUD floor — off-spine perform / arm-state / re-yield: a
+  // comment-marked unreachable, censusable; k2/k3's named homes
+  // Hβ.lower.continuation-callboundary-bubble /
+  // Hβ.lower.multishot-reyield-composition / .multishot-arm-state-commit).
+  | LYield(Int, String, LowExpr)
   | LMakeContinuation(Int, LowFn, List, List, Int, Int, Int)
   // H7 — multi-shot continuation record per the H7 walkthrough §1.2.
   // handle, resume_fn, captures_exprs, ev_slots, state_index, ret_slot,
@@ -431,6 +461,7 @@ fn lexpr_handle(e) with Pure = match e {
   LMakeClosure(h, _, _, _) => h,
   LFnRef(h, _, _)         => h,
   LMakeContinuation(h, _, _, _, _, _, _) => h,
+  LYield(h, _, _)         => h,
   LDeclareFn(_)            => 0,
   LIf(h, _, _, _)         => h,
   LBlock(h, _)            => h,
@@ -1387,6 +1418,18 @@ fn lookup_effect_op_names(eff_name) = {
 // Lexical install wins over the keyed forward (a nested handler shadows the
 // caller's evidence) — the seed's $lower_perform order, byte-faithful.
 fn lower_perform_dispatch(handle, op_name, lo_args) =
+  match op_resume_discipline(op_name) {
+    // A MultiShot perform NEVER calls the arm — it YIELDS (band B k1). The
+    // on-spine sites are consumed by lower_body_reified, which constructs
+    // the real k; one reaching the ordinary dispatch is OFF-spine (an
+    // if/match/nested-call interior, or args-bearing) — the LOUD floor,
+    // k2's composition home. Every OneShot/Either op falls through to the
+    // three tiers untouched (Law 7: the disc is a pure env read).
+    MultiShot => LYield(handle, op_name, LConst(handle, LInt(0))),
+    _ => lower_perform_tiers(handle, op_name, lo_args)
+  }
+
+fn lower_perform_tiers(handle, op_name, lo_args) =
   match lower_resolve_handler_for_op(op_name) {
     Some(r) =>
       LPerform(handle, resolve_target(r), lo_args, "__hstate_{int_to_str(resolve_handle(r))}"),
@@ -1728,7 +1771,7 @@ fn lower_expr_body(e, handle, span) = match e {
       captures_names, captures_handles,
       handle
     )
-    let lo_body = mark_tail(lower_expr(body_node))   // Hβ.lower.tail-call-mark-pass — lambda body is in tail
+    let lo_body = mark_tail(lower_body_reified(body_node))   // Hβ.lower.tail-call-mark-pass — lambda body is in tail; MultiShot spine → the k1 yield
     ls_exit_frame()
     let fn_ir = LFn(
       lambda_name,
@@ -1763,11 +1806,12 @@ fn lower_expr_body(e, handle, span) = match e {
       // after evaluating all RHS into scratch locals in source order.
       OneShot   => lower_resume_oneshot(handle, val, state_updates),
       Either    => lower_resume_oneshot(handle, val, state_updates),
-      // MultiShot: reify the continuation record (lower.mn:246), capturing the
-      // arm's live locals + the SAME derive_ev_slots the closure path threads.
-      // resume(v) calling the record's fn_ptr@0 IS multi-shot; the catching
-      // handler (in-memory / oracle-rollback / persist) is the swap.
-      MultiShot => lower_resume_multishot(handle, val, state_updates)
+      // MultiShot: resume(v) CALLS the k record the driver bound to the
+      // arm's __k param — the W7 closure convention on fn_ptr@0, N times
+      // (k is immutable data; the reification happened at the PERFORMING
+      // frame's yield, lower_body_reified). The catching handler
+      // (in-memory / oracle-rollback / persist) is the swap.
+      MultiShot => lower_resume_callk(handle, val, state_updates)
     },
 
   FieldExpr(rec, field) => {
@@ -1872,7 +1916,10 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     let lo_r = lower_expr(right)
     let hname = extract_handler_name(right)
     lower_handler_push(hname, handle)
-    let lo_l = lower_expr(left)
+    // The install body takes the k1 split too — upstream of tier selection,
+    // so an inline `{ pick() } ~> twice` spelling yields instead of baking a
+    // lexical-tier arm call the driver could never intercept.
+    let lo_l = lower_body_reified(left)
     lower_handler_pop()
     let config_inits = extract_handler_config_args(right) |> map(lower_expr)
     let all_inits = config_inits ++ lookup_handler_state_inits_of(hname)
@@ -2373,7 +2420,7 @@ fn lower_stmt_body(s, handle, span) = match s {
       captures_names, captures_handles,
       -1   // named fn — not a lambda; the ev READ uses escaping_row(fn_name)
     )
-    let lo_body = mark_tail(lower_expr(body_node))   // Hβ.lower.tail-call-mark-pass — fn body is in tail
+    let lo_body = mark_tail(lower_body_reified(body_node))   // Hβ.lower.tail-call-mark-pass — fn body is in tail; MultiShot spine → the k1 yield
     ls_exit_frame()
     let fn_ir = LFn(
       fn_name,
@@ -2670,28 +2717,34 @@ fn lower_one_arm_decl(arm: {args: [String], body: N, op_name: String}, discrimin
   let state_field_names = state_field_names_of(state)
   let captures_names = config_names ++ state_field_names
   let captures_handles = zeros_of_len(len(captures_names))
-  let locals_handles = zeros_of_len(len(arm.args))
+  // The cardinality, PROJECTED off the op's EffectOpScheme — inference wrote
+  // it (draw_op_edges joined every handler arm's resume_grade); lower reads
+  // the proven fact live, the way it reads repr off a type or world off a
+  // row. Read BEFORE the frame: a MultiShot arm's signature carries the k
+  // record as its leading param (the driver pushes (record, k); resume(v)
+  // calls __k — band B k1). OneShot arms keep their params, arity, and
+  // fence byte-identically (Law 7).
+  let disc = op_resume_discipline(arm.op_name)
+  let arm_params = match disc {
+    MultiShot => ["__k"] ++ arm.args,
+    _         => arm.args
+  }
+  let locals_handles = zeros_of_len(len(arm_params))
   ls_enter_frame(
     fn_name,
-    arm.args, locals_handles,
+    arm_params, locals_handles,
     captures_names, captures_handles,
     -1   // handler arm — not a lambda; the ev READ uses the arm's captured set / escaping_row
   )
   // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
   // around arm body lowering so lower_expr's ResumeExpr arm resolves
   // `with field = NEW` updates' slot offsets via current_state_fields()
-  // AND its representation via current_resume_discipline(). The cardinality
-  // is PROJECTED off the op's EffectOpScheme — inference wrote it there
-  // (draw_op_edges joined every handler arm's resume_grade), so lower reads
-  // the proven fact live, the way it reads repr off a type or world off a row.
-  // No second hand-walk: the deleted infer_resume_cardinality re-derived this
-  // at the wrong layer over a broken buffer (the mn-multishot dormancy).
-  let disc = op_resume_discipline(arm.op_name)
+  // AND its representation via current_resume_discipline().
   let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names, disc))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
   ls_exit_frame()
   // fence = nstate + total_arms; the arm's LEvPerform reads land on the
   // record's captured-ev region (past state AND arms).
-  let fn_ir = LFn(fn_name, len(arm.args), arm.args, [lo_body], EfPure, fence)
+  let fn_ir = LFn(fn_name, len(arm_params), arm_params, [lo_body], EfPure, fence)
   LDeclareFn(fn_ir)
 }
 
@@ -2762,72 +2815,146 @@ fn lower_resume_oneshot(handle, val, state_updates) = {
   }
 }
 
-// MultiShot resume — reify the continuation as the unified heap record's
-// fifth role (lower.mn:246, fully emittable at wasm.mn:1905). The record
-// captures the arm's live locals + the SAME derive_ev_slots the closure
-// path threads; its fn_ptr is a synthesized resumption function
-// `$__k_<arm>_<site>` whose body IS the snapshot prologue (the resumed
-// value committing any `with` state updates, then returning). Calling that
-// record twice IS multi-shot — backtracking, generators, search: ONE
-// LMakeContinuation, distinguished only by the catching handler. resume(v)
-// dispatches call_indirect on fn_ptr@0 (the closure-call path, wasm.mn) —
-// Koka evidence-passing, never a vtable.
-fn lower_resume_multishot(handle, val, state_updates) = {
-  // The resumption fn's name is keyed on the resume SITE (its handle) — the one
-  // globally-unique, always-valid discriminator (mint gives a fresh handle per
-  // resume, so two resumes in one arm get distinct fns). The prior form spliced
-  // ls_outer_fn_name() for readability, but that read returns a 1-byte NULL in
-  // the multishot lowering context (the arm frame's name does not reach here) —
-  // an invalid WAT identifier that the never-exercised producer path baked in.
-  // The handle carries the identity; the decoration was the non-ultimate part.
-  let resume_fn_name = "__k_{int_to_str(handle)}"
-  let fields = current_state_fields()    // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
-  // The resumption prologue: commit the snapshot, return the resumed value.
-  // The resumed value is the resumption fn's single parameter `__resume_in`.
-  let prologue = lower_resume_snapshot(handle, val, state_updates, fields)
-  // The continuation is FROZEN under an effect-WORLD (§5.U, the TIME axis): the
-  // row the resumed body performs. The graph already proves it — the resume
-  // handle's type is TCont(R, disc, world) (the infer-side world-CAPTURE),
-  // so READ it live, never default to EfPure (Carried-Truth: EfPure DISCARDS
-  // the captured world, leaving a persisted resume with nothing to unify
-  // against → the silent cross-handler-set miscompile Law 7 forbids). The
-  // resume fn's row IS that world; persist=memcpy then carries it.
-  let world = resume_world_of(handle)
-  // Captures = the arm's live locals the resumption body actually reads (W07):
-  // exactly the free vars of the resumed VALUE and every `with` update RHS,
-  // collected against the EMPTY bound-set (the resumption fn re-enters — those
-  // names are not bound inside it, so they ARE its captures), resolved through
-  // the SAME resolve_captures_outer the LambdaExpr path uses (handler = state =
-  // closure = continuation: ONE capture mechanism, four roles). The former `[]`
-  // left a resumed body reading garbage for any arm local; the live set makes
-  // the unified-record continuation realize its memcpy-serializable promise —
-  // a resumed `a + b` reads the real `a`, `b`.
-  let free_names =
-    free_vars_merge(collect_free_vars(val, []),
-                    free_vars_state_updates(state_updates, []))
-  let (_, captures_exprs, _) = resolve_captures_outer(free_names, handle)
-  let captures_fence = len(captures_exprs)
-  let resume_fn = LFn(resume_fn_name, 1, ["__resume_in"], [prologue], world, captures_fence)
-  // ret_slot reserves the resumed-value field. The resumed value flows into the
-  // resumption fn as its `__resume_in` PARAMETER (the prologue returns it), so
-  // the record's ret_slot field has no live READER — it stays the perform-site
-  // handle (a stable per-site discriminator), NOT a fabricated 0. Carried-Truth:
-  // a value with no consumer is not minted from an uninstalled allocator (the
-  // dormant LowerState ms_alloc_ret_slot has no install in the lowering chain —
-  // calling it would be an unhandled perform); the handle the graph already
-  // proves IS the discriminator the slot needs.
-  let ret_slot = handle
-  // world_tag = the interned hash of the captured world (W06) — a deterministic
-  // projection of the canonical row (sorted names → FNV), so memcpy carries the
-  // frozen handler-set into the persisted record; the load-time value gate
-  // compares it against the live stack world. EfPure → 0.
-  let world_tag = world_tag_of_row(world)
-  // ev = the effects the resumed body still performs (the row already proves
-  // them — derive_ev_slots reads it live). state_idx = the perform-site
-  // discriminator (the resume handle).
-  LMakeContinuation(handle, resume_fn, captures_exprs, derive_ev_slots(handle),
-                    handle, ret_slot, world_tag)
+// ── MultiShot: the reified k (band B k1, continuation-reification codegen) ──
+//
+// A MultiShot perform never calls the arm — the PERFORMING FRAME yields: its
+// remainder-after-the-perform reifies as the continuation record k (handler =
+// state = closure = evidence = CONTINUATION, one shape), the install's driver
+// binds k to the arm, and resume(v) CALLS the record — N times, it is
+// immutable data. The prior producer (deleted here) reified the WRONG side:
+// k minted at the RESUME site from the arm's snapshot prologue — the arm
+// bound record POINTERS to a/b and nothing ever called them (the measured
+// invalid-exit). The capture/world recipe it carried lives on below, at the
+// correct side (the perform's frame).
+
+// resume(v) in a MultiShot arm = call the k record through the W7 closure
+// convention (park k, push k as __state, push v, call_indirect fn_ptr@0).
+// The post-call flag check is the RE-YIELD TRAP: a remainder that yields
+// again mid-arm (a called fn's own MultiShot perform — invisible at compile
+// time) traps LOUDLY at the k-call boundary instead of letting the arm
+// compute on a dummy; k2's composition (Hβ.lower.continuation-callboundary-
+// bubble) replaces the trap with the composed k. state_updates ≠ [] is the
+// k3 floor (Hβ.lower.multishot-arm-state-commit: commit against the stable
+// install record, then call).
+fn lower_resume_callk(handle, val, state_updates) =
+  if len(state_updates) == 0 {
+    LBlock(handle, [
+      LLet(handle, "__kr_{int_to_str(handle)}",
+           LCall(handle, LLocal(handle, "__k"), [lower_expr(val)])),
+      LIf(handle, LGlobal(handle, "yield_flag"),
+          [LYield(handle, "", LConst(handle, LInt(0)))],
+          [LConst(handle, LInt(0))]),
+      LLocal(handle, "__kr_{int_to_str(handle)}")
+    ])
+  } else {
+    LYield(handle, "", LConst(handle, LInt(0)))
+  }
+
+// The k1 SPINE: the position that evaluates FIRST in the frame body — a bare
+// argless MultiShot op call, possibly wrapped in a left-BinOp chain or a
+// statement-free brace block. op-ness + cardinality are ONE env read
+// (op_resume_discipline returns MultiShot only for a genuine MultiShot op;
+// every non-op floors OneShot). An args-bearing MultiShot perform is NOT
+// spine (it falls through to lower_perform_dispatch's loud floor — k3's
+// $yield_args packet).
+fn ms_op_of_call(node) = {
+  let N(b, _, _) = node
+  match b {
+    NExpr(CallExpr(f, args)) => {
+      let N(fb, _, _) = f
+      match fb {
+        NExpr(VarRef(name)) =>
+          if len(args) == 0 {
+            match op_resume_discipline(name) {
+              MultiShot => Some(name),
+              _         => None
+            }
+          } else { None },
+        _ => None
+      }
+    },
+    _ => None
+  }
 }
+
+// THE AGREEMENT LAW: ms_spine_op (the test, run OUTSIDE the k frame) and
+// k1_remainder (the build, run INSIDE it) walk the SAME three spine forms —
+// bare call, BinOp-left, statement-free block. Keep them adjacent; a form
+// added to one without the other is the free_in_ty/subst_ty divergence bug
+// at the split.
+fn ms_spine_op(node) =
+  match ms_op_of_call(node) {
+    Some(op) => {
+      let N(_, _, ph) = node
+      Some((op, ph))
+    },
+    None => {
+      let N(b, _, _) = node
+      match b {
+        NExpr(BinOpExpr(_, l, _))      => ms_spine_op(l),
+        NExpr(BlockExpr(stmts, final)) =>
+          if len(stmts) == 0 { ms_spine_op(final) } else { None },
+        _ => None
+      }
+    }
+  }
+
+// Build the remainder-with-hole: the frame body with the spine perform
+// replaced by LLocal(ph, "__resume_in"), every untouched operand lowered
+// INSIDE the k frame (evaluation order preserved — a right operand had not
+// evaluated at yield time, so it evaluates inside k, in order; its free
+// names resolve to the k's captures through the frame ls entered).
+fn k1_remainder(node, ph) = {
+  let N(b, _, h) = node
+  if h == ph { LLocal(ph, "__resume_in") }
+  else {
+    match b {
+      NExpr(BinOpExpr(op2, l, r))    => LBinOp(h, op2, k1_remainder(l, ph), lower_expr(r)),
+      NExpr(BlockExpr(_, final))     => k1_remainder(final, ph),
+      // Unreachable by the agreement law (ms_spine_op admits exactly the
+      // forms above); the identity hole is the honest residue, never a
+      // fabricated value — the perform handle names the only hole.
+      _                              => LLocal(ph, "__resume_in")
+    }
+  }
+}
+
+// Lower a frame body with k1 reification: a MultiShot perform on the spine
+// yields its reified remainder; every other body lowers verbatim (the
+// byte-identical path — Law 7). Runs INSIDE the enclosing frame (FnStmt /
+// LambdaExpr / PTee install-body), upstream of tier selection, so the
+// lexical and singleton tiers cannot bake an arm call for a spine perform.
+fn lower_body_reified(body_node) =
+  match ms_spine_op(body_node) {
+    None => lower_expr(body_node),
+    Some((op_name, ph)) => {
+      let N(_, _, frame_h) = body_node
+      // The world the remainder still performs — read from the enclosing fn
+      // BEFORE entering the k frame (resume_world_of's own env read; at a
+      // perform site the outer fn name is real). persist=memcpy carries it;
+      // the load-time value gate compares world_tag against the live stack.
+      let world = resume_world_of(ph)
+      // Captures = the remainder's free names (the perform's callee is an
+      // env global — resolve_captures_outer drops RGlobal, the phantom-
+      // capture fence), resolved in the ENCLOSING frame: prefix locals
+      // become capture loads, outer upvals re-capture. ONE mechanism,
+      // four roles (the LambdaExpr recipe verbatim).
+      let free_names = collect_free_vars(body_node, ["__resume_in"])
+      let (captures_names, captures_exprs, captures_handles) =
+        resolve_captures_outer(free_names, ph)
+      ls_enter_frame("", ["__resume_in"], [ph], captures_names, captures_handles, ph)
+      let k_body = k1_remainder(body_node, ph)
+      ls_exit_frame()
+      let k_fn = LFn("__k_{int_to_str(ph)}", 1, ["__resume_in"], [k_body],
+                     world, len(captures_exprs))
+      // state_idx / ret_slot stay the perform-site handle (the stable
+      // per-site discriminator; ret_slot has no live reader — its own
+      // documented fact). world_tag = the canonical row interned (W06).
+      LYield(frame_h, op_name,
+             LMakeContinuation(ph, k_fn, captures_exprs, derive_ev_slots(ph),
+                               ph, ph, world_tag_of_row(world)))
+    }
+  }
 
 // The effect-world a continuation is frozen under, read LIVE from the
 // enclosing arm fn's inferred row — the SAME source derive_ev_slots reads
@@ -3787,6 +3914,9 @@ fn reach_names_expr(expr, acc) = match expr {
     reach_names_list(ev, reach_names_list(caps, reach_names_list(body, acc))),
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     reach_names_list(ev, reach_names_list(caps, reach_names_list(body, acc))),
+  // A yield reaches through its k record (the __k fn's body + captures + ev);
+  // the ARM reaches through the install's arm groups, the existing channel.
+  LYield(_h, _op, k)        => reach_names_expr(k, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => reach_names_list(body, acc),
   LBlock(_h, stmts)         => reach_names_list(stmts, acc),
   LIf(_h, c, t, e)          =>

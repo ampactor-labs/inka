@@ -55,16 +55,20 @@ continuations are **not viable for `_start` programs on wasmtime 43** — the
 `mentl` binary without an upstream wasmtime fix (which would be an `!Outside`
 dependency).
 
-**Consequence:** the shipping multi-shot path is the PURE-MENTL re-execution
-driver — `resume(v)` re-runs the body thunk under a one-shot replay handler, all
-ordinary Mentl handlers, works under `_start`. Its DIRECT form (arm logic run as
-a driver fn, no outer install) is proven (reexec-model.mn → 30) and is correct
-whenever the body performs the op unconditionally (mn-multishot). The
-fully-general form (conditional / no-perform bodies) needs the
-**arm-internal-perform gap** closed so the re-run's perform resolves to the inner
-replay instead of re-entering the outer handler — that is the real keystone dig,
-and it is `!Outside`-clean (no wasmtime dependency). Native conts return as the
-O(1) optimization if/when wasmtime carries them under `_start`.
+**Consequence (superseded 2026-07-11 by the reified k — PLAN §7 THE PIVOT):**
+the shipping multi-shot is **continuation-reification codegen (k1)**, landed in
+the wheel: a MultiShot perform YIELDS — the performing frame's
+remainder-after-the-perform reifies as the continuation record (the unified
+heap record, closure-identical head), the install's driver binds k to the arm,
+and `resume(v)` CALLS the record N times. No stack capture, no engine feature,
+works under `_start`, resumes AT the perform (never re-runs the prefix — the
+re-execution model below survives as the degenerate stateless-replay fork the
+oracle uses, and reexec-model.mn stays its crucible). Gates through m2:
+mn-multishot → 30, twice-handler-nonidentity → 36 (the delimited `+3` per
+fork), twice-capture → 40 (k captures through the record). A driverless yield
+traps LOUD at the `_start` backstop; a mid-remainder re-yield traps at the
+k-call boundary (the k2 composition floor). Native conts return as the O(1)
+control swap if/when wasmtime carries them under `_start`.
 
 ## The emit target (native-cont form — kept for when the substrate is ready)
 

@@ -263,7 +263,7 @@ fn emit_module(lowered) = {
   // of the same tree, 16+ helper fns, 4x the structural drift surface).
   // Adding a fifth projection = one new handler + one new visit-site in
   // walk_lemit_expr. The graph IS the index; the chain IS the projector.
-  let (all_fn_names, top_fn_names, string_entries, state_slots, wasi_ops) =
+  let (all_fn_names, top_fn_names, string_entries, state_slots, wasi_ops, yield_seen) =
     project_emit_state(lowered)
   // W5 string interning — seed the string_table handler so downstream
   // LString emits can look up the offset via perform string_offset.
@@ -274,6 +274,10 @@ fn emit_module(lowered) = {
   emit_memory_decl()
   emit_state_globals(state_slots)
   emit_singleton_globals(lowered)
+  // band B k1: the yield triple exists only in a module that yields —
+  // $yield_flag (the out-of-band Koka-lineage yielding bit), $yield_op (the
+  // interned op key the drivers compare), $yield_k (the reified k record).
+  if yield_seen > 0 { emit_yield_globals() }
   emit_string_data(string_entries)
   emit_fn_table(all_fn_names)
   emit_fn_index_globals(all_fn_names, 0)
@@ -305,7 +309,7 @@ fn emit_module(lowered) = {
   // identical to the pre-show module, Law 7).
   emit_show_leaves(lowered)
   emit_init_lets(value_lets)
-  emit_start(top_fn_names, value_lets, main_param_count(lowered))
+  emit_start(top_fn_names, value_lets, main_param_count(lowered), yield_seen)
   emit_footer()
 }
 
@@ -361,6 +365,21 @@ effect EmitStateSlotOp {
 effect EmitWasiOp {
   visit_wasi_op(String) -> ()
   drain_wasi_ops() -> List
+}
+
+// The sixth projection (band B k1): does the module YIELD anywhere? A
+// MultiShot yield site (LYield / a gated install's driver) fires visit_yield;
+// the yield globals ($yield_flag/$yield_op/$yield_k) and the _start
+// unhandled-yield backstop emit ONLY when seen — a OneShot-only module (the
+// wheel) fires zero visits, so its emitted bytes are unchanged (Law 7).
+effect EmitYield {
+  visit_yield() -> ()
+  drain_yield_seen() -> Int
+}
+
+handler yield_seen_collector with n = 0 {
+  visit_yield() => resume() with n = n + 1,
+  drain_yield_seen() => resume(n)
 }
 
 handler fn_names_collector with buf = make_list(64), count = 0 {
@@ -461,9 +480,11 @@ fn project_emit_state(lowered) = {
   let strs  = drain_string_literals()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let slots = drain_state_slots()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let wasi  = drain_wasi_ops()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  (names, tops, strs, slots, wasi)
+  let yseen = drain_yield_seen()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  (names, tops, strs, slots, wasi, yseen)
 } ~> fn_names_collector ~> top_fn_names_collector
   ~> string_literal_collector ~> state_slots_collector ~> wasi_ops_collector
+  ~> yield_seen_collector
 
 // register_show_literals — fire visit_string for every String literal the
 // generated $show_<sig> helpers will emit. The literal set is a PROJECTION of
@@ -562,6 +583,14 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_list(captures)
     walk_lemit_list(ev)
   },
+  // band B k1: a yield reads the yield globals and interns its op key (the
+  // driver's compare reads the SAME offset); descend the k record. The floor
+  // form ("" op) interns the empty string — harmless, gated modules only.
+  LYield(_, op_name, k) => {
+    visit_yield()
+    visit_string(op_name)
+    walk_lemit_expr(k)
+  },
   // LFnRef references an ALREADY-emitted named fn — NO visit_fn (the fn is
   // collected at its own declaration; visiting here would double-register it).
   // Walk only its ev region (the forwarded evidence LowExprs).
@@ -611,11 +640,19 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_list(args)
     walk_lemit_list(ev)
   },
-  LHandleWith(_, b, hn, _hname, inits, _arm_names, captured_evs) => {
+  LHandleWith(_, b, hn, hname, inits, _arm_names, captured_evs) => {
     walk_lemit_expr(b)
     walk_lemit_expr(hn)
     walk_lemit_list(inits)
     walk_lemit_list(captured_evs)
+    // band B k1: a MultiShot-armed install carries the driver loop, which
+    // reads the yield globals and compares the interned op keys — register
+    // both through the same channels (the one decider multishot_ops_of;
+    // its emit twin reads it identically).
+    each((op) => {
+      visit_yield()
+      visit_string(op)
+    }, multishot_ops_of(hname))
   },
   LFeedback(h, b, s) => {
     visit_state_slot(h)
@@ -728,6 +765,18 @@ fn emit_singleton_globals(lowered) with WasmOut + EnvRead = {
   }, all_names)
 }
 
+// The yield triple (band B k1) — the out-of-band MultiShot unwind protocol,
+// the Koka-lineage yielding bit as three per-instance globals (wasi-threads
+// share only MEMORY, so the flag is thread-local by construction): $yield_flag
+// (1 = a MultiShot perform is unwinding), $yield_op (the interned op-name key
+// the install drivers compare), $yield_k (the reified continuation record).
+// Emitted only when the module yields (the sixth projection).
+fn emit_yield_globals() with WasmOut = {
+  wat_emit("  (global $yield_flag (mut i32) (i32.const 0))\n")
+  wat_emit("  (global $yield_op (mut i32) (i32.const 0))\n")
+  wat_emit("  (global $yield_k (mut i32) (i32.const 0))\n")
+}
+
 // Add each no-config declared handler's name (a HandlerKind with empty config)
 // to acc, deduped — the home-dispatch set lower reads via lower_op_default_handler.
 // INDEX-walk, never drop_last: `entries` is an env_snapshot slice view, and
@@ -766,6 +815,7 @@ fn singleton_hnames_expr(expr, acc) = match expr {
     singleton_hnames_list(ev, singleton_hnames_list(caps, singleton_hnames_list(body, acc))),
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     singleton_hnames_list(ev, singleton_hnames_list(caps, singleton_hnames_list(body, acc))),
+  LYield(_h, _op, k)        => singleton_hnames_expr(k, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => singleton_hnames_list(body, acc),
   LBlock(_h, stmts)         => singleton_hnames_list(stmts, acc),
   LIf(_h, c, t, e)          =>
@@ -1111,6 +1161,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_call_vectors_list(body,
       collect_call_vectors_list(caps, collect_call_vectors_list(ev, acc))),
+  LYield(_h, _op, k)    => collect_call_vectors_expr(k, acc),
   LFnRef(_h, _n, ev)    => collect_call_vectors_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_call_vectors_list(body, acc),
   LIf(_h, c, t, e)      => collect_call_vectors_list(e,
@@ -1503,6 +1554,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
       ++ collect_fn_emit_records(captures)
       ++ collect_fn_emit_records(ev)
   },
+  LYield(_h, _op, k) => collect_fn_emit_records_expr(k),
   LDeclareFn(LFn(name, _arity, param_names, body, _row, fence)) => {
     [(name, param_names, body, fence)]
       ++ collect_fn_emit_records(body)
@@ -1712,6 +1764,7 @@ fn walk_locals_expr(expr, acc) = match expr {
   LMakeClosure(_, _, _, _)         => acc,  // function boundary — its locals are its own
   LFnRef(_h, _n, ev)        => walk_locals_list(ev, acc),  // record reuses $state_tmp; ev forwards declare no locals
   LMakeContinuation(_, _, _, _, _, _, _) => acc,  // resume_fn boundary — its locals are its own (H7)
+  LYield(_, _, k)           => walk_locals_expr(k, acc),  // k = the record boundary above; the yield's own emit is globals + consts, zero locals
   LDeclareFn(_)                    => acc,  // module-level fn declaration — its body has its own locals
   LBlock(_h, stmts)         => walk_locals_list(stmts, acc),
   LIf(_h, c, t, e)          =>
@@ -1757,9 +1810,18 @@ fn walk_locals_expr(expr, acc) = match expr {
     let with_groups = fold(with_prev,
       (a, g) => ["__hstate_{int_to_str(h)}_{group_ename(g)} i32"] ++ a,
       arm_names)
+    // band B k1: a MultiShot-armed install runs the yield DRIVER, which parks
+    // the body/arm result ($__hres, the install node's proven width) and the
+    // caught k ($__yk). Same multishot_ops_of decider the emit reads —
+    // mirror-true by construction.
+    let with_ms =
+      if len(multishot_ops_of(hname)) > 0 {
+        ["__hres_{int_to_str(h)} {repr_wat(repr_of(lookup_ty(h)))}",
+         "__yk_{int_to_str(h)} i32"] ++ with_groups
+      } else { with_groups }
     walk_locals_list(captured_evs,
       walk_locals_list(inits,
-        walk_locals_expr(hn, walk_locals_expr(b, with_groups))))
+        walk_locals_expr(hn, walk_locals_expr(b, with_ms))))
   },
   LFeedback(h, b, s)        =>
     // LF walkthrough §4.5: both per-site locals for the load-tee-store
@@ -2039,6 +2101,7 @@ fn find_local_handle_expr(name: String, expr) = match expr {
   LMakeClosure(_, _, _, _)         => 0,
   LFnRef(_h, _n, ev)        => find_local_handle_list(name, ev),
   LMakeContinuation(_, _, _, _, _, _, _) => 0,
+  LYield(_h, _op, k)        => find_local_handle_expr(name, k),
   LDeclareFn(_)                    => 0,
   LLet(_h, _n, inner)       => find_local_handle_expr(name, inner),
   LBinOp(_h, _op, l, r)     => {
@@ -2152,7 +2215,7 @@ fn main_param_count(lowered) =
     if name == "main" { len(param_names) } else { acc }
   }, collect_fn_emit_records(lowered))
 
-fn emit_start(top_fn_names, value_lets, main_params) = {
+fn emit_start(top_fn_names, value_lets, main_params, yield_seen) = {
   // Top-level closures are static data; top-level VALUE lets initialize
   // through $__init_lets, run FIRST in program order — before main's
   // invocation AND before a library-shape module's clean exit (effectful
@@ -2176,6 +2239,15 @@ fn emit_start(top_fn_names, value_lets, main_params) = {
     wat_emit("    (call $main (global.get $main)")
     each((_) => wat_emit(" (call $alloc (i32.const 4))"), range(0, main_params))
     wat_emit(")\n")
+    // band B k1: the UNHANDLED-YIELD backstop — a MultiShot yield no install
+    // driver caught reaches the program boundary as an unhandled effect and
+    // traps LOUDLY, never exits with the dummy (the anonymous-install /
+    // driverless floor made unsilenceable). Gated: only a yielding module
+    // has the flag to read.
+    if yield_seen > 0 {
+      wat_emit("    (global.get $yield_flag)\n")
+      wat_emit("    (if (then unreachable)) ;; unhandled multishot yield — no install driver caught it\n")
+    }
     wat_emit("    (call $proc_exit)\n")
   } else {
     // No main; the module is library-shape. Exit cleanly.
@@ -2606,89 +2678,102 @@ fn emit_expr(expr) = match expr {
   },
 
   LMakeContinuation(_h, LFn(resume_fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs, ev_exprs, state_idx, ret_slot, world_tag) => {
-    // H7 §4.2 — multi-shot continuation record layout. Mirrors
-    // LMakeClosure's heap-record shape with two added i32 fields:
-    // state_index at offset 4 (between fn_ptr and capture_count) and
-    // ret_slot at the final offset (after captures + evidence).
+    // H7 — the multi-shot continuation record, CLOSURE-IDENTICAL HEAD
+    // (band B k1): the k is CALLED through the same W7 convention every
+    // closure takes (park as __state, LUpval reads captures at 8+4*i, the
+    // in-body ev-scan keys from 8+4*fence), so its head must BE the closure
+    // head. The continuation metadata rides in a TAIL after the ev
+    // sentinel — invisible to the keyed scan (which stops at key=0), still
+    // inside the one contiguous record so persist = memcpy carries it whole.
     //
-    // Layout per H7 §1.2:
-    //   offset 0:                          fn_ptr (i32) — resume_fn table index
-    //   offset 4:                          state_index (i32) — perform-site discriminator
-    //   offset 8:                          capture_count (i32) — fence
-    //   offset 12 + 4*i:                   capture_i
-    //   offset 12 + 4*nc + 8*j:            [key_j][ev_j] — keyed pair (stride 8)
-    //   offset 12 + 4*nc + 8*ne:           key=0 sentinel (terminates the scan)
-    //   offset 12 + 4*nc + 4*(2*ne+1):     ret_slot (i32)
-    //   offset 16 + 4*nc + 4*(2*ne+1):     world_tag (i32) — the frozen
+    //   offset 0:                          fn_ptr (i32) — __k fn table index
+    //   offset 4:                          capture_count (i32) — the fence
+    //   offset 8 + 4*i:                    capture_i
+    //   offset 8 + 4*nc + 8*j:             [key_j][ev_j] — keyed pair
+    //   offset 8 + 4*nc + 8*ne:            key=0 sentinel (ends the scan)
+    //   offset 8 + 4*(nc + 2*ne + 1):      state_idx — perform-site discriminator
+    //   +4:                                ret_slot (documented: no live reader)
+    //   +8:                                world_tag (i32) — the frozen
     //                                      handler-WORLD's interned hash (§5.U
-    //                                      TIME axis, W06). It is the LAST field
-    //                                      so memcpy of the contiguous record
-    //                                      carries it whole; the Persist load
-    //                                      reads it to fire the value-gate
+    //                                      TIME axis, W06); LAST so the Persist
+    //                                      load reads it to fire the value-gate
     //                                      E_ResumeWorldMismatch.
     //
-    // The continuation IS Mentl's oracle substrate — heap-captured
-    // closure struct (captures + evidence + state + ret_slot)
-    // allocated through the SAME emit_alloc swap surface as every
-    // other heap value (γ crystallization #8 — the heap has one
-    // story). Mentl's exploration ALWAYS goes through this code
-    // path; trail rollback (per src/graph.mn graph_rollback) reverts
-    // any speculative graph_bind that happened during the resume.
-    //
-    // Per the H7 walkthrough: there is no vtable. The fn_ptr field is
-    // a plain i32 indexing into the WASM funcref table; resume happens
-    // via call_indirect with the resume_fn's signature. Evidence
-    // passing per Koka JFP 2022, not vtable indirection.
+    // The continuation IS Mentl's oracle substrate — allocated through the
+    // SAME emit_alloc swap surface as every heap value (the heap has one
+    // story); trail rollback (graph_rollback) reverts speculative binds
+    // between branch runs. No vtable: fn_ptr indexes the funcref table;
+    // resume is call_indirect — Koka evidence passing (JFP 2022).
     let nc = len(captures_exprs)
     let ne = len(ev_exprs)
-    // header (12) + captures + ev-slots + ret_slot (4) + world_tag (4).
-    // ev region keyed: 2 words/entry + sentinel = 2*ne+1 words; then ret + world.
-    let size = 12 + 4 * (nc + 2 * ne + 1) + 4 + 4
+    // head (8) + captures + keyed evs incl. sentinel + [state_idx, ret, world].
+    let size = 8 + 4 * (nc + 2 * ne + 1) + 12
     emit_alloc(size, "state_tmp")
-    // Store fn_ptr (resume_fn table index) at offset 0.
+    // fn_ptr at 0 — the closure head.
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (global.get $")
     wat_emit(resume_fn_name)
     wat_emit("_idx)\n")
     wat_emit("    (i32.store offset=0)\n")
-    // Store state_index at offset 4 (per H7 §4.2 layout).
-    wat_emit("    (local.get $state_tmp)\n")
-    wat_emit("    (i32.const ")
-    wat_emit(int_to_str(state_idx))
-    wat_emit(") (i32.store offset=4)\n")
-    // Store capture count at offset 8 — fence between captures and
-    // evidence (same shape as LMakeClosure offset 4, just shifted).
+    // capture count at 4 — the SAME fence slot every closure carries.
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (i32.const ")
     wat_emit(int_to_str(nc))
-    wat_emit(") (i32.store offset=8)\n")
-    // Store each capture at offset 12 + 4*i.
-    emit_capture_stores_at_offset(captures_exprs, 12, 0)
-    // Store each ev_slot at offset 12 + 4*nc + 4*j.
-    emit_ev_slot_stores_at_offset(ev_exprs, 12 + 4 * nc, 0)
-    // Store ret_slot.
-    // ret_slot lands AFTER the keyed ev region (2*ne+1 words: pairs + sentinel).
-    let ret_offset = 12 + 4 * (nc + 2 * ne + 1)
+    wat_emit(") (i32.store offset=4)\n")
+    // captures at 8 + 4*i — where LUpval reads.
+    emit_capture_stores_at_offset(captures_exprs, 8, 0)
+    // keyed evs + sentinel at 8 + 4*nc — where the in-body scan keys.
+    emit_ev_slot_stores_at_offset(ev_exprs, 8 + 4 * nc, 0)
+    // The metadata tail, after the sentinel.
+    let state_idx_offset = 8 + 4 * (nc + 2 * ne + 1)
+    wat_emit("    (local.get $state_tmp)\n")
+    wat_emit("    (i32.const ")
+    wat_emit(int_to_str(state_idx))
+    wat_emit(") (i32.store offset=")
+    wat_emit(int_to_str(state_idx_offset))
+    wat_emit(")\n")
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (i32.const ")
     wat_emit(int_to_str(ret_slot))
     wat_emit(") (i32.store offset=")
-    wat_emit(int_to_str(ret_offset))
+    wat_emit(int_to_str(state_idx_offset + 4))
     wat_emit(")\n")
-    // Store world_tag at the final offset (W06) — the interned hash of the
-    // captured handler-WORLD. memcpy carries it into a persisted record; the
-    // Persist load compares it against the live stack world, firing the
-    // value-gate E_ResumeWorldMismatch when a continuation is rehydrated under
-    // a changed handler-set (the §4③ modal frontier on the TIME axis).
-    let world_offset = ret_offset + 4
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (i32.const ")
     wat_emit(int_to_str(world_tag))
     wat_emit(") (i32.store offset=")
-    wat_emit(int_to_str(world_offset))
+    wat_emit(int_to_str(state_idx_offset + 8))
     wat_emit(")\n")
     // Result: continuation pointer on stack.
     wat_emit("    (local.get $state_tmp)\n")
+  },
+
+  LYield(h, op_name, k_expr) => {
+    // band B k1 — the MultiShot unwind. The REAL form (k = the reified
+    // remainder record): park k in $yield_k, the interned op key in
+    // $yield_op, raise $yield_flag, and return a width-honest dummy through
+    // the frame's own result type (h = the REWRITTEN FRAME's tail node; a
+    // Float-tailed frame keeps its f64 ft — never the perform's width).
+    // The FLOOR form (k = LConst 0) is the loud comment-marked refusal:
+    // off-spine perform / arm-state / re-yield — k2/k3's named homes.
+    match k_expr {
+      LConst(_, _) =>
+        wat_emit("    (unreachable) ;; multishot yield floor — off-spine perform / arm-state / re-yield (k2/k3)\n"),
+      _ => {
+        emit_expr(k_expr)
+        wat_emit("    (global.set $yield_k)\n")
+        wat_emit("    (i32.const ")
+        wat_emit(int_to_str(string_offset(op_name)))
+        wat_emit(") (global.set $yield_op)\n")
+        wat_emit("    (i32.const 1) (global.set $yield_flag)\n")
+        match repr_of(lookup_ty(h)) {
+          RF64 => wat_emit("    (f64.const 0)\n"),
+          RF32 => wat_emit("    (f32.const 0)\n"),
+          RI64 => wat_emit("    (i64.const 0)\n"),
+          _    => wat_emit("    (i32.const 0)\n")
+        }
+      }
+    }
   },
 
   LIf(_h, cond, then_body, else_body) => {
@@ -2920,6 +3005,40 @@ fn emit_expr(expr) = match expr {
       wat_emit("_state_g)\n")
     }
     emit_expr(body)
+    // band B k1 — the yield DRIVER. Runs INSIDE the $<hname>_state_g bracket
+    // (so the arm AND every k(v) re-entry of the remainder still resolve
+    // this install's record — the deep-handler law by construction) and is a
+    // LOOP (a re-yield of an owned op re-enters the SAME driver with the new
+    // k). Body returned normally → the flag is clear → the loop exits on its
+    // first check with the body's parked value: semantically the ungated
+    // leg. A yield of a FOREIGN op exits with the flag INTACT — it bubbles
+    // through this install to the enclosing driver (or the _start backstop).
+    // Gated on the ONE multishot_ops_of decider (walk_locals reads it
+    // identically); an all-OneShot install emits the pre-k1 bytes exactly.
+    let ms_ops = multishot_ops_of(hname)
+    if len(ms_ops) > 0 {
+      let hs = int_to_str(h)
+      wat_emit("    (local.set $__hres_{hs})\n")
+      wat_emit("    (block $ydone_{hs} (loop $ydrive_{hs}\n")   // drift-audit: ignore — WAT instruction text (the emit target's vocabulary), not Mentl control flow
+      wat_emit("      (global.get $yield_flag)(i32.eqz)(br_if $ydone_{hs})\n")
+      each((op) => {
+        wat_emit("      (global.get $yield_op)(i32.const ")
+        wat_emit(int_to_str(string_offset(op)))
+        wat_emit(")(i32.eq)\n")
+        wat_emit("      (if (then\n")
+        wat_emit("        (i32.const 0)(global.set $yield_flag)\n")
+        wat_emit("        (global.get $yield_k)(local.set $__yk_{hs})\n")
+        wat_emit("        (local.get $")
+        wat_emit(local_name)
+        wat_emit(")(local.get $__yk_{hs})(call $op_{hname}_{op})\n")
+        wat_emit("        (local.set $__hres_{hs})\n")
+        wat_emit("        (br $ydrive_{hs})\n")
+        wat_emit("      ))\n")
+      }, ms_ops)
+      wat_emit("      (br $ydone_{hs})\n")
+      wat_emit("    ))\n")
+      wat_emit("    (local.get $__hres_{hs})\n")
+    }
     if hname != "" {
       wat_emit("(local.get $")
       wat_emit(local_name)
@@ -4189,6 +4308,7 @@ fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_cmp_agg_tys_list(body,
       collect_cmp_agg_tys_list(caps, collect_cmp_agg_tys_list(ev, acc))),
+  LYield(_h, _op, k)     => collect_cmp_agg_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_cmp_agg_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_cmp_agg_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_cmp_agg_tys_list(e,
@@ -4342,6 +4462,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_eq_product_tys_list(body,
       collect_eq_product_tys_list(caps, collect_eq_product_tys_list(ev, acc))),
+  LYield(_h, _op, k)     => collect_eq_product_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_eq_product_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_eq_product_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_eq_product_tys_list(e,
@@ -4871,6 +4992,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_show_tys_list(body,
       collect_show_tys_list(caps, collect_show_tys_list(ev, acc))),
+  LYield(_h, _op, k)     => collect_show_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_show_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_show_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_show_tys_list(e,
@@ -5141,6 +5263,7 @@ fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_hash_tys_list(body,
       collect_hash_tys_list(caps, collect_hash_tys_list(ev, acc))),
+  LYield(_h, _op, k)     => collect_hash_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_hash_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_hash_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_hash_tys_list(e,

@@ -23,7 +23,7 @@ if [ $# -gt 0 ]; then TARGETS="$*"; else TARGETS="$(find src lib -name '*.mn')";
 # symbol present here is resolved; one absent (yet cited) is a phantom edge.
 SURFACE="$(mktemp)"
 { find src lib -name '*.mn'    -exec sed 's://.*::' {} + ;
-  find bootstrap/src -name '*.wat' -exec sed 's:;;.*::' {} + ; } > "$SURFACE"
+  } > "$SURFACE"
 
 # kernel vocabulary that reads snake_case but is NOT a code symbol (tune freely)
 ALLOW='^(self|first_light|machine_code|use_count)$'

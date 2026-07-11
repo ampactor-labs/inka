@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
 # ═══ Mentl first-light march — the binary-arbiter gate in ONE command ════════
-# seed → m2 → m3 (→ m4), with structured trap / probe / nstate reporting, so a
+# boot → m2 → m3 (→ m4), with structured trap / probe reporting, so a
 # diagnostic cycle is a single invocation instead of a hand-typed pipeline.
-# Bootstrap-layer tool — dissolves at first-light (the wheel becomes its own
-# oracle). Pairs with tools/verify.sh (micros + drift-audit, the Law-7 guard).
+# Pairs with tools/verify.sh (micros + census, stamped green).
 #
 #   bash tools/march.sh             # boot → m2 → m3, ASSERT the fixpoint ratchet
-#   bash tools/march.sh --no-build  # reuse bootstrap/mentl.wasm (skip the ~3min build)
 #   bash tools/march.sh --fixpoint  # force the m4 leg even on a clean m2 == m3
-#   PROBE=35866 bash tools/march.sh # surface the per-handle seed eprint probe line
 #
 # The ratchet arbitrates ITSELF: m2 == m3 is the fixpoint; on m2 ≠ m3 the march
 # runs the m4 leg automatically and rules TRANSITION (m3 == m4 — an emit/import
@@ -25,16 +22,13 @@ cd "$(dirname "$0")/.." || exit 2
 source "$(dirname "$0")/wt-env.sh"   # WT, WT_RUN_FLAGS, W2W — the one home
 OUT="${MARCH_OUT:-$(pwd)/.build/march}"; mkdir -p "$OUT"
 WHEEL="$OUT/wheel.mn"
-# Post-first-light default: boot from the PINNED FIXPOINT WHEEL
-# (boot/mentl.wasm — boot/PROVENANCE.md). m2 := boot(wheel) is wheel-emitted,
-# so m2 == m3 IS the fixed point (the seed-era "NOT m2 == m3" compared a
-# SEED-emitted m2 and retired with the seed). --from-seed walks the cold
-# ladder (build seed, seed→m2, m2→m3[, m3→m4]) — band J archaeology.
-BUILD=1; FIXPOINT=0; FROM_SEED=0
+# Boot from the PINNED FIXPOINT WHEEL (boot/mentl.wasm — boot/PROVENANCE.md).
+# m2 := boot(wheel) is wheel-emitted, so m2 == m3 IS the fixed point. The
+# hand-WAT seed is DELETED (7401c4b); the cold-ladder recipe lives at tag
+# first-light (band J archaeology).
+FIXPOINT=0
 for a in "$@"; do case "$a" in
-  --no-build)  BUILD=0 ;;
   --fixpoint)  FIXPOINT=1 ;;
-  --from-seed) FROM_SEED=1 ;;
   *) echo "march: unknown arg '$a'" >&2; exit 2 ;;
 esac; done
 
@@ -77,43 +71,22 @@ pin_trap() {  # pin_trap <wasm> <err> — auto-disassemble the trap site from th
   find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; } > "$WHEEL"
 echo "wheel: $(wc -l < "$WHEEL") lines"
 
-if [ "$FROM_SEED" = 1 ]; then
-  if [ "$BUILD" = 1 ]; then
-    if bash bootstrap/build.sh > "$OUT/seedbuild.log" 2>&1; then
-      echo "✓ seed build ($(grep -oE 'mentl.wasm \([0-9]+ bytes\)' "$OUT/seedbuild.log" | tail -1))"
-    else echo "✗ seed build FAILED:"; tail -15 "$OUT/seedbuild.log"; exit 1; fi
-  fi
-  BOOT=bootstrap/mentl.wasm
-else
-  BOOT=boot/mentl.wasm
-  [ -f "$BOOT" ] || { echo "✗ no $BOOT (boot/PROVENANCE.md) — or use --from-seed"; exit 1; }
-  echo "✓ boot: $BOOT (the pinned fixpoint wheel)"
-fi
+BOOT=boot/mentl.wasm
+[ -f "$BOOT" ] || { echo "✗ no $BOOT (boot/PROVENANCE.md)"; exit 1; }
+echo "✓ boot: $BOOT (the pinned fixpoint wheel)"
 
 # ── m2: the boot compiler compiles the wheel ──
-# Boot path reads the ONE keyed boot(wheel) artifact (wt_m2_ensure — shared
-# with verify's census and march-gate; .build/m2cache): instant when verify
-# already compiled this exact state. Seed path generates directly (a
-# different compiler, never cached against boot's key).
-if [ "$FROM_SEED" = 0 ]; then
-  if C=$(wt_m2_ensure); then
-    wt_m2_place "$C" "$OUT"; m2rc=0
-    echo "m2: boot(wheel) via $C — $(wc -l < "$OUT/m2.wat") lines (key $(cut -c1-12 "$C/key"))"
-  else
-    echo "✗ m2 generation TRAPPED (see $WT_M2CACHE/m2.err):"; trap_lines "$WT_M2CACHE/m2.err" | head -6; exit 1
-  fi
+# Reads the ONE keyed boot(wheel) artifact (wt_m2_ensure — shared with
+# verify's census and march-gate; .build/m2cache): instant when another
+# gate already compiled this exact state.
+if C=$(wt_m2_ensure); then
+  wt_m2_place "$C" "$OUT"; m2rc=0
+  echo "m2: boot(wheel) via $C — $(wc -l < "$OUT/m2.wat") lines (key $(cut -c1-12 "$C/key"))"
 else
-  gen "$BOOT" "$OUT/m2.wat" "$OUT/m2.err"; m2rc=$?
-  echo "m2: exit=$m2rc, $(wc -l < "$OUT/m2.wat" 2>/dev/null) lines"
-  if [ "$m2rc" != 0 ]; then echo "✗ m2 generation TRAPPED:"; trap_lines "$OUT/m2.err" | head -6; exit 1; fi
-  if ! "${W2W[@]}" "$OUT/m2.wat" -o "$OUT/m2.wasm" 2> "$OUT/m2w.err"; then
-    echo "✗ m2 wat2wasm FAILED:"; head -8 "$OUT/m2w.err"; exit 1; fi
+  echo "✗ m2 generation TRAPPED (see $WT_M2CACHE/m2.err):"; trap_lines "$WT_M2CACHE/m2.err" | head -6; exit 1
 fi
 echo "✓ m2 assembles ($(stat -c%s "$OUT/m2.wasm") bytes)"
 
-# seed eprint probes land in m2.err during m2 generation (bare-integer lines)
-PROBE_OUT=$(grep -xE '[0-9]+' "$OUT/m2.err" 2>/dev/null | head)
-[ -n "$PROBE_OUT" ] && echo "  probe lines: $(echo "$PROBE_OUT" | tr '\n' ' ')"
 if [ -n "${PROBE:-}" ]; then
   # closure record = [fn_ptr@0][nc@4][caps..][evs..], alloc = 8 + 4*(nc+ne).
   SZ=$(grep -oE "\(i32.const ([0-9]+)\)\(i32.add\)\(global.set \\\$heap_ptr\)\(local.get \\\$state_tmp\)\(global.get \\\$${PROBE}_idx\)" "$OUT/m2.wat" | grep -oE 'const [0-9]+' | grep -oE '[0-9]+' | head -1)
@@ -134,13 +107,12 @@ else
 fi
 
 # ── the FIXPOINT RATCHET ──
-# Boot path: m2 and m3 are BOTH wheel-emitted, so m2 == m3 is the fixed
-# point — asserted on every run (the ratchet law: every wheel change holds
+# m2 and m3 are BOTH wheel-emitted, so m2 == m3 is the fixed point —
+# asserted on every run (the ratchet law: every wheel change holds
 # m_n == m_{n+1}). --fixpoint extends the chain one more generation (m4)
-# for the paranoid triple. Seed path (--from-seed): m2 is seed-emitted, so
-# the fixpoint is m3 == m4 (the original first-light form) — needs --fixpoint.
+# for the paranoid triple.
 fixok=1; m4done=0
-if [ "$FROM_SEED" = 0 ] && [ "$m3rc" = 0 ]; then
+if [ "$m3rc" = 0 ]; then
   if diff -q "$OUT/m2.wat" "$OUT/m3.wat" >/dev/null 2>&1; then
     echo "✓✓ FIXED POINT holds: m2 == m3"
   else

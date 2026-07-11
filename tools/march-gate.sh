@@ -1,24 +1,21 @@
 #!/usr/bin/env bash
-# march-gate.sh — the m2 first-light march's ONE command.
+# march-gate.sh — the rung + micro battery through the WHEEL-emitted m2.
 #
-# The pass-2 road is walked in rungs: m2 (the seed-compiled wheel) must
-# compile ever-larger inputs END-TO-END (compile → assemble → run → correct
-# exit). Each rung that regresses names the dig site; each rung that clears
-# extends the road. This script IS the battery this march has been running
-# by hand since 2026-07-01 — one invocation, one scoreboard, zero re-derived
-# probe incantations.
+# The road is walked in rungs: m2 := boot(wheel) must compile ever-larger
+# inputs END-TO-END (compile → assemble → run → correct exit). Each rung
+# that regresses names the dig site; each rung that clears extends the road.
 #
-#   bash tools/march-gate.sh                     # build seed + m2, run all rungs
+#   bash tools/march-gate.sh                     # m2 (cached), run all rungs
 #   bash tools/march-gate.sh --no-build          # reuse .build/probe/m2.wasm
 #   bash tools/march-gate.sh --micros            # rungs, THEN the full micro
 #                                                 # battery compiled through m2
 #   bash tools/march-gate.sh --no-build --micros # reuse m2.wasm, rungs + micros
 #
 # The --micros tier promotes every tests/micros/mn-NAME.mn carrying a
-# `micro:NAME=EXIT` line in tools/verify-baseline.txt from "the SEED compiles
-# and runs it" (verify.sh's claim) to "m2 — the WHEEL, compiled BY the seed —
-# compiles and runs it" (a strictly stronger claim: m2 is the wheel's own
-# emit, seed-sparked). It is a SCOREBOARD, not a gate: a ✗ here names a dig
+# `micro:NAME=EXIT` line in tools/verify-baseline.txt from "boot compiles
+# and runs it" (verify.sh's claim) to "m2 — the wheel compiled by the
+# fixpoint wheel — compiles and runs it". It is a SCOREBOARD, not a gate:
+# a ✗ here names a dig
 # site for the next session, never a wheel bug to chase inline (CLAUDE.md ⟲
 # — census, don't chase moles). Same RT link set as the +rt rungs
 # (memory+strings+lists+prelude) for every micro — m2 has reachability-from-
@@ -54,25 +51,16 @@ for a in "$@"; do
 done
 
 if [ "$DO_BUILD" = 1 ]; then
-  if [ "${FROM_SEED:-0}" = 1 ]; then
-    echo "── seed ──"
-    bash bootstrap/build.sh >/dev/null 2>&1 || { echo "✗ seed build FAILED"; exit 1; }
-    echo "── m2 (seed compiles the wheel) ──"
-    bash tools/probe.sh m2 | tail -2 || exit 1
-  else
-    # Post-first-light default: m2 := boot(wheel) — the pinned fixpoint
-    # wheel compiles the wheel (boot/PROVENANCE.md), so every rung and
-    # micro below runs through a WHEEL-emitted compiler. Reads the ONE
-    # keyed boot(wheel) artifact (wt_m2_ensure, .build/m2cache — shared
-    # with verify's census and march.sh): instant when another gate
-    # already compiled this exact state. FROM_SEED=1 restores the
-    # seed-sparked path (band J archaeology).
-    echo "── m2 (boot — the pinned fixpoint wheel — compiles the wheel) ──"
-    C=$(wt_m2_ensure) || { echo "✗ m2 generation TRAPPED (see $WT_M2CACHE/m2.err)"; tail -3 "$WT_M2CACHE/m2.err"; exit 1; }
-    wt_m2_place "$C" "$OUT"; cp -f "$C/wheel.mn" "$OUT/wheel.mn"
-    echo "m2: boot(wheel) via $C — $(wc -l < "$OUT/m2.wat") lines (key $(cut -c1-12 "$C/key"))"
-    echo "✓ m2.wasm ($(stat -c%s "$OUT/m2.wasm") bytes)"
-  fi
+  # m2 := boot(wheel) — the pinned fixpoint wheel compiles the wheel
+  # (boot/PROVENANCE.md), so every rung and micro below runs through a
+  # WHEEL-emitted compiler. Reads the ONE keyed boot(wheel) artifact
+  # (wt_m2_ensure, .build/m2cache — shared with verify's census and
+  # march.sh): instant when another gate already compiled this state.
+  echo "── m2 (boot — the pinned fixpoint wheel — compiles the wheel) ──"
+  C=$(wt_m2_ensure) || { echo "✗ m2 generation TRAPPED (see $WT_M2CACHE/m2.err)"; tail -3 "$WT_M2CACHE/m2.err"; exit 1; }
+  wt_m2_place "$C" "$OUT"; cp -f "$C/wheel.mn" "$OUT/wheel.mn"
+  echo "m2: boot(wheel) via $C — $(wc -l < "$OUT/m2.wat") lines (key $(cut -c1-12 "$C/key"))"
+  echo "✓ m2.wasm ($(stat -c%s "$OUT/m2.wasm") bytes)"
 fi
 [ -f "$OUT/m2.wasm" ] || { echo "✗ no m2.wasm — run without --no-build"; exit 1; }
 # GATE_WASM: the compiler-under-test. Default m2 (seed-sparked wheel); point it

@@ -11,7 +11,7 @@ MICRO="$1"; EXPECT="${2:-}"
 shift 2 2>/dev/null || shift 1
 LIBS=("$@")
 # The compiler under test: the pinned fixpoint wheel (boot/PROVENANCE.md).
-# MENTL_BOOT=bootstrap/mentl.wasm walks the cold seed path (archaeology).
+# MENTL_BOOT=<path> points the battery at any compiler (e.g. a fresh m3).
 BOOT="${MENTL_BOOT:-boot/mentl.wasm}"
 source "$(dirname "$0")/wt-env.sh"   # wt_run, wt_asm — the one home
 # Honor TMPDIR (state.sh points it at a luks build dir); never hardwire the

@@ -537,7 +537,14 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 ## §6 · The bootstrap reality
 
-Mentl bootstraps **backward**. The VFINAL codebase in `src/**.mn` (+ `lib/**`)
+> **THE SEED IS DELETED (7401c4b "Fly, my pretty <3", 2026-07-10 — Morgan's own
+> hands, the day after first light).** The build loop is `boot/mentl.wasm` (the
+> pinned fixpoint wheel, boot/PROVENANCE.md); the ladder below is git
+> archaeology — the cold-bootstrap recipe lives at tag `first-light` (band J,
+> diverse-double-compilation). Everything in this section phrased as present
+> tense about the seed is HISTORY of how the wheel was sparked.
+
+Mentl bootstrapped **backward**. The VFINAL codebase in `src/**.mn` (+ `lib/**`)
 IS the compiler — the wheel. A disposable hand-WAT **seed** (`bootstrap/`,
 assembled to `bootstrap/mentl.wasm`) compiles the wheel **once** → `mentl2`;
 then Mentl compiles itself; the seed is deleted. The seed is the largest
@@ -573,7 +580,7 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 - **Handler IS state IS closure IS evidence** — one heap record, four roles
   (`[fn_ptr@0][nstate@4][state@8..][arms][captured_evs]`).
 - **Non-ultimate by design (dissolve at L1):** the seed (hand-WAT); the bash
-  scaffolds (`build.sh`, `state.sh`→`mentl where`, `faithful.sh`→`mentl verify`,
+  scaffolds (`state.sh`→`mentl where`, `verify.sh`→`mentl verify`,
   `run-micro.sh`, `drift-audit.sh`→`mentl audit`); the external runtime/assembler
   (wasmtime, WABT) — the arc to native is `!Outside` (§5 stage 3).
 
@@ -708,8 +715,8 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > micro runs through a WHEEL-emitted compiler, strictly stronger), and
 > march.sh, which ASSERTS `m2 == m3` ON EVERY RUN — the fixpoint RATCHET, a
 > two-generation loop (measured: "✓✓ FIXED POINT holds", 8/8 + 52/52 through
-> it). `--from-seed` everywhere walks the cold ladder (band J,
-> diverse-double-compilation keeps the recipe). **And band M's first artifact
+> it). The seed + its `--from-seed` ladder are deleted
+> (7401c4b); the cold recipe lives at tag `first-light` (band J). **And band M's first artifact
 > exists: `ide/` — mentl edit in the browser, RUNNING THE FIXPOINT COMPILER
 > ITSELF** (a 512MB-initial repack, derivation in ide/README.md): the
 > keystroke→compile→project loop live (fresh instance per compile — the bump
@@ -1986,17 +1993,13 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ```
 # ── the BOOT ERA (post-first-light, 2026-07-10): boot/mentl.wasm IS the compiler ──
-bash tools/verify.sh           # the floor: micros through boot + the wheel self-census (the pre-commit hook)
-bash tools/march-gate.sh --micros   # rungs + battery through boot's wheel-emitted m2
-bash tools/march.sh            # THE RATCHET: boot→m2→m3, ASSERTS m2 == m3 (every wheel change holds the fixpoint)
+bash tools/verify.sh           # the floor: micros + census — STAMPED green (unchanged tree answers in ms; FORCE_VERIFY=1 re-runs)
+bash tools/march-gate.sh --micros   # rungs + battery through boot's wheel-emitted m2 (reads the shared .build/m2cache)
+bash tools/march.sh            # THE RATCHET: boot→m2→m3, ASSERTS m2 == m3; on m2 ≠ m3 runs m4 ITSELF and rules TRANSITION (re-pin from m3) vs BROKEN
 bash ide/serve.sh              # mentl edit in the browser (localhost:7378/ide/) — SERVED BY MENTL (ide/serve.mn)
-#   --from-seed on any of the three walks the cold hand-WAT ladder (band J archaeology)
-bash tools/state.sh            # seed build · wheel census · micro battery · FIXED-POINT m3==m4 (run FIRST)
-bash tools/state.sh --quick    # census + micros only (one wasmtime pass)
-bash tools/march-gate.sh       # the LIVE m2 rung scoreboard (7 pass / 1 fail; hof-map the open rung)
-bash tools/march-gate.sh --micros   # + micros-through-m2 (the wheel's own emit runs the battery — 0/34, the seam's blast radius)
-tools/faithful.sh <file.mn>    # proto-`mentl verify`: does mentl2 agree with the seed?
-tools/faithful.sh --wheel      # live L1 status   ·   --bisect: ddmin to the minimal failing file-set
+#   (the seed + --from-seed are deleted, 7401c4b; the cold ladder lives at tag first-light)
+bash tools/state.sh            # ground FIRST: git state → verify (stamped) → march (the ratchet); --quick = verify only
+bash tools/march-gate.sh       # the LIVE m2 rung scoreboard
 python3 tools/emit-diff.py m2.wat m3.wat        # the divergence pinner — run FIRST on any m3 trap (CLAUDE.md ⟲)
 python3 tools/emit-diff.py m2.wat m3.wat --trap # m3-side unreachable bodies m2 lacks (filter to comment-marked floors — bare else-unreachable is benign, SYNTAX §exhaustiveness)
 grep -B3 '(unreachable)' m3.wat | grep ';;' | sort | uniq -c   # the floor CENSUS in one measurement (concat / field-offset markers)

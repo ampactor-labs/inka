@@ -4,7 +4,7 @@
 # assemble-flags are a FACT with exactly one home. Every script sources this;
 # nobody hand-types `-W threads=y …` again (the flag-split footgun that cost a
 # session). The instant `mentl run` / `mentl asm` exist as real subcommands,
-# this file dissolves — like every bootstrap scaffold.
+# this file dissolves — like every bootstrap-era scaffold.
 #
 #   Usage (source, never execute):   source "$(dirname "$0")/wt-env.sh"
 #   Then:  wt_run <wasm> [args…]              # run with the canonical flags
@@ -18,8 +18,8 @@
 # truth. Override the binary via WASMTIME_BIN. Nothing here re-derives; every
 # helper is a projection of the four constants.
 
-# The threads/shared-memory/tail-call quartet is load-bearing: the seed uses
-# wasi-threads shared memory (bootstrap wasi_thread_spawn substrate) and
+# The threads/shared-memory/tail-call quartet is load-bearing: the wheel's
+# modules use wasi-threads shared memory (the wasi_thread_spawn substrate) and
 # return_call_indirect (opcode 0x13). Drop any one flag → the module refuses to
 # instantiate. This quartet is the invariant, proven across the whole toolchain.
 WT="${WASMTIME_BIN:-$HOME/.wasmtime/bin/wasmtime}"

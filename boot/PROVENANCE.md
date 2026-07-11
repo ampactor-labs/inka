@@ -26,8 +26,12 @@ Provenance, self-confirmed at pin time:
   sha b3314001…, commit 87c0152, tag `first-light`)
 
 Re-pinning (a deliberate act, like updating a lockfile): after a wheel change
-reaches its new fixpoint, copy the fresh m2.wasm here, update the hashes
-above, and commit with the march output in the message.
+reaches its new fixpoint, copy the SELF-REPRODUCING generation here — on a
+steady-state run (m2 == m3) either binary is that generation; on a TRANSITION
+(m2 != m3, m3 == m4) it is m3.wasm, NEVER the fresh m2 (m2 is the OLD emit's
+output — blessing it is the trusting-trust mistake march.sh:123-132 warns
+about and its printed `cp .build/march/m3.wasm boot/mentl.wasm` avoids).
+Update the hashes above and commit with the march output in the message.
 
 The hand-WAT seed (`bootstrap/`) stays as the cold-bootstrap recipe and the
 diverse-second-seed ingredient (trusting-trust, PLAN band J:

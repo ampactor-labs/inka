@@ -36,7 +36,37 @@ rerun(v):
 outer-install driver hit). No-perform bodies return normally from the first
 `resume`. Non-identity continuations are captured natively.
 
-## The emit target (the remaining build)
+## ⚠ Native conts are BLOCKED under WASI `_start` (wasmtime 43, verified 2026-07-11)
+
+A continuation runs correctly only when the module is entered via
+`wasmtime --invoke <fn>` (that is how the crucibles above pass). Entered via the
+WASI command entry `_start` — which every real Mentl program uses — even a
+*single* `cont.new`+`resume` panics wasmtime internally:
+
+```
+assertion failed: core::ptr::eq(head, self)   (traphandlers.rs)
+```
+
+(the SAME assertion double-resume trips). wasmtime's command execution runs the
+module on its own fiber, and a user continuation created inside it violates the
+continuation-stack invariant. No `-W`/`-O`/`-C` flag avoids it. So native typed
+continuations are **not viable for `_start` programs on wasmtime 43** — the
+`--invoke` proofs are real, but the substrate can't carry them to a running
+`mentl` binary without an upstream wasmtime fix (which would be an `!Outside`
+dependency).
+
+**Consequence:** the shipping multi-shot path is the PURE-MENTL re-execution
+driver — `resume(v)` re-runs the body thunk under a one-shot replay handler, all
+ordinary Mentl handlers, works under `_start`. Its DIRECT form (arm logic run as
+a driver fn, no outer install) is proven (reexec-model.mn → 30) and is correct
+whenever the body performs the op unconditionally (mn-multishot). The
+fully-general form (conditional / no-perform bodies) needs the
+**arm-internal-perform gap** closed so the re-run's perform resolves to the inner
+replay instead of re-entering the outer handler — that is the real keystone dig,
+and it is `!Outside`-clean (no wasmtime dependency). Native conts return as the
+O(1) optimization if/when wasmtime carries them under `_start`.
+
+## The emit target (native-cont form — kept for when the substrate is ready)
 
 Lower a multi-shot handler `{ body } ~> h` to this driver:
 

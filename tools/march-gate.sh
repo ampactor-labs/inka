@@ -62,16 +62,15 @@ if [ "$DO_BUILD" = 1 ]; then
   else
     # Post-first-light default: m2 := boot(wheel) — the pinned fixpoint
     # wheel compiles the wheel (boot/PROVENANCE.md), so every rung and
-    # micro below runs through a WHEEL-emitted compiler. FROM_SEED=1
-    # restores the seed-sparked path (band J archaeology).
+    # micro below runs through a WHEEL-emitted compiler. Reads the ONE
+    # keyed boot(wheel) artifact (wt_m2_ensure, .build/m2cache — shared
+    # with verify's census and march.sh): instant when another gate
+    # already compiled this exact state. FROM_SEED=1 restores the
+    # seed-sparked path (band J archaeology).
     echo "── m2 (boot — the pinned fixpoint wheel — compiles the wheel) ──"
-    { find src -name '*.mn' | sort | xargs cat
-      find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; } > "$OUT/wheel.mn"
-    "$WT" run "${WT_RUN_FLAGS[@]}" boot/mentl.wasm < "$OUT/wheel.mn" > "$OUT/m2.wat" 2> "$OUT/m2.err"
-    rc=$?
-    echo "m2: exit=$rc, $(wc -l < "$OUT/m2.wat" 2>/dev/null) lines"
-    [ "$rc" = 0 ] || { echo "✗ m2 generation TRAPPED"; exit 1; }
-    "${W2W[@]}" "$OUT/m2.wat" -o "$OUT/m2.wasm" 2> "$OUT/m2w.err" || { echo "✗ m2 wat2wasm FAILED"; head -5 "$OUT/m2w.err"; exit 1; }
+    C=$(wt_m2_ensure) || { echo "✗ m2 generation TRAPPED (see $WT_M2CACHE/m2.err)"; tail -3 "$WT_M2CACHE/m2.err"; exit 1; }
+    wt_m2_place "$C" "$OUT"; cp -f "$C/wheel.mn" "$OUT/wheel.mn"
+    echo "m2: boot(wheel) via $C — $(wc -l < "$OUT/m2.wat") lines (key $(cut -c1-12 "$C/key"))"
     echo "✓ m2.wasm ($(stat -c%s "$OUT/m2.wasm") bytes)"
   fi
 fi

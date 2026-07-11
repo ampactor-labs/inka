@@ -78,3 +78,61 @@ wt_wheel() {
     esac
   done
 }
+
+# ── the ONE wheel-compile + the gate stamp — Carried-Truth for the tools ────
+# boot(wheel) is DETERMINISTIC (the monotonic bump image: determinism =
+# fixpoint; every byte-exact m2 == m3 assert is the empirical proof), so the
+# compile is a pure function of (wheel bytes, boot bytes, run flags). It costs
+# ~13 minutes, and three gates used to re-derive it independently — verify's
+# census, march's m2, march-gate's m2. ONE keyed home now: .build/m2cache.
+# Consumers call wt_m2_ensure and READ; nobody re-derives. verify.sh stamps
+# its green verdict keyed on wt_state_key, so the pre-commit hook answers
+# instantly on an unchanged tree instead of re-paying the full gate it just
+# watched pass. Placement into a consumer dir COPIES (never hardlinks — every
+# tool overwrites its own output paths, and a hardlink would write back into
+# the cache inode). Dissolves with this file at `mentl verify` (the IC cursor
+# makes caching the semantics, not a bolt-on).
+
+wt_state_key() {  # the gate-relevant tree state, hashed. Over-inclusion is a
+                  # spurious re-run; under-inclusion is the bug — include every
+                  # file whose change can change the verdict.
+  { wt_wheel src lib
+    cat boot/mentl.wasm tests/micros/*.mn tools/verify.sh tools/run-micro.sh \
+        tools/wt-env.sh tools/verify-baseline.txt 2>/dev/null
+    printf '%s' "${WT_RUN_FLAGS[*]}"
+  } | sha256sum | cut -d' ' -f1
+}
+
+wt_m2_key() {  # what the cached boot(wheel) artifact depends on — nothing more
+  { wt_wheel src lib; cat boot/mentl.wasm; printf '%s' "${WT_RUN_FLAGS[*]}"; } \
+    | sha256sum | cut -d' ' -f1
+}
+
+WT_M2CACHE=".build/m2cache"
+wt_m2_ensure() {  # fill $WT_M2CACHE/{wheel.mn,m2.wat,m2.wasm,m2.err} for the
+                  # CURRENT tree; instant on a key hit. flock serializes
+                  # concurrent gates (the second waits, then reads). Echoes the
+                  # cache dir; returns 1 on a trapped/failed compile.
+  mkdir -p "$WT_M2CACHE"
+  local key; key=$(wt_m2_key)
+  if [ "$(cat "$WT_M2CACHE/key" 2>/dev/null)" != "$key" ] || [ ! -s "$WT_M2CACHE/m2.wasm" ]; then
+    (
+      exec 9>"$WT_M2CACHE/lock"; flock 9
+      # re-check under the lock — a concurrent gate may have just filled it
+      [ "$(cat "$WT_M2CACHE/key" 2>/dev/null)" = "$key" ] && [ -s "$WT_M2CACHE/m2.wasm" ] && exit 0
+      : > "$WT_M2CACHE/key"   # invalidate before rebuilding (empty never matches a sha)
+      wt_wheel src lib > "$WT_M2CACHE/wheel.mn"
+      timeout 9000 "$WT" run -D coredump="$WT_M2CACHE/m2.coredump" "${WT_RUN_FLAGS[@]}" \
+        boot/mentl.wasm < "$WT_M2CACHE/wheel.mn" > "$WT_M2CACHE/m2.wat" 2> "$WT_M2CACHE/m2.err" || exit 1
+      wt_asm "$WT_M2CACHE/m2.wat" "$WT_M2CACHE/m2.wasm" 2> "$WT_M2CACHE/m2w.err" || exit 1
+      printf '%s' "$key" > "$WT_M2CACHE/key"
+    ) || return 1
+  fi
+  echo "$WT_M2CACHE"
+}
+
+wt_m2_place() {  # copy the cached m2 trio into a consumer's dir so its
+                 # downstream paths (diffs, pin_trap, err censuses) read as before
+  local C="$1" D="$2" f
+  for f in m2.wat m2.wasm m2.err; do cp -f "$C/$f" "$D/$f"; done
+}

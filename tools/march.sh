@@ -5,10 +5,17 @@
 # Bootstrap-layer tool — dissolves at first-light (the wheel becomes its own
 # oracle). Pairs with tools/verify.sh (micros + drift-audit, the Law-7 guard).
 #
-#   bash tools/march.sh             # build seed → m2 → m3, report the trap gate
+#   bash tools/march.sh             # boot → m2 → m3, ASSERT the fixpoint ratchet
 #   bash tools/march.sh --no-build  # reuse bootstrap/mentl.wasm (skip the ~3min build)
-#   bash tools/march.sh --fixpoint  # also m3 → m4 + diff (the m3==m4 first-light gate)
+#   bash tools/march.sh --fixpoint  # force the m4 leg even on a clean m2 == m3
 #   PROBE=35866 bash tools/march.sh # surface the per-handle seed eprint probe line
+#
+# The ratchet arbitrates ITSELF: m2 == m3 is the fixpoint; on m2 ≠ m3 the march
+# runs the m4 leg automatically and rules TRANSITION (m3 == m4 — an emit/import
+# change crossed one generation; re-pin boot from m3) vs BROKEN (m3 ≠ m4). The
+# m2 leg reads the ONE keyed boot(wheel) artifact (wt_m2_ensure, .build/m2cache
+# — shared with verify's census and march-gate), so gates never re-derive the
+# same ~13-minute compile.
 #
 # Artifacts land in .build/march (luks-backed, per PLAN §8), NEVER /tmp — /tmp is
 # RAM-backed tmpfs here, and a 50MB objdump + 12MB m2.wat × repeated runs OOMs the
@@ -84,11 +91,24 @@ else
 fi
 
 # ── m2: the boot compiler compiles the wheel ──
-gen "$BOOT" "$OUT/m2.wat" "$OUT/m2.err"; m2rc=$?
-echo "m2: exit=$m2rc, $(wc -l < "$OUT/m2.wat" 2>/dev/null) lines"
-if [ "$m2rc" != 0 ]; then echo "✗ m2 generation TRAPPED:"; trap_lines "$OUT/m2.err" | head -6; exit 1; fi
-if ! "${W2W[@]}" "$OUT/m2.wat" -o "$OUT/m2.wasm" 2> "$OUT/m2w.err"; then
-  echo "✗ m2 wat2wasm FAILED:"; head -8 "$OUT/m2w.err"; exit 1; fi
+# Boot path reads the ONE keyed boot(wheel) artifact (wt_m2_ensure — shared
+# with verify's census and march-gate; .build/m2cache): instant when verify
+# already compiled this exact state. Seed path generates directly (a
+# different compiler, never cached against boot's key).
+if [ "$FROM_SEED" = 0 ]; then
+  if C=$(wt_m2_ensure); then
+    wt_m2_place "$C" "$OUT"; m2rc=0
+    echo "m2: boot(wheel) via $C — $(wc -l < "$OUT/m2.wat") lines (key $(cut -c1-12 "$C/key"))"
+  else
+    echo "✗ m2 generation TRAPPED (see $WT_M2CACHE/m2.err):"; trap_lines "$WT_M2CACHE/m2.err" | head -6; exit 1
+  fi
+else
+  gen "$BOOT" "$OUT/m2.wat" "$OUT/m2.err"; m2rc=$?
+  echo "m2: exit=$m2rc, $(wc -l < "$OUT/m2.wat" 2>/dev/null) lines"
+  if [ "$m2rc" != 0 ]; then echo "✗ m2 generation TRAPPED:"; trap_lines "$OUT/m2.err" | head -6; exit 1; fi
+  if ! "${W2W[@]}" "$OUT/m2.wat" -o "$OUT/m2.wasm" 2> "$OUT/m2w.err"; then
+    echo "✗ m2 wat2wasm FAILED:"; head -8 "$OUT/m2w.err"; exit 1; fi
+fi
 echo "✓ m2 assembles ($(stat -c%s "$OUT/m2.wasm") bytes)"
 
 # seed eprint probes land in m2.err during m2 generation (bare-integer lines)
@@ -119,16 +139,35 @@ fi
 # m_n == m_{n+1}). --fixpoint extends the chain one more generation (m4)
 # for the paranoid triple. Seed path (--from-seed): m2 is seed-emitted, so
 # the fixpoint is m3 == m4 (the original first-light form) — needs --fixpoint.
-fixok=1
+fixok=1; m4done=0
 if [ "$FROM_SEED" = 0 ] && [ "$m3rc" = 0 ]; then
   if diff -q "$OUT/m2.wat" "$OUT/m3.wat" >/dev/null 2>&1; then
     echo "✓✓ FIXED POINT holds: m2 == m3"
   else
-    echo "✗ RATCHET: m2 ≠ m3 ($(diff "$OUT/m2.wat" "$OUT/m3.wat" 2>/dev/null | grep -c '^[<>]') diff lines) — the wheel no longer reproduces itself"
-    fixok=0
+    # THE TRANSITION FORM — native, never hand-driven. A change to the wheel's
+    # own EMIT or import surface crosses one generation: m2 is the OLD emit
+    # rendering the new source, m3 the NEW emit — different bytes by design
+    # (PLAN §6's original rule, resurfacing whenever the emit itself moves).
+    # The fixpoint then lands at m3 == m4, and blessing the wrong generation
+    # (m2) is the classic trusting-trust mistake — so the march arbitrates
+    # itself instead of leaving the m4 leg to a human.
+    echo "· RATCHET: m2 ≠ m3 ($(diff "$OUT/m2.wat" "$OUT/m3.wat" 2>/dev/null | grep -c '^[<>]') diff lines) — testing the TRANSITION form (m3 == m4)"
+    if "${W2W[@]}" "$OUT/m3.wat" -o "$OUT/m3.wasm" 2> "$OUT/m3w.err"; then
+      gen "$OUT/m3.wasm" "$OUT/m4.wat" "$OUT/m4.err"; m4rc=$?; m4done=1
+      echo "m4: exit=$m4rc, $(wc -l < "$OUT/m4.wat" 2>/dev/null) lines"
+      if [ "$m4rc" = 0 ] && diff -q "$OUT/m3.wat" "$OUT/m4.wat" >/dev/null 2>&1; then
+        echo "✓✓ TRANSITION: m3 == m4 — the NEW wheel reproduces itself; the m2/m3 diff was the emit change crossing one generation."
+        echo "   Re-pin to bless: cp $OUT/m3.wasm boot/mentl.wasm  (then update boot/PROVENANCE.md — the recipe is in that file)"
+      else
+        echo "✗✗ BROKEN: m3 ≠ m4 ($(diff "$OUT/m3.wat" "$OUT/m4.wat" 2>/dev/null | grep -c '^[<>]') diff lines; m4 exit=$m4rc) — genuine non-reproduction, not a transition"
+        fixok=0
+      fi
+    else
+      echo "✗ m3 wat2wasm FAILED (transition leg cannot run):"; head -5 "$OUT/m3w.err"; fixok=0
+    fi
   fi
 fi
-if [ "$FIXPOINT" = 1 ] && [ "$m3rc" = 0 ]; then
+if [ "$FIXPOINT" = 1 ] && [ "$m3rc" = 0 ] && [ "$m4done" = 0 ]; then
   if "${W2W[@]}" "$OUT/m3.wat" -o "$OUT/m3.wasm" 2>/dev/null; then
     gen "$OUT/m3.wasm" "$OUT/m4.wat" "$OUT/m4.err"; m4rc=$?
     if [ "$m4rc" = 0 ] && diff -q "$OUT/m3.wat" "$OUT/m4.wat" >/dev/null 2>&1; then

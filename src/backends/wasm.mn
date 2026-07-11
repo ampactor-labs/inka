@@ -907,15 +907,18 @@ fn emit_fn_index_globals(names, base_idx) = {
 // projects state directly, doesn't generate code that builds it.
 //
 // Layout: the static-closure region is [heap_base, 0x10000) — it starts AT
-// heap_base (4096), never below, for two laws: (1) page 0 is the host-boundary
-// scratch page — io.mn's WHOLE map (iov 0x50, print 0x60, fs path 0x100,
-// filestat 0x200, fd result 0x240) plus the thread-record region
-// [0x800, 0x1000) — and a record seated at 0x108 was CLOBBERED by the first
-// fs_write_path the mentl server ever ran (ev_scan's fn_ptr became "x.ht",
-// 2026-07-10); (2) the eq/compare sentinel guard word-compares anything
-// below heap_base, and a closure record is a heap value. Interned data
-// strings begin at 0x10000, so the region holds 7680 records; the bump
-// heap starts at 1MB.
+// heap_base (4096), never below, for two laws: (1) page 0 belongs to the
+// SUBSTRATE — the sentinel space plus the thread-record region
+// [0x800, 0x1000); the runtime owns no static address there (io.mn's old
+// scratch map is DELETED — every syscall record allocs per use — after a
+// record seated at 0x108 was clobbered by the first fs path write the
+// mentl server ever ran: ev_scan's fn_ptr became "x.ht", 2026-07-10);
+// (2) the eq/compare sentinel guard word-compares anything below
+// heap_base, and a closure record is a heap value. Interned data strings
+// begin at 0x10000, so the region holds 7680 records; the bump heap
+// starts at 1MB. The whole layout as ONE fold — each region's base IS the
+// previous region's limit, overlap unconstructible — is the named ultimate
+// form (Hβ.emit.image-map-fold, band D).
 //
 // Each top-level closure occupies 8 bytes:
 //   offset 0: fn_idx (i32 LE)

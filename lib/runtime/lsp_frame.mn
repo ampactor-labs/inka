@@ -164,7 +164,7 @@ fn read_body_loop(buf, written, total) with Memory + Alloc + WASI = {
   if written >= total { written }
   else {
     let chunk_size = total - written
-    let nread = read_chunk(buf + 4 + written, chunk_size)
+    let nread = read_chunk(0, buf + 4 + written, chunk_size)
     if nread == 0 { written }
     else { read_body_loop(buf, written + nread, total) }
   }

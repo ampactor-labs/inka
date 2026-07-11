@@ -509,7 +509,7 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 **C · IFC — flow in the row (arm 4/6, §4⑥; W31 scaffold landed).** `Hβ.verify.ifc-noninterference` (umbrella; code `Hβ.types.ifc-flow-constraint`, types.mn:1029) ← `Hβ.ifc.dcc-noninterference-gate` → `.flowlabel-inference-in-hm` → `.pc-label-implicit-flow` → `.integrity-dual-lattice` (prompt-injection IS an integrity-flow violation) → `.declassify-robust` → `.flow-world-on-tcont` → `.agentic-fides-target`. DEP-rooted on `sound-neg-under-poly`.
 
-**D · The value layer — fold & repr (arms 1/7, §5.U; STEP 0/1/2 landed).** `Hβ.fold.show-leaf` (synthesize as a lowered LFn, not raw WAT; lower.mn:481) · `.compare-hash-leaf` · gate `Hβ.eq.fold-seed-value-gate` · `Hβ.repr.arrow-layout-interop` · `Hβ.emit.variant-payload-repr-width` (wasm.mn:4913) · `.plit-handle-repr` (wasm.mn:5537) · `Hβ.value.ontology-derivation-complete` · `Hβ.runtime.zero-copy-string-view` (lexer.mn:316).
+**D · The value layer — fold & repr (arms 1/7, §5.U; STEP 0/1/2 landed).** `Hβ.fold.show-leaf` (synthesize as a lowered LFn, not raw WAT; lower.mn:481) · `.compare-hash-leaf` · gate `Hβ.eq.fold-seed-value-gate` · `Hβ.repr.arrow-layout-interop` · `Hβ.emit.variant-payload-repr-width` (wasm.mn:4913) · `.plit-handle-repr` (wasm.mn:5537) · `Hβ.value.ontology-derivation-complete` · `Hβ.runtime.zero-copy-string-view` (lexer.mn:316) · `Hβ.emit.image-map-fold` *(new 2026-07-10 — the module's static layout as ONE fold in the emit: each region's base IS the previous region's limit (sentinel space | records | thread records | interned data | bump heap), overlap unconstructible; born from the ev_scan record clobber (a closure record at 264 sat inside io.mn's fs path scratch — two files claiming one page in prose). The fold IS band B's persist substrate: it defines what a memcpy snapshot means)* · `Hβ.io.scratch-dissolves-into-alloc` *(new 2026-07-10 — io.mn's fixed page-0 scratch (iov 80, print 96, fs path 256, filestat 512, fd 576) is an unaccounted allocation evading the Alloc row; every buffer allocs per use (the net.mn precedent — the bump image never frees, droplets beside the lake). Deletes the runtime's LAST static addresses: page 0 becomes purely the sentinel space, heap_base ONE meaning. Re-rows ~9 io fns (Alloc visible) — a two-generation march)* · `Hβ.tools.march-transition-native` *(new 2026-07-10 — on m2 ≠ m3 march.sh runs the m4 leg itself and reports TRANSITION (m3 == m4, re-pin from m3) vs BROKEN (m3 ≠ m4); removes the bless-the-wrong-generation human-error surface — bash scaffold tier)*.
 
 **E · Parallelism & accelerators (arm 3, §4④; STEP 4 collapse landed).** `Hβ.lower.fanout-simd-lane-cashout` (RV128) · `.fanout-gpu-backend-handler` (lower.mn:1475) · `.fanout-durable-persist-handler` (SPACE=TIME) · `Hβ.parallel.thread-alloc-transitive-proof` (verify ONLY after the leak closes) · `.race-freedom-ownership-proof` · `Hβ.infer.fanout-ownership-from-use-count` (infer.mn:1288) · `Hβ.runtime.wasi-thread-spawn-seed` (threading.mn:296) · `Hβ.driver.level-set-par-walk` *(the topological layer-partition is LIVE in driver.mn — 7165bbb; the open half is the multi-core `>< ~> Thread` at the layer site)* · `Hβ.cursor.speculative-compile` · `Hβ.cursor.work-stealing-via-gradient` *(idle cores ask the cursor "what next?"; the gradient's argmax IS the priority queue — no scheduler module)* · `Hβ.lower.schedule-specialized-callee` *(new — the parallel_map dissolution's open remainder: whether a reusable fn's internal `><`/`<|` should EVER inherit a caller-installed `Schedule` across a call boundary. The only sound route is compile-time specialization of the callee per install-context, preserving `Seq`'s zero-cost/`!Thread`-provable property — the §5.3 dispatch gradient's sibling on the INSTALLED-HANDLER axis (vs the known-argument axis; shares callee-specialization infra). The ambient/evidence-passed-runtime `Schedule` alternative is the wrong direction — it taxes every `Seq` fanout to buy portability only a rare `Thread` caller needs. Scoped skeptically: direct `>< + ~> Thread` at the use site is sufficient and simpler; build only when a real consumer needs one fanout helper serving callers wanting different schedules. Sequenced behind `Hβ.driver.level-set-par-walk`, DEP-gated on band-A `sound-neg-under-poly`)*.
 
@@ -716,10 +716,12 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > allocator never frees, so instantiation IS the reset), clickable
 > diagnostics that jump to the source line, the emitted WAT + stats, six
 > demos, the five verbs and `??` accented. Verified headlessly under V8
-> (`node ide/test-shim.mjs`) + serve.py's COOP/COEP (shared memory needs
-> cross-origin isolation). Run: `python3 ide/serve.py` →
-> localhost:7378/ide/. Named follow-up: `Hβ.felt.ide-run-in-page` (an
-> in-browser assembler). **The boot-era frontier, measured on day one:**
+> (`node ide/test-shim.mjs`) + COOP/COEP isolation headers (shared memory
+> needs cross-origin isolation). Run: `bash ide/serve.sh` →
+> localhost:7378/ide/ — THE SERVER IS MENTL (ide/serve.mn, an HTTP/1.1
+> file server on the WASI socket substrate lib/runtime/net.mn; serve.py
+> is deleted — no python in the run path). Named follow-up:
+> `Hβ.felt.ide-run-in-page` (an in-browser assembler). **The boot-era frontier, measured on day one:**
 > `mn-multishot` = exit 10 (want 30) — the seed GATE dissolved but the
 > wheel's multi-shot producer is genuinely dormant (lower still fabricates
 > OneShot; band B's reify is the first real dig of the era — the multi-shot
@@ -1987,7 +1989,7 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 bash tools/verify.sh           # the floor: micros through boot + the wheel self-census (the pre-commit hook)
 bash tools/march-gate.sh --micros   # rungs + battery through boot's wheel-emitted m2
 bash tools/march.sh            # THE RATCHET: boot→m2→m3, ASSERTS m2 == m3 (every wheel change holds the fixpoint)
-python3 ide/serve.py           # mentl edit in the browser (localhost:7378/ide/) — the fixpoint compiler live
+bash ide/serve.sh              # mentl edit in the browser (localhost:7378/ide/) — SERVED BY MENTL (ide/serve.mn)
 #   --from-seed on any of the three walks the cold hand-WAT ladder (band J archaeology)
 bash tools/state.sh            # seed build · wheel census · micro battery · FIXED-POINT m3==m4 (run FIRST)
 bash tools/state.sh --quick    # census + micros only (one wasmtime pass)

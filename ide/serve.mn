@@ -1,0 +1,113 @@
+// serve.mn — mentl serves its own IDE. The first application of the boot
+// era: an HTTP/1.1 file server written in Mentl, compiled by the fixpoint
+// compiler, speaking through the socket substrate (lib/runtime/net.mn).
+//
+//   bash ide/serve.sh          # compile-if-stale + run
+//
+// The host preopens the working directory and the listener:
+//   wasmtime run <flags> --dir . -S tcplisten=127.0.0.1:7378 ide/serve.wasm
+// find_listener reads the preopen table for the socket (positional — dirs
+// first), so the fd never lives in source. Every response carries the
+// cross-origin-isolation pair the IDE's shared-memory compiler requires —
+// the reason serve.py existed, now a Mentl truth.
+
+// Pinned structural compare (the field_name_eq precedent): path fragments
+// arrive as views over the request buffer. ends_with is the prelude's.
+fn text_eq(a: String, b: String) with Memory = a == b
+
+fn mime_for(path: String) with Memory + Alloc =
+  if ends_with(path, ".html")      { "text/html; charset=utf-8" }
+  else if ends_with(path, ".wasm") { "application/wasm" }
+  else if ends_with(path, ".js")   { "text/javascript" }
+  else if ends_with(path, ".mjs")  { "text/javascript" }
+  else if ends_with(path, ".css")  { "text/css" }
+  else if ends_with(path, ".json") { "application/json" }
+  else if ends_with(path, ".svg")  { "image/svg+xml" }
+  else if ends_with(path, ".png")  { "image/png" }
+  else if ends_with(path, ".md")   { "text/markdown; charset=utf-8" }
+  else if ends_with(path, ".mn")   { "text/plain; charset=utf-8" }
+  else if ends_with(path, ".wat")  { "text/plain; charset=utf-8" }
+  else                             { "application/octet-stream" }
+
+// One read is the whole request for the GETs a static IDE makes.
+fn read_request(conn) with Memory + Alloc + WASI = {
+  let cap = 65536
+  let s = alloc(4 + cap)
+  let n = sock_read(conn, s + 4, cap)
+  store_i32(s, n)
+  s
+}
+
+// The request line's path: bytes between the first two spaces, query
+// stripped. Empty on a malformed line (the caller 400s).
+fn request_path(req: String) with Memory + Alloc = {
+  let n = byte_len(req)
+  let sp1 = find_char(req, n, 0, 32)
+  if sp1 < 0 { "" }
+  else {
+    let sp2 = find_char(req, n, sp1 + 1, 32)
+    if sp2 < 0 { "" }
+    else {
+      let raw = str_slice(req, sp1 + 1, sp2)
+      let q = find_char(raw, byte_len(raw), 0, 63)   // '?'
+      if q < 0 { raw } else { str_slice(raw, 0, q) }
+    }
+  }
+}
+
+// Routing: "/" and any directory path serve its index.html; the leading
+// slash strips (fs paths are preopen-relative); ".." refuses.
+fn route(path: String) with Memory + Alloc =
+  if text_eq(path, "") || text_eq(path, "/") { "ide/index.html" }
+  else {
+    let full = if ends_with(path, "/") { str_concat(path, "index.html") } else { path }
+    str_slice(full, 1, byte_len(full))
+  }
+
+fn respond(conn, code_line: String, mime: String, body: String) with Memory + Alloc + WASI = {
+  let len_s = int_to_str(byte_len(body))
+  let head = "HTTP/1.1 {code_line}\r\nContent-Type: {mime}\r\nContent-Length: {len_s}\r\nCross-Origin-Opener-Policy: same-origin\r\nCross-Origin-Embedder-Policy: require-corp\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
+  sock_write_str(conn, head)
+  sock_write_str(conn, body)
+  ()
+}
+
+fn handle(conn) with Memory + Alloc + WASI = {
+  let req = read_request(conn)
+  let path = request_path(req)
+  if byte_len(path) == 0 {
+    respond(conn, "400 Bad Request", "text/plain", "bad request\n")
+  } else if str_contains(path, "..") {
+    respond(conn, "403 Forbidden", "text/plain", "no traversal\n")
+  } else {
+    let file = route(path)
+    if fs_exists_impl(file) {
+      respond(conn, "200 OK", mime_for(file), fs_read_file_impl(file))
+      print_string("200 {file}\n")
+    } else {
+      respond(conn, "404 Not Found", "text/plain", "not found: {file}\n")
+      print_string("404 {file}\n")
+    }
+  }
+  fd_close(conn)
+  ()
+}
+
+// The accept loop — an evidence-threading tail call, constant stack
+// forever (the first-light era's own tail form carrying its own server).
+fn serve_loop(lfd) with Memory + Alloc + WASI = {
+  handle(sock_accept_blocking(lfd))
+  serve_loop(lfd)
+}
+
+fn main() with Memory + Alloc + WASI = {
+  let lfd = find_listener()   // drift-audit: ignore — sequenced effectful read consumed at TWO sites (the guard and the loop): the reuse exclusion, not a pipe stage
+  if lfd < 0 {
+    print_string("no listener preopened — run: wasmtime run <flags> --dir . -S tcplisten=127.0.0.1:7378 ide/serve.wasm\n")
+    1
+  } else {
+    print_string("mentl edit, served by mentl -> http://localhost:7378/ide/\n")
+    serve_loop(lfd)
+    0
+  }
+}

@@ -11,14 +11,21 @@ line exists for wheel-scale self-compiles). Derivation, reproducible:
 
 Run it:
 
-    python3 ide/serve.py        # then open http://localhost:7378/ide/
+    bash ide/serve.sh           # then open http://localhost:7378/ide/
 
-The server exists for one reason: the compiler's memory is SHARED (the
-threading substrate), and browsers require cross-origin isolation
-(COOP/COEP headers) for shared WebAssembly memory. serve.py serves the
-repo root with those headers; the page also fetches lib/runtime/*.mn +
-lib/prelude.mn from the repo to link the runtime the way tools/run-micro.sh
-does.
+THE SERVER IS MENTL. ide/serve.mn is an HTTP/1.1 file server written in
+Mentl, compiled by the fixpoint compiler, speaking WASI preview1 sockets
+(lib/runtime/net.mn: sock_accept + poll_oneoff over a listener wasmtime
+preopens with -S tcplisten; connections are plain fds). serve.sh only
+compiles-if-stale and hands wasmtime the invocation — a scaffold that
+dissolves at the `mentl serve` verb.
+
+The isolation headers exist for one reason: the compiler's memory is
+SHARED (the threading substrate), and browsers require cross-origin
+isolation (COOP/COEP) for shared WebAssembly memory. Every response the
+Mentl server writes carries the pair; the page also fetches
+lib/runtime/*.mn + lib/prelude.mn from the repo to link the runtime the
+way tools/run-micro.sh does.
 
 What works today: the live loop (keystroke → compile → project, debounced),
 diagnostics parsed into a clickable panel (click → jump to the source
@@ -29,6 +36,10 @@ page — that needs an assembler in the browser, a named follow-up
 (`Hβ.felt.ide-run-in-page`); until then, download the .wat and
 `wat2wasm out.wat -o out.wasm --enable-threads --enable-tail-call &&
 wasmtime run -W all-proposals=y out.wasm`.
+
+The serving loop is an evidence-threading tail call — constant stack for
+the server's whole life, the first-light era's own tail form carrying its
+own IDE.
 
 The shim's Node twin (`node ide/test-shim.mjs`) is the harness — the same
 import surface the page provides, runnable headlessly. If the page ever

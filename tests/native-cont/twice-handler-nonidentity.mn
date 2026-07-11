@@ -1,0 +1,41 @@
+// twice-handler-nonidentity — the LOWERING gate for the re-exec driver.
+//
+// reexec-model.mn proves the DIRECT driver shape (run_twice(bt) hand-written)
+// runs to 30. This proves the compiler must LOWER the handler form
+// `{ body } ~> twice` INTO that shape — and that the continuation AFTER the
+// perform (`+ 3`) survives each re-run, not just the identity case.
+//
+// body() = pick() + 3 → resume(v) re-runs body with pick→v = v + 3.
+// arm sums two resumes: (10+3) + (20+3) = 13 + 23 = 36.
+// The identity gate (mn-multishot, body()=pick()) proves the fork count;
+// THIS proves the delimited continuation (the `+ 3`) is carried per fork.
+//
+// Exit 36 (< 127 — wasmtime aliases codes >=127 to 1; the harness must stay
+// below the Unix signal wall, tests/native-cont/README.md).
+//
+// DORMANT TODAY (lower fabricates OneShot → LMakeContinuation, never called):
+// exit is the one-shot 13 (first resume only), not 36. The band-B dig this
+// gates: Hβ.continuations.multishot-reexecution-driver +
+// Hβ.lower.arm-internal-perform-scope, as ONE pre-inference desugar (the
+// re-execution driver is evidence-proven sound only when the replay handler
+// is REGISTERED — a lower-time synthesis leaves the op singleton and re-enters
+// the driver; PLAN §7 boot-era frontier, the 3-refuter verdict).
+//
+// Run (through a fixed m2):
+//   MENTL_BOOT=.build/m2cache/m2.wasm tools/run-micro.sh \
+//     tests/native-cont/twice-handler-nonidentity.mn 36 \
+//     lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn lib/prelude.mn
+
+effect Pick { pick() -> Int }
+
+handler twice with total = 0 {
+  pick() => {
+    let a = resume(10)
+    let b = resume(20)
+    a + b
+  }
+}
+
+fn body() = pick() + 3
+
+fn main(q) = { body() } ~> twice

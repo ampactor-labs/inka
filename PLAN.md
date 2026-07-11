@@ -728,14 +728,58 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > localhost:7378/ide/ — THE SERVER IS MENTL (ide/serve.mn, an HTTP/1.1
 > file server on the WASI socket substrate lib/runtime/net.mn; serve.py
 > is deleted — no python in the run path). Named follow-up:
-> `Hβ.felt.ide-run-in-page` (an in-browser assembler). **The boot-era frontier, measured on day one:**
-> `mn-multishot` = exit 10 (want 30) — the seed GATE dissolved but the
-> wheel's multi-shot producer is genuinely dormant (lower still fabricates
-> OneShot; band B's reify is the first real dig of the era — the multi-shot
-> exploration itself). `mn-float-arith` = assembly `expected [i32] but got
-> [f64]` at a call — the callsite-result-width family
-> (`Hβ.m2.callsite-result-width`), fast repro via run-micro. Both named,
-> neither chased same-day.**
+> `Hβ.felt.ide-run-in-page` (an in-browser assembler). **THE IDE GREW ITS FIVE
+> SURFACES (2026-07-11, 73d21df): mentl edit is now the DESIGN_SYSTEM/MENTL_EDIT
+> cursor-mode rail — one caret is the one reader, every panel a projection of it.
+> Canvas (SYNTAX-faithful, each glyph its kernel-role hue), Aspect ring (eight
+> facets, each an always-visible provenance badge surface/declared/real/socket),
+> Lens (real stderr gradient-ranked to one teaching step + the two real
+> canonicalization fixes), Ledger (with-rows + the !E proof surface), Wavefront
+> (Why strip + dormant band-B realities/trail gates). Every pixel is real compiler
+> output or a LABELED source parse — no guess posing as graph truth; the magic
+> (fill-and-resume, realities) is an honest socket naming its gate, never a mock.
+> Served by ide/serve.mn under COOP/COEP; verified end-to-end. Design + surface
+> honesty adversarially checked (18-agent workflow, all seven surfaces
+> SHIP_WITH_FIX, folded in).**
+>
+> **THE MULTI-SHOT PRODUCER — FULLY ADVERSARIALLY VERIFIED (3-refuter pass,
+> 2026-07-11); the verdict: do NOT ship the narrow lower-time driver — it is the
+> band-aid the discipline forbids.** (1) EVIDENCE axis PROVEN SOUND through boot
+> (hand-written form): the re-run's perform resolves to the INNERMOST replay,
+> co-performed effects pass to the outer handler, NO re-entry — because ms_handler
+> is never installed (its arm body BECOMES the install expression) and the body is
+> a captureless top-level global taking fresh evidence per call site. (2) Holds
+> ONLY under three conditions: body emitted as a captureless top-level global with
+> an EMPTY lexical handler stack (bypass the PTee ms_handler push); free vars +
+> handler state threaded as PARAMS, never closure captures (a closure under a
+> same-effect outer handler is the D2 `undefined local $__hstate` assemble trap);
+> and the replay handler REGISTERED so the op is non-singleton → Tier-2 evidence
+> (an unregistered lower-synthesized replay leaves the op singleton → Tier-1
+> `lower_singleton_perform` re-reads `$ms_handler_state_g` → re-enters the driver —
+> the synthesis refutation). THEREFORE the ultimate form is an AST-LEVEL DESUGAR
+> BEFORE inference (emit real fn/handler decls that get inferred + registered,
+> exactly like the hand-written reexec-model.mn/run_twice), NOT a lower-time
+> synthesis. (3) The direct-driver is correct ONLY for mn-multishot's shape (pure
+> prefix-free body, single arg-independent perform, stateless arm); the GENERAL
+> form needs op-ARGS (the trigger form, not the direct-driver), per-resume STATE
+> (thread ms_handler's record through re-runs), and re-duplicates any effectful
+> PREFIX (native-cont O(1) is the exact-semantics `!Outside` future). (4) THE
+> FIXPOINT COUPLING (the sharpest finding): the wheel's TWO real multi-shot
+> handlers — `backtrack` (search.mn:134) and `Synth.enumerate_inhabitants`
+> (synth_proposer.mn:131) — are exactly the hard case (op-args + recursion +
+> effectful), MISCLASSIFIED OneShot today by the `Hβ.infer.tail-recursion-resume-
+> cardinality` gap (resume_grade skips called top-level fns). So "fixpoint-safe by
+> construction" is really "safe by classifier-gap": completing the classifier flips
+> them to MultiShot, fires the new lowering ON THE WHEEL, and breaks the fixpoint
+> UNLESS the general form is built — so the classifier completion and the general
+> lowering must CO-LAND, as ONE pre-inference desugar. The dig =
+> `Hβ.continuations.multishot-reexecution-driver` + `Hβ.lower.arm-internal-perform-
+> scope` + `Hβ.infer.tail-recursion-resume-cardinality`, together. Crucibles:
+> tests/native-cont/reexec-model.mn (→30, the model, PROVEN) +
+> twice-handler-nonidentity.mn (the non-identity lowering gate, dormant → will be
+> 36). `mn-float-arith` = assembly `expected [i32] but got [f64]` at a call — the
+> callsite-result-width family (`Hβ.m2.callsite-result-width`), fast repro via
+> run-micro. Named, not chased same-day.**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

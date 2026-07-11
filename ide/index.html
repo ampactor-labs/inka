@@ -4,117 +4,237 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>mentl edit — the medium, compiled by itself</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230A0809'/%3E%3Cpolygon points='16,6 22,9 25,15 22,21 16,24 10,21 7,15 10,9' fill='none' stroke='%23E69F00' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='15' r='3.2' fill='none' stroke='%23E69F00' stroke-width='1.4'/%3E%3C/svg%3E">
 <style>
+  /* ── DESIGN_SYSTEM tokens (docs/DESIGN_SYSTEM.md §4.7) ───────────────── */
   :root {
-    --bg: #0a0d13; --bg2: #0f1420; --bg3: #131a2a; --line: #1d2740;
-    --fg: #c8d3e8; --dim: #5d6b8a; --faint: #38425c;
-    --teal: #2dd4bf; --cyan: #67e8f9; --mag: #e879f9; --amber: #fbbf24;
-    --red: #f87171; --green: #4ade80; --violet: #a78bfa;
-    --mono: "Berkeley Mono", "JetBrains Mono", "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    /* obsidian ground — the deep the octopus surfaces from */
+    --abyss:#0A0809; --canvas:#0D0B0E; --raised1:#100E11; --raised2:#121013;
+    --line:#15121688; --border:#2A2428;
+    /* warm neutral text ramp */
+    --primary:#E8DCC8; --bright:#F5EDE0; --muted:#8B7B6E; --faint:#6B6157;
+    --whisper:#766B60; --comment:#7B7168; --ghost:#4A4040;
+    /* Okabe–Ito accent family — each hue IS a kernel role */
+    --gold:#E69F00; --gold-b:#F0B830;        /* types · contracts · cursor · teach */
+    --sky:#56B4E9;  --sky-b:#7CC8EE;         /* the five verbs · topology */
+    --blue:#2A8FC2; --blue-b:#3399CC;        /* structure · keywords · query */
+    --green:#009E73; --green-b:#33B893;      /* computation · fns · handlers · propose */
+    --verm:#D55E00; --verm-b:#E87D44;        /* boundary · negation · hole · self · error */
+    --mag:#CC79A7;  --mag-b:#D9A0C0;         /* ownership · Pure · resume */
+    --wheat:#F0C674;                          /* string literals */
+    --mono: ui-monospace, "JetBrains Mono", "Berkeley Mono", "SF Mono", Menlo, Consolas, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --sp: 8px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
-    background: var(--bg); color: var(--fg); font-family: var(--mono);
-    font-size: 13px; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--canvas); color: var(--primary); font-family: var(--mono);
+    font-size: 13px; overflow: hidden;
+    display: grid; grid-template-rows: auto auto 1fr auto auto; height: 100vh;
   }
-  /* ── header ─────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ── header ─────────────────────────────────────────────────────────── */
   header {
-    display: flex; align-items: center; gap: 14px; padding: 10px 16px;
-    border-bottom: 1px solid var(--line); background: var(--bg2); flex: none;
+    display: flex; align-items: center; gap: 14px; padding: 9px 16px;
+    border-bottom: 1px solid var(--border); background: var(--abyss);
   }
-  .mark { font-size: 15px; font-weight: 700; letter-spacing: .18em; }
-  .mark .m { background: linear-gradient(90deg, var(--teal), var(--mag));
-    -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .tag { color: var(--dim); font-size: 11px; }
+  .mark { display: flex; align-items: center; gap: 9px; }
+  .mark svg { width: 26px; height: 26px; display: block; filter: drop-shadow(0 0 6px rgba(230,159,0,.25)); }
+  .wordmark { font-size: 15px; font-weight: 600; letter-spacing: .04em; color: var(--bright); }
+  .wordmark .edit { color: var(--muted); font-weight: 400; margin-left: 2px; }
+  .tag { color: var(--faint); font-size: 11px; font-family: var(--sans); }
+  .grow { margin-left: auto; }
   .plaque {
-    margin-left: auto; display: flex; align-items: center; gap: 8px;
-    font-size: 10.5px; color: var(--dim); border: 1px solid var(--line);
-    border-radius: 6px; padding: 4px 10px; background: var(--bg);
+    display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; background: var(--canvas);
   }
-  .plaque b { color: var(--teal); font-weight: 600; }
-  .plaque code { color: var(--faint); }
-  #dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
-  #dot.busy { background: var(--amber); animation: pulse 1s infinite; }
-  #dot.ok { background: var(--green); }
-  #dot.diag { background: var(--amber); }
-  #dot.bad { background: var(--red); }
-  @keyframes pulse { 50% { opacity: .4; } }
-  /* ── toolbar ────────────────────────────────────────────── */
-  .bar {
-    display: flex; align-items: center; gap: 10px; padding: 7px 16px;
-    border-bottom: 1px solid var(--line); background: var(--bg2); flex: none;
-  }
+  .plaque b { color: var(--gold-b); font-weight: 600; }
+  .plaque code { color: var(--ghost); }
+  /* teach knob — the single density control */
+  .knob { display: flex; align-items: center; gap: 7px; font-size: 10.5px; color: var(--muted); font-family: var(--sans); }
+  .knob input { accent-color: var(--gold); width: 84px; }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ghost); flex: none; transition: background .2s; }
+  #dot.busy { background: var(--gold); animation: breath 1s infinite; }
+  #dot.ok { background: var(--green); } #dot.diag { background: var(--gold); } #dot.bad { background: var(--verm); }
+  @keyframes breath { 50% { opacity: .4; } }
+
+  /* ── toolbar ────────────────────────────────────────────────────────── */
+  .bar { display: flex; align-items: center; gap: 9px; padding: 6px 16px;
+    border-bottom: 1px solid var(--border); background: var(--abyss); }
   select, button, label.tgl {
-    background: var(--bg3); color: var(--fg); border: 1px solid var(--line);
-    border-radius: 5px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer;
+    background: var(--raised2); color: var(--primary); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer;
   }
-  button:hover, select:hover { border-color: var(--teal); }
-  button.primary { border-color: var(--teal); color: var(--teal); }
+  button:hover, select:hover { border-color: var(--gold); }
+  button.primary { border-color: var(--gold); color: var(--gold-b); }
   label.tgl { display: flex; align-items: center; gap: 6px; user-select: none; }
-  .bar .stats { margin-left: auto; color: var(--dim); font-size: 11px; display: flex; gap: 16px; }
-  .bar .stats b { color: var(--cyan); font-weight: 600; }
-  /* ── main split ─────────────────────────────────────────── */
-  main { flex: 1; display: flex; min-height: 0; }
-  .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .pane + .pane { border-left: 1px solid var(--line); }
-  /* editor: textarea over highlighted pre */
-  .edwrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-  .edwrap pre, .edwrap textarea {
-    position: absolute; inset: 0; padding: 14px 16px 40vh; margin: 0;
-    font: 13px/1.55 var(--mono); white-space: pre; overflow: auto;
-    tab-size: 2; border: 0; outline: 0; resize: none;
-  }
-  .edwrap pre { pointer-events: none; color: var(--fg); }
-  .edwrap textarea {
-    background: transparent; color: transparent; caret-color: var(--cyan);
-    z-index: 2; scrollbar-width: thin;
-  }
-  .edwrap textarea::selection { background: rgba(103,232,249,.18); }
-  /* token colors — the five verbs get the accent treatment */
-  .tk-kw { color: var(--mag); }
-  .tk-verb { color: var(--teal); font-weight: 700; }
-  .tk-hole { color: var(--amber); font-weight: 700; text-shadow: 0 0 8px rgba(251,191,36,.5); }
-  .tk-str { color: #a5d6a7; }
-  .tk-spl { color: var(--cyan); }
-  .tk-num { color: #f0abfc; }
-  .tk-ty { color: var(--violet); }
-  .tk-cm { color: var(--faint); font-style: italic; }
-  .tk-fx { color: var(--cyan); }
-  .ln-bad { background: rgba(248,113,113,.12); outline: 1px solid rgba(248,113,113,.25); }
-  /* right pane tabs */
-  .tabs { display: flex; border-bottom: 1px solid var(--line); background: var(--bg2); flex: none; }
-  .tabs div { padding: 8px 16px; color: var(--dim); cursor: pointer; font-size: 12px; border-bottom: 2px solid transparent; }
-  .tabs div.on { color: var(--teal); border-bottom-color: var(--teal); }
-  .tabs div .n { margin-left: 6px; font-size: 10px; color: var(--bg); background: var(--dim); border-radius: 8px; padding: 1px 6px; }
-  .tabs div.on .n { background: var(--teal); }
-  .panel { flex: 1; overflow: auto; display: none; min-height: 0; }
-  .panel.on { display: block; }
-  #watout { padding: 14px 16px; white-space: pre; color: var(--dim); font-size: 12px; line-height: 1.5; }
-  #watout .w-hd { color: var(--cyan); }
-  /* diagnostics list */
-  .diag { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
-  .diag:hover { background: var(--bg3); }
-  .diag .code { font-weight: 700; }
-  .diag.E .code { color: var(--red); } .diag.W .code { color: var(--amber); } .diag.T .code, .diag.P .code { color: var(--cyan); }
-  .diag .at { color: var(--faint); font-size: 11px; margin-left: 8px; }
-  .diag .msg { color: var(--dim); margin-top: 3px; font-size: 12px; }
-  .empty { padding: 40px; text-align: center; color: var(--faint); }
-  .empty .big { font-size: 28px; margin-bottom: 10px; }
-  footer {
-    flex: none; padding: 6px 16px; border-top: 1px solid var(--line);
-    background: var(--bg2); color: var(--faint); font-size: 10.5px;
-    display: flex; gap: 18px;
-  }
-  footer span b { color: var(--dim); font-weight: 600; }
-  #err-banner { display:none; padding: 12px 16px; background: #2a1215; color: var(--red);
+  label.tgl input { accent-color: var(--gold); }
+  .bar .stats { margin-left: auto; color: var(--muted); font-size: 11px; display: flex; gap: 16px; font-family: var(--sans); }
+  .bar .stats b { color: var(--gold-b); font-weight: 600; font-family: var(--mono); }
+
+  #err-banner { display:none; padding: 12px 16px; background: #2a1010; color: var(--verm-b);
     border-bottom: 1px solid #7f1d1d; font-size: 12px; white-space: pre-wrap; }
+
+  /* ── main: canvas | rail ────────────────────────────────────────────── */
+  main { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(360px,1fr); min-height: 0; }
+  .canvas-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .rail { display: grid; grid-template-rows: auto 1fr; border-left: 1px solid var(--border);
+    background: var(--raised1); min-height: 0; }
+
+  /* editor: textarea over highlighted pre */
+  .edwrap { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--canvas); }
+  .edwrap pre, .edwrap textarea {
+    position: absolute; inset: 0; padding: 16px 18px 40vh 18px; margin: 0;
+    font: 13px/1.6 var(--mono); white-space: pre; overflow: auto; tab-size: 2; border: 0; outline: 0; resize: none;
+  }
+  .edwrap pre { pointer-events: none; color: var(--primary); }
+  .edwrap textarea { background: transparent; color: transparent; caret-color: var(--gold-b); z-index: 2; scrollbar-width: thin; }
+  .edwrap textarea::selection { background: rgba(230,159,0,.16); }
+  .cursor-line { color: var(--gold-b); }
+
+  /* token colors — the five verbs get the accent; each hue IS its kernel role */
+  .tk-kw   { color: var(--blue-b); }
+  .tk-disc { color: var(--mag-b); }                     /* own ref Pure resume */
+  .tk-verb { color: var(--sky-b); font-weight: 700; }   /* |> <| >< ~> <~ */
+  /* the ?? socket — vermillion glow, NO clip-path/padding: the highlight layer
+     must stay width-identical to the textarea beneath it (a true octagon needs
+     the four-layer SVG canvas, a named follow-up). */
+  .tk-hole { color: var(--verm-b); font-weight: 700; text-shadow: 0 0 7px rgba(213,94,0,.55); }
+  .tk-str  { color: var(--wheat); }
+  .tk-spl  { color: var(--bright); }                    /* {expr} splice — live code carrying the row, NOT a Topology token */
+  .tk-num  { color: var(--verm-b); }                    /* literals — where reality is asserted */
+  .tk-ty   { color: var(--gold-b); }                    /* Capitalized = type/effect/ctor */
+  .tk-neg  { color: var(--verm-b); font-weight: 700; }  /* !E negation */
+  .tk-fn   { color: var(--green-b); }                   /* fn/handler decl name */
+  .tk-cm   { color: var(--comment); font-style: italic; }
+  .tk-self { color: var(--verm-b); font-style: italic; }
+  .ln-bad  { background: rgba(213,94,0,.10); box-shadow: inset 2px 0 0 var(--verm); }
+  .ln-cur  { background: rgba(230,159,0,.055); }
+
+  /* ── the Aspect ring (rail top, always-on) — DESIGN_SYSTEM §7 ─────────── */
+  .aspect { border-bottom: 1px solid var(--border); background: var(--raised1);
+    padding: 10px 12px 12px; overflow: auto; }
+  .aspect h4 { font: 600 10px var(--sans); letter-spacing: .12em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .aspect h4 .at { color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; font-family: var(--mono); }
+  .facets { display: grid; gap: 5px; }
+  .facet { display: grid; grid-template-columns: 74px 1fr; gap: 8px; align-items: baseline;
+    padding: 3px 6px; border-radius: 6px; cursor: default; }
+  .facet.door { cursor: pointer; } .facet.door:hover { background: var(--raised2); }
+  .facet .k { font-size: 10px; font-family: var(--sans); letter-spacing: .04em; display: flex; align-items: center; gap: 5px; }
+  .facet .k::before { content: "◆"; font-size: 8px; }
+  /* provenance badge — the three-state honesty contract, always visible */
+  .prov { margin-left: auto; font-size: 8px; letter-spacing: .06em; text-transform: uppercase;
+    padding: 0 4px; border-radius: 3px; border: 1px solid var(--border); color: var(--faint); }
+  .prov-surface { color: var(--whisper); } .prov-declared { color: var(--mag); border-color: rgba(204,121,167,.4); }
+  .prov-real { color: var(--sky); border-color: rgba(86,180,233,.4); }
+  .prov-socket { color: var(--verm); border-color: rgba(213,94,0,.4); }
+  .facet .v { font-size: 12px; color: var(--primary); word-break: break-word; }
+  .facet .v .stub { color: var(--faint); font-style: italic; font-size: 11px; }
+  .k-graph::before,.k-graph{ color: var(--blue-b); } .k-hand{ color: var(--green-b); }
+  .k-verb{ color: var(--sky-b); } .k-row{ color: var(--mag-b); } .k-own{ color: var(--mag-b); }
+  .k-ref{ color: var(--verm-b); } .k-grad{ color: var(--gold-b); } .k-why{ color: var(--blue-b); }
+  .facet .k.k-graph{color:var(--blue-b)} .facet .k.k-hand{color:var(--green-b)} .facet .k.k-verb{color:var(--sky-b)}
+  .facet .k.k-row{color:var(--mag-b)} .facet .k.k-own{color:var(--mag-b)} .facet .k.k-ref{color:var(--verm-b)}
+  .facet .k.k-grad{color:var(--gold-b)} .facet .k.k-why{color:var(--blue-b)}
+
+  /* ── rail tabs: Lens | Ledger | WAT ─────────────────────────────────── */
+  .rail-lower { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--abyss); }
+  .tabs div { padding: 8px 14px; color: var(--muted); cursor: pointer; font-size: 11.5px;
+    border-bottom: 2px solid transparent; font-family: var(--sans); letter-spacing: .02em; }
+  .tabs div.on { color: var(--gold-b); border-bottom-color: var(--gold); }
+  .tabs div .n { margin-left: 6px; font-size: 10px; color: var(--abyss); background: var(--muted);
+    border-radius: 8px; padding: 1px 6px; font-family: var(--mono); }
+  .tabs div.on .n { background: var(--gold); }
+  .panel { overflow: auto; display: none; min-height: 0; }
+  .panel.on { display: block; }
+
+  /* the Lens — diagnostics as teaching, ranked */
+  .lead { padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--raised2); }
+  .lead .voice { display: flex; gap: 7px; align-items: flex-start; font-size: 12px; color: var(--primary); }
+  .lead .oct { color: var(--gold); flex: none; }
+  .diag { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .diag:hover { background: var(--raised2); }
+  .diag .row1 { display: flex; align-items: baseline; gap: 8px; }
+  .diag .code { font-weight: 700; font-size: 12px; }
+  .diag.E .code { color: var(--verm-b); } .diag.W .code { color: var(--gold-b); }
+  .diag.T .code { color: var(--sky-b); } .diag.P .code { color: var(--sky-b); } .diag.V .code { color: var(--mag-b); }
+  .diag .at { color: var(--ghost); font-size: 11px; }
+  .diag .appl { margin-left: auto; font-size: 9.5px; font-family: var(--sans); color: var(--faint);
+    border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+  .diag .appl.fix { color: var(--green-b); border-color: var(--green); cursor: pointer; }
+  .diag .msg { color: var(--muted); margin-top: 3px; font-size: 12px; line-height: 1.45; }
+  .empty { padding: 44px 20px; text-align: center; color: var(--faint); }
+  .empty .big { font-size: 30px; margin-bottom: 12px; }
+  .empty .sub { font-size: 11px; color: var(--ghost); margin-top: 8px; }
+
+  /* the Ledger — rows + the proof surface (negative space) */
+  .ledger { padding: 12px 14px; }
+  .ledger section { margin-bottom: 16px; }
+  .ledger h5 { font: 600 10px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin-bottom: 7px; }
+  .rowchip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 5px;
+    font-size: 11.5px; margin: 0 5px 5px 0; border: 1px solid var(--border); }
+  .rowchip.pos { color: var(--green-b); } .rowchip.neg { color: var(--verm-b); border-color: rgba(213,94,0,.4); }
+  .rowchip.pure { color: var(--mag-b); }
+  .proof { border: 1px solid rgba(213,94,0,.35); border-radius: 8px; padding: 10px 12px; background: rgba(213,94,0,.05); }
+  .proof .head { color: var(--verm-b); font-size: 12px; margin-bottom: 6px; }
+  .proof .item { font-size: 11.5px; color: var(--primary); padding: 2px 0; }
+  .proof .item .x { color: var(--verm-b); font-weight: 700; }
+  .proof .gate { font-size: 10.5px; color: var(--faint); font-style: italic; margin-top: 7px; font-family: var(--sans); }
+  .ownrow { font-size: 11.5px; color: var(--mag-b); padding: 2px 0; }
+  .subtle { color: var(--faint); font-size: 11px; font-style: italic; font-family: var(--sans); }
+
+  /* the emitted WAT projection */
+  #watout { padding: 12px 16px; white-space: pre; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  #watout .w-key { color: var(--blue-b); } #watout .w-fn { color: var(--green-b); }
+  #watout .w-str { color: var(--wheat); } #watout .w-num { color: var(--verm-b); }
+
+  /* ── the Wavefront (bottom strip) — TIME made scrubbable ───────────────── */
+  .wavefront { border-top: 1px solid var(--border); background: var(--abyss); padding: 8px 16px;
+    display: flex; align-items: center; gap: 20px; overflow-x: auto; }
+  .wf-seg { display: flex; align-items: center; gap: 9px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .wf-seg .lbl { font: 600 9.5px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+  .why-dag { display: flex; align-items: center; gap: 5px; }
+  .why-node { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+  .why-node.on { background: var(--blue-b); box-shadow: 0 0 6px rgba(51,153,204,.6); }
+  .why-edge { width: 16px; height: 1px; background: var(--border); }
+  .realities { display: flex; gap: 4px; align-items: center; }
+  .rbar { width: 7px; height: 16px; border-radius: 2px; background: var(--border); }
+  .rbar.live { background: var(--gold); } .rbar.ghost { background: rgba(230,159,0,.25); }
+  .wf-gate { color: var(--faint); font-style: italic; font-family: var(--sans); }
+  .wf-gate b { color: var(--sky); font-style: normal; }
+
+  footer { padding: 6px 16px; border-top: 1px solid var(--border); background: var(--abyss);
+    color: var(--ghost); font-size: 10px; display: flex; gap: 18px; flex-wrap: wrap; font-family: var(--sans); }
+  footer span b { color: var(--faint); font-weight: 600; }
+
+  /* teach density: 0 = terse (hide named-future stubs, hide wavefront), 2 = full */
+  body[data-teach="0"] .facet.future, body[data-teach="0"] .wf-gate,
+  body[data-teach="0"] .proof .gate, body[data-teach="0"] .lead .sub2 { display: none; }
+  body[data-teach="2"] .aspect { padding-bottom: 16px; }
 </style>
 </head>
-<body>
+<body data-teach="1">
 <header>
-  <div class="mark"><span class="m">MENTL</span> <span style="font-size:12px">edit</span></div>
-  <div class="tag">the medium, compiled by itself · this page runs the fixpoint compiler</div>
+  <div class="mark">
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <polygon points="16,4 23,7 26,15 23,23 16,26 9,23 6,15 9,7" fill="none" stroke="var(--gold)" stroke-width="1.5"/>
+      <circle cx="16" cy="15" r="3.4" fill="none" stroke="var(--gold-b)" stroke-width="1.3"/>
+      <g stroke="var(--gold)" stroke-width="1.2" opacity=".75">
+        <path d="M16 26 L16 30 M11 24 L8 28 M21 24 L24 28 M7 20 L3 22 M25 20 L29 22" fill="none"/>
+      </g>
+    </svg>
+    <div class="wordmark">mentl<span class="edit">edit</span></div>
+  </div>
+  <div class="tag">the medium, compiled by itself — this page runs the first-light wheel</div>
+  <div class="grow"></div>
+  <label class="knob">teach<input id="teach" type="range" min="0" max="2" value="1" step="1"></label>
   <div class="plaque"><span>first light</span><b>m₃ = m₄</b><code>0536240b…</code><span>2026-07-10</span><div id="dot"></div></div>
 </header>
 <div id="err-banner"></div>
@@ -128,43 +248,56 @@
     <span>compile <b id="ms">—</b></span>
     <span>wat <b id="lines">—</b> lines</span>
     <span>fns <b id="fns">—</b></span>
+    <span>exit <b id="exit">—</b></span>
   </div>
 </div>
 <main>
-  <div class="pane">
+  <div class="canvas-pane">
     <div class="edwrap">
       <pre id="hl" aria-hidden="true"></pre>
-      <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+      <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
     </div>
   </div>
-  <div class="pane">
-    <div class="tabs">
-      <div data-p="pdiag" class="on">diagnostics <span class="n" id="ndiag">0</span></div>
-      <div data-p="pwat">emitted WAT</div>
+  <div class="rail">
+    <div class="aspect">
+      <h4>aspect ring <span class="at" id="asp-at">— place the cursor —</span></h4>
+      <div class="facets" id="facets"></div>
     </div>
-    <div class="panel on" id="pdiag"><div class="empty"><div class="big">🐙</div>write mentl on the left —<br>the compiler speaks here</div></div>
-    <div class="panel" id="pwat"><div id="watout"></div></div>
+    <div class="rail-lower">
+      <div class="tabs">
+        <div data-p="plens" class="on">Lens <span class="n" id="ndiag">0</span></div>
+        <div data-p="pledger">Ledger</div>
+        <div data-p="pwat">emitted WAT</div>
+      </div>
+      <div class="panel on" id="plens"></div>
+      <div class="panel" id="pledger"></div>
+      <div class="panel" id="pwat"><div id="watout"></div></div>
+    </div>
   </div>
 </main>
+<div class="wavefront" id="wavefront"></div>
 <footer>
-  <span><b>compiler</b> mentl-ide.wasm — the first-light wheel (512MB-initial repack of the pinned boot)</span>
-  <span><b>loop</b> keystroke → compile → project (proto mentl edit)</span>
+  <span><b>compiler</b> mentl-ide.wasm — the first-light wheel, 512MB-initial repack of the pinned boot</span>
+  <span><b>loop</b> keystroke → compile → project</span>
   <span><b>server</b> ide/serve.mn — mentl, serving mentl</span>
-  <span><b>run</b> download the .wat and `wat2wasm … && wasmtime run …` — in-browser assembly is a named follow-up</span>
+  <span><b>run</b> download .wat + wat2wasm — in-page run lands with binary emit (band N)</span>
 </footer>
 <script>
 "use strict";
-/* ── demos ─────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+
+/* ── demos — each surfaces something the rail can read ──────────────────── */
 const DEMOS = {
-"pipes & fold — the verbs": `// The five verbs draw the topology; |> is hole-completion.
+"the five verbs · a pipe": `// The five verbs draw the topology; |> is hole-completion.
+// Place your cursor on a verb — the Aspect ring names its shape.
 fn main() with Memory + Alloc =
   [1, 2, 3, 4, 5]
     |> map((x) => x * x)
     |> filter((x) => x > 3)
     |> fold(0, (acc, x) => acc + x)
 `,
-"effects & a handler": `// An effect is declared, performed as a bare call, and absorbed
-// by ~> — the one install verb. State evolves on resume.
+"effects · a handler": `// An effect is declared, performed as a bare call, absorbed by ~>
+// (the one install verb). State evolves on resume.
 effect Tick {
   tick() -> Int
 }
@@ -178,8 +311,48 @@ fn spin(rounds, acc) with Tick =
 
 fn main() = { spin(5, 0) } ~> ticky
 `,
-"constant-stack effectful recursion": `// 200,000 evidence-threading tail calls, constant stack —
-// the clone-then-return_call the fixpoint compiler emits.
+"the negative · !E, proven": `// The Ledger unrolls the negative space: what this region is
+// proven INCAPABLE of. !Alloc + !IO propagate transitively.
+fn hot_path(x: Int) with !Alloc + !IO =
+  x * x + 1
+
+fn main() = hot_path(41)
+`,
+"a refinement · bounds as type": `// A refined alias narrows a type by predicate; the annotation is
+// an Intent Boundary the graph verifies, never ceremony.
+type Unit = Float where 0.0 <= self && self <= 1.0
+
+fn attenuate(g: Unit, x) = x
+
+fn main() with Memory + Alloc = byte_len(float_to_str(attenuate(0.5, 2.0)))
+`,
+"a ?? hole · the socket": `// A ?? hole is a dormant continuation — the octagonal socket
+// the medium fills. (fill-and-resume lands with the multi-shot
+// producer, band B — the Wavefront shows the gate.)
+fn main() with Memory + Alloc =
+  [1, 2, 3, 4]
+    |> map((x) => ??)
+    |> fold(0, (a, x) => a + x)
+`,
+"multi-shot · the TIME axis (band B)": `// A two-resume arm is MultiShot: the continuation forks and the
+// handler sums both runs (10 + 20 = 30). Dormant in the wheel today
+// — the re-execution driver is band B, the IDE's own soul.
+effect Pick { pick() -> Int }
+
+handler twice with total = 0 {
+  pick() => {
+    let a = resume(10)
+    let b = resume(20)
+    a + b
+  }
+}
+
+fn body() = pick()
+
+fn main() = { body() } ~> twice
+`,
+"constant-stack effectful recursion": `// 200,000 evidence-threading tail calls, constant stack — the
+// clone-then-return_call the fixpoint compiler emits.
 effect Tick { tick() -> Int }
 handler ticky { tick() => resume(1) }
 
@@ -190,12 +363,8 @@ fn spin(n) with Tick = if n == 0 { 7 } else {
 
 fn main() = { spin(200000) } ~> ticky
 `,
-"floats render (first light's last dragon)": `// Every float literal used to die at ~0.0 in the self-compiled
-// wheel (a variant record 4 bytes too small). Now: real f64.
-fn main() with Memory + Alloc = byte_len(float_to_str(2.5))
-`,
-"ADTs & string patterns": `// String-literal patterns are interned constants compared
-// structurally — the fix that closed the fixed point.
+"ADTs · string patterns": `// String-literal patterns are interned constants compared
+// structurally — the last cut that closed the fixed point.
 type Cmd = Go | Stop | Other
 
 fn parse_cmd(s: String) = match s {
@@ -208,51 +377,216 @@ fn score(c) = match c { Go => 10, Stop => 20, Other => 30 }
 
 fn main() = score(parse_cmd("go")) + score(parse_cmd("stop")) + score(parse_cmd("hm"))
 `,
-"refined types": `// A refined alias narrows Int by predicate; annotations are
-// Intent Boundaries the graph verifies, never ceremony.
-type VO = Int where 0 <= self
-
-fn clampish(a: VO, b: VO) = if a >= b { a } else { b }
-
-fn main() = clampish(4200, 5000)
-`,
 };
-/* ── mn syntax highlighter (display-only; the parser is the wasm) ── */
-const KW = /\b(fn|let|if|else|match|type|effect|handler|with|resume|import|where|own|ref|Pure|true|false)\b/y;
-function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;");}
-function highlight(src){
-  let out = "", i = 0, badLines = window.__badLines || new Set();
-  const lines = src.split("\n");
-  for (let li = 0; li < lines.length; li++){
-    let line = lines[li], h = "";
-    let j = 0;
-    while (j < line.length){
-      const rest = line.slice(j);
-      let m;
-      if ((m = rest.match(/^\/\/.*/))) { h += `<span class="tk-cm">${esc(m[0])}</span>`; j += m[0].length; continue; }
-      if ((m = rest.match(/^"(?:[^"\\]|\\.)*"?/))) {
-        // splice-aware string render
-        let s = m[0], inner = "";
-        inner = esc(s).replace(/\{[^}]*\}/g, x => `</span><span class="tk-spl">${x}</span><span class="tk-str">`);
-        h += `<span class="tk-str">${inner}</span>`; j += s.length; continue;
+
+/* ── the surface tokenizer — SYNTAX.md §"Token enumeration", faithful ────
+   This is the CLIENT's own read of the source (SYNTAX principle 1: the
+   surface IS a projection of the graph). It is honest as a surface read; it
+   is NOT the compiler's inferred graph — the facets that need that say so. */
+const KEYWORDS = new Set(["fn","let","if","else","match","type","effect","handler",
+  "with","import","where","true","false"]);
+const DISCIPLINE = new Set(["own","ref","Pure","resume"]);   // magenta — ownership/resume
+const VERBS = ["|>","<|","><","~>","<~"];
+
+function tokenize(src){
+  const T = []; let i = 0, line = 1, col = 1;
+  const push = (kind, s, e) => T.push({kind, text: src.slice(s,e), start:s, end:e, line, col});
+  while (i < src.length){
+    const c = src[i], s = i;
+    if (c === "\n"){ T.push({kind:"nl", text:"\n", start:s, end:s+1, line, col}); i++; line++; col=1; continue; }
+    if (c === " " || c === "\t"){ i++; col++; continue; }
+    // comment — one form, graph content
+    if (c === "/" && src[i+1] === "/"){ while (i<src.length && src[i]!=="\n") i++; push("cm",s,i); col+=i-s; continue; }
+    // string (incl. triple) with live splices
+    if (c === '"'){
+      const triple = src.startsWith('"""', i);
+      i += triple ? 3 : 1;
+      while (i < src.length){
+        if (src[i] === "\\"){ i += 2; continue; }
+        if (triple && src.startsWith('"""', i)){ i += 3; break; }
+        if (!triple && src[i] === '"'){ i++; break; }
+        if (!triple && src[i] === "\n") break;
+        i++;
       }
-      if ((m = rest.match(/^(\|>|<\||><|~>|<~)/))) { h += `<span class="tk-verb">${esc(m[0])}</span>`; j += m[0].length; continue; }
-      if ((m = rest.match(/^\?\?/))) { h += `<span class="tk-hole">??</span>`; j += 2; continue; }
-      if ((m = rest.match(/^[0-9][0-9_]*(\.[0-9][0-9_]*)?/))) { h += `<span class="tk-num">${m[0]}</span>`; j += m[0].length; continue; }
-      KW.lastIndex = 0;
-      if ((m = rest.match(/^(fn|let|if|else|match|type|effect|handler|with|resume|import|where|own|ref|Pure|true|false)\b/))) {
-        h += `<span class="tk-kw">${m[0]}</span>`; j += m[0].length; continue;
-      }
-      if ((m = rest.match(/^![A-Z][A-Za-z0-9_]*/))) { h += `<span class="tk-fx">${esc(m[0])}</span>`; j += m[0].length; continue; }
-      if ((m = rest.match(/^[A-Z][A-Za-z0-9_]*/))) { h += `<span class="tk-ty">${m[0]}</span>`; j += m[0].length; continue; }
-      if ((m = rest.match(/^[a-z_][A-Za-z0-9_]*/))) { h += esc(m[0]); j += m[0].length; continue; }
-      h += esc(rest[0]); j += 1;
+      push("str",s,i); col+=i-s; continue;
     }
-    out += badLines.has(li + 1) ? `<span class="ln-bad">${h}\n</span>` : h + "\n";
+    // ?? hole (before single ops)
+    if (c === "?" && src[i+1] === "?"){ i+=2; push("hole",s,i); col+=2; continue; }
+    // five verbs (maximal munch, before single-char ops)
+    let v = VERBS.find(g => src.startsWith(g, i));
+    if (v){ i += v.length; push("verb",s,i); col+=v.length; continue; }
+    // !E negation (bang directly before a Capitalized effect name)
+    if (c === "!" && /[A-Z]/.test(src[i+1]||"")){ i++; while(/[A-Za-z0-9_]/.test(src[i]||"")) i++; push("neg",s,i); col+=i-s; continue; }
+    // number (decimal/hex/bin/oct/float)
+    if (/[0-9]/.test(c)){ while (/[0-9A-Fa-fxbo_.]/.test(src[i]||"")) i++; push("num",s,i); col+=i-s; continue; }
+    // identifier / keyword / type
+    if (/[A-Za-z_]/.test(c)){
+      while (/[A-Za-z0-9_]/.test(src[i]||"")) i++;
+      const w = src.slice(s,i);
+      let kind = "id";
+      if (w === "self") kind = "self";
+      else if (KEYWORDS.has(w)) kind = "kw";
+      else if (DISCIPLINE.has(w)) kind = "disc";
+      else if (/^[A-Z]/.test(w)) kind = "ty";
+      push(kind,s,i); col+=i-s; continue;
+    }
+    // two-char ops
+    const two = src.substr(i,2);
+    if (["->","=>","++","==","!=","<=",">=","&&","||"].includes(two)){ i+=2; push("op",s,i); col+=2; continue; }
+    i++; push("op",s,i); col++;
   }
-  return out;
+  return T;
 }
-/* ── WASI shim (identical surface to ide/test-shim.mjs) ─────── */
+
+/* ── highlighter — the tokenizer projected to DESIGN_SYSTEM color ───────── */
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+const CLS = { cm:"tk-cm", str:"tk-str", verb:"tk-verb", hole:"tk-hole", neg:"tk-neg",
+  num:"tk-num", kw:"tk-kw", disc:"tk-disc", ty:"tk-ty", self:"tk-self" };
+function renderStr(text){
+  // splice {expr} carries flow → sky; \{ \} are literal regions
+  let h = "", i = 0;
+  while (i < text.length){
+    if (text[i] === "\\"){ h += esc(text.substr(i,2)); i+=2; continue; }
+    if (text[i] === "{"){ let j = text.indexOf("}", i); if (j<0) j = text.length-1;
+      h += `<span class="tk-spl">${esc(text.slice(i,j+1))}</span>`; i = j+1; continue; }
+    h += esc(text[i]); i++;
+  }
+  return h;
+}
+let CURSOR_LINE = 0, BAD = new Set();
+function highlight(src){
+  const T = tokenize(src);
+  const lines = [];   // build per-line so we can tag cursor/bad lines
+  let cur = "";
+  let ln = 1;
+  // decl-name detection: an id/ty right after fn|handler → green
+  for (let k = 0; k < T.length; k++){
+    const t = T[k];
+    if (t.kind === "nl"){ lines.push(cur); cur = ""; ln++; continue; }
+    let cls = CLS[t.kind] || "";
+    if ((t.kind === "id" || t.kind === "ty")){
+      const prev = T[k-1];
+      if (prev && prev.kind === "kw" && (prev.text === "fn" || prev.text === "handler")) cls = "tk-fn";
+    }
+    const inner = t.kind === "str" ? renderStr(t.text) : (t.kind === "hole" ? "??" : esc(t.text));
+    cur += cls ? `<span class="${cls}">${inner}</span>` : inner;
+  }
+  lines.push(cur);
+  return lines.map((h, idx) => {
+    const n = idx + 1;
+    const c = (n === CURSOR_LINE ? " ln-cur" : "") + (BAD.has(n) ? " ln-bad" : "");
+    return c ? `<span class="${c.trim()}">${h || " "}\n</span>` : h + "\n";
+  }).join("");
+}
+
+/* ── surface parse — decls, rows, verbs, holes (the honest projection) ──── */
+function surfaceParse(src){
+  const T = tokenize(src).filter(t => t.kind !== "nl");
+  const raw = tokenize(src);
+  const decls = [], holes = [], verbUses = [];
+  // line map for tokens (recompute line from offset)
+  const lineAt = off => src.slice(0, off).split("\n").length;
+  let i = 0;
+  const all = tokenize(src);
+  for (let k = 0; k < all.length; k++){
+    const t = all[k];
+    if (t.kind === "verb") verbUses.push({text:t.text, line:t.line});
+    if (t.kind === "hole") holes.push({line:t.line, col:t.col});
+    if (t.kind === "kw" && ["fn","effect","handler","type","let"].includes(t.text)){
+      // next non-ws token is the name
+      let j = k+1; while (all[j] && (all[j].kind==="nl")) j++;
+      const nameT = all[j];
+      const d = { kind: t.text, name: nameT ? nameT.text : "?", line: t.line, row: null, refined: null };
+      // scan this decl's line(s) up to `=` or `{` for a `with` row
+      let m = j+1, rowToks = [], sawWith = false, whereToks = [], sawWhere = false, depth = 0;
+      while (all[m] && !(depth===0 && all[m].kind==="op" && (all[m].text==="=" ))){
+        const x = all[m];
+        if (x.kind==="op" && x.text==="{"){ depth++; }
+        if (x.kind==="kw" && x.text==="with"){ sawWith = true; m++; continue; }
+        if (x.kind==="kw" && x.text==="where"){ sawWhere = true; m++; continue; }
+        if (sawWith && !sawWhere && (x.kind==="ty"||x.kind==="neg"||(x.kind==="disc"&&x.text==="Pure")||(x.kind==="op"&&(x.text==="+"||x.text==="-"||x.text==="&"))))
+          rowToks.push(x.text);
+        if (sawWhere) whereToks.push(x.text);
+        if (x.line > d.line + 3) break;
+        m++;
+      }
+      if (rowToks.length) d.row = rowToks.join(" ");
+      if (whereToks.length) d.refined = whereToks.join(" ");
+      decls.push(d);
+    }
+  }
+  return { decls, holes, verbUses, tokens: tokenize(src) };
+}
+
+/* ── the eight-aspect projection — honest per facet ─────────────────────
+   REAL surface reads are shown plainly; facets that need the compiler's
+   inferred graph (mentl where / mentl why) are marked as named-future. */
+const VERB_SHAPE = {
+  "|>": "sequential — A then B, each value used once",
+  "<|": "divergent — one input fans to parallel branches (borrowed)",
+  "><": "parallel — independent pipelines, joined at an indented center",
+  "~>": "handler — the foot governs the whole chain to its left",
+  "<~": "feedback — output loops back as the next input",
+};
+function tokenAt(parse, off){
+  let hit = null;
+  for (const t of parse.tokens){ if (t.kind==="nl") continue; if (off >= t.start && off <= t.end) hit = t; }
+  return hit;
+}
+function enclosingDecl(parse, line){
+  let d = null;
+  for (const x of parse.decls){ if (x.line <= line) d = x; }
+  return d;
+}
+function projectAspects(parse, off, diags){
+  const t = tokenAt(parse, off);
+  const line = parse.tokens.length ? (parse.tokens.find(x=>x.start>=off)?.line || 1) : 1;
+  const d = enclosingDecl(parse, line);
+  const stub = txt => `<span class="stub">${txt}</span>`;
+  const F = [];
+  // 1 Graph
+  F.push({k:"graph", label:"graph", door:false,
+    v: t ? `<code>${esc(t.text)}</code> · ${t.kind}` : stub("—"),
+    future:true, futureNote:"the live node & handle — mentl where"});
+  // 2 Handler (+ resume cardinality)
+  const hd = d && d.kind === "handler" ? d : null;
+  F.push({k:"hand", label:"handler",
+    v: hd ? `${esc(hd.name)}` + (parse.tokens.some(x=>x.line>=hd.line && x.text==="resume") ? " · installs on ~>" : "") : stub("—"),
+    future:true, futureNote:"resume cardinality (one/multi-shot) — inferred, mentl where"});
+  // 3 Verb
+  F.push({k:"verb", label:"verb",
+    v: t && t.kind==="verb" ? `${esc(t.text)} — ${VERB_SHAPE[t.text]}` :
+       (d ? `${parse.verbUses.filter(v=>v.line>=d.line).length} in this decl` : stub("—")),
+    future:false});
+  // 4 Row (declared = surface-real; inferred = future)
+  F.push({k:"row", label:"row", door:true, doorTo:"pledger",
+    v: d && d.row ? `<span style="color:var(--mag-b)">${esc(d.row)}</span> <span class="subtle">declared</span>` :
+       (d ? stub("Pure (none declared)") : stub("—")),
+    future: !(d&&d.row), futureNote:"the inferred row from the body's op-sites — mentl where"});
+  // 5 Ownership
+  const ownTok = t && (t.kind==="disc" && (t.text==="own"||t.text==="ref"));
+  F.push({k:"own", label:"own/ref",
+    v: ownTok ? `<span style="color:var(--mag-b)">${esc(t.text)}</span> — ${t.text==="own"?"consumes (use-count 1)":"borrows (use-count 2+)"}` : stub("inferred from use-count"),
+    future:!ownTok, futureNote:"own/ref graded from use-count — mentl where"});
+  // 6 Refinement
+  F.push({k:"ref", label:"refine",
+    v: d && d.refined ? `<span style="color:var(--verm-b)">${esc(d.refined)}</span>` :
+       (t && t.kind==="self" ? "self — the value being refined" : stub("—")),
+    future:false});
+  // 7 Gradient / hole
+  F.push({k:"grad", label:"gradient",
+    v: t && t.kind==="hole" ? `<span style="color:var(--verm-b)">?? socket</span> — a dormant continuation` : stub("annotation inputs unlock capability"),
+    future: t && t.kind==="hole", futureNote:"fill-and-resume — the live value arrives here (band B)"});
+  // 8 Why (Reason) — the closest real receipt we have is a genuine diagnostic at
+  // this line; a format-liftable canonicalization is NOT a Reason (critic E).
+  const dg = diags && diags.find(x => x.line === line && !FORMAT_LIFTABLE.has(x.code));
+  F.push({k:"why", label:"why", door: !!dg, doorTo:"plens",
+    v: dg ? `<span style="color:var(--sky-b)">${esc(dg.code)}</span> ${esc(dg.msg).slice(0,60)} <span class="subtle">(a diagnostic here)</span>` : stub("walk the Reason chain"),
+    future: !dg, futureNote:"the Reason edge back to the mint — mentl why"});
+  return { facets:F, token:t, line };
+}
+
+/* ── WASI shim — identical surface to ide/test-shim.mjs (PRESERVED) ──────── */
 function makeWasi(sourceBytes){
   let srcPos = 0, mem = null;
   const out = [], err = [];
@@ -290,12 +624,12 @@ function makeWasi(sourceBytes){
 }
 const td = new TextDecoder(), te = new TextEncoder();
 const cat = cs => { const n = cs.reduce((a,c)=>a+c.length,0); const b = new Uint8Array(n); let o=0; for(const c of cs){b.set(c,o);o+=c.length;} return b; };
-/* ── boot ──────────────────────────────────────────────────── */
-let MODULE = null, RT = "";
-const $ = id => document.getElementById(id);
+
+/* ── boot ───────────────────────────────────────────────────────────────── */
+let MODULE = null, RT = "", RESULT = null, PARSE = null;
 async function boot(){
   try {
-    if (!crossOriginIsolated) throw new Error("page is not cross-origin isolated — start it with ide/serve.py (the compiler's shared memory needs COOP/COEP headers)");
+    if (!crossOriginIsolated) throw new Error("page is not cross-origin isolated — start it with `bash ide/serve.sh` (the compiler's shared memory needs COOP/COEP headers)");
     const [wasm, ...libs] = await Promise.all([
       fetch("mentl-ide.wasm").then(r => { if(!r.ok) throw new Error("mentl-ide.wasm missing"); return r.arrayBuffer(); }),
       ...["../lib/runtime/memory.mn","../lib/runtime/strings.mn","../lib/runtime/lists.mn","../lib/prelude.mn"]
@@ -311,7 +645,8 @@ async function boot(){
     $("dot").className = "bad";
   }
 }
-/* ── compile loop ──────────────────────────────────────────── */
+
+/* ── compile loop (PRESERVED) ─────────────────────────────────────────────── */
 let busy = false, again = false;
 async function compile(){
   if (!MODULE) return;
@@ -335,64 +670,223 @@ async function compile(){
   busy = false;
   if (again){ again = false; compile(); }
 }
-/* ── diagnostics parsing + render ──────────────────────────── */
+
+/* ── diagnostics parse (PRESERVED + applicability) ────────────────────────── */
+// SYNTAX.md diagnostic catalog — Applicability drives the label text.
+const APPL = {
+  E_RedundantBraces:"MachineApplicable", E_RedundantPerform:"MachineApplicable",
+  E_BlockNeedsBraces:"MachineApplicable", T_OverDeclared:"MachineApplicable",
+  W_RedundantWhere:"MachineApplicable", W_EmptyRow:"MaybeIncorrect",
+  E_PatternInexhaustive:"HasPlaceholders", E_MissingVariable:"MaybeIncorrect",
+  E_EffectMismatch:"MaybeIncorrect", E_ImportNameCollision:"MaybeIncorrect",
+};
+// Only these two arrive on today's wire AND rewrite soundly client-side. The
+// parser never emits E_StatementSemicolon (a phantom — cut the strip affordance).
+const FIXABLE = new Set(["E_RedundantBraces", "E_RedundantPerform"]);
+// Canonicalizations are NOT Reasons — they never light the Why facet (critic E).
+const FORMAT_LIFTABLE = new Set(["E_RedundantBraces","E_RedundantPerform","E_BlockNeedsBraces","E_StatementSemicolon"]);
 function parseDiags(text, rtLines){
   const out = []; let rtNoise = 0;
   for (const line of text.split("\n")){
-    const m = line.match(/^(\w+): ((?:E|W|T|P)_\w+)\s*(\w*):?\s*(.*?)(?:\s+at\s+(\d+):(\d+)[-\d:]*)?\s*$/);
+    // the compiler emits the FULL span sl:sc-el:ec — capture the end, never swallow it (critic B)
+    const m = line.match(/^(\w+): ((?:E|W|T|P|V)_\w+)\s*(\w*):?\s*(.*?)(?:\s+at\s+(\d+):(\d+)(?:-(\d+):(\d+))?)?\s*$/);
     if (!m) { if (line.trim()) out.push({stage:"", code:"·", msg: line, line: null}); continue; }
     const rawLn = m[5] ? parseInt(m[5], 10) : null;
-    // Diagnostics whose span lands inside the LINKED RUNTIME are the runtime's
-    // own standalone-compile noise (the wheel normally compiles src+lib whole),
-    // not the user's program — counted, never listed.
     if (rawLn !== null && rawLn <= rtLines) { rtNoise++; continue; }
     const ln = rawLn === null ? null : rawLn - rtLines;
-    out.push({ stage: m[1], code: m[2], msg: m[4], line: ln, col: m[6] ? parseInt(m[6],10) : null });
+    out.push({ stage: m[1], code: m[2], msg: m[4], line: ln, col: m[6] ? parseInt(m[6],10) : null,
+      endLine: m[7] ? parseInt(m[7],10) - rtLines : null, endCol: m[8] ? parseInt(m[8],10) : null,
+      appl: APPL[m[2]] || "Unspecified" });
   }
   out.rtNoise = rtNoise;
   return out;
 }
+
+/* rank: the gradient shows the ONE highest-leverage thing first (E > P > W > T) */
+const SEV = { E:0, P:1, V:2, W:3, T:4, "·":5 };
+function rankDiags(ds){ return ds.slice().sort((a,b)=>(SEV[a.code[0]]??9)-(SEV[b.code[0]]??9) || (a.line||1e9)-(b.line||1e9)); }
+
+/* ── render — the one compile result, projected onto every surface ───────── */
 function render(user, wat, diagText, ms, rtLines, exitCode, trapped){
   $("ms").textContent = ms + " ms";
   $("lines").textContent = wat ? wat.split("\n").length : 0;
   $("fns").textContent = (wat.match(/\(func \$/g) || []).length;
-  const ds = parseDiags(diagText, rtLines);
-  if (trapped) ds.unshift({stage:"trap", code:"E_CompilerTrap", msg: String(trapped.message||trapped), line:null});
-  window.__badLines = new Set(ds.filter(d => d.line).map(d => d.line));
+  $("exit").textContent = trapped ? "trap" : exitCode;
+  let ds = parseDiags(diagText, rtLines);
+  if (trapped) ds.unshift({stage:"trap", code:"E_CompilerTrap", msg: String(trapped.message||trapped), line:null, appl:"Unspecified"});
+  ds = rankDiags(ds); ds.rtNoise = parseDiags(diagText, rtLines).rtNoise;
+  RESULT = { wat, diags: ds, ms, exit: exitCode, trapped, rtLines };
+  PARSE = surfaceParse(user);
+  BAD = new Set(ds.filter(d => d.line).map(d => d.line));
   $("hl").innerHTML = highlight(user);
   $("ndiag").textContent = ds.length;
   $("dot").className = trapped ? "bad" : ds.some(d => d.code.startsWith("E")) ? "diag" : "ok";
-  const p = $("pdiag");
-  const noise = ds.rtNoise ? `<div style="padding:8px 14px;color:var(--faint);font-size:10.5px;border-bottom:1px solid var(--line)">${ds.rtNoise} runtime-internal diagnostics hidden (the linked stdlib compiled standalone)</div>` : "";
-  if (!ds.length){
-    p.innerHTML = noise + `<div class="empty"><div class="big">✓</div>clean — the graph is coherent<br><span style="font-size:11px;color:var(--faint)">${$("lines").textContent} lines of WAT in ${ms} ms</span></div>`;
-  } else {
-    p.innerHTML = noise + ds.map((d,i) =>
-      `<div class="diag ${d.code[0]}" data-l="${d.line||""}">
-        <span class="code">${d.code}</span><span class="at">${d.stage}${d.line ? " · line " + d.line : ""}</span>
-        <div class="msg">${esc(d.msg)}</div></div>`).join("");
-    p.querySelectorAll(".diag[data-l]").forEach(el => el.onclick = () => jump(parseInt(el.dataset.l,10)));
-  }
-  const w = $("watout");
-  w.textContent = wat || "(no output)";
+  renderLens(ds); renderLedger(); renderWat(wat); renderWavefront(ds);
+  projectCursor();
 }
+
+/* the Lens — one teaching step in view, sockets in place, never a 200-item panel */
+function renderLens(ds){
+  const p = $("plens");
+  const noise = ds.rtNoise ? `<div style="padding:7px 14px;color:var(--ghost);font-size:10.5px;border-bottom:1px solid var(--line)">${ds.rtNoise} runtime-internal diagnostics hidden — the linked stdlib compiled standalone</div>` : "";
+  if (!ds.length){
+    p.innerHTML = noise + `<div class="empty"><div class="big" style="color:var(--green-b)">✓</div>clean — the graph is coherent
+      <div class="sub">${$("lines").textContent} lines of WAT · exit ${$("exit").textContent} · ${$("ms").textContent}</div></div>`;
+    return;
+  }
+  const top = ds[0];
+  const lead = `<div class="lead"><div class="voice"><span class="oct">◉</span><span>
+    <b style="color:var(--bright)">Mentl:</b> ${leadCopy(top)}
+    <span class="sub2" style="display:block;color:var(--faint);font-size:10.5px;margin-top:3px">the gradient ranks — one step, ${ds.length-1} more below</span></span></div></div>`;
+  const list = ds.map(d => {
+    const fixable = FIXABLE.has(d.code);
+    return `<div class="diag ${d.code[0]}" data-l="${d.line||""}">
+      <div class="row1"><span class="code">${esc(d.code)}</span>
+        <span class="at">${esc(d.stage)}${d.line ? " · line " + d.line : ""}</span>
+        <span class="appl ${fixable?"fix":""}" ${fixable?`data-fix="${esc(d.code)}" data-l="${d.line||""}"`:""}>${fixable?"apply fix":d.appl}</span></div>
+      <div class="msg">${esc(d.msg)}</div></div>`;
+  }).join("");
+  p.innerHTML = lead + list;
+  p.querySelectorAll(".diag").forEach(el => el.onclick = ev => { if (!ev.target.dataset.fix) jump(parseInt(el.dataset.l||"0",10)); });
+  p.querySelectorAll(".appl.fix").forEach(el => el.onclick = ev => { ev.stopPropagation(); applyFix(el.dataset.fix, parseInt(el.dataset.l||"0",10)); });
+}
+function leadCopy(d){
+  const c = d.code;
+  if (c==="E_CompilerTrap") return "the compiler hit a wall on this input — reduce it and I'll point at the spot.";
+  if (c.startsWith("E_Effect")||c==="E_PurityViolated") return `this path needs a capability the row forbids. ${esc(d.msg)}`;
+  if (c==="E_MissingVariable") return `a name here isn't in scope — check the spelling or the import. ${esc(d.msg)}`;
+  if (c.startsWith("T_")) return `a gradient step is available: ${esc(d.msg)}`;
+  if (c[0]==="W") return `${esc(d.msg)}`;
+  return `${esc(d.msg)} — here's where.`;
+}
+/* format-liftable fixes are real client-side text edits (the canon the parser projects) */
+function applyFix(code, line){
+  const ta = $("src"); let lines = ta.value.split("\n");
+  if (line < 1 || line > lines.length) return;
+  let L = lines[line-1];
+  if (code==="E_RedundantPerform") L = L.replace(/\bperform\s+/,"");
+  else if (code==="E_RedundantBraces") L = L.replace(/^\s*\{\s*/,"").replace(/\s*\}\s*$/,"");
+  else return;
+  lines[line-1] = L; ta.value = lines.join("\n");
+  ta.dispatchEvent(new Event("input")); compile();
+}
+
+/* the Ledger — the effect rows + the proof surface (negative space) */
+function renderLedger(){
+  const p = $("pledger");
+  const decls = (PARSE?.decls||[]).filter(d => d.kind==="fn"||d.kind==="handler");
+  const rowed = decls.filter(d => d.row);
+  const negs = [];
+  rowed.forEach(d => (d.row.match(/!([A-Za-z0-9_]+)/g)||[]).forEach(n => negs.push({fn:d.name, cap:n.slice(1)})));
+  const chips = row => {
+    // the row's Boolean algebra: + union, - difference, & intersection, ! negation.
+    let toks = (row||"").split(/\s*[+&]\s*|\s+-\s+/).map(s=>s.trim()).filter(Boolean);
+    if (toks.length > 1) toks = toks.filter(t => t !== "Pure");   // Pure is the identity of + (SYNTAX §With-clauses)
+    return toks.map(tok =>
+      tok.startsWith("!") ? `<span class="rowchip neg">${esc(tok)}</span>`
+      : tok==="Pure" ? `<span class="rowchip pure">Pure</span>`
+      : `<span class="rowchip pos">${esc(tok)}</span>`).join("");
+  };
+  let html = `<div class="ledger">`;
+  html += `<section><h5>ambient rows — declared</h5>`;
+  if (rowed.length) html += rowed.map(d => `<div style="margin-bottom:7px"><span style="color:var(--green-b)">${esc(d.name)}</span> &nbsp;${chips(d.row)}</div>`).join("");
+  else html += `<div class="subtle">no <code>with</code> rows in view — every fn here is inferred Pure until a body performs.</div>`;
+  html += `</section>`;
+  // the proof surface — what the negative rows prove this code CANNOT do
+  html += `<section><h5>the proof surface — negative space</h5>`;
+  if (negs.length){
+    html += `<div class="proof"><div class="head">proven incapable, here:</div>` +
+      negs.map(n => `<div class="item"><span class="x">✗</span> <b>${esc(n.fn)}</b> cannot <b>${esc(n.cap)}</b></div>`).join("") +
+      `<div class="gate">declared today; the TRANSITIVE proof (every callee, hop by hop) lands with <b>sound-neg-under-poly</b> — band A, the crown.</div></div>`;
+  } else {
+    html += `<div class="subtle">add a <code>!E</code> to a row (try the "negative · !E" demo) — the Ledger unrolls what the region is proven <i>incapable</i> of. Mentl's most underrated arm.</div>`;
+  }
+  html += `</section>`;
+  // ownership
+  const owns = (PARSE?.tokens||[]).filter(t => t.kind==="disc" && (t.text==="own"||t.text==="ref"));
+  html += `<section><h5>ownership</h5>`;
+  html += owns.length ? owns.map(t=>`<div class="ownrow">◆ a parameter marked <b>${esc(t.text)}</b> — ${t.text==="own"?"consumed once":"borrowed, read-only"}</div>`).join("")
+    : `<div class="subtle">own/ref are inferred from use-count (0/1/2+); mark a param only to pin the intent.</div>`;
+  html += `</section></div>`;
+  p.innerHTML = html;
+}
+
+/* the emitted WAT projection — the graph become the substrate */
+function renderWat(wat){
+  const w = $("watout");
+  if (!wat){ w.textContent = "(no output — the compiler emitted nothing)"; return; }
+  // light structural tint (keywords, fn names, strings, nums) without a full parse
+  const head = wat.split("\n").slice(0, 400).map(l => esc(l)
+    .replace(/\b(module|func|param|result|local|memory|global|type|export|import|call|i32|i64|f64|data)\b/g,'<span class="w-key">$1</span>')
+    .replace(/(\$[A-Za-z0-9_.]+)/g,'<span class="w-fn">$1</span>')
+    .replace(/(&quot;[^&]*&quot;)/g,'<span class="w-str">$1</span>')
+  ).join("\n");
+  const more = wat.split("\n").length > 400 ? `\n\n<span class="subtle">… ${wat.split("\n").length-400} more lines — download the .wat for the whole module</span>` : "";
+  w.innerHTML = head + more;
+}
+
+/* the Wavefront — Why-DAG (real, from the cursor's diagnostic) + band-B hooks */
+function renderWavefront(ds){
+  const wf = $("wavefront");
+  const nWhy = Math.min(5, Math.max(1, ds.length));
+  const dag = Array.from({length:5}, (_,i)=>`<span class="why-node ${i<nWhy?"on":""}"></span>${i<4?'<span class="why-edge"></span>':""}`).join("");
+  const holes = (PARSE?.holes||[]).length;
+  wf.innerHTML =
+    `<div class="wf-seg"><span class="lbl">why</span><div class="why-dag">${dag}</div>
+       <span class="wf-gate">provenance ink — the Reason chain lands with <b>mentl why</b></span></div>` +
+    `<div class="wf-seg"><span class="lbl">realities</span><div class="realities">
+       <span class="rbar live"></span><span class="rbar ghost"></span><span class="rbar ghost"></span><span class="rbar ghost"></span></div>
+       <span class="wf-gate">${holes?`${holes} hole${holes>1?"s":""} — `:""}scrub proven futures when the <b>multi-shot producer</b> lands (band B)</span></div>` +
+    `<div class="wf-seg"><span class="lbl">trail</span>
+       <span class="wf-gate">session = image; scrub execution back & forth — <b>persist = memcpy</b>, band B</span></div>`;
+}
+
+/* ── the cursor — the one reader; every surface re-projects around it ─────── */
+function getOffset(){ return $("src").selectionStart; }
+function projectCursor(){
+  if (!PARSE) return;
+  const off = getOffset();
+  const { facets, token, line } = projectAspects(PARSE, off, RESULT?.diags||[]);
+  CURSOR_LINE = line;
+  $("asp-at").textContent = token ? `${token.kind}: ${token.text.slice(0,24)}` : "— place the cursor —";
+  $("facets").innerHTML = facets.map(f => {
+    const door = f.door ? " door" : "";
+    const fut = f.future ? " future" : "";
+    // provenance is a three-state, ALWAYS-visible contract (critic D): a surface
+    // read never omits its badge; a socket names its gate, renders no value.
+    const prov = f.future ? "socket" : f.k === "why" ? "real" : f.k === "row" ? "declared" : "surface";
+    const note = f.future ? `<div class="subtle" style="margin-top:1px">${esc(f.futureNote||"")}</div>` : "";
+    return `<div class="facet${door}${fut}" ${f.doorTo?`data-door="${f.doorTo}"`:""}>
+      <div class="k k-${f.k}">${f.label}<span class="prov prov-${prov}">${prov}</span></div>
+      <div class="v">${f.v}${note}</div></div>`;
+  }).join("");
+  // re-highlight to move the cursor-line tint
+  $("hl").innerHTML = highlight($("src").value);
+  syncScroll();
+  $("facets").querySelectorAll(".facet.door").forEach(el => el.onclick = () => openTab(el.dataset.door));
+}
+
+/* ── wiring ──────────────────────────────────────────────────────────────── */
+function syncScroll(){ $("hl").scrollTop = $("src").scrollTop; $("hl").scrollLeft = $("src").scrollLeft; }
 function jump(line){
   if (!line) return;
   const ta = $("src");
-  const idx = ta.value.split("\n").slice(0, line - 1).join("\n").length;
+  const idx = ta.value.split("\n").slice(0, line - 1).join("\n").length + (line>1?1:0);
   ta.focus(); ta.setSelectionRange(idx, idx);
-  const lh = 13 * 1.55;
-  ta.scrollTop = Math.max(0, (line - 6) * lh);
-  syncScroll();
+  ta.scrollTop = Math.max(0, (line - 6) * 13 * 1.6);
+  projectCursor();
 }
-/* ── wiring ────────────────────────────────────────────────── */
-function syncScroll(){ $("hl").scrollTop = $("src").scrollTop; $("hl").scrollLeft = $("src").scrollLeft; }
+function openTab(p){
+  document.querySelectorAll(".tabs div").forEach(x => x.classList.toggle("on", x.dataset.p===p));
+  document.querySelectorAll(".panel").forEach(x => x.classList.toggle("on", x.id===p));
+}
 $("src").addEventListener("scroll", syncScroll);
 let deb = null;
 $("src").addEventListener("input", () => {
   $("hl").innerHTML = highlight($("src").value);
-  if ($("live").checked){ clearTimeout(deb); deb = setTimeout(compile, 700); }
+  if ($("live").checked){ clearTimeout(deb); deb = setTimeout(compile, 650); }
 });
+["click","keyup"].forEach(ev => $("src").addEventListener(ev, () => projectCursor()));
 $("src").addEventListener("keydown", e => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter"){ e.preventDefault(); compile(); }
   if (e.key === "Tab"){ e.preventDefault();
@@ -403,14 +897,11 @@ $("src").addEventListener("keydown", e => {
 });
 $("compile").onclick = compile;
 $("dl").onclick = () => {
-  const blob = new Blob([$("watout").textContent], {type: "text/plain"});
+  const blob = new Blob([RESULT?.wat||""], {type: "text/plain"});
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "out.wat"; a.click();
 };
-document.querySelectorAll(".tabs div").forEach(t => t.onclick = () => {
-  document.querySelectorAll(".tabs div").forEach(x => x.classList.remove("on"));
-  document.querySelectorAll(".panel").forEach(x => x.classList.remove("on"));
-  t.classList.add("on"); $(t.dataset.p).classList.add("on");
-});
+document.querySelectorAll(".tabs div").forEach(t => t.onclick = () => openTab(t.dataset.p));
+$("teach").oninput = e => document.body.dataset.teach = e.target.value;
 const sel = $("demo");
 for (const name of Object.keys(DEMOS)){ const o = document.createElement("option"); o.textContent = name; sel.appendChild(o); }
 sel.onchange = () => { $("src").value = DEMOS[sel.value]; $("hl").innerHTML = highlight($("src").value); compile(); };

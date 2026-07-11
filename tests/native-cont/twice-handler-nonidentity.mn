@@ -15,11 +15,14 @@
 //
 // DORMANT TODAY (lower fabricates OneShot → LMakeContinuation, never called):
 // exit is the one-shot 13 (first resume only), not 36. The band-B dig this
-// gates: Hβ.continuations.multishot-reexecution-driver +
-// Hβ.lower.arm-internal-perform-scope, as ONE pre-inference desugar (the
-// re-execution driver is evidence-proven sound only when the replay handler
-// is REGISTERED — a lower-time synthesis leaves the op singleton and re-enters
-// the driver; PLAN §7 boot-era frontier, the 3-refuter verdict).
+// gates: Hβ.lower.continuation-reification-codegen — yield-bubbling through
+// the unified record: the MultiShot perform YIELDS, the frame's remainder
+// reifies as a closure onto the k record, the install's driver binds k to the
+// arm, resume(v) = call k (N times; immutable data). The `+ 3` here is exactly
+// the remainder-closure the reification must carry per fork (PLAN §7 THE
+// PIVOT; the AST-desugar and lower-synthesis forms are both refuted — the
+// first erases the authored install from the graph, the second leaves the op
+// singleton and re-enters the driver).
 //
 // Run (through a fixed m2):
 //   MENTL_BOOT=.build/m2cache/m2.wasm tools/run-micro.sh \

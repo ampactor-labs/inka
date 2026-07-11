@@ -756,10 +756,11 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > and the replay handler REGISTERED so the op is non-singleton → Tier-2 evidence
 > (an unregistered lower-synthesized replay leaves the op singleton → Tier-1
 > `lower_singleton_perform` re-reads `$ms_handler_state_g` → re-enters the driver —
-> the synthesis refutation). THEREFORE the ultimate form is an AST-LEVEL DESUGAR
-> BEFORE inference (emit real fn/handler decls that get inferred + registered,
-> exactly like the hand-written reexec-model.mn/run_twice), NOT a lower-time
-> synthesis. (3) The direct-driver is correct ONLY for mn-multishot's shape (pure
+> the synthesis refutation). The "therefore an AST-level desugar" conclusion
+> this produced was itself REFUTED same-day (Morgan's interrogation — see THE
+> PIVOT below): the desugar bakes the WASM workaround into the SOURCE graph.
+> The refuter FACTS stand (evidence-soundness, the three conditions, the
+> classifier coupling); only the destination moved. (3) The direct-driver is correct ONLY for mn-multishot's shape (pure
 > prefix-free body, single arg-independent perform, stateless arm); the GENERAL
 > form needs op-ARGS (the trigger form, not the direct-driver), per-resume STATE
 > (thread ms_handler's record through re-runs), and re-duplicates any effectful
@@ -772,14 +773,61 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > construction" is really "safe by classifier-gap": completing the classifier flips
 > them to MultiShot, fires the new lowering ON THE WHEEL, and breaks the fixpoint
 > UNLESS the general form is built — so the classifier completion and the general
-> lowering must CO-LAND, as ONE pre-inference desugar. The dig =
-> `Hβ.continuations.multishot-reexecution-driver` + `Hβ.lower.arm-internal-perform-
-> scope` + `Hβ.infer.tail-recursion-resume-cardinality`, together. Crucibles:
+> lowering must CO-LAND. Crucibles:
 > tests/native-cont/reexec-model.mn (→30, the model, PROVEN) +
 > twice-handler-nonidentity.mn (the non-identity lowering gate, dormant → will be
 > 36). `mn-float-arith` = assembly `expected [i32] but got [f64]` at a call — the
 > callsite-result-width family (`Hβ.m2.callsite-result-width`), fast repro via
 > run-micro. Named, not chased same-day.**
+>
+> **▶ THE PIVOT (2026-07-11, same day — Morgan's interrogation "is this the most
+> powerful, future-proof, Mentl-native multi-shot?"; the answer was NO, the
+> half-wired AST desugar REVERTED uncommitted): the desugar is the WORKAROUND
+> CANONIZED — refuted on three cuts.** (1) It erases the authored `~>` install
+> from the source graph before inference — intent LOST (§0 pillar 3: the Why
+> chain sees synthetic `__ms_driver` noise), and the native backend (NATIVE.md
+> keystone 1: MultiShot = a memcpy'd image frame segment) inherits a pre-chewed
+> form it can never re-project — the wheel shaped around the substrate's
+> silhouette, the forbidden hedge at the graph layer. (2) Re-execution RESTARTS;
+> the felt spec demands RESUME — MENTL_EDIT §4.1 ("filling the hole resumes from
+> the suspension — no restart") and band M's hole-is-dormant-continuation
+> require k as a HOLDABLE RECORD; re-run-from-zero can never power
+> fill-and-resume or reality-scrubbing. The IDE's soul structurally excludes the
+> desugar. (3) It fires only on the FV-empty/argless/stateless shape — the
+> micro, not the capability. **THE TRUE KEYSTONE is the one §2 always named:
+> CONTINUATION-REIFICATION CODEGEN (`Hβ.lower.continuation-reification-codegen`,
+> band B's real center)** — generalized evidence passing with YIELD-BUBBLING
+> through the unified record, the Koka-lineage compilation the dispatch tiers
+> already follow: a MultiShot-classified perform does not call the arm — it
+> YIELDS; each frame between the perform and the install appends its
+> remainder-as-closure onto the continuation (LMakeContinuation — §5.U's
+> "emittable today, constructed nowhere" — at last CONSTRUCTED; handler = state
+> = closure = evidence = CONTINUATION, one record); the install's driver runs
+> the arm with k BOUND; `resume(v)` = call the k record — N times, it is
+> immutable data. Pay-as-you-go: tail-resumptive/OneShot paths never build a
+> frame (byte-identical, Law 7; no wheel op classifies MultiShot → the fixpoint
+> held by the same gate as before, now guarding the TRUE mechanism). Correct for
+> EVERY refuted shape — op-args (the yield carries them), per-resume state (the
+> Effekt-ICFP-2025 semantics question stays named), effectful prefixes (ran
+> once; k resumes AT the perform, never from zero), conditional/multiple
+> performs. What the substrate gives Mentl that Koka cannot have: k is a
+> contiguous image record → persist = MEMCPY (durable multi-shot, band B whole),
+> thread-shippable (SPACE=TIME, `~> Schedule`), world-tagged
+> (E_ResumeWorldMismatch reads k's frozen world), and the IDE hole IS a dormant
+> k — fill-and-resume is the same record. Composes with the TRAIL (heap rollback
+> between branch runs — §2's per-fork rollback), never competes with it;
+> re-execution DEMOTES to the degenerate stateless-replay fork (the oracle's),
+> and native conts/wasmFX stay the future O(1) control swap — a backend handler
+> swap over an UNCHANGED graph (the future-proofing the desugar destroyed).
+> Increments, each gated + byte-identical off the MultiShot path: **(k1)**
+> direct-shape reification — the remainder-closure at the perform's own fn + the
+> install driver loop + resume = k-call (mn-multishot=30,
+> twice-handler-nonidentity=36 via a REAL k); **(k2)** the call-boundary bubble
+> (the yield protocol at effectful call sites in MultiShot-capable rows — the
+> sst_ choke point); **(k3)** the general spine (recursion; state semantics;
+> the classifier completion `Hβ.infer.tail-recursion-resume-cardinality`
+> CO-LANDS here, the same coupling as before, now on the mechanism that can
+> carry `backtrack` and `enumerate_inhabitants`).**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

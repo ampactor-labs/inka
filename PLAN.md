@@ -369,7 +369,7 @@ ultimate form?"; the disposable seed's weaker inference catches up afterward
 2. **FELT — the human surface (L6).** The felt experience *falls out as
    projections*: `mentl where/why/edit`, the gradient, the Why button,
    reactivity. The founding's payoff and the point. (Working brand/IDE design
-   brief: `docs/DESIGN_SYSTEM.md` — a draft ARTIFACT of this aspect, not
+   brief: `docs/DESIGN_SYSTEM.md`; the interaction architecture: `docs/MENTL_EDIT.md` — draft ARTIFACTS of this aspect, not
    read-path; the three-doc contract stands.)
 3. **UNSURPASSABLE — the frontier.** The modal effect synthesis (§4③), the IFC
    frontier (§4⑥), durable-execution-as-handler (§4④), the value-ontology

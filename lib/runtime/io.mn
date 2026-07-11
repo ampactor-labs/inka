@@ -27,7 +27,8 @@
 //
 // FS constants (WASI preview1 flags). Mirrored literally from the
 // WASI spec; documented here to avoid magic numbers at call sites.
-//   FS_PREOPEN_FD         = 3   — wasmtime grants via --dir=.
+//   dir preopen fd        — read LIVE from the preopen table (fs_dir_fd;
+//                           a tcplisten socket may occupy fd 3 first)
 //   FS_RIGHTS_READ        = 0x2 — fd_read right
 //   FS_RIGHTS_WRITE       = 0x40 — fd_write right
 //   FS_OFLAGS_CREAT       = 0x1 — create if not exists
@@ -48,11 +49,18 @@ effect WASI {
   fd_write(fd: Int, iov_ptr: Int, iov_cnt: Int, nwritten_ptr: Int) -> Int
   fd_read(fd: Int, iov_ptr: Int, iov_cnt: Int, nread_ptr: Int) -> Int
   fd_close(fd: Int) -> Int
+  fd_prestat_get(fd: Int, prestat_ptr: Int) -> Int
   path_open(base_fd: Int, dirflags: Int, path_ptr: Int, path_len: Int, oflags: Int, rights_base: Int, rights_inherit: Int, fdflags: Int, fd_out_ptr: Int) -> Int
   path_create_directory(fd: Int, path_ptr: Int, path_len: Int) -> Int
   path_filestat_get(fd: Int, flags: Int, path_ptr: Int, path_len: Int, stat_ptr: Int) -> Int
   path_unlink_file(fd: Int, path_ptr: Int, path_len: Int) -> Int
   path_rename(old_fd: Int, old_ptr: Int, old_len: Int, new_fd: Int, new_ptr: Int, new_len: Int) -> Int
+  // The socket pair (2026-07-10, mentl serves natively): the host preopens
+  // the LISTENER (wasmtime -S tcplisten); sock_accept yields a connection fd
+  // the fd_* ops above already speak; poll_oneoff is the honest blocking
+  // wait both nonblocking ends demand (lib/runtime/net.mn wraps them).
+  sock_accept(listen_fd: Int, flags: Int, fd_out_ptr: Int) -> Int
+  poll_oneoff(subs_ptr: Int, events_ptr: Int, nsubs: Int, nevents_ptr: Int) -> Int
   proc_exit(code: Int) -> ()
 }
 
@@ -242,20 +250,34 @@ fn fs_write_path(s) with Memory = {
   slen
 }
 
+// fs_dir_fd — the preopened DIRECTORY's fd, read live from the preopen
+// table: fd_prestat_get answers 0 with tag 0 (dir) for a dir preopen; a
+// tcplisten socket occupying a slot refuses. The table's ORDER is the
+// host invocation's business, never a baked constant — the listener
+// stole fd 3 the first time mentl served with both preopens (2026-07-10)
+// and every path syscall hit the socket. Scan exhausted = no dir
+// preopened: return the first slot so the syscall itself errors loudly.
+fn fs_dir_fd() with Memory + WASI = fs_dir_fd_from(3)
+
+fn fs_dir_fd_from(fd) with Memory + WASI =
+  if fd >= 16 { 3 }
+  else if fd_prestat_get(fd, 96) == 0 && load_i8(96) == 0 { fd }
+  else { fs_dir_fd_from(fd + 1) }
+
 // fs_exists — path_filestat_get returns 0 on success, errno otherwise.
 // The filestat record is written to scratch 512 (64 bytes for
 // filestat_t) but we discard the contents; existence is the boolean.
 fn fs_exists_impl(path_str) with Memory + WASI = {
   let path_len = fs_write_path(path_str)
-  let errno = path_filestat_get(3, 0, 256, path_len, 512)
+  let errno = path_filestat_get(fs_dir_fd(), 0, 256, path_len, 512)
   errno == 0
 }
 
-// fs_mkdir — path_create_directory relative to preopen fd 3.
+// fs_mkdir — path_create_directory relative to the dir preopen.
 // Idempotent at the handler level (errno-17 EEXIST ignored).
 fn fs_mkdir_impl(path_str) with Memory + WASI = {
   let path_len = fs_write_path(path_str)
-  path_create_directory(3, 256, path_len)
+  path_create_directory(fs_dir_fd(), 256, path_len)
   ()
 }
 
@@ -267,7 +289,7 @@ fn fs_read_file_impl(path_str) with Memory + Alloc + WASI = {
   // path_open(base_fd=3, dirflags=0, path_ptr, path_len, oflags=0,
   //   rights_base=FS_RIGHTS_READ, rights_inheriting=FS_RIGHTS_READ,
   //   fdflags=0, fd_result_ptr=576)
-  let open_errno = path_open(3, 0, 256, path_len, 0, 2, 2, 0, 576)
+  let open_errno = path_open(fs_dir_fd(), 0, 256, path_len, 0, 2, 2, 0, 576)
   if open_errno != 0 {
     let empty = alloc(4)
     store_i32(empty, 0)
@@ -306,7 +328,7 @@ fn fs_read_loop(fd, buf, offset, capacity) with Memory + Alloc + WASI = {
 fn fs_write_file_impl(path_str, bytes_str) with Memory + WASI = {
   let path_len = fs_write_path(path_str)
   // path_open with FS_OFLAGS_CREAT|FS_OFLAGS_TRUNC = 0x9, FS_RIGHTS_WRITE = 0x40
-  let open_errno = path_open(3, 0, 256, path_len, 9, 64, 64, 0, 576)
+  let open_errno = path_open(fs_dir_fd(), 0, 256, path_len, 9, 64, 64, 0, 576)
   if open_errno != 0 { () }
   else {
     let fd = load_i32(576)
@@ -330,7 +352,7 @@ fn fs_write_file_impl(path_str, bytes_str) with Memory + WASI = {
 // FS_OFLAGS_CREAT = 0x1; FS_RIGHTS_READ|WRITE = 0x42.
 fn fs_open_impl(path_str) with Memory + WASI = {
   let path_len = fs_write_path(path_str)
-  let open_errno = path_open(3, 0, 256, path_len, 1, 66, 66, 0, 576)
+  let open_errno = path_open(fs_dir_fd(), 0, 256, path_len, 1, 66, 66, 0, 576)
   if open_errno != 0 { 0 }
   else { load_i32(576) }
 }
@@ -342,15 +364,15 @@ fn fs_close_impl(fd) with Memory + WASI = {
   ()
 }
 
-// fs_unlink_impl — path_unlink_file relative to preopen fd 3.
+// fs_unlink_impl — path_unlink_file relative to the dir preopen.
 // Errno surfaced as Bool (true on success). H6 binary outcome.
 fn fs_unlink_impl(path_str) with Memory + WASI = {
   let path_len = fs_write_path(path_str)
-  let errno = path_unlink_file(3, 256, path_len)
+  let errno = path_unlink_file(fs_dir_fd(), 256, path_len)
   errno == 0
 }
 
-// fs_rename_impl — path_rename within preopen fd 3 to itself. Both
+// fs_rename_impl — path_rename within the dir preopen to itself. Both
 // paths packed into adjacent scratch regions: old at 256 (per
 // fs_write_path), new at 256 + old_len + 1 (one byte gap). Errno
 // surfaced as Bool.
@@ -360,6 +382,7 @@ fn fs_rename_impl(old_str, new_str) with Memory + WASI = {
   let new_len = byte_len(new_str)
   let (nb_buf, nb_off) = view_base(new_str)
   mem_copy(new_offset, nb_buf + 4 + nb_off, new_len)
-  let errno = path_rename(3, 256, old_len, 3, new_offset, new_len)
+  let dir = fs_dir_fd()   // drift-audit: ignore — effectful read consumed at TWO sites (old_fd AND new_fd): the reuse exclusion
+  let errno = path_rename(dir, 256, old_len, dir, new_offset, new_len)
   errno == 0
 }

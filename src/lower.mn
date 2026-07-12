@@ -2976,32 +2976,36 @@ fn resume_world_of(handle) = match env_lookup(ls_outer_fn_name()) {
   None => EfPure
 }
 
-// world_tag_of_row — the continuation's frozen handler-WORLD interned to one
-// deterministic i32 (§5.U, the TIME axis; W06). The row is first normalized to
-// its canonical form (EfPure | EfClosed(sorted) | EfOpen(sorted, v)) so two
-// rows that are EQUAL under the Boolean algebra hash IDENTICALLY (determinism =
-// fixpoint, PLAN §6) — the tag is a pure projection of the row's identity, the
-// same way repr_of projects a width. EfPure → 0 (the empty world needs no tag,
-// and 0 reads as "unconstrained" at the load-time value gate). The hash IS the
-// FNV-1a the cache uses (one hash story, Carried-Truth — not a second
-// algorithm): fold the sorted effect-name bytes, names separated by 0, so the
-// open row-var contributes nothing (a row-var is a hole, not a captured
-// effect). memcpy then carries this tag into a persisted record; the Persist
-// handler's load compares it against the live stack world → the value-gate
-// E_ResumeWorldMismatch.
+// world_tag_of_row — the continuation's frozen handler-WORLD projected to a
+// UNION-HOMOMORPHIC i32 bitmask (§5.U, the TIME axis; W06). Each effect NAME
+// projects to one bit (its FNV-1a hash folded to a position mod 32); the
+// row's tag is the OR of its names' bits. The homomorphism is the point:
+// tag(A ∪ B) == i32_or(tag(A), tag(B)), so a COMPOSED continuation's world
+// is one i32.or at compose time — a hash-of-hashes cannot union (the
+// semantics refuter's kill of the head-only form), a bit-union always can.
+// The value gate is a SUBSET test, (k_tag & ~live_tag) == 0 admits — which
+// IS the world-widening-resume semantics (a superset world may resume,
+// band B) rather than brittle equality. A bit collision can only ADD a
+// phantom need → a spurious refusal, never an unsound admit — conservative
+// in exactly the direction a proof-of-absence gate must be. The row is
+// normalized first so Boolean-equal rows tag identically (determinism =
+// fixpoint); EfPure → 0 (the empty world, unconstrained at the gate); the
+// open row-var contributes nothing (a hole, not a captured effect). The
+// per-name hash IS the FNV-1a the cache uses (one hash story) — only the
+// FOLD changed, from sequence-sensitive mixing to the OR of bits.
 fn world_tag_of_row(row) = match normalize_row(row) {
   EfPure          => 0,
-  EfClosed(names) => world_tag_hash_names(eff_names_of(names), 0, 2166136261),
-  EfOpen(names, _) => world_tag_hash_names(eff_names_of(names), 0, 2166136261)
+  EfClosed(names) => world_tag_or_names(eff_names_of(names), 0, 0),
+  EfOpen(names, _) => world_tag_or_names(eff_names_of(names), 0, 0)
 }
 
-fn world_tag_hash_names(names, i, h) = {
-  if i >= len(names) { h }
+fn world_tag_or_names(names, i, acc) = {
+  if i >= len(names) { acc }
   else {
-    let h2 = world_tag_hash_bytes(list_index(names, i), 0, byte_len(list_index(names, i)), h)
-    // Name separator (0) so {Ask}{Network} and {AskNetwork} never collide.
-    let h3 = i32_xor(h2, 0) * 16777619
-    world_tag_hash_names(names, i + 1, h3)
+    let name = list_index(names, i)
+    let h = world_tag_hash_bytes(name, 0, byte_len(name), 2166136261)
+    world_tag_or_names(names, i + 1,
+      i32_or(acc, i32_shl(1, i32_and(h, 31))))
   }
 }
 
@@ -3364,6 +3368,9 @@ fn is_substrate_mem_op(name: String) with Pure = {
     || name == "load_i8"
     || name == "mem_copy"
     || name == "i32_xor"
+    || name == "i32_or"
+    || name == "i32_and"
+    || name == "i32_shl"
     || name == "alloc"
 }
 

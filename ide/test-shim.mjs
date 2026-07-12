@@ -47,6 +47,7 @@ function makeWasi(sourceText) {
         return 0;
       },
       fd_close() { return 0; },
+      fd_prestat_get() { return 8; },        // badf — no preopens in the browser (fs_dir_fd finds none, honestly)
       path_open() { return 44; },            // noent — the IDE has no fs
       path_filestat_get() { return 44; },
       path_create_directory() { return 44; },

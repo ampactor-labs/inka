@@ -33,6 +33,15 @@ effect Memory {
   // Lowers to WASM's i32.xor. Not a bitwise operator in the
   // language — a substrate primitive. Used by hash functions.
   i32_xor(Int, Int) -> Int   // (a, b) -> a XOR b
+
+  // The XOR's siblings — i32.or / i32.and / i32.shl, the same substrate
+  // projection. i32_or is the union-homomorphic world-tag join (a composed
+  // continuation's world = the OR of its frames' tags, band B); i32_and +
+  // i32_shl serve the tag's bit projection and the value-gate's subset
+  // test ((k & ~live) == 0 admits — the world-widening resume).
+  i32_or(Int, Int) -> Int    // (a, b) -> a OR b
+  i32_and(Int, Int) -> Int   // (a, b) -> a AND b
+  i32_shl(Int, Int) -> Int   // (a, n) -> a << (n mod 32)
 }
 
 // Alloc — heap allocation. Bump allocator in WASM linear memory.

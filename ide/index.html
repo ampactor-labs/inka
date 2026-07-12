@@ -336,11 +336,10 @@ fn main() with Memory + Alloc =
 `,
 "multi-shot · the TIME axis (band B)": `// A two-resume arm is MultiShot: the perform YIELDS its reified
 // continuation record, the install's driver binds k to the arm, and
-// each resume(v) calls the record — 10 + 20 = 30. The wheel carries
-// this producer (k1, 2026-07-11); this page's pinned compiler
-// predates it, so here it still shows the one-shot 10 until the
-// next re-pin. The hole-as-dormant-k is the same record — the
-// IDE's own soul.
+// each resume(v) calls the record — 10 + 20 = 30, LIVE in this page
+// (the pinned compiler carries the k1 producer, re-pinned
+// 2026-07-11). The hole-as-dormant-k is the same record — the IDE's
+// own soul, now under your keystroke.
 effect Pick { pick() -> Int }
 
 handler twice with total = 0 {
@@ -619,6 +618,7 @@ function makeWasi(sourceBytes){
         v.setUint32(outp, total, true); return 0;
       },
       fd_close: () => 0,
+      fd_prestat_get: () => 8,   // badf — no preopens in the browser (fs_dir_fd finds none, honestly)
       path_open: () => 44, path_filestat_get: () => 44,
       path_create_directory: () => 44, path_unlink_file: () => 44, path_rename: () => 44,
     },

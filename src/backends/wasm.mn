@@ -3143,6 +3143,12 @@ fn emit_expr(expr) = match expr {
       wat_emit("    (memory.copy)(i32.const 0)\n")
     } else if import_name == "i32_xor" {
       wat_emit("    (i32.xor)\n")
+    } else if import_name == "i32_or" {
+      wat_emit("    (i32.or)\n")
+    } else if import_name == "i32_and" {
+      wat_emit("    (i32.and)\n")
+    } else if import_name == "i32_shl" {
+      wat_emit("    (i32.shl)\n")
     } else if import_name == "alloc" {
       wat_emit("    (call $alloc)\n")
     } else if import_name == "atomic_load_i32" {

@@ -1054,20 +1054,55 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > COMPLETE — M1.1 world-tag homomorphism · M1.2 composer pair · M1.3 k2
 > boundary check · M1.4 args packet · M1.5 state-commit tail · M1.6
 > resolution ladder — six commits, six fixpoints (one arbitrated
-> TRANSITION), every crucible green on its first run.** NEXT — M2's
-> remaining ladder, each crucible pre-cut-classifiable (two sequential
-> top-level resumes wrap the feature): mn-nested-choose (driver
-> re-entry: the product of two choices) · mn-uzero-abort (the abandon
-> path: an arm that never resumes delivers its value as the install's —
-> the driver gets this right by construction) · mn-resume-across-install
-> (THE acid distillation — A4's re-install-in-k arbitrates) ·
-> mn-dynamic-abort-in-k (the A2 arbitration) · mn-uzero-through-frames
-> (the UZero blast-radius measurement) · mn-called-fn-resume-typed (the
-> closed-declared-row + R→S gate) · mn-option-protocol (ratchets the
-> +14); then M3 THE CUT (classifier fixpoint + capability mark + op
-> binding/E_ResumeAmbiguousOp + choose/enumerate flip + the march
-> TRANSITION + boot/IDE re-pin + mn-backtrack-full — "flipped but
-> unproven is the drift").**
+> TRANSITION), every crucible green on its first run.** **M2's NESTED-CHOOSE ARC LANDED (2026-07-12, the
+> twice-refuted build): mn-nested-choose=9 · mn-nested-depth3=27 ·
+> mn-nested-state=51, all first-run green after one artifact-pinned
+> fix.** TWO adversarial refuters attacked the design pre-build and both
+> verdicts LANDED AS CORRECTIONS TO THE BANK ITSELF (the M2 amendment,
+> docs/research/multishot-general-design.md): (1) the bank's own "driver
+> re-entry" sketch was WRONG — it abandons the outer arm (computes 32
+> where deep-handler semantics, independently derived, give 66); the
+> correct mechanism is the OWNED-OP RE-DISPATCH AT THE RESUME BOUNDARY,
+> landed as **$op___redrive_<hname>** — the install driver's dispatch
+> loop factored to ONE home, called by the install bracket AND every
+> MultiShot arm's resume flag-arm ($yield_flag is the second return
+> channel, no mode flag: the bracket bubbles a foreign op, the resume
+> floors it loudly; arm_state_ctx gained the hname; the flag-arm
+> re-dispatches through LPerform's "" sentinel — zero new LowIR nodes).
+> (2) the "captures resolve by the existing recipe" claim was REFUTED —
+> collect_free_vars walks the AST where a hole is still the perform
+> call, and a shared __resume_in param SHADOWED every ancestor hole: the
+> naive build silently computes the DIAGONAL substitution, and the
+> refuter's theorem proved every AFFINE crucible blind to it (correct
+> and diagonal agree at any depth) — gates are MULTIPLICATIVE by law
+> (pick()*pick(): correct 9, diagonal 10). Landed: the HOLE-SET reifier
+> — per-site names __resume_in_<ph>, a substitution ENVIRONMENT
+> [(ph, read)] through the ONE remainder builder (hole reads resolved
+> INSIDE the entered frame; enclosing hole names SEEDED into the free
+> set; ms_spine_op dissolved into k_spine_next, whose trivial-left
+> descent covers holes/literals/VarRefs/arith), recursive reification
+> (each deeper perform reifies its own k, captures chaining through
+> frames), and the DEADENER — every spine perform BEYOND the substituted
+> yield is dead in that residency (a MultiShot perform always yields)
+> and lowers as a dummy word, never an inline floor: the depth-3 gate
+> caught exactly this (k1 floored p3 at a position no execution reaches;
+> one artifact dump — hole*yield2-dummy*FLOOR — named the fix). One
+> build regression en route, self-caught at assembly: the M2a region
+> replacement SWALLOWED k2_spine_call's definition (`undefined global
+> $k2_spine_call` = an unregistered name's LGlobal fallback — census the
+> DELETED names of a region replacement, not only the added). Gates:
+> micros 52/52; ALL ELEVEN k gates 30/36/40/29/26/16/46/23/9/27/51;
+> march ✓✓ FIXED POINT m2 == m3 (sha 12b5f04b…, zero redrive fns in the
+> wheel's own module — Law 7 exact). NEXT — M2's remaining ladder:
+> mn-uzero-abort (the abandon path — M4's uzero semantics under the
+> driver) · mn-resume-across-install (THE acid distillation — A4's
+> re-install-in-k arbitrates) · mn-dynamic-abort-in-k (the A2
+> arbitration) · mn-uzero-through-frames (the UZero blast-radius
+> measurement) · mn-called-fn-resume-typed (the closed-declared-row +
+> R→S gate) · mn-option-protocol (ratchets the +14); then M3 THE CUT
+> (classifier fixpoint + capability mark + op binding/E_ResumeAmbiguousOp
+> + choose/enumerate flip + the march TRANSITION + boot/IDE re-pin +
+> mn-backtrack-full — "flipped but unproven is the drift").**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

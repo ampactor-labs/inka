@@ -106,11 +106,13 @@ handler lower_state_default
 effect ArmStateContext {
   current_state_fields() -> List
   current_resume_discipline() -> ResumeDiscipline
+  current_arm_handler() -> String   // band B M2b — the enclosing arm's handler name; the resume flag-arm names $op___redrive_<hname> with it ("" outside arms)
 }
 
-handler arm_state_ctx(fields, disc) {
+handler arm_state_ctx(fields, disc, hname) {
   current_state_fields()     => resume(fields),
-  current_resume_discipline() => resume(disc)
+  current_resume_discipline() => resume(disc),
+  current_arm_handler()      => resume(hname)
 }
 
 // Empty default for non-arm contexts (top-level fn bodies, lambdas).
@@ -120,6 +122,7 @@ handler arm_state_ctx(fields, disc) {
 // byte-identical floor (a value-call with no continuation to reify).
 handler arm_state_default {
   current_state_fields()     => resume([]),
+  current_arm_handler()      => resume(""),
   current_resume_discipline() => resume(OneShot)
 }
 
@@ -2854,7 +2857,7 @@ fn lower_one_arm_decl(arm: {args: [String], body: N, op_name: String}, discrimin
   // around arm body lowering so lower_expr's ResumeExpr arm resolves
   // `with field = NEW` updates' slot offsets via current_state_fields()
   // AND its representation via current_resume_discipline().
-  let lo_body = k2_guard(mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names, disc)))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail; k2_guard floors off-spine boundaries (M1.3)
+  let lo_body = k2_guard(mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names, disc, discriminator)))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail; k2_guard floors off-spine boundaries (M1.3)
   ls_exit_frame()
   // fence = nstate + total_arms; the arm's LEvPerform reads land on the
   // record's captured-ev region (past state AND arms).
@@ -2943,21 +2946,23 @@ fn lower_resume_oneshot(handle, val, state_updates) = {
 
 // resume(v) in a MultiShot arm = call the k record through the W7 closure
 // convention (park k, push k as __state, push v, call_indirect fn_ptr@0).
-// The post-call flag check is the RE-YIELD TRAP: a remainder that yields
-// again mid-arm (a called fn's own MultiShot perform — invisible at compile
-// time) traps LOUDLY at the k-call boundary instead of letting the arm
-// compute on a dummy; k2's composition (Hβ.lower.continuation-callboundary-
-// bubble) replaces the trap with the composed k. With state updates (band B
-// M1.5, bank Ruling 4): the SAME commit prefix OneShot uses — the val and
-// every update RHS snapshot against pre-update state, then the slot stores
-// COMMIT — runs BEFORE the k-call (the resumed remainder re-enters against
-// committed state; the stores write through the arm's __state = the install
-// record, and arm state reads are LIVE loads through it, so the next resume
-// in the same arm sees the committed value), and the k-call takes the
-// SNAPSHOTTED val local, never a re-lower after the stores (the ev8d
-// 58-not-57 race). One prefix, two tails.
+// The post-call flag check (band B M2b — the owned-op re-dispatch, the
+// twice-refuted correction of the bank's "driver re-entry" sketch, which
+// ABANDONED the outer arm): a raised flag means the remainder yielded
+// again mid-resume. An OWNED op re-enters this handler's own dispatch —
+// $op___redrive_<hname>, the install driver's loop factored to ONE home —
+// and the dispatched arm's return IS this resume's value (the deep-handler
+// equation handle(E[perform]) = arm(k = λv. handle(E[v])), independently
+// re-derived: pick()+pick()*10 under twice = 66, never the abandonment's
+// 32). A FOREIGN op still flagged after the redrive keeps the LOUD floor
+// (arm-remainder composition is A4/M3 territory). With state updates (band
+// B M1.5, bank Ruling 4): the SAME commit prefix OneShot uses — snapshot,
+// then the slot stores COMMIT — runs BEFORE the k-call, and the k-call
+// takes the SNAPSHOTTED val local (the ev8d race). One prefix, two tails.
 fn lower_resume_callk(handle, val, state_updates) = {
   let kr = "__kr_{int_to_str(handle)}"
+  let kr2 = "__kr2_{int_to_str(handle)}"
+  let hname = current_arm_handler()   // drift-audit: ignore — sequenced effectful arm-context read (LowerScope)
   let (prefix, val_name) =
     if len(state_updates) == 0 { ([], "") }
     else {
@@ -2969,10 +2974,18 @@ fn lower_resume_callk(handle, val, state_updates) = {
     else { LLocal(handle, val_name) }
   LBlock(handle, prefix ++ [
     LLet(handle, kr, LCall(handle, resolve_resume_k(handle), [val_lo])),
-    LIf(handle, LGlobal(handle, "yield_flag"),
-        [LYield(handle, "", [], LConst(handle, LInt(0)))],
-        [LConst(handle, LInt(0))]),
-    LLocal(handle, kr)
+    LLet(handle, kr2,
+      LIf(handle, LGlobal(handle, "yield_flag"),
+          [LBlock(handle, [
+            LLet(handle, "__rd_{int_to_str(handle)}",
+                 LPerform(handle, "__redrive_{hname}", [LLocal(handle, kr)], "")),
+            LIf(handle, LGlobal(handle, "yield_flag"),
+                [LYield(handle, "", [], LConst(handle, LInt(0)))],
+                [LConst(handle, LInt(0))]),
+            LLocal(handle, "__rd_{int_to_str(handle)}")
+          ])],
+          [LLocal(handle, kr)])),
+    LLocal(handle, kr2)
   ])   // drift-audit: ignore — one-shot stmt-list concat, no loop
 }
 
@@ -3027,29 +3040,73 @@ fn ms_op_of_call(node) = {
   }
 }
 
-// THE AGREEMENT LAW: the spine TESTERS (ms_spine_op for k1 performs,
-// k2_spine_call for k2 can-yield calls — both run OUTSIDE the k frame) and
-// the ONE remainder BUILDER (k_remainder, run per residency) walk the SAME
-// spine forms — bare position, BinOp-left, statement-free block, and (k2)
-// PForward-left + the bare-VarRef pipe stage. Keep all three adjacent; a
-// form added to one without the others is the free_in_ty/subst_ty
-// divergence bug at the split.
-fn ms_spine_op(node) =
-  match ms_op_of_call(node) {
-    Some((op, args)) => {
-      let N(_, _, ph) = node
-      Some((op, ph, args))
-    },
-    None => {
-      let N(b, _, _) = node
-      match b {
-        NExpr(BinOpExpr(_, l, _))      => ms_spine_op(l),
-        NExpr(BlockExpr(stmts, final)) =>
-          if len(stmts) == 0 { ms_spine_op(final) } else { None },
-        _ => None
+// THE AGREEMENT LAW: the spine TESTER (k_spine_next — k1 performs, run
+// OUTSIDE the k frame and again INSIDE each reified level), the
+// call-boundary tester (k2_spine_call), the containment probe
+// (k_subs_inside), the triviality probe (k_trivial), and the ONE remainder
+// BUILDER (k_remainder) all walk the SAME spine grammar — bare position,
+// BinOp with left-descent-or-trivial-left-right-descent, statement-free
+// block, and (k2) PForward-left + the bare-VarRef pipe stage. Keep them
+// adjacent; a form added to one without the others is the
+// free_in_ty/subst_ty divergence bug at the split.
+
+// The FIRST MultiShot perform on the extended spine, skipping positions
+// already substituted (band B M2a). The extension over the k1 grammar: a
+// BinOp whose LEFT is pure-and-trivial lets the spine descend RIGHT — so a
+// second perform in a k remainder (`hole1 + pick2*10`) is a REAL nested
+// yield site, at any depth (the depth-3 gate: `(h1*h2)*pick3` descends
+// through two trivial hole reads).
+fn k_spine_next(node, subs) = {
+  match k_sub_for(subs, node) {
+    Some(_) => None,
+    None => match ms_op_of_call(node) {
+      Some((op, args)) => {
+        let N(_, _, ph) = node
+        Some((op, ph, args))
+      },
+      None => {
+        let N(b, _, _) = node
+        match b {
+          NExpr(BinOpExpr(_, l, r)) =>
+            match k_spine_next(l, subs) {
+              Some(hit) => Some(hit),
+              None      => if k_trivial(l, subs) { k_spine_next(r, subs) } else { None }
+            },
+          NExpr(BlockExpr(stmts, final)) =>
+            if len(stmts) == 0 { k_spine_next(final, subs) } else { None },
+          _ => None
+        }
       }
     }
   }
+}
+
+// Pure-and-trivial given the live substitution points: re-evaluable inside
+// a k with zero effects — a hole read, a literal, a value VarRef (every
+// Mentl local is an immutable binding; a global name in value position is
+// a pure read), and arithmetic over those. A call or perform is never
+// trivial (the A-H4 ruling: VarRefs are exactly as pure as literals, and
+// their captures are the part of the recipe that already works).
+fn k_trivial(node, subs) = {
+  match k_sub_for(subs, node) {
+    Some(_) => true,
+    None => {
+      let N(b, _, _) = node
+      match b {
+        NExpr(LitInt(_))            => true,
+        NExpr(LitFloat(_))          => true,
+        NExpr(LitBool(_))           => true,
+        NExpr(LitString(_))         => true,
+        NExpr(LitUnit)              => true,
+        NExpr(VarRef(_))            => true,
+        NExpr(BinOpExpr(_, l, r))   => k_trivial(l, subs) && k_trivial(r, subs),
+        NExpr(UnaryOpExpr(_, x))    => k_trivial(x, subs),
+        _                           => false
+      }
+    }
+  }
+}
+
 
 // The k2 spine: the first-evaluated position chain, descended for a
 // CAN-YIELD CALL boundary (band B M1.3, the bank Ruling 5). Returns the
@@ -3097,61 +3154,152 @@ fn k2_spine_call(node) = {
   }
 }
 
-// Build the remainder-with-hole: the frame body with the spine node at ph
-// replaced by LLocal(ph, hole) — hole = "__resume_in" INSIDE the k frame
-// (the reified residency; untouched operands lower in the k frame so their
-// free names resolve to its captures, evaluation order preserved) or the
-// parked "__kr_<ph>" local for the INLINE residency (the k2 fast path —
-// the same walker, the other hole name; dual residency by construction).
-fn k_remainder(node, ph, hole) = {
-  let N(b, _, h) = node
-  if h == ph { LLocal(ph, hole) }
+// The substitution for a node, by handle identity. subs = [(ph, read_lo)]
+// — the innermost hole reads the k fn's own param, an enclosing level's
+// hole reads its CAPTURE (built inside the entered frame, k_hole_read), a
+// nested spine perform substitutes its whole LYield, and the inline
+// residency reads the parked __kr local. One environment, four read kinds.
+fn k_sub_for(subs, node) = {
+  let N(_, _, h) = node
+  let hits = filter(((ph, _)) => ph == h, subs)
+  if len(hits) == 0 { None }
   else {
-    match b {
-      NExpr(BinOpExpr(op2, l, r))    => LBinOp(h, op2, k_remainder(l, ph, hole), lower_expr(r)),
-      NExpr(BlockExpr(_, final))     => k_remainder(final, ph, hole),
-      NExpr(PipeExpr(_, l, r))       => lower_pipe_complete(k_remainder(l, ph, hole), r, h),
-      // Unreachable by the agreement law (the spine testers admit exactly
-      // the forms above); the identity hole is the honest residue, never a
-      // fabricated value — the spine handle names the only hole.
-      _                              => LLocal(ph, hole)
+    let (_, read) = head(hits)
+    Some(read)
+  }
+}
+
+// Does any substitution point sit inside this subtree? Over the spine
+// grammar's reachable positions only (a sub ph is a spine node by
+// construction; handles are unique, so both-sides BinOp descent
+// over-approximates nothing).
+fn k_subs_inside(node, subs) = {
+  match k_sub_for(subs, node) {
+    Some(_) => true,
+    None => {
+      let N(b, _, _) = node
+      match b {
+        NExpr(BinOpExpr(_, l, r))      => k_subs_inside(l, subs) || k_subs_inside(r, subs),
+        NExpr(BlockExpr(stmts, final)) =>
+          if len(stmts) == 0 { k_subs_inside(final, subs) } else { false },
+        NExpr(PipeExpr(_, l, _))       => k_subs_inside(l, subs),
+        _                              => false
+      }
     }
   }
 }
 
-// Reify a frame's remainder-after-ph as the continuation record: the k fn
-// (hole = "__resume_in", captures resolved in the ENCLOSING frame — prefix
-// locals become capture loads, outer upvals re-capture; the LambdaExpr
-// recipe verbatim, ONE mechanism four roles) wrapped in LMakeContinuation.
-// state_idx / ret_slot stay the spine-site handle (the stable per-site
-// discriminator; ret_slot has no live reader — its own documented fact);
-// world_tag = the canonical row's union-homomorphic bitmask (W06). Shared
-// by the k1 yield producer and the k2 boundary composition — one reifier.
-fn reify_frame_k(body_node, ph) = {
-  // The world the remainder still performs — read from the enclosing fn
-  // BEFORE entering the k frame (resume_world_of's own env read; at a
-  // spine site the outer fn name is real). persist=memcpy carries it;
-  // the load-time value gate compares world_tag against the live stack.
+// Build the remainder-with-substitutions (band B M2a — the hole-SET form;
+// the single-hole (ph, name) pair could not express a nested k's TWO live
+// holes, and a same-named param SHADOWED the outer hole's capture: the
+// diagonal-substitution refutation). Untouched subtrees lower ONCE via
+// lower_expr (the containment probe keeps single-lowering); a substitution
+// point inside an off-grammar subtree is the LOUD floor — with multiple
+// live holes a fabricated identity read is a silent wrong VALUE, never a
+// trap, so the fallback refuses (the A-H3 ruling).
+fn k_remainder(node, subs) = {
+  match k_sub_for(subs, node) {
+    Some(read) => read,
+    None =>
+      if !k_subs_inside(node, subs) { lower_expr(node) }
+      else {
+        let N(b, _, h) = node
+        match b {
+          NExpr(BinOpExpr(op2, l, r)) =>
+            LBinOp(h, op2, k_remainder(l, subs), k_remainder(r, subs)),
+          NExpr(BlockExpr(_, final))  => k_remainder(final, subs),
+          NExpr(PipeExpr(_, l, r))    => lower_pipe_complete(k_remainder(l, subs), r, h),
+          _ => LYield(h, "", [], LConst(h, LInt(0)))
+        }
+      }
+  }
+}
+
+// An enclosing level's hole, read INSIDE the entered k frame: the name is
+// a local of the enclosing k frame (its param), so it resolves RLocal one
+// frame up = a CAPTURE here (RUpval). A hole name that resolves nowhere is
+// a walker-divergence bug — the loud floor, never a fabricated read.
+fn k_hole_read(ph, name) = {
+  let (res, lh) = ls_resolve(name)
+  match res {
+    RLocal       => LLocal(if lh == 0 { ph } else { lh }, name),
+    RUpval(slot) => LUpval(if lh == 0 { ph } else { lh }, slot),
+    RFbPrior(_)  => LYield(ph, "", [], LConst(ph, LInt(0))),
+    RGlobal      => LYield(ph, "", [], LConst(ph, LInt(0)))
+  }
+}
+
+// The per-level hole name. Per-SITE, never shared: a shared "__resume_in"
+// made every nested k's param SHADOW its ancestors' holes (LLocal emits by
+// NAME), silently substituting the diagonal — the refuted form.
+fn k_hole_name(ph) = "__resume_in_{int_to_str(ph)}"
+
+// Reify a frame's remainder-after-ph as the continuation record (band B
+// k1/M2a — the recursive hole-set form): the k fn's captures resolve in
+// the ENCLOSING frame (prefix locals become capture loads, outer upvals
+// re-capture; the LambdaExpr recipe verbatim, ONE mechanism four roles),
+// with the ENCLOSING LEVELS' hole names SEEDED into the free set — the
+// AST at those positions is still the perform call (its only free name is
+// the op, RGlobal-fenced), so the walk alone can never surface them (the
+// diagonal refutation's root). A further MultiShot perform on this
+// remainder's extended spine reifies RECURSIVELY: its k captures this
+// level's hole through the same seeded recipe; its yield substitutes
+// mid-expression at the OP node's own width (never the frame's), minted
+// only when this k RUNS — fresh per call, live captures. state_idx /
+// ret_slot stay the spine-site handle; world_tag = the canonical row's
+// union-homomorphic bitmask (W06). Shared by the k1 yield producer and
+// the k2 boundary composition — one reifier.
+fn reify_frame_k(body_node, ph, outer_holes) = {
   let world = resume_world_of(ph)
-  let free_names = collect_free_vars(body_node, ["__resume_in"])
+  let hole = k_hole_name(ph)
+  let free_names = free_vars_merge(map(((_, n)) => n, outer_holes),
+                                   collect_free_vars(body_node, [hole]))
   let (captures_names, captures_exprs, captures_handles) =
     resolve_captures_outer(free_names, ph)
-  ls_enter_frame("", ["__resume_in"], [ph], captures_names, captures_handles, ph)
-  let k_body = k2_floor_guard(mark_tail(k_remainder(body_node, ph, "__resume_in")), false)
+  ls_enter_frame("", [hole], [ph], captures_names, captures_handles, ph)
+  let subs = map(((p, n)) => (p, k_hole_read(p, n)), outer_holes)
+             ++ [(ph, LLocal(ph, hole))]   // drift-audit: ignore — one-shot env build, no loop
+  let subs2 = match k_spine_next(body_node, subs) {
+    None => subs,
+    Some((op2, ph2, args2)) => {
+      let lo_args2 = map(lower_expr, args2)
+      let nested = reify_frame_k(body_node, ph2, outer_holes ++ [(ph, hole)])   // drift-audit: ignore — one-shot env build, no loop
+      // Every spine perform BEYOND ph2 is DEAD in this residency — a
+      // MultiShot perform always yields, so control never passes ph2 here;
+      // each deeper level substitutes its own real yield (the depth-3
+      // gate's lesson: lowering it inline floored a position no execution
+      // can reach). The dummy is an i32 word; a float-result op chain
+      // meets the loud assembly mismatch (the compose-width-floor family).
+      k_deaden_rest(body_node,
+        subs ++ [(ph2, LYield(ph2, op2, lo_args2, nested))])   // drift-audit: ignore — one-shot env build, no loop
+    }
+  }
+  let k_body = k2_floor_guard(mark_tail(k_remainder(body_node, subs2)), false)
   ls_exit_frame()
-  let k_fn = LFn("__k_{int_to_str(ph)}", 1, ["__resume_in"], [k_body],
+  let k_fn = LFn("__k_{int_to_str(ph)}", 1, [hole], [k_body],
                  world, len(captures_exprs))
   LMakeContinuation(ph, k_fn, captures_exprs, derive_ev_slots(ph),
                     ph, ph, world_tag_of_row(world))
+}
+
+// Substitute every remaining spine perform with a dead dummy word — the
+// positions a MultiShot yield upstream makes unreachable in THIS residency.
+// Terminates: each step adds a substitution at a fresh handle and the walk
+// skips substituted positions.
+fn k_deaden_rest(body_node, subs) = match k_spine_next(body_node, subs) {
+  None => subs,
+  Some((_, ph_dead, _)) =>
+    k_deaden_rest(body_node, subs ++ [(ph_dead, LConst(ph_dead, LInt(0)))])   // drift-audit: ignore — bounded by the body's perform count, not a hot loop
 }
 
 // Lower a frame body with continuation reification. THREE arms, priority
 // ordered (runs INSIDE the enclosing frame — FnStmt / LambdaExpr / PTee
 // install-body — upstream of tier selection, so the lexical and singleton
 // tiers cannot bake an arm call for a spine perform):
-//   k1 — a MultiShot perform on the spine: the WHOLE body becomes the
-//        yield (its remainder reified as k); the frame's value IS the
-//        yield's dummy, so the unwind is pure dataflow.
+//   k1 — a MultiShot perform on the (extended) spine: the WHOLE body
+//        becomes the yield (its remainder reified as k, nested performs
+//        reified recursively); the frame's value IS the yield's dummy, so
+//        the unwind is pure dataflow.
 //   k2 — a can-yield CALL on the spine (band B M1.3, Ruling 5): the DUAL
 //        RESIDENCY check — the call runs inline and parks width-honest in
 //        __kr_<ph> (llet_repr reads the call's own type); a raised
@@ -3161,24 +3309,25 @@ fn reify_frame_k(body_node, ph) = {
 //        fast path uses (no control transfer — correct inside install
 //        bodies, where a return would skip the driver bracket); a clear
 //        flag runs the SAME remainder inline with the parked result (the
-//        one walker, the other hole name — "the check block holds both").
+//        one walker, the parked-local substitution — "the check block
+//        holds both").
 //   else — verbatim lowering (the byte-identical path, Law 7).
 fn lower_body_reified(body_node) =
-  match ms_spine_op(body_node) {
+  match k_spine_next(body_node, []) {
     Some((op_name, ph, arg_nodes)) => {
       let N(_, _, frame_h) = body_node
       // The op's args evaluate at the yield site, in the ENCLOSING frame —
       // the already-computed prefix; the k's hole replaces the whole
       // perform call, so the remainder never re-evaluates them.
       let lo_args = map(lower_expr, arg_nodes)
-      LYield(frame_h, op_name, lo_args, reify_frame_k(body_node, ph))
+      LYield(frame_h, op_name, lo_args, reify_frame_k(body_node, ph, []))
     },
     None => match k2_spine_call(body_node) {
       Some(spine_node) => {
         let N(_, _, frame_h) = body_node
         let N(_, _, ph) = spine_node
         let kr = "__kr_{int_to_str(ph)}"
-        let c_inline = k_remainder(body_node, ph, kr)
+        let c_inline = k_remainder(body_node, [(ph, LLocal(ph, kr))])
         match c_inline {
           // Identity remainder: the boundary IS the frame tail — the flag
           // propagates through the frame's own return (mark_tail keeps the
@@ -3188,7 +3337,7 @@ fn lower_body_reified(body_node) =
           _ => LBlock(frame_h, [
             LLet(ph, kr, lower_expr(spine_node)),
             LIf(ph, LGlobal(ph, "yield_flag"),
-                [LKExtend(frame_h, reify_frame_k(body_node, ph))],
+                [LKExtend(frame_h, reify_frame_k(body_node, ph, []))],
                 [c_inline])
           ])
         }

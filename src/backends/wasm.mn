@@ -321,6 +321,10 @@ fn emit_module(lowered) = {
   // bubble op), $__k_world_tag (the tail read). Dormant until a k2 boundary
   // calls extend; emitted only when the module yields (Law 7).
   if yield_seen > 0 { emit_k_compose_pair() }
+  // band B M2b — one redrive fn per MultiShot-armed env handler: the
+  // dispatch loop's one home (the install bracket and every resume
+  // flag-arm call the same fn).
+  if yield_seen > 0 { emit_redrive_fns() }
   emit_init_lets(value_lets)
   emit_start(top_fn_names, value_lets, main_param_count(lowered), yield_seen)
   emit_footer()
@@ -827,6 +831,73 @@ fn emit_driver_arg_loads(n, i) = {
     wat_emit(")\n")
     emit_driver_arg_loads(n, i + 1)
   }
+}
+
+// band B M2b — the per-handler REDRIVE: the install driver's dispatch loop
+// factored to ONE home, called by the install bracket AND every MultiShot
+// arm's resume flag-arm (the owned-op re-dispatch — the twice-refuted
+// correction of the bank's "driver re-entry" sketch, which abandoned the
+// outer arm). (state, acc) → the last dispatched arm's value; a FOREIGN op
+// exits the loop with acc and $yield_flag INTACT — the flag global is the
+// second return channel, so the two callers differ with no mode flag: the
+// install bracket falls out with the flag up (the bubble, k1's law), the
+// resume flag-arm meets the still-raised flag and floors LOUDLY
+// (arm-remainder composition is A4/M3 territory). Emitted for every env
+// handler with a MultiShot-graded arm, under the yield gate; an
+// UNINSTALLED handler's op keys intern nowhere and compare against offset
+// 0 — dead code, assembles clean.
+fn emit_redrive_fns() with WasmOut + EnvRead = {
+  let hnames = match env_snapshot() {
+    Env(entries) => ms_handler_names(entries, [])
+  }
+  each(emit_one_redrive, hnames)
+}
+
+// Every declared handler with a MultiShot-graded arm — the same env-live
+// read the singleton globals walk uses (one criterion, N readers, never a
+// registry).
+fn ms_handler_names(entries, acc) = ms_handler_names_at(entries, len(entries), acc)
+
+fn ms_handler_names_at(entries, i, acc) = {
+  if i == 0 { acc }
+  else {
+    let (name, _scheme, _reason, kind) = list_index(entries, i - 1)
+    let acc2 = match kind {
+      HandlerKind(_row, _config, _state, _arms) =>
+        if len(multishot_ops_of(name)) > 0 && ls_find_str_local(acc, name, 0) < 0 { [name] ++ acc } else { acc },
+      _ => acc
+    }
+    ms_handler_names_at(entries, i - 1, acc2)
+  }
+}
+
+fn emit_one_redrive(hname) = {
+  wat_emit("  (func $op___redrive_")
+  wat_emit(hname)
+  wat_emit(" (param $__state i32) (param $acc i32) (result i32) (local $k i32)\n")
+  wat_emit("    (block $rdone (loop $rdrive\n")   // drift-audit: ignore — WAT instruction text
+  wat_emit("      (global.get $yield_flag)(i32.eqz)(br_if $rdone)\n")
+  each(((op, arity)) => {
+    wat_emit("      (global.get $yield_op)(i32.const ")
+    wat_emit(int_to_str(string_offset(op)))
+    wat_emit(")(i32.eq)\n")
+    wat_emit("      (if (then\n")
+    wat_emit("        (i32.const 0)(global.set $yield_flag)\n")
+    wat_emit("        (global.get $yield_k)(local.set $k)\n")
+    wat_emit("        (local.get $__state)(local.get $k)\n")
+    emit_driver_arg_loads(arity, 0)
+    wat_emit("        (call $op_")
+    wat_emit(hname)
+    wat_emit("_")
+    wat_emit(op)
+    wat_emit(")\n")
+    wat_emit("        (local.set $acc)\n")
+    wat_emit("        (br $rdrive)\n")
+    wat_emit("      ))\n")
+  }, multishot_ops_of(hname))
+  wat_emit("      (br $rdone)))\n")
+  wat_emit("    (local.get $acc)\n")
+  wat_emit("  )\n")
 }
 
 // The composer pair + the tag reader (band B M1.2, the k2/k3 bank Ruling 1) —
@@ -1946,14 +2017,13 @@ fn walk_locals_expr(expr, acc) = match expr {
     let with_groups = fold(with_prev,
       (a, g) => ["__hstate_{int_to_str(h)}_{group_ename(g)} i32"] ++ a,
       arm_names)
-    // band B k1: a MultiShot-armed install runs the yield DRIVER, which parks
-    // the body/arm result ($__hres, the install node's proven width) and the
-    // caught k ($__yk). Same multishot_ops_of decider the emit reads —
-    // mirror-true by construction.
+    // band B k1/M2b: a MultiShot-armed install parks the body result
+    // ($__hres, the install node's proven width) and hands it to the
+    // redrive — the caught k lives in the redrive's own local now. Same
+    // multishot_ops_of decider the emit reads — mirror-true by construction.
     let with_ms =
       if len(multishot_ops_of(hname)) > 0 {
-        ["__hres_{int_to_str(h)} {repr_wat(repr_of(lookup_ty(h)))}",
-         "__yk_{int_to_str(h)} i32"] ++ with_groups
+        ["__hres_{int_to_str(h)} {repr_wat(repr_of(lookup_ty(h)))}"] ++ with_groups
       } else { with_groups }
     walk_locals_list(captured_evs,
       walk_locals_list(inits,
@@ -3197,32 +3267,19 @@ fn emit_expr(expr) = match expr {
     // identically); an all-OneShot install emits the pre-k1 bytes exactly.
     let ms_ops = multishot_ops_of(hname)
     if len(ms_ops) > 0 {
+      // band B M2b — the driver IS one redrive call: park the body result,
+      // hand (record, parked) to $op___redrive_<hname> (the dispatch loop's
+      // ONE home, shared with every resume flag-arm). A flag still raised
+      // on return is a FOREIGN op — the value falls out of the bracket
+      // with the flag intact and the enclosing boundary sees it (the
+      // bubble, k1's law, unchanged).
       let hs = int_to_str(h)
       wat_emit("    (local.set $__hres_{hs})\n")
-      wat_emit("    (block $ydone_{hs} (loop $ydrive_{hs}\n")   // drift-audit: ignore — WAT instruction text (the emit target's vocabulary), not Mentl control flow
-      wat_emit("      (global.get $yield_flag)(i32.eqz)(br_if $ydone_{hs})\n")
-      each(((op, arity)) => {
-        wat_emit("      (global.get $yield_op)(i32.const ")
-        wat_emit(int_to_str(string_offset(op)))
-        wat_emit(")(i32.eq)\n")
-        wat_emit("      (if (then\n")
-        wat_emit("        (i32.const 0)(global.set $yield_flag)\n")
-        wat_emit("        (global.get $yield_k)(local.set $__yk_{hs})\n")
-        wat_emit("        (local.get $")
-        wat_emit(local_name)
-        wat_emit(")(local.get $__yk_{hs})\n")
-        // band B M1.4 — the op's args, read once from the transient
-        // $yield_args record at fixed word offsets (the arity is the arm
-        // decl's, read live off the same pair the dispatch keys on); the
-        // arm's signature has carried (__k, args...) since k1.
-        emit_driver_arg_loads(arity, 0)
-        wat_emit("        (call $op_{hname}_{op})\n")
-        wat_emit("        (local.set $__hres_{hs})\n")
-        wat_emit("        (br $ydrive_{hs})\n")
-        wat_emit("      ))\n")
-      }, ms_ops)
-      wat_emit("      (br $ydone_{hs})\n")
-      wat_emit("    ))\n")
+      wat_emit("    (local.get $")
+      wat_emit(local_name)
+      wat_emit(")(local.get $__hres_{hs})(call $op___redrive_")
+      wat_emit(hname)
+      wat_emit(")(local.set $__hres_{hs})\n")
       wat_emit("    (local.get $__hres_{hs})\n")
     }
     if hname != "" {

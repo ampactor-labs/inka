@@ -1,0 +1,24 @@
+// band B M2 gate — depth-3 nesting: the TRUE multi-hole gate. k3's
+// substitution environment carries TWO enclosing holes ((h1*h2)*??), both
+// read through captures seeded across two frame levels — the hole-SET
+// reifier's whole reason to exist (the single-pair form could not express
+// it, and the shared hole name shadowed every ancestor). The spine
+// descends two trivial-left hole reads to reach pick3.
+//   Product of sums: (1+2)^3 → exit 27.
+// Affine depth-3 bodies are blind to the diagonal at every level (both
+// compute 36 for sums); the triple product is not.
+effect Choice {
+  pick() -> Int
+}
+
+handler twice {
+  pick() => {
+    let a = resume(1)
+    let b = resume(2)
+    a + b
+  }
+}
+
+fn body() with Choice = pick() * pick() * pick()
+
+fn main() = { body() } ~> twice

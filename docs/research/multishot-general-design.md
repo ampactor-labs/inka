@@ -321,3 +321,53 @@ autodiff-as-multishot · IDE fill-and-resume via the producer-carrying re-pin ·
 per-install Either negotiation · f64 composer variants
 (`Hβ.emit.compose-width-floor`) · `Hβ.lower.kfn-singleton-after-unwind` ·
 the persist-layer truncation the edges sweep flagged (verify at build).
+
+## M2 amendment (2026-07-12 — the nested-choose refutation pass, landed form)
+
+Two refuters (semantics + mechanics) attacked the M2 nested-choose
+mechanism before a byte landed. Three corrections to THIS document's own
+text, each with its decisive fact:
+
+**The "driver re-entry" sketch in the M2 ladder line is WRONG — struck.**
+"mn-nested-choose (driver re-entry: the product of two choices)" as
+sketched — the arm returns dummy flag-up and the DRIVER dispatches
+arm(k2) — ABANDONS the outer arm (its remaining resumes and its
+combination never run): pick()+pick()*10 under twice computes 32 where
+the deep-handler answer (independently derived: install = the prompt;
+deep k(v) = handle(E[v])) is 66. The correct mechanism is the OWNED-OP
+RE-DISPATCH AT THE RESUME BOUNDARY: the resume's post-call flag check,
+on an op THIS handler owns, re-enters the handler's own dispatch and
+uses the dispatched arm's return as the resume's value — the deep
+equation handle(E[perform]) = arm(k = λv. handle(E[v])) verbatim. Landed
+as $op___redrive_<hname>: the install driver's loop factored to ONE
+dispatch home, called by the install bracket AND every MultiShot arm's
+resume flag-arm; a FOREIGN op exits with $yield_flag INTACT (the flag
+global is the second return channel — no mode flag): the bracket
+bubbles, the resume floors loudly.
+
+**Ruling 5 gains the resume carve-out.** "EVERY non-tail can-yield call
+carries the check" does NOT sweep the resume k-call in: composing the
+frame remainder there would splice ARM code into the delimited segment
+(the arm runs at the prompt's edge, above the captured segment). The
+resume boundary's own protocol is the redrive (owned) + the loud floor
+(foreign — arm-remainder composition has no sound form).
+
+**Ruling 1's "existing capture recipe" claim was FALSE for nesting — the
+hole-SET reifier replaces it.** collect_free_vars walks the AST, where a
+hole position is still the perform call (its only free name is the op,
+RGlobal-fenced), so an outer hole's name never enters a nested k's free
+set; and a shared "__resume_in" param SHADOWED every ancestor hole
+(LLocal emits by name) — the naive build silently computes the DIAGONAL
+substitution, and every AFFINE body is blind to it (correct and diagonal
+totals agree at any depth — the refuter's theorem; gates must be
+MULTIPLICATIVE). Landed: per-site hole names (__resume_in_<ph>), a
+substitution ENVIRONMENT through k_remainder ([(ph, read)] — hole reads
+resolved INSIDE the entered frame, enclosing hole names seeded into the
+free set explicitly), recursive reification, and the DEADENER (every
+spine perform beyond the substituted yield is dead in that residency — a
+MultiShot perform always yields — and lowers as a dummy word, never an
+inline floor: the depth-3 gate's lesson). The landed gates:
+mn-nested-choose = pick()*pick() = 9 (the diagonal computes 10),
+mn-nested-depth3 = 27 (the two-outer-hole environment),
+mn-nested-state = 51 (interleaved arm invocations against the one
+install record — live loads, commit-before-k).

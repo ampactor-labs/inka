@@ -1,0 +1,27 @@
+// band B M2 gate — nested choose × arm state: two arm invocations
+// interleave against the ONE install record (the inner runs to completion
+// mid-outer-arm; every state read is a LIVE load, every commit lands
+// before its k-call — Ruling 4's global-record semantics under nesting).
+//   s = 1, commit step +2. Outer arm (k1 = [?? + pick2]):
+//   a = resume(s=1) with s=3: k1(1) → yield2, k2=[1+??] → redrive arm#2:
+//     a2 = resume(s=3) with s=5 → k2(3)=4; b2 = resume(s=5) → k2(5)=6;
+//     arm#2 = 4+6+5 = 15 → a = 15.
+//   b = resume(s=5): k1(5) → k2'=[5+??] → redrive arm#3:
+//     a3 = resume(s=5) with s=7 → k2'(5)=10; b3 = resume(s=7) → k2'(7)=12;
+//     arm#3 = 10+12+7 = 29 → b = 29.
+//   arm#1 = a + b + s = 15 + 29 + 7 → exit 51.
+effect Choice {
+  pick() -> Int
+}
+
+handler counter with s = 1 {
+  pick() => {
+    let a = resume(s) with s = s + 2
+    let b = resume(s)
+    a + b + s
+  }
+}
+
+fn body() with Choice = pick() + pick()
+
+fn main() = { body() } ~> counter

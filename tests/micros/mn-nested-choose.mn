@@ -1,0 +1,29 @@
+// band B M2 gate — nested choose: the product of two choices (the k
+// re-yields its own op mid-resume). pick1 reifies k1 = [?? * pick2]; each
+// k1(v) call hits pick2, whose remainder reifies NESTED (k2 = [v * ??],
+// hole1 read through k2's CAPTURE — the per-level hole names + seeded
+// frees; a shared name shadowed the outer hole and computed the diagonal);
+// the yield bubbles to the arm's resume flag-arm, which re-dispatches the
+// OWNED op through $op___redrive_twice — the deep-handler equation, never
+// the bank's original driver re-entry sketch (which abandoned the outer
+// arm: 4, not 9).
+//   a = resume(1) → k2=[1*??] → 1+2 = 3; b = resume(2) → k2'=[2*??] →
+//   2+4 = 6; arm = a + b → exit 9.
+// MULTIPLICATIVE by design: for any AFFINE body the diagonal substitution
+// (k2 reading its own hole twice) produces the SAME total — the refuter's
+// blindness theorem. pick()*pick(): correct 9, diagonal 10.
+effect Choice {
+  pick() -> Int
+}
+
+handler twice {
+  pick() => {
+    let a = resume(1)
+    let b = resume(2)
+    a + b
+  }
+}
+
+fn body() with Choice = pick() * pick()
+
+fn main() = { body() } ~> twice

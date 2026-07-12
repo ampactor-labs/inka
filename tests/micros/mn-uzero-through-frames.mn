@@ -1,0 +1,27 @@
+// band B M2 RATCHET — the UZero blast radius through call frames (pinned
+// so M4's abandon cut is a MEASURED flip). Under today's convention the
+// abort's None returns to the deepest perform site and reaches the install
+// ONLY because every intermediate frame is a TAIL-position value chain
+// (deep's recursive branch returns the recursion verbatim). A frame doing
+// arithmetic on the result — `deep(n-1) + 1` — silently BREAKS the
+// protocol (the None sentinel arithmetics into garbage; the enclosing
+// Option match hits its exhaustive else): that is the blast radius M4's
+// abandon semantics closes structurally.
+//   TODAY: exit 33 (the None chains up three tail frames to the match).
+//   M4: same exit by a different mechanism (the install delivers the
+//   arm's None directly, no chain) — the pin survives the cut; only the
+//   FRAGILITY (the non-tail break) disappears.
+effect Abort {
+  abort() -> Option
+}
+
+handler my_catch {
+  abort() => None
+}
+
+fn deep(n) with Abort = if n == 0 { abort() } else { deep(n - 1) }
+
+fn main() = match (deep(3)) ~> my_catch {
+  Some(v) => v,
+  None    => 33
+}

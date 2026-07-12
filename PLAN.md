@@ -1093,13 +1093,31 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > DELETED names of a region replacement, not only the added). Gates:
 > micros 52/52; ALL ELEVEN k gates 30/36/40/29/26/16/46/23/9/27/51;
 > march ✓✓ FIXED POINT m2 == m3 (sha 12b5f04b…, zero redrive fns in the
-> wheel's own module — Law 7 exact). NEXT — M2's remaining ladder:
-> mn-uzero-abort (the abandon path — M4's uzero semantics under the
-> driver) · mn-resume-across-install (THE acid distillation — A4's
-> re-install-in-k arbitrates) · mn-dynamic-abort-in-k (the A2
-> arbitration) · mn-uzero-through-frames (the UZero blast-radius
-> measurement) · mn-called-fn-resume-typed (the closed-declared-row +
-> R→S gate) · mn-option-protocol (ratchets the +14); then M3 THE CUT
+> wheel's own module — Law 7 exact). **THE TWO UZERO RATCHETS LANDED (same
+> day): mn-option-protocol=0 and mn-uzero-through-frames=33 — today's
+> abort convention MEASURED and PINNED so M4's abandon cut is a measured
+> flip, never an accident.** The measurements: abort()'s None returns to
+> the PERFORM site and does NOT unwind (`abort(); 0` discards it — the
+> protocol's sharp edge; M4 flips this program 0 → 42); the None reaches
+> an install only through TAIL-position value chains (a non-tail frame
+> arithmetics the sentinel into garbage and the Option match hits its
+> exhaustive else — the blast radius M4 closes structurally; the 33 pin
+> survives the cut, only the fragility disappears). And
+> mn-dynamic-abort-in-k is NOT testable pre-M4 — today's convention
+> erases the observable (the arm value returns to the perform site
+> regardless of which record dispatched); it lands WITH the abandon cut,
+> where install-value delivery makes the resolution visible (the A2
+> resolution mechanism — the no-config singleton tier reading
+> $<hname>_state_g live under the resume-site bracket — is already the
+> dispatch in place). NEXT — M2's remaining mechanism: A4's
+> re-install-in-k (mn-resume-across-install, THE acid distillation — the
+> k2 spine descending into PTee install bodies, the remainder re-
+> establishing the install as a FRESH LHandleWith around the hole;
+> stateless only, stateful = the loud floor
+> Hβ.lower.stateful-install-crossing-yield; needs the PTee lowering
+> factored the way lower_pipe_complete factored PForward — its own
+> refuter pass before the byte) · mn-called-fn-resume-typed (the
+> closed-declared-row + R→S gate — M3's capability mark); then M3 THE CUT
 > (classifier fixpoint + capability mark + op binding/E_ResumeAmbiguousOp
 > + choose/enumerate flip + the march TRANSITION + boot/IDE re-pin +
 > mn-backtrack-full — "flipped but unproven is the drift").**

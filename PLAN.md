@@ -867,11 +867,6 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > were zsh passing $LIBS unsplit (the crucible compiled without libs — 14
 > fns, no $ev_lookup); the "missing" k1 fn defs were shell-quoting noise
 > (python re-count: all present). Verify the INSTRUMENT before the claim.
-> NEXT on this arc: k2 (the sst_ call-boundary bubble replaces the re-yield
-> trap with composition), k3 (op-args as the yield packet; arm-state commit;
-> `Hβ.infer.tail-recursion-resume-cardinality` co-lands — backtrack and
-> enumerate_inhabitants flip MultiShot on the mechanism that can carry them),
-> then the boot re-pin so the IDE's pinned compiler carries the producer.
 > **THE k2/k3 DESIGN IS BANKED, TWICE-REFUTED (287521d, 2026-07-11):
 > `docs/research/multishot-general-design.md` — 8 scouts + a first-principles
 > challenger + 2 independent refuters; every fork ruled with its decisive
@@ -882,6 +877,59 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > sites swept); the cut ships only with mn-backtrack-full green (backtrack
 > is DEAD CODE in the wheel — no wheel gate can see it). Build order M1 →
 > M2 → M3 lives in the doc.**
+>
+> **▶ THE M1 ARC IS EXECUTING (2026-07-11, same day as the bank).
+> M1.1 LANDED (eec974c) — the union-homomorphic world_tag:** one bit per
+> effect name (FNV mod 32), row tag = OR of bits, so tag(A∪B) ==
+> i32_or(tag(A), tag(B)) — compose is one i32.or and the future value gate
+> is a subset test (world-widening-resume in the representation);
+> i32_or/i32_and/i32_shl land as Memory-op substrate siblings (3 homes:
+> effect decl, is_substrate_mem_op, emit projection). The march ruled
+> TRANSITION (the wheel CALLS the new projections while boot's emit
+> predated them — m2 != m3 by design, m3 == m4 self-confirmed; battery
+> 52/52 + k gates verified THROUGH m3 before the bless); boot RE-PINNED
+> from m3 (sha 70d184a0…; PROVENANCE recipe corrected first — on a
+> transition the self-reproducing generation is m3, NEVER the fresh m2,
+> the trusting-trust mistake); the IDE re-packed from the same m3 — the
+> browser compiler carries the k1 producer, the multi-shot demo runs → 30
+> live under the keystroke. **M1.2 LANDED — the composer pair (bank
+> Ruling 1):** $__k_compose, the ONE generic self-re-composing junction k —
+> a composed k is ITSELF a k (closure-identical head [fn_ptr=
+> $__k_compose_idx][nc=2][inner@8][frame_k@12][sentinel@16][0][0]
+> [world_tag@28]), resume calls it through the same W7 convention, no
+> second calling convention, no chain walker; body: r = inner(v); flag
+> still raised → $__k_extend re-composes the fresh $yield_k onto its own
+> frame_k and the dummy propagates with $yield_flag AND $yield_op
+> untouched (the chain rebuilds lazily, one fresh record per crossed
+> suspension — the mint is the only write); flag clear →
+> return_call_indirect into frame_k (constant stack at any depth).
+> Composed world_tag = OR-join of the children — M1.1's homomorphism doing
+> the job it was built for ($__k_world_tag walks the keyed-ev sentinel to
+> the tail, the same scan ev_perform_entry keys). Table-resident (the one
+> new plumbing seam: appended fn-name slot + $__k_compose_idx from the
+> same index-global projection every closure mint reads) with $ft2
+> FLOORED in when the module yields (the bank's FT SEAM — a yielding
+> module with only UZero arms may lack any other 2-arg site). Width pinned
+> word-uniform $ft2: a non-i32 frame k meets a LOUD call_indirect type
+> trap (Hβ.emit.compose-width-floor; f64 variant the named after). All
+> yield_seen-gated — march self-confirmed **✓✓ FIXED POINT m2 == m3**
+> (cmp byte-identical, sha 1009d959…; the composer emitter is compiled
+> INTO the fixpoint compiler and emits into ZERO of its own bytes — Law 7
+> exact). Proven standalone on the VERBATIM emitted text (scratchpad
+> crucible: compose(k,k)(5)=25; composed tag 2|4=6; re-yield propagation
+> preserving $yield_op → drained 25) AND through the m2 tier: rungs 8/8,
+> micros 52/52, mn-multishot=30 + twice-handler-nonidentity=36 +
+> twice-capture=40, the trio + table slot 28 + $ft2 censused in
+> mn-multishot's emitted module, wasm-tools validates. DORMANT by
+> construction until M1.3 wires the boundary checks. Instrument lesson
+> re-paid: the first census greps returned 0 on a module that HELD the
+> trio (BRE `\$`-quoting) — grep -F before the claim; and mn-multishot is
+> NOT in the 52-micro baseline, so the k gates are run explicitly, never
+> assumed covered. NEXT: M1.3 — the k2 call-boundary check (prove-absence
+> gate; all THREE LSuspend mints: lower_call_default, pipe completion,
+> pipe splice) + dual-residency split + re-install-in-k; then M1.4 LYield
+> args; M1.5 state-commit tail (cross-commit m2.wat diff gate); M1.6 the
+> "__resume" keyed evidence (dormant); M2 crucible ladder; M3 THE CUT.**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

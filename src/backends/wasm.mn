@@ -265,11 +265,19 @@ fn emit_module(lowered) = {
   // walk_lemit_expr. The graph IS the index; the chain IS the projector.
   let (all_fn_names, top_fn_names, string_entries, state_slots, wasi_ops, yield_seen) =
     project_emit_state(lowered)
+  // band B M1.2 (the k2/k3 bank, Ruling 1) — the composer is CALLED INDIRECT
+  // (it is the fn_ptr@0 of every composed k record), so unlike every other
+  // synthesized helper it is TABLE-RESIDENT: appended to the fn-name set
+  // (existing indices stable) and given $__k_compose_idx by the same
+  // index-global projection every closure mint reads. Yield-gated — a
+  // OneShot-only module's table is byte-identical (Law 7).
+  let table_fn_names =
+    if yield_seen > 0 { all_fn_names ++ ["__k_compose"] } else { all_fn_names }   // drift-audit: ignore — one-time module-scope append, not a loop accumulator
   // W5 string interning — seed the string_table handler so downstream
   // LString emits can look up the offset via perform string_offset.
   set_string_entries(string_entries)
   emit_header()
-  emit_type_section(lowered)
+  emit_type_section(lowered, yield_seen)
   emit_runtime_imports(wasi_ops)
   emit_memory_decl()
   emit_state_globals(state_slots)
@@ -279,9 +287,9 @@ fn emit_module(lowered) = {
   // interned op key the drivers compare), $yield_k (the reified k record).
   if yield_seen > 0 { emit_yield_globals() }
   emit_string_data(string_entries)
-  emit_fn_table(all_fn_names)
-  emit_fn_index_globals(all_fn_names, 0)
-  emit_static_top_closures(top_fn_names, all_fn_names, 0)
+  emit_fn_table(table_fn_names)
+  emit_fn_index_globals(table_fn_names, 0)
+  emit_static_top_closures(top_fn_names, table_fn_names, 0)
   // Module VALUE bindings: ONE projection feeds the declaration half and
   // the init half (never two walks of one tree).
   let value_lets = collect_top_value_lets(lowered)
@@ -308,6 +316,11 @@ fn emit_module(lowered) = {
   // traversal. A program with no aggregate to_string collects none (byte-
   // identical to the pre-show module, Law 7).
   emit_show_leaves(lowered)
+  // band B M1.2 — the composer pair + tag reader: $__k_compose (the
+  // self-re-composing junction k, table-resident above), $__k_extend (the one
+  // bubble op), $__k_world_tag (the tail read). Dormant until a k2 boundary
+  // calls extend; emitted only when the module yields (Law 7).
+  if yield_seen > 0 { emit_k_compose_pair() }
   emit_init_lets(value_lets)
   emit_start(top_fn_names, value_lets, main_param_count(lowered), yield_seen)
   emit_footer()
@@ -777,6 +790,75 @@ fn emit_yield_globals() with WasmOut = {
   wat_emit("  (global $yield_k (mut i32) (i32.const 0))\n")
 }
 
+// The composer pair + the tag reader (band B M1.2, the k2/k3 bank Ruling 1) —
+// the one generic self-re-composing junction. compose(inner, frame_k) is
+// ITSELF a k with the closure-identical head [fn_ptr=$__k_compose_idx][nc=2]
+// [inner@8][frame_k@12][ev-sentinel@16][state_idx=0@20][ret_slot=0@24]
+// [world_tag@28] — resume calls it through the SAME W7 convention as every k
+// (no second calling convention, no chain walker). The body: r = inner(v); a
+// still-raised $yield_flag means inner suspended DEEPER — re-compose the
+// fresh $yield_k onto this record's own frame_k and propagate the dummy with
+// $yield_flag AND $yield_op untouched (the chain rebuilds itself lazily, one
+// fresh record per crossed suspension — never a post-mint mutation; the mint
+// in $__k_extend is the ONLY write in the k design); a clear flag feeds r to
+// frame_k as return_call_indirect — constant stack at any composition depth.
+// The composed world_tag is the OR-join of both children's (the M1.1
+// union-homomorphic representation: compose IS one i32.or; the full
+// row-in-tail form rides the Persist/value-gate band). Width: the composer ft
+// is pinned word-uniform $ft2 — a non-i32 frame k meets a LOUD call_indirect
+// type trap (Hβ.emit.compose-width-floor; the f64 composer variant is the
+// named after), never a silent truncation. Dormant until a k2 boundary or a
+// junction calls $__k_extend; emitted only when the module yields (Law 7).
+fn emit_k_compose_pair() with WasmOut = {
+  // $__k_world_tag(k) — the tail read: skip the captures fence, walk the
+  // keyed ev region to its 0 sentinel (the SAME scan ev_perform_entry keys),
+  // load world_tag at sentinel+12 — the record's last word, where
+  // LMakeContinuation stores it.
+  wat_emit("  (func $__k_world_tag (param $k i32) (result i32) (local $p i32)\n")
+  wat_emit("    (local.set $p (i32.add (local.get $k)\n")
+  wat_emit("      (i32.add (i32.const 8) (i32.shl (i32.load offset=4 (local.get $k)) (i32.const 2)))))\n")
+  wat_emit("    (block $tag_done (loop $tag_scan\n")   // drift-audit: ignore — WAT instruction text
+  wat_emit("      (br_if $tag_done (i32.eqz (i32.load (local.get $p))))\n")
+  wat_emit("      (local.set $p (i32.add (local.get $p) (i32.const 8)))\n")
+  wat_emit("      (br $tag_scan)))\n")
+  wat_emit("    (i32.load offset=12 (local.get $p))\n")
+  wat_emit("  )\n")
+  // $__k_extend(frame_k) — the one operation every bubble junction performs:
+  // $yield_k := compose($yield_k, frame_k). Reads the unwinding k, mints the
+  // 32-byte composer record, ORs the two world tags, republishes.
+  wat_emit("  (func $__k_extend (param $fk i32) (local $nk i32)\n")
+  wat_emit("    (local.set $nk (call $alloc (i32.const 32)))\n")
+  wat_emit("    (i32.store offset=0 (local.get $nk) (global.get $__k_compose_idx))\n")
+  wat_emit("    (i32.store offset=4 (local.get $nk) (i32.const 2))\n")
+  wat_emit("    (i32.store offset=8 (local.get $nk) (global.get $yield_k))\n")
+  wat_emit("    (i32.store offset=12 (local.get $nk) (local.get $fk))\n")
+  wat_emit("    (i32.store offset=16 (local.get $nk) (i32.const 0))\n")
+  wat_emit("    (i32.store offset=20 (local.get $nk) (i32.const 0))\n")
+  wat_emit("    (i32.store offset=24 (local.get $nk) (i32.const 0))\n")
+  wat_emit("    (i32.store offset=28 (local.get $nk) (i32.or\n")
+  wat_emit("      (call $__k_world_tag (global.get $yield_k))\n")
+  wat_emit("      (call $__k_world_tag (local.get $fk))))\n")
+  wat_emit("    (global.set $yield_k (local.get $nk))\n")
+  wat_emit("  )\n")
+  // $__k_compose(__state, v) — W7 through and through: inner and frame_k are
+  // its own captures; each junction call is the same park-push-load-indirect
+  // every closure call emits.
+  wat_emit("  (func $__k_compose (param $__state i32) (param $v i32) (result i32) (local $ik i32) (local $r i32)\n")
+  wat_emit("    (local.set $ik (i32.load offset=8 (local.get $__state)))\n")
+  wat_emit("    (local.get $ik) (local.get $v)\n")
+  wat_emit("    (local.get $ik) (i32.load offset=0)\n")
+  wat_emit("    (call_indirect (type $ft2))\n")
+  wat_emit("    (local.set $r)\n")
+  wat_emit("    (if (global.get $yield_flag) (then\n")
+  wat_emit("      (call $__k_extend (i32.load offset=12 (local.get $__state)))\n")
+  wat_emit("      (i32.const 0) (return)))\n")   // drift-audit: ignore — WAT instruction text
+  wat_emit("    (local.set $ik (i32.load offset=12 (local.get $__state)))\n")
+  wat_emit("    (local.get $ik) (local.get $r)\n")
+  wat_emit("    (local.get $ik) (i32.load offset=0)\n")
+  wat_emit("    (return_call_indirect (type $ft2))\n")
+  wat_emit("  )\n")
+}
+
 // Add each no-config declared handler's name (a HandlerKind with empty config)
 // to acc, deduped — the home-dispatch set lower reads via lower_op_default_handler.
 // INDEX-walk, never drop_last: `entries` is an env_snapshot slice view, and
@@ -1088,7 +1170,7 @@ fn hex_digit(d) with Pure = match d {
 // polymorphic-call path uses these same types: the evidence pointer
 // is a normal i32 slot, so effectful calls of arity K use $ft(K+1).
 
-fn emit_type_section(lowered) = {
+fn emit_type_section(lowered, yield_seen) = {
   // ONE walk (the Universal Audit): the repr-vector collection visits every
   // indirect-dispatch site, and the arity-keyed all-i32 $ftN types ARE the
   // all-RI32 instances of those SAME vectors (PLAN §5.U — the arity-$ftN
@@ -1096,10 +1178,15 @@ fn emit_type_section(lowered) = {
   // PROJECTION of the collected vectors; the prior shallow parallel arity
   // walk — a second reader of the same fact that missed every call nested
   // inside a fn body — is DELETED. _start calls main via $ft1 (__state
-  // alone); floor 1 keeps that entry for call-free programs.
+  // alone); floor 1 keeps that entry for call-free programs. A YIELDING
+  // module floors at 2: the composer's own W7 indirects (inner(v),
+  // frame_k(r)) are 2-arg all-i32 = $ft2, and a yielding module with only
+  // UZero arms may carry no other 2-arg site (the bank's FT SEAM, Ruling 1)
+  // — the miss would be a loud assembly error, so the floor interns it.
   let vectors = collect_call_vectors_list(lowered, [])
   let observed = max_i32_vector_arity(vectors, 0)
-  let max_arity = if observed < 1 { 1 } else { observed }
+  let floor = if yield_seen > 0 { 2 } else { 1 }
+  let max_arity = if observed < floor { floor } else { observed }
   emit_type_decls(0, max_arity)
   // Then the DISTINCT non-i32 repr-vectors — each a structural function-
   // type the gradient reached (an f64 arg, an f64 result), deduped by

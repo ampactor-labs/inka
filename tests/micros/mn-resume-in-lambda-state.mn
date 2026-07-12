@@ -1,0 +1,29 @@
+// band B S1 gate — the closure-context record home (the refuter's measured
+// 32-not-46 silent state loss, unmasked). Resumes-with-state inside
+// thunks: the lambda's own $__state is its CLOSURE record, so the commit
+// stores and the redrive must reach the install record through the
+// bracket-scoped $<hname>_state_g singleton — the same record as the arm's
+// $__state at arm level (the bracket set it), and the only home a closure
+// can reach. Same trace as mn-arm-state-multishot (46) with both resumes
+// moved into W7-called thunks:
+//   s=10: a = thunk(resume(s=10) with s=17) → k(10)=11; b's thunk mints
+//   after the commit, captures live s=17 → k(17)=18; a+b+s = 11+18+17 →
+//   exit 46. The pre-S1 broken path wrote s=17 into the thunk's closure
+//   record: 11+11+10 = 32.
+effect Choice {
+  pick() -> Int
+}
+
+fn call_thunk(f) = f()
+
+handler counter with s = 10 {
+  pick() => {
+    let a = call_thunk(() => resume(s) with s = s + 7)
+    let b = call_thunk(() => resume(s))
+    a + b + s
+  }
+}
+
+fn body() with Choice = pick() + 1
+
+fn main() = { body() } ~> counter

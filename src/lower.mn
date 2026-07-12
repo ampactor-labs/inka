@@ -420,7 +420,7 @@ type LowExpr
   // arm fn's __state IS the handler's state record per
   // protocol_handler_is_state_is_closure_is_evidence.md, so the store
   // mutates handler state across resume calls.
-  | LStateSlotStore(Int, Int, LowExpr)         // handle, slot_offset, value
+  | LStateSlotStore(Int, Int, LowExpr, String)  // handle, slot_offset, value, record home ("" = the arm's $__state — byte-frozen OneShot; else $<name>_state_g, the bracket-scoped singleton a closure context reaches — the lambda's own $__state is its closure record, the measured 32-not-46 silent state loss)
   // Stage 4a: direct WASM-level import call. perform-form recognized at
   // lower-time when op_name matches a known WASI import (wasi_thread_
   // spawn, wasi_num_cores, fd_write, fd_read, path_open, etc.) bridges
@@ -506,7 +506,7 @@ fn lexpr_handle(e) with Pure = match e {
   LEvEntry(_, ev)         => lexpr_handle(ev),
   LFieldLoad(h, _, _)     => h,
   LConvert(h, _, _)       => h,
-  LStateSlotStore(h, _, _) => h,
+  LStateSlotStore(h, _, _, _) => h,
   LWasiCall(h, _, _)      => h
 }
 
@@ -2931,6 +2931,9 @@ fn lower_resume_oneshot(handle, val, state_updates) = {
     lower_resume_snapshot(handle, val, state_updates, fields)
   }
 }
+// The OneShot commit's record home: the arm's own $__state ("" — the
+// byte-frozen pre-S1 form; a OneShot resume lowers in the arm frame where
+// $__state IS the install record).
 
 // ── MultiShot: the reified k (band B k1, continuation-reification codegen) ──
 //
@@ -2967,7 +2970,12 @@ fn lower_resume_callk(handle, val, state_updates) = {
     if len(state_updates) == 0 { ([], "") }
     else {
       let fields = current_state_fields()   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
-      resume_commit_prefix(handle, val, state_updates, fields)
+      // The MultiShot commit's record home is the bracket-scoped singleton
+      // $<hname>_state_g — the SAME record as the arm's $__state at arm
+      // level (the bracket set it), and the ONLY reachable home inside a
+      // closure (whose own $__state is its closure record — the measured
+      // 32-not-46 silent state loss, S1's unmasking gate).
+      resume_commit_prefix(handle, val, state_updates, fields, hname)
     }
   let val_lo =
     if len(state_updates) == 0 { lower_expr(val) }
@@ -3373,7 +3381,7 @@ fn lower_body_reified(body_node) =
 // The per-seam entry: a program with no MultiShot-graded op cannot yield,
 // so the walk is skipped whole — the pre-cut wheel pays zero rebuild and
 // keeps byte-identity by construction (Law 7).
-fn k2_guard(e) = if ls_program_may_yield() { k2_floor_guard(e, false) } else { e }
+fn k2_guard(e) = if ls_program_may_yield() { k2_floor_guard(e, true) } else { e }
 
 fn k2_floor_guard(e, terminus) = match e {
   LSuspend(h, o, f, args, ev, tail) => {
@@ -3394,9 +3402,21 @@ fn k2_floor_guard(e, terminus) = match e {
                                     let (pat, body) = arm
                                     (pat, k2_floor_guard(body, terminus))
                                   }, arms)),
-  LHandleWith(h, b, hn, hname, inits, an, evs) =>
-    LHandleWith(h, k2_floor_guard(b, true), k2_floor_guard(hn, false), hname,
-                k2_floor_list(inits), an, k2_floor_list(evs)),
+  LHandleWith(h, b, hn, hname, inits, an, evs) => {
+    // The body's terminus is driver-guarded ONLY when a driver exists
+    // (multishot_ops_of != [] — the ONE decider). A DRIVERLESS install's
+    // yield exits the bracket as a flagged dummy; in a non-propagating
+    // position the enclosing code would compute on it silently (the
+    // measured 9-not-29 install-crossing value loss), so the whole install
+    // wraps in the loud floor — the dormant A4 gate: re-install-in-k flips
+    // it to composition (Hβ.lower.stateful-install-crossing-yield stays
+    // the stateful floor).
+    let has_driver = len(multishot_ops_of(hname)) > 0
+    let rebuilt = LHandleWith(h, k2_floor_guard(b, has_driver),
+                              k2_floor_guard(hn, false), hname,
+                              k2_floor_list(inits), an, k2_floor_list(evs))
+    if has_driver || terminus { rebuilt } else { k2_floor_wrap(h, rebuilt) }
+  },
   LReturn(h, inner)     => LReturn(h, k2_floor_guard(inner, true)),
   LCall(h, f, args)     => LCall(h, k2_floor_guard(f, false), k2_floor_list(args)),
   LTailCall(h, f, args) => LTailCall(h, k2_floor_guard(f, false), k2_floor_list(args)),
@@ -3420,7 +3440,7 @@ fn k2_floor_guard(e, terminus) = match e {
   LWasiCall(h, n, args) => LWasiCall(h, n, k2_floor_list(args)),
   LFieldLoad(h, rec, o) => LFieldLoad(h, k2_floor_guard(rec, false), o),
   LConvert(h, k, x)     => LConvert(h, k, k2_floor_guard(x, false)),
-  LStateSlotStore(h, o, v) => LStateSlotStore(h, o, k2_floor_guard(v, false)),
+  LStateSlotStore(h, o, v, home) => LStateSlotStore(h, o, k2_floor_guard(v, false), home),
   LEvEntry(n, ev)       => LEvEntry(n, k2_floor_guard(ev, false)),
   LConst(_, _)          => e,
   LLocal(_, _)          => e,
@@ -3541,7 +3561,7 @@ fn world_tag_hash_bytes(s, i, n, h) = {
 // offsets per protocol_resume_state_mutation_substrate.md
 // productive-under-error.
 fn lower_resume_snapshot(handle, val, updates, fields) = {
-  let (prefix, val_name) = resume_commit_prefix(handle, val, updates, fields)
+  let (prefix, val_name) = resume_commit_prefix(handle, val, updates, fields, "")
   LBlock(handle,
     prefix ++ [LReturn(handle, LLocal(handle, val_name))])  // drift-audit: ignore — one-shot stmt-list concat, no loop
 }
@@ -3557,7 +3577,7 @@ fn lower_resume_snapshot(handle, val, updates, fields) = {
 // which IS the install record the driver pushed, and every arm state read
 // is a LIVE load through that record, so the next resume in the same arm
 // sees the committed value).
-fn resume_commit_prefix(handle, val, updates, fields) = {
+fn resume_commit_prefix(handle, val, updates, fields, home) = {
   let val_name = "__resume_val_{int_to_str(handle)}"
   let val_let = LLet(handle, val_name, lower_expr(val))
   let lets = map((upd) =>
@@ -3565,7 +3585,7 @@ fn resume_commit_prefix(handle, val, updates, fields) = {
          lower_expr(state_field_init(upd))), updates)
   let stores = map((upd) =>
     LStateSlotStore(handle, resolve_state_slot_offset(state_field_name(upd), fields),
-                    LLocal(handle, resume_upd_local(upd, handle))), updates)
+                    LLocal(handle, resume_upd_local(upd, handle)), home), updates)
   ([val_let] ++ lets ++ stores, val_name)   // drift-audit: ignore — one-shot stmt-list concat, no loop
 }
 
@@ -4496,7 +4516,7 @@ fn reach_names_expr(expr, acc) = match expr {
   LUnresolvedEvidence(_, _) => acc,
   LFieldLoad(_h, rec, _off) => reach_names_expr(rec, acc),
   LConvert(_h, _, operand)  => reach_names_expr(operand, acc),
-  LStateSlotStore(_h, _o, v) => reach_names_expr(v, acc),
+  LStateSlotStore(_h, _o, v, _) => reach_names_expr(v, acc),
   LConst(_, _)              => acc,
   LLocal(_, _)              => acc,
   LFeedbackPrior(_)         => acc,

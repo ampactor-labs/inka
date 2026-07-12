@@ -708,7 +708,7 @@ fn walk_lemit_expr(expr) = match expr {
   LUnresolvedEvidence(_, ekey) => visit_string(ekey),
   LFieldLoad(_, rec, _)     => walk_lemit_expr(rec),
   LConvert(_, _, operand)   => walk_lemit_expr(operand),
-  LStateSlotStore(_, _, v)  => walk_lemit_expr(v)
+  LStateSlotStore(_, _, v, _) => walk_lemit_expr(v)
 }
 
 fn walk_lemit_list(exprs) = walk_lemit_list_loop(exprs, 0)
@@ -884,7 +884,9 @@ fn emit_one_redrive(hname) = {
     wat_emit("      (if (then\n")
     wat_emit("        (i32.const 0)(global.set $yield_flag)\n")
     wat_emit("        (global.get $yield_k)(local.set $k)\n")
-    wat_emit("        (local.get $__state)(local.get $k)\n")
+    wat_emit("        (global.get $")
+    wat_emit(hname)
+    wat_emit("_state_g)(local.get $k)\n")
     emit_driver_arg_loads(arity, 0)
     wat_emit("        (call $op_")
     wat_emit(hname)
@@ -1035,7 +1037,7 @@ fn singleton_hnames_expr(expr, acc) = match expr {
   LUnresolvedEvidence(_, _) => acc,
   LFieldLoad(_h, rec, _off) => singleton_hnames_expr(rec, acc),
   LConvert(_h, _, operand)  => singleton_hnames_expr(operand, acc),
-  LStateSlotStore(_h, _o, v) => singleton_hnames_expr(v, acc),
+  LStateSlotStore(_h, _o, v, _) => singleton_hnames_expr(v, acc),
   LFnRef(_h, _n, ev)        => singleton_hnames_list(ev, acc),
   LConst(_, _)              => acc,
   LLocal(_, _)              => acc,
@@ -1381,7 +1383,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LWasiCall(_h, _n, args)   => collect_call_vectors_list(args, acc),
   LFieldLoad(_h, rec, _o) => collect_call_vectors_expr(rec, acc),
   LConvert(_h, _, operand) => collect_call_vectors_expr(operand, acc),
-  LStateSlotStore(_h, _o, v) => collect_call_vectors_expr(v, acc),
+  LStateSlotStore(_h, _o, v, _) => collect_call_vectors_expr(v, acc),
   LConst(_, _)          => acc,
   LLocal(_, _)          => acc,
   LFeedbackPrior(_)     => acc,
@@ -1801,7 +1803,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LUnresolvedEvidence(_, _)  => [],
   LFieldLoad(_h, rec, _off)  => collect_fn_emit_records_expr(rec),
   LConvert(_h, _, operand)   => collect_fn_emit_records_expr(operand),
-  LStateSlotStore(_h, _o, v) => collect_fn_emit_records_expr(v),
+  LStateSlotStore(_h, _o, v, _) => collect_fn_emit_records_expr(v),
   // H6: exhaustive LowExpr. Leaves with no fn-containing
   // descendants contribute no records.
   LConst(_, _)               => [],
@@ -2043,7 +2045,7 @@ fn walk_locals_expr(expr, acc) = match expr {
   LUnresolvedEvidence(_, _) => acc,
   LFieldLoad(_h, rec, _off) => walk_locals_expr(rec, acc),
   LConvert(_h, _, operand)  => walk_locals_expr(operand, acc),
-  LStateSlotStore(_h, _o, v) => walk_locals_expr(v, acc),
+  LStateSlotStore(_h, _o, v, _) => walk_locals_expr(v, acc),
   // H6: exhaustive LowExpr. Leaves declare no locals; LUpval,
   // LConst, LLocal, LGlobal are pure reads. New LIR
   // variants with let-bindings inside must add their recursion
@@ -2371,7 +2373,7 @@ fn find_local_handle_expr(name: String, expr) = match expr {
   LEvPerform(_h, _n, _e, _s, a) => find_local_handle_list(name, a),
   LFieldLoad(_h, rec, _off) => find_local_handle_expr(name, rec),
   LConvert(_h, _, operand)  => find_local_handle_expr(name, operand),
-  LStateSlotStore(_h, _o, v) => find_local_handle_expr(name, v),
+  LStateSlotStore(_h, _o, v, _) => find_local_handle_expr(name, v),
   LConst(_, _)              => 0,
   LFeedbackPrior(_)         => 0,
   LGlobal(_, _)             => 0,
@@ -2409,7 +2411,7 @@ fn emit_body_seq(stmts, i) = {
 // own result (local.set / store / decl) or never falls through.
 fn lexpr_leaves_value(e) = match e {
   LLet(_, _, _)            => false,
-  LStateSlotStore(_, _, _) => false,
+  LStateSlotStore(_, _, _, _) => false,
   LDeclareFn(_)            => false,
   LReturn(_, _)            => false,
   _                        => true
@@ -3520,22 +3522,29 @@ fn emit_expr(expr) = match expr {
     wat_emit(")\n")
   },
 
-  LStateSlotStore(_h, slot_offset, value) => {
+  LStateSlotStore(_h, slot_offset, value, home) => {
     // Hβ.first-light.resume-with-state-mutation: store VALUE into the
-    // arm fn's __state record at slot_offset, mutating handler state
-    // across resume calls. __state IS the state record per
-    // protocol_handler_is_state_is_closure_is_evidence.md. The store WIDTH
-    // is the stored value's proven repr (i32.store byte-identical for an
-    // i32 value, Law 7; f64.store for an f64 state field). Negative
-    // slot_offset = lower-time name-resolution miss (productive-under-
-    // error per protocol_resume_state_mutation_substrate.md): emit
-    // the value as drop, no store. Block-position emit produces no
-    // result on the stack.
+    // handler state record at slot_offset, mutating handler state across
+    // resume calls. The record HOME (band B S1): "" reads the arm fn's own
+    // $__state (the install record at arm level — the byte-frozen OneShot
+    // form); a handler name reads the bracket-scoped $<name>_state_g
+    // singleton — the SAME record at arm level (the install bracket set
+    // it) and the ONLY home reachable inside a closure, whose own $__state
+    // is its closure record (writing through it was the measured 32-not-46
+    // silent state loss). The store WIDTH is the stored value's proven
+    // repr. Negative slot_offset = lower-time name-resolution miss
+    // (productive-under-error): emit the value as drop, no store.
     if slot_offset < 0 {
       emit_expr(value)
       wat_emit("    (drop)\n")
     } else {
-      wat_emit("    (local.get $__state)\n")
+      if home == "" {
+        wat_emit("    (local.get $__state)\n")
+      } else {
+        wat_emit("    (global.get $")
+        wat_emit(home)
+        wat_emit("_state_g)\n")
+      }
       emit_expr(value)
       wat_emit("    (")
       wat_emit(repr_wat(repr_of(lookup_ty(lexpr_handle(value)))))

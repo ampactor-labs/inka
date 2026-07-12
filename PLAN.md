@@ -1109,14 +1109,47 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > where install-value delivery makes the resolution visible (the A2
 > resolution mechanism — the no-config singleton tier reading
 > $<hname>_state_g live under the resume-site bracket — is already the
-> dispatch in place). NEXT — M2's remaining mechanism: A4's
-> re-install-in-k (mn-resume-across-install, THE acid distillation — the
-> k2 spine descending into PTee install bodies, the remainder re-
-> establishing the install as a FRESH LHandleWith around the hole;
-> stateless only, stateful = the loud floor
-> Hβ.lower.stateful-install-crossing-yield; needs the PTee lowering
-> factored the way lower_pipe_complete factored PForward — its own
-> refuter pass before the byte) · mn-called-fn-resume-typed (the
+> dispatch in place). **A4 REFUTED AS THE M3 PATH; ITS REFUTER
+> FOUND TWO MEASURED SILENT-WRONG-VALUE BUGS ON THE REAL ROAD — BOTH
+> FIXED SAME-DAY (S1+S2): mn-resume-in-lambda-state=46 (was a silent 32)
+> and mn-resume-across-install=134-loud (was a silent 9).** The A4
+> refuter's verdict, every claim probe-measured through m2: (A) a
+> re-yield NEVER crosses the install bracket — the resume flag-check is
+> immediate post-call, so the redrive fires before any bracket exit;
+> (C) A4's PTee descent never connects to backtrack's REAL shape (twac's
+> install is a LET-INIT in a statement-bearing block — off every spine
+> grammar — and doesn't need to: the install-body terminus always
+> returns flag-CLEAR through the redrive); (F) abort in resumed segments
+> ALREADY resolves dynamically via the no-config singleton tier
+> ($my_catch_state_g under the bracket save/restore — A2's arbitration
+> realized in shipped machinery), and M4-first would ADD an unwind
+> protocol, not remove one; backtrack's full topology
+> (arm→nested-recursive-fn→lambda) probed GREEN pre-cut. THE TWO BUGS:
+> **(S1, the wrong-record home)** — a resume-with-state inside a thunk
+> committed through the LAMBDA's $__state = its own CLOSURE record (the
+> install record never updated; backtrack is stateless, so
+> mn-backtrack-full would have gone green with the corruption LATENT).
+> Fix: LStateSlotStore gained the record-HOME field ("" = the arm's
+> $__state, byte-frozen OneShot — the cross-commit gate re-proved
+> resume-splice/ev5/ev16 byte-identical; else $<hname>_state_g, the
+> bracket-scoped singleton — the same record at arm level and the ONLY
+> home a closure reaches), and the redrive reads its own handler's
+> singleton global (its $__state param is dead). **(S2, the silent
+> install-crossing value loss)** — a yield exiting a DRIVERLESS install
+> in a non-propagating position reached the enclosing arithmetic as a
+> flagged dummy with NO floor anywhere (the loud-floor law violated
+> TODAY): k2_floor_guard's LHandleWith arm now grants body-terminus ONLY
+> when the handler HAS a driver (multishot_ops_of ≠ [], the one
+> decider), wraps a driverless non-propagating install WHOLE in the loud
+> floor, and the guard's ENTRY terminus is true (a fn's return IS a
+> propagation boundary — the caller's check/driver/composer catches, the
+> LReturn rule generalized). mn-resume-across-install re-pins at 29 when
+> A4's NARROWED form lands (driverless-only descent, spine+builder
+> simultaneous, the three emptiness gates — config/state/arm-evs empty;
+> Hβ.lower.stateful-install-crossing-yield the stateful floor). Gates:
+> micros 52/52; ALL FIFTEEN k gates
+> 30/36/40/29/26/16/46/23/9/27/51/0/33/46/134; march ✓✓ FIXED POINT
+> (sha 513e4987…). NEXT — mn-called-fn-resume-typed (the
 > closed-declared-row + R→S gate — M3's capability mark); then M3 THE CUT
 > (classifier fixpoint + capability mark + op binding/E_ResumeAmbiguousOp
 > + choose/enumerate flip + the march TRANSITION + boot/IDE re-pin +

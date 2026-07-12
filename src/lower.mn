@@ -2947,22 +2947,34 @@ fn lower_resume_oneshot(handle, val, state_updates) = {
 // again mid-arm (a called fn's own MultiShot perform — invisible at compile
 // time) traps LOUDLY at the k-call boundary instead of letting the arm
 // compute on a dummy; k2's composition (Hβ.lower.continuation-callboundary-
-// bubble) replaces the trap with the composed k. state_updates ≠ [] is the
-// k3 floor (Hβ.lower.multishot-arm-state-commit: commit against the stable
-// install record, then call).
-fn lower_resume_callk(handle, val, state_updates) =
-  if len(state_updates) == 0 {
-    LBlock(handle, [
-      LLet(handle, "__kr_{int_to_str(handle)}",
-           LCall(handle, LLocal(handle, "__k"), [lower_expr(val)])),
-      LIf(handle, LGlobal(handle, "yield_flag"),
-          [LYield(handle, "", [], LConst(handle, LInt(0)))],
-          [LConst(handle, LInt(0))]),
-      LLocal(handle, "__kr_{int_to_str(handle)}")
-    ])
-  } else {
-    LYield(handle, "", [], LConst(handle, LInt(0)))
-  }
+// bubble) replaces the trap with the composed k. With state updates (band B
+// M1.5, bank Ruling 4): the SAME commit prefix OneShot uses — the val and
+// every update RHS snapshot against pre-update state, then the slot stores
+// COMMIT — runs BEFORE the k-call (the resumed remainder re-enters against
+// committed state; the stores write through the arm's __state = the install
+// record, and arm state reads are LIVE loads through it, so the next resume
+// in the same arm sees the committed value), and the k-call takes the
+// SNAPSHOTTED val local, never a re-lower after the stores (the ev8d
+// 58-not-57 race). One prefix, two tails.
+fn lower_resume_callk(handle, val, state_updates) = {
+  let kr = "__kr_{int_to_str(handle)}"
+  let (prefix, val_name) =
+    if len(state_updates) == 0 { ([], "") }
+    else {
+      let fields = current_state_fields()   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
+      resume_commit_prefix(handle, val, state_updates, fields)
+    }
+  let val_lo =
+    if len(state_updates) == 0 { lower_expr(val) }
+    else { LLocal(handle, val_name) }
+  LBlock(handle, prefix ++ [
+    LLet(handle, kr, LCall(handle, LLocal(handle, "__k"), [val_lo])),
+    LIf(handle, LGlobal(handle, "yield_flag"),
+        [LYield(handle, "", [], LConst(handle, LInt(0)))],
+        [LConst(handle, LInt(0))]),
+    LLocal(handle, kr)
+  ])   // drift-audit: ignore — one-shot stmt-list concat, no loop
+}
 
 // The k1 SPINE: the position that evaluates FIRST in the frame body — a
 // MultiShot op call of ANY arity (band B M1.4 lifted the argless gate; the
@@ -3354,6 +3366,23 @@ fn world_tag_hash_bytes(s, i, n, h) = {
 // offsets per protocol_resume_state_mutation_substrate.md
 // productive-under-error.
 fn lower_resume_snapshot(handle, val, updates, fields) = {
+  let (prefix, val_name) = resume_commit_prefix(handle, val, updates, fields)
+  LBlock(handle,
+    prefix ++ [LReturn(handle, LLocal(handle, val_name))])  // drift-audit: ignore — one-shot stmt-list concat, no loop
+}
+
+// The COMMIT PREFIX — the snapshot semantics shared by BOTH resume
+// disciplines (band B M1.5, bank Ruling 4): the resume value and every
+// update RHS evaluate against the arm's PRE-update state, in source order,
+// into per-site scratch locals; only then do the slot stores COMMIT.
+// Returns (stmts, val_name) — the tail differs per discipline: OneShot
+// returns the snapshotted value (LReturn); MultiShot calls the k with it
+// (commit BEFORE k(v), so the resumed remainder re-enters against
+// committed state — LStateSlotStore writes through the arm's __state,
+// which IS the install record the driver pushed, and every arm state read
+// is a LIVE load through that record, so the next resume in the same arm
+// sees the committed value).
+fn resume_commit_prefix(handle, val, updates, fields) = {
   let val_name = "__resume_val_{int_to_str(handle)}"
   let val_let = LLet(handle, val_name, lower_expr(val))
   let lets = map((upd) =>
@@ -3362,11 +3391,7 @@ fn lower_resume_snapshot(handle, val, updates, fields) = {
   let stores = map((upd) =>
     LStateSlotStore(handle, resolve_state_slot_offset(state_field_name(upd), fields),
                     LLocal(handle, resume_upd_local(upd, handle))), updates)
-  LBlock(handle,
-    [val_let]
-      ++ lets
-      ++ stores
-      ++ [LReturn(handle, LLocal(handle, val_name))])  // drift-audit: ignore — one-shot stmt-list concat, no loop
+  ([val_let] ++ lets ++ stores, val_name)   // drift-audit: ignore — one-shot stmt-list concat, no loop
 }
 
 // The update's minted local — keyed by the field NAME (unique per

@@ -1005,12 +1005,42 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > (strictly additive). Gates: micros 52/52; ALL SIX k gates
 > 30/36/40/29/26/16 (order pinned — swapped packet = 20); march ✓✓ FIXED
 > POINT m2 == m3 (sha 95332740…, zero yield_args refs in the wheel's own
-> module — Law 7 exact). NEXT: M1.5 — the state-commit tail
-> (lower_resume_callk's state_updates ≠ [] floor dissolves into the
-> shared snapshot-prefix builder; commit BEFORE k(v); the snapshot-val
-> law; the CROSS-COMMIT m2.wat diff gate — the one M1 item the m2==m3
-> ratchet cannot arbitrate); M1.6 the "__resume" keyed evidence
-> (dormant); M2 crucible ladder; M3 THE CUT.**
+> module — Law 7 exact). **M1.5 LANDED (same day) — the state-commit tail (bank
+> Ruling 4): mn-arm-state-multishot=46 on the FIRST run** — a MultiShot
+> arm resuming twice with a state update between: the COMMIT PREFIX
+> (resume_commit_prefix, factored whole from lower_resume_snapshot — the
+> val and every update RHS snapshot against PRE-update state into
+> per-site locals, THEN the slot stores commit) is now ONE builder with
+> two tails: OneShot returns the snapshotted value (LReturn — LowIR
+> byte-identical by construction), MultiShot commits BEFORE k(v) and the
+> k-call takes the SNAPSHOTTED val local, never a re-lower after the
+> stores (the ev8d 58-not-57 race — the crucible pins it: a re-lowered
+> val computes 53, never 46). The stores write through the arm's __state
+> = the install record the driver pushed, and arm state reads are LIVE
+> LUpval loads through that record, so the second resume sees the first's
+> committed value (10 → commit 17 → k(10)=11; live 17 → k(17)=18;
+> 11+18+17=46). The resume-callk floor for state_updates ≠ [] is
+> DISSOLVED. Gates: micros 52/52; ALL SEVEN k gates 30/36/40/29/26/16/46;
+> the CROSS-COMMIT byte gate (the one M1 item the m2==m3 ratchet cannot
+> arbitrate — both generations run the same changed compiler): the
+> pre-M1.5 m2 and the rebuilt m2 compile mn-resume-splice/mn-ev5/mn-ev16
+> to BYTE-IDENTICAL outputs (36/46/41KB, cmp-equal — the prefix factor
+> proven pure on the OneShot path); march ✓✓ FIXED POINT m2 == m3 (sha
+> e7d322c0…). Instrument lesson: the byte gate's first run compared
+> 0-byte files as "identical" (wrong wasmtime flags + discarded stderr)
+> — source tools/wt-env.sh for the canonical wt_run, and gate the gate
+> (a size floor before cmp). NEXT: M1.6 — the "__resume" keyed-evidence
+> machinery (Ruling 2 as amended by A3: the arm is the one WRITER at its
+> interior effectful call sites — sst_ appends [key="__resume"][ev=__k];
+> resume resolution = lexical __k param (Tier-1, the k1 fast path, KEPT)
+> → the "__resume" keyed scan (the general tier); DORMANT pre-cut — no
+> wheel arm is MultiShot, zero entries, bytes identical; the capability
+> MARK on contains-resume fns/closures lands AT THE CUT in the same
+> commit as the classifier); then M2's remaining ladder
+> (mn-nested-choose · mn-resume-in-lambda · mn-uzero-abort ·
+> mn-resume-across-install · mn-dynamic-abort-in-k ·
+> mn-uzero-through-frames · mn-called-fn-resume-typed ·
+> mn-option-protocol); M3 THE CUT.**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

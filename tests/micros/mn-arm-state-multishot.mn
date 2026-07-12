@@ -1,0 +1,25 @@
+// band B M1.5 gate — the state-commit tail (bank Ruling 4): a MultiShot
+// arm resuming twice with a state update between. The commit prefix (val +
+// update RHS snapshot against PRE-update state, then the slot stores) runs
+// BEFORE the k-call; arm state reads are LIVE loads through the install
+// record, so the second resume sees the first's committed value.
+//   s = 10. a = resume(s) with s = s + 7: snapshot val 10, commit s = 17,
+//   k(10) = 11 → a = 11. b = resume(s): live s = 17, k(17) = 18 → b = 18.
+//   arm = a + b + s = 11 + 18 + 17 → exit 46.
+// The pin: a val re-lowered AFTER the stores (the ev8d race) computes
+// a = k(17) = 18 → 53, never 46.
+effect Choice {
+  pick() -> Int
+}
+
+handler counter with s = 10 {
+  pick() => {
+    let a = resume(s) with s = s + 7
+    let b = resume(s)
+    a + b + s
+  }
+}
+
+fn body() with Choice = pick() + 1
+
+fn main() = { body() } ~> counter

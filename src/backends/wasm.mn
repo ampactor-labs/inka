@@ -599,9 +599,10 @@ fn walk_lemit_expr(expr) = match expr {
   // band B k1: a yield reads the yield globals and interns its op key (the
   // driver's compare reads the SAME offset); descend the k record. The floor
   // form ("" op) interns the empty string — harmless, gated modules only.
-  LYield(_, op_name, k) => {
+  LYield(_, op_name, args, k) => {
     visit_yield()
     visit_string(op_name)
+    walk_lemit_list(args)
     walk_lemit_expr(k)
   },
   // band B M1.3: a k2 boundary needs the yield machinery (globals + the
@@ -669,7 +670,7 @@ fn walk_lemit_expr(expr) = match expr {
     // reads the yield globals and compares the interned op keys — register
     // both through the same channels (the one decider multishot_ops_of;
     // its emit twin reads it identically).
-    each((op) => {
+    each(((op, _)) => {
       visit_yield()
       visit_string(op)
     }, multishot_ops_of(hname))
@@ -795,6 +796,37 @@ fn emit_yield_globals() with WasmOut = {
   wat_emit("  (global $yield_flag (mut i32) (i32.const 0))\n")
   wat_emit("  (global $yield_op (mut i32) (i32.const 0))\n")
   wat_emit("  (global $yield_k (mut i32) (i32.const 0))\n")
+  wat_emit("  (global $yield_args (mut i32) (i32.const 0))\n")
+}
+
+// band B M1.4 — one arg of the yield's transient record: evaluate (the
+// emission may clobber every shared scratch), park the VALUE in $state_tmp
+// (nothing runs between the set and the store), write through the per-site
+// record ptr.
+fn emit_yield_arg_stores(args, h, i) = {
+  if i >= len(args) { () }
+  else {
+    emit_expr(list_index(args, i))
+    wat_emit("    (local.set $state_tmp)\n")
+    wat_emit("    (local.get $yargs_")
+    wat_emit(int_to_str(h))
+    wat_emit(")(local.get $state_tmp)(i32.store offset=")
+    wat_emit(int_to_str(4 * i))
+    wat_emit(")\n")
+    emit_yield_arg_stores(args, h, i + 1)
+  }
+}
+
+// band B M1.4 — the driver's args push: one load per declared arm arg, read
+// once from the transient $yield_args record at fixed word offsets.
+fn emit_driver_arg_loads(n, i) = {
+  if i >= n { () }
+  else {
+    wat_emit("        (global.get $yield_args)(i32.load offset=")
+    wat_emit(int_to_str(4 * i))
+    wat_emit(")\n")
+    emit_driver_arg_loads(n, i + 1)
+  }
 }
 
 // The composer pair + the tag reader (band B M1.2, the k2/k3 bank Ruling 1) —
@@ -904,7 +936,7 @@ fn singleton_hnames_expr(expr, acc) = match expr {
     singleton_hnames_list(ev, singleton_hnames_list(caps, singleton_hnames_list(body, acc))),
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     singleton_hnames_list(ev, singleton_hnames_list(caps, singleton_hnames_list(body, acc))),
-  LYield(_h, _op, k)        => singleton_hnames_expr(k, acc),
+  LYield(_h, _op, args, k)  => singleton_hnames_expr(k, singleton_hnames_list(args, acc)),
   LKExtend(_h, k)           => singleton_hnames_expr(k, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => singleton_hnames_list(body, acc),
   LBlock(_h, stmts)         => singleton_hnames_list(stmts, acc),
@@ -1256,7 +1288,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_call_vectors_list(body,
       collect_call_vectors_list(caps, collect_call_vectors_list(ev, acc))),
-  LYield(_h, _op, k)    => collect_call_vectors_expr(k, acc),
+  LYield(_h, _op, args, k) => collect_call_vectors_expr(k, collect_call_vectors_list(args, acc)),
   LKExtend(_h, k)       => collect_call_vectors_expr(k, acc),
   LFnRef(_h, _n, ev)    => collect_call_vectors_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_call_vectors_list(body, acc),
@@ -1650,7 +1682,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
       ++ collect_fn_emit_records(captures)
       ++ collect_fn_emit_records(ev)
   },
-  LYield(_h, _op, k) => collect_fn_emit_records_expr(k),
+  LYield(_h, _op, args, k) => collect_fn_emit_records(args) ++ collect_fn_emit_records_expr(k),
   LKExtend(_h, k)    => collect_fn_emit_records_expr(k),
   LDeclareFn(LFn(name, _arity, param_names, body, _row, fence)) => {
     [(name, param_names, body, fence)]
@@ -1861,7 +1893,13 @@ fn walk_locals_expr(expr, acc) = match expr {
   LMakeClosure(_, _, _, _)         => acc,  // function boundary — its locals are its own
   LFnRef(_h, _n, ev)        => walk_locals_list(ev, acc),  // record reuses $state_tmp; ev forwards declare no locals
   LMakeContinuation(_, _, _, _, _, _, _) => acc,  // resume_fn boundary — its locals are its own (H7)
-  LYield(_, _, k)           => walk_locals_expr(k, acc),  // k = the record boundary above; the yield's own emit is globals + consts, zero locals
+  LYield(h, _, args, k)     => {
+    // k = the record boundary above. An args-bearing yield parks its
+    // transient record ptr in a per-site local — the only slot inner arg
+    // emissions (which clobber every shared scratch) cannot touch.
+    let base = walk_locals_expr(k, walk_locals_list(args, acc))
+    if len(args) == 0 { base } else { ["yargs_{int_to_str(h)} i32"] ++ base }
+  },
   LKExtend(_, k)            => walk_locals_expr(k, acc),  // same boundary rule; the extend's own emit is a call + a const
   LDeclareFn(_)                    => acc,  // module-level fn declaration — its body has its own locals
   LBlock(_h, stmts)         => walk_locals_list(stmts, acc),
@@ -2199,7 +2237,10 @@ fn find_local_handle_expr(name: String, expr) = match expr {
   LMakeClosure(_, _, _, _)         => 0,
   LFnRef(_h, _n, ev)        => find_local_handle_list(name, ev),
   LMakeContinuation(_, _, _, _, _, _, _) => 0,
-  LYield(_h, _op, k)        => find_local_handle_expr(name, k),
+  LYield(_h, _op, args, k)  => {
+    let ah = find_local_handle_list(name, args)
+    if ah != 0 { ah } else { find_local_handle_expr(name, k) }
+  },
   LKExtend(_h, k)           => find_local_handle_expr(name, k),
   LDeclareFn(_)                    => 0,
   LLet(_h, _n, inner)       => find_local_handle_expr(name, inner),
@@ -2847,12 +2888,14 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (local.get $state_tmp)\n")
   },
 
-  LYield(h, op_name, k_expr) => {
-    // band B k1 — the MultiShot unwind. The REAL form (k = the reified
-    // remainder record): park k in $yield_k, the interned op key in
+  LYield(h, op_name, args, k_expr) => {
+    // band B k1/M1.4 — the MultiShot unwind. The REAL form (k = the reified
+    // remainder record): park k in $yield_k, the op's args (if any) as the
+    // transient word-slot record in $yield_args, the interned op key in
     // $yield_op, raise $yield_flag, and return a width-honest dummy through
     // the frame's own result type (h = the REWRITTEN FRAME's tail node; a
-    // Float-tailed frame keeps its f64 ft — never the perform's width).
+    // Float-tailed frame keeps its f64 ft — never the perform's width). An
+    // argless yield's bytes are unchanged (Ruling 3: strictly additive).
     // The FLOOR form (k = LConst 0) is the loud comment-marked refusal:
     // off-spine perform / off-spine k2 boundary / arm-state / re-yield —
     // k2/k3's named homes.
@@ -2862,6 +2905,24 @@ fn emit_expr(expr) = match expr {
       _ => {
         emit_expr(k_expr)
         wat_emit("    (global.set $yield_k)\n")
+        if len(args) > 0 {
+          // The args record: [arg0][arg1]… at fixed word offsets, consumed
+          // once by the matching driver dispatch (k is durable; args are
+          // not). The record ptr parks in the per-site $yargs local — every
+          // shared scratch is clobberable by an inner arg emission; each
+          // arg VALUE parks in $state_tmp only after its own emission
+          // completes. A non-word op arg meets the arm's loud call
+          // mismatch (the callsite-result-width family), never a silent
+          // truncation.
+          emit_alloc(4 * len(args), "state_tmp")
+          wat_emit("    (local.get $state_tmp)(local.set $yargs_")
+          wat_emit(int_to_str(h))
+          wat_emit(")\n")
+          emit_yield_arg_stores(args, h, 0)
+          wat_emit("    (local.get $yargs_")
+          wat_emit(int_to_str(h))
+          wat_emit(")(global.set $yield_args)\n")
+        }
         wat_emit("    (i32.const ")
         wat_emit(int_to_str(string_offset(op_name)))
         wat_emit(") (global.set $yield_op)\n")
@@ -3140,7 +3201,7 @@ fn emit_expr(expr) = match expr {
       wat_emit("    (local.set $__hres_{hs})\n")
       wat_emit("    (block $ydone_{hs} (loop $ydrive_{hs}\n")   // drift-audit: ignore — WAT instruction text (the emit target's vocabulary), not Mentl control flow
       wat_emit("      (global.get $yield_flag)(i32.eqz)(br_if $ydone_{hs})\n")
-      each((op) => {
+      each(((op, arity)) => {
         wat_emit("      (global.get $yield_op)(i32.const ")
         wat_emit(int_to_str(string_offset(op)))
         wat_emit(")(i32.eq)\n")
@@ -3149,7 +3210,13 @@ fn emit_expr(expr) = match expr {
         wat_emit("        (global.get $yield_k)(local.set $__yk_{hs})\n")
         wat_emit("        (local.get $")
         wat_emit(local_name)
-        wat_emit(")(local.get $__yk_{hs})(call $op_{hname}_{op})\n")
+        wat_emit(")(local.get $__yk_{hs})\n")
+        // band B M1.4 — the op's args, read once from the transient
+        // $yield_args record at fixed word offsets (the arity is the arm
+        // decl's, read live off the same pair the dispatch keys on); the
+        // arm's signature has carried (__k, args...) since k1.
+        emit_driver_arg_loads(arity, 0)
+        wat_emit("        (call $op_{hname}_{op})\n")
         wat_emit("        (local.set $__hres_{hs})\n")
         wat_emit("        (br $ydrive_{hs})\n")
         wat_emit("      ))\n")
@@ -4433,7 +4500,7 @@ fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_cmp_agg_tys_list(body,
       collect_cmp_agg_tys_list(caps, collect_cmp_agg_tys_list(ev, acc))),
-  LYield(_h, _op, k)     => collect_cmp_agg_tys_expr(k, acc),
+  LYield(_h, _op, args, k) => collect_cmp_agg_tys_expr(k, collect_cmp_agg_tys_list(args, acc)),
   LKExtend(_h, k)        => collect_cmp_agg_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_cmp_agg_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_cmp_agg_tys_list(body, acc),
@@ -4588,7 +4655,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_eq_product_tys_list(body,
       collect_eq_product_tys_list(caps, collect_eq_product_tys_list(ev, acc))),
-  LYield(_h, _op, k)     => collect_eq_product_tys_expr(k, acc),
+  LYield(_h, _op, args, k) => collect_eq_product_tys_expr(k, collect_eq_product_tys_list(args, acc)),
   LKExtend(_h, k)        => collect_eq_product_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_eq_product_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_eq_product_tys_list(body, acc),
@@ -5119,7 +5186,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_show_tys_list(body,
       collect_show_tys_list(caps, collect_show_tys_list(ev, acc))),
-  LYield(_h, _op, k)     => collect_show_tys_expr(k, acc),
+  LYield(_h, _op, args, k) => collect_show_tys_expr(k, collect_show_tys_list(args, acc)),
   LKExtend(_h, k)        => collect_show_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_show_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_show_tys_list(body, acc),
@@ -5391,7 +5458,7 @@ fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_hash_tys_list(body,
       collect_hash_tys_list(caps, collect_hash_tys_list(ev, acc))),
-  LYield(_h, _op, k)     => collect_hash_tys_expr(k, acc),
+  LYield(_h, _op, args, k) => collect_hash_tys_expr(k, collect_hash_tys_list(args, acc)),
   LKExtend(_h, k)        => collect_hash_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_hash_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_hash_tys_list(body, acc),

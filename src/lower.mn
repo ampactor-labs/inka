@@ -145,13 +145,14 @@ fn handler_decl_of(hname) =
     None => None
   }
 
-// The handler's MultiShot-classified op names, projected live from its decl
-// arms + the op scheme's disc (band B k1 — the ONE decider walk_locals and
-// the LHandleWith emit both read). [] for an unknown/anonymous name, so an
-// ungated install keeps the existing emission byte-for-byte (Law 7); the
-// anonymous-install-of-a-MultiShot-handler form is the named floor
-// Hβ.lower.multishot-anonymous-install (its yield trips the _start backstop,
-// loud, never a silent dummy).
+// The handler's MultiShot-classified ops as (name, arity) pairs, projected
+// live from its decl arms + the op scheme's disc (band B k1/M1.4 — the ONE
+// decider walk_locals, walk_lemit, and the LHandleWith emit all read; the
+// arity drives the driver's $yield_args loads). [] for an unknown/anonymous
+// name, so an ungated install keeps the existing emission byte-for-byte
+// (Law 7); the anonymous-install-of-a-MultiShot-handler form is the named
+// floor Hβ.lower.multishot-anonymous-install (its yield trips the _start
+// backstop, loud, never a silent dummy).
 fn multishot_ops_of(hname) =
   match handler_decl_of(hname) {
     Some((_, _, arms)) =>
@@ -160,7 +161,7 @@ fn multishot_ops_of(hname) =
              MultiShot => true,
              _         => false
            })
-        |> map(handler_arm_op_name),
+        |> map((a) => (handler_arm_op_name(a), handler_arm_arity(a))),
     None => []
   }
 
@@ -284,16 +285,23 @@ type LowExpr
   // bare LGlobal (lower_callee_ref collapses an LFnRef callee).
   | LFnRef(Int, String, List)                    // handle, fn-name, ev_slots
   // The YIELD of a MultiShot perform (band B, continuation-reification k1):
-  // (frame_node, op_name, k_expr). frame_node = the REWRITTEN FRAME's tail
-  // node — the yield's dummy returns through the frame's own result width
-  // (never the perform's; a Float-tailed frame keeps its f64 ft). k_expr =
-  // LMakeContinuation (the real yield: k → $yield_k, interned op →
-  // $yield_op, 1 → $yield_flag, width-aware dummy) or LConst(_, LInt(0))
-  // (the LOUD floor — off-spine perform / arm-state / re-yield: a
+  // (frame_node, op_name, args, k_expr). frame_node = the REWRITTEN
+  // FRAME's tail node — the yield's dummy returns through the frame's own
+  // result width (never the perform's; a Float-tailed frame keeps its f64
+  // ft). args (band B M1.4, bank Ruling 3) = the op's lowered arg exprs,
+  // evaluated at the yield site in the enclosing frame (the
+  // already-computed prefix) and shipped as a TRANSIENT heap record in
+  // $yield_args, consumed once by the matching driver dispatch inside the
+  // same unwind — k is durable (immutable, called N times, composed onto);
+  // args are not. [] on every floor and on argless yields (an argless
+  // yield's emitted bytes are unchanged). k_expr = LMakeContinuation (the
+  // real yield: k → $yield_k, interned op → $yield_op, 1 → $yield_flag,
+  // width-aware dummy) or LConst(_, LInt(0)) (the LOUD floor — off-spine
+  // perform / off-spine k2 boundary / arm-state / re-yield: a
   // comment-marked unreachable, censusable; k2/k3's named homes
   // Hβ.lower.continuation-callboundary-bubble /
   // Hβ.lower.multishot-reyield-composition / .multishot-arm-state-commit).
-  | LYield(Int, String, LowExpr)
+  | LYield(Int, String, List, LowExpr)
   // band B M1.3 — the k2 call-boundary's yield path (the bank Ruling 5): a
   // non-tail can-yield call returned with $yield_flag still raised, so this
   // frame's remainder composes onto the unwinding k and the unwind
@@ -474,7 +482,7 @@ fn lexpr_handle(e) with Pure = match e {
   LMakeClosure(h, _, _, _) => h,
   LFnRef(h, _, _)         => h,
   LMakeContinuation(h, _, _, _, _, _, _) => h,
-  LYield(h, _, _)         => h,
+  LYield(h, _, _, _)      => h,
   LKExtend(h, _)          => h,
   LDeclareFn(_)            => 0,
   LIf(h, _, _, _)         => h,
@@ -1528,7 +1536,7 @@ fn lower_perform_dispatch(handle, op_name, lo_args) =
     // if/match/nested-call interior, or args-bearing) — the LOUD floor,
     // k2's composition home. Every OneShot/Either op falls through to the
     // three tiers untouched (Law 7: the disc is a pure env read).
-    MultiShot => LYield(handle, op_name, LConst(handle, LInt(0))),
+    MultiShot => LYield(handle, op_name, [], LConst(handle, LInt(0))),
     _ => lower_perform_tiers(handle, op_name, lo_args)
   }
 
@@ -2948,21 +2956,21 @@ fn lower_resume_callk(handle, val, state_updates) =
       LLet(handle, "__kr_{int_to_str(handle)}",
            LCall(handle, LLocal(handle, "__k"), [lower_expr(val)])),
       LIf(handle, LGlobal(handle, "yield_flag"),
-          [LYield(handle, "", LConst(handle, LInt(0)))],
+          [LYield(handle, "", [], LConst(handle, LInt(0)))],
           [LConst(handle, LInt(0))]),
       LLocal(handle, "__kr_{int_to_str(handle)}")
     ])
   } else {
-    LYield(handle, "", LConst(handle, LInt(0)))
+    LYield(handle, "", [], LConst(handle, LInt(0)))
   }
 
-// The k1 SPINE: the position that evaluates FIRST in the frame body — a bare
-// argless MultiShot op call, possibly wrapped in a left-BinOp chain or a
+// The k1 SPINE: the position that evaluates FIRST in the frame body — a
+// MultiShot op call of ANY arity (band B M1.4 lifted the argless gate; the
+// args ride the yield as the $yield_args packet, evaluated in the frame
+// before the unwind), possibly wrapped in a left-BinOp chain or a
 // statement-free brace block. op-ness + cardinality are ONE env read
 // (op_resume_discipline returns MultiShot only for a genuine MultiShot op;
-// every non-op floors OneShot). An args-bearing MultiShot perform is NOT
-// spine (it falls through to lower_perform_dispatch's loud floor — k3's
-// $yield_args packet).
+// every non-op floors OneShot).
 fn ms_op_of_call(node) = {
   let N(b, _, _) = node
   match b {
@@ -2970,12 +2978,10 @@ fn ms_op_of_call(node) = {
       let N(fb, _, _) = f
       match fb {
         NExpr(VarRef(name)) =>
-          if len(args) == 0 {
-            match op_resume_discipline(name) {
-              MultiShot => Some(name),
-              _         => None
-            }
-          } else { None },
+          match op_resume_discipline(name) {
+            MultiShot => Some((name, args)),
+            _         => None
+          },
         _ => None
       }
     },
@@ -2992,9 +2998,9 @@ fn ms_op_of_call(node) = {
 // divergence bug at the split.
 fn ms_spine_op(node) =
   match ms_op_of_call(node) {
-    Some(op) => {
+    Some((op, args)) => {
       let N(_, _, ph) = node
-      Some((op, ph))
+      Some((op, ph, args))
     },
     None => {
       let N(b, _, _) = node
@@ -3121,9 +3127,13 @@ fn reify_frame_k(body_node, ph) = {
 //   else — verbatim lowering (the byte-identical path, Law 7).
 fn lower_body_reified(body_node) =
   match ms_spine_op(body_node) {
-    Some((op_name, ph)) => {
+    Some((op_name, ph, arg_nodes)) => {
       let N(_, _, frame_h) = body_node
-      LYield(frame_h, op_name, reify_frame_k(body_node, ph))
+      // The op's args evaluate at the yield site, in the ENCLOSING frame —
+      // the already-computed prefix; the k's hole replaces the whole
+      // perform call, so the remainder never re-evaluates them.
+      let lo_args = map(lower_expr, arg_nodes)
+      LYield(frame_h, op_name, lo_args, reify_frame_k(body_node, ph))
     },
     None => match k2_spine_call(body_node) {
       Some(spine_node) => {
@@ -3208,7 +3218,7 @@ fn k2_floor_guard(e, terminus) = match e {
   LMakeClosure(h, fn_, caps, ev)  => LMakeClosure(h, fn_, k2_floor_list(caps), k2_floor_list(ev)),
   LMakeContinuation(h, fn_, caps, ev, si, rs, wt) =>
     LMakeContinuation(h, fn_, k2_floor_list(caps), k2_floor_list(ev), si, rs, wt),
-  LYield(h, op, k)      => LYield(h, op, k2_floor_guard(k, false)),
+  LYield(h, op, args, k) => LYield(h, op, k2_floor_list(args), k2_floor_guard(k, false)),
   LKExtend(h, k)        => LKExtend(h, k2_floor_guard(k, false)),
   LFnRef(h, n, ev)      => LFnRef(h, n, k2_floor_list(ev)),
   LDeclareFn(fn_)       => LDeclareFn(fn_),
@@ -3264,7 +3274,7 @@ fn k2_floor_wrap(h, s) = {
   LBlock(h, [
     LLet(h, kf, s),
     LIf(h, LGlobal(h, "yield_flag"),
-        [LYield(h, "", LConst(h, LInt(0)))],
+        [LYield(h, "", [], LConst(h, LInt(0)))],
         [LConst(h, LInt(0))]),
     LLocal(h, kf)
   ])
@@ -4247,7 +4257,7 @@ fn reach_names_expr(expr, acc) = match expr {
     reach_names_list(ev, reach_names_list(caps, reach_names_list(body, acc))),
   // A yield reaches through its k record (the __k fn's body + captures + ev);
   // the ARM reaches through the install's arm groups, the existing channel.
-  LYield(_h, _op, k)        => reach_names_expr(k, acc),
+  LYield(_h, _op, args, k)  => reach_names_expr(k, reach_names_list(args, acc)),
   // A k2 boundary reaches through its frame_k record the same way.
   LKExtend(_h, k)           => reach_names_expr(k, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => reach_names_list(body, acc),

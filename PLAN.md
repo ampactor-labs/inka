@@ -978,11 +978,39 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > sha d866ee4d…; ZERO __kf_ parks and ZERO $__k_extend calls in the
 > wheel's own module — the prove-absence gate false wheel-wide, Law 7
 > exact). zsh no-split re-paid a THIRD time (`set -- $spec` — spell the
-> argv, never rely on splitting). NEXT: M1.4 — LYield args (the ~18-site
-> lockstep) + $yield_args + the driver args push + lift ms_op_of_call's
-> argless gate; then M1.5 state-commit tail (cross-commit m2.wat diff
-> gate); M1.6 the "__resume" keyed evidence (dormant); M2 crucible
-> ladder; M3 THE CUT.**
+> argv, never rely on splitting). **M1.4 LANDED (same day) — LYield args
+> (bank Ruling 3): mn-choice-args=16 on the FIRST run** — pick(3, 7)
+> rides the yield as the transient $yield_args record (the 4th global;
+> word slots at fixed offsets, minted at the yield site with the
+> clobber-safe parking discipline: the record ptr in the per-site
+> $yargs_<h> local — the only slot inner arg emissions can't touch — and
+> each arg VALUE parked in $state_tmp only after its own emission
+> completes); the DRIVER reads each op's arity LIVE off multishot_ops_of
+> (now (name, arity) pairs via the typed handler_arm_arity projection —
+> one decider, three readers) and pushes (record, k, arg0..argN-1); the
+> arm's signature has carried (__k, args...) since k1, so nothing changed
+> at the arm. ms_op_of_call's argless gate LIFTED — any-arity MultiShot
+> performs ride the k1 spine, args lowered in the ENCLOSING frame (the
+> already-computed prefix; the k's hole swallows the whole perform, so
+> the remainder never re-evaluates them). The LYield arity lockstep: 21
+> sites across lower.mn + wasm.mn (decl, 5 mints — all four floors carry
+> [], the k1 real mint carries the lowered args — and ~15 walkers; the
+> one near-miss caught in review: collect_fn_emit_records returns a LIST,
+> so its args walk CONCATENATES, never sequences-and-drops). k is durable
+> (immutable, called N times, composed onto); args are transient
+> (consumed once by the matching driver dispatch inside the same unwind).
+> A non-word op arg meets the arm's loud call mismatch (the
+> callsite-result-width family) — never a silent truncation; the f64
+> packet slot is band-D width work. Argless yields byte-identical
+> (strictly additive). Gates: micros 52/52; ALL SIX k gates
+> 30/36/40/29/26/16 (order pinned — swapped packet = 20); march ✓✓ FIXED
+> POINT m2 == m3 (sha 95332740…, zero yield_args refs in the wheel's own
+> module — Law 7 exact). NEXT: M1.5 — the state-commit tail
+> (lower_resume_callk's state_updates ≠ [] floor dissolves into the
+> shared snapshot-prefix builder; commit BEFORE k(v); the snapshot-val
+> law; the CROSS-COMMIT m2.wat diff gate — the one M1 item the m2==m3
+> ratchet cannot arbitrate); M1.6 the "__resume" keyed evidence
+> (dormant); M2 crucible ladder; M3 THE CUT.**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

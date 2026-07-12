@@ -905,6 +905,7 @@ fn state_field_init(f: {init: N, name: String}) -> N = f.init
 // The handler-arm record's typed projection ({args, body, op_name},
 // minted in parse_handler_arm) — same pin, same discipline.
 fn handler_arm_op_name(a: {args: List, body: N, op_name: String}) -> String = a.op_name
+fn handler_arm_arity(a: {args: List, body: N, op_name: String}) -> Int = len(a.args)
 
 // The arm's body node — the typed projection draw_op_edges folds the resume
 // Usage grade over (the arm-record type only resolves in a scope that closed

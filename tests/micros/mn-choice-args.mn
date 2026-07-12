@@ -1,0 +1,23 @@
+// band B M1.4 gate — the args-bearing MultiShot perform (bank Ruling 3).
+// pick(3, 7) rides the yield as the transient $yield_args record; the
+// driver reads the arm's declared arity live and pushes (record, k, 3, 7);
+// the arm binds lo/hi from the packet and resumes twice through the k.
+//   a = resume(3) → 3 + 1 = 4; b = resume(7) → 8; arm = a*2 + b → exit 16.
+// Broken paths this pins: the pre-M1.4 argless gate floors the perform
+// (trap, never 16); swapped arg offsets bind lo=7/hi=3 → 8*2 + 4 = 20 —
+// the asymmetric arm pins packet order.
+effect Choice {
+  pick(lo, hi) -> Int
+}
+
+handler twice {
+  pick(lo, hi) => {
+    let a = resume(lo)
+    let b = resume(hi)
+    a * 2 + b
+  }
+}
+
+fn body() with Choice = pick(3, 7) + 1
+
+fn main() = { body() } ~> twice

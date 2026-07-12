@@ -920,16 +920,69 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > preserving $yield_op → drained 25) AND through the m2 tier: rungs 8/8,
 > micros 52/52, mn-multishot=30 + twice-handler-nonidentity=36 +
 > twice-capture=40, the trio + table slot 28 + $ft2 censused in
-> mn-multishot's emitted module, wasm-tools validates. DORMANT by
-> construction until M1.3 wires the boundary checks. Instrument lesson
+> mn-multishot's emitted module, wasm-tools validates. Instrument lesson
 > re-paid: the first census greps returned 0 on a module that HELD the
 > trio (BRE `\$`-quoting) — grep -F before the claim; and mn-multishot is
 > NOT in the 52-micro baseline, so the k gates are run explicitly, never
-> assumed covered. NEXT: M1.3 — the k2 call-boundary check (prove-absence
-> gate; all THREE LSuspend mints: lower_call_default, pipe completion,
-> pipe splice) + dual-residency split + re-install-in-k; then M1.4 LYield
-> args; M1.5 state-commit tail (cross-commit m2.wat diff gate); M1.6 the
-> "__resume" keyed evidence (dormant); M2 crucible ladder; M3 THE CUT.**
+> assumed covered (they enter the baseline only when a TRANSITION re-pins
+> boot with the k machinery — the boot tier compiles them wrong until
+> then, the k1-era precedent). **M1.3 LANDED (same day) — the k2
+> call-boundary check + the dual-residency split (bank Ruling 5 + A1):
+> THE BUBBLE IS ALIVE — mn-k2-frame=29 (a yield composing across an
+> intermediate frame) and mn-k2-pipe=26 (a `|>` chain crossing a yield,
+> composition ORDER pinned: swapped composes to 16), both green on the
+> FIRST run through the M1.3 m2; M1.2's pair went dormant→exercised in
+> one increment ($__k_extend ×2 in the artifact = the boundary + the
+> composer's self-re-compose arm).** The mechanism as built: can_yield is
+> the A1 PROVE-ABSENCE gate — check UNLESS the row proves no MultiShot op
+> — three tiers, cheapest first: the global short-circuit
+> (ls_program_may_yield: zero MS-graded ops declared ⇒ nothing can yield,
+> one stmts walk at lower_program over the LIVE EffectDeclKind +
+> EffectOpScheme env edges — no side registry), the name tier (leaf row ∪
+> flow-closure — the SAME union derive_ev_slots threads, so an effect
+> handled inside the callee subtracts out and the gate goes quiet), the
+> tail tier (closed/chased-bound rows PROVE; free tails, ¬/∩ forms, and
+> untyped callees CHECK — the one-global.get price of the A1 hole). The
+> spine split (k2_spine_call: binop-left · stmt-free-block ·
+> PForward-left + the bare-VarRef stage, whose LSuspend carries the PIPE
+> node's handle so mint and wrap agree on the key BY CONSTRUCTION; PTee
+> is a boundary, never descended — the driver guards its body, and A4's
+> re-install-in-k rides mn-resume-across-install at M2) finds the
+> first-evaluated can-yield call; ONE remainder builder (k_remainder =
+> k1_remainder + the hole-name param + the PForward arm over
+> lower_pipe_complete, factored whole from the pipe) builds BOTH
+> residencies — the k fn (hole __resume_in; reify_frame_k, now SHARED by
+> k1 and k2) and the inline else (hole = the parked __kr_<ph>). The check
+> block is PURE DATAFLOW — LBlock[LLet(__kr, S); LIf(flag,
+> [LKExtend(frame_k)], [C_inline])] — the then-value is the frame's
+> width-honest dummy with $yield_flag AND $yield_op untouched, flowing
+> through the SAME value position the fast path uses: a `(return)` would
+> skip an install's driver bracket (the design flaw caught in trace
+> before a byte landed — "the check block holds BOTH" was the bank's
+> exact sentence, read right the second time). LKExtend = the one new
+> LowIR node (~15 lockstep walker arms across lower.mn + wasm.mn, the
+> TCont precedent); frame_k mints INSIDE the then-branch — zero fast-path
+> allocation. The INVARIANT walk (k2_floor_guard at all FOUR seams —
+> fn/lambda/thunk/arm — plus inside reify_frame_k): every remaining
+> non-tail can-yield LSuspend parks and traps LOUDLY at a raised flag
+> (the comment-marked floor, censusable); every skip is a real boundary
+> elsewhere — tail==true → the caller's check; install-body terminus →
+> the driver's own loop (wrapping there would trap every owned yield
+> before its driver); under LReturn → the fn exit IS the propagation;
+> __kr_ parks → already composed; LFn bodies → each frame guards itself.
+> Degradation is SOUND by construction: an unwalkable spine form yields
+> the identity remainder ⇒ no wrap ⇒ the flag propagates to the caller's
+> boundary — never a wrong remainder. Gates, all self-confirmed through
+> the M1.3 m2: rungs 8/8 + micros 52/52; the five k gates 30/36/40 (k1
+> held) + 29 + 26; march **✓✓ FIXED POINT m2 == m3** (cmp byte-identical,
+> sha d866ee4d…; ZERO __kf_ parks and ZERO $__k_extend calls in the
+> wheel's own module — the prove-absence gate false wheel-wide, Law 7
+> exact). zsh no-split re-paid a THIRD time (`set -- $spec` — spell the
+> argv, never rely on splitting). NEXT: M1.4 — LYield args (the ~18-site
+> lockstep) + $yield_args + the driver args push + lift ms_op_of_call's
+> argless gate; then M1.5 state-commit tail (cross-commit m2.wat diff
+> gate); M1.6 the "__resume" keyed evidence (dormant); M2 crucible
+> ladder; M3 THE CUT.**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

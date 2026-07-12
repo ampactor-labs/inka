@@ -1,0 +1,29 @@
+// band B M1.3 gate — the k2 boundary at a `|>` chain (the pipe-completion
+// LSuspend mint, the wheel's dominant idiom). chain's spine descends
+// PForward-left to the bare-VarRef stage `5 |> step` (its LSuspend carries
+// the PIPE node's handle — the wrap and the mint agree on the key by
+// construction); the remainder `?? |> dbl` composes through
+// lower_pipe_complete with the resume hole as the piped value.
+//   resume(v) = dbl(v + 5): a = resume(1) → 12; b = resume(2) → 14;
+//   arm = a + b → exit 26.
+// The asymmetric stages pin composition ORDER: a swapped compose computes
+// dbl BEFORE step's remainder — (v*2) + 5 → 7/9 → 16, never 26.
+effect Choice {
+  pick() -> Int
+}
+
+handler twice {
+  pick() => {
+    let a = resume(1)
+    let b = resume(2)
+    a + b
+  }
+}
+
+fn step(x) with Choice = pick() + x
+
+fn dbl(v) = v * 2
+
+fn chain() with Choice = 5 |> step |> dbl
+
+fn main() = { chain() } ~> twice

@@ -1649,6 +1649,8 @@ effect LowerScope {
   ls_pop_scope(Int) -> ()  // truncate frame locals back to checkpoint
   ls_register_escaping(List) -> ()  // install the flow-closure map (name → escaping row)
   ls_escaping_of(String) -> Option   // a name's flow-closure (None = not a top-level fn → leaf)
+  ls_register_may_yield(Bool) -> ()  // band B M1.3 — does ANY declared effect carry a MultiShot op? (computed once at lower_program)
+  ls_program_may_yield() -> Bool     // the A1 prove-absence gate's global short-circuit: no MultiShot op anywhere ⇒ nothing can yield ⇒ every row proves absence
 }
 
 // Every refinement unification performs verify(span, pred, reason).

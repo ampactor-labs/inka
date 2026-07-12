@@ -294,6 +294,19 @@ type LowExpr
   // Hβ.lower.continuation-callboundary-bubble /
   // Hβ.lower.multishot-reyield-composition / .multishot-arm-state-commit).
   | LYield(Int, String, LowExpr)
+  // band B M1.3 — the k2 call-boundary's yield path (the bank Ruling 5): a
+  // non-tail can-yield call returned with $yield_flag still raised, so this
+  // frame's remainder composes onto the unwinding k and the unwind
+  // propagates. handle = the FRAME's tail node (the dummy's width source —
+  // the same width law LYield's dummy follows); the LowExpr = the frame_k
+  // record (an LMakeContinuation, the remainder-with-hole reified). Emit:
+  // push frame_k, `call $__k_extend` ($yield_k := compose($yield_k,
+  // frame_k) — M1.2's pair), then the width-honest dummy WITH $yield_flag
+  // AND $yield_op untouched — pure dataflow, no control transfer: the dummy
+  // flows to whatever consumes the frame value (the fn return, or the
+  // install driver's parked $__hres), which is what makes the check correct
+  // INSIDE an install body (a `(return)` here would skip the driver bracket).
+  | LKExtend(Int, LowExpr)
   | LMakeContinuation(Int, LowFn, List, List, Int, Int, Int)
   // H7 — multi-shot continuation record per the H7 walkthrough §1.2.
   // handle, resume_fn, captures_exprs, ev_slots, state_index, ret_slot,
@@ -462,6 +475,7 @@ fn lexpr_handle(e) with Pure = match e {
   LFnRef(h, _, _)         => h,
   LMakeContinuation(h, _, _, _, _, _, _) => h,
   LYield(h, _, _)         => h,
+  LKExtend(h, _)          => h,
   LDeclareFn(_)            => 0,
   LIf(h, _, _, _)         => h,
   LBlock(h, _)            => h,
@@ -803,6 +817,95 @@ fn evidence_effects_of(callee_handle) = {
   let flow = if len(name) == 0 { lambda_escaping_row(callee_handle) } else { escaping_row(name) }
   set_canonicalize(names_concat(effects_of(lookup_ty(callee_handle)), flow))
 }
+
+// ─── band B M1.3 — the A1 prove-absence gate (the bank Ruling 5) ─────────
+// can_yield(fh): may a yield unwind THROUGH a call to this callee? The k2
+// boundary check is inserted UNLESS the callee's row PROVES absence of every
+// MultiShot-graded effect — the project's own stance applied to the gate:
+// prove the negative, never assume it. The call-side twin of
+// multishot_ops_of (the install-side decider); keep them in view together.
+//
+// The proof ladder, cheapest first:
+//   1. The program declares NO MultiShot-graded op anywhere ⇒ nothing can
+//      ever yield ⇒ absence proven globally (ls_program_may_yield, computed
+//      once at lower_program). Pre-cut this is the wheel's whole story —
+//      zero wraps, bytes identical (Law 7).
+//   2. Any MultiShot-graded effect in the callee's KNOWN names (the leaf row
+//      ∪ the flow-closure — the same union derive_ev_slots threads, so a
+//      MultiShot effect fully handled INSIDE the callee has already
+//      subtracted out and the gate goes quiet) ⇒ check.
+//   3. The leaf row's TAIL: a closed row (or an open one whose chase grounds
+//      to closed) with no MultiShot name PROVES absence ⇒ skip; a free tail,
+//      a negation/intersection form (¬X admits everything but X), or a
+//      non-TFun callee type is UNPROVEN ⇒ check — the one-global.get cost is
+//      the price of the A1 hole (a free row var at the callee's one lowering
+//      hid try_fn's yield from every name read).
+fn can_yield(callee_handle) = {
+  if !ls_program_may_yield() { false }
+  else {
+    let name = callee_name_of_handle(callee_handle)
+    let flow = if len(name) == 0 { lambda_escaping_row(callee_handle) } else { escaping_row(name) }
+    if names_have_multishot(flow) { true }
+    else {
+      match lookup_ty(callee_handle) {
+        TFun(_, _, row) => row_may_multishot(row),
+        _               => true
+      }
+    }
+  }
+}
+
+// A row MAY carry a MultiShot-graded effect: its known names say so, or its
+// tail is unproven. Total over the six row forms — the unproven forms answer
+// true (check), never a fabricated "safe".
+fn row_may_multishot(row) = match row {
+  EfPure           => false,
+  EfClosed(names)  => names_have_multishot(eff_names_of(names)),
+  EfOpen(names, v) =>
+    if names_have_multishot(eff_names_of(names)) { true }
+    else {
+      let GNode(kind, _) = graph_chase(v)
+      match kind {
+        NRowBound(inner) => row_may_multishot(inner),
+        _                => true
+      }
+    },
+  EfNeg(_)         => true,
+  EfInter(a, b)    => row_may_multishot(a) && row_may_multishot(b),
+  EfSub(a, _)      => row_may_multishot(a)
+}
+
+fn names_have_multishot(enames) = any(effect_has_multishot_op, enames)
+
+// The effect→ops edge lives in the env (EffectDeclKind, register_effect_ops);
+// each op's resume grade lives on its EffectOpScheme (inference joined the
+// handler arms' Usage grades). Two live reads — no side registry.
+fn effect_has_multishot_op(ename) = match env_lookup(ename) {
+  Some(entry) => {
+    let (_, _, kind) = entry
+    match kind {
+      EffectDeclKind(op_names) =>
+        any((op) => match op_resume_discipline(op) {
+          MultiShot => true,
+          _         => false
+        }, op_names),
+      _ => false
+    }
+  },
+  None => false
+}
+
+// The global short-circuit's one writer: walk the program's effect decls and
+// ask each for a MultiShot-graded op. Runs once at lower_program, before any
+// body lowers.
+fn program_may_yield(stmts) =
+  any((node) => {
+    let N(body, _, _) = node
+    match body {
+      NStmt(EffectDeclStmt(ename, _)) => effect_has_multishot_op(ename),
+      _                               => false
+    }
+  }, stmts)
 
 // One ev per effect: the installed handler's record (LLocal) when a handler is
 // lexically in scope on the live `~>` stack, else a forward of THIS frame's own
@@ -1771,7 +1874,7 @@ fn lower_expr_body(e, handle, span) = match e {
       captures_names, captures_handles,
       handle
     )
-    let lo_body = mark_tail(lower_body_reified(body_node))   // Hβ.lower.tail-call-mark-pass — lambda body is in tail; MultiShot spine → the k1 yield
+    let lo_body = k2_guard(mark_tail(lower_body_reified(body_node)))   // Hβ.lower.tail-call-mark-pass — lambda body is in tail; MultiShot spine → the k1 yield; k2_guard floors off-spine boundaries (M1.3)
     ls_exit_frame()
     let fn_ir = LFn(
       lambda_name,
@@ -1841,6 +1944,53 @@ fn lower_expr_body(e, handle, span) = match e {
     lower_expr(v)
 }
 
+// `|>` is HOLE-COMPLETION (SYNTAX.md §«Partial application — the product
+// with a hole»), never a positional rewrite: the piped value fills the
+// right call's one remaining hole — the authored `??` slot when present,
+// else the first unfilled declaration-order param (the trailing hole of a
+// positional-prefix partial). A SATURATED call is a closure-producing
+// stage; the piped value applies to its result. The callee's arity is
+// read LIVE from its graph type (lookup_ty → TFun) — Carried-Truth,
+// never a second arity table. Factored from PForward so the k remainder
+// builder can complete a stage with the RESUME HOLE as the piped value
+// (band B M1.3) — one completion, two callers.
+fn lower_pipe_complete(lo_l, right, handle) = {
+  let lo_r = lower_callee_ref(right)
+  let N(rbody, _, rfh) = right
+  let hole_at = match rbody {
+    NExpr(CallExpr(_, cargs)) => pipe_hole_index(cargs, 0),
+    _                         => -1
+  }
+  let is_partial = match rbody {
+    NExpr(CallExpr(f, cargs)) => len(cargs) < callee_arity_of(f),
+    _                         => false
+  }
+  match lo_r {
+    LCall(ch, fn_, args) =>
+      if hole_at >= 0      { LCall(ch, fn_, splice_at(args, hole_at, lo_l)) }
+      else if is_partial   { LCall(ch, fn_, args ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node, not a loop accumulator
+      else                 { LCall(handle, lo_r, [lo_l]) },
+    LSuspend(sh, oph, fnx, args, evs, tl) =>
+      if hole_at >= 0      { LSuspend(sh, oph, fnx, splice_at(args, hole_at, lo_l), evs, tl) }
+      else if is_partial   { LSuspend(sh, oph, fnx, args ++ [lo_l], evs, tl) }   // drift-audit: ignore — one completion per pipe node
+      else                 { LCall(handle, lo_r, [lo_l]) },
+    LMakeVariant(vh, tag, vargs) =>
+      if hole_at >= 0      { LMakeVariant(vh, tag, splice_at(vargs, hole_at, lo_l)) }
+      else if is_partial   { LMakeVariant(vh, tag, vargs ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node
+      else                 { LCall(handle, lo_r, [lo_l]) },
+    _ => {
+      // A bare fn-VALUE stage (`7 |> outer`): the completion call runs the
+      // SAME evidence fork every call runs — this arm minted a bare LCall
+      // and an effectful piped stage's callee starved (ev4's 134; ev2's
+      // block spelling of the same program was green). The already-lowered
+      // callee is reused; the fork reads the stage node's own type.
+      let evs = derive_ev_slots(rfh)
+      if len(evs) == 0 { LCall(handle, lo_r, [lo_l]) }
+      else             { LSuspend(handle, rfh, lo_r, [lo_l], evs, false) }
+    }
+  }
+}
+
 fn lower_pipe(kind, left, right, handle) = match kind {
   // `<|`/`><` — ONE parallel-fanout topology, discriminated by input
   // ownership (the FanOwnership aspect). The verb draws the independence
@@ -1855,51 +2005,7 @@ fn lower_pipe(kind, left, right, handle) = match kind {
   PFanout(fan_own) =>
     lower_fanout(handle, fan_own, left, right),
 
-  PForward => {
-    // `|>` is HOLE-COMPLETION (SYNTAX.md §«Partial application — the product
-    // with a hole»), never a positional rewrite: the piped value fills the
-    // right call's one remaining hole — the authored `??` slot when present,
-    // else the first unfilled declaration-order param (the trailing hole of a
-    // positional-prefix partial). A SATURATED call is a closure-producing
-    // stage; the piped value applies to its result. The callee's arity is
-    // read LIVE from its graph type (lookup_ty → TFun) — Carried-Truth,
-    // never a second arity table.
-    let lo_l = lower_expr(left)
-    let lo_r = lower_callee_ref(right)
-    let N(rbody, _, rfh) = right
-    let hole_at = match rbody {
-      NExpr(CallExpr(_, cargs)) => pipe_hole_index(cargs, 0),
-      _                         => -1
-    }
-    let is_partial = match rbody {
-      NExpr(CallExpr(f, cargs)) => len(cargs) < callee_arity_of(f),
-      _                         => false
-    }
-    match lo_r {
-      LCall(ch, fn_, args) =>
-        if hole_at >= 0      { LCall(ch, fn_, splice_at(args, hole_at, lo_l)) }
-        else if is_partial   { LCall(ch, fn_, args ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node, not a loop accumulator
-        else                 { LCall(handle, lo_r, [lo_l]) },
-      LSuspend(sh, oph, fnx, args, evs, tl) =>
-        if hole_at >= 0      { LSuspend(sh, oph, fnx, splice_at(args, hole_at, lo_l), evs, tl) }
-        else if is_partial   { LSuspend(sh, oph, fnx, args ++ [lo_l], evs, tl) }   // drift-audit: ignore — one completion per pipe node
-        else                 { LCall(handle, lo_r, [lo_l]) },
-      LMakeVariant(vh, tag, vargs) =>
-        if hole_at >= 0      { LMakeVariant(vh, tag, splice_at(vargs, hole_at, lo_l)) }
-        else if is_partial   { LMakeVariant(vh, tag, vargs ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node
-        else                 { LCall(handle, lo_r, [lo_l]) },
-      _ => {
-        // A bare fn-VALUE stage (`7 |> outer`): the completion call runs the
-        // SAME evidence fork every call runs — this arm minted a bare LCall
-        // and an effectful piped stage's callee starved (ev4's 134; ev2's
-        // block spelling of the same program was green). The already-lowered
-        // callee is reused; the fork reads the stage node's own type.
-        let evs = derive_ev_slots(rfh)
-        if len(evs) == 0 { LCall(handle, lo_r, [lo_l]) }
-        else             { LSuspend(handle, rfh, lo_r, [lo_l], evs, false) }
-      }
-    }
-  },
+  PForward => lower_pipe_complete(lower_expr(left), right, handle),
 
   PTee => {
     // ~> tee — handler attachment. One precedence, one kind: the parser's
@@ -2234,7 +2340,7 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
   // Synthetic parallel-thunk: empty fn_name; not a named fn declaration; not a
   // lambda (lambda_h = -1 → ev READ falls through to the named-fn/block path).
   ls_enter_frame("", [], [], captures_names, captures_handles, -1)
-  let lo_body = mark_tail(lower_expr(branch_node))   // Hβ.lower.tail-call-mark-pass — synthesized thunk body is in tail
+  let lo_body = k2_guard(mark_tail(lower_expr(branch_node)))   // Hβ.lower.tail-call-mark-pass — synthesized thunk body is in tail; k2_guard floors off-spine boundaries (M1.3)
   ls_exit_frame()
   let fn_ir = LFn(
     thunk_name,
@@ -2420,7 +2526,7 @@ fn lower_stmt_body(s, handle, span) = match s {
       captures_names, captures_handles,
       -1   // named fn — not a lambda; the ev READ uses escaping_row(fn_name)
     )
-    let lo_body = mark_tail(lower_body_reified(body_node))   // Hβ.lower.tail-call-mark-pass — fn body is in tail; MultiShot spine → the k1 yield
+    let lo_body = k2_guard(mark_tail(lower_body_reified(body_node)))   // Hβ.lower.tail-call-mark-pass — fn body is in tail; MultiShot spine → the k1 yield; k2_guard floors off-spine boundaries (M1.3)
     ls_exit_frame()
     let fn_ir = LFn(
       fn_name,
@@ -2740,7 +2846,7 @@ fn lower_one_arm_decl(arm: {args: [String], body: N, op_name: String}, discrimin
   // around arm body lowering so lower_expr's ResumeExpr arm resolves
   // `with field = NEW` updates' slot offsets via current_state_fields()
   // AND its representation via current_resume_discipline().
-  let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names, disc))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
+  let lo_body = k2_guard(mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names, disc)))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail; k2_guard floors off-spine boundaries (M1.3)
   ls_exit_frame()
   // fence = nstate + total_arms; the arm's LEvPerform reads land on the
   // record's captured-ev region (past state AND arms).
@@ -2877,11 +2983,13 @@ fn ms_op_of_call(node) = {
   }
 }
 
-// THE AGREEMENT LAW: ms_spine_op (the test, run OUTSIDE the k frame) and
-// k1_remainder (the build, run INSIDE it) walk the SAME three spine forms —
-// bare call, BinOp-left, statement-free block. Keep them adjacent; a form
-// added to one without the other is the free_in_ty/subst_ty divergence bug
-// at the split.
+// THE AGREEMENT LAW: the spine TESTERS (ms_spine_op for k1 performs,
+// k2_spine_call for k2 can-yield calls — both run OUTSIDE the k frame) and
+// the ONE remainder BUILDER (k_remainder, run per residency) walk the SAME
+// spine forms — bare position, BinOp-left, statement-free block, and (k2)
+// PForward-left + the bare-VarRef pipe stage. Keep all three adjacent; a
+// form added to one without the others is the free_in_ty/subst_ty
+// divergence bug at the split.
 fn ms_spine_op(node) =
   match ms_op_of_call(node) {
     Some(op) => {
@@ -2899,62 +3007,268 @@ fn ms_spine_op(node) =
     }
   }
 
-// Build the remainder-with-hole: the frame body with the spine perform
-// replaced by LLocal(ph, "__resume_in"), every untouched operand lowered
-// INSIDE the k frame (evaluation order preserved — a right operand had not
-// evaluated at yield time, so it evaluates inside k, in order; its free
-// names resolve to the k's captures through the frame ls entered).
-fn k1_remainder(node, ph) = {
+// The k2 spine: the first-evaluated position chain, descended for a
+// CAN-YIELD CALL boundary (band B M1.3, the bank Ruling 5). Returns the
+// DEEPEST boundary — the first yield to cross at runtime. Two boundary
+// shapes this increment: a direct call with a trivial (VarRef, non-op)
+// callee, and a `|>` stage whose right is a bare VarRef (the :bare-value
+// completion — its LSuspend carries the PIPE node's handle, so the check
+// wrap and the mint agree on the key by construction). A PTee is a
+// BOUNDARY, never descended — the install's driver guards its body; the
+// composition that crosses an install is A4's re-install-in-k (its
+// crucible mn-resume-across-install arbitrates, M2). Off-spine can-yield
+// calls are NOT silent: k2_floor_guard wraps them with the loud floor.
+fn k2_spine_call(node) = {
+  let N(b, _, _) = node
+  match b {
+    NExpr(BinOpExpr(_, l, _))      => k2_spine_call(l),
+    NExpr(BlockExpr(stmts, final)) =>
+      if len(stmts) == 0 { k2_spine_call(final) } else { None },
+    NExpr(PipeExpr(kind, l, r))    => match kind {
+      PForward => match k2_spine_call(l) {
+        Some(deeper) => Some(deeper),
+        None         => {
+          let N(rb, _, rfh) = r
+          match rb {
+            NExpr(VarRef(_)) => if can_yield(rfh) { Some(node) } else { None },
+            _                => None
+          }
+        }
+      },
+      _ => None
+    },
+    NExpr(CallExpr(f, _))          => {
+      let N(fb, _, fh) = f
+      match fb {
+        NExpr(VarRef(name)) =>
+          // An effect op is k1's business (its MultiShot form yields at the
+          // perform itself); a k2 boundary is an ordinary CALL whose callee
+          // may carry a yield out.
+          if lower_effect_name_of_op(name) == "" && can_yield(fh) { Some(node) }
+          else { None },
+        _ => None
+      }
+    },
+    _ => None
+  }
+}
+
+// Build the remainder-with-hole: the frame body with the spine node at ph
+// replaced by LLocal(ph, hole) — hole = "__resume_in" INSIDE the k frame
+// (the reified residency; untouched operands lower in the k frame so their
+// free names resolve to its captures, evaluation order preserved) or the
+// parked "__kr_<ph>" local for the INLINE residency (the k2 fast path —
+// the same walker, the other hole name; dual residency by construction).
+fn k_remainder(node, ph, hole) = {
   let N(b, _, h) = node
-  if h == ph { LLocal(ph, "__resume_in") }
+  if h == ph { LLocal(ph, hole) }
   else {
     match b {
-      NExpr(BinOpExpr(op2, l, r))    => LBinOp(h, op2, k1_remainder(l, ph), lower_expr(r)),
-      NExpr(BlockExpr(_, final))     => k1_remainder(final, ph),
-      // Unreachable by the agreement law (ms_spine_op admits exactly the
-      // forms above); the identity hole is the honest residue, never a
-      // fabricated value — the perform handle names the only hole.
-      _                              => LLocal(ph, "__resume_in")
+      NExpr(BinOpExpr(op2, l, r))    => LBinOp(h, op2, k_remainder(l, ph, hole), lower_expr(r)),
+      NExpr(BlockExpr(_, final))     => k_remainder(final, ph, hole),
+      NExpr(PipeExpr(_, l, r))       => lower_pipe_complete(k_remainder(l, ph, hole), r, h),
+      // Unreachable by the agreement law (the spine testers admit exactly
+      // the forms above); the identity hole is the honest residue, never a
+      // fabricated value — the spine handle names the only hole.
+      _                              => LLocal(ph, hole)
     }
   }
 }
 
-// Lower a frame body with k1 reification: a MultiShot perform on the spine
-// yields its reified remainder; every other body lowers verbatim (the
-// byte-identical path — Law 7). Runs INSIDE the enclosing frame (FnStmt /
-// LambdaExpr / PTee install-body), upstream of tier selection, so the
-// lexical and singleton tiers cannot bake an arm call for a spine perform.
+// Reify a frame's remainder-after-ph as the continuation record: the k fn
+// (hole = "__resume_in", captures resolved in the ENCLOSING frame — prefix
+// locals become capture loads, outer upvals re-capture; the LambdaExpr
+// recipe verbatim, ONE mechanism four roles) wrapped in LMakeContinuation.
+// state_idx / ret_slot stay the spine-site handle (the stable per-site
+// discriminator; ret_slot has no live reader — its own documented fact);
+// world_tag = the canonical row's union-homomorphic bitmask (W06). Shared
+// by the k1 yield producer and the k2 boundary composition — one reifier.
+fn reify_frame_k(body_node, ph) = {
+  // The world the remainder still performs — read from the enclosing fn
+  // BEFORE entering the k frame (resume_world_of's own env read; at a
+  // spine site the outer fn name is real). persist=memcpy carries it;
+  // the load-time value gate compares world_tag against the live stack.
+  let world = resume_world_of(ph)
+  let free_names = collect_free_vars(body_node, ["__resume_in"])
+  let (captures_names, captures_exprs, captures_handles) =
+    resolve_captures_outer(free_names, ph)
+  ls_enter_frame("", ["__resume_in"], [ph], captures_names, captures_handles, ph)
+  let k_body = k2_floor_guard(mark_tail(k_remainder(body_node, ph, "__resume_in")), false)
+  ls_exit_frame()
+  let k_fn = LFn("__k_{int_to_str(ph)}", 1, ["__resume_in"], [k_body],
+                 world, len(captures_exprs))
+  LMakeContinuation(ph, k_fn, captures_exprs, derive_ev_slots(ph),
+                    ph, ph, world_tag_of_row(world))
+}
+
+// Lower a frame body with continuation reification. THREE arms, priority
+// ordered (runs INSIDE the enclosing frame — FnStmt / LambdaExpr / PTee
+// install-body — upstream of tier selection, so the lexical and singleton
+// tiers cannot bake an arm call for a spine perform):
+//   k1 — a MultiShot perform on the spine: the WHOLE body becomes the
+//        yield (its remainder reified as k); the frame's value IS the
+//        yield's dummy, so the unwind is pure dataflow.
+//   k2 — a can-yield CALL on the spine (band B M1.3, Ruling 5): the DUAL
+//        RESIDENCY check — the call runs inline and parks width-honest in
+//        __kr_<ph> (llet_repr reads the call's own type); a raised
+//        $yield_flag composes the reified remainder onto the unwinding k
+//        (LKExtend → $__k_extend, $yield_op untouched) and the frame's
+//        width-honest dummy flows out through the SAME value position the
+//        fast path uses (no control transfer — correct inside install
+//        bodies, where a return would skip the driver bracket); a clear
+//        flag runs the SAME remainder inline with the parked result (the
+//        one walker, the other hole name — "the check block holds both").
+//   else — verbatim lowering (the byte-identical path, Law 7).
 fn lower_body_reified(body_node) =
   match ms_spine_op(body_node) {
-    None => lower_expr(body_node),
     Some((op_name, ph)) => {
       let N(_, _, frame_h) = body_node
-      // The world the remainder still performs — read from the enclosing fn
-      // BEFORE entering the k frame (resume_world_of's own env read; at a
-      // perform site the outer fn name is real). persist=memcpy carries it;
-      // the load-time value gate compares world_tag against the live stack.
-      let world = resume_world_of(ph)
-      // Captures = the remainder's free names (the perform's callee is an
-      // env global — resolve_captures_outer drops RGlobal, the phantom-
-      // capture fence), resolved in the ENCLOSING frame: prefix locals
-      // become capture loads, outer upvals re-capture. ONE mechanism,
-      // four roles (the LambdaExpr recipe verbatim).
-      let free_names = collect_free_vars(body_node, ["__resume_in"])
-      let (captures_names, captures_exprs, captures_handles) =
-        resolve_captures_outer(free_names, ph)
-      ls_enter_frame("", ["__resume_in"], [ph], captures_names, captures_handles, ph)
-      let k_body = k1_remainder(body_node, ph)
-      ls_exit_frame()
-      let k_fn = LFn("__k_{int_to_str(ph)}", 1, ["__resume_in"], [k_body],
-                     world, len(captures_exprs))
-      // state_idx / ret_slot stay the perform-site handle (the stable
-      // per-site discriminator; ret_slot has no live reader — its own
-      // documented fact). world_tag = the canonical row interned (W06).
-      LYield(frame_h, op_name,
-             LMakeContinuation(ph, k_fn, captures_exprs, derive_ev_slots(ph),
-                               ph, ph, world_tag_of_row(world)))
+      LYield(frame_h, op_name, reify_frame_k(body_node, ph))
+    },
+    None => match k2_spine_call(body_node) {
+      Some(spine_node) => {
+        let N(_, _, frame_h) = body_node
+        let N(_, _, ph) = spine_node
+        let kr = "__kr_{int_to_str(ph)}"
+        let c_inline = k_remainder(body_node, ph, kr)
+        match c_inline {
+          // Identity remainder: the boundary IS the frame tail — the flag
+          // propagates through the frame's own return (mark_tail keeps the
+          // return_call), and the caller's check (or the driver, or the
+          // composer) is the boundary. No wrap, no reification.
+          LLocal(_, _) => lower_expr(body_node),
+          _ => LBlock(frame_h, [
+            LLet(ph, kr, lower_expr(spine_node)),
+            LIf(ph, LGlobal(ph, "yield_flag"),
+                [LKExtend(frame_h, reify_frame_k(body_node, ph))],
+                [c_inline])
+          ])
+        }
+      },
+      None => lower_expr(body_node)
     }
   }
+
+// ─── band B M1.3 — the invariant walk (Ruling 5's last sentence) ─────────
+// "EVERY non-tail can-yield call site carries the check, else a frame
+// computes on the dummy." The spine split composes the boundary it can
+// express; THIS walk makes every remaining one LOUD: a non-tail can-yield
+// LSuspend off the spine parks its result and traps at a raised flag (the
+// comment-marked yield floor — censusable, never a silent dummy). Skips,
+// each a real boundary elsewhere:
+//   tail == true            — return_call propagates; the CALLER's check
+//                             (or driver, or composer) is the boundary.
+//   terminus of an install  — the driver loop right after the body IS the
+//     body                    check (owned op → dispatch; foreign → the
+//                             parked dummy + flag exit the bracket to the
+//                             enclosing check). Wrapping here would trap
+//                             every owned yield before its own driver.
+//   under LReturn           — the fn's exit is the propagation the caller
+//                             checks; a wrap would trap a legitimate unwind.
+//   a "__kr_" park          — the spine split's own composed check; its
+//                             CHILDREN still walk (an off-spine suspend
+//                             inside the parked call's args must floor).
+//   LFn bodies              — frame boundaries; each frame guards itself
+//                             (the four seams + reify_frame_k).
+// The terminus flag propagates exactly where a value position propagates:
+// block-last, if-branches, match-arm bodies — the same spine mark_tail
+// walks, here for the install driver's sake rather than return_call's.
+// The per-seam entry: a program with no MultiShot-graded op cannot yield,
+// so the walk is skipped whole — the pre-cut wheel pays zero rebuild and
+// keeps byte-identity by construction (Law 7).
+fn k2_guard(e) = if ls_program_may_yield() { k2_floor_guard(e, false) } else { e }
+
+fn k2_floor_guard(e, terminus) = match e {
+  LSuspend(h, o, f, args, ev, tail) => {
+    let walked = LSuspend(h, o, k2_floor_guard(f, false),
+                          k2_floor_list(args), k2_floor_list(ev), tail)
+    if tail || terminus || !can_yield(o) { walked }
+    else { k2_floor_wrap(h, walked) }
+  },
+  LLet(h, name, init) =>
+    if k2_is_park(name) { LLet(h, name, k2_park_children(init)) }
+    else { LLet(h, name, k2_floor_guard(init, false)) },
+  LBlock(h, stmts)      => LBlock(h, k2_floor_last(stmts, terminus)),
+  LIf(h, c, t, el)      => LIf(h, k2_floor_guard(c, false),
+                               k2_floor_last(t, terminus),
+                               k2_floor_last(el, terminus)),
+  LMatch(h, s, arms)    => LMatch(h, k2_floor_guard(s, false),
+                                  map((arm) => {
+                                    let (pat, body) = arm
+                                    (pat, k2_floor_guard(body, terminus))
+                                  }, arms)),
+  LHandleWith(h, b, hn, hname, inits, an, evs) =>
+    LHandleWith(h, k2_floor_guard(b, true), k2_floor_guard(hn, false), hname,
+                k2_floor_list(inits), an, k2_floor_list(evs)),
+  LReturn(h, inner)     => LReturn(h, k2_floor_guard(inner, true)),
+  LCall(h, f, args)     => LCall(h, k2_floor_guard(f, false), k2_floor_list(args)),
+  LTailCall(h, f, args) => LTailCall(h, k2_floor_guard(f, false), k2_floor_list(args)),
+  LBinOp(h, op, l, r)   => LBinOp(h, op, k2_floor_guard(l, false), k2_floor_guard(r, false)),
+  LUnaryOp(h, op, x)    => LUnaryOp(h, op, k2_floor_guard(x, false)),
+  LMakeClosure(h, fn_, caps, ev)  => LMakeClosure(h, fn_, k2_floor_list(caps), k2_floor_list(ev)),
+  LMakeContinuation(h, fn_, caps, ev, si, rs, wt) =>
+    LMakeContinuation(h, fn_, k2_floor_list(caps), k2_floor_list(ev), si, rs, wt),
+  LYield(h, op, k)      => LYield(h, op, k2_floor_guard(k, false)),
+  LKExtend(h, k)        => LKExtend(h, k2_floor_guard(k, false)),
+  LFnRef(h, n, ev)      => LFnRef(h, n, k2_floor_list(ev)),
+  LDeclareFn(fn_)       => LDeclareFn(fn_),
+  LMakeList(h, es)      => LMakeList(h, k2_floor_list(es)),
+  LMakeTuple(h, es)     => LMakeTuple(h, k2_floor_list(es)),
+  LSimdLanes(h, ls)     => LSimdLanes(h, k2_floor_list(ls)),
+  LMakeRecord(h, fs)    => LMakeRecord(h, k2_floor_list(fs)),
+  LMakeVariant(h, t, fs) => LMakeVariant(h, t, k2_floor_list(fs)),
+  LFeedback(h, b, s)    => LFeedback(h, k2_floor_guard(b, false), k2_floor_guard(s, false)),
+  LPerform(h, n, args, r) => LPerform(h, n, k2_floor_list(args), r),
+  LEvPerform(h, n, ev, s, args) => LEvPerform(h, n, ev, s, k2_floor_list(args)),
+  LWasiCall(h, n, args) => LWasiCall(h, n, k2_floor_list(args)),
+  LFieldLoad(h, rec, o) => LFieldLoad(h, k2_floor_guard(rec, false), o),
+  LConvert(h, k, x)     => LConvert(h, k, k2_floor_guard(x, false)),
+  LStateSlotStore(h, o, v) => LStateSlotStore(h, o, k2_floor_guard(v, false)),
+  LEvEntry(n, ev)       => LEvEntry(n, k2_floor_guard(ev, false)),
+  LConst(_, _)          => e,
+  LLocal(_, _)          => e,
+  LGlobal(_, _)         => e,
+  LUpval(_, _)          => e,
+  LEvRef(_, _)          => e,
+  LFeedbackPrior(_)     => e,
+  LUnresolvedEvidence(_, _) => e
+}
+
+fn k2_floor_list(es) = map((x) => k2_floor_guard(x, false), es)
+
+// Block statements: only the LAST carries the terminus flag through.
+fn k2_floor_last(stmts, terminus) = {
+  let n = len(stmts)
+  map((ix) => {
+    let (i, s) = ix
+    k2_floor_guard(s, if i == n - 1 { terminus } else { false })
+  }, enumerate(stmts))
+}
+
+// The spine split's park local — its init is the one already-composed
+// suspend; children still walk.
+fn k2_is_park(name: String) = len(name) >= 5 && str_slice(name, 0, 5) == "__kr_"
+
+fn k2_park_children(init) = match init {
+  LSuspend(h, o, f, args, ev, tail) =>
+    LSuspend(h, o, k2_floor_guard(f, false), k2_floor_list(args), k2_floor_list(ev), tail),
+  other => k2_floor_guard(other, false)
+}
+
+// The loud floor: park width-honest, trap at a raised flag, else the value.
+// The trap is the SAME comment-marked LYield floor the census greps — the
+// off-spine k2 boundary's positive-form home until its spine form lands
+// with its crucible.
+fn k2_floor_wrap(h, s) = {
+  let kf = "__kf_{int_to_str(h)}"
+  LBlock(h, [
+    LLet(h, kf, s),
+    LIf(h, LGlobal(h, "yield_flag"),
+        [LYield(h, "", LConst(h, LInt(0)))],
+        [LConst(h, LInt(0))]),
+    LLocal(h, kf)
+  ])
+}
 
 // The effect-world a continuation is frozen under, read LIVE from the
 // enclosing arm fn's inferred row — the SAME source derive_ev_slots reads
@@ -3592,6 +3906,10 @@ fn lower_program(stmts) = {
   // Read live by THE SEAM's two consumers; the env is fully typed here (infer
   // ran), so own_dispatched + the call-edge fixpoint are both available.
   ls_register_escaping(compute_escaping_rows(stmts))
+  // band B M1.3 — the A1 gate's global short-circuit: does any declared
+  // effect carry a MultiShot-graded op? No ⇒ nothing can yield ⇒ can_yield
+  // is false everywhere and the k2 machinery contributes zero bytes (Law 7).
+  ls_register_may_yield(program_may_yield(stmts))
   // No pre-register pass: every handler decl's (config, state, arms) is
   // already in the env's HandlerKind (register_handler), so an install
   // resolves its handler's decl live (handler_decl_of) regardless of source
@@ -3664,13 +3982,19 @@ fn push_name(buf, count, name) = {
 // alphabetically, so the WAT layout is captures(0), capture_handles(4),
 // capture_order(8), locals(12), local_handles(16), local_order(20).
 // Mentl source reads via .field — physical layout irrelevant.
-handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [] {
+handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [], may_yield = false {
   // THE FLOW-CLOSURE map (name → escaping row), computed once at lower_program
   // and read live by THE SEAM. Some(row) for a top-level fn; None (→ the leaf)
   // for a nested fn / lambda / unknown name.
   ls_register_escaping(map) => resume() with esc_rows = map,
 
   ls_escaping_of(name) => resume(esc_assoc(esc_rows, name)),
+
+  // band B M1.3 — the A1 gate's global short-circuit, computed once at
+  // lower_program from the declared effects × their ops' inferred disciplines.
+  ls_register_may_yield(b) => resume() with may_yield = b,
+
+  ls_program_may_yield() => resume(may_yield),
 
   ls_enter_frame(fn_name, locals_in, locals_h, captures_in, captures_h, lambda_h) => {   // drift-audit: ignore — pre-existing frame-record paired-arrays (locals_h/captures_h); same restructure tracked for 11.C.2
     // Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):
@@ -3924,6 +4248,8 @@ fn reach_names_expr(expr, acc) = match expr {
   // A yield reaches through its k record (the __k fn's body + captures + ev);
   // the ARM reaches through the install's arm groups, the existing channel.
   LYield(_h, _op, k)        => reach_names_expr(k, acc),
+  // A k2 boundary reaches through its frame_k record the same way.
+  LKExtend(_h, k)           => reach_names_expr(k, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => reach_names_list(body, acc),
   LBlock(_h, stmts)         => reach_names_list(stmts, acc),
   LIf(_h, c, t, e)          =>

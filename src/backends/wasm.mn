@@ -604,6 +604,13 @@ fn walk_lemit_expr(expr) = match expr {
     visit_string(op_name)
     walk_lemit_expr(k)
   },
+  // band B M1.3: a k2 boundary needs the yield machinery (globals + the
+  // composer pair) exactly as a yield does; its frame_k record descends
+  // like LYield's k.
+  LKExtend(_, k) => {
+    visit_yield()
+    walk_lemit_expr(k)
+  },
   // LFnRef references an ALREADY-emitted named fn — NO visit_fn (the fn is
   // collected at its own declaration; visiting here would double-register it).
   // Walk only its ev region (the forwarded evidence LowExprs).
@@ -898,6 +905,7 @@ fn singleton_hnames_expr(expr, acc) = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     singleton_hnames_list(ev, singleton_hnames_list(caps, singleton_hnames_list(body, acc))),
   LYield(_h, _op, k)        => singleton_hnames_expr(k, acc),
+  LKExtend(_h, k)           => singleton_hnames_expr(k, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => singleton_hnames_list(body, acc),
   LBlock(_h, stmts)         => singleton_hnames_list(stmts, acc),
   LIf(_h, c, t, e)          =>
@@ -1249,6 +1257,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
     collect_call_vectors_list(body,
       collect_call_vectors_list(caps, collect_call_vectors_list(ev, acc))),
   LYield(_h, _op, k)    => collect_call_vectors_expr(k, acc),
+  LKExtend(_h, k)       => collect_call_vectors_expr(k, acc),
   LFnRef(_h, _n, ev)    => collect_call_vectors_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_call_vectors_list(body, acc),
   LIf(_h, c, t, e)      => collect_call_vectors_list(e,
@@ -1642,6 +1651,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
       ++ collect_fn_emit_records(ev)
   },
   LYield(_h, _op, k) => collect_fn_emit_records_expr(k),
+  LKExtend(_h, k)    => collect_fn_emit_records_expr(k),
   LDeclareFn(LFn(name, _arity, param_names, body, _row, fence)) => {
     [(name, param_names, body, fence)]
       ++ collect_fn_emit_records(body)
@@ -1852,6 +1862,7 @@ fn walk_locals_expr(expr, acc) = match expr {
   LFnRef(_h, _n, ev)        => walk_locals_list(ev, acc),  // record reuses $state_tmp; ev forwards declare no locals
   LMakeContinuation(_, _, _, _, _, _, _) => acc,  // resume_fn boundary — its locals are its own (H7)
   LYield(_, _, k)           => walk_locals_expr(k, acc),  // k = the record boundary above; the yield's own emit is globals + consts, zero locals
+  LKExtend(_, k)            => walk_locals_expr(k, acc),  // same boundary rule; the extend's own emit is a call + a const
   LDeclareFn(_)                    => acc,  // module-level fn declaration — its body has its own locals
   LBlock(_h, stmts)         => walk_locals_list(stmts, acc),
   LIf(_h, c, t, e)          =>
@@ -2189,6 +2200,7 @@ fn find_local_handle_expr(name: String, expr) = match expr {
   LFnRef(_h, _n, ev)        => find_local_handle_list(name, ev),
   LMakeContinuation(_, _, _, _, _, _, _) => 0,
   LYield(_h, _op, k)        => find_local_handle_expr(name, k),
+  LKExtend(_h, k)           => find_local_handle_expr(name, k),
   LDeclareFn(_)                    => 0,
   LLet(_h, _n, inner)       => find_local_handle_expr(name, inner),
   LBinOp(_h, _op, l, r)     => {
@@ -2842,10 +2854,11 @@ fn emit_expr(expr) = match expr {
     // the frame's own result type (h = the REWRITTEN FRAME's tail node; a
     // Float-tailed frame keeps its f64 ft — never the perform's width).
     // The FLOOR form (k = LConst 0) is the loud comment-marked refusal:
-    // off-spine perform / arm-state / re-yield — k2/k3's named homes.
+    // off-spine perform / off-spine k2 boundary / arm-state / re-yield —
+    // k2/k3's named homes.
     match k_expr {
       LConst(_, _) =>
-        wat_emit("    (unreachable) ;; multishot yield floor — off-spine perform / arm-state / re-yield (k2/k3)\n"),
+        wat_emit("    (unreachable) ;; multishot yield floor — off-spine perform / off-spine k2 boundary / arm-state / re-yield (k2/k3)\n"),
       _ => {
         emit_expr(k_expr)
         wat_emit("    (global.set $yield_k)\n")
@@ -2860,6 +2873,25 @@ fn emit_expr(expr) = match expr {
           _    => wat_emit("    (i32.const 0)\n")
         }
       }
+    }
+  },
+
+  LKExtend(h, k_expr) => {
+    // band B M1.3 — the k2 boundary's yield path: compose the frame's
+    // reified remainder onto the unwinding k ($yield_k := compose($yield_k,
+    // frame_k) — M1.2's $__k_extend) and evaluate to the frame's
+    // width-honest dummy with $yield_flag AND $yield_op UNTOUCHED — the
+    // unwind continues as pure dataflow through the same value position the
+    // fast path uses (h = the frame's tail node, the same width law
+    // LYield's dummy follows; a return here would skip an install's driver
+    // bracket).
+    emit_expr(k_expr)
+    wat_emit("    (call $__k_extend)\n")
+    match repr_of(lookup_ty(h)) {
+      RF64 => wat_emit("    (f64.const 0)\n"),
+      RF32 => wat_emit("    (f32.const 0)\n"),
+      RI64 => wat_emit("    (i64.const 0)\n"),
+      _    => wat_emit("    (i32.const 0)\n")
     }
   },
 
@@ -4402,6 +4434,7 @@ fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
     collect_cmp_agg_tys_list(body,
       collect_cmp_agg_tys_list(caps, collect_cmp_agg_tys_list(ev, acc))),
   LYield(_h, _op, k)     => collect_cmp_agg_tys_expr(k, acc),
+  LKExtend(_h, k)        => collect_cmp_agg_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_cmp_agg_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_cmp_agg_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_cmp_agg_tys_list(e,
@@ -4556,6 +4589,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
     collect_eq_product_tys_list(body,
       collect_eq_product_tys_list(caps, collect_eq_product_tys_list(ev, acc))),
   LYield(_h, _op, k)     => collect_eq_product_tys_expr(k, acc),
+  LKExtend(_h, k)        => collect_eq_product_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_eq_product_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_eq_product_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_eq_product_tys_list(e,
@@ -5086,6 +5120,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
     collect_show_tys_list(body,
       collect_show_tys_list(caps, collect_show_tys_list(ev, acc))),
   LYield(_h, _op, k)     => collect_show_tys_expr(k, acc),
+  LKExtend(_h, k)        => collect_show_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_show_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_show_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_show_tys_list(e,
@@ -5357,6 +5392,7 @@ fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
     collect_hash_tys_list(body,
       collect_hash_tys_list(caps, collect_hash_tys_list(ev, acc))),
   LYield(_h, _op, k)     => collect_hash_tys_expr(k, acc),
+  LKExtend(_h, k)        => collect_hash_tys_expr(k, acc),
   LFnRef(_h, _n, ev)     => collect_hash_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_hash_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_hash_tys_list(e,

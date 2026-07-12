@@ -1,0 +1,28 @@
+// band B M1.3 gate — the k2 call-boundary composition (the bank Ruling 5).
+// The yield crosses ONE intermediate frame: outer's `step()` is a non-tail
+// can-yield CALL (the `+ 10` consumes it), so the boundary check parks the
+// dummy, composes outer's remainder (`?? + 10`) onto the unwinding k via
+// $__k_extend, and the driver's resume runs BOTH remainders through the
+// composer: resume(v) = (v + 3) + 10.
+//   a = resume(1) → 14; b = resume(2) → 15; arm = a + b → exit 29.
+// Broken paths this pins: a missing boundary check computes 10 on the dummy
+// (exit 20-ish garbage); a clobbered $yield_op misses the driver dispatch
+// (backstop trap 134); a wrong composition order yields (v + 10) + 3 — same
+// sum here, so the pipe twin (mn-k2-pipe, asymmetric stages) pins order.
+effect Choice {
+  pick() -> Int
+}
+
+handler twice {
+  pick() => {
+    let a = resume(1)
+    let b = resume(2)
+    a + b
+  }
+}
+
+fn step() with Choice = pick() + 3
+
+fn outer() with Choice = step() + 10
+
+fn main() = { outer() } ~> twice

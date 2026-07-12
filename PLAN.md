@@ -1029,18 +1029,45 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > e7d322c0…). Instrument lesson: the byte gate's first run compared
 > 0-byte files as "identical" (wrong wasmtime flags + discarded stderr)
 > — source tools/wt-env.sh for the canonical wt_run, and gate the gate
-> (a size floor before cmp). NEXT: M1.6 — the "__resume" keyed-evidence
-> machinery (Ruling 2 as amended by A3: the arm is the one WRITER at its
-> interior effectful call sites — sst_ appends [key="__resume"][ev=__k];
-> resume resolution = lexical __k param (Tier-1, the k1 fast path, KEPT)
-> → the "__resume" keyed scan (the general tier); DORMANT pre-cut — no
-> wheel arm is MultiShot, zero entries, bytes identical; the capability
-> MARK on contains-resume fns/closures lands AT THE CUT in the same
-> commit as the classifier); then M2's remaining ladder
-> (mn-nested-choose · mn-resume-in-lambda · mn-uzero-abort ·
-> mn-resume-across-install · mn-dynamic-abort-in-k ·
-> mn-uzero-through-frames · mn-called-fn-resume-typed ·
-> mn-option-protocol); M3 THE CUT.**
+> (a size floor before cmp). **M1.6 LANDED (same day) — the resume-resolution
+> LADDER (Ruling 2 as amended by A3): mn-resume-in-lambda=23 on the
+> FIRST run — backtrack's closure shape minus abort, GREEN PRE-CUT.**
+> The k channel now mirrors the perform's dispatch gradient exactly:
+> LEXICAL (the arm's own __k param — the k1 fast path; arm params bind
+> handle 0 so the node handle carries the type, byte-identical) →
+> CAPTURE (collect_free_vars' ResumeExpr arm reports "__k" free, so a
+> lambda inside a MultiShot arm captures the k record like any local and
+> resolve_resume_k reads it RUpval — the tier that greens the lambda
+> shape with ZERO context plumbing: everywhere __k is not an arm-frame
+> local, "__k" resolves RGlobal and the phantom-capture fence DROPS it,
+> which is why the wheel's own backtrack — resume-in-lambda under the
+> OneShot-misclassified choose — keeps its bytes) → EVIDENCE (the
+> "__resume" keyed entry, LEvRef through the same strict scan every
+> perform reads; DORMANT — the writer is A3's capability mark, landing
+> AT THE CUT because pre-cut it would change wheel bytes; a called-fn
+> resume lowers OneShot under the classifier gap so the tier is
+> unreachable until M3, and an early arrival meets the scan's LOUD miss).
+> Gates: micros 52/52; ALL EIGHT k gates 30/36/40/29/26/16/46/23; march
+> ✓✓ FIXED POINT m2 == m3 (sha 2d6919e2…; the keyed "__resume" minted
+> nowhere in the wheel — the 508 grep hits are the pre-existing
+> __resume_val_/__resume_in local families). **THE M1 MECHANISM ARC IS
+> COMPLETE — M1.1 world-tag homomorphism · M1.2 composer pair · M1.3 k2
+> boundary check · M1.4 args packet · M1.5 state-commit tail · M1.6
+> resolution ladder — six commits, six fixpoints (one arbitrated
+> TRANSITION), every crucible green on its first run.** NEXT — M2's
+> remaining ladder, each crucible pre-cut-classifiable (two sequential
+> top-level resumes wrap the feature): mn-nested-choose (driver
+> re-entry: the product of two choices) · mn-uzero-abort (the abandon
+> path: an arm that never resumes delivers its value as the install's —
+> the driver gets this right by construction) · mn-resume-across-install
+> (THE acid distillation — A4's re-install-in-k arbitrates) ·
+> mn-dynamic-abort-in-k (the A2 arbitration) · mn-uzero-through-frames
+> (the UZero blast-radius measurement) · mn-called-fn-resume-typed (the
+> closed-declared-row + R→S gate) · mn-option-protocol (ratchets the
+> +14); then M3 THE CUT (classifier fixpoint + capability mark + op
+> binding/E_ResumeAmbiguousOp + choose/enumerate flip + the march
+> TRANSITION + boot/IDE re-pin + mn-backtrack-full — "flipped but
+> unproven is the drift").**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

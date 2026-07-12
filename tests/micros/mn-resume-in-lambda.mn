@@ -1,0 +1,28 @@
+// band B M1.6 gate — the resume-resolution ladder's CAPTURE tier (bank
+// Ruling 2/A3): a resume inside a let-bound lambda W7-called within a
+// MultiShot arm. The ResumeExpr free-vars arm reports "__k" free, so the
+// lambda CAPTURES the k record like any local; resolve_resume_k finds it
+// RUpval and calls it through the same W7 convention. backtrack's closure
+// shape, minus abort. The two top-level resumes classify the op MultiShot
+// by the existing grade counter (the pre-cut-classifiable pattern).
+//   k = ?? + 3. a = resume(1) → 4; b = go(4) = (4+3)*2 → 14;
+//   c = resume(2) → 5; arm = a + b + c → exit 23.
+// The pre-M1.6 broken path: the lambda's resume emitted a raw
+// (local.get $__k) — an undefined local, a loud assembly refusal.
+effect Choice {
+  pick() -> Int
+}
+
+handler twice {
+  pick() => {
+    let a = resume(1)
+    let go = (v) => resume(v) * 2
+    let b = go(4)
+    let c = resume(2)
+    a + b + c
+  }
+}
+
+fn body() with Choice = pick() + 3
+
+fn main() = { body() } ~> twice

@@ -2968,12 +2968,38 @@ fn lower_resume_callk(handle, val, state_updates) = {
     if len(state_updates) == 0 { lower_expr(val) }
     else { LLocal(handle, val_name) }
   LBlock(handle, prefix ++ [
-    LLet(handle, kr, LCall(handle, LLocal(handle, "__k"), [val_lo])),
+    LLet(handle, kr, LCall(handle, resolve_resume_k(handle), [val_lo])),
     LIf(handle, LGlobal(handle, "yield_flag"),
         [LYield(handle, "", [], LConst(handle, LInt(0)))],
         [LConst(handle, LInt(0))]),
     LLocal(handle, kr)
   ])   // drift-audit: ignore — one-shot stmt-list concat, no loop
+}
+
+// The resume-resolution LADDER (band B M1.6, bank Ruling 2 as amended by
+// A3) — the k channel mirrors the perform's dispatch gradient exactly:
+//   lexical  — "__k" is the arm's own leading param (the k1 fast path,
+//              KEPT; arm params bind handle 0, so the node handle carries
+//              the type — byte-identical to the pre-ladder form).
+//   capture  — "__k" was captured into this lambda's record (the
+//              ResumeExpr free-vars arm reports it; resolve_captures_outer
+//              threaded it) — the LUpval read, N frames deep.
+//   evidence — the "__resume" keyed entry (delimited-continuation
+//              semantics: the nearest enclosing prompt), threaded by the
+//              MultiShot arm's sst_ clone at its interior effectful call
+//              sites. THE WRITER LANDS AT THE CUT (A3: the capability mark
+//              — pre-cut it would change wheel bytes); until then this
+//              tier is unreachable (a called-fn resume lowers OneShot
+//              under the classifier gap), and an early arrival meets the
+//              strict keyed scan's LOUD miss, never a silent dummy.
+fn resolve_resume_k(handle) = {
+  let (res, lh) = ls_resolve("__k")
+  match res {
+    RLocal       => LLocal(if lh == 0 { handle } else { lh }, "__k"),
+    RUpval(slot) => LUpval(if lh == 0 { handle } else { lh }, slot),
+    RFbPrior(_)  => LEvRef(handle, "__resume"),
+    RGlobal      => LEvRef(handle, "__resume")
+  }
 }
 
 // The k1 SPINE: the position that evaluates FIRST in the frame body — a
@@ -3550,8 +3576,18 @@ fn free_vars_expr(e, bound) = match e {
   },
 
   ResumeExpr(val, state_updates) =>
-    free_vars_merge(collect_free_vars(val, bound),
-              free_vars_state_updates(state_updates, bound)),
+    // band B M1.6 (bank Ruling 2/A3): a resume USES the enclosing arm's k,
+    // so "__k" is one of its free names. A lambda inside a MultiShot arm
+    // thereby CAPTURES the k record like any local — the capture tier of
+    // the resume-resolution ladder (lower_resume_callk walks it). Anywhere
+    // __k is NOT an arm-frame local — a OneShot arm's lambda, a k-fn build,
+    // an ordinary fn — "__k" resolves RGlobal and the phantom-capture fence
+    // DROPS it: zero captures added, bytes identical (Law 7 holds on the
+    // wheel's own backtrack, whose resume-in-lambda sits under the
+    // OneShot-misclassified choose until the cut).
+    free_vars_merge(["__k"],
+      free_vars_merge(collect_free_vars(val, bound),
+                free_vars_state_updates(state_updates, bound))),
   FieldExpr(rec, _)    => collect_free_vars(rec, bound),
 
   PipeExpr(_, l, r) =>

@@ -3018,13 +3018,16 @@ fn emit_expr(expr) = match expr {
     // the frame's own result type (h = the REWRITTEN FRAME's tail node; a
     // Float-tailed frame keeps its f64 ft — never the perform's width). An
     // argless yield's bytes are unchanged (Ruling 3: strictly additive).
-    // The FLOOR form (k = LConst 0) is the loud comment-marked refusal:
-    // off-spine perform / off-spine k2 boundary / arm-state / re-yield —
-    // k2/k3's named homes.
-    match k_expr {
-      LConst(_, _) =>
-        wat_emit("    (unreachable) ;; multishot yield floor — off-spine perform / off-spine k2 boundary / arm-state / re-yield (k2/k3)\n"),
-      _ => {
+    // The FLOOR form carries the EMPTY op name (off-spine resume perform /
+    // k2_floor_wrap's re-yield check) — the loud comment-marked refusal. M4:
+    // the discriminator is op == "", NEVER the k value: an ABANDON yield's k
+    // is also a bare LConst(0) (the dead continuation, stored in $yield_k and
+    // never read), but it carries the REAL op name and takes the real-yield
+    // path — the driver runs the arm, which returns without calling k, and
+    // the loop delivers the arm value flag-clear (abandon by construction).
+    if op_name == "" {
+        wat_emit("    (unreachable) ;; multishot yield floor — off-spine perform / off-spine k2 boundary / arm-state / re-yield (k2/k3)\n")
+      } else {
         emit_expr(k_expr)
         wat_emit("    (global.set $yield_k)\n")
         if len(args) > 0 {
@@ -3056,7 +3059,6 @@ fn emit_expr(expr) = match expr {
           _    => wat_emit("    (i32.const 0)\n")
         }
       }
-    }
   },
 
   LKExtend(h, k_expr) => {

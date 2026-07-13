@@ -271,6 +271,7 @@ type ResumeDiscipline
   = OneShot
   | MultiShot
   | Either
+  | Abandon   // M4 — the arm NEVER resumes AND returns a meaningful value: it delivers that value as the INSTALL's, abandoning the continuation (a UZero grade over a concrete return; `abort() -> Option`). A dead continuation, so the perform yields with a dummy k and the remainder deadens — distinct from MultiShot (live k, off-spine unsupportable → floor) and OneShot (bottom/noreturn: `fail -> a`, no value to abandon)
 
 // ─── Usage — the coeffect multiplicity grade {0, 1, ω} ─────────────
 // How many times a value is used, as a join-semilattice. THE shared
@@ -1946,7 +1947,8 @@ fn show_discipline(d) with Pure = {
   match d {
     OneShot   => "OneShot",
     MultiShot => "MultiShot",
-    Either    => "Either"
+    Either    => "Either",
+    Abandon   => "Abandon"
   }
 }
 

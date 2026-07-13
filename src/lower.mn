@@ -163,6 +163,7 @@ fn multishot_ops_of(hname) =
       arms
         |> filter((a) => match op_resume_discipline(handler_arm_op_name(a)) {
              MultiShot => true,
+             Abandon   => true,   // M4 — an abandon op needs the driver too: it delivers the arm value on flag-clear (the redrive's existing behaviour IS abandon)
              _         => false
            })
         |> map((a) => (handler_arm_op_name(a), handler_arm_arity(a))),
@@ -942,6 +943,7 @@ fn effect_has_multishot_op(ename) = match env_lookup(ename) {
       EffectDeclKind(op_names) =>
         any((op) => match op_resume_discipline(op) {
           MultiShot => true,
+          Abandon   => true,   // M4 — an abandon op yields, so its row can_yield: the caller treats the call as a k2 boundary and propagates the flag (risky → Some(risky) → the install)
           _         => false
         }, op_names),
       _ => false
@@ -1667,6 +1669,57 @@ fn lookup_effect_op_names(eff_name) = {
 //     IDENTITY; the read KEY-SCANS for it (no row position to shift). op_slot
 //     stays a position — the op's index in its effect's IMMUTABLE decl-order
 //     op-list (a stable identity, not a row position).
+// M4 — divergence: an expression that ALWAYS yields (unwinds and never
+// returns to its own position). An Abandon-op perform is the leaf; an
+// if/match whose every branch diverges diverges; a block diverges if a
+// statement diverges or its value does. Code after a diverging expression
+// in a block is DEAD (the deaden in lower_expr's BlockExpr arm). A call to
+// a fn that always aborts is NOT caught here (inter-procedural — the named
+// follow-up Hβ.lower.diverging-callee-analysis; rare, and the flag still
+// propagates via the caller's k2 boundary, only the local dead code isn't
+// pruned).
+fn expr_diverges(node) = {
+  let N(b, _, _) = node
+  match b {
+    // Statements wrap their expression — a block's stmts are NStmt(...), so
+    // first_diverging must unwrap to reach the perform.
+    NStmt(ExprStmt(e))        => expr_diverges(e),
+    NStmt(LetStmt(_, init))   => expr_diverges(init),
+    NExpr(CallExpr(f, _)) => {
+      let N(fb, _, _) = f
+      match fb {
+        NExpr(VarRef(name)) => match op_resume_discipline(name) {
+          Abandon => true,
+          _       => false
+        },
+        _ => false
+      }
+    },
+    NExpr(IfExpr(_, t, e))    => expr_diverges(t) && expr_diverges(e),
+    NExpr(MatchExpr(_, arms)) => all_arms_diverge(arms, 0),
+    NExpr(BlockExpr(stmts, final)) =>
+      match first_diverging(stmts, 0) {
+        Some(_) => true,
+        None    => expr_diverges(final)
+      },
+    _ => false
+  }
+}
+
+fn all_arms_diverge(arms, i) =
+  if i >= len(arms) { true }
+  else {
+    let (_, body) = list_index(arms, i)
+    if expr_diverges(body) { all_arms_diverge(arms, i + 1) } else { false }
+  }
+
+// The index of the first diverging statement, if any — everything past it
+// in the block is dead.
+fn first_diverging(stmts, i) =
+  if i >= len(stmts) { None }
+  else if expr_diverges(list_index(stmts, i)) { Some(i) }
+  else { first_diverging(stmts, i + 1) }
+
 // Lexical install wins over the keyed forward (a nested handler shadows the
 // caller's evidence) — the seed's $lower_perform order, byte-faithful.
 fn lower_perform_dispatch(handle, op_name, lo_args) =
@@ -1675,9 +1728,22 @@ fn lower_perform_dispatch(handle, op_name, lo_args) =
     // on-spine sites are consumed by lower_body_reified, which constructs
     // the real k; one reaching the ordinary dispatch is OFF-spine (an
     // if/match/nested-call interior, or args-bearing) — the LOUD floor,
-    // k2's composition home. Every OneShot/Either op falls through to the
-    // three tiers untouched (Law 7: the disc is a pure env read).
-    MultiShot => LYield(handle, op_name, [], LConst(handle, LInt(0))),
+    // k2's composition home. The floor carries the EMPTY op name (the emit
+    // floors on op == "", NEVER on the k value — an abandon yield's k is
+    // also a bare LConst, so op-name is the discriminator).
+    MultiShot => LYield(handle, "", [], LConst(handle, LInt(0))),
+    // M4 — an Abandon perform yields from ANY position with a DEAD k (the
+    // arm never resumes, so the continuation is abandoned). The k slot is a
+    // bare LConst(0) → the emit stores $yield_k = 0 (never read) and takes
+    // the real-yield path (op non-empty): set op/args/flag, return the
+    // width-honest dummy. The driver runs the arm, the arm returns without
+    // calling k, the loop exits flag-clear delivering the arm value as the
+    // install's — abandon by construction. The perform's own frame deadens
+    // its remainder (lower_expr's BlockExpr arm — an Abandon perform
+    // diverges); everything up the stack propagates via the EXISTING k2
+    // call-boundary check (never a bare return, which would skip an
+    // install's driver bracket — the M1.3 finding).
+    Abandon => LYield(handle, op_name, lo_args, LConst(handle, LInt(0))),
     _ => lower_perform_tiers(handle, op_name, lo_args)
   }
 
@@ -1937,10 +2003,30 @@ fn lower_expr_body(e, handle, span) = match e {
 
   BlockExpr(stmts, final_e) => {
     let cp = ls_push_scope()   // drift-audit: ignore — sequenced effectful scope checkpoint (LowerScope)
-    let lo_stmts = lower_stmt_list(stmts)
-    let lo_final = lower_expr(final_e)
+    // M4 — an Abandon perform DIVERGES (it always yields, unwinding to its
+    // install's driver), so any statement/expression after it is DEAD. The
+    // block's value IS the diverging statement's yield; the remainder deadens
+    // (never lowered), so post-abort EFFECTFUL code cannot run. Without this
+    // the abort's LYield stands but `s; abort(); print(x)` would raise the
+    // flag and STILL run print before the frame propagates (the crucibles'
+    // pure `0` hid it). The prefix statements up to the divergence lower
+    // and drop as usual; the diverging one lowers as the block VALUE (not
+    // dropped, so its yield is the block's result the enclosing frame
+    // propagates).
+    let result = match first_diverging(stmts, 0) {
+      Some(i) => {
+        let lo_prefix = lower_stmt_list(take(i, stmts))
+        let lo_diverge = lower_expr(list_index(stmts, i))
+        LBlock(handle, list_concat(lo_prefix, [lo_diverge]))
+      },
+      None => {
+        let lo_stmts = lower_stmt_list(stmts)
+        let lo_final = lower_expr(final_e)
+        LBlock(handle, list_concat(lo_stmts, [lo_final]))
+      }
+    }
     ls_pop_scope(cp)
-    LBlock(handle, list_concat(lo_stmts, [lo_final]))
+    result
   },
 
   MatchExpr(scrutinee, arms) => {
@@ -2065,7 +2151,15 @@ fn lower_expr_body(e, handle, span) = match e {
       // (k is immutable data; the reification happened at the PERFORMING
       // frame's yield, lower_body_reified). The catching handler
       // (in-memory / oracle-rollback / persist) is the swap.
-      MultiShot => lower_resume_callk(handle, val, state_updates)
+      MultiShot => lower_resume_callk(handle, val, state_updates),
+      // M4 — a resume inside a pure-Abandon op's arm is the MIXED case (the
+      // op has an abandon arm AND a resume arm). It does not occur in the
+      // wheel or crucibles: abort/fail are single-handler UZero, so a
+      // resume under an Abandon-graded op is unreachable-by-construction (a
+      // UZero arm has no resume). If it ever arises, the op must reify k at
+      // the perform (become MultiShot — the abandon perform's dead k=0
+      // would trap here, loud, never silent): Hβ.lower.abandon-with-resume-arm.
+      Abandon   => lower_resume_callk(handle, val, state_updates)
     },
 
   FieldExpr(rec, field) => {
@@ -3020,6 +3114,7 @@ fn lower_one_arm_decl(arm: {args: [String], body: N, op_name: String}, discrimin
   let disc = op_resume_discipline(arm.op_name)
   let arm_params = match disc {
     MultiShot => ["__k"] ++ arm.args,
+    Abandon   => ["__k"] ++ arm.args,   // M4 — the driver pushes (record, k) uniformly; an Abandon arm takes __k and ignores it (it never resumes), returning its value flag-clear so the driver delivers it as the install's
     _         => arm.args
   }
   let locals_handles = zeros_of_len(len(arm_params))
@@ -3165,9 +3260,15 @@ fn lower_resume_callk(handle, val, state_updates) = {
           [LBlock(handle, [
             LLet(handle, "__rd_{int_to_str(handle)}",
                  LPerform(handle, "__redrive_{hname}", [LLocal(handle, kr)], "")),
-            LIf(handle, LGlobal(handle, "yield_flag"),
-                [LYield(handle, "", [], LConst(handle, LInt(0)))],
-                [LConst(handle, LInt(0))]),
+            // The redrive LOOPS this handler's OWN ops (dispatch-until-clear),
+            // so a flag STILL raised after it is a FOREIGN op — M4 made abort
+            // an Abandon yield, so a resumed continuation that aborts bubbles
+            // its yield back through here (backtrack's try-fn resume feeding
+            // my_catch). It must PROPAGATE to the enclosing driver, NOT floor:
+            // __rd (a flagged dummy) flows up with the flag intact, the
+            // caller's driver/composer catches it, and a genuinely-unhandled
+            // foreign op still traps LOUDLY at the _start backstop. Flooring
+            // here (the pre-M4 form) trapped the legitimate foreign crossing.
             LLocal(handle, "__rd_{int_to_str(handle)}")
           ])],
           [LLocal(handle, kr)])),
@@ -3324,7 +3425,7 @@ fn k2_spine_call(node) = {
       },
       _ => None
     },
-    NExpr(CallExpr(f, _))          => {
+    NExpr(CallExpr(f, args))       => {
       let N(fb, _, fh) = f
       match fb {
         NExpr(VarRef(name)) =>
@@ -3332,6 +3433,16 @@ fn k2_spine_call(node) = {
           // perform itself); a k2 boundary is an ordinary CALL whose callee
           // may carry a yield out.
           if lower_effect_name_of_op(name) == "" && can_yield(fh) { Some(node) }
+          // M4 — the callee doesn't yield, but an ARG might: the first
+          // can-yield arg is the boundary (`Some(risky())`). ONLY for a
+          // CONSTRUCTOR callee — k_remainder can rebuild the variant with
+          // the arg substituted, but a FN-call remainder (evidence, arity)
+          // is unbuilt (Hβ.lower.k2-remainder-fncall), so descending there
+          // would floor a genuine yield AND mis-reify an over-approximated
+          // can-yield arg (parse `at`'s `kind_eq(_, token_kind_at())` — the
+          // m3-trap the divergence pinner caught). A fn-call arg's yield
+          // stays k2_floor_guard's business (floored off-spine, loud).
+          else if callee_is_constructor(name) { k2_spine_in_args(args, 0) }
           else { None },
         _ => None
       }
@@ -3339,6 +3450,33 @@ fn k2_spine_call(node) = {
     _ => None
   }
 }
+
+// M4 — is this name a value CONSTRUCTOR (an ADT variant, `Some`/`Branch`)?
+// The env's ConstructorScheme is the one truth (the same read lower_expr
+// dispatches construction on); a fn / effect-op / unknown name is not.
+fn callee_is_constructor(name) = match env_lookup(name) {
+  Some(entry) => {
+    let (_, _, kind) = entry
+    match kind { ConstructorScheme(_, _) => true, _ => false }
+  },
+  None => false
+}
+
+// M4 — find the first can-yield ARG (evaluation order left-to-right). An
+// arg carrying a k2 boundary IS the boundary; a TRIVIAL arg (literal /
+// VarRef, re-evaluable in the remainder) passes through to the next; a
+// non-trivial non-yielding prefix arg cannot be re-evaluated in the k, so
+// it floors (Hβ.lower.k2-nontrivial-prefix-arg — the crucibles are
+// single-arg `Some(call)`, no prefix).
+fn k2_spine_in_args(args, i) =
+  if i >= len(args) { None }
+  else {
+    let arg = list_index(args, i)
+    match k2_spine_call(arg) {
+      Some(hit) => Some(hit),
+      None      => if k_trivial(arg, []) { k2_spine_in_args(args, i + 1) } else { None }
+    }
+  }
 
 // The substitution for a node, by handle identity. subs = [(ph, read_lo)]
 // — the innermost hole reads the k fn's own param, an enclosing level's
@@ -3369,6 +3507,7 @@ fn k_subs_inside(node, subs) = {
         NExpr(BlockExpr(stmts, final)) =>
           if len(stmts) == 0 { k_subs_inside(final, subs) } else { false },
         NExpr(PipeExpr(_, l, _))       => k_subs_inside(l, subs),
+        NExpr(CallExpr(_, args))       => any((a) => k_subs_inside(a, subs), args),   // M4 — a sub inside a constructor/call arg (the `Some(call)` boundary)
         _                              => false
       }
     }
@@ -3395,6 +3534,23 @@ fn k_remainder(node, subs) = {
             LBinOp(h, op2, k_remainder(l, subs), k_remainder(r, subs)),
           NExpr(BlockExpr(_, final))  => k_remainder(final, subs),
           NExpr(PipeExpr(_, l, r))    => lower_pipe_complete(k_remainder(l, subs), r, h),
+          // M4 — a boundary inside a CONSTRUCTOR arg (`Some(risky())`): the
+          // remainder is the variant rebuilt with the arg substituted. The
+          // tag is read LIVE from the ConstructorScheme (never re-derived).
+          // A fn-CALL boundary reconstruction (evidence, arity resolution)
+          // is the named floor Hβ.lower.k2-remainder-fncall — loud, unbuilt.
+          NExpr(CallExpr(f, args)) => {
+            let N(fbody, _, _) = f
+            match fbody {
+              NExpr(VarRef(name)) =>
+                match env_lookup(name) {
+                  Some((_, _, ConstructorScheme(tag, _))) =>
+                    LMakeVariant(h, tag, map((a) => k_remainder(a, subs), args)),
+                  _ => LYield(h, "", [], LConst(h, LInt(0)))
+                },
+              _ => LYield(h, "", [], LConst(h, LInt(0)))
+            }
+          },
           _ => LYield(h, "", [], LConst(h, LInt(0)))
         }
       }
@@ -3563,6 +3719,24 @@ fn lower_body_reified(body_node) =
 // keeps byte-identity by construction (Law 7).
 fn k2_guard(e) = if ls_program_may_yield() { k2_floor_guard(e, true) } else { e }
 
+// M4 — does the install body's TERMINUS yield a FOREIGN op (one this handler
+// does not cover)? Walks only the value-propagating positions (a yield, a
+// block's last, an if/match branch, a k2 boundary's dummy path) — NOT into
+// calls or fn bodies (separate frames whose yields are their own concern).
+// A foreign terminus yield means the driver bubbles it but the enclosing
+// remainder is not in the k → the install is not guarded for that crossing.
+fn body_has_foreign_yield(e, hname) = match e {
+  LYield(_, op, _, _) =>
+    op != "" && !handler_covers_effect(hname, lower_effect_name_of_op(op)),
+  LBlock(_, stmts)      => len(stmts) > 0 && body_has_foreign_yield(last(stmts), hname),
+  LIf(_, _, t, el)      =>
+    (len(t) > 0 && body_has_foreign_yield(last(t), hname))
+    || (len(el) > 0 && body_has_foreign_yield(last(el), hname)),
+  LMatch(_, _, arms)    => any((pb) => { let (_, body) = pb; body_has_foreign_yield(body, hname) }, arms),
+  LKExtend(_, k)        => body_has_foreign_yield(k, hname),
+  _                     => false
+}
+
 fn k2_floor_guard(e, terminus) = match e {
   LSuspend(h, o, f, args, ev, tail) => {
     let walked = LSuspend(h, o, k2_floor_guard(f, false),
@@ -3583,15 +3757,21 @@ fn k2_floor_guard(e, terminus) = match e {
                                     (pat, k2_floor_guard(body, terminus))
                                   }, arms)),
   LHandleWith(h, b, hn, hname, inits, an, evs) => {
-    // The body's terminus is driver-guarded ONLY when a driver exists
-    // (multishot_ops_of != [] — the ONE decider). A DRIVERLESS install's
-    // yield exits the bracket as a flagged dummy; in a non-propagating
-    // position the enclosing code would compute on it silently (the
-    // measured 9-not-29 install-crossing value loss), so the whole install
-    // wraps in the loud floor — the dormant A4 gate: re-install-in-k flips
-    // it to composition (Hβ.lower.stateful-install-crossing-yield stays
-    // the stateful floor).
-    let has_driver = len(multishot_ops_of(hname)) > 0
+    // The body's terminus is driver-guarded when a driver exists
+    // (multishot_ops_of != []) AND the driver handles the body's OWN yield.
+    // A DRIVERLESS install's yield exits the bracket as a flagged dummy; in a
+    // non-propagating position the enclosing code would compute on it
+    // silently (the measured 9-not-29 install-crossing value loss), so the
+    // whole install wraps in the loud floor — the dormant A4 gate:
+    // re-install-in-k flips it to composition. M4 added the second clause:
+    // an install whose body yields a FOREIGN op (one the driver does not
+    // cover — `{ pick() + 3 } ~> mycatch` where mycatch handles only abort)
+    // is NOT guarded for that crossing (the driver bubbles the foreign op,
+    // but the enclosing remainder is not in the k). Without it, mycatch's
+    // new abandon-driver defeated this floor and silently computed the
+    // incomplete 9 (Hβ.lower.stateful-install-crossing-yield stays the
+    // stateful floor; the foreign-crossing re-installs in the k at A4).
+    let has_driver = len(multishot_ops_of(hname)) > 0 && !body_has_foreign_yield(b, hname)
     let rebuilt = LHandleWith(h, k2_floor_guard(b, has_driver),
                               k2_floor_guard(hn, false), hname,
                               k2_floor_list(inits), an, k2_floor_list(evs))

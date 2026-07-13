@@ -1228,6 +1228,33 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > mn-resume-across-install re-pins 134→29), mn-called-fn-resume-typed
 > (the R→S typed binding — infer still recovers E_ResumeOutsideArm ×2 on
 > a bound fn), M5 the handler return clause.**
+>
+> **▶ M4 ROOT-CAUSED + DESIGNED, NOT BUILT (2026-07-12) — the UZero abandon
+> cut is an `Abandon` DISCIPLINE, not a classifier gate; full design banked in
+> docs/research/multishot-general-design.md ("M4 — the Abandon discipline").**
+> The return-type CLASSIFIER is right and stashed (stash@{0}: `arm_disc_of`
+> gates the UZero branch on the op's return type read live from its
+> EffectOpScheme — a bare TVar (`fail -> a`) or `!`-parsed-TUnit (`abort -> !`,
+> intentionally-OneShot per types.mn:1571) is BOTTOM → stays OneShot). Census
+> (fast static brace-depth scan, 3 arms) proved all three wheel UZero arms stay
+> put, so the wheel compiles BYTE-IDENTICAL (m2 == m3, not a transition) — only
+> out-of-wheel crucibles with `abort -> Option` (concrete) flip. But the
+> classifier alone TRAPS 134 (mn-backtrack-full 30 → 134, measured then reverted
+> to green): `abort()` in `if n>3 { abort(); 0 }` is OFF the k2 spine
+> (k2_spine_call doesn't descend into IfExpr branches) → k2_floor_guard floors
+> it. Abandon (dead continuation → deaden + unwind from any position) and resume
+> (live continuation, off-spine unsupportable → floor correctly) need DIFFERENT
+> lowering, and the op disc must carry which — hence the `Abandon` variant. The
+> unwind rides the EXISTING k2 call-boundary propagation (flag-raised value up
+> through risky → Some(risky) → the install; mn-k2-frame's machinery), NEVER a
+> bare `(return)` (skips an install's driver bracket, the M1.3 finding); only
+> the abort's own frame needs new handling — deaden its block-remainder
+> (post-abort EFFECTFUL code must not run; the crucibles' pure `0` hid this, so
+> "just skip the floor" is a silent gap, forbidden). The ~15-site cut is the
+> next focused effort. Method lesson (Morgan's "is this the best way"): the
+> UZero census is a fast static scan (seconds), NEVER an 18-min instrument
+> rebuild — the ⟲-forbidden Heisenberg path, wasted this session and which
+> didn't even compile the probe into m2.**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

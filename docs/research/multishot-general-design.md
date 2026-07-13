@@ -388,3 +388,76 @@ arm_state_ctx([], OneShot, "") and the singleton tier reads the live
 bracket global). Full landing narrative: PLAN §7's 2026-07-12 entry.
 Remaining ladder: M4 abandon cut, A4 narrowed, the R→S typed binding
 (mn-called-fn-resume-typed), M5 return clause.
+
+## M4 — the Abandon discipline (design banked 2026-07-12, root-caused, NOT yet built)
+
+M4's return-type CLASSIFIER is correct and stashed (stash@{0}
+"M4-wip-return-type-gate", src/infer.mn +47/-3): `arm_disc_of(grade, ret)`
+replaces `usage_to_disc`, gating the UZero branch on the op's return type read
+live from its EffectOpScheme's TFun (`scheme_ret_ty`). Census (fast static,
+brace-depth-aware) found EXACTLY three wheel UZero arms: `abort_exit.fail -> a`
+(bare TVar, bottom), `catch_abort.abort -> !` (the never type, parses TUnit —
+types.mn:1571 documents it intentionally OneShot), and
+`synth_default.enumerate_inhabitants` (actually UMany via THE CUT's
+call-substitution, not UZero). All three stay put under the gate (TVar|TUnit →
+OneShot), so NO wheel op changes disc — the wheel compiles byte-identically
+(m2 == m3, not even a transition). Only out-of-wheel crucibles with
+`abort() -> Option` (concrete) flip.
+
+THE GAP the gate alone can't close (measured, not theorised): flipping
+`abort -> Option` to MultiShot traps 134 in all three abort crucibles
+(mn-option-protocol, mn-uzero-through-frames, mn-backtrack-full 30→134). Root,
+debug-name backtrace: `risky = if n > 3 { abort(); 0 }` — the abort sits in an
+IF-BRANCH, which is OFF the k2 spine (k2_spine_call's grammar is binop-left /
+empty-block-final / PForward-left / CallExpr — it does NOT descend into
+IfExpr branches or match arms), so k2_floor_guard FLOORS it
+(`multishot yield floor — off-spine perform`). The bank's "under the driver,
+don't call k, return" framing quietly assumed the perform is on-spine under an
+existing driver; the crucibles' real shape (abort in a conditional, non-tail
+block) is neither.
+
+WHY a distinct `Abandon` discipline (not just MultiShot): abandon and resume
+need DIFFERENT lowering and the op disc must carry which. An abandon perform's
+continuation is DEAD (the arm never resumes), so it must yield-and-unwind from
+ANY position with the remainder DEADENED (k_deaden_rest, not reify_frame_k). A
+resume perform off-spine is genuinely unsupportable (its remainder is live and
+control-flow-entangled) → the floor is correct THERE. k_spine_next can't just
+descend into if-branches for both: reifying a RESUME-in-if-branch remainder is
+control-flow-tricky (the if-join), while an ABANDON-in-if-branch remainder is
+dead (deaden, don't reify). The disc is what tells them apart. A bare `(return)`
+after the yield is NOT the unwind (it skips an enclosing install's driver
+bracket — the M1.3 finding); the unwind is the value flowing up flag-raised
+through each frame's EXISTING k2 call-boundary check (risky → Some(risky) → the
+lambda → the install), which already works (mn-k2-frame). Only the abort
+perform's OWN frame needs the new handling: deaden the rest of its block, yield
+the dummy as that position's value.
+
+THE CUT (coordinated, ~10-15 sites, TCont-arity precedent):
+- types.mn: `Abandon` added to ResumeDiscipline; every match handles it.
+- infer.mn (from the stash): `arm_disc_of` UZero + concrete-non-unit → Abandon
+  (TVar|TUnit stay OneShot — wheel byte-identical); `disc_join` — Abandon joins
+  with OneShot/Abandon → Abandon, with MultiShot → MultiShot (any resuming arm
+  dominates → the real-k path).
+- lower.mn: `lower_perform_dispatch` Abandon → `LYield(op, args, dummy_k)`
+  (reuse the existing form); a DIVERGENCE-deaden in block/if lowering — an
+  Abandon perform diverges, so statements/exprs after it in its enclosing block
+  are dead (the block's value IS the abort yield); `k2_floor_guard` skips an
+  Abandon-op LYield (a legit abandon yield, never floored);
+  `lower_one_arm_decl` Abandon → `__k` param like MultiShot (arm ignores it);
+  `multishot_ops_of` / `can_yield` include Abandon ops (yield-capable, driver
+  needed).
+- wasm.mn: the redrive already delivers the arm value on flag-clear (abandon by
+  construction) — Abandon handlers just need to be in ms_handler_names.
+
+GATES: mn-option-protocol → 42 (the flip), mn-uzero-through-frames → 33 (same
+value, cleaner mechanism), mn-backtrack-full stays 30 (every abort in tail
+position — convention-independent), full battery + all k-gates, march m2 == m3
+(wheel byte-identical — the crucibles are out-of-wheel). Named follow-up:
+`Hβ.lower.uzero-unit-abandon` (a genuine unit-returning abandon arm — none in
+the wheel; () carries no value so the concrete-non-unit signal suffices).
+
+METHOD NOTE (the session's lesson, per Morgan's "is this the best way"): the
+UZero census should have been the fast static brace-depth scan (3 arms,
+seconds), NOT an 18-min instrument rebuild (which didn't even fire —
+UZEROCENSUS never compiled into m2). Wheel-eprint census is the ⟲-forbidden
+Heisenberg/slow path; binary-patch probes or the march battery are the census.

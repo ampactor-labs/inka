@@ -371,3 +371,20 @@ mn-nested-choose = pick()*pick() = 9 (the diagonal computes 10),
 mn-nested-depth3 = 27 (the two-outer-hole environment),
 mn-nested-state = 51 (interleaved arm invocations against the one
 install record — live loads, commit-before-k).
+
+## M3 — LANDED (2026-07-12)
+
+The cut shipped: classifier fixpoint + binding worklist + the unconditional
+bound-fn wrap + the "__resume" evidence writers, with mn-backtrack-full=30
+and mn-resume-in-called-fn=9 green through m2 AND m3, the march ruling
+TRANSITION (m3 == m4, sha 8311d097…), boot re-pinned (ac204467…). The op
+binding stayed unique in practice (three redrives: backtrack, pick_first,
+synth_default — the two censused ops' handlers); E_ResumeAmbiguousOp
+remains declared for the day a program arms one op in two handlers. The
+deep root the cut surfaced — the ambient arm context's ambiguous op edge
+pushing dynamically-scoped reads onto lexical clone-chain threading — is
+closed by deletion (arm_state_default; the boundary installs
+arm_state_ctx([], OneShot, "") and the singleton tier reads the live
+bracket global). Full landing narrative: PLAN §7's 2026-07-12 entry.
+Remaining ladder: M4 abandon cut, A4 narrowed, the R→S typed binding
+(mn-called-fn-resume-typed), M5 return clause.

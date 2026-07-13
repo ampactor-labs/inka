@@ -1154,6 +1154,80 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > (classifier fixpoint + capability mark + op binding/E_ResumeAmbiguousOp
 > + choose/enumerate flip + the march TRANSITION + boot/IDE re-pin +
 > mn-backtrack-full — "flipped but unproven is the drift").**
+>
+> **▶▶ M3 THE CUT LANDED (2026-07-12) — the march ruled ✓✓ TRANSITION
+> (m2 ≠ m3 by design, m3 == m4 self-confirmed sha 8311d097…, provenance
+> genuine: m4 generated 22 min after m3 by RUNNING m3 on the wheel); boot
+> RE-PINNED from m3 (sha ac204467…), the IDE re-packed from the same m3
+> (node shim verified), the k gates ENTER the verify baseline (52 → 66
+> micros; resume-across-install=134 stays in the explicit ladder — a
+> trap-exit expectation doesn't belong in the floor harness).** The cut
+> as landed: the classifier fixpoint (per-fn resume summaries with call
+> substitution over the 3-point Usage lattice; classify_grade_all a
+> body-level recursion — the arm-internal-perform gap fix; the wheel's
+> own choose + enumerate_inhabitants flip MultiShot exactly as censused —
+> the three redrives in m3 are backtrack/pick_first/synth_default, the
+> two ops' handlers); the binding worklist (MultiShot arms' free vars ∩
+> marked fns); the bound-fn wrap — UNCONDITIONAL, because a conditional
+> `~>` install poisons the wheel's own lexically-resolved evidence (the
+> install-body's call sites bind the lexical __hstate local; a
+> branch-gated install leaves it unassigned on the other path); the
+> "__resume" k evidence writers at call/pipe sites gated by
+> resume_bind_target. **THE DEEP ROOT the cut exposed (rw4 — any
+> let-bearing OneShot resume arm, 4 starved reads of 168 scans): the
+> ambient arm context had TWO handlers (arm_state_ctx + an
+> arm_state_default twin), so the op edge was AMBIGUOUS and every
+> current_resume_discipline/current_state_fields/current_arm_handler
+> read fell to the lexical evidence floor — clone-chain threading for a
+> DYNAMICALLY-SCOPED fact — while the row math (install absorption)
+> correctly told callers NOT to thread what the install covers.
+> arm_state_default is DELETED; the pipeline boundary installs
+> `~> arm_state_ctx([], OneShot, "")`; the edge is unique → the
+> singleton tier reads the LIVE `$arm_state_ctx_state_g` bracket global
+> (S1's home, saved/restored at every install) — dynamic scoping by
+> construction, the threading class dissolved.** En route, the silent
+> floor that hid it: ev_perform_entry's "deterministic OOB" `load_i32(0
+> - 8)` went IN BOUNDS when memory grew to 4GB (2fc7544) — every broken
+> evidence promise silently returned virgin 0 and the trap surfaced
+> frames away (the consumer read the postmortem's own breadcrumbs at
+> addresses 0/4 back as record=89504/base=8). Restored: `load_i32(0 -
+> 1)` — a 4-byte read crossing 2^32, OOB at ANY wasm32 memory size.
+> **The march then marched FOUR named-family faces, each closed
+> structurally in one cycle:** (1) duplicate fn definitions — the k
+> reification legitimately SHARES LFn subtrees (original decl + reified
+> k fn + inline residency), so the tree-order walks met one fn N times
+> (lambda_16603 ×4); the emitted fn set is a SET — dedup by name at both
+> materialization seams (the drain, the emit records), keep-first so
+> table/_idx/definitions agree. (2) dangling lexical evidence —
+> reify_frame_k re-lowers remainders inside a fresh k frame while the
+> lexical handler stack still held the original fn's pipeline installs
+> (__k_60854's `$__hstate_60873_BodyContext`): the lexical evidence
+> FENCE — a Tier-1 resolution names a fn-frame LOCAL, so resolution
+> STOPS at every fn-frame boundary (named fn, lambda, arm, fanout thunk,
+> reified k) and falls to the singleton/evidence tiers; closes the
+> each-with-effects lambda gap (§7's named frontier) by the same cut,
+> and schedule_in_stack's fence-stop realizes the documented "schedule
+> never crosses a call boundary" law. (3) dead redrives — emit_redrive_fns
+> walked the ENV (registration truth) and emitted `call
+> $op_backtrack_choose` for handlers whose arms reachability had
+> dropped; emission == reachability at the redrive seam (filter to
+> arm-fns-in-the-emitted-set). (4) the k2 floor wrap's else dummy was
+> hardcoded i32 under an f64-width call (score_one_position's proximity
+> weight — the compose-width-floor family arriving where it was named):
+> k2_floor_dummy reads repr_of(lookup_ty(h)) — RF64 → LFloat(0.0);
+> RI64/RF32/RV128 keep the word form and meet the same loud assembly
+> mismatch (band D width work). GATES AT THE BLESS: rungs 8/8 + micros
+> 52/52 + ALL SEVENTEEN k gates
+> 30/36/40/29/26/16/46/23/9/27/51/0/33/46/134/9/30 — through m2 AND
+> through m3 (mn-backtrack-full=30 the acid: the complete
+> arm→recursive-fn→lambda resume topology through the classifier flip;
+> mn-resume-in-called-fn=9 the called-fn resume through the evidence
+> tier). NEXT on the ladder: M4 the UZero abandon cut
+> (mn-option-protocol flips 0→42; mn-dynamic-abort-in-k becomes
+> testable), A4 narrowed (driverless-only descent;
+> mn-resume-across-install re-pins 134→29), mn-called-fn-resume-typed
+> (the R→S typed binding — infer still recovers E_ResumeOutsideArm ×2 on
+> a bound fn), M5 the handler return clause.**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

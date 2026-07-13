@@ -1255,6 +1255,47 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > UZero census is a fast static scan (seconds), NEVER an 18-min instrument
 > rebuild — the ⟲-forbidden Heisenberg path, wasted this session and which
 > didn't even compile the probe into m2.**
+>
+> **▶▶ M4 THE ABANDON DISCIPLINE — LANDED, SELF-HOSTED (2026-07-13). The march
+> ruled ✓✓ TRANSITION: m2 ≠ m3 (7156 emit-diff lines) by design, m3 == m4
+> byte-identical (sha f8f8ecc8…), battery 8/8 + 66/66 THROUGH m3; boot re-pinned
+> (67e44c9c…), IDE re-packed, verify 66/66 green.** `Abandon` is a fourth
+> `ResumeDiscipline`: `arm_disc_of` grades UZero + concrete-non-unit-non-TVar →
+> Abandon (a bare TVar / `!`-as-TUnit stays OneShot — bottom, no value to
+> abandon), so the wheel's own `abort -> !` and `fail -> a` DON'T flip (NO wheel
+> op becomes Abandon — the m2/m3 diff is purely the k-machinery emit change). The
+> mechanism, all landed: (1) `lower_perform_dispatch` — an Abandon perform is
+> `LYield(op, args, dead-k)`; the off-spine MultiShot floor moved to op="" so the
+> EMIT floors on op-name, never the k value (an abandon yield's dead k is a bare
+> LConst too). (2) the DEADEN — an Abandon perform DIVERGES, so `lower_expr`'s
+> BlockExpr arm truncates at the first diverging statement (`expr_diverges` /
+> `first_diverging`), so post-abort EFFECTFUL code cannot run (the crucibles'
+> pure `0` hid it). (3) the DRIVER — `multishot_ops_of` / `effect_has_multishot_op`
+> include Abandon; `lower_one_arm_decl` gives the arm `__k` (unused); the redrive
+> delivers the arm value on flag-clear (abandon by construction). (4) the k2
+> ARG-BOUNDARY — `k2_spine_call` descends into a CONSTRUCTOR call's args
+> (`callee_is_constructor` — NOT a fn call, whose remainder reconstruction is
+> unbuilt, `Hβ.lower.k2-remainder-fncall`), `k_remainder` rebuilds the
+> `LMakeVariant` with the boundary → hole (`Some(risky())` → `Some(kr)`). (5) the
+> REDRIVE-PROPAGATE — a resume(k) whose continuation aborts yields a FOREIGN op
+> back through the redrive; it now PROPAGATES to the enclosing driver (my_catch)
+> instead of flooring (backtrack's try-fn resume). (6) the `has_driver`
+> FOREIGN-YIELD gate — an install whose body directly yields an op the driver
+> doesn't cover (`{ pick() + 3 } ~> mycatch`) is not guarded for that crossing,
+> so mycatch's new abandon-driver no longer defeats the A4 floor (resume-across-
+> install stays 134). GATES: option-protocol 0→42 (the flip), uzero-through-
+> frames 33 (same value, no fragility), backtrack-full 30 (the acid — every
+> abort in tail position), resume-across-install 134, plus the eleven prior k
+> gates. THE SELF-HOST DIG: m3 first trapped in the parser's `at` — my
+> arg-descent over-fired on a FN-call arg (`kind_eq(_, token_kind_at())`) whose
+> remainder floored; the divergence pinner caught it, and restricting the
+> descent to CONSTRUCTOR callees (what k_remainder can rebuild) shrank the diff
+> 11748 → 7156 and closed the reproduction. Named residue: the fn-call k2
+> remainder, the non-trivial-prefix-arg, the effectful-non-block post-abort
+> deaden, and `Hβ.lower.abandon-with-resume-arm` (a pure-abandon op gaining a
+> resume arm needs the perform to reify k — unreachable in the wheel). NEXT:
+> A4 narrowed (re-install-in-k, resume-across-install 134→29), mn-called-fn-
+> resume-typed (R→S), M5 the handler return clause.**
 
 > **▶▶▶▶▶ FIRST LIGHT (2026-07-10, 87c0152): m3 == m4 — THE FIXED POINT, BOTH
 > HALVES SELF-CONFIRMED.** `diff m3.wat m4.wat` EMPTY by the orchestrator's own

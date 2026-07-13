@@ -461,3 +461,30 @@ UZero census should have been the fast static brace-depth scan (3 arms,
 seconds), NOT an 18-min instrument rebuild (which didn't even fire —
 UZEROCENSUS never compiled into m2). Wheel-eprint census is the ⟲-forbidden
 Heisenberg/slow path; binary-patch probes or the march battery are the census.
+
+## M4 — the Abandon discipline: LANDED, SELF-HOSTED (2026-07-13)
+
+Shipped and self-hosting (march TRANSITION: m2 != m3 by design, m3 == m4
+byte-identical sha f8f8ecc8…, battery 8/8 + 66/66 through m3, boot re-pinned
+67e44c9c…). `Abandon` is a fourth ResumeDiscipline; the classifier gates on
+the op's return type so no wheel op flips (the wheel's abort/fail are bottom).
+The six landed pieces: the dead-k perform yield (op="" floor discriminator),
+the divergence deaden, the driver (multishot_ops_of + redrive delivers on
+flag-clear), the k2 CONSTRUCTOR arg-boundary (k_remainder rebuilds
+LMakeVariant), the redrive-propagate (a foreign abort bubbling back through a
+resume), and the has_driver foreign-yield gate. Gates: option-protocol 0→42,
+uzero-through-frames 33, backtrack-full 30, resume-across-install 134.
+
+The self-host dig (the divergence pinner's fifth win): m3 first trapped in the
+parser's `at` because the arg-descent over-fired on a FN-call arg
+(`kind_eq(_, token_kind_at())`) whose remainder is a fn call k_remainder can't
+rebuild → floor → trap. Restricting the descent to CONSTRUCTOR callees (what
+k_remainder handles) closed it and shrank the m2/m3 diff 11748 → 7156.
+
+Named residue (loud floors, unreachable in the wheel):
+`Hβ.lower.k2-remainder-fncall` (fn-call remainder reconstruction),
+`Hβ.lower.k2-nontrivial-prefix-arg` (a non-trivial arg before the boundary),
+the effectful-non-block post-abort deaden, and
+`Hβ.lower.abandon-with-resume-arm` (a pure-abandon op gaining a resume arm must
+reify k). Full narrative: PLAN §7's 2026-07-13 entry. Next ladder: A4 narrowed
+(resume-across-install 134→29), the R→S typed binding, M5 the return clause.

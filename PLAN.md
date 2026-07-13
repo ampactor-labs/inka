@@ -86,6 +86,45 @@ its own truth). This is the deepest reason to get the medium real (§5): so it
 keeps every builder — Claude included — honest, the way it will keep developers
 honest.
 
+**Arche and telos — which is the root, and which is the point** (crystallized
+2026-07-13, an eight-agent adversarial pass refuting the founder's own
+DX-first framing; the refutation held). The **generative root — the arche — is
+the kernel**: one graph, two operations, and its closure `!Outside`. From those,
+*both* the felt developer experience (L6, projected bottom-up per §3 — each
+layer forced by the one below) *and* the five machine-age properties project;
+neither generates the other. The **developer is the telos** — what the medium
+is *for* ("the developer they become is the end") — and that is exactly *why
+proof wins whenever it meets convenience*: proof serves the developer better
+than an ergonomic lie, so a proof-first root is the DX-*honoring* one, and an
+ergonomics-first root would betray the developer at the first
+soundness/convenience trade (TypeScript's `any`, Scala's implicits, unchecked
+exceptions — the paved road to unsound languages, all "developer-friendly"
+first). So the DX-is-the-root reframe is a telos-as-arche error; the truer
+statement extends the one-law-at-three-scales convergence: **the developer's
+intent→expression gap and civilization's machine-authored-code trust gap are
+the SAME invariant — the Carried-Truth Law — read at two scales**, and the
+convergence of independent directions onto one answer *is* the truth signal
+(re-rooting on either scale makes that convergence tautological and dissolves
+the argument the north star rests on). The one true residue of the DX critique
+is a **guardrail, not a re-rooting**: keep the machine-age framing tethered to
+the actual developer at the keyboard, so it never inflates into grandiose
+detachment.
+
+And scope `!Outside` exactly where §1 places it, no wider: it is **toolchain
+reflexivity** — every lever to improve the medium (compiler, IDE, oracle,
+formatter, prover) is already a move *inside* it. It does NOT close the **intent
+space** — specs are born in the human's head, a genuine Outside where meaning
+originates, and a proof is always relative to a spec (proof-passing but
+intent-wrong code is a failure proof *launders*, not one it removes) — nor the
+**capability space** (Rice bounds a Turing-complete self-hosting verifier to
+sound *or* complete, never both; Mentl chooses sound-and-incomplete, accruing
+honest `V_Pending` debt over fabrication). Two Outsides the medium is still
+closing, both already named: the external-SMT residual
+(`Hβ.verify.smt-handler-swap`) and the internal correctness oracle
+(`Hβ.closure.correctness-oracle-internal` — first-light proves *reproduction*,
+not *correctness*, so today the micro-battery is itself an external oracle).
+Naming them is what buys the skeptic's trust and costs the thesis nothing.
+
 Mentl is not a programming language with good features. It is a **medium** — a
 lens so clear the developer looks through it and sees their program, not the
 language. The programs are the means; **the developer they become is the end.**
@@ -104,13 +143,35 @@ that could build a better medium is already a move *inside* this one.
 - **Unsurpassability is `!Outside`** — the medium's own negation primitive at
   topology altitude. As `!E` proves the absence of a capability, the fixed point
   proves the absence of an outside.
-- **Closed over proposers.** Any external intelligence — enumerative, SMT, a
-  model, whatever follows — plugs in as a `Synth` handler whose candidates must
-  survive checkpoint → infer → Verify → rollback before any human sees them. A
-  stronger proposer makes the medium stronger; it can never surpass the medium,
-  because its only path to execution runs through the kernel. The unit of
-  conversation with a model is the token (lossy, decaying); with the medium it
-  is the **constraint** (lossless, monotone, compounding).
+- **Closed over proposers — the medium is a verification-gated proposal
+  substrate.** Any external intelligence — the graph's own vocabulary,
+  type-directed enumeration, SMT, a model, whatever follows — plugs in as a
+  `Synth` handler whose candidates must survive checkpoint → infer → Verify →
+  rollback over the trail-backed shared image before any human trusts one. This
+  is **Oracle-Guided Inductive Synthesis / Synthesis-Modulo-Oracles** (Jha–Seshia
+  2017; Polgreen–Reynolds–Seshia, VMCAI 2022) instantiated on the memory model —
+  a published architecture Mentl realizes cleanly, not invents. A stronger
+  proposer strictly strengthens the medium and can never surpass it, because its
+  only path to execution runs through the kernel; the unit of conversation with a
+  model is the token (lossy, decaying), with the medium it is the **constraint**
+  (lossless, monotone, compounding). But be exact about what proof does, because
+  the equivocation is seductive: **proof is a MONOTONE FILTER, not a
+  generator.** "The proof becomes the dispatch" is TRUE and TOTAL at
+  instruction-selection (an f64 operand admits exactly one add opcode — a finite,
+  decidable set the type fully determines) and only a FILTER at authorship (a
+  type + refinement is a *partial* spec admitting infinitely many well-typed
+  inhabitants — `(xs) => 0`, `(xs) => sum(abs(xs))` both "prove" under
+  `[Int] -> Int where result >= 0`), so the dispatch *among the survivors* — which
+  proven program the developer actually MEANT — is **exogenous**: carried by the
+  human, or by an inductive/learned ranker that is itself a legitimate `Synth`
+  handler behind the gate, never a projection of the graph's truth at P. The
+  medium does not cut out the proposer; it makes the sieve **cheap, sound, and
+  universal over every proposer** — and finding the intended program (the ranking
+  prior, the piece a learned model legitimately owns) stays the proposer's job.
+  Even so, a partially-sound Mentl gate beats a fluent generator categorically: a
+  verifier with a known, characterizable, lintable hole emits a *checkable
+  derivation*, fails *systematically*, and accrues *monotone* constraints — three
+  properties a token-sampler cannot have.
 - **The proof, validated from eight directions.** Every domain spent a decade
   building *one of Mentl's arms* in isolation and stopped where it lacked the
   others: Faust has the verbs and no effects; JAX has the handlers and no real
@@ -377,6 +438,51 @@ ultimate form?"; the disposable seed's weaker inference catches up afterward
    e-graph (effect-aware equality saturation, live in lower). Each a move
    *within* the medium.
 
+   **The felt endpoint — verification-gated proposal at the `??` (§1's proposer
+   closure, made the surface).** As you type, a `??` is a typed CONSTRAINT (the
+   graph knows its type, effect-row, ownership, refinement); the cursor forks a
+   **finite, latency-budgeted set** of candidate fillings (the graph's
+   vocabulary, enumeration, an installed learned proposer), each run
+   checkpoint → infer → Verify → rollback on its own trail, and only the proven
+   survivors surface. This is **sample-then-filter, asynchronous and
+   best-effort — it may return nothing** — NOT an exhaustive multiverse per
+   keystroke: enumeration hits the synthesis exponential wall (FlashFill:
+   ~10²⁰ programs for a few examples), the cheap trail-fork lowers the
+   per-*visit* constant never the candidate *count*, and the IC cursor memoizes
+   the context AROUND the hole, not the search WITHIN it (each candidate is a
+   different query graph). Multi-shot is continuation-*reification* (resume one
+   computation with different values) — the substrate that makes each fork
+   cheap, not the search engine (a distinct operation from enumerating
+   subtrees; the vocabulary must not be borrowed for generate-and-test). The
+   **honest gaps, positive-form:** the ranker among survivors is `gates ×
+   proximity` today — sound only over the finite ANNOTATION lattice (effect-row
+   / ownership tightenings on already-written code); **code-body intent-ranking
+   is an inductive prior that legitimately lives behind the gate**, never a
+   graph projection (`Hβ.felt.intent-ranker-is-a-synth-handler`). And Verify
+   must **commit to a decidable refinement fragment** (Liquid/Flux-style) or the
+   per-keystroke filter is vaporware past `len(self) > 0`; the undecidable
+   residue is honest `V_Pending` debt (the sound-incomplete choice — never a
+   silent assume-true; the Dafny `{:axiom}` cautionary, `Hβ.verify.ledger-soundness`)
+   or a NAMED external-SMT `!Outside` (`Hβ.verify.smt-handler-swap`).
+   **Trustworthiness is a CONJUNCTION with a dependency order, not the crown
+   alone:** compiler-correctness *beneath* (a miscompiled wheel voids any
+   on-paper `!E`; first-light proved reproduction, not correctness) → Verify-
+   discharge-soundness *alongside* → `!E`-sound-under-poly (the crown, root of
+   the negative-capability BRANCH every differentiating guarantee inherits — the
+   load-bearing OPEN dependency, uniquely Mentl's) → spec-faithfulness *above*
+   (the crown does not touch it; proof-passing-but-intent-wrong code is a failure
+   proof LAUNDERS, band K's Lahiri worked-example). The genuinely novel residue,
+   all on the FILTER/substrate side (never on "search," where the field already
+   moved the proposer seat to a learned model): the **effect-and-ownership-typed
+   hole** prunes classes no simply-typed (Hazel) or refinement-but-effect-blind
+   (Synquid) hole can; **trail-fork + memcpy-persist** unifies backtrack with
+   durable execution (persist = memcpy) in one loop; **`??` is one absence
+   marker across SPACE (partial application) and TIME (the resumable
+   continuation)**; and **`!E`-gated speculation** — proving an effect's ABSENCE
+   is the license to *live-run* a candidate (only `!IO` runs freely; the rest
+   caught by a virtualizing handler), a correct answer to live programming's
+   "don't run the dangerous candidate," contingent on the crown landing.
+
 ### §5.U · The value layer — four projections of one cursor on one heap record
 
 *Verified by a 21-agent adversarial workflow; the inevitable form, not a choice.*
@@ -507,7 +613,31 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 **B · Continuations & TIME (arm 2, §4④) — the binding keystone.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (at the multi-shot producer's reify site) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed; the standardized multiple-memories proposal is this peer's substrate cash-out — a dedicated IMAGE memory snapshots whole while scratch lives apart, the memcpy boundary drawn by the module format itself) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` *(substrate PROBED 2026-07-10: wasmtime 43 `-W stack-switching` + wasm-tools 1.252 assemble native typed-continuations — single suspend/resume runs (fx1→10) — but the cont is LINEAR: resuming one twice PANICS the engine (`ptr::eq(head, self)`). So native gives ONE-shot free (already fast-pathed by direct-call) and does NOT solve MULTI-shot; the multi-shot keystone is RE-EXECUTION — `cont.new(body)` fresh per resume, replaying prior performs, the trail/rollback substrate the driver — not native cloning. `perform`→`suspend`, `resume(v)`→fresh-cont resume; the emit path switches to wasm-tools for continuation modules (WABT can't assemble `cont`). This IS the producer-invocation keystone the cardinality fix unblocked — see §7)* · `Hβ.continuations.multishot-reexecution-driver` *(the re-execution driver — PROVEN END-TO-END 2026-07-11, crucibles in tests/native-cont/: native-cont `twice` → 3 (identity) and 13 (non-identity `pick()+5`, the continuation after the perform captured natively), and the same model in Mentl source → 30 through boot. A multi-shot handler is a DRIVER over re-runs: `resume(v)` = fresh `cont.new(body)` resumed to the `suspend`, then resumed with v; `suspend` unwinds the perform to the driver so the arm runs OUTSIDE the body's stack (no re-entrancy — the trap the pure-Mentl outer-install form hit). Correct for identity / non-identity / no-perform. **BUT native conts are BLOCKED under WASI `_start` (wasmtime 43, verified 2026-07-11): a single `cont.new`+`resume` under `_start` panics `ptr::eq(head, self)` — the command entry runs on wasmtime's own fiber and a user continuation violates its stack invariant; `--invoke` works, `_start` (every real program) does not, and no flag avoids it.** So native conts are the O(1) future (an `!Outside` dependency until wasmtime carries them under `_start`), NOT the shipping substrate. THE SHIPPING PATH is the PURE-MENTL re-execution driver — `resume(v)` re-runs the body thunk under a one-shot replay handler, all ordinary handlers, works under `_start`: the DIRECT form (arm logic as a driver fn, no outer install) is proven (reexec-model.mn → 30) and correct when the body performs the op unconditionally (mn-multishot). The general form (conditional / no-perform bodies) needs the ARM-INTERNAL-PERFORM GAP closed — the re-run's perform must resolve to the inner replay, not re-enter the outer handler (the pure-Mentl outer-install driver's 134 trap). THAT is the real keystone dig, `!Outside`-clean. Each rerun is a stateless fork → trivially parallel + durable, the SPACE=TIME fork §5.U scheduled by `~> Schedule`)* · `Hβ.lower.arm-internal-perform-scope` *(new — the gate under multi-shot: a handler installed INSIDE an arm body (`bt() ~> replay(v)`) must shadow the enclosing handler for performs in the re-run; today the re-run's perform re-enters the outer handler (evidence threads to the wrong install). Closing it makes the pure-Mentl re-execution driver fully correct AND fixes arm-internal effectful installs generally — core handler correctness, not just multi-shot)* · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:3174) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
 
-**C · IFC — flow in the row (arm 4/6, §4⑥; W31 scaffold landed).** `Hβ.verify.ifc-noninterference` (umbrella; code `Hβ.types.ifc-flow-constraint`, types.mn:1029) ← `Hβ.ifc.dcc-noninterference-gate` → `.flowlabel-inference-in-hm` → `.pc-label-implicit-flow` → `.integrity-dual-lattice` (prompt-injection IS an integrity-flow violation) → `.declassify-robust` → `.flow-world-on-tcont` → `.agentic-fides-target`. DEP-rooted on `sound-neg-under-poly`.
+**C · `!Flow` — the crown applied to data flow (arm 4/6, §4⑥; W31 scaffold landed).**
+IFC is `!E` on the data-flow lattice: prove transitively, like `!Alloc`, that a
+value cannot reach a sink — `!Flow(Untrusted -> Sink)`. ONE mechanism, TWO
+CO-EQUAL first-class regimes, neither a footnote to the other (crystallized
+2026-07-13; the adversarial pass INVERTED the earlier instinct to demote the
+agentic one): (1) **developer confidentiality/integrity in trusted code** — this
+`Secret` never reaches `Log`, this request body never reaches a SQL string
+unsanitized (the everyday superpower — the compiler discharging a data-flow
+invariant like a type); (2) **adversarial integrity in agentic systems** — the
+attacker controls the data crossing into the control plane. Regime (2) is not a
+buzzword; it is the **adversary specification** that FORCES the mechanism's
+hardest, non-free requirements — the integrity dual-lattice, PC-labels for
+implicit flow, robust declassification — that the benign-developer framing
+silently under-specifies, and it is Mentl's actual adoption pull out of IFC's
+50-year confidentiality-for-trusted-authors zero-adoption graveyard (JIF /
+FlowCaml / Paragon / LIO; Zdancewic–Myers on the confidentiality/integrity
+duals). What is retired is the HYPE VOCABULARY, not the regime: "prompt injection"
+and "SQL injection" are the *same* property (an untrusted-integrity source
+reaching a privileged sink), so the medium states it substrate-native
+(`!Flow`), never as a threat-of-the-week feature. Honest disclaimer a flow
+lattice does NOT discharge: it cannot make a model separate data from
+instructions inside its own context window — "the untrusted text reached the
+model" is not itself the breach; `!Flow` proves where the OUTPUT may go, not
+what the model does with its input. Peers: `Hβ.verify.ifc-noninterference`
+(umbrella; code `Hβ.types.ifc-flow-constraint`, types.mn:1029) ← `Hβ.ifc.dcc-noninterference-gate` → `.flowlabel-inference-in-hm` → `.pc-label-implicit-flow` → `.integrity-dual-lattice` → `.declassify-robust` → `.flow-world-on-tcont` → `.agentic-fides-target`. DEP-rooted on `sound-neg-under-poly` (the crown — `!Flow` inherits its soundness).
 
 **D · The value layer — fold & repr (arms 1/7, §5.U; STEP 0/1/2 landed).** `Hβ.fold.show-leaf` (synthesize as a lowered LFn, not raw WAT; lower.mn:481) · `.compare-hash-leaf` · gate `Hβ.eq.fold-seed-value-gate` · `Hβ.repr.arrow-layout-interop` · `Hβ.emit.variant-payload-repr-width` (wasm.mn:4913) · `.plit-handle-repr` (wasm.mn:5537) · `Hβ.value.ontology-derivation-complete` · `Hβ.runtime.zero-copy-string-view` (lexer.mn:316) · `Hβ.emit.image-map-fold` *(new 2026-07-10 — the module's static layout as ONE fold in the emit: each region's base IS the previous region's limit (sentinel space | records | thread records | interned data | bump heap), overlap unconstructible; born from the ev_scan record clobber (a closure record at 264 sat inside io.mn's fs path scratch — two files claiming one page in prose). The fold IS band B's persist substrate: it defines what a memcpy snapshot means)* · `Hβ.io.scratch-dissolves-into-alloc` *(LANDED 2026-07-10, f0089a3 — page 0 carries no runtime scratch: every syscall record (iov / nread / prestat / filestat / fd-out) allocs per use; fs paths cross the boundary as (ptr, len) views straight into the string payload (`fs_path_view` — the old copy-into-scratch re-derived bytes the image already holds; WASI paths are explicit-length); `read_stdin_loop` + `fs_read_loop` unified into one `fd_read_loop` (stdin and opened files are the same stream); ten io fns re-rowed +Alloc; net −8 lines. The march measured the prediction WRONG in the good direction: a lib-source-only change holds m2 == m3 in ONE generation (both generations compile the same source with the same emit) — the transition form is for EMIT changes only. Gates: 52/52 boot, 8/8 + 52/52 through m2, fixpoint byte-exact, serve battle green)* · `Hβ.tools.march-transition-native` *(new 2026-07-10 — on m2 ≠ m3 march.sh runs the m4 leg itself and reports TRANSITION (m3 == m4, re-pin from m3) vs BROKEN (m3 ≠ m4); removes the bless-the-wrong-generation human-error surface — bash scaffold tier)*.
 

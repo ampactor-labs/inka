@@ -1,0 +1,60 @@
+// THE CUT's load-bearing acid (bank M3): the COMPLETE backtrack shape —
+// resume in a lambda passed as a config-fn arg, an arm-internal `~>`
+// install, recursion through a nested fn, an args-bearing MultiShot op,
+// and the abort protocol. backtrack is DEAD CODE in the wheel, so no wheel
+// gate can see it post-cut — THIS crucible is the proof ("flipped but
+// unproven is the drift").
+//   The classifier: g(try_each) saturates UMany at round 2 (its self-call
+//   through the catch lambda); choose flips MultiShot. The resume's k
+//   resolves through the CAPTURE chain (arm → try_each → lambda, all
+//   lexical — no evidence threading needed for nested fns). attempt's
+//   abort resolves DYNAMICALLY through the my_catch singleton global set
+//   by twac's bracket at the resume site (A2's arbitration, realized by
+//   shipped machinery). Per the refuter's authoring constraints: my_catch
+//   is the ONE abort-armed handler in the link set (the unambiguous op
+//   edge) and every abort sits in tail position (the Option protocol).
+//   Trace: choose([10,20,30]): k = [?? |> attempt].
+//     try_each(0): twac(() => resume(10), retry): attempt(10) → abort →
+//       None (via twac's live bracket) → resume = None → attempted = None
+//       → retry → try_each(1): attempt(20) → None → try_each(2):
+//       attempt(30) → Some(30) → attempted = Some(30) → 30.
+//   Arm returns 30 → exit 30.
+effect Choice {
+  choose(options) -> Int
+}
+
+effect Abort {
+  abort() -> Option
+}
+
+handler my_catch {
+  abort() => None
+}
+
+fn twac(try_fn, catch_fn) with Abort = {
+  let attempted = (try_fn()) ~> my_catch
+  match attempted {
+    Some(value) => value,
+    None        => catch_fn()
+  }
+}
+
+handler bt {
+  choose(options) => {
+    fn try_each(i) =
+      if i >= len(options) { None }
+      else {
+        twac(() => resume(list_index(options, i)),
+             () => try_each(i + 1))
+      }
+    try_each(0)
+  }
+}
+
+fn pick_one() with Choice = choose([10, 20, 30])
+
+fn attempt(v) with Abort = if v > 25 { Some(v) } else { abort() }
+
+fn body() with Choice + Abort = pick_one() |> attempt
+
+fn main() = { body() } ~> bt

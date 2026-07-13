@@ -1268,6 +1268,7 @@ type DiagKind
   | EMissingVariable(String, Span)               // the unresolved context (name / "constructor: X" / ...)
   | ENotARecordType(String, Span)                // the type name
   | EResumeOutsideArm(Span)
+  | EResumeAmbiguousOp(String, Span)   // THE CUT (bank A3): a resume-bearing fn reachable from arms of TWO different handlers — the k's op binding is ambiguous; narrow the call graph
   | EResumeWorldMismatch(ResumeDiscipline, ResumeDiscipline, Span)
   | EUnknownArgLabel(String, Span)               // the label-resolution detail
   | EFeedbackNoContext(Span)
@@ -1331,6 +1332,7 @@ fn diag_span(d) with Pure = match d {
   EMissingVariable(_, s) => s,
   ENotARecordType(_, s) => s,
   EResumeOutsideArm(s) => s,
+  EResumeAmbiguousOp(_, s) => s,
   EResumeWorldMismatch(_, _, s) => s,
   EUnknownArgLabel(_, s) => s,
   EFeedbackNoContext(s) => s,
@@ -1380,6 +1382,7 @@ fn diag_source(d) with Pure = match d {
   EMissingVariable(_, _) => "infer",
   ENotARecordType(_, _) => "infer",
   EResumeOutsideArm(_) => "infer",
+  EResumeAmbiguousOp(_, _) => "lower",
   EResumeWorldMismatch(_, _, _) => "infer",
   EUnknownArgLabel(_, _) => "infer",
   EFeedbackNoContext(_) => "infer",
@@ -1429,6 +1432,7 @@ fn diag_code(d) with Pure = match d {
   EMissingVariable(_, _) => "E_MissingVariable",
   ENotARecordType(_, _) => "E_NotARecordType",
   EResumeOutsideArm(_) => "E_ResumeOutsideArm",
+  EResumeAmbiguousOp(_, _) => "E_ResumeAmbiguousOp",
   EResumeWorldMismatch(_, _, _) => "E_ResumeWorldMismatch",
   EUnknownArgLabel(_, _) => "E_UnknownArgLabel",
   EFeedbackNoContext(_) => "E_FeedbackNoContext",
@@ -1498,6 +1502,7 @@ fn diag_applicability(d) with Pure = match d {
   EOwnershipViolation(_, _) => Unspecified,
   EOrphanHandlerAttach(_) => Unspecified,
   EResumeOutsideArm(_) => Unspecified,
+  EResumeAmbiguousOp(_, _) => MaybeIncorrect,
   _ => MaybeIncorrect
 }
 
@@ -1537,6 +1542,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
   EMissingVariable(what, _) => what,
   ENotARecordType(name, _) => "{name} is not a record type",
   EResumeOutsideArm(_) => "`resume` outside a handler arm",
+  EResumeAmbiguousOp(name, _) => "'{name}' resumes under arms of two different handlers — the k record's op binding is ambiguous",
   EResumeWorldMismatch(da, db, _) => "resume cardinality mismatch: {show_discipline(da)} vs {show_discipline(db)}",
   EUnknownArgLabel(detail, _) => detail,
   EFeedbackNoContext(_) => "`<~` used outside an iterative context",
@@ -1651,6 +1657,8 @@ effect LowerScope {
   ls_escaping_of(String) -> Option   // a name's flow-closure (None = not a top-level fn → leaf)
   ls_register_may_yield(Bool) -> ()  // band B M1.3 — does ANY declared effect carry a MultiShot op? (computed once at lower_program)
   ls_program_may_yield() -> Bool     // the A1 prove-absence gate's global short-circuit: no MultiShot op anywhere ⇒ nothing can yield ⇒ every row proves absence
+  ls_register_resume_binds(List) -> ()  // THE CUT (bank A3) — [(fn_name, hname)]: resume-bearing fns reachable from a MultiShot arm, bound to their handler (computed once at lower_program)
+  ls_resume_bind_of(String) -> String   // the fn's bound handler name; "" = unbound (no wrap, no evidence threading)
 }
 
 // Every refinement unification performs verify(span, pred, reason).

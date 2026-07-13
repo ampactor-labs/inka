@@ -321,10 +321,10 @@ fn emit_module(lowered) = {
   // bubble op), $__k_world_tag (the tail read). Dormant until a k2 boundary
   // calls extend; emitted only when the module yields (Law 7).
   if yield_seen > 0 { emit_k_compose_pair() }
-  // band B M2b — one redrive fn per MultiShot-armed env handler: the
-  // dispatch loop's one home (the install bracket and every resume
-  // flag-arm call the same fn).
-  if yield_seen > 0 { emit_redrive_fns() }
+  // band B M2b — one redrive fn per LIVE MultiShot-armed handler (arm fns
+  // in the emitted set): the dispatch loop's one home (the install bracket
+  // and every resume flag-arm call the same fn).
+  if yield_seen > 0 { emit_redrive_fns(table_fn_names) }
   emit_init_lets(value_lets)
   emit_start(top_fn_names, value_lets, main_param_count(lowered), yield_seen)
   emit_footer()
@@ -492,7 +492,7 @@ fn project_emit_state(lowered) = {
   // The set of literals is a projection of the collected show types (the graph
   // IS the index — the same type closure emit_show_leaves generates from).
   register_show_literals(lowered)
-  let names = drain_fn_names()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let names = drain_fn_names() |> dedup_names   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let tops  = drain_top_fn_names()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let strs  = drain_string_literals()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let slots = drain_state_slots()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
@@ -846,11 +846,23 @@ fn emit_driver_arg_loads(n, i) = {
 // handler with a MultiShot-graded arm, under the yield gate; an
 // UNINSTALLED handler's op keys intern nowhere and compare against offset
 // 0 — dead code, assembles clean.
-fn emit_redrive_fns() with WasmOut + EnvRead = {
+fn emit_redrive_fns(emitted_names) with WasmOut + EnvRead = {
   let hnames = match env_snapshot() {
     Env(entries) => ms_handler_names(entries, [])
   }
-  each(emit_one_redrive, hnames)
+  // Emission == reachability (the dcac3b8 law, at the redrive seam): a
+  // redrive dispatches `call $op_<hname>_<op>` — arm fns that exist only
+  // when the handler's container survives reachability. The env holds
+  // every DECLARED MultiShot handler, dead ones included (the wheel's own
+  // backtrack/pick_first are uninstalled dead code — their redrives
+  // referenced dropped arms and m3 failed assembly). A dead handler has
+  // no install bracket and no resume flag-arm, so no caller either: emit
+  // the redrive iff its arm fns are in the emitted set.
+  let live = filter((hname) =>
+    all(((op, _arity)) => name_seen_at(emitted_names, "op_{hname}_{op}", 0, len(emitted_names)),
+        multishot_ops_of(hname)),
+    hnames)
+  each(emit_one_redrive, live)
 }
 
 // Every declared handler with a MultiShot-graded arm — the same env-live
@@ -1103,6 +1115,44 @@ fn collect_top_value_lets(stmts) =
          _                                                  => []
        })
     |> flatten
+
+// The module's fn set IS a set. The k machinery's dual-residency and
+// nested reification legitimately SHARE LFn subtrees — one node, many
+// reaching trees (the original decl, the reified k fn, the inline
+// residency) — so the tree-order walks meet one fn N times (first
+// exercised when THE CUT flipped the wheel's own choose/
+// enumerate_inhabitants MultiShot: lambda_16603 collected 4x,
+// __k_16596 2x — table, _idx globals, and definitions all redefined).
+// Emission dedups by NAME at each materialization seam; keep-first
+// preserves visit order so all three surfaces agree. A second sighting
+// of one name is never a second fn — the name derives from the minting
+// handle (lambda_<h> / __k_<h>) or the unique top-level decl.
+fn name_seen_at(names, target: String, i, n) = {
+  if i >= n { false }
+  else if list_index(names, i) == target { true }
+  else { name_seen_at(names, target, i + 1, n) }
+}
+
+fn dedup_names(names) =
+  fold([], (acc, name) =>
+    if name_seen_at(acc, name, 0, len(acc)) { acc }
+    else { acc ++ [name] },   // drift-audit: ignore — set-insert, bounded by the fn count
+    names)
+
+fn fn_record_seen(records, target: String, i, n) = {
+  if i >= n { false }
+  else {
+    let (name, _, _, _) = list_index(records, i)
+    if name == target { true } else { fn_record_seen(records, target, i + 1, n) }
+  }
+}
+
+fn dedup_fn_records(records) =
+  fold([], (acc, r) => {
+    let (name, _, _, _) = r
+    if fn_record_seen(acc, name, 0, len(acc)) { acc }
+    else { acc ++ [r] }   // drift-audit: ignore — set-insert, bounded by the fn count
+  }, records)
 
 // Emit the function table and elem mapping indices to function
 // labels. Every closure's fn_ptr slot stores the i32 index into
@@ -1696,7 +1746,7 @@ fn emit_memory_decl() = {
 // is a `><` fanout under `~> Thread` at this site
 // (Hβ.lower.schedule-specialized-callee).
 fn emit_functions(lowered) = {
-  let fn_records = collect_fn_emit_records(lowered)
+  let fn_records = collect_fn_emit_records(lowered) |> dedup_fn_records
   fn_records
     |> map(emit_one_fn_to_string)
     |> each((s) => wat_emit(s))

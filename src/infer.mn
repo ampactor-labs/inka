@@ -148,8 +148,12 @@ fn infer_program(stmts) = {
   {
     register_primitives()
     pre_register_decls(stmts)
+    // THE CUT: the resume-summary classifier runs between registration and
+    // the walk — draw_op_edges' resume_grade reads the summaries through
+    // the standing ctx, so arm grades see resumes in CALLED fns.
+    set_summaries(classify_fixpoint(stmts))
     infer_stmt_list(stmts)
-  } ~> infer_ctx ~> fresh_for_inference
+  } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
   stmts
 }
 
@@ -3398,6 +3402,162 @@ fn bind_handler_state_names(state_binds, hname, span: ValidSpan) =
 // Hβ.infer.tail-recursion-resume-cardinality (the old walk was no better: it
 // only detected a never-emitted NLoopExpr ancestor).
 
+// ─── THE CUT — the resume-summary classifier (bank Ruling 6) ────────────
+// Per-fn summaries g(f) = the fn body's resume grade WITH call-substitution,
+// run as a monotone fixpoint over the 3-point Usage lattice: recursion
+// saturates to UMany by round 2 (try_each's self-call through its catch
+// lambda), no cycle detection needed. Runs at infer_program between
+// pre_register_decls and infer_stmt_list; builds its own name→body map from
+// the stmts directly (top-level AND nested fn decls — a nested name
+// colliding across scopes JOINS, the sound over-approximation direction).
+// draw_op_edges reads the summaries through resume_grade's substitution, so
+// an arm's grade sees resumes in called fns and choose/enumerate_inhabitants
+// flip MultiShot on machinery that can carry them.
+effect ResumeSummaries {
+  summary_of(String) -> Usage
+  set_summaries(List) -> ()
+}
+
+// The standing ctx — infer_program installs it; the fixpoint's result lives
+// here for every later resume_grade call (draw_op_edges at each handler).
+handler resume_summaries_ctx with entries = [] {
+  summary_of(name) => resume(usage_summary_lookup(entries, name, 0)),
+  set_summaries(es) => resume() with entries = es
+}
+
+// One frozen round of the fixpoint — resume_grade's summary reads answer
+// from the PREVIOUS round's entries.
+handler summaries_frozen(entries) {
+  summary_of(name) => resume(usage_summary_lookup(entries, name, 0))
+}
+
+fn usage_summary_lookup(entries, name: String, i) = {
+  if i >= len(entries) { UZero }
+  else {
+    let (n, u) = list_index(entries, i)
+    if n == name { u } else { usage_summary_lookup(entries, name, i + 1) }
+  }
+}
+
+fn classify_fixpoint(stmts) = {
+  let decls = collect_fn_decls_list(stmts, [])
+  classify_rounds(decls, map((nb) => { let (n, _) = nb; (n, UZero) }, decls))
+}
+
+fn classify_rounds(decls, entries) = {
+  // A body-level RECURSION under the install, never a map-lambda: a perform
+  // inside a lambda under an install resolves Tier-1 to the enclosing
+  // frame's __hstate local — out of scope in the lambda's emitted body (the
+  // arm-internal-perform gap; the draw_op_edges precedent). The recursion
+  // threads evidence through its own calls.
+  let next = { classify_grade_all(decls, 0) } ~> summaries_frozen(entries)
+  if usage_entries_eq(entries, next, 0) { next }
+  else { classify_rounds(decls, next) }
+}
+
+fn classify_grade_all(decls, i) = {
+  if i >= len(decls) { [] }
+  else {
+    let (n, b) = list_index(decls, i)
+    [(n, resume_grade(b))] ++ classify_grade_all(decls, i + 1)   // drift-audit: ignore — prepend-cons recursion, O(N) total
+  }
+}
+
+// Monotone lattice ⇒ the fixpoint compares by VALUE; the name lists are
+// positionally identical across rounds (same decls order).
+fn usage_entries_eq(a, b, i) = {
+  if i >= len(a) { true }
+  else {
+    let (_, ua) = list_index(a, i)
+    let (_, ub) = list_index(b, i)
+    if usage_eq(ua, ub) { usage_entries_eq(a, b, i + 1) } else { false }
+  }
+}
+
+fn usage_eq(a, b) = match a {
+  UZero => match b { UZero => true, _ => false },
+  UOne  => match b { UOne  => true, _ => false },
+  UMany => match b { UMany => true, _ => false }
+}
+
+// Every fn decl in the program — top-level and nested — as (name, body).
+// The walk mirrors resume_grade's enumeration (the same child-bearing
+// forms); a form added to one without the other starves the summary map.
+fn collect_fn_decls_list(nodes, acc) = {
+  if len(nodes) == 0 { acc }
+  else { collect_fn_decls_list(drop_last(nodes), collect_fn_decls(last(nodes), acc)) }
+}
+
+fn collect_fn_decls(node, acc) = {
+  let N(body, _, _) = node
+  match body {
+    NStmt(FnStmt(name, _, _, _, b))       => collect_fn_decls(b, [(name, b)] ++ acc),   // drift-audit: ignore — decl-count-bounded cons, not a hot loop
+    NStmt(HandlerDeclStmt(_, _, _, _, arms)) => collect_fn_decls_arms(arms, acc),
+    NStmt(LetStmt(_, v))                  => collect_fn_decls(v, acc),
+    NStmt(ExprStmt(e))                    => collect_fn_decls(e, acc),
+    NExpr(BlockExpr(stmts, final))        => collect_fn_decls(final, collect_fn_decls_list(stmts, acc)),
+    NExpr(IfExpr(c, t, e))                => collect_fn_decls(e, collect_fn_decls(t, collect_fn_decls(c, acc))),
+    NExpr(MatchExpr(scrut, arms))         => collect_fn_decls_match(arms, collect_fn_decls(scrut, acc)),
+    NExpr(CallExpr(f, args))              => collect_fn_decls_list(args, collect_fn_decls(f, acc)),
+    NExpr(BinOpExpr(_, l, r))             => collect_fn_decls(r, collect_fn_decls(l, acc)),
+    NExpr(UnaryOpExpr(_, x))              => collect_fn_decls(x, acc),
+    NExpr(LambdaExpr(_, lbody))           => collect_fn_decls(lbody, acc),
+    NExpr(MakeListExpr(elems))            => collect_fn_decls_list(elems, acc),
+    NExpr(MakeTupleExpr(elems))           => collect_fn_decls_list(elems, acc),
+    NExpr(MakeRecordExpr(fields))         => collect_fn_decls_fields(fields, acc),
+    NExpr(RecordUpdateExpr(base, fields)) => collect_fn_decls_fields(fields, collect_fn_decls(base, acc)),
+    NExpr(NamedRecordExpr(_, fields))     => collect_fn_decls_fields(fields, acc),
+    NExpr(FieldExpr(b, _))                => collect_fn_decls(b, acc),
+    NExpr(IndexExpr(receiver, index))     => collect_fn_decls(index, collect_fn_decls(receiver, acc)),
+    NExpr(PipeExpr(_, l, r))              => collect_fn_decls(r, collect_fn_decls(l, acc)),
+    NExpr(MakeStringExpr(frags))          => collect_fn_decls_list(frags, acc),
+    NExpr(LabeledArg(_, v))               => collect_fn_decls(v, acc),
+    NExpr(ResumeExpr(v, us))              => collect_fn_decls_updates(us, collect_fn_decls(v, acc)),
+    NStmt(TypeDefStmt(_, _))              => acc,
+    NStmt(EffectDeclStmt(_, _))           => acc,
+    NStmt(ImportStmt(_))                  => acc,
+    NStmt(RefineStmt(_, _, _))            => acc,
+    NStmt(AliasStmt(_, _))                => acc,
+    NExpr(LitInt(_))                      => acc,
+    NExpr(LitFloat(_))                    => acc,
+    NExpr(LitString(_))                   => acc,
+    NExpr(LitBool(_))                     => acc,
+    NExpr(LitUnit)                        => acc,
+    NExpr(VarRef(_))                      => acc,
+    NExpr(ExprPlaceholder)                => acc,
+    NHole(_)                              => acc,
+    NPat(_)                               => acc,
+    NModule(_)                            => acc,
+    NTypeAnn(_)                           => acc
+  }
+}
+
+fn collect_fn_decls_arms(arms, acc) = {
+  if len(arms) == 0 { acc }
+  else { collect_fn_decls_arms(drop_last(arms), collect_fn_decls(handler_arm_body(last(arms)), acc)) }
+}
+
+fn collect_fn_decls_match(arms, acc) = {
+  if len(arms) == 0 { acc }
+  else {
+    let (_, b) = last(arms)
+    collect_fn_decls_match(drop_last(arms), collect_fn_decls(b, acc))
+  }
+}
+
+fn collect_fn_decls_fields(fields, acc) = {
+  if len(fields) == 0 { acc }
+  else {
+    let (_, v) = last(fields)
+    collect_fn_decls_fields(drop_last(fields), collect_fn_decls(v, acc))
+  }
+}
+
+fn collect_fn_decls_updates(updates, acc) = {
+  if len(updates) == 0 { acc }
+  else { collect_fn_decls_updates(drop_last(updates), collect_fn_decls(state_field_init(last(updates)), acc)) }
+}
+
 fn usage_seq(a, b) = match a {
   UZero => b,
   UMany => UMany,
@@ -3430,7 +3590,20 @@ fn resume_grade(node) = {
     NExpr(BlockExpr(stmts, final))        => usage_seq(grade_nodes(stmts), resume_grade(final)),
     NExpr(IfExpr(c, t, e))                => usage_seq(resume_grade(c), usage_join(resume_grade(t), resume_grade(e))),
     NExpr(MatchExpr(scrut, arms))         => usage_seq(resume_grade(scrut), grade_join_arms(arms)),
-    NExpr(CallExpr(f, args))              => usage_seq(resume_grade(f), grade_nodes(args)),
+    NExpr(CallExpr(f, args))              => {
+      // THE CUT (bank Ruling 6): call-substitution — a call to a fn with a
+      // resume summary contributes that summary (the classifier fixpoint
+      // wrote it; summary_of answers UZero for unknown names, params, and
+      // ops). This is what makes backtrack's try_each recursion saturate
+      // to UMany by round 2 and lets an arm's grade see resumes in CALLED
+      // fns (yield_inhabitants' shape) — the classifier gap closed.
+      let N(fb, _, _) = f
+      let callee_g = match fb {
+        NExpr(VarRef(cn)) => summary_of(cn),   // drift-audit: ignore — sequenced effectful summaries read
+        _                 => UZero
+      }
+      usage_seq(callee_g, usage_seq(resume_grade(f), grade_nodes(args)))
+    },
     NExpr(BinOpExpr(_, l, r))             => usage_seq(resume_grade(l), resume_grade(r)),
     NExpr(UnaryOpExpr(_, x))              => resume_grade(x),
     NExpr(LambdaExpr(_, lbody))           => resume_grade(lbody),
@@ -3446,7 +3619,10 @@ fn resume_grade(node) = {
     NExpr(LabeledArg(_, v))               => resume_grade(v),
     NStmt(LetStmt(_, v))                  => resume_grade(v),
     NStmt(ExprStmt(e))                    => resume_grade(e),
-    NStmt(FnStmt(_, _, _, _, b))          => resume_grade(b),
+    // A nested fn DECLARATION is not an execution — its resumes count at
+    // its CALL sites via the summary substitution (the pre-cut descend
+    // double-counted a define-once-call-once helper into UMany).
+    NStmt(FnStmt(_, _, _, _, _))          => UZero,
     // Decls nested in an arm carry no resume of THIS arm's continuation; leaves
     // carry no children. Both are the grade identity UZero (explicit, never a
     // wildcard fabricating a grade for an un-enumerated child-bearing variant).

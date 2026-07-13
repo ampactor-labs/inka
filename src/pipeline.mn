@@ -73,7 +73,7 @@ fn compile(entry_module) = {
     ~> region_tracker        // I12 — region-escape ledger (substrate prep)
     ~> verify_ledger
     ~> lower_scope
-    ~> arm_state_default
+    ~> arm_state_ctx([], OneShot, "")
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
@@ -109,7 +109,7 @@ fn compile_stdin() = {
     ~> region_tracker
     ~> verify_ledger
     ~> lower_scope
-    ~> arm_state_default
+    ~> arm_state_ctx([], OneShot, "")
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
@@ -150,7 +150,7 @@ fn compile_source(source) = {
     ~> region_tracker
     ~> verify_ledger
     ~> lower_scope
-    ~> arm_state_default
+    ~> arm_state_ctx([], OneShot, "")
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler

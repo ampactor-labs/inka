@@ -115,16 +115,17 @@ handler arm_state_ctx(fields, disc, hname) {
   current_arm_handler()      => resume(hname)
 }
 
-// Empty default for non-arm contexts (top-level fn bodies, lambdas).
-// `current_state_fields()` returns [] — `resume() with X = Y` outside arm
-// context resolves no slots and falls through to plain LReturn — and the
-// discipline defaults to OneShot, so a stray resume outside an arm keeps the
-// byte-identical floor (a value-call with no continuation to reify).
-handler arm_state_default {
-  current_state_fields()     => resume([]),
-  current_arm_handler()      => resume(""),
-  current_resume_discipline() => resume(OneShot)
-}
+// There is NO second handler. The non-arm default ([], OneShot, "") is the
+// pipeline BOUNDARY install `~> arm_state_ctx([], OneShot, "")` — so the op
+// edge is UNIQUE and every arm-context read dispatches through the singleton
+// tier's LIVE `$arm_state_ctx_state_g` (the bracket-scoped global every
+// install saves/restores — S1's home). The context is a DYNAMIC fact; its
+// one home is the innermost live bracket. The deleted `arm_state_default`
+// twin made the op AMBIGUOUS, pushing these reads to the lexical evidence
+// floor — clone-chain threading for a dynamically-scoped truth — and the
+// row math (install absorption) then correctly told callers NOT to thread
+// it: the give-arm resume read a starved pair four hops from its live
+// bracket (the rw4 trap, 2026-07-12). One handler, one home, read live.
 
 // The handler's static shape — config, state, arms — read LIVE from the
 // env's HandlerKind (register_handler populates it). No side-ledger, no
@@ -218,6 +219,22 @@ handler lower_handler_stack_ctx with stack = [] {
   // Head-first = innermost-first; resolution walks it as a plain fn.
   lower_handler_stack_now() => resume(stack)
 }
+
+// The lexical evidence FENCE. A Tier-1 resolution names an `__hstate_<h>`
+// LOCAL — a slot of the fn frame the install lowered in. A new fn frame
+// (named fn, lambda, handler arm, fanout thunk, reified k) is a NEW WASM
+// function: the enclosing frame's locals do not exist there, so lexical
+// resolution STOPS at the frame boundary and the perform falls to the
+// singleton/evidence tiers (derive_ev_slots already threads enclosing
+// evidence through captures — transparent forwarding). Surfaced when THE
+// CUT flipped the wheel's choose/enumerate MultiShot and reify_frame_k
+// re-lowered pipeline remainders inside fresh k frames while the lexical
+// stack still held compile_source's installs (__k_60854's dangling
+// $__hstate_60873_BodyContext); the each-with-effects lambda gap is the
+// same hole. The fence entry is name "" — no handler is nameless, so it
+// can never shadow a real install.
+fn lower_frame_fence_push() = lower_handler_push("", 0)
+fn lower_frame_fence_pop() = lower_handler_pop()
 
 // ─── Arm-body evidence ledger ──────────────────────────────────────
 // While a handler's arm bodies lower, their Tier-2 performs NOTE the effects
@@ -739,10 +756,37 @@ fn lower_call_default(handle, f, fh, lo_args) = {
   // BARE and the callee's strict scan met an empty region — the 0/34 floor.
   // Groundness is a row-VARIABLE fact; evidence need is an ESCAPING-ROW fact.
   let ev_slots = derive_ev_slots(fh)
-  if len(ev_slots) == 0 {
+  // THE CUT (bank Ruling 2/A3): a call to a resume-BOUND fn from a
+  // MultiShot context threads the "__resume" k evidence — the arm's
+  // lexical __k, a closure's captured __k, or a bound fn's own forwarded
+  // entry, all through the ONE resolve_resume_k ladder. The callee's
+  // resumes read it back by the same keyed scan every perform uses.
+  let ev_slots2 =
+    if resume_bind_target(fh) {
+      ev_slots ++ [LEvEntry("__resume", resolve_resume_k(handle))]   // drift-audit: ignore — one entry per call site, not a loop
+    } else { ev_slots }
+  if len(ev_slots2) == 0 {
     LCall(handle, lo_f, lo_args)
   } else {
-    LSuspend(handle, fh, lo_f, lo_args, ev_slots, false)
+    LSuspend(handle, fh, lo_f, lo_args, ev_slots2, false)
+  }
+}
+
+// Is this callee a resume-bound fn called from a MultiShot context? Both
+// reads are live (the bindings registered at lower_program; the discipline
+// from the ambient arm context — which a bound fn's own wrap installs, so
+// deep chains forward the entry hop by hop).
+fn resume_bind_target(callee_handle) = {
+  let name = callee_name_of_handle(callee_handle)
+  if name == "" { false }
+  else {
+    if ls_resume_bind_of(name) == "" { false }
+    else {
+      match current_resume_discipline() {   // drift-audit: ignore — sequenced effectful arm-context read
+        MultiShot => true,
+        _         => false
+      }
+    }
   }
 }
 
@@ -904,6 +948,98 @@ fn effect_has_multishot_op(ename) = match env_lookup(ename) {
     }
   },
   None => false
+}
+
+fn resume_bind_assoc(binds, name: String, i) = {
+  if i >= len(binds) { "" }
+  else {
+    let (n, h) = list_index(binds, i)
+    if n == name { h } else { resume_bind_assoc(binds, name, i + 1) }
+  }
+}
+
+// THE CUT (bank Ruling 6 + A3) — the resume-capability bindings: from each
+// handler arm whose op grades MultiShot, the transitive closure of called
+// resume-bearing fns (summary ≥ UOne — the classifier's fixpoint, re-run
+// here over the same stmts; collect_free_vars over-approximates the call
+// edge, which only ever binds a dormant wrap). Each bound fn lowers under
+// its handler's arm context (disc MultiShot, the redrive's hname, the
+// state fields read live from the decl) and every call to it from a
+// MultiShot context threads the "__resume" k evidence. A fn reached from
+// arms of TWO handlers is E_ResumeAmbiguousOp — narrow the call graph;
+// the first binding stands (productive-under-error).
+fn resume_bindings(stmts) = {
+  let summaries = classify_fixpoint(stmts)
+  let decls = collect_fn_decls_list(stmts, [])
+  bind_from_handlers(stmts, summaries, decls, [])
+}
+
+fn bind_from_handlers(stmts, summaries, decls, binds) = {
+  if len(stmts) == 0 { binds }
+  else {
+    let N(b, _, _) = last(stmts)
+    let binds2 = match b {
+      NStmt(HandlerDeclStmt(hname, _, _, _, arms)) =>
+        bind_from_arms(arms, hname, summaries, decls, binds),
+      _ => binds
+    }
+    bind_from_handlers(drop_last(stmts), summaries, decls, binds2)
+  }
+}
+
+fn bind_from_arms(arms, hname, summaries, decls, binds) = {
+  if len(arms) == 0 { binds }
+  else {
+    let arm = last(arms)
+    let binds2 = match op_resume_discipline(handler_arm_op_name(arm)) {
+      MultiShot => bind_closure(collect_free_vars(handler_arm_body(arm), []),
+                                hname, summaries, decls, binds),
+      _         => binds
+    }
+    bind_from_arms(drop_last(arms), hname, summaries, decls, binds2)
+  }
+}
+
+// Worklist closure: bind each marked free name, then its body's marked
+// frees, until no new name binds.
+fn bind_closure(names, hname, summaries, decls, binds) = {
+  if len(names) == 0 { binds }
+  else {
+    let n = last(names)
+    let rest = drop_last(names)
+    if usage_is_marked(usage_summary_lookup(summaries, n, 0)) {
+      let bound = resume_bind_assoc(binds, n, 0)
+      if bound == "" {
+        let deeper = collect_free_vars_of_decl(decls, n)
+        bind_closure(free_vars_merge(rest, deeper), hname, summaries, decls,
+                     [(n, hname)] ++ binds)   // drift-audit: ignore — decl-count-bounded cons, not a hot loop
+      } else {
+        if bound == hname { bind_closure(rest, hname, summaries, decls, binds) }
+        else {
+          report(EResumeAmbiguousOp(n, span_zero()))
+          bind_closure(rest, hname, summaries, decls, binds)
+        }
+      }
+    } else { bind_closure(rest, hname, summaries, decls, binds) }
+  }
+}
+
+fn usage_is_marked(u) = match u {
+  UZero => false,
+  UOne  => true,
+  UMany => true
+}
+
+fn collect_free_vars_of_decl(decls, name: String) = {
+  let hits = filter((nb) => {
+    let (n, _) = nb
+    n == name
+  }, decls)
+  if len(hits) == 0 { [] }
+  else {
+    let (_, body) = head(hits)
+    collect_free_vars(body, [])
+  }
 }
 
 // The global short-circuit's one writer: walk the program's effect decls and
@@ -1343,7 +1479,8 @@ fn resolve_in_stack(op_name, ename, stack) = {
   if ename == "" || len(stack) == 0 { None }
   else {
     let e = last(stack)
-    if handler_covers_effect(stack_entry_name(e), ename) {
+    if field_name_eq(stack_entry_name(e), "") { None }   // the frame fence — enclosing installs live in another WASM frame
+    else if handler_covers_effect(stack_entry_name(e), ename) {
       Some({target: "{stack_entry_name(e)}_{op_name}", handle: stack_entry_handle(e)})
     } else {
       resolve_in_stack(op_name, ename, drop_last(stack))
@@ -1394,7 +1531,8 @@ fn schedule_in_stack(stack) =
   if len(stack) == 0 { Seq }
   else {
     let e = last(stack)
-    if handler_covers_effect(stack_entry_name(e), "Thread") { Threaded }
+    if field_name_eq(stack_entry_name(e), "") { Seq }   // the frame fence — "the schedule is read at the fanout's own install site, never across a call boundary" (SYNTAX §Vocabulary)
+    else if handler_covers_effect(stack_entry_name(e), "Thread") { Threaded }
     else if handler_covers_effect(stack_entry_name(e), "Simd") { Simd }
     else if handler_covers_effect(stack_entry_name(e), "Gpu") { Gpu }
     else if handler_covers_effect(stack_entry_name(e), "Persist") { Persisted }
@@ -1885,7 +2023,9 @@ fn lower_expr_body(e, handle, span) = match e {
       captures_names, captures_handles,
       handle
     )
+    lower_frame_fence_push()
     let lo_body = k2_guard(mark_tail(lower_body_reified(body_node)))   // Hβ.lower.tail-call-mark-pass — lambda body is in tail; MultiShot spine → the k1 yield; k2_guard floors off-spine boundaries (M1.3)
+    lower_frame_fence_pop()
     ls_exit_frame()
     let fn_ir = LFn(
       lambda_name,
@@ -1996,8 +2136,12 @@ fn lower_pipe_complete(lo_l, right, handle) = {
       // block spelling of the same program was green). The already-lowered
       // callee is reused; the fork reads the stage node's own type.
       let evs = derive_ev_slots(rfh)
-      if len(evs) == 0 { LCall(handle, lo_r, [lo_l]) }
-      else             { LSuspend(handle, rfh, lo_r, [lo_l], evs, false) }
+      let evs2 =
+        if resume_bind_target(rfh) {
+          evs ++ [LEvEntry("__resume", resolve_resume_k(handle))]   // drift-audit: ignore — one entry per stage, not a loop
+        } else { evs }
+      if len(evs2) == 0 { LCall(handle, lo_r, [lo_l]) }
+      else              { LSuspend(handle, rfh, lo_r, [lo_l], evs2, false) }
     }
   }
 }
@@ -2323,8 +2467,10 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   let captures_exprs   = [LLocal(input_h, input_local_name)] ++ b_exprs
   let captures_handles = [input_h] ++ b_handles
   ls_enter_frame("", [], [], captures_names, captures_handles, -1)
+  lower_frame_fence_push()
   let lo_branch  = lower_callee_ref(branch_node)   // branch's frees → upvals under the frame
   let thunk_body = LCall(branch_h, lo_branch, [LUpval(input_h, 0)])
+  lower_frame_fence_pop()
   ls_exit_frame()
   let fn_ir = LFn(thunk_name, 0, [], [thunk_body], EfPure, len(captures_exprs))
   // The thunk's identity is ITS BRANCH's handle — N thunks sharing the
@@ -2351,7 +2497,9 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
   // Synthetic parallel-thunk: empty fn_name; not a named fn declaration; not a
   // lambda (lambda_h = -1 → ev READ falls through to the named-fn/block path).
   ls_enter_frame("", [], [], captures_names, captures_handles, -1)
+  lower_frame_fence_push()
   let lo_body = k2_guard(mark_tail(lower_expr(branch_node)))   // Hβ.lower.tail-call-mark-pass — synthesized thunk body is in tail; k2_guard floors off-spine boundaries (M1.3)
+  lower_frame_fence_pop()
   ls_exit_frame()
   let fn_ir = LFn(
     thunk_name,
@@ -2537,7 +2685,35 @@ fn lower_stmt_body(s, handle, span) = match s {
       captures_names, captures_handles,
       -1   // named fn — not a lambda; the ev READ uses escaping_row(fn_name)
     )
-    let lo_body = k2_guard(mark_tail(lower_body_reified(body_node)))   // Hβ.lower.tail-call-mark-pass — fn body is in tail; MultiShot spine → the k1 yield; k2_guard floors off-spine boundaries (M1.3)
+    lower_frame_fence_push()
+    // THE CUT (bank A3): a resume-BOUND fn's body lowers under its
+    // handler's arm context — resumes inside it take the MultiShot
+    // discipline (lower_resume_callk), resolve their k through the
+    // evidence tier (resolve_resume_k's RGlobal arm → LEvRef "__resume",
+    // threaded by every MultiShot-context caller), commit state through
+    // the bracket-scoped singleton (S1), and re-dispatch owned re-yields
+    // through $op___redrive_<hname> (M2b). The install is UNCONDITIONAL —
+    // an unbound fn carries the boundary install's exact answers ([],
+    // OneShot, "") — because a conditional `~>` here poisons the WHEEL'S
+    // OWN evidence: boot lowers the install-body's call sites with the
+    // lexical __hstate local as their ArmStateContext evidence, and on
+    // the unwrapped branch that local is never assigned — every unbound
+    // fn's clone shipped an uninitialized record and the callee's keyed
+    // scan walked garbage (the probe: rec=89504 — the key's own address —
+    // nstate="ArmS" as bytes, fn_idx 0; the rw4 let-arm trap's root).
+    let bind_h = ls_resume_bind_of(name)   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
+    let bind_fields =
+      if bind_h == "" { [] }
+      else {
+        match handler_decl_of(bind_h) {
+          Some((config, state, _)) => config ++ state_field_names_of(state),   // drift-audit: ignore — one-shot name-list build
+          None => []
+        }
+      }
+    let bind_disc = if bind_h == "" { OneShot } else { MultiShot }
+    let lo_body =
+      k2_guard(mark_tail({ lower_body_reified(body_node) } ~> arm_state_ctx(bind_fields, bind_disc, bind_h)))   // Hβ.lower.tail-call-mark-pass — fn body is in tail; MultiShot spine → the k1 yield; k2_guard floors off-spine boundaries (M1.3)
+    lower_frame_fence_pop()
     ls_exit_frame()
     let fn_ir = LFn(
       fn_name,
@@ -2853,11 +3029,13 @@ fn lower_one_arm_decl(arm: {args: [String], body: N, op_name: String}, discrimin
     captures_names, captures_handles,
     -1   // handler arm — not a lambda; the ev READ uses the arm's captured set / escaping_row
   )
+  lower_frame_fence_push()
   // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
   // around arm body lowering so lower_expr's ResumeExpr arm resolves
   // `with field = NEW` updates' slot offsets via current_state_fields()
   // AND its representation via current_resume_discipline().
   let lo_body = k2_guard(mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names, disc, discriminator)))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail; k2_guard floors off-spine boundaries (M1.3)
+  lower_frame_fence_pop()
   ls_exit_frame()
   // fence = nstate + total_arms; the arm's LEvPerform reads land on the
   // record's captured-ev region (past state AND arms).
@@ -3265,6 +3443,7 @@ fn reify_frame_k(body_node, ph, outer_holes) = {
   let (captures_names, captures_exprs, captures_handles) =
     resolve_captures_outer(free_names, ph)
   ls_enter_frame("", [hole], [ph], captures_names, captures_handles, ph)
+  lower_frame_fence_push()
   let subs = map(((p, n)) => (p, k_hole_read(p, n)), outer_holes)
              ++ [(ph, LLocal(ph, hole))]   // drift-audit: ignore — one-shot env build, no loop
   let subs2 = match k_spine_next(body_node, subs) {
@@ -3283,6 +3462,7 @@ fn reify_frame_k(body_node, ph, outer_holes) = {
     }
   }
   let k_body = k2_floor_guard(mark_tail(k_remainder(body_node, subs2)), false)
+  lower_frame_fence_pop()
   ls_exit_frame()
   let k_fn = LFn("__k_{int_to_str(ph)}", 1, [hole], [k_body],
                  world, len(captures_exprs))
@@ -3482,9 +3662,21 @@ fn k2_floor_wrap(h, s) = {
     LLet(h, kf, s),
     LIf(h, LGlobal(h, "yield_flag"),
         [LYield(h, "", [], LConst(h, LInt(0)))],
-        [LConst(h, LInt(0))]),
+        [k2_floor_dummy(h)]),
     LLocal(h, kf)
   ])
+}
+
+// The floor if's else value is DROPPED — its one job is width-agreeing
+// with the if node's declared repr (h = the wrapped call). An i32 word
+// under an f64 call was the m3 assembly face at score_one_position's
+// proximity weight (the compose-width-floor family arriving exactly
+// where it was named). RI64/RF32/RV128 dummies keep the word form and
+// meet the same LOUD assembly mismatch if a call of that width ever
+// parks here — censusable, never silent (band D width work).
+fn k2_floor_dummy(h) = match repr_of(lookup_ty(h)) {
+  RF64 => LConst(h, LFloat(0.0)),
+  _    => LConst(h, LInt(0))
 }
 
 // The effect-world a continuation is frozen under, read LIVE from the
@@ -4150,6 +4342,9 @@ fn lower_program(stmts) = {
   // effect carry a MultiShot-graded op? No ⇒ nothing can yield ⇒ can_yield
   // is false everywhere and the k2 machinery contributes zero bytes (Law 7).
   ls_register_may_yield(program_may_yield(stmts))
+  // THE CUT — the resume-capability bindings (dormant when no op grades
+  // MultiShot: zero arms seed the closure, the list is empty).
+  ls_register_resume_binds(resume_bindings(stmts))
   // No pre-register pass: every handler decl's (config, state, arms) is
   // already in the env's HandlerKind (register_handler), so an install
   // resolves its handler's decl live (handler_decl_of) regardless of source
@@ -4222,7 +4417,7 @@ fn push_name(buf, count, name) = {
 // alphabetically, so the WAT layout is captures(0), capture_handles(4),
 // capture_order(8), locals(12), local_handles(16), local_order(20).
 // Mentl source reads via .field — physical layout irrelevant.
-handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [], may_yield = false {
+handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [], may_yield = false, resume_binds = [] {
   // THE FLOW-CLOSURE map (name → escaping row), computed once at lower_program
   // and read live by THE SEAM. Some(row) for a top-level fn; None (→ the leaf)
   // for a nested fn / lambda / unknown name.
@@ -4235,6 +4430,12 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
   ls_register_may_yield(b) => resume() with may_yield = b,
 
   ls_program_may_yield() => resume(may_yield),
+
+  // THE CUT (bank A3) — the resume-capability bindings: fn name → the
+  // handler whose MultiShot arm's call graph reaches it.
+  ls_register_resume_binds(bs) => resume() with resume_binds = bs,
+
+  ls_resume_bind_of(name) => resume(resume_bind_assoc(resume_binds, name, 0)),
 
   ls_enter_frame(fn_name, locals_in, locals_h, captures_in, captures_h, lambda_h) => {   // drift-audit: ignore — pre-existing frame-record paired-arrays (locals_h/captures_h); same restructure tracked for 11.C.2
     // Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):

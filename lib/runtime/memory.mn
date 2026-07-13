@@ -114,7 +114,12 @@ fn ev_perform_entry(state, base, target) with Memory = {
   if entry == 0 {
     store_i32(0, target)
     store_i32(4, base)
-    load_i32(0 - 8)
+    // 0 - 1 = 0xFFFFFFFF: a 4-byte load crossing 2^32 — out of bounds at
+    // ANY wasm32 memory size, including the full 65536 pages. The prior
+    // `0 - 8` went SILENT when memory grew to 4GB (2fc7544): 0xFFFFFFF8+4
+    // is in bounds there, so a miss returned virgin 0 and the broken
+    // promise cascaded to a garbage dispatch far from this site.
+    load_i32(0 - 1)
   }
   else { entry }
 }

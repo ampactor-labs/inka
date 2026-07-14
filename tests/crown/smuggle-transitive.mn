@@ -1,0 +1,7 @@
+// CROWN — `!E` propagates transitively (SYNTAX §Negation). E flows a -> b -> bad;
+// bad declares `with !E`. Expect E_EffectMismatch (the effect reaches bad's row).
+effect E { op() -> Int }
+fn a() = op()
+fn b() = a()
+fn bad() with !E = b()
+fn main() = bad()

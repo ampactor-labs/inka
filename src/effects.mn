@@ -338,6 +338,41 @@ fn neg_row(ref a) with !Mutate = {
 //   !Network → sandbox
 //
 // The same call services user-defined negations: `with !Logging` is one call away.
+
+// The effect's NAME — the identity the negation gate forbids. `!E` proves the
+// ABSENCE of the effect NAMED E (SYNTAX §Negation), ALL its instances, so the gate
+// matches by name; instance-precise `!Sample(44100)` admitting Sample(48000) is the
+// refinement Hβ.effects.parameterized-negation-instance. The `name: EffName` param
+// annotation re-establishes the EffName proof list_index erased to a word (band-D
+// typed containers dissolve the erasure) — honored where a let-annotation is not —
+// so the match reads the constructor; and by-name sidesteps the structural-Ty
+// compare a full EParameterized `==` drags through its args (the timeout the broad
+// structural fix hit on the row-algebra hot path).
+fn eff_name_str(name: EffName) -> String with Pure = match name {
+  ENamed(s)            => s,
+  EParameterized(s, _) => s,
+  EPure                => ""
+}
+
+// body ∩ forbidden = ∅ BY NAME — the crown's negation membership. A body effect
+// whose NAME is forbidden fails the gate: this is where a forbidden effect smuggled
+// through instantiation is CAUGHT — it lands in body's names and matches by true
+// name identity across distinct source sites, where the hot-path pointer-eq (an
+// effect-decl `ENamed("E")` and a `with !E` clause's `ENamed("E")` are distinct heap
+// objects) would silently miss it and let the effect escape the `!E` boundary.
+fn forbidden_names_disjoint(ref body, ref forbidden) with !Mutate =
+  forbidden_names_disjoint_loop(body, forbidden, 0, len(body))
+
+fn forbidden_names_disjoint_loop(ref body, ref forbidden, i, n) with !Mutate =
+  if i >= n { true }
+  else if name_in_forbidden(forbidden, eff_name_str(list_index(body, i)), 0, len(forbidden)) { false }
+  else { forbidden_names_disjoint_loop(body, forbidden, i + 1, n) }
+
+fn name_in_forbidden(ref forbidden, s: String, i, n) with !Mutate =
+  if i >= n { false }
+  else if str_eq(eff_name_str(list_index(forbidden, i)), s) { true }   // drift-audit: ignore — the String case of ==; the nameable sequence leaf, band D
+  else { name_in_forbidden(forbidden, s, i + 1, n) }
+
 fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
   match gate_row {
     EfPure =>
@@ -365,8 +400,16 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
         EfPure => true,
         EfClosed(body_names) =>
           match inner {
-            EfClosed(neg_names) => list_disjoint(body_names, neg_names),
+            EfClosed(neg_names) => forbidden_names_disjoint(body_names, neg_names),
             EfPure => true,     // body ⊆ !Pure: body has no Pure effects — vacuously true
+            _ => false
+          },
+        EfOpen(body_names, _) =>
+          // an open body may still perform a forbidden effect in its named part;
+          // the row var carries the rest, caught at instantiation by bind_open_to_neg
+          match inner {
+            EfClosed(neg_names) => forbidden_names_disjoint(body_names, neg_names),
+            EfPure => true,
             _ => false
           },
         _ => false
@@ -797,7 +840,12 @@ fn name_set_contains_loop(ref set, ref name, i, n) with !Mutate = {
   // equality, type-dispatched at emit; the hand-rolled eff_name_eq was its
   // drift-7 twin (and its `match a` fell through to a trap on a null, where the
   // fold tag-compares). EffName IS a sum; `==` recurses ENamed's string /
-  // EParameterized's args / EPure by shape.
+  // EParameterized's args / EPure by shape. NOTE: on the untyped-list hot path
+  // the operands floor to pointer-eq (list_index erases the element to a word;
+  // band D's typed containers dissolve this) — adequate for dedup/subset where
+  // names are interned-identical, but the NEGATION gate needs true name identity
+  // across distinct source sites, so it matches by name (row_subsumes' EfNeg arm,
+  // forbidden_names_disjoint) rather than routing here.
   else if list_index(set, i) == name { true }
   else { name_set_contains_loop(set, name, i + 1, n) }
 }

@@ -1,0 +1,6 @@
+// CROWN — the "under polymorphism" case: `run`'s row var is instantiated with E
+// through the lambda, smuggling E past `bad`'s `!E`. Expect E_EffectMismatch.
+effect E { op() -> Int }
+fn run(f) = f()
+fn bad() with !E = run(() => op())
+fn main() = bad()

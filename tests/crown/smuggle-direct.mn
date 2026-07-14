@@ -1,0 +1,5 @@
+// CROWN — the negation gate must REJECT a body performing a forbidden effect.
+// `bad` declares `with !E` yet performs E directly. Expect E_EffectMismatch.
+effect E { op() -> Int }
+fn bad() with !E = op()
+fn main() = bad()

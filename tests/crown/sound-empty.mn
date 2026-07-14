@@ -1,0 +1,4 @@
+// CROWN control — a `!E` body performing NOTHING must be ACCEPTED (no mismatch).
+effect E { op() -> Int }
+fn good() with !E = 42
+fn main() = good()

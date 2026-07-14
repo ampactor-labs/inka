@@ -1,0 +1,47 @@
+// imap — the ONE indexed-map primitive (Hβ.runtime.indexed-map-primitive, §5.O).
+//
+// A str_hash-bucketed String→value map. Five perf waypoints hand-rolled this
+// exact shape independently (env / summary / esc / base / reach); region_index
+// is its handle-keyed sibling. The value is opaque, so one primitive serves
+// them all: `smap` (String-keyed map). Miss → None, distinguishing "absent"
+// from a present empty value (Some []).
+//
+// Byte-identical to the linear scans it replaces: build reverse-inserts and
+// prepends, so the smallest original index sits at the bucket front and
+// smap_get returns the SAME first-match the O(n) scan did. The `name: String`
+// pins carry the content-equality (str_eq inside the small bucket) — a bare
+// `==` on the list-erased word would floor to pointer-eq, the very bug the
+// crown gate shed. A name is a HANDLE; this is where the six copies converge.
+
+fn smap_new() with Memory + Alloc = make_list(4096)
+
+fn smap_build(pairs) with Memory + Alloc =
+  smap_build_from(pairs, len(pairs) - 1, smap_new())
+
+fn smap_build_from(pairs, i, idx) with Memory + Alloc = {
+  if i < 0 { idx }
+  else {
+    let (name, val) = list_index(pairs, i)
+    smap_build_from(pairs, i - 1, smap_add(idx, name, val))
+  }
+}
+
+fn smap_add(idx, name: String, val) with Memory + Alloc = {
+  let b = i32_and(str_hash(name), 4095)
+  let x = list_index(idx, b)
+  list_set(idx, b, [(name, val)] ++ (if x == 0 { [] } else { x }))
+}
+
+fn smap_get(ref idx, name: String) with Memory = {
+  let b = i32_and(str_hash(name), 4095)
+  let x = list_index(idx, b)
+  smap_bucket_scan(if x == 0 { [] } else { x }, name, 0)
+}
+
+fn smap_bucket_scan(ref bucket, name: String, i) with Memory = {
+  if i >= len(bucket) { None }
+  else {
+    let (bn, val) = list_index(bucket, i)
+    if bn == name { Some(val) } else { smap_bucket_scan(bucket, name, i + 1) }
+  }
+}

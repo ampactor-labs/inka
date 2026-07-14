@@ -3504,43 +3504,12 @@ fn usage_summary_lookup(entries, name: String, i) = {
 // by name, and re-scanning it linearly per lookup is the Carried-Truth violation
 // at the performance scale (§5.O — the same str_hash index the env resolution
 // uses). The index is built once per round (O(N)); every summary_of is O(1).
+// The name → resume-grade index is the shared smap (lib/runtime/imap.mn);
+// a miss is UZero (the identity grade), unwrapped from smap's Option. Reverse
+// insertion keeps the first-match grade byte-identical to the old linear scan
+// when a nested fn shadows a top-level name.
 handler summaries_frozen(idx) {
-  summary_of(name) => resume(summary_index_get(idx, name))
-}
-
-// Build the name -> grade index. Insert entries in REVERSE so the FIRST entry
-// (index 0) ends up at each bucket's HEAD — summary_index_get then returns the
-// first-match grade, byte-identical to the old first-match linear scan when a
-// name appears more than once (nested fns can shadow a top-level name).
-fn build_summary_index(entries) with Memory + Alloc =
-  build_summary_index_from(entries, len(entries) - 1, make_list(4096))
-
-fn build_summary_index_from(entries, i, idx) with Memory + Alloc = {
-  if i < 0 { idx }
-  else {
-    let (name, grade) = list_index(entries, i)
-    build_summary_index_from(entries, i - 1, summary_index_add(idx, name, grade))
-  }
-}
-
-fn summary_index_add(idx, name: String, grade) with Memory + Alloc = {
-  let b = i32_and(str_hash(name), 4095)
-  let x = list_index(idx, b)
-  list_set(idx, b, [(name, grade)] ++ (if x == 0 { [] } else { x }))
-}
-
-fn summary_index_get(ref idx, name: String) with Memory = {
-  let b = i32_and(str_hash(name), 4095)
-  let x = list_index(idx, b)
-  summary_bucket_scan(if x == 0 { [] } else { x }, name, 0)
-}
-
-fn summary_bucket_scan(ref bucket, name: String, i) with Memory = {
-  if i >= len(bucket) { UZero }
-  else {
-    let (bn, g) = list_index(bucket, i)
-    if bn == name { g } else { summary_bucket_scan(bucket, name, i + 1) }
-  }
+  summary_of(name) => resume(match smap_get(idx, name) { Some(g) => g, None => UZero })
 }
 
 fn classify_fixpoint(stmts) = {
@@ -3557,7 +3526,7 @@ fn classify_rounds(decls, entries) = {
   // frame's __hstate local — out of scope in the lambda's emitted body (the
   // arm-internal-perform gap; the draw_op_edges precedent). The recursion
   // threads evidence through its own calls.
-  let idx = build_summary_index(entries)
+  let idx = smap_build(entries)
   let next = list_to_flat({ classify_grade_all(decls, 0) } ~> summaries_frozen(idx))
   if usage_entries_eq(entries, next, 0) { next }
   else { classify_rounds(decls, next) }

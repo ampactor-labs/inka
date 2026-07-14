@@ -1374,46 +1374,12 @@ fn collect_fn_bases(stmts) =
     }
   }, stmts))
 
-// Option-returning map lookup for ls_escaping_of: None distinguishes "not a
-// top-level fn" (→ the leaf) from "a fn whose flow-closure is empty" (Some []).
-// esc_rows is a str_hash name→row index (built once at ls_register_escaping),
-// read O(1) per call site. The old esc_assoc_from linear scan (escaping_row →
-// ls_escaping_of → derive_ev_slots, per call site) was 72% of the post-esc-setup
-// self-compile (perf, 2026-07-14; the esc_assoc read-side O(n²) §5.O named).
-// None still means "not a top-level fn"; Some [] "a fn with empty flow-closure".
-// Reverse-inserted first-match, byte-identical (base names are unique).
-fn esc_assoc(idx, name: String) = esc_index_get(idx, name)
-
-fn build_esc_index(map) with Memory + Alloc =
-  build_esc_index_from(map, len(map) - 1, make_list(4096))
-
-fn build_esc_index_from(map, i, idx) with Memory + Alloc = {
-  if i < 0 { idx }
-  else {
-    let (name, row) = list_index(map, i)
-    build_esc_index_from(map, i - 1, esc_index_add(idx, name, row))
-  }
-}
-
-fn esc_index_add(idx, name: String, row) with Memory + Alloc = {
-  let b = i32_and(str_hash(name), 4095)
-  let x = list_index(idx, b)
-  list_set(idx, b, [(name, row)] ++ (if x == 0 { [] } else { x }))
-}
-
-fn esc_index_get(ref idx, name: String) with Memory = {
-  let b = i32_and(str_hash(name), 4095)
-  let x = list_index(idx, b)
-  esc_bucket_scan(if x == 0 { [] } else { x }, name, 0)
-}
-
-fn esc_bucket_scan(ref bucket, name: String, i) with Memory = {
-  if i >= len(bucket) { None }
-  else {
-    let (bn, row) = list_index(bucket, i)
-    if bn == name { Some(row) } else { esc_bucket_scan(bucket, name, i + 1) }
-  }
-}
+// The flow-closure map (name → escaping row) is the shared smap indexed-map
+// (lib/runtime/imap.mn): esc_rows = smap_build(map) at ls_register_escaping,
+// smap_get(esc_rows, name) per call site. None = "not a top-level fn" (→ the
+// leaf); Some [] = "a fn with empty flow-closure". The old esc_index_* family
+// (a linear-scan read-side that was 72% of the post-esc-setup self-compile,
+// perf 2026-07-14) was esc_index generalized — dissolved into smap.
 
 // The name→index edge, drawn ONCE (Carried-Truth): each base's callee names
 // resolve to base POSITIONS at collect time, so the fixpoint rounds read
@@ -1429,39 +1395,23 @@ fn esc_bucket_scan(ref bucket, name: String, i) with Memory = {
 // over every base → O(N² × callees) — 85% of the post-region self-compile (perf,
 // 2026-07-14; the esc_assoc O(n²) §5.O named). Reverse-inserted so a name's FIRST
 // base position (lowest index) is returned, byte-identical to the old scan.
+// The callee-name → base-position index: the shared smap (lib/runtime/imap.mn).
+// Keeps its own build (the position IS the list index i, extracted from each
+// base's 4-tuple — not a field), calling smap_new/smap_add; the primitive is
+// smap. base names are unique, so first-match is byte-identical.
 fn build_base_index(bases) with Memory + Alloc =
-  build_base_index_from(bases, len(bases) - 1, make_list(4096))
+  build_base_index_from(bases, len(bases) - 1, smap_new())
 
 fn build_base_index_from(bases, i, idx) with Memory + Alloc = {
   if i < 0 { idx }
   else {
     let (name, _, _, _) = list_index(bases, i)
-    build_base_index_from(bases, i - 1, base_index_add(idx, name, i))
-  }
-}
-
-fn base_index_add(idx, name: String, pos) with Memory + Alloc = {
-  let b = i32_and(str_hash(name), 4095)
-  let x = list_index(idx, b)
-  list_set(idx, b, [(name, pos)] ++ (if x == 0 { [] } else { x }))
-}
-
-fn base_index_get(ref idx, name: String) with Memory = {
-  let b = i32_and(str_hash(name), 4095)
-  let x = list_index(idx, b)
-  base_bucket_scan(if x == 0 { [] } else { x }, name, 0)
-}
-
-fn base_bucket_scan(ref bucket, name: String, i) with Memory = {
-  if i >= len(bucket) { None }
-  else {
-    let (bn, pos) = list_index(bucket, i)
-    if bn == name { Some(pos) } else { base_bucket_scan(bucket, name, i + 1) }
+    build_base_index_from(bases, i - 1, smap_add(idx, name, i))
   }
 }
 
 fn resolve_callee_indices(idx, callees) =
-  flatten(map((c) => match base_index_get(idx, c) {
+  flatten(map((c) => match smap_get(idx, c) {
     Some(i) => [i],
     None    => []
   }, callees))
@@ -4659,13 +4609,13 @@ fn push_name(buf, count, name) = {
 // alphabetically, so the WAT layout is captures(0), capture_handles(4),
 // capture_order(8), locals(12), local_handles(16), local_order(20).
 // Mentl source reads via .field — physical layout irrelevant.
-handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = make_list(4096), may_yield = false, resume_binds = [] {
+handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = smap_new(), may_yield = false, resume_binds = [] {
   // THE FLOW-CLOSURE map (name → escaping row), computed once at lower_program
   // and read live by THE SEAM. Some(row) for a top-level fn; None (→ the leaf)
   // for a nested fn / lambda / unknown name.
-  ls_register_escaping(map) => resume() with esc_rows = build_esc_index(map),
+  ls_register_escaping(map) => resume() with esc_rows = smap_build(map),
 
-  ls_escaping_of(name) => resume(esc_assoc(esc_rows, name)),
+  ls_escaping_of(name) => resume(smap_get(esc_rows, name)),
 
   // band B M1.3 — the A1 gate's global short-circuit, computed once at
   // lower_program from the declared effects × their ops' inferred disciplines.
@@ -4997,7 +4947,7 @@ fn reach_grow(index, rbuf, rn, fbuf, fcount) = {
   if fcount == 0 { (rbuf, rn) }
   else {
     let name = list_index(fbuf, fcount - 1)
-    let refs = reach_index_get(index, name)
+    let refs = match smap_get(index, name) { Some(r) => r, None => [] }
     let rbuf2 = list_set(list_extend_to(rbuf, rn + 1), rn, name)
     let (fbuf2, fcount2) = reach_enqueue(refs, rbuf2, rn + 1, fbuf, fcount - 1)
     reach_grow(index, rbuf2, rn + 1, fbuf2, fcount2)
@@ -5014,40 +4964,23 @@ fn reach_grow(index, rbuf, rn, fbuf, fcount) = {
 // name → [] (the old len==0 fallthrough). The esc-proven build-then-read
 // str_hash index; the deletion-ultimate is Hβ.lower.esc-row-on-node (a reach
 // edge on the node), generalized by Hβ.perf.name-is-handle (§5.O).
-fn reach_index_new() with Memory + Alloc = make_list(4096)
-
-fn reach_index_add(idx, name: String, refs) with Memory + Alloc = {
-  let b = i32_and(str_hash(name), 4095)
-  let x = list_index(idx, b)
-  list_set(idx, b, [(name, refs)] ++ (if x == 0 { [] } else { x }))
-}
-
-fn reach_index_get(ref idx, name: String) with Memory = {
-  let b = i32_and(str_hash(name), 4095)
-  let x = list_index(idx, b)
-  reach_index_bucket_get(if x == 0 { [] } else { x }, name, 0)
-}
-
-fn reach_index_bucket_get(ref bucket, name: String, i) with Memory = {
-  if i >= len(bucket) { [] }
-  else {
-    let (bn, refs) = list_index(bucket, i)
-    if bn == name { refs } else { reach_index_bucket_get(bucket, name, i + 1) }
-  }
-}
+// The name → outgoing-edges index is the shared smap (lib/runtime/imap.mn);
+// a miss is [] (the old len==0 fallthrough), unwrapped from smap's Option.
+// The tree-walk builders below keep their reach-specific shape (each arm name
+// maps to its refs ++ the container's nested-name set), calling smap_new/add.
 
 // ONE pass over lowered: each top-level decl's name → its refs, then every
 // nested arm name → its refs ++ the container's nested-name set. Mirrors the
 // exact structure reach_nested_refs/reach_nested_names walked per-lookup.
 fn build_reach_index(lowered) with Memory + Alloc =
-  build_reach_index_from(lowered, 0, reach_index_new())
+  build_reach_index_from(lowered, 0, smap_new())
 
 fn build_reach_index_from(lowered, i, idx) with Memory + Alloc = {
   if i >= len(lowered) { idx }
   else {
     let d = list_index(lowered, i)
     let nm = reach_decl_name(d)
-    let idx1 = if nm == "" { idx } else { reach_index_add(idx, nm, reach_names_expr(d, [])) }
+    let idx1 = if nm == "" { idx } else { smap_add(idx, nm, reach_names_expr(d, [])) }
     build_reach_index_from(lowered, i + 1, reach_index_add_children(d, reach_nested_names(d, []), idx1))
   }
 }
@@ -5068,7 +5001,7 @@ fn reach_index_add_children(d, cnames, idx) with Memory + Alloc = match d {
 fn reach_index_add_nested(stmt, cnames, idx) with Memory + Alloc = match stmt {
   LDeclareFn(LFn(n, _, _, body, _, _)) =>
     reach_index_add_nested_list(body, cnames,
-      reach_index_add(idx, n, reach_names_list(body, []) ++ cnames)),
+      smap_add(idx, n, reach_names_list(body, []) ++ cnames)),
   LBlock(_h, stmts)   => reach_index_add_nested_list(stmts, cnames, idx),
   LLet(_h, _n, inner) => reach_index_add_nested(inner, cnames, idx),
   LIf(_h, _c, t, e)   => reach_index_add_nested_list(e, cnames, reach_index_add_nested_list(t, cnames, idx)),

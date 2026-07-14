@@ -203,10 +203,16 @@ fn query(entry_module, question) = {
     ~> diagnostics_handler
 }
 
-fn teach(entry_module) = {
+// analyze_fns — the shared analysis-verb cursor: load+check the module,
+// project each fn decl with `project(name, handle)`, render, print. audit
+// and teach ARE this cursor at two projections — the check handler chain and the
+// load → map_fn_stmts → render → print skeleton lived twice, byte-identical
+// but for the project/render pair (Carried-Truth: one home now). query
+// stays separate: it ASKS a question, not a per-fn walk.
+fn analyze_fns(entry_module, project, render) = {
   {
     let ast = driver_check_entry(entry_module)
-    collect_gradients(ast) |> render_gradients |> print_string
+    map_fn_stmts(ast, project) |> render |> print_string
   }
     ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
     ~> mentl_default
@@ -223,25 +229,11 @@ fn teach(entry_module) = {
     ~> diagnostics_handler
 }
 
-fn audit(entry_module) = {
-  {
-    let ast = driver_check_entry(entry_module)
-    collect_fn_rows(ast) |> render_audit |> print_string
-  }
-    ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
-    ~> mentl_default
-    ~> affine_ledger
-    ~> region_tracker
-    ~> verify_ledger
-    ~> arm_state_ctx([], OneShot, "")
-    ~> lookup_ty_graph
-    ~> env_handler
-    ~> graph_handler
-    ~> mutate_sink
-    ~> parallel_compose
-    ~> wasi_threads
-    ~> diagnostics_handler
-}
+fn teach(entry_module) =
+  analyze_fns(entry_module, (name, handle) => (name, teach_gradient(handle)), render_gradients)
+
+fn audit(entry_module) =
+  analyze_fns(entry_module, (name, handle) => build_audit_report(name, lookup_ty(handle)), render_audit)
 
 // ─── cursor_session_batch — `<|` fanout from one source to four projections ──
 //
@@ -575,14 +567,17 @@ handler fresh_for_query with next_display = 0 {
 // independent of siblings (no shared state mutation among reads);
 // map's tail loop walks them. N-core gradients are a `><` under its
 // own `~> Thread` at this site (Hβ.lower.schedule-specialized-callee).
-fn collect_gradients(ast) = {
+// map_fn_stmts — project every top-level FnStmt to `project(name, handle)`,
+// dropping non-fn nodes. The ONE cursor walk over the module's fn decls;
+// audit and teach are two projections of it (Carried-Truth: the walk lived
+// twice, byte-identical but for the projection — one home now).
+fn map_fn_stmts(ast, project) = {
   ast
     |> map((node) => {
          let N(body, _, handle) = node
          match body {
-           NStmt(FnStmt(name, _, _, _, _)) =>
-             [(name, teach_gradient(handle))],
-           _ => []
+           NStmt(FnStmt(name, _, _, _, _)) => [project(name, handle)],
+           _                               => []
          }
        })
     |> flatten
@@ -616,22 +611,6 @@ fn join_unlock_labels(labels) with Pure = {
     let rest = rest(labels)
     fold(first, (acc, label) => acc ++ ", " ++ label, rest)
   }
-}
-
-// Per-fn audit projection. Each FnStmt's row + capability set is
-// independently computable from its handle's graph state; map's tail
-// loop walks them (N-core = `><` + `~> Thread` at this site).
-fn collect_fn_rows(ast) = {
-  ast
-    |> map((node) => {
-         let N(body, _, handle) = node
-         match body {
-           NStmt(FnStmt(name, _, _, _, _)) =>
-             [build_audit_report(name, lookup_ty(handle))],
-           _ => []
-         }
-       })
-    |> flatten
 }
 
 // H5: AuditReport record per fn — the structured projection Mentl's

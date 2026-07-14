@@ -518,7 +518,8 @@ fn parse_one_param(ref tokens, pos) = {
     let (pat, p_pat) = parse_pat(tokens, p)
     let fresh = fresh_param_name(psp)
     let param = TParam(fresh, TVar(fresh_handle(psp)), own_marker, own_marker, None)
-    let bind = nstmt(LetStmt(pat, nexpr(VarRef(fresh), psp)), psp)
+    let vref = nexpr(VarRef(fresh), psp)   // reuse as the absent-annotation sentinel (byte-identical)
+    let bind = nstmt(LetStmt(pat, vref, vref), psp)
     (param, Some(bind), p_pat)
   } else {
     let name = ident_or_kw_at(tokens, p)
@@ -650,13 +651,23 @@ fn parse_let(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let (pat, p) = parse_pat(tokens, pos)
   let p2 = skip_ws(tokens, p)
-  let p3 = if at(tokens, p2, TColon) {
-    let (_, p_ty) = parse_type_ty(tokens, skip_ws(tokens, p2 + 1))
-    skip_ws(tokens, p_ty)
-  } else { p2 }
-  let p4 = expect(tokens, p3, TEq)
+  // Capture the `: T` annotation LIVE (mirrors FnStmt's ret_ann, parse_type_expr):
+  // present = NTypeAnn(ty) minted into the graph, so infer reads the declared
+  // type back and discharges its refinement against the value node; absent = a
+  // LitUnit dummy the infer arm skips. The old form parsed the type and DISCARDED
+  // it (`let (_, p_ty) = ...`), so every `let x: T = e` lost its constraint.
+  let (ann_opt, p3) = if at(tokens, p2, TColon) {
+    let (a, pt) = parse_type_expr(tokens, skip_ws(tokens, p2 + 1))
+    (Some(a), pt)
+  } else { (None, p2) }
+  let p4 = expect(tokens, skip_ws(tokens, p3), TEq)
   let (val, p5) = parse_expr(tokens, skip_ws(tokens, p4))
-  (nstmt(LetStmt(pat, val), start), p5)
+  // Absent annotation REUSES the value node as the sentinel — no fresh mint,
+  // so the handle counter is unshifted and the emit stays byte-identical for
+  // every unannotated let (infer's NTypeAnn arm skips a non-annotation node).
+  // Only a PRESENT annotation adds its NTypeAnn node.
+  let ann_node = match ann_opt { Some(a) => a, None => val }
+  (nstmt(LetStmt(pat, val, ann_node), start), p5)
 }
 
 // Parse `type X = V1 | V2(fields) | ...` or `type X = T where P`.
@@ -1087,7 +1098,9 @@ fn parse_let_expr(ref tokens, pos, start_span) = {
   // Desugar: wrap as BlockExpr([LetStmt(pat, val)], body)
   // BlockExpr takes (stmts, final_expr) — the let is a statement,
   // body is the final expression value of the block.
-  let let_stmt = nstmt(LetStmt(pat, val), start_span)
+  // Reuse the value node as the absent-annotation sentinel (byte-identical;
+  // the expr-form let does not carry an annotation — Hβ.parser.let-expr-annotation).
+  let let_stmt = nstmt(LetStmt(pat, val, val), start_span)
   (nexpr(desugar_block([let_stmt], body, start_span), start_span), p7)
 }
 
@@ -1419,7 +1432,8 @@ fn pat_param_and_let(pat, span: ValidSpan) = match pat {
   _ => {
     let fresh = fresh_param_name(span)
     let param = TParam(fresh, TVar(fresh_handle(span)), Unmarked, Unmarked, None)
-    let bind = nstmt(LetStmt(pat, nexpr(VarRef(fresh), span)), span)
+    let vref = nexpr(VarRef(fresh), span)   // reuse as the absent-annotation sentinel (byte-identical)
+    let bind = nstmt(LetStmt(pat, vref, vref), span)
     (param, Some(bind))
   }
 }
@@ -1812,7 +1826,7 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
 fn desugar_block(stmts, final_e, span) = match find_destructure_let(stmts, 0) {
   None    => BlockExpr(stmts, final_e),
   Some(i) => {
-    let N(NStmt(LetStmt(pat, v)), lsp, _) = list_index(stmts, i)
+    let N(NStmt(LetStmt(pat, v, _)), lsp, _) = list_index(stmts, i)
     let rest_stmts = slice(stmts, i + 1, len(stmts))
     // The arm body is exactly what follows the destructure — a bare final when
     // nothing intervenes, else the desugared remainder. No redundant block.
@@ -1830,7 +1844,7 @@ fn find_destructure_let(stmts, i) =
   if i >= len(stmts) { None }
   else {
     match list_index(stmts, i) {
-      N(NStmt(LetStmt(pat, _)), _, _) =>
+      N(NStmt(LetStmt(pat, _, _)), _, _) =>
         if is_destructure_pat(pat) { Some(i) } else { find_destructure_let(stmts, i + 1) },
       _ => find_destructure_let(stmts, i + 1)
     }

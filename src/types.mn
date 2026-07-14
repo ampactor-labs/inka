@@ -1008,7 +1008,7 @@ effect BodyContext {
 // ─── Stmt (spec 03) ────────────────────────────────────────────────
 
 type Stmt
-  = LetStmt(Pat, Node)
+  = LetStmt(Pat, Node, Node)     // pat, value, annotation node (NTypeAnn(ty) present, LitUnit absent — mirrors FnStmt's ret_ann)
   | FnStmt(String, List, Node, List, Node)
                            // name, params (TParam), retty, effects, body
   | TypeDefStmt(String, List)

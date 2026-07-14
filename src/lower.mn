@@ -1314,7 +1314,7 @@ fn flow_edges_expr(e) = match e {
 }
 
 fn flow_edges_stmt(s) = match s {
-  LetStmt(_, expr)               => flow_edges(expr),
+  LetStmt(_, expr, _)            => flow_edges(expr),
   FnStmt(_, _, _, _, body_node)  => flow_edges(body_node),
   ExprStmt(expr)                 => flow_edges(expr),
   TypeDefStmt(_, _)              => ([], []),
@@ -1744,7 +1744,7 @@ fn expr_diverges(node) = {
     // Statements wrap their expression — a block's stmts are NStmt(...), so
     // first_diverging must unwrap to reach the perform.
     NStmt(ExprStmt(e))        => expr_diverges(e),
-    NStmt(LetStmt(_, init))   => expr_diverges(init),
+    NStmt(LetStmt(_, init, _)) => expr_diverges(init),
     NExpr(CallExpr(f, _)) => {
       let N(fb, _, _) = f
       match fb {
@@ -2788,7 +2788,7 @@ fn lower_stmt(node) = {
 }
 
 fn lower_stmt_body(s, handle, span) = match s {
-  LetStmt(pat, expr) => {
+  LetStmt(pat, expr, _) => {
     let lo = lower_expr(expr)
     match pat {
       PVar(name) => {
@@ -4215,7 +4215,7 @@ fn free_vars_expr(e, bound) = match e {
 // to closure capture. Refinement stmts similarly. Named
 // explicitly so new Stmt variants decide their cfv behavior.
 fn free_vars_stmt(s, bound) = match s {
-  LetStmt(_, expr)              => collect_free_vars(expr, bound),
+  LetStmt(_, expr, _)           => collect_free_vars(expr, bound),
   FnStmt(_, _, _, _, body_node) => collect_free_vars(body_node, bound),
   ExprStmt(expr)                => collect_free_vars(expr, bound),
   TypeDefStmt(_, _)             => [],
@@ -4250,7 +4250,7 @@ fn free_vars_stmts(stmts, bound, acc_frees) = {
     let stmt = last(stmts)
     let N(stmt_body, _, _) = stmt
     match stmt_body {
-      NStmt(LetStmt(pat, expr)) => {
+      NStmt(LetStmt(pat, expr, _)) => {
         let frees = collect_free_vars(expr, bound)
         let new_bound = free_vars_merge(bound, free_vars_pat_binds(pat))
         free_vars_stmts(
@@ -4617,7 +4617,7 @@ fn collect_top_level_names_loop(stmts, i, n, buf, count) = {
     let N(body, _, _) = list_index(stmts, i)
     let (new_buf, new_count) = match body {
       NStmt(FnStmt(name, _, _, _, _))            => push_name(buf, count, name),
-      NStmt(LetStmt(PVar(name), _))              => push_name(buf, count, name),
+      NStmt(LetStmt(PVar(name), _, _))           => push_name(buf, count, name),
       // A handler decl IS a top-level name — `~> h` references it as a
       // global, never a captured upvalue (the phantom-capture fence lie:
       // each install counted as a capture inflated the ev-region base by

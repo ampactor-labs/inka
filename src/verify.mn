@@ -90,6 +90,32 @@ fn node_const(handle) with GraphRead = match graph_node_body(handle) {
   _                   => None
 }
 
+// Substitute the refinement's `self` operand with the value node being refined.
+// A predicate's operands are node HANDLES (types.mn Predicate); the generic
+// TRefined arm of unify_types has no value node, so `self` (a VarRef("self")
+// node) resolves via node_const to None and every refinement stays V_Pending.
+// At a construction site WITH the value handle (a let/param annotation), swap
+// self for the value node so node_const reads the literal and predicate_decide
+// decides. Carry the handle, read live. `self` is identified by reading the
+// operand's body LIVE (graph_node_body), never a copied marker.
+fn subst_self(pred, value_handle) with GraphRead = match pred {
+  PTrue                => PTrue,
+  PCompare(op, l, r)   => PCompare(op, subst_self_operand(l, value_handle), subst_self_operand(r, value_handle)),
+  PAnd(a, b)           => PAnd(subst_self(a, value_handle), subst_self(b, value_handle)),
+  POr(a, b)            => POr(subst_self(a, value_handle), subst_self(b, value_handle)),
+  PNot(inner)          => PNot(subst_self(inner, value_handle)),
+  PBoolNode(h)         => PBoolNode(subst_self_operand(h, value_handle)),
+  PPatternMatch(p, h)  => PPatternMatch(p, subst_self_operand(h, value_handle)),
+  PFlowLe(a, b)        => PFlowLe(a, b)
+}
+
+// Replace an operand handle with the value handle iff it reads live as the
+// `self` marker (VarRef("self")); any other operand is carried unchanged.
+fn subst_self_operand(h, value_handle) with GraphRead = match graph_node_body(h) {
+  NExpr(VarRef(name)) => if name == "self" { value_handle } else { h },
+  _                   => h
+}
+
 // Fold a comparison over two constant operand values.
 fn litval_compare(ref op, ref a, ref b) with Pure = match op {
   BEq => litval_eq(a, b),

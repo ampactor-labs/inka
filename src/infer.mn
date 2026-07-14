@@ -247,10 +247,20 @@ fn infer_stmt_list(stmts) = each(infer_stmt, stmts)
 fn infer_stmt(ref node) = {
   let N(body, span, handle) = node
   match body {
-    NStmt(LetStmt(pat, expr)) => {
+    NStmt(LetStmt(pat, expr, ann)) => {
       infer_expr(expr)
-      let N(_, _, eh) = expr
+      let N(_, val_span, eh) = expr
       infer_pat(pat, eh, span)
+      // The `: T` annotation is a CONSTRAINT verified against the value node.
+      // Unlike the generic TRefined arm of unify_types (predicate + span only),
+      // the value's node HANDLE (eh) is live here, so a refinement's `self`
+      // operand binds to the value and Verify decides it on the literal —
+      // `let bad: Sample = 1.5` rejects, `0.5` compiles. Absent = LitUnit, skipped.
+      let N(ann_body, _, _) = ann
+      match ann_body {
+        NTypeAnn(ann_ty) => apply_let_annotation(ann_ty, eh, val_span),
+        _                => ()
+      }
     },
 
     NStmt(FnStmt(name, params, ret_ann, effs, body_node)) => {
@@ -2902,6 +2912,31 @@ fn build_param_types_loop(params, handles, qmap, i) =
     ([TParam(name, chosen, auth, res, default)] ++ rest, qmap2)
   }
 
+// Apply a let-binding's `: T` annotation as a refinement constraint on the
+// value node. The value's node HANDLE is live here (unlike the generic TRefined
+// arm of unify_types, which carries only the predicate + span), so subst_self
+// binds `self` to the value and Verify decides the predicate on the literal —
+// `let bad: Sample = 1.5` rejects, `let ok: Sample = 0.5` compiles; a
+// non-constant value stays V_Pending (node_const → None). Resolve the annotation
+// through its alias edge (quantify_ctor_ty — the same resolution build_param_types
+// uses), then discharge the refinement.
+fn apply_let_annotation(ann_ty, value_handle, span: ValidSpan) = {
+  let (resolved, _q) = quantify_ctor_ty(ann_ty, [])
+  apply_refinement_constraint(resolved, value_handle, span)
+}
+
+// Peel the resolved annotation to its refinement. A transparent alias recurses
+// to its inner type; a TRefined discharges its (self-substituted) predicate
+// against the value node; any other resolved type carries no refinement
+// obligation here (base-type unification of the value against the annotation is
+// the named follow-up Hβ.infer.let-annotation-base-unify — this increment
+// discharges only the refinement, keeping the change purely additive).
+fn apply_refinement_constraint(ty, value_handle, span: ValidSpan) = match ty {
+  TAlias(_, inner)     => apply_refinement_constraint(inner, value_handle, span),
+  TRefined(_, pred)    => verify(span, subst_self(pred, value_handle), Refinement(pred, PTrue)),
+  _                    => ()
+}
+
 fn build_inferred_params(handles) = map((h) => mk_param("_", TVar(h)), handles)
 
 fn register_type_constructors(type_name, variants) = {
@@ -3566,7 +3601,7 @@ fn collect_fn_decls(node, acc) = {
   match body {
     NStmt(FnStmt(name, _, _, _, b))       => collect_fn_decls(b, [(name, b)] ++ acc),   // drift-audit: ignore — decl-count-bounded cons, not a hot loop
     NStmt(HandlerDeclStmt(_, _, _, _, arms)) => collect_fn_decls_arms(arms, acc),
-    NStmt(LetStmt(_, v))                  => collect_fn_decls(v, acc),
+    NStmt(LetStmt(_, v, _))               => collect_fn_decls(v, acc),
     NStmt(ExprStmt(e))                    => collect_fn_decls(e, acc),
     NExpr(BlockExpr(stmts, final))        => collect_fn_decls(final, collect_fn_decls_list(stmts, acc)),
     NExpr(IfExpr(c, t, e))                => collect_fn_decls(e, collect_fn_decls(t, collect_fn_decls(c, acc))),
@@ -3718,7 +3753,7 @@ fn resume_grade(node) = {
     NExpr(PipeExpr(_, l, r))              => usage_seq(resume_grade(l), resume_grade(r)),
     NExpr(MakeStringExpr(frags))          => grade_nodes(frags),
     NExpr(LabeledArg(_, v))               => resume_grade(v),
-    NStmt(LetStmt(_, v))                  => resume_grade(v),
+    NStmt(LetStmt(_, v, _))               => resume_grade(v),
     NStmt(ExprStmt(e))                    => resume_grade(e),
     // A nested fn DECLARATION is not an execution — its resumes count at
     // its CALL sites via the summary substitution (the pre-cut descend
@@ -3910,7 +3945,7 @@ fn walk_refinement(node, path_pred) with GraphRead + GraphWrite = {
       walk_refinement(l, path_pred)
       walk_refinement(r, path_pred)
     },
-    NStmt(LetStmt(_, v)) =>
+    NStmt(LetStmt(_, v, _)) =>
       walk_refinement(v, path_pred),
     NStmt(ExprStmt(e)) =>
       walk_refinement(e, path_pred),

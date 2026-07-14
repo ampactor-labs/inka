@@ -1,0 +1,12 @@
+// VALUE-PROOF (R2) — the PASSING path: a refined let with a valid constant
+// discharges its refinement and compiles byte-identically to the un-annotated
+// form. `0.5` satisfies `-1.0 <= self && self <= 1.0`, so subst_self binds
+// self=0.5, predicate_decide proves Some(true), verify resumes with no debt and
+// no diagnostic — the program runs to 42. The REJECT path (a compile-time
+// E_RefinementRejected, not a runtime exit) is the stderr gate mn-refine-reject.
+type Sample = Float where -1.0 <= self && self <= 1.0
+
+fn main(q) = {
+  let ok: Sample = 0.5
+  42
+}

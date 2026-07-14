@@ -39,7 +39,8 @@ Provenance, self-confirmed at pin time:
   the M1.1 world-tag pin 70d184a0…, the image-layout pin d24af35a…, the
   first-light boot b3314001…, commit 87c0152, tag `first-light`)
 
-The hand-WAT seed (`bootstrap/`) stays as the cold-bootstrap recipe and the
-diverse-second-seed ingredient (trusting-trust, PLAN band J:
-`Hβ.closure.diverse-double-compilation`). It no longer runs in the loop;
-`--from-seed` on verify/march-gate/march walks the full ladder from it.
+The hand-WAT seed (`bootstrap/`) was DELETED (7401c4b "Fly, my pretty <3",
+2026-07-10, the day after first light); `--from-seed` is gone with it. The
+cold-bootstrap recipe — and the diverse-second-seed ingredient for
+trusting-trust (PLAN band J, `Hβ.closure.diverse-double-compilation`) — lives
+at tag `first-light`, git archaeology out of the run path (PLAN §6).

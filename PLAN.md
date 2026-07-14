@@ -164,14 +164,37 @@ that could build a better medium is already a move *inside* this one.
   `[Int] -> Int where result >= 0`), so the dispatch *among the survivors* — which
   proven program the developer actually MEANT — is **exogenous**: carried by the
   human, or by an inductive/learned ranker that is itself a legitimate `Synth`
-  handler behind the gate, never a projection of the graph's truth at P. The
-  medium does not cut out the proposer; it makes the sieve **cheap, sound, and
-  universal over every proposer** — and finding the intended program (the ranking
-  prior, the piece a learned model legitimately owns) stays the proposer's job.
-  Even so, a partially-sound Mentl gate beats a fluent generator categorically: a
-  verifier with a known, characterizable, lintable hole emits a *checkable
-  derivation*, fails *systematically*, and accrues *monotone* constraints — three
-  properties a token-sampler cannot have.
+  handler behind the gate, never a projection of the graph's truth at P. But be
+  equally exact about the PROPOSER, because "so keep a model as the proposer" is
+  the refuter's own equivocation (corrected 2026-07-13, Morgan): at the cursor the
+  medium does NOT enumerate token space against a bare type — it proposes by
+  GUIDED search over the whole typed graph (every in-scope row, the Reason chains
+  carrying upstream intent, the live refinements, ownership, proximity), pruned at
+  every step by the proof. That graph IS a prior — a STRUCTURAL one, richer at the
+  cursor than a model's token-window, not poorer — and the pruning is the move a
+  sampler structurally cannot make (no proof to prune with, so it samples the
+  whole distribution and hands one draw to audit). So for the NEXT MOVE — the next
+  function, the next annotation, the next fill — the medium is the best proposer
+  and the learned model is **UNNECESSARY, not merely filtered**: when two
+  survivors satisfy every EXPRESSED constraint, the medium does not guess — it
+  surfaces the ONE missing constraint (a refinement, a type, an example) that
+  collapses the tie, then proposes the proven code. The gradient reading local
+  intent is the ranker; the disambiguating question is the tie-break; that IS the
+  teaching compiler, and what Mentl's voice speaks when it proposes. A learned
+  ranker survives only as an OPTIONAL last-resort `Synth` handler behind the same
+  gate — never necessary, because naming the missing bit is one keystroke, cheaper
+  than guessing it. **"Cut the model out" holds at next-move scope** — not by
+  out-guessing it but by never needing a guess. The honest boundary is SCOPE, and
+  it is the correct scope, not a weakness: a 500-line algorithm from one sentence
+  IS underdetermined for guided search and a model alike, but that was never a
+  hole-fill — the medium builds a program as a SEQUENCE of proven next-moves, each
+  accepted or refined, trustworthy by construction where whole-cloth generation
+  can never be. Even in that underdetermined tail a partially-sound Mentl gate
+  beats a fluent generator categorically: a verifier with a known, characterizable,
+  lintable hole emits a *checkable derivation*, fails *systematically*, and accrues
+  *monotone* constraints — three properties a token-sampler cannot have. The moat
+  is the gate; the PROPOSER over the typed graph is the second moat the refuter
+  missed, and the crown (`!E`-sound-under-poly) is what makes both trustworthy.
 - **The proof, validated from eight directions.** Every domain spent a decade
   building *one of Mentl's arms* in isolation and stopped where it lacked the
   others: Faust has the verbs and no effects; JAX has the handlers and no real
@@ -456,9 +479,16 @@ ultimate form?"; the disposable seed's weaker inference catches up afterward
    subtrees; the vocabulary must not be borrowed for generate-and-test). The
    **honest gaps, positive-form:** the ranker among survivors is `gates ×
    proximity` today — sound only over the finite ANNOTATION lattice (effect-row
-   / ownership tightenings on already-written code); **code-body intent-ranking
-   is an inductive prior that legitimately lives behind the gate**, never a
-   graph projection (`Hβ.felt.intent-ranker-is-a-synth-handler`). And Verify
+   / ownership tightenings on already-written code); the ULTIMATE next-move
+   ranker is **the gradient reading LOCAL intent** — the Reason chains carrying
+   upstream why, proximity, the in-scope vocabulary — with the **teaching
+   TIE-BREAK** when two survivors satisfy every expressed constraint (surface the
+   one disambiguating refinement / type / example, never guess); a learned
+   code-body prior is then an OPTIONAL last-resort `Synth` handler for the
+   underdetermined tail, **never the seat** (§1's 2026-07-13 correction —
+   `Hβ.felt.intent-ranker-gradient-plus-teaching`, superseding the earlier
+   "learned prior behind the gate" framing; the medium is the best next-move
+   proposer, the model unnecessary at that scope). And Verify
    must **commit to a decidable refinement fragment** (Liquid/Flux-style) or the
    per-keystroke filter is vaporware past `len(self) > 0`; the undecidable
    residue is honest `V_Pending` debt (the sound-incomplete choice — never a
@@ -472,10 +502,13 @@ ultimate form?"; the disposable seed's weaker inference catches up afterward
    load-bearing OPEN dependency, uniquely Mentl's) → spec-faithfulness *above*
    (the crown does not touch it; proof-passing-but-intent-wrong code is a failure
    proof LAUNDERS, band K's Lahiri worked-example). The genuinely novel residue,
-   all on the FILTER/substrate side (never on "search," where the field already
-   moved the proposer seat to a learned model): the **effect-and-ownership-typed
-   hole** prunes classes no simply-typed (Hazel) or refinement-but-effect-blind
-   (Synquid) hole can; **trail-fork + memcpy-persist** unifies backtrack with
+   on the FILTER/substrate side AND on GUIDED next-move search — never on the
+   UNGUIDED whole-program enumeration that explodes (that tail is where a learned
+   ranker earns its keep): the **effect-and-ownership-typed hole** prunes classes
+   no simply-typed (Hazel) or refinement-but-effect-blind (Synquid) hole can —
+   type-directed search over the FINITE in-scope vocabulary, pruned by the row at
+   every step, IS the proposer for the next move, the structural prior the
+   token-sampler lacks; **trail-fork + memcpy-persist** unifies backtrack with
    durable execution (persist = memcpy) in one loop; **`??` is one absence
    marker across SPACE (partial application) and TIME (the resumable
    continuation)**; and **`!E`-gated speculation** — proving an effect's ABSENCE

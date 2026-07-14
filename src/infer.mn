@@ -3451,12 +3451,9 @@ handler resume_summaries_ctx with entries = [] {
   set_summaries(es) => resume() with entries = es
 }
 
-// One frozen round of the fixpoint — resume_grade's summary reads answer
-// from the PREVIOUS round's entries.
-handler summaries_frozen(entries) {
-  summary_of(name) => resume(usage_summary_lookup(entries, name, 0))
-}
-
+// Linear summary lookup — kept for the COLD readers (resume_summaries_ctx, read
+// once per handler arm by draw_op_edges; lower.mn:1012's per-fn grade read). The
+// HOT per-round fixpoint path uses the O(1) summary_index below (summaries_frozen).
 fn usage_summary_lookup(entries, name: String, i) = {
   if i >= len(entries) { UZero }
   else {
@@ -3465,9 +3462,58 @@ fn usage_summary_lookup(entries, name: String, i) = {
   }
 }
 
+// One frozen round of the fixpoint — resume_grade's summary reads answer from
+// the PREVIOUS round's entries, O(1) via a str_hash index. The former linear
+// usage_summary_lookup — an O(N) by-name scan per call-node per round — was 98%
+// of the ENTIRE self-compile (perf, 2026-07-13): the grade is a per-fn fact keyed
+// by name, and re-scanning it linearly per lookup is the Carried-Truth violation
+// at the performance scale (§5.O — the same str_hash index the env resolution
+// uses). The index is built once per round (O(N)); every summary_of is O(1).
+handler summaries_frozen(idx) {
+  summary_of(name) => resume(summary_index_get(idx, name))
+}
+
+// Build the name -> grade index. Insert entries in REVERSE so the FIRST entry
+// (index 0) ends up at each bucket's HEAD — summary_index_get then returns the
+// first-match grade, byte-identical to the old first-match linear scan when a
+// name appears more than once (nested fns can shadow a top-level name).
+fn build_summary_index(entries) with Memory + Alloc =
+  build_summary_index_from(entries, len(entries) - 1, make_list(4096))
+
+fn build_summary_index_from(entries, i, idx) with Memory + Alloc = {
+  if i < 0 { idx }
+  else {
+    let (name, grade) = list_index(entries, i)
+    build_summary_index_from(entries, i - 1, summary_index_add(idx, name, grade))
+  }
+}
+
+fn summary_index_add(idx, name: String, grade) with Memory + Alloc = {
+  let b = i32_and(str_hash(name), 4095)
+  let x = list_index(idx, b)
+  list_set(idx, b, [(name, grade)] ++ (if x == 0 { [] } else { x }))
+}
+
+fn summary_index_get(ref idx, name: String) with Memory = {
+  let b = i32_and(str_hash(name), 4095)
+  let x = list_index(idx, b)
+  summary_bucket_scan(if x == 0 { [] } else { x }, name, 0)
+}
+
+fn summary_bucket_scan(ref bucket, name: String, i) with Memory = {
+  if i >= len(bucket) { UZero }
+  else {
+    let (bn, g) = list_index(bucket, i)
+    if bn == name { g } else { summary_bucket_scan(bucket, name, i + 1) }
+  }
+}
+
 fn classify_fixpoint(stmts) = {
-  let decls = collect_fn_decls_list(stmts, [])
-  classify_rounds(decls, map((nb) => { let (n, _) = nb; (n, UZero) }, decls))
+  // Flatten decls ONCE — collect_fn_decls builds a cons-list, so the classifier's
+  // list_index(decls, i) would be O(N²) per round (§5.O: read a flat array O(1),
+  // never re-walk a spine). Both decls and the entries are flat hereafter.
+  let decls = list_to_flat(collect_fn_decls_list(stmts, []))
+  classify_rounds(decls, list_to_flat(map((nb) => { let (n, _) = nb; (n, UZero) }, decls)))
 }
 
 fn classify_rounds(decls, entries) = {
@@ -3476,7 +3522,8 @@ fn classify_rounds(decls, entries) = {
   // frame's __hstate local — out of scope in the lambda's emitted body (the
   // arm-internal-perform gap; the draw_op_edges precedent). The recursion
   // threads evidence through its own calls.
-  let next = { classify_grade_all(decls, 0) } ~> summaries_frozen(entries)
+  let idx = build_summary_index(entries)
+  let next = list_to_flat({ classify_grade_all(decls, 0) } ~> summaries_frozen(idx))
   if usage_entries_eq(entries, next, 0) { next }
   else { classify_rounds(decls, next) }
 }

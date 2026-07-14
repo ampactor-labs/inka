@@ -689,6 +689,19 @@ compiler re-derives BY NAME what a HANDLE already connects:
   `|>` cursor, 8 cores idle; the level-set partition (driver.mn) is off the hot
   path.
 
+**CORRECTION (2026-07-13) — the code-reading diagnosis MISSED the actual dominant
+cost; empirical `perf` found it.** The 8 agents read code and estimated; the
+biggest cost they named (env `env_find_flat`) measured 0.5–4% (below the ±14%
+run-variance — fixing it moved nothing). The REAL dominant cost was the
+**resume-cardinality classifier** (`classify_fixpoint`, infer.mn) — O(rounds ×
+(N² + calls×N)), ~47% of the whole compile — which NO agent flagged, because a
+static read can't see a fixpoint's round-count × per-call rescans compounding.
+Host `perf` (§8, surviving `proc_exit`) pinned it at 98% of a sample; the O(1)
+str_hash-index fix cut m3-gen 1400s → 749s (§7). The lesson is load-bearing for
+this whole section: **measure the hot path with `perf`, never trust a
+code-reading estimate — the ultimate-form target is still O(1) everywhere, but
+which O(n^k) dominates is an empirical question.**
+
 **The unifying fix — a name is a HANDLE, not a byte-sequence.** Interned ONCE at
 lex (the content-intern table is the one O(1)-amortized hash — and it ALREADY
 exists for the data section, `string_offset_lookup`, today O(n)-scanned at
@@ -861,6 +874,8 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 ---
 
 ## §7 · Current state (grounded 2026-07-13 — **FIRST LIGHT LANDED; the medium builds itself; the frontier is now SPEED, not correctness.** (1) **First light** (2026-07-10, 87c0152, tag `first-light`): `m3 == m4` byte-identical AND battery-green-through-m3 — the fixed point, the medium reproduced by itself. (2) **The boot era** (7401c4b): the hand-WAT seed is DELETED, `boot/mentl.wasm` IS the compiler; `tools/march.sh` asserts `m2 == m3` as the live ratchet (a TRANSITION on emit changes → re-pin from m3; boot/PROVENANCE.md). (3) **The M1–M4 multi-shot arc self-hosted** — the k1 continuation-reification producer through the M4 Abandon discipline, each fixpoint-confirmed; the value-layer fold leaves (STEP 0–5, S0 compare/hash) landed. (4) **THE CROWN LANDED** (2026-07-13, 29df478): `!E`-sound-under-poly, the by-name negation gate (`row_subsumes` EfNeg) — `m2 == m3` byte-identical, 5/5 crown-gate (tests/crown/, tools/crown-gate.sh), 66/66 micros. (5) **The proposer reframe corrected** (§1/§5, 6c3efb4): the medium is the best next-move proposer; the model is unnecessary at that scope. **THE CURRENT CURSOR — the O(1) architecture (§5.O), performance IS the Carried-Truth Law.** The 8-agent diagnosis pinned the ~23-min self-compile (1377s, 100% guest algorithm) to name-keyed re-derivation: `env_find_flat` O(n²) (pipeline.mn:375, convergent 5/7), dedup O(U²) with an O(1) target (wasm.mn:1145/1168), `esc_assoc` O(n²) (lower.mn:1383), `instantiate` tree-clone (infer.mn:2687), the 4GB never-free cache-hostile amplifier, and ZERO parallelism (one `|>` cursor, 8 cores idle). The fix is **names-are-handles + O(1) handle-indexed reads + per-decl arena + parallel cursors**, built layer-by-layer — the first cut is `string_offset_lookup` O(1) via a str_hash index (byte-identical by construction). Ground FIRST: `bash tools/state.sh`; gates: `verify.sh` + `march-gate.sh` + `march.sh` the m2==m3 ratchet. The detailed trap-march log below is PRE-first-light archaeology, kept for its substrate mechanics.)
+
+> **▶ THE PROFILER FOUND THE SILVER BULLET — the resume-cardinality classifier was ~half the compile (2026-07-13, 1400s → 749s).** Host `perf` (surviving `proc_exit`, where `--profile=guest` wrote empty ×3 — §8) pinned `list_index` at 98% of a 5-min sample, 74% under `classify_grade_all`: the classifier's dataflow fixpoint was O(rounds × (N² + calls×N)) — `usage_summary_lookup` an O(N) by-name linear scan per call-node per round, `decls`/entries cons-lists re-indexed O(N²), all × rounds. FIX (infer.mn, the SAME str_hash index the env got): `summary_of` O(1) via `build_summary_index`/`summary_index_get`, `decls`+entries flattened; `usage_summary_lookup` kept for the COLD readers (`resume_summaries_ctx` per-arm, lower.mn:1012 per-fn) — the over-deletion that broke the first build, caught by tracing the edges (never delete a fn without greping its callers). **MEASURED: m3-gen 1400s → 749s (~2×), m2==m3 byte-identical (467908 lines), 66/66 micros, 5/5 crown.** The 98% was of the SAMPLE (the classifier phase); ~47% of the whole — the remaining 749s is the next frontier (perf the fixed m2). **LESSON: the 8-agent code-reading diagnosis (§5.O) MISSED the classifier entirely** — it estimated env/instantiate/LowIR; the env O(n²) I fixed first was 0.5–4% (below noise), the classifier was ~47%. Empirical `perf` beats code-reading estimates; measure the hot path, never guess it.
 
 > **▶▶▶ THE 4096-BYTE LEXER CUT = RAW-TNAME ANNOTATIONS — CLOSED (f320f97,
 > 2026-07-09); m3 now reads WHOLE inputs; the trap MARCHED into m3's own emit /
@@ -2840,12 +2855,23 @@ wat2wasm m2.wat -o m2.wasm --debug-names --enable-threads --enable-tail-call
 # --fold-exprs (readable canonical WAT — NEVER the raw 12MB m2.wat) · wasm-validate · wasm-decompile (C-like)
 ```
 
-**Modern toolkit (2026-07-05, measured):** `wasmtime --profile=guest` writes a
-Firefox-profiler JSON with per-fn guest time (name-section names — the
-alloc-profile band's measurement; incompatible with `--allow-precompiled`,
-profile the plain module). `wasmtime compile` (AOT → .cwasm, run with
-`--allow-precompiled`) removes the ~seconds-per-invocation JIT cost — worth it
-for the 37-invocation micro battery, required for fair guest-speed timing.
+**Modern toolkit (measured; profiling CORRECTED 2026-07-13).** `wasmtime
+--profile=guest` writes a Firefox-profiler JSON — BUT it writes NOTHING for a
+program that exits via `proc_exit` (WASI), which is every real Mentl compile: the
+store is torn down before the dump fires (three attempts wrote empty, 2026-07-13).
+Profile the self-compile with host **`perf`** instead — it samples the process
+regardless of how the guest exits: `perf record -F 199 --call-graph=fp -o
+perf.data -- wasmtime run --profile=perfmap <flags> m2.wasm < wheel.mn` (the
+`--profile=perfmap` writes /tmp/perf-<pid>.map so `perf report` resolves guest fn
+names; `perf_event_paranoid=2` permits user-space samples of your own child; a
+`timeout 300` on the first 5 min is representative for the uniform compile). This
+is THE profiler for the self-compile — it pinned the resume-cardinality
+classifier's O(n^k) at **98% of the entire compile** (§7) after `--profile=guest`
+returned nothing, and it is the tool that made the env miss (attacking a
+diagnosed-but-non-dominant O(n²)) unrepeatable: measure, do not guess the hot
+path. **AOT is MARGINAL: `wasmtime compile` → .cwasm removes the JIT cost, but the
+JIT is only ~20ms MEASURED (the 2 MB boot module), so the compile is 100% guest
+ALGORITHM — AOT buys ~nothing for the wheel, ~1s across the 66-micro battery.**
 `wasm-opt -O2 -all` was MEASURED A 4% REGRESSION on real guest work (82.7s vs
 86.0s AOT on a 2k-line slice): the wheel's cost is ALGORITHMIC (bump-image
 allocation churn, linear scans), not instruction slop — wasm-opt stays OUT of

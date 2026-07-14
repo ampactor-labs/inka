@@ -4946,9 +4946,16 @@ fn reach_names_expr(expr, acc) = match expr {
   LMakeRecord(_h, fs)       => reach_names_list(fs, acc),
   LMakeVariant(_h, _t, fs)  => reach_names_list(fs, acc),
   LMatch(_h, s, arms)       => reach_match_arms(arms, reach_names_expr(s, acc)),
-  LSuspend(_h, o, f, args, ev, _) =>
+  // op_h (field 2) is an Int op-handle, NOT a reachable name — the callee is
+  // reached via f (fn_expr). Prepending [o] enqueued a raw Int as a "name"; the
+  // scan-based reach_decl_refs tolerated it (str_eq rejects on a length mismatch
+  // before reading the garbage), but the O(1) index's str_hash iterates ALL
+  // byte_len(o) bytes — o read as a string pointer lands in low scratch memory,
+  // byte_len there is ~1.8e9, and str_hash hangs. Dropping [o] is byte-identical
+  // (an Int is never a decl name, so it was always a dead no-op leaf).
+  LSuspend(_h, _o, f, args, ev, _) =>
     reach_names_list(ev,
-      reach_names_list(args, reach_names_expr(f, [o] ++ acc))),
+      reach_names_list(args, reach_names_expr(f, acc))),
   LFeedback(_h, b, s)       => reach_names_expr(s, reach_names_expr(b, acc)),
   LWasiCall(_h, _n, args)   => reach_names_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => reach_names_list(a, acc),
@@ -4984,73 +4991,92 @@ fn reach_has_loop(buf, count, target: String, i) = {
   else { reach_has_loop(buf, count, target, i + 1) }
 }
 
-fn reach_grow(lowered, rbuf, rn, fbuf, fcount) = {
+fn reach_grow(index, rbuf, rn, fbuf, fcount) = {
   if fcount == 0 { (rbuf, rn) }
   else {
     let name = list_index(fbuf, fcount - 1)
-    let refs = reach_decl_refs(lowered, name)
+    let refs = reach_index_get(index, name)
     let rbuf2 = list_set(list_extend_to(rbuf, rn + 1), rn, name)
     let (fbuf2, fcount2) = reach_enqueue(refs, rbuf2, rn + 1, fbuf, fcount - 1)
-    reach_grow(lowered, rbuf2, rn + 1, fbuf2, fcount2)
+    reach_grow(index, rbuf2, rn + 1, fbuf2, fcount2)
   }
 }
 
-// The named decl's outgoing edges — walk its body once. Handler-arm
-// fns are NESTED LDeclareFns inside a name-less container statement
-// (the lowered handler decl), so a top-level miss falls through to the
-// nested scan: the arm reaches through its container, dormant until an
-// install or a perform names it.
-//
-// Reaching ONE arm reaches ALL its siblings — because the container-keep
-// filter (reachable_from_main) emits the WHOLE container the moment any
-// arm is reached (installing a handler makes every arm dispatchable). So
-// the sibling arms are EMITTED regardless; if their bodies are not walked
-// here, their outgoing edges (a fn-value `LGlobal`, a callee) dangle as
-// undefined references — emission ⊋ reachability, the exact split that
-// left project_queue_merger's cursor_relevant/query_at_position arms
-// emitted while filter_by_locality/filter_at_position went undefined.
-// Return the arm's own refs PLUS the container's full nested-name set so
-// the frontier walks every arm the filter will emit: reachability == the
-// emitted set, one truth (Carried-Truth).
-fn reach_decl_refs(lowered, name: String) = {
-  if len(lowered) == 0 { [] }
+// name → its outgoing edges, built ONCE over lowered (build_reach_index), read
+// O(1) per frontier name (reach_index_get). The old reach_decl_refs LINEAR-
+// SCANNED the whole lowered list per name AND re-walked each decl's nested
+// bodies — O(N² × body), perf-pinned at 58.66% of the compile (2026-07-14).
+// The container-keep truth it carried (reaching one arm reaches every sibling,
+// so no fn-value edge dangles — emission == reachability) lives here: each arm
+// name maps to its own refs ++ the container's full nested-name set. Unknown
+// name → [] (the old len==0 fallthrough). The esc-proven build-then-read
+// str_hash index; the deletion-ultimate is Hβ.lower.esc-row-on-node (a reach
+// edge on the node), generalized by Hβ.perf.name-is-handle (§5.O).
+fn reach_index_new() with Memory + Alloc = make_list(4096)
+
+fn reach_index_add(idx, name: String, refs) with Memory + Alloc = {
+  let b = i32_and(str_hash(name), 4095)
+  let x = list_index(idx, b)
+  list_set(idx, b, [(name, refs)] ++ (if x == 0 { [] } else { x }))
+}
+
+fn reach_index_get(ref idx, name: String) with Memory = {
+  let b = i32_and(str_hash(name), 4095)
+  let x = list_index(idx, b)
+  reach_index_bucket_get(if x == 0 { [] } else { x }, name, 0)
+}
+
+fn reach_index_bucket_get(ref bucket, name: String, i) with Memory = {
+  if i >= len(bucket) { [] }
   else {
-    let d = last(lowered)
-    if reach_decl_name(d) == name { reach_names_expr(d, []) }
-    else {
-      match reach_nested_refs(d, name) {
-        Some(refs) => refs ++ reach_nested_names(d, []),
-        None       => reach_decl_refs(drop_last(lowered), name)
-      }
-    }
+    let (bn, refs) = list_index(bucket, i)
+    if bn == name { refs } else { reach_index_bucket_get(bucket, name, i + 1) }
   }
 }
 
-// Scan one statement's nested LDeclareFns for `name`; Some(its refs)
-// on a hit. Containers recurse; expression leaves cannot hold a decl.
-fn reach_nested_refs(d, name: String) = match d {
+// ONE pass over lowered: each top-level decl's name → its refs, then every
+// nested arm name → its refs ++ the container's nested-name set. Mirrors the
+// exact structure reach_nested_refs/reach_nested_names walked per-lookup.
+fn build_reach_index(lowered) with Memory + Alloc =
+  build_reach_index_from(lowered, 0, reach_index_new())
+
+fn build_reach_index_from(lowered, i, idx) with Memory + Alloc = {
+  if i >= len(lowered) { idx }
+  else {
+    let d = list_index(lowered, i)
+    let nm = reach_decl_name(d)
+    let idx1 = if nm == "" { idx } else { reach_index_add(idx, nm, reach_names_expr(d, [])) }
+    build_reach_index_from(lowered, i + 1, reach_index_add_children(d, reach_nested_names(d, []), idx1))
+  }
+}
+
+// Walk INTO a decl (skipping its own top-level name — the top-level pass
+// already added it without cnames) recording every nested arm fn.
+fn reach_index_add_children(d, cnames, idx) with Memory + Alloc = match d {
+  LDeclareFn(LFn(_n, _, _, body, _, _)) => reach_index_add_nested_list(body, cnames, idx),
+  LBlock(_h, stmts)   => reach_index_add_nested_list(stmts, cnames, idx),
+  LLet(_h, _n, inner) => reach_index_add_children(inner, cnames, idx),
+  LIf(_h, _c, t, e)   => reach_index_add_nested_list(e, cnames, reach_index_add_nested_list(t, cnames, idx)),
+  LHandleWith(_h, b, _hn, _hname, _inits, _an, _evs) => reach_index_add_children(b, cnames, idx),
+  _ => idx
+}
+
+// A nested statement that may BE an arm fn: add it (body refs ++ cnames), then
+// recurse into its body for deeper nesting.
+fn reach_index_add_nested(stmt, cnames, idx) with Memory + Alloc = match stmt {
   LDeclareFn(LFn(n, _, _, body, _, _)) =>
-    if n == name { Some(reach_names_list(body, [])) }
-    else { reach_nested_refs_list(body, name) },
-  LBlock(_h, stmts)   => reach_nested_refs_list(stmts, name),
-  LLet(_h, _n, inner) => reach_nested_refs(inner, name),
-  LIf(_h, _c, t, e)   => match reach_nested_refs_list(t, name) {
-    Some(r) => Some(r),
-    None    => reach_nested_refs_list(e, name)
-  },
-  LHandleWith(_h, b, _hn, _hname, _inits, _an, _evs) =>
-    reach_nested_refs(b, name),
-  _ => None
+    reach_index_add_nested_list(body, cnames,
+      reach_index_add(idx, n, reach_names_list(body, []) ++ cnames)),
+  LBlock(_h, stmts)   => reach_index_add_nested_list(stmts, cnames, idx),
+  LLet(_h, _n, inner) => reach_index_add_nested(inner, cnames, idx),
+  LIf(_h, _c, t, e)   => reach_index_add_nested_list(e, cnames, reach_index_add_nested_list(t, cnames, idx)),
+  LHandleWith(_h, b, _hn, _hname, _inits, _an, _evs) => reach_index_add_nested(b, cnames, idx),
+  _ => idx
 }
 
-fn reach_nested_refs_list(stmts, name: String) = {
-  if len(stmts) == 0 { None }
-  else {
-    match reach_nested_refs(last(stmts), name) {
-      Some(r) => Some(r),
-      None    => reach_nested_refs_list(drop_last(stmts), name)
-    }
-  }
+fn reach_index_add_nested_list(stmts, cnames, idx) with Memory + Alloc = {
+  if len(stmts) == 0 { idx }
+  else { reach_index_add_nested_list(drop_last(stmts), cnames, reach_index_add_nested(last(stmts), cnames, idx)) }
 }
 
 // Every nested decl name a container holds — the container LIVES iff
@@ -5104,10 +5130,11 @@ fn reachable_from_main(lowered) = {
       LLet(_, _, init)                                   => reach_names_expr(init, acc),
       _                                                  => acc
     }, lowered)
+    let index = build_reach_index(lowered)   // name → edges, ONE pass, O(1) read
     let (fbuf0, fc0) = reach_enqueue(init_refs ++ emit_runtime_contract(),
       make_list(16), 0,
       list_set(list_extend_to(make_list(16), 1), 0, "main"), 1)
-    let (rbuf, rn) = reach_grow(lowered, make_list(16), 0, fbuf0, fc0)
+    let (rbuf, rn) = reach_grow(index, make_list(16), 0, fbuf0, fc0)
     filter((d) => {
       let n = reach_decl_name(d)
       if n == "" {

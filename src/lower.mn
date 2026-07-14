@@ -1376,16 +1376,44 @@ fn collect_fn_bases(stmts) =
 
 // Option-returning map lookup for ls_escaping_of: None distinguishes "not a
 // top-level fn" (→ the leaf) from "a fn whose flow-closure is empty" (Some []).
-// Index-walk, zero allocation — the drop_last form minted a 16-byte slice
-// view PER STEP, and at 2,500 entries per scan that was the face-7 fuel.
-fn esc_assoc(map, name: String) = esc_assoc_from(map, name, 0)
+// esc_rows is a str_hash name→row index (built once at ls_register_escaping),
+// read O(1) per call site. The old esc_assoc_from linear scan (escaping_row →
+// ls_escaping_of → derive_ev_slots, per call site) was 72% of the post-esc-setup
+// self-compile (perf, 2026-07-14; the esc_assoc read-side O(n²) §5.O named).
+// None still means "not a top-level fn"; Some [] "a fn with empty flow-closure".
+// Reverse-inserted first-match, byte-identical (base names are unique).
+fn esc_assoc(idx, name: String) = esc_index_get(idx, name)
 
-fn esc_assoc_from(map, name: String, i) =
-  if i >= len(map) { None }
+fn build_esc_index(map) with Memory + Alloc =
+  build_esc_index_from(map, len(map) - 1, make_list(4096))
+
+fn build_esc_index_from(map, i, idx) with Memory + Alloc = {
+  if i < 0 { idx }
   else {
-    let (n, row) = list_index(map, i)
-    if n == name { Some(row) } else { esc_assoc_from(map, name, i + 1) }
+    let (name, row) = list_index(map, i)
+    build_esc_index_from(map, i - 1, esc_index_add(idx, name, row))
   }
+}
+
+fn esc_index_add(idx, name: String, row) with Memory + Alloc = {
+  let b = i32_and(str_hash(name), 4095)
+  let x = list_index(idx, b)
+  list_set(idx, b, [(name, row)] ++ (if x == 0 { [] } else { x }))
+}
+
+fn esc_index_get(ref idx, name: String) with Memory = {
+  let b = i32_and(str_hash(name), 4095)
+  let x = list_index(idx, b)
+  esc_bucket_scan(if x == 0 { [] } else { x }, name, 0)
+}
+
+fn esc_bucket_scan(ref bucket, name: String, i) with Memory = {
+  if i >= len(bucket) { None }
+  else {
+    let (bn, row) = list_index(bucket, i)
+    if bn == name { Some(row) } else { esc_bucket_scan(bucket, name, i + 1) }
+  }
+}
 
 // The name→index edge, drawn ONCE (Carried-Truth): each base's callee names
 // resolve to base POSITIONS at collect time, so the fixpoint rounds read
@@ -4629,11 +4657,11 @@ fn push_name(buf, count, name) = {
 // alphabetically, so the WAT layout is captures(0), capture_handles(4),
 // capture_order(8), locals(12), local_handles(16), local_order(20).
 // Mentl source reads via .field — physical layout irrelevant.
-handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [], may_yield = false, resume_binds = [] {
+handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = make_list(4096), may_yield = false, resume_binds = [] {
   // THE FLOW-CLOSURE map (name → escaping row), computed once at lower_program
   // and read live by THE SEAM. Some(row) for a top-level fn; None (→ the leaf)
   // for a nested fn / lambda / unknown name.
-  ls_register_escaping(map) => resume() with esc_rows = map,
+  ls_register_escaping(map) => resume() with esc_rows = build_esc_index(map),
 
   ls_escaping_of(name) => resume(esc_assoc(esc_rows, name)),
 

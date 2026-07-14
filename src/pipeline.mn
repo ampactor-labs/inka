@@ -175,16 +175,25 @@ fn check_source(source) = {
     ~> diagnostics_handler
 }
 
-fn query(source, question) = {
+fn query(entry_module, question) = {
   {
-    let ast = source |> frontend
-    infer_program(ast)
+    // driver_check_entry loads the module + its deps, infers ONCE, and
+    // hands back the entry's typed AST — the same load compile/check
+    // use. So `mentl query lib/foo "why bar"` reads the REAL graph, not
+    // the module NAME parsed as source (Carried-Truth: the driver
+    // already resolved+typed it; re-frontend-ing a name re-derived
+    // nothing and mis-parsed "tutorial/foo" as two variable refs).
+    let ast = driver_check_entry(entry_module)
     let q = parse_query_string(question)
-    ask(q) |> render_query_result
+    ask(q) |> render_query_result |> print_string
   }
+    ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
     ~> query_default
     ~> mentl_default
+    ~> affine_ledger
+    ~> region_tracker
     ~> verify_ledger
+    ~> arm_state_ctx([], OneShot, "")
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
@@ -194,14 +203,17 @@ fn query(source, question) = {
     ~> diagnostics_handler
 }
 
-fn teach(source) = {
+fn teach(entry_module) = {
   {
-    let ast = source |> frontend
-    infer_program(ast)
-    collect_gradients(ast) |> render_gradients
+    let ast = driver_check_entry(entry_module)
+    collect_gradients(ast) |> render_gradients |> print_string
   }
+    ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
     ~> mentl_default
+    ~> affine_ledger
+    ~> region_tracker
     ~> verify_ledger
+    ~> arm_state_ctx([], OneShot, "")
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
@@ -211,14 +223,17 @@ fn teach(source) = {
     ~> diagnostics_handler
 }
 
-fn audit(source) = {
+fn audit(entry_module) = {
   {
-    let ast = source |> frontend
-    infer_program(ast)
-    collect_fn_rows(ast) |> render_audit
+    let ast = driver_check_entry(entry_module)
+    collect_fn_rows(ast) |> render_audit |> print_string
   }
+    ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
     ~> mentl_default
+    ~> affine_ledger
+    ~> region_tracker
     ~> verify_ledger
+    ~> arm_state_ctx([], OneShot, "")
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
@@ -631,13 +646,19 @@ fn collect_fn_rows(ast) = {
 //   severable   — effects NOT in body that could be added as !E
 //                 ([EffName], each unlocking capabilities)
 //   unlocks     — capabilities gained from severing every severable
+//
+// A TUPLE, not a record: render_audit reads these fields inside a map
+// lambda, and a structural record's fields floor "field offset
+// unprovable" there (map's lambda param doesn't inherit the list element
+// type, and the wheel lowers no nominal record PATTERN to prove it — §7
+// field-offset class). Positional destructure is provable with no type
+// flow, exactly as teach's [(name, result)] tuples are.
 fn build_audit_report(fn_name, ty) = {
   let body_row = extract_row(ty)
   let reached = row_names(body_row)
   let severable = severance_candidates(reached)
   let unlocks = severance_unlocks(severable)
-  {fn_name: fn_name, reached: reached, row_str: show_effrow(body_row),   // drift-audit: ignore — drift-1 heuristic false-positive on record field punning where field name matches value identifier; record literal, not vtable
-   severable: severable, unlocks: unlocks}
+  (fn_name, reached, show_effrow(body_row), severable, unlocks)
 }
 
 // Severance candidates: the canonical effects (Alloc / IO / Network)
@@ -684,17 +705,20 @@ fn severance_unlocks_loop(severable, i, n, acc) = {
 // JSON / IDE-projection renderers are peer functions on the same
 // record (one substrate, multiple projections per CLAUDE.md insight 8).
 fn render_audit(entries) = {
-  if len(entries) == 0 { "" }
-  else {
-    let report = last(entries)
-    let header = "{report.fn_name} : {report.row_str}\n"
-    let severance_section =
-      if len(report.severable) == 0 { "" }
-      else {
-        "  severable: {show_list(report.severable, show_eff_name, " + ")} — unlocks {show_list(report.unlocks, show_capability, ", ")}\n"
-      }
-    "{header}{severance_section}{render_audit(drop_last(entries))}"
-  }
+  entries
+    |> map((report) => {
+         // Positional destructure — provable with no type flow, where a
+         // record field read floors in a map lambda (see build_audit_report).
+         let (fn_name, reached, row_str, severable, unlocks) = report
+         let header = "{fn_name} : {row_str}\n"
+         let severance_section =
+           if len(severable) == 0 { "" }
+           else {
+             "  severable: {show_list(severable, show_eff_name, " + ")} — unlocks {show_list(unlocks, show_capability, ", ")}\n"
+           }
+         "{header}{severance_section}"
+       })
+    |> str_concat_all
 }
 
 // Query rendering — delegates to query.mn for Question parsing
@@ -727,7 +751,7 @@ type QueryVerb
   = QVType | QVEffects | QVOwnership | QVWhy | QVRefs | QVProvider
   | QVUnresolved | QVVerification | QVFlow | QVUnknownVerb
 
-fn classify_query_verb(w) with Pure = {
+fn classify_query_verb(w: String) with Pure = {
   if      w == "type"         { QVType }
   else if w == "effects"      { QVEffects }
   else if w == "ownership"    { QVOwnership }
@@ -741,12 +765,16 @@ fn classify_query_verb(w) with Pure = {
 }
 
 fn parse_query_string(q) = {
-  match split(q, " ") {
+  // split returns a slice VIEW; the list-pattern match assumes the flat
+  // [len][elems] contract, so flatten once before matching (§7 face 13)
+  // — and read words ONCE, never re-split per arm (Carried-Truth).
+  let words = list_to_flat(split(q, " "))
+  match words {
     []       => QUnknown(q),
     [w0]     => build_question(classify_query_verb(w0), "", q),
     [w0, w1] => build_question(classify_query_verb(w0), w1, q),
-    _        => build_question(classify_query_verb(query_head(split(q, " "))),
-                               query_last(split(q, " ")), q)
+    _        => build_question(classify_query_verb(query_head(words)),
+                               query_last(words), q)
   }
 }
 

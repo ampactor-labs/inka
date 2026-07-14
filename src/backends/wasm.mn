@@ -1133,11 +1133,27 @@ fn name_seen_at(names, target: String, i, n) = {
   else { name_seen_at(names, target, i + 1, n) }
 }
 
-fn dedup_names(names) =
-  fold([], (acc, name) =>
-    if name_seen_at(acc, name, 0, len(acc)) { acc }
-    else { acc ++ [name] },   // drift-audit: ignore — set-insert, bounded by the fn count
-    names)
+// Flat-buffer keep-first dedup — byte-identical to the old fold, O(U^2)
+// not O(U^3). The old fold appended onto a concat SPINE, so name_seen_at's
+// list_index was O(depth) per step and the whole dedup O(U^3) (~1.5e9
+// node-steps for U~2100 names — a top wheel-compile cost, PLAN §8 the
+// loop-accumulator class). The result buffer is flat (list_index O(1));
+// slice returns the logical prefix; the membership scan stays linear but
+// the concat-spine re-scan was the real cost, not the linearity
+// (Hβ.emit.flat-accumulator-dedup — the speed IS the Carried-Truth fix:
+// stop re-deriving position by re-walking a spine).   // drift-audit: ignore
+fn dedup_names(names) = {
+  let n = len(names)
+  dedup_names_flat(names, 0, n, make_list(n), 0)
+}
+
+fn dedup_names_flat(names, i, n, out, count) =
+  if i >= n { slice(out, 0, count) }
+  else {
+    let name = list_index(names, i)
+    if name_seen_at(out, name, 0, count) { dedup_names_flat(names, i + 1, n, out, count) }
+    else { dedup_names_flat(names, i + 1, n, list_set(out, count, name), count + 1) }
+  }
 
 fn fn_record_seen(records, target: String, i, n) = {
   if i >= n { false }
@@ -1147,12 +1163,21 @@ fn fn_record_seen(records, target: String, i, n) = {
   }
 }
 
-fn dedup_fn_records(records) =
-  fold([], (acc, r) => {
+// Flat-buffer keep-first dedup of fn records — the sibling of
+// dedup_names, same O(U^3)->O(U^2) fix (Hβ.emit.flat-accumulator-dedup).
+fn dedup_fn_records(records) = {
+  let n = len(records)
+  dedup_fn_records_flat(records, 0, n, make_list(n), 0)
+}
+
+fn dedup_fn_records_flat(records, i, n, out, count) =
+  if i >= n { slice(out, 0, count) }
+  else {
+    let r = list_index(records, i)
     let (name, _, _, _) = r
-    if fn_record_seen(acc, name, 0, len(acc)) { acc }
-    else { acc ++ [r] }   // drift-audit: ignore — set-insert, bounded by the fn count
-  }, records)
+    if fn_record_seen(out, name, 0, count) { dedup_fn_records_flat(records, i + 1, n, out, count) }
+    else { dedup_fn_records_flat(records, i + 1, n, list_set(out, count, r), count + 1) }
+  }
 
 // Emit the function table and elem mapping indices to function
 // labels. Every closure's fn_ptr slot stores the i32 index into

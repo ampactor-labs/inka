@@ -338,10 +338,56 @@ fn frontend(source) = {
 // bump (amortized-doubling growth); scope-exit = count := mark, O(1),
 // no truncation walk; lookup = a backward index-walk over the flat
 // buffer, ZERO allocation. Shadowing is position, exactly as before.
-handler env_handler with entries_buf = make_list(1024), entries_count = 0, scopes = [] {
+// ── O(1) env resolution — the str_hash-bucket index (§5.O layer 2) ──────────
+// A binding is an edge env_extend DREW; env_find_flat RE-DERIVES it by a backward
+// by-name linear scan — O(n²) over the compile, the convergent hot path (§5.O).
+// The index reads the edge in O(1): a 4096-bucket str_hash array over the flat
+// buffer, each bucket a prepended list of (name, position). env_resolve returns
+// the first LIVE (position < count) binding — env_find_flat's latest-wins result,
+// byte-identical, O(1) amortized. Carried-Truth: read the handle, never re-scan.
+fn env_index_new() with Memory + Alloc = make_list(4096)
+
+// A bucket slot is 0 (make_list zeroes) until first written; read it as [] then.
+fn env_bucket_at(ref idx, b) with Memory = {
+  let x = list_index(idx, b)
+  if x == 0 { [] } else { x }
+}
+
+fn env_index_add(idx, name: String, pos) with Memory + Alloc = {
+  let b = i32_and(str_hash(name), 4095)
+  list_set(idx, b, [(name, pos)] ++ env_bucket_at(idx, b))
+}
+
+// The first (name, pos) with pos < count — the latest LIVE binding position, or
+// -1. Prepended latest-first, so index 0 is the newest.
+fn env_bucket_pos(ref bucket, name: String, count, i, n) with Memory = {
+  if i >= n { -1 }
+  else {
+    let (bn, pos) = list_index(bucket, i)
+    if pos < count && bn == name { pos }
+    else { env_bucket_pos(bucket, name, count, i + 1, n) }
+  }
+}
+
+// Resolve via the index; re-validate against the BUFFER name, because scope_exit
+// can reuse a position and stale a bucket entry — fall back to the linear scan
+// for that rare case (byte-identical either way).
+fn env_resolve(ref buf, count, ref idx, name: String) with Memory = {
+  let b = i32_and(str_hash(name), 4095)
+  let bucket = env_bucket_at(idx, b)
+  let pos = env_bucket_pos(bucket, name, count, 0, len(bucket))
+  if pos < 0 { None }
+  else {
+    let (bn, scheme, reason, kind) = list_index(buf, pos)
+    if bn == name { Some((scheme, reason, kind)) }
+    else { env_find_flat(buf, count, name) }
+  }
+}
+
+handler env_handler with entries_buf = make_list(1024), entries_count = 0, scopes = [], index = env_index_new() {
 
   env_lookup(name) =>
-    resume(env_find_flat(entries_buf, entries_count, name)),
+    resume(env_resolve(entries_buf, entries_count, index, name)),
 
   env_snapshot() =>
     // Snapshots copy the live prefix — rare (module boundaries), and a
@@ -355,7 +401,8 @@ handler env_handler with entries_buf = make_list(1024), entries_count = 0, scope
       } else { entries_buf }
     resume()
       with entries_buf = list_set(grown, entries_count, (name, scheme, reason, kind)),
-           entries_count = entries_count + 1
+           entries_count = entries_count + 1,
+           index = env_index_add(index, name, entries_count)
   },
 
   env_scope_enter() =>

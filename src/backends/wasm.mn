@@ -1663,6 +1663,10 @@ fn wasi_import_reprs(op) =
   // on EAGAIN=6). The probe that proved the contract: scratch sockprobe4.wat.
   else if op == "sock_accept"           { Some(([RI32, RI32, RI32], Some(RI32))) }
   else if op == "poll_oneoff"           { Some(([RI32, RI32, RI32, RI32], Some(RI32))) }
+  // argv, read live at _start — (argc_ptr, buf_size_ptr) and (argv_ptr, buf_ptr),
+  // both returning errno. This is what makes `mentl <verb>` reach a verb.
+  else if op == "args_sizes_get"        { Some(([RI32, RI32], Some(RI32))) }
+  else if op == "args_get"              { Some(([RI32, RI32], Some(RI32))) }
   else { None }
 
 fn wat_frag_concat(a: String, b: String) -> String = a ++ b
@@ -2524,7 +2528,21 @@ fn emit_start(top_fn_names, value_lets, main_params, yield_seen) = {
     // NOTHING (the 0/45 battery, the empty m4). Real WASI argv is the
     // named peer Hβ.emit.wasi-argv-in-start.
     wat_emit("    (call $main (global.get $main)")
-    each((_) => wat_emit(" (call $alloc (i32.const 4))"), range(0, main_params))
+    // main's FIRST param IS argv — read the live process args (Hβ.emit.wasi-argv-
+    // in-start, closed). wasi_args has no captures, so __state = 0 (the
+    // __init_lets precedent). Any further params (none in practice) stay empty
+    // lists. A 0-param main() gets nothing — the micros never touch argv.
+    if main_params > 0 {
+      // wasi_args needs io.mn linked. A params-taking main WITHOUT it (the micro
+      // harness links memory+strings+lists+prelude only) gets the empty list —
+      // the pre-argv behavior — never a dangling $wasi_args.
+      if ls_find_str_local(top_fn_names, "wasi_args", 0) >= 0 {
+        wat_emit(" (call $wasi_args (i32.const 0))")
+      } else {
+        wat_emit(" (call $alloc (i32.const 4))")
+      }
+      each((_) => wat_emit(" (call $alloc (i32.const 4))"), range(1, main_params))
+    } else { () }
     wat_emit(")\n")
     // band B k1: the UNHANDLED-YIELD backstop — a MultiShot yield no install
     // driver caught reaches the program boundary as an unhandled effect and

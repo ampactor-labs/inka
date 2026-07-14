@@ -59,7 +59,47 @@ effect WASI {
   // wait both nonblocking ends demand (lib/runtime/net.mn wraps them).
   sock_accept(listen_fd: Int, flags: Int, fd_out_ptr: Int) -> Int
   poll_oneoff(subs_ptr: Int, events_ptr: Int, nsubs: Int, nevents_ptr: Int) -> Int
+  args_sizes_get(argc_ptr: Int, buf_size_ptr: Int) -> Int
+  args_get(argv_ptr: Int, buf_ptr: Int) -> Int
   proc_exit(code: Int) -> ()
+}
+
+// wasi_args — the process argv as a [String], read live from the host at
+// _start. This is what makes the CLI real: without it _start handed main a
+// len-0 list and every `mentl <verb>` fell through to compile-stdin
+// (Hβ.emit.wasi-argv-in-start). args_sizes_get writes (argc, total-byte-size);
+// args_get writes the argv pointer array + the null-terminated string buffer;
+// each argv[i] is a C-string materialized into a flat [len][bytes] Mentl string
+// (the read_stdin buffer→string layout). argv[0] is the program name, so the
+// self-compile (`m2 < wheel`, argc=1) still parses to VCompileStdin (len < 2).
+fn cstr_len(cstr, i) with Memory =
+  if load_i8(cstr + i) == 0 { i } else { cstr_len(cstr, i + 1) }
+
+fn cstr_to_string(cstr) with Memory + Alloc = {
+  let n = cstr_len(cstr, 0)
+  let s = alloc(4 + n)
+  store_i32(s, n)
+  mem_copy(s + 4, cstr, n)
+  s
+}
+
+fn wasi_args_build(argv_ptr, argc, i, acc) with Memory + Alloc = {
+  if i >= argc { acc }
+  else {
+    let cstr = load_i32(argv_ptr + i * 4)
+    wasi_args_build(argv_ptr, argc, i + 1, push(acc, cstr_to_string(cstr)))
+  }
+}
+
+fn wasi_args() with Memory + Alloc + WASI = {
+  let argc_ptr = alloc(4)
+  let bufsz_ptr = alloc(4)
+  args_sizes_get(argc_ptr, bufsz_ptr)
+  let argc = load_i32(argc_ptr)
+  let argv_ptr = alloc(argc * 4)
+  let buf = alloc(load_i32(bufsz_ptr))
+  args_get(argv_ptr, buf)
+  wasi_args_build(argv_ptr, argc, 0, make_list(0))
 }
 
 // ─── The Console effect — narration's output boundary ─────────

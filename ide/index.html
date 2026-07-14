@@ -618,6 +618,10 @@ function makeWasi(sourceBytes){
         v.setUint32(outp, total, true); return 0;
       },
       fd_close: () => 0,
+      args_sizes_get: (argcPtr, bufSizePtr) => {   // no argv in the browser → argc 0 → main([]) → compile-stdin
+        const v = new DataView(mem.buffer); v.setUint32(argcPtr, 0, true); v.setUint32(bufSizePtr, 0, true); return 0;
+      },
+      args_get: () => 0,
       fd_prestat_get: () => 8,   // badf — no preopens in the browser (fs_dir_fd finds none, honestly)
       path_open: () => 44, path_filestat_get: () => 44,
       path_create_directory: () => 44, path_unlink_file: () => 44, path_rename: () => 44,

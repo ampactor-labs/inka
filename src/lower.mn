@@ -4380,6 +4380,8 @@ fn is_wasi_import_op(name) with Pure = {
     || name == "fd_readdir"
     || name == "sock_accept"
     || name == "poll_oneoff"
+    || name == "args_sizes_get"
+    || name == "args_get"
     || name == "proc_exit"
     || name == "atomic_load_i32"
     || name == "atomic_store_i32"
@@ -5131,7 +5133,11 @@ fn reachable_from_main(lowered) = {
       _                                                  => acc
     }, lowered)
     let index = build_reach_index(lowered)   // name → edges, ONE pass, O(1) read
-    let (fbuf0, fc0) = reach_enqueue(init_refs ++ emit_runtime_contract(),
+    // _start reads live argv via wasi_args ONLY when main takes it
+    // (Hβ.emit.wasi-argv-in-start); root it just then, so a 0-param main()
+    // (the micros, which don't link io.mn) never pulls an undefined $wasi_args.
+    let argv_root = if main_param_count(lowered) > 0 { ["wasi_args"] } else { [] }
+    let (fbuf0, fc0) = reach_enqueue(init_refs ++ emit_runtime_contract() ++ argv_root,
       make_list(16), 0,
       list_set(list_extend_to(make_list(16), 1), 0, "main"), 1)
     let (rbuf, rn) = reach_grow(index, make_list(16), 0, fbuf0, fc0)

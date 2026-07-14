@@ -154,7 +154,11 @@ handler query_default {
         None => resume(QRError("not found: {name}")),
         Some(entry) => {
           let (_, reason, _) = entry
-          resume(QRWhy(reason))
+          // Walk the reason to ROOT — why_expand chases each Fresh(id) through
+          // the graph to its resolved reason, so intent is walkable, not a chain
+          // ending in dangling unification vars. The engine existed (mentl.mn:437)
+          // and only why_from_handle called it; the CLI `why` now performs it too.
+          resume(QRWhy(why_expand(reason, 0)))
         }
       },
 

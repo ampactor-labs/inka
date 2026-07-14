@@ -154,7 +154,7 @@ fn path_to_module(arg) with Pure = {
   let stripped_prefix = if starts_with(arg, "src/") {
     str_slice(arg, 4, byte_len(arg))
   } else if starts_with(arg, "lib/") {
-    str_slice(arg, 5, byte_len(arg))
+    str_slice(arg, 4, byte_len(arg))
   } else { arg }
   if ends_with(stripped_prefix, ".mn") {
     str_slice(stripped_prefix, 0, byte_len(stripped_prefix) - 3)

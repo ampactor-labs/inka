@@ -47,6 +47,10 @@ function makeWasi(sourceText) {
         return 0;
       },
       fd_close() { return 0; },
+      args_sizes_get(argcPtr, bufSizePtr) {   // no argv in the browser → argc 0 → main([]) → compile-stdin
+        const v = view(); v.setUint32(argcPtr, 0, true); v.setUint32(bufSizePtr, 0, true); return 0;
+      },
+      args_get() { return 0; },
       fd_prestat_get() { return 8; },        // badf — no preopens in the browser (fs_dir_fd finds none, honestly)
       path_open() { return 44; },            // noent — the IDE has no fs
       path_filestat_get() { return 44; },

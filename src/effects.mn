@@ -374,21 +374,43 @@ fn name_in_forbidden(ref forbidden, s: String, i, n) with !Mutate =
   else { name_in_forbidden(forbidden, s, i + 1, n) }
 
 fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
-  match gate_row {
+  // Resolve both rows before gating (Carried-Truth: read the live bound
+  // row, never the unresolved surface). A body whose effects live behind
+  // a bound row-var — EfOpen(names, v) with v => NRowBound — surfaces to
+  // its concrete closed form, so it subsumes its declared gate instead of
+  // hitting the open-tail `_ => false`. A genuinely-free tail (NRowFree)
+  // stays EfOpen and is still rejected against a closed gate —
+  // conservatively sound (an unknown tail may perform beyond the gate).
+  // Dissolves the ~80% row-var slice of the self-compile's false
+  // effect-mismatches (the r<N>@e<N> census); the pointer-eq remainder is
+  // the by-name family's job (EffName-is-a-handle).
+  let b = resolve_row(body_row)
+  let g = resolve_row(gate_row)
+  match g {
     EfPure =>
-      match body_row {
+      match b {
         EfPure => true,
         EfClosed(names) => len(names) == 0,
         _ => false
       },
     EfClosed(gate_names) =>
-      match body_row {
+      match b {
         EfPure => true,
         EfClosed(body_names) => list_subset_str(body_names, gate_names),
+        // An open body against a closed gate — mirror the EfOpen-gate arm.
+        // resolve_row already surfaced any BOUND tail into body_names (so a
+        // hidden forbidden effect is checked here); a tail still EfOpen is
+        // GENUINELY free = NRowFree = empty after full inference (a
+        // monomorphic fn accumulated no further effect), so the body
+        // performs exactly body_names and the rebind at the call site
+        // closes it to the declared row. The old `_ => false` here rejected
+        // every such fn against its own declared row — the ~80% row-var
+        // slice of the false-mismatch census.
+        EfOpen(body_names, _) => list_subset_str(body_names, gate_names),
         _ => false
       },
     EfOpen(gate_names, _) =>
-      match body_row {
+      match b {
         EfPure => true,
         EfClosed(body_names) => list_subset_str(body_names, gate_names),
         EfOpen(body_names, _) => list_subset_str(body_names, gate_names),
@@ -396,7 +418,7 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
       },
     EfNeg(inner) =>
       // body ⊆ !inner means body ∩ inner = ∅
-      match body_row {
+      match b {
         EfPure => true,
         EfClosed(body_names) =>
           match inner {
@@ -417,10 +439,10 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
     EfSub(_, _) =>
       // Intermediate form — normalize to resolved shape, then re-check.
       // Both sides must normalize: body_row may also carry intermediates.
-      row_subsumes(normalize_row(body_row), normalize_row(gate_row)),
+      row_subsumes(normalize_row(b), normalize_row(g)),
     EfInter(_, _) =>
       // Intermediate form — same: normalize both, then re-check.
-      row_subsumes(normalize_row(body_row), normalize_row(gate_row))
+      row_subsumes(normalize_row(b), normalize_row(g))
   }
 }
 
@@ -668,7 +690,19 @@ fn list_diff_str(ref a, ref b) with !Mutate = name_set_diff(a, b)
 fn list_subset_str(ref sub, ref sup) with !Mutate = name_set_subset(sub, sup)
 fn list_disjoint(ref a, ref b) with !Mutate = name_set_disjoint(a, b)
 fn list_eq_str(ref a, ref b) with !Mutate = name_set_eq(a, b)
-fn string_in_list(ref lst, ref s) with !Mutate = name_set_contains(lst, s)
+// string_in_list — membership over a list of STRINGS (own.mn's ref-escape
+// names), NOT EffNames. It aliased name_set_contains, whose by-name leaf
+// derefs each element as an EffName (eff_name_str) — a bare String traps
+// there. The two were conflated into one fn; they are different element
+// types, so they get different comparisons. The elements are words
+// (list_index erases the type), so str_eq explicitly — a bare `==` would
+// floor to the same pointer-eq name_set_contains just shed.
+fn string_in_list(ref lst, s: String) with !Mutate = string_in_list_loop(lst, s, 0, len(lst))
+fn string_in_list_loop(ref lst, s: String, i, n) with !Mutate = {
+  if i >= n { false }
+  else if str_eq(list_index(lst, i), s) { true }   // drift-audit: ignore — the String case of ==; nameable-sequence leaf, band D
+  else { string_in_list_loop(lst, s, i + 1, n) }
+}
 
 // EffName equality is the ONE structural `==` (the value-layer fold's sum-eq
 // leaf, §5.U) — type-dispatched at emit, total over the five node-kinds, so
@@ -836,17 +870,21 @@ fn name_set_contains(ref set, ref name) with !Mutate = {
 
 fn name_set_contains_loop(ref set, ref name, i, n) with !Mutate = {
   if i >= n { false }
-  // Structural `==` (the value-layer fold's sum-eq leaf, §5.U) — the ONE
-  // equality, type-dispatched at emit; the hand-rolled eff_name_eq was its
-  // drift-7 twin (and its `match a` fell through to a trap on a null, where the
-  // fold tag-compares). EffName IS a sum; `==` recurses ENamed's string /
-  // EParameterized's args / EPure by shape. NOTE: on the untyped-list hot path
-  // the operands floor to pointer-eq (list_index erases the element to a word;
-  // band D's typed containers dissolve this) — adequate for dedup/subset where
-  // names are interned-identical, but the NEGATION gate needs true name identity
-  // across distinct source sites, so it matches by name (row_subsumes' EfNeg arm,
-  // forbidden_names_disjoint) rather than routing here.
-  else if list_index(set, i) == name { true }
+  // Match by NAME, exactly as the negation gate does (name_in_forbidden,
+  // forbidden_names_disjoint) — the value-layer `==` FLOORS to pointer-eq
+  // here because list_index erases the element to a word (the untyped list
+  // has no type to dispatch structural EffName equality on), and two
+  // byte-equal ENamed("Memory") minted at distinct source sites are
+  // distinct heap objects. The old `==` claimed pointer-eq was "adequate
+  // for dedup/subset where names are interned-identical" — MEASURED FALSE:
+  // it broke set-dedup, so ~422/598 self-compile rows carried duplicate
+  // names (Memory+Memory+Memory) whose open tail never closed and hit
+  // row_subsumes' `_ => false`. By-name identity across sites fixes dedup
+  // AND subset. (The ultimate form is EffName-is-a-handle — intern names to
+  // handles at the decl so this is i32.eq-on-identity and the whole by-name
+  // family dissolves; that closes the parameterized residue str_eq conflates
+  // — Hβ.effects.parameterized-negation-instance — and is §5.O layer 1.)
+  else if str_eq(eff_name_str(list_index(set, i)), eff_name_str(name)) { true }   // drift-audit: ignore — the String case of ==; nameable-sequence leaf, band D
   else { name_set_contains_loop(set, name, i + 1, n) }
 }
 

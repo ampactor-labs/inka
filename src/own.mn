@@ -135,7 +135,7 @@ fn report_branch_collisions(ref deltas, ref span) with !Mutate = {
 // takes the deepest (innermost) region across a composite value's
 // fields — preventing inner-region pointers from escaping via the
 // composite.
-handler region_tracker with region_stack = [], next_region = 0, tagged_values = [] {
+handler region_tracker with region_stack = [], next_region = 0, region_index = region_index_new() {
 
   region_enter(span) => {
     let rid = next_region
@@ -169,7 +169,7 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
                        else { let Region(_, s) = last(region_stack); s }
     let tag = {handle: value_handle, install_span: install_span, region_id: rid}
     resume()
-      with tagged_values = [tag] ++ tagged_values
+      with region_index = region_index_add(region_index, value_handle, tag)
   },
 
   tag_alloc_join(value_handle, field_handles) => {
@@ -184,10 +184,10 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
                   else { let Region(r, _) = last(region_stack); r }
     let install_span = if len(region_stack) == 0 { span_zero() }
                        else { let Region(_, s) = last(region_stack); s }
-    let joined = join_field_regions(tagged_values, field_handles, cur_rid)
+    let joined = join_field_regions(region_index, field_handles, cur_rid)
     let tag = {handle: value_handle, install_span: install_span, region_id: joined}
     resume()
-      with tagged_values = [tag] ++ tagged_values
+      with region_index = region_index_add(region_index, value_handle, tag)
   },
 
   check_escape(value_handle, escape_span) => {
@@ -196,7 +196,7 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
     // region was popped (no longer on stack), the value has
     // escaped — emit E_RegionEscape pointing at both the install
     // site and the escape site.
-    let entry = lookup_tag(tagged_values, value_handle)
+    let entry = lookup_tag(region_index, value_handle)
     match entry {
       None => resume(),
       Some(tag) => {
@@ -213,8 +213,35 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
   }
 }
 
-fn lookup_tag(ref tags: [{handle: Int, install_span: Span, region_id: Int}], handle) with !Mutate =
-  find((tag) => tag.handle == handle, tags)
+// O(1) region lookup — tagged_values is now a handle-indexed hash bucket
+// (region_index), not a cons-list re-scanned per alloc. check_escape /
+// join_field_regions' linear find over it was ~93% of the post-classifier
+// self-compile (perf, 2026-07-13; the O(N²) alloc-check scan, §5.O). The handle
+// is a dense Int, so i32.eq buckets — no str_eq. Returns Some(tag) / None, exactly
+// as find did.
+fn lookup_tag(ref idx, handle) with !Mutate = region_index_get(idx, handle)
+
+fn region_index_new() with Memory + Alloc = make_list(65536)
+
+fn region_index_add(idx, handle, tag) with Memory + Alloc = {
+  let b = i32_and(handle, 65535)
+  let x = list_index(idx, b)
+  list_set(idx, b, [(handle, tag)] ++ (if x == 0 { [] } else { x }))
+}
+
+fn region_index_get(ref idx, handle) with Memory = {
+  let b = i32_and(handle, 65535)
+  let x = list_index(idx, b)
+  region_bucket_scan(if x == 0 { [] } else { x }, handle, 0)
+}
+
+fn region_bucket_scan(ref bucket, handle, i) with Memory = {
+  if i >= len(bucket) { None }
+  else {
+    let (h, tag) = list_index(bucket, i)
+    if h == handle { Some(tag) } else { region_bucket_scan(bucket, handle, i + 1) }
+  }
+}
 
 fn region_on_stack(ref stack, rid) with !Mutate = {
   any((r) => {

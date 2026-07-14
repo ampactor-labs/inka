@@ -180,28 +180,54 @@ handler emit_memory_atomic_cas {
   }
 }
 
-// String-literal interning (W5). Populated once per emit_module
-// by set_string_entries, then read via string_offset at every
-// LString emit site. Entries are [(String, Int)] — (literal, offset).
-// On lookup miss the handler returns 0 (points at the start of the
-// string region — an empty string whose emit is idempotent).
-handler string_table with entries = [] {
-  string_offset(s) => resume(string_offset_lookup(entries, s, 0, len(entries))),
-  set_string_entries(es) => resume() with entries = es
+// String-literal interning (W5). Populated once per emit_module by
+// set_string_entries, then read via string_offset at every LString emit
+// site. The state is now a str_hash bucket INDEX (the 6th §5.O name-scanner
+// dissolved — string_offset_lookup was a linear str_eq scan over ~thousands
+// of entries per LString). string_index_get returns the SAME offset the
+// linear first-match did (reverse-insertion + prepend puts the smallest
+// original index at the bucket front), so the emit is byte-identical. On
+// miss: 0 (the string region start — an empty string, idempotent emit).
+handler string_table with idx = string_index_new() {
+  string_offset(s) => resume(string_index_get(idx, s)),
+  set_string_entries(es) => resume() with idx = build_string_index(es)
 }
 
-// target: String — the Intent Boundary carrying the proof: both compare
-// operands are tuple-destructure binders (h=0 under the seed), so an
-// unpinned `==` emits pointer-eq and a content-equal COPY of a registered
-// string (an instantiated row's ename, a perform's key) missed the table
-// and keyed the evidence region 0 — the sentinel. The annotation proves
-// the RIGHT operand; the symmetric dispatch adopts it → str_eq.
-fn string_offset_lookup(entries, target: String, i, n) = {
-  if i >= n { 0 }
+// The str_hash bucket index — the shared name-is-handle waypoint shape
+// (mirrors env/esc/summary/base/reach; region_index is the handle-keyed
+// template). str_eq inside the small bucket carries the same content
+// equality the old `target: String` pin did: a content-equal COPY of a
+// registered string keys the same offset.
+fn string_index_new() with Memory + Alloc = make_list(4096)
+
+fn build_string_index(entries) with Memory + Alloc =
+  build_string_index_from(entries, len(entries) - 1, string_index_new())
+
+fn build_string_index_from(entries, i, idx) with Memory + Alloc = {
+  if i < 0 { idx }
   else {
     let (s, offset) = list_index(entries, i)
-    if s == target { offset }
-    else { string_offset_lookup(entries, target, i + 1, n) }
+    build_string_index_from(entries, i - 1, string_index_add(idx, s, offset))
+  }
+}
+
+fn string_index_add(idx, s: String, offset) with Memory + Alloc = {
+  let b = i32_and(str_hash(s), 4095)
+  let x = list_index(idx, b)
+  list_set(idx, b, [(s, offset)] ++ (if x == 0 { [] } else { x }))
+}
+
+fn string_index_get(ref idx, s: String) with Memory = {
+  let b = i32_and(str_hash(s), 4095)
+  let x = list_index(idx, b)
+  string_bucket_scan(if x == 0 { [] } else { x }, s, 0)
+}
+
+fn string_bucket_scan(ref bucket, s: String, i) with Memory = {
+  if i >= len(bucket) { 0 }
+  else {
+    let (bs, offset) = list_index(bucket, i)
+    if bs == s { offset } else { string_bucket_scan(bucket, s, i + 1) }
   }
 }
 

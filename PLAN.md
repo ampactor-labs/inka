@@ -274,7 +274,9 @@ audit, run alongside the reductive "does the graph already know this?").**
 The cursor projected through {substrate, time, space} IS the subsystem table
 above; **the oracle FUSES all three** — N forked cursors on N threads over one
 shared-memory graph with per-fork rollback (trail/rollback + wasi-threads
-substrate landed; continuation-reification codegen is the open keystone). *Best
+substrate landed; continuation-reification codegen LANDED — k1 through the M1–M4
+cut, self-hosted through first-light (§7); the fused N-thread oracle SEARCH over it
+is the open reach). *Best
 current organizing answer; interrogate it (§9.9).*
 
 **The eight arms** (project all eight at every cursor before a line; type the
@@ -517,8 +519,10 @@ ultimate form?"; the disposable seed's weaker inference catches up afterward
    alone:** compiler-correctness *beneath* (a miscompiled wheel voids any
    on-paper `!E`; first-light proved reproduction, not correctness) → Verify-
    discharge-soundness *alongside* → `!E`-sound-under-poly (the crown, root of
-   the negative-capability BRANCH every differentiating guarantee inherits — the
-   load-bearing OPEN dependency, uniquely Mentl's) → spec-faithfulness *above*
+   the negative-capability BRANCH every differentiating guarantee inherits — its
+   soundness gate LANDED 2026-07-13, 29df478, the by-name negation gate,
+   m2==m3 byte-identical; the modal world-index is the open remainder, uniquely
+   Mentl's) → spec-faithfulness *above*
    (the crown does not touch it; proof-passing-but-intent-wrong code is a failure
    proof LAUNDERS, band K's Lahiri worked-example). The genuinely novel residue,
    on the FILTER/substrate side AND on GUIDED next-move search — never on the
@@ -560,7 +564,8 @@ representation-host**, ONE contiguous handle-addressed shape:
   peer (OCaml's alloc-per-op disease, fatal to DSP) is unsayable.
 - **MULTI-SHOT CONTINUATION (the same record FROZEN at a resume site, TIME
   altitude).** `LMakeContinuation` is dimensionally `LMakeClosure + state_index +
-  ret_slot` — emittable today, **constructed nowhere**; lower fabricates OneShot.
+  ret_slot` — CONSTRUCTED at STEP 3 (7b72790, the write-only resume_kinds ledger
+  dissolved); the k1→M4 arc self-hosted the producer through the fixpoint.
   Read the op's cardinality LIVE: OneShot → `LReturn` (byte-identical, ~85%);
   MultiShot → the dormant continuation record. Because it is one contiguous
   handle-addressed record in the monotonic bump image, **persist = `memcpy`** —
@@ -645,6 +650,83 @@ Write the ultimate form in FULL — all three aspects at once. A leap that advan
 NOT premature: the seed catches up, and the census it raises is a SHADOW (§8),
 never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
+### §5.O · The O(1) architecture — performance IS the Carried-Truth Law
+
+**The only acceptable complexity for any operation in Mentl is O(1)** (Morgan,
+2026-07-13). Not an aspiration — the Carried-Truth Law read at the performance
+scale. The kernel is one graph whose ONLY native access is the O(1) flat-array
+handle chase (§2), so a super-constant operation is by definition NOT reading the
+graph — it is RE-DERIVING what the graph already holds (a scan, a re-filter, a
+re-clone). **"O(1) only" ≡ "read the edge, never re-scan" ≡ Law 1.** Every scanner
+in the compiler is a place we forgot the graph already knew. (Derived by running
+the eight interrogations on the hot paths, 2026-07-13; the record is in the arc
+below.)
+
+**The diagnosis (8-agent adversarial workflow, 2026-07-13 — the 22-min
+self-compile).** The cost is 100% guest ALGORITHM: JIT is ~20ms, AOT marginal,
+`wasm-opt -O2` a measured 4% regression (§8 — the cost is algorithmic, never
+instruction slop). Seven independent readers converged on ONE class — the
+compiler re-derives BY NAME what a HANDLE already connects:
+- **`env_find_flat` — O(n²)** (pipeline.mn:375): a backward by-NAME linear
+  `str_eq` scan of the ~2,036-entry flat env buffer per name resolution;
+  pre_register_decls registers top-level names FIRST (so they sit deepest), and
+  every stdlib reference (`map`/`fold`/`mint`/`N`/`Some`) scans to the bottom.
+  ~1e5 refs × ~2k entries — the dominant compute O(n²). CONVERGENT (5 of 7 agents).
+- **`dedup_fn_records` / `dedup_names` — O(U²)** (wasm.mn:1145/1168): the
+  O(U³)→O(U²) concat-spine fix already landed this session (a flat-buffer
+  `name_seen_at`/`fn_record_seen` membership scan over a preallocated `out`; the
+  old `acc ++ [x]` spine made `list_index` O(depth) → O(U³), ~1.5e9 node-steps).
+  Still super-constant — the O(1) target is a handle-set bit (layer 2).
+- **`esc_assoc` — O(n²)** (lower.mn:1383): a name-keyed escaping-row side-ledger
+  re-scanned per call site, three stacked passes.
+- **`instantiate` → `subst_ty` tree-clone** (infer.mn:2687) + **`find_mapping`'s
+  per-leaf `filter`-alloc** (infer.mn:2840): a full type-tree clone per
+  polymorphic reference, garbage per TVar leaf.
+- **The 4GB never-free bump image** (memory.mn): ~1e8 transient records → a
+  cache-hostile working set that MULTIPLIES the constant factor of every
+  pointer-chase — the amplifier on all of the above.
+- **Zero parallelism** (pipeline.mn:100): the whole self-compile is ONE sequential
+  `|>` cursor, 8 cores idle; the level-set partition (driver.mn) is off the hot
+  path.
+
+**The unifying fix — a name is a HANDLE, not a byte-sequence.** Interned ONCE at
+lex (the content-intern table is the one O(1)-amortized hash — and it ALREADY
+exists for the data section, `string_offset_lookup`, today O(n)-scanned at
+wasm.mn:199; fix IT to O(1) and its offsets ARE the universal name-handles). Then
+every downstream compare is `i32.eq` (never `str_eq`), every table is
+handle-keyed (O(1) index, never a name scan), every set is a handle-bit. This
+dissolves env / dedup / find_mapping / esc into the graph's O(1) chase — LESS
+code (delete every scanner) — and the byte-sequence survives only as a display
+projection (arm 7's gradient cash-out: a name's ultimate representation is a word).
+
+**The build order — each layer makes the next O(1):**
+1. **Handle-interning substrate** (`Hβ.perf.name-is-handle`) — the string intern
+   table goes O(1) (a `str_hash`-keyed index), every identifier a handle at lex.
+   Load-bearing; everything else is O(1) off it.
+2. **The O(1) reads** — `env_lookup` (handle-index → slot, `Hβ.perf.env-o1-index`),
+   dedup (handle-set bit, `Hβ.emit.flat-accumulator-dedup` → handle-set),
+   `find_mapping` (handle→handle chase), esc-rows (a FIELD on the fn's node read
+   live, the side-ledger deleted, `Hβ.lower.esc-row-on-node`), instantiate
+   (`Hβ.infer.instantiate-shares-never-clones`). Each a Carried-Truth deletion.
+3. **Per-decl arena** (`Hβ.perf.per-decl-arena`, gated on
+   `Hβ.infer.region-on-tee-alloc-absorb`) — each decl's transient scratch is
+   `own`ed and `Consume`d at the decl boundary; the region drop IS the arena reset
+   (O(1)), `!Alloc` after; the 4GB working set collapses to one decl's live set →
+   cache-resident. Activates the dormant emit_memory_arena swap (wasm.mn:139).
+4. **Parallel cursors** — the level-set partition at DECL granularity on the
+   compile spine, infer/lower/emit fanned across cores with (arena_id, offset)
+   deterministic handle partitioning so native_m3==native_m4 holds
+   (`Hβ.driver.level-set-par-walk` multi-core half + `Hβ.native.deterministic-handle-partition`).
+   The `><` verb over the shared image; the highest ceiling.
+
+**Self-hosting:** layers 1–2 are Law-7 byte-identical where they change only HOW a
+fact is found, a TRANSITION where interning shifts emitted handle-order; layer 3
+is output-invariant (internal scratch strategy); layer 4 CHANGES bytes (handle
+numbers shift under the partition — a TRANSITION, re-pin from m3, the sharpest
+risk, well-precedented). Each layer marched + gated before the next. The whole
+becomes O(n) total (n = program size, O(1) per operation) on N cores — the
+substrate-honest floor of "unsurpassed speed."
+
 ### §5.R · The post-first-light roadmap — the named remainder (so first-light's focus cannot erase it)
 
 > Every unsurpassable item NAMED in positive form and SEQUENCED, so the work
@@ -656,14 +738,18 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 > hidden gap is drift (the bug IS the non-ultimate form, `CLAUDE.md ⟐`). Sequenced
 > AFTER first-light unless marked NOW; the gate that unblocks dependents leads each
 > band. **THE SPINE:** `Hβ.effects.sound-neg-under-poly` is the dependency ROOT —
-> ownership-as-effect, `!Thread`/`!Alloc` transitivity, and IFC non-interference ALL
+> ownership-as-effect, `!Thread`/`!Alloc` transitivity, and IFC non-interference — its
+> soundness GATE LANDED (29df478), so dependents can now be verified against it; the
+> modal world-index and the `TCont` world-index remain the open crown work. ALL
 > inherit the EfNeg-under-instantiation unsoundness, so none can be VERIFIED (only
 > built) until the crown closes; the `TCont` world-index is the second spine (TIME).
-> STEP 0–5 + W31 are LANDED — this is the remainder.
+> STEP 0–5 + W31 + the CROWN soundness gate (29df478) + the M1–M4 multi-shot arc + S0
+> compare/hash fold leaves are LANDED — this is the remainder (the O(1) architecture,
+> §5.O, is the current build-ordered layer set).
 
 **A · Effects & the modal crown (arm 4) — gates ownership, !Thread, IFC negation.** `Hβ.effects.sound-neg-under-poly` (the soundness GATE LANDED 2026-07-13 — `row_subsumes` EfNeg by-name membership; tests/crown/ + tools/crown-gate.sh; m2==m3 byte-identical, 66/66 micros; the open tier is the modal world-index below plus the two exposed follow-ups `Hβ.effects.positive-row-pointer-eq` and `Hβ.effects.parameterized-negation-instance`) · `Hβ.effects.modal-world-index` (rows+capabilities+negation sound simultaneously, as a graph fact; POPL-2026 cite at effects.mn:12) · `Hβ.infer.modal-capability-at-tee` (the modal rule: a row var becomes a lexical capability handle at the `~>` edge, no new surface form) · `Hβ.syntax.perform-dissolution`.
 
-**B · Continuations & TIME (arm 2, §4④) — the binding keystone.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (at the multi-shot producer's reify site) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed; the standardized multiple-memories proposal is this peer's substrate cash-out — a dedicated IMAGE memory snapshots whole while scratch lives apart, the memcpy boundary drawn by the module format itself) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` *(substrate PROBED 2026-07-10: wasmtime 43 `-W stack-switching` + wasm-tools 1.252 assemble native typed-continuations — single suspend/resume runs (fx1→10) — but the cont is LINEAR: resuming one twice PANICS the engine (`ptr::eq(head, self)`). So native gives ONE-shot free (already fast-pathed by direct-call) and does NOT solve MULTI-shot; the multi-shot keystone is RE-EXECUTION — `cont.new(body)` fresh per resume, replaying prior performs, the trail/rollback substrate the driver — not native cloning. `perform`→`suspend`, `resume(v)`→fresh-cont resume; the emit path switches to wasm-tools for continuation modules (WABT can't assemble `cont`). This IS the producer-invocation keystone the cardinality fix unblocked — see §7)* · `Hβ.continuations.multishot-reexecution-driver` *(the re-execution driver — PROVEN END-TO-END 2026-07-11, crucibles in tests/native-cont/: native-cont `twice` → 3 (identity) and 13 (non-identity `pick()+5`, the continuation after the perform captured natively), and the same model in Mentl source → 30 through boot. A multi-shot handler is a DRIVER over re-runs: `resume(v)` = fresh `cont.new(body)` resumed to the `suspend`, then resumed with v; `suspend` unwinds the perform to the driver so the arm runs OUTSIDE the body's stack (no re-entrancy — the trap the pure-Mentl outer-install form hit). Correct for identity / non-identity / no-perform. **BUT native conts are BLOCKED under WASI `_start` (wasmtime 43, verified 2026-07-11): a single `cont.new`+`resume` under `_start` panics `ptr::eq(head, self)` — the command entry runs on wasmtime's own fiber and a user continuation violates its stack invariant; `--invoke` works, `_start` (every real program) does not, and no flag avoids it.** So native conts are the O(1) future (an `!Outside` dependency until wasmtime carries them under `_start`), NOT the shipping substrate. THE SHIPPING PATH is the PURE-MENTL re-execution driver — `resume(v)` re-runs the body thunk under a one-shot replay handler, all ordinary handlers, works under `_start`: the DIRECT form (arm logic as a driver fn, no outer install) is proven (reexec-model.mn → 30) and correct when the body performs the op unconditionally (mn-multishot). The general form (conditional / no-perform bodies) needs the ARM-INTERNAL-PERFORM GAP closed — the re-run's perform must resolve to the inner replay, not re-enter the outer handler (the pure-Mentl outer-install driver's 134 trap). THAT is the real keystone dig, `!Outside`-clean. Each rerun is a stateless fork → trivially parallel + durable, the SPACE=TIME fork §5.U scheduled by `~> Schedule`)* · `Hβ.lower.arm-internal-perform-scope` *(new — the gate under multi-shot: a handler installed INSIDE an arm body (`bt() ~> replay(v)`) must shadow the enclosing handler for performs in the re-run; today the re-run's perform re-enters the outer handler (evidence threads to the wrong install). Closing it makes the pure-Mentl re-execution driver fully correct AND fixes arm-internal effectful installs generally — core handler correctness, not just multi-shot)* · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:3174) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
+**B · Continuations & TIME (arm 2, §4④) — the binding keystone. LANDED: `Hβ.lower.continuation-reification-codegen` (the k1→M4 arc self-hosted through the fixpoint, §7); `Hβ.continuations.multishot-reexecution-driver` is SUPERSEDED (the 2026-07-11 pivot — re-execution restarts, the felt spec demands resume), `Hβ.lower.arm-internal-perform-scope` closed by the M3 lexical-evidence fence.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (at the multi-shot producer's reify site) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed; the standardized multiple-memories proposal is this peer's substrate cash-out — a dedicated IMAGE memory snapshots whole while scratch lives apart, the memcpy boundary drawn by the module format itself) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` *(substrate PROBED 2026-07-10: wasmtime 43 `-W stack-switching` + wasm-tools 1.252 assemble native typed-continuations — single suspend/resume runs (fx1→10) — but the cont is LINEAR: resuming one twice PANICS the engine (`ptr::eq(head, self)`). So native gives ONE-shot free (already fast-pathed by direct-call) and does NOT solve MULTI-shot; the multi-shot keystone is RE-EXECUTION — `cont.new(body)` fresh per resume, replaying prior performs, the trail/rollback substrate the driver — not native cloning. `perform`→`suspend`, `resume(v)`→fresh-cont resume; the emit path switches to wasm-tools for continuation modules (WABT can't assemble `cont`). This IS the producer-invocation keystone the cardinality fix unblocked — see §7)* · `Hβ.continuations.multishot-reexecution-driver` *(the re-execution driver — PROVEN END-TO-END 2026-07-11, crucibles in tests/native-cont/: native-cont `twice` → 3 (identity) and 13 (non-identity `pick()+5`, the continuation after the perform captured natively), and the same model in Mentl source → 30 through boot. A multi-shot handler is a DRIVER over re-runs: `resume(v)` = fresh `cont.new(body)` resumed to the `suspend`, then resumed with v; `suspend` unwinds the perform to the driver so the arm runs OUTSIDE the body's stack (no re-entrancy — the trap the pure-Mentl outer-install form hit). Correct for identity / non-identity / no-perform. **BUT native conts are BLOCKED under WASI `_start` (wasmtime 43, verified 2026-07-11): a single `cont.new`+`resume` under `_start` panics `ptr::eq(head, self)` — the command entry runs on wasmtime's own fiber and a user continuation violates its stack invariant; `--invoke` works, `_start` (every real program) does not, and no flag avoids it.** So native conts are the O(1) future (an `!Outside` dependency until wasmtime carries them under `_start`), NOT the shipping substrate. THE SHIPPING PATH is the PURE-MENTL re-execution driver — `resume(v)` re-runs the body thunk under a one-shot replay handler, all ordinary handlers, works under `_start`: the DIRECT form (arm logic as a driver fn, no outer install) is proven (reexec-model.mn → 30) and correct when the body performs the op unconditionally (mn-multishot). The general form (conditional / no-perform bodies) needs the ARM-INTERNAL-PERFORM GAP closed — the re-run's perform must resolve to the inner replay, not re-enter the outer handler (the pure-Mentl outer-install driver's 134 trap). THAT is the real keystone dig, `!Outside`-clean. Each rerun is a stateless fork → trivially parallel + durable, the SPACE=TIME fork §5.U scheduled by `~> Schedule`)* · `Hβ.lower.arm-internal-perform-scope` *(new — the gate under multi-shot: a handler installed INSIDE an arm body (`bt() ~> replay(v)`) must shadow the enclosing handler for performs in the re-run; today the re-run's perform re-enters the outer handler (evidence threads to the wrong install). Closing it makes the pure-Mentl re-execution driver fully correct AND fixes arm-internal effectful installs generally — core handler correctness, not just multi-shot)* · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:3174) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
 
 **C · `!Flow` — the crown applied to data flow (arm 4/6, §4⑥; W31 scaffold landed).**
 IFC is `!E` on the data-flow lattice: prove transitively, like `!Alloc`, that a
@@ -774,7 +860,7 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-08 — **m3 ASSEMBLES (wat2wasm 0 errors) for the first time this arc, AND PARSES — the trap has marched all the way to the FIRST INFER PERFORM. Two Carried-Truth roots closed this session: (1) the fn-result-repr REGISTRY DELETED (8e… earlier: cfbdf8e's "wheel trusts the floored inference type" was REFUTED — the `$w.f64` USE node proved `repr_of(lookup_ty)` holds Float LIVE; the registry was a §2 side-ledger AND inert via the ev-seam; deleted whole, every call/ft width now reads `repr_of(lookup_ty(call_node))` live; m3 9→1 errors). (2) `float_of_int`/`float_to_int` TYPED AS ENV PRIMITIVES (8e9f7f3): they were recognized ONLY at lower (→ f64.convert_i32_s / i32.trunc_f64_s), UNTYPED at inference → 175 E_MissingVariable → a FREE VAR that cannot force `float_of_int(n) * x` to Float, so x floored to i32 and the product emitted `f64.mul [f64, i32]` (the standing score_one_position error). `register_primitives()` in infer_program registers `float_of_int : Int→Float`, `float_to_int : Float→Int` (pure, monomorphic) before pre_register → the multiply unifies its operand to Float. m3 wat2wasm 1→0 errors, E_MissingVariable 175→148 (the rest are OTHER recovered undefined names, pre-existing), rungs 8/0, micros-through-m2 45/0 (NO regression). THE SCORE ERROR WAS NOT A FORWARD-REF FLOOR (that framing was a partial picture — the multiply WOULD resolve proximity once float_of_int is Float). A dependency-order inference reorder (Hβ.infer.scc-ordered-walk) WAS built + verified (fbare/lit/chain forward-ref micros fixed, 45/0 no regression) then REVERTED: not needed for m3 (float_of_int typing fixes the site), and the naive `driver_partition_layers` peel is O(n²) over ~1605 decls (too slow — m3 gen ~8min). Kept as a NAMED future improvement — the ULTIMATE form is the call graph as REAL GRAPH EDGES (fn handle→dep handles, in-degree a node field, topo-order a graph traversal, composes with the IC cursor); build it ONLY when a bare-forward-float case (no forcing multiply) actually bites. **THE ev-seam FIXED (10124f1) — and the root was NOT "emit lacks sst_".** The wheel's emit HAS the sst_ evidence-clone (for LSuspend, walk_locals wasm.mn:1688 + emit). The real root was in LOWER: `lower_call_default` (lower.mn:669) produces `LCall` (bare, no evidence) vs `LSuspend` (sst_) by `len(derive_ev_slots(fh))==0`, and `derive_ev_slots` read the FROZEN LEAF `effects_of(lookup_ty(callee_handle))` — which DROPS a forward-ref callee's effect (mint_param_placeholders, defined AFTER pre_register_fn_sig at infer.mn:2768>204 — its Graph effect never entered the frozen instantiated row). So the effectful call lowered to a bare LCall, no evidence, and the callee's strict `ev_perform_entry` key-scan met an empty region → OOB. `escaping_row` (the flow-closure `own∪callees_escaping−handled`, precomputed at `lower_program` via `ls_register_escaping`) was BUILT precisely to recover forward-ref-dropped effects and its own doc names `derive_ev_slots` as the consumer — but derive_ev_slots was never wired to it. FIX: `evidence_effects_of` unions the per-call-site leaf with the flow-closure (`escaping_row(callee name)` / `lambda_escaping_row`). Verified: `.build/probe/evfwd.mn` (caller→forward-ref deep(), both `with Poke`) threads sst_, runs exit 9; m2 rungs 8/0 + micros 45/0 (NO regression). m3 wat2wasm 0 errors, RUNS PAST the pre_register seam — the trap MARCHED (progress) to `infer_fn`'s `inf_exit_fn`. m3.wat 285k→513k lines = the correct forward-ref evidence threading (previously dropped); the escaping_row `esc_assoc` O(n) lookup + the per-call sst_ clone are named efficiency follow-ups, and `Hβ.infer.order-free-live-row` (leaf==flow-closure, the union dissolves) is the deeper form. **THE NEW WALL — inf_exit_fn HANDLER-STATE RECORD-TYPE FLOOD (a THIRD freeze class, NOT forward-ref, NOT ev-seam).** m3 traps `unreachable` (`field offset unprovable`): `inf_exit_fn` reads `frame.row_handle` where `frame = last(stack)`, `stack` = the `infer_ctx` handler's list-state of ANONYMOUS records `{accumulated_row: EffRow, declared: List, fn_span: Span, row_handle: Int}`; the wheel's inference has LOST the frame's record type by the READ, so the field offset is unprovable. `bind_handler_state_names` (infer.mn) binds `stack` as a SHARED `Forall([], TVar(ih))` (state_binds computed ONCE at infer.mn:3111), so it SHOULD ground across arms (inf_enter_fn's `stack ++ [frame]` unifies ih=[frame_type]) — yet it floors, so the model is incomplete. NOT reproduced by the simple micro (`.build/probe/hstate.mn`: 2-arm list-of-records, one push + one field-read → runs CLEAN, exit 0). The trigger is SPECIFIC: the frame field flows into an EFFECTFUL call (`graph_bind_row`, now LSuspend via the ev-seam fix), AND/OR the multi-arm construction (inf_enter_fn/inf_add_effect/inf_add_row each build/update the frame), AND/OR the `EffRow`-typed field. NEXT: a FAITHFUL minimal repro (field-of-`last(state)` → effectful-call arg; ≥3 record-constructing arms; an EffRow field), then ground the frame record type live at the read — the next freeze→live. THE SYNTHESIS (Morgan 2026-07-08): there is NO single freeze — the wheel floors in distinct ways (forward-ref call-order; handler-state arm-propagation; missing primitives), unified only by "frozen where it should be live"; the trap-march DONE RIGHT (each fix a genuine snapshot→live conversion, never a patch) IS the incremental dissolution, converging on order-free-live inference at first-light. **CRUCIBLES to promote: `.build/probe/evfwd.mn` (forward-ref effectful call, the ev-seam) + `ffwd.mn`/`fbare.mn`/`fback.mn`/`lit.mn` (forward-ref float).** first-light = diff(m3,m4) empty AND battery green THROUGH m3. #1 proven-singleton (Approach B) REFUTED — abort_exit is a LIVE uninstalled default handler**; gates: `verify.sh` + `march-gate.sh --micros`)
+## §7 · Current state (grounded 2026-07-13 — **FIRST LIGHT LANDED; the medium builds itself; the frontier is now SPEED, not correctness.** (1) **First light** (2026-07-10, 87c0152, tag `first-light`): `m3 == m4` byte-identical AND battery-green-through-m3 — the fixed point, the medium reproduced by itself. (2) **The boot era** (7401c4b): the hand-WAT seed is DELETED, `boot/mentl.wasm` IS the compiler; `tools/march.sh` asserts `m2 == m3` as the live ratchet (a TRANSITION on emit changes → re-pin from m3; boot/PROVENANCE.md). (3) **The M1–M4 multi-shot arc self-hosted** — the k1 continuation-reification producer through the M4 Abandon discipline, each fixpoint-confirmed; the value-layer fold leaves (STEP 0–5, S0 compare/hash) landed. (4) **THE CROWN LANDED** (2026-07-13, 29df478): `!E`-sound-under-poly, the by-name negation gate (`row_subsumes` EfNeg) — `m2 == m3` byte-identical, 5/5 crown-gate (tests/crown/, tools/crown-gate.sh), 66/66 micros. (5) **The proposer reframe corrected** (§1/§5, 6c3efb4): the medium is the best next-move proposer; the model is unnecessary at that scope. **THE CURRENT CURSOR — the O(1) architecture (§5.O), performance IS the Carried-Truth Law.** The 8-agent diagnosis pinned the ~23-min self-compile (1377s, 100% guest algorithm) to name-keyed re-derivation: `env_find_flat` O(n²) (pipeline.mn:375, convergent 5/7), dedup O(U²) with an O(1) target (wasm.mn:1145/1168), `esc_assoc` O(n²) (lower.mn:1383), `instantiate` tree-clone (infer.mn:2687), the 4GB never-free cache-hostile amplifier, and ZERO parallelism (one `|>` cursor, 8 cores idle). The fix is **names-are-handles + O(1) handle-indexed reads + per-decl arena + parallel cursors**, built layer-by-layer — the first cut is `string_offset_lookup` O(1) via a str_hash index (byte-identical by construction). Ground FIRST: `bash tools/state.sh`; gates: `verify.sh` + `march-gate.sh` + `march.sh` the m2==m3 ratchet. The detailed trap-march log below is PRE-first-light archaeology, kept for its substrate mechanics.)
 
 > **▶▶▶ THE 4096-BYTE LEXER CUT = RAW-TNAME ANNOTATIONS — CLOSED (f320f97,
 > 2026-07-09); m3 now reads WHOLE inputs; the trap MARCHED into m3's own emit /
@@ -2792,7 +2878,13 @@ WAT for archaeology. `wasm-interp` CANNOT run m2 (no WASI — fails on the
    cached X instead of reading it live. Carry the handle, read live; the fix is
    always LESS code. *Same law:* humanity needs software that never hallucinates
    intent; the collaboration needs Claude to carry real reasoning, never perform
-   confidence.
+   confidence. *And at the PERFORMANCE scale (Morgan 2026-07-13): **O(1) is the
+   only acceptable complexity for any operation.*** The graph's only native access
+   is the O(1) flat-array handle chase, so a super-constant op re-derives what an
+   edge already connects — a scan/re-filter/re-clone IS Law 1 violated at runtime.
+   The fix is uniform: a name is a HANDLE (interned once), every read an O(1)
+   handle chase (§5.O). Every scanner in the compiler is a place we forgot the
+   graph already knew.
 2. **Don't patch — restructure or stop.** If a fix fits in a patch, the
    architecture is wrong. A silent failure / surrender-fallback (`_ => str_concat`,
    `_ => 0`) is *deleted*, not wrapped.

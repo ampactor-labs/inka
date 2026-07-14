@@ -1395,24 +1395,56 @@ fn esc_assoc_from(map, name: String, i) =
 // per step) and wrapped the bump pointer past 2^32 — face 7's root. A
 // callee with no base (a prelude intrinsic, an effect op) contributed the
 // empty row on every lookup of every round; now it is dropped once, here.
-fn base_index_find(bases, name: String, i) =
-  if i >= len(bases) { None }
-  else {
-    let (n, _, _, _) = list_index(bases, i)
-    if n == name { Some(i) } else { base_index_find(bases, name, i + 1) }
-  }
+// The name→index edge, drawn ONCE and O(1) (Carried-Truth): build a str_hash
+// index (name → base position) once, then resolve every callee in O(1). The old
+// base_index_find was an O(N) linear scan per callee, and indexed_bases maps it
+// over every base → O(N² × callees) — 85% of the post-region self-compile (perf,
+// 2026-07-14; the esc_assoc O(n²) §5.O named). Reverse-inserted so a name's FIRST
+// base position (lowest index) is returned, byte-identical to the old scan.
+fn build_base_index(bases) with Memory + Alloc =
+  build_base_index_from(bases, len(bases) - 1, make_list(4096))
 
-fn resolve_callee_indices(bases, callees) =
-  flatten(map((c) => match base_index_find(bases, c, 0) {
+fn build_base_index_from(bases, i, idx) with Memory + Alloc = {
+  if i < 0 { idx }
+  else {
+    let (name, _, _, _) = list_index(bases, i)
+    build_base_index_from(bases, i - 1, base_index_add(idx, name, i))
+  }
+}
+
+fn base_index_add(idx, name: String, pos) with Memory + Alloc = {
+  let b = i32_and(str_hash(name), 4095)
+  let x = list_index(idx, b)
+  list_set(idx, b, [(name, pos)] ++ (if x == 0 { [] } else { x }))
+}
+
+fn base_index_get(ref idx, name: String) with Memory = {
+  let b = i32_and(str_hash(name), 4095)
+  let x = list_index(idx, b)
+  base_bucket_scan(if x == 0 { [] } else { x }, name, 0)
+}
+
+fn base_bucket_scan(ref bucket, name: String, i) with Memory = {
+  if i >= len(bucket) { None }
+  else {
+    let (bn, pos) = list_index(bucket, i)
+    if bn == name { Some(pos) } else { base_bucket_scan(bucket, name, i + 1) }
+  }
+}
+
+fn resolve_callee_indices(idx, callees) =
+  flatten(map((c) => match base_index_get(idx, c) {
     Some(i) => [i],
     None    => []
   }, callees))
 
-fn indexed_bases(bases) =
+fn indexed_bases(bases) = {
+  let idx = build_base_index(bases)
   map((b) => {
     let (name, own_effs, callees, handled) = b
-    (name, own_effs, resolve_callee_indices(bases, callees), handled)
+    (name, own_effs, resolve_callee_indices(idx, callees), handled)
   }, bases)
+}
 
 // One monotone round over rows-only (base order): row = (own ∪ ⋃ callee rows) − handled.
 fn escaping_round(ibases, cur) =

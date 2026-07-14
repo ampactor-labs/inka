@@ -33,7 +33,13 @@ effect Iterate {
   result() -> r
 }
 
-fn iterate(xs) with Iterate = iterate_from(xs, 0, len(xs))
+// Flatten ONCE so iterate_from's xs[i] is O(1). map/fold/filter build their
+// inputs via push/++ (snoc/concat, tags 1/3), where list_index(xs, i) is O(i)
+// -> the whole iteration O(N²); it was 48.85% of the self-compile (perf,
+// 2026-07-14). list_to_flat no-ops on an already-flat list (tag 0), so flat
+// inputs pay nothing; the flat copy preserves order, so every yield is
+// byte-identical.
+fn iterate(xs) with Iterate = iterate_from(list_to_flat(xs), 0, len(xs))
 
 // Top-level tail-recursive iteration — no nested closure. Lower's
 // tail-call-mark-pass recognizes `iterate_from(xs, i+1, n)` as the

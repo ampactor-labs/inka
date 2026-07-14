@@ -757,7 +757,12 @@ fn name_set_prefix_contains(ref buf, count, ref name) with !Mutate = {
 
 fn name_set_prefix_contains_loop(ref buf, ref name, i, n) with !Mutate = {
   if i >= n { false }
-  else if list_index(buf, i) == name { true }
+  // By NAME, like the membership leaf (name_set_contains_loop) and the
+  // negation gate — this is the DEDUP twin (name_set_dedup_into), and it
+  // was still `==` (pointer-eq) after cc487f8 fixed membership, so two
+  // byte-equal ENamed from distinct sites still failed to dedup HERE, and
+  // rows kept bloating past the membership fix. The two must agree.
+  else if str_eq(eff_name_str(list_index(buf, i)), eff_name_str(name)) { true }   // drift-audit: ignore — the String case of ==; nameable-sequence leaf, band D
   else { name_set_prefix_contains_loop(buf, name, i + 1, n) }
 }
 

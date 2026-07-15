@@ -672,15 +672,15 @@ fn teach_session(handle) with Teach + GraphRead = {
   let (_, gradient, why, _, _) =
     pos
       <| (
-        (h, k, sp) => match k {
+        ((h, k, sp)) => match k {
           NBound(ty) => teach_here("at handle", sp, ty),
           _          => ()
         },
-        (h, _, _)  => teach_gradient(h),
-        (h, _, _)  => teach_why(h),
-        (h, _, sp) => teach_error("E_Position", sp,
+        ((h, _, _))  => teach_gradient(h),
+        ((h, _, _))  => teach_why(h),
+        ((h, _, sp)) => teach_error("E_Position", sp,
                                 Inferred("teach_session inquiry")),
-        (_, k, _)  => match k {
+        ((_, k, _))  => match k {
           NBound(ty) => match annotation_inferred_for(ty) {
             Some(ann) => teach_unlock(ann),
             None      => CMemoize

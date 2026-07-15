@@ -1,14 +1,7 @@
-// W13 gate — the `~> Persist` fanout schedule: durable parallel execution.
+// W13 prototype - value shape of the `~> Persist` fanout schedule.
 //
-// The ultimate form (PLAN §4④): parallelism and durable execution are the SAME
-// arm — a `><` branch thunk is a continuation record (handler = state = closure =
-// evidence = continuation, §6), so the Persist schedule catches each branch the
-// SAME way the thread pool and the oracle's backtrack catch it, differing only in
-// that it CHECKPOINTS the thunk to disk before running (a crashed/forked branch
-// re-runs from its memcpy'd record). lower's run_fanout_thunks Persist arm emits
-// `persist_branch(thunk)` per branch (checkpoint + run, accumulate result) +
-// `join_persist(i)` to collect in source order — the SAME strategy-neutral thunks
-// Seq/Thread run, only the CATCHER differs (persist_to_disk, lib/runtime/persist.mn).
+// This arithmetic proxy checks source-order collection only. It performs no
+// persistence, process restart, continuation resume, or resource recovery.
 //
 // The seed lags both the new Persist lowering arm AND the
 // persist_branch/join_persist handler ops (the disk memcpy round-trip needs the
@@ -16,9 +9,8 @@
 // op-call form traps in the seed's closure-header read). So this gate proves the
 // Persist schedule's CONTROL SHAPE arithmetically (the self-contained proxy
 // discipline mn-show-fold / mn-egraph-saturate use): checkpoint-THEN-run per
-// branch, joined in SOURCE ORDER, the result IDENTICAL to the inline `><` (durable
-// execution is invisible to the value — only crash-survivability differs). The
-// disk round-trip itself is gated runnably by mn-persist.mn (the record memcpy).
+// branch, joined in SOURCE ORDER, the result IDENTICAL to the inline `><`. The
+// disk byte-copy proxy is mn-persist.mn; neither test establishes durability.
 // When the seed catches up to the continuation-record layout, this becomes the
 // direct `(b1) >< (b2) ~> persist_scheduler` form — named peer
 // Hβ.lower.fanout-persist-seed-value-gate.

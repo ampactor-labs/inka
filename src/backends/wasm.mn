@@ -2276,14 +2276,15 @@ fn walk_locals_pat_list(pats, acc) = {
 }
 
 // A tuple pattern's elements are (offset_bytes, elem_ty, sub_pat) — the
-// width-summed positional product. Each sub declares at repr_of(elem_ty),
+// width-summed positional product. Each sub declares at the resolved element
+// repr,
 // the SAME proven width emit_pat_tuple_binds loads at.
 fn walk_locals_pat_tuple(elem_binds, acc) = {
   if len(elem_binds) == 0 { acc }
   else {
     let (_, elem_ty, sub_pat) = last(elem_binds)
     walk_locals_pat_tuple(drop_last(elem_binds),
-      walk_locals_pat(sub_pat, repr_of(fold_strip(elem_ty)), acc))
+      walk_locals_pat(sub_pat, repr_of_resolved(elem_ty), acc))
   }
 }
 
@@ -2983,10 +2984,11 @@ fn emit_expr(expr) = match expr {
 
   LFnRef(_h, fn_name, ev_exprs) => {
     // The unified record for an EXISTING named fn referenced as a VALUE —
-    // LMakeClosure's shape with ZERO captures: [fn_ptr@0][ne@4][ev_slot_j@8+4*j].
+    // LMakeClosure's shape with ZERO captures:
+    // [fn_ptr@0][0@4][key_j,ev_j@8+8*j][key=0 sentinel].
     // No body emit (the fn lives at its declaration; offset 0 reads its
-    // $<name>_idx). The callee reads its evidence at 8+4*ev_slot off its own
-    // (zero) compile-time fence, so the ev region starts at offset 8.
+    // $<name>_idx). The callee key-scans evidence from its zero compile-time
+    // fence, so the keyed region starts at offset 8.
     let ne = len(ev_exprs)
     // ev region is keyed: 2 words/entry ([key][ev]) + 1 key=0 sentinel word.
     let size = 8 + 4 * (2 * ne + 1)
@@ -2997,12 +2999,12 @@ fn emit_expr(expr) = match expr {
     wat_emit(fn_name)
     wat_emit("_idx)\n")
     wat_emit("    (i32.store offset=0)\n")
-    // Store the slot count at offset 4 — the unified-record fence field.
+    // Store capture_count=0 at offset 4. LSuspend clones this record using the
+    // same fence field; writing `ne` here made it copy evidence words as if they
+    // were captures and then append the new keyed region at the wrong offset.
     wat_emit("    (local.get $state_tmp)\n")
-    wat_emit("    (i32.const ")
-    wat_emit(int_to_str(ne))
-    wat_emit(") (i32.store offset=4)\n")
-    // Store each ev_slot at offset 8 + 4*j (nc=0).
+    wat_emit("    (i32.const 0) (i32.store offset=4)\n")
+    // Store each keyed evidence pair from offset 8 (nc=0).
     emit_ev_slot_stores(ev_exprs, 0, 0)
     // Result: record pointer on stack.
     wat_emit("    (local.get $state_tmp)\n")
@@ -6427,14 +6429,14 @@ fn emit_pat_record_binds(fbs, path, path_len) = {
 }
 
 // Tuple-element binders read the stored width-summed offset directly and bind
-// at the element's PROVEN repr (repr_of(elem_ty)) — an f64 element loads f64,
+// at the element's resolved repr — an f64 element loads f64,
 // a pointer/word loads i32. The SAME offset+width the construction stored.
 fn emit_pat_tuple_binds(ebs, path, path_len) = {
   if len(ebs) == 0 { () }
   else {
     let (offset, elem_ty, sub_pat) = last(ebs)
     let extended = list_set(path, path_len, offset)
-    emit_pat_binds_at(sub_pat, extended, path_len + 1, repr_of(fold_strip(elem_ty)))
+    emit_pat_binds_at(sub_pat, extended, path_len + 1, repr_of_resolved(elem_ty))
     emit_pat_tuple_binds(drop_last(ebs), path, path_len)
   }
 }

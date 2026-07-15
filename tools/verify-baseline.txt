@@ -137,6 +137,12 @@ micro:struct-eq-sum=60
 # follow-ups: Hβ.lower.fanout-simd-lane-cashout (reads STEP 1 v128), fanout-gpu-
 # backend-handler, fanout-durable-persist-handler (reads STEP 3).
 micro:fanout-seq=30
+# `<|` branch applications carry the exact result handles inference minted.
+# This covers named/inline effect evidence under an ambiguous handler set.
+micro:diverge-evidence=87
+# Non-word branch results keep their f64 call, tuple-store, pattern-load, and
+# local widths; the accepted single-branch surface still produces a tuple.
+micro:diverge-result-handle=125
 # STEP 5 (TCont world-index): TCont(Ty, ResumeDiscipline) → TCont(Ty,
 # ResumeDiscipline, EffRow) — the ONE coordinated breaking arity change (the
 # unpatchability theorem: swap the representation, never patch). The third field

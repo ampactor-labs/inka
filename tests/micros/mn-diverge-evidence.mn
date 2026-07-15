@@ -1,0 +1,31 @@
+effect Trigger {
+  go(x: Int) -> Int
+}
+
+effect Counter {
+  bump(x: Int) -> Int
+}
+
+handler trigger_handler {
+  go(x) => {
+    let (a, b) = x <| (stateful, stateful)
+    let (c, d) = x <| ((y) => bump(y), (y) => bump(y))
+    let (e) = x <| stateful
+    let (f) = x <| ((y) => bump(y))
+    resume(a + b + c + d + e + f)
+  }
+}
+
+handler counter with n = 10 {
+  bump(x) => resume(x + n) with n = n + 1
+}
+
+// Keep Counter runtime-variable so declaration uniqueness cannot hide a
+// missing install edge in either the named or inline branch path.
+handler other_counter {
+  bump(x) => resume(x)
+}
+
+fn stateful(y) with Counter = bump(y)
+
+fn main() = { { go(2) } ~> trigger_handler } ~> counter

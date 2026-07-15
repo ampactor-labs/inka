@@ -113,13 +113,13 @@ handler format_default with !Mutate {
     let (tokens, indent, line_break, comment, span, reason, sibling) =
       pos
         <| (
-          (n, _, _)  => render_tokens_for(n),                      // 1. tokens
-          (_, k, c)  => render_indent_for(k, c),                   // 2. indent (canonical)
-          (_, k, _)  => render_line_break_after(k),                // 3. line break
-          (n, _, _)  => render_comment_for(n),                     // 4. the one comment, read live from the weave
-          (n, _, _)  => render_span_marker(n),                     // 5. span (debug only)
-          (n, _, _)  => render_reason_chain(n),                    // 6. reason (debug)
-          (_, _, c)  => render_sibling_separator(c)                // 7. sibling glue
+          ((n, _, _))  => render_tokens_for(n),                      // 1. tokens
+          ((_, k, c))  => render_indent_for(k, c),                   // 2. indent (canonical)
+          ((_, k, _))  => render_line_break_after(k),                // 3. line break
+          ((n, _, _))  => render_comment_for(n),                     // 4. the one comment, read live from the weave
+          ((n, _, _))  => render_span_marker(n),                     // 5. span (debug only)
+          ((n, _, _))  => render_reason_chain(n),                    // 6. reason (debug)
+          ((_, _, c))  => render_sibling_separator(c)                // 7. sibling glue
         )
     let assembled = assemble_render(tokens, indent, line_break, comment, span, reason, sibling)
     resume(assembled)

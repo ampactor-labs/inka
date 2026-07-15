@@ -163,23 +163,23 @@ handler interrogate_default with !Mutate {
     let (graph_v, handler_v, verb_v, row_v, ownership_v, refinement_v, gradient_v, reason_v) =
       pos
         <| (
-          (_, k, r) => match k {                                                    // 1. Graph
+          ((_, k, r)) => match k {                                                    // 1. Graph
             NBound(_)     => VerdictClears(r),
             NRowBound(_)  => VerdictClears(r),
             NFree(_)      => VerdictInvites(graph_invite_for(0, r)),
             NRowFree(_)   => VerdictInvites(graph_invite_for(0, r)),
             NErrorHole(_) => VerdictInvites(graph_invite_for(0, r))
           },
-          (h, k, r) => handler_verdict_for(h, k, r),                                // 2. Handler
-          (h, k, r) => verb_verdict_for(h, k, r),                                   // 3. Verb
-          (h, k, r) => row_verdict_for(h, k, r),                                    // 4. Row
-          (h, k, r) => ownership_verdict_for(h, k, r),                              // 5. Ownership
-          (h, _, r) => refinement_verdict_for(h, r),                                // 6. Refinement
-          (h, _, r) => match teach_gradient(h) {                            // 7. Gradient
+          ((h, k, r)) => handler_verdict_for(h, k, r),                                // 2. Handler
+          ((h, k, r)) => verb_verdict_for(h, k, r),                                   // 3. Verb
+          ((h, k, r)) => row_verdict_for(h, k, r),                                    // 4. Row
+          ((h, k, r)) => ownership_verdict_for(h, k, r),                              // 5. Ownership
+          ((h, _, r)) => refinement_verdict_for(h, r),                                // 6. Refinement
+          ((h, _, r)) => match teach_gradient(h) {                            // 7. Gradient
             None             => VerdictClears(r),
             Some(suggestion) => VerdictInvites(suggestion)
           },
-          (_, _, r) => match r {                                                    // 8. Reason
+          ((_, _, r)) => match r {                                                    // 8. Reason
             Inferred(_)   => VerdictClears(r),
             Declared(_)   => VerdictClears(r),
             Located(_, _) => VerdictClears(r),

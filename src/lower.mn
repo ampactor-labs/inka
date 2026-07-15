@@ -297,7 +297,7 @@ type LowExpr
   // VALUE-position reference to an EXISTING named fn that DISPATCHES effects —
   // the evidence-capturing twin of LGlobal (which carries NO ev region) and the
   // dispatch-less twin of LSuspend (which CALLS). Builds the unified record
-  // [fn_ptr@0][ne@4][ev_slot_j@8+4*j] for `$<name>_idx` so a fn passed as a
+  // [fn_ptr@0][capture_count=0@4][key_j,ev_j@8+8*j] for `$<name>_idx` so a fn passed as a
   // value (`each(infer_stmt, stmts)`) carries its evidence into the record
   // the callee reads as __state — Carried-Truth: the two divergent fn-value
   // paths (bare LGlobal vs evidence-bearing LMakeClosure) unified into ONE
@@ -344,11 +344,9 @@ type LowExpr
   // points to the synthesized __resume function registered in the
   // WASM funcref table; state_index discriminates which perform site
   // resumed; ret_slot reserves the local slot for the resumed value;
-  // world_tag is the interned hash of the captured effect-WORLD (§5.U,
-  // the TIME axis) — memcpy carries it, so a persisted continuation
-  // rehydrated under a CHANGED handler-set is caught at LOAD as the
-  // value-gate E_ResumeWorldMismatch (the §4③ modal frontier landing on
-  // TIME: !E proven across persist/recompile, never a silent miscompile).
+  // world_tag is the legacy 32-bit effect-name fingerprint. It is carried for
+  // layout compatibility only: collisions, parameter erasure, open tails, and
+  // missing activation identity make it unsuitable as a resume proof.
   // Composes with LMakeClosure's capture/ev-store loops; emit shares
   // the per-field store helpers (per H7 §4.2).
   | LDeclareFn(LowFn)                            // module-level fn declaration (handler arm) — no runtime slot
@@ -850,8 +848,26 @@ fn effects_of_row(row) = match row {
 // Named fn or lambda, ONE read; the name-keyed esc-map query this replaces
 // was a side-ledger re-derivation of the same live fact (Anchor 1).
 fn derive_ev_slots(callee_handle) = {
-  map((ename) => LEvEntry(ename, resolve_ev_for_ename(ename)),
-      evidence_effects_of(callee_handle))
+  map((ename) => {
+    let ev = resolve_ev_for_ename(ename)
+    // The arm's ev-region must carry every effect the arm THREADS to a callee,
+    // not only the ones it performs directly (the arm_ev_note at the perform
+    // tier). When the effect resolves to an LEvRef — a keyed lookup INTO the
+    // arm's captured_evs, because no handler is lexically in scope here — the
+    // install must have written that entry, so note it. (A lexical LLocal is
+    // threaded from its own install, never the arm's region.) Without this, an
+    // arm that only CALLS a stateful-effect function — `verify_pending_at`,
+    // whose row carries Verify — through a `<|` fanout branch left its
+    // captured_evs missing that key, so the callee got a garbage record
+    // (the felt-read ev-seam: target=Verify, record=32, scan → OOB).
+    note_threaded_ev(ename, ev)
+    LEvEntry(ename, ev)
+  }, evidence_effects_of(callee_handle))
+}
+
+fn note_threaded_ev(ename, ev) = match ev {
+  LEvRef(_, _) => arm_ev_note(ename),
+  _            => 0
 }
 
 // The effects a caller threads evidence for: the per-call-site instantiated row
@@ -2438,11 +2454,20 @@ fn extract_handler_config_args(node) = {
 // each branch thunk to disk via persist_branch/join_persist for crash-
 // survivable parallel execution (§4④ — parallelism and durable execution are
 // the same arm). Each is a `~> handler` choice over the one pure-topology verb.
-fn lower_fanout(handle, fan_own, left, right) = match fan_own {
+fn lower_fanout(handle, fan_own, left, right) = {
+  // Infer already drew the application-result edges into the fanout's tuple
+  // type. Project those exact handles; a call result is not the branch
+  // function's handle (TFun and Int merely happen to share RI32).
+  let result_hs = fanout_result_handles(handle)
+  match fan_own {
   FanDistribute => {
-    let thunks = [ synthesize_branch_thunk(handle, "l", left),
-                   synthesize_branch_thunk(handle, "r", right) ]
-    run_fanout_thunks(handle, thunks)
+    let N(_, _, lh) = left
+    let N(_, _, rh) = right
+    let branches = [ (synthesize_branch_thunk(handle, "l", left),
+                      fanout_result_handle_at(result_hs, 0, lh)),
+                     (synthesize_branch_thunk(handle, "r", right),
+                      fanout_result_handle_at(result_hs, 1, rh)) ]
+    run_fanout_thunks(handle, branches)
   },
   FanShare => {
     let lo_input = lower_expr(left)
@@ -2453,14 +2478,35 @@ fn lower_fanout(handle, fan_own, left, right) = match fan_own {
       NExpr(MakeTupleExpr(elems)) => elems,
       _                            => [right]
     }
-    let thunks = synthesize_diverge_thunks(handle, input_h, input_local_name, branch_nodes, 0)
+    let branches = synthesize_diverge_thunks(
+      handle, input_h, input_local_name, branch_nodes, result_hs, 0)
     // Bind the shared input ONCE, then run the thunks (each captures it).
     LBlock(handle, [
       LLet(input_h, input_local_name, lo_input),
-      run_fanout_thunks(handle, thunks)
+      run_fanout_thunks(handle, branches)
     ])
   }
+  }
 }
+
+// A fanout result is a positional product of the branch-result handles infer
+// minted. Read that graph edge directly rather than recovering a return type
+// from the branch expression in lower. The fallbacks keep productive lowering
+// after an earlier type error; every well-typed fanout reaches the TVar arm.
+fn fanout_result_handles(handle) = match lookup_ty(handle) {
+  TTuple(elems) => map((ty) => match ty {
+    TVar(h) => h,
+    _       => 0
+  }, elems),
+  _ => []
+}
+
+fn fanout_result_handle_at(result_hs, i, fallback) =
+  if i >= len(result_hs) { fallback }
+  else {
+    let h = list_index(result_hs, i)
+    if h == 0 { fallback } else { h }
+  }
 
 // Project the strategy-neutral branch thunks through the schedule read
 // LIVE from the installed `~>` chain. `prelude` are statements that must
@@ -2475,27 +2521,31 @@ fn lower_fanout(handle, fan_own, left, right) = match fan_own {
 // to a device-kernel host import (external-transport boundary); `~> Persist`
 // checkpoints each branch thunk to disk (persist_branch/join_persist). All
 // read the SAME strategy-neutral thunks — only the collector differs.
-fn run_fanout_thunks(handle, thunks) = match lower_fanout_schedule() {
-  // Each inline invocation's identity is ITS THUNK's handle, never the
-  // shared fanout handle: an L-node's identity IS its graph handle, and
-  // two LCalls carrying the same handle minted the same $call_<h> scratch
-  // local twice (fanout-seq's redefinition at assemble).
-  Seq    => LMakeTuple(handle, map((thunk) => LCall(lexpr_handle(thunk), thunk, []), thunks)),
+fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
+  // The closure and its invocation result have different graph identities.
+  // The pair carries both: thunk_h selects the closure record; result_h selects
+  // the call signature, stack width, tuple store width, and scratch identity.
+  Seq => LMakeTuple(handle, map((branch) => {
+    let (thunk, result_h) = branch
+    LCall(result_h, thunk, [])
+  }, branches)),
   Threaded => {
     // Spawn ALL branches, THEN join ALL — true parallelism with
     // source-order collection (the spawn-join-each interleave
     // serialized). The spawn handles bind as let-locals so the joins
     // read them after every spawn has launched.
     let spawn_lets = map((indexed) => {
-      let (i, thunk) = indexed
+      let (i, branch) = indexed
+      let (thunk, _) = branch
       LLet(handle, "__fanout_spawn_{int_to_str(i)}_{int_to_str(handle)}",
-        LPerform(handle, "spawn", [thunk], ""))
-    }, enumerate(thunks))
+        lower_perform_dispatch(handle, "spawn", [thunk]))
+    }, enumerate(branches))
     let joins = map((indexed) => {
-      let (i, _thunk) = indexed
-      LPerform(handle, "join",
-        [LLocal(handle, "__fanout_spawn_{int_to_str(i)}_{int_to_str(handle)}")], "")
-    }, enumerate(thunks))
+      let (i, branch) = indexed
+      let (_, result_h) = branch
+      lower_perform_dispatch(result_h, "thread_join",
+        [LLocal(handle, "__fanout_spawn_{int_to_str(i)}_{int_to_str(handle)}")])
+    }, enumerate(branches))
     LBlock(handle, list_concat(spawn_lets, [LMakeTuple(handle, joins)]))
   },
   // `~> Simd` — the SPACE-axis cash-out at the value layer's RV128 altitude:
@@ -2505,7 +2555,10 @@ fn run_fanout_thunks(handle, thunks) = match lower_fanout_schedule() {
   // lane ops (emit_binop_v128: f32x4.add/mul) process four-at-once. The thunks
   // are the SAME strategy-neutral closures Seq/Thread call — only the COLLECTOR
   // differs (lanes vs tuple), proving the verb is pure topology (PLAN §4 STEP 4).
-  Simd => LSimdLanes(handle, map((thunk) => LCall(handle, thunk, []), thunks)),
+  Simd => LSimdLanes(handle, map((branch) => {
+    let (thunk, result_h) = branch
+    LCall(result_h, thunk, [])
+  }, branches)),
   // `~> Gpu` — "the handler IS the backend" (PLAN: infer/lower/emit/native/GPU
   // are the projected cursor, each aspect → a target token). The WASM substrate
   // has no in-process GPU dispatch instruction — a device kernel crosses the
@@ -2516,7 +2569,10 @@ fn run_fanout_thunks(handle, thunks) = match lower_fanout_schedule() {
   // thunks Seq runs (a correct sequential execution of the kernel body), and the
   // device offload is the host-import swap at that boundary — named peer
   // Hβ.lower.fanout-gpu-host-import (the transport binding, not a Mentl gap).
-  Gpu  => LMakeTuple(handle, map((thunk) => LCall(handle, thunk, []), thunks)),
+  Gpu  => LMakeTuple(handle, map((branch) => {
+    let (thunk, result_h) = branch
+    LCall(result_h, thunk, [])
+  }, branches)),
   // `~> Persist` — parallelism and durable execution are the SAME arm (PLAN
   // §4④): each branch thunk is a continuation record (handler = state = closure
   // = evidence = continuation, §6), so a Persist scheduler spawns each branch
@@ -2529,31 +2585,33 @@ fn run_fanout_thunks(handle, thunks) = match lower_fanout_schedule() {
   // real at the fanout layer.
   Persisted => {
     let spawn_lets = map((indexed) => {
-      let (i, thunk) = indexed
+      let (i, branch) = indexed
+      let (thunk, _) = branch
       LLet(handle, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}",
-        LPerform(handle, "persist_branch", [thunk], ""))
-    }, enumerate(thunks))
+        lower_perform_dispatch(handle, "persist_branch", [thunk]))
+    }, enumerate(branches))
     let joins = map((indexed) => {
-      let (i, _thunk) = indexed
-      LPerform(handle, "join_persist",
-        [LLocal(handle, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}")], "")
-    }, enumerate(thunks))
+      let (i, branch) = indexed
+      let (_, result_h) = branch
+      lower_perform_dispatch(result_h, "join_persist",
+        [LLocal(handle, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}")])
+    }, enumerate(branches))
     LBlock(handle, list_concat(spawn_lets, [LMakeTuple(handle, joins)]))
   }
 }
 
-// Walk branch_nodes producing one LMakeClosure per branch. Each
-// thunk's body is `LCall(branch_h, lower_expr(branch_node),
-// [LLocal(input_h, input_local_name)])` — the branch fn applied
-// to the shared input. Captures = [LLocal(input_h, input_local_name)]
-// (one capture; uniform across branches).
+// Walk branch_nodes producing one LMakeClosure per branch. Each thunk body is
+// the ordinary call projection of the branch stage applied to the shared
+// input, carrying inference's result_h through LCall/LSuspend. Captures begin
+// with the shared input and then include the branch's free variables.
 //
 // Per H.2.e (lower-lambda-capture-substrate): the closure
 // machinery used here is the same machinery that lowers user-
 // written lambdas; compiler-synthesized thunks reuse it.
-fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_nodes, base_idx) = map((indexed) => {
+fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_nodes, result_hs, base_idx) = map((indexed) => {
   let (i, branch_node) = indexed
   let N(_, _, branch_h) = branch_node
+  let result_h = fanout_result_handle_at(result_hs, base_idx + i, branch_h)
   let thunk_name = "diverge_{int_to_str(base_idx + i)}_{int_to_str(parent_handle)}"
   // A diverge thunk is a closure exactly like a branch thunk (`><`,
   // synthesize_branch_thunk) — ONE closure-synthesis discipline, not two.
@@ -2572,14 +2630,25 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   let captures_handles = [input_h] ++ b_handles
   ls_enter_frame("", [], [], captures_names, captures_handles, -1)
   lower_frame_fence_push()
-  let lo_branch  = lower_callee_ref(branch_node)   // branch's frees → upvals under the frame
-  let thunk_body = LCall(branch_h, lo_branch, [LUpval(input_h, 0)])
+  // This is an ordinary call projected from an implicit application edge.
+  // Reuse the normal call lowering so effectful stages take LSuspend and pure
+  // stages take LCall; result_h is the application output infer minted.
+  let thunk_body = mark_tail(lower_call_default(
+    result_h, branch_node, branch_h, [LUpval(input_h, 0)]))
   lower_frame_fence_pop()
   ls_exit_frame()
   let fn_ir = LFn(thunk_name, 0, [], [thunk_body], EfPure, len(captures_exprs))
   // The thunk's identity is ITS BRANCH's handle — N thunks sharing the
   // parent's handle minted N identical scratch locals downstream.
-  LMakeClosure(branch_h, fn_ir, captures_exprs, [])
+  // The captured evidence IS the branch's — a `<|` branch that performs a
+  // STATEFUL effect (verify_pending_at → Verify, teach_gradient → Teach) reads
+  // it live through the thunk's [key][record][base] region, exactly as a real
+  // lambda does (the `derive_ev_slots(handle)` sites above). The old `[]` gave
+  // the thunk no effect evidence, so a stateful-effect perform inside a branch
+  // met the strict ev_perform_entry miss (only singleton `!Mutate` handlers,
+  // dispatched off their `$..._state_g` global, resolved) — invisible until the
+  // felt read drove the eight-arm fanout through Verify/Teach.
+  (LMakeClosure(branch_h, fn_ir, captures_exprs, derive_ev_slots(branch_h)), result_h)
 }, enumerate(branch_nodes))
 
 // Branch-as-thunk synthesis. Mirrors LambdaExpr's lowering above —
@@ -3889,23 +3958,18 @@ fn resume_world_of(handle) = match env_lookup(ls_outer_fn_name()) {
   None => EfPure
 }
 
-// world_tag_of_row — the continuation's frozen handler-WORLD projected to a
-// UNION-HOMOMORPHIC i32 bitmask (§5.U, the TIME axis; W06). Each effect NAME
+// world_tag_of_row - legacy effect-row fingerprint projected to a
+// union-homomorphic i32 bitmask. Each effect NAME
 // projects to one bit (its FNV-1a hash folded to a position mod 32); the
 // row's tag is the OR of its names' bits. The homomorphism is the point:
 // tag(A ∪ B) == i32_or(tag(A), tag(B)), so a COMPOSED continuation's world
 // is one i32.or at compose time — a hash-of-hashes cannot union (the
 // semantics refuter's kill of the head-only form), a bit-union always can.
-// The value gate is a SUBSET test, (k_tag & ~live_tag) == 0 admits — which
-// IS the world-widening-resume semantics (a superset world may resume,
-// band B) rather than brittle equality. A bit collision can only ADD a
-// phantom need → a spurious refusal, never an unsound admit — conservative
-// in exactly the direction a proof-of-absence gate must be. The row is
-// normalized first so Boolean-equal rows tag identically (determinism =
-// fixpoint); EfPure → 0 (the empty world, unconstrained at the gate); the
-// open row-var contributes nothing (a hole, not a captured effect). The
-// per-name hash IS the FNV-1a the cache uses (one hash story) — only the
-// FOLD changed, from sequence-sensitive mixing to the OR of bits.
+// A subset check over this value is UNSOUND as a capability gate: if required
+// A and unrelated live B collide, B satisfies A's bit. Parameter arguments and
+// activation identities are absent, and an open row tail contributes nothing.
+// Keep this only as a deterministic compatibility fingerprint until the graph
+// carries exact effect and handler-install identities.
 fn world_tag_of_row(row) = match normalize_row(row) {
   EfPure          => 0,
   EfClosed(names) => world_tag_or_names(eff_names_of(names), 0, 0),

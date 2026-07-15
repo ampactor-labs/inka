@@ -104,17 +104,17 @@ handler cursor_default with !Mutate {
     let (query, propose, topology, row, trace, verify, teach, why) =
       pos
         <| (
-          (_, k) => k,                                                       // 1. Graph + Env (Query)
-          (h, k) => synth_propose(                                   // 2. Handlers (Propose) — Synth's MultiShot
+          ((_, k)) => k,                                                       // 1. Graph + Env (Query)
+          ((h, k)) => synth_propose(                                   // 2. Handlers (Propose) — Synth's MultiShot
                       ty_of_kind(h, k),
                       row_of_kind(k),
                       mentl_context_at(h)),
-          (h, _) => pipe_context_of_handle(h),                               // 3. Five verbs (Topology)
-          (_, k) => row_of_kind(k),                                          // 4. Boolean row (Unlock)
-          (_, k) => ownership_of_kind(k),                                    // 5. Ownership-as-effect (Trace)
-          (h, _) => verify_pending_at(h),                                    // 6. Refinement (Verify)
-          (h, _) => teach_gradient(h),                               // 7. Continuous gradient (Teach)
-          (h, _) => teach_why(h)                                     // 8. HM live + Reasons (Why)
+          ((h, _)) => pipe_context_of_handle(h),                               // 3. Five verbs (Topology)
+          ((_, k)) => row_of_kind(k),                                          // 4. Boolean row (Unlock)
+          ((_, k)) => ownership_of_kind(k),                                    // 5. Ownership-as-effect (Trace)
+          ((h, _)) => verify_pending_at(h),                                    // 6. Refinement (Verify)
+          ((h, _)) => teach_gradient(h),                               // 7. Continuous gradient (Teach)
+          ((h, _)) => teach_why(h)                                     // 8. HM live + Reasons (Why)
         )
     resume(CursorView(query, propose, topology, row, trace, verify, teach, why))
   },

@@ -1,83 +1,56 @@
-// persist.mn — durable execution as a handler swap (PLAN §4④, W08)
+// persist.mn - same-image record-copy prototype.
 //
-// THE INSIGHT (PLAN §2/§4④): persisted multi-shot IS the same primitive as
-// the oracle's search and the runtime's backtrack — ONE resumable continuation,
-// distinguished ONLY by which handler catches the resume and whether that
-// handler persists the record. search.mn's `backtrack` catches the resume and
-// forks the trail; THIS file's `persist` catches the resume and memcpy's the
-// continuation record to disk. There is no second mechanism, no second runtime.
+// STATUS: this is not yet durable continuation persistence. It copies exactly
+// `size` bytes beginning at `k`. A real continuation record can contain linear-
+// memory pointers and a function-table index whose reachable heap, globals,
+// table/code identity, handler installs, and host resources are not in that
+// byte range. After process loss or recompilation those words may have no valid
+// referents.
 //
-// Because the continuation is the unified heap record (handler = state =
-// closure = evidence = continuation, PLAN §6) — ONE contiguous, handle-
-// addressed region in the monotonic bump image, every interior pointer a
-// handle/offset into that same image — persisting it is a SINGLE memcpy and
-// rehydrating it is a SINGLE memcpy. Durable execution falls OUT of the memory
-// model: NO bespoke heap-walking serializer (Temporal/Restate/DBOS each
-// hand-write one), NO reflection, NO schema. The record IS the wire.
+// `world_tag` is likewise a compatibility fingerprint, not a capability proof.
+// The current lowerer folds effect names into 32 bits, omits parameter arguments
+// and open row tails, and does not identify handler installs. Collisions can
+// admit the wrong world.
 //
-// The wire is self-describing (the B1 pack-leaf format, binary.mn): a persisted
-// continuation is `[world_tag : i32][size : i32][record bytes : size]`. On
-// rehydrate the world_tag is read FIRST and compared against the LIVE handler-
-// stack world (the caller passes the world it is resuming under) — a mismatch
-// is the value-gate E_ResumeWorldMismatch (W06; the §4③ modal frontier on the
-// TIME axis: !E proven across a persist/recompile boundary). A now-unhandled or
-// layout-shifted resume is caught at LOAD, never a silent memcpy'd miscompile.
-//
-// SOTA: no published durable-execution system types the effect-world on the
-// continuation. Temporal/Restate/DBOS persist+resume with ZERO static OR
-// load-time check that the resume world still matches — a now-unhandled resume
-// is a 3am production corruption. Here it is a load-time error, by construction.
+// The handler shape remains useful: storage and resource-rebind policy can be
+// selected by a handler. The bytes below are only a same-image encoding
+// experiment until an exact rooted image and typed Continuation value own them.
 
 import types
 import runtime/memory
 import runtime/binary
 import runtime/io
 
-// Persist — the durable catch. `persist` writes a continuation record to a
-// path; `rehydrate` reads it back, checking the captured world against the
-// live world the caller resumes under. The catching handler decides WHERE
-// (disk path here; a network/object-store handler is a swap, same wire).
+// Persist writes an explicitly sized record to a path; rehydrate copies it into
+// fresh memory after comparing the caller-supplied compatibility fingerprint.
+// The catching handler decides storage location. It does not prove that the
+// record is a closed continuation image.
 //
-// `k` is the continuation record pointer (LMakeContinuation's heap value).
-// `size` is its total byte length (the producer knows nc+ne at construct;
-// rehydrate recovers it from the wire — fully self-describing). `world_tag`
-// is the record's frozen-world hash, read from the record's final field.
+// `k` is an untyped pointer and rehydrate returns an untyped Int. This boundary
+// is not complete until the graph carries a typed continuation handle and its
+// transitive reachable image.
 effect Persist {
   persist(k: Int, size: Int, world_tag: Int, path: String) -> ()
   rehydrate(path: String, live_world_tag: Int) -> Int
-  // The `~> Persist` FANOUT scheduler ops (W13). A `><` branch thunk is a
-  // continuation record (handler = state = closure = evidence = continuation,
-  // §6), so the Persist schedule catches each branch the SAME way the oracle's
-  // backtrack and the thread pool catch it — differing only in that it
-  // checkpoints the thunk to disk before running. persist_branch(thunk)
-  // checkpoints + invokes the branch; join_persist collects the result. A
-  // crashed/forked branch re-runs from its memcpy'd thunk — durable parallel
-  // execution, parallelism and durability the SAME arm (PLAN §4④).
+  // Prototype fanout storage hooks. The current implementation checkpoints a
+  // closure header before invoking it and retains results only in live handler
+  // state. It does not restore a branch after process loss.
   persist_branch(thunk: Int) -> Int
   join_persist(branch: Int) -> Int
 }
 
-// persist_to_disk — the default durable handler. The wire is the B1 pack-leaf
-// format, so a different destination (network, object store) is purely a
-// handler swap with the SAME wire. memcpy is the whole serializer.
+// persist_to_disk - default record-copy handler for the prototype wire.
 handler persist_to_disk with branch_results = [] {
 
   persist(k, size, world_tag, path) => {
-    // The continuation record is contiguous from `k` for `size` bytes — view
-    // it as a [len][bytes] sequence (the one sequence node-kind, PLAN §4①) and
-    // pack it whole. world_tag leads so rehydrate reads it before allocating.
+    // Copy the caller-selected range. Reachability is not established here.
     let wire = persist_pack_record(world_tag, k, size)
     fs_write_file(path, wire)
     resume()
   },
 
-  // The `~> Persist` FANOUT scheduler (W13). Each branch thunk is checkpointed
-  // to disk BEFORE it runs (so a crash mid-branch re-runs from the memcpy'd
-  // record — the durable promise), then invoked; its result is accumulated in
-  // branch_results. join_persist reads the result by branch index. The thunk is
-  // the same strategy-neutral closure Seq/Thread run — only the CATCHER differs
-  // (a checkpointing handler vs a thread pool vs inline), the §4④ parallelism =
-  // durability unification realized at the fanout layer.
+  // Checkpoint the prototype thunk header before running, then retain the result
+  // in this live handler activation. No restart path consumes that checkpoint.
   persist_branch(thunk) => {
     persist_checkpoint_thunk(thunk, len(branch_results))
     let result = thunk()  // drift-audit: ignore — thunk() is the effectful branch body; result feeds the with-clause accumulator, not chain position
@@ -88,18 +61,17 @@ handler persist_to_disk with branch_results = [] {
 
   rehydrate(path, live_world_tag) => {
     let wire = fs_read_file(path)
-    // world_tag is the first i32 of the wire (the value gate's input).
+    // world_tag is the first i32 of the wire (a lossy compatibility input).
     let captured_world = load_i32(wire + 4)
-    // THE VALUE GATE (W06): a continuation frozen under one handler-world,
-    // resumed under another, is E_ResumeWorldMismatch — caught at LOAD, never a
-    // silent miscompile. world_tag 0 (EfPure) is the unconstrained world and
-    // unifies with anything (the empty world is a subset of every world).
+    // This comparison catches unequal fingerprints. It cannot establish world
+    // equality: different worlds can collide, and 0 also represents omitted
+    // open requirements.
     if captured_world != 0 && captured_world != live_world_tag {
       report(EResumeWorldMismatchWorld(captured_world, live_world_tag, span_zero()))
       resume(0)
     } else {
-      // memcpy the record back into a fresh heap region — relocation-stable
-      // because every interior pointer is a handle/offset into the one image.
+      // Copy into fresh memory. Any interior absolute pointer remains pointed at
+      // the old address; relocation safety is not established by this copy.
       let size = load_i32(wire + 8)
       let k = alloc(size)
       mem_copy(k, wire + 12, size)
@@ -108,25 +80,18 @@ handler persist_to_disk with branch_results = [] {
   }
 }
 
-// persist_checkpoint_thunk — memcpy the branch thunk's continuation record to a
-// per-branch disk path BEFORE the branch runs, so a crash mid-branch re-runs
-// from the checkpoint. The thunk is the unified heap record (fn_ptr@0, nstate@4,
-// state@8…, captured_evs) — its size is read from its own header (nstate gives
-// the field count), so the checkpoint is a single memcpy with no field-walking
-// (durable execution falls out of the memory model, PLAN §6). world_tag 0 (the
-// EfPure / unconstrained world) — a fanout branch carries the enclosing fn's
-// world, which the lower-side schedule has already proven uniform across
-// branches; pinning it here is the per-branch peer Hβ.persist.branch-world-tag.
+// Copy the thunk prefix derived from nstate. This size does not prove that arm,
+// evidence, sentinel, or reachable capture bytes are included. World 0 records
+// no checked capability requirement.
 fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Filesystem = {
   let nstate = load_i32(thunk + 4)
   let size = 8 + nstate * 4
   persist(thunk, size, 0, "/tmp/mn-persist-branch-{int_to_str(idx)}.k")
 }
 
-// persist_pack_record — lay the self-describing wire: [world_tag][size][bytes].
-// The record bytes are mem_copy'd whole; no field-walking. The leading two i32
-// headers make rehydrate fully self-describing (it never needs the producer's
-// nc/ne). This IS the pack-leaf wire (binary.mn) at the record granularity.
+// Lay out the prototype wire: [world_tag][size][bytes]. It is self-sized, not
+// self-describing: it carries no schema, code identity, pointer map, or resource
+// manifest.
 fn persist_pack_record(world_tag, k, size) with Memory + Alloc = {
   let wire = alloc(4 + 4 + 4 + size)
   store_i32(wire, 4 + 4 + size)         // [len] header for the [len][bytes] view

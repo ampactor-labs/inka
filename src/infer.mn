@@ -1415,35 +1415,75 @@ fn check_branch_is_stage(branch, span: ValidSpan) = {
 // outer-scope own collide.
 fn infer_fanout_share(left, right, handle, span: ValidSpan) = {
   infer_expr(left)
+  let N(_, _, input_h) = left
   let N(rbody, _, _) = right
-  match rbody {
-    NExpr(MakeTupleExpr(branches)) => {
-      let n = len(branches)
-      if n == 0 {
-        infer_expr(right)    // degenerate: <| () — empty branch tuple
-      } else {
-        branch_enter()
-        infer_fanout_share_branches(branches, span, 0, n)
-        branch_exit(span)
-        let N(_, _, rh) = right
-        graph_bind(rh, TTuple(collect_tvar_types(branches)),
-          Located(span, Inferred("<| fanout — tuple of branch outputs")))
-      }
-    },
-    _ => infer_expr(right)   // single-branch form — no branching ledger needed
+  // Lower normalizes a non-tuple RHS to one branch, so infer must draw the
+  // same application edge and the same one-element output product. Empty,
+  // singleton, and N-way forms now share one topology.
+  let branches = match rbody {
+    NExpr(MakeTupleExpr(elems)) => elems,
+    _                           => [right]
   }
+  let n = len(branches)
+  let ret_hs = if n == 0 { [] }
+    else {
+      branch_enter()
+      let hs = infer_fanout_share_branches(branches, input_h, span, 0, n)
+      branch_exit(span)
+      hs
+    }
   let N(_, _, rh) = right
-  graph_bind(handle, TVar(rh),
-    Located(span, Inferred("<| fanout — result type is branch-tuple type")))
+  // Preserve the RHS as the tuple of STAGES it denotes. In the singleton
+  // form `rh` is the branch handle itself and infer_fanout_apply_one already
+  // proved it TFun, so rebinding it to the output tuple would erase the
+  // branch's row. The fanout node alone owns the tuple of application results.
+  match rbody {
+    NExpr(MakeTupleExpr(_)) =>
+      graph_bind(rh, TTuple(collect_tvar_types(branches)),
+        Located(span, Inferred("<| fanout — tuple of branch stages"))),
+    _ => ()
+  }
+  graph_bind(handle, TTuple(map((rh2) => TVar(rh2), ret_hs)),
+    Located(span, Inferred("<| fanout — result type is branch-output tuple")))
 }
 
-fn infer_fanout_share_branches(branches, span: ValidSpan, i, n) = {
-  if i >= n { () }
+// Each `<|` branch is APPLIED to the borrowed input — lower emits
+// `LCall(branch, input)`, so infer must model the SAME application or the two
+// disagree: a stateful branch's effect row (`verify_pending_at → Verify`) never
+// reaches the enclosing scope, so its evidence goes uncaptured (the felt-read
+// ev-seam), and the result is mistyped as the branch FUNCTION rather than its
+// OUTPUT. This mirrors `infer_call_saturated`, with one borrowed input arg.
+fn infer_fanout_share_branches(branches, input_h, span: ValidSpan, i, n) = {
+  if i >= n { [] }
   else {
-    infer_expr(list_index(branches, i))
+    let ret_h = infer_fanout_apply_one(list_index(branches, i), input_h, span)
     if i + 1 < n { branch_divider(span) }
-    infer_fanout_share_branches(branches, span, i + 1, n)
+    [ret_h] ++ infer_fanout_share_branches(branches, input_h, span, i + 1, n)
   }
+}
+
+fn infer_fanout_apply_one(branch, input_h, span: ValidSpan) = {
+  let N(_, _, bh) = branch
+  infer_expr(branch)
+  let ret_h = mint(Inferred("<| branch output"))
+  let row_h = graph_fresh_row(Inferred("<| branch effects"))
+  let expected = TFun(build_inferred_params([input_h]), TVar(ret_h), mk_ef_open([], row_h))
+  let expected_h = mint(Inferred("<| branch expected fn"))
+  graph_bind(expected_h, expected,
+    Located(span, Inferred("<| branch applied to the borrowed input")))
+  unify(bh, expected_h, span, Inferred("<| branch borrows the shared input"))
+  // The branch's effects flow into the enclosing row — the same
+  // read-the-callee's-own-row discipline infer_call_saturated uses.
+  match graph_chase(bh) {
+    GNode(NBound(TFun(_, _, brow)), _) => inf_add_row(brow),
+    _ =>
+      match graph_chase(row_h) {
+        GNode(NRowBound(row), _) => inf_add_row(row),
+        GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], row_h)),
+        _ => ()
+      }
+  }
+  ret_h
 }
 
 // Unification — graph-direct, Hazel-productive.

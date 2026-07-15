@@ -1,0 +1,11 @@
+fn widen(x) = float_of_int(x) + 0.5
+
+fn main() = {
+  let (a, b) = 2 <| (
+    (x) => float_of_int(x) + 0.5,
+    (x) => float_of_int(x) + 0.5,
+  )
+  let (c, d) = 2 <| (widen, widen)
+  let (e) = 2 <| widen
+  float_to_int((a + b + c + d + e) * 10.0)
+}

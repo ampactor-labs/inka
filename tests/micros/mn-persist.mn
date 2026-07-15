@@ -1,31 +1,13 @@
-// mn-persist — W08 gate: durable execution = a handler swap (PLAN §4④).
+// mn-persist - same-image record byte-copy prototype.
 //
-// Persisted multi-shot IS the same primitive as the oracle's search and the
-// runtime's backtrack — ONE resumable continuation, distinguished ONLY by which
-// handler catches the resume and whether it persists the record. backtrack
-// catches and forks the trail; `persist` catches and memcpy's the continuation
-// record to disk. No second runtime, no bespoke serializer.
-//
-// Because the continuation is the unified heap record (handler = state =
-// closure = evidence = continuation, PLAN §6) — ONE contiguous handle-addressed
-// region in the monotonic bump image — persist = a SINGLE memcpy and rehydrate
-// = a SINGLE memcpy. This micro exercises the wire ROUND-TRIP at the record
-// granularity: pack a record's bytes whole, read them back, prove the bytes
-// survive memcpy → disk → memcpy verbatim (the durable-execution promise).
-//
-// THE VALUE GATE (W06): the wire leads with the world_tag; rehydrate compares
-// it against the live world. A matching world (or world_tag 0 = EfPure, the
-// unconstrained world) rehydrates; a changed handler-set is E_ResumeWorldMismatch
-// at LOAD — !E proven across the persist boundary, surpassing Temporal/Restate/
-// DBOS (which persist+resume with ZERO resume-world check).
+// This micro proves only that an arbitrary 12-byte record survives the current
+// `[fingerprint][size][bytes]` disk round trip. It does not persist or resume a
+// continuation, close over reachable memory, validate capability identity, or
+// survive a process/code-version change.
 //
 // Here we persist a 12-byte record [0xAB][0xCD][0xEF] under world_tag 7, then
 // rehydrate under the SAME world 7 and read field 1 back (0xCD = 205). The
-// memcpy'd record is byte-identical, so field 1 round-trips.
-//
-// SEED PEER: the seed lags the Persist handler + the 7-field continuation
-// record. Named positive-form peer Hβ.seed.durable-persist: the seed catches up
-// to the .mn-led persist wire. The .mn leads; this micro is the structural gate.
+// copied record is byte-identical, so field 1 round-trips.
 //
 // Run: tools/run-micro.sh tests/micros/mn-persist.mn 205 lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/binary.mn lib/runtime/io.mn lib/runtime/persist.mn
 // Expected exit 205: rehydrated record field 1 (0xCD) survives the round-trip.

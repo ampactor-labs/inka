@@ -2098,13 +2098,26 @@ fn op_resume_discipline(op_name) =
 // the type (and, for a dropping rewrite, the effect row — the gate proved it).
 fn lower_expr(node) = {
   let N(obody, span, handle) = node
-  let canon = egraph_extract(handle)
-  let body = if canon == handle { obody } else { graph_node_body(canon) }
-  match body {
-    NExpr(e)     => lower_expr_body(e, canon, span),
-    NStmt(s)     => lower_stmt_as_expr(s, canon, span),
-    NPat(_)      => LConst(canon, LInt(0)),   // patterns don't lower as expr
-    NHole(_)     => LConst(canon, LInt(0))    // Hazel hole → unreachable trap at emit
+  // An AUTHORED hole's identity lives on its own node — the id and the
+  // authored span the executable gate and the cursor read (authored_hole).
+  // Its union-find class root is often an absent-default mint (NHole(0):
+  // the fn-return var a body hole unified with, a let's value var), so
+  // canonicalizing first discards the authored truth and the surviving
+  // hole slips the gate. The hole keeps its handle; every other body
+  // reads canonically as before (same class ⇒ same lookup_ty chase ⇒
+  // same repr — byte-identical).
+  match obody {
+    NHole(_) => LConst(handle, LInt(0)),
+    _ => {
+      let canon = egraph_extract(handle)
+      let body = if canon == handle { obody } else { graph_node_body(canon) }
+      match body {
+        NExpr(e)     => lower_expr_body(e, canon, span),
+        NStmt(s)     => lower_stmt_as_expr(s, canon, span),
+        NPat(_)      => LConst(canon, LInt(0)),   // patterns don't lower as expr
+        NHole(_)     => LConst(canon, LInt(0))    // the class root is a hole-default mint; nothing authored to carry
+      }
+    }
   }
 }
 
@@ -5384,6 +5397,92 @@ fn reach_enqueue(refs, rbuf, rn, fbuf, fcount) = {
     }
   }
 }
+
+// The surviving-hole census over the REACHABLE emitted tree — the executable
+// gate's one read (pipeline.mn executable_gate). Survival IS value-position
+// by construction: a call-arg hole became a partial param (the fork), a
+// pipe-stage hole was spliced over (lower_pipe_complete), so an authored
+// NHole still riding an LConst in the tree is exactly the hole the
+// executable cannot carry (SYNTAX §«Partial application» — productive,
+// never executable). One pass, O(1) per node (authored_hole is one graph
+// read); the arm set mirrors singleton_hnames_expr — the two walk in
+// lockstep with LowExpr.
+// The gate's hole classifier reads the WEAVE span (parse_span_of) — the
+// parse truth no unification overwrites: a body/let-init hole unifies with
+// its binder's fresh var, the class root becomes that unlocated mint, and
+// the reason-flavored caret collapses to span_zero (the miss that let
+// `fn main() = ??` slip the gate). The compile tree is a SINGLE parse
+// generation, so the session-weave multiplicity that forces the cursor's
+// authored_hole onto the caret test (cursor.mn) cannot occur here; the two
+// reads re-unify under Hβ.cursor.session-weave-epoch-scope.
+fn executable_hole(handle) with GraphRead + !Mutate = match graph_node_body(handle) {
+  NHole(id) => id != 0 && !span_eq(parse_span_of(handle), span_zero()),
+  _         => false
+}
+
+fn collect_value_holes_list(stmts, acc) = {
+  if len(stmts) == 0 { acc }
+  else { collect_value_holes_list(drop_last(stmts), collect_value_holes_expr(last(stmts), acc)) }
+}
+
+fn collect_value_holes_expr(expr, acc) = match expr {
+  LConst(h, _)              => if executable_hole(h) { [h] ++ acc } else { acc },
+  LHandleWith(_h, b, hn, _hname, inits, _an, evs) =>
+    collect_value_holes_list(evs,
+      collect_value_holes_list(inits,
+        collect_value_holes_expr(hn, collect_value_holes_expr(b, acc)))),
+  LLet(_h, _n, inner)       => collect_value_holes_expr(inner, acc),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+    collect_value_holes_list(ev, collect_value_holes_list(caps, collect_value_holes_list(body, acc))),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
+    collect_value_holes_list(ev, collect_value_holes_list(caps, collect_value_holes_list(body, acc))),
+  LYield(_h, _op, args, k)  => collect_value_holes_expr(k, collect_value_holes_list(args, acc)),
+  LKExtend(_h, k)           => collect_value_holes_expr(k, acc),
+  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_value_holes_list(body, acc),
+  LBlock(_h, stmts)         => collect_value_holes_list(stmts, acc),
+  LIf(_h, c, t, e)          =>
+    collect_value_holes_list(e, collect_value_holes_list(t, collect_value_holes_expr(c, acc))),
+  LBinOp(_h, _op, lx, r)    => collect_value_holes_expr(r, collect_value_holes_expr(lx, acc)),
+  LUnaryOp(_h, _op, x)      => collect_value_holes_expr(x, acc),
+  LCall(_h, f, args)        => collect_value_holes_list(args, collect_value_holes_expr(f, acc)),
+  LTailCall(_h, f, args)    => collect_value_holes_list(args, collect_value_holes_expr(f, acc)),
+  LReturn(_h, x)            => collect_value_holes_expr(x, acc),
+  LMakeList(_h, elems)      => collect_value_holes_list(elems, acc),
+  LMakeTuple(_h, elems)     => collect_value_holes_list(elems, acc),
+  LSimdLanes(_h, lanes)     => collect_value_holes_list(lanes, acc),
+  LMakeRecord(_h, fs)       => collect_value_holes_list(fs, acc),
+  LMakeVariant(_h, _t, fs)  => collect_value_holes_list(fs, acc),
+  LMatch(_h, s, arms)       => collect_value_holes_arms(arms, collect_value_holes_expr(s, acc)),
+  LSuspend(_h, _o, f, args, ev, _) =>
+    collect_value_holes_list(ev, collect_value_holes_list(args, collect_value_holes_expr(f, acc))),
+  LFeedback(_h, b, s)       => collect_value_holes_expr(s, collect_value_holes_expr(b, acc)),
+  LPerform(_h, _n, args, _) => collect_value_holes_list(args, acc),
+  LWasiCall(_h, _n, args)   => collect_value_holes_list(args, acc),
+  LEvPerform(_h, _n, _e, _s, a) => collect_value_holes_list(a, acc),
+  LEvRef(_h, _e)            => acc,
+  LEvEntry(_, ev)           => collect_value_holes_expr(ev, acc),
+  LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _)   => acc,
+  LFieldLoad(_h, rec, _off) => collect_value_holes_expr(rec, acc),
+  LConvert(_h, _, operand)  => collect_value_holes_expr(operand, acc),
+  LStateSlotStore(_h, _o, v, _) => collect_value_holes_expr(v, acc),
+  LFnRef(_h, _n, ev)        => collect_value_holes_list(ev, acc),
+  LLocal(_, _)              => acc,
+  LFeedbackPrior(_)         => acc,
+  LGlobal(_, _)             => acc,
+  LUpval(_, _)              => acc,
+}
+
+fn collect_value_holes_arms(arms, acc) = {
+  if len(arms) == 0 { acc }
+  else {
+    let (_, body) = last(arms)
+    collect_value_holes_arms(drop_last(arms), collect_value_holes_expr(body, acc))
+  }
+}
+
+fn collect_value_holes_decls(lowered) =
+  collect_value_holes_list(lowered, [])
 
 fn reachable_from_main(lowered) = {
   let has_main = any((d) => reach_decl_name(d) == "main", lowered)

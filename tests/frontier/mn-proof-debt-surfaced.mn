@@ -1,0 +1,17 @@
+// `x` is not statically known to satisfy Positive, so the construction
+// leaves honest verification debt — the sound-incomplete NORMAL state
+// (PLAN §0: undecidable residue accrues visibly, never assume-true, and
+// never a blanket refusal: the wheel's own self-compile carries
+// structurally undecidable obligations). Compile must SURFACE the
+// V_Pending projection on stderr, exit 0, and emit the module. The
+// runtime value here even satisfies the predicate (unchecked(1)) —
+// refusing it would refuse a correct program.
+
+type Positive = Int where 0 < self
+
+fn unchecked(x) -> Positive = {
+  let claimed: Positive = x
+  claimed
+}
+
+fn main() = unchecked(1)

@@ -106,14 +106,45 @@ expect_executable() {
   fi
 }
 
+# Honest verification debt SURFACES and compiles — the sound-incomplete
+# choice (PLAN §0/§4: undecidable residue accrues visibly, never assume-true,
+# never a blanket refusal: the wheel's own self-compile carries structurally
+# undecidable obligations, so refuse-on-pending would refuse the medium).
+# Contract: exit 0, WAT emitted, the V_Pending projection on stderr.
+expect_surfaced() {
+  local stem="$1" fixture="$2" diagnostic="$3"
+  local wat="$dir/$stem.wat" err="$dir/$stem.err" rc
+
+  wt_run "$compiler" < "$fixture" > "$wat" 2> "$err"
+  rc=$?
+
+  if [ "$rc" -eq 0 ]; then
+    pass "$stem compiled (exit=0 — honest debt is not a refusal)"
+  else
+    red "$stem refused (exit=$rc)"
+  fi
+
+  if [ -s "$wat" ]; then
+    pass "$stem emitted a module"
+  else
+    red "$stem emitted no WAT"
+  fi
+
+  if grep -Eq "$diagnostic" "$err"; then
+    pass "$stem surfaced $diagnostic"
+  else
+    red "$stem lost $diagnostic (see $err)"
+  fi
+}
+
 echo "proof-exactness: compiler=$label artifact=$compiler"
 expect_refusal \
   unresolved-hole \
   "$ROOT/tests/frontier/mn-hole-executable-refusal.mn" \
   'E_UnresolvedHole'
-expect_refusal \
+expect_surfaced \
   proof-debt \
-  "$ROOT/tests/frontier/mn-proof-debt-executable-refusal.mn" \
+  "$ROOT/tests/frontier/mn-proof-debt-surfaced.mn" \
   'V_?Pending'
 expect_executable \
   partial-hole \

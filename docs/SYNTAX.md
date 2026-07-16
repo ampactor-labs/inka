@@ -275,14 +275,22 @@ The pipe's type rule (§«`|>` — converge») requires `right : A -> B` — a p
 **A hole is productive, never executable.** A bare value-position `??` (no
 parameter product to suspend into) admits check/edit projection — the graph
 types it, the cursor proposes into it — but it is NOT an executable value:
-compiling an executable whose reachable graph still contains an unresolved
-value hole is a REFUSAL (`E_UnresolvedHole`, nonzero exit, no emitted module).
+compiling an executable whose reachable emitted tree still carries an
+authored value-position hole is a REFUSAL (`E_UnresolvedHole` at the
+authored span, nonzero exit, zero WAT bytes — the gate runs between
+reachability and emit, so a hole in pruned dead code never over-refuses).
 A `??` inside a parameter product stays executable — it is the suspension
-awaiting its field (`add3(10, ??, 30)` is a value). The same refusal law
-covers proof debt: an executable with undischarged `V_Pending` obligations
-refuses at the compile boundary (§0's "nothing executes unproven" made
-mechanical). tools/proof-exactness-gate.sh is the executable contract; the
-refusal transaction is lathe-lag until it lands.
+awaiting its field (`add3(10, ??, 30)` is a value that runs). Proof debt is
+the OTHER law: an executable with undischarged `V_Pending` obligations
+SURFACES them (one ledger projection on stderr) and compiles — the
+sound-incomplete choice (`PLAN.md §0`): undecidable residue accrues
+visibly, never assume-true, and never a blanket refusal, because the
+wheel's own self-compile carries structurally undecidable obligations and
+refusing on pending would refuse the medium itself. Decidable-FALSE still
+refuses at the claim site (`E_RefinementRejected`).
+tools/proof-exactness-gate.sh is the executable contract for all three
+legs (hole refuses / debt surfaces / suspension runs), green through the
+pinned boot.
 
 ### The Stage Law — signatures serve the pipe
 
@@ -1973,7 +1981,7 @@ un-normalized source the formatter has not yet touched).
 | `E_ResumeOutsideArm`  | `resume` outside a handler-arm body           | `Unspecified`        | move the resume into an arm; the continuation only exists there |
 | `E_ResumeWorldMismatch` | two continuations (`TCont(R, S, discipline, world)`) unify with incompatible resume DISCIPLINES — OneShot and MultiShot are distinct representations (stack frame vs heap record), so the mismatch is hard; `Either` unifies with either. The WORLD half is the row unification in the same TCont arm (`!E` lifted to the TIME axis, §4③); its dedicated runtime raise (`E_ResumeWorldMismatchWorld`) is declared but not yet wired — lathe-lag, band B | `MaybeIncorrect` | align the handler arms' resume cardinality; for a world clash, re-install the absorbing handler before the resume OR widen the continuation's world |
 | `E_ConcatTypeMismatch` | `++` operands' element types fail to unify (e.g. `[Int] ++ [Bool]`) | `MaybeIncorrect` | unify the element types |
-| `E_UnresolvedHole`    | compiling an EXECUTABLE whose reachable graph holds a bare value-position `??` (§«Partial application» — a hole is productive for check/edit, never an executable value; a parameter-product `??` is an executable suspension and does not trigger this). Lathe-lag: the refusal transaction is the proof-exactness gate's contract, not yet raised | `HasPlaceholders` | fill the hole (accept a Synth survivor) or suspend it into a parameter product |
+| `E_UnresolvedHole`    | compiling an EXECUTABLE whose reachable emitted tree carries an authored value-position `??` (§«Partial application» — a hole is productive for check/edit, never an executable value; a parameter-product `??` is an executable suspension and runs). Raised by the executable gate between reachability and emit: nonzero exit, zero WAT bytes, the authored weave span on the diagnostic | `HasPlaceholders` | fill the hole (accept a Synth survivor) or suspend it into a parameter product |
 
 ### Gradient narration (teaching surfaces)
 

@@ -1331,6 +1331,10 @@ type DiagKind
   | ERegionEscape(String, Span)
   | EMissingModule(String, String, Span)         // module name, expected path
   | EUnresolvedType(Int, Int, Span)              // unresolved handle, epoch (lower-time NFree)
+  | EUnresolvedHole(Int, Span)                   // authored value-position hole surviving
+                                                 // into the reachable executable (SYNTAX
+                                                 // §«Partial application» — productive,
+                                                 // never executable)
   | EReplayExhausted(Span)                        // clock-replay trace ran out
   | EResumeWorldMismatchWorld(Int, Int, Span)    // captured vs live world-tag (persist)
 
@@ -1392,6 +1396,7 @@ fn diag_span(d) with Pure = match d {
   ERegionEscape(_, s) => s,
   EMissingModule(_, _, s) => s,
   EUnresolvedType(_, _, s) => s,
+  EUnresolvedHole(_, s) => s,
   EReplayExhausted(s) => s,
   EResumeWorldMismatchWorld(_, _, s) => s
 }
@@ -1442,6 +1447,7 @@ fn diag_source(d) with Pure = match d {
   ERegionEscape(_, _) => "region",
   EMissingModule(_, _, _) => "driver",
   EUnresolvedType(_, _, _) => "lower",
+  EUnresolvedHole(_, _) => "verify",
   EReplayExhausted(_) => "clock",
   EResumeWorldMismatchWorld(_, _, _) => "persist"
 }
@@ -1492,6 +1498,7 @@ fn diag_code(d) with Pure = match d {
   ERegionEscape(_, _) => "E_RegionEscape",
   EMissingModule(_, _, _) => "E_MissingModule",
   EUnresolvedType(_, _, _) => "E_UnresolvedType",
+  EUnresolvedHole(_, _) => "E_UnresolvedHole",
   EReplayExhausted(_) => "E_ReplayExhausted",
   EResumeWorldMismatchWorld(_, _, _) => "E_ResumeWorldMismatch"
 }
@@ -1531,6 +1538,7 @@ fn diag_applicability(d) with Pure = match d {
   WRedundantWhere(_) => MachineApplicable,
   TOverDeclared(_, _, _, _) => MachineApplicable,
   EPatternInexhaustive(_, _, _) => HasPlaceholders,
+  EUnresolvedHole(_, _) => HasPlaceholders,
   ERefinementRejected(_, _) => Unspecified,
   EVerifyUnencodable(_) => Unspecified,
   ETypeMismatch(_, _, _) => Unspecified,
@@ -1602,6 +1610,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
   ERegionEscape(detail, _) => detail,
   EMissingModule(name, path, _) => "module source not found: {name} (expected at {path})",
   EUnresolvedType(h, epoch, _) => "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",
+  EUnresolvedHole(h, _) => "unresolved value hole (handle {int_to_str(h)}) — fill it (accept a proven survivor) or suspend it into a parameter product",
   EReplayExhausted(_) => "clock replay trace exhausted",
   EResumeWorldMismatchWorld(captured, live, _) => "continuation frozen under world {int_to_str(captured)} cannot resume under world {int_to_str(live)}"
 }

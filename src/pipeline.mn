@@ -61,7 +61,7 @@ fn compile(entry_module) = {
     // the entry's already-typed AST — compile lowers that live graph, no
     // second fs_read / frontend / infer_program (Carried-Truth: the entry
     // is proven once and read live, never re-derived).
-    entry_module |> driver_check_entry |> saturate_pass |> lower_program |> reachable_from_main |> emit_module
+    entry_module |> driver_check_entry |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module
   }
     ~> wat_stdout
     ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache
@@ -96,8 +96,51 @@ fn compile(entry_module) = {
 // mentl2 reads stdin (the wheel input) → emits mentl3.wat. Both passes
 // produce byte-identical output when the wheel-source emit is
 // deterministic AND substrate-aligned across seed + wheel.
+// THE EXECUTABLE GATE (SYNTAX §«Partial application» — a hole is productive,
+// never executable; §0's "nothing executes unproven" at its honest scope).
+// Runs BETWEEN reachability and emit — wat_stdout streams every emit
+// immediately, so the refusal must precede the first one; refusing here
+// leaves stdout with ZERO WAT bytes. Two reads, one law each:
+//   HOLES REFUSE. An authored value-position hole surviving in the
+//   reachable tree (collect_value_holes_decls — call-arg holes became
+//   partial params, pipe holes were spliced, so survival IS value-position;
+//   a hole in pruned dead code never reaches this walk) reports
+//   E_UnresolvedHole at its authored span and the compile exits 1 —
+//   diagnostics on stderr, no module. Typed absence is not a value.
+//   HONEST DEBT SURFACES — and compiles. V_Pending is the sound-incomplete
+//   NORMAL state (§4/§5: undecidable residue accrues, never assume-true);
+//   the wheel's own self-compile carries obligations that are structurally
+//   undecidable without the SMT handler swap, so refusing on pending would
+//   refuse the medium itself (the fleet's measured refutation of the
+//   blanket form). The ledger projects one summary diagnostic; the
+//   per-entry projections stay query/edit surfaces.
+// `check` never routes here — the productive surfaces admit holes; only an
+// EXECUTABLE refuses to exist around one.
+fn executable_gate(lowered) = {
+  report_verify_debt(verify_debt())   // drift-audit: ignore — sequenced effectful ledger read, projected before emit
+  let holes = collect_value_holes_decls(lowered)
+  if len(holes) == 0 { lowered }
+  else {
+    report_holes(holes, 0)
+    proc_exit(1)
+    // proc_exit never returns (the emit appends unreachable after it);
+    // the tail value only closes the type of the branch.
+    lowered
+  }
+}
+
+fn report_holes(holes, i) =
+  if i >= len(holes) { () }
+  else {
+    let h = list_index(holes, i)
+    // The weave span — the parse truth authored_hole itself proved; the
+    // reason-chain span is clobbered by the binder's unification.
+    report(EUnresolvedHole(h, parse_span_of(h)))
+    report_holes(holes, i + 1)
+  }
+
 fn compile_stdin() = {
-  read_stdin() |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main |> emit_module
+  read_stdin() |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module
 }
     ~> wat_stdout
     ~> wasi_filesystem
@@ -140,6 +183,7 @@ fn compile_source(source) = {
     |> infer_program
     |> lower_program
     |> reachable_from_main
+    |> executable_gate
     |> emit_module
     ~> wat_stdout
     ~> string_table

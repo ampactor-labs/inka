@@ -336,12 +336,17 @@ fn infer_stmt(ref node) = {
 
     NStmt(ImportStmt(_)) => (),
 
-    NStmt(RefineStmt(_, _, pred)) =>
+    NStmt(RefineStmt(_, _, _)) =>
       // Registered at pre_register_stmt (the one home — TAlias(name,
       // TRefined(base, pred)), so X and its base unify transparently and
-      // the authored name travels for Reason chains). Here only the
-      // predicate's Verify obligation discharges.
-      verify(span, pred, Refinement(pred, PTrue)),
+      // the authored name travels for Reason chains). The declaration is a
+      // SCHEMA — there is no value for `self` to bind, so it accrues NO
+      // obligation here (the old decl-site verify pended one undecidable
+      // entry per refined type, permanently — self unbound). Discharge
+      // lives at CONSTRUCTION sites: apply_refinement_constraint substitutes
+      // the live value node for self (value-proof R2) and decides or pends
+      // against a value that exists.
+      (),
 
     // Transparent alias `type X = T`: registered at pre_register_stmt.
     // No predicate, no Verify — the difference from RefineStmt is exactly
@@ -1095,11 +1100,18 @@ fn infer_call_partial(args, params, pret, prow, handle, span: ValidSpan, cname) 
 
 fn unify_args_positionally(args, params, i, span: ValidSpan) =
   if i < len(args) && i < len(params) {
-    let N(_, _, ah) = list_index(args, i)
+    let N(b, _, ah) = list_index(args, i)
     let pty_h = mint(Inferred("declared param at partial call"))
     graph_bind(pty_h, param_ty(list_index(params, i)),
       Located(span, Inferred("declaration-order param")))
     unify(ah, pty_h, span, Inferred("argument fills its declaration-order param"))
+    // A SUPPLIED slot is a refinement construction site like any call arg
+    // (discharge_arg_refinements' partial sibling); a hole has no value
+    // yet — its obligation lands when the suspension is filled.
+    match b {
+      NHole(_) => (),
+      _        => apply_refinement_constraint(param_ty(list_index(params, i)), ah, span)
+    }
     unify_args_positionally(args, params, i + 1, span)
   }
 
@@ -1160,8 +1172,29 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
         _ => ()
       }
   }
+  // The call boundary is a refinement CONSTRUCTION site: each declared
+  // refined param discharges against ITS argument's live node (subst_self
+  // — value-proof R2's third site, beside the let annotation and the fn
+  // return). This is the one value-bearing home for the obligation;
+  // unify_types' wrapper arm has no value node in scope and accrues
+  // nothing (its old raw-pred verify pended one forever-undecidable entry
+  // per refined-param unification — noise the debt surfacing exposed).
+  // The partial path's supplied-arg discharge is the same law at
+  // unify_args_positionally.
+  match graph_chase(fh) {
+    GNode(NBound(TFun(dps, _, _)), _) =>
+      discharge_arg_refinements(dps, arg_handles, 0, span),
+    _ => ()
+  }
   stage_continuation_boundary(cname, handle)
 }
+
+fn discharge_arg_refinements(dps, arg_handles, i, span: ValidSpan) =
+  if i >= len(dps) || i >= len(arg_handles) { () }
+  else {
+    apply_refinement_constraint(param_ty(list_index(dps, i)), list_index(arg_handles, i), span)
+    discharge_arg_refinements(dps, arg_handles, i + 1, span)
+  }
 
 // EVERY application result is a possible suspension boundary — not only an
 // effect op's perform. k1 reifies the remainder AT the perform; k2 composes a
@@ -1758,10 +1791,15 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
   if right_is_wrapper && !left_is_wrapper_or_var {
     match b {
       TAlias(_, inner_b) => unify_types(a, inner_b, span, reason),
-      TRefined(base_b, pred_b) => {
-        unify_types(a, base_b, span, reason)
-        verify(span, pred_b, Refinement(pred_b, PTrue))
-      },
+      // A concrete type meets the refined wrapper: unify against the BASE
+      // only. The refinement OBLIGATION is never accrued here — this arm
+      // has no value node, so its old verify pended the raw predicate with
+      // `self` unsubstituted, forever undecidable, one noise entry per
+      // refined-param unification. The value-bearing homes own the
+      // discharge: the let annotation and the fn return
+      // (apply_refinement_constraint via subst_self) and the call boundary
+      // (discharge_arg_refinements — R2's third site).
+      TRefined(base_b, _) => unify_types(a, base_b, span, reason),
       _ => ()
     }
   } else {
@@ -1865,16 +1903,19 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
         _       => type_mismatch(a, b, span, reason)
       },
 
-    TRefined(base_a, pred_a) =>
+    // Refined types unify by their BASES; no arm here accrues an
+    // obligation — unification has no value node, so a raw-pred verify
+    // pends `self` unsubstituted forever (the noise class the debt
+    // surfacing exposed). The value-bearing homes own the discharge:
+    // the let annotation, the fn return, and the call boundary
+    // (apply_refinement_constraint / discharge_arg_refinements —
+    // subst_self against the live node). Refined-vs-refined predicate
+    // IMPLICATION is the SMT band's question (Hβ.verify.smt-handler-swap),
+    // never a conjunction pended at the unify.
+    TRefined(base_a, _) =>
       match b {
-        TRefined(base_b, pred_b) => {
-          unify_types(base_a, base_b, span, reason)
-          verify(span, PAnd(pred_a, pred_b), Refinement(pred_a, pred_b))
-        },
-        _ => {
-          unify_types(base_a, b, span, reason)
-          verify(span, pred_a, Refinement(pred_a, PTrue))
-        }
+        TRefined(base_b, _) => unify_types(base_a, base_b, span, reason),
+        _                   => unify_types(base_a, b, span, reason)
       },
 
     TCont(ria, saa, da, wa) =>
@@ -1914,10 +1955,7 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
       match b {
         TVar(_) => unify_types(b, a, span, reason),
         TAlias(_, inner_b) => unify_types(a, inner_b, span, reason),
-        TRefined(base_b, pred_b) => {
-          unify_types(a, base_b, span, reason)
-          verify(span, pred_b, Refinement(pred_b, PTrue))
-        },
+        TRefined(base_b, _) => unify_types(a, base_b, span, reason),
         _       => type_mismatch(a, b, span, reason)
       }
   }
@@ -3211,7 +3249,16 @@ fn apply_let_annotation(ann_ty, value_handle, span: ValidSpan) = {
 // the named follow-up Hβ.infer.let-annotation-base-unify — this increment
 // discharges only the refinement, keeping the change purely additive).
 fn apply_refinement_constraint(ty, value_handle, span: ValidSpan) = match ty {
-  TAlias(_, inner)     => apply_refinement_constraint(inner, value_handle, span),
+  TAlias(aname, inner) =>
+    // TYPED IDENTITY (refinement_admits' layering, at the accrual): a value
+    // whose inferred type IS the same refined alias carries that alias's
+    // obligation at its OWN first-claim site (the let / ret / arg that
+    // minted it) — discharged, pending, or refuted THERE. Accruing again
+    // per consumer echoes one claim N times up the chain (a fixture with
+    // one honest claim surfaced five pendings); the ledger owns each proof
+    // question at one home, so the echo accrues nothing.
+    if inferred_alias_name(value_handle) == aname { () }
+    else { apply_refinement_constraint(inner, value_handle, span) },
   TRefined(_, pred)    => verify(span, subst_self(pred, value_handle), Refinement(pred, PTrue)),
   _                    => ()
 }

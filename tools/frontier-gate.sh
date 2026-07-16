@@ -232,6 +232,23 @@ compile_fixture() {
   fi
 }
 
+# A hole-bearing fixture's input form is PRODUCTIVE, never executable
+# (SYNTAX §«Partial application»): the compile verb must REFUSE it honestly —
+# E_UnresolvedHole, nonzero exit, ZERO WAT bytes. The edit workflow then
+# fills the hole and the patched source compiles clean.
+compile_hole_fixture() {
+  local compiler="$1" label="$2" source="$3" dir="$4"
+  local wat="$dir/$label.input.wat" err="$dir/$label.input.err" rc
+
+  wt_run "$compiler" < "$source" > "$wat" 2> "$err"
+  rc=$?
+  if [ "$rc" -ne 0 ] && [ ! -s "$wat" ] && grep -q 'E_UnresolvedHole' "$err"; then
+    pass "$label input refuses honestly (E_UnresolvedHole, nonzero, no WAT)"
+  else
+    fail "$label input did not refuse (exit=$rc wat=$(wc -c < "$wat")B; see $err)"
+  fi
+}
+
 edit_fixture() {
   local compiler="$1" dir="$2" stem="$3" fixture="$4"
   EDIT_SCRATCH="$dir/$stem.mn"
@@ -280,7 +297,7 @@ run_positive_workflow() {
   local compiler="$1" dir="$2" patched=0
   local fixture="$ROOT/tests/frontier/mn-constrained-hole-workflow.mn"
 
-  compile_fixture "$compiler" positive-hole "$fixture" "$dir"
+  compile_hole_fixture "$compiler" positive-hole "$fixture" "$dir"
   edit_fixture "$compiler" "$dir" positive-hole "$fixture"
   assert_edit_window positive-hole
 
@@ -318,7 +335,7 @@ run_capability_workflow() {
   local compiler="$1" dir="$2" patched=0 rejected
   local fixture="$ROOT/tests/frontier/mn-capability-hole-workflow.mn"
 
-  compile_fixture "$compiler" capability-hole "$fixture" "$dir"
+  compile_hole_fixture "$compiler" capability-hole "$fixture" "$dir"
   edit_fixture "$compiler" "$dir" capability-hole "$fixture"
   assert_edit_window capability-hole
 
@@ -354,7 +371,7 @@ run_capability_tie_workflow() {
   local compiler="$1" dir="$2"
   local fixture="$ROOT/tests/frontier/mn-capability-tie.mn"
 
-  compile_fixture "$compiler" capability-tie "$fixture" "$dir"
+  compile_hole_fixture "$compiler" capability-tie "$fixture" "$dir"
   edit_fixture "$compiler" "$dir" capability-tie "$fixture"
   assert_edit_window capability-tie
 

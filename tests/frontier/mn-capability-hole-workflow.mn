@@ -10,10 +10,14 @@ effect Network {
   ping()
 }
 
-fn pure_seven() -> Seven with Pure = {
-  let exact: Seven = 7
-  exact
-}
+// The const body keeps the WHOLE claim chain decidable (0 < the ledger):
+// `7` discharges the ret refinement by decision, and every caller's ret
+// admits by typed identity through the call's alias. A let-indirected body
+// (`let exact: Seven = 7; exact`) erases the alias at the unify's
+// wrapper-peel, leaving one honest-but-noisy pend at the ret edge —
+// alias-preserving unification is the named peer
+// (Hβ.infer.alias-preserving-unify).
+fn pure_seven() -> Seven with Pure = 7
 
 fn direct_network() -> Seven with Network = {
   ping()

@@ -250,6 +250,17 @@ fn hole_gate(handle) with GraphRead + !Mutate =
 // hole nodes (driver scaffolding) are not caret targets — a position IS
 // a span, and there is nothing to render or patch at 0:0. The weave's
 // absent-default NHole(0) is likewise never a position.
+// The CARET test doubles as the live-generation filter: an edit session's
+// transport parses the module per projection pass, each pass minting its
+// own NHole at the SAME weave span (measured: three nodes, ids 17/41/65,
+// one span), and only the pass the live inference walked carries a Located
+// class root — so the reason-flavored span keeps the argmax off stale
+// generations' holes. The cost: a hole whose class root is an unlocated
+// mint (a bare `fn f() = ??` body unified with its fresh ret var) is not a
+// cursor position yet. The executable gate reads the WEAVE instead
+// (executable_hole, lower.mn) — its tree walk is single-generation by
+// construction. The two reads re-unify when session reads scope to the
+// live parse generation (Hβ.cursor.session-weave-epoch-scope).
 fn authored_hole(handle) with GraphRead + !Mutate = match graph_node_body(handle) {
   NHole(id) => id != 0 && !span_eq(caret_span_of_handle(handle), span_zero()),
   _         => false

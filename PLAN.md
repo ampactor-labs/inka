@@ -404,9 +404,10 @@ false-positive, 625 tolerated diagnostics in the wheel self-compile, dissolves w
 band-D typed containers) and `Hβ.effects.parameterized-negation-instance`
 (instance-precise `!Sample(44100)` admitting `Sample(48000)`; bare `!E` by-name is
 sound and conservative).
-**(b) the TIME axis** — `TCont(Ty, ResumeDiscipline, EffRow)` carries the
+**(b) the TIME axis** — `TCont(R, S, ResumeDiscipline, EffRow)` carries the
 effect-WORLD since STEP 5 (27edc30): the type CAN now detect a cross-world
-resume; band B's open work is ENFORCEMENT (the world is inert on OneShot; the
+resume while preserving the exact resume-input `R` and remainder-answer `S`;
+band B's open work is ENFORCEMENT (the world is inert on OneShot; the
 `E_ResumeWorldMismatch` value gate and capture-at-reify remain). **The graph is the ROUTE, never the replacement:** Mentl's
 first-class unified-evidence substrate — dispatch decoupled from the type-row
 (413bdc2) — is a degree of freedom Koka/Effekt/the modal calculus lack; it lets
@@ -606,8 +607,9 @@ representation-host**, ONE contiguous handle-addressed shape:
   (which renders an arbitrary USER value). They are a different fold over a fixed
   ADT for a human reader, kept; never retired as a fold-copy.
 
-**THE BINDING KEYSTONE — `TCont(Ty, ResumeDiscipline, EffRow)` — LANDED
-(27edc30, STEP 5).** Carrying the **effect-WORLD** on the continuation lifts
+**THE BINDING KEYSTONE — `TCont(R, S, ResumeDiscipline, EffRow)` — LANDED
+IN TWO STRUCTURAL STEPS (27edc30 world index; executable-boundary R/S split).**
+Carrying the **effect-WORLD** on the continuation lifts
 `!E` to TIME (the modal frontier §4③ lands HERE): a persisted `k` resumed under
 a changed handler-set is `E_ResumeWorldMismatch` — a compile-time error, not a
 3am production corruption. The one arity change (the coordinated edit across
@@ -1990,12 +1992,12 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > m2 → f64.mul + assembles; then verify.sh + march-gate --micros; then march.
 >
 > **REFUTED — proven-singleton dispatch gated on install (the prior "Approach B").**
-> The artifact killed it: `fail` (Abort) is performed in LIVE code — `unwrap`
-> (prelude.mn:335) calls `fail`, and unwrap is pervasive. So `abort_exit`
-> (io.mn:83) is a LEGITIMATE uninstalled DEFAULT handler (the last-resort
+> The artifact killed it: `fail` (Fail) is performed in LIVE code — `unwrap`
+> (prelude.mn) calls `fail`, and unwrap is pervasive. So `fail_exit`
+> (io.mn) is a LEGITIMATE uninstalled DEFAULT handler (the last-resort
 > print+exit), NEVER `~>`-installed yet correctly singleton-dispatched. Gating
-> singleton dispatch on `~>`-install would drop abort_exit → break unwrap
-> program-wide. The proven-singleton property is NOT "installed via `~>`"; abort_exit
+> singleton dispatch on `~>`-install would drop fail_exit → break unwrap
+> program-wide. The proven-singleton property is NOT "installed via `~>`"; fail_exit
 > and cursor_default are both uninstalled stateless handlers, and the distinction
 > (one live, one felt-dead) is reachability of the PERFORM site, not the install.
 > So dead-cursor emission is a reachability question, not a dispatch-gating one —
@@ -2642,8 +2644,9 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   multi-shot producer minting the dormant `LMakeContinuation`, the write-only
   `resume_kinds` ledger DELETED (7b72790); STEP 4 the `PDiverge|PCompose` →
   `PFanout` verb-collapse + the hardwired `inf_add_row(Thread)` DELETED, schedule
-  read live (600bc88); STEP 5 the binding keystone `TCont(Ty, ResumeDiscipline,
-  EffRow)` — the effect-WORLD on the continuation (`!E` lifted to TIME; the modal
+  read live (600bc88); STEP 5 the binding keystone, now
+  `TCont(R, S, ResumeDiscipline, EffRow)` — the exact resume-input and answer
+  types plus effect-WORLD on the continuation (`!E` lifted to TIME; the modal
   frontier §4③ landing here), all ~14 destructure sites + the seed's
   `$ty_make_tcont` + 6 classify/scheme/render seed-tests moved in lock-step
   (27edc30). The docs (SYNTAX §Type aliases `repr` pin, §`<|`/`><` the Schedule

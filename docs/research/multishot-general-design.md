@@ -395,7 +395,7 @@ M4's return-type CLASSIFIER is correct and stashed (stash@{0}
 "M4-wip-return-type-gate", src/infer.mn +47/-3): `arm_disc_of(grade, ret)`
 replaces `usage_to_disc`, gating the UZero branch on the op's return type read
 live from its EffectOpScheme's TFun (`scheme_ret_ty`). Census (fast static,
-brace-depth-aware) found EXACTLY three wheel UZero arms: `abort_exit.fail -> a`
+brace-depth-aware) found EXACTLY three wheel UZero arms: `fail_exit.fail -> a`
 (bare TVar, bottom), `catch_abort.abort -> !` (the never type, parses TUnit —
 types.mn:1571 documents it intentionally OneShot), and
 `synth_default.enumerate_inhabitants` (actually UMany via THE CUT's

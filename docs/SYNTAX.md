@@ -992,6 +992,12 @@ effect State {
 
 Each operation declares its parameter types and return type (if non-unit). **Resume cardinality is INFERRED at handler-decl time from each arm body** — never declared on the effect op. The infer pass counts resume call sites under control-flow ancestry; the inferred cardinality attaches to the op's `TCont` continuation type and drives lower's tier selection (Tier 1 direct call vs Tier 3 heap continuation). See `protocol_cursor_is_the_substrate.md` for the discipline.
 
+The graph type is `TCont(R, S, ResumeDiscipline, World)`: `R` is the value
+accepted by `resume`, `S` is the answer produced by the captured remainder,
+and `World` is the exact capability world frozen with that remainder. `R` and
+`S` are independent. A handler may resume a `Float` operation into a remainder
+whose answer is `Int`; neither representation may stand in for the other.
+
 ### Invoking effect operations
 
 An effect op is invoked as a **bare call** — the same surface as any
@@ -1933,7 +1939,7 @@ un-normalized source the formatter has not yet touched).
 | `E_NotAKeyword`       | user typed `for`/`while`/`loop`/`break`/`continue`/`return` | `MaybeIncorrect` | rewrite as verb form per substrate             |
 | `E_PatternAlternationBindingMismatch` | branches in `\|` bind different names or types | `MaybeIncorrect` | adjust patterns to bind same names with unifiable types |
 | `E_ResumeOutsideArm`  | `resume` outside a handler-arm body           | `Unspecified`        | move the resume into an arm; the continuation only exists there |
-| `E_ResumeWorldMismatch` | a continuation (`TCont(_, _, world)`) is resumed under an effect-WORLD that does not unify with the one it was frozen under (`!E` lifted to the TIME axis — a persisted/cross-context resume meeting a changed handler-set; `unify`'s TCont arm, §4③) | `MaybeIncorrect` | re-install the absorbing handler before the resume, OR widen the continuation's world |
+| `E_ResumeWorldMismatch` | a continuation (`TCont(R, S, discipline, world)`) is resumed under an effect-WORLD that does not unify with the one it was frozen under (`!E` lifted to the TIME axis — a persisted/cross-context resume meeting a changed handler-set; `unify`'s TCont arm, §4③) | `MaybeIncorrect` | re-install the absorbing handler before the resume, OR widen the continuation's world |
 | `E_ConcatTypeMismatch` | `++` operands' element types fail to unify (e.g. `[Int] ++ [Bool]`) | `MaybeIncorrect` | unify the element types |
 
 ### Gradient narration (teaching surfaces)

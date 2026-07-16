@@ -2322,6 +2322,19 @@ fn infer_unaryop(handle, op, ih, span: ValidSpan) = match op {
 
 // Pattern inference
 
+// A pattern's shape CONSTRAINS the scrutinee — it never overwrites it.
+// graph_bind on the scrutinee's own handle clobbered its proven type
+// (the fanout tuple's f64 elements re-bound to fresh free vars: the
+// writer stored at the proven widths, the pattern's reader floored to
+// words — the split-truth miscompile). Bind the pattern's shape onto a
+// fresh node and UNIFY, so proven element/payload types flow into the
+// binders and a shape mismatch is a diagnostic, never a silent retype.
+fn constrain_scrutinee(scrutinee_h, ty, span: ValidSpan, reason) = {
+  let pat_h = mint(reason)
+  graph_bind(pat_h, ty, Located(span, reason))
+  unify(scrutinee_h, pat_h, span, reason)   // drift-audit: ignore — the two sides of ONE unification edge (scrutinee node, pattern-shape node), not parallel arrays
+}
+
 fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
   PVar(name) =>
     env_extend(name, Forall([], TVar(handle)),
@@ -2337,7 +2350,7 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
       LVString(_) => TString,
       LVBool(_)   => TName("Bool", [])
     }
-    graph_bind(handle, ty, Located(span, Inferred("literal pattern")))
+    constrain_scrutinee(handle, ty, span, Inferred("literal pattern"))
   },
 
   PCon(name, sub_pats) =>
@@ -2371,14 +2384,10 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
         }
         match ty {
           TFun(params, ret_ty, _row) => {
-            graph_bind(handle, ret_ty,
-              Located(span, VarLookup(name, reason)))
+            constrain_scrutinee(handle, ret_ty, span, VarLookup(name, reason))
             bind_pcon_subpats(params, sub_pats, span, reason, name)
           },
-          _ => {
-            graph_bind(handle, ty,
-              Located(span, VarLookup(name, reason)))
-          }
+          _ => constrain_scrutinee(handle, ty, span, VarLookup(name, reason))
         }
       }
     },
@@ -2396,8 +2405,7 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
     let row_h = graph_fresh_row(Inferred("record pattern row"))
     let field_specs = build_pat_record_field_specs(flds, span)
     let pat_ty = mk_record_open(field_specs, row_h)
-    graph_bind(handle, pat_ty,
-      Located(span, Inferred("record pattern")))
+    constrain_scrutinee(handle, pat_ty, span, Inferred("record pattern"))
     infer_pat_record_subs(flds, field_specs, span)
   },
 
@@ -2513,17 +2521,17 @@ fn infer_pat_tuple(pats, parent_handle, span: ValidSpan) = {
   }, pats)
   // The scrutinee's proven element types flow into the bound vars, and
   // an arity mismatch is a unification failure at this edge — the exact
-  // bind the sibling infer_pat_list draws for lists.
-  graph_bind(parent_handle, TTuple(elem_tys),
-    Located(span, Inferred("tuple pattern")))
+  // constraint the sibling infer_pat_list draws for lists.
+  constrain_scrutinee(parent_handle, TTuple(elem_tys), span,
+    Inferred("tuple pattern"))
 }
 
 fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
   let elem_h = mint(Inferred("list pattern element"))
   each((p) => infer_pat(p, elem_h, span), pats)
   let list_ty = TList(TVar(elem_h))
-  graph_bind(parent_handle, list_ty,
-    Located(span, Inferred("list pattern")))
+  constrain_scrutinee(parent_handle, list_ty, span,
+    Inferred("list pattern"))
   match rest {
     None => (),
     Some(name) => {

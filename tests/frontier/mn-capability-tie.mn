@@ -1,0 +1,21 @@
+// Two proven survivors — the teaching tie-break (PLAN §5). pure_seven and
+// calm_seven both satisfy choose's !Network gate and Seven's refinement, so
+// the medium surfaces the tie and refuses to guess: the ?? stays authored.
+// Integer literal seeds omit 7, so the literal path contributes nothing.
+
+type Seven = Int where self == 7
+
+effect Network {
+  ping()
+}
+
+fn pure_seven() -> Seven with Pure = {
+  let exact: Seven = 7
+  exact
+}
+
+fn calm_seven() -> Seven with Pure = pure_seven()
+
+fn choose() -> Seven with !Network = ??
+
+fn main() = choose()

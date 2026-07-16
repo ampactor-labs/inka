@@ -347,6 +347,31 @@ run_capability_workflow() {
   check_and_execute "$compiler" "$dir" capability-hole 7 "$patched"
 }
 
+# Two proven survivors is the teaching TIE-BREAK (PLAN §5): the medium
+# surfaces both with their admission Reasons and refuses to guess — the
+# authored ?? survives the accepted edit action untouched.
+run_capability_tie_workflow() {
+  local compiler="$1" dir="$2"
+  local fixture="$ROOT/tests/frontier/mn-capability-tie.mn"
+
+  compile_fixture "$compiler" capability-tie "$fixture" "$dir"
+  edit_fixture "$compiler" "$dir" capability-tie "$fixture"
+  assert_edit_window capability-tie
+
+  if grep -Fq '2 candidate(s)' "$EDIT_OUT" && \
+      grep -Fq 'pure_seven' "$EDIT_OUT" && grep -Fq 'calm_seven' "$EDIT_OUT"; then
+    pass "capability-tie projection surfaced both proven survivors"
+  else
+    fail "capability-tie projection missing the two-survivor tie"
+  fi
+
+  if grep -Eq 'with !Network = \?\?([[:space:]]|$)' "$EDIT_SCRATCH"; then
+    pass "capability-tie refused to guess (authored ?? survives the accept)"
+  else
+    fail "capability-tie guessed between proven survivors (?? was replaced)"
+  fi
+}
+
 # Pin the inherited runtime debt to the checked boot compiler and current
 # runtime sources. A changed hash is an explicit baseline change, never an
 # automatically blessed shadow. Other compiler artifacts may remove entries
@@ -397,6 +422,7 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-scheduled-fanout-persist-float.mn" 60 persist "$dir"
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
+  run_capability_tie_workflow "$compiler" "$dir"
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

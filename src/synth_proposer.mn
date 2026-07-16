@@ -556,7 +556,7 @@ fn synth_param_loop(params, i, n, buf) with Pure = {
 // cache — read live by argmax, never a side-file.)
 
 fn cursor_session_with_full_phaseu(initial_caret)
-    with Surface + GraphRead + Cursor + Delta + Synth
+    with Surface + GraphRead + CursorRead + Delta + Synth
        + Interrogate + Teach + !Mutate = {
   cursor_session(initial_caret)
     ~> delta_default

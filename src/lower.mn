@@ -1715,10 +1715,17 @@ fn lookup_effect_op_names(eff_name) = {
       let (_, _, kind) = entry
       match kind {
         EffectDeclKind(op_names) => op_names,
-        _ => [eff_name]
+        // A non-effect entry under this name (a same-named TYPE shadowing the
+        // effect — the Cursor/Patch collision class, healed by the
+        // Graph/GraphRead naming convention; Sample still pairs by DSP
+        // doctrine). Fabricating [eff_name] here turned that shadowing into a
+        // wrong op list, a "" ename, and a silent keyed-tier fall-through that
+        // detonated as a runtime evidence OOB three layers away. No ops known
+        // is the honest answer.
+        _ => []
       }
     },
-    None => [eff_name]
+    None => []
   }
 }
 // Perform dispatch — the single decision point, lexical-install first.

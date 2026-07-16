@@ -21,7 +21,7 @@
 // Anchor 4 — build the wheel; never wrap the axle. This file extends
 // the wheel's gradient surface to its substrate-honest form.
 //
-// Per CLAUDE.md ⊕ + Cursor projection discipline: every line clears
+// Per CLAUDE.md ⊕ + CursorRead projection discipline: every line clears
 // the eight interrogations; no training-pattern drift; no "for now"
 // hedges; no flat yes/no questions about substrate that the graph
 // already encodes.
@@ -378,6 +378,6 @@ fn capabilities_unlocked_by_tightening(declared, body) with Pure = {
 // the other way. Both moves belong in the same continuous response curve.
 
 fn cursor_with_delta(initial_caret)
-    with Surface + GraphRead + Cursor + Delta + !Mutate = {
+    with Surface + GraphRead + CursorRead + Delta + !Mutate = {
   cursor_session(initial_caret) ~> delta_default
 }

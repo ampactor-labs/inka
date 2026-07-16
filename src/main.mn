@@ -242,9 +242,20 @@ fn edit_run(target_opt) = {
     Some(t) => t,
     None    => "main"  // default project entry
   }
+  // The session's final TransportState is a record pointer, not an exit
+  // code (main's result IS the process exit); the chain is a statement —
+  // its value drops — and a completed session exits 0.
   mentl_edit_session(entry_module)
     ~> patch_to_file
     ~> terminal_transport
+    // cursor_default innermost of the projection handlers: its arms fan the
+    // eight tentacles, performing Synth / Interrogate / Teach / Verify /
+    // Graph ops that bubble OUTWARD to the installs below. Without this
+    // install the Cursor ops (cursor_at / cursor_argmax / cursor_pinned)
+    // have no evidence on the session route — cursor_argmax is AMBIGUOUS
+    // (ic_fixpoint_handler carries an arm too), so the singleton tier
+    // cannot pick, and the first perform met the strict ev-scan miss.
+    ~> cursor_default
     ~> delta_default
     ~> synth_default
     ~> interrogate_default
@@ -252,8 +263,12 @@ fn edit_run(target_opt) = {
     ~> wasi_filesystem
     ~> verify_ledger
     ~> diagnostics_handler
+    // env before graph: env_handler's own arms read the graph (the same
+    // ordering serve_run already uses).
+    ~> env_handler
     ~> graph_handler
     ~> mutate_sink
+  0
 }
 
 fn mentl_edit_session(entry_module) = {

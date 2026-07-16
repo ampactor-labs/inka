@@ -515,7 +515,7 @@ fn all_eight_clear(report) with Pure = {
 // each kernel primitive).
 
 fn cursor_session_with_audit(initial_caret)
-    with Surface + GraphRead + Cursor + Interrogate + !Mutate = {
+    with Surface + GraphRead + CursorRead + Interrogate + !Mutate = {
   cursor_session(initial_caret) ~> interrogate_default
 }
 

@@ -70,7 +70,7 @@ import runtime/io
 
 effect Surface {
   /// Render the eight-aspect CursorView at the cursor's position.
-  /// Called whenever Cursor's argmax shifts (graph delta + caret
+  /// Called whenever CursorRead's argmax shifts (graph delta + caret
   /// change). Cadence is the transport's responsibility.
   surface_render(Cursor, CursorView) -> ()
 
@@ -146,7 +146,9 @@ fn transport_state_init(initial_caret) with Pure = {
 handler terminal_transport with state = transport_state_init(Caret(0, Inferred("term-init"))) {
 
   surface_handshake() => {
-    print_string("Mentl @ mentl teach — eight tentacles ready.\n")
+    // Verb-neutral: terminal_transport serves teach, query, AND edit —
+    // a handshake naming one verb lies on the other routes.
+    print_string("Mentl — eight tentacles ready.\n")
     resume()
   },
 
@@ -228,7 +230,7 @@ fn render_cursor_block(cursor, view) with GraphRead + !Mutate = {
 // `<~` verb un-named — the exact drift the prime directive forbids. The
 // state threads through `<~ accumulate`; cursor_step is one cycle.
 
-fn cursor_session(initial_caret) with Surface + GraphRead + Cursor + !Mutate = {
+fn cursor_session(initial_caret) with Surface + GraphRead + CursorRead + !Mutate = {
   surface_handshake()
   transport_state_init(initial_caret)
     |> cursor_step
@@ -239,9 +241,9 @@ fn cursor_session(initial_caret) with Surface + GraphRead + Cursor + !Mutate = {
 // read the human action, fold it into the next state. The `<~` closure
 // feeds this next state back as the cycle's input (no self-recursion —
 // the feedback verb carries the loop).
-fn cursor_step(state) with Surface + GraphRead + Cursor + !Mutate = {
+fn cursor_step(state) with Surface + GraphRead + CursorRead + !Mutate = {
   let TransportState(s) = state
-  // Compute Cursor: gradient argmax with caret bias.
+  // Compute the cursor: gradient argmax with caret bias.
   let cursor = cursor_argmax(s.caret)
   // Project the eight-aspect CursorView at the cursor's position.
   let view = cursor_at(span_of_cursor(cursor))
@@ -372,7 +374,7 @@ fn parse_action(line) with Pure =
 // how an Accept lands a suggestion into the source. One effect, one
 // handler (patch_to_file), composed in edit_run's chain.
 
-effect Patch {
+effect PatchWrite {
   patch_set_target(String) -> ()
   apply_patch_at_cursor(Span, String) -> ()
 }

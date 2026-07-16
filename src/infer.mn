@@ -206,8 +206,8 @@ fn pre_register_decls(stmts) = each(pre_register_stmt, stmts)
 fn pre_register_stmt(ref node) = {
   let N(body, span, handle) = node
   match body {
-    NStmt(FnStmt(name, params, _ret_ann, effs, _body_node)) =>
-      pre_register_fn_sig(name, params, declared_names_of(effs), handle, span),
+    NStmt(FnStmt(name, params, ret_ann, effs, _body_node)) =>
+      pre_register_fn_sig(name, params, declared_names_of(effs), ret_ann, handle, span),
     NStmt(TypeDefStmt(name, variants)) =>
       register_type_constructors(name, variants),
     NStmt(EffectDeclStmt(name, ops)) =>
@@ -244,9 +244,23 @@ fn declared_names_of(effs) =
     }
   }, effs)
 
-fn pre_register_fn_sig(name, params, declared_names, handle, span: ValidSpan) = {
+fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: ValidSpan) = {
   let param_handles = mint_param_placeholders(params, name)
   let ret_handle = mint(FnReturn(name, Inferred("return of '{name}'"))) // drift-audit: ignore — Reason string, not a control keyword
+  // An authored `-> RetTy` is a CONSTRAINT the pre-scheme must CARRY, not
+  // discard (the parse_let-annotation twin at the return position). Binding
+  // it here grounds every FORWARD callsite: an unannotated forward ref
+  // instantiates a quantified fresh return that its later real inference
+  // never reaches, so a use with no local grounding floors to word width —
+  // caret_proximity_weight's f64 result met an i32 definition, the indirect
+  // call type mismatch the felt loop was the first to execute. Absent
+  // annotation ⇒ the fresh var, inferred as before.
+  let N(ret_ann_body, _, _) = ret_ann
+  match ret_ann_body {
+    NTypeAnn(ann_ty) =>
+      graph_bind(ret_handle, ann_ty, Located(span, Declared(name))),
+    _ => ()
+  }
   let row_handle = graph_fresh_row(Inferred("effects of '{name}'"))
   let fn_ty = TFun(
     build_param_types(params, param_handles),

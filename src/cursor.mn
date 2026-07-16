@@ -61,7 +61,7 @@ import infer
 // projection cannot corrupt oracle state — exactly the constraint
 // `protocol_oracle_is_ic.md` locks for "surfaces query, never write."
 
-effect Cursor {
+effect CursorRead {
   cursor_at(Span) -> CursorView
   cursor_argmax(Caret) -> Cursor
   cursor_pinned(Handle) -> Cursor
@@ -179,7 +179,7 @@ handler cursor_default with !Mutate {
 // This IS what mentl does. Not "compile" as a separate phase — the
 // edit IS the compile IS the projection IS the loop.
 
-fn cursor_ic_fixpoint(initial_caret) with Cursor + IC + !Mutate = {
+fn cursor_ic_fixpoint(initial_caret) with CursorRead + IC + !Mutate = {
   initial_caret
     |> cursor_argmax_compute
     ~> ic_fixpoint_handler
@@ -277,7 +277,7 @@ fn score_one_position(handle, caret) with GraphRead + !Mutate = {
 // configurable via Hμ.cursor.transport's `cursor_weights` handler
 // (peer handle); the defaults below are the project residue.
 
-fn caret_proximity_weight(caret, target_span) with GraphRead + !Mutate = {
+fn caret_proximity_weight(caret, target_span) -> Float with GraphRead + !Mutate = {
   let Caret(_, caret_reason) = caret
   let caret_span = caret_span_from_reason(caret_reason)
   scope_distance_decay(caret_span, target_span)
@@ -291,7 +291,7 @@ fn caret_span_from_reason(reason) with Pure = match reason {
 // The decay reads the live module graph (same_module / transitive_dep walk
 // the import DAG in the weave), so it carries GraphRead — the spatial weight
 // is a projection of the graph's module structure, never a Pure constant.
-fn scope_distance_decay(caret_span, target_span) with GraphRead + !Mutate = {
+fn scope_distance_decay(caret_span, target_span) -> Float with GraphRead + !Mutate = {
   if span_eq(caret_span, target_span) { same_handle_weight() }
   else if same_enclosing_decl(caret_span, target_span) { same_decl_weight() }
   else if same_module(caret_span, target_span) { same_module_weight() }
@@ -304,11 +304,11 @@ fn scope_distance_decay(caret_span, target_span) with GraphRead + !Mutate = {
 // 0.2 because cross-module impact still matters; same-handle weight
 // is 1.0 because the developer's attention IS at the position.
 
-fn same_handle_weight()    with Pure = 1.0
-fn same_decl_weight()      with Pure = 0.85
-fn same_module_weight()    with Pure = 0.7
-fn transitive_dep_weight() with Pure = 0.4
-fn cross_module_weight()   with Pure = 0.2
+fn same_handle_weight()    -> Float with Pure = 1.0
+fn same_decl_weight()      -> Float with Pure = 0.85
+fn same_module_weight()    -> Float with Pure = 0.7
+fn transitive_dep_weight() -> Float with Pure = 0.4
+fn cross_module_weight()   -> Float with Pure = 0.2
 
 // same_enclosing_decl / same_module / transitive_dep — these read the
 // graph's existing scope structure. Inline residue; the eight-
@@ -433,7 +433,7 @@ fn contains_path(paths, target) with Pure = {
 // ─── Argmax with default ────────────────────────────────────────────
 //
 // Per Hμ-cursor.md §3: the no-candidates case is "fully annotated";
-// returns a Cursor with impact=0 co-located with the caret. Same
+// returns a CursorRead with impact=0 co-located with the caret. Same
 // shape, same record, same code path — drift 6 closure (no
 // primitive-type-special-case).
 

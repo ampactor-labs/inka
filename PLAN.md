@@ -926,6 +926,32 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ## §7 · Current state (grounded 2026-07-16 — **FIRST LIGHT LANDED; the medium builds itself; the frontier is CORRECTNESS-WIRING (the destiny audit's R-path) with the O(1) march riding alongside — "speed, not correctness" was the pre-audit framing, retired.** (1) **First light** (2026-07-10, 87c0152, tag `first-light`): `m3 == m4` byte-identical AND battery-green-through-m3 — the fixed point, the medium reproduced by itself. (2) **The boot era** (7401c4b): the hand-WAT seed is DELETED, `boot/mentl.wasm` IS the compiler; `tools/march.sh` asserts `m2 == m3` as the live ratchet (a TRANSITION on emit changes → re-pin from m3; boot/PROVENANCE.md). (3) **The M1–M4 multi-shot arc self-hosted** — the k1 continuation-reification producer through the M4 Abandon discipline, each fixpoint-confirmed; the value-layer fold leaves (STEP 0–5, S0 compare/hash) landed. (4) **THE CROWN — NEGATION landed, POSITIVE path still pointer-eq** (2026-07-13, 29df478; sharpened by the destiny audit 2026-07-14): `!E`-sound-under-poly is real for the by-name NEGATION gate (`row_subsumes` EfNeg) — `m2 == m3` byte-identical, 5/5 crown-gate, 66/66 micros. But the POSITIVE subsumption path a developer's ordinary `with E` actually leans on still compares effect names by POINTER-eq, so on the wheel's OWN self-compile it rejects **533 `E_EffectMismatch` + 61 `E_PurityViolated`** false alarms — including `WasmOut vs WasmOut`, a row failing to subsume ITSELF — all swallowed by productive-under-error. So "the crown landed" is HALF-true (the negative arm sound, the far larger positive arm unsound-by-pointer-eq); `Hβ.effects.positive-row-pointer-eq` is the fix and it is **R1** below — `EffName`-is-a-handle (§5.O layer 1, extended from perf to CORRECTNESS: the perf loop will never reach it — the membership site isn't hot, it's masked by productive-under-error), which makes the positive gate sound and deletes the by-name family (`eff_name_str`/`forbidden_names_disjoint`). **CORRECTED 2026-07-14 (cc487f8, the ▶ crown entry below): the "594→~0 from interning" claim was MEASURED wrong** — the root was pointer-eq at the ONE membership leaf (`name_set_contains`), and matching BY NAME there (str_eq, the negation gate's existing move) dropped the false mismatches **598 → 146** without any interning. R1 (EffName-is-a-handle) is now the ULTIMATE for the residual 146 + the six str_hash perf waypoints: it makes the leaf `i32.eq`-on-identity, deletes the by-name family, and closes the parameterized conflation str_eq admits. The convergent root of the path below — landed at the leaf, ultimate at the handle. (5) **The proposer reframe corrected** (§1/§5, 6c3efb4): the medium is the best next-move proposer; the model is unnecessary at that scope. **THE CURRENT CURSOR — the O(1) architecture (§5.O), performance IS the Carried-Truth Law.** The perf loop (the ▶ entry below) has cut the self-compile **1400s → 13s (~108×)** across five perf-found O(1) fixes (classifier, region, esc-write, esc-read, reachability index + the LSuspend Int-op_h-as-name root fix — the last a TRANSITION, m3==m4, boot re-pinned 349a3302…); 13s is the next perf (the reachability `reach_has` membership 16.54% and the instantiate-clone / arena / parallelism levers remain). The 8-agent diagnosis pinned the original ~23-min self-compile (1377s, 100% guest algorithm) to name-keyed re-derivation: `env_find_flat` O(n²) (pipeline.mn:375, convergent 5/7), dedup O(U²) with an O(1) target (wasm.mn:1145/1168), `esc_assoc` O(n²) (lower.mn:1383), `instantiate` tree-clone (infer.mn:2687), the 4GB never-free cache-hostile amplifier, and ZERO parallelism (one `|>` cursor, 8 cores idle). The fix is **names-are-handles + O(1) handle-indexed reads + per-decl arena + parallel cursors**, built layer-by-layer — the first cut is `string_offset_lookup` O(1) via a str_hash index (byte-identical by construction). Ground FIRST: `bash tools/state.sh`; gates: `verify.sh` + `march-gate.sh` + `march.sh` the m2==m3 ratchet. The detailed trap-march log below is PRE-first-light archaeology, kept for its substrate mechanics.)
 
+> **▶ THE FELT ROUTE LIVES — `mentl edit` reaches its projection window
+> (2026-07-16, bdec460, boot re-pinned 9c8b23ba…, frontier 24/19).** The
+> edit-session contract is GREEN: the first full eight-aspect CursorView in
+> project history renders and the session exits 0. Five roots, all pinned in
+> the binary before their fixes (a patched ev_perform_entry speaking its
+> missing key — "Cursor"; a gated eprint census in the resolver): edit_run's
+> chain lacked cursor_default + env_handler; `effect Cursor`/`effect Patch`
+> were SHADOWED by the same-named value types in the one env namespace (the
+> effects now follow the repo's own capability convention — CursorRead /
+> PatchWrite, as Graph/GraphRead already split; Sample still pairs by DSP
+> doctrine — the cross-namespace refusal is the named surface decision,
+> `Hβ.diag.duplicate-type-name`); lookup_effect_op_names' fabricated
+> `[eff_name]` surrender-fallback DELETED (it converted the shadowing into a
+> silent keyed fall-through); pre_register_fn_sig now BINDS the authored
+> `-> RetTy` (it discarded it — the parse_let twin at the return position;
+> forward callsites instantiated a disconnected quantified return and floored
+> to word width — `Hβ.m2.callsite-result-width` closed at the pre-scheme root,
+> the weight family annotated `-> Float`); the session's TransportState no
+> longer exits as the process code. Remaining reds on the leg = R4/R5 proper:
+> the synth candidate filter (`Propose │ (none)` — synth-on-NHole unwired),
+> patch application, proof-debt discharge; plus the `<~` session LOOP (the
+> LFeedback emit is the one-cycle state machine — the driving iterate context
+> is band M's open work; 11 recovered E_FeedbackNoContext on the wheel mark
+> the compile-boundary marker install as its own wiring debt). Census
+> 33,948 → 33,901.**
+>
 > **▶ INFERENCE-OWNED EXECUTABLE BOUNDARIES + THE PATTERN-CONSTRAINT LAW — the
 > scheduler carries exact representation, and a pattern can no longer clobber a
 > proven type (2026-07-16, cf00697 → fede003, boot re-pinned 7bd9e3e7…).** The

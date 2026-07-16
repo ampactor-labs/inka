@@ -385,7 +385,12 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
 
   // Enter the row-accumulation scope and infer body. The frame is born with
   // the authored declaration; the exit hands it back for enforcement below.
+  // The fn body IS a region (§5.O layer 3 — the per-decl granularity the
+  // arena resets at): every value the body walk constructs tags with this
+  // region; nested fn decls nest their own; the return check below either
+  // TRANSFERS the body value to the parent region or proves the escape.
   inf_enter_fn(row_handle, ret_handle, span, effs)
+  let body_region = region_enter(span)
   infer_expr(body_node)
   let declared_effs = inf_exit_fn()   // drift-audit: ignore — sequenced effectful handler-state read (the popped frame's declaration, consumed at the enforcement below)
 
@@ -419,12 +424,15 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
     _ => ()
   }
 
-  // H4: every fn return is an escape boundary. The body's return
-  // value (and its embedded fields, recursively) must not carry a
-  // region tag that's no longer live. region_tracker compares the
-  // tagged region against region_stack; mismatches surface as
-  // E_RegionEscape with the install-span.
+  // H4: every fn return is an escape boundary — and a TRANSFER. The body
+  // value tagged with THIS fn's region re-tags into the parent's (the
+  // caller owns it now — Hβ.own.region-return-transfer); an outer-region
+  // or global tag already outlives this return; a dead-region tag is the
+  // genuine escape, reported with both spans. The check runs INSIDE the
+  // body region (the arm reads the stack top to know which region is
+  // "mine"); the exit follows.
   check_escape(body_handle, span)
+  region_exit(body_region)
 
   // ─── Ownership inference (§4⑤, arm 5) — the Hylo-quiet bar ──────
   // After the body is inferred, classify each Unmarked param's ownership

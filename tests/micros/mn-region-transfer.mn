@@ -1,0 +1,18 @@
+// Live regions + the return transfer (§5.O layer 3): every fn body is a
+// region; a locally-built composite leaving through the return re-tags
+// into the parent region (Hβ.own.region-return-transfer), so a two-level
+// construct-return-destructure chain carries ZERO E_RegionEscape and the
+// values stay exact. The old dormant tracker false-flagged exactly this
+// shape (the tag record's field read landed on offset 0). Expected exit: 5
+// — (1+2) + (1*2) = 3 + 2.
+
+fn outer() = {
+  fn inner() = (1, 2)
+  let (a, b) = inner()
+  (a + b, a * b)
+}
+
+fn main() = {
+  let (s, p) = outer()
+  s + p
+}

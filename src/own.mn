@@ -138,10 +138,15 @@ fn report_branch_collisions(ref deltas, ref span) with !Mutate = {
 handler region_tracker with region_stack = [], next_region = 0, region_index = region_index_new() {
 
   region_enter(span) => {
-    let rid = next_region
+    // Push at the END — every Mentl stack does (§9's wrong-end class: the
+    // old front-push met last/drop_last readers, an enter-front/pop-bottom
+    // queue that dormancy never caught). Region ids start at 1: 0 is the
+    // no-region/global sentinel every tag test reads, and the first live
+    // region must never collide with it. Bounded by fn-nesting depth.
+    let rid = next_region + 1
     resume(rid)
-      with region_stack = [Region(rid, span)] ++ region_stack,
-           next_region = next_region + 1
+      with region_stack = region_stack ++ [Region(rid, span)],   // drift-audit: ignore — bounded by lexical fn-nesting depth, not a data loop
+           next_region = rid
   },
 
   region_exit(_rid) => {
@@ -194,21 +199,33 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
   },
 
   check_escape(value_handle, escape_span) => {
-    // Look up the value's tagged region. Region 0 (global — no region
-    // entered) or a region still on the stack is safe; a dead region is
-    // the escape, reported with BOTH spans (where the region opened,
-    // where the value tried to leave). When regions go LIVE
-    // (Hβ.infer.region-on-tee-alloc-absorb — the §5.O layer-3 arena),
-    // the fn RETURN is a TRANSFER: the returned value re-tags into the
-    // caller's region at the call site (Hβ.own.region-return-transfer),
-    // so this check keeps meaning one true thing — a value whose region
-    // genuinely died while holding it.
+    // The fn-return read, three verdicts (regions are LIVE — infer_fn
+    // brackets every fn body in its own region, §5.O layer 3):
+    //   OWN region  → THE RETURN TRANSFER (Hβ.own.region-return-transfer,
+    //     the result-region-as-parameter form): the value leaves through
+    //     the return, so it re-tags into the PARENT region — the caller
+    //     owns it now. This is what makes the region drop safe as the
+    //     layer-3 arena reset: everything still tagged with the dying
+    //     region is provably transient.
+    //   OUTER live region / region 0 → already outlives this return.
+    //   DEAD region → the escape, reported with BOTH spans (where the
+    //     region opened, where the value tried to leave).
     let entry = lookup_tag(region_index, value_handle)
     match entry {
       None => resume(),
       Some(tag) => {
         let (install_span, region_id) = tag
-        if region_id == 0 || region_on_stack(region_stack, region_id) {
+        let depth = len(region_stack)
+        let top_rid = if depth == 0 { 0 }
+                      else { let Region(r, _) = last(region_stack); r }
+        if region_id == 0 {
+          resume()
+        } else if region_id == top_rid {
+          let parent = if depth < 2 { 0 }
+                       else { let Region(p, _) = list_index(region_stack, depth - 2); p }
+          resume()
+            with region_index = region_index_add(region_index, value_handle, (install_span, parent))
+        } else if region_on_stack(region_stack, region_id) {
           resume()
         } else {
           report(ERegionEscape("value allocated in a region (opened at {show_span(install_span)}) that ended before this return — region {int_to_str(region_id)} no longer live", escape_span))   // drift-audit: ignore

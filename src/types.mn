@@ -702,7 +702,7 @@ type PipeContext
 // Predicate is at types.mn:568.
 
 type CursorView
-  = CursorView(NodeKind, List, PipeContext, EffRow, Ownership, List, Option, Reason)
+  = CursorView(NodeKind, Proposals, PipeContext, EffRow, Ownership, List, Option, Reason)
                               // query   propose  topology     row     trace      verify  teach    why
 
 

@@ -45,6 +45,7 @@ import types
 import graph
 import effects
 import mentl
+import query
 import verify
 import own
 import infer
@@ -105,10 +106,8 @@ handler cursor_default with !Mutate {
       pos
         <| (
           ((_, k)) => k,                                                       // 1. Graph + Env (Query)
-          ((h, k)) => synth_propose(                                   // 2. Handlers (Propose) — Synth's MultiShot
-                      ty_of_kind(h, k),
-                      row_of_kind(k),
-                      mentl_context_at(h)),
+          ((h, k)) => propose_at(h, k),                                        // 2. Handlers (Propose) — Synth's MultiShot
+
           ((h, _)) => pipe_context_of_handle(h),                               // 3. Five verbs (Topology)
           ((_, k)) => row_of_kind(k),                                          // 4. Boolean row (Unlock)
           ((_, k)) => ownership_of_kind(k),                                    // 5. Ownership-as-effect (Trace)
@@ -619,23 +618,63 @@ fn pipe_position_in(target, body) with Pure = match body {
   _ => NoPipe
 }
 
+// The Propose aspect: ONE read fills both the op's allowed row and the
+// Context — the enclosing fn's AUTHORED declared row. The published scheme
+// row is the MEET (the negation deliberately does not survive publication,
+// PLAN §7), so the authored signed set at the FnStmt is the only live home
+// of `!E` at a decl; the hole's own node row (EfPure for a refined-Int
+// hole) was the wrong source entirely.
+fn propose_at(h, k) with EnvRead + GraphRead + Synth + !Mutate = {
+  let ctx = mentl_context_at(h)
+  let Context(_, allowed, _) = ctx
+  synth_propose(ty_of_kind(h, k), allowed, ctx)
+}
+
 fn mentl_context_at(handle) with EnvRead + GraphRead + !Mutate = {
-  // Synth's Context is the (scope_bindings, active_effects) pair, both
-  // read LIVE from the graph the cursor sits in — never fabricated.
-  // Scope bindings ARE the live env snapshot (env_snapshot, the same
-  // bindings infer wrote); active effects ARE the effect-name list of
-  // the row already bound at this handle. Carried-Truth: the env and
-  // the node's row both already prove this; the cursor reads them, the
-  // OneShot empty-Context stub is dissolved.
+  // Synth's Context reads LIVE from the graph the cursor sits in — never
+  // fabricated: scope bindings ARE the env snapshot (the same bindings
+  // infer wrote); the row is the ENCLOSING declaration's authored signed
+  // set (build_declared_row over the FnStmt's own effs — the one home of
+  // `!E` at a decl); the enclosing NAME feeds the vocabulary's
+  // nontermination exclusion. At a top-level position with no enclosing
+  // fn, the node's own row stands and the name is "".
   let Env(scope_bindings) = env_snapshot()
   let GNode(kind, _) = graph_chase(handle)
-  // Carry the LIVE row, not a flattened positive name-list. The Boolean
-  // structure (EfNeg / EfSub / EfInter) survives intact to the synth gate,
-  // so the negative capability (`!E`, PLAN §4⑥) reaches Synth and it never
-  // proposes a candidate performing a forbidden effect. row_admits /
-  // row_forbidden_names (effects.mn) project admit/forbid from the row the
-  // graph already bound — no [EffName] re-derivation, no lossy `_ => []`.
-  Context(scope_bindings, row_of_kind(kind))
+  match enclosing_fn_decl_at(handle) {
+    Some(decl) => {
+      let (fname, effs) = decl
+      Context(scope_bindings, build_declared_row(effs), fname)
+    },
+    None => Context(scope_bindings, row_of_kind(kind), "")
+  }
+}
+
+// The enclosing fn DECLARATION at a handle — the tightest FnStmt whose
+// span contains the handle's MINT span (a reason-span is rebound by the
+// binder; the span weave is the position's truth). O(weave) at felt
+// cadence; the O(1) form is the decl-containment edge on the node
+// (Hβ.cursor.enclosing-decl-edge).
+fn enclosing_fn_decl_at(handle) with GraphRead + !Mutate = {
+  let target = parse_span_of(handle)
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = graph_snapshot()
+  enclosing_fn_scan(target, 0, next, None, 999999999)
+}
+
+fn enclosing_fn_scan(target, i, n, best, best_area) with GraphRead + !Mutate = {
+  if i >= n { best }
+  else {
+    match graph_node_body(i) {
+      NStmt(FnStmt(name, _params, _ret, effs, _body)) => {
+        let dspan = parse_span_of(i)
+        if span_contains(dspan, target) && span_area(dspan) < best_area {
+          enclosing_fn_scan(target, i + 1, n, Some((name, effs)), span_area(dspan))
+        } else {
+          enclosing_fn_scan(target, i + 1, n, best, best_area)
+        }
+      },
+      _ => enclosing_fn_scan(target, i + 1, n, best, best_area)
+    }
+  }
 }
 
 // verify_pending_at — Verify ledger holds ALL pending refinement

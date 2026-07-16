@@ -381,7 +381,14 @@ fn parse_fn(ref tokens, pos) = {
   // The authored intent row IS the FnStmt's effs field on the node —
   // read live by QIntentOf / oracle intent_weight via graph_node_body.
   // No parallel intent_index ledger to write (Carried-Truth).
-  let stmt_node = nstmt(FnStmt(name, params, ret_node, effs, body), start)
+  //
+  // The decl's span is the JOINED range through its body (SYNTAX §Parser
+  // obligations: every node carries the joined span of its constituent
+  // tokens) — a start-point span made the decl invisible to span
+  // containment, so enclosing_fn_decl_at found no enclosing declaration
+  // and the synth gate read the wrong allowed row.
+  let N(_, body_span, _) = body
+  let stmt_node = nstmt(FnStmt(name, params, ret_node, effs, body), span_join(start, body_span))
   (stmt_node, p9)
 }
 

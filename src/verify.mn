@@ -123,7 +123,19 @@ fn subst_self_operand(h, value_handle) with GraphRead = match graph_node_body(h)
 // exists to refuse. Transparent aliases recurse; an unrefined target
 // admits by type alone.
 fn refinement_admits(ty, value_handle) with GraphRead = match ty {
-  TAlias(_, inner)     => refinement_admits(inner, value_handle),
+  // A candidate whose INFERRED type is the SAME refined alias is admitted
+  // by TYPED IDENTITY — which proves the callee's DECLARATION, never its
+  // discharge. The layering is deliberate, each proof question at its one
+  // home: the callee's return obligation lives in the ledger AT ITS decl
+  // (discharged, pending, or refuted THERE); a refuted callee already
+  // fails the program's own check leg (E_RefinementRejected at the decl),
+  // so admitting its call here changes nothing observable; and executable
+  // refusal on remaining debt is R5's gate at the emit boundary. The synth
+  // gate answers only "does this filling fit the target type" — it never
+  // re-decides a proof another site owns.
+  TAlias(aname, inner) =>
+    if inferred_alias_name(value_handle) == aname { true }
+    else { refinement_admits(inner, value_handle) },
   TRefined(base, pred) =>
     refinement_admits(base, value_handle)
       && (match predicate_decide(subst_self(pred, value_handle)) {
@@ -131,6 +143,16 @@ fn refinement_admits(ty, value_handle) with GraphRead = match ty {
             None          => false
           }),
   _ => true
+}
+
+// The alias NAME of a value node's inferred type ("" when unaliased) —
+// read live through the chase after the candidate's infer pass.
+fn inferred_alias_name(value_handle) with GraphRead = {
+  let GNode(kind, _) = graph_chase(value_handle)
+  match kind {
+    NBound(TAlias(aname, _)) => aname,
+    _                        => ""   // drift-audit: ignore — "" IS the documented no-alias sentinel this projection's one caller compares against (an alias name is never empty)
+  }
 }
 
 // Fold a comparison over two constant operand values.

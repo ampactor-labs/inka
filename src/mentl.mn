@@ -64,8 +64,16 @@ type Explanation
       Reason      // reason_chain: the Why chain
     )
 
+// The propose projection: every PROVEN survivor as (Node, Reason), and every
+// vocabulary candidate the ALLOWED row refused as (name, Reason) — the
+// rejection keeps its Why (PLAN §5: retain the rejection reasons; the row
+// pruning IS the second moat, and a pruned candidate the developer cannot
+// see is a guess they cannot audit).
+type Proposals
+  = Proposals(List, List)   // survivors [(Node, Reason)], rejected [(String, Reason)]
+
 type Context
-  = Context(List, EffRow)   // scope bindings, the LIVE active-effect row.
+  = Context(List, EffRow, String)   // scope bindings, the LIVE active-effect row, the enclosing decl's name ("" at top level — the vocabulary excludes candidates whose free-name closure reaches it: proposing the hole's own enclosing fn, or anything that transitively calls it, is nontermination by construction).
                             // The full Boolean row reaches synth — not a
                             // flattened positive [EffName]. So `!E` (the
                             // negative capability, PLAN §4⑥) is readable at
@@ -95,7 +103,7 @@ effect Teach {
 // SMT, LLM, user — plugs in as a handler. The compiler verifies.
 
 effect Synth {
-  synth_propose(Ty, EffRow, Context) -> List   // [(Node, Reason)] — each proven survivor with its Why
+  synth_propose(Ty, EffRow, Context) -> Proposals   // proven survivors with their Whys + row-rejected vocabulary with theirs
   verify_candidate(Node, Ty) -> Bool
   enumerate_inhabitants(Ty, EffRow, Context) -> List
 }
@@ -470,18 +478,21 @@ fn why_expand(reason, depth) = {
   }
 }
 
-// Fill a typed hole with the first proven candidate from the Synth proposer
-// chain — the entry that performs synth_propose, handled by the live
-// synth_default handler (synth_proposer.mn). The dead duplicate handler
-// synth_enumerative + its private verify_each were dissolved (superseded).
+// Fill a typed hole with THE sole proven survivor from the Synth chain,
+// returned WITH its Reason. The allowed row is the Context's — the
+// enclosing decl's AUTHORED constraint (re-deriving it from the hole's
+// own type was the wrong-row-source class's second instance). Exactly one
+// survivor is the medium's answer; two or more is the tie that TEACHES —
+// indexing [0] was a hidden first-wins ranking, a guess between proven
+// survivors the tie-break law forbids (PLAN §5).
 fn teach_synthesize(hole_handle, context) = {
   let GNode(kind, _) = graph_chase(hole_handle)
   match kind {
     NBound(ty) => {
-      let row = extract_row(ty)
-      let candidates = synth_propose(ty, row, context)
-      if len(candidates) == 0 { None }
-      else { Some(list_index(candidates, 0)) }
+      let Context(_, allowed, _) = context
+      let Proposals(survivors, _rejected) = synth_propose(ty, allowed, context)
+      if len(survivors) == 1 { Some(head(survivors)) }
+      else { None }
     },
     _ => None
   }

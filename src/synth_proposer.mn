@@ -61,6 +61,7 @@ import verify
 import mentl
 import parser
 import infer
+import lower
 
 // ─── ProposerKind — which proposer in the chain emitted a candidate ─
 
@@ -106,10 +107,14 @@ type EnrichedCandidate
 handler synth_default with !Mutate {
 
   synth_propose(target_ty, allowed_effects, context) => {
-    // Forward to enumerative with full multi-shot enrichment.
-    let enriched = enumerate_typed(target_ty, allowed_effects, context)
+    // The in-scope VOCABULARY first (PLAN §1's second moat: type-directed
+    // search over what is already in scope, pruned by the row at every
+    // step), then the shape enumerators; every candidate through the ONE
+    // proof gate. Row-rejected vocabulary keeps its Reasons.
+    let (vocab, rejected) = enumerate_vocabulary_calls(target_ty, allowed_effects, context)
+    let enriched = concat_candidates(vocab, enumerate_typed(target_ty, allowed_effects, context))
     let verified = verify_each_enriched(enriched, target_ty)
-    resume(verified |> map_to_proposals)
+    resume(Proposals(verified |> map_to_proposals, rejected))
   },
 
   verify_candidate(candidate, target_ty) => {
@@ -122,7 +127,12 @@ handler synth_default with !Mutate {
     // seed survived a `0 < self` target. The caller's checkpoint
     // isolates this; rollback reverts the binds.
     let Candidate(node, _) = candidate
-    infer_expr(node)
+    // The re-infer runs under its OWN inference session (the same chain
+    // infer_program installs): a CALL candidate's inference stages
+    // continuation boundaries and reads the InferCtx frame — ops that need
+    // their handlers live. The scoped-singleton brackets make the nested
+    // session safe; the caller's checkpoint still isolates the binds.
+    { infer_expr(node) } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
     let N(_, _, h) = node
     resume(verify_after_apply(h) && refinement_admits(target_ty, h))
   },
@@ -186,6 +196,118 @@ fn enumerate_typed(target_ty, allowed_effects, context)
     TCont(_, _, _, _) => one_continuation_candidate(context),
     TList(elem) => enumerate_list_candidates(elem, context),
     TTuple(elems) => enumerate_tuple_candidates(elems, context)
+  }
+}
+
+// The Intent-Boundary pin grounding the candidate concat: the vocabulary
+// list is a fold's tuple component, whose element type the graph cannot
+// prove at the ++ site (the [LowExpr] precedent — the author states the
+// element identity once, both operands ground).
+fn concat_candidates(a: [EnrichedCandidate], b: [EnrichedCandidate]) -> [EnrichedCandidate] with Pure =
+  a ++ b
+
+// ─── The vocabulary enumerator — the finite in-scope call space ──────
+//
+// Every ZERO-ARGUMENT fn in scope whose return matches the target is a
+// call candidate; the ALLOWED row (the enclosing fn's authored constraint)
+// gates each through the crown's own subsumption. Three outcomes per name:
+//   admitted  — a call node, minted with its Why, into the proof gate;
+//   rejected  — the row refused it; the (name, Reason) pair SURVIVES to
+//               the projection (the rejection teaches);
+//   excluded  — its free-name closure reaches the enclosing decl:
+//               proposing choose() inside choose, or main() where main
+//               calls choose, is nontermination by construction (silent —
+//               a structural impossibility, not a teaching moment).
+// Arg-bearing fns are the recursive-hole general form
+// (Hβ.synth.vocabulary-arg-holes); the reach walk's O(1) form is the
+// call-edge index (Hβ.synth.vocabulary-reach-index).
+fn enumerate_vocabulary_calls(target_ty, allowed_row, context)
+    with GraphRead + GraphWrite + !Mutate = {
+  let Context(scope_bindings, _active, enclosing) = context
+  fold(([], []), (acc, entry) => {
+    let (accepted, rejected) = acc
+    let (name, scheme, _reason, kind) = entry
+    match kind {
+      FnScheme => match scheme {
+        Forall(_, TFun(params, ret, row)) =>
+          if len(params) == 0
+             && vocabulary_ret_matches(ret, target_ty)
+             && !reaches_decl(name, enclosing, []) {
+            if row_subsumes(row, allowed_row) {
+              (accepted ++ [vocabulary_call_candidate(name, row, allowed_row)], rejected)   // drift-audit: ignore — bounded by the in-scope zero-arg vocabulary, not a loop accumulator
+            } else {
+              (accepted,
+               rejected ++ [(name, Inferred("performs {show_effrow(row)} — refused by the target row {show_effrow(allowed_row)}"))])   // drift-audit: ignore — bounded by the in-scope zero-arg vocabulary, not a loop accumulator
+            }
+          } else { (accepted, rejected) },
+        _ => (accepted, rejected)
+      },
+      _ => (accepted, rejected)
+    }
+  }, scope_bindings)
+}
+
+// Return-type match for the vocabulary: refined aliases match by their
+// declared identity (both anchors resolve through the SAME env alias —
+// the type-level proof); unaliased grounds match structurally.
+fn vocabulary_ret_matches(ret, target_ty) with Pure = match target_ty {
+  TAlias(tname, _) => match ret {
+    TAlias(rname, _) => rname == tname,
+    _                => false
+  },
+  _ => same_ground(ret, target_ty)
+}
+
+fn vocabulary_call_candidate(name, row, allowed_row)
+    with GraphRead + GraphWrite + !Mutate = {
+  EnrichedCandidate({
+    node:    synth_node(CallExpr(synth_node(VarRef(name)), [])),
+    reason:  Located(span_zero(),
+                     Inferred("synth_proposer: in-scope call {name}() — row {show_effrow(row)} admitted by {show_effrow(allowed_row)}")),
+    origin:  ProposerEnumerative,
+    cost:    0.2
+  })
+}
+
+// Does `name`'s free-name closure reach `target`? collect_free_vars
+// over-approximates the call edge (a reference without a call also
+// excludes — the safe direction). `seen` breaks cycles.
+fn reaches_decl(name: String, target: String, seen) with GraphRead + !Mutate = {
+  if target == "" { false }
+  else if name == target { true }
+  else if contains_name(seen, name) { false }
+  else {
+    match fn_body_by_name(name) {
+      None       => false,
+      Some(body) => any((n) => reaches_decl(n, target, [name] ++ seen),   // drift-audit: ignore — bounded by call-graph depth (the seen set), not a loop accumulator
+                        collect_free_vars(body, []))
+    }
+  }
+}
+
+fn contains_name(names, target: String) with Pure =
+  any((n) => n == target, names)
+
+// A named fn's body node, read from the program weave directly — the
+// same walk enclosing_fn_decl_at does, keyed by name instead of span.
+// (The NModule-decls indirection read a projection the edit session's
+// weave does not always carry — main() leaked past the reach exclusion
+// because its body was unreachable through it; the weave is the one
+// truth both walks read.)
+fn fn_body_by_name(name: String) with GraphRead + !Mutate = {
+  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+  fn_body_scan(name, 0, next)
+}
+
+fn fn_body_scan(name: String, i, n) with GraphRead + !Mutate = {
+  if i >= n { None }
+  else {
+    match graph_node_body(i) {
+      NStmt(FnStmt(fname, _params, _ret, _effs, body)) =>
+        if fname == name { Some(body) } else { fn_body_scan(name, i + 1, n) },
+      _ => fn_body_scan(name, i + 1, n)
+    }
   }
 }
 

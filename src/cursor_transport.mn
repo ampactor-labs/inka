@@ -323,8 +323,9 @@ fn apply_suggestion(cursor, view) with GraphRead + !Mutate = {
   // the medium's answer. Two or more is the teaching TIE-BREAK — surface
   // the tie, never guess between proven survivors (PLAN §5). Non-hole
   // positions accept the teach annotation as before.
-  if authored_hole(handle) && len(propose) == 1 {
-    let (survivor, _reason) = head(propose)
+  let Proposals(survivors, _rejected) = propose
+  if authored_hole(handle) && len(survivors) == 1 {
+    let (survivor, _reason) = head(survivors)
     replace_span(parse_span_of(handle), render_candidate_source(survivor))
   } else {
     match teach {
@@ -343,7 +344,24 @@ fn apply_suggestion(cursor, view) with GraphRead + !Mutate = {
 // renderer is the formatter projection (Hβ.felt.candidate-render-is-format),
 // unreached while the enumerators seed literals.
 fn render_candidate_source(node) with GraphRead + !Mutate = {
-  let N(_, _, h) = node
+  let N(body, _, h) = node
+  match body {
+    // An in-scope vocabulary call renders as its source form.
+    NExpr(CallExpr(callee, args)) =>
+      if len(args) == 0 { "{callee_var_name(callee)}()" } else { "??" },
+    _ => render_literal_source(h)
+  }
+}
+
+fn callee_var_name(callee) with Pure = {
+  let N(cb, _, _) = callee
+  match cb {
+    NExpr(VarRef(name)) => name,
+    _                   => "??"
+  }
+}
+
+fn render_literal_source(h) with GraphRead + !Mutate = {
   match node_const(h) {
     Some(LVInt(n))    => int_to_str(n),
     Some(LVFloat(f))  => float_to_str(f),
@@ -368,11 +386,26 @@ fn show_node_kind(kind) with Pure = match kind {
   NErrorHole(_) => "error-hole"
 }
 
-fn show_proposals(props) with GraphRead + !Mutate =
-  if len(props) == 0 { "(none)" }
+fn show_proposals(props) with GraphRead + !Mutate = {
+  let Proposals(survivors, rejected) = props
+  let survivors_block =
+    if len(survivors) == 0 { "(none)" }
+    else {
+      "{int_to_str(len(survivors))} candidate(s){str_concat_all(map(show_one_proposal, survivors))}"
+    }
+  // The rejections TEACH: each row-refused name keeps its Why on the same
+  // projection (a pruned candidate the developer cannot see is a guess
+  // they cannot audit — PLAN §5).
+  if len(rejected) == 0 { survivors_block }
   else {
-    "{int_to_str(len(props))} candidate(s){str_concat_all(map(show_one_proposal, props))}"
+    "{survivors_block}{str_concat_all(map(show_one_rejection, rejected))}"
   }
+}
+
+fn show_one_rejection(pair) with GraphRead + !Mutate = {
+  let (name, reason) = pair
+  " · rejected {name} — {show_reason(reason)}"
+}
 
 // Each survivor: its source text and its Reason — the pair the Synth
 // contract carries (the seed reason lives in the candidate record, not on

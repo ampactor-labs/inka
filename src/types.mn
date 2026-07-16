@@ -44,7 +44,7 @@ type Ty
   | TRecord(List)                 // [(name, Ty)]
   | TRecordOpen(List, Int)        // fields + row-variable handle
   | TRefined(Ty, Predicate)       // refinement type (Verify discharges)
-  | TCont(Ty, ResumeDiscipline, EffRow)   // handler continuation type: return, resume cardinality, and the effect-WORLD it was frozen under (the modal-effect lexical-capability set — !E lifted to the TIME axis; a persisted resume under a changed handler-set is a row unification → E_ResumeWorldMismatch, never a silent memcpy'd miscompile)
+  | TCont(Ty, Ty, ResumeDiscipline, EffRow)   // handler continuation R -> S: resume input, answer, cardinality, and the effect-WORLD it was frozen under (the modal-effect lexical-capability set — !E lifted to the TIME axis; a persisted resume under a changed handler-set is a row unification -> E_ResumeWorldMismatch, never a silent memcpy'd miscompile)
   | TAlias(String, Ty)            // RN.1 — authored alias name (e.g. "Port") wrapping resolved type
 
 // ─── Representation — the value-representation gradient (STEP 0) ─────
@@ -101,7 +101,7 @@ fn repr_of(ty) with Pure = match ty {
   TName(_, _)       => RI32,    // variant pointer (Bool lives here — a tag is a word)
   TRecord(_)        => RI32,    // record pointer
   TRecordOpen(_, _) => RI32,    // record pointer
-  TCont(_, _, _)    => RI32     // continuation pointer
+  TCont(_, _, _, _) => RI32     // continuation pointer
 }
 
 // repr_of_resolved — repr_of through a graph chase. A TTuple's element Tys
@@ -182,7 +182,7 @@ fn fold_sig(ty) with Pure = match fold_strip(ty) {
   TRecord(fs)       => "r{fold_sig_fields(fs, 0, len(fs))}_",
   TRecordOpen(fs,_) => "r{fold_sig_fields(fs, 0, len(fs))}_",
   TFun(_, _, _)     => "fn",         // closure — folds at the function leaf
-  TCont(_, _, _)    => "k",          // continuation pointer — a word here
+  TCont(_, _, _, _) => "k",          // continuation pointer — a word here
   // fold_strip already removed TAlias/TRefined; reaching them is impossible.
   TAlias(_, inner)  => fold_sig(inner),
   TRefined(base, _) => fold_sig(base)
@@ -458,6 +458,42 @@ type NodeKind
 type GNode
   = GNode(NodeKind, Reason)   // every node carries its justification
 
+// Inference-created executable boundaries are graph edges, not lowering
+// conventions. Each fanout site owns one ordered edge per branch:
+//
+//   fanout_h -> FanoutBoundary([
+//     BoundaryEdge(result_h, thunk_h, carrier_h, thread_ticket_h,   // drift-audit: ignore — doc-comment example of the BoundaryEdge record shape
+//                  persist_ticket_h), ...
+//   ])
+//
+// The branch index is the topology; no reverse lookup through a tuple type is
+// needed. thunk_h is bound to `() -> carrier_h with branch_row`; carrier_h is
+// the one-field positional product `(result_h,)`. The product is a boundary-
+// local representation carrier: generic scheduling handlers transport one word
+// while the field keeps the result's exact repr (f64/f32/v128 included). Lower
+// follows the edge and immediately projects field 0. No name lookup, cache, or
+// boxing policy exists outside the graph.
+type BoundaryEdge
+  = BoundaryEdge(Int, Int, Int, Int, Int) // result, thunk, carrier, Thread ticket, Persist ticket
+
+// A suspended effect call has three identities: resume_input_h is the typed R
+// hole the continuation accepts, answer_h is the enclosing frame's S result,
+// and continuation_h is the heap record itself. The latter is bound to
+// `TCont(TVar(resume_input_h), TVar(answer_h), discipline, world)`. Keeping all
+// three on one edge prevents either value representation from doubling as a
+// pointer type, and makes the captured capability world an inference fact lower
+// only reads.
+type ContinuationEdge
+  = ContinuationEdge(Int, Int, Int, ResumeDiscipline, EffRow) // resume input, answer, continuation, discipline, world
+
+type ExecutableBoundary
+  = NoBoundary
+  | FanoutBoundary(List) // ordered BoundaryEdge values, one per branch
+  // The call is seen while its InferCtx frame is live, before later handler
+  // declarations have necessarily completed the op's cardinality join.
+  | PendingContinuationBoundary(Int, Int, Int, EffRow) // resume input, answer, continuation, world
+  | ContinuationBoundary(ContinuationEdge)
+
 type Graph
   = Graph(
       List,    // nodes: flat array indexed by handle
@@ -473,6 +509,7 @@ type Graph
 type Mutation
   = MSetNode(Int, GNode)    // handle, old_node (before overwrite)
   | MSetRow(Int, GNode)     // handle, old_node (row variant)
+  | MSetBoundary(Int, ExecutableBoundary) // fanout site handle, old boundary edges
   | MFreshNode(Int)         // handle allocated (undo = shrink)
 
 // 14 variants, one per operator form in SYNTAX.md's operator
@@ -1192,6 +1229,7 @@ effect GraphRead {
   graph_comment_at(Int) -> String     // resolve a node's parse-attached comment prose from the parallel comment weave (empty string if absent); the Why engine / formatter / cursor project it
   graph_canon_at(Int) -> Int          // the e-graph canonical pointer at a handle — the equivalence weave's `find` step (returns the handle itself if it is its own e-class root). One co-indexed weave, exactly like `nodes`' TVar union-find; egraph_extract chases it live.
   graph_narrow_at(Int) -> Int         // the refinement-narrowing pointer at a handle — the path-predicate's bool-node handle proven to hold AT this program point (0 = no narrowing). One co-indexed weave like `canon`; lower's verify-obligation read chases it live to elide a check the path already proves (§4⑥). Appropriate as a side-table: narrowing is a per-program-point boolean fact, not a unifiable variable.
+  graph_boundary_at(Int) -> ExecutableBoundary // exact compiler-created executable edges keyed by fanout site
 }
 
 effect GraphWrite {
@@ -1201,6 +1239,7 @@ effect GraphWrite {
   graph_attach_comment(Int, String) -> ()      // attach parse-collected comment prose to a node's handle (the parallel comment weave); resolves via graph_comment_at — a comment is graph content
   graph_canon_set(Int, Int) -> ()              // draw the e-graph equivalence edge `from ≡ to` — point `from`'s canonical pointer at the cheaper `to`. The union-find `union` over the equivalence weave; saturation reads it back via graph_canon_at (find). Idempotent: re-pointing an already-rooted `from` overwrites in place (one cell), never grows a ledger.
   graph_narrow_set(Int, Int) -> ()             // draw the refinement-narrowing edge — point program-point `handle`'s narrowing pointer at the path-predicate's bool-node `pred_handle` proven to hold there (§4⑥). One co-indexed weave like `canon`; idempotent (one cell per handle), read back via graph_narrow_at by lower's check-elision.
+  graph_boundary_set(Int, ExecutableBoundary) -> () // draw/replace one fanout's executable edges; trail-backed because inference runs under speculative checkpoints
   graph_bind(Int, Ty, Reason) -> ()
   graph_bind_row(Int, EffRow, Reason) -> ()
   graph_fork(String) -> ()
@@ -1754,7 +1793,7 @@ fn show_type(ref ty) with GraphRead + !Mutate = {
     TRecordOpen(fields, v) =>
       "\{ {show_list(fields, show_field, ", ")} | {show_handle(v)} \}",
     TRefined(base, pred) => "{show_type(base)} where {show_predicate(pred)}",
-    TCont(ret, disc, world) => "Cont({show_type(ret)}, {show_discipline(disc)}{show_row_suffix(world)})",
+    TCont(input, answer, disc, world) => "Cont({show_type(input)} {show_discipline(disc)} {show_type(answer)}{show_row_suffix(world)})",
     // RN.1 — show the alias name (intent), not the resolved type
     TAlias(name, _) => name
   }

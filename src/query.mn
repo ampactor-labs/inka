@@ -261,8 +261,8 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead = match ty {
     fields
       |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
       |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
-  TCont(ret, _, _) =>
-    ret |> query_flow_label,
+  TCont(input, answer, _, _) =>
+    flow_label_join(query_flow_label(input), query_flow_label(answer)),
   TInt     => Public,
   TFloat   => Public,
   TString  => Public,
@@ -338,7 +338,8 @@ fn chase_type_deep(ref ty) with !Mutate = match ty {
   TRecord(fields)        => TRecord(chase_fields_deep(fields)),
   TRecordOpen(fields, v) => mk_record_open(chase_fields_deep(fields), v),
   TRefined(base, pred)   => TRefined(chase_type_deep(base), pred),
-  TCont(ret, disc, world) => TCont(chase_type_deep(ret), disc, world),
+  TCont(input, answer, disc, world) =>
+    TCont(chase_type_deep(input), chase_type_deep(answer), disc, world),
   TAlias(name, inner)    => TAlias(name, chase_type_deep(inner)),
   _                      => ty
 }
@@ -400,7 +401,7 @@ fn has_free_tvar(ref ty) with !Mutate = match ty {
   TRecord(fields)        => has_free_tvar_fields(fields),
   TRecordOpen(fields, _) => has_free_tvar_fields(fields),
   TRefined(base, _)      => has_free_tvar(base),
-  TCont(ret, _, _)       => has_free_tvar(ret),
+  TCont(input, answer, _, _) => has_free_tvar(input) || has_free_tvar(answer),
   TAlias(_, inner)       => has_free_tvar(inner),
   _                      => false
 }
@@ -575,4 +576,3 @@ fn find_tightest(ref idx, target, best_h, best_area) with Pure = {
     }
   }
 }
-

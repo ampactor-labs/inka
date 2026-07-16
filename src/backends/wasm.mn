@@ -732,6 +732,7 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_expr(ev)
   },
   LUnresolvedEvidence(_, ekey) => visit_string(ekey),
+  LInvariantFailure(_, _)   => (),
   LFieldLoad(_, rec, _)     => walk_lemit_expr(rec),
   LConvert(_, _, operand)   => walk_lemit_expr(operand),
   LStateSlotStore(_, _, v, _) => walk_lemit_expr(v)
@@ -1073,6 +1074,7 @@ fn singleton_hnames_expr(expr, acc) = match expr {
   LEvRef(_h, _e)            => acc,
   LEvEntry(_, ev)           => singleton_hnames_expr(ev, acc),
   LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _)   => acc,
   LFieldLoad(_h, rec, _off) => singleton_hnames_expr(rec, acc),
   LConvert(_h, _, operand)  => singleton_hnames_expr(operand, acc),
   LStateSlotStore(_h, _o, v, _) => singleton_hnames_expr(v, acc),
@@ -1492,7 +1494,8 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LUpval(_, _)          => acc,
   LEvRef(_, _)          => acc,
   LEvEntry(_, ev)       => collect_call_vectors_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc
+  LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _) => acc
 }
 
 // Push a call site's repr-vector (the i32 state slot, then arg reprs, then
@@ -1906,6 +1909,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LEvRef(_h, _e)             => [],
   LEvEntry(_, ev)            => collect_fn_emit_records_expr(ev),
   LUnresolvedEvidence(_, _)  => [],
+  LInvariantFailure(_, _)    => [],
   LFieldLoad(_h, rec, _off)  => collect_fn_emit_records_expr(rec),
   LConvert(_h, _, operand)   => collect_fn_emit_records_expr(operand),
   LStateSlotStore(_h, _o, v, _) => collect_fn_emit_records_expr(v),
@@ -2148,6 +2152,7 @@ fn walk_locals_expr(expr, acc) = match expr {
   LEvRef(_h, _e)            => acc,
   LEvEntry(_, ev)           => walk_locals_expr(ev, acc),
   LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _)   => acc,
   LFieldLoad(_h, rec, _off) => walk_locals_expr(rec, acc),
   LConvert(_h, _, operand)  => walk_locals_expr(operand, acc),
   LStateSlotStore(_h, _o, v, _) => walk_locals_expr(v, acc),
@@ -2486,7 +2491,8 @@ fn find_local_handle_expr(name: String, expr) = match expr {
   LUpval(_, _)              => 0,
   LEvRef(_, _)              => 0,
   LEvEntry(_, ev)           => find_local_handle_expr(name, ev),
-  LUnresolvedEvidence(_, _) => 0
+  LUnresolvedEvidence(_, _) => 0,
+  LInvariantFailure(_, _)   => 0
 }
 
 // A statement is a value used ZERO times — the kernel-uniform word
@@ -2518,6 +2524,7 @@ fn emit_body_seq(stmts, i) = {
 fn lexpr_leaves_value(e) = match e {
   LLet(_, _, _)            => false,
   LStateSlotStore(_, _, _, _) => false,
+  LInvariantFailure(_, _)   => false,
   LDeclareFn(_)            => false,
   LReturn(_, _)            => false,
   _                        => true
@@ -3537,7 +3544,7 @@ fn emit_expr(expr) = match expr {
     } else if import_name == "proc_exit" {
       // proc_exit is NORETURN — it terminates the process, so the code
       // after it is unreachable. Emit (unreachable) so the enclosing fn's
-      // result type is satisfied (op_abort_exit_fail is `(result i32)` but
+      // result type is satisfied (op_fail_exit_fail is `(result i32)` but
       // its body ends here). Matches the seed's `(call $proc_exit)(unreachable)`.
       wat_emit("    (call $proc_exit)(unreachable)\n")
     } else {
@@ -3611,6 +3618,15 @@ fn emit_expr(expr) = match expr {
   // slot-0 evidence read that would dispatch through a foreign record.
   LUnresolvedEvidence(_h, _ekey) =>
     wat_emit("    (unreachable)  ;; unresolved evidence — effect has no installed handler\n"),
+
+  // Compiler-created executable boundaries have no productive-under-error
+  // value. Preserve the typed invariant in the WAT diagnostic and terminate;
+  // no backend is permitted to guess a handle, row, representation, or edge.
+  LInvariantFailure(_h, invariant) => {
+    wat_emit("    (unreachable)  ;; executable-boundary invariant: ")
+    wat_emit(show_boundary_invariant(invariant))
+    wat_emit("\n")
+  },
 
   // W6: record field load. The offset was resolved at lower-time from the
   // record's inferred type (prefix-sum of repr_width over the sorted fields).
@@ -4721,7 +4737,8 @@ fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
   LUpval(_, _)           => acc,
   LEvRef(_, _)           => acc,
   LEvEntry(_, ev)        => collect_cmp_agg_tys_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc
+  LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _) => acc
 }
 
 // The product's field types, in canonical (sorted-for-record, positional-for-
@@ -4876,7 +4893,8 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LUpval(_, _)           => acc,
   LEvRef(_, _)           => acc,
   LEvEntry(_, ev)        => collect_eq_product_tys_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc
+  LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _) => acc
 }
 
 // ─── The SHOW leaf of the structural fold: generated recursive $show_<sig> ──
@@ -5405,7 +5423,8 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LUpval(_, _)           => acc,
   LEvRef(_, _)           => acc,
   LEvEntry(_, ev)        => collect_show_tys_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc
+  LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _) => acc
 }
 
 // ─── The HASH leaf of the structural fold: generated recursive $hash_<sig> ──
@@ -5677,7 +5696,8 @@ fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
   LUpval(_, _)           => acc,
   LEvRef(_, _)           => acc,
   LEvEntry(_, ev)        => collect_hash_tys_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc
+  LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _) => acc
 }
 
 // variant_named_specs_of — like variant_specs_of but ALSO carries each

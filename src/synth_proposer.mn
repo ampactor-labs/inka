@@ -184,7 +184,7 @@ fn enumerate_typed(target_ty, allowed_effects, context)
     TRecordOpen(fields, rest) => enumerate_records(fields, context),
     TRefined(base, _pred) => enumerate_typed(base, allowed_effects, context),
     TAlias(_, inner) => enumerate_typed(inner, allowed_effects, context),
-    TCont(_, _, _) => one_continuation_candidate(context),
+    TCont(_, _, _, _) => one_continuation_candidate(context),
     TList(elem) => enumerate_list_candidates(elem, context),
     TTuple(elems) => enumerate_tuple_candidates(elems, context)
   }

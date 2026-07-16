@@ -279,7 +279,31 @@ fn index_of_name(names: [String], target: String, i) = {
   else { index_of_name(names, target, i + 1) }
 }
 
-// Every variant carries a source TypeHandle (Int), never a cached Ty.
+// A compiler-created executable edge can fail only by violating one of these
+// graph/lower contracts. Keep the failure typed through LowIR; the backend may
+// render it, but cannot reinterpret it as a value-producing expression.
+type BoundaryInvariant
+  = MissingFanoutBoundary
+  | WrongFanoutBoundaryKind
+  | MissingFanoutEdge(Int)              // expected branch ordinal
+  | UnresolvedBoundaryThunk(Int)        // thunk graph handle
+  | MissingContinuationBoundary
+  | UnfinalizedContinuationBoundary(Int) // continuation graph handle
+  | WrongContinuationBoundaryKind
+  | NonMultiShotContinuation(ResumeDiscipline)
+
+fn show_boundary_invariant(invariant) with Pure = match invariant {
+  MissingFanoutBoundary          => "missing fanout boundary",
+  WrongFanoutBoundaryKind        => "wrong boundary kind at fanout",
+  MissingFanoutEdge(i)           => "missing fanout edge at ordinal {int_to_str(i)}",
+  UnresolvedBoundaryThunk(h)     => "unresolved boundary thunk {int_to_str(h)}",
+  MissingContinuationBoundary    => "missing continuation boundary",
+  UnfinalizedContinuationBoundary(h) => "pending continuation boundary {int_to_str(h)}",
+  WrongContinuationBoundaryKind  => "wrong boundary kind at continuation",
+  NonMultiShotContinuation(disc) => "non-multishot continuation: {show_discipline(disc)}"
+}
+
+// Every value-bearing variant carries a source TypeHandle (Int), never a cached Ty.
 // Type reads go through `perform lookup_ty(h)`. Emit consumes this IR;
 // the handle is the live bridge back to the graph.
 type LowExpr
@@ -437,6 +461,9 @@ type LowExpr
   // protocol_handler_is_state_is_closure_is_evidence.md, so the store
   // mutates handler state across resume calls.
   | LStateSlotStore(Int, Int, LowExpr, String)  // handle, slot_offset, value, record home ("" = the arm's $__state — byte-frozen OneShot; else $<name>_state_g, the bracket-scoped singleton a closure context reaches — the lambda's own $__state is its closure record, the measured 32-not-46 silent state loss)
+  // Typed terminal for a compiler-created executable-edge invariant. It has no
+  // value representation and no recovery arm; emit projects only `unreachable`.
+  | LInvariantFailure(Int, BoundaryInvariant)
   // Stage 4a: direct WASM-level import call. perform-form recognized at
   // lower-time when op_name matches a known WASI import (wasi_thread_
   // spawn, wasi_num_cores, fd_write, fd_read, path_open, etc.) bridges
@@ -523,6 +550,7 @@ fn lexpr_handle(e) with Pure = match e {
   LFieldLoad(h, _, _)     => h,
   LConvert(h, _, _)       => h,
   LStateSlotStore(h, _, _, _) => h,
+  LInvariantFailure(h, _) => h,
   LWasiCall(h, _, _)      => h
 }
 
@@ -567,7 +595,7 @@ fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + Loo
     // same word-leaf the eq fold compares with i32.eq); no structure to descend.
     TFun(_, _, _)      => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
     TVar(_)            => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
-    TCont(_, _, _)     => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
+    TCont(_, _, _, _)  => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
     TAlias(_, _)       => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
     TRefined(_, _)     => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo])
   }
@@ -799,6 +827,7 @@ fn resume_bind_target(callee_handle) = {
 // effects the frozen TFun row lost (docs/specs/simulations/polymorphism-as-flow-edges.md §8).
 fn effects_of(fn_ty) = match fn_ty {
   TFun(_, _, row) => effects_of_row(row),
+  TCont(_, _, _, world) => effects_of_row(world),
   _               => []
 }
 
@@ -1543,6 +1572,13 @@ type Schedule
   | Simd
   | Gpu
   | Persisted
+
+// One projection of infer's ExecutableBoundary edge. Every field keeps its
+// graph identity through LowIR: the thunk closure, semantic result, boundary-
+// local carrier, and the two scheduler-specific transient tickets.
+type ScheduledBoundary
+  = ScheduledBoundary(LowExpr, Int, Int, Int, Int)
+  | InvalidScheduledBoundary(Int, BoundaryInvariant)
 
 // Read the fanout's execution strategy from the installed `~>` chain —
 // the SAME `lower_handler_stack_now()` + `handler_covers_effect`
@@ -2455,18 +2491,17 @@ fn extract_handler_config_args(node) = {
 // survivable parallel execution (§4④ — parallelism and durable execution are
 // the same arm). Each is a `~> handler` choice over the one pure-topology verb.
 fn lower_fanout(handle, fan_own, left, right) = {
-  // Infer already drew the application-result edges into the fanout's tuple
-  // type. Project those exact handles; a call result is not the branch
-  // function's handle (TFun and Int merely happen to share RI32).
-  let result_hs = fanout_result_handles(handle)
-  match fan_own {
+  // Infer owns the ordered executable edges at the fanout site. Project them
+  // directly; tuple types prove the result shape but are not an identity index.
+  match fanout_boundaries(handle) {
+  Ok(boundaries) => match fan_own {
   FanDistribute => {
     let N(_, _, lh) = left
     let N(_, _, rh) = right
-    let branches = [ (synthesize_branch_thunk(handle, "l", left),
-                      fanout_result_handle_at(result_hs, 0, lh)),
-                     (synthesize_branch_thunk(handle, "r", right),
-                      fanout_result_handle_at(result_hs, 1, rh)) ]
+    let l_boundary = fanout_boundary_at(boundaries, 0, lh)
+    let r_boundary = fanout_boundary_at(boundaries, 1, rh)
+    let branches = [ synthesize_branch_thunk(handle, "l", left, l_boundary),
+                     synthesize_branch_thunk(handle, "r", right, r_boundary) ]
     run_fanout_thunks(handle, branches)
   },
   FanShare => {
@@ -2479,34 +2514,60 @@ fn lower_fanout(handle, fan_own, left, right) = {
       _                            => [right]
     }
     let branches = synthesize_diverge_thunks(
-      handle, input_h, input_local_name, branch_nodes, result_hs, 0)
+      handle, input_h, input_local_name, branch_nodes, boundaries, 0)
     // Bind the shared input ONCE, then run the thunks (each captures it).
     LBlock(handle, [
       LLet(input_h, input_local_name, lo_input),
       run_fanout_thunks(handle, branches)
     ])
   }
+  },
+  Err(invariant) => LInvariantFailure(handle, invariant)
   }
 }
 
-// A fanout result is a positional product of the branch-result handles infer
-// minted. Read that graph edge directly rather than recovering a return type
-// from the branch expression in lower. The fallbacks keep productive lowering
-// after an earlier type error; every well-typed fanout reaches the TVar arm.
-fn fanout_result_handles(handle) = match lookup_ty(handle) {
-  TTuple(elems) => map((ty) => match ty {
-    TVar(h) => h,
-    _       => 0
-  }, elems),
-  _ => []
+// Inference is the sole writer of executable boundaries. Missing here means
+// lower was asked to project a graph whose fanout topology has no executable
+// edge: a compiler error, surfaced before the productive-under-error fallback.
+fn fanout_boundaries(handle) = match graph_boundary_at(handle) {
+  FanoutBoundary(edges) => Ok(edges),
+  PendingContinuationBoundary(_, _, _, _) => {
+    report(EUnresolvedType(handle, graph_epoch(), span_zero()))
+    Err(WrongFanoutBoundaryKind)
+  },
+  ContinuationBoundary(_) => {
+    report(EUnresolvedType(handle, graph_epoch(), span_zero()))
+    Err(WrongFanoutBoundaryKind)
+  },
+  NoBoundary => {
+    report(EUnresolvedType(handle, graph_epoch(), span_zero()))
+    Err(MissingFanoutBoundary)
+  }
 }
 
-fn fanout_result_handle_at(result_hs, i, fallback) =
-  if i >= len(result_hs) { fallback }
+fn fanout_boundary_at(boundaries, i, fallback_h) =
+  if i < len(boundaries) { Ok(list_index(boundaries, i)) }
   else {
-    let h = list_index(result_hs, i)
-    if h == 0 { fallback } else { h }
+    report(EUnresolvedType(fallback_h, graph_epoch(), span_zero()))
+    Err(MissingFanoutEdge(i))
   }
+
+fn executable_boundary_row(thunk_h) = match lookup_ty(thunk_h) {
+  TFun(_, _, row) => Ok(row),
+  _ => {
+    report(EUnresolvedType(thunk_h, graph_epoch(), span_zero()))
+    Err(UnresolvedBoundaryThunk(thunk_h))
+  }
+}
+
+// Run the exact zero-argument boundary and immediately project its one-field
+// carrier back to the semantic result representation. The scheduler only ever
+// transports the carrier pointer; f64/f32/v128 remain unboxed in field 0.
+fn invoke_scheduled_boundary(branch) = match branch {
+  ScheduledBoundary(thunk, result_h, carrier_h, _, _) =>   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
+    LFieldLoad(result_h, LCall(carrier_h, thunk, []), 0),
+  InvalidScheduledBoundary(handle, invariant) => LInvariantFailure(handle, invariant)
+}
 
 // Project the strategy-neutral branch thunks through the schedule read
 // LIVE from the installed `~>` chain. `prelude` are statements that must
@@ -2522,13 +2583,7 @@ fn fanout_result_handle_at(result_hs, i, fallback) =
 // checkpoints each branch thunk to disk (persist_branch/join_persist). All
 // read the SAME strategy-neutral thunks — only the collector differs.
 fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
-  // The closure and its invocation result have different graph identities.
-  // The pair carries both: thunk_h selects the closure record; result_h selects
-  // the call signature, stack width, tuple store width, and scratch identity.
-  Seq => LMakeTuple(handle, map((branch) => {
-    let (thunk, result_h) = branch
-    LCall(result_h, thunk, [])
-  }, branches)),
+  Seq => LMakeTuple(handle, map(invoke_scheduled_boundary, branches)),
   Threaded => {
     // Spawn ALL branches, THEN join ALL — true parallelism with
     // source-order collection (the spawn-join-each interleave
@@ -2536,15 +2591,26 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
     // read them after every spawn has launched.
     let spawn_lets = map((indexed) => {
       let (i, branch) = indexed
-      let (thunk, _) = branch
-      LLet(handle, "__fanout_spawn_{int_to_str(i)}_{int_to_str(handle)}",
-        lower_perform_dispatch(handle, "spawn", [thunk]))
+      match branch {
+        ScheduledBoundary(thunk, _, _, thread_ticket_h, _) =>
+          LLet(thread_ticket_h, "__fanout_spawn_{int_to_str(i)}_{int_to_str(handle)}",
+            lower_perform_dispatch(thread_ticket_h, "spawn", [thunk])),
+        InvalidScheduledBoundary(boundary_h, invariant) =>
+          LLet(boundary_h, "__fanout_spawn_invalid_{int_to_str(i)}_{int_to_str(handle)}",
+            LInvariantFailure(boundary_h, invariant))
+      }
     }, enumerate(branches))
     let joins = map((indexed) => {
       let (i, branch) = indexed
-      let (_, result_h) = branch
-      lower_perform_dispatch(result_h, "thread_join",
-        [LLocal(handle, "__fanout_spawn_{int_to_str(i)}_{int_to_str(handle)}")])
+      match branch {
+        ScheduledBoundary(_, result_h, carrier_h, thread_ticket_h, _) => {   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
+          let joined = lower_perform_dispatch(carrier_h, "thread_join",
+            [LLocal(thread_ticket_h, "__fanout_spawn_{int_to_str(i)}_{int_to_str(handle)}")])
+          LFieldLoad(result_h, joined, 0)
+        },
+        InvalidScheduledBoundary(boundary_h, invariant) =>
+          LInvariantFailure(boundary_h, invariant)
+      }
     }, enumerate(branches))
     LBlock(handle, list_concat(spawn_lets, [LMakeTuple(handle, joins)]))
   },
@@ -2555,10 +2621,7 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
   // lane ops (emit_binop_v128: f32x4.add/mul) process four-at-once. The thunks
   // are the SAME strategy-neutral closures Seq/Thread call — only the COLLECTOR
   // differs (lanes vs tuple), proving the verb is pure topology (PLAN §4 STEP 4).
-  Simd => LSimdLanes(handle, map((branch) => {
-    let (thunk, result_h) = branch
-    LCall(result_h, thunk, [])
-  }, branches)),
+  Simd => LSimdLanes(handle, map(invoke_scheduled_boundary, branches)),
   // `~> Gpu` — "the handler IS the backend" (PLAN: infer/lower/emit/native/GPU
   // are the projected cursor, each aspect → a target token). The WASM substrate
   // has no in-process GPU dispatch instruction — a device kernel crosses the
@@ -2569,10 +2632,7 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
   // thunks Seq runs (a correct sequential execution of the kernel body), and the
   // device offload is the host-import swap at that boundary — named peer
   // Hβ.lower.fanout-gpu-host-import (the transport binding, not a Mentl gap).
-  Gpu  => LMakeTuple(handle, map((branch) => {
-    let (thunk, result_h) = branch
-    LCall(result_h, thunk, [])
-  }, branches)),
+  Gpu  => LMakeTuple(handle, map(invoke_scheduled_boundary, branches)),
   // `~> Persist` — parallelism and durable execution are the SAME arm (PLAN
   // §4④): each branch thunk is a continuation record (handler = state = closure
   // = evidence = continuation, §6), so a Persist scheduler spawns each branch
@@ -2586,15 +2646,26 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
   Persisted => {
     let spawn_lets = map((indexed) => {
       let (i, branch) = indexed
-      let (thunk, _) = branch
-      LLet(handle, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}",
-        lower_perform_dispatch(handle, "persist_branch", [thunk]))
+      match branch {
+        ScheduledBoundary(thunk, _, _, _, persist_ticket_h) =>
+          LLet(persist_ticket_h, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}",
+            lower_perform_dispatch(persist_ticket_h, "persist_branch", [thunk])),
+        InvalidScheduledBoundary(boundary_h, invariant) =>
+          LLet(boundary_h, "__fanout_persist_invalid_{int_to_str(i)}_{int_to_str(handle)}",
+            LInvariantFailure(boundary_h, invariant))
+      }
     }, enumerate(branches))
     let joins = map((indexed) => {
       let (i, branch) = indexed
-      let (_, result_h) = branch
-      lower_perform_dispatch(result_h, "join_persist",
-        [LLocal(handle, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}")])
+      match branch {
+        ScheduledBoundary(_, result_h, carrier_h, _, persist_ticket_h) => {   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
+          let joined = lower_perform_dispatch(carrier_h, "join_persist",
+            [LLocal(persist_ticket_h, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}")])
+          LFieldLoad(result_h, joined, 0)
+        },
+        InvalidScheduledBoundary(boundary_h, invariant) =>
+          LInvariantFailure(boundary_h, invariant)
+      }
     }, enumerate(branches))
     LBlock(handle, list_concat(spawn_lets, [LMakeTuple(handle, joins)]))
   }
@@ -2608,10 +2679,12 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
 // Per H.2.e (lower-lambda-capture-substrate): the closure
 // machinery used here is the same machinery that lowers user-
 // written lambdas; compiler-synthesized thunks reuse it.
-fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_nodes, result_hs, base_idx) = map((indexed) => {
+fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_nodes, boundaries, base_idx) = map((indexed) => {
   let (i, branch_node) = indexed
   let N(_, _, branch_h) = branch_node
-  let result_h = fanout_result_handle_at(result_hs, base_idx + i, branch_h)
+  match fanout_boundary_at(boundaries, base_idx + i, branch_h) {
+  Ok(boundary) => {
+  let BoundaryEdge(result_h, thunk_h, carrier_h, thread_ticket_h, persist_ticket_h) = boundary   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
   let thunk_name = "diverge_{int_to_str(base_idx + i)}_{int_to_str(parent_handle)}"
   // A diverge thunk is a closure exactly like a branch thunk (`><`,
   // synthesize_branch_thunk) — ONE closure-synthesis discipline, not two.
@@ -2633,13 +2706,15 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   // This is an ordinary call projected from an implicit application edge.
   // Reuse the normal call lowering so effectful stages take LSuspend and pure
   // stages take LCall; result_h is the application output infer minted.
-  let thunk_body = mark_tail(lower_call_default(
-    result_h, branch_node, branch_h, [LUpval(input_h, 0)]))
+  let branch_value = lower_call_default(
+    result_h, branch_node, branch_h, [LUpval(input_h, 0)])
+  let thunk_body = k2_guard(LMakeTuple(carrier_h, [branch_value]))
   lower_frame_fence_pop()
   ls_exit_frame()
-  let fn_ir = LFn(thunk_name, 0, [], [thunk_body], EfPure, len(captures_exprs))
-  // The thunk's identity is ITS BRANCH's handle — N thunks sharing the
-  // parent's handle minted N identical scratch locals downstream.
+  match executable_boundary_row(thunk_h) {
+  Ok(thunk_row) => {
+  let fn_ir = LFn(thunk_name, 0, [], [thunk_body],
+                  thunk_row, len(captures_exprs))
   // The captured evidence IS the branch's — a `<|` branch that performs a
   // STATEFUL effect (verify_pending_at → Verify, teach_gradient → Teach) reads
   // it live through the thunk's [key][record][base] region, exactly as a real
@@ -2648,7 +2723,15 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   // met the strict ev_perform_entry miss (only singleton `!Mutate` handlers,
   // dispatched off their `$..._state_g` global, resolved) — invisible until the
   // felt read drove the eight-arm fanout through Verify/Teach.
-  (LMakeClosure(branch_h, fn_ir, captures_exprs, derive_ev_slots(branch_h)), result_h)
+  ScheduledBoundary(
+    LMakeClosure(thunk_h, fn_ir, captures_exprs, derive_ev_slots(thunk_h)),
+    result_h, carrier_h, thread_ticket_h, persist_ticket_h)   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
+  },
+  Err(invariant) => InvalidScheduledBoundary(thunk_h, invariant)
+  }
+  },
+  Err(invariant) => InvalidScheduledBoundary(branch_h, invariant)
+  }
 }, enumerate(branch_nodes))
 
 // Branch-as-thunk synthesis. Mirrors LambdaExpr's lowering above —
@@ -2661,8 +2744,11 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
 // lowers user-written lambdas covers compiler-synthesized thunks.
 // Drift 6 closure: same closure substrate — no special-case for
 // "compiler-synthesized" thunks vs. user-written ones.
-fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
+fn synthesize_branch_thunk(parent_handle, side_label, branch_node, boundary) = {
   let N(_, _, branch_h) = branch_node
+  match boundary {
+  Ok(edge) => {
+  let BoundaryEdge(result_h, thunk_h, carrier_h, thread_ticket_h, persist_ticket_h) = edge   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
   let thunk_name = "compose_{side_label}_{int_to_str(parent_handle)}"
   let free_names = collect_free_vars(branch_node, [])
   let (captures_names, captures_exprs, captures_handles) =
@@ -2671,20 +2757,28 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
   // lambda (lambda_h = -1 → ev READ falls through to the named-fn/block path).
   ls_enter_frame("", [], [], captures_names, captures_handles, -1)
   lower_frame_fence_push()
-  let lo_body = k2_guard(mark_tail(lower_expr(branch_node)))   // Hβ.lower.tail-call-mark-pass — synthesized thunk body is in tail; k2_guard floors off-spine boundaries (M1.3)
+  let lo_body = k2_guard(LMakeTuple(carrier_h, [lower_expr(branch_node)]))
   lower_frame_fence_pop()
   ls_exit_frame()
+  match executable_boundary_row(thunk_h) {
+  Ok(thunk_row) => {
   let fn_ir = LFn(
     thunk_name,
     0,
     [],
     [lo_body],
-    EfPure,
+    thunk_row,
     len(captures_exprs)   // closure fence = capture count
   )
-  // The thunk's identity is ITS BRANCH's handle (the l/r thunks sharing the
-  // fanout's handle minted the same $call_<h> scratch twice at invocation).
-  LMakeClosure(branch_h, fn_ir, captures_exprs, [])
+  ScheduledBoundary(
+    LMakeClosure(thunk_h, fn_ir, captures_exprs, derive_ev_slots(thunk_h)),
+    result_h, carrier_h, thread_ticket_h, persist_ticket_h)   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
+  },
+  Err(invariant) => InvalidScheduledBoundary(thunk_h, invariant)
+  }
+  },
+  Err(invariant) => InvalidScheduledBoundary(branch_h, invariant)
+  }
 }
 
 // W6 — resolve a field's byte offset from the record's live type.
@@ -2976,7 +3070,7 @@ fn ty_handle_of(ty) = match ty {
   TRecord(_)          => 0,
   TRecordOpen(_, _)   => 0,
   TRefined(_, _)      => 0,
-  TCont(_, _, _)      => 0,
+  TCont(_, _, _, _)   => 0,
   TAlias(_, _)        => 0
 }
 
@@ -3671,16 +3765,23 @@ fn k_hole_name(ph) = "__resume_in_{int_to_str(ph)}"
 // union-homomorphic bitmask (W06). Shared by the k1 yield producer and
 // the k2 boundary composition — one reifier.
 fn reify_frame_k(body_node, ph, outer_holes) = {
-  let world = resume_world_of(ph)
+  match continuation_boundary_at(ph) {
+  Ok(edge) => reify_frame_k_at(body_node, ph, outer_holes, edge),
+  Err(invariant) => LInvariantFailure(ph, invariant)
+  }
+}
+
+fn reify_frame_k_at(body_node, ph, outer_holes, edge) = {
+  let ContinuationEdge(resume_input_h, answer_h, continuation_h, disc, world) = edge   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
   let hole = k_hole_name(ph)
   let free_names = free_vars_merge(map(((_, n)) => n, outer_holes),
                                    collect_free_vars(body_node, [hole]))
   let (captures_names, captures_exprs, captures_handles) =
     resolve_captures_outer(free_names, ph)
-  ls_enter_frame("", [hole], [ph], captures_names, captures_handles, ph)
+  ls_enter_frame("", [hole], [resume_input_h], captures_names, captures_handles, continuation_h)
   lower_frame_fence_push()
   let subs = map(((p, n)) => (p, k_hole_read(p, n)), outer_holes)
-             ++ [(ph, LLocal(ph, hole))]   // drift-audit: ignore — one-shot env build, no loop
+             ++ [(ph, LLocal(resume_input_h, hole))]   // drift-audit: ignore — one-shot env build, no loop
   let subs2 = match k_spine_next(body_node, subs) {
     None => subs,
     Some((op2, ph2, args2)) => {
@@ -3701,8 +3802,30 @@ fn reify_frame_k(body_node, ph, outer_holes) = {
   ls_exit_frame()
   let k_fn = LFn("__k_{int_to_str(ph)}", 1, [hole], [k_body],
                  world, len(captures_exprs))
-  LMakeContinuation(ph, k_fn, captures_exprs, derive_ev_slots(ph),
-                    ph, ph, world_tag_of_row(world))
+  if disc == MultiShot {
+    LMakeContinuation(continuation_h, k_fn, captures_exprs,
+                      derive_ev_slots(continuation_h),
+                      ph, resume_input_h, world_tag_of_row(world))
+  } else {
+    report(EResumeWorldMismatch(disc, MultiShot, span_zero()))
+    LInvariantFailure(ph, NonMultiShotContinuation(disc))
+  }
+}
+
+fn continuation_boundary_at(site_h) = match graph_boundary_at(site_h) {
+  ContinuationBoundary(edge) => Ok(edge),
+  PendingContinuationBoundary(_, _, continuation_h, _) => {
+    report(EUnresolvedType(continuation_h, graph_epoch(), span_zero()))
+    Err(UnfinalizedContinuationBoundary(continuation_h))
+  },
+  FanoutBoundary(_) => {
+    report(EUnresolvedType(site_h, graph_epoch(), span_zero()))
+    Err(WrongContinuationBoundaryKind)
+  },
+  NoBoundary => {
+    report(EUnresolvedType(site_h, graph_epoch(), span_zero()))
+    Err(MissingContinuationBoundary)
+  }
 }
 
 // Substitute every remaining spine perform with a dead dummy word — the
@@ -3887,7 +4010,8 @@ fn k2_floor_guard(e, terminus) = match e {
   LUpval(_, _)          => e,
   LEvRef(_, _)          => e,
   LFeedbackPrior(_)     => e,
-  LUnresolvedEvidence(_, _) => e
+  LUnresolvedEvidence(_, _) => e,
+  LInvariantFailure(_, _) => e
 }
 
 fn k2_floor_list(es) = map((x) => k2_floor_guard(x, false), es)
@@ -3936,26 +4060,6 @@ fn k2_floor_wrap(h, s) = {
 fn k2_floor_dummy(h) = match repr_of(lookup_ty(h)) {
   RF64 => LConst(h, LFloat(0.0)),
   _    => LConst(h, LInt(0))
-}
-
-// The effect-world a continuation is frozen under, read LIVE from the
-// enclosing arm fn's inferred row — the SAME source derive_ev_slots reads
-// (the fn's TFun row via escaping_row), so the world IS the
-// effects the resumed body performs, by construction. Carried-Truth: the
-// graph already proves this row; reading it here (not re-binding the resume
-// handle to TCont, which would corrupt the typed-resume value S) is the
-// world-CAPTURE at the producer's mint. A fn with no inferred type yet
-// captures the empty world EfPure — honest, not a fabricated default.
-fn resume_world_of(handle) = match env_lookup(ls_outer_fn_name()) {
-  Some(entry) => {
-    let (scheme, _, _) = entry
-    let Forall(_, ty) = scheme
-    match ty {
-      TFun(_, _, row) => row,
-      _               => EfPure
-    }
-  },
-  None => EfPure
 }
 
 // world_tag_of_row - legacy effect-row fingerprint projected to a
@@ -4978,6 +5082,7 @@ fn reach_names_expr(expr, acc) = match expr {
   LEvRef(_h, _e)            => acc,
   LEvEntry(_, ev)           => reach_names_expr(ev, acc),
   LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _)   => acc,
   LFieldLoad(_h, rec, _off) => reach_names_expr(rec, acc),
   LConvert(_h, _, operand)  => reach_names_expr(operand, acc),
   LStateSlotStore(_h, _o, v, _) => reach_names_expr(v, acc),

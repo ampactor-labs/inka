@@ -67,7 +67,8 @@ handler graph_handler
        program = [],
        comments = [],
        canon = [],
-       narrowing = [] {
+       narrowing = [],
+       boundaries = [] {
 
   // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
@@ -242,6 +243,31 @@ handler graph_handler
     resume(if handle < len(narrowing) { list_index(narrowing, handle) } else { 0 })
   },
 
+  // The executable-boundary weave: one O(1) read per fanout site, containing
+  // its ordered branch edges. Unlike parse-only program/comments and post-
+  // infer canon/narrowing, inference writes this weave while the oracle may be
+  // under a checkpoint, so every replacement is trailed and rolls back with
+  // the type nodes it names.
+  graph_boundary_at(site_handle) => {
+    resume(boundary_at(boundaries, site_handle))
+  },
+
+  graph_boundary_set(site_handle, boundary) => {
+    let old_boundary = boundary_at(boundaries, site_handle)
+    let new_boundaries = boundary_set(boundaries, site_handle, boundary)
+    let mutation = MSetBoundary(site_handle, old_boundary)
+    let new_trail = trail_append(trail, trail_len, mutation)
+    let new_epoch = epoch + 1
+    if len(checkpoint_stack) == 0 {
+      graph_mutated(new_epoch, mutation)
+    }
+    resume()
+      with boundaries = new_boundaries,
+           epoch = new_epoch,
+           trail = new_trail,
+           trail_len = trail_len + 1
+  },
+
   graph_bind(handle, ty, reason) => {
     if occurs_in(handle, ty) {
       report(EOccursCheck(handle, ty, span_zero()))
@@ -325,6 +351,7 @@ handler graph_handler
   // mutation has a precise inverse:
   //   MSetNode(h, old) → restore nodes[h] to old
   //   MSetRow(h, old)  → restore nodes[h] to old
+  //   MSetBoundary(h, old) -> restore executable edge at h
   //   MFreshNode(h)    → decrement next (un-allocate)
   // Reset trail_len = target; entries above are stale and get
   // overwritten on next append — no slicing, no allocation. Epoch is
@@ -336,12 +363,13 @@ handler graph_handler
   },
 
   graph_rollback(target_idx) => {
-    let (new_nodes, new_next) =
-      revert_trail(nodes, trail, trail_len, target_idx, next)
+    let (new_nodes, new_boundaries, new_next) =
+      revert_trail(nodes, boundaries, trail, trail_len, target_idx, next)
     let n = len(checkpoint_stack)
     let new_stack = if n == 0 { checkpoint_stack } else { slice(checkpoint_stack, 0, n - 1) }
     resume()
       with nodes = new_nodes,
+           boundaries = new_boundaries,
            next = new_next,
            trail_len = target_idx,
            checkpoint_stack = new_stack
@@ -527,7 +555,8 @@ fn occurs_in(handle, ref ty) with !Mutate = {
     TRecordOpen(fields, v) =>
       v == handle || occurs_in_fields(handle, fields),
     TRefined(base, _) => occurs_in(handle, base),
-    TCont(ret, _, world) => occurs_in(handle, ret) || occurs_in_row(handle, world),
+    TCont(input, answer, _, world) =>
+      occurs_in(handle, input) || occurs_in(handle, answer) || occurs_in_row(handle, world),
     TAlias(_, inner)  => occurs_in(handle, inner)
   }
 }
@@ -642,27 +671,41 @@ fn occurs_in_eff_args_loop(handle, ref args, i, n) with !Mutate = {
 // and get overwritten on next append. No snoc, no concat, no linked
 // walk. This is the substrate on which Mentl's oracle runs.
 
-fn revert_trail(own nodes, ref trail, current, target, next_handle) = {
-  if current <= target { (nodes, next_handle) }
+fn revert_trail(own nodes, own boundaries, ref trail, current, target, next_handle) = {
+  if current <= target { (nodes, boundaries, next_handle) }
   else {
     let idx = current - 1
     let mutation = trail[idx]
     match mutation {
       MSetNode(h, old) =>
         revert_trail(
-          graph_set_node(nodes, h, old),
+          graph_set_node(nodes, h, old), boundaries,
           trail, idx, target, next_handle
         ),
       MSetRow(h, old) =>
         revert_trail(
-          graph_set_node(nodes, h, old),
+          graph_set_node(nodes, h, old), boundaries,
+          trail, idx, target, next_handle
+        ),
+      MSetBoundary(h, old) =>
+        revert_trail(
+          nodes, boundary_set(boundaries, h, old),
           trail, idx, target, next_handle
         ),
       MFreshNode(_) =>
-        revert_trail(nodes, trail, idx, target, next_handle - 1)
+        revert_trail(nodes, boundaries, trail, idx, target, next_handle - 1)
     }
   }
 }
+
+fn boundary_at(ref boundaries, handle) with !Mutate =
+  if handle < len(boundaries) { list_index(boundaries, handle) }
+  else { NoBoundary }
+
+fn boundary_set(own boundaries, handle, own boundary) =
+  boundaries
+    |> list_extend_to(??, handle + 1)
+    |> list_set(??, handle, boundary)
 
 fn trail_append(own trail, trail_len, own mutation) = {
   trail

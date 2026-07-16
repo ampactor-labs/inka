@@ -35,32 +35,41 @@ import types
 // it live and inf_add_row joins it). On scope exit, the accumulated row
 // binds to the handle via `graph_bind_row`. One write; no conflict.
 effect InferCtx {
-  inf_enter_fn(Int, Span, List) -> ()
+  inf_enter_fn(Int, Int, Span, List) -> ()
   inf_exit_fn() -> List
   inf_add_effect(EffName) -> ()
   inf_add_row(EffRow) -> ()
   inf_current_row() -> EffRow
-  inf_enter_arm(Ty, Int) -> ()
+  inf_current_world() -> EffRow
+  inf_current_answer() -> Int
+  inf_enter_arm(Int) -> ()
   inf_exit_arm() -> ()
   inf_arm_tys() -> Option
 }
 
 handler infer_ctx with stack = [], arm_stack = [] {
   // stack = [InferFrame, ...] where each InferFrame is a record:
-  //   {accumulated_row: EffRow, declared: List, fn_span: Span, row_handle: Int}
+  //   {accumulated_row: EffRow, answer_handle: Int, declared: List,
+  //    fn_span: Span, row_handle: Int}
   //   declared = [(EffName, negated)] — the fn's authored annotation, born
   //   with the frame and returned by inf_exit_fn (nested fns get their own)
-  // arm_stack = [(op_return_ty, handle_result_h), ...] — the typed-resume
+  // arm_stack = [continuation_handle, ...] — the typed-resume
   //   context (SUBSTRATE.md primitive #2): inside `op(args) => body` for
   //   `op : (P...) -> R` under a handler whose handle-result is S,
   //   `resume : R -> S`. ResumeExpr reads the top frame; a stack because
   //   handler decls nest inside arm bodies.
 
-  inf_enter_fn(h, fn_span, effs) => {
+  inf_enter_fn(h, answer_h, fn_span, effs) => {
     // The frame is BORN with its declaration: `effs` = the FnStmt's authored
     // [(EffName, negated)] list (empty for lambdas / tee bodies / arm scopes).
     // No ambient declared-scalar to clobber — a nested fn gets its own.
-    let frame = {accumulated_row: EfPure, declared: effs, fn_span: fn_span, row_handle: h}
+    let frame = {
+      accumulated_row: EfPure,
+      answer_handle: answer_h,
+      declared: effs,
+      fn_span: fn_span,
+      row_handle: h
+    }
     resume()
       with stack = stack ++ [frame]   // drift-audit: ignore — bounded-depth frame PUSH (one per fn nesting level, popped at exit; §9 push-at-END), not a loop accumulator
   },
@@ -88,6 +97,7 @@ handler infer_ctx with stack = [], arm_stack = [] {
       let extended = union_row(frame.accumulated_row, mk_ef_closed([name]))
       let updated = {
         accumulated_row: extended,
+        answer_handle: frame.answer_handle,
         declared: frame.declared,
         fn_span: frame.fn_span,
         row_handle: frame.row_handle
@@ -104,6 +114,7 @@ handler infer_ctx with stack = [], arm_stack = [] {
       let extended = union_row(frame.accumulated_row, row)
       let updated = {
         accumulated_row: extended,
+        answer_handle: frame.answer_handle,
         declared: frame.declared,
         fn_span: frame.fn_span,
         row_handle: frame.row_handle
@@ -121,8 +132,21 @@ handler infer_ctx with stack = [], arm_stack = [] {
     }
   },
 
-  inf_enter_arm(op_ret_ty, result_h) => {
-    resume() with arm_stack = arm_stack ++ [(op_ret_ty, result_h)]   // drift-audit: ignore — bounded-depth arm-frame PUSH (§9 push-at-END), not a loop accumulator
+  // The continuation world is the current frame's LIVE row variable, not the
+  // accumulated prefix observed at the suspension point. The frame binds that
+  // variable on exit, so effects in the remainder are carried without a copy.
+  inf_current_world() => {
+    if len(stack) == 0 { resume(EfPure) }
+    else { resume(mk_ef_open([], last(stack).row_handle)) }
+  },
+
+  inf_current_answer() => {
+    if len(stack) == 0 { resume(-1) }
+    else { resume(last(stack).answer_handle) }
+  },
+
+  inf_enter_arm(continuation_h) => {
+    resume() with arm_stack = arm_stack ++ [continuation_h]   // drift-audit: ignore — bounded-depth arm-frame PUSH (§9 push-at-END), not a loop accumulator
   },
 
   inf_exit_arm() => {
@@ -153,6 +177,10 @@ fn infer_program(stmts) = {
     // the standing ctx, so arm grades see resumes in CALLED fns.
     set_summaries(classify_fixpoint(stmts))
     infer_stmt_list(stmts)
+    // Handler declarations may follow their effect-call sites. Finalize only
+    // after the whole inference walk, when every op's cardinality join is live
+    // in its EffectOpScheme. The pending edge already holds the exact row frame.
+    finalize_continuation_boundaries(0, graph_next())
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
   stmts
 }
@@ -323,7 +351,7 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
 
   // Enter the row-accumulation scope and infer body. The frame is born with
   // the authored declaration; the exit hands it back for enforcement below.
-  inf_enter_fn(row_handle, span, effs)
+  inf_enter_fn(row_handle, ret_handle, span, effs)
   infer_expr(body_node)
   let declared_effs = inf_exit_fn()   // drift-audit: ignore — sequenced effectful handler-state read (the popped frame's declaration, consumed at the enforcement below)
 
@@ -733,14 +761,16 @@ fn infer_expr(ref node) = {
       infer_expr(val)
       let N(_, _, vh) = val
       match inf_arm_tys() {
-        Some(ctx) => {
-          let (op_ret_ty, result_h) = ctx
-          let r_h = mint(Inferred("op result at resume"))
-          graph_bind(r_h, op_ret_ty,
-            Located(span, Inferred("resume carries the op result")))
-          unify(vh, r_h, span, Inferred("resume carries the op result"))
-          graph_bind(handle, TVar(result_h),
-            Located(span, Inferred("resume yields the handle result")))
+        Some(continuation_h) => match graph_chase(continuation_h) {
+          GNode(NBound(TCont(resume_input, answer, _, _)), _) => {
+            let r_h = mint(Inferred("op result at resume"))
+            graph_bind(r_h, resume_input,
+              Located(span, Inferred("resume carries the continuation input")))
+            unify(vh, r_h, span, Inferred("resume carries the continuation input"))
+            graph_bind(handle, answer,
+              Located(span, Inferred("resume yields the continuation answer")))
+          },
+          _ => report(EUnresolvedType(continuation_h, graph_epoch(), span))
         },
         None =>
           // resume outside any arm — parse admitted it; surface the
@@ -786,7 +816,8 @@ fn infer_expr(ref node) = {
       env_scope_enter()
       let param_handles = mint_params(params, "lambda")
       let row_handle = graph_fresh_row(Inferred("lambda effects"))
-      inf_enter_fn(row_handle, span, [])
+      let N(_, _, bh) = body_node
+      inf_enter_fn(row_handle, bh, span, [])
       infer_expr(body_node)
       inf_exit_fn()
       // CREATE-CAPTURES-EVIDENCE flow edge: a closure created here captures THIS
@@ -797,7 +828,6 @@ fn infer_expr(ref node) = {
       // that asymmetry lost an escaping closure's effects (the higher-order-effect
       // leak). The graph already proved the lambda's row; flow it, never re-derive.
       inf_add_row(mk_ef_open([], row_handle))
-      let N(_, _, bh) = body_node
       graph_bind(handle, TFun(
         build_param_types(params, param_handles),
         TVar(bh),
@@ -1089,6 +1119,69 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
         _ => ()
       }
   }
+  stage_continuation_boundary(cname, handle)
+}
+
+// EVERY application result is a possible suspension boundary — not only an
+// effect op's perform. k1 reifies the remainder AT the perform; k2 composes a
+// frame remainder onto the unwinding k at an ordinary CALL or PIPE STAGE the
+// yield crosses (lower_body_reified's spine). Both read this one edge. Mint
+// the record identity while the enclosing InferCtx frame is live (the world is
+// the frame's LIVE row variable; the answer is the frame's answer handle);
+// bind its TCont only after all handler arms have joined their usage grades
+// onto the op scheme (finalize).
+fn stage_continuation_boundary(cname: String, resume_input_h) = {
+  let continuation_h = mint(
+    InferredCallReturn(cname, Inferred("continuation boundary")))
+  let current_answer_h = inf_current_answer()   // drift-audit: ignore — sequenced effectful handler-state read (the InferCtx frame's answer handle), consumed by the ternary below
+  let answer_h = if current_answer_h < 0 { resume_input_h } else { current_answer_h }
+  graph_boundary_set(resume_input_h,
+    PendingContinuationBoundary(
+      resume_input_h, answer_h, continuation_h, inf_current_world()))   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
+}
+
+fn finalize_continuation_boundaries(i, n) = {
+  if i >= n { () }
+  else {
+    match graph_boundary_at(i) {
+      PendingContinuationBoundary(resume_input_h, answer_h, continuation_h, world) => {   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
+        let disc = continuation_discipline_at(i)
+        graph_bind(continuation_h,
+          TCont(TVar(resume_input_h), TVar(answer_h), disc, world),
+          Inferred("inference-owned continuation boundary"))
+        graph_boundary_set(i,
+          ContinuationBoundary(
+            ContinuationEdge(
+              resume_input_h, answer_h, continuation_h, disc, world)))   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
+      },
+      _ => ()
+    }
+    finalize_continuation_boundaries(i + 1, n)
+  }
+}
+
+// The discipline at a boundary is read LIVE at finalize, after every handler
+// arm has joined its usage grade onto the op scheme. An effect op's perform
+// carries the op's own joined discipline (k1 — the yield site). Every OTHER
+// application boundary (an ordinary call, a pipe stage, a fanout apply) is a
+// k2 CROSSING site: a frame-k there only materializes as a SEGMENT of a
+// yield already unwinding, and a composed k is called as many times as the k
+// it extends — MultiShot by construction, never the callee's own cardinality.
+fn continuation_discipline_at(site_h) = match graph_node_body(site_h) {
+  NExpr(CallExpr(func, _)) => {
+    let name = callee_name(func)
+    match env_lookup(name) {
+      Some(entry) => {
+        let (_, _, kind) = entry
+        match kind {
+          EffectOpScheme(_, _, _, disc) => disc,
+          _ => MultiShot
+        }
+      },
+      None => MultiShot
+    }
+  },
+  _ => MultiShot
 }
 
 // `~>` handler attachment — the row algebra's handler operator. A handler is
@@ -1101,7 +1194,8 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
 // — without it map/each lose every effect performed in their arms.
 fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
   let body_row_h = graph_fresh_row(Inferred("~> body row"))
-  inf_enter_fn(body_row_h, span, [])
+  let N(_, _, body_answer_h) = left
+  inf_enter_fn(body_row_h, body_answer_h, span, [])   // drift-audit: ignore — two independent frame inputs (row handle, answer handle) — one frame record's fields, not parallel arrays
   infer_expr(left)
   inf_exit_fn()
 
@@ -1282,6 +1376,10 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       graph_bind(expected_h, expected, Located(span, InferredPipeResult("|>", Inferred("expected"))))
       unify(rh, expected_h, span, InferredPipeResult("|>", Inferred("target")))
       graph_bind(handle, TVar(ret_h), Located(span, InferredPipeResult("|>", Inferred("result"))))
+      // A pipe stage is an application; its result node is a suspension
+      // boundary exactly as a CallExpr's is (lower's k2 spine keys the
+      // bare-VarRef stage's LSuspend by THIS pipe node's handle).
+      stage_continuation_boundary("|>", handle)
       // callee's row flows into caller's row — including the open row
       // VARIABLE when the piped-into fn is effect-polymorphic.
       let row_node = graph_chase(row_h)
@@ -1360,12 +1458,10 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
 fn infer_fanout(fan_own, left, right, handle, span: ValidSpan) = match fan_own {
   FanDistribute => {
     branch_enter()
-    infer_expr(left)
+    let l_edge = infer_fanout_value_boundary(left, span, "left")
     branch_divider(span)
-    infer_expr(right)
+    let r_edge = infer_fanout_value_boundary(right, span, "right")
     branch_exit(span)
-    let N(_, _, lh) = left
-    let N(_, _, rh) = right
     // Branch validity is a TYPE fact (SYNTAX.md §«>< branch typing»): each
     // branch must be stage-shaped — a pipeline / function of the composed
     // input — never a bare value where a stage belongs. Read the branch
@@ -1373,10 +1469,57 @@ fn infer_fanout(fan_own, left, right, handle, span: ValidSpan) = match fan_own {
     // `><` site (peer Hβ.infer.pcompose-branch-stage-type).
     check_branch_is_stage(left, span)
     check_branch_is_stage(right, span)
-    graph_bind(handle, TTuple([TVar(lh), TVar(rh)]),
+    let edges = [l_edge, r_edge]
+    graph_boundary_set(handle, FanoutBoundary(edges))
+    graph_bind(handle, TTuple(map(boundary_result_ty, edges)),
       Located(span, Inferred(">< parallel fanout — branches affinity-checked")))
   },
   FanShare => infer_fanout_share(left, right, handle, span)
+}
+
+// A `><` branch is evaluated behind a compiler-created zero-argument boundary.
+// Give every layer of that boundary its own graph identity: `result_h` is the
+// branch evaluation, `carrier_h` is the one-field product transported through a
+// word-uniform scheduler, and `thunk_h` is the executable
+// `() -> carrier_h`. The nested InferCtx frame owns the thunk's exact row; once
+// closed, that row flows into the enclosing fanout just as a lambda row does.
+fn infer_fanout_value_boundary(branch, span: ValidSpan, label: String) = {
+  let N(_, _, branch_h) = branch
+  let result_h = mint(InferredPipeResult("><", Inferred("{label} branch result")))
+  let carrier_h = mint(InferredPipeResult("><", Inferred("{label} branch carrier")))
+  let thunk_h = mint(InferredPipeResult("><", Inferred("{label} executable boundary")))
+  let thread_ticket_h = mint(
+    InferredPipeResult("><", Inferred("{label} thread schedule ticket")))
+  let persist_ticket_h = mint(
+    InferredPipeResult("><", Inferred("{label} persist schedule ticket")))
+  let thunk_row_h = graph_fresh_row(
+    InferredPipeResult("><", Inferred("{label} boundary effects")))
+
+  inf_enter_fn(thunk_row_h, carrier_h, span, [])   // drift-audit: ignore — two independent frame inputs (row handle, answer handle) — one frame record's fields, not parallel arrays
+  infer_expr(branch)
+  graph_bind(result_h, TVar(branch_h),
+    Located(span, InferredPipeResult("><", Inferred("{label} branch evaluation"))))
+  // The branch evaluation is an application inside the thunk frame; its
+  // suspension boundary carries THIS frame's world (staged before exit).
+  stage_continuation_boundary("><", result_h)
+  inf_exit_fn()
+
+  let thunk_row = mk_ef_open([], thunk_row_h)
+  graph_bind(carrier_h, TTuple([TVar(result_h)]),
+    Located(span, InferredPipeResult("><", Inferred("{label} boundary carrier"))))
+  graph_bind(thunk_h, TFun([], TVar(carrier_h), thunk_row),
+    Located(span, InferredPipeResult("><", Inferred("{label} zero-argument boundary"))))
+  graph_bind(thread_ticket_h, TName("ThreadHandle", []),
+    Located(span, InferredPipeResult("><", Inferred("{label} thread schedule ticket"))))
+  graph_bind(persist_ticket_h, TName("PersistHandle", []),
+    Located(span, InferredPipeResult("><", Inferred("{label} persist schedule ticket"))))
+  inf_add_row(thunk_row)
+  BoundaryEdge(result_h, thunk_h, carrier_h, thread_ticket_h, persist_ticket_h)   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
+}
+
+fn boundary_result_ty(edge) = {
+  let BoundaryEdge(result_h, _, _, _, _) = edge
+  TVar(result_h)
 }
 
 // A `><` branch is stage-shaped iff it is a pipeline (PipeExpr — a
@@ -1425,12 +1568,12 @@ fn infer_fanout_share(left, right, handle, span: ValidSpan) = {
     _                           => [right]
   }
   let n = len(branches)
-  let ret_hs = if n == 0 { [] }
+  let edges = if n == 0 { [] }
     else {
       branch_enter()
-      let hs = infer_fanout_share_branches(branches, input_h, span, 0, n)
+      let inferred_edges = infer_fanout_share_branches(branches, input_h, span, 0, n)
       branch_exit(span)
-      hs
+      inferred_edges
     }
   let N(_, _, rh) = right
   // Preserve the RHS as the tuple of STAGES it denotes. In the singleton
@@ -1443,7 +1586,8 @@ fn infer_fanout_share(left, right, handle, span: ValidSpan) = {
         Located(span, Inferred("<| fanout — tuple of branch stages"))),
     _ => ()
   }
-  graph_bind(handle, TTuple(map((rh2) => TVar(rh2), ret_hs)),
+  graph_boundary_set(handle, FanoutBoundary(edges))
+  graph_bind(handle, TTuple(map(boundary_result_ty, edges)),
     Located(span, Inferred("<| fanout — result type is branch-output tuple")))
 }
 
@@ -1456,34 +1600,70 @@ fn infer_fanout_share(left, right, handle, span: ValidSpan) = {
 fn infer_fanout_share_branches(branches, input_h, span: ValidSpan, i, n) = {
   if i >= n { [] }
   else {
-    let ret_h = infer_fanout_apply_one(list_index(branches, i), input_h, span)
+    let edge = infer_fanout_apply_one(list_index(branches, i), input_h, span)
     if i + 1 < n { branch_divider(span) }
-    [ret_h] ++ infer_fanout_share_branches(branches, input_h, span, i + 1, n)
+    // Keep the recursive tail named. A bare `[edge]` immediately after the
+    // `if` is postfix indexing in Mentl's grammar, so it indexes the divider's
+    // Unit result instead of constructing the branch-edge prefix.
+    let rest = infer_fanout_share_branches(branches, input_h, span, i + 1, n)
+    [edge] ++ rest
   }
 }
 
 fn infer_fanout_apply_one(branch, input_h, span: ValidSpan) = {
   let N(_, _, bh) = branch
-  infer_expr(branch)
-  let ret_h = mint(Inferred("<| branch output"))
-  let row_h = graph_fresh_row(Inferred("<| branch effects"))
-  let expected = TFun(build_inferred_params([input_h]), TVar(ret_h), mk_ef_open([], row_h))
+  let ret_h = mint(InferredPipeResult("<|", Inferred("branch result")))
+  let carrier_h = mint(InferredPipeResult("<|", Inferred("branch carrier")))
+  let thunk_h = mint(InferredPipeResult("<|", Inferred("executable boundary")))
+  let thread_ticket_h = mint(
+    InferredPipeResult("<|", Inferred("thread schedule ticket")))
+  let persist_ticket_h = mint(
+    InferredPipeResult("<|", Inferred("persist schedule ticket")))
+  let thunk_row_h = graph_fresh_row(
+    InferredPipeResult("<|", Inferred("boundary effects")))
+  let call_row_h = graph_fresh_row(
+    InferredPipeResult("<|", Inferred("implicit application effects")))
+  let expected = TFun(
+    build_inferred_params([input_h]),
+    TVar(ret_h),
+    mk_ef_open([], call_row_h)
+  )
   let expected_h = mint(Inferred("<| branch expected fn"))
+
+  // Infer the authored stage and its implicit application inside the boundary's
+  // row frame. The frame closes onto thunk_row_h; only that exact row is then
+  // projected into the enclosing function.
+  inf_enter_fn(thunk_row_h, carrier_h, span, [])   // drift-audit: ignore — two independent frame inputs (row handle, answer handle) — one frame record's fields, not parallel arrays
+  infer_expr(branch)
   graph_bind(expected_h, expected,
     Located(span, Inferred("<| branch applied to the borrowed input")))
   unify(bh, expected_h, span, Inferred("<| branch borrows the shared input"))
-  // The branch's effects flow into the enclosing row — the same
+  // The branch call's row flows into the boundary frame — the same
   // read-the-callee's-own-row discipline infer_call_saturated uses.
   match graph_chase(bh) {
     GNode(NBound(TFun(_, _, brow)), _) => inf_add_row(brow),
     _ =>
-      match graph_chase(row_h) {
+      match graph_chase(call_row_h) {
         GNode(NRowBound(row), _) => inf_add_row(row),
-        GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], row_h)),
+        GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], call_row_h)),
         _ => ()
       }
   }
-  ret_h
+  // The implicit application is a suspension boundary inside the thunk frame.
+  stage_continuation_boundary("<|", ret_h)
+  inf_exit_fn()
+
+  let thunk_row = mk_ef_open([], thunk_row_h)
+  graph_bind(carrier_h, TTuple([TVar(ret_h)]),
+    Located(span, InferredPipeResult("<|", Inferred("boundary carrier"))))
+  graph_bind(thunk_h, TFun([], TVar(carrier_h), thunk_row),
+    Located(span, InferredPipeResult("<|", Inferred("zero-argument boundary"))))
+  graph_bind(thread_ticket_h, TName("ThreadHandle", []),
+    Located(span, InferredPipeResult("<|", Inferred("thread schedule ticket"))))
+  graph_bind(persist_ticket_h, TName("PersistHandle", []),
+    Located(span, InferredPipeResult("<|", Inferred("persist schedule ticket"))))
+  inf_add_row(thunk_row)
+  BoundaryEdge(ret_h, thunk_h, carrier_h, thread_ticket_h, persist_ticket_h)   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
 }
 
 // Unification — graph-direct, Hazel-productive.
@@ -1656,20 +1836,21 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
         }
       },
 
-    TCont(ra, da, wa) =>
+    TCont(ria, saa, da, wa) =>
       match b {
-        TCont(rb, db, wb) => {
-          // The continuation's TYPE carries three facts; unify ALL three —
-          // the prior form dropped da/db (and there was no world). (1) return
-          // type. (2) resume cardinality: OneShot/MultiShot are distinct
+        TCont(rib, sab, db, wb) => {
+          // The continuation's TYPE carries four facts; unify ALL four. (1)
+          // resume input R. (2) answer S. (3) resume cardinality:
+          // OneShot/MultiShot are distinct
           // representations (stack frame vs heap record), so a mismatch is a
           // hard E_ResumeWorldMismatch; Either is gradient-undecided and
-          // unifies with either. (3) the effect-WORLD: a row unification at the
+          // unifies with either. (4) the effect-WORLD: a row unification at the
           // resume edge — resuming a continuation under a changed handler-set
           // is unify(captured_world, resume_site_world). !E lifted to the TIME
           // axis (§4③ modal frontier); a now-unhandled resume is a compile/load
           // error, never a silent memcpy'd miscompile (Law 7).
-          unify_types(ra, rb, span, reason)
+          unify_types(ria, rib, span, reason)
+          unify_types(saa, sab, span, reason)
           if disciplines_compatible(da, db) { () }
           else {
             report(EResumeWorldMismatch(da, db, span))
@@ -1730,7 +1911,7 @@ fn same_ground(ref a, ref b) with Pure = match a {
   TRecord(_)         => false,
   TRecordOpen(_, _)  => false,
   TRefined(_, _)     => false,
-  TCont(_, _, _)     => false,
+  TCont(_, _, _, _)  => false,
   TAlias(_, inner)   => same_ground(inner, b)
 }
 
@@ -2484,7 +2665,12 @@ fn infer_one_handler_arm(arm: {args: List, body: N, op_name: String}, result_h, 
       TVar(mint(Inferred("undeclared op result")))
     }
   }
-  inf_enter_arm(op_ret_ty, result_h)
+  let continuation_h = mint(Inferred("handler arm continuation"))
+  let continuation_disc = arm_disc_of(resume_grade(arm.body), op_ret_ty)
+  graph_bind(continuation_h,
+    TCont(op_ret_ty, TVar(result_h), continuation_disc, inf_current_world()),
+    Located(arm_span, Inferred("handler arm continuation R -> S")))
+  inf_enter_arm(continuation_h)
   infer_expr(arm.body)
   inf_exit_arm()
   let N(_, _, abh) = arm.body
@@ -2631,7 +2817,8 @@ fn chase_deep(ty) = match ty {
   TRecord(fields) => TRecord(chase_fields(fields)),
   TRecordOpen(fields, v) => mk_record_open(chase_fields(fields), v),
   TRefined(base, pred) => TRefined(chase_deep(base), pred),
-  TCont(ret, disc, world) => TCont(chase_deep(ret), disc, world),   // world preserved unchased, mirroring TFun's eff at this site
+  TCont(input, answer, disc, world) =>
+    TCont(chase_deep(input), chase_deep(answer), disc, world),   // world preserved unchased, mirroring TFun's eff at this site
   TAlias(name, inner)  => TAlias(name, chase_deep(inner))
 }
 
@@ -2661,7 +2848,8 @@ fn free_in_ty(ty) = match ty {
   TRecord(fields)        => free_in_fields(fields),
   TRecordOpen(fields, v) => [v] ++ free_in_fields(fields),
   TRefined(base, _)      => free_in_ty(base),
-  TCont(ret, _, world)   => free_in_ty(ret) ++ free_in_row(world),
+  TCont(input, answer, _, world) =>
+    free_in_ty(input) ++ free_in_ty(answer) ++ free_in_row(world),
   TAlias(_, inner)       => free_in_ty(inner)
 }
 
@@ -2816,7 +3004,9 @@ fn subst_ty(ty, mapping) = match ty {
     }
   },
   TRefined(base, pred) => TRefined(subst_ty(base, mapping), pred),
-  TCont(ret, disc, world) => TCont(subst_ty(ret, mapping), disc, subst_row(world, mapping)),   // world is a row: freshen its row-var like TFun's eff (free_in/subst symmetry)
+  TCont(input, answer, disc, world) => TCont(
+    subst_ty(input, mapping), subst_ty(answer, mapping), disc,
+    subst_row(world, mapping)),   // world is a row: freshen its row-var like TFun's eff (free_in/subst symmetry)
   TAlias(name, inner)   => TAlias(name, subst_ty(inner, mapping))
 }
 
@@ -3361,7 +3551,7 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
   // body under this row scope routes every effect it performs (incl. a call
   // to a config arg `f`) into r_handle via inf_add_effect/inf_add_row. On
   // exit, r_handle binds to R — the row `~> h` adds to the caller.
-  inf_enter_fn(r_handle, span, [])
+  inf_enter_fn(r_handle, s_h, span, [])
   each((arm) => {
     env_scope_enter()
     infer_one_handler_arm(arm, s_h, inst_h)   // drift-audit: ignore — s_h (arm result) and inst_h (effect instance) are distinct, not parallel arrays

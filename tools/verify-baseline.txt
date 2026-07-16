@@ -380,3 +380,4 @@ micro:backtrack-full=30
 # deliberately installed inside the matching one; exit 81 proves neither op
 # cross-routes through the other effect's install.
 micro:effect-identity=81
+micro:fanout-destructure-float=60

@@ -291,6 +291,8 @@ type BoundaryInvariant
   | UnfinalizedContinuationBoundary(Int) // continuation graph handle
   | WrongContinuationBoundaryKind
   | NonMultiShotContinuation(ResumeDiscipline)
+  | PartialEffectfulCallee(Int)          // callee handle — Hβ.lower.partial-effectful-callee
+  | PartialCalleeShape(Int)              // callee handle — Hβ.lower.partial-local-callee
 
 fn show_boundary_invariant(invariant) with Pure = match invariant {
   MissingFanoutBoundary          => "missing fanout boundary",
@@ -300,7 +302,9 @@ fn show_boundary_invariant(invariant) with Pure = match invariant {
   MissingContinuationBoundary    => "missing continuation boundary",
   UnfinalizedContinuationBoundary(h) => "pending continuation boundary {int_to_str(h)}",
   WrongContinuationBoundaryKind  => "wrong boundary kind at continuation",
-  NonMultiShotContinuation(disc) => "non-multishot continuation: {show_discipline(disc)}"
+  NonMultiShotContinuation(disc) => "non-multishot continuation: {show_discipline(disc)}",
+  PartialEffectfulCallee(h)      => "partial over effectful callee {int_to_str(h)} — evidence capture at the mint unbuilt",
+  PartialCalleeShape(h)          => "partial over non-global callee shape {int_to_str(h)}"
 }
 
 // Every value-bearing variant carries a source TypeHandle (Int), never a cached Ty.
@@ -798,6 +802,187 @@ fn lower_call_default(handle, f, fh, lo_args) = {
     LSuspend(handle, fh, lo_f, lo_args, ev_slots2, false)
   }
 }
+
+// The saturated call's ONE dispatch body — two callers project through it:
+// lower_expr's CallExpr arm (behind the partial fork) and lower_pipe_complete
+// (fork-free by construction: the pipe owns its hole and completes it by the
+// inline splice, so a pipe-right hole-bearing call must never mint a partial
+// closure — the splice is the zero-record, evidence-correct projection of
+// the same hole-filling semantics).
+fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
+  let lo_args = lower_expr_list(r_args)
+  match fbody {
+      NExpr(VarRef(name)) =>
+        if name == "to_string" && len(r_args) == 1 {
+          lower_to_string_dispatch(handle, last(lo_args), r_args)
+        } else if name == "hash" && len(r_args) == 1 {
+          // hash(x) IS the HASH leaf of the structural fold — lower-time type
+          // dispatch (scalar word-identity / sequence str_hash·list_hash /
+          // aggregate $hash_<sig>), the sibling of to_string's show leaf.
+          lower_hash_dispatch(handle, last(lo_args), r_args)
+        } else if name == "float_of_int" && len(r_args) == 1 {
+          // W11: the gradient's coercion arm — a REAL i32->f64 widen
+          // (f64.convert_i32_s), never an identity stub reinterpreting bits.
+          LConvert(handle, IntToFloat, last(lo_args))
+        } else if name == "float_to_int" && len(r_args) == 1 {
+          // f64->i32 truncating toward zero (i32.trunc_f64_s) — the value-
+          // faithful inverse, replacing the bit-reinterpreting identity stub.
+          LConvert(handle, FloatToInt, last(lo_args))
+        } else if is_substrate_mem_op(name) {
+          // Memory / Alloc ops ARE the instruction set — "the WASM runtime
+          // IS the handler" (lib/runtime/memory.mn). They project to raw
+          // instructions, never through evidence: routing them Tier-2 made
+          // the evidence scan's own loads dispatch through the evidence
+          // scan (ev_perform_entry ⇄ ev_scan, the handler rung's runtime
+          // stack overflow). LWasiCall is the direct-substrate node; emit
+          // dispatches the name to its instruction.
+          LWasiCall(handle, name, lo_args)
+        } else { match env_kind_of(name) {
+        Some(ConstructorScheme(tag_id, _)) =>
+          LMakeVariant(handle, tag_id, lo_args),
+        Some(RecordSchemeKind(_)) =>
+          // Nominal-record CALL-form construction `Pri({...})`: the runtime
+          // representation IS the bare record (NamedRecordExpr's own arm
+          // lowers to LMakeRecord — type identity is type-system-only, no
+          // tag). The single argument already IS that record; the wrapper
+          // is the identity at this layer. Arity is the infer gate's
+          // business (the ctor-pattern arrow view unifies one param); a
+          // zero-arg call (already reported there) lowers to the empty
+          // record, never a garbage read past an empty args list.
+          if len(lo_args) == 0 { LMakeRecord(handle, []) } else { list_index(lo_args, 0) },
+        Some(EffectOpScheme(_, _, _, _)) =>
+          // Row-guided dispatch per SUBSTRATE.md §"Three Tiers of
+          // Effect Compilation". The row IS the evidence contract:
+          //   - Effect in declared row → Tier 2: LEvPerform (handler
+          //     comes from caller via evidence slot on __state)
+          //   - Effect NOT in row → Tier 1: LPerform (handler is
+          //     locally installed, direct call)
+          // A WASI import op bridges directly to the WASM-level import
+          // (no $op_<name> handler arm) — the import IS the bridge.
+          if is_wasi_import_op(name) {
+            LWasiCall(handle, name, lo_args)
+          } else {
+            lower_perform_dispatch(handle, name, lo_args)
+          },
+        _ => lower_call_default(handle, f, fh, lo_args)
+      } },
+      _ => lower_call_default(handle, f, fh, lo_args)
+  }
+}
+
+// The partial fork's ONE decider — the lower mirror of infer_call_dispatch's
+// (the same call_hole_index read, the same is_seq_op precedence, the same
+// fn-typed-callee gate): Some(n) = the callee declares n params and the
+// resolved args carry an authored `??` slot; None = saturated, or not a
+// fn-typed callee (infer's own saturated fallback, mirrored). The decider's
+// proof — the declared arity — travels to the mint; it is never re-derived
+// there. The AUTHORED hole is the one reliable signal: the bare positional
+// prefix k<n also types as a partial at infer, but under productive-under-
+// error a recovered callee's TFun arity is a guess, and flooring every
+// arity-mismatched recovered call collapses the module — the prefix form
+// mints only from proven arity (Hβ.lower.partial-prefix-arity, gated on the
+// recovered-inference population).
+fn partial_unfilled(cname, fh, r_args) =
+  if is_seq_op(cname) { None }
+  else if call_hole_index(r_args, 0) < 0 { None }
+  else { match lookup_ty(fh) {
+    TFun(ps, _, _) =>
+      // Over-application (more args than params — a recovered arity error)
+      // dispatches as before: the mint's slot walk stops at the param count
+      // and would silently drop the surplus args' evaluation, so it never
+      // fires there.
+      if len(r_args) <= len(ps) { Some(len(ps)) } else { None },
+    _              => None
+  } }
+
+// The partial's declaration-order slots — ONE walk, each arg visited once
+// (O(1) per slot; the flat r_args indexes O(1)), producing all three
+// projections in the same descent: (captures, param_names, body_args).
+// A supplied slot's arg lowers HERE, in arg order (evaluation-once —
+// product fields are constructed at the product's mint, filling a hole
+// RESUMES and never re-evaluates), rides the closure record, and is read
+// back by its capture ordinal (LUpval). An unfilled slot (authored `??`,
+// or a hole-adjacent short tail) becomes a param of the synthesized fn
+// (LLocal), typed by the hole's own handle (infer bound each hole to its
+// declaration-order param type; a tail slot carries the partial node's
+// handle — its width residue joins the callsite-result-width family).
+fn partial_split(r_args, n_args, n_ps, handle, i, ci) =
+  if i >= n_ps { ([], [], []) }
+  else if i >= n_args {
+    let pn = "__part_{int_to_str(i)}"
+    let (caps, names, bargs) = partial_split(r_args, n_args, n_ps, handle, i + 1, ci)
+    (caps, [pn] ++ names, [LLocal(handle, pn)] ++ bargs)
+  } else {
+    let arg = list_index(r_args, i)
+    let N(b, _, ah) = arg
+    match b {
+      NHole(_) => {
+        let pn = "__part_{int_to_str(i)}"
+        let (caps, names, bargs) = partial_split(r_args, n_args, n_ps, handle, i + 1, ci)
+        (caps, [pn] ++ names, [LLocal(ah, pn)] ++ bargs)
+      },
+      _ => {
+        let e = lower_expr(arg)
+        let (caps, names, bargs) = partial_split(r_args, n_args, n_ps, handle, i + 1, ci + 1)
+        ([e] ++ caps, names, [LUpval(lexpr_handle(e), ci)] ++ bargs)
+      }
+    }
+  }
+
+// The callee shapes a partial can synthesize a body for: a top-level fn
+// (direct LCall) and ADT construction (LMakeVariant) — for both, infer's
+// dispatch provably took the partial fork too (their schemes pre-register
+// as fn types), so type and lowering agree by construction. A local /
+// closure callee (its value captured at slot 0 + the W7 call), the
+// intrinsic projections (to_string / hash / float_of_int / substrate ops),
+// and effect ops are the named remainder — Hβ.lower.partial-local-callee —
+// floored typed, never called wrong.
+fn partial_callee_form(handle, fbody, fh) = match fbody {
+  NExpr(VarRef(name)) =>
+    // The name-keyed intrinsic projections (the show/hash fold leaves, the
+    // gradient's converts) and the substrate/wasi instruction ops have no
+    // global fn to LCall — a partial over one floors typed with the rest of
+    // the unbuilt shapes, never a call past the projection.
+    if is_substrate_mem_op(name) || is_wasi_import_op(name) ||
+        name == "to_string" || name == "hash" ||
+        name == "float_of_int" || name == "float_to_int" { None }
+    else { match env_kind_of(name) {
+      Some(FnScheme)                     => Some((bargs) => LCall(handle, LGlobal(fh, name), bargs)),
+      Some(ConstructorScheme(tag_id, _)) => Some((bargs) => LMakeVariant(handle, tag_id, bargs)),
+      _                                  => None
+    } },
+  _ => None
+}
+
+// PARTIAL APPLICATION AS A VALUE — the mint. The record is LambdaExpr's
+// exactly (fn_ptr@0, nc@4, captures@8; emit's deep walk lifts the LFn, the
+// caller dispatches through the same W7 closure-call convention), built by
+// the k1 lower-time LFn-synthesis precedent. The closure's evidence region
+// is derive_ev_slots(handle) — the partial node's own TFun row; a nonempty
+// region means the callee's performs would read evidence this mint does not
+// yet capture into the synthesized frame, so it floors typed
+// (Hβ.lower.partial-effectful-callee) instead of ever calling wrong.
+fn lower_call_partial(handle, fbody, fh, r_args, n_ps) =
+  match partial_callee_form(handle, fbody, fh) {
+    None => LInvariantFailure(handle, PartialCalleeShape(fh)),
+    Some(form) => {
+      let evs = derive_ev_slots(handle)
+      if len(evs) != 0 { LInvariantFailure(handle, PartialEffectfulCallee(fh)) }
+      else {
+        let flat_args = list_to_flat(r_args)
+        let (captures, param_names, body_args) =
+          partial_split(flat_args, len(flat_args), n_ps, handle, 0, 0)
+        let fn_ir = LFn(
+          "partial_{int_to_str(handle)}",
+          len(param_names),
+          param_names,
+          [form(body_args)],
+          EfPure,
+          len(captures))
+        LMakeClosure(handle, fn_ir, captures, evs)
+      }
+    }
+  }
 
 // Is this callee a resume-bound fn called from a MultiShot context? Both
 // reads are live (the bindings registered at lower_program; the discipline
@@ -2005,63 +2190,19 @@ fn lower_expr_body(e, handle, span) = match e {
     // declared params, resolution is positional passthrough (LabeledArg
     // wrappers stripped). This subsumes the old trailing-only default fill.
     let r_args = resolve_call_args(lower_callee_name(fbody), args)
-    let lo_args = lower_expr_list(r_args)
-    match fbody {
-      NExpr(VarRef(name)) =>
-        if name == "to_string" && len(r_args) == 1 {
-          lower_to_string_dispatch(handle, last(lo_args), r_args)
-        } else if name == "hash" && len(r_args) == 1 {
-          // hash(x) IS the HASH leaf of the structural fold — lower-time type
-          // dispatch (scalar word-identity / sequence str_hash·list_hash /
-          // aggregate $hash_<sig>), the sibling of to_string's show leaf.
-          lower_hash_dispatch(handle, last(lo_args), r_args)
-        } else if name == "float_of_int" && len(r_args) == 1 {
-          // W11: the gradient's coercion arm — a REAL i32->f64 widen
-          // (f64.convert_i32_s), never an identity stub reinterpreting bits.
-          LConvert(handle, IntToFloat, last(lo_args))
-        } else if name == "float_to_int" && len(r_args) == 1 {
-          // f64->i32 truncating toward zero (i32.trunc_f64_s) — the value-
-          // faithful inverse, replacing the bit-reinterpreting identity stub.
-          LConvert(handle, FloatToInt, last(lo_args))
-        } else if is_substrate_mem_op(name) {
-          // Memory / Alloc ops ARE the instruction set — "the WASM runtime
-          // IS the handler" (lib/runtime/memory.mn). They project to raw
-          // instructions, never through evidence: routing them Tier-2 made
-          // the evidence scan's own loads dispatch through the evidence
-          // scan (ev_perform_entry ⇄ ev_scan, the handler rung's runtime
-          // stack overflow). LWasiCall is the direct-substrate node; emit
-          // dispatches the name to its instruction.
-          LWasiCall(handle, name, lo_args)
-        } else { match env_kind_of(name) {
-        Some(ConstructorScheme(tag_id, _)) =>
-          LMakeVariant(handle, tag_id, lo_args),
-        Some(RecordSchemeKind(_)) =>
-          // Nominal-record CALL-form construction `Pri({...})`: the runtime
-          // representation IS the bare record (NamedRecordExpr's own arm
-          // lowers to LMakeRecord — type identity is type-system-only, no
-          // tag). The single argument already IS that record; the wrapper
-          // is the identity at this layer. Arity is the infer gate's
-          // business (the ctor-pattern arrow view unifies one param); a
-          // zero-arg call (already reported there) lowers to the empty
-          // record, never a garbage read past an empty args list.
-          if len(lo_args) == 0 { LMakeRecord(handle, []) } else { list_index(lo_args, 0) },
-        Some(EffectOpScheme(_, _, _, _)) =>
-          // Row-guided dispatch per SUBSTRATE.md §"Three Tiers of
-          // Effect Compilation". The row IS the evidence contract:
-          //   - Effect in declared row → Tier 2: LEvPerform (handler
-          //     comes from caller via evidence slot on __state)
-          //   - Effect NOT in row → Tier 1: LPerform (handler is
-          //     locally installed, direct call)
-          // A WASI import op bridges directly to the WASM-level import
-          // (no $op_<name> handler arm) — the import IS the bridge.
-          if is_wasi_import_op(name) {
-            LWasiCall(handle, name, lo_args)
-          } else {
-            lower_perform_dispatch(handle, name, lo_args)
-          },
-        _ => lower_call_default(handle, f, fh, lo_args)
-      } },
-      _ => lower_call_default(handle, f, fh, lo_args)
+    // PARTIAL APPLICATION AS A VALUE (SYNTAX §«Partial application — the
+    // product with a hole»): resolved args leaving declaration-order params
+    // unfilled — an authored `??` slot — IS the lambda the surface law names
+    // (`add3(10, ??, 30)` ≡ `(x) => add3(10, x, 30)`), supplied fields
+    // evaluated ONCE at construction. The fork mirrors infer_call_dispatch's
+    // (same call_hole_index read, same is_seq_op precedence); the mint
+    // precedes lo_args so hole slots never lower. Pipe-right calls never
+    // reach this fork — lower_pipe_complete dispatches them fork-free (the
+    // pipe owns its hole; the inline splice is the zero-record projection
+    // of the same hole-filling).
+    match partial_unfilled(lower_callee_name(fbody), fh, r_args) {
+      Some(n_ps) => lower_call_partial(handle, fbody, fh, r_args, n_ps),
+      None       => lower_call_dispatch(handle, f, fh, fbody, r_args)
     }
   },
 
@@ -2069,7 +2210,6 @@ fn lower_expr_body(e, handle, span) = match e {
     LIf(handle, lower_expr(cond),
         [lower_expr(then_e)],
         [lower_expr(else_e)]),
-
   BlockExpr(stmts, final_e) => {
     let cp = ls_push_scope()   // drift-audit: ignore — sequenced effectful scope checkpoint (LowerScope)
     // M4 — an Abandon perform DIVERGES (it always yields, unwinding to its
@@ -2269,8 +2409,24 @@ fn lower_expr_body(e, handle, span) = match e {
 // builder can complete a stage with the RESUME HOLE as the piped value
 // (band B M1.3) — one completion, two callers.
 fn lower_pipe_complete(lo_l, right, handle) = {
-  let lo_r = lower_callee_ref(right)
   let N(rbody, _, rfh) = right
+  // A pipe-right CALL dispatches fork-free (lower_call_dispatch): the pipe
+  // owns its hole and completes it below by inline splice, so a raw
+  // hole-bearing call in stage position never mints a partial closure.
+  let lo_r = match rbody {
+    NExpr(CallExpr(f2, args2)) => {
+      let N(fbody2, _, fh2) = f2
+      // The same LFnRef→LGlobal callee-position collapse lower_callee_ref
+      // applies (a record-ctor identity can surface its arg's LFnRef) —
+      // byte-parity with the pre-extraction path.
+      match lower_call_dispatch(rfh, f2, fh2, fbody2,
+        resolve_call_args(lower_callee_name(fbody2), args2)) {
+        LFnRef(h2, n2, _) => LGlobal(h2, n2),
+        lo2               => lo2
+      }
+    },
+    _ => lower_callee_ref(right)
+  }
   let hole_at = match rbody {
     NExpr(CallExpr(_, cargs)) => pipe_hole_index(cargs, 0),
     _                         => -1

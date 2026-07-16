@@ -2072,7 +2072,13 @@ fn walk_locals_expr(expr, acc) = match expr {
     walk_locals_expr(inner,
       [local_wat_name(name, r) ++ " " ++ repr_wat(r)] ++ acc)
   },
-  LMakeClosure(_, _, _, _)         => acc,  // function boundary — its locals are its own
+  LMakeClosure(_, _, captures, ev) =>
+    // The FN body is a boundary (its locals are its own) — but the CAPTURES
+    // evaluate in the ENCLOSING frame at the mint (a partial's supplied arg
+    // may be a call minting a result local here). Lambda captures are bare
+    // LLocal/LUpval reads contributing no locals, so walking them is
+    // byte-identical for the existing paths.
+    walk_locals_list(ev, walk_locals_list(captures, acc)),
   LFnRef(_h, _n, ev)        => walk_locals_list(ev, acc),  // record reuses $state_tmp; ev forwards declare no locals
   LMakeContinuation(_, _, _, _, _, _, _) => acc,  // resume_fn boundary — its locals are its own (H7)
   LYield(h, _, args, k)     => {

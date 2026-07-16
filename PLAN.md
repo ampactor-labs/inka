@@ -926,6 +926,63 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ## §7 · Current state (grounded 2026-07-16 — **FIRST LIGHT LANDED; the medium builds itself; the frontier is CORRECTNESS-WIRING (the destiny audit's R-path) with the O(1) march riding alongside — "speed, not correctness" was the pre-audit framing, retired.** (1) **First light** (2026-07-10, 87c0152, tag `first-light`): `m3 == m4` byte-identical AND battery-green-through-m3 — the fixed point, the medium reproduced by itself. (2) **The boot era** (7401c4b): the hand-WAT seed is DELETED, `boot/mentl.wasm` IS the compiler; `tools/march.sh` asserts `m2 == m3` as the live ratchet (a TRANSITION on emit changes → re-pin from m3; boot/PROVENANCE.md). (3) **The M1–M4 multi-shot arc self-hosted** — the k1 continuation-reification producer through the M4 Abandon discipline, each fixpoint-confirmed; the value-layer fold leaves (STEP 0–5, S0 compare/hash) landed. (4) **THE CROWN — NEGATION landed, POSITIVE path still pointer-eq** (2026-07-13, 29df478; sharpened by the destiny audit 2026-07-14): `!E`-sound-under-poly is real for the by-name NEGATION gate (`row_subsumes` EfNeg) — `m2 == m3` byte-identical, 5/5 crown-gate, 66/66 micros. But the POSITIVE subsumption path a developer's ordinary `with E` actually leans on still compares effect names by POINTER-eq, so on the wheel's OWN self-compile it rejects **533 `E_EffectMismatch` + 61 `E_PurityViolated`** false alarms — including `WasmOut vs WasmOut`, a row failing to subsume ITSELF — all swallowed by productive-under-error. So "the crown landed" is HALF-true (the negative arm sound, the far larger positive arm unsound-by-pointer-eq); `Hβ.effects.positive-row-pointer-eq` is the fix and it is **R1** below — `EffName`-is-a-handle (§5.O layer 1, extended from perf to CORRECTNESS: the perf loop will never reach it — the membership site isn't hot, it's masked by productive-under-error), which makes the positive gate sound and deletes the by-name family (`eff_name_str`/`forbidden_names_disjoint`). **CORRECTED 2026-07-14 (cc487f8, the ▶ crown entry below): the "594→~0 from interning" claim was MEASURED wrong** — the root was pointer-eq at the ONE membership leaf (`name_set_contains`), and matching BY NAME there (str_eq, the negation gate's existing move) dropped the false mismatches **598 → 146** without any interning. R1 (EffName-is-a-handle) is now the ULTIMATE for the residual 146 + the six str_hash perf waypoints: it makes the leaf `i32.eq`-on-identity, deletes the by-name family, and closes the parameterized conflation str_eq admits. The convergent root of the path below — landed at the leaf, ultimate at the handle. (5) **The proposer reframe corrected** (§1/§5, 6c3efb4): the medium is the best next-move proposer; the model is unnecessary at that scope. **THE CURRENT CURSOR — the O(1) architecture (§5.O), performance IS the Carried-Truth Law.** The perf loop (the ▶ entry below) has cut the self-compile **1400s → 13s (~108×)** across five perf-found O(1) fixes (classifier, region, esc-write, esc-read, reachability index + the LSuspend Int-op_h-as-name root fix — the last a TRANSITION, m3==m4, boot re-pinned 349a3302…); 13s is the next perf (the reachability `reach_has` membership 16.54% and the instantiate-clone / arena / parallelism levers remain). The 8-agent diagnosis pinned the original ~23-min self-compile (1377s, 100% guest algorithm) to name-keyed re-derivation: `env_find_flat` O(n²) (pipeline.mn:375, convergent 5/7), dedup O(U²) with an O(1) target (wasm.mn:1145/1168), `esc_assoc` O(n²) (lower.mn:1383), `instantiate` tree-clone (infer.mn:2687), the 4GB never-free cache-hostile amplifier, and ZERO parallelism (one `|>` cursor, 8 cores idle). The fix is **names-are-handles + O(1) handle-indexed reads + per-decl arena + parallel cursors**, built layer-by-layer — the first cut is `string_offset_lookup` O(1) via a str_hash index (byte-identical by construction). Ground FIRST: `bash tools/state.sh`; gates: `verify.sh` + `march-gate.sh` + `march.sh` the m2==m3 ratchet. The detailed trap-march log below is PRE-first-light archaeology, kept for its substrate mechanics.)
 
+> **▶ PARTIAL APPLICATION IS A VALUE + THE FALSE-DEBT CLASS IS EXTINCT —
+> census 31,546 → 2,984, frontier 45/2 (2026-07-16, 40ad601 + the NFree
+> deletion, boot re-pinned cf479f9d…).** A let-bound partial
+> (`middle = add3(10, ??, 30); middle(2)`) RUNS exit 42 — was trap 134:
+> infer_call_partial had typed the product-with-holes since the `??` landing,
+> and lower DISCARDED that proof (the hole lowered as a zero word, the callee
+> was CALLED at the partial site, the later call call_indirected on its Int
+> result). The mint is the lambda the surface law names: supplied args lower
+> ONCE at the mint in arg order and ride the closure record (LUpval by
+> ordinal); each unfilled slot becomes a param typed by the hole's own handle
+> — ONE walk builds captures/param-names/body-args with no intermediate list
+> and no list_index (§5.O). The record is LambdaExpr's exactly, so the caller
+> dispatches through the W7 convention unchanged (the k1 LFn-synthesis
+> precedent). The fork fires ONLY on an authored value-position hole:
+> pipe-right calls dispatch fork-free through the extracted
+> lower_call_dispatch (one body, two callers — the pipe owns its hole; firing
+> there minted a closure per pipe-?? stage, 7691 diff lines, and an
+> undeclared capture-result local), the bare k<n prefix keeps the old
+> dispatch (a recovered callee's arity is a guess — firing on it collapsed
+> the module to 1,884 lines, measured), unbuilt shapes floor typed
+> (PartialEffectfulCallee / PartialCalleeShape — the effectful-callee mint is
+> the named next, its evidence captured at the mint by the lambda's own
+> derive_ev_slots route). walk_locals now walks LMakeClosure CAPTURES (they
+> evaluate in the ENCLOSING frame; lambda captures are bare reads, so
+> byte-identical). THEN the fleet verdict (3 opus agents, adversarial): my
+> own "row-coupling" measurement was PROVEN a metric conflation (the
+> effectful probe is byte-identical-transparent; 182 = 31 free handles ×
+> repeated reads), and the real root both diggers converged on — the
+> lookup_ty NFree arm reported E_UnresolvedType per READ of a legitimately
+> free quantified var (`fn ident(x) = x` called from main: four reports on a
+> clean program; generalize's Forall is the graph's own proof, repr floors
+> the word by design). The report is DELETED — the arm is NErrorHole's twin;
+> a genuinely stuck width detonates at emit's loud floors, the consumer owns
+> the refusal. Runtime shadow 248 → 66 (E_UnresolvedType extinct),
+> fingerprint re-pinned; frontier 41/6 → 45/2 — the two survivors are ONE
+> genuine class the flood had drowned (an E_RegionEscape each on the
+> scheduled tuple/closure fixtures: the region tracker meeting the boundary
+> carrier's cross-region read — the next dig). Proof-exactness 0 → 3
+> (partial-hole compiles CLEAN, assembles, runs 42); the R5 refusal design
+> was REFUTED as written by the fleet's third agent on artifact evidence —
+> the wheel self-compile carries 731 honest V_Pending (335 structurally
+> undecidable; RefineStmt's decl-site verify runs with self UNBOUND,
+> infer.mn:339 — one phantom pending per refined type), so blanket
+> refuse-on-pending refuses the wheel itself and kills the march. The
+> corrected R5: refusal fires on HOLES (typed absence is not a value) and
+> decidable-FALSE (already landed as E_RefinementRejected); honest pending
+> SURFACES (report_verify_debt has zero callers — the wiring) and runs —
+> sound-incomplete kept whole. Its build order: the RefineStmt decl-site fix
+> → the ledger projection at compile/check → the refusal stage BETWEEN
+> reachable_from_main and emit_module (wat_stdout streams, so the gate
+> precedes the first emit; exit-nonzero via the fail path) → the fixtures
+> recontracted. Also landed: mn-capability-tie (bf0257f) — two proven
+> survivors, the projection surfaces both with admission Reasons, the accept
+> is a no-op, the authored ?? survives: the teaching tie-break gated.
+> Battery at the bless: 70/70 micros through m2, march ✓✓ FIXED POINT
+> m2 == m3 (475,416 lines), IDE re-packed, shim verified.**
+>
 > **▶ THE CAPABILITY `??` WORKFLOW IS GREEN — the row prunes, the rejections
 > teach; and every block-let's phantom debt dies (2026-07-16, 54c403dd +
 > 8fd0358b, boot re-pinned c323a40f…, frontier 37/6, census 31,414).** Under

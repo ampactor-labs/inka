@@ -926,6 +926,41 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ## §7 · Current state (grounded 2026-07-16 — **FIRST LIGHT LANDED; the medium builds itself; the frontier is CORRECTNESS-WIRING (the destiny audit's R-path) with the O(1) march riding alongside — "speed, not correctness" was the pre-audit framing, retired.** (1) **First light** (2026-07-10, 87c0152, tag `first-light`): `m3 == m4` byte-identical AND battery-green-through-m3 — the fixed point, the medium reproduced by itself. (2) **The boot era** (7401c4b): the hand-WAT seed is DELETED, `boot/mentl.wasm` IS the compiler; `tools/march.sh` asserts `m2 == m3` as the live ratchet (a TRANSITION on emit changes → re-pin from m3; boot/PROVENANCE.md). (3) **The M1–M4 multi-shot arc self-hosted** — the k1 continuation-reification producer through the M4 Abandon discipline, each fixpoint-confirmed; the value-layer fold leaves (STEP 0–5, S0 compare/hash) landed. (4) **THE CROWN — NEGATION landed, POSITIVE path still pointer-eq** (2026-07-13, 29df478; sharpened by the destiny audit 2026-07-14): `!E`-sound-under-poly is real for the by-name NEGATION gate (`row_subsumes` EfNeg) — `m2 == m3` byte-identical, 5/5 crown-gate, 66/66 micros. But the POSITIVE subsumption path a developer's ordinary `with E` actually leans on still compares effect names by POINTER-eq, so on the wheel's OWN self-compile it rejects **533 `E_EffectMismatch` + 61 `E_PurityViolated`** false alarms — including `WasmOut vs WasmOut`, a row failing to subsume ITSELF — all swallowed by productive-under-error. So "the crown landed" is HALF-true (the negative arm sound, the far larger positive arm unsound-by-pointer-eq); `Hβ.effects.positive-row-pointer-eq` is the fix and it is **R1** below — `EffName`-is-a-handle (§5.O layer 1, extended from perf to CORRECTNESS: the perf loop will never reach it — the membership site isn't hot, it's masked by productive-under-error), which makes the positive gate sound and deletes the by-name family (`eff_name_str`/`forbidden_names_disjoint`). **CORRECTED 2026-07-14 (cc487f8, the ▶ crown entry below): the "594→~0 from interning" claim was MEASURED wrong** — the root was pointer-eq at the ONE membership leaf (`name_set_contains`), and matching BY NAME there (str_eq, the negation gate's existing move) dropped the false mismatches **598 → 146** without any interning. R1 (EffName-is-a-handle) is now the ULTIMATE for the residual 146 + the six str_hash perf waypoints: it makes the leaf `i32.eq`-on-identity, deletes the by-name family, and closes the parameterized conflation str_eq admits. The convergent root of the path below — landed at the leaf, ultimate at the handle. (5) **The proposer reframe corrected** (§1/§5, 6c3efb4): the medium is the best next-move proposer; the model is unnecessary at that scope. **THE CURRENT CURSOR — the O(1) architecture (§5.O), performance IS the Carried-Truth Law.** The perf loop (the ▶ entry below) has cut the self-compile **1400s → 13s (~108×)** across five perf-found O(1) fixes (classifier, region, esc-write, esc-read, reachability index + the LSuspend Int-op_h-as-name root fix — the last a TRANSITION, m3==m4, boot re-pinned 349a3302…); 13s is the next perf (the reachability `reach_has` membership 16.54% and the instantiate-clone / arena / parallelism levers remain). The 8-agent diagnosis pinned the original ~23-min self-compile (1377s, 100% guest algorithm) to name-keyed re-derivation: `env_find_flat` O(n²) (pipeline.mn:375, convergent 5/7), dedup O(U²) with an O(1) target (wasm.mn:1145/1168), `esc_assoc` O(n²) (lower.mn:1383), `instantiate` tree-clone (infer.mn:2687), the 4GB never-free cache-hostile amplifier, and ZERO parallelism (one `|>` cursor, 8 cores idle). The fix is **names-are-handles + O(1) handle-indexed reads + per-decl arena + parallel cursors**, built layer-by-layer — the first cut is `string_offset_lookup` O(1) via a str_hash index (byte-identical by construction). Ground FIRST: `bash tools/state.sh`; gates: `verify.sh` + `march-gate.sh` + `march.sh` the m2==m3 ratchet. The detailed trap-march log below is PRE-first-light archaeology, kept for its substrate mechanics.)
 
+> **▶ THE CAPABILITY `??` WORKFLOW IS GREEN — the row prunes, the rejections
+> teach; and every block-let's phantom debt dies (2026-07-16, 54c403dd +
+> 8fd0358b, boot re-pinned c323a40f…, frontier 37/6, census 31,414).** Under
+> `-> Seven with !Network = ??` the vocabulary enumerator surfaces exactly
+> `pure_seven()` with its Reason; direct/transitive/higher-order Network
+> offenders are refused through row_subsumes (the crown's own gate) with
+> every rejection's Why RETAINED on the projection; the exact patch lands;
+> zero debt; exit 7. `Hβ.synth.vocabulary-enumeration` is REAL. The wiring
+> truths: the allowed row is the ENCLOSING decl's AUTHORED signed set (the
+> published scheme row is the MEET — the negation deliberately dies at
+> publication, so the FnStmt's effs are `!E`'s one live home at a decl);
+> parse_fn mints decls with JOINED spans (SYNTAX §Parser obligations — a
+> start-point span made every decl invisible to containment); the reach
+> exclusion reads the weave directly. refinement_admits admits a
+> same-refined-alias call by TYPED IDENTITY, the proof layering stated
+> exactly (alias proves the declaration; the callee's ledger owns the
+> discharge; a refuted callee fails check; R5 owns executable refusal).
+> THEN the gate's differential accounting surfaced a wheel-wide phantom:
+> every block-let's own STATEMENT node sat NFree (infer typed the value and
+> pattern, never the stmt; lower keys LLet by it; two emit width-readers
+> ask it) — the stmt now BINDS its value's var, one union-find edge: wheel
+> census 34,028 → 31,414, the frontier runtime shadow 320 → 248, the
+> fingerprint re-pinned to the smaller truth twice (the gate's documented
+> explicit-baseline rule — tooling updates with the times). Designed
+> against a 9-agent ultracode fleet; the refuters caught the unmigrated
+> teach_synthesize consumer and the carried-proof overclaim; the eight
+> interrogations then caught four MORE defects in that ten-line fn (the
+> row re-derivation, the pair contract, a hidden first-wins ranking
+> violating the tie-break law, the dropped Reason). Named next: the
+> scheduled compile legs' inherited 0:0 debt (6 reds, one class), R5's
+> executable refusal (proof-exactness 0/7), the multi-survivor tie
+> fixture (`io_seven with IO` must be ADMITTED under !Network — the gate's
+> next sharpening), `Hβ.synth.vocabulary-arg-holes`,
+> `Hβ.synth.vocabulary-reach-index`, `Hβ.cursor.enclosing-decl-edge`.**
+>
 > **▶ THE POSITIVE `??` WORKFLOW IS GREEN END TO END — the medium proposes,
 > proves, patches, and the patch runs (2026-07-16, 1255a76, boot re-pinned
 > 7b188a31…, frontier 30/13).** All nine assertions of the constrained-hole

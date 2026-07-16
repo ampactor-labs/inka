@@ -159,17 +159,21 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
 
   tag_alloc(value_handle) => {
     // Stamp the value with the current-top region (or 0 = no
-    // region active = global lifetime). tagged_values entries
-    // are records — adding metadata fields (e.g., region join
-    // for record/variant fields per H4 addendum) is additive
-    // without breaking lookup_tag's destructure.
+    // region active = global lifetime). A tag is the TUPLE
+    // (install_span, region_id) — destructured positionally by its
+    // readers, because the bucket scan's return is type-erased and a
+    // nominal field read there silently resolved to OFFSET 0 (the old
+    // record's handle field posed as the region id, so every
+    // bare-literal-bodied fn flagged its own body handle as a dead
+    // region — the six false E_RegionEscape). Positional destructure
+    // is provable with no type flow — the render_audit precedent. The
+    // old handle field duplicated the bucket key and had zero readers.
     let rid = if len(region_stack) == 0 { 0 }
               else { let Region(r, _) = last(region_stack); r }
     let install_span = if len(region_stack) == 0 { span_zero() }
                        else { let Region(_, s) = last(region_stack); s }
-    let tag = {handle: value_handle, install_span: install_span, region_id: rid}
     resume()
-      with region_index = region_index_add(region_index, value_handle, tag)
+      with region_index = region_index_add(region_index, value_handle, (install_span, rid))
   },
 
   tag_alloc_join(value_handle, field_handles) => {
@@ -185,27 +189,29 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
     let install_span = if len(region_stack) == 0 { span_zero() }
                        else { let Region(_, s) = last(region_stack); s }
     let joined = join_field_regions(region_index, field_handles, cur_rid)
-    let tag = {handle: value_handle, install_span: install_span, region_id: joined}
     resume()
-      with region_index = region_index_add(region_index, value_handle, tag)
+      with region_index = region_index_add(region_index, value_handle, (install_span, joined))
   },
 
   check_escape(value_handle, escape_span) => {
-    // Look up the value's tagged region. If it's region 0 (global)
-    // or a region still on the stack, the value is safe. If the
-    // region was popped (no longer on stack), the value has
-    // escaped — emit E_RegionEscape pointing at both the install
-    // site and the escape site.
+    // Look up the value's tagged region. Region 0 (global — no region
+    // entered) or a region still on the stack is safe; a dead region is
+    // the escape, reported with BOTH spans (where the region opened,
+    // where the value tried to leave). When regions go LIVE
+    // (Hβ.infer.region-on-tee-alloc-absorb — the §5.O layer-3 arena),
+    // the fn RETURN is a TRANSFER: the returned value re-tags into the
+    // caller's region at the call site (Hβ.own.region-return-transfer),
+    // so this check keeps meaning one true thing — a value whose region
+    // genuinely died while holding it.
     let entry = lookup_tag(region_index, value_handle)
     match entry {
       None => resume(),
       Some(tag) => {
-        if tag.region_id == 0 || region_on_stack(region_stack, tag.region_id) {
+        let (install_span, region_id) = tag
+        if region_id == 0 || region_on_stack(region_stack, region_id) {
           resume()
         } else {
-          report(ERegionEscape("value allocated in a scope that ended before this return — region {int_to_str(tag.region_id)} no longer live", escape_span))   // drift-audit: ignore
-          // tag.install_span retained for future multi-span
-          // diagnostic (Located secondary at the alloc site).
+          report(ERegionEscape("value allocated in a region (opened at {show_span(install_span)}) that ended before this return — region {int_to_str(region_id)} no longer live", escape_span))   // drift-audit: ignore
           resume()
         }
       }
@@ -258,7 +264,7 @@ fn join_field_regions(ref tags, ref fields, current) with !Mutate = {
   fold(current, (acc, fh) => {
     let field_rid = match lookup_tag(tags, fh) {
       None     => 0,
-      Some(t)  => t.region_id
+      Some(t)  => { let (_, rid) = t rid }
     }
     if field_rid > acc { field_rid } else { acc }
   }, fields)

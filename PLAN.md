@@ -926,6 +926,36 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ## §7 · Current state (grounded 2026-07-16 — **FIRST LIGHT LANDED; the medium builds itself; the frontier is CORRECTNESS-WIRING (the destiny audit's R-path) with the O(1) march riding alongside — "speed, not correctness" was the pre-audit framing, retired.** (1) **First light** (2026-07-10, 87c0152, tag `first-light`): `m3 == m4` byte-identical AND battery-green-through-m3 — the fixed point, the medium reproduced by itself. (2) **The boot era** (7401c4b): the hand-WAT seed is DELETED, `boot/mentl.wasm` IS the compiler; `tools/march.sh` asserts `m2 == m3` as the live ratchet (a TRANSITION on emit changes → re-pin from m3; boot/PROVENANCE.md). (3) **The M1–M4 multi-shot arc self-hosted** — the k1 continuation-reification producer through the M4 Abandon discipline, each fixpoint-confirmed; the value-layer fold leaves (STEP 0–5, S0 compare/hash) landed. (4) **THE CROWN — NEGATION landed, POSITIVE path still pointer-eq** (2026-07-13, 29df478; sharpened by the destiny audit 2026-07-14): `!E`-sound-under-poly is real for the by-name NEGATION gate (`row_subsumes` EfNeg) — `m2 == m3` byte-identical, 5/5 crown-gate, 66/66 micros. But the POSITIVE subsumption path a developer's ordinary `with E` actually leans on still compares effect names by POINTER-eq, so on the wheel's OWN self-compile it rejects **533 `E_EffectMismatch` + 61 `E_PurityViolated`** false alarms — including `WasmOut vs WasmOut`, a row failing to subsume ITSELF — all swallowed by productive-under-error. So "the crown landed" is HALF-true (the negative arm sound, the far larger positive arm unsound-by-pointer-eq); `Hβ.effects.positive-row-pointer-eq` is the fix and it is **R1** below — `EffName`-is-a-handle (§5.O layer 1, extended from perf to CORRECTNESS: the perf loop will never reach it — the membership site isn't hot, it's masked by productive-under-error), which makes the positive gate sound and deletes the by-name family (`eff_name_str`/`forbidden_names_disjoint`). **CORRECTED 2026-07-14 (cc487f8, the ▶ crown entry below): the "594→~0 from interning" claim was MEASURED wrong** — the root was pointer-eq at the ONE membership leaf (`name_set_contains`), and matching BY NAME there (str_eq, the negation gate's existing move) dropped the false mismatches **598 → 146** without any interning. R1 (EffName-is-a-handle) is now the ULTIMATE for the residual 146 + the six str_hash perf waypoints: it makes the leaf `i32.eq`-on-identity, deletes the by-name family, and closes the parameterized conflation str_eq admits. The convergent root of the path below — landed at the leaf, ultimate at the handle. (5) **The proposer reframe corrected** (§1/§5, 6c3efb4): the medium is the best next-move proposer; the model is unnecessary at that scope. **THE CURRENT CURSOR — the O(1) architecture (§5.O), performance IS the Carried-Truth Law.** The perf loop (the ▶ entry below) has cut the self-compile **1400s → 13s (~108×)** across five perf-found O(1) fixes (classifier, region, esc-write, esc-read, reachability index + the LSuspend Int-op_h-as-name root fix — the last a TRANSITION, m3==m4, boot re-pinned 349a3302…); 13s is the next perf (the reachability `reach_has` membership 16.54% and the instantiate-clone / arena / parallelism levers remain). The 8-agent diagnosis pinned the original ~23-min self-compile (1377s, 100% guest algorithm) to name-keyed re-derivation: `env_find_flat` O(n²) (pipeline.mn:375, convergent 5/7), dedup O(U²) with an O(1) target (wasm.mn:1145/1168), `esc_assoc` O(n²) (lower.mn:1383), `instantiate` tree-clone (infer.mn:2687), the 4GB never-free cache-hostile amplifier, and ZERO parallelism (one `|>` cursor, 8 cores idle). The fix is **names-are-handles + O(1) handle-indexed reads + per-decl arena + parallel cursors**, built layer-by-layer — the first cut is `string_offset_lookup` O(1) via a str_hash index (byte-identical by construction). Ground FIRST: `bash tools/state.sh`; gates: `verify.sh` + `march-gate.sh` + `march.sh` the m2==m3 ratchet. The detailed trap-march log below is PRE-first-light archaeology, kept for its substrate mechanics.)
 
+> **▶ THE BOARD IS WHOLE — frontier 47/0, proof-exactness 9/9, census
+> 3,002 (2026-07-16, boot re-pinned 4b7f998f…).** The last red class was a
+> SILENT WRONG-OFFSET READ, pinned in the binary (never a wheel-eprint —
+> the one eprint probe Heisenberg'd to a null, the ⟲ law re-paid):
+> $op_region_tracker_check_escape's `tag.region_id` emitted
+> `(i32.load offset=0)` — the tag record crossed the type-erased bucket
+> scan, the field read resolved to the HANDLE field, and every diagnostic's
+> "region N" was the value's own handle (the six ids monotone with line
+> number — the tell). Population = exactly fns whose body IS a bare
+> tuple/record literal (the only shape where check_escape's body_handle
+> carries a tag): the wheel's own 23, the shadow's 5, the two scheduled
+> reds — ONE class, all false. THE FIX is the render_audit precedent: the
+> tag is the TUPLE (install_span, region_id) destructured positionally
+> (provable with no type flow), the dead handle field deleted (zero
+> readers — it duplicated the bucket key, the Universal Audit), the
+> diagnostic gains the region's install span. The eight interrogations'
+> generative half, named where the layer-3 arena lands: a region is the
+> ownership aspect of the alloc edge (the side-index dissolves, the
+> esc-row-on-node arc); regions open at Alloc-absorbing installs
+> (Hβ.infer.region-on-tee-alloc-absorb); the fn RETURN is a TRANSFER into
+> the caller's region (Hβ.own.region-return-transfer — result-region-as-
+> parameter, the MLKit form), so the region drop IS the arena reset,
+> persist-as-memcpy composes per-slab, and E_RegionEscape means one true
+> thing: a borrowed pointer whose region died holding it, with the
+> two-span Why. Measured: int-tuple repro 1→0, wheel self-compile escapes
+> 23→0, shadow 66→61 (fingerprint f725d0f6…), frontier 45/2 → 47/0 and
+> proof-exactness 9/9 BOTH at the default boot tier; 70/70 micros, march
+> ✓✓ FIXED POINT (479,560 lines), IDE re-packed. Every gate in the repo is
+> green.**
+>
 > **▶ R5 IS REAL — THE EXECUTABLE GATE REFUSES HOLES, HONEST DEBT SURFACES
 > AND RUNS, AND THE REFINEMENT LEDGER SPEAKS ONLY TRUTH — proof-exactness
 > 9/9 through the pinned boot (2026-07-16, boot re-pinned 701c7024…,

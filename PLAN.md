@@ -973,7 +973,11 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > simplifies to the const body meanwhile). Gates at the bless: 70/70 micros,
 > march ✓✓ FIXED POINT m2 == m3 (479,543 lines), proof-exactness 9/9 (hole
 > refuses / debt surfaces / suspension runs — all three legs, default boot
-> tier), frontier 45/2 (the two E_RegionEscape survivors unchanged), edit
+> tier), frontier 45/2 (the E_RegionEscape pair — pinned post-bless to a
+> five-line repro: ANY fn returning a tuple literal flags, int-only
+> included, fanout and floats innocent, the programs run correctly — the
+> tracker misses the RETURN transfer of a tuple's region, own.mn's
+> check_escape seam, kin of Hβ.infer.region-on-tee-alloc-absorb), edit
 > workflows green (the tie projection + both patches through the new boot),
 > IDE re-packed, shadow fingerprint UNCHANGED (7e0826d1… — the runtime libs
 > carry no pendings). SYNTAX §«Partial application» + the E_UnresolvedHole

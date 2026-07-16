@@ -14,8 +14,8 @@ effect DSP {
     process(x: Float) -> Float
 }
 
-// Capability effects — exist primarily to be NEGATED
-effect Alloc { alloc_buffer(size: Int) -> [Float] }
+// Domain capability effects — exist primarily to be NEGATED. Allocation
+// uses the one substrate Alloc declaration in runtime/memory.mn.
 effect Network { fetch_param(url: String) -> String }
 effect Feedback { delay_tap(samples: Int, x: Float) -> Float }
 

@@ -376,3 +376,7 @@ micro:uzero-through-frames=33
 micro:resume-in-lambda-state=46
 micro:resume-in-called-fn=9
 micro:backtrack-full=30
+# Fail and Abort are distinct declaration identities. Each opposite handler is
+# deliberately installed inside the matching one; exit 81 proves neither op
+# cross-routes through the other effect's install.
+micro:effect-identity=81

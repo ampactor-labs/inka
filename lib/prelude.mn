@@ -345,9 +345,10 @@ type Result
 
 // Failure IS an effect — the kernel's answer to bottom. `fail` never
 // resumes, so its polymorphic return unifies with any consumer; the
-// installed handler decides the policy (io.mn abort_exit prints +
-// exits; a test handler collects instead).
-effect Abort {
+// installed handler decides the policy (io.mn fail_exit prints +
+// exits; a test handler collects instead). Fail is distinct from the
+// control-cut Abort effect: their declarations must never share identity.
+effect Fail {
   fail(msg: String) -> a
 }
 

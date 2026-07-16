@@ -120,13 +120,13 @@ handler stdout_console {
   },
 }
 
-// ─── abort_exit — the host-boundary failure policy ─────────────
+// ─── fail_exit — the host-boundary failure policy ──────────────
 //
-// Abort.fail never resumes; this handler prints the message and
+// Fail.fail never resumes; this handler prints the message and
 // exits through the WASI host. A test handler can swap in to
 // collect failures instead — the policy is the install, not the
 // call site.
-handler abort_exit {
+handler fail_exit {
   fail(msg) => {
     print_string(msg)
     print_newline()

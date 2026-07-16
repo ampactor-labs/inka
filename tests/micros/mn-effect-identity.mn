@@ -1,0 +1,22 @@
+// Fail is bottom-producing failure; Abort is a control cut. The two effects
+// must retain distinct identities even when both opposite handlers are live.
+effect Abort {
+  abort() -> !
+}
+
+handler fail_value {
+  fail(_) => 7
+}
+
+handler abort_value {
+  abort() => 11
+}
+
+fn failing() with Fail = fail("failure")
+fn aborting() with Abort = abort()
+
+fn main() = {
+  let failed = (failing() ~> abort_value) ~> fail_value
+  let aborted = (aborting() ~> fail_value) ~> abort_value
+  failed * 10 + aborted
+}

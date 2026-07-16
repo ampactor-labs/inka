@@ -1,0 +1,10 @@
+// Scheduler representation frontier: the same topology as the Int control,
+// but every branch returns Float. The synthesized thunk and scheduler must
+// retain f64 all the way to the fanout result. Expected exit: 60.
+
+fn widen(x) = float_of_int(x) * 15.0
+
+fn main() = {
+  let (a, b) = (2 <| (widen, widen)) ~> sequential_compose
+  float_to_int(a * 1.0 + b * 1.0)
+}

@@ -1,0 +1,10 @@
+// A hole in a parameter product is an executable suspension, not an unresolved
+// value hole. The executable preflight must follow the hole-context edge and
+// admit this program. Expected exit: 42.
+
+fn add3(a, b, c) = a + b + c
+
+fn main() = {
+  let middle = add3(10, ??, 30)
+  middle(2)
+}

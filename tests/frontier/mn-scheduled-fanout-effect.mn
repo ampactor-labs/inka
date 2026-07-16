@@ -1,0 +1,24 @@
+// Evidence control: the scheduled branch thunk retains the exact Counter
+// install while also crossing the scheduler install. Expected exit: 25.
+
+effect Counter {
+  bump(x: Int) -> Int
+}
+
+handler counter with n = 10 {
+  bump(x) => resume(x + n) with n = n + 1
+}
+
+// Declaration uniqueness must not make Counter look statically closed.
+handler other_counter {
+  bump(x) => resume(x)
+}
+
+fn stateful(x) with Counter = bump(x)
+
+fn main() = {
+  {
+    let (left, right) = (2 <| (stateful, stateful)) ~> sequential_compose
+    left + right
+  } ~> counter
+}

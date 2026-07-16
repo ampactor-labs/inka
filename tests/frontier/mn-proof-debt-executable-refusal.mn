@@ -1,0 +1,12 @@
+// `x` is not statically known to satisfy Positive. The construction therefore
+// leaves honest verification debt. Compile must retain V_Pending, return
+// nonzero, and emit no WAT bytes.
+
+type Positive = Int where 0 < self
+
+fn unchecked(x) -> Positive = {
+  let claimed: Positive = x
+  claimed
+}
+
+fn main() = unchecked(1)

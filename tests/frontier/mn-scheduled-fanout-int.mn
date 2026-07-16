@@ -1,0 +1,10 @@
+// Scheduler representation control: an Int result crosses each synthesized
+// branch thunk, sequential_compose, its result list, and the fanout collector.
+// Expected exit: 60.
+
+fn widen(x) = x * 15
+
+fn main() = {
+  let (a, b) = (2 <| (widen, widen)) ~> sequential_compose
+  a + b
+}

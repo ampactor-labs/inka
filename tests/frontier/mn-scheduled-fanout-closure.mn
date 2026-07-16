@@ -1,0 +1,9 @@
+// Function control: scheduled branch results can themselves be closures with
+// captures, and remain callable after collection. Expected exit: 34.
+
+fn make_adder(x) = (y) => x + y
+
+fn main() = {
+  let (left, right) = (2 <| (make_adder, make_adder)) ~> sequential_compose
+  left(10) + right(20)
+}

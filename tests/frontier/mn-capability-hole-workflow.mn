@@ -1,0 +1,35 @@
+// The candidate vocabulary has four zero-argument functions returning Seven.
+// Only the pure candidate satisfies choose's !Network constraint. The other three
+// introduce Network directly, transitively, and through a higher-order call.
+// Literal synthesis cannot bypass the function candidates: integer seeds omit
+// 7, and Seven's refinement rejects every other integer.
+
+type Seven = Int where self == 7
+
+effect Network {
+  ping()
+}
+
+fn pure_seven() -> Seven with Pure = {
+  let exact: Seven = 7
+  exact
+}
+
+fn direct_network() -> Seven with Network = {
+  ping()
+  pure_seven()
+}
+
+fn transitive_network() -> Seven with Network = direct_network()
+
+fn call_zero(f) = f()
+
+fn higher_order_network() -> Seven with Network =
+  call_zero(() => {
+    ping()
+    pure_seven()
+  })
+
+fn choose() -> Seven with !Network = ??
+
+fn main() = choose()

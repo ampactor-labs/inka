@@ -195,7 +195,7 @@ that could build a better medium is already a move *inside* this one.
   *monotone* constraints — three properties a token-sampler cannot have. The moat
   is the gate; the PROPOSER over the typed graph is the second moat the refuter
   missed, and the crown (`!E`-sound-under-poly) is what makes both trustworthy.
-- **The proof, validated from eight directions.** Every domain spent a decade
+- **The proof, validated from six directions.** Every domain spent a decade
   building *one of Mentl's arms* in isolation and stopped where it lacked the
   others: Faust has the verbs and no effects; JAX has the handlers and no real
   graph; Temporal has the continuation and no types; Rust has the ownership and
@@ -399,16 +399,21 @@ PASSES against the fix; 66/66 micros hold and the fixpoint is byte-identical
 (m2 == m3), so it is Law-7-additive — the wheel's own `!` fns never violate their
 declarations, so the gate returns the same verdict there. What REMAINS open in band
 A: the full modal world-index, and two follow-ups the working gate exposed —
-`Hβ.effects.positive-row-pointer-eq` (the positive path's pre-existing pointer-eq
-false-positive, 625 tolerated diagnostics in the wheel self-compile, dissolves with
-band-D typed containers) and `Hβ.effects.parameterized-negation-instance`
+`Hβ.effects.positive-row-pointer-eq` (the positive path's pointer-eq
+false-positive — 598 false mismatches on the self-compile, healed to 146 by the
+by-name membership fix, cc487f8 §7; the residual dissolves with
+EffName-is-a-handle) and `Hβ.effects.parameterized-negation-instance`
 (instance-precise `!Sample(44100)` admitting `Sample(48000)`; bare `!E` by-name is
 sound and conservative).
-**(b) the TIME axis** — `TCont(R, S, ResumeDiscipline, EffRow)` carries the
-effect-WORLD since STEP 5 (27edc30): the type CAN now detect a cross-world
-resume while preserving the exact resume-input `R` and remainder-answer `S`;
-band B's open work is ENFORCEMENT (the world is inert on OneShot; the
-`E_ResumeWorldMismatch` value gate and capture-at-reify remain). **The graph is the ROUTE, never the replacement:** Mentl's
+**(b) the TIME axis** — `TCont(R, S, ResumeDiscipline, EffRow)`, landed in two
+steps exactly as §5.U records them: 27edc30 added the effect-WORLD index; the
+executable-boundary landing (2026-07-16, §7) split resume-input `R` from
+remainder-answer `S` and captures the world on the ContinuationEdge at
+inference. The unify-time gates are LIVE (discipline mismatch raises
+`E_ResumeWorldMismatch`; the world half unifies as a row); band B's open work
+is the runtime VALUE gate on a genuinely divergent world (the declared
+`E_ResumeWorldMismatchWorld` raise is unwired — persist's rehydrate now
+REFUSES via Fail). **The graph is the ROUTE, never the replacement:** Mentl's
 first-class unified-evidence substrate — dispatch decoupled from the type-row
 (413bdc2) — is a degree of freedom Koka/Effekt/the modal calculus lack; it lets
 the modality be **inferred and cursor-projected** (a graph fact, §4⑤ quiet, never
@@ -919,8 +924,61 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-14 — **FIRST LIGHT LANDED; the medium builds itself; the frontier is now SPEED, not correctness.** (1) **First light** (2026-07-10, 87c0152, tag `first-light`): `m3 == m4` byte-identical AND battery-green-through-m3 — the fixed point, the medium reproduced by itself. (2) **The boot era** (7401c4b): the hand-WAT seed is DELETED, `boot/mentl.wasm` IS the compiler; `tools/march.sh` asserts `m2 == m3` as the live ratchet (a TRANSITION on emit changes → re-pin from m3; boot/PROVENANCE.md). (3) **The M1–M4 multi-shot arc self-hosted** — the k1 continuation-reification producer through the M4 Abandon discipline, each fixpoint-confirmed; the value-layer fold leaves (STEP 0–5, S0 compare/hash) landed. (4) **THE CROWN — NEGATION landed, POSITIVE path still pointer-eq** (2026-07-13, 29df478; sharpened by the destiny audit 2026-07-14): `!E`-sound-under-poly is real for the by-name NEGATION gate (`row_subsumes` EfNeg) — `m2 == m3` byte-identical, 5/5 crown-gate, 66/66 micros. But the POSITIVE subsumption path a developer's ordinary `with E` actually leans on still compares effect names by POINTER-eq, so on the wheel's OWN self-compile it rejects **533 `E_EffectMismatch` + 61 `E_PurityViolated`** false alarms — including `WasmOut vs WasmOut`, a row failing to subsume ITSELF — all swallowed by productive-under-error. So "the crown landed" is HALF-true (the negative arm sound, the far larger positive arm unsound-by-pointer-eq); `Hβ.effects.positive-row-pointer-eq` is the fix and it is **R1** below — `EffName`-is-a-handle (§5.O layer 1, extended from perf to CORRECTNESS: the perf loop will never reach it — the membership site isn't hot, it's masked by productive-under-error), which makes the positive gate sound and deletes the by-name family (`eff_name_str`/`forbidden_names_disjoint`). **CORRECTED 2026-07-14 (cc487f8, the ▶ crown entry below): the "594→~0 from interning" claim was MEASURED wrong** — the root was pointer-eq at the ONE membership leaf (`name_set_contains`), and matching BY NAME there (str_eq, the negation gate's existing move) dropped the false mismatches **598 → 146** without any interning. R1 (EffName-is-a-handle) is now the ULTIMATE for the residual 146 + the six str_hash perf waypoints: it makes the leaf `i32.eq`-on-identity, deletes the by-name family, and closes the parameterized conflation str_eq admits. The convergent root of the path below — landed at the leaf, ultimate at the handle. (5) **The proposer reframe corrected** (§1/§5, 6c3efb4): the medium is the best next-move proposer; the model is unnecessary at that scope. **THE CURRENT CURSOR — the O(1) architecture (§5.O), performance IS the Carried-Truth Law.** The perf loop (the ▶ entry below) has cut the self-compile **1400s → 13s (~108×)** across five perf-found O(1) fixes (classifier, region, esc-write, esc-read, reachability index + the LSuspend Int-op_h-as-name root fix — the last a TRANSITION, m3==m4, boot re-pinned 349a3302…); 13s is the next perf (the reachability `reach_has` membership 16.54% and the instantiate-clone / arena / parallelism levers remain). The 8-agent diagnosis pinned the original ~23-min self-compile (1377s, 100% guest algorithm) to name-keyed re-derivation: `env_find_flat` O(n²) (pipeline.mn:375, convergent 5/7), dedup O(U²) with an O(1) target (wasm.mn:1145/1168), `esc_assoc` O(n²) (lower.mn:1383), `instantiate` tree-clone (infer.mn:2687), the 4GB never-free cache-hostile amplifier, and ZERO parallelism (one `|>` cursor, 8 cores idle). The fix is **names-are-handles + O(1) handle-indexed reads + per-decl arena + parallel cursors**, built layer-by-layer — the first cut is `string_offset_lookup` O(1) via a str_hash index (byte-identical by construction). Ground FIRST: `bash tools/state.sh`; gates: `verify.sh` + `march-gate.sh` + `march.sh` the m2==m3 ratchet. The detailed trap-march log below is PRE-first-light archaeology, kept for its substrate mechanics.)
+## §7 · Current state (grounded 2026-07-16 — **FIRST LIGHT LANDED; the medium builds itself; the frontier is CORRECTNESS-WIRING (the destiny audit's R-path) with the O(1) march riding alongside — "speed, not correctness" was the pre-audit framing, retired.** (1) **First light** (2026-07-10, 87c0152, tag `first-light`): `m3 == m4` byte-identical AND battery-green-through-m3 — the fixed point, the medium reproduced by itself. (2) **The boot era** (7401c4b): the hand-WAT seed is DELETED, `boot/mentl.wasm` IS the compiler; `tools/march.sh` asserts `m2 == m3` as the live ratchet (a TRANSITION on emit changes → re-pin from m3; boot/PROVENANCE.md). (3) **The M1–M4 multi-shot arc self-hosted** — the k1 continuation-reification producer through the M4 Abandon discipline, each fixpoint-confirmed; the value-layer fold leaves (STEP 0–5, S0 compare/hash) landed. (4) **THE CROWN — NEGATION landed, POSITIVE path still pointer-eq** (2026-07-13, 29df478; sharpened by the destiny audit 2026-07-14): `!E`-sound-under-poly is real for the by-name NEGATION gate (`row_subsumes` EfNeg) — `m2 == m3` byte-identical, 5/5 crown-gate, 66/66 micros. But the POSITIVE subsumption path a developer's ordinary `with E` actually leans on still compares effect names by POINTER-eq, so on the wheel's OWN self-compile it rejects **533 `E_EffectMismatch` + 61 `E_PurityViolated`** false alarms — including `WasmOut vs WasmOut`, a row failing to subsume ITSELF — all swallowed by productive-under-error. So "the crown landed" is HALF-true (the negative arm sound, the far larger positive arm unsound-by-pointer-eq); `Hβ.effects.positive-row-pointer-eq` is the fix and it is **R1** below — `EffName`-is-a-handle (§5.O layer 1, extended from perf to CORRECTNESS: the perf loop will never reach it — the membership site isn't hot, it's masked by productive-under-error), which makes the positive gate sound and deletes the by-name family (`eff_name_str`/`forbidden_names_disjoint`). **CORRECTED 2026-07-14 (cc487f8, the ▶ crown entry below): the "594→~0 from interning" claim was MEASURED wrong** — the root was pointer-eq at the ONE membership leaf (`name_set_contains`), and matching BY NAME there (str_eq, the negation gate's existing move) dropped the false mismatches **598 → 146** without any interning. R1 (EffName-is-a-handle) is now the ULTIMATE for the residual 146 + the six str_hash perf waypoints: it makes the leaf `i32.eq`-on-identity, deletes the by-name family, and closes the parameterized conflation str_eq admits. The convergent root of the path below — landed at the leaf, ultimate at the handle. (5) **The proposer reframe corrected** (§1/§5, 6c3efb4): the medium is the best next-move proposer; the model is unnecessary at that scope. **THE CURRENT CURSOR — the O(1) architecture (§5.O), performance IS the Carried-Truth Law.** The perf loop (the ▶ entry below) has cut the self-compile **1400s → 13s (~108×)** across five perf-found O(1) fixes (classifier, region, esc-write, esc-read, reachability index + the LSuspend Int-op_h-as-name root fix — the last a TRANSITION, m3==m4, boot re-pinned 349a3302…); 13s is the next perf (the reachability `reach_has` membership 16.54% and the instantiate-clone / arena / parallelism levers remain). The 8-agent diagnosis pinned the original ~23-min self-compile (1377s, 100% guest algorithm) to name-keyed re-derivation: `env_find_flat` O(n²) (pipeline.mn:375, convergent 5/7), dedup O(U²) with an O(1) target (wasm.mn:1145/1168), `esc_assoc` O(n²) (lower.mn:1383), `instantiate` tree-clone (infer.mn:2687), the 4GB never-free cache-hostile amplifier, and ZERO parallelism (one `|>` cursor, 8 cores idle). The fix is **names-are-handles + O(1) handle-indexed reads + per-decl arena + parallel cursors**, built layer-by-layer — the first cut is `string_offset_lookup` O(1) via a str_hash index (byte-identical by construction). Ground FIRST: `bash tools/state.sh`; gates: `verify.sh` + `march-gate.sh` + `march.sh` the m2==m3 ratchet. The detailed trap-march log below is PRE-first-light archaeology, kept for its substrate mechanics.)
 
+> **▶ INFERENCE-OWNED EXECUTABLE BOUNDARIES + THE PATTERN-CONSTRAINT LAW — the
+> scheduler carries exact representation, and a pattern can no longer clobber a
+> proven type (2026-07-16, cf00697 → fede003, boot re-pinned 7bd9e3e7…).** The
+> takeover session's staged work (TCont R/S split; the trail-backed boundary
+> weave — per fanout site one BoundaryEdge(result, thunk, carrier, tickets) per
+> branch; the one-field carrier product so f64/f32/v128 branch values cross
+> Seq/Thread/Persist schedules as ONE word with field 0 projected at the exact
+> repr; LInvariantFailure the typed no-fabrication terminal; Fail≠Abort effect
+> identity; the frontier gate battery) was verified-through-m2 ONLY — and the
+> through-m3 battery caught it at a WRONG FIXPOINT: m3 == m4 held while
+> k2-frame/k2-pipe/option-protocol/backtrack-full trapped 134 through m3,
+> because reify_frame_k demanded a ContinuationBoundary edge that inference
+> staged only at effect-op sites while k2 boundaries are ordinary calls/pipe
+> stages. THE COMPLETION: EVERY application result stages the edge (calls, pipe
+> stages, fanout applies — SYNTAX's "every call boundary is a potential
+> TIME-hole" made mechanical); finalize binds the op's live discipline at op
+> sites and the SEGMENT discipline (MultiShot — a frame-k only materializes
+> under a crossing multi-shot yield) everywhere else; the world on the edge is
+> the live InferCtx frame row captured AT INFERENCE (resume_world_of, the
+> name-keyed env read, deleted — `Hβ.infer.tcont-world-capture-at-reify` closes
+> a level earlier than named). THEN THE DEEPER ROOT the persist-float fixture
+> exposed: all five shape-bearing pattern arms (literal/ctor/tuple/list/record)
+> graph_bind-OVERWROTE the scrutinee — every destructure DISCARDED the proven
+> type, binders floored to word widths unless a use grounded them (the fanout
+> tuple's f64 elements: writer stored f64@0/8, reader loaded i32@0/4 — the
+> split-truth miscompile, pre-existing in boot, invisible on word payloads).
+> `constrain_scrutinee` (bind the shape onto a fresh node, UNIFY) is the one
+> home; on the wheel's own self-compile it resolves ~4,400 diagnostics
+> (37,684 → 33,286; census through the new boot 33,948) and surfaced
+> HandlerKind's bare-List payload erasure (the 581a92f class — typed at the
+> declaration; the ++-operand floor that briefly broke m4 dissolved at root).
+> MEASURED at the bless: 8/8 rungs + 70/70 micros through m2 AND m3 (the new
+> mn-fanout-destructure-float=60), march TRANSITION m3 == m4, boot re-pinned +
+> IDE re-packed, ratchet back to ✓✓ m2 == m3. THE FRONTIER GATE
+> (tools/frontier-gate.sh, red-by-design, differential-shadow accounting):
+> the scheduled matrix is GREEN IN BEHAVIOR through the pinned boot —
+> Int 60, Float 60 (was 134), tuple 90, closure 34, effect 25,
+> persist-float 60 (the persist carrier crosses persist_to_disk exactly) —
+> reds remaining are the inherited 0:0 E_UnresolvedType debt on compile legs
+> and the whole ?? authoring loop (edit-session transports, candidate filter,
+> Reason surfacing, patch, zero-debt execute = R4/R5); the proof-exactness
+> gate (0/7) pins executable REFUSAL (E_UnresolvedHole / V_Pending → nonzero
+> exit + no WAT; a parameter-product ?? stays executable) — SYNTAX now states
+> both refusal laws. Named residue: E_ResumeWorldMismatchWorld is declared,
+> never raised (persist rehydrate now REFUSES via Fail — delete or wire on the
+> next wheel touch); the `() vs Option(())` mismatch the honest patterns
+> surfaced in backtrack's choose arm (search.mn, recovered, real); the k2
+> parks the carrier wrapping adds inside effectful diverge thunks (loud-floor
+> class, dormant unless a yield crosses a fanout thunk). A 6-agent doc-truth
+> sweep + opus critic corrected the read-path (TAmp/checksum-64, the
+> E_ResumeWorldMismatch row, `-> !` documented, four lathe-lag markers, §4③'s
+> TCont attribution + 625→598/146, §1 six-not-eight).**
+>
 > **▶ VALUE-PROOF (R2) LANDED + the O(1) interner substrate — the north-star pillar goes from zero to on (2026-07-14, 730dfe8 + 9feb727; 8-agent design workflow, built + gated).** After the crown fixes, an adversarial design-convergence for EffName-is-a-handle overturned its own premise: measured, EffName drops NO census (the residual 146 is open-tail + genuine subset failures, ZERO same-name-different-scalar pairs), so it is a by-name-family-deletion + perf lever, NOT the correctness lever — and **value-proof R2 wins per-effort**: refinements discharged NOTHING (`let bad: Sample = 1.5` compiled; SYNTAX's own `E_RefinementRejected` was false against the binary). TWO roots, both fixed (730dfe8): parse_let DISCARDED the `: T` annotation (`let (_, p_ty)`), so a let never reached a refinement check — LetStmt now carries the annotation node (mirrors FnStmt's ret_ann, ~19 sites in lockstep, the absent sentinel REUSES the value node so it is BYTE-IDENTICAL, m2==m3, not a 148k renumbering); and the predicate's `self` (a VarRef node; PCompare operands are node handles) resolved to None — `subst_self(pred, value_handle)` swaps the self-operand for the value node at `infer_pat` and verify discharges. MEASURED: `let bad: Sample = 1.5` REJECTS (`1.5 <= 1.0` proven false), `let ok: Sample = 0.5` compiles, non-constant stays honest V_Pending; crown 5/5, 66/66, census 146. **Then Cluster A L0 (9feb727):** `string_offset_lookup` — the 6th and last §5.O name-scanner, a linear str_eq scan at every LString emit — dissolved into a str_hash bucket index (byte-identical by construction: reverse-insertion puts the smallest index at the bucket front, same offset as the linear first-match; m2==m3). **BANKED, exact-edit-ready** (docs/research via the workflow plan, `make-it-happen.js`): the `smap` indexed-map primitive (generalize esc_index → lib/runtime/imap.mn) migrating the five remaining str_hash waypoints (esc/base/summary/reach/env) onto ONE handle-keyed Set/Map (~200-line delete, `Hβ.runtime.indexed-map-primitive`, every increment byte-identical), then EffName-is-a-handle (INCR1 factor the by-name family, INCR2 the parameterized-precision transition, INCR3 the interned ENamed(String,Int) — the by-name-family deletion + perf, no census). Sequenced perf-cleanup; the correctness wins (crown + value-proof) are LANDED.
 >
 > **▶ THE CROWN'S POSITIVE GATE IS (LARGELY) SOUND — the false-mismatch root was pointer-eq at the membership leaf, NOT the framing R1 claimed (2026-07-14, cc487f8; 8-agent adversarial audit → refute).** The destiny audit said "R1 / EffName-is-a-handle drops 594→~0 AND deletes the by-name family." An 8-agent workflow (audit → adversarial refute) MEASURED that wrong: the 598 false effect-mismatches on the self-compile were ~80% an UNRESOLVED-ROW-VAR class (`r<N>@e<N>`) dying at `row_subsumes`' `EfClosed-gate vs EfOpen-body → _ => false` arm, and the shared root is pointer-eq at ONE leaf — `name_set_contains_loop` compared `list_index(set, i) == name`, which FLOORS to i32.eq because the untyped list erases the element to a word, so two byte-equal `ENamed("Memory")` minted at distinct sites never merged → set-dedup broke (422/598 rows carried duplicate names, `Memory+Memory+Memory`) → the open tail never closed → the gate rejected the row against its OWN declared row. FIX (effects.mn): the leaf matches BY NAME (`str_eq(eff_name_str(...), eff_name_str(name))`, exactly as the negation gate `name_in_forbidden` already did); `row_subsumes` resolves both inputs (a BOUND tail surfaces, so a hidden forbidden effect is still checked — soundness) and mirrors the EfOpen-gate arm for an open body vs a closed gate (the free tail is empty after inference for a monomorphic fn; the call-site rebind at infer.mn:410 closes it to the declared row); and `string_in_list` (own.mn's ref-escape check over a String list) is UN-CONFLATED from `name_set_contains` it aliased — by-name deref traps on a bare String, and the two are different element types. MEASURED: false mismatches **598 → 146** (76%), census 38154 → 37710; crown **5/5** (soundness held — the by-name gate is TIGHTER, resolve surfaces bound tails), 66/66 micros, all CLI verbs work. 452 fns now pass their own declared row → tighter evidence threading (469685 → **453508** lines, a −16k drop): m2 ≠ m3, **m3 == m4** self-confirmed, boot re-pinned (8a5d8ff7…), IDE re-packed. **The corrected R1:** by-name str_eq (this fix) cleared the row-var/dedup 76%; the residual ~146 (85 mismatch + 61 purity) + the six str_hash perf WAYPOINTS is what EffName-is-a-handle (intern to a handle at the decl — §5.O layer 1) dissolves NEXT: it makes this leaf `i32.eq`-on-identity, deletes the by-name family (`eff_name_str`/`forbidden_names_disjoint`), closes the parameterized conflation str_eq admits (`Hβ.effects.parameterized-negation-instance`), and is the same mechanism as the perf waypoints. Named residue: the **purity path** (61 E_PurityViolated, a different `has_pure` gate untouched here) and `Hβ.cli.audit-row-var-render` (greet's audit row renders as a raw var — a separate un-resolved-scheme-row at the single-entry driver_check_entry inference, NOT this subsumption root).
@@ -3037,7 +3095,7 @@ collector that counts them as captures inflates the ev-region base, e791bf3) ·
 strings interned by different passes never match — annotate the name param
 `: String`, the Intent Boundary carrying the proof) · **one-operand dispatch**
 (a binop's emit reading only ONE operand's type proof; read EITHER, 4fb8e68) ·
-**the seed's name-keyed intrinsic table** (bootstrap/src/infer/walk_expr.wat
+**the seed's name-keyed intrinsic table** (bootstrap/src/infer/walk_expr.wat — deleted with the seed, 7401c4b; the lesson outlives the file
 types prelude stages BY NAME with byte-pinned offsets — ANY prelude rename or
 re-signature is a same-cut three-layer edit: wheel decl, wheel callers, seed
 table; miss it and the seed silently mistypes every call) · **blind token-walk

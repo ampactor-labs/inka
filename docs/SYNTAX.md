@@ -272,6 +272,18 @@ The pipe's type rule (§«`|>` — converge») requires `right : A -> B` — a p
 
 **The hole is the suspension point — SPACE and TIME are one.** A hole-product is a computation *suspended at its argument*; filling the hole *resumes* it. On the SPACE axis this is partial application — the field filled by a value, or by the pipe's flowing datum. On the TIME axis it is the multi-shot continuation (`PLAN.md §4④`): a `??` hole reified as a resumable record is a continuation awaiting its argument, fillable now, later, or many times. Partial application and continuation-resumption are the same operation — hole-filling keyed by identity — distinguished only by whether the hole is filled at the call site or captured and resumed. `??` is one absence marker across the whole medium: the gradient's synth-hole, the argument hole, and the continuation's resume-slot are the cursor reading *the same absence* at three altitudes.
 
+**A hole is productive, never executable.** A bare value-position `??` (no
+parameter product to suspend into) admits check/edit projection — the graph
+types it, the cursor proposes into it — but it is NOT an executable value:
+compiling an executable whose reachable graph still contains an unresolved
+value hole is a REFUSAL (`E_UnresolvedHole`, nonzero exit, no emitted module).
+A `??` inside a parameter product stays executable — it is the suspension
+awaiting its field (`add3(10, ??, 30)` is a value). The same refusal law
+covers proof debt: an executable with undischarged `V_Pending` obligations
+refuses at the compile boundary (§0's "nothing executes unproven" made
+mechanical). tools/proof-exactness-gate.sh is the executable contract; the
+refusal transaction is lathe-lag until it lands.
+
 ### The Stage Law — signatures serve the pipe
 
 A consequence of hole-completion, elevated to the signature convention: **a
@@ -782,6 +794,10 @@ let {name, ...rest} = morgan   // bind name; rest is a record of remaining field
 let {name: n, age: a} = morgan // bind to renamed locals
 ```
 
+*Lathe-lag:* the record-pattern REST (`...rest`) is spec — `PRecord` carries no
+rest slot yet (list-pattern rest and record-literal spread both work); the
+parser catches up (§Authority).
+
 ### Field access
 
 ```
@@ -912,6 +928,11 @@ type LaneGain  = Float repr f32
 type Pixels    = Int repr v128            // four packed lanes
 ```
 
+*Lathe-lag:* the authored `repr <width>` suffix (and the bare-width parameter
+pin `s: f32`) is spec — `parse_type_atom` carries no repr arm yet; the gradient
+itself (`repr_of`, the internal width projection) is live. The parser catches
+up (§Authority).
+
 `repr <width>` is a **gradient INPUT — a PIN, not a constructor** (the peer of
 `own`/`ref` at the representation altitude; it surfaces primitive #7). The gradient
 INFERS a value's representation from its type and use (`Word` is the i32 FLOOR;
@@ -1039,6 +1060,14 @@ effect Console { print(msg: String) -> () } // equivalent, explicit
 ```
 
 Both forms are accepted; absence is the idiomatic short form. Non-unit returns MUST be declared explicitly: `read() -> String`. This mirrors the fn-declaration rule where `-> RetTy` is optional on inferred fns but REQUIRED when declared.
+
+**Never-returning ops** declare `-> !`: the op's handler arm never resumes
+(`abort() -> !` — the control cut the Abandon discipline reads; a bare type
+variable `fail(msg: String) -> a` is the bottom-producing sibling whose return
+unifies with any consumer). *Lathe-lag:* the parser currently has no `TBang`
+arm in the type position, so `-> !` rides unexpected-token recovery (typed as
+unit, with a spurious `P_UnexpectedToken`) — the form is canonical; the parser
+catches up (§Authority).
 
 ### Calling resume with unit
 
@@ -1377,6 +1406,8 @@ match v {
 When branches bind different names: `E_PatternAlternationBindingMismatch` with the conflict surfaced. When the same name has incompatible types: same diagnostic with the type conflict surfaced. See `docs/specs/simulations/syntax/pattern-alternation-substrate.md` for the substrate analysis.
 
 ### As-patterns — rule
+
+*Lathe-lag:* the `Pat` ADT carries no `PAs` constructor yet — the form below is spec, the parser catches up (§Authority).
 
 `name @ pat => body`: binds `name` to the entire matched value; `pat` destructures it further. `name` and any bindings inside `pat` are all available in the arm body. Common for "need the whole value AND some pieces" cases — event forwarding, logging, pass-through.
 
@@ -1757,7 +1788,7 @@ type TokenKind
   | TLParen | TRParen | TLBrace | TRBrace | TLBracket | TRBracket
   | TComma | TDot | TColon | TSemicolon
   | TPlus | TMinus | TStar | TSlash | TPercent
-  | TEq | TLt | TGt | TBang
+  | TEq | TLt | TGt | TBang | TAmp
   | TPipe | TAt | THole
 
   // ─── Layout / structural ──────────────────────────────────────────
@@ -1812,7 +1843,7 @@ type TokenKind
 | `TLtTilde`      | `<~`             | —         | feedback                                       |
 | `TAndAnd`       | `&&`             | —         | logical and                                    |
 | `TOrOr`         | `\|\|`           | —         | logical or                                     |
-| **Single-character operators and punctuation (22)** |  |           |                              |
+| **Single-character operators and punctuation (23)** |  |           |                              |
 | `TLParen`       | `(`              | —         | grouping, params, tuples, calls                |
 | `TRParen`       | `)`              | —         | close grouping                                 |
 | `TLBrace`       | `{`              | —         | blocks, records, handler arms, type variants   |
@@ -1832,6 +1863,7 @@ type TokenKind
 | `TLt`           | `<`              | —         | less-than comparison (no generic-param role — angle brackets retired; `f<T>(...)` parses as a comparison chain and the general unexpected-token / type-mismatch diagnostic teaches, never a bespoke turbofish lookahead) |
 | `TGt`           | `>`              | —         | greater-than comparison (no generic-param role; see `TLt`) |
 | `TBang`         | `!`              | —         | logical not; effect negation                   |
+| `TAmp`          | `&`              | —         | effect-row intersection (`EfInter` — §«Named effect rows»); row-expression syntax only, no value-operator precedence |
 | `TPipe`         | `\|`             | —         | type-variant separator; pattern alternation in match arms (the `\|x\|` lambda fence is rejected — `E_LambdaFence`) |
 | `TAt`           | `@`              | —         | as-patterns: `name @ pat` binds the whole value AND destructures (§«As-patterns»); `@resume=` erased per inference-from-body |
 | `THole`         | `??`             | —         | hole — the gradient's syntactic absence marker; Mentl's Synth proposes candidates filling the position. The Mentl Mono ligature renders `??` as the octagonal-socket glyph (8 sides ↔ 8 kernel primitives). Single `?` is no longer a token. |
@@ -1839,7 +1871,7 @@ type TokenKind
 | `TNewline`      | `\n`             | —         | statement separator; transparent around binops (layout is never semantics) |
 | `TEof`          | (end of input)   | —         | always last token; parser uses to terminate    |
 
-**Checksum: 63 variants** (18 keywords + 7 identifiers/literals + 14 two-char operators + 22 single-char operators/punctuation + 2 layout) — a reviewer cross-check that the `TokenKind` declaration and this catalog enumerate the SAME set; the hand-maintained stand-in for `mentl audit` until the cursor projects it from the graph. Exhaustiveness over the ADT (§Lexer/Parser obligations) IS the cardinality guarantee — the number is its shadow, not its source. (`TColonColon`, `TCapability`, `TTilde`, and `THandle` are absent: a token with no kernel correspondence is speculative inventory — and `handle` is the medium's own domain noun, not a keyword (§«Installation»). `TStringPart`/`TStringSplice` carry the interpolation substrate.)
+**Checksum: 64 variants** (18 keywords + 7 identifiers/literals + 14 two-char operators + 23 single-char operators/punctuation + 2 layout) — a reviewer cross-check that the `TokenKind` declaration and this catalog enumerate the SAME set; the hand-maintained stand-in for `mentl audit` until the cursor projects it from the graph. Exhaustiveness over the ADT (§Lexer/Parser obligations) IS the cardinality guarantee — the number is its shadow, not its source. (`TColonColon`, `TCapability`, `TTilde`, and `THandle` are absent: a token with no kernel correspondence is speculative inventory — and `handle` is the medium's own domain noun, not a keyword (§«Installation»). `TStringPart`/`TStringSplice` carry the interpolation substrate.)
 
 ### Lexer obligations
 
@@ -1939,8 +1971,9 @@ un-normalized source the formatter has not yet touched).
 | `E_NotAKeyword`       | user typed `for`/`while`/`loop`/`break`/`continue`/`return` | `MaybeIncorrect` | rewrite as verb form per substrate             |
 | `E_PatternAlternationBindingMismatch` | branches in `\|` bind different names or types | `MaybeIncorrect` | adjust patterns to bind same names with unifiable types |
 | `E_ResumeOutsideArm`  | `resume` outside a handler-arm body           | `Unspecified`        | move the resume into an arm; the continuation only exists there |
-| `E_ResumeWorldMismatch` | a continuation (`TCont(R, S, discipline, world)`) is resumed under an effect-WORLD that does not unify with the one it was frozen under (`!E` lifted to the TIME axis — a persisted/cross-context resume meeting a changed handler-set; `unify`'s TCont arm, §4③) | `MaybeIncorrect` | re-install the absorbing handler before the resume, OR widen the continuation's world |
+| `E_ResumeWorldMismatch` | two continuations (`TCont(R, S, discipline, world)`) unify with incompatible resume DISCIPLINES — OneShot and MultiShot are distinct representations (stack frame vs heap record), so the mismatch is hard; `Either` unifies with either. The WORLD half is the row unification in the same TCont arm (`!E` lifted to the TIME axis, §4③); its dedicated runtime raise (`E_ResumeWorldMismatchWorld`) is declared but not yet wired — lathe-lag, band B | `MaybeIncorrect` | align the handler arms' resume cardinality; for a world clash, re-install the absorbing handler before the resume OR widen the continuation's world |
 | `E_ConcatTypeMismatch` | `++` operands' element types fail to unify (e.g. `[Int] ++ [Bool]`) | `MaybeIncorrect` | unify the element types |
+| `E_UnresolvedHole`    | compiling an EXECUTABLE whose reachable graph holds a bare value-position `??` (§«Partial application» — a hole is productive for check/edit, never an executable value; a parameter-product `??` is an executable suspension and does not trigger this). Lathe-lag: the refusal transaction is the proof-exactness gate's contract, not yet raised | `HasPlaceholders` | fill the hole (accept a Synth survivor) or suspend it into a parameter product |
 
 ### Gradient narration (teaching surfaces)
 

@@ -58,6 +58,8 @@ import cursor
 import mentl
 import voice
 import driver
+import query
+import verify
 import runtime/strings
 import runtime/io
 
@@ -252,7 +254,7 @@ fn cursor_step(state) with Surface + GraphRead + CursorRead + !Mutate = {
   // Receive an action from the human, fold into the next state.
   match surface_action() {
     AccAccept => {
-      apply_suggestion(view)
+      apply_suggestion(cursor, view)
       state_advance(state, cursor)
     },
     AccDefer => state_advance(state, cursor),
@@ -314,14 +316,40 @@ fn span_of_cursor(cursor) with GraphRead = {
 // promote this to a GraphRead op (perform graph_handle_at_span(span));
 // blocked on adding the op to graph.mn's effect declaration.
 
-fn apply_suggestion(view) with GraphRead + !Mutate = {
-  let CursorView(_, _, _, _, _, _, teach, _) = view
-  match teach {
-    None => (),
-    Some(suggestion) => {
-      let AnnotationSuggestion(_kind, ann_text, _unlocks, reason) = suggestion
-      apply_patch_at_cursor(span_of_reason(reason), ann_text)
+fn apply_suggestion(cursor, view) with GraphRead + !Mutate = {
+  let Cursor(handle, _, _) = cursor
+  let CursorView(_, propose, _, _, _, _, teach, _) = view
+  // A hole accepts its PROPOSE survivor: exactly one proven candidate is
+  // the medium's answer. Two or more is the teaching TIE-BREAK — surface
+  // the tie, never guess between proven survivors (PLAN §5). Non-hole
+  // positions accept the teach annotation as before.
+  if authored_hole(handle) && len(propose) == 1 {
+    let (survivor, _reason) = head(propose)
+    replace_span(parse_span_of(handle), render_candidate_source(survivor))
+  } else {
+    match teach {
+      None => (),
+      Some(suggestion) => {
+        let AnnotationSuggestion(_kind, ann_text, _unlocks, reason) = suggestion
+        apply_patch_at_cursor(span_of_reason(reason), ann_text)
+      }
     }
+  }
+}
+
+// A proven literal survivor renders as its source text. A non-constant
+// survivor renders as the hole marker itself — replacing `??` with `??`
+// is the honest no-op, never a spliced fabrication; the general candidate
+// renderer is the formatter projection (Hβ.felt.candidate-render-is-format),
+// unreached while the enumerators seed literals.
+fn render_candidate_source(node) with GraphRead + !Mutate = {
+  let N(_, _, h) = node
+  match node_const(h) {
+    Some(LVInt(n))    => int_to_str(n),
+    Some(LVFloat(f))  => float_to_str(f),
+    Some(LVString(lit)) => "\"{lit}\"",
+    Some(LVBool(b))   => if b { "true" } else { "false" },
+    None              => "??"
   }
 }
 
@@ -340,9 +368,19 @@ fn show_node_kind(kind) with Pure = match kind {
   NErrorHole(_) => "error-hole"
 }
 
-fn show_proposals(props) with Pure =
+fn show_proposals(props) with GraphRead + !Mutate =
   if len(props) == 0 { "(none)" }
-  else { "{int_to_str(len(props))} candidate(s)" }
+  else {
+    "{int_to_str(len(props))} candidate(s){str_concat_all(map(show_one_proposal, props))}"
+  }
+
+// Each survivor: its source text and its Reason — the pair the Synth
+// contract carries (the seed reason lives in the candidate record, not on
+// the node's mint placeholder).
+fn show_one_proposal(proposal) with GraphRead + !Mutate = {
+  let (node, reason) = proposal
+  " · {render_candidate_source(node)} — {show_reason(reason)}"
+}
 
 fn show_pipe_context(ctx) with Pure = match ctx {
   NoPipe => "(none)",
@@ -377,6 +415,10 @@ fn parse_action(line) with Pure =
 effect PatchWrite {
   patch_set_target(String) -> ()
   apply_patch_at_cursor(Span, String) -> ()
+  // Replace the exact byte range a source span covers — the hole-fill
+  // primitive (the Patch value's own semantic: span to replace, new text).
+  // apply_patch_at_cursor stays the annotation form (insert-above-line).
+  replace_span(Span, String) -> ()
 }
 
 handler patch_to_file with target_module = "" {
@@ -392,7 +434,26 @@ handler patch_to_file with target_module = "" {
     fs_write_file(path, edited)
     driver_check(target_module)
     resume()
+  },
+
+  replace_span(span, text) => {
+    let path = driver_module_path(target_module)
+    let source = fs_read_file(path)
+    let edited = splice_span(source, span, text)
+    fs_write_file(path, edited)
+    driver_check(target_module)
+    resume()
   }
+}
+
+// Replace the byte range a source span covers. Lines and columns are
+// 1-based (the lexer's token spans); the end column is exclusive.
+fn splice_span(ref source, ref span, ref text) with Memory + Alloc = {
+  let n = byte_len(source)
+  let Span(sl, sc, el, ec) = span
+  let start = find_line_start(source, sl, 1, 0, n) + (sc - 1)
+  let end   = find_line_start(source, el, 1, 0, n) + (ec - 1)
+  "{str_slice(source, 0, start)}{text}{str_slice(source, end, n)}"
 }
 
 fn indent_annotation(ref text) with Memory + Alloc = {

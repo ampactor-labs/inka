@@ -108,46 +108,45 @@ handler synth_default with !Mutate {
   synth_propose(target_ty, allowed_effects, context) => {
     // Forward to enumerative with full multi-shot enrichment.
     let enriched = enumerate_typed(target_ty, allowed_effects, context)
-    let verified = verify_each_enriched(enriched)
-    resume(verified |> map_to_nodes)
+    let verified = verify_each_enriched(enriched, target_ty)
+    resume(verified |> map_to_proposals)
   },
 
-  verify_candidate(candidate) => {
+  verify_candidate(candidate, target_ty) => {
     // The real proof gate (PLAN.md §1: checkpoint -> INFER -> Verify ->
     // rollback). The candidate is a real minted node in the graph; run
-    // the SAME infer walk that types all source over it, then read its
-    // handle's binding live. A candidate is proven when inference bound
-    // its handle to a concrete type (NBound) — the apply succeeded and
-    // no occurs-check / structural conflict marked it an error-hole.
-    // The caller's checkpoint isolates this; rollback reverts the binds.
-    // This reuses verify_after_apply's chase shape (mentl.mn:352) after
-    // the infer that the fabricated-handle-0 form could never run.
+    // the SAME infer walk that types all source over it, read its
+    // handle's binding live (NBound = the apply succeeded), AND
+    // discharge the TARGET's refinement against the candidate — an
+    // NBound(TInt) alone proved only well-typedness, so every integer
+    // seed survived a `0 < self` target. The caller's checkpoint
+    // isolates this; rollback reverts the binds.
     let Candidate(node, _) = candidate
     infer_expr(node)
     let N(_, _, h) = node
-    resume(verify_after_apply(h))
+    resume(verify_after_apply(h) && refinement_admits(target_ty, h))
   },
 
   enumerate_inhabitants(target_ty, allowed_effects, context) => {
     let enriched = enumerate_typed(target_ty, allowed_effects, context)
-    yield_inhabitants(enriched, 0, len(enriched))
+    yield_inhabitants(enriched, target_ty, 0, len(enriched))
   }
 }
 
-fn yield_inhabitants(enriched, i, n) with Synth + GraphRead + GraphWrite + !Mutate = {
+fn yield_inhabitants(enriched, target_ty, i, n) with Synth + GraphRead + GraphWrite + !Mutate = {
   if i >= n { resume([]) }
   else {
     let cand = list_index(enriched, i)
     let EnrichedCandidate(c) = cand
     let inner = Candidate(c.node, c.reason)
     let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-    let proven = verify_candidate(inner)
+    let proven = verify_candidate(inner, target_ty)
     graph_rollback(cp)
     if proven {
       resume([c.node])
-      yield_inhabitants(enriched, i + 1, n)
+      yield_inhabitants(enriched, target_ty, i + 1, n)
     } else {
-      yield_inhabitants(enriched, i + 1, n)
+      yield_inhabitants(enriched, target_ty, i + 1, n)
     }
   }
 }
@@ -412,7 +411,7 @@ fn enumerate_tuple_candidates(elems, context) with GraphRead + GraphWrite + !Mut
 // Same form as mentl.mn:146-166 try_each_annotation but with
 // EnrichedCandidate replacing (Annotation, Capability) pairs.
 
-fn verify_each_enriched(candidates) with Synth + GraphRead + GraphWrite + !Mutate = {
+fn verify_each_enriched(candidates, target_ty) with Synth + GraphRead + GraphWrite + !Mutate = {
   // Per-candidate proof-search is the divergent-fanout topology
   // (checkpoint isolates each branch from siblings) — symmetric with
   // oracle's per-candidate dispatch at src/oracle.mn:357 + mentl.mn's
@@ -424,7 +423,7 @@ fn verify_each_enriched(candidates) with Synth + GraphRead + GraphWrite + !Mutat
          let EnrichedCandidate(c) = candidate
          let inner = Candidate(c.node, c.reason)
          let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-         let proven = verify_candidate(inner)
+         let proven = verify_candidate(inner, target_ty)
          graph_rollback(cp)
          (candidate, proven)
        })
@@ -432,12 +431,15 @@ fn verify_each_enriched(candidates) with Synth + GraphRead + GraphWrite + !Mutat
     |> map((pair) => { let (c, _) = pair; c })
 }
 
-// ─── map_to_nodes — strip the EnrichedCandidate wrapper for the ───
-//                    Synth effect's [Node] return contract.
+// ─── map_to_proposals — project each survivor to its (node, reason) ──
+//    pair for the Synth effect's proposal contract. The seed Reason lives
+//    in the candidate record — the node's own GNode reason is only its
+//    mint-span record — so dropping the pair dropped the Why from every
+//    rendered survivor.
 
-fn map_to_nodes(enriched) with Pure = map((candidate) => {
+fn map_to_proposals(enriched) with Pure = map((candidate) => {
   let EnrichedCandidate(c) = candidate
-  c.node
+  (c.node, c.reason)
 }, enriched)
 
 // ─── Node synthesizers — per-shape AST construction ─────────────────

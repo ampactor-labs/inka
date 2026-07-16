@@ -116,6 +116,23 @@ fn subst_self_operand(h, value_handle) with GraphRead = match graph_node_body(h)
   _                   => h
 }
 
+// The candidate gate's refinement half: a candidate SURFACES only when the
+// target's refinement DECIDES true on it (PLAN §5 sample-then-filter — the
+// proven survivors, which may be none). An undecided predicate is not a
+// proof, and assume-true is the Dafny {:axiom} cautionary the ledger
+// exists to refuse. Transparent aliases recurse; an unrefined target
+// admits by type alone.
+fn refinement_admits(ty, value_handle) with GraphRead = match ty {
+  TAlias(_, inner)     => refinement_admits(inner, value_handle),
+  TRefined(base, pred) =>
+    refinement_admits(base, value_handle)
+      && (match predicate_decide(subst_self(pred, value_handle)) {
+            Some(decided) => decided,
+            None          => false
+          }),
+  _ => true
+}
+
 // Fold a comparison over two constant operand values.
 fn litval_compare(ref op, ref a, ref b) with Pure = match op {
   BEq => litval_eq(a, b),

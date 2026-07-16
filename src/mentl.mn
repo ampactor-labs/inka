@@ -95,8 +95,8 @@ effect Teach {
 // SMT, LLM, user — plugs in as a handler. The compiler verifies.
 
 effect Synth {
-  synth_propose(Ty, EffRow, Context) -> List
-  verify_candidate(Node) -> Bool
+  synth_propose(Ty, EffRow, Context) -> List   // [(Node, Reason)] — each proven survivor with its Why
+  verify_candidate(Node, Ty) -> Bool
   enumerate_inhabitants(Ty, EffRow, Context) -> List
 }
 

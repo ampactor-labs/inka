@@ -257,8 +257,15 @@ fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: Vali
   // annotation ⇒ the fresh var, inferred as before.
   let N(ret_ann_body, _, _) = ret_ann
   match ret_ann_body {
-    NTypeAnn(ann_ty) =>
-      graph_bind(ret_handle, ann_ty, Located(span, Declared(name))),
+    NTypeAnn(ann_ty) => {
+      // Resolve through the alias edge FIRST (quantify_ctor_ty — the same
+      // resolution build_param_types and apply_let_annotation use): binding
+      // the raw syntactic TName made a refined alias look NOMINAL, so the
+      // proposer enumerated constructors of `Positive` (zero) instead of
+      // integer seeds under its refinement.
+      let (resolved_ret, _q) = quantify_ctor_ty(ann_ty, [])
+      graph_bind(ret_handle, resolved_ret, Located(span, Declared(name)))
+    },
     _ => ()
   }
   let row_handle = graph_fresh_row(Inferred("effects of '{name}'"))
@@ -382,8 +389,20 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   // annotation is absent ⇒ inferred, no pin (byte-identical to the old form).
   let N(ret_body, ret_span, _) = ret_ann
   match ret_body {
-    NTypeAnn(ann_ty) =>
-      unify_types(TVar(ret_handle), ann_ty, ret_span, Declared(name)),
+    NTypeAnn(ann_ty) => {
+      // Resolve through the alias edge FIRST — the pre-scheme bound the
+      // RESOLVED annotation, so pinning the raw syntactic TName here made
+      // the two anchors disagree with each other (Int vs Positive at the
+      // annotation's own span). One resolver, every reader.
+      let (resolved_ann, _q) = quantify_ctor_ty(ann_ty, [])
+      unify_types(TVar(ret_handle), resolved_ann, ret_span, Declared(name))
+      // A refined return annotation is a CONSTRAINT on the body — discharge
+      // it against the body node exactly as a let-annotation discharges
+      // against its value (R2): `fn choose() -> Positive = 1` proves
+      // 0 < 1 on the literal; a non-constant body stays honest V_Pending.
+      let N(_, _, body_h) = body_node
+      apply_refinement_constraint(resolved_ann, body_h, ret_span)
+    },
     _ => ()
   }
 

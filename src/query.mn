@@ -560,6 +560,20 @@ fn span_area(s: ValidSpan) with Pure = {
   else { ((el - sl) * 1000) + ec - sc }
 }
 
+// The MINT span of a handle — the reverse read of the span_index weave
+// (fresh_handle writes (span, handle) at every mint). A node's REASON span
+// can be overwritten by a later bind (a hole's reason becomes its binder's
+// "declared as ..."), so a patch target must read the weave, never the
+// reason. O(n) scan at felt cadence (once per accepted action); the O(1)
+// form is the handle-indexed span weave (the §5.O name-is-handle sibling).
+fn parse_span_of(handle) with GraphRead + !Mutate = {
+  let Graph(_, _, _, _, span_index) = graph_snapshot()
+  match find((pair) => { let (_, h) = pair h == handle }, span_index) {
+    Some(pair) => { let (span, _) = pair span },
+    None       => span_zero()
+  }
+}
+
 fn find_tightest(ref idx, target, best_h, best_area) with Pure = {
   if len(idx) == 0 { best_h }
   else {

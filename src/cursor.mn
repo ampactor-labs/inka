@@ -227,9 +227,38 @@ handler ic_fixpoint_handler with last_epoch = 0 - 1 {
 // never a side-file.
 
 fn cursor_argmax_compute(caret) with GraphRead + !Mutate = {
-  enumerate_gradient_positions()
-    |> (positions) => score_all_positions(positions, caret)
+  // SYNTAX «THole»: `??` is the gradient's syntactic absence marker. An
+  // unfilled hole blocks the executable itself (E_UnresolvedHole), so
+  // absence categorically outranks every annotation tightening — holes
+  // rank among themselves by caret proximity; the annotation lattice is
+  // the no-hole gradient. A structural tier, never a magic weight.
+  let holes = enumerate_hole_positions()   // drift-audit: ignore — holes reused twice (tier test + the tier itself); a `<|` reuse, not a `|>` chain
+  let positions = if len(holes) > 0 { holes } else { enumerate_gradient_positions() }
+  positions
+    |> (ps) => score_all_positions(ps, caret)
     |> (scored) => argmax_or_default(scored, caret)
+}
+
+// An AUTHORED hole: the parser mints NHole with a fresh nonzero id for
+// every `??` (and for each syntax-error recovery hole — an absence to fix
+// either way); the program weave's absent-default is NHole(0), never a
+// position.
+fn hole_gate(handle) with GraphRead + !Mutate =
+  if authored_hole(handle) { 1 } else { 0 }
+
+// A hole is a POSITION only when it carries a source span: the parser's
+// `??` and recovery mints carry their token span; synthetic span-zero
+// hole nodes (driver scaffolding) are not caret targets — a position IS
+// a span, and there is nothing to render or patch at 0:0. The weave's
+// absent-default NHole(0) is likewise never a position.
+fn authored_hole(handle) with GraphRead + !Mutate = match graph_node_body(handle) {
+  NHole(id) => id != 0 && !span_eq(caret_span_of_handle(handle), span_zero()),
+  _         => false
+}
+
+fn enumerate_hole_positions() with GraphRead + !Mutate = {
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = graph_snapshot()
+  filter(authored_hole, range(0, next))
 }
 
 fn enumerate_gradient_positions() with GraphRead + !Mutate = {
@@ -252,7 +281,11 @@ fn score_all_positions(handles, caret) with GraphRead + !Mutate = {
 fn score_one_position(handle, caret) with GraphRead + !Mutate = {
   let suggestion_opt = teach_gradient(handle)
   let gates = match suggestion_opt {
-    None => 0,
+    // No annotation suggestion: an AUTHORED hole still gates — filling it
+    // unlocks the executable itself (E_UnresolvedHole is the refusal it
+    // lifts), so within the hole tier proximity alone ranks. Any other
+    // suggestion-less position stays gate-zero.
+    None => hole_gate(handle),
     Some(suggestion) => {
       let AnnotationSuggestion(_kind, _ann, unlocks, _reason) = suggestion
       len(unlocks)

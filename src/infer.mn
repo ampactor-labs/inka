@@ -299,6 +299,14 @@ fn infer_stmt(ref node) = {
     NStmt(LetStmt(pat, expr, ann)) => {
       infer_expr(expr)
       let N(_, val_span, eh) = expr
+      // The let STATEMENT's value IS its expression: bind the stmt node to
+      // the value's var (one union-find edge). Unbound, every block-let's
+      // own node sat NFree while lower keys LLet by the STMT handle and two
+      // emit width-readers lookup_ty it — two recovered E_UnresolvedType
+      // per let, program-wide, and a word-floored LLet width where the
+      // value's proof already existed one edge away.
+      graph_bind(handle, TVar(eh),
+        Located(span, Inferred("let statement carries its value")))
       infer_pat(pat, eh, span)
       // The `: T` annotation is a CONSTRAINT verified against the value node.
       // Unlike the generic TRefined arm of unify_types (predicate + span only),

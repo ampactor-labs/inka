@@ -1417,8 +1417,30 @@ in this column is one of its classes.
   correction above; zero census errors are name-identity failures.
 - `Hβ.effects.parameterized-negation-instance` (instance-precise
   `!Sample(44100)`).
-- `Hβ.infer.alias-preserving-unify` (the wrapper-peel erases the alias from
-  the union-find class — the ret-chain echo).
+- `Hβ.infer.alias-preserving-unify` — the census's biggest remaining root:
+  ~362 (241 `Span vs ValidSpan` + 121 `Int vs ValidOffset`). INVESTIGATION
+  BANKED 2026-07-17. The error fires at unify_types' `TName` arm
+  (`type_name_eq` false → `type_mismatch`), so a bare `TName("ValidSpan")`
+  reaches unify UNEXPANDED and meets the resolved base — the wrapper never
+  peels because it is not a wrapper at that point. Two hypotheses RULED OUT by
+  the artifact: (1) forward-reference pre-registration order (types.mn sorts
+  after infer.mn, so `span: ValidSpan` uses precede the RefineStmt) — a
+  two-pass pre_register_decls (aliases first) was built and marched and moved
+  the census ZERO (241/121 unchanged), because unify runs in the MAIN walk
+  after ALL pre-registration, so alias order there is moot; (2) a resolver gap
+  — params (build_param_types), returns (line 415), ADT ctors
+  (register_type_constructors), and effect ops (quantify_effect_ops) ALL route
+  through quantify_ctor_ty, which env-resolves a capitalized nullary name to
+  its TAlias. So the unexpanded `TName("ValidSpan")` comes from a path that
+  BYPASSES quantify_ctor_ty — a type built directly in inference, or the
+  handler-state type inferred from `[]` + uses (the `graph_index_span` span_index
+  push at wheel-blob 11460 is a clean minimal site). NEXT: instrument the raw
+  Ty tag (TName vs TAlias — `show_type` renders both as "ValidSpan", RN.1, which
+  is why static reading kept peeling to OK) at that one site — a binary-patch
+  probe on m2.wat (never an `eprint_string` in `type_mismatch`: it performs IO
+  and perturbs the rows under test). Governed by the unpatchability theorem: the
+  fix resolves the name at its ORIGIN (read the alias edge), never a new arm in
+  unify_types.
 - backtrack's `() vs Option(())` mismatch (search.mn).
 - `E_ResumeWorldMismatchWorld` wire-or-delete (band B).
 - **R3**: the decidable arithmetic Verify fragment (beyond constants — the

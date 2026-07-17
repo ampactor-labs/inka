@@ -28,7 +28,9 @@
 #     `call $eprint_string (i32.const 0) s` / `call $int_to_str (i32.const 0) n`,
 #     separator = a REAL interned string const — offsets shift per build).
 #   assemble-fail → the wheel's EMIT is wrong (undeclared local / missing
-#     $ftN / bad WAT) — fix src/backends/wasm.mn, mirror the seed if shared.
+#     $ftN / bad WAT) — fix src/backends/wasm.mn. (This line used to end "mirror
+#     the seed if shared"; the seed was deleted 7401c4b, so there is nothing to
+#     mirror — the wheel's emit is the only home.)
 #   run-wrong-exit → a silent miscompile — the worst class; bisect the rung's
 #     source, then WABT-diff the emitted fn (wasm-objdump -d, wt_func).
 #
@@ -63,7 +65,7 @@ if [ "$DO_BUILD" = 1 ]; then
   echo "✓ m2.wasm ($(stat -c%s "$OUT/m2.wasm") bytes)"
 fi
 [ -f "$OUT/m2.wasm" ] || { echo "✗ no m2.wasm — run without --no-build"; exit 1; }
-# GATE_WASM: the compiler-under-test. Default m2 (seed-sparked wheel); point it
+# GATE_WASM: the compiler-under-test. Default m2 (boot-sparked wheel); point it
 # at an assembled m3 to run the SAME rung+micro battery through the wheel's own
 # child — the phase-3 correctness half (a buggy compiler self-reproduces to a
 # WRONG fixpoint, so diff-empty alone proves nothing; PLAN §6).

@@ -1,18 +1,25 @@
-// driver.mn — incremental compilation driver (IC.2)
+// driver.mn — the module DAG walk
 //
-// Orchestrates per-module check/build with cache hit detection.
-// Walks the import DAG from an entry-point module, processes each
-// module exactly once in dependency order, consults the .kai cache
-// to skip re-inference on unchanged sources, installs cached envs
-// into the env_handler so importing modules can resolve names.
+// Walks the import DAG from an entry module, visits each module once
+// in dependency order (post-order: leaves before importers), and
+// resolves each name to a path (driver_module_path — four homes, tried
+// in order). driver_compile_entry concatenates the DAG into ONE program
+// so the whole thing is parsed and inferred together and the diagnostics
+// are whole-program truth, never per-module fragments missing their
+// cross-module names.
 //
-// IC.2 (this commit): single-entry recursive descent over imports
-// with source-hash invalidation. Per-module env install merges
-// flat into env_handler (no per-module overlay separation yet —
-// the graph chase still walks one global graph). Per-module
-// overlays land with IC.3's chase extension.
+// The header here described "cache hit detection" and "consults the .kai
+// cache to skip re-inference on unchanged sources" for two weeks after
+// the .kai layer was DELETED WHOLE (2026-07-02): it snapshotted env
+// entries lossily, DROPPING Reason chains, and pinned an Inka-era wire
+// format. There is no cache in this file. Cross-run skipping returns as
+// image-persist (Hβ.persist.module-image-cache, PLAN §5.R band O) — the
+// graph image memcpy'd whole, keyed by source + transitive dep hashes,
+// never a second serializer.
 //
-// Walkthrough: docs/specs/simulations/IC-incremental-compilation.md
+// The per-module env overlay is still open: env install merges flat into
+// env_handler and the graph chase walks one global graph
+// (Hβ.driver.per-module-env-overlay).
 
 import types
 import parser

@@ -24,7 +24,7 @@
 #
 # Enable: bash tools/setup-git-hooks.sh   (git config core.hooksPath .githooks)
 # Bypass: --no-verify is for non-source emergency fixes ONLY. Never bypass for
-# .mn / seed .wat — these gates ARE the discipline CLAUDE.md establishes.
+# .mn sources — these gates ARE the discipline CLAUDE.md establishes.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -64,7 +64,7 @@ for f in "${staged_src[@]}"; do
 done
 
 if [[ "$has_compiler_change" == "true" && -x "$VERIFY" ]]; then
-    echo "pre-commit: thesis gate (tools/verify.sh — seed builds + micros + census)..."
+    echo "pre-commit: thesis gate (tools/verify.sh — micros + the census ratchet)..."
     if ! bash "$VERIFY"; then
         echo ""
         echo "pre-commit: THE MENTL-THESIS GATE FAILED — the commit is BLOCKED."

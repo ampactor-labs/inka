@@ -147,6 +147,20 @@
 # next ratchet-down, and it is the shortest path from here toward the bar.
 census_errors_max: 2266
 
+# ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
+# The census one layer up: symbols cited in `//` comments that exist nowhere
+# in code. A comment IS graph content (SYNTAX §Comments) — a CommentReason
+# edge the Why engine walks — so a phantom is a FALSE EDGE, the Carried-Truth
+# Law at the prose layer. tools/comment-audit.sh has caught these since it was
+# written, exits 1 on a hit, and says in its own header "wire into pre-commit
+# to gate, or run by hand." It was wired to nothing and had never been run.
+#
+# 2026-07-17: 554, the first measurement. Read by tools/comment-ratchet.sh,
+# which is on the board. Falls to 0, then both it and this line are deleted and
+# comment-audit gates directly — and both ratchets dissolve into `mentl audit`,
+# the projection they are larval forms of.
+phantom_comments_max: 554
+
 # micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
 micro:ev2=57
 micro:ev4=57

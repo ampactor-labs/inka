@@ -37,12 +37,12 @@ type Ty
   | TString
   | TUnit
   | TList(Ty)
-  | TTuple(List)
-  | TFun(List, Ty, EffRow)        // params: List[TParam], return, effects
+  | TTuple([Ty])
+  | TFun([TParam], Ty, EffRow)    // params, return, effects
   | TVar(Int)                     // handle into Graph
-  | TName(String, List)           // nominal type + type args (Bool lives here)
-  | TRecord(List)                 // [(name, Ty)]
-  | TRecordOpen(List, Int)        // fields + row-variable handle
+  | TName(String, [Ty])           // nominal type + type args (Bool lives here)
+  | TRecord([(String, Ty)])       // [(name, Ty)]
+  | TRecordOpen([(String, Ty)], Int) // fields + row-variable handle
   | TRefined(Ty, Predicate)       // refinement type (Verify discharges)
   | TCont(Ty, Ty, ResumeDiscipline, EffRow)   // handler continuation R -> S: resume input, answer, cardinality, and the effect-WORLD it was frozen under (the modal-effect lexical-capability set — !E lifted to the TIME axis; a persisted resume under a changed handler-set is a row unification -> E_ResumeWorldMismatch, never a silent memcpy'd miscompile)
   | TAlias(String, Ty)            // RN.1 — authored alias name (e.g. "Port") wrapping resolved type
@@ -301,7 +301,7 @@ type Usage
 // Forall([], ty). env_lookup returns Option<(Scheme, Reason)>.
 
 type Scheme
-  = Forall(List, Ty)
+  = Forall([Int], Ty)
 
 // SchemeKind discriminates env entries by their CONSTRUCTION ORIGIN.
 // Same Scheme shape, three different downstream stories: lower
@@ -346,9 +346,9 @@ type SchemeKind
   = FnScheme                                     // tag 0
   | ConstructorScheme(TagId, Int)                // tag 1
   | EffectOpScheme(String, String, Bool, ResumeDiscipline)   // tag 2 — (effect_name, default_handler, ambiguous, resume cardinality — the join over handlers' arm grades)
-  | RecordSchemeKind(List)                       // tag 3 — [(field_name, ty)]
-  | EffectDeclKind(List)                         // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
-  | HandlerKind(Int, [String], [{init: N, name: String}], [{args: List, body: N, op_name: String}])   // tag 6 — (residual_row_handle, config param names, state fields, arms). Typed payloads: a bare List here erased the element types the consumers prove (the 581a92f class), and the pattern-constraint unification surfaces the conflict as E_TypeMismatch at every destructure.
+  | RecordSchemeKind([(String, Ty)])             // tag 3 — [(field_name, ty)]
+  | EffectDeclKind([String])                     // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
+  | HandlerKind(Int, [String], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])   // tag 6 — (residual_row_handle, config param names, state fields, arms). Typed payloads: a bare List here erased the element types the consumers prove (the 581a92f class), and the pattern-constraint unification surfaces the conflict as E_TypeMismatch at every destructure.
   | ParamScheme(Ownership)                       // tag 7 — parameter binding carries authored ownership at the env edge
   // HandlerKind (tag 6) is the full handler-effect type AND the handler's
   // identity: a handler is
@@ -377,8 +377,8 @@ type SchemeKind
 
 type EffRow
   = EfPure                          // identity: no effects
-  | EfClosed(List)                  // sorted, deduped [EffName]
-  | EfOpen(List, Int)               // known [EffName] + row-variable handle
+  | EfClosed([EffName])             // sorted, deduped [EffName]
+  | EfOpen([EffName], Int)          // known [EffName] + row-variable handle
   | EfNeg(EffRow)                   // !E — any effect not in E
   | EfSub(EffRow, EffRow)           // E - F — always reduces to E & !F
   | EfInter(EffRow, EffRow)         // E & F — set intersection
@@ -401,7 +401,7 @@ type EffRow
 
 type EffName
   = ENamed(String)
-  | EParameterized(String, List)    // name + [EffArg]
+  | EParameterized(String, [EffArg]) // name + [EffArg]
   | EPure                           // the union identity — `with Pure` IS the
                                     // empty row, made an ADT variant (drift-3:
                                     // not a string key). build_declared_row   // drift-audit: ignore — describes the dissolution
@@ -488,7 +488,7 @@ type ContinuationEdge
 
 type ExecutableBoundary
   = NoBoundary
-  | FanoutBoundary(List) // ordered BoundaryEdge values, one per branch
+  | FanoutBoundary([BoundaryEdge]) // ordered BoundaryEdge values, one per branch
   // The call is seen while its InferCtx frame is live, before later handler
   // declarations have necessarily completed the op's cardinality join.
   | PendingContinuationBoundary(Int, Int, Int, EffRow) // resume input, answer, continuation, world
@@ -496,11 +496,11 @@ type ExecutableBoundary
 
 type Graph
   = Graph(
-      List,    // nodes: flat array indexed by handle
-      Int,     // epoch: bumps on every bind
-      Int,     // next: next fresh allocation
-      List,    // overlays: [(module_name, [handle])]
-      List     // span_index: [(ValidSpan, Int)] for Mentl QTypeAt queries
+      [GNode],           // nodes: flat array indexed by handle
+      Int,               // epoch: bumps on every bind
+      Int,               // next: next fresh allocation
+      [(String, [Int])], // overlays: [(module_name, [handle])]
+      [(ValidSpan, Int)] // span_index: [(ValidSpan, Int)] for Mentl QTypeAt queries
     )
 
 // Trail mutations — append during forward execution, walk backwards
@@ -673,7 +673,7 @@ type SuggestionKind
 //   reason      — why the suggestion is highest-leverage at the position
 
 type AnnotationSuggestion
-  = AnnotationSuggestion(SuggestionKind, String, List, Reason)
+  = AnnotationSuggestion(SuggestionKind, String, [String], Reason)
 
 // PipeContext — surrounding pipe topology at a position.
 // CursorView.topology reads the context. Reuses existing PipeKind for
@@ -702,7 +702,7 @@ type PipeContext
 // Predicate is at types.mn:568.
 
 type CursorView
-  = CursorView(NodeKind, Proposals, PipeContext, EffRow, Ownership, List, Option, Reason)
+  = CursorView(NodeKind, Proposals, PipeContext, EffRow, Ownership, [(Span, Predicate, Reason)], Option, Reason)
                               // query   propose  topology     row     trace      verify  teach    why
 
 
@@ -845,7 +845,7 @@ type NodeBody
   // comment attaches to this handle in the comment weave (graph_attach_comment);
   // decls lists every top-level Handle so F.1's doc_handler and render_index can
   // walk the module without re-parsing source.
-  | NModule({path: String, decls: List, span: Span})
+  | NModule({path: String, decls: [Node], span: Span})
   // An authored type annotation carried live in the graph — the `-> RetTy`
   // return annotation (SYNTAX.md «Return type omission»: absent = inferred,
   // present = a CONSTRAINT). parse_type_expr mints this carrying the real Ty
@@ -867,7 +867,7 @@ type Expr
   | VarRef(String)
   | BinOpExpr(BinOp, Node, Node)
   | UnaryOpExpr(UnaryOp, Node)
-  | CallExpr(Node, List)
+  | CallExpr(Node, [Node])
   | LabeledArg(String, Node)       // a `name = value` call argument (SYNTAX.md
                                    // §«Labeled call arguments»). The label is the
                                    // PRODUCT-FIELD name of the parameter-list-as-
@@ -878,22 +878,22 @@ type Expr
                                    // declared param names (one read, both infer + lower
                                    // see the identical order). The wrapper never reaches
                                    // infer_expr / lower_expr — it is resolved away first.
-  | LambdaExpr(List, Node)         // params: List[TParam], body
+  | LambdaExpr([TParam], Node)     // params, body
   | IfExpr(Node, Node, Node)
-  | BlockExpr(List, Node)          // stmts, final expr
-  | MatchExpr(Node, List)          // scrutinee, arms
-  | ResumeExpr(Node, List)         // value, state updates
-  | MakeListExpr(List)
-  | MakeTupleExpr(List)
-  | MakeRecordExpr(List)           // [(field_name: String, value: Node)] — sorted at parse
-  | RecordUpdateExpr(Node, List)   // {...base, f: v, ...} — non-destructive update:
+  | BlockExpr([Node], Node)        // stmts, final expr
+  | MatchExpr(Node, [(Pat, Node)]) // scrutinee, arms
+  | ResumeExpr(Node, [{init: Node, name: String}]) // value, state updates
+  | MakeListExpr([Node])
+  | MakeTupleExpr([Node])
+  | MakeRecordExpr([(String, Node)]) // [(field_name: String, value: Node)] — sorted at parse
+  | RecordUpdateExpr(Node, [(String, Node)]) // {...base, f: v, ...} — non-destructive update:
                                    // copy base's fields, overwrite/add the listed
                                    // [(name, value)] (sorted). base is owned-read,
                                    // not mutated (SYNTAX.md §«Record update»). One
                                    // spread base per literal; the override fields
                                    // are the same product-field machinery as
                                    // MakeRecordExpr.
-  | NamedRecordExpr(String, List)  // type_name + sorted fields — nominal record literal
+  | NamedRecordExpr(String, [(String, Node)]) // type_name + sorted fields — nominal record literal
   | IndexExpr(Node, Node)          // `xs[i]` semantic AST — receiver, index.
                                    // Infer dispatches on receiver's type:
                                    // TList → list_index (runtime); TTuple →
@@ -903,7 +903,7 @@ type Expr
                                    // was drift mode 9 (eager-form-commitment) —
                                    // it committed the dispatch before infer knew
                                    // the receiver's shape. Per #139.
-  | MakeStringExpr(List)           // string interpolation fragments — Node list
+  | MakeStringExpr([Node])         // string interpolation fragments — Node list
                                    // where each Node is either NExpr(LitString(s))
                                    // for literal chunks OR an arbitrary expression
                                    // node for a splice. Semantic-preserving form
@@ -956,7 +956,7 @@ type PipeKind
 type FeedbackSpec
   = FbState(Ty)                   // typed state cell; RHS is a carrier
   | FbDelay(Int)                  // unit-delay lookback of N samples
-  | FbFilter(Int, List)           // N-tap filter with coefficient list
+  | FbFilter(Int, [Float])        // N-tap filter with coefficient list
 
 // Region (spec I12) — Tofte-Talpin region identity for escape
 // analysis. Each `handle ... with mem_arena` scope produces a
@@ -987,7 +987,7 @@ effect RegionTrack {
   region_enter(Span) -> Int
   region_exit(Int) -> ()
   tag_alloc(Int) -> ()
-  tag_alloc_join(Int, List) -> ()
+  tag_alloc_join(Int, [Int]) -> ()
                                                   // value_handle, field_handles —
                                                   // tag with the deepest (innermost)
                                                   // region across (current, fields).
@@ -1046,11 +1046,11 @@ effect BodyContext {
 
 type Stmt
   = LetStmt(Pat, Node, Node)     // pat, value, annotation node (NTypeAnn(ty) present, LitUnit absent — mirrors FnStmt's ret_ann)
-  | FnStmt(String, List, Node, List, Node)
+  | FnStmt(String, [TParam], Node, [(EffName, Bool, EConn)], Node)
                            // name, params (TParam), retty, effects, body
-  | TypeDefStmt(String, List)
-                           // name, type args, variants
-  | EffectDeclStmt(String, List)
+  | TypeDefStmt(String, [(String, [Ty])])
+                           // name, then per variant its name + field types
+  | EffectDeclStmt(String, [(String, [Ty], Ty)])
                            // effect name, ops (each is (op_name, param_tys, ret_ty);
                            // ResumeDiscipline is inferred at handler-decl time
                            // from each arm body, not declared on the effect op)
@@ -1082,11 +1082,11 @@ type Pat
   = PVar(String)
   | PWild
   | PLit(LitValue)
-  | PCon(String, List)
-  | PTuple(List)
-  | PList(List, Option)    // prefix pats, optional rest name (`...rest`)
-  | PRecord(List)           // [(fieldname, Pat)]
-  | PAlt(List)              // pat_1 | pat_2 | ... — any branch matches; branches
+  | PCon(String, [Pat])
+  | PTuple([Pat])
+  | PList([Pat], Option)    // prefix pats, optional rest name (`...rest`)
+  | PRecord([(String, Pat)]) // [(fieldname, Pat)]
+  | PAlt([Pat])             // pat_1 | pat_2 | ... — any branch matches; branches
                             // bind the same names with unifiable types (SYNTAX.md
                             // §"Pattern alternation — rule")
 
@@ -1195,7 +1195,7 @@ fn show_flow_label(label) with Pure = match label {
 // carries construction-origin metadata that lower dispatches on.
 
 type Env
-  = Env(List)   // [(name, Scheme, Reason, SchemeKind)]
+  = Env([(String, Scheme, Reason, SchemeKind)])   // [(name, Scheme, Reason, SchemeKind)]
 
 effect EnvRead {
   env_lookup(String) -> Option
@@ -1735,22 +1735,22 @@ type Resolution
 // fallback). This is the W7 + A1 capture-handle correctness fix.
 
 effect LowerScope {
-  ls_enter_frame(String, List, List, List, List, Int) -> ()  // fn_name, locals_names, locals_handles, captures_names, captures_handles, lambda_h (-1 = not a lambda frame)
+  ls_enter_frame(String, [String], [Int], [String], [Int], Int) -> ()  // fn_name, locals_names, locals_handles, captures_names, captures_handles, lambda_h (-1 = not a lambda frame)
   ls_exit_frame() -> ()
   ls_bind_local(String, Int) -> Int  // append (name, handle); returns slot
   ls_bind_fb_prior(String, Int) -> ()  // (LF.B) push a `<~` lambda param → feedback handle's prior local
   ls_unbind_fb_prior() -> ()           // (LF.B) pop the innermost `<~` prior binding after its body lowers
   ls_resolve(String) -> (Resolution, Int)
-  ls_register_globals(List) -> ()
+  ls_register_globals([String]) -> ()
   ls_outer_fn_name() -> String  // closest enclosing named-fn frame; "" for top-level
   ls_current_lambda_handle() -> Int  // innermost-first: the enclosing lambda frame's handle, or -1 if a named-fn frame is hit first / none
   ls_push_scope() -> Int  // checkpoint = current frame's local count
   ls_pop_scope(Int) -> ()  // truncate frame locals back to checkpoint
-  ls_register_escaping(List) -> ()  // install the flow-closure map (name → escaping row)
+  ls_register_escaping([(String, EffRow)]) -> ()  // install the flow-closure map (name → escaping row)
   ls_escaping_of(String) -> Option   // a name's flow-closure (None = not a top-level fn → leaf)
   ls_register_may_yield(Bool) -> ()  // band B M1.3 — does ANY declared effect carry a MultiShot op? (computed once at lower_program)
   ls_program_may_yield() -> Bool     // the A1 prove-absence gate's global short-circuit: no MultiShot op anywhere ⇒ nothing can yield ⇒ every row proves absence
-  ls_register_resume_binds(List) -> ()  // THE CUT (bank A3) — [(fn_name, hname)]: resume-bearing fns reachable from a MultiShot arm, bound to their handler (computed once at lower_program)
+  ls_register_resume_binds([(String, String)]) -> ()  // THE CUT (bank A3) — [(fn_name, hname)]: resume-bearing fns reachable from a MultiShot arm, bound to their handler (computed once at lower_program)
   ls_resume_bind_of(String) -> String   // the fn's bound handler name; "" = unbound (no wrap, no evidence threading)
 }
 
@@ -1760,7 +1760,7 @@ effect LowerScope {
 
 effect Verify {
   verify(Span, Predicate, Reason) -> ()
-  verify_debt() -> List
+  verify_debt() -> [(Span, Predicate, Reason)]
   // ifc non-interference: verify(span, PFlowLe(src, dst), reason)
   // predicate_decide(PFlowLe(a,b)) = Some(flow_le(a,b)) — always compile-time decidable.
   // ERefinementRejected carries the violation; show_predicate renders "Secret ⊑ Public".

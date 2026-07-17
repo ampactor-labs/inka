@@ -917,19 +917,19 @@ fn parse_handler_decl(ref tokens, pos) = {
 // a bare generic under the seed, and an unproven receiver's field access
 // hits the loud emit floor; the call-site unification with the declared
 // param IS the pin. One home — the mint — every consumer reads through.
-fn state_field_name(f: {init: N, name: String}) -> String = f.name
-fn state_field_init(f: {init: N, name: String}) -> N = f.init
+fn state_field_name(f: {init: Node, name: String}) -> String = f.name
+fn state_field_init(f: {init: Node, name: String}) -> Node = f.init
 
 // The handler-arm record's typed projection ({args, body, op_name},
 // minted in parse_handler_arm) — same pin, same discipline.
-fn handler_arm_op_name(a: {args: List, body: N, op_name: String}) -> String = a.op_name
-fn handler_arm_arity(a: {args: List, body: N, op_name: String}) -> Int = len(a.args)
+fn handler_arm_op_name(a: {args: [String], body: Node, op_name: String}) -> String = a.op_name
+fn handler_arm_arity(a: {args: [String], body: Node, op_name: String}) -> Int = len(a.args)
 
 // The arm's body node — the typed projection draw_op_edges folds the resume
 // Usage grade over (the arm-record type only resolves in a scope that closed
 // {args, body, op_name}, so this annotated accessor reads it from any context,
 // exactly as handler_arm_op_name reads the op name).
-fn handler_arm_body(a: {args: List, body: N, op_name: String}) -> N = a.body
+fn handler_arm_body(a: {args: [String], body: Node, op_name: String}) -> Node = a.body
 
 fn parse_handler_state_fields(ref tokens, pos) = {
   let name = ident_at(tokens, pos)

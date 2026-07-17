@@ -45,7 +45,7 @@ import effects
 effect LowerState {
   ms_alloc_state(Int, Int) -> Int
   ms_alloc_ret_slot(Int, Int) -> Int
-  ms_function_states(Int) -> List
+  ms_function_states(Int) -> [Int]
   ms_reset_function() -> ()
 }
 
@@ -104,7 +104,7 @@ handler lower_state_default
 // protocol_resume_state_mutation_substrate.md.
 
 effect ArmStateContext {
-  current_state_fields() -> List
+  current_state_fields() -> [String]
   current_resume_discipline() -> ResumeDiscipline
   current_arm_handler() -> String   // band B M2b — the enclosing arm's handler name; the resume flag-arm names $op___redrive_<hname> with it ("" outside arms)
 }
@@ -186,8 +186,8 @@ fn lookup_handler_arm_names_of(hname) =
 
 // The arm-ev ledger entry's typed projections ({evs, name}, minted at
 // arm_ev_end) — the boundary pin for the generic filter/project flow.
-fn registry_entry_name(e: {evs: List, name: String}) -> String = e.name
-fn registry_entry_evs(e: {evs: List, name: String}) -> List = e.evs
+fn registry_entry_name(e: {evs: [String], name: String}) -> String = e.name
+fn registry_entry_evs(e: {evs: [String], name: String}) -> [String] = e.evs
 
 fn find_registry_field(name: String, ledger, project) = {
   let hits = filter((entry) => registry_entry_name(entry) == name, ledger)
@@ -206,7 +206,7 @@ fn find_registry_field(name: String, ledger, project) = {
 effect LowerHandlerStack {
   lower_handler_push(String, Int) -> Int
   lower_handler_pop() -> Int
-  lower_handler_stack_now() -> List
+  lower_handler_stack_now() -> [{name: String, handle: Int}]
 }
 
 handler lower_handler_stack_ctx with stack = [] {
@@ -248,7 +248,7 @@ effect ArmEvLedger {
   arm_ev_begin() -> Int
   arm_ev_note(String) -> Int
   arm_ev_end(String) -> Int
-  lookup_handler_arm_ev_names(String) -> List
+  lookup_handler_arm_ev_names(String) -> [String]
 }
 
 handler arm_ev_ledger_ctx with active = false, names = [], entries = [] {
@@ -331,7 +331,7 @@ type LowExpr
   | LCall(Int, LowExpr, [LowExpr])             // monomorphic direct call
   | LTailCall(Int, LowExpr, [LowExpr])
   | LReturn(Int, LowExpr)
-  | LMakeClosure(Int, LowFn, List, List)         // handle, fn, captures, ev_slots
+  | LMakeClosure(Int, LowFn, [LowExpr], [LowExpr]) // handle, fn, captures, ev_slots
   // VALUE-position reference to an EXISTING named fn that DISPATCHES effects —
   // the evidence-capturing twin of LGlobal (which carries NO ev region) and the
   // dispatch-less twin of LSuspend (which CALLS). Builds the unified record
@@ -342,7 +342,7 @@ type LowExpr
   // capture. Emits NO body (the fn is emitted at its own declaration). A pure
   // fn-value stays bare LGlobal (len(ev)==0, Law 7); the CALLEE position stays
   // bare LGlobal (lower_callee_ref collapses an LFnRef callee).
-  | LFnRef(Int, String, List)                    // handle, fn-name, ev_slots
+  | LFnRef(Int, String, [LowExpr])               // handle, fn-name, ev_slots
   // The YIELD of a MultiShot perform (band B, continuation-reification k1):
   // (frame_node, op_name, args, k_expr). frame_node = the REWRITTEN
   // FRAME's tail node — the yield's dummy returns through the frame's own
@@ -360,7 +360,7 @@ type LowExpr
   // comment-marked unreachable, censusable; k2/k3's named homes
   // Hβ.lower.continuation-callboundary-bubble /
   // Hβ.lower.multishot-reyield-composition / .multishot-arm-state-commit).
-  | LYield(Int, String, List, LowExpr)
+  | LYield(Int, String, [LowExpr], LowExpr)
   // band B M1.3 — the k2 call-boundary's yield path (the bank Ruling 5): a
   // non-tail can-yield call returned with $yield_flag still raised, so this
   // frame's remainder composes onto the unwinding k and the unwind
@@ -374,7 +374,7 @@ type LowExpr
   // install driver's parked $__hres), which is what makes the check correct
   // INSIDE an install body (a `(return)` here would skip the driver bracket).
   | LKExtend(Int, LowExpr)
-  | LMakeContinuation(Int, LowFn, List, List, Int, Int, Int)
+  | LMakeContinuation(Int, LowFn, [LowExpr], [LowExpr], Int, Int, Int)
   // H7 — multi-shot continuation record per the H7 walkthrough §1.2.
   // handle, resume_fn, captures_exprs, ev_slots, state_index, ret_slot,
   // world_tag. Heap-allocated through emit_alloc (one allocator per kernel
@@ -388,10 +388,10 @@ type LowExpr
   // Composes with LMakeClosure's capture/ev-store loops; emit shares
   // the per-field store helpers (per H7 §4.2).
   | LDeclareFn(LowFn)                            // module-level fn declaration (handler arm) — no runtime slot
-  | LIf(Int, LowExpr, List, List)
-  | LBlock(Int, List)
-  | LMakeList(Int, List)
-  | LMakeTuple(Int, List)
+  | LIf(Int, LowExpr, [LowExpr], [LowExpr])
+  | LBlock(Int, [LowExpr])
+  | LMakeList(Int, [LowExpr])
+  | LMakeTuple(Int, [LowExpr])
   // SIMD lane pack — the `~> Simd` cash-out of a `><` f32 fanout (W13). The N
   // branch results (each an f32-repr value) become the N lanes of a v128: emit
   // a zeroed `v128.const f32x4` base, then `f32x4.replace_lane i` for each
@@ -399,11 +399,11 @@ type LowExpr
   // run — only the COLLECTOR differs (lanes, not a tuple). The result is one
   // v128 the lane ops (emit_binop_v128) operate on in parallel — the value
   // layer (RV128 repr) meeting the `><` parallel verb at the SPACE axis.
-  | LSimdLanes(Int, List)                      // handle, [lane_value] (≤4 f32 branch results → v128)
-  | LMakeRecord(Int, List)                     // handle, [field_value] sorted by field name
+  | LSimdLanes(Int, [LowExpr])                 // handle, [lane_value] (≤4 f32 branch results → v128)
+  | LMakeRecord(Int, [LowExpr])                // handle, [field_value] sorted by field name
   | LMakeVariant(Int, TagId, [LowExpr])        // handle, tag_id, field exprs
-  | LMatch(Int, LowExpr, List)
-  | LSuspend(Int, Int, LowExpr, [LowExpr], List, Bool)   // handle, op_h, fn_expr, args, ev_slots, tail — mark_tail is the ONE writer of tail=true; emit renders return_call_indirect (the seed's clone-then-tail-call form; without it every evidence-threading recursion burned a frame per step — m3's iterate_from stack exhaustion, 2026-07-09)
+  | LMatch(Int, LowExpr, [(LowPat, LowExpr)])
+  | LSuspend(Int, Int, LowExpr, [LowExpr], [LowExpr], Bool)   // handle, op_h, fn_expr, args, ev_slots, tail — mark_tail is the ONE writer of tail=true; emit renders return_call_indirect (the seed's clone-then-tail-call form; without it every evidence-threading recursion burned a frame per step — m3's iterate_from stack exhaustion, 2026-07-09)
   // ~> desugaring. ONE handler record (handler IS state IS closure IS
   // evidence): [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous][captured_evs].
   //   4th = handler_name ("" for anonymous — no `_state_g` global).
@@ -416,7 +416,7 @@ type LowExpr
   //         the arms so the arm fn's LowFn fence lands its LEvPerform reads.
   // Per protocol_handler_is_state_is_closure_is_evidence.md +
   // Hβ.lower.multi-effect-ev-index-map (Part 2) + Hβ.emit.handler-record-ev-capture.
-  | LHandleWith(Int, LowExpr, LowExpr, String, List, List, List)
+  | LHandleWith(Int, LowExpr, LowExpr, String, [LowExpr], [(String, [String])], [LowExpr])
   | LFeedback(Int, LowExpr, LowExpr)           // <~ desugaring (iterative ctx required)
   // (LF.B) the prior-iteration output of feedback handle h, read LIVE from the
   // $__fb_prev_<h> local the LFeedback emit declares + loads. A `<~` lambda
@@ -428,7 +428,7 @@ type LowExpr
   // install-LOCAL name "__hstate_<h>" of the lexically-enclosing handler the
   // arm runs against ("" sentinel = use caller __state). Threads the handler's
   // STATE RECORD as the arm-call's __state per handler-IS-state.
-  | LPerform(Int, String, List, String)
+  | LPerform(Int, String, [LowExpr], String)
   // Tier-2 evidence-dispatched perform (handler comes from the caller via
   // an evidence slot on __state — handler IS evidence). The ev-slot holds
   // a per-effect entry [record_ptr, base]; the arm runs against that RECORD
@@ -443,7 +443,7 @@ type LowExpr
   //   arm    = record[8 + 4*record[4] + 4*(base + op_slot)]  (fence-relative
   //            off the record's OWN nstate@4) — an interior read, never a
   //            static body-captures guess (protocol_reflexive_interiority).
-  | LEvPerform(Int, String, String, Int, List) // handle, op_name, effect_key, op_slot, args
+  | LEvPerform(Int, String, String, Int, [LowExpr]) // handle, op_name, effect_key, op_slot, args
   // Forward THIS fn's evidence for an effect (the handler record the caller
   // threaded into __state) by IDENTITY (effect_key) into a deeper callee's
   // record or an install's captured-ev region — the caller fills the SAME key,
@@ -485,7 +485,7 @@ type LowExpr
   // directly — bypassing the LPerform/$op_<name> handler-arm dispatch
   // (which would require a wrapper fn). The import IS the bridge; no
   // wrapper. Per protocol_bootstrap_wasi_threads_substrate.md Stage 4.
-  | LWasiCall(Int, String, List)               // handle, import name (no $ prefix), args
+  | LWasiCall(Int, String, [LowExpr])          // handle, import name (no $ prefix), args
 
 // The two directions of int<->float conversion. An ADT, not a string/int flag
 // (drift 8): each direction projects exactly one signed WASM convert op.
@@ -500,7 +500,7 @@ type LowValue
   | LBool(Bool)
 
 type LowFn
-  = LFn(String, Int, List, List, EffRow, Int)
+  = LFn(String, Int, [String], [LowExpr], EffRow, Int)
                   // name, arity, param names, body stmts, effect row, fence.
                   // fence = where this fn's __state evidence region starts,
                   // in slots past the 8-byte header: closures pass their
@@ -513,16 +513,16 @@ type LowFn
 type LowPat
   = LPVar(String)
   | LPWild
-  | LPCon(String, TagId, List)       // name, tag_id (from ConstructorScheme), sub-pats
-  | LPTuple(List)                    // [(offset_bytes: Int, elem_ty: Ty, sub_pat: LowPat)]
+  | LPCon(String, TagId, [LowPat])   // name, tag_id (from ConstructorScheme), sub-pats
+  | LPTuple([(Int, Ty, LowPat)])     // [(offset_bytes: Int, elem_ty: Ty, sub_pat: LowPat)]
                                      // positional product: width-summed offset +
                                      // the element's proven Ty (emit reads
                                      // repr_of(ty) for the leaf load width — RI32
                                      // for a pointer element, RF64 for an f64)
   | LPLit(LowValue)
-  | LPList(List, Option)             // prefix pats, optional rest name
-  | LPRecord(List)                   // [(field_name: String, offset_bytes: Int, sub_pat: LowPat)]
-  | LPAlt(List)                      // alternation branches; arm matches if ANY
+  | LPList([LowPat], Option)         // prefix pats, optional rest name
+  | LPRecord([(String, Int, LowPat)]) // [(field_name: String, offset_bytes: Int, sub_pat: LowPat)]
+  | LPAlt([LowPat])                  // alternation branches; arm matches if ANY
                                      // branch matches (predicate = OR); branches
                                      // bind the same names (infer's law)
 
@@ -3455,7 +3455,7 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = {
   decls
 }
 
-fn lower_one_arm_decl(arm: {args: [String], body: N, op_name: String}, discriminator, config, state, fence) = {
+fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discriminator, config, state, fence) = {
   let fn_name = "op_{discriminator}_{arm.op_name}"
   // Hβ.first-light.arm-body-fresh-frame: each handler-arm body is
   // its own WASM function with __state IS the handler state record
@@ -3513,7 +3513,7 @@ fn sum_group_arm_lens(groups: [{arms: [String], ename: String}]) = fold(0, (acc,
 
 // Extract just the `name` field from each state-fields record.
 // Per parse_handler_state_fields, each entry is `{name, init}`.
-fn state_field_names_of(state: [{init: N, name: String}]) = map(state_field_name, state)
+fn state_field_names_of(state: [{init: Node, name: String}]) = map(state_field_name, state)
 
 // state_field_name / state_field_init live at the record's mint
 // (parser.mn, beside parse_handler_state_fields) — one home per truth.
@@ -3538,7 +3538,7 @@ fn state_field_names_of(state: [{init: N, name: String}]) = map(state_field_name
 fn lower_state_field_inits(config, state) =
   map((field) => lower_state_init(config, field), state)
 
-fn lower_state_init(config, field: {init: N, name: String}) = {
+fn lower_state_init(config, field: {init: Node, name: String}) = {
   let N(body, _, _) = field.init
   match body {
     NExpr(VarRef(name)) => {
@@ -4340,7 +4340,7 @@ fn resume_commit_prefix(handle, val, updates, fields, home) = {
 // identity the name already carries) + the resume site's handle. Both
 // map lambdas above mint through this one home, so the LLet and its
 // LLocal read can never drift apart.
-fn resume_upd_local(upd: {init: N, name: String}, handle) =
+fn resume_upd_local(upd: {init: Node, name: String}, handle) =
   "__resume_upd_{upd.name}_{int_to_str(handle)}"
 
 // Resolve a field name to its byte offset in the handler state

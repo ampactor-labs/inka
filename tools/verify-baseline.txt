@@ -157,7 +157,23 @@
 # re-founding (head of file): the count is the transport, the ARMED refusal arm is
 # the bar. This class does not arm (there is nothing left to detect); it simply
 # stops lying. E_MissingModule remains the one armed class.
-census_errors_max: 1904
+#
+# 2026-07-17: 1904 -> 1337 (DOWN 567, Stage 1a core ADTs). Typed the erased
+# element of the compiler's own core ADTs: Ty (TTuple/TFun/TName/TRecord/
+# TRecordOpen), Node (CallExpr/BlockExpr/MatchExpr/ResumeExpr/Make*/...), Pat,
+# LowExpr, LowPat, LowFn, Scheme, SchemeKind, EffRow, and the shared handler-arm
+# / state-field record shapes across types/parser/lower/infer. A bare `List` is
+# TName("List",[]) — a nominal name that never unifies with the native TList the
+# consumers build via `[..]` literals and list ops (there is no bridge, by
+# design: SYNTAX §4① has ONE sequence kind, `[a]`, and the nominal `List` is the
+# drift). The fix is [Element] at the declaration, never a TName<->TList unify
+# bridge (which would legitimize the illegal shape while leaving the element
+# erased). Same sweep cleared `N vs Node` (14 -> 0): `body: N` wrote the
+# constructor name where the type Node was meant. Inference-only — m2 == m3
+# byte-identical, zero new error classes. 581a92f swept only the trap-causing
+# subset and closed "the census after the next march is the arbiter"; this is
+# that census, the siblings finally swept.
+census_errors_max: 1337
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

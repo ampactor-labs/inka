@@ -2782,7 +2782,7 @@ fn arms_have_wildcard(arms) = any((arm) => {
 // them — fresh vars would discard that); resume reads (R, S) from
 // arm context; the body's own value unifies with S — the arm's
 // value IS the handle result, whether it resumes or aborts.
-fn infer_one_handler_arm(arm: {args: List, body: N, op_name: String}, result_h, inst_h) = {   // drift-audit: ignore — result_h (arm result) and inst_h (effect instance) are distinct handles
+fn infer_one_handler_arm(arm: {args: [String], body: Node, op_name: String}, result_h, inst_h) = {   // drift-audit: ignore — result_h (arm result) and inst_h (effect instance) are distinct handles
   let arm_span = span_of_node(arm.body)
   let op_ret_ty = match env_lookup(arm.op_name) {
     Some(entry) => {

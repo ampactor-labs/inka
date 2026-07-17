@@ -310,86 +310,30 @@ fn find_first_span(ref sites, ref name: String) with !Mutate = {
 // O(log N) without boundary canonicalize. The local string_in_list
 // adapter is gone — call sites use set_contains directly.
 
-// Check that ref bindings don't escape to return position or closures.
-// A `ref`-annotated binding cannot appear in return position or be
-// captured by a closure that outlives its scope. Called by infer.mn
-// at every `FnStmt` body.
-fn check_ref_escape(ref params, ref body) with !Mutate = {
-  params
-    |> collect_ref_params
-    |> (refs) =>
-         if len(refs) == 0 { () }
-         else { walk_return_positions(refs, body) }
-}
-
-// Phase-A4: filter Ref-discipline params, projecting their names.
-// The prelude verbs filter + map cascade the substrate-honest residue;
-// the prior buffer-counter loop was the foreign-fluency form.
-fn collect_ref_params(ref params) with !Mutate = {
-  map(param_name,
-    filter((p) => match param_resolved(p) { Ref => true, _ => false },
-      list_to_flat(params)))
-}
-
-fn walk_return_positions(ref refs, ref node) with !Mutate = {
-  let N(body, span, _) = node
-  match body {
-    NExpr(VarRef(name)) =>
-      if string_in_list(refs, name) {
-        report(EOwnershipViolation("ref binding '{name}' escapes its scope (returned)", span))
-      } else { () },
-
-    NExpr(BlockExpr(_, final_e)) =>
-      walk_return_positions(refs, final_e),
-
-    NExpr(IfExpr(_, then_e, else_e)) => {
-      walk_return_positions(refs, then_e)
-      walk_return_positions(refs, else_e)
-    },
-
-    NExpr(MatchExpr(_, arms)) =>
-      walk_match_arms(refs, arms),
-
-    NExpr(LambdaExpr(_, lambda_body)) =>
-      walk_return_positions(refs, lambda_body),
-
-    // H6: exhaustive NodeBody + Expr enumeration. Most Expr
-    // variants don't contain a ref-returning sub-position
-    // (the tail of a call, binop, literal, etc.); listing each
-    // makes the decision visible. Future Expr variants must
-    // decide their return-position semantics explicitly.
-    NExpr(LitInt(_))         => (),
-    NExpr(LitFloat(_))       => (),
-    NExpr(LitString(_))      => (),
-    NExpr(LitBool(_))        => (),
-    NExpr(LitUnit)           => (),
-    NExpr(BinOpExpr(_, _, _)) => (),
-    NExpr(UnaryOpExpr(_, _)) => (),
-    NExpr(CallExpr(_, _))    => (),
-    NExpr(ResumeExpr(_, _))  => (),
-    NExpr(MakeListExpr(_))   => (),
-    NExpr(MakeTupleExpr(_))  => (),
-    NExpr(MakeStringExpr(_)) => (),
-    NExpr(IndexExpr(_, _))   => (),
-    NExpr(MakeRecordExpr(_)) => (),
-    NExpr(RecordUpdateExpr(_, _)) => (),
-    NExpr(NamedRecordExpr(_, _)) => (),
-    NExpr(FieldExpr(_, _))   => (),
-    NExpr(PipeExpr(_, _, _)) => (),
-    NExpr(ExprPlaceholder)   => (),
-    NExpr(LabeledArg(_, _))  => (),  // resolved to positional before this walk
-    NStmt(_) => (),
-    NPat(_)  => (),
-    NHole(_) => ()
-  }
-}
-
-fn walk_match_arms(ref refs, ref arms) with !Mutate = {
-  each((arm) => {
-    let (_, body) = arm
-    walk_return_positions(refs, body)
-  }, arms)
-}
+// DELETED 2026-07-17 (Stage 1b): check_ref_escape / collect_ref_params /
+// walk_return_positions / walk_match_arms — a purely SYNTACTIC escape check with
+// ZERO hazard model. It fired when a param inference had graded `Ref` (use-count
+// >= 2) also appeared as a bare tail return, never asking whether a mutation or
+// aliasing conflict was actually possible. So it flagged `min(a,b) = if a <= b
+// { a } else { b }`, every fold-accumulator return, and `extract_chase` — 356 of
+// the census, every sampled case provably safe to return from.
+//
+// It was a cruder, older stand-in for the hazard the region tracker now covers.
+// check_escape (own.mn ~201) tracks allocation regions and reports a GENUINE
+// escape — a value outliving the region it was allocated in — via the return
+// TRANSFER (Hβ.own.region-return-transfer); it reports 0 on the wheel, because
+// the wheel has no real lifetime violations. Two checks for one property, one
+// modelling the hazard and one guessing from syntax; the guess is deleted. Its
+// only caller was infer.mn:450 and nothing downstream read its verdict
+// (grep-verified). §4⑤'s bar — "if the developer has to think about it, the
+// inference failed" — is met by removal: 356 false alarms on the medium's own
+// source were exactly the developer being made to think.
+//
+// The named peer Hβ.infer.usage-grade-unifies-cardinality-ownership survives as
+// a SEPARATE, real item: own.mn's count_uses sums disjoint branches additively
+// (the anti-pattern types.mn:288 warns against) instead of sharing resume_grade's
+// usage_seq/usage_join lattice. Worth doing as a Usage-lattice dedup, but NOT
+// this deletion, and it would not have cleared the compare-then-return subclass.
 
 // Deduce `Own` vs `Ref` for `Unmarked`-marked parameters by counting
 // uses in the function body: 0 uses → `Unmarked` (mark stays),

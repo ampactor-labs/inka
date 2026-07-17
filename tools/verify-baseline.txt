@@ -145,7 +145,19 @@
 # widening ripples into the callers' own declared rows, and starting that cascade
 # without measuring it is how a "small fix" eats a wheel. That measurement is the
 # next ratchet-down, and it is the shortest path from here toward the bar.
-census_errors_max: 2266
+#
+# 2026-07-17: 2266 -> 1904 (DOWN 362, Stage 1b). Deleted check_ref_escape — a
+# purely syntactic escape check with no hazard model that fired on use-count-plus-
+# bare-return, flagging `min(a,b)` and every fold accumulator. 356 of those were
+# the exact "escapes its scope (returned)" shape; deleting the checker cleared
+# them and 6 downstream, and the region tracker (check_escape, E_RegionEscape = 0)
+# already proves the real lifetime hazard. Net -55 source lines; the emit shrank
+# 1,813 lines (the checker's own body, gone). This is the ratchet doing what §5.O
+# could not: a class cleared by DELETION, not by a scan made faster — but note the
+# re-founding (head of file): the count is the transport, the ARMED refusal arm is
+# the bar. This class does not arm (there is nothing left to detect); it simply
+# stops lying. E_MissingModule remains the one armed class.
+census_errors_max: 1904
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere
@@ -159,7 +171,7 @@ census_errors_max: 2266
 # which is on the board. Falls to 0, then both it and this line are deleted and
 # comment-audit gates directly — and both ratchets dissolve into `mentl audit`,
 # the projection they are larval forms of.
-phantom_comments_max: 554
+phantom_comments_max: 287
 
 # micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
 micro:ev2=57

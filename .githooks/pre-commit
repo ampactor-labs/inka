@@ -55,7 +55,31 @@ if [[ -x "$AUDIT" && ${#staged_src[@]} -gt 0 ]]; then
     fi
 fi
 
-# ─── Gate 2: the thesis gate (compiler source staged) ────────────────
+# ─── Gate 2: comment truth (a comment IS a graph edge) ───────────────
+# SYNTAX §Comments: a `//` comment is graph content — a CommentReason edge the Why
+# engine walks. A comment citing a symbol that exists nowhere is a FALSE edge, the
+# Carried-Truth Law at the prose layer. tools/comment-audit.sh finds them; this
+# gate keeps a commit from ADDING one (it caught me twice on 2026-07-16/17 — a
+# stale process_wasmtime reference, a deleted-symbol note). Ratcheted, not
+# absolute: the tree carries 554 legacy phantoms, so blocking every commit until
+# all 554 die would stop work; the ratchet blocks only a RISE. This is the
+# future-proof form the discipline asks for — new prose cannot cite a ghost, and
+# the backlog falls monotonically toward the deletion of this gate (at 0,
+# comment-audit gates directly; both dissolve into `mentl audit`).
+RATCHET="$REPO_ROOT/tools/comment-ratchet.sh"
+if [[ -x "$RATCHET" && ${#staged_src[@]} -gt 0 ]]; then
+    echo "pre-commit: comment truth (no NEW phantom symbol)..."
+    if ! bash "$RATCHET"; then
+        echo ""
+        echo "pre-commit: A NEW PHANTOM — the commit is BLOCKED."
+        echo "A comment cites a symbol that exists nowhere in code: a false CommentReason"
+        echo "edge the Why engine will walk a reader into. Fix the comment (or restore the"
+        echo "symbol). Offenders: bash tools/comment-audit.sh"
+        exit 1
+    fi
+fi
+
+# ─── Gate 3: the thesis gate (compiler source staged) ────────────────
 has_compiler_change=false
 for f in "${staged_src[@]}"; do
     if [[ "$f" == src/*.mn || "$f" == lib/*.mn || "$f" == lib/*/*.mn ]]; then

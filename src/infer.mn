@@ -441,13 +441,15 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   // are written BACK into the fn's TFun node (over the SAME param handles, so
   // types stay live as TVar(h)) — so lower's Consume-elision and affine_ledger
   // read the inferred ownership LIVE (Carried-Truth: written once at infer, read
-  // live everywhere, never re-derived per consumer). Then check_ref_escape walks
-  // return positions, surfacing E_OwnershipViolation when a ref binding escapes —
-  // how Mentl expresses borrows via !E without a separate borrow-checker pass.
+  // live everywhere, never re-derived per consumer). The lifetime hazard — a
+  // value outliving its region — is proven by check_escape (the region tracker,
+  // above at :434).
+  // REMOVED here (Stage 1b): a syntactic escape check that fired on
+  // use-count-plus-bare-return with no hazard model — 356 false alarms, min and
+  // every fold accumulator among them. The region tracker covers the real hazard.
   let inferred_params = infer_ownership(resolved_params, body_node)
   graph_bind(handle, TFun(inferred_params, TVar(ret_handle), mk_ef_open([], row_handle)),
     Located(span, Inferred("ownership-resolved params of '{name}'")))
-  check_ref_escape(inferred_params, body_node)
 
   // ─── Refinement narrowing (§4⑥, arm 6) — the verified cursor ────
   // Walk the body's if/match/assert sites; at each index site under a proven

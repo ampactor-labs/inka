@@ -89,7 +89,13 @@ total_pass=0
 total_fail=0
 RUNTIME_SHADOW=""
 BOOT_RUNTIME_SHADOW=""
-EXPECTED_RUNTIME_SHADOW_SHA256="6273b71ea9fa8ee68cf0586056b128a1997afcd2ba9ba158d1f0537826715b57"
+# 2026-07-17: repinned after Stage 1b removed check_ref_escape. The runtime libs
+# shed their "escapes its scope (returned)" false alarms (a syntactic check with
+# no hazard model, 356 across the wheel), so the inherited-debt multiset SHRANK —
+# a removal, which the rule above explicitly permits. Verified by reading the new
+# shadow: the same E_TypeMismatch/E_RedundantBraces set minus the ownership false
+# positives, never a NEW entry.
+EXPECTED_RUNTIME_SHADOW_SHA256="75c5f56132e2cfdc19d99e5522671a1ba5fe7cd3fda698b66bc622a6545296ca"
 
 pass() {
   echo "  PASS $*"

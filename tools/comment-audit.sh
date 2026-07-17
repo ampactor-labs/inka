@@ -31,7 +31,17 @@ ALLOW='^(self|first_light|machine_code|use_count)$'
 found=0
 for f in $TARGETS; do
   [ -f "$f" ] || continue
+  # TOMBSTONE EXEMPTION: a comment block that opens with DELETED / REMOVED /
+  # RETIRED is a deliberate history note — the symbols it names are SUPPOSED to be
+  # gone, so citing them is correct, not a phantom edge. Without this, deleting
+  # code and honestly recording what was deleted RAISES the phantom count, which
+  # would push authors to erase the tombstone — the opposite of comment truth.
+  # A tombstone's authority extends to the contiguous `//` block it heads.
+  in_tombstone=0
   while IFS=: read -r ln rest; do
+    printf '%s' "$rest" | grep -qE '^[[:space:]]*//' || in_tombstone=0   # blank/code line ends the block
+    printf '%s' "$rest" | grep -qE '\b(DELETED|REMOVED|RETIRED|DISSOLVED)\b' && in_tombstone=1
+    [ "$in_tombstone" -eq 1 ] && continue
     # drop file paths + file.ext tokens so seed/doc filenames aren't mistaken
     clean=$(printf '%s' "$rest" | sed -E 's@[A-Za-z0-9_.-]*/[A-Za-z0-9_./-]+@ @g; s@[A-Za-z0-9_]+\.[a-z]{2,4}\b@ @g')
     for sym in $(printf '%s\n' "$clean" | grep -oE '[a-z][a-z0-9]*(_[a-z0-9]+)+' | sort -u); do

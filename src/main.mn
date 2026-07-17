@@ -88,6 +88,8 @@ type EntryVerb
   | VRepl
   | VNew(String)                     // project name — required
   | VWith(String, Option(String))    // handler name, optional target
+  | VWelcome                         // bare tty invocation / `mentl help` —
+                                     // the directory PROJECTION, never a hang
 
 type EntryHandlerInvocation
   = Invocation(EntryVerb)
@@ -130,6 +132,8 @@ fn parse_cli_args(argv) with Pure = {
       Invocation(VNew(argv[2]))
     } else if mode == "--with" && len(argv) >= 3 {
       Invocation(VWith(argv[2], optional_target(argv, 3)))
+    } else if mode == "help" || mode == "-h" || mode == "--help" {
+      Invocation(VWelcome)
     } else {
       ParseError("unrecognized or under-specified command: " ++ mode)
     }
@@ -203,7 +207,16 @@ fn dispatch_invocation(verb) = {
       VDoc(target)         => doc_run(target),
       VServe               => serve_run(),
       VCompile(target)     => compile_run(target),
-      VCompileStdin        => compile_stdin_run(),
+      VCompileStdin        =>
+        // The bare invocation forks on the ONE substrate fact that
+        // distinguishes intent: fd 0's filetype. A pipe or file IS the
+        // compile-stdin contract (`mentl < wheel.mn` — the fixpoint path,
+        // untouched); a terminal is a human with no program yet — project
+        // the welcome instead of hanging on a read that never comes.
+        // (Landed as the second rung of a two-step ladder: the ops' import
+        // tables crossed on the prior pin, so this generation's boot
+        // lowers the call it is about to execute.)
+        if stdin_is_tty() { welcome_run() } else { compile_stdin_run() },
       VRun(target)         => run_run(target),
       VCheck(target)       => check_run(target),
       VTest(target)        => test_run(target),
@@ -212,7 +225,8 @@ fn dispatch_invocation(verb) = {
       VTeach(target)       => teach_run(target),
       VRepl                => repl_run(),
       VNew(name)           => new_project(name),
-      VWith(hname, target) => with_run(hname, target)
+      VWith(hname, target) => with_run(hname, target),
+      VWelcome             => welcome_run()
     }
   }
     ~> env_handler
@@ -622,26 +636,35 @@ fn print_error_and_help(msg) = {
   print_help()
 }
 
-fn print_help() = {
-  eprint_string("mentl — the medium between intent and execution\n\n")
-  eprint_string("usage:\n")
-  eprint_string("  mentl                          — terminal voice surface (default = teach_run)\n")
-  eprint_string("  mentl edit [path]              — canonical Web IDE (browser-WASM holographic)\n")
-  eprint_string("  mentl doc [path]               — documentation projection (handler chain)\n")
-  eprint_string("  mentl serve                    — LSP transport on stdio\n")
-  eprint_string("  mentl compile <path>           — emit WAT to stdout (incremental)\n")
-  eprint_string("  mentl run <path>               — compile + wasmtime execute\n")
-  eprint_string("  mentl check <path>             — diagnostics; no emit (incremental)\n")
-  eprint_string("  mentl test [path]              — test handler chain\n")
-  eprint_string("  mentl audit <path>             — capability set + severance suggestions\n")
-  eprint_string("  mentl query <path> <question>  — structured ad-hoc query\n")
-  eprint_string("  mentl teach [path]             — terminal voice; gradient narration\n")
-  eprint_string("  mentl repl                     — line REPL\n")
-  eprint_string("  mentl new <name>               — scaffold from lib/tutorial/00-hello.mn\n")
-  eprint_string("  mentl --with <handler> [path]  — universal escape hatch (env_lookup)\n")
-  eprint_string("\n")
-  eprint_string("module names map to src/ or lib/ paths — paths accepted too.\n")
-  eprint_string("\n")
-  eprint_string("see docs/specs/simulations/CLI-canonical-vocabulary.md for the full catalog\n")
-  eprint_string("see docs/specs/simulations/EH-entry-handlers.md for substrate (--with resolution)\n")
+// The verb catalog — ONE string, two surfaces: the error path eprints it
+// (print_help, stderr), the welcome prints it (stdout). Never two copies.
+fn verb_catalog() with Pure =
+  "the verbs:\n  mentl                          — project this directory (a pipe compiles stdin)\n  mentl run <path>               — compile, prove, execute (a hole or refuted claim REFUSES)\n  mentl check <path>             — diagnostics only, no emit\n  mentl compile <path>           — emit WAT to stdout\n  mentl edit [path]              — the cursor session (eight aspects + proven proposals)\n  mentl audit <path>             — the capability set + severance unlocks\n  mentl query <path> <question>  — why / type / effects / ownership, walked to your words\n  mentl teach [path]             — the gradient narrated\n  mentl doc [path]               — documentation projection\n  mentl test [path]              — the test chain\n  mentl new <name>               — scaffold a source file (imports are the manifest — no config, ever)\n  mentl serve                    — the transport server\n  mentl repl                     — line REPL\n  mentl --with <handler> [path]  — install any handler over any verb\n  mentl help                     — this projection\n\na target is a module name or a file path, from any directory.\nthe surface: PLAN.md §11 (the production bar) · docs/SYNTAX.md (the language)\n"
+
+fn print_help() = eprint_string(verb_catalog())
+
+// ─── the welcome — bare `mentl` in a terminal, `mentl help` ────────
+//
+// Not a manpage: a PROJECTION of where you are (the cursor law at the
+// shell). The medium reads the current directory through the preopen,
+// names the .mn sources it sees, and offers each one's next keystroke;
+// an empty directory gets the beginning. stdout, exit 0 — help asked
+// for is never an error (the ERROR surface, print_error_and_help,
+// stays on stderr).
+fn welcome_run() = {
+  print_string("mentl — the medium between intent and execution\n")
+  print_string("any intelligence may propose; nothing executes unproven\n\n")
+  let sources = filter((n) => ends_with(n, ".mn"), fs_list_dir_names())
+  if len(sources) > 0 {
+    print_string("in this directory:\n")
+    each((n) => {
+      let stem = str_slice(n, 0, byte_len(n) - 3)
+      print_string("  {n}  →  mentl run {stem} · mentl edit {stem} · mentl check {stem}\n")
+    }, sources)
+    print_string("\n")
+  } else {
+    print_string("nothing to read here yet — begin:\n  mentl new hello && mentl run hello\n\n")
+  }
+  print_string(verb_catalog())
+  0
 }

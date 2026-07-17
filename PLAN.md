@@ -1273,7 +1273,8 @@ a foreign assembler, exactly like WAT), the verb surface (`mentl check
   arena reset; `!Alloc` after a reset becomes provable; persist-as-memcpy
   composes per-slab.
 - Layer 4: parallel cursors (`Hβ.driver.level-set-par-walk` multi-core).
-- The perf ledger runs per-commit on the MI300X host (fixed hardware).
+- The perf ledger runs per-commit in CI (tools/ci/run-board.sh; fixed
+  hardware sharpens it once the MI300X arc begins).
 
 ### Column 4 — the felt surface
 
@@ -1297,27 +1298,34 @@ a foreign assembler, exactly like WAT), the verb surface (`mentl check
 
 ### Column 5 — trust & ops
 
-- **CI on the MI300X host**: every push → the full board (state.sh) +
-  the through-m3 battery + the perf ledger. (The box: an AMD-hosted
-  Instinct MI300X, ROCm JAX prebuilt image — recon gates daemon
-  persistence; fallback is tools/ci/run-board.sh per session.)
-- **The JAX baseline**: the CFC comodulogram in JAX on the same silicon —
-  the SOTA number the Mentl pipeline must meet (JAX is §4②'s own foil:
-  handlers without a real graph). The GPU flagship races it.
-- The `~> Gpu` spike (band E, scoped): ONE `><` fanout of pure f64 kernels;
-  the branch thunk ships to the device by MEMCPY (the §5.U record law);
-  HIP source + host launcher as the text-projection scaffold. The thesis
-  gate: SAME source under `~> Seq`/`~> Thread`/`~> Gpu`, identical results,
-  race-freedom carried by the ownership proof. Flagship, not gate.
+- **CI, host-agnostic and REQUIRED**: every push → the full board
+  (tools/ci/run-board.sh: state.sh + the perf ledger). Any always-on
+  Linux with wasmtime serves; the MI300X is merely the nicest host for
+  it once its arc begins.
 - Diverse double-compilation (band J — trusting-trust).
-- License + public-repo readiness; the 21+ landed commits pushed.
+- License + public-repo readiness (the landed commits are pushed).
 - `Hβ.closure.correctness-oracle-internal` stays NAMED as the bar's own
   residual !Outside (the micro battery is an external oracle until the
   wheel's Verify subsumes it).
 
+### THE LAST ARC — the MI300X (after everything above; NOT required)
+
+Morgan's call (2026-07-16): the box (an AMD-hosted Instinct MI300X, ROCm
+JAX prebuilt image) is the FINAL arc, gated on every required column
+landing first. Its stages, in order: recon (docs/ops/mi300x.md — access
+mode, daemon persistence, hipcc, egress) → the JAX baseline (the CFC
+comodulogram in JAX on the same silicon — the SOTA number the Mentl
+pipeline races; JAX is §4②'s own foil) → CI relocated to the box (fixed
+hardware makes the perf ledger sharpest) → the `~> Gpu` spike (band E,
+scoped: ONE `><` fanout of pure f64 kernels; the branch thunk ships to
+the device by MEMCPY — the §5.U record law; HIP text emission as the
+projection scaffold; the thesis gate: SAME source under
+`~> Seq`/`~> Thread`/`~> Gpu`, identical results, race-freedom carried by
+the ownership proof) → the CFC flagship raced against the baseline.
+
 ### NOT required for the label (the unsurpassable tier continues after)
 
-Native backend (docs/NATIVE.md) · the modal world-index (§4③'s crown
-remainder) · IFC/`!Flow` (band C) · GPU offload (flagship demo, not gate) ·
+The MI300X arc above · native backend (docs/NATIVE.md) · the modal
+world-index (§4③'s crown remainder) · IFC/`!Flow` (band C) · GPU offload ·
 wasmFX. Naming these is part of the bar: a hidden gap is drift; a named
 positive-form peer is the ultimate form.

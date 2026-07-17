@@ -49,6 +49,8 @@ effect WASI {
   fd_close(fd: Int) -> Int
   fd_prestat_get(fd: Int, prestat_ptr: Int) -> Int
   fd_prestat_dir_name(fd: Int, path_ptr: Int, path_len: Int) -> Int
+  fd_fdstat_get(fd: Int, stat_ptr: Int) -> Int
+  fd_readdir(fd: Int, buf_ptr: Int, buf_len: Int, cookie: Int, nread_ptr: Int) -> Int
   path_open(base_fd: Int, dirflags: Int, path_ptr: Int, path_len: Int, oflags: Int, rights_base: Int, rights_inherit: Int, fdflags: Int, fd_out_ptr: Int) -> Int
   path_create_directory(fd: Int, path_ptr: Int, path_len: Int) -> Int
   path_filestat_get(fd: Int, flags: Int, path_ptr: Int, path_len: Int, stat_ptr: Int) -> Int
@@ -369,6 +371,58 @@ fn fs_bytes_eq(a, b, n, i) with Memory =
   if i >= n { true }
   else if load_i8(a + i) != load_i8(b + i) { false }
   else { fs_bytes_eq(a, b, n, i + 1) }
+
+// stdin_is_tty — the fdstat filetype of fd 0 (character_device = 2). The
+// one read that lets a bare `mentl` fork honestly: a terminal invocation
+// projects the welcome; a pipe or file IS the compile-stdin contract
+// (`mentl < wheel.mn` — the fixpoint path, byte-identical). The fdstat
+// record is 24 bytes; filetype is the u8 at offset 0.
+fn stdin_is_tty() with Memory + Alloc + WASI = {
+  let stat = alloc(24)
+  fd_fdstat_get(0, stat) == 0 && load_i8(stat) == 2
+}
+
+// fs_list_dir_names — the names in the FIRST dir preopen (the caller's
+// cwd under the install shim), read via fd_readdir on the preopen fd
+// itself. The dirent wire format (WASI preview1): d_next u64@0,
+// d_ino u64@8, d_namlen u32@16, d_type u8@20, name@24. The cookie rides
+// the low word (the fd_readdir import's RI64 slot zero-extends it — the
+// wait_i32 precedent); a buffer-boundary-truncated entry resumes the
+// loop from the last whole entry's d_next.
+fn fs_list_dir_names() with Memory + Alloc + WASI =
+  fs_dir_fd() |> fs_readdir_loop(??, 0, [])
+
+fn fs_readdir_loop(fd, cookie, acc) with Memory + Alloc + WASI = {
+  let bufsz = 8192
+  let buf = alloc(bufsz)
+  let nread_cell = alloc(4)
+  let errno = fd_readdir(fd, buf, bufsz, cookie, nread_cell)
+  if errno != 0 { acc }
+  else {
+    let nread = load_i32(nread_cell)
+    let (acc2, last_cookie, saw_whole) = fs_parse_dirents(buf, nread, 0, acc, cookie, false)
+    // nread < bufsz ⇒ the host wrote the whole remainder — done. A full
+    // buffer means more entries exist; continue from the last WHOLE
+    // entry's d_next (no whole entry in a full buffer = a name larger
+    // than the buffer — stop rather than loop forever).
+    if nread < bufsz || !saw_whole { acc2 }
+    else { fs_readdir_loop(fd, last_cookie, acc2) }
+  }
+}
+
+fn fs_parse_dirents(buf, end, off, acc, last_cookie, saw_whole) with Memory + Alloc =
+  if off + 24 > end { (acc, last_cookie, saw_whole) }
+  else {
+    let d_next = load_i32(buf + off)
+    let namlen = load_i32(buf + off + 16)
+    if off + 24 + namlen > end { (acc, last_cookie, saw_whole) }
+    else {
+      let name = alloc(4 + namlen)
+      store_i32(name, namlen)
+      mem_copy(name + 4, buf + off + 24, namlen)
+      fs_parse_dirents(buf, end, off + 24 + namlen, push(acc, name), d_next, true)
+    }
+  }
 
 // fs_exists — path_filestat_get returns 0 on success, errno otherwise.
 // The 64-byte filestat_t record is alloc'd and discarded; existence is

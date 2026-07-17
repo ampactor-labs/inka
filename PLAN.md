@@ -945,6 +945,7 @@ CLAUDE.md ⟲/§9 and the code's own comments).
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-17 · STAGE 1a — the census's largest root felled: a bare `List` in a declaration is the nominal `TName("List",[])` that never unifies with the native `TList` consumers build (SYNTAX §4① — one sequence kind `[a]`); the fix is `[Element]` at the declaration, read live from the consumer, never a TName↔TList unify bridge (which would legitimize the illegal shape while leaving the element erased). Core ADTs (Ty/Node/Pat/LowExpr/LowPat/LowFn/Scheme/EffRow) + the shared handler-arm/state-field records (also cleared `N vs Node` 14→0) + the leaf ADTs and effect-op sigs. Census 2266 → 1233 (true bare-List shape 645+ → 6, residue = the dead buffer.mn); inference-only, m2==m3 byte-identical, zero new classes — af8a9189+ef0030b1. Stage 2a (`Hβ.infer.seq-op-row-from-callee`) built + marched + REVERTED: correct but DEP-gated on §5.O per-decl-arena (the Alloc attribution's ev-slot emit tips the 4GB bump image → m3 OOM; §11 col 2)
 - 2026-07-16 · BARE MENTL PROJECTS WHERE YOU ARE: the tty fork (fd_fdstat_get), the directory projection (fd_readdir), verb_catalog one-string-two-surfaces, mentl help; a two-rung transition ladder; §11 rescoped (MI300X = the last arc, not required) + the named-peer audit (four verdicts) — 80215c38 · pin e2babb24
 - 2026-07-16 · MENTL RUNS FROM ANYWHERE (§11 col 1): install shim = a POINTER to the live boot; resolver chain + /mentl-home guest path; fs_at (the preopen table IS the mount table — longest-prefix, fd_prestat_dir_name); prelude declares its imports (the manifest); driver_compile_entry = the one-namespace DAG concatenation. Temp-dir matrix: run=42, hole refuses · pin 26bfe90a
 - 2026-07-16 · §7 → this ledger; PROVENANCE compacted; archaeology banners; tools/state.sh = THE BOARD; §11 THE PRODUCTION BAR authored — a09026c, f6ed08c
@@ -1375,9 +1376,19 @@ in this column is one of its classes.
   declaration (lists.mn:234) says `with Memory + Alloc`. The `++` sibling of
   this bug is fixed (BKConcat reads the callee's row live via
   `concat_callee_row`); this is the same fabrication one arm over, and the
-  fix is the same deletion: read the declared row, delete the hardcode. Note
+  fix is the same deletion: read the declared row live via
+  `graph_chase(fh)` (the same read `infer_call_saturated` makes — `fh` is
+  bound by `infer_expr(func)` before the call), delete the hardcode. Note
   PLAN §7 records "infer_seq_op dissolved" (2026-07-08) — the special-case
-  path is still there; the doc is ahead of the artifact.
+  path is still there; the doc is ahead of the artifact. **DEP-gated on
+  `Hβ.perf.per-decl-arena` (§5.O), MEASURED 2026-07-17.** The fix was built
+  and marched: it is correct (m3 is clean) but m2 ≠ m3 by 302 lines — the
+  extra Alloc attribution shifts ev-slot emit — and the slightly larger wheel
+  compile then OOMs m3 in `infer_program` (memory fault at 0x100000000, a
+  shallow stack, not a logic loop). Correct row attribution costs ev-slots,
+  and the 4GB never-free bump image has no headroom for them. So this waits on
+  the per-decl-arena collapsing the working set; until then the Memory floor
+  holds — a NAMED under-attribution, the at-site comment carrying the fix.
 - **`Hβ.cli.process-exec-wire`** — `mentl run` does not run anything. The
   wheel's own `run_run` → `process_exec` → `process_wasmtime` prints and
   fabricates exit 0; the bash shim (tools/install.sh) intercepts `run` and does

@@ -1063,6 +1063,19 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
     // here. seq_force_fn went with them.
     _            => graph_bind(handle, TList(elem), Located(span, Inferred("sequence")))
   }
+  // Hβ.infer.seq-op-row-from-callee (PLAN §11 col 2): the ULTIMATE form reads the
+  // callee's OWN declared row live — `match graph_chase(fh) { NBound(TFun(_,_,crow))
+  // => inf_add_row(crow) }` — the same Carried-Truth read infer_call_saturated
+  // makes, deleting this hardcode. It is CORRECT and DROPS the Alloc-fabrication
+  // (push/slice/list_concat/make_list/drop_last are `with Memory + Alloc`,
+  // lists.mn), but it BREAKS SELF-HOSTING on the current substrate: the extra
+  // Alloc attribution shifts ev-slot emit (m2 ≠ m3 by 302 lines), and the
+  // slightly larger wheel compile tips the 4GB never-free bump image OVER its
+  // ceiling — m3 OOMs in infer_program (verified 2026-07-17: memory fault at
+  // 0x100000000, shallow stack, not a logic loop). So it is DEP-gated on §5.O's
+  // per-decl-arena (Hβ.perf.per-decl-arena), which collapses the 4GB working set
+  // to one decl's live set. Until then the Memory floor stands — a known
+  // under-attribution, named here, not a silent one.
   inf_add_row(mk_ef_closed([ENamed("Memory")]))
 }
 

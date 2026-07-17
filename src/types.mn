@@ -1344,7 +1344,6 @@ type DiagKind
 
 effect Diagnostic {
   report(DiagKind) -> ()
-  refusals() -> Int          // the live count of gated-class claims (diag_refuses)
 }
 
 // ─── The catalog AS projections of the DiagKind constructors ───────────

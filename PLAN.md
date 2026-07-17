@@ -1277,6 +1277,71 @@ oracle-fuzz feeding both.
 
 ### Column 2 — the correctness spine (no known silent-wrong class)
 
+**THE COLUMN'S OWN MEASUREMENT, taken 2026-07-16 and previously unmade: the
+medium reports 2,266 errors about its OWN source and emits a working
+compiler anyway.** Nobody had counted, because the census was filed under an
+alibi that expired at first light — "the disposable seed's weaker inference
+lags" (verify-baseline, 2026-06-22), written eighteen days before the seed
+was deleted (7401c4b). boot IS the wheel, so those are the wheel's
+diagnostics about the wheel. Under the alibi sat a real dead-code bug
+(format.mn's `NPipeExpr` ghost, six spanned diagnostics, a `_` catch-all
+swallowing five verb arms). "No known silent-wrong class" is not a
+checklist of peers below — **it is that number reaching 0**, and every peer
+in this column is one of its classes.
+
+- **`Hβ.diag.refusal-law-per-class` — THE COLUMN'S SPINE.** An executable
+  emits IFF every claim in its reachable tree is discharged, and the exit
+  code is a projection of the diagnostic ledger, never a fabricated 0
+  (`mentl check <missing>` printed E_MissingModule and exited 0). The
+  all-at-once form — "refuse on any SError" — was designed, dispatched to an
+  adversarial fleet, and REFUTED on the artifact: it refuses the wheel
+  itself at 2,266, and 3 independent verifiers killed it. The target does
+  not lower; the WORK sequences (§9.3). So the classes turn on **ONE AT A
+  TIME, each when the wheel's own census of that class reaches zero**, and
+  the census ratchet (tools/verify-baseline.txt) holds it there — a class at
+  zero can be gated and can never ungate. Landed and locked: E_UnresolvedHole,
+  E_RefinementRejected (proof-exactness 9/9). Gateable NOW, zero on the wheel:
+  **E_MissingModule** (its silent skip in driver_compile_entry is fixed;
+  the gate is the next build). The work, by class: E_TypeMismatch 1286 ·
+  E_OwnershipViolation 508 · E_OccursCheck 118 · E_MissingVariable 118 ·
+  E_EffectMismatch 95 · E_PurityViolated 66 · E_IfMissingElse 28 ·
+  E_PatternInexhaustive 26 · E_FeedbackNoContext 11 · E_UnresolvedType 4 ·
+  E_ConstructorArity 4 · E_ResumeOutsideArm 2. The mechanism is `diag_refuses`
+  (a projection beside `diag_severity`, types.mn:1506) + the count on
+  diagnostics_handler's own state + one live read at executable_gate. Do NOT
+  declare the op before the arm and the gate land together — a declared
+  `refusals()` with no arm shipped for one commit here and is drift-9 wearing
+  a good idea's face. **The novelty is the self-hosting property doing the
+  work:** rustc/tsc gate errors from day one because they never had errors on
+  their own source; TypeScript's `strict` family and Rust's lint levels are
+  per-flag opt-ins a project may never turn on. Here the wheel is the
+  medium's first user, so "a class the medium never violates on itself" is a
+  MECHANICAL license to enforce it on everyone — dogfooding as a formal gate,
+  and the ratchet makes it monotone. When the last class flips, the census
+  line and `diag_refuses` are both DELETED and the law is just
+  `diag_severity(d) == SError`.
+- **`Hβ.effects.declared-row-truth` — the eight fns whose declared row is
+  narrower than their body** (any_imports · collect_hash_tys_expr ·
+  collect_hash_tys_list · collect_show_tys_expr · ctor_payload_tys ·
+  cursor_argmax_compute · emit_distinct_compare_helpers ·
+  emit_distinct_eq_leaves · emit_distinct_hash_leaves ·
+  emit_distinct_show_leaves · emit_eq_leaf_sum · emit_fold_hash_helpers).
+  Exposed by the `++`-carries-its-callee's-row fix compounding through the
+  re-pin: boot now knows `++` allocates, so the medium re-judged its own
+  source and caught them (+3 E_EffectMismatch, +5 E_PurityViolated). They
+  were false before the fix; only now can the medium say so. Each widening
+  ripples into its callers' declared rows — measure the cascade before
+  starting it. The first ratchet-DOWN target.
+- **`Hβ.infer.seq-op-row-from-callee`** — `infer_seq_op` (infer.mn:1064) ends
+  with a hardcoded `inf_add_row(mk_ef_closed([ENamed("Memory")]))` for the
+  whole `len`/`push`/`slice`/`list_concat`/`make_list` family, **dropping
+  Alloc** — so `list_concat` is attributed Memory-only while its own
+  declaration (lists.mn:234) says `with Memory + Alloc`. The `++` sibling of
+  this bug is fixed (BKConcat reads the callee's row live via
+  `concat_callee_row`); this is the same fabrication one arm over, and the
+  fix is the same deletion: read the declared row, delete the hardcode. Note
+  PLAN §7 records "infer_seq_op dissolved" (2026-07-08) — the special-case
+  path is still there; the doc is ahead of the artifact.
 - `Hβ.perf.name-is-handle` / EffName-is-a-handle: the crown's positive
   residual (~146 false mismatches) + the by-name family deletion (design
   banked, §5.O layer 1).

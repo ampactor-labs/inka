@@ -1,5 +1,9 @@
 # Mentl — Substrate
 
+> **GIT ARCHAEOLOGY — out of the read-path** (the three-doc contract,
+> CLAUDE.md): the load-bearing truths of this document live in PLAN.md and
+> docs/SYNTAX.md. Kept for history; never cite it as current.
+
 **What this is.** The canonical substrate of Mentl — load-bearing structural facts the medium is built from. Compiler-verifiable theorems, not vision.
 
 **How to read it.** Cursor-adjacent. CLAUDE.md cites sections by name; load only what the cursor needs. Not always-loaded; not Session-Zero-bulk-read. (Insight #15 — MRCR cliff under Opus 4.7+.)

@@ -1,5 +1,9 @@
 # Mentl — The Ultimate Medium, Projected
 
+> **GIT ARCHAEOLOGY — out of the read-path** (the three-doc contract,
+> CLAUDE.md): the load-bearing truths of this document live in PLAN.md and
+> docs/SYNTAX.md. Kept for history; never cite it as current.
+
 > *The medium IS one read at P. This document is that read, projected over the whole.*
 
 This is the visual companion to `docs/ULTIMATE_MEDIUM.md` and `docs/SUBSTRATE.md`. Every box below is a substrate truth; every edge a chase. The diagram IS the medium's own self-representation — the cursor projecting the cursor.

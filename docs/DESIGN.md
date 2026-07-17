@@ -1,5 +1,9 @@
 # Mentl — The Medium
 
+> **GIT ARCHAEOLOGY — out of the read-path** (the three-doc contract,
+> CLAUDE.md): the load-bearing truths of this document live in PLAN.md and
+> docs/SYNTAX.md. Kept for history; never cite it as current.
+
 *A design manifesto. Not a description of the current implementation —
 a declaration of what Mentl IS. Written unconstrained, measured against
 the vision alone.*

@@ -1,5 +1,9 @@
 # Mentl Empirical Effects Catalog
 
+> **GIT ARCHAEOLOGY — out of the read-path** (the three-doc contract,
+> CLAUDE.md): the load-bearing truths of this document live in PLAN.md and
+> docs/SYNTAX.md. Kept for history; never cite it as current.
+
 *This document serves as the exhaustive source-of-truth for every effect currently defined in the Mentl codebase, categorized by their mechanical function.*
 
 ---

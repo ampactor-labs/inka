@@ -1,5 +1,9 @@
 # Synthesis Manifesto — Crosswalk to Mentl
 
+> **GIT ARCHAEOLOGY — out of the read-path** (the three-doc contract,
+> CLAUDE.md): the load-bearing truths of this document live in PLAN.md and
+> docs/SYNTAX.md. Kept for history; never cite it as current.
+
 > **Status: historical context, not a living spec.** This doc predates
 > the current roadmap (`ROADMAP.md`). It remains as confidence — external
 > validation that the major design choices align with a manifesto

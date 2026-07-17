@@ -1,5 +1,9 @@
 # ULTIMATE MEDIUM
 
+> **GIT ARCHAEOLOGY — out of the read-path** (the three-doc contract,
+> CLAUDE.md): the load-bearing truths of this document live in PLAN.md and
+> docs/SYNTAX.md. Kept for history; never cite it as current.
+
 > *The lossless substrate between human thought and machine action.
 > Not a programming language. Not an IDE. Not an AI tool. The thing
 > one rung up: the medium itself.*

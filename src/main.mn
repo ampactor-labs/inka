@@ -601,13 +601,32 @@ fn repl_eval_line(line) = {
   }
 }
 
-// ─── new_project — the Filesystem scaffold handler
+// ─── new — the welcome's own WRITE
 //
-// new IS a Filesystem projection: fs_mkdir the project tree, then read the
-// tutorial seed and fs_write_file it into the new src/main.mn. fs_mkdir /
-// fs_read_file / fs_write_file are all Filesystem ops (types.mn) — no
-// external wire; the whole scaffold is the cursor reading one file and
-// writing another. wasi_filesystem performs the syscalls at the boundary.
+// The welcome PROJECTS a directory (project_directory, the READ); `new`
+// draws the first edge into it (the WRITE) and then re-projects. One
+// graph, two operations, at the shell — `new` is the second operation,
+// never a scaffolding engine.
+//
+// ONE FILE, never a tree. A project directory exists to hold a manifest,
+// and the imports ARE the manifest (PLAN §11's novelty audit); a `.mn`
+// file carrying `fn main()` IS an executable (SYNTAX §Top-level program
+// structure), so `hello.mn` beside you IS the project — and `mentl run
+// hello` reaches it through the resolver's own first arm (driver.mn's
+// direct read). `{name}/src/main.mn` was Cargo's shape borrowed one level
+// down, and the resolver could not even see it.
+//
+// The seed is a string the medium CARRIES (new_seed). Reading it from a
+// repo file made the CLI depend on an artifact outside itself: from any
+// directory but the repo, fs_read_file found nothing, returned "" (its
+// own surrender-fallback) and `new` wrote a ZERO-BYTE file while printing
+// "scaffolded ... from lib/tutorial/00-hello.mn" — a claim about the
+// world that was false.
+//
+// So `new` states nothing it did not read. It never claims "wrote
+// hello.mn"; it re-projects the directory and lets the file speak for
+// itself — a write followed by the live read is unfalsifiable, and it is
+// the same `<~` the cursor session runs (draw the edge, re-project).
 
 fn new_project(name) = {
   scaffold_project(name)
@@ -619,13 +638,28 @@ fn new_project(name) = {
 }
 
 fn scaffold_project(name) = {
-  fs_mkdir(name)
-  fs_mkdir("{name}/src")
-  let seed = fs_read_file("lib/tutorial/00-hello.mn")
-  let dest = "{name}/src/main.mn"
-  fs_write_file(dest, seed)
-  eprint_string("mentl new {name}: scaffolded {dest} from lib/tutorial/00-hello.mn\n")
+  let dest = "{name}.mn"
+  if fs_exists(dest) {
+    // Refusal teaches: the medium never overwrites what it did not write.
+    eprint_string("mentl new {name}: {dest} is already here\n\n")
+    eprint_string("the medium never overwrites what it did not write.\n")
+    eprint_string("  read it:      mentl edit {name}\n")
+    eprint_string("  or name another:  mentl new {name}2\n")
+    1
+  } else {
+    fs_write_file(dest, new_seed())
+    project_directory()
+    0
+  }
 }
+
+// The seed the medium carries — the smallest program that RUNS and whose
+// own comments are the Reason edges it talks about. Not the curriculum
+// (lib/tutorial/ is the curriculum, and it is not on a user's disk).
+// The `\{who\}` escapes emit literal braces, so the FILE gets a live
+// interpolation the user's own compile reads.
+fn new_seed() =
+  "// this file is the whole project — the imports are the manifest.\n//\n// the comment you are reading is not a remark the lexer discards: it is\n// a Reason edge in the graph. ask the medium about this file:\n//   mentl audit   — what it is allowed to do\n//   mentl edit    — the cursor, and what it proposes\n\nimport runtime/io\n\n// `|>` is the sequential verb — the string flows into print_string.\n// the topology is on the page; there is no hidden control flow.\nfn greet(who) = \"hello, \{who\} — the medium is reading you back\\n\" |> print_string\n\nfn main() = {\n  greet(\"world\")\n  0\n}\n"
 
 // ─── help + error surface ─────────────────────────────────────────
 
@@ -639,7 +673,7 @@ fn print_error_and_help(msg) = {
 // The verb catalog — ONE string, two surfaces: the error path eprints it
 // (print_help, stderr), the welcome prints it (stdout). Never two copies.
 fn verb_catalog() with Pure =
-  "the verbs:\n  mentl                          — project this directory (a pipe compiles stdin)\n  mentl run <path>               — compile, prove, execute (a hole or refuted claim REFUSES)\n  mentl check <path>             — diagnostics only, no emit\n  mentl compile <path>           — emit WAT to stdout\n  mentl edit [path]              — the cursor session (eight aspects + proven proposals)\n  mentl audit <path>             — the capability set + severance unlocks\n  mentl query <path> <question>  — why / type / effects / ownership, walked to your words\n  mentl teach [path]             — the gradient narrated\n  mentl doc [path]               — documentation projection\n  mentl test [path]              — the test chain\n  mentl new <name>               — scaffold a source file (imports are the manifest — no config, ever)\n  mentl serve                    — the transport server\n  mentl repl                     — line REPL\n  mentl --with <handler> [path]  — install any handler over any verb\n  mentl help                     — this projection\n\na target is a module name or a file path, from any directory.\nthe surface: PLAN.md §11 (the production bar) · docs/SYNTAX.md (the language)\n"
+  "the verbs:\n  mentl                          — project this directory (a pipe compiles stdin)\n  mentl run <path>               — compile, prove, execute (a hole or refuted claim REFUSES)\n  mentl check <path>             — diagnostics only, no emit\n  mentl compile <path>           — emit WAT to stdout\n  mentl edit [path]              — the cursor session (eight aspects + proven proposals)\n  mentl audit <path>             — the capability set + severance unlocks\n  mentl query <path> <question>  — why / type / effects / ownership, walked to your words\n  mentl teach [path]             — the gradient narrated\n  mentl doc [path]               — documentation projection\n  mentl test [path]              — the test chain\n  mentl new <name>               — write <name>.mn here (one file; the imports are the manifest)\n  mentl serve                    — the transport server\n  mentl repl                     — line REPL\n  mentl --with <handler> [path]  — install any handler over any verb\n  mentl help                     — this projection\n\na target is a module name or a file path, from any directory.\nthe surface: PLAN.md §11 (the production bar) · docs/SYNTAX.md (the language)\n"
 
 fn print_help() = eprint_string(verb_catalog())
 
@@ -654,6 +688,17 @@ fn print_help() = eprint_string(verb_catalog())
 fn welcome_run() = {
   print_string("mentl — the medium between intent and execution\n")
   print_string("any intelligence may propose; nothing executes unproven\n\n")
+  project_directory()
+  print_string(verb_catalog())
+  0
+}
+
+// project_directory — the cursor law at the shell: read where you ARE and
+// name each source's next keystroke. The welcome opens with it; `new`
+// closes with it (which is why `new` never has to claim what it wrote —
+// the projection reads the live directory back). An empty directory gets
+// the beginning, so the surface is never a dead end.
+fn project_directory() = {
   let sources = filter((n) => ends_with(n, ".mn"), fs_list_dir_names())
   if len(sources) > 0 {
     print_string("in this directory:\n")
@@ -665,6 +710,4 @@ fn welcome_run() = {
   } else {
     print_string("nothing to read here yet — begin:\n  mentl new hello && mentl run hello\n\n")
   }
-  print_string(verb_catalog())
-  0
 }

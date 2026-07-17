@@ -19,7 +19,7 @@
 # site for the next session, never a wheel bug to chase inline (CLAUDE.md ⟲
 # — census, don't chase moles). Same RT link set as the +rt rungs
 # (memory+strings+lists+prelude) for every micro — m2 has reachability-from-
-# main, so an unused stdlib fn drops silently; withholding it would be the
+# main, so an unused vocabulary fn drops silently; withholding it would be the
 # harness lying, not a regression (verify.sh's own reasoning, carried here).
 #
 # Reading a FAIL:
@@ -136,7 +136,7 @@ fn get(o) = match o {
 fn main() = get(Some(4))
 EOF
 
-# rungs below carry the runtime trio (the standard library — every real
+# rungs below carry the runtime trio (the vocabulary — every real
 # program links it; verify.sh RTLIBS convention)
 rungrt() {
   local name="$1" want="$2" src="$G/$1.mn"

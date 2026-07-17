@@ -193,8 +193,16 @@
 > Scope every dispatch so it does NOT need the live context (scout inline first,
 > hand a complete brief), OR use it precisely BECAUSE it is independent
 > (adversarial verify). Never hand off the live deep-reasoning thread on a cold
-> brief — that is the one proven drift. Omit model parameters (agents inherit the
-> session model); the eight interrogations + Carried-Truth govern every agent.
+> brief — that is the one proven drift. **PASS A MODEL ON EVERY DISPATCHED AGENT
+> (Morgan 2026-07-02): `sonnet` for read-only sweeps / measurement / panel
+> designers, `opus` for edit-capable builders, judges, and adversarial verifiers.
+> NEVER Fable** — Fable-on-max is the copilot in this seat, and its depth belongs
+> to synthesis, design rulings, and gate re-derivation, not to breadth. This
+> retires the old "omit model parameters (agents inherit the session model)"
+> line, which assumed the session model was the right default for a fan-out; with
+> Fable in the seat it is not, and the omission silently bills every agent at the
+> scarcest rate (paid again 2026-07-16: a 15-agent workflow launched with no model
+> params). The eight interrogations + Carried-Truth still govern every agent.
 >
 > Skills are tools, not ceremony — apply the discipline silently; never invoke a
 > skill as a reflexive preamble. (`mentl-implementer`/`mentl-planner` are deleted;

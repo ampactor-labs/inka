@@ -29,7 +29,7 @@ import runtime/io
 //   `/mentl-home/{src,lib}/{name}.mn` — the well-known guest path when
 //     running OUTSIDE the repo: the install shim (tools/install.sh) maps
 //     $MENTL_HOME there, so a user project's `import prelude` reaches the
-//     pinned boot's own stdlib — and its transitive `import types` (the
+//     pinned boot's own vocabulary — and its transitive `import types` (the
 //     substrate effect decls live in src/types.mn) — with zero
 //     configuration (the shim is a pointer to the live boot; the mapping
 //     is an address, not an env var). In-repo the src/lib homes win
@@ -204,7 +204,15 @@ fn driver_compile_entry(ref entry_module)
   let modules = driver_collect_dag(entry_module)
   let source = fold("", (acc, m) => {
     let p = driver_module_path(m)
-    if fs_exists(p) { "{acc}{fs_read_file(p)}\n" } else { acc }
+    // A module the resolver cannot find is REPORTED, never skipped. The
+    // `else { acc }` that stood here dropped it silently, so `mentl check`
+    // said E_MissingModule while `mentl compile` on the same source said
+    // nothing and shipped 2,432 bytes of WAT — two verbs, two answers, one
+    // truth, which is the Carried-Truth Law violated across the surface.
+    // driver_check_module (above) has raised this exact diagnostic all
+    // along; the concatenation walked past its one raise site.
+    if fs_exists(p) { "{acc}{fs_read_file(p)}\n" }
+    else { report(EMissingModule(m, p, span_zero())) acc }
   }, modules)
   let ast = parse_program(lex(source))
   infer_program(ast)
@@ -236,7 +244,7 @@ fn driver_collect_dag_with_deps(ref entry_module)
 }
 
 // Extract the imports of one module, then filter to the in-DAG set.
-// Out-of-DAG names (missing modules, stdlib aliases the driver doesn't
+// Out-of-DAG names (missing modules, vocabulary aliases the driver doesn't
 // process) contribute nothing to the layer-partition's wait condition.
 fn driver_module_in_dag_deps(ref module_name, ref dag_modules)
   with Memory + Alloc + Filesystem = {

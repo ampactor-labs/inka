@@ -324,7 +324,7 @@ fn fs_dir_fd_from(fd) with Memory + Alloc + WASI =
 // at the WASI layer): an ABSOLUTE path resolves to the preopen whose guest
 // name is its LONGEST prefix (the wasi-libc rule), opened relative with the
 // prefix stripped — what makes the install shim's `--dir lib::/mentl-lib`
-// mapping reachable, so a user project's stdlib imports resolve from any
+// mapping reachable, so a user project's vocabulary imports resolve from any
 // directory. A relative path opens against the FIRST dir preopen (the shim
 // preopens the caller's cwd first); no prefix match falls to the first dir
 // so the syscall itself errors loudly, exactly as fs_dir_fd always did.

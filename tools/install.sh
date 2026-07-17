@@ -7,7 +7,7 @@
 # release, so every `tools/march.sh` re-pin is instantly the global CLI
 # with zero sync. The shim preopens the caller's cwd (so `mentl check foo`
 # works beside foo.mn in any directory) and maps the repo to the
-# well-known guest path /mentl-home (so user projects' stdlib imports —
+# well-known guest path /mentl-home (so user projects' vocabulary imports —
 # and their transitive substrate imports — resolve with zero
 # configuration: an address, not an env var; the resolver's home chain,
 # src/driver.mn driver_module_path).

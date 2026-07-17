@@ -1137,7 +1137,10 @@ WAT for archaeology. `wasm-interp` CANNOT run m2 (no WASI — fails on the
     drift); VERIFY my own conclusions via ADVERSARIAL/independent agents told to
     refute (the anti-fluency-trap tool, a systematic proxy for the
     human-catches-the-drift loop); BREADTH via Workflow fan-out; synthesis
-    inline. Omit model-params (agents inherit the session model); the discipline
+    inline. PASS A MODEL on every dispatched agent — `sonnet` for read-only
+    sweeps/measurement/designers, `opus` for builders/judges/adversarial
+    verifiers, NEVER Fable (Morgan 2026-07-02; the copilot's depth is for
+    synthesis, not breadth). This retires "omit model-params"; the discipline
     governs each agent. A turn ends with what CHANGED and the MEASURED result;
     work not done → "not done" first sentence; shortest response carrying result
     + next move.

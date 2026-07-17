@@ -2,10 +2,10 @@
 # tools/verify.sh — the Mentl gate (proto-`mentl check`).
 #
 # Boot-era gate: the micro battery compiles-and-runs green through the pinned
-# fixpoint wheel (boot/mentl.wasm), plus the census (the compiler's own
-# diagnostic count on the wheel — reported, never enforced). Green is STAMPED
-# on wt_state_key, so re-runs on an unchanged tree (above all the pre-commit
-# hook) answer instantly; FORCE_VERIFY=1 re-runs the battery.
+# fixpoint wheel (boot/mentl.wasm), plus the census RATCHET — the medium's own
+# verdict on its own source, which may never get worse (§3 below carries the
+# re-founding). Green is STAMPED on wt_state_key, so re-runs on an unchanged
+# tree (above all the pre-commit hook) answer instantly; FORCE_VERIFY=1 re-runs.
 #
 # Usage: tools/verify.sh
 # Exit:  0 thesis holds, 1 thesis violated, 2 invocation error.
@@ -15,12 +15,12 @@ cd "$ROOT"
 
 BASELINE="tools/verify-baseline.txt"
 source "$ROOT/tools/wt-env.sh"   # WT, WT_RUN_FLAGS, W2W — the one home
-# The runtime trio IS the standard library — every real .mn program links it, so
+# The runtime trio IS the vocabulary every real .mn program reaches for, so
 # a micro compiled WITHOUT it is the abnormal case, not the default. Link it for
 # every micro: a micro that calls str_concat/str_eq (strings) or ev_lookup (the
 # keyed-evidence dispatch scan, runtime/memory.mn) gets its def; one that uses
 # neither pays nothing (reachability-from-main drops the unused). A micro failing
-# only because the stdlib was withheld is the harness lying, not a regression.
+# only because the vocabulary was withheld is the harness lying, not a regression.
 RTLIBS=(lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn lib/prelude.mn)
 
 say() { printf '%s\n' "$*"; }
@@ -65,24 +65,52 @@ while IFS= read -r line; do
   if [[ "$out" == PASS* ]]; then say "✓ micro $m=$want"; else say "✗ micro $m: ${out:-no output}"; fail=1; fi
 done < <(grep -E '^micro:' "$BASELINE")
 
-# 3. Wheel census — a SHADOW, reported not enforced. The ultimate .mn leads;
-#    the seed's weaker inference lags, so a rising count is the seed catching
-#    up to the wheel, never a reason to refuse it. The seed TRAPPING (no m2 at
-#    all) still fails — that is the wheel not compiling, a real signal, not a
-#    shadow. Reads the ONE keyed boot(wheel) artifact (wt_m2_ensure —
-#    shared with march/march-gate, .build/m2cache).
+# 3. The census — the medium's own verdict on its own source, RATCHETED.
+#
+#    Its meaning INVERTED at first light and the prose did not follow for six
+#    days. The old justification (baseline, 2026-06-22): "a SHADOW, reported
+#    not enforced ... the disposable seed's weaker inference lags, so a rising
+#    count is the seed catching up to the wheel, expected progress" — and
+#    "census_max no longer exists; it is read by nothing". THE SEED WAS DELETED
+#    (7401c4b, 2026-07-10). boot IS the wheel. So m2.err is not a seed's shadow
+#    of the wheel; it is the WHEEL's diagnostics about the WHEEL's OWN SOURCE —
+#    every line a claim the medium makes about itself and does not believe.
+#    Filed under the expired justification, that number hid a real dead-code bug
+#    for six days: format.mn matched `NPipeExpr`, a constructor declared nowhere
+#    (the real one is `PipeExpr`, types.mn:917), so format_chain's five arms
+#    never matched and every chain fell to the `_` catch-all. The compiler said
+#    so, exactly, with a span, six times.
+#
+#    So the census RATCHETS: errors may never RISE. This is the transport toward
+#    the refusal law (PLAN §11), not its replacement — the endpoint is `mentl
+#    check` on the wheel exiting 0, at which point emit can refuse on any error
+#    and this counter DISSOLVES (§6's scaffold tier: it exists to be deleted).
+#    Warnings are reported, not ratcheted: they are the format-lift backlog, and
+#    the formatter erases them by construction.
+#    Reads the ONE keyed boot(wheel) artifact (wt_m2_ensure — shared with
+#    march/march-gate, .build/m2cache).
 if C=$(wt_m2_ensure); then
-  census=$(grep -cE '(^|: )(E_|W_)' "$C/m2.err")   # the wheel prefixes stages ('infer: E_…')
-  say "· census $census (the compiler's own diagnostic count on the wheel; artifact $C, shared with march/march-gate)"
+  errors=$(grep -cE '(^|: )E_[A-Za-z_]+ error: ' "$C/m2.err")    # the wheel prefixes stages ('infer: E_…')
+  warns=$(grep -cE '(^|: )(E_|W_|P_)[A-Za-z_]+ Warning: ' "$C/m2.err")
+  max=$(grep -E '^census_errors_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  say "· census: $errors errors / $warns warnings — the medium's own verdict on its own source"
+  if [[ -n "$max" && "$errors" -gt "$max" ]]; then
+    say "✗ census RATCHET: errors rose $max -> $errors. Every one is a claim the medium"
+    say "  makes about its own source and does not believe. Fix them, or — if the rise is"
+    say "  real and understood — raise census_errors_max in $BASELINE with the reason."
+    fail=1
+  elif [[ -n "$max" && "$errors" -lt "$max" ]]; then
+    say "  ↓ census FELL $max -> $errors — lower census_errors_max in $BASELINE to hold it."
+  fi
 else
   say "✗ compiler TRAPPED compiling the wheel (tail $WT_M2CACHE/m2.err):"; tail -3 "$WT_M2CACHE/m2.err"; fail=1
 fi
 
 if [[ "$fail" -ne 0 ]]; then
   say ""
-  say "verify: the gate failed — the wheel does not compile-and-run (a micro"
-  say "regressed, or the seed trapped). That is the thing not working, not the"
-  say "seed's shadow. Fix it (carry the handle, read live; rewrite in residue form)."
+  say "verify: the gate failed — a micro regressed, the wheel did not compile, or the"
+  say "census ratchet caught the medium making more claims about itself that it does"
+  say "not believe. Fix it (carry the handle, read live; rewrite in residue form)."
   exit 1
 fi
 say "verify: thesis invariants hold."

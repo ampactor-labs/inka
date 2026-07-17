@@ -293,6 +293,15 @@ type BoundaryInvariant
   | NonMultiShotContinuation(ResumeDiscipline)
   | PartialEffectfulCallee(Int)          // callee handle — Hβ.lower.partial-effectful-callee
   | PartialCalleeShape(Int)              // callee handle — Hβ.lower.partial-local-callee
+  // A VarRef whose name is in NO env entry. infer already proved it missing
+  // (E_MissingVariable, MissingVar Reason); the lowering must not then GUESS
+  // it into `(global.get $name)` — the guess is a fabrication of the one fact
+  // the graph most clearly holds, and it emits WAT that no assembler accepts,
+  // so the medium's own precise diagnostic surfaces 350k lines later as a
+  // wat2wasm error about a symbol the developer never wrote. This is the
+  // VALUE-path twin of LUnresolvedEvidence: same class, same fix, one site
+  // it never reached.
+  | MissingName(String)                  // the unbound name
 
 fn show_boundary_invariant(invariant) with Pure = match invariant {
   MissingFanoutBoundary          => "missing fanout boundary",
@@ -304,7 +313,8 @@ fn show_boundary_invariant(invariant) with Pure = match invariant {
   WrongContinuationBoundaryKind  => "wrong boundary kind at continuation",
   NonMultiShotContinuation(disc) => "non-multishot continuation: {show_discipline(disc)}",
   PartialEffectfulCallee(h)      => "partial over effectful callee {int_to_str(h)} — evidence capture at the mint unbuilt",
-  PartialCalleeShape(h)          => "partial over non-global callee shape {int_to_str(h)}"
+  PartialCalleeShape(h)          => "partial over non-global callee shape {int_to_str(h)}",
+  MissingName(name)              => "unbound name {name} — infer proved it missing; the lowering will not guess it into a global"
 }
 
 // Every value-bearing variant carries a source TypeHandle (Int), never a cached Ty.
@@ -2174,7 +2184,17 @@ fn lower_expr_body(e, handle, span) = match e {
           if len(evs) == 0 { LGlobal(handle, name) }
           else { LFnRef(handle, name, evs) }
         },
-        _ => LGlobal(handle, name)
+        // Found, some other kind (a value binding, an op, a record) — the
+        // global read is the right projection.
+        Some(_) => LGlobal(handle, name),
+        // NOT FOUND. `_ => LGlobal(handle, name)` stood here and conflated
+        // these two: it guessed an unbound name into `(global.get $name)`,
+        // fabricating the one fact infer had just proved false. The guess is
+        // never reachable code — it is WAT no assembler accepts — so it did
+        // not "keep going"; it moved the medium's own precise, spanned
+        // E_MissingVariable to a wat2wasm error hundreds of thousands of
+        // lines away, about a symbol the developer never wrote.
+        None => LInvariantFailure(handle, MissingName(name))
       }
     }
   },

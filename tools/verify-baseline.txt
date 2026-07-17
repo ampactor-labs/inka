@@ -1,19 +1,38 @@
 # tools/verify-baseline.txt — the Mentl-thesis gate's recorded baseline.
 #
 # tools/verify.sh (and the .githooks/pre-commit hook that runs it) BLOCKS a
-# commit if the seed fails to build, any micro in the battery below regresses,
-# or the seed traps compiling the wheel. That, plus drift-audit (the Carried-
+# commit if any micro in the battery below regresses, the wheel does not
+# compile, or the census ratchet rises. That, plus drift-audit (the Carried-
 # Truth Law, run by the same hook), IS the gate: the wheel COMPILES AND RUNS
-# correct code and the source coheres.
+# correct code, the source coheres, and the medium's verdict on its own source
+# never gets worse.
 #
-# The wheel census is an informational SHADOW, enforced NOWHERE (Morgan,
-# 2026-06-22; see the dated entry below). The ultimate .mn leads and the
-# disposable seed's weaker inference lags, so a rising census is the seed
-# catching up to the wheel, expected progress, not a reason to refuse it.
-# census_max no longer exists; it is read by nothing.
+# ── THE CENSUS, RE-FOUNDED (2026-07-16) ──────────────────────────────────
+# The paragraph that stood here said: "an informational SHADOW, enforced
+# NOWHERE (Morgan, 2026-06-22) ... the disposable seed's weaker inference lags,
+# so a rising census is the seed catching up to the wheel, expected progress"
+# and "census_max no longer exists; it is read by nothing."
 #
-# census = count of wheel-compile stderr lines starting with E_ or W_
-#          ( grep -cE '^(E_|W_)' on the seed's compile of src/ + lib/ ).
+# THE SEED WAS DELETED eighteen days after that was written (7401c4b,
+# 2026-07-10, "Fly, my pretty <3"). boot/mentl.wasm IS the wheel — the pinned
+# fixpoint of the very source it compiles. So m2.err is not a weaker seed's
+# shadow of a stronger wheel. It is the WHEEL's diagnostics about the WHEEL's
+# OWN SOURCE: 2,266 claims the medium makes about itself and does not believe.
+# The justification expired at first light; the number kept its old alibi for
+# six days, and under it sat a real dead-code bug — src/format.mn matched
+# `NPipeExpr`, a constructor declared nowhere (the real one is `PipeExpr`,
+# types.mn:917), so format_chain's five verb arms never matched and every chain
+# fell through the `_` catch-all. The compiler named it six times, with spans.
+#
+# So the census RATCHETS: errors may never rise. It is the transport toward the
+# refusal law (PLAN §11 column 2) — the endpoint is `mentl check` on the wheel
+# exiting 0, at which point emit refuses on any error and this counter is
+# DELETED (PLAN §6's scaffold tier: it exists to dissolve). Warnings are
+# reported, not ratcheted — they are the format-lift backlog and the formatter
+# erases them by construction.
+#
+# census_errors   = wheel-compile stderr lines matching 'E_… error: '
+# census_warnings = … matching '(E_|W_|P_)… Warning: '   (reported only)
 #
 # 2026-06-15: bumped 171 -> 190 (deliberate, explained). The field-pair-name
 # fix (walk_compound.wat $field_byte_offset) corrected record field-offset
@@ -79,6 +98,54 @@
 # compile-and-run (the wheel WORKS) + the drift-audit (the Carried-Truth Law).
 # verify.sh reports census as an informational shadow, enforced nowhere. The
 # micro battery below IS the gate. (census_max removed — read by nothing.)
+#
+# 2026-07-16: the entry above was CORRECT while the seed existed and expired
+# with it eighteen days later (7401c4b). Every clause of it names the seed;
+# none of them survives boot-IS-the-wheel. The census is a ratchet again — not
+# by overruling the 2026-06-22 call, but because its subject changed: it no
+# longer measures a weaker compiler's shadow of a stronger source, it measures
+# the medium disbelieving itself. See the re-founding at the head of this file.
+
+# ── THE RATCHET ─────────────────────────────────────────────────────────
+# The medium's error-verdict on its own source. It may never rise. Lower it
+# whenever it falls; the bar (PLAN §11) is 0, at which point the refusal law
+# turns on and this line is deleted.
+#
+# 2026-07-16: 2282 -> 2256. Re-founded from the expired seed alibi (above). The
+# first fall came free once the number was looked at: format.mn's `NPipeExpr`
+# ghost (24 errors) was a partial rename left half-done — the same file already
+# used the real `PipeExpr` at lines 341 and 485, and a `_ => render_non_chain`
+# catch-all swallowed the five dead arms.
+#
+# 2026-07-16: 2256 -> 2258 (deliberate, +2 E_TypeMismatch, the medium learning
+# to see). infer_binop's BKConcat arm contributed NO row, so `++` was attributed
+# Pure while the str_concat/list_concat it lowers to declare `with Memory +
+# Alloc`. Measured before/after on the same file, `fn viaop(ref n) with !Alloc =
+# "a" ++ n`:
+#     old: T_OverDeclared "body only uses Pure — tighten the signature"; Pure
+#     new: E_EffectMismatch !Alloc vs Alloc + Memory;      Alloc + Memory
+# The old path did not merely miss the false !Alloc — it ADVISED tightening into
+# it. E_EffectMismatch on the wheel is UNCHANGED at 92 (the wheel already
+# declares Memory + Alloc where it concatenates), so the +2 is two type conflicts
+# the row now connects, not a regression. This is the 2026-06-21 shape recurring:
+# "the medium now CONNECTS types it previously left free — proof-beats-review,
+# expected to ratchet back down."
+#
+# 2026-07-16: 2258 -> 2266 (deliberate, +3 E_EffectMismatch / +5 E_PurityViolated).
+# The re-pin compounds the fix through the fixpoint: boot is now the wheel that
+# knows `++` allocates, so the medium re-judges its OWN source with its own
+# sharper eye and catches eight fns whose declared row is narrower than their
+# body — `with EnvRead` over a body that really uses Alloc + EnvRead + Memory.
+# The eight, by name: any_imports · collect_hash_tys_expr · collect_hash_tys_list
+# · collect_show_tys_expr · ctor_payload_tys · cursor_argmax_compute ·
+# emit_distinct_compare_helpers · emit_distinct_eq_leaves · emit_distinct_hash_leaves
+# · emit_distinct_show_leaves · emit_eq_leaf_sum · emit_fold_hash_helpers.
+# These are TRUE findings — the declarations are false, and they were false
+# before this fix; only now can the medium say so. They are NOT fixed here: each
+# widening ripples into the callers' own declared rows, and starting that cascade
+# without measuring it is how a "small fix" eats a wheel. That measurement is the
+# next ratchet-down, and it is the shortest path from here toward the bar.
+census_errors_max: 2266
 
 # micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
 micro:ev2=57

@@ -2392,8 +2392,51 @@ fn infer_binop(handle, op, lh, rh, span: ValidSpan) = {
     BKConcat => {
       unify(lh, rh, span, OpConstraint(lbl, Inferred("left"), Inferred("right")))
       graph_bind(handle, TVar(lh), Located(span, OpConstraint(lbl, Inferred("concat"), Inferred("operand"))))
+      // `++` IS a call to the concat primitive, so it contributes that
+      // callee's row — exactly what infer_call does at :1176
+      // (inf_add_row(crow), "the callee's effect row flows into the
+      // caller's row"). This arm did not, so `++` was attributed Pure while
+      // both primitives it lowers to declare `with Memory + Alloc`. The
+      // measured consequence was the crown's own arm failing open:
+      //   fn f(ref n) with !Alloc = "a" ++ n     -> row projects Pure,
+      //     T_OverDeclared advises TIGHTENING to the false claim, and it
+      //     compiles and runs
+      //   fn f(ref n) with !Alloc = str_concat("a", n)   -> E_EffectMismatch
+      // Byte-identical work, opposite verdicts, because one path read the
+      // row the graph proved and the other re-derived it as nothing.
+      inf_add_row(concat_callee_row())
     }
   }
+}
+
+// The concat primitive's row, read LIVE from its own scheme. Never a
+// fabricated `Memory + Alloc` here: the vocabulary declares that row at
+// str_concat (lib/runtime/strings.mn:183) and list_concat
+// (lib/runtime/lists.mn:234), and a second home for it in infer is the
+// re-derivation this fix exists to delete.
+//
+// No element-type dispatch: the row is INVARIANT under the representation
+// emit chooses (both primitives carry the same row), which is why infer can
+// know it while the element type is still open. The union of the two is that
+// one row today and stays sound if they ever diverge. When the seq_concat
+// unification lands (PLAN §4①, "the str_concat-vs-list_concat split does not
+// exist at the bottom") this reads ONE name and the union dissolves.
+fn concat_callee_row() = union_row(named_fn_row("str_concat"), named_fn_row("list_concat"))
+
+// A named fn's declared row, live from the env edge. A name that is absent
+// or not a function contributes EfPure — the union's identity — which is the
+// true statement "this primitive is not in scope here, so `++` cannot be
+// calling it"; a `++` with NEITHER primitive in scope has no concat to emit
+// and fails at the callee, where that absence actually lives.
+fn named_fn_row(name: String) = match env_lookup(name) {
+  Some(entry) => {
+    let (scheme, _, _) = entry
+    match instantiate(scheme) {
+      TFun(_, _, row) => row,
+      _               => EfPure
+    }
+  },
+  None => EfPure
 }
 
 fn infer_unaryop(handle, op, ih, span: ValidSpan) = match op {

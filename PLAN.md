@@ -1277,6 +1277,42 @@ oracle-fuzz feeding both.
 
 ### Column 2 — the correctness spine (no known silent-wrong class)
 
+**THE FLEET'S CORRECTION (2026-07-17, 89 agents / 0 errors / 15.3M tokens;
+full harvest `docs/research/production-bar-fleet-2026-07-17.md`; 115 designs,
+91 adversarial verdicts, every one verified against the artifact before it was
+banked here).** Four of its findings overturn what this section said, and each
+is re-measured by hand:
+- **The census is NOT 2,266 independent bugs — 763 of them (34%) are TWO
+  roots.** Measured: 407 are the exact `List(T) vs List` shape (a bare
+  parameterized annotation meeting a real `List(T)` —
+  `Hβ.infer.bare-parameterized-type-arity`), and 356 of the 508 ownership
+  errors are one shape, `escapes its scope (returned)`
+  (`Hβ.infer.usage-grade-unifies-cardinality-ownership`, a peer the medium
+  already names in its own source and PLAN never did). The bar is a handful of
+  roots, not a wall of 2,266.
+- **"name-is-handle roots BOTH spines" is half wrong.** ZERO of the 2,266 are
+  name-identity failures, so it roots the PERFORMANCE floor only; the
+  correctness spine's root is the two arity/grade items above. The named-peer
+  audit's verdict (1) stands for §5.O and is corrected here.
+- **"The imports ARE the manifest" is FALSE for the wheel's own source.**
+  Measured: ZERO files import `lib/prelude.mn`, and `mentl compile main`
+  through the driver path emits 16,176,251 bytes that DO NOT ASSEMBLE
+  (`undefined function variable "$ev_lookup"`, exit 0). `find src lib | xargs
+  cat` is the real manifest — a bash side-ledger the import edges cannot
+  reproduce, in the doc that rejects side-ledgers.
+  `Hβ.driver.wheel-imports-are-the-manifest`: make the wheel's own import graph
+  reach every file the blob concatenates. Until it does, the medium cannot
+  build itself with its own module resolution.
+- **`Hβ.medium.cannot-observe-its-own-programs` — THE RISK NOBODY NAMED, and
+  the fleet's deepest finding.** Thirty items were independently refuted for
+  having a gate that CANNOT FAIL. That is not thirty bad designs; it is one
+  missing capability, and it means **the bar as written cannot be measured.**
+  Sharpest instance: any thread-determinism gate built on `wt_m2_ensure`
+  passes vacuously forever — `wt_m2_key()` = sha256(wheel + boot + flags),
+  containing neither spawn order nor affinity, so all runs share one cache
+  entry and `diff` compares a file to itself. A determinism gate keyed on the
+  assumption of determinism is circular by construction.
+
 **THE COLUMN'S OWN MEASUREMENT, taken 2026-07-16 and previously unmade: the
 medium reports 2,266 errors about its OWN source and emits a working
 compiler anyway.** Nobody had counted, because the census was filed under an
@@ -1342,9 +1378,25 @@ in this column is one of its classes.
   fix is the same deletion: read the declared row, delete the hardcode. Note
   PLAN §7 records "infer_seq_op dissolved" (2026-07-08) — the special-case
   path is still there; the doc is ahead of the artifact.
+- **`Hβ.cli.process-exec-wire`** — `mentl run` does not run anything. The
+  wheel's own `run_run` → `process_exec` → `process_wasmtime` prints and
+  fabricates exit 0; the bash shim (tools/install.sh) intercepts `run` and does
+  the compile→assemble→execute itself. So the verb the README quickstart is
+  built on, and every gate that "runs" a program, is the scaffold working
+  around a fabrication in the wheel. WASI has no exec, so the shim is honest
+  scaffold — but the wheel must REFUSE (`E_CannotExec`) rather than report a
+  success it did not perform.
+- **`Hβ.parser.refined-alias-nonatomic-base`** — SYNTAX's OWN canonical
+  refinement example does not parse. Measured: `type NonEmpty = [a] where
+  len(self) > 0` (docs/SYNTAX.md:990, quoted verbatim as THE refined-alias
+  form) → `P_UnexpectedToken: unexpected token: where at 1:21-1:26`. The
+  refined-alias form silently accepts only a single-token base. The
+  authoritative surface doc is not accepted by the parser it binds, and unlike
+  SYNTAX's other four lathe-lag markers this one is unmarked.
 - `Hβ.perf.name-is-handle` / EffName-is-a-handle: the crown's positive
   residual (~146 false mismatches) + the by-name family deletion (design
-  banked, §5.O layer 1).
+  banked, §5.O layer 1). Roots the PERFORMANCE floor only — see the fleet's
+  correction above; zero census errors are name-identity failures.
 - `Hβ.effects.parameterized-negation-instance` (instance-precise
   `!Sample(44100)`).
 - `Hβ.infer.alias-preserving-unify` (the wrapper-peel erases the alias from

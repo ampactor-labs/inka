@@ -70,11 +70,11 @@ type LspMethodKind
 type LspResponseBody
   = LspNullResp
   | LspHoverResp(Option)            // Option(HoverContent)
-  | LspCompletionResp(List)         // [CompletionItem]
-  | LspCodeActionResp(List)         // [CodeAction]
-  | LspDiagnosticResp(List)         // [LspDiagnostic]
+  | LspCompletionResp([CompletionItem])
+  | LspCodeActionResp([CodeAction])
+  | LspDiagnosticResp([LspDiagnostic])
   | LspDefinitionResp(Option)       // Option(Location)
-  | LspReferencesResp(List)         // [Location]
+  | LspReferencesResp([Location])
   | LspInitializeResp(JsonValue)    // server capabilities + serverInfo
 
 type HoverContent = HoverContent(String)        // markdown text

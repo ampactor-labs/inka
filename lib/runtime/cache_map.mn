@@ -22,7 +22,7 @@ import types
 // invariant: every (key, _) precedes its successor by key < successor.
 
 type CacheMap
-  = CacheMap(List)               // List<(Int, V)>, sorted by key ascending
+  = CacheMap([(Int, v)])         // [(Int, v)], sorted by key ascending
 
 // empty_cache — the identity element. Returns a fresh empty CacheMap.
 // Pure; no allocation needed (uses the empty-list literal).

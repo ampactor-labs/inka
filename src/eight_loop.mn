@@ -124,7 +124,7 @@ effect Interrogate {
   /// Walk the live graph; return reports for every binding-bearing
   /// node. The audit-style projection. Cursor reads the cached form
   /// per Hμ.cursor.cache; this op recomputes from scratch.
-  interrogate_all() -> List
+  interrogate_all() -> [InterrogationReport]
 
   /// Filter a report: was a specific interrogation kind unclear?
   /// Used by the IDE's "show me the residue" surface.

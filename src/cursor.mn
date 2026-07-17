@@ -732,7 +732,7 @@ fn filter_by_span(target, debt) with Pure = {
 
 effect GradientQueue {
   gradient_pop() -> Option
-  gradient_peek_n(n: Int) -> List
+  gradient_peek_n(n: Int) -> [Cursor]
   gradient_step() -> Option
 }
 

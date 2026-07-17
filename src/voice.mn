@@ -199,7 +199,7 @@ type Modifier
 
 type VoiceLine
   = Silence
-  | VoiceLine(Tentacle, FormKind, List, Modifier)   // slots: [Slot]
+  | VoiceLine(Tentacle, FormKind, [Slot], Modifier)
 
 // History feeds the silence predicate's
 // observation_new_since_last_turn check. Bounded ring — the session
@@ -269,8 +269,8 @@ type Answer
   = AnsType(Ty, Reason)
   | AnsRow(EffRow, Reason)
   | AnsReason(Reason)               // full Reason chain for QWhy
-  | AnsRefs(List, Reason)           // [Span] of references
-  | AnsDebt(List, Reason)           // [(Span, Predicate, Reason)] pending obligations
+  | AnsRefs([Span], Reason)         // references
+  | AnsDebt([(Span, Predicate, Reason)], Reason) // pending obligations
   | AnsSilence
 
 // Edit is a Patch applied to a FileHandle. Outcome is either
@@ -289,13 +289,13 @@ type EditOutcome
 
 type CompileOutcome
   = CompileOk(Path)                 // emitted binary
-  | CompileFailed(List)             // [Diagnostic]
+  | CompileFailed([DiagKind])       // the failure diagnostics
 
 type CheckOutcome
-  = CheckOutcome(List, List)        // diagnostics, pending obligations
+  = CheckOutcome([DiagKind], [(Span, Predicate, Reason)]) // diagnostics, pending obligations
 
 type AuditReport
-  = AuditReport(List)               // [AuditFinding] — drift + plan + effect-registry surfaces
+  = AuditReport([(Span, Predicate, Reason)]) // the live pending obligations — drift + plan + effect-registry surfaces
 
 // `declare_intent` lets the human say "I'm targeting embedded; keep
 // me honest" — a constraint the silence predicate and Trace
@@ -392,7 +392,7 @@ effect Interact {
 
   declare_intent(Intent)         -> ()
   retract_intent(IntentId)       -> ()
-  history(Int)                   -> List   // [TurnRecord]
+  history(Int)                   -> [TurnRecord]
   cancel_pending()               -> ()
 }
 

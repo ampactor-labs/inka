@@ -31,8 +31,8 @@ type JsonValue
   | JBool(Bool)
   | JNum(Float)
   | JStr(String)
-  | JArr(List)              // [JsonValue]
-  | JObj(List)              // List<(String, JsonValue)>
+  | JArr([JsonValue])
+  | JObj([(String, JsonValue)])
 
 // JsonResult — parser return shape. Per drift mode 9 prevention: no
 // silent absorption of parse errors. Caller pattern-matches; LSP

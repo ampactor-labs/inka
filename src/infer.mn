@@ -35,8 +35,8 @@ import types
 // it live and inf_add_row joins it). On scope exit, the accumulated row
 // binds to the handle via `graph_bind_row`. One write; no conflict.
 effect InferCtx {
-  inf_enter_fn(Int, Int, Span, List) -> ()
-  inf_exit_fn() -> List
+  inf_enter_fn(Int, Int, Span, [(EffName, Bool, EConn)]) -> ()
+  inf_exit_fn() -> [(EffName, Bool, EConn)]
   inf_add_effect(EffName) -> ()
   inf_add_row(EffRow) -> ()
   inf_current_row() -> EffRow
@@ -3855,7 +3855,7 @@ fn bind_handler_state_names(state_binds, hname, span: ValidSpan) =
 // flip MultiShot on machinery that can carry them.
 effect ResumeSummaries {
   summary_of(String) -> Usage
-  set_summaries(List) -> ()
+  set_summaries([(String, Usage)]) -> ()
 }
 
 // The standing ctx — infer_program installs it; the fixpoint's result lives

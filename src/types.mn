@@ -1006,7 +1006,7 @@ effect RegionTrack {
 // after collection to populate the handler's state.
 effect StringTable {
   string_offset(String) -> Int
-  set_string_entries(List) -> ()
+  set_string_entries([(String, Int)]) -> ()
 }
 
 // Evidence (spec W4) — runtime witness of an effect-to-handler-arm
@@ -1038,8 +1038,8 @@ type Evidence
 effect BodyContext {
   current_body_captures() -> Int
   set_body_captures(Int) -> ()
-  current_body_evidence() -> List
-  set_body_evidence(List) -> ()
+  current_body_evidence() -> [Int]
+  set_body_evidence([Int]) -> ()
 }
 
 // ─── Stmt (spec 03) ────────────────────────────────────────────────

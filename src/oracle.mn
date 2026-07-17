@@ -131,10 +131,10 @@ type PriorityTier
 // - Web playground — same as LSP, push on queue change
 
 effect OracleQuery {
-  query_at_position(Int)            -> List   // [QueueItem] at this Handle
-  query_project_queue()             -> List   // [QueueItem] merged from all positions
-  query_module_queue(String)        -> List   // [QueueItem] for one module
-  cursor_relevant(Int, Int)         -> List   // (cursor_handle, max_distance_bytes); locality-filtered
+  query_at_position(Int)            -> [QueueItem]   // at this Handle
+  query_project_queue()             -> [QueueItem]   // merged from all positions
+  query_module_queue(String)        -> [QueueItem]   // for one module
+  cursor_relevant(Int, Int)         -> [QueueItem]   // (cursor_handle, max_distance_bytes); locality-filtered
 }
 
 // ─── project_queue_merger — the queue projected live, memoized by epoch ─

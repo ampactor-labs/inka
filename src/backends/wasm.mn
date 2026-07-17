@@ -387,27 +387,27 @@ fn emit_module(lowered) = {
 
 effect EmitFnNamesOp {
   visit_fn(String) -> ()
-  drain_fn_names() -> List
+  drain_fn_names() -> [String]
 }
 
 effect EmitTopFnNamesOp {
   visit_top_fn(String) -> ()
-  drain_top_fn_names() -> List
+  drain_top_fn_names() -> [String]
 }
 
 effect EmitStringLiteralOp {
   visit_string(String) -> ()
-  drain_string_literals() -> List
+  drain_string_literals() -> [String]
 }
 
 effect EmitStateSlotOp {
   visit_state_slot(Int) -> ()
-  drain_state_slots() -> List
+  drain_state_slots() -> [Int]
 }
 
 effect EmitWasiOp {
   visit_wasi_op(String) -> ()
-  drain_wasi_ops() -> List
+  drain_wasi_ops() -> [String]
 }
 
 // The sixth projection (band B k1): does the module YIELD anywhere? A

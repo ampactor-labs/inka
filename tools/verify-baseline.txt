@@ -173,7 +173,24 @@
 # byte-identical, zero new error classes. 581a92f swept only the trap-causing
 # subset and closed "the census after the next march is the arbiter"; this is
 # that census, the siblings finally swept.
-census_errors_max: 1337
+#
+# 2026-07-17: 1337 -> 1233 (DOWN 104, Stage 1a leaf files). The same [Element]
+# fix carried into the leaf ADTs and effect-op signatures the core sweep did not
+# reach: query (QueryResult), voice (Answer/CompileOutcome/CheckOutcome/
+# AuditReport — the comments named Diagnostic/AuditFinding, types that do not
+# exist; the real element is DiagKind / the debt triple, read from the producer),
+# lsp/oracle/json responses, autodiff ([Float]/[TapeEntry]), mentl synth
+# (Proposals/Context/enumerate_inhabitants), infer (inf_enter/exit_fn effs,
+# set_summaries), the wasm drain_* emit collectors (each named by its visit_*
+# companion), cursor/eight_loop projections, the StringTable/BodyContext ops, and
+# cache_map (parameterized CacheMap(v) — a generic container, correctly). The
+# true bare-List shape (List(X) vs List) is now 6, from 645+ at the start: the
+# residue is buffer.mn (a dead module — no import, no external caller; a deletion
+# candidate, not typed here) plus a few genuine mismatches that were never this
+# class. What remains in the census is the OTHER roots the plan already named —
+# ~144 ETypeArityMismatch, the Span-vs-ValidSpan alias class, and genuine errors
+# — not List erasure. Inference-only; m2 == m3 byte-identical; zero new classes.
+census_errors_max: 1233
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

@@ -945,6 +945,7 @@ CLAUDE.md ⟲/§9 and the code's own comments).
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-16 · BARE MENTL PROJECTS WHERE YOU ARE: the tty fork (fd_fdstat_get), the directory projection (fd_readdir), verb_catalog one-string-two-surfaces, mentl help; a two-rung transition ladder; §11 rescoped (MI300X = the last arc, not required) + the named-peer audit (four verdicts) — 80215c38 · pin e2babb24
 - 2026-07-16 · MENTL RUNS FROM ANYWHERE (§11 col 1): install shim = a POINTER to the live boot; resolver chain + /mentl-home guest path; fs_at (the preopen table IS the mount table — longest-prefix, fd_prestat_dir_name); prelude declares its imports (the manifest); driver_compile_entry = the one-namespace DAG concatenation. Temp-dir matrix: run=42, hole refuses · pin 26bfe90a
 - 2026-07-16 · §7 → this ledger; PROVENANCE compacted; archaeology banners; tools/state.sh = THE BOARD; §11 THE PRODUCTION BAR authored — a09026c, f6ed08c
 - 2026-07-16 · regions live: fn body = region, return = TRANSFER; Hylo-quiet on the wheel (0 escapes) — 82a7e42 · pin 94e449dc
@@ -983,14 +984,16 @@ CLAUDE.md ⟲/§9 and the code's own comments).
 
 `Hβ.synth.vocabulary-arg-holes` · `Hβ.synth.vocabulary-reach-index` ·
 `Hβ.cursor.enclosing-decl-edge` (band M kin) ·
-`Hβ.cursor.session-weave-epoch-scope` (cursor.mn authored_hole — re-unifies
-the gate's and the cursor's hole classifiers) ·
+`Hβ.cursor.session-weave-epoch-scope` (DISSOLVED by the peer audit — the
+session `<~` loop deletes the re-parse that created it; §11) ·
 `Hβ.infer.alias-preserving-unify` (the wrapper-peel erases the alias from
 the union-find class — the ret-chain echo) ·
 `Hβ.own.region-return-transfer` (LANDED at the check; the caller-side
 re-tag under region polymorphism is the arena increment) ·
-`Hβ.lower.partial-effectful-callee` / `.partial-local-callee` /
-`.partial-prefix-arity` (lower.mn floors, typed) ·
+`Hβ.lower.partial-via-lambda-recipe` (the peer-audit merge of
+partial-effectful-callee + partial-local-callee: the mint routes through
+the LambdaExpr machinery) / `.partial-prefix-arity` (lower.mn floors,
+typed) ·
 `Hβ.lower.k2-remainder-fncall` · `Hβ.lower.abandon-with-resume-arm` ·
 `Hβ.lower.stateful-install-crossing-yield` (band B kin) ·
 `Hβ.cli.audit-row-var-render` (cosmetic) ·
@@ -1225,6 +1228,33 @@ a foreign assembler, exactly like WAT), the verb surface (`mentl check
 <path>` is a transport; the endpoint is the cursor-address form —
 `mentl <address>` projecting the eight aspects).
 
+**The named-peer audit** (2026-07-16, Morgan's charge: a "named peer" can
+be honest sequencing or fear wearing a name — run the eight interrogations
+across ALL of them and ask for the interconnectedness). Four verdicts,
+each a PLAN correction: (1) the name-is-handle cluster is ONE design in
+five names — `Hβ.perf.name-is-handle` / EffName-is-a-handle /
+`Hβ.runtime.indexed-map-primitive` / esc-row-on-node / reach-edge-on-node
+all reduce to "a name re-derives what an edge connects", and the banked
+smap-first sequencing is INVERTED (str_hash-keyed maps re-key by handle
+when interning lands — the migration paid twice); intern-at-lex leads,
+the maps land handle-keyed once. (2) `Hβ.cursor.session-weave-epoch-scope`
+DISSOLVES — it names a symptom of the edit transport re-parsing per
+projection; the required session `<~` loop (one graph, IC re-projection)
+deletes the multi-generation weave, so the two hole classifiers re-unify
+for free; never build the filter. (3) `Hβ.lower.partial-effectful-callee`
+and `.partial-local-callee` MERGE into partial-via-lambda-recipe — both
+name the same gap (the mint bypassed the LambdaExpr machinery: frame
+entry, capture resolution, derive_ev_slots); one landing.
+(4) `Hβ.infer.alias-preserving-unify` is governed by the unpatchability
+theorem: the design is a representative-choice PROJECTION (the union-find
+class exposes its most-refined member), never an arm edit inside
+unify_types. Everything else interrogated held: the region arc's stages
+are genuinely ordered (each gates the next), band L's diagnostics arms
+share the catalog-as-projection umbrella, band M's transports are honest
+parallel handler swaps, and the trust trio (oracle-fuzz →
+correctness-oracle-internal, diverse-double-compilation) is distinct with
+oracle-fuzz feeding both.
+
 ### Column 1 — install & the project story
 
 - **The resolver arm**: `driver_module_path` (src/driver.mn:27) resolves an
@@ -1262,8 +1292,10 @@ a foreign assembler, exactly like WAT), the verb surface (`mentl check
 
 ### Column 3 — the performance floor (§5.O completion)
 
-- The banked smap migration (five str_hash waypoints → one indexed-map
-  primitive, `Hβ.runtime.indexed-map-primitive`).
+- Name-is-handle FIRST (the peer-audit inversion): intern at lex, then
+  the five str_hash waypoints land as ONE handle-keyed map primitive
+  (`Hβ.runtime.indexed-map-primitive`) — never str_hash-keyed twice. This
+  is also column 2's EffName item: one design, five former names.
 - `Hβ.lower.reach-membership-o1` · `Hβ.infer.instantiate-shares-never-clones`.
 - **The per-decl arena arc** (unblocked 2026-07-16 — regions live, returns
   transfer, Hylo-quiet on the wheel): class-aware region-tag lookup →

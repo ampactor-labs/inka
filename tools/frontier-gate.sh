@@ -443,6 +443,8 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-scheduled-fanout-effect.mn" 25 yes "$dir"
   run_program "$compiler" scheduled-persist-float \
     "$ROOT/tests/frontier/mn-scheduled-fanout-persist-float.mn" 60 persist "$dir"
+  run_program "$compiler" refined-alias-nonatomic \
+    "$ROOT/tests/frontier/mn-refined-alias-nonatomic.mn" 3 yes "$dir"
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

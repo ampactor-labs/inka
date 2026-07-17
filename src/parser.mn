@@ -684,13 +684,7 @@ fn parse_type_decl(ref tokens, pos) = {
   let p = skip_ws(tokens, pos + 1)
   let p2 = if at(tokens, p, TEq) { skip_ws(tokens, p + 1) } else { p }
 
-  let base_val = ident_at(tokens, p2)
-  let probe = skip_ws(tokens, p2 + 1)
-  if at(tokens, probe, TWhere) {
-    let (base_ty, _p3) = parse_type_ty(tokens, p2)
-    let (pred, p4) = parse_predicate(tokens, skip_ws(tokens, probe + 1))
-    (nstmt(RefineStmt(name, base_ty, pred), start), p4)
-  } else if at(tokens, p2, TLBrace) {
+  if at(tokens, p2, TLBrace) {
     // H2.3 nominal record: `type Person = {name: String, age: Int}`.
     // Single-variant type whose body is the record. Reuse
     // parse_record_type_fields so the field-sort invariant matches
@@ -703,17 +697,22 @@ fn parse_type_decl(ref tokens, pos) = {
     let variant = (name, [body])     // single variant named after the type
     (nstmt(TypeDefStmt(name, [variant]), start), p3)
   } else {
-    // Transparent alias vs ADT (SYNTAX.md §«Type aliases» + §«Token
-    // wrapper»): a bare RHS type-expression with no `|` is an alias
-    // (`type Port = Int`, `type Bytes = [Int]`). A constructor-shaped RHS
-    // with fields (`type Token = Tok(TokenKind, Span)`, `type LowFn =
-    // LFn(...)`) is a single-variant ADT. The RHS shape is the carried
-    // truth: fields mean a constructor payload; no fields mean alias.
-    // Multi-variant ADTs and named effect rows still route through
-    // parse_variants below.
+    // The RHS is a type expression. Parse it WHOLE, then branch on what
+    // FOLLOWS. The base of a refined alias may be ANY type expr — `[a]`,
+    // `Option(k)`, `Int` — not just a single-token name; the old `p2 + 1`
+    // probe saw only a one-token base and so rejected SYNTAX §«Type aliases»'
+    // own `type NonEmpty = [a] where len(self) > 0` (P_UnexpectedToken on
+    // `where` at the `]`). Reading the whole base first is the fix:
+    //   `where` (TWhere)        → refined alias, base = alias_ty
+    //   `|`/`+`/`-`/`&`         → multi-variant ADT / named effect row
+    //   a constructor payload    → single-variant ADT (`type Token = Tok(...)`)
+    //   nothing                  → transparent alias (`type Port = Int`)
     let (alias_ty, p_alias) = parse_type_ty(tokens, p2)
     let term = skip_ws(tokens, p_alias)
-    if at(tokens, term, TPipe) || at(tokens, term, TPlus)
+    if at(tokens, term, TWhere) {
+      let (pred, p4) = parse_predicate(tokens, skip_ws(tokens, term + 1))
+      (nstmt(RefineStmt(name, alias_ty, pred), start), p4)
+    } else if at(tokens, term, TPipe) || at(tokens, term, TPlus)
        || at(tokens, term, TMinus) || at(tokens, term, TAmp) {
       let (variants, p3) = parse_variants(tokens, p2)
       (nstmt(TypeDefStmt(name, variants), start), p3)

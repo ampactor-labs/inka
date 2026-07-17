@@ -1,0 +1,13 @@
+// SYNTAX §«Type aliases»: a refined-alias base may be ANY type expression, not
+// just a single-token name. `type X = [Int] where len(self) > 0` did not parse
+// before Hβ.parser.refined-alias-nonatomic-base — parse_type_decl probed only
+// p2+1 for `where`, so a multi-token base (`[Int]` is three tokens) put `where`
+// out of reach: P_UnexpectedToken on `where` at the `]`, then E_MissingVariable
+// on the orphaned `len`/`self`. Parsing the whole base type FIRST, then branching
+// on what follows, is the fix. This fixture declares the form (exercising the
+// parse + the predicate's type-check) and runs. A parser regression re-surfaces
+// the mismatches and fails the diagnostic check. Expected exit: 3.
+
+type NonEmpty = [Int] where len(self) > 0
+
+fn main() = len([10, 20, 30])

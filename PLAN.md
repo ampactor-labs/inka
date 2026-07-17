@@ -945,6 +945,7 @@ CLAUDE.md ⟲/§9 and the code's own comments).
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-17 · STAGE 4 — the surface parses its own canonical form (`Hβ.parser.refined-alias-nonatomic-base`): `parse_type_decl` probed only `p2+1` for `where`, so a multi-token base (`[Int]`) hid it — SYNTAX:990's own `type NonEmpty = [a] where len(self) > 0` did not parse. Fix parses the whole base first, then branches. Wheel-neutral (m2==m3 byte-identical) yet tool-changing, so boot re-pinned `ab34a853…`; guarded by tests/frontier/mn-refined-alias-nonatomic.mn (frontier 47→50) — tooling improved WITH the medium
 - 2026-07-17 · STAGE 1a — the census's largest root felled: a bare `List` in a declaration is the nominal `TName("List",[])` that never unifies with the native `TList` consumers build (SYNTAX §4① — one sequence kind `[a]`); the fix is `[Element]` at the declaration, read live from the consumer, never a TName↔TList unify bridge (which would legitimize the illegal shape while leaving the element erased). Core ADTs (Ty/Node/Pat/LowExpr/LowPat/LowFn/Scheme/EffRow) + the shared handler-arm/state-field records (also cleared `N vs Node` 14→0) + the leaf ADTs and effect-op sigs. Census 2266 → 1233 (true bare-List shape 645+ → 6, residue = the dead buffer.mn); inference-only, m2==m3 byte-identical, zero new classes — af8a9189+ef0030b1. Stage 2a (`Hβ.infer.seq-op-row-from-callee`) built + marched + REVERTED: correct but DEP-gated on §5.O per-decl-arena (the Alloc attribution's ev-slot emit tips the 4GB bump image → m3 OOM; §11 col 2)
 - 2026-07-16 · BARE MENTL PROJECTS WHERE YOU ARE: the tty fork (fd_fdstat_get), the directory projection (fd_readdir), verb_catalog one-string-two-surfaces, mentl help; a two-rung transition ladder; §11 rescoped (MI300X = the last arc, not required) + the named-peer audit (four verdicts) — 80215c38 · pin e2babb24
 - 2026-07-16 · MENTL RUNS FROM ANYWHERE (§11 col 1): install shim = a POINTER to the live boot; resolver chain + /mentl-home guest path; fs_at (the preopen table IS the mount table — longest-prefix, fd_prestat_dir_name); prelude declares its imports (the manifest); driver_compile_entry = the one-namespace DAG concatenation. Temp-dir matrix: run=42, hole refuses · pin 26bfe90a
@@ -1397,13 +1398,19 @@ in this column is one of its classes.
   around a fabrication in the wheel. WASI has no exec, so the shim is honest
   scaffold — but the wheel must REFUSE (`E_CannotExec`) rather than report a
   success it did not perform.
-- **`Hβ.parser.refined-alias-nonatomic-base`** — SYNTAX's OWN canonical
-  refinement example does not parse. Measured: `type NonEmpty = [a] where
-  len(self) > 0` (docs/SYNTAX.md:990, quoted verbatim as THE refined-alias
-  form) → `P_UnexpectedToken: unexpected token: where at 1:21-1:26`. The
-  refined-alias form silently accepts only a single-token base. The
-  authoritative surface doc is not accepted by the parser it binds, and unlike
-  SYNTAX's other four lathe-lag markers this one is unmarked.
+- **`Hβ.parser.refined-alias-nonatomic-base`** — LANDED 2026-07-17. SYNTAX's
+  own canonical `type NonEmpty = [a] where len(self) > 0` (docs/SYNTAX.md:990)
+  did not parse: `parse_type_decl` probed only `p2 + 1` for `where`, so a
+  multi-token base (`[Int]` is three tokens) put `where` out of reach —
+  `P_UnexpectedToken` on `where` at the `]`, then `E_MissingVariable` on the
+  orphaned len/self. The fix parses the whole base type FIRST, then branches on
+  what follows (`where` refines / `|`+`-`& is a variant/row / a ctor payload is
+  a single-variant ADT / nothing is a transparent alias). The wheel uses no
+  such form, so m2 == m3 stayed byte-identical, but the parser fn's own bytes
+  changed — the case where a change is wheel-neutral yet TOOL-changing, so boot
+  was re-pinned (the fix is not live until boot carries it). Guarded by
+  tests/frontier/mn-refined-alias-nonatomic.mn (frontier 47 → 50) — tooling
+  improved with the medium in the same change.
 - `Hβ.perf.name-is-handle` / EffName-is-a-handle: the crown's positive
   residual (~146 false mismatches) + the by-name family deletion (design
   banked, §5.O layer 1). Roots the PERFORMANCE floor only — see the fleet's

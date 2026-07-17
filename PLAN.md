@@ -1185,3 +1185,137 @@ table idx 0, so "prints WAT mid-inference" can mean "the parser ate my arm").
 5. **Keep the three docs in ultimate form.** Each touch consolidates toward the
    tightest *complete* prefix, one home per truth. They are the only durable
    memory — the investment that means this session never recurs.
+
+---
+
+## §11 · THE PRODUCTION BAR — everything before Mentl is production-ready
+
+**One bar, both audiences** (decided with Morgan 2026-07-16): the external
+early adopter who clones, installs, and ships a wasm artifact from an
+arbitrary directory; and the founding research use — the cross-frequency-
+coupling pipeline on real recordings. The bar's definition is the medium's
+own, never borrowed stability theater: **production-ready = the medium
+keeps its own promises mechanically.** Every claim it makes about a program
+is true (no known silent-wrong class); every refusal teaches; the green
+board (`tools/state.sh`) IS the release gate; and the felt loop closes —
+hole → proven proposal → patch → run. Each item below is BUILT (landing
+whole, gated, marched) or the label does not apply; the NOT-REQUIRED list
+at the end is part of the bar, not an omission.
+
+**The novelty audit governs every item** (run 2026-07-16 against the whole
+roadmap): a borrowed best practice survives only where it empowers the
+medium; where Mentl's structure supplies a stronger form, the native form
+wins. Rejected borrowed shapes, with their native replacements: version
+managers / semver → **the pin IS the release** (boot + the PROVENANCE
+chain of self-confirmed fixpoints; the march is the updater; PROVENANCE
+ships as the release notes); manifest files → **the imports ARE the
+manifest** (the kernel already holds the dep DAG as edges; `mentl new`
+scaffolds a source file, never config; the project's endpoint is the
+persisted graph image, `Hβ.persist.module-image-cache`); generic compiler
+fuzzing → **the oracle IS the fuzzer** (`enumerate_inhabitants` multi-shot-
+searches program space as the generator; wasm-tools shrink reduces);
+C-FFI-style GPU marshaling → **thunk-as-record memcpy** (§5.U: a branch
+thunk is a contiguous image record; the device crossing is the same
+operation as persist — SPACE = TIME = DEVICE). Kept borrowed substrate,
+named scaffold-tier (§6): the PATH shim (a POINTER to the live boot, never
+a copy), GitHub Actions as CI transport, HIP text emission (a projection to
+a foreign assembler, exactly like WAT), the verb surface (`mentl check
+<path>` is a transport; the endpoint is the cursor-address form —
+`mentl <address>` projecting the eight aspects).
+
+### Column 1 — install & the project story
+
+- **The resolver arm**: `driver_module_path` (src/driver.mn:27) resolves an
+  arg naming an EXISTING file path as itself (as given or absolute) before
+  the src/-then-lib/ repo fallback; stdlib imports from user projects
+  resolve via the MENTL_HOME-rooted lib/. `path_to_module` (src/main.mn)
+  passes path-shaped args through.
+- **tools/install.sh** → `~/.local/bin/mentl`: bakes MENTL_HOME, sources
+  tools/wt-env.sh (the one flag home), execs wasmtime on
+  `$MENTL_HOME/boot/mentl.wasm` with `--dir "$PWD" --dir /tmp --dir
+  "$MENTL_HOME"` and stdin passthrough. Up-to-date BY CONSTRUCTION: the
+  shim points at the live pinned boot — every re-pin is instantly the
+  global CLI.
+- `mentl new` scaffolds a runnable source file — no manifest, ever.
+- The release = a tagged pin: boot + PROVENANCE-as-release-notes.
+- README quickstart: clone → install.sh → `mentl run` in five commands.
+
+### Column 2 — the correctness spine (no known silent-wrong class)
+
+- `Hβ.perf.name-is-handle` / EffName-is-a-handle: the crown's positive
+  residual (~146 false mismatches) + the by-name family deletion (design
+  banked, §5.O layer 1).
+- `Hβ.effects.parameterized-negation-instance` (instance-precise
+  `!Sample(44100)`).
+- `Hβ.infer.alias-preserving-unify` (the wrapper-peel erases the alias from
+  the union-find class — the ret-chain echo).
+- backtrack's `() vs Option(())` mismatch (search.mn).
+- `E_ResumeWorldMismatchWorld` wire-or-delete (band B).
+- **R3**: the decidable arithmetic Verify fragment (beyond constants — the
+  Liquid-style fragment; undecidable residue stays honest V_Pending).
+- `Hβ.diag.duplicate-type-name` decl-site refusal (band L).
+- **The oracle-fuzz loop**: the medium's own proposer generates programs;
+  compile each; any trap shrinks via wasm-tools; every survivor becomes a
+  crucible.
+
+### Column 3 — the performance floor (§5.O completion)
+
+- The banked smap migration (five str_hash waypoints → one indexed-map
+  primitive, `Hβ.runtime.indexed-map-primitive`).
+- `Hβ.lower.reach-membership-o1` · `Hβ.infer.instantiate-shares-never-clones`.
+- **The per-decl arena arc** (unblocked 2026-07-16 — regions live, returns
+  transfer, Hylo-quiet on the wheel): class-aware region-tag lookup →
+  result/argument region POLYMORPHISM (before any mutation-site check — a
+  naive store-check false-floods the ref-buffer idiom) → the image/scratch
+  allocator split → the emit_memory_arena swap. The region drop IS the
+  arena reset; `!Alloc` after a reset becomes provable; persist-as-memcpy
+  composes per-slab.
+- Layer 4: parallel cursors (`Hβ.driver.level-set-par-walk` multi-core).
+- The perf ledger runs per-commit on the MI300X host (fixed hardware).
+
+### Column 4 — the felt surface
+
+- The session `<~` loop: `mentl edit` as a LIVING loop (today: one
+  projection + one action per invocation; the LFeedback iterate context is
+  the wiring).
+- Fill-and-resume: the hole→dormant-continuation edge (the k record exists
+  — k1 built it; band M's hole-is-dormant-continuation).
+- The LSP transport (`Hβ.felt.lsp-transport-projection`) — vim/VS Code get
+  the same projections.
+- IC-riding reactivity in the IDE (today: re-instantiate per compile).
+- doc/test/new verb transports; `Hβ.diag.catalog-as-projection`;
+  `Hβ.cli.audit-row-var-render`.
+- Tutorial + stdlib reference via `mentl doc`.
+- **The CFC pipeline end-to-end on CPU**: lib/dsp/signal.mn grows
+  stft/bandpass/comodulogram; a real recording processed — the research
+  half of the bar.
+- The cursor-address surface named as the CLI's endpoint:
+  `mentl <address>` → the eight-aspect projection (drift-38's at-cursor
+  law; the verbs remain as transports).
+
+### Column 5 — trust & ops
+
+- **CI on the MI300X host**: every push → the full board (state.sh) +
+  the through-m3 battery + the perf ledger. (The box: an AMD-hosted
+  Instinct MI300X, ROCm JAX prebuilt image — recon gates daemon
+  persistence; fallback is tools/ci/run-board.sh per session.)
+- **The JAX baseline**: the CFC comodulogram in JAX on the same silicon —
+  the SOTA number the Mentl pipeline must meet (JAX is §4②'s own foil:
+  handlers without a real graph). The GPU flagship races it.
+- The `~> Gpu` spike (band E, scoped): ONE `><` fanout of pure f64 kernels;
+  the branch thunk ships to the device by MEMCPY (the §5.U record law);
+  HIP source + host launcher as the text-projection scaffold. The thesis
+  gate: SAME source under `~> Seq`/`~> Thread`/`~> Gpu`, identical results,
+  race-freedom carried by the ownership proof. Flagship, not gate.
+- Diverse double-compilation (band J — trusting-trust).
+- License + public-repo readiness; the 21+ landed commits pushed.
+- `Hβ.closure.correctness-oracle-internal` stays NAMED as the bar's own
+  residual !Outside (the micro battery is an external oracle until the
+  wheel's Verify subsumes it).
+
+### NOT required for the label (the unsurpassable tier continues after)
+
+Native backend (docs/NATIVE.md) · the modal world-index (§4③'s crown
+remainder) · IFC/`!Flow` (band C) · GPU offload (flagship demo, not gate) ·
+wasmFX. Naming these is part of the bar: a hidden gap is drift; a named
+positive-form peer is the ultimate form.

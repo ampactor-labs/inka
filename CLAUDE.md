@@ -412,7 +412,8 @@ for new convergences; (5) consolidate proactively.
 - **What Mentl IS / kernel / resolved decisions / laws:** `PLAN.md` (§0 reframe,
   §2 kernel, §4 decisions, §9 laws). **Syntax / forms:** `SYNTAX.md`.
 - **Bootstrap / substrate / file-map / verification:** `PLAN.md` (§6, §8).
-- **The cursor / current work:** `PLAN.md §5` (real→felt→unsurpassable arc) +
-  `§7` (grounded state) + `§10` (resume).
+- **The cursor / current work:** `PLAN.md §11` (THE PRODUCTION BAR — the
+  live roadmap) + `§7` (grounded state + the landing ledger) + `§5`
+  (real→felt→unsurpassable) + `§10` (resume).
 - **When drift happens:** re-read the three docs, run `state.sh`, ask "what does
   the ultimate medium do here?", and implement that.

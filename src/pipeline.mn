@@ -61,7 +61,7 @@ fn compile(entry_module) = {
     // the entry's already-typed AST — compile lowers that live graph, no
     // second fs_read / frontend / infer_program (Carried-Truth: the entry
     // is proven once and read live, never re-derived).
-    entry_module |> driver_check_entry |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module
+    entry_module |> driver_compile_entry |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module
   }
     ~> wat_stdout
     ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache

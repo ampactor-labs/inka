@@ -21,15 +21,38 @@ import infer
 import runtime/strings
 import runtime/io
 
-// Resolve a module name to a file path. Checks `src/` then `lib/`:
-//   `"infer"` → `"src/infer.mn"`,
-//   `"runtime/strings"` → `"lib/runtime/strings.mn"`.
+// Resolve a module name to a file path — four homes, tried in order:
+//   the DIRECT read (an arg naming an existing file resolves as itself —
+//     `mentl check foo` beside foo.mn in ANY directory; `sub/thing` and
+//     absolute paths ride the same read),
+//   `src/{name}.mn` then `lib/{name}.mn` (the repo layout),
+//   `/mentl-home/{src,lib}/{name}.mn` — the well-known guest path when
+//     running OUTSIDE the repo: the install shim (tools/install.sh) maps
+//     $MENTL_HOME there, so a user project's `import prelude` reaches the
+//     pinned boot's own stdlib — and its transitive `import types` (the
+//     substrate effect decls live in src/types.mn) — with zero
+//     configuration (the shim is a pointer to the live boot; the mapping
+//     is an address, not an env var). In-repo the src/lib homes win
+//     first — byte-identical behavior; on a total miss the repo-relative
+//     lib path returns so the E_MissingModule diagnostic stays as before.
 fn driver_module_path(ref module_name) with Memory + Alloc + Filesystem = {
-  let src_path = "src/{module_name}.mn"
-  if fs_exists(src_path) {
-    src_path
-  } else {
-    "lib/{module_name}.mn"
+  let direct = "{module_name}.mn"
+  if fs_exists(direct) { direct }
+  else {
+    let src_path = "src/{module_name}.mn"
+    if fs_exists(src_path) { src_path }
+    else {
+      let lib_path = "lib/{module_name}.mn"
+      if fs_exists(lib_path) { lib_path }
+      else {
+        let home_src = "/mentl-home/src/{module_name}.mn"
+        if fs_exists(home_src) { home_src }
+        else {
+          let home_lib = "/mentl-home/lib/{module_name}.mn"
+          if fs_exists(home_lib) { home_lib } else { lib_path }
+        }
+      }
+    }
   }
 }
 
@@ -167,6 +190,27 @@ fn driver_check(ref entry_module)
 // downstream (Carried-Truth: compile's old second fs_read + frontend +
 // infer_program was the canonical re-derivation this deletes — the entry
 // is parsed+typed here, once, and lowered live).
+// The COMPILE form of the entry read: an executable IS the one-namespace
+// concatenation of its dep DAG — deps first, post-order, entry last — the
+// exact form the wheel's own build proves daily (`find src lib | xargs
+// cat`). Parsed and inferred as ONE program, so every dep's decls lower
+// and emit with the entry (reachability prunes the unused) and the
+// diagnostics are the whole-program truth, never per-module fragments
+// missing their cross-module names. The per-module env overlay
+// (Hβ.driver.per-module-env-overlay) is the sequenced refinement; the
+// concatenation is the proven form.
+fn driver_compile_entry(ref entry_module)
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  let modules = driver_collect_dag(entry_module)
+  let source = fold("", (acc, m) => {
+    let p = driver_module_path(m)
+    if fs_exists(p) { "{acc}{fs_read_file(p)}\n" } else { acc }
+  }, modules)
+  let ast = parse_program(lex(source))
+  infer_program(ast)
+  ast
+}
+
 fn driver_check_entry(ref entry_module)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   // Check the deps DAG (every module the entry imports) — not the entry.

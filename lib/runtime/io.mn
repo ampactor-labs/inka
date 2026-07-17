@@ -48,6 +48,7 @@ effect WASI {
   fd_read(fd: Int, iov_ptr: Int, iov_cnt: Int, nread_ptr: Int) -> Int
   fd_close(fd: Int) -> Int
   fd_prestat_get(fd: Int, prestat_ptr: Int) -> Int
+  fd_prestat_dir_name(fd: Int, path_ptr: Int, path_len: Int) -> Int
   path_open(base_fd: Int, dirflags: Int, path_ptr: Int, path_len: Int, oflags: Int, rights_base: Int, rights_inherit: Int, fdflags: Int, fd_out_ptr: Int) -> Int
   path_create_directory(fd: Int, path_ptr: Int, path_len: Int) -> Int
   path_filestat_get(fd: Int, flags: Int, path_ptr: Int, path_len: Int, stat_ptr: Int) -> Int
@@ -316,21 +317,74 @@ fn fs_dir_fd_from(fd) with Memory + Alloc + WASI =
     else { fs_dir_fd_from(fd + 1) }
   }
 
+// fs_at — the ONE path resolution every fs syscall reads: (dir_fd,
+// path_ptr, path_len). The preopen table IS the mount table (Carried-Truth
+// at the WASI layer): an ABSOLUTE path resolves to the preopen whose guest
+// name is its LONGEST prefix (the wasi-libc rule), opened relative with the
+// prefix stripped — what makes the install shim's `--dir lib::/mentl-lib`
+// mapping reachable, so a user project's stdlib imports resolve from any
+// directory. A relative path opens against the FIRST dir preopen (the shim
+// preopens the caller's cwd first); no prefix match falls to the first dir
+// so the syscall itself errors loudly, exactly as fs_dir_fd always did.
+fn fs_at(path_str) with Memory + Alloc + WASI = {
+  let (pp, plen) = fs_path_view(path_str)
+  if plen == 0 || load_i8(pp) != 47 { (fs_dir_fd(), pp, plen) }
+  else {
+    let (best_fd, best_len) = fs_best_preopen(pp, plen, 3, 0, 0)
+    if best_fd == 0 { (fs_dir_fd(), pp, plen) }
+    else {
+      let skip = if best_len < plen && load_i8(pp + best_len) == 47 { best_len + 1 }
+                 else { best_len }
+      (best_fd, pp + skip, plen - skip)
+    }
+  }
+}
+
+// The longest-prefix scan over the preopen table (dir fds live in 3..16;
+// fd 0 is the no-match sentinel — a real dir preopen is never below 3).
+fn fs_best_preopen(pp, plen, fd, best_fd, best_len) with Memory + Alloc + WASI =
+  if fd >= 16 { (best_fd, best_len) }
+  else {
+    let prestat = alloc(8)
+    if fd_prestat_get(fd, prestat) == 0 && load_i8(prestat) == 0 {
+      let nlen = load_i32(prestat + 4)
+      let nbuf = alloc(nlen)
+      if fd_prestat_dir_name(fd, nbuf, nlen) == 0 &&
+          fs_preopen_prefix(nbuf, nlen, pp, plen) && nlen > best_len {
+        fs_best_preopen(pp, plen, fd + 1, fd, nlen)
+      } else { fs_best_preopen(pp, plen, fd + 1, best_fd, best_len) }
+    } else { fs_best_preopen(pp, plen, fd + 1, best_fd, best_len) }
+  }
+
+// The guest name is a prefix of the path AND the boundary is exact (the
+// path ends there or continues with '/'); the root name "/" matches every
+// absolute path.
+fn fs_preopen_prefix(nbuf, nlen, pp, plen) with Memory =
+  if nlen == 1 && load_i8(nbuf) == 47 { true }
+  else if nlen > plen { false }
+  else if !fs_bytes_eq(nbuf, pp, nlen, 0) { false }
+  else { nlen == plen || load_i8(pp + nlen) == 47 }
+
+fn fs_bytes_eq(a, b, n, i) with Memory =
+  if i >= n { true }
+  else if load_i8(a + i) != load_i8(b + i) { false }
+  else { fs_bytes_eq(a, b, n, i + 1) }
+
 // fs_exists — path_filestat_get returns 0 on success, errno otherwise.
 // The 64-byte filestat_t record is alloc'd and discarded; existence is
 // the boolean.
 fn fs_exists_impl(path_str) with Memory + Alloc + WASI = {
-  let (pp, plen) = fs_path_view(path_str)
+  let (dfd, pp, plen) = fs_at(path_str)
   let stat = alloc(64)
-  let errno = path_filestat_get(fs_dir_fd(), 0, pp, plen, stat)
+  let errno = path_filestat_get(dfd, 0, pp, plen, stat)
   errno == 0
 }
 
 // fs_mkdir — path_create_directory relative to the dir preopen.
 // Idempotent at the handler level (errno-17 EEXIST ignored).
 fn fs_mkdir_impl(path_str) with Memory + Alloc + WASI = {
-  let (pp, plen) = fs_path_view(path_str)
-  path_create_directory(fs_dir_fd(), pp, plen)
+  let (dfd, pp, plen) = fs_at(path_str)
+  path_create_directory(dfd, pp, plen)
   ()
 }
 
@@ -338,12 +392,12 @@ fn fs_mkdir_impl(path_str) with Memory + Alloc + WASI = {
 // Returns the file bytes as a flat Mentl String. On open failure
 // returns an empty string; caller should distinguish via fs_exists.
 fn fs_read_file_impl(path_str) with Memory + Alloc + WASI = {
-  let (pp, plen) = fs_path_view(path_str)
+  let (dfd, pp, plen) = fs_at(path_str)
   let fd_cell = alloc(4)
   // path_open(base_fd, dirflags=0, path_ptr, path_len, oflags=0,
   //   rights_base=FS_RIGHTS_READ, rights_inheriting=FS_RIGHTS_READ,
   //   fdflags=0, fd_out_ptr)
-  let open_errno = path_open(fs_dir_fd(), 0, pp, plen, 0, 2, 2, 0, fd_cell)
+  let open_errno = path_open(dfd, 0, pp, plen, 0, 2, 2, 0, fd_cell)
   if open_errno != 0 {
     let empty = alloc(4)
     store_i32(empty, 0)
@@ -359,10 +413,10 @@ fn fs_read_file_impl(path_str) with Memory + Alloc + WASI = {
 // fs_write_file — path_open (write+create+trunc) + fd_write + fd_close.
 // Overwrites any existing file at path.
 fn fs_write_file_impl(path_str, bytes_str) with Memory + Alloc + WASI = {
-  let (pp, plen) = fs_path_view(path_str)
+  let (dfd, pp, plen) = fs_at(path_str)
   let fd_cell = alloc(4)
   // path_open with FS_OFLAGS_CREAT|FS_OFLAGS_TRUNC = 0x9, FS_RIGHTS_WRITE = 0x40
-  let open_errno = path_open(fs_dir_fd(), 0, pp, plen, 9, 64, 64, 0, fd_cell)
+  let open_errno = path_open(dfd, 0, pp, plen, 9, 64, 64, 0, fd_cell)
   if open_errno != 0 { () }
   else {
     let fd = load_i32(fd_cell)
@@ -382,9 +436,9 @@ fn fs_write_file_impl(path_str, bytes_str) with Memory + Alloc + WASI = {
 // integer or 0 on failure (caller checks via fs_exists for distinction).
 // FS_OFLAGS_CREAT = 0x1; FS_RIGHTS_READ|WRITE = 0x42.
 fn fs_open_impl(path_str) with Memory + Alloc + WASI = {
-  let (pp, plen) = fs_path_view(path_str)
+  let (dfd, pp, plen) = fs_at(path_str)
   let fd_cell = alloc(4)
-  let open_errno = path_open(fs_dir_fd(), 0, pp, plen, 1, 66, 66, 0, fd_cell)
+  let open_errno = path_open(dfd, 0, pp, plen, 1, 66, 66, 0, fd_cell)
   if open_errno != 0 { 0 }
   else { load_i32(fd_cell) }
 }
@@ -399,8 +453,8 @@ fn fs_close_impl(fd) with Memory + WASI = {
 // fs_unlink_impl — path_unlink_file relative to the dir preopen.
 // Errno surfaced as Bool (true on success). H6 binary outcome.
 fn fs_unlink_impl(path_str) with Memory + Alloc + WASI = {
-  let (pp, plen) = fs_path_view(path_str)
-  let errno = path_unlink_file(fs_dir_fd(), pp, plen)
+  let (dfd, pp, plen) = fs_at(path_str)
+  let errno = path_unlink_file(dfd, pp, plen)
   errno == 0
 }
 
@@ -409,9 +463,8 @@ fn fs_unlink_impl(path_str) with Memory + Alloc + WASI = {
 // packing (new at 256 + old_len + 1) died with the scratch. Errno
 // surfaced as Bool.
 fn fs_rename_impl(old_str, new_str) with Memory + Alloc + WASI = {
-  let (op, olen) = fs_path_view(old_str)
-  let (np, nlen) = fs_path_view(new_str)
-  let dir = fs_dir_fd()   // drift-audit: ignore — effectful read consumed at TWO sites (old_fd AND new_fd): the reuse exclusion
-  let errno = path_rename(dir, op, olen, dir, np, nlen)
+  let (ofd, op, olen) = fs_at(old_str)
+  let (nfd, np, nlen) = fs_at(new_str)
+  let errno = path_rename(ofd, op, olen, nfd, np, nlen)
   errno == 0
 }

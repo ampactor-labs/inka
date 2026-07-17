@@ -623,6 +623,7 @@ function makeWasi(sourceBytes){
       },
       args_get: () => 0,
       fd_prestat_get: () => 8,   // badf — no preopens in the browser (fs_dir_fd finds none, honestly)
+      fd_prestat_dir_name: () => 8,   // badf — same absence, same honesty (fs_at's preopen scan)
       path_open: () => 44, path_filestat_get: () => 44,
       path_create_directory: () => 44, path_unlink_file: () => 44, path_rename: () => 44,
     },

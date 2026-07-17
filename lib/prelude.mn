@@ -3,6 +3,17 @@
 // The Iterate effect: one mechanism for all collection operations.
 // map, filter, fold, take, find — all handlers on the same effect.
 // Same yield. Different resume. Stream fusion falls out for free.
+//
+// The imports ARE the manifest (there is no config file, ever): a user
+// program's one `import prelude` pulls the whole runtime through the
+// driver's dep walk — memory (the substrate ops), strings, lists,
+// threading. The wheel's own one-namespace concatenation reads these as
+// inert statements; the driver reads them as the dep DAG.
+
+import runtime/memory
+import runtime/strings
+import runtime/lists
+import runtime/threading
 
 // ─── Bool (HB) ──────────────────────────────────────────────
 // Nullary-sentinel ADT. False=tag 0, True=tag 1 — matches WAT's

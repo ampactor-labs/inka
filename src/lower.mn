@@ -4666,6 +4666,7 @@ fn is_wasi_import_op(name) with Pure = {
     || name == "fd_read"
     || name == "fd_close"
     || name == "fd_prestat_get"
+    || name == "fd_prestat_dir_name"
     || name == "path_open"
     || name == "path_create_directory"
     || name == "path_filestat_get"

@@ -1679,6 +1679,7 @@ fn wasi_import_reprs(op) =
   else if op == "fd_read"               { Some(([RI32, RI32, RI32, RI32], Some(RI32))) }
   else if op == "fd_close"              { Some(([RI32], Some(RI32))) }
   else if op == "fd_prestat_get"        { Some(([RI32, RI32], Some(RI32))) }
+  else if op == "fd_prestat_dir_name"   { Some(([RI32, RI32, RI32], Some(RI32))) }
   else if op == "path_open"             { Some(([RI32, RI32, RI32, RI32, RI32, RI64, RI64, RI32, RI32], Some(RI32))) }
   else if op == "path_create_directory" { Some(([RI32, RI32, RI32], Some(RI32))) }
   else if op == "path_filestat_get"     { Some(([RI32, RI32, RI32, RI32, RI32], Some(RI32))) }

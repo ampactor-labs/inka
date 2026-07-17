@@ -119,9 +119,18 @@ fn compile(entry_module) = {
 fn executable_gate(lowered) = {
   report_verify_debt(verify_debt())   // drift-audit: ignore — sequenced effectful ledger read, projected before emit
   let holes = collect_value_holes_decls(lowered)
-  if len(holes) == 0 { lowered }
+  // The ARMED classes, read LIVE off the ledger the diagnostics handler keeps
+  // (diag_refuses names them; a class arms only when the wheel's own census of it
+  // is zero, so this can never refuse the medium). The hole gate was this law
+  // with one arm; these are its others. Productive at the walk, refusing at the
+  // boundary — SYNTAX's "a hole is productive, never executable", generalized.
+  let refused = diag_refusals()   // drift-audit: ignore — sequenced effectful ledger read, guarding the emit (the verify_debt read above is the same shape)
+  if len(holes) == 0 && refused == 0 { lowered }
   else {
     report_holes(holes, 0)
+    if refused > 0 {
+      eprint_string("mentl: refusing to emit — {int_to_str(refused)} claim(s) the medium could not discharge\n")
+    }
     proc_exit(1)
     // proc_exit never returns (the emit appends unreachable after it);
     // the tail value only closes the type of the branch.
@@ -161,8 +170,20 @@ fn compile_stdin() = {
     ~> wasi_threads
     ~> diagnostics_handler
 
+// pipeline_check returns its own ERROR COUNT, because it owns the handler that
+// does the counting (the diagnostics_handler at the foot of this chain).
+//
+// The read has to live HERE, and finding that out cost a build: check_run tried
+// to read diag_errors() from its own outer install and always got 0. That is
+// innermost-wins working exactly as documented — every report performed inside
+// this chain is caught by THIS handler, so the outer one never sees them and its
+// tally is honestly zero. The count and the counter are one handler; a reader
+// outside the install is reading a different ledger.
 fn pipeline_check(entry_module) = {
-  driver_check(entry_module)
+  {
+    driver_check(entry_module)
+    diag_errors()
+  }
     ~> wasi_filesystem
     ~> mentl_default
     ~> affine_ledger
@@ -573,15 +594,31 @@ handler lookup_ty_graph {
 // `with !Diagnostic` so its own arms cannot recursively perform
 // report — structural gate via spec 01's algebra.
 
-handler diagnostics_handler {
+handler diagnostics_handler with errors = 0, refusals = 0 {
 
   report(diag) => {
     // Every surface is a PROJECTION of the one DiagKind — source, code,
     // severity-class, message, span, applicability are read live, never
     // copied. The stderr line and the IDE hover are the same graph read.
     eprint_string("{diag_source(diag)}: {diag_code(diag)} {diag_kind(diag)}: {diag_message(diag)} at {show_span(diag_span(diag))}\n")
-    resume()
+    // The tally IS the projection continued. This arm saw every diagnostic and
+    // dropped its severity on the floor, so `mentl check` on a missing module
+    // printed the error and exited 0, and a program with a live E_TypeMismatch
+    // emitted 77 lines of WAT. The verdict was here the whole time; the exit
+    // code re-derived it as success.
+    if diag_severity(diag) == SError {
+      if diag_refuses(diag) {
+        resume() with errors = errors + 1, refusals = refusals + 1
+      } else {
+        resume() with errors = errors + 1
+      }
+    } else {
+      resume()
+    }
   }
+
+  diag_errors()   => resume(errors)
+  diag_refusals() => resume(refusals)
 }
 
 // FreshHandle — two handlers, same function

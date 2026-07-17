@@ -1344,6 +1344,13 @@ type DiagKind
 
 effect Diagnostic {
   report(DiagKind) -> ()
+  // The two live reads of the ledger the handler already keeps. The exit code
+  // and the emit gate were both RE-DERIVING this as 0 — the handler saw every
+  // diagnostic, printed it, and threw the severity away, so `mentl check` on a
+  // missing module printed E_MissingModule and exited 0. Carried-Truth at the
+  // instrument: the handler knows; nobody read it.
+  diag_errors() -> Int      // every SError seen. `check`'s exit code.
+  diag_refusals() -> Int    // only the ARMED classes (diag_refuses). The emit gate.
 }
 
 // ─── The catalog AS projections of the DiagKind constructors ───────────
@@ -1520,6 +1527,43 @@ fn diag_severity(d) with Pure = match d {
   VPending(_, _) => SVerificationPending,
   EVerifyUnencodable(_) => SVerificationPending,
   _ => SError
+}
+
+// diag_refuses — the ARMED classes of the refusal law, a projection beside
+// diag_severity.
+//
+// SYNTAX already wrote this law, for one class: "A hole is productive, never
+// executable." That is Hazel's own shape, which infer.mn:24 cites by name —
+// productive under error at the WALK (a mismatch binds NErrorHole and continues;
+// ten mismatches yield ten holes, not one-and-halt), refusing at the BOUNDARY.
+// The walk's half was built; the boundary's half was drawn for holes and for
+// decidable-false refinements, and never for the other twelve classes. This is
+// that same law reaching them — nothing new is invented here.
+//
+// A class is ARMED when the wheel's own census of it is ZERO: the medium never
+// violates it on ITSELF, so enforcing it on everyone cannot refuse the medium.
+// The census ratchet (tools/verify-baseline.txt) holds it at zero, so an armed
+// class can never un-arm. That licence is the self-hosting property doing the
+// work — rustc and tsc gate from day one because they never had errors on their
+// own source; here the wheel is the medium's first user, so "a class the medium
+// keeps on itself" is a MECHANICAL licence, not a policy.
+//
+// The all-at-once form — refuse on any SError — was designed, dispatched to an
+// adversarial fleet, and REFUTED on the artifact by three independent verifiers:
+// the wheel reports 2,266 errors about its own source, so that gate refuses the
+// medium itself and no m2 exists. The target does not lower; the WORK sequences
+// (§9.3). Classes arm one at a time as their census falls.
+//
+// `_ => False` is not a fabrication: "not yet armed" is TRUE of every class not
+// listed, and the list only grows. When the last one arms, this projection and
+// the census line are both DELETED and the law is `diag_severity(d) == SError`.
+fn diag_refuses(d) with Pure = match d {
+  // ARMED 2026-07-17. Census on the wheel: 0. Its silent skip in
+  // driver_compile_entry's fold was fixed the same day — `mentl check` reported
+  // it while `mentl compile` on the same source said nothing and shipped 2,432
+  // bytes of WAT.
+  EMissingModule(_, _, _) => True,
+  _                       => False
 }
 
 // The severity-class label the stderr line prints (the legacy `kind`

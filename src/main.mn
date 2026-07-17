@@ -12,19 +12,20 @@
 //
 // CLI canonical vocabulary (per docs/specs/simulations/CLI-canonical-vocabulary.md):
 //
-//   mentl                       → bare; defaults to teach_run
+//   mentl                       → bare: the directory PROJECTION on a tty;
+//                                 a pipe/file on fd 0 compiles stdin
 //   mentl edit [path] [--port=N] → canonical Web IDE (browser-WASM holographic)
 //   mentl doc [path]             → documentation projection (F.1 substrate)
 //   mentl serve                  → LSP transport on stdio
 //   mentl compile <path>         → emit WAT to stdout
-//   mentl run <path>             → compile + wasmtime execute
+//   mentl run <path>             → compile; the shim executes (WASI has no exec)
 //   mentl check <path>           → diagnostics; no emit
 //   mentl test [path]            → test handler chain
 //   mentl audit <path>           → capability set + severance suggestions
 //   mentl query <path> <q>       → structured ad-hoc query
 //   mentl teach [path]           → terminal voice surface; gradient narration
 //   mentl repl                   → line REPL over current env
-//   mentl new <name>             → scaffold new project from lib/tutorial/00-hello.mn
+//   mentl new <name>             → write <name>.mn here (one file; imports are the manifest)
 //   mentl --with <handler>       → universal escape hatch; resolves by env_lookup
 //
 // Drift 38 (mascot-as-tentacle-prefix per CLAUDE.md red-flag table):
@@ -357,9 +358,10 @@ fn doc_project(entry_module) = {
 // ─── compile_run / run_run — emit WAT / compile + execute
 //
 // compile_run emits WAT to stdout (CI use case; shell pipeline).
-// run_run = compile + a Process handler that execs the emitted module —
-// `mentl run` IS compile `~> process_wasmtime`, a handler swap over the
-// SAME compile graph (not a re-invoked toolchain). The process_exec op is
+// run_run = compile + a Process handler over the SAME compile graph — a
+// handler swap, not a re-invoked toolchain. On WASI no handler can actually
+// exec (see process_no_exec); the install shim owns that seam and returns the
+// program's real exit code. The process_exec op is
 // the ONLY external surface (the wasmtime wire, peer of the browser/nvim
 // wires) — its handler body crosses out of the medium into the host
 // process boundary, named Hβ.cli.process-exec-wire.
@@ -388,8 +390,8 @@ fn compile_stdin_run() = {
 }
 
 // Process — the execute-the-compiled-module effect. process_exec is the
-// ONE external-boundary op (the host process surface); process_wasmtime
-// is its handler. run = compile then ~> process_wasmtime catches the
+// ONE external-boundary op (the host process surface). run = compile then
+// ~> <a Process handler> catches the
 // process_exec the run pipeline performs over the SAME compile graph (no
 // re-invoked toolchain). The op carries the entry module; the compiled
 // artifact is handle-addressed (the compile emitted it), so the host wire
@@ -401,27 +403,40 @@ effect Process {
   process_exec(entry: String) -> Int   // exit code
 }
 
-handler process_wasmtime {
+// The op is right and stays: `run` IS compile-then-`process_exec`, one handler
+// swap over the same compile graph, and a native mentl (band N) can perform it
+// for real. The op is the seam, correctly placed.
+//
+// This HANDLER is what was wrong. It was named for the wasmtime projection and
+// its comment said it "dispatches the entry to that boundary and returns the exit
+// code the run reports" — it printed a sentence and resumed 0. Nothing ran; every
+// `mentl run` through the wheel reported success it had not performed, and the only
+// reason no one noticed is that tools/install.sh's shim intercepts `run`,
+// compiles, assembles, executes, and propagates the REAL exit code (measured:
+// `fn main() = 7` exits 7 through the shim).
+//
+// WASI has no exec. That is a substrate fact, not a gap to paper over, so the
+// handler is named for what it is and REFUSES. The shim owns the seam honestly;
+// this arm's job is to never claim otherwise.
+handler process_no_exec {
   process_exec(entry) => {
-    // The host runner is reached at the WASI process boundary. The wire
-    // (wasmtime spawn over the entry's emitted artifact) is
-    // Hβ.cli.process-exec-wire; the handler dispatches the entry to that
-    // boundary and returns the exit code the run reports.
-    eprint_string("mentl run: dispatched {entry} to process boundary\n")
-    resume(0)
+    eprint_string("mentl run: cannot execute {entry} from inside wasm — WASI has no exec.\n")
+    eprint_string("  the install shim owns this seam: `mentl run {entry}` via ~/.local/bin/mentl\n")
+    eprint_string("  compiles, assembles, and runs it, returning the program's own exit code.\n")
+    resume(1)
   }
 }
 
 fn run_run(target) = {
-  // run IS compile then process_exec ~> process_wasmtime — one handler
+  // run IS compile then process_exec ~> <a Process handler> — one handler
   // swap over the SAME compile graph. compile emits the module; the run
-  // performs process_exec(entry); process_wasmtime projects it to the
-  // host runner; the exit code returns.
+  // performs process_exec(entry). Under WASI the only truthful handler is
+  // process_no_exec, which refuses; the shim performs the run for real.
   {
     compile(target)
     process_exec(target)
   }
-    ~> process_wasmtime
+    ~> process_no_exec
     ~> wat_stdout
     ~> wasi_filesystem
     ~> no_iter_context
@@ -435,14 +450,25 @@ fn run_run(target) = {
 // Same handler chain as compile_run minus wat_stdout — the diagnostic
 // pipeline is the value; emission is suppressed.
 
-fn check_run(target) = {
-  pipeline_check(target)
-    ~> wasi_filesystem
-    ~> no_iter_context
-    ~> diagnostics_handler
-    ~> graph_handler
-    ~> mutate_sink
-}
+// check's exit code IS the ledger, read live. It reported E_MissingModule and
+// exited 0 — a claim about the program ("fine") that the handler one frame away
+// knew was false. The read must sit INSIDE the chain: diagnostics_handler is
+// installed here, so the op resolves to the same install that did the counting.
+// Safe by measurement: nothing in tools/ or .githooks/ reads check's exit code
+// (every gate drives the wheel through stdin), so this cannot regress a gate —
+// and on the wheel's own source it will now exit nonzero, which is simply true
+// and is exactly what the census ratchet is driving to zero.
+// pipeline_check hands back its own error count — it owns the handler that did
+// the counting. Reading the tally from a handler installed out here returned 0
+// forever, because innermost-wins means those reports never reached this
+// install: the counter and the count are one handler. That cost a build to find.
+//
+// The chain this fn used to install is gone with it: pipeline_check already
+// installs wasi_filesystem / graph_handler / mutate_sink / diagnostics_handler
+// at its own foot, so those were shadowed duplicates, and the surviving
+// expression is pure arithmetic over the count.
+fn check_run(target) =
+  if pipeline_check(target) > 0 { 1 } else { 0 }
 
 // ─── test_run — Test effect handler chain
 //

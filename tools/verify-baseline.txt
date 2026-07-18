@@ -282,7 +282,7 @@
 # compiler's own m3 judgment; the real `take(value) + take(value)` double move
 # remains rejected. Guarded red-first by mn-own-call-arg-borrow,
 # mn-own-forward-ref-seq, and mn-own-call-arg-move. Clean m2 == m3 fixed point.
-census_errors_max: 578
+census_errors_max: 356
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

@@ -240,8 +240,42 @@ fn pre_register_stmt(ref node) = {
       register_type_constructors(name, variants),
     NStmt(EffectDeclStmt(name, ops)) =>
       register_effect_ops(name, ops),
+    NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) =>
+      pre_register_handler_sig(hname, config, state, arms),
     _ => ()
   }
+}
+
+// The handler's identity IS a parsed fact: its effect (derivable from the
+// arms' op names + the effect env entry), its instance type, its config shape,
+// its residual row handle, and its HandlerKind. All of these read only parsed
+// structure and the effect env (already registered by EffectDeclStmt above).
+// Registering the identity here makes handler names resolve at forward-reference
+// sites (`~> handler_name` before the handler's declaration in source order),
+// and lets handler_e_r extract the HandlerKind for the ~> row algebra.
+// The main walk's register_handler overwrites with the fully-inferred scheme
+// after arm-body inference, reading the pre-registered r_handle so forward
+// references share the same residual row handle.
+fn pre_register_handler_sig(hname, config, state, arms) = {
+  let ename = derive_handler_ename(arms, hname)
+  let inst_vars = mint_instance_vars(ename, effect_instance_arity(ename), 0)
+  let inst_ty = TName(ename, map((v) => TVar(v), inst_vars))
+  let inst_h = mint(Inferred("effect '{ename}' instance"))
+  graph_bind(inst_h, inst_ty, Inferred("effect '{ename}' instance"))
+  let handler_ty = TName("Handler", [inst_ty])
+  let config_tparams = mint_handler_config_tparams(config, hname, 0)
+  let scheme_body = if len(config) == 0 {
+    handler_ty
+  } else {
+    TFun(config_tparams, handler_ty, mk_ef_closed([]))
+  }
+  let scheme_body_h = mint(Inferred("handler scheme of '{hname}'"))
+  graph_bind(scheme_body_h, scheme_body, Inferred("handler scheme of '{hname}'"))
+  let r_handle = graph_fresh_row(Inferred("residual of handler '{hname}'"))
+  env_extend(hname,
+    Forall(inst_vars, scheme_body),
+    Declared(hname),
+    HandlerKind(r_handle, config, state, arms))
 }
 
 // The POSITIVE, non-Pure declared effect names — the inline-known half of a
@@ -3705,46 +3739,14 @@ fn derive_handler_ename(arms, fallback: String) =
   }
 
 fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) = {
-  // The parser leaves the effect name blank (it names no effect); read it LIVE
-  // from the arms' op→effect edges so the instance flow keys on the true effect.
+  // The handler's identity (effect, instance, config, HandlerKind) was registered
+  // at pre_register_handler_sig — a parsed fact, not an inferred one. The main
+  // walk reads the pre-registered r_handle from the env so forward references
+  // that resolved against the pre-registered HandlerKind share the same residual
+  // row handle. Fresh instance vars and config tparams are minted here for the
+  // arm inference; the pre-registered scheme is overwritten by env_extend below
+  // and again at re-generalization after the arms.
   let ename = derive_handler_ename(arms, hname)
-  // Handlers are first-class values. Per Hβ.first-light.handler-
-  // scheme-tfun-shape (2026-05-06): when the handler decl has
-  // config-params, its scheme is `TFun([config_tys], Handler(E),
-  // pure_row)` so install-site calls `~> h(arg1, arg2)` unify
-  // each arg's type against the corresponding config-param tyvar.
-  // Without the TFun shape, `let h: Handler(E)` mismatches
-  // `h(args): fn(...) -> ?` at install — the bug surfaced by the
-  // minimal `handler h(x) { op() => x }; perform op() ~> h(42)`
-  // empirical (E_TypeMismatch at handle 20). Empty-config handlers
-  // keep the bare Handler(E) scheme since `~> h` (no parens) is
-  // direct application without intermediate call.
-  //
-  // Per protocol_cursor_is_the_substrate.md (2026-05-07) Phase B:
-  // each arm's resume cardinality is INFERRED from the body as a Usage
-  // grade (resume_grade below); draw_op_edges joins it onto the op's
-  // EffectOpScheme so lower picks Tier 1 (OneShot direct call) vs Tier 3
-  // (heap continuation) per proven cardinality — projected off the op's
-  // type, never re-walked at lower. There is no @resume= annotation; the
-  // body IS the contract.
-  // The handler's effect IS the effect that DECLARES its arm ops, read LIVE from
-  // the env (§2 follow-the-edge: the op→effect edge carries the identity; the
-  // parser names no effect, leaving ename "" — parser.mn:881). Derived HERE, not
-  // via a helper: only register_handler's scope holds `arms` at its concrete
-  // arm-record type (the loop below closes {args,body,op_name} via
-  // infer_one_handler_arm), so op_name's field offset resolves here where a
-  // generic helper's open record floors it. Mirrors the seed's
-  // $derive_effect_name_from_arms; a handler that is its own effect's sole
-  // declaration falls back to its own name. (ename is vestigial once this is
-  // live — peer Hβ.infer.handler-effect-name-is-live-edge.)
-  // The handler carries the effect's WHOLE INSTANCE `E(v1..vn)` — one fresh var
-  // per payload position (arity read LIVE from the effect), exposed in the value
-  // type so generalize quantifies each and every install freshens the whole
-  // instance. `~>` and each arm unify their performed/op instance against it
-  // POSITION-WISE (unify_types walks the TName args), so the arm's op params
-  // become the performer's value types — the data-twin of the dispatch gradient,
-  // a fact fixed at the install, not the decl. NEVER all-payloads-to-one-var
-  // (which crossed a multi-payload effect's positions: the result()->r cycle).
   let inst_vars = mint_instance_vars(ename, effect_instance_arity(ename), 0)
   let inst_ty = TName(ename, map((v) => TVar(v), inst_vars))
   let inst_h = mint(Inferred("effect '{ename}' instance"))
@@ -3766,18 +3768,20 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
   // the unified positions to one — the caught-up caller threads.
   let scheme_body_h = mint(Inferred("handler scheme of '{hname}'"))
   graph_bind(scheme_body_h, scheme_body, Inferred("handler scheme of '{hname}'"))
-  // The handler's residual row R: the effects its arms PERFORM (calling a
-  // config arg `f`, performing other ops) — distinct from the effect E it
-  // HANDLES. A handler is (a ! E+r) ⟿ (a ! R+r); `~> h` reads HandlerKind to
-  // compute row(expr ~> h) = (row(expr) − E) ⊕ R. r_handle is a LIVE row var
-  // (union-find), config-polymorphic: an arm's call to `f` joins f's effect
-  // var into R, so installing the handler propagates the lambda's effect.
-  // Accumulated below by inferring the arms under inf_enter_fn(r_handle).
-  let r_handle = graph_fresh_row(Inferred("residual of handler '{hname}'"))
-  // The env NAMES the handler's node: HandlerKind carries the decl's
-  // (config, state, arms) so lower reads the handler's static shape LIVE
-  // (handler_decl_of) — no handler_state_inits_registry side-ledger
-  // re-deriving what the graph already holds (Anchor 1, Carried-Truth).
+  // The handler's residual row R. READ the pre-registered r_handle from the env
+  // so forward references share the same residual row — the row algebra at ~>
+  // sites that resolved before this decl in source order uses THIS handle.
+  // Carried-Truth: the handle was minted once at pre_register; read it live.
+  let r_handle = match env_lookup(hname) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        HandlerKind(r, _, _, _) => r,
+        _ => graph_fresh_row(Inferred("residual of handler '{hname}'"))
+      }
+    },
+    None => graph_fresh_row(Inferred("residual of handler '{hname}'"))
+  }
   env_extend(hname,
     Forall(inst_vars, scheme_body),
     Declared(hname),

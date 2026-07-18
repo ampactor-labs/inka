@@ -925,19 +925,20 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-17) + the landing ledger
+## §7 · Current state (grounded 2026-07-18) + the landing ledger
 
 **THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 63/0,
-proof-exactness 9/9, crown 5/5, 71 micros, the march's `m2 == m3` fixed point
-(483,609 lines) — through the pinned boot `361ed16c…` (chain:
-boot/PROVENANCE.md). The self-compile runs ~10s. The census is **578** (from
-2,266): the four Stage-1 roots fell and the affine ownership model is
-Hylo-quiet on the wheel (consumed-twice 152 → 0). Both `??` authoring
-workflows (positive + capability) are green end to end; the executable gate
-refuses holes and surfaces honest debt; value-proof discharges at all three
-sites (let / fn-return / call-arg); every fn body is a region and the return
-is a transfer, validated Hylo-quiet on the wheel's own compile. **The current
-cursor is §11 — the production bar.**
+proof-exactness 9/9, crown 5/5, 71 micros, the march's `m3 == m4` fixed point
+(483,570 lines) — through the pinned boot `8bf740a4…` (chain:
+boot/PROVENANCE.md). The self-compile runs ~10s. The census is **356** (from
+2,266): the four Stage-1 roots fell, the affine ownership model is
+Hylo-quiet on the wheel (consumed-twice 152 → 0), and handler pre-registration
+made handler names resolve order-independently (E_MissingVariable 115 → 4,
+E_OccursCheck 115 → 4). Both `??` authoring workflows (positive + capability)
+are green end to end; the executable gate refuses holes and surfaces honest
+debt; value-proof discharges at all three sites (let / fn-return / call-arg);
+every fn body is a region and the return is a transfer, validated Hylo-quiet
+on the wheel's own compile. **The current cursor is §11 — the production bar.**
 
 Ground FIRST: `bash tools/state.sh` (the whole board). This ledger is
 prose until the medium projects repo state itself — state-as-PROJECTION is
@@ -985,6 +986,7 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-18 · A HANDLER'S IDENTITY IS A PARSED FACT (pre_register_handler_sig; census 578 → 356): `pre_register_stmt` registered FnStmt, TypeDefStmt, EffectDeclStmt but not HandlerDeclStmt — handlers entered the env only at the main walk's `register_handler`, so every `~> handler_name` before the handler's declaration in source order (115 sites) floored E_MissingVariable. The handler's identity (effect, instance type, config, residual row, HandlerKind) reads only parsed structure and the effect env (already registered by EffectDeclStmt). Moving the identity registration to pre_register makes handler names resolve order-independently; the main walk reads the pre-registered r_handle from the env so forward references share the same residual row handle. E_MissingVariable 115→4, E_OccursCheck 115→4. Clean m3==m4 TRANSITION, pin 8bf740a4
 - 2026-07-17 · A BORROWING PARAMETER BORROWS (move-vs-borrow part 3; census 582 → 578): CallExpr previously inferred every argument before reading the callee's parameter product, so an owned value passed to `observe(ref value)` consumed exactly like one passed to `take(own value)`. The call now reads the canonical TParam product after labeled/default resolution: a direct VarRef passed to authored or inferred Ref enters the existing borrow scope; Own parameters and nested computations keep their normal move inference. `len` / `list_index` declare the read-only access their bodies prove; update_file_text_loop carries list_set's returned owner. E_OwnershipViolation 4→0, while the real `take(value) + take(value)` double move remains rejected. Carried-Truth: the callee product already owns the access mode; the call re-derived a move. Clean m2==m3 fixed point, pin 361ed16c. RED-first: mn-own-call-arg-borrow + mn-own-forward-ref-seq; negative control: mn-own-call-arg-move; frontier 63/0
 - 2026-07-17 · A READ IS A BORROW (move-vs-borrow, census 615 → 582): an `if` condition / `match` scrutinee / a `.field` receiver is READ, never moved, so an `own` value used there is a borrow. A borrow_depth counter on affine_ledger + borrow_enter/borrow_exit bracket the condition, the scrutinee, and a value-chain field receiver (`f(x).field` keeps its normal move of `x`); consume no-ops inside. Cleared 33 of 37 with soundness intact (a real `(take(buf), take(buf))` double-move to two `own` params still caught). Two clean m2==m3 transitions, pin 1e06cdaa. Residue (4, all graph/voice): the call-arg-borrow — `len(nodes)` then `list_copy_into(nodes)`, an `own` value passed to a BORROWING param; the last piece reads the callee's param ownership at each argument
 - 2026-07-17 · THE AFFINE MODEL STOPS FIGHTING SAFE CODE (`Hβ.infer.usage-grade-unifies-cardinality-ownership` — the branch + scope halves; census 727 → 615): 115 of 152 `E_OwnershipViolation` "consumed twice" were false positives — the medium stricter than Rust on provably-safe code, the inverse of §4⑤'s Hylo-quiet bar. Two masked bugs. (1) `if`/`match` arms were never bracketed, so an `own` value read in both arms of `if i<0 {slice(buf)} else {list_set(buf)}` counted twice — but arms are ALTERNATIVES (one runs). A `BranchMode` ADT (BParallel | BAlternative) rides the branch frame; branch_exit collides only for BParallel (`><`/`<|`), unions for BAlternative (if/match). (2) affine_ledger installed ONCE at the pipeline, not per body — a name consumed in one fn stayed `used` and collided in the next naming the same `own` param (`buf`/`acc`, the dominant shape); consume_enter_fn/consume_exit_fn bracket each infer_fn body (fresh scope, restored on exit, re-entrant). Carried-Truth: the graph knows a branch is an alternative and a body is a scope. `><`/`<|` collision path unchanged (crown + micros green). Emit grew → clean m2==m3 TRANSITION, pin 6d693a87. RED-first: tests/frontier/mn-own-alternative-branches.mn. E_IfMissingElse 29→32 = latent errors the ownership false-positives had masked (total still fell). Residue (37): move-vs-borrow-by-callee — an `own` read in an `if` condition or a field is a BORROW

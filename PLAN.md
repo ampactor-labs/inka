@@ -925,23 +925,63 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-16) + the landing ledger
+## §7 · Current state (grounded 2026-07-17) + the landing ledger
 
-**THE BOARD IS WHOLE AND REGIONS ARE LIVE.** Every gate the repo owns is
-green — frontier 47/0, proof-exactness 9/9, crown 5/5, 71 micros, the
-march's `m2 == m3` fixed point (479,698 lines) — through the pinned boot
-`94e449dc…` (chain: boot/PROVENANCE.md). The self-compile runs ~10s. Both
-`??` authoring workflows (positive + capability) are green end to end; the
-executable gate refuses holes and surfaces honest debt; value-proof
-discharges at all three sites (let / fn-return / call-arg); every fn body
-is a region and the return is a transfer, validated Hylo-quiet on the
-wheel's own compile. **The current cursor is §11 — the production bar.**
+**THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 56/0,
+proof-exactness 9/9, crown 5/5, 71 micros, the march's `m2 == m3` fixed point
+(481,947 lines) — through the pinned boot `1e06cdaa…` (chain:
+boot/PROVENANCE.md). The self-compile runs ~10s. The census is **582** (from
+2,266): the four Stage-1 roots fell and the affine ownership model is
+Hylo-quiet on the wheel (consumed-twice 152 → 4). Both `??` authoring
+workflows (positive + capability) are green end to end; the executable gate
+refuses holes and surfaces honest debt; value-proof discharges at all three
+sites (let / fn-return / call-arg); every fn body is a region and the return
+is a transfer, validated Hylo-quiet on the wheel's own compile. **The current
+cursor is §11 — the production bar.**
 
 Ground FIRST: `bash tools/state.sh` (the whole board). This ledger is
 prose until the medium projects repo state itself — state-as-PROJECTION is
 §7's own destiny (the docs-as-projection endpoint); each line is a POINTER
 (git log + boot/PROVENANCE.md hold the mechanics; the lessons live in
 CLAUDE.md ⟲/§9 and the code's own comments).
+
+### The honest audit — the ultimate form (§4/§5) vs what the artifact reaches
+
+§4 and §5 write the ULTIMATE FORM under dream-code discipline (Anchor 0):
+present tense is the *design*, never a claim the seed has caught up. This audit
+is the arbiter of how-real each mechanism is, so the doc never reads as
+present-tense-done (a hidden gap is drift, `CLAUDE.md ⟐`). Where a design
+section and this audit seem to disagree, §4/§5 is the TARGET and this is the
+STATE. (Distilled from an adversarial PLAN re-audit, 2026-07-17 —
+`docs/research/finish-plan-codex-2026-07-17.md`; its honest de-hyping salvaged
+here, its wholesale rewrite and invented vocabulary rejected.)
+
+The design present-tense the artifact has NOT reached — named so the reader is
+not misled:
+- **Regions** are compile-time root-tagging + the return-transfer, Hylo-quiet
+  on the wheel — NOT a runtime arena and NOT an O(1) drop. The arena is §5.O's
+  open work; the `emit_memory_arena` swap is dormant.
+- **`persist = memcpy`** (§4④/§5.U) is the design. Today a continuation is a
+  bump-allocated record, not a closed / relocatable / versioned image; durable
+  execution is ABSENT as a shipping claim (bands B/O).
+- **The effect-WORLD on `TCont`** (§4③b/§5.U) is INERT on the OneShot path — a
+  tag carried, not an enforced exact world; the runtime value gate
+  (`E_ResumeWorldMismatchWorld`) is declared and unwired (band B).
+- **"O(1) is the only acceptable complexity"** (§5.O/§9.1) is the DIRECTION,
+  not a built fact. The honest contract: O(1) identity chase, O(changed cone)
+  incremental, O(reachable) image, O(1) reclaim-after-proof. The never-free
+  bump image is the SEED's simplicity, not a law of determinism.
+- **Universal executable refusal** (§11 col 2): only `E_MissingModule` is
+  armed; the twelve census classes are the ratcheting work toward 0.
+- **`mentl compile main`** does not yet self-serve — the import DAG omits the
+  vocabulary the concatenated-wheel build supplies
+  (`Hβ.driver.wheel-imports-are-the-manifest`, §11 col 2).
+- **Thread / SIMD / GPU schedules + the persist handler** are scaffold / proxy,
+  proven by fanout-arithmetic fixtures, not by real spawn / lane / device /
+  disk (bands E/O).
+
+Everything else on the board above is measured green; this list is the seam
+between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 

@@ -30,14 +30,14 @@ import effects
 // the Located reason so the Why chain reads at the user's
 // coordinates, not 0:0-0:0.
 type Annotation
-  = APure(Option)
-  | ANotAlloc(Option)
-  | ANotIO(Option)
-  | ANotNetwork(Option)
-  | ARefined(String, Predicate, Option)
-  | AOwn(String, Option)
-  | ARef(String, Option)
-  | AWrapHandler(String, Int, Option)
+  = APure(Option(Span))
+  | ANotAlloc(Option(Span))
+  | ANotIO(Option(Span))
+  | ANotNetwork(Option(Span))
+  | ARefined(String, Predicate, Option(Span))
+  | AOwn(String, Option(Span))
+  | ARef(String, Option(Span))
+  | AWrapHandler(String, Int, Option(Span))
                               // handler_name, target_fn_handle, span;
                               // proposes wrapping the target's body in a
                               // handler that absorbs an offending effect
@@ -60,7 +60,7 @@ type Explanation
       String,     // code: E_MissingVariable, V_Pending, W_Suggestion, …
       String,     // canonical_md: docs/errors/<code>.md
       String,     // summary: one-line human-readable
-      Option,     // fix: Option(Patch) when MachineApplicable
+      Option(Patch),     // fix, present when MachineApplicable
       Reason      // reason_chain: the Why chain
     )
 
@@ -91,7 +91,7 @@ type Candidate
 // unlock preview.
 effect Teach {
   teach_here(String, Span, Ty) -> ()
-  teach_gradient(Int) -> Option
+  teach_gradient(Int) -> Option(AnnotationSuggestion)
   teach_why(Int) -> Reason
   teach_error(String, Span, Reason) -> Explanation
   teach_unlock(Annotation) -> Capability
@@ -703,7 +703,7 @@ fn teach_session(handle) with Teach + GraphRead = {
 }
 
 type TeachSession
-  = TeachSession(Option, Reason)
+  = TeachSession(Option(AnnotationSuggestion), Reason)
 
 fn caret_span_from_handle(handle) with GraphRead = {
   let GNode(_, reason) = graph_chase(handle)

@@ -945,6 +945,7 @@ CLAUDE.md ⟲/§9 and the code's own comments).
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-17 · STAGE 1 — the bare-parameterized-type-arity class felled (`Hβ.infer.bare-parameterized-type-arity`, census 874 → 727): the `0 vs 1` arity mismatches were one shape, one type over from Stage 1a's bare `List` — a bare parameterized type (mostly `Option`) written without its argument in a declaration, meeting the real `Option(X)`/`List(X)` its consumers build. The root was `env_lookup(String) -> Option` (types.mn): the effect op erased the `Option((Scheme, Reason, SchemeKind))` its own handler proves via env_resolve, so every env_lookup match site mismatched. Swept its siblings too — the Annotation ctors (`Option(Span)`), the teach/CursorView gradient field (`Option(AnnotationSuggestion)`), PList/LPList rest (`Option(String)`), gradient_pop/step (`Option(Cursor)`), inf_arm_tys (`Option(Int)`), ls_escaping_of (`Option(EffRow)`), the Situation/TopicFacts record fields, the Lsp response ctors, Explanation's fix (`Option(Patch)`), QRHandlerProvider (`Option(String)`), tree_list (`[TreeEntry]`), NonEmptyList (`[a]`), QRIntent's tuple. Carried-Truth: each consumer/handler proves the type the declaration erased. Pure declaration fix — emit byte-identical, boot UNCHANGED, so no re-pin; the census ratchet is the gate. Residue: `Buffer` → `Buffer(a)` (genuinely generic, named)
 - 2026-07-17 · STAGE 1 — the census's biggest root felled (`Hβ.infer.alias-preserving-unify`, census 1233 → 874): the 362 `Span vs ValidSpan` / `Int vs ValidOffset` errors were ONE forward-reference bug. `pre_register_decls` ran a single source-order pass, so a fn signature quantified before its refined alias was declared (parser.mn's `span: ValidSpan` precedes types.mn, last in the concatenated wheel) baked a bare nominal `TName` the main walk could never refine — `unify(bare-TName, base)` floored at the leaf. Fix (`pre_register_alias`): register alias edges in a phase BEFORE any fn signature, so `quantify_ctor_ty` reads the LIVE edge (Carried-Truth: the graph drew the alias; the resolver re-derived a name). My own banked "a two-pass is a no-op / ruled out" was the drift — measured against BOOT's census, not the fixed compiler's (⟲: a label is a hypothesis until the artifact confirms it, the verifier included). Emit byte-identical → clean m2==m3 fixed point; boot re-pinned (wheel-neutral yet tool-changing) `5e9ec2d6…`. RED-first gate: tests/frontier/mn-refined-alias-forward-ref.mn (fails `Pos vs Int` on the old boot, runs 42 on this one; frontier 50→53)
 - 2026-07-17 · STAGE 4 — the surface parses its own canonical form (`Hβ.parser.refined-alias-nonatomic-base`): `parse_type_decl` probed only `p2+1` for `where`, so a multi-token base (`[Int]`) hid it — SYNTAX:990's own `type NonEmpty = [a] where len(self) > 0` did not parse. Fix parses the whole base first, then branches. Wheel-neutral (m2==m3 byte-identical) yet tool-changing, so boot re-pinned `ab34a853…`; guarded by tests/frontier/mn-refined-alias-nonatomic.mn (frontier 47→50) — tooling improved WITH the medium
 - 2026-07-17 · STAGE 1a — the census's largest root felled: a bare `List` in a declaration is the nominal `TName("List",[])` that never unifies with the native `TList` consumers build (SYNTAX §4① — one sequence kind `[a]`); the fix is `[Element]` at the declaration, read live from the consumer, never a TName↔TList unify bridge (which would legitimize the illegal shape while leaving the element erased). Core ADTs (Ty/Node/Pat/LowExpr/LowPat/LowFn/Scheme/EffRow) + the shared handler-arm/state-field records (also cleared `N vs Node` 14→0) + the leaf ADTs and effect-op sigs. Census 2266 → 1233 (true bare-List shape 645+ → 6, residue = the dead buffer.mn); inference-only, m2==m3 byte-identical, zero new classes — af8a9189+ef0030b1. Stage 2a (`Hβ.infer.seq-op-row-from-callee`) built + marched + REVERTED: correct but DEP-gated on §5.O per-decl-arena (the Alloc attribution's ev-slot emit tips the 4GB bump image → m3 OOM; §11 col 2)
@@ -1286,14 +1287,23 @@ full harvest `docs/research/production-bar-fleet-2026-07-17.md`; 115 designs,
 91 adversarial verdicts, every one verified against the artifact before it was
 banked here).** Four of its findings overturn what this section said, and each
 is re-measured by hand:
-- **The census is NOT 2,266 independent bugs — 763 of them (34%) are TWO
-  roots.** Measured: 407 are the exact `List(T) vs List` shape (a bare
-  parameterized annotation meeting a real `List(T)` —
-  `Hβ.infer.bare-parameterized-type-arity`), and 356 of the 508 ownership
-  errors are one shape, `escapes its scope (returned)`
-  (`Hβ.infer.usage-grade-unifies-cardinality-ownership`, a peer the medium
-  already names in its own source and PLAN never did). The bar is a handful of
-  roots, not a wall of 2,266.
+- **The census is NOT 2,266 independent bugs — most are a handful of roots,
+  and four of them are now FELLED (2266 → 727).** LANDED 2026-07-17: bare-List
+  in declarations (`Hβ.types.bare-list-erases-its-element`, Stage 1a, 2266 →
+  1233); `check_ref_escape` deleted (`Hβ.own.delete-check-ref-escape`, Stage
+  1b); the refined-alias forward-reference (`Hβ.infer.alias-preserving-unify`,
+  1233 → 874); and the bare-parameterized-type-arity
+  (`Hβ.infer.bare-parameterized-type-arity`, 874 → 727) — the `0 vs 1` class
+  was mostly `env_lookup(String) -> Option` erasing its `Option((Scheme,
+  Reason, SchemeKind))`, plus its Option/List sibling declarations across
+  mentl/lsp/voice/query/cursor. Each was Carried-Truth: a consumer or handler
+  already proves the type the declaration erased; the fix reads it live.
+  Residue: `Buffer` needs `Buffer(a)` parameterization (genuinely generic, 7
+  sites — named, not forced). The remaining census is the ownership root (356
+  `escapes its scope (returned)`,
+  `Hβ.infer.usage-grade-unifies-cardinality-ownership`, a peer the medium names
+  in its own source) plus OccursCheck / MissingVariable / EffectMismatch /
+  PurityViolated classes — a short list, not a wall of 2,266.
 - **"name-is-handle roots BOTH spines" is half wrong.** ZERO of the 2,266 are
   name-identity failures, so it roots the PERFORMANCE floor only; the
   correctness spine's root is the two arity/grade items above. The named-peer

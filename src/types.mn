@@ -702,7 +702,7 @@ type PipeContext
 // Predicate is at types.mn:568.
 
 type CursorView
-  = CursorView(NodeKind, Proposals, PipeContext, EffRow, Ownership, [(Span, Predicate, Reason)], Option, Reason)
+  = CursorView(NodeKind, Proposals, PipeContext, EffRow, Ownership, [(Span, Predicate, Reason)], Option(AnnotationSuggestion), Reason)
                               // query   propose  topology     row     trace      verify  teach    why
 
 
@@ -740,7 +740,7 @@ fn span_zero() with Pure = Span(0, 0, 0, 0)
 type Handle = Int where 0 <= self
 type TagId = Int where 0 <= self && self <= 255
 type ValidOffset = Int where 0 <= self
-type NonEmptyList = List where len(self) > 0
+type NonEmptyList = [a] where len(self) > 0
 
 fn span_valid(s) with Pure = {
   let Span(sl, sc, el, ec) = s
@@ -1084,7 +1084,7 @@ type Pat
   | PLit(LitValue)
   | PCon(String, [Pat])
   | PTuple([Pat])
-  | PList([Pat], Option)    // prefix pats, optional rest name (`...rest`)
+  | PList([Pat], Option(String))    // prefix pats, optional rest name (`...rest`)
   | PRecord([(String, Pat)]) // [(fieldname, Pat)]
   | PAlt([Pat])             // pat_1 | pat_2 | ... — any branch matches; branches
                             // bind the same names with unifiable types (SYNTAX.md
@@ -1198,7 +1198,7 @@ type Env
   = Env([(String, Scheme, Reason, SchemeKind)])   // [(name, Scheme, Reason, SchemeKind)]
 
 effect EnvRead {
-  env_lookup(String) -> Option
+  env_lookup(String) -> Option((Scheme, Reason, SchemeKind))
   env_snapshot() -> Env
 }
 
@@ -1747,7 +1747,7 @@ effect LowerScope {
   ls_push_scope() -> Int  // checkpoint = current frame's local count
   ls_pop_scope(Int) -> ()  // truncate frame locals back to checkpoint
   ls_register_escaping([(String, EffRow)]) -> ()  // install the flow-closure map (name → escaping row)
-  ls_escaping_of(String) -> Option   // a name's flow-closure (None = not a top-level fn → leaf)
+  ls_escaping_of(String) -> Option(EffRow)   // a name's flow-closure (None = not a top-level fn → leaf)
   ls_register_may_yield(Bool) -> ()  // band B M1.3 — does ANY declared effect carry a MultiShot op? (computed once at lower_program)
   ls_program_may_yield() -> Bool     // the A1 prove-absence gate's global short-circuit: no MultiShot op anywhere ⇒ nothing can yield ⇒ every row proves absence
   ls_register_resume_binds([(String, String)]) -> ()  // THE CUT (bank A3) — [(fn_name, hname)]: resume-bearing fns reachable from a MultiShot arm, bound to their handler (computed once at lower_program)

@@ -205,7 +205,27 @@
 # same codegen), so a clean m2 == m3 fixed point; boot re-pinned because the
 # compiler binary changed. Guarded RED-first by
 # tests/frontier/mn-refined-alias-forward-ref.mn.
-census_errors_max: 874
+#
+# 874 -> 727 (2026-07-17, Hβ.infer.bare-parameterized-type-arity LANDED). The
+# arity `0 vs 1` class (145 errors) was ONE shape, one type over from Stage 1a's
+# bare List: a bare parameterized type — mostly `Option`, plus a couple of tuple
+# arities — written WITHOUT its argument in a declaration, meeting the real
+# `Option(X)` / `List(X)` its consumers build. The root was `env_lookup(String)
+# -> Option` (types.mn) — the effect op erased the `Option((Scheme, Reason,
+# SchemeKind))` its own handler proves via env_resolve, so every env_lookup match
+# site (~80) mismatched. The sibling declarations: the Annotation ctors
+# (Option(Span)), the teach/CursorView gradient field (Option(AnnotationSuggestion)),
+# PList/LPList rest (Option(String)), gradient_pop/step (Option(Cursor)),
+# inf_arm_tys (Option(Int)), ls_escaping_of (Option(EffRow)), the Situation /
+# TopicFacts record fields, the Lsp response ctors, Explanation's fix (Option(Patch)),
+# QRHandlerProvider (Option(String)), tree_list ([TreeEntry]), NonEmptyList ([a]),
+# and QRIntent's tuple ([(EffName, Bool, EConn)]). Carried-Truth: each consumer /
+# handler already proves the type; the declaration erased it. Pure declaration
+# fix — emit byte-identical, boot UNCHANGED (an error hole and a resolved
+# Option(X) lower the same), so no re-pin; the census ratchet IS this class's
+# gate (revert and it rises past 727). Residue: Buffer needs `Buffer(a)`
+# parameterization (7 sites, genuinely generic) — named, not forced here.
+census_errors_max: 727
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

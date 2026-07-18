@@ -44,7 +44,7 @@ effect InferCtx {
   inf_current_answer() -> Int
   inf_enter_arm(Int) -> ()
   inf_exit_arm() -> ()
-  inf_arm_tys() -> Option
+  inf_arm_tys() -> Option(Int)
 }
 
 handler infer_ctx with stack = [], arm_stack = [] {

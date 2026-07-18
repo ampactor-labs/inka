@@ -46,7 +46,7 @@ fn question_is_why(q) with Pure = match q {
 
 type QueryResult
   = QRType(Ty, Reason)
-  | QRIntent([(EffName, Bool)])
+  | QRIntent([(EffName, Bool, EConn)])
   | QRUnresolved([(String, Ty, [Ty])]) // [(name, ty, free-tvars)]
   | QRChain([(Int, GNode)]) // [(handle, GNode)]
   | QREffects(EffRow)
@@ -54,7 +54,7 @@ type QueryResult
   | QRWhy(Reason)
   | QRRefs([Span])
   | QRVerifyDebt([(Span, Predicate, Reason)])
-  | QRHandlerProvider(Option)// Option(String)
+  | QRHandlerProvider(Option(String))
   | QRFlowLabel(FlowLabel, Reason)  // IFC projection — the FlowLabel the type already proves
   | QRError(String)
 

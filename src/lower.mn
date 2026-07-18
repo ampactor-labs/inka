@@ -520,7 +520,7 @@ type LowPat
                                      // repr_of(ty) for the leaf load width — RI32
                                      // for a pointer element, RF64 for an f64)
   | LPLit(LowValue)
-  | LPList([LowPat], Option)         // prefix pats, optional rest name
+  | LPList([LowPat], Option(String))         // prefix pats, optional rest name
   | LPRecord([(String, Int, LowPat)]) // [(field_name: String, offset_bytes: Int, sub_pat: LowPat)]
   | LPAlt([LowPat])                  // alternation branches; arm matches if ANY
                                      // branch matches (predicate = OR); branches

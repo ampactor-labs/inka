@@ -731,9 +731,9 @@ fn filter_by_span(target, debt) with Pure = {
 //   38 (mascot-as-tentacle):  GradientQueue is its own effect; not a CLI verb
 
 effect GradientQueue {
-  gradient_pop() -> Option
+  gradient_pop() -> Option(Cursor)
   gradient_peek_n(n: Int) -> [Cursor]
-  gradient_step() -> Option
+  gradient_step() -> Option(Cursor)
 }
 
 handler gradient_queue_default with caret = Caret(0, Inferred("queue init")) {

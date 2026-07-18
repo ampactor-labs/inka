@@ -103,18 +103,18 @@ type Situation
   = Situation({
       tentacle:              Tentacle,
       topic:                 Topic,
-      handle:                Option,                // Option(Int)
-      env_snapshot:          List,                  // [EnvEntry]
-      reason_at_topic:       Option,                // Option(Reason)
-      row_at_topic:          Option,                // Option(EffRow)
-      row_declared:          Option,                // Option(EffRow) — differs from row_at_topic → subsumption diag
-      ownership_at_topic:    Option,                // Option(Ownership)
-      refinements:           List,                  // [Predicate]
-      gradient_next:          Option,                // Option(AnnotationSuggestion) per Hμ.cursor §2 + GR §3.2 live
-      handlers_installed:    List,                  // [HandlerEntry]
-      prior_turn_topic:      Option,                // Option(Topic) — silence predicate input
-      prior_turn_tentacle:   Option,                // Option(Tentacle) — travels with prior_turn_topic for tentacle-different check
-      facts:                 TopicFacts,            // pre-computed predicates over topic (§2.7.5 helpers as field reads)
+      handle:                Option(Int),
+      env_snapshot:          [EnvEntry],
+      reason_at_topic:       Option(Reason),
+      row_at_topic:          Option(EffRow),
+      row_declared:          Option(EffRow),         // differs from row_at_topic → subsumption diag
+      ownership_at_topic:    Option(Ownership),
+      refinements:           [Predicate],
+      gradient_next:         Option(AnnotationSuggestion),
+      handlers_installed:    [HandlerEntry],
+      prior_turn_topic:      Option(Topic),          // silence predicate input
+      prior_turn_tentacle:   Option(Tentacle),       // travels with prior_turn_topic for tentacle-different check
+      facts:                 TopicFacts,             // pre-computed predicates over topic
       register:              Register
     })
 
@@ -137,7 +137,7 @@ type Situation
 type TopicFacts
   = TopicFacts({
       is_hole:                Bool,                 // TentPropose → TopicHandle(h): handle_is_hole(h)
-      error_code_at:          Option,               // Option(String) — TentPropose → TopicHandle(h): error_at(h)
+      error_code_at:          Option(String),       // TentPropose → TopicHandle(h): error_at(h)
       nested_call_depth:      Int                   // TentTopology → nested_calls_at_span(topic)
     })
 
@@ -342,7 +342,7 @@ effect Interact {
   // Text-files-first is a hard constraint. These ops are first-class.
 
   project_root()                 -> Path
-  tree_list(Path)                -> List   // [TreeEntry]
+  tree_list(Path)                -> [TreeEntry]
   open_file(Path)                -> FileHandle
   save_file(FileHandle)          -> ()
   create_file(Path, String)      -> FileHandle

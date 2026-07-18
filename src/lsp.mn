@@ -38,7 +38,7 @@ import runtime/io
 type LspMessage
   = LspRequest(Int, String, JsonValue)
   | LspNotification(String, JsonValue)
-  | LspResponse(Int, JsonValue, Option)
+  | LspResponse(Int, JsonValue, Option(JsonValue))
 
 // LspMethodKind — classification ADT. LSP method strings come from
 // the protocol (unavoidable string-keyed input); classify_method
@@ -69,11 +69,11 @@ type LspMethodKind
 
 type LspResponseBody
   = LspNullResp
-  | LspHoverResp(Option)            // Option(HoverContent)
+  | LspHoverResp(Option(HoverContent))
   | LspCompletionResp([CompletionItem])
   | LspCodeActionResp([CodeAction])
   | LspDiagnosticResp([LspDiagnostic])
-  | LspDefinitionResp(Option)       // Option(Location)
+  | LspDefinitionResp(Option(Location))
   | LspReferencesResp([Location])
   | LspInitializeResp(JsonValue)    // server capabilities + serverInfo
 

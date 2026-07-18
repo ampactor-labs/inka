@@ -295,7 +295,26 @@
 # show_pred_operand's `<expr>` fabrication on compound operands (a refinement's
 # own `-1.0` rendered as `<expr>` in the very diagnostic that exists to teach
 # the bound — UnaryOp/BinOp now render recursively).
-census_errors_max: 352
+# 352 -> 348 (2026-07-18, one miss one diagnostic + the handler-namespace
+# refusals). The env-miss path bound TVar(self) — tripping graph_bind's own
+# occurs check (a spurious 0:0 E_OccursCheck per missing name) and reading
+# downstream as an unconstrained var (the ownership move-default cascade the
+# adversarial panel proved with own1.mn). It now binds NErrorHole via the new
+# graph_bind_hole op: one miss, one diagnostic; unify no-ops, generalize
+# preserves, an unresolved VarRef callee borrows its direct args. The voice
+# handler's two state-shadows (history, caret — each naming an op of its own
+# handled effect; the collision measured compiling clean with a WRONG value)
+# renamed to turns/caret_now, and the class REFUSES at decl from birth
+# (E_HandlerStateShadowsOp, armed; the medium's own m3 leg caught `caret`
+# the same hour the check landed). E_DuplicateFnName likewise born armed
+# (two `fn dup` emitted a WAT redefinition only wat2wasm caught). The dead
+# duplicate FeedbackSpec (types.mn) deleted — its Fb* ctors had zero code
+# consumers while silently sharing tags with prelude's Delay/Accumulate/
+# FilterSpec. E_MissingVariable and E_OccursCheck are at ZERO on the wheel
+# but do NOT arm: the panel refuted blob-zero as the licence (user paths
+# still fire them on unresolved stdlib vocabulary until the manifest work
+# lands — no class arms until its user-path census is also clean).
+census_errors_max: 348
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

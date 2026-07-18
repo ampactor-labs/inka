@@ -742,6 +742,14 @@ fn span_overlaps(a, b) with Pure = {
 
 fn span_zero() with Pure = Span(0, 0, 0, 0)
 
+// The span a Reason edge carries, when it carries one — Located wraps the
+// site; anything else is genuinely unlocated. The occurs-check's coordinates
+// read THIS instead of flooring to 0:0 (SYNTAX principle 5).
+fn reason_span_or_zero(ref reason) with Pure = match reason {
+  Located(span, _) => span,
+  _                => span_zero()
+}
+
 // Inference + Verify ledger discharges obligations at construction
 // sites. Runtime-erased. Failed discharge surfaces as V_Pending or
 // V_Failed diagnostic with the predicate and the failing expression
@@ -958,15 +966,14 @@ type PipeKind
   | PTee              // ~>   handler-attach — governs the whole chain to its left
   | PFeedback         // <~   feedback — closes cycle under ambient clock
 
-// FeedbackSpec (spec I10) — the RHS shape of `<~`. Recognized by
-// inference to desugar the feedback verb into a stateful handler
-// capturing previous output as state. Three variants cover the
-// DESIGN Ch 6 DSP/control surface: a Z^-1 delay line, a
-// state-carrying closure, and a digital filter of N taps.
-type FeedbackSpec
-  = FbState(Ty)                   // typed state cell; RHS is a carrier
-  | FbDelay(Int)                  // unit-delay lookback of N samples
-  | FbFilter(Int, [Float])        // N-tap filter with coefficient list
+// The `<~` RHS vocabulary (FeedbackSpec) has ONE home: lib/prelude.mn's
+// Delay/Accumulate/FilterSpec + their constructor fns — the surface SYNTAX
+// names. A second, code-dead FeedbackSpec (FbState/FbDelay/FbFilter) lived
+// here and silently MERGED with the prelude's under one TName: two variant
+// sets sharing tag ids, so a prelude Delay(3) matched an FbState(_) pattern.
+// Deleted 2026-07-18 — the duplicate-type-name silent merge, in the wheel's
+// own source (the decl-site refusal for the class is the named peer
+// Hβ.infer.type-decl-name-registry).
 
 // Region (spec I12) — Tofte-Talpin region identity for escape
 // analysis. Each `handle ... with mem_arena` scope produces a
@@ -1251,6 +1258,7 @@ effect GraphWrite {
   graph_narrow_set(Int, Int) -> ()             // draw the refinement-narrowing edge — point program-point `handle`'s narrowing pointer at the path-predicate's bool-node `pred_handle` proven to hold there (§4⑥). One co-indexed weave like `canon`; idempotent (one cell per handle), read back via graph_narrow_at by lower's check-elision.
   graph_boundary_set(Int, ExecutableBoundary) -> () // draw/replace one fanout's executable edges; trail-backed because inference runs under speculative checkpoints
   graph_bind(Int, Ty, Reason) -> ()
+  graph_bind_hole(Int, Reason) -> ()   // mark a node an OBSERVED FAILURE (NErrorHole) — the productive-under-error poison. An env miss binds this, never TVar(self): the self-var tripped graph_bind's own occurs check (a spurious 0:0 E_OccursCheck per missing name) and read downstream as a normal free var (the ownership move-default cascade). A hole is the fact itself: unify no-ops on it, generalize preserves the handle, consumers stay silent.
   graph_bind_row(Int, EffRow, Reason) -> ()
   graph_fork(String) -> ()
   graph_rollback(Int) -> ()
@@ -1340,6 +1348,8 @@ type DiagKind
   | EOwnershipViolation(String, Span)            // the violated-name detail
   | ERegionEscape(String, Span)
   | EMissingModule(String, String, Span)         // module name, expected path
+  | EHandlerStateShadowsOp(String, String, Span) // handler name, state field that names an op of the handled effect — ambiguous by construction (the arm body cannot distinguish a state read from an op re-perform; measured: the collision compiles clean and returns the WRONG value)
+  | EDuplicateFnName(String, Span)               // a second `fn name` in one namespace — the emitter would pick one silently (invalid WAT today; silent under a native path)
   | EUnresolvedType(Int, Int, Span)              // unresolved handle, epoch (lower-time NFree)
   | EUnresolvedHole(Int, Span)                   // authored value-position hole surviving
                                                  // into the reachable executable (SYNTAX
@@ -1412,6 +1422,8 @@ fn diag_span(d) with Pure = match d {
   EOwnershipViolation(_, s) => s,
   ERegionEscape(_, s) => s,
   EMissingModule(_, _, s) => s,
+  EHandlerStateShadowsOp(_, _, s) => s,
+  EDuplicateFnName(_, s) => s,
   EUnresolvedType(_, _, s) => s,
   EUnresolvedHole(_, s) => s,
   EReplayExhausted(s) => s,
@@ -1463,6 +1475,8 @@ fn diag_source(d) with Pure = match d {
   EOwnershipViolation(_, _) => "ownership",
   ERegionEscape(_, _) => "region",
   EMissingModule(_, _, _) => "driver",
+  EHandlerStateShadowsOp(_, _, _) => "infer",
+  EDuplicateFnName(_, _) => "infer",
   EUnresolvedType(_, _, _) => "lower",
   EUnresolvedHole(_, _) => "verify",
   EReplayExhausted(_) => "clock",
@@ -1514,6 +1528,8 @@ fn diag_code(d) with Pure = match d {
   EOwnershipViolation(_, _) => "E_OwnershipViolation",
   ERegionEscape(_, _) => "E_RegionEscape",
   EMissingModule(_, _, _) => "E_MissingModule",
+  EHandlerStateShadowsOp(_, _, _) => "E_HandlerStateShadowsOp",
+  EDuplicateFnName(_, _) => "E_DuplicateFnName",
   EUnresolvedType(_, _, _) => "E_UnresolvedType",
   EUnresolvedHole(_, _) => "E_UnresolvedHole",
   EReplayExhausted(_) => "E_ReplayExhausted",
@@ -1573,6 +1589,14 @@ fn diag_refuses(d) with Pure = match d {
   // it while `mentl compile` on the same source said nothing and shipped 2,432
   // bytes of WAT.
   EMissingModule(_, _, _) => True,
+  // ARMED at birth (2026-07-18): both are DECL-SITE facts read from parsed
+  // structure — no resolution dependency, so the blob-vs-user-path licence
+  // gap the adversarial panel found for name-dependent classes cannot apply.
+  // Census on the wheel at arming: 0 (the wheel's one state-shadow — the
+  // voice history field — was renamed in the arming commit; the wheel has
+  // no duplicate fn names, measured).
+  EHandlerStateShadowsOp(_, _, _) => True,
+  EDuplicateFnName(_, _) => True,
   _                       => False
 }
 
@@ -1663,6 +1687,8 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
   EOwnershipViolation(detail, _) => detail,
   ERegionEscape(detail, _) => detail,
   EMissingModule(name, path, _) => "module source not found: {name} (expected at {path})",
+  EHandlerStateShadowsOp(hname, field, _) => "handler '{hname}' state field '{field}' names an op of the handled effect — a state read and an op call become indistinguishable in the arm bodies; rename the field",
+  EDuplicateFnName(name, _) => "a second `fn {name}` in one namespace — the first declaration already binds it; rename one",
   EUnresolvedType(h, epoch, _) => "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",
   EUnresolvedHole(h, _) => "unresolved value hole (handle {int_to_str(h)}) — fill it (accept a proven survivor) or suspend it into a parameter product",
   EReplayExhausted(_) => "clock replay trace exhausted",

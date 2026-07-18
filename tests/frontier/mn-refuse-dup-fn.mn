@@ -1,0 +1,11 @@
+// ARMED-CLASS refusal fixture — E_DuplicateFnName.
+// Two `fn dup` in one namespace: the emitter would pick one silently
+// (CLAUDE.md §9's own bug list; measured pre-refusal: exit 0 and a WAT
+// global redefinition only wat2wasm caught — silent under any path with
+// no assembler backstop). The second decl site refuses: nonzero exit,
+// zero WAT bytes.
+fn dup() = 1
+
+fn dup() = 2
+
+fn main() = dup()

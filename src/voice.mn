@@ -1229,9 +1229,9 @@ fn intents_without(intents, id) with Pure = {
 // via ~> with caller rows), #8 (every cursor write threads a Reason).
 
 handler mentl_voice_default
-  with caret              = Caret(0, Inferred("session start")),
+  with caret_now          = Caret(0, Inferred("session start")),
        prior_turn          = None,
-       history             = [],
+       turns               = [],
        intents             = [],
        next_intent_id      = 0 {
 
@@ -1255,7 +1255,7 @@ handler mentl_voice_default
   /// resolution; TargetIdent falls back to current handle (MV.2.e.Q.ident
   /// peer sub-handle wires env→handle resolution).
   focus(target)         => {
-    let Caret(current_handle, _) = caret
+    let Caret(current_handle, _) = caret_now
     let new_handle = resolve_cursor_target(target, current_handle)
     let new_reason = focus_reason(target)
     let new_cursor = Caret(new_handle, new_reason)
@@ -1266,14 +1266,14 @@ handler mentl_voice_default
       span_at:  span_zero()
     })
     resume()
-      with caret     = new_cursor,
+      with caret_now = new_cursor,
            prior_turn = Some(new_turn),
-           history    = [new_turn] ++ history
+           turns      = [new_turn] ++ turns
   },
 
   /// caret — read the caret-of-attention. Pure read of handler
   /// state; per MV §2.7.1 cursor lives in handler state.
-  caret()              => resume(caret),
+  caret()              => resume(caret_now),
 
   // ─── Mentl voice ops (3) — ask in Q; propose + speak in MV.2.e.P ─
 
@@ -1296,7 +1296,7 @@ handler mentl_voice_default
     })
     resume(query_result_to_answer(answer))
       with prior_turn = Some(new_turn),
-           history    = [new_turn] ++ history
+           turns      = [new_turn] ++ turns
   },
 
   /// propose — Mentl-initiated proposal at a CaretTarget. Compose
@@ -1310,7 +1310,7 @@ handler mentl_voice_default
   /// peer sub-handle. This sparse form ships the structural composition
   /// while oracle plumbing lands separately.
   propose(target)       => {
-    let Caret(current_handle, _) = caret
+    let Caret(current_handle, _) = caret_now
     let target_handle = resolve_cursor_target(target, current_handle)
     let target_reason = focus_reason(target)
     let situation = compose_propose_situation(target_handle, target_reason, prior_turn)
@@ -1327,7 +1327,7 @@ handler mentl_voice_default
     })
     resume(voiceline)
       with prior_turn = Some(new_turn),
-           history    = [new_turn] ++ history
+           turns      = [new_turn] ++ turns
   },
 
   /// speak — Mentl-initiated voice surfacing of a pre-composed
@@ -1353,7 +1353,7 @@ handler mentl_voice_default
     })
     resume()
       with prior_turn = Some(new_turn),
-           history    = [new_turn] ++ history
+           turns      = [new_turn] ++ turns
   },
 
   // ─── Run ops (4) — MV.2.e.V (run_check) + MV.2.e.Run (rest) ──────
@@ -1401,7 +1401,7 @@ handler mentl_voice_default
     })
     resume(query_result_to_answer(answer))
       with prior_turn = Some(new_turn),
-           history    = [new_turn] ++ history
+           turns      = [new_turn] ++ turns
   },
 
   // ─── Session ops (4) — MV.2.e.Session ────────────────────────────
@@ -1442,9 +1442,9 @@ handler mentl_voice_default
   /// VoiceLine / span; surfaces use this for observation-delta
   /// reasoning (silence_predicate's prior_turn input is the head).
   history(n) => {
-    let h_len = len(history)
-    if n >= h_len { resume(history) }
-    else          { resume(slice(history, h_len - n, h_len)) }
+    let h_len = len(turns)
+    if n >= h_len { resume(turns) }
+    else          { resume(slice(turns, h_len - n, h_len)) }
   },
 
   /// cancel_pending — clear prior_turn so the next turn doesn't

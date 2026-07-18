@@ -203,6 +203,26 @@ run_program() {
   fi
 }
 
+# An ARMED class's contract: the diagnostic fires AND the executable refuses —
+# nonzero exit, ZERO WAT bytes (the refusal law, PLAN §11 col 2). run_diagnostic
+# asserts the productive form (exit 0, diagnostics on stderr); an armed class's
+# fixture moves HERE in the same commit that arms it.
+run_refusal() {
+  local compiler="$1" label="$2" source="$3" expected_code="$4" dir="$5"
+  local wat="$dir/$label.wat" err="$dir/$label.compile.err"
+  local rc count size
+
+  wt_run "$compiler" < "$source" > "$wat" 2> "$err"
+  rc=$?
+  count=$(grep -c "$expected_code error:" "$err" 2>/dev/null || true)
+  size=$(wc -c < "$wat" 2>/dev/null || echo 0)
+  if [ "$rc" -ne 0 ] && [ "$count" -gt 0 ] && [ "$size" -eq 0 ]; then
+    pass "$label refusal ($expected_code=$count exit=$rc wat=0B)"
+  else
+    fail "$label refusal (exit=$rc $expected_code=$count wat=${size}B; see $err)"
+  fi
+}
+
 run_diagnostic() {
   local compiler="$1" label="$2" source="$3" expected_code="$4" dir="$5"
   local wat="$dir/$label.wat" err="$dir/$label.compile.err"
@@ -472,6 +492,10 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-own-forward-ref-seq.mn" 0 no "$dir"
   run_diagnostic "$compiler" own-call-arg-move \
     "$ROOT/tests/frontier/mn-own-call-arg-move.mn" E_OwnershipViolation "$dir"
+  run_refusal "$compiler" refuse-state-shadows-op \
+    "$ROOT/tests/frontier/mn-refuse-state-shadows-op.mn" E_HandlerStateShadowsOp "$dir"
+  run_refusal "$compiler" refuse-dup-fn \
+    "$ROOT/tests/frontier/mn-refuse-dup-fn.mn" E_DuplicateFnName "$dir"
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

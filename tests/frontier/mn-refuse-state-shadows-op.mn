@@ -1,0 +1,17 @@
+// ARMED-CLASS refusal fixture — E_HandlerStateShadowsOp.
+// A state field naming an op of the handled effect is ambiguous by
+// construction: in the arm bodies a bare `turn` means both the state read
+// and the op call. Measured before the refusal existed: this compiled
+// CLEAN and returned the WRONG value (5-shaped garbage where 42 was meant)
+// — the silent-wrong form of the collision; a second shape silently
+// unbound the arm's own parameter (the voice `history` census root).
+// The executable must refuse: nonzero exit, zero WAT bytes.
+effect Log {
+  turn(n: Int) -> Int
+}
+
+handler keeper with turn = 10 {
+  turn(n) => resume(n + turn)
+}
+
+fn main() = { turn(32) } ~> keeper

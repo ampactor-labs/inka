@@ -258,6 +258,31 @@ fn pre_register_stmt(ref node) = {
 // references share the same residual row handle.
 fn pre_register_handler_sig(hname, config, state, arms) = {
   let ename = derive_handler_ename(arms, hname)
+  // A state field naming an op of the HANDLED effect is refused at the decl:
+  // inside the arm bodies a bare `name` then means both the state read and
+  // the op call — measured, the collision compiles clean and returns the
+  // WRONG value (scratchpad collide: 5 where 42 was meant), and in a second
+  // shape silently unbinds the arm's own parameter. The effect env is already
+  // populated (EffectDeclStmt pre-registers above), so the op-ness read is
+  // live; an effect declared after its handler in source order under-detects,
+  // never falsely fires.
+  each((sf) => {
+    let fname = state_field_name(sf)
+    match env_lookup(fname) {
+      Some(entry) => {
+        let (_, _, kind) = entry
+        match kind {
+          EffectOpScheme(op_effect, _, _, _) =>
+            if op_effect == ename {
+              let N(_, fspan, _) = state_field_init(sf)
+              report(EHandlerStateShadowsOp(hname, fname, fspan))
+            } else { () },
+          _ => ()
+        }
+      },
+      None => ()
+    }
+  }, state)
   let inst_vars = mint_instance_vars(ename, effect_instance_arity(ename), 0)
   let inst_ty = TName(ename, map((v) => TVar(v), inst_vars))
   let inst_h = mint(Inferred("effect '{ename}' instance"))
@@ -296,6 +321,23 @@ fn declared_names_of(effs) =
   }, effs)
 
 fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: ValidSpan) = {
+  // A second `fn name` in one namespace is refused at ITS decl site — the
+  // emitter would otherwise pick one silently (CLAUDE.md §9's own bug list;
+  // measured: two `fn dup()` compiled exit 0 and emitted a WAT redefinition
+  // only wat2wasm caught). Pre-registration runs once per decl in one pass,
+  // so an existing FnScheme under this name IS a prior `fn` decl (aliases
+  // share the kind but live in the capitalized namespace — the case rule
+  // keeps them disjoint).
+  match env_lookup(name) {
+    Some(prior) => {
+      let (_, _, prior_kind) = prior
+      match prior_kind {
+        FnScheme => report(EDuplicateFnName(name, span)),
+        _        => ()
+      }
+    },
+    None => ()
+  }
   let param_handles = mint_param_placeholders(params, name)
   let ret_handle = mint(FnReturn(name, Inferred("return of '{name}'"))) // drift-audit: ignore — Reason string, not a control keyword
   // An authored `-> RetTy` is a CONSTRAINT the pre-scheme must CARRY, not
@@ -701,7 +743,19 @@ fn infer_expr(ref node) = {
       let cname = callee_name(func)
       let params = callee_params(cname)
       let pos_args = resolve_call_args(cname, args)
-      infer_call_arg_list(pos_args, params, 0)
+      // A named callee that MISSES env already reported (one miss, one
+      // diagnostic); its parameter product is unreadable, so the move-vs-
+      // borrow read has no ground. Compounding the miss with a move default
+      // was the ownership false-positive cascade (`len(buf)` unresolved
+      // consuming `buf`). Borrow the args under the miss; param-position and
+      // lambda callees keep normal inference (their schemes resolve).
+      if callee_missing_in_env(func, cname) {
+        borrow_enter()
+        infer_call_arg_list(pos_args, params, 0)
+        borrow_exit()
+      } else {
+        infer_call_arg_list(pos_args, params, 0)
+      }
       infer_call(func, pos_args, handle, span)
       // H4: constructor calls allocate a heap record. Tag the
       // resulting handle so check_escape at fn return can verify
@@ -1043,7 +1097,13 @@ fn infer_var_ref(name, handle, span: ValidSpan) = {
   match env_lookup(name) {
     None => {
       report(EMissingVariable(name, span))
-      graph_bind(handle, TVar(handle), Located(span, MissingVar(name)))
+      // The miss IS the fact — poison, never a normal-looking var. The old
+      // TVar(handle) self-bind tripped graph_bind's own occurs check (a
+      // spurious 0:0 E_OccursCheck per missing name) and read downstream as
+      // an unconstrained var (the ownership move-default false positives).
+      // A hole no-ops in unify, preserves the handle through generalize, and
+      // keeps every consumer silent: one miss, one diagnostic.
+      graph_bind_hole(handle, Located(span, MissingVar(name)))
     },
     Some(entry) => {
       let (scheme, reason, kind) = entry
@@ -1053,6 +1113,21 @@ fn infer_var_ref(name, handle, span: ValidSpan) = {
       // lookup: SchemeKind names the binding's construction origin.
       check_consume_at_use(name, kind, span)
     }
+  }
+}
+
+// A NAMED callee that misses env — the shape whose parameter product the
+// move-vs-borrow read cannot ground. Param-position and lambda callees have
+// resolvable schemes and keep normal inference; only the VarRef-with-no-entry
+// shape borrows its direct args (the miss already reported once).
+fn callee_missing_in_env(ref func, cname: String) = {
+  let N(fbody, _, _) = func
+  match fbody {
+    NExpr(VarRef(_)) => match env_lookup(cname) {
+      None    => true,
+      Some(_) => false
+    },
+    _ => false
   }
 }
 

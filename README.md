@@ -3,20 +3,67 @@
 > Program testing can be used to show the presence of bugs, but never to show their absence.
 > — Edsger W. Dijkstra
 
-Mentl is humanity's verification substrate for the age of machine-written code. Any intelligence may propose; nothing runs unproven; intent is never lost; capability is always bounded.
+Mentl is humanity's verification substrate for the age of machine-written code. Any intelligence may propose; no hidden or refuted claim crosses the executable boundary; intent is never lost; capability is always bounded.
 
 ```
 type Sample = Float where -1.0 <= self <= 1.0
 
-fn voice(x) -> Sample with Clock(48_000) + !Alloc =
+fn voice(x) -> Sample with Sample(48_000) + !Alloc =
   x |> gain(-3.0) |> lowpass(0.2) |> echo(0.35) |> louder |> soft_clip
 ```
 
 Two lines to hold in your hand before anything else. The first declares a number that cannot leave the range a speaker can survive; not checked at runtime, proven at compile, erased before it runs. The second declares a function that cannot allocate memory, anywhere, transitively, down through everything it calls; if one line five layers deep breaks that promise, this does not build. Proven before it runs. Not observed while you pray.
 
-This document is the whole front door: a story, then a school. The story asks nothing of you. The school starts from nothing, and by its last page you will read and write programs that prove themselves, which is something the best engineers alive cannot do without this medium, because no one can.
+This document is the whole front door: one program you can run now, a story, then a school. The story asks nothing of you. The school starts from nothing and ends with the whole medium in one program.
 
-*Written from first-light: this book describes the finished medium. Where today's artifact falls short of what is written here, the artifact is the unfinished thing, never the medium. The same law already binds the compiler to [`docs/SYNTAX.md`](docs/SYNTAX.md); where they disagree, the compiler is wrong. This book stands under that law.*
+*This README is the product contract. It describes perfected Mentl in the present tense so a contributor can point at an example and say: make this true. [`docs/SYNTAX.md`](docs/SYNTAX.md) is the surface authority; where an example and the syntax law disagree, the example is wrong. [Artifact today](#artifact-today) records exactly how far the implementation has reached without weakening the target.*
+
+## Try Mentl now
+
+The smallest honest program already carries the whole method:
+
+```mn
+fn twice(x) = x + x
+fn main() = 21 |> twice
+```
+
+With Wasmtime and WABT installed:
+
+```sh
+git clone https://github.com/ampactor-labs/mentl.git
+cd mentl
+bash tools/install.sh
+
+cat > hello.mn <<'MN'
+fn twice(x) = x + x
+fn main() = 21 |> twice
+MN
+
+mentl check hello.mn
+mentl run hello.mn
+echo $?                         # 42
+mentl query hello.mn "type twice"
+mentl teach hello.mn
+```
+
+`mentl check` is silent. `mentl run` returns 42. The query projects the inferred pure function, its inferred `ref` parameter, and the Reason leading back to `twice`'s declaration. `teach` proposes `!Alloc` because the graph already proves zero allocation. These results are direct gates of the pinned compiler, not screenshots of the target.
+
+The quoted query is today's batch transport. The perfected surface below puts one cursor at an address and projects every facet from that one read; it does not make users memorize string commands.
+
+The eight interrogations are already present at this tiny cursor:
+
+| Interrogation | What the program says |
+|---|---|
+| **Graph?** | `main`, `twice`, the literal, and the pipe are typed nodes and edges. |
+| **Handler?** | None is needed; there is no effect to answer or continuation to resume. |
+| **Verb?** | `\|>` completes `twice`'s one remaining product hole with `21`. |
+| **Row?** | The body proves `Pure`. |
+| **Ownership?** | `x` is read twice, so the parameter is inferred `ref`. |
+| **Refinement?** | None is authored; the unbounded `Int` is visible honestly. |
+| **Gradient?** | The cursor can propose `!Alloc` as a capability-unlocking input. |
+| **Reason?** | Type and ownership projections walk back to the declaration and uses. |
+
+If you want the language, continue into [The School](#the-school). If you want why the language has to exist, enter [The Door](#the-door) first. If you are implementing Mentl, read the walkthrough as executable product specification, then ground every claim in [Artifact today](#artifact-today) and `bash tools/state.sh`.
 
 ---
 
@@ -52,7 +99,7 @@ But the story kept the way out, all those centuries, carried like a coal in a ho
 
 So this is the medium where everything must say its name.
 
-In this medium, nothing runs unproven. Code does not get the benefit of looking right; it carries its proof or it does not execute. And the proof that matters most is the one no other system on earth will give you: the proof of the negative. Not "we watched it and it never phoned home." Cannot. Write `with !Network` on a function and the medium proves that nothing it calls, and nothing they call, all the way down, can reach the network; or it refuses to build. That is a program's true name: not what it did while you watched, but what it is unable to do when you don't.
+In this medium, nothing runs under a hidden or refuted claim. Code does not get the benefit of looking right: every obligation is proven, refused, or carried as visible debt, and unknown is never silently promoted to true. The proof that matters most is the one existing toolchains rarely make both transitive and executable: the proof of the negative. Not "we watched it and it never phoned home." Cannot. Write `with !Network` on a function and the medium proves that nothing it calls, and nothing they call, all the way down, can reach the network; or it refuses to build. That is a program's true name: not what it did while you watched, but what it is unable to do when you don't.
 
 And the name is not only a wall; it is a record of the why. Everything in this medium carries the reason it exists, walkable back to the root, so that what you meant does not rot into what it became. In the story, the man loses his name and his hands stop being his own. Here, intent is never lost.
 
@@ -68,9 +115,9 @@ Because of the shape of the thing. One graph. Two moves: draw an edge, read what
 
 Pieces of this have been built before, one arm at a time, each a decade of someone's life. One language got the pipes right and never reached the effects. One got the effects right on a host that fought it. One got ownership right and still cannot say what a function must never do. Each stopped exactly where its one arm ended. This is the body.
 
-A tool you can surpass keeps its own improvement outside itself; to beat it, you leave it. This medium has no outside. Its compiler is a move within its own graph. A better prover, a faster backend, a stronger proposer are all moves within its own graph. And the day it compiles itself and the output is itself, byte for byte, exact, there is nothing left standing outside it to surpass it with.
+A tool you can surpass keeps its own improvement machinery outside itself; to beat it, you leave it. Mentl's compiler is a move within its own graph. A better prover, a faster backend, and a stronger proposer are moves within that graph too. The day it reproduces itself byte for byte while independent semantic and refusal gates still hold, the toolchain closes its own improvement loop. That is Mentl's `!Outside`: not independence from hardware or human intent, but no privileged compiler outside the medium that contributors must leave Mentl to improve.
 
-The day has a name. This medium was called Light when it was born, before it could do anything at all: a medium where nothing about a program is hidden, where the complexity is real and present and visible, clarity instead of the false ease that papers over what is hard. It has been renamed twice since. The day it proves itself by making itself is still called first-light, because that was always the point. A telescope's first light is the first sky it catches whole. A reactor's is the first fire that feeds itself.
+The day has a name. This medium was called Light when it was born, before it could do anything at all: a medium where nothing about a program is hidden, where the complexity is real and present and visible, clarity instead of the false ease that papers over what is hard. It has been renamed twice since. The day it reproduces itself and survives the independent questions it asks of every other program is still called first-light, because that was always the point. A telescope's first light is the first sky it catches whole. A reactor's is the first fire that feeds itself.
 
 A medium's first light is the day it says its own true name, and the name holds.
 
@@ -186,7 +233,7 @@ signal
 
 One signal, two watchers; the meter and the display each get to look, and looking is all they get, which will matter in a later chapter.
 
-`><` runs independent things side by side:
+`><` declares independent things side by side:
 
 ```
 (left  |> louder)
@@ -194,14 +241,14 @@ One signal, two watchers; the meter and the display each get to look, and lookin
 (right |> louder)
 ```
 
-Two channels, two pipelines, no shared anything. Read the page: they are literally side by side. The shape on the page is the shape of the work; that is not a coincidence, it is a law, and the medium's formatter keeps it true, because layout belongs to the machine and meaning belongs to you.
+Two channels, two pipelines, no shared anything. Read the page: they are literally side by side. Independence is the topology; execution strategy is an answer installed later with `~>`. With no schedule installed the branches run sequentially in source order. A Thread, SIMD, or device handler may cash the same proof out differently without changing either branch. The shape on the page is the shape of the work; that is not a coincidence, it is a law, and the medium's formatter keeps it true, because layout belongs to the machine and meaning belongs to you.
 
 The fourth verb, `~>`, answers a question you have not asked yet. It waits in chapter 5.
 
 The fifth is the one to slow down for. Sound has memory. An echo is now plus a little of before; there is no echo without a before. Most languages make you build memory out of scaffolding. Here, memory is a shape you draw, a loop in the graph:
 
 ```
-fn echo(mix, x) with Clock(48_000) =
+fn echo(mix, x) with Sample(48_000) =
   ((prev) => x + mix * prev) <~ delay(24_000)
 ```
 
@@ -212,7 +259,7 @@ And a promise rides inside it that you cannot see yet but should hear named: tha
 The same verb, one tick deep instead of half a second, is a tone control:
 
 ```
-fn lowpass(a, x) with Clock(48_000) =
+fn lowpass(a, x) with Sample(48_000) =
   ((prev) => a * x + (1.0 - a) * prev) <~ delay(1)
 ```
 
@@ -221,7 +268,7 @@ A little of now, a share of before, every tick, and the harshness averages away.
 Our instrument grows. The knob from chapter 1, the echo from this one:
 
 ```
-fn wet(x) with Clock(48_000) =
+fn wet(x) with Sample(48_000) =
   x
     |> louder
     |> echo(0.35)
@@ -236,17 +283,17 @@ That is the arm called Verbs. Its question: **which way does this flow?**
 Look again at something that has been sitting in plain sight since the echo:
 
 ```
-with Clock(48_000)
+with Sample(48_000)
 ```
 
-`with` is the most honest word in this medium. Everything after it is the row: the list of what this function needs from the world, and later, what it swears never to do to the world. The echo needs a heartbeat, a clock ticking 48,000 times a second, because "half a second ago" means nothing without one. So it says so, in its own signature, where you can read it.
+`with` is the most honest word in this medium. Everything after it constrains the row: what this function may need from the world, and later, what it swears never to do to the world. The body is still the contract. The medium infers the exact row from operation-call edges, verifies it against the authored constraint, and publishes the inferred truth to callers. The echo needs a sample clock ticking 48,000 times a second, because "half a second ago" means nothing without one. So it says so, in its own signature, where you can read it.
 
-Sit with how strange and how right that is. In most languages a function's signature tells you what goes in and what comes out, and everything else, that it reads the disk, that it phones a server, that it needs a clock, is a rumor you learn by reading its guts, or by being burned. Here the signature is the confession. Needs are declared:
+Sit with how strange and how right that is. In most languages a function's signature tells you what goes in and what comes out, and everything else, that it reads the disk, that it phones a server, that it needs a clock, is a rumor you learn by reading its guts, or by being burned. Here the signature is a checked intention and the graph carries the exact confession. Needs are named:
 
 ```
 effect Audio {
   mic() -> Float
-  play(s: Float)
+  play(s: Float) -> ()
 }
 ```
 
@@ -255,13 +302,13 @@ That is an effect: a named set of operations the world must provide. A microphon
 And using a need is just calling it. No ritual, no special posture: `mic()` where you want the next sample, exactly as you would call any function. The medium knows it is a need and not a function because of what it is, not because you bowed first.
 
 ```
-fn show() with Audio + Clock(48_000) =
+fn show() with Audio + Sample(48_000) =
   mic() |> wet |> play
 ```
 
-Read the row aloud: show needs a microphone and a speaker, and a 48k heartbeat. That is not documentation that might be stale. The medium reads the body, sees every need the code actually touches, and verifies the confession against the truth. Claim less than you use and it refuses. Claim more and it nudges you, gently, in its own voice: you asked for more than you need; tighten it, and here is what tightening unlocks. The row is checked speech, both directions.
+Read the row aloud: show admits Audio and a 48k sample clock. That is not documentation that might be stale. The medium reads the body, sees every need the code actually touches, and verifies the constraint against the truth. Claim less than the body uses and it refuses. Claim more and it can tighten the input without infecting callers with an effect the body never performs. The row is checked speech, both directions.
 
-One more mercy hidden in plain sight: `Clock(48_000)` and `Clock(44_100)` are different needs. A function tuned to one heartbeat cannot be quietly wired to another; where two rates meet, the medium demands you say how, out loud, at the seam. Whole studios of subtle grief, refused at compile. The heartbeat itself is declared once, in the clock library, the same way `Audio` is declared here; the last page imports it like anything else.
+One more mercy hidden in plain sight: `Sample(48_000)` and `Sample(44_100)` are different needs. A function tuned to one sample rate cannot be quietly wired to another; where two rates meet, the medium demands you say how, out loud, at the seam. Whole studios of subtle grief, refused at compile. The sample clock itself is declared once, in the DSP clock library, the same way `Audio` is declared here; the last page imports it like anything else.
 
 That is the first hand of the arm called Row. Its question: **what does this need?**
 
@@ -283,7 +330,7 @@ handler on_stage {
 }
 ```
 
-Read an arm aloud: when someone asks for the mic, take the next sample off the hall's line-in and resume them with it, resume meaning "carry on where you left off, here is what you asked for." When someone plays a sample, put it on the wire, resume them with nothing. A handler is a small dictionary of answers, and `resume` is the act of answering.
+Read an arm aloud: when someone asks for the mic, take the next sample off the hall's line-in and resume them with it, resume meaning "carry on where you left off, here is what you asked for." When someone plays a sample, put it on the wire, resume them with nothing. A handler is a typed set of answer arms, and `resume` is the act of answering.
 
 Install it with the fourth verb:
 
@@ -310,6 +357,27 @@ handler in_test(input: [Float]) with i = 0, heard = [] {
 
 The `with i = 0, heard = []` gives the handler its own memory, evolving as it answers: feed the known air in one sample at a time, keep everything the hall would have heard. No mock frameworks, no dependency injection, no test doubles; those are three industries built to fake what "the caller decides who answers" simply is. You do not mock. You answer.
 
+`resume` is not secretly one-shot. Its cardinality is inferred from the handler body, because the body already proves it. Zero or one resume site outside loop or recursion ancestry is `OneShot`; several branch-disjoint sites are still one-shot because only one can run. A site beneath loop or recursion ancestry, or two sites reachable on one path, is `MultiShot`. If distinct installation sites require different disciplines, the unresolved operation projects `Either` instead of pretending the choice was settled.
+
+```mn
+effect Choose { choose() -> Int }
+
+handler both {
+  choose() => {
+    let first = resume(1)
+    let second = resume(2)
+    first + second
+  }
+}
+
+fn score() = choose() * 10
+fn explore() = score() ~> both
+```
+
+`score` asks once. `both` resumes the rest of `score` with 1 and again with 2: one request, two resumptions, two futures, combined as 10 + 20. Nobody annotates a continuation kind; the arm's control shape already proves it, and the cursor projects the result.
+
+This is Mentl's time axis. A multi-shot continuation is a typed fork of the rest of a computation. Different answers can search, teach, resume a filled hole, or let you revisit an earlier point without inventing a second control surface. Later, `><` will expose independent space and the memory image will provide the substrate. Time, space, and substrate meet without adding another surface verb.
+
 And handlers stack. Each `~>` wraps the one above it, so the outermost handler is the outermost authority; put the untrusted thing on the inside and the sandbox on the outside, and the stack of answers is the chain of trust, readable top to bottom on the page.
 
 That is the arm called Handlers. Its question: **who answers this?**
@@ -327,7 +395,7 @@ Every audio programmer alive holds that dread at bay the same way: discipline, c
 Here is the same intention, said in this medium; `wet` has grown up, taken its stage name, and traded chapter one's knob for the desk's own units:
 
 ```
-fn voice(x) with Clock(48_000) + !Alloc =
+fn voice(x) with Sample(48_000) + !Alloc =
   x
     |> gain(-3.0)
     |> lowpass(0.2)
@@ -336,7 +404,7 @@ fn voice(x) with Clock(48_000) + !Alloc =
 
 `!Alloc`. Read it: cannot allocate. Not "does not," not "was tested and didn't," not "the team agreed not to." Cannot, proven, transitively: the gain, the filter, the echo and its half-second memory, everything they call, everything those call, to the bottom. If one line anywhere beneath this signature allocates, the program does not build, and the refusal arrives with the chain of reasons walked back to the guilty line. The dread does not get quieter. It gets impossible.
 
-This is `!E`, effect negation, and you should know plainly: the medium you are learning is the one place in software where this word exists with teeth. Everything else in this book has cousins scattered across other languages. The proven negative, transitive, compile-time, does not. And it is the guarantee the machine-writing age actually needs, because it is the true name from the story. Watch:
+This is `!E`, effect negation, and it is Mentl's central bet: absence stays transitive through ordinary calls, higher-order values, handlers, and the executable boundary. Pieces of that story exist elsewhere. The claim here is the composition, because that is the guarantee the machine-writing age actually needs. Watch:
 
 ```
 fn admit(pedal, x) with !Network + !FileSystem =
@@ -347,7 +415,7 @@ A guest effect, a pedal someone else built, plugged into your voice. You did not
 
 The false one passes every test you invent. It cannot say your name.
 
-There is also the total refusal, `Pure`, the empty row: no needs, no world, arithmetic and nothing else, the strongest thing you can say about a function and the medium proves it like everything else. And refusals compose with needs in one algebra: a row like `Audio + Clock(48_000) + !Alloc` reads exactly as it should, needs the hall and the heartbeat, touches nothing else's memory.
+There is also the total refusal, `Pure`, the empty row: no needs, no world, arithmetic and nothing else, the strongest thing you can say about a function and the medium proves it like everything else. And refusals compose with needs in one algebra: a row like `Audio + Sample(48_000) + !Alloc` reads exactly as it should, needs the hall and the sample clock, touches nothing else's memory.
 
 That is the second hand of the arm called Row, and its question is the one from the door: **what can this never do?**
 
@@ -361,7 +429,7 @@ A type, so far, is a shape. A refinement is a shape with a law inside it:
 type Sample = Float where -1.0 <= self <= 1.0
 ```
 
-Read it: a Sample is a Float that has sworn to stay between minus one and one, the range a speaker survives, the line between music and a blown driver. The `where` clause is a predicate, and the medium's prover discharges it at compile time: anywhere a Sample is minted, the proof that it is in range must go through, or nothing builds. And at runtime the law costs nothing, because it was settled before running was allowed.
+Read it: a `Sample` is a Float that has sworn to stay between minus one and one, the range a speaker survives, the line between music and a blown driver. The `where` clause is a predicate. Every construction reaches `Verify` as one of three honest facts: proven, refuted, or still undecidable. A refutation refuses the executable; an undecidable obligation remains visible as `V_Pending` and is never silently assumed. Once the law is proven, it costs nothing at runtime because there is nothing left to check.
 
 ```
 let ok:  Sample = 0.5    // proven, silently
@@ -373,7 +441,7 @@ Now change the world the way `Triangle` changed it in chapter 2, this time by la
 ```
 effect Audio {
   mic() -> Float
-  play(s: Sample)
+  play(s: Sample) -> ()
 }
 ```
 
@@ -382,15 +450,15 @@ One word changed: the speaker no longer accepts any float, it accepts a lawful o
 The proof is one stage, the last our voice needs:
 
 ```
-fn soft_clip(x) -> Sample = (2.0 / pi) * atan(x)
+fn soft_clip(x) -> Sample = (2.0 / pi()) * atan(x)
 ```
 
-This claims to take any float, any wildness the echo and the gain conspire to produce, and return a Sample, lawful, in range. Where is the proof? In the mathematics: atan of anything lands in an open interval, scale it and the result cannot leave minus one to one. The prover checks the math, not the vibes. `soft_clip` does not clamp the signal after the fact; it is a function whose shape makes clipping unrepresentable. The instrument cannot clip, not because we tested a lot, but because there is no value of type Sample that clips, and the voice returns Sample.
+This claims to take any float, any wildness the echo and the gain conspire to produce, and return a `Sample`, lawful, in range. Where is the proof? In the mathematics: atan of anything lands in an open interval, scale it and the result cannot leave minus one to one. The prover checks the math, not the vibes. `soft_clip` does not clamp the signal after the fact; it is a function whose shape makes clipping unrepresentable. The instrument cannot clip, not because we tested a lot, but because no `Sample` clips, and the voice returns one.
 
 With the proof in hand, complete the chain; the line from chapter one comes back:
 
 ```
-fn voice(x) -> Sample with Clock(48_000) + !Alloc =
+fn voice(x) -> Sample with Sample(48_000) + !Alloc =
   x
     |> gain(-3.0)
     |> lowpass(0.2)
@@ -399,22 +467,26 @@ fn voice(x) -> Sample with Clock(48_000) + !Alloc =
     |> soft_clip
 ```
 
-Look at the stage before the clip: `louder`, chapter one's line, unchanged. Doubling the pressure of a signal is the most dangerous thing a chain can do to a speaker; here it is the drive that leans the sound into the curve, and it cannot do harm, because there is no value of type Sample that clips, and what follows it returns Sample. The school's first promise is kept the way this medium keeps every promise: the dangerous line was not removed, what follows it was bounded.
+Look at the stage before the clip: `louder`, chapter one's line, unchanged. Doubling the pressure of a signal is the most dangerous thing a chain can do to a speaker; here it is the drive that leans the sound into the curve, and it cannot do harm, because no `Sample` clips and what follows it returns one. The school's first promise is kept the way this medium keeps every promise: the dangerous line was not removed, what follows it was bounded.
 
 Point `show` at the finished voice, its row taking the same oath, and the refusal lifts; the proof travels the whole seam:
 
 ```
-fn show() with Audio + Clock(48_000) + !Alloc =
+fn show() with Audio + Sample(48_000) + !Alloc =
   mic() |> voice |> play
 ```
 
 For the metalworker, the same arm in heavier iron:
 
-```
+```mn
+type Door = Open | Closed
+type Kiln = {door: Door}
 type Sealed = Kiln where self.door == Closed
 
+effect Flame { light(k: Sealed) -> () }
+
 fn ignite(k: Sealed) with Flame =
-  ...
+  light(k)
 ```
 
 `ignite` does not take a kiln. It takes a *sealed* kiln; the door state is in the type. There is no code path in which the flame lights while the door stands open, not because a warning sticker asks nicely, but because the open-door call does not compile. Safety not as procedure. Safety as grammar.
@@ -457,33 +529,35 @@ That is the arm called Ownership. Its question: **who holds this?**
 
 Two kinds of memory are usually lost. What the program was doing. And why the program is the way it is. This medium loses neither.
 
-First, the doing. Because a program here is one graph in one flat block of memory, a running computation, paused mid-note, is a contiguous record: the continuation, the "rest of what I was going to do," as a thing you can hold. And a thing that is one record in one block can be saved with a single copy. Not serialized by a framework, not reconstructed from logs by an engine someone maintains; copied, byte for byte, the way you copy anything. Which turns crash-survival into one more installed answer:
+First, the doing. A paused computation is a value you can hold: the continuation, the "rest of what I was going to do," with an exact effect world. But the continuation record alone is not an image. Every owned record reachable through its handles must close with it into one relocatable, versioned region; otherwise a copied pointer merely remembers where lost state used to be. `Persist` catches the reified suspension, freezes that closed world, and commits it crash-safely. Once those proofs hold, the fast path can be a bulk copy because the layout earned it, not because serialization was wished away:
 
 ```
 show()
   ~> on_stage
-  ~> clock(48_000)
+  ~> sample_clock(48_000)
   ~> persist("live.image")
 ```
 
-One line appended to the stack of answers, and the show mid-note is a file. Power fails at the bridge of the song; the machine returns; the image resumes where the air stopped. Elsewhere, whole industries hand-build this out of checkpoints and replay engines. Here it falls out of the memory model, because a continuation was never anything but a value with a shape, and you know the five shapes.
+One answer appended to the stack, and every suspension in its scope can become a closed image. Power fails at the bridge of the song; the machine returns; the journal restores a version it committed whole, and the image resumes under the same typed world. Elsewhere, whole industries hand-build this out of checkpoints and replay engines. Here it is the composition of continuation, ownership, region, row, and Reason rather than a second workflow language.
 
 And a saved doing is honest about its world: a continuation resumed under answers different from the ones it was frozen with is a compile-time refusal, not a corruption at three in the morning. Even time must say its name.
 
-Second, the why. Every conclusion the medium reaches, every type it infers, every proof it discharges, every value a default filled in, carries a reason, and reasons chain to the root. Ask, at any point, in your editor or at the command line:
+Second, the why. Every conclusion the medium reaches, every type it infers, every proof it discharges, every value a default filled in, carries a reason, and reasons chain to the root. Put the cursor on the call, in an editor or through the smallest command-line transport:
 
-```
-$ mentl why voice.mn:9 mix
-  mix = 0.35, set at show.mn:4, the desk preset
-  flows into echo(mix, x) at voice.mn:9
-  output bounded by Sample: proven -1.0 <= self <= 1.0 via soft_clip
+```text
+$ mentl voice.mn:9
+  Query: echo(mix, x) -> Sample
+  Effects: Sample(48_000)
+  Why: mix = 0.35, set at show.mn:4, the desk preset
+       flows into echo(mix, x) here
+       output bounded by Sample via soft_clip
 ```
 
 Walkable, to the root, always. And your own prose rides the same rails: a `//` comment is not whitespace the machine skips, it is attached to the graph beside the thing it explains, carried, surfaced when the thing is questioned, never dropped. The storyteller's arm: provenance. Ten years from now, someone who is not you, or a machine that is not anyone, changes this program. The why is still there, in the graph, walkable. What you meant does not rot into what it became. That sentence was a vow at the door. This is the machinery of the vow.
 
 That is the arm called Reasons. Its question, the oldest question: **why is this here?**
 
-### 10 · Unlock — the arm called Gradient
+### 10 · Unlock — the arm called Gradient, at the cursor
 
 The last arm reverses the polarity of everything you know about annotations.
 
@@ -495,13 +569,29 @@ type Coeff = Float repr f64
 
 and the desk's filter math holds full double precision while everything you did not pin finds its natural width on its own; ask the medium and it shows its choices as read-only badges, `c : Float @ f64 (inferred)`, output, never homework.
 
-There is a mark for absence itself. Where you do not yet know what to write, say so, honestly:
+There is a mark for absence itself. Where you do not yet know what to write, say so, honestly. The annotations here are not base-type homework: `Mix` and `Sample` are refinement boundaries that constrain what may fill the socket.
 
 ```
-fn brighten(amount: Float, x: Float) -> Float with Pure = ??
+type Mix = Float where 0.0 <= self <= 1.0
+fn brighten(amount: Mix, x: Sample) -> Sample with Pure = ??
 ```
 
-`??` is the hole, and in the medium's own font it renders as a small octagonal socket, eight-sided, one side per arm, which is exactly what a hole is: a place where all eight questions are known and the answer is not yet. That is why this signature, alone in the school, spells everything out; the socket's shape, two `Float`s in, one out, `Pure`, is the constraint set every proposal must fit, and the more the signature says, the less an imposter can slip through. And into the socket, the medium proposes. Its search, or a model's suggestion, or a stranger's patch, it does not matter, and that indifference is the whole point of the door: any intelligence may propose. Every candidate must run the same gauntlet, forked off to the side, typed, proven against the row and the bounds, rolled back without a trace if it cannot say the name. What survives is shown to you with its reasons attached, and nothing that failed ever touches your program. The machine can write. The machine cannot make it false.
+`??` is the hole. It is the place where all eight questions are known and the answer is not yet. The refinements, result, and `Pure` row are the authored intent every proposal must fit; an ordinary inferred base type would add no intent and does not belong here. The medium proposes into that hole — its own graph-native search explores every valid completion of the constraint space. An external proposal, a model's suggestion or a stranger's patch, faces the same gate: every candidate is forked aside, checked against the same graph facts, and discarded without a trace if it cannot say the name. Survivors keep their Reasons. The machine can write. The machine cannot make it false.
+
+The cursor is not an editor caret with compiler plugins attached. It is the graph's own read head. Put it on a value, edge, diagnostic, hole, or suspended computation and the medium projects eight facets of the same address:
+
+| Facet | What it projects |
+|---|---|
+| **Query** | What is this node? |
+| **Propose** | Which verified moves fit here? |
+| **Topology** | Which of the five verbs connects it? |
+| **Effects** | What does its Boolean row require or exclude? |
+| **Ownership** | Who owns or borrows it? |
+| **Verify** | Which predicates are proven, refuted, or still visible debt? |
+| **Teach** | Which annotation input would unlock the next capability? |
+| **Why** | Which Reason path returns to the author's words? |
+
+The cursor reads one graph address. `Propose` enumerates moves; type, row, ownership, and refinement facts reject incoherent ones. The gradient ranks the survivors from local authored intent and their Reasons. Annotations are inputs to that ranking, never tax. When two survivors remain, `Teach` asks for the one missing constraint that separates them; `Why` walks the retained Reason edge back to the author's words. The eight facets are synchronized projections of one read, not eight competing validators. When a hole suspends a running computation, filling it resumes the typed continuation instead of restarting the world. Multi-shot makes an earlier point on that worldline forkable, so debugging becomes a walk through explicit alternate realities rather than a reconstruction from logs.
 
 The door from the first pages, standing open on your own desk.
 
@@ -509,21 +599,19 @@ That is the arm called Gradient. Its question: **what would unlock this?**
 
 ### The instrument, whole
 
-Every chapter promised you would never rewrite it. Here it is, one page. The imports at the top, two lines of decibel arithmetic, and `main` at the bottom are the only lines you have never met; read them cold and notice that they simply open. That is the school's real measure. Everything else you have already read:
+Every chapter promised you would never rewrite it. Here it is, one page. Stereo gives `<|` and `><` honest work instead of displaying them as ornaments: the channels are independent, then their shared result is borrowed by audio and metering projections. All five verbs now appear because the topology needs all five.
 
-```
+```mn
+import dsp/audio {Audio, mic_stereo, play_stereo, on_stage}
+import dsp/clock {Sample, sample_clock}
 import dsp/feedback {delay}
-import dsp/clock {clock, Clock}
-import dsp/signal {line_in, line_out}
-import std/persist {persist}
+import dsp/meter {Meter, show_levels, meter_overlay}
+import runtime/math {atan, pi, pow}
+import runtime/persist {persist}
+import runtime/threading {Thread}
 
 // The law of the speaker: a sample that cannot clip.
 type Sample = Float where -1.0 <= self <= 1.0
-
-effect Audio {
-  mic() -> Float
-  play(s: Sample)
-}
 
 fn louder(x) = x * 2.0
 
@@ -531,16 +619,16 @@ fn from_db(db) with Pure = pow(10.0, db / 20.0)
 
 fn gain(db, x) with Pure = x * from_db(db)
 
-fn lowpass(a, x) with Clock(48_000) =
+fn lowpass(a, x) with Sample(48_000) =
   ((prev) => a * x + (1.0 - a) * prev) <~ delay(1)
 
-fn echo(mix, x) with Clock(48_000) =
+fn echo(mix, x) with Sample(48_000) =
   ((prev) => x + mix * prev) <~ delay(24_000)
 
-fn soft_clip(x) -> Sample = (2.0 / pi) * atan(x)
+fn soft_clip(x) -> Sample = (2.0 / pi()) * atan(x)
 
 // The voice: cannot clip, cannot stutter. Proven, not promised.
-fn voice(x) -> Sample with Clock(48_000) + !Alloc =
+fn voice(x) -> Sample with Sample(48_000) + !Alloc =
   x
     |> gain(-3.0)
     |> lowpass(0.2)
@@ -548,27 +636,38 @@ fn voice(x) -> Sample with Clock(48_000) + !Alloc =
     |> louder
     |> soft_clip
 
-fn show() with Audio + Clock(48_000) + !Alloc =
-  mic() |> voice |> play
-
-handler on_stage {
-  mic() => resume(line_in()),
-  play(s) => {
-    line_out(s)
-    resume()
-  },
+fn peak_levels(ref stereo) with Pure = {
+  let (left, right) = stereo
+  (left * left, right * right)
 }
+
+fn render(stereo) with Audio + Meter + Sample(48_000) + !Alloc = {
+  let (left, right) = stereo
+  let processed =
+    ((left |> voice) >< (right |> voice))
+      ~> Thread
+  processed
+    <| (
+      play_stereo,
+      (s) => s |> peak_levels |> show_levels,
+    )
+}
+
+fn show() with Audio + Meter + Sample(48_000) + !Alloc =
+  mic_stereo()
+    |> render
 
 fn main() =
   show()
     ~> on_stage
-    ~> clock(48_000)
+    ~> meter_overlay
+    ~> sample_clock(48_000)
     ~> persist("live.image")
 ```
 
-Read it top to bottom, aloud, one last time, and hear what you could not have heard ten chapters ago. A law, then a need, then six plain sentences of arithmetic and memory, the first of them the first line you ever wrote. A voice that swears two oaths in its own signature and is held to both, transitively, to the bottom of everything it calls. A show that asks for a hall. A hall that answers. A heartbeat. A copy of time itself, standing by against the dark. Under it, one graph; over it, eight questions; inside it, no place for a lie to stand.
+Read it top to bottom, aloud, one last time. `|>` completes each stage's open product field. `<~` closes the two recurrences. `><` states that the channels share nothing, and `Thread` answers that exact fanout at its installation site. `<|` lets the audio sink and the level projection borrow the same processed stereo product without taking it from each other. `~>` supplies the schedule where the topology lives, then the hall, overlay, sample clock, and durable-time policy at the outer seam. Those are not five syntactic tricks. They are the topology that lets rows, ownership, refinements, continuations, Reasons, and backend choice read the same program without re-deriving it.
 
-Swap `on_stage` for `in_test(known_air)` and it is a laboratory. Fan `voice` across `><` and foot the chain with `~> Thread` and it is parallel, provably race-free. Hand `brighten`'s socket to the strongest proposer alive and sleep well. The best engineers on earth could not hand-verify what this one page simply *is*.
+Swap `on_stage` for `in_test(known_air)` and it is a laboratory. Change the answer installed beside the channel fanout from `Thread` to `Seq`, `Simd`, or `Gpu`, and the topology and proof remain while the schedule changes. Remove `persist` and the live show is unchanged except for its time policy. Hand `brighten`'s socket to the strongest proposer alive and judge only the survivors. Under it, one graph; over it, eight questions; inside it, no place for a lie to stand.
 
 ---
 
@@ -578,7 +677,7 @@ One thing remains to tell you, and it is the reveal the whole school has been ke
 
 The eight questions you now carry, what is this really, which way does it flow, what does it need and what can it never do, who answers, what bounds it, who holds it, why is it here, what would unlock it: those are not a study aid. They are, literally, the compiler. That is what this medium's compiler is: one read of the graph that asks exactly these questions at every node, and refuses to look away from any answer. You have not been learning *about* Mentl, chapter by chapter. You have been becoming its reading. When you look at a stranger's code now, or a machine's, and the questions rise on their own, you are doing what the medium does. That is why you can trust code no one you trust wrote: not because you believe harder, but because you and the medium now ask the same questions, and neither of you accepts looks-right for an answer.
 
-And the medium asks them of itself. Its compiler is written in it, an answer installed on its own graph; its prover proves its own passes; every improvement anyone will ever make to it is a move within it. It has no outside. The day it compiles itself and the output is itself, byte for byte, is called first-light, the telescope's first whole sky, the fire that feeds itself, the medium pronouncing its own true name and the name holding.
+And the medium asks them of itself. Its compiler is written in it, an answer installed on its own graph; its prover examines its own passes; improvements to the prover, backend, and proposer are moves within the same medium. First-light is the byte-identical fixed point paired with independent semantic, refusal, and adversarial evidence: reproduction plus reasons to trust what was reproduced. That is the toolchain's `!Outside`, the telescope's first whole sky, the fire that feeds itself, the medium pronouncing its own true name and the name holding.
 
 At the door, you read a sentence and felt it. Read it now, one page after writing an instrument that cannot lie about itself, and notice that you no longer have to take it on faith, which is fitting, because taking things on faith is the one habit this medium exists to end.
 
@@ -590,8 +689,38 @@ Nothing runs that cannot say its name.
 
 ---
 
+## Artifact today
+
+Everything above is the product contract. This section is the implementation ledger. The distinction is load-bearing: the target is never weakened to fit the current compiler, and current scaffolding is never advertised as the target already working.
+
+The generated board is `bash tools/state.sh`; [`PLAN.md` §7](PLAN.md) is the one prose snapshot. This table records stable capability boundaries, not volatile hashes or counts:
+
+| Capability | State | Direct evidence and remaining boundary |
+|---|---|---|
+| Self-hosting compiler | **LIVE** | The wheel compiles itself to byte-identical `m2 == m3`, with a separate micro battery. A fixed point proves reproduction, not correctness by itself. |
+| Small project CLI | **LIVE** | The quickstart above checks cleanly, runs to 42, and projects type, ownership, and Reason from any directory. The ordinary import DAG still lacks vocabulary the concatenated wheel receives. |
+| Graph inference and Reasons | **PARTIAL** | Typed graph edges and structured Reasons drive the compiler. Append-only evidence, minimal-cause Why, and complete stable addressing are not finished. |
+| Five topological operators | **PARTIAL** | All five are canonical syntax with live compiler paths. Sequential pipe/fanout and handler installation are directly gated; feedback and schedule selection are bounded; Thread/SIMD/GPU execution is scaffold or target. |
+| Boolean rows and `!E` | **PARTIAL** | Direct, transitive, and higher-order negation crucibles are green. Declared rows must finish behaving as constraints rather than published contracts, and executable refusal is not yet universal across every diagnostic class. |
+| Handlers and multi-shot | **PARTIAL** | One-shot and in-process multi-shot continuations execute through direct gates, including nested backtracking shapes. Exact continuation worlds, general delimited control, durable images, and cross-process resume remain unfinished. |
+| Ownership | **PARTIAL** | The wheel now has zero `E_OwnershipViolation`; alternative branches, function scope, conditions, field reads, and borrowing call parameters are gated, while real double moves still refuse. Production qualification remains broader than the wheel. |
+| Refinements and holes | **PARTIAL** | Literal rejection, narrowing, visible proof debt, constrained-hole filtering, Reasons, patching, and hole refusal are live in bounded workflows. Full solver coverage, teaching tie-break, fill-and-resume, and timeline scrubbing remain work. |
+| Cursor medium | **PARTIAL** | `query`, `audit`, and `teach` reach real projections, and bounded hole-edit workflows apply verified patches. Ordinary `mentl edit <path>` still traps; the eight synchronized facets, incremental delta cone, formatter/LSP/browser parity, and complete Why surface are not finished. |
+| Regions and persistence | **TARGET beyond a live floor** | Compile-time region tagging and return transfer are live. Runtime arenas, O(1) proven reclamation, relocatable typed images, crash-safe journals, and `persist = memcpy` are not yet shipping facts. |
+| Representation and declarations | **PARSER LAG / TARGET** | Representation inference and parameterized effect use have live floors, but authored `repr` and parameterized effect declarations are canonical syntax the parser does not yet accept. Native, SIMD, and GPU handlers remain on the production road. |
+
+The compiler's own diagnostic census remains nonzero while it still emits a working compiler. That debt is not hidden: its ratchet is the monotone correctness spine toward universal refusal. [`PLAN.md` §7](PLAN.md) owns the current count, audit, and landing ledger; [`boot/PROVENANCE.md`](boot/PROVENANCE.md) identifies the pinned compiler; `bash tools/state.sh` re-derives the whole board.
+
+The final instrument above intentionally names several library and handler surfaces that are not complete today. That is the point of a product contract: every import, projection, proof, and installed answer is a concrete acceptance target. “Make the README true” means close those named paths without changing their semantics or inventing a second surface.
+
+---
+
 ## The law and the road
 
-[`docs/SYNTAX.md`](docs/SYNTAX.md) is the law this book teaches: every form, with the reasoning that forced it. The school's chapters mirror the runnable tutorials in [`lib/tutorial/`](lib/tutorial/), `00-hello.mn` through `08-reasons.mn`, one file per arm. The compiler lives in [`src/`](src/), written in Mentl; the standard library and the DSP and ML arms live in [`lib/`](lib/); the disposable seed that sparks the first compilation lives in [`bootstrap/`](bootstrap/). Ground truth is one command: `bash tools/verify.sh`.
+[`docs/SYNTAX.md`](docs/SYNTAX.md) is the surface law this book teaches: every accepted form, with the reasoning that forced it. [`PLAN.md`](PLAN.md) carries the resolved design, current state, and production road. [`CLAUDE.md`](CLAUDE.md) carries the eight-interrogation working discipline. Read all three before changing the language or compiler; then run `bash tools/state.sh` before believing any prose, including this README.
+
+The compiler lives in [`src/`](src/), written in Mentl. The runtime, standard vocabulary, DSP, and ML arms live in [`lib/`](lib/). The school has source counterparts under [`lib/tutorial/`](lib/tutorial/), but they are curriculum under repair, not the current proof surface. Direct gates live under [`tests/`](tests/). `boot/mentl.wasm` is the pinned self-hosting compiler; the disposable seed is gone.
+
+Use `bash tools/verify.sh` for the compiler micro battery and census ratchet. Use `bash tools/state.sh` for the whole board: git state, verify, fixed point, frontier, proof exactness, crown, effect identity, phantom comments, and the red-instrument control.
 
 Dual-licensed under MIT or Apache 2.0. See `LICENSE-MIT` and `LICENSE-APACHE`.

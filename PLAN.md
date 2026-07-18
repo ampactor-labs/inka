@@ -927,7 +927,7 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ## §7 · Current state (grounded 2026-07-17) + the landing ledger
 
-**THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 56/0,
+**THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 63/0,
 proof-exactness 9/9, crown 5/5, 71 micros, the march's `m2 == m3` fixed point
 (483,609 lines) — through the pinned boot `361ed16c…` (chain:
 boot/PROVENANCE.md). The self-compile runs ~10s. The census is **578** (from

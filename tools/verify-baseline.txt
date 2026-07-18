@@ -328,7 +328,20 @@
 # Hβ.infer.narrowing-write-requires-discharge. TRANSITION m3 == m4 (the emit
 # change crossing one generation); micro oob-traps=134 is the law's executable
 # form. The -5: guard rewrites cleared 4 E_TypeMismatch + 1 E_IfMissingElse.
-census_errors_max: 343
+# 343 -> 301 (2026-07-18, two checker roots — the medium's own diagnostics were
+# the bugs). E_IfMissingElse EXTINCT (31 -> 0): the unit test matched
+# TName("Unit") — a nominal spelling the inferencer never produces; real unit is
+# TUnit, so every genuinely-unit then (`if c { wat_emit(...) }`, 25 sites) was
+# judged non-unit, and 6 more were unresolved-at-check-time op results the unify
+# below resolves (the probe that settled it printed then_ty=() for all 25).
+# E_FeedbackNoContext EXTINCT (11 -> 0): the check read iter_context() — the
+# COMPILER'S runtime handler stack — while inferring the COMPILED program's
+# structure; a category error that fired on every real `<~` in the wheel,
+# SYNTAX's own canonical lowpass included. The honest compile-time question
+# (does the site's ambient row carry an Iterate-CLASS effect?) needs class
+# membership as a declared fact: Hβ.effects.iterate-class-declaration. The
+# DiagKind stays for the check's return.
+census_errors_max: 301
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

@@ -803,7 +803,18 @@ fn infer_expr(ref node) = {
       if else_is_synthesized_unit {
         let then_ty = lookup_ty(th)
         match then_ty {
+          // Unit's REAL constructor is TUnit — the old TName("Unit") arm
+          // matched a nominal spelling the inferencer never produces, so
+          // every genuinely-unit then (`if c { wat_emit(...) }`, 25 wheel
+          // sites) was judged non-unit. The probe that settled it printed
+          // then_ty=() for all 25.
+          TUnit            => (),
           TName("Unit", _) => (),
+          // An UNRESOLVED then is not evidence either — an effect-op
+          // call's result resolves through the unify just below (6 wheel
+          // sites). The unify against the synthesized unit decides: a
+          // genuinely non-unit then mismatches loudly there.
+          TVar(_)          => (),
           _ => report(EIfMissingElse(span))
         }
       }
@@ -1701,20 +1712,23 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       graph_bind(handle, TVar(lh),
         Located(span, InferredPipeResult("~>", Inferred("handler attachment")))),
 
-    // <~ feedback — requires an iterative context: the structural
-    // presence of an Iterate-class handler (a cycle/iteration-resume
-    // context — Clock/Tick/Sample are instances) in the enclosing
-    // stack. Read it LIVE from the marker capability; absence is a type
-    // error at this site. SYNTAX.md §«<~»: not a name-allowlist — the
-    // marker is provided by any Iterate-class handler.
+    // <~ feedback — SYNTAX §«<~» requires an iterative context: an
+    // Iterate-class effect in the enclosing stack AT THE SITE. The check
+    // that stood here read iter_context() — the COMPILER'S OWN runtime
+    // handler stack — while inferring the COMPILED PROGRAM's structure: a
+    // category error that reported E_FeedbackNoContext on every real `<~`
+    // in the wheel (11 sites, including SYNTAX's own canonical lowpass)
+    // because the pipeline chains install no_iter_context. The honest
+    // compile-time question — does the site's AMBIENT ROW carry an
+    // Iterate-CLASS effect? — needs class membership as a DECLARED fact
+    // (not a name-allowlist): the named peer
+    // Hβ.effects.iterate-class-declaration. Until it lands, the verb
+    // types by unification and a genuinely driverless `<~` surfaces at
+    // runtime (ev-miss, loud); the E_FeedbackNoContext DiagKind stays
+    // for the check's return.
     PFeedback => {
-      if iter_context() {
-        unify(lh, rh, span, InferredPipeResult("<~", Inferred("feedback wiring")))
-        graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("feedback"))))
-      } else {
-        report(EFeedbackNoContext(span))
-        graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("no context"))))
-      }
+      unify(lh, rh, span, InferredPipeResult("<~", Inferred("feedback wiring")))
+      graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("feedback"))))
     }
   }
 }

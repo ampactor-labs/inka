@@ -909,8 +909,15 @@ fn set_canonicalize_loop(lst, acc, i, n) with Memory + Alloc = {
 fn set_insert(set, name) with Memory + Alloc = {
   let n = len(set)
   let pos = set_find_pos(set, name, 0, n)
-  if pos < n && str_eq(list_index(set, pos), name) { set }
-  else { set_insert_at(set, name, pos, n) }
+  // The guard written as the nested if it means. Under the old eager `&&`
+  // (i32.and — both operands evaluate) `pos < n && read(pos)` ran the
+  // one-past read the guard exists to prevent — the first trap the bounds
+  // check ever fired. `&&` short-circuits now (lower's BKBool arm), and this
+  // control-flow form is valid under BOTH lowerings, which the bootstrap
+  // requires (an m2 body compiled by the still-eager boot carries the
+  // checked list_index in the same binary).
+  let present = if pos < n { str_eq(list_index(set, pos), name) } else { false }
+  if present { set } else { set_insert_at(set, name, pos, n) }
 }
 
 fn set_find_pos(set, name, i, n) with Memory = {

@@ -141,8 +141,12 @@ fn cache_filter_loop(entries, n, ei, keys, m, ki, buf, count) with Memory + Allo
   else {
     let (entry_key, entry_val) = list_index(entries, ei)
     let new_ki = cache_advance_ki(keys, m, ki, entry_key)
+    // Guard-protected read spelled as control flow — valid under both the
+    // old eager `&&` and the short-circuit lowering, which the bootstrap
+    // requires (an m2 body compiled by the still-eager boot carries the
+    // checked list_index in the same binary).
     let in_invalidation_set =
-      new_ki < m && list_index(keys, new_ki) == entry_key
+      if new_ki < m { list_index(keys, new_ki) == entry_key } else { false }
     if in_invalidation_set {
       cache_filter_loop(entries, n, ei + 1, keys, m, new_ki + 1, buf, count)
     }

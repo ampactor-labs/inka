@@ -95,7 +95,13 @@ BOOT_RUNTIME_SHADOW=""
 # a removal, which the rule above explicitly permits. Verified by reading the new
 # shadow: the same E_TypeMismatch/E_RedundantBraces set minus the ownership false
 # positives, never a NEW entry.
-EXPECTED_RUNTIME_SHADOW_SHA256="d30f049885c815509c5fd1130afb77444c6483c12c7d6b8ab7005d14d334ca03"
+#
+# 2026-07-18: repinned for the bounds-trap landing — lists.mn gained the checked
+# list_index entry + list_index_unchecked (SYNTAX §Indexing made real), and
+# strings.mn/cache_map.mn spell their guarded reads as control flow (sound
+# under both the old eager `&&` and the short-circuit lowering). The shadow's
+# byte change is those three files; the diagnostic multiset did not grow.
+EXPECTED_RUNTIME_SHADOW_SHA256="d55cc4af23d0305e9f1c7c9cce2d0e658ef411179ec1b61affe91d4304ddfd70"
 
 pass() {
   echo "  PASS $*"

@@ -86,39 +86,53 @@ fn list_copy_into(src, dst, i, count) with Memory + Alloc = {
 }
 
 // list_index — O(1) for tag=0, O(log N) for snoc chains, O(depth) for
-// concat/slice. Exhaustive on all four tags — no fallback sentinel.
+// concat/slice. SYNTAX §Indexing: bounds-checking is RUNTIME for lists —
+// traps on out-of-range. That sentence was PROSE until 2026-07-18: tag-0
+// raw-loaded, so every out-of-range index read adjacent memory silently
+// (the panel's find while refuting the elision landmine). The trap is the
+// ev-miss precedent (3b19771c): a 4-byte load crossing 2^32 is out of
+// bounds at every wasm32 memory size. One check at the boundary; the
+// traversal below it runs unchecked — ONE home, no duplicate to drift.
 fn list_index(ref list, i) with Memory = {
+  if i < 0 { load_i32(0 - 1) }
+  else if i >= load_i32(list) { load_i32(0 - 1) }
+  else { list_index_unchecked(list, i) }
+}
+
+// The raw traversal — every entry already carries a discharged bounds
+// obligation (list_index's boundary check, or list_index_proven's proof).
+// Exhaustive on all four tags — no fallback sentinel.
+fn list_index_unchecked(ref list, i) with Memory = {
   let tag = load_i32(list + 4)
   match tag {
     0 => load_i32(list + 8 + i * 4),
     1 => {
       let left     = load_i32(list + 8)
       let left_len = load_i32(left)
-      if i < left_len { list_index(left, i) }
+      if i < left_len { list_index_unchecked(left, i) }
       else { load_i32(list + 12) }
     },
     3 => {
       let left     = load_i32(list + 8)
       let left_len = load_i32(left)
-      if i < left_len { list_index(left, i) }
-      else { list_index(load_i32(list + 12), i - left_len) }
+      if i < left_len { list_index_unchecked(left, i) }
+      else { list_index_unchecked(load_i32(list + 12), i - left_len) }
     },
     4 => {
       let base  = load_i32(list + 8)
       let start = load_i32(list + 12)
-      list_index(base, start + i)
+      list_index_unchecked(base, start + i)
     }
   }
 }
 
 // list_index_proven — the elision variant lower selects when the refinement-
-// narrowing weave proved the index in-range (graph_narrow_at ≠ 0; §4⑥). The
-// proof discharges the bounds obligation, so a bounds-checking backend emits the
-// raw load with NO check; on this trap-on-OOB substrate it is list_index's
-// behavior with the obligation already proven (the proof IS the dispatch — the
-// ++/== precedent at the index layer). One home: the proven path delegates, so
-// there is no duplicated traversal to drift apart.
-fn list_index_proven(list, i) with Memory = list_index(list, i)
+// narrowing weave discharges the index in-range (graph_narrow_at ≠ 0; §4⑥ —
+// the write side is the named peer Hβ.infer.narrowing-write-requires-discharge;
+// nothing writes the weave today, so lower always selects the checked entry).
+// The proof discharges the bounds obligation, so the raw traversal runs with
+// no check — the proof IS the dispatch, the ++/== precedent at the index layer.
+fn list_index_proven(list, i) with Memory = list_index_unchecked(list, i)
 
 // Structural equality — the sequence case of the one == derivation.
 

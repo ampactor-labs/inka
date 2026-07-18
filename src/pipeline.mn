@@ -187,6 +187,14 @@ fn pipeline_check(entry_module) = {
     ~> wasi_filesystem
     ~> mentl_default
     ~> affine_ledger
+    // The region ops infer_fn performs (check_escape at every return) need
+    // their handler in CHECK mode too — this chain lacked the install, so
+    // every region op ran DRIVERLESS with a zero state record, and
+    // region_index_get(0, …) read the zero-filled sentinel page as an empty
+    // bucket: check "worked" on garbage until list_index's bounds trap
+    // unmasked it (the probe: idx=0 len=0). Check runs the same analyses as
+    // compile; its chain installs the same analysis handlers.
+    ~> region_tracker
     ~> verify_ledger
     ~> env_handler
     ~> graph_handler
@@ -231,6 +239,11 @@ fn check_source(source) = {
     |> infer_program
     ~> mentl_default
     ~> affine_ledger
+    // Same law as pipeline_check: infer_fn performs region ops, so every
+    // infer-reaching chain installs region_tracker — driverless region ops
+    // read a zero state record (the sentinel page masked it until the
+    // bounds trap; the edit-session fixtures were this chain's proof).
+    ~> region_tracker
     ~> verify_ledger
     ~> env_handler
     ~> graph_handler

@@ -2200,8 +2200,28 @@ fn lower_expr_body(e, handle, span) = match e {
     }
   },
 
+  // The boolean verbs are CONTROL, not arithmetic: `a && b` IS
+  // `if a { b } else { false }`, `a || b` IS `if a { true } else { b }`.
+  // The eager i32.and lowering evaluated both operands, so every guard
+  // protecting a read (`pos < n && str_eq(set[pos], …)`) ran the read it
+  // guards — three latent OOB sites in the wheel's own runtime and infer
+  // (set_insert, cache_filter_loop, register_one_variant), all surfaced the
+  // hour list_index gained its SYNTAX-promised bounds trap. Those three
+  // sites keep explicit control-flow guards for the transition generation
+  // (an m2 body compiled by the still-eager boot meets the checked
+  // list_index in the same binary).
   BinOpExpr(op, left, right) =>
-    LBinOp(handle, op, lower_expr(left), lower_expr(right)),
+    match binop_kind(op) {
+      BKBool => match op {
+        BAnd => LIf(handle, lower_expr(left),
+                    [lower_expr(right)],
+                    [LConst(handle, LInt(0))]),
+        _    => LIf(handle, lower_expr(left),
+                    [LConst(handle, LInt(1))],
+                    [lower_expr(right)])
+      },
+      _ => LBinOp(handle, op, lower_expr(left), lower_expr(right))
+    },
 
   UnaryOpExpr(op, inner) =>
     LUnaryOp(handle, op, lower_expr(inner)),

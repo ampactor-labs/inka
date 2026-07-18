@@ -3675,10 +3675,17 @@ fn register_one_variant(type_name: String, result_ty, qhandles, field_types, var
   // The env entry binds the type's name to TName directly (no
   // function arrow); NamedRecordExpr inference reads the
   // RecordSchemeKind to validate and lower constructions.
-  if total == 1 &&
-     len(field_types) == 1 &&
-     ctor_name == type_name &&
-     is_record_ty(list_index(field_types, 0)) {
+  // The record-payload probe under an explicit guard: list_index(_, 0) on a
+  // ZERO-field variant is out of bounds, and the eager `&&` ran it for every
+  // nullary ctor (None, Leaf, EfPure…) — silent garbage into is_record_ty,
+  // surfaced by the bounds trap. The control-flow guard is valid under BOTH
+  // lowerings, which the bootstrap requires: an m2 body compiled by the
+  // still-eager boot carries the checked list_index in the same binary.
+  let single_record_payload =
+    if total == 1 && len(field_types) == 1 && ctor_name == type_name {
+      is_record_ty(list_index(field_types, 0))
+    } else { false }
+  if single_record_payload {
     let TRecord(declared_fields) = list_index(field_types, 0)
     env_extend(ctor_name, Forall(qhandles, result_ty),
       Declared(ctor_name),
@@ -4468,10 +4475,17 @@ fn walk_refinement(node, path_pred) with GraphRead + GraphWrite = {
     // check"). Carried-Truth: the narrowing is written ONCE here, read live at
     // lower — never re-derived. A trivial path (PTrue) records nothing (the 0
     // default = no narrowing = byte-identical un-elided load).
+    // The narrowing WRITE was here — graph_narrow_set(ih, path-pred) on ANY
+    // non-trivial path. It was doubly dead-and-wrong (panel, 2026-07-18):
+    // narrowing_pred_handle descends PAnd's LEFT conjunct to the PTrue seed,
+    // so the handle was always 0 and the write never fired; and had it fired,
+    // it recorded predicates that say NOTHING about the index (`if x > 0 {
+    // xs[i] }`) — an unsound elision licence. The real write requires a
+    // structural discharge that the path predicate implies BOTH `0 <= index`
+    // AND `index < len(receiver)` — the named peer
+    // Hβ.infer.narrowing-write-requires-discharge. The weave (graph_narrow_set
+    // /at) stays as its substrate; lower reads 0 → the checked entry.
     NExpr(IndexExpr(receiver, index)) => {
-      let N(_, _, ih) = index
-      let ph = narrowing_pred_handle(path_pred)
-      if ph != 0 { graph_narrow_set(ih, ph) }
       walk_refinement(receiver, path_pred)
       walk_refinement(index, path_pred)
     },
@@ -4610,26 +4624,6 @@ fn walk_refinement_fields(fields, path_pred) with GraphRead + GraphWrite = {
 // `Hβ.infer.predicate-from-bool-expression` covers the full case
 // enumeration.
 fn predicate_of_bool_expr(node) = PBoolNode(node_handle(node))
-
-// Extract the directly-consumable bool-node handle from a path predicate — the
-// representative the narrowing weave stores. A leaf PBoolNode/PCompare carries
-// its handle; a compound PAnd recurses to its left conjunct (the nearest
-// path-condition); PTrue and the non-leaf forms carry no single narrowing node
-// (0 = no narrowing recorded — lower elides nothing, byte-identical).
-fn narrowing_pred_handle(pred) with Pure = match pred {
-  PBoolNode(h)        => h,
-  PCompare(_, lh, _)  => lh,
-  PAnd(a, _)          => narrowing_pred_handle(a),
-  PTrue               => 0,
-  PNot(_)             => 0,
-  POr(_, _)           => 0,
-  PPatternMatch(_, h) => h,
-  // An IFC flow obligation (src ⊑ dst) carries no value-narrowing bool node —
-  // 0, like PTrue/PNot/POr. TOTAL over Predicate; without this arm the inlined
-  // match falls through to the loud `unreachable` in walk_refinement (nothing
-  // drops — a missing arm IS a drop; the m3 floor after the NodeBody one).
-  PFlowLe(_, _)       => 0
-}
 
 fn negation_of(pred) = PNot(pred)
 

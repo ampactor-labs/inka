@@ -314,7 +314,21 @@
 # but do NOT arm: the panel refuted blob-zero as the licence (user paths
 # still fire them on unresolved stdlib vocabulary until the manifest work
 # lands — no class arms until its user-path census is also clean).
-census_errors_max: 348
+# 348 -> 343 (2026-07-18, the bounds trap + short-circuit boolean verbs). SYNTAX
+# §Indexing's "traps on out-of-range" was PROSE: list_index tag-0 raw-loaded, so
+# every OOB index silently read adjacent memory (the adversarial panel's find
+# while refuting the elision landmine). The checked entry landed with its
+# structural prerequisite: `&&`/`||` now SHORT-CIRCUIT (lower's BKBool arm — the
+# boolean verbs are control, not arithmetic). The eager i32.and had run every
+# guarded read: set_insert, cache_filter_loop, and register_one_variant all read
+# one-past under their own guards (nullary ctors probed list_index(_, 0) of an
+# empty list on every `type X = A | B`) — three latent OOBs the trap surfaced in
+# its first hour. The dead narrowing-elision write (never fired — PAnd
+# left-descent to PTrue) is deleted; the discharge-gated write is the named peer
+# Hβ.infer.narrowing-write-requires-discharge. TRANSITION m3 == m4 (the emit
+# change crossing one generation); micro oob-traps=134 is the law's executable
+# form. The -5: guard rewrites cleared 4 E_TypeMismatch + 1 E_IfMissingElse.
+census_errors_max: 343
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere
@@ -632,3 +646,9 @@ micro:backtrack-full=30
 micro:effect-identity=81
 micro:fanout-destructure-float=60
 micro:region-transfer=5
+# SYNTAX §Indexing made executable: an out-of-range list index TRAPS (134),
+# never reads adjacent memory. The raw tag-0 load was silent-wrong until
+# 2026-07-18; the checked entry + short-circuit && landed together (the
+# eager i32.and ran every guarded read — set_insert / cache_filter_loop /
+# register_one_variant all read one-past under their own guards).
+micro:oob-traps=134

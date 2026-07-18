@@ -276,6 +276,14 @@ fn edit_run(target_opt) = {
     ~> interrogate_default
     ~> mentl_default
     ~> wasi_filesystem
+    // Every infer-reaching chain installs the analysis handlers infer's own
+    // performs need (consume/borrow → affine_ledger; check_escape/region tags
+    // → region_tracker). The edit session ran BOTH driverless — zero state
+    // records reading the zero-filled sentinel page as empty ledgers.
+    // list_index's bounds trap surfaced it; the capability-hole fixtures
+    // were this chain's proof.
+    ~> affine_ledger
+    ~> region_tracker
     ~> verify_ledger
     ~> diagnostics_handler
     // env before graph: env_handler's own arms read the graph (the same
@@ -609,6 +617,12 @@ fn repl_run() = {
     ~> wasi_filesystem
     ~> mentl_voice_default
     ~> query_default
+    // The line-eval runs infer; infer performs consume/region ops — the
+    // analysis handlers install on every infer-reaching chain (the
+    // driverless-zero-state class the bounds trap unmasked).
+    ~> affine_ledger
+    ~> region_tracker
+    ~> verify_ledger
     ~> env_handler
     ~> diagnostics_handler
     ~> graph_handler

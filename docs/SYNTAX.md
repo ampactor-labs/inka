@@ -1565,8 +1565,8 @@ statement level — neither participates in the binop ladder.
 | 8    | `++`                                     | left            | one `seq_concat` over the sequence kind; associativity immaterial under the concat-tree representation; see §"Concatenation operator" |
 | 7    | `<`, `>`, `<=`, `>=`                     | left            | comparison                     |
 | 6    | `==`, `!=`                               | left            | looser than comparison: `a < b == c < d` reads as `(a<b) == (c<d)` |
-| 5    | `&&`                                     | left            |                                |
-| 4    | `\|\|`                                   | left            |                                |
+| 5    | `&&`                                     | left            | SHORT-CIRCUITS: `a && b` ≡ `if a { b } else { false }` — the right operand evaluates only when the left is true, so a guard protects the read it guards (`pos < n && set[pos] == x` is sound) |
+| 4    | `\|\|`                                   | left            | SHORT-CIRCUITS: `a \|\| b` ≡ `if a { true } else { b }` |
 | 3    | `\|>`                                    | left            | sequential pipe — looser than all value operators: `a == b \|> f` pipes the comparison |
 | 2    | `<\|`, `><`, `<~`                        | left            | convergent verbs — they draw shape around chains |
 | 1    | `~>`                                     | left (loosest)  | handler-attach floor — governs the whole chain to its left |

@@ -295,7 +295,7 @@ fn parenthesize(s) with Pure = {
   "({s})"
 }
 
-fn join_lines(lines) with Pure = {
+fn join_lines(lines) with Memory = {
   if len(lines) == 0 { "" }
   else if len(lines) == 1 { last(lines) }
   else {
@@ -316,11 +316,12 @@ fn render_tokens_for(node) with GraphRead + Memory + Alloc + !Mutate = {
 }
 
 fn render_body_tokens(body) with GraphRead + Memory + Alloc + !Mutate = match body {
-  NExpr(e)   => render_expr_tokens(e),
-  NStmt(s)   => render_stmt_tokens(s),
-  NPat(p)    => render_pat_tokens(p),
-  NHole(_)   => "??",
-  NModule(m) => "// module {m.path}"
+  NExpr(e)     => render_expr_tokens(e),
+  NStmt(s)     => render_stmt_tokens(s),
+  NPat(p)      => render_pat_tokens(p),
+  NHole(_)     => "??",
+  NModule(m)   => "// module {m.path}",
+  NTypeAnn(ty) => show_type(ty)
 }
 
 fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate = match e {
@@ -412,7 +413,9 @@ fn render_line_break_after(kind) with Pure = match kind {
   NStmt(_)              => "\n",
   NExpr(_)              => "",
   NPat(_)               => "",
-  NHole(_)              => ""
+  NHole(_)              => "",
+  NModule(_)            => "\n",
+  NTypeAnn(_)           => ""
 }
 
 // The one comment, read LIVE from the comment weave at the node's handle
@@ -444,7 +447,10 @@ fn render_reason_chain(node) with GraphRead + !Mutate = {
 // carries no sibling info (render_context_at's parent-walk substrate),
 // so its separator is empty — an honest read, not a placeholder.
 fn render_sibling_separator(ctx) with Pure = match ctx {
-  RenderContextDefault => ""
+  RenderContextDefault  => "",
+  RenderContextChain(_) => "",
+  RenderContextBlock(_) => "",
+  RenderContextTuple(_) => ""
 }
 
 // The row + Reason text projections are the ONE canonical renderers in
@@ -500,13 +506,13 @@ fn child_is(target, node) with Pure = {
   h == target
 }
 
-fn any_child_is(target, nodes) with Pure = {
+fn any_child_is(target, nodes) with Memory = {
   if len(nodes) == 0 { false }
   else if child_is(target, last(nodes)) { true }
   else { any_child_is(target, drop_last(nodes)) }
 }
 
-fn render_branch_tuple(branches) with Format + !Mutate = {
+fn render_branch_tuple(branches) with Format + Alloc + Memory + !Mutate = {
   if len(branches) == 0 { "" }
   else {
     let head = last(branches)
@@ -528,7 +534,7 @@ fn render_non_chain(node) with Format + !Mutate = {
   format_at_handle(node_handle(node))
 }
 
-fn assemble_render(tokens, indent, line_break, comment, span, reason, sibling) with Pure = {
+fn assemble_render(tokens, indent, line_break, comment, span, reason, sibling) with Alloc + Memory = {
   // The one comment renders as a leading block above the declaration (the
   // verbatim //-prefixed prose from the weave); then indent, tokens, glue.
   comment

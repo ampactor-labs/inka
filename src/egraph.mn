@@ -68,14 +68,14 @@ fn extract_chase(handle, depth) with GraphRead = {
 // the only sound per-node signal, and the type row catches the closure case the
 // body form would miss. (When infer grows a per-expr row binding, is_pure reduces
 // to effs_at alone — peer Hβ.egraph.per-expr-effect-row.)
-fn is_pure(handle) with GraphRead + LookupTy =
+fn is_pure(handle) with GraphRead + LookupTy + Memory =
   body_is_pure(handle) && row_subsumes(effs_at(handle), EfPure)
 
 // The structural purity of a node's EVALUATION — read live from its body. A
 // literal/var performs nothing; arithmetic over pure operands is pure; ANY other
 // form (a call, a perform, a hole) may run effects, so it is NOT provably pure.
 // This is the per-node signal the frame-keyed effect row cannot give.
-fn body_is_pure(handle) with GraphRead + LookupTy = match graph_node_body(handle) {
+fn body_is_pure(handle) with GraphRead + LookupTy + Memory = match graph_node_body(handle) {
   NExpr(LitInt(_))    => true,
   NExpr(LitFloat(_))  => true,
   NExpr(LitString(_)) => true,
@@ -147,7 +147,7 @@ fn rw_mul_identity(handle) with GraphRead + GraphWrite = {
 // x * 0 ≡ 0  and  0 * x ≡ 0  — DROPS the non-zero operand, so it fires only
 // when that operand is provably pure (the effect gate, read LIVE from the row).
 // The canonical target is the zero literal node, already in the fabric.
-fn rw_mul_absorb(handle) with GraphRead + GraphWrite + LookupTy = {
+fn rw_mul_absorb(handle) with GraphRead + GraphWrite + LookupTy + Memory = {
   match graph_node_body(handle) {
     NExpr(BinOpExpr(BMul, l, r)) => {
       let lh = egraph_extract(node_handle(l))
@@ -291,7 +291,7 @@ fn saturate_until(bound, pass) with GraphRead + GraphWrite + LookupTy = {
 // identities match var-involving forms; the cases are disjoint, so `||`
 // short-circuits to the single rule that can fire. Returns the count of FRESH
 // equivalence edges drawn this pass (the convergence signal).
-fn apply_rules_from(i, bound, acc) with GraphRead + GraphWrite + LookupTy = {
+fn apply_rules_from(i, bound, acc) with GraphRead + GraphWrite + LookupTy + Memory = {
   if i >= bound { acc }
   else {
     let fired = rw_const_fold(i) || rw_add_identity(i) || rw_mul_identity(i)

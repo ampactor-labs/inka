@@ -210,7 +210,7 @@ fn project_queue() with Verify + GraphRead + GraphWrite = {
 // (gradient_candidates_at); each survivor carries the e-graph-aware
 // priority and the Why-walkable Reason mentl.mn already minted.
 
-fn candidates_at(pos) with Verify + GraphRead + GraphWrite = {
+fn candidates_at(pos) with Verify + GraphRead + GraphWrite + Alloc + Memory = {
   let node = graph_chase(pos)
   let GNode(kind, anchor) = node
   match kind {
@@ -297,7 +297,7 @@ fn tier_of_annotation(ann) with Pure = match suggestion_kind_of(ann) {
 // field IS the authored row; no parallel intent_index to walk. A node
 // that is not a fn declaration carries no authored intent -> baseline 0.
 
-fn intent_weight_at(pos) with GraphRead = match graph_node_body(pos) {
+fn intent_weight_at(pos) with GraphRead + Memory = match graph_node_body(pos) {
   NStmt(FnStmt(_, _, _, effs, _)) => 50 + (len(effs) * 10),
   _                               => 0
 }
@@ -333,7 +333,7 @@ fn body_references(body, target) with Pure = match body {
 // One arm per Expr variant that carries children (the row algebra over
 // the value space — H6 exhaustive); leaf literals carry none.
 
-fn expr_child_handles(e) with Pure = match e {
+fn expr_child_handles(e) with Alloc + Memory = match e {
   BinOpExpr(_, l, r)       => [node_handle(l), node_handle(r)],
   UnaryOpExpr(_, n)        => [node_handle(n)],
   CallExpr(f, args)        => [node_handle(f)] ++ map(node_handle, args),
@@ -376,7 +376,7 @@ fn locality_at(span_index, pos) with Pure = match span_index {
 // scope is the graph's own structure (PLAN §2 Q-2 (B)), never a stored
 // position list.
 
-fn positions_with_dependents() with GraphRead = {
+fn positions_with_dependents() with GraphRead + Alloc + Memory = {
   collect_bound_positions(0, graph_next(), [])
 }
 

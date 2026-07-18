@@ -50,7 +50,7 @@ effect Iterate {
 // 2026-07-14). list_to_flat no-ops on an already-flat list (tag 0), so flat
 // inputs pay nothing; the flat copy preserves order, so every yield is
 // byte-identical.
-fn iterate(xs) with Iterate = iterate_from(list_to_flat(xs), 0, len(xs))
+fn iterate(xs) with Iterate + Alloc + Memory = iterate_from(list_to_flat(xs), 0, len(xs))
 
 // Top-level tail-recursive iteration — no nested closure. Lower's
 // tail-call-mark-pass recognizes `iterate_from(xs, i+1, n)` as the

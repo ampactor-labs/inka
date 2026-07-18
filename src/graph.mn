@@ -678,7 +678,8 @@ fn occurs_in_eff_args_loop(handle, ref args, i, n) with !Mutate = {
       EAInt(_)    => false,
       EAFloat(_)  => false,
       EAString(_) => false,
-      EAType(ty)  => occurs_in(handle, ty)
+      EAType(ty)  => occurs_in(handle, ty),
+      EANode(_)   => false
     }
     if occ { true }
     else { occurs_in_eff_args_loop(handle, args, i + 1, n) }

@@ -96,7 +96,7 @@ handler persist_to_disk with branch_results = [] {
 // Copy the thunk prefix derived from nstate. This size does not prove that arm,
 // evidence, sentinel, or reachable capture bytes are included. World 0 records
 // no checked capability requirement.
-fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Filesystem = {
+fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Filesystem + Persist = {
   let nstate = load_i32(thunk + 4)
   let size = 8 + nstate * 4
   persist(thunk, size, 0, "/tmp/mn-persist-branch-{int_to_str(idx)}.k")

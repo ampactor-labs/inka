@@ -542,7 +542,7 @@ fn situation_hash(situation) with Pure = {
 // pool is empty per §2.7.4, but the substrate refuses to fabricate
 // when the invariant ever shifts).
 
-fn pick_from_pool(tentacle, hash) with Pure = {
+fn pick_from_pool(tentacle, hash) with Memory = {
   let pool = applicable_modifiers_for_tentacle(tentacle)
   let n    = len(pool)
   if n == 0 { NoMod }
@@ -674,7 +674,7 @@ fn render_propose_arm(situation) with Pure = {
 // surfaces a "use |> instead" suggestion. silence_predicate gated on
 // nested_call_depth >= 3 (TopicFacts substrate from D.1.c).
 
-fn render_topology_arm(situation) with Pure = {
+fn render_topology_arm(situation) with Alloc + Memory = {
   let Situation(s) = situation
   let TopicFacts(f) = s.facts
   VoiceLine(TentTopology, FOffering, [
@@ -733,7 +733,7 @@ fn render_trace_arm(situation) with Pure = {
 // obligations + discharges. silence_predicate gated on
 // list_non_empty(refinements).
 
-fn render_verify_arm(situation) with Pure = {
+fn render_verify_arm(situation) with Alloc + Memory = {
   let Situation(s) = situation
   VoiceLine(TentVerify, FRefinement, [
     SLit("Refinements at "),
@@ -788,7 +788,7 @@ fn render_why_arm(situation) with Pure = {
 // arm. H6 exhaustive 8-arm match. Each arm produces a VoiceLine
 // (assumed silence_predicate has already passed for this tentacle).
 
-fn render_for_tentacle(situation) with Pure = {
+fn render_for_tentacle(situation) with Alloc + Memory = {
   let Situation(s) = situation
   match s.tentacle {
     TentQuery     => render_query_arm(situation),
@@ -837,7 +837,7 @@ fn render_for_tentacle(situation) with Pure = {
 // end-of-file. The handler internally folds the project queue via
 // this projector.
 
-fn voice_queue_walk(situation_seed) with OracleQuery = {
+fn voice_queue_walk(situation_seed) with OracleQuery + Memory = {
   let Situation(s) = situation_seed
   let queue_items = match s.handle {
     None       => query_project_queue(),
@@ -859,7 +859,7 @@ fn voice_queue_walk(situation_seed) with OracleQuery = {
 // accumulator pattern; flat-buffer-plus-counter substrate (Ω.3 —
 // list_extend_to + list_set + counter + slice).
 
-fn fold_queue_items(situation, items, i, n, acc, count) with OracleQuery = {
+fn fold_queue_items(situation, items, i, n, acc, count) with OracleQuery + Alloc + Memory = {
   if i >= n { slice(acc, 0, count) }
   else {
     let item = list_index(items, i)
@@ -938,7 +938,7 @@ fn unimplemented_arm(op_name) with Abort = {
 //
 // H6 exhaustive over CaretTarget — no `_` wildcard.
 
-fn resolve_cursor_target(target, current_handle) with GraphRead = {
+fn resolve_cursor_target(target, current_handle) with GraphRead + Memory = {
   match target {
     TargetHandle(h)    => h,
     TargetSpan(s)      => {
@@ -971,12 +971,13 @@ fn focus_reason(target) with Pure = {
 // state); QWhy / QSubstChain are Why-tentacle (walk reason chain);
 // QOwnership is Trace-tentacle (ownership trail); QVerifyDebt is
 // Verify-tentacle (refinement obligations). H6 exhaustive over
-// Question's 12 variants via pattern alternation per SYNTAX.md L956.
+// Question's 13 variants via pattern alternation per SYNTAX.md L956.
 
 fn tentacle_for_question(question) with Pure = {
   match question {
     QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved
-    | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QUnknown(_)
+    | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_)
+    | QUnknown(_)
                           => TentQuery,
     QOwnership(_)         => TentTrace,
     QWhy(_) | QSubstChain(_)
@@ -995,7 +996,7 @@ fn question_span(question) with Pure = {
     QTypeAt(s)             => s,
     QTypeOf(_) | QIntentOf(_) | QUnresolved | QSubstChain(_)
     | QEffects(_) | QOwnership(_) | QWhy(_) | QRefsOf(_)
-    | QVerifyDebt | QHandlerProvider(_) | QUnknown(_)
+    | QVerifyDebt | QHandlerProvider(_) | QFlowOf(_) | QUnknown(_)
                            => span_zero()
   }
 }
@@ -1070,9 +1071,9 @@ fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure
 // payload, so they project to AnsSilence — the honest "no provable hover here"
 // rather than a fabricated Reason. QRError → AnsSilence: an ill-posed or
 // unprovable question is a valid Silence (voice.mn:265). H6 exhaustive over
-// QueryResult's 11 variants — no wildcard.
+// QueryResult's 12 variants — no wildcard.
 
-fn query_result_to_answer(result) with Pure = match result {
+fn query_result_to_answer(result) with Alloc + Memory = match result {
   QRType(ty, reason)      => AnsType(ty, reason),
   QRWhy(reason)           => AnsReason(reason),
   QRRefs(spans)           => AnsRefs(spans, Inferred("refs-of: {int_to_str(len(spans))} reference(s)")),
@@ -1083,6 +1084,7 @@ fn query_result_to_answer(result) with Pure = match result {
   QRIntent(_)             => AnsSilence,
   QROwnership(_)          => AnsSilence,
   QRHandlerProvider(_)    => AnsSilence,
+  QRFlowLabel(_)          => AnsSilence,
   QRError(_)              => AnsSilence
 }
 
@@ -1094,7 +1096,7 @@ fn query_result_to_answer(result) with Pure = match result {
 // discharge statically: ERefinementRejected IS its canonical DiagKind. The
 // audit findings are the same obligations — the forensic surface is one read.
 
-fn diagnostics_from_debt(debt) with Pure = {
+fn diagnostics_from_debt(debt) with Alloc + Memory = {
   if len(debt) == 0 { [] }
   else {
     let (span, predicate, _reason) = last(debt)
@@ -1484,7 +1486,7 @@ handler mentl_voice_default
 // String)>. Single-pass cons recursion; small N typical (handles
 // table holds open editor sessions, not arbitrary file enumerations).
 
-fn handles_table_lookup(table, target_handle) with Pure = {
+fn handles_table_lookup(table, target_handle) with Memory = {
   if len(table) == 0 { None }
   else {
     let head = last(table)
@@ -1513,7 +1515,7 @@ fn file_handle_eq(a, b) with Pure = {
 // substrate produces lists of size ≤ 3 today, so a flat fold is
 // honest.
 
-fn join_capability_labels(labels) with Pure = {
+fn join_capability_labels(labels) with Memory = {
   if len(labels) == 0 { "" }
   else {
     let head = last(labels)

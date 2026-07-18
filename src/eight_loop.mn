@@ -247,7 +247,7 @@ fn audit_ic_fixpoint(initial_density) with Interrogate + IC + !Mutate = {
 
 fn empty_density() with Pure = []
 
-fn enumerate_handles(i, n) with Pure = {
+fn enumerate_handles(i, n) with Alloc + Memory = {
   if i >= n { [] }
   else { [i] ++ enumerate_handles(i + 1, n) }
 }
@@ -298,7 +298,7 @@ fn scan_for_tee_governing(target, i, n) with GraphRead + !Mutate = {
   }
 }
 
-fn is_pure_row(row) with Pure = match row {
+fn is_pure_row(row) with Memory = match row {
   EfPure          => true,
   EfClosed(names) => len(names) == 0,
   _               => false
@@ -357,7 +357,7 @@ fn ownership_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
   }
 }
 
-fn refinement_verdict_for(handle, reason) with Verify + !Mutate = {
+fn refinement_verdict_for(handle, reason) with Verify + GraphRead + Memory + !Mutate = {
   // Refinement clears when no Verify-pending predicates attach to
   // this handle. Pending obligations surface as invites (the
   // gradient could resolve them via SMT or refinement annotation).

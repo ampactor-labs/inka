@@ -446,7 +446,12 @@ fn count_uses(ref name: String, ref node) with !Mutate = {
     NExpr(ExprPlaceholder) => 0,
     NStmt(_) => 0,
     NPat(_)  => 0,
-    NHole(_) => 0
+    NHole(_) => 0,
+    // NModule's decls are top-level (never a sub-node inside a scanned fn
+    // body) and NTypeAnn wraps a Ty, not an Expr — neither carries an
+    // expr-level VarRef to count.
+    NModule(_) => 0,
+    NTypeAnn(_) => 0
   }
 }
 

@@ -701,7 +701,7 @@ fn render_gradient_result(result) = match result {
   }
 }
 
-fn join_unlock_labels(labels) with Pure = {
+fn join_unlock_labels(labels) with Memory = {
   if len(labels) == 0 { "(no capabilities)" }
   else {
     let first = head(labels)
@@ -801,13 +801,27 @@ fn render_audit(entries) = {
 
 fn render_query_result(result) = match result {
   QRType(ty, reason) => "→ {show_type(ty)}\n  Reason: {show_reason(reason)}",
+  QRIntent(effs) => {
+    let terms = effs |> map((entry) => {
+      let (name, negated, conn) = entry
+      let sign = if negated { "!" } else { "" }
+      let symbol = match conn { EcUnion => "+", EcDiff => "-", EcInter => "&" }
+      "{symbol}{sign}{show_eff_name(name)}"
+    })
+    "→ {str_concat_all(terms)}"
+  },
   QRUnresolved(entries) => "→ {int_to_str(len(entries))} unresolved entries",
   QRChain(hops) => "→ {int_to_str(len(hops))} hops in chain",
   QREffects(row) => "→ {show_effrow(row)}",
   QROwnership(params) => "→ {int_to_str(len(params))} params",
   QRWhy(reason) =>
     show_reason(reason),
+  QRRefs(spans) => "→ {int_to_str(len(spans))} reference(s)",
   QRVerifyDebt(obligations) => "→ {int_to_str(len(obligations))} verification obligations pending",
+  QRHandlerProvider(provider) => match provider {
+    Some(name) => "→ handled by {name}",
+    None       => "→ no handler installed"
+  },
   QRFlowLabel(label, reason) =>
     "→ {show_flow_label(label)}\n  Reason: {show_reason(reason)}",
   QRError(msg) => "error: {msg}"
@@ -873,7 +887,7 @@ fn build_question(verb, arg, raw) with Pure = match verb {
 // The verb is the FIRST word (`<verb> [arg]` — the documented query
 // grammar); the prior read of last(ws) made every 3+-word query's verb
 // and argument the SAME final word.
-fn query_head(ws) with Pure = if len(ws) == 0 { "" } else { head(ws) }
+fn query_head(ws) with Memory = if len(ws) == 0 { "" } else { head(ws) }
 
-fn query_last(ws) with Pure =
+fn query_last(ws) with Memory =
   if len(ws) == 0 { "" } else { list_index(ws, len(ws) - 1) }

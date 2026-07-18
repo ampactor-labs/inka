@@ -540,7 +540,7 @@ fn register_show_literals(lowered) with EmitStringLiteralOp + EnvRead = {
   register_show_literals_list(tys, [])
 }
 
-fn register_show_literals_list(tys, seen) with EmitStringLiteralOp + EnvRead = {
+fn register_show_literals_list(tys, seen) with EmitStringLiteralOp + EnvRead + Alloc + Memory = {
   if len(tys) == 0 { () }
   else {
     let ty = last(tys)
@@ -566,7 +566,7 @@ fn register_one_show_literals(ty) with EmitStringLiteralOp + EnvRead = match fol
                       register_show_field_name_literals(show_named_fields(fold_strip(ty)), 0, true) }
 }
 
-fn register_show_field_name_literals(fields, i, is_record) with EmitStringLiteralOp = {
+fn register_show_field_name_literals(fields, i, is_record) with EmitStringLiteralOp + Memory = {
   if i >= len(fields) { () }
   else {
     let (fname, _fty) = list_index(fields, i)
@@ -575,7 +575,7 @@ fn register_show_field_name_literals(fields, i, is_record) with EmitStringLitera
   }
 }
 
-fn register_show_sum_literals(specs, i) with EmitStringLiteralOp = {
+fn register_show_sum_literals(specs, i) with EmitStringLiteralOp + Memory = {
   if i >= len(specs) { visit_string(", ") }
   else {
     let (_tag, cname, payloads) = list_index(specs, i)
@@ -4014,12 +4014,12 @@ fn variant_specs_of(type_name) with EnvRead = {
 // produced) — face 11: drop_last on the env SNAPSHOT (a slice view since
 // the flat-buffer env) stacked a slice layer per step until element access
 // recursed thousands deep and killed the stack inside `last`.
-fn variant_specs_filter(entries, type_name) with Pure = {
+fn variant_specs_filter(entries, type_name) with Memory = {
   let n = len(entries)
   variant_specs_filter_from(entries, type_name, n - 1, make_list(n), 0)
 }
 
-fn variant_specs_filter_from(entries, type_name, i, own buf, count) with Pure = {
+fn variant_specs_filter_from(entries, type_name, i, own buf, count) with Memory = {
   if i < 0 { slice(buf, 0, count) }
   else {
     let (_name, scheme, _reason, kind) = list_index(entries, i)
@@ -4046,12 +4046,12 @@ fn ctor_result_is(ty, type_name: String) with Pure = match ty {
 
 // The constructor's payload types, in field order: a fielded ctor's TFun params
 // (each TParam carries its ty); a nullary ctor (bare TName) has none.
-fn ctor_payload_tys(ty) with Pure = match ty {
+fn ctor_payload_tys(ty) with Memory = match ty {
   TFun(params, _ret, _) => param_tys_of(params, 0, len(params)),
   _                     => []
 }
 
-fn param_tys_of(params, i, n) with Pure =
+fn param_tys_of(params, i, n) with Alloc + Memory =
   if i >= n { [] }
   else {
     [param_ty(list_index(params, i))] ++ param_tys_of(params, i + 1, n)
@@ -4123,7 +4123,7 @@ fn emit_eq_leaves(lowered) with EnvRead = {
   emit_distinct_eq_leaves(tys, [])
 }
 
-fn emit_distinct_eq_leaves(tys, seen) with EnvRead = {
+fn emit_distinct_eq_leaves(tys, seen) with EnvRead + Alloc + Memory = {
   if len(tys) == 0 { () }
   else {
     let ty = last(tys)
@@ -4144,7 +4144,7 @@ fn emit_distinct_eq_leaves(tys, seen) with EnvRead = {
 // never a re-derived 4*i); a SUM (TName payload-ADT) reads the env's variant
 // specs and emits sentinel-guard + tag-compare + per-tag payload recursion.
 // One generator, two of the five leaves — divergence between them is unsayable.
-fn emit_one_eq_helper(sig, ty) with EnvRead = match fold_strip(ty) {
+fn emit_one_eq_helper(sig, ty) with EnvRead + Memory + WasmOut = match fold_strip(ty) {
   TName(name, _) => emit_eq_leaf_sum(sig, name),
   _ => {
     wat_emit("  (func $eq_")
@@ -4169,7 +4169,7 @@ fn emit_one_eq_helper(sig, ty) with EnvRead = match fold_strip(ty) {
 // uniform i32 slots) via emit_field_eq — a sum payload field re-enters this
 // family. Recursive ADTs (Tree) call $eq_nTree again: a runtime call, finite
 // on the value, never inline-infinite. The env's variant specs are read LIVE.
-fn emit_eq_leaf_sum(sig, type_name) with EnvRead = {
+fn emit_eq_leaf_sum(sig, type_name) with EnvRead + Alloc + Memory + WasmOut = {
   let specs = variant_specs_of(type_name)
   wat_emit("  (func $eq_")
   wat_emit(sig)
@@ -4443,7 +4443,7 @@ fn emit_fold_compare_helpers(lowered) with EnvRead = {
   emit_distinct_compare_helpers(tys, [])
 }
 
-fn emit_distinct_compare_helpers(tys, seen) with EnvRead = {
+fn emit_distinct_compare_helpers(tys, seen) with EnvRead + Alloc + Memory = {
   if len(tys) == 0 { () }
   else {
     let ty = last(tys)
@@ -4462,7 +4462,7 @@ fn emit_distinct_compare_helpers(tys, seen) with EnvRead = {
 // returning the first non-zero field-compare (else 0); a SUM (TName payload-ADT)
 // compares tags first (sign of the tag difference), then the matched variant's
 // payload fields. One generator, two of the five leaves — divergence unsayable.
-fn emit_one_compare_helper(sig, ty) with EnvRead = match fold_strip(ty) {
+fn emit_one_compare_helper(sig, ty) with EnvRead + Memory + WasmOut = match fold_strip(ty) {
   TName(name, _) => emit_one_compare_sum_helper(sig, name),
   _ => {
     wat_emit("  (func $compare_")
@@ -4483,7 +4483,7 @@ fn emit_one_compare_helper(sig, ty) with EnvRead = match fold_strip(ty) {
 //     order (declaration order = tag id = sentinel value).
 //   - else both heap records: compare tags (sign of difference); if equal,
 //     descend the matched variant's payload conjunction (first non-zero wins).
-fn emit_one_compare_sum_helper(sig, type_name) with EnvRead = {
+fn emit_one_compare_sum_helper(sig, type_name) with EnvRead + Alloc + Memory + WasmOut = {
   let specs = variant_specs_of(type_name)
   wat_emit("  (func $compare_")
   wat_emit(sig)
@@ -4741,7 +4741,7 @@ fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
   LWasiCall(_h, _n, args)   => collect_cmp_agg_tys_list(args, acc),
   LFieldLoad(_h, rec, _o) => collect_cmp_agg_tys_expr(rec, acc),
   LConvert(_h, _, operand) => collect_cmp_agg_tys_expr(operand, acc),
-  LStateSlotStore(_h, _o, v) => collect_cmp_agg_tys_expr(v, acc),
+  LStateSlotStore(_h, _o, v, _) => collect_cmp_agg_tys_expr(v, acc),
   LConst(_, _)           => acc,
   LLocal(_, _)           => acc,
   LFeedbackPrior(_)      => acc,
@@ -4757,7 +4757,7 @@ fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
 // tuple) order — the field set the fold descends. Read live from the proven
 // type (the fields TRecord/TTuple already carry; a tuple's positional elems
 // ARE its product fields). Non-product types have no field set (empty).
-fn product_field_tys(ty) with Pure = match fold_strip(ty) {
+fn product_field_tys(ty) with Memory = match fold_strip(ty) {
   TRecord(fields)        => field_tys_of(fields, 0, len(fields)),
   TRecordOpen(fields, _) => field_tys_of(fields, 0, len(fields)),
   TTuple(elems)          => elems,
@@ -4897,7 +4897,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LWasiCall(_h, _n, args)   => collect_eq_product_tys_list(args, acc),
   LFieldLoad(_h, rec, _o) => collect_eq_product_tys_expr(rec, acc),
   LConvert(_h, _, operand) => collect_eq_product_tys_expr(operand, acc),
-  LStateSlotStore(_h, _o, v) => collect_eq_product_tys_expr(v, acc),
+  LStateSlotStore(_h, _o, v, _) => collect_eq_product_tys_expr(v, acc),
   LConst(_, _)           => acc,
   LLocal(_, _)           => acc,
   LFeedbackPrior(_)      => acc,
@@ -4932,7 +4932,7 @@ fn emit_show_leaves(lowered) with EnvRead = {
   emit_distinct_show_leaves(tys, [])
 }
 
-fn emit_distinct_show_leaves(tys, seen) with EnvRead = {
+fn emit_distinct_show_leaves(tys, seen) with EnvRead + Alloc + Memory = {
   if len(tys) == 0 { () }
   else {
     let ty = last(tys)
@@ -4974,7 +4974,7 @@ fn emit_show_header(sig) = {
 // structural projection. The fold runs over the canonically-sorted fields at
 // their width-summed offsets (the SAME align_for + repr_width the eq leaf and
 // the store side run — Carried-Truth).
-fn emit_one_show_product_helper(sig, ty) with EnvRead = {
+fn emit_one_show_product_helper(sig, ty) with EnvRead + WasmOut = {
   emit_show_header(sig)
   let is_record = ty_is_record(fold_strip(ty))
   let open  = if is_record { "{" } else { "(" }
@@ -5002,14 +5002,14 @@ fn ty_is_record(ty) with Pure = match ty {
 // canonical sort order; a tuple's elements as positional ("" names). Read live
 // from the proven type — the SAME field set product_field_tys gives eq, plus
 // the names show prints.
-fn show_named_fields(ty) with Pure = match ty {
+fn show_named_fields(ty) with Memory = match ty {
   TRecord(fields)        => fields,
   TRecordOpen(fields, _) => fields,
   TTuple(elems)          => name_positional(elems, 0, len(elems)),
   _                      => []
 }
 
-fn name_positional(elems, i, n) with Pure =
+fn name_positional(elems, i, n) with Alloc + Memory =
   if i >= n { [] }
   else { [("", list_index(elems, i))] ++ name_positional(elems, i + 1, n) }
 
@@ -5017,7 +5017,7 @@ fn name_positional(elems, i, n) with Pure =
 // concat( <name-prefix + ", " sep>, concat( show(field), <rest> ) ). The first
 // field has no leading ", "; a record field is prefixed "name: ". The byte
 // offset is width-summed (align_for + repr_width). Terminates with "" at the end.
-fn emit_show_product_fields(fields, i, off, is_record) with EnvRead = {
+fn emit_show_product_fields(fields, i, off, is_record) with EnvRead + Memory = {
   if i >= len(fields) { emit_show_str_literal("") }
   else {
     let (fname, fty) = list_index(fields, i)
@@ -5087,7 +5087,7 @@ fn emit_show_field_load(off, r) = {
 // "Ctor(" ++ f0 ++ ", " ++ f1 ++ ")". The variant names + payload types are read
 // LIVE from the env (variant_named_specs_of). A recursive ADT re-enters
 // $show_n<Name> (finite on the value). Mirrors emit_eq_leaf_sum's guard.
-fn emit_one_show_sum_helper(sig, type_name) with EnvRead = {
+fn emit_one_show_sum_helper(sig, type_name) with EnvRead + Alloc + Memory + WasmOut = {
   let specs = variant_named_specs_of(type_name)
   wat_emit("  (func $show_")
   wat_emit(sig)
@@ -5112,7 +5112,7 @@ fn emit_one_show_sum_helper(sig, type_name) with EnvRead = {
 // ($a in the nullary arm, $ta in the heap arm). A nullary variant renders its
 // bare name; a fielded variant renders "Ctor(" ++ payloads ++ ")". The cascade
 // terminal is "" (the env enumerates every variant; control lands on one arm).
-fn emit_show_sum_tag_dispatch(specs, i, n, scrutinee) with EnvRead = {
+fn emit_show_sum_tag_dispatch(specs, i, n, scrutinee) with EnvRead + Alloc + Memory + WasmOut = {
   if i >= n { emit_show_str_literal("") }
   else {
     let (tag_id, cname, payloads) = list_index(specs, i)
@@ -5202,7 +5202,7 @@ fn emit_show_variant_load(off, pty) = {
 // LIST show: "[" ++ <element loop, joined by ", "> ++ "]". The element count is
 // runtime (len); $show_listbody_<sig> folds str_concat over list_index(a, i),
 // joining ", ". The element leaf is read from the proven element type.
-fn emit_one_show_list_helper(sig, elem) with EnvRead = {
+fn emit_one_show_list_helper(sig, elem) with WasmOut = {
   emit_show_header(sig)
   emit_show_concat_open()
   emit_show_str_literal("[")
@@ -5354,7 +5354,7 @@ fn show_subtys_variants(specs, i, n, seen, acc) = {
 
 // show_operand_contrib — the arg of a $show_<sig> LCall contributes its
 // aggregate closure. The arg handle carries the proven type (AST-in-graph).
-fn show_operand_contrib(arg, acc) with LookupTy = {
+fn show_operand_contrib(arg, acc) with LookupTy + Alloc + Memory = {
   let h = lexpr_handle(arg)
   if h == 0 { acc }
   else { show_subtys(fold_strip(lookup_ty(h)), [], acc) }
@@ -5383,7 +5383,7 @@ fn collect_show_tys_arms_from(arms, acc, i) =
     collect_show_tys_arms_from(arms, collect_show_tys_expr(body, acc), i + 1)
   }
 
-fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
+fn collect_show_tys_expr(expr, acc) with LookupTy + Alloc + Memory = match expr {
   LCall(_h, f, args) =>
     if is_show_global(f) && len(args) == 1 {
       collect_show_tys_expr(f,
@@ -5427,7 +5427,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LWasiCall(_h, _n, args)   => collect_show_tys_list(args, acc),
   LFieldLoad(_h, rec, _o) => collect_show_tys_expr(rec, acc),
   LConvert(_h, _, operand) => collect_show_tys_expr(operand, acc),
-  LStateSlotStore(_h, _o, v) => collect_show_tys_expr(v, acc),
+  LStateSlotStore(_h, _o, v, _) => collect_show_tys_expr(v, acc),
   LConst(_, _)           => acc,
   LLocal(_, _)           => acc,
   LFeedbackPrior(_)      => acc,
@@ -5450,12 +5450,12 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
 // identically. The runtime str_hash/list_hash are the sequence leaf; a scalar
 // word IS its own hash; a nested aggregate recurses its own $hash_<sig>.
 
-fn emit_fold_hash_helpers(lowered) with EnvRead = {
+fn emit_fold_hash_helpers(lowered) with EnvRead + LookupTy = {
   let tys = collect_hash_tys_list(lowered, [])
   emit_distinct_hash_leaves(tys, [])
 }
 
-fn emit_distinct_hash_leaves(tys, seen) with EnvRead = {
+fn emit_distinct_hash_leaves(tys, seen) with EnvRead + Alloc + Memory = {
   if len(tys) == 0 { () }
   else {
     let ty = last(tys)
@@ -5474,7 +5474,7 @@ fn emit_distinct_hash_leaves(tys, seen) with EnvRead = {
 // canonical offset; a SUM seeds the mix with the tag, then mixes the matched
 // variant's payload. The FNV offset basis (2166136261) and prime (16777619)
 // are the SAME str_hash / hash_source share — one hash family, no divergence.
-fn emit_one_hash_helper(sig, ty) with EnvRead = match fold_strip(ty) {
+fn emit_one_hash_helper(sig, ty) with EnvRead + Memory + WasmOut = match fold_strip(ty) {
   TName(name, _) => emit_one_hash_sum_helper(sig, name),
   _ => {
     wat_emit("  (func $hash_")
@@ -5494,7 +5494,7 @@ fn emit_one_hash_helper(sig, ty) with EnvRead = match fold_strip(ty) {
 // [tag@0][f0@4]…, so: seed $h with the FNV basis; if the operand is a sentinel
 // (< heap_base) mix the word itself; else mix tag@0, then the matched variant's
 // payload fields. Two structurally-equal ADT values fold identically.
-fn emit_one_hash_sum_helper(sig, type_name) with EnvRead = {
+fn emit_one_hash_sum_helper(sig, type_name) with EnvRead + Alloc + Memory + WasmOut = {
   let specs = variant_specs_of(type_name)
   wat_emit("  (func $hash_")
   wat_emit(sig)
@@ -5633,13 +5633,13 @@ fn is_hash_global(f) = match f {
   _ => false
 }
 
-fn hash_operand_contrib(arg, acc) with LookupTy = {
+fn hash_operand_contrib(arg, acc) with LookupTy + Alloc + Memory = {
   let h = lexpr_handle(arg)
   if h == 0 { acc }
   else { eq_subtys(fold_strip(lookup_ty(h)), [], acc) }
 }
 
-fn collect_hash_tys_list(stmts, acc) with LookupTy = {
+fn collect_hash_tys_list(stmts, acc) with LookupTy + Memory = {
   if len(stmts) == 0 { acc }
   else {
     collect_hash_tys_list(drop_last(stmts),
@@ -5656,7 +5656,7 @@ fn collect_hash_tys_arms_from(arms, acc, i) =
     collect_hash_tys_arms_from(arms, collect_hash_tys_expr(body, acc), i + 1)
   }
 
-fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
+fn collect_hash_tys_expr(expr, acc) with LookupTy + Alloc + Memory = match expr {
   LCall(_h, f, args) =>
     if is_hash_global(f) && len(args) == 1 {
       collect_hash_tys_expr(f,
@@ -5700,7 +5700,7 @@ fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
   LWasiCall(_h, _n, args)   => collect_hash_tys_list(args, acc),
   LFieldLoad(_h, rec, _o) => collect_hash_tys_expr(rec, acc),
   LConvert(_h, _, operand) => collect_hash_tys_expr(operand, acc),
-  LStateSlotStore(_h, _o, v) => collect_hash_tys_expr(v, acc),
+  LStateSlotStore(_h, _o, v, _) => collect_hash_tys_expr(v, acc),
   LConst(_, _)           => acc,
   LLocal(_, _)           => acc,
   LFeedbackPrior(_)      => acc,
@@ -5721,12 +5721,12 @@ fn variant_named_specs_of(type_name) with EnvRead = {
   variant_named_specs_filter(entries, type_name)
 }
 
-fn variant_named_specs_filter(entries, type_name) with Pure = {
+fn variant_named_specs_filter(entries, type_name) with Memory = {
   let n = len(entries)
   variant_named_specs_from(entries, type_name, n - 1, make_list(n), 0)
 }
 
-fn variant_named_specs_from(entries, type_name, i, own buf, count) with Pure = {
+fn variant_named_specs_from(entries, type_name, i, own buf, count) with Memory = {
   if i < 0 { slice(buf, 0, count) }
   else {
     let (name, scheme, _reason, kind) = list_index(entries, i)

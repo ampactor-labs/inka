@@ -252,7 +252,7 @@ fn fn_body_handle(handle) with GraphRead + !Mutate = {
   }
 }
 
-fn first_inferred_with_classification(params, fn_handle) with Pure = {
+fn first_inferred_with_classification(params, fn_handle) with Memory = {
   if len(params) == 0 { None }
   else {
     let p = last(params)
@@ -272,13 +272,13 @@ fn first_inferred_with_classification(params, fn_handle) with Pure = {
   }
 }
 
-fn row_is_pure(row) with Pure = match row {
+fn row_is_pure(row) with Memory = match row {
   EfPure => true,
   EfClosed(names) => len(names) == 0,
   _ => false
 }
 
-fn row_strictly_narrower(body_row, decl_row) with Pure = {
+fn row_strictly_narrower(body_row, decl_row) with Memory = {
   // Body strictly narrower iff body subsumes decl AND decl does NOT
   // subsume body. row_subsumes is from src/effects.mn.
   if row_subsumes(decl_row, body_row) {
@@ -305,7 +305,7 @@ fn row_to_with_clause_inner(row) with Pure = match row {
   _ => "?"
 }
 
-fn eff_names_to_str(names) with Pure = {
+fn eff_names_to_str(names) with Memory = {
   if len(names) == 0 { "Pure" }                   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
   else if len(names) == 1 { eff_name_label(last(names)) }
   else {
@@ -378,6 +378,6 @@ fn capabilities_unlocked_by_tightening(declared, body) with Pure = {
 // the other way. Both moves belong in the same continuous response curve.
 
 fn cursor_with_delta(initial_caret)
-    with Surface + GraphRead + CursorRead + Delta + !Mutate = {
+    with Surface + GraphRead + CursorRead + Delta + Memory + !Mutate = {
   cursor_session(initial_caret) ~> delta_default
 }

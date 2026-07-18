@@ -81,7 +81,7 @@ fn tiebreak_reason_depth(survivors) with Pure = {
   min_by_key(survivors, (s) => reason_chain_length(handler_reason(s)))
 }
 
-fn tiebreak_declared_intent(survivors, cursor) with GraphRead = {
+fn tiebreak_declared_intent(survivors, cursor) with GraphRead + Memory = {
   let aligned = filter_list(survivors, (s) => intent_matches(s, cursor))
   if len(aligned) > 0 { aligned } else { survivors }
 }
@@ -166,7 +166,7 @@ fn handler_name(_handler) with Pure = {
 // effect_count — count distinct effects in a row. Pure walk over
 // EffRow's variant tree.
 
-fn effect_count(row) with Pure = {
+fn effect_count(row) with Memory = {
   match row {
     EfPure              => 0,
     EfClosed(names)     => len(names),
@@ -205,7 +205,7 @@ fn span_start(span) with Pure = {
 // is empty (race shouldn't produce empty survivors, but the
 // substrate refuses to fabricate values when invariants ever shift).
 
-fn list_head_or_default(lst) with Pure = {
+fn list_head_or_default(lst) with Memory = {
   if len(lst) == 0 { 0 }   // 0 = "no survivor" sentinel
   else             { list_index(lst, 0) }
 }
@@ -213,7 +213,7 @@ fn list_head_or_default(lst) with Pure = {
 // min_by_key — find the element with smallest key. O(N). Used by
 // tiebreak steps.
 
-fn min_by_key(lst, key_fn) with Pure = {
+fn min_by_key(lst, key_fn) with Memory = {
   let n = len(lst)
   if n == 0 { [] }
   else {
@@ -222,7 +222,7 @@ fn min_by_key(lst, key_fn) with Pure = {
   }
 }
 
-fn min_by_key_loop(lst, key_fn, i, n, current_min, current_key) with Pure = {
+fn min_by_key_loop(lst, key_fn, i, n, current_min, current_key) with Memory = {
   if i >= n { current_min }
   else {
     let candidate = list_index(lst, i)
@@ -238,14 +238,14 @@ fn min_by_key_loop(lst, key_fn, i, n, current_min, current_key) with Pure = {
 // filter_list — basic functional filter. O(N) using Ω.3 buffer-
 // counter substrate.
 
-fn filter_list(lst, pred) with Pure = {
+fn filter_list(lst, pred) with Memory = {
   let n = len(lst)
   let buf = make_list(n)
   let count = filter_loop(lst, pred, 0, n, buf, 0)
   slice(buf, 0, count)
 }
 
-fn filter_loop(lst, pred, i, n, buf, count) with Pure = {
+fn filter_loop(lst, pred, i, n, buf, count) with Alloc + Memory = {
   if i >= n { count }
   else {
     let item = list_index(lst, i)
@@ -262,14 +262,14 @@ fn filter_loop(lst, pred, i, n, buf, count) with Pure = {
 // map_list — basic functional map. O(N) using Ω.3 buffer-counter
 // substrate.
 
-fn map_list(lst, fn_apply) with Pure = {
+fn map_list(lst, fn_apply) with Memory = {
   let n = len(lst)
   let buf = make_list(n)
   let _ = map_loop(lst, fn_apply, 0, n, buf, 0)
   slice(buf, 0, n)
 }
 
-fn map_loop(lst, fn_apply, i, n, buf, count) with Pure = {
+fn map_loop(lst, fn_apply, i, n, buf, count) with Alloc + Memory = {
   if i >= n { count }
   else {
     let item = list_index(lst, i)

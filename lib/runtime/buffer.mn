@@ -62,7 +62,7 @@ type Buffer = {data: List, count: Int}
 // predicate composes cleanly + Mentl can surface it as the Why
 // edge for any "buffer over-fill" diagnostic.
 
-fn buf_invariant(b: Buffer) -> Bool with Pure =
+fn buf_invariant(b: Buffer) -> Bool with Memory =
   buf_count(b) <= len(buf_data(b))
 
 // `buf_make()` — fresh empty buffer. Storage starts as the empty

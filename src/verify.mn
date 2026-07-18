@@ -341,7 +341,7 @@ fn verify_residual(ref debt, ref witnesses) with Memory + Alloc = {
   }, witnesses)
 }
 
-fn predicate_to_smt_lib(ref pred) with Memory + Alloc = {
+fn predicate_to_smt_lib(ref pred) with Memory + Alloc + GraphRead = {
   "(assert {predicate_to_smt(pred)})\n(check-sat)"
 }
 
@@ -383,7 +383,7 @@ fn handle_to_smt(handle) with GraphRead + Memory + Alloc = {
 // proof of the unprovable — the most dangerous silent fallback in the compiler;
 // the no-silent-fallback law, deleted not wrapped). A call's args are HANDLES
 // (the AST-in-graph fabric), mapped through handle_to_smt — no i/n index loop.
-fn body_to_smt(body) with GraphRead + Memory + Alloc = match body {
+fn body_to_smt(body) with GraphRead + Memory + Alloc + Diagnostic = match body {
   NExpr(LitInt(n))    => int_to_str(n),
   NExpr(LitFloat(f))  => float_to_str(f),
   NExpr(LitString(s)) => "\"{s}\"",
@@ -402,7 +402,7 @@ fn body_to_smt(body) with GraphRead + Memory + Alloc = match body {
 // (the operand-Node channel PCompare already uses); the fname is the callee's
 // name read live from its node body, or the unencodable sentinel if it is not a
 // bare name reference.
-fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc = {
+fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc + Diagnostic = {
   let N(cbody, _, _) = callee
   let fname = match cbody {
     NExpr(VarRef(n)) => n,

@@ -34,12 +34,12 @@ fn empty_cache() with Pure = {
 // cache_lookup — O(log N) binary search by key. Returns Some(value)
 // if found; None otherwise. Pure over the map.
 
-fn cache_lookup(map, key) with Pure = {
+fn cache_lookup(map, key) with Memory = {
   let CacheMap(entries) = map
   cache_lookup_loop(entries, key, 0, len(entries))
 }
 
-fn cache_lookup_loop(entries, key, lo, hi) with Pure = {
+fn cache_lookup_loop(entries, key, lo, hi) with Memory = {
   if lo >= hi { None }
   else {
     let mid = (lo + hi) / 2
@@ -80,7 +80,7 @@ fn cache_store(map, key, value) with Memory + Alloc = {
   }
 }
 
-fn cache_find_insert_pos(entries, key, lo, hi) with Pure = {
+fn cache_find_insert_pos(entries, key, lo, hi) with Memory = {
   if lo >= hi { lo }
   else {
     let mid = (lo + hi) / 2
@@ -158,7 +158,7 @@ fn cache_filter_loop(entries, n, ei, keys, m, ki, buf, count) with Memory + Allo
   }
 }
 
-fn cache_advance_ki(keys, m, ki, target) with Pure = {
+fn cache_advance_ki(keys, m, ki, target) with Memory = {
   if ki >= m { ki }
   else if list_index(keys, ki) >= target { ki }
   else { cache_advance_ki(keys, m, ki + 1, target) }
@@ -166,7 +166,7 @@ fn cache_advance_ki(keys, m, ki, target) with Pure = {
 
 // cache_size — number of entries in the map. O(1) — list_len-direct.
 
-fn cache_size(map) with Pure = {
+fn cache_size(map) with Memory = {
   let CacheMap(entries) = map
   len(entries)
 }

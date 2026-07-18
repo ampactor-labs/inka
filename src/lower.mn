@@ -303,7 +303,7 @@ type BoundaryInvariant
   // it never reached.
   | MissingName(String)                  // the unbound name
 
-fn show_boundary_invariant(invariant) with Pure = match invariant {
+fn show_boundary_invariant(invariant) with Memory + Alloc = match invariant {
   MissingFanoutBoundary          => "missing fanout boundary",
   WrongFanoutBoundaryKind        => "wrong boundary kind at fanout",
   MissingFanoutEdge(i)           => "missing fanout edge at ordinal {int_to_str(i)}",
@@ -550,6 +550,7 @@ fn lexpr_handle(e) with Pure = match e {
   LBlock(h, _)            => h,
   LMakeList(h, _)         => h,
   LMakeTuple(h, _)        => h,
+  LSimdLanes(h, _)        => h,
   LMakeRecord(h, _)       => h,
   LMakeVariant(h, _, _)   => h,
   LMatch(h, _, _)         => h,
@@ -591,7 +592,7 @@ fn lexpr_handle(e) with Pure = match e {
 // Hβ.fold.show-leaf-as-lowered-lfn; until it lands the aggregate renders
 // through the runtime `to_string` (the structure-preserving renderer is
 // the addition, never a regression — the word-leaf path is unchanged).
-fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic = {
+fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic + Memory = {
   let N(_, _, ah) = last(args)
   match fold_strip(lookup_ty(ah)) {
     TString            => arg_lo,
@@ -637,7 +638,7 @@ fn lower_show_call(handle, ah, arg_lo) with LookupTy = {
 // the generated recursive $hash_<sig> (field/payload FNV mix). A float hashes
 // its decimal-string bytes (str_hash(float_to_str)) so two equal f64s hash
 // equal regardless of bit-noise — the value-faithful leaf, never the raw bits.
-fn lower_hash_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic = {
+fn lower_hash_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic + Memory = {
   let N(_, _, ah) = last(args)
   match fold_strip(lookup_ty(ah)) {
     TString            => lower_hash_call(handle, ah, arg_lo, "str_hash"),
@@ -710,7 +711,7 @@ fn mark_tail_last_in(stmts) with Memory + Alloc = {
   }
 }
 
-fn mark_tail_arms(arms) with Memory = map((arm) => {
+fn mark_tail_arms(arms) with Memory + Alloc = map((arm) => {
   let (pat, body) = arm
   (pat, mark_tail(body))
 }, arms)
@@ -1464,7 +1465,9 @@ fn flow_edges(node) = {
     NExpr(e) => flow_edges_expr(e),
     NStmt(s) => flow_edges_stmt(s),
     NPat(_)  => ([], []),
-    NHole(_) => ([], [])
+    NHole(_) => ([], []),
+    NModule(_)  => ([], []),  // a module handle carries no call/install edges of its own — decls are separate handles, walked individually
+    NTypeAnn(_) => ([], [])   // a type annotation is not executable — no callees, no installs
   }
 }
 
@@ -2126,7 +2129,9 @@ fn lower_expr(node) = {
         NExpr(e)     => lower_expr_body(e, canon, span),
         NStmt(s)     => lower_stmt_as_expr(s, canon, span),
         NPat(_)      => LConst(canon, LInt(0)),   // patterns don't lower as expr
-        NHole(_)     => LConst(canon, LInt(0))    // the class root is a hole-default mint; nothing authored to carry
+        NHole(_)     => LConst(canon, LInt(0)),   // the class root is a hole-default mint; nothing authored to carry
+        NModule(_)   => LConst(canon, LInt(0)),   // never an expr position — module entity, not a value
+        NTypeAnn(_)  => LConst(canon, LInt(0))    // never an expr position — an authored return annotation, not a value
       }
     }
   }
@@ -3113,7 +3118,9 @@ fn lower_stmt(node) = {
     NStmt(s) => lower_stmt_body(s, handle, span),
     NExpr(e) => lower_expr_body(e, handle, span),
     NPat(_)  => LConst(handle, LInt(0)),   // pattern at stmt position — degenerate
-    NHole(_) => LConst(handle, LInt(0))    // Hazel hole at stmt position — unreachable trap at emit
+    NHole(_) => LConst(handle, LInt(0)),   // Hazel hole at stmt position — unreachable trap at emit
+    NModule(_)  => LConst(handle, LInt(0)), // module entity at stmt position — degenerate
+    NTypeAnn(_) => LConst(handle, LInt(0))  // type annotation at stmt position — degenerate
   }
 }
 
@@ -4294,7 +4301,10 @@ fn k2_floor_dummy(h) = match repr_of(lookup_ty(h)) {
 fn world_tag_of_row(row) = match normalize_row(row) {
   EfPure          => 0,
   EfClosed(names) => world_tag_or_names(eff_names_of(names), 0, 0),
-  EfOpen(names, _) => world_tag_or_names(eff_names_of(names), 0, 0)
+  EfOpen(names, _) => world_tag_or_names(eff_names_of(names), 0, 0),
+  EfNeg(inner)     => world_tag_of_row(inner),               // the fingerprint folds referenced names regardless of polarity — already documented as an unsound-for-gating compatibility hash
+  EfSub(a, b)      => world_tag_of_row(EfInter(a, EfNeg(b))), // per the type's own reduction identity (E - F = E & !F); normalize_row already applies it, so this arm is the honest never-taken mirror
+  EfInter(a, b)    => i32_or(world_tag_of_row(a), world_tag_of_row(b))
 }
 
 fn world_tag_or_names(names, i, acc) = {
@@ -4456,7 +4466,9 @@ fn collect_free_vars(node, bound) = {
     NExpr(e) => free_vars_expr(e, bound),
     NStmt(s) => free_vars_stmt(s, bound),
     NPat(_)  => [],
-    NHole(_) => []
+    NHole(_) => [],
+    NModule(_)  => [],   // a module entity contains no VarRef of its own
+    NTypeAnn(_) => []    // an authored type annotation contains no VarRef
   }
 }
 
@@ -4900,6 +4912,11 @@ fn resolve_captures_outer(names, owner_h) = {
       RUpval(slot) => (
         [name] ++ rest_names,
         [LUpval(local_h, slot)] ++ rest_exprs,
+        [local_h] ++ rest_handles
+      ),
+      RFbPrior(fb_h) => (
+        [name] ++ rest_names,
+        [LFeedbackPrior(fb_h)] ++ rest_exprs,
         [local_h] ++ rest_handles
       )
     }

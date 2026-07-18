@@ -307,7 +307,7 @@ fn unwrap_source_span(opt) with Pure = match opt {
 // live; the string table that re-derived this is dissolved. A name
 // that binds no handler (not found, or a non-handler kind) absorbs
 // nothing.
-fn catalog_handled_effects(handler_name) with EnvRead + !Mutate = {
+fn catalog_handled_effects(handler_name) with Memory + EnvRead + !Mutate = {
   match env_lookup(handler_name) {
     None => [],
     Some(entry) => {
@@ -431,7 +431,8 @@ fn annotation_eq(a, b) with Pure = match a {
   ANotNetwork(_) => match b { ANotNetwork(_) => true, _ => false },
   ARefined(_, _, _) => match b { ARefined(_, _, _) => true, _ => false },
   AOwn(_, _)     => match b { AOwn(_, _)     => true, _ => false },
-  ARef(_, _)     => match b { ARef(_, _)     => true, _ => false }
+  ARef(_, _)     => match b { ARef(_, _)     => true, _ => false },
+  AWrapHandler(_, _, _) => match b { AWrapHandler(_, _, _) => true, _ => false }
 }
 
 // Walk the reason DAG from a graph handle. Every unification, instantiation, and
@@ -569,7 +570,8 @@ fn show_annotation(ann) = match ann {
   ANotNetwork(_)       => "with !Network",
   ARefined(name, _, _) => "refined {name}",
   AOwn(name, _)        => "own {name}",
-  ARef(name, _)        => "ref {name}"
+  ARef(name, _)        => "ref {name}",
+  AWrapHandler(name, _, _) => "wrap with {name}"
 }
 
 fn show_capability(cap) with Pure = match cap {
@@ -641,6 +643,12 @@ fn render_why_at(reason, depth) = {
     Instantiation(name, inner) =>
       "{indent_for(depth)}instantiation of '{name}':\n{render_why_at(inner, depth + 1)}",
 
+    InferredCallReturn(callee, inner) =>
+      "{indent_for(depth)}call to '{callee}':\n{render_why_at(inner, depth + 1)}",
+
+    InferredPipeResult(verb, inner) =>
+      "{indent_for(depth)}{verb} pipe:\n{render_why_at(inner, depth + 1)}",
+
     // Leaf variants — render via show_reason and terminate.
     Declared(_)          => render_leaf(reason, depth),
     Inferred(_)          => render_leaf(reason, depth),
@@ -648,7 +656,11 @@ fn render_why_at(reason, depth) = {
     MissingVar(_)        => render_leaf(reason, depth),
     Placeholder(_)       => render_leaf(reason, depth),
     BinOpPlaceholder(_)  => render_leaf(reason, depth),
-    Refinement(_, _)     => render_leaf(reason, depth)
+    Refinement(_, _)     => render_leaf(reason, depth),
+    UnifyFailed(_, _)    => render_leaf(reason, depth),
+    FreshInContext(_, _) => render_leaf(reason, depth),
+    DefaultReason(_, _)  => render_leaf(reason, depth),
+    VerifyWitness(_)     => render_leaf(reason, depth)
   }
 }
 

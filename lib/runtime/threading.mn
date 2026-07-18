@@ -192,7 +192,7 @@ fn ffi_spawn(ref task) with WasiThreads = {
   ThreadHandle(wasi_thread_spawn(closure_ptr))
 }
 
-fn ffi_join(handle) with WasiThreads + SharedMemory = {
+fn ffi_join(handle) with WasiThreads + SharedMemory + Memory = {
   let ThreadHandle(closure_ptr) = handle
   // done_offset is layout-dependent: closure has 8 bytes header
   // (fn_idx + capture_count) + 4 * (captures+ev_slots) bytes; the

@@ -275,7 +275,7 @@ fn handle_initialize(_params) with Memory + Alloc + Interact = {
 }
 
 // handle_hover — focus + ask(QTypeAt) → HoverContent. Per MV §2.8 AT1.
-fn handle_hover(params) with Memory + Alloc + Interact = {
+fn handle_hover(params) with Memory + Alloc + Interact + GraphRead = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
@@ -287,7 +287,8 @@ fn handle_hover(params) with Memory + Alloc + Interact = {
     AnsType(ty, reason)     => LspHoverResp(Some(hover_from_type(ty, reason))),
     AnsRow(row, reason)     => LspHoverResp(Some(hover_from_row(row, reason))),
     AnsReason(reason)       => LspHoverResp(Some(hover_from_reason(reason))),
-    AnsRefs(_, _)           => LspHoverResp(None)
+    AnsRefs(_, _)           => LspHoverResp(None),
+    AnsDebt(_, _)           => LspHoverResp(None)
   }
 }
 
@@ -327,7 +328,7 @@ fn handle_code_action(params) with Memory + Alloc + Interact + GraphRead + !Muta
 // obligations the graph holds; project each (span, predicate, reason)
 // to an LSP LspDiagnostic. The verify-debt IS the diagnostic set (the
 // graph proved it) — read live, never an empty []-fabrication.
-fn handle_diagnostic(params) with Memory + Alloc + Interact = {
+fn handle_diagnostic(params) with Memory + Alloc + Interact + GraphRead = {
   let uri = lsp_extract_uri(params)
   ensure_doc_open(uri)
   match consult(QVerifyDebt) {

@@ -341,7 +341,17 @@
 # (does the site's ambient row carry an Iterate-CLASS effect?) needs class
 # membership as a declared fact: Hβ.effects.iterate-class-declaration. The
 # DiagKind stays for the check's return.
-census_errors_max: 301
+# 301 -> 213 (2026-07-18, the effect-truth sweep, round 1). The census-spec
+# fleet (29 readers, one per file) produced exact edit specs for 192 sites;
+# 148 applied this round (the rest held for the concurrent design panel's
+# read-set): declared rows widened to the body's truth (never a row-var into a
+# declaration), aspirational `with Pure` dropped for the honest Memory/Alloc
+# the bodies perform, missing match arms written explicitly with correct
+# payload arities, the LStateSlotStore patterns bound their fourth field.
+# EffectMismatch 95 -> 70 (the remainder = the held files + the widen
+# cascade's second round), PurityViolated 56 -> 24, PatternInexhaustive
+# 25 -> 7, ConstructorArity 4 -> 1.
+census_errors_max: 213
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

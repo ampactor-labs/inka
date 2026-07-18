@@ -169,7 +169,7 @@ handler terminal_transport with state = transport_state_init(Caret(0, Inferred("
 // labeled aspects into ONE string; the transport arm writes it at
 // the WASI boundary in one print_string. Any text-mode surface
 // (terminal, CI log, doc snapshot) reads the same projection.
-fn render_cursor_block(cursor, view) with GraphRead + !Mutate = {
+fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate = {
   let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
   "Mentl @ "
     ++ show_handle_label(cursor)
@@ -316,7 +316,7 @@ fn span_of_cursor(cursor) with GraphRead = {
 // promote this to a GraphRead op (perform graph_handle_at_span(span));
 // blocked on adding the op to graph.mn's effect declaration.
 
-fn apply_suggestion(cursor, view) with GraphRead + !Mutate = {
+fn apply_suggestion(cursor, view) with GraphRead + PatchWrite + Memory + !Mutate = {
   let Cursor(handle, _, _) = cursor
   let CursorView(_, propose, _, _, _, _, teach, _) = view
   // A hole accepts its PROPOSE survivor: exactly one proven candidate is
@@ -343,7 +343,7 @@ fn apply_suggestion(cursor, view) with GraphRead + !Mutate = {
 // is the honest no-op, never a spliced fabrication; the general candidate
 // renderer is the formatter projection (Hβ.felt.candidate-render-is-format),
 // unreached while the enumerators seed literals.
-fn render_candidate_source(node) with GraphRead + !Mutate = {
+fn render_candidate_source(node) with GraphRead + Memory + !Mutate = {
   let N(body, _, h) = node
   match body {
     // An in-scope vocabulary call renders as its source form.
@@ -361,7 +361,7 @@ fn callee_var_name(callee) with Pure = {
   }
 }
 
-fn render_literal_source(h) with GraphRead + !Mutate = {
+fn render_literal_source(h) with GraphRead + Alloc + Memory + !Mutate = {
   match node_const(h) {
     Some(LVInt(n))    => int_to_str(n),
     Some(LVFloat(f))  => float_to_str(f),
@@ -373,7 +373,7 @@ fn render_literal_source(h) with GraphRead + !Mutate = {
 
 // ─── Format / parse helpers per transport ──────────────────────────
 
-fn show_handle_label(cursor) with Pure = {
+fn show_handle_label(cursor) with Alloc + Memory = {
   let Cursor(handle, _, _) = cursor
   "handle={int_to_str(handle)}"
 }
@@ -386,7 +386,7 @@ fn show_node_kind(kind) with Pure = match kind {
   NErrorHole(_) => "error-hole"
 }
 
-fn show_proposals(props) with GraphRead + !Mutate = {
+fn show_proposals(props) with GraphRead + Alloc + Memory + !Mutate = {
   let Proposals(survivors, rejected) = props
   let survivors_block =
     if len(survivors) == 0 { "(none)" }
@@ -410,7 +410,7 @@ fn show_one_rejection(pair) with GraphRead + !Mutate = {
 // Each survivor: its source text and its Reason — the pair the Synth
 // contract carries (the seed reason lives in the candidate record, not on
 // the node's mint placeholder).
-fn show_one_proposal(proposal) with GraphRead + !Mutate = {
+fn show_one_proposal(proposal) with GraphRead + Memory + !Mutate = {
   let (node, reason) = proposal
   " · {render_candidate_source(node)} — {show_reason(reason)}"
 }
@@ -422,11 +422,11 @@ fn show_pipe_context(ctx) with Pure = match ctx {
   EndingPipe => "ends pipe"
 }
 
-fn show_verify_count(preds) with Pure =
+fn show_verify_count(preds) with Alloc + Memory =
   if len(preds) == 0 { "no obligations" }
   else { "{int_to_str(len(preds))} pending" }
 
-fn show_suggestion(opt) with Pure = match opt {
+fn show_suggestion(opt) with Alloc + Memory = match opt {
   None => "(no next-step)",
   Some(suggestion) => {
     let AnnotationSuggestion(_, ann_text, unlocks, _) = suggestion

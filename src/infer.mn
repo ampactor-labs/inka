@@ -975,7 +975,20 @@ fn infer_expr(ref node) = {
 // duplication. The record-open unification is unchanged from its
 // original arm form.
 fn infer_field_access_record(rec, field, handle, span: ValidSpan) = {
-  infer_expr(rec)
+  // Reading `.field` borrows the receiver — it never moves the record. Borrow
+  // only a value chain (a VarRef or a nested field access); a call receiver
+  // (`f(x).field`) keeps its normal inference so `x`'s move into `f` still
+  // consumes. `buf.data` and `buf.count` are then two borrows of `buf`, not
+  // two consumes.
+  let N(rec_body, _, _) = rec
+  match rec_body {
+    NExpr(VarRef(_)) | NExpr(FieldExpr(_, _)) => {
+      borrow_enter()
+      infer_expr(rec)
+      borrow_exit()
+    },
+    _ => infer_expr(rec)
+  }
   let N(_, _, rh) = rec
   let field_h = mint(Inferred("field type"))
   let row_h = graph_fresh_row(Inferred("record row"))

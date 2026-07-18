@@ -258,7 +258,18 @@
 # call-arg-borrow (`len(nodes)` then `list_copy_into(nodes)`, graph.mn) — the
 # remaining move-vs-borrow needs a field-receiver borrow + the callee-param
 # ownership at each call arg (a borrowing param does not consume its argument).
-census_errors_max: 583
+#
+# 583 -> 582 (2026-07-17, move-vs-borrow part 2 — the field-receiver borrow).
+# Reading `.field` borrows the receiver; it never moves the record. infer_field
+# _access_record brackets the receiver in a borrow scope when it is a value
+# chain (a VarRef or nested field access) — `f(x).field` keeps its normal
+# inference so `x`'s move into `f` still consumes. `buf.data`/`buf.count`
+# (buffer.mn) are now two borrows, not two consumes. Soundness intact, clean
+# m2 == m3 transition. Residue (4, all `graph.mn`/`voice.mn`): the call-arg-
+# borrow — `len(nodes)` then `list_copy_into(nodes)`, an `own` value passed to
+# a BORROWING parameter. The last move-vs-borrow piece: read the callee's param
+# ownership at each argument so a ref/unmarked param does not consume its arg.
+census_errors_max: 582
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

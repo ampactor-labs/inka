@@ -1,0 +1,15 @@
+// Handler forward reference — the RED-first regression 2522f0dc landed
+// without (the harvest's flag). A `~> handler_name` BEFORE the handler's
+// declaration in source order must resolve: the handler's identity is a
+// parsed fact, pre-registered before the main walk. Runs to 42.
+effect Ask {
+  ask() -> Int
+}
+
+fn compute() = { ask() + 2 } ~> forty_answers
+
+handler forty_answers {
+  ask() => resume(40)
+}
+
+fn main() = compute()

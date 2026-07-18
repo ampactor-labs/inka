@@ -2236,6 +2236,10 @@ fn walk_locals_pat(pat, r, acc) = match pat {
   LPVar(name) => [local_wat_name(name, r) ++ " " ++ repr_wat(r)] ++ acc,
   LPCon(name, _, sub_pats) =>
     walk_locals_pat_con(ctor_payload_tys_of(name), sub_pats, acc),
+  // No declaration proves the payload tys — declare each sub-binder at the
+  // word floor so the (dead — predicate false) arm body still assembles.
+  LPUnresolvedCon(_, sub_pats) =>
+    fold(acc, (a, p) => walk_locals_pat(p, RI32, a), sub_pats),
   LPTuple(elem_binds)   => walk_locals_pat_tuple(elem_binds, acc),
   LPList(sub_pats, rest) =>
     walk_locals_pat_rest(rest, walk_locals_pat_list(sub_pats, acc)),
@@ -6146,6 +6150,7 @@ fn pat_always_matches(pat) = match pat {
   LPVar(_)        => true,
   LPLit(_)        => false,
   LPCon(_, _, _)  => false,
+  LPUnresolvedCon(_, _) => false,
   LPList(_, _)    => false,
   LPTuple(ebs)    => tuple_pats_always_match(ebs),
   LPRecord(fbs)   => record_pats_always_match(fbs),
@@ -6208,6 +6213,9 @@ fn emit_pat_predicate(pat) = emit_pat_predicate_at(pat, make_list(8), 0)
 fn emit_pat_predicate_at(pat, path, path_len) = match pat {
   LPWild   => wat_emit("    (i32.const 1)\n"),
   LPVar(_) => wat_emit("    (i32.const 1)\n"),
+  // A ctor no declaration proves can match nothing — the honest constant,
+  // never a fabricated out-of-domain tag compare.
+  LPUnresolvedCon(_, _) => wat_emit("    (i32.const 0)\n"),
   LPLit(lv) => match lv {
     // A STRING-literal pattern is `scrutinee == "literal"` at the match layer,
     // so it is the SAME structural sequence-eq `==` derives — str_eq over the
@@ -6383,6 +6391,9 @@ fn emit_pat_binds_at(pat, path, path_len, val_repr) = match pat {
   LPWild   => (),
   LPLit(_) => (),
   LPCon(name, _, sub_pats) => emit_pat_con_subs_binds(ctor_payload_tys_of(name), sub_pats, 0, path, path_len),
+  // Dead arm (predicate false) — bind each sub at the scrutinee root, word
+  // floor: never executes, always assembles.
+  LPUnresolvedCon(_, sub_pats) => each((p) => emit_pat_binds_at(p, path, path_len, RI32), sub_pats),
   LPTuple(ebs)           => emit_pat_tuple_binds(ebs, path, path_len),
   LPRecord(fbs)          => emit_pat_record_binds(fbs, path, path_len),
   LPList(sub_pats, rest) => {
@@ -6513,6 +6524,7 @@ fn lowpat_has_binders(pat) = match pat {
   LPWild          => false,
   LPLit(_)        => false,
   LPCon(_, _, sub_pats) => lowpats_have_binders(sub_pats),
+  LPUnresolvedCon(_, sub_pats) => lowpats_have_binders(sub_pats),
   LPTuple(ebs)    => tuple_pats_have_binders(ebs),
   LPRecord(fbs)   => record_pats_have_binders(fbs),
   LPList(sub_pats, rest) => {

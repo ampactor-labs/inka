@@ -1,0 +1,14 @@
+// ARMED-CLASS refusal fixture — E_RefinementRejected.
+// `1.5` violates `-1.0 <= self && self <= 1.0`: subst_self binds self=1.5,
+// predicate_decide proves Some(false) (both conjuncts decide — the UNeg
+// const fold reads `-1.0`), verify reports at the value span, and the
+// EXECUTABLE refuses: nonzero exit, zero WAT bytes. Measured before the
+// arm: the same program emitted 2,513 bytes at exit 0 while §11 claimed
+// the class was locked. Undecidable claims still defer to V_Pending and
+// compile (proof-exactness gate); only DECIDED-false refuses.
+type Sample = Float where -1.0 <= self && self <= 1.0
+
+fn main() = {
+  let bad: Sample = 1.5
+  42
+}

@@ -1597,6 +1597,17 @@ fn diag_refuses(d) with Pure = match d {
   // no duplicate fn names, measured).
   EHandlerStateShadowsOp(_, _, _) => True,
   EDuplicateFnName(_, _) => True,
+  // ARMED 2026-07-18, panel-corrected licence: census 0 on the wheel AND the
+  // user-path channel verified. ERefinementRejected fires only on a predicate
+  // DECIDED false (undecidable defers to V_Pending, decidable-true passes —
+  // the panel found no false-refusal channel); §11 claimed this class was
+  // locked while a decidable-false `let bad: Sample = 1.5` emitted 2,513
+  // bytes at exit 0. EOwnershipViolation's one false channel (an unresolved
+  // callee's move default) died with graph_bind_hole + the callee-miss borrow
+  // guard; the detector survived adversarial falsification on resolved
+  // programs (a genuine double move still refuses, disjoint arms still pass).
+  ERefinementRejected(_, _) => True,
+  EOwnershipViolation(_, _) => True,
   _                       => False
 }
 

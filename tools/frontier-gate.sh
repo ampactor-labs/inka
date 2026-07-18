@@ -490,12 +490,18 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-own-call-arg-borrow.mn" 42 no "$dir"
   run_program "$compiler" own-forward-ref-seq \
     "$ROOT/tests/frontier/mn-own-forward-ref-seq.mn" 0 no "$dir"
-  run_diagnostic "$compiler" own-call-arg-move \
+  # E_OwnershipViolation armed 2026-07-18 — the double-move fixture moved from
+  # run_diagnostic (productive exit 0) to the armed-class refusal contract.
+  run_refusal "$compiler" own-call-arg-move \
     "$ROOT/tests/frontier/mn-own-call-arg-move.mn" E_OwnershipViolation "$dir"
+  run_refusal "$compiler" refuse-refinement \
+    "$ROOT/tests/frontier/mn-refuse-refinement.mn" E_RefinementRejected "$dir"
   run_refusal "$compiler" refuse-state-shadows-op \
     "$ROOT/tests/frontier/mn-refuse-state-shadows-op.mn" E_HandlerStateShadowsOp "$dir"
   run_refusal "$compiler" refuse-dup-fn \
     "$ROOT/tests/frontier/mn-refuse-dup-fn.mn" E_DuplicateFnName "$dir"
+  run_program "$compiler" handler-forward-ref \
+    "$ROOT/tests/frontier/mn-handler-forward-ref.mn" 42 no "$dir"
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

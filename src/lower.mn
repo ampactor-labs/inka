@@ -514,6 +514,7 @@ type LowPat
   = LPVar(String)
   | LPWild
   | LPCon(String, TagId, [LowPat])   // name, tag_id (from ConstructorScheme), sub-pats
+  | LPUnresolvedCon(String, [LowPat]) // a pattern naming a ctor no declaration proves — infer already reported the miss; the match test is FALSE (no tag exists to compare) and the sub-binders still declare so the dead arm body assembles. Replaces the fabricated tag -1, which violated TagId's own 0..255 refinement — the armed E_RefinementRejected caught it on the wheel the hour the class armed.
   | LPTuple([(Int, Ty, LowPat)])     // [(offset_bytes: Int, elem_ty: Ty, sub_pat: LowPat)]
                                      // positional product: width-summed offset +
                                      // the element's proven Ty (emit reads
@@ -3406,7 +3407,7 @@ fn lower_pat(pat) = match pat {
         // unguarded list_index read garbage and fed a non-LowPat to
         // emit's walk_locals).
         if len(sub) == 0 { LPWild } else { lower_pat(list_index(sub, 0)) },
-      _ => LPCon(name, -1, lower_pats(sub))
+      _ => LPUnresolvedCon(name, lower_pats(sub))
     }
   },
   PTuple(sub)      => LPTuple(lower_pat_tuple_uniform(sub, 0)),

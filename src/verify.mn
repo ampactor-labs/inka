@@ -87,6 +87,18 @@ fn node_const(handle) with GraphRead = match graph_node_body(handle) {
   NExpr(LitFloat(f))  => Some(LVFloat(f)),
   NExpr(LitString(s)) => Some(LVString(s)),
   NExpr(LitBool(b))   => Some(LVBool(b)),
+  // A negated literal IS a constant — `-1.0` parses as UnaryOpExpr(UNeg,
+  // LitFloat), and reading only the bare-literal arms left the canonical
+  // Sample range (`-1.0 <= self`) UNDECIDABLE: the claim deferred to pending
+  // debt instead of deciding (measured by the adversarial panel).
+  NExpr(UnaryOpExpr(UNeg, inner)) => {
+    let N(ibody, _, _) = inner
+    match ibody {
+      NExpr(LitInt(n))   => Some(LVInt(0 - n)),
+      NExpr(LitFloat(f)) => Some(LVFloat(0.0 - f)),
+      _                  => None
+    }
+  },
   _                   => None
 }
 

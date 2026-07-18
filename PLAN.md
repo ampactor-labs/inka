@@ -759,7 +759,9 @@ projection (arm 7's gradient cash-out: a name's ultimate representation is a wor
 
 **Self-hosting:** layers 1–2 are Law-7 byte-identical where they change only HOW a
 fact is found, a TRANSITION where interning shifts emitted handle-order; layer 3
-is output-invariant (internal scratch strategy); layer 4 CHANGES bytes (handle
+is a TRANSITION too (the fleet's 2026-07-17 refutation of the earlier
+"output-invariant" claim here: any real arena changes allocation order and
+therefore handle numbering — plan it as a re-pin, never a no-op); layer 4 CHANGES bytes (handle
 numbers shift under the partition — a TRANSITION, re-pin from m3, the sharpest
 risk, well-precedented). Each layer marched + gated before the next. The whole
 becomes O(n) total (n = program size, O(1) per operation) on N cores — the
@@ -927,18 +929,26 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ## §7 · Current state (grounded 2026-07-18) + the landing ledger
 
-**THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 63/0,
-proof-exactness 9/9, crown 5/5, 71 micros, the march's `m3 == m4` fixed point
-(483,570 lines) — through the pinned boot `8bf740a4…` (chain:
-boot/PROVENANCE.md). The self-compile runs ~10s. The census is **356** (from
-2,266): the four Stage-1 roots fell, the affine ownership model is
-Hylo-quiet on the wheel (consumed-twice 152 → 0), and handler pre-registration
-made handler names resolve order-independently (E_MissingVariable 115 → 4,
-E_OccursCheck 115 → 4). Both `??` authoring workflows (positive + capability)
-are green end to end; the executable gate refuses holes and surfaces honest
-debt; value-proof discharges at all three sites (let / fn-return / call-arg);
-every fn body is a region and the return is a transfer, validated Hylo-quiet
-on the wheel's own compile. **The current cursor is §11 — the production bar.**
+**THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 69/0,
+proof-exactness 9/9, crown 5/5, micros, the march's fixed point, the phantom
+ratchet (287) — through the pinned boot `01d77f31…` (chain:
+boot/PROVENANCE.md). The census is **348** (from 2,266): the forward-ref
+roots are extinct (E_MissingVariable 0, E_OccursCheck 0 on the wheel — an
+env miss binds NErrorHole, one miss one diagnostic), and **six diagnostic
+classes are ARMED** (E_UnresolvedHole, E_MissingModule,
+E_HandlerStateShadowsOp, E_DuplicateFnName, E_RefinementRejected,
+E_OwnershipViolation — the armed-class contract: nonzero exit, zero WAT;
+run_refusal in the frontier gate). The arming immediately paid twice: the
+state-shadow check caught the wheel's own `caret` field at the m3 leg, and
+the refinement class + UNeg fold caught the wheel fabricating tag -1 into
+TagId's refinement (now LPUnresolvedCon). Both `??` authoring workflows are
+green end to end; value-proof discharges at all three sites; every fn body
+is a region and the return is a transfer. **The current cursor is §11 — the
+production bar**, informed by the 2026-07-18 exhaustive harvest (23 readers
+over the 113 post-first-light commits + the Codex/fleet/Opus corpus) and
+the 5-lens adversarial panel that corrected the finish-line design
+(scratchpad archaeology: the harvest + panel transcripts in the session
+workflow dirs).
 
 Ground FIRST: `bash tools/state.sh` (the whole board). This ledger is
 prose until the medium projects repo state itself — state-as-PROJECTION is
@@ -986,6 +996,9 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-18 · THE VALUE CLASSES ARM (census 348 held; frontier 69/0): diag_refuses gains ERefinementRejected (the §11 "landed and locked" claim was FALSE — a decidable-false `let bad: Sample = 1.5` emitted 2,513 bytes at exit 0) and EOwnershipViolation (its unresolved-callee false channel dead; the adversarial panel could not falsify the detector on resolved programs). node_const folds negated literals so the canonical Sample range DECIDES — and the sharper compiler caught the wheel fabricating tag -1 into TagId's 0..255 (lower_pat's unresolved-ctor arm): deleted into LPUnresolvedCon (match test honestly false, sub-binders declare at the word floor, the dead arm assembles). The dormant mn-refine-reject micro (asserting pre-arm exit-0, wired to nothing) superseded by frontier refusal fixtures; the handler-forward-ref regression added. m2==m3 clean fixed point · pin 01d77f31
+- 2026-07-18 · ONE MISS, ONE DIAGNOSTIC + THE HANDLER-NAMESPACE REFUSALS (census 352 → 348): the env-miss path bound TVar(self) — tripping graph_bind's own occurs check (a spurious 0:0 E_OccursCheck per missing name) and reading downstream as an unconstrained var (the ownership move-default cascade the panel proved). It now binds NErrorHole via the new graph_bind_hole op; an unresolved VarRef callee borrows its direct args; the occurs check reads its span from the bind's Located reason. Two classes born ARMED at the decl site: E_HandlerStateShadowsOp (a state field naming an op of its handled effect compiled clean and returned the WRONG value; the medium's own m3 leg caught the second wheel violation, `caret`, the hour the check landed) and E_DuplicateFnName. Voice state fields renamed turns/caret_now; the code-dead duplicate FeedbackSpec deleted (silently shared tag ids with prelude's Delay/Accumulate/FilterSpec — the duplicate-TYPE decl refusal is the named peer Hβ.infer.type-decl-name-registry, repro banked). E_MissingVariable/E_OccursCheck reach wheel-zero but do NOT arm (the licence correction). Frontier gains run_refusal. m2==m3 · pin d6dd8ed9
+- 2026-07-18 · THE SMT HANDLER TELLS THE TRUTH (census 356 → 352): verify_smt declared only `witnesses` while its arms update and read `debt` — the unknown-debt ledger never existed as state (2 E_MissingVariable + 2 paired E_OccursCheck). `debt = []` is the whole fell. Same commit: solver polarity (validity = UNSAT of the negation; SmtSat now returns a COUNTEREXAMPLE with the rejection, never proof-evidence — predicate_decide short-circuits ground predicates so the solver only sees open ones); node_to_predicate's missing BNe arm (`self != 0` fell to opaque PBoolNode and accrued debt instead of deciding); show_pred_operand's `<expr>` fabrication on compound operands (the refinement's own -1.0 bound rendered as `<expr>` in the diagnostic that exists to teach it — UnaryOp/BinOp render recursively). m2==m3 · pin 45244e15
 - 2026-07-18 · A HANDLER'S IDENTITY IS A PARSED FACT (pre_register_handler_sig; census 578 → 356): `pre_register_stmt` registered FnStmt, TypeDefStmt, EffectDeclStmt but not HandlerDeclStmt — handlers entered the env only at the main walk's `register_handler`, so every `~> handler_name` before the handler's declaration in source order (115 sites) floored E_MissingVariable. The handler's identity (effect, instance type, config, residual row, HandlerKind) reads only parsed structure and the effect env (already registered by EffectDeclStmt). Moving the identity registration to pre_register makes handler names resolve order-independently; the main walk reads the pre-registered r_handle from the env so forward references share the same residual row handle. E_MissingVariable 115→4, E_OccursCheck 115→4. Clean m3==m4 TRANSITION, pin 8bf740a4
 - 2026-07-17 · A BORROWING PARAMETER BORROWS (move-vs-borrow part 3; census 582 → 578): CallExpr previously inferred every argument before reading the callee's parameter product, so an owned value passed to `observe(ref value)` consumed exactly like one passed to `take(own value)`. The call now reads the canonical TParam product after labeled/default resolution: a direct VarRef passed to authored or inferred Ref enters the existing borrow scope; Own parameters and nested computations keep their normal move inference. `len` / `list_index` declare the read-only access their bodies prove; update_file_text_loop carries list_set's returned owner. E_OwnershipViolation 4→0, while the real `take(value) + take(value)` double move remains rejected. Carried-Truth: the callee product already owns the access mode; the call re-derived a move. Clean m2==m3 fixed point, pin 361ed16c. RED-first: mn-own-call-arg-borrow + mn-own-forward-ref-seq; negative control: mn-own-call-arg-move; frontier 63/0
 - 2026-07-17 · A READ IS A BORROW (move-vs-borrow, census 615 → 582): an `if` condition / `match` scrutinee / a `.field` receiver is READ, never moved, so an `own` value used there is a borrow. A borrow_depth counter on affine_ledger + borrow_enter/borrow_exit bracket the condition, the scrutinee, and a value-chain field receiver (`f(x).field` keeps its normal move of `x`); consume no-ops inside. Cleared 33 of 37 with soundness intact (a real `(take(buf), take(buf))` double-move to two `own` params still caught). Two clean m2==m3 transitions, pin 1e06cdaa. Residue (4, all graph/voice): the call-arg-borrow — `len(nodes)` then `list_copy_into(nodes)`, an `own` value passed to a BORROWING param; the last piece reads the callee's param ownership at each argument
@@ -1030,6 +1043,51 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-06-18→23 · the reframe + the three-doc consolidation; the crown's EfOpen~EfNeg unify (b4b1989); the handler registry dissolved into the live read
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
+
+The 2026-07-18 harvest + panel born peers (each artifact-verified before naming):
+`Hβ.infer.type-decl-name-registry` (a second `type X` silently MERGES —
+disjoint ctor sets share tag ids; measured: cross-tag match returns the wrong
+arm, zero diagnostics; the decl refusal needs the type-name registry — a
+SchemeKind representation change, its own landing; repro banked) ·
+`Hβ.lower.trecordopen-wrong-field` (VERIFIED LIVE silent-wrong-VALUE: an open
+receiver `u: {name: Int, ...}` reads the wrong slot — offsets computed over
+the partial field set while the record sorts over the full set; the panel:
+instrument whether self-compile hits the arm, then concrete-receiver
+resolution, never a blind -1 refusal) ·
+`Hβ.runtime.list-index-bounds-check` (SYNTAX §Indexing promises a runtime
+trap; lists.mn tag-0 raw-loads with NO bounds compare — every OOB index is a
+silent wrong read; the fix restores the promised trap, and list_index_proven
+becomes the genuinely-unchecked variant the R5 discharge selects) ·
+`Hβ.infer.narrowing-write-requires-discharge` (R5 re-scoped by the panel: the
+elision machinery is DEAD CODE — narrowing_pred_handle descends PAnd's left
+conjunct to PTrue, handle 0, never fires; delete the dead machinery, then the
+real form: record only when the path predicate discharges BOTH 0<=i AND
+i<len(receiver)) · `Hβ.mentl.verify-after-apply-boundness-only` (the teach
+loop's proof check reads node-boundness, never re-runs row subsumption;
+narrow_row binds without re-inferring — an `!Alloc` proposal on an allocating
+fn reads back 'proven'; fix = re-run subsumption under a FRESH diagnostics
+handler, graph_rollback does not cover diagnostic state) ·
+`Hβ.infer.ctor-record-construction-unify` (single-variant record-wrapping
+`Ctor({...})` construction unifies against the ctor's arrow type instead of
+its result — ~5 voice sites of E_TypeMismatch) ·
+`Hβ.lsp.transport-runs-frontend` (ensure_doc_open reads bytes, never
+lex/parse/infers — hover reads an unpopulated graph; v1 = the pipeline splice)
+· `Hβ.format.render-totality-before-fmt` (mentl fmt wiring is premature:
+render_body_tokens carries `<expr>`/`<stmt>`/`<pat>` surrender-fallbacks and
+format_chain is unreachable from format_program — totality first, then the
+verb) · `Hβ.multishot.handler-return-clause` (M5 — named twice in
+docs/research/multishot-general-design.md as the next ladder step, absent
+here until now) · `Hβ.lower.branch-isolated-handler-state` (the multishot
+doc's own correction, missing from every band) ·
+`Hβ.infer.usage-grade-unifies-cardinality-ownership` — NOTE: this peer's
+name was REUSED on 2026-07-17 for the branch/scope ownership fix; the
+ORIGINAL residue (unify classify_usage and resume_grade onto one count_uses)
+is still open and lives under this line ·
+`Hβ.emit.compose-width-floor` (implemented in lower.mn, tracked nowhere until
+now) · `Hβ.cursor.gradient-queue-activate-or-delete` (built, exposed, zero
+callers) · `Hβ.graph.fork-dead-code` (graph_fork + the overlays
+module-to-handle index: built, zero callers, taxing the hot alloc path — an
+activation slot or a deletion).
 
 `Hβ.synth.vocabulary-arg-holes` · `Hβ.synth.vocabulary-reach-index` ·
 `Hβ.cursor.enclosing-decl-edge` (band M kin) ·
@@ -1194,6 +1252,15 @@ WAT for archaeology. `wasm-interp` CANNOT run m2 (no WASI — fails on the
     governs each agent. A turn ends with what CHANGED and the MEASURED result;
     work not done → "not done" first sentence; shortest response carrying result
     + next move.
+
+11. **A gate is not trusted until it has been seen RED; a Carried-Truth fix
+    DELETES.** Run every new gate against the unfixed tree and watch it fail
+    before the fix (march.sh models this — it arbitrates by running the m4 leg
+    itself; thirty of the 2026-07-17 fleet's gates could not fail and died to
+    one command). And ask of every fix's diff: does it delete? Elegance is the
+    axis fluency fakes best; a line count is not — a net-positive "less code"
+    fix must say why in its commit (the `++` row fix claimed a deletion while
+    adding 43 lines; the flurry plan caught it).
 
 **Bug classes that cost hours:** `match … with _` masking type errors · dup
 top-level fn names (emitter picks one silently) · flat-array ops in Snoc paths
@@ -1394,17 +1461,37 @@ in this column is one of its classes.
   not lower; the WORK sequences (§9.3). So the classes turn on **ONE AT A
   TIME, each when the wheel's own census of that class reaches zero**, and
   the census ratchet (tools/verify-baseline.txt) holds it there — a class at
-  zero can be gated and can never ungate. Landed and locked: E_UnresolvedHole,
-  E_RefinementRejected (proof-exactness 9/9). Gateable NOW, zero on the wheel:
-  **E_MissingModule** (its silent skip in driver_compile_entry is fixed;
-  the gate is the next build). The work, by class (the four Stage-1 roots
-  FELLED 2026-07-17, census 2266 → 578): E_TypeMismatch 1286 → 109 (bare-List +
-  alias-forward-ref + bare-parameterized-arity) · E_OwnershipViolation 508 → 0
-  (check_ref_escape deleted; the affine branch/scope fix + read/field/callee-
-  parameter borrows cleared the class) · E_OccursCheck 118 → 115 · E_MissingVariable 118 →
-  115 (the handler forward-reference class) · E_EffectMismatch 95 ·
-  E_PurityViolated 66 · E_IfMissingElse 28 → 32 · E_PatternInexhaustive 26 → 25 ·
-  E_FeedbackNoContext 11 · E_UnresolvedType 4 · E_ConstructorArity 4 ·
+  zero can be gated and can never ungate — **AND the user path must be clean
+  too** (the panel's 2026-07-18 licence correction: blob-census-zero alone is
+  circular — users compile via stdin-without-lib and the import DAG, whose
+  diagnostic sets differ from the blob's, so a name-dependent class at
+  blob-zero can still falsely refuse a correct stdlib-using program until the
+  manifest work lands). ARMED (2026-07-18): E_UnresolvedHole (the hole gate)
+  · E_MissingModule · E_HandlerStateShadowsOp and E_DuplicateFnName (born
+  armed — decl-site facts, no resolution dependency; the state-shadow
+  collision measured compiling clean with a WRONG value, and the arming
+  commit's own m3 leg caught the wheel's second violation, `caret`) ·
+  E_RefinementRejected (the prior "landed and locked" claim here was FALSE —
+  a decidable-false `let bad: Sample = 1.5` emitted 2,513 bytes at exit 0;
+  armed with the UNeg const fold, which immediately caught the wheel
+  fabricating tag -1 into TagId's refinement — deleted into LPUnresolvedCon)
+  · E_OwnershipViolation (its unresolved-callee false channel died with
+  graph_bind_hole + the callee-miss borrow guard). AT WHEEL-ZERO BUT NOT
+  ARMED: E_MissingVariable and E_OccursCheck — the user-path condition
+  (stdlib vocabulary unresolved on stdin/DAG paths until §11 col-2's
+  manifest lands); the occurs cascade itself is DEAD (an env miss binds
+  NErrorHole via graph_bind_hole, never the self-referential TVar that
+  tripped graph_bind's occurs check — one miss, one diagnostic). The work,
+  by class (census 2266 → 348): E_TypeMismatch 109 (incl. the
+  single-variant record-wrapping `Ctor({...})` construction-inference bug,
+  ~5 voice sites, panel-found) · E_EffectMismatch 95 · E_PurityViolated 66 ·
+  E_IfMissingElse 32 (largely a checker false-positive class — the unit
+  proof does not reach effect-op calls in body position; graph_bind's own
+  arm shape is among them) · E_PatternInexhaustive 25 · E_FeedbackNoContext
+  11 (one checker-recognition root: the Iterate-class test does not read
+  installed iterate handlers or the declared `Sample` row — SYNTAX says the
+  class is structural, not a name-allowlist) · E_UnresolvedType 4 ·
+  E_ConstructorArity 4 (LStateSlotStore patterns bind 3 of 4) ·
   E_ResumeOutsideArm 2. The mechanism is `diag_refuses`
   (a projection beside `diag_severity`, types.mn:1506) + the count on
   diagnostics_handler's own state + one live read at executable_gate. Do NOT

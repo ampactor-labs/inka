@@ -3436,7 +3436,7 @@ fn emit_expr(expr) = match expr {
   },
 
   LFeedback(h, body, _spec) => {
-    // <~ feedback — state-machine lowering, v1 scope: FbDelay(1).
+    // <~ feedback — state-machine lowering, v1 scope: Delay(1).
     //
     // Per LF walkthrough §1.5: the iteration cycle is load-prior →
     // emit body → tee-current → store-current → reload-current.
@@ -3454,9 +3454,9 @@ fn emit_expr(expr) = match expr {
     //
     // Sub-handles named as peers in ROADMAP.md (each lands in its own
     // commit when its substrate motive surfaces):
-    //   LF.1 — FbDelay(N>1) ring buffer
-    //   LF.2 — FbState(init) with typed carrier
-    //   LF.3 — FbFilter(N, coeffs) N-tap filter
+    //   LF.1 — Delay(N>1) ring buffer
+    //   LF.2 — Accumulate(init) with typed carrier
+    //   LF.3 — FilterSpec(N, coeffs) N-tap filter
     //   LF.M — handler-state-offset migration (replaces module
     //          globals with per-handler-state slots; required for
     //          threading × multi-shot composition correctness).

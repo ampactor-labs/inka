@@ -222,6 +222,16 @@ type Ownership
   | Own          // affine: consumed at use (performs Consume)
   | Ref          // borrowed: cannot escape return position
 
+// How a branch frame's arms relate at runtime — the affine ledger reads it
+// at branch_exit to decide whether consuming one name in two arms is a
+// violation. `><` / `<|` run every branch (BParallel), so a name consumed
+// in two IS a double-consume; `if` / `match` run exactly ONE arm
+// (BAlternative), so consuming a name across arms is a single consume on
+// whichever path is taken — the arms UNION, never collide.
+type BranchMode
+  = BParallel      // >< / <| — all arms execute; cross-arm consume is a collision
+  | BAlternative   // if / match — one arm executes; cross-arm consume unions
+
 // ─── TParam projections — the §2 'project' operation made literal ──
 // A param is a PRODUCT node CARRIED whole; every aspect is read through
 // a TOTAL named projection defined ONCE here, never a positional
@@ -1772,18 +1782,31 @@ effect Verify {
 // affine_ledger enforces linearity only for authored Own. Unmarked params are
 // resolved later by the structural use-count pass and written into the TFun.
 //
-// Branching ops (W2) implement the `><` / `<|` branching ledger:
-// at branch_enter, the handler stashes `used` as a base; branch_divider
-// captures the delta since base, stashes it in the frame, resets used
-// to base; branch_exit captures the final branch's delta, pairwise-
-// checks collisions (same name consumed in two branches →
-// E_OwnershipViolation), unions all deltas into used, pops the frame.
+// Branching ops implement the branching ledger for BOTH parallel
+// (`><` / `<|`) and alternative (`if` / `match`) arms — the BranchMode
+// carried at branch_enter tells them apart. At branch_enter the handler
+// stashes `used` as a base and the mode; branch_divider captures the
+// delta since base, stashes it in the frame, resets used to base;
+// branch_exit captures the final arm's delta, unions all deltas into
+// used, pops the frame — and, for BParallel only, pairwise-checks
+// collisions (a name consumed in two arms that BOTH run is a double
+// consume → E_OwnershipViolation). Alternative arms never collide: only
+// one runs, so a name consumed across arms is one consume on the taken
+// path.
 
 effect Consume {
   consume(String, Ownership, Span) -> ()
-  branch_enter() -> ()
+  branch_enter(BranchMode) -> ()
   branch_divider(Span) -> ()
   branch_exit(Span) -> ()
+  // A function body is a consume SCOPE — its `own` params are its own
+  // linear resources, unrelated to any other body's. infer_fn brackets
+  // each body with enter/exit so a name consumed in one function never
+  // pollutes the next (affine_ledger is installed once at the pipeline,
+  // not per body). Re-entrant for nested fn decls: enter pushes a fresh
+  // frame, exit restores the parent's.
+  consume_enter_fn() -> ()
+  consume_exit_fn() -> ()
 }
 
 // Generic file I/O (read/write, mkdir, exists) — the driver's module

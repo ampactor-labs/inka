@@ -1,0 +1,17 @@
+// Ownership: an `own` value read in BOTH arms of an `if` is ONE consume on
+// the taken path (the arms are ALTERNATIVES — exactly one runs), and an
+// `own` param in one function is unrelated to the same-named param in the
+// next. Before if/match bracketed their arms as BAlternative and the consume
+// ledger scoped per function body, `tally` floored on its two arms and
+// `total` floored on `buf` left "used" by `tally` — the cross-function false
+// positive. Both are clean now; no runtime linked, so the gate tests only
+// the affine ledger.
+fn keep(x) with Pure = x
+
+fn tally(own buf, i) with Pure =
+  if i < 0 { keep(buf) }
+  else { keep(buf) }
+
+fn total(own buf) with Pure = keep(buf)
+
+fn main() = tally(10, -1) + total(20)

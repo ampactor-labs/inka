@@ -95,7 +95,7 @@ BOOT_RUNTIME_SHADOW=""
 # a removal, which the rule above explicitly permits. Verified by reading the new
 # shadow: the same E_TypeMismatch/E_RedundantBraces set minus the ownership false
 # positives, never a NEW entry.
-EXPECTED_RUNTIME_SHADOW_SHA256="75c5f56132e2cfdc19d99e5522671a1ba5fe7cd3fda698b66bc622a6545296ca"
+EXPECTED_RUNTIME_SHADOW_SHA256="d30f049885c815509c5fd1130afb77444c6483c12c7d6b8ab7005d14d334ca03"
 
 pass() {
   echo "  PASS $*"
@@ -447,6 +447,8 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-refined-alias-nonatomic.mn" 3 yes "$dir"
   run_program "$compiler" refined-alias-forward-ref \
     "$ROOT/tests/frontier/mn-refined-alias-forward-ref.mn" 42 no "$dir"
+  run_program "$compiler" own-alternative-branches \
+    "$ROOT/tests/frontier/mn-own-alternative-branches.mn" 30 no "$dir"
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

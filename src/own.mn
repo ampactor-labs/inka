@@ -32,7 +32,28 @@ handler catch_abort {
   abort() => None
 }
 
-handler affine_ledger with used = [], used_sites = [], branches = [] {
+handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved = [] {
+
+  // A function body opens a fresh consume scope; its close restores the
+  // parent's. The whole (used, used_sites, branches) triple is saved so a
+  // nested fn decl inferred mid-branch cannot leak its consumes outward —
+  // the enclosing frame comes back exactly as it was. Push/pop at the END
+  // (§9 stack discipline): bounded by lexical fn-nesting depth, not a data
+  // loop.
+  consume_enter_fn() =>
+    resume()
+      with fn_saved = fn_saved ++ [(used, used_sites, branches)],   // drift-audit: ignore — bounded by lexical fn-nesting depth, not a data loop
+           used = [], used_sites = [], branches = [],
+
+  consume_exit_fn() => {
+    if len(fn_saved) == 0 { resume() }
+    else {
+      let (u, us, br) = last(fn_saved)
+      resume()
+        with used = u, used_sites = us, branches = br,
+             fn_saved = drop_last(fn_saved)
+    }
+  },
 
   consume(name, ownership, span) => {
     match ownership {
@@ -55,10 +76,12 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
   },
 
   // branch_enter — snapshot the current `used` as the frame's base;
-  // deltas list starts empty. Nested branches push onto the stack.
-  branch_enter() => {
+  // deltas list starts empty; the mode rides the frame so branch_exit
+  // knows whether the arms run in parallel (collision) or as
+  // alternatives (union). Nested branches push onto the stack.
+  branch_enter(mode) => {
     resume()
-      with branches = [(used, [])] ++ branches
+      with branches = [(used, [], mode)] ++ branches
   },
 
   // branch_divider — called between branches of `><` or between
@@ -69,11 +92,11 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
   branch_divider(_span) => {
     if len(branches) == 0 { resume() }
     else {
-      let (base, deltas) = last(branches)
+      let (base, deltas, mode) = last(branches)
       let delta = set_diff(used, base)
       resume()
         with used = base,
-             branches = [(base, [delta] ++ deltas)] ++ drop_last(branches)
+             branches = [(base, [delta] ++ deltas, mode)] ++ drop_last(branches)
     }
   },
 
@@ -84,10 +107,17 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
   branch_exit(span) => {
     if len(branches) == 0 { resume() }
     else {
-      let (base, prior_deltas) = last(branches)
+      let (base, prior_deltas, mode) = last(branches)
       let last_delta = set_diff(used, base)
       let all_deltas = [last_delta] ++ prior_deltas
-      report_branch_collisions(all_deltas, span)
+      // Parallel arms both run, so a name in two deltas is consumed
+      // twice at runtime — a violation. Alternative arms run exactly
+      // one, so a name across deltas is one consume on the taken path:
+      // union it in, never a collision.
+      match mode {
+        BParallel    => report_branch_collisions(all_deltas, span),
+        BAlternative => ()
+      }
       resume()
         with used = set_union(base, union_all_deltas(all_deltas)),
              branches = drop_last(branches)

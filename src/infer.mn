@@ -408,7 +408,14 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   // TRANSFERS the body value to the parent region or proves the escape.
   inf_enter_fn(row_handle, ret_handle, span, effs)
   let body_region = region_enter(span)
+  // The body is a consume scope — its `own` params are its own linear
+  // resources. Without this bracket, a name consumed here (affine_ledger
+  // is installed once at the pipeline, not per body) stays in `used` and
+  // collides in the NEXT function that names the same `own` param — the
+  // cross-function `buf`/`acc` false positives.
+  consume_enter_fn()
   infer_expr(body_node)
+  consume_exit_fn()
   let declared_effs = inf_exit_fn()   // drift-audit: ignore — sequenced effectful handler-state read (the popped frame's declaration, consumed at the enforcement below)
 
   // Unify body's type with the declared return.
@@ -672,8 +679,17 @@ fn infer_expr(ref node) = {
 
     NExpr(IfExpr(cond, then_e, else_e)) => {
       infer_expr(cond)
+      // then / else are ALTERNATIVE arms — exactly one runs — so an `own`
+      // value consumed in both is one consume on the taken path, never a
+      // double. The affine ledger unions the arms' deltas without a
+      // collision check (BAlternative), the same mechanism `><` / `<|`
+      // use with BParallel. Without this, every `if c { use(buf) } else {
+      // use(buf) }` threading an owned accumulator floored E_OwnershipViolation.
+      branch_enter(BAlternative)
       infer_expr(then_e)
+      branch_divider(span)
       infer_expr(else_e)
+      branch_exit(span)
       let N(_, _, ch) = cond
       let N(_, _, th) = then_e
       let N(_, _, eh) = else_e
@@ -1571,7 +1587,7 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
 // ownership CHECKS coherence in that follow-up.
 fn infer_fanout(fan_own, left, right, handle, span: ValidSpan) = match fan_own {
   FanDistribute => {
-    branch_enter()
+    branch_enter(BParallel)
     let l_edge = infer_fanout_value_boundary(left, span, "left")
     branch_divider(span)
     let r_edge = infer_fanout_value_boundary(right, span, "right")
@@ -1684,7 +1700,7 @@ fn infer_fanout_share(left, right, handle, span: ValidSpan) = {
   let n = len(branches)
   let edges = if n == 0 { [] }
     else {
-      branch_enter()
+      branch_enter(BParallel)
       let inferred_edges = infer_fanout_share_branches(branches, input_h, span, 0, n)
       branch_exit(span)
       inferred_edges
@@ -2725,7 +2741,15 @@ fn bind_pcon_subpats(params, sub_pats, span: ValidSpan, reason, ctor_name) = {
 }
 
 fn infer_match_arms(arms, scrut, result_h, span: ValidSpan) = {
-  infer_match_arm_iter(arms, scrut, result_h, span)
+  // Match arms are ALTERNATIVE — exactly one runs — so an `own` value
+  // consumed in several arms is one consume on the taken path, unioned
+  // by the affine ledger without a collision (BAlternative), the same
+  // bracket `><` / `<|` use with BParallel. Empty match has no arms to
+  // bracket.
+  let n = len(arms)
+  if n > 0 { branch_enter(BAlternative) }
+  infer_match_arm_iter(arms, scrut, result_h, span, 0, n)
+  if n > 0 { branch_exit(span) }
   // Exhaustiveness check (H3): if no wildcard arm covers the
   // remainder, every constructor of the scrutinee's declaring type
   // must appear among the arms. ConstructorScheme(_, total_variants)
@@ -2738,16 +2762,22 @@ fn infer_match_arms(arms, scrut, result_h, span: ValidSpan) = {
   }
 }
 
-fn infer_match_arm_iter(arms, scrut, result_h, span: ValidSpan) = {
-  each((arm) => {
-    let (pat, body) = arm
+fn infer_match_arm_iter(arms, scrut, result_h, span: ValidSpan, i, n) = {
+  if i >= n { () }
+  else {
+    let (pat, body) = list_index(arms, i)
     env_scope_enter()
     infer_pat(pat, scrut, span)
     infer_expr(body)
     let N(_, _, bh) = body
     unify(bh, result_h, span, MatchBranch(Inferred("arm body"), Inferred("result")))
     env_scope_exit()
-  }, arms)
+    // Divide BETWEEN arms only — the affine ledger resets `used` to the
+    // frame base so the next arm sees the pre-match scope, never the
+    // prior arm's consumes.
+    if i + 1 < n { branch_divider(span) }
+    infer_match_arm_iter(arms, scrut, result_h, span, i + 1, n)
+  }
 }
 
 // Walk arms, gathering each PCon's tag_id (deduped via set_insert).

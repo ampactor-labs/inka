@@ -225,7 +225,28 @@
 # Option(X) lower the same), so no re-pin; the census ratchet IS this class's
 # gate (revert and it rises past 727). Residue: Buffer needs `Buffer(a)`
 # parameterization (7 sites, genuinely generic) — named, not forced here.
-census_errors_max: 727
+#
+# 727 -> 615 (2026-07-17, the affine ownership model, two Carried-Truth fixes).
+# 115 of the 152 "consumed twice" were false positives from two masked bugs:
+# (1) if/match arms were NOT bracketed as branches, so an `own` value read in
+# both arms of `if i<0 {slice(buf)} else {list_set(buf)}` counted as two
+# consumes — but the arms are ALTERNATIVES (one runs), so it is one consume on
+# the taken path. Fix: a BranchMode ADT (BParallel | BAlternative) rides the
+# branch frame; branch_exit reports collisions only for BParallel (`><`/`<|`,
+# both run), unions without collision for BAlternative (if/match). (2) the
+# affine_ledger is installed ONCE at the pipeline, not per body, so a name
+# consumed in one function stayed in `used` and collided in the next function
+# naming the same `own` param (`buf`/`acc` are everywhere) — the dominant
+# shape. Fix: consume_enter_fn/consume_exit_fn bracket each infer_fn body, a
+# fresh consume scope restored on exit (re-entrant for nested fn decls). Emit
+# grew (the ADT + ops), a clean m2 == m3 TRANSITION, boot re-pinned. Guarded
+# RED-first by tests/frontier/mn-own-alternative-branches.mn. E_IfMissingElse
+# rose 29 -> 32 — productive-under-error exposing real if-without-else the
+# masking ownership errors hid, not a regression (total still fell). Residue
+# (37 left): the move-vs-borrow-by-callee case — an `own` value read in an `if`
+# CONDITION (`if set_contains(buf,...)`) or a field (`buf.data`) is a BORROW,
+# not a move; only a whole-value move to an `own` param should consume.
+census_errors_max: 615
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

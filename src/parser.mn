@@ -2473,6 +2473,7 @@ fn node_to_predicate(node, span: ValidSpan) = {
   let N(body, _, _) = node
   match body {
     NExpr(BinOpExpr(BEq, l, r))     => compare_pred(BEq, l, r),
+    NExpr(BinOpExpr(BNe, l, r))     => PNot(compare_pred(BEq, l, r)),
     NExpr(BinOpExpr(BLt, l, r))     => compare_pred(BLt, l, r),
     NExpr(BinOpExpr(BLe, l, r))     => compare_pred(BLe, l, r),
     NExpr(BinOpExpr(BGt, l, r))     => compare_pred(BLt, r, l),

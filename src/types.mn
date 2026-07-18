@@ -2156,6 +2156,23 @@ fn show_pred_operand(handle) with GraphRead = {
     NExpr(LitFloat(f))  => float_to_str(f),
     NExpr(LitString(s)) => "\"{s}\"",
     NExpr(CallExpr(callee, _)) => "{show_callee_name(callee)}(...)",
+    // The predicate grammar's compound operands render recursively — a
+    // refinement's `-1.0 <= self` carries UnaryOpExpr(UNeg, LitFloat) on the
+    // left, and `self % 2` carries a BinOpExpr; both rendered `<expr>` before,
+    // fabricating away the exact bound the diagnostic exists to teach.
+    NExpr(UnaryOpExpr(UNeg, inner)) => {
+      let N(_, _, ih) = inner
+      "-{show_pred_operand(ih)}"
+    },
+    NExpr(UnaryOpExpr(UNot, inner)) => {
+      let N(_, _, ih) = inner
+      "!{show_pred_operand(ih)}"
+    },
+    NExpr(BinOpExpr(op, l, r)) => {
+      let N(_, _, lh) = l
+      let N(_, _, rh) = r
+      "{show_pred_operand(lh)} {binop_to_str(op)} {show_pred_operand(rh)}"
+    },
     _                   => "<expr>"
   }
 }

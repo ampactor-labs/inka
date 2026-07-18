@@ -282,7 +282,20 @@
 # compiler's own m3 judgment; the real `take(value) + take(value)` double move
 # remains rejected. Guarded red-first by mn-own-call-arg-borrow,
 # mn-own-forward-ref-seq, and mn-own-call-arg-move. Clean m2 == m3 fixed point.
-census_errors_max: 356
+# 356 -> 352 (2026-07-18, the SMT handler tells the truth). verify_smt declared
+# only `witnesses` while its arms update and read `debt` — the SMT unknown-debt
+# ledger never existed as state, so every arm reference was an unbound name (2
+# E_MissingVariable + their 2 paired E_OccursCheck, the missing name minting a
+# self-referencing free var). Adding `debt = []` is the whole fell. Same commit:
+# the solver's polarity (validity = UNSAT of the negation — SAT-of-the-predicate
+# admitted any satisfiable open predicate as discharged; predicate_decide already
+# short-circuits ground ones, so the solver only ever sees open predicates);
+# node_to_predicate's missing BNe arm (`self != 0` fell to the opaque PBoolNode
+# and accrued debt instead of deciding — one arm: PNot of the BEq compare); and
+# show_pred_operand's `<expr>` fabrication on compound operands (a refinement's
+# own `-1.0` rendered as `<expr>` in the very diagnostic that exists to teach
+# the bound — UnaryOp/BinOp now render recursively).
+census_errors_max: 352
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

@@ -271,7 +271,7 @@ effect SmtSolver {
   smt_solve(String) -> SmtResult
 }
 
-handler verify_smt with witnesses = [] {
+handler verify_smt with witnesses = [], debt = [] {
 
   verify(span, predicate, reason) =>
     match predicate_decide(predicate) {
@@ -281,13 +281,19 @@ handler verify_smt with witnesses = [] {
         resume()
       },
       None        =>
-        match smt_solve(predicate_to_smt_lib(predicate)) {
-          SmtSat(witness) =>
-            resume()
-              with witnesses = [(span, predicate, witness)] ++ witnesses,
-          SmtUnsat => {
+        // Only OPEN predicates reach the solver (predicate_decide short-circuits
+        // ground ones above), so validity is the question — and validity is the
+        // NEGATION's unsatisfiability. Solving the predicate itself and reading
+        // SAT as discharge admits any predicate SOME assignment satisfies: the
+        // inverted-polarity hole. UNSAT(¬P) proves P for every assignment;
+        // SAT(¬P) hands back the violating assignment — a COUNTEREXAMPLE the
+        // cursor surfaces at the rejection, not proof-evidence.
+        match smt_solve(predicate_to_smt_lib(PNot(predicate))) {
+          SmtUnsat => resume(),
+          SmtSat(counterexample) => {
             report_refinement_rejected(predicate, span, reason)
             resume()
+              with witnesses = [(span, predicate, counterexample)] ++ witnesses
           },
           // SmtUnknown is a GENUINELY undischarged obligation — accrue it as
           // pending debt (never silently resume, which would discharge an
@@ -302,9 +308,10 @@ handler verify_smt with witnesses = [] {
 
   // verify_debt projects the SMT handler's residual LIVE (Carried-Truth — the
   // witnesses + the unknown-debt are graph state the handler proved; reading
-  // resume([]) fabricated an empty ledger). SmtSat witnesses are proof-evidence
-  // the cursor surfaces (mentl-why walks to the model); SmtUnknown obligations
-  // are retained debt. Both flow back as the residual, never dropped.
+  // resume([]) fabricated an empty ledger). SmtSat counterexamples are the
+  // violating assignments behind each rejection (mentl-why walks to the model);
+  // SmtUnknown obligations are retained debt. Both flow back as the residual,
+  // never dropped.
   verify_debt() =>
     resume(verify_residual(debt, witnesses))
 }

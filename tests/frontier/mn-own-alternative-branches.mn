@@ -1,12 +1,13 @@
-// Ownership: an `own` value read in BOTH arms of an `if` is ONE consume on
-// the taken path (the arms are ALTERNATIVES — exactly one runs), and an
-// `own` param in one function is unrelated to the same-named param in the
-// next. Before if/match bracketed their arms as BAlternative and the consume
-// ledger scoped per function body, `tally` floored on its two arms and
-// `total` floored on `buf` left "used" by `tally` — the cross-function false
-// positive. Both are clean now; no runtime linked, so the gate tests only
-// the affine ledger.
+// Ownership, three ways the affine ledger must NOT flag safe code, no
+// runtime linked so the gate tests only the ledger:
+//  - tally: an `own` value read in BOTH arms of an `if` is ONE consume on
+//    the taken path (the arms are ALTERNATIVES — exactly one runs).
+//  - total: an `own` param in one function is unrelated to the same-named
+//    param in the next (the ledger scopes per function body).
+//  - guard: an `own` value read in an `if` CONDITION is a borrow, not a
+//    move, so it stays available in the arms.
 fn keep(x) with Pure = x
+fn nonzero(x) with Pure = x != 0
 
 fn tally(own buf, i) with Pure =
   if i < 0 { keep(buf) }
@@ -14,4 +15,8 @@ fn tally(own buf, i) with Pure =
 
 fn total(own buf) with Pure = keep(buf)
 
-fn main() = tally(10, -1) + total(20)
+fn guard(own buf) with Pure =
+  if nonzero(buf) { keep(buf) }
+  else { 0 }
+
+fn main() = tally(10, -1) + total(20) + guard(3)

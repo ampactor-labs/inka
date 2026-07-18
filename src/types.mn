@@ -1807,6 +1807,12 @@ effect Consume {
   // frame, exit restores the parent's.
   consume_enter_fn() -> ()
   consume_exit_fn() -> ()
+  // A BORROW scope — an `if` condition / `match` scrutinee is READ to
+  // decide control, never moved, so a use inside it is a borrow, not a
+  // consume. Between enter/exit the ledger drops consumes (a value read
+  // here stays available in the arms). Nested via a depth counter.
+  borrow_enter() -> ()
+  borrow_exit() -> ()
 }
 
 // Generic file I/O (read/write, mkdir, exists) — the driver's module

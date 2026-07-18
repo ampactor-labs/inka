@@ -678,7 +678,12 @@ fn infer_expr(ref node) = {
     },
 
     NExpr(IfExpr(cond, then_e, else_e)) => {
+      // The condition is READ to decide the branch — an `own` value used
+      // in it (`if set_contains(buf, x)`) is borrowed, not moved, so it
+      // stays available in the arms.
+      borrow_enter()
       infer_expr(cond)
+      borrow_exit()
       // then / else are ALTERNATIVE arms — exactly one runs — so an `own`
       // value consumed in both is one consume on the taken path, never a
       // double. The affine ledger unions the arms' deltas without a
@@ -726,7 +731,12 @@ fn infer_expr(ref node) = {
     },
 
     NExpr(MatchExpr(scrutinee, arms)) => {
+      // The scrutinee is READ to dispatch — an `own` value matched on
+      // (`match kind { ... }`) is borrowed, not moved, so it stays
+      // available inside the arms.
+      borrow_enter()
       infer_expr(scrutinee)
+      borrow_exit()
       let N(_, _, sh) = scrutinee
       infer_match_arms(arms, sh, handle, span)
     },

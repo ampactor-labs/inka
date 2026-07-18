@@ -246,7 +246,19 @@
 # (37 left): the move-vs-borrow-by-callee case — an `own` value read in an `if`
 # CONDITION (`if set_contains(buf,...)`) or a field (`buf.data`) is a BORROW,
 # not a move; only a whole-value move to an `own` param should consume.
-census_errors_max: 615
+#
+# 615 -> 583 (2026-07-17, the borrow scope — move-vs-borrow, part 1). An `if`
+# condition and a `match` scrutinee are READ to decide control, never moved, so
+# a use inside them is a borrow. A borrow_depth counter on affine_ledger +
+# borrow_enter/borrow_exit bracket the condition and scrutinee; consume no-ops
+# while borrow_depth > 0. Cleared 32 of the 37 (`if set_contains(buf,...)` &c.),
+# soundness preserved — a real double-move `(take(buf), take(buf))` to two `own`
+# params is still caught. Emit grew → clean m2 == m3 transition. Residue (5):
+# the field-read (`buf.data` + `buf.count`, buffer.mn) and the sequential
+# call-arg-borrow (`len(nodes)` then `list_copy_into(nodes)`, graph.mn) — the
+# remaining move-vs-borrow needs a field-receiver borrow + the callee-param
+# ownership at each call arg (a borrowing param does not consume its argument).
+census_errors_max: 583
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

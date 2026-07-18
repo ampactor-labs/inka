@@ -32,7 +32,15 @@ handler catch_abort {
   abort() => None
 }
 
-handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved = [] {
+handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved = [], borrow_depth = 0 {
+
+  // A borrow scope reads without moving — inside it consume is a no-op, so
+  // an `own` value used in an `if` condition / `match` scrutinee stays
+  // available in the arms. A depth counter, not a flag: nested borrows
+  // (a field access inside a condition) each add one.
+  borrow_enter() => resume() with borrow_depth = borrow_depth + 1,
+  borrow_exit()  => resume() with borrow_depth = borrow_depth - 1,
+
 
   // A function body opens a fresh consume scope; its close restores the
   // parent's. The whole (used, used_sites, branches) triple is saved so a
@@ -58,7 +66,9 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
   consume(name, ownership, span) => {
     match ownership {
       Own =>
-        if set_contains(used, name) {
+        // Inside a borrow scope the value is READ, not moved — record nothing.
+        if borrow_depth > 0 { resume() }
+        else if set_contains(used, name) {
           let first = find_first_span(used_sites, name)
           report(EOwnershipViolation("'{name}' consumed twice (first at {show_span(first)})", span))
           resume()

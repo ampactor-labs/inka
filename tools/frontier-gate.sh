@@ -448,7 +448,7 @@ for i in "${!compilers[@]}"; do
   run_program "$compiler" refined-alias-forward-ref \
     "$ROOT/tests/frontier/mn-refined-alias-forward-ref.mn" 42 no "$dir"
   run_program "$compiler" own-alternative-branches \
-    "$ROOT/tests/frontier/mn-own-alternative-branches.mn" 30 no "$dir"
+    "$ROOT/tests/frontier/mn-own-alternative-branches.mn" 33 no "$dir"
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

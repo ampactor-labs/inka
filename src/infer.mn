@@ -201,7 +201,35 @@ fn register_primitives() = {
     Declared("float_to_int"), FnScheme)
 }
 
-fn pre_register_decls(stmts) = each(pre_register_stmt, stmts)
+// Two phases, and the order is load-bearing. Aliases are pure env writes
+// with no body dependence — pre-pass citizens — so they register FIRST,
+// before any fn signature quantifies its params. A fn used before its
+// alias is declared (`fn f(span: ValidSpan)` in parser.mn precedes
+// `type ValidSpan` in types.mn — src/ sorts before types.mn, which sorts
+// last in the concatenated wheel) then reads the LIVE alias edge instead
+// of baking a bare nominal TName that the main walk can never refine
+// (build_param_types re-resolves `Vs` to TAlias(Vs, TRefined(Int, _)) and
+// unify(bare-TName Vs, Int) floors at the leaf — the `Span vs ValidSpan`
+// / `Int vs ValidOffset` class, 362 census errors, Carried-Truth: the
+// graph drew the alias edge; quantify_ctor_ty re-derived a nominal name).
+fn pre_register_decls(stmts) = {
+  each(pre_register_alias, stmts)
+  each(pre_register_stmt, stmts)
+}
+
+// The alias edges — registration's ONE home. The main walk keeps only
+// RefineStmt's predicate Verify obligation.
+fn pre_register_alias(ref node) = {
+  let N(body, _, _) = node
+  match body {
+    NStmt(RefineStmt(name, base_ty, pred)) =>
+      env_extend(name, Forall([], TAlias(name, TRefined(base_ty, pred))),
+        Declared(name), FnScheme),
+    NStmt(AliasStmt(name, ty)) =>
+      env_extend(name, Forall([], TAlias(name, ty)), Declared(name), FnScheme),
+    _ => ()
+  }
+}
 
 fn pre_register_stmt(ref node) = {
   let N(body, span, handle) = node
@@ -212,17 +240,6 @@ fn pre_register_stmt(ref node) = {
       register_type_constructors(name, variants),
     NStmt(EffectDeclStmt(name, ops)) =>
       register_effect_ops(name, ops),
-    // Transparent / refined aliases are pure env writes with no body
-    // dependence — pre-pass citizens. An annotation converted ANYWHERE
-    // (src/ sorts before types.mn in the concatenated wheel, so lexer.mn's
-    // `pos: ValidOffset` precedes the RefineStmt that declares it) reads
-    // the live alias edge. Registration's ONE home is here; the main walk
-    // keeps only RefineStmt's predicate Verify obligation.
-    NStmt(RefineStmt(name, base_ty, pred)) =>
-      env_extend(name, Forall([], TAlias(name, TRefined(base_ty, pred))),
-        Declared(name), FnScheme),
-    NStmt(AliasStmt(name, ty)) =>
-      env_extend(name, Forall([], TAlias(name, ty)), Declared(name), FnScheme),
     _ => ()
   }
 }

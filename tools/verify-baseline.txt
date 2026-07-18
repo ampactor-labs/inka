@@ -188,9 +188,24 @@
 # residue is buffer.mn (a dead module — no import, no external caller; a deletion
 # candidate, not typed here) plus a few genuine mismatches that were never this
 # class. What remains in the census is the OTHER roots the plan already named —
-# ~144 ETypeArityMismatch, the Span-vs-ValidSpan alias class, and genuine errors
-# — not List erasure. Inference-only; m2 == m3 byte-identical; zero new classes.
-census_errors_max: 1233
+# ~144 ETypeArityMismatch, and genuine errors — not List erasure. Inference-only;
+# m2 == m3 byte-identical; zero new classes.
+#
+# 1233 -> 874 (2026-07-17, Hβ.infer.alias-preserving-unify LANDED). The 362
+# Span-vs-ValidSpan / Int-vs-ValidOffset errors were ONE root: pre_register_decls
+# ran a single source-order pass, so a fn signature quantified before its refined
+# alias was declared (parser.mn's `span: ValidSpan` precedes types.mn) read a
+# MISSING env edge and baked a bare nominal TName the main walk could never refine
+# — unify(bare-TName, base) floored at the leaf. Fix: register the alias edges in
+# a phase BEFORE any fn signature (pre_register_alias), so quantify_ctor_ty reads
+# the LIVE edge. Carried-Truth: the graph drew the alias; the resolver re-derived
+# a name. The banked "two-pass is a no-op" was measuring boot's census (old
+# inference), not the fixed compiler's — the fixed compiler's census is 0 for the
+# class. Emit byte-identical (error-hole and resolved-TAlias both emit word width,
+# same codegen), so a clean m2 == m3 fixed point; boot re-pinned because the
+# compiler binary changed. Guarded RED-first by
+# tests/frontier/mn-refined-alias-forward-ref.mn.
+census_errors_max: 874
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

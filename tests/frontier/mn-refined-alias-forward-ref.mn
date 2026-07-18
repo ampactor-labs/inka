@@ -1,0 +1,11 @@
+// A refined-alias parameter used BEFORE its type is declared — the shape
+// parser.mn's `span: ValidSpan` takes against types.mn (src/ sorts before
+// types.mn in the concatenated wheel). Before the alias edges were
+// registered ahead of every fn signature, `Pos` here bound a bare nominal
+// TName that unify could never refine to its base, and `clamp_low(42)`
+// failed `Pos vs Int` — 362 census errors on the wheel's own source.
+fn clamp_low(x: Pos) with Pure = x
+
+type Pos = Int where 0 <= self
+
+fn main() = clamp_low(42)

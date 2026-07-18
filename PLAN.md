@@ -945,6 +945,7 @@ CLAUDE.md ⟲/§9 and the code's own comments).
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-17 · STAGE 1 — the census's biggest root felled (`Hβ.infer.alias-preserving-unify`, census 1233 → 874): the 362 `Span vs ValidSpan` / `Int vs ValidOffset` errors were ONE forward-reference bug. `pre_register_decls` ran a single source-order pass, so a fn signature quantified before its refined alias was declared (parser.mn's `span: ValidSpan` precedes types.mn, last in the concatenated wheel) baked a bare nominal `TName` the main walk could never refine — `unify(bare-TName, base)` floored at the leaf. Fix (`pre_register_alias`): register alias edges in a phase BEFORE any fn signature, so `quantify_ctor_ty` reads the LIVE edge (Carried-Truth: the graph drew the alias; the resolver re-derived a name). My own banked "a two-pass is a no-op / ruled out" was the drift — measured against BOOT's census, not the fixed compiler's (⟲: a label is a hypothesis until the artifact confirms it, the verifier included). Emit byte-identical → clean m2==m3 fixed point; boot re-pinned (wheel-neutral yet tool-changing) `5e9ec2d6…`. RED-first gate: tests/frontier/mn-refined-alias-forward-ref.mn (fails `Pos vs Int` on the old boot, runs 42 on this one; frontier 50→53)
 - 2026-07-17 · STAGE 4 — the surface parses its own canonical form (`Hβ.parser.refined-alias-nonatomic-base`): `parse_type_decl` probed only `p2+1` for `where`, so a multi-token base (`[Int]`) hid it — SYNTAX:990's own `type NonEmpty = [a] where len(self) > 0` did not parse. Fix parses the whole base first, then branches. Wheel-neutral (m2==m3 byte-identical) yet tool-changing, so boot re-pinned `ab34a853…`; guarded by tests/frontier/mn-refined-alias-nonatomic.mn (frontier 47→50) — tooling improved WITH the medium
 - 2026-07-17 · STAGE 1a — the census's largest root felled: a bare `List` in a declaration is the nominal `TName("List",[])` that never unifies with the native `TList` consumers build (SYNTAX §4① — one sequence kind `[a]`); the fix is `[Element]` at the declaration, read live from the consumer, never a TName↔TList unify bridge (which would legitimize the illegal shape while leaving the element erased). Core ADTs (Ty/Node/Pat/LowExpr/LowPat/LowFn/Scheme/EffRow) + the shared handler-arm/state-field records (also cleared `N vs Node` 14→0) + the leaf ADTs and effect-op sigs. Census 2266 → 1233 (true bare-List shape 645+ → 6, residue = the dead buffer.mn); inference-only, m2==m3 byte-identical, zero new classes — af8a9189+ef0030b1. Stage 2a (`Hβ.infer.seq-op-row-from-callee`) built + marched + REVERTED: correct but DEP-gated on §5.O per-decl-arena (the Alloc attribution's ev-slot emit tips the 4GB bump image → m3 OOM; §11 col 2)
 - 2026-07-16 · BARE MENTL PROJECTS WHERE YOU ARE: the tty fork (fd_fdstat_get), the directory projection (fd_readdir), verb_catalog one-string-two-surfaces, mentl help; a two-rung transition ladder; §11 rescoped (MI300X = the last arc, not required) + the named-peer audit (four verdicts) — 80215c38 · pin e2babb24
@@ -988,8 +989,9 @@ CLAUDE.md ⟲/§9 and the code's own comments).
 `Hβ.cursor.enclosing-decl-edge` (band M kin) ·
 `Hβ.cursor.session-weave-epoch-scope` (DISSOLVED by the peer audit — the
 session `<~` loop deletes the re-parse that created it; §11) ·
-`Hβ.infer.alias-preserving-unify` (the wrapper-peel erases the alias from
-the union-find class — the ret-chain echo) ·
+`Hβ.infer.alias-preserving-unify` (LANDED 2026-07-17 — not a unify-peel bug:
+a forward-referenced refined alias bound a bare TName; `pre_register_alias`
+registers the edges before any fn signature, §7 ledger) ·
 `Hβ.own.region-return-transfer` (LANDED at the check; the caller-side
 re-tag under region polymorphism is the arena increment) ·
 `Hβ.lower.partial-via-lambda-recipe` (the peer-audit merge of
@@ -1417,30 +1419,31 @@ in this column is one of its classes.
   correction above; zero census errors are name-identity failures.
 - `Hβ.effects.parameterized-negation-instance` (instance-precise
   `!Sample(44100)`).
-- `Hβ.infer.alias-preserving-unify` — the census's biggest remaining root:
-  ~362 (241 `Span vs ValidSpan` + 121 `Int vs ValidOffset`). INVESTIGATION
-  BANKED 2026-07-17. The error fires at unify_types' `TName` arm
-  (`type_name_eq` false → `type_mismatch`), so a bare `TName("ValidSpan")`
-  reaches unify UNEXPANDED and meets the resolved base — the wrapper never
-  peels because it is not a wrapper at that point. Two hypotheses RULED OUT by
-  the artifact: (1) forward-reference pre-registration order (types.mn sorts
-  after infer.mn, so `span: ValidSpan` uses precede the RefineStmt) — a
-  two-pass pre_register_decls (aliases first) was built and marched and moved
-  the census ZERO (241/121 unchanged), because unify runs in the MAIN walk
-  after ALL pre-registration, so alias order there is moot; (2) a resolver gap
-  — params (build_param_types), returns (line 415), ADT ctors
-  (register_type_constructors), and effect ops (quantify_effect_ops) ALL route
-  through quantify_ctor_ty, which env-resolves a capitalized nullary name to
-  its TAlias. So the unexpanded `TName("ValidSpan")` comes from a path that
-  BYPASSES quantify_ctor_ty — a type built directly in inference, or the
-  handler-state type inferred from `[]` + uses (the `graph_index_span` span_index
-  push at wheel-blob 11460 is a clean minimal site). NEXT: instrument the raw
-  Ty tag (TName vs TAlias — `show_type` renders both as "ValidSpan", RN.1, which
-  is why static reading kept peeling to OK) at that one site — a binary-patch
-  probe on m2.wat (never an `eprint_string` in `type_mismatch`: it performs IO
-  and perturbs the rows under test). Governed by the unpatchability theorem: the
-  fix resolves the name at its ORIGIN (read the alias edge), never a new arm in
-  unify_types.
+- `Hβ.infer.alias-preserving-unify` — LANDED 2026-07-17 (census 1233 → 874,
+  the single biggest root: 362 = `Span vs ValidSpan` + `Int vs ValidOffset`,
+  both directions). The root was forward-reference order all along, and my
+  own banked "ruled it out" was the drift: `pre_register_decls` ran ONE
+  source-order pass, so a fn signature quantified before its refined alias was
+  declared (parser.mn's `span: ValidSpan` precedes types.mn, which sorts last
+  in the concatenated wheel) called `quantify_ctor_ty` against an env that did
+  not yet hold the alias edge, and baked a bare nominal `TName("ValidSpan")`
+  into both the param handle and the fn scheme; the main walk then tried to
+  refine that bare name to its live `TAlias(ValidSpan, TRefined(Span, _))` and
+  `unify(bare-TName, Span)` floored at the leaf. The earlier "a two-pass moved
+  the census ZERO" was measured against BOOT's census (old inference judging
+  the source), NEVER the FIXED compiler's — the trap the ⟲ pipeline names (a
+  label is a hypothesis until the ARTIFACT confirms it; the verifier's
+  included). The controlled experiment settled it: a refined alias used BEFORE
+  its declaration mismatches, declared-first is clean. Fix (`pre_register_alias`):
+  register the alias edges in a phase BEFORE any fn signature, so the resolver
+  reads the LIVE edge. Carried-Truth exactly — the graph drew the alias; the
+  resolver re-derived a name; the fix is at the ORIGIN, never a new arm in
+  unify_types (the unpatchability theorem holds). Emit byte-identical (an error
+  hole and a resolved TAlias both lower at word width, same codegen), so m2 ==
+  m3 as a clean fixed point; boot re-pinned because the compiler binary changed
+  (wheel-neutral yet tool-changing). Guarded RED-first by
+  tests/frontier/mn-refined-alias-forward-ref.mn (fails `Pos vs Int` on the
+  old boot, runs to 42 on this one).
 - backtrack's `() vs Option(())` mismatch (search.mn).
 - `E_ResumeWorldMismatchWorld` wire-or-delete (band B).
 - **R3**: the decidable arithmetic Verify fragment (beyond constants — the

@@ -664,8 +664,10 @@ fn infer_expr(ref node) = {
       // to positional order and fill absent fields with param defaults (the ONE
       // read both infer + lower call — they see the identical order). The
       // LabeledArg wrappers never reach infer_expr — resolution strips them.
-      let pos_args = resolve_call_args(callee_name(func), args)
-      infer_expr_list(pos_args)
+      let cname = callee_name(func)
+      let params = callee_params(cname)
+      let pos_args = resolve_call_args(cname, args)
+      infer_call_arg_list(pos_args, params, 0)
       infer_call(func, pos_args, handle, span)
       // H4: constructor calls allocate a heap record. Tag the
       // resulting handle so check_escape at fn return can verify
@@ -1153,6 +1155,38 @@ fn infer_call(func, args, handle, span: ValidSpan) = {
       } else { infer_call_saturated(args, fh, handle, span, cname) },
     _ => infer_call_saturated(args, fh, handle, span, cname)
   }
+  }
+}
+
+fn infer_call_arg_list(args, params, i) =
+  if i >= len(args) { () }
+  else {
+    let arg = list_index(args, i)
+    if i < len(params) {
+      infer_call_arg(arg, list_index(params, i))
+    } else { infer_expr(arg) }
+    infer_call_arg_list(args, params, i + 1)
+  }
+
+fn infer_call_arg(arg, param) = {
+  let N(body, _, _) = arg
+  let TParam(_, _, authored, resolved, _) = param
+  let borrows = match authored {
+    Ref      => true,
+    Own      => false,
+    Unmarked => match resolved {
+      Ref => true,
+      _   => false
+    }
+  }
+  match body {
+    NExpr(VarRef(_)) =>
+      if borrows {
+        borrow_enter()
+        infer_expr(arg)
+        borrow_exit()
+      } else { infer_expr(arg) },
+    _ => infer_expr(arg)
   }
 }
 

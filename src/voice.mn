@@ -1692,8 +1692,8 @@ fn update_file_text_loop(ref table, fh, ref path, ref text, i, n, own buf) with 
     let replacement = if file_handle_eq(h, fh) {
       (h, path, text)
     } else { entry }
-    list_set(buf, i, replacement)
-    update_file_text_loop(table, fh, path, text, i + 1, n, buf)
+    let next_buf = list_set(buf, i, replacement)
+    update_file_text_loop(table, fh, path, text, i + 1, n, next_buf)
   }
 }
 

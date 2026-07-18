@@ -1,0 +1,11 @@
+fn grow(own nodes, min_size) =
+  if len(nodes) >= min_size { nodes }
+  else {
+    let old_len = len(nodes)
+    list_copy_into(nodes, [], 0, old_len)
+  }
+
+fn len(ref xs) = 0
+fn list_copy_into(own src, dst, i, count) = src
+
+fn main() = 0

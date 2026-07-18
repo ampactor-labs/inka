@@ -203,6 +203,23 @@ run_program() {
   fi
 }
 
+run_diagnostic() {
+  local compiler="$1" label="$2" source="$3" expected_code="$4" dir="$5"
+  local wat="$dir/$label.wat" err="$dir/$label.compile.err"
+  local rc count other
+
+  wt_run "$compiler" < "$source" > "$wat" 2> "$err"
+  rc=$?
+  count=$(grep -c "$expected_code error:" "$err" 2>/dev/null || true)
+  other=$(grep -E 'E_[A-Za-z0-9_]+ error:' "$err" 2>/dev/null \
+    | grep -vc "$expected_code error:" || true)
+  if [ "$rc" -eq 0 ] && [ "$count" -gt 0 ] && [ "$other" -eq 0 ]; then
+    pass "$label diagnostic ($expected_code=$count)"
+  else
+    fail "$label diagnostic (exit=$rc $expected_code=$count other-errors=$other; see $err)"
+  fi
+}
+
 # Same differential accounting for the persist lib set: pin boot's shadow,
 # per-compiler shadows may only shrink it.
 capture_persist_shadow() {
@@ -449,6 +466,12 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-refined-alias-forward-ref.mn" 42 no "$dir"
   run_program "$compiler" own-alternative-branches \
     "$ROOT/tests/frontier/mn-own-alternative-branches.mn" 33 no "$dir"
+  run_program "$compiler" own-call-arg-borrow \
+    "$ROOT/tests/frontier/mn-own-call-arg-borrow.mn" 42 no "$dir"
+  run_program "$compiler" own-forward-ref-seq \
+    "$ROOT/tests/frontier/mn-own-forward-ref-seq.mn" 0 no "$dir"
+  run_diagnostic "$compiler" own-call-arg-move \
+    "$ROOT/tests/frontier/mn-own-call-arg-move.mn" E_OwnershipViolation "$dir"
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

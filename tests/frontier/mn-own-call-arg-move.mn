@@ -1,0 +1,6 @@
+fn take(own value) with Pure = value
+
+fn take_twice(own value) with Pure =
+  take(value) + take(value)
+
+fn main() = take_twice(21)

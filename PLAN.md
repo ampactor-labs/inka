@@ -929,10 +929,10 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 **THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 56/0,
 proof-exactness 9/9, crown 5/5, 71 micros, the march's `m2 == m3` fixed point
-(481,947 lines) — through the pinned boot `1e06cdaa…` (chain:
-boot/PROVENANCE.md). The self-compile runs ~10s. The census is **582** (from
+(483,609 lines) — through the pinned boot `361ed16c…` (chain:
+boot/PROVENANCE.md). The self-compile runs ~10s. The census is **578** (from
 2,266): the four Stage-1 roots fell and the affine ownership model is
-Hylo-quiet on the wheel (consumed-twice 152 → 4). Both `??` authoring
+Hylo-quiet on the wheel (consumed-twice 152 → 0). Both `??` authoring
 workflows (positive + capability) are green end to end; the executable gate
 refuses holes and surfaces honest debt; value-proof discharges at all three
 sites (let / fn-return / call-arg); every fn body is a region and the return
@@ -985,6 +985,7 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-17 · A BORROWING PARAMETER BORROWS (move-vs-borrow part 3; census 582 → 578): CallExpr previously inferred every argument before reading the callee's parameter product, so an owned value passed to `observe(ref value)` consumed exactly like one passed to `take(own value)`. The call now reads the canonical TParam product after labeled/default resolution: a direct VarRef passed to authored or inferred Ref enters the existing borrow scope; Own parameters and nested computations keep their normal move inference. `len` / `list_index` declare the read-only access their bodies prove; update_file_text_loop carries list_set's returned owner. E_OwnershipViolation 4→0, while the real `take(value) + take(value)` double move remains rejected. Carried-Truth: the callee product already owns the access mode; the call re-derived a move. Clean m2==m3 fixed point, pin 361ed16c. RED-first: mn-own-call-arg-borrow + mn-own-forward-ref-seq; negative control: mn-own-call-arg-move; frontier 63/0
 - 2026-07-17 · A READ IS A BORROW (move-vs-borrow, census 615 → 582): an `if` condition / `match` scrutinee / a `.field` receiver is READ, never moved, so an `own` value used there is a borrow. A borrow_depth counter on affine_ledger + borrow_enter/borrow_exit bracket the condition, the scrutinee, and a value-chain field receiver (`f(x).field` keeps its normal move of `x`); consume no-ops inside. Cleared 33 of 37 with soundness intact (a real `(take(buf), take(buf))` double-move to two `own` params still caught). Two clean m2==m3 transitions, pin 1e06cdaa. Residue (4, all graph/voice): the call-arg-borrow — `len(nodes)` then `list_copy_into(nodes)`, an `own` value passed to a BORROWING param; the last piece reads the callee's param ownership at each argument
 - 2026-07-17 · THE AFFINE MODEL STOPS FIGHTING SAFE CODE (`Hβ.infer.usage-grade-unifies-cardinality-ownership` — the branch + scope halves; census 727 → 615): 115 of 152 `E_OwnershipViolation` "consumed twice" were false positives — the medium stricter than Rust on provably-safe code, the inverse of §4⑤'s Hylo-quiet bar. Two masked bugs. (1) `if`/`match` arms were never bracketed, so an `own` value read in both arms of `if i<0 {slice(buf)} else {list_set(buf)}` counted twice — but arms are ALTERNATIVES (one runs). A `BranchMode` ADT (BParallel | BAlternative) rides the branch frame; branch_exit collides only for BParallel (`><`/`<|`), unions for BAlternative (if/match). (2) affine_ledger installed ONCE at the pipeline, not per body — a name consumed in one fn stayed `used` and collided in the next naming the same `own` param (`buf`/`acc`, the dominant shape); consume_enter_fn/consume_exit_fn bracket each infer_fn body (fresh scope, restored on exit, re-entrant). Carried-Truth: the graph knows a branch is an alternative and a body is a scope. `><`/`<|` collision path unchanged (crown + micros green). Emit grew → clean m2==m3 TRANSITION, pin 6d693a87. RED-first: tests/frontier/mn-own-alternative-branches.mn. E_IfMissingElse 29→32 = latent errors the ownership false-positives had masked (total still fell). Residue (37): move-vs-borrow-by-callee — an `own` read in an `if` condition or a field is a BORROW
 - 2026-07-17 · STAGE 1 — the bare-parameterized-type-arity class felled (`Hβ.infer.bare-parameterized-type-arity`, census 874 → 727): the `0 vs 1` arity mismatches were one shape, one type over from Stage 1a's bare `List` — a bare parameterized type (mostly `Option`) written without its argument in a declaration, meeting the real `Option(X)`/`List(X)` its consumers build. The root was `env_lookup(String) -> Option` (types.mn): the effect op erased the `Option((Scheme, Reason, SchemeKind))` its own handler proves via env_resolve, so every env_lookup match site mismatched. Swept its siblings too — the Annotation ctors (`Option(Span)`), the teach/CursorView gradient field (`Option(AnnotationSuggestion)`), PList/LPList rest (`Option(String)`), gradient_pop/step (`Option(Cursor)`), inf_arm_tys (`Option(Int)`), ls_escaping_of (`Option(EffRow)`), the Situation/TopicFacts record fields, the Lsp response ctors, Explanation's fix (`Option(Patch)`), QRHandlerProvider (`Option(String)`), tree_list (`[TreeEntry]`), NonEmptyList (`[a]`), QRIntent's tuple. Carried-Truth: each consumer/handler proves the type the declaration erased. Pure declaration fix — emit byte-identical, boot UNCHANGED, so no re-pin; the census ratchet is the gate. Residue: `Buffer` → `Buffer(a)` (genuinely generic, named)
@@ -1395,11 +1396,10 @@ in this column is one of its classes.
   E_RefinementRejected (proof-exactness 9/9). Gateable NOW, zero on the wheel:
   **E_MissingModule** (its silent skip in driver_compile_entry is fixed;
   the gate is the next build). The work, by class (the four Stage-1 roots
-  FELLED 2026-07-17, census 2266 → 583): E_TypeMismatch 1286 → 109 (bare-List +
-  alias-forward-ref + bare-parameterized-arity) · E_OwnershipViolation 508 → 5
-  (check_ref_escape deleted; the affine branch/scope fix + condition/scrutinee
-  borrow — residue is 5 field-read + call-arg-borrow, the move-vs-borrow-by-
-  callee tail) · E_OccursCheck 118 → 115 · E_MissingVariable 118 →
+  FELLED 2026-07-17, census 2266 → 578): E_TypeMismatch 1286 → 109 (bare-List +
+  alias-forward-ref + bare-parameterized-arity) · E_OwnershipViolation 508 → 0
+  (check_ref_escape deleted; the affine branch/scope fix + read/field/callee-
+  parameter borrows cleared the class) · E_OccursCheck 118 → 115 · E_MissingVariable 118 →
   115 (the handler forward-reference class) · E_EffectMismatch 95 ·
   E_PurityViolated 66 · E_IfMissingElse 28 → 32 · E_PatternInexhaustive 26 → 25 ·
   E_FeedbackNoContext 11 · E_UnresolvedType 4 · E_ConstructorArity 4 ·

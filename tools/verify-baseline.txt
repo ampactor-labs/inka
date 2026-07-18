@@ -269,7 +269,20 @@
 # borrow — `len(nodes)` then `list_copy_into(nodes)`, an `own` value passed to
 # a BORROWING parameter. The last move-vs-borrow piece: read the callee's param
 # ownership at each argument so a ref/unmarked param does not consume its arg.
-census_errors_max: 582
+#
+# 582 -> 578 (2026-07-17, move-vs-borrow part 3 — callee-param ownership).
+# Call inference previously inferred every argument before reading the callee's
+# parameter product, so `observe(ref value)` consumed an owned caller value just
+# like `take(own value)`. The call now reads the canonical TParam product after
+# labeled/default argument resolution: a direct variable passed to an authored
+# or inferred Ref is borrowed; an Own argument and every nested computation keep
+# normal move inference. Runtime `len` and `list_index` declare their actual
+# read-only Ref access, and update_file_text_loop carries list_set's returned
+# owner instead of discarding it. E_OwnershipViolation is 0 on the fixed
+# compiler's own m3 judgment; the real `take(value) + take(value)` double move
+# remains rejected. Guarded red-first by mn-own-call-arg-borrow,
+# mn-own-forward-ref-seq, and mn-own-call-arg-move. Clean m2 == m3 fixed point.
+census_errors_max: 578
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

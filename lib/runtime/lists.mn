@@ -35,7 +35,7 @@ fn make_list(count) with Memory + Alloc = {
 // len — element count of any list. Every node shape carries its
 // count at offset 0 (flat, snoc, concat, slice alike) — one load;
 // the representation already proves it. No tag dispatch.
-fn len(xs) with Memory = load_i32(xs)
+fn len(ref xs) with Memory = load_i32(xs)
 
 // Mutation and access (tag-dispatched)
 
@@ -87,7 +87,7 @@ fn list_copy_into(src, dst, i, count) with Memory + Alloc = {
 
 // list_index — O(1) for tag=0, O(log N) for snoc chains, O(depth) for
 // concat/slice. Exhaustive on all four tags — no fallback sentinel.
-fn list_index(list, i) with Memory = {
+fn list_index(ref list, i) with Memory = {
   let tag = load_i32(list + 4)
   match tag {
     0 => load_i32(list + 8 + i * 4),

@@ -372,7 +372,7 @@ fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc = {
 // level and nested call arg — is resolved via graph_node_body and rendered
 // uniformly, never a second node-destructure path). Follow the edge, read the
 // live node — the AST-in-graph fabric makes every sub-node a resolvable handle.
-fn handle_to_smt(handle) with GraphRead + Memory + Alloc = {
+fn handle_to_smt(handle) with GraphRead + Memory + Alloc + Diagnostic = {
   body_to_smt(graph_node_body(handle))
 }
 
@@ -416,19 +416,19 @@ fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc + Diagnostic =
 
 // Each arg is a handle — map through handle_to_smt and join (map/fold, never an
 // imperative i/n counter; Anchor 6).
-fn smt_arg_terms(ref args) with GraphRead + Memory + Alloc =
+fn smt_arg_terms(ref args) with GraphRead + Memory + Alloc + Diagnostic =
   fold("", (acc, arg) => {
     let N(_, _, h) = arg
     "{acc} {handle_to_smt(h)}"
   }, args)
 
-fn smt_binop(ref op, ref l, ref r) with GraphRead + Memory + Alloc = {
+fn smt_binop(ref op, ref l, ref r) with GraphRead + Memory + Alloc + Diagnostic = {
   let N(_, _, lh) = l
   let N(_, _, rh) = r
   "({smt_binop_sym(op)} {handle_to_smt(lh)} {handle_to_smt(rh)})"
 }
 
-fn smt_unop(ref op, ref x) with GraphRead + Memory + Alloc = {
+fn smt_unop(ref op, ref x) with GraphRead + Memory + Alloc + Diagnostic = {
   let N(_, _, xh) = x
   match op {
     UNot => "(not {handle_to_smt(xh)})",

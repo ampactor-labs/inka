@@ -689,7 +689,7 @@ fn render_topology_arm(situation) with Alloc + Memory = {
 // gradient_next would unlock. silence_predicate gated on gradient_next
 // AND gradient_unlocks_capability(gradient_next).
 
-fn render_unlock_arm(situation) with Pure = {
+fn render_unlock_arm(situation) with Memory = {
   let Situation(s) = situation
   let body = match s.gradient_next {
     None              => [SLit("")],
@@ -837,7 +837,7 @@ fn render_for_tentacle(situation) with Alloc + Memory = {
 // end-of-file. The handler internally folds the project queue via
 // this projector.
 
-fn voice_queue_walk(situation_seed) with OracleQuery + Memory = {
+fn voice_queue_walk(situation_seed) with OracleQuery + Memory + Alloc = {
   let Situation(s) = situation_seed
   let queue_items = match s.handle {
     None       => query_project_queue(),

@@ -506,7 +506,7 @@ fn scan_handler_for_op(op_name, i, n) with GraphRead + !Mutate = {
   }
 }
 
-fn arms_include_op(arms, op_name) with Pure = {
+fn arms_include_op(arms, op_name) with Memory = {
   if len(arms) == 0 { false }
   else {
     let arm = last(arms)
@@ -574,7 +574,7 @@ fn parse_span_of(handle) with GraphRead + !Mutate = {
   }
 }
 
-fn find_tightest(ref idx, target, best_h, best_area) with Pure = {
+fn find_tightest(ref idx, target, best_h, best_area) with Memory = {
   if len(idx) == 0 { best_h }
   else {
     let (s, h) = last(idx)

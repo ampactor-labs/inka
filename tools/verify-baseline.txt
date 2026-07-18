@@ -351,7 +351,24 @@
 # EffectMismatch 95 -> 70 (the remainder = the held files + the widen
 # cascade's second round), PurityViolated 56 -> 24, PatternInexhaustive
 # 25 -> 7, ConstructorArity 4 -> 1.
-census_errors_max: 213
+# 213 -> 185 (2026-07-18, the cursor-address transport + the widen cascade's
+# second round + the render's own row bills paid). `mentl voice.mn:9` is REAL:
+# VAt parses at the argv boundary (shape-only byte walk; the runner resolves
+# like every verb), driver_entry_with_ranges carries the module-range map out
+# of the concatenation fold it always computed, the three-case line rule
+# resolves over the span index every node writes at birth, cursor_at_handle
+# projects the same eight-arm CursorView mentl edit reads (cursor_at's
+# exact-match reason-span scanner DELETED for find_tightest over mint spans —
+# the fleet-flagged fabricating resolver retired), and the terse facet-silent
+# render reads the source slice, the env scheme for decls, literal bodies for
+# free cells, and the Why walk through the range map. propose_at is now the
+# ABSENCE facet structurally (a bound node's proposals are empty by
+# construction) — which also fences the float-evidence call-convention gap
+# (an f64-arg candidate ctor through an all-i32 $ft: the named peer
+# Hβ.emit.float-evidence-ft, first fired by the first float-position
+# projection ever taken). ~55 more declared rows widened to their bodies'
+# truth by the mechanical round (the re-pinned sharper compiler re-judging).
+census_errors_max: 185
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

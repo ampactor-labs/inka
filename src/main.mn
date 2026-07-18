@@ -82,6 +82,7 @@ type EntryVerb
   | VCompileStdin
   | VRun(String)
   | VCheck(String)
+  | VAt(String, Int, Int)            // the cursor-address form — `mentl voice.mn:9[:5]`: target, line, col (0 = whole-line). Drift-38's endpoint: the address IS the surface; verbs are transports
   | VTest(Option(String))
   | VAudit(String)
   | VQuery(String, String)           // target, question — both required
@@ -103,10 +104,20 @@ type EntryHandlerInvocation
 // escape hatch. A target-requiring verb given no target is a ParseError
 // here (the one boundary), never a fabricated "" downstream.
 
-fn parse_cli_args(argv) with Pure = {
+fn parse_cli_args(argv) with Memory + Alloc = {
   if len(argv) < 2 { Invocation(VCompileStdin) }
   else {
     let mode = argv[1]
+    // The cursor-address probe FIRST — `mentl <target>:<line>[:<col>]` is
+    // the medium's primary surface (drift-38: projections fire AT-CURSOR;
+    // the named verbs are transports). The parse is shape-only; the runner
+    // resolves the target exactly like every verb and refuses honestly.
+    match parse_address(mode) {
+      Some(addr) => {
+        let (target, line, col) = addr
+        Invocation(VAt(path_to_module(target), line, col))
+      },
+      None =>
     if mode == "edit" {
       Invocation(VEdit(optional_target(argv, 2)))
     } else if mode == "doc" {
@@ -138,6 +149,57 @@ fn parse_cli_args(argv) with Pure = {
     } else {
       ParseError("unrecognized or under-specified command: " ++ mode)
     }
+    }
+  }
+}
+
+// The address shape — `<target>:<line>` or `<target>:<line>:<col>`, both
+// numeric segments all-digits. Shape parse only (a byte walk over the flat
+// string); existence/resolution is the runner's question. Returns None for
+// anything else, falling through to the verb ladder.
+fn parse_address(ref s) with Memory + Alloc = {
+  let n = load_i32(s)
+  let c1 = addr_colon_from(s, 0, n)
+  if c1 <= 0 { None }
+  else {
+    let c2 = addr_colon_from(s, c1 + 1, n)
+    if c2 < 0 {
+      match addr_int(s, c1 + 1, n) {
+        Some(line) => Some((str_slice(s, 0, c1), line, 0)),
+        None       => None
+      }
+    } else {
+      match addr_int(s, c1 + 1, c2) {
+        Some(line) => match addr_int(s, c2 + 1, n) {
+          Some(col) => Some((str_slice(s, 0, c1), line, col)),
+          None      => None
+        },
+        None => None
+      }
+    }
+  }
+}
+
+// The first ':' at or after i; -1 when none.
+fn addr_colon_from(ref s, i, n) with Memory = {
+  if i >= n { 0 - 1 }
+  else if load_i8(s + 4 + i) == 58 { i }
+  else { addr_colon_from(s, i + 1, n) }
+}
+
+// The all-digits segment [i, end) as Some(value); None when empty or any
+// non-digit byte (so `web:site.mn` never parses as an address).
+fn addr_int(ref s, i, end) with Memory = {
+  if i >= end { None }
+  else { addr_int_loop(s, i, end, 0) }
+}
+
+fn addr_int_loop(ref s, i, end, acc) with Memory = {
+  if i >= end { Some(acc) }
+  else {
+    let ch = load_i8(s + 4 + i)
+    if ch >= 48 && ch <= 57 { addr_int_loop(s, i + 1, end, acc * 10 + (ch - 48)) }
+    else { None }
   }
 }
 
@@ -146,7 +208,7 @@ fn parse_cli_args(argv) with Pure = {
 // otherwise. Strips src/ / lib/ prefixes + .mn suffix per
 // path_to_module.
 
-fn optional_target(argv, idx) with Pure = {
+fn optional_target(argv, idx) with Memory = {
   if len(argv) > idx { Some(path_to_module(argv[idx])) }
   else { None }
 }
@@ -155,7 +217,7 @@ fn optional_target(argv, idx) with Pure = {
 // path ("src/main.mn"). Strip "src/" or "lib/" prefix and ".mn"
 // suffix when present. Idempotent on bare module names.
 
-fn path_to_module(arg) with Pure = {
+fn path_to_module(arg) with Alloc + Memory = {
   let stripped_prefix = if starts_with(arg, "src/") {
     str_slice(arg, 4, byte_len(arg))
   } else if starts_with(arg, "lib/") {
@@ -220,6 +282,7 @@ fn dispatch_invocation(verb) = {
         if stdin_is_tty() { welcome_run() } else { compile_stdin_run() },
       VRun(target)         => run_run(target),
       VCheck(target)       => check_run(target),
+      VAt(target, line, col) => at_run(target, line, col),
       VTest(target)        => test_run(target),
       VAudit(target)       => audit_run(target),
       VQuery(target, q)    => query_run(target, q),
@@ -477,6 +540,361 @@ fn run_run(target) = {
 // expression is pure arithmetic over the count.
 fn check_run(target) =
   if pipeline_check(target) > 0 { 1 } else { 0 }
+
+// ─── at_run — the cursor-address transport (`mentl voice.mn:9`)
+//
+// The smallest transport of the one read: resolve the address to a graph
+// node ONCE (the three-case line rule over the span index every node
+// writes at birth), project the eight aspects THROUGH the same CursorView
+// `mentl edit` reads (cursor_at_handle — by handle, no re-resolution),
+// and render the facets whose content is non-trivial (the voice's
+// silence predicate at the terminal). Spans render back to file:line
+// through the module-range map the driver's own concatenation fold
+// carries (driver_entry_with_ranges — computed where the fold runs,
+// once, never a second ledger).
+fn at_run(target, line, col) = {
+  {
+    let (_ast, ranges) = driver_entry_with_ranges(target)
+    if diag_errors() > 0 { 1 }
+    else {
+      match range_of_module(ranges, target) {
+        None => {
+          eprint_string("mentl: {target} did not load — nothing to project\n")
+          1
+        },
+        Some(r) => {
+          let (_m, _p, start, nlines) = r
+          if line < 1 { eprint_string("mentl: line {int_to_str(line)} — lines count from 1\n") 1 }
+          else if line > nlines {
+            eprint_string("mentl: {target} has {int_to_str(nlines)} lines; {int_to_str(line)} is past the end\n")
+            1
+          } else {
+            let gline = start + line - 1
+            let spans = span_index_of_snapshot()   // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
+            match address_resolve(spans, gline, col) {
+              None => {
+                eprint_string("mentl: no node at {target}:{int_to_str(line)} (a blank or comment-only line)\n")
+                1
+              },
+              Some(pick) => {
+                let (pspan, ph) = pick
+                render_at(cursor_at_handle(ph), ph, pspan, ranges)
+                0
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+    ~> patch_to_file
+    ~> terminal_transport
+    ~> cursor_default
+    ~> delta_default
+    ~> synth_default
+    ~> interrogate_default
+    ~> mentl_default
+    ~> wasi_filesystem
+    ~> affine_ledger
+    ~> region_tracker
+    ~> verify_ledger
+    ~> diagnostics_handler
+    ~> env_handler
+    ~> graph_handler
+    ~> mutate_sink
+}
+
+fn span_index_of_snapshot() with GraphRead = {
+  let Graph(_n, _e, _x, _o, spans) = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  spans
+}
+
+fn range_of_module(ref ranges, ref target) with Memory = {
+  find((r) => { let (m, _, _, _) = r m == target }, ranges)
+}
+
+// The span's file:line through the module-range map — the render-side
+// inverse of the concatenation fold.
+fn file_line(ref ranges, ref span) with Memory + Alloc = {
+  let Span(sl, _, _, _) = span
+  match find((r) => { let (_, _, start, nlines) = r sl >= start && sl < start + nlines }, ranges) {
+    Some(r) => { let (_, p, start, _) = r "{p}:{int_to_str(sl - start + 1)}" },
+    None    => "line {int_to_str(sl)}"
+  }
+}
+
+// The three-case line rule (the panel's corrected form, deterministic):
+//  (a) among nodes whose span STARTS on the line (and, with a column,
+//      contains it) — smallest start column, then largest area (the
+//      line's statement root);
+//  (b) else the tightest node COVERING the point (a continuation line);
+//  (c) else the nearest node by start line (the no-Module-root top-level
+//      gap — blank lines between decls are ordinary addresses, not errors).
+fn address_resolve(ref spans, gline, col) with Memory = {
+  match address_case_a(spans, gline, col, 0, len(spans), None) {
+    Some(pick) => Some(pick),
+    None => {
+      let point = Span(gline, if col > 0 { col } else { 1 }, gline, if col > 0 { col } else { 1 })
+      match find_tightest(spans, point, None, 1000000000) {
+        Some(h) => span_pick_of(spans, h),
+        None    => address_case_c(spans, gline, 0, len(spans), None)
+      }
+    }
+  }
+}
+
+fn address_case_a(ref spans, gline, col, i, n, best) with Memory = {
+  if i >= n { best }
+  else {
+    let (s, h) = list_index(spans, i)
+    let Span(sl, sc, _, _) = s
+    let hits = if sl == gline {
+      if col > 0 { span_contains(s, Span(gline, col, gline, col)) } else { true }
+    } else { false }
+    let next = if hits { address_better_a(best, (s, h)) } else { best }
+    address_case_a(spans, gline, col, i + 1, n, next)
+  }
+}
+
+// The line's ROOT is its WIDEST node (the statement/expression covering
+// most of the line — `echo(mix, x)` over the `wet` binder it feeds);
+// column breaks ties leftward. Area-first is what "point at the line"
+// means; a column address narrows within it.
+fn address_better_a(best, cand) with Memory = match best {
+  None => Some(cand),
+  Some(b) => {
+    let (bs, _) = b
+    let (cs, _) = cand
+    let Span(_, bsc, _, _) = bs
+    let Span(_, csc, _, _) = cs
+    if span_area(cs) > span_area(bs) { Some(cand) }
+    else if span_area(cs) == span_area(bs) {
+      if csc < bsc { Some(cand) } else { best }
+    }
+    else { best }
+  }
+}
+
+fn span_pick_of(ref spans, h) with Memory = {
+  match find((e) => { let (_, eh) = e eh == h }, spans) {
+    Some(e) => { let (s, _) = e Some((s, h)) },
+    None    => None
+  }
+}
+
+fn address_case_c(ref spans, gline, i, n, best) with Memory = {
+  if i >= n { best }
+  else {
+    let (s, h) = list_index(spans, i)
+    let Span(sl, _, _, _) = s
+    let d = if sl > gline { sl - gline } else { gline - sl }
+    let next = match best {
+      None => Some((s, h)),
+      Some(b) => {
+        let (bs, _) = b
+        let Span(bsl, _, _, _) = bs
+        let bd = if bsl > gline { bsl - gline } else { gline - bsl }
+        if d < bd { Some((s, h)) } else { best }
+      }
+    }
+    address_case_c(spans, gline, i + 1, n, next)
+  }
+}
+
+// ─── the terse render — facet-silence at the terminal
+fn render_at(view, h, pspan, ranges) = {
+  let CursorView(kind, _propose, _topology, row, trace, verify, teach, why) = view
+  print_string("Query: {source_slice(pspan, ranges)}{node_query_line(h, kind)}\n")
+  match row {
+    EfPure => (),
+    _      => print_string("Effects: {show_effrow(row)}\n")
+  }
+  match trace {
+    Unmarked => (),
+    Own      => print_string("Ownership: own\n"),
+    Ref      => print_string("Ownership: ref\n")
+  }
+  if len(verify) > 0 {
+    print_string("Verify: {int_to_str(len(verify))} obligation(s) at this node\n")
+  } else { () }
+  match teach {
+    None    => (),
+    Some(_) => print_string("Teach: an annotation here would unlock a capability — `mentl teach` names it\n")
+  }
+  print_string("Why: ")
+  render_why_hops(why_expand(why, 0), ranges, 0)
+}
+
+fn node_query_line(h, kind) with GraphRead + EnvRead = {
+  // A declaration node's own graph cell is a free var (the scheme lives in
+  // the env — read it there, never render the raw t-var); every other node
+  // shows its inferred type.
+  match graph_node_body(h) {
+    NStmt(FnStmt(name, _, _, _, _)) => match env_lookup(name) {
+      Some(entry) => {
+        let (scheme, _, _) = entry
+        match scheme { Forall(_, ty) => show_type(ty) }
+      },
+      None => show_type(ty_of_kind(h, kind))
+    },
+    // A literal's type IS its body when the cell is still free (a top-level
+    // let's value node keeps its own cell unbound; the body already proves
+    // the answer — read it, never render the raw t-var).
+    NExpr(LitFloat(_))  => "Float",
+    NExpr(LitInt(_))    => "Int",
+    NExpr(LitString(_)) => "String",
+    NExpr(LitBool(_))   => "Bool",
+    _ => show_type(ty_of_kind(h, kind))
+  }
+}
+
+// The addressed source text itself, read back through the range map — the
+// line the user pointed at, sliced to the node's span. The file is the one
+// authority on its own text.
+fn source_slice(ref span, ref ranges) with Memory + Alloc + Filesystem = {
+  let Span(sl, sc, _, ec) = span
+  match find((r) => { let (_, _, start, nlines) = r sl >= start && sl < start + nlines }, ranges) {
+    None => "",
+    Some(r) => {
+      let (_, p, start, _) = r
+      if fs_exists(p) {
+        let text = fs_read_file(p)
+        let lstart = nth_line_offset(text, sl - start, 0, 0)
+        let lend = line_end_from(text, lstart)
+        let a = lstart + sc - 1
+        let b = lstart + ec
+        let lo = if a < lend { a } else { lstart }
+        let hi = if b <= lend { b } else { lend }
+        if hi > lo { "{str_slice(text, lo, hi)} : " } else { "" }
+      } else { "" }
+    }
+  }
+}
+
+// Byte offset of the k-th line (0-based) — a forward newline walk.
+fn nth_line_offset(ref text, k, i, line) with Memory = {
+  if line >= k { i }
+  else if i >= load_i32(text) { i }
+  else if load_i8(text + 4 + i) == 10 { nth_line_offset(text, k, i + 1, line + 1) }
+  else { nth_line_offset(text, k, i + 1, line) }
+}
+
+fn line_end_from(ref text, i) with Memory = {
+  if i >= load_i32(text) { i }
+  else if load_i8(text + 4 + i) == 10 { i }
+  else { line_end_from(text, i + 1) }
+}
+
+// The Why chain, one hop per line: file:line through the range map, the
+// hop's own phrase, and — where the graph carries them — the binding's
+// literal value (node_const at the let's value node, read live) and the
+// author's attached `//` lede (graph_comment_at). The prose rides the
+// same rails as the types: nothing here is stored twice.
+fn render_why_hops(reason, ranges, depth) = {
+  if depth > 7 { print_string("\n") }
+  else {
+    match reason {
+      Located(span, inner) => {
+        if depth > 0 { print_string("     ") } else { () }
+        print_string("{reason_phrase(inner)}, at {file_line(ranges, span)}{binding_ledes(span, inner)}\n")
+        render_why_deeper(inner, ranges, depth)
+      },
+      VarLookup(name, br) => {
+        if depth > 0 { print_string("     ") } else { () }
+        print_string("{name} read here\n")
+        render_why_hops(br, ranges, depth + 1)
+      },
+      _ => {
+        if depth > 0 { print_string("     ") } else { () }
+        print_string("{show_reason(reason)}\n")
+      }
+    }
+  }
+}
+
+fn render_why_deeper(inner, ranges, depth) = match inner {
+  VarLookup(_, br)          => render_why_hops(br, ranges, depth + 1),
+  LetBinding(_, br)         => render_why_hops(br, ranges, depth + 1),
+  FnReturn(_, br)           => render_why_hops(br, ranges, depth + 1),
+  InferredCallReturn(_, br) => render_why_hops(br, ranges, depth + 1),
+  InferredPipeResult(_, br) => render_why_hops(br, ranges, depth + 1),
+  // A unification joins TWO provenances — walk both (the second indented
+  // as its own branch), the DAG rendered as the tree it is.
+  Unified(a, b)             => {
+    render_why_hops(a, ranges, depth + 1)
+    render_why_hops(b, ranges, depth + 1)
+  },
+  OpConstraint(_, a, b)     => {
+    render_why_hops(a, ranges, depth + 1)
+    render_why_hops(b, ranges, depth + 1)
+  },
+  IfBranch(br)              => render_why_hops(br, ranges, depth + 1),
+  Instantiation(_, br)      => render_why_hops(br, ranges, depth + 1),
+  _                         => print_string("")
+}
+
+fn reason_phrase(inner) with Memory + GraphRead = match inner {
+  VarLookup(name, _)          => "{name} flows in here",
+  LetBinding(name, _)         => "let {name}",
+  Declared(name)              => "declared {name}",
+  Inferred(s)                 => s,
+  FnReturn(name, _)           => "returned from {name}",
+  FnParam(name, i, _)         => "parameter {name}",
+  InferredCallReturn(name, _) => "the call to {name}",
+  InferredPipeResult(v, _)    => "through {v}",
+  MissingVar(name)            => "{name} is unresolved",
+  Placeholder(_)              => "authored here",
+  _                           => show_reason(inner)
+}
+
+// The value + comment ledes at a binding hop — both read LIVE from the
+// graph (the let's value node via node_const; the attached comment via
+// the comment weave). Empty strings when the graph carries neither.
+fn binding_ledes(span, inner) with GraphRead + Memory = match inner {
+  LetBinding(_, _) => {
+    let spans = span_index_of_snapshot()   // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
+    match address_case_a(spans, span_line_of(span), 0, 0, len(spans), None) {
+      None => "",
+      Some(pick) => {
+        let (_, sh) = pick
+        "{value_lede(sh)}{comment_lede(sh)}"
+      }
+    }
+  },
+  _ => ""   // drift-audit: ignore — genuine String-null lede: a non-binding hop carries no value/comment lede by construction
+}
+
+fn span_line_of(ref s) with Pure = { let Span(sl, _, _, _) = s sl }
+
+fn value_lede(sh) with GraphRead + Alloc + Memory = match graph_node_body(sh) {
+  NStmt(LetStmt(_, value, _)) => {
+    let N(_, _, vh) = value
+    match node_const(vh) {
+      Some(LVInt(n))    => " = {int_to_str(n)}",
+      Some(LVFloat(f))  => " = {float_to_str(f)}",
+      Some(LVString(s)) => " = \"{s}\"",
+      Some(LVBool(b))   => if b { " = true" } else { " = false" },
+      None              => ""
+    }
+  },
+  _ => ""   // drift-audit: ignore — genuine String-null lede: a non-let node has no binding value to render
+}
+
+fn comment_lede(sh) with GraphRead + Alloc + Memory = {
+  let c = graph_comment_at(sh)
+  if load_i32(c) == 0 { "" } else { ", {comment_first_line(c)}" }
+}
+
+fn comment_first_line(ref c) with Memory + Alloc = {
+  let cut = addr_newline_at(c, 0, load_i32(c))
+  if cut < 0 { c } else { str_slice(c, 0, cut) }
+}
+
+fn addr_newline_at(ref s, i, n) with Memory = {
+  if i >= n { 0 - 1 }
+  else if load_i8(s + 4 + i) == 10 { i }
+  else { addr_newline_at(s, i + 1, n) }
+}
 
 // ─── test_run — Test effect handler chain
 //

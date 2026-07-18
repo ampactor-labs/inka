@@ -64,6 +64,7 @@ import infer
 
 effect CursorRead {
   cursor_at(Span) -> CursorView
+  cursor_at_handle(Handle) -> CursorView   // the by-HANDLE projection — a caller that already resolved the node reads it directly; re-resolving a handle it holds is the re-derivation (the cursor-address transport resolves once, then projects)
   cursor_argmax(Caret) -> Cursor
   cursor_pinned(Handle) -> Cursor
 }
@@ -98,25 +99,12 @@ handler cursor_default with !Mutate {
   // teach why); `_` discards the unread half — explicit per H6
   // exhaustiveness, no `_ => fabricated` over the load-bearing pos
   // (CLAUDE.md red-flag table).
-  cursor_at(span) => {
-    let handle = handle_at_span(span)
-    let GNode(kind, _reason) = graph_chase(handle)
-    let pos = (handle, kind)
-    let (query, propose, topology, row, trace, verify, teach, why) =
-      pos
-        <| (
-          ((_, k)) => k,                                                       // 1. Graph + Env (Query)
-          ((h, k)) => propose_at(h, k),                                        // 2. Handlers (Propose) — Synth's MultiShot
+  cursor_at(span) => resume(cursor_view_of(handle_at_span(span))),
 
-          ((h, _)) => pipe_context_of_handle(h),                               // 3. Five verbs (Topology)
-          ((_, k)) => row_of_kind(k),                                          // 4. Boolean row (Unlock)
-          ((_, k)) => ownership_of_kind(k),                                    // 5. Ownership-as-effect (Trace)
-          ((h, _)) => verify_pending_at(h),                                    // 6. Refinement (Verify)
-          ((h, _)) => teach_gradient(h),                               // 7. Continuous gradient (Teach)
-          ((h, _)) => teach_why(h)                                     // 8. HM live + Reasons (Why)
-        )
-    resume(CursorView(query, propose, topology, row, trace, verify, teach, why))
-  },
+  // The by-handle entry — the same eight-arm fan, resolution already done
+  // by the caller (the cursor-address transport resolves once via its
+  // line rule; re-resolving here would be the re-derivation).
+  cursor_at_handle(handle) => resume(cursor_view_of(handle)),
 
   cursor_argmax(caret) =>
     resume(cursor_argmax_compute(caret)),
@@ -451,7 +439,7 @@ fn import_paths_of_decls(decls) with Pure = {
     |> filter_map_imports
 }
 
-fn filter_map_imports(decls) with Pure = {
+fn filter_map_imports(decls) with Alloc + Memory = {
   if len(decls) == 0 { [] }
   else {
     let head_imports = match node_body_of(last(decls)) {
@@ -467,7 +455,7 @@ fn node_body_of(node) with Pure = {
   body
 }
 
-fn contains_path(paths, target) with Pure = {
+fn contains_path(paths, target) with Memory = {
   if len(paths) == 0 { false }
   else if last(paths) == target { true }
   else { contains_path(drop_last(paths), target) }
@@ -480,7 +468,7 @@ fn contains_path(paths, target) with Pure = {
 // shape, same record, same code path — drift 6 closure (no
 // primitive-type-special-case).
 
-fn argmax_or_default(scored, caret) with Pure = {
+fn argmax_or_default(scored, caret) with Memory = {
   // The pin is an OVERRIDE edge, followed FIRST: if the caret's Reason marks
   // a `??`-pinned position, that position dominates the argmax by STRUCTURE
   // (reason_is_pinned), never by a float magnitude. Only when no pin is set
@@ -522,10 +510,40 @@ fn reduce_max_by_score(scored) with Pure = {
 // Structure, Effects for Context"). The structure is the GNode; the
 // extraction is reproducible.
 
+// The eight-arm fan — ONE projection body serving both cursor_at (span,
+// resolved here) and cursor_at_handle (pre-resolved). The eight aspects of
+// the one read (PLAN §2), each arm a tentacle.
+fn cursor_view_of(handle) with GraphRead + EnvRead + LookupTy + Verify + Synth + !Mutate = {
+  let GNode(kind, _reason) = graph_chase(handle)
+  let pos = (handle, kind)
+  let (query, propose, topology, row, trace, verify, teach, why) =
+    pos
+      <| (
+        ((_, k)) => k,                                                       // 1. Graph + Env (Query)
+        ((h, k)) => propose_at(h, k),                                        // 2. Handlers (Propose) — Synth's MultiShot
+
+        ((h, _)) => pipe_context_of_handle(h),                               // 3. Five verbs (Topology)
+        ((_, k)) => row_of_kind(k),                                          // 4. Boolean row (Unlock)
+        ((_, k)) => ownership_of_kind(k),                                    // 5. Ownership-as-effect (Trace)
+        ((h, _)) => verify_pending_at(h),                                    // 6. Refinement (Verify)
+        ((h, _)) => teach_gradient(h),                               // 7. Continuous gradient (Teach)
+        ((h, _)) => teach_why(h)                                     // 8. HM live + Reasons (Why)
+      )
+  CursorView(query, propose, topology, row, trace, verify, teach, why)
+}
+
+// The SESSION's resolver — exact match on the REASON span, deliberately.
+// The edit transport re-parses the module per projection pass, so the graph
+// carries one hole node PER GENERATION at the same weave span; only the
+// generation live inference walked carries a Located reason, and the exact
+// reason-span match is what keeps the session off the stale mints (measured
+// 2026-07-18: swapping this for find_tightest over MINT spans resolved a
+// stale generation's node and 13 edit-workflow fixtures went red at once).
+// This resolver DISSOLVES with Hβ.cursor.session-weave-epoch-scope (the
+// session `<~` loop deletes the re-parse and with it the generations); the
+// cursor-address transport does not ride it — it resolves once over mint
+// spans (address_resolve, main.mn) and projects via cursor_at_handle.
 fn handle_at_span(span) with GraphRead + !Mutate = {
-  // Spans are indexed in the graph via graph_index_span (types.mn:717).
-  // Today this is a forward scan via graph_snapshot; the indexed
-  // lookup is peer-handle territory (Hμ.cursor.cache).
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
   scan_for_span(span, 0, next)
@@ -635,10 +653,32 @@ fn pipe_position_in(target, body) with Pure = match body {
 // PLAN §7), so the authored signed set at the FnStmt is the only live home
 // of `!E` at a decl; the hole's own node row (EfPure for a refined-Int
 // hole) was the wrong source entirely.
+// Propose is the ABSENCE facet: enumeration fills a socket. A BOUND node's
+// socket is filled, so its proposals are empty BY CONSTRUCTION — the render's
+// silence rule made structural (SYNTAX §Gradient: "Propose only at holes";
+// what fits a filled position is Teach's annotation question, not candidate
+// enumeration). This also fences the first live float-position enumeration
+// from the float-evidence call-convention gap (an f64-arg candidate ctor
+// dispatched through an all-i32 $ft and trapped `indirect call type mismatch`
+// the hour the cursor-address transport projected a Float node — the named
+// peer Hβ.emit.float-evidence-ft; the hole-typed gates exercise the
+// enumeration where it belongs).
+// Propose is the ABSENCE facet: enumeration fills a socket, and absence is
+// the AUTHORED-hole fact (authored_hole — body NHole with a real id and a
+// real span), never the cell state (a typed hole's cell is BOUND — typed
+// absence is the design) and never a bare body probe (the `??` mint carries
+// two handles and an unregistered slot reads zero-fill). This is the same
+// read the transport gates patches on — one truth, two readers. A filled
+// node's proposals are empty BY CONSTRUCTION, which also fences the
+// float-evidence call-convention gap (an f64-arg candidate ctor through an
+// all-i32 $ft — the named peer Hβ.emit.float-evidence-ft, first fired by
+// the first float-position projection ever taken).
 fn propose_at(h, k) with EnvRead + GraphRead + Synth + !Mutate = {
-  let ctx = mentl_context_at(h)
-  let Context(_, allowed, _) = ctx
-  synth_propose(ty_of_kind(h, k), allowed, ctx)
+  if authored_hole(h) {
+    let ctx = mentl_context_at(h)
+    let Context(_, allowed, _) = ctx
+    synth_propose(ty_of_kind(h, k), allowed, ctx)
+  } else { Proposals([], []) }
 }
 
 fn mentl_context_at(handle) with EnvRead + GraphRead + !Mutate = {
@@ -786,7 +826,7 @@ fn top_n_by_score(scored, n) with Pure = {
   take(n, sorted)
 }
 
-fn sort_by_score_desc(scored) with Pure = {
+fn sort_by_score_desc(scored) with Alloc + Memory = {
   if len(scored) <= 1 { scored }
   else {
     let head = last(scored)

@@ -196,7 +196,7 @@ handler project_queue_merger
 // the graph epoch IS the cache. The e-graph supplies the TStyle-tier
 // equivalences (topology nudges) effect-awarely via egraph.mn.
 
-fn project_queue() with Verify + GraphRead + GraphWrite = {
+fn project_queue() with Verify + GraphRead + GraphWrite + Memory + Alloc = {
   positions_with_dependents()
     |> map((pos) => candidates_at(pos))
     |> flatten
@@ -267,7 +267,7 @@ fn proven_to_item(pos, pair, anchor) with GraphRead = {
 // from the span_index byte position. Reads `graph_snapshot` once for the
 // span_index; the intent row is read per-handle from the node itself.
 
-fn compute_priority(pos, ann) with GraphRead = {
+fn compute_priority(pos, ann) with GraphRead + Memory = {
   let Graph(_nodes, _epoch, _next, _overlays, span_index) = graph_snapshot()
   OraclePriority({
     tier:          tier_of_annotation(ann),

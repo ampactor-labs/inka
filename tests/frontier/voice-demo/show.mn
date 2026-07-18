@@ -1,0 +1,4 @@
+// the desk preset
+let mix = 0.35
+
+fn soft_clip(x) with Pure = x

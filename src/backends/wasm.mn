@@ -535,7 +535,7 @@ fn project_emit_state(lowered) = {
 // a record contributes its delimiters + each "name: "; a tuple its parens; a
 // list its brackets + ", "; a sum each "Ctor("/")"/nullary name. Runs inside
 // project_emit_state where string_literal_collector catches visit_string.
-fn register_show_literals(lowered) with EmitStringLiteralOp + EnvRead = {
+fn register_show_literals(lowered) with EmitStringLiteralOp + EnvRead + Memory + Alloc = {
   let tys = collect_show_tys_list(lowered, [])
   register_show_literals_list(tys, [])
 }
@@ -4005,7 +4005,7 @@ fn emit_eq_sum_call(sig, neg) = {
 // constructors). A nullary ctor's scheme is bare TName -> []; a fielded ctor's
 // is TFun(params, TName, _) -> the param types. Carried-Truth: the payload
 // types are read LIVE from the constructor's scheme, never re-derived.
-fn variant_specs_of(type_name) with EnvRead = {
+fn variant_specs_of(type_name) with EnvRead + Memory = {
   let Env(entries) = env_snapshot()
   variant_specs_filter(entries, type_name)
 }
@@ -4019,7 +4019,7 @@ fn variant_specs_filter(entries, type_name) with Memory = {
   variant_specs_filter_from(entries, type_name, n - 1, make_list(n), 0)
 }
 
-fn variant_specs_filter_from(entries, type_name, i, own buf, count) with Memory = {
+fn variant_specs_filter_from(entries, type_name, i, own buf, count) with Memory + Alloc = {
   if i < 0 { slice(buf, 0, count) }
   else {
     let (_name, scheme, _reason, kind) = list_index(entries, i)
@@ -4086,7 +4086,7 @@ fn ctor_payload_tys_filter(entries, ctor_name) with Memory = {
   ctor_payload_tys_find(entries, ctor_name, len(entries) - 1)
 }
 
-fn ctor_payload_tys_find(entries, ctor_name, i) with Memory = {
+fn ctor_payload_tys_find(entries, ctor_name, i) with Memory + Alloc = {
   if i < 0 { [] }
   else {
     let (name, scheme, _reason, kind) = list_index(entries, i)
@@ -4118,12 +4118,12 @@ fn ctor_payload_tys_find(entries, ctor_name, i) with Memory = {
 // every BEq/BNe site, then emit each DISTINCT $eq_<sig> recursive helper once.
 // Called from emit_module after emit_functions (the helpers are plain top-
 // level functions, called directly like $str_eq — no fn-table entry needed).
-fn emit_eq_leaves(lowered) with EnvRead = {
+fn emit_eq_leaves(lowered) with EnvRead + Memory + Alloc = {
   let tys = collect_eq_product_tys_list(lowered, [])
   emit_distinct_eq_leaves(tys, [])
 }
 
-fn emit_distinct_eq_leaves(tys, seen) with EnvRead + Alloc + Memory = {
+fn emit_distinct_eq_leaves(tys, seen) with EnvRead + Alloc + Memory + WasmOut = {
   if len(tys) == 0 { () }
   else {
     let ty = last(tys)
@@ -4438,12 +4438,12 @@ fn emit_cmp_sign_test(op) = {
 // Mirror of emit_eq_leaves: a pre-pass collects the aggregate operand
 // type at every BLt/BGt/BLe/BGe site (+ its nested-aggregate closure, the SAME
 // eq_subtys reach), each distinct sig emitting ONE recursive 3-way helper.
-fn emit_fold_compare_helpers(lowered) with EnvRead = {
+fn emit_fold_compare_helpers(lowered) with EnvRead + Memory + Alloc = {
   let tys = collect_cmp_agg_tys_list(lowered, [])
   emit_distinct_compare_helpers(tys, [])
 }
 
-fn emit_distinct_compare_helpers(tys, seen) with EnvRead + Alloc + Memory = {
+fn emit_distinct_compare_helpers(tys, seen) with EnvRead + Alloc + Memory + WasmOut = {
   if len(tys) == 0 { () }
   else {
     let ty = last(tys)
@@ -4927,7 +4927,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
 // lower emitted) and its nested-aggregate closure, then emit each DISTINCT
 // $show_<sig> recursive helper once (the e-graph canonicalizes duplicates — the
 // graph IS the index). A pure-scalar program collects none (byte-identical, Law 7).
-fn emit_show_leaves(lowered) with EnvRead = {
+fn emit_show_leaves(lowered) with EnvRead + Memory + Alloc = {
   let tys = collect_show_tys_list(lowered, [])
   emit_distinct_show_leaves(tys, [])
 }
@@ -4974,7 +4974,7 @@ fn emit_show_header(sig) = {
 // structural projection. The fold runs over the canonically-sorted fields at
 // their width-summed offsets (the SAME align_for + repr_width the eq leaf and
 // the store side run — Carried-Truth).
-fn emit_one_show_product_helper(sig, ty) with EnvRead + WasmOut = {
+fn emit_one_show_product_helper(sig, ty) with EnvRead + WasmOut + Memory = {
   emit_show_header(sig)
   let is_record = ty_is_record(fold_strip(ty))
   let open  = if is_record { "{" } else { "(" }
@@ -5354,7 +5354,7 @@ fn show_subtys_variants(specs, i, n, seen, acc) = {
 
 // show_operand_contrib — the arg of a $show_<sig> LCall contributes its
 // aggregate closure. The arg handle carries the proven type (AST-in-graph).
-fn show_operand_contrib(arg, acc) with LookupTy + Alloc + Memory = {
+fn show_operand_contrib(arg, acc) with LookupTy + Alloc + Memory + EnvRead = {
   let h = lexpr_handle(arg)
   if h == 0 { acc }
   else { show_subtys(fold_strip(lookup_ty(h)), [], acc) }
@@ -5450,12 +5450,12 @@ fn collect_show_tys_expr(expr, acc) with LookupTy + Alloc + Memory = match expr 
 // identically. The runtime str_hash/list_hash are the sequence leaf; a scalar
 // word IS its own hash; a nested aggregate recurses its own $hash_<sig>.
 
-fn emit_fold_hash_helpers(lowered) with EnvRead + LookupTy = {
+fn emit_fold_hash_helpers(lowered) with EnvRead + LookupTy + Alloc + Memory = {
   let tys = collect_hash_tys_list(lowered, [])
   emit_distinct_hash_leaves(tys, [])
 }
 
-fn emit_distinct_hash_leaves(tys, seen) with EnvRead + Alloc + Memory = {
+fn emit_distinct_hash_leaves(tys, seen) with EnvRead + Alloc + Memory + WasmOut = {
   if len(tys) == 0 { () }
   else {
     let ty = last(tys)
@@ -5633,13 +5633,13 @@ fn is_hash_global(f) = match f {
   _ => false
 }
 
-fn hash_operand_contrib(arg, acc) with LookupTy + Alloc + Memory = {
+fn hash_operand_contrib(arg, acc) with LookupTy + Alloc + Memory + EnvRead = {
   let h = lexpr_handle(arg)
   if h == 0 { acc }
   else { eq_subtys(fold_strip(lookup_ty(h)), [], acc) }
 }
 
-fn collect_hash_tys_list(stmts, acc) with LookupTy + Memory = {
+fn collect_hash_tys_list(stmts, acc) with LookupTy + Memory + Alloc = {
   if len(stmts) == 0 { acc }
   else {
     collect_hash_tys_list(drop_last(stmts),
@@ -5716,7 +5716,7 @@ fn collect_hash_tys_expr(expr, acc) with LookupTy + Alloc + Memory = match expr 
 // variant's constructor NAME (show prints it; eq does not need it). Read live
 // from the env's ConstructorScheme — (tag_id, ctor_name, [payload_ty]) in
 // declaration (tag) order.
-fn variant_named_specs_of(type_name) with EnvRead = {
+fn variant_named_specs_of(type_name) with EnvRead + Memory = {
   let Env(entries) = env_snapshot()
   variant_named_specs_filter(entries, type_name)
 }
@@ -5726,7 +5726,7 @@ fn variant_named_specs_filter(entries, type_name) with Memory = {
   variant_named_specs_from(entries, type_name, n - 1, make_list(n), 0)
 }
 
-fn variant_named_specs_from(entries, type_name, i, own buf, count) with Memory = {
+fn variant_named_specs_from(entries, type_name, i, own buf, count) with Memory + Alloc = {
   if i < 0 { slice(buf, 0, count) }
   else {
     let (name, scheme, _reason, kind) = list_index(entries, i)

@@ -4552,7 +4552,7 @@ fn walk_refinement(node, path_pred) with GraphRead + GraphWrite = {
 // before walking the arm body. The narrowing is per-arm-scope; once
 // the arm body is walked, its refinement contributions don't leak
 // to other arms (they're branch-disjoint; map-per-arm semantics).
-fn walk_refinement_arms(scrut, arms, path_pred) with GraphRead + GraphWrite = {
+fn walk_refinement_arms(scrut, arms, path_pred) with GraphRead + GraphWrite + Memory = {
   if len(arms) == 0 { () }
   else {
     // A match arm is a (pat, body) TUPLE (parser push_node (pat, body); the
@@ -4569,7 +4569,7 @@ fn walk_refinement_arms(scrut, arms, path_pred) with GraphRead + GraphWrite = {
 // Block walking — stmts may include `assert(pred)` which narrows the
 // rest of the block. Threads path_pred through; each assert
 // strengthens the predicate for subsequent stmts + final expression.
-fn walk_refinement_block(stmts, final, path_pred) with GraphRead + GraphWrite = {
+fn walk_refinement_block(stmts, final, path_pred) with GraphRead + GraphWrite + Memory = {
   if len(stmts) == 0 { walk_refinement(final, path_pred) }
   else {
     let stmt = last(stmts)
@@ -4605,7 +4605,7 @@ fn walk_refinement_args_with_param_preds(f, args, path_pred) with GraphRead + Gr
   walk_refinement_list(args, path_pred)
 }
 
-fn walk_refinement_list(nodes, path_pred) with GraphRead + GraphWrite = {
+fn walk_refinement_list(nodes, path_pred) with GraphRead + GraphWrite + Memory = {
   if len(nodes) == 0 { () }
   else {
     walk_refinement(last(nodes), path_pred)
@@ -4613,7 +4613,7 @@ fn walk_refinement_list(nodes, path_pred) with GraphRead + GraphWrite = {
   }
 }
 
-fn walk_refinement_fields(fields, path_pred) with GraphRead + GraphWrite = {
+fn walk_refinement_fields(fields, path_pred) with GraphRead + GraphWrite + Memory = {
   if len(fields) == 0 { () }
   else {
     // A record-literal field is a (name, value) TUPLE (types.mn
@@ -4653,7 +4653,7 @@ fn is_assert_call(callee) with GraphRead = {
   }
 }
 
-fn predicate_of_assert_arg(args) with GraphRead = {
+fn predicate_of_assert_arg(args) with GraphRead + Memory = {
   if len(args) == 0 { PTrue }
   else { predicate_of_bool_expr(last(args)) }
 }

@@ -1,0 +1,11 @@
+import show
+
+// echo — the send blended by the desk's mix.
+fn echo(m, x) with Pure = m * x
+
+fn main() = {
+  let x = 0.5
+
+  let wet = echo(mix, x)
+  7
+}

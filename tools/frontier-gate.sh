@@ -101,7 +101,13 @@ BOOT_RUNTIME_SHADOW=""
 # strings.mn/cache_map.mn spell their guarded reads as control flow (sound
 # under both the old eager `&&` and the short-circuit lowering). The shadow's
 # byte change is those three files; the diagnostic multiset did not grow.
-EXPECTED_RUNTIME_SHADOW_SHA256="d55cc4af23d0305e9f1c7c9cce2d0e658ef411179ec1b61affe91d4304ddfd70"
+#
+# 2026-07-18 (2): repinned for the effect-truth sweep — the runtime libs'
+# declared rows widened to their bodies' truth (prelude iterate, combinators'
+# Pure fictions dropped for the Memory/Alloc the list ops perform, cache_map's
+# Pure declarations, persist's Persist op, threading's Memory). Rows only;
+# the diagnostic multiset SHRANK (the sweep's own purpose).
+EXPECTED_RUNTIME_SHADOW_SHA256="5579954f4af4445b45ba17f8e6d1c3667082b651b7795f755502c35f55e5dc13"
 
 pass() {
   echo "  PASS $*"
@@ -508,6 +514,24 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-refuse-dup-fn.mn" E_DuplicateFnName "$dir"
   run_program "$compiler" handler-forward-ref \
     "$ROOT/tests/frontier/mn-handler-forward-ref.mn" 42 no "$dir"
+
+  # ── the cursor-address transport (mentl voice.mn:9) ─────────────────
+  # Runs from the demo dir (the driver resolves imports CWD-relative).
+  # Asserts the honest minimum the artifact produces today: the Query
+  # line names the addressed call and its type; refusals refuse.
+  demo="$ROOT/tests/frontier/voice-demo"
+  out=$(cd "$demo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$demo" --dir /tmp "$compiler" voice.mn:9 2>"$dir/at9.err")
+  if [ $? -eq 0 ] && printf '%s' "$out" | grep -q 'echo(mix, x) : Float'; then
+    pass "cursor-address voice.mn:9 (Query names the call + type)"
+  else
+    fail "cursor-address voice.mn:9 (got: $out; see $dir/at9.err)"
+  fi
+  (cd "$demo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$demo" --dir /tmp "$compiler" voice.mn:9999) >"$dir/at-oob.out" 2>&1
+  if [ $? -ne 0 ] && grep -q 'past the end' "$dir/at-oob.out"; then
+    pass "cursor-address out-of-range refuses"
+  else
+    fail "cursor-address out-of-range (see $dir/at-oob.out)"
+  fi
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

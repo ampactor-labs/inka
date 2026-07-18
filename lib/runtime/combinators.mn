@@ -73,11 +73,11 @@ fn race(handlers) with GraphRead + GraphWrite = {
 //    file)
 // 5. Lexical name — alphabetic tiebreak; guarantees singleton
 
-fn tiebreak_row_minimality(survivors) with Pure = {
+fn tiebreak_row_minimality(survivors) with Memory = {
   min_by_key(survivors, (s) => effect_count(handler_row(s)))
 }
 
-fn tiebreak_reason_depth(survivors) with Pure = {
+fn tiebreak_reason_depth(survivors) with Memory = {
   min_by_key(survivors, (s) => reason_chain_length(handler_reason(s)))
 }
 
@@ -86,18 +86,18 @@ fn tiebreak_declared_intent(survivors, cursor) with GraphRead + Memory = {
   if len(aligned) > 0 { aligned } else { survivors }
 }
 
-fn tiebreak_source_span(survivors) with Pure = {
+fn tiebreak_source_span(survivors) with Memory = {
   min_by_key(survivors, (s) => span_start(handler_span(s)))
 }
 
-fn tiebreak_lex(survivors) with Pure = {
+fn tiebreak_lex(survivors) with Memory = {
   min_by_key(survivors, (s) => handler_name(s))
 }
 
 // first_verified_wins — applies the five tiebreak steps in order;
 // each step narrows. Returns the unique winner.
 
-fn first_verified_wins(survivors, cursor) with GraphRead = {
+fn first_verified_wins(survivors, cursor) with GraphRead + Memory = {
   survivors
     |> tiebreak_row_minimality
     |> tiebreak_reason_depth
@@ -115,7 +115,7 @@ fn first_verified_wins(survivors, cursor) with GraphRead = {
 // shared checkpoint at install is the substrate's anchor for
 // rollback discipline.
 
-fn race_internal(handlers) with GraphRead + GraphWrite = {
+fn race_internal(handlers) with GraphRead + GraphWrite + Memory = {
   let race_checkpoint = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let survivors       = collect_verified_survivors(handlers, race_checkpoint)
   let cursor          = graph_cursor()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
@@ -238,7 +238,7 @@ fn min_by_key_loop(lst, key_fn, i, n, current_min, current_key) with Memory = {
 // filter_list — basic functional filter. O(N) using Ω.3 buffer-
 // counter substrate.
 
-fn filter_list(lst, pred) with Memory = {
+fn filter_list(lst, pred) with Memory + Alloc = {
   let n = len(lst)
   let buf = make_list(n)
   let count = filter_loop(lst, pred, 0, n, buf, 0)
@@ -262,7 +262,7 @@ fn filter_loop(lst, pred, i, n, buf, count) with Alloc + Memory = {
 // map_list — basic functional map. O(N) using Ω.3 buffer-counter
 // substrate.
 
-fn map_list(lst, fn_apply) with Memory = {
+fn map_list(lst, fn_apply) with Memory + Alloc = {
   let n = len(lst)
   let buf = make_list(n)
   let _ = map_loop(lst, fn_apply, 0, n, buf, 0)

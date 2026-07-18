@@ -206,23 +206,51 @@ fn driver_check(ref entry_module)
 // missing their cross-module names. The per-module env overlay
 // (Hβ.driver.per-module-env-overlay) is the sequenced refinement; the
 // concatenation is the proven form.
-fn driver_compile_entry(ref entry_module)
+// The one-namespace concatenation WITH its module-range map — the map is a
+// fact of the fold that builds the source (each module's start line and
+// line count in the concatenated coordinate space), computed exactly where
+// the concatenation happens, once. The cursor-address transport renders
+// every span back to file:line through it; driver_compile_entry is its
+// map-dropping projection.
+fn driver_entry_with_ranges(ref entry_module)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   let modules = driver_collect_dag(entry_module)
-  let source = fold("", (acc, m) => {
+  let (source, _next_line, ranges) = fold(("", 1, []), (acc, m) => {
+    let (src_acc, line_acc, r_acc) = acc
     let p = driver_module_path(m)
     // A module the resolver cannot find is REPORTED, never skipped. The
-    // `else { acc }` that stood here dropped it silently, so `mentl check`
-    // said E_MissingModule while `mentl compile` on the same source said
-    // nothing and shipped 2,432 bytes of WAT — two verbs, two answers, one
-    // truth, which is the Carried-Truth Law violated across the surface.
-    // driver_check_module (above) has raised this exact diagnostic all
-    // along; the concatenation walked past its one raise site.
-    if fs_exists(p) { "{acc}{fs_read_file(p)}\n" }
-    else { report(EMissingModule(m, p, span_zero())) acc }
+    // `else` that once dropped it silently made `mentl check` say
+    // E_MissingModule while `mentl compile` on the same source said
+    // nothing and shipped WAT — two verbs, two answers, one truth.
+    if fs_exists(p) {
+      let text = fs_read_file(p)
+      let nlines = count_lines(text) + 1
+      ("{src_acc}{text}\n", line_acc + nlines, push(r_acc, (m, p, line_acc, nlines)))
+    }
+    else {
+      report(EMissingModule(m, p, span_zero()))
+      acc
+    }
   }, modules)
   let ast = parse_program(lex(source))
   infer_program(ast)
+  (ast, ranges)
+}
+
+// Newlines in a flat string — the concatenation fold's line accountant.
+fn count_lines(ref s) with Memory = count_lines_from(s, load_i32(s), 0, 0)
+
+fn count_lines_from(ref s, n, i, acc) with Memory = {
+  if i >= n { acc }
+  else {
+    let step = if load_i8(s + 4 + i) == 10 { 1 } else { 0 }
+    count_lines_from(s, n, i + 1, acc + step)
+  }
+}
+
+fn driver_compile_entry(ref entry_module)
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  let (ast, _ranges) = driver_entry_with_ranges(entry_module)
   ast
 }
 

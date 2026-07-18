@@ -277,7 +277,7 @@ fn saturate_pass(program) with GraphRead + GraphWrite + LookupTy = {
 // The outer cap is `bound` passes: each productive pass draws at least one edge
 // and the relation only grows toward roots, so `bound` passes suffice; the cap is
 // a total-function guard, never reached at fixpoint (fired hits 0 first).
-fn saturate_until(bound, pass) with GraphRead + GraphWrite + LookupTy = {
+fn saturate_until(bound, pass) with GraphRead + GraphWrite + LookupTy + Memory = {
   if pass > bound { () }
   else {
     let fired = apply_rules_from(0, bound, 0)

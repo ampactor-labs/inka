@@ -188,11 +188,11 @@ fn fold_sig(ty) with Pure = match fold_strip(ty) {
   TRefined(base, _) => fold_sig(base)
 }
 
-fn fold_sig_list(elems, i, n) with Pure =
+fn fold_sig_list(elems, i, n) with Memory =
   if i >= n { "" }
   else { "_{fold_sig(list_index(elems, i))}{fold_sig_list(elems, i + 1, n)}" }
 
-fn fold_sig_fields(fields, i, n) with Pure =
+fn fold_sig_fields(fields, i, n) with Memory =
   if i >= n { "" }
   else {
     let (name, ty) = list_index(fields, i)
@@ -2055,7 +2055,7 @@ fn next_free_slot(slots, from, n) with Memory =
   else { next_free_slot(slots, from + 1, n) }
 
 // The param index whose name is `label`, or -1 when no param bears it.
-fn param_index(params, label, i) with Pure =
+fn param_index(params, label, i) with Memory =
   if i >= len(params) { -1 }
   else {
     if param_name(list_index(params, i)) == label { i }
@@ -2186,7 +2186,7 @@ fn show_cmp_op(ref op) with !Mutate = match op {
 }
 
 // Resolve a predicate operand HANDLE to its Expr live and render it.
-fn show_pred_operand(handle) with GraphRead = {
+fn show_pred_operand(handle) with GraphRead + Alloc + Memory = {
   match graph_node_body(handle) {
     NExpr(VarRef(name)) => name,
     NExpr(LitInt(n))    => int_to_str(n),

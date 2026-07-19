@@ -1287,6 +1287,13 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
   // to one decl's live set. Until then the Memory floor stands — a known
   // under-attribution, named here, not a silent one.
   inf_add_row(mk_ef_closed([ENamed("Memory")]))
+  // EVERY application result is a possible suspension boundary
+  // (stage_continuation_boundary's own law) — the fast path is still an
+  // application. Skipping the staging here left lower's k2 crossing
+  // machinery with NoBoundary at exactly four wheel sites (a seq-op call on
+  // the k2 spine: alt_same_name_set, rows_equal, splice_at, k2_is_park) —
+  // the census's last E_UnresolvedType class.
+  stage_continuation_boundary(cname, handle)
 }
 
 fn infer_call(func, args, handle, span: ValidSpan) = {

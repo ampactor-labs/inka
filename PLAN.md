@@ -599,7 +599,16 @@ representation-host**, ONE contiguous handle-addressed shape:
   `fold(ty, leaf)`, retiring the two hand-copies (the `lower_to_string`
   aggregate fall-through; a generated `compare`/`hash` leaf) — LESS code,
   sequenced on STEP 0/1's repr word-leaf and STEP 5's `TCont`-world (the
-  function-leaf's serialized-closure world). There is NO pack/unpack leaf: the
+  function-leaf's serialized-closure world). **The fold's TRAVERSALS are
+  unified (2026-07-18, the unified each):** the five walks of the lowered
+  tree (four per-leaf type-closure collectors + the show-literal
+  re-collection) are ONE walk carrying the four closures as one record, and
+  the four dedup walkers are ONE keyed by the FoldOp ADT — 25 fns deleted,
+  the eq/cmp collectors' dropped-right-subtree class closed by construction
+  (§7 ledger). The LEAF GENERATORS remain four: conjunction / first-nonzero
+  chain / FNV mix / concat tree are four real leaves of the one fold, not
+  copies — their unification is the synthesize-as-lowered-LFn altitude
+  (band D's `Hβ.fold.show-leaf` / `.compare-hash-leaf`), not a walker merge. There is NO pack/unpack leaf: the
   `.kai` cache layer and its `IKAI` tag-byte serializer were DELETED whole
   (2026-07-02 — the Inka-era incremental-compilation side-file; it snapshotted
   env entries lossily, DROPPING Reason chains, and pinned an archaeology wire

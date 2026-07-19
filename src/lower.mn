@@ -1413,9 +1413,13 @@ fn set_difference(a, b) = filter((x) => !set_contains(b, x), a)
 // The flow-closure read at a use site: the precomputed escaping row by name
 // (Some for a top-level fn), else the leaf (nested fn / lambda / unknown —
 // identical to the pre-flow-closure behaviour, so closures stay byte-stable).
+// The whole escaping family speaks canonical NAME-SETS ([EffName] — the form
+// escaping_fixpoint computes over and ev derivation consumes); the old
+// `-> Option(EffRow)` op declaration was the family's one row-speaker, and
+// its instantiation at this match was the List-vs-EffRow census error.
 fn escaping_row(name) = match ls_escaping_of(name) {
-  Some(row) => row,
-  None      => own_dispatched_row(name)
+  Some(names) => names,
+  None        => own_dispatched_row(name)
 }
 
 // An anonymous lambda has no name in the esc map, so its closure-evidence row
@@ -2748,15 +2752,15 @@ fn lower_fanout(handle, fan_own, left, right) = {
 fn fanout_boundaries(handle) = match graph_boundary_at(handle) {
   FanoutBoundary(edges) => Ok(edges),
   PendingContinuationBoundary(_, _, _, _) => {
-    report(EUnresolvedType(handle, graph_epoch(), span_zero()))
+    report(EUnresolvedType(handle, graph_epoch(), parse_span_of(handle)))
     Err(WrongFanoutBoundaryKind)
   },
   ContinuationBoundary(_) => {
-    report(EUnresolvedType(handle, graph_epoch(), span_zero()))
+    report(EUnresolvedType(handle, graph_epoch(), parse_span_of(handle)))
     Err(WrongFanoutBoundaryKind)
   },
   NoBoundary => {
-    report(EUnresolvedType(handle, graph_epoch(), span_zero()))
+    report(EUnresolvedType(handle, graph_epoch(), parse_span_of(handle)))
     Err(MissingFanoutBoundary)
   }
 }
@@ -2764,14 +2768,14 @@ fn fanout_boundaries(handle) = match graph_boundary_at(handle) {
 fn fanout_boundary_at(boundaries, i, fallback_h) =
   if i < len(boundaries) { Ok(list_index(boundaries, i)) }
   else {
-    report(EUnresolvedType(fallback_h, graph_epoch(), span_zero()))
+    report(EUnresolvedType(fallback_h, graph_epoch(), parse_span_of(fallback_h)))
     Err(MissingFanoutEdge(i))
   }
 
 fn executable_boundary_row(thunk_h) = match lookup_ty(thunk_h) {
   TFun(_, _, row) => Ok(row),
   _ => {
-    report(EUnresolvedType(thunk_h, graph_epoch(), span_zero()))
+    report(EUnresolvedType(thunk_h, graph_epoch(), parse_span_of(thunk_h)))
     Err(UnresolvedBoundaryThunk(thunk_h))
   }
 }
@@ -4033,15 +4037,15 @@ fn reify_frame_k_at(body_node, ph, outer_holes, edge) = {
 fn continuation_boundary_at(site_h) = match graph_boundary_at(site_h) {
   ContinuationBoundary(edge) => Ok(edge),
   PendingContinuationBoundary(_, _, continuation_h, _) => {
-    report(EUnresolvedType(continuation_h, graph_epoch(), span_zero()))
+    report(EUnresolvedType(continuation_h, graph_epoch(), parse_span_of(continuation_h)))
     Err(UnfinalizedContinuationBoundary(continuation_h))
   },
   FanoutBoundary(_) => {
-    report(EUnresolvedType(site_h, graph_epoch(), span_zero()))
+    report(EUnresolvedType(site_h, graph_epoch(), parse_span_of(site_h)))
     Err(WrongContinuationBoundaryKind)
   },
   NoBoundary => {
-    report(EUnresolvedType(site_h, graph_epoch(), span_zero()))
+    report(EUnresolvedType(site_h, graph_epoch(), parse_span_of(site_h)))
     Err(MissingContinuationBoundary)
   }
 }

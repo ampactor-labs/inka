@@ -3707,8 +3707,11 @@ fn quantify_ctor_ty(ty, qmap) = match ty {
       // Int — $compare_nValidOffset tag-compared byte POSITIONS ≥ heap_base,
       // so m3's lexer cut every input at 4096 bytes (2026-07-09). A nominal
       // record / ADT / not-yet-declared name stays TName: its identity IS
-      // nominal; only a TAlias-bodied entry is transparent.
-      match env_lookup(name) {
+      // nominal; only a TAlias-bodied entry is transparent. The read is the
+      // TYPE-position lookup: an effect decl may share the name (`effect
+      // Sample` + `type Sample`), and the plain newest-entry read would let
+      // the effect shadow the alias — the kind is the namespace.
+      match env_lookup_type(name) {
         Some(entry) => {
           let (scheme, _, _) = entry
           match scheme {

@@ -469,10 +469,51 @@ fn env_resolve(ref buf, count, ref idx, name: String) with Memory = {
   }
 }
 
+// The TYPE-position read. One env, one namespace of entries; the KIND is the
+// namespace discriminator (an effect decl and a type alias may share a name —
+// `effect Sample` + `type Sample = Float where …` are both canonical). A type
+// position (quantify_ctor_ty — every annotation surface) wants the newest
+// TYPE-BEARING entry: an alias-schemed Forall (the only transparent kind) or a
+// nominal record's RecordSchemeKind. The plain lookup returns the newest entry
+// of ANY kind, so a later-registered effect decl shadows the alias and the
+// annotation bakes a bare nominal TName that never unifies with its base.
+fn env_entry_is_type(ref scheme, ref kind) with Pure =
+  match scheme {
+    Forall(_, TAlias(_, _)) => true,
+    _ => match kind { RecordSchemeKind(_) => true, _ => false }
+  }
+
+fn env_bucket_type_pos(ref buf, ref bucket, name: String, count, i, n) with Memory = {
+  if i >= n { -1 }
+  else {
+    let (bn, pos) = list_index(bucket, i)
+    if pos < count && bn == name {
+      let (en, scheme, _, kind) = list_index(buf, pos)
+      if en == name && env_entry_is_type(scheme, kind) { pos }
+      else { env_bucket_type_pos(buf, bucket, name, count, i + 1, n) }
+    }
+    else { env_bucket_type_pos(buf, bucket, name, count, i + 1, n) }
+  }
+}
+
+fn env_resolve_type(ref buf, count, ref idx, name: String) with Memory = {
+  let b = i32_and(str_hash(name), 4095)
+  let bucket = env_bucket_at(idx, b)
+  let pos = env_bucket_type_pos(buf, bucket, name, count, 0, len(bucket))
+  if pos < 0 { None }
+  else {
+    let (_, scheme, reason, kind) = list_index(buf, pos)
+    Some((scheme, reason, kind))
+  }
+}
+
 handler env_handler with entries_buf = make_list(1024), entries_count = 0, scopes = [], index = env_index_new() {
 
   env_lookup(name) =>
     resume(env_resolve(entries_buf, entries_count, index, name)),
+
+  env_lookup_type(name) =>
+    resume(env_resolve_type(entries_buf, entries_count, index, name)),
 
   env_snapshot() =>
     // Snapshots copy the live prefix — rare (module boundaries), and a

@@ -1,0 +1,26 @@
+# The board as CI — every push runs every gate (§11 col 5: host-agnostic,
+# REQUIRED). The job is one call: tools/ci/run-board.sh wraps tools/state.sh
+# (census ratchet + march fixpoint + frontier + proof-exactness + crown) and
+# appends the perf ledger. Any always-on Linux with wasmtime serves; a
+# self-hosted runner on fixed hardware sharpens the ledger when the MI300X
+# arc begins — same file, different runs-on.
+name: board
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: install wasmtime
+        run: |
+          curl -sSf https://wasmtime.dev/install.sh | bash
+          echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
+      - name: install wabt
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq wabt
+      - name: the board
+        run: bash tools/state.sh

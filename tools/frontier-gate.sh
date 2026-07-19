@@ -85,6 +85,18 @@ PERSIST_RTLIBS=(
   "$ROOT/lib/runtime/persist.mn"
 )
 
+# The CFC pipeline links the DSP math substrate (math.mn), the comodulogram
+# (dsp/cfc.mn, whose read_recording crosses the WASI boundary → io.mn), and
+# the synthetic-signal generator (cfc-demo/gen.mn). The demo builds its
+# signal inline, so its run preopens nothing.
+CFC_RTLIBS=(
+  "${RTLIBS[@]}"
+  "$ROOT/lib/runtime/io.mn"
+  "$ROOT/lib/runtime/math.mn"
+  "$ROOT/lib/dsp/cfc.mn"
+  "$ROOT/tests/frontier/cfc-demo/gen.mn"
+)
+
 total_pass=0
 total_fail=0
 RUNTIME_SHADOW=""
@@ -172,6 +184,8 @@ run_program() {
     persist)
       cat "${PERSIST_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr"
       run_flags=(--dir /tmp) ;;
+    cfc)
+      cat "${CFC_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr" ;;
     *)
       wt_run "$compiler" < "$source" > "$wat" 2> "$cerr" ;;
   esac
@@ -186,6 +200,9 @@ run_program() {
   elif [ "$link_runtime" = persist ]; then
     comm -23 "$normalized" "$PERSIST_SHADOW" > "$unexpected"
     shadow="; inherited-shadow=$(wc -l < "$PERSIST_SHADOW")"
+  elif [ "$link_runtime" = cfc ]; then
+    comm -23 "$normalized" "$CFC_SHADOW" > "$unexpected"
+    shadow="; inherited-shadow=$(wc -l < "$CFC_SHADOW")"
   else
     cp "$normalized" "$unexpected"
   fi
@@ -269,6 +286,25 @@ capture_persist_shadow() {
   PERSIST_SHADOW="$dir/persist-shadow.normalized"
   normalize_errors "$err" > "$PERSIST_SHADOW"
   pass "persist shadow captured ($(wc -l < "$PERSIST_SHADOW") inherited errors)"
+}
+
+# Same differential accounting for the CFC lib set (runtime + io + math +
+# dsp/cfc + gen): the demo may only add refusals the base libs do not carry.
+capture_cfc_shadow() {
+  local compiler="$1" dir="$2"
+  local wat="$dir/cfc-shadow.wat" err="$dir/cfc-shadow.err"
+
+  { cat "${CFC_RTLIBS[@]}"; printf '\nfn main() = 0\n'; } \
+    | wt_run "$compiler" > "$wat" 2> "$err"
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    fail "cfc shadow compile (exit=$rc; see $err)"
+    return 1
+  fi
+
+  CFC_SHADOW="$dir/cfc-shadow.normalized"
+  normalize_errors "$err" > "$CFC_SHADOW"
+  pass "cfc shadow captured ($(wc -l < "$CFC_SHADOW") inherited errors)"
 }
 
 compile_fixture() {
@@ -480,6 +516,13 @@ for i in "${!compilers[@]}"; do
     pass "$label runtime shadow is a subset of the pinned baseline"
   fi
   capture_persist_shadow "$compiler" "$dir" || continue
+  capture_cfc_shadow "$compiler" "$dir" || continue
+  # The CFC pipeline end to end (PLAN §11 col 4): the synthetic PAC signal
+  # (4096 samples @ 512 Hz) run through the comodulogram over low=[4,6,8,10]
+  # high=[30,40,50,60]. Exit 42 iff the coupled cell is (6, 40) — the phase-
+  # amplitude coupling built into the signal (peak/median MVL ratio ≈ 5.9).
+  run_program "$compiler" cfc-demo \
+    "$ROOT/tests/frontier/cfc-demo/demo.mn" 42 cfc "$dir"
   run_program "$compiler" scheduled-int \
     "$ROOT/tests/frontier/mn-scheduled-fanout-int.mn" 60 yes "$dir"
   run_program "$compiler" scheduled-float \

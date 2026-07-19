@@ -1,0 +1,23 @@
+// demo.mn — the CFC pipeline, end to end on CPU
+//
+// Build the synthetic PAC signal (4096 samples @ 512 Hz), run the
+// comodulogram over the low grid [4, 6, 8, 10] Hz (phase) and the high
+// grid [30, 40, 50, 60] Hz (amplitude), and find the coupled cell.
+//
+// EXIT 42 iff the argmax cell is (6, 40) — the coupling built into the
+// signal. Otherwise exit the flat cell index (li·4 + hi), a teaching code
+// naming which pair won instead. (6, 40) is low index 1, high index 1 =
+// flat 5, so a correct run returns 42, never 5.
+//
+// Links the wheel runtime + lib/runtime/math.mn + lib/dsp/cfc.mn +
+// this dir's gen.mn (the gate cats them in dependency order).
+
+fn main() = {
+  let sr = 512
+  let signal = build_pac_signal(sr, 4096)
+  let low_freqs = [4, 6, 8, 10]
+  let high_freqs = [30, 40, 50, 60]
+  let matrix = comodulogram(signal, sr, low_freqs, high_freqs, 128, 32)
+  let flat = comodulogram_argmax(matrix, 4, 4)
+  if flat == 5 { 42 } else { flat }
+}

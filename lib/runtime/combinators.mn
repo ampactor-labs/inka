@@ -51,7 +51,7 @@ import graph
 // Per HC2 §0: race is library-level — no new primitive. Composes
 // graph + handlers + row + MS + Reason from existing substrate.
 
-fn race(handlers) with GraphRead + GraphWrite = {
+fn race(handlers) with GraphRead + GraphWrite + Memory + Alloc = {
   race_internal(handlers)
 }
 
@@ -81,7 +81,7 @@ fn tiebreak_reason_depth(survivors) with Memory = {
   min_by_key(survivors, (s) => reason_chain_length(handler_reason(s)))
 }
 
-fn tiebreak_declared_intent(survivors, cursor) with GraphRead + Memory = {
+fn tiebreak_declared_intent(survivors, cursor) with GraphRead + Memory + Alloc = {
   let aligned = filter_list(survivors, (s) => intent_matches(s, cursor))
   if len(aligned) > 0 { aligned } else { survivors }
 }
@@ -97,7 +97,7 @@ fn tiebreak_lex(survivors) with Memory = {
 // first_verified_wins — applies the five tiebreak steps in order;
 // each step narrows. Returns the unique winner.
 
-fn first_verified_wins(survivors, cursor) with GraphRead + Memory = {
+fn first_verified_wins(survivors, cursor) with GraphRead + Memory + Alloc = {
   survivors
     |> tiebreak_row_minimality
     |> tiebreak_reason_depth
@@ -115,7 +115,7 @@ fn first_verified_wins(survivors, cursor) with GraphRead + Memory = {
 // shared checkpoint at install is the substrate's anchor for
 // rollback discipline.
 
-fn race_internal(handlers) with GraphRead + GraphWrite + Memory = {
+fn race_internal(handlers) with GraphRead + GraphWrite + Memory + Alloc = {
   let race_checkpoint = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let survivors       = collect_verified_survivors(handlers, race_checkpoint)
   let cursor          = graph_cursor()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion

@@ -368,7 +368,16 @@
 # Hβ.emit.float-evidence-ft, first fired by the first float-position
 # projection ever taken). ~55 more declared rows widened to their bodies'
 # truth by the mechanical round (the re-pinned sharper compiler re-judging).
-census_errors_max: 185
+# 185 -> 116 (2026-07-18, the effect-truth family EXTINCT). The widen loop ran
+# to its fixpoint (nine iterations, each rebuilding and re-judging): declared
+# rows to the bodies' truth, negation-carrying declarations matched on their
+# positive parts with the ! entries preserved. E_EffectMismatch 95 -> 0 and
+# E_PurityViolated 66 -> 0 across the arc — the two classes born from the
+# ++-carries-its-callee's-row honesty fix (2026-07-16) are gone; the wheel's
+# declarations now tell the truth the bodies prove. Remaining: the
+# TypeMismatch tail (105, root-grouped), UnresolvedType 4, Pattern-
+# Inexhaustive 4, ResumeOutsideArm 2, ConstructorArity 1.
+census_errors_max: 116
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

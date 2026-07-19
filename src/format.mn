@@ -191,7 +191,7 @@ fn render_converge_chain(left, right) with Format + !Mutate = {
 // on the same line; branches at +4 indent with trailing commas; `)`
 // at +2 indent (aligned with <|). The shape draws the fanout topology.
 
-fn render_diverge_chain(input, branches_tuple) with Format + !Mutate = {
+fn render_diverge_chain(input, branches_tuple) with Format + !Mutate + Memory + Alloc = {
   let input_str = format_chain(input)
   let branches = render_branch_tuple(branches_tuple)
   "{input_str}\n{spaces(left_edge_indent())}<| (\n{branches}\n{spaces(left_edge_indent())})"
@@ -437,7 +437,7 @@ fn render_span_marker(node) with Pure = ""
 // to its GNode; the Reason renders via the ONE canonical show_reason
 // (types.mn) — never a second compressed walk of the 25-variant Reason ADT.
 // Debug aspect — assemble_render decides placement.
-fn render_reason_chain(node) with GraphRead + !Mutate = {
+fn render_reason_chain(node) with GraphRead + !Mutate + Alloc + Memory = {
   let N(_, _, h) = node
   let GNode(_, reason) = graph_chase(h)
   show_reason(reason)
@@ -467,13 +467,13 @@ fn render_sibling_separator(ctx) with Pure = match ctx {
 // the chain/block/tuple depth is a live read of that edge chain (the parent IS
 // an edge, not a missing index). canonical_indent_depth / sibling_separator
 // project the 2-/4-space layout from this real position.
-fn render_context_at(handle) with GraphRead + !Mutate = {
+fn render_context_at(handle) with GraphRead + !Mutate + Memory = {
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
   scan_for_render_parent(handle, 0, next)
 }
 
-fn scan_for_render_parent(target, i, n) with GraphRead + !Mutate = {
+fn scan_for_render_parent(target, i, n) with GraphRead + !Mutate + Memory = {
   if i >= n { RenderContextDefault }
   else {
     match render_context_from_parent(target, graph_node_body(i)) {
@@ -487,7 +487,7 @@ fn scan_for_render_parent(target, i, n) with GraphRead + !Mutate = {
 // puts the target in a chain; a BlockExpr in a block; a tuple/list literal in
 // a tuple. Depth is the parent's own enclosing depth + 1 (read by recursion at
 // render time; the first enclosing edge is sufficient for the indent step).
-fn render_context_from_parent(target, body) with Pure = match body {
+fn render_context_from_parent(target, body) with Memory = match body {
   NExpr(PipeExpr(_, l, r)) =>
     if child_is(target, l) || child_is(target, r) {
       RenderContextChain(1)

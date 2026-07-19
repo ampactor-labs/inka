@@ -213,7 +213,7 @@ handler ic_fixpoint_handler with last_epoch = 0 - 1 {
 // (Hβ.persist.module-image-cache) — same semantics, better latency,
 // never a side-file.
 
-fn cursor_argmax_compute(caret) with GraphRead + !Mutate = {
+fn cursor_argmax_compute(caret) with GraphRead + Memory + !Mutate + Teach + Alloc = {
   // SYNTAX «THole»: `??` is the gradient's syntactic absence marker. An
   // unfilled hole blocks the executable itself (E_UnresolvedHole), so
   // absence categorically outranks every annotation tightening — holes
@@ -254,12 +254,12 @@ fn authored_hole(handle) with GraphRead + !Mutate = match graph_node_body(handle
   _         => false
 }
 
-fn enumerate_hole_positions() with GraphRead + !Mutate = {
+fn enumerate_hole_positions() with GraphRead + Alloc + Memory + !Mutate = {
   let Graph(_nodes, _epoch, next, _overlays, _spans) = graph_snapshot()
   filter(authored_hole, range(0, next))
 }
 
-fn enumerate_gradient_positions() with GraphRead + !Mutate = {
+fn enumerate_gradient_positions() with GraphRead + Teach + Alloc + Memory + !Mutate = {
   let Graph(_nodes, _epoch, next, _overlays, _spans) = graph_snapshot()
   filter((i) => match teach_gradient(i) {
     None    => false,
@@ -271,12 +271,12 @@ fn enumerate_gradient_positions() with GraphRead + !Mutate = {
 // gates × proximity from the graph + pure decay table; map's tail
 // loop walks them. Cargo-class fan-out is a `><` under its own
 // `~> Thread` at this site (Hβ.lower.schedule-specialized-callee).
-fn score_all_positions(handles, caret) with GraphRead + !Mutate = {
+fn score_all_positions(handles, caret) with GraphRead + !Mutate + Teach + Memory + Alloc = {
   handles
     |> map((h) => score_one_position(h, caret))
 }
 
-fn score_one_position(handle, caret) with GraphRead + !Mutate = {
+fn score_one_position(handle, caret) with GraphRead + Memory + Teach + !Mutate + Alloc = {
   let suggestion_opt = teach_gradient(handle)
   let gates = match suggestion_opt {
     // No annotation suggestion: an AUTHORED hole still gates — filling it
@@ -308,7 +308,7 @@ fn score_one_position(handle, caret) with GraphRead + !Mutate = {
 // configurable via Hμ.cursor.transport's `cursor_weights` handler
 // (peer handle); the defaults below are the project residue.
 
-fn caret_proximity_weight(caret, target_span) -> Float with GraphRead + !Mutate = {
+fn caret_proximity_weight(caret, target_span) -> Float with GraphRead + !Mutate + Memory + Alloc = {
   let Caret(_, caret_reason) = caret
   let caret_span = caret_span_from_reason(caret_reason)
   scope_distance_decay(caret_span, target_span)
@@ -322,7 +322,7 @@ fn caret_span_from_reason(reason) with Pure = match reason {
 // The decay reads the live module graph (same_module / transitive_dep walk
 // the import DAG in the weave), so it carries GraphRead — the spatial weight
 // is a projection of the graph's module structure, never a Pure constant.
-fn scope_distance_decay(caret_span, target_span) -> Float with GraphRead + !Mutate = {
+fn scope_distance_decay(caret_span, target_span) -> Float with GraphRead + !Mutate + Alloc + Memory = {
   if span_eq(caret_span, target_span) { same_handle_weight() }
   else if same_enclosing_decl(caret_span, target_span) { same_decl_weight() }
   else if same_module(caret_span, target_span) { same_module_weight() }
@@ -365,7 +365,7 @@ fn same_module(caret_span, target_span) with GraphRead + !Mutate = {
   module_path_of_span(caret_span) == module_path_of_span(target_span)
 }
 
-fn transitive_dep(caret_span, target_span) with GraphRead + !Mutate = {
+fn transitive_dep(caret_span, target_span) with GraphRead + !Mutate + Memory + Alloc = {
   // Cross-module-but-reachable: the target's module is imported (transitively)
   // by the caret's module. Read the live import edges — the caret module's
   // ImportStmt decls in the weave — and walk them. The decay then ranks a
@@ -400,7 +400,7 @@ fn scan_for_enclosing_module(target, i, n) with GraphRead + !Mutate = {
 // Does module `from` import `target` (transitively)? Reads the live
 // ImportStmt edges in `from`'s NModule decls; the `seen` accumulator
 // breaks import cycles. The module graph IS graph content — no side-ledger.
-fn module_imports(from, target, seen) with GraphRead + !Mutate = {
+fn module_imports(from, target, seen) with GraphRead + Alloc + Memory + !Mutate = {
   if from == "" || contains_path(seen, from) { false }
   else {
     let direct = module_import_paths(from)
@@ -409,7 +409,7 @@ fn module_imports(from, target, seen) with GraphRead + !Mutate = {
   }
 }
 
-fn any_imports(paths, target, seen) with GraphRead + !Mutate = {
+fn any_imports(paths, target, seen) with GraphRead + Alloc + Memory + !Mutate = {
   if len(paths) == 0 { false }
   else if module_imports(last(paths), target, seen) { true }
   else { any_imports(drop_last(paths), target, seen) }
@@ -596,12 +596,12 @@ fn extract_row_local(ty) with Pure = match ty {
 // summary; full per-param ownership is in CursorView for handlers
 // that want it). For non-function nodes, default Unmarked.
 
-fn ownership_of_kind(kind) with Pure = match kind {
+fn ownership_of_kind(kind) with Memory = match kind {
   NBound(ty) => ownership_of_ty(ty),
   _          => Unmarked
 }
 
-fn ownership_of_ty(ty) with Pure = match ty {
+fn ownership_of_ty(ty) with Memory = match ty {
   TFun(params, _, _) =>
     if len(params) == 0 { Unmarked }
     else { param_resolved(list_index(params, 0)) },
@@ -821,7 +821,7 @@ handler gradient_queue_default with caret = Caret(0, Inferred("queue init")) {
 // names `Hμ.cursor.queue-fast-sort` as a peer handle. Substrate-
 // honest baseline; drift 9 refusal on premature optimization.
 
-fn top_n_by_score(scored, n) with Pure = {
+fn top_n_by_score(scored, n) with Memory + Alloc = {
   let sorted = sort_by_score_desc(scored)
   take(n, sorted)
 }
@@ -835,7 +835,7 @@ fn sort_by_score_desc(scored) with Alloc + Memory = {
   }
 }
 
-fn insert_descending(item, sorted) with Pure = match sorted {
+fn insert_descending(item, sorted) with Alloc + Memory = match sorted {
   []            => [item],
   [head, ...rest] => {
     let Cursor(_, _, item_score) = item
@@ -849,5 +849,6 @@ fn insert_descending(item, sorted) with Pure = match sorted {
 // Pure helper for gradient_step's caret advance.
 
 fn reason_of_located(located) with Pure = match located {
-  Located(_, reason) => reason
+  Located(_, reason) => reason,
+  other               => other
 }

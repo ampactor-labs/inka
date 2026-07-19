@@ -263,13 +263,13 @@ fn mint_fold(handle, v) with GraphRead + GraphWrite = {
 // const-fold mints new literal nodes ABOVE that bound, but they are already in
 // canonical form (a bare literal matches no rule's LHS), so the bound need not
 // chase them — the relation reaches its fixpoint over the original program space.
-fn saturate(bound) with GraphRead + GraphWrite + LookupTy = saturate_until(bound, 0)
+fn saturate(bound) with GraphRead + GraphWrite + LookupTy + Memory = saturate_until(bound, 0)
 
 // The saturation pass: populate the e-graph over the whole node space
 // (graph_next bounds it at entry), then pass the program through unchanged — the
 // equivalence edges are the side effect lower reads via egraph_extract. A `|>`
 // stage between frontend and lower in the pipeline spine.
-fn saturate_pass(program) with GraphRead + GraphWrite + LookupTy = {
+fn saturate_pass(program) with GraphRead + GraphWrite + LookupTy + Memory = {
   saturate(graph_next())
   program
 }

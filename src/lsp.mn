@@ -155,7 +155,7 @@ fn classify_method(method) with Memory = {
 // exhaustive over LspMethodKind. Notification-shaped methods that
 // arrive as requests get LspNullResp (graceful protocol tolerance).
 
-fn dispatch_request(kind, params) with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate = {
+fn dispatch_request(kind, params) with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate + EnvRead = {
   match kind {
     LspInitialize           => handle_initialize(params),
     LspShutdown             => LspNullResp,
@@ -328,7 +328,7 @@ fn handle_code_action(params) with Memory + Alloc + Interact + GraphRead + !Muta
 // obligations the graph holds; project each (span, predicate, reason)
 // to an LSP LspDiagnostic. The verify-debt IS the diagnostic set (the
 // graph proved it) — read live, never an empty []-fabrication.
-fn handle_diagnostic(params) with Memory + Alloc + Interact + GraphRead = {
+fn handle_diagnostic(params) with Memory + Alloc + Interact + GraphRead + EnvRead = {
   let uri = lsp_extract_uri(params)
   ensure_doc_open(uri)
   match consult(QVerifyDebt) {
@@ -345,7 +345,7 @@ fn handle_diagnostic(params) with Memory + Alloc + Interact + GraphRead = {
 // its binding span LIVE from the env entry's Located Reason (the graph
 // proved where the name lives). No echo of the cursor's own position;
 // the defining span IS the goto target. None when unresolved.
-fn handle_definition(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
+fn handle_definition(params) with Memory + Alloc + Interact + GraphRead + !Mutate + EnvRead = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
@@ -670,7 +670,7 @@ handler lsp_adapter
 // message; writes responses to stdout. Composes through the full
 // Mentl handler chain at install per MV-LSP-adapter §3.
 
-fn lsp_session() with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate = {
+fn lsp_session() with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate + EnvRead = {
   match read_lsp_frame() {
     LspFrameEof           => (),
     LspFrame(body)        => {
@@ -686,7 +686,7 @@ fn lsp_session() with Memory + Alloc + WASI + Filesystem + Interact + GraphRead 
   }
 }
 
-fn handle_message(msg) with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate = {
+fn handle_message(msg) with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate + EnvRead = {
   match msg {
     LspRequest(id, method, params)        => {
       let kind = classify_method(method)

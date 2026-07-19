@@ -625,7 +625,7 @@ fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + Loo
 // helper is a sibling of $eq_<sig>, calling the runtime renderers ($str_concat /
 // $int_to_str / $float_to_str) via the SAME W7 (__state, args) convention the eq
 // helper calls $str_eq with — every emitted fn takes __state as its first param.
-fn lower_show_call(handle, ah, arg_lo) with LookupTy = {
+fn lower_show_call(handle, ah, arg_lo) with LookupTy + Memory = {
   LCall(handle, LGlobal(handle, "show_{fold_sig(lookup_ty(ah))}"), [arg_lo])
 }
 
@@ -661,13 +661,13 @@ fn lower_hash_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy
 
 // A sequence hash: the runtime str_hash/list_hash ([Byte]/[a] FNV instance),
 // state-threaded like every Memory-rowed runtime call.
-fn lower_hash_call(handle, ah, arg_lo, rt) with LookupTy = {
+fn lower_hash_call(handle, ah, arg_lo, rt) with LookupTy + Memory = {
   LCall(handle, LGlobal(handle, rt), [arg_lo])
 }
 
 // An aggregate hash: the generated recursive $hash_<sig> helper, named by the
 // proven fold-signature — sibling of $eq_<sig> / $compare_<sig> / $show_<sig>.
-fn lower_hash_agg_call(handle, ah, arg_lo) with LookupTy = {
+fn lower_hash_agg_call(handle, ah, arg_lo) with LookupTy + Memory = {
   LCall(handle, LGlobal(handle, "hash_{fold_sig(lookup_ty(ah))}"), [arg_lo])
 }
 

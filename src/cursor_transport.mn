@@ -243,7 +243,7 @@ fn cursor_session(initial_caret) with Surface + GraphRead + CursorRead + !Mutate
 // read the human action, fold it into the next state. The `<~` closure
 // feeds this next state back as the cycle's input (no self-recursion —
 // the feedback verb carries the loop).
-fn cursor_step(state) with Surface + GraphRead + CursorRead + !Mutate = {
+fn cursor_step(state) with Surface + GraphRead + CursorRead + !Mutate + Memory + PatchWrite + Alloc = {
   let TransportState(s) = state
   // Compute the cursor: gradient argmax with caret bias.
   let cursor = cursor_argmax(s.caret)
@@ -316,7 +316,7 @@ fn span_of_cursor(cursor) with GraphRead = {
 // promote this to a GraphRead op (perform graph_handle_at_span(span));
 // blocked on adding the op to graph.mn's effect declaration.
 
-fn apply_suggestion(cursor, view) with GraphRead + PatchWrite + Memory + !Mutate = {
+fn apply_suggestion(cursor, view) with GraphRead + PatchWrite + Memory + !Mutate + Alloc = {
   let Cursor(handle, _, _) = cursor
   let CursorView(_, propose, _, _, _, _, teach, _) = view
   // A hole accepts its PROPOSE survivor: exactly one proven candidate is
@@ -343,7 +343,7 @@ fn apply_suggestion(cursor, view) with GraphRead + PatchWrite + Memory + !Mutate
 // is the honest no-op, never a spliced fabrication; the general candidate
 // renderer is the formatter projection (Hβ.felt.candidate-render-is-format),
 // unreached while the enumerators seed literals.
-fn render_candidate_source(node) with GraphRead + Memory + !Mutate = {
+fn render_candidate_source(node) with GraphRead + Memory + !Mutate + Alloc = {
   let N(body, _, h) = node
   match body {
     // An in-scope vocabulary call renders as its source form.
@@ -402,7 +402,7 @@ fn show_proposals(props) with GraphRead + Alloc + Memory + !Mutate = {
   }
 }
 
-fn show_one_rejection(pair) with GraphRead + !Mutate = {
+fn show_one_rejection(pair) with GraphRead + !Mutate + Alloc + Memory = {
   let (name, reason) = pair
   " · rejected {name} — {show_reason(reason)}"
 }
@@ -410,7 +410,7 @@ fn show_one_rejection(pair) with GraphRead + !Mutate = {
 // Each survivor: its source text and its Reason — the pair the Synth
 // contract carries (the seed reason lives in the candidate record, not on
 // the node's mint placeholder).
-fn show_one_proposal(proposal) with GraphRead + Memory + !Mutate = {
+fn show_one_proposal(proposal) with GraphRead + Memory + !Mutate + Alloc = {
   let (node, reason) = proposal
   " · {render_candidate_source(node)} — {show_reason(reason)}"
 }

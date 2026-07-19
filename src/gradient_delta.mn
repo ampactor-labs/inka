@@ -293,14 +293,14 @@ fn row_strictly_narrower(body_row, decl_row) with Memory = {
 // type to apply the suggestion. Per GR §3.2 AnnotationSuggestion: the
 // `annotation` field IS the literal source residue.
 
-fn row_to_with_clause(row) with Pure = match row {
+fn row_to_with_clause(row) with Memory = match row {
   EfPure => "with Pure",
   EfClosed(names) => "with {eff_names_to_str(names)}",
   EfNeg(inner) => "with !{row_to_with_clause_inner(inner)}",
   _ => "with ..."   // open-row case; named follow-up: surface row variable
 }
 
-fn row_to_with_clause_inner(row) with Pure = match row {
+fn row_to_with_clause_inner(row) with Memory = match row {
   EfClosed(names) => eff_names_to_str(names),
   _ => "?"
 }

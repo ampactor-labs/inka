@@ -341,11 +341,11 @@ fn verify_residual(ref debt, ref witnesses) with Memory + Alloc = {
   }, witnesses)
 }
 
-fn predicate_to_smt_lib(ref pred) with Memory + Alloc + GraphRead = {
+fn predicate_to_smt_lib(ref pred) with Memory + Alloc + GraphRead + Diagnostic = {
   "(assert {predicate_to_smt(pred)})\n(check-sat)"
 }
 
-fn predicate_to_smt(ref pred) with GraphRead + Memory + Alloc = match pred {
+fn predicate_to_smt(ref pred) with GraphRead + Memory + Alloc + Diagnostic = match pred {
   PTrue              => "true",
   PCompare(op, l, r) => "({smt_cmp_op(op)} {handle_to_smt(l)} {handle_to_smt(r)})",
   PAnd(a, b)         => smt_logop("and", a, b),
@@ -363,7 +363,7 @@ fn smt_cmp_op(ref op) with Pure = match op {
   _   => "="
 }
 
-fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc = {
+fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc + Diagnostic = {
   "({op} {predicate_to_smt(a)} {predicate_to_smt(b)})"
 }
 

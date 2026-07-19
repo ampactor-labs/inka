@@ -180,7 +180,7 @@ fn yield_inhabitants(enriched, target_ty, i, n) with Synth + GraphRead + GraphWr
 // allowed_effects row.
 
 fn enumerate_typed(target_ty, allowed_effects, context)
-    with EnvRead + GraphRead + GraphWrite + Synth + !Mutate = {
+    with EnvRead + GraphRead + GraphWrite + Synth + !Mutate + Memory = {
   match target_ty {
     TName(name, args) => enumerate_constructors(name, args, context),
     TFun(params, ret, row) => enumerate_lambdas(params, ret, row, context),
@@ -259,7 +259,7 @@ fn vocabulary_ret_matches(ret, target_ty) with Pure = match target_ty {
 }
 
 fn vocabulary_call_candidate(name, row, allowed_row)
-    with GraphRead + GraphWrite + !Mutate = {
+    with GraphRead + GraphWrite + !Mutate + Memory = {
   EnrichedCandidate({
     node:    synth_node(CallExpr(synth_node(VarRef(name)), [])),
     reason:  Located(span_zero(),
@@ -314,7 +314,7 @@ fn fn_body_scan(name: String, i, n) with GraphRead + !Mutate = {
 // ─── Per-target-shape enumerators ──────────────────────────────────
 
 fn enumerate_constructors(type_name, args, context)
-    with EnvRead + GraphRead + GraphWrite + !Mutate = {
+    with EnvRead + GraphRead + GraphWrite + !Mutate + Memory = {
   // The graph already proves which bindings are constructors of this
   // type: each typedef's `env_extend` registered its variants as
   // ConstructorScheme entries whose scheme result type is
@@ -365,7 +365,7 @@ fn scheme_result_is(ty, type_name) with Pure = match ty {
 }
 
 fn ctor_to_enriched_candidate(name, scheme, reason)
-    with GraphRead + GraphWrite + !Mutate = {
+    with GraphRead + GraphWrite + !Mutate + Memory = {
   EnrichedCandidate({
     node:    synthesize_ctor_call_node(name, scheme),
     reason:  Located(span_zero(),
@@ -582,19 +582,19 @@ fn synthesize_singleton_list_node(elem) with GraphRead + GraphWrite + !Mutate = 
   synth_node(MakeListExpr([synth_hole_node()]))
 }
 
-fn synthesize_tuple_node(elems) with GraphRead + GraphWrite + !Mutate = {
+fn synthesize_tuple_node(elems) with GraphRead + GraphWrite + !Mutate + Memory = {
   synth_node(MakeTupleExpr(synth_holes_for(elems)))
 }
 
-fn synthesize_record_node(fields) with GraphRead + GraphWrite + !Mutate = {
+fn synthesize_record_node(fields) with GraphRead + GraphWrite + !Mutate + Memory = {
   synth_node(MakeRecordExpr(synth_record_holes_for(fields)))
 }
 
-fn synthesize_ctor_call_node(name, scheme) with GraphRead + GraphWrite + !Mutate = {
+fn synthesize_ctor_call_node(name, scheme) with GraphRead + GraphWrite + !Mutate + Memory = {
   synth_node(CallExpr(synth_node(VarRef(name)), synth_holes_for_scheme(scheme)))
 }
 
-fn synthesize_lambda_node(params, ret) with GraphRead + GraphWrite + !Mutate = {
+fn synthesize_lambda_node(params, ret) with GraphRead + GraphWrite + !Mutate + Memory = {
   synth_node(LambdaExpr(synth_param_names(params), synth_hole_node()))
 }
 
@@ -680,8 +680,7 @@ fn synth_param_loop(params, i, n, buf) with Memory = {
 // cache — read live by argmax, never a side-file.)
 
 fn cursor_session_with_full_phaseu(initial_caret)
-    with Surface + GraphRead + CursorRead + Delta + Synth
-       + Interrogate + Teach + !Mutate = {
+    with Surface + GraphRead + CursorRead + Delta + Synth + Interrogate + Teach + !Mutate + EnvWrite + LookupTy + RegionTrack + Consume + Diagnostic + EnvRead + GraphWrite + Memory + Alloc = {
   cursor_session(initial_caret)
     ~> delta_default
     ~> synth_default

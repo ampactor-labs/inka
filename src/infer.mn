@@ -1066,8 +1066,15 @@ fn infer_expr(ref node) = {
     NStmt(_)  => (),               // statement at expression position — parser
                                    // should have wrapped in ExprStmt; no-op
                                    // is the safe fallback
-    NPat(_)   => ()                // pattern at expression position — degenerate;
+    NPat(_)   => (),               // pattern at expression position — degenerate;
                                    // parser emits in match-arm contexts only
+    NModule(_)  => (),             // the synthetic per-file module handle at
+                                   // expression position — degenerate; NModule
+                                   // is never itself an expression node
+    NTypeAnn(_) => ()              // an authored type annotation at expression
+                                   // position — degenerate; NTypeAnn is read
+                                   // directly by return-type/let-annotation call
+                                   // sites, never reached through infer_expr
   }
 }
 
@@ -3289,7 +3296,9 @@ fn free_in_eff_arg(arg) = match arg {
   EAInt(_)    => [],
   EAFloat(_)  => [],
   EAString(_) => [],
-  EAType(ty)  => free_in_ty(ty)
+  EAType(ty)  => free_in_ty(ty),
+  EANode(_)   => []              // an opaque operand-node handle, not an
+                                 // embedded Ty — carries no free type vars
 }
 
 fn row_var_is_free(v) = match graph_chase(v) {
@@ -4443,11 +4452,11 @@ fn grade_fields(fields) =
 // primitive-type-special-case for refinement); 8 (Predicate is the
 // ADT — no string-keyed pred-name flag); 9 (every NarrowingSite
 // NExpr arm enumerated; no wildcard fabricating ()).
-fn infer_refinement_narrowing(body) with GraphRead + GraphWrite = {
+fn infer_refinement_narrowing(body) with GraphRead + GraphWrite + Memory = {
   walk_refinement(body, PTrue)
 }
 
-fn walk_refinement(node, path_pred) with GraphRead + GraphWrite = {
+fn walk_refinement(node, path_pred) with GraphRead + GraphWrite + Memory = {
   let N(body, _, _) = node
   match body {
     NExpr(IfExpr(c, t, e)) => {
@@ -4579,7 +4588,7 @@ fn walk_refinement_block(stmts, final, path_pred) with GraphRead + GraphWrite + 
   }
 }
 
-fn strengthen_path_pred(path_pred, stmt) with GraphRead = {
+fn strengthen_path_pred(path_pred, stmt) with GraphRead + Memory = {
   let N(body, _, _) = stmt
   match body {
     NStmt(ExprStmt(e)) => {
@@ -4601,7 +4610,7 @@ fn strengthen_path_pred(path_pred, stmt) with GraphRead = {
 // inference doesn't add the predicate to the caller's path_pred (the
 // callee's body is independently walked); the relationship surfaces
 // via signature unification at call site.
-fn walk_refinement_args_with_param_preds(f, args, path_pred) with GraphRead + GraphWrite = {
+fn walk_refinement_args_with_param_preds(f, args, path_pred) with GraphRead + GraphWrite + Memory = {
   walk_refinement_list(args, path_pred)
 }
 

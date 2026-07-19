@@ -189,12 +189,12 @@ fn addr_colon_from(ref s, i, n) with Memory = {
 
 // The all-digits segment [i, end) as Some(value); None when empty or any
 // non-digit byte (so `web:site.mn` never parses as an address).
-fn addr_int(ref s, i, end) with Memory = {
+fn addr_int(ref s, i, end) with Memory + Alloc = {
   if i >= end { None }
   else { addr_int_loop(s, i, end, 0) }
 }
 
-fn addr_int_loop(ref s, i, end, acc) with Memory = {
+fn addr_int_loop(ref s, i, end, acc) with Memory + Alloc = {
   if i >= end { Some(acc) }
   else {
     let ch = load_i8(s + 4 + i)
@@ -208,7 +208,7 @@ fn addr_int_loop(ref s, i, end, acc) with Memory = {
 // otherwise. Strips src/ / lib/ prefixes + .mn suffix per
 // path_to_module.
 
-fn optional_target(argv, idx) with Memory = {
+fn optional_target(argv, idx) with Memory + Alloc = {
   if len(argv) > idx { Some(path_to_module(argv[idx])) }
   else { None }
 }
@@ -725,7 +725,7 @@ fn render_at(view, h, pspan, ranges) = {
   render_why_hops(why_expand(why, 0), ranges, 0)
 }
 
-fn node_query_line(h, kind) with GraphRead + EnvRead = {
+fn node_query_line(h, kind) with GraphRead + EnvRead + Memory + Alloc = {
   // A declaration node's own graph cell is a free var (the scheme lives in
   // the env — read it there, never render the raw t-var); every other node
   // shows its inferred type.
@@ -833,7 +833,7 @@ fn render_why_deeper(inner, ranges, depth) = match inner {
   _                         => print_string("")
 }
 
-fn reason_phrase(inner) with Memory + GraphRead = match inner {
+fn reason_phrase(inner) with Memory + GraphRead + Alloc = match inner {
   VarLookup(name, _)          => "{name} flows in here",
   LetBinding(name, _)         => "let {name}",
   Declared(name)              => "declared {name}",
@@ -850,7 +850,7 @@ fn reason_phrase(inner) with Memory + GraphRead = match inner {
 // The value + comment ledes at a binding hop — both read LIVE from the
 // graph (the let's value node via node_const; the attached comment via
 // the comment weave). Empty strings when the graph carries neither.
-fn binding_ledes(span, inner) with GraphRead + Memory = match inner {
+fn binding_ledes(span, inner) with GraphRead + Memory + Alloc = match inner {
   LetBinding(_, _) => {
     let spans = span_index_of_snapshot()   // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
     match address_case_a(spans, span_line_of(span), 0, 0, len(spans), None) {

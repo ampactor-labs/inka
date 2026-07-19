@@ -223,7 +223,7 @@ handler query_default {
 // GraphRead + EnvRead: predicate_flow_label follows PBoolNode handles into graph;
 // TName arm follows the type's env entry to read its predicate.
 
-fn query_flow_label(ref ty) with GraphRead + EnvRead = match ty {
+fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty {
   TRefined(base, pred) =>
     flow_label_join(pred |> predicate_flow_label, query_flow_label(base)),
   TName(name, _) =>
@@ -276,7 +276,7 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead = match ty {
 // is_secret, is_sensitive) raises the label. This reads the AUTHORED name
 // from the graph — not re-deriving, reading what the graph holds.
 // H6: exhaustive over all 8 Predicate variants (7 + PFlowLe).
-fn predicate_flow_label(ref pred) with GraphRead = match pred {
+fn predicate_flow_label(ref pred) with GraphRead + Memory + Alloc = match pred {
   PTrue              => Public,
   PCompare(_, _, _)  => Public,   // numeric comparison: not a secrecy annotation
   PPatternMatch(_,_) => Public,   // match-narrowing: not a secrecy signal
@@ -453,12 +453,12 @@ fn walk_chain(handle, depth) with !Mutate = {
 // weave. refs_of_name walks the weave and collects the span of each
 // NExpr(VarRef(name)) — the inbound use-edge set, read live. No AST side-index.
 
-fn refs_of_name(name) with GraphRead + !Mutate = {
+fn refs_of_name(name) with GraphRead + !Mutate + Alloc + Memory = {
   let Graph(_, _, next, _, _) = graph_snapshot()
   collect_var_ref_spans(name, 0, next)
 }
 
-fn collect_var_ref_spans(name, i, n) with GraphRead + !Mutate = {
+fn collect_var_ref_spans(name, i, n) with GraphRead + Memory + Alloc + !Mutate = {
   if i >= n { [] }
   else {
     let rest = collect_var_ref_spans(name, i + 1, n)
@@ -489,12 +489,12 @@ fn span_of_reason(reason) with Pure = match reason {
 // it provides (the handler chain IS the capability stack, PLAN §2). Scan the
 // weave for the decl whose arms include OP; project its handler name.
 
-fn handler_providing_op(op_name) with GraphRead + !Mutate = {
+fn handler_providing_op(op_name) with GraphRead + !Mutate + Memory = {
   let Graph(_, _, next, _, _) = graph_snapshot()
   scan_handler_for_op(op_name, 0, next)
 }
 
-fn scan_handler_for_op(op_name, i, n) with GraphRead + !Mutate = {
+fn scan_handler_for_op(op_name, i, n) with GraphRead + !Mutate + Memory = {
   if i >= n { None }
   else {
     match graph_node_body(i) {
@@ -523,7 +523,7 @@ fn arms_include_op(arms, op_name) with Memory = {
 // the resolution goto-definition / find-references start from — read live, no
 // position→symbol side-index.
 
-fn name_at_span(span) with GraphRead + !Mutate = {
+fn name_at_span(span) with GraphRead + !Mutate + Memory = {
   let Graph(_, _, _, _, span_index) = graph_snapshot()
   match find_tightest(span_index, span, None, 999999999) {
     None         => None,
@@ -539,7 +539,7 @@ fn name_at_span(span) with GraphRead + !Mutate = {
 // already proved where each name lives; goto-definition follows that edge, it
 // does not re-scan. None when the name is unbound or its reason is unlocated.
 
-fn defining_span_of(name) with GraphRead + !Mutate = {
+fn defining_span_of(name) with EnvRead + !Mutate = {
   match env_lookup(name) {
     None        => None,
     Some(entry) => {

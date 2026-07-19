@@ -254,7 +254,7 @@ fn enumerate_handles(i, n) with Alloc + Memory = {
 
 // ─── Per-interrogation helpers ──────────────────────────────────────
 
-fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
+fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory = {
   // The handler stack IS graph content: an install draws a `~>` edge
   // (PipeExpr(PTee, body, handler)) and the body subtree it governs is
   // exactly the capability stack (PLAN §2 — "the handler chain IS the
@@ -347,7 +347,7 @@ fn row_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
   }
 }
 
-fn ownership_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
+fn ownership_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory = {
   // Ownership clears when authored OR resolved is non-Unmarked.
   // Otherwise the gradient could suggest one (see Hμ.gradient-delta
   // delta_ownership).
@@ -515,7 +515,7 @@ fn all_eight_clear(report) with Pure = {
 // each kernel primitive).
 
 fn cursor_session_with_audit(initial_caret)
-    with Surface + GraphRead + CursorRead + Interrogate + !Mutate = {
+    with Surface + GraphRead + CursorRead + Interrogate + !Mutate + Memory + Alloc = {
   cursor_session(initial_caret) ~> interrogate_default
 }
 

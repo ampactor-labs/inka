@@ -932,10 +932,15 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 **THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 69/0,
 proof-exactness 9/9, crown 5/5, micros (incl. oob-traps=134 — SYNTAX's index
 law executable), the march's fixed point, the phantom ratchet (287) — through
-the pinned boot `6e7c10b2…` (chain: boot/PROVENANCE.md); frontier **71/0**.
+the pinned boot `8e248607…` (chain: boot/PROVENANCE.md); frontier **71/0**.
 **`mentl voice.mn:9` ANSWERS** (the cursor-address transport,
 tests/frontier/voice-demo the executable gate). The census is
-**185** (from 2,266): the forward-ref
+**73** (from 2,266), TWO classes only — E_TypeMismatch 69 (root-grouped:
+the list-word substrate boundary 21, the `<~` recurrence 15, seq-op-hole
+14, misc) and E_UnresolvedType 4 (handle-level). NINE classes reached
+zero on 2026-07-18 alone: IfMissingElse, FeedbackNoContext,
+EffectMismatch, PurityViolated, PatternInexhaustive, ConstructorArity,
+ResumeOutsideArm, MissingVariable, OccursCheck — the forward-ref
 roots are extinct (E_MissingVariable 0, E_OccursCheck 0 on the wheel — an
 env miss binds NErrorHole, one miss one diagnostic), and **six diagnostic
 classes are ARMED** (E_UnresolvedHole, E_MissingModule,
@@ -999,6 +1004,8 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-18 · THE RECORD-CTOR ARROW VIEW (census 101 → 73): `X({...})` — the single-variant nominal ctor in the one application syntax — met the env's RESULT binding at infer_call's chase and mismatched at 29 sites, the tail's biggest root. The arrow is a VIEW minted at the read (record_ctor_arrow_view — the identical instantiation infer_pat's RecordSchemeKind arm performs; one view two readers; the scheme stays the RESULT, one home); the saturated machinery does the rest. TRANSITION m3 == m4 · pin 8e248607
+- 2026-07-18 · FIVE MORE CLASSES EXTINCT (census 185 → 101): EffectMismatch + PurityViolated to ZERO (the widen loop's fixpoint — nine rebuild-and-re-judge iterations; !-carrying declarations matched on positive parts); ResumeOutsideArm (the synth candidate fan moved INTO its arm — backtrack's try_each shape; the census was right); ConstructorArity (QRFlowLabel's second field); PatternInexhaustive (the counter was PAlt-BLIND — collect_arm_tags/arms_have_wildcard now flatten alternation branches; voice's two H6 matches were exhaustive all along). register_one_variant's refutable let-destructure became its match; unlock_capability gained AWrapHandler→CSandbox; dead lib/runtime/buffer.mn DELETED whole (zero consumers, three findings one deletion) · pins 0f3d4f17, bfc576f2
 - 2026-07-18 · THE ADDRESS IS THE SURFACE (census 213 → 185; frontier 71/0): `mentl voice.mn:9` answers `Query: echo(mix, x) : Float` — README §9's smallest transport, real. VAt at the argv boundary; driver_entry_with_ranges returns the module-range map from the concatenation fold that always computed it; the three-case line rule resolves over the span index every node writes at birth; cursor_at_handle (new CursorRead op; the eight-arm fan extracted to one cursor_view_of) projects without re-resolving; the facet-silent render reads source slices, env schemes, literal bodies, and the Why walk mapped to file:line — every lede a live read. propose_at is the ABSENCE facet structurally (authored_hole, the patch gate's own read) — which also fenced Hβ.emit.float-evidence-ft (an f64-arg candidate ctor through an all-i32 $ft, trapping the first float-position enumeration ever taken). The session's exact-reason-span resolver SURVIVES as the documented live-generation crutch (measured: mint-span find_tightest resolved a stale generation, 13 edit fixtures red at once; dissolves with session-weave-epoch-scope). Remaining README-Why substrate named: why-flow-naming (FnParam-at-call), refinement-provenance · pin 6e7c10b2
 - 2026-07-18 · THE EFFECT-TRUTH SWEEP, ROUNDS 1+2 (census 301 → 213 → 185 across the arc): the census-spec fleet (29 per-file readers) produced exact specs for 192 sites; 148 + ~55 cascade widens applied — declared rows to the bodies' truth, aspirational Pure dropped for the honest Memory/Alloc, missing match arms written with real payload arities, LStateSlotStore's fourth field bound. The re-pinned sharper compiler re-judged its own source each round (the ++-carries-row precedent at scale) · pins 01ccaa3a, intermediate
 - 2026-07-18 · TWO CHECKER ROOTS (census 343 → 301): E_IfMissingElse EXTINCT — the unit test matched TName("Unit"), a spelling the inferencer never produces (real unit is TUnit; probe: then_ty=() at all 25 sites) + 6 unresolved op-results the unify below decides. E_FeedbackNoContext EXTINCT — the check read the COMPILER'S runtime handler stack while inferring the COMPILED program's structure (a category error firing on every real `<~`, SYNTAX's canonical lowpass included); the compile-time class fact is the named peer Hβ.effects.iterate-class-declaration · pin 57a2113e

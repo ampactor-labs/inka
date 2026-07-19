@@ -393,7 +393,18 @@
 # (root-grouped: Ctor({...}) 29, list-word boundary 21, misc 16, feedback
 # recurrence 15, seq-op-hole 14 — minus the 8 these restructures already
 # resolved), E_UnresolvedType 4 (handle-level, probes next).
-census_errors_max: 101
+# 101 -> 73 (2026-07-18, the record-ctor arrow view). `X({...})` — a
+# single-variant nominal record's constructor in the ONE application syntax —
+# met the env's RESULT binding (TName under RecordSchemeKind) at the call's
+# plain chase and mismatched at 29 sites, the tail's biggest root. The ARROW
+# is a VIEW minted at the read (record_ctor_arrow_view — the identical
+# instantiation the pattern path's RecordSchemeKind arm already performs; one
+# view, two readers; the env's scheme stays the RESULT, one home) and the
+# ordinary saturated-call machinery does the rest. TRANSITION m3 == m4 (the
+# view changes inference; the new wheel reproduces itself). Remaining:
+# E_TypeMismatch 69 (list-word boundary 21, feedback recurrence 15,
+# seq-op-hole 14, misc — the banked root grouping), E_UnresolvedType 4.
+census_errors_max: 73
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

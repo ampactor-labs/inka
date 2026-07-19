@@ -1269,6 +1269,17 @@ fn infer_call(func, args, handle, span: ValidSpan) = {
   let cname = callee_name(func)
   if is_seq_op(cname) { infer_seq_op(cname, args, handle, span) }
   else {
+  // The single-variant record ctor in the ONE application syntax —
+  // `X({...})` (SYNTAX §Constructor calls: same syntax as function calls).
+  // The env binds X to its RESULT (TName under RecordSchemeKind), so the
+  // plain chase below met a non-arrow and every such call mismatched (29
+  // census sites, the tail's biggest root). The ARROW is a VIEW built at
+  // the read — the same view the pattern path already builds (infer_pat's
+  // RecordSchemeKind arm): one view, two readers; the ordinary saturated
+  // machinery does the rest.
+  match record_ctor_arrow_view(cname, span) {
+    Some(vh) => infer_call_saturated(args, vh, handle, span, cname),
+    None =>
   // HOLE-COMPLETION (SYNTAX §«Partial application — the product with a
   // hole»): a call whose args leave declaration-order params unfilled — a
   // positional-prefix k<n, or an authored `??` slot — IS the product with
@@ -1282,6 +1293,32 @@ fn infer_call(func, args, handle, span: ValidSpan) = {
       } else { infer_call_saturated(args, fh, handle, span, cname) },
     _ => infer_call_saturated(args, fh, handle, span, cname)
   }
+  }
+  }
+}
+
+// The record ctor's arrow VIEW, minted at the read — Some(handle bound to
+// TFun([TRecord(declared)], TName(X, ...), Pure)) when cname is a nominal
+// record's constructor, None otherwise. The identical instantiation the
+// pattern path's RecordSchemeKind arm performs; the env's scheme stays the
+// RESULT (one home), the arrow exists only as this projection.
+fn record_ctor_arrow_view(cname: String, span: ValidSpan) = {
+  match env_lookup(cname) {
+    Some(entry) => {
+      let (scheme, reason, kind) = entry
+      match kind {
+        RecordSchemeKind(declared_fields) => {
+          let Forall(q, body) = scheme
+          let view = instantiate(Forall(q,
+            TFun(build_ctor_params([TRecord(declared_fields)], 0), body, EfPure)))
+          let vh = mint(Inferred("record-ctor arrow view of '{cname}'"))
+          graph_bind(vh, view, Located(span, VarLookup(cname, reason)))
+          Some(vh)
+        },
+        _ => None
+      }
+    },
+    None => None
   }
 }
 

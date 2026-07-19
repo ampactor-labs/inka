@@ -1,0 +1,9 @@
+// R3 · the decidable arithmetic fragment over modulo (SYNTAX's own `Even`).
+// `self % 2 == 0` with self = 4 decides TRUE (0 == 0) at compile time — no
+// debt. Pre-R3 `self % 2` never folded and accrued V_Pending. Exit 42.
+type Even = Int where self % 2 == 0
+
+fn main() = {
+  let x: Even = 4
+  x + 38
+}

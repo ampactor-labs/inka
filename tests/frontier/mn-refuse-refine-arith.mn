@@ -1,0 +1,12 @@
+// ARMED-CLASS refusal fixture — E_RefinementRejected via the R3 arithmetic
+// fragment. `self + 1 <= 10` with self = 15 decides FALSE (16 <= 10) at
+// compile time: the medium PROVES the construction violates its refinement
+// and, the class being armed, the executable REFUSES — nonzero exit, zero
+// WAT. Pre-R3 the nested arithmetic never folded and the invalid value
+// emitted with silent V_Pending debt.
+type Small = Int where self + 1 <= 10
+
+fn main() = {
+  let bad: Small = 15
+  42
+}

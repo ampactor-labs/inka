@@ -285,6 +285,7 @@ fn predicate_flow_label(ref pred) with GraphRead + Memory + Alloc = match pred {
   PFlowLe(a, _)      => a,        // the predicate itself carries the src label
   PAnd(a, b)         => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
   POr(a, b)          => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
+  PWithSelf(_, inner) => predicate_flow_label(inner),  // the `self` binder is transparent to flow
   PBoolNode(h)       =>
     // Follow the handle into the graph — read the actual call node's callee name.
     // The callee name IS the authored intent; reading it is reading the graph.

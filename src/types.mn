@@ -1135,6 +1135,13 @@ type Predicate
                                  // never deferred. verify(span, PFlowLe(src, dst), reason)
                                  // IS the ifc_check; ERefinementRejected carries the violation.
                                  // No new effect op, no new diagnostic, no new handler arm.
+  | PWithSelf(Int, Predicate)    // the `self` BINDER: the value-node handle self resolves
+                                 // to, carried WITH the predicate as data. self may sit
+                                 // NESTED inside an arithmetic operand (`self + 1`), where a
+                                 // physical operand swap cannot reach without minting a
+                                 // rewritten node — the binder threads through
+                                 // predicate_decide_at into every node_const_at instead.
+                                 // Appended LAST so existing variant tags are unshifted.
 
 // PExpr is GONE: its leaves (PSelf/PInt/PEVar/PApp) were a lossy COPY of the
 // expression the AST node already holds (`node_to_pexpr` re-derived it with a
@@ -2209,7 +2216,11 @@ fn show_predicate(ref pred) with GraphRead + Memory + Alloc = {
     PNot(p)    => "!{show_predicate(p)}",
     PBoolNode(n) => show_pred_operand(n),
     PPatternMatch(_, n) => "{show_pred_operand(n)} matches _",
-    PFlowLe(src, dst)   => "{show_flow_label(src)} ⊑ {show_flow_label(dst)}"  // IFC: src must not exceed dst in the lattice
+    PFlowLe(src, dst)   => "{show_flow_label(src)} ⊑ {show_flow_label(dst)}",  // IFC: src must not exceed dst in the lattice
+    // The binder renders as its body — the diagnostic reads `self + 1 <= 10`
+    // with self SYMBOLIC (the SYNTAX-canonical spelling), never the
+    // substituted value.
+    PWithSelf(_, inner) => show_predicate(inner)
   }
 }
 

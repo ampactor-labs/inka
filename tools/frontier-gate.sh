@@ -551,6 +551,17 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-own-call-arg-move.mn" E_OwnershipViolation "$dir"
   run_refusal "$compiler" refuse-refinement \
     "$ROOT/tests/frontier/mn-refuse-refinement.mn" E_RefinementRejected "$dir"
+  # R3 · the decidable arithmetic Verify fragment. The true cases DISCHARGE at
+  # compile time (zero V_Pending, run to 42); the false case is PROVEN false
+  # and refuses under the armed class. Pre-R3, none of the three folded — the
+  # nested `self + 1` / `self % 2` accrued silent V_Pending and the invalid
+  # construction emitted.
+  run_program "$compiler" refine-arith-true \
+    "$ROOT/tests/frontier/mn-refine-arith-true.mn" 42 no "$dir"
+  run_program "$compiler" refine-even \
+    "$ROOT/tests/frontier/mn-refine-even.mn" 42 no "$dir"
+  run_refusal "$compiler" refuse-refine-arith \
+    "$ROOT/tests/frontier/mn-refuse-refine-arith.mn" E_RefinementRejected "$dir"
   run_refusal "$compiler" refuse-state-shadows-op \
     "$ROOT/tests/frontier/mn-refuse-state-shadows-op.mn" E_HandlerStateShadowsOp "$dir"
   run_refusal "$compiler" refuse-dup-fn \

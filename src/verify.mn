@@ -48,85 +48,86 @@ handler verify_ledger with debt = [] {
     resume(debt)
 }
 
-// Compile-time decidable discharge. Returns Some(true) when the
-// predicate proves true on its constant operands alone; Some(false)
-// when it proves false; None at the undecidable boundary (a variable,
-// a call, a compound expr) — defers to ledger or solver. Pure.
+// Compile-time decidable discharge. Returns Some(true) when the predicate
+// proves true on its GROUND operands alone; Some(false) when it proves false;
+// None at the undecidable boundary (a free variable with no `self` binding, a
+// call, a non-constant expression) — defers to the ledger or the SMT tier.
 //
-// A PCompare is decidable iff BOTH operand nodes are literal constants
-// (read LIVE via node_const, never a PExpr copy); litval_compare folds
-// them — cross-kind equality is Some(false) (type mismatch is a
-// stronger refusal than undecidable), cross-kind ordering is None.
-// PAnd / POr / PNot recurse with three-valued short-circuit.
-fn predicate_decide(ref pred) with GraphRead = match pred {
-  PTrue              => Some(true),
-  PCompare(op, l, r) => compare_decide(op, l, r),
-  PAnd(a, b)         => and_decide(predicate_decide(a), predicate_decide(b)),
-  POr(a, b)          => or_decide(predicate_decide(a), predicate_decide(b)),
-  PNot(inner)        => not_decide(predicate_decide(inner)),
-  PBoolNode(_)       => None,        // a bool expr node — the SMT tier resolves it live
-  PPatternMatch(_, _) => None,       // match-narrowing — the SMT tier evaluates
-  PFlowLe(a, b)      => Some(flow_le(a, b))  // IFC: finite lattice, always decidable
+// A PCompare decides iff BOTH operands reduce to ground constants under the
+// current `self` binding — the decidable ARITHMETIC FRAGMENT: literals, `self`
+// resolved to its value node, and +,-,*,/,% over same-kind Int/Float operands
+// (node_const_at). litval_compare folds the comparison; cross-kind equality is
+// Some(false), cross-kind ordering is None. PAnd/POr/PNot recurse with
+// three-valued short-circuit; PWithSelf rebinds `self` over its inner predicate.
+fn predicate_decide(ref pred) with GraphRead = predicate_decide_at(pred, 0)
+
+// self_h is the value-node handle `self` resolves to (0 = no `self` in scope,
+// so `self` is undecidable). PWithSelf(sh, inner) rebinds it over inner.
+fn predicate_decide_at(ref pred, self_h) with GraphRead = match pred {
+  PTrue                => Some(true),
+  PCompare(op, l, r)   => compare_decide_at(op, l, r, self_h),
+  PAnd(a, b)           => and_decide(predicate_decide_at(a, self_h), predicate_decide_at(b, self_h)),
+  POr(a, b)            => or_decide(predicate_decide_at(a, self_h), predicate_decide_at(b, self_h)),
+  PNot(inner)          => not_decide(predicate_decide_at(inner, self_h)),
+  PBoolNode(_)         => None,        // a bool expr node — the SMT tier resolves it live
+  PPatternMatch(_, _)  => None,        // match-narrowing — the SMT tier evaluates
+  PFlowLe(a, b)        => Some(flow_le(a, b)),  // IFC: finite lattice, always decidable
+  PWithSelf(sh, inner) => predicate_decide_at(inner, sh)  // bind `self` = sh over inner
 }
 
-// A comparison decides at compile time iff BOTH operand handles resolve
-// to literal constants; otherwise None (defer to the solver).
-fn compare_decide(op, lh, rh) with GraphRead = match node_const(lh) {
-  Some(lv) => match node_const(rh) {
+// A comparison decides iff BOTH operands reduce to ground constants under the
+// current `self` binding; otherwise None (defer to the solver).
+fn compare_decide_at(op, lh, rh, self_h) with GraphRead = match node_const_at(lh, self_h) {
+  Some(lv) => match node_const_at(rh, self_h) {
     Some(rv) => litval_compare(op, lv, rv),
     None     => None
   },
   None => None
 }
 
-// Resolve an operand HANDLE to its literal value, reading the Expr LIVE
-// from the graph (graph_node_body) — Some for a compile-time constant,
-// None otherwise. Carry the handle, read live.
-fn node_const(handle) with GraphRead = match graph_node_body(handle) {
+// Resolve an operand HANDLE to a ground constant, reading the Expr LIVE from the
+// graph — the decidable arithmetic fragment. A literal folds to itself; `self`
+// resolves to the value node the enclosing PWithSelf bound; a BinOpExpr folds
+// its two ground operands via litval_arith (+,-,*,/,% same-kind); a UnaryOpExpr
+// negates its ground operand. NO node is minted — every leaf is read live and
+// folded in place (the e-graph const-fold mints nodes and runs AFTER Verify;
+// this is a pure read-and-fold at the proof gate). Carry the handle, read live.
+fn node_const(handle) with GraphRead = node_const_at(handle, 0)
+
+fn node_const_at(handle, self_h) with GraphRead = match graph_node_body(handle) {
   NExpr(LitInt(n))    => Some(LVInt(n)),
   NExpr(LitFloat(f))  => Some(LVFloat(f)),
   NExpr(LitString(s)) => Some(LVString(s)),
   NExpr(LitBool(b))   => Some(LVBool(b)),
-  // A negated literal IS a constant — `-1.0` parses as UnaryOpExpr(UNeg,
-  // LitFloat), and reading only the bare-literal arms left the canonical
-  // Sample range (`-1.0 <= self`) UNDECIDABLE: the claim deferred to pending
-  // debt instead of deciding (measured by the adversarial panel).
-  NExpr(UnaryOpExpr(UNeg, inner)) => {
-    let N(ibody, _, _) = inner
-    match ibody {
-      NExpr(LitInt(n))   => Some(LVInt(0 - n)),
-      NExpr(LitFloat(f)) => Some(LVFloat(0.0 - f)),
-      _                  => None
-    }
+  NExpr(VarRef(name)) => resolve_self_operand(name, self_h),
+  NExpr(BinOpExpr(op, l, r)) => {
+    let N(_, _, lh) = l
+    let N(_, _, rh) = r
+    litval_arith_opt(op, node_const_at(lh, self_h), node_const_at(rh, self_h))
+  },
+  NExpr(UnaryOpExpr(op, x)) => {
+    let N(_, _, xh) = x
+    litval_unary_opt(op, node_const_at(xh, self_h))
   },
   _                   => None
 }
 
-// Substitute the refinement's `self` operand with the value node being refined.
-// A predicate's operands are node HANDLES (types.mn Predicate); the generic
-// TRefined arm of unify_types has no value node, so `self` (a VarRef("self")
-// node) resolves via node_const to None and every refinement stays V_Pending.
-// At a construction site WITH the value handle (a let/param annotation), swap
-// self for the value node so node_const reads the literal and predicate_decide
-// decides. Carry the handle, read live. `self` is identified by reading the
-// operand's body LIVE (graph_node_body), never a copied marker.
-fn subst_self(pred, value_handle) with GraphRead = match pred {
-  PTrue                => PTrue,
-  PCompare(op, l, r)   => PCompare(op, subst_self_operand(l, value_handle), subst_self_operand(r, value_handle)),
-  PAnd(a, b)           => PAnd(subst_self(a, value_handle), subst_self(b, value_handle)),
-  POr(a, b)            => POr(subst_self(a, value_handle), subst_self(b, value_handle)),
-  PNot(inner)          => PNot(subst_self(inner, value_handle)),
-  PBoolNode(h)         => PBoolNode(subst_self_operand(h, value_handle)),
-  PPatternMatch(p, h)  => PPatternMatch(p, subst_self_operand(h, value_handle)),
-  PFlowLe(a, b)        => PFlowLe(a, b)
-}
+// `self` resolves to the bound value node (read as a ground constant); any other
+// free variable is genuinely non-constant. self_h == 0 means no `self` is in
+// scope — undecidable, never a chase of handle 0.
+fn resolve_self_operand(name: String, self_h) with GraphRead =
+  if name == "self" {
+    if self_h == 0 { None } else { node_const_at(self_h, 0) }
+  } else { None }
 
-// Replace an operand handle with the value handle iff it reads live as the
-// `self` marker (VarRef("self")); any other operand is carried unchanged.
-fn subst_self_operand(h, value_handle) with GraphRead = match graph_node_body(h) {
-  NExpr(VarRef(name)) => if name == "self" { value_handle } else { h },
-  _                   => h
-}
+// Bind the refinement's `self` to the value node being refined. A predicate's
+// operands are node HANDLES (types.mn Predicate) and `self` may sit NESTED inside
+// an arithmetic operand (`self + 1`, `self % 2`), so a physical operand swap
+// could not reach it without minting a rewritten node. Carry the binding as data
+// instead — PWithSelf(value_handle, pred) — and predicate_decide_at threads it
+// into every node_const_at. One binder resolves every `self`, top-level and
+// nested, the same way; carry the handle, read live, mint nothing.
+fn subst_self(pred, value_handle) with Pure = PWithSelf(value_handle, pred)
 
 // The candidate gate's refinement half: a candidate SURFACES only when the
 // target's refinement DECIDES true on it (PLAN §5 sample-then-filter — the
@@ -200,6 +201,62 @@ fn litval_le(ref a, ref b) with Pure = match a {
   LVBool(_)    => None
 }
 
+// Fold an arithmetic BinOp over two OPTIONAL ground operands (the decidable
+// fragment); either None makes the fold None.
+fn litval_arith_opt(op, ref ea, ref eb) with Pure = match ea {
+  Some(a) => match eb { Some(b) => litval_arith(op, a, b), None => None },
+  None    => None
+}
+
+// Fold +,-,*,/,% over two ground operands. SAME-KIND only: Int op Int -> Int,
+// Float op Float -> Float; cross-kind -> None (a genuine type mismatch the
+// comparison above already refuses). Strings/bools carry no arithmetic. The
+// operands are bound through the LVInt/LVFloat PATTERN — exactly like
+// litval_lt/litval_le — so na/nb are Int and fa/fb are Float; a bare helper
+// param defaults to the i32 floor and stores an int where an f64 belongs.
+// Int div/mod GUARD the zero divisor (the runtime traps on Int `/ 0` — folding
+// one would LIE; None keeps the obligation live and honest). Float folds use the
+// compiler's own f64 ops (identical wasm IEEE-754 semantics; f64 `/ 0.0` is
+// inf/nan, not a trap). No float modulo; a comparison/logical op defers to None.
+fn litval_arith(ref op, ref a, ref b) with Pure = match a {
+  LVInt(na)    => match b {
+    LVInt(nb) => match op {
+      BAdd => Some(LVInt(na + nb)),
+      BSub => Some(LVInt(na - nb)),
+      BMul => Some(LVInt(na * nb)),
+      BDiv => if nb == 0 { None } else { Some(LVInt(na / nb)) },
+      BMod => if nb == 0 { None } else { Some(LVInt(na % nb)) },
+      _    => None
+    },
+    LVFloat(_) => None, LVString(_) => None, LVBool(_) => None
+  },
+  LVFloat(fa)  => match b {
+    LVFloat(fb) => match op {
+      BAdd => Some(LVFloat(fa + fb)),
+      BSub => Some(LVFloat(fa - fb)),
+      BMul => Some(LVFloat(fa * fb)),
+      BDiv => Some(LVFloat(fa / fb)),
+      _    => None
+    },
+    LVInt(_) => None, LVString(_) => None, LVBool(_) => None
+  },
+  LVString(_)  => None,
+  LVBool(_)    => None
+}
+
+// Fold a unary op over an OPTIONAL ground operand. UNeg negates a numeric
+// constant (the source of `-1.0` / `-3`); UNot is boolean, outside the
+// arithmetic fragment (defer to None).
+fn litval_unary_opt(op, ref e) with Pure = match e {
+  Some(v) => litval_unary(op, v),
+  None    => None
+}
+
+fn litval_unary(ref op, ref v) with Pure = match op {
+  UNeg => match v { LVInt(n) => Some(LVInt(0 - n)), LVFloat(f) => Some(LVFloat(0.0 - f)), LVString(_) => None, LVBool(_) => None },
+  UNot => None
+}
+
 // Conjunction with three-valued short-circuit. Some(false) on either
 // branch decides the conjunction false regardless; Some(true) on both
 // decides true; mixed Some(true) + None defers to None (the unknown
@@ -271,7 +328,8 @@ fn classify_predicate(pred) with Pure = match pred {
   PCompare(_, _, _) => "comparison",
   PBoolNode(_) => "graph-deferred",
   PPatternMatch(_, _) => "match-narrowing",
-  PFlowLe(_, _) => "ifc-flow"  // IFC: always decides at compile time via flow_le
+  PFlowLe(_, _) => "ifc-flow",  // IFC: always decides at compile time via flow_le
+  PWithSelf(_, inner) => classify_predicate(inner)  // the binder classifies as its body
 }
 
 type SmtResult
@@ -353,7 +411,10 @@ fn predicate_to_smt(ref pred) with GraphRead + Memory + Alloc + Diagnostic = mat
   PNot(inner)        => "(not {predicate_to_smt(inner)})",
   PBoolNode(n)       => handle_to_smt(n),
   PPatternMatch(_, n) => handle_to_smt(n),
-  PFlowLe(a, b)      => if flow_le(a, b) { "true" } else { "false" }  // finite lattice: literal
+  PFlowLe(a, b)      => if flow_le(a, b) { "true" } else { "false" },  // finite lattice: literal
+  // The self binder renders as its body — `self` stays symbolic in SMT-LIB
+  // (the solver's declared variable), exactly the diagnostic's reading.
+  PWithSelf(_, inner) => predicate_to_smt(inner)
 }
 
 fn smt_cmp_op(ref op) with Pure = match op {

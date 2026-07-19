@@ -284,18 +284,16 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
 // as find did.
 fn lookup_tag(ref idx, handle) with !Mutate = region_index_get(idx, handle)
 
-fn region_index_new() with Memory + Alloc = make_list(65536)
+fn region_index_new() with Memory + Alloc = list_filled(65536, [])
 
 fn region_index_add(idx, handle, tag) with Memory + Alloc = {
   let b = i32_and(handle, 65535)
-  let x = list_index(idx, b)
-  list_set(idx, b, [(handle, tag)] ++ (if x == 0 { [] } else { x }))
+  list_set(idx, b, [(handle, tag)] ++ list_index(idx, b))
 }
 
 fn region_index_get(ref idx, handle) with Memory = {
   let b = i32_and(handle, 65535)
-  let x = list_index(idx, b)
-  region_bucket_scan(if x == 0 { [] } else { x }, handle, 0)
+  region_bucket_scan(list_index(idx, b), handle, 0)
 }
 
 fn region_bucket_scan(ref bucket, handle, i) with Memory = {

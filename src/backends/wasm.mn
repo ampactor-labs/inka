@@ -198,7 +198,7 @@ handler string_table with idx = string_index_new() {
 // template). str_eq inside the small bucket carries the same content
 // equality the old `target: String` pin did: a content-equal COPY of a
 // registered string keys the same offset.
-fn string_index_new() with Memory + Alloc = make_list(4096)
+fn string_index_new() with Memory + Alloc = list_filled(4096, [])
 
 fn build_string_index(entries) with Memory + Alloc =
   build_string_index_from(entries, len(entries) - 1, string_index_new())
@@ -213,14 +213,12 @@ fn build_string_index_from(entries, i, idx) with Memory + Alloc = {
 
 fn string_index_add(idx, s: String, offset) with Memory + Alloc = {
   let b = i32_and(str_hash(s), 4095)
-  let x = list_index(idx, b)
-  list_set(idx, b, [(s, offset)] ++ (if x == 0 { [] } else { x }))
+  list_set(idx, b, [(s, offset)] ++ list_index(idx, b))
 }
 
 fn string_index_get(ref idx, s: String) with Memory = {
   let b = i32_and(str_hash(s), 4095)
-  let x = list_index(idx, b)
-  string_bucket_scan(if x == 0 { [] } else { x }, s, 0)
+  string_bucket_scan(list_index(idx, b), s, 0)
 }
 
 fn string_bucket_scan(ref bucket, s: String, i) with Memory = {

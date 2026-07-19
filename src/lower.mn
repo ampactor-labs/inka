@@ -1317,22 +1317,16 @@ fn resolve_ev_for_ename(ename) = {
 // EPure is the union identity and never enters a row name-set (consumed to
 // EfPure at build_declared_row), so its arm is the unreachable-but-total case:
 // the empty name (it contributes no evidence slot — it is never present here).
-// Total over the row's REAL population: graph-stored rows carry null
-// elements (0 — the absence a failed/absent effect mint leaves; the
-// name-set ops tag-compare-tolerate them, so they survive to this
-// projection). A null projects to "" and row_dispatched_names' builtin
-// filter is not consulted for it — "" never names a dispatchable
-// effect. The null's BIRTH is the upstream census peer
-// (Hβ.infer.effname-null-mint); flattening the absence here is the
-// projection's totality, not a fix for the mint.
+// The old `name == 0` null guard is gone WITH its class: the name-set ops
+// whose slack slots once leaked nulls (the dissolved sorted insert) are
+// buffer-counter builds now, slicing to their exact count — no null element
+// survives to this projection (the battery + self-compile arbitrated the
+// guard's removal).
 fn eff_names_of(names) = flatten(map((name) =>
-  if name == 0 { [] }
-  else {
-    match name {
-      ENamed(s)            => [s],
-      EParameterized(s, _) => [s],
-      EPure                => []
-    }
+  match name {
+    ENamed(s)            => [s],
+    EParameterized(s, _) => [s],
+    EPure                => []
   }, names))
 
 // Builtin effects have no handler record — the raw substrate IS their

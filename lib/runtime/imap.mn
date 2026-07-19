@@ -13,7 +13,7 @@
 // `==` on the list-erased word would floor to pointer-eq, the very bug the
 // crown gate shed. A name is a HANDLE; this is where the six copies converge.
 
-fn smap_new() with Memory + Alloc = make_list(4096)
+fn smap_new() with Memory + Alloc = list_filled(4096, [])
 
 fn smap_build(pairs) with Memory + Alloc =
   smap_build_from(pairs, len(pairs) - 1, smap_new())
@@ -28,14 +28,12 @@ fn smap_build_from(pairs, i, idx) with Memory + Alloc = {
 
 fn smap_add(idx, name: String, val) with Memory + Alloc = {
   let b = i32_and(str_hash(name), 4095)
-  let x = list_index(idx, b)
-  list_set(idx, b, [(name, val)] ++ (if x == 0 { [] } else { x }))
+  list_set(idx, b, [(name, val)] ++ list_index(idx, b))
 }
 
 fn smap_get(ref idx, name: String) with Memory = {
   let b = i32_and(str_hash(name), 4095)
-  let x = list_index(idx, b)
-  smap_bucket_scan(if x == 0 { [] } else { x }, name, 0)
+  smap_bucket_scan(list_index(idx, b), name, 0)
 }
 
 fn smap_bucket_scan(ref bucket, name: String, i) with Memory = {

@@ -430,17 +430,11 @@ fn frontend(source) = {
 // buffer, each bucket a prepended list of (name, position). env_resolve returns
 // the first LIVE (position < count) binding — env_find_flat's latest-wins result,
 // byte-identical, O(1) amortized. Carried-Truth: read the handle, never re-scan.
-fn env_index_new() with Memory + Alloc = make_list(4096)
-
-// A bucket slot is 0 (make_list zeroes) until first written; read it as [] then.
-fn env_bucket_at(ref idx, b) with Memory = {
-  let x = list_index(idx, b)
-  if x == 0 { [] } else { x }
-}
+fn env_index_new() with Memory + Alloc = list_filled(4096, [])
 
 fn env_index_add(idx, name: String, pos) with Memory + Alloc = {
   let b = i32_and(str_hash(name), 4095)
-  list_set(idx, b, [(name, pos)] ++ env_bucket_at(idx, b))
+  list_set(idx, b, [(name, pos)] ++ list_index(idx, b))
 }
 
 // The first (name, pos) with pos < count — the latest LIVE binding position, or
@@ -459,7 +453,7 @@ fn env_bucket_pos(ref bucket, name: String, count, i, n) with Memory = {
 // for that rare case (byte-identical either way).
 fn env_resolve(ref buf, count, ref idx, name: String) with Memory = {
   let b = i32_and(str_hash(name), 4095)
-  let bucket = env_bucket_at(idx, b)
+  let bucket = list_index(idx, b)
   let pos = env_bucket_pos(bucket, name, count, 0, len(bucket))
   if pos < 0 { None }
   else {
@@ -498,7 +492,7 @@ fn env_bucket_type_pos(ref buf, ref bucket, name: String, count, i, n) with Memo
 
 fn env_resolve_type(ref buf, count, ref idx, name: String) with Memory = {
   let b = i32_and(str_hash(name), 4095)
-  let bucket = env_bucket_at(idx, b)
+  let bucket = list_index(idx, b)
   let pos = env_bucket_type_pos(buf, bucket, name, count, 0, len(bucket))
   if pos < 0 { None }
   else {

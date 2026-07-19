@@ -32,6 +32,18 @@ fn make_list(count) with Memory + Alloc = {
   t
 }
 
+// list_filled — a flat list with every slot holding v. The bucket-index
+// mints read this: a hash index's slot IS a list that starts empty (one
+// shared [] across the slots — buckets are only ever REPLACED, never
+// mutated, so the sharing is sound), which keeps the element type honest
+// end to end where a zero-filled buffer forced every reader through an
+// `if x == 0` word test that no type admits.
+fn list_filled(n, v) with Memory + Alloc = list_filled_from(make_list(n), v, 0, n)
+
+fn list_filled_from(xs, v, i, n) with Memory + Alloc =
+  if i >= n { xs }
+  else { list_filled_from(list_set(xs, i, v), v, i + 1, n) }
+
 // len — element count of any list. Every node shape carries its
 // count at offset 0 (flat, snoc, concat, slice alike) — one load;
 // the representation already proves it. No tag dispatch.

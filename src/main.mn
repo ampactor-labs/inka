@@ -407,11 +407,23 @@ fn entry_start_caret(entry_module, ranges) = {
 // is OUTERMOST. Per MV-LSP-adapter.md substrate.
 
 fn serve_run() = {
+  // The transport reads a LIVE graph: handle_did_open runs driver_check, whose
+  // inference performs Consume / Region / Verify / LookupTy (the analysis ops
+  // infer_program leaks past its own infer_ctx install). Those handlers install
+  // HERE, at the session boundary, so the graph the frontend populates persists
+  // across every hover / definition / reference in the session — the driverless
+  // chain (open_file only) read an unpopulated graph and every query fell to
+  // AnsSilence (Hβ.lsp.transport-runs-frontend). env before graph preserved:
+  // env_handler's arms read the graph outer to them.
   mentl_lsp_session()
     ~> lsp_adapter
     ~> mentl_voice_filesystem
     ~> mentl_voice_default
     ~> query_default          // consult/run_query bubble Query.ask here — the live forensic read
+    ~> affine_ledger          // driver_check → infer's Consume (ownership)
+    ~> region_tracker         // driver_check → infer's Region (body-as-region)
+    ~> verify_ledger          // driver_check → infer's Verify (refinement debt)
+    ~> lookup_ty_graph        // the type-of-a-handle read the cursor projection makes
     ~> env_handler            // query_default's env_lookup / env_snapshot
     ~> wasi_filesystem
     ~> no_iter_context

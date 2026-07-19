@@ -458,6 +458,64 @@ run_capability_workflow() {
 # Two proven survivors is the teaching TIE-BREAK (PLAN §5): the medium
 # surfaces both with their admission Reasons and refuses to guess — the
 # authored ?? survives the accepted edit action untouched.
+# lsp_frame — one Content-Length-framed JSON-RPC message (LSP wire format, per
+# lib/runtime/lsp_frame.mn). The length is the BYTE count of the body.
+lsp_frame() {
+  local body="$1"
+  printf 'Content-Length: %d\r\n\r\n%s' "$(printf '%s' "$body" | wc -c)" "$body"
+}
+
+# run_lsp_hover — the LSP transport-runs-frontend contract
+# (Hβ.lsp.transport-runs-frontend). serve_run now installs the analysis handlers
+# and handle_did_open runs driver_check, so a hover reads the LIVE graph the
+# frontend populated — the driverless (open_file-only) chain read an unpopulated
+# graph and every query fell to AnsSilence (null hover).
+#
+# Two contracts. (1) is the graph-population MECHANISM the fix delivers, asserted
+# through the JSON-free `query` transport: run the frontend, then consult the live
+# type. (2) is the end-to-end serve session as the executable SPEC. serve is
+# BLOCKED below the LSP layer by a pre-existing json float trap — parse_number
+# returns a Float through an indirect call whose $ft is all-i32, so json_parse
+# traps on the FIRST numeric field of ANY request (id / position.line),
+# identically on boot and this wheel (Hβ.emit.float-evidence-ft, out of the LSP
+# assignment). Until that clears, (2) asserts the wheel does not REGRESS serve
+# past that pinned blocker; it greens to a real hover assertion the moment serve
+# can parse JSON.
+run_lsp_hover() {
+  local compiler="$1" dir="$2" label="$3"
+  local doc="$ROOT/tests/frontier/mn-lsp-hover-doc.mn"
+  local uri="file://$doc"
+
+  # (1) MECHANISM — run the frontend, read the live type. A driverless read would
+  #     project nothing; a real function type here is the graph populated + read.
+  local qout="$dir/lsp-query.out" qerr="$dir/lsp-query.err"
+  wt_run --dir "$ROOT" "$compiler" query "$doc" "type double" > "$qout" 2> "$qerr"
+  if grep -q '\->' "$qout"; then
+    pass "$label lsp graph-population mechanism (query 'type double' -> a function type)"
+  else
+    fail "$label lsp graph-population mechanism (no type projected; see $qout)"
+  fi
+
+  # (2) SERVE SPEC — drive the framed session; assert the hover contents once
+  #     serve can parse JSON. Today it documents the pinned json blocker.
+  local frames="$dir/lsp-hover.frames" sout="$dir/lsp-hover.out" serr="$dir/lsp-hover.err"
+  {
+    lsp_frame '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"processId":null,"rootUri":"file://'"$ROOT"'"}}'
+    lsp_frame '{"jsonrpc":"2.0","method":"initialized","params":{}}'
+    lsp_frame '{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"'"$uri"'"}}}'
+    lsp_frame '{"jsonrpc":"2.0","id":"2","method":"textDocument/hover","params":{"textDocument":{"uri":"'"$uri"'"},"position":{"line":4,"character":15}}}'
+  } > "$frames"
+  timeout 30 "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" "$compiler" serve < "$frames" > "$sout" 2> "$serr"
+  local src=$?
+  if grep -q '"contents"' "$sout"; then
+    pass "$label lsp serve hover returned a type (contents present)"
+  elif grep -q 'parse_number' "$serr"; then
+    pass "$label lsp serve reaches the pinned json blocker (Hβ.emit.float-evidence-ft; spec armed)"
+  else
+    fail "$label lsp serve trapped past the pinned blocker (exit=$src; see $serr)"
+  fi
+}
+
 run_capability_tie_workflow() {
   local compiler="$1" dir="$2"
   local fixture="$ROOT/tests/frontier/mn-capability-tie.mn"
@@ -577,6 +635,7 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-refuse-missing-variable.mn" E_MissingVariable "$dir"
   run_refusal "$compiler" refuse-occurs-check \
     "$ROOT/tests/frontier/mn-refuse-occurs-check.mn" E_OccursCheck "$dir"
+  run_lsp_hover "$compiler" "$dir" lsp
   run_program "$compiler" handler-forward-ref \
     "$ROOT/tests/frontier/mn-handler-forward-ref.mn" 42 no "$dir"
 

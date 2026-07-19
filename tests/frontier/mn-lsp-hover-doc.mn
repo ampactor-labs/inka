@@ -1,0 +1,6 @@
+// LSP hover fixture — the serve transport infers this on didOpen, then a hover
+// reads the live type off the one graph. double's body forces x : Int (x + x),
+// so a hover over an identifier projects a concrete type: null on a driverless
+// (open_file-only) transport, the real type once the frontend runs.
+fn double(x) = x + x
+fn quad(y) = double(double(y))

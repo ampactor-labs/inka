@@ -1,0 +1,15 @@
+// BANKED refusal fixture — E_OccursCheck (NOT yet wired into the gate).
+// Running this today TRAPS the compiler: chase_deep spins to stack
+// exhaustion on the cyclic structure before any E_OccursCheck reports —
+// the occurs guard at graph_bind and unify never sees the cycle this
+// shape builds (Hβ.infer.selfapply-cyclic-ty-spin; the three var leaves
+// already root-chase). The class arms, and this fixture wires into
+// run_refusal, when the spin's root lands.
+// A genuinely infinite type: `f` applied to itself forces T = T -> R at the
+// unify, the one cycle the occurs check exists to refuse. The phantom
+// cascade this class once carried is dead (an env miss binds NErrorHole,
+// never a self-referential TVar), so a report here is a REAL infinite type
+// and an executable carrying one refuses: nonzero exit, zero WAT bytes.
+fn selfapply(f) = f(f)
+
+fn main() = selfapply(selfapply)

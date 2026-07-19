@@ -1,0 +1,10 @@
+// ARMED-CLASS refusal fixture — E_MissingVariable.
+// A name no declaration binds, on the self-contained stdin contract (the
+// input IS the whole program — the wheel's own build form). Pre-arming this
+// compiled to a module that trapped at the call; the miss is a parse-time
+// fact about an executable and refuses at the boundary: nonzero exit, zero
+// WAT bytes. The DAG path is the licence's other half: a stdlib-using
+// program with no imports resolves via the prelude seed and compiles clean
+// (measured at arming — map/fold/len/any through `mentl compile`, exit 0,
+// runs 20).
+fn main() = definitely_not_declared(41)

@@ -1616,6 +1616,18 @@ fn diag_refuses(d) with Pure = match d {
   // programs (a genuine double move still refuses, disjoint arms still pass).
   ERefinementRejected(_, _) => True,
   EOwnershipViolation(_, _) => True,
+  // ARMED 2026-07-18, the manifest arc's dividend: wheel census 0, and the
+  // user-path licence MEASURED — a no-import stdlib program (map / fold /
+  // len / any) resolves via the DAG's prelude seed and runs; the stdin
+  // contract is self-contained input (the wheel's own build form), where a
+  // missing name is a real break. Pre-arming, the refusal fixture compiled
+  // a missing-name executable to 2,795 bytes at exit 0 with the diagnostic
+  // on stderr — the silent-wrong this class's arming deletes.
+  // E_OccursCheck does NOT arm with it: a genuinely infinite type
+  // (selfapply f = f(f)) TRAPS the compiler in chase_deep before any
+  // report — the banked fixture and Hβ.infer.selfapply-cyclic-ty-spin
+  // hold the arming until the spin's root lands.
+  EMissingVariable(_, _) => True,
   _                       => False
 }
 

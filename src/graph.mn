@@ -591,7 +591,14 @@ fn occurs_in(handle, ref ty) with !Mutate = {
     TFloat           => false,
     TString          => false,
     TUnit            => false,
-    TVar(id)         => id == handle,
+    // The leaf compares ROOTS, not raw handles (unify IS union-find): the
+    // indirect cycle a ~ (b -> r) with b's root already a passed a raw
+    // `id == handle`, the cyclic graph bound, and chase_deep spun to stack
+    // exhaustion at generalize — `fn selfapply(f) = f(f)` TRAPPED the
+    // compiler instead of reporting E_OccursCheck (the refusal fixture's
+    // first run found it). `handle` is already a root at every caller
+    // (unify chases before checking); the leaf chases its side to match.
+    TVar(id)         => id == handle || graph_chase_handle(id) == handle,
     TList(elem)      => occurs_in(handle, elem),
     TTuple(elems)    => occurs_in_list(handle, elems),
     TFun(params, ret, eff) =>
@@ -599,7 +606,8 @@ fn occurs_in(handle, ref ty) with !Mutate = {
     TName(_, args)   => occurs_in_list(handle, args),
     TRecord(fields)  => occurs_in_fields(handle, fields),
     TRecordOpen(fields, v) =>
-      v == handle || occurs_in_fields(handle, fields),
+      v == handle || graph_chase_handle(v) == handle
+        || occurs_in_fields(handle, fields),
     TRefined(base, _) => occurs_in(handle, base),
     TCont(input, answer, _, world) =>
       occurs_in(handle, input) || occurs_in(handle, answer) || occurs_in_row(handle, world),
@@ -658,7 +666,8 @@ fn occurs_in_row(handle, ref eff) with !Mutate = {
   match eff {
     EfPure           => false,
     EfClosed(names)  => occurs_in_eff_names(handle, names),
-    EfOpen(names, v) => v == handle || occurs_in_eff_names(handle, names),
+    EfOpen(names, v) => v == handle || graph_chase_handle(v) == handle
+                          || occurs_in_eff_names(handle, names),
     EfNeg(inner)     => occurs_in_row(handle, inner),
     EfSub(a, b)      => occurs_in_row(handle, a) || occurs_in_row(handle, b),
     EfInter(a, b)    => occurs_in_row(handle, a) || occurs_in_row(handle, b),

@@ -512,6 +512,15 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-refuse-state-shadows-op.mn" E_HandlerStateShadowsOp "$dir"
   run_refusal "$compiler" refuse-dup-fn \
     "$ROOT/tests/frontier/mn-refuse-dup-fn.mn" E_DuplicateFnName "$dir"
+  # E_MissingVariable armed 2026-07-18 — wheel census 0 and the user-path
+  # licence measured: a no-import stdlib program resolves via the DAG's
+  # prelude seed (compile exit 0, runs); the stdin contract is
+  # self-contained input, where a miss is a real break. The E_OccursCheck
+  # sibling fixture is BANKED (tests/frontier/mn-refuse-occurs-check.mn):
+  # a genuinely infinite type traps chase_deep before any report
+  # (Hβ.infer.selfapply-cyclic-ty-spin); it arms when the spin's root lands.
+  run_refusal "$compiler" refuse-missing-variable \
+    "$ROOT/tests/frontier/mn-refuse-missing-variable.mn" E_MissingVariable "$dir"
   run_program "$compiler" handler-forward-ref \
     "$ROOT/tests/frontier/mn-handler-forward-ref.mn" 42 no "$dir"
 

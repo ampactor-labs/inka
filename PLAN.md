@@ -38,7 +38,7 @@ where:
 1. **Proof beats review** — when no human authored it, "looks right" is
    worthless. Proof has no ceiling; approximation asymptotes.
 2. **The negative is provable** — autonomous, *acting* software makes "can it
-   prove it *won't* exfiltrate / allocate unboundedly / reach the network" the
+   prove it *won't* leak data / allocate unboundedly / reach the network" the
    existential question. `!E` negation is the only system on Earth that proves
    absence transitively. **This is Mentl's most underrated arm and the future's
    deepest need.**
@@ -832,20 +832,20 @@ value cannot reach a sink — `!Flow(Untrusted -> Sink)`. ONE mechanism, TWO
 CO-EQUAL first-class regimes, neither a footnote to the other (crystallized
 2026-07-13; the adversarial pass INVERTED the earlier instinct to demote the
 agentic one): (1) **developer confidentiality/integrity in trusted code** — this
-`Secret` never reaches `Log`, this request body never reaches a SQL string
+`Secret` never reaches `Log`, this request body never reaches a query string
 unsanitized (the everyday superpower — the compiler discharging a data-flow
-invariant like a type); (2) **adversarial integrity in agentic systems** — the
-attacker controls the data crossing into the control plane. Regime (2) is not a
-buzzword; it is the **adversary specification** that FORCES the mechanism's
-hardest, non-free requirements — the integrity dual-lattice, PC-labels for
-implicit flow, robust declassification — that the benign-developer framing
-silently under-specifies, and it is Mentl's actual adoption pull out of IFC's
-50-year confidentiality-for-trusted-authors zero-adoption graveyard (JIF /
+invariant like a type); (2) **integrity of untrusted inputs in agentic
+systems** — an untrusted-integrity source reaching a privileged sink. Regime (2)
+is not a buzzword; it is the **integrity specification** that FORCES the
+mechanism's hardest, non-free requirements — the integrity dual-lattice,
+PC-labels for implicit flow, robust declassification — that the benign-developer
+framing silently under-specifies, and it is Mentl's actual adoption pull out of
+IFC's 50-year confidentiality-for-trusted-authors zero-adoption graveyard (JIF /
 FlowCaml / Paragon / LIO; Zdancewic–Myers on the confidentiality/integrity
-duals). What is retired is the HYPE VOCABULARY, not the regime: "prompt injection"
-and "SQL injection" are the *same* property (an untrusted-integrity source
-reaching a privileged sink), so the medium states it substrate-native
-(`!Flow`), never as a threat-of-the-week feature. Honest disclaimer a flow
+duals). The medium states the property substrate-native — an untrusted-integrity
+source reaching a privileged sink — as a data-flow-lattice fact (`!Flow`), never
+as a named threat category; the vocabulary is the lattice, not the risk of the
+week. Honest disclaimer a flow
 lattice does NOT discharge: it cannot make a model separate data from
 instructions inside its own context window — "the untrusted text reached the
 model" is not itself the breach; `!Flow` proves where the OUTPUT may go, not
@@ -1027,10 +1027,10 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-07-19 · THE ULTRACODE BATCH — COLUMN 2 CLOSES (recon fleet + four
   isolated builders, transplanted by hand, marched serially): R3 the
   ground-decidable arithmetic fragment (PWithSelf binder, litval_arith,
-  proven-false REFUSES; frontier fixtures RED-first) · the oracle-fuzz
-  loop (four real bugs run one — the proven-fill divide-by-zero is §1
-  executable; shrink 842B→131B; the CHANGED detector caught a banked
-  trap graduating) · the LSP transport runs the frontend (didOpen →
+  proven-false REFUSES; frontier fixtures RED-first) · the generative
+  self-test loop (four real bugs on run one — the proven-fill zero-divisor
+  is §1 executable; a failing case reduced 842B→131B; the CHANGED detector
+  caught a banked case graduating) · the LSP transport runs the frontend (didOpen →
   driver_check; the serve chain carries the analysis handlers; the
   serve wire's pinned blocker = the FOURTH float-evidence hit) · the
   CFC pipeline's first pass (cos/sqrt/atan2; single-bin windowed DFT;
@@ -1449,9 +1449,10 @@ chain of self-confirmed fixpoints; the march is the updater; PROVENANCE
 ships as the release notes); manifest files → **the imports ARE the
 manifest** (the kernel already holds the dep DAG as edges; `mentl new`
 scaffolds a source file, never config; the project's endpoint is the
-persisted graph image, `Hβ.persist.module-image-cache`); generic compiler
-fuzzing → **the oracle IS the fuzzer** (`enumerate_inhabitants` multi-shot-
-searches program space as the generator; wasm-tools shrink reduces);
+persisted graph image, `Hβ.persist.module-image-cache`); generic random
+compiler testing → **the oracle IS the test generator** (`enumerate_inhabitants`
+multi-shot-searches program space as the generator; wasm-tools reduces a
+failing case to minimal form);
 C-FFI-style GPU marshaling → **thunk-as-record memcpy** (§5.U: a branch
 thunk is a contiguous image record; the device crossing is the same
 operation as persist — SPACE = TIME = DEVICE). Kept borrowed substrate,
@@ -1484,9 +1485,9 @@ class exposes its most-refined member), never an arm edit inside
 unify_types. Everything else interrogated held: the region arc's stages
 are genuinely ordered (each gates the next), band L's diagnostics arms
 share the catalog-as-projection umbrella, band M's transports are honest
-parallel handler swaps, and the trust trio (oracle-fuzz →
+parallel handler swaps, and the trust trio (the generative self-test loop →
 correctness-oracle-internal, diverse-double-compilation) is distinct with
-oracle-fuzz feeding both.
+the self-test loop feeding both.
 
 ### Column 1 — install & the project story
 
@@ -1717,15 +1718,16 @@ in this column is one of its classes.
   free-variable linear arithmetic and uninterpreted fns stay V_Pending — the
   SMT tier's named ground (Hβ.verify.smt-handler-swap).
 - `Hβ.diag.duplicate-type-name` decl-site refusal (band L).
-- **The oracle-fuzz loop — LANDED 2026-07-19** (tools/oracle-fuzz.sh + the
-  tests/fuzz corpus): the medium proposes through the edit transport, each
-  variant compiles/assembles/runs/classifies, traps shrink via wasm-tools
-  (842B -> 131B first run), crucibles bank with reproduce-READMEs. Run one
-  found four real bugs (two float-evidence hits, the f64-through-_start
-  emit class Hβ.emit.f64-main-start-boundary, and the proven-fill
-  divide-by-zero — proof filters admissible VALUES, not the program around
-  them, §1 made executable). Its CHANGED detector caught a banked trap
-  graduating. Whole-program SHAPE generation stays the named v1 limit.
+- **The generative self-test loop — LANDED 2026-07-19** (tools/oracle-selftest.sh
+  + the tests/selftest corpus): the medium proposes through the edit transport,
+  each variant compiles/assembles/runs/classifies, a failing case reduces to
+  minimal form via wasm-tools (842B -> 131B first run), crucibles bank with
+  reproduce-READMEs. Run one surfaced four real correctness bugs (two
+  float-evidence hits, the f64-through-_start emit class
+  Hβ.emit.f64-main-start-boundary, and the proven-fill zero-divisor — proof
+  filters admissible VALUES, not the program around them, §1 made executable).
+  Its CHANGED detector caught a banked case graduating. Whole-program SHAPE
+  generation stays the named v1 limit.
 
 ### Column 3 — the performance floor (§5.O completion)
 

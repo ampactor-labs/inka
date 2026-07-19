@@ -1,5 +1,5 @@
-// fuzz-shape: float-arith
-// fuzz-expect: edit-trap
+// selftest-shape: float-arith
+// selftest-expect: edit-trap
 // A Float hole feeding float arithmetic. The synth vocabulary has float seeds
 // (0.0, 1.0), but enumerating them through the Propose facet traps the medium:
 // `indirect call type mismatch` in enumerate_float_literals — an f64 candidate

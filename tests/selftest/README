@@ -1,11 +1,11 @@
-tests/fuzz — the oracle-fuzz loop's corpus and banked findings
+tests/selftest — the oracle-selftest loop's corpus and banked findings
 
-Driver: tools/oracle-fuzz.sh. Run it from the repo root:
+Driver: tools/oracle-selftest.sh. Run it from the repo root:
 
-  bash tools/oracle-fuzz.sh                 # against pinned boot (default)
-  bash tools/oracle-fuzz.sh --compiler PATH # against a fresh wt_m2_ensure m2.wasm
+  bash tools/oracle-selftest.sh                 # against pinned boot (default)
+  bash tools/oracle-selftest.sh --compiler PATH # against a fresh wt_m2_ensure m2.wasm
 
-The medium is its own fuzzer (PLAN §11 col 2). This v1 drives the Synth proposer
+The medium is its own test generator (PLAN §11 col 2). This v1 drives the Synth proposer
 through the `edit`/address transport: each skeleton is a complete program with
 one authored `??` in a typed position; the loop runs `edit` non-interactively
 (printf 'y\n' accepts the top survivor), then compiles / assembles / runs
@@ -13,7 +13,7 @@ whatever the medium proposed and classifies the result. A trap or a
 non-assemblable emit is a banked crucible, not a loop failure — the loop found a
 real gap. We bank, we do not fix compiler code here.
 
-skeletons/ — the input corpus. Each carries `// fuzz-shape:` and `// fuzz-expect:`
+skeletons/ — the input corpus. Each carries `// selftest-shape:` and `// selftest-expect:`
 directives (self-describing; the loop reads them for the results TSV and the
 regression/graduation check). Six skeletons over five type shapes:
 

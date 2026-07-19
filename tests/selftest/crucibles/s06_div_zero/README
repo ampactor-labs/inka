@@ -4,7 +4,7 @@ filled fill ran and trapped: wasm trap: integer divide by zero (exit=134)
 
 Reproduce (from repo root):
   source tools/wt-env.sh
-  d=$(mktemp -d /tmp/cru_XXXX); cp tests/fuzz/crucibles/s06_div_zero/s06_div_zero.mn $d/
+  d=$(mktemp -d /tmp/cru_XXXX); cp tests/selftest/crucibles/s06_div_zero/s06_div_zero.mn $d/
   wt_run boot/mentl.wasm < $d/s06_div_zero.mn > $d/s06_div_zero.wat
   wt_asm $d/s06_div_zero.wat $d/s06_div_zero.wasm && wt_run $d/s06_div_zero.wasm   # traps at runtime
 

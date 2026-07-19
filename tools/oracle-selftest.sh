@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# tools/oracle-fuzz.sh — the oracle-fuzz loop, v1.
+# tools/oracle-selftest.sh — the oracle-selftest loop, v1.
 #
-# The medium is its own fuzzer: its Synth proposer generates the program
-# variations (PLAN §11 col 2, "the oracle IS the fuzzer"). This loop drives that
+# The medium is its own test generator: its Synth proposer generates the program
+# variations (PLAN §11 col 2, "the oracle IS the test generator"). This loop drives that
 # through the ADDRESS/edit transport over a corpus of hand-authored skeletons —
 # each a complete program with ONE authored `??` in a typed position — then
 # compiles, assembles, and runs whatever the medium proposed, and CLASSIFIES the
@@ -18,7 +18,7 @@
 #   (c) classify: edit-trap / compile-error / assemble-fail / runtime-trap /
 #       refuse-unfilled / clean-run — one line per case to a results TSV;
 #   (d) on a finding (edit-trap / compile-error / assemble-fail / runtime-trap)
-#       save the reproducer into tests/fuzz/crucibles/<stem>/ with a README
+#       save the reproducer into tests/selftest/crucibles/<stem>/ with a README
 #       naming the classification and the site;
 #   (e) on a runtime-trap, wire and RUN wasm-tools shrink (predicate: the trap
 #       still fires) to bank a minimal reproducer.
@@ -45,7 +45,7 @@ SHRINK_TIMEOUT=60
 
 usage() {
   cat <<'EOF'
-usage: tools/oracle-fuzz.sh [--compiler boot|PATH]
+usage: tools/oracle-selftest.sh [--compiler boot|PATH]
 
   boot   pinned boot/mentl.wasm (default)
   PATH   an explicit compiler artifact (e.g. a fresh wt_m2_ensure m2.wasm)
@@ -63,21 +63,21 @@ while [ "$#" -gt 0 ]; do
       esac
       shift 2 ;;
     -h|--help) usage; exit 0 ;;
-    *) echo "oracle-fuzz: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    *) echo "oracle-selftest: unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
-[ -f "$COMPILER" ] || { echo "oracle-fuzz: compiler not found: $COMPILER" >&2; exit 2; }
+[ -f "$COMPILER" ] || { echo "oracle-selftest: compiler not found: $COMPILER" >&2; exit 2; }
 
-SKEL_DIR="$ROOT/tests/fuzz/skeletons"
-CRUCIBLE_DIR="$ROOT/tests/fuzz/crucibles"
-WORK="$ROOT/.build/oracle-fuzz"
+SKEL_DIR="$ROOT/tests/selftest/skeletons"
+CRUCIBLE_DIR="$ROOT/tests/selftest/crucibles"
+WORK="$ROOT/.build/oracle-selftest"
 RESULTS="$WORK/results.tsv"
 
 mkdir -p "$WORK"
 # Crucibles are LOOP OUTPUT — regenerated every run, so a graduated finding (a
 # skeleton the medium now handles) leaves the dir and a fresh finding enters it.
-rm -rf "$CRUCIBLE_DIR"   # protocol-skip: regenerating my own banked crucibles under tests/fuzz/
+rm -rf "$CRUCIBLE_DIR"   # protocol-skip: regenerating my own banked crucibles under tests/selftest/
 mkdir -p "$CRUCIBLE_DIR"
 
 printf 'stem\tshape\tedit_rc\tfilled\tclass\texpect\tmatch\tdetail\n' > "$RESULTS"
@@ -116,7 +116,7 @@ bank_crucible() {
     echo
     echo "Reproduce (from repo root):"
     echo "  source tools/wt-env.sh"
-    echo "  d=\$(mktemp -d /tmp/cru_XXXX); cp tests/fuzz/crucibles/$stem/$stem.mn \$d/"
+    echo "  d=\$(mktemp -d /tmp/cru_XXXX); cp tests/selftest/crucibles/$stem/$stem.mn \$d/"
     case "$class" in
       edit-trap)
         echo "  printf 'y\\n' | \"\$WT\" run \"\${WT_RUN_FLAGS[@]}\" --dir \"\$d\" boot/mentl.wasm edit $stem"
@@ -171,10 +171,10 @@ run_skeleton() {
   local skel="$1"
   local stem; stem="$(basename "$skel" .mn)"
   local shape expect
-  shape="$(read_directive "$skel" fuzz-shape)"; shape="${shape:-unknown}"
-  expect="$(read_directive "$skel" fuzz-expect)"; expect="${expect:-?}"
+  shape="$(read_directive "$skel" selftest-shape)"; shape="${shape:-unknown}"
+  expect="$(read_directive "$skel" selftest-expect)"; expect="${expect:-?}"
 
-  local d; d="$(mktemp -d /tmp/fuzz_run_XXXX)"
+  local d; d="$(mktemp -d /tmp/selftest_run_XXXX)"
   cp "$skel" "$d/$stem.mn"
 
   # ── (a) EDIT: the address transport proposes into the hole and (if a single
@@ -255,15 +255,15 @@ run_skeleton() {
   printf '  %-22s %-18s %-14s %-8s %s\n' "$stem" "$shape" "$class" "$match" "$detail"
 }
 
-echo "oracle-fuzz: compiler=$COMPILER"
-echo "oracle-fuzz: corpus=$SKEL_DIR"
+echo "oracle-selftest: compiler=$COMPILER"
+echo "oracle-selftest: corpus=$SKEL_DIR"
 echo
 
 shopt -s nullglob
 skels=("$SKEL_DIR"/*.mn)
 shopt -u nullglob
 if [ "${#skels[@]}" -eq 0 ]; then
-  echo "oracle-fuzz: no skeletons found in $SKEL_DIR" >&2
+  echo "oracle-selftest: no skeletons found in $SKEL_DIR" >&2
   exit 2
 fi
 
@@ -272,14 +272,14 @@ for skel in $(printf '%s\n' "${skels[@]}" | sort); do
 done
 
 echo
-echo "oracle-fuzz: classification counts"
+echo "oracle-selftest: classification counts"
 awk -F'\t' 'NR>1 {c[$5]++} END {for (k in c) printf "  %-16s %d\n", k, c[k]}' "$RESULTS" | sort
 echo
 banked=$(find "$CRUCIBLE_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 changed=$(awk -F'\t' 'NR>1 && $7=="CHANGED"' "$RESULTS" | wc -l | tr -d ' ')
-echo "oracle-fuzz: $banked crucible(s) banked in tests/fuzz/crucibles/; results: $RESULTS"
+echo "oracle-selftest: $banked crucible(s) banked in tests/selftest/crucibles/; results: $RESULTS"
 if [ "$changed" -gt 0 ]; then
-  echo "oracle-fuzz: $changed skeleton(s) CHANGED class vs their fuzz-expect (a finding graduated or regressed):"
+  echo "oracle-selftest: $changed skeleton(s) CHANGED class vs their selftest-expect (a finding graduated or regressed):"
   awk -F'\t' 'NR>1 && $7=="CHANGED" {printf "  %s: expected %s, got %s\n", $1, $6, $5}' "$RESULTS"
 fi
 # A run that completed is a success regardless of how many findings it banked —

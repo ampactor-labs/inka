@@ -1,5 +1,5 @@
-// fuzz-shape: fn-argument
-// fuzz-expect: assemble-fail
+// selftest-shape: fn-argument
+// selftest-expect: assemble-fail
 // A hole in a function-argument position. The arg is refined to one survivor
 // (Positive rejects 0 and -1), so the medium fills `1` with no guess — the
 // arg-position synthesis path works end to end. But the callee returns Float

@@ -43,15 +43,15 @@ Prior pin's provenance:
   one-line wrapper; the shallow operand swap deleted); div/mod-by-zero
   refuses to fold. `self + 1 <= 10` discharges with zero debt, SYNTAX's
   own Even discharges, and a proven-false construction REFUSES under
-  the armed class (frontier 84/0 at that pin). (2) The oracle-fuzz
-  loop: the medium proposes through the edit transport, compiles,
-  runs, classifies, shrinks (842B -> 131B, still trapping), banks
-  crucibles — four real bugs on run one, including the sharpest
-  demonstration in the repo: `0`, the only inhabitant of
-  `Int where self == 0`, is a PROVEN fill that builds a
-  divide-by-zero — proof is a monotone filter over admissible values,
+  the armed class (frontier 84/0 at that pin). (2) The generative
+  self-test loop: the medium proposes through the edit transport,
+  compiles, runs, classifies, reduces a failing case to minimal form
+  (842B -> 131B), banks crucibles — four real bugs on run one,
+  including the sharpest demonstration in the repo: `0`, the only
+  inhabitant of `Int where self == 0`, is a PROVEN fill that still
+  divides by zero — proof is a monotone filter over admissible values,
   not a guarantee about the program around them, now executable. Its
-  regression detector caught s03's trap GRADUATING against current
+  regression detector caught s03's case GRADUATING against current
   boot (the bucket sweep had fixed it). (3) The LSP transport runs the
   frontend: didOpen drives driver_check into the session-level graph,
   serve_run carries the analysis handlers, and `query "type double"`

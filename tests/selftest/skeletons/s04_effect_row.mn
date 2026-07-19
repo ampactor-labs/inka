@@ -1,5 +1,5 @@
-// fuzz-shape: effect-row
-// fuzz-expect: clean-run
+// selftest-shape: effect-row
+// selftest-expect: clean-run
 // A hole under a negative effect-row constraint. The candidate vocabulary has
 // four zero-arg functions returning Seven; only pure_seven satisfies choose's
 // `!Network` gate (the other three reach Network directly, transitively, and

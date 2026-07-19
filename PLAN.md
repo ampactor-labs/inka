@@ -1113,11 +1113,14 @@ scheme where the canonical order met the loose pre-registered one — three
 real latent mismatches at prelude sum/chunk/trim under a leaves-first
 weave; the canonical sort sidesteps, the class remains; repro: swap
 lists/strings before prelude on stdin) ·
-`Hβ.patch.set-target-state-clobber` (patch_set_target's state write
-destroys the TAIL of the last-allocated list — read-after-write lost
-ranges[6] deterministically; the edit session hoists the read above the
-write as the dodge; the fix is the state-record home audit, the S1
-wrong-record class) ·
+`Hβ.patch.set-target-state-clobber` RETRACTED (2026-07-18, same day):
+probed on the pinned artifact with both a len read and a full iterate,
+before and after the perform — seven of seven survive; the original
+"lost tail" measurement came from a probe-perturbed build (the
+wheel-eprint Heisenberg class: the PROBE-R eprints inside
+entry_start_caret changed the very emit under test). A label is a
+hypothesis until the artifact confirms it — this one died by the law
+that minted it; the hoisted read stays as ordinary hygiene ·
 `Hβ.driver.per-module-env-overlay` gains its measured consequence: the
 per-module check walk inferred prelude without its layer's vocabulary
 (len/list_index missing on a clean program) — check rides the weave until
@@ -1638,14 +1641,12 @@ in this column is one of its classes.
   and the 4GB never-free bump image has no headroom for them. So this waits on
   the per-decl-arena collapsing the working set; until then the Memory floor
   holds — a NAMED under-attribution, the at-site comment carrying the fix.
-- **`Hβ.cli.process-exec-wire`** — `mentl run` does not run anything. The
-  wheel's own `run_run` → `process_exec` → `process_wasmtime` prints and
-  fabricates exit 0; the bash shim (tools/install.sh) intercepts `run` and does
-  the compile→assemble→execute itself. So the verb the README quickstart is
-  built on, and every gate that "runs" a program, is the scaffold working
-  around a fabrication in the wheel. WASI has no exec, so the shim is honest
-  scaffold — but the wheel must REFUSE (`E_CannotExec`) rather than report a
-  success it did not perform.
+- **`Hβ.cli.process-exec-wire` — CLOSED BY MEASUREMENT (2026-07-18):**
+  `run_run` routes `process_exec ~> process_no_exec`, which REFUSES (exit 1,
+  zero fabrication) and teaches the shim as the seam's owner — verified by
+  executing the run verb against the pinned boot. The earlier entry here
+  (fabricated exit 0) described a state some prior session already fixed;
+  the doc lagged the artifact.
 - **`Hβ.parser.refined-alias-nonatomic-base`** — LANDED 2026-07-17. SYNTAX's
   own canonical `type NonEmpty = [a] where len(self) > 0` (docs/SYNTAX.md:990)
   did not parse: `parse_type_decl` probed only `p2 + 1` for `where`, so a

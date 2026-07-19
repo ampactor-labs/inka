@@ -1623,11 +1623,16 @@ fn diag_refuses(d) with Pure = match d {
   // missing name is a real break. Pre-arming, the refusal fixture compiled
   // a missing-name executable to 2,795 bytes at exit 0 with the diagnostic
   // on stderr — the silent-wrong this class's arming deletes.
-  // E_OccursCheck does NOT arm with it: a genuinely infinite type
-  // (selfapply f = f(f)) TRAPS the compiler in chase_deep before any
-  // report — the banked fixture and Hβ.infer.selfapply-cyclic-ty-spin
-  // hold the arming until the spin's root lands.
   EMissingVariable(_, _) => True,
+  // ARMED 2026-07-18, the eighth — the same day its fixture found the spin:
+  // a genuinely infinite type (selfapply f = f(f)) used to TRAP the compiler
+  // (chase_deep / subst_ty stack exhaustion, zero reports) because the occurs
+  // leaf compared handles where the cycle lived in BOUND STRUCTURE (bind
+  // a := TFun([b], r) first, close b := TVar(a) after — no comparison sees
+  // it). The leaf now recurses into the root's binding, the write guard is
+  // total, and the fixture reports E_OccursCheck and refuses. Wheel census 0
+  // throughout; the phantom cascade stayed dead (one miss, one diagnostic).
+  EOccursCheck(_, _, _) => True,
   _                       => False
 }
 

@@ -3295,7 +3295,30 @@ fn generalize(handle) = {
 // on a non-NBound kind). A new Ty with embedded sub-types that
 // could contain TVars would need its own recursive arm — fails
 // to compile here until the decision is made.
-fn chase_deep(ty) = match ty {
+// PRODUCTIVE-UNDER-ERROR at the read (the HANG law, CLAUDE.md ⟲): a graph
+// CYCLE — however it got past the write guards — must project as a
+// diagnostic, never a stack exhaustion. The depth bound is structural
+// paranoia, not a semantics: no real resolved type nests 200 deep, so
+// crossing it IS the cycle, reported once with the shape in hand.
+fn chase_deep(ty) = chase_deep_at(ty, 0)
+fn chase_probe_tag(ty) with Memory + Alloc = match ty {
+  TVar(h) => "TVar({int_to_str(h)})",
+  TFun(ps, _, _) => "TFun/{int_to_str(len(ps))}",
+  TList(_) => "TList", TTuple(_) => "TTuple", TName(n, _) => "TName({n})",
+  TRecord(_) => "TRecord", TRecordOpen(_, _) => "TRecordOpen",
+  TRefined(_, _) => "TRefined", TCont(_, _, _, _) => "TCont",
+  TAlias(n, _) => "TAlias({n})", TInt => "TInt", TFloat => "TFloat",
+  TString => "TString", TUnit => "TUnit"
+}
+
+
+fn chase_deep_at(ty, d) = if d > 200 {
+  // Unreachable once the occurs guard recurses bindings (no cycle can enter
+  // the graph); a firing here means a write path slipped the guard — the
+  // tripwire names the shape without recursing it (show_type would spin).
+  eprint_string("mentl: chase_deep depth tripwire — cyclic graph at {chase_probe_tag(ty)}\n")
+  ty
+} else { match ty {
   TInt    => ty,
   TFloat  => ty,
   TString => ty,
@@ -3304,7 +3327,7 @@ fn chase_deep(ty) = match ty {
     let node = graph_chase(h)
     let GNode(kind, _) = node
     match kind {
-      NBound(inner) => chase_deep(inner),
+      NBound(inner) => chase_deep_at(inner, d + 1),
       NFree(_)      => ty,   // unresolved — stays as TVar
       NRowBound(_)  => ty,   // row handle used as Ty — stays
       NRecordRowBound(_) => ty,   // record-row residual — row sort; stays
@@ -3312,26 +3335,26 @@ fn chase_deep(ty) = match ty {
       NErrorHole(_) => ty    // error node — preserve TVar for diagnostics
     }
   },
-  TList(elem) => TList(chase_deep(elem)),
-  TTuple(elems) => TTuple(map_chase_ty(elems)),
+  TList(elem) => TList(chase_deep_at(elem, d + 1)),
+  TTuple(elems) => TTuple(map_chase_ty(elems, d + 1)),
   TFun(params, ret, eff) =>
-    TFun(chase_params(params), chase_deep(ret), eff),
-  TName(name, args) => TName(name, map_chase_ty(args)),
-  TRecord(fields) => TRecord(chase_fields(fields)),
-  TRecordOpen(fields, v) => mk_record_open(chase_fields(fields), v),
-  TRefined(base, pred) => TRefined(chase_deep(base), pred),
+    TFun(chase_params(params, d + 1), chase_deep_at(ret, d + 1), eff),
+  TName(name, args) => TName(name, map_chase_ty(args, d + 1)),
+  TRecord(fields) => TRecord(chase_fields(fields, d + 1)),
+  TRecordOpen(fields, v) => mk_record_open(chase_fields(fields, d + 1), v),
+  TRefined(base, pred) => TRefined(chase_deep_at(base, d + 1), pred),
   TCont(input, answer, disc, world) =>
-    TCont(chase_deep(input), chase_deep(answer), disc, world),   // world preserved unchased, mirroring TFun's eff at this site
-  TAlias(name, inner)  => TAlias(name, chase_deep(inner))
-}
+    TCont(chase_deep_at(input, d + 1), chase_deep_at(answer, d + 1), disc, world),   // world preserved unchased, mirroring TFun's eff at this site
+  TAlias(name, inner)  => TAlias(name, chase_deep_at(inner, d + 1))
+} }
 
-fn map_chase_ty(tys) = map(chase_deep, tys)
+fn map_chase_ty(tys, d) = map((t) => chase_deep_at(t, d), tys)
 
-fn chase_params(params) = map((p) => param_with_ty(p, chase_deep(param_ty(p))), params)
+fn chase_params(params, d) = map((p) => param_with_ty(p, chase_deep_at(param_ty(p), d)), params)
 
-fn chase_fields(fields) = map((fld) => {
+fn chase_fields(fields, d) = map((fld) => {
   let (name, ty) = fld
-  (name, chase_deep(ty))
+  (name, chase_deep_at(ty, d))
 }, fields)
 
 // H6: exhaustive Ty enumeration. Scalars have no free handles;

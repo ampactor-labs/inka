@@ -1580,15 +1580,18 @@ in this column is one of its classes.
   2026-07-18 (the seventh, the manifest arc's dividend): E_MissingVariable —
   wheel census 0 AND the user-path licence measured (a no-import stdlib
   program resolves via the DAG's prelude seed and runs; the stdin contract
-  is self-contained input, where a miss is a real break). AT WHEEL-ZERO BUT
-  NOT ARMED: E_OccursCheck — its refusal fixture found a live trap
-  (`fn selfapply(f) = f(f)` spins chase_deep to stack exhaustion BEFORE any
-  report; the occurs guards never see the cycle this shape builds —
-  `Hβ.infer.selfapply-cyclic-ty-spin`, fixture banked at
-  tests/frontier/mn-refuse-occurs-check.mn); the three occurs var-leaves now
-  root-chase (unify IS union-find), and the class arms when the spin's root
-  lands. The occurs phantom cascade itself stays DEAD (an env miss binds
-  NErrorHole via graph_bind_hole — one miss, one diagnostic). The work,
+  is self-contained input, where a miss is a real break). E_OccursCheck ARMED same
+  day (the eighth) — its refusal fixture FOUND the trap it now gates:
+  `fn selfapply(f) = f(f)` spun chase_deep/subst_ty to stack exhaustion
+  with zero reports, because the occurs leaf compared handles while the
+  cycle lived in BOUND structure (bind a := TFun([b], r) first, close
+  b := TVar(a) after). The leaf now recurses into the root's binding —
+  raw handle, then root, then binding — so the write guard is total, the
+  graph stays acyclic by invariant, and the shape reports + refuses
+  (`Hβ.infer.selfapply-cyclic-ty-spin` CLOSED; chase_deep keeps a
+  depth tripwire as the belt). The occurs phantom cascade itself stays
+  DEAD (an env miss binds NErrorHole via graph_bind_hole — one miss,
+  one diagnostic). The work,
   by class: the census is ZERO (2026-07-18 end-of-day; from 2,266) — every
   class's wheel-side arming precondition is MET. The user-path condition
   (the panel's licence correction) still gates name-dependent classes

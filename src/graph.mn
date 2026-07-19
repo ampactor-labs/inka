@@ -591,23 +591,50 @@ fn occurs_in(handle, ref ty) with !Mutate = {
     TFloat           => false,
     TString          => false,
     TUnit            => false,
-    // The leaf compares ROOTS, not raw handles (unify IS union-find): the
-    // indirect cycle a ~ (b -> r) with b's root already a passed a raw
-    // `id == handle`, the cyclic graph bound, and chase_deep spun to stack
-    // exhaustion at generalize — `fn selfapply(f) = f(f)` TRAPPED the
-    // compiler instead of reporting E_OccursCheck (the refusal fixture's
-    // first run found it). `handle` is already a root at every caller
-    // (unify chases before checking); the leaf chases its side to match.
-    TVar(id)         => id == handle || graph_chase_handle(id) == handle,
+    // The leaf answers "does handle occur in the type GRAPH reachable from
+    // here" — three tiers, each a hole the selfapply fixture found trapping
+    // the compiler (f(f) spun chase_deep/subst_ty to stack exhaustion with
+    // ZERO occurs reports): (1) the raw handle; (2) the ROOT (unify IS
+    // union-find — the indirect cycle a ~ (b -> r) with b's root already a
+    // passed a raw compare); (3) the root's BINDING, recursed — bind
+    // a := TFun([b], r) first (b free, passes), then close b := TVar(a):
+    // no handle comparison sees that cycle, only descending a's bound
+    // structure does. Termination is the guarded-write invariant itself:
+    // every bind runs this check, so the graph stays acyclic and the
+    // recursion always bottoms out (chase_deep's depth tripwire is the
+    // belt behind this suspender).
+    TVar(id)         =>
+      if id == handle { true }
+      else {
+        let root = graph_chase_handle(id)
+        if root == handle { true }
+        else {
+          match graph_chase(root) {
+            GNode(NBound(inner), _) => occurs_in(handle, inner),
+            GNode(NRecordRowBound(fields), _) => occurs_in_fields(handle, fields),
+            _ => false
+          }
+        }
+      },
     TList(elem)      => occurs_in(handle, elem),
     TTuple(elems)    => occurs_in_list(handle, elems),
     TFun(params, ret, eff) =>
       occurs_in_params(handle, params) || occurs_in(handle, ret) || occurs_in_row(handle, eff),
     TName(_, args)   => occurs_in_list(handle, args),
     TRecord(fields)  => occurs_in_fields(handle, fields),
-    TRecordOpen(fields, v) =>
-      v == handle || graph_chase_handle(v) == handle
-        || occurs_in_fields(handle, fields),
+    TRecordOpen(fields, v) => {
+      if v == handle || occurs_in_fields(handle, fields) { true }
+      else {
+        let vroot = graph_chase_handle(v)
+        if vroot == handle { true }
+        else {
+          match graph_chase(vroot) {
+            GNode(NRecordRowBound(rest), _) => occurs_in_fields(handle, rest),
+            _ => false
+          }
+        }
+      }
+    },
     TRefined(base, _) => occurs_in(handle, base),
     TCont(input, answer, _, world) =>
       occurs_in(handle, input) || occurs_in(handle, answer) || occurs_in_row(handle, world),

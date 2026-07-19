@@ -450,8 +450,14 @@ type EConn
 type NodeKind
   = NBound(Ty)          // resolved — chase terminates; delivers Ty
   | NFree(Int)          // unresolved — epoch at allocation time
-  | NRowBound(EffRow)   // resolved effect row
+  | NRowBound(EffRow)   // resolved effect row — the payload is EffRow, ONLY
   | NRowFree(Int)       // unresolved effect row variable
+  | NRecordRowBound([(String, Ty)])  // record-row residual — a `...R` rest's
+                        // remaining (name, ty) fields. Its own kind: binding
+                        // the residual under NRowBound made the row slot an
+                        // untagged EffRow-or-Ty union, and every row walk's
+                        // catch-all silently crossed sorts (the census's
+                        // EffRow-vs-Ty at occurs_in_row's delegation).
   | NErrorHole(Reason)  // inference observed failure (Hazel marked hole)
   // IFC (§4⑥): no separate NFlowBound/NFlowFree dimension needed. The existing
   // graph already encodes information-flow constraints through two mechanisms:
@@ -1261,6 +1267,7 @@ effect GraphWrite {
   graph_bind(Int, Ty, Reason) -> ()
   graph_bind_hole(Int, Reason) -> ()   // mark a node an OBSERVED FAILURE (NErrorHole) — the productive-under-error poison. An env miss binds this, never TVar(self): the self-var tripped graph_bind's own occurs check (a spurious 0:0 E_OccursCheck per missing name) and read downstream as a normal free var (the ownership move-default cascade). A hole is the fact itself: unify no-ops on it, generalize preserves the handle, consumers stay silent.
   graph_bind_row(Int, EffRow, Reason) -> ()
+  graph_bind_record_row(Int, [(String, Ty)], Reason) -> ()
   graph_fork(String) -> ()
   graph_rollback(Int) -> ()
   graph_index_span(ValidSpan, Int) -> ()
@@ -1929,6 +1936,7 @@ fn show_handle(h) with GraphRead + Memory + Alloc + !Mutate = {
   match node {
     GNode(NBound(ty), _)      => show_type(ty),
     GNode(NRowBound(row), _)  => show_effrow(row),
+    GNode(NRecordRowBound(fields), _) => show_type(TRecord(fields)),
     GNode(NFree(epoch), _)    => "t{int_to_str(h)}@e{int_to_str(epoch)}",
     GNode(NRowFree(epoch), _) => "r{int_to_str(h)}@e{int_to_str(epoch)}",
     GNode(NErrorHole(reason), _) => "!hole[{show_reason(reason)}]"
@@ -2048,12 +2056,20 @@ fn place_positional(args, cur, slot, slots, n) with GraphRead + Memory = {
   }
 }
 
-// The first slot at or after `from` whose value is still the 0 sentinel; n
-// when none remain.
+// A slot word's presence — the Option-of-handle niche read at the repr
+// altitude (0 = absent, a node's handle-word = present; §5.U: a handle IS a
+// word). Substrate-table-typed `a -> Bool` so the test never pins the slot's
+// element type onto Int (the census's Node-vs-Int at collect_slot_nodes);
+// the raw body compares the word. The full niche repr — construction and
+// match projection — is Hβ.emit.option-niche-repr; this is its read half,
+// the one piece the arg-slot machinery needs.
+fn slot_present(w) with Pure = w != 0
+
+// The first slot at or after `from` still absent; n when none remain.
 fn next_free_slot(slots, from, n) with Memory =
   if from >= n { n }
-  else if list_index(slots, from) == 0 { from }
-  else { next_free_slot(slots, from + 1, n) }
+  else if slot_present(list_index(slots, from)) { next_free_slot(slots, from + 1, n) }
+  else { from }
 
 // The param index whose name is `label`, or -1 when no param bears it.
 fn param_index(params, label, i) with Memory =
@@ -2071,7 +2087,7 @@ fn collect_slot_nodes(params, slots, i, n, out, count) with Memory + Alloc = {
   if i >= n { slice(out, 0, count) }
   else {
     let placed = list_index(slots, i)
-    if placed != 0 {
+    if slot_present(placed) {
       collect_slot_nodes(params, slots, i + 1, n, list_set(out, count, placed), count + 1)
     } else {
       match param_default(list_index(params, i)) {

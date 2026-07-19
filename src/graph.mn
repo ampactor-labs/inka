@@ -337,6 +337,30 @@ handler graph_handler
     }
   },
 
+  // The record-row residual bind — a `...R` rest's remaining fields, under
+  // its OWN node kind (NRecordRowBound). Binding residuals under NRowBound
+  // made the row slot an untagged EffRow-or-Ty union every row walk's
+  // catch-all silently crossed. The occurs guard is the TYPE-side check over
+  // each field ty (a residual's self-reference is a real infinite type).
+  graph_bind_record_row(handle, fields, reason) => {
+    if occurs_in_record_fields(handle, fields) {
+      resume()
+    } else {
+      let old_node = graph_node_at(nodes, handle)
+      let new_nodes = graph_set_node(nodes, handle, GNode(NRecordRowBound(fields), reason))
+      let new_trail = trail_append(trail, trail_len, MSetRow(handle, old_node))
+      let new_epoch = epoch + 1
+      if len(checkpoint_stack) == 0 {
+        graph_mutated(new_epoch, MSetRow(handle, old_node))
+      }
+      resume()
+        with nodes = new_nodes,
+             epoch = new_epoch,
+             trail = new_trail,
+             trail_len = trail_len + 1
+    }
+  },
+
   graph_fork(module_name) => {
     // Enter the named module's overlay. If it already exists (re-entry
     // during incremental recompile), point current_overlay_idx at it;
@@ -638,13 +662,19 @@ fn occurs_in_row(handle, ref eff) with !Mutate = {
     EfNeg(inner)     => occurs_in_row(handle, inner),
     EfSub(a, b)      => occurs_in_row(handle, a) || occurs_in_row(handle, b),
     EfInter(a, b)    => occurs_in_row(handle, a) || occurs_in_row(handle, b),
-    // graph_bind_row binds effect rows AND record-row residuals (a TRecord Ty
-    // from mk_record_row_residual) under one NRowBound, so `eff` may be a Ty
-    // here. A residual's self-reference is a TYPE occurs — delegate to occurs_in
-    // (occurs_in and occurs_in_row are the mutually-recursive halves of "does
-    // handle occur in this graph structure"; occurs_in's TFun/TCont arms call
-    // back here). NOT a fabricated fallback: the real occurs-check for the Ty case.
-    _                => occurs_in(handle, eff)
+    // Total over the six row forms — the identity carries no handle. The old
+    // catch-all delegated to occurs_in because record-row residuals (a raw Ty)
+    // shared this slot; they live under NRecordRowBound now, with their own
+    // type-side occurs (occurs_in_record_fields).
+    EfPure           => false
+  }
+}
+
+fn occurs_in_record_fields(handle, ref fields) with !Mutate = {
+  if len(fields) == 0 { false }
+  else {
+    let (_, ty) = last(fields)
+    occurs_in(handle, ty) || occurs_in_record_fields(handle, drop_last(fields))
   }
 }
 

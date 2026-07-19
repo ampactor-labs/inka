@@ -1207,6 +1207,10 @@ fn is_seq_op(cname: String) with Pure =
   // [len][bytes] record by address arithmetic (a word), and the table
   // projects the String its consumers read — the §4① seam at the text face.
   || cname == "int_to_str"
+  // The Option-of-handle niche's READ (types.mn slot_present): typed
+  // `a -> Bool` here so a presence test never pins its operand's element
+  // type; the raw body compares the word.
+  || cname == "slot_present"
 
 // seq_force — bind the i-th argument's type to `ty` (a no-op past the end).
 // `graph_bind` on a VarRef handle propagates to the bound variable (the same
@@ -1259,6 +1263,7 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
     "last"  => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, elem, Located(span, Inferred("head element"))) },
     "list_index" => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); graph_bind(handle, elem, Located(span, Inferred("element at index"))) },
     "int_to_str" => { seq_force(ah, 0, TInt, span); graph_bind(handle, TString, Located(span, Inferred("decimal render"))) },
+    "slot_present" => graph_bind(handle, TName("Bool", []), Located(span, Inferred("slot presence"))),
     // The length read.
     "len"        => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, TInt, Located(span, Inferred("sequence length"))) },
     // Builders/transforms that return a sequence of the same element.
@@ -2399,8 +2404,7 @@ fn unify_record_open_against_closed(closed_fields, open_fields, open_var, span: 
   // matched fields' types; bind the row variable to the remainder.
   unify_record_open_subset(open_fields, closed_fields, span, reason)
   let residual = record_fields_diff(closed_fields, open_fields)
-  graph_bind_row(open_var, mk_record_row_residual(residual),
-    Located(span, reason))
+  graph_bind_record_row(open_var, residual, Located(span, reason))
 }
 
 fn unify_record_open_subset(needed, available, span: ValidSpan, reason) = {
@@ -2431,10 +2435,8 @@ fn unify_two_open_records(fa, va, fb, vb, span: ValidSpan, reason) = {
     if len(extra_a) == 0 && len(extra_b) == 0 { () }
     else { type_mismatch(TRecordOpen(fa, va), TRecordOpen(fb, vb), span, reason) }
   } else {
-    graph_bind_row(va, mk_record_row_residual(extra_b),
-      Located(span, reason))
-    graph_bind_row(vb, mk_record_row_residual(extra_a),
-      Located(span, reason))
+    graph_bind_record_row(va, extra_b, Located(span, reason))
+    graph_bind_record_row(vb, extra_a, Located(span, reason))
   }
 }
 
@@ -2507,11 +2509,6 @@ fn find_record_field_pos_loop(fields, name: String, i, n) = {
     if field_name_eq(existing, name) { i }
     else { find_record_field_pos_loop(fields, name, i + 1, n) }
   }
-}
-
-fn mk_record_row_residual(fields) = {
-  if len(fields) == 0 { TRecord([]) }
-  else { TRecord(fields) }
 }
 
 // Infer each field's value expression; result handles are used by
@@ -3285,6 +3282,7 @@ fn generalize(handle) = {
     },
     NFree(_)      => Forall([], TVar(handle)),    // unresolved — monotype stays
     NRowBound(_)  => Forall([], TVar(handle)),    // row handle — not a Ty; monotype
+    NRecordRowBound(_) => Forall([], TVar(handle)),   // record-row residual — row sort; monotype
     NRowFree(_)   => Forall([], TVar(handle)),    // unresolved row — monotype
     NErrorHole(_) => Forall([], TVar(handle))     // error — preserve handle for diagnostics
   }
@@ -3307,6 +3305,7 @@ fn chase_deep(ty) = match ty {
       NBound(inner) => chase_deep(inner),
       NFree(_)      => ty,   // unresolved — stays as TVar
       NRowBound(_)  => ty,   // row handle used as Ty — stays
+      NRecordRowBound(_) => ty,   // record-row residual — row sort; stays
       NRowFree(_)   => ty,   // unresolved row handle — stays
       NErrorHole(_) => ty    // error node — preserve TVar for diagnostics
     }
@@ -3456,6 +3455,7 @@ fn build_inst_mapping(qs) = map((old) => {
 fn is_row_handle(h) = match graph_chase(h) {
   GNode(NRowFree(_), _)  => true,
   GNode(NRowBound(_), _) => true,
+  GNode(NRecordRowBound(_), _) => true,
   _                      => false
 }
 

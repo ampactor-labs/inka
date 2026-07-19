@@ -632,6 +632,7 @@ handler lookup_ty_graph {
       // consumer owns the refusal, never the read.
       NFree(_)         => resume(TVar(h)),
       NRowBound(_)     => resume(TUnit),
+      NRecordRowBound(_) => resume(TUnit),
       NRowFree(_)      => resume(TUnit)
     }
   }

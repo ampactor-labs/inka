@@ -380,6 +380,7 @@ fn verify_after_apply(handle) = {
     NErrorHole(_) => false,
     NFree(_)      => false,
     NRowBound(_)  => false,
+    NRecordRowBound(_) => false,
     NRowFree(_)   => false
   }
 }

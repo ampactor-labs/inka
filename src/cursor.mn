@@ -574,6 +574,7 @@ fn ty_of_kind(handle, kind) with Pure = match kind {
   NBound(ty)    => ty,
   NFree(_)      => TVar(handle),
   NRowBound(_)  => TVar(handle),
+  NRecordRowBound(_) => TVar(handle),
   NRowFree(_)   => TVar(handle),
   NErrorHole(_) => TVar(handle)
 }

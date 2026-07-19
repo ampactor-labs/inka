@@ -98,6 +98,7 @@ handler query_default {
             NBound(ty)    => resume(QRType(chase_type_deep(ty), reason)),
             NFree(_)      => resume(QRType(TVar(handle), reason)),
             NRowBound(_)  => resume(QRType(TVar(handle), reason)),
+            NRecordRowBound(_) => resume(QRType(TVar(handle), reason)),
             NRowFree(_)   => resume(QRType(TVar(handle), reason)),
             NErrorHole(_) => resume(QRType(TVar(handle), reason))
           }

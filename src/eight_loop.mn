@@ -166,6 +166,7 @@ handler interrogate_default with !Mutate {
           ((_, k, r)) => match k {                                                    // 1. Graph
             NBound(_)     => VerdictClears(r),
             NRowBound(_)  => VerdictClears(r),
+            NRecordRowBound(_) => VerdictClears(r),
             NFree(_)      => VerdictInvites(graph_invite_for(0, r)),
             NRowFree(_)   => VerdictInvites(graph_invite_for(0, r)),
             NErrorHole(_) => VerdictInvites(graph_invite_for(0, r))

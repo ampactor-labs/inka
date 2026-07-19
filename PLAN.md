@@ -1024,6 +1024,19 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-07-18 · THE ADDRESS IS THE SURFACE (census 213 → 185; frontier 71/0): `mentl voice.mn:9` answers `Query: echo(mix, x) : Float` — README §9's smallest transport, real. VAt at the argv boundary; driver_entry_with_ranges returns the module-range map from the concatenation fold that always computed it; the three-case line rule resolves over the span index every node writes at birth; cursor_at_handle (new CursorRead op; the eight-arm fan extracted to one cursor_view_of) projects without re-resolving; the facet-silent render reads source slices, env schemes, literal bodies, and the Why walk mapped to file:line — every lede a live read. propose_at is the ABSENCE facet structurally (authored_hole, the patch gate's own read) — which also fenced Hβ.emit.float-evidence-ft (an f64-arg candidate ctor through an all-i32 $ft, trapping the first float-position enumeration ever taken). The session's exact-reason-span resolver SURVIVES as the documented live-generation crutch (measured: mint-span find_tightest resolved a stale generation, 13 edit fixtures red at once; dissolves with session-weave-epoch-scope). Remaining README-Why substrate named: why-flow-naming (FnParam-at-call), refinement-provenance · pin 6e7c10b2
 - 2026-07-18 · THE EFFECT-TRUTH SWEEP, ROUNDS 1+2 (census 301 → 213 → 185 across the arc): the census-spec fleet (29 per-file readers) produced exact specs for 192 sites; 148 + ~55 cascade widens applied — declared rows to the bodies' truth, aspirational Pure dropped for the honest Memory/Alloc, missing match arms written with real payload arities, LStateSlotStore's fourth field bound. The re-pinned sharper compiler re-judged its own source each round (the ++-carries-row precedent at scale) · pins 01ccaa3a, intermediate
 - 2026-07-18 · TWO CHECKER ROOTS (census 343 → 301): E_IfMissingElse EXTINCT — the unit test matched TName("Unit"), a spelling the inferencer never produces (real unit is TUnit; probe: then_ty=() at all 25 sites) + 6 unresolved op-results the unify below decides. E_FeedbackNoContext EXTINCT — the check read the COMPILER'S runtime handler stack while inferring the COMPILED program's structure (a category error firing on every real `<~`, SYNTAX's canonical lowpass included); the compile-time class fact is the named peer Hβ.effects.iterate-class-declaration · pin 57a2113e
+- 2026-07-19 · THE ULTRACODE BATCH — COLUMN 2 CLOSES (recon fleet + four
+  isolated builders, transplanted by hand, marched serially): R3 the
+  ground-decidable arithmetic fragment (PWithSelf binder, litval_arith,
+  proven-false REFUSES; frontier fixtures RED-first) · the oracle-fuzz
+  loop (four real bugs run one — the proven-fill divide-by-zero is §1
+  executable; shrink 842B→131B; the CHANGED detector caught a banked
+  trap graduating) · the LSP transport runs the frontend (didOpen →
+  driver_check; the serve chain carries the analysis handlers; the
+  serve wire's pinned blocker = the FOURTH float-evidence hit) · the
+  CFC pipeline's first pass (cos/sqrt/atan2; single-bin windowed DFT;
+  MVL comodulogram finds the planted (6,40), peak/median 5.93 matching
+  the numpy oracle; read_recording = the real-file transport). Census
+  0 and m2 == m3 at every pin; frontier 77→84→86/0 across the merges
 - 2026-07-18 · ▶▶▶ CENSUS ZERO (73 → 0 in one day; 2,266 three days prior):
   the medium's verdict on its own source is CLEAN, and the ratchet holds
   zero. After the five-pin tail (below), the last three roots: EVERY
@@ -1696,12 +1709,23 @@ in this column is one of its classes.
   old boot, runs to 42 on this one).
 - backtrack's `() vs Option(())` mismatch (search.mn).
 - `E_ResumeWorldMismatchWorld` wire-or-delete (band B).
-- **R3**: the decidable arithmetic Verify fragment (beyond constants — the
-  Liquid-style fragment; undecidable residue stays honest V_Pending).
+- **R3 — LANDED 2026-07-19** (the ultracode batch): the GROUND-decidable
+  arithmetic fragment — node_const_at folds +,-,*,/,% over ground Int/Float
+  operands, nested `self` resolves through the PWithSelf binder, zero nodes
+  minted, div/mod-by-zero refuses to fold. Proven-false constructions REFUSE
+  under the armed class; SYNTAX's own Even discharges. The residue is honest:
+  free-variable linear arithmetic and uninterpreted fns stay V_Pending — the
+  SMT tier's named ground (Hβ.verify.smt-handler-swap).
 - `Hβ.diag.duplicate-type-name` decl-site refusal (band L).
-- **The oracle-fuzz loop**: the medium's own proposer generates programs;
-  compile each; any trap shrinks via wasm-tools; every survivor becomes a
-  crucible.
+- **The oracle-fuzz loop — LANDED 2026-07-19** (tools/oracle-fuzz.sh + the
+  tests/fuzz corpus): the medium proposes through the edit transport, each
+  variant compiles/assembles/runs/classifies, traps shrink via wasm-tools
+  (842B -> 131B first run), crucibles bank with reproduce-READMEs. Run one
+  found four real bugs (two float-evidence hits, the f64-through-_start
+  emit class Hβ.emit.f64-main-start-boundary, and the proven-fill
+  divide-by-zero — proof filters admissible VALUES, not the program around
+  them, §1 made executable). Its CHANGED detector caught a banked trap
+  graduating. Whole-program SHAPE generation stays the named v1 limit.
 
 ### Column 3 — the performance floor (§5.O completion)
 

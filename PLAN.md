@@ -1584,8 +1584,8 @@ in this column is one of its classes.
   day (the eighth) — its refusal fixture FOUND the trap it now gates:
   `fn selfapply(f) = f(f)` spun chase_deep/subst_ty to stack exhaustion
   with zero reports, because the occurs leaf compared handles while the
-  cycle lived in BOUND structure (bind a := TFun([b], r) first, close
-  b := TVar(a) after). The leaf now recurses into the root's binding —
+  cycle lived in BOUND structure (graph_bind(a, TFun([b], r)) first;
+  graph_bind(b, TVar(a)) closes it). The leaf now recurses into the root's binding —
   raw handle, then root, then binding — so the write guard is total, the
   graph stays acyclic by invariant, and the shape reports + refuses
   (`Hβ.infer.selfapply-cyclic-ty-spin` CLOSED; chase_deep keeps a

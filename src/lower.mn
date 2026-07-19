@@ -370,7 +370,7 @@ type LowExpr
   // propagates. handle = the FRAME's tail node (the dummy's width source —
   // the same width law LYield's dummy follows); the LowExpr = the frame_k
   // record (an LMakeContinuation, the remainder-with-hole reified). Emit:
-  // push frame_k, `call $__k_extend` ($yield_k := compose($yield_k,
+  // push frame_k, `call $__k_extend` ($yield_k becomes compose($yield_k,
   // frame_k) — M1.2's pair), then the width-honest dummy WITH $yield_flag
   // AND $yield_op untouched — pure dataflow, no control transfer: the dummy
   // flows to whatever consumes the frame value (the fn return, or the

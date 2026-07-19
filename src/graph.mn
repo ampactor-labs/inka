@@ -597,7 +597,8 @@ fn occurs_in(handle, ref ty) with !Mutate = {
     // ZERO occurs reports): (1) the raw handle; (2) the ROOT (unify IS
     // union-find — the indirect cycle a ~ (b -> r) with b's root already a
     // passed a raw compare); (3) the root's BINDING, recursed — bind
-    // a := TFun([b], r) first (b free, passes), then close b := TVar(a):
+    // graph_bind(a, TFun([b], r)) first (b free, passes), then close the
+    // cycle with graph_bind(b, TVar(a)):
     // no handle comparison sees that cycle, only descending a's bound
     // structure does. Termination is the guarded-write invariant itself:
     // every bind runs this check, so the graph stays acyclic and the

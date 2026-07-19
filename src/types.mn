@@ -1628,7 +1628,8 @@ fn diag_refuses(d) with Pure = match d {
   // a genuinely infinite type (selfapply f = f(f)) used to TRAP the compiler
   // (chase_deep / subst_ty stack exhaustion, zero reports) because the occurs
   // leaf compared handles where the cycle lived in BOUND STRUCTURE (bind
-  // a := TFun([b], r) first, close b := TVar(a) after — no comparison sees
+  // graph_bind(a, TFun([b], r)) first, then graph_bind(b, TVar(a)) closes
+  // the cycle — no comparison sees
   // it). The leaf now recurses into the root's binding, the write guard is
   // total, and the fixture reports E_OccursCheck and refuses. Wheel census 0
   // throughout; the phantom cascade stayed dead (one miss, one diagnostic).

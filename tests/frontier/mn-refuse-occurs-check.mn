@@ -2,8 +2,8 @@
 // This fixture's first run found the spin it now gates: a genuinely
 // infinite type TRAPPED the compiler (chase_deep / subst_ty stack
 // exhaustion, zero reports) because the occurs leaf compared handles
-// while the cycle lived in BOUND structure — bind a := TFun([b], r)
-// first, close b := TVar(a) after. The leaf recurses into the root's
+// while the cycle lived in BOUND structure — graph_bind(a, TFun([b], r))
+// first, then graph_bind(b, TVar(a)) closes it. The leaf recurses into the root's
 // binding now; the shape reports E_OccursCheck at the bind and an
 // executable carrying it refuses: nonzero exit, zero WAT bytes.
 // A genuinely infinite type: `f` applied to itself forces T = T -> R at the

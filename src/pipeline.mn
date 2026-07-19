@@ -428,7 +428,7 @@ fn frontend(source) = {
 // 2,500+ entries, at EVERY name resolution, with top-level names
 // (pre-registered first) always at full scan depth: the env was the
 // infer phase's dominant allocator. Now: extend = one write + count
-// bump (amortized-doubling growth); scope-exit = count := mark, O(1),
+// bump (amortized-doubling growth); scope-exit resets count to mark, O(1),
 // no truncation walk; lookup = a backward index-walk over the flat
 // buffer, ZERO allocation. Shadowing is position, exactly as before.
 // ── O(1) env resolution — the str_hash-bucket index (§5.O layer 2) ──────────

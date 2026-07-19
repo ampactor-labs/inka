@@ -2288,6 +2288,11 @@ fn parse_type_atom(ref tokens, pos) = match kind_at(tokens, pos) {
       (typed, p_after)
     } else { (base, base_pos) }
   },
+  // `-> !` — the never-returns marker (SYNTAX §«Never-returning ops»). The
+  // syntactic name "!" resolves at quantify_ctor_ty to a FRESH quantified var
+  // per occurrence: bottom unifies with every consumer, exactly the
+  // bottom-producing sibling `fail(msg) -> a` spelled as intent.
+  TBang => (TName("!", []), pos + 1),
   TLParen => {
     let p = skip_ws(tokens, pos + 1)
     if at(tokens, p, TRParen) { (TUnit, p + 1) }

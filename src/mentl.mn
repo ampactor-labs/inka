@@ -104,7 +104,7 @@ effect Teach {
 
 effect Synth {
   synth_propose(Ty, EffRow, Context) -> Proposals   // proven survivors with their Whys + row-rejected vocabulary with theirs
-  verify_candidate(Node, Ty) -> Bool
+  verify_candidate(Candidate, Ty) -> Bool
   enumerate_inhabitants(Ty, EffRow, Context) -> [Node]
 }
 

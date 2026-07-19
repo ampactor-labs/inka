@@ -395,7 +395,7 @@ effect EmitTopFnNamesOp {
 
 effect EmitStringLiteralOp {
   visit_string(String) -> ()
-  drain_string_literals() -> [String]
+  drain_string_literals() -> [(String, Int)]
 }
 
 effect EmitStateSlotOp {
@@ -6225,7 +6225,7 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
     // m3 mistyped `len(argv)` as List and emitted list_compare — the m4
     // blocker. The W7 state-insert (scrut, const → __state, scrut, const),
     // then str_eq → Bool (a drop-in for the i32.eq the predicate expects).
-    LVString(_) => {
+    LString(_) => {
       emit_scrut_at_repr(path, path_len, RI32)
       emit_low_value_const(lv)
       emit_fold_state_insert()

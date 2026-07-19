@@ -416,7 +416,7 @@ type LowExpr
   //         the arms so the arm fn's LowFn fence lands its LEvPerform reads.
   // Per protocol_handler_is_state_is_closure_is_evidence.md +
   // Hβ.lower.multi-effect-ev-index-map (Part 2) + Hβ.emit.handler-record-ev-capture.
-  | LHandleWith(Int, LowExpr, LowExpr, String, [LowExpr], [(String, [String])], [LowExpr])
+  | LHandleWith(Int, LowExpr, LowExpr, String, [LowExpr], [{arms: [String], ename: String}], [LowExpr])
   | LFeedback(Int, LowExpr, LowExpr)           // <~ desugaring (iterative ctx required)
   // (LF.B) the prior-iteration output of feedback handle h, read LIVE from the
   // $__fb_prev_<h> local the LFeedback emit declares + loads. A `<~` lambda

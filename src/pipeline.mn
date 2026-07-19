@@ -348,7 +348,7 @@ fn cursor_session_batch(source) = {
         (s) => audit(s),
         (s) => query(s, "type main")
       )
-  CursorSessionResult(diagnostics, gradients, audit_report, query_default_view)
+  CursorSessionResult({diagnostics, gradients, audit_report, query_default_view})
 }
 
 type CursorSessionResult

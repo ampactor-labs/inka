@@ -107,7 +107,7 @@ BOOT_RUNTIME_SHADOW=""
 # Pure fictions dropped for the Memory/Alloc the list ops perform, cache_map's
 # Pure declarations, persist's Persist op, threading's Memory). Rows only;
 # the diagnostic multiset SHRANK (the sweep's own purpose).
-EXPECTED_RUNTIME_SHADOW_SHA256="6f7a96079adf300217fdf8e39e0dbd10150a1208ff32c83f3c0f2fb221e6ebff"
+EXPECTED_RUNTIME_SHADOW_SHA256="065e34e27fb4925c1939d5bbbc688687848ca1a8a72b248dde4bd505c890a166"
 
 pass() {
   echo "  PASS $*"

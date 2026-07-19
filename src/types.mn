@@ -1071,7 +1071,7 @@ type Stmt
                            // effect name, ops (each is (op_name, param_tys, ret_ty);
                            // ResumeDiscipline is inferred at handler-decl time
                            // from each arm body, not declared on the effect op)
-  | HandlerDeclStmt(String, String, List, List({init: Node, name: String}), List)
+  | HandlerDeclStmt(String, String, [String], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])
                            // handler name, effect name, config-params, state-fields, arms
                            // config: [String] — closure-captured at install site
                            // state:  List<{name: String, init: Node}> — per-arm scope; updates via `resume(...) with f = e`

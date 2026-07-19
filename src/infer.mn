@@ -1203,6 +1203,10 @@ fn is_seq_op(cname: String) with Pure =
   cname == "len"      || cname == "list_index"  || cname == "last"
   || cname == "drop_last"  || cname == "list_set"    || cname == "list_concat"
   || cname == "make_list"  || cname == "slice"       || cname == "push"
+  // The String-builder half of the same boundary: int_to_str assembles a
+  // [len][bytes] record by address arithmetic (a word), and the table
+  // projects the String its consumers read — the §4① seam at the text face.
+  || cname == "int_to_str"
 
 // seq_force — bind the i-th argument's type to `ty` (a no-op past the end).
 // `graph_bind` on a VarRef handle propagates to the bound variable (the same
@@ -1214,9 +1218,29 @@ fn seq_force(ah, i, ty, span: ValidSpan) =
     // so the accumulator var never learns `[a]`); unify unions the arg's root
     // with the expected type, reading BOTH truths and propagating structurally
     // into a lambda's params / an empty literal's element.
-    let expected = mint(Inferred("sequence operand"))
-    graph_bind(expected, ty, Located(span, Inferred("sequence operand")))
-    unify(list_index(ah, i), expected, span, Inferred("sequence operand"))
+    //
+    // §4① seam: a String IS a sequence ([Byte] + the text view), so a
+    // TList-shaped force on an operand the graph already proves TString is
+    // SATISFIED, not a mismatch — `len(name)` on a String is canonical
+    // (SYNTAX's own `len(self) > 0` refinements). Ty still carries TString
+    // as a scalar, so the ontology's one-sequence-kind claim is discharged
+    // here, at the table's single force point, never by a wide
+    // TString~TList unification that would admit any [Int] as text.
+    let already_string =
+      match ty {
+        TList(_) =>
+          match graph_chase(graph_chase_handle(list_index(ah, i))) {
+            GNode(NBound(TString), _) => true,
+            _ => false
+          },
+        _ => false
+      }
+    if already_string { () }
+    else {
+      let expected = mint(Inferred("sequence operand"))
+      graph_bind(expected, ty, Located(span, Inferred("sequence operand")))
+      unify(list_index(ah, i), expected, span, Inferred("sequence operand"))
+    }
   } else { () }
 
 
@@ -1234,6 +1258,7 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
     // Reads that project the element.
     "last"  => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, elem, Located(span, Inferred("head element"))) },
     "list_index" => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); graph_bind(handle, elem, Located(span, Inferred("element at index"))) },
+    "int_to_str" => { seq_force(ah, 0, TInt, span); graph_bind(handle, TString, Located(span, Inferred("decimal render"))) },
     // The length read.
     "len"        => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, TInt, Located(span, Inferred("sequence length"))) },
     // Builders/transforms that return a sequence of the same element.
@@ -3690,7 +3715,13 @@ fn quantify_ty_list(tys, qmap) = {
 // keep nominal identity (args recurse); compound forms recurse.
 fn quantify_ctor_ty(ty, qmap) = match ty {
   TName(name, args) =>
-    if len(args) == 0 && first_char_code(name) >= 97 && first_char_code(name) <= 122 {
+    // `!` — the never-returns bottom (parse_type_atom's TBang). Each
+    // occurrence mints its OWN fresh var, never a shared qmap entry: bottom
+    // is per-site, so `abort() -> !` instantiates to a type every consumer
+    // unifies with, at every call independently.
+    if len(args) == 0 && type_name_eq(name, "!") {
+      (TVar(graph_fresh_ty(Inferred("bottom: never returns"))), qmap)
+    } else if len(args) == 0 && first_char_code(name) >= 97 && first_char_code(name) <= 122 {
       match qmap_find(qmap, name) {
         Some(h) => (TVar(h), qmap),
         None => {

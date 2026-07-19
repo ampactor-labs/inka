@@ -935,12 +935,15 @@ law executable), the march's fixed point, the phantom ratchet (287) — through
 the pinned boot (chain: boot/PROVENANCE.md, newest pin = the census-6
 diagnostic-address landing). **`mentl voice.mn:9` ANSWERS** (the
 cursor-address transport, tests/frontier/voice-demo the executable gate).
-The census is **6** (from 2,266): E_TypeMismatch 2 (graph:647's untagged
-EffRow/Ty residual under NRowBound; types:2079's word-sentinel arg-slot
-buffer — the niche-repr Option instance) and E_UnresolvedType 4 (span-
-located now; ONE root — a generic fn's `&&` short-circuit whose boundary-
-weave thunk row never resolves, `Hβ.lower.boundary-weave-generic-thunk-row`).
-NINE classes reached
+**The census is ZERO** (2026-07-18 end-of-day; 2,266 three days prior) —
+the medium compiles its own source with NO error diagnostics, and the
+ratchet holds it there: a rising census is a refusal to merge. The last
+three roots fell as: the seq-op fast path staging its continuation
+boundary like every application (E_UnresolvedType extinct); the
+record-row residual under its OWN node kind (NRecordRowBound — NRowBound
+is EffRow-only, occurs_in_row total, no cross-sort catch-all); and
+slot_present, the Option-of-handle niche's READ half (the arg-slot
+presence test typed `a -> Bool` at the substrate table). NINE classes reached
 zero on 2026-07-18 alone: IfMissingElse, FeedbackNoContext,
 EffectMismatch, PurityViolated, PatternInexhaustive, ConstructorArity,
 ResumeOutsideArm, MissingVariable, OccursCheck — the forward-ref
@@ -1012,6 +1015,18 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-07-18 · THE ADDRESS IS THE SURFACE (census 213 → 185; frontier 71/0): `mentl voice.mn:9` answers `Query: echo(mix, x) : Float` — README §9's smallest transport, real. VAt at the argv boundary; driver_entry_with_ranges returns the module-range map from the concatenation fold that always computed it; the three-case line rule resolves over the span index every node writes at birth; cursor_at_handle (new CursorRead op; the eight-arm fan extracted to one cursor_view_of) projects without re-resolving; the facet-silent render reads source slices, env schemes, literal bodies, and the Why walk mapped to file:line — every lede a live read. propose_at is the ABSENCE facet structurally (authored_hole, the patch gate's own read) — which also fenced Hβ.emit.float-evidence-ft (an f64-arg candidate ctor through an all-i32 $ft, trapping the first float-position enumeration ever taken). The session's exact-reason-span resolver SURVIVES as the documented live-generation crutch (measured: mint-span find_tightest resolved a stale generation, 13 edit fixtures red at once; dissolves with session-weave-epoch-scope). Remaining README-Why substrate named: why-flow-naming (FnParam-at-call), refinement-provenance · pin 6e7c10b2
 - 2026-07-18 · THE EFFECT-TRUTH SWEEP, ROUNDS 1+2 (census 301 → 213 → 185 across the arc): the census-spec fleet (29 per-file readers) produced exact specs for 192 sites; 148 + ~55 cascade widens applied — declared rows to the bodies' truth, aspirational Pure dropped for the honest Memory/Alloc, missing match arms written with real payload arities, LStateSlotStore's fourth field bound. The re-pinned sharper compiler re-judged its own source each round (the ++-carries-row precedent at scale) · pins 01ccaa3a, intermediate
 - 2026-07-18 · TWO CHECKER ROOTS (census 343 → 301): E_IfMissingElse EXTINCT — the unit test matched TName("Unit"), a spelling the inferencer never produces (real unit is TUnit; probe: then_ty=() at all 25 sites) + 6 unresolved op-results the unify below decides. E_FeedbackNoContext EXTINCT — the check read the COMPILER'S runtime handler stack while inferring the COMPILED program's structure (a category error firing on every real `<~`, SYNTAX's canonical lowpass included); the compile-time class fact is the named peer Hβ.effects.iterate-class-declaration · pin 57a2113e
+- 2026-07-18 · ▶▶▶ CENSUS ZERO (73 → 0 in one day; 2,266 three days prior):
+  the medium's verdict on its own source is CLEAN, and the ratchet holds
+  zero. After the five-pin tail (below), the last three roots: EVERY
+  APPLICATION STAGES ITS BOUNDARY (the seq-op fast path skipped
+  stage_continuation_boundary — lower's k2 crossing found NoBoundary at
+  four sites, pinned by an epoch-field probe; E_UnresolvedType extinct) ·
+  NRecordRowBound (the record-row residual's own node kind; NRowBound
+  EffRow-only; occurs_in_row total over six row forms; the Ty-wrap mint
+  deleted; ten mirror arms) · slot_present (the niche's READ half — the
+  presence test table-typed `a -> Bool`, never pinning a slot's element).
+  Every gate green at the pin: fixed point, frontier 71/0,
+  proof-exactness 9/9, crown 5/5, micros-through-m2 72/0
 - 2026-07-18 · THE TYPEMISMATCH TAIL FELLED (census 73 → 6, five pins; the
   eight-interrogations charge): the seq-op HOLE guard (a `??` argument no
   longer counts toward saturation — the Stage-Law partial mints; 14) + the
@@ -1082,21 +1097,13 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-The 2026-07-18 census-tail landings born three (each artifact-located):
-`Hβ.lower.boundary-weave-generic-thunk-row` (the census's last
-E_UnresolvedType root — a generic fn's `&&` short-circuit stages a
-boundary-weave thunk whose TFun row never resolves; four located sites:
-infer alt_same_name_set, lower rows_equal / splice_at / k2_is_park; the
-report now carries the weave span, so the probe starts at the site) ·
-`Hβ.graph.rowbound-ty-residual-tagged` (NRowBound stores EffRow AND — for
-mk_record_row_residual — a raw Ty in one untagged slot; occurs_in_row's
-delegation arm is the census's EffRow-vs-Ty error; the fix is a tagged
-binding representation, never an arm edit) ·
-`Hβ.emit.option-niche-repr` (the word-sentinel absence the bucket sweep
-did NOT reach: fill_arg_slots' 0-or-Node slot buffer (types.mn
-collect_slot_nodes, the census's Node-vs-Int) is the exact
-Option-of-handle niche — 0=None, handle=Some, zero boxing; the lower/emit
-arm that makes match-on-Option read the niche repr is the landing).
+The 2026-07-18 census-tail peers: boundary-weave-generic-thunk-row and
+rowbound-ty-residual-tagged both LANDED same day (the census-zero arc —
+§7 ledger). `Hβ.emit.option-niche-repr` remains open at its EMIT half:
+slot_present landed the READ (a table-typed `a -> Bool` presence test
+over the 0-or-handle word), but Option CONSTRUCTION still boxes and
+match-on-Option still tag-compares — the lower/emit arm that makes both
+read the niche (0=None, handle=Some, zero boxing) is the landing.
 
 The 2026-07-18 harvest + panel born peers (each artifact-verified before naming):
 `Hβ.infer.type-decl-name-registry` (a second `type X` silently MERGES —
@@ -1546,11 +1553,11 @@ in this column is one of its classes.
   manifest lands); the occurs cascade itself is DEAD (an env miss binds
   NErrorHole via graph_bind_hole, never the self-referential TVar that
   tripped graph_bind's occurs check — one miss, one diagnostic). The work,
-  by class (census 2266 → 6, trued 2026-07-18 end-of-day): E_TypeMismatch 2
-  (`Hβ.graph.rowbound-ty-residual-tagged` + the `Hβ.emit.option-niche-repr`
-  arg-slot instance — named-residue index) and E_UnresolvedType 4
-  (span-located; one root, `Hβ.lower.boundary-weave-generic-thunk-row`).
-  EffectMismatch / PurityViolated / IfMissingElse / PatternInexhaustive /
+  by class: the census is ZERO (2026-07-18 end-of-day; from 2,266) — every
+  class's wheel-side arming precondition is MET. The user-path condition
+  (the panel's licence correction) still gates name-dependent classes
+  (TypeMismatch and kin fire on partial-link paths — the runtime shadow's
+  3 lib-isolation errors are the proof) on the manifest arc. EffectMismatch / PurityViolated / IfMissingElse / PatternInexhaustive /
   FeedbackNoContext / ConstructorArity / ResumeOutsideArm all reached ZERO
   on 2026-07-18 (the §7 ledger holds each root). The mechanism is `diag_refuses`
   (a projection beside `diag_severity`, types.mn:1506) + the count on

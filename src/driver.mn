@@ -248,9 +248,12 @@ fn driver_canonical_order(modules) with Memory + Alloc + Filesystem = {
 
 // src/ ranks before lib/ (the blob's find order); within a rank, the path's
 // own byte order. The rank digit prefixes the resolved path as the key.
+// The rank reads the src/ SEGMENT, not a position-0 prefix: under an
+// installed mount the resolver returns /mentl-home/src/..., and a prefix
+// test would re-rank every src module as lib (a mount-dependent weave).
 fn driver_module_order_key(m) with Memory + Alloc + Filesystem = {
   let p = driver_module_path(m)
-  if str_slice(p, 0, 4) == "src/" { "0{p}" } else { "1{p}" }
+  if str_contains(p, "src/") { "0{p}" } else { "1{p}" }
 }
 
 fn driver_sort_keyed(pairs) with Memory + Alloc =

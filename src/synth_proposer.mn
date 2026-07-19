@@ -139,25 +139,24 @@ handler synth_default with !Mutate {
 
   enumerate_inhabitants(target_ty, allowed_effects, context) => {
     let enriched = enumerate_typed(target_ty, allowed_effects, context)
-    yield_inhabitants(enriched, target_ty, 0, len(enriched))
-  }
-}
-
-fn yield_inhabitants(enriched, target_ty, i, n) with Synth + GraphRead + GraphWrite + Memory + !Mutate = {
-  if i >= n { resume([]) }
-  else {
-    let cand = list_index(enriched, i)
-    let EnrichedCandidate(c) = cand
-    let inner = Candidate(c.node, c.reason)
-    let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-    let proven = verify_candidate(inner, target_ty)
-    graph_rollback(cp)
-    if proven {
-      resume([c.node])
-      yield_inhabitants(enriched, target_ty, i + 1, n)
-    } else {
-      yield_inhabitants(enriched, target_ty, i + 1, n)
-    }
+    // The per-candidate resume fan lives IN the arm as a nested fn — the
+    // backtrack handler's own try_each shape (search.mn). resume is
+    // context-bound to arms (SYNTAX §resume); the top-level fn that held
+    // this loop was the census's E_ResumeOutsideArm pair, true by the law.
+    fn yield_from(i) =
+      if i >= len(enriched) { resume([]) }
+      else {
+        let EnrichedCandidate(c) = list_index(enriched, i)
+        let inner = Candidate(c.node, c.reason)
+        let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+        let proven = verify_candidate(inner, target_ty)
+        graph_rollback(cp)
+        if proven {
+          resume([c.node])
+          yield_from(i + 1)
+        } else { yield_from(i + 1) }
+      }
+    yield_from(0)
   }
 }
 

@@ -528,7 +528,10 @@ fn unlock_capability(annotation) with Pure = match annotation {
   ANotNetwork(_)    => CSandbox,
   ARefined(_, _, _) => CEliminateBoundsCheck,
   AOwn(_, _)        => CDeterministicDrop,
-  ARef(_, _)        => CZeroCopy
+  ARef(_, _)        => CZeroCopy,
+  // Wrapping a body in an absorbing handler CONTAINS the offending effect —
+  // the sandbox capability, the same family ANotNetwork unlocks by proof.
+  AWrapHandler(_, _, _) => CSandbox
 }
 
 // One-line summary for an error code. Every code has a full entry at

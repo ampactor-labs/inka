@@ -2972,6 +2972,14 @@ fn infer_match_arm_iter(arms, scrut, result_h, span: ValidSpan, i, n) = {
 fn collect_arm_tags(arms, own init) = {
   fold(init, (acc, arm) => {
     let (pat, _body) = arm
+    collect_pat_tags(pat, acc)
+  }, arms)
+}
+
+// An alternation covers the UNION of its branches — flatten. The counter
+// was blind to PAlt: two H6-exhaustive alternation matches in voice read
+// "misses 11 of 13" while covering every variant (the census's own find).
+fn collect_pat_tags(pat, own acc) = {
     match pat {
       PCon(name, _) => match env_lookup(name) {
         Some(entry) => {
@@ -2983,9 +2991,9 @@ fn collect_arm_tags(arms, own init) = {
         },
         None => acc
       },
+      PAlt(branches) => fold(acc, (a, b) => collect_pat_tags(b, a), branches),
       _ => acc
     }
-  }, arms)
 }
 
 // Read total_variants from any one PCon arm's ConstructorScheme.
@@ -3016,12 +3024,16 @@ fn arms_total_variants(arms) = {
 // everything the prior arms don't.
 fn arms_have_wildcard(arms) = any((arm) => {
   let (pat, _body) = arm
-  match pat {
-    PWild   => true,
-    PVar(_) => true,
-    _       => false
-  }
+  pat_has_wildcard(pat)
 }, arms)
+
+fn pat_has_wildcard(pat) = match pat {
+  PWild          => true,
+  PVar(_)        => true,
+  // A wildcard inside an alternation covers the remainder the same way.
+  PAlt(branches) => any(pat_has_wildcard, branches),
+  _              => false
+}
 
 // One arm under the typed-resume law (SUBSTRATE.md primitive #2).
 // `op(args) => body` for `op : (P...) -> R` under handle-result S:
@@ -3709,10 +3721,16 @@ fn register_one_variant(type_name: String, result_ty, qhandles, field_types, var
       is_record_ty(list_index(field_types, 0))
     } else { false }
   if single_record_payload {
-    let TRecord(declared_fields) = list_index(field_types, 0)
-    env_extend(ctor_name, Forall(qhandles, result_ty),
-      Declared(ctor_name),
-      RecordSchemeKind(declared_fields))
+    match list_index(field_types, 0) {
+      TRecord(declared_fields) =>
+        env_extend(ctor_name, Forall(qhandles, result_ty),
+          Declared(ctor_name),
+          RecordSchemeKind(declared_fields)),
+      // is_record_ty above proves TRecord — the impossible branch (SYNTAX
+      // §exhaustiveness); the refutable let-destructure that stood here was
+      // the census's own "misses 13 of 14" finding, true by the law.
+      _ => ()
+    }
   } else {
     let kind = ConstructorScheme(tag_id, total)
     if len(field_types) == 0 {

@@ -1084,7 +1084,7 @@ fn query_result_to_answer(result) with Alloc + Memory = match result {
   QRIntent(_)             => AnsSilence,
   QROwnership(_)          => AnsSilence,
   QRHandlerProvider(_)    => AnsSilence,
-  QRFlowLabel(_)          => AnsSilence,
+  QRFlowLabel(_, _)       => AnsSilence,
   QRError(_)              => AnsSilence
 }
 

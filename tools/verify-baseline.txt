@@ -377,7 +377,23 @@
 # declarations now tell the truth the bodies prove. Remaining: the
 # TypeMismatch tail (105, root-grouped), UnresolvedType 4, Pattern-
 # Inexhaustive 4, ResumeOutsideArm 2, ConstructorArity 1.
-census_errors_max: 116
+# 116 -> 101 (2026-07-18, five more classes extinct). ResumeOutsideArm: the
+# synth candidate fan moved INTO its arm as a nested fn (backtrack's own
+# try_each shape — resume is context-bound to arms, and the census was right).
+# ConstructorArity: QRFlowLabel's second field bound. PatternInexhaustive: the
+# exhaustiveness counter was PAlt-BLIND — collect_arm_tags matched only a
+# top-level PCon and arms_have_wildcard only a top-level PWild/PVar, so two
+# H6-exhaustive alternation matches in voice read "misses 11 of 13" while
+# covering every variant; both walks now flatten alternation branches. The
+# refutable let-destructure in register_one_variant became the match it
+# always was (the guard's proof read once); unlock_capability gained its
+# missing AWrapHandler arm (containment -> CSandbox); the dead
+# lib/runtime/buffer.mn DELETED (zero consumers, a lying row, a bare-List
+# residue — three finds, one deletion). Remaining: E_TypeMismatch 97
+# (root-grouped: Ctor({...}) 29, list-word boundary 21, misc 16, feedback
+# recurrence 15, seq-op-hole 14 — minus the 8 these restructures already
+# resolved), E_UnresolvedType 4 (handle-level, probes next).
+census_errors_max: 101
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

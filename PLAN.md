@@ -1097,6 +1097,23 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
+`Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a
+runtime fn declared before its prelude consumer meets the TIGHT inferred
+scheme where the canonical order met the loose pre-registered one — three
+real latent mismatches at prelude sum/chunk/trim under a leaves-first
+weave; the canonical sort sidesteps, the class remains; repro: swap
+lists/strings before prelude on stdin) ·
+`Hβ.patch.set-target-state-clobber` (patch_set_target's state write
+destroys the TAIL of the last-allocated list — read-after-write lost
+ranges[6] deterministically; the edit session hoists the read above the
+write as the dodge; the fix is the state-record home audit, the S1
+wrong-record class) ·
+`Hβ.driver.per-module-env-overlay` gains its measured consequence: the
+per-module check walk inferred prelude without its layer's vocabulary
+(len/list_index missing on a clean program) — check rides the weave until
+the overlay lands.
+
 The 2026-07-18 census-tail peers: boundary-weave-generic-thunk-row and
 rowbound-ty-residual-tagged both LANDED same day (the census-zero arc —
 §7 ledger). `Hβ.emit.option-niche-repr` remains open at its EMIT half:
@@ -1491,15 +1508,15 @@ is re-measured by hand:
   name-identity failures, so it roots the PERFORMANCE floor only; the
   correctness spine's root is the two arity/grade items above. The named-peer
   audit's verdict (1) stands for §5.O and is corrected here.
-- **"The imports ARE the manifest" is FALSE for the wheel's own source.**
-  Measured: ZERO files import `lib/prelude.mn`, and `mentl compile main`
-  through the driver path emits 16,176,251 bytes that DO NOT ASSEMBLE
-  (`undefined function variable "$ev_lookup"`, exit 0). `find src lib | xargs
-  cat` is the real manifest — a bash side-ledger the import edges cannot
-  reproduce, in the doc that rejects side-ledgers.
-  `Hβ.driver.wheel-imports-are-the-manifest`: make the wheel's own import graph
-  reach every file the blob concatenates. Until it does, the medium cannot
-  build itself with its own module resolution.
+- **"The imports ARE the manifest" — CLOSED 2026-07-18** (the fleet had
+  measured it false: zero prelude imports, 16MB of non-assembling emit).
+  `mentl compile main` now emits the whole wheel with ZERO diagnostics,
+  it assembles, and the DAG-built wheel compiles and runs programs: the
+  prelude seeds the DAG where it resolves, every module declares its real
+  deps, keyword-spelled import segments parse (`import own`), and the
+  weave order is canonical (the discovery walk finds the SET; the sort
+  fixes the WEAVE to the blob's own order). Residue: the named
+  order-independence and clobber peers (named-residue index).
 - **`Hβ.medium.cannot-observe-its-own-programs` — THE RISK NOBODY NAMED, and
   the fleet's deepest finding.** Thirty items were independently refuted for
   having a gate that CANNOT FAIL. That is not thirty bad designs; it is one

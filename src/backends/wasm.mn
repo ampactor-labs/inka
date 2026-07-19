@@ -287,8 +287,12 @@ fn emit_module(lowered) = {
   // of the same tree, 16+ helper fns, 4x the structural drift surface).
   // Adding a fifth projection = one new handler + one new visit-site in
   // walk_lemit_expr. The graph IS the index; the chain IS the projector.
+  // The fold's type-closure record — computed ONCE (the unified each);
+  // register_show_literals (inside project_emit_state) reads .show for the
+  // data section, the leaf emission below reads all four.
+  let fold_closures = collect_fold_tys_list(lowered, fold_closures_empty())
   let (all_fn_names, top_fn_names, string_entries, state_slots, wasi_ops, yield_seen) =
-    project_emit_state(lowered)
+    project_emit_state(lowered, fold_closures.show)
   // band B M1.2 (the k2/k3 bank, Ruling 1) — the composer is CALLED INDIRECT
   // (it is the fn_ptr@0 of every composed k record), so unlike every other
   // synthesized helper it is TABLE-RESIDENT: appended to the fn-name set
@@ -319,27 +323,12 @@ fn emit_module(lowered) = {
   let value_lets = collect_top_value_lets(lowered)
   emit_top_let_globals(value_lets)
   emit_functions(lowered)
-  // The eq-leaf of the structural fold: one recursive $eq_<sig> helper per
-  // distinct product type appearing at a `==`/`!=` site (the graph IS the
-  // index). Plain top-level fns, called directly like $str_eq — emitted after
-  // the program's functions, before _start. A pure-scalar/sequence program
-  // collects none (byte-identical to the pre-fold module, Law 7).
-  emit_eq_leaves(lowered)
-  // The compare-leaf: one recursive 3-way $compare_<sig> helper per distinct
-  // aggregate at a `<`/`>`/`<=`/`>=` site (the graph IS the index, the same
-  // dedup). Sibling of $eq_<sig>; ordering where eq tests equality. A program
-  // with no aggregate ordering collects none (byte-identical, Law 7).
-  emit_fold_compare_helpers(lowered)
-  // The hash-leaf: one recursive $hash_<sig> helper per distinct aggregate at a
-  // `hash(x)` site (FNV mix over the SAME field set the eq leaf reads, so eq ⇒
-  // hash equal). A program with no aggregate hash collects none (Law 7).
-  emit_fold_hash_helpers(lowered)
-  // The show-leaf of the structural fold: one recursive $show_<sig> helper per
-  // distinct aggregate type rendered by to_string (the graph IS the index, the
-  // same dedup the eq leaf uses). Sibling generator, sibling leaf — six ops, one
-  // traversal. A program with no aggregate to_string collects none (byte-
-  // identical to the pre-show module, Law 7).
-  emit_show_leaves(lowered)
+  // The four fold leaves — eq / compare / hash / show — one recursive
+  // $<leaf>_<sig> helper per distinct signature in each closure, all read
+  // from the ONE collection walk above (the unified each). Plain top-level
+  // fns, called directly like $str_eq; a program with no aggregate sites
+  // collects none (byte-identical, Law 7).
+  emit_fold_leaf_helpers(fold_closures)
   // band B M1.2 — the composer pair + tag reader: $__k_compose (the
   // self-re-composing junction k, table-resident above), $__k_extend (the one
   // bubble op), $__k_world_tag (the tail read). Dormant until a k2 boundary
@@ -506,7 +495,7 @@ fn slot_already_recorded(entries, target: String, i, n) = {   // the String proo
 // per-projection encounter order matches the prior per-walk order. The
 // chained `~>` install establishes the handler stack at the body's
 // perform sites; each visit-op routes to its handler unambiguously.
-fn project_emit_state(lowered) = {
+fn project_emit_state(lowered, show_tys) = {
   walk_lemit(lowered)
   // The SHOW leaf's helpers ($show_<sig>) assemble String literals not present
   // in the user IR (delimiters "{" "}" "(" ")" "[" "]" ", ", each field name
@@ -514,8 +503,8 @@ fn project_emit_state(lowered) = {
   // channel the user literals flow through — so emit_string_data lays them in
   // the (data ...) section and string_offset resolves the helper's references.
   // The set of literals is a projection of the collected show types (the graph
-  // IS the index — the same type closure emit_show_leaves generates from).
-  register_show_literals(lowered)
+  // IS the index — the same type closure the unified fold walk collects).
+  register_show_literals(show_tys)
   let names = drain_fn_names() |> dedup_names   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let tops  = drain_top_fn_names()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let strs  = drain_string_literals()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
@@ -529,13 +518,12 @@ fn project_emit_state(lowered) = {
 
 // register_show_literals — fire visit_string for every String literal the
 // generated $show_<sig> helpers will emit. The literal set is a PROJECTION of
-// the collected show types (the SAME type closure emit_show_leaves folds):
+// the collected show types (the SAME .show closure the unified fold walk carries):
 // a record contributes its delimiters + each "name: "; a tuple its parens; a
 // list its brackets + ", "; a sum each "Ctor("/")"/nullary name. Runs inside
 // project_emit_state where string_literal_collector catches visit_string.
-fn register_show_literals(lowered) with EmitStringLiteralOp + EnvRead + Memory + Alloc = {
-  let tys = collect_show_tys_list(lowered, [])
-  register_show_literals_list(tys, [])
+fn register_show_literals(show_tys) with EmitStringLiteralOp + EnvRead + Memory + Alloc = {
+  register_show_literals_list(show_tys, [])
 }
 
 fn register_show_literals_list(tys, seen) with EmitStringLiteralOp + EnvRead + Alloc + Memory = {
@@ -3931,7 +3919,7 @@ fn emit_eq_for_ty(ty, neg) = match ty {
     if neg { wat_emit("    (i32.eqz)\n") } else { () }
   },
   // Product — field-wise structural recursion. The generated $eq_<sig>
-  // helper (emit_eq_leaves) takes (__state, a, b) and ANDs each
+  // helper (emit_one_eq_helper) takes (__state, a, b) and ANDs each
   // field's eq at the canonical width-summed offset, recursing for nested
   // products. The eq/hash-disagreement footgun is unsayable: ONE traversal.
   TRecord(fields)        => emit_eq_product_call(fold_sig(ty), neg),
@@ -4112,28 +4100,165 @@ fn ctor_payload_tys_find(entries, ctor_name, i) with Memory + Alloc = {
 // fold_sig / fold_sig_list / fold_sig_fields moved to their Carried-Truth home
 // (types.mn) — the structural signature every fold leaf shares.
 
-// emit_eq_leaves — the generator pre-pass. Collect the product types at
-// every BEq/BNe site, then emit each DISTINCT $eq_<sig> recursive helper once.
-// Called from emit_module after emit_functions (the helpers are plain top-
-// level functions, called directly like $str_eq — no fn-table entry needed).
-fn emit_eq_leaves(lowered) with EnvRead + Memory + Alloc + WasmOut = {
-  let tys = collect_eq_product_tys_list(lowered, [])
-  emit_distinct_eq_leaves(tys, [])
+// ─── THE UNIFIED EACH — the fold's ONE collection walk + ONE dedup walk ────
+//
+// §5.U's fold(ty, leaf) at the emit, its traversals unified. FOUR
+// byte-identical ~60-arm walkers (eq / compare / hash / show) each re-walked
+// the WHOLE lowered tree to collect one leaf's type closure — the same each
+// four times over one fact — and the eq/cmp copies dropped their trigger's
+// RIGHT subtree (`a == (b == c)`'s inner site was never collected). FOUR
+// byte-identical 13-line dedup walkers then each walked their closure; a
+// FIFTH walk (register_show_literals) re-collected the show closure for the
+// data section. The project_emit_state fold (this file) is the in-repo
+// precedent: four parallel walks of one tree became ONE walk with
+// per-projection accumulators. Here: ONE walk carries the four closures as
+// one record; a TRIGGER arm contributes to its slot (an eq/ne site, an
+// ordering site, a $show_ call, a $hash_ call); recursion is uniform over
+// EVERY child, so no subtree is dropped. emit_module computes the record
+// ONCE and both readers (the literal registration, the leaf emission) read
+// it. One dedup walk emits each distinct signature's helper once, the leaf
+// selected by the FoldOp ADT — four fn names were four spellings of one
+// operation fact.
+
+type FoldOp = FoldCompare | FoldEq | FoldHash | FoldShow
+
+fn fold_closures_empty() with Pure = ({cmp: [], eq: [], hash: [], show: []})
+
+// The closed-record pins are load-bearing (Intent Boundary): an unannotated
+// acc infers a partial OPEN record per accessor, and an open receiver's field
+// offsets are computed over the partial set while the record sorts over the
+// full one (Hβ.lower.trecordopen-wrong-field — this fn's first compile hit
+// that floor at runtime).
+fn fold_acc_eq(acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}, lh) with LookupTy + EnvRead + Alloc + Memory =
+  ({cmp: acc.cmp, eq: eq_operand_contrib(lh, acc.eq), hash: acc.hash, show: acc.show})
+
+// The ordering contribution IS the eq contribution (cmp_agg_operand_contrib
+// was a byte-copy of eq_operand_contrib — deleted; one reach, two slots).
+fn fold_acc_cmp(acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}, lh) with LookupTy + EnvRead + Alloc + Memory =
+  ({cmp: eq_operand_contrib(lh, acc.cmp), eq: acc.eq, hash: acc.hash, show: acc.show})
+
+fn fold_acc_hash(acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}, arg) with LookupTy + EnvRead + Alloc + Memory =
+  ({cmp: acc.cmp, eq: acc.eq, hash: hash_operand_contrib(arg, acc.hash), show: acc.show})
+
+fn fold_acc_show(acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}, arg) with LookupTy + EnvRead + Alloc + Memory =
+  ({cmp: acc.cmp, eq: acc.eq, hash: acc.hash, show: show_operand_contrib(arg, acc.show)})
+
+fn fold_trigger_binop(op, lh, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) with LookupTy + EnvRead + Alloc + Memory = match op {
+  BEq => fold_acc_eq(acc, lh),
+  BNe => fold_acc_eq(acc, lh),
+  BLt => fold_acc_cmp(acc, lh),
+  BGt => fold_acc_cmp(acc, lh),
+  BLe => fold_acc_cmp(acc, lh),
+  BGe => fold_acc_cmp(acc, lh),
+  _   => acc
 }
 
-fn emit_distinct_eq_leaves(tys, seen) with EnvRead + Alloc + Memory + WasmOut = {
+fn collect_fold_tys_list(stmts, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) with LookupTy + EnvRead + Memory + Alloc = {
+  if len(stmts) == 0 { acc }
+  else {
+    collect_fold_tys_list(drop_last(stmts),
+      collect_fold_tys_expr(last(stmts), acc))
+  }
+}
+
+fn collect_fold_tys_arms(arms, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) = collect_fold_tys_arms_from(arms, acc, 0)
+
+fn collect_fold_tys_arms_from(arms, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}, i) =
+  if i >= len(arms) { acc }
+  else {
+    let (_, body) = list_index(arms, i)
+    collect_fold_tys_arms_from(arms, collect_fold_tys_expr(body, acc), i + 1)
+  }
+
+fn collect_fold_tys_expr(expr, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) with LookupTy + EnvRead + Alloc + Memory = match expr {
+  LCall(_h, f, args) => {
+    let triggered =
+      if is_show_global(f) && len(args) == 1 { fold_acc_show(acc, last(args)) }
+      else if is_hash_global(f) && len(args) == 1 { fold_acc_hash(acc, last(args)) }
+      else { acc }
+    collect_fold_tys_expr(f, collect_fold_tys_list(args, triggered))
+  },
+  LTailCall(_h, f, args) => collect_fold_tys_expr(f, collect_fold_tys_list(args, acc)),
+  LBinOp(_h, op, l, r)  => collect_fold_tys_expr(r,
+                             collect_fold_tys_expr(l,
+                               fold_trigger_binop(op, lexpr_handle(l), acc))),
+  LSuspend(_h, _o, f, args, ev, _) => collect_fold_tys_expr(f,
+                              collect_fold_tys_list(args, collect_fold_tys_list(ev, acc))),
+  LEvPerform(_h, _n, _e, _s, args) => collect_fold_tys_list(args, acc),
+  LLet(_h, _n, inner)    => collect_fold_tys_expr(inner, acc),
+  LUnaryOp(_h, _op, i)   => collect_fold_tys_expr(i, acc),
+  LReturn(_h, i)         => collect_fold_tys_expr(i, acc),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+    collect_fold_tys_list(body,
+      collect_fold_tys_list(caps, collect_fold_tys_list(ev, acc))),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
+    collect_fold_tys_list(body,
+      collect_fold_tys_list(caps, collect_fold_tys_list(ev, acc))),
+  LYield(_h, _op, args, k) => collect_fold_tys_expr(k, collect_fold_tys_list(args, acc)),
+  LKExtend(_h, k)        => collect_fold_tys_expr(k, acc),
+  LFnRef(_h, _n, ev)     => collect_fold_tys_list(ev, acc),
+  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_fold_tys_list(body, acc),
+  LIf(_h, c, t, e)       => collect_fold_tys_list(e,
+                              collect_fold_tys_list(t, collect_fold_tys_expr(c, acc))),
+  LBlock(_h, stmts)      => collect_fold_tys_list(stmts, acc),
+  LMakeList(_h, es)      => collect_fold_tys_list(es, acc),
+  LMakeTuple(_h, es)     => collect_fold_tys_list(es, acc),
+  LSimdLanes(_h, lanes)  => collect_fold_tys_list(lanes, acc),
+  LMakeRecord(_h, fs)    => collect_fold_tys_list(fs, acc),
+  LMakeVariant(_h, _t, fs) => collect_fold_tys_list(fs, acc),
+  LMatch(_h, s, arms)    => collect_fold_tys_arms(arms, collect_fold_tys_expr(s, acc)),
+  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
+    collect_fold_tys_expr(b,
+      collect_fold_tys_expr(hn,
+        collect_fold_tys_list(inits, collect_fold_tys_list(cevs, acc)))),
+  LFeedback(_h, b, s)    => collect_fold_tys_expr(s, collect_fold_tys_expr(b, acc)),
+  LPerform(_h, _n, args, _) => collect_fold_tys_list(args, acc),
+  LWasiCall(_h, _n, args)   => collect_fold_tys_list(args, acc),
+  LFieldLoad(_h, rec, _o) => collect_fold_tys_expr(rec, acc),
+  LConvert(_h, _, operand) => collect_fold_tys_expr(operand, acc),
+  LStateSlotStore(_h, _o, v, _) => collect_fold_tys_expr(v, acc),
+  LConst(_, _)           => acc,
+  LLocal(_, _)           => acc,
+  LFeedbackPrior(_)      => acc,
+  LGlobal(_, _)          => acc,
+  LUpval(_, _)           => acc,
+  LEvRef(_, _)           => acc,
+  LEvEntry(_, ev)        => collect_fold_tys_expr(ev, acc),
+  LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _) => acc
+}
+
+// The one dedup walk: emit each distinct fold_sig's helper ONCE, the leaf
+// generator selected by the op.
+fn emit_distinct_fold_leaves(op, tys, seen) with EnvRead + Alloc + Memory + WasmOut = {
   if len(tys) == 0 { () }
   else {
     let ty = last(tys)
     let sig = fold_sig(ty)
     if ls_find_str_local(seen, sig, 0) >= 0 {
-      emit_distinct_eq_leaves(drop_last(tys), seen)
+      emit_distinct_fold_leaves(op, drop_last(tys), seen)
     } else {
-      emit_one_eq_helper(sig, ty)
-      emit_distinct_eq_leaves(drop_last(tys), [sig] ++ seen)
+      match op {
+        FoldEq      => emit_one_eq_helper(sig, ty),
+        FoldCompare => emit_one_compare_helper(sig, ty),
+        FoldHash    => emit_one_hash_helper(sig, ty),
+        FoldShow    => emit_one_show_helper(sig, ty)
+      }
+      emit_distinct_fold_leaves(op, drop_last(tys), [sig] ++ seen)
     }
   }
 }
+
+// The four leaves behind the one walk. Emission order (eq, compare, hash,
+// show) preserves the module layout the four separate entry fns produced.
+fn emit_fold_leaf_helpers(closures: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) with EnvRead + Memory + Alloc + WasmOut = {
+  emit_distinct_fold_leaves(FoldEq, closures.eq, [])
+  emit_distinct_fold_leaves(FoldCompare, closures.cmp, [])
+  emit_distinct_fold_leaves(FoldHash, closures.hash, [])
+  emit_distinct_fold_leaves(FoldShow, closures.show, [])
+}
+
+
 
 // emit_one_eq_helper — the $eq_<sig> recursive helper body. Takes (__state,
 // a, b) per W7, returns Bool. The node-kind selects the body: a PRODUCT
@@ -4432,28 +4557,7 @@ fn emit_cmp_sign_test(op) = {
   }
 }
 
-// ─── The compare-leaf generator: recursive $compare_<sig> helpers ─────────
-// Mirror of emit_eq_leaves: a pre-pass collects the aggregate operand
-// type at every BLt/BGt/BLe/BGe site (+ its nested-aggregate closure, the SAME
-// eq_subtys reach), each distinct sig emitting ONE recursive 3-way helper.
-fn emit_fold_compare_helpers(lowered) with EnvRead + Memory + Alloc + WasmOut = {
-  let tys = collect_cmp_agg_tys_list(lowered, [])
-  emit_distinct_compare_helpers(tys, [])
-}
 
-fn emit_distinct_compare_helpers(tys, seen) with EnvRead + Alloc + Memory + WasmOut = {
-  if len(tys) == 0 { () }
-  else {
-    let ty = last(tys)
-    let sig = fold_sig(ty)
-    if ls_find_str_local(seen, sig, 0) >= 0 {
-      emit_distinct_compare_helpers(drop_last(tys), seen)
-    } else {
-      emit_one_compare_helper(sig, ty)
-      emit_distinct_compare_helpers(drop_last(tys), [sig] ++ seen)
-    }
-  }
-}
 
 // emit_one_compare_helper — the $compare_<sig> recursive body. (__state, a, b)
 // → i32 ∈ {-1,0,1}. A PRODUCT (record/tuple) compares fields in canonical order,
@@ -4661,95 +4765,10 @@ fn emit_field_agg_cmp(sig) = {
   wat_emit(")\n")
 }
 
-// The compare collection pre-pass: the aggregate operand type at every BLt/BGt/
-// BLe/BGe site, plus its nested-aggregate closure (eq_subtys — the SAME reach
-// the eq leaf collects, since compare descends the identical structure). A
-// scalar/float operand contributes nothing (the machine compare needs no helper).
-fn cmp_agg_operand_contrib(left_h, acc) = {
-  if left_h == 0 { acc }
-  else { eq_subtys(fold_strip(lookup_ty(left_h)), [], acc) }
-}
 
-fn collect_cmp_agg_tys_list(stmts, acc) = {
-  if len(stmts) == 0 { acc }
-  else {
-    collect_cmp_agg_tys_list(drop_last(stmts),
-      collect_cmp_agg_tys_expr(last(stmts), acc))
-  }
-}
 
-fn collect_cmp_agg_tys_arms(arms, acc) = collect_cmp_agg_tys_arms_from(arms, acc, 0)
 
-fn collect_cmp_agg_tys_arms_from(arms, acc, i) =
-  if i >= len(arms) { acc }
-  else {
-    let (_, body) = list_index(arms, i)
-    collect_cmp_agg_tys_arms_from(arms, collect_cmp_agg_tys_expr(body, acc), i + 1)
-  }
 
-fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
-  LBinOp(_h, BLt, l, _r) => collect_cmp_agg_tys_expr(l,
-                              cmp_agg_operand_contrib(lexpr_handle(l), acc)),
-  LBinOp(_h, BGt, l, _r) => collect_cmp_agg_tys_expr(l,
-                              cmp_agg_operand_contrib(lexpr_handle(l), acc)),
-  LBinOp(_h, BLe, l, _r) => collect_cmp_agg_tys_expr(l,
-                              cmp_agg_operand_contrib(lexpr_handle(l), acc)),
-  LBinOp(_h, BGe, l, _r) => collect_cmp_agg_tys_expr(l,
-                              cmp_agg_operand_contrib(lexpr_handle(l), acc)),
-  LBinOp(_h, _op, l, r)  => collect_cmp_agg_tys_expr(r,
-                              collect_cmp_agg_tys_expr(l, acc)),
-  LCall(_h, f, args)     => collect_cmp_agg_tys_expr(f,
-                              collect_cmp_agg_tys_list(args, acc)),
-  LTailCall(_h, f, args) => collect_cmp_agg_tys_expr(f,
-                              collect_cmp_agg_tys_list(args, acc)),
-  LSuspend(_h, _o, f, args, ev, _) => collect_cmp_agg_tys_expr(f,
-                              collect_cmp_agg_tys_list(args,
-                                collect_cmp_agg_tys_list(ev, acc))),
-  LEvPerform(_h, _n, _e, _s, args) => collect_cmp_agg_tys_list(args, acc),
-  LLet(_h, _n, inner)    => collect_cmp_agg_tys_expr(inner, acc),
-  LUnaryOp(_h, _op, i)   => collect_cmp_agg_tys_expr(i, acc),
-  LReturn(_h, i)         => collect_cmp_agg_tys_expr(i, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
-    collect_cmp_agg_tys_list(body,
-      collect_cmp_agg_tys_list(caps, collect_cmp_agg_tys_list(ev, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
-    collect_cmp_agg_tys_list(body,
-      collect_cmp_agg_tys_list(caps, collect_cmp_agg_tys_list(ev, acc))),
-  LYield(_h, _op, args, k) => collect_cmp_agg_tys_expr(k, collect_cmp_agg_tys_list(args, acc)),
-  LKExtend(_h, k)        => collect_cmp_agg_tys_expr(k, acc),
-  LFnRef(_h, _n, ev)     => collect_cmp_agg_tys_list(ev, acc),
-  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_cmp_agg_tys_list(body, acc),
-  LIf(_h, c, t, e)       => collect_cmp_agg_tys_list(e,
-                              collect_cmp_agg_tys_list(t,
-                                collect_cmp_agg_tys_expr(c, acc))),
-  LBlock(_h, stmts)      => collect_cmp_agg_tys_list(stmts, acc),
-  LMakeList(_h, es)      => collect_cmp_agg_tys_list(es, acc),
-  LMakeTuple(_h, es)     => collect_cmp_agg_tys_list(es, acc),
-  LSimdLanes(_h, lanes)  => collect_cmp_agg_tys_list(lanes, acc),
-  LMakeRecord(_h, fs)    => collect_cmp_agg_tys_list(fs, acc),
-  LMakeVariant(_h, _t, fs) => collect_cmp_agg_tys_list(fs, acc),
-  LMatch(_h, s, arms)    => collect_cmp_agg_tys_arms(arms, collect_cmp_agg_tys_expr(s, acc)),
-  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
-    collect_cmp_agg_tys_expr(b,
-      collect_cmp_agg_tys_expr(hn,
-        collect_cmp_agg_tys_list(inits, collect_cmp_agg_tys_list(cevs, acc)))),
-  LFeedback(_h, b, s)    => collect_cmp_agg_tys_expr(s,
-                              collect_cmp_agg_tys_expr(b, acc)),
-  LPerform(_h, _n, args, _) => collect_cmp_agg_tys_list(args, acc),
-  LWasiCall(_h, _n, args)   => collect_cmp_agg_tys_list(args, acc),
-  LFieldLoad(_h, rec, _o) => collect_cmp_agg_tys_expr(rec, acc),
-  LConvert(_h, _, operand) => collect_cmp_agg_tys_expr(operand, acc),
-  LStateSlotStore(_h, _o, v, _) => collect_cmp_agg_tys_expr(v, acc),
-  LConst(_, _)           => acc,
-  LLocal(_, _)           => acc,
-  LFeedbackPrior(_)      => acc,
-  LGlobal(_, _)          => acc,
-  LUpval(_, _)           => acc,
-  LEvRef(_, _)           => acc,
-  LEvEntry(_, ev)        => collect_cmp_agg_tys_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
-  LInvariantFailure(_, _) => acc
-}
 
 // The product's field types, in canonical (sorted-for-record, positional-for-
 // tuple) order — the field set the fold descends. Read live from the proven
@@ -4769,17 +4788,6 @@ fn field_tys_of(fields, i, n) =
     [ty] ++ field_tys_of(fields, i + 1, n)
   }
 
-// ─── The collection pre-pass: product types at every == / != site ─────────
-// Walk the lowered IR collecting the operand type at each LBinOp(BEq/BNe).
-// Only product operands need a helper (word/sequence fold inline at the `==`
-// site). The walk mirrors collect_call_vectors_expr's H6-exhaustive shape.
-fn collect_eq_product_tys_list(stmts, acc) = {
-  if len(stmts) == 0 { acc }
-  else {
-    collect_eq_product_tys_list(drop_last(stmts),
-      collect_eq_product_tys_expr(last(stmts), acc))
-  }
-}
 
 // A == operand contributes its aggregate type AND every nested aggregate its
 // fields / variant payloads reach (a record-of-records or a Tree needs a helper
@@ -4838,74 +4846,8 @@ fn eq_subtys_variants(specs, i, n, seen, acc) = {
   }
 }
 
-fn collect_eq_product_tys_arms(arms, acc) = collect_eq_product_tys_arms_from(arms, acc, 0)
 
-fn collect_eq_product_tys_arms_from(arms, acc, i) =
-  if i >= len(arms) { acc }
-  else {
-    let (_, body) = list_index(arms, i)
-    collect_eq_product_tys_arms_from(arms, collect_eq_product_tys_expr(body, acc), i + 1)
-  }
 
-fn collect_eq_product_tys_expr(expr, acc) = match expr {
-  LBinOp(_h, BEq, l, _r) => collect_eq_product_tys_expr(l,
-                              eq_operand_contrib(lexpr_handle(l), acc)),
-  LBinOp(_h, BNe, l, _r) => collect_eq_product_tys_expr(l,
-                              eq_operand_contrib(lexpr_handle(l), acc)),
-  LBinOp(_h, _op, l, r)  => collect_eq_product_tys_expr(r,
-                              collect_eq_product_tys_expr(l, acc)),
-  LCall(_h, f, args)     => collect_eq_product_tys_expr(f,
-                              collect_eq_product_tys_list(args, acc)),
-  LTailCall(_h, f, args) => collect_eq_product_tys_expr(f,
-                              collect_eq_product_tys_list(args, acc)),
-  LSuspend(_h, _o, f, args, ev, _) => collect_eq_product_tys_expr(f,
-                              collect_eq_product_tys_list(args,
-                                collect_eq_product_tys_list(ev, acc))),
-  LEvPerform(_h, _n, _e, _s, args) => collect_eq_product_tys_list(args, acc),
-  LLet(_h, _n, inner)    => collect_eq_product_tys_expr(inner, acc),
-  LUnaryOp(_h, _op, i)   => collect_eq_product_tys_expr(i, acc),
-  LReturn(_h, i)         => collect_eq_product_tys_expr(i, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
-    collect_eq_product_tys_list(body,
-      collect_eq_product_tys_list(caps, collect_eq_product_tys_list(ev, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
-    collect_eq_product_tys_list(body,
-      collect_eq_product_tys_list(caps, collect_eq_product_tys_list(ev, acc))),
-  LYield(_h, _op, args, k) => collect_eq_product_tys_expr(k, collect_eq_product_tys_list(args, acc)),
-  LKExtend(_h, k)        => collect_eq_product_tys_expr(k, acc),
-  LFnRef(_h, _n, ev)     => collect_eq_product_tys_list(ev, acc),
-  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_eq_product_tys_list(body, acc),
-  LIf(_h, c, t, e)       => collect_eq_product_tys_list(e,
-                              collect_eq_product_tys_list(t,
-                                collect_eq_product_tys_expr(c, acc))),
-  LBlock(_h, stmts)      => collect_eq_product_tys_list(stmts, acc),
-  LMakeList(_h, es)      => collect_eq_product_tys_list(es, acc),
-  LMakeTuple(_h, es)     => collect_eq_product_tys_list(es, acc),
-  LSimdLanes(_h, lanes)  => collect_eq_product_tys_list(lanes, acc),
-  LMakeRecord(_h, fs)    => collect_eq_product_tys_list(fs, acc),
-  LMakeVariant(_h, _t, fs) => collect_eq_product_tys_list(fs, acc),
-  LMatch(_h, s, arms)    => collect_eq_product_tys_arms(arms, collect_eq_product_tys_expr(s, acc)),
-  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
-    collect_eq_product_tys_expr(b,
-      collect_eq_product_tys_expr(hn,
-        collect_eq_product_tys_list(inits, collect_eq_product_tys_list(cevs, acc)))),
-  LFeedback(_h, b, s)    => collect_eq_product_tys_expr(s,
-                              collect_eq_product_tys_expr(b, acc)),
-  LPerform(_h, _n, args, _) => collect_eq_product_tys_list(args, acc),
-  LWasiCall(_h, _n, args)   => collect_eq_product_tys_list(args, acc),
-  LFieldLoad(_h, rec, _o) => collect_eq_product_tys_expr(rec, acc),
-  LConvert(_h, _, operand) => collect_eq_product_tys_expr(operand, acc),
-  LStateSlotStore(_h, _o, v, _) => collect_eq_product_tys_expr(v, acc),
-  LConst(_, _)           => acc,
-  LLocal(_, _)           => acc,
-  LFeedbackPrior(_)      => acc,
-  LGlobal(_, _)          => acc,
-  LUpval(_, _)           => acc,
-  LEvRef(_, _)           => acc,
-  LEvEntry(_, ev)        => collect_eq_product_tys_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
-  LInvariantFailure(_, _) => acc
-}
 
 // ─── The SHOW leaf of the structural fold: generated recursive $show_<sig> ──
 // to_string on an AGGREGATE is a CALL to the generated recursive $show_<sig>
@@ -4920,29 +4862,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
 // proved the type at the to_string site. The eq/show DIVERGENCE footgun is
 // unsayable: both are leaves of one traversal over the same five node-kinds.
 
-// emit_show_leaves — the show generator pre-pass. Collect the aggregate
-// operand type at every `to_string` site (the LCall to a $show_<sig> global
-// lower emitted) and its nested-aggregate closure, then emit each DISTINCT
-// $show_<sig> recursive helper once (the e-graph canonicalizes duplicates — the
-// graph IS the index). A pure-scalar program collects none (byte-identical, Law 7).
-fn emit_show_leaves(lowered) with EnvRead + Memory + Alloc + WasmOut = {
-  let tys = collect_show_tys_list(lowered, [])
-  emit_distinct_show_leaves(tys, [])
-}
 
-fn emit_distinct_show_leaves(tys, seen) with EnvRead + Alloc + Memory + WasmOut = {
-  if len(tys) == 0 { () }
-  else {
-    let ty = last(tys)
-    let sig = fold_sig(ty)
-    if ls_find_str_local(seen, sig, 0) >= 0 {
-      emit_distinct_show_leaves(drop_last(tys), seen)
-    } else {
-      emit_one_show_helper(sig, ty)
-      emit_distinct_show_leaves(drop_last(tys), [sig] ++ seen)
-    }
-  }
-}
 
 // emit_one_show_helper — the $show_<sig> recursive helper. Takes (__state, a)
 // — the W7 convention every emitted fn uses (the SAME __state-first shape the
@@ -5293,19 +5213,6 @@ fn emit_show_str_literal_inline(s) = emit_expr(LConst(0, LString(s)))
 fn emit_show_concat_open() = wat_emit("    (call $str_concat (local.get $__state)\n")
 fn emit_show_concat_close() = wat_emit("    )\n")
 
-// ─── show collection pre-pass: aggregate types at every to_string site ─────
-// Walk the lowered IR for LCall to a $show_<sig> global (lower_show_call emitted
-// it) and contribute the arg's aggregate type closure (the type proved at `ah`).
-// Mirror of collect_eq_product_tys_expr's H6-exhaustive shape; the divergence is
-// only the trigger (a show_ call vs a BEq site) and that show DOES collect list
-// types (eq folds lists inline; show needs a $show_l<elem> helper).
-fn collect_show_tys_list(stmts, acc) = {
-  if len(stmts) == 0 { acc }
-  else {
-    collect_show_tys_list(drop_last(stmts),
-      collect_show_tys_expr(last(stmts), acc))
-  }
-}
 
 // The aggregate type closure for show: the type itself if aggregate, plus every
 // nested aggregate its fields / elements / variant payloads reach. Unlike eq,
@@ -5372,70 +5279,8 @@ fn is_show_global(f) = match f {
   _ => false
 }
 
-fn collect_show_tys_arms(arms, acc) = collect_show_tys_arms_from(arms, acc, 0)
 
-fn collect_show_tys_arms_from(arms, acc, i) =
-  if i >= len(arms) { acc }
-  else {
-    let (_, body) = list_index(arms, i)
-    collect_show_tys_arms_from(arms, collect_show_tys_expr(body, acc), i + 1)
-  }
 
-fn collect_show_tys_expr(expr, acc) with LookupTy + Alloc + Memory = match expr {
-  LCall(_h, f, args) =>
-    if is_show_global(f) && len(args) == 1 {
-      collect_show_tys_expr(f,
-        show_operand_contrib(last(args), collect_show_tys_list(args, acc)))
-    } else {
-      collect_show_tys_expr(f, collect_show_tys_list(args, acc))
-    },
-  LTailCall(_h, f, args) => collect_show_tys_expr(f, collect_show_tys_list(args, acc)),
-  LBinOp(_h, _op, l, r)  => collect_show_tys_expr(r, collect_show_tys_expr(l, acc)),
-  LSuspend(_h, _o, f, args, ev, _) => collect_show_tys_expr(f,
-                              collect_show_tys_list(args, collect_show_tys_list(ev, acc))),
-  LEvPerform(_h, _n, _e, _s, args) => collect_show_tys_list(args, acc),
-  LLet(_h, _n, inner)    => collect_show_tys_expr(inner, acc),
-  LUnaryOp(_h, _op, i)   => collect_show_tys_expr(i, acc),
-  LReturn(_h, i)         => collect_show_tys_expr(i, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
-    collect_show_tys_list(body,
-      collect_show_tys_list(caps, collect_show_tys_list(ev, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
-    collect_show_tys_list(body,
-      collect_show_tys_list(caps, collect_show_tys_list(ev, acc))),
-  LYield(_h, _op, args, k) => collect_show_tys_expr(k, collect_show_tys_list(args, acc)),
-  LKExtend(_h, k)        => collect_show_tys_expr(k, acc),
-  LFnRef(_h, _n, ev)     => collect_show_tys_list(ev, acc),
-  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_show_tys_list(body, acc),
-  LIf(_h, c, t, e)       => collect_show_tys_list(e,
-                              collect_show_tys_list(t, collect_show_tys_expr(c, acc))),
-  LBlock(_h, stmts)      => collect_show_tys_list(stmts, acc),
-  LMakeList(_h, es)      => collect_show_tys_list(es, acc),
-  LMakeTuple(_h, es)     => collect_show_tys_list(es, acc),
-  LSimdLanes(_h, lanes)  => collect_show_tys_list(lanes, acc),
-  LMakeRecord(_h, fs)    => collect_show_tys_list(fs, acc),
-  LMakeVariant(_h, _t, fs) => collect_show_tys_list(fs, acc),
-  LMatch(_h, s, arms)    => collect_show_tys_arms(arms, collect_show_tys_expr(s, acc)),
-  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
-    collect_show_tys_expr(b,
-      collect_show_tys_expr(hn,
-        collect_show_tys_list(inits, collect_show_tys_list(cevs, acc)))),
-  LFeedback(_h, b, s)    => collect_show_tys_expr(s, collect_show_tys_expr(b, acc)),
-  LPerform(_h, _n, args, _) => collect_show_tys_list(args, acc),
-  LWasiCall(_h, _n, args)   => collect_show_tys_list(args, acc),
-  LFieldLoad(_h, rec, _o) => collect_show_tys_expr(rec, acc),
-  LConvert(_h, _, operand) => collect_show_tys_expr(operand, acc),
-  LStateSlotStore(_h, _o, v, _) => collect_show_tys_expr(v, acc),
-  LConst(_, _)           => acc,
-  LLocal(_, _)           => acc,
-  LFeedbackPrior(_)      => acc,
-  LGlobal(_, _)          => acc,
-  LUpval(_, _)           => acc,
-  LEvRef(_, _)           => acc,
-  LEvEntry(_, ev)        => collect_show_tys_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
-  LInvariantFailure(_, _) => acc
-}
 
 // ─── The HASH leaf of the structural fold: generated recursive $hash_<sig> ──
 // hash(x) on an AGGREGATE is a CALL to the generated recursive $hash_<sig>
@@ -5448,24 +5293,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy + Alloc + Memory = match expr 
 // identically. The runtime str_hash/list_hash are the sequence leaf; a scalar
 // word IS its own hash; a nested aggregate recurses its own $hash_<sig>.
 
-fn emit_fold_hash_helpers(lowered) with EnvRead + LookupTy + Alloc + Memory + WasmOut = {
-  let tys = collect_hash_tys_list(lowered, [])
-  emit_distinct_hash_leaves(tys, [])
-}
 
-fn emit_distinct_hash_leaves(tys, seen) with EnvRead + Alloc + Memory + WasmOut = {
-  if len(tys) == 0 { () }
-  else {
-    let ty = last(tys)
-    let sig = fold_sig(ty)
-    if ls_find_str_local(seen, sig, 0) >= 0 {
-      emit_distinct_hash_leaves(drop_last(tys), seen)
-    } else {
-      emit_one_hash_helper(sig, ty)
-      emit_distinct_hash_leaves(drop_last(tys), [sig] ++ seen)
-    }
-  }
-}
 
 // emit_one_hash_helper — the $hash_<sig> recursive body. (__state, a) → i32.
 // A PRODUCT (record/tuple) folds the FNV mix over each field's hash at its
@@ -5637,78 +5465,9 @@ fn hash_operand_contrib(arg, acc) with LookupTy + Alloc + Memory + EnvRead = {
   else { eq_subtys(fold_strip(lookup_ty(h)), [], acc) }
 }
 
-fn collect_hash_tys_list(stmts, acc) with LookupTy + Memory + Alloc = {
-  if len(stmts) == 0 { acc }
-  else {
-    collect_hash_tys_list(drop_last(stmts),
-      collect_hash_tys_expr(last(stmts), acc))
-  }
-}
 
-fn collect_hash_tys_arms(arms, acc) = collect_hash_tys_arms_from(arms, acc, 0)
 
-fn collect_hash_tys_arms_from(arms, acc, i) =
-  if i >= len(arms) { acc }
-  else {
-    let (_, body) = list_index(arms, i)
-    collect_hash_tys_arms_from(arms, collect_hash_tys_expr(body, acc), i + 1)
-  }
 
-fn collect_hash_tys_expr(expr, acc) with LookupTy + Alloc + Memory = match expr {
-  LCall(_h, f, args) =>
-    if is_hash_global(f) && len(args) == 1 {
-      collect_hash_tys_expr(f,
-        hash_operand_contrib(last(args), collect_hash_tys_list(args, acc)))
-    } else {
-      collect_hash_tys_expr(f, collect_hash_tys_list(args, acc))
-    },
-  LTailCall(_h, f, args) => collect_hash_tys_expr(f, collect_hash_tys_list(args, acc)),
-  LBinOp(_h, _op, l, r)  => collect_hash_tys_expr(r, collect_hash_tys_expr(l, acc)),
-  LSuspend(_h, _o, f, args, ev, _) => collect_hash_tys_expr(f,
-                              collect_hash_tys_list(args, collect_hash_tys_list(ev, acc))),
-  LEvPerform(_h, _n, _e, _s, args) => collect_hash_tys_list(args, acc),
-  LLet(_h, _n, inner)    => collect_hash_tys_expr(inner, acc),
-  LUnaryOp(_h, _op, i)   => collect_hash_tys_expr(i, acc),
-  LReturn(_h, i)         => collect_hash_tys_expr(i, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
-    collect_hash_tys_list(body,
-      collect_hash_tys_list(caps, collect_hash_tys_list(ev, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
-    collect_hash_tys_list(body,
-      collect_hash_tys_list(caps, collect_hash_tys_list(ev, acc))),
-  LYield(_h, _op, args, k) => collect_hash_tys_expr(k, collect_hash_tys_list(args, acc)),
-  LKExtend(_h, k)        => collect_hash_tys_expr(k, acc),
-  LFnRef(_h, _n, ev)     => collect_hash_tys_list(ev, acc),
-  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_hash_tys_list(body, acc),
-  LIf(_h, c, t, e)       => collect_hash_tys_list(e,
-                              collect_hash_tys_list(t, collect_hash_tys_expr(c, acc))),
-  LBlock(_h, stmts)      => collect_hash_tys_list(stmts, acc),
-  LMakeList(_h, es)      => collect_hash_tys_list(es, acc),
-  LMakeTuple(_h, es)     => collect_hash_tys_list(es, acc),
-  LSimdLanes(_h, lanes)  => collect_hash_tys_list(lanes, acc),
-  LMakeRecord(_h, fs)    => collect_hash_tys_list(fs, acc),
-  LMakeVariant(_h, _t, fs) => collect_hash_tys_list(fs, acc),
-  LMatch(_h, s, arms)    => collect_hash_tys_arms(arms, collect_hash_tys_expr(s, acc)),
-  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
-    collect_hash_tys_expr(b,
-      collect_hash_tys_expr(hn,
-        collect_hash_tys_list(inits, collect_hash_tys_list(cevs, acc)))),
-  LFeedback(_h, b, s)    => collect_hash_tys_expr(s, collect_hash_tys_expr(b, acc)),
-  LPerform(_h, _n, args, _) => collect_hash_tys_list(args, acc),
-  LWasiCall(_h, _n, args)   => collect_hash_tys_list(args, acc),
-  LFieldLoad(_h, rec, _o) => collect_hash_tys_expr(rec, acc),
-  LConvert(_h, _, operand) => collect_hash_tys_expr(operand, acc),
-  LStateSlotStore(_h, _o, v, _) => collect_hash_tys_expr(v, acc),
-  LConst(_, _)           => acc,
-  LLocal(_, _)           => acc,
-  LFeedbackPrior(_)      => acc,
-  LGlobal(_, _)          => acc,
-  LUpval(_, _)           => acc,
-  LEvRef(_, _)           => acc,
-  LEvEntry(_, ev)        => collect_hash_tys_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
-  LInvariantFailure(_, _) => acc
-}
 
 // variant_named_specs_of — like variant_specs_of but ALSO carries each
 // variant's constructor NAME (show prints it; eq does not need it). Read live

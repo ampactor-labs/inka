@@ -929,15 +929,18 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ## §7 · Current state (grounded 2026-07-18) + the landing ledger
 
-**THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 69/0,
+**THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 71/0,
 proof-exactness 9/9, crown 5/5, micros (incl. oob-traps=134 — SYNTAX's index
 law executable), the march's fixed point, the phantom ratchet (287) — through
-the pinned boot `8e248607…` (chain: boot/PROVENANCE.md); frontier **71/0**.
-**`mentl voice.mn:9` ANSWERS** (the cursor-address transport,
-tests/frontier/voice-demo the executable gate). The census is
-**73** (from 2,266), TWO classes only — E_TypeMismatch 69 (root-grouped:
-the list-word substrate boundary 21, the `<~` recurrence 15, seq-op-hole
-14, misc) and E_UnresolvedType 4 (handle-level). NINE classes reached
+the pinned boot (chain: boot/PROVENANCE.md, newest pin = the census-6
+diagnostic-address landing). **`mentl voice.mn:9` ANSWERS** (the
+cursor-address transport, tests/frontier/voice-demo the executable gate).
+The census is **6** (from 2,266): E_TypeMismatch 2 (graph:647's untagged
+EffRow/Ty residual under NRowBound; types:2079's word-sentinel arg-slot
+buffer — the niche-repr Option instance) and E_UnresolvedType 4 (span-
+located now; ONE root — a generic fn's `&&` short-circuit whose boundary-
+weave thunk row never resolves, `Hβ.lower.boundary-weave-generic-thunk-row`).
+NINE classes reached
 zero on 2026-07-18 alone: IfMissingElse, FeedbackNoContext,
 EffectMismatch, PurityViolated, PatternInexhaustive, ConstructorArity,
 ResumeOutsideArm, MissingVariable, OccursCheck — the forward-ref
@@ -1009,6 +1012,27 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-07-18 · THE ADDRESS IS THE SURFACE (census 213 → 185; frontier 71/0): `mentl voice.mn:9` answers `Query: echo(mix, x) : Float` — README §9's smallest transport, real. VAt at the argv boundary; driver_entry_with_ranges returns the module-range map from the concatenation fold that always computed it; the three-case line rule resolves over the span index every node writes at birth; cursor_at_handle (new CursorRead op; the eight-arm fan extracted to one cursor_view_of) projects without re-resolving; the facet-silent render reads source slices, env schemes, literal bodies, and the Why walk mapped to file:line — every lede a live read. propose_at is the ABSENCE facet structurally (authored_hole, the patch gate's own read) — which also fenced Hβ.emit.float-evidence-ft (an f64-arg candidate ctor through an all-i32 $ft, trapping the first float-position enumeration ever taken). The session's exact-reason-span resolver SURVIVES as the documented live-generation crutch (measured: mint-span find_tightest resolved a stale generation, 13 edit fixtures red at once; dissolves with session-weave-epoch-scope). Remaining README-Why substrate named: why-flow-naming (FnParam-at-call), refinement-provenance · pin 6e7c10b2
 - 2026-07-18 · THE EFFECT-TRUTH SWEEP, ROUNDS 1+2 (census 301 → 213 → 185 across the arc): the census-spec fleet (29 per-file readers) produced exact specs for 192 sites; 148 + ~55 cascade widens applied — declared rows to the bodies' truth, aspirational Pure dropped for the honest Memory/Alloc, missing match arms written with real payload arities, LStateSlotStore's fourth field bound. The re-pinned sharper compiler re-judged its own source each round (the ++-carries-row precedent at scale) · pins 01ccaa3a, intermediate
 - 2026-07-18 · TWO CHECKER ROOTS (census 343 → 301): E_IfMissingElse EXTINCT — the unit test matched TName("Unit"), a spelling the inferencer never produces (real unit is TUnit; probe: then_ty=() at all 25 sites) + 6 unresolved op-results the unify below decides. E_FeedbackNoContext EXTINCT — the check read the COMPILER'S runtime handler stack while inferring the COMPILED program's structure (a category error firing on every real `<~`, SYNTAX's canonical lowpass included); the compile-time class fact is the named peer Hβ.effects.iterate-class-declaration · pin 57a2113e
+- 2026-07-18 · THE TYPEMISMATCH TAIL FELLED (census 73 → 6, five pins; the
+  eight-interrogations charge): the seq-op HOLE guard (a `??` argument no
+  longer counts toward saturation — the Stage-Law partial mints; 14) + the
+  `<~` RECURRENCE prior ((prev)=>body applies to its own result, RHS checked
+  against FeedbackSpec; 14) · THE KIND IS THE NAMESPACE (env_lookup_type — a
+  type-position read filters the env by kind, so `effect Sample` no longer
+  shadows `type Sample`; quantify_ctor_ty is the one reader; 15) · A BUCKET
+  IS A LIST THAT STARTS EMPTY (list_filled mints the four hash indexes with
+  one shared []; every `if x == 0 {[]}` guard + env_bucket_at DELETED;
+  eff_names_of's null guard out with its extinct class; 14) · THE BOUNDARY
+  MADE NAMEABLE (alloc_list/slice_raw = the RAW altitude's own names, so raw
+  walks stop calling table-typed names; int_to_str joins the table's String
+  face; `-> !` PARSES — TBang arm + per-occurrence bottom var, abort()
+  finally never-returns; verify_candidate takes Candidate, LPLit's emit arm
+  matches LowValue, HandlerDeclStmt/LHandleWith/drain_string_literals
+  declare their real elements, seq_force admits TString under a TList force
+  — len on a String is canonical; 12) · THE DIAGNOSTIC LEARNS ITS ADDRESS
+  (all eight E_UnresolvedType reports read the node's weave span; the four
+  became locatable and named their one root, the `&&` boundary-weave thunk
+  row; the escaping family speaks name-sets end to end). Clean fixed points
+  + two TRANSITIONs; every gate green at each pin
 - 2026-07-18 · THE INDEX LAW IS REAL (census 348 → 343): SYNTAX §Indexing's "traps on out-of-range" was prose — list_index tag-0 raw-loaded, every OOB a silent adjacent-memory read (the panel's find). The checked entry landed with its structural prerequisite: `&&`/`||` SHORT-CIRCUIT (lower's BKBool arm; the boolean verbs are control — SYNTAX gains the sentence). The eager i32.and had run every guarded read: set_insert / cache_filter_loop / register_one_variant all read one-past under their own guards (nullary ctors probed index 0 of EMPTY payload lists on every ADT ever inferred) — three latent OOBs in the trap's first hour. Then the trap swept the DRIVERLESS-CHAIN class: check / check_source / edit / repl ran infer's consume+region ops with NO analysis handlers installed — zero state records reading the sentinel page as empty ledgers since the chains were born; all four now install affine_ledger + region_tracker. Dead narrowing-elision write deleted (never fired — PAnd left-descent to PTrue; unsound if activated); the discharge-gated write is the named peer. micro oob-traps=134. TRANSITION m3 == m4, then clean fixed points · pin 3112cec5
 - 2026-07-18 · THE VALUE CLASSES ARM (census 348 held; frontier 69/0): diag_refuses gains ERefinementRejected (the §11 "landed and locked" claim was FALSE — a decidable-false `let bad: Sample = 1.5` emitted 2,513 bytes at exit 0) and EOwnershipViolation (its unresolved-callee false channel dead; the adversarial panel could not falsify the detector on resolved programs). node_const folds negated literals so the canonical Sample range DECIDES — and the sharper compiler caught the wheel fabricating tag -1 into TagId's 0..255 (lower_pat's unresolved-ctor arm): deleted into LPUnresolvedCon (match test honestly false, sub-binders declare at the word floor, the dead arm assembles). The dormant mn-refine-reject micro (asserting pre-arm exit-0, wired to nothing) superseded by frontier refusal fixtures; the handler-forward-ref regression added. m2==m3 clean fixed point · pin 01d77f31
 - 2026-07-18 · ONE MISS, ONE DIAGNOSTIC + THE HANDLER-NAMESPACE REFUSALS (census 352 → 348): the env-miss path bound TVar(self) — tripping graph_bind's own occurs check (a spurious 0:0 E_OccursCheck per missing name) and reading downstream as an unconstrained var (the ownership move-default cascade the panel proved). It now binds NErrorHole via the new graph_bind_hole op; an unresolved VarRef callee borrows its direct args; the occurs check reads its span from the bind's Located reason. Two classes born ARMED at the decl site: E_HandlerStateShadowsOp (a state field naming an op of its handled effect compiled clean and returned the WRONG value; the medium's own m3 leg caught the second wheel violation, `caret`, the hour the check landed) and E_DuplicateFnName. Voice state fields renamed turns/caret_now; the code-dead duplicate FeedbackSpec deleted (silently shared tag ids with prelude's Delay/Accumulate/FilterSpec — the duplicate-TYPE decl refusal is the named peer Hβ.infer.type-decl-name-registry, repro banked). E_MissingVariable/E_OccursCheck reach wheel-zero but do NOT arm (the licence correction). Frontier gains run_refusal. m2==m3 · pin d6dd8ed9
@@ -1057,6 +1081,22 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-06-18→23 · the reframe + the three-doc consolidation; the crown's EfOpen~EfNeg unify (b4b1989); the handler registry dissolved into the live read
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
+
+The 2026-07-18 census-tail landings born three (each artifact-located):
+`Hβ.lower.boundary-weave-generic-thunk-row` (the census's last
+E_UnresolvedType root — a generic fn's `&&` short-circuit stages a
+boundary-weave thunk whose TFun row never resolves; four located sites:
+infer alt_same_name_set, lower rows_equal / splice_at / k2_is_park; the
+report now carries the weave span, so the probe starts at the site) ·
+`Hβ.graph.rowbound-ty-residual-tagged` (NRowBound stores EffRow AND — for
+mk_record_row_residual — a raw Ty in one untagged slot; occurs_in_row's
+delegation arm is the census's EffRow-vs-Ty error; the fix is a tagged
+binding representation, never an arm edit) ·
+`Hβ.emit.option-niche-repr` (the word-sentinel absence the bucket sweep
+did NOT reach: fill_arg_slots' 0-or-Node slot buffer (types.mn
+collect_slot_nodes, the census's Node-vs-Int) is the exact
+Option-of-handle niche — 0=None, handle=Some, zero boxing; the lower/emit
+arm that makes match-on-Option read the niche repr is the landing).
 
 The 2026-07-18 harvest + panel born peers (each artifact-verified before naming):
 `Hβ.infer.type-decl-name-registry` (a second `type X` silently MERGES —
@@ -1506,17 +1546,13 @@ in this column is one of its classes.
   manifest lands); the occurs cascade itself is DEAD (an env miss binds
   NErrorHole via graph_bind_hole, never the self-referential TVar that
   tripped graph_bind's occurs check — one miss, one diagnostic). The work,
-  by class (census 2266 → 348): E_TypeMismatch 109 (incl. the
-  single-variant record-wrapping `Ctor({...})` construction-inference bug,
-  ~5 voice sites, panel-found) · E_EffectMismatch 95 · E_PurityViolated 66 ·
-  E_IfMissingElse 32 (largely a checker false-positive class — the unit
-  proof does not reach effect-op calls in body position; graph_bind's own
-  arm shape is among them) · E_PatternInexhaustive 25 · E_FeedbackNoContext
-  11 (one checker-recognition root: the Iterate-class test does not read
-  installed iterate handlers or the declared `Sample` row — SYNTAX says the
-  class is structural, not a name-allowlist) · E_UnresolvedType 4 ·
-  E_ConstructorArity 4 (LStateSlotStore patterns bind 3 of 4) ·
-  E_ResumeOutsideArm 2. The mechanism is `diag_refuses`
+  by class (census 2266 → 6, trued 2026-07-18 end-of-day): E_TypeMismatch 2
+  (`Hβ.graph.rowbound-ty-residual-tagged` + the `Hβ.emit.option-niche-repr`
+  arg-slot instance — named-residue index) and E_UnresolvedType 4
+  (span-located; one root, `Hβ.lower.boundary-weave-generic-thunk-row`).
+  EffectMismatch / PurityViolated / IfMissingElse / PatternInexhaustive /
+  FeedbackNoContext / ConstructorArity / ResumeOutsideArm all reached ZERO
+  on 2026-07-18 (the §7 ledger holds each root). The mechanism is `diag_refuses`
   (a projection beside `diag_severity`, types.mn:1506) + the count on
   diagnostics_handler's own state + one live read at executable_gate. Do NOT
   declare the op before the arm and the gate land together — a declared

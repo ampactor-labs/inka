@@ -10,6 +10,8 @@
 
 // ── DSP Effects ─────────────────────────────────────────────
 
+import dsp/processors
+
 effect DSP {
     process(x: Float) -> Float
 }

@@ -25,6 +25,9 @@
 
 import graph
 import types
+import runtime/imap
+import runtime/persist
+import runtime/search
 import effects
 
 // LowerState — per-function MS state-machine bookkeeping (H7 §4.1

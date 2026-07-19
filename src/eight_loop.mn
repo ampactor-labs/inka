@@ -57,6 +57,7 @@
 //   Drift 9 (deferred):     All eight bodied; no "later."
 //   Drift 11 (suffix-append): Buffer-counter substrate.
 
+import ml/autodiff
 import types
 import effects
 import graph

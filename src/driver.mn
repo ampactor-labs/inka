@@ -65,12 +65,31 @@ fn driver_module_path(ref module_name) with Memory + Alloc + Filesystem = {
 
 // Module DAG collection — depth-first post-order walk from entry.
 // Leaves before importers; visited set prevents cycles.
-
+//
+// THE PRELUDE IS PRE-IMPORTED — that is what the word means. Every module
+// speaks the prelude's vocabulary (map / fold / Option / FeedbackSpec)
+// without an import line, so the DAG seeds with `prelude` before the
+// entry: its own imports (the runtime floor) resolve first, and the
+// post-order puts the whole standard vocabulary ahead of every user
+// module. Without the seed, `mentl compile main` reached a DAG that
+// omitted the vocabulary the concatenated-wheel build supplies and
+// emitted a module that could not assemble ($ev_lookup undefined —
+// Hβ.driver.wheel-imports-are-the-manifest, the fleet's measured
+// finding).
 fn driver_collect_dag(ref entry_module) with Memory + Alloc + Filesystem = {
   let buf = make_list(16)
   let visited = []
+  // The seed is conditional on RESOLUTION: the prelude is pre-imported where
+  // the stdlib is reachable (the repo, an installed MENTL_HOME); a bare
+  // scratch context with no lib/ compiles bare programs — seeding an
+  // unresolvable prelude there would hand the ARMED E_MissingModule a
+  // phantom and refuse every driver-path compile.
+  let (seeded, seeded_visited) =
+    if fs_exists(driver_module_path("prelude")) {
+      driver_collect_visit("prelude", (buf, 0), visited)
+    } else { ((buf, 0), visited) }
   let ((final_buf, final_count), _final_visited) =
-    driver_collect_visit(entry_module, (buf, 0), visited)
+    driver_collect_visit(entry_module, seeded, seeded_visited)
   slice(final_buf, 0, final_count)
 }
 
@@ -212,9 +231,44 @@ fn driver_check(ref entry_module)
 // the concatenation happens, once. The cursor-address transport renders
 // every span back to file:line through it; driver_compile_entry is its
 // map-dropping projection.
+// The weave order is CANONICAL, never the discovery order. The pinned blob
+// build concatenates `find src | sort` then `find lib | sort`; one-namespace
+// pre-registration makes ANY order compile, but verdicts are not yet
+// order-independent — a runtime fn declared before its prelude consumer
+// meets the TIGHT inferred scheme where the canon's order met the loose
+// pre-registered one, and three real latent mismatches surface (prelude's
+// sum / chunk / trim under a leaves-first weave — the banked measurement,
+// Hβ.infer.order-independent-verdicts). One canon, one truth: the DAG
+// discovers the SET; the sort fixes the WEAVE to the blob's own order, so
+// the two build paths read one input.
+fn driver_canonical_order(modules) with Memory + Alloc + Filesystem = {
+  let keyed = map((m) => (driver_module_order_key(m), m), modules)
+  map((pair) => { let (_, m) = pair m }, driver_sort_keyed(keyed))
+}
+
+// src/ ranks before lib/ (the blob's find order); within a rank, the path's
+// own byte order. The rank digit prefixes the resolved path as the key.
+fn driver_module_order_key(m) with Memory + Alloc + Filesystem = {
+  let p = driver_module_path(m)
+  if str_slice(p, 0, 4) == "src/" { "0{p}" } else { "1{p}" }
+}
+
+fn driver_sort_keyed(pairs) with Memory + Alloc =
+  fold([], (acc, p) => driver_insert_keyed(p, acc), pairs)
+
+fn driver_insert_keyed(pair, sorted) with Memory + Alloc = {
+  if len(sorted) == 0 { [pair] }
+  else {
+    let (k, _) = pair
+    let (k0, _) = sorted[0]
+    if str_lt(k, k0) { [pair] ++ sorted }
+    else { [sorted[0]] ++ driver_insert_keyed(pair, rest(sorted)) }
+  }
+}
+
 fn driver_entry_with_ranges(ref entry_module)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
-  let modules = driver_collect_dag(entry_module)
+  let modules = driver_canonical_order(driver_collect_dag(entry_module))
   let (source, _next_line, ranges) = fold(("", 1, []), (acc, m) => {
     let (src_acc, line_acc, r_acc) = acc
     let p = driver_module_path(m)
@@ -234,6 +288,24 @@ fn driver_entry_with_ranges(ref entry_module)
   }, modules)
   let ast = parse_program(lex(source))
   infer_program(ast)
+  // The weave carries its own MODULE STRUCTURE: each range entry minted as
+  // an NModule node — the module's NAME, its weave span, and the top-level
+  // decls the span contains. The fabric's NModule readers (same_module's
+  // proximity decay, module_path_of_span, the import walks) were built
+  // against this node and had ZERO writers, so every span resolved to the
+  // "" module and the argmax's module-aware decay flattened to one tie
+  // (the edit session focusing a prelude recovery hole instead of the
+  // entry's own `??`). The range map held the same fact out-of-band; the
+  // graph is its one home.
+  each((r) => {
+    let (m, _p, line_start, nlines) = r
+    let mspan = Span(line_start, 0, line_start + nlines, 0)
+    mint_node(NModule({
+      path: m,
+      decls: filter((n) => { let N(_, dsp, _) = n span_contains(mspan, dsp) }, ast),
+      span: mspan
+    }), mspan)
+  }, ranges)
   (ast, ranges)
 }
 

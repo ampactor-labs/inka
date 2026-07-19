@@ -55,6 +55,7 @@
 // - src/backends/wasm.mn LFeedback emit (commit 7f8ff5f)
 // - lib/dsp/clock.mn (Sample / Tick / Clock effects + handlers)
 
+import dsp/processors
 import dsp/signal
 import dsp/clock
 

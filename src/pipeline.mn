@@ -181,7 +181,15 @@ fn compile_stdin() = {
 // outside the install is reading a different ledger.
 fn pipeline_check(entry_module) = {
   {
-    driver_check(entry_module)
+    // Check reads the SAME one-namespace weave every other driver verb
+    // reads (compile / at / edit — driver_entry_with_ranges): whole-program
+    // truth, one span space. The old per-module walk (driver_check) inferred
+    // each module against only the layers already installed, so prelude's
+    // own body missed the substrate vocabulary its layer supplies —
+    // E_MissingVariable noise on a clean program. The per-module env
+    // overlay (Hβ.driver.per-module-env-overlay) is that walk's sequenced
+    // refinement; until it lands, the weave IS the check.
+    driver_entry_with_ranges(entry_module)
     diag_errors()
   }
     ~> wasi_filesystem

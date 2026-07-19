@@ -52,7 +52,8 @@
 //   636c365)
 
 import types
-import own        // for catch_abort handler
+// own supplies the catch_abort handler.
+import own
 
 // Choice — the canonical multi-shot effect. `choose(options)` with
 // MultiShot resume discipline. The handler decides exploration

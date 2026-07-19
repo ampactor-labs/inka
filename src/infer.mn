@@ -27,6 +27,8 @@
 import graph
 import effects
 import types
+import own
+import runtime/imap
 
 // Infer-local effect for row accumulation.
 // Each `FnStmt` / `LambdaExpr` pushes a `(row_handle, accumulated_row)`

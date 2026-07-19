@@ -47,6 +47,7 @@
 // handler receives narrower capability.
 
 import pipeline
+import own
 import query
 import infer
 import backends/wasm
@@ -62,6 +63,19 @@ import eight_loop
 import oracle
 import test
 import runtime/io
+// The shipped surface — the stdlib the medium's binary carries whether or
+// not the compiler's own body reaches it: format's verb substrate, the DSP
+// vocabulary, the runtime families a user program may import. The DAG that
+// builds the medium IS the manifest of what the medium ships.
+import format
+import dsp/feedback
+import dsp/signal
+import dsp/spectral
+import ml/tensor
+import runtime/cache_map
+import runtime/math
+import runtime/net
+import runtime/tuples
 
 // ─── EntryVerb ADT — the verb carries its target where required ───────
 //
@@ -357,10 +371,33 @@ fn edit_run(target_opt) = {
   0
 }
 
+// The session reads ONE weave — the same driver_entry_with_ranges the
+// address transport projects — never the per-module check walk: per-module
+// parses give every module its own span space, so the closure's seven
+// authored-absence positions (the entry's `??` plus the runtime's parse-
+// recovery holes) aliased near offset zero and the argmax focused a
+// prelude node (the 13-red frontier family). One weave, one span space;
+// and the caret OPENS AT THE ENTRY — its Located span is the entry's first
+// weave line, so the module-aware proximity decay ranks the entry's own
+// absences above the closure's.
 fn mentl_edit_session(entry_module) = {
-  driver_check(entry_module)
+  let (_ast, ranges) = driver_entry_with_ranges(entry_module)
+  let opening = entry_start_caret(entry_module, ranges)
   patch_set_target(entry_module)
-  cursor_session(Caret(0, Inferred("mentl edit session start")))
+  cursor_session(opening)
+}
+
+fn entry_start_caret(entry_module, ranges) = {
+  // type_name_eq pins the compare `: String` — a bare `==` on two names
+  // allocated by different passes is the pointer-eq class and never matches.
+  match find((r) => { let (m, _, _, _) = r; type_name_eq(m, entry_module) }, ranges) {
+    Some(r) => {
+      let (_, _, line_start, _) = r
+      Caret(0, Located(Span(line_start, 1, line_start, 1),
+        Inferred("mentl edit session start — at the entry")))
+    },
+    None => Caret(0, Inferred("mentl edit session start"))
+  }
 }
 
 // ─── serve_run — LSP transport on stdio

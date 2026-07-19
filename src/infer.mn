@@ -1267,7 +1267,17 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
 fn infer_call(func, args, handle, span: ValidSpan) = {
   let N(_, _, fh) = func
   let cname = callee_name(func)
-  if is_seq_op(cname) { infer_seq_op(cname, args, handle, span) }
+  // The substrate fast-path fires only for a SATURATED, hole-free call —
+  // both facts read live (the hole from the arg's own body, the arity from
+  // the callee's declared product). It previously fired on shape-of-name
+  // alone, so `list_set(??, i, v)` was typed saturated: the `??` never
+  // became the partial the pipe completes, and every seq-op pipe stage
+  // mismatched (14 census sites). An under-applied or holed seq-op call is
+  // the product-with-holes like any other call.
+  if is_seq_op(cname) && call_hole_index(args, 0) < 0
+     && len(args) == len(callee_params(cname)) {
+    infer_seq_op(cname, args, handle, span)
+  }
   else {
   // The single-variant record ctor in the ONE application syntax —
   // `X({...})` (SYNTAX §Constructor calls: same syntax as function calls).
@@ -1771,8 +1781,32 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
     // runtime (ev-miss, loud); the E_FeedbackNoContext DiagKind stays
     // for the check's return.
     PFeedback => {
-      unify(lh, rh, span, InferredPipeResult("<~", Inferred("feedback wiring")))
-      graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("feedback"))))
+      // SYNTAX §«<~» — the recurrence form: `((prev) => body) <~ delay(1)`
+      // binds PREV to the PRIOR ITERATION'S OUTPUT, so the lambda's param
+      // unifies with its own result (y[n-1] has y's type — the prior
+      // carries the forward path's refinement row for free) and the verb's
+      // value IS that result. A bare LHS is the feed-forward form: the verb
+      // carries its value through. The RHS names WHAT flows back — a
+      // FeedbackSpec value — and is checked as one; it is never unified
+      // with the FLOW (the arrow~spec unify that stood here mismatched all
+      // 15 recurrence sites, SYNTAX's own canonical lowpass included).
+      match graph_chase(lh) {
+        GNode(NBound(TFun(params, ret_ty, _row)), _) =>
+          if len(params) == 1 {
+            unify_types(param_ty(list_index(params, 0)), ret_ty, span,
+              InferredPipeResult("<~", Inferred("the prior is the prior output")))
+            graph_bind(handle, ret_ty,
+              Located(span, InferredPipeResult("<~", Inferred("recurrence result"))))
+          } else {
+            graph_bind(handle, TVar(lh),
+              Located(span, InferredPipeResult("<~", Inferred("feedback"))))
+          },
+        _ =>
+          graph_bind(handle, TVar(lh),
+            Located(span, InferredPipeResult("<~", Inferred("feedback"))))
+      }
+      unify_types(TVar(rh), TName("FeedbackSpec", [TVar(mint(Inferred("feedback state element")))]),
+        span, InferredPipeResult("<~", Inferred("the RHS is a state element")))
     }
   }
 }

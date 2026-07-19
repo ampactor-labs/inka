@@ -404,7 +404,7 @@
 # view changes inference; the new wheel reproduces itself). Remaining:
 # E_TypeMismatch 69 (list-word boundary 21, feedback recurrence 15,
 # seq-op-hole 14, misc — the banked root grouping), E_UnresolvedType 4.
-census_errors_max: 73
+census_errors_max: 59
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

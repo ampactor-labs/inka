@@ -591,6 +591,7 @@ fn occurs_in(handle, ref ty) with !Mutate = {
     TFloat           => false,
     TString          => false,
     TUnit            => false,
+    TByte            => false,
     // The leaf answers "does handle occur in the type GRAPH reachable from
     // here" — three tiers, each a hole the selfapply fixture found trapping
     // the compiler (f(f) spun chase_deep/subst_ty to stack exhaustion with

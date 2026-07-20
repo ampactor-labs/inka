@@ -510,6 +510,7 @@ fn extract_row(ty) with Pure = match ty {
   TFloat            => EfPure,
   TString           => EfPure,
   TUnit             => EfPure,
+  TByte             => EfPure,
   TList(_)          => EfPure,
   TTuple(_)         => EfPure,
   TVar(_)           => EfPure,

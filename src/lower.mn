@@ -602,6 +602,7 @@ fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + Loo
     TFloat             => LCall(handle, LGlobal(handle, "float_to_str"), [arg_lo]),
     TInt               => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
     TUnit              => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
+    TByte              => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
     // Aggregates — the generated $show_<sig> fold leaf (structural render),
     // named by the operand's fold-signature (read live from the proven type).
     TList(_)           => lower_show_call(handle, ah, arg_lo),
@@ -3288,6 +3289,7 @@ fn ty_handle_of(ty) = match ty {
   TFloat              => 0,
   TString             => 0,
   TUnit               => 0,
+  TByte               => 0,
   TList(_)            => 0,
   TTuple(_)           => 0,
   TFun(_, _, _)       => 0,

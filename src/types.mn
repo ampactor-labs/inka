@@ -36,6 +36,17 @@ type Ty
   | TFloat
   | TString
   | TUnit
+  | TByte                         // the packed sequence ELEMENT-slot leaf: a
+                                  //   byte VALUE is a word (repr RI32, arithmetic
+                                  //   is Int), but its SLOT stride in a packed
+                                  //   sequence is 1 — so [byte] (TList(TByte),
+                                  //   the §4① String) folds distinctly from
+                                  //   [Int] and lowers to load_i8/store_i8. The
+                                  //   value/slot split is the novel move: Rust's
+                                  //   u8 conflates them. Dead vocabulary until
+                                  //   String = TList(TByte) (the RI64/RF32
+                                  //   gradient-arm precedent — a trigger, not a
+                                  //   new scalar).
   | TList(Ty)
   | TTuple([Ty])
   | TFun([TParam], Ty, EffRow)    // params, return, effects
@@ -94,6 +105,8 @@ fn repr_of(ty) with Pure = match ty {
   TInt              => RI32,    // STEP 1's `repr i64` pin / fixed-point / i64-literal yields RI64
   TString           => RI32,    // pointer into linear memory
   TUnit             => RI32,
+  TByte             => RI32,    // a byte VALUE is a word (arithmetic is Int); the
+                                //   1-byte packing is a SLOT stride, not a value repr
   TList(_)          => RI32,    // pointer (STEP 1/4: a fixed-width lane-sequence pins RV128)
   TTuple(_)         => RI32,    // pointer
   TFun(_, _, _)     => RI32,    // table index / closure ptr
@@ -133,6 +146,19 @@ fn repr_width(r) with Pure = match r {
   RF64  => 8,
   RF32  => 4,
   RV128 => 16
+}
+
+// stride_of — the byte STRIDE of a sequence's element SLOT, the axis below
+// repr_of. A TByte element packs 1 byte (the §4① String's byte face; a byte
+// VALUE stays a word, but its slot is 1); every other element occupies a full
+// repr_width slot. This is where "the proof becomes the dispatch" lands for
+// sequence access: list_index/list_set/alloc_list read stride_of(elem) to emit
+// load_i8 vs load_i32 and to size the buffer — the packed/word distinction the
+// String=[Byte] unification rides. Dead until the element-repr-dispatched leaf
+// reads it (the RI64/RF32 gradient-arm precedent — a trigger, not a live path).
+fn stride_of(elem_ty) with Pure = match elem_ty {
+  TByte => 1,
+  _     => repr_width(repr_of(elem_ty))
 }
 
 // repr_wat — the WAT value-type token for a representation class. STEP 1's
@@ -175,6 +201,8 @@ fn fold_sig(ty) with Memory = match fold_strip(ty) {
   TFloat            => "d",
   TUnit             => "u",
   TString           => "s",
+  TByte             => "b",          // packed 1-byte slot — distinct from "i" so
+                                     //   [byte] and [Int] never share a fold helper
   TVar(_)           => "i",          // unresolved handle — a word
   TList(elem)       => "l{fold_sig(elem)}",
   TName(n, _)       => "n{n}",       // nominal — name carries identity
@@ -1934,6 +1962,7 @@ fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory = {
     TFloat  => "Float",
     TString => "String",
     TUnit   => "()",
+    TByte   => "Byte",
     TList(elem) => "List({show_type(elem)})",
     TTuple(elems) => "({show_list(elems, show_type, ", ")})",
     TFun(params, ret, row) =>

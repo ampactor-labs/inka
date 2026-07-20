@@ -2380,6 +2380,7 @@ fn same_ground(ref a, ref b) with Pure = match a {
   TFloat  => match b { TFloat  => true, _ => false },
   TString => match b { TString => true, _ => false },
   TUnit   => match b { TUnit   => true, _ => false },
+  TByte   => match b { TByte   => true, _ => false },
   // Compound types: same_ground rejects; unify_types handles structurally
   TVar(_)            => false,
   TList(_)           => false,
@@ -3354,7 +3355,7 @@ fn chase_probe_tag(ty) with Memory + Alloc = match ty {
   TRecord(_) => "TRecord", TRecordOpen(_, _) => "TRecordOpen",
   TRefined(_, _) => "TRefined", TCont(_, _, _, _) => "TCont",
   TAlias(n, _) => "TAlias({n})", TInt => "TInt", TFloat => "TFloat",
-  TString => "TString", TUnit => "TUnit"
+  TString => "TString", TUnit => "TUnit", TByte => "TByte"
 }
 
 
@@ -3369,6 +3370,7 @@ fn chase_deep_at(ty, d) = if d > 200 {
   TFloat  => ty,
   TString => ty,
   TUnit   => ty,
+  TByte   => ty,
   TVar(h) => {
     let node = graph_chase(h)
     let GNode(kind, _) = node
@@ -3412,6 +3414,7 @@ fn free_in_ty(ty) = match ty {
   TFloat                 => [],
   TString                => [],
   TUnit                  => [],
+  TByte                  => [],
   TVar(id)               => [id],
   TList(elem)            => free_in_ty(elem),
   TTuple(elems)          => free_in_list(elems),
@@ -3538,6 +3541,7 @@ fn subst_ty(ty, mapping) = match ty {
   TFloat  => ty,
   TString => ty,
   TUnit   => ty,
+  TByte   => ty,
   TVar(id) => {
     // Read the LIVE node, not the raw captured TVar (union-find / Carried-Truth).
     // A var free at generalize but BOUND after (a handler config-param the

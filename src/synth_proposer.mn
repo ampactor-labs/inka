@@ -184,6 +184,7 @@ fn enumerate_typed(target_ty, allowed_effects, context)
     TName(name, args) => enumerate_constructors(name, args, context),
     TFun(params, ret, row) => enumerate_lambdas(params, ret, row, context),
     TInt    => enumerate_int_literals(context),
+    TByte   => enumerate_int_literals(context),
     TFloat  => enumerate_float_literals(context),
     TString => enumerate_string_literals(context),
     TUnit   => one_unit_candidate(context),

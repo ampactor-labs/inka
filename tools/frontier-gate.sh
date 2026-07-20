@@ -119,7 +119,18 @@ BOOT_RUNTIME_SHADOW=""
 # Pure fictions dropped for the Memory/Alloc the list ops perform, cache_map's
 # Pure declarations, persist's Persist op, threading's Memory). Rows only;
 # the diagnostic multiset SHRANK (the sweep's own purpose).
-EXPECTED_RUNTIME_SHADOW_SHA256="065e34e27fb4925c1939d5bbbc688687848ca1a8a72b248dde4bd505c890a166"
+#
+# 2026-07-20: repinned for the §4① string-layer typing + the expect_same
+# chase-first fix (Hβ.infer.expect-same-chases-bound-var). The multiset GREW
+# 2 -> 13, and the growth is benign-by-construction: the new entries are all
+# `Int vs List` in prelude's GENERIC list combinators (reduce/unique/chunk/
+# iterate) whose element type is a free var when the libs compile WITHOUT
+# src/. The expect_same fix propagates that var precisely instead of the old
+# clobber masking it, so the isolation shadow surfaces it — but the FULL
+# wheel census is 0 (they resolve at every concrete use), so no user program
+# and no self-compile sees them. Growth here is the isolation context lacking
+# src/, not a regression; the full-wheel census is the real gate.
+EXPECTED_RUNTIME_SHADOW_SHA256="f0f321a31e94f7e3e31d741d5bb0851e0d9f6d1852f7ea00c1e359582f762511"
 
 pass() {
   echo "  PASS $*"
@@ -473,14 +484,18 @@ lsp_frame() {
 #
 # Two contracts. (1) is the graph-population MECHANISM the fix delivers, asserted
 # through the JSON-free `query` transport: run the frontend, then consult the live
-# type. (2) is the end-to-end serve session as the executable SPEC. serve is
-# BLOCKED below the LSP layer by a pre-existing json float trap — parse_number
-# returns a Float through an indirect call whose $ft is all-i32, so json_parse
-# traps on the FIRST numeric field of ANY request (id / position.line),
-# identically on boot and this wheel (Hβ.emit.float-evidence-ft, out of the LSP
-# assignment). Until that clears, (2) asserts the wheel does not REGRESS serve
-# past that pinned blocker; it greens to a real hover assertion the moment serve
-# can parse JSON.
+# type. (2) is the end-to-end serve session as the executable SPEC.
+#
+# 2026-07-20: the pinned json float blocker is CLEARED. It was Hβ.emit.float-
+# evidence-ft — parse_number returned a Float through an indirect call whose
+# $ft was all-i32, so json_parse trapped on the FIRST numeric field of any
+# request. The §4① string-layer typing + the expect_same chase-first fix that
+# closed the Float-ctor-arg face of that class also closed the json face: serve
+# now parses JSON and reaches the LSP layer without trapping. So (2) INVERTS —
+# a parse_number trap is now a REGRESSION, not the expected state — and greens
+# on the cleared blocker. The remaining gap is the hover-RESPONSE emission
+# (serve exits 0 having consumed the frames but does not yet write a result);
+# that is Hβ.lsp.transport-runs-frontend's next rung, not a float trap.
 run_lsp_hover() {
   local compiler="$1" dir="$2" label="$3"
   local doc="$ROOT/tests/frontier/mn-lsp-hover-doc.mn"
@@ -510,9 +525,11 @@ run_lsp_hover() {
   if grep -q '"contents"' "$sout"; then
     pass "$label lsp serve hover returned a type (contents present)"
   elif grep -q 'parse_number' "$serr"; then
-    pass "$label lsp serve reaches the pinned json blocker (Hβ.emit.float-evidence-ft; spec armed)"
+    fail "$label lsp serve REGRESSED to the json float trap (Hβ.emit.float-evidence-ft returned; see $serr)"
+  elif [ "$src" -eq 0 ]; then
+    pass "$label lsp serve clears the json float blocker (no parse_number trap; hover-response emission is the next rung, Hβ.lsp.transport-runs-frontend)"
   else
-    fail "$label lsp serve trapped past the pinned blocker (exit=$src; see $serr)"
+    fail "$label lsp serve trapped (exit=$src; see $serr)"
   fi
 }
 
@@ -603,6 +620,15 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-own-call-arg-borrow.mn" 42 no "$dir"
   run_program "$compiler" own-forward-ref-seq \
     "$ROOT/tests/frontier/mn-own-forward-ref-seq.mn" 0 no "$dir"
+  # A Float POSITIONAL constructor field filled from an unannotated param: `g`
+  # must infer Float from its use as the ctor's argument (the mirror of a
+  # pattern binding a sub-pattern to the field type). Before expect_same chased
+  # the arg's live binding, the scalar CLOBBERED the NBound(TVar(binder))
+  # reference, `g` stayed an unresolved var → i32 floor, and the f64 call site
+  # dispatched through an all-i32 $ft — indirect-call trap. RED (run 134) on the
+  # pre-fix boot, 42 on this one.
+  run_program "$compiler" ctor-float-param \
+    "$ROOT/tests/frontier/mn-ctor-float-param.mn" 42 no "$dir"
   # E_OwnershipViolation armed 2026-07-18 — the double-move fixture moved from
   # run_diagnostic (productive exit 0) to the armed-class refusal contract.
   run_refusal "$compiler" own-call-arg-move \

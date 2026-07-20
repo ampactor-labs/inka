@@ -446,7 +446,7 @@ handler string_literal_collector with buf = make_list(16), count = 0, next_offse
 
 handler state_slots_collector with buf = make_list(8), count = 0 {
   visit_state_slot(slot) => {
-    if slot_already_recorded(buf, slot, 0, count) { resume() }
+    if handle_recorded(buf, slot, 0, count) { resume() }
     else {
       let extended = list_extend_to(buf, count + 1)
       let written  = list_set(extended, count, slot)
@@ -486,6 +486,18 @@ fn slot_already_recorded(entries, target: String, i, n) = {   // the String proo
   if i >= n { false }
   else if list_index(entries, i) == target { true }
   else { slot_already_recorded(entries, target, i + 1, n) }
+}
+
+// handle_recorded — the Int-handle membership: a state slot is a graph-node
+// HANDLE, not a name, so it dedups by handle identity (== on Int → i32.eq),
+// never str_eq. slot_already_recorded's String proof is right for op NAMES
+// (the sibling collector below), wrong for handles — the two equalities are
+// distinct, so the two typed checks are, until a generated membership fold
+// projects the element type live (Hβ.runtime.indexed-map-primitive).
+fn handle_recorded(entries, target, i, n) = {
+  if i >= n { false }
+  else if list_index(entries, i) == target { true }
+  else { handle_recorded(entries, target, i + 1, n) }
 }
 
 // project_emit_state — single-tree-walk; four projections drained at end.

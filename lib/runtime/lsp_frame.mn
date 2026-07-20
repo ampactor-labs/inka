@@ -157,7 +157,7 @@ fn read_body(n) with Memory + Alloc + WASI = {
   store_i32(buf, n)
   let total = read_body_loop(buf, 0, n)
   if total < n { LspFrameEof }
-  else         { LspFrame(buf) }
+  else         { LspFrame(str_of_buf(buf)) }
 }
 
 fn read_body_loop(buf, written, total) with Memory + Alloc + WASI = {

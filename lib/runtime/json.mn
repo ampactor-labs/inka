@@ -240,7 +240,7 @@ fn scan_string_loop(src, pos, buf, written, cap) with Memory + Alloc = {
     let b = byte_at(src, pos)
     if b == 34 {
       store_i32(buf, written)
-      JOk(JStr(buf), pos + 1)
+      JOk(JStr(str_of_buf(buf)), pos + 1)
     } else if b == 92 {
       handle_escape(src, pos + 1, buf, written, cap)
     } else {

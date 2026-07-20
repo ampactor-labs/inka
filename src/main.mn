@@ -172,7 +172,7 @@ fn parse_cli_args(argv) with Memory + Alloc = {
 // string); existence/resolution is the runner's question. Returns None for
 // anything else, falling through to the verb ladder.
 fn parse_address(ref s) with Memory + Alloc = {
-  let n = load_i32(s)
+  let n = byte_len(s)
   let c1 = addr_colon_from(s, 0, n)
   if c1 <= 0 { None }
   else {
@@ -197,7 +197,7 @@ fn parse_address(ref s) with Memory + Alloc = {
 // The first ':' at or after i; -1 when none.
 fn addr_colon_from(ref s, i, n) with Memory = {
   if i >= n { 0 - 1 }
-  else if load_i8(s + 4 + i) == 58 { i }
+  else if byte_at(s, i) == 58 { i }
   else { addr_colon_from(s, i + 1, n) }
 }
 
@@ -211,7 +211,7 @@ fn addr_int(ref s, i, end) with Memory + Alloc = {
 fn addr_int_loop(ref s, i, end, acc) with Memory + Alloc = {
   if i >= end { Some(acc) }
   else {
-    let ch = load_i8(s + 4 + i)
+    let ch = byte_at(s, i)
     if ch >= 48 && ch <= 57 { addr_int_loop(s, i + 1, end, acc * 10 + (ch - 48)) }
     else { None }
   }
@@ -931,17 +931,17 @@ fn value_lede(sh) with GraphRead + Alloc + Memory = match graph_node_body(sh) {
 
 fn comment_lede(sh) with GraphRead + Alloc + Memory = {
   let c = graph_comment_at(sh)
-  if load_i32(c) == 0 { "" } else { ", {comment_first_line(c)}" }
+  if byte_len(c) == 0 { "" } else { ", {comment_first_line(c)}" }
 }
 
 fn comment_first_line(ref c) with Memory + Alloc = {
-  let cut = addr_newline_at(c, 0, load_i32(c))
+  let cut = addr_newline_at(c, 0, byte_len(c))
   if cut < 0 { c } else { str_slice(c, 0, cut) }
 }
 
 fn addr_newline_at(ref s, i, n) with Memory = {
   if i >= n { 0 - 1 }
-  else if load_i8(s + 4 + i) == 10 { i }
+  else if byte_at(s, i) == 10 { i }
   else { addr_newline_at(s, i + 1, n) }
 }
 

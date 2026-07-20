@@ -1019,6 +1019,34 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-20 · THE §4① STRING LAYER TYPES ITSELF — the expect_same root fix
+  lands, no compromises (Hβ.infer.expect-same-chases-bound-var; census held 0
+  the honest way). A Float POSITIONAL ctor field from an unannotated param
+  (`type Box = MkBox(Float)`, `fn wrap(g) = MkBox(g)`) left `g` an unresolved
+  var — expect_same, the LONE unify arm that bound a var without chasing,
+  CLOBBERED the arg reference's NBound(TVar(binder)) live binding, orphaning
+  the binder — so g floored to i32 and the f64 call site trapped indirect-call
+  (the ctor-arg face of float-evidence-ft; it also blocked LSP serve on json's
+  parse_number Float). The one-line fix (chase the var live, like every other
+  arm) UNMASKED the runtime's pervasive handle-word pun, so foundational
+  correctness demanded typing the string layer whole: byte_len/byte_at/str_slice/
+  str_concat/view_base/the float builders are seq-ops (typed calls over
+  self-consistent raw bodies, the list_index pattern); str_of_buf is the ONE
+  construction boundary (§4① — a raw [len][bytes] buffer word IS a String),
+  coerced at every builder's return; parse/comment functions read via byte_at/
+  byte_len not raw arithmetic; state slots dedup by handle identity (i32.eq),
+  not str_eq (handle_recorded — a handle is not a name). Six m2 builds drove
+  the census 10 → 17 (typing byte_len alone, refuted) → 15 → 8 → 2 → 0. The LSP
+  json float blocker CLEARED (serve reaches the LSP layer; hover-response is the
+  next rung). TWO convergent shortcuts were built and refuted by the binary
+  before the foundational path: typing byte_len as String SPREAD the census (the
+  string layer is uniformly raw-Int, 104 `s + N` sites), and address-permissive
+  memory ops is blocked because `s + 12` forces Int through `+`. TRANSITION
+  m3 == m4 (594-line diff = the emit change crossing one generation); the
+  runtime-shadow grew 2 → 13 (benign — generic prelude combinators' free element
+  var surfaced in ISOLATION by the precise propagation; full wheel census 0).
+  Board whole: census 0, frontier 89/0 (ctor-float-param + lsp-blocker-cleared),
+  proof-exactness 9/9, crown 5/5, micros 72/72 · pin a0dd9849
 - 2026-07-18 · THE RECORD-CTOR ARROW VIEW (census 101 → 73): `X({...})` — the single-variant nominal ctor in the one application syntax — met the env's RESULT binding at infer_call's chase and mismatched at 29 sites, the tail's biggest root. The arrow is a VIEW minted at the read (record_ctor_arrow_view — the identical instantiation infer_pat's RecordSchemeKind arm performs; one view two readers; the scheme stays the RESULT, one home); the saturated machinery does the rest. TRANSITION m3 == m4 · pin 8e248607
 - 2026-07-18 · FIVE MORE CLASSES EXTINCT (census 185 → 101): EffectMismatch + PurityViolated to ZERO (the widen loop's fixpoint — nine rebuild-and-re-judge iterations; !-carrying declarations matched on positive parts); ResumeOutsideArm (the synth candidate fan moved INTO its arm — backtrack's try_each shape; the census was right); ConstructorArity (QRFlowLabel's second field); PatternInexhaustive (the counter was PAlt-BLIND — collect_arm_tags/arms_have_wildcard now flatten alternation branches; voice's two H6 matches were exhaustive all along). register_one_variant's refutable let-destructure became its match; unlock_capability gained AWrapHandler→CSandbox; dead lib/runtime/buffer.mn DELETED whole (zero consumers, three findings one deletion) · pins 0f3d4f17, bfc576f2
 - 2026-07-18 · THE ADDRESS IS THE SURFACE (census 213 → 185; frontier 71/0): `mentl voice.mn:9` answers `Query: echo(mix, x) : Float` — README §9's smallest transport, real. VAt at the argv boundary; driver_entry_with_ranges returns the module-range map from the concatenation fold that always computed it; the three-case line rule resolves over the span index every node writes at birth; cursor_at_handle (new CursorRead op; the eight-arm fan extracted to one cursor_view_of) projects without re-resolving; the facet-silent render reads source slices, env schemes, literal bodies, and the Why walk mapped to file:line — every lede a live read. propose_at is the ABSENCE facet structurally (authored_hole, the patch gate's own read) — which also fenced Hβ.emit.float-evidence-ft (an f64-arg candidate ctor through an all-i32 $ft, trapping the first float-position enumeration ever taken). The session's exact-reason-span resolver SURVIVES as the documented live-generation crutch (measured: mint-span find_tightest resolved a stale generation, 13 edit fixtures red at once; dissolves with session-weave-epoch-scope). Remaining README-Why substrate named: why-flow-naming (FnParam-at-call), refinement-provenance · pin 6e7c10b2
@@ -1173,6 +1201,20 @@ handler, graph_rollback does not cover diagnostic state) ·
 `Hβ.infer.ctor-record-construction-unify` (single-variant record-wrapping
 `Ctor({...})` construction unifies against the ctor's arrow type instead of
 its result — ~5 voice sites of E_TypeMismatch) ·
+`Hβ.infer.expect-same-chases-bound-var` (LANDED 2026-07-20, pin a0dd9849 — the
+ledger head has the full arc). expect_same was the LONE unify arm that bound a
+var without chasing, so a scalar clobbered a ctor-argument reference's
+NBound(TVar(binder)) live binding and the parameter never learned the field
+type (Float → i32 floor → indirect-call trap); the one-line fix chases like
+every other arm. It unmasked the runtime handle-word pun, which the §4①
+string-layer typing closed whole: byte_len/byte_at/str_slice/str_concat/
+view_base/the float builders are seq-ops, str_of_buf is the ONE construction
+boundary (a raw buffer word IS a String), handle_recorded dedups Int handles
+by i32.eq. Census 0, m3 == m4, board whole. Repro registered:
+tests/frontier/mn-ctor-float-param.mn. The next rung the fix exposed —
+`Hβ.lsp.hover-response-emission`: serve now clears the json float blocker and
+reaches the LSP layer but does not yet write a hover result
+(Hβ.lsp.transport-runs-frontend)) ·
 `Hβ.lsp.transport-runs-frontend` (ensure_doc_open reads bytes, never
 lex/parse/infers — hover reads an unpopulated graph; v1 = the pipeline splice)
 · `Hβ.format.render-totality-before-fmt` (mentl fmt wiring is premature:

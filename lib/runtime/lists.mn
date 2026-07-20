@@ -196,9 +196,12 @@ fn list_compare_loop(a, b, la, lb, i) -> Int with Memory =
     else { list_compare_loop(a, b, la, lb, i + 1) }
   }
 
+// The length reads route through the structural `len` (a seq-op, typed
+// [x] -> Int), not raw load_i32: `a`/`b` are also list_index'd in the loop,
+// so a raw load_i32 would pun one value as both Int and [x] in one body.
 fn list_compare(a, b) -> Int with Memory =
-  let la = load_i32(a)
-  let lb = load_i32(b)
+  let la = len(a)
+  let lb = len(b)
   list_compare_loop(a, b, la, lb, 0)
 
 // list_hash — FNV-1a over the elements: the [a] instance of the ONE hash leaf.
@@ -210,7 +213,7 @@ fn list_hash_loop(xs, i, n, h) -> Int with Memory =
   else { list_hash_loop(xs, i + 1, n, i32_xor(h, list_index(xs, i)) * 16777619) }
 
 fn list_hash(xs) -> Int with Memory = {
-  let n = load_i32(xs)
+  let n = len(xs)
   list_hash_loop(xs, 0, n, i32_xor(2166136261, n) * 16777619)
 }
 

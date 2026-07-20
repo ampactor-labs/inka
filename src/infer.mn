@@ -1213,6 +1213,24 @@ fn is_seq_op(cname: String) with Pure =
   // `a -> Bool` here so a presence test never pins its operand's element
   // type; the raw body compares the word.
   || cname == "slot_present"
+  // The String face of the sequence node-kind (the comment above: byte_at IS
+  // list_index, byte_len IS len). Typed here so consumers holding a String
+  // type against the projection, never the load_i32 word-idiom body — the
+  // exact list_index pattern (self-consistent raw body, typed calls). is_view
+  // stays OUT: it is called INSIDE byte_len/byte_at beside load_i32(s), so a
+  // String projection would pun s in one body; it is the raw Int -> Bool
+  // discriminant its word-reading callers already expect.
+  || cname == "byte_len"   || cname == "byte_at"
+  // The String BUILDERS: their bodies alloc a [len][bytes]/view record and
+  // return its word (self-consistent Int inside, the int_to_str pattern);
+  // typed here so the projected RESULT is the String consumers read, never the
+  // raw buffer word. view_base is the reader that resolves a String to its
+  // (flat_buf, offset) — String in, word-pair out.
+  || cname == "str_slice"  || cname == "str_concat"    || cname == "str_of_single_byte"
+  || cname == "str_literal_5" || cname == "view_base"   || cname == "str_of_buf"
+  || cname == "float_to_str" || cname == "float_zero_pad" || cname == "float_format_fixed"
+  || cname == "float_format_scientific" || cname == "float_render_positive"
+  || cname == "float_digits_to_str"
 
 // seq_force — bind the i-th argument's type to `ty` (a no-op past the end).
 // `graph_bind` on a VarRef handle propagates to the bound variable (the same
@@ -1265,6 +1283,25 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
     "last"  => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, elem, Located(span, Inferred("head element"))) },
     "list_index" => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); graph_bind(handle, elem, Located(span, Inferred("element at index"))) },
     "int_to_str" => { seq_force(ah, 0, TInt, span); graph_bind(handle, TString, Located(span, Inferred("decimal render"))) },
+    // The String face: byte_at IS list_index over [byte], byte_len IS len.
+    // The element is a byte (an Int 0..255); the sequence is a String.
+    "byte_len" => { seq_force(ah, 0, TString, span); graph_bind(handle, TInt, Located(span, Inferred("byte length"))) },
+    "byte_at"  => { seq_force(ah, 0, TString, span); seq_force(ah, 1, TInt, span); graph_bind(handle, TInt, Located(span, Inferred("byte at index"))) },
+    // The String BUILDERS project a String RESULT over a raw buffer body.
+    "str_slice" => { seq_force(ah, 0, TString, span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); graph_bind(handle, TString, Located(span, Inferred("string slice"))) },
+    "str_concat" => { seq_force(ah, 0, TString, span); seq_force(ah, 1, TString, span); graph_bind(handle, TString, Located(span, Inferred("string concat"))) },
+    "str_of_single_byte" => { seq_force(ah, 0, TInt, span); graph_bind(handle, TString, Located(span, Inferred("single-byte string"))) },
+    "str_literal_5" => { seq_force(ah, 0, TString, span); graph_bind(handle, TString, Located(span, Inferred("string literal"))) },
+    // view_base resolves a String to its (flat_buf, byte_offset) word pair.
+    "view_base" => { seq_force(ah, 0, TString, span); graph_bind(handle, TTuple([TInt, TInt]), Located(span, Inferred("view base"))) },
+    // str_of_buf — the raw buffer word IS a String (§4① construction boundary).
+    "str_of_buf" => graph_bind(handle, TString, Located(span, Inferred("buffer as string"))),
+    "float_to_str" => { seq_force(ah, 0, TFloat, span); graph_bind(handle, TString, Located(span, Inferred("float render"))) },
+    "float_render_positive" => { seq_force(ah, 0, TFloat, span); graph_bind(handle, TString, Located(span, Inferred("positive float render"))) },
+    "float_zero_pad" => { seq_force(ah, 0, TInt, span); graph_bind(handle, TString, Located(span, Inferred("zero pad"))) },
+    "float_format_fixed" => { seq_force(ah, 1, TInt, span); graph_bind(handle, TString, Located(span, Inferred("fixed-notation float"))) },
+    "float_format_scientific" => { seq_force(ah, 1, TInt, span); graph_bind(handle, TString, Located(span, Inferred("scientific-notation float"))) },
+    "float_digits_to_str" => { seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); graph_bind(handle, TString, Located(span, Inferred("digit bytes to string"))) },
     "slot_present" => graph_bind(handle, TName("Bool", []), Located(span, Inferred("slot presence"))),
     // The length read.
     "len"        => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, TInt, Located(span, Inferred("sequence length"))) },
@@ -2318,7 +2355,16 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
 
 fn expect_same(ref a, ref b, span: ValidSpan, reason) = {
   match b {
-    TVar(hb) => graph_bind(hb, a, Located(span, reason)),
+    // The var may ALREADY be bound — a constructor-argument reference is
+    // NBound(TVar(binder)), the graph's live proof that the arg IS the
+    // param. A raw graph_bind(hb, a) CLOBBERS that binding, orphaning the
+    // binder: the arg reference learns the scalar, the parameter never does
+    // (a Float ctor field left the param an unresolved var → i32 floor →
+    // f64-through-i32 trap). Flip to the one canonical var path (every other
+    // unify arm does) — it chases hb live, unifies the scalar against the
+    // bound inner (binding the binder for a free chain, reporting a genuine
+    // mismatch for a bound-to-conflicting-scalar chain the raw bind masked).
+    TVar(_) => unify_types(b, a, span, reason),
     _ =>
       if same_ground(a, b) { () }
       else { type_mismatch(a, b, span, reason) }

@@ -1,0 +1,23 @@
+// A Float POSITIONAL constructor field filled from an unannotated parameter.
+// The field type is a fact the ctor scheme proves (MkBox : Float -> Box), so
+// `g` must infer Float from its use as MkBox's argument — as a pattern binds a
+// sub-pattern to the field type on the read side. Before expect_same chased
+// the argument's live binding, a scalar meeting the NBound(TVar(binder))
+// reference CLOBBERED the binder: `g` stayed an unresolved var, floored to the
+// i32 word, and the f64 call site (0.5 is proven Float) dispatched through an
+// all-i32 $ft — `indirect call type mismatch` at run (Hβ.emit.float-evidence-ft,
+// the ctor-arg face; root Hβ.infer.expect-same-chases-bound-var). The fixed
+// compiler infers `g: Float`, emits an f64 param, and the value round-trips.
+//
+// Positional-field-specific: the record form `type Box = {value: Float}` with
+// `MkBox{value: g}` is IMMUNE (record construction unifies the field via
+// RecordSchemeKind, var-on-the-left; the positional path goes through
+// infer_call_saturated → expect_same). Distinct ctor name (MkBox != Box) — the
+// canonical single-variant ADT, SYNTAX.md's own `type Token = Tok(...)` idiom.
+type Box = MkBox(Float)
+
+fn wrap(g) = MkBox(g)
+
+fn main() = match wrap(0.5) {
+  MkBox(x) => if x > 0.25 && x < 0.75 { 42 } else { 0 }
+}

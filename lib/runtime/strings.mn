@@ -189,7 +189,7 @@ fn str_concat(a, b) with Memory + Alloc = {
   store_i32(dest, la + lb)
   mem_copy(dest + 4, a_buf + 4 + a_off, la)
   mem_copy(dest + 4 + la, b_buf + 4 + b_off, lb)
-  dest
+  str_of_buf(dest)
 }
 
 // str_concat_all — materialize a list of strings into ONE flat string.
@@ -219,7 +219,7 @@ fn str_concat_all(xs) with Memory + Alloc = {
   let dest  = alloc(4 + total)
   store_i32(dest, total)
   copy_strings_to(xs, dest, 4, 0)
-  dest
+  str_of_buf(dest)
 }
 
 fn sum_byte_lens(xs, i, acc) with Memory =
@@ -268,7 +268,7 @@ fn str_slice(s, start, end) with Memory + Alloc = {
   store_i32(view + 4, base_buf)
   store_i32(view + 8, base_off + cstart)
   store_i32(view + 12, n)
-  view
+  str_of_buf(view)
 }
 
 // split — sep-delimited tokens as zero-copy views into s (one
@@ -320,7 +320,7 @@ fn str_unescape(s) with Memory + Alloc = {
   let ptr = alloc(4 + dlen)
   store_i32(ptr, dlen)
   str_unescape_into(s, 0, n, ptr, 0)
-  ptr
+  str_of_buf(ptr)
 }
 
 // is_hex_byte / hex_val — hex-digit classification and value for the
@@ -398,7 +398,7 @@ fn int_to_str(n) with Memory + Alloc = {
     store_i8(ptr + 12, 54)    // '6'
     store_i8(ptr + 13, 52)    // '4'
     store_i8(ptr + 14, 56)    // '8'
-    ptr
+    str_of_buf(ptr)
   }
   else if n < 0 {
     let neg = str_of_single_byte(45)               // "-"
@@ -437,11 +437,17 @@ handler show_default {
 
 fn to_string(x) with Show = show_word(x)
 
+// str_of_buf — the construction boundary: a raw [len][bytes] buffer word IS a
+// String (§4①, a handle is a word). The identity projection that lets a
+// builder's raw buffer body return the typed String its consumers read — the
+// alloc_list/make_list altitude split at the text face (typed via is_seq_op).
+fn str_of_buf(buf) with Pure = buf
+
 fn str_of_single_byte(b) with Memory + Alloc = {
   let ptr = alloc(5)
   store_i32(ptr, 1)
   store_i8(ptr + 4, b)
-  ptr
+  str_of_buf(ptr)
 }
 
 fn int_to_str_positive(n) with Memory + Alloc = {
@@ -454,7 +460,7 @@ fn int_to_str_positive(n) with Memory + Alloc = {
   let dest = alloc(4 + len)
   store_i32(dest, len)
   mem_copy(dest + 4, scratch + 4 + used, len)
-  dest
+  str_of_buf(dest)
 }
 
 // int_write_digits — write decimal digits right-to-left into buf[0..10).
@@ -603,7 +609,7 @@ fn float_zero_pad(n) with Memory + Alloc = {
     let dest = alloc(4 + n)
     store_i32(dest, n)
     float_fill_zeros(dest + 4, 0, n)
-    dest
+    str_of_buf(dest)
   }
 }
 
@@ -633,7 +639,7 @@ fn float_digits_to_str(digits, start, end) with Memory + Alloc = {
     let dest = alloc(4 + len)
     store_i32(dest, len)
     float_fill_digit_bytes(dest + 4, digits, start, end, start)
-    dest
+    str_of_buf(dest)
   }
 }
 
@@ -1031,7 +1037,7 @@ fn str_slice_from_list(ref lst, n) with Memory + Alloc = {
   let dest = alloc(4 + n)
   store_i32(dest, n)
   str_slice_from_list_loop(lst, dest, 0, n)
-  dest
+  str_of_buf(dest)
 }
 
 fn str_slice_from_list_loop(ref lst, dest, i, n) with Memory + Alloc = {

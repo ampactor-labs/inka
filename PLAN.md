@@ -1019,6 +1019,42 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-21 · THE STRIDE CARRIER LANDS (7db29195; the §4① substrate keystone)
+  + the merge FULLY DIAGNOSED. A sequence carries its element stride in the free
+  HIGH bits of its existing tag word (tag_word = sc*16 + tag; zero-biased so sc 0
+  => stride 4 and every current list is byte-identical; only a byte writes sc 1).
+  decode_stride/pack_tag/seq_stride/seq_tag/seq_sc/load_strided/store_strided in
+  lists.mn (load_strided BRANCHES load_i8/load_i32 — no padding); stride_class in
+  types.mn; alloc/list_set/index/push/concat/slice/flat_fill thread the stride;
+  snoc/concat/slice nodes carry the parent's sc (self-describing). The flat leaf
+  reads the stride LIVE, so a generic body over a packed sequence never assumes
+  4 — the substrate that makes String=[byte] SOUND. m2==m3==m4, census 0, 72
+  micros green. One real bug fixed en route: decode_stride belongs in lists.mn,
+  not the type layer (the micro RTLIBS blob has no src/). The TYPE-MERGE HALF
+  (unify_types String↔[byte] both arms, same_ground cross-arms, fold_strip
+  TString => TList(TByte); TString STAYS NULLARY — no TAlias clone, the OOM
+  dodged; no mint site changes) was BUILT then REVERTED: an 8-agent build cycle
+  PROVED (binary, not theory) it is INSEPARABLE from the physical migration —
+  alone it TRAPS m3, because str_eq now lowers to $list_eq => list_index_unchecked
+  which reads a string's +4 CONTENT byte as a tag word (garbage => unreachable),
+  first hit in env_resolve's interned-name compare while self-compiling. THE
+  REMAINING ULTIMATE, sequenced (land ATOMICALLY, never the merge alone): (1) the
+  physical +8 layout migration — strings become [count][pack_tag(0,1)][bytes@+8]
+  (identical to a stride-1 list), ~50 raw +4 sites across strings.mn + io/net/
+  lsp_frame/json/persist/driver/main + the emit_string_data/string_literal_collector
+  8-byte header + emit_list_literal stride + the show byte-guard (show_subtys skips
+  a TByte element's list-show helper, or "hi" renders "[104,105]"); (2) the
+  DIRECTIONAL TByte→Int arithmetic coercion (Hβ.infer.seq-addr-downcast) — REQUIRED
+  even for map((b)=>b-32, "abc"): list_index returns the element TByte, byte
+  arithmetic needs Int, and TByte does NOT unify with TInt (the value is an Int-repr
+  word, the SLOT is stride 1 — a byte-value-to-Int widening at the operator,
+  result Int, preserving fold-distinguishability so a [byte] never collapses to
+  stride-4 [Int]); (3) the two-stage DISPOSABLE bootstrap (no permanent compat —
+  boot emits old +4 literals; W1 reads +4/emits +8 → m2 works; W2 reads +8 →
+  m3==m4; re-pin; W1 discarded). The BEHAVIORAL BATTERY (map/fold/index/==/concat/
+  show over real strings, output-checked) is the LOAD-BEARING gate — the fixpoint
+  oracle is structurally blind to string corruption (census 0 and m3==m4 both hold
+  for a byte_at-disciplined wheel while user code corrupts)
 - 2026-07-20 · THE STRING=[BYTE] TYPE-MERGE SHORTCUT REFUTED (a proven
   NEGATIVE that redirects the arc; no code shipped, STEP 0 stands): a 6-agent
   adversarial ultracode pass (wf_b7ba2a2e-22c) killed the naïve `String →

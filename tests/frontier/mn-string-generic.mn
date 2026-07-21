@@ -1,0 +1,8 @@
+// The whole combinator vocabulary works on text with zero adapters: filter
+// keeps the bytes above 105 (l, l, o), any finds the e, all proves the caps.
+fn main() = {
+  let picked = filter((b) => b > 105, "hello")
+  let has_e  = any((b) => b == 101, "hello")
+  let caps   = all((b) => b < 97, "ABC")
+  if len(picked) == 3 && has_e && caps { 42 } else { 1 }
+}

@@ -1204,6 +1204,7 @@ fn is_seq_op(cname: String) with Pure =
   // (). Zero re-derivation — the type is read from the one place it lives.
   cname == "len"      || cname == "list_index"  || cname == "last"
   || cname == "drop_last"  || cname == "list_set"    || cname == "list_concat"
+  || cname == "list_to_flat"
   || cname == "make_list"  || cname == "slice"       || cname == "push"
   // The String-builder half of the same boundary: int_to_str assembles a
   // [len][bytes] record by address arithmetic (a word), and the table
@@ -1216,18 +1217,16 @@ fn is_seq_op(cname: String) with Pure =
   // The String face of the sequence node-kind (the comment above: byte_at IS
   // list_index, byte_len IS len). Typed here so consumers holding a String
   // type against the projection, never the load_i32 word-idiom body — the
-  // exact list_index pattern (self-consistent raw body, typed calls). is_view
-  // stays OUT: it is called INSIDE byte_len/byte_at beside load_i32(s), so a
-  // String projection would pun s in one body; it is the raw Int -> Bool
-  // discriminant its word-reading callers already expect.
+  // exact list_index pattern (self-consistent raw body, typed calls).
   || cname == "byte_len"   || cname == "byte_at"
-  // The String BUILDERS: their bodies alloc a [len][bytes]/view record and
+  // The String BUILDERS: their bodies alloc a [count][tag][bytes] record and
   // return its word (self-consistent Int inside, the int_to_str pattern);
   // typed here so the projected RESULT is the String consumers read, never the
-  // raw buffer word. view_base is the reader that resolves a String to its
-  // (flat_buf, offset) — String in, word-pair out.
+  // raw buffer word. str_payload is the reader that resolves a String to its
+  // contiguous stride-1 payload pointer — String in, word out (the WASI
+  // materialization boundary; the seq-addr down-cast in table form).
   || cname == "str_slice"  || cname == "str_concat"    || cname == "str_of_single_byte"
-  || cname == "str_literal_5" || cname == "view_base"   || cname == "str_of_buf"
+  || cname == "str_literal_5" || cname == "str_payload"  || cname == "str_of_buf"
   || cname == "float_to_str" || cname == "float_zero_pad" || cname == "float_format_fixed"
   || cname == "float_format_scientific" || cname == "float_render_positive"
   || cname == "float_digits_to_str"
@@ -1292,8 +1291,8 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
     "str_concat" => { seq_force(ah, 0, TString, span); seq_force(ah, 1, TString, span); graph_bind(handle, TString, Located(span, Inferred("string concat"))) },
     "str_of_single_byte" => { seq_force(ah, 0, TInt, span); graph_bind(handle, TString, Located(span, Inferred("single-byte string"))) },
     "str_literal_5" => { seq_force(ah, 0, TString, span); graph_bind(handle, TString, Located(span, Inferred("string literal"))) },
-    // view_base resolves a String to its (flat_buf, byte_offset) word pair.
-    "view_base" => { seq_force(ah, 0, TString, span); graph_bind(handle, TTuple([TInt, TInt]), Located(span, Inferred("view base"))) },
+    // str_payload resolves a String to its contiguous stride-1 payload pointer.
+    "str_payload" => { seq_force(ah, 0, TString, span); graph_bind(handle, TInt, Located(span, Inferred("payload base"))) },
     // str_of_buf — the raw buffer word IS a String (§4① construction boundary).
     "str_of_buf" => graph_bind(handle, TString, Located(span, Inferred("buffer as string"))),
     "float_to_str" => { seq_force(ah, 0, TFloat, span); graph_bind(handle, TString, Located(span, Inferred("float render"))) },
@@ -1311,6 +1310,9 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
     "push"       => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, elem, span); graph_bind(handle, TList(elem), Located(span, Inferred("push element"))) },
     "slice"      => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); graph_bind(handle, TList(elem), Located(span, Inferred("slice"))) },
     "list_concat"=> { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TList(elem), span); graph_bind(handle, TList(elem), Located(span, Inferred("concat"))) },
+    // Flatten is representation-only: type-preserving [a] -> [a] (flat_raw is
+    // its raw altitude; a raw-typed list_to_flat poisoned iterate's element).
+    "list_to_flat" => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, TList(elem), Located(span, Inferred("flatten"))) },
     "make_list"  => { seq_force(ah, 0, TInt, span); graph_bind(handle, TList(elem), Located(span, Inferred("fresh sequence"))) },
     // The FUNCTOR arms are DELETED — they derive their own types from their
     // bodies (Iterate.result -> r, prelude.mn); only substrate primitives route
@@ -2196,8 +2198,23 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
     match a {
       TInt    => expect_same(a, b, span, reason),
       TFloat  => expect_same(a, b, span, reason),
-      TString => expect_same(a, b, span, reason),
+      // String IS [byte] (§4①): a String unifies with a byte list, and with any
+      // [a] by binding the element to TByte. TString stays a NULLARY Ty (no
+      // TAlias wrapper to clone per instantiate — the OOM the naive merge hit);
+      // the merge lives HERE, in unify, so no mint site changes and a partial
+      // migration cannot half-break. Sound because the carrier makes a generic
+      // body read a string's bytes at stride 1 (map(f, "hi") no longer corrupts).
+      TString => match b {
+        TList(eb) => unify_types(eb, TByte, span, ListElement(reason)),
+        TVar(_)   => unify_types(b, a, span, reason),
+        _         => expect_same(a, b, span, reason)
+      },
       TUnit   => expect_same(a, b, span, reason),
+      // The byte scalar routes through the ground check like every word
+      // (expect_same reads same_ground's Byte~Byte and the Byte~Int
+      // value-equality); without this arm TByte fell to the catch-all's
+      // type_mismatch and refused Byte vs Byte itself.
+      TByte   => expect_same(a, b, span, reason),
 
       TVar(ha) =>
         match b {
@@ -2226,6 +2243,9 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
     TList(ea) =>
       match b {
         TList(eb)  => unify_types(ea, eb, span, ListElement(reason)),
+        // The site the naive merge made corrupt: map's TList(a) meeting a String
+        // binds a := TByte. Sound now — the carrier reads the string at stride 1.
+        TString    => unify_types(ea, TByte, span, ListElement(reason)),
         TVar(_)    => unify_types(b, a, span, reason),
         _          => type_mismatch(a, b, span, reason)
       },
@@ -2376,14 +2396,30 @@ fn expect_same(ref a, ref b, span: ValidSpan, reason) = {
 // sub-parts are unified separately (that's unify_types' job, not
 // same_ground's). A new scalar Ty must be added here explicitly.
 fn same_ground(ref a, ref b) with Pure = match a {
-  TInt    => match b { TInt    => true, _ => false },
+  // §4①/STEP 0: a byte VALUE and an Int are ground-EQUAL — both are the one
+  // word (repr RI32) — and this acceptance is CHECK-level only: same_ground
+  // never binds, so a [byte] node never REWRITES to [Int] (no re-stride by
+  // unification, ever; fold_sig keeps "b" != "i"). The check-level form is
+  // forced by inference order: under the Stage Law the datum infers LAST, so
+  // `map((b) => b - 32, s)` types the lambda while `b` is still free — b binds
+  // Int, and only the CALL's param unify meets TByte; a strict split would
+  // refuse the canonical case. The SLOT stays protected where slots actually
+  // live: reads follow the runtime stride carrier (any stride, always honest),
+  // construction follows the RESULT type, the one typed stride-1 store traps
+  // out-of-range (store_strided, the bounds-trap precedent), and str_payload
+  // normalizes stride at the materialization boundary. The compile-time
+  // narrowing gate (ground Int proven 0..255 via R3) is the named refinement
+  // tier on top — Hβ.infer.byte-narrowing-ground-discharge.
+  TInt    => match b { TInt    => true, TByte => true, _ => false },
   TFloat  => match b { TFloat  => true, _ => false },
-  TString => match b { TString => true, _ => false },
+  TString => match b { TString => true, TList(inner) => same_ground(inner, TByte), _ => false },
   TUnit   => match b { TUnit   => true, _ => false },
-  TByte   => match b { TByte   => true, _ => false },
+  TByte   => match b { TByte   => true, TInt  => true, _ => false },
   // Compound types: same_ground rejects; unify_types handles structurally
   TVar(_)            => false,
-  TList(_)           => false,
+  // §4①: a byte-list IS a String (ground-equal); a non-byte list defers (false),
+  // and unify_types' TList/TString arms turn it into an element mismatch.
+  TList(inner)       => match b { TString => same_ground(inner, TByte), _ => false },
   TTuple(_)          => false,
   TFun(_, _, _)      => false,
   TName(_, _)        => false,

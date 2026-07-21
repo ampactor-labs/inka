@@ -1,0 +1,7 @@
+// Identity map builds a word-stride [byte] record; the carrier makes the
+// cross-stride structural == read TRUE — stride is representation freedom,
+// the value is one. byte_at reads the word-stride record honestly.
+fn main() = {
+  let bs = map((b) => b, "hi")
+  if bs == "hi" && byte_at(bs, 0) == 104 && len(bs) == 2 { 42 } else { 1 }
+}

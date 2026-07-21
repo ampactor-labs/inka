@@ -53,8 +53,17 @@ fn seq_sc(ref list) with Memory = load_i32(list + 4) / 16
 fn load_strided(base, i, stride) with Memory =
   if stride == 1 { load_i8(base + i * stride) } else { load_i32(base + i * stride) }
 
+// The stride-1 store carries the byte RANGE trap (the list_index bounds-trap
+// precedent, same load_i32(-1) OOB idiom): a word outside 0..255 entering a
+// byte slot would otherwise wrap silently (i32.store8 masks to the low byte) —
+// the narrowing corruption class §4① band D names. Runtime-total; the
+// compile-time ground discharge on top is the named refinement tier
+// (Hβ.infer.byte-narrowing-ground-discharge).
 fn store_strided(base, i, stride, val) with Memory =
-  if stride == 1 { store_i8(base + i * stride, val) } else { store_i32(base + i * stride, val) }
+  if stride == 1 {
+    store_i8(base + i * stride, if val < 0 || val > 255 { load_i32(0 - 1) } else { val })
+  }
+  else { store_i32(base + i * stride, val) }
 
 // Construction
 
@@ -222,7 +231,9 @@ fn list_eq_loop(a, b, n, i) -> Bool with Memory =
 // The first differing element decides; on a common prefix the shorter list is
 // less. Elements compare as words here (the i32 instance the eq loop also uses);
 // the generated $compare_<sig> fold descends element-typed aggregates at the
-// emit layer, the same place the eq leaf does. length-then-element ordering.
+// emit layer, the same place the eq leaf does. The SAME lexicographic walk
+// str_compare's [byte] instance makes, so a byte sequence orders identically
+// through either route.
 fn list_compare_loop(a, b, la, lb, i) -> Int with Memory =
   if i >= la && i >= lb { 0 }
   else if i >= la { 0 - 1 }
@@ -392,7 +403,17 @@ fn drop_last(list) with Memory + Alloc = {
 // list_to_flat — convert any list tree to a contiguous tag=0 array.
 // O(N) time, O(N) space. Returns the input unchanged if already flat.
 // Call this at hot-path entrances when O(1) random access is required.
-fn list_to_flat(list) with Memory + Alloc = {
+// Two altitudes, two names (the make_list/alloc_list precedent): flat_raw is
+// the RAW body (word in, word out — the flatten by address arithmetic), used
+// by this file's walks and str_payload's raw body; list_to_flat is the TYPED
+// name the substrate table projects as [a] -> [a] for every consumer above
+// the boundary. A raw body calling the table-typed name would force the
+// typed view onto its own word-level locals; a typed caller reaching the raw
+// name poisons its element var to Int (the iterate leak that refused
+// map(f, "abc") in libs-isolation, 2026-07-21).
+fn list_to_flat(list) with Memory + Alloc = flat_raw(list)
+
+fn flat_raw(list) with Memory + Alloc = {
   let n = load_i32(list)
   if n == 0 { list }
   else {

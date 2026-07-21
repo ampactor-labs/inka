@@ -1,82 +1,48 @@
-// strings.mn — String primitives for the Mentl runtime
+// strings.mn — the String face of the ONE sequence node-kind (§4①)
 //
-// TWO SHAPES, ONE INTERFACE.
+// A String IS [byte]: a stride-1 sequence record, identical in layout to
+// every other list — [count@0][tag_word@+4][payload@+8], where the tag word
+// carries pack_tag(tag, sc) (lists.mn's zero-biased stride carrier; a byte
+// sequence writes sc 1). There is no second string shape: slices are the
+// list slice node (tag 4), lazy concat is the list concat node (tag 3), and
+// every byte read routes through the ONE tag-dispatched, stride-honest
+// list_index (byte_at IS list_index; byte_len IS len).
 //
-// Shape A: FLAT — [len_i32 >= 0][bytes...]
-//   The bytes live contiguously after the length word. Constructed
-//   by alloc + mem_copy / store_i8; produced by str_concat,
-//   int_to_str, single-byte builders, and the seed's data-section
-//   literals. Length is non-negative.
+// The bespoke string machinery this file once carried — the sign-bit VIEW
+// record, its flat/view discriminant, the eager copying concat — dissolved
+// into the sequence substrate. What remains here is the byte-sequence
+// INSTANCE of each structural leaf (str_eq / str_compare / str_hash — the
+// [byte] cases of the one eq/compare/hash derivation), the text builders
+// (int_to_str, float_to_str, str_unescape), the parse family, and the
+// sorted-string-set vocabulary.
 //
-// Shape B: VIEW — [-1_sentinel_i32][buf_ptr_i32][start_offset_i32][len_i32]
-//   A reference into another flat string's byte payload. The first
-//   word is -1 (no flat string can have negative length); the remaining
-//   12 bytes encode (flat_buf_ptr, start_offset, length). Constructed
-//   by str_slice — zero byte-copy regardless of slice length. The
-//   referenced buffer must be flat (chains of views collapse via
-//   view_base on slice) so byte_at remains O(1) not O(view-chain-depth).
-//
-// EVERY observer of bytes (byte_at, byte_len, str_eq, str_lt,
-// str_concat copy-from-source) reads through byte_at + byte_len,
-// which dispatch on `is_view(s) = load_i32(s) < 0`. The first-word
-// sentinel is the discriminant: positive = flat-length, -1 = view.
-//
-// SUBSTRATE-HONEST DESIGN per the eight interrogations on string
-// representation (2026-05-11 ultimate-form realization):
-//   Graph: source bytes already encoded at their original buffer
-//   Handler: +Memory only for byte_at; +Alloc only at concat/output
+// SUBSTRATE-HONEST DESIGN per the eight interrogations:
+//   Graph: one sequence kind; the byte face is a projection, never a fork
+//   Handler: +Memory for reads; +Alloc only at build/concat/materialize
 //   Verb: |> sequential walk via byte_at — no copy
-//   Row: +Alloc(16) per slice, not +Alloc(N) — orders of magnitude lower
-//   Ownership: views borrow the buf; concat materializes (owns)
-//   Refinement: View carries (start, length) bounds on buf
-//   Gradient: future operations stay zero-copy until a boundary forces flatten
-//   Reason: provenance preserved — view points back at its source buf
+//   Row: concat is O(1) node alloc; slice O(1) view node — never O(N) copies
+//   Ownership: slices/concats borrow their sources; str_payload materializes
+//   Refinement: list_index carries the bounds trap (SYNTAX §Indexing)
+//   Gradient: stride is representation freedom — the carrier keeps every
+//             read honest; boundaries (str_payload) normalize to stride 1
+//   Reason: provenance preserved — slice/concat nodes point at their sources
 //
 // Effects declared in std/compiler/types.mn:
 //   Memory: load_i32, store_i32, load_i8, store_i8, mem_copy, byte_at, byte_len
 //   Alloc:  alloc(size) -> Int
-//
-// Deleted forever (v1 tumors — do NOT recreate):
-//   val_concat — heuristic dispatch on unknown type. Gone.
-//   val_eq     — pointer-range "maybe a string" heuristic. Gone.
-//   to_string  — dispatch-by-magnitude heuristic. Gone. (The NAME
-//                returned 2026-06-11 as the value-word default under
-//                lower_to_string_dispatch — lower projects the typed
-//                renderer from the graph's PROOF of the arg type.
-//                No runtime guessing; the opposite of the v1 tumor.)
-//   type_of    — "what is this value at runtime" heuristic. Gone.
 
 import types
 
-// is_view — true iff s carries the view sentinel (-1) in its first
-// word. Flat strings have non-negative length; view headers have
-// -1 as the discriminant. `load_i32(s) < 0` separates them with
-// one signed comparison — no bitwise needed.
-fn is_view(s) -> Bool with Memory = {
-  load_i32(s) < 0
-}
+// A String IS [byte] (§4①): its byte face is the sequence face. byte_len IS
+// len (the count at +0, shape-invariant across flat/slice/concat); byte_at IS
+// list_index — the carrier reads the byte at stride 1 (load_i8(s + 8 + i)),
+// tag-dispatched over every representation. The byte VALUE returns as a word
+// (repr RI32), ground-equal to Int at check level (same_ground), so byte
+// arithmetic and comparisons read naturally; the SLOT stays stride-1, guarded
+// by the carrier on reads and the store_strided range trap on writes.
+fn byte_len(s) with Memory = len(s)
 
-// Byte-level accessors — uniform interface, two-shape dispatch.
-
-// byte_len — payload length. Flat: word at offset 0. View: word at
-// offset 12 (after sentinel, buf_ptr, start_offset).
-fn byte_len(s) with Memory = {
-  if is_view(s) { load_i32(s + 12) }
-  else { load_i32(s) }
-}
-
-// byte_at — load a single byte at position i (0-indexed into the
-// payload). View: resolve (buf, start) from header, index into
-// buf's flat payload. Flat: index after the length word.
-fn byte_at(s, i) with Memory = {
-  if is_view(s) {
-    let buf = load_i32(s + 4)
-    let off = load_i32(s + 8)
-    load_i8(buf + 4 + off + i)
-  } else {
-    load_i8(s + 4 + i)
-  }
-}
+fn byte_at(s, i) with Memory = list_index(s, i)
 
 // Equality and ordering — walk via byte_at so view/flat dispatch is
 // transparent at observer sites. byte_len gives the comparable length.
@@ -88,10 +54,10 @@ fn str_eq_loop(a, b, slen, i) -> Bool with Memory =
     else { str_eq_loop(a, b, slen, i + 1) }
   }
 
-// str_eq — byte-exact equality. Returns Bool. Always use directly:
-// `if str_eq(a, b) { ... }` — never `str_eq(a, b)` as a value
-// (E_TypeMismatch under Mentl's type-distinct Bool). Bare `==` on
-// string pointers is a pointer compare, not a content compare.
+// str_eq — byte-exact equality: the [byte] INSTANCE of the one structural
+// `==` derivation (SYNTAX §Equality). Surface `==` on strings lowers HERE
+// (emit_eq_for_ty's byte-sequence arm) — pointer comparison is unsayable.
+// The name survives for the runtime's own walkers; user code writes `==`.
 fn str_eq(a, b) -> Bool with Memory =
   let la = byte_len(a)
   let lb = byte_len(b)
@@ -171,105 +137,73 @@ fn str_hash_loop(s, i, n, h) -> Int with Memory =
 fn str_hash(s) -> Int with Memory =
   str_hash_loop(s, 0, byte_len(s), 2166136261)
 
-// Concatenation and slicing — concat materializes (the boundary);
-// slice produces a view (zero byte-copy).
+// Concatenation and slicing — a String IS [byte] (§4①), so these ARE the
+// sequence ops: concat IS ++ (list_concat, an O(1) lazy concat node — strictly
+// better than the old eager materialize), slice IS slice (a tag-4 view node).
+// The sign-bit view shape and view_base dissolve into the list slice tag.
+// The String pins are Intent Boundaries: they resolve the body's `++` to the
+// byte-sequence concat at emit (an unresolved-element `++` refuses, the
+// no-silent-fallback law).
+fn str_concat(a: String, b: String) with Memory + Alloc = a ++ b
 
-// str_concat — produce a new flat string = a ++ b. The materialization
-// boundary: the result is always flat, never a chain of view nodes.
-// Hot path: both operands flat → block-copy via mem_copy after
-// resolving each operand's (base_buf, base_off, length) via
-// view_base. View operands route through their base_buf — no
-// per-byte fn dispatch. O(la + lb) bytes copied; one Alloc.
-fn str_concat(a, b) with Memory + Alloc = {
-  let (a_buf, a_off) = view_base(a)
-  let (b_buf, b_off) = view_base(b)
-  let la = byte_len(a)
-  let lb = byte_len(b)
-  let dest = alloc(4 + la + lb)
-  store_i32(dest, la + lb)
-  mem_copy(dest + 4, a_buf + 4 + a_off, la)
-  mem_copy(dest + 4 + la, b_buf + 4 + b_off, lb)
+// str_concat_all — the N-ary materialize: two tail-recursive passes (sum the
+// lengths, then pack each part's contiguous payload into one fresh byte
+// record). O(total) bytes, O(1) stack per part — a right-fold of ++ here
+// would build O(N) stack and a depth-N tree (the call-stack exhaustion the
+// first ladder run measured); the pairwise `++` rope stays the right shape
+// for CHAINS, the packer for N-ary joins.
+fn str_concat_all(xs: [String]) with Memory + Alloc = {
+  let n = len(xs)
+  let total = sum_byte_lens(xs, 0, n, 0)
+  let dest = bytes_buf(total)
+  fill_concat_all(xs, 0, n, dest, 0)
   str_of_buf(dest)
 }
 
-// str_concat_all — materialize a list of strings into ONE flat string.
-// O(B + N) total: pass 1 sums byte_lens (O(N) graph reads); pass 2 allocs
-// once + memcpys each view_base-resolved payload (O(B) copies, ONE alloc).
-// View-substrate aware: each string's bytes resolve through view_base
-// regardless of flat-vs-view shape.
-//
-// THE substrate-honest accumulator-materialize primitive. Per the eight
-// interrogations on drift-11 closure (acc ++ x in a loop):
-//   Graph:      list of string-handles IS the accumulator's graph state.
-//   Handler:    one arm per op; resume discipline OneShot.
-//   Verb:       this fn IS materialization; called once at result().
-//   Row:        +Memory (byte reads) +Alloc (ONE).
-//   Ownership:  refs in the list are borrows; result owns the new flat.
-//   Refinement: dest.byte_len == sum(byte_len(xs[i])) by construction.
-//   Gradient:   O(B+N) IS the locked gradient — no narrower form exists.
-//   Reason:     each input string's Reason chains through unmodified.
-//
-// Pattern: every accumulator handler in the wheel materializes via this.
-// Per-yield work is O(1) amortized (list_extend_to + list_set); per-result
-// work is O(B+N) one-time. Total across N yields of B bytes: O(B + N).
-// Drift-11 (acc-mutation-in-loop) closed structurally — no per-yield
-// byte-copying ever happens.
-fn str_concat_all(xs) with Memory + Alloc = {
-  let total = sum_byte_lens(xs, 0, 0)
-  let dest  = alloc(4 + total)
-  store_i32(dest, total)
-  copy_strings_to(xs, dest, 4, 0)
-  str_of_buf(dest)
-}
+fn sum_byte_lens(xs: [String], i, n, acc) with Memory =
+  if i >= n { acc }
+  else { sum_byte_lens(xs, i + 1, n, acc + byte_len(list_index(xs, i))) }
 
-fn sum_byte_lens(xs, i, acc) with Memory =
-  if i >= len(xs) { acc }
-  else { sum_byte_lens(xs, i + 1, acc + byte_len(xs[i])) }
-
-fn copy_strings_to(xs, dest, off, i) with Memory =
-  if i >= len(xs) { () }
+fn fill_concat_all(xs: [String], i, n, dest, w) with Memory + Alloc =
+  if i >= n { () }
   else {
-    let s = xs[i]
-    let n = byte_len(s)
-    let (base_buf, base_off) = view_base(s)
-    mem_copy(dest + off, base_buf + 4 + base_off, n)
-    copy_strings_to(xs, dest, off + n, i + 1)
+    let s = list_index(xs, i)
+    let m = byte_len(s)
+    mem_copy(dest + 8 + w, str_payload(s), m)
+    fill_concat_all(xs, i + 1, n, dest, w + m)
   }
 
-// view_base — given a string of either shape, return the (flat buf,
-// absolute start offset) backing its payload. Collapses view-of-
-// view chains so the substrate invariant holds: every view's buf
-// field IS a flat string (one byte_at dereference reaches bytes,
-// not N). The graph already knows where the bytes live; this
-// projection makes that direct at every slice site.
-fn view_base(s) with Memory = {
-  if is_view(s) {
-    let buf = load_i32(s + 4)
-    let off = load_i32(s + 8)
-    (buf, off)
-  } else {
-    (s, 0)
-  }
+fn str_slice(s, start, end) with Memory + Alloc = slice(s, start, end)
+
+// str_payload(s) — a raw pointer to s's byte_len(s) CONTIGUOUS stride-1 bytes:
+// THE materialization boundary. A rope/slice flattens first (list_to_flat, a
+// no-op on a flat record); a byte sequence whose record carries a wider
+// stride — a [byte] built through generic word-list construction, since
+// stride is representation freedom under the carrier — REPACKS to stride 1
+// here, exactly where WASI demands contiguity. fd_write / sock_write / the
+// path syscalls all read this one projection.
+fn str_payload(s) with Memory + Alloc = {
+  let flat = flat_raw(s)
+  if seq_stride(flat) == 1 { flat + 8 }
+  else { str_repack_stride1(flat, seq_stride(flat)) + 8 }
 }
 
-// str_slice — return a VIEW into s covering bytes [start..end).
-// Zero byte-copy regardless of slice length: 16 bytes of header
-// allocation, no payload copying. View collapse via view_base
-// guarantees the result's buf field is always a flat string.
-// Clamps start and end to valid range — no panic, no sentinel.
-fn str_slice(s, start, end) with Memory + Alloc = {
-  let slen = byte_len(s)
-  let cstart = if start < 0 { 0 } else if start > slen { slen } else { start }
-  let cend   = if end < cstart { cstart } else if end > slen { slen } else { end }
-  let n = cend - cstart
-  let (base_buf, base_off) = view_base(s)
-  let view = alloc(16)
-  store_i32(view, 0 - 1)
-  store_i32(view + 4, base_buf)
-  store_i32(view + 8, base_off + cstart)
-  store_i32(view + 12, n)
-  str_of_buf(view)
+// The stride-1 repack: copy each element word into a fresh byte record. The
+// values are byte-ranged by type ([byte]); store_strided's range trap keeps a
+// violation loud, never a silent wrap.
+fn str_repack_stride1(flat, stride) with Memory + Alloc = {
+  let n = load_i32(flat)
+  let dest = bytes_buf(n)
+  str_repack_loop(flat, dest, stride, 0, n)
+  dest
 }
+
+fn str_repack_loop(flat, dest, stride, i, n) with Memory + Alloc =
+  if i >= n { () }
+  else {
+    store_i8(dest + 8 + i, load_strided(flat + 8, i, stride))
+    str_repack_loop(flat, dest, stride, i + 1, n)
+  }
 
 // split — sep-delimited tokens as zero-copy views into s (one
 // str_slice per token; no byte copies). One O(N) walk; buffer-
@@ -317,8 +251,7 @@ fn sep_at(s, sep, i, seplen, j) with Memory = {
 fn str_unescape(s) with Memory + Alloc = {
   let n = byte_len(s)
   let dlen = str_unescape_count(s, 0, n, 0)
-  let ptr = alloc(4 + dlen)
-  store_i32(ptr, dlen)
+  let ptr = bytes_buf(dlen)
   str_unescape_into(s, 0, n, ptr, 0)
   str_of_buf(ptr)
 }
@@ -357,7 +290,7 @@ fn str_unescape_into(s, i, n, dest, w) with Memory + Alloc =
   if i >= n { () }
   else if is_hex_escape(s, i, n) {
     let decoded = hex_val(byte_at(s, i + 2)) * 16 + hex_val(byte_at(s, i + 3))
-    store_i8(dest + 4 + w, decoded)
+    store_i8(dest + 8 + w, decoded)
     str_unescape_into(s, i + 4, n, dest, w + 1)
   }
   else if byte_at(s, i) == 92 && i + 1 < n {
@@ -368,10 +301,10 @@ fn str_unescape_into(s, i, n, dest, w) with Memory + Alloc =
       else if esc == 116 { 9 }
       else if esc == 48  { 0 }
       else { esc }
-    store_i8(dest + 4 + w, decoded)
+    store_i8(dest + 8 + w, decoded)
     str_unescape_into(s, i + 2, n, dest, w + 1)
   } else {
-    store_i8(dest + 4 + w, byte_at(s, i))
+    store_i8(dest + 8 + w, byte_at(s, i))
     str_unescape_into(s, i + 1, n, dest, w + 1)
   }
 
@@ -385,30 +318,25 @@ fn int_to_str(n) with Memory + Alloc = {
   else if n == 0 - 2147483648 {
     // INT_MIN can't be negated in i32 (0 - INT_MIN = INT_MIN).
     // Hardcode the 11-byte string "-2147483648".
-    let ptr = alloc(15)
-    store_i32(ptr, 11)
-    store_i8(ptr + 4, 45)     // '-'
-    store_i8(ptr + 5, 50)     // '2'
-    store_i8(ptr + 6, 49)     // '1'
-    store_i8(ptr + 7, 52)     // '4'
-    store_i8(ptr + 8, 55)     // '7'
-    store_i8(ptr + 9, 52)     // '4'
-    store_i8(ptr + 10, 56)    // '8'
-    store_i8(ptr + 11, 51)    // '3'
-    store_i8(ptr + 12, 54)    // '6'
+    let ptr = bytes_buf(11)
+    store_i8(ptr + 8, 45)     // '-'
+    store_i8(ptr + 9, 50)     // '2'
+    store_i8(ptr + 10, 49)    // '1'
+    store_i8(ptr + 11, 52)    // '4'
+    store_i8(ptr + 12, 55)    // '7'
     store_i8(ptr + 13, 52)    // '4'
     store_i8(ptr + 14, 56)    // '8'
+    store_i8(ptr + 15, 51)    // '3'
+    store_i8(ptr + 16, 54)    // '6'
+    store_i8(ptr + 17, 52)    // '4'
+    store_i8(ptr + 18, 56)    // '8'
     str_of_buf(ptr)
   }
   else if n < 0 {
     let neg = str_of_single_byte(45)               // "-"
     let abs = 0 - n
     let digits = int_to_str_positive(abs)
-    // str_concat by NAME: the builders assemble flat strings by address
-    // arithmetic, so `p + 4` types the value a word and `++`'s sequence
-    // proof cannot arrive until String = [Byte] lands (PLAN §4①, band D).
-    // The author states the representation; no dispatch, no guess.
-    str_concat(neg, digits)
+    neg ++ digits
   }
   else { int_to_str_positive(n) }
 }
@@ -437,29 +365,38 @@ handler show_default {
 
 fn to_string(x) with Show = show_word(x)
 
-// str_of_buf — the construction boundary: a raw [len][bytes] buffer word IS a
-// String (§4①, a handle is a word). The identity projection that lets a
-// builder's raw buffer body return the typed String its consumers read — the
-// alloc_list/make_list altitude split at the text face (typed via is_seq_op).
+// str_of_buf — the construction boundary: a raw [count][tag_word][bytes] buffer
+// word IS a String, which IS [byte] (§4①, a handle is a word). The identity
+// projection that returns a builder's raw buffer as the typed sequence its
+// consumers read.
 fn str_of_buf(buf) with Pure = buf
 
+// bytes_buf(n) — allocate a fresh flat [byte] buffer for n bytes, headered as
+// the unified sequence record: [count=n @0][tag_word=pack_tag(0,1) @+4][bytes
+// @+8]. THE one home for byte-string construction; every builder fills its
+// bytes at ptr + 8, so list_index reads them at stride 1 through the carrier.
+fn bytes_buf(n) with Memory + Alloc = {
+  let ptr = alloc(8 + n)
+  store_i32(ptr, n)
+  store_i32(ptr + 4, pack_tag(0, 1))
+  ptr
+}
+
 fn str_of_single_byte(b) with Memory + Alloc = {
-  let ptr = alloc(5)
-  store_i32(ptr, 1)
-  store_i8(ptr + 4, b)
+  let ptr = bytes_buf(1)
+  store_i8(ptr + 8, b)
   str_of_buf(ptr)
 }
 
 fn int_to_str_positive(n) with Memory + Alloc = {
   // Worst case: 10 decimal digits for i32 max (2147483647).
-  // Write digits right-to-left into a 10-byte scratch area, then copy.
-  let scratch = alloc(14)                  // 4 header + 10 digit bytes
+  // Write digits right-to-left into a raw 10-byte scratch area, then copy.
+  let scratch = alloc(10)
   let end_pos = 10
-  let used = int_write_digits(scratch + 4, end_pos, n)
+  let used = int_write_digits(scratch, end_pos, n)
   let len = end_pos - used
-  let dest = alloc(4 + len)
-  store_i32(dest, len)
-  mem_copy(dest + 4, scratch + 4 + used, len)
+  let dest = bytes_buf(len)
+  mem_copy(dest + 8, scratch + used, len)
   str_of_buf(dest)
 }
 
@@ -498,7 +435,7 @@ fn float_to_str(f) with Memory + Alloc = {
     let rendered = float_render_positive(abs_f)
     if sign == 1 {
       let minus = str_of_single_byte(45)
-      str_concat(minus, rendered)   // named representation — see int_to_str
+      minus ++ rendered
     }
     else { rendered }
   }
@@ -587,28 +524,21 @@ fn float_format_fixed(digits, exp) with Memory + Alloc = {
     let dot = str_of_single_byte(46)            // "."
     let leading = float_zero_pad(0 - int_digits)  // |int_digits| zeros // drift-audit: ignore
     let frac = float_digits_to_str(digits, 0, 17)
-    // named representation (see int_to_str): word-built strings, §4① residue
-    zero
-      |> str_concat(??, dot)
-      |> str_concat(??, leading)
-      |> str_concat(??, frac)
+    zero ++ dot ++ leading ++ frac
   } else {
     let int_part = float_digits_to_str(digits, 0, int_digits)
     let frac_part = float_digits_to_str(digits, int_digits, 17)
     let dot = str_of_single_byte(46)
-    int_part
-      |> str_concat(??, dot)
-      |> str_concat(??, frac_part)
+    int_part ++ dot ++ frac_part
   }
 }
 
 // Build a string of n '0' characters for fractional padding.
 fn float_zero_pad(n) with Memory + Alloc = {
-  if n <= 0 { str_of_single_byte(48) |> str_slice(??, 0, 0) }
+  if n <= 0 { str_of_buf(bytes_buf(0)) }
   else {
-    let dest = alloc(4 + n)
-    store_i32(dest, n)
-    float_fill_zeros(dest + 4, 0, n)
+    let dest = bytes_buf(n)
+    float_fill_zeros(dest + 8, 0, n)
     str_of_buf(dest)
   }
 }
@@ -625,9 +555,7 @@ fn float_format_scientific(digits, exp) with Memory + Alloc = {
   let mantissa = float_format_fixed(digits, 0)
   let e_char = str_of_single_byte(101)             // 'e'
   let exp_str = int_to_str(exp)
-  mantissa
-    |> str_concat(??, e_char)
-    |> str_concat(??, exp_str)
+  mantissa ++ e_char ++ exp_str
 }
 
 // float_digits_to_str: convert a slice of the digit list to a string.
@@ -636,9 +564,8 @@ fn float_digits_to_str(digits, start, end) with Memory + Alloc = {
   if start >= end { str_of_single_byte(48) }       // "0" minimum
   else {
     let len = end - start
-    let dest = alloc(4 + len)
-    store_i32(dest, len)
-    float_fill_digit_bytes(dest + 4, digits, start, end, start)
+    let dest = bytes_buf(len)
+    float_fill_digit_bytes(dest + 8, digits, start, end, start)
     str_of_buf(dest)
   }
 }
@@ -707,7 +634,7 @@ fn digit_at(digits, i) with Memory = {
 fn parse_int_digits(s, slen, i, acc) with Memory = {
   if i >= slen { acc }
   else {
-    let ch = load_i8(s + 4 + i)
+    let ch = byte_at(s, i)
     if ch >= 48 && ch <= 57 {
       parse_int_digits(s, slen, i + 1, acc * 10 + (ch - 48))
     }
@@ -719,10 +646,10 @@ fn parse_int_digits(s, slen, i, acc) with Memory = {
 // Handles sign, integer part, fractional part, and optional 'e'/'E' exponent.
 // Returns 0.0 on empty or malformed input.
 fn parse_float(s) with Memory + Alloc = {
-  let slen = load_i32(s)
+  let slen = byte_len(s)
   if slen == 0 { 0.0 }
   else {
-    let first = load_i8(s + 4)
+    let first = byte_at(s, 0)
     let start = if first == 45 { 1 } else { 0 }
     let sign   = if first == 45 { 0 - 1 } else { 1 }
     let result = parse_float_body(s, slen, start)
@@ -745,7 +672,7 @@ fn parse_float_body(s, slen, i) with Memory + Alloc = {
 fn parse_frac_digits(s, slen, i, scale) with Memory + Alloc = {
   if i >= slen { 0.0 }
   else {
-    let ch = load_i8(s + 4 + i)
+    let ch = byte_at(s, i)
     if ch >= 48 && ch <= 57 {
       let new_scale = scale * 10.0
       let digit_f = float_of_int(ch - 48) / new_scale
@@ -758,7 +685,7 @@ fn parse_frac_digits(s, slen, i, scale) with Memory + Alloc = {
 fn parse_int_sign(s, slen, i) with Memory = {
   if i >= slen { 0 }
   else {
-    let first = load_i8(s + 4 + i)
+    let first = byte_at(s, i)
     if first == 45 { 0 - parse_int_digits(s, slen, i + 1, 0) }
     else if first == 43 { parse_int_digits(s, slen, i + 1, 0) }
     else { parse_int_digits(s, slen, i, 0) }
@@ -767,14 +694,14 @@ fn parse_int_sign(s, slen, i) with Memory = {
 
 fn find_char(s, slen, start, ch) with Memory = {
   if start >= slen { 0 - 1 }
-  else if load_i8(s + 4 + start) == ch { start }
+  else if byte_at(s, start) == ch { start }
   else { find_char(s, slen, start + 1, ch) }
 }
 
 fn find_char_either(s, slen, start, ch1, ch2) with Memory = {
   if start >= slen { 0 - 1 }
   else {
-    let b = load_i8(s + 4 + start)
+    let b = byte_at(s, start)
     if b == ch1 || b == ch2 { start }
     else { find_char_either(s, slen, start + 1, ch1, ch2) }
   }
@@ -1034,8 +961,7 @@ fn strip_underscores_loop(ref s, i, n, own buf, count) with Memory + Alloc = {
 // str_slice_from_list: materialise the first `n` bytes of a byte-list
 // into a fresh flat string. Used only by strip_underscores above.
 fn str_slice_from_list(ref lst, n) with Memory + Alloc = {
-  let dest = alloc(4 + n)
-  store_i32(dest, n)
+  let dest = bytes_buf(n)
   str_slice_from_list_loop(lst, dest, 0, n)
   str_of_buf(dest)
 }
@@ -1043,7 +969,7 @@ fn str_slice_from_list(ref lst, n) with Memory + Alloc = {
 fn str_slice_from_list_loop(ref lst, dest, i, n) with Memory + Alloc = {
   if i >= n { () }
   else {
-    store_i8(dest + 4 + i, list_index(lst, i))
+    store_i8(dest + 8 + i, list_index(lst, i))
     str_slice_from_list_loop(lst, dest, i + 1, n)
   }
 }

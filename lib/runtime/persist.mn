@@ -17,6 +17,7 @@
 // experiment until an exact rooted image and typed Continuation value own them.
 
 import runtime/memory
+import runtime/strings
 import runtime/io
 
 // A durable-branch ticket is opaque to its consumer. The handler owns the
@@ -71,8 +72,11 @@ handler persist_to_disk with branch_results = [] {
 
   rehydrate(path, live_world_tag) => {
     let wire = fs_read_file_impl(path)
-    // world_tag is the first i32 of the wire (a lossy compatibility input).
-    let captured_world = load_i32(wire + 4)
+    // The wire is a String (the byte record fs_read built); str_payload
+    // projects its contiguous payload base — the seq-addr boundary in table
+    // form. Payload layout: [world_tag@0][size@4][k bytes@8].
+    let p = str_payload(wire)
+    let captured_world = load_i32(p)
     // This comparison catches unequal fingerprints. It cannot establish world
     // equality: different worlds can collide, and 0 also represents omitted
     // open requirements.
@@ -85,9 +89,9 @@ handler persist_to_disk with branch_results = [] {
     } else {
       // Copy into fresh memory. Any interior absolute pointer remains pointed at
       // the old address; relocation safety is not established by this copy.
-      let size = load_i32(wire + 8)
+      let size = load_i32(p + 4)
       let k = alloc(size)
-      mem_copy(k, wire + 12, size)
+      mem_copy(k, p + 8, size)
       resume(k)
     }
   }
@@ -106,10 +110,9 @@ fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Filesystem + Persi
 // self-describing: it carries no schema, code identity, pointer map, or resource
 // manifest.
 fn persist_pack_record(world_tag, k, size) with Memory + Alloc = {
-  let wire = alloc(4 + 4 + 4 + size)
-  store_i32(wire, 4 + 4 + size)         // [len] header for the [len][bytes] view
-  store_i32(wire + 4, world_tag)        // world_tag (the value-gate input)
-  store_i32(wire + 8, size)             // record byte size (self-describing)
-  mem_copy(wire + 12, k, size)          // the continuation record, verbatim
-  wire
+  let wire = bytes_buf(4 + 4 + size)    // the [count][tag] byte-record header
+  store_i32(wire + 8, world_tag)        // world_tag (the value-gate input)
+  store_i32(wire + 12, size)            // record byte size (self-describing)
+  mem_copy(wire + 16, k, size)          // the continuation record, verbatim
+  str_of_buf(wire)                      // the wire IS a String for fs_write
 }

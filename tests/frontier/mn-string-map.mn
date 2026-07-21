@@ -1,0 +1,10 @@
+// §4① String = [byte] — the flagship generic flow: map over a String. The
+// lambda infers FIRST (datum last, the Stage Law), so b binds Int through the
+// subtraction; the call's param unify then meets the byte element via
+// check-level ground equality (same_ground), the carrier reads the bytes at
+// stride 1, and the result builds as a word-stride [Int]. Silent corruption
+// (the pre-carrier 4-byte misread) is structurally unsayable.
+fn main() = {
+  let up = map((b) => b - 32, "abc")
+  if len(up) == 3 && up[0] == 65 && up[1] == 66 && up[2] == 67 { 42 } else { 1 }
+}

@@ -130,7 +130,15 @@ BOOT_RUNTIME_SHADOW=""
 # wheel census is 0 (they resolve at every concrete use), so no user program
 # and no self-compile sees them. Growth here is the isolation context lacking
 # src/, not a regression; the full-wheel census is the real gate.
-EXPECTED_RUNTIME_SHADOW_SHA256="f0f321a31e94f7e3e31d741d5bb0851e0d9f6d1852f7ea00c1e359582f762511"
+# 2026-07-21: the shadow is EMPTY (the sha256 of zero bytes) — the §4①
+# String=[byte] landing healed the whole inherited class. The 13 entries were
+# ONE root: list_to_flat's raw body typed (Int)->Int and poisoned the element
+# var of every generic combinator that called it (iterate/reduce/unique/chunk)
+# when the libs compiled without src/. The two-altitude split (list_to_flat
+# joins the seq-op table as [a] -> [a]; flat_raw is the raw body — the
+# make_list/alloc_list precedent) deleted the class at its origin. The libs
+# now compile in isolation with ZERO diagnostics.
+EXPECTED_RUNTIME_SHADOW_SHA256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 pass() {
   echo "  PASS $*"
@@ -629,6 +637,32 @@ for i in "${!compilers[@]}"; do
   # pre-fix boot, 42 on this one.
   run_program "$compiler" ctor-float-param \
     "$ROOT/tests/frontier/mn-ctor-float-param.mn" 42 no "$dir"
+  # §4① String = [byte] — THE BEHAVIORAL BATTERY (2026-07-21). The fixpoint
+  # oracle is structurally BLIND to string corruption (the wheel is
+  # byte_at-disciplined and never maps a string), so these output-checked runs
+  # are the load-bearing gate for the ontology: generic combinators over text,
+  # the O(1) concat rope, cross-stride structural ==, the text-view render,
+  # and the stride-1 store range trap (exit 134 = the loud narrowing refusal).
+  # RED on the pre-merge boot by construction — the merge is what makes
+  # map-over-String type at all.
+  run_program "$compiler" string-map \
+    "$ROOT/tests/frontier/mn-string-map.mn" 42 yes "$dir"
+  run_program "$compiler" string-fold \
+    "$ROOT/tests/frontier/mn-string-fold.mn" 42 yes "$dir"
+  run_program "$compiler" string-generic \
+    "$ROOT/tests/frontier/mn-string-generic.mn" 42 yes "$dir"
+  run_program "$compiler" string-eq-concat \
+    "$ROOT/tests/frontier/mn-string-eq-concat.mn" 42 yes "$dir"
+  run_program "$compiler" string-slice-index \
+    "$ROOT/tests/frontier/mn-string-slice-index.mn" 42 yes "$dir"
+  run_program "$compiler" string-show-interp \
+    "$ROOT/tests/frontier/mn-string-show-interp.mn" 42 yes "$dir"
+  run_program "$compiler" string-cross-stride \
+    "$ROOT/tests/frontier/mn-string-cross-stride.mn" 42 yes "$dir"
+  run_program "$compiler" string-parse \
+    "$ROOT/tests/frontier/mn-string-parse.mn" 42 yes "$dir"
+  run_program "$compiler" byte-range-trap \
+    "$ROOT/tests/frontier/mn-byte-range-trap.mn" 134 yes "$dir"
   # E_OwnershipViolation armed 2026-07-18 — the double-move fixture moved from
   # run_diagnostic (productive exit 0) to the armed-class refusal contract.
   run_refusal "$compiler" own-call-arg-move \

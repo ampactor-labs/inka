@@ -1,0 +1,12 @@
+// Interpolation renders TEXT for byte sequences (the text-view law): a String
+// splice is identity — never [104, 105]. The computed check routes through
+// int_to_str explicitly because the INT splice renders empty on the current
+// boot — the pre-existing named peer Hβ.emit.int-splice-empty (probed
+// 2026-07-21: byte-equal behavior under the pre-merge boot, so it is not this
+// landing's regression; its fix flips this fixture to the bare `{40 + 2}`).
+fn main() = {
+  let name = "world"
+  let msg = "hello {name}!"
+  if msg == "hello world!" && byte_len(msg) == 12
+     && ("n=" ++ int_to_str(40 + 2)) == "n=42" { 42 } else { 1 }
+}

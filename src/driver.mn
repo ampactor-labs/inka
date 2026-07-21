@@ -318,7 +318,7 @@ fn count_lines(ref s) with Memory = count_lines_from(s, load_i32(s), 0, 0)
 fn count_lines_from(ref s, n, i, acc) with Memory = {
   if i >= n { acc }
   else {
-    let step = if load_i8(s + 4 + i) == 10 { 1 } else { 0 }
+    let step = if load_i8(s + 8 + i) == 10 { 1 } else { 0 }
     count_lines_from(s, n, i + 1, acc + step)
   }
 }

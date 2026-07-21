@@ -88,8 +88,8 @@ fn sock_write_all(fd, ptr, len) with Memory + Alloc + WASI = {
   }
 }
 
-// sock_write_str — a Mentl string (flat or view) onto the socket, whole.
+// sock_write_str — a Mentl string (any shape) onto the socket, whole.
+// str_payload is the materialization boundary: rope/slice flattens here.
 fn sock_write_str(fd, s) with Memory + Alloc + WASI = {
-  let (buf, off) = view_base(s)
-  sock_write_all(fd, buf + 4 + off, byte_len(s))
+  sock_write_all(fd, str_payload(s), byte_len(s))
 }

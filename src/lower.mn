@@ -599,6 +599,10 @@ fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + Loo
   let N(_, _, ah) = last(args)
   match fold_strip(lookup_ty(ah)) {
     TString            => arg_lo,
+    // A byte sequence IS text (§4①): fold_strip maps TString to TList(TByte),
+    // so THIS arm is the one every interpolated/shown String takes — identity,
+    // the text view, never the generated bracket-list $show_lb.
+    TList(TByte)       => arg_lo,
     TFloat             => LCall(handle, LGlobal(handle, "float_to_str"), [arg_lo]),
     TInt               => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
     TUnit              => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),

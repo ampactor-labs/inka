@@ -80,10 +80,9 @@ fn cstr_len(cstr, i) with Memory =
 
 fn cstr_to_string(cstr) with Memory + Alloc = {
   let n = cstr_len(cstr, 0)
-  let s = alloc(4 + n)
-  store_i32(s, n)
-  mem_copy(s + 4, cstr, n)
-  s
+  let s = bytes_buf(n)
+  mem_copy(s + 8, cstr, n)
+  str_of_buf(s)
 }
 
 fn wasi_args_build(argv_ptr, argc, i, acc) with Memory + Alloc = {
@@ -167,15 +166,12 @@ fn read_chunk(fd, buf, size) with Memory + Alloc + WASI = {
 
 // Stdout
 
-// print_string — write a Mentl string to stdout (fd=1). Routes
-// through byte_len + view_base so both flat and view shapes
-// resolve to (base_buf, byte_offset, length) before the write.
-// Io IS the materialization boundary in the gradient — the bytes
-// must be contiguous; view_base collapses the chain to the
-// underlying flat buffer's payload region (base_buf + 4 + off).
+// print_string — write a Mentl string to stdout (fd=1). Io IS the
+// materialization boundary in the gradient: str_payload flattens a
+// rope/slice (and repacks a wider-stride byte record) to the contiguous
+// stride-1 span the syscall wants; a flat string passes through untouched.
 fn print_string(s) with Memory + Alloc + WASI = {
-  let (base_buf, base_off) = view_base(s)
-  fd_write_bytes(1, base_buf + 4 + base_off, byte_len(s))
+  fd_write_bytes(1, str_payload(s), byte_len(s))
   ()
 }
 
@@ -201,12 +197,10 @@ fn println(s) with Memory + Alloc + WASI = {
 
 // Stderr
 
-// eprint_string — write a Mentl string to stderr (fd=2). View-
-// transparent via byte_len + view_base; the materialization
-// boundary resolves to the underlying flat buffer's payload region.
+// eprint_string — write a Mentl string to stderr (fd=2). The same
+// str_payload materialization boundary print_string reads.
 fn eprint_string(s) with Memory + Alloc + WASI = {
-  let (base_buf, base_off) = view_base(s)
-  fd_write_bytes(2, base_buf + 4 + base_off, byte_len(s))
+  fd_write_bytes(2, str_payload(s), byte_len(s))
   ()
 }
 
@@ -214,17 +208,16 @@ fn eprint_string(s) with Memory + Alloc + WASI = {
 
 // fd_read_all — slurp an fd to EOF into a heap-allocated flat string.
 // Reads into a raw doubling byte buffer, then materializes one flat
-// [len:i32][bytes...]. ONE loop serves stdin (read_stdin) and opened
-// files (fs_read_file_impl) — the stream does not care where the fd
-// came from.
+// [count][tag][bytes] byte record (bytes_buf). ONE loop serves stdin
+// (read_stdin) and opened files (fs_read_file_impl) — the stream does
+// not care where the fd came from.
 fn fd_read_all(fd) with Memory + Alloc + WASI = {
   let initial_cap = 65536
   let buf = alloc(initial_cap)
   let (final_buf, total) = fd_read_loop(fd, buf, 0, initial_cap)
-  let str = alloc(4 + total)
-  store_i32(str, total)
-  mem_copy(str + 4, final_buf, total)
-  str
+  let str = bytes_buf(total)
+  mem_copy(str + 8, final_buf, total)
+  str_of_buf(str)
 }
 
 fn fd_read_loop(fd, buf, offset, capacity) with Memory + Alloc + WASI = {
@@ -259,15 +252,14 @@ fn read_one_byte() with Memory + Alloc + WASI = {
 // read_stdin_line — read one line from stdin (interactive-prompt
 // discipline: one human action per line). Accumulates bytes until
 // 0x0A or EOF; the newline is consumed, not returned. Returns a flat
-// Mentl string [len:i32][bytes...].
+// [count][tag][bytes] Mentl string.
 fn read_stdin_line() with Memory + Alloc + WASI = {
   let initial_cap = 256
   let buf = alloc(initial_cap)
   let (final_buf, total) = read_line_loop(buf, 0, initial_cap)
-  let str = alloc(4 + total)
-  store_i32(str, total)
-  mem_copy(str + 4, final_buf, total)
-  str
+  let str = bytes_buf(total)
+  mem_copy(str + 8, final_buf, total)
+  str_of_buf(str)
 }
 
 fn read_line_loop(buf, offset, capacity) with Memory + Alloc + WASI = {
@@ -294,12 +286,11 @@ fn read_line_loop(buf, offset, capacity) with Memory + Alloc + WASI = {
 
 // fs_path_view — the (ptr, len) span a path_* syscall reads, pointing
 // STRAIGHT at the string's payload bytes in the image. WASI preview1
-// paths carry explicit lengths, and view_base collapses any view chain
-// to the contiguous flat payload — the bytes already sit where the
-// syscall wants them. Zero copy, zero alloc: carry the handle.
-fn fs_path_view(s) with Memory = {
-  let (base_buf, base_off) = view_base(s)
-  (base_buf + 4 + base_off, byte_len(s))
+// paths carry explicit lengths; str_payload materializes a rope/slice
+// exactly here, and a flat path is zero-copy — the bytes already sit
+// where the syscall wants them.
+fn fs_path_view(s) with Memory + Alloc = {
+  (str_payload(s), byte_len(s))
 }
 
 // fs_dir_fd — the preopened DIRECTORY's fd, read live from the preopen
@@ -417,10 +408,9 @@ fn fs_parse_dirents(buf, end, off, acc, last_cookie, saw_whole) with Memory + Al
     let namlen = load_i32(buf + off + 16)
     if off + 24 + namlen > end { (acc, last_cookie, saw_whole) }
     else {
-      let name = alloc(4 + namlen)
-      store_i32(name, namlen)
-      mem_copy(name + 4, buf + off + 24, namlen)
-      fs_parse_dirents(buf, end, off + 24 + namlen, push(acc, name), d_next, true)
+      let name = bytes_buf(namlen)
+      mem_copy(name + 8, buf + off + 24, namlen)
+      fs_parse_dirents(buf, end, off + 24 + namlen, push(acc, str_of_buf(name)), d_next, true)
     }
   }
 
@@ -452,11 +442,8 @@ fn fs_read_file_impl(path_str) with Memory + Alloc + WASI = {
   //   rights_base=FS_RIGHTS_READ, rights_inheriting=FS_RIGHTS_READ,
   //   fdflags=0, fd_out_ptr)
   let open_errno = path_open(dfd, 0, pp, plen, 0, 2, 2, 0, fd_cell)
-  if open_errno != 0 {
-    let empty = alloc(4)
-    store_i32(empty, 0)
-    empty
-  } else {
+  if open_errno != 0 { str_of_buf(bytes_buf(0)) }
+  else {
     let fd = load_i32(fd_cell)
     let bytes = fd_read_all(fd)
     fd_close(fd)
@@ -474,8 +461,7 @@ fn fs_write_file_impl(path_str, bytes_str) with Memory + Alloc + WASI = {
   if open_errno != 0 { () }
   else {
     let fd = load_i32(fd_cell)
-    let (bb_buf, bb_off) = view_base(bytes_str)
-    fd_write_bytes(fd, bb_buf + 4 + bb_off, byte_len(bytes_str))
+    fd_write_bytes(fd, str_payload(bytes_str), byte_len(bytes_str))
     fd_close(fd)
     ()
   }

@@ -1,0 +1,9 @@
+// ++ is the O(1) concat node (the rope); == is the structural [byte] eq;
+// byte_at walks the rope tag-honestly through the carrier; an in-range push
+// appends a byte (the ground 0..255 case the narrowing gate will one day
+// discharge at compile time).
+fn main() = {
+  let joined = "ab" ++ "cd"
+  if joined == "abcd" && len(joined) == 4 && byte_at(joined, 2) == 99
+     && "ab" != "ac" && push("ab", 99) == "abc" { 42 } else { 1 }
+}

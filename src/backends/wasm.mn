@@ -434,7 +434,9 @@ handler string_literal_collector with buf = make_list(16), count = 0, next_offse
   visit_string(s) => {
     if string_entry_exists(buf, s, 0, count) { resume() }
     else {
-      let size = 4 + byte_len(s)
+      // 8-byte header [count@0][tag_word@+4] + the bytes @ +8 (§4①: a string
+      // literal is the unified flat-sequence record, a stride-1 byte list).
+      let size = 8 + byte_len(s)
       let aligned_size = (size + 3) / 4 * 4
       let extended = list_extend_to(buf, count + 1)
       let written  = list_set(extended, count, (s, next_offset))
@@ -1092,19 +1094,21 @@ fn singleton_hnames_arms(arms, acc) = {
   }
 }
 
-// Emit `(data (i32.const <offset>) "<escaped-bytes>")` for each
-// string entry. Layout per string: first 4 bytes are the little-
-// endian length (emit_le4_escape emits four \xx escapes), followed
-// by the UTF-8 bytes (each byte emitted as \xx so the WAT parser
-// accepts the whole payload uniformly regardless of byte values).
+// Emit `(data (i32.const <offset>) "<escaped-bytes>")` for each string
+// entry. A string literal IS a byte-sequence literal (§4①): its data-section
+// layout is the unified flat-sequence record [count@0][tag_word@+4][bytes@+8],
+// identical to a stride-1 flat list, so list_index reads it generically at
+// stride 1 (the carrier). tag_word = pack_tag(0, 1): the flat tag (0) with the
+// byte stride-code (1). The bytes now begin at +8, not +4.
 fn emit_string_data(entries) = {
   each((entry) => {
   let (s, offset) = entry
   wat_emit("  (data (i32.const ")
   wat_emit(int_to_str(offset))
   wat_emit(") \"")
-  emit_le4_escape(byte_len(s))
-  emit_string_bytes(s, 0, byte_len(s))
+  emit_le4_escape(byte_len(s))       // count @ +0
+  emit_le4_escape(pack_tag(0, 1))    // tag word @ +4: flat, stride-1 (byte)
+  emit_string_bytes(s, 0, byte_len(s))  // bytes @ +8
   wat_emit("\")\n")
   }, entries)
 }
@@ -3833,9 +3837,13 @@ fn emit_binop_for(op, l, r) = {
     wat_emit("    (local.get $__state)\n")
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (local.get $callee_closure)\n")
+    // ONE concat: a String IS a stride-1 list, so both arms emit the SAME
+    // O(1) concat node (list_concat threads the carrier's sc). Routing the
+    // TString arm to $str_concat would self-recurse — str_concat's own body
+    // IS `a ++ b` under §4①.
     match lookup_ty(left_h) {
       TList(_) => wat_emit("    (call $list_concat)\n"),
-      TString  => wat_emit("    (call $str_concat)\n"),
+      TString  => wat_emit("    (call $list_concat)\n"),
       other    => emit_concat_unresolved(other)
     }
   },
@@ -3921,6 +3929,14 @@ fn emit_eq_for_ty(ty, neg) = match ty {
   // Sequence case — the [Byte] (str_eq) and [a] (list_eq) instances of the
   // ONE length-then-element recursion. Both return Bool; != wraps i32.eqz.
   TString => {
+    emit_fold_state_insert()
+    wat_emit("    (call $str_eq)\n")
+    if neg { wat_emit("    (i32.eqz)\n") } else { () }
+  },
+  // A byte sequence — TList(TByte), what a String fold_strips to — routes to
+  // the SAME [byte] family as the nominal arm, so String and [byte] (one type
+  // under §4①) can never diverge across eq/cmp/hash routes.
+  TList(TByte) => {
     emit_fold_state_insert()
     wat_emit("    (call $str_eq)\n")
     if neg { wat_emit("    (i32.eqz)\n") } else { () }
@@ -4460,6 +4476,10 @@ fn emit_field_eq(fty) = match fty {
   TString  => { wat_emit("    (local.get $__state)\n")
                 emit_swap_under_state()
                 wat_emit("    (call $str_eq)\n") },
+  // Byte sequence == the String family (§4①): one route, no divergence.
+  TList(TByte) => { wat_emit("    (local.get $__state)\n")
+                emit_swap_under_state()
+                wat_emit("    (call $str_eq)\n") },
   TList(_) => { wat_emit("    (local.get $__state)\n")
                 emit_swap_under_state()
                 wat_emit("    (call $list_eq)\n") },
@@ -4522,6 +4542,8 @@ fn emit_struct_cmp(op, left_h) =
 // [Byte]/[a] instance; a product/sum the generated $compare_<sig>.
 fn emit_cmp_for_ty(op, ty) = match ty {
   TString => emit_cmp_seq_call("str_compare", op),
+  // Byte sequence == the String family (§4①): one route, no divergence.
+  TList(TByte) => emit_cmp_seq_call("str_compare", op),
   TList(_) => emit_cmp_seq_call("list_compare", op),
   TRecord(_)        => emit_cmp_agg_call(fold_sig(ty), op),
   TRecordOpen(_, _) => emit_cmp_agg_call(fold_sig(ty), op),
@@ -4740,6 +4762,10 @@ fn emit_cmp_helper_chain(fields, i, n, off) = {
 // drives at the top-level compare — eq and compare cannot diverge.
 fn emit_field_cmp(fty) = match fty {
   TString  => { wat_emit("    (local.get $__state)\n")
+                emit_swap_under_state()
+                wat_emit("    (call $str_compare)\n") },
+  // Byte sequence == the String family (§4①): one route, no divergence.
+  TList(TByte) => { wat_emit("    (local.get $__state)\n")
                 emit_swap_under_state()
                 wat_emit("    (call $str_compare)\n") },
   TList(_) => { wat_emit("    (local.get $__state)\n")
@@ -4979,6 +5005,9 @@ fn show_field_name(fname, is_record) with Pure = if is_record { "{fname}: " } el
 // load is the SAME width-typed read the eq leaf and the store side use.
 fn emit_show_field_render(off, r, fty) = match fty {
   TString => emit_show_field_load(off, r),
+  // A byte sequence RENDERS AS TEXT (§4①: String is the text VIEW of [byte]) —
+  // never the bracket-list render ("hi", not [104, 105]).
+  TList(TByte)      => emit_show_field_load(off, r),
   TFloat            => emit_show_call_field("float_to_str", off, r),
   TList(_)          => emit_show_call_field("show_{fold_sig(fty)}", off, r),
   TRecord(_)        => emit_show_call_field("show_{fold_sig(fty)}", off, r),
@@ -5101,6 +5130,7 @@ fn emit_show_variant_payloads(payloads, i, n) = {
 // reads the SAME width the store wrote (Carried-Truth).
 fn emit_show_variant_payload_render(off, pty) = match pty {
   TString => emit_show_variant_load(off, pty),
+  TList(TByte)      => emit_show_variant_load(off, pty),   // text view (§4①)
   TFloat            => emit_show_call_variant("float_to_str", off, pty),
   TList(_)          => emit_show_call_variant("show_{fold_sig(pty)}", off, pty),
   TRecord(_)        => emit_show_call_variant("show_{fold_sig(pty)}", off, pty),
@@ -5185,6 +5215,7 @@ fn emit_show_list_body_helper(sig, elem) = {
 // The renderer-name is the only degree of freedom; the indexed load is its arg.
 fn emit_show_list_elem_render(elem) = match elem {
   TString => emit_show_list_index(),
+  TList(TByte)      => emit_show_list_index(),             // text view (§4①)
   TFloat            => emit_show_call_listidx("float_to_str"),
   TList(_)          => emit_show_call_listidx("show_{fold_sig(elem)}"),
   TRecord(_)        => emit_show_call_listidx("show_{fold_sig(elem)}"),
@@ -5416,6 +5447,10 @@ fn emit_hash_field_mix(fields, i, n, off) = {
 // lower_hash_dispatch drives — eq, compare, and hash cannot diverge.
 fn emit_field_hash(off, r, fty) = match fty {
   TString  => emit_field_hash_seq_call(off, "str_hash"),
+  // Byte sequence == the String family (§4①). Load-bearing here: list_hash
+  // seeds its FNV mix with the length, str_hash does not — one type must
+  // hash through ONE route or eq-equal values hash unequal.
+  TList(TByte) => emit_field_hash_seq_call(off, "str_hash"),
   TList(_) => emit_field_hash_seq_call(off, "list_hash"),
   TRecord(_)        => emit_field_hash_agg_call(off, fold_sig(fty)),
   TRecordOpen(_, _) => emit_field_hash_agg_call(off, fold_sig(fty)),
@@ -5602,19 +5637,18 @@ fn emit_binop(op) = match op {
   BGe     => wat_emit("    (i32.ge_s)\n"),
   BAnd    => wat_emit("    (i32.and)\n"),
   BOr     => wat_emit("    (i32.or)\n"),
-  // Per Hβ.emit.runtime-helper-state-push: str_concat is W7-compiled
+  // Per Hβ.emit.runtime-helper-state-push: list_concat is W7-compiled
   // (state, a, b). Stack here has [a, b]; insert state UNDER via
   // save-reload through pre-declared $state_tmp + $callee_closure.
-  // BConcat callers via emit_binop_for resolve to list_concat or
-  // str_concat per the left operand's Ty — this default kept for
-  // call sites without operand handle.
+  // ONE concat (§4①): the carrier's sc rides the node, so the handle-less
+  // default is the same list_concat every typed site emits.
   BConcat => {
     wat_emit("    (local.set $callee_closure)\n")
     wat_emit("    (local.set $state_tmp)\n")
     wat_emit("    (local.get $__state)\n")
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (local.get $callee_closure)\n")
-    wat_emit("    (call $str_concat)\n")
+    wat_emit("    (call $list_concat)\n")
   }
 }
 

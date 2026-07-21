@@ -1,0 +1,6 @@
+// fold over a String's bytes: h=104, i=105 — 209. The accumulator flows Int;
+// the element widens through the arithmetic.
+fn main() = {
+  let total = fold(0, (acc, b) => acc + b, "hi")
+  if total == 209 { 42 } else { 1 }
+}

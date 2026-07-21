@@ -161,6 +161,20 @@ fn stride_of(elem_ty) with Pure = match elem_ty {
   _     => repr_width(repr_of(elem_ty))
 }
 
+// stride_class — the ZERO-BIASED carrier codec, EMIT side: the stride-code the
+// emit packs into a byte/float sequence's tag word (stride_class(stride_of(elem))
+// feeds make_list_sc / the data-section header). The bias is load-bearing: sc 0
+// => stride 4 (Int/handle/pointer — the FREE word default every existing list
+// already writes as tag 0), so `pack_tag(0, 0) == 0` and the whole i32/handle
+// world is byte-identical; only a byte (sc 1) or a packed float (sc 2/3) writes a
+// nonzero code. Mirrors repr_of (RI32 the free floor; RI64/RF64/RF32/RV128 the
+// gradient triggers) one axis down: the element SLOT stride, not the VALUE repr.
+// The RUNTIME inverse (`decode_stride`, sc => stride) lives in lib/runtime/
+// lists.mn beside the readers that consume it — the RTLIBS blob has no src/.
+fn stride_class(stride) with Pure = match stride {
+  4 => 0, 1 => 1, 8 => 2, 16 => 3, 2 => 4, _ => 0
+}
+
 // repr_wat — the WAT value-type token for a representation class. STEP 1's
 // emit slots project `repr_wat(repr_of(lookup_ty(handle)))` instead of
 // re-deriving i32 from arity. ty_to_wasm_type (backends/wasm.mn) is the

@@ -21,6 +21,41 @@
 
 import types
 
+// The stride carrier. A sequence's element byte-stride rides the HIGH bits of
+// its tag word (which holds sc*16 + tag): the structural tag is that word masked
+// to its low 4 bits, the stride-code sc is that word / 16 (exact, since the tag
+// is < 16, so no shift op is needed). Zero-biased
+// (decode_stride/stride_class, types.mn): a stride-4 word list writes sc 0, so
+// pack_tag(0, 0) == 0 and every existing list is byte-identical; only a byte or
+// packed-float sequence writes a nonzero code. This is what lets a GENERIC body
+// (iterate_from's xs[i], its element a TVar) read a packed [byte] correctly — it
+// reads the stride LIVE from the node, never assuming 4 (the corruption the
+// naive String=[byte] merge caused, fixed at the substrate).
+// decode_stride — the RUNTIME half of the zero-biased carrier codec (sc =>
+// element byte stride), the inverse of types.mn's stride_class (the EMIT half).
+// It lives HERE, not in the compiler's type layer, because the RTLIBS blob
+// (memory + strings + lists + prelude, how the micros compile) has no src/ — a
+// runtime reader must resolve to a runtime definition.
+fn decode_stride(sc) with Pure = match sc {
+  0 => 4, 1 => 1, 2 => 8, 3 => 16, 4 => 2, _ => 4
+}
+
+fn pack_tag(tag, sc) with Pure = sc * 16 + tag
+fn seq_stride(ref list) with Memory = decode_stride(load_i32(list + 4) / 16)
+fn seq_tag(ref list) with Memory = i32_and(load_i32(list + 4), 15)
+fn seq_sc(ref list) with Memory = load_i32(list + 4) / 16
+
+// Element access at a runtime-carried stride. The load BRANCHES on stride
+// (load_i8 for a packed byte — exactly one byte, always in bounds, no tail-pad
+// invariant; load_i32 for a word), so a byte value comes back as a word (a byte
+// VALUE is a word). Stride 8/16 never reach the generic path (the wide-element
+// refusal fires first), so the branch is total over {1, 4}.
+fn load_strided(base, i, stride) with Memory =
+  if stride == 1 { load_i8(base + i * stride) } else { load_i32(base + i * stride) }
+
+fn store_strided(base, i, stride, val) with Memory =
+  if stride == 1 { store_i8(base + i * stride, val) } else { store_i32(base + i * stride, val) }
+
 // Construction
 
 // make_list — allocate a flat tag=0 list of `count` slots (uninitialized).
@@ -32,14 +67,18 @@ import types
 // `Int -> [a]` for every consumer above the boundary. One body, two names —
 // a raw body that CALLS a table-typed name would force the typed view onto
 // its own word-level locals (the List-vs-Int census class this split felled).
-fn alloc_list(count) with Memory + Alloc = {
-  let t = alloc(8 + count * 4)
+fn alloc_list_sc(count, sc) with Memory + Alloc = {
+  let t = alloc(8 + count * decode_stride(sc))
   store_i32(t, count)
-  store_i32(t + 4, 0)
+  store_i32(t + 4, pack_tag(0, sc))
   t
 }
 
+fn alloc_list(count) with Memory + Alloc = alloc_list_sc(count, 0)
+
 fn make_list(count) with Memory + Alloc = alloc_list(count)
+
+fn make_list_sc(count, sc) with Memory + Alloc = alloc_list_sc(count, sc)
 
 // list_filled — a flat list with every slot holding v. The bucket-index
 // mints read this: a hash index's slot IS a list that starts empty (one
@@ -65,7 +104,7 @@ fn len(ref xs) with Memory = load_i32(xs)
 // Caller asserts tag=0 — calling list_set on a snoc/concat/slice is
 // a structural contract violation (the list should be list_to_flat'd first).
 fn list_set(l, idx, val) with Memory = {
-  store_i32(l + 8 + idx * 4, val)
+  store_strided(l + 8, idx, seq_stride(l), val)
   l
 }
 
@@ -124,14 +163,14 @@ fn list_index(ref list, i) with Memory = {
 // obligation (list_index's boundary check, or list_index_proven's proof).
 // Exhaustive on all four tags — no fallback sentinel.
 fn list_index_unchecked(ref list, i) with Memory = {
-  let tag = load_i32(list + 4)
-  match tag {
-    0 => load_i32(list + 8 + i * 4),
+  let stride = seq_stride(list)
+  match seq_tag(list) {
+    0 => load_strided(list + 8, i, stride),
     1 => {
       let left     = load_i32(list + 8)
       let left_len = load_i32(left)
       if i < left_len { list_index_unchecked(left, i) }
-      else { load_i32(list + 12) }
+      else { load_strided(list + 12, 0, stride) }
     },
     3 => {
       let left     = load_i32(list + 8)
@@ -225,11 +264,12 @@ fn list_hash(xs) -> Int with Memory = {
 // push allocates a 16-byte snoc node.
 fn push(list, val) with Memory + Alloc = {
   let old_len = load_i32(list)
+  let sc = seq_sc(list)
   let snoc = alloc(16)
   store_i32(snoc, old_len + 1)
-  store_i32(snoc + 4, 1)
+  store_i32(snoc + 4, pack_tag(1, sc))
   store_i32(snoc + 8, list)
-  store_i32(snoc + 12, val)
+  store_strided(snoc + 12, 0, decode_stride(sc), val)
   snoc
 }
 
@@ -278,7 +318,7 @@ fn list_concat(a, b) with Memory + Alloc = {
     let total = len_a + len_b
     let node = alloc(16)
     store_i32(node, total)
-    store_i32(node + 4, 3)
+    store_i32(node + 4, pack_tag(3, seq_sc(a)))
     store_i32(node + 8, a)
     store_i32(node + 12, b)
     node
@@ -299,11 +339,11 @@ fn slice_raw(list, start, end) with Memory + Alloc = {
   let cstart = if start < 0 { 0 } else if start > total { total } else { start }
   let cend   = if end < cstart { cstart } else if end > total { total } else { end }
   let new_len = cend - cstart
-  if new_len <= 0 { alloc_list(0) }
+  if new_len <= 0 { alloc_list_sc(0, seq_sc(list)) }
   else {
     let node = alloc(16)
     store_i32(node, new_len)
-    store_i32(node + 4, 4)
+    store_i32(node + 4, pack_tag(4, seq_sc(list)))
     store_i32(node + 8, list)
     store_i32(node + 12, cstart)
     node
@@ -337,7 +377,7 @@ fn last(xs) with Memory = xs[len(xs) - 1]
 // degrades gracefully.
 fn drop_last(list) with Memory + Alloc = {
   let list_len = load_i32(list)
-  let tag      = load_i32(list + 4)
+  let tag      = seq_tag(list)
   match tag {
     1 => load_i32(list + 8),
     0 => slice_raw(list, 0, list_len - 1),
@@ -356,10 +396,9 @@ fn list_to_flat(list) with Memory + Alloc = {
   let n = load_i32(list)
   if n == 0 { list }
   else {
-    let tag = load_i32(list + 4)
-    if tag == 0 { list }
+    if seq_tag(list) == 0 { list }
     else {
-      let flat = alloc_list(n)
+      let flat = alloc_list_sc(n, seq_sc(list))
       flat_fill(flat, list, 0, n)
       flat
     }
@@ -372,8 +411,7 @@ fn list_to_flat(list) with Memory + Alloc = {
 fn flat_fill(flat, tree, i, n) with Memory + Alloc = {
   if i >= n { () }
   else {
-    let tag = load_i32(tree + 4)
-    match tag {
+    match seq_tag(tree) {
       0 => flat_fill_flat_src(flat, tree, i, n),
       1 => flat_fill_snoc(flat, tree, i, n),
       3 => flat_fill_concat(flat, tree, i, n),
@@ -385,7 +423,7 @@ fn flat_fill(flat, tree, i, n) with Memory + Alloc = {
 fn flat_fill_flat_src(flat, src, i, n) with Memory + Alloc = {
   if i >= n { () }
   else {
-    store_i32(flat + 8 + i * 4, load_i32(src + 8 + i * 4))
+    store_strided(flat + 8, i, seq_stride(flat), load_strided(src + 8, i, seq_stride(src)))
     flat_fill_flat_src(flat, src, i + 1, n)
   }
 }
@@ -396,8 +434,8 @@ fn flat_fill_snoc(flat, tree, i, n) with Memory + Alloc = {
   // then recurse into left for positions 0..n-2.
   let count = load_i32(tree)
   let last_pos = count - 1
-  let last_val = load_i32(tree + 12)
-  store_i32(flat + 8 + last_pos * 4, last_val)
+  let last_val = load_strided(tree + 12, 0, seq_stride(tree))
+  store_strided(flat + 8, last_pos, seq_stride(flat), last_val)
   let left = load_i32(tree + 8)
   flat_fill(flat, left, i, last_pos)
 }
@@ -413,8 +451,7 @@ fn flat_fill_concat(flat, tree, i, n) with Memory + Alloc = {
 fn flat_fill_at_offset(flat, src, offset, n) with Memory + Alloc = {
   if n == 0 { () }
   else {
-    let tag = load_i32(src + 4)
-    match tag {
+    match seq_tag(src) {
       0 => flat_fill_flat_src_offset(flat, src, offset, n),
       1 => flat_fill_snoc_offset(flat, src, offset, n),
       3 => flat_fill_concat_offset(flat, src, offset, n),
@@ -434,15 +471,15 @@ fn flat_fill_flat_src_offset(flat, src, offset, n) with Memory + Alloc = {
 fn copy_range(flat, src, dest_off, src_off, n) with Memory + Alloc = {
   if n == 0 { () }
   else {
-    store_i32(flat + 8 + dest_off * 4, load_i32(src + 8 + src_off * 4))
+    store_strided(flat + 8, dest_off, seq_stride(flat), load_strided(src + 8, src_off, seq_stride(src)))
     copy_range(flat, src, dest_off + 1, src_off + 1, n - 1)
   }
 }
 
 fn flat_fill_snoc_offset(flat, src, offset, n) with Memory + Alloc = {
   let count    = load_i32(src)
-  let last_val = load_i32(src + 12)
-  store_i32(flat + 8 + (offset + count - 1) * 4, last_val)
+  let last_val = load_strided(src + 12, 0, seq_stride(src))
+  store_strided(flat + 8, offset + count - 1, seq_stride(flat), last_val)
   let left = load_i32(src + 8)
   flat_fill_at_offset(flat, left, offset, count - 1)
 }
@@ -470,7 +507,7 @@ fn flat_fill_slice_range(flat, base, dest_off, src_start, n) with Memory + Alloc
     // list_index would also be a table-typed call forcing [a] onto this raw
     // walk's word locals.
     let val = list_index_unchecked(base, src_start)
-    store_i32(flat + 8 + dest_off * 4, val)
+    store_strided(flat + 8, dest_off, seq_stride(flat), val)
     flat_fill_slice_range(flat, base, dest_off + 1, src_start + 1, n - 1)
   }
 }

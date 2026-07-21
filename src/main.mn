@@ -111,6 +111,59 @@ type EntryHandlerInvocation
   = Invocation(EntryVerb)
   | ParseError(String)
 
+// ─── The verb table — ONE home the parser AND the help project ────────
+//
+// A VerbSpec carries the verb's name, its argument hint (for the help line),
+// the BUILDER that projects argv → the typed Invocation (or a ParseError that
+// names the missing argument), and its one-line description. The builder is a
+// first-class effectful CLOSURE stored in the field — the medium carries
+// functions-with-their-rows through data (the same capability handlers rest
+// on), so the verb→construction edge is the graph's own edge, never a tag a
+// second pass re-derives. parse_cli_args finds by name and RUNS the closure;
+// verb_catalog projects each row into the help surface. The verb set has ONE
+// home; the help text and the parser were two hand-maintained copies that
+// could drift, and now both read this table (Carried-Truth Law: one home, and
+// every reader is a projection of it). Adding a verb is ONE row here plus its
+// runner arm in dispatch_invocation.
+type VerbSpec = VerbSpec(String, String, ([String]) -> EntryHandlerInvocation, String)
+
+// req_target — the shared shape of the target-REQUIRED verbs (compile / run /
+// check / audit): argv[2] resolved to a module, or a ParseError that names the
+// verb and shows its usage. `mk` builds the variant from the resolved module.
+fn req_target(argv, mk, msg) with Memory + Alloc =
+  if len(argv) >= 3 { Invocation(mk(path_to_module(argv[2]))) }
+  else { ParseError(msg) }
+
+// The verbs, in help-presentation order (the parser matches by name, so order
+// here is the human's reading order, never the dispatch order). A `""` hint is
+// a no-argument verb.
+fn verb_specs() with Memory + Alloc = [
+  VerbSpec("run",     "<path>",            (a) => req_target(a, (t) => VRun(t),     "run needs a target: mentl run <path>"),          "compile, prove, execute (a hole or refuted claim REFUSES)"),
+  VerbSpec("check",   "<path>",            (a) => req_target(a, (t) => VCheck(t),   "check needs a target: mentl check <path>"),      "diagnostics only, no emit"),
+  VerbSpec("compile", "<path>",            (a) => req_target(a, (t) => VCompile(t), "compile needs a target: mentl compile <path>"),  "emit WAT to stdout"),
+  VerbSpec("edit",    "[path]",            (a) => Invocation(VEdit(optional_target(a, 2))),                                           "the cursor session (eight aspects + proven proposals)"),
+  VerbSpec("audit",   "<path>",            (a) => req_target(a, (t) => VAudit(t),   "audit needs a target: mentl audit <path>"),      "the capability set + severance unlocks"),
+  VerbSpec("query",   "<path> <question>", (a) => if len(a) >= 4 { Invocation(VQuery(path_to_module(a[2]), a[3])) } else { ParseError("query needs a target and a question: mentl query <path> <question>") }, "why / type / effects / ownership, walked to your words"),
+  VerbSpec("teach",   "[path]",            (a) => Invocation(VTeach(optional_target(a, 2))),                                          "the gradient narrated"),
+  VerbSpec("doc",     "[path]",            (a) => Invocation(VDoc(optional_target(a, 2))),                                            "documentation projection"),
+  VerbSpec("test",    "[path]",            (a) => Invocation(VTest(optional_target(a, 2))),                                           "the test chain"),
+  VerbSpec("new",     "<name>",            (a) => if len(a) >= 3 { Invocation(VNew(a[2])) } else { ParseError("new needs a name: mentl new <name>") }, "write <name>.mn here (one file; the imports are the manifest)"),
+  VerbSpec("serve",   "",                  (a) => Invocation(VServe),                                                                 "the transport server"),
+  VerbSpec("repl",    "",                  (a) => Invocation(VRepl),                                                                  "line REPL"),
+  VerbSpec("--with",  "<handler> [path]",  (a) => if len(a) >= 3 { Invocation(VWith(a[2], optional_target(a, 3))) } else { ParseError("--with needs a handler: mentl --with <handler> [path]") }, "install any handler over any verb"),
+  VerbSpec("help",    "",                  (a) => Invocation(VWelcome),                                                               "this projection")
+]
+
+// find_verb — the name → spec projection over the table (names are unique, so
+// either end serves; last/drop_last is the O(1) snoc walk). None when no match.
+fn find_verb(name, specs) with Memory + Alloc =
+  if len(specs) == 0 { None }
+  else {
+    let spec = last(specs)
+    let VerbSpec(n, _, _, _) = spec
+    if n == name { Some(spec) } else { find_verb(name, drop_last(specs)) }
+  }
+
 // ─── argv parsing ─────────────────────────────────────────────────
 //
 // Projects argv to the EntryVerb ADT at the ONE boundary. Bare `mentl` →
@@ -131,38 +184,16 @@ fn parse_cli_args(argv) with Memory + Alloc = {
         let (target, line, col) = addr
         Invocation(VAt(path_to_module(target), line, col))
       },
-      None =>
-    if mode == "edit" {
-      Invocation(VEdit(optional_target(argv, 2)))
-    } else if mode == "doc" {
-      Invocation(VDoc(optional_target(argv, 2)))
-    } else if mode == "serve" {
-      Invocation(VServe)
-    } else if mode == "compile" && len(argv) >= 3 {
-      Invocation(VCompile(path_to_module(argv[2])))
-    } else if mode == "run" && len(argv) >= 3 {
-      Invocation(VRun(path_to_module(argv[2])))
-    } else if mode == "check" && len(argv) >= 3 {
-      Invocation(VCheck(path_to_module(argv[2])))
-    } else if mode == "test" {
-      Invocation(VTest(optional_target(argv, 2)))
-    } else if mode == "audit" && len(argv) >= 3 {
-      Invocation(VAudit(path_to_module(argv[2])))
-    } else if mode == "query" && len(argv) >= 4 {
-      Invocation(VQuery(path_to_module(argv[2]), argv[3]))
-    } else if mode == "teach" {
-      Invocation(VTeach(optional_target(argv, 2)))
-    } else if mode == "repl" {
-      Invocation(VRepl)
-    } else if mode == "new" && len(argv) >= 3 {
-      Invocation(VNew(argv[2]))
-    } else if mode == "--with" && len(argv) >= 3 {
-      Invocation(VWith(argv[2], optional_target(argv, 3)))
-    } else if mode == "help" || mode == "-h" || mode == "--help" {
-      Invocation(VWelcome)
-    } else {
-      ParseError("unrecognized or under-specified command: " ++ mode)
-    }
+      // The verb ladder is ONE table projection now (verb_specs): normalize the
+      // help aliases to the canonical name, find the spec, run its builder. An
+      // unknown name is the honest ParseError — never a fabricated fallback.
+      None => {
+        let name = if mode == "-h" || mode == "--help" { "help" } else { mode }
+        match find_verb(name, verb_specs()) {
+          Some(VerbSpec(_, _, build, _)) => build(argv),
+          None => ParseError("unrecognized or under-specified command: " ++ mode)
+        }
+      }
     }
   }
 }
@@ -1177,10 +1208,32 @@ fn print_error_and_help(msg) = {
   print_help()
 }
 
-// The verb catalog — ONE string, two surfaces: the error path eprints it
-// (print_help, stderr), the welcome prints it (stdout). Never two copies.
-fn verb_catalog() with Pure =
-  "the verbs:\n  mentl                          — project this directory (a pipe compiles stdin)\n  mentl run <path>               — compile, prove, execute (a hole or refuted claim REFUSES)\n  mentl check <path>             — diagnostics only, no emit\n  mentl compile <path>           — emit WAT to stdout\n  mentl edit [path]              — the cursor session (eight aspects + proven proposals)\n  mentl audit <path>             — the capability set + severance unlocks\n  mentl query <path> <question>  — why / type / effects / ownership, walked to your words\n  mentl teach [path]             — the gradient narrated\n  mentl doc [path]               — documentation projection\n  mentl test [path]              — the test chain\n  mentl new <name>               — write <name>.mn here (one file; the imports are the manifest)\n  mentl serve                    — the transport server\n  mentl repl                     — line REPL\n  mentl --with <handler> [path]  — install any handler over any verb\n  mentl help                     — this projection\n\na target is a module name or a file path, from any directory.\nthe surface: PLAN.md §11 (the production bar) · docs/SYNTAX.md (the language)\n"
+// The verb catalog — ONE surface projected from the verb table, so the help a
+// user reads can never disagree with the parser that reads them. The bare
+// `mentl` line (the directory projection, not a named verb) frames the list;
+// every verb line is verb_specs()[i] rendered uniformly.
+fn verb_catalog() with Memory + Alloc =
+  "the verbs:\n  mentl                          — project this directory (a pipe compiles stdin)\n"
+    ++ catalog_lines(verb_specs(), 0, len(verb_specs()), "")
+    ++ "\na target is a module name or a file path, from any directory.\n"
+    ++ "the surface: PLAN.md §11 (the production bar) · docs/SYNTAX.md (the language)\n"
+
+// One catalog line per spec: `  mentl <name> <hint>` padded to a column, then
+// `— <desc>`. The `++` accumulator IS the O(1) concat rope (§4①), not a loop
+// re-alloc — the string grows by pointer, never by copy.
+fn catalog_lines(specs, i, n, acc) with Memory + Alloc =
+  if i >= n { acc }
+  else {
+    let VerbSpec(name, hint, _, desc) = specs[i]
+    let usage = if byte_len(hint) > 0 { name ++ " " ++ hint } else { name }
+    catalog_lines(specs, i + 1, n,
+      acc ++ "  mentl " ++ pad_right(usage, 25) ++ "— " ++ desc ++ "\n")
+  }
+
+// pad_right — right-pad with spaces to width w (the alignment column). A no-op
+// once s already reaches w. Small, bounded, one home for the help alignment.
+fn pad_right(s, w) with Memory + Alloc =
+  if byte_len(s) >= w { s } else { pad_right(s ++ " ", w) }
 
 fn print_help() = eprint_string(verb_catalog())
 

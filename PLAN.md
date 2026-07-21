@@ -1019,6 +1019,48 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-21 · EFFECT-POLYMORPHIC STORED FUNCTIONS + the mentl verb table
+  (a hole in the medium closed, and the CLI overhaul it unblocked · pin
+  1167ddfe). A first-class CLOSURE carrying its own effect row can now be
+  STORED in an ADT field and called — the medium carries functions-with-
+  their-rows through data, the same capability handlers rest on. The root
+  was in the inferencer: quantify_ctor_ty (infer.mn) passed a function-typed
+  ctor field's effect ROW through UNQUANTIFIED, so its open tail was a single
+  free var that finalize closed to Pure — every effectful stored closure then
+  "violated Pure," and a table of heterogeneous-row builders could not
+  typecheck. TWO sub-roots: parse_type_ty minted the function-type row var as
+  a TYPE handle (fresh_handle → graph_fresh_ty), which free_in_row never
+  collects and instantiate cannot freshen; and quantify_ctor_ty never added
+  it to the quantified set. quantify_ctor_row re-mints the open tail as a
+  genuine row var (graph_fresh_row / NRowFree) and quantifies it; result_ty
+  filters row handles out by node-kind (is_row_handle) so the type stays
+  non-parametric; instantiate's is_row_handle → mint_row already freshens a
+  quantified row var, so each ctor use gets a fresh row and the list unifies
+  the builders' rows by the row algebra. This is the Carried-Truth Law at the
+  type layer: the function's effect row is a fact the graph proved and
+  quantify_ctor_ty DISCARDED. The fix UNBLOCKED the CLI overhaul (Morgan's
+  ask): the verb set had three drifting homes — the hand-written verb_catalog
+  help, the `if mode == "..."` parse chain, the dispatch match — now ONE
+  VerbSpec table (name, arg-hint, BUILDER CLOSURE, description) projected by
+  both find_verb (the closure builds the typed Invocation, or a per-verb
+  ParseError naming the missing argument — a better message than the old
+  generic one) and verb_catalog (the help, padded from the same rows), so
+  they cannot drift; the address probe and dispatch match are unchanged. An
+  earlier pass HERE sidestepped the inferencer hole with a VerbBuild data-tag
+  (a name build_invocation re-derived the construction from — drift-8 + a
+  Carried-Truth re-derivation, the closure IS the edge the tag re-derived);
+  Morgan caught it, and the ultimate form is the closure carried directly.
+  Witnessed RED→GREEN on the wheel's OWN census: the verb table drove it from
+  7 E_PurityViolated (unfixed boot → m2) to 0 (fixed m2 → m3), then m3 == m4
+  byte-identical, re-pinned boot holds the clean m2 == m3. Board whole:
+  census 0, frontier 131/0 (+stored-fn-effect-poly capability test),
+  proof-exactness 9/9, crown 5/5, micros green, phantom 286. Residue, named:
+  parse_type_ty still mints EVERY function-type row var as a TYPE handle (the
+  localized ctor-field fix corrects it only where it's load-bearing; the
+  global parser fix is higher-blast-radius, sequenced); and the isolated
+  stored-fn fixture is a capability smoke test, not the fix's discriminating
+  gate (the generalization-to-Pure needs the full 14-builder context — the
+  wheel census is the trusted gate)
 - 2026-07-21 · ▶▶ THE WIDE-ELEMENT [Float] CASH-OUT (§5.U's stride carrier
   reaches its first wide element · pin 683d66cb). [Float] is a first-class
   packed sequence end to end, and the SAME landing kills the

@@ -3800,8 +3800,16 @@ fn register_type_constructors(type_name, variants) = {
   // too). Lowercase TName leaves ARE the parameters: the case rule
   // IS the declaration; no angle-bracket list exists to keep in sync.
   let (converted, qmap) = quantify_variants(variants, make_list(total), 0, total, [])
-  let result_ty = TName(type_name, map((pair) => { let (_, h) = pair TVar(h) }, qmap))
-  let qhandles = map((pair) => { let (_, h) = pair h }, qmap)
+  // result_ty's argument list is the TYPE parameters only (the type is applied
+  // as `TName(type_name, [params])`); a function-field's quantified ROW var is
+  // in qmap for the Forall but is NOT a type parameter, so filter it out by
+  // node-kind (is_row_handle). qhandles keeps ALL — params AND row vars — so
+  // every ctor scheme quantifies (and instantiate freshens) the stored-function
+  // rows.
+  let all_handles = map((pair) => { let (_, h) = pair h }, qmap)
+  let param_handles = filter((h) => !is_row_handle(h), all_handles)
+  let result_ty = TName(type_name, map((h) => TVar(h), param_handles))
+  let qhandles = all_handles
   each((indexed) => {
     let (tag_id, variant) = indexed
     register_one_variant(type_name, result_ty, qhandles,
@@ -3827,6 +3835,23 @@ fn quantify_ty_list(tys, qmap) = {
     let (rest2, q2) = quantify_ty_list(slice(tys, 1, len(tys)), q1)
     ([head2] ++ rest2, q2)
   }
+}
+
+// quantify_ctor_row — re-mint a function field's OPEN row tail as a genuine row
+// variable and quantify it (push onto qmap; result_ty filters row handles out).
+// A CLOSED row (`-> B with IO`) is monomorphic — no polymorphic tail — so it
+// passes through unchanged; only the open tail (the default `-> B`, EfOpen with
+// a fresh tail) becomes a quantified row var. EfNeg recurses to its inner row.
+fn quantify_ctor_row(row, qmap) = match row {
+  EfOpen(names, _v) => {
+    let rv = graph_fresh_row(Inferred("polymorphic effect row of a stored function"))
+    (EfOpen(names, rv), push(qmap, ("", rv)))
+  },
+  EfNeg(inner) => {
+    let (i2, q) = quantify_ctor_row(inner, qmap)
+    (EfNeg(i2), q)
+  },
+  _ => (row, qmap)
 }
 
 // Lowercase TName leaves become quantified TVars; capitalized names
@@ -3885,7 +3910,18 @@ fn quantify_ctor_ty(ty, qmap) = match ty {
   TFun(params, ret, row) => {
     let (ps2, q1) = quantify_tparam_list(params, qmap)
     let (r2, q2) = quantify_ctor_ty(ret, q1)
-    (TFun(ps2, r2, row), q2)
+    // A function-typed FIELD is effect-POLYMORPHIC: its open row tail must be a
+    // genuine ROW variable, quantified into the ctor scheme so each USE of the
+    // ctor instantiates a FRESH row (a stored function carries its own effects;
+    // a table of them unifies their rows by the row algebra). parse_type_ty
+    // mints the tail as a TYPE handle (fresh_handle → graph_fresh_ty), which
+    // free_in_row never collects and instantiate can't freshen, so the tail
+    // stayed a single free var that finalize closed to Pure — every effectful
+    // stored closure then "violated Pure" (the CLI verb table). Re-mint the tail
+    // as a row var here and quantify it; result_ty filters row handles out by
+    // node-kind, so the type stays non-parametric.
+    let (row2, q3) = quantify_ctor_row(row, q2)
+    (TFun(ps2, r2, row2), q3)
   },
   TRecord(fields) => {
     let (fs2, q2) = quantify_field_list(fields, qmap)

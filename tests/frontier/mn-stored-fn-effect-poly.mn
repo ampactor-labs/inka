@@ -1,0 +1,33 @@
+// Effect-polymorphic stored functions — a first-class CLOSURE carrying its own
+// effect row, stored in an ADT field and later called. This is the capability
+// the mentl verb table rests on (main.mn: VerbSpec holds each verb's builder as
+// a closure). Before quantify_ctor_row quantified the function-field's row var,
+// the field's open row tail closed to Pure at finalize, so an effectful builder
+// "violated Pure" — a table of heterogeneous-row closures could not typecheck.
+// Now the row is generalized like a type parameter: each use of the ctor
+// instantiates a fresh row, and the list unifies the builders' rows by the row
+// algebra.
+//
+// A capability SMOKE test (runs 42), not the fix's discriminating gate: the
+// close-to-Pure failure needs the full generalization context of a 14-builder
+// table, so this isolated shape typechecks on the pre-fix boot too. The
+// witnessed RED->GREEN for quantify_ctor_row is the WHEEL's own census — the
+// mentl verb table (main.mn) drove it from 7 E_PurityViolated (unfixed boot ->
+// m2) to 0 (fixed m2 -> m3), and the census ratchet holds it there.
+type Cmd = Cmd(String, ([Int]) -> Int)
+
+fn total(xs) = fold(0, (a, x) => a + x, xs)   // effectful (Memory, via fold + list)
+
+fn run_cmd(name, cmds, xs) =
+  if len(cmds) == 0 { 0 }
+  else {
+    let Cmd(n, f) = last(cmds)
+    if n == name { f(xs) } else { run_cmd(name, drop_last(cmds), xs) }
+  }
+
+fn main() = {
+  // Heterogeneous rows in ONE list: `total` is effectful, `xs[0]` is a bare
+  // index — both stored where a `([Int]) -> Int` builder is expected.
+  let cmds = [Cmd("sum", (xs) => total(xs)), Cmd("first", (xs) => xs[0])]
+  run_cmd("sum", cmds, [10, 15, 17])
+}

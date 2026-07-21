@@ -690,6 +690,13 @@ for i in "${!compilers[@]}"; do
   # and refuses under the armed class. Pre-R3, none of the three folded — the
   # nested `self + 1` / `self % 2` accrued silent V_Pending and the invalid
   # construction emitted.
+  # Effect-polymorphic stored functions — a closure carrying its own effect row
+  # stored in an ADT field, then called (the capability the mentl verb table
+  # rests on). A capability smoke test; the fix's discriminating RED->GREEN was
+  # the wheel's own census (7 E_PurityViolated -> 0), the fixture's own comment
+  # records why the isolated shape does not itself go RED.
+  run_program "$compiler" stored-fn-effect-poly \
+    "$ROOT/tests/frontier/mn-stored-fn-effect-poly.mn" 42 yes "$dir"
   run_program "$compiler" refine-arith-true \
     "$ROOT/tests/frontier/mn-refine-arith-true.mn" 42 no "$dir"
   run_program "$compiler" refine-even \

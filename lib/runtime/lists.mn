@@ -45,13 +45,18 @@ fn seq_stride(ref list) with Memory = decode_stride(load_i32(list + 4) / 16)
 fn seq_tag(ref list) with Memory = i32_and(load_i32(list + 4), 15)
 fn seq_sc(ref list) with Memory = load_i32(list + 4) / 16
 
-// Element access at a runtime-carried stride. The load BRANCHES on stride
-// (load_i8 for a packed byte — exactly one byte, always in bounds, no tail-pad
-// invariant; load_i32 for a word), so a byte value comes back as a word (a byte
-// VALUE is a word). Stride 8/16 never reach the generic path (the wide-element
-// refusal fires first), so the branch is total over {1, 4}.
+// Element access at a runtime-carried stride — the WORD PROTOCOL, total and
+// repr-erased. A sub-word byte loads as a word by value; a word loads as
+// itself; a WIDE element (stride 8/16 — f64 today, i64/v128 by the same law)
+// returns its ADDRESS — the reference IS the element's word face ("a handle
+// IS a word", §5.U). The generic layer never touches a wide value; a typed
+// site cashes the width through load_f64/store_f64 at the boundary. Stride 2
+// (the reserved u16 code) has no producer; it rides the wide arm's
+// address/copy protocol until a by-value arm earns a producer.
 fn load_strided(base, i, stride) with Memory =
-  if stride == 1 { load_i8(base + i * stride) } else { load_i32(base + i * stride) }
+  if stride == 1 { load_i8(base + i * stride) }
+  else if stride == 4 { load_i32(base + i * stride) }
+  else { base + i * stride }
 
 // The stride-1 store carries the byte RANGE trap (the list_index bounds-trap
 // precedent, same load_i32(-1) OOB idiom): a word outside 0..255 entering a
@@ -63,7 +68,10 @@ fn store_strided(base, i, stride, val) with Memory =
   if stride == 1 {
     store_i8(base + i * stride, if val < 0 || val > 255 { load_i32(0 - 1) } else { val })
   }
-  else { store_i32(base + i * stride, val) }
+  else if stride == 4 { store_i32(base + i * stride, val) }
+  // Wide slot: val is the REFERENCE (the word face of a wide value); the
+  // store copies the stride's bytes from behind it into the packed slot.
+  else { mem_copy(base + i * stride, val, stride) }
 
 // Construction
 
@@ -267,6 +275,59 @@ fn list_hash(xs) -> Int with Memory = {
   list_hash_loop(xs, 0, n, i32_xor(2166136261, n) * 16777619)
 }
 
+// The [Float] instances of the eq / compare / hash leaves — the wide-element
+// siblings of str_eq/str_compare/str_hash. RAW bodies over the word protocol:
+// list_index_unchecked yields each element's word face (the f64's address —
+// a packed slot's interior for sc 2, a cell for a word-built list), load_f64
+// cashes the width, and the comparison/mix runs on the native value. Called
+// by the emit's TList(TFloat) routing arms; equal sequences through EITHER
+// physical stride agree (the value decides, never the representation).
+fn list_eq_f64(a, b) -> Bool with Memory = {
+  let la = load_i32(a)
+  let lb = load_i32(b)
+  if la != lb { false }
+  else { list_eq_f64_loop(a, b, la, 0) }
+}
+
+fn list_eq_f64_loop(a, b, n, i) -> Bool with Memory =
+  if i >= n { true }
+  else {
+    if load_f64(list_index_unchecked(a, i)) != load_f64(list_index_unchecked(b, i)) { false }
+    else { list_eq_f64_loop(a, b, n, i + 1) }
+  }
+
+fn list_compare_f64(a, b) -> Int with Memory = {
+  let la = load_i32(a)
+  let lb = load_i32(b)
+  list_compare_f64_loop(a, b, la, lb, 0)
+}
+
+fn list_compare_f64_loop(a, b, la, lb, i) -> Int with Memory =
+  if i >= la && i >= lb { 0 }
+  else if i >= la { 0 - 1 }
+  else if i >= lb { 1 }
+  else {
+    let ea = load_f64(list_index_unchecked(a, i))
+    let eb = load_f64(list_index_unchecked(b, i))
+    if ea < eb { 0 - 1 }
+    else if ea > eb { 1 }
+    else { list_compare_f64_loop(a, b, la, lb, i + 1) }
+  }
+
+// Hash via the decimal rendering (the field-hash precedent: value-faithful —
+// equal f64 => equal rendering => equal hash; the eq/hash agreement holds).
+fn list_hash_f64(xs) -> Int with Memory + Alloc = {
+  let n = load_i32(xs)
+  list_hash_f64_loop(xs, 0, n, i32_xor(2166136261, n) * 16777619)
+}
+
+fn list_hash_f64_loop(xs, i, n, h) -> Int with Memory + Alloc =
+  if i >= n { h }
+  else {
+    let sh = str_hash(float_to_str(load_f64(list_index_unchecked(xs, i))))
+    list_hash_f64_loop(xs, i + 1, n, i32_xor(h, sh) * 16777619)
+  }
+
 // Push — O(1) snoc
 
 // push — append val to list, returning a new snoc node (tag=1).
@@ -276,7 +337,9 @@ fn list_hash(xs) -> Int with Memory = {
 fn push(list, val) with Memory + Alloc = {
   let old_len = load_i32(list)
   let sc = seq_sc(list)
-  let snoc = alloc(16)
+  // The value slot at +12 is stride-sized: 12+4=16 for a word list
+  // (byte-identical floor), 12+8 for a packed f64, 12+1 for a byte.
+  let snoc = alloc(12 + decode_stride(sc))
   store_i32(snoc, old_len + 1)
   store_i32(snoc + 4, pack_tag(1, sc))
   store_i32(snoc + 8, list)

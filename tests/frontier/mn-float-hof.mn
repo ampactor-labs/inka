@@ -1,0 +1,12 @@
+// The float-evidence-ft class, killed: a NAMED f64-signature fn used as a
+// VALUE (its table slot holds the word wrapper), and an f64 CAPTURE crossing
+// into a closure record's word slot by reference — the two crossings that
+// used to trap `indirect call type mismatch`.
+fn scale(x: Float) = x * 3.0
+fn main() = {
+  let xs = [1.0, 2.0]
+  let tripled = map(scale, xs)
+  let k = 2.5
+  let scaled = map((x) => x * k, xs)
+  if tripled[1] == 6.0 && scaled[0] == 2.5 && scaled[1] == 5.0 { 42 } else { 1 }
+}

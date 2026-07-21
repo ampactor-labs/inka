@@ -1019,6 +1019,44 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-21 · ▶▶ THE WIDE-ELEMENT [Float] CASH-OUT (§5.U's stride carrier
+  reaches its first wide element · pin 683d66cb). [Float] is a first-class
+  packed sequence end to end, and the SAME landing kills the
+  float-evidence-ft class ("all the birds, one stone"). The WORD PROTOCOL is
+  the keystone: "a handle IS a word", so the generic/indirect boundary speaks
+  WORD-ARITY only — a wide value (f64, stride 8) crosses BY REFERENCE, its
+  address its word face (emit_wide_ref spills to a fresh cell + f64.store and
+  leaves the address; emit_wide_deref cashes back via f64.load; call_ft_name
+  is always $ft{arity}, the per-site repr-vector $ft DELETED as unsound at
+  polymorphic sites). A wide-signatured fn — named (`scale`) OR a capturing
+  lambda — reaches the fn table through a `$wf$<name>` word-face WRAPPER
+  (deref args, direct-call the native body at full speed, spill the wide
+  result), so a polymorphic call site never needs the callee's emission. The
+  literal is born stride-8 (make_list_sc, the allocator's second face paired
+  with make_list); load_strided's wide arm returns the ADDRESS, store_strided
+  mem_copies stride bytes from the reference; structural == compares VALUES
+  via list_eq_f64 (deref each element — the word list_eq would pointer-compare
+  them), with list_compare_f64/list_hash_f64/float_to_str the ordering/hash/
+  show leaves. The reach walk CONTRIBUTES the f64 family at the exact
+  ==/ordering/show/hash mint sites (reach_names_expr's wide_binop_seed/
+  wide_call_seed reading the operand's live type through ty_has_wide_seq) —
+  the visitor-walk projection of the runtime contract the emit-side comment
+  names, so a float-free module drags in nothing and the reach index's row
+  widens honestly to LookupTy + EnvRead. One real emit bug fixed en route
+  (§9 wrong-scratch class): emit_wide_ref used $state_tmp for its spill cell,
+  clobbering the closure record a capturing lambda holds live there — the
+  k-cell was then read as a fn record → indirect-call mismatch; a dedicated
+  $wide_cell local closes it. TRANSITION m3 == m4 (the 6056-line m2/m3 diff
+  is the emit change crossing one generation), then the re-pinned boot holds
+  the CLEAN m2 == m3 fixed point. Board whole: census 0, frontier 128/0 (+4
+  wide-element fixtures list/map/hof/show, RED-first where f64.const into an
+  i32 slot did not even ASSEMBLE), proof-exactness 9/9, crown 5/5, micros
+  green, phantom 286. Residue, named: the RI64/RF32/RV128 producers (the
+  wide-ref/deref arms stand as loud floors until an i64/f32/v128 producer
+  exists — the wide-element mechanism is complete, only its other reprs
+  await their first values), and the visitor-walk projection swallowing the
+  rest of emit_runtime_contract's static list (str_eq/list_eq/… — the wide
+  family proved the pattern; the deeper dissolution is the same walk widened)
 - 2026-07-21 · ▶▶ THE STRING=[BYTE] MERGE LANDS WHOLE (§4①'s biggest
   dissolution · pin dbcaca3e). String IS a stride-1 byte list, end to end:
   TString unifies with [byte] in unify_types (nullary, no alias clone, no

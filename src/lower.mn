@@ -4706,6 +4706,8 @@ fn is_substrate_mem_op(name: String) with Pure = {
     || name == "load_i32"
     || name == "store_i8"
     || name == "load_i8"
+    || name == "store_f64"
+    || name == "load_f64"
     || name == "mem_copy"
     || name == "i32_xor"
     || name == "i32_or"
@@ -5298,9 +5300,13 @@ fn reach_names_expr(expr, acc) = match expr {
   LBlock(_h, stmts)         => reach_names_list(stmts, acc),
   LIf(_h, c, t, e)          =>
     reach_names_list(e, reach_names_list(t, reach_names_expr(c, acc))),
-  LBinOp(_h, _op, l, r)     => reach_names_expr(r, reach_names_expr(l, acc)),
+  // ==/ordering on a wide-element sequence mints list_eq_f64/list_compare_f64
+  // (emit_eq_for_ty / emit_cmp_for_ty); contribute it where emit reads it.
+  LBinOp(_h, op, l, r)      => reach_names_expr(r, reach_names_expr(l, wide_binop_seed(op, l) ++ acc)),
   LUnaryOp(_h, _op, x)      => reach_names_expr(x, acc),
-  LCall(_h, f, args)        => reach_names_list(args, reach_names_expr(f, acc)),
+  // show/hash on a wide-element (or wide-containing) value mints float_to_str /
+  // list_hash_f64 through the generated leaf; seed it at the call.
+  LCall(_h, f, args)        => reach_names_list(args, reach_names_expr(f, wide_call_seed(f, args) ++ acc)),
   LTailCall(_h, f, args)    => reach_names_list(args, reach_names_expr(f, acc)),
   LReturn(_h, x)            => reach_names_expr(x, acc),
   LMakeList(_h, elems)      => reach_names_list(elems, acc),
@@ -5384,10 +5390,10 @@ fn reach_grow(index, rbuf, rn, fbuf, fcount) = {
 // ONE pass over lowered: each top-level decl's name → its refs, then every
 // nested arm name → its refs ++ the container's nested-name set. Mirrors the
 // exact structure reach_nested_refs/reach_nested_names walked per-lookup.
-fn build_reach_index(lowered) with Memory + Alloc =
+fn build_reach_index(lowered) with LookupTy + EnvRead + Memory + Alloc =
   build_reach_index_from(lowered, 0, smap_new())
 
-fn build_reach_index_from(lowered, i, idx) with Memory + Alloc = {
+fn build_reach_index_from(lowered, i, idx) with LookupTy + EnvRead + Memory + Alloc = {
   if i >= len(lowered) { idx }
   else {
     let d = list_index(lowered, i)
@@ -5399,7 +5405,7 @@ fn build_reach_index_from(lowered, i, idx) with Memory + Alloc = {
 
 // Walk INTO a decl (skipping its own top-level name — the top-level pass
 // already added it without cnames) recording every nested arm fn.
-fn reach_index_add_children(d, cnames, idx) with Memory + Alloc = match d {
+fn reach_index_add_children(d, cnames, idx) with LookupTy + EnvRead + Memory + Alloc = match d {
   LDeclareFn(LFn(_n, _, _, body, _, _)) => reach_index_add_nested_list(body, cnames, idx),
   LBlock(_h, stmts)   => reach_index_add_nested_list(stmts, cnames, idx),
   LLet(_h, _n, inner) => reach_index_add_children(inner, cnames, idx),
@@ -5410,7 +5416,7 @@ fn reach_index_add_children(d, cnames, idx) with Memory + Alloc = match d {
 
 // A nested statement that may BE an arm fn: add it (body refs ++ cnames), then
 // recurse into its body for deeper nesting.
-fn reach_index_add_nested(stmt, cnames, idx) with Memory + Alloc = match stmt {
+fn reach_index_add_nested(stmt, cnames, idx) with LookupTy + EnvRead + Memory + Alloc = match stmt {
   LDeclareFn(LFn(n, _, _, body, _, _)) =>
     reach_index_add_nested_list(body, cnames,
       smap_add(idx, n, reach_names_list(body, []) ++ cnames)),
@@ -5421,7 +5427,7 @@ fn reach_index_add_nested(stmt, cnames, idx) with Memory + Alloc = match stmt {
   _ => idx
 }
 
-fn reach_index_add_nested_list(stmts, cnames, idx) with Memory + Alloc = {
+fn reach_index_add_nested_list(stmts, cnames, idx) with LookupTy + EnvRead + Memory + Alloc = {
   if len(stmts) == 0 { idx }
   else { reach_index_add_nested_list(drop_last(stmts), cnames, reach_index_add_nested(last(stmts), cnames, idx)) }
 }
@@ -5551,6 +5557,50 @@ fn collect_value_holes_arms(arms, acc) = {
 fn collect_value_holes_decls(lowered) =
   collect_value_holes_list(lowered, [])
 
+// A type NAMES a wide-element sequence — directly or nested — when some
+// reachable sub-shape is a sequence whose element face (chased through any
+// binding, §4①) rides a stride >= 8 (the f64/i64/v128 slot that crosses the
+// generic layer by reference). The recursion mirrors eq_subtys' aggregate
+// descent, so a {xs: [Float]} record or an ADT with a [Float] payload counts:
+// emit's generated eq/show/hash leaf recurses to that field and mints the same
+// f64 runtime call the flat case does. `seen` guards recursive ADTs.
+fn ty_has_wide_seq(t, seen) = match fold_strip(t) {
+  TList(e)               => stride_of(seq_elem_face(e)) >= 8 || ty_has_wide_seq(e, seen),
+  TRecord(fields)        => any((f) => { let (_n, fty) = f; ty_has_wide_seq(fty, seen) }, fields),
+  TRecordOpen(fields, _) => any((f) => { let (_n, fty) = f; ty_has_wide_seq(fty, seen) }, fields),
+  TTuple(elems)          => any((x) => ty_has_wide_seq(x, seen), elems),
+  TName(name, _) =>
+    if ls_find_str_local(seen, name, 0) >= 0 { false }
+    else { any((s) => { let (_tag, payloads) = s
+                        any((p) => ty_has_wide_seq(p, [name] ++ seen), payloads) },
+               variant_specs_of(name)) },
+  _ => false
+}
+
+// The wide runtime family is emit-minted BY NAME at the SAME sites emit reads a
+// type's structural op: an ==/ordering LBinOp mints list_eq_f64/list_compare_f64
+// (emit_eq_for_ty / emit_cmp_for_ty), a show/hash call mints float_to_str /
+// list_hash_f64. Seeding the reach frontier from the operand's live type at
+// those nodes is the visitor-walk projection the runtime-contract comment names
+// (backends/wasm.mn) — the reach walk reads what emit will mint, never a hand-
+// copied guess, and a float-free program contributes nothing.
+fn wide_binop_seed(op, l) =
+  if ty_has_wide_seq(lookup_ty(lexpr_handle(l)), []) {
+    match op {
+      BEq => ["list_eq_f64"],      BNe => ["list_eq_f64"],
+      BLt => ["list_compare_f64"], BGt => ["list_compare_f64"],
+      BLe => ["list_compare_f64"], BGe => ["list_compare_f64"],
+      _   => []
+    }
+  } else { [] }
+
+fn wide_call_seed(f, args) =
+  if len(args) == 1 && ty_has_wide_seq(lookup_ty(lexpr_handle(last(args))), []) {
+    if is_show_global(f) { ["float_to_str"] }
+    else if is_hash_global(f) { ["list_hash_f64"] }
+    else { [] }
+  } else { [] }
+
 fn reachable_from_main(lowered) = {
   let has_main = any((d) => reach_decl_name(d) == "main", lowered)
   if !has_main { lowered }   // a library emits whole
@@ -5568,6 +5618,10 @@ fn reachable_from_main(lowered) = {
     // (Hβ.emit.wasi-argv-in-start); root it just then, so a 0-param main()
     // (the micros, which don't link io.mn) never pulls an undefined $wasi_args.
     let argv_root = if main_param_count(lowered) > 0 { ["wasi_args"] } else { [] }
+    // The wide runtime family (the f64 leaves + float renderer) is contributed
+    // by reach_names_expr AT its mint sites (the ==/ordering LBinOp, the
+    // show/hash call), so it flows through the index like every other edge — no
+    // separate root, and a float-free program adds nothing.
     let (fbuf0, fc0) = reach_enqueue(init_refs ++ emit_runtime_contract() ++ argv_root,
       make_list(16), 0,
       list_set(list_extend_to(make_list(16), 1), 0, "main"), 1)

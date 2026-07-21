@@ -29,6 +29,13 @@ effect Memory {
   // Bulk memory copy — src to dst, n bytes
   mem_copy(Int, Int, Int) -> ()   // (dst, src, n)
 
+  // 64-bit float store/load — the WIDE-value boundary pair (§5.U): a wide
+  // value crosses the word altitude BY REFERENCE (its address is a word, a
+  // handle IS a word); these two ops are the deref/ref that cash the native
+  // width at a typed site. Project 1:1 to f64.load / f64.store.
+  store_f64(Int, Float) -> ()   // (addr, value)
+  load_f64(Int) -> Float   // (addr) -> value
+
   // Integer XOR — two i32 values, returns i32
   // Lowers to WASM's i32.xor. Not a bitwise operator in the
   // language — a substrate primitive. Used by hash functions.

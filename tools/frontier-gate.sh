@@ -663,6 +663,22 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-string-parse.mn" 42 yes "$dir"
   run_program "$compiler" byte-range-trap \
     "$ROOT/tests/frontier/mn-byte-range-trap.mn" 134 yes "$dir"
+  # §5.U wide-element cash-out — [Float] as a first-class packed sequence: the
+  # literal is born stride-8 (make_list_sc), a concrete read derefs the
+  # element's reference, structural == compares VALUES (list_eq_f64, never the
+  # references), map/fold/filter/any cross the polymorphic boundary by
+  # reference, a NAMED f64 fn and an f64 CAPTURE reach the table through their
+  # $wf$ word wrappers, and show renders through float_to_str. RED on the
+  # pre-wide-element boot by construction — before the word-protocol boundary
+  # these did not even ASSEMBLE (f64.const into an i32 slot).
+  run_program "$compiler" float-list \
+    "$ROOT/tests/frontier/mn-float-list.mn" 42 yes "$dir"
+  run_program "$compiler" float-map \
+    "$ROOT/tests/frontier/mn-float-map.mn" 42 yes "$dir"
+  run_program "$compiler" float-hof \
+    "$ROOT/tests/frontier/mn-float-hof.mn" 42 yes "$dir"
+  run_program "$compiler" float-show \
+    "$ROOT/tests/frontier/mn-float-show.mn" 42 yes "$dir"
   # E_OwnershipViolation armed 2026-07-18 — the double-move fixture moved from
   # run_diagnostic (productive exit 0) to the armed-class refusal contract.
   run_refusal "$compiler" own-call-arg-move \

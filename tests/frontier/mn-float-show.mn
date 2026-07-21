@@ -1,0 +1,7 @@
+// A float element renders through the deref + the native float_to_str face.
+// The 17-digit tail ("2.5000…") is the pre-existing named cosmetic residue
+// (tests/micros/mn-float-render.mn documents it) — the check reads the prefix.
+fn main() = {
+  let xs = [1.5, 2.5]
+  if str_slice(float_to_str(xs[1]), 0, 3) == "2.5" && byte_at(float_to_str(xs[0]), 0) == 49 { 42 } else { 1 }
+}

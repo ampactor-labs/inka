@@ -866,22 +866,38 @@ fn infer_expr(ref node) = {
     },
 
     NExpr(IndexExpr(receiver, index)) => {
-      // Per #139 — semantic subscript. Infer receiver + index; the
-      // result type chases receiver. [A][Int] → A; (a, b, c)[Int]
-      // → element type at the index (compile-time slot); record[Int]
-      // → field type at int-key. Today's bootstrap form binds result
-      // to a fresh TVar and dispatches list-shape unconditionally;
-      // post-Show-typeclass / tuple-const-index (peer Hβ.infer.index-
-      // expr-dispatch), the cursor narrows further from receiver's
-      // chase-deep Ty.
+      // Per #139 — semantic subscript. Infer receiver + index; the result
+      // chases the receiver's element. Force = UNIFY, never overwrite
+      // (seq_force's own law, one table over): the old graph_bind here
+      // DISCARDED the receiver's proven TList(elem) and orphaned a fresh
+      // element class per subscript — the union-find FRACTURE that forced
+      // the monomorphization free-leaf rule (probe-pinned 2026-07-22:
+      // merge's condition subscripts rooted apart from its own param
+      // element; unifying collapses them to ONE class). A TList force on a
+      // proven-TString receiver is SATISFIED (§4① — a String IS a
+      // sequence); its element is the byte. Tuple-const-index /
+      // record-int-key remain the named peer Hβ.infer.index-expr-dispatch.
       infer_expr(receiver)
       infer_expr(index)
       let N(_, _, rh) = receiver
       let N(_, _, ih) = index
-      graph_bind(ih, TInt, Located(span, Inferred("index value")))
-      let elem_h = mint(Inferred("subscript element"))
-      graph_bind(rh, TList(TVar(elem_h)), Located(span, Inferred("subscript receiver")))
-      graph_bind(handle, TVar(elem_h), Located(span, Inferred("subscript result")))
+      let exp_i = mint(Inferred("index value"))
+      graph_bind(exp_i, TInt, Located(span, Inferred("index value")))
+      unify(ih, exp_i, span, Inferred("index value"))
+      let already_string =
+        match graph_chase(graph_chase_handle(rh)) {
+          GNode(NBound(TString), _) => true,
+          _ => false
+        }
+      if already_string {
+        graph_bind(handle, TByte, Located(span, Inferred("subscript result")))
+      } else {
+        let elem_h = mint(Inferred("subscript element"))
+        let exp_r = mint(Inferred("subscript receiver"))
+        graph_bind(exp_r, TList(TVar(elem_h)), Located(span, Inferred("subscript receiver")))
+        unify(rh, exp_r, span, Inferred("subscript receiver"))
+        graph_bind(handle, TVar(elem_h), Located(span, Inferred("subscript result")))
+      }
     },
 
     NExpr(MakeStringExpr(fragments)) => {

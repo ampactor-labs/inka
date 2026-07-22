@@ -1019,6 +1019,32 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE SUBSCRIPT FRACTURE FIX — Force = UNIFY, never overwrite
+  (infer.mn IndexExpr · pin da45bcdd). The xs[i] sugar arm graph_bind-
+  OVERWROTE its receiver, discarding the proven TList(elem) and orphaning a
+  fresh element class per subscript — the union-find FRACTURE beneath the
+  monomorphization free-leaf rule, pinned by an adversarial worktree agent
+  (probe: merge's condition subscripts rooted at 13777, its param element at
+  13793; the unify fix collapses them to ONE class, agent-verified). Its
+  sibling seq_force one table over states the law verbatim. Both forces now
+  unify; the §4① String seam holds (a proven-TString receiver SATISFIES the
+  force, s[i] binds TByte — sharper than the old clobber). The REFUTED
+  hypothesis is the record's point: my own "instantiate-shares is the root"
+  died to the artifact (instantiate heals through argument unification,
+  polymorphic recursion included) — the adversarial dispatch existing so the
+  orchestrator's label could be killed by a probe. UNLOCKED, named: exact
+  root-keyed substitution (replacing free-leaf) and the multi-type-generic
+  guard lift, now that a generic body's element classes are one root.
+  TRANSITION m3 == m4; census 0; frontier 153/0; proof-exactness 9/9;
+  crown 5/5. Sibling finds from the same ultracode wave, banked: to_string/
+  hash are the ONLY remaining lower-time type bakes (the D3 map — everything
+  else already reads under the emit bracket; the build moves them to a
+  structural LowExpr node dispatched at emit), and a pre-existing LOUD break:
+  to_string((1,2)) in a MINIMAL lib set emits calls to $show_<sig>/$int_to_str
+  that reach never kept and no static closure global backs — assembly
+  failure, masked in the full battery by richer lib sets
+  (Hβ.emit.generated-helper-reach — the show-face reach arms fix it as a
+  side effect when the emit-dispatch build lands)
 - 2026-07-22 · NESTED-LAMBDA TWINS — monomorphization residue face 1 CLOSES
   (Hβ.emit.spec-nested-lambda-twin LANDED · pin a919906d). A lambda born
   inside a generic body twins under the parent's instantiation with ZERO body

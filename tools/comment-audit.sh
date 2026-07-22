@@ -21,9 +21,30 @@ if [ $# -gt 0 ]; then TARGETS="$*"; else TARGETS="$(find src lib -name '*.mn')";
 
 # CODE SURFACE: BOTH layers, comments stripped — where real symbols live. A
 # symbol present here is resolved; one absent (yet cited) is a phantom edge.
+#
+# PLUS THE EMITTED NAMESPACE (2026-07-22): a comment describing the EMITTED
+# artifact (a generated fn like __k_compose, a record field slot like fn_ptr,
+# a runtime local like fb_prev / state_g / frame_k) cites a name that is REAL —
+# it lives in the projection, not the source. The audit reads those names LIVE
+# from the current wheel-emitted m2 (the artifact IS the namespace; never a
+# hand-maintained lexicon): every $-identifier the emit defines or references,
+# with the sigil and W7 dots stripped. Comments are the reason-net (SYNTAX:
+# CommentReason edges); resolution runs against wheel source UNION its own
+# projection — the two faces of the one graph.
 SURFACE="$(mktemp)"
 { find src lib -name '*.mn'    -exec sed 's://.*::' {} + ;
   } > "$SURFACE"
+M2WAT=".build/m2cache/m2.wat"
+if [ -s "$M2WAT" ]; then
+  grep -ohE '\$[A-Za-z_][A-Za-z0-9_.$]*' "$M2WAT" \
+    | sed 's/^\$//; s/\./ /g; s/\$/ /g' | tr ' ' '\n' \
+    | sed -E 's/^_+//; s/_[0-9]+$//' | sort -u >> "$SURFACE"
+fi
+# THE DESIGN VOCABULARY: record-field and substrate names (fn_ptr, tag_word,
+# nstate, the k-frame vocabulary) are DEFINED in the three docs' prose — the
+# design's own source. A comment citing them resolves against the design,
+# exactly as a comment citing a fn resolves against the code.
+cat PLAN.md CLAUDE.md docs/SYNTAX.md >> "$SURFACE" 2>/dev/null
 
 # kernel vocabulary that reads snake_case but is NOT a code symbol (tune freely)
 ALLOW='^(self|first_light|machine_code|use_count)$'

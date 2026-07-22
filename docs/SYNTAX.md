@@ -981,7 +981,7 @@ type Port = {value: Int}
 type Customer = {value: String}
 ```
 
-No `newtype` keyword required; the record name carries the brand. Field access via `.value`. See `docs/specs/simulations/syntax/type-alias-substrate.md` for the substrate analysis.
+No `newtype` keyword required; the record name carries the brand. Field access via `.value`.
 
 ### Refinement types
 
@@ -1055,8 +1055,7 @@ strips the keyword silently; both forms produce the same graph, and per
 governing principle 2 the bare call is the one that survives. `resume`
 keeps its keyword: it is context-bound to handler arms, typed by the
 typed-resume law (`resume : R -> S`), and names the continuation — a
-value the call site cannot otherwise reach. See
-`docs/specs/simulations/syntax/perform-dissolution-substrate.md`.
+value the call site cannot otherwise reach.
 
 ### Unit return omission
 
@@ -1411,7 +1410,7 @@ match v {
 }
 ```
 
-When branches bind different names: `E_PatternAlternationBindingMismatch` with the conflict surfaced. When the same name has incompatible types: same diagnostic with the type conflict surfaced. See `docs/specs/simulations/syntax/pattern-alternation-substrate.md` for the substrate analysis.
+When branches bind different names: `E_PatternAlternationBindingMismatch` with the conflict surfaced. When the same name has incompatible types: same diagnostic with the type conflict surfaced.
 
 ### As-patterns — rule
 
@@ -1761,9 +1760,7 @@ type TokenKind
   // Early-exit is via `Abort` effect + `catch_abort` handler.
   // The gradient teaches the substrate at the friction-point: when a user
   // types `for x in xs`, `E_NotAKeyword` surfaces a Quick Fix to the
-  // verb form `xs |> each((x) => ...)`. See
-  // `docs/specs/simulations/syntax/iteration-substrate.md` for the
-  // canonical iteration patterns and gradient teaching.
+  // verb form `xs |> each((x) => ...)`.
 
   // ─── Identifiers and literals (carry payload) ─────────────────────
   // Constructors share ONE namespace (env entries). The literal-token

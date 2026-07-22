@@ -782,8 +782,8 @@ substrate-honest floor of "unsurpassed speed."
 > survives first-light's all-consuming focus (gathered 2026-06-28: the SOTA fleet +
 > the three docs + the codebase `Hβ.*` peers + an adversarial completeness critic;
 > 95 items / 15 bands; **full detail with SOTA refs + file:line anchors in
-> `docs/research/post-first-light-roadmap.md`**, the SOTA map in
-> `docs/research/sota-convergence.md`). Each is a positive-form named peer — a
+> git history: docs/research/post-first-light-roadmap.md**, the SOTA map in
+> git history: docs/research/sota-convergence.md). Each is a positive-form named peer — a
 > hidden gap is drift (the bug IS the non-ultimate form, `CLAUDE.md ⟐`). Sequenced
 > AFTER first-light unless marked NOW; the gate that unblocks dependents leads each
 > band. **THE SPINE:** `Hβ.effects.sound-neg-under-poly` is the dependency ROOT —
@@ -797,7 +797,7 @@ substrate-honest floor of "unsurpassed speed."
 > §5.O, is the current build-ordered layer set).
 >
 > **THE DESTINY AUDIT (2026-07-14, 8-subsystem adversarial ultracode workflow,
-> artifact-grounded; full record `docs/research/destiny-audit-2026-07-14.md`)
+> artifact-grounded; full record in git history: docs/research/destiny-audit-2026-07-14.md)
 > reframes this whole band.** The 95-peer list OBSCURES the real shape every
 > auditor found independently: **machinery real, performance absent** — Mentl
 > built its capabilities correctly as handlers-on-the-graph and then left the ops
@@ -987,7 +987,7 @@ is the arbiter of how-real each mechanism is, so the doc never reads as
 present-tense-done (a hidden gap is drift, `CLAUDE.md ⟐`). Where a design
 section and this audit seem to disagree, §4/§5 is the TARGET and this is the
 STATE. (Distilled from an adversarial PLAN re-audit, 2026-07-17 —
-`docs/research/finish-plan-codex-2026-07-17.md`; its honest de-hyping salvaged
+git history: docs/research/finish-plan-codex-2026-07-17.md; its honest de-hyping salvaged
 here, its wholesale rewrite and invented vocabulary rejected.)
 
 The design present-tense the artifact has NOT reached — named so the reader is
@@ -1519,7 +1519,7 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-07-14 · value-proof R2 landed (parse_let carried the annotation; subst_self at infer_pat: `let bad: Sample = 1.5` REJECTS) + string-interner O(1) — 730dfe8+9feb727
 - 2026-07-14 · crown positive gate largely sound: pointer-eq at name_set_contains, by-name fix 598→146 false mismatches, −16k emitted lines — cc487f8 · pin 8a5d8ff7 (m3==m4)
 - 2026-07-14 · felt CLI connected: argv wire + verb dispatch (compile/check/audit/teach/query WORK; six latent bugs rooted) — 91755d6+f1b13e2 · pins bea3692b, c4bdba19
-- 2026-07-14 · destiny audit (8-subsystem, artifact-grounded): machinery real / wiring absent; the R1–R6 path — docs/research/destiny-audit-2026-07-14.md
+- 2026-07-14 · destiny audit (8-subsystem, artifact-grounded): machinery real / wiring absent; the R1–R6 path — git history: docs/research/destiny-audit-2026-07-14.md
 - 2026-07-13→14 · THE PERF LOOP, seven iterations, 1400s→10s (~140×): classifier summary-index (→749s) · region tracker handle-index (→490s) · esc write-index (→226s) · esc read-index (→56s) · reachability index + LSuspend garbage-Int root (→13s, TRANSITION · pin 349a3302) · iterate flattens once (→10s). Lesson: perf the artifact, never the estimate (the 8-agent code-read missed every dominant cost)
 - 2026-07-13 · THE CROWN's negation gate landed: row_subsumes EfNeg by-name; 5/5 crucibles (tests/crown/) — 29df478
 - 2026-07-13 · M4 the Abandon discipline self-hosted (4th ResumeDiscipline; deaden after diverge; option-protocol 0→42) · pin 67e44c9c (m3==m4)
@@ -1614,7 +1614,7 @@ lex/parse/infers — hover reads an unpopulated graph; v1 = the pipeline splice)
 render_body_tokens carries `<expr>`/`<stmt>`/`<pat>` surrender-fallbacks and
 format_chain is unreachable from format_program — totality first, then the
 verb) · `Hβ.multishot.handler-return-clause` (M5 — named twice in
-docs/research/multishot-general-design.md as the next ladder step, absent
+git history: docs/research/multishot-general-design.md as the next ladder step, absent
 here until now) · `Hβ.lower.branch-isolated-handler-state` (the multishot
 doc's own correction, missing from every band) ·
 `Hβ.infer.usage-grade-unifies-cardinality-ownership` — NOTE: this peer's
@@ -1944,7 +1944,7 @@ the self-test loop feeding both.
 ### Column 2 — the correctness spine (no known silent-wrong class)
 
 **THE FLEET'S CORRECTION (2026-07-17, 89 agents / 0 errors / 15.3M tokens;
-full harvest `docs/research/production-bar-fleet-2026-07-17.md`; 115 designs,
+full harvest in git history: docs/research/production-bar-fleet-2026-07-17.md; 115 designs,
 91 adversarial verdicts, every one verified against the artifact before it was
 banked here).** Four of its findings overturn what this section said, and each
 is re-measured by hand:

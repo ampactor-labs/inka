@@ -17,8 +17,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: install wasmtime
+        # PINNED to the 43.x line the local pin runs. Wasmtime 45 deprecated
+        # and 47.0.0 REMOVED wasi-threads (PRs 13264/13558) — the shared-memory
+        # spawn substrate the wheel's modules use (tools/wt-env.sh -S threads=y).
+        # A floating install silently crosses that ceiling; the migration off
+        # wasi-threads is its own arc, not a CI default.
         run: |
-          curl -sSf https://wasmtime.dev/install.sh | bash
+          curl -sSf https://wasmtime.dev/install.sh | bash -s -- --version v43.0.1
           echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
       - name: install wabt
         run: sudo apt-get update -qq && sudo apt-get install -y -qq wabt

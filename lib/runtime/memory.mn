@@ -62,6 +62,16 @@ effect Memory {
 // allocation is forbidden.
 effect Alloc {
   alloc(Int) -> Int   // (size) -> ptr
+  // The REGION verbs — the arena's first grain (§5.O layer 3). A batch
+  // boundary (one micro's compile inside `mentl test`, one decl inside the
+  // future per-decl arena) marks the bump pointer, does its work, and resets:
+  // everything the region allocated is dead by construction at the boundary,
+  // and determinism IMPROVES — each region starts at the same watermark
+  // regardless of its predecessors. Reset to a mark you did not take (or
+  // with live handles above it) is the caller's ownership obligation — the
+  // same contract every region system carries.
+  heap_mark() -> Int
+  heap_reset(Int)
 }
 
 // Pure — the empty effect row. Pure is not an effect with operations

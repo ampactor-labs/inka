@@ -997,6 +997,21 @@ fn test_run(target_opt) = {
     Some(t) => t,
     None    => "test"  // default test entry module
   }
+  // A DIRECTORY target is the BATTERY: every .mn inside is a self-describing
+  // gate (its first comment declares `// expect: N` — the expectation lives
+  // ON the artifact, SYNTAX §Comments), compiled IN THIS PROCESS with a
+  // fresh handler chain per micro (handler state initializes at install —
+  // per-micro isolation is the install itself), each WAT written to
+  // .build/test/, and a manifest printed for the shim's exec loop (WASI has
+  // no process-spawn; the shim owns exec — the one seam). One process
+  // replaces one wasmtime invocation per micro.
+  match fs_list_dir_impl(entry_module) {
+    Some(names) => battery_run(entry_module, names),
+    None => test_check_run(entry_module)
+  }
+}
+
+fn test_check_run(entry_module) = {
   pipeline_check(entry_module)
     ~> assert_reporter
     ~> stdout_console
@@ -1005,6 +1020,140 @@ fn test_run(target_opt) = {
     ~> diagnostics_handler
     ~> graph_handler
     ~> mutate_sink
+}
+
+// ─── The battery: `mentl test <dir>` ────────────────────────────────────
+// The micro battery IS the medium reading its own gates: glob the directory,
+// read each micro's own `// expect: N` header, compile each against the
+// runtime lib set in ONE process, write the WATs, print the manifest. The
+// refusal law holds batch-shaped: a micro whose ledger shows errors / holes /
+// armed refusals gets a FAILC line and NO WAT (the same
+// errors-holes-refusals read executable_gate makes; here the boundary is the
+// batch, so the verdict is a manifest line instead of proc_exit).
+
+fn battery_libs() -> String with Memory + Alloc + WASI =
+  fs_read_file_impl("lib/runtime/memory.mn")
+    ++ fs_read_file_impl("lib/runtime/strings.mn")
+    ++ fs_read_file_impl("lib/runtime/lists.mn")
+    ++ fs_read_file_impl("lib/prelude.mn")
+
+// The micro's own expectation: first line `// expect: N`. None = not a
+// battery member (skipped loudly by the manifest consumer).
+fn battery_expect(src) with Memory + Alloc = {
+  let prefix = "// expect: "
+  if byte_len(src) < 12 { None }
+  else if !str_eq(str_slice(src, 0, 11), prefix) { None }
+  else { Some(battery_expect_digits(src, 11, 0)) }
+}
+
+fn battery_expect_digits(src, i, acc) with Memory = {
+  if i >= byte_len(src) { acc }
+  else {
+    let b = byte_at(src, i)
+    if b >= 48 && b <= 57 { battery_expect_digits(src, i + 1, acc * 10 + (b - 48)) }
+    else { acc }
+  }
+}
+
+// One micro, one fresh chain — the same chain compile_stdin drives, with
+// wat_to_string collecting the module instead of streaming to stdout. The
+// verdict pair: (wat, 0) on success, ("", 1) on a ledger-refused compile.
+fn battery_compile(src) = {
+  {
+    let lowered = src |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main
+    // THE SAME law executable_gate applies, batch-shaped: refusal = holes +
+    // ARMED classes only. Unarmed errors surface on stderr and the compile
+    // proceeds — the sound-incomplete contract; the battery must not be
+    // stricter than the medium (it FAILC'd ev2 for an unarmed row mismatch
+    // the check verb tolerates).
+    let holes = collect_value_holes_decls(lowered)
+    let refused = diag_refusals()   // drift-audit: ignore — sequenced effectful ledger read (the executable_gate precedent)
+    if len(holes) > 0 || refused > 0 { ("", 1) }
+    else {
+      emit_module(lowered)
+      (wat_collect(), 0)
+    }
+  }
+    ~> wat_to_string
+    ~> wasi_filesystem
+    ~> string_table
+    ~> emit_memory_bump
+    ~> body_context
+    ~> mentl_default
+    ~> affine_ledger
+    ~> region_tracker
+    ~> verify_ledger
+    ~> lower_scope
+    ~> arm_state_ctx([], OneShot, "")
+    ~> spec_registry
+    ~> lookup_ty_graph
+    ~> env_handler
+    ~> graph_handler
+    ~> mutate_sink
+    ~> parallel_compose
+    ~> wasi_threads
+    ~> diagnostics_handler
+}
+
+fn battery_run(dir, names) = {
+  fs_mkdir(".build")
+  fs_mkdir(".build/test")
+  // libs is MATERIALIZED flat (str_concat("", x) — the view-flatten idiom)
+  // BELOW the loop's first mark: a concat spine here would be poisoned by
+  // the region resets — compile #1's flatten memoizes the flat buffer INTO
+  // the spine nodes (an in-place memo pointing above the mark), the reset
+  // kills the buffer, and compile #2 reads garbage (measured: any second
+  // compile trapped in infer until this line).
+  let libs = str_concat("", battery_libs())
+  // The names list flattens below the mark for the same reason (sort returns
+  // a concat spine; indexing memoizes in place).
+  let micros = list_to_flat(sort(filter((n) => ends_with(n, ".mn"), names)))
+  // A RAW recursion, not a handler fold: each call's compile is a REGION
+  // (heap_mark before, heap_reset after — everything the micro allocated is
+  // dead once its WAT is written, and every micro starts at the same
+  // watermark, so per-micro output is deterministic regardless of
+  // predecessors). A handler-based fold cannot host the region: its own
+  // iteration machinery allocates per-step frames the reset would kill
+  // (measured: iteration 2 trapped in op_fold_handler_yield). The
+  // recursion's only cross-iteration state is word params — nothing lives
+  // above the mark.
+  battery_loop(dir, libs, micros, 0, 0)
+}
+
+fn battery_loop(dir, libs, micros, i, fails) = {
+  if i >= len(micros) { fails }
+  else {
+    let name = micros[i]
+    let stem = str_slice(name, 0, byte_len(name) - 3)
+    let src = fs_read_file_impl("{dir}/{name}")
+    let step = match battery_expect(src) {
+      None => {
+        print_string("NOEXPECT {stem}\n")
+        1
+      },
+      Some(want) => {
+        let (wat, failed) = battery_compile(libs ++ src)
+        if failed > 0 {
+          print_string("FAILC {stem}\n")
+          1
+        } else {
+          fs_write_file_impl(".build/test/{stem}.wat", wat)
+          print_string("MICRO {stem} .build/test/{stem}.wat {int_to_str(want)}\n")
+          0
+        }
+      }
+    }
+    // The per-compile region (heap_mark before / heap_reset here) is the
+    // arena's honest grain and its ops are landed + gated (mn-heap-region) —
+    // but a SECOND in-process compile after a reset traps in its own infer
+    // while every input is probe-verified intact (libs head+tail, the names,
+    // the reset address itself), and without the reset 100 compiles run
+    // straight to the 4GB ceiling. Some compile-internal heap state is
+    // durable across compiles and torn by the reset — the named peer
+    // Hβ.runtime.cross-compile-durable-state carries the corpus; the region
+    // brackets this loop the day it closes.
+    battery_loop(dir, libs, micros, i + 1, fails + step)
+  }
 }
 
 // assert_reporter — the Test effect's pass/fail reporter handler. Each

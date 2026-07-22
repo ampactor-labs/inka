@@ -1019,6 +1019,31 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE TEST VERB COMPILES THE BATTERY IN-PROCESS + the region
+  substrate (CLI absorption stage 2 · pin 658f3988). `mentl test <dir>`
+  forks on the target's own shape: a DIRECTORY is the battery
+  (fs_list_dir_impl — fd_readdir joins io.mn's transport set; a file stays
+  the single check). Each micro declares its oracle in its first line
+  (`// expect: N`, the 112-micro sweep c63a0a47 — the expectation is graph
+  content ON the artifact, never a side-table row); each compiles
+  IN-PROCESS under a fresh handler chain (verdict = holes + refusals, the
+  check verb's own licence), WAT under .build/test/ beside a streamed
+  manifest line; execution stays the shim's seam (WASI owns no
+  process-spawn — the process_exec precedent). One process replaces a
+  wasmtime boot per micro. The REGION substrate landed with it: Alloc
+  gains heap_mark()/heap_reset (emit = the bump global read/written, the
+  §5.O arena's first grain), gated RED-first (mn-heap-region: a reclaimed
+  region's next alloc returns the SAME address; 134 on the pre-arm pin, 42
+  here). The honest residue: bracketing each battery compile with
+  mark/reset traps compile #2 in its own infer while EVERY input is
+  probe-verified intact (libs len+head+tail, the names, the reset
+  address), and WITHOUT the reset 100 compiles run clean to the 4GB
+  ceiling — 12 short of the battery. The no-reset form ships; verify.sh
+  keeps the per-process loop as the gate; the peer
+  Hβ.runtime.cross-compile-durable-state (named-residue index) carries the
+  corpus, and closing it IS the arena's first real workload. Board: census
+  0, frontier 168/0 (+heap-region), proof-exactness 9/9, crown 5/5, micros
+  green, clean m2 == m3 self-confirmed at the pin
 - 2026-07-22 · THE HYGIENE WAVE + three rulings banked (no re-pin — the
   wheel untouched). DELETED per Morgan's ruling (git is the archive, no
   archaeology ceremony): docs/specs (2.2M), docs/research (1.3M),
@@ -1570,6 +1595,19 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-06-18→23 · the reframe + the three-doc consolidation; the crown's EfOpen~EfNeg unify (b4b1989); the handler registry dissolved into the live read
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
+
+`Hβ.runtime.cross-compile-durable-state` (2026-07-22, the region's blocker):
+an in-process SECOND compile after a heap_mark/heap_reset region traps in
+its own infer while every INPUT is probe-verified intact — libs
+len+head+tail, the micro names, the reset address, the mark taken before
+compile #1 — and without the reset 100 sequential in-process compiles run
+clean to the 4GB ceiling. So compile #1 allocates state ABOVE the mark
+that compile #2 READS (a durable heap dependency: a singleton handler's
+state record, an interned string, a memo — the candidate class), and the
+reset tears it. The fix is the §5.O image/scratch split — durable compiler
+state in the image, per-compile transients in the region — and this repro
+(battery_loop's at-site comment, tests/micros as the workload) is the
+per-decl arena's first real gate.
 
 The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
 `Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a

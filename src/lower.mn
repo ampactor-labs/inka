@@ -4626,6 +4626,8 @@ fn is_substrate_mem_op(name: String) with Pure = {
     || name == "i32_and"
     || name == "i32_shl"
     || name == "alloc"
+    || name == "heap_mark"
+    || name == "heap_reset"
 }
 
 fn is_wasi_import_op(name) with Pure = {

@@ -3968,6 +3968,12 @@ fn emit_expr(expr) = match expr {
       wat_emit("    (i32.shl)\n")
     } else if import_name == "alloc" {
       wat_emit("    (call $alloc)\n")
+    } else if import_name == "heap_mark" {
+      wat_emit("    (global.get $heap_ptr)\n")
+    } else if import_name == "heap_reset" {
+      // unit-typed: the set consumes the arg; the (i32.const 0) closes the
+      // result slot — the atomic_store precedent.
+      wat_emit("    (global.set $heap_ptr)(i32.const 0)\n")
     } else if import_name == "atomic_load_i32" {
       // The atomics have NO handler arm (unlike wasi_num_cores) — they ARE
       // the wasm atomic instruction set on shared memory, the threading peer

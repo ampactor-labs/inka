@@ -414,6 +414,24 @@ fn fs_parse_dirents(buf, end, off, acc, last_cookie, saw_whole) with Memory + Al
     }
   }
 
+// fs_list_dir_impl — list a SUBDIRECTORY's entry names: path_open the dir
+// (oflags DIRECTORY = 0x2; rights = fd_readdir, bit 14) against its preopen,
+// then the same fd_readdir loop the cwd projection drives, then close. None
+// = the path is not an openable directory — the discriminator `mentl test`
+// uses to fork battery-mode (a directory) from the check chain (a module).
+fn fs_list_dir_impl(path_str) with Memory + Alloc + WASI = {
+  let (dfd, pp, plen) = fs_at(path_str)
+  let fd_cell = alloc(4)
+  let open_errno = path_open(dfd, 0, pp, plen, 2, 16384, 0, 0, fd_cell)
+  if open_errno != 0 { None }
+  else {
+    let fd = load_i32(fd_cell)
+    let names = fs_readdir_loop(fd, 0, [])
+    fd_close(fd)
+    Some(names)
+  }
+}
+
 // fs_exists — path_filestat_get returns 0 on success, errno otherwise.
 // The 64-byte filestat_t record is alloc'd and discarded; existence is
 // the boolean.

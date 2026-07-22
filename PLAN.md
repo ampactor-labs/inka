@@ -1019,6 +1019,54 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE ROW'S DROPPED SUBTRACTION — root FOUND and fix PROVEN;
+  shipping WAITS on canonical-on-write rows (no re-pin; the tree stays at
+  the green fixpoint). The arc: retiring the raw-WASM error class (an
+  unhandled effect compiles CLEAN then dies as `memory fault at
+  0x100000000` — the ev-scan walking main's empty evidence into the
+  sentinel page, MEASURED) led through three designs to ONE root.
+  (1) The gate-time ROW read (E_EffectUnhandled at the executable gate,
+  main's residual row minus substrate/default effects) — REFUTED by six
+  micros: main's row still carried Sample past an absorbing install.
+  (2) The mint-site read (an LEvRef threaded from main's frame) with an
+  `ls_outer_fn_name() == "main"` guard — Morgan's own cut: a name-keyed
+  special case, and Mentl must judge itself by structure, not by name.
+  (3) The gate walk over ONE child projection (lowexpr_children — the
+  walker-unification seed, ~40 arms once, every future walk a recursion
+  over it) with a provided-set carried through enclosing installs —
+  which surfaced the TRUE root: normalize_inter's open×neg arm
+  `EfOpen(names, v) − handled => EfOpen(names − handled, v)` SUBTRACTS
+  THE KNOWNS AND DROPS THE NEGATION FROM THE TAIL, so an install typed
+  before its body's row resolved never subtracts the handled effect —
+  main's fat row, and DEAD LEvRef evidence entries minted from it (the
+  runtime survives only because the singleton tier never scans them).
+  THE FIX, built and proven on the fixtures: the pending subtraction —
+  `EfInter(EfOpen(names − handled, v), EfNeg(EfClosed(handled)))` —
+  with resolve_row growing reduction arms (chase operands, re-run the
+  pure reduction; the open head unions into a pending tail via the
+  total union). Under it feedback-iir runs 30 AND the unhandled-Ping
+  program's row is true. It cannot SHIP yet: rows are re-normalized
+  PER READ (unify_row_canonical → normalize per call, ~1e5 unifies ×
+  sort_unique/wrap allocations), and the pending nodes multiply that
+  churn past the 4GB ceiling mid-self-compile — Carried-Truth violated
+  at the ROW layer (§5.O: a normalize per read is a re-derivation).
+  THE NEXT ARC, fully specified: CANONICAL-ON-WRITE rows — normalize
+  once at graph_bind_row, reads return the stored node (O(1)), binds
+  re-canonicalize only the affected row; the deferred subtraction then
+  rides the store free, the row becomes TRUE, and E_EffectUnhandled
+  re-lands in its ELEGANT first form (the row read at the gate) with
+  the graph-derived proposal (handlers_absorbing — the env names which
+  declared handlers absorb the effect; the diagnostic teaches the
+  install; the finite candidate set is Synth's larval proposal). The
+  unifying frame, banked from Morgan's charge: absence is ONE node-kind
+  — the value `??`, the evidence hole, the proof hole, V_Pending — one
+  gate law (productive, never executable), one proposal machinery, the
+  ambient argmax ranking them, multi-shot exploring them: every
+  diagnostic-with-span-and-proposal is a search position for
+  Mentl-building-Mentl. Ladder-hygiene lesson, paid live: an empty
+  m3.wat cmp-equal to an empty m4.wat read as a fixpoint — a gate that
+  cannot fail; size-guard every ladder leg (march.sh's arbitration
+  already does; my by-hand legs now must).
 - 2026-07-22 · ▶▶ THE REPRESENTATION CHASE — the truth unification erased,
   carried back (pin 35e5437e). The SeqRep lattice (SRFlat | SRSnoc |
   SRRope | SRSlice | SRUnknown) is the fact every runtime helper re-derives

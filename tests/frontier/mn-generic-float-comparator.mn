@@ -1,0 +1,19 @@
+// Named-generic monomorphization, faces 2-4 — the comparator class. Before
+// per-site specialization a named generic compiled once at the i32 floor
+// compared the word-protocol REFERENCES of f64 values (bump addresses ascend,
+// so prelude sort returned its input in allocation order and reduce(xs, min)
+// picked by address — values intact, order garbage, zero diagnostics). Now:
+//   reduce(xs, min)  — the higher-order face: min's ref site redirects to
+//                      $wf$min$sp2, fold shuttles word faces, the twin derefs;
+//   sort(xs)         — the TRANSITIVE face: sort twins because its interior
+//                      merge site redirects to the worthy $merge$sp2 (the
+//                      worthiness fixpoint, no recursion special-case);
+//   the inline lambda — the always-sound control (site-specialized).
+// RED (run 1) on the pre-spec boot.
+fn main() = {
+  let xs = [3.5, 1.5, 2.5, 0.5, 4.5]
+  let rmin = reduce(xs, min)
+  let s = sort(xs)
+  let lmin = reduce(xs, (a, b) => if a <= b { a } else { b })
+  if rmin == 0.5 && s[0] == 0.5 && s[2] == 2.5 && s[4] == 4.5 && lmin == 0.5 { 42 } else { 1 }
+}

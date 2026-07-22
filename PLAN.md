@@ -1019,6 +1019,48 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · ▶▶ NAMED-GENERIC MONOMORPHIZATION — the §5.U scalar half LANDS
+  (Hβ.value.seq-element-stride-carrier's monomorphization face · pin 92fceff0).
+  A named generic fn compiled ONCE at the RI32 floor and, reached at a Float
+  instantiation, compared/added the word-protocol REFERENCES (prelude `sort`
+  returned its input in allocation order; `reduce(xs, min)` picked by address —
+  the data-validator tier's harvest, silent-wrong, zero diagnostics). Now: emit
+  runs a DEMAND ANALYSIS — each reference site's instantiation is a PROJECTION
+  off the live union-find (scheme type walked against the site's resolved type;
+  zero new storage, zero infer changes — Carried-Truth: the unifier already
+  drew the edges, the walk reads them), a site whose quantified vars land on
+  ONE distinct wide type is a candidate, and a candidate is WORTHY when its
+  body performs arith/compare/eq on a free-floored operand OR an interior site
+  redirects to a worthy twin (the transitivity fixpoint: sort twins because
+  merge is worthy — no recursion special-case; plumbing shells like fold/map
+  stay floor, which the word protocol keeps CORRECT — twins only where the
+  floor is WRONG). A worthy twin is the SAME record emitted once more under
+  the SPECIALIZATION STATE: lookup_ty_graph carries spec_wty (set/cleared
+  around the twin's emission), and while set a FREE var answers the wide
+  instantiation — the free-leaf rule, FORCED by the artifact (probe: a generic
+  body's unresolved classes FRACTURE — merge's param element roots at 13793,
+  its comparison operands at 13777 — so no root-keyed mapping is complete;
+  one-wide-type demands make every free unambiguous, and multi-type generics
+  stay floor as the named residue). THREE hard-won mechanisms, each
+  probe-pinned RED first: (1) STATE-swap, never a second handler — a second
+  LookupTy handler demoted every lookup_ty out of the singleton
+  direct-dispatch tier (16 frontier reds: ev-scan faults at infer sites that
+  never threaded evidence); (2) the order-conditional row class — wasm.mn
+  sorts before types/lower in the wheel, so INFERRED rows disagreed between
+  Tier-2 callees and bare callers (a 4GB ev fault): every spec fn DECLARES its
+  row, the build_reach_index precedent; (3) the concat floor at wide_all — an
+  open element through a filter-with-handler chain, closed by the declared
+  [String] Intent Boundary. Twins ride every name surface appended (table via
+  $wf$ word faces when wide, idx globals, static closures); LGlobal/LFnRef
+  redirect through spec_target_name gated on spec_registry (SpecTwins — the
+  StringTable pattern), the spec_twins_exist fast path keeping twin-free
+  modules at one op per reference (Law 7: Int instantiations byte-identical).
+  Gates seen RED: tests/frontier/mn-generic-float-{accumulator,comparator}.mn
+  run 1 (silent-wrong) on the pre-spec boot, 42 now — the two repro files
+  GRADUATED into them (deleted). CFC's annotation discipline becomes OPTIONAL
+  (annotated accumulators still valid Intent Boundaries, no longer required
+  for correctness on these shapes). Board whole: census 0, frontier 150/0,
+  proof-exactness 9/9, crown 5/5, micros green, m2 == m3
 - 2026-07-22 · THE DATA-VALIDATOR TIER — three real-workload oracles the
   fixpoint cannot be (no re-pin — tests + gate only, the wheel unchanged;
   m2 == m3 held). Three on-disk validators, each cross-validated against an
@@ -1053,10 +1095,9 @@ between the wheel and its ultimate form, held open on purpose.
   accumulator); any NAMED generic fn compiled once at the i32 floor and
   reached at a wide type is NOT. Repros banked:
   tests/repro/mn-named-generic-float-comparator.mn (+ the accumulator
-  sibling's scope note corrected). The ultimate remains the
-  Hβ.value.seq-element-stride-carrier scalar half — per-call-site
-  monomorphization of named generics (emit min_i32 and min_f64, dispatch
-  per site); a refusal is a stopgap monomorphization deletes
+  sibling's scope note corrected). The ultimate — per-call-site
+  monomorphization of named generics — LANDED the same day (the entry
+  above); both repros graduated into frontier gates and were deleted
 - 2026-07-21 · THE CFC PIPELINE RUNS ON NATIVE [Float] + the generic-over-wide
   keystone EVIDENCED (no re-pin — lib/dsp/cfc.mn is a leaf the compiler compiles
   but never calls, so m2 == m3 held directly). The cross-frequency-coupling

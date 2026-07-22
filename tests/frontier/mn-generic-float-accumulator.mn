@@ -1,0 +1,15 @@
+// Named-generic monomorphization, face 1 — the unannotated recursive
+// accumulator. `sum_acc` threads `acc` with no annotation; inference leaves it
+// a var, and before per-site specialization the fn compiled ONCE at the RI32
+// floor and read the f64 arguments as words (sum garbage, exit 1, zero
+// diagnostics — the silent-wrong class the fixpoint oracle cannot see). The
+// demand analysis now mints $sum_acc$sp2 (the same body emitted under the
+// spec_wty specialization state at the site's Float instantiation), the recursion stays
+// in-key, and the sum is native f64. RED (run 1) on the pre-spec boot.
+fn sum_acc(xs, i, acc) with Memory =
+  if i >= 3 { acc } else { sum_acc(xs, i + 1, acc + list_index(xs, i)) }
+
+fn main() = {
+  let xs = [0.5, 1.5, 2.5]           // native [Float], sums to 4.5
+  if sum_acc(xs, 0, 0.0) == 4.5 { 42 } else { 1 }
+}

@@ -808,6 +808,15 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-float-hof.mn" 42 yes "$dir"
   run_program "$compiler" float-show \
     "$ROOT/tests/frontier/mn-float-show.mn" 42 yes "$dir"
+  # Named-generic monomorphization (the §5.U scalar half): a generic fn whose
+  # site instantiates ONE wide type gets a demand-driven twin emitted under
+  # the spec_wty state — recursive accumulators, higher-order named comparators,
+  # and the transitive sort→merge web. RED (run 1, silent-wrong) on the
+  # pre-spec boot; Int instantiations stay at the byte-identical floor.
+  run_program "$compiler" generic-float-accumulator \
+    "$ROOT/tests/frontier/mn-generic-float-accumulator.mn" 42 yes "$dir"
+  run_program "$compiler" generic-float-comparator \
+    "$ROOT/tests/frontier/mn-generic-float-comparator.mn" 42 yes "$dir"
   # E_OwnershipViolation armed 2026-07-18 — the double-move fixture moved from
   # run_diagnostic (productive exit 0) to the armed-class refusal contract.
   run_refusal "$compiler" own-call-arg-move \

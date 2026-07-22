@@ -5601,6 +5601,295 @@ fn wide_call_seed(f, args) =
     else { [] }
   } else { [] }
 
+// ─── Named-generic specialization — monomorphization by repr key ─────────
+//
+// A named generic fn compiles ONCE at the word floor. The word protocol makes
+// that floor CORRECT for plumbing (a fold shell shuttles wide references
+// untouched), but WRONG the moment the body OPERATES on a quantified var at a
+// wide instantiation: the i32-floored `<=`/`+` reads the f64 references as
+// words, so prelude sort returns its input in ALLOCATION order and
+// `reduce(xs, min)` picks by address (tests/frontier/mn-generic-float-*).
+//
+// The fix is a TWIN emission of the same body under the site's instantiation —
+// and the instantiation is a PROJECTION, never a record: the unifier already
+// merged each call's argument classes into the scheme's var classes, so
+// walking the scheme's type (its TVar leaves are the quantified roots —
+// generalize chase-deeps first) against the site's instantiated type in
+// parallel reads the var→type mapping live off the union-find (Carried-Truth:
+// zero new storage, zero infer changes). The twin itself is the SAME emit
+// under the spec_wty state: the LookupTy handler answers lookup_ty through the
+// mapping, so every repr read downstream — param widths, binop dispatch,
+// element faces — specializes untouched, and interior call sites project
+// their keys UNDER the substitution, keeping a web (sort → merge → merge)
+// in-key transitively with no recursion special-case.
+//
+// The key is the repr digit vector over the scheme's quantified vars, sorted
+// by root handle — tiny, and maximally shared: every word instantiation IS
+// the floor emission ([Int], String, records — byte-identical, Law 7); only
+// a genuinely wide var mints a twin ($min$sp2 = min with its one var at f64).
+
+fn spec_pairs_find(pairs, root) with Memory = {
+  match find((p) => { let (v, _) = p; v == root }, pairs) {
+    Some(p) => { let (_, t) = p; Some(t) },
+    None    => None
+  }
+}
+
+fn spec_pairs_add(pairs, root, t) with Memory + Alloc = match spec_pairs_find(pairs, root) {
+  Some(_) => pairs,             // first binding wins; the unifier proved consistency
+  None    => [(root, t)] ++ pairs
+}
+
+// Deep site-type resolution THROUGH the LookupTy effect — under the spec_wty state
+// a substituted var resolves to its concrete, so interior sites in a twin
+// project their keys against the specialized truth.
+fn spec_resolve(t) with LookupTy + Memory + Alloc = match t {
+  TVar(h) => match lookup_ty(h) {
+    TVar(h2) => TVar(h2),       // genuinely free — the floor terminal
+    other    => spec_resolve(other)
+  },
+  TList(e)          => TList(spec_resolve(e)),
+  TTuple(es)        => TTuple(map((x) => spec_resolve(x), es)),
+  TFun(ps, r, eff)  => TFun(map((p) => param_with_ty(p, spec_resolve(param_ty(p))), ps),
+                            spec_resolve(r), eff),
+  TName(n, args)    => TName(n, map((x) => spec_resolve(x), args)),
+  TRecord(fs)       => TRecord(map((f) => { let (n, ft) = f; (n, spec_resolve(ft)) }, fs)),
+  TRecordOpen(fs, v) => mk_record_open(map((f) => { let (n, ft) = f; (n, spec_resolve(ft)) }, fs), v),
+  TRefined(b, p)    => TRefined(spec_resolve(b), p),
+  TAlias(n, i)      => TAlias(n, spec_resolve(i)),
+  TCont(i, a, d, w) => TCont(spec_resolve(i), spec_resolve(a), d, w),
+  _ => t                        // scalars (TInt/TFloat/TString/TUnit/TByte)
+}
+
+// The parallel walk: scheme side vs site side, same shape by construction
+// (the unifier made them agree); a shape mismatch is an error path already
+// reported — collect nothing there, the floor stands (never fabricate).
+fn spec_pairs_walk(st0, it0, acc) with LookupTy + GraphRead + Memory + Alloc = {
+  let st = fold_strip(st0)
+  match st {
+    TVar(v) => spec_pairs_add(acc, graph_chase_handle(v), it0),
+    TList(e) => match fold_strip(it0) {
+      TList(ie) => spec_pairs_walk(e, ie, acc), _ => acc },
+    TTuple(es) => match fold_strip(it0) {
+      TTuple(ies) => spec_pairs_walk_list(es, ies, acc), _ => acc },
+    TFun(ps, r, _) => match fold_strip(it0) {
+      TFun(ips, ir, _) => spec_pairs_walk(r, ir, spec_pairs_walk_params(ps, ips, acc)),
+      _ => acc },
+    TName(_, args) => match fold_strip(it0) {
+      TName(_, iargs) => spec_pairs_walk_list(args, iargs, acc), _ => acc },
+    TRecord(fs) => match fold_strip(it0) {
+      TRecord(ifs) => spec_pairs_walk_fields(fs, ifs, acc),
+      TRecordOpen(ifs, _) => spec_pairs_walk_fields(fs, ifs, acc), _ => acc },
+    TRecordOpen(fs, _) => match fold_strip(it0) {
+      TRecord(ifs) => spec_pairs_walk_fields(fs, ifs, acc),
+      TRecordOpen(ifs, _) => spec_pairs_walk_fields(fs, ifs, acc), _ => acc },
+    TCont(i1, a1, _, _) => match fold_strip(it0) {
+      TCont(i2, a2, _, _) => spec_pairs_walk(a1, a2, spec_pairs_walk(i1, i2, acc)),
+      _ => acc },
+    _ => acc                    // scalars carry no vars
+  }
+}
+
+fn spec_pairs_walk_list(sts, its, acc) with LookupTy + GraphRead + Memory + Alloc = {
+  if len(sts) == 0 || len(its) == 0 { acc }
+  else { spec_pairs_walk_list(rest(sts), rest(its),
+           spec_pairs_walk(sts[0], its[0], acc)) }
+}
+
+fn spec_pairs_walk_params(ps, ips, acc) with LookupTy + GraphRead + Memory + Alloc = {
+  if len(ps) == 0 || len(ips) == 0 { acc }
+  else { spec_pairs_walk_params(rest(ps), rest(ips),
+           spec_pairs_walk(param_ty(ps[0]), param_ty(ips[0]), acc)) }
+}
+
+// Fields pair by NAME (both sides parse-sorted); a missing partner is an
+// error path — skip, never fabricate.
+fn spec_pairs_walk_fields(fs, ifs, acc) with LookupTy + GraphRead + Memory + Alloc = {
+  if len(fs) == 0 { acc }
+  else {
+    let (n, ft) = fs[0]
+    let acc2 = match find((g) => { let (gn, _) = g; field_name_eq(gn, n) }, ifs) {
+      Some(g) => { let (_, gt) = g; spec_pairs_walk(ft, gt, acc) },
+      None    => acc
+    }
+    spec_pairs_walk_fields(rest(fs), ifs, acc2)
+  }
+}
+
+// Sorted by root handle — the canonical order the enc digits read.
+fn spec_pairs_sorted_insert(sorted, p) with Memory + Alloc = {
+  if len(sorted) == 0 { [p] }
+  else {
+    let (v, _) = p
+    let (v0, _) = sorted[0]
+    if v <= v0 { [p] ++ sorted }
+    else { [sorted[0]] ++ spec_pairs_sorted_insert(rest(sorted), p) }
+  }
+}
+
+fn spec_pairs_sort(pairs) with Memory + Alloc = fold([], (acc, p) => spec_pairs_sorted_insert(acc, p), pairs)
+
+fn spec_repr_digit(t) with Memory = match repr_of(t) {
+  RI32 => "0", RI64 => "1", RF64 => "2", RF32 => "3", RV128 => "4"
+}
+
+fn spec_enc(pairs) with Memory + Alloc = fold("", (acc, p) => { let (_, t) = p; acc ++ spec_repr_digit(t) }, pairs)
+
+fn spec_enc_is_floor(enc) with Memory = spec_enc_floor_loop(enc, 0, byte_len(enc))
+
+fn spec_enc_floor_loop(enc, i, n) with Memory = {
+  if i >= n { true }
+  else if byte_at(enc, i) != 48 { false }   // '0'
+  else { spec_enc_floor_loop(enc, i + 1, n) }
+}
+
+fn spec_mangle(name, enc) with Memory + Alloc = "{name}$sp{enc}"
+
+// The site's instantiation pairs — [] when the name is not generic: a value
+// let, a monomorphic fn, or an internal synthesized name. The scheme's
+// quantified vars are the roots; the site's chased type carries the bindings.
+fn spec_site_pairs_resolved(name: String, rt) with EnvRead + LookupTy + GraphRead + Memory + Alloc = match env_lookup(name) {
+  None => [],
+  Some(entry) => {
+    let (scheme, _r, kind) = entry
+    match kind {
+      FnScheme => match scheme {
+        Forall(qs, sty) =>
+          if len(qs) == 0 { [] }
+          else { spec_pairs_sort(spec_pairs_walk(sty, rt, [])) }
+      },
+      _ => []                   // ctor / record / effect-op / value schemes never specialize
+    }
+  }
+}
+
+fn spec_site_pairs(h, name: String) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
+  spec_site_pairs_resolved(name, spec_resolve(lookup_ty(h)))
+
+// The ONE naming projection every reference-emitting arm reads: the site's
+// key, mangled when any var lands wide, the plain name at the floor.
+fn spec_global_name(h, name: String) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  let pairs = spec_site_pairs(h, name)
+  if len(pairs) == 0 { name }
+  else {
+    let enc = spec_enc(pairs)
+    if spec_enc_is_floor(enc) { name } else { spec_mangle(name, enc) }
+  }
+}
+
+// Free-leaf substitution — the twin's one rule. A checked generic body's
+// unresolved classes FRACTURE (probe-proven: merge's param element roots at
+// one handle, its comparison operands at another — the seq-op result mints
+// its own class), so a root-keyed mapping can never be complete. But in a
+// body whose scheme instantiates ONE distinct wide type, every free-floored
+// leaf IS semantically that instantiation — so the rule is keyed on nothing:
+// a free var answers the wide type. Multi-type generics never twin (the
+// demand guard), so the rule never faces an ambiguous free.
+fn spec_subst_free(t, wty) with GraphRead + Memory + Alloc = match t {
+  TVar(u) => {
+    let GNode(kind, _r) = graph_chase(u)
+    match kind {
+      NBound(t2)         => spec_subst_free(t2, wty),
+      NFree(_)           => wty,
+      NErrorHole(_)      => wty,
+      NRowBound(_)       => t,
+      NRecordRowBound(_) => t,
+      NRowFree(_)        => t
+    }
+  },
+  TList(e)          => TList(spec_subst_free(e, wty)),
+  TTuple(es)        => TTuple(map((x) => spec_subst_free(x, wty), es)),
+  TFun(ps, r, eff)  => TFun(map((p) => param_with_ty(p, spec_subst_free(param_ty(p), wty)), ps),
+                            spec_subst_free(r, wty), eff),
+  TName(n, args)    => TName(n, map((x) => spec_subst_free(x, wty), args)),
+  TRecord(fs)       => TRecord(map((f) => { let (n, ft) = f; (n, spec_subst_free(ft, wty)) }, fs)),
+  TRecordOpen(fs, v) => mk_record_open(map((f) => { let (n, ft) = f; (n, spec_subst_free(ft, wty)) }, fs), v),
+  TRefined(b, p)    => TRefined(spec_subst_free(b, wty), p),
+  TAlias(n, i)      => TAlias(n, spec_subst_free(i, wty)),
+  TCont(i, a, d, w) => TCont(spec_subst_free(i, wty), spec_subst_free(a, wty), d, w),
+  _ => t
+}
+
+// ONE scan, two projections: the named-reference sites (LGlobal / LFnRef,
+// with their handles — the key-projection inputs) and the repr-sensitive
+// operand handles (arith / comparison / equality operands — the floor-is-
+// wrong witnesses the worthiness predicate reads). acc = (sites, ophs).
+fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
+  LGlobal(h, n)             => { let (s, o) = acc; ([(h, n)] ++ s, o) },
+  LFnRef(h, n, ev)          => { let (s, o) = spec_scan_list(ev, acc); ([(h, n)] ++ s, o) },
+  LPerform(_h, _t, args, _) => spec_scan_list(args, acc),
+  LHandleWith(_h, b, hn, _hname, inits, _arms, evs) =>
+    spec_scan_list(evs, spec_scan_list(inits, spec_scan_expr(hn, spec_scan_expr(b, acc)))),
+  LLet(_h, _n, inner)       => spec_scan_expr(inner, acc),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+    spec_scan_list(ev, spec_scan_list(caps, spec_scan_list(body, acc))),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
+    spec_scan_list(ev, spec_scan_list(caps, spec_scan_list(body, acc))),
+  LYield(_h, _op, args, k)  => spec_scan_expr(k, spec_scan_list(args, acc)),
+  LKExtend(_h, k)           => spec_scan_expr(k, acc),
+  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => spec_scan_list(body, acc),
+  LBlock(_h, stmts)         => spec_scan_list(stmts, acc),
+  LIf(_h, c, t, e)          => spec_scan_list(e, spec_scan_list(t, spec_scan_expr(c, acc))),
+  LBinOp(_h, op, l, r)      => {
+    let acc2 = match op {
+      BAdd | BSub | BMul | BDiv | BMod | BEq | BNe | BLt | BGt | BLe | BGe => {
+        let (s, o) = acc
+        (s, [lexpr_handle(l)] ++ ([lexpr_handle(r)] ++ o))
+      },
+      _ => acc
+    }
+    spec_scan_expr(r, spec_scan_expr(l, acc2))
+  },
+  LUnaryOp(_h, _op, x)      => spec_scan_expr(x, acc),
+  LCall(_h, f, args)        => spec_scan_list(args, spec_scan_expr(f, acc)),
+  LTailCall(_h, f, args)    => spec_scan_list(args, spec_scan_expr(f, acc)),
+  LReturn(_h, x)            => spec_scan_expr(x, acc),
+  LMakeList(_h, elems)      => spec_scan_list(elems, acc),
+  LMakeTuple(_h, elems)     => spec_scan_list(elems, acc),
+  LSimdLanes(_h, lanes)     => spec_scan_list(lanes, acc),
+  LMakeRecord(_h, fs)       => spec_scan_list(fs, acc),
+  LMakeVariant(_h, _t, fs)  => spec_scan_list(fs, acc),
+  LMatch(_h, s, arms)       => spec_scan_arms(arms, spec_scan_expr(s, acc)),
+  LSuspend(_h, _o, f, args, ev, _) =>
+    spec_scan_list(ev, spec_scan_list(args, spec_scan_expr(f, acc))),
+  LFeedback(_h, b, s)       => spec_scan_expr(s, spec_scan_expr(b, acc)),
+  LWasiCall(_h, _n, args)   => spec_scan_list(args, acc),
+  LEvPerform(_h, _n, _e, _s, a) => spec_scan_list(a, acc),
+  LEvRef(_h, _e)            => acc,
+  LEvEntry(_, ev)           => spec_scan_expr(ev, acc),
+  LUnresolvedEvidence(_, _) => acc,
+  LInvariantFailure(_, _)   => acc,
+  LFieldLoad(_h, rec, _off) => spec_scan_expr(rec, acc),
+  LConvert(_h, _, operand)  => spec_scan_expr(operand, acc),
+  LStateSlotStore(_h, _o, v, _) => spec_scan_expr(v, acc),
+  LConst(_, _)              => acc,
+  LLocal(_, _)              => acc,
+  LFeedbackPrior(_)         => acc,
+  LUpval(_, _)              => acc,
+}
+
+fn spec_scan_list(exprs, acc) with Memory + Alloc = fold(acc, (a, e) => spec_scan_expr(e, a), exprs)
+
+fn spec_scan_arms(arms, acc) with Memory + Alloc = fold(acc, (a, arm) => { let (_, b) = arm; spec_scan_expr(b, a) }, arms)
+
+// The wide runtime family a twin's emission can mint that its floor did not
+// (the same names wide_binop_seed / wide_call_seed contribute at concrete
+// sites). Seeded whenever ANY site projects a wide key — a cheap, precise-
+// enough over-approximation in the emit_runtime_contract tradition; a
+// program with no wide instantiation adds nothing.
+fn spec_wide_family() with Memory + Alloc = ["float_to_str", "list_compare_f64", "list_eq_f64", "list_hash_f64"]
+
+fn spec_site_is_wide(site) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  let (h, n) = site
+  let pairs = spec_site_pairs(h, n)
+  if len(pairs) == 0 { false } else { !spec_enc_is_floor(spec_enc(pairs)) }
+}
+
+fn spec_reach_seed(lowered) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  let (sites, _ophs) = fold(([], []), (a, d) => spec_scan_expr(d, a), lowered)
+  if any(spec_site_is_wide, sites) { spec_wide_family() } else { [] }
+}
+
 fn reachable_from_main(lowered) = {
   let has_main = any((d) => reach_decl_name(d) == "main", lowered)
   if !has_main { lowered }   // a library emits whole
@@ -5622,7 +5911,12 @@ fn reachable_from_main(lowered) = {
     // by reach_names_expr AT its mint sites (the ==/ordering LBinOp, the
     // show/hash call), so it flows through the index like every other edge — no
     // separate root, and a float-free program adds nothing.
-    let (fbuf0, fc0) = reach_enqueue(init_refs ++ emit_runtime_contract() ++ argv_root,
+    // A wide-keyed generic site means emit may mint twins whose bodies mint
+    // the f64 structural family the floor never referenced — seed it here so
+    // the prune keeps what the twins will call (spec_reach_seed: [] when no
+    // wide instantiation exists anywhere).
+    let (fbuf0, fc0) = reach_enqueue(init_refs ++ emit_runtime_contract() ++ argv_root
+        ++ spec_reach_seed(lowered),
       make_list(16), 0,
       list_set(list_extend_to(make_list(16), 1), 0, "main"), 1)
     let (rbuf, rn) = reach_grow(index, make_list(16), 0, fbuf0, fc0)

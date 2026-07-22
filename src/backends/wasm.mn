@@ -193,6 +193,31 @@ handler string_table with idx = string_index_new() {
   set_string_entries(es) => resume() with idx = build_string_index(es)
 }
 
+// The specialization-twin registry (SpecTwins, types.mn) — seeded once by
+// emit_module's demand analysis, read by every reference-emitting arm
+// (LGlobal / LFnRef) before it redirects a wide-keyed site to a twin. The
+// twin set is tiny (leaf compute fns), so the membership scan is bounded.
+handler spec_registry with twins = [] {
+  spec_twins_exist() => resume(len(twins) > 0),
+  spec_twin_known(n) => resume(any((t) => t == n, twins)),
+  set_spec_twins(ns) => resume() with twins = ns
+}
+
+// The naming read every reference arm shares: project the site's key
+// (spec_global_name, lower.mn), then redirect ONLY when the demand analysis
+// minted that twin — a wide key with no twin stays at the floor, which the
+// word protocol keeps correct for plumbing. The exists fast-path keeps a
+// twin-free module (every all-word program, Law 7) at one op per reference.
+fn spec_target_name(h, name: String) with SpecTwins + EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  if !spec_twins_exist() { name }
+  else {
+    let m = spec_global_name(h, name)
+    if m == name { name }
+    else if spec_twin_known(m) { m }
+    else { name }
+  }
+}
+
 // The str_hash bucket index — the shared name-is-handle waypoint shape
 // (mirrors env/esc/summary/base/reach; region_index is the handle-keyed
 // template). str_eq inside the small bucket carries the same content
@@ -287,6 +312,185 @@ fn emit_runtime_contract() =
 // (Hβ.m2.callsite-result-width), not a reason to drag the whole float
 // family into every float-free rung.
 
+// ─── The specialization demand analysis (monomorphization, §5.U scalar half) ──
+//
+// Which named-generic twins exist. Three passes over projections the graph
+// already holds, no new state: (1) CANDIDATES — every reference site whose key
+// projects wide, closed transitively by walking each candidate's body UNDER
+// its substitution (sort's merge site projects merge's key only with sort's
+// pairs active); (2) WORTHINESS — a candidate's floor emission is WRONG only
+// when its own body performs arith/compare/eq on a pair var at a wide
+// instantiation (the address-comparison class), or an interior site redirects
+// to a worthy twin; plumbing shells (fold/map — wide values shuttled as word
+// references, never operated on) stay at the floor, which the word protocol
+// keeps correct; (3) the worthy candidates ARE the twin set, seeded into
+// spec_registry and emitted as the same records under the spec_wty state.
+
+fn spec_find_rec(recs, target: String) with Memory =
+  find((r) => { let (n, _p, _b, _f) = r; n == target }, recs)
+
+fn spec_demand_named(ds, m: String) with Memory = any((d) => { let (dm, _b, _w) = d; dm == m }, ds)
+
+// A site becomes a candidate only when EVERY quantified var lands on the SAME
+// wide type — the guard the free-leaf substitution rule requires (a body's
+// unresolved classes fracture, so the twin answers every free with ONE type;
+// a generic instantiated at two distinct types stays floor, the word protocol
+// keeping its plumbing correct — the named multi-type residue).
+fn spec_candidate_of_site(site, acc) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  let (h, n) = site
+  let rt = spec_resolve(lookup_ty(h))
+  let pairs = spec_site_pairs_resolved(n, rt)
+  if len(pairs) == 0 { acc }
+  else {
+    let enc = spec_enc(pairs)
+    if spec_enc_is_floor(enc) { acc }
+    else if !spec_pairs_uniform_wide(pairs) { acc }
+    else {
+      let m = spec_mangle(n, enc)
+      let (_v, wty) = pairs[0]
+      if spec_demand_named(acc, m) { acc } else { [(m, n, wty)] ++ acc }
+    }
+  }
+}
+
+fn spec_pairs_uniform_wide(pairs) with Memory + Alloc =
+  all((pr) => { let (_v, t) = pr; repr_is_wide(repr_of(t)) }, pairs)
+    && spec_pairs_one_digit(pairs)
+
+fn spec_pairs_one_digit(pairs) with Memory + Alloc = {
+  let (_v0, t0) = pairs[0]
+  let d0 = spec_repr_digit(t0)
+  all((pr) => { let (_v, t) = pr; spec_repr_digit(t) == d0 }, pairs)
+}
+
+fn spec_candidates_from_sites(sites, acc) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
+  fold(acc, (a, s) => spec_candidate_of_site(s, a), sites)
+
+fn spec_candidates_fix(work, done, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  if len(work) == 0 { done }
+  else {
+    let d = work[0]
+    let w2 = rest(work)
+    let (m, base, wty) = d
+    if spec_demand_named(done, m) { spec_candidates_fix(w2, done, recs) }
+    else {
+      match spec_find_rec(recs, base) {
+        None => spec_candidates_fix(w2, [d] ++ done, recs),
+        Some(rec) => {
+          let (_n, _ps, body, _f) = rec
+          spec_wty_set(wty)
+          let inner = {
+            let (sites, _o) = spec_scan_list(body, ([], []))
+            spec_candidates_from_sites(sites, [])
+          }
+          spec_wty_clear()
+          spec_candidates_fix(inner ++ w2, [d] ++ done, recs)
+        }
+      }
+    }
+  }
+}
+
+// The floor-is-wrong witness: an arith/compare/eq operand whose FLOOR type is
+// a pair var bound wide at this candidate's key. Read at the floor (no
+// substitution) — the var-ness is exactly what the floor emission sees.
+// An arith/compare/eq operand whose floor type is FREE is exactly the site
+// the twin re-widens (the demand guard proved the instantiation is one wide
+// type, so every free IS it) — the address-comparison witness.
+fn spec_oph_free(oh) with LookupTy + GraphRead + Memory + Alloc = {
+  if oh == 0 { false }
+  else {
+    match lookup_ty(oh) {
+      TVar(u) => {
+        let GNode(kind, _r) = graph_chase(u)
+        match kind {
+          NFree(_)      => true,
+          NErrorHole(_) => false,
+          NBound(_)     => false,
+          NRowBound(_)  => false,
+          NRecordRowBound(_) => false,
+          NRowFree(_)   => false
+        }
+      },
+      _ => false
+    }
+  }
+}
+
+fn spec_candidate_sensitive(d, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  let (_m, base, _wty) = d
+  match spec_find_rec(recs, base) {
+    None => false,
+    Some(rec) => {
+      let (_n, _ps, body, _f) = rec
+      let (_sites, ophs) = spec_scan_list(body, ([], []))
+      any(spec_oph_free, ophs)
+    }
+  }
+}
+
+fn spec_name_in(names, m: String) with Memory = any((x) => x == m, names)
+
+fn spec_candidate_calls_worthy(d, worthy, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  let (_m, base, wty) = d
+  match spec_find_rec(recs, base) {
+    None => false,
+    Some(rec) => {
+      let (_n, _ps, body, _f) = rec
+      spec_wty_set(wty)
+      let verdict = {
+        let (sites, _o) = spec_scan_list(body, ([], []))
+        any((s) => {
+          let (h, n) = s
+          let m2 = spec_global_name(h, n)
+          if m2 == n { false } else { spec_name_in(worthy, m2) }
+        }, sites)
+      }
+      spec_wty_clear()
+      verdict
+    }
+  }
+}
+
+fn spec_worthy_pass(cands, worthy, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
+  fold((worthy, false), (acc, d) => {
+    let (w, changed) = acc
+    let (m, _base, _st) = d
+    if spec_name_in(w, m) { (w, changed) }
+    else if spec_candidate_sensitive(d, recs) { ([m] ++ w, true) }
+    else if spec_candidate_calls_worthy(d, w, recs) { ([m] ++ w, true) }
+    else { (w, changed) }
+  }, cands)
+
+fn spec_worthy_fix(cands, worthy, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  let (w2, changed) = spec_worthy_pass(cands, worthy, recs)
+  if changed { spec_worthy_fix(cands, w2, recs) } else { w2 }
+}
+
+fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  let (sites, _o) = spec_scan_list(lowered, ([], []))
+  let seed = spec_candidates_from_sites(sites, [])
+  let cands = spec_candidates_fix(seed, [], recs)
+  let worthy = spec_worthy_fix(cands, [], recs)
+  filter((d) => { let (m, _b, _st) = d; spec_name_in(worthy, m) }, cands)
+}
+
+// The two name projections the driver concats into the module's name surfaces.
+// The declared [String] is the Intent Boundary the ++ sites read — without it
+// the filter-with-handler-block chain left the element open and the concat
+// emitted its unresolved-element floor (the 00c0b6 trap that caught this).
+fn spec_twin_names(ds) -> [String] with Memory + Alloc =
+  map((d) => { let (m, _b, _st) = d; m }, ds)
+
+fn spec_wide_twin_names(spec_recs) -> [String] with LookupTy + GraphRead + Memory + Alloc =
+  fold([], (acc, rp) => {
+    let (rec2, wty) = rp
+    spec_wty_set(wty)
+    let w = fn_record_is_wide(rec2)
+    spec_wty_clear()
+    if w { let (m, _ps, _b, _f) = rec2; [m] ++ acc } else { acc }
+  }, spec_recs)
+
 fn emit_module(lowered) = {
   // Single-walk multi-projection pre-pass. project_emit_state walks the
   // LowExpr tree ONCE; four visitor-handlers chained via `~>` accumulate
@@ -317,6 +521,23 @@ fn emit_module(lowered) = {
   let fn_records = collect_fn_emit_records(lowered) |> dedup_fn_records
   let wide_fn_names =
     fn_records |> filter(fn_record_is_wide) |> map((r) => { let (nm, _, _, _) = r; nm })
+  // Named-generic twins (the demand analysis above): each demand's record is
+  // the BASE record renamed — the same body, emitted under the spec_wty state so
+  // every repr read resolves through the site's instantiation. Registered
+  // before any reference emits (spec_target_name reads the registry live);
+  // a program with no wide instantiation computes [] and every list below is
+  // untouched (Law 7 byte-identical).
+  let spec_demands = spec_demands_of(lowered, fn_records)
+  let spec_names = spec_twin_names(spec_demands)
+  let spec_recs = map((d) => {
+    let (m, base, wty) = d
+    match spec_find_rec(fn_records, base) {
+      Some(rec) => { let (_n, ps, body, f) = rec; ((m, ps, body, f), wty) },
+      None => ((m, [], [], 0), TUnit)   // record-less names are never worthy; unreachable by construction
+    }
+  }, spec_demands)
+  let spec_wide = spec_wide_twin_names(spec_recs)
+  set_spec_twins(spec_names)
   // W5 string interning — seed the string_table handler so downstream
   // LString emits can look up the offset via perform string_offset.
   set_string_entries(string_entries)
@@ -331,15 +552,34 @@ fn emit_module(lowered) = {
   // interned op key the drivers compare), $yield_k (the reified k record).
   if yield_seen > 0 { emit_yield_globals() }
   emit_string_data(string_entries)
-  emit_fn_table(table_fn_names, wide_fn_names)
-  emit_fn_index_globals(table_fn_names, 0)
-  emit_static_top_closures(top_fn_names, table_fn_names, 0)
+  // Twins ride every fn-name surface APPENDED (existing indices stable): the
+  // table (a wide twin's slot holds its $wf$ word face), the per-name idx
+  // globals, and the static closure records (global.get $<twin> at redirect
+  // sites reads a record whose offset-0 slot is the twin's table index).
+  let table_all = table_fn_names ++ spec_names
+  let wide_all = wide_fn_names ++ spec_wide
+  emit_fn_table(table_all, wide_all)
+  emit_fn_index_globals(table_all, 0)
+  emit_static_top_closures(top_fn_names ++ spec_names, table_all, 0)
   // Module VALUE bindings: ONE projection feeds the declaration half and
   // the init half (never two walks of one tree).
   let value_lets = collect_top_value_lets(lowered)
   emit_top_let_globals(value_lets)
   emit_functions(fn_records)
   emit_wide_wrappers(fn_records)
+  // The twins: the SAME per-fn emission, each under its instantiation
+  // handler — monomorphization as a handler swap. A wide twin also gets its
+  // $wf$ word-face wrapper under the same install (its table slot speaks the
+  // word-arity face like every other wide fn).
+  each((rp) => {
+    let (rec2, wty) = rp
+    spec_wty_set(wty)
+    let s = emit_one_fn_to_string(rec2)
+    let w = if fn_record_is_wide(rec2) { emit_one_wrapper_to_string(rec2) } else { "" }
+    spec_wty_clear()
+    wat_emit(s)
+    wat_emit(w)
+  }, spec_recs)
   // The four fold leaves — eq / compare / hash / show — one recursive
   // $<leaf>_<sig> helper per distinct signature in each closure, all read
   // from the ONE collection walk above (the unified each). Plain top-level
@@ -2889,9 +3129,14 @@ fn emit_expr(expr) = match expr {
     wat_emit(")\n")
   },
 
-  LGlobal(_h, name) => {
+  LGlobal(h, name) => {
+    // The ONE reference surface every named use routes through (direct calls,
+    // tail calls, fn-as-value, LSuspend callees all evaluate their callee
+    // here). spec_target_name redirects a wide-keyed generic site to its
+    // twin's record; everything else — value lets, monomorphic fns, floor
+    // keys — prints the plain name, byte-identical.
     wat_emit("    (global.get $")
-    wat_emit(name)
+    wat_emit(spec_target_name(h, name))
     wat_emit(")\n")
   },
 
@@ -3041,7 +3286,7 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (local.get $state_tmp)\n")
   },
 
-  LFnRef(_h, fn_name, ev_exprs) => {
+  LFnRef(h, fn_name, ev_exprs) => {
     // The unified record for an EXISTING named fn referenced as a VALUE —
     // LMakeClosure's shape with ZERO captures:
     // [fn_ptr@0][0@4][key_j,ev_j@8+8*j][key=0 sentinel].
@@ -3052,10 +3297,12 @@ fn emit_expr(expr) = match expr {
     // ev region is keyed: 2 words/entry ([key][ev]) + 1 key=0 sentinel word.
     let size = 8 + 4 * (2 * ne + 1)
     emit_alloc(size, "state_tmp")
-    // Store fn_ptr (table index) at offset 0.
+    // Store the table index at offset 0 — the twin's index when this ref
+    // site's key names one (a wide-instantiated `min` passed to reduce
+    // reaches the table as $wf$min$sp2; the word protocol derefs at the leaf).
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (global.get $")
-    wat_emit(fn_name)
+    wat_emit(spec_target_name(h, fn_name))
     wat_emit("_idx)\n")
     wat_emit("    (i32.store offset=0)\n")
     // Store capture_count=0 at offset 4. LSuspend clones this record using the

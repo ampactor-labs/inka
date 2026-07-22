@@ -1080,6 +1080,18 @@ effect StringTable {
   set_string_entries([(String, Int)]) -> ()
 }
 
+// SpecTwins — the specialization registry (the StringTable pattern one shelf
+// over): emit_module's demand analysis decides ONCE which named-generic twins
+// exist (the worthiness fixpoint over wide-keyed call sites), seeds the
+// registry, and every reference-emitting arm then asks spec_twin_known before
+// redirecting a site's mangled key to a twin — a site whose key names no twin
+// stays at the word-protocol floor, which is correct for plumbing.
+effect SpecTwins {
+  spec_twins_exist() -> Bool
+  spec_twin_known(String) -> Bool
+  set_spec_twins([String]) -> ()
+}
+
 // Evidence (spec W4) — runtime witness of an effect-to-handler-arm
 // binding. A polymorphic function that performs `op_name` dispatches
 // via an evidence slot: the caller threads the evidence record into
@@ -1828,6 +1840,11 @@ effect Mutate {
 
 effect LookupTy {
   lookup_ty(Int) -> Ty
+  // The specialization bracket (named-generic twins): while set, the handler
+  // answers a free var with the site's single wide instantiation. State on
+  // the ONE LookupTy handler — never a second handler (singleton tier).
+  spec_wty_set(Ty) -> ()
+  spec_wty_clear() -> ()
 }
 
 // Inference mints via graph_fresh_ty; query mints display ids. One

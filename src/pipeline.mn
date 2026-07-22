@@ -74,6 +74,7 @@ fn compile(entry_module) = {
     ~> verify_ledger
     ~> lower_scope
     ~> arm_state_ctx([], OneShot, "")
+    ~> spec_registry
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
@@ -162,6 +163,7 @@ fn compile_stdin() = {
     ~> verify_ledger
     ~> lower_scope
     ~> arm_state_ctx([], OneShot, "")
+    ~> spec_registry
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
@@ -232,6 +234,7 @@ fn compile_source(source) = {
     ~> verify_ledger
     ~> lower_scope
     ~> arm_state_ctx([], OneShot, "")
+    ~> spec_registry
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
@@ -280,6 +283,7 @@ fn query(entry_module, question) = {
     ~> region_tracker
     ~> verify_ledger
     ~> arm_state_ctx([], OneShot, "")
+    ~> spec_registry
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
@@ -306,6 +310,7 @@ fn analyze_fns(entry_module, project, render) = {
     ~> region_tracker
     ~> verify_ledger
     ~> arm_state_ctx([], OneShot, "")
+    ~> spec_registry
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
@@ -608,11 +613,30 @@ handler wasi_filesystem {
 // resume TVar(h) — the honest word floor every consumer reads; a width a
 // site genuinely needs detonates at emit's loud floors, never here.
 
-handler lookup_ty_graph {
+// The handler additionally carries the SPECIALIZATION state (spec_wty): a
+// named-generic twin's emission brackets itself with spec_wty_set/clear, and
+// while set, a free var answers the site's single wide instantiation (the
+// free-leaf rule, spec_subst_free in lower.mn). State-swap, NOT handler-swap:
+// a second LookupTy handler would demote every lookup_ty perform out of the
+// singleton direct-dispatch tier — measured as ev-scan faults at infer sites
+// that never threaded evidence (they never needed to under the singleton).
+handler lookup_ty_graph with spec_wty = None {
+
+  spec_wty_set(w) => resume() with spec_wty = Some(w),
+  spec_wty_clear() => resume() with spec_wty = None,
 
   lookup_ty(h) => {
     let GNode(kind, reason) = graph_chase(h)
-    match kind {
+    match spec_wty {
+      Some(w) => match kind {
+        NBound(t)          => resume(spec_subst_free(t, w)),
+        NFree(_)           => resume(w),
+        NErrorHole(_)      => resume(w),
+        NRowBound(_)       => resume(TUnit),
+        NRecordRowBound(_) => resume(TUnit),
+        NRowFree(_)        => resume(TUnit)
+      },
+      None => match kind {
       NBound(t)        => resume(t),
       // An error hole / free var resumes TVar(h) — CARRY THE HANDLE. The
       // prior TName("ERROR_HOLE")/TName("UNRESOLVED") sentinels fabricated
@@ -642,6 +666,7 @@ handler lookup_ty_graph {
       NRowBound(_)     => resume(TUnit),
       NRecordRowBound(_) => resume(TUnit),
       NRowFree(_)      => resume(TUnit)
+      }
     }
   }
 }

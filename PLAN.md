@@ -1019,6 +1019,37 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE HYGIENE WAVE + three rulings banked (no re-pin — the
+  wheel untouched). DELETED per Morgan's ruling (git is the archive, no
+  archaeology ceremony): docs/specs (2.2M), docs/research (1.3M),
+  docs/errors, docs/traces, DESIGN.md, SUBSTRATE.md, ULTIMATE_MEDIUM(.md +
+  _DIAGRAM), SYNTHESIS_CROSSWALK.md, EFFECTS.md — docs/ is now the three-doc
+  contract plus the three live working artifacts (NATIVE.md, DESIGN_SYSTEM.md,
+  MENTL_EDIT.md); every dangling pointer in PLAN/SYNTAX rewritten as a
+  git-history note. .build purged 579GB → 21M (keyed m2cache kept).
+  tests/repro dissolved (all repros graduated to gates). THE PHANTOM RATCHET
+  made PRINCIPLED: comment-audit resolves a cited symbol against wheel source
+  UNION the emitted artifact's own namespace (read live from m2.wat —
+  normalized __-prefixes and _<handle> suffixes; the artifact IS the
+  namespace) UNION the three docs' design vocabulary (fn_ptr / tag_word /
+  nstate resolve against the design's source exactly as fns resolve against
+  code) — 286 → 231, baseline ratcheted down; the residue is genuinely
+  stale prose (the hand-sweep is the named follow-up, frame_k's defining
+  home included). THREE RULINGS BANKED: (1) Hβ.voice.script-is-projection —
+  the mentl voice is NOT a model: it speaks only the author's own comment
+  prose, graph projections (types/rows/Reasons/spans), and a fixed template
+  grammar composed of them — easy enough to teach anyone, deep enough along
+  the gradient that the hardest developers feel the floor under every word;
+  (2) Hβ.compile.fixpoint-is-larval-forked-cursor — every hand-rolled
+  worklist/fixpoint in the wheel (the spec demand analysis, classify_fixpoint,
+  reach, worthiness) is a larval FORKED-CURSOR SEARCH; when trail-fork lands
+  as compile substrate each rewrites as forks with rollback (Morgan's own
+  call: 'why build a worklist when we could have built a forked cursor
+  search'); (3) the anti-drift safeguards (drift-audit, the hooks, the
+  discipline prose) are LARVAL mentl audit — when the medium is real they
+  dissolve INTO it (§0's own convergence: the gate that keeps an LLM honest
+  is the gate that keeps every proposer honest), so the hygiene endpoint is
+  absorption into verbs, never deletion of the safeguard
 - 2026-07-22 · ▶▶ THE LSHOW/LHASH BUILD — the LAST lower-time type bake moves
   to emit; FOUR latent breaks close (monomorphization face 7 + band D's leaf
   seam · pin f60110f4). to_string/hash are STRUCTURAL nodes dispatched at

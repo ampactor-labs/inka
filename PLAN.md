@@ -1019,6 +1019,18 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE COMMENT SCAFFOLDS DISSOLVE INTO THE COMPILE (absorption
+  complete, no re-pin — tools only). tools/comment-audit.sh and
+  comment-ratchet.sh are DELETED: the medium's own W_CommentRefUnresolved
+  pass (every compile's infer tail) is the classifier, and verify.sh's
+  census step ratchets its count off the SAME m2.err the census already
+  reads — zero extra passes, comment_refs_max in the baseline (52 at
+  absorption; the ratchet drives it to 0). state.sh's separate PHANTOMS
+  gate dissolves into verify; the pre-commit hook keeps only the semantic
+  reminder (content-matches-code is the judgment no resolver makes). This
+  is the ratchet script's own written destiny executed: "both ratchets
+  dissolve together into mentl audit, which is the projection they are
+  larval forms of."
 - 2026-07-22 · ▶▶ FIELD OFFSETS PROJECT AT EMIT + THE STRUCTURED ENC — the
   monomorphization machinery generalizes from repr to STRUCTURE (pin
   09f9706a). The last lower-time layout bake moves to the read: LFieldLoad

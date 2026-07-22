@@ -108,6 +108,21 @@ if C=$(wt_m2_ensure); then
   elif [[ -n "$max" && "$errors" -lt "$max" ]]; then
     say "  ↓ census FELL $max -> $errors — lower census_errors_max in $BASELINE to hold it."
   fi
+  # The comment-reference ratchet — the SAME stderr, one layer up: every
+  # backticked identifier in a comment is a REFERENCE the medium resolves at
+  # the infer tail (W_CommentRefUnresolved, SYNTAX §Comments). This absorbed
+  # tools/comment-audit.sh + comment-ratchet.sh whole: the medium is the
+  # classifier now, and the count rides the census compile — zero extra passes.
+  crefs=$(grep -cE 'W_CommentRefUnresolved' "$C/m2.err")
+  cmax=$(grep -E '^comment_refs_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  say "· comment-refs: $crefs unresolved — the medium's verdict on its own prose"
+  if [[ -n "$cmax" && "$crefs" -gt "$cmax" ]]; then
+    say "✗ comment-ref RATCHET: unresolved references rose $cmax -> $crefs. A backticked"
+    say "  name is a claim; fix the reference or write prose without backticks."
+    fail=1
+  elif [[ -n "$cmax" && "$crefs" -lt "$cmax" ]]; then
+    say "  ↓ comment-refs FELL $cmax -> $crefs — lower comment_refs_max in $BASELINE to hold it."
+  fi
 else
   say "✗ compiler TRAPPED compiling the wheel (tail $WT_M2CACHE/m2.err):"; tail -3 "$WT_M2CACHE/m2.err"; fail=1
 fi

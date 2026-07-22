@@ -43,7 +43,6 @@ if [ "${1:-}" != "--quick" ]; then
   gate "PROOF-EXACTNESS (hole refuses · debt surfaces · suspension runs)" bash tools/proof-exactness-gate.sh
   gate "CROWN (!E soundness crucibles)"                                  bash tools/crown-gate.sh
   gate "EFFECT IDENTITY (Fail ≠ Abort)"                                  bash tools/effect-identity-gate.sh
-  gate "PHANTOMS (the medium's verdict on its own prose)"                bash tools/comment-ratchet.sh
   gate "INSTRUMENT (can the board go RED?)"                              bash tools/instrument-gate.sh
 
   if [ "$reds" -eq 0 ]; then

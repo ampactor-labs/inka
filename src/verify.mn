@@ -312,14 +312,6 @@ fn report_verify_debt(debt) = {
   }
 }
 
-// Classify verification debt by predicate shape. Consumed by
-// `mentl query verification` so the developer sees at a glance
-// which proof classes are pending.
-fn debt_by_kind(debt) = map((entry) => {
-  let (span, pred, reason) = entry
-  (classify_predicate(pred), span, reason)
-}, debt)
-
 fn classify_predicate(pred) with Pure = match pred {
   PTrue        => "trivial",
   PNot(_)      => "negation",

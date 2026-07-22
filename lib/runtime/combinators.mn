@@ -147,8 +147,8 @@ fn collect_verified_survivors(handlers, checkpoint) with GraphRead + GraphWrite 
 // graph/types substrate when those hold the canonical shape.
 // Stubs below; consumers (race) treat them as opaque.
 
-fn handler_row(_handler) with Pure = {
-  EfPure   // conservative default; full body reads handler's declared row from graph (lands as peer HC2.h)
+fn handler_row(_handler) with Memory = {
+  mk_ef_pure()   // conservative default; full body reads handler's declared row from graph (lands as peer HC2.h)
 }
 
 fn handler_reason(_handler) with Pure = {
@@ -168,12 +168,7 @@ fn handler_name(_handler) with Pure = {
 
 fn effect_count(row) with Memory = {
   match row {
-    EfPure              => 0,
-    EfClosed(names)     => len(names),
-    EfOpen(names, _)    => len(names),
-    EfNeg(_)            => 1,
-    EfSub(a, b)         => effect_count(a) + effect_count(b),
-    EfInter(a, b)       => effect_count(a) + effect_count(b)
+    EfRow(p, a, _)      => len(p) + len(a)
   }
 }
 

@@ -67,7 +67,7 @@ handler infer_ctx with stack = [], arm_stack = [] {
     // [(EffName, negated)] list (empty for lambdas / tee bodies / arm scopes).
     // No ambient declared-scalar to clobber — a nested fn gets its own.
     let frame = {
-      accumulated_row: EfPure,
+      accumulated_row: mk_ef_pure(),
       answer_handle: answer_h,
       declared: effs,
       fn_span: fn_span,
@@ -128,7 +128,7 @@ handler infer_ctx with stack = [], arm_stack = [] {
   },
 
   inf_current_row() => {
-    if len(stack) == 0 { resume(EfPure) }
+    if len(stack) == 0 { resume(mk_ef_pure()) }
     else {
       let frame = last(stack)
       resume(frame.accumulated_row)
@@ -139,7 +139,7 @@ handler infer_ctx with stack = [], arm_stack = [] {
   // accumulated prefix observed at the suspension point. The frame binds that
   // variable on exit, so effects in the remainder are carried without a copy.
   inf_current_world() => {
-    if len(stack) == 0 { resume(EfPure) }
+    if len(stack) == 0 { resume(mk_ef_pure()) }
     else { resume(mk_ef_open([], last(stack).row_handle)) }
   },
 
@@ -566,10 +566,10 @@ fn cl_op_names(ref ops, i, acc) =
 // pre_register so every module sees them; pure, monomorphic.
 fn register_primitives() = {
   env_extend("float_of_int",
-    Forall([], TFun([mk_param("_", TInt)], TFloat, EfPure)),
+    Forall([], TFun([mk_param("_", TInt)], TFloat, mk_ef_pure())),
     Declared("float_of_int"), FnScheme)
   env_extend("float_to_int",
-    Forall([], TFun([mk_param("_", TFloat)], TInt, EfPure)),
+    Forall([], TFun([mk_param("_", TFloat)], TInt, mk_ef_pure())),
     Declared("float_to_int"), FnScheme)
 }
 
@@ -940,10 +940,10 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   // `declared_effs` arrived with inf_exit_fn's return above: the popped
   // frame's own declaration, so a nested fn can never clobber this one's.
   if len(declared_effs) > 0 {
-    // D3 — `with Pure` is absolute: body row must be EfPure (not
+    // D3 — `with Pure` is absolute: body row must be the pure row (not
     // merely ⊆ some sugar row named Pure). When Pure appears
     // anywhere in declared_effs, the declared row collapses to
-    // EfPure and any other declared names are a contradiction (a
+    // the pure row and any other declared names are a contradiction (a
     // single warning surfaces them precisely in the contradiction
     // diagnostic).
     let has_pure = has_pure_declared(declared_effs)
@@ -957,7 +957,7 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
           // over-declared — it reserves more capabilities than it
           // uses. Emit T_OverDeclared as a teaching warning so the
           // author can tighten the signature and unlock the tighter
-          // row's capabilities (memoization for EfPure, real-time
+          // row's capabilities (memoization for the pure row, real-time
           // for !Alloc, etc.).
           if row_subsumes(declared_row, body_row) { () }
           else {
@@ -969,9 +969,13 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
           // would union near-universe into every caller's accumulation.
           // The published truth is the meet the gate just proved:
           // body ∩ ¬N (= the body row with N provably absent).
-          let published = match declared_row {
-            EfNeg(_) => normalize_inter(body_row, declared_row),
-            _        => declared_row
+          let published = {
+            let EfRow(_, da, dt) = declared_row
+            match dt {
+              EtAll => inter_row(body_row, declared_row),
+              _     => if len(da) == 0 { declared_row }
+                       else { declared_row }
+            }
           }
           graph_bind_row(row_handle, published,
             Located(span, Declared(name)))
@@ -1045,20 +1049,22 @@ fn call_is_alloc_returning(func) = {
 // drops out of the meet, so the body's own perform fails the subsumption
 // gate LOUDLY (E_EffectMismatch) — never a silent contradiction.
 fn build_declared_row(effs) = {
-  let (pos, neg_names, saw_pure) = fold((EfPure, [], false), (acc, eff) => {
+  let (pos, neg_names, saw_pure) = fold((mk_ef_pure(), [], false), (acc, eff) => {
     let (pos, negs, saw) = acc
     let (name, negated, conn) = eff
     if is_pure_eff_name(name) { (pos, negs, true) }
     else if negated           { (pos, negs ++ [name], saw) }   // drift-audit: ignore — bounded by the authored clause length, not a loop accumulator
     else                      { (apply_connective(conn, pos, mk_ef_closed([name])), negs, saw) }
   }, effs)
-  if saw_pure { EfPure }
+  if saw_pure { mk_ef_pure() }
   else if len(neg_names) == 0 { pos }
   else {
-    match pos {
-      EfPure => neg_row(closed_or_pure(sort_unique(neg_names))),
-      _      => normalize_inter(pos, EfNeg(closed_or_pure(sort_unique(neg_names))))
-    }
+    // ONE triple: the positives present, the negations absent — a solo
+    // `with !N` is the negative capability (universal tail); positives
+    // pin the gate closed with the absence riding as the crown's proof.
+    let EfRow(pp, pa, pt) = pos
+    if len(pp) == 0 { mk_ef_neg(sort_unique(neg_names)) }
+    else { ef_make(pp, name_set_union(pa, sort_unique(neg_names)), pt) }
   }
 }
 
@@ -1784,7 +1790,7 @@ fn record_ctor_arrow_view(cname: String, span: ValidSpan) = {
         RecordSchemeKind(declared_fields) => {
           let Forall(q, body) = scheme
           let view = instantiate(Forall(q,
-            TFun(build_ctor_params([TRecord(declared_fields)], 0), body, EfPure)))
+            TFun(build_ctor_params([TRecord(declared_fields)], 0), body, mk_ef_pure())))
           let vh = mint(Inferred("record-ctor arrow view of '{cname}'"))
           graph_bind(vh, view, Located(span, VarLookup(cname, reason)))
           Some(vh)
@@ -2165,8 +2171,7 @@ fn eparam_arg_tys(args) = flatten(map((arg) => match arg {
 // them to the handler's one instance. list_to_flat so the caller's list_index is
 // O(1). Bare ENamed / EPure carry no instance and contribute nothing.
 fn instances_in_row(row, ename) = match row {
-  EfClosed(names)  => instances_in_names(names, ename),
-  EfOpen(names, _) => instances_in_names(names, ename),
+  EfRow(names, _, _) => instances_in_names(names, ename),
   _                => []
 }
 
@@ -3230,7 +3235,7 @@ fn infer_binop(handle, op, lh, rh, span: ValidSpan) = {
 fn concat_callee_row() = union_row(named_fn_row("str_concat"), named_fn_row("list_concat"))
 
 // A named fn's declared row, live from the env edge. A name that is absent
-// or not a function contributes EfPure — the union's identity — which is the
+// or not a function contributes the pure row — the union's identity — which is the
 // true statement "this primitive is not in scope here, so `++` cannot be
 // calling it"; a `++` with NEITHER primitive in scope has no concat to emit
 // and fails at the callee, where that absence actually lives.
@@ -3239,10 +3244,10 @@ fn named_fn_row(name: String) = match env_lookup(name) {
     let (scheme, _, _) = entry
     match instantiate(scheme) {
       TFun(_, _, row) => row,
-      _               => EfPure
+      _               => mk_ef_pure()
     }
   },
-  None => EfPure
+  None => mk_ef_pure()
 }
 
 fn infer_unaryop(handle, op, ih, span: ValidSpan) = match op {
@@ -3314,7 +3319,7 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
           RecordSchemeKind(declared_fields) => {
             let Forall(q, body) = scheme
             instantiate(Forall(q,
-              TFun(build_ctor_params([TRecord(declared_fields)], 0), body, EfPure)))
+              TFun(build_ctor_params([TRecord(declared_fields)], 0), body, mk_ef_pure())))
           },
           _ => instantiate(scheme)
         }
@@ -3689,8 +3694,7 @@ fn unify_op_payload(op_row, inst_h, span: ValidSpan) =
 // name is already there, never passed in), so `~>` unifies it per-position with
 // the body's performed instance and every arm of the handler shares one instance.
 fn op_instance_ty(row) = match row {
-  EfClosed(names)  => op_instance_in_names(names),
-  EfOpen(names, _) => op_instance_in_names(names),
+  EfRow(names, _, _) => op_instance_in_names(names),
   _                => None
 }
 
@@ -3873,24 +3877,20 @@ fn free_in_fields(fields) =
 // verbatim, so the freeness check happens here (the row mirror of how
 // chase_deep resolves bound TVars before free_in_ty collects the free ones).
 fn free_in_row(eff) = match eff {
-  EfPure        => [],
-  // A parameterized effect carries its op-payload TYPE (Iterate(a)); the
-  // payload's free vars are the row's free vars, so generalize quantifies
-  // them and instantiate freshens them — each op USE is a fresh effect
-  // instance, reconciled to the handler's at the install.
-  EfClosed(names) => free_in_eff_names(names),
-  EfOpen(names, v)  => {
-    // find the row var's union-find ROOT — a buried free tail (the residual of
-    // a `~> h(f)` / map's f-effect) is reached only through the alias chain.
-    // Collect the root, so generalize quantifies it and instantiate (subst_row,
-    // same find) freshens it — effect-polymorphism as HM over the row sort.
-    let r = graph_chase_handle(v)
-    let tail = if row_var_is_free(r) { [r] } else { [] }
-    free_in_eff_names(names) ++ tail
-  },
-  EfNeg(inner)  => free_in_row(inner),
-  EfSub(a, b)   => free_in_row(a) ++ free_in_row(b),
-  EfInter(a, b) => free_in_row(a) ++ free_in_row(b)
+  // ONE triple walk: a parameterized effect carries its op-payload TYPE
+  // (Iterate(a)) on either field; the payload's free vars are the row's
+  // free vars, and a free TAIL root joins them — generalize quantifies,
+  // instantiate freshens (effect-polymorphism as HM over the row sort).
+  EfRow(p, a, t) => {
+    let tail = match t {
+      EtVar(v) => {
+        let r = graph_chase_handle(v)
+        if row_var_is_free(r) { [r] } else { [] }
+      },
+      _ => []
+    }
+    free_in_eff_names(p) ++ free_in_eff_names(a) ++ tail
+  }
 }
 
 // The free type vars inside an effect-row's parameterized payloads
@@ -3991,7 +3991,7 @@ fn subst_ty(ty, mapping) = match ty {
   TName(name, args) => TName(name, subst_list(args, mapping)),
   TRecord(fields) => TRecord(subst_fields(fields, mapping)),
   TRecordOpen(fields, v) => {
-    // Freshen the open tail, mirroring subst_row's EfOpen: free_in_ty COLLECTS
+    // Freshen the open tail, mirroring subst_row's EtVar walk: free_in_ty COLLECTS
     // v (TRecordOpen ⇒ [v] ++ fields), so generalize quantifies it and
     // instantiate MUST freshen it. Dropping v here shared the SAME row tail
     // across every instantiation of an open-record scheme — a proven let-poly
@@ -4027,37 +4027,36 @@ fn subst_fields(fields, mapping) = map((fld) => {
 // fresh instance from the same mapping subst_ty reads. Row handles and type
 // handles are disjoint graph nodes, so the shared mapping never collides:
 // an open tail only ever matches a row entry, a TVar only a type entry.
-fn subst_row(eff, mapping) = match eff {
-  EfPure        => EfPure,
-  // Substitute parameterized payload TYPES (Iterate(a) ⇒ Iterate(fresh))
-  // so each op USE is a fresh effect instance — the row mirror of
-  // freshening a TVar. Without this, ops re-share one global payload var.
-  EfClosed(ns)  => EfClosed(subst_eff_names(ns, mapping)),
-  EfOpen(ns, v) => {
-    let ns2 = subst_eff_names(ns, mapping)
-    // Resolve v's row live and substitute the poly TAIL by its union-find root
-    // (the var generalize quantified), CARRYING the concrete effects v performs.
-    // graph_chase_handle skips names to the tail; substituting that alone drops
-    // the concrete row — an instantiated poly fn would lose the effects it
-    // carries and the caller would thread the wrong evidence. Carried-Truth.
-    match graph_chase(v) {
-      GNode(NRowBound(inner), _) => match inner {
-        EfOpen(c, t) => {
-          let r = find_mapping(mapping, graph_chase_handle(t))
-          if r >= 0 { mk_ef_open(subst_eff_names(c, mapping), r) } else { mk_ef_open(ns2, v) }
-        },
-        _ => mk_ef_open(ns2, v)   // EfClosed / EfPure — monomorphic tail
+fn subst_row(eff, mapping) = {
+  // The triple, freshened: parameterized payload TYPES substitute on both
+  // fields (each op USE a fresh effect instance); an EtVar tail resolves
+  // live and substitutes its quantified ROOT, carrying the concrete
+  // effects the var performs (dropping them loses the evidence a caller
+  // must thread — Carried-Truth).
+  let EfRow(ns, ab, t) = eff
+  let ns2 = subst_eff_names(ns, mapping)
+  let ab2 = subst_eff_names(ab, mapping)
+  match t {
+    EtVar(v) => match graph_chase(v) {
+      GNode(NRowBound(inner), _) => {
+        let EfRow(c, _, it) = inner
+        match it {
+          EtVar(t2) => {
+            let r = find_mapping(mapping, graph_chase_handle(t2))
+            if r >= 0 { ef_make(name_set_union(ns2, subst_eff_names(c, mapping)), ab2, EtVar(r)) }
+            else { ef_make(ns2, ab2, EtVar(v)) }
+          },
+          _ => ef_make(ns2, ab2, EtVar(v))
+        }
       },
       GNode(NRowFree(_), _) => {
         let r = find_mapping(mapping, graph_chase_handle(v))
-        if r >= 0 { mk_ef_open(ns2, r) } else { mk_ef_open(ns2, v) }
+        if r >= 0 { ef_make(ns2, ab2, EtVar(r)) } else { ef_make(ns2, ab2, EtVar(v)) }
       },
-      _ => mk_ef_open(ns2, v)
-    }
-  },
-  EfNeg(inner)  => EfNeg(subst_row(inner, mapping)),
-  EfSub(a, b)   => EfSub(subst_row(a, mapping), subst_row(b, mapping)),
-  EfInter(a, b) => EfInter(subst_row(a, mapping), subst_row(b, mapping))
+      _ => ef_make(ns2, ab2, EtVar(v))
+    },
+    _ => ef_make(ns2, ab2, t)
+  }
 }
 
 // Substitute parameterized payload types through an effect-name list
@@ -4228,18 +4227,18 @@ fn quantify_ty_list(tys, qmap) = {
 // quantify_ctor_row — re-mint a function field's OPEN row tail as a genuine row
 // variable and quantify it (push onto qmap; result_ty filters row handles out).
 // A CLOSED row (`-> B with IO`) is monomorphic — no polymorphic tail — so it
-// passes through unchanged; only the open tail (the default `-> B`, EfOpen with
-// a fresh tail) becomes a quantified row var. EfNeg recurses to its inner row.
-fn quantify_ctor_row(row, qmap) = match row {
-  EfOpen(names, _v) => {
-    let rv = graph_fresh_row(Inferred("polymorphic effect row of a stored function"))
-    (EfOpen(names, rv), push(qmap, ("", rv)))
-  },
-  EfNeg(inner) => {
-    let (i2, q) = quantify_ctor_row(inner, qmap)
-    (EfNeg(i2), q)
-  },
-  _ => (row, qmap)
+// passes through unchanged; only the open tail (the default `-> B`, a triple
+// with a fresh EtVar tail) becomes a quantified row var; the absent set
+// rides the same triple through unchanged.
+fn quantify_ctor_row(row, qmap) = {
+  let EfRow(names, ab, t) = row
+  match t {
+    EtVar(_) => {
+      let rv = graph_fresh_row(Inferred("polymorphic effect row of a stored function"))
+      (ef_make(names, ab, EtVar(rv)), push(qmap, ("", rv)))
+    },
+    _ => (row, qmap)
+  }
 }
 
 // Lowercase TName leaves become quantified TVars; capitalized names
@@ -4359,7 +4358,7 @@ fn register_one_variant(type_name: String, result_ty, qhandles, field_types, var
   // RecordSchemeKind to validate and lower constructions.
   // The record-payload probe under an explicit guard: list_index(_, 0) on a
   // ZERO-field variant is out of bounds, and the eager `&&` ran it for every
-  // nullary ctor (None, Leaf, EfPure…) — silent garbage into is_record_ty,
+  // nullary ctor (None, Leaf, EtClosed…) — silent garbage into is_record_ty,
   // surfaced by the bounds trap. The control-flow guard is valid under BOTH
   // lowerings, which the bootstrap requires: an m2 body compiled by the
   // still-eager boot carries the checked list_index in the same binary.
@@ -4386,7 +4385,7 @@ fn register_one_variant(type_name: String, result_ty, qhandles, field_types, var
     } else {
       let params = build_ctor_params(field_types, 0)
       env_extend(ctor_name,
-        Forall(qhandles, TFun(params, result_ty, EfPure)),
+        Forall(qhandles, TFun(params, result_ty, mk_ef_pure())),
         Declared(ctor_name), kind)
     }
   }
@@ -5413,15 +5412,12 @@ fn check_splice_flow_labels(fragments, span: ValidSpan) = {
 // Effect-name projection of a row — the handled-name set read live from
 // a row's NRowBound. Used by pipeline.mn's reached-effect report.
 fn row_names(row) with Pure = match row {
-  EfPure           => [],
-  EfClosed(names)  => names,
-  EfOpen(names, _) => names,
-  _                => []
+  EfRow(names, _, _) => names
 }
 
 fn read_bound_row(handle) = {
   match graph_chase(handle) {
     GNode(NRowBound(row), _) => row,
-    _                        => EfPure
+    _                        => mk_ef_pure()
   }
 }

@@ -166,13 +166,6 @@ handler cursor_default with !Mutate {
 // This IS what mentl does. Not "compile" as a separate phase — the
 // edit IS the compile IS the projection IS the loop.
 
-fn cursor_ic_fixpoint(initial_caret) with CursorRead + IC + !Mutate = {
-  initial_caret
-    |> cursor_argmax_compute
-    ~> ic_fixpoint_handler
-      <~ accumulate(initial_caret)
-}
-
 // `ic_fixpoint_handler` — the `<~` feedback closure's handler-attach
 // point. Installed via `~>` above. Each cycle reads the cursor argmax
 // LIVE off the graph and decides continue-vs-terminate by the GRAPH
@@ -579,15 +572,15 @@ fn ty_of_kind(handle, kind) with Pure = match kind {
   NErrorHole(_) => TVar(handle)
 }
 
-fn row_of_kind(kind) with Pure = match kind {
+fn row_of_kind(kind) with Memory = match kind {
   NBound(ty)    => extract_row_local(ty),
   NRowBound(r)  => r,
-  _             => EfPure
+  _             => mk_ef_pure()
 }
 
-fn extract_row_local(ty) with Pure = match ty {
+fn extract_row_local(ty) with Memory = match ty {
   TFun(_, _, row) => row,
-  _               => EfPure
+  _               => mk_ef_pure()
 }
 
 // ownership_of_kind — derives Ownership from the graph's binding
@@ -652,7 +645,7 @@ fn pipe_position_in(target, body) with Pure = match body {
 // Context — the enclosing fn's AUTHORED declared row. The published scheme
 // row is the MEET (the negation deliberately does not survive publication,
 // PLAN §7), so the authored signed set at the FnStmt is the only live home
-// of `!E` at a decl; the hole's own node row (EfPure for a refined-Int
+// of `!E` at a decl; the hole's own node row (the pure row for a refined-Int
 // hole) was the wrong source entirely.
 // Propose is the ABSENCE facet: enumeration fills a socket. A BOUND node's
 // socket is filled, so its proposals are empty BY CONSTRUCTION — the render's
@@ -674,7 +667,7 @@ fn pipe_position_in(target, body) with Pure = match body {
 // float-evidence call-convention gap (an f64-arg candidate ctor through an
 // all-i32 $ft — the named peer Hβ.emit.float-evidence-ft, first fired by
 // the first float-position projection ever taken).
-fn propose_at(h, k) with EnvRead + GraphRead + Synth + !Mutate = {
+fn propose_at(h, k) with EnvRead + GraphRead + Memory + Synth + !Mutate = {
   if authored_hole(h) {
     let ctx = mentl_context_at(h)
     let Context(_, allowed, _) = ctx
@@ -682,7 +675,7 @@ fn propose_at(h, k) with EnvRead + GraphRead + Synth + !Mutate = {
   } else { Proposals([], []) }
 }
 
-fn mentl_context_at(handle) with EnvRead + GraphRead + !Mutate = {
+fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + !Mutate = {
   // Synth's Context reads LIVE from the graph the cursor sits in — never
   // fabricated: scope bindings ARE the env snapshot (the same bindings
   // infer wrote); the row is the ENCLOSING declaration's authored signed

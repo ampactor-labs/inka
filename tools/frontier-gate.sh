@@ -829,6 +829,8 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-aggregate-hash.mn" 42 yes "$dir"
   run_program "$compiler" heap-region \
     "$ROOT/tests/frontier/mn-heap-region.mn" 42 yes "$dir"
+  run_program "$compiler" top-level-let \
+    "$ROOT/tests/frontier/mn-top-level-let.mn" 42 yes "$dir"
   run_program "$compiler" rope-list-pattern \
     "$ROOT/tests/frontier/mn-rope-list-pattern.mn" 42 yes "$dir"
   run_program "$compiler" seq-rep-license \

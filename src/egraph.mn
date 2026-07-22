@@ -23,7 +23,7 @@
 // resolved program (is_pure reads effs_at LIVE) and fires a DROPPING rewrite
 // (x * 0 ≡ 0) only when the dropped operand is provably Pure — preserving what
 // RUNS, not only what the value equals. Proof, not heuristic: only a row that
-// subsumes EfPure is droppable.
+// subsumes the pure row is droppable.
 //
 // This is the generative-audit payoff (PLAN §2): the AST-in-graph move made the
 // program a graph the optimizer reads at a handle — optimization IS a cursor
@@ -54,8 +54,9 @@ fn extract_chase(handle, depth) with GraphRead = {
 // is the node's inferred effect ROW (effs_at), not its AST shape: a `Pure`-typed
 // call IS droppable, a syntactically-pure form that performs through a captured
 // evidence is NOT. effs_at projects the row the inference already proved at this
-// handle; row_subsumes(row, EfPure) is true exactly when the row is empty (the
-// Boolean-algebra identity: EfPure is the bottom, subsumed only by itself).
+// handle; row_subsumes(row, mk_ef_pure()) is true exactly when the row is
+// empty (the Boolean-algebra identity: the pure row is the bottom, subsumed
+// only by itself).
 // Soundness over completeness: a missed optimization is free; a dropped effect is
 // a miscompile. Droppable = (a) the node's BODY is a value-producing form whose
 // EVALUATION performs nothing (a literal, a var, or arithmetic over droppable
@@ -69,7 +70,7 @@ fn extract_chase(handle, depth) with GraphRead = {
 // body form would miss. (When infer grows a per-expr row binding, is_pure reduces
 // to effs_at alone — peer Hβ.egraph.per-expr-effect-row.)
 fn is_pure(handle) with GraphRead + LookupTy + Memory =
-  body_is_pure(handle) && row_subsumes(effs_at(handle), EfPure)
+  body_is_pure(handle) && row_subsumes(effs_at(handle), mk_ef_pure())
 
 // The structural purity of a node's EVALUATION — read live from its body. A
 // literal/var performs nothing; arithmetic over pure operands is pure; ANY other
@@ -88,11 +89,11 @@ fn body_is_pure(handle) with GraphRead + LookupTy + Memory = match graph_node_bo
 // The effect row inference proved at this handle's TYPE, read LIVE (lookup_ty —
 // the same live read lower's derive_ev_slots uses). A functional node carries its
 // row in TFun's third field — a closure over effectful evidence is caught here; a
-// value node carries NONE, which IS EfPure (a value performs nothing to BE a
+// value node carries NONE, which IS the pure row (a value performs nothing to BE a
 // value). No fabrication, no AST re-derivation: the row is read where infer wrote it.
-fn effs_at(handle) with GraphRead + LookupTy = match lookup_ty(handle) {
+fn effs_at(handle) with GraphRead + LookupTy + Memory = match lookup_ty(handle) {
   TFun(_, _, row) => row,
-  _               => EfPure
+  _               => mk_ef_pure()
 }
 
 // ─── Rewrite rules ────────────────────────────────────────────────────

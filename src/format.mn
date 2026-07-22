@@ -399,8 +399,9 @@ fn render_with_clause(effs) with GraphRead + Memory + Alloc + !Mutate = {
   else { " with {show_effrow(build_row_from_effs(effs))}" }
 }
 
-// effs is the parser's [EffName] list; the canonical row is EfClosed over it.
-fn build_row_from_effs(effs) with Pure = EfClosed(effs)
+// effs is the parser's [EffName] list; the canonical row is the closed triple
+// over it (mk_ef_closed canonicalizes the set — the Memory row is that dedup).
+fn build_row_from_effs(effs) with Memory = mk_ef_closed(effs)
 
 fn render_indent_for(kind, ctx) with Pure = {
   // Canonical indent depth per node kind. Match-arm bodies +2; let-

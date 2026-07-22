@@ -539,10 +539,6 @@ fn lexpr_handle(e) with Pure = match e {
 // (show_reach_names / hash_reach_names, beside wide_binop_seed) mirror the
 // same dispatch so the prune keeps what emit will mint.
 
-fn lexpr_ty(e) with LookupTy = {
-  lookup_ty(lexpr_handle(e))
-}
-
 // Hβ.lower.tail-call-mark-pass — rewrite LCall→LTailCall in tail position.
 // Tail position is a structural property: branches of LIf, last stmt of
 // LBlock, arm bodies of LMatch. LHandleWith / LFeedback do NOT
@@ -583,9 +579,9 @@ fn mark_tail_arms(arms) with Memory + Alloc = map((arm) => {
   (pat, mark_tail(body))
 }, arms)
 
-// When the callee's effect row is ground AND pure (EfPure or empty
-// EfClosed), emit `LCall` (direct). A ground non-empty row like
-// `EfClosed([Iterate])` still needs evidence — the callee performs
+// When the callee's effect row is ground AND pure (the empty closed
+// triple), emit `LCall` (direct). A ground non-empty row like
+// `EfRow([Iterate], [], EtClosed)` still needs evidence — the callee performs
 // effects whose handler comes from the caller. The row IS the
 // evidence contract: non-empty row → evidence threading required.
 fn monomorphic_at(h) with LookupTy = {
@@ -597,10 +593,12 @@ fn monomorphic_at(h) with LookupTy = {
 
 // True when the row carries no effect names — the callee performs
 // nothing, so no handler evidence is needed at the call site.
-fn row_is_effectless(row) = match row {
-  EfPure          => true,
-  EfClosed(names) => len(names) == 0,
-  _               => false
+fn row_is_effectless(row) = {
+  let EfRow(p, _, t) = row
+  match t {
+    EtClosed => len(p) == 0,
+    _        => false
+  }
 }
 
 // Read the construction-origin metadata an env entry carries.
@@ -856,7 +854,7 @@ fn lower_call_partial(handle, fbody, fh, r_args, n_ps) =
           len(param_names),
           param_names,
           [form(body_args)],
-          EfPure,
+          mk_ef_pure(),
           len(captures))
         LMakeClosure(handle, fn_ir, captures, evs)
       }
@@ -895,35 +893,29 @@ fn effects_of(fn_ty) = match fn_ty {
   _               => []
 }
 
-fn effects_of_row(row) = match row {
-  EfClosed(names)  => row_dispatched_names(eff_names_of(names)),
-  // THE SEAM'S BODY, PINNED (2026-07-03): the row-var carries the rest
-  // of the row (declared enforcement binds it; generalize does not
-  // quantify it) and the discard here reads [] — empty escaping rows,
-  // bare calls, the strict scan's trap two frames down (thread3.mn,
-  // 25 lines, reproduces). THE CHASE IS THE FIX and its 2026-06-20
-  // fence is obsolete (keyed identity dissolved both killers: rows are
-  // consumed as SETS; over-placement is forward-tolerant) — but the
-  // chase EXPOSED the layer beneath: row NAME-SETS mix representations
-  // (register_one_op mints EffName ADTs into sets unify's residual
-  // builders treat as strings — list_diff_str; eff_names_of is the
-  // patch-reader), and the recursion makes the two realities meet in
-  // eff_names_of's match (m2 compile trap !37519 on prelude). The
-  // chase re-lands WITH the name-set unification as ONE band:
-  //   EfOpen(names, v) => union inline with graph_chase(v)'s
-  //   NRowBound(inner) via effects_of_row(inner), floor = inline.
-  EfOpen(names, v) => {
-    let inline = row_dispatched_names(eff_names_of(names))
-    let GNode(kind, _) = graph_chase(v)
-    match kind {
-      NRowBound(inner) =>
-        set_canonicalize(names_concat(inline, effects_of_row(inner))),
-      NRowFree(_) => inline,
-      _           => inline
-    }
-  },
-  _                => []
+fn effects_of_row(row) = {
+  // The dispatched names of the WHOLE row: the present field inline,
+  // the tail chased and folded (a var carries the rest of the row —
+  // discarding it read [] and starved the escaping rows, the pinned
+  // seam). The absent field masks tail contributions.
+  let EfRow(names, ab, t) = row
+  let inline = row_dispatched_names(eff_names_of(names))
+  match t {
+    EtVar(v) => {
+      let GNode(kind, _) = graph_chase(v)
+      match kind {
+        NRowBound(inner) =>
+          set_canonicalize(names_concat(inline,
+            names_diff_strs(effects_of_row(inner), eff_names_of(ab)))),
+        _ => inline
+      }
+    },
+    _ => inline
+  }
 }
+
+fn names_diff_strs(ref xs, ref mask) = filter((n) => !string_in_list(mask, n), xs)
+
 
 // The per-effect evidence the caller threads into a polymorphic callee's
 // __state record. ONE ev per effect in the callee's row — the ev is a RECORD
@@ -935,7 +927,7 @@ fn effects_of_row(row) = match row {
 // row is consumed as a SET — order carries no meaning; a sibling effect shuffles
 // nothing (the cure for position-as-the-bug). The row is read from THE GRAPH
 // at the call site: lookup_ty(callee_handle) is the callee expression's
-// instantiated TFun, whose row the EfOpen chase reads through bound vars —
+// instantiated TFun, whose row the EtVar chase reads through bound vars —
 // per-call-site precision (an effect-polymorphic callee's row var is bound to
 // THIS call's concrete row by the time lower runs; inference is complete).
 // Named fn or lambda, ONE read; the name-keyed esc-map query this replaces
@@ -1020,24 +1012,27 @@ fn can_yield(callee_handle) = {
   }
 }
 
+
+
 // A row MAY carry a MultiShot-graded effect: its known names say so, or its
 // tail is unproven. Total over the six row forms — the unproven forms answer
 // true (check), never a fabricated "safe".
-fn row_may_multishot(row) = match row {
-  EfPure           => false,
-  EfClosed(names)  => names_have_multishot(eff_names_of(names)),
-  EfOpen(names, v) =>
-    if names_have_multishot(eff_names_of(names)) { true }
-    else {
-      let GNode(kind, _) = graph_chase(v)
-      match kind {
-        NRowBound(inner) => row_may_multishot(inner),
-        _                => true
+fn row_may_multishot(row) = {
+  let EfRow(names, _, t) = row
+  if names_have_multishot(eff_names_of(names)) { true }
+  else {
+    match t {
+      EtClosed => false,
+      EtAll    => true,
+      EtVar(v) => {
+        let GNode(kind, _) = graph_chase(v)
+        match kind {
+          NRowBound(inner) => row_may_multishot(inner),
+          _                => true
+        }
       }
-    },
-  EfNeg(_)         => true,
-  EfInter(a, b)    => row_may_multishot(a) && row_may_multishot(b),
-  EfSub(a, _)      => row_may_multishot(a)
+    }
+  }
 }
 
 fn names_have_multishot(enames) = any(effect_has_multishot_op, enames)
@@ -1182,7 +1177,7 @@ fn resolve_ev_for_ename(ename) = {
 
 // Effect-row names as bare strings, in the row's (already-canonical) order.
 // EPure is the union identity and never enters a row name-set (consumed to
-// EfPure at build_declared_row), so its arm is the unreachable-but-total case:
+// the pure row at build_declared_row), so its arm is the unreachable-but-total case:
 // the empty name (it contributes no evidence slot — it is never present here).
 // The old `name == 0` null guard is gone WITH its class: the name-set ops
 // whose slack slots once leaked nulls (the dissolved sorted insert) are
@@ -1666,13 +1661,6 @@ fn schedule_in_stack(stack) =
     else if handler_covers_effect(stack_entry_name(e), "Persist") { Persisted }
     else { schedule_in_stack(drop_last(stack)) }
   }
-
-// The handler-state record local "__hstate_<h>" for the innermost handler
-// handling op_name's effect ("" sentinel = none in scope → caller __state).
-fn lower_resolve_handler_state_for_op(op_name) = match lower_resolve_handler_for_op(op_name) {
-  Some(r) => "__hstate_{int_to_str(resolve_handle(r))}",
-  None    => ""
-}
 
 // Same, keyed by effect name (derive_ev_slots / captured_evs path), but
 // resolving to the per-effect ENTRY local "__hstate_<h>_<ename>" (the thin
@@ -2251,7 +2239,7 @@ fn lower_expr_body(e, handle, span) = match e {
       len(params),
       param_names_list,
       [lo_body],
-      EfPure,
+      mk_ef_pure(),
       len(captures_exprs)   // closure fence = capture count
     )
     // A closure IS state IS evidence: the lambda captures the evidence for
@@ -3069,7 +3057,7 @@ fn lower_stmt_body(s, handle, span) = match s {
       len(params),
       param_names_list,
       [lo_body],
-      EfPure,         // row resolved live via lookup_ty(handle)
+      mk_ef_pure(),   // row resolved live via lookup_ty(handle)
       len(captures_exprs)   // closure fence = capture count
     )
     LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs, derive_ev_slots(handle)))
@@ -3497,7 +3485,7 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
   ls_exit_frame()
   // fence = nstate + total_arms; the arm's LEvPerform reads land on the
   // record's captured-ev region (past state AND arms).
-  let fn_ir = LFn(fn_name, len(arm_params), arm_params, [lo_body], EfPure, fence)
+  let fn_ir = LFn(fn_name, len(arm_params), arm_params, [lo_body], mk_ef_pure(), fence)
   LDeclareFn(fn_ir)
 }
 
@@ -4266,13 +4254,13 @@ fn k2_floor_dummy(h) = match repr_of(lookup_ty(h)) {
 // activation identities are absent, and an open row tail contributes nothing.
 // Keep this only as a deterministic compatibility fingerprint until the graph
 // carries exact effect and handler-install identities.
-fn world_tag_of_row(row) = match normalize_row(row) {
-  EfPure          => 0,
-  EfClosed(names) => world_tag_or_names(eff_names_of(names), 0, 0),
-  EfOpen(names, _) => world_tag_or_names(eff_names_of(names), 0, 0),
-  EfNeg(inner)     => world_tag_of_row(inner),               // the fingerprint folds referenced names regardless of polarity — already documented as an unsound-for-gating compatibility hash
-  EfSub(a, b)      => world_tag_of_row(EfInter(a, EfNeg(b))), // per the type's own reduction identity (E - F = E & !F); normalize_row already applies it, so this arm is the honest never-taken mirror
-  EfInter(a, b)    => i32_or(world_tag_of_row(a), world_tag_of_row(b))
+fn world_tag_of_row(row) = {
+  // The fingerprint folds referenced names regardless of polarity —
+  // documented as an unsound-for-gating compatibility hash; both fields
+  // contribute.
+  let EfRow(p, a, _) = row
+  i32_or(world_tag_or_names(eff_names_of(p), 0, 0),
+         world_tag_or_names(eff_names_of(a), 0, 0))
 }
 
 fn world_tag_or_names(names, i, acc) = {
@@ -4371,20 +4359,6 @@ fn resolve_state_slot_offset(name: String, fields) = {
 fn free_vars_state_updates(updates, bound) = {
   fold([], (acc, upd) =>
     free_vars_merge(acc, collect_free_vars(state_field_init(upd), bound)), updates)
-}
-
-// Bind handler state-field names as arm-scope locals. Per
-// Hβ.first-light.handler-config-state-substrate (2026-05-06):
-// state-fields are records `{name, init}`; arm bodies reference the
-// field names directly (e.g., `remaining` in take_h's `with remaining
-// = n`). Lower-time binding makes those references resolve to
-// captures/state-loads. Init expressions are NOT lowered here — they
-// evaluate at handler INSTALL time per H1.4 evidence wiring; the
-// arm-body reference IS the field's RUNTIME value, not its init.
-// Drift refused: 5 (state extracted from records, not parallel
-// arrays); 9 (init-time lowering at install handled at install site).
-fn bind_state_field_names_as_locals(state) = {
-  each((field) => ls_bind_local(state_field_name(field), 0), state)
 }
 
 // Parameter name lowering (for LFn metadata)

@@ -272,13 +272,15 @@ fn first_inferred_with_classification(params, fn_handle) with Memory = {
   }
 }
 
-fn row_is_pure(row) with Memory = match row {
-  EfPure => true,
-  EfClosed(names) => len(names) == 0,
-  _ => false
+fn row_is_pure(row) with Memory = {
+  let EfRow(p, _, t) = row
+  match t {
+    EtClosed => len(p) == 0,
+    _        => false
+  }
 }
 
-fn row_strictly_narrower(body_row, decl_row) with Memory = {
+fn row_strictly_narrower(body_row, decl_row) with Memory + GraphRead = {
   // Body strictly narrower iff body subsumes decl AND decl does NOT
   // subsume body. row_subsumes is from src/effects.mn.
   if row_subsumes(decl_row, body_row) {
@@ -293,17 +295,24 @@ fn row_strictly_narrower(body_row, decl_row) with Memory = {
 // type to apply the suggestion. Per GR §3.2 AnnotationSuggestion: the
 // `annotation` field IS the literal source residue.
 
-fn row_to_with_clause(row) with Memory = match row {
-  EfPure => "with Pure",
-  EfClosed(names) => "with {eff_names_to_str(names)}",
-  EfNeg(inner) => "with !{row_to_with_clause_inner(inner)}",
-  _ => "with ..."   // open-row case; named follow-up: surface row variable
+fn row_to_with_clause(row) with Memory = {
+  // The literal source residue: presents as `with A + B`, the absent
+  // set as `!X` terms, an empty closed row as Pure; an open tail keeps
+  // the honest ellipsis (surfacing the var is the named follow-up).
+  let EfRow(p, a, t) = row
+  let pos = if len(p) == 0 { "" } else { eff_names_to_str(p) }
+  let negs = neg_names_to_str(a)
+  let joiner = if len(p) > 0 && len(a) > 0 { " + " } else { "" }
+  match t {
+    EtClosed => if len(p) == 0 && len(a) == 0 { "with Pure" }
+                else { "with {pos}{joiner}{negs}" },
+    EtAll    => if len(a) == 0 { "with ..." } else { "with {pos}{joiner}{negs}" },
+    EtVar(_) => "with ..."
+  }
 }
 
-fn row_to_with_clause_inner(row) with Memory = match row {
-  EfClosed(names) => eff_names_to_str(names),
-  _ => "?"
-}
+fn neg_names_to_str(ref names) with Memory =
+  show_list(names, (n) => "!{show_eff_name(n)}", " + ")
 
 fn eff_names_to_str(names) with Memory = {
   if len(names) == 0 { "Pure" }                   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
@@ -327,22 +336,22 @@ fn predicate_to_where_clause(pred) = "where {show_predicate(pred)}"
 // ─── Capabilities tables — per delta axis ───────────────────────────
 //
 // Each row narrowing OR ownership tightening OR refinement landing
-// unlocks specific compile-time capabilities. Pure tables; no
-// learning, no tuning. The capability strings round-trip with the
+// unlocks specific compile-time capabilities. Constant tables (the
+// Memory row is the list construction, nothing learned or tuned); the
+// capability strings round-trip with the
 // Capability ADT (mentl.mn) at the surface boundary.
 
-fn capabilities_unlocked_by(row) with Pure = match row {
-  EfPure => ["CMemoize", "CCompileTimeEval", "CParallelize"],
-  EfNeg(inner) => capabilities_unlocked_by_negation(inner),
-  _ => []
+fn capabilities_unlocked_by(row) with Memory = {
+  let EfRow(p, a, t) = row
+  match t {
+    EtClosed => if len(p) == 0 && len(a) == 0 { ["CMemoize", "CCompileTimeEval", "CParallelize"] }
+                else { negation_caps(a) },
+    EtAll    => negation_caps(a),
+    EtVar(_) => negation_caps(a)
+  }
 }
 
-fn capabilities_unlocked_by_negation(row) with Pure = match row {
-  EfClosed(names) => negation_caps(names),
-  _ => []
-}
-
-fn negation_caps(names) with Pure = flatten(map(caps_for_negated_eff, names))
+fn negation_caps(names) with Memory = flatten(map(caps_for_negated_eff, names))
 
 fn caps_for_negated_eff(name) with Pure = match name {
   ENamed(s) =>
@@ -355,7 +364,7 @@ fn caps_for_negated_eff(name) with Pure = match name {
   EPure => []                  // the identity unlocks no negated-capability
 }
 
-fn capabilities_unlocked_by_tightening(declared, body) with Pure = {
+fn capabilities_unlocked_by_tightening(declared, body) with Memory = {
   // Capabilities the developer gains by writing the tighter row in
   // place of the declared one. The set IS the tighter-row's caps.
   capabilities_unlocked_by(body)
@@ -376,8 +385,3 @@ fn capabilities_unlocked_by_tightening(declared, body) with Pure = {
 // Per the bus-compressor metaphor: the gradient is bidirectional. Adding
 // annotations TIGHTENS one way; editing toward less-broad-rows tightens
 // the other way. Both moves belong in the same continuous response curve.
-
-fn cursor_with_delta(initial_caret)
-    with Surface + GraphRead + CursorRead + Delta + Memory + !Mutate = {
-  cursor_session(initial_caret) ~> delta_default
-}

@@ -29,20 +29,13 @@ type Question
   | QVerifyDebt              // "verification" — pending obligations
   | QHandlerProvider(String) // "which handler provides OP"
   // QFlowOf — the IFC tentacle (§4⑥). Reads the existing graph — TRefined,
-  // TName, and EfNeg in the EffRow — to classify NAME's FlowLabel without any
+  // TName, and the row's absent set — to classify NAME's FlowLabel without any
   // new graph state. The security classification IS already in the type;
   // this is the projection that names it. Novel: no other language exposes
   // IFC as a read of its existing type system. `mentl query flow key` answers
   // "what does the graph already know about key's sensitivity?"
   | QFlowOf(String)
   | QUnknown(String)
-
-// Predicate: is this question a why-walk? Every non-QWhy variant is
-// honestly false — predicate semantics, not a fabricated value.
-fn question_is_why(q) with Pure = match q {
-  QWhy(_) => true,
-  _       => false
-}
 
 type QueryResult
   = QRType(Ty, Reason)
@@ -190,7 +183,7 @@ handler query_default {
       // for NAME, without any new graph state. The classification comes from:
       //   - TRefined: a refinement predicate whose name contains secret / classified
       //   - TName: a nominal type whose name signals sensitivity (SecretKey, Token, etc.)
-      //   - EfNeg in the fn's EffRow: `with !IO + !Network` proves the fn cannot
+      //   - the absent set in the fn's row: `with !IO + !Network` proves the fn cannot
       //     route its output to public-observable sinks — that IS the Secret label.
       // This is a pure read over the existing graph. The graph IS the IFC mechanism.
       match env_lookup(name) {
@@ -214,7 +207,7 @@ handler query_default {
 //
 //   TRefined  — pred |> predicate_flow_label; join with base's label
 //   TName     — follow env to the TypeDecl's predicate (graph-native; no string matching)
-//   TFun      — row  |> row_flow_label (EfNeg IS the non-interference proof)
+//   TFun      — row  |> row_flow_label (the absent set IS the non-interference proof)
 //   TList     — elem |> query_flow_label (label propagates through containers)
 //   TTuple    — elems |> map |> fold(Public, flow_label_join)
 //   TRecord   — fields |> map |> fold(Public, flow_label_join)
@@ -305,19 +298,18 @@ fn predicate_flow_label(ref pred) with GraphRead + Memory + Alloc = match pred {
     }
 }
 
-// row_flow_label — the EfNeg in a function's row IS the non-interference proof.
-// `with !IO + !Network` proves the function cannot route output to public sinks.
-// EfSub(a, b) = effect subtraction: removing effects from a row never ADDS
-// restriction, so the result is Public (conservative: the subtracted restriction
-// is unknown). EfInter intersects rows; if either side is restricted, the
-// intersection may be too. H6: exhaustive over all 6 EffRow variants.
+// row_flow_label — the absent set in a function's row IS the non-interference
+// proof. `with !IO + !Network` proves the function cannot route output to
+// public sinks. On the canonical triple the stance is the TAIL: EtAll is the
+// proved-absence form (masked universe); EtClosed/EtVar rows are observably
+// Public (their absent set records proofs but the row itself flows). H6:
+// exhaustive over the three tails.
 fn row_flow_label(ref row) with Pure = match row {
-  EfNeg(_)      => Secret,  // !E negation: proved absence of observable effect
-  EfInter(a, b) => flow_label_join(row_flow_label(a), row_flow_label(b)),
-  EfSub(_, _)   => Public,  // subtraction: removing effects, not restricting; conservative
-  EfOpen(_, _)  => Public,
-  EfClosed(_)   => Public,
-  EfPure        => Public   // Pure IS observable-safe (no effects at all)
+  // A universal tail is the proved-absence stance (!E) — Secret; every
+  // other form is observably Public (subtraction/openness conservative).
+  EfRow(_, _, EtAll)     => Secret,
+  EfRow(_, _, EtVar(_))  => Public,
+  EfRow(_, _, EtClosed)  => Public
 }
 
 

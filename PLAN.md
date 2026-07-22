@@ -381,8 +381,15 @@ against the lines they cite: **(a) `!E` under polymorphism** — the one unify_r
 punt (`EfOpen ~ EfNeg` errored instead of unifying) is CLOSED (b4b1989,
 2026-06-23): `bind_open_to_neg` binds the open var to the NEGATION itself so the
 var carries the forbidden set forward through generalize/instantiate, and
-`free_in_row`/`subst_row` cross `EfNeg` — the mechanism Koka omitted negation to
-avoid, realized through the row representation. The adversarial soundness GATE
+`free_in_row`/`subst_row` cross the negation — the mechanism Koka omitted
+negation to avoid, realized through the row representation. (REPRESENTATION
+NOTE, 2026-07-22: the six-form row tree named in this paragraph's history —
+EfPure/EfClosed/EfOpen/EfNeg/EfSub/EfInter — is superseded by the canonical
+triple `EfRow(present, absent, tail)` with `EffTail = EtClosed | EtVar | EtAll`;
+negation IS the absent field, subtraction/intersection are eager fieldwise ops,
+and bind_open_to_neg's move is unify's Open~All arm binding the var to the
+masked triple. The landing record keeps the era's vocabulary; the §7 ledger
+entry carries the ruling.) The adversarial soundness GATE
 LANDED (2026-07-13, effects.mn `row_subsumes` EfNeg arm): the negation membership
 matches BY NAME (`forbidden_names_disjoint` / `eff_name_str`) — `!E` proves the
 ABSENCE of the effect NAMED E (SYNTAX §Negation), every instance — because the old
@@ -1019,6 +1026,61 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · ▶▶ THE ROW IS A TRIPLE — the six-form EffRow tree dissolves
+  into ONE canonical record (the representation-law update Morgan licensed:
+  "if a law written earlier now holds us back, update the law" · pin 09380a33).
+  `EfRow(present, absent, tail)` with `EffTail = EtClosed | EtVar(v) | EtAll`;
+  reading = present ∪ (tail ∖ absent); canonical AT BIRTH (ef_make dedups,
+  absent ∖= present, empty-set identity fast paths) so no read ever
+  normalizes — the normalize/retry rewrite passes, the six-arm cross-products
+  in unify/union/subsumes, and the read-time chasing allocation storm are
+  DELETED whole. Research-grounded, then made Mentl's own: Rémy's
+  presence/absence row fields (1989, the Links lineage) carry `!E` as a FIELD
+  where Koka's scoped labels chose duplicates precisely to avoid absence;
+  the `~>` subtraction rides the SAME field (a pending mask on a var tail —
+  the modal-effects reading of the install as a TRANSITION fact, Tang–Lindley
+  POPL 2026, held as data instead of a rewrite step); and the eager literal
+  difference is the Castagna/Elixir set-theoretic cure (their 1000-clause
+  slowdown is this compiler's 1e5-unify OOM, same disease) — the handled set
+  is always a literal, so diff_row is ef_make(pa∖pb, aa∪pb, ta), eagerly, no
+  lazy BDD. The FAT-ROW ROOT this dissolves: the old normalize_inter
+  open×neg arm subtracted known names and DROPPED the negation from the
+  unresolved tail var, so an install typed before its body's row grounds
+  never subtracted the handled effect — main's row kept every absorbed
+  effect, dead evidence entries stacked, and the unhandled-effect fault at
+  0x100000000 had no diagnostic. TWO one-writer rulings landed with it:
+  subsumption READS (resolve_row, no binds — the E_EffectMismatch the medium
+  raised on egraph's is_pure was itself the catch: a compressing read had
+  made every projection a writer; the GraphWrite compression belongs to
+  unify_row alone, where inference owns the bind) and the free-tail law
+  re-derived on the triple (a tail still EtVar after resolve is GENUINELY
+  free = vacuous at the gate — its rejection was the 646-error
+  false-mismatch wave m2's first self-judgment raised, the same ~80% slice
+  the six-form census once had). THE FIRST TOP-LEVEL LET the medium ever
+  compiled came out of this arc (`let ef_pure_row = …`, the shared pure
+  row): boot faulted at 0x100000000 emitting $__init_lets — NOT an OOM (RSS
+  2.6GB of 4GB, measured; the OOM story died to /usr/bin/time) but a wild
+  key-scan: emit_init_lets was the ONE emit_expr caller with no local
+  `~> emit_memory_bump` bracket (every fn body rides one —
+  emit_one_fn_to_string's shape), so the evidence-dispatched emit_alloc
+  (three memory handlers; never singleton-tiered) scanned an unthreaded
+  region into the wild address. Two hypotheses died to the artifact on the
+  way (⟲): "the 4GB ceiling" (RSS measurement) and "band-N
+  config-fn-evidence-in-arm" (the direct named loop reproduced the fault);
+  the local bracket is the mechanism, and the init bodies now emit under
+  it. Fixture tests/frontier/mn-top-level-let.mn (module
+  ctor-with-empty-list-args lets) seen RED on the pre-fix boot (exit 134,
+  the exact fault), GREEN through the fixed wheel (42). The wheel keeps
+  mk_ef_pure() allocating until this fix pins; the shared module-let pure
+  row is the named follow-up (the wheel's own first top-level let). Hygiene
+  rode along: 12 six-form remnants + 23 zero-reference fns deleted (~215
+  lines — normalize_row, neg_row, the list_* alias shims, dormant cursor
+  variants); the comment-truth pass leaves ZERO six-form mentions in code
+  OR prose (SYNTAX/PLAN trued; §4③ carries the representation note). Board:
+  census 0 at every generation; ladder m2 == m3 == m4 byte-identical
+  (18.8MB), size-guarded (the empty-wat cmp-equal trap closed — every leg
+  asserts nonempty before diff); feedback-iir 30, handled-Ping 42,
+  top-level-let 42.
 - 2026-07-22 · THE AFFORDABILITY DIG, second pass — two more mechanisms
   measured, the arc's design now COMPLETE on paper (tree back at the
   green fixpoint; no re-pin). Attempt A, the identity floor

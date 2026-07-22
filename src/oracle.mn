@@ -15,7 +15,7 @@
 //   - the SATURATION is egraph.mn's saturate / egraph_extract — the live
 //     graph's union-find as a fabric EDGE (the canon weave, graph_canon_set/
 //     graph_canon_at), pointed at the cheaper node, effect-aware (a dropping
-//     rewrite fires only when the dropped operand's row subsumes EfPure).
+//     rewrite fires only when the dropped operand's row subsumes the pure row).
 //   - the CACHE is graph_handler's epoch (graph.mn) + the egraph
 //     union-find — not a third sorted-list. The queue is a DERIVED
 //     PROJECTION (every QueueItem is a proven-and-rolled-back

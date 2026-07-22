@@ -113,7 +113,7 @@ fn single_char_kind(b) with Pure = {
   else if b == 60  { Some(TLt) }
   else if b == 62  { Some(TGt) }
   else if b == 33  { Some(TBang) }
-  // byte 38 `&` single — effect-row intersection (EfInter). `&&` is
+  // byte 38 `&` single — effect-row intersection (inter_row). `&&` is
   // TAndAnd (logical and), lexed by maximal munch before this point;
   // a bare `&` reaching here is the row connective.
   else if b == 38  { Some(TAmp) }

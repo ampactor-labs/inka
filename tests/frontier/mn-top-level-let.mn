@@ -1,0 +1,22 @@
+// A module VALUE binding — the first top-level `let` the medium compiles.
+// SYNTAX §Top-level program structure names the form; the wheel carried the
+// machinery (emit_top_let_globals + $__init_lets) with zero users until the
+// triple row's shared pure-row constant became the first. RED on the
+// pre-fix boot (exit 134): emit_init_lets was the ONE emit_expr caller with
+// no local `~> emit_memory_bump` bracket (every fn body rides one —
+// emit_one_fn_to_string's shape), so the evidence-dispatched emit_alloc
+// key-scanned an unthreaded region into the 0x100000000 fault. The fix
+// gives the init bodies the same bracket. The ctor-with-empty-list-args
+// init IS the shape that trapped.
+type Row
+  = Row([Int], [Int], Int)
+
+let shared_row = Row([], [], 38)
+
+let shared_pair = ([1], "two")
+
+fn main() = {
+  let Row(a, b, t) = shared_row
+  let (xs, s) = shared_pair
+  len(a) + len(b) + t + len(xs) + byte_len(s)
+}

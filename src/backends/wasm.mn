@@ -353,11 +353,6 @@ fn string_bucket_scan(ref bucket, s: String, i) with Memory = {
 
 // Reads through LookupTy; refinements transparent (erased at runtime).
 
-fn ty_to_wasm(handle) = {
-  lookup_ty(handle)
-    |> ty_to_wasm_type
-}
-
 // ty_to_wasm_type is a PROJECTION of repr_of (types.mn) — the WAT value
 // type IS the representation class rendered. The formerly-unreached
 // `TFloat => "f64"` now lives through repr_of's RF64 arm (the live decider).
@@ -1727,6 +1722,17 @@ fn emit_top_let_globals(value_lets) = {
 // main (effectful initializers still run for library-shape modules). The
 // pairs are iterated directly — the top-level LLet node itself never
 // reaches emit_expr (its arm emits local.set, wrong at module level).
+//
+// The init bodies emit under the SAME local `~> emit_memory_bump` bracket
+// every fn body rides (emit_one_fn_to_string's shape): emit_expr performs
+// the evidence-dispatched emit_alloc (three memory handlers exist, so the
+// op is not singleton-tiered), and the file's convention is that each
+// body-emission installs its own bracket so the evidence resolves at the
+// install, never through a distant frame. This path sat dead (zero
+// value_lets since birth), so its missing bracket was invisible until the
+// first top-level let the medium ever compiled key-scanned an unthreaded
+// region into the 0x100000000 fault — RED-proven by
+// tests/frontier/mn-top-level-let.mn against the pre-fix boot.
 fn emit_init_lets(value_lets) = {
   if len(value_lets) > 0 {
     wat_emit("  (func $__init_lets (param $__state i32) (result i32)")
@@ -1742,14 +1748,27 @@ fn emit_init_lets(value_lets) = {
     emit_named_locals(
       walk_locals_list(map(((_, init)) => init, value_lets), []), [])
     wat_emit("\n")
-    value_lets
-      |> each(((name, init)) => {
-        emit_expr(init)
-        wat_emit("(global.set $")
-        wat_emit(name)
-        wat_emit(")\n")
-      })
+    wat_emit(emit_init_lets_body(value_lets))
     wat_emit("    (i32.const 0)\n  )\n")
+  }
+}
+
+fn emit_init_lets_body(ref value_lets) = {
+  {
+    emit_init_lets_loop(value_lets, 0, len(value_lets))
+    wat_collect()
+  } ~> emit_memory_bump ~> wat_to_string
+}
+
+fn emit_init_lets_loop(ref value_lets, i, n) = {
+  if i >= n { () }
+  else {
+    let (name, init) = list_index(value_lets, i)
+    emit_expr(init)
+    wat_emit("(global.set $")
+    wat_emit(name)
+    wat_emit(")\n")
+    emit_init_lets_loop(value_lets, i + 1, n)
   }
 }
 

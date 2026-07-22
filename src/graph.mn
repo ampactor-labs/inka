@@ -496,7 +496,7 @@ fn chase_node(ref nodes, handle, depth) with !Mutate = {
         },
       NRowBound(row) =>
         match row {
-          EfOpen(names, next) =>
+          EfRow(names, _, EtVar(next)) =>
             chase_node(nodes, next, depth + 1)
               |> merge_chased_row(??, names, next),
           _ => GNode(kind, reason)
@@ -520,13 +520,13 @@ fn chase_handle(ref nodes, handle, depth) with !Mutate = {
           TVar(next) => chase_handle(nodes, next, depth + 1),
           _          => handle
         },
-      // Row aliases: unify_row links open row vars as `va → EfOpen(_, vb)`.
+      // Row aliases: unify_row links open row vars as `va → EfRow(_, _, EtVar(vb))`.
       // find follows them to the canonical root var, exactly as it follows
       // TVar — so generalize/instantiate quantify a buried row tail (the row
       // mirror of the type-var find). Type handles never reach this arm.
       NRowBound(row) =>
         match row {
-          EfOpen(_, next) => chase_handle(nodes, next, depth + 1),
+          EfRow(_, _, EtVar(next)) => chase_handle(nodes, next, depth + 1),
           _               => handle
         },
       _ => handle
@@ -534,16 +534,16 @@ fn chase_handle(ref nodes, handle, depth) with !Mutate = {
   }
 }
 
-// When chasing an EfOpen row that points to another row handle,
+// When chasing a var-tailed row that points to another row handle,
 // fold the known names forward through the chain. free_handle is the
-// handle we chased INTO — needed to reconstruct EfOpen when the
-// chain terminates at NRowFree (the free variable).
+// handle we chased INTO — needed to reconstruct the var-tailed triple
+// when the chain terminates at NRowFree (the free variable).
 fn merge_chased_row(ref chased, ref names, free_handle) with !Mutate = {
   let GNode(ck, cr) = chased
   match ck {
     NRowFree(_) =>
       // Preserve the accumulated names with the free variable.
-      // Without this, EfOpen([Memory, IO], v) where v → NRowFree
+      // Without this, EfRow([Memory, IO], [], EtVar(v)) where v → NRowFree
       // would lose [Memory, IO].
       if len(names) == 0 { chased }
       else { GNode(NRowBound(mk_ef_open(names, free_handle)), cr) },
@@ -553,19 +553,14 @@ fn merge_chased_row(ref chased, ref names, free_handle) with !Mutate = {
 }
 
 fn merge_row(ref names, ref row) with !Mutate = {
-  match row {
-    EfPure =>
-      if len(names) == 0 { EfPure }
-      else { mk_ef_closed(names) },
-    EfClosed(inner)  => mk_ef_closed(name_set_union(names, inner)),
-    EfOpen(inner, v) => mk_ef_open(name_set_union(names, inner), v),
-    // A var bound to `!E` (the sound modal stance, effects.mn bind_open_to_neg):
-    // the accumulated `names` were proven DISJOINT from E at the bind, so the
-    // universe-minus-E set already contains them — the negation subsumes the
-    // known present effects. Carry the negation forward (the var carries the
-    // forbidden set), names folded in by subsumption.
-    EfNeg(_)         => row,
-    _ => row
+  let EfRow(p, a, t) = row
+  match t {
+    // A universal tail (a var bound to `!E` — the sound modal stance):
+    // the accumulated names were proven DISJOINT from the absent set at
+    // the bind, so universe-minus-E already contains them; the negation
+    // subsumes the known presents and carries forward.
+    EtAll => row,
+    _     => ef_make(name_set_union(names, p), a, t)
   }
 }
 
@@ -736,19 +731,19 @@ fn occurs_in_fields_loop(handle, ref fields, i, n) with !Mutate = {
 // loops. One traversal shape across free_in_row / subst_row / here — they read
 // the SAME structure; drift between them IS the bug this closes.
 fn occurs_in_row(handle, ref eff) with !Mutate = {
-  match eff {
-    EfPure           => false,
-    EfClosed(names)  => occurs_in_eff_names(handle, names),
-    EfOpen(names, v) => v == handle || graph_chase_handle(v) == handle
-                          || occurs_in_eff_names(handle, names),
-    EfNeg(inner)     => occurs_in_row(handle, inner),
-    EfSub(a, b)      => occurs_in_row(handle, a) || occurs_in_row(handle, b),
-    EfInter(a, b)    => occurs_in_row(handle, a) || occurs_in_row(handle, b),
-    // Total over the six row forms — the identity carries no handle. The old
-    // catch-all delegated to occurs_in because record-row residuals (a raw Ty)
-    // shared this slot; they live under NRecordRowBound now, with their own
-    // type-side occurs (occurs_in_record_fields).
-    EfPure           => false
+  // ONE triple, one walk: the names on both fields plus the tail var —
+  // the three vars-of-a-row walks (free/occurs/subst) agree by having
+  // one shape to agree about.
+  let EfRow(p, a, t) = eff
+  if occurs_in_eff_names(handle, p) { true }
+  else {
+    if occurs_in_eff_names(handle, a) { true }
+    else {
+      match t {
+        EtVar(v) => v == handle || graph_chase_handle(v) == handle,
+        _        => false
+      }
+    }
   }
 }
 

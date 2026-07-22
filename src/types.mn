@@ -444,18 +444,38 @@ type SchemeKind
   // cache-serialized — live-only; cross-file handler caching reconstructs them
   // from the decl, peer Hβ.cache.handler-decl-from-source, post-L1.)
 
-// The Boolean algebra lives as functions in effects.mn; the ADT
-// lives here so every module that speaks types can speak rows.
-// After normalization every row is one of EfPure / EfClosed / EfOpen.
-// EfNeg / EfSub / EfInter are intermediate forms that reduce away.
+// The Boolean algebra lives as functions in effects.mn; the ADT lives
+// here so every module that speaks types can speak rows.
+//
+// THE ROW IS ONE CANONICAL TRIPLE — present, absent, tail — the
+// Rémy-lineage presence/absence row fused with the crown's negation and
+// the handler subtraction (the 2026-07-22 representation ruling; the
+// prior six-form tree + normalize-by-rewrite re-derived per read and
+// DROPPED the `~>` subtraction from ungrounded tails — the fat-row
+// root). The reading: row = present ∪ (tail ∖ absent). Every old form
+// is a point in this space:
+//   Pure        = ([], [], EtClosed)
+//   Closed(A)   = (A,  [], EtClosed)
+//   Open(A, v)  = (A,  [], EtVar(v))
+//   !B          = ([], B,  EtAll)          — the negative capability
+//   (A+tail)−B  = (A∖B, B, EtVar(v))       — the subtraction, UNDROPPABLE:
+//                                            the absent set masks the tail
+//                                            at every read, forever.
+// Subtraction is an EAGER LITERAL DIFFERENCE into the absent field (the
+// handled set is always a literal — the Elixir/Castagna lesson: lazy
+// differences accumulate, literal differences reduce now). Canonical
+// invariants, enforced at the constructors: present/absent deduped,
+// present ∩ absent = ∅, and EtClosed ⇒ absent = [] (a closed tail makes
+// absence vacuous). Unification and subsumption are fieldwise set ops —
+// no wrapper trees, no rewrite passes, no read-time re-derivation.
 
 type EffRow
-  = EfPure                          // identity: no effects
-  | EfClosed([EffName])             // sorted, deduped [EffName]
-  | EfOpen([EffName], Int)          // known [EffName] + row-variable handle
-  | EfNeg(EffRow)                   // !E — any effect not in E
-  | EfSub(EffRow, EffRow)           // E - F — always reduces to E & !F
-  | EfInter(EffRow, EffRow)         // E & F — set intersection
+  = EfRow([EffName], [EffName], EffTail)   // present, absent, tail
+
+type EffTail
+  = EtClosed        // nothing beyond the present set
+  | EtVar(Int)      // a row variable: more may arrive (masked by the absent set)
+  | EtAll           // the universe: anything EXCEPT the absent set (the !B form)
 
 // Effect names carry optional install-time arguments. The `with IO`
 // declaration is an ENamed wrapping the name IO; `with Sample(44100)`
@@ -479,7 +499,7 @@ type EffName
   | EPure                           // the union identity — `with Pure` IS the
                                     // empty row, made an ADT variant (drift-3:
                                     // not a string key). build_declared_row   // drift-audit: ignore — describes the dissolution
-                                    // maps it to EfPure; it never enters a name-set.
+                                    // maps it to the pure row; it never enters a name-set.
 
 type EffArg
   = EAInt(Int)
@@ -498,7 +518,7 @@ type EffArg
 // accumulated to its left — the topology the surface `+ - &` draws
 // (SYNTAX.md §«Named effect rows»: full algebra `+ - & ! Pure`).
 // `!` is the per-term `negated` flag, not a connective. The first
-// term carries EcUnion (joining onto the EfPure base = itself). The
+// term carries EcUnion (joining onto the pure-row base = itself). The
 // fold reads the existing effects.mn algebra live (union_row /
 // diff_row / inter_row) — the parser names the connective, infer
 // applies it; no row is re-derived.
@@ -525,7 +545,7 @@ type NodeKind
   | NErrorHole(Reason)  // inference observed failure (Hazel marked hole)
   // IFC (§4⑥): no separate NFlowBound/NFlowFree dimension needed. The existing
   // graph already encodes information-flow constraints through two mechanisms:
-  //   1. EfNeg in the EffRow (`!IO + !Network`) — a function proved to carry !IO
+  //   1. the row's absent set (`!IO + !Network`) — a function proved to carry !IO
   //      cannot let its return value reach a Log/stderr handler; the row unification
   //      catches the violation structurally (not through a parallel label lattice).
   //   2. TRefined(Ty, Predicate) + TName — `type SecretKey = Bytes where classified(self)`
@@ -894,7 +914,7 @@ type TokenKind
   | TComma | TDot | TColon | TSemicolon
   | TPlus | TMinus | TStar | TSlash | TPercent
   | TEq | TLt | TGt | TBang
-  | TAmp                            // `&` — effect-row intersection (EfInter);
+  | TAmp                            // `&` — effect-row intersection (inter_row);
                                     // the surface of the Boolean row algebra's `&`
                                     // (SYNTAX.md §«Named effect rows»). `&&` is the
                                     // distinct TAndAnd (logical and); maximal munch
@@ -1762,14 +1782,6 @@ fn diag_applicability(d) with Pure = match d {
   _ => MaybeIncorrect
 }
 
-// Applicability code — the stable identifier the stderr line carries.
-fn applicability_code(a) with Pure = match a {
-  MachineApplicable => "MachineApplicable",
-  MaybeIncorrect => "MaybeIncorrect",
-  HasPlaceholders => "HasPlaceholders",
-  Unspecified => "Unspecified"
-}
-
 // The rendered message — operands read LIVE from the constructor, never a
 // String copied at the call site. This is the Carried-Truth win: the fact
 // is structured; the prose is its projection.
@@ -2262,21 +2274,25 @@ fn show_type_args(ref args) with GraphRead + Memory + !Mutate = {
 
 fn show_row_suffix(ref row) with GraphRead + !Mutate + Memory = {
   match row {
-    EfPure => "",
+    EfRow([], [], EtClosed) => "",
     _      => " with {show_effrow(row)}"
   }
 }
 
 fn show_effrow(ref row) with GraphRead + Memory + !Mutate = {
-  match row {
-    EfPure            => "Pure",   // drift-audit: ignore — human-facing rendering string for diagnostics/show; not an effect-keyed lookup; tracked for item 11.B effect-rendering normalization
-    EfClosed(names)   => show_list(names, show_eff_name, " + "),
-    EfOpen(names, v)  =>
-      if len(names) == 0 { show_handle(v) }
-      else { "{show_list(names, show_eff_name, " + ")} + {show_handle(v)}" },
-    EfNeg(inner)  => "!{show_effrow(inner)}",
-    EfSub(a, b)   => "{show_effrow(a)} - {show_effrow(b)}",
-    EfInter(a, b) => "{show_effrow(a)} & {show_effrow(b)}"
+  // The triple's voice: presents joined with `+`, the absent set as `!X`
+  // terms, the tail as its var handle; an empty closed row is Pure.   // drift-audit: ignore — human-facing rendering string for diagnostics/show; not an effect-keyed lookup; tracked for item 11.B effect-rendering normalization
+  let EfRow(p, a, t) = row
+  let parts = show_list(p, show_eff_name, " + ")
+  let negs = show_list(a, (n) => "!{show_eff_name(n)}", " + ")
+  let joiner = if len(p) > 0 && len(a) > 0 { " + " } else { "" }
+  let head = "{parts}{joiner}{negs}"
+  match t {
+    EtClosed => if len(p) == 0 && len(a) == 0 { "Pure" } else { head },   // drift-audit: ignore — the renderer WRITES the surface word for the empty row (SYNTAX: Pure is the identity's spelling); no dispatch reads it
+    EtAll    => if len(p) == 0 && len(a) == 0 { "Any" } else { head },
+    EtVar(v) =>
+      if len(p) == 0 && len(a) == 0 { show_handle(v) }
+      else { "{head} + {show_handle(v)}" }
   }
 }
 
@@ -2401,12 +2417,6 @@ fn show_span(ref span) with !Mutate = {
   "{int_to_str(sl)}:{int_to_str(sc)}-{int_to_str(el)}:{int_to_str(ec)}"
 }
 
-fn show_scheme(ref sch) with GraphRead + Memory + !Mutate + Alloc = {
-  let Forall(vars, ty) = sch
-  if len(vars) == 0 { show_type(ty) }
-  else { "∀{show_list(vars, show_handle, " ")}. {show_type(ty)}" }
-}
-
 fn show_pipe_kind(pk) with Pure = {
   match pk {
     PForward              => "|>",
@@ -2428,5 +2438,3 @@ fn show_list(ref items, ref render, ref sep) with !Mutate = {
   }
 }
 
-
-fn mono(ty) with Pure = Forall([], ty)

@@ -240,13 +240,6 @@ handler interrogate_default with !Mutate {
 //
 // The Hμ.eight-interrogation-loop's ULTIMATE FORM realized by topology.
 
-fn audit_ic_fixpoint(initial_density) with Interrogate + IC + !Mutate = {
-  initial_density
-    |> (_) => interrogate_all()
-    ~> interrogate_default
-      <~ accumulate(empty_density())
-}
-
 fn empty_density() with Pure = []
 
 fn enumerate_handles(i, n) with Alloc + Memory = {
@@ -301,8 +294,8 @@ fn scan_for_tee_governing(target, i, n) with GraphRead + !Mutate = {
 }
 
 fn is_pure_row(row) with Memory = match row {
-  EfPure          => true,
-  EfClosed(names) => len(names) == 0,
+  EfRow([], [], EtClosed) => true,
+  EfRow([], _, EtClosed)  => true,
   _               => false
 }
 
@@ -334,7 +327,7 @@ fn verb_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
   }
 }
 
-fn row_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
+fn row_verdict_for(handle, kind, reason) with GraphRead + Memory + !Mutate = {
   // Row clears when the binding's row is bound (resolved at
   // inference). Free row variables surface as invites.
   match kind {
@@ -459,31 +452,6 @@ fn count_invites_by_kind(reports, kind) with Pure = {
   count((report) => verdict_is_invite(extract_verdict(report, kind)), reports)
 }
 
-// Project-wide eight-tentacle gradient density. Returns one Int per
-// interrogation kind. The eight numbers ARE the project's
-// "distance from ULTIMATE FORM" along each axis.
-//
-// `<|` divergence: one source (reports) borrowed by eight parallel
-// branches, each counting one kind's invites. Tuple output preserves
-// kind ordering. parallel_compose dispatches the eight branches across
-// cores; sequential_compose runs them on one thread. Same source,
-// handler swap.
-fn project_gradient_density(reports) with Pure = {
-  let (g, h, v, r, o, refn, grad, why) =
-    reports
-      <| (
-        (rs) => count_invites_by_kind(rs, IntGraph),
-        (rs) => count_invites_by_kind(rs, IntHandler),
-        (rs) => count_invites_by_kind(rs, IntVerb),
-        (rs) => count_invites_by_kind(rs, IntRow),
-        (rs) => count_invites_by_kind(rs, IntOwnership),
-        (rs) => count_invites_by_kind(rs, IntRefinement),
-        (rs) => count_invites_by_kind(rs, IntGradient),
-        (rs) => count_invites_by_kind(rs, IntReason)
-      )
-  [g, h, v, r, o, refn, grad, why]
-}
-
 // Total-clear count: positions where ALL EIGHT clear. Reading
 // ULTIMATE FORM as the limit.
 fn total_clear_positions(reports) with Pure = {
@@ -515,11 +483,6 @@ fn all_eight_clear(report) with Pure = {
 // "gradient density" as a single number per axis (the eight
 // numbers ARE the developer's distance from ULTIMATE FORM along
 // each kernel primitive).
-
-fn cursor_session_with_audit(initial_caret)
-    with Surface + GraphRead + CursorRead + Interrogate + !Mutate + Memory + Alloc = {
-  cursor_session(initial_caret) ~> interrogate_default
-}
 
 // ─── The recursive realization ──────────────────────────────────────
 //

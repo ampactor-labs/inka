@@ -77,11 +77,12 @@ type Context
                             // The full Boolean row reaches synth — not a
                             // flattened positive [EffName]. So `!E` (the
                             // negative capability, PLAN §4⑥) is readable at
-                            // the synth gate: row_forbidden_names projects
-                            // the FORBIDDEN set from the one row the graph
-                            // already bound. The cursor carries the row
-                            // handle, never a lossy name-list re-derived
-                            // from it (Carried-Truth).
+                            // the synth gate: the row's ABSENT field IS the
+                            // forbidden set (`let EfRow(_, a, _) = row`),
+                            // carried on the one row the graph already
+                            // bound. The cursor carries the row handle,
+                            // never a lossy name-list re-derived from it
+                            // (Carried-Truth).
 
 type Candidate
   = Candidate(Node, Reason)  // AST fragment + why it was proposed
@@ -258,10 +259,10 @@ fn try_each_annotation(handle, candidates, base_ty) = {
 // graph_bind is one-write; within a checkpoint, the narrowed bind is
 // recorded in the trail and reverted on rollback.
 fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
-  APure(sp)          => narrow_row(handle, base_ty, EfPure, sp),
-  ANotAlloc(sp)      => narrow_row(handle, base_ty, EfNeg(mk_ef_closed([ENamed("Alloc")])), sp),    // drift-audit: ignore — real drift 8 (EffName should have EAlloc variant); tracked for item 11.B EffName refactor
-  ANotIO(sp)         => narrow_row(handle, base_ty, EfNeg(mk_ef_closed([ENamed("IO")])), sp),       // drift-audit: ignore — real drift 8 (EffName should have EIO variant); tracked for item 11.B EffName refactor
-  ANotNetwork(sp)    => narrow_row(handle, base_ty, EfNeg(mk_ef_closed([ENamed("Network")])), sp),  // drift-audit: ignore — real drift 8 (EffName should have ENetwork variant); tracked for item 11.B EffName refactor
+  APure(sp)          => narrow_row(handle, base_ty, mk_ef_pure(), sp),
+  ANotAlloc(sp)      => narrow_row(handle, base_ty, mk_ef_neg([ENamed("Alloc")]), sp),    // drift-audit: ignore — real drift 8 (EffName should have EAlloc variant); tracked for item 11.B EffName refactor
+  ANotIO(sp)         => narrow_row(handle, base_ty, mk_ef_neg([ENamed("IO")]), sp),       // drift-audit: ignore — real drift 8 (EffName should have EIO variant); tracked for item 11.B EffName refactor
+  ANotNetwork(sp)    => narrow_row(handle, base_ty, mk_ef_neg([ENamed("Network")]), sp),  // drift-audit: ignore — real drift 8 (EffName should have ENetwork variant); tracked for item 11.B EffName refactor
   ARefined(_, pred, sp) => {
     // Narrowing the type via refinement — perform verify against the
     // narrowed predicate. Ledger captures; rollback removes.
@@ -501,23 +502,23 @@ fn teach_synthesize(hole_handle, context) = {
 }
 
 // H6: exhaustive Ty enumeration. Only TFun carries an explicit
-// row; every other Ty is treated as EfPure (it has no effect
+// row; every other Ty is treated as the pure row (it has no effect
 // behavior by itself). Named explicitly so a future Ty whose row
 // semantics aren't pure surfaces as a compile error.
-fn extract_row(ty) with Pure = match ty {
+fn extract_row(ty) with Memory = match ty {
   TFun(_, _, row)   => row,
-  TInt              => EfPure,
-  TFloat            => EfPure,
-  TString           => EfPure,
-  TUnit             => EfPure,
-  TByte             => EfPure,
-  TList(_)          => EfPure,
-  TTuple(_)         => EfPure,
-  TVar(_)           => EfPure,
-  TName(_, _)       => EfPure,
-  TRecord(_)        => EfPure,
-  TRecordOpen(_, _) => EfPure,
-  TRefined(_, _)    => EfPure,
+  TInt              => mk_ef_pure(),
+  TFloat            => mk_ef_pure(),
+  TString           => mk_ef_pure(),
+  TUnit             => mk_ef_pure(),
+  TByte             => mk_ef_pure(),
+  TList(_)          => mk_ef_pure(),
+  TTuple(_)         => mk_ef_pure(),
+  TVar(_)           => mk_ef_pure(),
+  TName(_, _)       => mk_ef_pure(),
+  TRecord(_)        => mk_ef_pure(),
+  TRecordOpen(_, _) => mk_ef_pure(),
+  TRefined(_, _)    => mk_ef_pure(),
   TCont(_, _, _, world) => world,   // resuming a continuation performs its frozen world (the TFun analog: extract_row(TFun) => row)
   TAlias(_, inner)  => extract_row(inner)
 }
@@ -562,11 +563,6 @@ fn catalog_summary(code) = match code {
 }
 
 // Display — for driver rendering
-
-fn render_explanation(exp) = {
-  let Explanation(code, _md, summary, _fix, reason) = exp
-  "{code}: {summary}"
-}
 
 fn show_annotation(ann) = match ann {
   APure(_)             => "with Pure",

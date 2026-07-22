@@ -785,7 +785,7 @@ fn render_at(view, h, pspan, ranges) = {
   let CursorView(kind, _propose, _topology, row, trace, verify, teach, why) = view
   print_string("Query: {source_slice(pspan, ranges)}{node_query_line(h, kind)}\n")
   match row {
-    EfPure => (),
+    EfRow([], [], EtClosed) => (),
     _      => print_string("Effects: {show_effrow(row)}\n")
   }
   match trace {

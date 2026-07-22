@@ -1138,7 +1138,7 @@ When used alone (e.g., `with !Mutate`), it creates a **negative capability stanc
 
 **Modal-readiness is a mechanism, not a claim (`PLAN.md §4③`, forward-pointer).** The modal effect synthesis (rows + capabilities unified, closing the higher-order leak) threads effects as *lexical capabilities* through the EXISTING `~>` binding: `~> h` lexically scopes the effect `h` absorbs — that IS the capability mechanism. So the modal form adds only a typing rule (a row variable becomes a lexical capability handle at `~>`), no new surface form: rows give `!E`, `~>` gives the lexical capability, modal is their unification on forms that already exist. Sequenced post-real (§5).
 
-`Pure` is shorthand for "the body's row must be EfPure (literally empty)":
+`Pure` is shorthand for "the body's row must be the empty row (no present names, closed tail — `EfRow([], [], EtClosed)` in the kernel's canonical triple)":
 ```
 fn pure_op(x) with Pure = x + 1
 ```
@@ -1263,7 +1263,7 @@ structurally. The RHS uses the full Boolean algebra `+ - & ! Pure`:
 
 - `+` **union** — `type ApiClient = File + Network`
 - `-` **difference** — `type ReadOnly = File - write` (admits `read`, rejects `write` at the structural gate)
-- `&` **intersection** — `type Shared = ServiceA & ServiceB` (effects BOTH require — the natural typing of a `<|` divergent join); the identity `E - F = E & !F` holds (`EfInter`)
+- `&` **intersection** — `type Shared = ServiceA & ServiceB` (effects BOTH require — the natural typing of a `<|` divergent join); the identity `E - F = E & !F` holds (`inter_row`)
 - `!` **negation** — `!Alloc` (universe-minus; transitive proof-of-absence)
 
 ```
@@ -1868,7 +1868,7 @@ type TokenKind
 | `TLt`           | `<`              | —         | less-than comparison (no generic-param role — angle brackets retired; `f<T>(...)` parses as a comparison chain and the general unexpected-token / type-mismatch diagnostic teaches, never a bespoke turbofish lookahead) |
 | `TGt`           | `>`              | —         | greater-than comparison (no generic-param role; see `TLt`) |
 | `TBang`         | `!`              | —         | logical not; effect negation                   |
-| `TAmp`          | `&`              | —         | effect-row intersection (`EfInter` — §«Named effect rows»); row-expression syntax only, no value-operator precedence |
+| `TAmp`          | `&`              | —         | effect-row intersection (`inter_row` — §«Named effect rows»); row-expression syntax only, no value-operator precedence |
 | `TPipe`         | `\|`             | —         | type-variant separator; pattern alternation in match arms (the `\|x\|` lambda fence is rejected — `E_LambdaFence`) |
 | `TAt`           | `@`              | —         | as-patterns: `name @ pat` binds the whole value AND destructures (§«As-patterns»); `@resume=` erased per inference-from-body |
 | `THole`         | `??`             | —         | hole — the gradient's syntactic absence marker; Mentl's Synth proposes candidates filling the position. The Mentl Mono ligature renders `??` as the octagonal-socket glyph (8 sides ↔ 8 kernel primitives). Single `?` is no longer a token. |

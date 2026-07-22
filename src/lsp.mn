@@ -562,16 +562,6 @@ fn code_actions_from_slots(slots) with Memory + Alloc = {
   }, slots))
 }
 
-fn line_of(pos) with Pure = {
-  let (l, _) = pos
-  l
-}
-
-fn char_of(pos) with Pure = {
-  let (_, c) = pos
-  c
-}
-
 // ─── response_to_json — LspResponseBody → JsonValue ───────────────────
 
 // response_to_json — project the typed response shape to JsonValue

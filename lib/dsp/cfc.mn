@@ -8,33 +8,23 @@
 // through the Mentl wheel.
 //
 // ── Representation (the substrate seam, named not hidden) ──
-// A `[Float]` list does NOT round-trip through the current emit: a list
-// slot is one word and `list_set` is an `i32.store`, so an f64 element
-// truncates (verified: `[1.5, 2.5][1]` assemble-fails on the f64→i32
-// slot). The §5.U representation gradient reaches record/tuple FIELDS
-// (f64.store at a width-summed offset) and scalar arithmetic, but not
-// list-element storage. So every stored sample sequence here is
-// FIXED-POINT: a scaled `Int` list (`to_fixed`/`from_fixed`, a Q-format
-// at 1e6), the one 1D float-sequence carrier the substrate proves today.
-// Live per-frequency values (re, im) ride a float TUPLE, which the record
-// path stores exactly. Named peer Hβ.dsp.float-list-repr-gradient: when
-// the gradient reaches list elements a `[Float]` stores f64 inline and the
-// fixed-point scaling dissolves.
+// The signal, the phase/amplitude columns, and the comodulogram matrix are
+// native `[Float]` — §5.U's wide-element cash-out: a `[Float]` list round-trips
+// end to end (a literal is born stride-8, `list_set`/`list_index` carry the
+// element stride, and arithmetic / comparison / show deref the element at its
+// native f64 width). Live per-frequency values (re, im) ride a float TUPLE,
+// which the record path stores exactly. The earlier scaled-Int Q-format carrier
+// — a workaround for a `[Float]` that did not round-trip — is gone.
 //
-// Every float parameter is annotated `: Float` and every float return
-// `-> Float` — the Hβ.emit.float-evidence-ft workaround (see math.mn):
-// an unannotated float param/return emits the i32 floor and mismatches
-// the f64 the caller pushes through call_indirect.
+// Every float accumulator threaded across a tail-recursive loop (dft's re/im,
+// mvl's sc/ss, argmax's best) is annotated `: Float`. The pin is load-bearing,
+// not cosmetic: an UNANNOTATED float accumulator leaves its type a variable
+// when the body is checked, so the fn compiles ONCE at the i32 floor and reads
+// f64 arguments as words — silent-wrong. That is the generic-over-wide keystone
+// Hβ.value.seq-element-stride-carrier (the ultimate is monomorphization or a
+// runtime stride carrier); the annotation monomorphizes the body to f64.
 
 import runtime/math
-
-// ─── Fixed-point Q-format — the 1D float-sequence carrier ───────────
-
-fn cfc_scale() -> Float with Pure = 1000000.0
-
-fn to_fixed(x: Float) -> Int with Pure = float_to_int(x * cfc_scale())
-
-fn from_fixed(n: Int) -> Float with Pure = float_of_int(n) / cfc_scale()
 
 // ─── Hann window — the taper that tames spectral leakage ────────────
 //
@@ -71,7 +61,7 @@ fn dft_bin_loop(xs, start: Int, n: Int, freq: Int, sr: Int, j: Int, re: Float, i
   if j >= n {
     (re / float_of_int(n), 0.0 - im / float_of_int(n))
   } else {
-    let sample = from_fixed(list_index(xs, start + j))
+    let sample = list_index(xs, start + j)
     let w = hann(j, n)
     let angle = two_pi() * float_of_int(freq) * float_of_int(j) / float_of_int(sr)
     let wx = sample * w
@@ -102,8 +92,8 @@ fn mvl_loop(phases, amps, i: Int, n: Int, sc: Float, ss: Float) -> Float with Me
   if i >= n {
     sqrt(sc * sc + ss * ss) / float_of_int(n)
   } else {
-    let p = from_fixed(list_index(phases, i))
-    let a = from_fixed(list_index(amps, i))
+    let p = list_index(phases, i)
+    let a = list_index(amps, i)
     mvl_loop(phases, amps, i + 1, n, sc + a * cos(p), ss + a * sin(p))
   }
 }
@@ -124,7 +114,7 @@ fn fill_phase_column(xs, sr: Int, freq: Int, win: Int, hop: Int, num_frames: Int
   if f >= num_frames { out }
   else {
     let (re, im) = dft_bin(xs, f * hop, win, freq, sr)
-    let out2 = list_set(out, f, to_fixed(bin_phase(re, im)))
+    let out2 = list_set(out, f, bin_phase(re, im))
     fill_phase_column(xs, sr, freq, win, hop, num_frames, out2, f + 1)
   }
 }
@@ -136,7 +126,7 @@ fn fill_amp_column(xs, sr: Int, freq: Int, win: Int, hop: Int, num_frames: Int, 
   if f >= num_frames { out }
   else {
     let (re, im) = dft_bin(xs, f * hop, win, freq, sr)
-    let out2 = list_set(out, f, to_fixed(bin_mag(re, im)))
+    let out2 = list_set(out, f, bin_mag(re, im))
     fill_amp_column(xs, sr, freq, win, hop, num_frames, out2, f + 1)
   }
 }
@@ -176,7 +166,7 @@ fn fill_row(low_cols, high_cols, li: Int, num_high: Int, out, hi: Int) with Memo
   else {
     let phases = list_index(low_cols, li)
     let amps = list_index(high_cols, hi)
-    let out2 = list_set(out, hi, to_fixed(mvl(phases, amps)))
+    let out2 = list_set(out, hi, mvl(phases, amps))
     fill_row(low_cols, high_cols, li, num_high, out2, hi + 1)
   }
 }
@@ -205,7 +195,7 @@ fn matrix_get(matrix, li: Int, hi: Int) with Memory =
 // The argmax cell as a FLAT index (li·num_high + hi). The demo maps it
 // back to a (low, high) pair. Track the running best cell and its value;
 // a flat scan over num_low × num_high, no allocation.
-fn argmax_scan(matrix, num_low: Int, num_high: Int, k: Int, total: Int, best_k: Int, best_v: Int) with Memory = {
+fn argmax_scan(matrix, num_low: Int, num_high: Int, k: Int, total: Int, best_k: Int, best_v: Float) with Memory = {
   if k >= total { best_k }
   else {
     let li = k / num_high
@@ -220,11 +210,11 @@ fn argmax_scan(matrix, num_low: Int, num_high: Int, k: Int, total: Int, best_k: 
 }
 
 fn comodulogram_argmax(matrix, num_low: Int, num_high: Int) with Memory =
-  argmax_scan(matrix, num_low, num_high, 0, num_low * num_high, 0, 0 - 1)
+  argmax_scan(matrix, num_low, num_high, 0, num_low * num_high, 0, 0.0 - 1.0)
 
 // Sum of all cells (scaled Int) — for the mean, a peak/mean separation
 // witness the demo reports.
-fn matrix_sum(matrix, num_low: Int, num_high: Int, k: Int, total: Int, acc: Int) with Memory = {
+fn matrix_sum(matrix, num_low: Int, num_high: Int, k: Int, total: Int, acc: Float) with Memory = {
   if k >= total { acc }
   else {
     let li = k / num_high
@@ -249,7 +239,7 @@ fn matrix_max(matrix, num_low: Int, num_high: Int) with Memory = {
 fn eprint_row(matrix, li: Int, num_high: Int, hi: Int) with Memory + Alloc + WASI = {
   if hi >= num_high { eprint_string("\n") }
   else {
-    eprint_string(int_to_str(matrix_get(matrix, li, hi)))
+    eprint_string(float_to_str(matrix_get(matrix, li, hi)))
     eprint_string(" ")
     eprint_row(matrix, li, num_high, hi + 1)
   }
@@ -287,7 +277,7 @@ fn fill_recording(strs, num: Int, out, i: Int, w: Int) with Memory + Alloc = {
     if byte_len(line) == 0 {
       fill_recording(strs, num, out, i + 1, w)
     } else {
-      let written = list_set(out, w, to_fixed(parse_float(line)))
+      let written = list_set(out, w, parse_float(line))
       fill_recording(strs, num, written, i + 1, w + 1)
     }
   }

@@ -1019,6 +1019,35 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-21 · THE CFC PIPELINE RUNS ON NATIVE [Float] + the generic-over-wide
+  keystone EVIDENCED (no re-pin — lib/dsp/cfc.mn is a leaf the compiler compiles
+  but never calls, so m2 == m3 held directly). The cross-frequency-coupling
+  research pipeline (lib/dsp/cfc.mn + the demo) sheds its fixed-point-Int carrier
+  — the 2026-07-19 workaround for "a [Float] list does not round-trip today" —
+  and runs on NATIVE f64 samples, phase/amplitude columns, and comodulogram
+  matrix, finding the planted (6,40) coupling (frontier cfc-demo exit 42, 65
+  fewer WAT lines: to_fixed/from_fixed/cfc_scale DELETED). This is the §5.U
+  wide-element cash-out validated on the real workload — representation stress
+  on real DSP, the verification leg that catches what m3==m4 cannot. The
+  migration surfaced, by that same stress, the deepest open value-layer bug:
+  Hβ.value.seq-element-stride-carrier is EVIDENCED with a minimal repro
+  (tests/repro/mn-unannotated-float-accumulator.mn). An UNANNOTATED float
+  accumulator threaded through recursion (`sum(xs,i,acc) = sum(xs,i+1, acc +
+  list_index(xs,i))`) leaves `acc` a type var when the body is checked (the list
+  element is free), so the fn compiles ONCE at the RI32 floor — `(param $acc
+  i32)`, `(i32.add)` — and a native-f64 [Float] call reads the f64 values as
+  words: the sum is garbage (~0), exit 1, ZERO diagnostics. A generic function
+  over a wide element compiled at the word floor cannot serve a Float
+  instantiation; this is the SILENT-WRONG class (the friend's "m3==m4 is not a
+  sufficient oracle" made concrete). The ULTIMATE is monomorphization or a
+  runtime stride carrier; the HONEST INTERMEDIATE (broken -> diagnostic, never
+  silent) is a REFUSAL where a wide-repr argument meets a word-repr parameter of
+  a generic body. CFC dodges it by annotating every float accumulator (re/im/
+  sc/ss/best: Float — the representation pin the gradient needs at a polymorphic
+  boundary), and all annotated-[Float] paths are broad and green (literals, ==,
+  ordering, arithmetic, show, map, threaded annotated accumulators, matrices,
+  list-of-[Float] — verified by an 8-case representation-stress battery). Board
+  green: m2 == m3, frontier cfc-demo 42, census 0
 - 2026-07-21 · EFFECT-POLYMORPHIC STORED FUNCTIONS + the mentl verb table
   (a hole in the medium closed, and the CLI overhaul it unblocked · pin
   1167ddfe). A first-class CLOSURE carrying its own effect row can now be

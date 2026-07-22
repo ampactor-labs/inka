@@ -1,0 +1,30 @@
+// KNOWN SILENT-WRONG (open) — the generic-over-wide representation keystone.
+// NOT gated: this file documents a bug the medium does not yet catch. It
+// compiles clean (zero diagnostics) and runs to the WRONG answer.
+//
+// `sum` threads an UNANNOTATED accumulator `acc`. Inference leaves `acc` a
+// type variable (the list element is a free var when `sum` is checked), so the
+// function compiles ONCE at the RI32 floor: `(param $acc i32)`, `(i32.add)`.
+// main then calls it with a native-f64 [Float] list — the f64 values cross into
+// the i32-compiled body and are read as words. The sum is garbage (~0), and
+// nothing refuses: exit 1 (the `else`), never 42.
+//
+// This is band D's `Hβ.value.seq-element-stride-carrier` — a generic function
+// over a wide element compiled at the word floor cannot serve a Float
+// instantiation. The ULTIMATE fix is monomorphization or a runtime stride
+// carrier; the HONEST INTERMEDIATE (the "broken -> diagnostic, never silent"
+// law) is a REFUSAL at the call site where a wide-repr argument meets a
+// word-repr parameter of a generic body. Annotating `acc: Float`
+// monomorphizes the body to f64 and it runs 42 (tests/frontier/mn-float-*.mn
+// cover the annotated path).
+//
+// Surfaced 2026-07-21 by representation-stress probing while migrating the CFC
+// pipeline to native [Float]. Turn this into a frontier gate (expecting 42, or
+// a run_refusal) when the keystone lands.
+fn sum(xs, i, acc) with Memory =
+  if i >= 3 { acc } else { sum(xs, i + 1, acc + list_index(xs, i)) }
+
+fn main() = {
+  let xs = [0.5, 1.5, 2.5]           // native [Float], sums to 4.5
+  if sum(xs, 0, 0.0) == 4.5 { 42 } else { 1 }
+}

@@ -6,8 +6,9 @@
 // by construction, so a correct comodulogram argmaxes the (6, 40) cell.
 // The 13 Hz term is an off-grid distractor. The signal reaches ±1.8
 // (envelope 1.8 × carrier ±1), so it is a plain Float, never a `Sample`
-// (whose refinement bounds it to ±1). Stored fixed-point in the scaled
-// Int carrier cfc.mn defines (a `[Float]` list does not round-trip today).
+// (whose refinement bounds it to ±1). Stored as a NATIVE [Float] list now —
+// the §5.U wide-element cash-out round-trips a [Float] end to end, so the
+// scaled-Int fixed-point carrier is gone.
 
 import dsp/cfc
 
@@ -22,7 +23,7 @@ fn pac_sample(i: Int, sr: Int) -> Float with Pure = {
 fn fill_signal(sr: Int, num: Int, out, i: Int) with Memory = {
   if i >= num { out }
   else {
-    let out2 = list_set(out, i, to_fixed(pac_sample(i, sr)))
+    let out2 = list_set(out, i, pac_sample(i, sr))
     fill_signal(sr, num, out2, i + 1)
   }
 }

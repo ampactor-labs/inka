@@ -1,7 +1,7 @@
 // synth_proposer.mn — Hμ.synth-proposer peer handle
 //
-// The oracle's exploration substrate. Replaces synth_enumerative's
-// OneShot stub (mentl.mn:404-438 returning []) with real MultiShot
+// The oracle's exploration substrate. Replaces the DELETED OneShot
+// enumeration stub (it returned []) with real MultiShot
 // candidate enumeration over the constraint space. This is what
 // makes `??` THE developer's primary write-mode verb per SUBSTRATE.md
 // §VI: with this handler installed, every `??` position invokes
@@ -90,10 +90,9 @@ type EnrichedCandidate
 //
 // Composes the four proposer handlers in priority order:
 //
-//   ~> synth_user                  (user-fed seeds; rank 1.0)
-//   ~> synth_handler_catalog       (H5 AWrapHandler; rank 0.9)
-//   ~> synth_smt                   (refinement-aware; rank 0.7)
-//   ~> synth_enumerative_real      (type-directed; rank 0.5)
+//   user-fed seeds (rank 1.0) · the handler catalog (0.9) ·
+//   refinement-aware SMT (0.7) · type-directed enumeration (0.5)
+//   — each a `~>`-installed Synth peer, named, post-first-light.
 //
 // Each proposer's arm calls verify_candidate to gate its output;
 // only proven candidates reach the parent. The chain composes via

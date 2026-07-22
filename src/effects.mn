@@ -112,7 +112,7 @@ fn field_copy_suffix_shifted(ref src, own dst, src_idx, dst_idx, n) with !Mutate
 
 // Normalization
 // After normalize_row, every row is canonical:
-//   EfPure  |  EfClosed(sorted_unique)  |  EfOpen(sorted_unique, v)
+//   EfPure  |  EfClosed(sorted, unique)  |  EfOpen(sorted, unique, v)
 // EfNeg / EfSub / EfInter are intermediate and reduce before
 // comparison or unification.
 
@@ -310,7 +310,7 @@ fn neg_minus_names(ref x, ref names) with !Mutate = {
   }
 }
 
-// Difference row (`-`): handler absorption uses this — `(body_row - handled_row) + arm_row`.
+// Difference row (`-`): handler absorption uses this — row(body) − handled + the arms' row.
 fn diff_row(ref a, ref b) with !Mutate = {
   EfSub(a, b)
     |> normalize_row
@@ -628,8 +628,8 @@ fn report_purity_mismatch(ref actual, ref span) with !Mutate =
 fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate =
   report(EEffectMismatch(a, b, span))
 
-// Handler absorption: `handle { body with E } { arms for F }` normalizes to
-// `(E - F) + arm_row`. Algebra falls out.
+// Handler absorption: a body row E under a handler for F normalizes to
+// (E − F) + the arms' row. Algebra falls out.
 //
 // Flow-edge: `union_row` keeps the FIRST open arg's rowvar. `extra_row` (the
 // handler's residual) carries the polymorphic escaping tail (its config effects);
@@ -644,7 +644,7 @@ fn absorb_row(ref body_row, ref handled_row, ref extra_row) with !Mutate = {
 }
 
 // Ground-row predicate: a row with no unresolved row variables. Ground rows let lowering
-// emit direct `call $h_op` (spec 05); non-ground rows take the evidence-passing path.
+// emit a direct call to the arm's own function (spec 05); non-ground rows take the evidence-passing path.
 fn row_is_ground(ref row) with Pure = {
   match row {
     EfPure           => true,
@@ -707,7 +707,7 @@ fn string_in_list_loop(ref lst, s: String, i, n) with !Mutate = {
 // EffName equality is the ONE structural `==` (the value-layer fold's sum-eq
 // leaf, §5.U) — type-dispatched at emit, total over the five node-kinds, so
 // `ENamed`'s string / `EParameterized`'s (name, args) / `EPure` all compare by
-// shape with no hand-rolled comparator. The former eff_name_eq / eff_args_eq /
+// shape with no hand-rolled comparator. The DELETED eff_name_eq / eff_args_eq /
 // eff_arg_eq were its drift-7 twins (and their `match a` fell through to a trap
 // on a null the fold tag-compares past). One equality; per SYNTAX §Parameterized
 // effect (structural for compound args). A parameterized effect carries ONE
@@ -718,7 +718,7 @@ fn string_in_list_loop(ref lst, s: String, i, n) with !Mutate = {
 
 // Row-name set algebra
 // [EffName] SET ops — a row IS a set, so membership (name_set_contains, a
-// linear eff_name_eq scan) is the ONE operation: subset / subsumption /
+// linear by-name scan) is the ONE operation: subset / subsumption /
 // equality (len + mutual-subset) and dedup all read through it, order-
 // independent. No canonical order is imposed because no consumer reads one —
 // equality is order-free (name_set_eq) and ev-slots are key-addressed, not

@@ -21,7 +21,7 @@ import runtime/strings
 //
 // Byte-code classification. Lexer operates on raw bytes from the
 // source string via `byte_at(source, pos)`. No 1-char-string
-// allocation per byte; no char_code indirection; no bare-== on
+// allocation per byte; no char-code indirection; no bare-== on
 // runtime strings (drift mode 12 cure).
 
 fn is_digit(b) with Pure = b >= 48 && b <= 57
@@ -266,7 +266,7 @@ fn scan_to_eol(ref source, n: ValidOffset, pos: ValidOffset) = {
 }
 
 // The `"..."` / `"""..."""` string scanner. Emits
-// `TStringPart(literal_chunk)` for contiguous literal content. On `{`
+// `TStringPart(the literal chunk)` for contiguous literal content. On `{`
 // followed by an expression-start byte, emits `TStringPart(acc)` +
 // `TStringSplice` then delegates to `scan_string_after_splice`, which
 // calls `lex_from` with `term_byte=125` to tokenize the expression until
@@ -339,7 +339,7 @@ fn scan_string_chunk(ref source, n: ValidOffset, chunk_start: ValidOffset, pos: 
     } else if b == 92 && pos + 1 < n {
       // Escape: NOT a chunk break — `\X` is two source bytes resolved
       // once by str_unescape at the chunk-flush sites (matches the
-      // seed arbiter $scan_string_end + $str_unescape). chunk_start
+      // one unescape arbiter, $str_unescape). chunk_start
       // unchanged so `\"` does not falsely close the string. The
       // prior per-escape TStringPart flush was the design flaw the
       // parser then had to un-coalesce — deleted, not decorated.

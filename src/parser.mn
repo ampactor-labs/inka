@@ -236,7 +236,7 @@ fn op_to_pipe_kind(k) with Pure = match k {
 // via a wildcard arm.
 //
 // Future form (named peer 11.B.1.R): refinement-typed parameter
-//   `fn op_to_binop(k) -> BinOp where is_binop_token(k)`
+//   `fn op_to_binop(k) -> BinOp where binop(k)`
 // exercises primitive #6 and eliminates the `Option` entirely.
 fn op_to_binop(k) with Pure = match k {
   TPlus      => Some(BAdd),
@@ -305,14 +305,17 @@ fn parse_stmt(ref tokens, pos) = match kind_at(tokens, pos) {
   TComment(first_line) => {
     let comment_span = span_at(tokens, pos)
     let (full_text, p) = collect_comment(tokens, pos + 1, first_line)
-    let p2 = skip_sep(tokens, p)
+    // skip_seps_only, never skip_sep: a blank-separated FOLLOWING comment
+    // block must reach the nested TComment arm and attach on its own —
+    // the weave merges blocks sharing one declaration.
+    let p2 = skip_seps_only(tokens, p)
     if at(tokens, p2, TEof) {
       report(POrphanDocstring(comment_span))
       (nstmt(ExprStmt(nexpr(LitUnit, comment_span)), comment_span), p2)
     } else {
       let (inner_stmt, p3) = parse_stmt(tokens, p2)
       let N(_, _, h) = inner_stmt
-      graph_attach_comment(h, full_text)
+      graph_attach_comment(h, full_text, comment_span)
       (inner_stmt, p3)
     }
   },
@@ -335,16 +338,21 @@ fn skip_seps_only(ref tokens, pos) = {
   }
 }
 
-// Concatenate the contiguous // run into one comment String. One intervening
-// newline keeps the run; any other token (incl. a non-comment after a blank
-// line) ends it.
+// Concatenate the contiguous // run into one comment String. Exactly ONE
+// intervening newline keeps the run; a blank line (two newlines) ends the
+// block — the next block reaches the TComment arm on its own and the weave
+// merges blocks that share a following declaration.
 fn collect_comment(ref tokens, pos, own acc) = {
-  let p = skip_seps_only(tokens, pos)
-  match kind_at(tokens, p) {
+  match kind_at(tokens, pos) {
     TComment(next_line) =>
-      collect_comment(tokens, p + 1,
-        "{acc}\n{next_line}"),
-    _ => (acc, p)
+      collect_comment(tokens, pos + 1, "{acc}\n{next_line}"),
+    TNewline =>
+      match kind_at(tokens, pos + 1) {
+        TComment(next_line) =>
+          collect_comment(tokens, pos + 2, "{acc}\n{next_line}"),
+        _ => (acc, pos)
+      },
+    _ => (acc, pos)
   }
 }
 
@@ -380,7 +388,7 @@ fn parse_fn(ref tokens, pos) = {
 
   // The authored intent row IS the FnStmt's effs field on the node —
   // read live by QIntentOf / oracle intent_weight via graph_node_body.
-  // No parallel intent_index ledger to write (Carried-Truth).
+  // No parallel intent ledger to write (Carried-Truth).
   //
   // The decl's span is the JOINED range through its body (SYNTAX §Parser
   // obligations: every node carries the joined span of its constituent
@@ -395,8 +403,8 @@ fn parse_fn(ref tokens, pos) = {
 // A param-name token: TIdent or the contextual keywords
 // own/ref/handle (SYNTAX.md — contextual keywords are idents outside
 // keyword-role position; #117 class). Pure structural match — no
-// string, no .len-on-call (the canonical projection mirroring seed
-// $ident_at_p; one predicate, both call sites).
+// string, no .len-on-call (the canonical projection — one predicate,
+// both call sites).
 fn is_param_name_tok(ref tokens, p) = match kind_at(tokens, p) {
   TIdent(_) => true,
   TOwn      => true,
@@ -407,8 +415,8 @@ fn is_param_name_tok(ref tokens, p) = match kind_at(tokens, p) {
 // Lexeme of an ident-shaped token: TIdent payload, or the contextual
 // keyword's spelling (own/ref). The canonical contextual-ident
 // LEXEME projection (paired with is_param_name_tok, the Bool gate) —
-// mirrors seed $ident_at_p (TIdent payload; TOwn→"own", TRef→"ref").
-// "" = not an ident-shaped token (seed-canonical null; surfaces
+// TIdent payload; TOwn→"own", TRef→"ref".
+// "" = not an ident-shaped token (the canonical null; surfaces
 // downstream, not a masked ADT). Used for record-field names:
 // SYNTAX.md admits keyword-named fields (e.with, r.ref) — record
 // construction is symmetric. (`handle` is NOT a keyword — it is the
@@ -437,7 +445,7 @@ fn param_starts_here(ref tokens, p) = match kind_at(tokens, p) {
 
 // Advance to the token after the next TRParen. Param lists are flat
 // (no nested parens), so a linear scan is exact. TEof-bounded
-// (substrate-honest, like the seed's skip_to_eq_or_brace bound).
+// (substrate-honest, TEof the one hard bound).
 fn skip_to_rparen(ref tokens, p) =
   if at(tokens, p, TRParen) { p + 1 }
   else if at(tokens, p, TEof) { p }
@@ -465,7 +473,7 @@ fn parse_fn_params(ref tokens, pos) = {
   else if !param_starts_here(tokens, p) {
     // Bare own/ref (no name follows) — seed parse_one_param returns
     // null → param-list terminates here; tokens to `)` discarded
-    // (seed skip_to_eq_or_brace). 0 params; pos past `)`.
+    // 0 params; pos past `)`.
     ([], [], skip_to_rparen(tokens, p))
   } else {
     let (first, fl, p2) = parse_one_param(tokens, p)
@@ -756,7 +764,9 @@ fn parse_variants(ref tokens, pos) = {
       let (rest, p5) = parse_variants(tokens, skip_ws(tokens, p4 + 1))
       ([variant] ++ rest, p5)
     } else {
-      ([variant], p4)
+      // Same law as binop_loop: no `|` continuation — resume at any
+      // following comment run so it attaches at the statement layer.
+      ([variant], skip_seps_only(tokens, p3))
     }
   }
 }
@@ -1160,7 +1170,11 @@ fn binop_loop(ref tokens, left, pos, min_prec, slot) = {
     }
     binop_loop(tokens, node, p2, min_prec, slot)
   } else {
-    (left, p)
+    // Comments are graph content, never layout: with no continuation the
+    // caller resumes AT the comment run so it reaches the statement layer
+    // and attaches (SYNTAX §Comments — never dropped). Newlines/semis
+    // stay consumed exactly as before.
+    (left, skip_seps_only(tokens, pos))
   }
 }
 
@@ -1905,7 +1919,8 @@ fn parse_if(ref tokens, pos, span: ValidSpan) = {
       }
     (nexpr(IfExpr(cond, then_e, else_e), span), p6)
   } else {
-    (nexpr(IfExpr(cond, then_e, nexpr(LitUnit, span)), span), p4)
+    // No else: resume at any following comment run, not past it.
+    (nexpr(IfExpr(cond, then_e, nexpr(LitUnit, span)), span), skip_seps_only(tokens, p3))
   }
 }
 

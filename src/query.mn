@@ -109,7 +109,7 @@ handler query_default {
     QIntentOf(handle) =>
       // The authored intent row is a field on the FnStmt node the handle
       // names — read it LIVE (graph_node_body), never a parallel
-      // intent_index re-found by scan (Carried-Truth). A non-fn node
+      // intent ledger re-found by scan (Carried-Truth). A non-fn node
       // carries no authored intent.
       match graph_node_body(handle) {
         NStmt(FnStmt(_, _, _, effs, _)) => resume(QRIntent(effs)),
@@ -188,7 +188,7 @@ handler query_default {
     QFlowOf(name) =>
       // The IFC tentacle: read the FlowLabel the type system already proves
       // for NAME, without any new graph state. The classification comes from:
-      //   - TRefined: a refinement predicate naming secrecy (is_secret / is_classified)
+      //   - TRefined: a refinement predicate whose name contains secret / classified
       //   - TName: a nominal type whose name signals sensitivity (SecretKey, Token, etc.)
       //   - EfNeg in the fn's EffRow: `with !IO + !Network` proves the fn cannot
       //     route its output to public-observable sinks — that IS the Secret label.
@@ -230,7 +230,7 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty
   TName(name, _) =>
     // Follow the type's env entry to its TypeDecl predicate — graph-native.
     // A nominal type with a refinement predicate (e.g. `type SecretKey = Bytes
-    // where is_classified(self)`) carries its IFC classification in that predicate.
+    // where classified(self)`) carries its IFC classification in that predicate.
     // No string matching: the graph's env entry IS the source of truth.
     match env_lookup(name) {
       None      => Public,  // unknown type: open-world default
@@ -274,8 +274,8 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty
 
 // predicate_flow_label — classify a Predicate's flow sensitivity.
 // PBoolNode follows the handle into the graph to read the actual call node.
-// A predicate call to a function whose name signals secrecy (is_classified,
-// is_secret, is_sensitive) raises the label. This reads the AUTHORED name
+// A predicate call to a function whose name contains secret / classified /
+// sensitive raises the label. This reads the AUTHORED name
 // from the graph — not re-deriving, reading what the graph holds.
 // H6: exhaustive over all 8 Predicate variants (7 + PFlowLe).
 fn predicate_flow_label(ref pred) with GraphRead + Memory + Alloc = match pred {

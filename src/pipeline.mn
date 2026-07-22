@@ -301,7 +301,11 @@ fn query(entry_module, question) = {
 // stays separate: it ASKS a question, not a per-fn walk.
 fn analyze_fns(entry_module, project, render) = {
   {
-    let ast = driver_check_entry(entry_module)
+    // "-" is the stdin contract (self-contained source, the bare
+    // compile's own path); anything else resolves through the driver DAG.
+    let ast =
+      if entry_module == "-" { read_stdin() |> frontend |> infer_program }
+      else { driver_check_entry(entry_module) }
     map_fn_stmts(ast, project) |> render |> print_string
   }
     ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
@@ -324,7 +328,7 @@ fn teach(entry_module) =
   analyze_fns(entry_module, (name, handle) => (name, teach_gradient(handle)), render_gradients)
 
 fn audit(entry_module) =
-  analyze_fns(entry_module, (name, handle) => build_audit_report(name, lookup_ty(handle)), render_audit)
+  analyze_fns(entry_module, (name, handle) => build_audit_report(name, handle, lookup_ty(handle)), render_audit)
 
 // ─── cursor_session_batch — `<|` fanout from one source to four projections ──
 //
@@ -801,12 +805,19 @@ fn join_unlock_labels(labels) with Memory = {
 // type, and the wheel lowers no nominal record PATTERN to prove it — §7
 // field-offset class). Positional destructure is provable with no type
 // flow, exactly as teach's [(name, result)] tuples are.
-fn build_audit_report(fn_name, ty) = {
+fn build_audit_report(fn_name, handle, ty) = {
   let body_row = extract_row(ty)
   let reached = row_names(body_row)
   let severable = severance_candidates(reached)
   let unlocks = severance_unlocks(severable)
-  (fn_name, reached, show_effrow(body_row), severable, unlocks)
+  // The comment-reference edges' reverse read: which comments point here.
+  let referenced_by = owner_names_of(graph_comment_refs_of(handle), 0, [])
+  (fn_name, reached, show_effrow(body_row), severable, unlocks, referenced_by)
+}
+
+fn owner_names_of(ref owners, i, acc) = {
+  if i >= len(owners) { acc }
+  else { owner_names_of(owners, i + 1, acc ++ [comment_owner(list_index(owners, i))]) }
 }
 
 // Severance candidates: the canonical effects (Alloc / IO / Network)
@@ -857,14 +868,17 @@ fn render_audit(entries) = {
     |> map((report) => {
          // Positional destructure — provable with no type flow, where a
          // record field read floors in a map lambda (see build_audit_report).
-         let (fn_name, reached, row_str, severable, unlocks) = report
+         let (fn_name, reached, row_str, severable, unlocks, referenced_by) = report
          let header = "{fn_name} : {row_str}\n"
          let severance_section =
            if len(severable) == 0 { "" }
            else {
              "  severable: {show_list(severable, show_eff_name, " + ")} — unlocks {show_list(unlocks, show_capability, ", ")}\n"
            }
-         "{header}{severance_section}"
+         let refs_section =
+           if len(referenced_by) == 0 { "" }
+           else { "  referenced in comments by: {show_list(referenced_by, (n) => n, ", ")}\n" }
+         "{header}{severance_section}{refs_section}"
        })
     |> str_concat_all
 }

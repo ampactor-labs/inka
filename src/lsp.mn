@@ -469,8 +469,7 @@ fn handle_did_save(params) with Memory + Alloc + Interact = {
   ()
 }
 
-// handle_did_close — close_file; gates on FX.5 close_file Interact op.
-// v1 no-op.
+// handle_did_close — v1 no-op; the close op is a named Interact peer.
 fn handle_did_close(_params) with Pure = {
   ()
 }

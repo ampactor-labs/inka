@@ -204,7 +204,8 @@ fn fold_strip(ty) with Pure = match ty {
   TRefined(base, _) => fold_strip(base),
   // §4①: a String folds AS its byte-sequence, so fold_sig(TString) == "lb" ==
   // fold_sig(TList(TByte)) and a String field and a [byte] field share the one
-  // generated $eq_lb/$hash_lb/$show_lb — the eq/hash-divergence footgun unsayable.
+  // generated `$eq_<sig>`/`$hash_<sig>`/`$show_<sig>` helpers at sig "lb" —
+  // the eq/hash-divergence footgun unsayable.
   TString           => TList(TByte),
   _                 => ty
 }
@@ -346,7 +347,7 @@ type ResumeDiscipline
 // alternates — disjoint branches join, not add (only one branch runs),
 // so a branch-and-resume-once arm keeps the OneShot fast path.
 // (Ownership's own.mn classifier is the syntactic-count shadow of this
-// grade; unifying them onto one `count_uses(is_use, body)` is the named
+// grade; unifying them onto one `count_uses(predicate, body)` is the named
 // peer Hβ.infer.usage-grade-unifies-cardinality-ownership.)
 
 type Usage
@@ -355,7 +356,7 @@ type Usage
   | UMany
 
 // ─── Scheme (spec 04) — let-generalization ─────────────────────────
-// Forall(quantified_handles, body_type). A monomorphic binding is
+// Forall(the quantified handles, the body type). A monomorphic binding is
 // Forall([], ty). env_lookup returns Option<(Scheme, Reason)>.
 
 type Scheme
@@ -368,10 +369,10 @@ type Scheme
 // the declaring effect already attributed. The graph stores the
 // distinction directly rather than re-deriving it from type shape.
 //
-// ConstructorScheme(tag_id, total_variants):
+// ConstructorScheme(tag_id, variant count):
 //   tag_id is this variant's ordinal within its declaring type
 //     (0-based, deterministic from declaration order).
-//   total_variants is the count over the declaring type — enables
+//   the variant count is the total over the declaring type — enables
 //     pattern-exhaustiveness as a graph read at infer_match_arms.
 //
 // EffectOpScheme(effect_name, default_handler, ambiguous, disc): the op
@@ -411,10 +412,9 @@ type SchemeKind
   // HandlerKind (tag 6) is the full handler-effect type AND the handler's
   // identity: a handler is
   // (a ! E+r) ⟿ (a ! R+r) — it REMOVES the handled effect E AND
-  // ADDS its arms' residual row (residual_row_handle, a live row var, config-
-  // polymorphic). `~>` reads it: row(expr ~> h) = (row(expr) − E) ⊕ R. Without R
+  // ADDS its arms' residual row (a live row var, config-polymorphic). `~>` reads it: row(expr ~> h) = (row(expr) − E) ⊕ R. Without R
   // the handler-attachment can't transform the row and every map/each loses
-  // the effects performed in its arms (protocol_handler_effect_typing).
+  // the effects performed in its arms.
   // The handled effect E is NOT stored: it is a PROJECTION of `arms` — each arm
   // handles an op, and the op's EffectOpScheme carries the effect that declared
   // it (§2 follow-the-edge). `derive_handler_ename(arms, hname)` reads it live at
@@ -512,7 +512,7 @@ type NodeKind
   //   1. EfNeg in the EffRow (`!IO + !Network`) — a function proved to carry !IO
   //      cannot let its return value reach a Log/stderr handler; the row unification
   //      catches the violation structurally (not through a parallel label lattice).
-  //   2. TRefined(Ty, Predicate) + TName — `type SecretKey = Bytes where is_secret(self)`
+  //   2. TRefined(Ty, Predicate) + TName — `type SecretKey = Bytes where classified(self)`
   //      brands values at the type level; the type checker refuses to pass SecretKey
   //      where Bytes is expected. Nominal branding IS the flow label.
   // FlowLabel (below) remains as a pure lattice for use in annotations and the
@@ -525,13 +525,13 @@ type GNode
 // Inference-created executable boundaries are graph edges, not lowering
 // conventions. Each fanout site owns one ordered edge per branch:
 //
-//   fanout_h -> FanoutBoundary([
+//   <fanout> -> FanoutBoundary([
 //     BoundaryEdge(result_h, thunk_h, carrier_h, thread_ticket_h,   // drift-audit: ignore — doc-comment example of the BoundaryEdge record shape
 //                  persist_ticket_h), ...
 //   ])
 //
 // The branch index is the topology; no reverse lookup through a tuple type is
-// needed. thunk_h is bound to `() -> carrier_h with branch_row`; carrier_h is
+// needed. thunk_h is bound to `() -> carrier_h` with the branch's row; carrier_h is
 // the one-field positional product `(result_h,)`. The product is a boundary-
 // local representation carrier: generic scheduling handlers transport one word
 // while the field keeps the result's exact repr (f64/f32/v128 included). Lower
@@ -915,7 +915,7 @@ type NodeBody
   | NHole(Int)               // Hazel marked hole — inference populates with reason
   // Synthetic module entity — one per source file. An orphan module-level
   // comment attaches to this handle in the comment weave (graph_attach_comment);
-  // decls lists every top-level Handle so F.1's doc_handler and render_index can
+  // decls lists every top-level Handle so a doc/render projection can
   // walk the module without re-parsing source.
   | NModule({path: String, decls: [Node], span: Span})
   // An authored type annotation carried live in the graph — the `-> RetTy`
@@ -970,7 +970,8 @@ type Expr
                                    // Infer dispatches on receiver's type:
                                    // TList → list_index (runtime); TTuple →
                                    // compile-time slot from constant index;
-                                   // TRecord by int-key → record_get. The eager
+                                   // TRecord by int-key → the field-offset
+                                   // load. The eager
                                    // parse-time fold to CallExpr(VarRef("list_index"))
                                    // was drift mode 9 (eager-form-commitment) —
                                    // it committed the dispatch before infer knew
@@ -1030,8 +1031,8 @@ type PipeKind
 // Hβ.infer.type-decl-name-registry).
 
 // Region (spec I12) — Tofte-Talpin region identity for escape
-// analysis. Each `handle ... with mem_arena` scope produces a
-// region; values allocated inside the region carry that region as a
+// analysis. Each region scope (a `~>`-installed arena handler)
+// produces a region; values allocated inside it carry that region as a
 // tag. A value cannot escape the scope that outlives its region —
 // the return-position check uses region identity, not pointer
 // reachability, making the analysis O(1) per return edge.
@@ -1096,16 +1097,16 @@ effect SpecTwins {
 // binding. A polymorphic function that performs `op_name` dispatches
 // via an evidence slot: the caller threads the evidence record into
 // the callee via `__state`, and the callee loads the arm's fn_idx
-// from slot `slot_idx` and invokes it through call_indirect.
+// from its evidence slot and invokes it through call_indirect.
 //
 // DESIGN Ch 4 "handler IS state" — closure captures and evidence
 // slots are both frozen handler state, projections of the same
 // underlying record. `__state`'s layout:
 //   offset 0        : fn_ptr (i32, table index)
 //   offset 4        : capture_count (i32)
-//   offset 8+4*i    : capture_i          (for i in 0..capture_count)
-//   offset 8+4*C+4*j: evidence_j_fn_idx  (for j in 0..ev_count, C = capture_count)
-// The body's ev_count and capture_count are known at emit time;
+//   offset 8+4*i    : the i-th capture      (i in 0..capture_count)
+//   offset 8+4*C+4*j: the j-th evidence fn idx (C = capture_count)
+// The body's evidence count and capture_count are known at emit time;
 // LEvPerform's offset arithmetic is compile-time-resolved.
 type Evidence
   = Ev(String, Int)   // op_name, slot_idx — the slot in __state where
@@ -1193,7 +1194,7 @@ type Predicate
   | PFlowLe(FlowLabel, FlowLabel) // IFC obligation (§4⑥): src ⊑ dst in the flow lattice.
                                  // Compile-time decidable by flow_le — ALWAYS Some(true/false),
                                  // never deferred. verify(span, PFlowLe(src, dst), reason)
-                                 // IS the ifc_check; ERefinementRejected carries the violation.
+                                 // IS the flow check; ERefinementRejected carries the violation.
                                  // No new effect op, no new diagnostic, no new handler arm.
   | PWithSelf(Int, Predicate)    // the `self` BINDER: the value-node handle self resolves
                                  // to, carried WITH the predicate as data. self may sit
@@ -1203,7 +1204,7 @@ type Predicate
                                  // predicate_decide_at into every node_const_at instead.
                                  // Appended LAST so existing variant tags are unshifted.
 
-// PExpr is GONE: its leaves (PSelf/PInt/PEVar/PApp) were a lossy COPY of the
+// PExpr is DELETED: its leaves (PSelf/PInt/PEVar/PApp) were a lossy COPY of the
 // expression the AST node already holds (`node_to_pexpr` re-derived it with a
 // `_ => PEVar("?")` surrender). The predicate now carries the live operand Node
 // and Verify reads its Expr live — carry the handle, read live, delete the copy.
@@ -1235,7 +1236,7 @@ type Predicate
 // from "IS secret".
 //
 // Per SYNTAX.md §4⑥: the IFC flow-constraint is sequenced after first-light.
-// The ADT is real now; infer.mn's MakeStringExpr arm emits ifc_check when the
+// The ADT is real now; infer.mn's MakeStringExpr arm emits the flow check when the
 // splice is Secret or Tainted into a Public-bound context (Arc F.1 discharge).
 // The handler swap is verify_smt (not verify_ledger). No new surface form.
 
@@ -1318,6 +1319,9 @@ effect GraphRead {
   graph_push_checkpoint() -> Int
   graph_node_body(Int) -> NodeBody    // resolve a node's body by its handle from the parallel program weave — every AST node is registered there at construction (NHole if absent)
   graph_comment_at(Int) -> String     // resolve a node's parse-attached comment prose from the parallel comment weave (empty string if absent); the Why engine / formatter / cursor project it
+  graph_comment_span_at(Int) -> Span  // the comment's own source span, carried from parse (zero span if absent) — the reference diagnostics anchor here
+  graph_attach_comment_ref(Int, Int) -> ()  // draw a resolved comment-reference edge (owner node -> referent decl node); drawn once at the infer tail
+  graph_comment_refs_of(Int) -> [Int]       // reverse read: the comment owners referencing this decl — the audit's referenced-by projection
   graph_canon_at(Int) -> Int          // the e-graph canonical pointer at a handle — the equivalence weave's `find` step (returns the handle itself if it is its own e-class root). One co-indexed weave, exactly like `nodes`' TVar union-find; egraph_extract chases it live.
   graph_narrow_at(Int) -> Int         // the refinement-narrowing pointer at a handle — the path-predicate's bool-node handle proven to hold AT this program point (0 = no narrowing). One co-indexed weave like `canon`; lower's verify-obligation read chases it live to elide a check the path already proves (§4⑥). Appropriate as a side-table: narrowing is a per-program-point boolean fact, not a unifiable variable.
   graph_boundary_at(Int) -> ExecutableBoundary // exact compiler-created executable edges keyed by fanout site
@@ -1327,7 +1331,7 @@ effect GraphWrite {
   graph_fresh_ty(Reason) -> Handle
   graph_fresh_row(Reason) -> Handle
   graph_register_node(Int, NodeBody) -> ()    // edge-link a node's body into the one graph at its handle (the parallel program weave); resolves via graph_node_body
-  graph_attach_comment(Int, String) -> ()      // attach parse-collected comment prose to a node's handle (the parallel comment weave); resolves via graph_comment_at — a comment is graph content
+  graph_attach_comment(Int, String, Span) -> ()  // attach parse-collected comment prose + its span to a node's handle (the parallel comment weave); resolves via graph_comment_at — a comment is graph content
   graph_canon_set(Int, Int) -> ()              // draw the e-graph equivalence edge `from ≡ to` — point `from`'s canonical pointer at the cheaper `to`. The union-find `union` over the equivalence weave; saturation reads it back via graph_canon_at (find). Idempotent: re-pointing an already-rooted `from` overwrites in place (one cell), never grows a ledger.
   graph_narrow_set(Int, Int) -> ()             // draw the refinement-narrowing edge — point program-point `handle`'s narrowing pointer at the path-predicate's bool-node `pred_handle` proven to hold there (§4⑥). One co-indexed weave like `canon`; idempotent (one cell per handle), read back via graph_narrow_at by lower's check-elision.
   graph_boundary_set(Int, ExecutableBoundary) -> () // draw/replace one fanout's executable edges; trail-backed because inference runs under speculative checkpoints
@@ -1391,6 +1395,7 @@ type DiagKind
   | EEffArgNotLiteral(Span)
   | EInternalInvariant(String, Span)             // invariant note
   | WRedundantWhere(Span)
+  | WCommentRefUnresolved(String, String, Span)  // owner name, referenced name, the comment's span
   // ─── infer (E_/T_) ───────────────────────────────────────────────
   | ETypeMismatch(Ty, Ty, Span)                  // a vs b — operands carried live
   | ETypeArityMismatch(Int, Int, Span)           // type-list arity a vs b
@@ -1469,6 +1474,7 @@ fn diag_span(d) with Pure = match d {
   EEffArgNotLiteral(s) => s,
   EInternalInvariant(_, s) => s,
   WRedundantWhere(s) => s,
+  WCommentRefUnresolved(_, _, s) => s,
   ETypeMismatch(_, _, s) => s,
   ETypeArityMismatch(_, _, s) => s,
   EConstructorArity(_, _, _, s) => s,
@@ -1522,6 +1528,7 @@ fn diag_source(d) with Pure = match d {
   EEffArgNotLiteral(_) => "parser",
   EInternalInvariant(_, _) => "parser",
   WRedundantWhere(_) => "parser",
+  WCommentRefUnresolved(_, _, _) => "infer",
   ETypeMismatch(_, _, _) => "infer",
   ETypeArityMismatch(_, _, _) => "infer",
   EConstructorArity(_, _, _, _) => "infer",
@@ -1575,6 +1582,7 @@ fn diag_code(d) with Pure = match d {
   EEffArgNotLiteral(_) => "E_EffArgNotLiteral",
   EInternalInvariant(_, _) => "E_InternalInvariant",
   WRedundantWhere(_) => "W_RedundantWhere",
+  WCommentRefUnresolved(_, _, _) => "W_CommentRefUnresolved",
   ETypeMismatch(_, _, _) => "E_TypeMismatch",
   ETypeArityMismatch(_, _, _) => "E_TypeMismatch",
   EConstructorArity(_, _, _, _) => "E_ConstructorArity",
@@ -1622,6 +1630,7 @@ fn diag_severity(d) with Pure = match d {
   ELambdaAsOrOr(_) => SWarning,
   ENotAKeyword(_, _) => SWarning,
   WRedundantWhere(_) => SWarning,
+  WCommentRefUnresolved(_, _, _) => SWarning,
   PExpectedToken(_, _) => SWarning,
   PUnexpectedToken(_, _) => SWarning,
   TOverDeclared(_, _, _, _) => SWarning,
@@ -1718,6 +1727,7 @@ fn diag_applicability(d) with Pure = match d {
   EBlockNeedsBraces(_) => MachineApplicable,
   ERedundantPerform(_) => MachineApplicable,
   WRedundantWhere(_) => MachineApplicable,
+  WCommentRefUnresolved(_, _, _) => MaybeIncorrect,
   TOverDeclared(_, _, _, _) => MachineApplicable,
   EPatternInexhaustive(_, _, _) => HasPlaceholders,
   EUnresolvedHole(_, _) => HasPlaceholders,
@@ -1763,6 +1773,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
   EEffArgNotLiteral(_) => "parameterized-effect argument must be a literal",
   EInternalInvariant(note, _) => "internal invariant: {note}",
   WRedundantWhere(_) => "`where true` is a vacuous predicate — drop it",
+  WCommentRefUnresolved(owner, name, _) => "comment on `{owner}` references `{name}`, which resolves nowhere — a backticked name is a reference; if this is prose, drop the backticks",
   ETypeMismatch(a, b, _) => "{show_type(a)} vs {show_type(b)}",
   ETypeArityMismatch(a, b, _) => "type list arity mismatch: {int_to_str(a)} vs {int_to_str(b)}",
   EConstructorArity(name, declared, got, _) => "constructor {name} takes {int_to_str(declared)} fields; the pattern binds {int_to_str(got)}",

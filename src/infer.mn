@@ -25,6 +25,7 @@
 // holes, not one-and-halt.
 
 import graph
+import lexer
 import effects
 import types
 import own
@@ -55,7 +56,7 @@ handler infer_ctx with stack = [], arm_stack = [] {
   //    fn_span: Span, row_handle: Int}
   //   declared = [(EffName, negated)] — the fn's authored annotation, born
   //   with the frame and returned by inf_exit_fn (nested fns get their own)
-  // arm_stack = [continuation_handle, ...] — the typed-resume
+  // arm_stack = [the continuation handle, ...] — the typed-resume
   //   context (SUBSTRATE.md primitive #2): inside `op(args) => body` for
   //   `op : (P...) -> R` under a handler whose handle-result is S,
   //   `resume : R -> S`. ResumeExpr reads the top frame; a stack because
@@ -183,9 +184,377 @@ fn infer_program(stmts) = {
     // after the whole inference walk, when every op's cardinality join is live
     // in its EffectOpScheme. The pending edge already holds the exact row frame.
     finalize_continuation_boundaries(0, graph_next())
+    // The backtick contract (SYNTAX §Comments: "the author writes the
+    // reference, the handler resolves it"): after the walk the env holds
+    // every decl, so each comment's backticked references resolve here —
+    // every compile keeps the weave honest, never a separate audit pass.
+    comment_refs_check(stmts)
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
   stmts
 }
+
+// ─── comment references — the backtick contract ─────────────────────
+//
+// A comment is a Reason edge (SYNTAX §Comments); a `backticked`
+// identifier inside one is a REFERENCE into the one namespace, authored
+// as such — bare prose is prose and never resolved against code. After
+// the walk the env is whole, so every reference either RESOLVES — and a
+// reference to a declared node DRAWS the comment-reference edge
+// (graph_attach_comment_ref), so the identity is carried and the name
+// is a projection (comments heal under rename; the audit's
+// referenced-by line is the reverse read) — or narrates
+// W_CommentRefUnresolved through the ordinary diagnostics chain at the
+// comment's own span. The resolution surfaces, in order: the owner's
+// own names (a fn's params, a handler's config / state / ops / arm
+// args — they live ON the commented node); the surface's vocabulary
+// (keywords via the lexer's keyword_kind — its one home — and the repr
+// words); the declared program (the decl index — these draw the edge);
+// the env's primitive schemes. A `$`-opening span is the program's
+// EMITTED vocabulary: judged against what the program's own string
+// literals write, built lazily on first use — and a BARE ident that
+// misses every Mentl surface takes the same lazy judgment before
+// narrating (a name the program's own literals write is the program's
+// word); a program whose comments all resolve in Mentl terms never
+// pays the walk. Spans with
+// non-ident bytes are quoted CODE (illustrative; compiling them is the
+// doc-test frontier) and `<...>` marks a schematic template — neither
+// is a reference.
+
+fn comment_refs_check(ref stmts) = {
+  let cdix = comment_decl_index(stmts, 0, smap_new())
+  let dollars = crc_walk(0, graph_next(), cdix, [])
+  if len(dollars) > 0 {
+    let lvix = lit_vocab_build(0, graph_next(), smap_new())
+    crc_judge_dollars(dollars, 0, lvix, cdix)
+  } else { () }
+}
+
+// name -> decl stmt handle, one walk over the program's own statements.
+fn comment_decl_index(ref stmts, i, idx) = {
+  if i >= len(stmts) { idx }
+  else {
+    let N(body, _, h) = list_index(stmts, i)
+    let idx2 = match body {
+      NStmt(FnStmt(name, _, _, _, _))          => smap_add(idx, name, h),
+      NStmt(TypeDefStmt(name, ctors))          => ctor_index_add(ctors, 0, smap_add(idx, name, h), h),
+      NStmt(EffectDeclStmt(name, ops))         => op_index_add(ops, 0, smap_add(idx, name, h), h),
+      NStmt(HandlerDeclStmt(name, _, _, _, _)) => smap_add(idx, name, h),
+      _                                        => idx
+    }
+    comment_decl_index(stmts, i + 1, idx2)
+  }
+}
+
+fn ctor_index_add(ref ctors, i, idx, h) = {
+  if i >= len(ctors) { idx }
+  else {
+    let (cname, _) = list_index(ctors, i)
+    ctor_index_add(ctors, i + 1, smap_add(idx, cname, h), h)
+  }
+}
+
+fn op_index_add(ref ops, i, idx, h) = {
+  if i >= len(ops) { idx }
+  else {
+    let (opname, _, _) = list_index(ops, i)
+    op_index_add(ops, i + 1, smap_add(idx, opname, h), h)
+  }
+}
+
+fn crc_walk(h, n, ref cdix, dollars) = {
+  if h >= n { dollars }
+  else {
+    let t = graph_comment_at(h)
+    let d2 =
+      if byte_len(t) > 0 {
+        eprint_string("CLH {int_to_str(h)} {comment_owner(h)}\n")
+        let locals = comment_locals(h)
+        crc_scan(t, 0, byte_len(t), h, cdix, locals, dollars)
+      } else { dollars }
+    crc_walk(h + 1, n, cdix, d2)
+  }
+}
+
+fn crc_scan(ref t, i, n, h, ref cdix, ref locals, dollars) = {
+  if i >= n { dollars }
+  else {
+    if byte_at(t, i) == 96 {
+      let j = ctick_close(t, i + 1, n)
+      if j < n {
+        crc_scan(t, j + 1, n, h, cdix, locals,
+                 crc_judge(t, i + 1, j, h, cdix, locals, dollars))
+      } else { dollars }
+    } else { crc_scan(t, i + 1, n, h, cdix, locals, dollars) }
+  }
+}
+
+fn ctick_close(ref t, i, n) =
+  if i < n && byte_at(t, i) != 96 { ctick_close(t, i + 1, n) } else { i }
+
+// One span, one verdict. A `$`-opening ident span queues for the lazy
+// emitted-vocabulary judgment; a pure ident span resolves now; anything
+// else in backticks is quoted code or schema, not a reference.
+fn crc_judge(ref t, a, b, h, ref cdix, ref locals, dollars) = {
+  if b <= a { dollars }
+  else {
+    if byte_at(t, a) == 36 {
+      if span_is_ident(t, a + 1, b) { dollars ++ [(h, str_slice(t, a + 1, b))] }
+      else { dollars }
+    } else { if byte_at(t, a) == 95 {
+      if span_is_ident(t, a, b) { dollars ++ [(h, str_slice(t, a, b))] }
+      else { dollars }
+    } else {
+      if span_is_ident(t, a, b) {
+        let name = str_slice(t, a, b)
+        if crc_resolve(name, h, cdix, locals) { dollars }
+        else { dollars ++ [(h, name)] }
+      } else { dollars }
+    } }
+  }
+}
+
+// A reference starts [A-Za-z_]; a digit-start span (`0x`, `125`) is a
+// quoted LEXEME, not a name.
+fn span_is_ident(ref t, a, b) =
+  if a >= b { false }
+  else {
+    let c0 = byte_at(t, a)
+    if (c0 >= 97 && c0 <= 122) || (c0 >= 65 && c0 <= 90) || c0 == 95
+      { span_ident_walk(t, a + 1, b) }
+    else { false }
+  }
+
+fn span_ident_walk(ref t, a, b) =
+  if a >= b { true }
+  else {
+    let c = byte_at(t, a)
+    if (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) || c == 95
+      { span_ident_walk(t, a + 1, b) }
+    else { false }
+  }
+
+fn crc_resolve(ref name, h, ref cdix, ref locals) = {
+  if in_owner_names(locals, name, 0) { true }
+  else {
+    match keyword_kind(name) {
+      Some(_) => true,
+      None    =>
+        if is_surface_word(name) { true }
+        else {
+          match smap_get(cdix, name) {
+            Some(referent) => {
+              graph_attach_comment_ref(h, referent)
+              true
+            },
+            None =>
+              match env_lookup(name) {
+                Some(_) => true,
+                None    => match env_lookup_type(name) {
+                  Some(_) => true,
+                  None    => false
+                }
+              }
+          }
+        }
+    }
+  }
+}
+
+// The `$`-vocabulary judgment: what the program's own literals write IS
+// part of the program. `$`-names normalize by shedding the sigil and
+// leading underscores on BOTH sides of the comparison.
+fn crc_judge_dollars(ref dollars, i, ref lvix, ref cdix) = {
+  if i >= len(dollars) { () }
+  else {
+    let (h, raw) = list_index(dollars, i)
+    let name = shed_underscores(raw, 0)
+    let hit = if byte_len(name) == 0 { true } else { match smap_get(lvix, name) {
+      Some(_) => true,
+      None    => match smap_get(cdix, name) { Some(_) => true, None => false }
+    } }
+    if hit { () }
+    else { report(WCommentRefUnresolved(comment_owner(h), raw, graph_comment_span_at(h))) }
+    crc_judge_dollars(dollars, i + 1, lvix, cdix)
+  }
+}
+
+fn shed_underscores(ref s, i) =
+  if i < byte_len(s) && byte_at(s, i) == 95 { shed_underscores(s, i + 1) }
+  else { str_slice(s, i, byte_len(s)) }
+
+// Every identifier run a literal writes joins the emitted vocabulary,
+// normalized the same way (sigils split runs; leading underscores shed).
+fn lit_vocab_build(h, n, idx) = {
+  if h >= n { idx }
+  else {
+    let idx2 = match graph_node_body(h) {
+      NExpr(LitString(s)) => lit_runs_add(s, 0, byte_len(s), idx),
+      _                   => idx
+    }
+    lit_vocab_build(h + 1, n, idx2)
+  }
+}
+
+fn lit_runs_add(ref s, i, n, idx) = {
+  if i >= n { idx }
+  else {
+    if ident_byte(byte_at(s, i)) {
+      let j = lit_run_end(s, i + 1, n)
+      let tok = shed_underscores(str_slice(s, i, j), 0)
+      lit_runs_add(s, j, n, if byte_len(tok) > 0 { smap_add(idx, tok, 1) } else { idx })
+    } else { lit_runs_add(s, i + 1, n, idx) }
+  }
+}
+
+fn lit_run_end(ref s, i, n) =
+  if i < n && ident_byte(byte_at(s, i)) { lit_run_end(s, i + 1, n) } else { i }
+
+fn ident_byte(b) with Pure =
+  (b >= 97 && b <= 122) || (b >= 65 && b <= 90) || (b >= 48 && b <= 57) || b == 95
+
+// SURFACE vocabulary that is not an env name: the repr words (SYNTAX
+// §repr pins) and `self`, the refinement's own binder (SYNTAX §Refinement).
+fn is_surface_word(ref name) =
+  name == "self" || name == "_" || name == "i32" || name == "i64" || name == "f32" || name == "f64" || name == "v128"
+
+fn in_owner_names(ref xs: [String], ref name: String, i) =
+  if i >= len(xs) { false }
+  else {
+    if list_index(xs, i) == name { true } else { in_owner_names(xs, name, i + 1) }
+  }
+
+fn comment_owner(h) =
+  match graph_node_body(h) {
+    NStmt(FnStmt(name, _, _, _, _))          => name,
+    NStmt(TypeDefStmt(name, _))              => name,
+    NStmt(EffectDeclStmt(name, _))           => name,
+    NStmt(HandlerDeclStmt(name, _, _, _, _)) => name,
+    _                                        => "node {int_to_str(h)}"
+  }
+
+// The owner's own names — a comment on a fn legitimately references its
+// parameters; a comment on a handler its config, state fields, ops and
+// arm args; a comment on an effect its ops. They live ON the owning node.
+fn comment_locals(h) =
+  match graph_node_body(h) {
+    NStmt(FnStmt(_, params, _, _, fbody)) =>
+      body_binders(fbody, cl_param_names(params, 0, [])),
+    NStmt(HandlerDeclStmt(_, _, config, states, arms)) =>
+      cl_arm_names(arms, 0, cl_state_names(states, 0, config)),
+    NStmt(EffectDeclStmt(_, ops)) => cl_op_names(ops, 0, []),
+    NStmt(LetStmt(pat, val, _)) => body_binders(val, pat_binders(pat)),
+    NStmt(TypeDefStmt(_, ctors)) => cl_ctor_names(ctors, 0, []),
+    NStmt(ExprStmt(e)) => body_binders(e, []),
+    _ => []
+  }
+
+// A type's comment references its ctors and its record fields — both
+// live in the declaration itself.
+fn cl_ctor_names(ref ctors, i, acc) =
+  if i >= len(ctors) { acc }
+  else {
+    let (cname, tys) = list_index(ctors, i)
+    cl_ctor_names(ctors, i + 1, cl_ctor_field_names(tys, 0, acc ++ [cname]))
+  }
+
+fn cl_ctor_field_names(ref tys, i, acc) =
+  if i >= len(tys) { acc }
+  else {
+    let acc2 = match list_index(tys, i) {
+      TRecord(fs) => cl_record_field_names(fs, 0, acc),
+      _           => acc
+    }
+    cl_ctor_field_names(tys, i + 1, acc2)
+  }
+
+fn cl_record_field_names(ref fs, i, acc) =
+  if i >= len(fs) { acc }
+  else {
+    let (fname, _) = list_index(fs, i)
+    cl_record_field_names(fs, i + 1, acc ++ [fname])
+  }
+
+// The binder-side dual of own.mn's count_uses: every name a decl's
+// subtree BINDS — let patterns, match-arm patterns, nested fn names
+// and params, lambda params. The comment resolver reads it as the
+// owner's own namespace. (uses / binders / reach / spec-scan are one
+// AST fold in larval form — the forked-cursor rewrite unifies them,
+// the PLAN §7 ruling.)
+fn body_binders(ref node, acc) = {
+  let N(nbody, _, _) = node
+  match nbody {
+    NExpr(LambdaExpr(params, lb))    => body_binders(lb, cl_param_names(params, 0, acc)),
+    NExpr(BlockExpr(stmts, fe))      => body_binders(fe, bb_list(stmts, 0, acc)),
+    NExpr(IfExpr(c, t, e))           => body_binders(e, body_binders(t, body_binders(c, acc))),
+    NExpr(MatchExpr(sc, arms))       => bb_arms(arms, 0, body_binders(sc, acc)),
+    NExpr(CallExpr(f, args))         => bb_list(args, 0, body_binders(f, acc)),
+    NExpr(BinOpExpr(_, l, r))        => body_binders(r, body_binders(l, acc)),
+    NExpr(UnaryOpExpr(_, inner))     => body_binders(inner, acc),
+    NExpr(PipeExpr(_, l, r))         => body_binders(r, body_binders(l, acc)),
+    NExpr(MakeListExpr(es))          => bb_list(es, 0, acc),
+    NExpr(MakeTupleExpr(es))         => bb_list(es, 0, acc),
+    NExpr(MakeStringExpr(fs))        => bb_list(fs, 0, acc),
+    NExpr(IndexExpr(rc, ix))         => body_binders(ix, body_binders(rc, acc)),
+    NExpr(FieldExpr(rc, _))          => body_binders(rc, acc),
+    NExpr(ResumeExpr(v, _))          => body_binders(v, acc),
+    NExpr(LabeledArg(_, v))          => body_binders(v, acc),
+    NExpr(MakeRecordExpr(flds))      => bb_fields(flds, 0, acc),
+    NExpr(RecordUpdateExpr(b, flds)) => bb_fields(flds, 0, body_binders(b, acc)),
+    NExpr(NamedRecordExpr(_, flds))  => bb_fields(flds, 0, acc),
+    NStmt(LetStmt(pat, val, _))      => body_binders(val, acc ++ pat_binders(pat)),
+    NStmt(FnStmt(nm, ps, _, _, fb))  => body_binders(fb, cl_param_names(ps, 0, acc ++ [nm])),
+    NStmt(ExprStmt(e))               => body_binders(e, acc),
+    _                                => acc
+  }
+}
+
+fn bb_list(ref nodes, i, acc) =
+  if i >= len(nodes) { acc }
+  else { bb_list(nodes, i + 1, body_binders(list_index(nodes, i), acc)) }
+
+fn bb_arms(ref arms, i, acc) =
+  if i >= len(arms) { acc }
+  else {
+    let (pat, abody) = list_index(arms, i)
+    bb_arms(arms, i + 1, body_binders(abody, acc ++ pat_binders(pat)))
+  }
+
+fn bb_fields(ref flds, i, acc) =
+  if i >= len(flds) { acc }
+  else {
+    let (_, v) = list_index(flds, i)
+    bb_fields(flds, i + 1, body_binders(v, acc))
+  }
+
+fn cl_param_names(ref params, i, acc) =
+  if i >= len(params) { acc }
+  else { cl_param_names(params, i + 1, acc ++ [param_name(list_index(params, i))]) }
+
+// The record annotations here carry what inference does not yet flow:
+// a record type through a generic param + list_index into a field read
+// floors to `field offset unprovable` without them (the same face the
+// monomorphization arc's lower-time reads closed elsewhere). The pin is
+// the named constraint, not a preference.
+fn cl_state_names(ref states: [{init: Node, name: String}], i, acc) =
+  if i >= len(states) { acc }
+  else {
+    let st = list_index(states, i)
+    cl_state_names(states, i + 1, acc ++ [st.name])
+  }
+
+fn cl_arm_names(ref arms: [{args: [String], body: Node, op_name: String}], i, acc) =
+  if i >= len(arms) { acc }
+  else {
+    let arm = list_index(arms, i)
+    cl_arm_names(arms, i + 1, body_binders(arm.body, acc ++ [arm.op_name] ++ arm.args))
+  }
+
+fn cl_op_names(ref ops, i, acc) =
+  if i >= len(ops) { acc }
+  else {
+    let (opname, _, _) = list_index(ops, i)
+    cl_op_names(ops, i + 1, acc ++ [opname])
+  }
 
 // float_of_int / float_to_int are PRIMITIVES — the Int↔Float conversions lower
 // recognizes (→ f64.convert_i32_s / i32.trunc_f64_s) that no .mn body can
@@ -3052,10 +3421,12 @@ fn pat_binders(ref pat) = match pat {
   PList(subs, rest) =>
     flatten([flat_map(pat_binders, subs), plist_rest_binders(rest)]),
   PRecord(flds)     => flat_map((fld) => { let (_, sub) = fld; pat_binders(sub) }, flds),
-  PAlt(branches)    => match branches {
-    []         => [],
-    [b0, ..._] => pat_binders(b0)
-  }
+  // Branch 0 carries the whole alternation's binder set (infer's law).
+  // Read through len/list_index — total over every representation — so
+  // this walk runs identically under a boot whose list-pattern emit
+  // predates the PIdx step (the ladder's one exposed rung).
+  PAlt(branches)    =>
+    if len(branches) == 0 { [] } else { pat_binders(list_index(branches, 0)) }
 }
 
 fn plist_rest_binders(rest) = match rest {

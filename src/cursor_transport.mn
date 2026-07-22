@@ -24,7 +24,7 @@
 //
 //   cursor_at / cursor_argmax / cursor_pinned  — src/cursor.mn Cursor effect
 //   CursorView fields (8 aspects of one read)  — src/types.mn
-//   wasi_fs / fd_write / fd_read               — lib/runtime/wasi.mn + io.mn
+//   fd_write / fd_read                         — lib/runtime/io.mn
 //   Iterate effect for streamed updates        — lib/prelude.mn
 //   <~ feedback at the human boundary           — primitive #3 (Five verbs)
 //
@@ -227,7 +227,7 @@ fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate =
 
 // The edit session IS the `<~` feedback verb at the human-medium
 // boundary (SYNTAX.md §`<~`): one cycle's output state loops back as the
-// next cycle's input under the Surface iterate-class context. The former
+// next cycle's input under the Surface iterate-class context. The DELETED
 // hand-rolled tail-recursion (cursor_loop calling itself per arm) was the
 // `<~` verb un-named — the exact drift the prime directive forbids. The
 // state threads through `<~ accumulate`; cursor_step is one cycle.
@@ -313,7 +313,7 @@ fn span_of_cursor(cursor) with GraphRead = {
 
 // handle_at_span() — see src/cursor.mn (canonical scan-based impl).
 // Substrate-honest peer Hβ.graph.handle-at-span-effect-op would
-// promote this to a GraphRead op (perform graph_handle_at_span(span));
+// promote this to a handle-at-span op on GraphRead;
 // blocked on adding the op to graph.mn's effect declaration.
 
 fn apply_suggestion(cursor, view) with GraphRead + PatchWrite + Memory + !Mutate + Alloc = {

@@ -31,7 +31,7 @@
 // src/mentl.mn (the proposer — gradient_next, try_each_annotation,
 // apply_annotation_tentatively, verify_after_apply, why_from_handle) ·
 // src/egraph.mn (saturate / egraph_extract) · src/graph.mn (graph_handler:
-// epoch, intent_index, span_index, graph_push_checkpoint/rollback,
+// epoch, span_index, graph_push_checkpoint/rollback,
 // graph_mutated at the outermost commit boundary).
 
 import types
@@ -82,8 +82,8 @@ type QueueItem
 
 // OraclePriority — ranking dimension, every input READ LIVE from the
 // graph (Carried-Truth: no stored counts). The priority function
-// composes tier (compile-blocking first) + intent_weight (read from
-// the position's authored intent row in graph intent_index) +
+// composes tier (compile-blocking first) + intent_weight (read live
+// off the position's authored intent row) +
 // surface_area (count of dependent positions, walked over graph edges)
 // + locality_bias (byte distance from cursor, read from span_index).
 // Total order via priority_lt: "compile-blocking always wins; among
@@ -262,7 +262,7 @@ fn proven_to_item(pos, pair, anchor) with GraphRead + Memory + Alloc = {
 // annotation's gradient axis (the cursor's classification of what the
 // candidate fixes); intent_weight from the position's authored intent
 // row read LIVE off the FnStmt node (graph_node_body — never a parallel
-// intent_index ledger); surface_area from a live walk of the positions
+// intent ledger); surface_area from a live walk of the positions
 // that depend on this one (graph edges, not a count field); locality_bias
 // from the span_index byte position. Reads `graph_snapshot` once for the
 // span_index; the intent row is read per-handle from the node itself.
@@ -294,7 +294,7 @@ fn tier_of_annotation(ann) with Pure = match suggestion_kind_of(ann) {
 // weight: a position carrying an authored intent (e.g. a `!Alloc`
 // real-time row) weights heavier than an un-annotated one. Read LIVE
 // off the FnStmt node the handle names (graph_node_body) — the effs
-// field IS the authored row; no parallel intent_index to walk. A node
+// field IS the authored row; no parallel intent ledger to walk. A node
 // that is not a fn declaration carries no authored intent -> baseline 0.
 
 fn intent_weight_at(pos) with GraphRead + Memory = match graph_node_body(pos) {
@@ -319,7 +319,7 @@ fn count_dependents(pos, h, bound, acc) with GraphRead + Alloc + Memory = {
 }
 
 // body_references — does a node body reference the target handle? Each
-// Expr carries its child Nodes (N(_, _, type_handle)); a body one of
+// Expr carries its child Nodes (N(_, _, h)); a body one of
 // whose direct children's type-handle IS `target` is a dependent edge.
 // The edges already exist in the program weave — this reads them live,
 // never a stored dependent count.

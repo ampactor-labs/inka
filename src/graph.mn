@@ -53,6 +53,16 @@ import runtime/strings
 // state is internal to the handler; callers never see Graph as
 // a value; access is only through perform.
 
+// Reverse projection over the comment-ref pairs: which comment owners
+// reference this node. Linear over the pair list — the pair count is the
+// program's authored cross-references, small by construction.
+fn comment_ref_owners(ref pairs, referent, i, acc) with Memory + Alloc =
+  if i >= len(pairs) { acc }
+  else {
+    let (o, r) = list_index(pairs, i)
+    comment_ref_owners(pairs, referent, i + 1, if r == referent { acc ++ [o] } else { acc })
+  }
+
 handler graph_handler
   with nodes = [], trail = [], trail_len = 0,
        epoch = 0, next = 0,
@@ -66,6 +76,7 @@ handler graph_handler
        checkpoint_stack = [],
        program = [],
        comments = [],
+       comment_refs = [],
        canon = [],
        narrowing = [],
        boundaries = [] {
@@ -185,15 +196,48 @@ handler graph_handler
   // graph_bind overwrites that slot at infer with the inference Reason, so a
   // parse-written comment Reason would be clobbered. One handle, co-indexed
   // weaves. No trail — the weave only grows at parse, before speculation.
-  graph_attach_comment(handle, text) => {
+  graph_attach_comment(handle, text, span) => {
+    // Blank-separated comment blocks share a following declaration: the
+    // nested arm attaches the LATER block first, so an existing entry
+    // merges BEHIND the incoming earlier text — source order, one home,
+    // the blank line surviving as the paragraph break.
+    let merged = if handle < len(comments) {
+      let (existing, _) = list_index(comments, handle)
+      if byte_len(existing) > 0 { "{text}\n\n{existing}" } else { text }
+    } else { text }
     resume()
       with comments = comments
         |> list_extend_to(??, handle + 1)
-        |> list_set(??, handle, text)
+        |> list_set(??, handle, (merged, span))
   },
 
+  // Padded slots hold word 0; the sentinel page reads as ("", zero span) —
+  // the same absent-contract every weave read shares.
   graph_comment_at(handle) => {
-    resume(if handle < len(comments) { list_index(comments, handle) } else { "" })
+    resume(if handle < len(comments) {
+      let (text, _) = list_index(comments, handle)
+      text
+    } else { "" })
+  },
+
+  graph_comment_span_at(handle) => {
+    resume(if handle < len(comments) {
+      let (_, span) = list_index(comments, handle)
+      span
+    } else { Span(0, 0, 0, 0) })
+  },
+
+  // The comment-REFERENCE edges: a resolved backticked reference is a
+  // real edge (owner comment's node -> referent decl's node), drawn at
+  // the infer tail once the env is whole. Comments heal under rename
+  // because the edge carries the identity and the NAME is a projection;
+  // the audit's referenced-by line is the reverse read.
+  graph_attach_comment_ref(owner, referent) => {
+    resume() with comment_refs = comment_refs ++ [(owner, referent)]
+  },
+
+  graph_comment_refs_of(referent) => {
+    resume(comment_ref_owners(comment_refs, referent, 0, []))
   },
 
   // The e-graph equivalence weave — union-find as a fabric EDGE, co-indexed by

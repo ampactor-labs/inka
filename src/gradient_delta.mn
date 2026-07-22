@@ -32,7 +32,7 @@
 //                                               direction; this file
 //                                               provides the inverse)
 //   AnnotationSuggestion / SuggestionKind   — src/types.mn (Hμ.cursor)
-//   row_subsumes / mk_ef_closed / row_diff  — src/effects.mn
+//   row_subsumes / mk_ef_closed / diff_row  — src/effects.mn
 //   infer_ownership / Ownership ADT         — src/own.mn + types.mn
 //   verify_pending_at / Predicate           — src/verify.mn + types.mn
 //   graph_chase / NBound + TFun + EffRow    — src/graph.mn + types.mn
@@ -179,8 +179,8 @@ handler delta_default with !Mutate {
   // a bool-node handle (0 = nothing proven). When the fn's body return-point
   // carries a proven narrowing, THAT predicate is a genuinely NEW tightening
   // (the developer hasn't written it; Verify discharges it statically) — read
-  // it live, never re-present the Verify backlog (verify_pending was the
-  // re-derivation this dissolves). The predicate IS the Expr the narrowing
+  // it live, never re-present the Verify backlog (the DISSOLVED
+  // verify_pending was that re-derivation). The predicate IS the Expr the narrowing
   // edge points at — read via graph_node_body, no PExpr re-walk.
   delta_refinement(handle) => {
     let GNode(kind, _) = graph_chase(handle)

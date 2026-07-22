@@ -30,9 +30,9 @@
 // - parallel_compose × Choice (B.3 CE): backtrack's per-option
 //   exploration could parallelize across threads when this handler
 //   installed.
-// - parallel_compose × arena_ms (B.5 AM): per-thread bump_allocator
-//   is the substrate; replay_safe / fork_deny / fork_copy compose
-//   with thread-local arenas.
+// - parallel compose × multi-shot: a per-thread bump arena is the
+//   substrate; the replay/fork disciplines compose with thread-local
+//   arenas.
 //
 // Authority:
 // - TH-threading.md walkthrough §1.1 (Thread effect), §1.2
@@ -162,9 +162,9 @@ handler sequential_compose with results = [] {
 // at module-init.
 
 // WasiThreads — Stage 3 collapsed substrate. The CLOSURE IS the
-// thread record; no separate thread_record_* ops. wasi_thread_spawn
-// receives the closure pointer; the host's $thread_start entry
-// reads fn_idx from closure[0] and call_indirects. wasi_num_cores
+// thread record; no separate thread-record ops. wasi_thread_spawn
+// receives the closure pointer; the host's $wasi_thread_start entry
+// reads fn_idx from closure[0] and dispatches via call_indirect. wasi_num_cores
 // reports host CPU count for parallel-degree tuning. Per the
 // realize: ONE record, FOUR roles, four-and-a-half — no parallel
 // thread-record table.
@@ -177,26 +177,26 @@ effect WasiThreads {
 // Per the realize protocol's collapse: spawnable closures carry
 // done/result fields after captures+ev_slots. The host's
 // wasi_thread_spawn receives the closure pointer as start_arg;
-// $thread_start (exported by the wheel-emit module) reads fn_idx
+// $wasi_thread_start (exported by the wheel-emit module) reads fn_idx
 // from closure[0], call_indirect with closure-as-__state, stores
-// result at closure[done_offset+4], atomic.store done=1 at
-// closure[done_offset], atomic.notify on done addr. NO separate
-// thread-record table, NO next_tid counter, NO partition arithmetic.
+// result at the done offset + 4, atomic.store done=1 at the done
+// offset, atomic.notify on the done addr. NO separate
+// thread-record table, NO tid counter, NO partition arithmetic.
 // One record, four roles, four-and-a-half (closure + thread context).
 // Per protocol_handler_is_state_is_closure_is_evidence.md.
 fn ffi_spawn(ref task) with WasiThreads = {
   let closure_ptr = closure_pointer(task)
   // The closure already exists in the heap (LMakeClosure emitted it).
   // wasi_thread_spawn(closure_ptr) gives the host the closure pointer;
-  // host invokes $thread_start(closure_ptr) on a fresh OS thread.
+  // host invokes $wasi_thread_start(closure_ptr) on a fresh OS thread.
   ThreadHandle(wasi_thread_spawn(closure_ptr))
 }
 
 fn ffi_join(handle) with WasiThreads + SharedMemory + Memory = {
   let ThreadHandle(closure_ptr) = handle
-  // done_offset is layout-dependent: closure has 8 bytes header
-  // (fn_idx + capture_count) + 4 * (captures+ev_slots) bytes; the
-  // done_flag sits at the first slot past the captures region. Per
+  // The done flag's offset is layout-dependent: closure has 8 bytes
+  // header (fn_idx + capture_count) + 4 * (captures+ev_slots) bytes;
+  // the flag sits at the first slot past the captures region. Per
   // emit_module.wat layout for spawnable closures (peer-extension).
   // done addr projection: closure_done_addr reads the layout.
   let done_addr = closure_done_addr(closure_ptr)
@@ -219,7 +219,7 @@ fn closure_result_addr(closure_ptr) with Memory = {
 // Current thread identity — within Mentl, the closure-IS-state
 // substrate makes "current thread" identical to "current closure
 // __state pointer". For Thread-effect callers that want an Int tid,
-// we project the start-arg the host passed when invoking $thread_start
+// we project the start-arg the host passed when invoking $wasi_thread_start
 // (which equals the closure pointer — the thread's own state).
 fn ffi_current_thread_id() with WasiThreads = 0
 
@@ -288,7 +288,7 @@ fn wasi_num_cores_intrinsic()                    with Pure = 1
 // Primitive #2 (Handlers + resume discipline) — parallel_compose +
 // sequential_compose are peer handlers; both are OneShot per the
 // Thread effect's resume discipline. Per Q-B.7.2: OS threads
-// direct for v1; pool_compose is peer handler post-first-light.
+// direct for v1; a pooled-schedule peer handler is post-first-light.
 //
 // Primitive #3 (Five verbs) — `><` AND `<|` are the parallel
 // topologies (SUBSTRATE.md §"`<|` vs `><`: Ownership Is the
@@ -308,12 +308,12 @@ fn wasi_num_cores_intrinsic()                    with Pure = 1
 // proves single-threaded; `Pure + !SharedMemory` proves
 // parallelizable-no-sync (the strictest contract).
 //
-// Primitive #5 (Ownership) — thread-local bump_allocator per spawn
+// Primitive #5 (Ownership) — a thread-local bump arena per spawn
 // (TH §3); cross-thread data via Pack/Unpack bytes only (TH §4 —
 // no shared mutable memory between threads except via SharedMemory's
 // atomics + per-ThreadHandle ownership). Per kernel crystallization #8 —
 // the heap has one story; per-thread heaps each go through
-// emit_alloc with thread-local bump_ptr.
+// emit_alloc with a thread-local bump pointer.
 //
 // Primitive #6 (Refinement) — could refine `ThreadHandle where 0 <= self
 // < num_cores()` post-first-light; V1 leaves ThreadHandle opaque.

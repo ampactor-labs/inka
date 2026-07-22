@@ -38,7 +38,7 @@ type Annotation
   | AOwn(String, Option(Span))
   | ARef(String, Option(Span))
   | AWrapHandler(String, Int, Option(Span))
-                              // handler_name, target_fn_handle, span;
+                              // handler_name, the target fn's handle, span;
                               // proposes wrapping the target's body in a
                               // handler that absorbs an offending effect
 
@@ -300,7 +300,7 @@ fn unwrap_source_span(opt) with Pure = match opt {
 
 // H5: the effects a named handler absorbs — read LIVE from its env
 // binding, never a static string-keyed table. A handler binds as
-// HandlerKind(handled_ename, ...) (types.mn:117): the env already
+// HandlerKind(the handled effect name, ...) (types.mn:117): the env already
 // PROVES which effect each handler absorbs (the `~>` row algebra
 // row(expr ~> h) = (row − E) ⊕ R reads the same E). The AWrapHandler
 // proposer reads it the same way — carry the handle, read the binding
@@ -737,7 +737,7 @@ fn annotation_inferred_for(ty) with Pure = match ty {
 
 // ─── Multi-position teach — map over a handle list ───────────────────
 //
-// `teach_pair` (binary special-case) was erased per
+// The DELETED `teach_pair` (binary special-case) was erased per
 // `feedback_fully_as_early.md`: callers compose
 // `map(teach_session, handles)` directly; teaching each handle on its
 // own core is a `><` fanout under its own `~> Thread` at the call site

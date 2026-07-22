@@ -7,7 +7,7 @@
 // the TVar union-find in `nodes`. So there is NO e-graph data structure beyond
 // the graph: union-find is a graph edge (graph_canon_set draws it, graph_canon_at
 // chases it = `find`), and extraction is that chase to the root — the root IS the
-// extracted term, so there is no separate extraction pass. The former side-ledger
+// extracted term, so there is no separate extraction pass. The DELETED side-ledger
 // (a snoc-list of (from,to) pairs, linear rw_lookup, re-appended every pass — the
 // O(N²) growth that OOM'd) is DELETED; the relation lives where every other graph
 // relation lives, read live.

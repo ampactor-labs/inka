@@ -142,8 +142,8 @@ fn union_all_deltas(ref deltas) with !Mutate = {
   fold([], (acc, delta) => set_union(acc, delta), deltas)
 }
 
-// Pairwise collision check across branch deltas. For each pair
-// (delta_i, delta_j) with i < j, any name in their intersection was
+// Pairwise collision check across branch deltas. For each pair of
+// branch deltas (i < j), any name in their intersection was
 // consumed in TWO parallel branches — an affine violation. We report
 // each colliding name once per pair; a name consumed in three
 // branches surfaces as (1,2), (1,3), (2,3) triples, each naming the
@@ -276,7 +276,7 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
   }
 }
 
-// O(1) region lookup — tagged_values is now a handle-indexed hash bucket
+// O(1) region lookup — the region ledger is a handle-indexed hash bucket
 // (region_index), not a cons-list re-scanned per alloc. check_escape /
 // join_field_regions' linear find over it was ~93% of the post-classifier
 // self-compile (perf, 2026-07-13; the O(N²) alloc-check scan, §5.O). The handle

@@ -6,13 +6,13 @@
 // renders properly; the file on disk is canonical regardless of what
 // the developer typed. Same source, same bytes, every save.
 //
-// Per protocol_cursor_is_argmax.md + protocol_parse_is_eager_graph_
-// projection.md (chain-link-5): the parser tolerates any structurally-
+// Layout is projection, never contract (chain-link-5): the parser
+// tolerates any structurally-
 // valid indent (relative ordering of verb-vs-operand suffices); the
 // formatter normalizes column counts. Indent is a render decision, not
 // a parse contract — the same chain-link-5 realization at the layout
-// layer that earlier closed `with EXPR` parsing and `$ident_at_p`
-// fabrication.
+// layer that earlier closed `with EXPR` parsing and the seed's
+// ident-fabrication.
 //
 // The formatter IS a `~>` handler on the cursor — same kernel primitive
 // as every other tentacle. Composes:
@@ -261,7 +261,7 @@ fn render_feedback_chain(input, spec) with Format + !Mutate = {
 
 // ─── Multi-source format — map over an AST list ─────────────────────
 //
-// `format_pair` (binary special-case) was erased per
+// The DELETED `format_pair` (binary special-case) was erased per
 // `feedback_fully_as_early.md`: callers compose
 // `map(format_program, asts)` directly. `format_program` itself
 // already maps over top-level statements (line 93); the same stage
@@ -456,8 +456,8 @@ fn render_sibling_separator(ctx) with Pure = match ctx {
 // The row + Reason text projections are the ONE canonical renderers in
 // types.mn (show_effrow / show_reason / show_eff_name / show_eff_arg /
 // show_list) — never a second, weaker copy here. The format.mn duplicates
-// (show_row / show_reason_compressed / show_effname / show_effarg /
-// show_joined) were DELETED: two renderers for one graph fact is the
+// were DELETED (show_row / show_reason_compressed / show_effname /
+// show_effarg / show_joined): two renderers for one graph fact is the
 // Carried-Truth violation at the render layer. LSP hover reads the canonical
 // pair directly; the reason aspect above reads show_reason. "Compressed" is
 // show_reason at a tighter register, not a second walk.

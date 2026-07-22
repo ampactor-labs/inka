@@ -9,11 +9,12 @@
 // NO GraphWrite — structural isolation via effect row. A stray
 // perform graph_bind would fail at handler install.
 //
-// Handler elimination (spec 05 §Handler elimination):
-//   TailResumptive (85%) → direct call $h_op
-//   Linear                → state machine
-//   MultiShot             → heap continuation struct
-// Classification reads TCont.discipline. Monomorphic detection is a
+// Handler elimination (the dispatch gradient, PLAN §6):
+//   TailResumptive (~85%)  → direct call to the arm's own fn
+//   static singleton       → direct call against the handler's state global
+//   polymorphic            → call_indirect via the evidence entry
+//   MultiShot              → heap continuation record + re-execution driver
+// Classification reads TCont's discipline. Monomorphic detection is a
 // graph read (row_is_ground), not a sidecar table.
 //
 // Pipe desugarings (spec 10):
@@ -29,70 +30,6 @@ import runtime/imap
 import runtime/persist
 import runtime/search
 import effects
-
-// LowerState — per-function MS state-machine bookkeeping (H7 §4.1
-// Change 4). At emit of a capturing function, allocate the state
-// table; per MS perform site, allocate the next state ordinal +
-// reserved ret-slot; at function-emit close, query the complete
-// state table to synthesize the resume_fn.
-//
-// State 0 is the entry; allocations return 1, 2, 3, ... per perform
-// site within the same function. Each state has its own ret-slot
-// (via lower.mn's existing local-allocation substrate).
-//
-// Per MV §2.7.5 + Ω.5 record-shape discipline: handler state record
-// holds the per-fn table mapping perform_site → state_idx, plus the
-// next-free-ret-slot counter. The implementation lives in
-// `lower_state_default` below.
-
-effect LowerState {
-  ms_alloc_state(Int, Int) -> Int
-  ms_alloc_ret_slot(Int, Int) -> Int
-  ms_function_states(Int) -> [Int]
-  ms_reset_function() -> ()
-}
-
-// lower_state_default — the LowerState handler. State record:
-// per-function CacheMap (per lib/runtime/cache_map.mn) keyed by
-// (fn_handle * 65537 + perform_site_handle) → state_idx; plus a
-// next-free-state counter and next-free-ret-slot counter. Reset on
-// ms_reset_function — installed at function-emit entry.
-//
-// Per H7 §4.1 Change 4 + Ω.5 record discipline. Stub bodies for V1;
-// full implementation lands when lower_perform actually invokes
-// these ops at MS perform sites (Tier 3 +1 sub-handle).
-
-handler lower_state_default
-  with state_table = empty_cache(),
-       next_state  = 1,
-       next_ret    = 0 {
-
-  ms_alloc_state(fn_handle, perform_site) => {
-    let key = fn_handle * 65537 + perform_site
-    let new_state = next_state
-    let new_table = cache_store(state_table, key, new_state)
-    resume(new_state)
-      with state_table = new_table,
-           next_state  = next_state + 1
-  },
-
-  ms_alloc_ret_slot(_fn_handle, _state_idx) => {
-    let slot = next_ret
-    resume(slot)
-      with next_ret = next_ret + 1
-  },
-
-  ms_function_states(_fn_handle) => {
-    resume(cache_keys(state_table))
-  },
-
-  ms_reset_function() => {
-    resume()
-      with state_table = empty_cache(),
-           next_state  = 1,
-           next_ret    = 0
-  }
-}
 
 // Hβ.first-light.resume-with-state-mutation — handler-arm-state context.
 // `lower_handler_arms_as_decls` installs `arm_state_ctx(state, disc)` around
@@ -123,7 +60,7 @@ handler arm_state_ctx(fields, disc, hname) {
 // edge is UNIQUE and every arm-context read dispatches through the singleton
 // tier's LIVE `$arm_state_ctx_state_g` (the bracket-scoped global every
 // install saves/restores — S1's home). The context is a DYNAMIC fact; its
-// one home is the innermost live bracket. The deleted `arm_state_default`
+// one home is the innermost live bracket. The DELETED `arm_state_default`
 // twin made the op AMBIGUOUS, pushing these reads to the lexical evidence
 // floor — clone-chain threading for a dynamically-scoped truth — and the
 // row math (install absorption) then correctly told callers NOT to thread
@@ -134,11 +71,11 @@ handler arm_state_ctx(fields, disc, hname) {
 // env's HandlerKind (register_handler populates it). No side-ledger, no
 // pre-register pass: the graph already names the handler's node, so an
 // install resolves its handler's decl directly (Anchor 1 — Carried-Truth).
-// The former handler_state_inits_registry re-derived into a name-keyed
+// The DISSOLVED handler_state_inits_registry re-derived into a name-keyed
 // ledger exactly what env_lookup holds live, and its own by-name scan
 // (find_registry_field → filter) ran inside a handler arm — re-triggering
-// the nested-arm evidence gap it was a workaround for. emit_lhandlewith
-// stores each state-init at offset 8+i*4 of the freshly-allocated state
+// the nested-arm evidence gap it was a workaround for. The LHandleWith emit
+// arm stores each state-init at offset 8+i*4 of the freshly-allocated state
 // record per protocol_handler_is_state_is_closure_is_evidence.md.
 fn handler_decl_of(hname) =
   match env_lookup(hname) {
@@ -154,7 +91,7 @@ fn handler_decl_of(hname) =
 
 // The handler's MultiShot-classified ops as (name, arity) pairs, projected
 // live from its decl arms + the op scheme's disc (band B k1/M1.4 — the ONE
-// decider walk_locals, walk_lemit, and the LHandleWith emit all read; the
+// decider the emit's locals walk (walk_lemit) and the LHandleWith emit read; the
 // arity drives the driver's $yield_args loads). [] for an unknown/anonymous
 // name, so an ungated install keeps the existing emission byte-for-byte
 // (Law 7); the anonymous-install-of-a-MultiShot-handler form is the named
@@ -203,8 +140,8 @@ fn find_registry_field(name: String, ledger, project) = {
 // after. A Tier-1 perform inside the body resolves the innermost handler
 // installed for its op AND that install's handle — so emit threads the
 // SAME state record (`__hstate_<h>`) the arm was installed against, not
-// the caller's __state misread as state. The seed's $lower_handler_stack
-// expressed as a Mentl effect (handler IS state); the install handle is
+// the caller's __state misread as state. The handler stack IS a Mentl
+// effect (handler IS state); the install handle is
 // graph-carried, never re-derived (Anchor 1).
 effect LowerHandlerStack {
   lower_handler_push(String, Int) -> Int
@@ -233,8 +170,8 @@ handler lower_handler_stack_ctx with stack = [] {
 // evidence through captures — transparent forwarding). Surfaced when THE
 // CUT flipped the wheel's choose/enumerate MultiShot and reify_frame_k
 // re-lowered pipeline remainders inside fresh k frames while the lexical
-// stack still held compile_source's installs (__k_60854's dangling
-// $__hstate_60873_BodyContext); the each-with-effects lambda gap is the
+// stack still held compile_source's installs (a reified k frame's dangling
+// per-install state global); the each-with-effects lambda gap is the
 // same hole. The fence entry is name "" — no handler is nameless, so it
 // can never shadow a real install.
 fn lower_frame_fence_push() = lower_handler_push("", 0)
@@ -246,7 +183,7 @@ fn lower_frame_fence_pop() = lower_handler_pop()
 // meaningless). The install threads a keyed [effect][record][base] entry per
 // noted effect; the arm fn's LEvPerform KEY-SCANS for it. Closed per
 // discriminator into the hev registry so install sites read the set back.
-// Hβ.emit.handler-record-ev-capture, the seed's $lower_arm_ev_* globals.
+// Hβ.emit.handler-record-ev-capture; the seed's own copy died with it.
 effect ArmEvLedger {
   arm_ev_begin() -> Int
   arm_ev_note(String) -> Int
@@ -338,7 +275,7 @@ type LowExpr
   // VALUE-position reference to an EXISTING named fn that DISPATCHES effects —
   // the evidence-capturing twin of LGlobal (which carries NO ev region) and the
   // dispatch-less twin of LSuspend (which CALLS). Builds the unified record
-  // [fn_ptr@0][capture_count=0@4][key_j,ev_j@8+8*j] for `$<name>_idx` so a fn passed as a
+  // [fn_ptr@0][capture_count=0@4][key,ev pairs @8+8*j] for `$<name>_idx` so a fn passed as a
   // value (`each(infer_stmt, stmts)`) carries its evidence into the record
   // the callee reads as __state — Carried-Truth: the two divergent fn-value
   // paths (bare LGlobal vs evidence-bearing LMakeClosure) unified into ONE
@@ -347,7 +284,7 @@ type LowExpr
   // bare LGlobal (lower_callee_ref collapses an LFnRef callee).
   | LFnRef(Int, String, [LowExpr])               // handle, fn-name, ev_slots
   // The YIELD of a MultiShot perform (band B, continuation-reification k1):
-  // (frame_node, op_name, args, k_expr). frame_node = the REWRITTEN
+  // (frame, op_name, args, k). The frame = the REWRITTEN
   // FRAME's tail node — the yield's dummy returns through the frame's own
   // result width (never the perform's; a Float-tailed frame keeps its f64
   // ft). args (band B M1.4, bank Ruling 3) = the op's lowered arg exprs,
@@ -379,7 +316,7 @@ type LowExpr
   | LKExtend(Int, LowExpr)
   | LMakeContinuation(Int, LowFn, [LowExpr], [LowExpr], Int, Int, Int)
   // H7 — multi-shot continuation record per the H7 walkthrough §1.2.
-  // handle, resume_fn, captures_exprs, ev_slots, state_index, ret_slot,
+  // handle, resume-fn, captures, ev_slots, state_index, ret_slot,
   // world_tag. Heap-allocated through emit_alloc (one allocator per kernel
   // crystallization #8 — the heap has one story); fn_index field
   // points to the synthesized __resume function registered in the
@@ -409,9 +346,9 @@ type LowExpr
   | LSuspend(Int, Int, LowExpr, [LowExpr], [LowExpr], Bool)   // handle, op_h, fn_expr, args, ev_slots, tail — mark_tail is the ONE writer of tail=true; emit renders return_call_indirect (the seed's clone-then-tail-call form; without it every evidence-threading recursion burned a frame per step — m3's iterate_from stack exhaustion, 2026-07-09)
   // ~> desugaring. ONE handler record (handler IS state IS closure IS
   // evidence): [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous][captured_evs].
-  //   4th = handler_name ("" for anonymous — no `_state_g` global).
-  //   5th = state_inits ([LowExpr], source-order; written at 8+i*4).
-  //   6th = arm_names — per-effect groups [(ename, [arm_fn_name])], op-decl
+  //   4th = handler_name ("" for anonymous — no per-handler state global).
+  //   5th = the state inits ([LowExpr], source-order; written at 8+i*4).
+  //   6th = arm_names — per-effect groups of (effect name, arm-fn names), op-decl
   //         order within each effect; emit lays each group contiguously and
   //         builds a thin [record, base] evidence-entry per effect.
   //   7th = captured_evs ([LowExpr]) — the install-site evidence the arm
@@ -434,19 +371,19 @@ type LowExpr
   | LPerform(Int, String, [LowExpr], String)
   // Tier-2 evidence-dispatched perform (handler comes from the caller via
   // an evidence slot on __state — handler IS evidence). The ev-slot holds
-  // a per-effect entry [record_ptr, base]; the arm runs against that RECORD
+  // a per-effect entry [record ptr, base]; the arm runs against that RECORD
   // as its __state. The effect is addressed by its decl-IDENTITY (the effect
   // name as key), NEVER by a position in this fn's row — position shifts under
   // any row delta (the mn-eq→str_concat miscompile, proven). op_slot stays a
   // position: it indexes the effect's OWN immutable decl-order op-list (a
   // stable identity, not a row position). emit reads via a KEY-SCAN of the
   // self-describing captured_evs region [key@0][record@4][base@8] entries:
-  //   entry  = scan __state captured_evs for str_eq(entry.key, effect_key)
+  //   entry  = scan __state captured_evs for str_eq(entry.key, the effect key)
   //   record = entry[record];  base = entry[base]
   //   arm    = record[8 + 4*record[4] + 4*(base + op_slot)]  (fence-relative
   //            off the record's OWN nstate@4) — an interior read, never a
-  //            static body-captures guess (protocol_reflexive_interiority).
-  | LEvPerform(Int, String, String, Int, [LowExpr]) // handle, op_name, effect_key, op_slot, args
+  //            static body-captures guess.
+  | LEvPerform(Int, String, String, Int, [LowExpr]) // handle, op_name, effect-key, op_slot, args
   // Forward THIS fn's evidence for an effect (the handler record the caller
   // threaded into __state) by IDENTITY (effect_key) into a deeper callee's
   // record or an install's captured-ev region — the caller fills the SAME key,
@@ -486,8 +423,8 @@ type LowExpr
   // value representation and no recovery arm; emit projects only `unreachable`.
   | LInvariantFailure(Int, BoundaryInvariant)
   // Stage 4a: direct WASM-level import call. perform-form recognized at
-  // lower-time when op_name matches a known WASI import (wasi_thread_
-  // spawn, wasi_num_cores, fd_write, fd_read, path_open, etc.) bridges
+  // lower-time when op_name matches a known WASI import (wasi_thread_spawn,
+  // wasi_num_cores, fd_write, fd_read, path_open, etc.) bridges
   // through this variant so emit produces `(call $<import_name> args)`
   // directly — bypassing the LPerform/$op_<name> handler-arm dispatch
   // (which would require a wrapper fn). The import IS the bridge; no
@@ -599,8 +536,7 @@ fn lexpr_ty(e) with LookupTy = {
 // propagate tail (their cleanup runs after the body's last expression).
 // Without this, lex_from / scan_decimal recursive calls compile as
 // regular call_indirect and exhaust the WASM stack on long inputs.
-// Mirror of bootstrap/src/lower/walk_call.wat $lower_mark_tail. Called by
-// FnStmt / LambdaExpr / handler-arm-body lowering after lower_expr.
+// Called by FnStmt / LambdaExpr / handler-arm-body lowering after lower_expr.
 fn mark_tail(e) with Memory + Alloc = match e {
   LCall(h, fn_, args)         => LTailCall(h, fn_, args),
   // An evidence-threading call in tail position stays LSuspend — the sst_
@@ -800,7 +736,7 @@ fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
   }
 }
 
-// The partial fork's ONE decider — the lower mirror of infer_call_dispatch's
+// The partial fork's ONE decider — the lower mirror of infer_call's dispatch
 // (the same call_hole_index read, the same is_seq_op precedence, the same
 // fn-typed-callee gate): Some(n) = the callee declares n params and the
 // resolved args carry an authored `??` slot; None = saturated, or not a
@@ -2169,7 +2105,7 @@ fn lower_expr_body(e, handle, span) = match e {
     // product with a hole»): resolved args leaving declaration-order params
     // unfilled — an authored `??` slot — IS the lambda the surface law names
     // (`add3(10, ??, 30)` ≡ `(x) => add3(10, x, 30)`), supplied fields
-    // evaluated ONCE at construction. The fork mirrors infer_call_dispatch's
+    // evaluated ONCE at construction. The fork mirrors infer_call's dispatch:
     // (same call_hole_index read, same is_seq_op precedence); the mint
     // precedes lo_args so hole slots never lower. Pipe-right calls never
     // reach this fork — lower_pipe_complete dispatches them fork-free (the

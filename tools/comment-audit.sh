@@ -40,6 +40,12 @@ if [ -s "$M2WAT" ]; then
     | sed 's/^\$//; s/\./ /g; s/\$/ /g' | tr ' ' '\n' \
     | sed -E 's/^_+//; s/_[0-9]+$//' | sort -u >> "$SURFACE"
 fi
+# The emitter's own string literals name WAT identifiers ($__init_lets) that a
+# given wheel build may never instantiate — normalize those the same way, so a
+# comment citing what the emit WRITES resolves against the writer itself.
+grep -ohE '\$[A-Za-z_][A-Za-z0-9_.$]*' "$SURFACE" \
+  | sed 's/^\$//; s/\./ /g; s/\$/ /g' | tr ' ' '\n' \
+  | sed -E 's/^_+//; s/_[0-9]+$//' | sort -u >> "$SURFACE"
 # THE DESIGN VOCABULARY: record-field and substrate names (fn_ptr, tag_word,
 # nstate, the k-frame vocabulary) are DEFINED in the three docs' prose — the
 # design's own source. A comment citing them resolves against the design,
@@ -63,8 +69,11 @@ for f in $TARGETS; do
     printf '%s' "$rest" | grep -qE '^[[:space:]]*//' || in_tombstone=0   # blank/code line ends the block
     printf '%s' "$rest" | grep -qE '\b(DELETED|REMOVED|RETIRED|DISSOLVED)\b' && in_tombstone=1
     [ "$in_tombstone" -eq 1 ] && continue
-    # drop file paths + file.ext tokens so seed/doc filenames aren't mistaken
-    clean=$(printf '%s' "$rest" | sed -E 's@[A-Za-z0-9_.-]*/[A-Za-z0-9_./-]+@ @g; s@[A-Za-z0-9_]+\.[a-z]{2,4}\b@ @g')
+    # drop file paths + file.ext tokens so seed/doc filenames aren't mistaken;
+    # drop SCHEMATIC TEMPLATES — a token containing an angle-bracket placeholder
+    # ($<h>_state_g, $show_<sig>) names a CONVENTION whose instances live in the
+    # emitted namespace; the template itself is never a symbol cite.
+    clean=$(printf '%s' "$rest" | sed -E 's@[A-Za-z0-9_.-]*/[A-Za-z0-9_./-]+@ @g; s@[A-Za-z0-9_]+\.[a-z]{2,4}\b@ @g; s@[$A-Za-z0-9_]*<[A-Za-z0-9_]+>[A-Za-z0-9_]*@ @g')
     for sym in $(printf '%s\n' "$clean" | grep -oE '[a-z][a-z0-9]*(_[a-z0-9]+)+' | sort -u); do
       printf '%s' "$sym" | grep -qE "$ALLOW" && continue
       grep -qwF "$sym" "$SURFACE" || { printf 'PHANTOM  %s:%-4s  %s — cited in a comment, defined nowhere in code\n' "$f" "$ln" "$sym"; found=1; }

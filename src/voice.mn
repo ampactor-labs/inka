@@ -64,7 +64,7 @@ type Register
 //
 // Substrate per Hμ.cursor §2 + GR §3.2 (live): the public shape IS
 // `AnnotationSuggestion(SuggestionKind, String, List, Reason)` from
-// types.mn — kind / annotation_text / unlocks_labels / reason. The
+// types.mn — kind / the annotation text / the unlocked labels / reason. The
 // site span lives inside the Reason's outer Located wrapper.
 
 // Env-entries reach Mentl as snapshots so a turn is stateless w.r.t.
@@ -93,8 +93,8 @@ type HandlerEntry
 // No external state consulted — stateless-per-turn except
 // prior_turn_topic (silence predicate input) and register (rendering).
 // The Situation IS the graph read: composing it invokes every
-// relevant effect op (graph_chase, env_snapshot, refinement_query,
-// ownership_at, gradient_next) and freezes their results for this
+// relevant effect op (graph_chase, env_snapshot, gradient_next and
+// kin) and freezes their results for this
 // turn.
 // Primitives: #1 (graph), #2 (handlers_installed), #4 (rows),
 // #5 (ownership), #6 (refinements), #7 (gradient_next), #8 (reason).
@@ -118,10 +118,10 @@ type Situation
       register:              Register
     })
 
-// §2.7.5's silence predicate references helpers (handle_is_hole,
-// error_at, nested_calls_at_span, unlocks_capability,
-// ownership_violation_at, row_subsumption_fails_at,
-// refinement_obligation_at) that would each require an effect read
+// §2.7.5's silence predicate references per-aspect reads (is the
+// handle a hole, is there an error here, which nested calls sit in
+// the span, which capability unlocks, which obligations stand)
+// that would each require an effect read
 // on graph / ledger state. TopicFacts hoists those reads into
 // Situation composition: the handler that builds the Situation
 // performs the effect queries once and freezes results here, so
@@ -157,7 +157,7 @@ type FormKind
   | FTrace            // "Bound L18; `+` at L42 said `Int`." (Why)
 
 // Each slot renders through a canonical renderer (show_type,
-// show_row, show_reason). No ad-hoc formatting at the voice layer —
+// show_effrow, show_reason). No ad-hoc formatting at the voice layer —
 // the graph's own self-projection is the source of strings.
 // Backtick-wrapping lives in the slot's render, not in handwritten
 // prose.
@@ -201,8 +201,8 @@ type VoiceLine
   = Silence
   | VoiceLine(Tentacle, FormKind, [Slot], Modifier)
 
-// History feeds the silence predicate's
-// observation_new_since_last_turn check. Bounded ring — the session
+// History feeds the silence predicate's is-this-new-since-last-turn
+// check. Bounded ring — the session
 // keeps the last N turns, older entries drop. Ring size is a
 // handler-install parameter, not a substrate constant (configured
 // at handler install per H3.1 parameterized effects).

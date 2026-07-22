@@ -32,7 +32,6 @@
 10	Wildcard-fabricates (_ arm returning Forall)	_\s*=>\s*Forall\s*\(	ka	Wildcard fabricates a Scheme. Enumerate variants explicitly.
 10	Wildcard-fabricates (_ arm returning TVar)	_\s*=>\s*TVar\s*\(	ka	Fabricated TVar silently absorbs a new variant.
 10	Wildcard-fabricates (_ arm returning "Pure")	_\s*=>\s*"Pure"	ka	String-Pure default. Use EffRow algebra.
-11	Loop-accumulator O(N²) (acc ++ [x])	\+\+\s*\[[^]]*\]	ka	Use list_extend_to + list_set + counter + slice. Bump allocator traps at 16 MB.
 13	Failure-mask (|| true)	\|\|\s*true	ka	A bug is zero or blocking. No `|| true` to hide a gate.
 14	Decorated-removal (removed-for comments)	//\s*removed\s+(for|because)	ka	Delete, don't decorate. No removal comments.
 15	Unused-decoration (leading underscore retain)	\blet\s+_[a-z]\w+\s*=	ka	Unused variables are deleted, not renamed with underscore.

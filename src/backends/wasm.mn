@@ -27,7 +27,7 @@ effect WasmOut {
   wat_emit(String) -> ()
 }
 
-// WatBuffer effect — collect_wat returns the accumulated buffer of a
+// WatBuffer effect — wat_collect returns the accumulated buffer of a
 // scoped emit. Used by row-aware-parallel-emit (per Hβ.emit.row-aware-
 // parallel-emit): each fn body emits to a fresh wat_to_string handler,
 // then the collected strings get sequential output preserving source
@@ -91,7 +91,8 @@ fn heap_base() with Pure = 4096
 //
 //   emit_memory_bump   — monotonic bump from $heap_ptr
 //   emit_memory_arena  — region-tracked alloc with O(1) drop on scope exit (W5)
-//   emit_memory_gc     — full collector with header tags (post-first-light)
+//   a full collector with header tags is the named peer
+//   Hβ.emit.memory-gc-handler (post-first-light)
 //
 // Anchor 5: the backend's memory model is a one-handler swap — DESIGN 7.3
 // "the handler IS the backend" extends to memory strategy without disturbing
@@ -708,7 +709,7 @@ fn emit_module(lowered) = {
 
 // ─── Single-walk multi-projection emit pre-pass ─────────────────────
 // Per protocol_cursor_is_the_substrate.md + Hβ.emit.consolidate-pre-pass-walks
-// (2026-05-11): the four prior `collect_X` passes (fn_names, top_fn_names,
+// (2026-05-11): the four DELETED `collect_X` passes (fn_names, top_fn_names,
 // string_literals, state_slots) over the SAME LowExpr tree were the
 // canonical "imperative subsystem" drift (#102) at the emit layer — each
 // pass an independent deep tree walk with duplicated 30+ variant match,
@@ -950,7 +951,7 @@ fn register_show_sum_literals(specs, i) with EmitStringLiteralOp + Memory = {
 
 // walk_lemit — top-level entry. Iterates `lowered`'s direct children;
 // fires `visit_top_fn(name)` for each LLet-bound closure/continuation
-// (the original collect_top_level_fn_names semantic). Then recursive
+// (the original top-level fn-name collection semantic). Then recursive
 // descent via walk_lemit_expr collects the per-node projections.
 fn walk_lemit(exprs) = walk_lemit_top(exprs, 0)
 
@@ -1171,8 +1172,8 @@ fn emit_state_globals(slots) = {
 // LHandleWith, SET at install) UNION every no-config DECLARED handler in the env
 // (uninstalled ones stay 0 — never read, but the home reference assembles).
 // emit and lower's singleton dispatch MUST agree on which handlers have a home,
-// so BOTH read the env live (one criterion, two readers — never a registry on
-// one side; mirror of the seed's $emit_noconfig_handler_globals).
+// so BOTH read the env live (one criterion, two readers — never a registry
+// on one side).
 fn emit_singleton_globals(lowered) with WasmOut + EnvRead = {
   let installed = singleton_hnames_list(lowered, [])
   let all_names = match env_snapshot() {
@@ -1521,8 +1522,8 @@ fn collect_top_value_lets(stmts) =
 // reaching trees (the original decl, the reified k fn, the inline
 // residency) — so the tree-order walks meet one fn N times (first
 // exercised when THE CUT flipped the wheel's own choose/
-// enumerate_inhabitants MultiShot: lambda_16603 collected 4x,
-// __k_16596 2x — table, _idx globals, and definitions all redefined).
+// enumerate_inhabitants MultiShot: one lambda collected 4x, its k
+// frame 2x — table, _idx globals, and definitions all redefined).
 // Emission dedups by NAME at each materialization seam; keep-first
 // preserves visit order so all three surfaces agree. A second sighting
 // of one name is never a second fn — the name derives from the minting
@@ -1624,7 +1625,7 @@ fn emit_fn_index_globals(names, base_idx) = {
 // captures = 8 bytes per record. We emit `(data ...)` segments at
 // module-load addresses [256, 256+8N) populated with little-endian
 // `[fn_idx, 0]`, and `(global $<name> i32 (i32.const <addr>))`
-// pointing to each. No `_init_closures` runtime routine; no
+// pointing to each. No runtime closure-init routine; no
 // startup walk; the host populates the records during module
 // instantiation. DESIGN Ch 4 "the graph IS the program" — emit
 // projects state directly, doesn't generate code that builds it.
@@ -6491,6 +6492,16 @@ fn alt_any_always_matches(branches) = {
 // f64-wide (the same width the store wrote). emit_scrut_at defaults leaf_repr to
 // RI32 — the word floor, byte-identical for pointer/i32 leaves (Law 7) — and the
 // width-typed leaves (a float payload/field bind) route through emit_scrut_at_repr.
+// A pattern path step is one of TWO navigations, never one Int wearing
+// two meanings: POff chases a FIXED layout (record field, tuple slot,
+// variant payload — offsets lower/emit PROVED), PIdx reads a SEQUENCE
+// element through the runtime's own total reader ($list_index — tag- and
+// stride-dispatching), so a list pattern matches a rope, snoc, or slice
+// exactly as it matches a flat list. The raw 8+4i element read this
+// replaces was a representation leak: sound only for tag-0 flat lists,
+// garbage on a `++` rope (the pa11 crucible).
+type PatStep = POff(Int) | PIdx(Int)
+
 fn emit_scrut_at(path, path_len) = emit_scrut_at_repr(path, path_len, RI32)
 
 fn emit_scrut_at_repr(path, path_len, leaf_repr) = {
@@ -6575,8 +6586,9 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
     emit_pat_record_subs_predicate(fbs, path, path_len)
   },
   LPList(sub_pats, rest) => {
-    // Flat list facts: len@0, tag@4, elems@8+4i (lists materialize
-    // flat at construction; runtime/lists.mn owns tree shapes).
+    // count@0 is the ONE universal sequence header (every representation —
+    // flat, snoc, rope, slice — carries it); elements read through
+    // $list_index (PIdx steps), never a raw stride assumption.
     emit_scrut_at(path, path_len)
     wat_emit("    (i32.load offset=0)\n")
     wat_emit("    (i32.const ")
@@ -6586,7 +6598,7 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
       None    => wat_emit("    (i32.eq)\n"),
       Some(_) => wat_emit("    (i32.ge_u)\n")
     }
-    emit_pat_subs_predicate(sub_pats, 0, path, path_len, 8)
+    emit_pat_subs_predicate(sub_pats, 0, path, path_len)
   },
   LPAlt(branches) => emit_pat_alt_predicate(branches, path, path_len)
 }
@@ -6595,17 +6607,17 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
 // on the stack when called; each refutable sub wraps it in
 // (if (result i32) (then <sub-pred> <rest>) (else (i32.const 0))) —
 // short-circuit, so a failed outer test never evaluates inner loads.
-fn emit_pat_subs_predicate(subs, i, path, path_len, base) = {
+fn emit_pat_subs_predicate(subs, i, path, path_len) = {
   if len(subs) == 0 { () }
   else {
     let p = last(subs)
     if pat_always_matches(p) {
-      emit_pat_subs_predicate(drop_last(subs), i + 1, path, path_len, base)
+      emit_pat_subs_predicate(drop_last(subs), i + 1, path, path_len)
     } else {
       wat_emit("    (if (result i32)\n      (then\n")
-      let extended = list_set(path, path_len, base + i * 4)
+      let extended = list_set(path, path_len, PIdx(i))
       emit_pat_predicate_at(p, extended, path_len + 1)
-      emit_pat_subs_predicate(drop_last(subs), i + 1, path, path_len, base)
+      emit_pat_subs_predicate(drop_last(subs), i + 1, path, path_len)
       wat_emit("      )\n      (else (i32.const 0)))\n")
     }
   }
@@ -6620,7 +6632,7 @@ fn emit_pat_record_subs_predicate(fbs, path, path_len) = {
       emit_pat_record_subs_predicate(drop_last(fbs), path, path_len)
     } else {
       wat_emit("    (if (result i32)\n      (then\n")
-      let extended = list_set(path, path_len, offset)
+      let extended = list_set(path, path_len, POff(offset))
       emit_pat_predicate_at(sub_pat, extended, path_len + 1)
       emit_pat_record_subs_predicate(drop_last(fbs), path, path_len)
       wat_emit("      )\n      (else (i32.const 0)))\n")
@@ -6639,7 +6651,7 @@ fn emit_pat_tuple_subs_predicate(ebs, path, path_len) = {
       emit_pat_tuple_subs_predicate(drop_last(ebs), path, path_len)
     } else {
       wat_emit("    (if (result i32)\n      (then\n")
-      let extended = list_set(path, path_len, offset)
+      let extended = list_set(path, path_len, POff(offset))
       emit_pat_predicate_at(sub_pat, extended, path_len + 1)
       emit_pat_tuple_subs_predicate(drop_last(ebs), path, path_len)
       wat_emit("      )\n      (else (i32.const 0)))\n")
@@ -6688,7 +6700,7 @@ fn emit_pat_binds_at(pat, path, path_len, val_repr) = match pat {
   LPTuple(ebs)           => emit_pat_tuple_binds(ebs, path, path_len),
   LPRecord(fbs)          => emit_pat_record_binds(fbs, path, path_len),
   LPList(sub_pats, rest) => {
-    emit_pat_subs_binds(sub_pats, 0, path, path_len, 8)
+    emit_pat_subs_binds(sub_pats, 0, path, path_len)
     emit_pat_list_rest_bind(len(sub_pats), rest, path, path_len)
   },
   LPAlt(branches) => emit_pat_alt_binds(branches, path, path_len)
@@ -6697,15 +6709,15 @@ fn emit_pat_binds_at(pat, path, path_len, val_repr) = match pat {
 // List-element binders use uniform i32 slots (list elems are word-slotted; an
 // f64-element list rides the RV128 lane cash-out peer, not this path) — RI32
 // leaf load, byte-identical.
-fn emit_pat_subs_binds(subs, i, path, path_len, base) = {
+fn emit_pat_subs_binds(subs, i, path, path_len) = {
   if len(subs) == 0 { () }
   else {
-    // Sub i pairs with slot i — the walker consumes from the FRONT. The
+    // Sub i pairs with element i — the walker consumes from the FRONT. The
     // prior last(subs)+i pairing gave the LAST sub index 0's offset:
     // every multi-element pattern bound REVERSED (the wrong-end class).
-    let extended = list_set(path, path_len, base + i * 4)
+    let extended = list_set(path, path_len, PIdx(i))
     emit_pat_binds_at(list_index(subs, 0), extended, path_len + 1, RI32)
-    emit_pat_subs_binds(rest(subs), i + 1, path, path_len, base)
+    emit_pat_subs_binds(rest(subs), i + 1, path, path_len)
   }
 }
 
@@ -6721,7 +6733,7 @@ fn emit_pat_con_subs_binds(ptys, subs, i, path, path_len) = {
     // and b at a's (compare-fold's 23: fst/snd swapped end to end).
     let pty = if i < len(ptys) { fold_strip(list_index(ptys, i)) } else { TVar(0) }
     let off = variant_payload_offset(ptys, i, 0, 4)
-    let extended = list_set(path, path_len, off)
+    let extended = list_set(path, path_len, POff(off))
     emit_pat_binds_at(list_index(subs, 0), extended, path_len + 1, repr_of(pty))
     emit_pat_con_subs_binds(ptys, rest(subs), i + 1, path, path_len)
   }
@@ -6740,7 +6752,7 @@ fn emit_pat_con_subs_predicate(ptys, subs, i, path, path_len) = {
     } else {
       wat_emit("    (if (result i32)\n      (then\n")
       let off = variant_payload_offset(ptys, i, 0, 4)
-      let extended = list_set(path, path_len, off)
+      let extended = list_set(path, path_len, POff(off))
       emit_pat_predicate_at(sub_pat, extended, path_len + 1)
       emit_pat_con_subs_predicate(ptys, rest(subs), i + 1, path, path_len)
       wat_emit("      )\n      (else (i32.const 0)))\n")
@@ -6752,7 +6764,7 @@ fn emit_pat_record_binds(fbs, path, path_len) = {
   if len(fbs) == 0 { () }
   else {
     let (_, offset, sub_pat) = last(fbs)
-    let extended = list_set(path, path_len, offset)
+    let extended = list_set(path, path_len, POff(offset))
     emit_pat_binds_at(sub_pat, extended, path_len + 1, RI32)
     emit_pat_record_binds(drop_last(fbs), path, path_len)
   }
@@ -6765,7 +6777,7 @@ fn emit_pat_tuple_binds(ebs, path, path_len) = {
   if len(ebs) == 0 { () }
   else {
     let (offset, elem_ty, sub_pat) = last(ebs)
-    let extended = list_set(path, path_len, offset)
+    let extended = list_set(path, path_len, POff(offset))
     emit_pat_binds_at(sub_pat, extended, path_len + 1, repr_of_resolved(elem_ty))
     emit_pat_tuple_binds(drop_last(ebs), path, path_len)
   }
@@ -6887,26 +6899,41 @@ fn emit_load_chain(path, k, path_len) =
 fn emit_load_chain_repr(path, k, path_len, leaf_repr) = {
   if k == path_len { () }
   else {
-    let off = list_index(path, k)
-    // NO negative offset reaches WAT: off < 0 = resolve_field_offset could not
-    // PROVE this field's offset (the scrutinee's type is non-record/unresolved
-    // or the field is absent). Emit (unreachable) — the loud floor, the wheel
-    // twin of emit_local.wat's $el_emit_i32_load_offset guard — never
-    // i32.load offset=-1 (invalid WAT) nor a silent foreign-field read. The
-    // chain stops here: anything after the unreachable is dead.
-    if off < 0 {
-      wat_emit("    (unreachable)\n")
-    } else {
-      // The last step loads at leaf_repr; every prior step is an i32 pointer
-      // chase (intermediate aggregate handles are always words).
-      let is_last = k + 1 == path_len
-      let ld = if is_last { repr_load_op(leaf_repr) } else { "i32.load" }
-      wat_emit("    (")
-      wat_emit(ld)
-      wat_emit(" offset=")
-      wat_emit(int_to_str(off))
-      wat_emit(")\n")
-      emit_load_chain_repr(path, k + 1, path_len, leaf_repr)
+    match list_index(path, k) {
+      POff(off) => {
+        // NO negative offset reaches WAT: off < 0 = resolve_field_offset could
+        // not PROVE this field's offset (the scrutinee's type is non-record/
+        // unresolved or the field is absent). Emit (unreachable) — the loud
+        // floor — never i32.load offset=-1 (invalid WAT) nor a silent
+        // foreign-field read. The chain stops here: the rest is dead.
+        if off < 0 {
+          wat_emit("    (unreachable)\n")
+        } else {
+          // The last step loads at leaf_repr; every prior step is an i32
+          // pointer chase (intermediate aggregate handles are always words).
+          let is_last = k + 1 == path_len
+          let ld = if is_last { repr_load_op(leaf_repr) } else { "i32.load" }
+          wat_emit("    (")
+          wat_emit(ld)
+          wat_emit(" offset=")
+          wat_emit(int_to_str(off))
+          wat_emit(")\n")
+          emit_load_chain_repr(path, k + 1, path_len, leaf_repr)
+        }
+      },
+      // A sequence element reads through the runtime's total reader — the
+      // SAME tag- and stride-dispatch every subscript takes, so a rope,
+      // snoc, or slice scrutinee matches exactly like a flat list. The
+      // result is the element word (a wide element's word face is its
+      // address — the word protocol), so the chain composes unchanged.
+      PIdx(i) => {
+        wat_emit("    (i32.const ")
+        wat_emit(int_to_str(i))
+        wat_emit(")\n")
+        emit_fold_state_insert()
+        wat_emit("    (call $list_index)\n")
+        emit_load_chain_repr(path, k + 1, path_len, leaf_repr)
+      }
     }
   }
 }

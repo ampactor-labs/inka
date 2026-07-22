@@ -31,7 +31,7 @@
 //   graph_chase / NodeKind / Reason          — src/graph.mn + types.mn
 //   query_default (Query tentacle)           — src/query.mn
 //   synth_propose (Propose tentacle)         — src/mentl.mn
-//   PipeContext / pipe_context_of_kind       — src/cursor.mn
+//   PipeContext / pipe_context_of_handle     — src/cursor.mn
 //   row_of_kind / EffRow                     — src/cursor.mn + effects.mn
 //   ownership_of_kind / Ownership            — src/cursor.mn + own.mn
 //   verify_pending_at / Predicate            — src/cursor.mn + verify.mn
@@ -264,8 +264,8 @@ fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory =
   // install in the weave governs it. The position's row decides the verdict:
   // a position with a non-empty row that NO enclosing `~>` covers invites (an
   // effect is unhandled here); a Pure position, or one a handler covers,
-  // clears. row_of_kind reads the bound row; pipe_under_tee reads the live
-  // install edges — no fabricated blanket-clear, no handler_stack side-ledger.
+  // clears. row_of_kind reads the bound row; handle_under_tee_install reads
+  // the live install edges — no fabricated blanket-clear, no side-ledger.
   let row = row_of_kind(kind)
   if row_is_ground(row) && is_pure_row(row) {
     VerdictClears(reason)
@@ -279,7 +279,7 @@ fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory =
 // Does an enclosing `~>` install govern this handle? The install's governed
 // body is the PTee's LEFT subtree; a position is covered when it sits inside
 // some PTee body in the weave. Live read of the install edges — the handler
-// chain IS the graph (PLAN §2), never a transient handler_stack.
+// chain IS the graph (PLAN §2), never a transient stack copy.
 fn handle_under_tee_install(handle) with GraphRead + !Mutate = {
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot

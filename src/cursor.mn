@@ -26,7 +26,7 @@
 //                                         MultiShot semantics post-H7)
 //   verify_debt           — types.mn:807 (Verify effect)
 //   mentl_context_at      — kind projection (this file)
-//   pipe_context_of_kind  — kind projection (this file)
+//   pipe_context_of_handle — kind projection (this file)
 //   ownership_of_kind     — kind projection (this file)
 //   row_of_kind           — kind projection (this file)
 //   verify_pending_at     — ledger projection (this file)
@@ -128,7 +128,7 @@ handler cursor_default with !Mutate {
 
 // ─── Multi-cursor projection — map over a span list ─────────────────
 //
-// `cursor_pair_at` (binary special-case) was erased per
+// The DELETED `cursor_pair_at` (binary special-case) was erased per
 // `feedback_fully_as_early.md`: pair-forms ARE the tell that an N-arity
 // peer is missing. Multi-cursor projection IS
 // `spans |> map((s) => cursor_at(s))` directly at the call site, the
@@ -305,8 +305,8 @@ fn score_one_position(handle, caret) with GraphRead + Memory + Teach + !Mutate +
 // matters."
 //
 // Pure. Reproducible. No learned weights. The decay table is
-// configurable via Hμ.cursor.transport's `cursor_weights` handler
-// (peer handle); the defaults below are the project residue.
+// configurable via a weights handler (the Hμ.cursor.transport peer);
+// the defaults below are the project residue.
 
 fn caret_proximity_weight(caret, target_span) -> Float with GraphRead + !Mutate + Memory + Alloc = {
   let Caret(_, caret_reason) = caret
@@ -756,8 +756,8 @@ fn filter_by_span(target, debt) with Pure = {
 //   Hμ.runtime.wasi-thread-spawn-seed        consumes work via gradient_pop
 //   Hμ.collab.shared-graph-handler (Phase Z) layered on top
 //
-// Per protocol_cursor_is_argmax + protocol_cursor_is_the_substrate:
-// gradient_queue IS the cursor projected as work-scheduler. The queue
+// Per the argmax law: the gradient queue IS the cursor projected as
+// work-scheduler. The queue
 // has zero memory cost — it's a recomputed argmax over the live graph
 // at the caret. No priority-queue data structure (drift 7 refusal —
 // that would be parallel-arrays-not-record); no scheduler module

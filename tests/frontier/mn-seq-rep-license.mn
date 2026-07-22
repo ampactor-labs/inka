@@ -1,0 +1,22 @@
+// The representation chase: a locally-flat scrutinee's list pattern reads
+// raw POff loads (licensed by proof — zero $list_index calls); a rope or
+// snoc scrutinee reads the total PIdx path. Same source shapes, three
+// representations, one truth: the proof becomes the dispatch per receiver.
+// flat local — licensed raw loads; rope — the total reader; snoc — total.
+fn flat_case() = {
+  let xs = [40, 2]
+  match xs { [a, b] => a + b, _ => 0 }   // drift-audit: ignore — the wildcard is the list pattern's required remainder arm
+}
+
+fn rope_case() = {
+  let xs = [1] ++ [2, 3]
+  match xs { [a, b, c] => a * 100 + b * 10 + c, _ => 0 }   // drift-audit: ignore — required remainder arm
+}
+
+fn snoc_case() = {
+  let xs = push(push([], 7), 8)
+  match xs { [a, b] => a * 10 + b, _ => 0 }   // drift-audit: ignore — required remainder arm
+}
+
+fn main() =
+  if flat_case() == 42 && rope_case() == 123 && snoc_case() == 78 { 42 } else { 1 }

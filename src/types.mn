@@ -73,6 +73,22 @@ type Ty
 // lands their gradient-INPUT surface (the `repr <width>` pin, a
 // fixed-point refinement, a homogeneous lane-sequence) — present here as
 // arms so STEP 1 ADDS a trigger, never a new type.
+// The sequence REPRESENTATION — the fact unification erases and every
+// runtime helper re-derives (load tag_word; branch). Minted at the
+// construction the graph already knows (a literal is flat, `++` is a rope,
+// push is snoc, slice is a view), carried through local bindings by the
+// LowerScope edge ls_bind_local already draws, JOINED at control merges
+// (equal reps survive; a genuine merge widens to SRUnknown — the honest
+// floor where the tag branch is real information). Consumers read it as a
+// license: a proven rep turns a runtime dispatch back into the direct
+// form, per receiver — the proof becomes the dispatch at the value layer.
+type SeqRep
+  = SRFlat
+  | SRSnoc
+  | SRRope
+  | SRSlice
+  | SRUnknown
+
 type Repr
   = RI32          // 32-bit word: TInt/TBool/TUnit/nullary-tag AND every
                   //   pointer-kind (string/list/tuple/record/fun/cont) AND

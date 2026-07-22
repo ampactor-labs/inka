@@ -1197,7 +1197,7 @@ fn walk_lemit_pat(pat) = match pat {
   LPCon(_, _, subs) => each(walk_lemit_pat, subs),
   LPTuple(elems)    => each((e) => { let (_, _, sp) = e
                                      walk_lemit_pat(sp) }, elems),
-  LPList(prefix, _) => each(walk_lemit_pat, prefix),
+  LPList(prefix, _, _) => each(walk_lemit_pat, prefix),
   LPRecord(fs)      => each((f) => { let (_, _, sp) = f
                                      walk_lemit_pat(sp) }, fs),
   LPAlt(branches)   => each(walk_lemit_pat, branches),
@@ -2685,7 +2685,7 @@ fn walk_locals_pat(pat, r, acc) = match pat {
   LPUnresolvedCon(_, sub_pats) =>
     fold(acc, (a, p) => walk_locals_pat(p, RI32, a), sub_pats),
   LPTuple(elem_binds)   => walk_locals_pat_tuple(elem_binds, acc),
-  LPList(sub_pats, rest) =>
+  LPList(sub_pats, rest, _) =>
     walk_locals_pat_rest(rest, walk_locals_pat_list(sub_pats, acc)),
   LPRecord(field_binds) => walk_locals_pat_record(field_binds, acc),
   LPWild                => acc,
@@ -6506,7 +6506,7 @@ fn pat_always_matches(pat) = match pat {
   LPLit(_)        => false,
   LPCon(_, _, _)  => false,
   LPUnresolvedCon(_, _) => false,
-  LPList(_, _)    => false,
+  LPList(_, _, _) => false,
   LPTuple(ebs)    => tuple_pats_always_match(ebs),
   LPRecord(fbs)   => record_pats_always_match(fbs),
   LPAlt(branches) => alt_any_always_matches(branches)
@@ -6648,10 +6648,13 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
     wat_emit("    (i32.const 1)\n")
     emit_pat_record_subs_predicate(fbs, path, path_len)
   },
-  LPList(sub_pats, rest) => {
+  LPList(sub_pats, rest, srep) => {
     // count@0 is the ONE universal sequence header (every representation —
-    // flat, snoc, rope, slice — carries it); elements read through
-    // $list_index (PIdx steps), never a raw stride assumption.
+    // flat, snoc, rope, slice — carries it). Elements: a PROVEN-flat
+    // word-stride scrutinee (the lower-time chase's license) reads raw
+    // POff(8+4i) — the direct loads, bounds-proven by this very length
+    // test; every other representation reads through $list_index (PIdx),
+    // the total reader. The proof becomes the dispatch, per receiver.
     emit_scrut_at(path, path_len)
     wat_emit("    (i32.load offset=0)\n")
     wat_emit("    (i32.const ")
@@ -6661,7 +6664,10 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
       None    => wat_emit("    (i32.eq)\n"),
       Some(_) => wat_emit("    (i32.ge_u)\n")
     }
-    emit_pat_subs_predicate(sub_pats, 0, path, path_len)
+    match srep {
+      SRFlat => emit_pat_subs_predicate_flat(sub_pats, 0, path, path_len),
+      _      => emit_pat_subs_predicate(sub_pats, 0, path, path_len)
+    }
   },
   LPAlt(branches) => emit_pat_alt_predicate(branches, path, path_len)
 }
@@ -6762,8 +6768,11 @@ fn emit_pat_binds_at(pat, path, path_len, val_repr) = match pat {
   LPUnresolvedCon(_, sub_pats) => each((p) => emit_pat_binds_at(p, path, path_len, RI32), sub_pats),
   LPTuple(ebs)           => emit_pat_tuple_binds(ebs, path, path_len),
   LPRecord(fbs)          => emit_pat_record_binds(fbs, path, path_len),
-  LPList(sub_pats, rest) => {
-    emit_pat_subs_binds(sub_pats, 0, path, path_len)
+  LPList(sub_pats, rest, srep) => {
+    match srep {
+      SRFlat => emit_pat_subs_binds_flat(sub_pats, 0, path, path_len),
+      _      => emit_pat_subs_binds(sub_pats, 0, path, path_len)
+    }
     emit_pat_list_rest_bind(len(sub_pats), rest, path, path_len)
   },
   LPAlt(branches) => emit_pat_alt_binds(branches, path, path_len)
@@ -6772,6 +6781,34 @@ fn emit_pat_binds_at(pat, path, path_len, val_repr) = match pat {
 // List-element binders use uniform i32 slots (list elems are word-slotted; an
 // f64-element list rides the RV128 lane cash-out peer, not this path) — RI32
 // leaf load, byte-identical.
+// The LICENSED twins: a proven-flat word-stride scrutinee's elements sit
+// at 8+4i — the exact raw layout the pre-PIdx emitter assumed for every
+// list; the chase's proof restores those bytes per receiver.
+fn emit_pat_subs_predicate_flat(subs, i, path, path_len) = {
+  if len(subs) == 0 { () }
+  else {
+    let p = last(subs)
+    if pat_always_matches(p) {
+      emit_pat_subs_predicate_flat(drop_last(subs), i + 1, path, path_len)
+    } else {
+      wat_emit("    (if (result i32)\n      (then\n")
+      let extended = list_set(path, path_len, POff(8 + i * 4))
+      emit_pat_predicate_at(p, extended, path_len + 1)
+      emit_pat_subs_predicate_flat(drop_last(subs), i + 1, path, path_len)
+      wat_emit("      )\n      (else (i32.const 0)))\n")
+    }
+  }
+}
+
+fn emit_pat_subs_binds_flat(subs, i, path, path_len) = {
+  if len(subs) == 0 { () }
+  else {
+    let extended = list_set(path, path_len, POff(8 + i * 4))
+    emit_pat_binds_at(list_index(subs, 0), extended, path_len + 1, RI32)
+    emit_pat_subs_binds_flat(rest(subs), i + 1, path, path_len)
+  }
+}
+
 fn emit_pat_subs_binds(subs, i, path, path_len) = {
   if len(subs) == 0 { () }
   else {
@@ -6893,7 +6930,7 @@ fn lowpat_has_binders(pat) = match pat {
   LPUnresolvedCon(_, sub_pats) => lowpats_have_binders(sub_pats),
   LPTuple(ebs)    => tuple_pats_have_binders(ebs),
   LPRecord(fbs)   => record_pats_have_binders(fbs),
-  LPList(sub_pats, rest) => {
+  LPList(sub_pats, rest, _) => {
     if lowpats_have_binders(sub_pats) { true }
     else {
       match rest {

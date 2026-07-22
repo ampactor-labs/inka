@@ -1019,6 +1019,31 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · ▶▶ THE REPRESENTATION CHASE — the truth unification erased,
+  carried back (pin 35e5437e). The SeqRep lattice (SRFlat | SRSnoc |
+  SRRope | SRSlice | SRUnknown) is the fact every runtime helper re-derives
+  per value (load tag_word; branch): minted at the construction the graph
+  already knows (a literal is flat, `++` a rope, push snoc, slice a view),
+  carried through local lets by the LowerScope edge ls_bind_local ALREADY
+  draws (name -> the init's handle — no new state, no handler, no installs:
+  the chase is a pure projection over two existing edges), JOINED at
+  control merges (equal survives, a genuine merge widens to SRUnknown —
+  the honest floor where the tag branch is real information), fuel-bounded
+  (8 steps; exhaustion degrades sound). ONE license per match (hoisted out
+  of the per-arm map — the first build allocated per arm × per chase and
+  hit the 4GB ceiling on the wheel; the trap taught the hoist). The first
+  consumer: a proven-flat word-stride scrutinee's list pattern emits raw
+  POff(8+4i) loads — ZERO $list_index calls, bounds proven by the
+  pattern's own length test — the exact bytes the pre-PIdx emitter
+  ASSUMED for every list, now proven per receiver; rope and snoc stay on
+  the total reader. Measured on the three-representation fixture: flat =
+  0 calls/2 raw loads, rope = 3 calls, snoc = 2 calls, one behavior
+  (mn-seq-rep-license, frontier). Named consumers next: xs[i] under the
+  license (needs a proper bounds-composed low node), the spec bracket
+  carrying rep pairs (generic bodies get proven reps — the twins' next
+  axis), and the per-fn rep summary (interprocedural). Board whole:
+  census 0, frontier 174/0, proof-exactness 9/9, crown 5/5, micros
+  green, clean m2 == m3 at the pin.
 - 2026-07-22 · THE COMMENT SCAFFOLDS DISSOLVE INTO THE COMPILE (absorption
   complete, no re-pin — tools only). tools/comment-audit.sh and
   comment-ratchet.sh are DELETED: the medium's own W_CommentRefUnresolved

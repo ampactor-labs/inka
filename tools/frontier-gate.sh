@@ -831,6 +831,8 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-heap-region.mn" 42 yes "$dir"
   run_program "$compiler" rope-list-pattern \
     "$ROOT/tests/frontier/mn-rope-list-pattern.mn" 42 yes "$dir"
+  run_program "$compiler" seq-rep-license \
+    "$ROOT/tests/frontier/mn-seq-rep-license.mn" 42 yes "$dir"
   # E_OwnershipViolation armed 2026-07-18 — the double-move fixture moved from
   # run_diagnostic (productive exit 0) to the armed-class refusal contract.
   run_refusal "$compiler" own-call-arg-move \

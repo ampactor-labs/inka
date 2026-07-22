@@ -476,7 +476,9 @@ type LowPat
                                      // repr_of(ty) for the leaf load width — RI32
                                      // for a pointer element, RF64 for an f64)
   | LPLit(LowValue)
-  | LPList([LowPat], Option(String))         // prefix pats, optional rest name
+  | LPList([LowPat], Option(String), SeqRep)  // prefix pats, optional rest name,
+                                             // the scrutinee's PROVEN representation
+                                             // (SRFlat licenses raw element loads)
   | LPRecord([(String, Int, LowPat)]) // [(field_name: String, offset_bytes: Int, sub_pat: LowPat)]
   | LPAlt([LowPat])                  // alternation branches; arm matches if ANY
                                      // branch matches (predicate = OR); branches
@@ -3115,7 +3117,11 @@ fn lower_stmt_as_expr(s, handle, span) = {
 
 // Pattern lowering
 
-fn lower_match_arms(scrut_h, arms) = map((arm) => {
+fn lower_match_arms(scrut_h, arms) = {
+  // ONE scrutinee, ONE license — hoisted out of the per-arm map (the chase
+  // is per-value, never per-arm).
+  let srep = seq_pat_rep(scrut_h)
+  map((arm) => {
   let (pat, body) = arm
   let cp = ls_push_scope()   // drift-audit: ignore — sequenced effectful scope checkpoint (LowerScope)
   bind_pat_locals(pat, lookup_ty(scrut_h))
@@ -3125,8 +3131,9 @@ fn lower_match_arms(scrut_h, arms) = map((arm) => {
   // resolves its element offsets as the width-summed prefix-sum (the SAME fold
   // tuple construction + index run), not a uniform 4*i. Carried-Truth: the
   // bind/predicate offsets and the construction stores read ONE offset fold.
-  (lower_pat_typed(pat, lookup_ty(scrut_h)), lo_body)
+  (lower_pat_typed(pat, lookup_ty(scrut_h), srep), lo_body)
 }, arms)
+}
 
 // Bind every `PVar` in the pattern as a local, carrying its element's TYPE
 // HANDLE read live from the scrutinee's type — so a String destructure local's
@@ -3213,6 +3220,104 @@ fn bind_pat_locals_fields(flds) = each((fld) => {
   bind_pat_locals(sub_pat, TVar(0))
 }, flds)
 
+// ─── the sequence-representation chase ──────────────────────────────
+//
+// seq_rep_of projects the representation the value was BORN with: the
+// graph holds the construction (a MakeListExpr is flat, a ++ node is a
+// rope, a push call is snoc, a slice call is a view), and the LowerScope
+// binding edge (ls_bind_local: name -> the init expression's handle)
+// carries it through local lets — no new state, no side-ledger, a pure
+// projection over two edges the graph already draws. Joins widen: equal
+// reps survive a merge; different reps degrade to SRUnknown, the honest
+// floor where the runtime tag branch is genuine information. Params,
+// captures, and polymorphic flow read SRUnknown until the spec bracket
+// learns to carry rep pairs (the twins' next axis).
+
+// Fuel bounds the descent: a chase step through a binding, a join arm, or
+// a block tail spends one, and exhaustion degrades to SRUnknown — always
+// sound (the total reader), never a deep tree re-walk per pattern.
+fn seq_rep_of(h) = seq_rep_of_fuel(h, 8)
+
+fn seq_rep_of_fuel(h, fuel) = {
+  if fuel <= 0 { SRUnknown }
+  else {
+    match graph_node_body(h) {
+      NExpr(MakeListExpr(_))          => SRFlat,
+      NExpr(LitString(_))             => SRFlat,
+      NExpr(MakeStringExpr(_))        => SRFlat,
+      NExpr(BinOpExpr(op, _, _))      => match op { BConcat => SRRope, _ => SRUnknown },
+      NExpr(CallExpr(f, _))           => {
+        let N(fb, _, _) = f
+        match fb {
+          NExpr(VarRef(cname)) => seq_rep_of_call(cname),
+          _                    => SRUnknown
+        }
+      },
+      NExpr(IfExpr(_, t, e))          => {
+        let N(_, _, th) = t
+        let N(_, _, eh) = e
+        seq_rep_join(seq_rep_of_fuel(th, fuel - 1), seq_rep_of_fuel(eh, fuel - 1))
+      },
+      NExpr(MatchExpr(_, arms))       => seq_rep_arms(arms, 0, SRUnknown, true, fuel - 1),
+      NExpr(BlockExpr(_, final_e))    => {
+        let N(_, _, fh) = final_e
+        seq_rep_of_fuel(fh, fuel - 1)
+      },
+      NExpr(VarRef(name))             => {
+        let (res, local_h) = ls_resolve(name)
+        match res {
+          RLocal => if local_h == 0 { SRUnknown } else { seq_rep_of_fuel(local_h, fuel - 1) },
+          _      => SRUnknown
+        }
+      },
+      _                               => SRUnknown
+    }
+  }
+}
+
+// The runtime constructors' return representations — the same named set
+// is_seq_op already recognizes as the substrate boundary. Anything not in
+// the set is the honest unknown (a per-fn rep summary is the
+// interprocedural completion).
+fn seq_rep_of_call(ref cname: String) =
+  if cname == "make_list" { SRFlat }
+  else { if cname == "list_to_flat" { SRFlat }
+  else { if cname == "push" { SRSnoc }
+  else { if cname == "slice" { SRSlice }
+  else { if cname == "str_slice" { SRSlice }
+  else { SRUnknown } } } } }
+
+fn seq_rep_join(a, b) = if a == b { a } else { SRUnknown }
+
+fn seq_rep_arms(ref arms, i, acc, first, fuel) = {
+  if i >= len(arms) { acc }
+  else {
+    let (_, body) = list_index(arms, i)
+    let N(_, _, bh) = body
+    let r = seq_rep_of_fuel(bh, fuel)
+    seq_rep_arms(arms, i + 1, if first { r } else { seq_rep_join(acc, r) }, false, fuel)
+  }
+}
+
+// The pattern LICENSE: SRFlat survives only when the element stride is the
+// word (a byte-packed or wide-element flat list still needs the total
+// reader). A licensed scrutinee's list pattern emits the raw POff loads —
+// the exact bytes the pre-PIdx emitter assumed, now proven per receiver.
+fn seq_pat_rep(scrut_h) = {
+  match seq_rep_of(scrut_h) {
+    SRFlat => match seq_elem_stride_word(lookup_ty(scrut_h)) {
+      true  => SRFlat,
+      false => SRUnknown
+    },
+    _ => SRUnknown
+  }
+}
+
+fn seq_elem_stride_word(ty) = match fold_strip(ty) {
+  TList(elem) => stride_of(elem) == 4,
+  _           => false
+}
+
 // lower_pat_typed — pattern lowering carrying the value's PROVEN type, so a
 // tuple pattern resolves its element offsets as the width-summed prefix-sum
 // (a tuple IS a positional product). The type is read live (chased through
@@ -3222,13 +3327,17 @@ fn bind_pat_locals_fields(flds) = each((fld) => {
 // the variant-payload-f64 width rides item (b)'s eq/store/bind agreement, a
 // named peer at the emit layer; PRecord pre-resolves field offsets), so they
 // delegate to lower_pat unchanged (Law 7 byte-identity).
-fn lower_pat_typed(pat, ty) = match pat {
+fn lower_pat_typed(pat, ty, srep) = match pat {
   PTuple(sub) => match tuple_pat_strip(ty) {
     TTuple(elems) => LPTuple(lower_pat_tuple_elems(sub, elems, 0, 0)),
     // Not a known tuple type (genuinely-unresolved scrutinee): fall back to the
     // uniform stride — productive-under-error, not a fabricated width.
     _             => LPTuple(lower_pat_tuple_uniform(sub, 0))
   },
+  // The scrutinee's proven representation rides the TOP list pattern —
+  // nested sequences are reached through elements (rep unknown) and stay
+  // on the total reader.
+  PList(sub, rest) => LPList(lower_pats(sub), rest, srep),
   _ => lower_pat(pat)
 }
 
@@ -3253,7 +3362,7 @@ fn lower_pat_tuple_elems(subs, elems, i, off) = {
     let elem_ty = if i < len(elems) { list_index(elems, i) } else { TVar(0) }
     let r = repr_of_resolved(elem_ty)
     let here = align_for(off, r)
-    [(here, elem_ty, lower_pat_typed(list_index(subs, i), elem_ty))]
+    [(here, elem_ty, lower_pat_typed(list_index(subs, i), elem_ty, SRUnknown))]
       ++ lower_pat_tuple_elems(subs, elems, i + 1, here + repr_width(r))
   }
 }
@@ -3295,7 +3404,7 @@ fn lower_pat(pat) = match pat {
     }
   },
   PTuple(sub)      => LPTuple(lower_pat_tuple_uniform(sub, 0)),
-  PList(sub, rest) => LPList(lower_pats(sub), rest),
+  PList(sub, rest) => LPList(lower_pats(sub), rest, SRUnknown),
   PRecord(flds)    => LPRecord(lower_pat_record_fields(flds, 0)),
   PAlt(branches)   => LPAlt(lower_pats(branches))
 }

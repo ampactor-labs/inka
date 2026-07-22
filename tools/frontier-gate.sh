@@ -215,10 +215,10 @@ run_program() {
       cat "${CFC_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr" ;;
     cfc-rec)
       cat "${CFC_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr"
-      run_flags=(--dir /tmp) ;;
+      run_flags=(--dir "$dir::/tmp") ;;
     io-rec)
       cat "${IO_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr"
-      run_flags=(--dir /tmp) ;;
+      run_flags=(--dir "$dir::/tmp") ;;
     *)
       wt_run "$compiler" < "$source" > "$wat" 2> "$cerr" ;;
   esac
@@ -358,7 +358,11 @@ capture_cfc_shadow() {
 run_cfc_rec() {
   local compiler="$1" dir="$2"
   local rec="$ROOT/tests/frontier/cfc-rec/recording.txt"
-  local tmp="/tmp/mentl-cfc-recording.txt"
+  # The fixture lives in the gate's OWN per-run dir, which run_program maps as
+  # the guest's /tmp (--dir "$dir::/tmp") — the .mn source keeps its /tmp path
+  # while the host never writes the shared world-writable /tmp (a predictable
+  # path there is a symlink-planting surface).
+  local tmp="$dir/mentl-cfc-recording.txt"
   cp -f "$rec" "$tmp"
   run_program "$compiler" cfc-rec \
     "$ROOT/tests/frontier/cfc-rec/rec-demo.mn" 42 cfc-rec "$dir"
@@ -402,11 +406,15 @@ capture_io_shadow() {
 # data — the representation-stress oracle the m3==m4 fixpoint is blind to. The
 # oracle runs only if it can import its deps; otherwise the cross-check is
 # skipped-noted and Mentl's self-assertion still runs. Trailing args are
-# KEY=value expectations checked against the oracle's output.
+# KEY=value expectations checked against the oracle's output. `guest_path` is
+# the /tmp path the .mn source reads; the host copy lives in the gate's own
+# per-run dir, which run_program maps as the guest's /tmp (--dir "$dir::/tmp"),
+# so the host never writes the shared world-writable /tmp.
 run_data_validator() {
-  local compiler="$1" label="$2" source="$3" fixture="$4" tmp="$5" oracle="$6" dir="$7"
+  local compiler="$1" label="$2" source="$3" fixture="$4" guest_path="$5" oracle="$6" dir="$7"
   shift 7
   local expected=("$@")
+  local tmp="$dir/$(basename "$guest_path")"
   cp -f "$fixture" "$tmp"
   run_program "$compiler" "$label" "$source" 42 io-rec "$dir"
   local out; out=$(python3 "$oracle" oracle "$tmp" 2>/dev/null)

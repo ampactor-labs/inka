@@ -1019,6 +1019,44 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE DATA-VALIDATOR TIER — three real-workload oracles the
+  fixpoint cannot be (no re-pin — tests + gate only, the wheel unchanged;
+  m2 == m3 held). Three on-disk validators, each cross-validated against an
+  INDEPENDENT implementation over the SAME bytes (the representation-stress
+  leg: a byte-identical wheel can still corrupt user data, and only a second
+  implementation agreeing on real data catches it): (1) cfc-rec — the CFC
+  comodulogram on a REAL 4096-sample recording (WASI fs → view-split →
+  parse_float → native [Float]), a 6→60 coupling DISTINCT from the inline
+  demo's 6→40, Mentl and a faithful numpy port of cfc.mn both argmax flat 7;
+  (2) stats-float — fold-sum mean, comparison-reduction argmin/argmax,
+  mean-threshold count over 400 samples, three discrete facts EXACT against
+  numpy (argmin 137 / argmax 298 / above 199 — discrete, so no ULP
+  tolerance); (3) text-bytes — the String=[byte] merge's first real-text
+  gate: byte_len / byte_at / structural == / a 256-slot histogram argmax
+  over a 429-byte corpus, four facts exact against python. Every gate seen
+  RED first (reversed data, perturbed text, a 6→40 recording — Mentl and
+  the oracle shift TOGETHER, so the assertions are data-driven). Frontier
+  135 → 144 / 0. Fixture transport hardened: the gate's own per-run dir is
+  mapped as the guest's /tmp (wasmtime --dir "$dir::/tmp"), so the host
+  never writes the shared world-writable /tmp (the symlink-planting surface
+  a commit-review flagged) — .mn sources keep their /tmp paths. THE HARVEST
+  the validators paid immediately: building stats-float surfaced the
+  monomorphization corner's SECOND face — a NAMED generic comparator passed
+  higher-order (`reduce(xs, min)`) and prelude `sort` (resting on the named
+  generic `merge`) silently MISORDER floats. Mechanism confirmed by probe:
+  the word protocol passes each f64 by reference, the bump allocator hands
+  out ascending addresses, and the i32-floored `<=` compares ADDRESSES — so
+  sort returns its input order unchanged (values intact, order garbage,
+  zero diagnostics). The precise scope rule, replacing two earlier
+  narrower framings: lambdas and annotated helpers are SOUND (specialized
+  per call site — map/filter/fold/each/reverse and every annotated
+  accumulator); any NAMED generic fn compiled once at the i32 floor and
+  reached at a wide type is NOT. Repros banked:
+  tests/repro/mn-named-generic-float-comparator.mn (+ the accumulator
+  sibling's scope note corrected). The ultimate remains the
+  Hβ.value.seq-element-stride-carrier scalar half — per-call-site
+  monomorphization of named generics (emit min_i32 and min_f64, dispatch
+  per site); a refusal is a stopgap monomorphization deletes
 - 2026-07-21 · THE CFC PIPELINE RUNS ON NATIVE [Float] + the generic-over-wide
   keystone EVIDENCED (no re-pin — lib/dsp/cfc.mn is a leaf the compiler compiles
   but never calls, so m2 == m3 held directly). The cross-frequency-coupling
@@ -1051,16 +1089,14 @@ between the wheel and its ultimate form, held open on purpose.
   sc/ss/best: Float — the representation pin the gradient needs at a polymorphic
   boundary), and all annotated-[Float] paths are broad and green (literals, ==,
   ordering, arithmetic, show, map, threaded annotated accumulators, matrices,
-  list-of-[Float] — verified by an 8-case representation-stress battery). SCOPE
-  (a correction to this entry's first framing, measured against the artifact):
-  the whole prelude combinator surface — fold / reduce / map / filter / each —
-  handles floats CORRECTLY (their accumulators are lambdas or handler state,
-  specialized per call site), so the floor bites ONLY a NAMED top-level
-  recursive fn with an unannotated wide param, compiled once. A corner, not a
-  pervasive hole; the mechanism to carry a wide accumulator already exists (fold
-  uses it), so the ultimate is per-call specialization / monomorphization of
-  named generic fns, low-impact and NOT the urgent keystone the first framing
-  implied. Board green: m2 == m3, frontier cfc-demo 42, census 0
+  list-of-[Float] — verified by an 8-case representation-stress battery). SCOPE:
+  this entry's second framing ("only named recursion floors") was ALSO
+  incomplete — superseded by the 2026-07-22 validators entry above, whose
+  measurement is the precise rule: any NAMED generic fn compiled once at the
+  i32 floor and reached at a wide type is the floor (unannotated recursion AND
+  named comparators passed higher-order, prelude sort/min/max included);
+  lambdas and annotated helpers are sound. Board green: m2 == m3, frontier
+  cfc-demo 42, census 0
 - 2026-07-21 · EFFECT-POLYMORPHIC STORED FUNCTIONS + the mentl verb table
   (a hole in the medium closed, and the CLI overhaul it unblocked · pin
   1167ddfe). A first-class CLOSURE carrying its own effect row can now be

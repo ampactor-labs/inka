@@ -24,13 +24,19 @@
 // ultimate is monomorphization itself. Annotating `acc: Float` is manual
 // monomorphization and is what CFC + tests/frontier/mn-float-*.mn use today.
 //
-// SCOPE (measured, against an earlier overstatement): the whole prelude
-// combinator surface — fold / reduce / map / filter / each — handles floats
-// CORRECTLY, because their accumulators are lambdas or handler state, specialized
-// per call site with the concrete type. The floor bites ONLY a NAMED top-level
-// recursive fn with an unannotated wide param, compiled once. So this is a
-// corner, not a pervasive hole; most float code (combinators, annotated helpers)
-// is sound today.
+// SCOPE (measured; corrected 2026-07-22 against a still-too-broad claim): the
+// LAMBDA-based combinators — map / filter / fold / each / reverse, and reduce
+// WITH AN INLINE LAMBDA — handle floats CORRECTLY, because the lambda is
+// specialized per call site at the concrete type. The floor bites any NAMED
+// GENERIC function compiled once at the i32 floor and reached at a wide type:
+// an unannotated recursive accumulator (this file), a named reducer passed
+// higher-order (reduce(xs, min)), and prelude `sort` (its `merge` is a named
+// generic). So the earlier "prelude combinators handle floats" was incomplete —
+// `sort` is a prelude combinator that does NOT. The precise rule: lambdas and
+// annotated helpers are sound; a NAMED generic applied at a wide type is not.
+// See the sibling repro mn-named-generic-float-comparator.mn. Still a corner,
+// not a pervasive hole (annotated helpers and lambdas cover real float code),
+// but broader than one recursive shape.
 //
 // Surfaced 2026-07-21 by representation-stress probing while migrating the CFC
 // pipeline to native [Float]. Turn this into a frontier gate (expecting 42, or

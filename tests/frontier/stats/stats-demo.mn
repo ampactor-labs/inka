@@ -1,0 +1,90 @@
+// stats-demo.mn — native [Float] statistics on a REAL on-disk dataset.
+//
+// A sibling to the CFC validators, stressing a DIFFERENT set of [Float] paths:
+// not trig/DFT, but REDUCTIONS — a fold-sum for the mean, comparison-reduction
+// for the argmin/argmax, and a mean-threshold count. Reads 400 sensor-like
+// samples from disk (WASI → newline split → parse_float → native [Float]) and
+// asserts three DISCRETE facts, each cross-validated against numpy by the gate:
+//   argmin index, argmax index, count of samples strictly above the mean.
+// Discrete facts carry no transcendental, so Mentl and numpy must agree EXACTLY
+// (no ULP tolerance) — a corrupt [Float] would move an index or the count.
+//
+// The reductions use ANNOTATED accumulators (best_v: Float, the sum lambda's
+// float init) — the representation pin the gradient needs at a polymorphic
+// boundary (§4①, the CFC discipline). A NAMED generic comparator (`min`/`max`,
+// prelude `sort`) would compile ONCE at the i32 floor and misorder the wide
+// values — the monomorphization corner Hβ.value.seq-element-stride-carrier
+// (scalar half); the annotation monomorphizes the body to f64, so these are
+// sound today. See tests/repro/mn-unannotated-float-accumulator.mn.
+//
+// EXIT 42 iff all three facts match numpy. Otherwise exit a teaching code
+// (1 argmin, 2 argmax, 3 above-count), naming which reduction diverged.
+
+// Read newline-separated decimals into a native [Float]. `split` yields VIEW
+// strings ([-1][buf][start][len]); str_concat("", line) materializes each into
+// a flat [len][bytes] parse_float can read, and byte_len reads a view's real
+// length. A trailing newline leaves one empty view, skipped.
+fn parse_float_lines(strs, num: Int, out, i: Int, w: Int) with Memory + Alloc = {
+  if i >= num { slice(out, 0, w) }
+  else {
+    let line = str_concat("", strs[i])
+    if byte_len(line) == 0 {
+      parse_float_lines(strs, num, out, i + 1, w)
+    } else {
+      parse_float_lines(strs, num, list_set(out, w, parse_float(line)), i + 1, w + 1)
+    }
+  }
+}
+
+fn read_floats(path) with Memory + Alloc + WASI = {
+  let strs = lines(fs_read_file_impl(path))
+  parse_float_lines(strs, len(strs), make_list(len(strs)), 0, 0)
+}
+
+// The sum threads a float accumulator through an inline lambda (specialized per
+// call site), so the fold is sound over [Float] with no annotation.
+fn fsum(xs) with Memory = fold(0.0, (acc, x) => acc + x, xs)
+
+// argmin / argmax — comparison-reduction with an annotated running best value.
+fn argmin_loop(xs, i: Int, best_i: Int, best_v: Float) with Memory = {
+  if i >= len(xs) { best_i }
+  else {
+    let v = xs[i]
+    if v < best_v { argmin_loop(xs, i + 1, i, v) }
+    else { argmin_loop(xs, i + 1, best_i, best_v) }
+  }
+}
+fn argmin(xs) with Memory = argmin_loop(xs, 1, 0, xs[0])
+
+fn argmax_loop(xs, i: Int, best_i: Int, best_v: Float) with Memory = {
+  if i >= len(xs) { best_i }
+  else {
+    let v = xs[i]
+    if v > best_v { argmax_loop(xs, i + 1, i, v) }
+    else { argmax_loop(xs, i + 1, best_i, best_v) }
+  }
+}
+fn argmax(xs) with Memory = argmax_loop(xs, 1, 0, xs[0])
+
+// Count of samples strictly above a float threshold.
+fn count_above_loop(xs, thresh: Float, i: Int, acc: Int) with Memory = {
+  if i >= len(xs) { acc }
+  else {
+    let inc = if xs[i] > thresh { 1 } else { 0 }
+    count_above_loop(xs, thresh, i + 1, acc + inc)
+  }
+}
+fn count_above(xs, thresh: Float) with Memory = count_above_loop(xs, thresh, 0, 0)
+
+fn main() with Memory + Alloc + WASI = {
+  let xs = read_floats("/tmp/mentl-stats-data.txt")
+  let n = len(xs)
+  let mean = fsum(xs) / float_of_int(n)
+  let amin = argmin(xs)
+  let amax = argmax(xs)
+  let above = count_above(xs, mean)
+  if amin != 137 { 1 }
+  else if amax != 298 { 2 }
+  else if above != 199 { 3 }
+  else { 42 }
+}

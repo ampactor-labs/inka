@@ -1,0 +1,59 @@
+// text-demo.mn — String = [byte] processing on a REAL on-disk text corpus.
+//
+// The second big representation after native [Float]: a String IS a stride-1
+// byte list (§4①). This validator reads a 429-byte prose corpus from disk (WASI
+// → the raw String) and computes DISCRETE facts, each mirroring the exact
+// operation a python oracle performs and cross-validated by the gate:
+//   byte count, count of 'e' (101), count of 't' (116), and the most frequent
+//   lowercase letter by a 256-slot histogram argmax.
+// These stress the core byte paths — byte_len, byte_at, structural == over every
+// byte, and list_set/list_index into an Int histogram — end to end on real text.
+// A corrupt byte read would move a count or the argmax letter; both must agree
+// with python EXACTLY.
+
+// Count occurrences of one byte value across the whole text.
+fn count_byte_loop(text, target: Int, i: Int, n: Int, acc: Int) with Memory = {
+  if i >= n { acc }
+  else {
+    let inc = if byte_at(text, i) == target { 1 } else { 0 }
+    count_byte_loop(text, target, i + 1, n, acc + inc)
+  }
+}
+fn count_byte(text, target: Int) with Memory = count_byte_loop(text, target, 0, byte_len(text), 0)
+
+// A 256-slot byte histogram, threaded through the byte scan (flat list_set, in
+// place). make_list zero-inits, so each slot starts at 0.
+fn hist_loop(text, i: Int, n: Int, hist) with Memory + Alloc = {
+  if i >= n { hist }
+  else {
+    let b = byte_at(text, i)
+    hist_loop(text, i + 1, n, list_set(hist, b, list_index(hist, b) + 1))
+  }
+}
+fn build_hist(text) with Memory + Alloc =
+  hist_loop(text, 0, byte_len(text), make_list(256))
+
+// The most frequent lowercase letter (a=97 .. z=122); a forward scan, so the
+// first max wins on a tie — the same order the python oracle takes.
+fn top_letter_loop(hist, b: Int, best_b: Int, best_c: Int) with Memory = {
+  if b > 122 { best_b }
+  else {
+    let c = list_index(hist, b)
+    if c > best_c { top_letter_loop(hist, b + 1, b, c) }
+    else { top_letter_loop(hist, b + 1, best_b, best_c) }
+  }
+}
+fn top_letter(hist) with Memory = top_letter_loop(hist, 97, 0, 0 - 1)
+
+fn main() with Memory + Alloc + WASI = {
+  let text = fs_read_file_impl("/tmp/mentl-text-corpus.txt")
+  let nbytes = byte_len(text)
+  let ce = count_byte(text, 101)      // 'e'
+  let ct = count_byte(text, 116)      // 't'
+  let top = top_letter(build_hist(text))
+  if nbytes != 429 { 1 }
+  else if ce != 47 { 2 }
+  else if ct != 32 { 3 }
+  else if top != 101 { 4 }            // 'e' is the most frequent letter
+  else { 42 }
+}

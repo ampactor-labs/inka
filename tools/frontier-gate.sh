@@ -97,6 +97,14 @@ CFC_RTLIBS=(
   "$ROOT/tests/frontier/cfc-demo/gen.mn"
 )
 
+# The data-validator lib set: the base runtime plus the WASI fs layer (io.mn),
+# for the on-disk [Float]-statistics and String=[byte]-text validators. Their
+# runs preopen /tmp for the fixture.
+IO_RTLIBS=(
+  "${RTLIBS[@]}"
+  "$ROOT/lib/runtime/io.mn"
+)
+
 total_pass=0
 total_fail=0
 RUNTIME_SHADOW=""
@@ -208,6 +216,9 @@ run_program() {
     cfc-rec)
       cat "${CFC_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr"
       run_flags=(--dir /tmp) ;;
+    io-rec)
+      cat "${IO_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr"
+      run_flags=(--dir /tmp) ;;
     *)
       wt_run "$compiler" < "$source" > "$wat" 2> "$cerr" ;;
   esac
@@ -225,6 +236,9 @@ run_program() {
   elif [ "$link_runtime" = cfc ] || [ "$link_runtime" = cfc-rec ]; then
     comm -23 "$normalized" "$CFC_SHADOW" > "$unexpected"
     shadow="; inherited-shadow=$(wc -l < "$CFC_SHADOW")"
+  elif [ "$link_runtime" = io-rec ]; then
+    comm -23 "$normalized" "$IO_SHADOW" > "$unexpected"
+    shadow="; inherited-shadow=$(wc -l < "$IO_SHADOW")"
   else
     cp "$normalized" "$unexpected"
   fi
@@ -360,6 +374,55 @@ run_cfc_rec() {
   else
     pass "cfc-rec cross-validation skipped (no numpy on host)"
   fi
+}
+
+# The IO shadow — the base runtime + WASI fs, the pinned inherited-debt baseline
+# for the on-disk data validators.
+capture_io_shadow() {
+  local compiler="$1" dir="$2"
+  local wat="$dir/io-shadow.wat" err="$dir/io-shadow.err"
+
+  { cat "${IO_RTLIBS[@]}"; printf '\nfn main() = 0\n'; } \
+    | wt_run "$compiler" > "$wat" 2> "$err"
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    fail "io shadow compile (exit=$rc; see $err)"
+    return 1
+  fi
+  IO_SHADOW="$dir/io-shadow.normalized"
+  normalize_errors "$err" > "$IO_SHADOW"
+  pass "io shadow captured ($(wc -l < "$IO_SHADOW") inherited errors)"
+}
+
+# A generic on-disk DATA VALIDATOR + a LIVE oracle cross-check. Mentl reads a
+# committed fixture (copied to /tmp), computes discrete facts over it, and
+# asserts exit 42; then the SAME on-disk bytes are run through a python oracle
+# whose EXPECTED_<KEY>=<value> lines are asserted to match the values Mentl's
+# exit-42 encodes. Two independent implementations agreeing on the same real
+# data — the representation-stress oracle the m3==m4 fixpoint is blind to. The
+# oracle runs only if it can import its deps; otherwise the cross-check is
+# skipped-noted and Mentl's self-assertion still runs. Trailing args are
+# KEY=value expectations checked against the oracle's output.
+run_data_validator() {
+  local compiler="$1" label="$2" source="$3" fixture="$4" tmp="$5" oracle="$6" dir="$7"
+  shift 7
+  local expected=("$@")
+  cp -f "$fixture" "$tmp"
+  run_program "$compiler" "$label" "$source" 42 io-rec "$dir"
+  local out; out=$(python3 "$oracle" oracle "$tmp" 2>/dev/null)
+  if ! printf '%s\n' "$out" | grep -q '^EXPECTED_'; then
+    pass "$label cross-validation skipped (oracle deps unavailable)"
+    return
+  fi
+  local pair key val got ok=1
+  for pair in "${expected[@]}"; do
+    key="${pair%%=*}"; val="${pair#*=}"
+    got=$(printf '%s\n' "$out" | sed -n "s/^$key=//p")
+    if [ "$got" != "$val" ]; then
+      ok=0; fail "$label cross-validation ($key=$got, expected $val)"
+    fi
+  done
+  [ "$ok" = 1 ] && pass "$label cross-validation (${#expected[@]} facts agree with the oracle)"
 }
 
 compile_fixture() {
@@ -646,6 +709,24 @@ for i in "${!compilers[@]}"; do
   # (a distinct 6→60 coupling, flat 7). The felt research payoff + the
   # representation oracle the fixpoint cannot be (see run_cfc_rec).
   run_cfc_rec "$compiler" "$dir"
+  # Two more on-disk data validators, cross-validated against numpy/python (the
+  # representation-stress the m3==m4 fixpoint is structurally blind to):
+  #  - native [Float] statistics: fold-sum mean, comparison-reduction argmin/
+  #    argmax, mean-threshold count over 400 real samples (argmin 137, argmax
+  #    298, above-mean 199).
+  #  - String=[byte] text: byte_len, byte_at, structural ==, and a 256-slot Int
+  #    histogram argmax over a 429-byte corpus (count_e 47, count_t 32, top 'e').
+  capture_io_shadow "$compiler" "$dir" || continue
+  run_data_validator "$compiler" stats-float \
+    "$ROOT/tests/frontier/stats/stats-demo.mn" \
+    "$ROOT/tests/frontier/stats/data.txt" /tmp/mentl-stats-data.txt \
+    "$ROOT/tests/frontier/stats/oracle.py" "$dir" \
+    EXPECTED_ARGMIN=137 EXPECTED_ARGMAX=298 EXPECTED_ABOVE=199
+  run_data_validator "$compiler" text-bytes \
+    "$ROOT/tests/frontier/text/text-demo.mn" \
+    "$ROOT/tests/frontier/text/corpus.txt" /tmp/mentl-text-corpus.txt \
+    "$ROOT/tests/frontier/text/oracle.py" "$dir" \
+    EXPECTED_BYTES=429 EXPECTED_COUNT_E=47 EXPECTED_COUNT_T=32 EXPECTED_TOP_LETTER=101
   run_program "$compiler" scheduled-int \
     "$ROOT/tests/frontier/mn-scheduled-fanout-int.mn" 60 yes "$dir"
   run_program "$compiler" scheduled-float \

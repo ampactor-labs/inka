@@ -1,0 +1,5 @@
+the medium is a lens so clear the developer looks through it and sees their program.
+proof beats review when no human authored the code, and the negative is provable.
+intent is lossless, computation is durable, and systems explain themselves at the cursor.
+every flow already has a shape, and naming the verb is the discipline that catches drift.
+one graph, two operations, eight arms, and no outside to reach for a better tool.

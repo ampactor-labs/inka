@@ -203,6 +203,85 @@ handler spec_registry with twins = [] {
   set_spec_twins(ns) => resume() with twins = ns
 }
 
+// ─── The show/hash dispatch — emit-time, the one home ─────────────────────
+// to_string / hash arrive as STRUCTURAL nodes (LShow / LHash); the operand's
+// type is read HERE, under whatever specialization bracket is active — so a
+// twin's to_string on its instantiated var renders the value (the lower-time
+// name bake rendered the ADDRESS), and its hash agrees with its eq. The
+// builders synthesize the SAME LowIR shapes lower used to bake, so every
+// walk (locals, vectors, fold collection) delegates through them and
+// concrete scalar sites stay byte-identical. The AGGREGATE leaf is the one
+// deliberate change: a DIRECT (__state, arg) call to the generated
+// $show_<sig>/$hash_<sig> helper — §5.U's own law ("plain top-level fns,
+// called directly like $str_eq") — replacing the closure-convention call
+// against a $show_<sig> global that never existed (the minimal-module
+// undefined-global assembly break, gate mn-aggregate-show).
+
+fn show_hash_ty(x) with LookupTy + Memory = fold_strip(lookup_ty(lexpr_handle(x)))
+
+fn spec_is_agg(ty) with Memory = match ty {
+  TList(TByte)      => false,
+  TList(_)          => true,
+  TTuple(_)         => true,
+  TName(_, _)       => true,
+  TRecord(_)        => true,
+  TRecordOpen(_, _) => true,
+  _                 => false
+}
+
+// The scalar/word face of show — the synthesized call (aggregates never
+// reach this; emit_show dispatches them to the direct leaf call).
+fn show_node_of(h, x) with LookupTy + Memory + Alloc = {
+  let ty = show_hash_ty(x)
+  match ty {
+    TString            => x,
+    TList(TByte)       => x,
+    TFloat             => LCall(h, LGlobal(h, "float_to_str"), [x]),
+    TList(_)           => x,
+    TTuple(_)          => x,
+    TName(_, _)        => x,
+    TRecord(_)         => x,
+    TRecordOpen(_, _)  => x,
+    _                  => LCall(h, LGlobal(h, "int_to_str"), [x])
+  }
+}
+
+fn hash_node_of(h, x) with LookupTy + Memory + Alloc = {
+  let ty = show_hash_ty(x)
+  match ty {
+    TString            => LCall(h, LGlobal(h, "str_hash"), [x]),
+    TList(_)           => LCall(h, LGlobal(h, "list_hash"), [x]),
+    TFloat             => LCall(h, LGlobal(h, "str_hash"),
+                            [LCall(h, LGlobal(h, "float_to_str"), [x])]),
+    TTuple(_)          => x,
+    TName(_, _)        => x,
+    TRecord(_)         => x,
+    TRecordOpen(_, _)  => x,
+    _                  => x
+  }
+}
+
+fn emit_agg_leaf_call(prefix, ty, x) = {
+  wat_emit("    (local.get $__state)\n")
+  emit_expr(x)
+  wat_emit("    (call $")
+  wat_emit(prefix)
+  wat_emit(fold_sig(ty))
+  wat_emit(")\n")
+}
+
+fn emit_show(h, x) = {
+  let ty = show_hash_ty(x)
+  if spec_is_agg(ty) { emit_agg_leaf_call("show_", ty, x) }
+  else { emit_expr(show_node_of(h, x)) }
+}
+
+fn emit_hash(h, x) = {
+  let ty = show_hash_ty(x)
+  if spec_is_agg(ty) { emit_agg_leaf_call("hash_", ty, x) }
+  else { emit_expr(hash_node_of(h, x)) }
+}
+
 // The naming read every reference arm shares: project the site's key
 // (spec_global_name, lower.mn), then redirect ONLY when the demand analysis
 // minted that twin — a wide key with no twin stays at the floor, which the
@@ -320,7 +399,7 @@ fn emit_runtime_contract() =
 // scan. The HEAVY wide family (the f64 structural leaves, which pull the
 // float renderer) is contributed CONDITIONALLY by reach_names_expr (lower.mn)
 // AT its mint sites — the ==/ordering LBinOp (wide_binop_seed) and the
-// show/hash call (wide_call_seed) — so a float-free module drags in nothing.
+// show/hash nodes (show_reach_names) — so a float-free module drags in nothing.
 // float_to_str is deliberately absent: to_string on a PROVEN float is
 // lower-minted (LGlobal — the walk sees it); only the emit-minted f64
 // show-fold leaf references it blind, and a program reaching that leaf
@@ -477,6 +556,16 @@ fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory +
 // The declared [String] is the Intent Boundary the ++ sites read — without it
 // the filter-with-handler-block chain left the element open and the concat
 // emitted its unresolved-element floor (the 00c0b6 trap that caught this).
+fn spec_fold_collect(spec_recs, acc0) with LookupTy + EnvRead + Memory + Alloc =
+  fold(acc0, (acc, rp) => {
+    let (rec2, pairs, enc) = rp
+    let (_m, _ps, body, _f) = rec2
+    spec_ctx_set(pairs, enc)
+    let acc2 = collect_fold_tys_list(body, acc)
+    spec_ctx_clear()
+    acc2
+  }, spec_recs)
+
 fn spec_rec_names(spec_recs) -> [String] with Memory + Alloc =
   map((rp) => { let (rec2, _p, _e) = rp; let (m, _ps, _b, _f) = rec2; m }, spec_recs)
 
@@ -490,28 +579,6 @@ fn spec_wide_twin_names(spec_recs) -> [String] with LookupTy + GraphRead + Memor
   }, spec_recs)
 
 fn emit_module(lowered) = {
-  // Single-walk multi-projection pre-pass. project_emit_state walks the
-  // LowExpr tree ONCE; four visitor-handlers chained via `~>` accumulate
-  // their projections in encounter order; the wrapper drains all four at
-  // the end and returns a 4-tuple. Per Hβ.emit.consolidate-pre-pass-walks
-  // (2026-05-11): replaces the prior `<|` fan-out (four parallel walks
-  // of the same tree, 16+ helper fns, 4x the structural drift surface).
-  // Adding a fifth projection = one new handler + one new visit-site in
-  // walk_lemit_expr. The graph IS the index; the chain IS the projector.
-  // The fold's type-closure record — computed ONCE (the unified each);
-  // register_show_literals (inside project_emit_state) reads .show for the
-  // data section, the leaf emission below reads all four.
-  let fold_closures = collect_fold_tys_list(lowered, fold_closures_empty())
-  let (all_fn_names, top_fn_names, string_entries, state_slots, wasi_ops, yield_seen) =
-    project_emit_state(lowered, fold_closures.show)
-  // band B M1.2 (the k2/k3 bank, Ruling 1) — the composer is CALLED INDIRECT
-  // (it is the fn_ptr@0 of every composed k record), so unlike every other
-  // synthesized helper it is TABLE-RESIDENT: appended to the fn-name set
-  // (existing indices stable) and given $__k_compose_idx by the same
-  // index-global projection every closure mint reads. Yield-gated — a
-  // OneShot-only module's table is byte-identical (Law 7).
-  let table_fn_names =
-    if yield_seen > 0 { all_fn_names ++ ["__k_compose"] } else { all_fn_names }   // drift-audit: ignore — one-time module-scope append, not a loop accumulator
   // The fn emit records, collected ONCE (emit_functions and the wrapper/table
   // wideness read the same set — never two walks of one tree). A fn whose
   // native signature carries a wide slot reaches the table through its $wf$
@@ -548,6 +615,35 @@ fn emit_module(lowered) = {
   let spec_names = spec_rec_names(spec_recs)
   let spec_wide = spec_wide_twin_names(spec_recs)
   set_spec_twins(spec_names)
+  // The fold-leaf collection — the base tree once, then each twin's body
+  // under its own bracket, so a twin's show/hash on substituted types
+  // collects the sigs its emission will name (the float-element leaf beside
+  // the floor's word-element leaf — both generated, each named where used).
+  let fold_closures = spec_fold_collect(spec_recs,
+    collect_fold_tys_list(lowered, fold_closures_empty()))
+  // Single-walk multi-projection pre-pass. project_emit_state walks the
+  // LowExpr tree ONCE; four visitor-handlers chained via `~>` accumulate
+  // their projections in encounter order; the wrapper drains all four at
+  // the end and returns a 4-tuple. Per Hβ.emit.consolidate-pre-pass-walks
+  // (2026-05-11): replaces the prior `<|` fan-out (four parallel walks
+  // of the same tree, 16+ helper fns, 4x the structural drift surface).
+  // Adding a fifth projection = one new handler + one new visit-site in
+  // walk_lemit_expr. The graph IS the index; the chain IS the projector.
+  // The fold's type-closure record — computed ONCE (the unified each);
+  // register_show_literals (inside project_emit_state) reads .show for the
+  // data section, the leaf emission below reads all four.
+  // (fold collection moved below the spec demand analysis — a twin's body is
+  // re-collected under its bracket so its substituted aggregate sigs exist)
+  let (all_fn_names, top_fn_names, string_entries, state_slots, wasi_ops, yield_seen) =
+    project_emit_state(lowered, fold_closures)
+  // band B M1.2 (the k2/k3 bank, Ruling 1) — the composer is CALLED INDIRECT
+  // (it is the fn_ptr@0 of every composed k record), so unlike every other
+  // synthesized helper it is TABLE-RESIDENT: appended to the fn-name set
+  // (existing indices stable) and given $__k_compose_idx by the same
+  // index-global projection every closure mint reads. Yield-gated — a
+  // OneShot-only module's table is byte-identical (Law 7).
+  let table_fn_names =
+    if yield_seen > 0 { all_fn_names ++ ["__k_compose"] } else { all_fn_names }   // drift-audit: ignore — one-time module-scope append, not a loop accumulator
   // W5 string interning — seed the string_table handler so downstream
   // LString emits can look up the offset via perform string_offset.
   set_string_entries(string_entries)
@@ -776,7 +872,7 @@ fn handle_recorded(entries, target, i, n) = {
 // per-projection encounter order matches the prior per-walk order. The
 // chained `~>` install establishes the handler stack at the body's
 // perform sites; each visit-op routes to its handler unambiguously.
-fn project_emit_state(lowered, show_tys) = {
+fn project_emit_state(lowered, closures: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) = {
   walk_lemit(lowered)
   // The SHOW leaf's helpers ($show_<sig>) assemble String literals not present
   // in the user IR (delimiters "{" "}" "(" ")" "[" "]" ", ", each field name
@@ -785,7 +881,7 @@ fn project_emit_state(lowered, show_tys) = {
   // the (data ...) section and string_offset resolves the helper's references.
   // The set of literals is a projection of the collected show types (the graph
   // IS the index — the same type closure the unified fold walk collects).
-  register_show_literals(show_tys)
+  register_show_literals(closures.show)
   let names = drain_fn_names() |> dedup_names   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let tops  = drain_top_fn_names()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let strs  = drain_string_literals()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
@@ -881,6 +977,11 @@ fn walk_lemit_top_one(expr) = {
 // Drift 9 closed: every arm explicit; no `_ =>` catch-all would silently
 // miss projections for a new variant.
 fn walk_lemit_expr(expr) = match expr {
+  // Delegate through the builders so the pre-pass sees the SAME synthesized
+  // shapes emit will drive (the scalar renderer LGlobal names join
+  // all_fn_names exactly as the lower-baked calls did — byte parity).
+  LShow(h, x) => walk_lemit_expr(show_node_of(h, x)),
+  LHash(h, x) => walk_lemit_expr(hash_node_of(h, x)),
   LMakeClosure(_, LFn(name, _, _, body, _, _), captures, ev) => {
     visit_fn(name)
     walk_lemit_list(body)
@@ -1302,6 +1403,8 @@ fn singleton_hnames_list(stmts, acc) = {
 }
 
 fn singleton_hnames_expr(expr, acc) = match expr {
+  LShow(_h, x) => singleton_hnames_expr(x, acc),
+  LHash(_h, x) => singleton_hnames_expr(x, acc),
   LHandleWith(_h, b, hn, hname, inits, _an, evs) => {
     let deeper = singleton_hnames_list(evs,
       singleton_hnames_list(inits,
@@ -1716,6 +1819,8 @@ fn collect_call_vectors_arms_from(arms, acc, i) =
   }
 
 fn collect_call_vectors_expr(expr, acc) = match expr {
+  LShow(h, x)           => collect_call_vectors_expr(show_node_of(h, x), acc),
+  LHash(h, x)           => collect_call_vectors_expr(hash_node_of(h, x), acc),
   LCall(h, f, args)     => collect_call_vectors_expr(f,
                              collect_call_vectors_list(args, vec_push(args, repr_of(lookup_ty(h)), acc))),
   LTailCall(h, f, args) => collect_call_vectors_expr(f,
@@ -2125,6 +2230,8 @@ fn fn_emit_records_arms(arms, i) =
   }
 
 fn collect_fn_emit_records_expr(expr) = match expr {
+  LShow(_h, x) => collect_fn_emit_records_expr(x),
+  LHash(_h, x) => collect_fn_emit_records_expr(x),
   // The LowFn fence IS the body-context every fn shape carries: closures
   // pass their capture count, handler arm fns nstate+total_arms, plain fns
   // 0. emit_fn_body installs it so LEvPerform/LEvRef key-scan the region
@@ -2380,6 +2487,8 @@ fn walk_locals_expr(expr, acc) = match expr {
     // i32 invariantly; the call's RESULT rides the stack at the ft's
     // width, never through this scratch. One entry into the set (deduped).
     walk_locals_list(args, walk_locals_expr(f, ["call_{int_to_str(h)} i32"] ++ acc)),
+  LShow(h, x)               => walk_locals_expr(show_node_of(h, x), acc),
+  LHash(h, x)               => walk_locals_expr(hash_node_of(h, x), acc),
   LTailCall(h, f, args)     =>
     walk_locals_list(args, walk_locals_expr(f, ["call_{int_to_str(h)} i32"] ++ acc)),
   LReturn(_h, inner)        => walk_locals_expr(inner, acc),
@@ -2643,6 +2752,8 @@ fn tail_expr_repr(expr) = match expr {
     _       => RI32
   },
   LCall(ch, _callee, _)         => repr_of(lookup_ty(ch)),
+  LShow(_h, _x)                 => RI32,
+  LHash(_h, _x)                 => RI32,
   LTailCall(ch, _callee, _)     => repr_of(lookup_ty(ch)),
   other              => {
     let h = lexpr_handle(other)
@@ -2707,6 +2818,8 @@ fn find_local_handle_arms(name, arms, i) =
 
 fn find_local_handle_expr(name: String, expr) = match expr {
   LLocal(h, n)              => if n == name { h } else { 0 },
+  LShow(_h, x)              => find_local_handle_expr(name, x),
+  LHash(_h, x)              => find_local_handle_expr(name, x),
   // A closure's BODY is its own scope (an inner `name` is its own binding) —
   // but its CAPTURES and EVS are PARENT-frame expressions: a param used ONLY
   // inside a nested lambda still has a live read here, and the param decl
@@ -3183,6 +3296,9 @@ fn emit_expr(expr) = match expr {
     emit_expr(r)
     emit_binop_for(op, l, r)
   },
+
+  LShow(h, x) => emit_show(h, x),
+  LHash(h, x) => emit_hash(h, x),
 
   LUnaryOp(_h, op, inner) => {
     // Hβ.first-light.unary-neg-stack-order — UNeg is `0 - x`, not `x - 0`.
@@ -4573,13 +4689,9 @@ fn collect_fold_tys_arms_from(arms, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show:
   }
 
 fn collect_fold_tys_expr(expr, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) with LookupTy + EnvRead + Alloc + Memory = match expr {
-  LCall(_h, f, args) => {
-    let triggered =
-      if is_show_global(f) && len(args) == 1 { fold_acc_show(acc, last(args)) }
-      else if is_hash_global(f) && len(args) == 1 { fold_acc_hash(acc, last(args)) }
-      else { acc }
-    collect_fold_tys_expr(f, collect_fold_tys_list(args, triggered))
-  },
+  LShow(_h, x) => collect_fold_tys_expr(x, fold_acc_show(acc, x)),
+  LHash(_h, x) => collect_fold_tys_expr(x, fold_acc_hash(acc, x)),
+  LCall(_h, f, args) => collect_fold_tys_expr(f, collect_fold_tys_list(args, acc)),
   LTailCall(_h, f, args) => collect_fold_tys_expr(f, collect_fold_tys_list(args, acc)),
   LBinOp(_h, op, l, r)  => collect_fold_tys_expr(r,
                              collect_fold_tys_expr(l,
@@ -5699,20 +5811,6 @@ fn show_operand_contrib(arg, acc) with LookupTy + Alloc + Memory + EnvRead = {
   else { show_subtys(fold_strip(lookup_ty(h)), [], acc) }
 }
 
-// A show-helper call target is an LGlobal whose name begins "show_" (lower_show_call
-// emitted it). Prefix-match via byte_at — the 5 bytes 's','h','o','w','_' — reusing
-// the one byte observer, adding no new runtime function.
-fn is_show_global(f) = match f {
-  LGlobal(_, name) =>
-    byte_len(name) >= 5
-      && byte_at(name, 0) == 115   // 's'
-      && byte_at(name, 1) == 104   // 'h'
-      && byte_at(name, 2) == 111   // 'o'
-      && byte_at(name, 3) == 119   // 'w'
-      && byte_at(name, 4) == 95,   // '_'
-  _ => false
-}
-
 
 
 
@@ -5884,20 +5982,6 @@ fn emit_field_hash_agg_call(off, sig) = {
   wat_emit(" (local.get $__state) (i32.load offset=")
   wat_emit(int_to_str(off))
   wat_emit(" (local.get $a)))")
-}
-
-// The hash collection pre-pass: the aggregate operand type at every $hash_<sig>
-// call (lower_hash_agg_call's LGlobal "hash_…") + its nested-aggregate closure
-// (the SAME eq_subtys reach). Mirror of collect_show_tys but keyed on "hash_".
-fn is_hash_global(f) = match f {
-  LGlobal(_, name) =>
-    byte_len(name) >= 5
-      && byte_at(name, 0) == 104   // 'h'
-      && byte_at(name, 1) == 97    // 'a'
-      && byte_at(name, 2) == 115   // 's'
-      && byte_at(name, 3) == 104   // 'h'
-      && byte_at(name, 4) == 95,   // '_'
-  _ => false
 }
 
 fn hash_operand_contrib(arg, acc) with LookupTy + Alloc + Memory + EnvRead = {

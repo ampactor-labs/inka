@@ -1019,6 +1019,31 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · ▶▶ THE LSHOW/LHASH BUILD — the LAST lower-time type bake moves
+  to emit; FOUR latent breaks close (monomorphization face 7 + band D's leaf
+  seam · pin f60110f4). to_string/hash are STRUCTURAL nodes dispatched at
+  emit under the active bracket (show_node_of/hash_node_of — one dispatch
+  home; every walk delegates through it; scalar sites byte-identical), so a
+  twin's render shows the VALUE and its hash agrees with its eq; a
+  render-only generic still twins (the operand is a worthiness witness).
+  The four closures, each probe-pinned RED first: the aggregate leaf call is
+  DIRECT (§5.U's own law — the closure-convention form referenced a
+  $show_<sig> global NO module ever emitted, an assembly failure in every
+  minimal module); the leaf's interior renderers survive reach
+  (show/hash_reach_names — int_to_str was pruned); the decor literals
+  register (the fold_closures.show CALL-SITE field read resolved a wrong
+  empty slot — Hβ.lower.trecordopen-wrong-field measured LIVE: n=0 at
+  register vs n=1 at generation from ONE record; fixed by passing the whole
+  closed-annotated record); and hash(x) gains its declaration (the to_string
+  mirror — the name NEVER resolved; the hash surface was unreachable from
+  user code). Twin fold collection runs per-demand under its bracket
+  ($show_ld beside $show_li). Gates: mn-generic-show (RED: address render) ·
+  mn-aggregate-show (RED: assembly failure) · mn-aggregate-hash (RED:
+  E_MissingVariable) — all 42; frontier 165/0; census 0; TRANSITION
+  m3 == m4 with the new wheel SMALLER (the name-bake machinery deleted).
+  The monomorphization arc's residue is now EMPTY of known silent-wrong
+  faces; wide_call_seed / is_show_global / is_hash_global / the five lower
+  dispatch fns are deleted whole
 - 2026-07-22 · THE EXACT-SUBSTITUTION SWAP — monomorphization face 3 CLOSES
   (the multi-type unlock · pin 4a114123). The bracket carries the site's
   EXACT instantiation pairs (root -> concrete); a free leaf answers its OWN

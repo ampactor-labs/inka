@@ -478,6 +478,10 @@ type LowExpr
   // protocol_handler_is_state_is_closure_is_evidence.md, so the store
   // mutates handler state across resume calls.
   | LStateSlotStore(Int, Int, LowExpr, String)  // handle, slot_offset, value, record home ("" = the arm's $__state — byte-frozen OneShot; else $<name>_state_g, the bracket-scoped singleton a closure context reaches — the lambda's own $__state is its closure record, the measured 32-not-46 silent state loss)
+  | LShow(Int, LowExpr)             // to_string — operand type read at EMIT under the active
+                                    //   specialization bracket (show_node_of, backends/wasm.mn —
+                                    //   the one dispatch home; emit_binop_for's altitude)
+  | LHash(Int, LowExpr)             // hash — the same emit-time read (eq/hash agreement in twins)
   // Typed terminal for a compiler-created executable-edge invariant. It has no
   // value representation and no recovery arm; emit projects only `unreachable`.
   | LInvariantFailure(Int, BoundaryInvariant)
@@ -545,6 +549,8 @@ fn lexpr_handle(e) with Pure = match e {
   LReturn(h, _)           => h,
   LMakeClosure(h, _, _, _) => h,
   LFnRef(h, _, _)         => h,
+  LShow(h, _)             => h,
+  LHash(h, _)             => h,
   LMakeContinuation(h, _, _, _, _, _, _) => h,
   LYield(h, _, _, _)      => h,
   LKExtend(h, _)          => h,
@@ -573,111 +579,15 @@ fn lexpr_handle(e) with Pure = match e {
   LWasiCall(h, _, _)      => h
 }
 
-// to_string IS lower-time type dispatch — the same projection class
-// as subscript (#139) and `++`'s string fold: the graph already
-// proves the arg's type; lower picks the renderer; no runtime tag
-// check. Ty enumerated exhaustively per H6 — fold_strip normalizes
-// TAlias/TRefined FIRST (a `Port` renders as its Int base, a `Sample`
-// as Float), so the renderer reads the underlying structural type, the
-// SAME normalization the eq / show / compare / hash leaves share.
-//
-// A SCALAR word renders through its primitive renderer (float_to_str /
-// int_to_str). An AGGREGATE (sequence / product / sum) is the SHOW leaf
-// of the structural fold — sibling of the eq leaf ($eq_<sig>): the
-// ultimate form is a generated recursive `$show_<sig>` helper that
-// assembles "{name: …}" / "[…]" / "Ctor(…)" from the proven shape (the
-// type closure the graph already holds). That helper must be synthesized
-// as LOWERED CODE (an LFn body of str_concat/int_to_str closure calls +
-// recursive show_<sig> descent) so it flows through the closure-call
-// convention emit_expr already drives — emitting it as raw WAT would
-// mishandle the runtime-closure ($str_concat) call shape (a silent
-// miscompile, Law 7). The synthesis-as-lowered-LFn is the named peer
-// Hβ.fold.show-leaf-as-lowered-lfn; until it lands the aggregate renders
-// through the runtime `to_string` (the structure-preserving renderer is
-// the addition, never a regression — the word-leaf path is unchanged).
-fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic + Memory = {
-  let N(_, _, ah) = last(args)
-  match fold_strip(lookup_ty(ah)) {
-    TString            => arg_lo,
-    // A byte sequence IS text (§4①): fold_strip maps TString to TList(TByte),
-    // so THIS arm is the one every interpolated/shown String takes — identity,
-    // the text view, never the generated bracket-list $show_lb.
-    TList(TByte)       => arg_lo,
-    TFloat             => LCall(handle, LGlobal(handle, "float_to_str"), [arg_lo]),
-    TInt               => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
-    TUnit              => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
-    TByte              => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
-    // Aggregates — the generated $show_<sig> fold leaf (structural render),
-    // named by the operand's fold-signature (read live from the proven type).
-    TList(_)           => lower_show_call(handle, ah, arg_lo),
-    TTuple(_)          => lower_show_call(handle, ah, arg_lo),
-    TName(_, _)        => lower_show_call(handle, ah, arg_lo),
-    TRecord(_)         => lower_show_call(handle, ah, arg_lo),
-    TRecordOpen(_, _)  => lower_show_call(handle, ah, arg_lo),
-    // A genuinely-unresolved operand (TVar) / closure (TFun) / continuation
-    // pointer (TCont) is a word at this leaf — int_to_str renders the word (the
-    // same word-leaf the eq fold compares with i32.eq); no structure to descend.
-    TFun(_, _, _)      => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
-    TVar(_)            => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
-    TCont(_, _, _, _)  => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
-    TAlias(_, _)       => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
-    TRefined(_, _)     => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo])
-  }
-}
-
-// The aggregate-show call: dispatch to the generated `$show_<sig>` recursive
-// helper named by the operand's structural fold-signature (read live from the
-// proven type at `ah`). The backend's emit_show_leaves pre-pass generates
-// each distinct helper once (the e-graph canonicalizes duplicates) — the SAME
-// graph-IS-the-index dedup the eq leaf uses. One leaf, one traversal: the show
-// helper is a sibling of $eq_<sig>, calling the runtime renderers ($str_concat /
-// $int_to_str / $float_to_str) via the SAME W7 (__state, args) convention the eq
-// helper calls $str_eq with — every emitted fn takes __state as its first param.
-fn lower_show_call(handle, ah, arg_lo) with LookupTy + Memory = {
-  LCall(handle, LGlobal(handle, "show_{fold_sig(lookup_ty(ah))}"), [arg_lo])
-}
-
-// hash(x) IS lower-time type dispatch — the HASH leaf of the SAME structural
-// fold show/eq/compare ride, the operand type read live (lookup_ty) to project
-// the leaf, never to choose a surface operator. Structural-equal values hash
-// equal by construction (the eq/hash agreement the whole fold enforces): a
-// scalar word hashes to itself (i32 identity — `x == y` ⇒ same word ⇒ same
-// hash); a sequence to str_hash/list_hash (byte/element FNV); an aggregate to
-// the generated recursive $hash_<sig> (field/payload FNV mix). A float hashes
-// its decimal-string bytes (str_hash(float_to_str)) so two equal f64s hash
-// equal regardless of bit-noise — the value-faithful leaf, never the raw bits.
-fn lower_hash_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic + Memory = {
-  let N(_, _, ah) = last(args)
-  match fold_strip(lookup_ty(ah)) {
-    TString            => lower_hash_call(handle, ah, arg_lo, "str_hash"),
-    TList(_)           => lower_hash_call(handle, ah, arg_lo, "list_hash"),
-    // Float: hash the value-faithful decimal rendering (equal f64 ⇒ equal
-    // string ⇒ equal hash), composing the show word-leaf with str_hash.
-    TFloat             => LCall(handle, LGlobal(handle, "str_hash"),
-                            [LCall(handle, LGlobal(handle, "float_to_str"), [arg_lo])]),
-    // Aggregates — the generated $hash_<sig> fold leaf, named by the operand's
-    // fold-signature (the SAME sig the eq/compare/show leaves read).
-    TRecord(_)         => lower_hash_agg_call(handle, ah, arg_lo),
-    TRecordOpen(_, _)  => lower_hash_agg_call(handle, ah, arg_lo),
-    TTuple(_)          => lower_hash_agg_call(handle, ah, arg_lo),
-    TName(_, _)        => lower_hash_agg_call(handle, ah, arg_lo),
-    // Int / Unit / unresolved-TVar / closure / continuation — the value word
-    // IS its hash (i32 identity: equal words hash equal, the scalar leaf).
-    _                  => arg_lo
-  }
-}
-
-// A sequence hash: the runtime str_hash/list_hash ([Byte]/[a] FNV instance),
-// state-threaded like every Memory-rowed runtime call.
-fn lower_hash_call(handle, ah, arg_lo, rt) with LookupTy + Memory = {
-  LCall(handle, LGlobal(handle, rt), [arg_lo])
-}
-
-// An aggregate hash: the generated recursive $hash_<sig> helper, named by the
-// proven fold-signature — sibling of $eq_<sig> / $compare_<sig> / $show_<sig>.
-fn lower_hash_agg_call(handle, ah, arg_lo) with LookupTy + Memory = {
-  LCall(handle, LGlobal(handle, "hash_{fold_sig(lookup_ty(ah))}"), [arg_lo])
-}
+// to_string / hash are STRUCTURAL nodes (LShow / LHash) — their type
+// dispatch lives at EMIT (show_node_of / hash_node_of, backends/wasm.mn),
+// where the operand's type is read live under whatever specialization
+// bracket is active. Lower used to read the type HERE and bake a renderer
+// NAME into the tree — the one pair of type-directed decisions an emit-time
+// bracket could not re-make (a twin's to_string on its instantiated var
+// rendered the ADDRESS; its hash used the pointer). The reach projections
+// (show_reach_names / hash_reach_names, beside wide_binop_seed) mirror the
+// same dispatch so the prune keeps what emit will mint.
 
 fn lexpr_ty(e) with LookupTy = {
   lookup_ty(lexpr_handle(e))
@@ -834,12 +744,12 @@ fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
   match fbody {
       NExpr(VarRef(name)) =>
         if name == "to_string" && len(r_args) == 1 {
-          lower_to_string_dispatch(handle, last(lo_args), r_args)
+          LShow(handle, last(lo_args))
         } else if name == "hash" && len(r_args) == 1 {
-          // hash(x) IS the HASH leaf of the structural fold — lower-time type
-          // dispatch (scalar word-identity / sequence str_hash·list_hash /
-          // aggregate $hash_<sig>), the sibling of to_string's show leaf.
-          lower_hash_dispatch(handle, last(lo_args), r_args)
+          // hash(x) IS the HASH leaf of the structural fold — dispatched at
+          // EMIT from the node's live type (hash_node_of), never a name baked
+          // here, so a twin's bracket re-answers it (eq/hash agreement).
+          LHash(handle, last(lo_args))
         } else if name == "float_of_int" && len(r_args) == 1 {
           // W11: the gradient's coercion arm — a REAL i32->f64 widen
           // (f64.convert_i32_s), never an identity stub reinterpreting bits.
@@ -4212,6 +4122,8 @@ fn k2_floor_guard(e, terminus) = match e {
   },
   LReturn(h, inner)     => LReturn(h, k2_floor_guard(inner, true)),
   LCall(h, f, args)     => LCall(h, k2_floor_guard(f, false), k2_floor_list(args)),
+  LShow(h, x)           => LShow(h, k2_floor_guard(x, false)),
+  LHash(h, x)           => LHash(h, k2_floor_guard(x, false)),
   LTailCall(h, f, args) => LTailCall(h, k2_floor_guard(f, false), k2_floor_list(args)),
   LBinOp(h, op, l, r)   => LBinOp(h, op, k2_floor_guard(l, false), k2_floor_guard(r, false)),
   LUnaryOp(h, op, x)    => LUnaryOp(h, op, k2_floor_guard(x, false)),
@@ -5304,9 +5216,14 @@ fn reach_names_expr(expr, acc) = match expr {
   // (emit_eq_for_ty / emit_cmp_for_ty); contribute it where emit reads it.
   LBinOp(_h, op, l, r)      => reach_names_expr(r, reach_names_expr(l, wide_binop_seed(op, l) ++ acc)),
   LUnaryOp(_h, _op, x)      => reach_names_expr(x, acc),
-  // show/hash on a wide-element (or wide-containing) value mints float_to_str /
-  // list_hash_f64 through the generated leaf; seed it at the call.
-  LCall(_h, f, args)        => reach_names_list(args, reach_names_expr(f, wide_call_seed(f, args) ++ acc)),
+  LCall(_h, f, args)        => reach_names_list(args, reach_names_expr(f, acc)),
+  // show/hash contribute the names emit will mint, projected from the SAME
+  // live type read the emit dispatch makes (the visitor-walk projection the
+  // runtime-contract comment names) — including the generated aggregate
+  // leaf's interior renderers, which reach previously never kept (the
+  // minimal-module undefined-$int_to_str break, gate mn-aggregate-show).
+  LShow(_h, x)              => reach_names_expr(x, show_reach_names(x) ++ acc),
+  LHash(_h, x)              => reach_names_expr(x, hash_reach_names(x) ++ acc),
   LTailCall(_h, f, args)    => reach_names_list(args, reach_names_expr(f, acc)),
   LReturn(_h, x)            => reach_names_expr(x, acc),
   LMakeList(_h, elems)      => reach_names_list(elems, acc),
@@ -5500,6 +5417,8 @@ fn collect_value_holes_list(stmts, acc) = {
 
 fn collect_value_holes_expr(expr, acc) = match expr {
   LConst(h, _)              => if executable_hole(h) { [h] ++ acc } else { acc },
+  LShow(_h, x)              => collect_value_holes_expr(x, acc),
+  LHash(_h, x)              => collect_value_holes_expr(x, acc),
   LHandleWith(_h, b, hn, _hname, inits, _an, evs) =>
     collect_value_holes_list(evs,
       collect_value_holes_list(inits,
@@ -5594,12 +5513,58 @@ fn wide_binop_seed(op, l) =
     }
   } else { [] }
 
-fn wide_call_seed(f, args) =
-  if len(args) == 1 && ty_has_wide_seq(lookup_ty(lexpr_handle(last(args))), []) {
-    if is_show_global(f) { ["float_to_str"] }
-    else if is_hash_global(f) { ["list_hash_f64"] }
-    else { [] }
-  } else { [] }
+// The show/hash reach projections — the exact names emit's show_node_of /
+// hash_node_of will mint for this operand's type, plus the generated
+// aggregate leaf's INTERIOR renderers (str_concat rides the runtime
+// contract; int_to_str / float_to_str do not, and the aggregate body calls
+// them directly). sig_has_d reads the fold signature for a float ANYWHERE
+// in the shape — the same one-scan the leaf generators key on.
+fn sig_has_d(sig, i) with Memory =
+  if i >= byte_len(sig) { false }
+  else if byte_at(sig, i) == 100 { true }
+  else { sig_has_d(sig, i + 1) }
+
+fn show_reach_names(x) with LookupTy + Memory + Alloc = {
+  let ty = fold_strip(lookup_ty(lexpr_handle(x)))
+  match ty {
+    TString            => [],
+    TList(TByte)       => [],
+    TFloat             => ["float_to_str"],
+    TList(_)           => show_agg_reach(ty),
+    TTuple(_)          => show_agg_reach(ty),
+    TName(_, _)        => show_agg_reach(ty),
+    TRecord(_)         => show_agg_reach(ty),
+    TRecordOpen(_, _)  => show_agg_reach(ty),
+    _                  => ["int_to_str"]
+  }
+}
+
+fn show_agg_reach(ty) with Memory + Alloc = {
+  let sig = fold_sig(ty)
+  if sig_has_d(sig, 0) { ["float_to_str", "int_to_str"] } else { ["int_to_str"] }
+}
+
+fn hash_reach_names(x) with LookupTy + Memory + Alloc = {
+  let ty = fold_strip(lookup_ty(lexpr_handle(x)))
+  match ty {
+    TString            => ["str_hash"],
+    TList(e)           =>
+      if stride_of(seq_elem_face(e)) >= 8 { ["list_hash_f64", "float_to_str", "str_hash"] }
+      else { ["list_hash"] },
+    TFloat             => ["float_to_str", "str_hash"],
+    TRecord(_)         => hash_agg_reach(ty),
+    TRecordOpen(_, _)  => hash_agg_reach(ty),
+    TTuple(_)          => hash_agg_reach(ty),
+    TName(_, _)        => hash_agg_reach(ty),
+    _                  => []
+  }
+}
+
+fn hash_agg_reach(ty) with Memory + Alloc = {
+  let sig = fold_sig(ty)
+  if sig_has_d(sig, 0) { ["float_to_str", "str_hash", "list_hash"] }
+  else { ["str_hash", "list_hash"] }
+}
 
 // ─── Named-generic specialization — monomorphization by repr key ─────────
 //
@@ -5836,6 +5801,14 @@ fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => spec_scan_list(body, acc),
   LBlock(_h, stmts)         => spec_scan_list(stmts, acc),
   LIf(_h, c, t, e)          => spec_scan_list(e, spec_scan_list(t, spec_scan_expr(c, acc))),
+  LShow(_h, x)              => {
+    let (s, o) = spec_scan_expr(x, acc)
+    (s, [lexpr_handle(x)] ++ o)
+  },
+  LHash(_h, x)              => {
+    let (s, o) = spec_scan_expr(x, acc)
+    (s, [lexpr_handle(x)] ++ o)
+  },
   LBinOp(_h, op, l, r)      => {
     let acc2 = match op {
       BAdd | BSub | BMul | BDiv | BMod | BEq | BNe | BLt | BGt | BLe | BGe => {
@@ -5879,7 +5852,7 @@ fn spec_scan_list(exprs, acc) with Memory + Alloc = fold(acc, (a, e) => spec_sca
 fn spec_scan_arms(arms, acc) with Memory + Alloc = fold(acc, (a, arm) => { let (_, b) = arm; spec_scan_expr(b, a) }, arms)
 
 // The wide runtime family a twin's emission can mint that its floor did not
-// (the same names wide_binop_seed / wide_call_seed contribute at concrete
+// (the same names wide_binop_seed / show_reach_names contribute at concrete
 // sites). Seeded whenever ANY site projects a wide key — a cheap, precise-
 // enough over-approximation in the emit_runtime_contract tradition; a
 // program with no wide instantiation adds nothing.

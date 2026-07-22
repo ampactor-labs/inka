@@ -1,0 +1,12 @@
+// Named-generic monomorphization, face 7 — show/hash INSIDE a generic body.
+// to_string/hash arrive at emit as STRUCTURAL nodes (LShow/LHash) whose type
+// dispatch runs under the active specialization bracket, so a worthy twin's
+// to_string on its instantiated var renders the VALUE — the lower-time name
+// bake rendered the ADDRESS ("val: 1048600"), invisible to any bracket. The
+// show/hash operand is also a worthiness witness now, so a generic whose only
+// var-touching op is a render still twins. RED (run 1) on the pre-build boot.
+fn describe(x) with Memory + Alloc + Show = "val: " ++ to_string(x)
+
+fn main() with Memory + Alloc + Show = {
+  if describe(2.5) == "val: 2.5000000000000000" { 42 } else { 1 }
+}

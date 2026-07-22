@@ -348,9 +348,9 @@ fn int_to_str(n) with Memory + Alloc = {
 // generic callers like assert_eq). The default handler renders the
 // kernel-uniform-i32 value word; the gradient's post-L1 typed
 // show-derivation is a handler swap (Hβ.lower.to-string-show-
-// derivation), not a rewrite. Lower's type dispatch
-// (src/lower.mn lower_to_string_dispatch) short-circuits proven
-// sites (TString identity / TFloat float_to_str / TInt int_to_str)
+// derivation), not a rewrite. The emit-time dispatch
+// (show_node_of, backends/wasm.mn) short-circuits proven sites
+// (TString identity / TFloat float_to_str / TInt int_to_str)
 // before the op round-trip. NOT the v1 dispatch-by-magnitude tumor
 // — the type is proven by the graph or deferred to the handler;
 // never guessed from the value.
@@ -364,6 +364,22 @@ handler show_default {
 }
 
 fn to_string(x) with Show = show_word(x)
+
+// hash(x) — the HASH leaf's user face, the exact mirror of to_string's: the
+// declaration types the call (a -> Int through the Hash op), and lower
+// intercepts the name into the structural LHash node whose dispatch happens
+// at emit — the body never runs, exactly like to_string's. Before this
+// declaration existed the name never resolved (E_MissingVariable): the whole
+// hash surface was unreachable from user code.
+effect Hash {
+  hash_word(x: a) -> Int
+}
+
+handler hash_default {
+  hash_word(w) => resume(w),
+}
+
+fn hash(x) with Hash = hash_word(x)
 
 // str_of_buf — the construction boundary: a raw [count][tag_word][bytes] buffer
 // word IS a String, which IS [byte] (§4①, a handle is a word). The identity

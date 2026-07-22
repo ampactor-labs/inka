@@ -1,0 +1,14 @@
+// hash(x)'s user face, typed and agreeing with eq. Before this build the
+// name `hash` had NO declaration anywhere — E_MissingVariable at every user
+// call; the entire lower hash surface was unreachable. The declaration
+// mirrors to_string's exactly (the Hash effect types the call; lower
+// intercepts the name into the structural LHash node; emit dispatches from
+// the live type). Equal tuples hash equal, unequal hash unequal — the
+// eq/hash agreement the fold enforces. RED (E_MissingVariable) on the
+// pre-build boot.
+fn main() = {
+  let h1 = hash((1, 2))
+  let h2 = hash((1, 2))
+  let h3 = hash((1, 3))
+  if h1 == h2 && h1 != h3 { 42 } else { 1 }
+}

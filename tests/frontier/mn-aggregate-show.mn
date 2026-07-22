@@ -1,0 +1,15 @@
+// The generated show leaf, END TO END in a minimal module — three
+// pre-existing breaks closed by the LShow build, each of which made this
+// exact program fail before it: (1) the aggregate call is now a DIRECT
+// (__state, arg) call to $show_<sig> (§5.U "called directly like $str_eq") —
+// the old closure-convention call referenced a $show_<sig> GLOBAL no module
+// ever emitted (undefined-global assembly failure); (2) the show reach
+// projection keeps the leaf's interior renderers (int_to_str was pruned —
+// undefined-fn assembly failure); (3) the decor literals ("(", ", ", ")")
+// actually register — the call-site `.show` field read resolved a WRONG
+// EMPTY SLOT against a partial field set (the Hβ.lower.trecordopen-wrong-field
+// class, live), so every module ever emitted rendered aggregates with
+// offset-0 decors. RED (assembly failure) on the pre-build boot.
+fn main() = {
+  if to_string((1, 2)) == "(1, 2)" { 42 } else { 1 }
+}

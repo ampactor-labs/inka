@@ -1,0 +1,12 @@
+// The evidence hole, no handler in scope — the gate's third read. Ping
+// reaches the executable root with no absorbing install and no declared
+// handler; the compile REFUSES (E_EffectUnhandled at main's span, exit 1,
+// zero WAT) and teaches the declare-one form. Before the triple row this
+// program compiled clean and faulted at 0x100000000 at runtime (the
+// dropped tail-subtraction hid the escape; the six-form row could not
+// carry the truth this read needs).
+effect Ping { ping(x: Int) -> Int }
+
+fn caller(v) with Ping = ping(v)
+
+fn main() = caller(41)

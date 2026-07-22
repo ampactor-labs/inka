@@ -1026,6 +1026,76 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · ▶▶ THE EVIDENCE HOLE REFUSES AND TEACHES — E_EffectUnhandled,
+  the gate's third read, born ARMED on the true rows (the arc Morgan opened
+  with "we should never see a WASM error" · pin TBD). An executable whose
+  main-row carries an effect no install absorbed REFUSES at compile
+  (exit 1, zero WAT, main's own decl span) with the graph-derived teach:
+  no handler in scope → the declare-one form; a declared-but-uninstalled
+  handler → "Install one over the performing chain: ~> pong" — read from
+  the env's own HandlerKind arms through each op's EffectOpScheme, never a
+  name table. THE CRITERION READS THE ARTIFACT, not a ledger — Morgan
+  caught the first build red-handed ("building a ledger system?
+  carried-truth violation much?"): lower-side note-lists caching perform/
+  install facts were drift-7 by the letter, and they died into the emit's
+  OWN single-walk multi-projection pre-pass — the SEVENTH projection
+  (EmitEffectCensus: visit_effect_demand at LEvPerform's ename-carrying
+  floor node and LYield's op, visit_effect_install at LHandleWith's arm
+  groups), run by the gate over the post-reach tree it already holds.
+  Reach-filtering is FREE (dead code is absent from that tree — the
+  to_string shell-body class), a lexically resolved LPerform fires no
+  demand (discharged by its install), and a singleton-tier perform fires
+  none (direct call). Conjunction: present at the root ∧ not
+  substrate-grounded ∧ a floor demand exists ∧ no install anywhere (the
+  install conjunct covers the ambiguous-handler floor). SIX false-refusing
+  micros forced the design there, and TWO inference roots fell to them: a
+  VAR tail's pending mask now lives IN THE GRAPH (diff_row mints a fresh
+  var bound to the masked triple over the original tail — union's absent
+  is the mask INTERSECTION, set-correct, so a top-level mask on a var
+  tail vanished at the frame union: multieffect's `run() ~> buffer` in
+  let position lost Emit's subtraction), and a multi-effect handler's
+  install subtracts its FULL arm-derived set (derive_handler_enames — the
+  single-name subtraction left buffer's sibling effect on the caller's
+  row). THE Show/Hash EFFECT SHELLS DISSOLVED at the same root: the
+  LShow/LHash build had moved their dispatch to emit-structural, so
+  `effect Show`/`show_default`/`with Show` was archaeology whose contract
+  poisoned every caller's row — to_string/hash are now seq-op table faces
+  (a -> String, a -> Int; raw word bodies that never run). WITNESSED
+  THRICE and cured by sequencing, the EFFECTFUL-ARG STAGING CLOBBER: an
+  effectful expression evaluated inside an interpolation splice list, a
+  ctor argument list, or another perform's argument list corrupts a
+  sibling operand's staged value (the diagnostics render's span read a
+  stale env record; the perform-ledger probe read "" for every frame) —
+  the render and every touched site are sequenced-lets now; the emit-side
+  root is the next staging dig. THE NEXT DIG, mechanism fully diagnosed:
+  an uninstalled UNIQUE handler's program emits call-boundary evidence
+  threading ($ev_lookup) that reach never includes — assembly-loud today;
+  after the reach seed it becomes RUN-clean for stateless handlers and
+  SILENT-WRONG for stateful ones (the zero-init state global), so the
+  singleton-perform node needs artifact distinguishability + the
+  stateful-uninstalled refusal before that class closes. This read
+  could not EXIST before the triple: the six-form row dropped the install's
+  subtraction off unresolved tails, so main's row lied (the design was
+  refuted by six micros in its first life THIS session, for exactly that
+  reason) — the representation fix is what makes the diagnostic true. Also
+  landed on the way, each witnessed by probe: the pure row returns as the
+  wheel's OWN first top-level let (ef_pure_row, riding the init-bracket
+  fix); fn env entries carry Located(decl-span) reasons at both register
+  sites (the Why chain and this diagnostic read them); handler_arms_touch
+  destructures CLOSED (the trecordopen-wrong-field class — the open field
+  read returned garbage and the proposal missed pong); the name compares
+  pin `: String` (the §9 pointer-eq class); and the diagnostics render is
+  sequenced-lets — the old single 5-splice line MIS-RENDERED its last
+  splice when an earlier splice's evaluation allocated (witnessed live:
+  the span rendered a stale env record's span, 362:78 for 2523:4, until a
+  preceding read shifted the staging — the shared-scratch clobber class at
+  the interpolation emit; the sequenced form has nothing to clobber; the
+  minimal-repro dig is the named residue
+  Hβ.emit.interp-splice-staging-clobber). Fixtures RED-first against the
+  pre-gate boot (both refusal programs compiled CLEAN, 5.6KB of WAT that
+  faults at 0x100000000 at runtime): frontier mn-effect-unhandled +
+  mn-effect-uninstalled (refusals) + mn-effect-absorbed (42). check/edit
+  never route through the gate — the productive surfaces stay open.
 - 2026-07-22 · THE BACKTICK CONTRACT REACHES ZERO (comment-refs 52 → 0,
   ratchet 0 · pin 10639d69). Morgan asked what the 52 phantoms were for —
   nothing: stale prose debt behind a tourniquet (the ratchet existed only to

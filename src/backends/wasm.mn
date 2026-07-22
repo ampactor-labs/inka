@@ -827,6 +827,29 @@ handler yield_seen_collector with n = 0 {
   drain_yield_seen() => resume(n)
 }
 
+// The seventh projection — the executable gate's EVIDENCE CENSUS: every
+// evidence-tier perform demand (LEvPerform's effect key — the floor's own
+// node carries the ename; LYield's non-empty op) and every install's
+// absorbed enames (LHandleWith's arm groups). The gate walks the SAME
+// post-reach tree emit walks and reads THIS drain — the artifact is the
+// truth source; a lower-side ledger caching the same facts was the
+// Carried-Truth violation this projection deleted.
+effect EmitEffectCensus {
+  visit_effect_demand(String) -> ()   // an ekey (ename) or a yield's op name — the gate resolves ops to enames
+  visit_effect_install(String) -> ()  // an ename an install's arm groups absorb
+  drain_effect_census() -> ([String], [String])   // (demands, installs)
+}
+
+handler effect_census_collector with demands = [], installs = [] {
+  visit_effect_demand(n) =>
+    if string_in_list(demands, n) { resume() }
+    else { resume() with demands = push(demands, n) },
+  visit_effect_install(n) =>
+    if string_in_list(installs, n) { resume() }
+    else { resume() with installs = push(installs, n) },
+  drain_effect_census() => resume((demands, installs))
+}
+
 handler fn_names_collector with buf = make_list(64), count = 0 {
   visit_fn(name) => {
     let extended = list_extend_to(buf, count + 1)
@@ -1006,6 +1029,15 @@ fn register_show_sum_literals(specs, i) with EmitStringLiteralOp + Memory = {
 // descent via walk_lemit_expr collects the per-node projections.
 fn walk_lemit(exprs) = walk_lemit_top(exprs, 0)
 
+fn walk_install_groups(ref groups, i) = {
+  if i >= len(groups) { () }
+  else {
+    let {arms: _, ename: en} = list_index(groups, i)
+    visit_effect_install(en)
+    walk_install_groups(groups, i + 1)
+  }
+}
+
 fn walk_lemit_top(exprs, i) = {
   if i >= len(exprs) { () }
   else {
@@ -1052,6 +1084,7 @@ fn walk_lemit_expr(expr) = match expr {
   LYield(_, op_name, args, k) => {
     visit_yield()
     visit_string(op_name)
+    if field_name_eq(op_name, "") { () } else { visit_effect_demand(op_name) }
     walk_lemit_list(args)
     walk_lemit_expr(k)
   },
@@ -1111,7 +1144,8 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_list(args)
     walk_lemit_list(ev)
   },
-  LHandleWith(_, b, hn, hname, inits, _arm_names, captured_evs) => {
+  LHandleWith(_, b, hn, hname, inits, arm_names, captured_evs) => {
+    walk_install_groups(arm_names, 0)
     walk_lemit_expr(b)
     walk_lemit_expr(hn)
     walk_lemit_list(inits)
@@ -1144,6 +1178,7 @@ fn walk_lemit_expr(expr) = match expr {
   // single-walk multi-projection invariant, Hβ.emit.consolidate-pre-pass-walks).
   LEvPerform(_, _, ekey, _, args) => {
     visit_string(ekey)
+    visit_effect_demand(ekey)
     walk_lemit_list(args)
   },
   LEvRef(_, ekey)           => visit_string(ekey),

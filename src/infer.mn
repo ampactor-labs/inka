@@ -750,7 +750,9 @@ fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: Vali
   // freshens per call site. Recursion stays monomorphic — infer_fn binds the
   // handle (graph_bind above + the unify branch) so the vars are bound by the
   // time the body's self-calls instantiate this scheme.
-  env_extend(name, Forall(free_in_ty(fn_ty), fn_ty), Declared(name), FnScheme)
+  // Located so every reader of this entry's reason (the Why chain, the
+  // executable gate's unhandled-effect diagnostic) projects the DECL's span.
+  env_extend(name, Forall(free_in_ty(fn_ty), fn_ty), Located(span, Declared(name)), FnScheme)
 }
 
 fn infer_stmt_list(stmts) = each(infer_stmt, stmts)
@@ -842,7 +844,7 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
     GNode(NBound(existing_ty), _) =>
       unify_types(existing_ty, fn_ty, span, Declared(name)),
     _ => {
-      env_extend(name, Forall([], fn_ty), Declared(name), FnScheme)
+      env_extend(name, Forall([], fn_ty), Located(span, Declared(name)), FnScheme)
       graph_bind(handle, fn_ty, Located(span, Declared(name)))
     }
   }
@@ -992,9 +994,12 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
 
   env_scope_exit()
 
-  // Generalize and re-extend.
+  // Generalize and re-extend. Located: this is the entry every later
+  // reader resolves (the flat env scans newest-first), so the decl span
+  // rides the reason for the Why chain and the executable gate's
+  // unhandled-effect diagnostic.
   let scheme = generalize(handle)
-  env_extend(name, scheme, Declared(name), FnScheme)
+  env_extend(name, scheme, Located(span, Declared(name)), FnScheme)
 }
 
 // H4 helper — does a CallExpr's callee resolve to an alloc-returning
@@ -1605,6 +1610,10 @@ fn is_seq_op(cname: String) with Pure =
   // `a -> Bool` here so a presence test never pins its operand's element
   // type; the raw body compares the word.
   || cname == "slot_present"
+  // The show/hash surfaces: lower intercepts both names into structural
+  // LShow/LHash nodes (emit-dispatched), so the table carries their
+  // generic faces (a -> String, a -> Int) and the raw bodies never run.
+  || cname == "to_string"  || cname == "hash"
   // The String face of the sequence node-kind (the comment above: byte_at IS
   // list_index, byte_len IS len). Typed here so consumers holding a String
   // type against the projection, never the load_i32 word-idiom body — the
@@ -1693,6 +1702,10 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
     "float_format_scientific" => { seq_force(ah, 1, TInt, span); graph_bind(handle, TString, Located(span, Inferred("scientific-notation float"))) },
     "float_digits_to_str" => { seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); graph_bind(handle, TString, Located(span, Inferred("digit bytes to string"))) },
     "slot_present" => graph_bind(handle, TName("Bool", []), Located(span, Inferred("slot presence"))),
+    // Generic faces of the emit-dispatched structural nodes — no force on
+    // the argument (any value shows/hashes; the emit reads its live type).
+    "to_string" => graph_bind(handle, TString, Located(span, Inferred("structural show"))),
+    "hash"      => graph_bind(handle, TInt, Located(span, Inferred("structural hash"))),
     // The length read.
     "len"        => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, TInt, Located(span, Inferred("sequence length"))) },
     // Builders/transforms that return a sequence of the same element.
@@ -2040,8 +2053,16 @@ fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
       // type. This is what makes `field` in `map((field)=>field.name, xs)`
       // resolve to xs's element. The dispatch gradient applied to data.
       unify_install_payload(body_row, handled, right, span)
+      // The subtraction takes the FULL handled set — every distinct effect
+      // the arms touch — read from the same HandlerKind the identity came
+      // from. A single-name subtraction left a multi-effect handler's
+      // sibling effect on the caller's row.
+      let handled_names = match handler_arms_of(right) {
+        Some(arms) => derive_handler_enames(arms, 0, []),
+        None       => [ENamed(handled)]
+      }
       inf_add_row(
-        absorb_row(body_row, mk_ef_closed([ENamed(handled)]), read_bound_row(resid_h)))
+        absorb_row(body_row, mk_ef_closed(handled_names), read_bound_row(resid_h)))
     },
     // Handler value not resolvable to a HandlerKind decl (e.g. a let-bound
     // handler) — productive-under-error: pass the body's row through. The
@@ -2057,6 +2078,21 @@ fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
 // The RHS handler's (handled_effect, residual_row) from its HandlerKind env
 // entry — read live from the graph, never re-derived. None when the RHS isn't
 // a named handler decl.
+// The RHS handler's arms, when it is a named handler decl.
+fn handler_arms_of(right) = match callee_name(right) {
+  "" => None,
+  name => match env_lookup(name) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        HandlerKind(_, _, _, arms) => Some(arms),
+        _                          => None
+      }
+    },
+    None => None
+  }
+}
+
 fn handler_e_r(right) = match callee_name(right) {
   "" => None,
   name => match env_lookup(name) {
@@ -4493,6 +4529,28 @@ fn register_one_op(effect_name, eff_name, op) = {
 // the accumulator's fragments never found each other through a nameless
 // instance). Falls back to the handler's own name when it is its own effect's
 // sole declaration (Hβ.infer.handler-effect-name-is-live-edge, now live).
+// The FULL handled set — every distinct effect the arms touch, as EffNames.
+// A handler may absorb several effects (multieffect's buffer handles Emit AND
+// Collect); the install's subtraction takes the whole set — subtracting only
+// derive_handler_ename's single pick left the sibling effect on the caller's
+// row (the false E_EffectUnhandled on an absorbed effect).
+fn derive_handler_enames(arms, i, own acc) =
+  if i >= len(arms) { acc }
+  else {
+    let acc2 = match env_lookup(handler_arm_op_name(list_index(arms, i))) {
+      Some(entry) => {
+        let (_, _, kind) = entry
+        match kind {
+          EffectOpScheme(en, _, _, _) =>
+            if name_set_contains(acc, ENamed(en)) { acc } else { push(acc, ENamed(en)) },
+          _ => acc
+        }
+      },
+      None => acc
+    }
+    derive_handler_enames(arms, i + 1, acc2)
+  }
+
 fn derive_handler_ename(arms, fallback: String) =
   if len(arms) == 0 { fallback }
   else match env_lookup(handler_arm_op_name(last(arms))) {

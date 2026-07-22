@@ -1843,7 +1843,7 @@ fn first_diverging(stmts, i) =
 
 // Lexical install wins over the keyed forward (a nested handler shadows the
 // caller's evidence) — the seed's $lower_perform order, byte-faithful.
-fn lower_perform_dispatch(handle, op_name, lo_args) =
+fn lower_perform_dispatch(handle, op_name, lo_args) = {
   match op_resume_discipline(op_name) {
     // A MultiShot perform NEVER calls the arm — it YIELDS (band B k1). The
     // on-spine sites are consumed by lower_body_reified, which constructs
@@ -1867,6 +1867,7 @@ fn lower_perform_dispatch(handle, op_name, lo_args) =
     Abandon => LYield(handle, op_name, lo_args, LConst(handle, LInt(0))),
     _ => lower_perform_tiers(handle, op_name, lo_args)
   }
+}
 
 fn lower_perform_tiers(handle, op_name, lo_args) =
   match lower_resolve_handler_for_op(op_name) {
@@ -4970,6 +4971,13 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = s
   ls_register_may_yield(b) => resume() with may_yield = b,
 
   ls_program_may_yield() => resume(may_yield),
+
+  // The actually-performed effect set — noted once per perform site at the
+  // dispatch choke point, deduped by name. The executable gate reads it:
+  // a row name with no perform anywhere reachable is a declared contract
+  // (the `<~` iterative-class style — `with Sample` on a recurrence fn),
+  // never an evidence hole.
+  
 
   // THE CUT (bank A3) — the resume-capability bindings: fn name → the
   // handler whose MultiShot arm's call graph reaches it.

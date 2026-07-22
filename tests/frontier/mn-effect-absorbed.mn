@@ -1,0 +1,13 @@
+// The GREEN sibling of the two evidence-hole refusals: the install
+// absorbs Ping (the triple's subtraction rides the row's mask even when
+// the body's tail is unresolved at install time), main's residual row is
+// substrate-only, and the program runs.
+effect Ping { ping(x: Int) -> Int }
+
+handler pong {
+  ping(x) => resume(x + 1),
+}
+
+fn caller(v) with Ping = ping(v)
+
+fn main() = { caller(41) } ~> pong

@@ -1467,6 +1467,12 @@ type DiagKind
   | EHandlerStateShadowsOp(String, String, Span) // handler name, state field that names an op of the handled effect — ambiguous by construction (the arm body cannot distinguish a state read from an op re-perform; measured: the collision compiles clean and returns the WRONG value)
   | EDuplicateFnName(String, Span)               // a second `fn name` in one namespace — the emitter would pick one silently (invalid WAT today; silent under a native path)
   | EUnresolvedType(Int, Int, Span)              // unresolved handle, epoch (lower-time NFree)
+  | EEffectUnhandled(String, String, Span)       // effect name, the graph-derived
+                                                 // proposal (absorbing handlers in
+                                                 // scope, or the declare-one teach),
+                                                 // main's span — an EVIDENCE hole:
+                                                 // the effect reaches the executable
+                                                 // root with no absorbing install
   | EUnresolvedHole(Int, Span)                   // authored value-position hole surviving
                                                  // into the reachable executable (SYNTAX
                                                  // §«Partial application» — productive,
@@ -1542,6 +1548,7 @@ fn diag_span(d) with Pure = match d {
   EHandlerStateShadowsOp(_, _, s) => s,
   EDuplicateFnName(_, s) => s,
   EUnresolvedType(_, _, s) => s,
+  EEffectUnhandled(_, _, s) => s,
   EUnresolvedHole(_, s) => s,
   EReplayExhausted(s) => s,
   EResumeWorldMismatchWorld(_, _, s) => s
@@ -1596,6 +1603,7 @@ fn diag_source(d) with Pure = match d {
   EHandlerStateShadowsOp(_, _, _) => "infer",
   EDuplicateFnName(_, _) => "infer",
   EUnresolvedType(_, _, _) => "lower",
+  EEffectUnhandled(_, _, _) => "effects",
   EUnresolvedHole(_, _) => "verify",
   EReplayExhausted(_) => "clock",
   EResumeWorldMismatchWorld(_, _, _) => "persist"
@@ -1650,6 +1658,7 @@ fn diag_code(d) with Pure = match d {
   EHandlerStateShadowsOp(_, _, _) => "E_HandlerStateShadowsOp",
   EDuplicateFnName(_, _) => "E_DuplicateFnName",
   EUnresolvedType(_, _, _) => "E_UnresolvedType",
+  EEffectUnhandled(_, _, _) => "E_EffectUnhandled",
   EUnresolvedHole(_, _) => "E_UnresolvedHole",
   EReplayExhausted(_) => "E_ReplayExhausted",
   EResumeWorldMismatchWorld(_, _, _) => "E_ResumeWorldMismatch"
@@ -1717,6 +1726,13 @@ fn diag_refuses(d) with Pure = match d {
   // no duplicate fn names, measured).
   EHandlerStateShadowsOp(_, _, _) => True,
   EDuplicateFnName(_, _) => True,
+  // ARMED at birth (2026-07-22): an EXECUTABLE-root fact read from main's
+  // resolved row at the gate — the row representation is true (the triple),
+  // the wheel's own main carries only substrate-grounded names (census 0 at
+  // arming), and check/edit never route through the gate, so the productive
+  // surfaces stay open. The unhandled effect was the LAST undiagnosed
+  // 0x100000000 class: a perform whose evidence no install threads.
+  EEffectUnhandled(_, _, _) => True,
   // ARMED 2026-07-18, panel-corrected licence: census 0 on the wheel AND the
   // user-path channel verified. ERefinementRejected fires only on a predicate
   // DECIDED false (undecidable defers to V_Pending, decidable-true passes —
@@ -1766,6 +1782,7 @@ fn diag_applicability(d) with Pure = match d {
   WCommentRefUnresolved(_, _, _) => MaybeIncorrect,
   TOverDeclared(_, _, _, _) => MachineApplicable,
   EPatternInexhaustive(_, _, _) => HasPlaceholders,
+  EEffectUnhandled(_, _, _) => MaybeIncorrect,
   EUnresolvedHole(_, _) => HasPlaceholders,
   ERefinementRejected(_, _) => Unspecified,
   EVerifyUnencodable(_) => Unspecified,
@@ -1833,6 +1850,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
   EHandlerStateShadowsOp(hname, field, _) => "handler '{hname}' state field '{field}' names an op of the handled effect — a state read and an op call become indistinguishable in the arm bodies; rename the field",
   EDuplicateFnName(name, _) => "a second `fn {name}` in one namespace — the first declaration already binds it; rename one",
   EUnresolvedType(h, epoch, _) => "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",
+  EEffectUnhandled(ename, proposal, _) => "effect {ename} reaches the executable root with no absorbing handler — calling one of its ops would read garbage evidence at runtime; nothing executes unproven. {proposal}",
   EUnresolvedHole(h, _) => "unresolved value hole (handle {int_to_str(h)}) — fill it (accept a proven survivor) or suspend it into a parameter product",
   EReplayExhausted(_) => "clock replay trace exhausted",
   EResumeWorldMismatchWorld(captured, live, _) => "continuation frozen under world {int_to_str(captured)} cannot resume under world {int_to_str(live)}"

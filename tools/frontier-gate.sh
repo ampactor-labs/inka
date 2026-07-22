@@ -831,6 +831,10 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-heap-region.mn" 42 yes "$dir"
   run_program "$compiler" top-level-let \
     "$ROOT/tests/frontier/mn-top-level-let.mn" 42 yes "$dir"
+  run_refusal "$compiler" effect-unhandled \
+    "$ROOT/tests/frontier/mn-effect-unhandled.mn" E_EffectUnhandled "$dir"
+  run_program "$compiler" effect-absorbed \
+    "$ROOT/tests/frontier/mn-effect-absorbed.mn" 42 no "$dir"
   run_program "$compiler" rope-list-pattern \
     "$ROOT/tests/frontier/mn-rope-list-pattern.mn" 42 yes "$dir"
   run_program "$compiler" seq-rep-license \

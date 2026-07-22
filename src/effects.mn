@@ -49,10 +49,13 @@ fn mk_ef_closed(ref names) with !Mutate = ef_make(names, [], EtClosed)
 
 fn mk_ef_open(ref names, v) with !Mutate = ef_make(names, [], EtVar(v))
 
-// The pure row — the identity element, constructed per read. (Probe note:
-// the module-let form `let ef_pure_row = EfRow([], [], EtClosed)` is the
-// experiment's variable for the 0x100000000 init-emission fault.)
-fn mk_ef_pure() with Memory = EfRow([], [], EtClosed)
+// ONE pure row for the whole image — the identity element as a module
+// value, every read a global load, zero allocation. This is the wheel's
+// own first top-level let: the form that found the init-emission fault
+// (the missing emit bracket, frontier mn-top-level-let) rides the fix.
+let ef_pure_row = EfRow([], [], EtClosed)
+
+fn mk_ef_pure() with Pure = ef_pure_row
 
 // The crown's negative capability: !B = anything except B.
 fn mk_ef_neg(ref names) with !Mutate = ef_make([], names, EtAll)
@@ -202,10 +205,27 @@ fn tail_join(ta, tb) with Pure = match ta {
 // into the fields — b's present names leave a's present and join a's
 // absent, masking the tail FOREVER (the subtraction cannot be dropped by
 // a later tail grounding: it is a field of the row, not a rewrite step).
-fn diff_row(ref a, ref b) with !Mutate = {
+//
+// A VAR tail's mask goes INTO THE GRAPH, not the field: union's absent is
+// the mask INTERSECTION (set-correct — each mask scopes only its own
+// tail), so a top-level mask on a var-tailed row VANISHES the moment the
+// absorbed row unions into a frame (the multieffect leak: `run() ~>
+// buffer` in let position lost Emit's subtraction at the frame union).
+// Minting a fresh var BOUND to the masked triple over the original tail
+// makes the mask an EDGE resolve_row folds through — unions carry vars
+// untouched, so the subtraction survives every union by construction.
+fn diff_row(ref a, ref b) with GraphWrite + Memory + !Mutate = {
   let EfRow(pa, aa, ta) = a
   let EfRow(pb, _, _) = b
-  ef_make(name_set_diff(pa, pb), name_set_union(aa, pb), ta)
+  match ta {
+    EtVar(orig) => {
+      let masked = graph_fresh_row(Inferred("~> subtraction mask"))
+      graph_bind_row(masked, EfRow([], name_set_union(aa, pb), EtVar(orig)),
+        Inferred("pending tail subtraction"))
+      ef_make(name_set_diff(pa, pb), [], EtVar(masked))
+    },
+    _ => ef_make(name_set_diff(pa, pb), name_set_union(aa, pb), ta)
+  }
 }
 
 // Intersection (`&`): closed∩closed intersects presents; anything meeting

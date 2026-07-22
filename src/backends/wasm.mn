@@ -341,18 +341,18 @@ fn emit_runtime_contract() =
 // to a worthy twin; plumbing shells (fold/map — wide values shuttled as word
 // references, never operated on) stay at the floor, which the word protocol
 // keeps correct; (3) the worthy candidates ARE the twin set, seeded into
-// spec_registry and emitted as the same records under the spec_wty state.
+// spec_registry and emitted as the same records under the spec_pairs state.
 
 fn spec_find_rec(recs, target: String) with Memory =
   find((r) => { let (n, _p, _b, _f) = r; n == target }, recs)
 
-fn spec_demand_named(ds, m: String) with Memory = any((d) => { let (dm, _b, _w, _e) = d; dm == m }, ds)
+fn spec_demand_named(ds, m: String) with Memory = any((d) => { let (dm, _b, _p, _e) = d; dm == m }, ds)
 
-// A site becomes a candidate only when EVERY quantified var lands on the SAME
-// wide type — the guard the free-leaf substitution rule requires (a body's
-// unresolved classes fracture, so the twin answers every free with ONE type;
-// a generic instantiated at two distinct types stays floor, the word protocol
-// keeping its plumbing correct — the named multi-type residue).
+// A site becomes a candidate when ANY quantified var lands wide — the exact
+// root-keyed substitution answers each var through its own pair (word-bound
+// vars included), so mixed instantiations (a := Float, b := Int) twin
+// correctly. The former one-wide-type guard was the free-leaf rule's
+// requirement; the fracture fix retired both.
 fn spec_candidate_of_site(site, acc) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
   let (h, n) = site
   let rt = spec_resolve(lookup_ty(h))
@@ -361,23 +361,11 @@ fn spec_candidate_of_site(site, acc) with EnvRead + LookupTy + GraphRead + Memor
   else {
     let enc = spec_enc(pairs)
     if spec_enc_is_floor(enc) { acc }
-    else if !spec_pairs_uniform_wide(pairs) { acc }
     else {
       let m = spec_mangle(n, enc)
-      let (_v, wty) = pairs[0]
-      if spec_demand_named(acc, m) { acc } else { [(m, n, wty, enc)] ++ acc }
+      if spec_demand_named(acc, m) { acc } else { [(m, n, pairs, enc)] ++ acc }
     }
   }
-}
-
-fn spec_pairs_uniform_wide(pairs) with Memory + Alloc =
-  all((pr) => { let (_v, t) = pr; repr_is_wide(repr_of(t)) }, pairs)
-    && spec_pairs_one_digit(pairs)
-
-fn spec_pairs_one_digit(pairs) with Memory + Alloc = {
-  let (_v0, t0) = pairs[0]
-  let d0 = spec_repr_digit(t0)
-  all((pr) => { let (_v, t) = pr; spec_repr_digit(t) == d0 }, pairs)
 }
 
 fn spec_candidates_from_sites(sites, acc) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
@@ -388,14 +376,14 @@ fn spec_candidates_fix(work, done, recs) with EnvRead + LookupTy + GraphRead + M
   else {
     let d = work[0]
     let w2 = rest(work)
-    let (m, base, wty, enc) = d
+    let (m, base, pairs, enc) = d
     if spec_demand_named(done, m) { spec_candidates_fix(w2, done, recs) }
     else {
       match spec_find_rec(recs, base) {
         None => spec_candidates_fix(w2, [d] ++ done, recs),
         Some(rec) => {
           let (_n, _ps, body, _f) = rec
-          spec_ctx_set(wty, enc)
+          spec_ctx_set(pairs, enc)
           let inner = {
             let (sites, _o) = spec_scan_list(body, ([], []))
             spec_candidates_from_sites(sites, [])
@@ -411,23 +399,16 @@ fn spec_candidates_fix(work, done, recs) with EnvRead + LookupTy + GraphRead + M
 // The floor-is-wrong witness: an arith/compare/eq operand whose FLOOR type is
 // a pair var bound wide at this candidate's key. Read at the floor (no
 // substitution) — the var-ness is exactly what the floor emission sees.
-// An arith/compare/eq operand whose floor type is FREE is exactly the site
-// the twin re-widens (the demand guard proved the instantiation is one wide
-// type, so every free IS it) — the address-comparison witness.
-fn spec_oph_free(oh) with LookupTy + GraphRead + Memory + Alloc = {
+// An arith/compare/eq operand whose floor type is a free var bound WIDE by
+// this site's instantiation pairs — the address-comparison witness, root-
+// keyed (sound post-fracture-fix: the operand's root IS the scheme var's).
+fn spec_oph_wide_pair(oh, pairs) with LookupTy + GraphRead + Memory + Alloc = {
   if oh == 0 { false }
   else {
     match lookup_ty(oh) {
-      TVar(u) => {
-        let GNode(kind, _r) = graph_chase(u)
-        match kind {
-          NFree(_)      => true,
-          NErrorHole(_) => false,
-          NBound(_)     => false,
-          NRowBound(_)  => false,
-          NRecordRowBound(_) => false,
-          NRowFree(_)   => false
-        }
+      TVar(u) => match spec_pairs_find(pairs, graph_chase_handle(u)) {
+        Some(c) => repr_is_wide(repr_of(c)),
+        None    => false
       },
       _ => false
     }
@@ -435,13 +416,13 @@ fn spec_oph_free(oh) with LookupTy + GraphRead + Memory + Alloc = {
 }
 
 fn spec_candidate_sensitive(d, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
-  let (_m, base, _wty, _enc) = d
+  let (_m, base, pairs, _enc) = d
   match spec_find_rec(recs, base) {
     None => false,
     Some(rec) => {
       let (_n, _ps, body, _f) = rec
       let (_sites, ophs) = spec_scan_list(body, ([], []))
-      any(spec_oph_free, ophs)
+      any((oh) => spec_oph_wide_pair(oh, pairs), ophs)
     }
   }
 }
@@ -449,12 +430,12 @@ fn spec_candidate_sensitive(d, recs) with EnvRead + LookupTy + GraphRead + Memor
 fn spec_name_in(names, m: String) with Memory = any((x) => x == m, names)
 
 fn spec_candidate_calls_worthy(d, worthy, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
-  let (_m, base, wty, enc) = d
+  let (_m, base, pairs, enc) = d
   match spec_find_rec(recs, base) {
     None => false,
     Some(rec) => {
       let (_n, _ps, body, _f) = rec
-      spec_ctx_set(wty, enc)
+      spec_ctx_set(pairs, enc)
       let verdict = {
         let (sites, _o) = spec_scan_list(body, ([], []))
         any((s) => {
@@ -472,7 +453,7 @@ fn spec_candidate_calls_worthy(d, worthy, recs) with EnvRead + LookupTy + GraphR
 fn spec_worthy_pass(cands, worthy, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
   fold((worthy, false), (acc, d) => {
     let (w, changed) = acc
-    let (m, _base, _wty, _enc) = d
+    let (m, _base, _p, _e) = d
     if spec_name_in(w, m) { (w, changed) }
     else if spec_candidate_sensitive(d, recs) { ([m] ++ w, true) }
     else if spec_candidate_calls_worthy(d, w, recs) { ([m] ++ w, true) }
@@ -489,7 +470,7 @@ fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory +
   let seed = spec_candidates_from_sites(sites, [])
   let cands = spec_candidates_fix(seed, [], recs)
   let worthy = spec_worthy_fix(cands, [], recs)
-  filter((d) => { let (m, _b, _w, _e) = d; spec_name_in(worthy, m) }, cands)
+  filter((d) => { let (m, _b, _p, _e) = d; spec_name_in(worthy, m) }, cands)
 }
 
 // The two name projections the driver concats into the module's name surfaces.
@@ -497,12 +478,12 @@ fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory +
 // the filter-with-handler-block chain left the element open and the concat
 // emitted its unresolved-element floor (the 00c0b6 trap that caught this).
 fn spec_rec_names(spec_recs) -> [String] with Memory + Alloc =
-  map((rp) => { let (rec2, _w, _e) = rp; let (m, _ps, _b, _f) = rec2; m }, spec_recs)
+  map((rp) => { let (rec2, _p, _e) = rp; let (m, _ps, _b, _f) = rec2; m }, spec_recs)
 
 fn spec_wide_twin_names(spec_recs) -> [String] with LookupTy + GraphRead + Memory + Alloc =
   fold([], (acc, rp) => {
-    let (rec2, wty, enc) = rp
-    spec_ctx_set(wty, enc)
+    let (rec2, pairs, enc) = rp
+    spec_ctx_set(pairs, enc)
     let w = fn_record_is_wide(rec2)
     spec_ctx_clear()
     if w { let (m, _ps, _b, _f) = rec2; [m] ++ acc } else { acc }
@@ -539,7 +520,7 @@ fn emit_module(lowered) = {
   let wide_fn_names =
     fn_records |> filter(fn_record_is_wide) |> map((r) => { let (nm, _, _, _) = r; nm })
   // Named-generic twins (the demand analysis above): each demand's record is
-  // the BASE record renamed — the same body, emitted under the spec_wty state so
+  // the BASE record renamed — the same body, emitted under the spec_pairs state so
   // every repr read resolves through the site's instantiation. Registered
   // before any reference emits (spec_target_name reads the registry live);
   // a program with no wide instantiation computes [] and every list below is
@@ -551,14 +532,14 @@ fn emit_module(lowered) = {
   // the nested twin via the active enc, no body rewriting). Names derive from
   // the FULL rec set so nested twins ride the table/idx/closure surfaces.
   let spec_recs = flatten(map((d) => {
-    let (m, base, wty, enc) = d
+    let (m, base, pairs, enc) = d
     match spec_find_rec(fn_records, base) {
       Some(rec) => {
         let (_n, ps, body, f) = rec
-        [((m, ps, body, f), wty, enc)]
+        [((m, ps, body, f), pairs, enc)]
           ++ map((nr) => {
                let (nn, nps, nbody, nf) = nr
-               ((spec_mangle(nn, enc), nps, nbody, nf), wty, enc)
+               ((spec_mangle(nn, enc), nps, nbody, nf), pairs, enc)
              }, collect_fn_emit_records(body))
       },
       None => []   // record-less names are never worthy; unreachable by construction
@@ -601,8 +582,8 @@ fn emit_module(lowered) = {
   // $wf$ word-face wrapper under the same install (its table slot speaks the
   // word-arity face like every other wide fn).
   each((rp) => {
-    let (rec2, wty, enc) = rp
-    spec_ctx_set(wty, enc)
+    let (rec2, pairs, enc) = rp
+    spec_ctx_set(pairs, enc)
     let s = emit_one_fn_to_string(rec2)
     let w = if fn_record_is_wide(rec2) { emit_one_wrapper_to_string(rec2) } else { "" }
     spec_ctx_clear()

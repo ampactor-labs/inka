@@ -1,0 +1,15 @@
+// Named-generic monomorphization, face 6 — the MIXED instantiation. A generic
+// over TWO vars called at (Float, Int): the exact root-keyed substitution
+// (sound since the subscript fracture fix made a generic body's element
+// classes one union-find root with the scheme's vars) answers each var
+// through its OWN pair — a := Float widens, b := Int stays the word — so the
+// twin $sqboth$sp20 squares the f64 natively and the i32 natively in one
+// body. The former one-wide-type guard (the free-leaf rule's requirement)
+// is retired. RED (run 1: a*a on the f64 references — address arithmetic)
+// on the pre-swap boot.
+fn sqboth(a, b) = (a * a, b * b)
+
+fn main() = {
+  let (f, i) = sqboth(1.5, 3)
+  if f == 2.25 && i == 9 { 42 } else { 1 }
+}

@@ -613,31 +613,33 @@ handler wasi_filesystem {
 // resume TVar(h) — the honest word floor every consumer reads; a width a
 // site genuinely needs detonates at emit's loud floors, never here.
 
-// The handler additionally carries the SPECIALIZATION state (spec_wty): a
-// named-generic twin's emission brackets itself with spec_wty_set/clear, and
-// while set, a free var answers the site's single wide instantiation (the
-// free-leaf rule, spec_subst_free in lower.mn). State-swap, NOT handler-swap:
+// The handler additionally carries the SPECIALIZATION state (spec_pairs): a
+// named-generic twin's emission brackets itself with spec_ctx_set/clear, and
+// while set, a free var answers through the site's EXACT instantiation pairs
+// (spec_subst_pairs, lower.mn — root-keyed; a free var whose root is not in
+// the pairs stays the honest floor TVar). State-swap, NOT handler-swap:
 // a second LookupTy handler would demote every lookup_ty perform out of the
 // singleton direct-dispatch tier — measured as ev-scan faults at infer sites
 // that never threaded evidence (they never needed to under the singleton).
-handler lookup_ty_graph with spec_wty = None, spec_enc = "" {
+handler lookup_ty_graph with spec_pairs = [], spec_enc = "" {
 
-  spec_ctx_set(w, e) => resume() with spec_wty = Some(w), spec_enc = e,
-  spec_ctx_clear() => resume() with spec_wty = None, spec_enc = "",
+  spec_ctx_set(prs, e) => resume() with spec_pairs = prs, spec_enc = e,
+  spec_ctx_clear() => resume() with spec_pairs = [], spec_enc = "",
   spec_enc_active() => resume(spec_enc),
 
   lookup_ty(h) => {
     let GNode(kind, reason) = graph_chase(h)
-    match spec_wty {
-      Some(w) => match kind {
-        NBound(t)          => resume(spec_subst_free(t, w)),
-        NFree(_)           => resume(w),
-        NErrorHole(_)      => resume(w),
+    if len(spec_pairs) > 0 {
+      match kind {
+        NBound(t)          => resume(spec_subst_pairs(t, spec_pairs)),
+        NFree(_)           => resume(spec_pair_or_var(h, spec_pairs)),
+        NErrorHole(_)      => resume(spec_pair_or_var(h, spec_pairs)),
         NRowBound(_)       => resume(TUnit),
         NRecordRowBound(_) => resume(TUnit),
         NRowFree(_)        => resume(TUnit)
-      },
-      None => match kind {
+      }
+    } else {
+      match kind {
       NBound(t)        => resume(t),
       // An error hole / free var resumes TVar(h) — CARRY THE HANDLE. The
       // prior TName("ERROR_HOLE")/TName("UNRESOLVED") sentinels fabricated

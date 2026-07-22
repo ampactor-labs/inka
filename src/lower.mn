@@ -5777,36 +5777,42 @@ fn spec_global_name(h, name: String) with EnvRead + LookupTy + GraphRead + Memor
   }
 }
 
-// Free-leaf substitution — the twin's one rule. A checked generic body's
-// unresolved classes FRACTURE (probe-proven: merge's param element roots at
-// one handle, its comparison operands at another — the seq-op result mints
-// its own class), so a root-keyed mapping can never be complete. But in a
-// body whose scheme instantiates ONE distinct wide type, every free-floored
-// leaf IS semantically that instantiation — so the rule is keyed on nothing:
-// a free var answers the wide type. Multi-type generics never twin (the
-// demand guard), so the rule never faces an ambiguous free.
-fn spec_subst_free(t, wty) with GraphRead + Memory + Alloc = match t {
+// Exact root-keyed substitution — the twin's one rule. Sound since the
+// subscript fracture fix (Force = UNIFY at IndexExpr): a generic body's
+// element classes and the scheme's quantified vars are ONE union-find root,
+// so a free leaf answers its OWN root's binding in the site's instantiation
+// pairs — and a free var whose root is NOT in the pairs stays the honest
+// floor TVar. This is the precision the interim free-leaf rule (every free =
+// the one wide type) could not have, and it lifts the one-wide-type demand
+// guard: multi-type generics (a := Float, b := Int) twin correctly.
+fn spec_pair_or_var(u, pairs) with GraphRead + Memory + Alloc =
+  match spec_pairs_find(pairs, graph_chase_handle(u)) {
+    Some(c) => c,
+    None    => TVar(u)
+  }
+
+fn spec_subst_pairs(t, pairs) with GraphRead + Memory + Alloc = match t {
   TVar(u) => {
     let GNode(kind, _r) = graph_chase(u)
     match kind {
-      NBound(t2)         => spec_subst_free(t2, wty),
-      NFree(_)           => wty,
-      NErrorHole(_)      => wty,
+      NBound(t2)         => spec_subst_pairs(t2, pairs),
+      NFree(_)           => spec_pair_or_var(u, pairs),
+      NErrorHole(_)      => spec_pair_or_var(u, pairs),
       NRowBound(_)       => t,
       NRecordRowBound(_) => t,
       NRowFree(_)        => t
     }
   },
-  TList(e)          => TList(spec_subst_free(e, wty)),
-  TTuple(es)        => TTuple(map((x) => spec_subst_free(x, wty), es)),
-  TFun(ps, r, eff)  => TFun(map((p) => param_with_ty(p, spec_subst_free(param_ty(p), wty)), ps),
-                            spec_subst_free(r, wty), eff),
-  TName(n, args)    => TName(n, map((x) => spec_subst_free(x, wty), args)),
-  TRecord(fs)       => TRecord(map((f) => { let (n, ft) = f; (n, spec_subst_free(ft, wty)) }, fs)),
-  TRecordOpen(fs, v) => mk_record_open(map((f) => { let (n, ft) = f; (n, spec_subst_free(ft, wty)) }, fs), v),
-  TRefined(b, p)    => TRefined(spec_subst_free(b, wty), p),
-  TAlias(n, i)      => TAlias(n, spec_subst_free(i, wty)),
-  TCont(i, a, d, w) => TCont(spec_subst_free(i, wty), spec_subst_free(a, wty), d, w),
+  TList(e)          => TList(spec_subst_pairs(e, pairs)),
+  TTuple(es)        => TTuple(map((x) => spec_subst_pairs(x, pairs), es)),
+  TFun(ps, r, eff)  => TFun(map((p) => param_with_ty(p, spec_subst_pairs(param_ty(p), pairs)), ps),
+                            spec_subst_pairs(r, pairs), eff),
+  TName(n, args)    => TName(n, map((x) => spec_subst_pairs(x, pairs), args)),
+  TRecord(fs)       => TRecord(map((f) => { let (n, ft) = f; (n, spec_subst_pairs(ft, pairs)) }, fs)),
+  TRecordOpen(fs, v) => mk_record_open(map((f) => { let (n, ft) = f; (n, spec_subst_pairs(ft, pairs)) }, fs), v),
+  TRefined(b, p)    => TRefined(spec_subst_pairs(b, pairs), p),
+  TAlias(n, i)      => TAlias(n, spec_subst_pairs(i, pairs)),
+  TCont(i, a, d, w) => TCont(spec_subst_pairs(i, pairs), spec_subst_pairs(a, pairs), d, w),
   _ => t
 }
 

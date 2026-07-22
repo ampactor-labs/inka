@@ -1019,6 +1019,17 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE EXACT-SUBSTITUTION SWAP — monomorphization face 3 CLOSES
+  (the multi-type unlock · pin 4a114123). The bracket carries the site's
+  EXACT instantiation pairs (root -> concrete); a free leaf answers its OWN
+  root's binding; a root not in the pairs stays the honest floor TVar; the
+  one-wide-type guard is DELETED (the free-leaf rule and its guard were
+  scaffolding around the subscript fracture, retired with it). Mixed
+  instantiations twin: sqboth at (Float, Int) -> $sqboth$sp20 squares the
+  f64 AND the i32 natively in one body. Gate mn-generic-multitype RED (1)
+  on the prior pin, 42 now; frontier 156/0; census 0; clean m2 == m3. The
+  monomorphization arc's named residue is now ONE face: the lower-time
+  show/hash bake (band D's leaf work — the LShow/LHash build)
 - 2026-07-22 · THE SUBSCRIPT FRACTURE FIX — Force = UNIFY, never overwrite
   (infer.mn IndexExpr · pin da45bcdd). The xs[i] sugar arm graph_bind-
   OVERWROTE its receiver, discarding the proven TList(elem) and orphaning a

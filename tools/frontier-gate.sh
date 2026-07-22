@@ -819,6 +819,8 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-generic-float-comparator.mn" 42 yes "$dir"
   run_program "$compiler" generic-nested-lambda \
     "$ROOT/tests/frontier/mn-generic-nested-lambda.mn" 42 yes "$dir"
+  run_program "$compiler" generic-multitype \
+    "$ROOT/tests/frontier/mn-generic-multitype.mn" 42 yes "$dir"
   # E_OwnershipViolation armed 2026-07-18 — the double-move fixture moved from
   # run_diagnostic (productive exit 0) to the armed-class refusal contract.
   run_refusal "$compiler" own-call-arg-move \

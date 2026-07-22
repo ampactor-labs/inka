@@ -1,3 +1,4 @@
+// expect: 33
 // band B M2 RATCHET — the UZero blast radius through call frames (pinned
 // so M4's abandon cut is a MEASURED flip). Under today's convention the
 // abort's None returns to the deepest perform site and reaches the install

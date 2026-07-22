@@ -1,3 +1,4 @@
+// expect: 50
 // HASH gate — the structural fold's HASH leaf: total `hash(x)` over aggregates
 // from ONE FNV mix, with the eq ⇒ hash agreement built in.
 //

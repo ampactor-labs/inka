@@ -1,3 +1,4 @@
+// expect: 60
 // W23 gate — parameterized effect args as operand Node handles (v2 deferral closed).
 //
 // The ultimate form (what the WHEEL now does): a parameterized effect arg is the

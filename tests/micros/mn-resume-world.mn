@@ -1,3 +1,4 @@
+// expect: 42
 // mn-resume-world — STEP 5 gate: TCont carries the effect-WORLD; the
 // world-index is INERT on the OneShot path (Law 7) and the unify arm that
 // now compares disciplines AND unifies world-rows never spuriously fires

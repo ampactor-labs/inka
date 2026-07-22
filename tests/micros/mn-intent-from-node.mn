@@ -1,3 +1,4 @@
+// expect: 80
 // W27 gate — the authored intent row is read LIVE off the FnStmt node, never a
 // parallel intent_index side-ledger re-found by scan.
 //

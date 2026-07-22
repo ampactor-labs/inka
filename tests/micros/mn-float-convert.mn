@@ -1,3 +1,4 @@
+// expect: 14
 // W11 gate (the int<->float convert intrinsic) — float_of_int / float_to_int are
 // REAL machine conversions (the gradient's coercion arm), NOT identity stubs that
 // reinterpret bits. Lower recognizes them by name and emits LConvert(IntToFloat /

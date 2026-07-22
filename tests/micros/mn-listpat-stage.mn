@@ -1,3 +1,4 @@
+// expect: 42
 fn first_plus(xs) = match xs {
   []         => 0,
   [b0, ..._] => b0 + 1

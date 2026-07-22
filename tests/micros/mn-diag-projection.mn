@@ -1,3 +1,4 @@
+// expect: 30
 // W19 gate — the diagnostic catalog AS a projection of the DiagKind ADT.
 //
 // The ultimate form (what the WHEEL now is): `report` takes ONE DiagKind

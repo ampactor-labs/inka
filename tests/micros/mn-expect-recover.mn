@@ -1,3 +1,4 @@
+// expect: 21
 // W17 GATE — `expect` is productive-under-error: consume on match, NARRATE +
 // RECOVER on mismatch (SYNTAX.md: diagnostics are teaching surfaces with
 // coordinates + a Quick Fix). The wheel's expect (src/parser.mn) now emits a

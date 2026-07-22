@@ -1,3 +1,4 @@
+// expect: 27
 // band B M2 gate — depth-3 nesting: the TRUE multi-hole gate. k3's
 // substitution environment carries TWO enclosing holes ((h1*h2)*??), both
 // read through captures seeded across two frame levels — the hole-SET

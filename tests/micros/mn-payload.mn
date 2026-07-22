@@ -1,3 +1,4 @@
+// expect: 1
 // Bottom-up probe of the ONE primitive: does ~> read the performed value's
 // type into the handler arm? No map, no buffer, no iterate. emit carries a
 // record; the arm reads v.beta. If the payload edge works, v : the record,

@@ -1,3 +1,4 @@
+// expect: 42
 // mn-higher-order-effect-builtin-state — the -multi-state repro + a make_list
 // STATE INIT (a Memory/Alloc-effecting init, like map_collector's `buf =
 // make_list(16)`), but the arm stays pure-Int (does NOT touch buf). Pins whether

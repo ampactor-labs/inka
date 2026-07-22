@@ -1,3 +1,4 @@
+// expect: 42
 type Q
   = QA(Int)
   | QB(Int)

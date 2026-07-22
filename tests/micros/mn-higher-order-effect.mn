@@ -1,3 +1,4 @@
+// expect: 42
 // mn-higher-order-effect — higher-order effect propagation (the L1 first-light blocker).
 // A lambda performing a USER effect, passed to `map`, under a handler. For the
 // evidence to thread, map must be effect-polymorphic: (a→b ! e) → [a] → [b] ! e,

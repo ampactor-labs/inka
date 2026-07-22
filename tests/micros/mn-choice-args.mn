@@ -1,3 +1,4 @@
+// expect: 16
 // band B M1.4 gate — the args-bearing MultiShot perform (bank Ruling 3).
 // pick(3, 7) rides the yield as the transient $yield_args record; the
 // driver reads the arm's declared arity live and pushes (record, k, 3, 7);

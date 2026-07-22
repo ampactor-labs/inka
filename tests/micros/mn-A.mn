@@ -1,3 +1,4 @@
+// expect: 6
 fn main(q) = {
   let r = last([{alpha: 1, beta: 2, gamma: 3}])
   r.alpha + r.beta + r.gamma

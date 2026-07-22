@@ -1,3 +1,4 @@
+// expect: 31
 // W15 GATE — labeled-call-arg resolution = parameter-list-as-product.
 //
 // The wheel resolves a call's arg PRODUCT to the callee's positional param

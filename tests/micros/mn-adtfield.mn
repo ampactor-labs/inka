@@ -1,3 +1,4 @@
+// expect: 0
 // EXACT wheel shape: record annotation with an ADT-typed field (install_span: Span).
 // If the record annotation fails to resolve because a field is an ADT (TName),
 // tag stays poly → tag.handle unreachable.

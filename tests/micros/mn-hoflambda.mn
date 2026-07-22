@@ -1,3 +1,4 @@
+// expect: 1
 // Minimal HOF passing a field-access LAMBDA, applied to a record literal.
 // apply's `a` mediates: f:(a)->b, x:a; the lambda's r must unify with {alpha,beta}
 // through `a`. If my unify fix propagates, r.beta@4 resolves → 2.

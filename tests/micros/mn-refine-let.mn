@@ -1,3 +1,4 @@
+// expect: 42
 // VALUE-PROOF (R2) — the PASSING path: a refined let with a valid constant
 // discharges its refinement and compiles byte-identically to the un-annotated
 // form. `0.5` satisfies `-1.0 <= self && self <= 1.0`, so subst_self binds

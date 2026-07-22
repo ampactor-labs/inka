@@ -1,3 +1,4 @@
+// expect: 7
 // An effectful fn's tail self-call must emit as a TAIL call — the sst_
 // evidence clone is argument computation, then return_call_indirect (the
 // seed's proven form). The regression this gates: the wheel's mark_tail

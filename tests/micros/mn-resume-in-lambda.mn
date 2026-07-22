@@ -1,3 +1,4 @@
+// expect: 23
 // band B M1.6 gate — the resume-resolution ladder's CAPTURE tier (bank
 // Ruling 2/A3): a resume inside a let-bound lambda W7-called within a
 // MultiShot arm. The ResumeExpr free-vars arm reports "__k" free, so the

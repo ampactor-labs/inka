@@ -1,3 +1,4 @@
+// expect: 9
 // THE CUT gate — yield_inhabitants' distilled shape: a resume in a CALLED
 // top-level fn. The classifier's call-substitution grades the arm UMany
 // through drive's summary (pick flips MultiShot); the bindings walk bounds

@@ -1,3 +1,4 @@
+// expect: 7
 // EXACT lookup_tag shape: find + field-access lambda + annotated list PARAM.
 // tag.handle must resolve via the annotation flowing through find's element. →7.
 fn pick(ref tags: [{handle: Int, region_id: Int}], h) with !Mutate =

@@ -1,3 +1,4 @@
+// expect: 42
 // Minimal reproduction: ONE handler handling TWO distinct effects (the
 // wat_to_string shape — wat_emit/WasmOut + wat_collect/WatBuffer). The wheel's
 // register_handler derives ONE ename from the first arm; the second arm's op

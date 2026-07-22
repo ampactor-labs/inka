@@ -1,3 +1,4 @@
+// expect: 51
 // band B M2 gate — nested choose × arm state: two arm invocations
 // interleave against the ONE install record (the inner runs to completion
 // mid-outer-arm; every state read is a LIVE load, every commit lands

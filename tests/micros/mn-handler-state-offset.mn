@@ -1,5 +1,0 @@
-handler h with s = 1 {
-  op(x) => resume(x + s)
-}
-
-fn main(q) = 42

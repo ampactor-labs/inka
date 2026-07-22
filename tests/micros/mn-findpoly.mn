@@ -1,3 +1,4 @@
+// expect: 0
 // find called with TWO different element types. If find is generalized (let-poly),
 // both field-lambdas resolve. If monomorphized to the first caller, the second breaks.
 fn pick_h(ref xs: [{handle: Int, region_id: Int}], k) with !Mutate = find((t) => t.handle == k, xs)

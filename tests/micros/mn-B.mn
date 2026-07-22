@@ -1,1 +1,2 @@
+// expect: 2
 fn main(q) = [{alpha: 1, beta: 2, gamma: 3}][0].beta

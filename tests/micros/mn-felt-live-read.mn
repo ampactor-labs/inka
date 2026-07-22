@@ -1,3 +1,4 @@
+// expect: 78
 // W28 gate (felt-projection) — the felt read is the cursor projecting the LIVE
 // graph: the negative capability (!E) reaches synth, and the `??` pin is a
 // STRUCTURAL override, never a magic float.

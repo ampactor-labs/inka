@@ -1,3 +1,4 @@
+// expect: 60
 // W22 gate — refinement narrowing + verify-SMT soundness, wired at infer_fn.
 //
 // The ultimate form (what the WHEEL now does):

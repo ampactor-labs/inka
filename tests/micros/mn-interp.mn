@@ -1,3 +1,4 @@
+// expect: 51
 fn main(q) = {
   let name = "wheel"
   let s = "the {name} turns"

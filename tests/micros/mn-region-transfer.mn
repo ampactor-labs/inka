@@ -1,3 +1,4 @@
+// expect: 5
 // Live regions + the return transfer (§5.O layer 3): every fn body is a
 // region; a locally-built composite leaving through the return re-tags
 // into the parent region (Hβ.own.region-return-transfer), so a two-level

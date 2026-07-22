@@ -1,3 +1,4 @@
+// expect: 90
 // A2 gate (Hβ.lower.tuple-as-product) — a tuple IS a positional product, so
 // construction and match-bind read ONE width-summed offset fold (the SAME
 // field_byte_offset records use). This gate proves construct + match-bind AGREE

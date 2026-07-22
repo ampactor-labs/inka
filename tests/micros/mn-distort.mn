@@ -1,3 +1,4 @@
+// expect: 18
 // mn-distort — W25 gate: DSP CHARACTER IS A HANDLER SWAP.
 //
 // The distortion is an EFFECT (`distort` — "shape this sample"); HOW it shapes

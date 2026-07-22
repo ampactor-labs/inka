@@ -1,3 +1,4 @@
+// expect: 66
 // String-literal patterns HIT: the pattern-position literal is the same
 // interned constant the expression position emits, compared str_eq. The
 // wheel's emit floored pattern strings to address 0 (walk_lemit_arms never

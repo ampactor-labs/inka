@@ -1,3 +1,4 @@
+// expect: 0
 // mn-nested-foreach-depth3 — minimal SELF-CONTAINED repro of the first-light
 // m2→m3 trap: a config-closure handler nested 3 deep, where the innermost
 // config performs a USER effect that must thread up through all three handlers.

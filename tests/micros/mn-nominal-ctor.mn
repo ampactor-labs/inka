@@ -1,3 +1,4 @@
+// expect: 42
 type Pri = Pri({tier: Int, w: Int})
 
 fn cmp(a, b) with Pure = {

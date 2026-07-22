@@ -1,3 +1,4 @@
+// expect: 4
 // fold-accumulator — the handler config/state/result seam.
 // `fold([], (acc, xs) => acc ++ xs, xss)` must carry one accumulator type
 // through init, f's first arg, f's return, handler state, and result().

@@ -1,3 +1,4 @@
+// expect: 46
 // band B S1 gate — the closure-context record home (the refuter's measured
 // 32-not-46 silent state loss, unmasked). Resumes-with-state inside
 // thunks: the lambda's own $__state is its CLOSURE record, so the commit

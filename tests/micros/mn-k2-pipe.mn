@@ -1,3 +1,4 @@
+// expect: 26
 // band B M1.3 gate — the k2 boundary at a `|>` chain (the pipe-completion
 // LSuspend mint, the wheel's dominant idiom). chain's spine descends
 // PForward-left to the bare-VarRef stage `5 |> step` (its LSuspend carries

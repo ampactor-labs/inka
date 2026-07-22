@@ -1,3 +1,4 @@
+// expect: 42
 // mn-refine — minimal refinement-type decl, to isolate the pass-2
 // expr_to_predicate OOB (mentl2 faults parsing `type X = Int where <pred>`).
 // No handler, so lowering can't hit the producer/pre-register path —

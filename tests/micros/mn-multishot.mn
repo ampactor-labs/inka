@@ -1,3 +1,4 @@
+// expect: 30
 // mn-multishot — STEP 3 / W07 gate: the MULTI-SHOT PRODUCER + LIVE CAPTURES.
 //
 // A handler arm with TWO sequential (non-disjoint) resume sites classifies

@@ -1,3 +1,4 @@
+// expect: 48
 // mn-multicap-effect — the pass-2 closure-capture trap, shrunk. Mirrors
 // lower_handler_arms_as_decls' `map((arm) => lower_one_arm_decl(arm, discriminator,
 // config, state, fence), arms)`: an EFFECTFUL lambda with MULTIPLE captures, applied

@@ -1,3 +1,4 @@
+// expect: 3
 // A declared payload carries its element type: `Mk(Int, [Item])` gives the
 // destructured xs a proven [Item], so `++` grounds to the list
 // representation. The bare-`List` spelling of this same decl erased the

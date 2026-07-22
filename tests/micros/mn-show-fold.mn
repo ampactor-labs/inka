@@ -1,3 +1,4 @@
+// expect: 40
 // W03 gate — the structural fold's SHOW leaf: to_string total over aggregates.
 //
 // The ultimate form (what the WHEEL now emits): to_string on an AGGREGATE is a

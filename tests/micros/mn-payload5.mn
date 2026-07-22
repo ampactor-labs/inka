@@ -1,3 +1,4 @@
+// expect: 1
 // Rung 3c: same as rung 3b but ops renamed so the WRITER (aset) sorts BEFORE
 // the reader (zrd). If alphabetical arm-typing order is the cause — the read
 // snapshotting the state type before the write lands — this passes while

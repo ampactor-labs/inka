@@ -1,3 +1,4 @@
+// expect: 30
 // mn-ms-both — multi-shot gating test. The handler resumes TWICE;
 // the continuation is λx. x * 10. resume(1) = 10, resume(2) = 20,
 // arm returns 10 + 20 = 30.

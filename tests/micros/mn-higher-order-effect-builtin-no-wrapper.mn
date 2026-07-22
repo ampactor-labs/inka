@@ -1,3 +1,4 @@
+// expect: 42
 // mn-higher-order-effect-builtin-no-wrapper — the -builtin-state repro with the
 // `use_each` wrapper REMOVED: the lambda is created directly in run's scope (the
 // same fn that installs env2_handler), so its Env2 evidence is captured LEXICALLY

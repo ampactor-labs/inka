@@ -1,3 +1,4 @@
+// expect: 60
 // W21 gate — ownership inference + affine double-consume, wired at infer_fn.
 //
 // The ultimate form (what the WHEEL now does): infer_fn runs infer_ownership

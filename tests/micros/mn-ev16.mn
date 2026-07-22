@@ -1,3 +1,4 @@
+// expect: 18
 // Handler-record evidence capture: a STATEFUL handler's arm performs
 // a Tier-2 effect (two decls of `note` force evidence dispatch). The
 // record is [_, nstate=1, k@8, arm@12, captured_ev@16]; the arm's

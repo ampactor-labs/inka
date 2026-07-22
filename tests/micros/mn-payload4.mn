@@ -1,3 +1,4 @@
+// expect: 1
 // Rung 3b: cross-arm state flow with a RECORD state (no list). If this works
 // but rung 3 (list state) traps, the break is the list element flowing through
 // state. If this ALSO traps, it's cross-arm state flow in general.

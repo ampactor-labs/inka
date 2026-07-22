@@ -1,3 +1,4 @@
+// expect: 42
 effect CurX { cx() -> Int }
 effect IcX { ix() -> Int }
 

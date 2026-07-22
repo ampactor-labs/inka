@@ -1,3 +1,4 @@
+// expect: 30
 // mn-fanout-seq — STEP 4 gate: PARALLEL TOPOLOGY, the SEQUENTIAL default.
 //
 // `><` is ONE parallel-fanout verb (collapsed from PDiverge|PCompose into

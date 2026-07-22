@@ -1,3 +1,4 @@
+// expect: 0
 // Rung 3: the element must flow through HANDLER STATE — put writes the record
 // into the slot list; get reads it back. This is map_collector's buf, minus
 // iterate/f/count. If state's element type flows from list_set's value, slot :

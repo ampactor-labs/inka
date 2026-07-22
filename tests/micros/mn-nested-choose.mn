@@ -1,3 +1,4 @@
+// expect: 9
 // band B M2 gate — nested choose: the product of two choices (the k
 // re-yields its own op mid-resume). pick1 reifies k1 = [?? * pick2]; each
 // k1(v) call hits pick2, whose remainder reifies NESTED (k2 = [v * ??],

@@ -1,3 +1,4 @@
+// expect: 42
 // mn-higher-order-effect-multi-state — the -wrapper repro + map_collector's
 // MULTI-STATE-FIELD shape (two state fields, both updated in the arm via
 // resume-with-state), but WITHOUT lists / Memory effects (both fields are Int).

@@ -1,3 +1,4 @@
+// expect: 6
 // mn-autodiff — W25 gate: AUTODIFF AS AN ALGEBRAIC EFFECT.
 //
 // d/dx of x^2 at x=3 = 2·x = 6. The forward pass PERFORMS Compute (square

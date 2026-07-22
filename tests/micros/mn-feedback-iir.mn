@@ -1,3 +1,4 @@
+// expect: 30
 // mn-feedback-iir — W24 / LF.B gate: the `<~` prior-iteration BINDING.
 //
 // THE GENUINE DSP NOVELTY (PLAN §2, the `<~` arm): the feedback operator binds

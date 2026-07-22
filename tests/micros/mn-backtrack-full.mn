@@ -1,3 +1,4 @@
+// expect: 30
 // THE CUT's load-bearing acid (bank M3): the COMPLETE backtrack shape —
 // resume in a lambda passed as a config-fn arg, an arm-internal `~>`
 // install, recursion through a nested fn, an args-bearing MultiShot op,

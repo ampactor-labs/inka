@@ -1,3 +1,4 @@
+// expect: 42
 // W17 GATE — the `-> RetTy` return annotation PINS (SYNTAX.md «Return type
 // omission»: absent = inferred; PRESENT = a CONSTRAINT unified against the
 // inferred body return). The wheel now mints NTypeAnn(ty) at parse

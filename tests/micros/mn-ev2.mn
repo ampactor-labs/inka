@@ -1,3 +1,4 @@
+// expect: 57
 effect G {
   g_mint(Int) -> Int
 }

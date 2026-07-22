@@ -1,3 +1,4 @@
+// expect: 7
 // mn-tuple-lambda.mn — a tuple-PATTERN lambda param (SYNTAX.md §Anonymous
 // functions: `((a, b)) => …`), piped a pair. This is the exact shape of
 // get_authored_ownership (own.mn:73) — `x |> ((owner_name, idx)) => {…}` — the

@@ -1,3 +1,4 @@
+// expect: 20
 // STEP 2 gate — the total structural FOLD's eq leaf compares to the BOTTOM.
 //
 // The ultimate form (what the WHEEL now emits): a product `==` is a CALL to

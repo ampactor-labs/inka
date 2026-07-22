@@ -1,3 +1,4 @@
+// expect: 63
 // W29+W30 gate (transports-cli) — the CLI dispatch and query grammar are
 // fully ADT-keyed, never string-keyed downstream. Two control shapes:
 //

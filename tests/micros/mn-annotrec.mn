@@ -1,3 +1,4 @@
+// expect: 3
 // Annotated RECORD param → direct field access. The annotation is the ONLY source
 // of r's shape (no call-site literal). If it resolves, r.alpha@0 r.beta@4 → 1+2=3.
 fn getb(r: {alpha: Int, beta: Int}) = r.alpha + r.beta

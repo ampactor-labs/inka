@@ -1,3 +1,4 @@
+// expect: 79
 // mn-lambda-evrow — Fix B: the captured-lambda ev-slot PLACE/READ unification.
 //
 // A captured/anonymous lambda's evidence region is PLACED against the lambda's

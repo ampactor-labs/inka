@@ -1,3 +1,4 @@
+// expect: 0
 // mn-nested-depth3-full — the MAXIMAL depth-3 variant, mirroring the real
 // first-light trap chain's distinguishing features all at once:
 //   - callbacks passed BY NAME (level1/2/3 = LFnRef named-fn values, the

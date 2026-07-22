@@ -1,3 +1,4 @@
+// expect: 10
 // Interpolation assembles in SOURCE ORDER: "x{a}y{b}z" is exactly
 // [120,66,121,68,122]. The wheel's lower_string_interpolation baked the
 // FINAL fragment first (head = last) — every interpolated string m2

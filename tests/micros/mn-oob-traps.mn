@@ -1,3 +1,4 @@
+// expect: 134
 // SYNTAX §Indexing: bounds-checking is RUNTIME for lists — traps on
 // out-of-range. This fixture is the law's executable form: xs[99] on a
 // three-element list must TRAP (exit 134), never read adjacent memory.

@@ -1,3 +1,4 @@
+// expect: 42
 // Hypothesis test (dep-free): does the seed mis-construct a FIELDED variant of a
 // MIXED nullary+fielded ADT as a nullary 0 (dropping its field)? Mirrors EffName
 // (ENamed(_) | EParameterized(_,_) | EPure) + eff_name_lt's shape, with Int

@@ -1,1 +1,2 @@
+// expect: 1
 fn main(q) = last(map((x) => x, [{alpha: 1, beta: 2, gamma: 3}])).beta

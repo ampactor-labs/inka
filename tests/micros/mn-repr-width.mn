@@ -1,3 +1,4 @@
+// expect: 40
 // STEP 0 gate — the representation-class read round-trips through the seed.
 //
 // repr_of/repr_width/repr_wat live in the WHEEL (src/types.mn) with NO caller

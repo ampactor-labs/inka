@@ -1,3 +1,4 @@
+// expect: 1
 // Rung 2: TRANSITIVE perform — the payload must survive being carried through
 // a function-call edge (run -> helper -> emit), i.e. through helper's effect
 // row. This is the map -> iterate -> yield shape, minus the buffer.

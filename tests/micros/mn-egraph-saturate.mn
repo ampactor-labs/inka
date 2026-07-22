@@ -1,3 +1,4 @@
+// expect: 70
 // W14 gate — the e-graph: effect-gated absorb + congruence-closed saturation.
 //
 // The ultimate form (what the WHEEL now does, src/egraph.mn): equality

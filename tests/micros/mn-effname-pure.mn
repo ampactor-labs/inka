@@ -1,3 +1,4 @@
+// expect: 18
 // W20 gate — Pure is the union-identity EffName variant, not a string key.
 //
 // The ultimate form (what the WHEEL now is): `with Pure` lexes to TPure and the

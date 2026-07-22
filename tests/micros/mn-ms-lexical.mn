@@ -1,3 +1,4 @@
+// expect: 30
 // mn-ms-lexical — multi-shot gating test, LEXICAL dispatch: the perform sits
 // DIRECTLY under `~> both` (not in a called fn), so the handler resolves
 // lexically at lower time → Tier-3 continuation producer. The handler resumes

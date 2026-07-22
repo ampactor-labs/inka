@@ -1,3 +1,4 @@
+// expect: 21
 // Three chained handlers; the op served by the MIDDLE one is
 // performed from a NESTED function, not the staged one — the
 // m2 fresh_ph shape: parse fns deep below the chain's stage

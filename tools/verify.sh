@@ -58,12 +58,18 @@ BOOT="boot/mentl.wasm"
 export MENTL_BOOT="$BOOT"
 say "✓ compiler: $BOOT"
 
-# 2. Micro battery — each line `micro:NAME=EXPECTED_EXIT` in the baseline.
-while IFS= read -r line; do
-  name=${line#micro:}; m=${name%%=*}; want=${name#*=}
-  out=$(tools/run-micro.sh "tests/micros/mn-${m}.mn" "$want" "${RTLIBS[@]}" 2>/dev/null | tail -1)
+# 2. Micro battery — each micro DECLARES its own expected exit as its first
+#    comment (`// expect: N`): the expectation lives ON the artifact it gates
+#    (a comment is graph content, SYNTAX §Comments — the medium reads its own
+#    gate), never in a side-table. A micro without the header is skipped
+#    loudly (a gate that cannot fail is no gate).
+for mf in tests/micros/mn-*.mn; do
+  m=$(basename "$mf" .mn); m=${m#mn-}
+  want=$(sed -n '1s|^// expect: \([0-9]\+\)$|\1|p' "$mf")
+  if [[ -z "$want" ]]; then say "✗ micro $m: no '// expect: N' header"; fail=1; continue; fi
+  out=$(tools/run-micro.sh "$mf" "$want" "${RTLIBS[@]}" 2>/dev/null | tail -1)
   if [[ "$out" == PASS* ]]; then say "✓ micro $m=$want"; else say "✗ micro $m: ${out:-no output}"; fail=1; fi
-done < <(grep -E '^micro:' "$BASELINE")
+done
 
 # 3. The census — the medium's own verdict on its own source, RATCHETED.
 #

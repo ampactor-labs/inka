@@ -1,3 +1,4 @@
+// expect: 42
 // W26 gate — the IC `<~` fixpoint converges on GRAPH-EPOCH stability, not a
 // hand-rolled reason-chain compare.
 //

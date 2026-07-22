@@ -1,3 +1,4 @@
+// expect: 46
 // band B M1.5 gate — the state-commit tail (bank Ruling 4): a MultiShot
 // arm resuming twice with a state update between. The commit prefix (val +
 // update RHS snapshot against PRE-update state, then the slot stores) runs

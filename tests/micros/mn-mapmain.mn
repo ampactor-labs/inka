@@ -1,3 +1,4 @@
+// expect: 14
 fn double(n) = n * 2
 fn main(q) = {
   let ys = map(double, [3, 4])

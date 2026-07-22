@@ -1,3 +1,4 @@
+// expect: 42
 // mn-higher-order-effect-two-op — mirrors the prelude's map exactly: a TWO-OP
 // declared effect (emit slot 0 + done slot 1), one handler covering both, emit
 // performed Tier-2 (one fn-call deep in `source`, like iterate_from) and done

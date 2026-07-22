@@ -1,3 +1,4 @@
+// expect: 125
 fn widen(x) = float_of_int(x) + 0.5
 
 fn main() = {

@@ -421,16 +421,10 @@ census_errors_max: 0
 phantom_comments_max: 220
 
 # micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
-micro:ev2=57
-micro:ev4=57
-micro:ev8=57
-micro:ev5=21
-micro:ev16=18
 # STEP 0 (repr_of): the representation-class read's width arithmetic round-trips
 # through the seed (5-arm Repr ADT, exhaustive 4/8/16 width match — never == 4).
 # The value gate (repr_of(TFloat) == RF64) lands with STEP 1's first caller,
 # when the seed catches up to the wheel — peer Hβ.repr.read-value-gate.
-micro:repr-width=40
 # STEP 2 (structural fold): a product `==` is a CALL to the generated recursive
 # $eq_<sig> helper (field-wise deep eq at canonical width-summed offsets,
 # recursing for nested products) — dissolving the loud emit_eq_deep_unsupported
@@ -439,7 +433,6 @@ micro:repr-width=40
 # the ev-slot seam, PLAN §7), so this gate proves the fold's CONTROL SHAPE
 # (per-field eq + AND conjunction + recursion). The direct record-`==` value
 # gate lands when the seed catches up — peer Hβ.eq.fold-seed-value-gate.
-micro:struct-eq-deep=20
 # W02 (the structural fold's SUM leaf): the wheel's eq is now TOTAL over all five
 # node-kinds — emit_one_eq_sum_helper (src/backends/wasm.mn) generates the
 # per-variant tag-then-payload $eq_n<Name> helper, variant specs read live from
@@ -447,7 +440,6 @@ micro:struct-eq-deep=20
 # control shape (sentinel-guard + tag-compare + payload conjunction) end-to-end
 # through the seed in ADT-construction + match constructs; the DIRECT `a == b` on
 # ADTs awaits the seed catching up (peer Hβ.eq.fold-sum-seed-value-gate). Exit 60.
-micro:struct-eq-sum=60
 # STEP 3 (multi-shot producer): the wheel's ResumeExpr now reads the op's proven
 # cardinality LIVE (current_resume_discipline, the deleted write-only resume_kinds
 # ledger) and mints the dormant LMakeContinuation for MultiShot arms — the
@@ -476,13 +468,10 @@ micro:struct-eq-sum=60
 # schedule the gate can't verify deterministically is never claimed). Unsurpassable
 # follow-ups: Hβ.lower.fanout-simd-lane-cashout (reads STEP 1 v128), fanout-gpu-
 # backend-handler, fanout-durable-persist-handler (reads STEP 3).
-micro:fanout-seq=30
 # `<|` branch applications carry the exact result handles inference minted.
 # This covers named/inline effect evidence under an ambiguous handler set.
-micro:diverge-evidence=87
 # Non-word branch results keep their f64 call, tuple-store, pattern-load, and
 # local widths; the accepted single-branch surface still produces a tuple.
-micro:diverge-result-handle=125
 # STEP 5 (TCont world-index): TCont(Ty, ResumeDiscipline) → TCont(Ty,
 # ResumeDiscipline, EffRow) — the ONE coordinated breaking arity change (the
 # unpatchability theorem: swap the representation, never patch). The third field
@@ -506,7 +495,6 @@ micro:diverge-result-handle=125
 # claimed). The world-CAPTURE plumbing is live: infer's inf_current_row()
 # already projects the ambient row at the suspend point, ready to fill the field
 # at the producer's mint — peer Hβ.infer.tcont-world-capture-at-reify.
-micro:resume-world=42
 # W03 (the structural fold's SHOW leaf): to_string on an AGGREGATE is now a CALL
 # to the generated recursive $show_<sig> helper (emit_fold_show_helpers,
 # src/backends/wasm.mn) — the SHOW leaf, sibling of the eq leaf ($eq_<sig>). It
@@ -521,7 +509,6 @@ micro:resume-world=42
 # proves the show fold's CONTROL SHAPE (per-field render + separator-join + open/
 # close delimiter assembly + recursion into nested aggregates) self-containedly —
 # peer Hβ.fold.show-seed-value-gate. Exit 40.
-micro:show-fold=40
 # A2 (Hβ.lower.tuple-as-product): a tuple IS a positional product — construction
 # and match-bind read ONE width-summed offset fold (emit_field_stores_acc + the
 # width-summed LPTuple carrying (offset, elem_ty, sub_pat)). This gate round-trips
@@ -532,7 +519,6 @@ micro:show-fold=40
 # tuple-index, f64, and the LConvert intrinsic): mn-tuple-f64 / mn-variant-f64 /
 # mn-float-convert document them, their value-gates landing when the seed catches
 # up (peers Hβ.seed.tuple-product / .variant-payload-repr / .float-convert). Exit 90.
-micro:tuple-product=90
 # W14 (e-graph: union-find as fabric edge + congruence-closed saturation): the
 # rw snoc-list side-ledger (linear rw_lookup, re-appended every pass — the O(N²)
 # OOM) is DELETED; equivalence is ONE fabric edge — the canonical pointer
@@ -545,7 +531,6 @@ micro:tuple-product=90
 # lags the canon-weave graph ops + effs_at, so the gate proves the saturation
 # SEMANTICS arithmetically (pure-vs-effectful absorb + congruent f(a)==f(b)) —
 # peer Hβ.egraph.saturate-seed-value-gate. Exit 70 (gate1 30 + congruent 40).
-micro:egraph-saturate=70
 # W13 (Schedule Persist arm): parallelism and durable execution are the SAME arm
 # (PLAN §4④) — the `~> Persist` fanout schedule emits persist_branch(thunk) per
 # branch (checkpoint to disk + run, accumulate) + join_persist(i) (collect in
@@ -556,7 +541,6 @@ micro:egraph-saturate=70
 # source-order-join CONTROL SHAPE arithmetically — the result is IDENTICAL to the
 # inline `><` (durability is value-invisible). The disk memcpy round-trip is gated
 # runnably by mn-persist.mn — peer Hβ.lower.fanout-persist-seed-value-gate. Exit 30.
-micro:fanout-persist=30
 # W13 (Schedule Simd arm): a `><` fanout of f32 branches under `~> Simd` packs the
 # branch results into v128 lanes (run_fanout_thunks Simd → LSimdLanes; emit_simd_
 # lanes → f32x4.replace_lane i per lane over a zeroed v128.const f32x4 base), so the
@@ -568,7 +552,6 @@ micro:fanout-persist=30
 # arithmetically (per-lane add visiting every lane once in position order, witnessed
 # by r3-r0); the f32x4.replace_lane WAT form is validated to assemble (wat2wasm) —
 # peer Hβ.lower.fanout-simd-seed-value-gate. Exit 90 (head 33 + lanes-in-order 57).
-micro:fanout-simd=90
 
 # W25 / A4-domains — autodiff + DSP-character as algebraic-effect HANDLERS, both
 # seed-runnable (Int scalars; the float tensor/waveshaping gradient is STEP 1's
@@ -582,16 +565,11 @@ micro:fanout-simd=90
 # `~>` install edge, never a hardcoded function (surpassing every fixed-transfer
 # DSP framework). The bound-`<~` IIR (mn-feedback-iir) is .mn-leads (the seed
 # closures the LF.B lambda; the wheel inlines it), so it is NOT in the run-set.
-micro:autodiff=6
-micro:distort=18
-micro:compare-fold=47
-micro:hash-fold=50
 # Fold's accumulator is carried through handler config, state, resume update,
 # result(), and the higher-order lambda argument. This is the direct regression
 # for the multi-payload Iterate/fold_handler seam: [[1], [2,3]] flattens to
 # [1,2,3], so first+last exits 4. Requires the standard runtime/prelude linked
 # by verify.sh.
-micro:fold-accumulator=4
 
 # W15 + W16 (the parameter list IS a positional product — SYNTAX.md §«Labeled
 # call arguments», §«Defaults...as a product node-kind», §«Anonymous functions»).
@@ -617,18 +595,12 @@ micro:fold-accumulator=4
 # 1*1 + 200*0 + 3*10 = 31. mn-param-destructure proves param-bind == let-bind:
 # the fn body IS the prepend-let the param desugar emits, binding a tuple
 # positionally → 7*1 + 5*10 = 57.
-micro:labeled-args=31
-micro:param-destructure=57
 # W17 parser-truth: the `-> RetTy` annotation PINS (NTypeAnn minted live,
 # infer_fn unifies the authored Ty against the inferred body return —
 # E_TypeMismatch on violation). ret-pin proves the agreeing path (annotation
 # present + matches) compiles byte-identically; expect-recover proves the
 # productive-under-error expect (narrate P_ExpectedToken + recover at pos on
 # mismatch, advance on match) two-branch control shape.
-micro:ret-pin=42
-micro:expect-recover=21
-micro:diag-projection=30
-micro:effname-pure=18
 # W21 + W22 + W23 (B13-ownership-refinement): the dormant-but-built type machinery
 # is WIRED into infer_fn (Carried-Truth — read live what is already inferred).
 # W21: infer_ownership runs at every FnStmt body (use-count 0/1/2+ → Unmarked/Own/
@@ -654,9 +626,6 @@ micro:effname-pure=18
 # identity (exit 60). Peers when the seed catches up: Hβ.seed.ownership-inference-
 # at-fn-body, Hβ.seed.narrowing-weave, Hβ.seed.verify-smt-install,
 # Hβ.seed.effarg-node-row-equality.
-micro:ownership-infer=60
-micro:refine-narrow=60
-micro:effarg-node=60
 # W26+W27 (felt-IC + Carried-Truth deletions): three new paths gated as
 # seed-runnable proxies (the established discipline — the live wheel forms read
 # the one graph / fs, which the libless WASI-free micro harness cannot run, so
@@ -669,62 +638,21 @@ micro:effarg-node=60
 #   `<~` fixpoint converges on GRAPH-EPOCH stability (revision = epoch, one
 #   number — surpassing Salsa red-green dirty-bits). Seed peer:
 #   Hβ.seed.ic-epoch-fixpoint. Exit 42.
-micro:intent-from-node=80
-micro:ic-epoch-fixpoint=42
-micro:felt-live-read=78
-micro:cli-dispatch=63
 # Fix B (captured-lambda ev-slot PLACE/READ unification): a captured lambda
 # performing a threaded effect at own-row index 0 inside a fn whose row carries
 # it at index 1. Before the fix the in-lambda READ used the enclosing fn's row
 # (offset 12) → wrong dispatch (47); the fix reads the lambda's own row
 # (offset 8 = the PLACE slot) → 79. Two Zzz handlers force the ev-slot path.
-micro:lambda-evrow=79
 # The f64 representation gradient's seed-runnable floor: 2.5 * 2.0 >= 4.9 → 3
 # (the i32-floor of floats gives 0). Real f64 literal + f64.mul + f64.ge + if
 # through the seed. The mix-with-f64-params form (mn-float-arith.mn) is the
 # m2-lead peer — it traps through the seed, needing the wheel's f64 call
 # convention (Hβ.seed.float-gradient).
-micro:float-gate=3
-micro:negation-declared=42
-micro:let-handle=37
-micro:nominal-ctor=42
-micro:resume-splice=8
-micro:listpat-stage=42
-micro:rest-wild=44
-micro:palt-arms=42
-micro:diverge-share=105
-micro:diverge-lambda=125
-micro:wildcard-params=42
-micro:str-contains=15
-micro:refined-cmp=3
-micro:effectful-tail=7
-micro:adt-list-payload=3
-micro:float-render=3
-micro:interp-order=10
-micro:strpat-dispatch=66
-micro:multishot=30
-micro:k2-frame=29
-micro:k2-pipe=26
-micro:choice-args=16
-micro:arm-state-multishot=46
-micro:resume-in-lambda=23
-micro:nested-choose=9
-micro:nested-depth3=27
-micro:nested-state=51
-micro:option-protocol=42
-micro:uzero-through-frames=33
-micro:resume-in-lambda-state=46
-micro:resume-in-called-fn=9
-micro:backtrack-full=30
 # Fail and Abort are distinct declaration identities. Each opposite handler is
 # deliberately installed inside the matching one; exit 81 proves neither op
 # cross-routes through the other effect's install.
-micro:effect-identity=81
-micro:fanout-destructure-float=60
-micro:region-transfer=5
 # SYNTAX §Indexing made executable: an out-of-range list index TRAPS (134),
 # never reads adjacent memory. The raw tag-0 load was silent-wrong until
 # 2026-07-18; the checked entry + short-circuit && landed together (the
 # eager i32.and ran every guarded read — set_insert / cache_filter_loop /
 # register_one_variant all read one-past under their own guards).
-micro:oob-traps=134

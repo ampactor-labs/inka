@@ -1,3 +1,4 @@
+// expect: 57
 // W16 GATE — destructuring parameter = param-as-pattern.
 //
 // A destructure param (`((a, b)) => …` / `({x, y}) => …` / `([h, ...t]) => …`)

@@ -1,3 +1,4 @@
+// expect: 57
 // Resume-with-state SNAPSHOT semantics: the resume value reads the
 // PRE-update state; the writeback commits after. Pre-snapshot
 // lowering emitted the slot stores before the value evaluated — the

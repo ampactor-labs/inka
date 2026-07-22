@@ -1,3 +1,4 @@
+// expect: 30
 // W13 prototype - value shape of the `~> Persist` fanout schedule.
 //
 // This arithmetic proxy checks source-order collection only. It performs no

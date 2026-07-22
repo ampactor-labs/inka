@@ -1,3 +1,4 @@
+// expect: 42
 // mn-negation-poly — !E SOUND UNDER POLYMORPHISM (W04, batch B2).
 //
 // The soundness property: a polymorphic row carrying `!E` cannot be

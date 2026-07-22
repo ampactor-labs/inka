@@ -1,2 +1,3 @@
+// expect: 42
 fn pick(_, _, r) = r + 1
 fn main() = pick(10, 20, 41)

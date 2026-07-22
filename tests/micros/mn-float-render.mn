@@ -1,3 +1,4 @@
+// expect: 3
 // The render family EXECUTES: float_to_str(2.5) begins "2.5" and
 // int_to_str(-47) is three bytes. Before 2026-07-09 this path was
 // unreachable-by-floor (the ++ operands never proved a representation), and

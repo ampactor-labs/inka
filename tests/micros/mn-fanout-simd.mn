@@ -1,3 +1,4 @@
+// expect: 90
 // W13 gate — the `~> Simd` fanout schedule: f32 branches packed into v128 lanes.
 //
 // The ultimate form (PLAN §4 STEP 4 + the RV128 repr): a `><` fanout of f32

@@ -1,3 +1,4 @@
+// expect: 60
 // W02 gate — the structural fold's SUM leaf: == total over ADTs to the bottom.
 //
 // The ultimate form (what the WHEEL now emits): a `==` on a payload-ADT (sum)

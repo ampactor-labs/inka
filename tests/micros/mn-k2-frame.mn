@@ -1,3 +1,4 @@
+// expect: 29
 // band B M1.3 gate — the k2 call-boundary composition (the bank Ruling 5).
 // The yield crosses ONE intermediate frame: outer's `step()` is a non-tail
 // can-yield CALL (the `+ 10` consumes it), so the boundary check parks the

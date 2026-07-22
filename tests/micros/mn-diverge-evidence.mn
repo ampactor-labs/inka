@@ -1,3 +1,4 @@
+// expect: 87
 effect Trigger {
   go(x: Int) -> Int
 }

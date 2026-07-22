@@ -1,3 +1,4 @@
+// expect: 60
 // A fanout tuple's PROVEN f64 element types must flow through the let-tuple
 // pattern into the binders — the pattern CONSTRAINS the scrutinee, never
 // re-binds it (a clobber left a and b free: the tuple writer stored f64 at

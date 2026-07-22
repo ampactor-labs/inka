@@ -1,3 +1,4 @@
+// expect: 8
 effect Rp { rp() -> Int }
 
 handler rd {

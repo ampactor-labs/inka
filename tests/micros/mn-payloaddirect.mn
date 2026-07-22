@@ -1,3 +1,4 @@
+// expect: 1
 effect Probe { emit(x) -> Int }
 handler collect { emit(v) => resume(v.beta) }
 fn run() with Probe = emit({alpha: 1, beta: 2, gamma: 3})

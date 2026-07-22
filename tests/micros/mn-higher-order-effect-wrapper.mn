@@ -1,3 +1,4 @@
+// expect: 42
 // mn-higher-order-effect-wrapper — the -two-op repro + a `use_each` wrapper: the
 // lambda performing lookup2 is created inside use_each (a DIFFERENT fn from run,
 // where env2_handler installs), mirroring the prelude's `use_each(xs) = map(lambda,

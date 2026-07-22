@@ -1,3 +1,4 @@
+// expect: 47
 // COMPARE gate — the structural fold's ORDERING leaf: total `<`/`>`/`<=`/`>=`
 // over aggregates (records / tuples / sums) from ONE 3-way fold.
 //

@@ -1066,6 +1066,13 @@ between the wheel and its ultimate form, held open on purpose.
   references the floor lambda's index; the fix is the same mechanism one level
   deeper (nested records join the demand under the same wide type + a rename
   walk), first witnessed by scale_all$sp22 delegating to its floor lambda.
+  Second face, probed the same day (tests/repro/mn-generic-show-lower-dispatch
+  .mn): a LOWER-time type dispatch inside a generic — to_string(x)/hash(x) —
+  is invisible to the emit bracket twice over (the binop-only worthiness
+  witness never counts a call, and lower already committed the word-show path
+  into the LowIR: describe(2.5) prints the ADDRESS). The ultimate is band D's
+  own show/compare-hash-leaf-as-lowered-LFn work, which moves those reads to
+  emit where the bracket specializes them.
   Board whole: census 0, frontier 150/0,
   proof-exactness 9/9, crown 5/5, micros green, m2 == m3
 - 2026-07-22 · THE DATA-VALIDATOR TIER — three real-workload oracles the

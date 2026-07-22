@@ -1,0 +1,26 @@
+// KNOWN SILENT-WRONG (open) — the monomorphization residue's LOWER-TIME face,
+// the sibling of mn-generic-nested-lambda.mn. NOT gated: compiles clean, runs
+// wrong (prints the ADDRESS: "val: 1048600", the first cell past heap base).
+//
+// Two stacked causes, both measured 2026-07-22:
+//   1. No twin is demanded: the worthiness witness is binop-only (arith /
+//      compare / eq on a free-floored operand), and to_string(x) is a CALL —
+//      the scan never counts it, so describe stays floor.
+//   2. Even a twin could not fix it: to_string dispatches at LOWER
+//      (lower_to_string_dispatch reads the operand's floor type and commits a
+//      word-show path into the LowIR), and the emit-time spec_wty bracket
+//      cannot re-make a decision lower already minted. The same holds for
+//      hash(x) — every LOWER-time type dispatch inside a generic body is
+//      invisible to emit-time specialization.
+//
+// The ULTIMATE is band D's own peer (Hβ.fold.show-leaf / .compare-hash-leaf):
+// synthesize the show/hash leaves as lowered LFns whose type reads happen at
+// EMIT — then the bracket specializes them like every other read, and the
+// sensitivity witness widens to cover the call. Until then this face is
+// documented here; the sound forms are to_string at a concrete call site or
+// an annotated parameter.
+fn describe(x) with Memory + Alloc = "val: " ++ to_string(x)
+
+fn main() with Memory + Alloc = {
+  if describe(2.5) == "val: 2.5000000000000000" { 42 } else { 1 }
+}

@@ -1019,6 +1019,34 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE AFFORDABILITY DIG, second pass — two more mechanisms
+  measured, the arc's design now COMPLETE on paper (tree back at the
+  green fixpoint; no re-pin). Attempt A, the identity floor
+  (row_is_canonical guarding normalize_row to alloc-free identity +
+  resolve_row split into a progress guard and a reduce path): the wheel
+  compiled census-0 and the fixtures held, but the SELF-compile still
+  OOM'd — the trap moved to normalize_inter under unify_row_canonical,
+  meaning some row class permanently fails the canonicality mirror and
+  rebuilds per call (suspect: same-named EParameterized instances vs the
+  by-name prefix-contains — UNVERIFIED; profile with perf before
+  believing, §8's law). Attempt B, containment (the pending pair bound
+  behind a fresh row var, the flowing row kept in the three cheap
+  forms): refuted by mechanism — a pending-BOUND tail meets open-open
+  unify, which BINDING-MERGES per call (graph_bind_row on an
+  already-bound tail recurses into binding-unification), so the
+  subtraction cannot ride the tail slot at all. THE COMPLETE NEXT ARC,
+  one landing: (1) canonical-on-write rows — normalize once at
+  graph_bind_row, unify operands arrive canonical by invariant, reads
+  return the stored node; (2) the deferred subtraction as an
+  INSTALL-EDGE fact (the `~>` draws an edge, §2's own words) read by
+  residual-row consumers, never a rewrite of the flowing row's tail;
+  (3) profile-first (host perf on the self-compile) so the churn source
+  is measured, not guessed — three prior code-reading estimates in this
+  family were wrong (the classifier lesson repeating at the row layer).
+  All comments touched in the reverted attempts carried their truths
+  into this ledger; the KNOWN-INCOMPLETENESS block at normalize_inter's
+  open×neg arm survives in the entry above as the site's standing
+  characterization.
 - 2026-07-22 · THE ROW'S DROPPED SUBTRACTION — root FOUND and fix PROVEN;
   shipping WAITS on canonical-on-write rows (no re-pin; the tree stays at
   the green fixpoint). The arc: retiring the raw-WASM error class (an

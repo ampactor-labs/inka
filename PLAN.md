@@ -1051,8 +1051,16 @@ between the wheel and its ultimate form, held open on purpose.
   sc/ss/best: Float — the representation pin the gradient needs at a polymorphic
   boundary), and all annotated-[Float] paths are broad and green (literals, ==,
   ordering, arithmetic, show, map, threaded annotated accumulators, matrices,
-  list-of-[Float] — verified by an 8-case representation-stress battery). Board
-  green: m2 == m3, frontier cfc-demo 42, census 0
+  list-of-[Float] — verified by an 8-case representation-stress battery). SCOPE
+  (a correction to this entry's first framing, measured against the artifact):
+  the whole prelude combinator surface — fold / reduce / map / filter / each —
+  handles floats CORRECTLY (their accumulators are lambdas or handler state,
+  specialized per call site), so the floor bites ONLY a NAMED top-level
+  recursive fn with an unannotated wide param, compiled once. A corner, not a
+  pervasive hole; the mechanism to carry a wide accumulator already exists (fold
+  uses it), so the ultimate is per-call specialization / monomorphization of
+  named generic fns, low-impact and NOT the urgent keystone the first framing
+  implied. Board green: m2 == m3, frontier cfc-demo 42, census 0
 - 2026-07-21 · EFFECT-POLYMORPHIC STORED FUNCTIONS + the mentl verb table
   (a hole in the medium closed, and the CLI overhaul it unblocked · pin
   1167ddfe). A first-class CLOSURE carrying its own effect row can now be

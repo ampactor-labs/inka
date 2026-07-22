@@ -24,6 +24,14 @@
 // ultimate is monomorphization itself. Annotating `acc: Float` is manual
 // monomorphization and is what CFC + tests/frontier/mn-float-*.mn use today.
 //
+// SCOPE (measured, against an earlier overstatement): the whole prelude
+// combinator surface — fold / reduce / map / filter / each — handles floats
+// CORRECTLY, because their accumulators are lambdas or handler state, specialized
+// per call site with the concrete type. The floor bites ONLY a NAMED top-level
+// recursive fn with an unannotated wide param, compiled once. So this is a
+// corner, not a pervasive hole; most float code (combinators, annotated helpers)
+// is sound today.
+//
 // Surfaced 2026-07-21 by representation-stress probing while migrating the CFC
 // pipeline to native [Float]. Turn this into a frontier gate (expecting 42, or
 // a run_refusal) when the keystone lands.

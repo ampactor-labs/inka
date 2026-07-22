@@ -418,7 +418,7 @@ census_errors_max: 0
 # which is on the board. Falls to 0, then both it and this line are deleted and
 # comment-audit gates directly — and both ratchets dissolve into `mentl audit`,
 # the projection they are larval forms of.
-comment_refs_max: 52
+comment_refs_max: 0
 
 # micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
 # STEP 0 (repr_of): the representation-class read's width arithmetic round-trips

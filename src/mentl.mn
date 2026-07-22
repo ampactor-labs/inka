@@ -733,7 +733,7 @@ fn annotation_inferred_for(ty) with Pure = match ty {
 
 // ─── Multi-position teach — map over a handle list ───────────────────
 //
-// The DELETED `teach_pair` (binary special-case) was erased per
+// The DELETED teach_pair (binary special-case) was erased per
 // `feedback_fully_as_early.md`: callers compose
 // `map(teach_session, handles)` directly; teaching each handle on its
 // own core is a `><` fanout under its own `~> Thread` at the call site

@@ -760,7 +760,7 @@ fn emit_module(lowered) = {
 
 // ─── Single-walk multi-projection emit pre-pass ─────────────────────
 // Per protocol_cursor_is_the_substrate.md + Hβ.emit.consolidate-pre-pass-walks
-// (2026-05-11): the four DELETED `collect_X` passes (fn_names, top_fn_names,
+// (2026-05-11): the four DELETED collect passes (fn_names, top_fn_names,
 // string_literals, state_slots) over the SAME LowExpr tree were the
 // canonical "imperative subsystem" drift (#102) at the emit layer — each
 // pass an independent deep tree walk with duplicated 30+ variant match,
@@ -1000,7 +1000,7 @@ fn register_show_sum_literals(specs, i) with EmitStringLiteralOp + Memory = {
   }
 }
 
-// walk_lemit — top-level entry. Iterates `lowered`'s direct children;
+// walk_lemit — top-level entry. Iterates the lowered program's direct children;
 // fires `visit_top_fn(name)` for each LLet-bound closure/continuation
 // (the original top-level fn-name collection semantic). Then recursive
 // descent via walk_lemit_expr collects the per-node projections.
@@ -1957,7 +1957,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
 fn vec_push(args, result_repr, acc) =
   [( [RI32] ++ arg_reprs(args), result_repr )] ++ acc
 
-// Emit each DISTINCT non-i32 repr-vector once. `seen` carries the ft_names
+// Emit each DISTINCT non-i32 repr-vector once. The seen list carries the ft_names
 // already emitted; an all-i32 vector is skipped (its $ftN already exists from
 // emit_type_decls). Dedup is by name = structural function-type equality.
 fn max_int(a, b) with Pure = if a > b { a } else { b }
@@ -2184,7 +2184,7 @@ fn emit_memory_decl() = {
 // function for every LMakeClosure encountered — top-level
 // `LLet(_, name, LMakeClosure(...))` fns use their outer LLet name;
 // inline lambdas use the handle-based `lambda_<handle>` name assigned
-// in lower.mn. Order matches `collect_fn_names` traversal, so
+// in lower.mn. Order matches `collect_fn_emit_records` traversal, so
 // $<name>_idx globals line up with the function table.
 //
 // Cargo-class per-fn parallel emit (Hβ.emit.row-aware-parallel-emit):
@@ -3481,7 +3481,7 @@ fn emit_expr(expr) = match expr {
     // A self-recursive closure binds its OWN local to the record BEFORE
     // filling captures, so the self-capture (an LLocal on fn_name) reads the
     // record, not the LLet's not-yet-set local — which is a null fn_ptr, the
-    // parse_int `go` indirect-call-type-mismatch that trapped m3 in the lexer.
+    // parse_int nested-go indirect-call-type-mismatch that trapped m3 in the lexer.
     // Guarded on captures_self so $fn_name is a declared in-scope local
     // exactly when we bind it; the LLet's own local.set re-binds harmlessly.
     // Mirrors the seed, which binds every let-bound closure's local early.
@@ -5407,7 +5407,7 @@ fn field_tys_of(fields, i, n) =
 // A == operand contributes its aggregate type AND every nested aggregate its
 // fields / variant payloads reach (a record-of-records or a Tree needs a helper
 // per level). eq_subtys flattens the type's aggregate closure so every nested
-// helper is generated. The `seen` set of TName names terminates the descent on
+// helper is generated. The seen-set of TName names terminates the descent on
 // recursive ADTs (Tree's payload reaches Tree — collected ONCE, the runtime
 // helper recurses the value).
 fn eq_operand_contrib(left_h, acc) = {
@@ -6244,12 +6244,12 @@ fn emit_capture_stores(captures, base_i) = {
   }, enumerate(captures))
 }
 
-// Does this closure capture ITSELF — a self-recursive nested function (`go`
-// whose body calls `go`)? Its self-capture is an LLocal referencing fn_name, filled from
+// Does this closure capture ITSELF — a self-recursive nested function (a
+// go-style inner fn whose body calls itself)? Its self-capture is an LLocal referencing fn_name, filled from
 // the enclosing scope where fn_name is the closure's own let-binding. That
 // binding is the local the LLet sets AFTER the closure is built, so the
 // self-capture must be bound to the record early or it reads a null fn_ptr
-// (the parse_int `go` indirect-call-type-mismatch). field_name_eq carries the
+// (the parse_int nested-go indirect-call-type-mismatch). field_name_eq carries the
 // String proof (a bare `==` would pointer-eq the names — this session's class).
 fn captures_self(captures, fn_name) =
   any((c) => match c {

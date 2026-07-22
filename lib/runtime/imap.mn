@@ -3,7 +3,7 @@
 // A str_hash-bucketed String→value map. Five perf waypoints hand-rolled this
 // exact shape independently (env / summary / esc / base / reach); region_index
 // is its handle-keyed sibling. The value is opaque, so one primitive serves
-// them all: `smap` (String-keyed map). Miss → None, distinguishing "absent"
+// them all: smap, the String-keyed map family. Miss → None, distinguishing "absent"
 // from a present empty value (Some []).
 //
 // Byte-identical to the linear scans it replaces: build reverse-inserts and

@@ -267,7 +267,6 @@ fn crc_walk(h, n, ref cdix, dollars) = {
     let t = graph_comment_at(h)
     let d2 =
       if byte_len(t) > 0 {
-        eprint_string("CLH {int_to_str(h)} {comment_owner(h)}\n")
         let locals = comment_locals(h)
         crc_scan(t, 0, byte_len(t), h, cdix, locals, dollars)
       } else { dollars }
@@ -580,7 +579,7 @@ fn register_primitives() = {
 // `type ValidSpan` in types.mn — src/ sorts before types.mn, which sorts
 // last in the concatenated wheel) then reads the LIVE alias edge instead
 // of baking a bare nominal TName that the main walk can never refine
-// (build_param_types re-resolves `Vs` to TAlias(Vs, TRefined(Int, _)) and
+// (build_param_types re-resolves an alias name like Vs to TAlias(Vs, TRefined(Int, _)) and
 // unify(bare-TName Vs, Int) floors at the leaf — the `Span vs ValidSpan`
 // / `Int vs ValidOffset` class, 362 census errors, Carried-Truth: the
 // graph drew the alias edge; quantify_ctor_ty re-derived a nominal name).
@@ -4723,7 +4722,7 @@ fn bind_handler_state_names(state_binds, hname, span: ValidSpan) =
 // the TIME axis reading the same value-multiplicity. ONE pure compositional
 // fold over the arm structure infer just typed — no buffer, no O(N²)
 // pairwise-disjoint scan, no second walk. (The deleted 12-fn collector used a
-// Buffer whose `buf_push` returned a NEW record the walk discarded, so pushes
+// Buffer whose push returned a NEW record the walk discarded, so pushes
 // never accumulated: every arm classified 0-site → OneShot and the multi-shot
 // producer stayed dormant — mn-multishot exit 10 not 30.) Drift refused: 1
 // (structural fold, no vtable); 8 (Usage / ResumeDiscipline are ADTs, never

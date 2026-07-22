@@ -38,7 +38,7 @@ import effects
 // `current_resume_discipline()` to pick its representation (OneShot →
 // LReturn floor, byte-identical; MultiShot → the LMakeContinuation record).
 // The discipline is carried LIVE on the context — read at the resume site,
-// never re-derived from a side-ledger (the deleted `resume_kinds`, Anchor 1).
+// never re-derived from a side-ledger (the deleted resume_kinds ledger, Anchor 1).
 // Config-param-only handler (no state-fields), so it works regardless of
 // resume-with-state-update lowering — bootstrap-safe per
 // protocol_resume_state_mutation_substrate.md.
@@ -58,9 +58,9 @@ handler arm_state_ctx(fields, disc, hname) {
 // There is NO second handler. The non-arm default ([], OneShot, "") is the
 // pipeline BOUNDARY install `~> arm_state_ctx([], OneShot, "")` — so the op
 // edge is UNIQUE and every arm-context read dispatches through the singleton
-// tier's LIVE `$arm_state_ctx_state_g` (the bracket-scoped global every
+// tier's LIVE per-handler state global (the bracket-scoped $<hname>_state_g every
 // install saves/restores — S1's home). The context is a DYNAMIC fact; its
-// one home is the innermost live bracket. The DELETED `arm_state_default`
+// one home is the innermost live bracket. The DELETED arm_state_default
 // twin made the op AMBIGUOUS, pushing these reads to the lexical evidence
 // floor — clone-chain threading for a dynamically-scoped truth — and the
 // row math (install absorption) then correctly told callers NOT to thread
@@ -638,7 +638,7 @@ fn lower_callee_name(fbody) = match fbody {
 // The `CallExpr` dispatch falls back to this when the callee isn't a
 // `SchemeKind`-recognized constructor or effect op. Monomorphic case:
 // direct `LCall` (callee's row is ground; no evidence needed).
-// Polymorphic case: `LSuspend` with `ev_slots` derived from the callee's
+// Polymorphic case: `LSuspend` with its ev slots derived (`derive_ev_slots`) from the callee's
 // row — each unground op resolves to the global handler arm's `fn_idx`
 // via the `op_<name>` naming convention H1.4 established.
 // THE callee-position read: a fn being CALLED stays BARE. The value-position
@@ -1251,8 +1251,8 @@ fn clamp_index(i) = if i < 0 { 0 } else { i }
 //                      ∪ ⋃ { escaping(c) | c ∈ static_callees(name) } )
 //                    − handled_locally(name)
 //
-// `own_dispatched` is the leaf (today's `effects_of` of the generalized
-// scheme — RETAINED, never deleted). `handled_locally` subtracts every
+// The own-dispatched set is the leaf (today's `effects_of` of the generalized
+// scheme — RETAINED, never deleted). The handled-locally subtraction removes every
 // effect a `~> h` install in the body absorbs (so `WasmOut` does NOT escape
 // `compile_stdin`, which installs `~> wat_stdout`). Monotone union over the
 // finite dispatched-effect lattice ⇒ the fixpoint converges (mutual
@@ -1645,7 +1645,7 @@ type ScheduledBoundary
 // innermost handler covering a scheduler-class effect (`Thread`/`Simd`/
 // `Gpu`) wins; with none installed the strategy is `Seq` — the net-new
 // default the old hardwired `Thread` inject made unsayable (a bare `><`
-// was `E_HandlerUninstallable`; now it just runs single-threaded).
+// was the E_HandlerUninstallable refusal; now it just runs single-threaded).
 // `!Thread` proves the negative: a region with `Thread` subtracted from
 // its row provably runs `Seq` (a real-time-DSP guarantee).
 fn lower_fanout_schedule() = schedule_in_stack(lower_handler_stack_now())
@@ -2543,7 +2543,7 @@ fn extract_handler_config_args(node) = {
 //       branches, each a `synthesize_branch_thunk`.
 //   `FanShare` (`<|`) — one input ref-borrowed: bind the input once as
 //       a let-local, then N shared-input thunks each applying their
-//       branch fn to it (the `__fanout_input` capture).
+//       branch fn to it (the __fanout_input capture).
 //
 // `effects_of(fanout) = ⋃ branch rows` (the Thread inject is deleted at
 // infer); ownership affinity (own values cannot flow through `<|`) is
@@ -2854,7 +2854,7 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node, boundary) = {
 // field's index in `TRecord(fields)` / `TRecordOpen(fields, _)` maps directly
 // to `4 * idx`. There is NO graceful degrade: if `lookup_ty` returns a
 // non-record type (the receiver's type mis-resolved) or the field is absent,
-// return -1 — `emit_lfieldload` guards `offset < 0` and emits a LOUD
+// return -1 — the LFieldLoad emit arm guards offset < 0 and emits a LOUD
 // `(unreachable)` with a Located Reason. The former silent `0` read the node's
 // word-0 as the field value (a graph pointer) and `wat_emit` dumped the heap:
 // the emit corruption. The ultimate form refuses to guess an offset it cannot
@@ -3802,7 +3802,7 @@ fn k2_spine_call(node) = {
   }
 }
 
-// M4 — is this name a value CONSTRUCTOR (an ADT variant, `Some`/`Branch`)?
+// M4 — is this name a value CONSTRUCTOR (an ADT variant like `Some`)?
 // The env's ConstructorScheme is the one truth (the same read lower_expr
 // dispatches construction on); a fn / effect-op / unknown name is not.
 fn callee_is_constructor(name) = match env_lookup(name) {
@@ -4336,7 +4336,7 @@ fn resume_upd_local(upd: {init: Node, name: String}, handle) =
 // and install writes inits to (one heap record, four roles, per
 // protocol_handler_is_state_is_closure_is_evidence.md:
 // [fn_ptr@0, count@4, slot_0@8, slot_1@12, ...]). A state-only list
-// here was a parallel half-truth: `buf` resolved to slot 0 — the
+// here was a parallel half-truth: the buffer name resolved to slot 0 — the
 // config param's slot — and the next dispatch called the buffer as
 // a closure. Returns -1 when name is not in fields
 // (productive-under-error).
@@ -4354,7 +4354,7 @@ fn resolve_state_slot_offset(name: String, fields) = {
 
 // Walk free vars through a `resume() with` updates list. Each update's
 // init expression may reference outer-scope names (e.g., a freshly-built
-// `[frame] ++ frames` where `frame` is a let-bound local in the arm
+// [frame] ++ frames where frame is a let-bound local in the arm
 // body). cfv reports those that aren't in `bound`.
 fn free_vars_state_updates(updates, bound) = {
   fold([], (acc, upd) =>
@@ -4837,7 +4837,7 @@ fn find_override(overrides, target: String) = match overrides {
 //   `RGlobal`     — name is a top-level symbol; NOT captured. Dropped from the list.
 //
 // Returns `(captures_names, captures_exprs, captures_handles)` — parallel
-// triples. `captures_names` feeds `ls_enter_frame`; `captures_exprs` feeds
+// triples. The names half feeds `ls_enter_frame`; the exprs half feeds
 // `LMakeClosure`'s heap-record materialization at emit time.
 fn resolve_captures_outer(names, owner_h) = {
   if len(names) == 0 { ([], [], []) }

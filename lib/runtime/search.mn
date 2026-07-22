@@ -11,7 +11,7 @@
 // Per the kernel's MultiShot resume discipline (primitive #2 +
 // INSIGHTS L97-101): `choose`'s arm bodies invoke `resume` more
 // than once (once per explored option), so the medium INFERS
-// cardinality `Many` from the body's resume sites. Handlers may
+// cardinality `MultiShot` from the body's resume sites. Handlers may
 // resume the continuation multiple times to explore alternatives.
 // The runtime substrate that makes this fork-real is H7 (commits
 // 4236b96 + ad78384 + bafd63a — LMakeContinuation emit path now
@@ -104,7 +104,7 @@ handler pick_first {
 //
 // Note: try_fn and catch_fn are both `with Abort` to allow the
 // outer scope's effects to flow. For backtrack's call site, both
-// thunks are closures over the surrounding `try_each` state.
+// thunks are closures over the surrounding try_each state.
 
 fn try_with_abort_catch(try_fn, catch_fn) with Abort = {
   let attempted = (try_fn()) ~> catch_abort
@@ -162,9 +162,9 @@ handler backtrack with Choice + GraphRead + GraphWrite + Abort {
 // recursion).
 //
 // Primitive #2 (Handlers + resume discipline) — Choice's `choose`
-// has cardinality `Many` (inferred from backtrack's arm body, which
+// has cardinality `MultiShot` (inferred from backtrack's arm body, which
 // invokes `resume` per-option in try_each); pick_first's arm
-// invokes resume once so its cardinality is `One`. Per H7 substrate
+// invokes resume once so its cardinality is `OneShot`. Per H7 substrate
 // (commits 4236b96 + ad78384 + bafd63a), MultiShot resumes are
 // heap-allocated continuation records; backtrack's per-option
 // invocation produces a fresh resume call per the existing trail

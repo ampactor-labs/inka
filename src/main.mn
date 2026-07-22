@@ -736,7 +736,7 @@ fn address_case_a(ref spans, gline, col, i, n, best) with Memory = {
 }
 
 // The line's ROOT is its WIDEST node (the statement/expression covering
-// most of the line — `echo(mix, x)` over the `wet` binder it feeds);
+// most of the line — `echo(mix, x)` over the wet binder it feeds);
 // column breaks ties leftward. Area-first is what "point at the line"
 // means; a column address narrows within it.
 fn address_better_a(best, cand) with Memory = match best {

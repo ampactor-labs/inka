@@ -134,7 +134,7 @@ fn single_char_kind(b) with Pure = {
 // a tag=4 view with logical length = count.
 //
 // `source` is a flat byte-string. `byte_at(source, pos)` returns the
-// `Int` byte code at position `pos`. No intermediate `[String]` of
+// `Int` byte code at a position. No intermediate `[String]` of
 // 1-char strings is allocated; all per-byte dispatch is `Int`-eq, not
 // string-eq (drift mode 12 cure).
 fn lex(ref source) = {

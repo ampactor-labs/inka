@@ -1634,7 +1634,7 @@ fn parse_list_elems(ref tokens, pos, own buf, count) = {
 }
 
 // Disambiguate `{`: record literal vs block. Per SYNTAX.md, after the
-// opening brace + whitespace, an `Identifier` followed by `:` (typed
+// opening brace + whitespace, an identifier token followed by `:` (typed
 // field) or `,`/`}` (puned field) signals a record literal.
 // Anything else is a block. Lookahead is bounded to two tokens past
 // the brace — no backtracking, no ambiguity that escapes the parser.

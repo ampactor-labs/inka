@@ -261,7 +261,7 @@ fn render_feedback_chain(input, spec) with Format + !Mutate = {
 
 // ─── Multi-source format — map over an AST list ─────────────────────
 //
-// The DELETED `format_pair` (binary special-case) was erased per
+// The DELETED format_pair (binary special-case) was erased per
 // `feedback_fully_as_early.md`: callers compose
 // `map(format_program, asts)` directly. `format_program` itself
 // already maps over top-level statements (line 93); the same stage

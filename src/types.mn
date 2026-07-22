@@ -212,7 +212,7 @@ fn repr_wat(r) with Pure = match r {
 // Carried-Truth home: a type's fold-signature is a property OF THE TYPE.
 
 // fold_strip — alias-strip / refinement-unwrap FIRST (TAlias->inner,
-// TRefined->base), structurally identical to repr_of's prologue. A `Port`
+// TRefined->base), structurally identical to repr_of's prologue. A Port-style
 // (= Int) folds as Int; a `Sample` (= Float where ..) folds as Float. The
 // predicate is erased at runtime, so the leaf reads the underlying value.
 fn fold_strip(ty) with Pure = match ty {
@@ -517,7 +517,7 @@ type EffArg
 // The Boolean connective joining a surface effect term to the row
 // accumulated to its left — the topology the surface `+ - &` draws
 // (SYNTAX.md §«Named effect rows»: full algebra `+ - & ! Pure`).
-// `!` is the per-term `negated` flag, not a connective. The first
+// `!` is the per-term negation flag, not a connective. The first
 // term carries EcUnion (joining onto the pure-row base = itself). The
 // fold reads the existing effects.mn algebra live (union_row /
 // diff_row / inter_row) — the parser names the connective, infer
@@ -739,7 +739,7 @@ type Caret
 // Cursor — the gradient's global argmax over the live graph at the
 // moment of query. Cursor is attention, not position. The text-caret
 // biases the locus via proximity weighting; the caret does NOT define
-// the locus. `impact` carries the argmax score: 0.0 for "no
+// the locus. The impact field carries the argmax score: 0.0 for "no
 // suggestion" / fully-annotated positions; positive finite for ranked
 // auto-argmax. A developer-pinned `??` position is STRUCTURAL — its
 // Reason IS Located(span, "user pinned via ??"), read by case
@@ -1130,7 +1130,7 @@ effect SpecTwins {
 }
 
 // Evidence (spec W4) — runtime witness of an effect-to-handler-arm
-// binding. A polymorphic function that performs `op_name` dispatches
+// binding. A polymorphic function that performs an op dispatches
 // via an evidence slot: the caller threads the evidence record into
 // the callee via `__state`, and the callee loads the arm's fn_idx
 // from its evidence slot and invokes it through call_indirect.
@@ -1241,7 +1241,7 @@ type Predicate
                                  // Appended LAST so existing variant tags are unshifted.
 
 // PExpr is DELETED: its leaves (PSelf/PInt/PEVar/PApp) were a lossy COPY of the
-// expression the AST node already holds (`node_to_pexpr` re-derived it with a
+// expression the AST node already holds (the deleted node_to_pexpr re-derived it with a
 // `_ => PEVar("?")` surrender). The predicate now carries the live operand Node
 // and Verify reads its Expr live — carry the handle, read live, delete the copy.
 
@@ -1385,7 +1385,7 @@ effect GraphWrite {
 // A diagnostic's IDENTITY lives on the DiagKind ADT — one constructor per
 // E_/V_/W_/T_/P_ code, each carrying ONLY the structured operands its
 // message needs (an EffRow, a Ty, a name) plus its Located Span. The
-// `source`, `kind` (severity class), `applicability`, and the rendered
+// source, kind (severity class), applicability, and the rendered
 // `message` are all PROJECTIONS of the constructor (diag_source / diag_kind
 // / diag_applicability / diag_message below) — never string literals copied
 // at the call site. So `mentl diagnostics` is `diag_*` walking the DiagKind

@@ -7,7 +7,7 @@
 // byte range. After process loss or recompilation those words may have no valid
 // referents.
 //
-// `world_tag` is likewise a compatibility fingerprint, not a capability proof.
+// The world tag is likewise a compatibility fingerprint, not a capability proof.
 // The current lowerer folds effect names into 32 bits, omits parameter arguments
 // and open row tails, and does not identify handler installs. Collisions can
 // admit the wrong world.

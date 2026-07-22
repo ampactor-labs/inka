@@ -1026,6 +1026,18 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE BACKTICK CONTRACT REACHES ZERO (comment-refs 52 → 0,
+  ratchet 0 · pin 10639d69). Morgan asked what the 52 phantoms were for —
+  nothing: stale prose debt behind a tourniquet (the ratchet existed only to
+  stop the number rising, and it caught this session's own fresh phantom
+  before commit). Every cited symbol now resolves: dead names repointed to
+  live successors (collect_fn_emit_records; MultiShot/OneShot for the stale
+  Many/One spellings), deletion-history and other-scope locals unbackticked
+  to prose (the contract: a backtick is a reference into the one namespace;
+  narration is prose), and the checker's own leftover CLH per-comment eprint
+  deleted (1,536 stderr lines every compile since the pass landed).
+  comment_refs_max: 0 makes the class a hard gate — the census arming law,
+  one layer up, at the prose boundary. Board whole at the pin.
 - 2026-07-22 · ▶▶ THE ROW IS A TRIPLE — the six-form EffRow tree dissolves
   into ONE canonical record (the representation-law update Morgan licensed:
   "if a law written earlier now holds us back, update the law" · pin 09380a33).

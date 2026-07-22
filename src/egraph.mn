@@ -4,7 +4,7 @@
 // one fabric (graph_node_body, the whole-AST-in-graph weave); every node carries
 // a Reason; and equivalence is ONE more fabric edge — the canonical pointer at a
 // handle (graph_canon_set / graph_canon_at), co-indexed by handle exactly like
-// the TVar union-find in `nodes`. So there is NO e-graph data structure beyond
+// the TVar union-find in the graph's node array. So there is NO e-graph data structure beyond
 // the graph: union-find is a graph edge (graph_canon_set draws it, graph_canon_at
 // chases it = `find`), and extraction is that chase to the root — the root IS the
 // extracted term, so there is no separate extraction pass. The DELETED side-ledger
@@ -105,7 +105,7 @@ fn effs_at(handle) with GraphRead + LookupTy + Memory = match lookup_ty(handle) 
 // true. The edge is drawn only when `handle` is not already pointed at that
 // target — `rewrite_to` reads the current edge first, so a fixpoint pass draws
 // NOTHING and saturation converges (the OOM cure: re-firing an already-rewritten
-// node records no new fact, so `fired` falls to 0).
+// node records no new fact, so the fired count falls to 0).
 
 // Draw `from ≡ to` iff it is a NEW edge (idempotent at the fixpoint). Returns
 // whether a fresh fact was recorded — the saturation progress signal.
@@ -258,7 +258,7 @@ fn mint_fold(handle, v) with GraphRead + GraphWrite = {
 // Apply every rule to every node, repeating until a full pass draws no fresh
 // equivalence edge (the fixpoint — equality saturation). Because every rule
 // draws its edge idempotently (rewrite_to / the const-fold guard), an
-// already-canonicalized node fires NOTHING on the next visit, so `fired` strictly
+// already-canonicalized node fires NOTHING on the next visit, so the fired count strictly
 // decreases to 0 — the OOM the re-appending snoc-list caused cannot recur. The
 // node space is bounded by the fresh-handle counter at the START of saturation;
 // const-fold mints new literal nodes ABOVE that bound, but they are already in

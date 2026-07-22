@@ -246,7 +246,7 @@ fn sep_at(s, sep, i, seplen, j) with Memory = {
 // length, then one alloc + byte-store fill. The two-pass IS the
 // O(N²)-bomb avoidance the scan_string comment warns about — a single
 // alloc, no per-byte str_concat. A `\xHH` consumes four source bytes
-// (`\`, `x`, hex, hex) and decodes to one byte, so the count and fill
+// (backslash, x, hex, hex) and decodes to one byte, so the count and fill
 // passes step by four and emit one byte for that form.
 fn str_unescape(s) with Memory + Alloc = {
   let n = byte_len(s)
@@ -269,7 +269,7 @@ fn hex_val(b) with Pure = {
 }
 
 // is_hex_escape — true when source bytes at `i` begin a complete `\xHH`
-// (backslash, `x`, two hex digits) within `[i, n)`.
+// (backslash, x, two hex digits) within the [i, n) window.
 fn is_hex_escape(s, i, n) with Memory = {
   i + 3 < n && byte_at(s, i) == 92 && byte_at(s, i + 1) == 120
     && is_hex_byte(byte_at(s, i + 2)) && is_hex_byte(byte_at(s, i + 3))
@@ -632,7 +632,7 @@ fn float_is_nan(f: Float) = f != f
 // IEEE identity, no threshold literal: finite f has f - f == 0.0; ±Inf has
 // Inf - Inf = NaN (never equal to itself); NaN fails the f == f guard. The
 // prior form compared against 1.79…e308 — but TFloatLit has NO exponent form
-// (SYNTAX §Token enumeration), so `e308` lexed as an IDENTIFIER, the compare
+// (SYNTAX §Token enumeration), so the e308 tail lexed as an IDENTIFIER, the compare
 // went through a recovered E_MissingVariable, and every finite float rendered
 // "Inf" (unreached until the render floors grounded, 2026-07-09).
 fn float_is_inf(f: Float)  = f == f && f - f != f - f

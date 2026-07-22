@@ -378,7 +378,7 @@ type CursorSessionResult
 
 // ─── Multi-module compilation — map over a module list ──────────────
 //
-// `compile_pair_modules` (binary special-case) was erased per
+// compile_pair_modules (binary special-case) was erased per
 // `feedback_fully_as_early.md`: the driver's topological-layer walk
 // (`Hβ.driver.level-set-par-walk`, layer partition live in driver.mn)
 // composes each dep-independent layer as `map(compile, layer)`; the

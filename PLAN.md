@@ -1019,6 +1019,36 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · ▶▶ FIELD OFFSETS PROJECT AT EMIT + THE STRUCTURED ENC — the
+  monomorphization machinery generalizes from repr to STRUCTURE (pin
+  09f9706a). The last lower-time layout bake moves to the read: LFieldLoad
+  carries a SELECTOR (FByName / FByIndex — the FieldSel ADT), and ONE
+  projection (field_sel_offset) resolves it at emit through lookup_ty under
+  the active specialization bracket — record fields, tuple slots, and the
+  record-update copy path (which now projects off BASE's handle, healing the
+  added-field layout split) all read live. The spec enc stops speaking repr
+  only: a structured concrete encodes as its fold_sig (wide digits unchanged
+  — existing twin names stable), so structure-bound sites become candidates,
+  and the worthiness witness generalizes to spec_ty_needs_structure — the
+  floor lies about ANY operand beyond the true word scalars (wide, string,
+  list, record, tuple, payload sum; a nullary-only sum is word-honest, read
+  from the variant specs). 128 structured twins emit on the wheel;
+  in_owner_names' `==` on [String] HEALS BY TWIN and its Intent-Boundary pin
+  is DELETED — the eq-on-generic-String class (pointer-eq under the word
+  floor, the §9 class) closes systemically, by specialization instead of
+  annotation. Twin emission hardened en route: nested-lambda contributions
+  dedup by mangled name (two parents, one lambda, one enc), and every
+  generated fold-leaf opener declares the state-insert scratch trio (a
+  tuple-with-sum sig's conjunction recursion emitted undeclared locals — an
+  assembly failure no prior sig shape reached). The one remaining pin family
+  is characterized exactly: cl_state_names/cl_arm_names read fields of a
+  CONSTRAINED-open record — TRecordOpen, which the TVar-shaped witness
+  misses, and whose offsets over a partial field set are the wrong-field bug
+  — the row must resolve under the bracket; that dig deletes the last two
+  pins. Ladders ran two-stage disposable (W1 pinned under boot → m2 → the
+  unpinned wheel → m3 == m4). Board whole at the pin: census 0, frontier
+  171/0 (+rope-list-pattern — the pa11 crucible), proof-exactness 9/9,
+  crown 5/5, micros green, phantoms 220 → 54 with the ratchet lowered.
 - 2026-07-22 · THE TEST VERB COMPILES THE BATTERY IN-PROCESS + the region
   substrate (CLI absorption stage 2 · pin 658f3988). `mentl test <dir>`
   forks on the target's own shape: a DIRECTORY is the battery

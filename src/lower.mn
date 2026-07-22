@@ -400,7 +400,14 @@ type LowExpr
   // self-describing captured_evs region — its ORDER carries no meaning (the cure
   // for position-as-the-bug: a sibling effect appearing shuffles no key).
   | LEvEntry(String, LowExpr)                  // effect_key, resolved evidence
-  | LFieldLoad(Int, LowExpr, Int)              // W6: handle, record, offset_bytes
+  // W6: handle, record, SELECTOR. The byte offset is a PROJECTION of the
+  // receiver's resolved type (prefix-sum of repr_width over the sorted
+  // fields) and projects at EMIT under the active specialization bracket —
+  // never a lower-time bake, so a generic body's field read heals when its
+  // call site's instantiation closes the record (the LShow precedent, one
+  // layer deeper). FByName selects a record field; FByIndex a positional
+  // product slot.
+  | LFieldLoad(Int, LowExpr, FieldSel)
   // W11: a REAL machine int<->float conversion — the gradient's coercion arm.
   // float_of_int / float_to_int are NOT identity stubs that reinterpret bits
   // (a silent miscompile); they are a value-changing convert: i32->f64 is
@@ -453,6 +460,10 @@ type LowFn
                   // plain top-level fns pass 0. emit_fn_body installs it as
                   // the body-context so every LEvPerform/LEvRef key-scans the
                   // captured_evs region based at 8+4*fence — one rule across all three fn shapes.
+
+type FieldSel
+  = FByName(String)
+  | FByIndex(Int)
 
 type LowPat
   = LPVar(String)
@@ -2283,16 +2294,9 @@ fn lower_expr_body(e, handle, span) = match e {
     },
 
   FieldExpr(rec, field) => {
-    // W6: record field access lowers to a compile-time-resolved
-    // offset load. Inference bound the record's type via
-    // lookup_ty; the field's position within the record's sorted
-    // field list gives the offset (4 bytes per slot, i32 fields;
-    // ty_to_wasm erases to i32 for all field kinds including
-    // nested records and lists stored as pointers).
-    let lo_rec = lower_expr(rec)
-    let N(_, _, rh) = rec
-    let offset = resolve_field_offset(rh, field)
-    LFieldLoad(handle, lo_rec, offset)
+    // W6: the field NAME rides the node; the offset projects at emit from
+    // the receiver's live type under the bracket.
+    LFieldLoad(handle, lower_expr(rec), FByName(field))
   },
 
   PipeExpr(kind, left, right) =>
@@ -2639,7 +2643,7 @@ fn executable_boundary_row(thunk_h) = match lookup_ty(thunk_h) {
 // transports the carrier pointer; f64/f32/v128 remain unboxed in field 0.
 fn invoke_scheduled_boundary(branch) = match branch {
   ScheduledBoundary(thunk, result_h, carrier_h, _, _) =>   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
-    LFieldLoad(result_h, LCall(carrier_h, thunk, []), 0),
+    LFieldLoad(result_h, LCall(carrier_h, thunk, []), FByIndex(0)),
   InvalidScheduledBoundary(handle, invariant) => LInvariantFailure(handle, invariant)
 }
 
@@ -2680,7 +2684,7 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
         ScheduledBoundary(_, result_h, carrier_h, thread_ticket_h, _) => {   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
           let joined = lower_perform_dispatch(carrier_h, "thread_join",
             [LLocal(thread_ticket_h, "__fanout_spawn_{int_to_str(i)}_{int_to_str(handle)}")])
-          LFieldLoad(result_h, joined, 0)
+          LFieldLoad(result_h, joined, FByIndex(0))
         },
         InvalidScheduledBoundary(boundary_h, invariant) =>
           LInvariantFailure(boundary_h, invariant)
@@ -2735,7 +2739,7 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
         ScheduledBoundary(_, result_h, carrier_h, _, persist_ticket_h) => {   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
           let joined = lower_perform_dispatch(carrier_h, "join_persist",
             [LLocal(persist_ticket_h, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}")])
-          LFieldLoad(result_h, joined, 0)
+          LFieldLoad(result_h, joined, FByIndex(0))
         },
         InvalidScheduledBoundary(boundary_h, invariant) =>
           LInvariantFailure(boundary_h, invariant)
@@ -4614,8 +4618,7 @@ fn lower_index(handle, receiver, index) = {
   match lookup_ty(rh) {
     TTuple(elems) => match idx_body {
       NExpr(LitInt(n)) =>
-        LFieldLoad(handle, lower_expr(receiver),
-                   tuple_elem_offset(elems, n, 0, 0)),
+        LFieldLoad(handle, lower_expr(receiver), FByIndex(n)),
       _ => lower_index_runtime(handle, receiver, index)
     },
     _ => lower_index_runtime(handle, receiver, index)
@@ -4698,12 +4701,15 @@ fn lower_record_update(handle, base, overrides) = {
   let result_fields = record_fields_of_handle(handle)
   let tmp = "__upd_{int_to_str(handle)}"
   let base_lo = lower_expr(base)
+  // The copy-load's receiver carries BASE's handle: the emit projects the
+  // offset from the receiver's live type, and base's layout is the one the
+  // copied field lives in (the result may ADD fields — two layouts).
+  let N(_, _, bh) = base
   let field_exprs = map((rf) => {
     let (fname, _) = rf
     match find_override(overrides, fname) {
       Some(v) => lower_expr(v),
-      None    => LFieldLoad(handle, LLocal(handle, tmp),
-                            resolve_field_offset_in(base, fname))
+      None    => LFieldLoad(handle, LLocal(bh, tmp), FByName(fname))
     }
   }, result_fields)
   LBlock(handle, [
@@ -4734,10 +4740,6 @@ fn record_fields_of_handle(handle) = match lookup_ty(handle) {
 // The byte offset of `field` within the record inferred at `base`'s
 // handle — base's own field layout (the source we copy from), distinct
 // from the result layout. Reuses resolve_field_offset's proven offset.
-fn resolve_field_offset_in(base, field) = {
-  let N(_, _, bh) = base
-  resolve_field_offset(bh, field)
-}
 
 fn find_override(overrides, target: String) = match overrides {
   []            => None,
@@ -5636,7 +5638,22 @@ fn spec_repr_digit(t) with Memory = match repr_of(t) {
   RI32 => "0", RI64 => "1", RF64 => "2", RF32 => "3", RV128 => "4"
 }
 
-fn spec_enc(pairs) with Memory + Alloc = fold("", (acc, p) => { let (_, t) = p; acc ++ spec_repr_digit(t) }, pairs)
+// A pair's enc code: wide scalars keep their repr digits (existing twin
+// names stay stable — Law 7), and a STRUCTURED concrete — record, tuple,
+// string, list, named sum — encodes as its fold_sig, the deterministic
+// name-safe type signature. A repr digit cannot say WHICH record closed
+// the var, and the all-'0' floor test was silently ejecting every
+// structure-bound site from candidacy (the field-heal gate).
+fn spec_pair_code(t) with Memory + Alloc = match fold_strip(t) {
+  TInt  => spec_repr_digit(t),
+  TByte => spec_repr_digit(t),
+  TUnit => spec_repr_digit(t),
+  TFloat => spec_repr_digit(t),
+  TVar(_) => spec_repr_digit(t),
+  _ => fold_sig(t)
+}
+
+fn spec_enc(pairs) with Memory + Alloc = fold("", (acc, p) => { let (_, t) = p; acc ++ spec_pair_code(t) }, pairs)
 
 fn spec_enc_is_floor(enc) with Memory = spec_enc_floor_loop(enc, 0, byte_len(enc))
 
@@ -5776,7 +5793,12 @@ fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
   LEvEntry(_, ev)           => spec_scan_expr(ev, acc),
   LUnresolvedEvidence(_, _) => acc,
   LInvariantFailure(_, _)   => acc,
-  LFieldLoad(_h, rec, _off) => spec_scan_expr(rec, acc),
+  // A field-load receiver is a STRUCTURE witness: a var-rooted receiver
+  // bound at a site to a concrete record/tuple heals under that site's twin.
+  LFieldLoad(_h, rec, _sel) => {
+    let (s2, o) = spec_scan_expr(rec, acc)
+    (s2, [lexpr_handle(rec)] ++ o)
+  },
   LConvert(_h, _, operand)  => spec_scan_expr(operand, acc),
   LStateSlotStore(_h, _o, v, _) => spec_scan_expr(v, acc),
   LConst(_, _)              => acc,

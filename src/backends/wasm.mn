@@ -482,18 +482,55 @@ fn spec_candidates_fix(work, done, recs) with EnvRead + LookupTy + GraphRead + M
 // An arith/compare/eq operand whose floor type is a free var bound WIDE by
 // this site's instantiation pairs — the address-comparison witness, root-
 // keyed (sound post-fracture-fix: the operand's root IS the scheme var's).
-fn spec_oph_wide_pair(oh, pairs) with LookupTy + GraphRead + Memory + Alloc = {
+fn spec_oph_wide_pair(oh, pairs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
   if oh == 0 { false }
   else {
     match lookup_ty(oh) {
       TVar(u) => match spec_pairs_find(pairs, graph_chase_handle(u)) {
-        Some(c) => repr_is_wide(repr_of(c)),
+        Some(c) => spec_ty_needs_structure(c),
         None    => false
       },
       _ => false
     }
   }
 }
+
+// The floor lies about any operand whose semantics exceed the raw word:
+// wide scalars (arith/compare at the wrong width), strings and lists
+// (structural eq/ordering, not pointer-eq), records and tuples (field
+// offsets), payload-carrying sums (tag+payload eq). Only the true word
+// scalars are floor-honest. A worthiness witness bound to anything else
+// demands the twin.
+// The ONE selector→offset projection for the field-load emitter: a name
+// resolves through the receiver's record type (resolve_field_offset —
+// TRecord / TRecordOpen / the env's RecordSchemeKind); an index through the
+// positional product's width-summed fold. Both read lookup_ty LIVE under the
+// active bracket, so a twin's instantiation closes a generic receiver.
+fn field_sel_offset(ref rec, sel) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
+  match sel {
+    FByName(fname) => resolve_field_offset(lexpr_handle(rec), fname),
+    FByIndex(i)    => match lookup_ty(lexpr_handle(rec)) {
+      TTuple(elems) => tuple_elem_offset(elems, i, 0, 0),
+      _             => -1
+    }
+  }
+
+fn spec_ty_needs_structure(c) with EnvRead + Memory + Alloc = match fold_strip(c) {
+  TInt        => false,
+  TByte       => false,
+  TUnit       => false,
+  // A nullary-only sum (Bool included — a DERIVED ADT, not a primitive) is
+  // word-honest: its values ARE tag words. Any payload makes structure.
+  TName(n, _) => sum_has_payload(variant_specs_of(n), 0),
+  _           => true
+}
+
+fn sum_has_payload(ref specs, i) with Memory =
+  if i >= len(specs) { false }
+  else {
+    let (_, ptys) = list_index(specs, i)
+    if len(ptys) > 0 { true } else { sum_has_payload(specs, i + 1) }
+  }
 
 fn spec_candidate_sensitive(d, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
   let (_m, base, pairs, _enc) = d
@@ -567,6 +604,24 @@ fn spec_fold_collect(spec_recs, acc0) with LookupTy + EnvRead + Memory + Alloc =
     acc2
   }, spec_recs)
 
+// Two demands can nest the SAME lambda under the SAME enc (two parents,
+// one inner record, one instantiation) — the twin emits once; keep-first
+// by mangled name, the emission seam's own dedup discipline.
+fn spec_recs_dedup(recs) with Memory + Alloc =
+  fold([], (acc, rp) => {
+    let (rec2, _p, _e) = rp
+    let (m, _ps, _b, _f) = rec2
+    if spec_rec_name_seen(acc, m, 0) { acc } else { acc ++ [rp] }
+  }, recs)
+
+fn spec_rec_name_seen(ref recs, ref m: String, i) with Memory =
+  if i >= len(recs) { false }
+  else {
+    let (rec2, _p, _e) = list_index(recs, i)
+    let (n, _ps, _b, _f) = rec2
+    if n == m { true } else { spec_rec_name_seen(recs, m, i + 1) }
+  }
+
 fn spec_rec_names(spec_recs) -> [String] with Memory + Alloc =
   map((rp) => { let (rec2, _p, _e) = rp; let (m, _ps, _b, _f) = rec2; m }, spec_recs)
 
@@ -613,6 +668,7 @@ fn emit_module(lowered) = {
       None => []   // record-less names are never worthy; unreachable by construction
     }
   }, spec_demands))
+    |> spec_recs_dedup
   let spec_names = spec_rec_names(spec_recs)
   let spec_wide = spec_wide_twin_names(spec_recs)
   set_spec_twins(spec_names)
@@ -4076,13 +4132,16 @@ fn emit_expr(expr) = match expr {
     wat_emit("\n")
   },
 
-  // W6: record field load. The offset was resolved at lower-time from the
-  // record's inferred type (prefix-sum of repr_width over the sorted fields).
+  // W6: field load. The offset PROJECTS HERE from the receiver's live type
+  // through field_sel_offset — under the active specialization bracket, so a
+  // twin's instantiation closes a generic receiver (the last lower-time
+  // layout bake, moved to the read).
   // The load WIDTH is the field's PROVEN repr (repr_of at the field handle h):
   // an i32/pointer field is i32.load (byte-identical to the pre-gradient
   // form, Law 7), an f64 field is f64.load at its width-summed offset — the
   // genuine 8 inline bytes, no box, no chase.
-  LFieldLoad(h, rec, offset) => {
+  LFieldLoad(h, rec, sel) => {
+    let offset = field_sel_offset(rec, sel)
     if offset < 0 {
       // NO SILENT FALLBACK (resolve_field_offset returned -1): the field's
       // offset was not provable from the graph. Emit (unreachable) — the
@@ -4793,7 +4852,8 @@ fn emit_one_eq_helper(sig, ty) with EnvRead + Memory + WasmOut + Alloc = match f
   _ => {
     wat_emit("  (func $eq_")
     wat_emit(sig)
-    wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)\n")
+    wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)")
+    wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
     let fields = product_field_tys(ty)
     emit_eq_leaf_conjunction(fields, 0, len(fields), 0)
     wat_emit("  )\n")
@@ -5419,7 +5479,8 @@ fn emit_one_show_helper(sig, ty) with EnvRead + WasmOut + Memory + Alloc = match
 fn emit_show_header(sig) = {
   wat_emit("  (func $show_")
   wat_emit(sig)
-  wat_emit(" (param $__state i32) (param $a i32) (result i32)\n")
+  wat_emit(" (param $__state i32) (param $a i32) (result i32)")
+  wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
 }
 
 // PRODUCT / TUPLE show: open ++ field_0 ++ ", " ++ field_1 ++ … ++ close, a
@@ -5548,7 +5609,8 @@ fn emit_one_show_sum_helper(sig, type_name) with EnvRead + Alloc + Memory + Wasm
   let specs = variant_named_specs_of(type_name)
   wat_emit("  (func $show_")
   wat_emit(sig)
-  wat_emit(" (param $__state i32) (param $a i32) (result i32) (local $ta i32)\n")
+  wat_emit(" (param $__state i32) (param $a i32) (result i32) (local $ta i32)")
+  wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
   wat_emit("    (if (result i32)\n")
   wat_emit("      (i32.lt_u (local.get $a) (i32.const ")
   wat_emit(int_to_str(heap_base()))
@@ -5681,7 +5743,8 @@ fn emit_one_show_list_helper(sig, elem) with WasmOut = {
 fn emit_show_list_body_helper(sig, elem) = {
   wat_emit("  (func $show_listbody_")
   wat_emit(sig)
-  wat_emit(" (param $__state i32) (param $a i32) (param $i i32) (result i32)\n")
+  wat_emit(" (param $__state i32) (param $a i32) (param $i i32) (result i32)")
+  wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
   wat_emit("    (if (result i32)\n")
   wat_emit("      (i32.ge_s (local.get $i) (call $len (local.get $__state) (local.get $a)))\n")
   wat_emit("      (then ")
@@ -5845,7 +5908,7 @@ fn emit_one_hash_helper(sig, ty) with EnvRead + Memory + WasmOut + Alloc = match
     wat_emit("  (func $hash_")
     wat_emit(sig)
     wat_emit(" (param $__state i32) (param $a i32) (result i32)")
-    wat_emit(" (local $h i32) (local $state_tmp i32) (local $callee_closure i32)\n")
+    wat_emit(" (local $h i32) (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
     wat_emit("    (local.set $h (i32.const 2166136261))\n")
     let fields = product_field_tys(ty)
     emit_hash_field_mix(fields, 0, len(fields), 0)
@@ -5865,7 +5928,7 @@ fn emit_one_hash_sum_helper(sig, type_name) with EnvRead + Alloc + Memory + Wasm
   wat_emit(sig)
   wat_emit(" (param $__state i32) (param $a i32) (result i32)")
   wat_emit(" (local $h i32) (local $ta i32)")
-  wat_emit(" (local $state_tmp i32) (local $callee_closure i32)\n")
+  wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
   wat_emit("    (local.set $h (i32.const 2166136261))\n")
   wat_emit("    (if\n")
   wat_emit("      (i32.lt_u (local.get $a) (i32.const ")

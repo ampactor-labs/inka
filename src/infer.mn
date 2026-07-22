@@ -417,7 +417,7 @@ fn ident_byte(b) with Pure =
 fn is_surface_word(ref name) =
   name == "self" || name == "_" || name == "i32" || name == "i64" || name == "f32" || name == "f64" || name == "v128"
 
-fn in_owner_names(ref xs: [String], ref name: String, i) =
+fn in_owner_names(ref xs, ref name, i) =
   if i >= len(xs) { false }
   else {
     if list_index(xs, i) == name { true } else { in_owner_names(xs, name, i + 1) }
@@ -530,11 +530,12 @@ fn cl_param_names(ref params, i, acc) =
   if i >= len(params) { acc }
   else { cl_param_names(params, i + 1, acc ++ [param_name(list_index(params, i))]) }
 
-// The record annotations here carry what inference does not yet flow:
-// a record type through a generic param + list_index into a field read
-// floors to `field offset unprovable` without them (the same face the
-// monomorphization arc's lower-time reads closed elsewhere). The pin is
-// the named constraint, not a preference.
+// The two record annotations below are the LAST pins of this family — the
+// String pin on in_owner_names is GONE (its site twins under the structured
+// enc and the twin's emit reads str_eq). A field read on a CONSTRAINED-open
+// record (TRecordOpen) does not yet heal: the witness matches TVar receivers
+// only, and open-record offsets over a partial field set are the wrong-field
+// bug — the row must resolve under the bracket. That dig deletes these two.
 fn cl_state_names(ref states: [{init: Node, name: String}], i, acc) =
   if i >= len(states) { acc }
   else {

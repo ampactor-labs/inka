@@ -1,0 +1,19 @@
+type Op11 = C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9 | C10 | C11 | C12
+
+// The parser builds a wide alternation's branch list as a ++ rope; the
+// list PATTERN inside pat_binders' PAlt walk then matches it — a rope
+// scrutinee under [head, ...] reads through $list_index (the PIdx step),
+// never a raw flat-stride assumption. RED (trap 134) on any boot whose
+// pattern emit predates the step ADT.
+fn pa11(v, w) = match w {
+  Some(x) => {
+    let acc2 = match v {
+      C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 | C9 | C10 | C11 => x + 1,
+      _ => x
+    }
+    acc2
+  },
+  None => 0
+}
+
+fn main() = pa11(C1, Some(41))

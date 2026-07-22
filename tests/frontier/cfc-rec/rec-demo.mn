@@ -1,0 +1,28 @@
+// rec-demo.mn — the CFC pipeline on a REAL on-disk recording.
+//
+// The synthetic demo (../cfc-demo) BUILDS its signal inline; this one READS a
+// recording from disk — a completely different value origin. The path crosses
+// WASI (fs_read_file_impl), splits on newlines into VIEW strings, and parses
+// 4096 decimal lines into a native [Float] list (read_recording). If parse_float
+// or the view-materialization or the [Float] round-trip were corrupt, the
+// resulting comodulogram's argmax would DIVERGE from the numpy oracle's — which
+// is exactly the representation-stress the m3==m4 fixpoint is structurally blind
+// to (a byte-identical wheel can still corrupt user float data).
+//
+// The recording carries a KNOWN 6 Hz→60 Hz phase-amplitude coupling (built by
+// oracle.py, cross-validated by it). Same well-resolved low as the inline demo
+// (6 Hz), a DIFFERENT high (60 Hz) → flat cell li·4 + hi = 1·4 + 3 = 7. The gate
+// runs oracle.py over the SAME file and confirms numpy independently argmaxes 7.
+//
+// EXIT 42 iff the argmax cell is (6, 60). Otherwise exit the flat index, naming
+// which pair won — a teaching code, never a silent pass.
+
+fn main() with Memory + Alloc + WASI = {
+  let sr = 512
+  let signal = read_recording("/tmp/mentl-cfc-recording.txt")
+  let low_freqs = [4, 6, 8, 10]
+  let high_freqs = [30, 40, 50, 60]
+  let matrix = comodulogram(signal, sr, low_freqs, high_freqs, 128, 32)
+  let flat = comodulogram_argmax(matrix, 4, 4)
+  if flat == 7 { 42 } else { flat }
+}

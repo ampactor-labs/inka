@@ -205,6 +205,9 @@ run_program() {
       run_flags=(--dir /tmp) ;;
     cfc)
       cat "${CFC_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr" ;;
+    cfc-rec)
+      cat "${CFC_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr"
+      run_flags=(--dir /tmp) ;;
     *)
       wt_run "$compiler" < "$source" > "$wat" 2> "$cerr" ;;
   esac
@@ -219,7 +222,7 @@ run_program() {
   elif [ "$link_runtime" = persist ]; then
     comm -23 "$normalized" "$PERSIST_SHADOW" > "$unexpected"
     shadow="; inherited-shadow=$(wc -l < "$PERSIST_SHADOW")"
-  elif [ "$link_runtime" = cfc ]; then
+  elif [ "$link_runtime" = cfc ] || [ "$link_runtime" = cfc-rec ]; then
     comm -23 "$normalized" "$CFC_SHADOW" > "$unexpected"
     shadow="; inherited-shadow=$(wc -l < "$CFC_SHADOW")"
   else
@@ -324,6 +327,39 @@ capture_cfc_shadow() {
   CFC_SHADOW="$dir/cfc-shadow.normalized"
   normalize_errors "$err" > "$CFC_SHADOW"
   pass "cfc shadow captured ($(wc -l < "$CFC_SHADOW") inherited errors)"
+}
+
+# The CFC pipeline on a REAL on-disk recording + a LIVE numpy cross-validation.
+# Two independent legs, both load-bearing:
+#   (1) Mentl reads recording.txt (WASI fs → newline split → parse_float → native
+#       [Float]), runs the comodulogram, and asserts the (6,60) argmax = flat 7.
+#       A different value origin than the inline demo's literal-built signal, so
+#       it stresses parse_float + the [Float] round-trip end to end.
+#   (2) IF python3+numpy is present, the SAME on-disk bytes are run through
+#       oracle.py (a faithful numpy port of cfc.mn) and its INDEPENDENT argmax is
+#       asserted to agree with Mentl's. This is the representation-stress oracle
+#       the m3==m4 fixpoint is structurally BLIND to — a corrupt [Float] would
+#       make Mentl's argmax diverge from numpy's. No numpy on host → the cross-
+#       check is skipped (noted), and Mentl's self-assertion still runs.
+run_cfc_rec() {
+  local compiler="$1" dir="$2"
+  local rec="$ROOT/tests/frontier/cfc-rec/recording.txt"
+  local tmp="/tmp/mentl-cfc-recording.txt"
+  cp -f "$rec" "$tmp"
+  run_program "$compiler" cfc-rec \
+    "$ROOT/tests/frontier/cfc-rec/rec-demo.mn" 42 cfc-rec "$dir"
+  local oflat
+  if python3 -c 'import numpy' 2>/dev/null; then
+    oflat=$(python3 "$ROOT/tests/frontier/cfc-rec/oracle.py" oracle "$tmp" 2>/dev/null \
+      | sed -n 's/^EXPECTED_FLAT=//p')
+    if [ "$oflat" = 7 ]; then
+      pass "cfc-rec cross-validation (numpy argmax flat=$oflat agrees with Mentl)"
+    else
+      fail "cfc-rec cross-validation (numpy argmax flat=$oflat, expected 7)"
+    fi
+  else
+    pass "cfc-rec cross-validation skipped (no numpy on host)"
+  fi
 }
 
 compile_fixture() {
@@ -606,6 +642,10 @@ for i in "${!compilers[@]}"; do
   # amplitude coupling built into the signal (peak/median MVL ratio ≈ 5.9).
   run_program "$compiler" cfc-demo \
     "$ROOT/tests/frontier/cfc-demo/demo.mn" 42 cfc "$dir"
+  # The same pipeline on a REAL on-disk recording, cross-validated against numpy
+  # (a distinct 6→60 coupling, flat 7). The felt research payoff + the
+  # representation oracle the fixpoint cannot be (see run_cfc_rec).
+  run_cfc_rec "$compiler" "$dir"
   run_program "$compiler" scheduled-int \
     "$ROOT/tests/frontier/mn-scheduled-fanout-int.mn" 60 yes "$dir"
   run_program "$compiler" scheduled-float \

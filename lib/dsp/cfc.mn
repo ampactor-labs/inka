@@ -78,7 +78,7 @@ fn dft_bin(xs, start: Int, n: Int, freq: Int, sr: Int) with Memory =
 // When A (the high-frequency amplitude) rises at a consistent low-
 // frequency phase φ, the vectors A·e^{iφ} point one way and the resultant
 // is large; when A is phase-blind they cancel. `phases` and `amps` are
-// scaled-Int (fixed-point) columns, co-indexed by frame.
+// native [Float] columns, co-indexed by frame.
 //
 // This is the RAW Canolty (2006) MVL — the mean of the complex vectors,
 // weighting each by its amplitude. It is NOT the Σamp-normalized variant
@@ -157,8 +157,8 @@ fn columns(xs, sr: Int, freqs, win: Int, hop: Int, num_frames: Int, is_phase) wi
 // ─── The comodulogram — one MVL per (low, high) cell ────────────────
 //
 // Phase columns for the low grid, amplitude columns for the high grid,
-// then cell (li, hi) = MVL(low_phase[li], high_amp[hi]), scaled to Int.
-// Returns [[Int]] (rows = low frequencies, cols = high). num_frames is
+// then cell (li, hi) = MVL(low_phase[li], high_amp[hi]). Returns [[Float]]
+// (rows = low frequencies, cols = high). num_frames is
 // (len(xs) − win)/hop + 1.
 
 fn fill_row(low_cols, high_cols, li: Int, num_high: Int, out, hi: Int) with Memory + Alloc = {
@@ -256,11 +256,12 @@ fn eprint_matrix(matrix, num_low: Int, num_high: Int, li: Int) with Memory + All
 // ─── Real-recording transport — newline-separated floats → signal ───
 //
 // The research face: a recording on disk is one float per line. Read the
-// file, split on newlines, parse each into the fixed-point signal the
+// file, split on newlines, parse each into the native [Float] signal the
 // comodulogram consumes. `fs_read_file_impl` crosses the WASI boundary
-// (the host IS an effect); the parse and scale are pure. Not gated — the
-// synthetic demo builds its signal inline — but this is the same [Int]
-// carrier a real recording flows through.
+// (the host IS an effect); the parse is pure. Gated end to end by
+// tests/frontier/cfc-rec (Mentl's argmax cross-validated against a numpy
+// oracle over the same on-disk bytes) — the representation-stress the
+// m3==m4 fixpoint is blind to.
 //
 // `split` yields VIEW strings ([-1][buf][start][len], PLAN §6): the first
 // word is the −1 discriminant, not a length, so a bare `len`/`parse_float`

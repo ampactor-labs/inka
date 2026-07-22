@@ -1029,9 +1029,14 @@ between the wheel and its ultimate form, held open on purpose.
   fewer WAT lines: to_fixed/from_fixed/cfc_scale DELETED). This is the §5.U
   wide-element cash-out validated on the real workload — representation stress
   on real DSP, the verification leg that catches what m3==m4 cannot. The
-  migration surfaced, by that same stress, the deepest open value-layer bug:
-  Hβ.value.seq-element-stride-carrier is EVIDENCED with a minimal repro
-  (tests/repro/mn-unannotated-float-accumulator.mn). An UNANNOTATED float
+  migration surfaced, by that same stress, the OPEN half of
+  Hβ.value.seq-element-stride-carrier, EVIDENCED with a minimal repro
+  (tests/repro/mn-unannotated-float-accumulator.mn). That peer names TWO
+  solutions — a runtime stride carrier OR whole-program monomorphization; the
+  STRIDE CARRIER shipped (7db29195) and made the SEQUENCE-READ sound (list_index
+  reads the element stride live), so this is NOT the sequence read (that runs
+  with an annotated accumulator). It is the MONOMORPHIZATION half, on a SCALAR:
+  an UNANNOTATED float
   accumulator threaded through recursion (`sum(xs,i,acc) = sum(xs,i+1, acc +
   list_index(xs,i))`) leaves `acc` a type var when the body is checked (the list
   element is free), so the fn compiles ONCE at the RI32 floor — `(param $acc

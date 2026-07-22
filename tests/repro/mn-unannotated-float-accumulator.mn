@@ -9,14 +9,20 @@
 // the i32-compiled body and are read as words. The sum is garbage (~0), and
 // nothing refuses: exit 1 (the `else`), never 42.
 //
-// This is band D's `Hβ.value.seq-element-stride-carrier` — a generic function
-// over a wide element compiled at the word floor cannot serve a Float
-// instantiation. The ULTIMATE fix is monomorphization or a runtime stride
-// carrier; the HONEST INTERMEDIATE (the "broken -> diagnostic, never silent"
-// law) is a REFUSAL at the call site where a wide-repr argument meets a
-// word-repr parameter of a generic body. Annotating `acc: Float`
-// monomorphizes the body to f64 and it runs 42 (tests/frontier/mn-float-*.mn
-// cover the annotated path).
+// This is the SCALAR half of band D's `Hβ.value.seq-element-stride-carrier`,
+// which names TWO solutions: a runtime stride carrier OR whole-program
+// monomorphization. The stride carrier SHIPPED (7db29195) and fixed the
+// SEQUENCE-READ half — `list_index(xs, i)` reads the element stride live, so a
+// generic body reading a packed [Float]/[Byte] is sound (proven here: annotate
+// `acc: Float` and the SAME sequence read runs 42). What is left open is the
+// MONOMORPHIZATION half: `acc` is a scalar generic over the numeric type
+// (`sum : ([a], Int, a) -> a`, a = Int or Float via `+`), and the fn compiles
+// ONCE at the i32 floor, so a Float call reads the doubles as words. The
+// stride carrier does not touch scalar params; only monomorphization (specialize
+// the fn at the repr its call demands) makes this run 42 without the annotation.
+// A refusal-at-the-mismatch would be a STOPGAP monomorphization deletes, so the
+// ultimate is monomorphization itself. Annotating `acc: Float` is manual
+// monomorphization and is what CFC + tests/frontier/mn-float-*.mn use today.
 //
 // Surfaced 2026-07-21 by representation-stress probing while migrating the CFC
 // pipeline to native [Float]. Turn this into a frontier gate (expecting 42, or

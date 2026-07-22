@@ -1841,10 +1841,13 @@ effect Mutate {
 effect LookupTy {
   lookup_ty(Int) -> Ty
   // The specialization bracket (named-generic twins): while set, the handler
-  // answers a free var with the site's single wide instantiation. State on
-  // the ONE LookupTy handler — never a second handler (singleton tier).
-  spec_wty_set(Ty) -> ()
-  spec_wty_clear() -> ()
+  // answers a free var with the site's single wide instantiation, and the
+  // active enc lets the closure-mint arm redirect a nested lambda to its
+  // twin record. State on the ONE LookupTy handler — never a second handler
+  // (singleton tier).
+  spec_ctx_set(Ty, String) -> ()
+  spec_ctx_clear() -> ()
+  spec_enc_active() -> String
 }
 
 // Inference mints via graph_fresh_ty; query mints display ids. One

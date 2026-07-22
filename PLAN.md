@@ -1019,6 +1019,24 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · NESTED-LAMBDA TWINS — monomorphization residue face 1 CLOSES
+  (Hβ.emit.spec-nested-lambda-twin LANDED · pin a919906d). A lambda born
+  inside a generic body twins under the parent's instantiation with ZERO body
+  rewriting: the worthy demand contributes every record nested in its body
+  (mangled with the parent's enc), and the closure-mint arm redirects the
+  record's table index through the bracket's active enc (spec_closure_name —
+  the LGlobal redirect's closure-mint face, registry-gated; captures,
+  self-binding, local naming keep the original name). Bracket state widened
+  to (spec_wty, spec_enc) on the one LookupTy handler. The landing FORCED a
+  width-consistency fix with reach beyond twins: a param used ONLY inside a
+  nested closure had no param-decl width source (find_local_handle_expr
+  stopped at the closure boundary) while the capture-store read the live
+  handle — (param $k i32) declared, $k.f64 read, an assembly break; captures
+  and evs are PARENT-frame expressions and the walk now reads them. Gate
+  mn-generic-nested-lambda RED (1) on the prior pin, 42 now; frontier 153/0;
+  census 0; clean m2 == m3. Remaining faces: the lower-time show/hash
+  dispatch (mn-generic-show-lower-dispatch, band D's leaf-as-lowered-LFn)
+  and multi-type generics (the uniform-wide guard)
 - 2026-07-22 · ▶▶ NAMED-GENERIC MONOMORPHIZATION — the §5.U scalar half LANDS
   (Hβ.value.seq-element-stride-carrier's monomorphization face · pin 92fceff0).
   A named generic fn compiled ONCE at the RI32 floor and, reached at a Float

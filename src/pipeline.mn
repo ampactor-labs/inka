@@ -620,10 +620,11 @@ handler wasi_filesystem {
 // a second LookupTy handler would demote every lookup_ty perform out of the
 // singleton direct-dispatch tier — measured as ev-scan faults at infer sites
 // that never threaded evidence (they never needed to under the singleton).
-handler lookup_ty_graph with spec_wty = None {
+handler lookup_ty_graph with spec_wty = None, spec_enc = "" {
 
-  spec_wty_set(w) => resume() with spec_wty = Some(w),
-  spec_wty_clear() => resume() with spec_wty = None,
+  spec_ctx_set(w, e) => resume() with spec_wty = Some(w), spec_enc = e,
+  spec_ctx_clear() => resume() with spec_wty = None, spec_enc = "",
+  spec_enc_active() => resume(spec_enc),
 
   lookup_ty(h) => {
     let GNode(kind, reason) = graph_chase(h)

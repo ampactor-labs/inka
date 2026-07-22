@@ -1,0 +1,18 @@
+// Named-generic monomorphization, face 5 — a lambda BORN INSIDE a generic
+// body. The lambda inherits the parent's vars, so it twins under the same
+// instantiation: the parent's demand contributes every record nested in its
+// body, and the closure-mint arm redirects the record's table index to the
+// nested twin via the bracket's active enc (spec_closure_name) — captures,
+// self-binding, and local naming keep the original name. Landing this also
+// forced the width-consistency fix in find_local_handle_expr: a param used
+// ONLY inside a nested lambda had no param-decl width source (the walk
+// stopped at the closure boundary) while the capture-store read the live
+// handle — $k i32 declared, $k.f64 read, an assembly break. Captures and
+// evs are PARENT-frame expressions; the walk now reads them. RED (run 1,
+// silent-wrong) on the pre-fix boot.
+fn scale_all(xs, k) = map((x) => x * k, xs)
+
+fn main() = {
+  let ys = scale_all([1.5, 2.5], 2.0)
+  if ys[0] == 3.0 && ys[1] == 5.0 { 42 } else { 1 }
+}

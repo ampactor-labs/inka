@@ -1,0 +1,28 @@
+// KNOWN SILENT-WRONG (open) — the monomorphization residue:
+// Hβ.emit.spec-nested-lambda-twin. NOT gated: compiles clean, runs wrong.
+//
+// A LAMBDA inside a named generic body does the arithmetic. The demand
+// analysis correctly twins the named function (the scan descends into
+// closure bodies, so $scale_all$sp22 exists), but the lambda is a SEPARATE record
+// emitted once at the word floor, and the twin's LMakeClosure still
+// references the floor lambda's table index — so the multiplication runs
+// i32.mul on the f64 references and ys is garbage (exit 1, zero
+// diagnostics). Landed shapes are sound: named-body arithmetic (sum_acc),
+// named comparators higher-order (reduce(xs, min)), the transitive web
+// (sort → merge), and lambdas authored AT a concrete call site (main's own
+// map lambda — specialized where it is born). Only a lambda BORN INSIDE a
+// generic body inherits the floor.
+//
+// The fix is the same mechanism one level deeper: a worthy twin's nested
+// closure records join the demand set under the same wide type, and the
+// twin's body is rewritten to reference the lambda-twin's index (a pure
+// LowExpr rename walk). Scoped out of the first landing deliberately —
+// none of the harvested silent-wrong shapes needed it; this probe
+// (2026-07-22) is its first witness. Turn into a frontier gate (expect 42)
+// when the lambda-twin lands.
+fn scale_all(xs, k) = map((x) => x * k, xs)
+
+fn main() = {
+  let ys = scale_all([1.5, 2.5], 2.0)
+  if ys[0] == 3.0 && ys[1] == 5.0 { 42 } else { 1 }
+}

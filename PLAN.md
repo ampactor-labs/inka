@@ -1059,7 +1059,14 @@ between the wheel and its ultimate form, held open on purpose.
   run 1 (silent-wrong) on the pre-spec boot, 42 now — the two repro files
   GRADUATED into them (deleted). CFC's annotation discipline becomes OPTIONAL
   (annotated accumulators still valid Intent Boundaries, no longer required
-  for correctness on these shapes). Board whole: census 0, frontier 150/0,
+  for correctness on these shapes). Residue, probed the same day and BANKED
+  with a repro (tests/repro/mn-generic-nested-lambda.mn):
+  Hβ.emit.spec-nested-lambda-twin — a lambda BORN INSIDE a generic body is a
+  separate record emitted once at the floor, and the twin's closure mint still
+  references the floor lambda's index; the fix is the same mechanism one level
+  deeper (nested records join the demand under the same wide type + a rename
+  walk), first witnessed by scale_all$sp22 delegating to its floor lambda.
+  Board whole: census 0, frontier 150/0,
   proof-exactness 9/9, crown 5/5, micros green, m2 == m3
 - 2026-07-22 · THE DATA-VALIDATOR TIER — three real-workload oracles the
   fixpoint cannot be (no re-pin — tests + gate only, the wheel unchanged;

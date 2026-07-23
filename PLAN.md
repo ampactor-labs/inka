@@ -1976,11 +1976,28 @@ closure record's field — and a wild index writes PAST the frame's
 allocation into the adjacent heap record (the zero-written strip is
 exactly authored/resolved/body). The stomp is LAYOUT-DEPENDENT, which is
 why only the reset's shifted layouts expose it and the monotonic run
-never did. NEXT OPENING, exact: probe infer_call_arg's sst write RANGE
-against its frame's allocated size, and callee_closure's provenance at
-the fatal iteration (the probe recipe, the site offsets, and the five
-probe artifacts are this entry's corpus). The image/scratch split stays
-the arena's build; THIS bug is upstream of it.
+never did. SESSION 2's five further probes
+(same night) advanced the frontier three more rungs, killing three more
+labels: the sst write range is HEALTHY every execution (callee = the
+static $infer_expr record at 9080, capture word 0, alloc 108 — the
+"wild index" was a misread), the static-closure block (0–20,080) sits
+far below the 1MB bump floor (stomp impossible), and the dying
+scrutinee is the ARG ITSELF — infer_call_arg receives a non-node.
+Arity is clean (the fatal call is 4 args / 4 params, dies at i=0); the
+poison is the LIST ELEMENT: args[0] points at a record whose shape
+NAMES itself — [count=1077][tag=flat][elem0=91,336 → a data-section
+name string][elem1=8,204,896 → a heap record] — THE ENV'S FLAT BUFFER
+(libs-only env ≈ 1,077 entries), served where an AST arg node belongs.
+op_each_handler_yield sits in the fatal frame chain, so the leading
+suspect is the YIELD-PACKET CROSS-WIRE: nested each-yields share the
+one global triple ($yield_op/$yield_args/$yield_k — wasm globals, never
+reset), and a resume path reads a packet a nested yield overwrote —
+layout/reset-dependent through the k-records' heap positions. NEXT
+OPENING, exact: dump the fatal call's remaining three args (same shape
+probe, offsets banked), and instrument the yield driver's packet
+writes/reads for interleave across the compile boundary. The
+image/scratch split stays the arena's build; THIS bug is upstream of
+it.
 
 The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
 `Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a

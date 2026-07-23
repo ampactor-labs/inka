@@ -294,12 +294,43 @@ fn infer_program(stmts) = {
 
 fn comment_refs_check(ref stmts) = {
   let cdix = comment_decl_index(stmts, 0, smap_new())
-  let dollars = crc_walk(0, graph_next(), cdix, [])
+  let scopes = crc_fn_scopes(stmts, 0, [])
+  let dollars = crc_walk(0, graph_next(), cdix, scopes, [])
   if len(dollars) > 0 {
     let lvix = lit_vocab_build(0, graph_next(), smap_new())
     crc_judge_dollars(dollars, 0, lvix, cdix)
   } else { () }
 }
+
+// The SCOPE face of the referent set: an interior comment's backticks name
+// the enclosing fn's params and binders — real names at that position —
+// so each top-level decl contributes (its span, its comment_locals) once,
+// and a comment inside that span resolves against them exactly as the
+// decl's own comment does.
+// A decl node's recorded span is its HEAD; the scope's EXTENT runs from
+// this decl's start to the next decl's start (the last runs open) — the
+// stmt list is consecutive, so the pair of starts IS the extent, no
+// re-measure of the body.
+fn crc_fn_scopes(ref stmts, i, acc) =
+  if i >= len(stmts) { acc }
+  else {
+    let node = list_index(stmts, i)
+    let N(_, sp, h) = node
+    let Span(sl, sc, _, _) = sp
+    let ext = if i + 1 < len(stmts) {
+      let N(_, nsp, _) = list_index(stmts, i + 1)
+      let Span(nl, nc, _, _) = nsp
+      Span(sl, sc, nl, nc)
+    } else { Span(sl, sc, 1000000000, 1) }
+    crc_fn_scopes(stmts, i + 1, push(acc, (ext, comment_locals(h))))
+  }
+
+fn crc_scope_at(ref scopes, csp, i) =
+  if i >= len(scopes) { [] }
+  else {
+    let (sp, names) = list_index(scopes, i)
+    if span_contains(sp, csp) { names } else { crc_scope_at(scopes, csp, i + 1) }
+  }
 
 // name -> decl stmt handle, one walk over the program's own statements.
 fn comment_decl_index(ref stmts, i, idx) = {
@@ -333,16 +364,16 @@ fn op_index_add(ref ops, i, idx, h) = {
   }
 }
 
-fn crc_walk(h, n, ref cdix, dollars) = {
+fn crc_walk(h, n, ref cdix, ref scopes, dollars) = {
   if h >= n { dollars }
   else {
     let t = graph_comment_at(h)
     let d2 =
       if byte_len(t) > 0 {
-        let locals = comment_locals(h)
+        let locals = comment_locals(h) ++ crc_scope_at(scopes, graph_comment_span_at(h), 0)
         crc_scan(t, 0, byte_len(t), h, cdix, locals, dollars)
       } else { dollars }
-    crc_walk(h + 1, n, cdix, d2)
+    crc_walk(h + 1, n, cdix, scopes, d2)
   }
 }
 
@@ -797,7 +828,7 @@ fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: Vali
       // Resolve through the alias edge FIRST (quantify_ctor_ty — the same
       // resolution build_param_types and apply_let_annotation use): binding
       // the raw syntactic TName made a refined alias look NOMINAL, so the
-      // proposer enumerated constructors of `Positive` (zero) instead of
+      // proposer enumerated constructors of Positive (zero) instead of
       // integer seeds under its refinement.
       let (resolved_ret, _q) = quantify_ctor_ty(ann_ty, [])
       graph_bind(ret_handle, resolved_ret, Located(span, Declared(name)))
@@ -933,7 +964,7 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   // resources. Without this bracket, a name consumed here (affine_ledger
   // is installed once at the pipeline, not per body) stays in `used` and
   // collides in the NEXT function that names the same `own` param — the
-  // cross-function `buf`/`acc` false positives.
+  // cross-function buf/acc false positives.
   consume_enter_fn()
   infer_expr(body_node)
   consume_exit_fn()
@@ -1223,7 +1254,7 @@ fn infer_expr(ref node) = {
       // diagnostic); its parameter product is unreadable, so the move-vs-
       // borrow read has no ground. Compounding the miss with a move default
       // was the ownership false-positive cascade (`len(buf)` unresolved
-      // consuming `buf`). Borrow the args under the miss; param-position and
+      // consuming buf). Borrow the args under the miss; param-position and
       // lambda callees keep normal inference (their schemes resolve).
       if callee_missing_in_env(func, cname) {
         borrow_enter()
@@ -1577,8 +1608,8 @@ fn infer_expr(ref node) = {
 fn infer_field_access_record(rec, field, handle, span: ValidSpan) = {
   // Reading `.field` borrows the receiver — it never moves the record. Borrow
   // only a value chain (a VarRef or a nested field access); a call receiver
-  // (`f(x).field`) keeps its normal inference so `x`'s move into `f` still
-  // consumes. `buf.data` and `buf.count` are then two borrows of `buf`, not
+  // (a value-chain receiver f(x).field) keeps its normal inference so the arg's move still
+  // consumes. buf.data and buf.count are then two borrows of one value, not
   // two consumes.
   let N(rec_body, _, _) = rec
   match rec_body {

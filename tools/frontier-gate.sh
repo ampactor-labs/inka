@@ -1066,6 +1066,19 @@ for i in "${!compilers[@]}"; do
   # The FAN at the address surface: two proven survivors LIST with their
   # Reasons (the space shown, the collapsing move named) — seen RED as the
   # bare count line before the fan projection landed.
+  # The comment weave at three altitudes (SYNTAX Comments — "never
+  # dropped"): a decl comment, a block-INTERIOR comment, and a TRAILING
+  # same-line comment each attach and render as the address's Lede facet.
+  # RED before the attach arms: zero Lede lines at every address.
+  ldemo="$ROOT/tests/frontier/lede-demo"
+  l2=$(cd "$ldemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ldemo" --dir /tmp "$compiler" lede.mn:2 2>/dev/null | grep -c '^Lede: .*outer prose')
+  l4=$(cd "$ldemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ldemo" --dir /tmp "$compiler" lede.mn:4 2>/dev/null | grep -c '^Lede: .*interior step')
+  l5=$(cd "$ldemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ldemo" --dir /tmp "$compiler" lede.mn:5 2>/dev/null | grep -c '^Lede: .*trailing beat')
+  if [ "$l2" = 1 ] && [ "$l4" = 1 ] && [ "$l5" = 1 ]; then
+    pass "comment lede (decl + interior + trailing all attach and render)"
+  else
+    fail "comment lede (decl=$l2 interior=$l4 trailing=$l5)"
+  fi
   fdemo="$ROOT/tests/frontier/propose-fan-demo"
   # The FIELD form (`mentl <file>:0`): the whole absence field ranked and
   # rendered — both holes with their Propose facets (the tie teaching), the

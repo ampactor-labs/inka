@@ -3521,7 +3521,7 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
   // its own WASM function with __state IS the handler state record
   // (per protocol_handler_is_state_is_closure_is_evidence.md). The
   // arm body needs a FRESH frame so state-field references (e.g.
-  // `frames`, `globals`) resolve to LUpval(0..N-1), emitting
+  // frames, globals) resolve to LUpval(0..N-1), emitting
   // `(local.get $__state)(i32.load offset=8 + idx*4)` — the
   // canonical closure-record layout.
   //

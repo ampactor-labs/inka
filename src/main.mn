@@ -514,7 +514,7 @@ fn doc_project(entry_module) = {
   // surfaces its `///` Reasons through the diagnostics handler. The dedicated
   // render step (md / html / llms handlers over the module signature) is a
   // NAMED gated peer — Hβ.f1.doc-handler-substrate — not a phantom call:
-  // `doc_emit_for_module` was referenced but never defined (reachable_from_main
+  // doc_emit_for_module was referenced but never defined (reachable_from_main
   // emitted the dangling global), so the honest form names the peer and stops.
   driver_check(entry_module)
 }
@@ -865,6 +865,13 @@ fn address_case_c(ref spans, gline, i, n, best) with Memory = {
 // ─── the terse render — facet-silence at the terminal
 fn render_at(view, h, pspan, ranges) = {
   let CursorView(kind, propose, _topology, row, trace, verify, teach, why) = view
+  // The register-gated lede — the read side of the comment weave the
+  // parser fills: a node carrying authored prose speaks its first line
+  // before the Query facet, the same edge the Why engine walks.
+  let prose = graph_comment_at(h)
+  if len(prose) > 0 {
+    print_string("Lede: {comment_first_line(prose)}\n")
+  } else { () }
   print_string("Query: {source_slice(pspan, ranges)}{node_query_line(h, kind)}\n")
   // The Propose facet — the socket's content at the address surface. The
   // graph already computed it (propose_at runs synth at an authored hole;

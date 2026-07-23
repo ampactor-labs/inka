@@ -1,0 +1,8 @@
+// The outer prose — a decl comment renders as the address's lede line.
+fn compute(x) = {
+  // The interior step — attaches to the statement that follows.
+  let doubled = x * 2
+  doubled + 1   // the trailing beat — attaches backward to its own line
+}
+
+fn main() = compute(20)

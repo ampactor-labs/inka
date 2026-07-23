@@ -1026,6 +1026,37 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · THE COMMENT WEAVE AT THREE ALTITUDES (queue 2 — SYNTAX's
+  "never dropped" made true for the measured gap · pin aa6338e9). A
+  block-INTERIOR comment attaches to the finest FOLLOWING node (next
+  statement / final expr / the block's unit node — by HANDLE, so the
+  before-final-expr case never wraps the final as an ExprStmt), and a
+  TRAILING same-line comment attaches BACKWARD to the node whose line
+  it shares — same-line decided by TOKEN geometry (no TNewline between
+  item and comment; the span test failed because a braceless let-chain
+  leaves the position past consumed newlines — the str_contains doc
+  attached to str_compare until the token test, caught by reading the
+  Lede at the address). The address surface renders the attached
+  prose's first line as the Lede facet through the one
+  comment_first_line projection (a duplicate lede helper died to
+  E_DuplicateFnName's own refusal — the armed class catching the
+  session's hand again). Interior comments thereby joined the backtick
+  gate, and the referent set grew its SCOPE face: each top-level decl
+  contributes (extent, comment_locals), extents from consecutive stmt
+  starts since decl spans are head-only, so interior backticks resolve
+  against the enclosing fn's params and binders; the eight residual
+  phantoms were the narration class, unbackticked per the contract.
+  The affine ledger pairs a buffer move inside a destructure-desugared
+  arm with sibling-leg moves (three clean small repros; the real fn
+  refused), so the block loop is destructure-free — helpers own the
+  collects. Gates: lede-demo (decl + interior + trailing all render,
+  RED as zero Lede lines on the prior pin); the ratchet itself (0 → 23
+  → 0 as the new judge saw interior prose and the heal closed it).
+  Board whole: CLEAN m2 == m3 at 558,532 lines, census 0,
+  comment-refs 0, frontier 210/0, battery 113/113. Expression-interior
+  positions (parens / arg lists / match-arm headers) stay layout — the
+  named refinement Hβ.parser.expr-interior-comment-attach (SYNTAX
+  carries it).
 - 2026-07-23 · ▶▶ THE BLOB DECLARES CALLEE-FIRST + THE SUBSTRATE FACE
   TABLE + THE N-CURSOR FIELD (queue 0b landed with the order truth it
   forced · pin 6807a214). The dig: `mentl two.mn:0` rendered every

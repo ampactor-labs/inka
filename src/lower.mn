@@ -30,6 +30,7 @@ import runtime/imap
 import runtime/persist
 import runtime/search
 import effects
+import parser
 
 // Hβ.first-light.resume-with-state-mutation — handler-arm-state context.
 // `lower_handler_arms_as_decls` installs `arm_state_ctx(state, disc)` around
@@ -283,6 +284,7 @@ type LowExpr
   | LUnaryOp(Int, UnaryOp, LowExpr)
   | LCall(Int, LowExpr, [LowExpr])             // monomorphic direct call
   | LTailCall(Int, LowExpr, [LowExpr])
+  | LDirectCall(Int, Int, String, Bool, [LowExpr])  // call handle, callee-ref handle, fn name, tail, args — the DIRECT native call to a known top-level fn: lower resolved the callee's FnScheme, so the emit calls $name with NATIVE argument types (an f64 arg stays f64 — no spill cell, no word face, no wrapper hop) and `return_call` in tail position (true tails for wide results too — the word-face demotion and the wrapper's per-iteration frame leak both die at this node). __state stays the callee's own static-closure global, byte-equal semantics to the closure convention minus the table hop. The closure path remains for genuine VALUE callees; the callee-ref handle feeds the twin-demand scan (the reference's instantiated TFun lives there)
   | LReturn(Int, LowExpr)
   | LMakeClosure(Int, LowFn, [LowExpr], [LowExpr]) // handle, fn, captures, ev_slots
   // VALUE-position reference to an EXISTING named fn that DISPATCHES effects —
@@ -510,6 +512,7 @@ fn lexpr_handle(e) with Pure = match e {
   LUnaryOp(h, _, _)       => h,
   LCall(h, _, _)          => h,
   LTailCall(h, _, _)      => h,
+  LDirectCall(h, _, _, _, _) => h,
   LReturn(h, _)           => h,
   LMakeClosure(h, _, _, _) => h,
   LFnRef(h, _, _)         => h,
@@ -563,6 +566,7 @@ fn lexpr_handle(e) with Pure = match e {
 // Called by FnStmt / LambdaExpr / handler-arm-body lowering after lower_expr.
 fn mark_tail(e) with Memory + Alloc = match e {
   LCall(h, fn_, args)         => LTailCall(h, fn_, args),
+  LDirectCall(h, fh, n, _, args) => LDirectCall(h, fh, n, true, args),
   // An evidence-threading call in tail position stays LSuspend — the sst_
   // clone is argument computation — but the dispatch becomes a TAIL call.
   // Without this arm the wildcard kept it plain and every effectful
@@ -689,7 +693,23 @@ fn lower_call_default(handle, f, fh, lo_args) = {
       ev_slots ++ [LEvEntry("__resume", resolve_resume_k(handle))]   // drift-audit: ignore — one entry per call site, not a loop
     } else { ev_slots }
   if len(ev_slots2) == 0 {
-    LCall(handle, lo_f, lo_args)
+    // The direct cash-out: a callee lower resolved to a top-level fn's
+    // OWN global (LGlobal minted from a FnScheme VarRef — locals shadowed
+    // it first, value bindings carry another kind) calls the fn BY NAME
+    // with native args. Carried-Truth at the dispatch: lower proved the
+    // callee's identity; routing through the closure re-derived it at
+    // runtime through a table hop that broke tail-calls (the wf$ wrapper
+    // frame leak — one leaked frame per iteration of every deep tail
+    // recursion routed through a wide fn's word face, measured at 4096
+    // frames under the signal crucible).
+    match lo_f {
+      LGlobal(gh, gname) =>
+        match env_kind_of(gname) {
+          Some(FnScheme) => LDirectCall(handle, gh, gname, false, lo_args),
+          _              => LCall(handle, lo_f, lo_args)
+        },
+      _ => LCall(handle, lo_f, lo_args)
+    }
   } else {
     LSuspend(handle, fh, lo_f, lo_args, ev_slots2, false)
   }
@@ -2392,6 +2412,10 @@ fn lower_pipe_complete(lo_l, right, handle) = {
     _                         => false
   }
   match lo_r {
+    LDirectCall(dh, dfh, dn, dt, dargs) =>
+      if hole_at >= 0      { LDirectCall(dh, dfh, dn, dt, splice_at(dargs, hole_at, lo_l)) }
+      else if is_partial   { LDirectCall(dh, dfh, dn, dt, dargs ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node, not a loop accumulator
+      else                 { LCall(handle, lo_r, [lo_l]) },
     LCall(ch, fn_, args) =>
       if hole_at >= 0      { LCall(ch, fn_, splice_at(args, hole_at, lo_l)) }
       else if is_partial   { LCall(ch, fn_, args ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node, not a loop accumulator
@@ -4213,6 +4237,7 @@ fn k2_floor_guard(e, terminus) = match e {
   LShow(h, x)           => LShow(h, k2_floor_guard(x, false)),
   LHash(h, x)           => LHash(h, k2_floor_guard(x, false)),
   LTailCall(h, f, args) => LTailCall(h, k2_floor_guard(f, false), k2_floor_list(args)),
+  LDirectCall(h, fh, n, t, args) => LDirectCall(h, fh, n, t, k2_floor_list(args)),
   LBinOp(h, op, l, r)   => LBinOp(h, op, k2_floor_guard(l, false), k2_floor_guard(r, false)),
   LUnaryOp(h, op, x)    => LUnaryOp(h, op, k2_floor_guard(x, false)),
   LMakeClosure(h, fn_, caps, ev)  => LMakeClosure(h, fn_, k2_floor_list(caps), k2_floor_list(ev)),
@@ -5283,6 +5308,7 @@ fn reach_match_arms(arms, acc) = {
 
 fn reach_names_expr(expr, acc) = match expr {
   LGlobal(_, n)             => [n] ++ acc,
+  LDirectCall(_h, _fh, n, _t, args) => reach_names_list(args, [n] ++ acc),
   LFnRef(_h, n, ev)         => reach_names_list(ev, [n] ++ acc),
   // emit calls `$op_<target>` (the arm fn), so reach the arm fn by its emitted
   // name — the un-prefixed `target` matched nothing (installed handlers survived
@@ -5535,6 +5561,7 @@ fn collect_value_holes_expr(expr, acc) = match expr {
   LUnaryOp(_h, _op, x)      => collect_value_holes_expr(x, acc),
   LCall(_h, f, args)        => collect_value_holes_list(args, collect_value_holes_expr(f, acc)),
   LTailCall(_h, f, args)    => collect_value_holes_list(args, collect_value_holes_expr(f, acc)),
+  LDirectCall(_h, _fh, _n, _t, args) => collect_value_holes_list(args, acc),
   LReturn(_h, x)            => collect_value_holes_expr(x, acc),
   LMakeList(_h, elems)      => collect_value_holes_list(elems, acc),
   LMakeTuple(_h, elems)     => collect_value_holes_list(elems, acc),
@@ -5900,6 +5927,7 @@ fn spec_subst_pairs(t, pairs) with GraphRead + Memory + Alloc = match t {
 // wrong witnesses the worthiness predicate reads). acc = (sites, ophs).
 fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
   LGlobal(h, n)             => { let (s, o) = acc; ([(h, n)] ++ s, o) },
+  LDirectCall(_h, fh, n, _t, args) => { let (s, o) = spec_scan_list(args, acc); ([(fh, n)] ++ s, o) },
   LFnRef(h, n, ev)          => { let (s, o) = spec_scan_list(ev, acc); ([(h, n)] ++ s, o) },
   LPerform(_h, _t, args, _) => spec_scan_list(args, acc),
   LDirectPerform(h, hn, op, st, args) => spec_scan_expr(singleton_perform_block(h, hn, op, st, args), acc),

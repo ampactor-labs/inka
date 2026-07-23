@@ -1026,6 +1026,46 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶▶ THE DIRECT-CALL CASH-OUT — every named call goes
+  native; the word-face wrapper's tail-leak dies; the signal crucible
+  goes green (the dispatch gradient's own endpoint, landed whole ·
+  pin f8abad90). THE DIG (the cfc-researcher's blocker, four labels
+  killed by the artifact): its table-layout theory REFUTED (the
+  three-way check — elem position == idx global == baked closure index,
+  perfect at every probed fn); my alloc-trap a HARNESS ARTIFACT (the
+  unmounted recording file — len(garbage)); the n-guards proved the
+  series terminates; the TRUE root read from the frames: THE WORD-FACE
+  WRAPPER BREAKS TAIL CALLS — a tail recursion's return_call_indirect
+  lands IN the wf$ wrapper, whose body-call was plain, leaking ONE
+  frame per iteration; at 4096 samples the stack tips with the innocent
+  atan ladder on top (the researcher's threshold was never fn-count —
+  it was recursion depth through any wrapper). THE FIX AT THE ROOT,
+  never the symptom: LDirectCall — a callee lower proved a top-level
+  FnScheme (the LGlobal-from-FnScheme mint; locals shadowed first,
+  value bindings keep the closure path) emits `call $name` /
+  `return_call $name` with NATIVE widths. Three artifact-taught
+  corrections en route, each loud: fn schemes carry TParam PRODUCTS
+  (param_ty unwraps — my first helper trapped repr_of on the product);
+  arg widths follow the CALLEE'S DECLARED signature (word floor for
+  generic/Int params — the seq-op raw bodies live there — native f64
+  for declared Floats; six assembly refusals taught it); and a TWIN's
+  widths read the SAME spec_site_pairs/spec_subst_pairs projection that
+  minted the redirect (raw lookup_ty floored free vars against the
+  twin's native slots — three assembly REDs). The pipe splice gained
+  the node's arm (26 phantom E_UnresolvedHole = partial-application
+  ??s surviving the `_` fallback — the m3 leg's own refusal caught it).
+  Word-result wf$ wrappers tail-collapse as the belt. MEASURED: the
+  wheel SHRANK 19,942 lines (−3.5%) and the wasm 5.3% — every named
+  call in the language dropped closure-eval + spill + call_indirect for
+  one direct call; the researcher's whole bracket runs (wf-1/5 = 42,
+  wf-15's 4096-deep demod as true tails); signal-crucible TRANSPLANTED
+  and GREEN (exit 42, cross-validated against the independent oracle —
+  argmax flat 2, strong coupling; the STFT + `<~` bandpass + filter
+  comodulogram lands as lib/dsp/signal.mn with tests/repro-wf banked).
+  Board whole: frontier 198/0, battery 113/113, census 0, comment-refs
+  0, m2 == m3 at 549,924 lines. Hβ.emit.float-evidence-ft's named class
+  narrows to the genuine value-dispatch residue (lambdas/HOF through
+  the table keep the word protocol — sound, just not yet fast).
 - 2026-07-23 · ▶▶ THE SOCKET SPEAKS AT THE ADDRESS SURFACE (the Propose
   facet's first render + the resolver's column law · pin 17d1c3be).
   `mentl hole.mn:9:37` at an authored `??` now projects the socket's
@@ -1060,8 +1100,10 @@ between the wheel and its ultimate form, held open on purpose.
   CursorView over a virtual fs, RED→GREEN on provenance 'real', plus a
   genuine serve.mn catch (read_request hand-rolled the pre-merge +4
   String layout — latent OOB under the armed bounds check, fixed to
-  bytes_buf/+8/str_of_buf); its batch commits when it reports against
-  this pin. RETRACTION, same night (the ⟲ law on the orchestrator's own
+  bytes_buf/+8/str_of_buf; the wheel-side class census came back CLEAN —
+  zero +4 payload writes, all 18 str_of_buf callers on the merge's
+  migrated boundary — so serve.mn was the class's last instance); its
+  batch commits when it reports against this pin. RETRACTION, same night (the ⟲ law on the orchestrator's own
   claim): commit dbf538ea's message says the fixpoint judged the
   rewritten tutorials because "the wheel blob includes lib/**" — FALSE;
   wt_wheel and march.sh both carry `-not -path '*/tutorial/*'`, so the

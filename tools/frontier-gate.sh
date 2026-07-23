@@ -97,6 +97,19 @@ CFC_RTLIBS=(
   "$ROOT/tests/frontier/cfc-demo/gen.mn"
 )
 
+# The signal-crucible link set: the CFC substrate plus lib/dsp/signal.mn (the
+# STFT + `<~` bandpass + filter-based comodulogram). signal.mn reuses cfc.mn's
+# mean-vector-length, matrix readers, and file transport (import, never
+# duplicate), so both are linked; its own demodulation columns, STFT, and `<~`
+# bandpass sit on top. The run preopens /tmp for the recording.
+SIGNAL_RTLIBS=(
+  "${RTLIBS[@]}"
+  "$ROOT/lib/runtime/io.mn"
+  "$ROOT/lib/runtime/math.mn"
+  "$ROOT/lib/dsp/cfc.mn"
+  "$ROOT/lib/dsp/signal.mn"
+)
+
 # The data-validator lib set: the base runtime plus the WASI fs layer (io.mn),
 # for the on-disk [Float]-statistics and String=[byte]-text validators. Their
 # runs preopen /tmp for the fixture.
@@ -225,6 +238,9 @@ run_program() {
     cfc-rec)
       cat "${CFC_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr"
       run_flags=(--dir "$dir::/tmp") ;;
+    signal)
+      cat "${SIGNAL_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr"
+      run_flags=(--dir "$dir::/tmp") ;;
     io-rec)
       cat "${IO_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr"
       run_flags=(--dir "$dir::/tmp") ;;
@@ -247,6 +263,9 @@ run_program() {
   elif [ "$link_runtime" = cfc ] || [ "$link_runtime" = cfc-rec ]; then
     comm -23 "$normalized" "$CFC_SHADOW" > "$unexpected"
     shadow="; inherited-shadow=$(wc -l < "$CFC_SHADOW")"
+  elif [ "$link_runtime" = signal ]; then
+    comm -23 "$normalized" "$SIGNAL_SHADOW" > "$unexpected"
+    shadow="; inherited-shadow=$(wc -l < "$SIGNAL_SHADOW")"
   elif [ "$link_runtime" = io-rec ]; then
     comm -23 "$normalized" "$IO_SHADOW" > "$unexpected"
     shadow="; inherited-shadow=$(wc -l < "$IO_SHADOW")"
@@ -355,6 +374,59 @@ capture_cfc_shadow() {
   CFC_SHADOW="$dir/cfc-shadow.normalized"
   normalize_errors "$err" > "$CFC_SHADOW"
   pass "cfc shadow captured ($(wc -l < "$CFC_SHADOW") inherited errors)"
+}
+
+# Same differential accounting for the signal lib set (runtime + io + math +
+# dsp/cfc + dsp/signal): the demo may only add refusals the base libs do not carry.
+capture_signal_shadow() {
+  local compiler="$1" dir="$2"
+  local wat="$dir/signal-shadow.wat" err="$dir/signal-shadow.err"
+
+  { cat "${SIGNAL_RTLIBS[@]}"; printf '\nfn main() = 0\n'; } \
+    | wt_run "$compiler" > "$wat" 2> "$err"
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    fail "signal shadow compile (exit=$rc; see $err)"
+    return 1
+  fi
+
+  SIGNAL_SHADOW="$dir/signal-shadow.normalized"
+  normalize_errors "$err" > "$SIGNAL_SHADOW"
+  pass "signal shadow captured ($(wc -l < "$SIGNAL_SHADOW") inherited errors)"
+}
+
+# The STFT + `<~` bandpass + comodulogram (lib/dsp/signal.mn) on a REAL on-disk
+# recording + a python cross-validation. The recording carries a 4 Hz-phase ->
+# 50 Hz-amplitude coupling — a DIFFERENT pair than cfc-demo (6->40) and cfc-rec
+# (6->60), so the pipeline is proven to find a coupling it was never tuned to, not
+# to memorize one grid cell.
+#   (1) Mentl reads the recording (WASI fs -> parse_float -> native [Float]),
+#       computes the comodulogram (`<~` bandpass conditioner + cfc.mn's windowed-
+#       DFT mean-vector-length), the STFT dominant bin, and the `<~` bandpass
+#       selectivity, and exits 42 iff all three verdicts hold.
+#   (2) oracle.py (an INDEPENDENT port of signal.mn's pipeline using math.mn's
+#       exact Taylor series — no numpy) computes the SAME grid over the SAME bytes;
+#       the gate asserts it independently agrees on the argmax cell (flat 2 =
+#       (4,50)) and the strong-coupling separation (floor(peak/median) >= 20).
+run_signal_crucible() {
+  local compiler="$1" dir="$2"
+  local rec="$ROOT/tests/frontier/signal-crucible/recording.txt"
+  local tmp="$dir/mentl-signal-recording.txt"
+  cp -f "$rec" "$tmp"
+  run_program "$compiler" signal-crucible \
+    "$ROOT/tests/frontier/signal-crucible/demo.mn" 42 signal "$dir"
+  local oracle="$ROOT/tests/frontier/signal-crucible/oracle.py"
+  local out; out=$(python3 "$oracle" oracle "$tmp" 2>/dev/null)
+  if ! printf '%s\n' "$out" | grep -q '^EXPECTED_'; then
+    pass "signal-crucible cross-validation skipped (oracle deps unavailable)"
+    return
+  fi
+  local flat strong ok=1
+  flat=$(printf '%s\n' "$out" | sed -n 's/^EXPECTED_FLAT=//p')
+  strong=$(printf '%s\n' "$out" | sed -n 's/^EXPECTED_STRONG_COUPLING=//p')
+  [ "$flat" = 2 ] || { ok=0; fail "signal-crucible cross-validation (argmax flat=$flat, expected 2)"; }
+  [ "$strong" = 1 ] || { ok=0; fail "signal-crucible cross-validation (strong_coupling=$strong, expected 1)"; }
+  [ "$ok" = 1 ] && pass "signal-crucible cross-validation (argmax flat=2 + strong coupling agree with the oracle)"
 }
 
 # The CFC pipeline on a REAL on-disk recording + a LIVE numpy cross-validation.
@@ -751,6 +823,11 @@ for i in "${!compilers[@]}"; do
   # (a distinct 6→60 coupling, flat 7). The felt research payoff + the
   # representation oracle the fixpoint cannot be (see run_cfc_rec).
   run_cfc_rec "$compiler" "$dir"
+  # The STFT + `<~` bandpass + filter-based comodulogram (lib/dsp/signal.mn) on a
+  # real recording with a planted 8→50 Hz coupling, cross-validated cell-for-cell
+  # against a python oracle (PLAN §11 col 4's research half, filter-based).
+  capture_signal_shadow "$compiler" "$dir" || continue
+  run_signal_crucible "$compiler" "$dir"
   # Two more on-disk data validators, cross-validated against numpy/python (the
   # representation-stress the m3==m4 fixpoint is structurally blind to):
   #  - native [Float] statistics: fold-sum mean, comparison-reduction argmin/

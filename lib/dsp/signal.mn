@@ -1,16 +1,45 @@
-// Lux DSP Framework — Signal Effects and Pure Processors
+// signal.mn — the DSP signal toolkit: processors, STFT, bandpass, comodulogram
 //
-// Effect declarations for DSP capabilities, plus pure math functions
-// that form the building blocks of signal chains.
+// Two layers share this file. The lower layer is the pipeable pure-processor
+// vocabulary (clip / gain / mix / soft_clip / db_to_linear / linear_to_db) and
+// the DSP effect, data-first for `|>` chains (x |> gain(0.8) |> soft_clip). The
+// upper layer is the cross-frequency-coupling research pipeline — a real STFT, a
+// bandpass filter bank drawn with the `<~` feedback verb, and a comodulogram
+// that composes them: phase from the low band (atan2 of a quadrature pair),
+// amplitude envelope from the high band, coupled by mean-vector-length over a
+// (phase-freq x amp-freq) grid.
 //
-// Pure processors use data-FIRST signatures for pipe compatibility:
-//   x |> gain(0.8) |> soft_clip |> clip(0.95)
+// The comodulogram COMPOSES the two building blocks with cfc.mn's coupling
+// measure: signal.mn's `<~` bandpass conditions the signal (strips DC drift and
+// out-of-band junk), then cfc.mn's windowed-DFT comodulogram reads the coupling —
+// the Hann-windowed DFT bin IS the frequency-selective filter whose (re, im) is
+// the quadrature pair (phase = atan2, amplitude = magnitude). cfc.mn's
+// comodulogram, mean-vector-length, matrix readers, and file transport are reused
+// whole (import, never duplicate); signal.mn adds the STFT, the `<~` bandpass, and
+// their composition. The pipeline runs end to end on a real recording,
+// cross-validated cell-for-cell against a python oracle over the same on-disk
+// bytes (tests/frontier/signal-crucible) — the representation-stress oracle the
+// m3==m4 fixpoint is structurally blind to.
 //
-// `x |> f(a, b)` = `f(x, a, b)` — signal is always the first argument.
-
-// ── DSP Effects ─────────────────────────────────────────────
+// ── The `<~` state substrate, artifact-proven this run ──
+// A `<~ delay(1)` site's prior/current values live in ONE module global per
+// site, threaded across calls and never reset. That is exactly right for a
+// SINGLE filter instance over one pass (the bandpass cascade below), but a
+// single site cannot serve a filter BANK over N data-driven frequencies: the
+// second frequency's pass would inherit the first's final state (measured:
+// filtering a zeros signal after a ones signal through one `<~` site returns the
+// leaked tail, not zero). This is why the `<~` sections here are the broad-band
+// single-instance conditioner, while the frequency-selective per-bin analysis is
+// the windowed DFT (a fresh integral per bin, no carried state). The ultimate
+// form — per-instance resettable `<~` state so a sharp resonator BANK could draw
+// `<~` for every band — is the named peer Hβ.dsp.per-instance-feedback-state
+// (lib/dsp/feedback.mn's LF.M per-handler-state-slots migration).
 
 import dsp/processors
+import runtime/math
+import dsp/cfc
+
+// ── DSP Effects ─────────────────────────────────────────────
 
 effect DSP {
     process(x: Float) -> Float
@@ -40,3 +69,155 @@ fn db_to_linear(db: Float) -> Float with Pure =
 
 fn linear_to_db(x: Float) -> Float with Pure =
     20.0 * log(x) / log(10.0)
+
+// ─── STFT — windowed, hopped, Hann magnitude spectrogram ────────────
+//
+// An STFT is a sequence of Hann-windowed DFTs at hop-spaced frames; the
+// magnitude at each bin is that frame's spectrum. The windowing (cfc.mn's
+// `hann`) tames spectral leakage, the hop slides the analysis window across the
+// signal, and the per-bin magnitude (cfc.mn's `bin_mag` of `dft_bin`) is the
+// time-varying spectrum — so the STFT reuses cfc.mn's windowed-DFT machinery
+// directly, adding the frame walk and the spectral projection on top.
+//
+// This is the direct-DFT STFT, O(frames x win x bins). A radix-2 FFT is the
+// named performance peer Hβ.dsp.stft-radix2-fft — it lowers the per-frame cost
+// from O(win x bins) to O(win log win), not needed for correctness here.
+
+// The average magnitude at one frequency across every hop-spaced frame — the
+// frequency's mean spectral energy over the whole signal.
+fn stft_avg_loop(xs, freq: Int, sr: Int, win: Int, hop: Int, num_frames: Int, f: Int, acc: Float) with Memory = {
+  if f >= num_frames { acc / float_of_int(num_frames) }
+  else {
+    let (re, im) = dft_bin(xs, f * hop, win, freq, sr)
+    stft_avg_loop(xs, freq, sr, win, hop, num_frames, f + 1, acc + bin_mag(re, im))
+  }
+}
+
+fn stft_avg_mag(xs, freq: Int, sr: Int, win: Int, hop: Int) with Memory = {
+  let num_frames = (len(xs) - win) / hop + 1
+  stft_avg_loop(xs, freq, sr, win, hop, num_frames, 0, 0.0)
+}
+
+// The dominant probe bin of the average STFT spectrum: the argmax over a set of
+// probe frequencies of their mean magnitude. On a carrier-plus-modulation
+// signal this names the carrier — the STFT's own verdict, independent of the
+// coupling grid. `best_v` threads the running peak as an annotated float
+// accumulator (the CFC representation discipline, below).
+fn stft_dominant_loop(xs, probes, sr: Int, win: Int, hop: Int, k: Int, np: Int, best_k: Int, best_v: Float) with Memory = {
+  if k >= np { best_k }
+  else {
+    let v = stft_avg_mag(xs, list_index(probes, k), sr, win, hop)
+    if v > best_v { stft_dominant_loop(xs, probes, sr, win, hop, k + 1, np, k, v) }
+    else { stft_dominant_loop(xs, probes, sr, win, hop, k + 1, np, best_k, best_v) }
+  }
+}
+
+fn stft_dominant(xs, probes, sr: Int, win: Int, hop: Int) with Memory =
+  stft_dominant_loop(xs, probes, sr, win, hop, 1, len(probes), 0,
+                     stft_avg_mag(xs, list_index(probes, 0), sr, win, hop))
+
+// ─── Bandpass filter bank — cascaded single-pole `<~` sections ──────
+//
+// Each section is the feedback verb's recurrence y[n] = a*x[n] + (1-a)*y[n-1],
+// drawn with `<~ delay(1)`: `(prev)` binds the prior output y[n-1], read live
+// from the site's state global. A single-pole highpass is the input minus its
+// lowpass; a bandpass is a highpass cascade (rejects below the band) into a
+// lowpass cascade (rejects above). The coefficient a = 1 - exp(-2*pi*fc/sr) sets
+// each section's cutoff fc; `band_coeff` computes it.
+//
+// The cascade is FOUR distinct `<~` sites (two highpass at a_hp, two lowpass at
+// a_lp), each with its own state global, all advanced once per sample as
+// `bandpass_step` runs down the per-sample `bandpass_loop`. Float `<~` threads
+// each section's f64 state live (the emit reads repr_of the feedback node — the
+// feedback-slot repr fix this run). This is the single-instance real-time face
+// of the recurrence; the comodulogram's demodulation below is the bank face.
+
+fn band_coeff(fc: Float, sr: Int) -> Float with Pure =
+  1.0 - exp(0.0 - two_pi() * fc / float_of_int(sr))
+
+fn bandpass_step(x: Float, a_hp: Float, a_lp: Float) -> Float = {
+  let lo1 = ((prev) => a_hp * x + (1.0 - a_hp) * prev) <~ delay(1)
+  let hp1 = x - lo1
+  let lo2 = ((prev) => a_hp * hp1 + (1.0 - a_hp) * prev) <~ delay(1)
+  let hp2 = hp1 - lo2
+  let lp1 = ((prev) => a_lp * hp2 + (1.0 - a_lp) * prev) <~ delay(1)
+  ((prev) => a_lp * lp1 + (1.0 - a_lp) * prev) <~ delay(1)
+}
+
+fn bandpass_loop(xs, a_hp: Float, a_lp: Float, i: Int, n: Int, out) with Memory = {
+  if i >= n { out }
+  else { bandpass_loop(xs, a_hp, a_lp, i + 1, n, list_set(out, i, bandpass_step(xs[i], a_hp, a_lp))) }
+}
+
+// Bandpass a signal through a passband [lo_hz, hi_hz]: two highpass sections at
+// lo_hz reject below, two lowpass sections at hi_hz reject above. One pass over
+// the signal — the `<~` sites thread their state across it. The row is the honest
+// Memory + Alloc of the list build: the recurrence's state is a compiler-managed
+// per-site global, and the tail-recursive loop is the structural iteration
+// context the `<~` needs — no Sample-clock handler required (the extinct
+// E_FeedbackNoContext check, PLAN §7; the structural re-enforcement is the named
+// peer Hβ.effects.iterate-class-declaration).
+fn bandpass(xs, lo_hz: Float, hi_hz: Float, sr: Int) with Memory + Alloc =
+  bandpass_loop(xs, band_coeff(lo_hz, sr), band_coeff(hi_hz, sr), 0, len(xs), make_list(len(xs)))
+
+// Single-bin DFT magnitude at `freq` over the whole signal — the plain
+// (unwindowed) energy at one frequency, for reading a filtered signal's spectrum.
+fn band_energy_loop(xs, freq: Int, sr: Int, i: Int, n: Int, re: Float, im: Float) with Memory = {
+  if i >= n { sqrt(re * re + im * im) }
+  else {
+    let ang = two_pi() * float_of_int(freq) * float_of_int(i) / float_of_int(sr)
+    band_energy_loop(xs, freq, sr, i + 1, n, re + xs[i] * cos(ang), im + xs[i] * sin(ang))
+  }
+}
+
+fn band_energy(xs, freq: Int, sr: Int) with Memory =
+  band_energy_loop(xs, freq, sr, 0, len(xs), 0.0, 0.0)
+
+// ─── Comodulogram — the `<~` bandpass composed with the windowed-DFT PAC ───
+//
+// Phase from the low band, amplitude envelope from the high band, coupled by
+// mean-vector-length over a (low-freq x high-freq) grid. This COMPOSES signal.mn's
+// two building blocks with cfc.mn's coupling measure: the `<~` bandpass first
+// pre-filters the signal to the analysis band (stripping DC drift and the
+// out-of-band junk that would bias the phase-sensitive step — measured to sharpen
+// the coupling peak on a real recording), then cfc.mn's windowed-DFT comodulogram
+// reads the coupling.
+//
+// The windowed DFT IS a frequency-selective filter: each Hann-windowed bin is a
+// bandpass centred at the bin frequency, and the bin's (re, im) is the QUADRATURE
+// PAIR whose atan2 is the phase (cfc.mn's bin_phase) and whose magnitude is the
+// amplitude (bin_mag). So "phase from the low band (atan2 of a quadrature pair),
+// amplitude envelope from the high band" is the per-frame DFT bin, and cfc.mn's
+// mean-vector-length couples a low-phase column with a high-amplitude column.
+// cfc.mn's comodulogram is reused whole (import, never duplicate); signal.mn's
+// contribution here is the `<~` bandpass conditioner composed onto its front.
+//
+// Why the analysis stays windowed-DFT and not the time-domain `<~` bank: a
+// single-pole `<~` filter bank cannot localise the grid on its own — single-pole
+// sections are too gentle, so the bands overlap and every cell elevates
+// (measured). The windowed DFT is the sharp, selective analyser; the `<~`
+// bandpass is the broad-band conditioner. A sharp time-domain filter bank (biquad
+// resonators + per-band quadrature) that would let `<~` drive the whole
+// comodulogram — and sharpen the LOW-frequency resolution the windowed-DFT floor
+// limits — is the named peer Hβ.dsp.resonator-filter-bank.
+
+fn pac_comodulogram(xs, sr: Int, low_freqs, high_freqs, win: Int, hop: Int, band_lo: Float, band_hi: Float) with Memory + Alloc =
+  comodulogram(bandpass(xs, band_lo, band_hi, sr), sr, low_freqs, high_freqs, win, hop)
+
+// Peak-vs-median separation without a sort: floor(peak/median) >= k is
+// equivalent to median <= peak/k, which for the 16-cell grid holds iff at least
+// 9 cells (the count that puts the 9th-smallest at or below the threshold) sit
+// at or below peak/k. `cells_below` is that count — the coupling stands above
+// the noise floor when the bulk of the grid sits far below the peak.
+fn cells_below_loop(matrix, num_high: Int, thresh: Float, k: Int, total: Int, acc: Int) with Memory = {
+  if k >= total { acc }
+  else {
+    let li = k / num_high
+    let hi = k - li * num_high
+    let inc = if matrix_get(matrix, li, hi) <= thresh { 1 } else { 0 }
+    cells_below_loop(matrix, num_high, thresh, k + 1, total, acc + inc)
+  }
+}
+
+fn cells_below(matrix, num_low: Int, num_high: Int, thresh: Float) with Memory =
+  cells_below_loop(matrix, num_high, thresh, 0, num_low * num_high, 0)

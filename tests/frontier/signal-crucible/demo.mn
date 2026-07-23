@@ -1,0 +1,66 @@
+// demo.mn — lib/dsp/signal.mn's STFT + bandpass + comodulogram, end to end on a
+// REAL on-disk recording.
+//
+// The recording (gen.py) carries a 50 Hz carrier whose AMPLITUDE is modulated at
+// 4 Hz — a phase-amplitude coupling, the (low=4, high=50) pair, DISTINCT from
+// cfc-demo (6→40) and cfc-rec (6→60). The pipeline reads it through WASI (cfc.mn's
+// read_recording: newline split -> parse_float -> native [Float]), then reads
+// three verdicts off it, one per building block:
+//
+//   COMODULOGRAM (the research result): the comodulogram composes signal.mn's
+//     `<~` bandpass conditioner with cfc.mn's windowed-DFT mean-vector-length, and
+//     argmaxes the (4, 50) cell = flat index LOW.index(4)*4 + HIGH.index(50) =
+//     0*4 + 2 = 2, with the peak >= 20x above the median cell (floor(peak/median)
+//     >= 20, tested sort-free as "at least 9 of 16 cells sit at or below peak/20";
+//     the recording measures ratio 35). Cross-validated cell-for-cell against
+//     oracle.py over the SAME bytes.
+//   STFT: the dominant probe bin of the average magnitude spectrum is the 50 Hz
+//     carrier (index 5 of [4,8,13,25,42,50,58,75]) — the STFT finding the carrier
+//     independent of the coupling grid.
+//   BANDPASS (`<~`): a cascaded single-pole bandpass around [35, 70] Hz makes the
+//     50 Hz carrier dominate the 13 Hz distractor by > 20x in the filtered signal
+//     (the raw ratio is ~10x; the bandpass measures ~41x), proving the `<~`
+//     sections reject out of band.
+//
+// EXIT is a composition that equals 42 exactly when all three hold:
+//   40 * (comodulogram cell AND strong coupling) + 1 * (STFT) + 1 * (bandpass).
+// So 42 iff every block is correct; 41/40 mark a missed STFT/bandpass; 0-2 mark a
+// missed coupling. Every code stays under 126 (WASI's exit ceiling).
+//
+// RED-verified: shifting the coupled carrier (regenerate gen.py with COUPLE_HIGH
+// = 40) moves the comodulogram argmax to the (4, 40) cell = flat 1, not 2, so the
+// run exits 2, not 42; the oracle over the same shifted bytes flips its
+// EXPECTED_FLAT in lockstep. (The raw mean-vector-length is carrier-dominated, so
+// REMOVING the coupling leaves the 50 Hz carrier and the argmax at flat 2 — the
+// perturbation that flips it is a coupling SHIFT. A modulation-index measure and a
+// sharp resonator bank for true removal-RED + low-frequency resolution are the
+// named peers Hβ.dsp.tort-modulation-index and Hβ.dsp.resonator-filter-bank.)
+
+fn main() with Memory + Alloc + WASI = {
+  let sr = 512
+  let signal = read_recording("/tmp/mentl-signal-recording.txt")
+  let low_freqs = [4, 6, 8, 10]
+  let high_freqs = [30, 40, 50, 60]
+
+  // The comodulogram: `<~` bandpass to [2, 70] Hz, then the windowed-DFT PAC
+  // (Hann window 128, hop 32) over the low x high grid.
+  let matrix = pac_comodulogram(signal, sr, low_freqs, high_freqs, 128, 32, 2.0, 70.0)
+  let flat = comodulogram_argmax(matrix, 4, 4)
+  let peak = matrix_max(matrix, 4, 4)
+  let below = cells_below(matrix, 4, 4, peak / 20.0)
+  let coupling_ok = flat == 2 && below >= 9
+
+  // The STFT: the dominant probe bin of the average magnitude spectrum.
+  let probes = [4, 8, 13, 25, 42, 50, 58, 75]
+  let stft_ok = stft_dominant(signal, probes, sr, 128, 32) == 5
+
+  // The `<~` bandpass around [35, 70] Hz: the 50 Hz carrier dominates the 13 Hz
+  // distractor by > 20x once out-of-band energy is rejected.
+  let band = bandpass(signal, 35.0, 70.0, sr)
+  let bp_ok = band_energy(band, 50, sr) > 20.0 * band_energy(band, 13, sr)
+
+  let base = if coupling_ok { 40 } else { 0 }
+  let sbit = if stft_ok { 1 } else { 0 }
+  let bbit = if bp_ok { 1 } else { 0 }
+  base + sbit + bbit
+}

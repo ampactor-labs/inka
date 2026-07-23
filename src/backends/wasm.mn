@@ -1130,6 +1130,7 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_expr(f)
     walk_lemit_list(args)
   },
+  LDirectCall(_h, _fh, _n, _t, args) => walk_lemit_list(args),
   LReturn(_, inner)         => walk_lemit_expr(inner),
   LIf(_, c, t, e) => {
     walk_lemit_expr(c)
@@ -1538,6 +1539,7 @@ fn singleton_hnames_expr(expr, acc) = match expr {
   LBinOp(_h, _op, lx, r)    => singleton_hnames_expr(r, singleton_hnames_expr(lx, acc)),
   LUnaryOp(_h, _op, x)      => singleton_hnames_expr(x, acc),
   LCall(_h, f, args)        => singleton_hnames_list(args, singleton_hnames_expr(f, acc)),
+  LDirectCall(_h, _fh, _n, _t, args) => singleton_hnames_list(args, acc),
   LTailCall(_h, f, args)    => singleton_hnames_list(args, singleton_hnames_expr(f, acc)),
   LReturn(_h, x)            => singleton_hnames_expr(x, acc),
   LMakeList(_h, elems)      => singleton_hnames_list(elems, acc),
@@ -1957,6 +1959,7 @@ fn collect_call_vectors_arms_from(arms, acc, i) =
 fn collect_call_vectors_expr(expr, acc) = match expr {
   LShow(h, x)           => collect_call_vectors_expr(show_node_of(h, x), acc),
   LHash(h, x)           => collect_call_vectors_expr(hash_node_of(h, x), acc),
+  LDirectCall(_h, _fh, _n, _t, args) => collect_call_vectors_list(args, acc),
   LCall(h, f, args)     => collect_call_vectors_expr(f,
                              collect_call_vectors_list(args, vec_push(args, repr_of(lookup_ty(h)), acc))),
   LTailCall(h, f, args) => collect_call_vectors_expr(f,
@@ -2319,12 +2322,16 @@ fn emit_wide_wrapper(record) = {
     wat_emit(")\n")
     emit_wide_deref(param_repr_from_body(p, body))
   }, enumerate(param_names))
-  wat_emit("    (call $")
-  wat_emit(name)
-  wat_emit(")\n")
   match body_result_repr(body) {
-    RI32 => (),
+    RI32 => {
+      wat_emit("    (return_call $")
+      wat_emit(name)
+      wat_emit(")\n")
+    },
     RF64 => {
+      wat_emit("    (call $")
+      wat_emit(name)
+      wat_emit(")\n")
       wat_emit("    (local.set $wf_f64)\n")
       wat_emit("    (i32.const 8)\n")
       wat_emit("    (call $alloc)\n")
@@ -2333,9 +2340,9 @@ fn emit_wide_wrapper(record) = {
       wat_emit("    (f64.store)\n")
       wat_emit("    (local.get $wf_cell)\n")
     },
-    RI64  => wat_emit("    (unreachable) ;; wide-result: i64 has no producer yet\n"),
-    RF32  => wat_emit("    (unreachable) ;; wide-result: f32 has no producer yet\n"),
-    RV128 => wat_emit("    (unreachable) ;; wide-result: v128 has no producer yet\n")
+    RI64  => { wat_emit("    (call $") wat_emit(name) wat_emit(")\n") wat_emit("    (unreachable) ;; wide-result: i64 has no producer yet\n") },
+    RF32  => { wat_emit("    (call $") wat_emit(name) wat_emit(")\n") wat_emit("    (unreachable) ;; wide-result: f32 has no producer yet\n") },
+    RV128 => { wat_emit("    (call $") wat_emit(name) wat_emit(")\n") wat_emit("    (unreachable) ;; wide-result: v128 has no producer yet\n") }
   }
   wat_emit("  )\n")
 }
@@ -2409,6 +2416,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LBinOp(_h, _op, l, r)      => collect_fn_emit_records_expr(l)
                                   ++ collect_fn_emit_records_expr(r),
   LUnaryOp(_h, _op, inner)   => collect_fn_emit_records_expr(inner),
+  LDirectCall(_h, _fh, _n, _t, args) => collect_fn_emit_records(args),
   LCall(_h, f, args)         => collect_fn_emit_records_expr(f)
                                   ++ collect_fn_emit_records(args),
   LTailCall(_h, f, args)     => collect_fn_emit_records_expr(f)
@@ -2630,6 +2638,7 @@ fn walk_locals_expr(expr, acc) = match expr {
     walk_locals_list(e, walk_locals_list(t, walk_locals_expr(c, acc))),
   LBinOp(_h, _op, l, r)     => walk_locals_expr(r, walk_locals_expr(l, acc)),
   LUnaryOp(_h, _op, inner)  => walk_locals_expr(inner, acc),
+  LDirectCall(_h, _fh, _n, _t, args) => walk_locals_list(args, acc),
   LCall(h, f, args)         =>
     // $call_<h> parks the CALLEE RECORD pointer — a handle IS a word,
     // i32 invariantly; the call's RESULT rides the stack at the ft's
@@ -2999,6 +3008,7 @@ fn find_local_handle_expr(name: String, expr) = match expr {
     if lh != 0 { lh } else { find_local_handle_expr(name, r) }
   },
   LUnaryOp(_h, _op, inner)  => find_local_handle_expr(name, inner),
+  LDirectCall(_h2, _fh, _n2, _t, args) => find_local_handle_list(name, args),
   LCall(_h, f, args)        => {
     let fh = find_local_handle_expr(name, f)
     if fh != 0 { fh } else { find_local_handle_list(name, args) }
@@ -3462,6 +3472,66 @@ fn emit_expr(expr) = match expr {
     // $state_tmp (declared in every fn preamble at line 978).
     emit_expr(inner)
     emit_unaryop(op)
+  },
+
+  LDirectCall(h, fh, cname, tail, args) => {
+    // The direct native call — the dispatch gradient's cash-out for a
+    // callee lower proved to be a top-level fn. Args emit at their PROVEN
+    // widths (an f64 argument rides the stack as f64 — no spill cell, no
+    // word face); a tail call is a REAL return_call, wide results included
+    // (the word-face demotion has nothing to demote, and the wf$ wrapper's
+    // per-iteration frame leak — one leaked frame per hop of every deep
+    // tail recursion routed through a wide fn's word face — cannot occur:
+    // there is no hop). __state = the callee's own static-closure global,
+    // the closure convention's exact semantics minus the table indirection.
+    // The twin redirect reads the SAME projection every reference surface
+    // routes through (the callee-ref handle carries the site's
+    // instantiated TFun, so a wide-keyed generic call lands on its twin).
+    let cname2 = spec_target_name(fh, cname)
+    // The callee's EMITTED widths: a twin's signature is the site's
+    // instantiation (native wide); an untwinned callee emits per its
+    // DECLARED scheme — a param declared Float is a native f64 slot, a
+    // generic/Int param is the word floor (the seq-op raw bodies and every
+    // generic body live there). The call site follows those widths arg by
+    // arg: native where the slot is wide, the word spill (address of a
+    // fresh cell) where the slot is a word but the value is wide. The
+    // result mirrors it: a declared-word result whose site type is wide is
+    // an ADDRESS the caller derefs — the same emit_wide_ref/emit_wide_deref
+    // pair the closure convention uses, applied per the one signature both
+    // sides agree on.
+    let widths = direct_callee_widths(fh, cname, cname2, len(args))
+    let (param_reprs, ret_repr) = widths
+    wat_emit("    (global.get $")
+    wat_emit(cname2)
+    wat_emit(")\n")
+    each((indexed) => {
+      let (i, a) = indexed
+      emit_expr(a)
+      let declared = list_index(param_reprs, i)
+      if repr_is_wide(declared) { () } else { emit_wide_ref(tail_expr_repr(a)) }
+    }, enumerate(args))
+    let site_repr = repr_of(lookup_ty(h))
+    // A tail call must agree with the ENCLOSING fn's native result exactly;
+    // when the callee's emitted result is the word face of a wide site type
+    // the deref must run after the call, so the tail form demotes there —
+    // the direct call to a NATIVE-wide callee keeps the true return_call.
+    if tail {
+      if repr_is_wide(ret_repr) == repr_is_wide(site_repr) {
+        wat_emit("    (return_call $")
+        wat_emit(cname2)
+        wat_emit(")\n")
+      } else {
+        wat_emit("    (call $")
+        wat_emit(cname2)
+        wat_emit(")\n")
+        if repr_is_wide(site_repr) { emit_wide_deref(site_repr) } else { () }
+      }
+    } else {
+      wat_emit("    (call $")
+      wat_emit(cname2)
+      wat_emit(")\n")
+      if repr_is_wide(site_repr) && repr_is_wide(ret_repr) == false { emit_wide_deref(site_repr) } else { () }
+    }
   },
 
   LCall(h, func, args) => {
@@ -4546,6 +4616,35 @@ fn emit_args_word(args) = each((a) => {
 
 fn repr_is_wide(r) with Pure = match r { RI32 => false, _ => true }
 
+// The direct call's ONE signature source (both sides agree by reading it):
+// a TWINNED callee's emitted widths are the site's instantiation (the twin
+// was emitted under that bracket), read from the callee-ref handle's live
+// TFun; an untwinned callee emits per its DECLARED scheme, read from the
+// env — a generic or Int param is the word floor, a declared-Float param a
+// native f64 slot. A callee whose type cannot be read floors to all-word:
+// the pre-direct protocol, sound by the word contract.
+fn direct_callee_widths(fh, cname: String, cname2: String, n) = {
+  let declared = match env_lookup(cname) {
+    Some(entry) => { let (scheme, _, _) = entry match scheme { Forall(_, t) => t } },
+    None => lookup_ty(fh)
+  }
+  // A twin's emitted signature is the declared scheme UNDER THE SITE'S
+  // instantiation pairs — the SAME projection that minted the redirect
+  // (spec_site_pairs / spec_subst_pairs), so the call site and the twin
+  // body cannot disagree on a width. Raw lookup_ty(fh) floors free vars
+  // and lied against the twin's native f64 slots (three assembly REDs).
+  let src_ty = if cname2 == cname { declared }
+               else { spec_subst_pairs(declared, spec_site_pairs(fh, cname)) }
+  match src_ty {
+    TFun(ps, ret, _) =>
+      if len(ps) == n { (map((p) => repr_of(param_ty(p)), ps), repr_of(ret)) }
+      else { (map((_) => RI32, range(0, n)), RI32) },
+    _ => (map((_) => RI32, range(0, n)), RI32)
+  }
+}
+
+
+
 fn emit_fold_state_insert() = {
   wat_emit("    (local.set $callee_closure)\n")
   wat_emit("    (local.set $state_tmp)\n")
@@ -4860,6 +4959,7 @@ fn collect_fold_tys_expr(expr, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]
   LShow(_h, x) => collect_fold_tys_expr(x, fold_acc_show(acc, x)),
   LHash(_h, x) => collect_fold_tys_expr(x, fold_acc_hash(acc, x)),
   LCall(_h, f, args) => collect_fold_tys_expr(f, collect_fold_tys_list(args, acc)),
+  LDirectCall(_h, _fh, _n, _t, args) => collect_fold_tys_list(args, acc),
   LTailCall(_h, f, args) => collect_fold_tys_expr(f, collect_fold_tys_list(args, acc)),
   LBinOp(_h, op, l, r)  => collect_fold_tys_expr(r,
                              collect_fold_tys_expr(l,

@@ -1234,16 +1234,26 @@ fn walk_lemit_pat(pat) = match pat {
   _                 => ()
 }
 
-// Emit `(global $s<n> (mut i32) (i32.const 0))` for each unique
-// state slot. Globals initialize to 0 — the convention for "no
-// prior iteration" at LFeedback's first entry. v1 single-threaded
-// scope; LF.M migrates to per-handler-state offsets.
+// Emit `(global $s<n> (mut <repr>) (<repr>.const 0))` for each unique
+// state slot. The global holds the `<~` prior-iteration output, so its
+// repr is the feedback node's own — repr_of(lookup_ty(slot)), read LIVE —
+// matching the $__fb_prev/$__fb locals. A float `<~` recurrence declares an
+// f64 global inited to 0.0; an integer IIR stays byte-identical (repr_wat =
+// "i32"). Carried-Truth: the graph proved the feedback's type; the emit reads
+// it, never fabricates i32. Globals initialize to 0 — the "no prior iteration"
+// convention at LFeedback's first entry. v1 single-threaded scope; LF.M
+// migrates to per-handler-state offsets.
 
 fn emit_state_globals(slots) = {
   each((slot) => {
+  let rw = repr_wat(repr_of(lookup_ty(slot)))
   wat_emit("  (global $s")
   wat_emit(int_to_str(slot))
-  wat_emit(" (mut i32) (i32.const 0))\n")
+  wat_emit(" (mut ")
+  wat_emit(rw)
+  wat_emit(") (")
+  wat_emit(rw)
+  wat_emit(".const 0))\n")
   }, slots)
 }
 
@@ -2646,12 +2656,18 @@ fn walk_locals_expr(expr, acc) = match expr {
       walk_locals_list(inits,
         walk_locals_expr(hn, walk_locals_expr(b, with_ms))))
   },
-  LFeedback(h, b, s)        =>
+  LFeedback(h, b, s)        => {
     // LF walkthrough §4.5: both per-site locals for the load-tee-store
     // state-machine at the LFeedback arm. $__fb_prev_<h> holds the prior
-    // iteration's output; $__fb_<h> holds the current. Both into the set.
+    // iteration's output; $__fb_<h> holds the current. Both declare at the
+    // feedback node's OWN repr (repr_of(lookup_ty(h)), read live), so a float
+    // `<~` recurrence gets f64 slots and its prior threads without truncation.
+    // Carried-Truth: the graph proved the feedback's type; the emit reads it,
+    // never fabricates i32 (an integer IIR is byte-identical, repr_wat "i32").
+    let fb_rw = repr_wat(repr_of(lookup_ty(h)))
     walk_locals_expr(s, walk_locals_expr(b,
-      ["__fb_prev_{int_to_str(h)} i32", "__fb_{int_to_str(h)} i32"] ++ acc)),
+      ["__fb_prev_{int_to_str(h)} {fb_rw}", "__fb_{int_to_str(h)} {fb_rw}"] ++ acc))
+  },
   LPerform(_h, _n, args, _) => walk_locals_list(args, acc),
   LWasiCall(_h, _n, args)   => walk_locals_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => walk_locals_list(a, acc),

@@ -1,0 +1,138 @@
+// dsp-demo.mn — a real DSP chain, generated and analyzed through the wheel.
+//
+// Synthesize a signal inline (two sinusoids plus a deterministic pseudo-noise
+// tone, all native [Float]), run it through a single-pole IIR lowpass built
+// with the `<~` feedback verb's recurrence form, and read three discrete
+// verdict facts off the result:
+//   1. the argmax bin of an 8-bin DFT magnitude over the FILTERED output
+//      (the low component survives the lowpass and dominates the spectrum),
+//   2. a zero-crossing count of the filtered output (a clean low sinusoid),
+//   3. a clipped-sample count of the RAW signal (magnitude above 1.0).
+//
+// THE FEEDBACK: `lp_step` is the canonical one-pole recurrence
+// y[n] = a·x[n] + (1-a)·y[n-1] drawn with `<~`. `(prev)` binds the prior
+// output y[n-1], read live from the per-site state global; the sample-by-sample
+// `filter_loop` advances the recurrence across the whole signal. This is the
+// float form of lib/dsp/feedback.mn's lowpass_iir. Every float accumulator
+// threaded across a tail-recursive loop is annotated `: Float` (the DFT's
+// re/im, the loop counters carry Int) — the representation pin the gradient
+// needs at a polymorphic boundary (§4①, the CFC discipline).
+//
+// The signal uses `sin`/`cos` (lib/runtime/math.mn's Taylor series). oracle.py
+// ports that EXACT series, so the boundary-sensitive zero-crossing and clip
+// counts agree with Mentl to f64 epsilon (the argmax is robust regardless — the
+// filtered low component dominates the DFT by ~4x). Cross-validated by
+// oracle.py: argmax bin 1 (freq 8), 21 zero crossings, 64 clipped samples.
+// Re-derive with
+//   python3 tests/frontier/dsp-crucible/oracle.py
+//
+// EXIT is a COMPOSITION of the three facts that equals 42 exactly when all hold:
+// 40·(argmax correct) + 1·(zeros correct) + 1·(clips correct). So 42 iff all
+// three; 41/40 mark a missed zero/clip count; 0-2 mark a missed argmax. Every
+// code stays under 126 (WASI's exit ceiling).
+//
+// RED-verified: weakening the lowpass to a = 0.9 (near-passthrough) leaves the
+// loud 64-cycle component in the filtered output, so the DFT argmax lands on the
+// high bin (base 0) and the zero-crossing count explodes to 127. Only the
+// raw-signal clip fact still holds, so the run exits 1, not 42.
+
+effect Sample { sample_rate() -> Int }
+effect IterContext { iter_context() -> Bool }
+
+handler iterate_context {
+  iter_context() => resume(True)
+}
+
+// The synthetic signal at sample n of N: a low tone (8 cycles), a LOUDER high
+// tone (64 cycles) the lowpass removes, and a faint off-grid pseudo-noise tone
+// (101 cycles). The high is loudest, so the RAW spectrum peaks on the high bin;
+// only after the lowpass does the low win — which is what makes the argmax fact
+// load-bearing. The raw peak ~1.75 drives the signal past +/-1 for the clip
+// count; t = n/N.
+fn sig_at(n: Int, nn: Int) -> Float with Pure = {
+  let t = float_of_int(n) / float_of_int(nn)
+  let lo = 0.7 * sin(two_pi() * 8.0 * t)
+  let hi = 1.0 * sin(two_pi() * 64.0 * t)
+  let noise = 0.05 * sin(two_pi() * 101.0 * t)
+  lo + hi + noise
+}
+
+fn build_signal(out, i: Int, n: Int) with Memory = {
+  if i >= n { out }
+  else { build_signal(list_set(out, i, sig_at(i, n)), i + 1, n) }
+}
+
+// The single-pole IIR lowpass as the `<~` recurrence: y[n] = a·x[n] +
+// (1-a)·y[n-1]. `(prev)` binds y[n-1], the per-site state global threads it
+// across the sample-by-sample calls. Float feedback: the state slots take the
+// node's f64 repr, read live.
+fn lp_step(x: Float, a: Float) -> Float with Sample =
+  ((prev) => a * x + (1.0 - a) * prev) <~ delay(1)
+
+fn filter_loop(xs, a: Float, i: Int, n: Int, out) with Sample + Memory = {
+  if i >= n { out }
+  else { filter_loop(xs, a, i + 1, n, list_set(out, i, lp_step(xs[i], a))) }
+}
+
+// One single-bin DFT magnitude at `freq` cycles over N: re/im threaded as
+// annotated float accumulators, the magnitude their hypotenuse.
+fn dft_loop(xs, freq: Int, n: Int, j: Int, re: Float, im: Float) with Memory = {
+  if j >= n { sqrt(re * re + im * im) }
+  else {
+    let ang = two_pi() * float_of_int(freq) * float_of_int(j) / float_of_int(n)
+    dft_loop(xs, freq, n, j + 1, re + xs[j] * cos(ang), im + xs[j] * sin(ang))
+  }
+}
+fn dft_mag(xs, freq: Int, n: Int) with Memory = dft_loop(xs, freq, n, 0, 0.0, 0.0)
+
+// The argmax bin over the eight DFT frequencies, tracking the running best.
+fn argmax_loop(xs, bins, n: Int, k: Int, nb: Int, best_k: Int, best_v: Float) with Memory = {
+  if k >= nb { best_k }
+  else {
+    let v = dft_mag(xs, bins[k], n)
+    if v > best_v { argmax_loop(xs, bins, n, k + 1, nb, k, v) }
+    else { argmax_loop(xs, bins, n, k + 1, nb, best_k, best_v) }
+  }
+}
+
+// Zero-crossing count: consecutive samples whose sign differs.
+fn zc_loop(xs, i: Int, n: Int, acc: Int) with Memory = {
+  if i >= n { acc }
+  else {
+    let na = if xs[i - 1] < 0.0 { 1 } else { 0 }
+    let nb = if xs[i] < 0.0 { 1 } else { 0 }
+    let inc = if na != nb { 1 } else { 0 }
+    zc_loop(xs, i + 1, n, acc + inc)
+  }
+}
+
+// Clipped-sample count: the magnitude of x above the threshold.
+fn clip_loop(xs, thresh: Float, i: Int, n: Int, acc: Int) with Memory = {
+  if i >= n { acc }
+  else {
+    let ax = if xs[i] < 0.0 { 0.0 - xs[i] } else { xs[i] }
+    let inc = if ax > thresh { 1 } else { 0 }
+    clip_loop(xs, thresh, i + 1, n, acc + inc)
+  }
+}
+
+fn analyze(sig, filtered, n: Int) with Memory + Alloc = {
+  let bins = [4, 8, 12, 16, 24, 32, 48, 64]
+  let ab = argmax_loop(filtered, bins, n, 1, 8, 0, dft_mag(filtered, 4, n))
+  let zc = zc_loop(filtered, 1, n, 0)
+  let cc = clip_loop(sig, 1.0, 0, n, 0)
+  let base = if ab == 1 { 40 } else { 0 }
+  let zbit = if zc == 21 { 1 } else { 0 }
+  let cbit = if cc == 64 { 1 } else { 0 }
+  base + zbit + cbit
+}
+
+fn run(n: Int) with Sample + Memory + Alloc = {
+  let sig = build_signal(make_list(n), 0, n)
+  let filtered = filter_loop(sig, 0.15, 0, n, make_list(n))
+  analyze(sig, filtered, n)
+}
+
+fn main() = {
+  { run(256) } ~> iterate_context
+}

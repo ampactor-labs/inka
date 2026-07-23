@@ -1,0 +1,87 @@
+// adaptive-demo.mn — the DSP×ML fusion only Mentl states cleanly: a 2-tap LMS
+// adaptive filter that LEARNS its coefficients online while filtering.
+//
+// The shape is noise cancellation / system identification. An unknown channel
+// with response [2, 1] shapes a reference noise source into the primary signal;
+// the adaptive filter reads the current reference and its one-sample delay (the
+// "delayed copy of the input"), estimates the channel, and subtracts — so the
+// residual (the error the update descends on) collapses as the taps converge.
+// Filtering and learning are the SAME tail-recursive loop: each sample forms
+// the estimate, measures the residual, and steps the taps by the LMS rule
+// w += mu·e·x. This is the felt fusion — DSP topology (the FIR + its delay) and
+// ML adaptation (online gradient on the taps) in one graph.
+//
+// Every float threaded across the loop is annotated `: Float` (the taps w0/w1,
+// the running power sums ip/fp) — the representation pin the gradient needs at a
+// polymorphic boundary (§4①, the CFC discipline); an unannotated float
+// accumulator floors to i32 and reads f64 words as garbage. All values native
+// [Float].
+//
+// The reference is an integer LCG mapped to [-1, 1) — deterministic, well
+// excited, and carrying no transcendental, so Mentl and the python oracle agree
+// to f64 epsilon; the rounded taps and the power-drop threshold are robust.
+//
+// Cross-validated by oracle.py: taps converge to (2.0, 1.0) and the residual
+// power drops from init 1.389e1 to final 2.13e-30 — past 1e6 by 30 orders.
+// Re-derive with
+//   python3 tests/frontier/adaptive-crucible/oracle.py
+//
+// EXIT 42 iff round(w0)==2 and round(w1)==1 and the residual power drops by at
+// least 1e6; otherwise a small teaching code naming which fact missed (10 =
+// tap0, 11 = tap1, 12 = power drop). Codes stay under 126 — WASI rejects an
+// exit status of 126 or more.
+//
+// RED-verified: setting the first channel tap to 5.0 (`5.0 * x0` in lms_loop's
+// `d`) makes w0 converge to ~5, so round(w0)=5 != 2 and the run exits 10,
+// not 42.
+
+fn lcg_next(s: Int) with Pure = (75 * s + 74) % 65537
+
+// Fill the reference with the LCG stream mapped into [-1, 1). Advance the state,
+// then store — so ref[0] is the first LCG output, matching the oracle.
+fn gen_ref(out, s: Int, i: Int, n: Int) with Memory = {
+  if i >= n { out }
+  else {
+    let s2 = lcg_next(s)
+    gen_ref(list_set(out, i, float_of_int(s2) / 32768.0 - 1.0), s2, i + 1, n)
+  }
+}
+
+// The one-sample delay: ref[i-1], zero before the stream starts.
+fn ref_at(refs, i: Int) with Memory = if i < 0 { 0.0 } else { refs[i] }
+
+// The LMS loop — filter and learn together. `d` is the unknown channel's
+// output (the desired), `y` the adaptive estimate, `e` the residual; the taps
+// step by mu·e·x each sample. `ip` accumulates the residual power over the first
+// K samples (early adaptation), `fp` over the last K (converged) — both threaded
+// float accumulators, compared at the end for the power-drop fact.
+fn lms_loop(refs, w0: Float, w1: Float, i: Int, n: Int, k: Int, ip: Float, fp: Float, mu: Float) with Memory = {
+  if i >= n { (w0, w1, ip, fp) }
+  else {
+    let x0 = ref_at(refs, i)
+    let x1 = ref_at(refs, i - 1)
+    let d = 2.0 * x0 + 1.0 * x1
+    let y = w0 * x0 + w1 * x1
+    let e = d - y
+    let ip2 = if i < k { ip + e * e } else { ip }
+    let fp2 = if i >= n - k { fp + e * e } else { fp }
+    lms_loop(refs, w0 + mu * e * x0, w1 + mu * e * x1, i + 1, n, k, ip2, fp2, mu)
+  }
+}
+
+// round-to-nearest for a positive value: truncate(v + 0.5).
+fn round_pos(v: Float) with Pure = float_to_int(v + 0.5)
+
+fn main() with Memory + Alloc = {
+  let n = 2000
+  let k = 100
+  let refs = gen_ref(make_list(n), 1, 0, n)
+  let (w0, w1, ip, fp) = lms_loop(refs, 0.0, 0.0, 0, n, k, 0.0, 0.0, 0.2)
+  let rw0 = round_pos(w0)
+  let rw1 = round_pos(w1)
+  let drop = fp * 1000000.0 < ip
+  if rw0 != 2 { 10 }
+  else if rw1 != 1 { 11 }
+  else if drop { 42 }
+  else { 12 }
+}

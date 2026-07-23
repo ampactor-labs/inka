@@ -1026,6 +1026,30 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · ▶▶ THE CRUCIBLE TIER — DSP, ML, and the DSP×ML fusion land
+  as real-workload gates, and building them killed a latent miscompile
+  (an isolated builder's arc, merged whole · pin fe68767f). Three
+  self-contained fixtures, each cross-validated against an independent
+  python oracle over the SAME formulas, every verdict a discrete fact
+  with wide margins: dsp-crucible (two sinusoids + a pseudo-noise tone
+  through the `<~` recurrence lowpass; verdict = 8-bin DFT argmax of the
+  FILTERED output — load-bearing on the filter, the raw signal's louder
+  tone sits elsewhere — + zero-crossings 21 + clip count 64); ml-crucible
+  (batch gradient descent, 2-parameter linear regression on 32 points;
+  w,b converge to the planted 3,1); adaptive-crucible (a 2-tap LMS filter
+  learning channel [2,1] ONLINE while filtering — feedback, float math,
+  and learning in one loop, the fusion only the medium states this
+  cleanly; residual power 13.89 → 2e-30). Each seen RED by perturbation
+  (lowpass a=0.9 flips the argmax to bin 7; wrong slope exits 10; wrong
+  channel exits 10; teaching codes kept under WASI's 126 exit ceiling).
+  THE HARVEST: float `<~` NEVER ASSEMBLED — the emit hardcoded the
+  feedback slots ($__fb_prev/$__fb/the state global) to i32, so the
+  entire float IIR family in lib/dsp/feedback.mn was dead codegen
+  (Carried-Truth: the graph proved the feedback node's type; the emit
+  fabricated i32); the fix reads repr_of(lookup_ty(h)) live at both decl
+  sites. No reachable wheel site floats a `<~`, so the fix rode a CLEAN
+  m2 == m3 == m4. Frontier 191/0 at the pin; census 0; the builder ran
+  isolated in a worktree and the merge was two clean 3-way patches.
 - 2026-07-22 · THE STAGING CLOBBER'S ROOT — one handle, one local, nine
   writers (the interp-segment mint · pin ccd9381d). The
   effectful-arg staging clobber witnessed thrice tonight reduced to ONE

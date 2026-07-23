@@ -1,0 +1,88 @@
+// ml-demo.mn — a tiny learner that RUNS through the wheel: batch gradient
+// descent for a 2-parameter linear regression y = w*x + b.
+//
+// Thirty-two inline-generated points carry a known ground truth (w=3, b=1)
+// plus small deterministic residuals; fixed-rate batch descent (lr 0.008,
+// 3000 iterations, both parameters from zero) recovers it. Every float
+// accumulator threaded across a tail-recursive loop is annotated `: Float` —
+// the representation pin the gradient needs at a polymorphic boundary (§4①,
+// the CFC discipline): an unannotated float accumulator floors to i32 and
+// reads f64 words as garbage. The gradient sums (`gw`, `gb`), the running
+// coefficients (`w`, `b`), and the point coordinates are all native [Float].
+//
+// The data is INTEGER-derived (i - 15.5, ((i%5)-2)*0.05), so no transcendental
+// enters, and the ROUNDED verdict clears its margin by a wide gap — Mentl and
+// the numpy-free python oracle agree to f64 epsilon.
+//
+// Cross-validated by oracle.py: converges to w=3.000284, b=0.995313, so
+// round(w)=3 and round(b)=1. Re-derive with
+//   python3 tests/frontier/ml-crucible/oracle.py
+//
+// EXIT 42 iff round(w)==3 and round(b)==1; otherwise a small teaching code
+// naming which coefficient missed (10 = slope, 11 = intercept). Codes stay
+// under 126 — WASI rejects an exit status of 126 or more.
+//
+// RED-verified: setting the ground-truth slope to 4.0 (gen_y's `4.0 * x`)
+// converges w to ~4, so round(w)=4 != 3 and the run exits 10, not 42.
+
+// x is centered on the sample mean (15.5) so the slope and intercept modes
+// decouple and the descent is well-conditioned. resid is a small periodic,
+// roughly mean-zero deterministic perturbation on the ground-truth line.
+fn gen_x(out, i: Int, n: Int) with Memory = {
+  if i >= n { out }
+  else { gen_x(list_set(out, i, float_of_int(i) - 15.5), i + 1, n) }
+}
+
+fn gen_y(out, i: Int, n: Int) with Memory = {
+  if i >= n { out }
+  else {
+    let x = float_of_int(i) - 15.5
+    let resid = float_of_int((i % 5) - 2) * 0.05
+    gen_y(list_set(out, i, 3.0 * x + 1.0 + resid), i + 1, n)
+  }
+}
+
+// One batch pass: accumulate Σ e_i·x_i and Σ e_i across every point, where
+// e_i = (w·x_i + b) − y_i is the current residual. Both accumulators pin
+// `: Float`; the caller scales the returned sums by 2/N to form the gradient.
+fn grad_loop(xs, ys, w: Float, b: Float, i: Int, n: Int, gw: Float, gb: Float) with Memory = {
+  if i >= n { (gw, gb) }
+  else {
+    let e = w * xs[i] + b - ys[i]
+    grad_loop(xs, ys, w, b, i + 1, n, gw + e * xs[i], gb + e)
+  }
+}
+
+// One descent step: form the batch gradient, take a fixed-rate step, return
+// the new (w, b) as a float pair (the record path stores its f64 fields exactly).
+fn gd_step(xs, ys, w: Float, b: Float, n: Int, lr: Float) with Memory = {
+  let (sw, se) = grad_loop(xs, ys, w, b, 0, n, 0.0, 0.0)
+  let gw = 2.0 * sw / float_of_int(n)
+  let gb = 2.0 * se / float_of_int(n)
+  (w - lr * gw, b - lr * gb)
+}
+
+// The outer descent: a fixed iteration count via tail recursion, threading the
+// coefficients (w, b) as annotated float accumulators.
+fn gd_run(xs, ys, w: Float, b: Float, iter: Int, iters: Int, n: Int, lr: Float) with Memory = {
+  if iter >= iters { (w, b) }
+  else {
+    let (w2, b2) = gd_step(xs, ys, w, b, n, lr)
+    gd_run(xs, ys, w2, b2, iter + 1, iters, n, lr)
+  }
+}
+
+// round-to-nearest for a positive value: truncate(v + 0.5).
+fn round_pos(v: Float) with Pure = float_to_int(v + 0.5)
+
+fn main() with Memory + Alloc = {
+  let n = 32
+  let xs = gen_x(make_list(n), 0, n)
+  let ys = gen_y(make_list(n), 0, n)
+  let (w, b) = gd_run(xs, ys, 0.0, 0.0, 0, 3000, n, 0.008)
+  let rw = round_pos(w)
+  let rb = round_pos(b)
+  if rw != 3 { 10 }
+  else if rb != 1 { 11 }
+  else { 42 }
+}

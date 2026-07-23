@@ -105,6 +105,15 @@ IO_RTLIBS=(
   "$ROOT/lib/runtime/io.mn"
 )
 
+# The real-workload crucible lib set: the base runtime plus the transcendental
+# float substrate (math.mn — sin/cos/sqrt/atan2). The dsp/ml/adaptive crucibles
+# build their signals and learners inline (no file I/O), so their runs preopen
+# nothing.
+MATH_RTLIBS=(
+  "${RTLIBS[@]}"
+  "$ROOT/lib/runtime/math.mn"
+)
+
 total_pass=0
 total_fail=0
 RUNTIME_SHADOW=""
@@ -219,6 +228,8 @@ run_program() {
     io-rec)
       cat "${IO_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr"
       run_flags=(--dir "$dir::/tmp") ;;
+    math)
+      cat "${MATH_RTLIBS[@]}" "$source" | wt_run "$compiler" > "$wat" 2> "$cerr" ;;
     *)
       wt_run "$compiler" < "$source" > "$wat" 2> "$cerr" ;;
   esac
@@ -239,6 +250,9 @@ run_program() {
   elif [ "$link_runtime" = io-rec ]; then
     comm -23 "$normalized" "$IO_SHADOW" > "$unexpected"
     shadow="; inherited-shadow=$(wc -l < "$IO_SHADOW")"
+  elif [ "$link_runtime" = math ]; then
+    comm -23 "$normalized" "$MATH_SHADOW" > "$unexpected"
+    shadow="; inherited-shadow=$(wc -l < "$MATH_SHADOW")"
   else
     cp "$normalized" "$unexpected"
   fi
@@ -396,6 +410,26 @@ capture_io_shadow() {
   IO_SHADOW="$dir/io-shadow.normalized"
   normalize_errors "$err" > "$IO_SHADOW"
   pass "io shadow captured ($(wc -l < "$IO_SHADOW") inherited errors)"
+}
+
+# The MATH shadow — the base runtime + math.mn, the pinned inherited-debt
+# baseline for the real-workload crucibles (dsp/ml/adaptive). math.mn is `with
+# Pure` throughout, so this shadow is empty; a crucible may only add refusals
+# the base libs do not carry.
+capture_math_shadow() {
+  local compiler="$1" dir="$2"
+  local wat="$dir/math-shadow.wat" err="$dir/math-shadow.err"
+
+  { cat "${MATH_RTLIBS[@]}"; printf '\nfn main() = 0\n'; } \
+    | wt_run "$compiler" > "$wat" 2> "$err"
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
+    fail "math shadow compile (exit=$rc; see $err)"
+    return 1
+  fi
+  MATH_SHADOW="$dir/math-shadow.normalized"
+  normalize_errors "$err" > "$MATH_SHADOW"
+  pass "math shadow captured ($(wc -l < "$MATH_SHADOW") inherited errors)"
 }
 
 # A generic on-disk DATA VALIDATOR + a LIVE oracle cross-check. Mentl reads a
@@ -735,6 +769,29 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/text/corpus.txt" /tmp/mentl-text-corpus.txt \
     "$ROOT/tests/frontier/text/oracle.py" "$dir" \
     EXPECTED_BYTES=429 EXPECTED_COUNT_E=47 EXPECTED_COUNT_T=32 EXPECTED_TOP_LETTER=101
+  # ── the real-workload crucibles (inline signals + learners, no file I/O) ──
+  # Each builds its data in Mentl, computes discrete verdict facts, and exits 42
+  # iff they match an independent python oracle (tests/frontier/<name>-crucible/
+  # oracle.py). Real DSP/ML stress on the wheel — the representation + numerics
+  # the m3==m4 fixpoint is structurally blind to.
+  #
+  #  - dsp: a two-sinusoid + pseudo-noise signal through a single-pole IIR
+  #    lowpass built with the `<~` feedback recurrence (float feedback — the
+  #    prior threads through f64 state slots, repr read live). Verdict composes
+  #    the argmax bin of an 8-bin DFT of the filtered output (1), a
+  #    zero-crossing count (21), and a raw-signal clip count (64): 42 iff all.
+  #  - ml: batch gradient descent for a 2-parameter linear regression recovering
+  #    a known slope/intercept (round to 3, 1) over 32 inline points.
+  #  - adaptive: a 2-tap LMS adaptive filter learning an unknown channel [2, 1]
+  #    online while filtering; verdict = rounded taps + a >=1e6 residual-power
+  #    drop.
+  capture_math_shadow "$compiler" "$dir" || continue
+  run_program "$compiler" dsp-crucible \
+    "$ROOT/tests/frontier/dsp-crucible/dsp-demo.mn" 42 math "$dir"
+  run_program "$compiler" ml-crucible \
+    "$ROOT/tests/frontier/ml-crucible/ml-demo.mn" 42 math "$dir"
+  run_program "$compiler" adaptive-crucible \
+    "$ROOT/tests/frontier/adaptive-crucible/adaptive-demo.mn" 42 math "$dir"
   run_program "$compiler" scheduled-int \
     "$ROOT/tests/frontier/mn-scheduled-fanout-int.mn" 60 yes "$dir"
   run_program "$compiler" scheduled-float \

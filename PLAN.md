@@ -1958,18 +1958,29 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.runtime.cross-compile-durable-state` (2026-07-22, the region's blocker):
-an in-process SECOND compile after a heap_mark/heap_reset region traps in
-its own infer while every INPUT is probe-verified intact — libs
-len+head+tail, the micro names, the reset address, the mark taken before
-compile #1 — and without the reset 100 sequential in-process compiles run
-clean to the 4GB ceiling. So compile #1 allocates state ABOVE the mark
-that compile #2 READS (a durable heap dependency: a singleton handler's
-state record, an interned string, a memo — the candidate class), and the
-reset tears it. The fix is the §5.O image/scratch split — durable compiler
-state in the image, per-compile transients in the region — and this repro
-(battery_loop's at-site comment, tests/micros as the workload) is the
-per-decl arena's first real gate.
+`Hβ.runtime.cross-compile-durable-state` (2026-07-22; corpus REWRITTEN the
+same night by a five-probe binary-patch dig — the earlier durable-state
+theory is DEAD, measured): compile #2 after a reset dies at
+infer_call_arg's match-else with a FRESH, ABOVE-MARK TParam whose
+authored/resolved/body words read ZERO — and the 32MB-slack split run
+(reset to mark+2^25, read-back-verified 35,542,384) still dies
+IDENTICALLY in virgin memory, so address REUSE and stale pointers are
+ELIMINATED, and with one well-behaved bump allocator (two writers total:
+$alloc and the reset; monotonic between resets) allocator overwrite is
+too. The control holds (the committed no-reset battery compiles 98 and
+dies at the documented 4GB ceiling). The surviving mechanism, with its
+signature already in the disassembly at the death site: the sst
+EVIDENCE-REGION build stores zeros and entries at
+sst+8+4*(callee_closure.load(4))+{92,96} — a slot index read from a
+closure record's field — and a wild index writes PAST the frame's
+allocation into the adjacent heap record (the zero-written strip is
+exactly authored/resolved/body). The stomp is LAYOUT-DEPENDENT, which is
+why only the reset's shifted layouts expose it and the monotonic run
+never did. NEXT OPENING, exact: probe infer_call_arg's sst write RANGE
+against its frame's allocated size, and callee_closure's provenance at
+the fatal iteration (the probe recipe, the site offsets, and the five
+probe artifacts are this entry's corpus). The image/scratch split stays
+the arena's build; THIS bug is upstream of it.
 
 The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
 `Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a

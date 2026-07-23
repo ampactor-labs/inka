@@ -2086,10 +2086,13 @@ fixpoint impact): a small Rust runner registering
 protocol wasmtime-wasi-threads itself used (std::thread::spawn + fresh
 Store over the shared memory + call the module's exported
 wasi_thread_start, which the wheel's emit already speaks) — and p1 I/O
-via wasmtime_wasi::p1::add_to_linker_sync. Build order: (1) re-pin to
-wasmtime 36.0.0 LTS first (43.0.1 left its non-LTS patch window
-~2026-06-09 — free runway, validate the gate battery byte-identical
-against the new binary before flipping CI); (2) the runner's I/O-only
+via wasmtime_wasi::p1::add_to_linker_sync. Build order: (1) EXECUTED
+2026-07-23 — the 36.0.0 LTS re-pin (43.0.1 left its non-LTS patch
+window ~2026-06-09): wheel self-compile byte-identical and battery
+113/113 validated through 36 BEFORE flipping; wt-env.sh probes the
+flag-spelling delta once at source time (36 folds shared-memory into
+-W threads=y), so the local 43 and CI's 36 both run with warm caches;
+board.yml pins v36.0.0; (2) the runner's I/O-only
 half, whole battery byte-identical through it; (3) the spawn glue; (4)
 the repo's FIRST real-spawn fixture (~> parallel_compose, genuine
 concurrency — band E's "proven by real spawn" claim made true as a side

@@ -17,13 +17,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: install wasmtime
-        # PINNED to the 43.x line the local pin runs. Wasmtime 45 deprecated
-        # and 47.0.0 REMOVED wasi-threads (PRs 13264/13558) — the shared-memory
-        # spawn substrate the wheel's modules use (tools/wt-env.sh -S threads=y).
-        # A floating install silently crosses that ceiling; the migration off
-        # wasi-threads is its own arc, not a CI default.
+        # PINNED to the 36.0.0 LTS (patched through 2027-08; 43.0.1 left its
+        # non-LTS window ~2026-06-09). Validated 2026-07-23: wheel self-compile
+        # byte-identical and battery 113/113 through 36 — wt-env.sh probes the
+        # flag-spelling delta (36 folds shared-memory into -W threads=y).
+        # Wasmtime 47.0.0 REMOVED wasi-threads (PRs 13264/13558) — the spawn
+        # substrate every emitted module imports; no future LTS carries it, so
+        # this pin buys runway for the custom-runner migration
+        # (Hβ.ops.wasmtime-runner-migration, PLAN named-residue index), not a
+        # permanent home. A floating install silently crosses the 47 ceiling.
         run: |
-          curl -sSf https://wasmtime.dev/install.sh | bash -s -- --version v43.0.1
+          curl -sSf https://wasmtime.dev/install.sh | bash -s -- --version v36.0.0
           echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
       - name: install wabt
         run: sudo apt-get update -qq && sudo apt-get install -y -qq wabt

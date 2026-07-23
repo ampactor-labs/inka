@@ -22,8 +22,17 @@
 # modules use wasi-threads shared memory (the wasi_thread_spawn substrate) and
 # return_call_indirect (opcode 0x13). Drop any one flag → the module refuses to
 # instantiate. This quartet is the invariant, proven across the whole toolchain.
+# The SPELLING is version-dependent: wasmtime 36 LTS folds shared-memory into
+# -W threads=y and rejects the separate flag; 43 requires it explicitly. Probe
+# once at source time so both run (validated 2026-07-23: wheel self-compile
+# byte-identical and battery 113/113 through BOTH binaries —
+# Hβ.ops.wasmtime-runner-migration step 1).
 WT="${WASMTIME_BIN:-$HOME/.wasmtime/bin/wasmtime}"
-WT_RUN_FLAGS=(-W threads=y -W shared-memory=y -W tail-call=y -S threads=y)
+if "$WT" run -W shared-memory=y /nonexistent.wasm 2>&1 | grep -q "unknown -W"; then
+  WT_RUN_FLAGS=(-W threads=y -W tail-call=y -S threads=y)
+else
+  WT_RUN_FLAGS=(-W threads=y -W shared-memory=y -W tail-call=y -S threads=y)
+fi
 WABT_FEATURE_FLAGS=(--enable-threads --enable-tail-call)
 W2W=(wat2wasm --debug-names "${WABT_FEATURE_FLAGS[@]}")
 

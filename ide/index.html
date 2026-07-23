@@ -377,13 +377,15 @@ fn hot_path(x: Int) with !Alloc + !IO =
 
 fn main() = hot_path(41)
 `,
-"a refinement · bounds as type": `// A refined alias narrows a type by predicate; the annotation is
-// an Intent Boundary the graph verifies, never ceremony.
-type Unit = Float where 0.0 <= self && self <= 1.0
+"a refinement · bounds as type": `// A refined alias narrows a type by a predicate. Level is an Int proven
+// to sit in 0..100 wherever a value of it is built — construction is the
+// proof, and Verify discharges 0 <= 50 <= 100 from the constant.
+type Level = Int where 0 <= self && self <= 100
 
-fn attenuate(g: Unit, x) = x
+// brighten needs no defensive guard: the bound is part of the type.
+fn brighten(lvl: Level) = lvl + 1
 
-fn main() with Memory + Alloc = byte_len(float_to_str(attenuate(0.5, 2.0)))
+fn main() = brighten(50)
 `,
 "a ?? hole · the socket": `// A ?? hole is a dormant continuation — the octagonal socket
 // the medium fills. (fill-and-resume lands with the multi-shot
@@ -745,12 +747,14 @@ function makeWasiFs(vfs, argvStr){
   return { imports: { wasi_snapshot_preview1: proxy, wasi: { "thread-spawn": () => -1 } },
            bind(i){ mem = i.exports.memory; }, out, err };
 }
-// the six facet lines render_at emits (src/main.mn) → the ring's aspect keys.
-const FACET_LABELS = { Query:"graph", Effects:"row", Ownership:"own", Verify:"ref", Teach:"grad", Why:"why" };
+// the facet lines render_at emits (src/main.mn) → the ring's aspect keys. Propose
+// is aspect 2 (handler/propose): at a ?? hole render_at surfaces the proven
+// survivor (`Propose: 1`), the same candidate the edit accept path applies.
+const FACET_LABELS = { Query:"graph", Effects:"row", Ownership:"own", Verify:"ref", Teach:"grad", Why:"why", Propose:"hand" };
 function parseFacets(stdout){
   const real = {}; let cur = null;
   for (const raw of stdout.split("\n")){
-    const m = raw.match(/^(Query|Effects|Ownership|Verify|Teach|Why): (.*)$/);
+    const m = raw.match(/^(Query|Effects|Ownership|Verify|Teach|Why|Propose): (.*)$/);
     if (m){ cur = FACET_LABELS[m[1]]; real[cur] = m[2]; }
     else if (cur === "why" && raw.startsWith("     ") && raw.trim()){ real.why = (real.why || "") + " · " + raw.trim(); }
   }
@@ -851,6 +855,7 @@ const VFS_LIBS = [
   ["lib/runtime/strings.mn",   "../lib/runtime/strings.mn"],
   ["lib/runtime/lists.mn",     "../lib/runtime/lists.mn"],
   ["lib/runtime/threading.mn", "../lib/runtime/threading.mn"],
+  ["lib/runtime/io.mn",        "../lib/runtime/io.mn"],
   ["lib/prelude.mn",           "../lib/prelude.mn"],
   ["src/types.mn",             "../src/types.mn"],
 ];
@@ -1122,16 +1127,21 @@ function projectCursor(){
   $("facets").innerHTML = facets.map(f => {
     const realV = haveReal ? REAL[f.k] : undefined;   // a live graph read for this facet?
     const isReal = realV !== undefined && realV !== "";
+    // aspect 2 (handler/propose) carries the socket's PROVEN SURVIVOR at a ?? hole —
+    // the same candidate the edit accept path applies, projected read-only here.
+    const isPropose = f.k === "hand" && isReal;
     const door = f.door ? " door" : "";
     const fut = (f.future && !isReal) ? " future" : "";
     // provenance is a four-state, ALWAYS-visible contract: 'real' ONLY for a fact
     // the compiler's CursorView actually returned; else the honest surface/
     // declared/socket the page's own parse can defend.
     const prov = isReal ? "real" : f.future ? "socket" : f.k === "why" ? "real" : f.k === "row" ? "declared" : "surface";
-    const val = isReal ? `<span style="color:var(--gold-b)">${esc(realV)}</span>` : f.v;
+    const label = isPropose ? "propose" : f.label;
+    const val = isPropose ? `<span style="color:var(--verm-b);font-weight:700">▸ ${esc(realV)}</span> <span class="subtle">proven survivor</span>`
+              : isReal ? `<span style="color:var(--gold-b)">${esc(realV)}</span>` : f.v;
     const note = (f.future && !isReal) ? `<div class="subtle" style="margin-top:2px">${esc(f.futureNote||"")}</div>` : "";
-    return `<div class="facet k-${f.k}${door}${fut}${isReal?" real":""}" ${f.doorTo?`data-door="${f.doorTo}"`:""}>
-      <div class="k k-${f.k}">${f.label}<span class="prov prov-${prov}">${prov}</span></div>
+    return `<div class="facet k-${f.k}${door}${fut}${isReal?" real":""}${isPropose?" propose":""}" ${f.doorTo?`data-door="${f.doorTo}"`:""}>
+      <div class="k k-${f.k}">${label}<span class="prov prov-${prov}">${prov}</span></div>
       <div class="v">${val}${note}</div></div>`;
   }).join("");
   // re-highlight to move the cursor-line tint

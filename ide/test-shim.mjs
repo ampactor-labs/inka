@@ -82,7 +82,7 @@ let bad = 0;
 }
 // ── Test 2: address mode projects the REAL CursorView (the ring wire) ────────
 {
-  const libs = ['lib/runtime/memory.mn', 'lib/runtime/strings.mn', 'lib/runtime/lists.mn', 'lib/runtime/threading.mn', 'lib/prelude.mn', 'src/types.mn'];
+  const libs = ['lib/runtime/memory.mn', 'lib/runtime/strings.mn', 'lib/runtime/lists.mn', 'lib/runtime/threading.mn', 'lib/runtime/io.mn', 'lib/prelude.mn', 'src/types.mn'];
   const vfs = {};
   for (const p of libs) vfs[p] = new Uint8Array(await readFile(new URL(p, REPO)));
   vfs['main.mn'] = te.encode('fn main() with Memory + Alloc =\n  [1, 2, 3, 4, 5]\n    |> map((x) => x * x)\n    |> filter((x) => x > 3)\n    |> fold(0, (acc, x) => acc + x)\n');
@@ -93,5 +93,14 @@ let bad = 0;
   console.log('    ' + r.out.trim().split('\n').join('\n    '));
   if (!ok) bad++;
 }
-console.log(bad ? `\n${bad} FAILED` : '\nboth surfaces green');
+// ── Test 3: the socket — a ?? hole projects a proven survivor (Propose) ──────
+{
+  const hole = 'type Positive = Int where 0 < self\n\nfn choose() -> Positive with Pure = ??\n\nfn main() = choose()\n';
+  const r = await run(makeWasiFs({ 'hole.mn': te.encode(hole) }, 'hole.mn:3:37'));
+  const ok = r.exit === 0 && r.out.includes('Query: ?? :') && /Propose: \S/.test(r.out);
+  console.log(`[3] address Propose socket: exit ${r.exit} -> ${ok ? 'PASS' : 'FAIL'}`);
+  console.log('    ' + r.out.trim().split('\n').join('\n    '));
+  if (!ok) bad++;
+}
+console.log(bad ? `\n${bad} FAILED` : '\nall surfaces green');
 process.exitCode = bad ? 1 : 0;

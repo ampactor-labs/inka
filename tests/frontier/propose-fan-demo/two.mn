@@ -1,0 +1,12 @@
+// The FIELD form: `mentl two.mn:0` projects the whole absence field —
+// BOTH holes ranked, each rendered through the address path with its own
+// Propose line (Bit's fan of two; Positive's single survivor).
+
+type Bit = Int where 0 <= self && self <= 1
+type Positive = Int where 0 < self
+
+fn pick() -> Bit with Pure = ??
+
+fn choose() -> Positive with Pure = ??
+
+fn main() = pick() + choose()

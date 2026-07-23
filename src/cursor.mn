@@ -461,7 +461,7 @@ fn contains_path(paths, target) with Memory = {
 // shape, same record, same code path — drift 6 closure (no
 // primitive-type-special-case).
 
-fn argmax_or_default(scored, caret) with Memory = {
+fn argmax_or_default(scored, caret) with Memory + Alloc = {
   // The pin is an OVERRIDE edge, followed FIRST: if the caret's Reason marks
   // a `??`-pinned position, that position dominates the argmax by STRUCTURE
   // (reason_is_pinned), never by a float magnitude. Only when no pin is set
@@ -488,7 +488,7 @@ fn reason_is_pinned(reason) with Pure = match reason {
   _                         => false
 }
 
-fn reduce_max_by_score(scored) with Pure = {
+fn reduce_max_by_score(scored) with Memory + Alloc = {
   reduce(scored, (best, candidate) => {
     let Cursor(_, _, c_impact) = candidate
     let Cursor(_, _, b_impact) = best
@@ -667,7 +667,7 @@ fn pipe_position_in(target, body) with Pure = match body {
 // float-evidence call-convention gap (an f64-arg candidate ctor through an
 // all-i32 $ft — the named peer Hβ.emit.float-evidence-ft, first fired by
 // the first float-position projection ever taken).
-fn propose_at(h, k) with EnvRead + GraphRead + Memory + Synth + !Mutate = {
+fn propose_at(h, k) with EnvRead + GraphRead + Memory + Alloc + Synth + !Mutate = {
   if authored_hole(h) {
     let ctx = mentl_context_at(h)
     let Context(_, allowed, _) = ctx
@@ -675,7 +675,7 @@ fn propose_at(h, k) with EnvRead + GraphRead + Memory + Synth + !Mutate = {
   } else { Proposals([], []) }
 }
 
-fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + !Mutate = {
+fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + Alloc + !Mutate = {
   // Synth's Context reads LIVE from the graph the cursor sits in — never
   // fabricated: scope bindings ARE the env snapshot (the same bindings
   // infer wrote); the row is the ENCLOSING declaration's authored signed
@@ -699,13 +699,13 @@ fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + !Mutate = {
 // binder; the span weave is the position's truth). O(weave) at felt
 // cadence; the O(1) form is the decl-containment edge on the node
 // (Hβ.cursor.enclosing-decl-edge).
-fn enclosing_fn_decl_at(handle) with GraphRead + !Mutate = {
+fn enclosing_fn_decl_at(handle) with GraphRead + Memory + Alloc + !Mutate = {
   let target = parse_span_of(handle)
   let Graph(_nodes, _epoch, next, _overlays, _spans) = graph_snapshot()
   enclosing_fn_scan(target, 0, next, None, 999999999)
 }
 
-fn enclosing_fn_scan(target, i, n, best, best_area) with GraphRead + !Mutate = {
+fn enclosing_fn_scan(target, i, n, best, best_area) with GraphRead + Memory + Alloc + !Mutate = {
   if i >= n { best }
   else {
     match graph_node_body(i) {

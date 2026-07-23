@@ -634,6 +634,60 @@ fn run_run(target) = {
 fn check_run(target) =
   if pipeline_check(target) > 0 { 1 } else { 0 }
 
+// The file's own positions: a graph handle joins the field iff its span
+// lies inside the target's weave range — the range map is the one
+// authority on which lines are this file's.
+fn field_positions(handles, fstart, nlines) with GraphRead + Memory + Alloc + !Mutate =
+  filter((h) => {
+    let Span(sl, _, _, _) = caret_span_of_handle(h)
+    sl >= fstart && sl < fstart + nlines
+  }, handles)
+
+// Rank by the one scorer, descending: structural sort ascends by the
+// (score, handle) pair — the compare fold's f64 leaf orders the score,
+// the handle breaks ties deterministically — then reverse. The pair list
+// rides the same wide-tuple machinery mn-generic-wide-tuple-pattern gates.
+fn field_ranked(handles, caret0) with GraphRead + Memory + Teach + Alloc + !Mutate =
+  reverse(sort(map((h) => {
+    let Cursor(_, _, sc) = score_one_position(h, caret0)
+    (sc, h)
+  }, handles)))
+
+fn render_field_tier(ranked, target, ranges, fstart, i) = {
+  if i >= len(ranked) { () }
+  else {
+    let (_, ph) = list_index(ranked, i)
+    let pspan = caret_span_of_handle(ph)
+    let Span(sl, sc, _, _) = pspan
+    print_string("\n── {target}:{int_to_str(sl - fstart + 1)}:{int_to_str(sc)}\n")
+    render_at(cursor_at_handle(ph), ph, pspan, ranges)
+    render_field_tier(ranked, target, ranges, fstart, i + 1)
+  }
+}
+
+// ─── render_field — the N-CURSOR read (`mentl <file>:0`) ────────────
+//
+// The whole absence field of ONE file, ranked and rendered: every
+// authored hole first (absence categorically outranks — the same tier
+// law cursor_argmax_compute states; filling a hole lifts the
+// executable's own refusal), then the annotation-gradient positions,
+// each tier sorted by the ONE score_one_position projection. Each
+// position renders through the SAME cursor_at_handle + render_at path
+// the single-address form uses — a hole's line carries its Propose fan
+// (the survivor space), an annotation position its Teach line. The
+// argmax is this list's head; the field is the argmax UNCOLLAPSED —
+// the multi-cursor read, sequential (the per-position `><` under
+// `~> Thread` rides Hβ.ops.wasmtime-runner-migration).
+fn render_field(target, ranges, fstart, nlines) = {
+  let caret0 = Caret(0, Located(Span(fstart, 1, fstart, 1), Inferred("field read")))
+  let holes = field_positions(enumerate_hole_positions(), fstart, nlines)
+  let grads = field_positions(enumerate_gradient_positions(), fstart, nlines)
+  print_string("Field: {int_to_str(len(holes))} hole(s), {int_to_str(len(grads))} gradient position(s) in {target}\n")
+  render_field_tier(field_ranked(holes, caret0), target, ranges, fstart, 0)
+  render_field_tier(field_ranked(grads, caret0), target, ranges, fstart, 0)
+  0
+}
+
 // ─── at_run — the cursor-address transport (`mentl <file>:L[:C]`)
 //
 // The smallest transport of the one read: resolve the address to a graph
@@ -657,7 +711,8 @@ fn at_run(target, line, col) = {
         },
         Some(r) => {
           let (_m, _p, start, nlines) = r
-          if line < 1 { eprint_string("mentl: line {int_to_str(line)} — lines count from 1\n") 1 }
+          if line == 0 { render_field(target, ranges, start, nlines) }
+          else if line < 0 { eprint_string("mentl: line {int_to_str(line)} — lines count from 1 (0 = the whole-file field)\n") 1 }
           else if line > nlines {
             eprint_string("mentl: {target} has {int_to_str(nlines)} lines; {int_to_str(line)} is past the end\n")
             1
@@ -703,7 +758,7 @@ fn span_index_of_snapshot() with GraphRead = {
   spans
 }
 
-fn range_of_module(ref ranges, ref target) with Memory = {
+fn range_of_module(ref ranges, ref target) with Memory + Alloc = {
   find((r) => { let (m, _, _, _) = r m == target }, ranges)
 }
 
@@ -724,7 +779,7 @@ fn file_line(ref ranges, ref span) with Memory + Alloc = {
 //  (b) else the tightest node COVERING the point (a continuation line);
 //  (c) else the nearest node by start line (the no-Module-root top-level
 //      gap — blank lines between decls are ordinary addresses, not errors).
-fn address_resolve(ref spans, gline, col) with Memory = {
+fn address_resolve(ref spans, gline, col) with Memory + Alloc = {
   match address_case_a(spans, gline, col, 0, len(spans), None) {
     Some(pick) => Some(pick),
     None => {
@@ -781,7 +836,7 @@ fn address_better_a(col, best, cand) with Memory = match best {
   }
 }
 
-fn span_pick_of(ref spans, h) with Memory = {
+fn span_pick_of(ref spans, h) with Memory + Alloc = {
   match find((e) => { let (_, eh) = e eh == h }, spans) {
     Some(e) => { let (s, _) = e Some((s, h)) },
     None    => None
@@ -1309,6 +1364,13 @@ fn teach_run(target_opt) = {
     ~> wasi_filesystem
     ~> mentl_voice_default
     ~> query_default          // mentl_voice_default's consult/run_query bubble Query.ask here
+    // teach reaches inference — the analysis handlers install on every
+    // infer-reaching chain (the driverless-zero-state class; this chain
+    // was the eighth found missing them, by design pass not by trap).
+    ~> affine_ledger
+    ~> region_tracker
+    ~> verify_ledger
+    ~> lookup_ty_graph
     ~> env_handler            // query_default's env_lookup / env_snapshot
     ~> diagnostics_handler
     ~> graph_handler

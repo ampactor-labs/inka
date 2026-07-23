@@ -972,6 +972,11 @@ for i in "${!compilers[@]}"; do
   # the f64 high word came back as the tag (invalid exit, zero diagnostics).
   run_program "$compiler" forward-wide-instantiation \
     "$ROOT/tests/frontier/mn-forward-wide-instantiation.mn" 42 yes "$dir"
+  # The holed substrate call types from the FACE (seq_op_sig), never the raw
+  # body's env scheme — RED on the pre-face boot (Int-vs-List at every
+  # `|> list_set(??, …)` stage under the callee-first blob).
+  run_program "$compiler" seq-op-holed-pipe \
+    "$ROOT/tests/frontier/mn-seq-op-holed-pipe.mn" 72 yes "$dir"
   run_program "$compiler" generic-show \
     "$ROOT/tests/frontier/mn-generic-show.mn" 42 yes "$dir"
   run_program "$compiler" aggregate-show \
@@ -1062,6 +1067,17 @@ for i in "${!compilers[@]}"; do
   # Reasons (the space shown, the collapsing move named) — seen RED as the
   # bare count line before the fan projection landed.
   fdemo="$ROOT/tests/frontier/propose-fan-demo"
+  # The FIELD form (`mentl <file>:0`): the whole absence field ranked and
+  # rendered — both holes with their Propose facets (the tie teaching), the
+  # gradient tier after. RED before the field arm ("lines count from 1").
+  fldout=$(cd "$fdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo" --dir /tmp "$compiler" two.mn:0 2>"$dir/field.err")
+  if [ $? -eq 0 ] && printf '%s' "$fldout" | grep -q 'Field: 2 hole(s)' \
+     && printf '%s' "$fldout" | grep -q '2 proven survivors' \
+     && printf '%s' "$fldout" | grep -q 'Propose: 1'; then
+    pass "cursor-address field (both holes project with their fans)"
+  else
+    fail "cursor-address field (got: $(printf '%s' "$fldout" | head -3); see $dir/field.err)"
+  fi
   fout=$(cd "$fdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo" --dir /tmp "$compiler" bit.mn:8:30 2>"$dir/propose-fan.err")
   if [ $? -eq 0 ] && printf '%s' "$fout" | grep -q '2 proven survivors' && printf '%s' "$fout" | grep -q 'integer literal seed'; then
     pass "cursor-address fan (both survivors project with Reasons)"

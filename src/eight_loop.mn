@@ -449,13 +449,13 @@ fn verdict_is_clear(v) with Pure = match v {
 // over a [InterrogationReport]. Cursor uses these to surface
 // project-wide gradient-density at various granularities.
 
-fn count_invites_by_kind(reports, kind) with Pure = {
+fn count_invites_by_kind(reports, kind) with Memory + Alloc = {
   count((report) => verdict_is_invite(extract_verdict(report, kind)), reports)
 }
 
 // Total-clear count: positions where ALL EIGHT clear. Reading
 // ULTIMATE FORM as the limit.
-fn total_clear_positions(reports) with Pure = {
+fn total_clear_positions(reports) with Memory + Alloc = {
   count(all_eight_clear, reports)
 }
 

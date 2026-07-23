@@ -1768,54 +1768,77 @@ fn seq_force(ah, i, ty, span: ValidSpan) =
 // projection. One fresh `a` per call binds the receiver(s) to `[a]`, indices to
 // `Int`, values to `a`. `lower` still calls the lib fns; only their TYPE moves
 // here, to the node-kind that owns it.
+// The substrate FACE table — ONE home for every seq-op's typed signature
+// (params, result) over a caller-minted element var. Both readers derive
+// from it: the saturated fast path forces each argument position against
+// its face type (infer_seq_op below), and a HOLED/under-applied call
+// builds its product-with-holes from the same face (infer_call) — the env
+// scheme is the RAW body's (list_set's `l + 8` types l Int) and must
+// never type a caller (the lib-first order made that scheme visible and
+// every `|> list_set(??, …)` pipe mismatched — 14 wheel sites). A
+// position typed by a fresh var (seq_unconstrained) is deliberately
+// unconstrained: the emit-dispatched generics (to_string/hash), the raw
+// construction boundaries (str_of_buf — the buffer word IS a String,
+// §4①), and the float formatters' digit-buffer heads.
+fn seq_op_sig(cname: String, elem) =
+  match cname {
+    "last"           => Some(([TList(elem)], elem)),
+    "list_index"     => Some(([TList(elem), TInt], elem)),
+    "int_to_str"     => Some(([TInt], TString)),
+    // The String face: byte_at IS list_index over [byte], byte_len IS len.
+    "byte_len"       => Some(([TString], TInt)),
+    "byte_at"        => Some(([TString, TInt], TInt)),
+    "str_slice"      => Some(([TString, TInt, TInt], TString)),
+    "str_concat"     => Some(([TString, TString], TString)),
+    "str_of_single_byte" => Some(([TInt], TString)),
+    "str_literal_5"  => Some(([TString], TString)),
+    // str_payload resolves a String to its contiguous stride-1 payload pointer.
+    "str_payload"    => Some(([TString], TInt)),
+    "str_of_buf"     => Some(([seq_unconstrained()], TString)),
+    "float_to_str"   => Some(([TFloat], TString)),
+    "float_render_positive" => Some(([TFloat], TString)),
+    "float_zero_pad" => Some(([TInt], TString)),
+    "float_format_fixed"      => Some(([seq_unconstrained(), TInt], TString)),
+    "float_format_scientific" => Some(([seq_unconstrained(), TInt], TString)),
+    "float_digits_to_str"     => Some(([seq_unconstrained(), TInt, TInt], TString)),
+    "slot_present"   => Some(([seq_unconstrained()], TName("Bool", []))),
+    "to_string"      => Some(([seq_unconstrained()], TString)),
+    "hash"           => Some(([seq_unconstrained()], TInt)),
+    "len"            => Some(([TList(elem)], TInt)),
+    "drop_last"      => Some(([TList(elem)], TList(elem))),
+    "list_set"       => Some(([TList(elem), TInt, elem], TList(elem))),
+    "push"           => Some(([TList(elem), elem], TList(elem))),
+    "slice"          => Some(([TList(elem), TInt, TInt], TList(elem))),
+    "list_concat"    => Some(([TList(elem), TList(elem)], TList(elem))),
+    // Flatten is representation-only: type-preserving [a] -> [a] (flat_raw is
+    // its raw altitude; a raw-typed list_to_flat poisoned iterate's element).
+    "list_to_flat"   => Some(([TList(elem)], TList(elem))),
+    "make_list"      => Some(([TInt], TList(elem))),
+    _                => None
+  }
+
+fn seq_unconstrained() = TVar(mint(Inferred("unconstrained substrate operand")))
+
+fn seq_force_list(ah, ptys, i, span: ValidSpan) =
+  if i >= len(ptys) { () }
+  else {
+    seq_force(ah, i, list_index(ptys, i), span)
+    seq_force_list(ah, ptys, i + 1, span)
+  }
+
 fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
   let ah = collect_handles(args)
   let elem = TVar(mint(Inferred("sequence element")))
-  match cname {
-    // Reads that project the element.
-    "last"  => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, elem, Located(span, Inferred("head element"))) },
-    "list_index" => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); graph_bind(handle, elem, Located(span, Inferred("element at index"))) },
-    "int_to_str" => { seq_force(ah, 0, TInt, span); graph_bind(handle, TString, Located(span, Inferred("decimal render"))) },
-    // The String face: byte_at IS list_index over [byte], byte_len IS len.
-    // The element is a byte (an Int 0..255); the sequence is a String.
-    "byte_len" => { seq_force(ah, 0, TString, span); graph_bind(handle, TInt, Located(span, Inferred("byte length"))) },
-    "byte_at"  => { seq_force(ah, 0, TString, span); seq_force(ah, 1, TInt, span); graph_bind(handle, TInt, Located(span, Inferred("byte at index"))) },
-    // The String BUILDERS project a String RESULT over a raw buffer body.
-    "str_slice" => { seq_force(ah, 0, TString, span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); graph_bind(handle, TString, Located(span, Inferred("string slice"))) },
-    "str_concat" => { seq_force(ah, 0, TString, span); seq_force(ah, 1, TString, span); graph_bind(handle, TString, Located(span, Inferred("string concat"))) },
-    "str_of_single_byte" => { seq_force(ah, 0, TInt, span); graph_bind(handle, TString, Located(span, Inferred("single-byte string"))) },
-    "str_literal_5" => { seq_force(ah, 0, TString, span); graph_bind(handle, TString, Located(span, Inferred("string literal"))) },
-    // str_payload resolves a String to its contiguous stride-1 payload pointer.
-    "str_payload" => { seq_force(ah, 0, TString, span); graph_bind(handle, TInt, Located(span, Inferred("payload base"))) },
-    // str_of_buf — the raw buffer word IS a String (§4① construction boundary).
-    "str_of_buf" => graph_bind(handle, TString, Located(span, Inferred("buffer as string"))),
-    "float_to_str" => { seq_force(ah, 0, TFloat, span); graph_bind(handle, TString, Located(span, Inferred("float render"))) },
-    "float_render_positive" => { seq_force(ah, 0, TFloat, span); graph_bind(handle, TString, Located(span, Inferred("positive float render"))) },
-    "float_zero_pad" => { seq_force(ah, 0, TInt, span); graph_bind(handle, TString, Located(span, Inferred("zero pad"))) },
-    "float_format_fixed" => { seq_force(ah, 1, TInt, span); graph_bind(handle, TString, Located(span, Inferred("fixed-notation float"))) },
-    "float_format_scientific" => { seq_force(ah, 1, TInt, span); graph_bind(handle, TString, Located(span, Inferred("scientific-notation float"))) },
-    "float_digits_to_str" => { seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); graph_bind(handle, TString, Located(span, Inferred("digit bytes to string"))) },
-    "slot_present" => graph_bind(handle, TName("Bool", []), Located(span, Inferred("slot presence"))),
-    // Generic faces of the emit-dispatched structural nodes — no force on
-    // the argument (any value shows/hashes; the emit reads its live type).
-    "to_string" => graph_bind(handle, TString, Located(span, Inferred("structural show"))),
-    "hash"      => graph_bind(handle, TInt, Located(span, Inferred("structural hash"))),
-    // The length read.
-    "len"        => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, TInt, Located(span, Inferred("sequence length"))) },
-    // Builders/transforms that return a sequence of the same element.
-    "drop_last"  => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, TList(elem), Located(span, Inferred("tail sequence"))) },
-    "list_set"   => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, elem, span); graph_bind(handle, TList(elem), Located(span, Inferred("set element"))) },
-    "push"       => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, elem, span); graph_bind(handle, TList(elem), Located(span, Inferred("push element"))) },
-    "slice"      => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); graph_bind(handle, TList(elem), Located(span, Inferred("slice"))) },
-    "list_concat"=> { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TList(elem), span); graph_bind(handle, TList(elem), Located(span, Inferred("concat"))) },
-    // Flatten is representation-only: type-preserving [a] -> [a] (flat_raw is
-    // its raw altitude; a raw-typed list_to_flat poisoned iterate's element).
-    "list_to_flat" => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, TList(elem), Located(span, Inferred("flatten"))) },
-    "make_list"  => { seq_force(ah, 0, TInt, span); graph_bind(handle, TList(elem), Located(span, Inferred("fresh sequence"))) },
-    // The FUNCTOR arms are DELETED — they derive their own types from their
-    // bodies (Iterate.result -> r, prelude.mn); only substrate primitives route
-    // here. seq_force_fn went with them.
-    _            => graph_bind(handle, TList(elem), Located(span, Inferred("sequence")))
+  match seq_op_sig(cname, elem) {
+    Some(sig) => {
+      let (ptys, ret) = sig
+      seq_force_list(ah, ptys, 0, span)
+      graph_bind(handle, ret, Located(span, Inferred("substrate face of '{cname}'")))
+    },
+    // A table member with no face row is unreachable by construction
+    // (is_seq_op and seq_op_sig enumerate the same names); the floor keeps
+    // productive-under-error alive if they ever diverge.
+    None => graph_bind(handle, TList(elem), Located(span, Inferred("sequence")))
   }
   // Hβ.infer.seq-op-row-from-callee (PLAN §11 col 2): the ULTIMATE form reads the
   // callee's OWN declared row live — `match graph_chase(fh) { NBound(TFun(_,_,crow))
@@ -1853,6 +1876,26 @@ fn infer_call(func, args, handle, span: ValidSpan) = {
   if is_seq_op(cname) && call_hole_index(args, 0) < 0
      && len(args) == len(callee_params(cname)) {
     infer_seq_op(cname, args, handle, span)
+  }
+  // A HOLED/under-applied substrate call is the product-with-holes built
+  // from the FACE (seq_op_sig — the same one home the saturated path
+  // forces against), never from the env scheme: the scheme is the raw
+  // body's own (list_set's `l + 8` types l Int), and typing a caller's
+  // partial from it unified every `|> list_set(??, …)` pipe datum with
+  // Int the moment the lib-first order made the scheme visible.
+  else if is_seq_op(cname) {
+    let elem = TVar(mint(Inferred("sequence element")))
+    match seq_op_sig(cname, elem) {
+      Some(sig) => {
+        let (ptys, ret) = sig
+        infer_call_partial(args, build_ctor_params(ptys, 0), ret,
+          mk_ef_closed([ENamed("Memory")]), handle, span, cname)
+      },
+      // A table member with no face row is unreachable by construction
+      // (the two enumerate the same names); the floor keeps
+      // productive-under-error alive if they ever diverge.
+      None => graph_bind(handle, TList(elem), Located(span, Inferred("sequence")))
+    }
   }
   else {
   // The single-variant record ctor in the ONE application syntax —

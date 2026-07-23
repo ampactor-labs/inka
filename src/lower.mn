@@ -4933,7 +4933,7 @@ fn find_override(overrides, target: String) = match overrides {
 // Returns `(captures_names, captures_exprs, captures_handles)` — parallel
 // triples. The names half feeds `ls_enter_frame`; the exprs half feeds
 // `LMakeClosure`'s heap-record materialization at emit time.
-fn resolve_captures_outer(names, owner_h) = {
+fn resolve_captures_outer(names: [String], owner_h) = {
   if len(names) == 0 { ([], [], []) }
   else {
     let name = last(names)
@@ -5531,7 +5531,7 @@ fn reach_enqueue(refs, rbuf, rn, fbuf, fcount) = {
 // generation, so the session-weave multiplicity that forces the cursor's
 // authored_hole onto the caret test (cursor.mn) cannot occur here; the two
 // reads re-unify under Hβ.cursor.session-weave-epoch-scope.
-fn executable_hole(handle) with GraphRead + !Mutate = match graph_node_body(handle) {
+fn executable_hole(handle) with GraphRead + Memory + Alloc + !Mutate = match graph_node_body(handle) {
   NHole(id) => id != 0 && !span_eq(parse_span_of(handle), span_zero()),
   _         => false
 }
@@ -5721,7 +5721,7 @@ fn hash_agg_reach(ty) with Memory + Alloc = {
 // the floor emission ([Int], String, records — byte-identical, Law 7); only
 // a genuinely wide var mints a twin ($min$sp2 = min with its one var at f64).
 
-fn spec_pairs_find(pairs, root) with Memory = {
+fn spec_pairs_find(pairs, root) with Memory + Alloc = {
   match find((p) => { let (v, _) = p; v == root }, pairs) {
     Some(p) => { let (_, t) = p; Some(t) },
     None    => None
@@ -6023,7 +6023,7 @@ fn spec_scan_list(exprs, acc) with Memory + Alloc = fold(acc, (a, e) => spec_sca
 // A tuple destructure at ANY depth reads positional layout: a tuple nested
 // under a con payload / record field / list slot sits behind a word pointer,
 // and its OWN element offsets are the same instantiation-sensitive read.
-fn lowpat_has_tuple(pat) with Memory = match pat {
+fn lowpat_has_tuple(pat) with Memory + Alloc = match pat {
   LPTuple(_)                   => true,
   LPCon(_, _, subs)            => any(lowpat_has_tuple, subs),
   LPUnresolvedCon(_, subs)     => any(lowpat_has_tuple, subs),

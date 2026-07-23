@@ -205,7 +205,7 @@ fn suggestion_kind_of(ann) with Pure = match ann {
 
 // Capability ADT to display label list. Used by AnnotationSuggestion.unlocks.
 // Composition over `show_capability` (already in mentl.mn).
-fn capability_labels(caps) with Pure = map(show_capability, caps)
+fn capability_labels(caps) with Memory + Alloc = map(show_capability, caps)
 
 // Suggestion's Reason edge. Wraps the candidate's anchor reason in a
 // Located/Unmarked chain that the Why-tentacle walks. Span comes from

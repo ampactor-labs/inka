@@ -74,8 +74,12 @@ wt_offsets() {
 }
 
 # wt_wheel <part…> — emit the canonical wheel input to stdout. Each part is
-# `src` or `lib`; order is the argument order (so `wt_wheel src lib` is the
-# canonical build order, `wt_wheel lib src` tests dependency-first). Uses `find`,
+# `src` or `lib`; order is the argument order. `wt_wheel lib src` is the
+# CANONICAL build order — callee-first at module scale: lib declares the
+# vocabulary src consumes, so a src->lib reference is BACKWARD and reads the
+# final scheme (the src-first blob left every such call on the loose
+# pre-registered snapshot: 492 fully-bare published schemes, measured
+# 2026-07-23 — the order-conditional class at its true size). Uses `find`,
 # NEVER `cat src/*.mn` (PLAN §6 — cat omits backends/). Excludes lib/tutorial.
 wt_wheel() {
   local part
@@ -105,7 +109,7 @@ wt_wheel() {
 wt_state_key() {  # the gate-relevant tree state, hashed. Over-inclusion is a
                   # spurious re-run; under-inclusion is the bug — include every
                   # file whose change can change the verdict.
-  { wt_wheel src lib
+  { wt_wheel lib src
     cat boot/mentl.wasm tests/micros/*.mn tools/verify.sh tools/run-micro.sh \
         tools/wt-env.sh tools/verify-baseline.txt 2>/dev/null
     printf '%s' "${WT_RUN_FLAGS[*]}"
@@ -113,7 +117,7 @@ wt_state_key() {  # the gate-relevant tree state, hashed. Over-inclusion is a
 }
 
 wt_m2_key() {  # what the cached boot(wheel) artifact depends on — nothing more
-  { wt_wheel src lib; cat boot/mentl.wasm; printf '%s' "${WT_RUN_FLAGS[*]}"; } \
+  { wt_wheel lib src; cat boot/mentl.wasm; printf '%s' "${WT_RUN_FLAGS[*]}"; } \
     | sha256sum | cut -d' ' -f1
 }
 
@@ -130,7 +134,7 @@ wt_m2_ensure() {  # fill $WT_M2CACHE/{wheel.mn,m2.wat,m2.wasm,m2.err} for the
       # re-check under the lock — a concurrent gate may have just filled it
       [ "$(cat "$WT_M2CACHE/key" 2>/dev/null)" = "$key" ] && [ -s "$WT_M2CACHE/m2.wasm" ] && exit 0
       : > "$WT_M2CACHE/key"   # invalidate before rebuilding (empty never matches a sha)
-      wt_wheel src lib > "$WT_M2CACHE/wheel.mn"
+      wt_wheel lib src > "$WT_M2CACHE/wheel.mn"
       timeout 9000 "$WT" run -D coredump="$WT_M2CACHE/m2.coredump" "${WT_RUN_FLAGS[@]}" \
         boot/mentl.wasm < "$WT_M2CACHE/wheel.mn" > "$WT_M2CACHE/m2.wat" 2> "$WT_M2CACHE/m2.err" || exit 1
       wt_asm "$WT_M2CACHE/m2.wat" "$WT_M2CACHE/m2.wasm" 2> "$WT_M2CACHE/m2w.err" || exit 1

@@ -369,7 +369,7 @@ fn driver_module_in_dag_deps(ref module_name, ref dag_modules)
   }
 }
 
-fn contains_module(ref modules, ref target) with Pure = {
+fn contains_module(ref modules, ref target) with Memory + Alloc = {
   any((m) => m == target, modules)
 }
 

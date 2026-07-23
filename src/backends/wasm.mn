@@ -376,10 +376,10 @@ fn ty_to_wasm_type(ty) with Pure =
 // keeps correct; (3) the worthy candidates ARE the twin set, seeded into
 // spec_registry and emitted as the same records under the spec_pairs state.
 
-fn spec_find_rec(recs, target: String) with Memory =
+fn spec_find_rec(recs, target: String) with Memory + Alloc =
   find((r) => { let (n, _p, _b, _f) = r; n == target }, recs)
 
-fn spec_demand_named(ds, m: String) with Memory = any((d) => { let (dm, _b, _p, _e) = d; dm == m }, ds)
+fn spec_demand_named(ds, m: String) with Memory + Alloc = any((d) => { let (dm, _b, _p, _e) = d; dm == m }, ds)
 
 // A site becomes a candidate when ANY quantified var lands wide — the exact
 // root-keyed substitution answers each var through its own pair (word-bound
@@ -454,7 +454,7 @@ fn spec_oph_wide_pair(oh, pairs) with EnvRead + LookupTy + GraphRead + Memory + 
   }
 }
 
-fn spec_tuple_elem_wide_pair(e, pairs) with GraphRead + Memory = match e {
+fn spec_tuple_elem_wide_pair(e, pairs) with GraphRead + Memory + Alloc = match e {
   TVar(u) => match spec_pairs_find(pairs, graph_chase_handle(u)) {
     Some(c) => match repr_of_resolved(c) { RI32 => false, _ => true },
     None    => false
@@ -511,7 +511,7 @@ fn spec_candidate_sensitive(d, recs) with EnvRead + LookupTy + GraphRead + Memor
   }
 }
 
-fn spec_name_in(names, m: String) with Memory = any((x) => x == m, names)
+fn spec_name_in(names, m: String) with Memory + Alloc = any((x) => x == m, names)
 
 fn spec_candidate_calls_worthy(d, worthy, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
   let (_m, base, pairs, enc) = d
@@ -1257,7 +1257,7 @@ fn emit_state_globals(slots) = {
 // emit and lower's singleton dispatch MUST agree on which handlers have a home,
 // so BOTH read the env live (one criterion, two readers — never a registry
 // on one side).
-fn emit_singleton_globals(lowered) with WasmOut + EnvRead = {
+fn emit_singleton_globals(lowered) with WasmOut + EnvRead + Memory + Alloc = {
   let installed = singleton_hnames_list(lowered, [])
   let all_names = match env_snapshot() {
     Env(entries) => noconfig_handler_names(entries, installed)
@@ -1325,7 +1325,7 @@ fn emit_driver_arg_loads(n, i) = {
 // handler with a MultiShot-graded arm, under the yield gate; an
 // UNINSTALLED handler's op keys intern nowhere and compare against offset
 // 0 — dead code, assembles clean.
-fn emit_redrive_fns(emitted_names) with WasmOut + EnvRead = {
+fn emit_redrive_fns(emitted_names) with WasmOut + EnvRead + Memory + Alloc = {
   let hnames = match env_snapshot() {
     Env(entries) => ms_handler_names(entries, [])
   }

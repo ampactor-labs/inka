@@ -1026,6 +1026,52 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶ THE BLOB DECLARES CALLEE-FIRST + THE SUBSTRATE FACE
+  TABLE + THE N-CURSOR FIELD (queue 0b landed with the order truth it
+  forced · pin 6807a214). The dig: `mentl two.mn:0` rendered every
+  position as one ghost var — the ranked (Float, Int) tier read ph at
+  the word-floor offset 4 while construction stored wide; no twin
+  minted because the demand walk's pairs resolved to FREE vars; the
+  Why probe named the fresh instantiation; the bare-scheme census then
+  measured the true shape: 492 wheel fns published fully-bare schemes
+  — the src-first blob made every src→lib call a FORWARD reference
+  reading the loose pre-registered snapshot (the order-conditional
+  class at its true size; the RTLIBS repros all passed because
+  fixtures sit AFTER the libs). THE FLIP: the canonical wheel input is
+  lib-before-src (wt_wheel lib src; march.sh matches) — callee-first
+  at module scale, the same cure prelude's iterate order applies
+  in-file. Bare schemes halve to 256 (intra-src residual, the named
+  order peer); field_ranked resolves whole; three tier twins mint
+  worthy. The sharper order re-judged the wheel — 57 diagnostics
+  trued: 33 declared rows widened to their bodies' truth (+Alloc
+  mostly; ic_compile_loop's IC-era row dropped — the body runs the
+  compile spine), the escaping family's two op declarations now speak
+  the string name-sets the family always carried (a first [EffName]
+  guess and a double-conversion detour both died to the artifact; the
+  probe's reason chain named the decl), expr_child_handles reads
+  {name, init} records by the init edge (MakeRecordExpr AND ResumeExpr
+  passed the record itself to node_handle), render_propose_arm's
+  guarded unwrap became the match (Pure holds), and the zero-caller
+  cursor_session_batch + CursorSessionResult deleted whole. THE FACE
+  TABLE: seq_op_sig is ONE home both substrate paths derive from —
+  infer_seq_op forces each argument position against it (the per-arm
+  force boilerplate deleted), and a HOLED/under-applied seq-op call
+  builds its product-with-holes from the SAME face, never from the raw
+  body's env scheme (list_set's `l + 8` types l Int; the partial
+  minted from it unified every pipe datum with Int the moment the
+  order made the scheme visible). The wheel's 14 `|> list_set(??, …)`
+  pipes rewrote saturated (clean under both judges); the class is
+  gated RED-first (mn-seq-op-holed-pipe: 4 errors on the prior boot,
+  72 through the face). THE FIELD (0b): `mentl <file>:0` projects the
+  whole absence field — every authored hole ranked first, each
+  rendered through the same cursor_at_handle + render_at path the
+  single-address form uses (a hole's line carries its Propose fan,
+  ties teaching), the annotation-gradient tier after; sequential, the
+  `><` swap honestly gated on the runner migration. Gate: the
+  propose-fan-demo field leg (RED as "lines count from 1" on the prior
+  pin). Board whole at the pin: TRANSITION m3 == m4 at 557,233 lines,
+  census 0 at every generation, comment-refs 0, frontier 209/0,
+  battery 113/113.
 - 2026-07-23 · ▶▶▶ THE INSTANCE CROSSES THE FN BOUNDARY — subst_row's
   dropped closed-tail merge, the trio law completed over bound tails,
   and the install-frame fragment join (the fold-family dig's root,
@@ -2354,10 +2400,17 @@ TWO-PASS WALK — pass 1 quiet-trial finalizes schemes, pass 2 re-parses
 and pre-registers every fn from pass 1's FINAL scheme — closes the class
 whole, and its second pass tips the 4GB bump image at the m3 emit
 (alloc-unreachable in the reach walk; the seq-op-row precedent exactly).
-DEP-gated on Hβ.perf.per-decl-arena; the build lives in git history at
-this landing's parent. Until then callee-first source order kills
-instances of the class one at a time — prelude's iterate_from precedes
-iterate for exactly this reason) ·
+DEP-gated on Hβ.perf.per-decl-arena; the reverted build was never
+committed — its design is three pieces: a quiet diagnostics trial
+bracketing pass 1, pass-2 pre-registration binding each FnStmt handle
+from the pass-1 FINAL scheme, and the compile seams calling the pair.
+THE CALLEE-FIRST BLOB (2026-07-23, the field landing) kills the class's
+src→lib face whole: the canonical wheel input is lib-before-src, so
+every cross-layer reference is BACKWARD; the bare-scheme census fell
+492 → 256, and the residual 256 are intra-src forward references — this
+peer's remaining scope. In-file, callee-first source order kills
+instances one at a time — prelude's iterate_from precedes iterate for
+exactly this reason) ·
 `Hβ.patch.set-target-state-clobber` RETRACTED (2026-07-18, same day):
 probed on the pinned artifact with both a len read and a full iterate,
 before and after the perform — seven of seven survive; the original

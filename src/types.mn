@@ -1953,8 +1953,8 @@ effect LowerScope {
   ls_current_lambda_handle() -> Int  // innermost-first: the enclosing lambda frame's handle, or -1 if a named-fn frame is hit first / none
   ls_push_scope() -> Int  // checkpoint = current frame's local count
   ls_pop_scope(Int) -> ()  // truncate frame locals back to checkpoint
-  ls_register_escaping([(String, EffRow)]) -> ()  // install the flow-closure map (name → escaping row)
-  ls_escaping_of(String) -> Option([EffName])   // a name's flow-closure as the ledger's native canonical NAME-SET (None = not a top-level fn → leaf); escaping_row lifts it to row algebra at the one consumer
+  ls_register_escaping([(String, [String])]) -> ()  // install the flow-closure map (name → escaping name-set; elements are the interned effect NAMES — eff_names_of's form, the ev ledger's native key)
+  ls_escaping_of(String) -> Option([String])   // a name's flow-closure name-set — the same string elements the register wrote (None = not a top-level fn → leaf); escaping_row lifts it at the one consumer
   ls_register_may_yield(Bool) -> ()  // band B M1.3 — does ANY declared effect carry a MultiShot op? (computed once at lower_program)
   ls_program_may_yield() -> Bool     // the A1 prove-absence gate's global short-circuit: no MultiShot op anywhere ⇒ nothing can yield ⇒ every row proves absence
   ls_register_resume_binds([(String, String)]) -> ()  // THE CUT (bank A3) — [(fn_name, hname)]: resume-bearing fns reachable from a MultiShot arm, bound to their handler (computed once at lower_program)

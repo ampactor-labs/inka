@@ -553,52 +553,6 @@ fn teach(entry_module) =
 fn audit(entry_module) =
   analyze_fns(entry_module, (name, handle) => build_audit_report(name, handle, lookup_ty(handle)), render_audit)
 
-// ─── cursor_session_batch — `<|` fanout from one source to four projections ──
-//
-// One source borrowed (read-only) to four cursor projections — check
-// surfaces diagnostics; teach surfaces gradient steps; query answers
-// structured questions; audit surfaces capability-severance suggestions.
-// All four read the SAME inferred graph; the AST is borrowed via `<|`
-// to each branch; outputs tuple together.
-//
-// `<|` here proves the cursor's eight-aspect projection AT THE
-// PIPELINE level: a single edit triggers four canonical surfaces
-// simultaneously — exactly what `mentl edit` does at the IDE layer.
-// The seed parser handles `<|` per Hβ.first-light.handle-expr-with-
-// clause-substrate; the lower-side parallelism dispatches via the
-// Thread effect handler installed upstream (single-thread sequential
-// default; WasiThreads spawn in production per
-// protocol_parallelism_symmetry.md).
-//
-// Renamed from `cursor_session` 2026-05-07 to disambiguate from
-// `cursor_session` (cursor_transport.mn) — that one opens the bus-
-// compressor loop with a Caret; this one runs the four batch
-// projections from one source string. Different shapes; same family.
-//
-// Drift refused: 9 (no deferred surface — all four bodied here);
-// 6 (none of the surfaces is primitive special-case; uniform branches);
-// 7 (output is a 4-tuple, not parallel-arrays).
-
-fn cursor_session_batch(source) = {
-  let (diagnostics, gradients, audit_report, query_default_view) =
-    source
-      <| (
-        (s) => check_source(s),
-        (s) => teach(s),
-        (s) => audit(s),
-        (s) => query(s, "type main")
-      )
-  CursorSessionResult({diagnostics, gradients, audit_report, query_default_view})
-}
-
-type CursorSessionResult
-  = CursorSessionResult({
-      diagnostics:        String,
-      gradients:          String,
-      audit_report:       String,
-      query_default_view: String
-    })
-
 // ─── Multi-module compilation — map over a module list ──────────────
 //
 // compile_pair_modules (binary special-case) was erased per
@@ -634,7 +588,7 @@ type CursorSessionResult
 // `mentl edit` IS this loop running. There is no separate `compile`
 // — the edit IS the compile IS the projection IS the loop closing.
 
-fn ic_compile_loop(initial_entry) with IC + !Mutate = {
+fn ic_compile_loop(initial_entry) = {
   initial_entry
     |> driver_check
     ~> project_queue_merger
@@ -1003,7 +957,7 @@ fn render_gradient_result(result) = match result {
   }
 }
 
-fn join_unlock_labels(labels) with Memory = {
+fn join_unlock_labels(labels) with Memory + Alloc = {
   if len(labels) == 0 { "(no capabilities)" }
   else {
     let first = head(labels)

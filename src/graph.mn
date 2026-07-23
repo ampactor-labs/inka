@@ -136,9 +136,7 @@ handler graph_handler
 
   graph_fresh_ty(reason) => {
     let handle = next
-    let new_nodes = nodes
-      |> graph_extend_to(??, handle + 1)
-      |> list_set(??, handle, GNode(NFree(epoch), reason))
+    let new_nodes = list_set(graph_extend_to(nodes, handle + 1), handle, GNode(NFree(epoch), reason))
     let (new_bufs, new_lens) =
       overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
     let new_trail = trail_append(trail, trail_len, MFreshNode(handle))
@@ -156,9 +154,7 @@ handler graph_handler
 
   graph_fresh_row(reason) => {
     let handle = next
-    let new_nodes = nodes
-      |> graph_extend_to(??, handle + 1)
-      |> list_set(??, handle, GNode(NRowFree(epoch), reason))
+    let new_nodes = list_set(graph_extend_to(nodes, handle + 1), handle, GNode(NRowFree(epoch), reason))
     let (new_bufs, new_lens) =
       overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
     let new_trail = trail_append(trail, trail_len, MFreshNode(handle))
@@ -183,9 +179,7 @@ handler graph_handler
   // before speculation, so rollback never touches it.
   graph_register_node(handle, body) => {
     resume()
-      with program = program
-        |> list_extend_to(??, handle + 1)
-        |> list_set(??, handle, body)
+      with program = list_set(list_extend_to(program, handle + 1), handle, body)
   },
 
   // The comment weave — parse-attached prose, keyed by handle exactly like the
@@ -206,9 +200,7 @@ handler graph_handler
       if byte_len(existing) > 0 { "{text}\n\n{existing}" } else { text }
     } else { text }
     resume()
-      with comments = comments
-        |> list_extend_to(??, handle + 1)
-        |> list_set(??, handle, (merged, span))
+      with comments = list_set(list_extend_to(comments, handle + 1), handle, (merged, span))
   },
 
   // Padded slots hold word 0; the sentinel page reads as ("", zero span) —
@@ -253,9 +245,7 @@ handler graph_handler
   // between infer and lower, before speculation, so rollback never touches it.
   graph_canon_set(from, to) => {
     resume()
-      with canon = canon
-        |> list_extend_to(??, from + 1)
-        |> list_set(??, from, to)
+      with canon = list_set(list_extend_to(canon, from + 1), from, to)
   },
 
   // A handle with no edge (absent, or a self-pointer) is its own e-class root —
@@ -278,9 +268,7 @@ handler graph_handler
   // narrowing is a `|>` stage at infer, read by lower's verify-obligation.
   graph_narrow_set(handle, pred_handle) => {
     resume()
-      with narrowing = narrowing
-        |> list_extend_to(??, handle + 1)
-        |> list_set(??, handle, pred_handle)
+      with narrowing = list_set(list_extend_to(narrowing, handle + 1), handle, pred_handle)
   },
 
   graph_narrow_at(handle) => {
@@ -417,15 +405,9 @@ handler graph_handler
         with current_overlay_idx = existing_idx,
              current_overlay = module_name
     } else {
-      let new_names = overlay_names
-        |> list_extend_to(??, overlay_count + 1)
-        |> list_set(??, overlay_count, module_name)
-      let new_bufs = overlay_bufs
-        |> list_extend_to(??, overlay_count + 1)
-        |> list_set(??, overlay_count, make_list(0))
-      let new_lens = overlay_lens
-        |> list_extend_to(??, overlay_count + 1)
-        |> list_set(??, overlay_count, 0)
+      let new_names = list_set(list_extend_to(overlay_names, overlay_count + 1), overlay_count, module_name)
+      let new_bufs = list_set(list_extend_to(overlay_bufs, overlay_count + 1), overlay_count, make_list(0))
+      let new_lens = list_set(list_extend_to(overlay_lens, overlay_count + 1), overlay_count, 0)
       resume()
         with overlay_names = new_names,
              overlay_bufs = new_bufs,
@@ -845,14 +827,10 @@ fn boundary_at(ref boundaries, handle) with !Mutate =
   else { NoBoundary }
 
 fn boundary_set(own boundaries, handle, own boundary) =
-  boundaries
-    |> list_extend_to(??, handle + 1)
-    |> list_set(??, handle, boundary)
+  list_set(list_extend_to(boundaries, handle + 1), handle, boundary)
 
 fn trail_append(own trail, trail_len, own mutation) = {
-  trail
-    |> list_extend_to(??, trail_len + 1)
-    |> list_set(??, trail_len, mutation)
+  list_set(list_extend_to(trail, trail_len + 1), trail_len, mutation)
 }
 
 // Overlay registration — flat-substrate per-module handle set
@@ -866,9 +844,7 @@ fn trail_append(own trail, trail_len, own mutation) = {
 fn overlay_register_at(own overlay_bufs, own overlay_lens, idx, handle) = {
   let handles_buf = list_index(overlay_bufs, idx)
   let handles_len = list_index(overlay_lens, idx)
-  let new_handles = handles_buf
-    |> list_extend_to(??, handles_len + 1)
-    |> list_set(??, handles_len, handle)
+  let new_handles = list_set(list_extend_to(handles_buf, handles_len + 1), handles_len, handle)
   let new_bufs = list_set(overlay_bufs, idx, new_handles)
   let new_lens = list_set(overlay_lens, idx, handles_len + 1)
   (new_bufs, new_lens)
@@ -933,7 +909,7 @@ fn node_handle(node) = {
 // "declared as ..."), so a patch target must read the weave, never the
 // reason. O(n) scan at felt cadence (once per accepted action); the O(1)
 // form is the handle-indexed span weave (the §5.O name-is-handle sibling).
-fn parse_span_of(handle) with GraphRead + !Mutate = {
+fn parse_span_of(handle) with GraphRead + Memory + Alloc + !Mutate = {
   let Graph(_, _, _, _, span_index) = graph_snapshot()
   match find((pair) => { let (_, h) = pair h == handle }, span_index) {
     Some(pair) => { let (span, _) = pair span },

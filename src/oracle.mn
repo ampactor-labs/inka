@@ -343,7 +343,9 @@ fn expr_child_handles(e) with Alloc + Memory = match e {
   IfExpr(c, t, f)          => [node_handle(c), node_handle(t), node_handle(f)],
   BlockExpr(stmts, fin)    => [node_handle(fin)] ++ map(node_handle, stmts),   // order-free: membership test only
   MatchExpr(scrut, _arms)  => [node_handle(scrut)],
-  ResumeExpr(v, updates)   => [node_handle(v)] ++ map(node_handle, updates),
+  // A resume-with update is the parser's {name, init} record — the handle
+  // lives on its init edge (record_field_handle's exact sibling).
+  ResumeExpr(v, updates)   => [node_handle(v)] ++ map(record_field_handle, updates),
   MakeListExpr(elems)      => map(node_handle, elems),
   MakeTupleExpr(elems)     => map(node_handle, elems),
   MakeRecordExpr(fields)   => map(record_field_handle, fields),
@@ -357,7 +359,9 @@ fn expr_child_handles(e) with Alloc + Memory = match e {
   _                        => []   // LitInt/LitFloat/LitString/LitBool/LitUnit/VarRef/ExprPlaceholder — no child Nodes
 }
 
-fn record_field_handle(field) with Pure = { let (_name, value) = field; node_handle(value) }
+// The field IS the parser's {name, init} record — read the init edge by
+// name (the tuple destructure read a record as positions and met Node).
+fn record_field_handle(field) with Pure = node_handle(field.init)
 
 // locality_at — byte distance from the cursor, read from the graph's
 // span_index ([(ValidSpan, Int)]). The position's span start IS the

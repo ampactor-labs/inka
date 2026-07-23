@@ -184,7 +184,7 @@ handler synth_default with !Mutate {
 // allowed_effects row.
 
 fn enumerate_typed(target_ty, allowed_effects, context)
-    with EnvRead + GraphRead + GraphWrite + Synth + !Mutate + Memory = {
+    with EnvRead + GraphRead + GraphWrite + Synth + !Mutate + Memory + Alloc = {
   match target_ty {
     TName(name, args) => enumerate_constructors(name, args, context),
     TFun(params, ret, row) => enumerate_lambdas(params, ret, row, context),
@@ -277,7 +277,7 @@ fn vocabulary_call_candidate(name, row, allowed_row)
 // Does `name`'s free-name closure reach `target`? collect_free_vars
 // over-approximates the call edge (a reference without a call also
 // excludes — the safe direction). `seen` breaks cycles.
-fn reaches_decl(name: String, target: String, seen) with GraphRead + !Mutate = {
+fn reaches_decl(name: String, target: String, seen) with GraphRead + Memory + Alloc + !Mutate = {
   if target == "" { false }
   else if name == target { true }
   else if contains_name(seen, name) { false }
@@ -290,7 +290,7 @@ fn reaches_decl(name: String, target: String, seen) with GraphRead + !Mutate = {
   }
 }
 
-fn contains_name(names, target: String) with Pure =
+fn contains_name(names, target: String) with Memory + Alloc =
   any((n) => n == target, names)
 
 // A named fn's body node, read from the program weave directly — the
@@ -319,7 +319,7 @@ fn fn_body_scan(name: String, i, n) with GraphRead + !Mutate = {
 // ─── Per-target-shape enumerators ──────────────────────────────────
 
 fn enumerate_constructors(type_name, args, context)
-    with EnvRead + GraphRead + GraphWrite + !Mutate + Memory = {
+    with EnvRead + GraphRead + GraphWrite + Alloc + !Mutate + Memory = {
   // The graph already proves which bindings are constructors of this
   // type: each typedef's `env_extend` registered its variants as
   // ConstructorScheme entries whose scheme result type is
@@ -338,7 +338,7 @@ fn enumerate_constructors(type_name, args, context)
 // enriched first, exactly as the rest-before-head recursion ran);
 // reverse restores the newest-first result order consumers saw.
 fn ctors_of_type(entries, type_name, context)
-    with GraphRead + GraphWrite + Memory + !Mutate = {
+    with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let n = len(entries)
   reverse(ctors_of_type_from(entries, type_name, 0, n, make_list(n), 0))
 }
@@ -572,7 +572,7 @@ fn verify_each_enriched(candidates, target_ty) with Synth + GraphRead + GraphWri
 //    mint-span record — so dropping the pair dropped the Why from every
 //    rendered survivor.
 
-fn map_to_proposals(enriched) with Pure = map((candidate) => {
+fn map_to_proposals(enriched) with Memory + Alloc = map((candidate) => {
   let EnrichedCandidate(c) = candidate
   (c.node, c.reason)
 }, enriched)

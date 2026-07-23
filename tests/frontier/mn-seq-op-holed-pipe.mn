@@ -1,0 +1,11 @@
+// The holed SUBSTRATE call is the product-with-holes built from the FACE
+// (seq_op_sig), never from the raw body's env scheme: list_set's `l + 8`
+// types l Int, and the partial minted from that scheme unified the pipe
+// datum with Int (14 wheel sites, the lib-first order's first catch).
+// RED on the pre-face boot: E_TypeMismatch Int vs List at every stage.
+fn main() = {
+  let grown = [10, 20, 30]
+    |> list_set(??, 0, 40)
+    |> list_set(??, 1, 2)
+  last(grown) + list_index(grown, 0) + list_index(grown, 1)
+}

@@ -659,9 +659,10 @@ fn render_propose_arm(situation) with Pure = {
   let TopicFacts(f) = s.facts
   let body = match s.topic {
     TopicHandle(_)       => [
+      // The guarded read in its non-failing form: the match IS the guard,
+      // so the row stays Pure (unwrap performs Fail even under is_some).
       SLit(if f.is_hole { "Hole expects synthesis here." }
-           else if is_some(f.error_code_at) { unwrap(f.error_code_at) }
-           else { "" })
+           else { match f.error_code_at { Some(c) => c, None => "" } })
     ],
     TopicError(code, _)  => [SLit("Diagnostic at "), SIdent(code), SLit(" — codeAction available.")],
     TopicAsk(_)          => [SLit("Ask received — proposing.")],
@@ -1187,7 +1188,7 @@ fn intent_id_eq(a, b) with Pure = {
 // so the simple form is honest. Substrate idiom (list_extend_to +
 // counter) reserved for genuinely-large N — this is not it.
 
-fn intents_without(intents, id) with Pure = {
+fn intents_without(intents, id) with Memory + Alloc = {
   filter((intent) => {
     let (head_id, _) = intent
     !intent_id_eq(head_id, id)

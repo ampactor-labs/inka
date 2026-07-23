@@ -67,8 +67,8 @@ pin_trap() {  # pin_trap <wasm> <err> — auto-disassemble the trap site from th
 }
 
 # ── wheel input: `find`, NOT `cat src/*.mn` (PLAN §6 — cat omits backends/) ──
-{ find src -name '*.mn' | sort | xargs cat
-  find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; } > "$WHEEL"
+{ find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat
+  find src -name '*.mn' | sort | xargs cat; } > "$WHEEL"
 echo "wheel: $(wc -l < "$WHEEL") lines"
 
 BOOT=boot/mentl.wasm

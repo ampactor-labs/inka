@@ -46,6 +46,35 @@
 > `mentl audit` is real and makes the wrong move *unsayable* (`PLAN.md §0`), YOU
 > are `mentl audit`, by hand, every turn.
 
+## ⚖ The law is ALIVE — update it, consolidate it, count its kills ⚖
+
+> **A law that now binds against the ultimate form gets UPDATED, not obeyed**
+> (Morgan's standing license, 2026-07-22, exercised the night the six-form
+> row became the canonical triple). The burden stays on the challenger:
+> bring the measurement that shows the law binding, then rewrite the law IN
+> PLACE — a law is a representation, and representations swap whole.
+>
+> **The three docs run their own census to zero.** A session's hard-won
+> lesson lands INSIDE the law it sharpens — appended sections are the
+> doc-layer accretion disease. A superseded claim is DELETED the moment the
+> artifact obsoletes it (the comment-ref ratchet is this law at the prose
+> boundary; the ledger's retractions are it at the corpus boundary).
+>
+> **The standing charge is AMBIENT — it need never be re-typed:** ultimate,
+> SOTA-surpassing, novel, Mentl-empowered design is the only acceptable
+> move at every scale; no deferrals, no named-gaps without their COMPLETE
+> build-ready design banked; challenge every "canonical" shape on sight;
+> comments must be TRUE (an entity that can be wrong wrote them — the
+> graph's carried truth outranks them); never dodge incomplete inference
+> with annotations (Mentl infers, teaches, proposes — annotations are
+> Intent Boundaries only); dissolve compile-time-vs-runtime assumptions at
+> every design; never move a problem and call it solved — the absolute root
+> or nothing; and the endpoint is the GRADIENT: inference + effects +
+> handlers + multi-cursor multi-shot exploration doing the fully-trustable,
+> always-proven job of teaching the developer what completes their program.
+> Mentl solves Mentl. **There is no time — only the work and, eventually,
+> Mentl.**
+
 ## ⌖ Prime directive — think in the five verbs ⌖
 
 > **Reason, write, and design in Mentl's five topological operators — always,
@@ -280,6 +309,24 @@
 >   never reuse yesterday's), `wt_asm` + run = seconds per cycle vs minutes.
 >   `bash tools/march-gate.sh` runs the whole m2 rung battery as one scoreboard —
 >   iterate against IT, not against hand-typed probes.
+> - **THE FORENSIC LAWS (twelve kills in one continuous dig, 2026-07-22):**
+>   (1) Gated probes are comparable ONLY within ONE binary — every rebuild
+>   shifts layout, so a gate tuned on one build silently misses on the next
+>   (the fatal value's count moved outside the window; four channels probed
+>   across four builds "proved" an impossibility one combined build
+>   dissolved). (2) The prober must HONOR the protocols it probes — a raw
+>   offset read on a tagged list decoded a valid slice as a poison record
+>   and cost two corpus entries; read through the representation or through
+>   the wheel's own accessors. (3) A wrong decode is RETRACTED the moment
+>   the artifact refutes it — the corpus is verified-only; a banked
+>   hypothesis is worse than none. (4) Count the KILLS: every theory a
+>   measurement destroys is progress and gets recorded as such — twelve
+>   dead labels turned "durable state torn" into "the slots buffer aliases
+>   the env state," each kill one probe. (5) A correctness invariant held
+>   by ACCIDENT (zero-reads true only because monotonic allocation never
+>   reuses wasm's zero-init pages) is a bug the first new capability
+>   exposes — name the accident, then make it a CONTRACT at the one writer
+>   (heap_reset now restores virginity).
 > - **wasm-tools FIRST — the mechanical instruments, before any hand-reading of a
 >   backtrace (proven 2026-07-08; the emit-diff was the biggest under-use).** The
 >   self-hosting bug class is ALWAYS "m2 works, m2's emit of the wheel (m3)

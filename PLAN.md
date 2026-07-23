@@ -1026,6 +1026,29 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · THE RESET RESTORES VIRGINITY + the law goes alive in
+  CLAUDE.md (the twelve-kill forensic dig's landings · pin 502f691e).
+  heap_reset now zeroes [mark, bump) before the rewind ($heap_reset_impl,
+  a dedicated preamble fn — never inline, the callers' scratch may be
+  live): the post-reset world is bit-identical to the never-allocated
+  world, so every zero-read (slot_present's Option niche, unwritten
+  make_list slots — alloc_list_sc writes only the header) stays true
+  under reuse. The invariant had held by ACCIDENT of monotonicity —
+  wasm's zero-init pages — and the first reuse served stale bytes as
+  placed arg slots; measured under the contract, the regioned battery
+  runs at a 192MB peak. The battery ships no-reset still: the
+  twelve-kill corpus (named-residue index) ends at a standing frontier
+  the virgin reset does NOT clear — the fill_arg_slots slots buffer
+  ALIASES the env handler's own state in virgin memory (both gated hits
+  at collect's placed arm, zero at every placement channel, one
+  binary), with the yield machinery in every fatal frame; the
+  address-pair probe is loaded. CLAUDE.md gains the ⚖ ALIVE-LAW
+  section (Morgan's update-the-law license as first-class law; the
+  docs' own census-to-zero; the standing charge made ambient) and the
+  five FORENSIC LAWS distilled from the dig (one-binary gates,
+  protocol-honoring probes, retract-fast, count-the-kills,
+  accident-invariants become contracts at the one writer). TRANSITION
+  m3 == m4 (the 2-line preamble/call-form crossing); board whole.
 - 2026-07-22 · THE SINGLETON TIER TELLS THE TRUTH — LDirectPerform +
   the stateful-uninstalled refusal (the last silent-wrong class of the
   gate arc closes · pin fc2a9520). The singleton perform is its own
@@ -2010,20 +2033,33 @@ under reset layouts) would deliver exactly a large list where a node
 belongs; the yield-packet cross-wire stays second. Misdirection is DEAD
 too (session 5: the return probe shows the indirect call consuming
 table index 2203 consistently and returning the valid slice — the call
-went where it should and returned what it should). The TParam value
-layer is CLEAN-BILLED at every construction site (ninth kill): the
-quantify path's default→None is deliberate and total, and
-subst_params/param_with_ty preserve all five fields through
-instantiate — so the crossed read is not a clone-arity tear. NEXT
-OPENING, exact: the fill probe at collect_slot_nodes — instrument BOTH
-arms' writes (the placed value and the default expr) with (cname, i,
-value, value[0]) so a list-shaped write into a node slot names itself
-and its source arm in one line; prefer the BINARY-PATCH form on the
-emitted fn (a source-level eprint shifts layout and this trigger is
-layout-sensitive — the probe could hide it). The 838 constant at the
-fatal slice's +16 still wants a graph read (a span/handle?). The
-image/scratch split stays the arena's build; the element anomaly is
-upstream of it.
+went where it should and returned what it should). Sessions 6–7 (the
+same continuous now) ran the fill probes and REWROTE THE ALLOCATOR'S
+CONTRACT on the way: (TENTH kill) the defaults are innocent — the one
+gated hit is collect's PLACED arm; (ELEVENTH, the contract) make_list
+never zeroes its slots (alloc_list_sc writes only the header), so every
+zero-read in the runtime held by the ACCIDENT of monotonicity — wasm's
+zero-init pages — and the first reuse served stale bytes as placed
+slots; heap_reset now RESTORES VIRGINITY ($heap_reset_impl memory.fills
+[mark, bump) before the rewind — the post-reset world is bit-identical
+to the never-allocated world; the op doc carries the contract;
+measured: the regioned battery runs at 192MB peak). And (TWELFTH, the
+standing frontier) the virgin reset does NOT clear the compile-#2 kill:
+in ONE binary with ALL four placement channels and collect gated
+identically, BOTH hits land at collect's placed and ZERO at any
+placement — the slots buffer contains env-shaped values (the entries
+list; a name-string-headed tuple) NO placement wrote, in VIRGIN
+memory. Two logical objects, one address: the slots buffer ALIASES the
+env handler's own state, and op_each_handler_yield sits in every fatal
+frame — the allocation-vs-continuation interaction (the yield/redrive
+path re-entering with a stale frame, or the ev-region carving
+overlapping alloc space) is the pinned frontier. NEXT OPENING, exact:
+print the slots buffer's ADDRESS at fill_arg_slots' make_list beside
+the env state record's address (one gated pair — if equal, the alias
+is proven and the writer is whoever built the env's entries at that
+address; the k/redrive frame-capture is the candidate that re-serves
+an old bump position). The image/scratch split stays the arena's
+build; the battery ships no-reset until this closes.
 
 The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
 `Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a

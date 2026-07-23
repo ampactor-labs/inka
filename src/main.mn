@@ -1142,15 +1142,13 @@ fn battery_loop(dir, libs, micros, i, fails) = {
         }
       }
     }
-    // The per-compile region (heap_mark before / heap_reset here) is the
-    // arena's honest grain and its ops are landed + gated (mn-heap-region) —
-    // but a SECOND in-process compile after a reset traps in its own infer
-    // while every input is probe-verified intact (libs head+tail, the names,
-    // the reset address itself), and without the reset 100 compiles run
-    // straight to the 4GB ceiling. Some compile-internal heap state is
-    // durable across compiles and torn by the reset — the named peer
-    // Hβ.runtime.cross-compile-durable-state carries the corpus; the region
-    // brackets this loop the day it closes.
+    // The per-compile region (mark/reset with the virginity contract) is
+    // measured 192MB-bounded across the battery — but compile #2 under ANY
+    // reset dies at a slots buffer ALIASING the env's own state (two logical
+    // objects, one address, in virgin memory, with the yield machinery in
+    // every fatal frame — the Hβ.runtime.cross-compile-durable-state corpus
+    // carries the eleven-probe decode). The no-reset form ships until the
+    // allocation-vs-continuation interaction closes.
     battery_loop(dir, libs, micros, i + 1, fails + step)
   }
 }

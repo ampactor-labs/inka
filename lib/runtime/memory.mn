@@ -71,7 +71,11 @@ effect Alloc {
   // with live handles above it) is the caller's ownership obligation — the
   // same contract every region system carries.
   heap_mark() -> Int
-  heap_reset(Int)
+  heap_reset(Int)   // rewinds AND zeroes [mark, bump): the post-reset world is
+                    // bit-identical to the never-allocated world, so every
+                    // zero-read (the Option-niche slot_present, unwritten
+                    // make_list slots) stays true under reuse — virginity is
+                    // the reset's CONTRACT, not monotonicity's accident
 }
 
 // Pure — the empty effect row. Pure is not an effect with operations

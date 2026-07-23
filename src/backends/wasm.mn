@@ -2224,6 +2224,16 @@ fn emit_memory_decl() = {
   // ev_perform_entry evidence seam today; the arena/CAS body-swap is the named
   // follow-up Hβ.emit.memory-strategy-body-swap (gated on the seam, PLAN §7).
   wat_emit("  (func $alloc (param $size i32) (result i32)(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (local.get $ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr)(br_if 0 (i32.ge_u (global.get $heap_ptr)(local.get $ptr)))(unreachable))\n")
+  // heap_reset RESTORES VIRGINITY: the region [mark, bump) is zeroed before
+  // the rewind, so the post-reset world is bit-identical to the
+  // never-allocated world. The whole runtime's zero-reads (slot_present's
+  // Option niche, every unwritten make_list slot) held only by the ACCIDENT
+  // of monotonicity — wasm's zero-init pages made unwritten slots read 0
+  // because memory was never reused; the first reuse without this fill
+  // served stale bytes as placed arg slots (the battery's compile-#2 kill).
+  // A dedicated fn, never inline: the fill needs a temporary for the mark,
+  // and the callers' scratch locals may be live (the wrong-scratch class).
+  wat_emit("  (func $heap_reset_impl (param $mark i32)(local.get $mark)(i32.const 0)(global.get $heap_ptr)(local.get $mark)(i32.sub)(memory.fill)(global.set $heap_ptr (local.get $mark)))\n")
   // Thread record region: [0x800, 0x1000) = 2KB / 16 bytes per record
   // = 128 thread slots. Layout per record (16 bytes):
   //   offset 0: closure_ptr (i32)
@@ -4112,9 +4122,10 @@ fn emit_expr(expr) = match expr {
     } else if import_name == "heap_mark" {
       wat_emit("    (global.get $heap_ptr)\n")
     } else if import_name == "heap_reset" {
-      // unit-typed: the set consumes the arg; the (i32.const 0) closes the
-      // result slot — the atomic_store precedent.
-      wat_emit("    (global.set $heap_ptr)(i32.const 0)\n")
+      // unit-typed: the call consumes the arg; the (i32.const 0) closes the
+      // result slot — the atomic_store precedent. The impl zeroes the
+      // region before rewinding (virginity restored — see its emission).
+      wat_emit("    (call $heap_reset_impl)(i32.const 0)\n")
     } else if import_name == "atomic_load_i32" {
       // The atomics have NO handler arm (unlike wasi_num_cores) — they ARE
       // the wasm atomic instruction set on shared memory, the threading peer

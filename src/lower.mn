@@ -369,6 +369,7 @@ type LowExpr
   // arm runs against ("" sentinel = use caller __state). Threads the handler's
   // STATE RECORD as the arm-call's __state per handler-IS-state.
   | LPerform(Int, String, [LowExpr], String)
+  | LDirectPerform(Int, String, String, [LowExpr])  // handle, hname, op_name, args — the SINGLETON-tier perform as its own node: the direct call against the unique handler's state global. Every walk delegates through singleton_perform_block (semantics identical by construction); the census walk fires its demand so the gate can refuse the stateful-and-never-installed read of a zero state global
   // Tier-2 evidence-dispatched perform (handler comes from the caller via
   // an evidence slot on __state — handler IS evidence). The ev-slot holds
   // a per-effect entry [record ptr, base]; the arm runs against that RECORD
@@ -518,6 +519,7 @@ fn lexpr_handle(e) with Pure = match e {
   LFeedback(h, _, _)      => h,
   LFeedbackPrior(h)       => h,
   LPerform(h, _, _, _)    => h,
+  LDirectPerform(h, _, _, _) => h,
   LEvPerform(h, _, _, _, _) => h,
   LEvRef(h, _)            => h,
   LUnresolvedEvidence(h, _) => h,
@@ -1914,7 +1916,14 @@ fn lower_op_default_handler(op_name) =
 // was installed with (handler IS state), reached live at its one home instead
 // of via a threaded ev-slot. Reuses LPerform's Tier-1 emit with the global read
 // standing in for the lexical __hstate local.
-fn lower_singleton_perform(handle, op_name, hname, lo_args) = {
+fn lower_singleton_perform(handle, op_name, hname, lo_args) =
+  LDirectPerform(handle, hname, op_name, lo_args)
+
+// The singleton perform's emission SHAPE — the block every walk and the
+// emit delegate through, so LDirectPerform's semantics equal the old
+// inline form BY CONSTRUCTION at every layer (locals, reach, evidence,
+// bytes — Law 7 arbitrates).
+fn singleton_perform_block(handle, hname, op_name, lo_args) = {
   let rec_local = "_{int_to_str(handle)}"
   LBlock(handle, [
     LLet(handle, rec_local, LGlobal(handle, "{hname}_state_g")),
@@ -4179,6 +4188,7 @@ fn k2_floor_guard(e, terminus) = match e {
   LMakeVariant(h, t, fs) => LMakeVariant(h, t, k2_floor_list(fs)),
   LFeedback(h, b, s)    => LFeedback(h, k2_floor_guard(b, false), k2_floor_guard(s, false)),
   LPerform(h, n, args, r) => LPerform(h, n, k2_floor_list(args), r),
+  LDirectPerform(h, hn, op, args) => LDirectPerform(h, hn, op, k2_floor_list(args)),
   LEvPerform(h, n, ev, s, args) => LEvPerform(h, n, ev, s, k2_floor_list(args)),
   LWasiCall(h, n, args) => LWasiCall(h, n, k2_floor_list(args)),
   LFieldLoad(h, rec, o) => LFieldLoad(h, k2_floor_guard(rec, false), o),
@@ -5238,6 +5248,7 @@ fn reach_names_expr(expr, acc) = match expr {
   // via their reached decl-container, but a singleton dispatch to an UNINSTALLED
   // handler is the arm fn's only reference).
   LPerform(_h, target, args, _) => reach_names_list(args, ["op_{target}"] ++ acc),
+  LDirectPerform(h, hn, op, args) => reach_names_expr(singleton_perform_block(h, hn, op, args), acc),
   LHandleWith(_h, b, hn, _hname, inits, arm_names, evs) =>
     reach_names_list(evs,
       reach_names_list(inits,
@@ -5494,6 +5505,7 @@ fn collect_value_holes_expr(expr, acc) = match expr {
     collect_value_holes_list(ev, collect_value_holes_list(args, collect_value_holes_expr(f, acc))),
   LFeedback(_h, b, s)       => collect_value_holes_expr(s, collect_value_holes_expr(b, acc)),
   LPerform(_h, _n, args, _) => collect_value_holes_list(args, acc),
+  LDirectPerform(_h, _hn, _op, args) => collect_value_holes_list(args, acc),
   LWasiCall(_h, _n, args)   => collect_value_holes_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => collect_value_holes_list(a, acc),
   LEvRef(_h, _e)            => acc,
@@ -5849,6 +5861,7 @@ fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
   LGlobal(h, n)             => { let (s, o) = acc; ([(h, n)] ++ s, o) },
   LFnRef(h, n, ev)          => { let (s, o) = spec_scan_list(ev, acc); ([(h, n)] ++ s, o) },
   LPerform(_h, _t, args, _) => spec_scan_list(args, acc),
+  LDirectPerform(h, hn, op, args) => spec_scan_expr(singleton_perform_block(h, hn, op, args), acc),
   LHandleWith(_h, b, hn, _hname, inits, _arms, evs) =>
     spec_scan_list(evs, spec_scan_list(inits, spec_scan_expr(hn, spec_scan_expr(b, acc)))),
   LLet(_h, _n, inner)       => spec_scan_expr(inner, acc),

@@ -201,19 +201,49 @@ fn demands_to_enames(ref demands, i, acc) = {
   if i >= len(demands) { acc }
   else {
     let d = list_index(demands, i)
-    let en = match env_lookup(d) {
+    // A demand that resolves through an op WITH a default handler is the
+    // SINGLETON tier's direct call: the read of the handler's state global.
+    // A STATELESS arm never touches it — grounded; a STATEFUL one
+    // dereferences zero unless some install initialized it, so only the
+    // stateful case joins the refusal set (the installed conjunct then
+    // clears it when an install exists — sound because the singleton tier
+    // is unique-handler by definition, an install of the ename IS an
+    // install of that handler). The evidence floor's demand is the ename
+    // itself (no op entry) and always joins.
+    let verdict = match env_lookup(d) {
       Some(entry) => {
         let (_, _, kind) = entry
         match kind {
-          EffectOpScheme(op_effect, _, _, _) => op_effect,
-          _ => d
+          EffectOpScheme(op_effect, default_handler, _, _) =>
+            if byte_len(default_handler) > 0 && !handler_stateful(default_handler) {
+              None
+            } else { Some(op_effect) },
+          _ => Some(d)
         }
       },
-      None => d
+      None => Some(d)
     }
-    let seen = string_in_list(acc, en)
-    if seen { demands_to_enames(demands, i + 1, acc) }
-    else { demands_to_enames(demands, i + 1, push(acc, en)) }
+    match verdict {
+      None => demands_to_enames(demands, i + 1, acc),
+      Some(en) => {
+        let seen = string_in_list(acc, en)
+        if seen { demands_to_enames(demands, i + 1, acc) }
+        else { demands_to_enames(demands, i + 1, push(acc, en)) }
+      }
+    }
+  }
+}
+
+fn handler_stateful(hname: String) = {
+  match env_lookup(hname) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        HandlerKind(_, _, states, _) => len(states) > 0,
+        _ => false
+      }
+    },
+    None => false
   }
 }
 

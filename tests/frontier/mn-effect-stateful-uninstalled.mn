@@ -1,0 +1,16 @@
+// The singleton tier's silent-wrong, refused: counter is the UNIQUE handler
+// for Count (the op scheme's default), so bump() direct-calls its arm against
+// $counter_state_g — which no install ever initialized. The arm's state read
+// dereferences ZERO as a record: the answer is garbage, the exit wrong, no
+// diagnostic — until this refusal. A stateless sibling (mn-effect-absorbed's
+// pong shape) stays green: its arm touches no state. RED-first: the pre-gate
+// boot compiles this clean and the artifact returns the wrong value.
+effect Count { bump() -> Int }
+
+handler counter with n = 10 {
+  bump() => resume(n) with n = n + 1,
+}
+
+fn caller() with Count = bump()
+
+fn main() = caller() + 32

@@ -1026,6 +1026,26 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE SINGLETON TIER TELLS THE TRUTH — LDirectPerform +
+  the stateful-uninstalled refusal (the last silent-wrong class of the
+  gate arc closes · pin fc2a9520). The singleton perform is its own
+  LowIR node whose EVERY reader — emit, locals, reach, k2, spec, the
+  census — delegates through singleton_perform_block, so its semantics
+  equal the old inline form BY CONSTRUCTION (the ladder proved it: CLEAN
+  m2 == m3 == m4, byte-identical). The census walk fires its demand, and
+  the gate's resolver tightens: a demand through an op with a default
+  handler grounds when the handler is STATELESS (the direct call touches
+  no state) and joins the refusal set when STATEFUL — the read of a
+  zero-initialized state global that no install ever wrote, the exact
+  silent-wrong the emit's own comment used to wave off as "never read"
+  (comment trued). Sound because the singleton tier is unique-handler by
+  definition: an install of the ename IS an install of that handler.
+  Fixture mn-effect-stateful-uninstalled seen RED (the prior boot
+  compiled it clean and the artifact returned the wrong value); the
+  stateless shape stays green. Frontier 192/0; census 0. The gate arc's
+  named remainder is now EMPTY; the one open external arc is the
+  wasi-threads migration (wasmtime 47 removed the substrate; local + CI
+  pinned at 43 until the threading story chooses its runtime).
 - 2026-07-22 · ▶▶ THE CRUCIBLE TIER — DSP, ML, and the DSP×ML fusion land
   as real-workload gates, and building them killed a latent miscompile
   (an isolated builder's arc, merged whole · pin fe68767f). Three

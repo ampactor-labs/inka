@@ -4751,8 +4751,22 @@ fn lower_string_interpolation(handle, lowered_fragments) = {
     // wheel's copy was never order-gated (mn-interp-order now gates it).
     let head = list_index(fragments, 0)
     let rest = slice(fragments, 1, len(fragments))
-    fold(head, (acc, frag) =>
-      LCall(handle, LGlobal(handle, "str_concat"), [acc, frag]), rest)
+    // Every interior concat mints its OWN handle. The fold once stamped the
+    // MakeString node's one handle on all N−1 concat calls, and emit's
+    // per-handle staging local ($call_<handle>) folded them into ONE cell —
+    // re-set per segment while later splice reads still loaded through it
+    // (the effectful-arg staging clobber, pinned in the diagnostics arm's
+    // wat: nine re-sets of one local, then reads expecting earlier values).
+    // The outermost call keeps the node's handle: the expression's type and
+    // span reads key on it.
+    let chained = fold(head, (acc, frag) => {
+      let ch = graph_fresh_ty(Inferred("interp segment concat"))
+      LCall(ch, LGlobal(ch, "str_concat"), [acc, frag])
+    }, rest)
+    match chained {
+      LCall(_, g, args) => LCall(handle, g, args),
+      other             => other
+    }
   }
 }
 

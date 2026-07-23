@@ -1026,6 +1026,24 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-22 · THE STAGING CLOBBER'S ROOT — one handle, one local, nine
+  writers (the interp-segment mint · pin ccd9381d). The
+  effectful-arg staging clobber witnessed thrice tonight reduced to ONE
+  mint bug: lower_string_interpolation's fold stamped the MakeString
+  node's single handle on every interior str_concat call, and emit's
+  per-handle staging local ($call_<handle>) folded all N−1 segments into
+  ONE cell — re-set per segment while later splice reads still loaded
+  through it. Pinned mechanically, not by repro (three structured repro
+  shapes ran CORRECT — the corruption needs the arm-context interleave):
+  the diagnostics arm's wat under the reconstructed 5-splice render shows
+  nine local.set of $call_73934 with reads against stale values; under
+  the fix every staging local in the same arm sets ONCE. The fix is the
+  mint law: every interior concat mints its own handle
+  (graph_fresh_ty at the fold), the outermost keeps the node's handle
+  (its type/span identity). TRANSITION m3 == m4 (4,246 lines of staging
+  renames crossed one generation); the sequenced-lets forms landed
+  earlier tonight stay as better prose, no longer load-bearing. Board
+  whole at the pin.
 - 2026-07-22 · ▶▶ THE EVIDENCE HOLE REFUSES AND TEACHES — E_EffectUnhandled,
   the gate's third read, born ARMED on the true rows (the arc Morgan opened
   with "we should never see a WASM error" · pin TBD). An executable whose

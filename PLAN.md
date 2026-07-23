@@ -1026,6 +1026,52 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶▶ THE INSTANCE CROSSES THE FN BOUNDARY — subst_row's
+  dropped closed-tail merge, the trio law completed over bound tails,
+  and the install-frame fragment join (the fold-family dig's root,
+  twelve iterations and twenty killed labels, landed whole · pin
+  cad3ca53). THE ROOT: subst_row's EtVar arm merged a bound row's
+  names only when the inner tail was itself EtVar — a row var SOLVED
+  to a CLOSED row (every declared-row fn) fell to the catch-all and
+  returned the empty row, DISCARDING the bound row's whole present set
+  at instantiation. Every caller of every declared-row fn has read a
+  BARE row since the row machinery landed; no effect instance ever
+  crossed a fn boundary; map's element died at the caller. The merge
+  arm reads the binding live, freshening through the same mapping the
+  params use, under the solved tail. THE TRIO LAW then completed it
+  (the second half, pinned by the install probe): free_in_row and
+  occurs_in_row now descend a BOUND tail exactly as subst_row
+  traverses it — collection-without-descent left the tail's inner
+  payload vars unquantified, so instantiate shared them RAW across
+  every call site, map's install bound the shared answer var to [b],
+  and every later HOF decl collided against it (the cross-decl
+  Bool-vs-List wave; the probe read the stale [b] inside any's own
+  fragment). With them: publish_with_instances (a declared-bare name
+  keeps the body's parameterized instance at publish),
+  inf_add_row_unified gated on the INSTALL frame (yield's and
+  result's fragments are one instance inside a tee body and join by
+  position before the name-set union can drop one; a caller's
+  independent callee instances never join — the ungated form unified
+  fold-over-[Int] with fold-over-[Float], the 286-error m3 wave),
+  the effects.mn name-set bare→parameterized upgrade at the three
+  dedup seams, prelude's callee-first iterate order, chase_deep root
+  canonicalization with chase_row_deep over EAType payloads and TCont
+  worlds, the compare-leaf f64 stash pair (the bare (f64.lt) select
+  never assembled — every Float-field compare helper was born broken),
+  and spec_pairs_walk chasing body-bound vars. THE TWO-PASS WALK built
+  en route (iterations 10-11) was REVERTED by measurement: its second
+  pass tips the 4GB image at the m3 emit (alloc-unreachable in the
+  reach walk — the seq-op-row precedent verbatim); the verdict and the
+  design are banked on Hβ.infer.order-independent-verdicts, DEP-gated
+  on the arena. The sharper compiler immediately exposed one CANONIZED
+  silent-wrong: micro mn-mapelem banked exit 1 — the old wheel floored
+  map's unresolved record to offset 0 and read alpha where .beta=2 was
+  meant — and one under-declared fixture row (stats fsum gains fold's
+  true Alloc). Gates: mn-forward-wide-instantiation RED on the prior
+  pin (a forward wide instantiation through a mono caller), bisect-r
+  42, the trued micro at its real value. Board whole at the pin:
+  TRANSITION m3 == m4 at 553,900 lines, census 0 at every generation,
+  comment-refs 0, frontier 205/0, battery 113/113.
 - 2026-07-23 · THE TUPLE PATTERN READS THE BRACKET (the pattern path's
   last lower-time layout bake dies · pin 80852432). LPTuple carries
   (elem_ty, sub_pat) — live element vars — and (offset, width) project
@@ -2302,7 +2348,16 @@ runtime fn declared before its prelude consumer meets the TIGHT inferred
 scheme where the canonical order met the loose pre-registered one — three
 real latent mismatches at prelude sum/chunk/trim under a leaves-first
 weave; the canonical sort sidesteps, the class remains; repro: swap
-lists/strings before prelude on stdin) ·
+lists/strings before prelude on stdin. The COMPLETE form was BUILT and
+REVERTED by measurement (2026-07-23, the instance-crossing landing): a
+TWO-PASS WALK — pass 1 quiet-trial finalizes schemes, pass 2 re-parses
+and pre-registers every fn from pass 1's FINAL scheme — closes the class
+whole, and its second pass tips the 4GB bump image at the m3 emit
+(alloc-unreachable in the reach walk; the seq-op-row precedent exactly).
+DEP-gated on Hβ.perf.per-decl-arena; the build lives in git history at
+this landing's parent. Until then callee-first source order kills
+instances of the class one at a time — prelude's iterate_from precedes
+iterate for exactly this reason) ·
 `Hβ.patch.set-target-state-clobber` RETRACTED (2026-07-18, same day):
 probed on the pinned artifact with both a len read and a full iterate,
 before and after the perform — seven of seven survive; the original

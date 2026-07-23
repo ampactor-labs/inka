@@ -1,0 +1,20 @@
+// A MONO caller forward-references a generic callee at a wide instantiation:
+// before the heal, the caller's site held the PRE-registered scheme's frozen
+// instance (loose vars the callee's later inference never reached), so the
+// twin-demand scan read pairs=0 — no twin minted anywhere in the chain — and
+// the floor bodies word-read the (Float, Int) pairs: sort compared records by
+// ADDRESS and the destructure read an f64 high word as the tag (invalid exit,
+// zero diagnostics — the wheel's own render_field chain, SPECPROBE-measured).
+// The heal (infer_program's heal_forward_sites) re-unifies every FnScheme
+// site against a fresh instance of the FINAL scheme, so the site carries the
+// live instantiation and the whole chain twins: rank_first at (Float, Int),
+// sort/merge under its bracket, the pattern reads at f64@0 / word@8, and the
+// compare fold's f64 leaf ordering the scores.
+fn show_rank() = rank_first([(0.5, 30), (2.5, 42), (1.5, 7)])
+
+fn rank_first(pairs) = {
+  let (_, tag) = list_index(reverse(sort(pairs)), 0)
+  tag
+}
+
+fn main() = show_rank()

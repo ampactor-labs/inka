@@ -740,7 +740,19 @@ fn occurs_in_row(handle, ref eff) with !Mutate = {
     if occurs_in_eff_names(handle, a) { true }
     else {
       match t {
-        EtVar(v) => v == handle || graph_chase_handle(v) == handle,
+        // A BOUND tail hides structure the write would embed: subst_row's
+        // merge arm traverses into the binding, so the cycle guard must
+        // reach the same leaves (the trio law over rows, through the tail).
+        EtVar(v) => {
+          let r = graph_chase_handle(v)
+          if v == handle || r == handle { true }
+          else {
+            match graph_chase(r) {
+              GNode(NRowBound(inner), _) => occurs_in_row(handle, inner),
+              _                          => false
+            }
+          }
+        },
         _        => false
       }
     }

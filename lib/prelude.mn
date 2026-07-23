@@ -50,8 +50,6 @@ effect Iterate {
 // 2026-07-14). list_to_flat no-ops on an already-flat list (tag 0), so flat
 // inputs pay nothing; the flat copy preserves order, so every yield is
 // byte-identical.
-fn iterate(xs) with Iterate + Alloc + Memory = iterate_from(list_to_flat(xs), 0, len(xs))
-
 // Top-level tail-recursive iteration — no nested closure. Lower's
 // tail-call-mark-pass recognizes `iterate_from(xs, i+1, n)` as the
 // tail call of the then-branch; emit produces a return_call, the
@@ -59,9 +57,17 @@ fn iterate(xs) with Iterate + Alloc + Memory = iterate_from(list_to_flat(xs), 0,
 // elements), this keeps the wasm stack bounded — without this form,
 // mentl2's self-compile trapped via the map handler's per-element yield recursion (one
 // frame per element × handler-stack-depth).
+// Declared BEFORE its caller (callee-first): a caller judged against the
+// PRE-scheme reads the authored bare row (mk_ef_open of declared names),
+// and that bare accumulation bakes into the caller's own published row —
+// the Iterate instance args died exactly there, orphaning every
+// fold-family element. Source order kills this instance; the class
+// (order-independent verdicts) is the named peer in PLAN.
 fn iterate_from(xs, i, n) with Iterate =
   if i < n { yield(xs[i]); iterate_from(xs, i + 1, n) }
   else { () }
+
+fn iterate(xs) with Iterate + Alloc + Memory = iterate_from(list_to_flat(xs), 0, len(xs))
 
 // ─── Collection Operations (single fused handlers on Iterate) ────────
 // One handler per `~>` install: transform + materialize fused into

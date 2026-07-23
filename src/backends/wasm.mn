@@ -5254,7 +5254,8 @@ fn emit_one_compare_helper(sig, ty) with EnvRead + Memory + WasmOut + Alloc = ma
     wat_emit(sig)
     wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)")
     wat_emit(" (local $c i32) (local $state_tmp i32)")
-    wat_emit(" (local $callee_closure i32) (local $alloc_size i32)\n")
+    wat_emit(" (local $callee_closure i32) (local $alloc_size i32)")
+    wat_emit(" (local $fa f64) (local $fb f64)\n")
     let fields = product_field_tys(ty)
     emit_cmp_helper_chain(fields, 0, len(fields), 0)
     wat_emit("  )\n")
@@ -5274,7 +5275,8 @@ fn emit_one_compare_sum_helper(sig, type_name) with EnvRead + Alloc + Memory + W
   wat_emit(sig)
   wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)")
   wat_emit(" (local $ta i32) (local $tb i32) (local $c i32)")
-  wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
+  wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)")
+  wat_emit(" (local $fa f64) (local $fb f64)\n")
   // Sentinel guard: either operand below heap_base ⇒ word ordering (sign of a-b).
   wat_emit("    (if (result i32)\n")
   wat_emit("      (i32.or\n")
@@ -5425,8 +5427,15 @@ fn emit_field_cmp(fty) = match fty {
   TRecordOpen(_, _) => emit_field_agg_cmp(fold_sig(fty)),
   TTuple(_)         => emit_field_agg_cmp(fold_sig(fty)),
   TName(_, _)       => emit_field_agg_cmp(fold_sig(fty)),
-  // f64 sign: gt ⇒ 1, else lt ⇒ -1, else 0 (the same select shape, f64 ops).
-  TFloat            => wat_emit("    (select (i32.const 1) (select (i32.const -1) (i32.const 0) (f64.lt)) (f64.gt))\n"),
+  // f64 sign: gt ⇒ 1, else lt ⇒ -1, else 0 — the word arm's shape at f64
+  // width. The select consumes the pair TWICE (lt AND gt), so stash both
+  // through the f64 scratch pair and re-reference; the bare-(f64.lt) form
+  // consumed the pair once and did not assemble (the sortpairs probe).
+  TFloat            => {
+    wat_emit("    (local.set $fb)\n")
+    wat_emit("    (local.set $fa)\n")
+    wat_emit("    (select (i32.const 1) (select (i32.const -1) (i32.const 0) (f64.lt (local.get $fa) (local.get $fb))) (f64.gt (local.get $fa) (local.get $fb)))\n")
+  },
   // Int / Unit / resolved-TVar / nullary-tag — word sign-of-difference. The
   // stack has [a_field, b_field]; (select 1 (select -1 0 (i32.lt_s)) (i32.gt_s))
   // needs the pair twice, so reload through scratch.

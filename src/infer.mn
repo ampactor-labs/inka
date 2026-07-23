@@ -51,9 +51,16 @@ effect InferCtx {
   inf_enter_arm(Int) -> ()
   inf_exit_arm() -> ()
   inf_arm_tys() -> Option(Int)
+  // The install-frame mark: a tee body's frame is ONE install's scope, so
+  // same-named effect-instance fragments inside it (yield's + result's)
+  // join by position; any other frame is a plain accumulation (joining a
+  // caller's independent callee instances unified Float with Int across
+  // the wheel — the 286-error m3 census).
+  inf_mark_install_frame() -> ()
+  inf_frame_is_install() -> Bool
 }
 
-handler infer_ctx with stack = [], arm_stack = [] {
+handler infer_ctx with stack = [], arm_stack = [], install_marks = [] {
   // stack = [InferFrame, ...] where each InferFrame is a record:
   //   {accumulated_row: EffRow, answer_handle: Int, declared: List,
   //    fn_span: Span, row_handle: Int}
@@ -89,10 +96,22 @@ handler infer_ctx with stack = [], arm_stack = [] {
         Located(frame.fn_span, Inferred("fn effect row")))
       // The popped frame's declaration comes back to the closer — the
       // enforcement site reads it from the resume value, no ambient read.
+      // An install mark on THIS depth pops with its frame.
+      let marks2 = if len(install_marks) > 0 {
+        if last(install_marks) == len(stack) { drop_last(install_marks) }
+        else { install_marks }
+      } else { install_marks }
       resume(frame.declared)
-        with stack = drop_last(stack)
+        with stack = drop_last(stack), install_marks = marks2
     }
   },
+
+  inf_mark_install_frame() =>
+    resume() with install_marks = push(install_marks, len(stack)),   // drift-audit: ignore — bounded-depth mark PUSH paired with the exit's pop (§9 push-at-END), not a loop accumulator
+
+  inf_frame_is_install() =>
+    resume(if len(install_marks) == 0 { false }
+           else { last(install_marks) == len(stack) }),
 
   inf_add_effect(name) => {
     if len(stack) == 0 { resume() }
@@ -191,6 +210,39 @@ handler fresh_for_inference {
 // floored its FreshHandle evidence (the slot-0 fabrication). Drawing the edge
 // roots the chain at the handler the graph now connects; the query/teach entry
 // installs `fresh_for_query` for ephemeral display ids (the swappable peer).
+// The callee-row accumulation seam. Same-named effect-instance FRAGMENTS
+// join by position ONLY inside an INSTALL frame (a tee body — one
+// install's scope: yield's Iterate(el, r) and result's Iterate(el', r')
+// are fragments of ONE instance, and the name-set union would drop one).
+// Everywhere else the frame is a plain accumulation: joining a CALLER's
+// independent callee instances unified Float with Int across the wheel
+// (fold over [Int] then fold over [Float] in one body — the 286-error m3
+// census). The name-set keeping one entry per name across genuinely
+// distinct instances is the standing representation tension
+// (parameterized-negation-instance).
+fn inf_add_row_unified(row) = {
+  if inf_frame_is_install() {
+    let EfRow(np, _, _) = row
+    let EfRow(cp, _, _) = inf_current_row()
+    each((e) => match e {
+      EParameterized(n, args_b) =>
+        match find((c) => match c {
+            EParameterized(cn, _) => cn == n,
+            _                     => false
+          }, cp) {
+          Some(EParameterized(_, args_a)) =>
+            // Row-side args are EffArg (EAType-wrapped) — unwrap to the Ty
+            // lists unify_instance_args joins; feeding the wrappers minted
+            // garbage nodes and joined those instead of the elements.
+            unify_instance_args(eparam_arg_tys(args_a), eparam_arg_tys(args_b), 0, span_zero()),
+          _ => ()
+        },
+      _ => ()
+    }, np)
+  } else { () }
+  inf_add_row(row)
+}
+
 fn infer_program(stmts) = {
   {
     register_primitives()
@@ -994,8 +1046,7 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
             let EfRow(_, da, dt) = declared_row
             match dt {
               EtAll => inter_row(body_row, declared_row),
-              _     => if len(da) == 0 { declared_row }
-                       else { declared_row }
+              _     => publish_with_instances(declared_row, body_row)
             }
           }
           graph_bind_row(row_handle, published,
@@ -1020,6 +1071,29 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   // unhandled-effect diagnostic.
   let scheme = generalize(handle)
   env_extend(name, scheme, Located(span, Declared(name)), FnScheme)
+}
+
+// The publish carries the body's INSTANCE for each name the declaration
+// spells bare: `with Iterate` declares the NAME (a constraint, SYNTAX's
+// verified-against law), while the body's inferred EParameterized(Iterate,
+// args) carries the effect's type params. Publishing the bare name ERASED
+// the element/answer args at every declared boundary — iterate's callers
+// saw a bare Iterate, instances_in_row found nothing, and the install
+// collapse had nothing to unify (measured n_insts=0 at fold's install —
+// the element severance of every fold-family scheme).
+fn publish_with_instances(declared_row, body_row) = {
+  let EfRow(dp, da, dt) = declared_row
+  let EfRow(bp, _, _) = body_row
+  ef_make(map((e) => match e {
+    ENamed(n) => match find((b) => match b {
+        EParameterized(bn, _) => bn == n,
+        _                     => false
+      }, bp) {
+      Some(inst) => inst,
+      None       => e
+    },
+    _ => e
+  }, dp), da, dt)
 }
 
 // H4 helper — does a CallExpr's callee resolve to an alloc-returning
@@ -1953,10 +2027,10 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
   // bare (t-rec's 134; hof-map's shape). The fallback keeps the
   // effect-polymorphic param case (an f whose type is still a TVar).
   match graph_chase(fh) {
-    GNode(NBound(TFun(_, _, crow)), _) => inf_add_row(crow),
+    GNode(NBound(TFun(_, _, crow)), _) => inf_add_row_unified(crow),
     _ =>
       match graph_chase(row_h) {
-        GNode(NRowBound(row), _) => inf_add_row(row),
+        GNode(NRowBound(row), _) => inf_add_row_unified(row),
         GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], row_h)),
         _ => ()
       }
@@ -2003,6 +2077,10 @@ fn stage_continuation_boundary(cname: String, resume_input_h) = {
       resume_input_h, answer_h, continuation_h, inf_current_world()))   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
 }
 
+// The heal fixpoint (see infer_program's call site): heal the recorded
+// sites, re-snapshot every decl's scheme over the healed graph, and stop
+// at the round that binds nothing. The trail position is the progress
+// meter (a round that asserts no new constraint leaves it unmoved).
 fn finalize_continuation_boundaries(i, n) = {
   if i >= n { () }
   else {
@@ -2059,6 +2137,9 @@ fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
   let body_row_h = graph_fresh_row(Inferred("~> body row"))
   let N(_, _, body_answer_h) = left
   inf_enter_fn(body_row_h, body_answer_h, span, [])   // drift-audit: ignore — two independent frame inputs (row handle, answer handle) — one frame record's fields, not parallel arrays
+  // The tee body is ONE install's scope — its effect-instance fragments
+  // join at the accumulation seam (inf_add_row_unified's gate).
+  inf_mark_install_frame()
   infer_expr(left)
   inf_exit_fn()
 
@@ -2269,7 +2350,7 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       // VARIABLE when the piped-into fn is effect-polymorphic.
       let row_node = graph_chase(row_h)
       match row_node {
-        GNode(NRowBound(row), _) => inf_add_row(row),
+        GNode(NRowBound(row), _) => inf_add_row_unified(row),
         GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], row_h)),
         _ => ()
       }
@@ -2553,10 +2634,10 @@ fn infer_fanout_apply_one(branch, input_h, span: ValidSpan) = {
   // The branch call's row flows into the boundary frame — the same
   // read-the-callee's-own-row discipline infer_call_saturated uses.
   match graph_chase(bh) {
-    GNode(NBound(TFun(_, _, brow)), _) => inf_add_row(brow),
+    GNode(NBound(TFun(_, _, brow)), _) => inf_add_row_unified(brow),
     _ =>
       match graph_chase(call_row_h) {
-        GNode(NRowBound(row), _) => inf_add_row(row),
+        GNode(NRowBound(row), _) => inf_add_row_unified(row),
         GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], call_row_h)),
         _ => ()
       }
@@ -3859,7 +3940,14 @@ fn chase_deep_at(ty, d) = if d > 200 {
     let GNode(kind, _) = node
     match kind {
       NBound(inner) => chase_deep_at(inner, d + 1),
-      NFree(_)      => ty,   // unresolved — stays as TVar
+      // A free var canonicalizes to its union-find ROOT, never the surface
+      // alias: a scheme snapshot holding two aliases of ONE class quantifies
+      // both, and instantiate then freshens them separately — the class
+      // SPLITS at every use (fold_handler's acc/init/instance-r measured as
+      // one live root 12914 yet stored as t12917 vs t12914 vs t12913, so
+      // every fold/map/filter caller rode an element-orphaned scheme — the
+      // subscript-fracture law at the generalize/instantiate layer).
+      NFree(_)      => TVar(graph_chase_handle(h)),
       NRowBound(_)  => ty,   // row handle used as Ty — stays
       NRecordRowBound(_) => ty,   // record-row residual — row sort; stays
       NRowFree(_)   => ty,   // unresolved row handle — stays
@@ -3868,16 +3956,42 @@ fn chase_deep_at(ty, d) = if d > 200 {
   },
   TList(elem) => TList(chase_deep_at(elem, d + 1)),
   TTuple(elems) => TTuple(map_chase_ty(elems, d + 1)),
+  // The ROW canonicalizes with the type: an EParameterized instance's
+  // EAType vars are the row's substitutable payload (free_in_row and
+  // subst_row both descend them), so a snapshot that skipped the row kept
+  // SURFACE aliases there while the type side stored roots — the same
+  // class-split at the row layer (fold's xs-element never reached f's elem
+  // through iterate's published instance). The three vars-of-a-type walks
+  // must agree over rows (the occurs-law trio); the snapshot now feeds all
+  // three the same canonical form.
   TFun(params, ret, eff) =>
-    TFun(chase_params(params, d + 1), chase_deep_at(ret, d + 1), eff),
+    TFun(chase_params(params, d + 1), chase_deep_at(ret, d + 1), chase_row_deep(eff, d + 1)),
   TName(name, args) => TName(name, map_chase_ty(args, d + 1)),
   TRecord(fields) => TRecord(chase_fields(fields, d + 1)),
   TRecordOpen(fields, v) => mk_record_open(chase_fields(fields, d + 1), v),
   TRefined(base, pred) => TRefined(chase_deep_at(base, d + 1), pred),
   TCont(input, answer, disc, world) =>
-    TCont(chase_deep_at(input, d + 1), chase_deep_at(answer, d + 1), disc, world),   // world preserved unchased, mirroring TFun's eff at this site
+    TCont(chase_deep_at(input, d + 1), chase_deep_at(answer, d + 1), disc, chase_row_deep(world, d + 1)),
   TAlias(name, inner)  => TAlias(name, chase_deep_at(inner, d + 1))
 } }
+
+// The row half of the canonical snapshot: every EParameterized instance's
+// EAType payload chase-deeps like any type (bound vars inline their
+// binding; free vars canonicalize to roots). Value args and bare names
+// pass through; the tail's freshening stays the row-var machinery's.
+fn chase_row_deep(eff, d) = match eff {
+  EfRow(p, a, t) =>
+    ef_make(chase_eff_names(p, d), chase_eff_names(a, d), t)
+}
+
+fn chase_eff_names(names, d) = map((e) => match e {
+  EParameterized(n, args) =>
+    EParameterized(n, map((ea) => match ea {
+      EAType(t2) => EAType(chase_deep_at(t2, d)),
+      other      => other
+    }, args)),
+  other => other
+}, names)
 
 fn map_chase_ty(tys, d) = map((t) => chase_deep_at(t, d), tys)
 
@@ -3940,7 +4054,18 @@ fn free_in_row(eff) = match eff {
     let tail = match t {
       EtVar(v) => {
         let r = graph_chase_handle(v)
-        if row_var_is_free(r) { [r] } else { [] }
+        // A BOUND tail is not itself a var — but subst_row's merge arm
+        // traverses INTO its binding (the closed-tail instance merge), so
+        // collection must reach the same leaves: the inner row's payload
+        // vars are this row's free vars (the trio law — free/occurs/subst
+        // agree over rows, here through the tail's binding).
+        if row_var_is_free(r) { [r] }
+        else {
+          match graph_chase(r) {
+            GNode(NRowBound(inner), _) => free_in_row(inner),
+            _                          => []
+          }
+        }
       },
       _ => []
     }
@@ -4094,14 +4219,24 @@ fn subst_row(eff, mapping) = {
   match t {
     EtVar(v) => match graph_chase(v) {
       GNode(NRowBound(inner), _) => {
-        let EfRow(c, _, it) = inner
+        let EfRow(c, ia, it) = inner
         match it {
           EtVar(t2) => {
             let r = find_mapping(mapping, graph_chase_handle(t2))
             if r >= 0 { ef_make(name_set_union(ns2, subst_eff_names(c, mapping)), ab2, EtVar(r)) }
             else { ef_make(ns2, ab2, EtVar(v)) }
           },
-          _ => ef_make(ns2, ab2, EtVar(v))
+          // The var is SOLVED to a closed/all row — the instance IS the
+          // inner's names (freshened through the SAME mapping the params
+          // read, so an effect-instance arg and its param occurrence stay
+          // one fresh var) under the solved tail. The old arm returned the
+          // empty row with the var tail, DISCARDING the bound row's whole
+          // present set — every caller of every declared-row fn read a
+          // BARE row, which is why no effect instance ever crossed a fn
+          // boundary (the fold-family element severance's true root: the
+          // birth probe read rowargs=[] off a correct publish).
+          _ => ef_make(name_set_union(ns2, subst_eff_names(c, mapping)),
+                       name_set_union(ab2, ia), it)
         }
       },
       GNode(NRowFree(_), _) => {

@@ -5757,10 +5757,18 @@ fn spec_resolve(t) with LookupTy + Memory + Alloc = match t {
 // The parallel walk: scheme side vs site side, same shape by construction
 // (the unifier made them agree); a shape mismatch is an error path already
 // reported — collect nothing there, the floor stands (never fabricate).
+// A scheme-side var CHASES its binding before matching: a body-bound var
+// (constrain_scrutinee's elem ~ (u, v)) holds structure whose FIELD roots
+// are the quantified ones — pairing the outer var coarse ({e -> (F, I)})
+// leaves the twin's pattern reads keyless (pat_elem_repr found no pair for
+// u/v and floored the destructure to offset 4 inside a minted twin).
 fn spec_pairs_walk(st0, it0, acc) with LookupTy + GraphRead + Memory + Alloc = {
   let st = fold_strip(st0)
   match st {
-    TVar(v) => spec_pairs_add(acc, graph_chase_handle(v), it0),
+    TVar(v) => match graph_chase(v) {
+      GNode(NBound(inner), _) => spec_pairs_walk(inner, it0, acc),
+      _                       => spec_pairs_add(acc, graph_chase_handle(v), it0)
+    },
     TList(e) => match fold_strip(it0) {
       TList(ie) => spec_pairs_walk(e, ie, acc), _ => acc },
     TTuple(es) => match fold_strip(it0) {

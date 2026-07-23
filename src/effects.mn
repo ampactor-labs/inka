@@ -493,12 +493,38 @@ fn name_set_dedup_into(ref names, i, n, own buf, count) with !Mutate = {
   if i >= n { slice(buf, 0, count) }
   else {
     let x = list_index(names, i)
-    if name_set_prefix_contains(buf, count, x) {
-      name_set_dedup_into(names, i + 1, n, buf, count)
+    let at = name_set_prefix_index(buf, count, x)
+    if at >= 0 {
+      // A name collision UPGRADES bare -> parameterized in place: the
+      // instance carries the payload truth the bare name only gestures at
+      // (bare ∪ instance = instance). Keeping the first-arrived bare
+      // erased the instance args wherever a declared pre-row met the
+      // body's inferred instance (iterate_from's recursive self-call
+      // unioned its bare pre-scheme Iterate over the parameterized one —
+      // the fold-family element severance). Two parameterized instances
+      // keep the first (the instance-precision residue,
+      // parameterized-negation-instance).
+      let held = list_index(buf, at)
+      let upgraded = match (held, x) {
+        (ENamed(_), EParameterized(_, _)) => list_set(buf, at, x),
+        _                                 => buf
+      }
+      name_set_dedup_into(names, i + 1, n, upgraded, count)
     } else {
       name_set_dedup_into(names, i + 1, n, list_set(buf, count, x), count + 1)
     }
   }
+}
+
+// The index twin of name_set_prefix_contains: where in buf[0..count) does a
+// same-named entry sit (-1 = absent). The dedup's upgrade needs the slot.
+fn name_set_prefix_index(ref buf, count, ref name) with !Mutate =
+  name_set_prefix_index_loop(buf, name, 0, count)
+
+fn name_set_prefix_index_loop(ref buf, ref name, i, n) with !Mutate = {
+  if i >= n { 0 - 1 }
+  else if str_eq(eff_name_str(list_index(buf, i)), eff_name_str(name)) { i }   // drift-audit: ignore — the String case of ==; nameable-sequence leaf, band D
+  else { name_set_prefix_index_loop(buf, name, i + 1, n) }
 }
 
 // Membership against the WRITTEN PREFIX of a buffer under construction.
@@ -541,12 +567,22 @@ fn name_set_union(ref a, ref b) with !Mutate = {
 
 // Phase 1 of union: dedup a into the buffer, RETURN the raw (buf-mutating)
 // count — the caller continues appending into the same buffer.
+// The union loops share dedup_into's collision law: a same-named arrival
+// UPGRADES a held bare to the parameterized instance (bare ∪ instance =
+// instance) — one law at every dedup twin, or the instance args die on
+// whichever accumulation path a bare reaches first.
 fn name_set_dedup_count(ref names, i, n, own buf, count) with !Mutate = {
   if i >= n { count }
   else {
     let x = list_index(names, i)
-    if name_set_prefix_contains(buf, count, x) {
-      name_set_dedup_count(names, i + 1, n, buf, count)
+    let at = name_set_prefix_index(buf, count, x)
+    if at >= 0 {
+      let held = list_index(buf, at)
+      let upgraded = match (held, x) {
+        (ENamed(_), EParameterized(_, _)) => list_set(buf, at, x),
+        _                                 => buf
+      }
+      name_set_dedup_count(names, i + 1, n, upgraded, count)
     } else {
       name_set_dedup_count(names, i + 1, n, list_set(buf, count, x), count + 1)
     }
@@ -557,8 +593,14 @@ fn name_set_union_rest(ref b, i, n, own buf, count) with !Mutate = {
   if i >= n { slice(buf, 0, count) }
   else {
     let x = list_index(b, i)
-    if name_set_prefix_contains(buf, count, x) {
-      name_set_union_rest(b, i + 1, n, buf, count)
+    let at = name_set_prefix_index(buf, count, x)
+    if at >= 0 {
+      let held = list_index(buf, at)
+      let upgraded = match (held, x) {
+        (ENamed(_), EParameterized(_, _)) => list_set(buf, at, x),
+        _                                 => buf
+      }
+      name_set_union_rest(b, i + 1, n, upgraded, count)
     } else {
       name_set_union_rest(b, i + 1, n, list_set(buf, count, x), count + 1)
     }

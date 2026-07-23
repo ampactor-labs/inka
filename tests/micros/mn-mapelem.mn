@@ -1,2 +1,6 @@
-// expect: 1
+// expect: 2
+// .beta IS 2. The banked 1 was the old wheel's silent-wrong: map's element
+// instance never crossed the fn boundary (the dropped closed-tail row), the
+// record layout never resolved, and the field read floored to offset 0 —
+// alpha's slot. The element flows now; the read is the true field.
 fn main(q) = last(map((x) => x, [{alpha: 1, beta: 2, gamma: 3}])).beta

@@ -42,8 +42,10 @@ fn read_floats(path) with Memory + Alloc + WASI = {
 }
 
 // The sum threads a float accumulator through an inline lambda (specialized per
-// call site), so the fold is sound over [Float] with no annotation.
-fn fsum(xs) with Memory = fold(0.0, (acc, x) => acc + x, xs)
+// call site), so the fold is sound over [Float] with no annotation. The row
+// carries fold's truth: iterate flattens its input (list_to_flat allocates),
+// so Alloc rides the declaration — the callee row read live, instances intact.
+fn fsum(xs) with Memory + Alloc = fold(0.0, (acc, x) => acc + x, xs)
 
 // argmin / argmax — comparison-reduction with an annotated running best value.
 fn argmin_loop(xs, i: Int, best_i: Int, best_v: Float) with Memory = {

@@ -963,6 +963,15 @@ for i in "${!compilers[@]}"; do
   # element (invalid exit status, zero diagnostics).
   run_program "$compiler" generic-wide-tuple-pattern \
     "$ROOT/tests/frontier/mn-generic-wide-tuple-pattern.mn" 42 yes "$dir"
+  # The effect-instance boundary: a declared-row fn's callers must read its
+  # row's INSTANCE args (subst_row's closed-tail arm — the old arm returned
+  # the empty row with the var tail, so every caller of every declared-row
+  # fn read a BARE row and no effect instance ever crossed a fn boundary).
+  # RED for twelve dig iterations: reverse over (Float, Int) pairs returned
+  # an element-orphaned type, the destructure took the uniform floor, and
+  # the f64 high word came back as the tag (invalid exit, zero diagnostics).
+  run_program "$compiler" forward-wide-instantiation \
+    "$ROOT/tests/frontier/mn-forward-wide-instantiation.mn" 42 yes "$dir"
   run_program "$compiler" generic-show \
     "$ROOT/tests/frontier/mn-generic-show.mn" 42 yes "$dir"
   run_program "$compiler" aggregate-show \

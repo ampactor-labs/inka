@@ -1992,12 +1992,28 @@ op_each_handler_yield sits in the fatal frame chain, so the leading
 suspect is the YIELD-PACKET CROSS-WIRE: nested each-yields share the
 one global triple ($yield_op/$yield_args/$yield_k — wasm globals, never
 reset), and a resume path reads a packet a nested yield overwrote —
-layout/reset-dependent through the k-records' heap positions. NEXT
-OPENING, exact: dump the fatal call's remaining three args (same shape
-probe, offsets banked), and instrument the yield driver's packet
-writes/reads for interleave across the compile boundary. The
-image/scratch split stays the arena's build; THIS bug is upstream of
-it.
+layout/reset-dependent through the k-records' heap positions. SESSION 3 (same
+night) DECODED THE POISON: the fatal "args list" is a CALLEXPR BODY
+RECORD read as a list — word0=4 is the CallExpr TAG parsed as a count,
+"elem0" is its FUNC field (the callee node 24 bytes back), the real
+args slot holds 0, and the constant 838 rides at word 12 across
+layouts. And the probe showed the SAME mis-shape flowing through
+infer_call_arg_list ROUTINELY in healthy runs — surviving silently
+because the list protocol's len-decode on the mis-shape usually
+short-circuits the loop — so this is a SILENT-MISBEHAVIOR class in
+every compile, not a reset bug; the reset layouts merely make one
+instance fatal (i=0 reached, the func-field "element" fails the
+N-destructure). The entry point is pinned to one block:
+infer_call_saturated's pos_args — either resolve_call_args RETURNS the
+body record on some path, or its input `args` (the CallExpr destructure)
+already holds it, with the yield-packet cross-wire (nested each-yields
+through the never-reset global triple, op_each_handler_yield in the
+fatal frames) still the mechanism candidate for HOW a body record lands
+in an args slot. NEXT OPENING, exact: instrument resolve_call_args'
+return (print output ptr + word0, gated on word0==4-with-heap-word1) to
+split produces-vs-receives, then the yield driver's packet write/read
+interleave. The image/scratch split stays the arena's build; THIS bug
+is upstream of it and live in every run.
 
 The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
 `Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a

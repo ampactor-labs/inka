@@ -29,13 +29,20 @@ fn mime_for(path: String) with Memory + Alloc =
   else if ends_with(path, ".wat")  { "text/plain; charset=utf-8" }
   else                             { "application/octet-stream" }
 
-// One read is the whole request for the GETs a static IDE makes.
+// One read is the whole request for the GETs a static IDE makes. The bytes
+// materialize as a proper [count][tag][bytes@+8] String record (bytes_buf +
+// str_of_buf — io.mn's fd_read_all form), NOT a hand-rolled +4 buffer: the
+// String=[byte] merge moved the payload to +8, so the old +4 layout made
+// byte_at/find_char read past the request and trap under the armed list-index
+// bounds check.
 fn read_request(conn) with Memory + Alloc + WASI = {
   let cap = 65536
-  let s = alloc(4 + cap)
-  let n = sock_read(conn, s + 4, cap)
-  store_i32(s, n)
-  s
+  let buf = alloc(cap)
+  let n = sock_read(conn, buf, cap)
+  let got = if n < 0 { 0 } else { n }
+  let str = bytes_buf(got)
+  mem_copy(str + 8, buf, got)
+  str_of_buf(str)
 }
 
 // The request line's path: bytes between the first two spaces, query

@@ -1061,7 +1061,17 @@ between the wheel and its ultimate form, held open on purpose.
   genuine serve.mn catch (read_request hand-rolled the pre-merge +4
   String layout — latent OOB under the armed bounds check, fixed to
   bytes_buf/+8/str_of_buf); its batch commits when it reports against
-  this pin.
+  this pin. RETRACTION, same night (the ⟲ law on the orchestrator's own
+  claim): commit dbf538ea's message says the fixpoint judged the
+  rewritten tutorials because "the wheel blob includes lib/**" — FALSE;
+  wt_wheel and march.sh both carry `-not -path '*/tutorial/*'`, so the
+  tutorials are OUTSIDE the blob and the matching m2cache key proved
+  nothing (an excluded file cannot change the key — the inference was
+  consistent with its own negation). The tutorials' real verification
+  is direct: each compiled through the pinned boot, assembled, run,
+  output checked (re-derived by hand for 00/03/06/08 — greetings, 30,
+  51, 9). The lesson is §9.6 verbatim: verify the formula, not the
+  plausible reading of its output.
 - 2026-07-23 · ▶▶ THE NULL-SINGLETON CLASS CLOSES + THE REGION BATTERY
   SHIPS (the cross-compile trap's root, proven adversarially and landed at
   every altitude · pin 6c192865). The forensic-prober (a fresh mind told

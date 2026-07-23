@@ -1,13 +1,14 @@
 # mentl edit — the web IDE (band M's first artifact)
 
 The page runs THE FIXPOINT COMPILER ITSELF in your browser: mentl-ide.wasm
-is the first-light wheel (boot/PROVENANCE.md) with one derived change — the
-initial memory shrunk from 4GB to 512MB (IDE programs are small; the 4GB
-line exists for wheel-scale self-compiles). Derivation, reproducible:
+is the pinned wheel (boot/mentl.wasm, boot/PROVENANCE.md) with one derived
+change — the initial memory shrunk from 4GB to 512MB (IDE programs are small;
+the 4GB line exists for wheel-scale self-compiles). Derivation, reproducible
+from the committed boot:
 
-    sed 's/(memory (export "memory") 65536 65536 shared)/(memory (export "memory") 8192 65536 shared)/' \
-        .build/march/m3.wat > mentl-ide.wat
-    wat2wasm mentl-ide.wat -o ide/mentl-ide.wasm --enable-threads --enable-tail-call
+    wasm2wat --enable-threads --enable-tail-call boot/mentl.wasm -o mentl-ide.wat
+    sed -i 's/(memory (;0;) 65536 65536 shared)/(memory (;0;) 8192 65536 shared)/' mentl-ide.wat
+    wat2wasm --debug-names --enable-threads --enable-tail-call mentl-ide.wat -o ide/mentl-ide.wasm
 
 Run it:
 
@@ -37,10 +38,17 @@ modes, not features. Five surfaces:
   `own`/`ref`/`resume` magenta, literals and `!E` vermillion, the `??` socket
   glowing vermillion. The caret is the position every other surface reads.
 - **The Aspect ring** — the eight facets at the cursor (graph, handler, verb,
-  row, own, refine, gradient, why). Every facet wears an always-visible
-  provenance badge: `surface` (the page's own parse of the source), `declared`
-  (a `with` row read verbatim), `real` (a live compiler diagnostic), or
-  `socket` (a named-future gate — never a value it can't earn).
+  row, own, refine, gradient, why). It reads the compiler's OWN eight-aspect
+  CursorView: on cursor settle the page runs the wheel's cursor-address
+  transport (`mentl main.mn:L:C` → src/main.mn `at_run` → `cursor_at_handle`,
+  the same read `mentl edit` projects) over a virtual filesystem (the user
+  source as main.mn + the vocabulary closure), and the returned facets (the
+  inferred type, the effect row, ownership, refinement obligations, the Teach
+  step, the Reason chain) flip their provenance badge to `real`. Where the
+  projection is silent or a program the closure can't resolve, the facet keeps
+  the page's own read: `surface` (its parse), `declared` (a `with` row read
+  verbatim), or `socket` (a named-future gate — never a value it can't earn).
+  The badge is `real` ONLY for a fact the compiler graph actually returned.
 - **The Lens** — the real `stderr` diagnostics, gradient-ranked to one teaching
   step in Mentl's voice, click-to-jump, with a genuine text-fix for the two
   canonicalizations the parser actually reports (`E_RedundantBraces`,
@@ -57,13 +65,20 @@ projection with fn/line/time stats, and eight demos. Everything is either
 real compiler output (the WAT, the diagnostics) or a labeled surface read of
 the source — no surface ever dresses a guess as the compiler's graph truth.
 
+The aspect ring reads the live graph today, but the read is a full compile per
+cursor settle (debounced, one WASM instantiation); the IC cursor's
+millisecond re-projection is the ultimate form (`Hβ.felt.reactivity-typed-demand-driven`,
+the session `<~` loop). The address transport also resolves a program only when
+the vocabulary closure covers its imports; a program reaching for runtime
+modules the page does not mount stays on the surface read (honest, never faked)
+until the closure widens.
+
 What deliberately does not exist yet, each an honest socket that names its
 gate: RUNNING the compiled program in the page (`Hβ.felt.ide-run-in-page` —
 needs an in-browser assembler; download the .wat and `wat2wasm out.wat -o
 out.wasm --enable-threads --enable-tail-call && wasmtime run
 -W all-proposals=y out.wasm`); fill-and-resume and reality-scrubbing (band
-B's multi-shot producer); the live per-node aspect and Reason-chain walk
-(`mentl where` / `mentl why`); the transitive `!E` proof (band A's crown).
+B's multi-shot producer); the transitive `!E` proof (band A's crown).
 
 The serving loop is an evidence-threading tail call — constant stack for
 the server's whole life, the first-light era's own tail form carrying its

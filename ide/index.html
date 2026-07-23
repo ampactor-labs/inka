@@ -6,148 +6,164 @@
 <title>mentl edit — the medium, compiled by itself</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230A0809'/%3E%3Cpolygon points='16,6 22,9 25,15 22,21 16,24 10,21 7,15 10,9' fill='none' stroke='%23E69F00' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='15' r='3.2' fill='none' stroke='%23E69F00' stroke-width='1.4'/%3E%3C/svg%3E">
 <style>
-  /* ── DESIGN_SYSTEM tokens (docs/DESIGN_SYSTEM.md §4.7) ───────────────── */
+  /* ── DESIGN_SYSTEM tokens (docs/DESIGN_SYSTEM.md §4) — color IS the kernel ── */
   :root {
-    /* obsidian ground — the deep the octopus surfaces from */
-    --abyss:#0A0809; --canvas:#0D0B0E; --raised1:#100E11; --raised2:#121013;
-    --line:#15121688; --border:#2A2428;
-    /* warm neutral text ramp */
+    --abyss:#0A0809; --canvas:#0D0B0E; --raised1:#100E11; --raised2:#141116; --raised3:#171319;
+    --line:#15121688; --border:#241F24; --border-lift:#332B33;
     --primary:#E8DCC8; --bright:#F5EDE0; --muted:#8B7B6E; --faint:#6B6157;
     --whisper:#766B60; --comment:#7B7168; --ghost:#4A4040;
-    /* Okabe–Ito accent family — each hue IS a kernel role */
-    --gold:#E69F00; --gold-b:#F0B830;        /* types · contracts · cursor · teach */
-    --sky:#56B4E9;  --sky-b:#7CC8EE;         /* the five verbs · topology */
-    --blue:#2A8FC2; --blue-b:#3399CC;        /* structure · keywords · query */
-    --green:#009E73; --green-b:#33B893;      /* computation · fns · handlers · propose */
-    --verm:#D55E00; --verm-b:#E87D44;        /* boundary · negation · hole · self · error */
-    --mag:#CC79A7;  --mag-b:#D9A0C0;         /* ownership · Pure · resume */
-    --wheat:#F0C674;                          /* string literals */
-    --mono: ui-monospace, "JetBrains Mono", "Berkeley Mono", "SF Mono", Menlo, Consolas, monospace;
+    --gold:#E69F00; --gold-b:#F0B830; --sky:#56B4E9; --sky-b:#7CC8EE;
+    --blue:#2A8FC2; --blue-b:#3399CC; --green:#009E73; --green-b:#33B893;
+    --verm:#D55E00; --verm-b:#E87D44; --mag:#CC79A7; --mag-b:#D9A0C0; --wheat:#F0C674;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", "Berkeley Mono", Menlo, Consolas, monospace;
     --serif: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
     --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --sp: 8px;
+    --glow-gold: 0 0 0 1px #2a2010, 0 6px 26px -8px rgba(230,159,0,.30);
+    --e-surface: cubic-bezier(0.16,1,0.3,1);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
-    background: var(--canvas); color: var(--primary); font-family: var(--mono);
-    font-size: 13px; overflow: hidden;
+    background:
+      radial-gradient(1100px 620px at 78% -12%, #120d13 0%, transparent 60%),
+      radial-gradient(900px 500px at -8% 108%, #0f0b12 0%, transparent 55%),
+      var(--canvas);
+    color: var(--primary); font-family: var(--mono); font-size: 13px; overflow: hidden;
     display: grid; grid-template-rows: auto auto 1fr auto auto; height: 100vh;
   }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--border-lift); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: #453a45; }
   ::-webkit-scrollbar-track { background: transparent; }
+  ::selection { background: rgba(230,159,0,.20); }
 
-  /* ── header ─────────────────────────────────────────────────────────── */
+  /* ── header — the deep's rim ───────────────────────────────────────────── */
   header {
-    display: flex; align-items: center; gap: 14px; padding: 9px 16px;
-    border-bottom: 1px solid var(--border); background: var(--abyss);
+    display: flex; align-items: center; gap: 15px; padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #0b090b, var(--abyss));
   }
-  .mark { display: flex; align-items: center; gap: 9px; }
-  .mark svg { width: 26px; height: 26px; display: block; filter: drop-shadow(0 0 6px rgba(230,159,0,.25)); }
-  .wordmark { font-size: 15px; font-weight: 600; letter-spacing: .04em; color: var(--bright); }
-  .wordmark .edit { color: var(--muted); font-weight: 400; margin-left: 2px; }
-  .tag { color: var(--faint); font-size: 11px; font-family: var(--sans); }
+  .mark { display: flex; align-items: center; gap: 11px; }
+  .mark svg { width: 30px; height: 30px; display: block; overflow: visible; }
+  .mark .halo { filter: drop-shadow(0 0 7px rgba(230,159,0,.35)); }
+  .wordmark { font-size: 16px; font-weight: 600; letter-spacing: .045em; color: var(--bright); }
+  .wordmark .edit { color: var(--muted); font-weight: 400; margin-left: 3px; }
+  .tag { color: var(--faint); font-size: 11px; font-family: var(--sans); font-style: italic; letter-spacing: .01em; }
   .grow { margin-left: auto; }
   .plaque {
-    display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--muted);
-    border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; background: var(--canvas);
+    display: flex; align-items: center; gap: 9px; font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 9px; padding: 5px 11px; background: #0b090c;
+    font-family: var(--sans);
   }
-  .plaque b { color: var(--gold-b); font-weight: 600; }
-  .plaque code { color: var(--ghost); }
-  /* teach knob — the single density control */
-  .knob { display: flex; align-items: center; gap: 7px; font-size: 10.5px; color: var(--muted); font-family: var(--sans); }
-  .knob input { accent-color: var(--gold); width: 84px; }
-  #dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ghost); flex: none; transition: background .2s; }
-  #dot.busy { background: var(--gold); animation: breath 1s infinite; }
-  #dot.ok { background: var(--green); } #dot.diag { background: var(--gold); } #dot.bad { background: var(--verm); }
-  @keyframes breath { 50% { opacity: .4; } }
+  .plaque b { color: var(--gold-b); font-weight: 600; font-family: var(--mono); }
+  .plaque code { color: var(--ghost); font-size: 10px; }
+  .knob { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--muted); font-family: var(--sans); text-transform: uppercase; letter-spacing: .08em; }
+  .knob input { accent-color: var(--gold); width: 90px; }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ghost); flex: none; transition: background .25s, box-shadow .25s; }
+  #dot.busy { background: var(--gold); box-shadow: 0 0 10px var(--gold); animation: breath 1.1s infinite; }
+  #dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(0,158,115,.6); }
+  #dot.diag { background: var(--gold); box-shadow: 0 0 8px rgba(230,159,0,.5); }
+  #dot.bad { background: var(--verm); box-shadow: 0 0 9px rgba(213,94,0,.6); }
+  @keyframes breath { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 
-  /* ── toolbar ────────────────────────────────────────────────────────── */
-  .bar { display: flex; align-items: center; gap: 9px; padding: 6px 16px;
+  /* ── toolbar ────────────────────────────────────────────────────────────── */
+  .bar { display: flex; align-items: center; gap: 10px; padding: 7px 18px;
     border-bottom: 1px solid var(--border); background: var(--abyss); }
   select, button, label.tgl {
     background: var(--raised2); color: var(--primary); border: 1px solid var(--border);
-    border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer;
+    border-radius: 7px; padding: 6px 11px; font: inherit; font-size: 12px; cursor: pointer;
+    transition: border-color .18s, color .18s, background .18s;
   }
-  button:hover, select:hover { border-color: var(--gold); }
-  button.primary { border-color: var(--gold); color: var(--gold-b); }
-  label.tgl { display: flex; align-items: center; gap: 6px; user-select: none; }
+  button:hover, select:hover { border-color: var(--border-lift); background: var(--raised3); }
+  button.primary { border-color: #4a3610; color: var(--gold-b); background: linear-gradient(180deg, #1a1206, #120d06); }
+  button.primary:hover { border-color: var(--gold); box-shadow: var(--glow-gold); }
+  label.tgl { display: flex; align-items: center; gap: 7px; user-select: none; }
   label.tgl input { accent-color: var(--gold); }
-  .bar .stats { margin-left: auto; color: var(--muted); font-size: 11px; display: flex; gap: 16px; font-family: var(--sans); }
-  .bar .stats b { color: var(--gold-b); font-weight: 600; font-family: var(--mono); }
+  .bar .stats { margin-left: auto; color: var(--muted); font-size: 11px; display: flex; gap: 18px; font-family: var(--sans); }
+  .bar .stats span { display: flex; gap: 6px; align-items: baseline; }
+  .bar .stats b { color: var(--gold-b); font-weight: 600; font-family: var(--mono); font-size: 12px; }
 
-  #err-banner { display:none; padding: 12px 16px; background: #2a1010; color: var(--verm-b);
+  #err-banner { display:none; padding: 12px 18px; background: #2a1010; color: var(--verm-b);
     border-bottom: 1px solid #7f1d1d; font-size: 12px; white-space: pre-wrap; }
 
-  /* ── main: canvas | rail ────────────────────────────────────────────── */
-  main { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(360px,1fr); min-height: 0; }
-  .canvas-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-  .rail { display: grid; grid-template-rows: auto 1fr; border-left: 1px solid var(--border);
-    background: var(--raised1); min-height: 0; }
+  /* ── main: the Topographic Canvas | the rail ───────────────────────────── */
+  main { display: grid; grid-template-columns: minmax(0,1.28fr) minmax(384px,1fr); min-height: 0; position: relative; }
+  .canvas-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
+  .rail { display: grid; grid-template-rows: auto 1fr;
+    border-left: 1px solid var(--border); background: linear-gradient(180deg,#0f0d11,var(--raised1)); min-height: 0; }
 
-  /* editor: textarea over highlighted pre */
-  .edwrap { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--canvas); }
+  /* editor: topology svg (deepest) · highlighted pre · textarea (front) */
+  .edwrap { position: relative; flex: 1; min-height: 0; overflow: hidden;
+    background:
+      linear-gradient(90deg, rgba(86,180,233,.028) 0 34px, transparent 34px),
+      var(--canvas); }
+  #topo { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: visible; }
   .edwrap pre, .edwrap textarea {
-    position: absolute; inset: 0; padding: 16px 18px 40vh 18px; margin: 0;
-    font: 13px/1.6 var(--mono); white-space: pre; overflow: auto; tab-size: 2; border: 0; outline: 0; resize: none;
+    position: absolute; inset: 0; padding: 18px 20px 40vh 20px; margin: 0;
+    font: 13px/1.62 var(--mono); white-space: pre; overflow: auto; tab-size: 2; border: 0; outline: 0; resize: none;
+    letter-spacing: 0;
   }
-  .edwrap pre { pointer-events: none; color: var(--primary); }
+  .edwrap pre { pointer-events: none; color: var(--primary); z-index: 1; }
   .edwrap textarea { background: transparent; color: transparent; caret-color: var(--gold-b); z-index: 2; scrollbar-width: thin; }
-  .edwrap textarea::selection { background: rgba(230,159,0,.16); }
-  .cursor-line { color: var(--gold-b); }
+  .edwrap textarea::selection { background: rgba(230,159,0,.15); }
 
-  /* token colors — the five verbs get the accent; each hue IS its kernel role */
+  /* token colors — each hue IS its kernel role */
   .tk-kw   { color: var(--blue-b); }
-  .tk-disc { color: var(--mag-b); }                     /* own ref Pure resume */
-  .tk-verb { color: var(--sky-b); font-weight: 700; }   /* |> <| >< ~> <~ */
-  /* the ?? socket — vermillion glow, NO clip-path/padding: the highlight layer
-     must stay width-identical to the textarea beneath it (a true octagon needs
-     the four-layer SVG canvas, a named follow-up). */
-  .tk-hole { color: var(--verm-b); font-weight: 700; text-shadow: 0 0 7px rgba(213,94,0,.55); }
+  .tk-disc { color: var(--mag-b); }
+  .tk-verb { color: var(--sky-b); font-weight: 700; }
+  .tk-hole { color: var(--verm-b); font-weight: 700; text-shadow: 0 0 8px rgba(213,94,0,.6); }
   .tk-str  { color: var(--wheat); }
-  .tk-spl  { color: var(--bright); }                    /* {expr} splice — live code carrying the row, NOT a Topology token */
-  .tk-num  { color: var(--verm-b); }                    /* literals — where reality is asserted */
-  .tk-ty   { color: var(--gold-b); }                    /* Capitalized = type/effect/ctor */
-  .tk-neg  { color: var(--verm-b); font-weight: 700; }  /* !E negation */
-  .tk-fn   { color: var(--green-b); }                   /* fn/handler decl name */
+  .tk-spl  { color: var(--bright); }
+  .tk-num  { color: var(--verm-b); }
+  .tk-ty   { color: var(--gold-b); }
+  .tk-neg  { color: var(--verm-b); font-weight: 700; }
+  .tk-fn   { color: var(--green-b); }
   .tk-cm   { color: var(--comment); font-style: italic; }
   .tk-self { color: var(--verm-b); font-style: italic; }
-  .ln-bad  { background: rgba(213,94,0,.10); box-shadow: inset 2px 0 0 var(--verm); }
-  .ln-cur  { background: rgba(230,159,0,.055); }
+  .ln-bad  { background: linear-gradient(90deg, rgba(213,94,0,.14), transparent 70%); box-shadow: inset 3px 0 0 var(--verm); }
+  .ln-cur  { background: linear-gradient(90deg, rgba(230,159,0,.07), transparent 80%); }
 
-  /* ── the Aspect ring (rail top, always-on) — DESIGN_SYSTEM §7 ─────────── */
-  .aspect { border-bottom: 1px solid var(--border); background: var(--raised1);
-    padding: 10px 12px 12px; overflow: auto; }
-  .aspect h4 { font: 600 10px var(--sans); letter-spacing: .12em; text-transform: uppercase;
-    color: var(--faint); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-  .aspect h4 .at { color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; font-family: var(--mono); }
+  /* ── the Aspect ring (rail top) — the eight-fold identity ──────────────── */
+  .aspect { border-bottom: 1px solid var(--border);
+    background: radial-gradient(320px 200px at 100% 0, rgba(230,159,0,.05), transparent 70%), var(--raised1);
+    padding: 13px 15px 15px; overflow: auto; }
+  .aspect h4 { font: 600 10px var(--sans); letter-spacing: .13em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 11px; display: flex; align-items: center; gap: 9px; }
+  .aspect h4 .oct8 { width: 15px; height: 15px; flex: none; }
+  .aspect h4 .at { margin-left: auto; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; font-family: var(--mono); font-size: 10.5px; }
   .facets { display: grid; gap: 5px; }
-  .facet { display: grid; grid-template-columns: 74px 1fr; gap: 8px; align-items: baseline;
-    padding: 3px 6px; border-radius: 6px; cursor: default; }
-  .facet.door { cursor: pointer; } .facet.door:hover { background: var(--raised2); }
-  .facet .k { font-size: 10px; font-family: var(--sans); letter-spacing: .04em; display: flex; align-items: center; gap: 5px; }
-  .facet .k::before { content: "◆"; font-size: 8px; }
-  /* provenance badge — the three-state honesty contract, always visible */
-  .prov { margin-left: auto; font-size: 8px; letter-spacing: .06em; text-transform: uppercase;
-    padding: 0 4px; border-radius: 3px; border: 1px solid var(--border); color: var(--faint); }
-  .prov-surface { color: var(--whisper); } .prov-declared { color: var(--mag); border-color: rgba(204,121,167,.4); }
-  .prov-real { color: var(--sky); border-color: rgba(86,180,233,.4); }
-  .prov-socket { color: var(--verm); border-color: rgba(213,94,0,.4); }
-  .facet .v { font-size: 12px; color: var(--primary); word-break: break-word; }
+  .facet { display: grid; grid-template-columns: 15px 78px 1fr; gap: 9px; align-items: baseline;
+    padding: 5px 8px; border-radius: 8px; cursor: default; position: relative;
+    border: 1px solid transparent; transition: background .18s, border-color .18s, transform .18s; }
+  .facet::before { content: ""; width: 7px; height: 7px; align-self: center;
+    background: currentColor; clip-path: polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
+    opacity: .85; }
+  .facet.door { cursor: pointer; }
+  .facet.door:hover { background: var(--raised2); border-color: var(--border); transform: translateX(2px); }
+  .facet.real { background: linear-gradient(90deg, rgba(230,159,0,.06), transparent 75%); }
+  .facet .k { font-size: 10px; font-family: var(--sans); letter-spacing: .04em; display: flex; align-items: center; gap: 6px; }
+  .prov { margin-left: auto; font-size: 8px; letter-spacing: .07em; text-transform: uppercase;
+    padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border); color: var(--faint); font-family: var(--sans); }
+  .prov-surface { color: var(--whisper); }
+  .prov-declared { color: var(--mag); border-color: rgba(204,121,167,.35); }
+  .prov-real { color: var(--gold-b); border-color: rgba(230,159,0,.45); background: rgba(230,159,0,.07); }
+  .prov-socket { color: var(--verm); border-color: rgba(213,94,0,.35); }
+  .facet .v { font-size: 12px; color: var(--primary); word-break: break-word; line-height: 1.45; }
   .facet .v .stub { color: var(--faint); font-style: italic; font-size: 11px; }
-  .k-graph::before,.k-graph{ color: var(--blue-b); } .k-hand{ color: var(--green-b); }
-  .k-verb{ color: var(--sky-b); } .k-row{ color: var(--mag-b); } .k-own{ color: var(--mag-b); }
-  .k-ref{ color: var(--verm-b); } .k-grad{ color: var(--gold-b); } .k-why{ color: var(--blue-b); }
-  .facet .k.k-graph{color:var(--blue-b)} .facet .k.k-hand{color:var(--green-b)} .facet .k.k-verb{color:var(--sky-b)}
-  .facet .k.k-row{color:var(--mag-b)} .facet .k.k-own{color:var(--mag-b)} .facet .k.k-ref{color:var(--verm-b)}
-  .facet .k.k-grad{color:var(--gold-b)} .facet .k.k-why{color:var(--blue-b)}
+  .facet .v code { color: var(--bright); background: #0c0a0d; padding: 0 4px; border-radius: 4px; }
+  .facet.real .v { animation: surface .34s var(--e-surface); }
+  .k-graph{color:var(--blue-b)} .k-hand{color:var(--green-b)} .k-verb{color:var(--sky-b)}
+  .k-row{color:var(--mag-b)} .k-own{color:var(--mag-b)} .k-ref{color:var(--verm-b)}
+  .k-grad{color:var(--gold-b)} .k-why{color:var(--blue-b)}
+  .facet.k-graph::before,.facet .k-graph{color:var(--blue-b)}
+  @keyframes surface { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-  /* ── rail tabs: Lens | Ledger | WAT ─────────────────────────────────── */
+  /* ── rail tabs: Lens | Ledger | WAT ─────────────────────────────────────── */
   .rail-lower { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
-  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--abyss); }
-  .tabs div { padding: 8px 14px; color: var(--muted); cursor: pointer; font-size: 11.5px;
-    border-bottom: 2px solid transparent; font-family: var(--sans); letter-spacing: .02em; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--abyss); padding: 0 6px; }
+  .tabs div { padding: 9px 14px; color: var(--muted); cursor: pointer; font-size: 11.5px;
+    border-bottom: 2px solid transparent; font-family: var(--sans); letter-spacing: .02em; transition: color .18s; }
+  .tabs div:hover { color: var(--primary); }
   .tabs div.on { color: var(--gold-b); border-bottom-color: var(--gold); }
   .tabs div .n { margin-left: 6px; font-size: 10px; color: var(--abyss); background: var(--muted);
     border-radius: 8px; padding: 1px 6px; font-family: var(--mono); }
@@ -155,75 +171,98 @@
   .panel { overflow: auto; display: none; min-height: 0; }
   .panel.on { display: block; }
 
-  /* the Lens — diagnostics as teaching, ranked */
-  .lead { padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--raised2); }
-  .lead .voice { display: flex; gap: 7px; align-items: flex-start; font-size: 12px; color: var(--primary); }
-  .lead .oct { color: var(--gold); flex: none; }
-  .diag { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  /* the Lens — Mentl's voice, ranked to one teaching step */
+  .lead { padding: 12px 15px; border-bottom: 1px solid var(--border);
+    background: radial-gradient(400px 120px at 0 0, rgba(230,159,0,.06), transparent), var(--raised2); }
+  .lead .voice { display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; color: var(--primary); line-height: 1.5; }
+  .lead .oct { color: var(--gold); flex: none; font-size: 14px; margin-top: -1px; }
+  .diag { padding: 11px 15px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .16s; }
   .diag:hover { background: var(--raised2); }
-  .diag .row1 { display: flex; align-items: baseline; gap: 8px; }
-  .diag .code { font-weight: 700; font-size: 12px; }
+  .diag .row1 { display: flex; align-items: baseline; gap: 9px; }
+  .diag .code { font-weight: 700; font-size: 12px; letter-spacing: .01em; }
   .diag.E .code { color: var(--verm-b); } .diag.W .code { color: var(--gold-b); }
   .diag.T .code { color: var(--sky-b); } .diag.P .code { color: var(--sky-b); } .diag.V .code { color: var(--mag-b); }
-  .diag .at { color: var(--ghost); font-size: 11px; }
+  .diag .at { color: var(--ghost); font-size: 11px; font-family: var(--sans); }
   .diag .appl { margin-left: auto; font-size: 9.5px; font-family: var(--sans); color: var(--faint);
-    border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+    border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px; }
   .diag .appl.fix { color: var(--green-b); border-color: var(--green); cursor: pointer; }
-  .diag .msg { color: var(--muted); margin-top: 3px; font-size: 12px; line-height: 1.45; }
-  .empty { padding: 44px 20px; text-align: center; color: var(--faint); }
-  .empty .big { font-size: 30px; margin-bottom: 12px; }
-  .empty .sub { font-size: 11px; color: var(--ghost); margin-top: 8px; }
+  .diag .appl.fix:hover { background: rgba(0,158,115,.12); }
+  .diag .msg { color: var(--muted); margin-top: 4px; font-size: 12px; line-height: 1.5; }
+  .empty { padding: 52px 22px; text-align: center; color: var(--faint); }
+  .empty .big { font-size: 34px; margin-bottom: 14px; filter: drop-shadow(0 0 12px rgba(0,158,115,.4)); }
+  .empty .sub { font-size: 11px; color: var(--ghost); margin-top: 10px; font-family: var(--sans); }
 
-  /* the Ledger — rows + the proof surface (negative space) */
-  .ledger { padding: 12px 14px; }
-  .ledger section { margin-bottom: 16px; }
-  .ledger h5 { font: 600 10px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin-bottom: 7px; }
-  .rowchip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 5px;
-    font-size: 11.5px; margin: 0 5px 5px 0; border: 1px solid var(--border); }
-  .rowchip.pos { color: var(--green-b); } .rowchip.neg { color: var(--verm-b); border-color: rgba(213,94,0,.4); }
-  .rowchip.pure { color: var(--mag-b); }
-  .proof { border: 1px solid rgba(213,94,0,.35); border-radius: 8px; padding: 10px 12px; background: rgba(213,94,0,.05); }
-  .proof .head { color: var(--verm-b); font-size: 12px; margin-bottom: 6px; }
-  .proof .item { font-size: 11.5px; color: var(--primary); padding: 2px 0; }
+  /* the Ledger — the verification dashboard + the proof surface */
+  .ledger { padding: 14px 15px; }
+  .ledger section { margin-bottom: 18px; }
+  .ledger h5 { font: 600 10px var(--sans); letter-spacing: .13em; text-transform: uppercase; color: var(--faint); margin-bottom: 9px; }
+  .rowchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 6px;
+    font-size: 11.5px; margin: 0 5px 5px 0; border: 1px solid var(--border); background: #0c0a0d; }
+  .rowchip.pos { color: var(--green-b); border-color: rgba(0,158,115,.3); }
+  .rowchip.neg { color: var(--verm-b); border-color: rgba(213,94,0,.4); }
+  .rowchip.pure { color: var(--mag-b); border-color: rgba(204,121,167,.3); }
+  .proof { border: 1px solid rgba(213,94,0,.32); border-radius: 10px; padding: 12px 14px;
+    background: linear-gradient(180deg, rgba(213,94,0,.07), rgba(213,94,0,.02)); }
+  .proof .head { color: var(--verm-b); font-size: 12px; margin-bottom: 8px; font-weight: 600; }
+  .proof .item { font-size: 12px; color: var(--primary); padding: 3px 0; }
   .proof .item .x { color: var(--verm-b); font-weight: 700; }
-  .proof .gate { font-size: 10.5px; color: var(--faint); font-style: italic; margin-top: 7px; font-family: var(--sans); }
-  .ownrow { font-size: 11.5px; color: var(--mag-b); padding: 2px 0; }
-  .subtle { color: var(--faint); font-size: 11px; font-style: italic; font-family: var(--sans); }
+  .proof .gate { font-size: 10.5px; color: var(--faint); font-style: italic; margin-top: 9px; font-family: var(--sans); line-height: 1.5; }
+  .ownrow { font-size: 12px; color: var(--mag-b); padding: 3px 0; }
+  .subtle { color: var(--faint); font-size: 11px; font-style: italic; font-family: var(--sans); line-height: 1.5; }
+  .ledger code, .lead code { color: var(--bright); background: #0c0a0d; padding: 0 4px; border-radius: 4px; }
 
   /* the emitted WAT projection */
-  #watout { padding: 12px 16px; white-space: pre; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  #watout { padding: 13px 16px; white-space: pre; color: var(--muted); font-size: 12px; line-height: 1.55; }
   #watout .w-key { color: var(--blue-b); } #watout .w-fn { color: var(--green-b); }
   #watout .w-str { color: var(--wheat); } #watout .w-num { color: var(--verm-b); }
 
-  /* ── the Wavefront (bottom strip) — TIME made scrubbable ───────────────── */
-  .wavefront { border-top: 1px solid var(--border); background: var(--abyss); padding: 8px 16px;
-    display: flex; align-items: center; gap: 20px; overflow-x: auto; }
-  .wf-seg { display: flex; align-items: center; gap: 9px; font-size: 11px; color: var(--muted); white-space: nowrap; }
-  .wf-seg .lbl { font: 600 9.5px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+  /* ── the Wavefront — TIME made scrubbable ──────────────────────────────── */
+  .wavefront { border-top: 1px solid var(--border); background: linear-gradient(0deg,#0b090b,var(--abyss));
+    padding: 9px 18px; display: flex; align-items: center; gap: 26px; overflow-x: auto; }
+  .wf-seg { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .wf-seg .lbl { font: 600 9.5px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
   .why-dag { display: flex; align-items: center; gap: 5px; }
-  .why-node { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
-  .why-node.on { background: var(--blue-b); box-shadow: 0 0 6px rgba(51,153,204,.6); }
-  .why-edge { width: 16px; height: 1px; background: var(--border); }
+  .why-node { width: 8px; height: 8px; border-radius: 50%; background: var(--border-lift); transition: background .3s, box-shadow .3s; }
+  .why-node.on { background: var(--blue-b); box-shadow: 0 0 7px rgba(51,153,204,.7); }
+  .why-edge { width: 17px; height: 1px; background: var(--border-lift); }
   .realities { display: flex; gap: 4px; align-items: center; }
-  .rbar { width: 7px; height: 16px; border-radius: 2px; background: var(--border); }
-  .rbar.live { background: var(--gold); } .rbar.ghost { background: rgba(230,159,0,.25); }
-  .wf-gate { color: var(--faint); font-style: italic; font-family: var(--sans); }
+  .rbar { width: 7px; height: 17px; border-radius: 2px; background: var(--border-lift); }
+  .rbar.live { background: var(--gold); box-shadow: 0 0 6px rgba(230,159,0,.5); }
+  .rbar.ghost { background: rgba(230,159,0,.22); }
+  .wf-gate { color: var(--faint); font-style: italic; font-family: var(--sans); font-size: 10.5px; }
   .wf-gate b { color: var(--sky); font-style: normal; }
 
-  footer { padding: 6px 16px; border-top: 1px solid var(--border); background: var(--abyss);
-    color: var(--ghost); font-size: 10px; display: flex; gap: 18px; flex-wrap: wrap; font-family: var(--sans); }
+  footer { padding: 7px 18px; border-top: 1px solid var(--border); background: var(--abyss);
+    color: var(--ghost); font-size: 10px; display: flex; gap: 20px; flex-wrap: wrap; font-family: var(--sans); }
   footer span b { color: var(--faint); font-weight: 600; }
 
-  /* teach density: 0 = terse (hide named-future stubs, hide wavefront), 2 = full */
+  /* ── Mentl, the octopus — present, never intrusive ─────────────────────── */
+  #mentl { position: absolute; right: calc(min(384px,44%) + 22px); bottom: 18px; width: 62px; height: 62px;
+    z-index: 5; pointer-events: none; opacity: .92; transition: opacity .4s, transform .5s var(--e-surface); }
+  #mentl svg { width: 100%; height: 100%; overflow: visible; }
+  #mentl .body { animation: mentl-breath 4.6s ease-in-out infinite; transform-origin: 50% 45%; }
+  #mentl .arm { stroke: var(--gold); stroke-width: 1.5; fill: none; opacity: .7; stroke-linecap: round; }
+  #mentl.exploring .arm { animation: mentl-explore 2.2s ease-in-out infinite; }
+  #mentl.proven { transform: translateY(-3px); }
+  #mentl.proven .eye { fill: rgba(0,158,115,.5); }
+  #mentl.offering .eye { stroke: var(--verm-b); }
+  @keyframes mentl-breath { 0%,100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+  @keyframes mentl-explore { 0%,100% { opacity: .5; } 50% { opacity: .95; } }
+
+  /* teach density: 0 = terse, 2 = full */
   body[data-teach="0"] .facet.future, body[data-teach="0"] .wf-gate,
   body[data-teach="0"] .proof .gate, body[data-teach="0"] .lead .sub2 { display: none; }
-  body[data-teach="2"] .aspect { padding-bottom: 16px; }
+  body[data-teach="2"] .aspect { padding-bottom: 18px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body data-teach="1">
 <header>
   <div class="mark">
-    <svg viewBox="0 0 32 32" aria-hidden="true">
+    <svg class="halo" viewBox="0 0 32 32" aria-hidden="true">
       <polygon points="16,4 23,7 26,15 23,23 16,26 9,23 6,15 9,7" fill="none" stroke="var(--gold)" stroke-width="1.5"/>
       <circle cx="16" cy="15" r="3.4" fill="none" stroke="var(--gold-b)" stroke-width="1.3"/>
       <g stroke="var(--gold)" stroke-width="1.2" opacity=".75">
@@ -235,7 +274,7 @@
   <div class="tag">the medium, compiled by itself — this page runs the first-light wheel</div>
   <div class="grow"></div>
   <label class="knob">teach<input id="teach" type="range" min="0" max="2" value="1" step="1"></label>
-  <div class="plaque"><span>first light</span><b>m₃ = m₄</b><code>0536240b…</code><span>2026-07-10</span><div id="dot"></div></div>
+  <div class="plaque"><span>fixed point</span><b>m₃ = m₄</b><code>boot</code><div id="dot"></div></div>
 </header>
 <div id="err-banner"></div>
 <div class="bar">
@@ -254,13 +293,20 @@
 <main>
   <div class="canvas-pane">
     <div class="edwrap">
+      <svg id="topo" aria-hidden="true"><g id="topo-g"></g></svg>
       <pre id="hl" aria-hidden="true"></pre>
       <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
     </div>
   </div>
   <div class="rail">
     <div class="aspect">
-      <h4>aspect ring <span class="at" id="asp-at">— place the cursor —</span></h4>
+      <h4>
+        <svg class="oct8" viewBox="0 0 24 24" aria-hidden="true">
+          <polygon points="12,2 19,5 22,12 19,19 12,22 5,19 2,12 5,5" fill="none" stroke="var(--gold)" stroke-width="1.2" opacity=".5"/>
+          <polygon points="12,8.5 14,9.5 15.5,12 14,14.5 12,15.5 10,14.5 8.5,12 10,9.5" fill="none" stroke="var(--verm)" stroke-width="1"/>
+        </svg>
+        aspect ring <span class="at" id="asp-at">— place the cursor —</span>
+      </h4>
       <div class="facets" id="facets"></div>
     </div>
     <div class="rail-lower">
@@ -274,11 +320,24 @@
       <div class="panel" id="pwat"><div id="watout"></div></div>
     </div>
   </div>
+  <div id="mentl" title="Mentl — quiet until she has proven something">
+    <svg viewBox="0 0 60 60" aria-hidden="true">
+      <g class="arm">
+        <path d="M30 44 C22 50 16 48 14 56"/><path d="M30 44 C38 50 44 48 46 56"/>
+        <path d="M24 42 C16 46 10 44 6 50"/><path d="M36 42 C44 46 50 44 54 50"/>
+      </g>
+      <g class="body">
+        <polygon points="30,10 42,15 47,28 42,41 30,46 18,41 13,28 18,15" fill="#0f0b0e" stroke="var(--gold)" stroke-width="1.4" opacity=".92"/>
+        <circle class="eye" cx="30" cy="26" r="5.4" fill="none" stroke="var(--gold-b)" stroke-width="1.3"/>
+        <text x="30" y="29.4" text-anchor="middle" font-family="var(--mono)" font-size="8" font-weight="700" fill="var(--verm-b)">??</text>
+      </g>
+    </svg>
+  </div>
 </main>
 <div class="wavefront" id="wavefront"></div>
 <footer>
-  <span><b>compiler</b> mentl-ide.wasm — the first-light wheel, 512MB-initial repack of the pinned boot</span>
-  <span><b>loop</b> keystroke → compile → project</span>
+  <span><b>compiler</b> mentl-ide.wasm — the pinned wheel, 512MB-initial repack of boot</span>
+  <span><b>loop</b> keystroke → compile → project → the live CursorView</span>
   <span><b>server</b> ide/serve.mn — mentl, serving mentl</span>
   <span><b>run</b> download .wat + wat2wasm — in-page run lands with binary emit (band N)</span>
 </footer>
@@ -636,19 +695,181 @@ function makeWasi(sourceBytes){
 const td = new TextDecoder(), te = new TextEncoder();
 const cat = cs => { const n = cs.reduce((a,c)=>a+c.length,0); const b = new Uint8Array(n); let o=0; for(const c of cs){b.set(c,o);o+=c.length;} return b; };
 
+/* ── the ADDRESS-mode WASI shim — a virtual filesystem so the compiler's own
+   cursor-address transport (`mentl main.mn:L:C` → src/main.mn at_run →
+   cursor_at_handle, the SAME CursorView `mentl edit` reads) runs in the page.
+   The browser presents a filesystem the way wasmtime's --dir does: one dir
+   preopen (fd 3), relative paths (main.mn + the vocabulary closure) served from
+   `vfs`. argv carries the address. Unhandled WASI calls return errno via the
+   proxy — the driver never needs them for a read-only projection. ──────────── */
+function makeWasiFs(vfs, argvStr){
+  let mem = null; const out = [], err = [];
+  const dv = () => new DataView(mem.buffer), u8 = () => new Uint8Array(mem.buffer);
+  const fds = new Map(); let nextFd = 8;
+  const argv = ["mentl", argvStr].map(s => te.encode(s + "\0"));
+  const argvTotal = argv.reduce((a,b) => a + b.length, 0);
+  const readStr = (p, l) => td.decode(u8().slice(p, p + l));
+  const norm = p => p.replace(/^\.\//, "").replace(/^\//, "");
+  const stat = (ptr, ft, sz) => { const v = dv(); for (let i=0;i<64;i+=8) v.setBigUint64(ptr+i, 0n, true);
+    v.setUint8(ptr+16, ft); v.setBigUint64(ptr+24, 1n, true); v.setBigUint64(ptr+32, BigInt(sz), true); };
+  const P = {
+    proc_exit(code){ const e = new Error("exit"); e.exitCode = code; throw e; },
+    args_sizes_get(a, b){ dv().setUint32(a, argv.length, true); dv().setUint32(b, argvTotal, true); return 0; },
+    args_get(ap, bp){ let p = bp; argv.forEach((a, i) => { dv().setUint32(ap + 4*i, p, true); u8().set(a, p); p += a.length; }); return 0; },
+    fd_write(fd, io, n, o){ const v = dv(); let t = 0; for (let i=0;i<n;i++){ const p=v.getUint32(io+8*i,true), l=v.getUint32(io+8*i+4,true); (fd===2?err:out).push(u8().slice(p,p+l)); t+=l; } v.setUint32(o, t, true); return 0; },
+    fd_read(fd, io, n, o){ const v = dv(); if (fd === 0){ v.setUint32(o, 0, true); return 0; }   // no stdin in address mode
+      const h = fds.get(fd); if (!h) return 8; const d = vfs[h.name]; let t = 0;
+      for (let i=0;i<n && h.pos<d.length;i++){ const p=v.getUint32(io+8*i,true), l=v.getUint32(io+8*i+4,true);
+        const k = Math.min(l, d.length - h.pos); u8().set(d.subarray(h.pos, h.pos+k), p); h.pos += k; t += k; }
+      v.setUint32(o, t, true); return 0; },
+    fd_close(fd){ fds.delete(fd); return 0; },
+    fd_seek(fd, off, w, o){ const h = fds.get(fd); if (!h) return 8;
+      h.pos = w===0 ? Number(off) : w===1 ? h.pos+Number(off) : vfs[h.name].length+Number(off);
+      dv().setBigUint64(o, BigInt(h.pos), true); return 0; },
+    fd_prestat_get(fd, p){ if (fd === 3){ dv().setUint8(p, 0); dv().setUint32(p+4, 1, true); return 0; } return 8; },
+    fd_prestat_dir_name(fd, p){ if (fd === 3){ u8()[p] = 46; return 0; } return 8; },   // "."
+    path_open(b, df, pp, pl, of, rb, ri, ff, o){ const nm = norm(readStr(pp, pl));
+      if (nm === "" || nm === "."){ const fd = nextFd++; fds.set(fd, {name:".", pos:0, dir:1}); dv().setUint32(o, fd, true); return 0; }
+      if (!(nm in vfs)) return 44; const fd = nextFd++; fds.set(fd, {name:nm, pos:0}); dv().setUint32(o, fd, true); return 0; },
+    path_filestat_get(fd, fl, pp, pl, s){ const nm = norm(readStr(pp, pl)); if (!(nm in vfs)) return 44; stat(s, 4, vfs[nm].length); return 0; },
+    fd_filestat_get(fd, s){ const h = fds.get(fd); if (!h) return 8; stat(s, h.dir?3:4, h.dir?0:vfs[h.name].length); return 0; },
+    fd_fdstat_get(fd, p){ if (fd === 3){ dv().setUint8(p, 3); return 0; } const h = fds.get(fd); if (h){ dv().setUint8(p, h.dir?3:4); return 0; } return 8; },
+    fd_readdir(){ return 0; },
+    clock_time_get(id, pr, o){ dv().setBigUint64(o, 0n, true); return 0; },
+    random_get(p, l){ u8().fill(0, p, p+l); return 0; },
+    environ_sizes_get(a, b){ dv().setUint32(a, 0, true); dv().setUint32(b, 0, true); return 0; },
+    environ_get(){ return 0; }, poll_oneoff(){ return 0; }, sched_yield(){ return 0; },
+    path_create_directory(){ return 44; }, path_unlink_file(){ return 44; }, path_rename(){ return 44; },
+  };
+  const proxy = new Proxy(P, { get(t, k){ return k in t ? t[k] : () => 8; } });
+  return { imports: { wasi_snapshot_preview1: proxy, wasi: { "thread-spawn": () => -1 } },
+           bind(i){ mem = i.exports.memory; }, out, err };
+}
+// the six facet lines render_at emits (src/main.mn) → the ring's aspect keys.
+const FACET_LABELS = { Query:"graph", Effects:"row", Ownership:"own", Verify:"ref", Teach:"grad", Why:"why" };
+function parseFacets(stdout){
+  const real = {}; let cur = null;
+  for (const raw of stdout.split("\n")){
+    const m = raw.match(/^(Query|Effects|Ownership|Verify|Teach|Why): (.*)$/);
+    if (m){ cur = FACET_LABELS[m[1]]; real[cur] = m[2]; }
+    else if (cur === "why" && raw.startsWith("     ") && raw.trim()){ real.why = (real.why || "") + " · " + raw.trim(); }
+  }
+  return real;
+}
+
+/* ── the Topographic Canvas — the five verbs DRAWN as geometry ───────────
+   Layout is meaning (DESIGN_SYSTEM §5): a pipeline's stages physically connect.
+   From the surface lines we find verb-stages (indent + a verb glyph), group the
+   contiguous runs into chains, and draw the spine + node dots into #topo — the
+   sky flow of |>/<|/><, the gold enclosure of ~> governing its chain, the
+   vermillion loop of <~. Purely a surface read; it never claims graph truth. */
+let CW = 7.82, LH = 21.06, PADT = 18, PADL = 20;
+function measureMetrics(){
+  try {
+    const ta = $("src"); const cs = getComputedStyle(ta);
+    LH = parseFloat(cs.lineHeight) || LH;
+    PADT = parseFloat(cs.paddingTop) || PADT;
+    PADL = parseFloat(cs.paddingLeft) || PADL;
+    const ruler = document.createElement("span");
+    ruler.style.cssText = "position:absolute;visibility:hidden;white-space:pre;font:" + cs.font;
+    ruler.textContent = "0".repeat(100); document.body.appendChild(ruler);
+    CW = ruler.getBoundingClientRect().width / 100 || CW; ruler.remove();
+  } catch (e) {}
+}
+const VERB_HUE = { "|>":"var(--sky-b)", "<|":"var(--sky-b)", "><":"var(--sky-b)", "~>":"var(--gold-b)", "<~":"var(--verm-b)" };
+function renderTopology(){
+  const g = $("topo-g"); if (!g) return;
+  try {
+    const src = $("src").value;
+    const rows = src.split("\n");
+    // a stage line: leading whitespace then a verb glyph
+    const stages = [];
+    rows.forEach((row, idx) => {
+      const m = row.match(/^(\s*)(\|>|<\||><|~>|<~)/);
+      if (m) stages.push({ idx, col: m[1].length, verb: m[2] });
+    });
+    // group contiguous stage runs; a run's head is the nearest non-blank line above
+    const chains = []; let run = null;
+    stages.forEach(st => {
+      if (run && st.idx === run.at + 1) { run.stages.push(st); run.at = st.idx; }
+      else { run = { stages: [st], at: st.idx }; chains.push(run); }
+    });
+    let out = "";
+    const X = (col) => PADL + col * CW;
+    const Y = (idx) => PADT + idx * LH;
+    for (const ch of chains){
+      const first = ch.stages[0], last = ch.stages[ch.stages.length-1];
+      const col = Math.min(...ch.stages.map(s => s.col));
+      const spineX = X(col) - 5;
+      // find the head line (the pipeline's input) just above the first stage
+      let head = first.idx - 1; while (head >= 0 && rows[head].trim() === "") head--;
+      const topY = head >= 0 ? Y(head) + LH*0.5 : Y(first.idx) - LH*0.3;
+      const botY = Y(last.idx) + LH*0.5;
+      const isTee = ch.stages.some(s => s.verb === "~>");
+      // ~> governs its chain: a soft enclosure to the LEFT of the spine
+      if (isTee){
+        const encL = spineX - 6, encT = topY - LH*0.35, encW = Math.max(CW*10, 60), encB = botY + LH*0.35;
+        out += `<rect x="${encL}" y="${encT}" width="${encW}" height="${encB-encT}" rx="9" fill="rgba(230,159,0,.035)" stroke="rgba(230,159,0,.22)" stroke-width="1"/>`;
+      }
+      // the spine — flow down the left edge
+      out += `<line x1="${spineX}" y1="${topY}" x2="${spineX}" y2="${botY}" stroke="rgba(86,180,233,.4)" stroke-width="1.4"/>`;
+      out += `<circle cx="${spineX}" cy="${topY}" r="2.1" fill="var(--sky-b)" opacity=".7"/>`;
+      // node dot at each stage
+      for (const s of ch.stages){
+        const y = Y(s.idx) + LH*0.5;
+        out += `<circle cx="${spineX}" cy="${y}" r="3" fill="${VERB_HUE[s.verb]||"var(--sky-b)"}"/>`;
+        // <~ draws a loop-back arc back up the spine
+        if (s.verb === "<~"){
+          out += `<path d="M ${spineX} ${y} C ${spineX-13} ${y}, ${spineX-13} ${topY}, ${spineX} ${topY}" fill="none" stroke="var(--verm-b)" stroke-width="1.2" opacity=".55"/>`;
+        }
+      }
+    }
+    g.innerHTML = out;
+    syncTopo();
+  } catch (e) { /* topology is decorative — never let it break the page */ }
+}
+function syncTopo(){
+  const ta = $("src"); const g = $("topo-g");
+  if (g) g.setAttribute("transform", `translate(${-ta.scrollLeft}, ${-ta.scrollTop})`);
+}
+
+/* ── Mentl, the octopus — quiet until she has proven something ───────────── */
+function octopus(state){
+  const m = $("mentl"); if (!m) return;
+  m.className = state || "";
+}
+
 /* ── boot ───────────────────────────────────────────────────────────────── */
-let MODULE = null, RT = "", RESULT = null, PARSE = null;
+// The address-mode virtual filesystem: the vocabulary closure the driver walks
+// (prelude + its transitive imports + types — measured minimal set), keyed by
+// the repo-relative path the driver probes. The user's source mounts as main.mn
+// per projection. Fed to the compiler's REAL cursor-address transport
+// (`mentl main.mn:L:C`, src/main.mn at_run → cursor_at_handle), so the Aspect
+// ring reads the live graph, not the page's surface parse.
+const VFS_LIBS = [
+  ["lib/runtime/memory.mn",    "../lib/runtime/memory.mn"],
+  ["lib/runtime/strings.mn",   "../lib/runtime/strings.mn"],
+  ["lib/runtime/lists.mn",     "../lib/runtime/lists.mn"],
+  ["lib/runtime/threading.mn", "../lib/runtime/threading.mn"],
+  ["lib/prelude.mn",           "../lib/prelude.mn"],
+  ["src/types.mn",             "../src/types.mn"],
+];
+// compile-stdin prepends these four, in this order, exactly as before.
+const RT_KEYS = ["lib/runtime/memory.mn","lib/runtime/strings.mn","lib/runtime/lists.mn","lib/prelude.mn"];
+let MODULE = null, RT = "", RESULT = null, PARSE = null, VFS = {};
 async function boot(){
   try {
     if (!crossOriginIsolated) throw new Error("page is not cross-origin isolated — start it with `bash ide/serve.sh` (the compiler's shared memory needs COOP/COEP headers)");
-    const [wasm, ...libs] = await Promise.all([
+    const [wasm, ...texts] = await Promise.all([
       fetch("mentl-ide.wasm").then(r => { if(!r.ok) throw new Error("mentl-ide.wasm missing"); return r.arrayBuffer(); }),
-      ...["../lib/runtime/memory.mn","../lib/runtime/strings.mn","../lib/runtime/lists.mn","../lib/prelude.mn"]
-        .map(u => fetch(u).then(r => r.ok ? r.text() : "")),
+      ...VFS_LIBS.map(([, u]) => fetch(u).then(r => r.ok ? r.text() : "")),
     ]);
-    RT = libs.join("\n");
+    const byKey = {};
+    VFS_LIBS.forEach(([k], i) => { byKey[k] = texts[i]; VFS[k] = te.encode(texts[i]); });
+    RT = RT_KEYS.map(k => byKey[k]).join("\n");
     MODULE = await WebAssembly.compile(wasm);
     $("dot").className = "ok";
+    measureMetrics();
     compile();
   } catch (e) {
     const b = $("err-banner"); b.style.display = "block";
@@ -662,7 +883,7 @@ let busy = false, again = false;
 async function compile(){
   if (!MODULE) return;
   if (busy){ again = true; return; }
-  busy = true; $("dot").className = "busy";
+  busy = true; $("dot").className = "busy"; octopus("exploring");
   const user = $("src").value;
   const full = ($("rt").checked ? RT + "\n" : "") + user;
   const rtLines = $("rt").checked ? RT.split("\n").length + 1 : 0;
@@ -730,8 +951,10 @@ function render(user, wat, diagText, ms, rtLines, exitCode, trapped){
   PARSE = surfaceParse(user);
   BAD = new Set(ds.filter(d => d.line).map(d => d.line));
   $("hl").innerHTML = highlight(user);
+  renderTopology();
   $("ndiag").textContent = ds.length;
   $("dot").className = trapped ? "bad" : ds.some(d => d.code.startsWith("E")) ? "diag" : "ok";
+  octopus(trapped ? "offering" : ds.some(d => d.code.startsWith("E")) ? "offering" : "proven");
   renderLens(ds); renderLedger(); renderWat(wat); renderWavefront(ds);
   projectCursor();
 }
@@ -739,7 +962,7 @@ function render(user, wat, diagText, ms, rtLines, exitCode, trapped){
 /* the Lens — one teaching step in view, sockets in place, never a 200-item panel */
 function renderLens(ds){
   const p = $("plens");
-  const noise = ds.rtNoise ? `<div style="padding:7px 14px;color:var(--ghost);font-size:10.5px;border-bottom:1px solid var(--line)">${ds.rtNoise} runtime-internal diagnostics hidden — the linked stdlib compiled standalone</div>` : "";
+  const noise = ds.rtNoise ? `<div style="padding:7px 15px;color:var(--ghost);font-size:10.5px;border-bottom:1px solid var(--line);font-family:var(--sans)">${ds.rtNoise} runtime-internal diagnostics hidden — the linked stdlib compiled standalone</div>` : "";
   if (!ds.length){
     p.innerHTML = noise + `<div class="empty"><div class="big" style="color:var(--green-b)">✓</div>clean — the graph is coherent
       <div class="sub">${$("lines").textContent} lines of WAT · exit ${$("exit").textContent} · ${$("ms").textContent}</div></div>`;
@@ -748,7 +971,7 @@ function renderLens(ds){
   const top = ds[0];
   const lead = `<div class="lead"><div class="voice"><span class="oct">◉</span><span>
     <b style="color:var(--bright)">Mentl:</b> ${leadCopy(top)}
-    <span class="sub2" style="display:block;color:var(--faint);font-size:10.5px;margin-top:3px">the gradient ranks — one step, ${ds.length-1} more below</span></span></div></div>`;
+    <span class="sub2" style="display:block;color:var(--faint);font-size:10.5px;margin-top:4px">the gradient ranks — one step, ${ds.length-1} more below</span></span></div></div>`;
   const list = ds.map(d => {
     const fixable = FIXABLE.has(d.code);
     return `<div class="diag ${d.code[0]}" data-l="${d.line||""}">
@@ -800,7 +1023,7 @@ function renderLedger(){
   };
   let html = `<div class="ledger">`;
   html += `<section><h5>ambient rows — declared</h5>`;
-  if (rowed.length) html += rowed.map(d => `<div style="margin-bottom:7px"><span style="color:var(--green-b)">${esc(d.name)}</span> &nbsp;${chips(d.row)}</div>`).join("");
+  if (rowed.length) html += rowed.map(d => `<div style="margin-bottom:8px"><span style="color:var(--green-b)">${esc(d.name)}</span> &nbsp;${chips(d.row)}</div>`).join("");
   else html += `<div class="subtle">no <code>with</code> rows in view — every fn here is inferred Pure until a body performs.</div>`;
   html += `</section>`;
   // the proof surface — what the negative rows prove this code CANNOT do
@@ -844,47 +1067,90 @@ function renderWavefront(ds){
   const holes = (PARSE?.holes||[]).length;
   wf.innerHTML =
     `<div class="wf-seg"><span class="lbl">why</span><div class="why-dag">${dag}</div>
-       <span class="wf-gate">provenance ink — the Reason chain lands with <b>mentl why</b></span></div>` +
+       <span class="wf-gate">provenance ink — the Reason chain walks with <b>mentl why</b></span></div>` +
     `<div class="wf-seg"><span class="lbl">realities</span><div class="realities">
        <span class="rbar live"></span><span class="rbar ghost"></span><span class="rbar ghost"></span><span class="rbar ghost"></span></div>
        <span class="wf-gate">${holes?`${holes} hole${holes>1?"s":""} — `:""}scrub proven futures when the <b>multi-shot producer</b> lands (band B)</span></div>` +
     `<div class="wf-seg"><span class="lbl">trail</span>
-       <span class="wf-gate">session = image; scrub execution back & forth — <b>persist = memcpy</b>, band B</span></div>`;
+       <span class="wf-gate">session = image; scrub execution back &amp; forth — <b>persist = memcpy</b>, band B</span></div>`;
 }
 
 /* ── the cursor — the one reader; every surface re-projects around it ─────── */
 function getOffset(){ return $("src").selectionStart; }
+
+// the live CursorView, read from the compiler's own graph via the address
+// transport. REAL holds the facet content for REAL_AT (an offset); a facet the
+// projection covers flips its provenance from surface/declared to 'real'.
+let REAL = {}, REAL_AT = -1, realBusy = false, realDeb = null;
+function lineColAt(off){
+  const before = $("src").value.slice(0, off);
+  const nl = before.lastIndexOf("\n");
+  return { line: before.split("\n").length, col: off - nl };   // both 1-based
+}
+// run the compiler's cursor-address transport at the caret over a virtual fs
+// (user source as main.mn + the vocabulary closure). On a clean projection the
+// ring upgrades; on any error (exit != 0 / a program the closure can't resolve)
+// REAL stays empty and the surface parse holds — the honest-socket law.
+async function projectReal(off){
+  if (!MODULE || realBusy) return;
+  const { line, col } = lineColAt(off);
+  realBusy = true; $("dot").className = "busy";
+  const vfs = Object.assign({ "main.mn": te.encode($("src").value) }, VFS);
+  const shim = makeWasiFs(vfs, `main.mn:${line}:${col}`);
+  let exit = 1, stdout = "";
+  try {
+    const inst = await WebAssembly.instantiate(MODULE, shim.imports);
+    shim.bind(inst);
+    exit = 0;
+    try { inst.exports._start(); } catch (e){ if (e.exitCode === undefined) throw e; exit = e.exitCode; }
+    stdout = td.decode(cat(shim.out));
+  } catch (e){ exit = 1; }
+  realBusy = false; $("dot").className = RESULT?.trapped ? "bad" : "ok";
+  const real = (exit === 0) ? parseFacets(stdout) : {};
+  REAL = real; REAL_AT = off;
+  if (Object.keys(real).length) octopus("proven");
+  if (getOffset() === off) projectCursor();   // REAL_AT===off now, so no re-kick
+}
+
 function projectCursor(){
   if (!PARSE) return;
   const off = getOffset();
   const { facets, token, line } = projectAspects(PARSE, off, RESULT?.diags||[]);
   CURSOR_LINE = line;
+  const haveReal = REAL_AT === off;
   $("asp-at").textContent = token ? `${token.kind}: ${token.text.slice(0,24)}` : "— place the cursor —";
   $("facets").innerHTML = facets.map(f => {
+    const realV = haveReal ? REAL[f.k] : undefined;   // a live graph read for this facet?
+    const isReal = realV !== undefined && realV !== "";
     const door = f.door ? " door" : "";
-    const fut = f.future ? " future" : "";
-    // provenance is a three-state, ALWAYS-visible contract (critic D): a surface
-    // read never omits its badge; a socket names its gate, renders no value.
-    const prov = f.future ? "socket" : f.k === "why" ? "real" : f.k === "row" ? "declared" : "surface";
-    const note = f.future ? `<div class="subtle" style="margin-top:1px">${esc(f.futureNote||"")}</div>` : "";
-    return `<div class="facet${door}${fut}" ${f.doorTo?`data-door="${f.doorTo}"`:""}>
+    const fut = (f.future && !isReal) ? " future" : "";
+    // provenance is a four-state, ALWAYS-visible contract: 'real' ONLY for a fact
+    // the compiler's CursorView actually returned; else the honest surface/
+    // declared/socket the page's own parse can defend.
+    const prov = isReal ? "real" : f.future ? "socket" : f.k === "why" ? "real" : f.k === "row" ? "declared" : "surface";
+    const val = isReal ? `<span style="color:var(--gold-b)">${esc(realV)}</span>` : f.v;
+    const note = (f.future && !isReal) ? `<div class="subtle" style="margin-top:2px">${esc(f.futureNote||"")}</div>` : "";
+    return `<div class="facet k-${f.k}${door}${fut}${isReal?" real":""}" ${f.doorTo?`data-door="${f.doorTo}"`:""}>
       <div class="k k-${f.k}">${f.label}<span class="prov prov-${prov}">${prov}</span></div>
-      <div class="v">${f.v}${note}</div></div>`;
+      <div class="v">${val}${note}</div></div>`;
   }).join("");
   // re-highlight to move the cursor-line tint
   $("hl").innerHTML = highlight($("src").value);
+  renderTopology();
   syncScroll();
   $("facets").querySelectorAll(".facet.door").forEach(el => el.onclick = () => openTab(el.dataset.door));
+  // read the live graph for this caret (debounced; a full compile, so not per keystroke)
+  if (!haveReal){ clearTimeout(realDeb); realDeb = setTimeout(() => projectReal(off), 260); }
 }
 
 /* ── wiring ──────────────────────────────────────────────────────────────── */
-function syncScroll(){ $("hl").scrollTop = $("src").scrollTop; $("hl").scrollLeft = $("src").scrollLeft; }
+function syncScroll(){ $("hl").scrollTop = $("src").scrollTop; $("hl").scrollLeft = $("src").scrollLeft; syncTopo(); }
 function jump(line){
   if (!line) return;
   const ta = $("src");
   const idx = ta.value.split("\n").slice(0, line - 1).join("\n").length + (line>1?1:0);
   ta.focus(); ta.setSelectionRange(idx, idx);
-  ta.scrollTop = Math.max(0, (line - 6) * 13 * 1.6);
+  ta.scrollTop = Math.max(0, (line - 6) * LH);
   projectCursor();
 }
 function openTab(p){
@@ -894,7 +1160,9 @@ function openTab(p){
 $("src").addEventListener("scroll", syncScroll);
 let deb = null;
 $("src").addEventListener("input", () => {
+  REAL_AT = -1;   // the source changed — the live CursorView is stale until re-read
   $("hl").innerHTML = highlight($("src").value);
+  renderTopology();
   if ($("live").checked){ clearTimeout(deb); deb = setTimeout(compile, 650); }
 });
 ["click","keyup"].forEach(ev => $("src").addEventListener(ev, () => projectCursor()));
@@ -913,9 +1181,10 @@ $("dl").onclick = () => {
 };
 document.querySelectorAll(".tabs div").forEach(t => t.onclick = () => openTab(t.dataset.p));
 $("teach").oninput = e => document.body.dataset.teach = e.target.value;
+window.addEventListener("resize", () => { measureMetrics(); renderTopology(); });
 const sel = $("demo");
 for (const name of Object.keys(DEMOS)){ const o = document.createElement("option"); o.textContent = name; sel.appendChild(o); }
-sel.onchange = () => { $("src").value = DEMOS[sel.value]; $("hl").innerHTML = highlight($("src").value); compile(); };
+sel.onchange = () => { $("src").value = DEMOS[sel.value]; $("hl").innerHTML = highlight($("src").value); renderTopology(); compile(); };
 $("src").value = DEMOS[Object.keys(DEMOS)[0]];
 $("hl").innerHTML = highlight($("src").value);
 boot();

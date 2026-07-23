@@ -100,14 +100,14 @@ fn show_token_kind(k) with Pure = match k {
   THandler => "handler", TWith => "with",
   TResume => "resume", TPerform => "perform",
   TImport => "import", TWhere => "where",
-  TOwn => "own", TRef => "ref", TPure => "Pure",   // drift-audit: ignore — human-facing token-display rendering, not effect keying; tracked for item 11.B token-rendering normalization
+  TOwn => "own", TRef => "ref", TPure => "Pure",   // drift-audit: ignore — human-facing token-display rendering, not effect keying; tracked by Hβ.perf.name-is-handle; token-rendering normalization
   TTrue => "true", TFalse => "false",
   TIdent(s) => s,
   TIntLit(_) => "<int>", TFloatLit(_) => "<float>", TStringLit(_) => "<string>",
   TComment(_) => "<comment>",
   TStringPart(_) => "<string-part>",
   TStringSplice  => "<string-splice>",
-  TEqEq => "==", TBangEq => "!=", TLtEq => "<=", TGtEq => ">=",   // drift-audit: ignore — TokenKind→display-text rendering for diagnostics; not runtime comparison; tracked for item 11.B token-rendering normalization
+  TEqEq => "==", TBangEq => "!=", TLtEq => "<=", TGtEq => ">=",   // drift-audit: ignore — TokenKind→display-text rendering for diagnostics; not runtime comparison; tracked by Hβ.perf.name-is-handle; token-rendering normalization
   TArrow => "->", TFatArrow => "=>", TPlusPlus => "++",
   TPipeGt => "|>", TLtPipe => "<|", TGtLt => "><",
   TTildeGt => "~>", TLtTilde => "<~",
@@ -157,8 +157,8 @@ fn ident_at(ref tokens, pos) = {
 
 // Operator precedence — THE canonical table, per SYNTAX.md §Precedence.
 // Higher number = tighter binding. The same literal integers appear in
-// SYNTAX.md and the seed ($op_prec, parser_infra.wat) — one table,
-// three projections, zero translation.
+// SYNTAX.md — one table, two projections (the spec and this fn),
+// zero translation; the seed's third projection retired with the seed.
 //
 // The one law of `~>`: precedence 1, the loosest binary operator
 // (sharing the floor with nothing — verbs tier above it). The handler
@@ -937,8 +937,7 @@ fn parse_handler_state_fields(ref tokens, pos) = {
 // is a field separator ONLY when followed by `IDENT =`. A comma
 // followed by anything else is the match-arm separator (consumed by
 // parse_handler_arms via skip_sep), so the list ends BEFORE it.
-// Canonical predicate mirrors seed bootstrap/src/parser_compound.wat
-// $parse_resume_state_updates — the arbiter, since pass-2 proves it.
+// The canonical resume-state-update predicate — pass-2 proves it.
 // Same {name, init} record shape as parse_handler_state_fields (drift
 // 7 refused); a separate fn, not a context flag (drift 8 refused —
 // mirrors the seed's $parse_handler_state / $parse_resume_state_updates

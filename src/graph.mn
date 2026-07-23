@@ -897,3 +897,36 @@ fn overlays_to_pairs_loop(ref names, ref bufs, ref lens, count, i, own acc) = {
 // so no boundary canonicalize is needed. The local string-set
 // adapters are gone — string-set primitives still serve own.mn and
 // other linear-binding consumers.
+
+// ── DAG-homed here (the import-truth sweep, 2026-07-23): each fn below
+// moved from a module DOWNSTREAM of its users so every user reaches it
+// through a forward import edge — the manifest tells the truth.
+
+fn node_handle(node) = {
+  let N(_, _, h) = node
+  h
+}
+
+// Mint TParam list for handler config-params. Each name gets a
+// fresh tyvar handle (via mint), wrapped as TParam(name, TVar(h),
+// Unmarked, Unmarked) — Ownership is Unmarked (no authored marker;
+// arm-body usage may constrain). Per Hβ.first-light.handler-scheme-
+// tfun-shape (2026-05-06). Drift refused: 7 (one list of TParam
+// records, not (names, types) parallel arrays); 8 (TParam is the
+// established positional shape, not name-keyed map).
+
+// The MINT span of a handle — the reverse read of the span_index weave
+// (fresh_handle writes (span, handle) at every mint). A node's REASON span
+// can be overwritten by a later bind (a hole's reason becomes its binder's
+// "declared as ..."), so a patch target must read the weave, never the
+// reason. O(n) scan at felt cadence (once per accepted action); the O(1)
+// form is the handle-indexed span weave (the §5.O name-is-handle sibling).
+fn parse_span_of(handle) with GraphRead + !Mutate = {
+  let Graph(_, _, _, _, span_index) = graph_snapshot()
+  match find((pair) => { let (_, h) = pair h == handle }, span_index) {
+    Some(pair) => { let (span, _) = pair span },
+    None       => span_zero()
+  }
+}
+
+

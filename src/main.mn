@@ -95,7 +95,7 @@ type EntryVerb
   | VCompileStdin
   | VRun(String)
   | VCheck(String)
-  | VAt(String, Int, Int)            // the cursor-address form — `mentl voice.mn:9[:5]`: target, line, col (0 = whole-line). Drift-38's endpoint: the address IS the surface; verbs are transports
+  | VAt(String, Int, Int)            // the cursor-address form — `mentl lib/tutorial/09-all.mn:40:20`: target, line, col (0 = whole-line). Drift-38's endpoint: the address IS the surface; verbs are transports
   | VTest(Option(String))
   | VAudit(String)
   | VQuery(String, String)           // target, question — both required
@@ -634,7 +634,7 @@ fn run_run(target) = {
 fn check_run(target) =
   if pipeline_check(target) > 0 { 1 } else { 0 }
 
-// ─── at_run — the cursor-address transport (`mentl voice.mn:9`)
+// ─── at_run — the cursor-address transport (`mentl <file>:L[:C]`)
 //
 // The smallest transport of the one read: resolve the address to a graph
 // node ONCE (the three-case line rule over the span index every node

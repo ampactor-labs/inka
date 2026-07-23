@@ -21,6 +21,8 @@
 import types
 import graph
 import effects
+import infer
+import query
 
 // Mentl-owned ADTs
 
@@ -260,9 +262,9 @@ fn try_each_annotation(handle, candidates, base_ty) = {
 // recorded in the trail and reverted on rollback.
 fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
   APure(sp)          => narrow_row(handle, base_ty, mk_ef_pure(), sp),
-  ANotAlloc(sp)      => narrow_row(handle, base_ty, mk_ef_neg([ENamed("Alloc")]), sp),    // drift-audit: ignore — real drift 8 (EffName should have EAlloc variant); tracked for item 11.B EffName refactor
-  ANotIO(sp)         => narrow_row(handle, base_ty, mk_ef_neg([ENamed("IO")]), sp),       // drift-audit: ignore — real drift 8 (EffName should have EIO variant); tracked for item 11.B EffName refactor
-  ANotNetwork(sp)    => narrow_row(handle, base_ty, mk_ef_neg([ENamed("Network")]), sp),  // drift-audit: ignore — real drift 8 (EffName should have ENetwork variant); tracked for item 11.B EffName refactor
+  ANotAlloc(sp)      => narrow_row(handle, base_ty, mk_ef_neg([ENamed("Alloc")]), sp),    // drift-audit: ignore — real drift 8 (EffName should have EAlloc variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
+  ANotIO(sp)         => narrow_row(handle, base_ty, mk_ef_neg([ENamed("IO")]), sp),       // drift-audit: ignore — real drift 8 (EffName should have EIO variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
+  ANotNetwork(sp)    => narrow_row(handle, base_ty, mk_ef_neg([ENamed("Network")]), sp),  // drift-audit: ignore — real drift 8 (EffName should have ENetwork variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
   ARefined(_, pred, sp) => {
     // Narrowing the type via refinement — perform verify against the
     // narrowed predicate. Ledger captures; rollback removes.
@@ -341,7 +343,7 @@ fn capabilities_for_annotation(ann) with Pure = match ann {
 // keyed by EffName (severance candidate's name).
 fn capabilities_for_severance(name) = match name {
   ENamed(n) =>
-    if n == "Alloc"   { [CRealTime] }                          // drift-audit: ignore — capability-for-severance table; real drift 8 (should match on EAlloc/EIO variants); tracked for item 11.B EffName refactor
+    if n == "Alloc"   { [CRealTime] }                          // drift-audit: ignore — capability-for-severance table; real drift 8 (should match on EAlloc/EIO variants); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
     else if n == "IO" { [CCompileTimeEval, CSandbox] }          // drift-audit: ignore — same as above
     else if n == "Network" { [CSandbox] }
     else { [] },
@@ -445,49 +447,6 @@ fn why_from_handle(handle) = {
   why_expand(reason, 0)
 }
 
-fn why_expand(reason, depth) = {
-  if depth > 20 { reason }
-  else match reason {
-    Located(span, inner) =>
-      Located(span, why_expand(inner, depth + 1)),
-    Unified(a, b) =>
-      Unified(why_expand(a, depth + 1), why_expand(b, depth + 1)),
-    OpConstraint(op, l, r) =>
-      OpConstraint(op, why_expand(l, depth + 1), why_expand(r, depth + 1)),
-    VarLookup(name, inner) =>
-      VarLookup(name, why_expand(inner, depth + 1)),
-    FnReturn(name, inner) =>
-      FnReturn(name, why_expand(inner, depth + 1)),
-    FnParam(name, idx, inner) =>
-      FnParam(name, idx, why_expand(inner, depth + 1)),
-    MatchBranch(a, b) =>
-      MatchBranch(why_expand(a, depth + 1), why_expand(b, depth + 1)),
-    ListElement(inner) =>
-      ListElement(why_expand(inner, depth + 1)),
-    IfBranch(inner) =>
-      IfBranch(why_expand(inner, depth + 1)),
-    LetBinding(name, inner) =>
-      LetBinding(name, why_expand(inner, depth + 1)),
-    Instantiation(name, inner) =>
-      Instantiation(name, why_expand(inner, depth + 1)),
-    Fresh(id) => {
-      let GNode(_, resolved) = graph_chase(id)
-      match resolved {
-        Fresh(_) => reason,
-        _        => why_expand(resolved, depth + 1)
-      }
-    },
-    _ => reason
-  }
-}
-
-// Fill a typed hole with THE sole proven survivor from the Synth chain,
-// returned WITH its Reason. The allowed row is the Context's — the
-// enclosing decl's AUTHORED constraint (re-deriving it from the hole's
-// own type was the wrong-row-source class's second instance). Exactly one
-// survivor is the medium's answer; two or more is the tie that TEACHES —
-// indexing [0] was a hidden first-wins ranking, a guess between proven
-// survivors the tie-break law forbids (PLAN §5).
 fn teach_synthesize(hole_handle, context) = {
   let GNode(kind, _) = graph_chase(hole_handle)
   match kind {

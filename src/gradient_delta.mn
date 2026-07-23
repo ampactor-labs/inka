@@ -355,7 +355,7 @@ fn negation_caps(names) with Memory = flatten(map(caps_for_negated_eff, names))
 
 fn caps_for_negated_eff(name) with Pure = match name {
   ENamed(s) =>
-    if s == "Alloc" { ["CRealTime"] }                          // drift-audit: ignore — real drift 3 (EffName should have EAlloc variant); tracked for item 11.B EffName refactor — same pattern as mentl.mn:219
+    if s == "Alloc" { ["CRealTime"] }                          // drift-audit: ignore — real drift 3 (EffName should have EAlloc variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle) — same pattern as mentl.mn:219
     else if s == "IO" { ["CCompileTimeEval", "CSandbox"] }     // drift-audit: ignore — same as above
     else if s == "Network" { ["CSandbox"] }                    // drift-audit: ignore — same as above
     else if s == "Mutate" { ["CParallelize"] }                 // drift-audit: ignore — same as above

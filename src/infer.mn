@@ -30,6 +30,9 @@ import effects
 import types
 import own
 import runtime/imap
+import parser
+import runtime/io
+import verify
 
 // Infer-local effect for row accumulation.
 // Each `FnStmt` / `LambdaExpr` pushes a `(row_handle, accumulated_row)`
@@ -163,6 +166,23 @@ handler infer_ctx with stack = [], arm_stack = [] {
   }
 }
 
+
+// fresh_for_inference — the FreshHandle install inference runs under:
+// `mint` resolves to real graph handles (graph_fresh_ty), never display
+// ids. Declared HERE, the op's own layer, so every re-inference chain
+// (synth's candidate verify included) reaches it through `import infer`;
+// the query/teach entry installs `fresh_for_query` (pipeline.mn) for
+// ephemeral display ids — the swappable peer.
+handler fresh_for_inference {
+  mint(reason) => {
+    let h = graph_fresh_ty(reason)
+    resume(h)
+  }
+  mint_row(reason) => {
+    let h = graph_fresh_row(reason)
+    resume(h)
+  }
+}
 
 // Entry point — wraps the walk in `infer_ctx` (row accumulation) and
 // `fresh_for_inference` (the FreshHandle install: `mint` resolves to real graph
@@ -5388,18 +5408,6 @@ fn predicate_of_assert_arg(args) with GraphRead + Memory = {
   else { predicate_of_bool_expr(last(args)) }
 }
 
-fn node_handle(node) = {
-  let N(_, _, h) = node
-  h
-}
-
-// Mint TParam list for handler config-params. Each name gets a
-// fresh tyvar handle (via mint), wrapped as TParam(name, TVar(h),
-// Unmarked, Unmarked) — Ownership is Unmarked (no authored marker;
-// arm-body usage may constrain). Per Hβ.first-light.handler-scheme-
-// tfun-shape (2026-05-06). Drift refused: 7 (one list of TParam
-// records, not (names, types) parallel arrays); 8 (TParam is the
-// established positional shape, not name-keyed map).
 fn mint_handler_config_tparams(config, hname, base_idx) = map((indexed) => {
   let (i, name) = indexed
   let idx = base_idx + i

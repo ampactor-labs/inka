@@ -287,8 +287,8 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
   // effect, so the body performs exactly its present names and the free
   // tail is vacuous at the gate (the rebind at the gate closes it to the
   // declared row). Rejecting it was the ~80% row-var slice of the
-  // self-compile's false effect-mismatches — twice now (the six-form
-  // census and this representation's own 646). A body tail EtAll (the
+  // self-compile's false effect-mismatches — twice now (measured at 646
+  // on this representation's first self-judgment; the ledger has both). A body tail EtAll (the
   // negative stance: everything-except) is never subsumed by a closed
   // gate — an unknown-beyond-mask body may perform outside it.
   let b = resolve_row(body_row)

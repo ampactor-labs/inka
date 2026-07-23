@@ -1026,6 +1026,33 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶ THE MANIFEST TELLS THE TRUTH — every module's import
+  list resolves its whole vocabulary, and the medium wrote its own
+  worklist (the /loop's first landing · pin cab557e8). The probe form
+  `mentl src/<m>.mn:1:1` turned each module's E_MissingVariable set into
+  the exact edge list; four sweep rounds converged: nine primary moves
+  to DAG-honest homes plus their sibling closures (the wasm-layer
+  reach/spec/ctor helpers → lower; node_handle + parse_span_of → graph;
+  why_expand → query; the flow-label trio → types — each was defined
+  DOWNSTREAM of its users, the backward edges that made module entry
+  fail), plain imports across fourteen modules, and main_param_count
+  rewritten on lower's own decl walk. The rewrite's first flat form
+  MISSED the LLet-closure named-fn shape (the wheel's own main) and
+  dropped _start's argv — the march's transition arbitration refused
+  the unassemblable m3 before any pin moved (the size-guard/arbitrate
+  machinery paying for itself again); the fix matches exactly
+  reach_decl_name's shape set. The comment-truth sweep rode the same
+  ladder: T2–T7 trued (deleted-seed mirrors, six→eight fields, dead
+  item-11.B pointers → the live name-is-handle peer, the stale
+  voice.mn:9 example → a projecting address, era-narration → mechanism
+  prose), and SYNTAX corrected its two false claims — the retired third
+  projection, and the comment-attachment gap MEASURED and named with
+  its build (interior/trailing comments are today consumed as layout;
+  the finest-following-node attachment is the named upgrade). Board
+  whole at the pin: m2 == m3 at 549,887 lines, census 0, comment-refs
+  0, frontier 198/0, battery 113/113. The de-theme landed separately
+  (ffe271eb — system fonts, neutral palette, no mascot, no octagon
+  motifs; function untouched, twin green).
 - 2026-07-23 · ▶▶▶ THE DIRECT-CALL CASH-OUT — every named call goes
   native; the word-face wrapper's tail-leak dies; the signal crucible
   goes green (the dispatch gradient's own endpoint, landed whole ·

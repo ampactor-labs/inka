@@ -362,8 +362,8 @@ fn find_first_span(ref sites, ref name: String) with !Mutate = {
 // TRANSFER (Hβ.own.region-return-transfer); it reports 0 on the wheel, because
 // the wheel has no real lifetime violations. Two checks for one property, one
 // modelling the hazard and one guessing from syntax; the guess is deleted. Its
-// only caller was infer.mn:450 and nothing downstream read its verdict
-// (grep-verified). §4⑤'s bar — "if the developer has to think about it, the
+// one caller existed and nothing downstream read its verdict
+// (grep-verified at deletion). §4⑤'s bar — "if the developer has to think about it, the
 // inference failed" — is met by removal: 356 false alarms on the medium's own
 // source were exactly the developer being made to think.
 //

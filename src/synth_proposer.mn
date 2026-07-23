@@ -62,6 +62,7 @@ import mentl
 import parser
 import infer
 import lower
+import egraph
 
 // ─── ProposerKind — which proposer in the chain emitted a candidate ─
 

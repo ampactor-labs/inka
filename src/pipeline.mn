@@ -42,6 +42,9 @@ import mentl
 import query
 import dsp/clock
 import driver
+import runtime/io
+import egraph
+import oracle
 
 // The spine — entry points as |> + ~> topology
 // Read top-to-bottom: source flows DOWN through `|>`; handlers wrap
@@ -143,9 +146,10 @@ fn executable_gate(lowered) = {
 // ─── The evidence hole — the gate's third read ──────────────────────
 // An executable's row truth at the root: main's resolved row carries every
 // effect no install absorbed. The triple representation carries the `~>`
-// subtraction on the tail's mask, so this row is TRUE — the six-form
+// subtraction on the tail's mask, so this row is TRUE — a rewrite-based
 // representation lied here (an install typed before its body's row grounded
-// never subtracted), which is why this read could not exist before it. A
+// never subtracted, the fat-row root the ledger records), which is why this
+// read requires the triple. A
 // present name whose ops the substrate does not project to instructions is
 // an EVIDENCE HOLE: some perform of it would key-scan a region no install
 // threaded — the 0x100000000 class, refused at compile with the
@@ -231,19 +235,6 @@ fn demands_to_enames(ref demands, i, acc) = {
         else { demands_to_enames(demands, i + 1, push(acc, en)) }
       }
     }
-  }
-}
-
-fn handler_stateful(hname: String) = {
-  match env_lookup(hname) {
-    Some(entry) => {
-      let (_, _, kind) = entry
-      match kind {
-        HandlerKind(_, _, states, _) => len(states) > 0,
-        _ => false
-      }
-    },
-    None => false
   }
 }
 
@@ -953,20 +944,12 @@ handler diagnostics_handler with errors = 0, refusals = 0 {
   diag_refusals() => resume(refusals)
 }
 
-// FreshHandle — two handlers, same function
-// Inference mints via graph_fresh_ty (stored in graph); query mints
-// display ids (ephemeral, for rendering). Both satisfy FreshHandle.
-
-handler fresh_for_inference {
-  mint(reason) => {
-    let h = graph_fresh_ty(reason)
-    resume(h)
-  }
-  mint_row(reason) => {
-    let h = graph_fresh_row(reason)
-    resume(h)
-  }
-}
+// FreshHandle — two handlers, same function. Inference mints via
+// graph_fresh_ty (stored in graph) — that handler lives in infer.mn, its
+// op's own layer, so synth's re-inference chain reaches it through
+// `import infer` (the import-truth round: pipeline was an over-wide home
+// only its own chain could see). Query mints display ids (ephemeral, for
+// rendering); both satisfy FreshHandle.
 
 handler fresh_for_query with next_display = 0 {
   mint(_reason) =>
@@ -1067,7 +1050,7 @@ fn owner_names_of(ref owners, i, acc) = {
 // that the body does NOT perform. Adding `!E` for each unlocks a
 // capability without breaking the row.
 fn severance_candidates(reached) = {
-  let canonical = [ENamed("Alloc"), ENamed("IO"), ENamed("Network")]   // drift-audit: ignore — real drift 8 (EffName should have EAlloc/EIO/ENetwork variants); tracked for item 11.B EffName refactor
+  let canonical = [ENamed("Alloc"), ENamed("IO"), ENamed("Network")]   // drift-audit: ignore — real drift 8 (EffName should have EAlloc/EIO/ENetwork variants); tracked by Hβ.perf.name-is-handle; EffName refactor
   filter_not_in(canonical, reached, 0, len(canonical), [])
 }
 
@@ -1076,7 +1059,7 @@ fn filter_not_in(candidates, present, i, n, acc) = {
   else {
     let c = list_index(candidates, i)
     let next = if name_in_list(present, c) { acc }
-               else { acc ++ [c] }   // drift-audit: ignore — real drift 11 on small canonical-3-effect list; buffer-counter conversion requires adding Memory+Alloc to fn row rippling through audit walk; tracked for item 11.B buffer-counter sweep
+               else { acc ++ [c] }   // drift-audit: ignore — real drift 11 on small canonical-3-effect list; buffer-counter conversion requires adding Memory+Alloc to fn row rippling through audit walk; tracked by Hβ.perf.name-is-handle; buffer-counter sweep
     filter_not_in(candidates, present, i + 1, n, next)
   }
 }

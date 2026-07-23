@@ -62,6 +62,8 @@ import query
 import verify
 import runtime/strings
 import runtime/io
+import oracle
+import egraph
 
 // ─── The Surface effect ─────────────────────────────────────────────
 //

@@ -202,121 +202,6 @@ handler query_default {
   }
 }
 
-// query_flow_label — the IFC projection (§4⑥).
-// Reads FlowLabel from the Ty the graph already holds; no new state.
-//
-//   TRefined  — pred |> predicate_flow_label; join with base's label
-//   TName     — follow env to the TypeDecl's predicate (graph-native; no string matching)
-//   TFun      — row  |> row_flow_label (the absent set IS the non-interference proof)
-//   TList     — elem |> query_flow_label (label propagates through containers)
-//   TTuple    — elems |> map |> fold(Public, flow_label_join)
-//   TRecord   — fields |> map |> fold(Public, flow_label_join)
-//   _         — Public (open-world default; unannotated = observable)
-//
-// H6: exhaustive over all 14 Ty constructors.
-// GraphRead + EnvRead: predicate_flow_label follows PBoolNode handles into graph;
-// TName arm follows the type's env entry to read its predicate.
-
-fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty {
-  TRefined(base, pred) =>
-    flow_label_join(pred |> predicate_flow_label, query_flow_label(base)),
-  TName(name, _) =>
-    // Follow the type's env entry to its TypeDecl predicate — graph-native.
-    // A nominal type with a refinement predicate (e.g. `type SecretKey = Bytes
-    // where classified(self)`) carries its IFC classification in that predicate.
-    // No string matching: the graph's env entry IS the source of truth.
-    match env_lookup(name) {
-      None      => Public,  // unknown type: open-world default
-      Some(entry) => {
-        let (scheme, _, _) = entry
-        let Forall(_, ty) = scheme
-        match ty {
-          TAlias(_, TRefined(_, pred)) => predicate_flow_label(pred),
-          TRefined(_, pred)            => predicate_flow_label(pred),
-          _                            => Public  // non-refined nominal: Public
-        }
-      }
-    },
-  TFun(_, _, row) =>
-    row |> row_flow_label,
-  TAlias(_, inner) =>
-    inner |> query_flow_label,
-  TList(elem) =>
-    elem |> query_flow_label,
-  TTuple(elems) =>
-    elems
-      |> map((e) => query_flow_label(e))
-      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
-  TRecord(fields) =>
-    fields
-      |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
-      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
-  TRecordOpen(fields, _) =>
-    fields
-      |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
-      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
-  TCont(input, answer, _, _) =>
-    flow_label_join(query_flow_label(input), query_flow_label(answer)),
-  TInt     => Public,
-  TFloat   => Public,
-  TString  => Public,
-  TUnit    => Public,
-  TByte    => Public,
-  TVar(_)  => Public     // unresolved: open-world default (no proof = observable)
-}
-
-// predicate_flow_label — classify a Predicate's flow sensitivity.
-// PBoolNode follows the handle into the graph to read the actual call node.
-// A predicate call to a function whose name contains secret / classified /
-// sensitive raises the label. This reads the AUTHORED name
-// from the graph — not re-deriving, reading what the graph holds.
-// H6: exhaustive over all 8 Predicate variants (7 + PFlowLe).
-fn predicate_flow_label(ref pred) with GraphRead + Memory + Alloc = match pred {
-  PTrue              => Public,
-  PCompare(_, _, _)  => Public,   // numeric comparison: not a secrecy annotation
-  PPatternMatch(_,_) => Public,   // match-narrowing: not a secrecy signal
-  PNot(_)            => Public,   // negation of secret IS NOT secret (non-monotone)
-  PFlowLe(a, _)      => a,        // the predicate itself carries the src label
-  PAnd(a, b)         => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
-  POr(a, b)          => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
-  PWithSelf(_, inner) => predicate_flow_label(inner),  // the `self` binder is transparent to flow
-  PBoolNode(h)       =>
-    // Follow the handle into the graph — read the actual call node's callee name.
-    // The callee name IS the authored intent; reading it is reading the graph.
-    match graph_node_body(h) {
-      NExpr(CallExpr(callee, _)) => {
-        let N(cbody, _, _) = callee
-        match cbody {
-          NExpr(VarRef(fname)) =>
-            if str_contains(fname, "secret") || str_contains(fname, "classified")
-                 || str_contains(fname, "sensitive") { Secret }
-            else { Public },
-          _ => Public
-        }
-      },
-      _ => Public
-    }
-}
-
-// row_flow_label — the absent set in a function's row IS the non-interference
-// proof. `with !IO + !Network` proves the function cannot route output to
-// public sinks. On the canonical triple the stance is the TAIL: EtAll is the
-// proved-absence form (masked universe); EtClosed/EtVar rows are observably
-// Public (their absent set records proofs but the row itself flows). H6:
-// exhaustive over the three tails.
-fn row_flow_label(ref row) with Pure = match row {
-  // A universal tail is the proved-absence stance (!E) — Secret; every
-  // other form is observably Public (subtraction/openness conservative).
-  EfRow(_, _, EtAll)     => Secret,
-  EfRow(_, _, EtVar(_))  => Public,
-  EfRow(_, _, EtClosed)  => Public
-}
-
-
-
-// Resolve every `TVar` transitively through the graph. Every query
-// that returns a `Ty` calls this so the user sees the resolved shape,
-// never raw handles.
 fn chase_type_deep(ref ty) with !Mutate = match ty {
   TVar(h) => {
     let GNode(kind, _) = graph_chase(h)
@@ -555,20 +440,6 @@ fn span_area(s: ValidSpan) with Pure = {
   else { ((el - sl) * 1000) + ec - sc }
 }
 
-// The MINT span of a handle — the reverse read of the span_index weave
-// (fresh_handle writes (span, handle) at every mint). A node's REASON span
-// can be overwritten by a later bind (a hole's reason becomes its binder's
-// "declared as ..."), so a patch target must read the weave, never the
-// reason. O(n) scan at felt cadence (once per accepted action); the O(1)
-// form is the handle-indexed span weave (the §5.O name-is-handle sibling).
-fn parse_span_of(handle) with GraphRead + !Mutate = {
-  let Graph(_, _, _, _, span_index) = graph_snapshot()
-  match find((pair) => { let (_, h) = pair h == handle }, span_index) {
-    Some(pair) => { let (span, _) = pair span },
-    None       => span_zero()
-  }
-}
-
 fn find_tightest(ref idx, target, best_h, best_area) with Memory = {
   if len(idx) == 0 { best_h }
   else {
@@ -585,3 +456,52 @@ fn find_tightest(ref idx, target, best_h, best_area) with Memory = {
     }
   }
 }
+
+// ── DAG-homed here (the import-truth sweep, 2026-07-23): each fn below
+// moved from a module DOWNSTREAM of its users so every user reaches it
+// through a forward import edge — the manifest tells the truth.
+
+fn why_expand(reason, depth) = {
+  if depth > 20 { reason }
+  else match reason {
+    Located(span, inner) =>
+      Located(span, why_expand(inner, depth + 1)),
+    Unified(a, b) =>
+      Unified(why_expand(a, depth + 1), why_expand(b, depth + 1)),
+    OpConstraint(op, l, r) =>
+      OpConstraint(op, why_expand(l, depth + 1), why_expand(r, depth + 1)),
+    VarLookup(name, inner) =>
+      VarLookup(name, why_expand(inner, depth + 1)),
+    FnReturn(name, inner) =>
+      FnReturn(name, why_expand(inner, depth + 1)),
+    FnParam(name, idx, inner) =>
+      FnParam(name, idx, why_expand(inner, depth + 1)),
+    MatchBranch(a, b) =>
+      MatchBranch(why_expand(a, depth + 1), why_expand(b, depth + 1)),
+    ListElement(inner) =>
+      ListElement(why_expand(inner, depth + 1)),
+    IfBranch(inner) =>
+      IfBranch(why_expand(inner, depth + 1)),
+    LetBinding(name, inner) =>
+      LetBinding(name, why_expand(inner, depth + 1)),
+    Instantiation(name, inner) =>
+      Instantiation(name, why_expand(inner, depth + 1)),
+    Fresh(id) => {
+      let GNode(_, resolved) = graph_chase(id)
+      match resolved {
+        Fresh(_) => reason,
+        _        => why_expand(resolved, depth + 1)
+      }
+    },
+    _ => reason
+  }
+}
+
+// Fill a typed hole with THE sole proven survivor from the Synth chain,
+// returned WITH its Reason. The allowed row is the Context's — the
+// enclosing decl's AUTHORED constraint (re-deriving it from the hole's
+// own type was the wrong-row-source class's second instance). Exactly one
+// survivor is the medium's answer; two or more is the tie that TEACHES —
+// indexing [0] was a hidden first-wins ranking, a guess between proven
+// survivors the tie-break law forbids (PLAN §5).
+

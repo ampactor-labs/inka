@@ -30,6 +30,8 @@
 // mode (the canon-weave read), not a bolted-on pass.
 
 import types
+import graph
+import effects
 
 // Follow the equivalence edge to the canonical (cheapest) node — the union-find
 // `find`, now a single live graph read. Depth-bounded so a malformed rule set

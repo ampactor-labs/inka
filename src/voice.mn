@@ -17,6 +17,8 @@ import query
 import pipeline
 import driver
 import runtime/strings
+import oracle
+import egraph
 
 // Topic is the focus of one voice turn. Caret-of-attention projects
 // onto a Topic; Mentl reads the graph at that topic. Five variants

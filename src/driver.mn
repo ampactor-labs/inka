@@ -27,6 +27,7 @@ import lexer
 import infer
 import runtime/strings
 import runtime/io
+import verify
 
 // Resolve a module name to a file path — four homes, tried in order:
 //   the DIRECT read (an arg naming an existing file resolves as itself —

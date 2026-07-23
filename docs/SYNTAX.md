@@ -1478,7 +1478,7 @@ fn lowpass_filter(samples: [Sample]) -> [Sample] with !Alloc =
 
 ### What a comment IS
 
-- **Pure prose, graph-attached.** Contiguous `//` lines concatenate to one String; a blank `//` line is a paragraph break. The comment attaches to the immediately-following declaration (`fn`/`type`/`effect`/`handler`/`let`), or — with none — to the enclosing block / the file's `Module` handle. It is **never dropped**; an orphan with genuinely no home surfaces `P_OrphanDocstring` (gradient-narration), never a silent discard.
+- **Pure prose, graph-attached.** Contiguous `//` lines concatenate to one String; a blank `//` line is a paragraph break. The comment attaches to the immediately-following declaration (`fn`/`type`/`effect`/`handler`/`let`), or — with none — to the enclosing block / the file's `Module` handle; a decl-boundary comment is **never dropped**, and an orphan with genuinely no home surfaces `P_OrphanDocstring` (gradient-narration), never a silent discard. The MEASURED gap (2026-07-23, probe-verified): an INTERIOR comment (inside a `{ }` body) and a TRAILING same-line comment are today consumed as layout by the statement separator — outside the graph and outside the backtick gate. The ultimate rule, named as the build: every comment attaches at the finest FOLLOWING node (interior statements are handles already; a trailing comment's node is the line it shares), and the cursor renders the attached comment as a register-gated lede — the read side of the weave the writer already fills.
 - **Register is a projection, not a delimiter.** How much surfaces — the one-line lede in `RTerse`, the full body in `RExplain` — is the gradient reading the comment's relevance at the cursor (the same gradient that drives every projection), NOT an author-chosen `//`-vs-`///` audience split. The author writes prose; the cursor decides what shows. First sentence = lede.
 - **Surfaces verbatim, rendered per target.** The substrate stores the raw String; render handlers interpret presentation — HTML `<code>` for `` `backticks` ``, terminal ANSI, markdown fence. `` `backticks` `` cross-reference identifiers; the author writes the reference, the handler resolves it.
 - **Code blocks compile via the same pipeline.** A comment containing Mentl source IS Mentl source — the compile verifies it; there is no separate doc-test category.
@@ -1550,9 +1550,9 @@ character (the Python/shell convention). One sequence kind ⇒ one string surfac
 ## Operator precedence
 
 One canonical table. Higher number = tighter binding. **These are
-the literal integers** returned by `op_prec` in BOTH parsers
-(src/parser.mn and bootstrap/src/parser_infra.wat $op_prec) — one
-table, three projections, zero translation. Structural forms (call
+the literal integers** returned by `op_prec` (src/parser.mn) — one
+table, two projections (this spec and that fn), zero translation; the
+seed's third projection retired with the seed. Structural forms (call
 `f(args)`, field access `.`, indexing, unary `-`/`!`) bind tighter
 than every binary operator; `=` in let and `=>` in lambda sit at
 statement level — neither participates in the binop ladder.

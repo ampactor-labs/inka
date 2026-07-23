@@ -29,6 +29,8 @@ import runtime/json
 import runtime/lsp_frame
 import runtime/strings
 import runtime/io
+import oracle
+import egraph
 
 // ─── LspMessage — incoming JSON-RPC message shape ─────────────────────
 

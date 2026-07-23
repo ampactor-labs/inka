@@ -450,7 +450,7 @@ type SchemeKind
 // THE ROW IS ONE CANONICAL TRIPLE — present, absent, tail — the
 // Rémy-lineage presence/absence row fused with the crown's negation and
 // the handler subtraction (the 2026-07-22 representation ruling; the
-// prior six-form tree + normalize-by-rewrite re-derived per read and
+// a normalize-by-rewrite representation re-derived per read and
 // DROPPED the `~>` subtraction from ungrounded tails — the fat-row
 // root). The reading: row = present ∪ (tail ∖ absent). Every old form
 // is a point in this space:
@@ -2299,7 +2299,7 @@ fn show_row_suffix(ref row) with GraphRead + !Mutate + Memory = {
 
 fn show_effrow(ref row) with GraphRead + Memory + !Mutate = {
   // The triple's voice: presents joined with `+`, the absent set as `!X`
-  // terms, the tail as its var handle; an empty closed row is Pure.   // drift-audit: ignore — human-facing rendering string for diagnostics/show; not an effect-keyed lookup; tracked for item 11.B effect-rendering normalization
+  // terms, the tail as its var handle; an empty closed row is Pure.   // drift-audit: ignore — human-facing rendering string for diagnostics/show; not an effect-keyed lookup; tracked by Hβ.perf.name-is-handle; effect-rendering normalization
   let EfRow(p, a, t) = row
   let parts = show_list(p, show_eff_name, " + ")
   let negs = show_list(a, (n) => "!{show_eff_name(n)}", " + ")
@@ -2455,4 +2455,126 @@ fn show_list(ref items, ref render, ref sep) with !Mutate = {
       ++ show_list(drop_last(items), render, sep)
   }
 }
+
+// ── DAG-homed here (the import-truth sweep, 2026-07-23): each fn below
+// moved from a module DOWNSTREAM of its users so every user reaches it
+// through a forward import edge — the manifest tells the truth.
+
+// query_flow_label — the IFC projection (§4⑥).
+// Reads FlowLabel from the Ty the graph already holds; no new state.
+//
+//   TRefined  — pred |> predicate_flow_label; join with base's label
+//   TName     — follow env to the TypeDecl's predicate (graph-native; no string matching)
+//   TFun      — row  |> row_flow_label (the absent set IS the non-interference proof)
+//   TList     — elem |> query_flow_label (label propagates through containers)
+//   TTuple    — elems |> map |> fold(Public, flow_label_join)
+//   TRecord   — fields |> map |> fold(Public, flow_label_join)
+//   _         — Public (open-world default; unannotated = observable)
+//
+// H6: exhaustive over all 14 Ty constructors.
+// GraphRead + EnvRead: predicate_flow_label follows PBoolNode handles into graph;
+// TName arm follows the type's env entry to read its predicate.
+
+fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty {
+  TRefined(base, pred) =>
+    flow_label_join(pred |> predicate_flow_label, query_flow_label(base)),
+  TName(name, _) =>
+    // Follow the type's env entry to its TypeDecl predicate — graph-native.
+    // A nominal type with a refinement predicate (e.g. `type SecretKey = Bytes
+    // where classified(self)`) carries its IFC classification in that predicate.
+    // No string matching: the graph's env entry IS the source of truth.
+    match env_lookup(name) {
+      None      => Public,  // unknown type: open-world default
+      Some(entry) => {
+        let (scheme, _, _) = entry
+        let Forall(_, ty) = scheme
+        match ty {
+          TAlias(_, TRefined(_, pred)) => predicate_flow_label(pred),
+          TRefined(_, pred)            => predicate_flow_label(pred),
+          _                            => Public  // non-refined nominal: Public
+        }
+      }
+    },
+  TFun(_, _, row) =>
+    row |> row_flow_label,
+  TAlias(_, inner) =>
+    inner |> query_flow_label,
+  TList(elem) =>
+    elem |> query_flow_label,
+  TTuple(elems) =>
+    elems
+      |> map((e) => query_flow_label(e))
+      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  TRecord(fields) =>
+    fields
+      |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
+      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  TRecordOpen(fields, _) =>
+    fields
+      |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
+      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  TCont(input, answer, _, _) =>
+    flow_label_join(query_flow_label(input), query_flow_label(answer)),
+  TInt     => Public,
+  TFloat   => Public,
+  TString  => Public,
+  TUnit    => Public,
+  TByte    => Public,
+  TVar(_)  => Public     // unresolved: open-world default (no proof = observable)
+}
+
+// predicate_flow_label — classify a Predicate's flow sensitivity.
+// PBoolNode follows the handle into the graph to read the actual call node.
+// A predicate call to a function whose name contains secret / classified /
+// sensitive raises the label. This reads the AUTHORED name
+// from the graph — not re-deriving, reading what the graph holds.
+// H6: exhaustive over all 8 Predicate variants (7 + PFlowLe).
+
+fn predicate_flow_label(ref pred) with GraphRead + Memory + Alloc = match pred {
+  PTrue              => Public,
+  PCompare(_, _, _)  => Public,   // numeric comparison: not a secrecy annotation
+  PPatternMatch(_,_) => Public,   // match-narrowing: not a secrecy signal
+  PNot(_)            => Public,   // negation of secret IS NOT secret (non-monotone)
+  PFlowLe(a, _)      => a,        // the predicate itself carries the src label
+  PAnd(a, b)         => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
+  POr(a, b)          => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
+  PWithSelf(_, inner) => predicate_flow_label(inner),  // the `self` binder is transparent to flow
+  PBoolNode(h)       =>
+    // Follow the handle into the graph — read the actual call node's callee name.
+    // The callee name IS the authored intent; reading it is reading the graph.
+    match graph_node_body(h) {
+      NExpr(CallExpr(callee, _)) => {
+        let N(cbody, _, _) = callee
+        match cbody {
+          NExpr(VarRef(fname)) =>
+            if str_contains(fname, "secret") || str_contains(fname, "classified")
+                 || str_contains(fname, "sensitive") { Secret }
+            else { Public },
+          _ => Public
+        }
+      },
+      _ => Public
+    }
+}
+
+// row_flow_label — the absent set in a function's row IS the non-interference
+// proof. `with !IO + !Network` proves the function cannot route output to
+// public sinks. On the canonical triple the stance is the TAIL: EtAll is the
+// proved-absence form (masked universe); EtClosed/EtVar rows are observably
+// Public (their absent set records proofs but the row itself flows). H6:
+// exhaustive over the three tails.
+
+fn row_flow_label(ref row) with Pure = match row {
+  // A universal tail is the proved-absence stance (!E) — Secret; every
+  // other form is observably Public (subtraction/openness conservative).
+  EfRow(_, _, EtAll)     => Secret,
+  EfRow(_, _, EtVar(_))  => Public,
+  EfRow(_, _, EtClosed)  => Public
+}
+
+
+
+// Resolve every `TVar` transitively through the graph. Every query
+// that returns a `Ty` calls this so the user sees the resolved shape,
+// never raw handles.
 

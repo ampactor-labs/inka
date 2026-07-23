@@ -65,6 +65,7 @@ import own
 import verify
 import mentl
 import cursor
+import runtime/math
 
 // ─── The eight interrogations as a tagged ADT ───────────────────────
 //

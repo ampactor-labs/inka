@@ -31,6 +31,8 @@ import runtime/persist
 import runtime/search
 import effects
 import parser
+import infer
+import egraph
 
 // Hβ.first-light.resume-with-state-mutation — handler-arm-state context.
 // `lower_handler_arms_as_decls` installs `arm_state_ctx(state, disc)` around
@@ -2570,8 +2572,7 @@ fn feedback_param_name(p) = param_name(p)
 //   canonical projection.
 // - 8 string-keyed-when-structured: name is genuinely a String here
 //   (handler symbol resolved at install); this is NOT a mode-int.
-// - 9 deferred-by-omission: the wheel-side mirror of seed's
-//   $extract_handler_name (bootstrap/src/lower/walk_handle.wat:638).
+// - 9 deferred-by-omission: named here so the omission is loud.
 // The install's handler NAME, read through the node wrapper (every AST
 // node is N(body, span, h); the body carries NExpr(...) — matching
 // VarRef against the bare N record silently fell to the "" sentinel,
@@ -4699,7 +4700,7 @@ fn free_vars_merge(a, b) = {
     let x = last(b)
     let rest = drop_last(b)
     if free_vars_contains(a, x) { free_vars_merge(a, rest) }
-    else { free_vars_merge(list_concat(a, [x]), rest) }   // drift-audit: ignore — real drift 11 in free_vars_* set-union family; buffer-counter rewrite adds Memory+Alloc to row rippling through callers; tracked for item 11.B buffer-counter sweep. Explicit list_concat (was `a ++ [x]`) — BConcat's emit dispatches via lookup_ty which returned NFree at infer-time, falling to str_concat and trapping in mentl2's runtime when list arms walked the bytes as elements. Direct call avoids the dispatch.
+    else { free_vars_merge(list_concat(a, [x]), rest) }   // drift-audit: ignore — real drift 11 in free_vars_* set-union family; buffer-counter rewrite adds Memory+Alloc to row rippling through callers; tracked by Hβ.perf.name-is-handle; buffer-counter sweep. Explicit list_concat (was `a ++ [x]`) — BConcat's emit dispatches via lookup_ty which returned NFree at infer-time, falling to str_concat and trapping in mentl2's runtime when list arms walked the bytes as elements. Direct call avoids the dispatch.
   }
 }
 
@@ -5034,7 +5035,7 @@ fn push_name(buf, count, name) = {
 // Otherwise `RGlobal`. Frames below the head are NEVER searched — they
 // belong to the enclosing lambda, which is opaque at this lexical level.
 // Names referenced across frame boundaries MUST be captured.
-// Frame shape (Ω.5): one record per frame, six fields. Sorted-set
+// Frame shape (Ω.5): one record per frame, eight fields. Sorted-set
 // for O(log N) membership; parallel insertion-ordered list for slot
 // positioning (LLocal / LUpval need positional indices). Same data
 // as the prior parallel-arrays form, structurally consolidated:
@@ -6059,3 +6060,203 @@ fn reachable_from_main(lowered) = {
     }, lowered)
   }
 }
+
+// ── DAG-homed here (the import-truth sweep, 2026-07-23): each fn below
+// moved from a module DOWNSTREAM of its users so every user reaches it
+// through a forward import edge — the manifest tells the truth.
+
+// Walks the lowered program, emitting the full WAT module structure:
+// imports, memory, globals, function table, functions, start. Every
+// output line flows through perform wat_emit.
+
+// W7: every function is emitted with an implicit `__state` param.
+// Calls go through a function table keyed by i32 index; LMakeClosure
+// stores the index at offset 0 of the closure record; LCall loads
+// the index and uses `call_indirect` with `$ft(N+1)` type (arity
+// includes the `__state` slot).
+
+// The emit layer's substrate contract — every runtime fn an emit arm
+// dispatches to BY NAME as it cashes a proof ("the proof becomes the
+// dispatch": a String == mints `call $str_eq`, a perform's strict scan
+// mints `call $ev_perform_entry`). These references are minted at emit,
+// after reachability projected the input, so the projection seeds its
+// frontier from this set — one home, maintained beside the arms that
+// mint the calls; an arm that gains a `call $<fn>` adds the name here.
+// A name absent from the input dissolves (nothing to reach). The
+// visitor-walk projection of this set is the deeper form, gated on the
+// ev-slot seam close.
+fn emit_runtime_contract() =
+  ["ev_lookup", "ev_perform_entry", "len",
+   "list_compare", "list_concat", "list_eq", "list_index", "list_set",
+   "make_list", "make_list_sc", "slice", "str_compare", "str_concat",
+   "str_eq", "str_hash"]
+// make_list_sc is the literal allocator's SECOND face, paired with make_list:
+// emit_list_literal mints `call $make_list` for the word floor (sc 0) and
+// `call $make_list_sc` for a packed element (byte sc 1, f64 sc 2). Both are
+// always-available and tiny (each a one-line wrapper over alloc_list_sc); the
+// pairing keeps the wide literal's allocator reachable without a per-program
+// scan. The HEAVY wide family (the f64 structural leaves, which pull the
+// float renderer) is contributed CONDITIONALLY by reach_names_expr (lower.mn)
+// AT its mint sites — the ==/ordering LBinOp (wide_binop_seed) and the
+// show/hash nodes (show_reach_names) — so a float-free module drags in nothing.
+// float_to_str is deliberately absent: to_string on a PROVEN float is
+// lower-minted (LGlobal — the walk sees it); only the emit-minted f64
+// show-fold leaf references it blind, and a program reaching that leaf
+// without the proof fails LOUD at assembly (undefined $float_to_str) —
+// the named floor of the m2 call-site result-width frontier
+// (Hβ.m2.callsite-result-width), not a reason to drag the whole float
+// family into every float-free rung.
+
+
+// Find the index of a string in a list. Returns -1 if not found.
+// target: String is an Intent Boundary (SYNTAX §"The Intent Boundary Rule"):
+// the elements arrive as bare generic vars, and an unpinned `==` cannot
+// prove String to the emit dispatch — it silently emitted POINTER-eq, so
+// the interned "main" constant never matched the heap-parsed "main"
+// (emit_start's find_main=-1 while the list held it). The pin is the
+// proof; env_find(name: String) is the standing precedent.
+fn ls_find_str_local(lst: [String], target: String, i) = {
+  ls_find_str_local_loop(lst, target, i, len(lst))
+}
+
+
+// main's declared param count, read from the same records emit walks —
+// _start must supply every declared param or the call's type mismatches
+// (mn-ev2's `fn main(q)`: the hardwired $ft1 met a two-param main). A
+// parameterized main runs with zeroed args (the battery convention).
+fn main_param_count(lowered) =
+  // Reads main's OWN decl directly — the fn-record collector was a
+  // whole-tree walk answering a one-decl question (and a wasm-layer dep
+  // this module cannot import). BOTH named-fn decl shapes, exactly the
+  // set reach_decl_name enumerates: a plain LDeclareFn AND the
+  // LLet-wrapped closure form (an evidence-carrying fn — the wheel's
+  // own main is this shape; matching only the first dropped _start's
+  // argv arg and broke the m3 assemble, caught by the march).
+  fold(0, (acc, d) => match d {
+    LDeclareFn(LFn(name, _arity, param_names, _body, _row, _fence)) =>
+      if name == "main" { len(param_names) } else { acc },
+    LLet(_h, name, LMakeClosure(_h2, LFn(_n2, _a2, param_names, _b2, _r2, _f2), _caps, _evs)) =>
+      if name == "main" { len(param_names) } else { acc },
+    _ => acc
+  }, lowered)
+
+
+// Insert the runtime-helper state argument UNDER [a, b] on the stack
+// (the W7 calling convention: a Memory-rowed helper takes (state, a, b)).
+// Save-reload through the fn-preamble scratch locals, then push state.
+// ─── The WIDE-VALUE boundary (§5.U at the call layer) ─────────────────
+// A wide value crosses the word-protocol indirect boundary BY REFERENCE:
+// emit_wide_ref spills it to a fresh cell and leaves the address (the word
+// face — "a handle IS a word"); emit_wide_deref cashes a wide result back
+// to its native width. RI32 is the identity. RI64/RF32/RV128 are the same
+// law at their widths; their loud floors stand until a producer exists (no i64/f32/
+// v128 VALUE exists yet — the reprs reach the boundary only through the f64
+// gradient today).
+// seq_elem_face — a sequence ELEMENT's resolved face. The element usually
+// sits behind a bound var (TList(TVar(h)) with h bound to TFloat), and the
+// dispatch arms match STRUCTURE — so the read chases the binding through
+// the same lookup_ty projection every top-level read trusts, then strips.
+// An unbound var stays itself (the word floor). Without this chase the
+// [Float] eq routed to the word list_eq — pointer-comparing the element
+// references, the exact lie the structural derivation forbids.
+fn seq_elem_face(e) = match fold_strip(e) {
+  TVar(h) => {
+    match lookup_ty(h) {
+      TVar(h2) => if h2 == h { TVar(h) } else { seq_elem_face(TVar(h2)) },
+      inner    => seq_elem_face(inner)
+    }
+  },
+  stripped => stripped
+}
+
+
+fn handler_stateful(hname: String) = {
+  match env_lookup(hname) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        HandlerKind(_, _, states, _) => len(states) > 0,
+        _ => false
+      }
+    },
+    None => false
+  }
+}
+
+fn ls_find_str_local_loop(lst: [String], target: String, i, n) = {
+  if i >= n { -1 }
+  else if list_index(lst, i) == target { i }
+  else { ls_find_str_local_loop(lst, target, i + 1, n) }
+}
+
+// WAT data string escape: \HH per byte, little-endian for i32.
+
+// variant_specs_of — the env's ConstructorScheme entries for `type_name`, each
+// as (tag_id, [payload_ty]) in declaration (tag) order. Reads env_snapshot and
+// filters exactly as synth_proposer's ctors_of_type does (the ONE variant-
+// enumeration channel; the graph already proved which bindings are this type's
+// constructors). A nullary ctor's scheme is bare TName -> []; a fielded ctor's
+// is TFun(params, TName, _) -> the param types. Carried-Truth: the payload
+// types are read LIVE from the constructor's scheme, never re-derived.
+fn variant_specs_of(type_name) with EnvRead + Memory + Alloc = {
+  let Env(entries) = env_snapshot()
+  variant_specs_filter(entries, type_name)
+}
+
+// Backward index walk (newest-first, the same order the drop_last form
+// produced) — face 11: drop_last on the env SNAPSHOT (a slice view since
+// the flat-buffer env) stacked a slice layer per step until element access
+// recursed thousands deep and killed the stack inside `last`.
+
+fn variant_specs_filter(entries, type_name) with Memory + Alloc = {
+  let n = len(entries)
+  variant_specs_filter_from(entries, type_name, n - 1, make_list(n), 0)
+}
+
+fn variant_specs_filter_from(entries, type_name, i, own buf, count) with Memory + Alloc = {
+  if i < 0 { slice(buf, 0, count) }
+  else {
+    let (_name, scheme, _reason, kind) = list_index(entries, i)
+    match kind {
+      ConstructorScheme(tag_id, _total) => {
+        let Forall(_, ty) = scheme
+        if ctor_result_is(ty, type_name) {
+          variant_specs_filter_from(entries, type_name, i - 1,
+            list_set(buf, count, (tag_id, ctor_payload_tys(ty))), count + 1)
+        } else { variant_specs_filter_from(entries, type_name, i - 1, buf, count) }
+      },
+      _ => variant_specs_filter_from(entries, type_name, i - 1, buf, count)
+    }
+  }
+}
+
+// A constructor's scheme result type is TName(type_name, _) (nullary, bare) or
+// TFun(_, TName(type_name, _), _) (fielded) — the same test synth uses.
+
+// The constructor's payload types, in field order: a fielded ctor's TFun params
+// (each TParam carries its ty); a nullary ctor (bare TName) has none.
+fn ctor_payload_tys(ty) with Memory + Alloc = match ty {
+  TFun(params, _ret, _) => param_tys_of(params, 0, len(params)),
+  _                     => []
+}
+
+
+fn ctor_result_is(ty, type_name: String) with Pure = match ty {
+  TName(n, _)     => n == type_name,
+  TFun(_, ret, _) => ctor_result_is(ret, type_name),
+  _               => false
+}
+
+fn param_tys_of(params, i, n) with Alloc + Memory =
+  if i >= n { [] }
+  else {
+    [param_ty(list_index(params, i))] ++ param_tys_of(params, i + 1, n)
+  }
+
+// ctor_payload_tys_of — the payload types of a constructor BY NAME, read live
+// from its env scheme (the same ConstructorScheme channel variant_specs_of uses,
+// keyed on the ctor name the LPCon match carries). The match-bind reads the SAME
+// payload types the store wrote, so the variant-payload offsets agree at one
+// width fold (Carried-Truth). A name with no constructor scheme → [] (a nullary
+// or unresolved ctor — the uniform-stride fallback is then byte-identical).
+

@@ -40,6 +40,8 @@ import infer
 import graph
 import egraph
 import runtime/combinators
+import verify
+import query
 
 // ─── IC — the iterative context the `<~` fixpoint reads ──────────────
 

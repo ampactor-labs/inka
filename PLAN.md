@@ -1026,6 +1026,11 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · gradient_queue DELETED WHOLE (queue 3 · pin 56f01996):
+  the built-exposed-zero-callers GradientQueue block (effect + handler +
+  its four private fns, 107 lines) dies; the peer resolves as DELETE;
+  band E's work-stealing-via-gradient keeps the design. CLEAN m2 == m3
+  at 558,531 lines; board whole.
 - 2026-07-23 · THE COMMENT WEAVE AT THREE ALTITUDES (queue 2 — SYNTAX's
   "never dropped" made true for the measured gap · pin aa6338e9). A
   block-INTERIOR comment attaches to the finest FOLLOWING node (next
@@ -2517,8 +2522,9 @@ name was REUSED on 2026-07-17 for the branch/scope ownership fix; the
 ORIGINAL residue (unify classify_usage and resume_grade onto one count_uses)
 is still open and lives under this line ·
 `Hβ.emit.compose-width-floor` (implemented in lower.mn, tracked nowhere until
-now) · `Hβ.cursor.gradient-queue-activate-or-delete` (built, exposed, zero
-callers) · `Hβ.graph.fork-dead-code` (graph_fork + the overlays
+now) · `Hβ.cursor.gradient-queue-activate-or-delete` RESOLVED: DELETED
+(2026-07-23, pin 56f01996 — the 107-line larval block died whole; band
+E's work-stealing-via-gradient keeps the design) · `Hβ.graph.fork-dead-code` (graph_fork + the overlays
 module-to-handle index: built, zero callers, taxing the hot alloc path — an
 activation slot or a deletion) · `Hβ.emit.float-evidence-ft` (an f64-argument
 candidate/closure call dispatched through an all-i32 $ft — `indirect call

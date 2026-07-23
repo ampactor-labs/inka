@@ -40,3 +40,4 @@ art/
 
 # Local Codex artifact
 .codex
+__pycache__/

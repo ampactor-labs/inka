@@ -152,6 +152,10 @@
   .facet .v .stub { color: var(--faint); font-style: italic; font-size: 11px; }
   .facet .v code { color: var(--bright); background: #0c0a0d; padding: 0 4px; border-radius: 4px; }
   .facet.real .v { animation: surface .34s var(--e-surface); }
+  /* the ?? socket's proven survivor — the octagonal-socket eye (the ligature's glyph) */
+  .socket-eye { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: middle;
+    background: var(--gold-b); box-shadow: 0 0 7px var(--gold);
+    clip-path: polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%); }
   .k-graph{color:var(--blue-b)} .k-hand{color:var(--green-b)} .k-verb{color:var(--sky-b)}
   .k-row{color:var(--mag-b)} .k-own{color:var(--mag-b)} .k-ref{color:var(--verm-b)}
   .k-grad{color:var(--gold-b)} .k-why{color:var(--blue-b)}
@@ -612,11 +616,12 @@ function projectAspects(parse, off, diags){
   F.push({k:"graph", label:"graph", door:false,
     v: t ? `<code>${esc(t.text)}</code> · ${t.kind}` : stub("—"),
     future:true, futureNote:"the live node & handle — mentl where"});
-  // 2 Handler (+ resume cardinality)
+  // 2 Handler / Propose — aspect 2's tentacle is Propose (propose_at is its cursor
+  //   arm), so the ring labels it by that tentacle name.
   const hd = d && d.kind === "handler" ? d : null;
-  F.push({k:"hand", label:"handler",
+  F.push({k:"hand", label:"propose",
     v: hd ? `${esc(hd.name)}` + (parse.tokens.some(x=>x.line>=hd.line && x.text==="resume") ? " · installs on ~>" : "") : stub("—"),
-    future:true, futureNote:"resume cardinality (one/multi-shot) — inferred, mentl where"});
+    future:true, futureNote:"at a ?? hole the proven survivor surfaces here — propose_at, the oracle's arm"});
   // 3 Verb
   F.push({k:"verb", label:"verb",
     v: t && t.kind==="verb" ? `${esc(t.text)} — ${VERB_SHAPE[t.text]}` :
@@ -1127,8 +1132,9 @@ function projectCursor(){
   $("facets").innerHTML = facets.map(f => {
     const realV = haveReal ? REAL[f.k] : undefined;   // a live graph read for this facet?
     const isReal = realV !== undefined && realV !== "";
-    // aspect 2 (handler/propose) carries the socket's PROVEN SURVIVOR at a ?? hole —
-    // the same candidate the edit accept path applies, projected read-only here.
+    // aspect 2 (the Propose tentacle) carries the socket's PROVEN result at a ?? hole:
+    // one survivor rendered by the same projection the accept path applies, or — on a
+    // tie — the count + teaching line render_at emits, verbatim (never dressed as a pick).
     const isPropose = f.k === "hand" && isReal;
     const door = f.door ? " door" : "";
     const fut = (f.future && !isReal) ? " future" : "";
@@ -1136,8 +1142,8 @@ function projectCursor(){
     // the compiler's CursorView actually returned; else the honest surface/
     // declared/socket the page's own parse can defend.
     const prov = isReal ? "real" : f.future ? "socket" : f.k === "why" ? "real" : f.k === "row" ? "declared" : "surface";
-    const label = isPropose ? "propose" : f.label;
-    const val = isPropose ? `<span style="color:var(--verm-b);font-weight:700">▸ ${esc(realV)}</span> <span class="subtle">proven survivor</span>`
+    const label = f.label;
+    const val = isPropose ? `<span class="socket-eye"></span><span style="color:var(--gold-b);font-weight:700">${esc(realV)}</span>`
               : isReal ? `<span style="color:var(--gold-b)">${esc(realV)}</span>` : f.v;
     const note = (f.future && !isReal) ? `<div class="subtle" style="margin-top:2px">${esc(f.futureNote||"")}</div>` : "";
     return `<div class="facet k-${f.k}${door}${fut}${isReal?" real":""}${isPropose?" propose":""}" ${f.doorTo?`data-door="${f.doorTo}"`:""}>

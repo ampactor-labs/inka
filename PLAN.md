@@ -1992,38 +1992,32 @@ op_each_handler_yield sits in the fatal frame chain, so the leading
 suspect is the YIELD-PACKET CROSS-WIRE: nested each-yields share the
 one global triple ($yield_op/$yield_args/$yield_k — wasm globals, never
 reset), and a resume path reads a packet a nested yield overwrote —
-layout/reset-dependent through the k-records' heap positions. SESSION 3 (same
-night) DECODED THE POISON: the fatal "args list" is a CALLEXPR BODY
-RECORD read as a list — word0=4 is the CallExpr TAG parsed as a count,
-"elem0" is its FUNC field (the callee node 24 bytes back), the real
-args slot holds 0, and the constant 838 rides at word 12 across
-layouts. And the probe showed the SAME mis-shape flowing through
-infer_call_arg_list ROUTINELY in healthy runs — surviving silently
-because the list protocol's len-decode on the mis-shape usually
-short-circuits the loop — so this is a SILENT-MISBEHAVIOR class in
-every compile, not a reset bug; the reset layouts merely make one
-instance fatal (i=0 reached, the func-field "element" fails the
-N-destructure). The entry point is pinned to one block:
-infer_call_saturated's pos_args — either resolve_call_args RETURNS the
-body record on some path, or its input `args` (the CallExpr destructure)
-already holds it, with the yield-packet cross-wire (nested each-yields
-through the never-reset global triple, op_each_handler_yield in the
-fatal frames) still the mechanism candidate for HOW a body record lands
-in an args slot. SESSION 4's one further read:
-resolve_call_args has ZERO direct call sites in the emitted module — it
-is EVIDENCE-DISPATCHED (the cloned-closure call_indirect machinery, the
-same pattern the death-site disassembly showed for infer_expr), so a
-MISDIRECTED INDIRECT CALL — the wrong table entry executing with a
-right-shaped frame and returning a wrong-typed value — joins the
-yield-packet cross-wire as the two live mechanism candidates, and both
-share the same substrate (the evidence/packet plumbing around the
-never-reset yield triple). NEXT OPENING, exact: instrument the
-indirect call's RETURN in infer_call_saturated's emitted block (the sst
-build feeding call_indirect just before pos_args lands — print the
-consumed table index + the returned ptr + its word0, gated on
-word0==4), which splits produces-vs-receives AND catches misdirection
-in the same run. The image/scratch split stays the arena's build; THIS
-bug is upstream of it and live in every run.
+layout/reset-dependent through the k-records' heap positions. SESSION 3's decode was
+ITSELF a protocol violation and is RETRACTED by session 5's return
+probe: the fatal "args list" [4][4][buf][0][…] is a perfectly VALID
+SLICE list (tag 4 = slice; the raw offset-8 probe read the BUF field
+and called it element 0 — the prober misparsing the very protocol the
+compiler honors). resolve_call_args returns the ordinary buffer-counter
+slice; the "routine mis-shape in healthy runs" observation dissolves
+with the misread. What SURVIVES protocol-clean (the wheel's own
+list_index did the walk): the slice's ELEMENT 0 at the fatal call is a
+record reading [1077][0][91,336→data][8,204,896→heap] — a 1,077-entry
+FLAT LIST occupying an AST-node slot in the args buffer. The prime
+candidate is now the DEFAULTS FILL: resolve_call_args writes param
+DEFAULT nodes into absent slots, the default node read from the
+scheme's TParam — a crossed read there (the wrong tuple/record slot
+under reset layouts) would deliver exactly a large list where a node
+belongs; the yield-packet cross-wire stays second. Misdirection is DEAD
+too (session 5: the return probe shows the indirect call consuming
+table index 2203 consistently and returning the valid slice — the call
+went where it should and returned what it should). NEXT OPENING,
+exact: probe resolve_call_args' FILL — at its list_set sites print
+(slot, value, value[0]) so a default-fill writing a list-shaped value
+into a node slot names itself, and read the fatal callee's cname +
+param count on the same line (the 838 constant at the slice's +16 may
+be the span/handle of the defaulted param's decl — check it against
+the graph). The image/scratch split stays the arena's build; the
+element anomaly is upstream of it.
 
 The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
 `Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a

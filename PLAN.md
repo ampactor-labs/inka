@@ -1026,6 +1026,42 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶ THE SOCKET SPEAKS AT THE ADDRESS SURFACE (the Propose
+  facet's first render + the resolver's column law · pin 17d1c3be).
+  `mentl hole.mn:9:37` at an authored `??` now projects the socket's
+  content: `Query: ?? : Positive · Propose: 1 · Why: declared choose` —
+  the ONE proven survivor, rendered through the SAME
+  render_candidate_source projection the edit transport's accept path
+  applies, at the one-shot address read; a tie prints the survivor count
+  + the teaching line (never a hidden first-wins pick — PLAN §5's
+  tie-break law at this surface too). render_at stops discarding the
+  CursorView's propose slot (the ide-visionary's seam report named it:
+  the graph computed the proposal; the terminal threw it away). TWO
+  structural fixes were forced by the artifact before the facet could be
+  real: (1) THE COLUMN LAW — address_better_a picked the WIDEST
+  containing node for BOTH address forms while its own comment promised
+  "a column address narrows within it"; the code caught up to the
+  comment (file:LINE keeps the line's root = widest; file:L:C picks the
+  TIGHTEST containing node), and on IDENTICAL spans the LATEST mint wins
+  — mint order builds constituents before composites, so the later node
+  is the more derived reading (a `??` mints its id cell then the NHole
+  over the same span; the address must reach the NHole, whose Propose
+  facet speaks). (2) The sharper wheel then caught MY OWN first attempt
+  at a ty_of_kind NHole arm as ill-sorted (E_TypeMismatch NodeKind vs
+  NodeBody — census 0 → 1 on the m3 leg): NHole is a BODY constructor
+  and can never appear as a chased cell state, so the arm was dead code
+  with a sort error; DELETED (the census-as-ratchet catching the
+  session's own hand within the hour — the medium keeping its builder
+  honest, §0 live). Gate leg: tests/frontier/propose-demo +
+  frontier-gate's cursor-address-propose assertion, seen RED on the
+  pre-arm boot (the address printed no Propose line and resolved the id
+  cell). The ide-visionary's proof-of-life landed in parallel (ide/
+  only): the browser aspect ring reads the compiler's real eight-aspect
+  CursorView over a virtual fs, RED→GREEN on provenance 'real', plus a
+  genuine serve.mn catch (read_request hand-rolled the pre-merge +4
+  String layout — latent OOB under the armed bounds check, fixed to
+  bytes_buf/+8/str_of_buf); its batch commits when it reports against
+  this pin.
 - 2026-07-23 · ▶▶ THE NULL-SINGLETON CLASS CLOSES + THE REGION BATTERY
   SHIPS (the cross-compile trap's root, proven adversarially and landed at
   every altitude · pin 6c192865). The forensic-prober (a fresh mind told

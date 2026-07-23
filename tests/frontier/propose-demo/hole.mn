@@ -1,0 +1,11 @@
+// The socket's content at the ADDRESS surface: one candidate satisfies this
+// hole (integer seeds 0/1/-1; Positive rejects 0 and -1), so `mentl
+// hole.mn:9:37` must project `Propose: 1` — the same proven survivor the
+// edit transport's accept path applies, rendered through the same
+// projection, at the one-shot address read.
+
+type Positive = Int where 0 < self
+
+fn choose() -> Positive with Pure = ??
+
+fn main() = choose()

@@ -745,25 +745,37 @@ fn address_case_a(ref spans, gline, col, i, n, best) with Memory = {
     let hits = if sl == gline {
       if col > 0 { span_contains(s, Span(gline, col, gline, col)) } else { true }
     } else { false }
-    let next = if hits { address_better_a(best, (s, h)) } else { best }
+    let next = if hits { address_better_a(col, best, (s, h)) } else { best }
     address_case_a(spans, gline, col, i + 1, n, next)
   }
 }
 
-// The line's ROOT is its WIDEST node (the statement/expression covering
-// most of the line — `echo(mix, x)` over the wet binder it feeds);
-// column breaks ties leftward. Area-first is what "point at the line"
-// means; a column address narrows within it.
-fn address_better_a(best, cand) with Memory = match best {
+// The two address intents pick OPPOSITE extremes of the containing set.
+// `file:LINE` (col 0) means "the line" — its ROOT, the WIDEST node (the
+// statement/expression covering most of the line: `echo(mix, x)` over the
+// wet binder it feeds). `file:L:C` (col > 0) means "this exact position" —
+// the TIGHTEST node containing the point, so pointing at a `??` reaches
+// the hole node itself (and its Propose facet), never the enclosing decl
+// that also contains the column. Ties break leftward in both modes.
+fn address_better_a(col, best, cand) with Memory = match best {
   None => Some(cand),
   Some(b) => {
     let (bs, _) = b
     let (cs, _) = cand
     let Span(_, bsc, _, _) = bs
     let Span(_, csc, _, _) = cs
-    if span_area(cs) > span_area(bs) { Some(cand) }
+    let narrower = if col > 0 { span_area(cs) < span_area(bs) }
+                   else       { span_area(cs) > span_area(bs) }
+    if narrower { Some(cand) }
     else if span_area(cs) == span_area(bs) {
-      if csc < bsc { Some(cand) } else { best }
+      // Identical spans: the LATEST mint wins — mint order builds
+      // constituents before composites, so the later node is the more
+      // derived reading of the same position (a `??` mints its id cell
+      // first, then the NHole node over the same span; the address must
+      // reach the NHole, whose Propose facet speaks). Distinct starts
+      // keep the leftward tie-break.
+      if csc == bsc { Some(cand) }
+      else if csc < bsc { Some(cand) } else { best }
     }
     else { best }
   }
@@ -797,8 +809,24 @@ fn address_case_c(ref spans, gline, i, n, best) with Memory = {
 
 // ─── the terse render — facet-silence at the terminal
 fn render_at(view, h, pspan, ranges) = {
-  let CursorView(kind, _propose, _topology, row, trace, verify, teach, why) = view
+  let CursorView(kind, propose, _topology, row, trace, verify, teach, why) = view
   print_string("Query: {source_slice(pspan, ranges)}{node_query_line(h, kind)}\n")
+  // The Propose facet — the socket's content at the address surface. The
+  // graph already computed it (propose_at runs synth at an authored hole;
+  // empty everywhere else, so silence needs no second hole check). Exactly
+  // one proven survivor is the medium's answer, rendered through the SAME
+  // projection the edit transport's accept path uses; two or more is the
+  // tie that TEACHES (never a hidden first-wins pick between proven
+  // survivors — PLAN §5's tie-break law at this surface too).
+  match propose {
+    Proposals([], _)         => (),
+    Proposals([only], _)     => {
+      let (survivor, _r) = only
+      print_string("Propose: {render_candidate_source(survivor)}\n")
+    },
+    Proposals(survivors, _)  =>
+      print_string("Propose: {int_to_str(len(survivors))} proven survivors — a tie; one more constraint (a refinement, a type, an example) collapses it\n")
+  }
   match row {
     EfRow([], [], EtClosed) => (),
     _      => print_string("Effects: {show_effrow(row)}\n")

@@ -958,6 +958,19 @@ for i in "${!compilers[@]}"; do
   else
     fail "cursor-address out-of-range (see $dir/at-oob.out)"
   fi
+  # The Propose facet at the address surface: an L:C address pointing at a
+  # `??` resolves the HOLE node (the column form picks the tightest span;
+  # identical spans pick the latest mint) and the socket speaks the ONE
+  # proven survivor — the same synth gate the edit transport's accept path
+  # runs, projected at the one-shot read. Seen RED before the render arm
+  # (the address printed no Propose line and resolved the id cell).
+  pdemo="$ROOT/tests/frontier/propose-demo"
+  pout=$(cd "$pdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$pdemo" --dir /tmp "$compiler" hole.mn:9:37 2>"$dir/propose-at.err")
+  if [ $? -eq 0 ] && printf '%s' "$pout" | grep -q 'Query: ?? : Positive' && printf '%s' "$pout" | grep -q 'Propose: 1'; then
+    pass "cursor-address propose (the socket speaks the one survivor)"
+  else
+    fail "cursor-address propose (got: $pout; see $dir/propose-at.err)"
+  fi
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

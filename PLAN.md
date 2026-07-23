@@ -2009,11 +2009,21 @@ body record on some path, or its input `args` (the CallExpr destructure)
 already holds it, with the yield-packet cross-wire (nested each-yields
 through the never-reset global triple, op_each_handler_yield in the
 fatal frames) still the mechanism candidate for HOW a body record lands
-in an args slot. NEXT OPENING, exact: instrument resolve_call_args'
-return (print output ptr + word0, gated on word0==4-with-heap-word1) to
-split produces-vs-receives, then the yield driver's packet write/read
-interleave. The image/scratch split stays the arena's build; THIS bug
-is upstream of it and live in every run.
+in an args slot. SESSION 4's one further read:
+resolve_call_args has ZERO direct call sites in the emitted module — it
+is EVIDENCE-DISPATCHED (the cloned-closure call_indirect machinery, the
+same pattern the death-site disassembly showed for infer_expr), so a
+MISDIRECTED INDIRECT CALL — the wrong table entry executing with a
+right-shaped frame and returning a wrong-typed value — joins the
+yield-packet cross-wire as the two live mechanism candidates, and both
+share the same substrate (the evidence/packet plumbing around the
+never-reset yield triple). NEXT OPENING, exact: instrument the
+indirect call's RETURN in infer_call_saturated's emitted block (the sst
+build feeding call_indirect just before pos_args lands — print the
+consumed table index + the returned ptr + its word0, gated on
+word0==4), which splits produces-vs-receives AND catches misdirection
+in the same run. The image/scratch split stays the arena's build; THIS
+bug is upstream of it and live in every run.
 
 The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
 `Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a

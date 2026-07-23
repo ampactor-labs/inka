@@ -1,0 +1,10 @@
+// The FAN at the address surface: TWO candidates prove (integer seeds 0 and
+// 1 both satisfy Bit; -1 is refined out), so `mentl bit.mn:8:30` must
+// project BOTH survivors with their Reasons — the proven space shown, the
+// collapsing move named, never a hidden first-wins pick.
+
+type Bit = Int where 0 <= self && self <= 1
+
+fn pick() -> Bit with Pure = ??
+
+fn main() = pick()

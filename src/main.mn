@@ -824,8 +824,17 @@ fn render_at(view, h, pspan, ranges) = {
       let (survivor, _r) = only
       print_string("Propose: {render_candidate_source(survivor)}\n")
     },
-    Proposals(survivors, _)  =>
-      print_string("Propose: {int_to_str(len(survivors))} proven survivors — a tie; one more constraint (a refinement, a type, an example) collapses it\n")
+    Proposals(survivors, _)  => {
+      // The FAN projected: a tie TEACHES by showing the actual proven
+      // space — every survivor rendered with its Reason — then names the
+      // move that collapses it. Never a hidden first-wins pick.
+      print_string("Propose: {int_to_str(len(survivors))} proven survivors — a tie:\n")
+      each((pair) => {
+        let (node, reason) = pair
+        print_string("  {render_candidate_source(node)}  — {show_reason(reason)}\n")
+      }, survivors)
+      print_string("  one more constraint (a refinement, a type, an example) collapses it\n")
+    }
   }
   match row {
     EfRow([], [], EtClosed) => (),

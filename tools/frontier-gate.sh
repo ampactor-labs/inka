@@ -1041,6 +1041,16 @@ for i in "${!compilers[@]}"; do
   # proven survivor — the same synth gate the edit transport's accept path
   # runs, projected at the one-shot read. Seen RED before the render arm
   # (the address printed no Propose line and resolved the id cell).
+  # The FAN at the address surface: two proven survivors LIST with their
+  # Reasons (the space shown, the collapsing move named) — seen RED as the
+  # bare count line before the fan projection landed.
+  fdemo="$ROOT/tests/frontier/propose-fan-demo"
+  fout=$(cd "$fdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo" --dir /tmp "$compiler" bit.mn:8:30 2>"$dir/propose-fan.err")
+  if [ $? -eq 0 ] && printf '%s' "$fout" | grep -q '2 proven survivors' && printf '%s' "$fout" | grep -q 'integer literal seed'; then
+    pass "cursor-address fan (both survivors project with Reasons)"
+  else
+    fail "cursor-address fan (got: $fout; see $dir/propose-fan.err)"
+  fi
   pdemo="$ROOT/tests/frontier/propose-demo"
   pout=$(cd "$pdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$pdemo" --dir /tmp "$compiler" hole.mn:9:37 2>"$dir/propose-at.err")
   if [ $? -eq 0 ] && printf '%s' "$pout" | grep -q 'Query: ?? : Positive' && printf '%s' "$pout" | grep -q 'Propose: 1'; then

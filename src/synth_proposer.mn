@@ -49,9 +49,12 @@
 //                           Reason; not parallel (asts[], reasons[]).
 //   Drift 8 (string flag):  ProposerKind is a tagged ADT.
 //   Drift 9 (deferred):     The chain is named in full; each proposer
-//                           bodied; H7-blocked MultiShot semantics
-//                           gate the enumerate_inhabitants arm but
-//                           the OneShot fast path (propose) is live.
+//                           bodied; BOTH arms live — propose (the
+//                           OneShot survivor-set) and
+//                           enumerate_inhabitants (the multi-shot
+//                           resume-per-proven fan, gated by its own
+//                           frontier fixture; the fork pair =
+//                           graph checkpoint + heap region).
 
 import types
 import effects
@@ -149,8 +152,10 @@ handler synth_default with !Mutate {
         let EnrichedCandidate(c) = list_index(enriched, i)
         let inner = Candidate(c.node, c.reason)
         let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+        let mark = heap_mark()   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
         let proven = verify_candidate(inner, target_ty)
         graph_rollback(cp)
+        heap_reset(mark)
         if proven {
           resume([c.node])
           yield_from(i + 1)
@@ -533,7 +538,7 @@ fn enumerate_tuple_candidates(elems, context) with GraphRead + GraphWrite + Memo
 // Same form as mentl.mn:146-166 try_each_annotation but with
 // EnrichedCandidate replacing (Annotation, Capability) pairs.
 
-fn verify_each_enriched(candidates, target_ty) with Synth + GraphRead + GraphWrite + !Mutate = {
+fn verify_each_enriched(candidates, target_ty) with Synth + GraphRead + GraphWrite + Alloc + !Mutate = {
   // Per-candidate proof-search is the divergent-fanout topology
   // (checkpoint isolates each branch from siblings) — symmetric with
   // oracle's per-candidate dispatch at src/oracle.mn:357 + mentl.mn's
@@ -544,9 +549,17 @@ fn verify_each_enriched(candidates, target_ty) with Synth + GraphRead + GraphWri
     |> map((candidate) => {
          let EnrichedCandidate(c) = candidate
          let inner = Candidate(c.node, c.reason)
+         // The FORK PAIR: graph checkpoint + heap region — a candidate's
+         // verify is a fork whose GRAPH binds roll back on the trail and
+         // whose MEMORY dies at the region reset (the virginity contract
+         // makes the reset a true fork boundary: the next candidate sees
+         // bit-identical never-allocated ground). O(1) fork: one trail
+         // mark + one bump word.
          let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+         let mark = heap_mark()   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
          let proven = verify_candidate(inner, target_ty)
          graph_rollback(cp)
+         heap_reset(mark)
          (candidate, proven)
        })
     |> filter((pair) => { let (_, p) = pair; p })

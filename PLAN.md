@@ -1026,6 +1026,20 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶ THE FAN PROJECTS + THE FORK PAIR (the /loop's queue-0
+  landing · pin 08640f17). A `??` tie LISTS the proven survivor space —
+  each candidate rendered with its Reason, then the collapsing move
+  (propose-fan-demo seen RED as the bare count line; the frontier leg
+  asserts both Bit survivors project). Both candidate-verify loops
+  (verify_each_enriched and enumerate_inhabitants' resume-per-proven
+  fan) gain the FORK PAIR — graph checkpoint + heap region per
+  candidate, memory and graph both restored at the fork boundary, O(1)
+  each — the exploration substrate's honest isolation, and the arena's
+  second real workload after the battery. The medium caught its own
+  builder again within minutes (census 0 → 1 → 0: the fork pair's
+  heap ops forced verify_each_enriched's declared row to its Alloc
+  truth). The multi-shot arm's first wheel-internal consumer is the
+  N-cursor pass, next in the queue.
 - 2026-07-23 · ▶▶ THE MANIFEST TELLS THE TRUTH — every module's import
   list resolves its whole vocabulary, and the medium wrote its own
   worklist (the /loop's first landing · pin cab557e8). The probe form

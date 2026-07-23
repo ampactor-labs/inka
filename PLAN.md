@@ -1026,6 +1026,33 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · THE MARCH ABSORBS THE HAND LADDERS (the ladder's own
+  alive-law audit, Morgan's challenge: "are you sure m2–m4 is the best
+  practice, canonicalized, automated, future-proof?" · pin 229fda2f).
+  The AUDIT'S VERDICT, banked: the LAW (self-application to a byte
+  fixpoint + adversarial oracles, TRANSITION re-pinned from m3) is right
+  and future-proof — it generalizes to native (native_m3==native_m4,
+  NATIVE.md) and to parallel cursors (the deterministic handle
+  partition exists for exactly this); the PRACTICE was scaffold with
+  four measured gaps, three closed HERE: march.sh gains the SIZE-GUARD
+  (two empty legs can no longer read as a fixpoint), MARCH_REPIN=1
+  (CLEAN blesses m2, TRANSITION blesses m3 — the wrong-side cp a hand
+  script made once is now impossible; PROVENANCE prose stays the
+  session's, the pin unblessed until written), and the per-leg census
+  echo. The canonical run also caught the hand ladders' container
+  drift: they assembled without --debug-names; wt_asm's pin carries the
+  name section (readable backtraces), the fixpoint wat byte-identical.
+  THE REMAINING GAP is the ultimate form, named in full: the ladder
+  recompiles the whole world thrice to answer a changed-cone question —
+  Carried-Truth at the practice layer — and dissolves into the medium
+  as (a) the INCREMENTAL fixpoint (the IC cursor re-deriving only the
+  changed cone + downstream, the whole-world march kept as the
+  trusting-trust audit tier, not the per-landing loop), (b) `mentl
+  march` as a verb (self-application as a cursor mode, the bash
+  scaffold dissolved per §6), and (c) the verdict as a PROJECTION
+  (emit-diff's handle-anchored divergence as the march's Reason, never
+  a line count). Sessions must never hand-roll ladders again — the
+  canonical tool now bends to the probe loop instead.
 - 2026-07-23 · THE RESET RESTORES VIRGINITY + the law goes alive in
   CLAUDE.md (the twelve-kill forensic dig's landings · pin 502f691e).
   heap_reset now zeroes [mark, bump) before the rewind ($heap_reset_impl,

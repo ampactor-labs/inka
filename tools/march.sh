@@ -97,7 +97,7 @@ fi
 
 # ── m3: m2 compiles the wheel — THE GATE (the trapping lambda executes here) ──
 gen "$OUT/m2.wasm" "$OUT/m3.wat" "$OUT/m3.err"; m3rc=$?
-echo "m3: exit=$m3rc, $(wc -l < "$OUT/m3.wat" 2>/dev/null) lines"
+echo "m3: exit=$m3rc, $(wc -l < "$OUT/m3.wat" 2>/dev/null) lines, census=$(grep -cE 'E_[A-Za-z]+ error' "$OUT/m3.err" 2>/dev/null)"
 TRAP=$(trap_lines "$OUT/m3.err")
 if [ -n "$TRAP" ]; then
   echo "✗ GATE: m3 TRAPPED —"; echo "$TRAP" | head -4
@@ -112,9 +112,18 @@ fi
 # m_n == m_{n+1}). --fixpoint extends the chain one more generation (m4)
 # for the paranoid triple.
 fixok=1; m4done=0
-if [ "$m3rc" = 0 ]; then
+# SIZE-GUARD the compare (the empty-wat trap: two empty legs diff equal and a
+# gate that cannot fail reads as a fixpoint — 2026-07-22's own lesson).
+if [ ! -s "$OUT/m2.wat" ] || [ ! -s "$OUT/m3.wat" ]; then
+  echo "✗ SIZE-GUARD: an empty wat leg (m2=$(wc -c < "$OUT/m2.wat" 2>/dev/null)B m3=$(wc -c < "$OUT/m3.wat" 2>/dev/null)B) — no verdict from empties"
+  fixok=0
+elif [ "$m3rc" = 0 ]; then
   if diff -q "$OUT/m2.wat" "$OUT/m3.wat" >/dev/null 2>&1; then
     echo "✓✓ FIXED POINT holds: m2 == m3"
+    if [ "${MARCH_REPIN:-0}" = 1 ]; then
+      cp "$OUT/m2.wasm" boot/mentl.wasm
+      echo "· REPIN (clean): boot ← m2  sha256 $(sha256sum boot/mentl.wasm | cut -c1-16)…  — write the PROVENANCE entry (the recipe is in that file); the pin is not blessed until it is"
+    fi
   else
     # THE TRANSITION FORM — native, never hand-driven. A change to the wheel's
     # own EMIT or import surface crosses one generation: m2 is the OLD emit
@@ -129,7 +138,12 @@ if [ "$m3rc" = 0 ]; then
       echo "m4: exit=$m4rc, $(wc -l < "$OUT/m4.wat" 2>/dev/null) lines"
       if [ "$m4rc" = 0 ] && diff -q "$OUT/m3.wat" "$OUT/m4.wat" >/dev/null 2>&1; then
         echo "✓✓ TRANSITION: m3 == m4 — the NEW wheel reproduces itself; the m2/m3 diff was the emit change crossing one generation."
-        echo "   Re-pin to bless: cp $OUT/m3.wasm boot/mentl.wasm  (then update boot/PROVENANCE.md — the recipe is in that file)"
+        if [ "${MARCH_REPIN:-0}" = 1 ]; then
+          cp "$OUT/m3.wasm" boot/mentl.wasm
+          echo "· REPIN (transition): boot ← m3  sha256 $(sha256sum boot/mentl.wasm | cut -c1-16)…  — write the PROVENANCE entry; blessing the wrong generation (m2) is the trusting-trust mistake this automation exists to prevent"
+        else
+          echo "   Re-pin to bless: cp $OUT/m3.wasm boot/mentl.wasm  (or rerun with MARCH_REPIN=1; then update boot/PROVENANCE.md — the recipe is in that file)"
+        fi
       else
         echo "✗✗ BROKEN: m3 ≠ m4 ($(diff "$OUT/m3.wat" "$OUT/m4.wat" 2>/dev/null | grep -c '^[<>]') diff lines; m4 exit=$m4rc) — genuine non-reproduction, not a transition"
         fixok=0

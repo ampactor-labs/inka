@@ -1026,6 +1026,33 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · THE TUPLE PATTERN READS THE BRACKET (the pattern path's
+  last lower-time layout bake dies · pin 80852432). LPTuple carries
+  (elem_ty, sub_pat) — live element vars — and (offset, width) project
+  at EMIT: pat_elem_repr resolves through lookup_ty (the bracket-aware
+  channel construction and binop dispatch already read; the raw chase
+  answered the floor and split a twin against its own construction),
+  pat_tuple_off runs the identical align_for+repr_width prefix-sum, and
+  a var-typed tuple destructure is itself a worthiness WITNESS
+  (spec_oph_wide_pair's TTuple arm — a var element landing wide demands
+  the twin; pointer instantiations keep word slots, minting nothing).
+  Seen RED twice on the prior pin: the worthy twin's WAT did not
+  assemble ($sc.f64 undefined local — the in-flight N-cursor code's
+  (Float, Handle) ranked tuples were the first trigger), and the
+  non-worthy floor read an f64's high word at baked offset 4 as the
+  next element (invalid exit, zero diagnostics — probe-second). Gate
+  mn-generic-wide-tuple-pattern: twin assembly + floor face +
+  mixed-order (Int, Float, Int) alignment, 42. CLEAN m2 == m3 at
+  550,965 lines (the witness mints zero twins on the wheel itself);
+  frontier 202/0, battery 113/113, census 0. The two SIBLINGS stay
+  named with their designs: record-field patterns
+  (Hβ.emit.f64-aggregate-pattern-width — the carrier lacks fty; the fix
+  is this landing's shape one arm over: carry the field ty, read
+  pat_elem_repr, fold the offsets live) and generic CON payloads
+  (Hβ.emit.spec-con-payload-instantiation — ctor_payload_tys_of reads
+  the DECLARED scheme whose roots the bracket does not key; the fix
+  resolves the payload tys through the site-instantiated ctor type at
+  the match, the same spec_resolve read the twins' interior calls use).
 - 2026-07-23 · ▶▶ THE FAN PROJECTS + THE FORK PAIR (the /loop's queue-0
   landing · pin 08640f17). A `??` tie LISTS the proven survivor space —
   each candidate rendered with its Reason, then the collapsing move

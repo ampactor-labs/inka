@@ -1,38 +1,33 @@
-// 00-hello.mn — Curriculum entry: the kernel surfaces in one program
+// 00 · hello — meet the medium
 //
-// Mentl's eight kernel primitives (DESIGN.md §0.5) are not eight
-// features. They are eight ways the same medium reads itself. This
-// program is the smallest one that demonstrates all eight at once.
-// Every line clears the eight interrogations (CLAUDE.md ⌁ Mentl's
-// anchor): Graph? Handler? Verb? Row? Ownership? Refinement? Gradient?
-// Reason?
+// This is the smallest Mentl program that does something you can watch: run
+// it and three greetings print. That is the whole program. The rest of this
+// comment matters more than usual, because in Mentl a comment is not thrown
+// away — the lexer keeps it as a Reason edge on the graph, so the medium can
+// read your intent back to you.
 //
-// To run:    mentl compile tutorial/00-hello | wat2wasm - -o /tmp/h.wasm && wasmtime /tmp/h.wasm
-// To edit:   mentl edit tutorial/00-hello       — the medium opens; type ?? to see the gradient narrow
-// To audit:  mentl audit tutorial/00-hello      — eight tentacles project the file's capability set
+// Mentl has one kernel: one graph, two operations (draw an edge, project a
+// read). At any point in your code the medium reads that graph eight ways —
+// its type, the handlers over it, the verb that shapes it, its effect row,
+// its ownership, its refinements, the gradient's next move, and the Reason it
+// holds. The eight files after this one take those one at a time. This one
+// just says hello.
+//
+// Run it:   mentl run  lib/tutorial/00-hello.mn
+// Edit it:  bash ide/serve.sh   →   http://localhost:7378/ide/
+// Read it:  mentl lib/tutorial/00-hello.mn:30   ← put the cursor on greet; the medium answers
 
 import runtime/io
 
-// greet — the curriculum's first read.
-//
-// The eight, in residue form:
-//   #1 Graph + Env   — `name` is a handle; the graph chases it through unification.
-//   #2 Handlers      — `print_string` is performed against the chain (wasi_filesystem absorbs IO).
-//   #3 Verbs         — `|>` flows; `~>` attaches; same source, two reads.
-//   #4 Row algebra   — `with !Alloc` proves zero allocation under inference (real-time eligible).
-//   #5 Ownership     — `ref` borrows the string; greet returns Unit; no ownership transfer.
-//   #6 Refinement    — invariants enforced by construction; verify.mn discharges decidable
-//                       predicates at compile time (see 06-refinement.mn).
-//   #7 Gradient      — `with !Alloc` is a gradient annotation Mentl can propose; type `??`
-//                       on the row to ask "what would this unlock?"
-//   #8 Reasons       — every unification leaves a Located/Unmarked edge in the graph; the
-//                       Why Engine walks them on demand via `mentl query reason name`.
-fn greet(ref name) with !Alloc = {
-  "Hello, "
-    ++ name
-    ++ ". The medium is reading you back.\n"
+// greet builds a line and flows it into print_string with `|>`, the
+// sequential verb: the value on the left becomes the argument on the right.
+// `++` joins byte-sequences. Joining allocates, so greet's effect row carries
+// Memory and Alloc — Mentl infers that from the body; you never wrote it down.
+// (Ask for `with !Alloc` here and the medium would refuse this body, because
+// it can prove the join allocates. That refusal is the subject of 04-row.)
+fn greet(name) =
+  "Hello, " ++ name ++ ". The medium is reading you back.\n"
     |> print_string
-}
 
 fn main() = {
   greet("kernel")

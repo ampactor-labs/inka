@@ -1,65 +1,39 @@
-// 08-reasons.mn — Primitive #8: HM inference live + Reason chains
+// 08 · reasons — inference that keeps walking, and remembers why
 //
-// Mentl's inference is HINDLEY-MILNER but PRODUCTIVE under error.
-// Every unification step writes a Reason edge into the graph
-// (Located + Unmarked + Unified + VarLookup + ...). When a type
-// error arises, the compiler doesn't fail-fast; it inserts a
-// `NErrorHole` at the conflict site and KEEPS WALKING. Downstream
-// code still typechecks where it can.
+// Mentl's inference is Hindley-Milner, with two properties worth the last file
+// of this tour. First, it is productive under error: a type conflict does not
+// stop the compile. The medium drops an error node at the conflict and keeps
+// going, so the rest of the program still typechecks and the healthy parts
+// still emit. You get every real diagnostic at once, not the first one and a
+// wall.
 //
-// The Why Engine (mentl.mn render_why) walks the Reason chain on
-// demand — every type, every error, every unification has a
-// queryable provenance. This is what makes Mentl's diagnostics
-// reach `MachineApplicable` quality: each error knows exactly why
-// it was inferred.
+// Second, every edge it draws carries a Reason. A type was not merely inferred;
+// it was inferred BECAUSE — a literal here, a unification there, an install up
+// the chain. The Why walk follows that chain back to where a fact was minted.
+// No fact in the medium is asserted; every one is walkable.
 //
-// Read this alongside SUBSTRATE.md §VII "Inference Is The Light"
-// and `docs/specs/04-inference.md`.
+// You never call the Why engine from your program — it is the medium reading
+// itself. Point the cursor at a value and the medium answers:
+//
+//   mentl lib/tutorial/08-reasons.mn:29
+//     Query: caller(x) : Int
+//     Why:   the call to caller, at 08-reasons.mn:29
+//
+// Or open the IDE, click any fact in the aspect ring, and the Reason draws.
+//
+// Run it:   mentl run  lib/tutorial/08-reasons.mn   ← prints 9
 
 import runtime/io
-import mentl
 
-// `safe_call` — clean inference; one Reason edge per unification.
-// Run `mentl query reason safe_call` to walk the chain:
-//
-//   safe_call's row chases to:
-//     Pure (Located src/tutorial/08-reasons.mn:24:1-26:1)
-//       Inferred("body has no perform calls")
-fn safe_call(x) = x + 1
+// A clean binding. Its type and its row each carry a Reason edge, and the Why
+// walk at this line reads them back to the literal and the unification that set
+// them.
+fn base(x) = x + 1
 
-// `mistake` — would produce E_TypeMismatch in normal HM and STOP.
-// Mentl's productive-under-error continues: `mistake` gets an
-// NErrorHole at the conflict; downstream `caller` still
-// typechecks. The Reason chain on the error is queryable:
-//
-//   mentl query reason mistake
-//     E_TypeMismatch (Located :30:?)
-//       Unified(
-//         Located(:30:?, Declared("Int"))
-//         Located(:30:?, Inferred("StringLit body"))
-//       )
-//
-// Commented out so the file remains compilable; uncomment to see
-// the productive-under-error behavior in `mentl edit`.
-// fn mistake() = "this is a string but the body type is Int"
+// caller typechecks even when a sibling has a type error: a conflict is
+// isolated to its own node, so base and caller are unaffected, and the build
+// still emits WAT for everything sound while reporting what is not.
+fn caller(x) = base(x) + 1
 
-// `caller` — even with `mistake` having an error, this typechecks.
-// The error reaches the diagnostics handler at the chain boundary;
-// the build emits BOTH the diagnostic AND the WAT for healthy
-// fragments. Mentl stays productive while telling you what's wrong.
-fn caller(x) = safe_call(x) + 1
-
-// `walk_reason` — explicit Why query. Mentl's teach_why returns
-// the Reason chain rooted at a graph handle; render_why walks it
-// to indented text suitable for IDE hover or `mentl explain` CLI.
-fn walk_reason(handle) = {
-  teach_why(handle)
-    |> render_why
-    |> print_string
-}
-
-fn main() = {
-  caller(7)
-    |> int_to_str
-    |> print_string
-}
+fn main() =
+  caller(7) |> int_to_str |> print_string

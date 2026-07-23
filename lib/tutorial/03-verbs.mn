@@ -1,159 +1,64 @@
-// 03-verbs.mn — Primitive #3: the five verbs draw the topology
+// 03 · the verbs — five operators, five shapes on the page
 //
-// Every Mentl program's shape ON THE PAGE is the computation graph.
-// Five operators; five distinct topologies; no nested-call ladder
-// to climb. The verb at each junction tells you which way data
-// flows.
+// Mentl has five verbs, and each draws a different topology. You read a
+// program's shape by reading its indentation, because the shape IS the graph:
 //
-//    |>     sequential flow              data → transform → result
-//    <|     divergence                   one input → many branches
-//    ><     parallel compose             many inputs → tupled output
-//    ~>     handler attachment           wrap with capability
-//    <~     feedback                     close a cycle under a clock
+//   |>   sequential   A then B; the value flows down the left edge
+//   <|   divergent    one input fans to several branches; a tuple comes back
+//   ><   parallel     independent pipelines, run together, tupled
+//   ~>   handler      the foot governs the whole chain to its left
+//   <~   feedback     the output loops back as the next input
 //
-// Canonical formatting (SUBSTRATE.md §II): sequential operators
-// (`|>`, `~>`) at the LEFT edge — flow goes down. Convergent
-// operators (`><`, `<~`) at the INDENTED CENTER — they draw shape.
-// `<|` at the left edge before its branch tuple. The shape on the
-// page IS the computation graph.
+// Sequential verbs (|> and ~>) sit at the left edge; convergent ones (>< and
+// <~) at an indented center. Whitespace enforces nothing — the formatter
+// projects the canonical layout, and one precedence table draws the tree.
+//
+// Run it:   mentl run  lib/tutorial/03-verbs.mn   ← prints 30, the accumulator
+// Read it:  mentl lib/tutorial/03-verbs.mn:36     ← the cursor on a verb; the ring names its shape
 
 import runtime/io
-import runtime/threading
-import dsp/clock
-
-// ─── |> sequential flow ─────────────────────────────────────────────
-
-// Pipe the input through three transforms. Each |> is one step;
-// reading top-to-bottom is reading the data flow direction.
-fn pipeline_demo(n) = {
-  n
-    |> double
-    |> add_one
-    |> int_to_str
-}
 
 fn double(x) = x + x
 fn add_one(x) = x + 1
-
-// ─── <| divergence — one input, many branches, tupled output ────────
-
-// `branch_demo` borrows `x` to each branch (no ownership transfer).
-// The result is a tuple of branch outputs. Drift 1 closure: no
-// vtable; the `<|` IS the dispatch.
-fn branch_demo(x) =
-  x <|
-    ( double,
-      add_one,
-      negate )
-
 fn negate(x) = 0 - x
 
-// ─── >< parallel compose — independent tracks, both run, tupled ─────
-//
-// `><` × Thread effect: each branch becomes a thunk; the chain's
-// installed handler (parallel_compose for real OS threads;
-// sequential_compose for synchronous fallback) chooses the
-// semantics. Same source; the row constraint forces the choice.
+// |> sequential — each step's output is the next step's input.
+fn pipeline(n) =
+  n |> double |> add_one |> int_to_str
 
-fn parallel_demo() with Thread = {
-  slow_a()
+// <| divergent — n is borrowed to three branches; the result is their tuple.
+// The branches read the same input; none consumes it.
+fn fan(n) =
+  n <| (double, add_one, negate)
+
+// >< parallel — two independent pipelines, each with its own input. They run
+// together and the result is their tuple. How they run — in sequence, across
+// threads, on a device — is a handler choice, not part of the verb: install a
+// `~> Thread` schedule over the chain and the same source runs on cores.
+fn combine(x, y) =
+  (x |> double)
     ><
-  slow_b()
+  (y |> add_one)
+
+// <~ feedback — the recurrence y[n] = x[n] + y[n-1]. `(prev)` binds the prior
+// output, read live; `delay(1)` is the one-step state element. `<~` requires an
+// iterative context, so accum carries the Beat effect and the chain installs it.
+effect Beat { rate() -> Int }
+handler beat { rate() => resume(1) }
+
+fn accum(input) with Beat =
+  ((prev) => input + prev) <~ delay(1)
+
+// Called three times under one context, the prior carries across each call:
+// 10, then 10 + 10 = 20, then 10 + 20 = 30.
+fn run() with Beat = {
+  let a = accum(10)
+  let b = accum(10)
+  accum(10)
 }
 
-fn slow_a() = 42
-fn slow_b() = 17
-
-// ─── ~> handler attachment — capability stack ───────────────────────
-//
-// Outermost (last in chain) is least trusted = sandbox boundary.
-// ~> has ONE precedence (the loosest): each ~> governs everything
-// to its left, so stacked handlers nest outward. Parenthesize
-// (stage ~> h) to scope a handler to one stage.
-
-fn capability_demo() = {
-  parallel_demo()
-    ~> sequential_compose       // sequential fallback for `><`
-    ~> wasi_filesystem
-}
-
-// ─── <~ feedback — close a cycle under an iterative context ─────────
-//
-// Stateful loop: previous output feeds back as input under the
-// ambient clock. Requires `Clock` (or `Sample` / `Tick`) handler in
-// scope; absence is a type error at this site (E_FeedbackNoContext).
-
-// Lowpass filter — classic <~ shape. Each tick, `output` becomes
-// `0.9 * previous_output + 0.1 * input`. The verb DRAWS the cycle.
-fn lowpass(input) with Sample = {
-  input
-    <~
-  (0.9 * previous + 0.1 * input)
-}
-
-// ─── The five-verb finale — all five composed at once ──────────────
-//
-// Each verb has its own section above. The finale composes them in
-// ONE expression: the cursor's read at a position, audited live,
-// feedback-closing over an iterative context. The shape on the page
-// IS the medium's main loop.
-//
-// Reading the topology:
-//   `<|` divergence — input borrowed to FOUR independent reads
-//                     (each tentacle's lens is a branch)
-//   `|>` sequential — flow through normalize and combine
-//   `><` parallel  — two independent positions project simultaneously
-//   `~>` attach    — Clock + sample handlers wrap the cycle
-//   `<~` feedback  — output threads back as next-cycle input
-//
-// Per SUBSTRATE.md §II: convergent verbs (`><`, `<~`) sit at indented
-// center; sequential verbs (`|>`, `~>`) at the left edge; `<|` at the
-// left edge before its branch tuple. The visual shape IS the
-// computation graph — the developer reads the topology by reading
-// the indent.
-
-// `live_session_demo` — one position projected through four lenses
-// simultaneously, normalized, combined with another position's
-// projection (parallel composition), feedback-closed under a clock.
-fn live_session_demo(input_a, input_b) with Sample = {
-  let projection_a =
-    input_a
-      <| (
-        double,
-        add_one,
-        negate,
-        identity_step
-      )
-  let projection_b =
-    input_b
-      <| (
-        double,
-        add_one,
-        negate,
-        identity_step
-      )
-  let normalized =
-    (projection_a |> reduce_to_int)
-        ><
-    (projection_b |> reduce_to_int)
-  normalized
-      <~ (combine_normalized(normalized) |> tick_advance)
-}
-
-fn identity_step(x) with Pure = x
-fn reduce_to_int(t) with Pure = sum_tuple(t)
-fn sum_tuple(t) with Pure = match t {
-  (a, b, c, d) => a + b + c + d
-}
-fn combine_normalized(pair) with Pure = match pair {
-  (a, b) => a + b
-}
-fn tick_advance(x) with Sample = {
-  tick()
-  x
-}
-
+// ~> handler — install the Beat context over the whole run.
 fn main() = {
-  pipeline_demo(7)
-    |> print_string
+  let total = { run() } ~> beat
+  total |> int_to_str |> print_string
 }

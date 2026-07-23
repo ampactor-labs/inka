@@ -1,67 +1,37 @@
-// 07-gradient.mn — Primitive #7: the continuous annotation gradient
+// 07 · the gradient — annotations are inputs, not obligations
 //
-// Every annotation in Mentl is OPTIONAL but EXPRESSIVE. The gradient
-// is the partial order: less-annotated functions are valid; more-
-// annotated functions UNLOCK CAPABILITIES. The compiler can
-// suggest the next-most-impactful annotation at any cursor — the
-// gradient's argmax (Cursor handler at src/cursor.mn).
+// Every annotation in Mentl is optional and expressive. Leave one off and the
+// program is still valid; add one and you UNLOCK something — a capability, a
+// freedom, a sharper proof. The annotations form a partial order, and at any
+// cursor the medium can name the next-most-useful one to add. That ranking is
+// the gradient, and the cursor is its argmax: the position where adding one
+// thing buys the most.
 //
-// Annotations and the capabilities they unlock:
+// This is the file to open in the medium, not only to read. Serve the IDE, put
+// the cursor on a signature, and the aspect ring's Teach facet names the one
+// annotation worth adding here — proven, because the medium tried it, verified
+// it, and rolled it back before offering it. A `??` is you asking directly; it
+// names a hole the medium proposes into.
 //
-//    with Pure       memoize / parallelize / compile-time evaluate
-//    with !Alloc     real-time eligible (proven zero allocation)
-//    with !IO        compile-time evaluation
-//    with !Network   sandbox eligible
-//    own / ref       deterministic drop / zero-copy
-//    refined types   bounds-check elimination at use sites
-//
-// Mentl's `teach_gradient(handle)` returns the next-most-impactful
-// annotation as a PROVEN candidate (speculative oracle: try; verify;
-// rollback). When a candidate's predicate holds, the user sees
-// "add `with !Alloc` to unlock CRealTime" at the cursor.
-//
-// `??` is the developer's override — pin the cursor to a chosen
-// position, ask Mentl what the gradient says HERE.
+// Edit it:  bash ide/serve.sh   →   http://localhost:7378/ide/   (paste this in)
+// Read it:  mentl lib/tutorial/07-gradient.mn:31   ← the Teach facet names the next move
 
 import runtime/io
 
-// `add` declared without any annotations. Inference resolves the
-// row to `Pure` automatically. Mentl's gradient at this handle
-// would suggest `with Pure` to UNLOCK memoize + parallelize +
-// compile-time evaluation — same body, more capabilities.
-//
-// Open this file in `mentl edit`; place the cursor on `add`'s
-// signature; type `??`. The Cursor handler projects the eight-
-// aspect view; the Teach tentacle surfaces the gradient
-// suggestion.
+// add carries no annotation. Inference still proves its row is Pure; the
+// gradient here would offer `with Pure` — same body, and now the medium may
+// memoize it, fold it at compile time, or run it beside anything.
 fn add(a, b) = a + b
 
-// `safe_add` — same body, annotated. The compiler proves Pure;
-// memoization and parallelization handlers can now compose.
-fn safe_add(a, b) with Pure = a + b
+// The same body, the annotation taken. Nothing about the computation changed;
+// what changed is what the medium is now allowed to do with it.
+fn add_pure(a, b) with Pure = a + b
 
-// `dsp_step` — the gradient's higher-leverage suggestion at this
-// position would be `with !Alloc`. The body allocates nothing
-// (literal-only arithmetic); adding `!Alloc` unlocks real-time
-// dispatch — the function becomes safe inside an audio interrupt.
-fn dsp_step(input) with !Alloc = {
-  let scaled = input * 2
-  scaled - 1
-}
+// A bigger unlock lives here. step allocates nothing, so the gradient's argmax
+// at this signature is `with !Alloc`; take it and step becomes safe inside a
+// real-time callback. The annotation did not make it faster; it stated
+// a promise the medium could already prove, and unlocked the callers that need it.
+fn step(x) with !Alloc = x * 2 - 1
 
-// `gradient_visible` — when a function's body is more constrained
-// than its declared row, the gradient's INVERSE direction
-// (gradient_delta.mn) surfaces a TIGHTENING. Here the declared row
-// is open (Unmarked); the body is Pure; Mentl proposes
-// `with Pure`. The arrow points TOWARD the unlock.
-fn gradient_visible(x) = {
-  x + 1
-}
-
-fn main() = {
-  let a = safe_add(2, 3)        // proves Pure; memoizable
-  let b = dsp_step(7)            // proves !Alloc; real-time eligible
-  a + b
-    |> int_to_str
-    |> print_string
-}
+fn main() =
+  add_pure(step(20), 3) |> int_to_str |> print_string

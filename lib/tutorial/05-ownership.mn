@@ -1,76 +1,46 @@
-// 05-ownership.mn — Primitive #5: Ownership as effect
+// 05 · ownership — one value, one owner, no second checker
 //
-// Ownership in Mentl is not a separate type system. It is the
-// `Consume` effect: passing a value `own` into a function consumes
-// it; passing `ref` borrows it. The compiler proves single-use via
-// the same effect-row machinery that proves `Pure` or `!IO`. There
-// is no second checker; the same row decides everything.
+// Ownership in Mentl is not a separate type system bolted on the side. It is
+// an effect: passing a value `own` into a function CONSUMES it; passing `ref`
+// borrows it. The same row machinery that proves `Pure` proves single-use, so
+// there is no borrow checker to satisfy separately — the row decides.
 //
-// Annotations form a continuous gradient (see 07-gradient.mn):
-// `Unmarked` (compiler picks), `ref` (explicit borrow), `own`
-// (explicit consume). Inference resolves Unmarked toward Ref or
-// Own based on the body's usage; the gradient surfaces upgrades.
+// And you rarely write the marker. Inference reads the use count: a value used
+// once and not aliased is consumed; a value only read is borrowed. You annotate
+// `own` or `ref` only to state intent at a boundary, the way you annotate a
+// type only where it matters. The bar is Hylo's: if you find yourself thinking
+// about ownership, the inference failed.
 //
-// Read this alongside SUBSTRATE.md §V "Ownership Is The Consume
-// Effect" and `docs/specs/07-ownership.md`.
+// Run it:   mentl run  lib/tutorial/05-ownership.mn   ← prints 14 (byte length, twice)
+// Read it:  mentl lib/tutorial/05-ownership.mn:24     ← the cursor on a param; own/ref in the ring
 
 import runtime/io
 
-// ─── ref — borrow only ──────────────────────────────────────────────
-
-// `length` reads the string but doesn't consume it. The caller can
-// still use `s` after the call. `ref` is the explicit borrow
-// annotation; inference would resolve to Ref here automatically.
+// ref — borrow. `length` reads its argument and gives it back; the caller can
+// use the string again afterward. Inference would reach `ref` here on its own;
+// the marker just says so out loud.
 fn length(ref s) = byte_len(s)
 
-// Calls `length` twice on the same string — both borrow; nothing
-// is consumed. Compiles cleanly.
-fn use_twice() = {
+// Two borrows of the same value, both fine — reading never consumes.
+fn measure() = {
   let greeting = "octopus"
   let a = length(greeting)
   let b = length(greeting)
   a + b
 }
 
-// ─── own — consume; the value cannot be used after ──────────────────
+// own — consume. `archive` takes ownership; after the call the value is gone,
+// and any later reference to it is a compile-time error (E_OwnershipViolation).
+// The medium proves single-use the same way it proves everything else.
+fn archive(own data) = byte_len(data)
 
-// `archive` takes ownership of `data`. The caller MUST NOT use
-// `data` after the call site; the compiler proves this via the
-// `Consume` effect. Reuse after archive produces E_OwnershipViolation.
-fn archive(own data) = {
-  // bodied per a real archival surface; pretend this writes to
-  // long-term storage and the value is no longer addressable.
-  ()
-}
+// Branches are ALTERNATIVES, not both-run, so consuming `x` in each arm of an
+// if is sound: exactly one arm runs, so `x` is consumed exactly once. The
+// affine ledger scopes per branch and knows this. (Consume it twice in the same
+// path — `archive(x)` then `archive(x)` — and that is the error it catches.)
+fn choose(own x) =
+  if byte_len("flag") > 3 { archive(x) }
+  else { archive(x) }
 
-// Single-use is correct.
-fn correct_single_use() = {
-  let payload = "important record"
-  archive(payload)
-  // payload is consumed here — any further reference would fail at compile time.
-}
-
-// ─── The Consume effect, made visible ───────────────────────────────
-//
-// Ownership IS an effect; the row records consumes. Affine ledger
-// (own.mn affine_ledger handler) tracks per-binding linearity.
-// Branching constructs (<| diverge, match arms) require the SAME
-// consume pattern across branches — branch_enter / branch_exit
-// scopes the ledger so two branches consuming the same `own` value
-// collide.
-
-fn branch_consume_safely(own x) = {
-  // Each branch consumes x exactly once — the ledger sees one
-  // consume per branch, not two cumulative.
-  if length("flag") > 0 {
-    archive(x)
-  } else {
-    archive(x)
-  }
-}
-
-fn main() = {
-  use_twice()
-    |> int_to_str
-    |> print_string
-}
+fn main() =
+  measure() |> int_to_str |> print_string

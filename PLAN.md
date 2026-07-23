@@ -2127,12 +2127,12 @@ via wasmtime_wasi::p1::add_to_linker_sync. Build order: (1) EXECUTED
 window ~2026-06-09): wheel self-compile byte-identical and battery
 113/113 validated through 36 BEFORE flipping; wt-env.sh probes the
 flag-spelling delta once at source time (36 folds shared-memory into
--W threads=y), so the local 43 and CI's 36 both run with warm caches;
-board.yml pins v36.0.0; (2) the runner's I/O-only
+-W threads=y), so both binaries run with warm caches (the hosted CI
+workflow was later deleted whole — §11 col 5); (2) the runner's I/O-only
 half, whole battery byte-identical through it; (3) the spawn glue; (4)
 the repo's FIRST real-spawn fixture (~> parallel_compose, genuine
 concurrency — band E's "proven by real spawn" claim made true as a side
-effect); (5) swap wt-env.sh/install.sh/serve.sh/board.yml to the runner,
+effect); (5) swap wt-env.sh/install.sh/serve.sh (+ hosted CI when it returns, §11 col 5) to the runner,
 drop `-S threads=y`; (6) retire the LTS pin. shared-everything-threads is
 the named eventual target, unimplemented in any host — name it, do not
 build toward it. Two artifact-prose corrections the recon surfaced:
@@ -2840,10 +2840,20 @@ in this column is one of its classes.
 
 ### Column 5 — trust & ops
 
-- **CI, host-agnostic and REQUIRED**: every push → the full board
-  (tools/ci/run-board.sh: state.sh + the perf ledger). Any always-on
-  Linux with wasmtime serves; the MI300X is merely the nicest host for
-  it once its arc begins.
+- **CI: the LOCAL board is the gate; hosted CI returns on capable
+  hardware** (Morgan's call, 2026-07-23 — the alive-law exercised on
+  this column's own "REQUIRED"). The GitHub workflow was DELETED: its
+  runner could not hold the board (45-min ceiling and ~7GB RAM against
+  the wheel compile + the full gate battery + 4GB shared-memory
+  modules), so at this project's landing cadence every push was a
+  lagging "Run failed" — noise, not a gate. The REAL gate never moved:
+  every landing runs the board locally (march + frontier +
+  proof-exactness + crown + verify through the pre-commit hook) BEFORE
+  its commit, and the pin is not blessed until PROVENANCE is written.
+  Hosted CI returns when a runner can hold the board whole — the
+  MI300X arc's fixed hardware (where the perf ledger is sharpest), or
+  any always-on Linux with the resources; tools/ci/run-board.sh stays
+  as the one entry point it will re-wire to.
 - Diverse double-compilation (band J — trusting-trust).
 - License + public-repo readiness (the landed commits are pushed).
 - `Hβ.closure.correctness-oracle-internal` stays NAMED as the bar's own

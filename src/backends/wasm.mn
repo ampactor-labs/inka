@@ -443,9 +443,23 @@ fn spec_oph_wide_pair(oh, pairs) with EnvRead + LookupTy + GraphRead + Memory + 
         Some(c) => spec_ty_needs_structure(c),
         None    => false
       },
+      // A tuple floor lies when a VAR element lands WIDE at this key: the
+      // word layout misreads the 8-byte slot (a destructure reads the f64's
+      // high word as the next field; a field-load offsets past it). A
+      // pointer-valued instantiation keeps the word slot — offsets stand,
+      // no twin minted.
+      TTuple(es) => any((e) => spec_tuple_elem_wide_pair(e, pairs), es),
       _ => false
     }
   }
+}
+
+fn spec_tuple_elem_wide_pair(e, pairs) with GraphRead + Memory = match e {
+  TVar(u) => match spec_pairs_find(pairs, graph_chase_handle(u)) {
+    Some(c) => match repr_of_resolved(c) { RI32 => false, _ => true },
+    None    => false
+  },
+  _ => false
 }
 
 // The floor lies about any operand whose semantics exceed the raw word:
@@ -1195,7 +1209,7 @@ fn walk_lemit_pat(pat) = match pat {
   LPLit(LString(s)) => visit_string(s),
   LPLit(_)          => (),
   LPCon(_, _, subs) => each(walk_lemit_pat, subs),
-  LPTuple(elems)    => each((e) => { let (_, _, sp) = e
+  LPTuple(elems)    => each((e) => { let (_, sp) = e
                                      walk_lemit_pat(sp) }, elems),
   LPList(prefix, _, _) => each(walk_lemit_pat, prefix),
   LPRecord(fs)      => each((f) => { let (_, _, sp) = f
@@ -2783,16 +2797,53 @@ fn walk_locals_pat_list(pats, acc) = {
   else { walk_locals_pat_list(drop_last(pats), walk_locals_pat(last(pats), RI32, acc)) }
 }
 
-// A tuple pattern's elements are (offset_bytes, elem_ty, sub_pat) — the
-// width-summed positional product. Each sub declares at the resolved element
-// repr,
-// the SAME proven width emit_pat_tuple_binds loads at.
+// The pattern-element repr, read through the LIVE channel (lookup_ty): under
+// a twin's spec bracket a free element var answers the site's instantiation —
+// the same channel the binop dispatch, field_sel_offset, and the construction
+// stores read. The raw graph chase would answer the word floor and split the
+// twin against its own construction (the $sc.f64 assembly failure: decl and
+// bind floored while the compare read wide). TVar(0) is lower's explicit
+// no-proof floor (the null handle — never chased); a var lookup_ty returns
+// unchanged is genuinely free — the honest word floor.
+fn pat_elem_repr(ty) with LookupTy = match ty {
+  TVar(h)           =>
+    if h == 0 { RI32 }
+    else {
+      match lookup_ty(h) {
+        TVar(h2) => if h2 == h { RI32 } else { pat_elem_repr(TVar(h2)) },
+        t        => pat_elem_repr(t)
+      }
+    },
+  TAlias(_, inner)  => pat_elem_repr(inner),
+  TRefined(base, _) => pat_elem_repr(base),
+  _                 => repr_of(ty)
+}
+
+// The pattern-side offset of tuple element `target`: the align_for +
+// repr_width prefix-sum — the IDENTICAL fold construction
+// (emit_field_stores_acc) and indexing (tuple_elem_offset) run — over the
+// ebs' element types resolved through pat_elem_repr, so bind, decl, and
+// test agree with the stored layout under any bracket. -1 past the end
+// (unprovable, never a silent 0), mirroring tuple_elem_offset.
+fn pat_tuple_off(ebs, target, i, off) with LookupTy + Memory =
+  if i >= len(ebs) { -1 }
+  else {
+    let (ty, _) = list_index(ebs, i)
+    let r = pat_elem_repr(ty)
+    let here = align_for(off, r)
+    if i == target { here }
+    else { pat_tuple_off(ebs, target, i + 1, here + repr_width(r)) }
+  }
+
+// A tuple pattern's elements are (elem_ty, sub_pat) — the width-summed
+// positional product. Each sub declares at the element repr read through
+// the live channel, the SAME proven width emit_pat_tuple_binds loads at.
 fn walk_locals_pat_tuple(elem_binds, acc) = {
   if len(elem_binds) == 0 { acc }
   else {
-    let (_, elem_ty, sub_pat) = last(elem_binds)
+    let (elem_ty, sub_pat) = last(elem_binds)
     walk_locals_pat_tuple(drop_last(elem_binds),
-      walk_locals_pat(sub_pat, repr_of_resolved(elem_ty), acc))
+      walk_locals_pat(sub_pat, pat_elem_repr(elem_ty), acc))
   }
 }
 
@@ -3830,12 +3881,13 @@ fn emit_expr(expr) = match expr {
     // ADT match dispatch: cascading if-else over arm tag comparisons.
     // Per arm:
     //   - LPCon(_, tag, sub_pats): load tag at offset=0, compare to
-    //     tag_id. On match: bind each LPVar sub-pattern from offset
-    //     4 + 4*i; emit body.
+    //     tag_id. On match: bind each sub-pattern at its width-summed
+    //     payload offset (variant_payload_offset); emit body.
     //   - LPWild / LPVar at top-level: always-match terminal arm.
     //   - LPLit: scalar equality check on scrutinee directly.
-    //   - LPTuple / LPList: not yet emitted — fall through. Filling
-    //     these is a downstream step (record/list pattern wiring).
+    //   - LPTuple / LPRecord / LPList: predicate + binds through the
+    //     shared pattern walkers (pat_tuple_off / record offsets / the
+    //     srep-licensed list reads).
     // Empty arm list emits (unreachable) — exhaustiveness violation
     // at runtime, complementing the inference-time check.
     emit_expr(scrutinee)
@@ -6552,12 +6604,12 @@ fn pat_always_matches(pat) = match pat {
   LPAlt(branches) => alt_any_always_matches(branches)
 }
 
-// A tuple pattern's elements are (offset, sub_pat); the tuple always matches
+// A tuple pattern's elements are (elem_ty, sub_pat); the tuple always matches
 // iff every refutable element does (structure is fixed at the type).
 fn tuple_pats_always_match(ebs) = {
   if len(ebs) == 0 { true }
   else {
-    let (_, _, sub_pat) = last(ebs)
+    let (_, sub_pat) = last(ebs)
     if pat_always_matches(sub_pat) { tuple_pats_always_match(drop_last(ebs)) }
     else { false }
   }
@@ -6749,20 +6801,26 @@ fn emit_pat_record_subs_predicate(fbs, path, path_len) = {
   }
 }
 
-// A tuple pattern's elements are (offset, sub_pat) — the IDENTICAL projection
-// as the record predicate, minus the field name. Each element's offset is the
-// width-summed one lower resolved; emit reads it, never re-derives a 4*i stride.
-fn emit_pat_tuple_subs_predicate(ebs, path, path_len) = {
-  if len(ebs) == 0 { () }
+// A tuple pattern's elements are (elem_ty, sub_pat) — the IDENTICAL projection
+// as the record predicate, minus the field name. Each element's offset projects
+// at emit through pat_tuple_off (the live width-summed fold), so a twin's
+// instantiation places the test where the construction stored the value.
+// Iteration stays last-first (the emitted AND-nest is outermost-last),
+// byte-identical to the pre-projection order.
+fn emit_pat_tuple_subs_predicate(ebs, path, path_len) =
+  emit_pat_tuple_subs_predicate_at(ebs, len(ebs) - 1, path, path_len)
+
+fn emit_pat_tuple_subs_predicate_at(ebs, i, path, path_len) = {
+  if i < 0 { () }
   else {
-    let (offset, _ty, sub_pat) = last(ebs)
+    let (_ty, sub_pat) = list_index(ebs, i)
     if pat_always_matches(sub_pat) {
-      emit_pat_tuple_subs_predicate(drop_last(ebs), path, path_len)
+      emit_pat_tuple_subs_predicate_at(ebs, i - 1, path, path_len)
     } else {
       wat_emit("    (if (result i32)\n      (then\n")
-      let extended = list_set(path, path_len, POff(offset))
+      let extended = list_set(path, path_len, POff(pat_tuple_off(ebs, i, 0, 0)))
       emit_pat_predicate_at(sub_pat, extended, path_len + 1)
-      emit_pat_tuple_subs_predicate(drop_last(ebs), path, path_len)
+      emit_pat_tuple_subs_predicate_at(ebs, i - 1, path, path_len)
       wat_emit("      )\n      (else (i32.const 0)))\n")
     }
   }
@@ -6910,16 +6968,20 @@ fn emit_pat_record_binds(fbs, path, path_len) = {
   }
 }
 
-// Tuple-element binders read the stored width-summed offset directly and bind
-// at the element's resolved repr — an f64 element loads f64,
-// a pointer/word loads i32. The SAME offset+width the construction stored.
-fn emit_pat_tuple_binds(ebs, path, path_len) = {
-  if len(ebs) == 0 { () }
+// Tuple-element binders bind at the element's live-channel repr and the
+// pat_tuple_off projection — an f64 element loads f64 at its 8-byte slot,
+// a pointer/word loads i32. The SAME offset+width the construction stored,
+// under any bracket. Iteration stays last-first (byte-identical order).
+fn emit_pat_tuple_binds(ebs, path, path_len) =
+  emit_pat_tuple_binds_at(ebs, len(ebs) - 1, path, path_len)
+
+fn emit_pat_tuple_binds_at(ebs, i, path, path_len) = {
+  if i < 0 { () }
   else {
-    let (offset, elem_ty, sub_pat) = last(ebs)
-    let extended = list_set(path, path_len, POff(offset))
-    emit_pat_binds_at(sub_pat, extended, path_len + 1, repr_of_resolved(elem_ty))
-    emit_pat_tuple_binds(drop_last(ebs), path, path_len)
+    let (elem_ty, sub_pat) = list_index(ebs, i)
+    let extended = list_set(path, path_len, POff(pat_tuple_off(ebs, i, 0, 0)))
+    emit_pat_binds_at(sub_pat, extended, path_len + 1, pat_elem_repr(elem_ty))
+    emit_pat_tuple_binds_at(ebs, i - 1, path, path_len)
   }
 }
 
@@ -7000,7 +7062,7 @@ fn record_pats_have_binders(fbs) = {
 fn tuple_pats_have_binders(ebs) = {
   if len(ebs) == 0 { false }
   else {
-    let (_, _, sub_pat) = last(ebs)
+    let (_, sub_pat) = last(ebs)
     if lowpat_has_binders(sub_pat) { true }
     else { tuple_pats_have_binders(drop_last(ebs)) }
   }

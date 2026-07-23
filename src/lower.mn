@@ -488,11 +488,14 @@ type LowPat
   | LPWild
   | LPCon(String, TagId, [LowPat])   // name, tag_id (from ConstructorScheme), sub-pats
   | LPUnresolvedCon(String, [LowPat]) // a pattern naming a ctor no declaration proves — infer already reported the miss; the match test is FALSE (no tag exists to compare) and the sub-binders still declare so the dead arm body assembles. Replaces the fabricated tag -1, which violated TagId's own 0..255 refinement — the armed E_RefinementRejected caught it on the wheel the hour the class armed.
-  | LPTuple([(Int, Ty, LowPat)])     // [(offset_bytes: Int, elem_ty: Ty, sub_pat: LowPat)]
-                                     // positional product: width-summed offset +
-                                     // the element's proven Ty (emit reads
-                                     // repr_of(ty) for the leaf load width — RI32
-                                     // for a pointer element, RF64 for an f64)
+  | LPTuple([(Ty, LowPat)])          // [(elem_ty: Ty, sub_pat: LowPat)]
+                                     // positional product: each element carries its
+                                     // proven Ty — a LIVE var handle in a generic
+                                     // body. (offset, width) project at EMIT through
+                                     // the bracket-aware channel (pat_elem_repr /
+                                     // pat_tuple_off), so a twin's instantiation
+                                     // closes the layout; a lower-time offset bake
+                                     // would freeze the word floor into the twin
   | LPLit(LowValue)
   | LPList([LowPat], Option(String), SeqRep)  // prefix pats, optional rest name,
                                              // the scrutinee's PROVEN representation
@@ -3393,9 +3396,9 @@ fn seq_elem_stride_word(ty) = match fold_strip(ty) {
 // delegate to lower_pat unchanged (Law 7 byte-identity).
 fn lower_pat_typed(pat, ty, srep) = match pat {
   PTuple(sub) => match tuple_pat_strip(ty) {
-    TTuple(elems) => LPTuple(lower_pat_tuple_elems(sub, elems, 0, 0)),
-    // Not a known tuple type (genuinely-unresolved scrutinee): fall back to the
-    // uniform stride — productive-under-error, not a fabricated width.
+    TTuple(elems) => LPTuple(lower_pat_tuple_elems(sub, elems, 0)),
+    // Not a known tuple type (genuinely-unresolved scrutinee): the no-proof
+    // floor — productive-under-error, not a fabricated width.
     _             => LPTuple(lower_pat_tuple_uniform(sub, 0))
   },
   // The scrutinee's proven representation rides the TOP list pattern —
@@ -3420,24 +3423,23 @@ fn tuple_pat_strip(ty) with GraphRead = match ty {
 // Each sub-pattern lands at its element's width-summed offset (the SAME
 // tuple_elem_offset fold construction + index run) and recurses with its
 // element TYPE — so a tuple-of-tuples resolves offsets at every depth.
-fn lower_pat_tuple_elems(subs, elems, i, off) = {
+fn lower_pat_tuple_elems(subs, elems, i) = {
   if i >= len(subs) { [] }
   else {
     let elem_ty = if i < len(elems) { list_index(elems, i) } else { TVar(0) }
-    let r = repr_of_resolved(elem_ty)
-    let here = align_for(off, r)
-    [(here, elem_ty, lower_pat_typed(list_index(subs, i), elem_ty, SRUnknown))]
-      ++ lower_pat_tuple_elems(subs, elems, i + 1, here + repr_width(r))
+    [(elem_ty, lower_pat_typed(list_index(subs, i), elem_ty, SRUnknown))]
+      ++ lower_pat_tuple_elems(subs, elems, i + 1)
   }
 }
 
-// Uniform-stride fallback when the tuple's element types are unresolved: 4*i,
-// the all-i32 instance (byte-identical to the pre-migration form). The element
-// type is TVar(0) — repr_of reads RI32, the word floor the uniform stride uses.
+// No-proof fallback when the scrutinee's element types are unresolved at
+// lower: TVar(0) is the explicit no-proof floor (the null handle — never
+// chased), which emit's pat_elem_repr reads as the word. A genuinely-typed
+// scrutinee takes the elems path above and carries its LIVE element vars.
 fn lower_pat_tuple_uniform(subs, i) = {
   if i >= len(subs) { [] }
   else {
-    [(i * 4, TVar(0), lower_pat(list_index(subs, i)))]
+    [(TVar(0), lower_pat(list_index(subs, i)))]
       ++ lower_pat_tuple_uniform(subs, i + 1)
   }
 }
@@ -5971,7 +5973,20 @@ fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
   LSimdLanes(_h, lanes)     => spec_scan_list(lanes, acc),
   LMakeRecord(_h, fs)       => spec_scan_list(fs, acc),
   LMakeVariant(_h, _t, fs)  => spec_scan_list(fs, acc),
-  LMatch(_h, s, arms)       => spec_scan_arms(arms, spec_scan_expr(s, acc)),
+  // A tuple-destructuring arm is a STRUCTURE witness on the scrutinee —
+  // the pattern's element offsets and widths follow the instantiation
+  // (a wide element occupies 8 inline bytes where the floor bakes the
+  // word layout: the non-worthy floor read an f64's high word as the
+  // tag, an invalid exit with zero diagnostics), so a var-rooted
+  // scrutinee bound wide at a site heals under that site's twin,
+  // exactly as a field-load receiver does.
+  LMatch(_h, s, arms)       => {
+    let acc2 = spec_scan_arms(arms, spec_scan_expr(s, acc))
+    if any((arm) => { let (p, _) = arm; lowpat_has_tuple(p) }, arms) {
+      let (s2, o) = acc2
+      (s2, [lexpr_handle(s)] ++ o)
+    } else { acc2 }
+  },
   LSuspend(_h, _o, f, args, ev, _) =>
     spec_scan_list(ev, spec_scan_list(args, spec_scan_expr(f, acc))),
   LFeedback(_h, b, s)       => spec_scan_expr(s, spec_scan_expr(b, acc)),
@@ -5996,6 +6011,21 @@ fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
 }
 
 fn spec_scan_list(exprs, acc) with Memory + Alloc = fold(acc, (a, e) => spec_scan_expr(e, a), exprs)
+
+// A tuple destructure at ANY depth reads positional layout: a tuple nested
+// under a con payload / record field / list slot sits behind a word pointer,
+// and its OWN element offsets are the same instantiation-sensitive read.
+fn lowpat_has_tuple(pat) with Memory = match pat {
+  LPTuple(_)                   => true,
+  LPCon(_, _, subs)            => any(lowpat_has_tuple, subs),
+  LPUnresolvedCon(_, subs)     => any(lowpat_has_tuple, subs),
+  LPRecord(fbs)                => any((f) => { let (_, _, sp) = f; lowpat_has_tuple(sp) }, fbs),
+  LPList(subs, _, _)           => any(lowpat_has_tuple, subs),
+  LPAlt(branches)              => any(lowpat_has_tuple, branches),
+  LPVar(_)                     => false,
+  LPWild                       => false,
+  LPLit(_)                     => false
+}
 
 fn spec_scan_arms(arms, acc) with Memory + Alloc = fold(acc, (a, arm) => { let (_, b) = arm; spec_scan_expr(b, a) }, arms)
 

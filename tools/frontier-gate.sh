@@ -955,6 +955,14 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-generic-nested-lambda.mn" 42 yes "$dir"
   run_program "$compiler" generic-multitype \
     "$ROOT/tests/frontier/mn-generic-multitype.mn" 42 yes "$dir"
+  # A tuple destructure in a generic body: offsets/widths project at emit
+  # through the spec bracket (pat_elem_repr / pat_tuple_off), and the
+  # destructure is itself a worthiness witness. RED on the pre-fix boot
+  # twice over: the worthy twin's WAT did not assemble ($x.f64 undefined
+  # local), and the non-worthy floor read an f64's high word as the next
+  # element (invalid exit status, zero diagnostics).
+  run_program "$compiler" generic-wide-tuple-pattern \
+    "$ROOT/tests/frontier/mn-generic-wide-tuple-pattern.mn" 42 yes "$dir"
   run_program "$compiler" generic-show \
     "$ROOT/tests/frontier/mn-generic-show.mn" 42 yes "$dir"
   run_program "$compiler" aggregate-show \

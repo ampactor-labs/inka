@@ -1,0 +1,39 @@
+// A generic body that DESTRUCTURES a tuple is layout-sensitive: the element
+// offsets and widths its pattern reads must follow the instantiation, never
+// the word floor. Two faces, both seen RED on the pre-fix boot:
+//   - pick_wider / middle (worthy twins — the wide compare): the twin's decl
+//     walk and tuple binds floored $x while the compare read $x.f64 — the
+//     emitted WAT did not assemble (undefined local $sc.f64, the m2w.err of
+//     2026-07-23).
+//   - second_of (no wide op of its own): no twin was minted, and the floor
+//     body read the f64's high word at the baked word offset as the tag —
+//     an invalid exit status, zero diagnostics.
+// The fix: a var-typed tuple destructure is itself a worthiness witness
+// (spec_oph_wide_pair's TTuple arm), and the twin's pattern reads project
+// through the live channel (pat_elem_repr / pat_tuple_off — the same
+// bracket-aware lookup_ty the construction and binop dispatch read).
+fn pick_wider(pair, floor) = {
+  let (x, tag) = pair
+  if x > floor { tag } else { 0 - tag }
+}
+
+fn second_of(pair) = {
+  let (_, t) = pair
+  t
+}
+
+// (Int, Float, Int): p@0, y aligns 4 -> 8 and occupies 8 bytes, q@16 — the
+// prefix-sum with alignment, exercised across a word element BEFORE the wide
+// one and a word element AFTER it.
+fn middle(t3) = {
+  let (p, y, q) = t3
+  if y > 1.0 { p + q } else { p - q }
+}
+
+fn main() = {
+  let a = pick_wider((3.5, 40), 1.0)
+  let b = pick_wider((0.5, 2), 1.0)
+  let s = second_of((2.5, 7))
+  let m = middle((3, 2.5, 5))
+  a + b + s + m - 11
+}

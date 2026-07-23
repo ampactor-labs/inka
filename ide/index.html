@@ -8,26 +8,26 @@
 <style>
   /* ── DESIGN_SYSTEM tokens (docs/DESIGN_SYSTEM.md §4) — color IS the kernel ── */
   :root {
-    --abyss:#0A0809; --canvas:#0D0B0E; --raised1:#100E11; --raised2:#141116; --raised3:#171319;
-    --line:#15121688; --border:#241F24; --border-lift:#332B33;
-    --primary:#E8DCC8; --bright:#F5EDE0; --muted:#8B7B6E; --faint:#6B6157;
-    --whisper:#766B60; --comment:#7B7168; --ghost:#4A4040;
-    --gold:#E69F00; --gold-b:#F0B830; --sky:#56B4E9; --sky-b:#7CC8EE;
-    --blue:#2A8FC2; --blue-b:#3399CC; --green:#009E73; --green-b:#33B893;
-    --verm:#D55E00; --verm-b:#E87D44; --mag:#CC79A7; --mag-b:#D9A0C0; --wheat:#F0C674;
-    --mono: "JetBrains Mono", ui-monospace, "SF Mono", "Berkeley Mono", Menlo, Consolas, monospace;
-    --serif: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --glow-gold: 0 0 0 1px #2a2010, 0 6px 26px -8px rgba(230,159,0,.30);
-    --e-surface: cubic-bezier(0.16,1,0.3,1);
+    /* Neutral functional palette — no brand layer (fonts and theme are the
+       system's; the removed custom set is git history). Variable NAMES stay
+       so every downstream var() reference keeps resolving. */
+    --abyss:#111; --canvas:#141414; --raised1:#181818; --raised2:#1c1c1c; --raised3:#202020;
+    --line:#22222288; --border:#2e2e2e; --border-lift:#3a3a3a;
+    --primary:#ddd; --bright:#f2f2f2; --muted:#999; --faint:#777;
+    --whisper:#888; --comment:#8a8a8a; --ghost:#555;
+    --gold:#bbb; --gold-b:#ccc; --sky:#bbb; --sky-b:#ccc;
+    --blue:#aaa; --blue-b:#bbb; --green:#aaa; --green-b:#bbb;
+    --verm:#aaa; --verm-b:#bbb; --mag:#aaa; --mag-b:#bbb; --wheat:#ccc;
+    --mono: ui-monospace, monospace;
+    --serif: system-ui, sans-serif;
+    --sans: system-ui, sans-serif;
+    --glow-gold: none;
+    --e-surface: ease;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
-    background:
-      radial-gradient(1100px 620px at 78% -12%, #120d13 0%, transparent 60%),
-      radial-gradient(900px 500px at -8% 108%, #0f0b12 0%, transparent 55%),
-      var(--canvas);
+    background: var(--canvas);
     color: var(--primary); font-family: var(--mono); font-size: 13px; overflow: hidden;
     display: grid; grid-template-rows: auto auto 1fr auto auto; height: 100vh;
   }
@@ -136,7 +136,7 @@
     padding: 5px 8px; border-radius: 8px; cursor: default; position: relative;
     border: 1px solid transparent; transition: background .18s, border-color .18s, transform .18s; }
   .facet::before { content: ""; width: 7px; height: 7px; align-self: center;
-    background: currentColor; clip-path: polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
+    background: currentColor; border-radius: 2px;
     opacity: .85; }
   .facet.door { cursor: pointer; }
   .facet.door:hover { background: var(--raised2); border-color: var(--border); transform: translateX(2px); }
@@ -155,7 +155,7 @@
   /* the ?? socket's proven survivor — the octagonal-socket eye (the ligature's glyph) */
   .socket-eye { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: middle;
     background: var(--gold-b); box-shadow: 0 0 7px var(--gold);
-    clip-path: polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%); }
+    border-radius: 2px; }
   .k-graph{color:var(--blue-b)} .k-hand{color:var(--green-b)} .k-verb{color:var(--sky-b)}
   .k-row{color:var(--mag-b)} .k-own{color:var(--mag-b)} .k-ref{color:var(--verm-b)}
   .k-grad{color:var(--gold-b)} .k-why{color:var(--blue-b)}
@@ -240,19 +240,6 @@
     color: var(--ghost); font-size: 10px; display: flex; gap: 20px; flex-wrap: wrap; font-family: var(--sans); }
   footer span b { color: var(--faint); font-weight: 600; }
 
-  /* ── Mentl, the octopus — present, never intrusive ─────────────────────── */
-  #mentl { position: absolute; right: calc(min(384px,44%) + 22px); bottom: 18px; width: 62px; height: 62px;
-    z-index: 5; pointer-events: none; opacity: .92; transition: opacity .4s, transform .5s var(--e-surface); }
-  #mentl svg { width: 100%; height: 100%; overflow: visible; }
-  #mentl .body { animation: mentl-breath 4.6s ease-in-out infinite; transform-origin: 50% 45%; }
-  #mentl .arm { stroke: var(--gold); stroke-width: 1.5; fill: none; opacity: .7; stroke-linecap: round; }
-  #mentl.exploring .arm { animation: mentl-explore 2.2s ease-in-out infinite; }
-  #mentl.proven { transform: translateY(-3px); }
-  #mentl.proven .eye { fill: rgba(0,158,115,.5); }
-  #mentl.offering .eye { stroke: var(--verm-b); }
-  @keyframes mentl-breath { 0%,100% { transform: scale(1); } 50% { transform: scale(1.045); } }
-  @keyframes mentl-explore { 0%,100% { opacity: .5; } 50% { opacity: .95; } }
-
   /* teach density: 0 = terse, 2 = full */
   body[data-teach="0"] .facet.future, body[data-teach="0"] .wf-gate,
   body[data-teach="0"] .proof .gate, body[data-teach="0"] .lead .sub2 { display: none; }
@@ -323,21 +310,7 @@
       <div class="panel" id="pledger"></div>
       <div class="panel" id="pwat"><div id="watout"></div></div>
     </div>
-  </div>
-  <div id="mentl" title="Mentl — quiet until she has proven something">
-    <svg viewBox="0 0 60 60" aria-hidden="true">
-      <g class="arm">
-        <path d="M30 44 C22 50 16 48 14 56"/><path d="M30 44 C38 50 44 48 46 56"/>
-        <path d="M24 42 C16 46 10 44 6 50"/><path d="M36 42 C44 46 50 44 54 50"/>
-      </g>
-      <g class="body">
-        <polygon points="30,10 42,15 47,28 42,41 30,46 18,41 13,28 18,15" fill="#0f0b0e" stroke="var(--gold)" stroke-width="1.4" opacity=".92"/>
-        <circle class="eye" cx="30" cy="26" r="5.4" fill="none" stroke="var(--gold-b)" stroke-width="1.3"/>
-        <text x="30" y="29.4" text-anchor="middle" font-family="var(--mono)" font-size="8" font-weight="700" fill="var(--verm-b)">??</text>
-      </g>
-    </svg>
-  </div>
-</main>
+  </div></main>
 <div class="wavefront" id="wavefront"></div>
 <footer>
   <span><b>compiler</b> mentl-ide.wasm — the pinned wheel, 512MB-initial repack of boot</span>
@@ -843,10 +816,7 @@ function syncTopo(){
 }
 
 /* ── Mentl, the octopus — quiet until she has proven something ───────────── */
-function octopus(state){
-  const m = $("mentl"); if (!m) return;
-  m.className = state || "";
-}
+function octopus(_state){ /* the mascot layer is removed; state calls are no-ops */ }
 
 /* ── boot ───────────────────────────────────────────────────────────────── */
 // The address-mode virtual filesystem: the vocabulary closure the driver walks

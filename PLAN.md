@@ -2049,17 +2049,23 @@ in ONE binary with ALL four placement channels and collect gated
 identically, BOTH hits land at collect's placed and ZERO at any
 placement — the slots buffer contains env-shaped values (the entries
 list; a name-string-headed tuple) NO placement wrote, in VIRGIN
-memory. Two logical objects, one address: the slots buffer ALIASES the
-env handler's own state, and op_each_handler_yield sits in every fatal
-frame — the allocation-vs-continuation interaction (the yield/redrive
-path re-entering with a stale frame, or the ev-region carving
-overlapping alloc space) is the pinned frontier. NEXT OPENING, exact:
-print the slots buffer's ADDRESS at fill_arg_slots' make_list beside
-the env state record's address (one gated pair — if equal, the alias
-is proven and the writer is whoever built the env's entries at that
-address; the k/redrive frame-capture is the candidate that re-serves
-an old bump position). The image/scratch split stays the arena's
-build; the battery ships no-reset until this closes.
+memory. THIRTEENTH kill (the
+address-pair probe, 20,028 gated fills): the slots buffer NEVER aliases
+the env state — buffers at ~40.7MB, entries at ~2.19MB, no pair equal
+or within 64K — so the env-shape READING of the collect values was
+itself an over-decode (the two values' true identity is open: a
+1077-count flat list and a string-headed record, writers unknown).
+WHAT STANDS, protocol-clean: values no placement channel wrote appear
+at collect's placed reads, in virgin memory, one binary, with
+op_each_handler_yield in every fatal frame. NEXT OPENING, exact: the
+WRITE-vs-READ divergence probe in ONE binary — after place_* return,
+dump the slots buffer's words (addr + each slot); at collect's gated
+hit, dump the SAME buffer's words; identical addresses with different
+words prove an intervening writer (then watchpoint-style bisect the
+window); identical words prove the values were WRITTEN by placement
+and the placement gates were blind (then instrument list_set itself).
+The image/scratch split stays the arena's build; the battery ships
+no-reset until this closes.
 
 The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
 `Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a

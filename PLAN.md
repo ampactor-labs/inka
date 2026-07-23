@@ -2010,14 +2010,20 @@ under reset layouts) would deliver exactly a large list where a node
 belongs; the yield-packet cross-wire stays second. Misdirection is DEAD
 too (session 5: the return probe shows the indirect call consuming
 table index 2203 consistently and returning the valid slice — the call
-went where it should and returned what it should). NEXT OPENING,
-exact: probe resolve_call_args' FILL — at its list_set sites print
-(slot, value, value[0]) so a default-fill writing a list-shaped value
-into a node slot names itself, and read the fatal callee's cname +
-param count on the same line (the 838 constant at the slice's +16 may
-be the span/handle of the defaulted param's decl — check it against
-the graph). The image/scratch split stays the arena's build; the
-element anomaly is upstream of it.
+went where it should and returned what it should). The TParam value
+layer is CLEAN-BILLED at every construction site (ninth kill): the
+quantify path's default→None is deliberate and total, and
+subst_params/param_with_ty preserve all five fields through
+instantiate — so the crossed read is not a clone-arity tear. NEXT
+OPENING, exact: the fill probe at collect_slot_nodes — instrument BOTH
+arms' writes (the placed value and the default expr) with (cname, i,
+value, value[0]) so a list-shaped write into a node slot names itself
+and its source arm in one line; prefer the BINARY-PATCH form on the
+emitted fn (a source-level eprint shifts layout and this trigger is
+layout-sensitive — the probe could hide it). The 838 constant at the
+fatal slice's +16 still wants a graph read (a span/handle?). The
+image/scratch split stays the arena's build; the element anomaly is
+upstream of it.
 
 The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
 `Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a

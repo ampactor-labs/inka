@@ -432,6 +432,11 @@ fn pipeline_check(entry_module) = {
     // compile; its chain installs the same analysis handlers.
     ~> region_tracker
     ~> verify_ledger
+    // The type-of-a-handle read infer's own unify_install_payload makes —
+    // the same install every inference-reaching chain carries (the
+    // SingletonUninstalled guard turned this chain's absence from silent
+    // null-page type reads into a loud refusal at the site).
+    ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
     ~> mutate_sink
@@ -482,6 +487,7 @@ fn check_source(source) = {
     // bounds trap; the edit-session fixtures were this chain's proof).
     ~> region_tracker
     ~> verify_ledger
+    ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
     ~> mutate_sink

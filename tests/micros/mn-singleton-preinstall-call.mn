@@ -1,0 +1,27 @@
+// expect: 134
+// A STATEFUL singleton op called BEFORE its handler's install has executed.
+// The compile gate (E_EffectUnhandled) admits this program — an install of
+// `counting` exists, grounding the whole-program installed conjunct — but at
+// runtime `early()` runs while the state global is still 0, and the
+// SingletonUninstalled guard refuses the null-state call at the site
+// (exit 134). On the pre-guard wheel this ran SILENTLY WRONG: the arm read
+// its `n` field from the null page and wrote the state update back to it —
+// the address-12 corruption class this guard makes unsayable. The stateless
+// shape stays unguarded by the same licence (the arm ignores __state), so
+// the two altitudes agree on every program.
+
+effect Counter {
+  bump() -> Int
+}
+
+handler counting with n = 0 {
+  bump() => resume(n + 1) with n = n + 1
+}
+
+fn early() with Counter = bump()
+
+fn main() = {
+  let a = early()   // drift-audit: ignore — the sequencing IS the fixture: this op call must execute BEFORE the install below
+  let b = { bump() } ~> counting
+  a + b
+}

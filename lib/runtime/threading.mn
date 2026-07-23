@@ -233,16 +233,18 @@ fn max_join_timeout() with Pure = 1000000000
 
 // ─── wasi_threads — handler for the WasiThreads effect ────────────────
 //
-// Each arm performs an intrinsic and resumes; no state. Runtime
-// intrinsics come from the seed-side substrate per
-// `Hβ.runtime.wasi-thread-spawn-seed` (positive-form named peer):
-// bootstrap/src/* imports `wasi_thread_spawn` from the WASI threads
-// runtime + partitions per-thread bump arenas + lowers thread-record
-// allocation. Until that peer cascade lands, the intrinsics return
-// single-thread sentinels; parallel_compose dispatches via these
-// intrinsics and degrades to sequential-equivalent runtime behavior.
-// Same handler, swap-via-substrate-cascade — the wheel describes
-// parallel without depending on the seed.
+// Each arm performs an intrinsic and resumes; no state. The two ops
+// live at DIFFERENT altitudes (threads-scout recon, 2026-07-23):
+// `wasi_thread_spawn` is a Stage-4a DIRECT IMPORT — lower's
+// is_wasi_import_op routes it straight to the host's
+// `(import "wasi" "thread-spawn" …)`, bypassing this handler's arm
+// entirely, so spawns reach the real runtime; `wasi_num_cores` DOES
+// route through its arm and returns the single-core sentinel `1`. Every
+// emitted module ships the import + shared memory unconditionally
+// (emit_memory_decl), so the RUNTIME must satisfy thread-spawn to
+// instantiate at all — the runner-migration peer
+// (`Hβ.ops.wasmtime-runner-migration`, PLAN named-residue index)
+// carries the post-wasmtime-47 hosting design.
 //
 // Per `protocol_parallelism_symmetry.md`: parallel_compose's ffi_spawn
 // performs WasiThreads ops; without wasi_threads installed in the

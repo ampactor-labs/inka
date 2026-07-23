@@ -242,6 +242,18 @@ type BoundaryInvariant
   // VALUE-path twin of LUnresolvedEvidence: same class, same fix, one site
   // it never reached.
   | MissingName(String)                  // the unbound name
+  // A singleton-tier perform whose state global is still 0 at runtime — the
+  // handler was never installed in THIS dynamic extent. The singleton tier's
+  // evidence IS the global; a null global is a missing-evidence refusal, the
+  // direct-call twin of LUnresolvedEvidence. Without the guard the arm reads
+  // address 0+offset (the null page) as its state — below every region mark,
+  // never reset — and the corruption surfaces compiles later as a stale
+  // pointer walk (the address-12 census root, 2026-07-22). The compile-time
+  // gate (E_EffectUnhandled) refuses whole-program absence; this guard is the
+  // runtime floor for the per-extent gap the row algebra cannot see: an
+  // effect installed SOMEWHERE satisfies the row while a second walk extent
+  // performs it uninstalled.
+  | SingletonUninstalled(String)         // the handler name
 
 fn show_boundary_invariant(invariant) with Memory + Alloc = match invariant {
   MissingFanoutBoundary          => "missing fanout boundary",
@@ -254,7 +266,8 @@ fn show_boundary_invariant(invariant) with Memory + Alloc = match invariant {
   NonMultiShotContinuation(disc) => "non-multishot continuation: {show_discipline(disc)}",
   PartialEffectfulCallee(h)      => "partial over effectful callee {int_to_str(h)} — evidence capture at the mint unbuilt",
   PartialCalleeShape(h)          => "partial over non-global callee shape {int_to_str(h)}",
-  MissingName(name)              => "unbound name {name} — infer proved it missing; the lowering will not guess it into a global"
+  MissingName(name)              => "unbound name {name} — infer proved it missing; the lowering will not guess it into a global",
+  SingletonUninstalled(hname)    => "singleton op call with no live install: {hname} — the state global is 0 in this extent; install the handler (~> {hname}) around the calling walk"
 }
 
 // Every value-bearing variant carries a source TypeHandle (Int), never a cached Ty.
@@ -369,7 +382,7 @@ type LowExpr
   // arm runs against ("" sentinel = use caller __state). Threads the handler's
   // STATE RECORD as the arm-call's __state per handler-IS-state.
   | LPerform(Int, String, [LowExpr], String)
-  | LDirectPerform(Int, String, String, [LowExpr])  // handle, hname, op_name, args — the SINGLETON-tier perform as its own node: the direct call against the unique handler's state global. Every walk delegates through singleton_perform_block (semantics identical by construction); the census walk fires its demand so the gate can refuse the stateful-and-never-installed read of a zero state global
+  | LDirectPerform(Int, String, String, Bool, [LowExpr])  // handle, hname, op_name, stateful, args — the SINGLETON-tier perform as its own node: the direct call against the unique handler's state global. The stateful bit is the handler's own decl fact (len(states) > 0), read once at the mint; it selects the block SHAPE — stateful gets the SingletonUninstalled null-guard (the compile gate's refusal conjunction at the runtime altitude), stateless keeps the unguarded form (the arm ignores __state, so a null record is sound by construction — the same licence the gate's STATEFUL conjunct encodes). Every walk delegates through singleton_perform_block (semantics identical by construction); the census walk fires its demand so the gate can refuse the stateful-and-never-installed read of a zero state global
   // Tier-2 evidence-dispatched perform (handler comes from the caller via
   // an evidence slot on __state — handler IS evidence). The ev-slot holds
   // a per-effect entry [record ptr, base]; the arm runs against that RECORD
@@ -519,7 +532,7 @@ fn lexpr_handle(e) with Pure = match e {
   LFeedback(h, _, _)      => h,
   LFeedbackPrior(h)       => h,
   LPerform(h, _, _, _)    => h,
-  LDirectPerform(h, _, _, _) => h,
+  LDirectPerform(h, _, _, _, _) => h,
   LEvPerform(h, _, _, _, _) => h,
   LEvRef(h, _)            => h,
   LUnresolvedEvidence(h, _) => h,
@@ -1917,18 +1930,46 @@ fn lower_op_default_handler(op_name) =
 // of via a threaded ev-slot. Reuses LPerform's Tier-1 emit with the global read
 // standing in for the lexical __hstate local.
 fn lower_singleton_perform(handle, op_name, hname, lo_args) =
-  LDirectPerform(handle, hname, op_name, lo_args)
+  LDirectPerform(handle, hname, op_name, handler_stateful(hname), lo_args)
 
 // The singleton perform's emission SHAPE — the block every walk and the
 // emit delegate through, so LDirectPerform's semantics equal the old
 // inline form BY CONSTRUCTION at every layer (locals, reach, evidence,
-// bytes — Law 7 arbitrates).
-fn singleton_perform_block(handle, hname, op_name, lo_args) = {
+// bytes — Law 7 arbitrates). The shape is selected by the node's stateful
+// bit, mirroring the compile gate's own refusal conjunction at the runtime
+// altitude: a STATEFUL handler's arm reads its state record, so a 0 global
+// is missing evidence (the singleton tier's evidence IS the global) and
+// the op call REFUSES loudly at the site (SingletonUninstalled) instead
+// of silently reading the null page as its state — the address-12
+// corruption class where a never-installed collector's accumulator lived
+// below every region mark and surfaced as a stale-pointer walk whole
+// compiles downstream. A STATELESS handler's arm ignores __state, so the null
+// record is sound by construction and the block keeps the unguarded form
+// (byte-identical to the pre-guard emission, Law 7) — the exact licence
+// the gate's STATEFUL conjunct encodes; the two altitudes cannot
+// contradict on any shape.
+fn singleton_perform_block(handle, hname, op_name, stateful, lo_args) = {
   let rec_local = "_{int_to_str(handle)}"
-  LBlock(handle, [
-    LLet(handle, rec_local, LGlobal(handle, "{hname}_state_g")),
-    LPerform(handle, "{hname}_{op_name}", lo_args, rec_local)
-  ])
+  if stateful {
+    // The guard condition is the record pointer's own truthiness (wasm `if`
+    // consumes a nonzero i32 natively) — no comparison nodes, so no
+    // operand-width dispatch to mislead. Both arms and the condition carry
+    // the op node's handle, so the LIf's result width and the local's
+    // register name all read the ONE (handle → repr) projection the LLet
+    // decl wrote.
+    LBlock(handle, [
+      LLet(handle, rec_local, LGlobal(handle, "{hname}_state_g")),
+      LIf(handle,
+          LLocal(handle, rec_local),
+          [LPerform(handle, "{hname}_{op_name}", lo_args, rec_local)],
+          [LInvariantFailure(handle, SingletonUninstalled(hname))])
+    ])
+  } else {
+    LBlock(handle, [
+      LLet(handle, rec_local, LGlobal(handle, "{hname}_state_g")),
+      LPerform(handle, "{hname}_{op_name}", lo_args, rec_local)
+    ])
+  }
 }
 
 // Look up which effect an op belongs to via EffectOpScheme.
@@ -4188,7 +4229,7 @@ fn k2_floor_guard(e, terminus) = match e {
   LMakeVariant(h, t, fs) => LMakeVariant(h, t, k2_floor_list(fs)),
   LFeedback(h, b, s)    => LFeedback(h, k2_floor_guard(b, false), k2_floor_guard(s, false)),
   LPerform(h, n, args, r) => LPerform(h, n, k2_floor_list(args), r),
-  LDirectPerform(h, hn, op, args) => LDirectPerform(h, hn, op, k2_floor_list(args)),
+  LDirectPerform(h, hn, op, st, args) => LDirectPerform(h, hn, op, st, k2_floor_list(args)),
   LEvPerform(h, n, ev, s, args) => LEvPerform(h, n, ev, s, k2_floor_list(args)),
   LWasiCall(h, n, args) => LWasiCall(h, n, k2_floor_list(args)),
   LFieldLoad(h, rec, o) => LFieldLoad(h, k2_floor_guard(rec, false), o),
@@ -5248,7 +5289,7 @@ fn reach_names_expr(expr, acc) = match expr {
   // via their reached decl-container, but a singleton dispatch to an UNINSTALLED
   // handler is the arm fn's only reference).
   LPerform(_h, target, args, _) => reach_names_list(args, ["op_{target}"] ++ acc),
-  LDirectPerform(h, hn, op, args) => reach_names_expr(singleton_perform_block(h, hn, op, args), acc),
+  LDirectPerform(h, hn, op, st, args) => reach_names_expr(singleton_perform_block(h, hn, op, st, args), acc),
   LHandleWith(_h, b, hn, _hname, inits, arm_names, evs) =>
     reach_names_list(evs,
       reach_names_list(inits,
@@ -5505,7 +5546,7 @@ fn collect_value_holes_expr(expr, acc) = match expr {
     collect_value_holes_list(ev, collect_value_holes_list(args, collect_value_holes_expr(f, acc))),
   LFeedback(_h, b, s)       => collect_value_holes_expr(s, collect_value_holes_expr(b, acc)),
   LPerform(_h, _n, args, _) => collect_value_holes_list(args, acc),
-  LDirectPerform(_h, _hn, _op, args) => collect_value_holes_list(args, acc),
+  LDirectPerform(_h, _hn, _op, _st, args) => collect_value_holes_list(args, acc),
   LWasiCall(_h, _n, args)   => collect_value_holes_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => collect_value_holes_list(a, acc),
   LEvRef(_h, _e)            => acc,
@@ -5861,7 +5902,7 @@ fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
   LGlobal(h, n)             => { let (s, o) = acc; ([(h, n)] ++ s, o) },
   LFnRef(h, n, ev)          => { let (s, o) = spec_scan_list(ev, acc); ([(h, n)] ++ s, o) },
   LPerform(_h, _t, args, _) => spec_scan_list(args, acc),
-  LDirectPerform(h, hn, op, args) => spec_scan_expr(singleton_perform_block(h, hn, op, args), acc),
+  LDirectPerform(h, hn, op, st, args) => spec_scan_expr(singleton_perform_block(h, hn, op, st, args), acc),
   LHandleWith(_h, b, hn, _hname, inits, _arms, evs) =>
     spec_scan_list(evs, spec_scan_list(inits, spec_scan_expr(hn, spec_scan_expr(b, acc)))),
   LLet(_h, _n, inner)       => spec_scan_expr(inner, acc),

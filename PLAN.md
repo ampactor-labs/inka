@@ -1026,6 +1026,66 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶ THE NULL-SINGLETON CLASS CLOSES + THE REGION BATTERY
+  SHIPS (the cross-compile trap's root, proven adversarially and landed at
+  every altitude · pin 6c192865). The forensic-prober (a fresh mind told
+  to refute the thirteen-kill corpus) did exactly that: with the virgin
+  reset on main the old infer-side death was GONE, and the real death sat
+  at compile #14 entirely in EMIT — project_emit_state installed six
+  visitor collectors but not effect_census_collector, so the shared walk's
+  census op ran as a NULL-STATE SINGLETON: its accumulator lived at
+  absolute address 12 (the null page — below every region mark, never
+  reset, holding a stale pointer into the region), and the next compile
+  walked the stale pointer as a list. THREE CLOSURES, one landing: (1) the
+  wiring — every walk_lemit bracket installs every visitor family the walk
+  fires (the row's dynamic-extent obligation, stated at the site); (2) the
+  GUARD — singleton_perform_block refuses a STATEFUL singleton op call
+  whose state global is 0 (SingletonUninstalled, the tier's evidence IS
+  the global; the LDirectPerform node carries the stateful bit read once
+  at the mint, and the LIf's condition is the record pointer's own
+  truthiness — no comparison nodes, no operand-width hazard); stateless
+  stays UNGUARDED by the same licence the compile gate's STATEFUL
+  conjunct encodes (the arm ignores __state; null is sound by
+  construction; byte-identical emission, Law 7) — the two altitudes
+  cannot contradict on any program; (3) the REGION battery ships —
+  battery_loop marks/resets per micro (113/113, ~192MB peak, the
+  per-decl arena's first real workload, §5.O). The guard was seen RED
+  live TWICE the hour it landed, each firing a real missing install: (1)
+  the test verb's directory arm ran battery_run's fs/console ops bare
+  (tolerated for months because the stateless arms read the null page
+  benignly) — fixed by giving the match the chain its sibling always
+  had; (2) the EDIT chain ran its whole inference without
+  lookup_ty_graph, so every lookup_ty in a `??` authoring session read
+  the NULL PAGE AS THE GRAPH — silently wrong inference in the felt
+  loop's own flagship workflow, surfaced only because the guard refused
+  it (16 frontier legs RED at unify_install_payload's lookup_ty). The
+  second firing triggered the CENSUS the two-trap rule demands: SEVEN
+  chains reach inference; serve_run/compile/battery/stdin carried the
+  install, FIVE did not — edit_run, pipeline_check (whose own comment
+  records the same class from the region sweep one landing ago),
+  check_source, at_run, repl_run, and doc_run (missing affine_ledger
+  and region_tracker too — its per-module inference ran every analysis
+  op driverless). All five gain their installs in one sweep; the class
+  now polices itself (any chain a future verb forgets traps loudly at
+  the exact site instead of silently reading the null page). The
+  residual drift-7 is NAMED with its design question: the analysis
+  core (affine/region/verify/lookup_ty/env/graph) is one sub-chain
+  hand-copied per verb with ORDER VARIANCE (env-before-graph is
+  load-bearing; parallel_compose presence varies) — consolidating it
+  into one shared bracket fn needs the order question settled first
+  (`Hβ.cli.infer-context-bracket`). Fixture mn-singleton-preinstall-call banks the class
+  (stateful op called before its install executes: compile gate admits —
+  an install exists, grounding the whole-program conjunct — runtime guard
+  refuses, exit 134; on the pre-guard wheel this ran SILENTLY WRONG,
+  reading and writing state through the null page). Measured en route:
+  an `_x` pattern binder emits byte-identical wat to `_` — the
+  ignored-slot naming convention is free documentation. Five ladders,
+  one landing: TRANSITION (guard bytes) → CLEAN (test-verb bracket) →
+  TRANSITION (stateful-only refinement; wheel 95 lines SMALLER than the
+  all-guarded form) → CLEAN (edit-chain install) → CLEAN (the
+  seven-chain census sweep). The thirteen-kill corpus is superseded as diagnosis, kept as
+  law (CLAUDE.md's forensic laws); Hβ.runtime.cross-compile-durable-state
+  is CLOSED (named-residue index carries the resolution).
 - 2026-07-23 · THE MARCH ABSORBS THE HAND LADDERS (the ladder's own
   alive-law audit, Morgan's challenge: "are you sure m2–m4 is the best
   practice, canonicalized, automated, future-proof?" · pin 229fda2f).
@@ -1094,8 +1154,9 @@ between the wheel and its ultimate form, held open on purpose.
   compiled it clean and the artifact returned the wrong value); the
   stateless shape stays green. Frontier 192/0; census 0. The gate arc's
   named remainder is now EMPTY; the one open external arc is the
-  wasi-threads migration (wasmtime 47 removed the substrate; local + CI
-  pinned at 43 until the threading story chooses its runtime).
+  wasi-threads migration — DESIGN COMPLETE (the threads-scout recon,
+  2026-07-23), banked as `Hβ.ops.wasmtime-runner-migration` in the
+  named-residue index.
 - 2026-07-22 · ▶▶ THE CRUCIBLE TIER — DSP, ML, and the DSP×ML fusion land
   as real-workload gates, and building them killed a latent miscompile
   (an isolated builder's arc, merged whole · pin fe68767f). Three
@@ -2008,91 +2069,73 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.runtime.cross-compile-durable-state` (2026-07-22; corpus REWRITTEN the
-same night by a five-probe binary-patch dig — the earlier durable-state
-theory is DEAD, measured): compile #2 after a reset dies at
-infer_call_arg's match-else with a FRESH, ABOVE-MARK TParam whose
-authored/resolved/body words read ZERO — and the 32MB-slack split run
-(reset to mark+2^25, read-back-verified 35,542,384) still dies
-IDENTICALLY in virgin memory, so address REUSE and stale pointers are
-ELIMINATED, and with one well-behaved bump allocator (two writers total:
-$alloc and the reset; monotonic between resets) allocator overwrite is
-too. The control holds (the committed no-reset battery compiles 98 and
-dies at the documented 4GB ceiling). The surviving mechanism, with its
-signature already in the disassembly at the death site: the sst
-EVIDENCE-REGION build stores zeros and entries at
-sst+8+4*(callee_closure.load(4))+{92,96} — a slot index read from a
-closure record's field — and a wild index writes PAST the frame's
-allocation into the adjacent heap record (the zero-written strip is
-exactly authored/resolved/body). The stomp is LAYOUT-DEPENDENT, which is
-why only the reset's shifted layouts expose it and the monotonic run
-never did. SESSION 2's five further probes
-(same night) advanced the frontier three more rungs, killing three more
-labels: the sst write range is HEALTHY every execution (callee = the
-static $infer_expr record at 9080, capture word 0, alloc 108 — the
-"wild index" was a misread), the static-closure block (0–20,080) sits
-far below the 1MB bump floor (stomp impossible), and the dying
-scrutinee is the ARG ITSELF — infer_call_arg receives a non-node.
-Arity is clean (the fatal call is 4 args / 4 params, dies at i=0); the
-poison is the LIST ELEMENT: args[0] points at a record whose shape
-NAMES itself — [count=1077][tag=flat][elem0=91,336 → a data-section
-name string][elem1=8,204,896 → a heap record] — THE ENV'S FLAT BUFFER
-(libs-only env ≈ 1,077 entries), served where an AST arg node belongs.
-op_each_handler_yield sits in the fatal frame chain, so the leading
-suspect is the YIELD-PACKET CROSS-WIRE: nested each-yields share the
-one global triple ($yield_op/$yield_args/$yield_k — wasm globals, never
-reset), and a resume path reads a packet a nested yield overwrote —
-layout/reset-dependent through the k-records' heap positions. SESSION 3's decode was
-ITSELF a protocol violation and is RETRACTED by session 5's return
-probe: the fatal "args list" [4][4][buf][0][…] is a perfectly VALID
-SLICE list (tag 4 = slice; the raw offset-8 probe read the BUF field
-and called it element 0 — the prober misparsing the very protocol the
-compiler honors). resolve_call_args returns the ordinary buffer-counter
-slice; the "routine mis-shape in healthy runs" observation dissolves
-with the misread. What SURVIVES protocol-clean (the wheel's own
-list_index did the walk): the slice's ELEMENT 0 at the fatal call is a
-record reading [1077][0][91,336→data][8,204,896→heap] — a 1,077-entry
-FLAT LIST occupying an AST-node slot in the args buffer. The prime
-candidate is now the DEFAULTS FILL: resolve_call_args writes param
-DEFAULT nodes into absent slots, the default node read from the
-scheme's TParam — a crossed read there (the wrong tuple/record slot
-under reset layouts) would deliver exactly a large list where a node
-belongs; the yield-packet cross-wire stays second. Misdirection is DEAD
-too (session 5: the return probe shows the indirect call consuming
-table index 2203 consistently and returning the valid slice — the call
-went where it should and returned what it should). Sessions 6–7 (the
-same continuous now) ran the fill probes and REWROTE THE ALLOCATOR'S
-CONTRACT on the way: (TENTH kill) the defaults are innocent — the one
-gated hit is collect's PLACED arm; (ELEVENTH, the contract) make_list
-never zeroes its slots (alloc_list_sc writes only the header), so every
-zero-read in the runtime held by the ACCIDENT of monotonicity — wasm's
-zero-init pages — and the first reuse served stale bytes as placed
-slots; heap_reset now RESTORES VIRGINITY ($heap_reset_impl memory.fills
-[mark, bump) before the rewind — the post-reset world is bit-identical
-to the never-allocated world; the op doc carries the contract;
-measured: the regioned battery runs at 192MB peak). And (TWELFTH, the
-standing frontier) the virgin reset does NOT clear the compile-#2 kill:
-in ONE binary with ALL four placement channels and collect gated
-identically, BOTH hits land at collect's placed and ZERO at any
-placement — the slots buffer contains env-shaped values (the entries
-list; a name-string-headed tuple) NO placement wrote, in VIRGIN
-memory. THIRTEENTH kill (the
-address-pair probe, 20,028 gated fills): the slots buffer NEVER aliases
-the env state — buffers at ~40.7MB, entries at ~2.19MB, no pair equal
-or within 64K — so the env-shape READING of the collect values was
-itself an over-decode (the two values' true identity is open: a
-1077-count flat list and a string-headed record, writers unknown).
-WHAT STANDS, protocol-clean: values no placement channel wrote appear
-at collect's placed reads, in virgin memory, one binary, with
-op_each_handler_yield in every fatal frame. NEXT OPENING, exact: the
-WRITE-vs-READ divergence probe in ONE binary — after place_* return,
-dump the slots buffer's words (addr + each slot); at collect's gated
-hit, dump the SAME buffer's words; identical addresses with different
-words prove an intervening writer (then watchpoint-style bisect the
-window); identical words prove the values were WRITTEN by placement
-and the placement gates were blind (then instrument list_set itself).
-The image/scratch split stays the arena's build; the battery ships
-no-reset until this closes.
+`Hβ.ops.wasmtime-runner-migration` (2026-07-23, the threads-scout recon —
+design complete, artifact-grounded): every emitted module, boot included,
+imports `wasi.thread-spawn` and a 4GB shared memory UNCONDITIONALLY
+(emit_memory_decl), so instantiation itself needs wasi-threads support —
+yet real spawning is exercised NOWHERE (zero `><` in the wheel's own
+algorithm; every fanout fixture installs sequential_compose; the only
+load-bearing consequence today is an import that must resolve). wasmtime
+47 removed exactly the CLI convenience that auto-satisfies that import
+(`-S threads=y`, the deleted wasmtime-wasi-threads/wasi-common crates);
+core shared-memory + atomics (threads Phase 4) remain supported
+indefinitely, and preview1 I/O survives via wasmtime-wasi's maintained p1
+shim. THE DESIGN (lowest blast radius, zero wheel-source change, zero
+fixpoint impact): a small Rust runner registering
+`Linker::func_wrap("wasi", "thread-spawn", …)` by hand — the exact
+protocol wasmtime-wasi-threads itself used (std::thread::spawn + fresh
+Store over the shared memory + call the module's exported
+wasi_thread_start, which the wheel's emit already speaks) — and p1 I/O
+via wasmtime_wasi::p1::add_to_linker_sync. Build order: (1) re-pin to
+wasmtime 36.0.0 LTS first (43.0.1 left its non-LTS patch window
+~2026-06-09 — free runway, validate the gate battery byte-identical
+against the new binary before flipping CI); (2) the runner's I/O-only
+half, whole battery byte-identical through it; (3) the spawn glue; (4)
+the repo's FIRST real-spawn fixture (~> parallel_compose, genuine
+concurrency — band E's "proven by real spawn" claim made true as a side
+effect); (5) swap wt-env.sh/install.sh/serve.sh/board.yml to the runner,
+drop `-S threads=y`; (6) retire the LTS pin. shared-everything-threads is
+the named eventual target, unimplemented in any host — name it, do not
+build toward it. Two artifact-prose corrections the recon surfaced:
+threading.mn's "sentinel" comments are STALE for wasi_thread_spawn (it is
+a Stage-4a direct import, lower.mn:4674 — the handler arm is bypassed);
+and ide/index.html's thread-spawn stub always returns -1 with no
+ffi_join fallback path (latent, nothing calls it — the browser-Worker
+spawn is the runner pattern at the other host).
+
+`Hβ.runtime.cross-compile-durable-state` CLOSED (2026-07-23, the
+adversarial forensic-prober's independent dig — a fresh mind refuting
+the accumulated corpus first, then proving the root behaviorally): the
+cross-compile trap was the EFFECT-CENSUS COLLECTOR RUNNING AS A
+NULL-STATE SINGLETON IN EMIT'S WALK EXTENT. project_emit_state
+installed six visitor collectors but not effect_census_collector, so
+the shared walk's visit_effect_install routed through the singleton
+tier with __state = 0 — its installs accumulator lived at ABSOLUTE
+ADDRESS 12 (the null page), below every region mark, never reset,
+holding a pointer INTO the region; the reset zeroed/rewound the region
+and the next compile's census walked the stale pointer as a list
+(named backtrace: list_index_unchecked → string_in_list_loop →
+op_effect_census_collector_visit_effect_install → walk_install_groups
+→ walk_lemit → project_emit_state). Installing the collector: the full
+region-bracketed battery runs 112/112 with byte-identical emitted wat.
+The thirteen-kill probe corpus (2026-07-22, the same peer's prior
+text) is SUPERSEDED as diagnosis — its pre-virginity infer-side
+symptom was this same null-singleton class read through address reuse
+under the rewind-only reset, and its "values no placement wrote, in
+virgin memory" was exactly right: the writer was outside every
+placement channel, storing through the null page. What the corpus
+PAID FOR survives as law (CLAUDE.md ⟲, the forensic laws): one-binary
+gates, protocol-honoring probes, retraction-on-refutation, counted
+kills, and the virginity contract itself ($heap_reset_impl zeroes
+[mark, bump) — the allocator accident made a contract; 192MB battery
+peak). The CLASS is closed structurally, both altitudes: the wiring
+(every walk_lemit bracket installs every visitor family the walk
+fires) and the SingletonUninstalled guard in singleton_perform_block —
+a singleton op call finding state_g = 0 REFUSES loudly at the site
+(the tier's evidence IS the global; null evidence is missing evidence,
+the direct-call twin of LUnresolvedEvidence), so the silent null-page
+read is unsayable. The regioned battery ships (main.mn battery_loop
+mark/resets per micro — the arena's first real workload, §5.O).
 
 The manifest arc's residue (2026-07-18, the arc itself CLOSED — §7 ledger):
 `Hβ.infer.order-independent-verdicts` (the census is ORDER-CONDITIONAL: a

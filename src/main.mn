@@ -392,6 +392,13 @@ fn edit_run(target_opt) = {
     ~> affine_ledger
     ~> region_tracker
     ~> verify_ledger
+    // The type-of-a-handle read the session's inference and cursor
+    // projection make — serve_run's chain always carried it; the edit
+    // chain ran WITHOUT it, so every lookup_ty here was a null-state
+    // singleton reading the null page as the graph (silently wrong
+    // inference in the edit session until the SingletonUninstalled guard
+    // refused it — the guard's second live catch, after the test verb).
+    ~> lookup_ty_graph
     ~> diagnostics_handler
     // env before graph: env_handler's own arms read the graph (the same
     // ordering serve_run already uses).
@@ -489,7 +496,14 @@ fn doc_run(target_opt) = {
     ~> stdout_console
     ~> wasi_filesystem
     ~> mentl_default
+    // driver_check's per-module inference performs the same analysis ops
+    // every other inference-reaching chain absorbs (consume/borrow, region
+    // tags, lookup_ty) — this chain ran them all driverless until the
+    // SingletonUninstalled guard made the class loud.
+    ~> affine_ledger
+    ~> region_tracker
     ~> verify_ledger
+    ~> lookup_ty_graph
     ~> diagnostics_handler
     ~> graph_handler
     ~> mutate_sink
@@ -677,6 +691,7 @@ fn at_run(target, line, col) = {
     ~> affine_ledger
     ~> region_tracker
     ~> verify_ledger
+    ~> lookup_ty_graph
     ~> diagnostics_handler
     ~> env_handler
     ~> graph_handler
@@ -1004,10 +1019,22 @@ fn test_run(target_opt) = {
   // .build/test/, and a manifest printed for the shim's exec loop (WASI has
   // no process-spawn; the shim owns exec — the one seam). One process
   // replaces one wasmtime invocation per micro.
-  match fs_list_dir_impl(entry_module) {
-    Some(names) => battery_run(entry_module, names),
-    None => test_check_run(entry_module)
+  // The directory probe and the battery run in the SAME handler extent the
+  // single-file sibling installs — the fs probe itself is a WasiFilesystem
+  // op, so the bracket must cover the scrutinee too. This install was
+  // MISSING (the battery's fs/console ops ran as null-state singletons,
+  // reading the null page as their state — tolerated by accident until the
+  // SingletonUninstalled guard refused it); test_check_run keeps its own
+  // inner chain, which shadows these installs for its extent, unchanged.
+  {
+    match fs_list_dir_impl(entry_module) {
+      Some(names) => battery_run(entry_module, names),
+      None => test_check_run(entry_module)
+    }
   }
+    ~> stdout_console
+    ~> wasi_filesystem
+    ~> diagnostics_handler
 }
 
 fn test_check_run(entry_module) = {
@@ -1122,6 +1149,18 @@ fn battery_run(dir, names) = {
 fn battery_loop(dir, libs, micros, i, fails) = {
   if i >= len(micros) { fails }
   else {
+    // Each micro's compile is a REGION: mark before, reset after — the
+    // virginity contract (heap_reset zeroes [mark, bump)) makes every
+    // compile start at the same watermark with genuinely virgin memory, so
+    // per-micro output is deterministic regardless of predecessors and the
+    // battery's peak stays one compile's live set (~192MB measured), not
+    // the sum. The cross-compile trap that blocked this form was the
+    // effect-census collector running as a NULL-STATE singleton in emit's
+    // walk extent (its accumulator at address 12 — below the mark, never
+    // reset, holding a stale pointer into the region): closed at the root
+    // by the project_emit_state install + the SingletonUninstalled guard,
+    // and the full battery runs region-bracketed 112/112.
+    let mark = heap_mark()   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
     let name = micros[i]
     let stem = str_slice(name, 0, byte_len(name) - 3)
     let src = fs_read_file_impl("{dir}/{name}")
@@ -1142,13 +1181,7 @@ fn battery_loop(dir, libs, micros, i, fails) = {
         }
       }
     }
-    // The per-compile region (mark/reset with the virginity contract) is
-    // measured 192MB-bounded across the battery — but compile #2 under ANY
-    // reset dies at a slots buffer ALIASING the env's own state (two logical
-    // objects, one address, in virgin memory, with the yield machinery in
-    // every fatal frame — the Hβ.runtime.cross-compile-durable-state corpus
-    // carries the eleven-probe decode). The no-reset form ships until the
-    // allocation-vs-continuation interaction closes.
+    heap_reset(mark)
     battery_loop(dir, libs, micros, i + 1, fails + step)
   }
 }
@@ -1267,6 +1300,7 @@ fn repl_run() = {
     ~> affine_ledger
     ~> region_tracker
     ~> verify_ledger
+    ~> lookup_ty_graph
     ~> env_handler
     ~> diagnostics_handler
     ~> graph_handler

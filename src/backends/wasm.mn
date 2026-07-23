@@ -940,13 +940,20 @@ fn handle_recorded(entries, target, i, n) = {
   else { handle_recorded(entries, target, i + 1, n) }
 }
 
-// project_emit_state — single-tree-walk; four projections drained at end.
-// Returns (all_fn_names, top_fn_names, string_entries, state_slots).
-// Replaces the prior `<|` fan-out (four parallel walks of the same tree)
-// with ONE walk and four visitor-handler accumulators. Order-preserving:
+// project_emit_state — single-tree-walk; six projections drained at end.
+// Returns (all_fn_names, top_fn_names, string_entries, state_slots, wasi,
+// yield_seen). Replaces the prior `<|` fan-out (parallel walks of the same
+// tree) with ONE walk and visitor-handler accumulators. Order-preserving:
 // per-projection encounter order matches the prior per-walk order. The
-// chained `~>` install establishes the handler stack at the body's
-// perform sites; each visit-op routes to its handler unambiguously.
+// chained `~>` install establishes the handler stack at the body's op-call
+// sites; each visit-op routes to its handler unambiguously. The bracket
+// installs EVERY visitor family the shared walk fires — effect_census
+// included, though only the gate's invocation drains it: an op the walk
+// fires MUST land in a live record in THIS extent, or the singleton tier
+// routes it to a zero state global and the accumulator lives at the null
+// page (address 12 — below every region mark, never reset, holding a stale
+// pointer into the region; the cross-compile trap of 2026-07-22). The walk's
+// row names the ops; the bracket is the row's dynamic-extent obligation.
 fn project_emit_state(lowered, closures: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) = {
   walk_lemit(lowered)
   // The SHOW leaf's helpers ($show_<sig>) assemble String literals not present
@@ -966,7 +973,7 @@ fn project_emit_state(lowered, closures: {cmp: [Ty], eq: [Ty], hash: [Ty], show:
   (names, tops, strs, slots, wasi, yseen)
 } ~> fn_names_collector ~> top_fn_names_collector
   ~> string_literal_collector ~> state_slots_collector ~> wasi_ops_collector
-  ~> yield_seen_collector
+  ~> yield_seen_collector ~> effect_census_collector
 
 // register_show_literals — fire visit_string for every String literal the
 // generated $show_<sig> helpers will emit. The literal set is a PROJECTION of
@@ -1165,9 +1172,9 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_expr(s)
   },
   LPerform(_, _, args, _)   => walk_lemit_list(args),
-  LDirectPerform(h, hn, op, args) => {
+  LDirectPerform(h, hn, op, st, args) => {
     visit_effect_demand(op)
-    walk_lemit_expr(singleton_perform_block(h, hn, op, args))
+    walk_lemit_expr(singleton_perform_block(h, hn, op, st, args))
   },
   LWasiCall(_, op_name, args) => {
     visit_wasi_op(op_name)
@@ -1543,7 +1550,7 @@ fn singleton_hnames_expr(expr, acc) = match expr {
     singleton_hnames_list(ev, singleton_hnames_list(args, singleton_hnames_expr(f, acc))),
   LFeedback(_h, b, s)       => singleton_hnames_expr(s, singleton_hnames_expr(b, acc)),
   LPerform(_h, _n, args, _) => singleton_hnames_list(args, acc),
-  LDirectPerform(_h, _hn, _op, args) => singleton_hnames_list(args, acc),
+  LDirectPerform(_h, _hn, _op, _st, args) => singleton_hnames_list(args, acc),
   LWasiCall(_h, _n, args)   => singleton_hnames_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => singleton_hnames_list(a, acc),
   LEvRef(_h, _e)            => acc,
@@ -1987,7 +1994,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
         collect_call_vectors_list(inits, collect_call_vectors_list(cevs, acc)))),
   LFeedback(_h, b, s)   => collect_call_vectors_expr(s, collect_call_vectors_expr(b, acc)),
   LPerform(_h, _n, args, _) => collect_call_vectors_list(args, acc),
-  LDirectPerform(h, hn, op, args) => collect_call_vectors_expr(singleton_perform_block(h, hn, op, args), acc),
+  LDirectPerform(h, hn, op, st, args) => collect_call_vectors_expr(singleton_perform_block(h, hn, op, st, args), acc),
   LWasiCall(_h, _n, args)   => collect_call_vectors_list(args, acc),
   LFieldLoad(_h, rec, _o) => collect_call_vectors_expr(rec, acc),
   LConvert(_h, _, operand) => collect_call_vectors_expr(operand, acc),
@@ -2429,7 +2436,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LFeedback(_h, b, s)        => collect_fn_emit_records_expr(b)
                                   ++ collect_fn_emit_records_expr(s),
   LPerform(_h, _n, args, _)  => collect_fn_emit_records(args),
-  LDirectPerform(_h, _hn, _op, args) => collect_fn_emit_records(args),
+  LDirectPerform(_h, _hn, _op, _st, args) => collect_fn_emit_records(args),
   LWasiCall(_h, _n, args)    => collect_fn_emit_records(args),
   LEvPerform(_h, _n, _e, _s, a) => collect_fn_emit_records(a),
   LEvRef(_h, _e)             => [],
@@ -2689,7 +2696,7 @@ fn walk_locals_expr(expr, acc) = match expr {
       ["__fb_prev_{int_to_str(h)} {fb_rw}", "__fb_{int_to_str(h)} {fb_rw}"] ++ acc))
   },
   LPerform(_h, _n, args, _) => walk_locals_list(args, acc),
-  LDirectPerform(h, hn, op, args) => walk_locals_expr(singleton_perform_block(h, hn, op, args), acc),
+  LDirectPerform(h, hn, op, st, args) => walk_locals_expr(singleton_perform_block(h, hn, op, st, args), acc),
   LWasiCall(_h, _n, args)   => walk_locals_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => walk_locals_list(a, acc),
   LEvRef(_h, _e)            => acc,
@@ -3040,7 +3047,7 @@ fn find_local_handle_expr(name: String, expr) = match expr {
     if bh != 0 { bh } else { find_local_handle_expr(name, s) }
   },
   LPerform(_h, _n, args, _) => find_local_handle_list(name, args),
-  LDirectPerform(h, hn, op, args) => find_local_handle_expr(name, singleton_perform_block(h, hn, op, args)),
+  LDirectPerform(h, hn, op, st, args) => find_local_handle_expr(name, singleton_perform_block(h, hn, op, st, args)),
   LWasiCall(_h, _n, args)   => find_local_handle_list(name, args),
   LEvPerform(_h, _n, _e, _s, a) => find_local_handle_list(name, a),
   LFieldLoad(_h, rec, _off) => find_local_handle_expr(name, rec),
@@ -4055,8 +4062,8 @@ fn emit_expr(expr) = match expr {
     wat_emit(")\n")
   },
 
-  LDirectPerform(h, hn, op, args) =>
-    emit_expr(singleton_perform_block(h, hn, op, args)),
+  LDirectPerform(h, hn, op, st, args) =>
+    emit_expr(singleton_perform_block(h, hn, op, st, args)),
   LPerform(_h, op_name, args, state_local) => {
     // Tier-1 perform: a direct `(call $op_<handler>_<op>)` against the
     // lexically-installed handler's OWN state record. state_local carries
@@ -4888,7 +4895,7 @@ fn collect_fold_tys_expr(expr, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]
         collect_fold_tys_list(inits, collect_fold_tys_list(cevs, acc)))),
   LFeedback(_h, b, s)    => collect_fold_tys_expr(s, collect_fold_tys_expr(b, acc)),
   LPerform(_h, _n, args, _) => collect_fold_tys_list(args, acc),
-  LDirectPerform(_h, _hn, _op, args) => collect_fold_tys_list(args, acc),
+  LDirectPerform(_h, _hn, _op, _st, args) => collect_fold_tys_list(args, acc),
   LWasiCall(_h, _n, args)   => collect_fold_tys_list(args, acc),
   LFieldLoad(_h, rec, _o) => collect_fold_tys_expr(rec, acc),
   LConvert(_h, _, operand) => collect_fold_tys_expr(operand, acc),

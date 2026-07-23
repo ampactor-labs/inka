@@ -1109,13 +1109,26 @@ between the wheel and its ultimate form, held open on purpose.
   sibling operand's staged value (the diagnostics render's span read a
   stale env record; the perform-ledger probe read "" for every frame) —
   the render and every touched site are sequenced-lets now; the emit-side
-  root is the next staging dig. THE NEXT DIG, mechanism fully diagnosed:
-  an uninstalled UNIQUE handler's program emits call-boundary evidence
-  threading ($ev_lookup) that reach never includes — assembly-loud today;
-  after the reach seed it becomes RUN-clean for stateless handlers and
-  SILENT-WRONG for stateful ones (the zero-init state global), so the
-  singleton-perform node needs artifact distinguishability + the
-  stateful-uninstalled refusal before that class closes. This read
+  root is the next staging dig. THE NEXT DIG, design COMPLETE
+  (specified against the artifact, ready to build): the
+  uninstalled-singleton class. Corrected mechanism — the $ev_lookup
+  assembly failure is the BARE-STDIN path only (the contract name is
+  genuinely absent from an unlinked input; linked programs carry it), so
+  the real remainder is the LINKED stateful case: a singleton-tier
+  perform against a never-installed stateful handler reads the zero-init
+  state global — silent-wrong. The build, each piece named: (1)
+  LDirectPerform(handle, hname, op, args) — the singleton perform's own
+  LowIR node, its emit arm DELEGATING to emit_expr over the exact
+  LBlock/LLet/LPerform value lower_singleton_perform builds today (byte
+  drift impossible by construction; Law 7 arbitrates); (2) the census
+  walk fires visit_effect_demand at it; (3) the gate's resolver already
+  maps op→ename, and for a demand that resolves through an op WITH a
+  default handler the refusal tightens to stateful(handler) ∧ ename ∉
+  installs — sound because the singleton tier is UNIQUE-handler by
+  definition, so an install of the ename IS an install of that handler
+  (ename-install ⟺ hname-install); statefulness reads live from
+  HandlerKind's state fields. Stateless-uninstalled stays green (the
+  direct call touches no state). This read
   could not EXIST before the triple: the six-form row dropped the install's
   subtraction off unresolved tails, so main's row lied (the design was
   refuted by six micros in its first life THIS session, for exactly that

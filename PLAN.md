@@ -1026,6 +1026,22 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶ THE WORLD CHAIN — R1 of the world-as-value arc
+  (writers only, the reader is R2 · pin 8156ee0c): every emitted
+  install draws its runtime edge — $world_g + $world_push cons one
+  [key][record][parent] node per absorbed effect group, save/restored
+  around the install extent (world outermost of the two brackets; the
+  save is unconditional, anonymous installs included — the invariant,
+  not an optimization); install enames intern through visit_string so
+  every world key resolves nonzero. The three repro-world fixtures
+  hold their measured values through the new emit (134 / 2 / 40 — the
+  chain is inert by construction until the perform swap reads it), and
+  the m4 leg ran the wheel's entire self-compile under live world
+  brackets. TRANSITION m3 == m4 at 561,069 lines (the 26,623-line
+  m2/m3 diff is the bracket crossing one generation); census 0,
+  comment-refs 0, frontier 212/0, battery 113/113. Next: R2, the
+  perform swap whole — the evidence tier reads the chain, captured_evs
+  op-dispatch dies, the __resume k-threading channel survives.
 - 2026-07-23 · THE ANALYSIS-CORE ORDER LAW + doc's env completion
   (queue 5's honest yield; the consolidation itself refuted by
   measurement · pin 4b10e457): the infer-context audit enumerated all

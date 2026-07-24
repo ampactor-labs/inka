@@ -1013,6 +1013,11 @@ fn walk_install_groups(ref groups, i) = {
   else {
     let {arms: _, ename: en} = list_index(groups, i)
     visit_effect_install(en)
+    // The install ename is a WORLD-chain key at emit ($world_push's
+    // (i32.const string_offset)) — intern it through the one channel every
+    // dispatch key flows through, else an ename no perform references
+    // resolves to offset 0 and every such key collides.
+    visit_string(en)
     walk_install_groups(groups, i + 1)
   }
 }
@@ -2180,6 +2185,14 @@ fn emit_memory_decl() = {
   // bump heap; only one strategy is active per emit (the installed
   // EmitMemory handler decides which pointer moves).
   wat_emit("  (global $arena_ptr (mut i32) (i32.const 1048576))\n")
+  // The live WORLD — the top of the install chain, the runtime half of
+  // TCont's world index (the world-as-value substrate; PLAN named-residue
+  // Hβ.cli.infer-context-bracket carries the converged design). A node is
+  // [key@0][record@4][parent@8] — one per effect group per live install,
+  // consed by $world_push, save/restored around every install extent by
+  // the LHandleWith emit. 0 = the empty world. R1 is chain-only (writers
+  // balanced, no reader); the perform swap reads it next rung.
+  wat_emit("  (global $world_g (mut i32) (i32.const 0))\n")
   // The ONE allocator, emitted once — every construction, closure record, and
   // handler-state alloc is a `(call $alloc SIZE)` against this fn. The bump body:
   // return $heap_ptr, advance it by (size+7)&-8 so every record starts 8-byte
@@ -2198,6 +2211,10 @@ fn emit_memory_decl() = {
   // A dedicated fn, never inline: the fill needs a temporary for the mark,
   // and the callers' scratch locals may be live (the wrong-scratch class).
   wat_emit("  (func $heap_reset_impl (param $mark i32)(local.get $mark)(i32.const 0)(global.get $heap_ptr)(local.get $mark)(i32.sub)(memory.fill)(global.set $heap_ptr (local.get $mark)))\n")
+  // $world_push — cons one [key][record][parent] node onto the live world
+  // chain (the install's runtime edge; a dedicated fn like $heap_reset_impl,
+  // never inline — the callers' scratch may be live at the install site).
+  wat_emit("  (func $world_push (param $key i32)(param $record i32)(local $n i32)(local.set $n (call $alloc (i32.const 12)))(local.get $n)(local.get $key)(i32.store offset=0)(local.get $n)(local.get $record)(i32.store offset=4)(local.get $n)(global.get $world_g)(i32.store offset=8)(global.set $world_g (local.get $n)))\n")
   // Thread record region: [0x800, 0x1000) = 2KB / 16 bytes per record
   // = 128 thread slots. Layout per record (16 bytes):
   //   offset 0: closure_ptr (i32)
@@ -2627,7 +2644,10 @@ fn walk_locals_expr(expr, acc) = match expr {
     // singleton save (named installs only), and one [record, base] entry
     // per effect group — mirror-true to the LHandleWith emit arm +
     // emit_handler_effect_entries local.set. All collect into the set.
-    let base = ["__hstate_{int_to_str(h)} i32"] ++ acc
+    // Every install brackets the world chain (save/restore is
+    // unconditional — the invariant, not an optimization), so the
+    // world-save local declares for anonymous installs too.
+    let base = ["__hstate_{int_to_str(h)} i32", "__hstate_{int_to_str(h)}_wprev i32"] ++ acc
     let with_prev =
       if hname != "" { ["__hstate_{int_to_str(h)}_prev i32"] ++ base }
       else           { base }
@@ -4013,6 +4033,21 @@ fn emit_expr(expr) = match expr {
     emit_handler_effect_entries(local_name, nstate, arm_names)
     // the arm-bodies' captured evidence, after the arms
     emit_captured_evs(local_name, nstate, total_arms, captured_evs)
+    // The WORLD bracket — every install draws its runtime edge: save the
+    // live chain, cons one [key][record][parent] node per absorbed effect
+    // group, restore after the extent (the same save/restore shape as the
+    // scoped-singleton global below, world outermost). R1: writers only —
+    // the perform swap is the reader rung.
+    wat_emit("(global.get $world_g)(local.set $")
+    wat_emit(local_name)
+    wat_emit("_wprev)\n")
+    each((g) => {
+      wat_emit("(i32.const ")
+      wat_emit(int_to_str(string_offset(group_ename(g))))
+      wat_emit(")(local.get $")
+      wat_emit(local_name)
+      wat_emit(")(call $world_push)\n")
+    }, arm_names)
     // bind the record to $<hname>_state_g for env-scan Tier-1 resolution —
     // SCOPED: the global is the INNERMOST live install's record, so save
     // the enclosing install's record first and restore it after the body
@@ -4067,6 +4102,11 @@ fn emit_expr(expr) = match expr {
       wat_emit(hname)
       wat_emit("_state_g)\n")
     }
+    // world restore — unconditional, mirroring the unconditional save
+    // (world outermost of the two brackets).
+    wat_emit("(local.get $")
+    wat_emit(local_name)
+    wat_emit("_wprev)(global.set $world_g)\n")
   },
 
   LFeedback(h, body, _spec) => {

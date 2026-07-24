@@ -881,6 +881,15 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-scheduled-fanout-effect.mn" 25 yes "$dir"
   run_program "$compiler" scheduled-persist-float \
     "$ROOT/tests/frontier/mn-scheduled-fanout-persist-float.mn" 60 persist "$dir"
+  # Real host-thread spawn over the shared image (the task-record substrate:
+  # import-shape memory, shared-cell allocator, $spawn_task_impl/$join_task_impl).
+  # Seen RED on the pre-task-record boot: 134, unaligned atomic in the join.
+  run_program "$compiler" real-spawn \
+    "$ROOT/tests/frontier/mn-real-spawn.mn" 60 yes "$dir"
+  run_program "$compiler" real-spawn-float \
+    "$ROOT/tests/frontier/mn-real-spawn-float.mn" 60 yes "$dir"
+  run_program "$compiler" real-spawn-identity \
+    "$ROOT/tests/frontier/mn-real-spawn-identity.mn" 60 yes "$dir"
   run_program "$compiler" refined-alias-nonatomic \
     "$ROOT/tests/frontier/mn-refined-alias-nonatomic.mn" 3 yes "$dir"
   run_program "$compiler" refined-alias-forward-ref \

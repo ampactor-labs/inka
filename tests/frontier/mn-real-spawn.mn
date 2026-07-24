@@ -1,0 +1,17 @@
+// Real host-thread fanout: the Threaded schedule read live from the
+// install chain; each branch runs on its own instance over the SHARED
+// image via the task record ([task closure][completion][result],
+// $spawn_task_impl / $join_task_impl / $wasi_thread_start). Seen RED on
+// the pre-task-record boot (2026-07-24): spawn banked the host thread id
+// while join dereferenced it as a record — exit 134, unaligned atomic,
+// through both engines. The sequential twin (mn-scheduled-fanout-int)
+// answers the same 60 — the §`><` thesis gate: one source, two
+// schedules, identical results.
+// Expected exit: 60.
+
+fn widen(x) = x * 15
+
+fn main() = {
+  let (a, b) = (2 <| (widen, widen)) ~> parallel_compose
+  a + b
+}

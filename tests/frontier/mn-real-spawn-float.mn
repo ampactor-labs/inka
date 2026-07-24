@@ -1,0 +1,12 @@
+// The wide crossing under real spawn: each branch's f64 result rides its
+// boundary carrier (unboxed in field 0), the carrier is allocated by the
+// SPAWNED instance through the shared cell, and the joiner reads it from
+// the one image — the cross-instance allocation story the shared-cell
+// allocator exists for, gated. Same computation under sequential_compose
+// is mn-scheduled-fanout-float's class.
+// Expected exit: 60.
+
+fn main() = {
+  let (a, b) = (1.5 <| ((x) => x * 2.0, (x) => x * 4.0)) ~> parallel_compose
+  if a + b == 9.0 { 60 } else { 1 }
+}

@@ -1,17 +1,18 @@
 // mentl-runner — the wasmtime embed that replaces the wasmtime CLI for Mentl
 // modules (Hβ.ops.wasmtime-runner-migration steps 2–3).
 //
-// Every emitted Mentl module needs two things beyond plain WASI preview1:
-//   1. the engine must accept a SHARED memory + tail calls (the module DEFINES
-//      its own 4GB shared memory and exports it as "memory"; nothing to link);
-//   2. the import `wasi.thread-spawn` must resolve. wasmtime 47 deleted the
-//      CLI convenience that satisfied it (-S threads=y), so this binary
-//      registers the host fn by hand: the wasi-threads protocol — allocate a
-//      thread id, std::thread::spawn a fresh instance of the SAME module in a
-//      fresh Store, call its exported wasi_thread_start(tid, start_arg).
-//      A module that IMPORTS a shared memory (the wasi-threads convention)
-//      gets one created at its declared type and linked under the import's
-//      own module/name, so all instances share it.
+// Every emitted Mentl module needs the engine to accept a SHARED memory +
+// tail calls. The memory's SHAPE follows the module's own proof: a
+// thread-free module DEFINES and exports its memory (self-contained; no
+// thread-spawn import at all); a spawning module IMPORTS it (the
+// wasi-threads convention) and re-exports it for the p1 ABI. For the
+// spawning shape this binary supplies what wasmtime 47's CLI deleted
+// (-S threads=y): the imported shared memory is created at its declared
+// type and linked under the import's own module/name (so every instance —
+// root and spawned — reads ONE image), and `wasi.thread-spawn` is
+// registered by hand: allocate a thread id, std::thread::spawn a fresh
+// instance of the SAME module in a fresh Store over that memory, call its
+// exported wasi_thread_start(tid, start_arg).
 //
 // CLI contract (argv-compatible with the wt_run subset of the wasmtime CLI):
 //   mentl-runner run [-W v] [-S v] [-D v] [--dir h[::g]] [--env K=V] \
@@ -242,9 +243,10 @@ fn run() -> Result<i32> {
 
     // A module following the wasi-threads convention IMPORTS its shared
     // memory; create one at the exact declared type and link it under the
-    // import's own module/name so every instance (main + spawned) shares it.
-    // Mentl's current emit instead DEFINES + exports the memory, so this
-    // loop is a no-op there — each instance owns a fresh memory.
+    // import's own module/name so every instance (main + spawned) shares
+    // it. Mentl's emit uses exactly this shape for a spawning module; for
+    // a thread-free module (defined memory, no imports here) the loop is
+    // a no-op and each run owns its self-contained memory.
     for import in module.imports() {
         if let ExternType::Memory(mt) = import.ty() {
             if !mt.is_shared() {

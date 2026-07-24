@@ -293,26 +293,23 @@ fn main(argv) = match parse_cli_args(argv) {
     dispatch_invocation(verb)
 }
 
-// dispatch_invocation — the cargo-class default substrate. parallel_
-// compose + wasi_threads install ONCE here at the outermost dispatch
-// boundary; every verb inherits multi-threading without per-*_run
-// repetition. The default IS parallelism — same as `cargo build` using
-// all cores by default. Opt-out: install `~> sequential_compose`
-// INSIDE a specific verb's chain to override (innermost handler wins).
+// dispatch_invocation — the substrate handlers (env/graph/diagnostics)
+// install ONCE at this outermost dispatch boundary: the program boundary
+// IS an install site (EH). Every verb path — including import-parse,
+// which runs BEFORE compile_source's per-compile chain — performs
+// against a rooted handler stack; the evidence chain from main downward
+// forwards real entries, never a bare closure record. Inner per-compile
+// installs shadow these (innermost wins), giving each compile_source
+// fresh graph state.
 //
-// Per protocol_parallelism_symmetry.md: parallel_compose IS the
-// substrate-honest default; sequential_compose IS the deterministic-
-// output override (test harness verbose mode, reproducible-bisect
-// debugging, etc.). The medium's reflexive: parallelism is the WORLD;
-// single-thread is the EXCEPTION.
-//
-// The substrate handlers (env/graph/diagnostics) install at this SAME
-// boundary: the program boundary IS an install site (EH). Every verb
-// path — including import-parse, which runs BEFORE compile_source's
-// per-compile chain — performs against a rooted handler stack; the
-// evidence chain from main downward forwards real entries, never a
-// bare closure record. Inner per-compile installs shadow these
-// (innermost wins), giving each compile_source fresh graph state.
+// NO schedule handler installs here: the wheel's own algorithm carries
+// zero fanouts (one sequential compile spine — §5.O layer 4 is the
+// multi-core `><` that will bring its install WITH it), and a standing
+// parallel_compose install would put the spawn arm's task-record
+// performs into the wheel's own emitted tree, flipping the wheel to the
+// shared-image/shared-cell shape for parallelism it never performs. A
+// schedule installs lexically at the fanout it schedules — SYNTAX §`><`:
+// no Schedule installed → Seq, the invisible default.
 fn dispatch_invocation(verb) = {
   {
     match verb {
@@ -350,8 +347,6 @@ fn dispatch_invocation(verb) = {
     ~> graph_handler
     ~> mutate_sink
     ~> diagnostics_handler
-    ~> parallel_compose
-    ~> wasi_threads
 }
 
 // ─── edit_run — canonical Web IDE (browser-WASM; per IE walkthrough)

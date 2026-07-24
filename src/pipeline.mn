@@ -78,11 +78,12 @@ import oracle
 //
 // The bracket takes the body as a thunk (the analyze_fns precedent);
 // verb-specific handlers chain INSIDE the thunk, so their ops resolve
-// innermost-first. parallel_compose + wasi_threads are NOT here: they
-// install ONCE at the dispatch boundary (main.mn) and every chain
-// inherits them. Nested installs stay isolating — a voice consult's
-// compile_source brackets fresh instances inside a session's bracket
-// (handler state is per-install).
+// innermost-first. NO schedule handler is here or at the dispatch
+// boundary: the wheel's spine is sequential by artifact (a schedule
+// installs lexically at the fanout it schedules — main.mn's dispatch
+// comment carries the why). Nested installs stay isolating — a voice
+// consult's compile_source brackets fresh instances inside a session's
+// bracket (handler state is per-install).
 //
 // IC.4: compile / check now route through driver_check when invoked
 // with an entry-MODULE name. The single-source entry compile/

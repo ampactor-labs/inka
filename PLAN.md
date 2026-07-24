@@ -861,7 +861,8 @@ what the model does with its input. Peers: `Hβ.verify.ifc-noninterference`
 
 **D · The value layer — fold & repr (arms 1/7, §5.U; STEP 0/1/2 landed).** `Hβ.fold.show-leaf` (synthesize as a lowered LFn, not raw WAT; lower.mn:481) · `.compare-hash-leaf` · gate `Hβ.eq.fold-seed-value-gate` · `Hβ.repr.arrow-layout-interop` · `Hβ.emit.variant-payload-repr-width` (wasm.mn:4913) · `.plit-handle-repr` (wasm.mn:5537) · `Hβ.value.ontology-derivation-complete` *(LANDED 2026-07-21 — the §7 ledger head carries the arc; the residue is the named narrowing/wide-stride/alias-edge tier. History of the derivation: DETAILED 2026-07-20 by a 13-agent adversarial ultracode pass — map + 4-design panel + per-design refutation; all four designs REFUTED, converging on ONE attractor, the truth signal. String = [byte] IS the §4① ultimate and is SOTA-validated (Rust's `str` = `[u8]` behind a fat-pointer view; Arrow's one-array-over-many-element-types with zero-copy slices; Harper–Morrisett intensional type analysis / TIL and Crary–Weirich type-erasure = "the proof becomes the dispatch"; and Haskell's `String = [Char]` cons-list disaster PROVES the representation must stay PACKED, element-projected, never the uniform list layout). BUT it is NOT a single landable change, and — the load-bearing catch — the NAÏVE type-first form SHIPS A SILENT-CORRUPTION REGRESSION THE SELF-HOSTING ORACLE IS STRUCTURALLY BLIND TO. Mechanism: `String → TAlias("String", TList(TByte))` types cheaply via the existing TAlias-peel (unify_types infer.mn:2337-2342), but then String unifies with `[a]` EVERYWHERE (today `same_ground` infer.mn:2381 makes TString unify with nothing but TString, so `map(f, "hi")` / `list_index(s,i)` is a CLEAN E_TypeMismatch — the merge removes that barrier); meanwhile the runtime keeps strings 1-byte-packed with a sign-bit view whose length relocates to +12, and lists 4-byte-strided behind a tag word — so any [Byte]-typed value that is physically a String, meeting any generic `[a]` consumer, lowers to `list_*` and reads packed bytes / the −1 view sentinel as count+tag → SILENT MEMORY CORRUPTION, no diagnostic, over an UNBOUNDED surface (every map/fold/user helper, not the ~10 enumerated dispatch sites). And `m3==m4` cannot distinguish correct from corrupt: a wheel disciplined to string-named ops on strings is emit-identical while user code corrupts — the oracle's blind spot. THE CORRECT SEQUENCE inverts every proposed design (representation FIRST, type-merge LAST): (0) add RI8 to the Repr ADT + a byte marker as zero-reader vocabulary (Law-7 no-op), and VALIDATE the repr-width-polymorphic flat leaf on WIDE elements first ([Float]/[i64] lists, RF64/RI64) where there is a clean consumer and NO header/view/discriminant collision — byte-packing is the NARROWEST, HARDEST end, not the place to start; (1) the emit consolidation DEFENSIVELY — the ~10 ==/++/show/hash/compare OUTER TString-vs-TList forks (emit_binop_for BConcat wasm.mn:3830, emit_eq_for_ty:3920, emit_cmp_for_ty:4523, the field-eq/cmp/hash + show pairs) collapse into ONE `match repr_of(elem)` nested dispatch, KEEPING the nominal TString arm so H6 still NAMES it (deleting it lets a bare `TList(_)` wildcard SILENTLY absorb former strings into `$list_eq` at 4-byte stride — H6 forces the deletion, never the sub-dispatch); (2) the runtime representation reconciliation as its own perf-measured TRANSITION — the stride-polymorphic flat leaf (load_i8 vs load_i32 by element repr: the NAMED-CALL STRIDE HAS NO RUNTIME MECHANISM today — one non-polymorphic WASM body cannot serve both strides; needs a per-repr `$index_i8`/`$index_i32` family or a runtime width carrier, the load-bearing gap `Hβ.value.seq-element-stride-carrier` — SHARPENED 2026-07-20, a SECOND adversarial pass (wf_b7ba2a2e-22c, survives=False on the type-first shortcut) proving the per-repr call-site family is INSUFFICIENT: a generic body (`iterate_from`/`map`, prelude.mn:53/63) compiles ONCE with its element a TVar (repr RI32), and emit-selection specializes only at CONCRETE sites, NEVER a type-variable element — so `map(f, aString)` typechecks under the merge then reads packed bytes at 4-byte stride (the killer, and the oracle is BLIND to it because the wheel never maps a string, so m3==m4 stays byte-identical while user code corrupts). Generic-over-packed traversal REQUIRES a runtime stride carrier (a fat sequence header read at access; word-sized elements pass by value, wide elements by reference-into-the-buffer) OR whole-program monomorphization — the TRUE keystone DEP, DEEPER than the arena, and it must be PROVEN on WIDE elements ([Float]/[i64], RF64/RI64) BEFORE String is ever minted TList(TByte). The type-merge's OWN OOM is a DISTINCT mechanism from the seq-op-row ev-slot revert — TString is a nullary sentinel (0 heap) while TAlias("String",TList(TByte)) is 2 heap records ×instantiate-clone (type-node bloat) — so the arena stance is build-and-measure PER-MECHANISM, never inherited by analogy), the view/slice unification (String's sign-bit O(1)-collapse-via-view_base vs List's tag-4 O(depth) chain), the [len][bytes] data-section literal the interner + self-compile depend on, and the concat-persistence decision (String eager materialize O(la+lb) vs List lazy rope O(1)); (3) ONLY THEN the type merge, when the runtime agrees. TWO settled truths: (a) THE fold_sig COLLISION — `fold_sig` reads `fold_strip` which strips alias/refine, so a byte-as-`Int repr i8` strips to TInt and `fold_sig(TList(byte)) == fold_sig(TList(Int)) == 'li'`, sharing generated `$eq_li`/`$hash_li`/`$show_li` helpers → silent wrong-width; the byte leaf must be a NEW NOMINAL Ty `fold_strip` does NOT strip, OR `fold_sig` must READ repr (diverging from `fold_strip` — an explicit structural decision), and §4①'s "a byte is an Int, not a new primitive" is in direct tension with fold-distinguishability — SETTLE THIS FIRST; (b) `handle_recorded` does NOT dissolve here (handle-IDENTITY i32.eq vs structural str_eq — a real split merged only by `Hβ.runtime.indexed-map-primitive`; corrects the 0fa3649b commit/PROVENANCE claim). THE KEYSTONE DEP is `Hβ.perf.per-decl-arena` (§5.O): the honest-row Alloc attribution + the ontology's self-compile allocation shift both hit the MEASURED 4GB never-free bump-image OOM (the 2026-07-17 seq-op-row-from-callee revert, infer.mn:1320-1333) — the whole dissolution waits on the arena. is_seq_op is therefore a LEGITIMATE "self-consistent raw body, typed calls" substrate boundary, NOT shameful drift-8, until (i) the arena lands and (ii) the ONE genuinely-new increment the panel converged on exists: `Hβ.infer.seq-addr-downcast` — `addr : ∀a. a -> Int`, a sound structure-forgetting DOWN-cast (negative position, concrete Int result) that lets an authored-signature runtime body typecheck (`load_i32(addr(xs))` keeps BKArith `Int+Int`), capability-gated (`with Cast` / provable `!Cast`), confined to handle-repr; the UP-cast (`str_of_buf : Int -> String`) stays the SINGLE localized identity coercion, never proliferated to a `from_addr : ∀a. Int -> a` unsafeCoerce. Retiring is_seq_op is the separate DEP-blocked `Hβ.infer.seq-op-signature-driven`, sequenced AFTER the arena AND the representation work, never as a substitute for the ontology. Full transcripts: the session workflow dir wf_79a821ca-ccc)* · `Hβ.runtime.zero-copy-string-view` (DISSOLVED 2026-07-21 — the list slice node IS the zero-copy view; the sign-bit shape is deleted) · `Hβ.emit.image-map-fold` *(new 2026-07-10 — the module's static layout as ONE fold in the emit: each region's base IS the previous region's limit (sentinel space | records | thread records | interned data | bump heap), overlap unconstructible; born from the ev_scan record clobber (a closure record at 264 sat inside io.mn's fs path scratch — two files claiming one page in prose). The fold IS band B's persist substrate: it defines what a memcpy snapshot means)* · `Hβ.io.scratch-dissolves-into-alloc` *(LANDED 2026-07-10, f0089a3 — page 0 carries no runtime scratch: every syscall record (iov / nread / prestat / filestat / fd-out) allocs per use; fs paths cross the boundary as (ptr, len) views straight into the string payload (`fs_path_view` — the old copy-into-scratch re-derived bytes the image already holds; WASI paths are explicit-length); `read_stdin_loop` + `fs_read_loop` unified into one `fd_read_loop` (stdin and opened files are the same stream); ten io fns re-rowed +Alloc; net −8 lines. The march measured the prediction WRONG in the good direction: a lib-source-only change holds m2 == m3 in ONE generation (both generations compile the same source with the same emit) — the transition form is for EMIT changes only. Gates: 52/52 boot, 8/8 + 52/52 through m2, fixpoint byte-exact, serve battle green)* · `Hβ.tools.march-transition-native` *(new 2026-07-10 — on m2 ≠ m3 march.sh runs the m4 leg itself and reports TRANSITION (m3 == m4, re-pin from m3) vs BROKEN (m3 ≠ m4); removes the bless-the-wrong-generation human-error surface — bash scaffold tier)*.
 
-**E · Parallelism & accelerators (arm 3, §4④; STEP 4 collapse landed).** `Hβ.lower.fanout-simd-lane-cashout` (RV128) · `.fanout-gpu-backend-handler` (lower.mn:1475) · `.fanout-durable-persist-handler` (SPACE=TIME) · `Hβ.parallel.thread-alloc-transitive-proof` (verify ONLY after the leak closes) · `.race-freedom-ownership-proof` · `Hβ.infer.fanout-ownership-from-use-count` (infer.mn:1288) · `Hβ.runtime.wasi-thread-spawn-seed` (threading.mn:296) · `Hβ.driver.level-set-par-walk` *(the topological layer-partition is LIVE in driver.mn — 7165bbb; the open half is the multi-core `>< ~> Thread` at the layer site)* · `Hβ.cursor.speculative-compile` · `Hβ.cursor.work-stealing-via-gradient` *(idle cores ask the cursor "what next?"; the gradient's argmax IS the priority queue — no scheduler module)* · `Hβ.lower.schedule-specialized-callee` *(new — the parallel_map dissolution's open remainder: whether a reusable fn's internal `><`/`<|` should EVER inherit a caller-installed `Schedule` across a call boundary. The only sound route is compile-time specialization of the callee per install-context, preserving `Seq`'s zero-cost/`!Thread`-provable property — the §5.3 dispatch gradient's sibling on the INSTALLED-HANDLER axis (vs the known-argument axis; shares callee-specialization infra). The ambient/evidence-passed-runtime `Schedule` alternative is the wrong direction — it taxes every `Seq` fanout to buy portability only a rare `Thread` caller needs. Scoped skeptically: direct `>< + ~> Thread` at the use site is sufficient and simpler; build only when a real consumer needs one fanout helper serving callers wanting different schedules. Sequenced behind `Hβ.driver.level-set-par-walk`, DEP-gated on band-A `sound-neg-under-poly`)*.
+**E · Parallelism & accelerators (arm 3, §4④; STEP 4 collapse landed).** `Hβ.lower.fanout-simd-lane-cashout` (RV128) · `.fanout-gpu-backend-handler` (lower.mn:1475) · `.fanout-durable-persist-handler` (SPACE=TIME) · `Hβ.parallel.thread-alloc-transitive-proof` (verify ONLY after the leak closes) · `.race-freedom-ownership-proof` · `Hβ.infer.fanout-ownership-from-use-count` (infer.mn:1288) · `Hβ.runtime.wasi-thread-spawn-seed` (LANDED 2026-07-24 — the task-record
+spawn substrate, §7 ledger; real host threads over the shared image) · `Hβ.driver.level-set-par-walk` *(the topological layer-partition is LIVE in driver.mn — 7165bbb; the open half is the multi-core `>< ~> Thread` at the layer site)* · `Hβ.cursor.speculative-compile` · `Hβ.cursor.work-stealing-via-gradient` *(idle cores ask the cursor "what next?"; the gradient's argmax IS the priority queue — no scheduler module)* · `Hβ.lower.schedule-specialized-callee` *(new — the parallel_map dissolution's open remainder: whether a reusable fn's internal `><`/`<|` should EVER inherit a caller-installed `Schedule` across a call boundary. The only sound route is compile-time specialization of the callee per install-context, preserving `Seq`'s zero-cost/`!Thread`-provable property — the §5.3 dispatch gradient's sibling on the INSTALLED-HANDLER axis (vs the known-argument axis; shares callee-specialization infra). The ambient/evidence-passed-runtime `Schedule` alternative is the wrong direction — it taxes every `Seq` fanout to buy portability only a rare `Thread` caller needs. Scoped skeptically: direct `>< + ~> Thread` at the use site is sufficient and simpler; build only when a real consumer needs one fanout helper serving callers wanting different schedules. Sequenced behind `Hβ.driver.level-set-par-walk`, DEP-gated on band-A `sound-neg-under-poly`)*.
 
 **F · Verification & proof (arm 6/8).** `Hβ.types.predicate-is-expr` (dissolve PExpr) → `Hβ.verify.smt-handler-swap` (Z3+CVC5; NAME the external-SMT residual !Outside if it persists) → `.higher-order-refinement` · `Hβ.verify.ledger-soundness` (no silent assume-true; the Dafny `{:axiom}` cautionary) · `.proof-incrementality-cached-cursor` · `.reason-edge-pcc-certificate` · `Hβ.dsp.hz-ceiling-ambient-sample-rate` · `Hβ.refine.buffer-invariant` · `Hβ.infer.predicate-from-bool-expression`.
 
@@ -1019,15 +1020,85 @@ not misled:
 - **`mentl compile main`** does not yet self-serve — the import DAG omits the
   vocabulary the concatenated-wheel build supplies
   (`Hβ.driver.wheel-imports-are-the-manifest`, §11 col 2).
-- **Thread / SIMD / GPU schedules + the persist handler** are scaffold / proxy,
-  proven by fanout-arithmetic fixtures, not by real spawn / lane / device /
-  disk (bands E/O).
+- **The Thread schedule is REAL** (2026-07-24: host threads over the one
+  shared image, gated by the three real-spawn frontier legs); its SAFETY
+  story (stateful-effect-in-fanout refusal) stays gated on band A, and a
+  spawned branch's evidence-tier performs meet an empty per-instance
+  world (loud, never silent). **SIMD / GPU schedules + the persist
+  handler** remain scaffold / proxy — lane and device and disk are not
+  yet real (bands E/O).
 
 Everything else on the board above is measured green; this list is the seam
 between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶▶▶ THE FANOUT SPAWNS FOR REAL — the task record lands
+  whole and `>< ~> parallel_compose` runs branches on host threads over
+  ONE shared image (band E's real-spawn claim made true; the
+  runner-migration peer's banked RED dies · pin 8891428f). THE ROOT was
+  never four bugs: the spawn crossing had no unit of state — spawn
+  banked the host thread id while join dereferenced it as a record, the
+  entry wrote completion/result words past the closure's allocation, the
+  start argument was a sentinel zero, and a spawned instance re-read a
+  fresh zeroed image. The TASK RECORD answers all of it at once:
+  [task closure@0][completion@4][result@8], allocated per spawn through
+  the ONE allocator ($spawn_task_impl — loud refusal on a host spawn
+  failure; no static slot region, no capacity ceiling, no tid ledger),
+  banked whole in ThreadHandle, joined by $join_task_impl's atomic wait.
+  The rewritten $wasi_thread_start stamps per-instance identity
+  ($tid_g — current_id's truth source; a per-instance global IS
+  instance-local storage), runs $__init_lets when lets exist (globals
+  are per-instance; the copies land in fresh shared-cell records), and
+  invokes the task through the closure protocol. TWO OWNERSHIP READS AT
+  THE MODULE-IMAGE ALTITUDE, both from the program's own proof
+  (spawn_task ∈ the fifth projection): a spawning module IMPORTS the
+  shared image (the wasi-threads convention, re-exported for the p1
+  ABI — a defined memory is per-instance, so a child of a defining
+  module reads a fresh zeroed image) and allocates through the shared
+  CELL at address 64 (compare-exchange bump; root _start initializes it
+  once); a thread-free module keeps its self-contained defined memory,
+  plain bump, and ships NO thread-spawn import at all — the
+  must-satisfy-thread-spawn instantiation constraint the recon named is
+  DISSOLVED for every non-spawning program, boot included.
+  heap_mark/heap_reset went strategy-invariant at the call site
+  ($heap_mark_impl beside $alloc; the reset writes the line where the
+  strategy keeps it). THE DELETIONS: threading.mn 355 → 160 lines — the
+  whole ffi/sentinel/intrinsic block, closure_pointer, the
+  done-past-the-captures address arithmetic, the write-only threads
+  ledger (the resume_kinds pattern at the schedule layer), num_cores
+  (preview1 exposes no processor count — an op with no truth source is
+  a fabrication; the spawn degree is the fanout's own branch count),
+  and the wasi_threads handler whole (its spawn arm was bypassed by the
+  direct route since Stage 4a); the dormant emit_memory_atomic_cas
+  handler (byte-identical to bump — the strategy fork was never in the
+  emitter) died into the emit_memory_decl body fork. The wheel's own
+  dispatch chain dropped its dead schedule installs: a standing
+  parallel_compose install would put the spawn arm's performs into the
+  wheel's emitted tree and flip the wheel itself to the shared-image
+  shape for parallelism it never performs (zero `><` in the wheel) — a
+  schedule installs lexically at the fanout it schedules (SYNTAX §`><`:
+  no Schedule → Seq). TWO LATENT SURFACE BUGS fixed by the same audit:
+  WaitResult's decl order now matches the wait32 ABI (nullary ctor =
+  tag word = the instruction's result; the old order silently swapped
+  not-equal and timed-out), and atomic_rmw gained its real dispatch
+  ($atomic_rmw_impl br_table on the RmwOp tag; its old emit was a
+  dangling call) with two-operand cmpxchg split into its own honest op
+  (the one-operand rmw shape cannot carry expected+replacement).
+  GATES seen RED on the prior pin (exit 134, unaligned atomic in the
+  join, identically through both engines): frontier real-spawn (60 —
+  the sequential twin's exact answer, the §`><` thesis gate: one
+  source, two schedules, identical results) · real-spawn-float (60 —
+  a spawned instance's f64 carrier allocated through the shared cell
+  and read by the joiner: the cross-instance allocation story proven)
+  · real-spawn-identity (60 — both branches read positive stamped
+  ids). Board whole at the pin: TRANSITION m3 == m4 at 329,774 lines
+  (the 36-line m2/m3 diff is the emit change crossing one generation),
+  then CLEAN m2 == m3; census 0; comment-refs 0; frontier 241/0;
+  proof-exactness 9/9; crown 5/5; battery green through both engines'
+  smokes. The named remainder of the runner-migration peer is now ONLY
+  the host-path endgame (swap wt-env to the runner, retire the CLI
+  pin) — no wheel-side glue remains.
 - 2026-07-24 · ▶▶ THE COMMIT'S RECORD RIDES THE __k RAILS — the last
   bracket-maintained cache dies (Hβ.emit.arm-closure-captures-record
   RESOLVED, and the OneShot cousin the pre-build probe surfaced dies
@@ -2855,71 +2926,30 @@ demanded restructuring); the fix is the branch bracket nesting as a
 STACK (enter/exit balanced per alternative level), and the
 undo_set_within hoist is the passing form until it lands.
 
-`Hβ.ops.wasmtime-runner-migration` (2026-07-23, the threads-scout recon —
-design complete, artifact-grounded): every emitted module, boot included,
-imports `wasi.thread-spawn` and a 4GB shared memory UNCONDITIONALLY
-(emit_memory_decl), so instantiation itself needs wasi-threads support —
-yet real spawning is exercised NOWHERE (zero `><` in the wheel's own
-algorithm; every fanout fixture installs sequential_compose; the only
-load-bearing consequence today is an import that must resolve). wasmtime
-47 removed exactly the CLI convenience that auto-satisfies that import
-(`-S threads=y`, the deleted wasmtime-wasi-threads/wasi-common crates);
-core shared-memory + atomics (threads Phase 4) remain supported
-indefinitely, and preview1 I/O survives via wasmtime-wasi's maintained p1
-shim. THE DESIGN (lowest blast radius, zero wheel-source change, zero
-fixpoint impact): a small Rust runner registering
-`Linker::func_wrap("wasi", "thread-spawn", …)` by hand — the exact
-protocol wasmtime-wasi-threads itself used (std::thread::spawn + fresh
-Store over the shared memory + call the module's exported
-wasi_thread_start, which the wheel's emit already speaks) — and p1 I/O
-via wasmtime_wasi::p1::add_to_linker_sync. Build order: (1) EXECUTED
-2026-07-23 — the 36.0.0 LTS re-pin (43.0.1 left its non-LTS patch
-window ~2026-06-09): wheel self-compile byte-identical and battery
-113/113 validated through 36 BEFORE flipping; wt-env.sh probes the
-flag-spelling delta once at source time (36 folds shared-memory into
--W threads=y), so both binaries run with warm caches (the hosted CI
-workflow was later deleted whole — §11 col 5); (2)+(3)+(4) EXECUTED
-2026-07-24 (an isolated Fable builder; every gate re-derived by the
-orchestrator on main before integrating): tools/runner — wasmtime crate
-47.0.2, accepting wt_run's exact argv so the swap stays one line —
-passes S1 byte-identity (runner m2.wat sha == CLI m2.wat sha,
-re-derived on the freshly pinned boot) and the battery through both
-legs (the builder measured 113/113 CLI == 113/113 runner with 0
-per-micro WAT diffs; the orchestrator re-ran the commit-class micros
-25/46/51 and the spawn smoke through it); S2 spawn smoke
-(tools/runner/smoke/spawn-import.wat — wasi-threads convention:
-IMPORTED shared memory re-exported for the p1 ABI) exits 42 through
-runner AND CLI 43. Import-surface CORRECTION: the wheel has NO memory
-import — emit DEFINES and exports the shared memory (wasm.mn:2054)
-beside the one `wasi.thread-spawn` import and 17 p1 fns; and
-wasmtime-wasi's p1 host locates guest memory through the instance's
-"memory" EXPORT, so an import-shape module must re-export it. (4) is a
-BANKED RED (tools/runner/smoke/mn-real-spawn.mn): `(2 <| (widen,
-widen)) ~> parallel_compose ~> wasi_threads` compiles with zero
-diagnostics and traps 134 unaligned-atomic in ffi_join identically on
-both engines (the sequential twin answers 60 on both) — the gap is the
-WHEEL's spawn glue, four links each artifact-verified: (a)
-threading.mn banks wasi_thread_spawn's return (the thread id) in
-ThreadHandle while ffi_join dereferences that payload as a CLOSURE
-POINTER — the handle==closure_ptr identity belonged to the
-sentinel-intrinsic era and broke when spawn became a Stage-4a direct
-import; (b) closure_pointer_intrinsic (threading.mn:230, a Pure body
-returning 0) has no lower/emit recognition, so every child's start_arg
-is literally 0; (c) emit_wasi_thread_start writes its done/result
-words one past the closure record's 8+4nc allocation; (d) the
-defined-memory shape gives every spawned instance a FRESH zeroed
-image — genuine sharing needs the import shape the runner already
-links generically. Closing (a)-(d) is the wheel-side spawn-glue arc —
-the `>< ~> Thread` unlock, band E's real-spawn claim made true; then
-(5) swap wt-env.sh/install.sh (+ hosted CI when it returns, §11 col 5)
-to the runner, drop `-S threads=y`; (6) retire the LTS pin. shared-everything-threads is
-the named eventual target, unimplemented in any host — name it, do not
-build toward it. Two artifact-prose corrections the recon surfaced:
-threading.mn's "sentinel" comments are STALE for wasi_thread_spawn (it is
-a Stage-4a direct import, lower.mn:4674 — the handler arm is bypassed);
-and ide/index.html's thread-spawn stub always returns -1 with no
-ffi_join fallback path (latent, nothing calls it — the browser-Worker
-spawn is the runner pattern at the other host).
+`Hβ.ops.wasmtime-runner-migration` (2026-07-23 recon; the wheel-side
+spawn glue LANDED 2026-07-24 — the §7 ledger head carries the arc):
+steps (1)-(4) are EXECUTED. (1) the 36.0.0 LTS re-pin + wt-env.sh
+flag-spelling probe (2026-07-23); (2)+(3) tools/runner — wasmtime crate
+47.0.2, wt_run-argv-compatible — S1 byte-identity + battery through
+both legs, S2 spawn smoke (tools/runner/smoke/spawn-import.wat,
+IMPORTED shared memory re-exported for the p1 ABI) 42 through runner
+AND CLI; (4) the banked RED (mn-real-spawn, 134 unaligned-atomic in
+the join on both engines) is RESOLVED by the task-record landing (pin
+8891428f): the four glue links died into the task record +
+proof-driven memory ownership — a spawning module imports the shared
+image and allocates through the shared cell; a thread-free module
+(boot included) defines its memory and ships NO thread-spawn import,
+so the must-satisfy-thread-spawn instantiation constraint is dissolved
+everywhere it was inert. The three real-spawn frontier legs (int /
+float-carrier / identity) run 60 through BOTH engines. REMAINING
+scope, host-path only: (5) swap wt-env.sh/install.sh (+ hosted CI when
+it returns, §11 col 5) to the runner, drop `-S threads=y`; (6) retire
+the LTS pin. shared-everything-threads is the named eventual target,
+unimplemented in any host — name it, do not build toward it. One
+artifact-prose note survives the recon: ide/index.html's thread-spawn
+stub always returns -1 with no join fallback path (latent, nothing
+calls it — the browser-Worker spawn is the runner pattern at the other
+host).
 
 `Hβ.query.comment-prose-search` (2026-07-24, the ⟳ self-build law's
 first named confession): the vocabulary sweep ran on grep while

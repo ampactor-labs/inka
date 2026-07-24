@@ -391,13 +391,12 @@ type LowExpr
   // Typed terminal for a compiler-created executable-edge invariant. It has no
   // value representation and no recovery arm; emit projects only `unreachable`.
   | LInvariantFailure(Int, BoundaryInvariant)
-  // Stage 4a: direct WASM-level import call. perform-form recognized at
-  // lower-time when op_name matches a known WASI import (wasi_thread_spawn,
-  // wasi_num_cores, fd_write, fd_read, path_open, etc.) bridges
-  // through this variant so emit produces `(call $<import_name> args)`
-  // directly — bypassing the LPerform/$op_<name> handler-arm dispatch
-  // (which would require a wrapper fn). The import IS the bridge; no
-  // wrapper. Per protocol_bootstrap_wasi_threads_substrate.md Stage 4.
+  // Stage 4a: direct WASM-level op. A perform whose op_name is in
+  // is_wasi_import_op (spawn_task, join_task, fd_write, path_open, the
+  // atomics, …) bridges through this variant so emit produces the raw
+  // instruction sequence or `(call $<name>)` directly — bypassing the
+  // LPerform/$op_<name> handler-arm dispatch (which would require a
+  // wrapper fn). The import IS the bridge; no wrapper.
   | LWasiCall(Int, String, [LowExpr])          // handle, import name (no $ prefix), args
 
 // The two directions of int<->float conversion. An ADT, not a string/int flag
@@ -4556,13 +4555,16 @@ fn is_substrate_mem_op(name: String) with Pure = {
 }
 
 fn is_wasi_import_op(name) with Pure = {
-  // wasi_num_cores is ABSENT by design: it has a wasi_threads handler arm
-  // (threading.mn — `wasi_num_cores() => resume(wasi_num_cores_intrinsic())`),
-  // so it is an effect-op PERFORM routed through the handler (the else branch,
-  // lower_perform_dispatch), never a raw import. Listing it here bridged it to
-  // a `(call $wasi_num_cores)` with no import and no arm — a dangling call.
-  // Only ops with NO handler arm (raw host imports + atomic instructions) belong.
-  name == "wasi_thread_spawn"
+  // Only ops with NO handler arm belong here — raw host imports, atomic
+  // instructions, and the substrate preamble fns emit backs them with
+  // (spawn_task/join_task allocate-and-cross the task record; thread_id
+  // reads the per-instance identity the thread entry stamped). An op with
+  // a real handler arm routes through the else branch
+  // (lower_perform_dispatch); listing one here bridges it to a dangling
+  // `(call $<op>)` with no import and no arm.
+  name == "spawn_task"
+    || name == "join_task"
+    || name == "thread_id"
     || name == "fd_write"
     || name == "fd_read"
     || name == "fd_close"
@@ -4583,6 +4585,7 @@ fn is_wasi_import_op(name) with Pure = {
     || name == "atomic_load_i32"
     || name == "atomic_store_i32"
     || name == "atomic_rmw"
+    || name == "atomic_cmpxchg"
     || name == "wait_i32"
     || name == "notify"
     || name == "fence"

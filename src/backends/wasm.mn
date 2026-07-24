@@ -220,7 +220,7 @@ handler spec_registry with twins = [] {
 
 fn show_hash_ty(x) with LookupTy + Memory = fold_strip(lookup_ty(lexpr_handle(x)))
 
-fn spec_is_agg(ty) with Memory = match ty {
+fn spec_is_agg(ty) with Pure = match ty {
   TList(TByte)      => false,
   TList(_)          => true,
   TTuple(_)         => true,

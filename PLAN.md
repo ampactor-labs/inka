@@ -1026,6 +1026,31 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶▶▶ THE MEDIUM AUTHORS ITS FIRST CHANGE (`mentl
+  tighten`; the self-build audit's step 1 executed whole · pin
+  ab8daa07): T_OverDeclared was always a MachineApplicable proposal
+  carrying the proven row — the tighten verb turns the first authorable
+  one (closed tail) into the patch. The tighten_collector is the
+  COLLECTING FORWARDER over Diag: every diagnostic re-performs outward
+  from the arm — the world arc's deep-handler law in production the
+  night it landed — and all three Diag ops carry arms (a partial-effect
+  handler leaves zero fn slots; a perform through one is a garbage
+  dispatch — the constraint, named at the handler). Run on the wheel's
+  own DAG, the medium authored spec_is_agg (src/backends/wasm.mn:223)
+  `with Memory` → `with Pure`; the fixpoint held CLEAN through the
+  self-authored diff and the human's role reduced to gates + commit —
+  §0's convergence (docs : Claude :: language : developer :: human :
+  mentl audit) at its first executable instance. Three frontier legs
+  seen RED on the pre-verb boot (author / fresh-check / fixpoint).
+  NAMED FOLLOW-UP (Morgan's cut at the suppress marker): the
+  drift-audit's mode-33 exclusion is a ROW fact a grep cannot read —
+  the scaffold takes per-line ignore markers where the medium reads
+  the row; the absorption (an infer-side let-where-pipe class gated on
+  the callee's row, pure-only, plus the string-literal blindness) is
+  the comment-refs precedent applied to the drift audit, and the whole
+  ignore-marker family dies with it (Hβ.audit.drift-modes-read-the-row).
+  Board whole: CLEAN m2 == m3 at 561,214 lines, census 0, comment-refs
+  0, frontier 226/0, battery 113/113.
 - 2026-07-23 · THE ANNOTATION VERIFIER PROVES
   (Hβ.mentl.verify-after-apply-boundness-only RESOLVED — the self-build
   audit's gap 2 · pin fadbbee7): apply_annotation_tentatively returns

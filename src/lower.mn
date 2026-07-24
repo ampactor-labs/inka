@@ -338,7 +338,15 @@ type LowExpr
   // arm runs against ("" sentinel = use caller __state). Threads the handler's
   // STATE RECORD as the arm-call's __state per handler-IS-state.
   | LPerform(Int, String, [LowExpr], String)
-  | LDirectPerform(Int, String, String, Bool, [LowExpr])  // handle, hname, op_name, stateful, args — the SINGLETON-tier perform as its own node: the direct call against the unique handler's state global. The stateful bit is the handler's own decl fact (len(states) > 0), read once at the mint; it selects the block SHAPE — stateful gets the SingletonUninstalled null-guard (the compile gate's refusal conjunction at the runtime altitude), stateless keeps the unguarded form (the arm ignores __state, so a null record is sound by construction — the same licence the gate's STATEFUL conjunct encodes). Every walk delegates through singleton_perform_block (semantics identical by construction); the census walk fires its demand so the gate can refuse the stateful-and-never-installed read of a zero state global
+  | LDirectPerform(Int, String, String, Bool, [LowExpr])  // handle, hname, op_name, stateful, args — the SINGLETON-tier perform as its own node: the direct arm call against the record resolved LIVE from the world chain (LWorldResolve on the HANDLER name — the op→handler edge is per-OP, so the handler is the singleton tier's key; an ename key mis-resolved the split-effect pair, where two handlers cover one effect's disjoint op sets and chain-top-for-the-ename is the WRONG record). The chain is the ONE home — a state-global cache went stale across every $world_g rebind (LResumeK, __k_compose): a k remainder crossing an exited install read the null page as its state, silently (the mn-world-resume-frozen 30-not-42). The stateful bit is the handler's own decl fact (config or `with` state — the arm reads the record for EITHER), read once at the mint; it selects the block SHAPE — stateful gets the SingletonUninstalled chain-miss guard (the compile gate's refusal conjunction at the runtime altitude), stateless keeps the unguarded form (the arm ignores __state, so a null record is sound by construction — the same licence the gate's STATEFUL conjunct encodes). Every walk delegates through singleton_perform_block (semantics identical by construction); the census walk fires its demand so the gate can refuse the stateful-and-never-installed perform whose chain find can only miss
+  // The chain-top record for a HANDLER, read LIVE from $world_g — the
+  // singleton perform's record source ($world_find in the preamble: walk
+  // [key][entry][parent][iw][hkey] nodes, i32.eq on the interned handler
+  // name at hkey@16, return the entry's record@0; 0 on miss). The ename
+  // key@0 stays the EVIDENCE tier's walk (ev_perform_node) — two keys,
+  // two dispatch semantics, one chain. Sound under every $world_g rebind
+  // by construction — a k re-entry's frozen chain IS what the find walks.
+  | LWorldResolve(Int, String)                 // handle, handler name (interned)
   // Tier-2 evidence-dispatched perform (handler comes from the caller via
   // an evidence slot on __state — handler IS evidence). The ev-slot holds
   // a per-effect entry [record ptr, base]; the arm runs against that RECORD
@@ -476,6 +484,7 @@ fn lexpr_handle(e) with Pure = match e {
   LFeedbackPrior(h)       => h,
   LPerform(h, _, _, _)    => h,
   LDirectPerform(h, _, _, _, _) => h,
+  LWorldResolve(h, _) => h,
   LEvPerform(h, _, _, _, _) => h,
   LFieldLoad(h, _, _)     => h,
   LConvert(h, _, _)       => h,
@@ -1693,13 +1702,15 @@ fn lower_perform_tiers(handle, op_name, lo_args) =
     Some(r) =>
       LPerform(handle, resolve_target(r), lo_args, "__hstate_{int_to_str(resolve_handle(r))}"),
     None =>
-      // Tier 1-GLOBAL — no lexical install covers the op, but a UNIQUE handler
-      // declares it (the op→handler edge drawn at register_handler). Read that
-      // singleton's record LIVE from its $<hname>_state_g home and direct-call
-      // the arm, never thread a copy of a once-installed record through the
-      // ev-region (Carried-Truth). The route-infra handlers (graph/env/…) land
-      // here; it dissolves the deep-chain evidence trap at fresh_handle. Only a
-      // genuinely unknown or ambiguous handler keeps the evidence floor below.
+      // Tier 1-SINGLETON — no lexical install covers the op, but a UNIQUE
+      // handler declares it (the op→handler edge drawn at register_handler).
+      // Resolve that singleton's record LIVE from the world chain (the fn
+      // identity is static — the direct arm call stays; only the STATE is
+      // dynamic) and direct-call the arm, never thread a copy of a
+      // once-installed record through the ev-region (Carried-Truth). The
+      // route-infra handlers (graph/env/…) land here; it dissolves the
+      // deep-chain evidence trap at fresh_handle. Only a genuinely unknown or
+      // ambiguous handler keeps the evidence floor below.
       match lower_op_default_handler(op_name) {
         Some(hname) => lower_singleton_perform(handle, op_name, hname, lo_args),
         None => {
@@ -1727,30 +1738,38 @@ fn lower_op_default_handler(op_name) =
     None => None
   }
 
-// Read the singleton's record from its $<hname>_state_g home into a per-node
+// Resolve the singleton's record from the LIVE world chain into a per-node
 // local, then direct-call $op_<hname>_<op> against it — the SAME record the arm
 // was installed with (handler IS state), reached live at its one home instead
-// of via a threaded ev-slot. Reuses LPerform's Tier-1 emit with the global read
-// standing in for the lexical __hstate local.
+// of via a threaded ev-slot. The find keys on the HANDLER name (the op→handler
+// edge is per-op — hname is already in hand); emit interns it and compares the
+// interned pointer against the chain nodes' hkey@16. Reuses LPerform's Tier-1
+// emit with the chain find standing in for the lexical __hstate local.
 fn lower_singleton_perform(handle, op_name, hname, lo_args) =
   LDirectPerform(handle, hname, op_name, handler_stateful(hname), lo_args)
 
 // The singleton perform's emission SHAPE — the block every walk and the
 // emit delegate through, so LDirectPerform's semantics equal the old
 // inline form BY CONSTRUCTION at every layer (locals, reach, evidence,
-// bytes — Law 7 arbitrates). The shape is selected by the node's stateful
-// bit, mirroring the compile gate's own refusal conjunction at the runtime
-// altitude: a STATEFUL handler's arm reads its state record, so a 0 global
-// is missing evidence (the singleton tier's evidence IS the global) and
-// the op call REFUSES loudly at the site (SingletonUninstalled) instead
-// of silently reading the null page as its state — the address-12
-// corruption class where a never-installed collector's accumulator lived
-// below every region mark and surfaced as a stale-pointer walk whole
-// compiles downstream. A STATELESS handler's arm ignores __state, so the null
+// bytes — Law 7 arbitrates). The record source is the LIVE world chain
+// (LWorldResolve on the node's effect key): the singleton tier's evidence
+// IS the chain-top entry, so the resolve is sound under every $world_g
+// rebind — an LResumeK re-entry's frozen chain carries the crossed
+// install's record where the old $<hname>_state_g cache had already been
+// bracket-restored to 0 (the mn-world-resume-frozen 30-not-42: a k
+// remainder's perform read the null page as its config, silently). The
+// shape is selected by the node's stateful bit, mirroring the compile
+// gate's own refusal conjunction at the runtime altitude: a STATEFUL
+// handler's arm reads its state record (config or `with` fields — the
+// record packs both), so a chain MISS is missing evidence and the op call
+// REFUSES loudly at the site (SingletonUninstalled) instead of silently
+// reading the null page as its state — the address-12 corruption class
+// where a never-installed collector's accumulator lived below every
+// region mark and surfaced as a stale-pointer walk whole compiles
+// downstream. A STATELESS handler's arm ignores __state, so the null
 // record is sound by construction and the block keeps the unguarded form
-// (byte-identical to the pre-guard emission, Law 7) — the exact licence
-// the gate's STATEFUL conjunct encodes; the two altitudes cannot
-// contradict on any shape.
+// — the exact licence the gate's STATEFUL conjunct encodes; the two
+// altitudes cannot contradict on any shape.
 fn singleton_perform_block(handle, hname, op_name, stateful, lo_args) = {
   let rec_local = "_{int_to_str(handle)}"
   if stateful {
@@ -1761,7 +1780,7 @@ fn singleton_perform_block(handle, hname, op_name, stateful, lo_args) = {
     // register name all read the ONE (handle → repr) projection the LLet
     // decl wrote.
     LBlock(handle, [
-      LLet(handle, rec_local, LGlobal(handle, "{hname}_state_g")),
+      LLet(handle, rec_local, LWorldResolve(handle, hname)),
       LIf(handle,
           LLocal(handle, rec_local),
           [LPerform(handle, "{hname}_{op_name}", lo_args, rec_local)],
@@ -1769,7 +1788,7 @@ fn singleton_perform_block(handle, hname, op_name, stateful, lo_args) = {
     ])
   } else {
     LBlock(handle, [
-      LLet(handle, rec_local, LGlobal(handle, "{hname}_state_g")),
+      LLet(handle, rec_local, LWorldResolve(handle, hname)),
       LPerform(handle, "{hname}_{op_name}", lo_args, rec_local)
     ])
   }
@@ -3960,25 +3979,8 @@ fn lower_body_reified(body_node) =
 // keeps byte-identity by construction (Law 7).
 fn k2_guard(e) = if ls_program_may_yield() { k2_floor_guard(e, true) } else { e }
 
-// M4 — does the install body's TERMINUS yield a FOREIGN op (one this handler
-// does not cover)? Walks only the value-propagating positions (a yield, a
-// block's last, an if/match branch, a k2 boundary's dummy path) — NOT into
-// calls or fn bodies (separate frames whose yields are their own concern).
-// A foreign terminus yield means the driver bubbles it but the enclosing
-// remainder is not in the k → the install is not guarded for that crossing.
-fn body_has_foreign_yield(e, hname) = match e {
-  LYield(_, op, _, _) =>
-    op != "" && !handler_covers_effect(hname, lower_effect_name_of_op(op)),
-  LBlock(_, stmts)      => len(stmts) > 0 && body_has_foreign_yield(last(stmts), hname),
-  LIf(_, _, t, el)      =>
-    (len(t) > 0 && body_has_foreign_yield(last(t), hname))
-    || (len(el) > 0 && body_has_foreign_yield(last(el), hname)),
-  LMatch(_, _, arms)    => any((pb) => { let (_, body) = pb; body_has_foreign_yield(body, hname) }, arms),
-  LKExtend(_, k)        => body_has_foreign_yield(k, hname),
-  _                     => false
-}
-
 fn k2_floor_guard(e, terminus) = match e {
+  LWorldResolve(_, _)   => e,
   // A `__kr_` let is the k2 COMPOSITION JUNCTION's own park (the spine
   // machinery minted the flag-check + LKExtend right below it), so its
   // init's yield is already composed — walk it under terminus so the
@@ -3996,22 +3998,28 @@ fn k2_floor_guard(e, terminus) = match e {
                                     (pat, k2_floor_guard(body, terminus))
                                   }, arms)),
   LHandleWith(h, b, hn, hname, inits, an) => {
-    // The body's terminus is driver-guarded when a driver exists
-    // (multishot_ops_of != []) AND the driver handles the body's OWN yield.
-    // A DRIVERLESS install's yield exits the bracket as a flagged dummy; in a
-    // non-propagating position the enclosing code would compute on it
-    // silently (the measured 9-not-29 install-crossing value loss), so the
-    // whole install wraps in the loud floor — the dormant A4 gate:
-    // re-install-in-k flips it to composition. M4 added the second clause:
-    // an install whose body yields a FOREIGN op (one the driver does not
-    // cover — `{ pick() + 3 } ~> mycatch` where mycatch handles only abort)
-    // is NOT guarded for that crossing (the driver bubbles the foreign op,
-    // but the enclosing remainder is not in the k). Without it, mycatch's
-    // new abandon-driver defeated this floor and silently computed the
-    // incomplete 9 (Hβ.lower.stateful-install-crossing-yield stays the
-    // stateful floor; the foreign-crossing re-installs in the k at A4).
-    let has_driver = len(multishot_ops_of(hname)) > 0 && !body_has_foreign_yield(b, hname)
-    let rebuilt = LHandleWith(h, k2_floor_guard(b, has_driver),
+    // A4 — the install crossing COMPOSES. An install is TRANSPARENT to the
+    // terminus flag: a yield exiting its bracket lands exactly where the
+    // install's own value lands, so the body's boundary is checked IFF the
+    // install's position is (the enclosing driver / caller / composer) OR
+    // its own driver exists (multishot_ops_of != []). The crossing itself
+    // is sound by the world arc: the k record freezes the live $world_g
+    // handle at reify — chain nodes are immutable image records, so the
+    // frozen world keeps every intermediate install (record, config) alive
+    // after its bracket exits — and LResumeK re-enters under it, resolving
+    // the remainder's performs through that chain. The re-install-in-k this
+    // floor was parked for arrives by REPRESENTATION, not by a rebuild;
+    // the unhandled-effect compile gate is what makes "an enclosing check
+    // exists" a static fact at every terminus. A foreign terminus yield
+    // under a driver is the same composition: the driver bubbles it, the
+    // outer check catches, the frozen world re-enters (the old foreign
+    // clause re-derived crossing-safety the k record now CARRIES). A
+    // driverless install in a NON-checked position still wraps loud below —
+    // that remainder is in no k (the measured 9-not-29 value loss), the
+    // honest floor until the k2 spine form composes across non-terminus
+    // installs.
+    let has_driver = len(multishot_ops_of(hname)) > 0
+    let rebuilt = LHandleWith(h, k2_floor_guard(b, has_driver || terminus),
                               k2_floor_guard(hn, false), hname,
                               k2_floor_list(inits), an)
     if has_driver || terminus { rebuilt } else { k2_floor_wrap(h, rebuilt) }
@@ -5056,6 +5064,7 @@ fn reach_match_arms(arms, acc) = {
 }
 
 fn reach_names_expr(expr, acc) = match expr {
+  LWorldResolve(_, _)       => acc,
   LGlobal(_, n)             => [n] ++ acc,
   LDirectCall(_h, _fh, n, _t, args) => reach_names_list(args, [n] ++ acc),
   // emit calls `$op_<target>` (the arm fn), so reach the arm fn by its emitted
@@ -5276,6 +5285,7 @@ fn collect_value_holes_list(stmts, acc) = {
 }
 
 fn collect_value_holes_expr(expr, acc) = match expr {
+  LWorldResolve(_, _)       => acc,
   LConst(h, _)              => if executable_hole(h) { [h] ++ acc } else { acc },
   LShow(_h, x)              => collect_value_holes_expr(x, acc),
   LHash(_h, x)              => collect_value_holes_expr(x, acc),
@@ -5665,6 +5675,7 @@ fn spec_subst_pairs(t, pairs) with GraphRead + Memory + Alloc = match t {
 // operand handles (arith / comparison / equality operands — the floor-is-
 // wrong witnesses the worthiness predicate reads). acc = (sites, ophs).
 fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
+  LWorldResolve(_, _)       => acc,
   LGlobal(h, n)             => { let (s, o) = acc; ([(h, n)] ++ s, o) },
   LDirectCall(_h, fh, n, _t, args) => { let (s, o) = spec_scan_list(args, acc); ([(fh, n)] ++ s, o) },
   LPerform(_h, _t, args, _) => spec_scan_list(args, acc),
@@ -5935,12 +5946,20 @@ fn seq_elem_face(e) = match fold_strip(e) {
 }
 
 
+// A handler is STATEFUL when its arm reads the state record — which happens
+// for config params AND `with` state fields alike (the record packs config
+// into the same slots; a config-only arm's `n * f` loads offset 8). The old
+// state-fields-only read left config-only handlers "stateless": their
+// uninstalled performs skipped the SingletonUninstalled guard and silently
+// multiplied by the null page (the mn-world-resume-frozen fixture's silent
+// 30). One fn, two readers — the mint's guard shape and the compile gate's
+// refusal conjunct — so both altitudes tighten together.
 fn handler_stateful(hname: String) = {
   match env_lookup(hname) {
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
-        HandlerKind(_, _, states, _) => len(states) > 0,
+        HandlerKind(_, config, states, _) => len(config) > 0 || len(states) > 0,
         _ => false
       }
     },

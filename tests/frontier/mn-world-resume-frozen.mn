@@ -7,10 +7,12 @@
 // flooring (the A4 un-flooring: the frozen world is exactly the evidence
 // the floor existed to protect, so the crossing's reason to floor is gone).
 //
-// MEASURED RED on pin 9448692b: exit 134 — the k2 loud floor's
-// `unreachable` fires in main at the scaler crossing before any perform
-// runs. GREEN = 42: chooser resumes 10 and 20; the remainder
-// `<p> + emitt(3)` under scaler(2) gives (10+6) + (20+6).
+// MEASURED RED twice on the pre-arc pins: exit 134 (the k2 loud floor
+// fires in main at the scaler crossing before any perform runs), then —
+// with A4 un-floored but the perform still reading the bracket-restored
+// state global — exit 30 (the remainder's emitt read the null page as its
+// config: (10+0) + (20+0), silent). GREEN = 42: chooser resumes 10 and
+// 20; the remainder under scaler(2) gives (10+6) + (20+6).
 //
 // scaler takes a config param (bare name — an annotated handler config
 // param is unparsed lathe-lag) so emitt dispatches through the EVIDENCE

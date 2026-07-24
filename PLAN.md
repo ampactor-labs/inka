@@ -1028,6 +1028,58 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶▶▶ THE SINGLETON TIER READS THE WORLD — R4 completes at
+  the last dispatch tier, and A4 un-floors on top (the banked RED pair
+  goes green · pin 8458415b). THE ARC: the A4 un-flooring (installs
+  TRANSPARENT to the k2 terminus flag; body_has_foreign_yield deleted —
+  the frozen world CARRIES what the foreign clause re-derived) took
+  mn-world-resume-frozen from its banked 134 to a NEW measured red, 30 —
+  the crossing composed but the remainder's emitt read ZERO: the
+  singleton tier's direct call read $scaler_state_g, and main's bracket
+  had already restored it before the redrive ran the resumes. The k
+  record's frozen world (R4's rebind, correctly set by LResumeK) was
+  never consulted — the singleton state global is a CACHE of the
+  chain-top entry, and every $world_g REBIND (LResumeK, __k_compose)
+  invalidates it, not just lexically in remainders but through every fn
+  a resume's dynamic extent calls. THE FIX AT THE REPRESENTATION: the
+  perform reads the chain. singleton_perform_block's record source is
+  LWorldResolve(handle, hname) — a new LowIR leaf emitting
+  (call $world_find (i32.const <interned hname>)) — and $world_find
+  walks the live chain. THE KEY IS THE HANDLER, NOT THE ENAME (the
+  frontier caught the first form red-handed: the LSP serve leg's
+  postmortem trapped inside op_mentl_voice_default_focus — the
+  ename-keyed find returned the SPLIT-EFFECT pair's chain-top,
+  mentl_voice_filesystem's record, to mentl_voice_default's arm; two
+  handlers covering one effect's disjoint op sets is exactly what the
+  per-hname global was precise about, because the op→handler edge is
+  per-OP). The chain node widens to [key@0][entry@4][parent@8][iw@12]
+  [hkey@16] — the ename key stays the evidence tier's walk
+  (ev_perform_node untouched, persist's fingerprint walk untouched),
+  the interned handler name is the singleton find's key, 0 for
+  anonymous installs. With it: handler_stateful counts CONFIG params
+  (scaler's arm reads the record for f — the config-only guard skip is
+  WHY the 30 was silent; the compile gate's refusal conjunct tightens
+  in lockstep, one shared fn), the redrive driver uses its own __state
+  (both callers always passed the record — the global re-read was a
+  re-derivation of a value in hand), emit_singleton_globals shrinks to
+  installed-only (the no-config-declared union existed to make the
+  dead global.get assemble; noconfig_handler_names deleted), and the
+  ten LowExpr walks gained their LWorldResolve leaf arms — named by
+  the medium's own census (E_PatternInexhaustive ×10, the exact
+  sites), not by hand audit. The $<hname>_state_g global survives with
+  ONE reader: the resume-commit store's closure home (arm commits run
+  inside their install's live bracket — sound); its retirement is the
+  named peer Hβ.emit.arm-closure-captures-record. MEASURED, the whole
+  board: TRANSITION m3 == m4 at 331,648 lines (the 17,331-line m2/m3
+  diff is the chain read + node widening crossing one generation;
+  2,380 lines smaller than the prior wheel), census 0, comment-refs 0,
+  frontier 232/0 (mn-world-resume-frozen GRADUATED as a leg — 134 on
+  the pre-A4 boot, 30 under the cache read, 42 through the chain; the
+  lsp serve leg RED under the ename key, healed by the hname key),
+  proof-exactness 9/9, crown 5/5. Scaffold gap noted en route:
+  tools/verify-baseline.txt has carried zero `micro:` lines since the
+  backtick sweep (e3d0e39e), so march-gate --micros enumerates an
+  empty promoted tier — the verify battery is the live micro gate.
 - 2026-07-24 · THE KEYED SCAN'S LAST CORPSE LEAVES THE SOURCE (the
   foundation cut's second write-side cleanup · pin 9bfcf506):
   ev_lookup/ev_scan — kept one generation for the prior boot's emitted
@@ -2678,6 +2730,22 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-06-18→23 · the reframe + the three-doc consolidation; the crown's EfOpen~EfNeg unify (b4b1989); the handler registry dissolved into the live read
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
+
+`Hβ.emit.arm-closure-captures-record` (2026-07-24, born of the
+singleton-reads-the-world landing): the LAST bracket-maintained cache is
+the $<hname>_state_g global, now read by exactly one site — the
+resume-commit store's closure home (LStateSlotStore with a handler name:
+a MultiShot arm's state commit from inside a closure, whose own __state
+is its closure record — the measured 32-not-46 silent state loss).
+Sound today because arm commits execute inside their install's live
+bracket; the ultimate form deletes the global whole: the arm closure
+CAPTURES the record it commits to (Carried-Truth — the record is a
+value in scope at the closure's mint), LStateSlotStore's home field
+dies, emit_singleton_globals dies, and the install bracket's
+save/set/restore triple dies with them. Keyed by the same hname the
+world chain now carries, so the capture can also be read as "the store
+resolves through $world_find like the perform" — but the capture is the
+deeper cut (no runtime walk for a value the closure was born holding).
 
 `Hβ.cli.infer-context-bracket` RESOLVED: LANDED (2026-07-23, pin 2644dab5 —
 the R5 entry in the ledger; the arc: refuted by the mint-time evidence

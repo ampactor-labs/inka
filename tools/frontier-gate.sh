@@ -1052,6 +1052,14 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-world-arm-config.mn" 40 yes "$dir"
   run_program "$compiler" world-arm-shadow \
     "$ROOT/tests/frontier/mn-world-arm-shadow.mn" 40 yes "$dir"
+  # R4+A4: a MultiShot remainder's singleton perform resolves through the
+  # k record's FROZEN world after the crossed install's bracket exited.
+  # Seen RED twice on pin 9bfcf506: 134 (the k2 loud floor at the
+  # driverless crossing, pre-A4) then 30 (A4 un-floored but the perform
+  # read the bracket-restored $scaler_state_g cache — the null page as its
+  # config). GREEN = the chain read: (10+6) + (20+6).
+  run_program "$compiler" world-resume-frozen \
+    "$ROOT/tests/frontier/mn-world-resume-frozen.mn" 42 yes "$dir"
 
   # ── the annotation verifier PROVES (never reads boundness) ──────────
   # Seen RED on the pre-fix boot: an allocating main (++ carries its

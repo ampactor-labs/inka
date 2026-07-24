@@ -1124,6 +1124,11 @@ fn walk_lemit_expr(expr) = match expr {
   },
   LHandleWith(_, b, hn, hname, inits, arm_names) => {
     walk_install_groups(arm_names, 0)
+    // The install's world_push carries the interned HANDLER name as the
+    // singleton tier's find key (hkey@16) — register it through the same
+    // visit_string channel the group enames ride, so the push's constant
+    // and every LWorldResolve seeking this handler agree on one offset.
+    if hname != "" { visit_string(hname) }
     walk_lemit_expr(b)
     walk_lemit_expr(hn)
     walk_lemit_list(inits)
@@ -1146,6 +1151,11 @@ fn walk_lemit_expr(expr) = match expr {
     visit_effect_demand(op)
     walk_lemit_expr(singleton_perform_block(h, hn, op, st, args))
   },
+  // The chain find compares the interned HANDLER name — register it
+  // through the SAME visit_string channel the install's world_push hkey
+  // rides, so both sides resolve to one nonzero data offset (else every
+  // find misses at 0).
+  LWorldResolve(_, hkey)    => visit_string(hkey),
   LWasiCall(_, op_name, args) => {
     visit_wasi_op(op_name)
     walk_lemit_list(args)
@@ -1233,31 +1243,24 @@ fn emit_state_globals(slots) = {
 }
 
 // ─── The scoped-singleton globals — one `$<hname>_state_g` per NAMED
-// install in the module. The install binds its record here (the Tier-1
-// env-scan home, the scoped-singleton save/restore around every named
-// install); the DECLARATION projects from the same LowIR the binds do —
-// a pure walk collecting every LHandleWith's hname, deduped. Anonymous
-// installs ("" — an inline handler expression) bind no singleton.
-// Declare `$<hname>_state_g` — the state's ONE HOME — for every handler the
-// singleton dispatch may read: the INSTALLED handlers (from the LowExpr tree's
-// LHandleWith, SET at install) UNION every no-config DECLARED handler in the env
-// (an uninstalled handler's global stays 0; a STATELESS arm never reads it, and
-// the stateful-and-never-installed read is REFUSED at the executable gate —
-// E_EffectUnhandled's singleton tightening — so a zero global is never
-// dereferenced as a state record).
-// emit and lower's singleton dispatch MUST agree on which handlers have a home,
-// so BOTH read the env live (one criterion, two readers — never a registry
-// on one side).
-fn emit_singleton_globals(lowered) with WasmOut + EnvRead + Memory + Alloc = {
+// install in the module. The install binds its record here; the DECLARATION
+// projects from the same LowIR the binds do — a pure walk collecting every
+// LHandleWith's hname, deduped. Anonymous installs ("" — an inline handler
+// expression) bind no singleton. The set is INSTALLED-only: the perform
+// resolves its record from the world chain (LWorldResolve), so a global
+// exists solely for its remaining reader — the resume-commit store's
+// closure home (LStateSlotStore with a handler name), which only an
+// executing arm reaches, and an executing arm implies its install. The
+// old union with every no-config DECLARED handler existed to make the
+// perform's global.get assemble for never-installed handlers; that read
+// is gone.
+fn emit_singleton_globals(lowered) with WasmOut + Memory + Alloc = {
   let installed = singleton_hnames_list(lowered, [])
-  let all_names = match env_snapshot() {
-    Env(entries) => noconfig_handler_names(entries, installed)
-  }
   each((h) => {
     wat_emit("  (global $")
     wat_emit(h)
     wat_emit("_state_g (mut i32) (i32.const 0))\n")
-  }, all_names)
+  }, installed)
 }
 
 // The yield triple (band B k1) — the out-of-band MultiShot unwind protocol,
@@ -1366,9 +1369,11 @@ fn emit_one_redrive(hname) = {
     wat_emit("      (if (then\n")
     wat_emit("        (i32.const 0)(global.set $yield_flag)\n")
     wat_emit("        (global.get $yield_k)(local.set $k)\n")
-    wat_emit("        (global.get $")
-    wat_emit(hname)
-    wat_emit("_state_g)(local.get $k)\n")
+    // The arm's record is the driver's OWN $__state — both callers already
+    // pass it (the install boundary passes its bracket's record; an arm's
+    // flag-check passes its own __state). The old global re-read was the
+    // Carried-Truth re-derivation of a value in hand.
+    wat_emit("        (local.get $__state)(local.get $k)\n")
     emit_driver_arg_loads(arity, 0)
     wat_emit("        (call $op_")
     wat_emit(hname)
@@ -1453,31 +1458,13 @@ fn emit_k_compose_pair() with WasmOut = {
   wat_emit("  )\n")
 }
 
-// Add each no-config declared handler's name (a HandlerKind with empty config)
-// to acc, deduped — the home-dispatch set lower reads via lower_op_default_handler.
-// INDEX-walk, never drop_last: `entries` is an env_snapshot slice view, and
-// drop_last-walking a slice stacks slice-of-slice and corrupts the walk (§7).
-fn noconfig_handler_names(entries, acc) = noconfig_handler_names_at(entries, len(entries), acc)
-
-fn noconfig_handler_names_at(entries, i, acc) = {
-  if i == 0 { acc }
-  else {
-    let (name, _scheme, _reason, kind) = list_index(entries, i - 1)
-    let acc2 = match kind {
-      HandlerKind(_row, config, _state, _arms) =>
-        if len(config) == 0 && ls_find_str_local(acc, name, 0) < 0 { [name] ++ acc } else { acc },
-      _ => acc
-    }
-    noconfig_handler_names_at(entries, i - 1, acc2)
-  }
-}
-
 fn singleton_hnames_list(stmts, acc) = {
   if len(stmts) == 0 { acc }
   else { singleton_hnames_list(drop_last(stmts), singleton_hnames_expr(last(stmts), acc)) }
 }
 
 fn singleton_hnames_expr(expr, acc) = match expr {
+  LWorldResolve(_, _) => acc,
   LShow(_h, x) => singleton_hnames_expr(x, acc),
   LHash(_h, x) => singleton_hnames_expr(x, acc),
   LHandleWith(_h, b, hn, hname, inits, _an) => {
@@ -1896,6 +1883,7 @@ fn collect_call_vectors_arms_from(arms, acc, i) =
   }
 
 fn collect_call_vectors_expr(expr, acc) = match expr {
+  LWorldResolve(_, _)   => acc,
   LShow(h, x)           => collect_call_vectors_expr(show_node_of(h, x), acc),
   LHash(h, x)           => collect_call_vectors_expr(hash_node_of(h, x), acc),
   LDirectCall(_h, _fh, _n, _t, args) => collect_call_vectors_list(args, acc),
@@ -2189,14 +2177,27 @@ fn emit_memory_decl() = {
   // and the callers' scratch locals may be live (the wrong-scratch class).
   wat_emit("  (func $heap_reset_impl (param $mark i32)(local.get $mark)(i32.const 0)(global.get $heap_ptr)(local.get $mark)(i32.sub)(memory.fill)(global.set $heap_ptr (local.get $mark)))\n")
   // $world_push — cons one [key@0][entry@4][parent@8][install_world@12]
-  // node onto the live world chain (the install's runtime edge; a dedicated
-  // fn like $heap_reset_impl, never inline — the callers' scratch may be
-  // live at the install site). entry is the install's own [record][base]
-  // view (ONE view object, never copied); install_world is the chain as
-  // saved BEFORE this install's pushes — the world the arm dispatch sets
-  // around the arm call (deep-handler semantics: an arm's performs resolve
+  // [hkey@16] node onto the live world chain (the install's runtime edge; a
+  // dedicated fn like $heap_reset_impl, never inline — the callers' scratch
+  // may be live at the install site). entry is the install's own
+  // [record][base] view (ONE view object, never copied); install_world is
+  // the chain as saved BEFORE this install's pushes — the world the arm
+  // dispatch sets around the arm call (deep-handler semantics: an arm's
+  // performs resolve
   // outer, never self).
-  wat_emit("  (func $world_push (param $key i32)(param $entry i32)(param $iw i32)(local $n i32)(local.set $n (call $alloc (i32.const 16)))(local.get $n)(local.get $key)(i32.store offset=0)(local.get $n)(local.get $entry)(i32.store offset=4)(local.get $n)(global.get $world_g)(i32.store offset=8)(local.get $n)(local.get $iw)(i32.store offset=12)(global.set $world_g (local.get $n)))\n")
+  wat_emit("  (func $world_push (param $key i32)(param $entry i32)(param $iw i32)(param $hkey i32)(local $n i32)(local.set $n (call $alloc (i32.const 20)))(local.get $n)(local.get $key)(i32.store offset=0)(local.get $n)(local.get $entry)(i32.store offset=4)(local.get $n)(global.get $world_g)(i32.store offset=8)(local.get $n)(local.get $iw)(i32.store offset=12)(local.get $n)(local.get $hkey)(i32.store offset=16)(global.set $world_g (local.get $n)))\n")
+  // $world_find — the chain-top RECORD for a HANDLER: walk the live
+  // $world_g [key][entry][parent][iw][hkey] nodes, i32.eq on the interned
+  // HANDLER name at hkey@16 (both sides intern through visit_string —
+  // pointer-eq is the licence; ename key@0 stays the EVIDENCE tier's walk,
+  // ev_perform_node — two keys, two dispatch semantics, one chain: the
+  // singleton tier's op→handler edge is per-OP, and an ename find
+  // mis-resolved the split-effect pair, two handlers covering one effect's
+  // disjoint op sets). Return the entry's record@0; 0 on miss. Sound under
+  // every $world_g rebind because the find walks whatever chain is LIVE —
+  // an LResumeK re-entry's frozen chain included, where a bracket-restored
+  // state global read 0.
+  wat_emit("  (func $world_find (param $hkey i32) (result i32) (local $n i32)(local.set $n (global.get $world_g))(block $done (loop $walk (br_if $done (i32.eqz (local.get $n)))(if (i32.eq (i32.load offset=16 (local.get $n)) (local.get $hkey))(then (return (i32.load offset=0 (i32.load offset=4 (local.get $n))))))(local.set $n (i32.load offset=8 (local.get $n)))(br $walk)))(i32.const 0))\n")   // drift-audit: ignore — WAT instruction text
   // Thread record region: [0x800, 0x1000) = 2KB / 16 bytes per record
   // = 128 thread slots. Layout per record (16 bytes):
   //   offset 0: closure_ptr (i32)
@@ -2337,6 +2338,7 @@ fn fn_emit_records_arms(arms, i) =
   }
 
 fn collect_fn_emit_records_expr(expr) = match expr {
+  LWorldResolve(_, _) => [],
   LShow(_h, x) => collect_fn_emit_records_expr(x),
   LHash(_h, x) => collect_fn_emit_records_expr(x),
   // The LowFn fence IS the body-context every fn shape carries: closures
@@ -2549,6 +2551,7 @@ fn walk_locals_list(stmts, acc) = {
 }
 
 fn walk_locals_expr(expr, acc) = match expr {
+  LWorldResolve(_, _) => acc,
   LLet(h, name, inner) => {
     // The local's WIDTH: llet_repr — the ONE projection this decl and the
     // LLet store both read, so they cannot disagree. The NAME is
@@ -2962,6 +2965,7 @@ fn find_local_handle_arms(name, arms, i) =
   }
 
 fn find_local_handle_expr(name: String, expr) = match expr {
+  LWorldResolve(_, _)       => 0,
   LLocal(h, n)              => if n == name { h } else { 0 },
   LShow(_h, x)              => find_local_handle_expr(name, x),
   LHash(_h, x)              => find_local_handle_expr(name, x),
@@ -3305,6 +3309,16 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (global.get $")
     wat_emit(spec_target_name(h, name))
     wat_emit(")\n")
+  },
+
+  LWorldResolve(_h, hkey) => {
+    // The chain-top record for the interned HANDLER name, read from the
+    // LIVE $world_g — the walk_lemit arm interned hkey through
+    // visit_string, the same channel the install's world_push hkey rode,
+    // so the two i32.eq as the same data offset.
+    wat_emit("    (call $world_find (i32.const ")
+    wat_emit(int_to_str(string_offset(hkey)))
+    wat_emit("))\n")
   },
 
   LLet(h, name, val) => {
@@ -3798,12 +3812,15 @@ fn emit_expr(expr) = match expr {
     // each effect-group's arms contiguous + its [record, base] entry
     emit_handler_effect_entries(local_name, nstate, arm_names)
     // The WORLD bracket — every install draws its runtime edge: save the
-    // live chain, cons one [key][entry][parent][install_world] node per
-    // absorbed effect group (entry = the group's [record][base] view built
-    // above; install_world = the saved chain, what the arm dispatch sets
-    // around the arm call), restore after the extent (the same
+    // live chain, cons one [key][entry][parent][install_world][hkey] node
+    // per absorbed effect group (entry = the group's [record][base] view
+    // built above; install_world = the saved chain, what the arm dispatch
+    // sets around the arm call; hkey = the interned HANDLER name, the
+    // singleton tier's find key — 0 for an anonymous install, which no
+    // singleton find ever seeks), restore after the extent (the same
     // save/restore shape as the scoped-singleton global below, world
-    // outermost). The perform walks this chain (ev_perform_node).
+    // outermost). The evidence perform walks key@0 (ev_perform_node); the
+    // singleton perform walks hkey@16 ($world_find).
     wat_emit("(global.get $world_g)(local.set $")
     wat_emit(local_name)
     wat_emit("_wprev)\n")
@@ -3816,15 +3833,22 @@ fn emit_expr(expr) = match expr {
       wat_emit(group_ename(g))
       wat_emit(")(local.get $")
       wat_emit(local_name)
-      wat_emit("_wprev)(call $world_push)\n")
+      wat_emit("_wprev)(i32.const ")
+      wat_emit(if hname == "" { "0" } else { int_to_str(string_offset(hname)) })
+      wat_emit(")(call $world_push)\n")
     }, arm_names)
-    // bind the record to $<hname>_state_g for env-scan Tier-1 resolution —
-    // SCOPED: the global is the INNERMOST live install's record, so save
-    // the enclosing install's record first and restore it after the body
+    // bind the record to $<hname>_state_g for the resume-commit store's
+    // closure home (LStateSlotStore with a handler name — the one reader
+    // left; the PERFORM resolves through the world chain now) — SCOPED:
+    // the global is the INNERMOST live install's record, so save the
+    // enclosing install's record first and restore it after the body
     // (global.set pops only its operand; the body's result stays on the
     // stack). Without the restore, any NESTED same-handler session — map
     // inside map, the collector family — leaves the OUTER session's
-    // Tier-1 reads pointing at the INNER exhausted record.
+    // store pointing at the INNER exhausted record. The named peer
+    // Hβ.emit.arm-closure-captures-record retires this global whole: the
+    // arm closure captures the record it commits to, and the last
+    // bracket-maintained cache dies.
     if hname != "" {
       wat_emit("(global.get $")
       wat_emit(hname)
@@ -3838,14 +3862,19 @@ fn emit_expr(expr) = match expr {
       wat_emit("_state_g)\n")
     }
     emit_expr(body)
-    // band B k1 — the yield DRIVER. Runs INSIDE the $<hname>_state_g bracket
-    // (so the arm AND every k(v) re-entry of the remainder still resolve
-    // this install's record — the deep-handler law by construction) and is a
-    // LOOP (a re-yield of an owned op re-enters the SAME driver with the new
-    // k). Body returned normally → the flag is clear → the loop exits on its
-    // first check with the body's parked value: semantically the ungated
-    // leg. A yield of a FOREIGN op exits with the flag INTACT — it bubbles
-    // through this install to the enclosing driver (or the _start backstop).
+    // band B k1 — the yield DRIVER. Takes this install's record as its own
+    // __state (the arm call carries it — no global re-read) and is a LOOP
+    // (a re-yield of an owned op re-enters the SAME driver with the new
+    // k). A remainder's performs resolve through the LIVE world chain the
+    // k record froze — the deep-handler law by REPRESENTATION, which the
+    // old "the state_g bracket covers every k(v) re-entry" claim was not:
+    // a k crossing an EXITED inner install found that install's global
+    // restored to 0 while the frozen chain still carried its record (the
+    // mn-world-resume-frozen fixture's silent 30). Body returned normally
+    // → the flag is clear → the loop exits on its first check with the
+    // body's parked value: semantically the ungated leg. A yield of a
+    // FOREIGN op exits with the flag INTACT — it bubbles through this
+    // install to the enclosing driver (or the _start backstop).
     // Gated on the ONE multishot_ops_of decider (walk_locals reads it
     // identically); an all-OneShot install emits the pre-k1 bytes exactly.
     let ms_ops = multishot_ops_of(hname)
@@ -4644,6 +4673,7 @@ fn collect_fold_tys_arms_from(arms, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show:
   }
 
 fn collect_fold_tys_expr(expr, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) with LookupTy + EnvRead + Alloc + Memory = match expr {
+  LWorldResolve(_, _) => acc,
   LShow(_h, x) => collect_fold_tys_expr(x, fold_acc_show(acc, x)),
   LHash(_h, x) => collect_fold_tys_expr(x, fold_acc_hash(acc, x)),
   LCall(_h, f, args) => collect_fold_tys_expr(f, collect_fold_tys_list(args, acc)),

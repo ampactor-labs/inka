@@ -1026,6 +1026,21 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶▶ THE RATCHET RUNS — 77 medium-authored tightenings,
+  19 corrected by the canonical judge (tighten goes batch · pin
+  b0204323): every authorable T_OverDeclared applies per run (per file
+  bottom-up; monotone-safe by the wider-declaration argument);
+  iteration 1 authored 75, iteration 2 authored 2; the blob's
+  canonical judgment then REFUTED 19 DAG-computed rows (the
+  order-conditional class measured live at scale — the tighten loop is
+  now Hβ.infer.order-independent-verdicts' sharpest consumer), and
+  each was trued to the judge's own found-row, converging 19 → 13 → 0
+  with the emitted wheel BYTE-IDENTICAL throughout (pure inference
+  truth, zero emit drift). Residue: 15 multi-line decl heads the
+  single-line patcher refuses (never mangle). The wheel's declared
+  rows are now at the canonical judgment's fixpoint for every
+  single-line head. Board whole: CLEAN m2 == m3 at 563,042 lines,
+  census 0, comment-refs 0, frontier 226/0, battery 113/113.
 - 2026-07-23 · ▶▶▶▶ THE MEDIUM AUTHORS ITS FIRST CHANGE (`mentl
   tighten`; the self-build audit's step 1 executed whole · pin
   ab8daa07): T_OverDeclared was always a MachineApplicable proposal

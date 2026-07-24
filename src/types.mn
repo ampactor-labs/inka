@@ -2141,7 +2141,7 @@ fn resolve_call_args(cname, args) with EnvRead + GraphRead + Memory + Alloc + Di
 }
 
 // Unwrap a LabeledArg to its value node; a positional arg passes through.
-fn unwrap_labeled_arg(arg) with GraphRead = {
+fn unwrap_labeled_arg(arg) with Pure = {
   let N(body, _, _) = arg
   match body {
     NExpr(LabeledArg(_, v)) => v,
@@ -2252,7 +2252,7 @@ fn collect_slot_nodes(params, slots, i, n, out, count) with Memory + Alloc = {
   }
 }
 
-fn show_tparam(ref tp) with GraphRead + !Mutate + Alloc + Memory = {
+fn show_tparam(ref tp) with Pure = {
   let base = "{param_name(tp)}: {show_type(param_ty(tp))}"
   match param_authored(tp) {
     Unmarked => match param_resolved(tp) {
@@ -2331,7 +2331,7 @@ fn show_eff_name(ref name) with !Mutate = match name {
   _                       => "«invalid-effect»"   // drift-audit: ignore — display-totality floor; honest placeholder, not data classification
 }
 
-fn show_eff_arg(ref arg) with !Mutate = match arg {
+fn show_eff_arg(ref arg) with Memory = match arg {
   EAInt(n)    => int_to_str(n),
   EAFloat(f)  => float_to_str(f),
   EAString(s) => "\"{s}\"",
@@ -2356,7 +2356,7 @@ fn show_predicate(ref pred) with GraphRead + Memory + Alloc = {
   }
 }
 
-fn show_cmp_op(ref op) with !Mutate = match op {
+fn show_cmp_op(ref op) with Pure = match op {
   BEq => "==",
   BLt => "<",
   BLe => "<=",
@@ -2392,7 +2392,7 @@ fn show_pred_operand(handle) with GraphRead + Alloc + Memory = {
   }
 }
 
-fn show_callee_name(ref callee) with !Mutate = {
+fn show_callee_name(ref callee) with Pure = {
   let N(cbody, _, _) = callee
   match cbody {
     NExpr(VarRef(n)) => n,
@@ -2430,7 +2430,7 @@ fn show_reason(ref reason) with GraphRead + Memory + Alloc + !Mutate = {
   }
 }
 
-fn show_span(ref span) with !Mutate = {
+fn show_span(ref span) with Memory = {
   let Span(sl, sc, el, ec) = span
   "{int_to_str(sl)}:{int_to_str(sc)}-{int_to_str(el)}:{int_to_str(ec)}"
 }

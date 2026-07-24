@@ -304,7 +304,7 @@ fn region_bucket_scan(ref bucket, handle, i) with Memory = {
   }
 }
 
-fn region_on_stack(ref stack, rid) with !Mutate = {
+fn region_on_stack(ref stack, rid) with Memory + Alloc = {
   any((r) => {
     let Region(rid_on_stack, _) = r
     rid_on_stack == rid
@@ -325,13 +325,13 @@ fn join_field_regions(ref tags, ref fields, current) with !Mutate = {
   }, fields)
 }
 
-fn report_each_collision(ref names, ref span) with !Mutate = {
+fn report_each_collision(ref names, ref span) with Diagnostic + Memory + Alloc = {
   each((name) => {
     report(EOwnershipViolation("'{name}' consumed in two parallel branches", span))
   }, names)
 }
 
-fn find_first_span(ref sites, ref name: String) with !Mutate = {
+fn find_first_span(ref sites, ref name: String) with Alloc + Memory = {
   let hits = filter((entry) => {
     let (entry_name, _) = entry
     entry_name == name

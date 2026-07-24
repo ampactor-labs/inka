@@ -43,7 +43,7 @@ import verify
 //     is an address, not an env var). In-repo the src/lib homes win
 //     first — byte-identical behavior; on a total miss the repo-relative
 //     lib path returns so the E_MissingModule diagnostic stays as before.
-fn driver_module_path(ref module_name) with Memory + Alloc + Filesystem = {
+fn driver_module_path(ref module_name) with Filesystem = {
   let direct = "{module_name}.mn"
   if fs_exists(direct) { direct }
   else {

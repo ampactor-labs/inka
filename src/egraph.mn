@@ -93,7 +93,7 @@ fn body_is_pure(handle) with GraphRead + LookupTy + Memory = match graph_node_bo
 // row in TFun's third field — a closure over effectful evidence is caught here; a
 // value node carries NONE, which IS the pure row (a value performs nothing to BE a
 // value). No fabrication, no AST re-derivation: the row is read where infer wrote it.
-fn effs_at(handle) with GraphRead + LookupTy + Memory = match lookup_ty(handle) {
+fn effs_at(handle) with LookupTy = match lookup_ty(handle) {
   TFun(_, _, row) => row,
   _               => mk_ef_pure()
 }
@@ -247,7 +247,7 @@ fn rw_const_fold(handle) with GraphRead + GraphWrite = {
   }
 }
 
-fn mint_fold(handle, v) with GraphRead + GraphWrite = {
+fn mint_fold(handle, v) with GraphWrite = {
   let h = graph_fresh_ty(Inferred("const-fold"))
   graph_register_node(h, NExpr(LitInt(v)))
   graph_bind(h, TInt, Inferred("const-fold result : Int"))

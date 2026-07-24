@@ -47,7 +47,7 @@ fn is_oct_digit(b) with Pure = b >= 48 && b <= 55
 
 // Keyword classification — returns `Some(TokenKind)` if `word` is a
 // reserved keyword; `None` otherwise (caller emits `TIdent(word)`).
-fn keyword_kind(ref word) with !Mutate = {
+fn keyword_kind(ref word) with Pure = {
   if word == "fn"       { Some(TFn) }
   else if word == "let"       { Some(TLet) }
   else if word == "if"        { Some(TIf) }

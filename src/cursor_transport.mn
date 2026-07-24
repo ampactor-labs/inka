@@ -234,7 +234,7 @@ fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate =
 // `<~` verb un-named — the exact drift the prime directive forbids. The
 // state threads through `<~ accumulate`; cursor_step is one cycle.
 
-fn cursor_session(initial_caret) with Surface + GraphRead + CursorRead + !Mutate = {
+fn cursor_session(initial_caret) with Surface = {
   surface_handshake()
   transport_state_init(initial_caret)
     |> cursor_step
@@ -375,7 +375,7 @@ fn render_literal_source(h) with GraphRead + Alloc + Memory + !Mutate = {
 
 // ─── Format / parse helpers per transport ──────────────────────────
 
-fn show_handle_label(cursor) with Alloc + Memory = {
+fn show_handle_label(cursor) with Memory = {
   let Cursor(handle, _, _) = cursor
   "handle={int_to_str(handle)}"
 }
@@ -429,7 +429,7 @@ fn show_verify_count(preds) with Alloc + Memory =
   if len(preds) == 0 { "no obligations" }
   else { "{int_to_str(len(preds))} pending" }
 
-fn show_suggestion(opt) with Alloc + Memory = match opt {
+fn show_suggestion(opt) with Memory = match opt {
   None => "(no next-step)",
   Some(suggestion) => {
     let AnnotationSuggestion(_, ann_text, unlocks, _) = suggestion
@@ -492,7 +492,7 @@ fn splice_span(ref source, ref span, ref text) with Memory + Alloc = {
   "{str_slice(source, 0, start)}{text}{str_slice(source, end, n)}"
 }
 
-fn indent_annotation(ref text) with Memory + Alloc = {
+fn indent_annotation(ref text) with Pure = {
   "  {text}\n"
 }
 

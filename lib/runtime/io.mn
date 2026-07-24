@@ -289,7 +289,7 @@ fn read_line_loop(buf, offset, capacity) with Memory + Alloc + WASI = {
 // paths carry explicit lengths; str_payload materializes a rope/slice
 // exactly here, and a flat path is zero-copy — the bytes already sit
 // where the syscall wants them.
-fn fs_path_view(s) with Memory + Alloc = {
+fn fs_path_view(s) with Memory = {
   (str_payload(s), byte_len(s))
 }
 
@@ -503,7 +503,7 @@ fn fs_open_impl(path_str) with Memory + Alloc + WASI = {
 
 // fs_close_impl — fd_close; errno absorbed (idempotent at runtime
 // per WASI errno-9 EBADF semantics).
-fn fs_close_impl(fd) with Memory + WASI = {
+fn fs_close_impl(fd) with WASI = {
   fd_close(fd)
   ()
 }

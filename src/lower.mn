@@ -5860,7 +5860,7 @@ fn spec_enc_floor_loop(enc, i, n) with Memory = {
   else { spec_enc_floor_loop(enc, i + 1, n) }
 }
 
-fn spec_mangle(name, enc) with Memory + Alloc = "{name}$sp{enc}"
+fn spec_mangle(name, enc) with Pure = "{name}$sp{enc}"
 
 // The site's instantiation pairs — [] when the name is not generic: a value
 // let, a monomorphic fn, or an internal synthesized name. The scheme's
@@ -6043,7 +6043,7 @@ fn spec_scan_arms(arms, acc) with Memory + Alloc = fold(acc, (a, arm) => { let (
 // sites). Seeded whenever ANY site projects a wide key — a cheap, precise-
 // enough over-approximation in the emit_runtime_contract tradition; a
 // program with no wide instantiation adds nothing.
-fn spec_wide_family() with Memory + Alloc = ["float_to_str", "list_compare_f64", "list_eq_f64", "list_hash_f64"]
+fn spec_wide_family() with Pure = ["float_to_str", "list_compare_f64", "list_eq_f64", "list_hash_f64"]
 
 fn spec_site_is_wide(site) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
   let (h, n) = site
@@ -6051,7 +6051,7 @@ fn spec_site_is_wide(site) with EnvRead + LookupTy + GraphRead + Memory + Alloc 
   if len(pairs) == 0 { false } else { !spec_enc_is_floor(spec_enc(pairs)) }
 }
 
-fn spec_reach_seed(lowered) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+fn spec_reach_seed(lowered) with Alloc + Memory = {
   let (sites, _ophs) = fold(([], []), (a, d) => spec_scan_expr(d, a), lowered)
   if any(spec_site_is_wide, sites) { spec_wide_family() } else { [] }
 }

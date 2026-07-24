@@ -3986,7 +3986,7 @@ fn generalize(handle) = {
 // paranoia, not a semantics: no real resolved type nests 200 deep, so
 // crossing it IS the cycle, reported once with the shape in hand.
 fn chase_deep(ty) = chase_deep_at(ty, 0)
-fn chase_probe_tag(ty) with Memory + Alloc = match ty {
+fn chase_probe_tag(ty) with Memory = match ty {
   TVar(h) => "TVar({int_to_str(h)})",
   TFun(ps, _, _) => "TFun/{int_to_str(len(ps))}",
   TList(_) => "TList", TTuple(_) => "TTuple", TName(n, _) => "TName({n})",
@@ -5604,7 +5604,7 @@ fn conjunction(p, q) = PAnd(p, q)
 
 fn pattern_predicate_for(pat, scrut) = PPatternMatch(pat, node_handle(scrut))
 
-fn is_assert_call(callee) with GraphRead = {
+fn is_assert_call(callee) with Pure = {
   let N(body, _, _) = callee
   match body {
     NExpr(VarRef(name)) => name == "assert",
@@ -5612,7 +5612,7 @@ fn is_assert_call(callee) with GraphRead = {
   }
 }
 
-fn predicate_of_assert_arg(args) with GraphRead + Memory = {
+fn predicate_of_assert_arg(args) with Memory = {
   if len(args) == 0 { PTrue }
   else { predicate_of_bool_expr(last(args)) }
 }

@@ -232,7 +232,7 @@ fn spec_is_agg(ty) with Pure = match ty {
 
 // The scalar/word face of show — the synthesized call (aggregates never
 // reach this; emit_show dispatches them to the direct leaf call).
-fn show_node_of(h, x) with LookupTy + Memory + Alloc = {
+fn show_node_of(h, x) with Memory + LookupTy = {
   let ty = show_hash_ty(x)
   match ty {
     TString            => x,
@@ -247,7 +247,7 @@ fn show_node_of(h, x) with LookupTy + Memory + Alloc = {
   }
 }
 
-fn hash_node_of(h, x) with LookupTy + Memory + Alloc = {
+fn hash_node_of(h, x) with Memory + LookupTy = {
   let ty = show_hash_ty(x)
   match ty {
     TString            => LCall(h, LGlobal(h, "str_hash"), [x]),

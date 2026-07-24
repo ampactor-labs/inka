@@ -488,7 +488,7 @@ fn reason_is_pinned(reason) with Pure = match reason {
   _                         => false
 }
 
-fn reduce_max_by_score(scored) with Memory + Alloc = {
+fn reduce_max_by_score(scored) with Alloc + Memory = {
   reduce(scored, (best, candidate) => {
     let Cursor(_, _, c_impact) = candidate
     let Cursor(_, _, b_impact) = best
@@ -506,7 +506,7 @@ fn reduce_max_by_score(scored) with Memory + Alloc = {
 // The eight-arm fan — ONE projection body serving both cursor_at (span,
 // resolved here) and cursor_at_handle (pre-resolved). The eight aspects of
 // the one read (PLAN §2), each arm a tentacle.
-fn cursor_view_of(handle) with GraphRead + EnvRead + LookupTy + Verify + Synth + !Mutate = {
+fn cursor_view_of(handle) with GraphRead = {
   let GNode(kind, _reason) = graph_chase(handle)
   let pos = (handle, kind)
   let (query, propose, topology, row, trace, verify, teach, why) =

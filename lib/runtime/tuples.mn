@@ -24,7 +24,7 @@ import types
 
 // make_tuple — allocate `arity` 4-byte slots (uninitialized).
 // Callers fill slots immediately via tuple_set before the tuple escapes.
-fn make_tuple(arity) with Memory + Alloc = {
+fn make_tuple(arity) with Alloc = {
   alloc(arity * 4)
 }
 

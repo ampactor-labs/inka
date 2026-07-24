@@ -221,7 +221,7 @@ fn closure_result_addr(closure_ptr) with Memory = {
 // __state pointer". For Thread-effect callers that want an Int tid,
 // we project the start-arg the host passed when invoking $wasi_thread_start
 // (which equals the closure pointer — the thread's own state).
-fn ffi_current_thread_id() with WasiThreads = 0
+fn ffi_current_thread_id() with Pure = 0
 
 fn ffi_num_cores() with WasiThreads = wasi_num_cores()
 

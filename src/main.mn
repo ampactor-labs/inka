@@ -588,12 +588,19 @@ fn tighten_run(target_opt) = {
     {
       let (_ast, ranges) = driver_entry_with_ranges(entry_module)
       let cands = tightenables()   // drift-audit: ignore — sequenced effectful ledger read (the diag_refusals precedent): the collector's state is read once after the check populates it
-      match find((c) => { let (_, used, _, _) = c row_is_authorable(used) }, cands) {
-        None => {
-          print_string("mentl tighten: nothing to tighten ({int_to_str(len(cands))} over-declared, none authorable)\n")
-          0
-        },
-        Some(c) => apply_tightening(c, ranges)
+      let authorable = filter((c) => { let (_, used, _, _) = c row_is_authorable(used) }, cands)
+      if len(authorable) == 0 {
+        print_string("mentl tighten: nothing to tighten ({int_to_str(len(cands))} over-declared, none authorable)\n")
+        0
+      } else {
+        // Batch-apply: every proposal was computed against the CURRENT
+        // (wider) declarations, so a batch member's row is never too
+        // narrow — at worst it leaves slack a tightened callee exposes,
+        // which the NEXT run's re-judgment catches (the ratchet
+        // converges). Per file, patch bottom-up so line offsets hold.
+        let n = apply_tightenings(authorable, ranges)
+        print_string("tighten: {int_to_str(n)} of {int_to_str(len(authorable))} authorable applied — the medium authored these; verify with a fresh check + the gates\n")
+        if n > 0 { 0 } else { 1 }
       }
     }
       ~> tighten_collector
@@ -613,40 +620,69 @@ fn row_is_authorable(ref used) = {
   }
 }
 
-fn apply_tightening(c, ranges) = {
-  let (declared, used, name, span) = c
-  match file_line_of(ranges, span) {
-    None => {
-      eprint_string("mentl tighten: {name}'s span maps into no module range\n")
-      1
-    },
-    Some(pl) => {
-      let (path, line1) = pl
-      let text = fs_read_file(path)
-      let ls = line_start_offset(text, line1)
-      let le = line_end_offset(text, ls)
-      let line = str_slice(text, ls, le)
-      let wi = index_of(line, " with ")
-      if wi < 0 {
-        eprint_string("mentl tighten: {name} at {path}:{int_to_str(line1)} — no with-clause on the decl line; skipping\n")
-        1
-      } else {
-        // The terminator: the first " = " after the clause. The row text
-        // itself contains no " = ", so the match is the head's binder.
-        let after = str_slice(line, wi + 6, byte_len(line))
-        let eq = index_of(after, " = ")
-        if eq < 0 {
-          eprint_string("mentl tighten: {name} at {path}:{int_to_str(line1)} — the decl head is not single-line; skipping\n")
-          1
-        } else {
-          let row_new = show_effrow(used)
-          let new_line = "{str_slice(line, 0, wi + 6)}{row_new}{str_slice(after, eq, byte_len(after))}"
-          let new_text = "{str_slice(text, 0, ls)}{new_line}{str_slice(text, le, byte_len(text))}"
-          fs_write_file(path, new_text)
-          print_string("tighten: {name} ({path}:{int_to_str(line1)})\n  with {show_effrow(declared)}  →  with {row_new}\n  the medium authored this; verify with a fresh check + the gates\n")
-          0
-        }
+// The batch applier: locate every candidate (drop unmappable spans),
+// order by (path, line DESCENDING) — the negated-line sort key — so each
+// file patches bottom-up and earlier offsets never shift, then fold with
+// one open file at a time (read on path change, write on leave).
+fn apply_tightenings(cands, ranges) = {
+  let located = flatten(map((c) => {
+    let (declared, used, name, span) = c
+    match file_line_of(ranges, span) {
+      Some(pl) => {
+        // A list literal after a let must open on its own line — on one
+        // line `pl [(…)]` parses as indexing.
+        let (p, l) = pl
+        [(p, 0 - l, name, declared, used)]
+      },
+      None     => []
+    }
+  }, cands))
+  tighten_fold(sort(located), 0, "", "", 0)
+}
+
+fn tighten_fold(items, i, cur_path, cur_text, applied) = {
+  if i >= len(items) {
+    if byte_len(cur_path) > 0 { fs_write_file(cur_path, cur_text) }
+    applied
+  } else {
+    let (path, negline, name, declared, used) = list_index(items, i)
+    let line1 = 0 - negline
+    let text0 =
+      if path == cur_path { cur_text }
+      else {
+        if byte_len(cur_path) > 0 { fs_write_file(cur_path, cur_text) }
+        fs_read_file(path)
       }
+    match patch_with_clause(text0, line1, used) {
+      Some(t2) => {
+        print_string("tighten: {name} ({path}:{int_to_str(line1)})  with {show_effrow(declared)}  →  with {show_effrow(used)}\n")
+        tighten_fold(items, i + 1, path, t2, applied + 1)
+      },
+      None => {
+        eprint_string("mentl tighten: {name} at {path}:{int_to_str(line1)} — no single-line with-clause; skipped\n")
+        tighten_fold(items, i + 1, path, text0, applied)
+      }
+    }
+  }
+}
+
+// Rewrite one decl line's with-clause to the proven row. The terminator
+// is the first " = " after the clause — the row text itself contains no
+// " = ", so the match is the head's binder. None = the decl shape is not
+// a single-line with-clause head (never mangle; skip and say so).
+fn patch_with_clause(ref text, line1, ref used) = {
+  let ls = line_start_offset(text, line1)
+  let le = line_end_offset(text, ls)
+  let line = str_slice(text, ls, le)
+  let wi = index_of(line, " with ")
+  if wi < 0 { None }
+  else {
+    let after = str_slice(line, wi + 6, byte_len(line))
+    let eq = index_of(after, " = ")
+    if eq < 0 { None }
+    else {
+      let new_line = "{str_slice(line, 0, wi + 6)}{show_effrow(used)}{str_slice(after, eq, byte_len(after))}"
+      Some("{str_slice(text, 0, ls)}{new_line}{str_slice(text, le, byte_len(text))}")
     }
   }
 }
@@ -1168,7 +1204,7 @@ fn node_query_line(h, kind) with GraphRead + EnvRead + Memory + Alloc = {
 // The addressed source text itself, read back through the range map — the
 // line the user pointed at, sliced to the node's span. The file is the one
 // authority on its own text.
-fn source_slice(ref span, ref ranges) with Memory + Alloc + Filesystem = {
+fn source_slice(ref span, ref ranges) with Filesystem + Memory + Alloc = {
   let Span(sl, sc, _, ec) = span
   match find((r) => { let (_, _, start, nlines) = r sl >= start && sl < start + nlines }, ranges) {
     None => "",

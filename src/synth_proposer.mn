@@ -572,7 +572,7 @@ fn verify_each_enriched(candidates, target_ty) with Synth + GraphRead + GraphWri
 //    mint-span record — so dropping the pair dropped the Why from every
 //    rendered survivor.
 
-fn map_to_proposals(enriched) with Memory + Alloc = map((candidate) => {
+fn map_to_proposals(enriched) with Alloc + Memory = map((candidate) => {
   let EnrichedCandidate(c) = candidate
   (c.node, c.reason)
 }, enriched)

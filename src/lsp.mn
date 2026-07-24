@@ -134,7 +134,7 @@ fn parse_lsp_message(v) with Memory = {
 // downstream is ADT-only. Per drift mode 8: input strings are
 // projected, not stored.
 
-fn classify_method(method) with Memory = {
+fn classify_method(method) with Pure = {
   if      method == "initialize"               { LspInitialize }
   else if method == "initialized"              { LspInitialized }
   else if method == "shutdown"                 { LspShutdown }
@@ -255,7 +255,7 @@ fn position_to_span(pos) with Pure = {
 // diagnostic; definition; references). Project root extracted from
 // rootUri or workspaceFolders.
 
-fn handle_initialize(_params) with Memory + Alloc + Interact = {
+fn handle_initialize(_params) with Interact = {
   project_root()
   let caps = JObj([
     ("textDocumentSync",   JNum(1.0)),                    // 1 = Full
@@ -299,7 +299,7 @@ fn handle_hover(params) with Memory + Alloc + Interact + GraphRead = {
 // returned VoiceLine's slots to CompletionItems. The cursor's Propose
 // tentacle IS the completion source (PLAN §2 proposing-cursor): one
 // propose, the SIdent slots become items. Silence → empty list.
-fn handle_completion(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
+fn handle_completion(params) with Interact + Alloc + Memory = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
@@ -315,7 +315,7 @@ fn handle_completion(params) with Memory + Alloc + Interact + GraphRead + !Mutat
 // offering slots to CodeActions. Same propose path as completion (MV
 // §2.7.6: codeAction and completion both surface Propose-tentacle
 // voice). SLit slots (offering closers) become the quick-fix actions.
-fn handle_code_action(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
+fn handle_code_action(params) with Interact + Alloc + Memory = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
@@ -535,7 +535,7 @@ fn hover_from_reason(reason) with Memory + Alloc + GraphRead + !Mutate = {
 // CompletionItems. SIdent slots become items (label = ident,
 // kind=14 = Keyword as v1 placeholder). Other slot kinds skipped.
 
-fn completion_items_from_slots(slots) with Memory + Alloc = {
+fn completion_items_from_slots(slots) with Alloc + Memory = {
   flatten(map((s) => match s {
     SIdent(name)        => [CompletionItem(name, "", 14)],
     SType(_)            => [],
@@ -551,7 +551,7 @@ fn completion_items_from_slots(slots) with Memory + Alloc = {
 // code_actions_from_slots — project VoiceLine slots to LSP
 // CodeActions. SLit slots carrying suggestion text become actions.
 
-fn code_actions_from_slots(slots) with Memory + Alloc = {
+fn code_actions_from_slots(slots) with Alloc + Memory = {
   flatten(map((s) => match s {
     SLit(text)          => [CodeAction(text, "")],
     SIdent(_)           => [],
@@ -587,7 +587,7 @@ fn response_to_json(body) with Memory + Alloc = {
   }
 }
 
-fn hover_content_to_json(content) with Memory + Alloc = {
+fn hover_content_to_json(content) with Pure = {
   let HoverContent(md) = content
   JObj([
     ("contents", JObj([
@@ -655,7 +655,7 @@ fn location_to_json(loc) with Memory + Alloc = {
   ])
 }
 
-fn range_to_json(sl, sc, el, ec) with Memory + Alloc = {
+fn range_to_json(sl, sc, el, ec) with Pure = {
   JObj([
     ("start", JObj([("line", JNum(float_of_int(sl - 1))), ("character", JNum(float_of_int(sc - 1)))])),
     ("end",   JObj([("line", JNum(float_of_int(el - 1))), ("character", JNum(float_of_int(ec - 1)))]))

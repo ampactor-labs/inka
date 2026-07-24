@@ -294,7 +294,7 @@ fn scan_for_tee_governing(target, i, n) with GraphRead + !Mutate = {
   }
 }
 
-fn is_pure_row(row) with Memory = match row {
+fn is_pure_row(row) with Pure = match row {
   EfRow([], [], EtClosed) => true,
   EfRow([], _, EtClosed)  => true,
   _               => false
@@ -328,7 +328,7 @@ fn verb_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
   }
 }
 
-fn row_verdict_for(handle, kind, reason) with GraphRead + Memory + !Mutate = {
+fn row_verdict_for(handle, kind, reason) with Memory = {
   // Row clears when the binding's row is bound (resolved at
   // inference). Free row variables surface as invites.
   match kind {
@@ -343,7 +343,7 @@ fn row_verdict_for(handle, kind, reason) with GraphRead + Memory + !Mutate = {
   }
 }
 
-fn ownership_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory = {
+fn ownership_verdict_for(handle, kind, reason) with Memory = {
   // Ownership clears when authored OR resolved is non-Unmarked.
   // Otherwise the gradient could suggest one (see Hμ.gradient-delta
   // delta_ownership).

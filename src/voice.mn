@@ -677,7 +677,7 @@ fn render_propose_arm(situation) with Pure = {
 // surfaces a "use |> instead" suggestion. silence_predicate gated on
 // nested_call_depth >= 3 (TopicFacts substrate from D.1.c).
 
-fn render_topology_arm(situation) with Alloc + Memory = {
+fn render_topology_arm(situation) with Memory = {
   let Situation(s) = situation
   let TopicFacts(f) = s.facts
   VoiceLine(TentTopology, FOffering, [
@@ -736,7 +736,7 @@ fn render_trace_arm(situation) with Pure = {
 // obligations + discharges. silence_predicate gated on
 // list_non_empty(refinements).
 
-fn render_verify_arm(situation) with Alloc + Memory = {
+fn render_verify_arm(situation) with Memory = {
   let Situation(s) = situation
   VoiceLine(TentVerify, FRefinement, [
     SLit("Refinements at "),
@@ -791,7 +791,7 @@ fn render_why_arm(situation) with Pure = {
 // arm. H6 exhaustive 8-arm match. Each arm produces a VoiceLine
 // (assumed silence_predicate has already passed for this tentacle).
 
-fn render_for_tentacle(situation) with Alloc + Memory = {
+fn render_for_tentacle(situation) with Pure = {
   let Situation(s) = situation
   match s.tentacle {
     TentQuery     => render_query_arm(situation),
@@ -1076,7 +1076,7 @@ fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure
 // unprovable question is a valid Silence (voice.mn:265). H6 exhaustive over
 // QueryResult's 12 variants — no wildcard.
 
-fn query_result_to_answer(result) with Alloc + Memory = match result {
+fn query_result_to_answer(result) with Memory = match result {
   QRType(ty, reason)      => AnsType(ty, reason),
   QRWhy(reason)           => AnsReason(reason),
   QRRefs(spans)           => AnsRefs(spans, Inferred("refs-of: {int_to_str(len(spans))} reference(s)")),
@@ -1117,7 +1117,7 @@ fn findings_from_debt(debt) with Pure = debt
 // addressing scheme (voice.mn §FileHandle), so the artifact path is derived
 // from the handle deterministically — a stable address tied to the real
 // handle, not a fabricated "emitted" literal.
-fn emitted_artifact_path(fh) with Memory + Alloc = {
+fn emitted_artifact_path(fh) with Memory = {
   let FileHandle(i) = fh
   Path(".build/unit-{int_to_str(i)}.wasm")
 }
@@ -1188,7 +1188,7 @@ fn intent_id_eq(a, b) with Pure = {
 // so the simple form is honest. Substrate idiom (list_extend_to +
 // counter) reserved for genuinely-large N — this is not it.
 
-fn intents_without(intents, id) with Memory + Alloc = {
+fn intents_without(intents, id) with Alloc + Memory = {
   filter((intent) => {
     let (head_id, _) = intent
     !intent_id_eq(head_id, id)

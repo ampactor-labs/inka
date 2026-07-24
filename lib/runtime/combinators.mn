@@ -147,7 +147,7 @@ fn collect_verified_survivors(handlers, checkpoint) with GraphRead + GraphWrite 
 // graph/types substrate when those hold the canonical shape.
 // Stubs below; consumers (race) treat them as opaque.
 
-fn handler_row(_handler) with Memory = {
+fn handler_row(_handler) with Pure = {
   mk_ef_pure()   // conservative default; full body reads handler's declared row from graph (lands as peer HC2.h)
 }
 
@@ -183,7 +183,7 @@ fn reason_chain_length(_reason) with Pure = {
 // intent_matches — does this handler align with the user's declared
 // Intent at the cursor? Per MV §2.7.1 Intent. Stub for V1.
 
-fn intent_matches(_handler, _cursor) with GraphRead = {
+fn intent_matches(_handler, _cursor) with Pure = {
   true   // conservative default; full body reads Intent + handler's row
 }
 
@@ -289,7 +289,7 @@ fn outcome_verified(_outcome) with Pure = {
 // per-fork mutations are bracketed within race_internal's shared
 // checkpoint (rolled back collectively in one graph_rollback call).
 
-fn try_handler_with_rollback(h, checkpoint) with GraphRead + GraphWrite = {
+fn try_handler_with_rollback(h, checkpoint) with Pure = {
   // V1 outcome: the handler value itself. The MS-fork body (invoke h
   // over the body's resume continuation, bracket trail mutations in
   // the shared checkpoint) is the H7 substrate — peer with the
@@ -303,7 +303,7 @@ fn try_handler_with_rollback(h, checkpoint) with GraphRead + GraphWrite = {
 // captured during try_handler_with_rollback; replay walks that
 // captured trail forward. Stub for V1.
 
-fn replay_winner(winner) with GraphRead + GraphWrite = {
+fn replay_winner(winner) with Pure = {
   winner
 }
 
@@ -312,7 +312,7 @@ fn replay_winner(winner) with GraphRead + GraphWrite = {
 // query.mn + Mentl substrate (CursorTarget per src/voice.mn).
 // Stub for V1; actual implementation reads from the cursor handler.
 
-fn graph_cursor() with GraphRead = {
+fn graph_cursor() with Pure = {
   0   // conservative default; full body reads cursor handle from graph
 }
 

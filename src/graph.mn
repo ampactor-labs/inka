@@ -548,7 +548,7 @@ fn merge_row(ref names, ref row) with !Mutate = {
 
 // Returns node at handle, or synthesizes NFree for out-of-range
 // handles (defensive — should not happen in well-formed compilation).
-fn graph_node_at(ref nodes, idx) with !Mutate = {
+fn graph_node_at(ref nodes, idx) with Memory = {
   if idx >= len(nodes) { GNode(NFree(0), Fresh(idx)) }
   else { nodes[idx] }
 }
@@ -909,7 +909,7 @@ fn node_handle(node) = {
 // "declared as ..."), so a patch target must read the weave, never the
 // reason. O(n) scan at felt cadence (once per accepted action); the O(1)
 // form is the handle-indexed span weave (the §5.O name-is-handle sibling).
-fn parse_span_of(handle) with GraphRead + Memory + Alloc + !Mutate = {
+fn parse_span_of(handle) with Memory + Alloc + GraphRead = {
   let Graph(_, _, _, _, span_index) = graph_snapshot()
   match find((pair) => { let (_, h) = pair h == handle }, span_index) {
     Some(pair) => { let (span, _) = pair span },

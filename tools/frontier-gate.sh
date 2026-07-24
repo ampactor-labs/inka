@@ -1075,6 +1075,37 @@ for i in "${!compilers[@]}"; do
     fail "teach-pure-control (the true proposal died with the fix)"
   fi
 
+  # ── mentl tighten — the medium authors its own row tightening ───────
+  # T_OverDeclared is a MachineApplicable proposal carrying the proven
+  # row; the tighten verb turns the first authorable one into the patch.
+  # The fixture copies out (tighten MUTATES its target): helper reserves
+  # Memory + Alloc over a pure body; one run rewrites the clause to
+  # `with Pure`, a fresh check stays clean, and a second run finds
+  # nothing — the ratchet's fixpoint. RED on the pre-verb boot
+  # (unrecognized command; file untouched).
+  tdemo="$dir/tighten-demo"
+  mkdir -p "$tdemo"
+  cp "$ROOT/tests/frontier/tighten-demo/over.mn" "$tdemo/over.mn"
+  (cd "$tdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$tdemo" --dir /tmp "$compiler" tighten over.mn) >"$dir/tighten.out" 2>&1
+  trc=$?
+  if [ $trc -eq 0 ] && grep -q 'with Pure = 42' "$tdemo/over.mn"; then
+    pass "tighten authors the patch (with Memory + Alloc → with Pure)"
+  else
+    fail "tighten authoring (exit=$trc; see $dir/tighten.out)"
+  fi
+  (cd "$tdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$tdemo" --dir /tmp "$compiler" check over.mn) >/dev/null 2>&1
+  if [ $? -eq 0 ]; then
+    pass "tighten result checks clean (fresh process)"
+  else
+    fail "tighten result check"
+  fi
+  (cd "$tdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$tdemo" --dir /tmp "$compiler" tighten over.mn) >"$dir/tighten2.out" 2>&1
+  if grep -q 'nothing to tighten' "$dir/tighten2.out"; then
+    pass "tighten reaches its fixpoint (second run finds nothing)"
+  else
+    fail "tighten fixpoint (see $dir/tighten2.out)"
+  fi
+
   # ── the cursor-address transport (mentl voice.mn:9) ─────────────────
   # Runs from the demo dir (the driver resolves imports CWD-relative).
   # Asserts the honest minimum the artifact produces today: the Query

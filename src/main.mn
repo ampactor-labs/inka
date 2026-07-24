@@ -92,6 +92,7 @@ type EntryVerb
   | VDoc(Option(String))
   | VServe
   | VSpace
+  | VTighten(Option(String))
   | VCompile(String)                 // target REQUIRED — carried non-optionally
   | VCompileStdin
   | VRun(String)
@@ -150,6 +151,7 @@ fn verb_specs() with Memory + Alloc = [
   VerbSpec("new",     "<name>",            (a) => if len(a) >= 3 { Invocation(VNew(a[2])) } else { ParseError("new needs a name: mentl new <name>") }, "write <name>.mn here (one file; the imports are the manifest)"),
   VerbSpec("serve",   "",                  (a) => Invocation(VServe),                                                                 "the transport server"),
   VerbSpec("space",   "",                  (a) => Invocation(VSpace),                                                                 "the ide, served — open http://localhost:7378/ide/"),
+  VerbSpec("tighten", "[path]",            (a) => Invocation(VTighten(optional_target(a, 2))),                                        "apply the first proven row tightening — the medium authors, you accept"),
   VerbSpec("repl",    "",                  (a) => Invocation(VRepl),                                                                  "line REPL"),
   VerbSpec("--with",  "<handler> [path]",  (a) => if len(a) >= 3 { Invocation(VWith(a[2], optional_target(a, 3))) } else { ParseError("--with needs a handler: mentl --with <handler> [path]") }, "install any handler over any verb"),
   VerbSpec("help",    "",                  (a) => Invocation(VWelcome),                                                               "this projection")
@@ -316,6 +318,7 @@ fn dispatch_invocation(verb) = {
       VDoc(target)         => doc_run(target),
       VServe               => serve_run(),
       VSpace               => space_run(),
+      VTighten(target)     => tighten_run(target),
       VCompile(target)     => compile_run(target),
       VCompileStdin        =>
         // The bare invocation forks on the ONE substrate fact that
@@ -535,6 +538,136 @@ fn space_run() with Memory + Alloc + WASI = {
     space_loop(lfd)
     0
   }
+}
+
+// ─── tighten_run — the medium authors its own row tightening
+//
+// The self-authorship driver at its smallest real scope (the self-build
+// audit's step 1b): T_OverDeclared already IS a proposal — the diagnostic
+// carries the declared row, the proven body row, the fn name, and the
+// decl span, MachineApplicable. This verb turns the first authorable one
+// into the patch: rewrite the decl's with-clause to the body's proven
+// row, report old → new, and leave the verdict to a fresh check + the
+// gates. Tightening is the monotone-safe direction — a narrower
+// declaration can only shrink what callers accumulate, so it can create
+// new T_OverDeclared warnings (the next ratchet turns) but never an
+// E_EffectMismatch.
+
+effect Tighten {
+  tightenables() -> [(EffRow, EffRow, String, Span)]
+}
+
+// The collecting forwarder over the Diag effect: TOverDeclared
+// accumulates in state AND every diagnostic re-performs outward from the
+// arm — sound because an arm's own performs resolve in the INSTALL's
+// world (the world arc's deep-handler law), reaching the bracket's
+// diagnostics_handler, never re-entering this collector. All three Diag
+// ops carry arms: a handler arming only SOME ops of an effect leaves
+// zero fn slots for the rest, and a perform through a zero slot is a
+// garbage dispatch.
+handler tighten_collector with found = [] {
+  report(diag) => {
+    report(diag)
+    match diag {
+      TOverDeclared(declared, used, name, span) =>
+        resume() with found = push(found, (declared, used, name, span)),
+      _ => resume()
+    }
+  },
+  diag_errors()   => resume(diag_errors()),
+  diag_refusals() => resume(diag_refusals()),
+  tightenables()  => resume(found)
+}
+
+fn tighten_run(target_opt) = {
+  let entry_module = match target_opt {
+    Some(t) => t,
+    None    => "main"
+  }
+  infer_context(() =>
+    {
+      let (_ast, ranges) = driver_entry_with_ranges(entry_module)
+      let cands = tightenables()   // drift-audit: ignore — sequenced effectful ledger read (the diag_refusals precedent): the collector's state is read once after the check populates it
+      match find((c) => { let (_, used, _, _) = c row_is_authorable(used) }, cands) {
+        None => {
+          print_string("mentl tighten: nothing to tighten ({int_to_str(len(cands))} over-declared, none authorable)\n")
+          0
+        },
+        Some(c) => apply_tightening(c, ranges)
+      }
+    }
+      ~> tighten_collector
+      ~> wasi_filesystem
+      ~> mentl_default
+  )
+}
+
+// Authorable = the proven row renders as source: a closed tail. A var
+// tail renders as a handle name — never authored into a signature.
+fn row_is_authorable(ref used) = {
+  let EfRow(_, _, t) = used
+  match t {
+    EtClosed  => true,
+    EtVar(_)  => false,
+    EtAll     => false
+  }
+}
+
+fn apply_tightening(c, ranges) = {
+  let (declared, used, name, span) = c
+  match file_line_of(ranges, span) {
+    None => {
+      eprint_string("mentl tighten: {name}'s span maps into no module range\n")
+      1
+    },
+    Some(pl) => {
+      let (path, line1) = pl
+      let text = fs_read_file(path)
+      let ls = line_start_offset(text, line1)
+      let le = line_end_offset(text, ls)
+      let line = str_slice(text, ls, le)
+      let wi = index_of(line, " with ")
+      if wi < 0 {
+        eprint_string("mentl tighten: {name} at {path}:{int_to_str(line1)} — no with-clause on the decl line; skipping\n")
+        1
+      } else {
+        // The terminator: the first " = " after the clause. The row text
+        // itself contains no " = ", so the match is the head's binder.
+        let after = str_slice(line, wi + 6, byte_len(line))
+        let eq = index_of(after, " = ")
+        if eq < 0 {
+          eprint_string("mentl tighten: {name} at {path}:{int_to_str(line1)} — the decl head is not single-line; skipping\n")
+          1
+        } else {
+          let row_new = show_effrow(used)
+          let new_line = "{str_slice(line, 0, wi + 6)}{row_new}{str_slice(after, eq, byte_len(after))}"
+          let new_text = "{str_slice(text, 0, ls)}{new_line}{str_slice(text, le, byte_len(text))}"
+          fs_write_file(path, new_text)
+          print_string("tighten: {name} ({path}:{int_to_str(line1)})\n  with {show_effrow(declared)}  →  with {row_new}\n  the medium authored this; verify with a fresh check + the gates\n")
+          0
+        }
+      }
+    }
+  }
+}
+
+fn line_start_offset(ref text, line1) = line_start_walk(text, 1, 0, line1)
+
+fn line_start_walk(ref text, at_line, off, line1) = {
+  if at_line >= line1 { off }
+  else {
+    let n = byte_len(text)
+    if off >= n { off }
+    else if byte_at(text, off) == 10 { line_start_walk(text, at_line + 1, off + 1, line1) }
+    else { line_start_walk(text, at_line, off + 1, line1) }
+  }
+}
+
+fn line_end_offset(ref text, ls) = {
+  let n = byte_len(text)
+  if ls >= n { n }
+  else if byte_at(text, ls) == 10 { ls }
+  else { line_end_offset(text, ls + 1) }
 }
 
 // ─── serve_run — LSP transport on stdio
@@ -849,13 +982,19 @@ fn range_of_module(ref ranges, ref target) with Memory + Alloc = {
 
 // The span's file:line through the module-range map — the render-side
 // inverse of the concatenation fold.
-fn file_line(ref ranges, ref span) with Memory + Alloc = {
+fn file_line_of(ref ranges, ref span) with Memory + Alloc = {
   let Span(sl, _, _, _) = span
   match find((r) => { let (_, _, start, nlines) = r sl >= start && sl < start + nlines }, ranges) {
-    Some(r) => { let (_, p, start, _) = r "{p}:{int_to_str(sl - start + 1)}" },
-    None    => "line {int_to_str(sl)}"
+    Some(r) => { let (_, p, start, _) = r Some((p, sl - start + 1)) },
+    None    => None
   }
 }
+
+fn file_line(ref ranges, ref span) with Memory + Alloc =
+  match file_line_of(ranges, span) {
+    Some(pl) => { let (p, l) = pl "{p}:{int_to_str(l)}" },
+    None     => { let Span(sl, _, _, _) = span "line {int_to_str(sl)}" }
+  }
 
 // The three-case line rule (the panel's corrected form, deterministic):
 //  (a) among nodes whose span STARTS on the line (and, with a column,

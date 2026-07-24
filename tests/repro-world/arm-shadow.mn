@@ -1,0 +1,20 @@
+// Band N's arm-internal-perform-scope as a fixture: an install INSIDE the
+// governed body must shadow the outer handler. Both handlers carry pick
+// (evidence-dispatched). Correct answer: 40.
+effect Pick {
+  pick() -> Int
+}
+
+handler outer_pick {
+  pick() => resume(1)
+}
+
+handler replay(v) {
+  pick() => resume(v)
+}
+
+fn body_thunk() = pick() + pick()
+
+fn main() = {
+  { body_thunk() ~> replay(20) } ~> outer_pick
+}

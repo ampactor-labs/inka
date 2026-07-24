@@ -1,0 +1,28 @@
+// Band N's true shape — config-fn-evidence-in-arm + arm-internal install:
+// the driver's ARM installs replay_h over a config-param thunk. bt's picks
+// must hit replay_h (40); the evidence bug re-enters outer_pick (2).
+effect Pick {
+  pick() -> Int
+}
+
+effect Go {
+  go() -> Int
+}
+
+handler outer_pick {
+  pick() => resume(1)
+}
+
+handler replay_h(v) {
+  pick() => resume(v)
+}
+
+handler driver_h(bt) {
+  go() => resume({ bt() ~> replay_h(20) })
+}
+
+fn body_thunk() = pick() + pick()
+
+fn main() = {
+  { go() } ~> driver_h(body_thunk) ~> outer_pick
+}

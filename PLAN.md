@@ -2418,17 +2418,49 @@ verify_ledger + verify_smt), the at verb trapped on its ambiguous cursor
 ops, while check/doc/teach/query/repl passed on singleton-tier ops (the
 state global is dynamic). The split is exactly singleton-vs-evidence; the
 wheel shrank 1,568 lines and compiled census-0, so the refutation is
-semantic, not syntactic. DEP: evidence crossing fn boundaries dynamically —
-the generalization of band N's `Hβ.lower.config-fn-evidence-in-arm` (a
-thunk called under installs carries creation-site evidence). The candidate
-design (ev-scan miss → fall back to the live handler stack, the singleton
-tier's own read) DIRECTLY CONTRADICTS the M3 lexical fence in replay
-contexts (an arm-internal re-perform must not re-enter the outer handler),
-so the design needs a replay discriminator — likely the TCont world (band
-B) naming which frame's evidence a resumed continuation may read. Build
-order: settle the discriminator with band B's value gate, then the
-fallback, then re-run this consolidation (the 14-site rewrite is mechanical
-once the substrate admits it).
+semantic, not syntactic. THE CONVERGED DESIGN (same night, Morgan's
+charge to read the pieces together — WORLD-AS-VALUE): the world is a
+first-class graph value, a handle to the top of the install chain in the
+image ([handler_record, parent] nodes, one $world_g global, O(1) cons per
+install, trail-covered restore), with THREE PRINCIPLED TRANSPORTS all
+already typed by the kernel: CALLS FLOW the world (the evv the §6
+evidence-passing claim always named — the per-frame captured_evs snapshot
+was a mint-time CACHE of a dynamic fact, Carried-Truth violated at the
+kernel layer); ARMS REBIND to the install node's parent (the deep-handler
+law — the M3 fence's PURPOSE, kept, its lexical approximation retired);
+RESUMES REBIND to the world frozen on the k record (world_tag@28 upgrades
+from bit-tag to handle; the declared-unwired E_ResumeWorldMismatchWorld
+gate wires as a side effect — band B's value gate). The earlier "needs a
+replay discriminator, open research" hedge is SUPERSEDED — the rebinding
+rules ARE the discriminator. The infer half already exists
+(inf_current_world onto every ContinuationEdge, TCont's 4th arg). The
+dispatch gradient survives whole: tail-resumptive direct calls and the
+singleton tier stay as proof-becomes-dispatch cash-outs over the ONE
+semantics (the singleton state global becomes the cache of a unique world
+entry; the uninstalled-guard's state_g==0 read becomes chain-miss →
+refuse). This dissolves BOTH band-N evidence bugs, and its consumers are
+the whole §2 fan: the bracket (this peer's original form, re-run as the
+proving consumer), per-candidate virtualizing worlds in synth's fork pair
+(the third leg beside graph checkpoint + heap region), work-stealing
+frontier entries carrying their world as one memcpy-portable word, and
+the depth-economics design (no depth parameter: gradient=priority,
+handler=budget, multi-shot=memory — every frontier entry a dormant
+continuation resumable across cursors/sessions ONLY if its world is a
+value). MEASURED RED GATES, minted 2026-07-23 (scratchpad fixtures, to
+graduate as frontier legs with the arc): thunk-world (a thunk minted
+outside an install, called under one, evidence-dispatched op) traps 134
+today, 42 under worlds; arm-config-ev (band N's true shape — a
+config-param thunk performed under an arm-internal install) answers 2
+today (silent wrong value: re-enters the outer handler), 40 under worlds;
+the plain-block shadow control already answers 40 (no-regression
+control). BUILD RUNGS, each marched: R1 world-chain substrate
+(install/uninstall push-pop + $world_g, additive) → R2 the perform swap
+WHOLE (evidence tier reads the chain; captured_evs op-dispatch dies; the
+__resume k-threading channel survives — it is an argument, not evidence)
+→ R3 arms-under-parent-world → R4 reify/resume world word + the band-B
+gate live → R5 the 14-chain bracket consolidation re-run → R6 the fork
+pair's world leg in synth/oracle. R2/R3 carry the whole-battery blast
+radius; the multishot-era gates (52→66) and the march arbitrate.
 
 `Hβ.ops.wasmtime-runner-migration` (2026-07-23, the threads-scout recon —
 design complete, artifact-grounded): every emitted module, boot included,

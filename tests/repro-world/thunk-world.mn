@@ -1,0 +1,22 @@
+// The thunk crosses into a world it was not minted in: body is created
+// where no Ask handler is installed, then called under one. Two handlers
+// carry ask, so the op is evidence-dispatched — the mint-time snapshot
+// misses. World-threading resolves it at the call site: 42.
+effect Ask {
+  ask() -> Int
+}
+
+handler asker_a {
+  ask() => resume(1)
+}
+
+handler asker_b {
+  ask() => resume(42)
+}
+
+fn crossing(body) = body() ~> asker_b
+
+fn main() = {
+  let body = () => ask()
+  crossing(body)
+}

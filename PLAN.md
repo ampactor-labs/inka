@@ -1026,6 +1026,32 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · THE ANALYSIS-CORE ORDER LAW + doc's env completion
+  (queue 5's honest yield; the consolidation itself refuted by
+  measurement · pin 4b10e457): the infer-context audit enumerated all
+  14 inference-reaching chains (not the ledger's seven), settled the
+  install-order question at ONE home (pipeline.mn's spine — ledgers
+  innermost; lookup_ty before env before graph before mutate_sink;
+  diagnostics outer to graph, because graph_bind's occurs-check reports
+  FROM the graph arm — probed live: at_run counts it, exit 1, via the
+  unique-handler state global; the outer placement makes the count
+  tier-independent), and completed doc_run's core with its missing
+  env_handler (env ops resolved through dispatch's instance while its
+  graph was chain-local — accident made contract). The BRACKET FN was
+  BUILT WHOLE and REFUTED before commit (⟲ — the verifier's own theory
+  died to the artifact): all 14 chains rewritten over a body thunk,
+  wheel 1,568 lines smaller, census 0 — and the smoke split exactly
+  singleton-vs-evidence: check/doc/teach/query/repl green (state-global
+  ops are dynamic), compile and the at verb TRAPPED (executable_gate's
+  verify_debt is multi-handler Verify; the cursor ops are ambiguous —
+  both evidence-dispatched, and a closure's evidence snapshot predates
+  the bracket's installs; the M3 lexical fence is the semantics, not a
+  bug). Reverted whole; `Hβ.cli.infer-context-bracket` (named-residue
+  index) banks the measurement, the DEP (dynamic evidence crossing vs
+  the fence's replay guarantee), and the build order behind band B's
+  world discriminator. Board whole at the pin: CLEAN m2 == m3 at
+  559,460 lines, census 0, comment-refs 0, frontier 212/0, battery
+  113/113.
 - 2026-07-23 · THE WHEEL SERVES ITS OWN IDE — `mentl space` (queue 4;
   the serve scaffold's written dissolution executed · pin 61c10ab8):
   ide/serve.mn absorbed whole as src/main.mn's space arms (mime
@@ -1377,9 +1403,11 @@ between the wheel and its ultimate form, held open on purpose.
   residual drift-7 is NAMED with its design question: the analysis
   core (affine/region/verify/lookup_ty/env/graph) is one sub-chain
   hand-copied per verb with ORDER VARIANCE (env-before-graph is
-  load-bearing; parallel_compose presence varies) — consolidating it
-  into one shared bracket fn needs the order question settled first
-  (`Hβ.cli.infer-context-bracket`). Fixture mn-singleton-preinstall-call banks the class
+  load-bearing; parallel_compose presence varies) — the order question
+  is now SETTLED (the law at pipeline.mn's spine) and the bracket-fn
+  form REFUTED by the evidence fence; `Hβ.cli.infer-context-bracket`
+  (named-residue index) carries the measurement and the DEP-gated
+  design. Fixture mn-singleton-preinstall-call banks the class
   (stateful op called before its install executes: compile gate admits —
   an install exists, grounding the whole-program conjunct — runtime guard
   refuses, exit 134; on the pre-guard wheel this ran SILENTLY WRONG,
@@ -2374,6 +2402,33 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-06-18→23 · the reframe + the three-doc consolidation; the crown's EfOpen~EfNeg unify (b4b1989); the handler registry dissolved into the live read
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
+
+`Hβ.cli.infer-context-bracket` (2026-07-23, the order settled + the fn-form
+REFUTED by measurement): the analysis-core ORDER LAW is written at its one
+home (pipeline.mn's spine block) — ledgers innermost, lookup_ty before
+env before graph before mutate_sink, diagnostics outer to graph (its arms
+report: the occurs-check fires from graph_bind) — and doc_run's missing
+env_handler landed, completing the core on every inference-reaching chain.
+The CONSOLIDATION itself was built (a bracket fn taking the body as a
+thunk, all 14 chains rewritten) and REFUTED by the artifact before commit:
+a closure's evidence snapshot predates the bracket's installs, so every
+EVIDENCE-dispatched core op faults its ev-scan into the sentinel — compile
+trapped at executable_gate's verify_debt() (Verify is multi-handler:
+verify_ledger + verify_smt), the at verb trapped on its ambiguous cursor
+ops, while check/doc/teach/query/repl passed on singleton-tier ops (the
+state global is dynamic). The split is exactly singleton-vs-evidence; the
+wheel shrank 1,568 lines and compiled census-0, so the refutation is
+semantic, not syntactic. DEP: evidence crossing fn boundaries dynamically —
+the generalization of band N's `Hβ.lower.config-fn-evidence-in-arm` (a
+thunk called under installs carries creation-site evidence). The candidate
+design (ev-scan miss → fall back to the live handler stack, the singleton
+tier's own read) DIRECTLY CONTRADICTS the M3 lexical fence in replay
+contexts (an arm-internal re-perform must not re-enter the outer handler),
+so the design needs a replay discriminator — likely the TCont world (band
+B) naming which frame's evidence a resumed continuation may read. Build
+order: settle the discriminator with band B's value gate, then the
+fallback, then re-run this consolidation (the 14-site rewrite is mechanical
+once the substrate admits it).
 
 `Hβ.ops.wasmtime-runner-migration` (2026-07-23, the threads-scout recon —
 design complete, artifact-grounded): every emitted module, boot included,

@@ -618,6 +618,12 @@ fn doc_run(target_opt) = {
     ~> region_tracker
     ~> verify_ledger
     ~> lookup_ty_graph
+    // env completes the core (the order law, pipeline.mn spine): this chain
+    // carried graph_handler without env_handler, so its env ops resolved
+    // through the dispatch boundary's instance while its graph was
+    // chain-local — correct only via the unique-handler state global, the
+    // accident-invariant class; the install makes it a contract.
+    ~> env_handler
     ~> diagnostics_handler
     ~> graph_handler
     ~> mutate_sink

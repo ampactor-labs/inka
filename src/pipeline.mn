@@ -50,6 +50,41 @@ import oracle
 // Read top-to-bottom: source flows DOWN through `|>`; handlers wrap
 // OUTWARD through `~>`. Outermost handler is the sandbox boundary.
 //
+// THE ANALYSIS-CORE ORDER LAW (the one home; every inference-reaching
+// chain instantiates it, inner to outer):
+//
+//   affine_ledger / region_tracker / verify_ledger — the analysis
+//     ledgers, innermost: arms are pure state over the ops inference
+//     performs (consume/borrow, region tags, proof debt).
+//   lookup_ty_graph — the GraphRead → LookupTy bridge: its arms read
+//     the graph, so graph_handler sits outer to it.
+//   env_handler before graph_handler — env arms read the graph outer
+//     to them.
+//   graph_handler before mutate_sink — graph writes perform
+//     graph_mutated, absorbed outward.
+//   diagnostics_handler outer to graph_handler — graph_bind's
+//     occurs-check report fires FROM a graph arm (graph.mn); today
+//     `report` is unique-handler (singleton tier, one state global) so
+//     any placement counts it — probed on at_run, exit 1 — but only
+//     the outer placement is correct independent of tier.
+//
+// The chains instantiate this law BY HAND, one copy each, because the
+// fn-shaped consolidation is REFUTED by the evidence model
+// (Hβ.cli.infer-context-bracket, measured 2026-07-23): a bracket fn
+// taking the body as a thunk moves the body into a fenced frame — a
+// closure's evidence snapshot predates the bracket's installs, so
+// every evidence-dispatched core op (Verify with verify_ledger +
+// verify_smt both carrying it; the ambiguous cursor ops) faults its
+// ev-scan into the sentinel page, while singleton-tier ops keep
+// working through the state global. compile trapped at
+// executable_gate's verify_debt(); the at verb trapped on its cursor ops;
+// check/doc/teach/query/repl passed — the split is exactly
+// singleton-vs-evidence. The consolidation is DEP-gated on evidence
+// crossing fn boundaries dynamically, which the M3 lexical fence
+// deliberately forbids (an arm-internal re-perform must not re-enter
+// the outer handler) — the PLAN named-residue entry carries the
+// design space.
+//
 // IC.4: compile / check now route through driver_check when invoked
 // with an entry-MODULE name. The single-source entry compile/
 // check_source remain for tests that pass a raw source string. The

@@ -1,0 +1,278 @@
+// mentl-runner — the wasmtime embed that replaces the wasmtime CLI for Mentl
+// modules (Hβ.ops.wasmtime-runner-migration steps 2–3).
+//
+// Every emitted Mentl module needs two things beyond plain WASI preview1:
+//   1. the engine must accept a SHARED memory + tail calls (the module DEFINES
+//      its own 4GB shared memory and exports it as "memory"; nothing to link);
+//   2. the import `wasi.thread-spawn` must resolve. wasmtime 47 deleted the
+//      CLI convenience that satisfied it (-S threads=y), so this binary
+//      registers the host fn by hand: the wasi-threads protocol — allocate a
+//      thread id, std::thread::spawn a fresh instance of the SAME module in a
+//      fresh Store, call its exported wasi_thread_start(tid, start_arg).
+//      A module that IMPORTS a shared memory (the wasi-threads convention)
+//      gets one created at its declared type and linked under the import's
+//      own module/name, so all instances share it.
+//
+// CLI contract (argv-compatible with the wt_run subset of the wasmtime CLI):
+//   mentl-runner run [-W v] [-S v] [-D v] [--dir h[::g]] [--env K=V] \
+//                    <module.wasm> [guest argv...]
+// -W/-S/-D values are parsed and ignored (threads + tail-call are always on);
+// stdin/stdout/stderr pass through; exit code = guest exit code; a trap exits
+// 134 (the wasmtime CLI's trap status, banked by the micro battery).
+
+use wasmtime::{Result, bail, format_err};
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::{Arc, OnceLock};
+use wasmtime::{Caller, Config, Engine, ExternType, Linker, Module, SharedMemory, Store};
+use wasmtime_wasi::p1::WasiP1Ctx;
+use wasmtime_wasi::{DirPerms, FilePerms, I32Exit, WasiCtxBuilder};
+
+// wasi-threads: a spawned thread id is positive and stays below 2^29 so it
+// packs beside the wait/notify sentinel values.
+const MAX_TID: i32 = 0x1FFF_FFFF;
+
+struct RunSpec {
+    argv: Vec<String>,
+    preopens: Vec<(String, String)>,
+    envs: Vec<(String, String)>,
+}
+
+struct Host {
+    wasi: WasiP1Ctx,
+    threads: Arc<ThreadCtx>,
+}
+
+struct ThreadCtx {
+    engine: Engine,
+    module: Module,
+    // The linker is completed (WASI + thread-spawn + any shared-memory
+    // import) before the first guest instruction runs, so every spawn reads
+    // it initialized; OnceLock breaks the build-order knot (the linker's
+    // memory definition needs a Store<Host>, and Host carries this ctx).
+    linker: OnceLock<Linker<Host>>,
+    spec: RunSpec,
+    next_tid: AtomicI32,
+}
+
+impl ThreadCtx {
+    fn spawn(self: &Arc<Self>, start_arg: i32) -> i32 {
+        let tid = self.next_tid.fetch_add(1, Ordering::SeqCst);
+        if !(1..=MAX_TID).contains(&tid) {
+            return -1;
+        }
+        let ctx = self.clone();
+        let spawned = std::thread::Builder::new()
+            .name(format!("wasi-thread-{tid}"))
+            .spawn(move || {
+                let host = Host {
+                    wasi: build_wasi(&ctx.spec),
+                    threads: ctx.clone(),
+                };
+                let mut store = Store::new(&ctx.engine, host);
+                let linker = ctx
+                    .linker
+                    .get()
+                    .expect("linker is completed before any guest code runs");
+                let instance = match linker.instantiate(&mut store, &ctx.module) {
+                    Ok(i) => i,
+                    Err(e) => {
+                        eprintln!("mentl-runner: wasi-thread-{tid} instantiation: {e:?}");
+                        std::process::exit(134);
+                    }
+                };
+                let entry = match instance
+                    .get_typed_func::<(i32, i32), ()>(&mut store, "wasi_thread_start")
+                {
+                    Ok(f) => f,
+                    Err(e) => {
+                        eprintln!("mentl-runner: wasi-thread-{tid}: {e:?}");
+                        std::process::exit(134);
+                    }
+                };
+                if let Err(e) = entry.call(&mut store, (tid, start_arg)) {
+                    // wasi-threads semantics: proc_exit from any thread exits
+                    // the process; a trap in any thread terminates all.
+                    if let Some(exit) = e.downcast_ref::<I32Exit>() {
+                        std::process::exit(exit.0);
+                    }
+                    eprintln!("mentl-runner: wasi-thread-{tid} trapped: {e:?}");
+                    std::process::exit(134);
+                }
+            });
+        match spawned {
+            Ok(_) => tid,
+            Err(_) => -1,
+        }
+    }
+}
+
+fn build_wasi(spec: &RunSpec) -> WasiP1Ctx {
+    let mut b = WasiCtxBuilder::new();
+    b.inherit_stdio();
+    b.args(&spec.argv);
+    b.envs(&spec.envs);
+    for (host, guest) in &spec.preopens {
+        if let Err(e) = b.preopened_dir(host, guest, DirPerms::all(), FilePerms::all()) {
+            eprintln!("mentl-runner: --dir {host}::{guest}: {e}");
+            std::process::exit(1);
+        }
+    }
+    b.build_p1()
+}
+
+struct Cli {
+    spec: RunSpec,
+    module_path: String,
+}
+
+fn parse_cli() -> Result<Cli> {
+    let mut args = std::env::args().skip(1);
+    match args.next().as_deref() {
+        Some("run") => {}
+        other => bail!("usage: mentl-runner run [flags] <module.wasm> [args...] (got {other:?})"),
+    }
+    let mut preopens = Vec::new();
+    let mut envs = Vec::new();
+    let mut module_path: Option<String> = None;
+    while let Some(a) = args.next() {
+        match a.as_str() {
+            // engine/CLI tuning flags from wt-env.sh — the runner always
+            // enables threads + tail-call, so the values are consumed and
+            // dropped (a joined form like -Wthreads=y is self-contained).
+            "-W" | "-S" | "-D" => {
+                args.next()
+                    .ok_or_else(|| format_err!("{a} expects a value"))?;
+            }
+            _ if a.starts_with("-W") || a.starts_with("-S") || a.starts_with("-D") => {}
+            "--dir" => {
+                let v = args.next().ok_or_else(|| format_err!("--dir expects a value"))?;
+                let (host, guest) = match v.split_once("::") {
+                    Some((h, g)) => (h.to_string(), g.to_string()),
+                    None => (v.clone(), v.clone()),
+                };
+                preopens.push((host, guest));
+            }
+            "--env" => {
+                let v = args.next().ok_or_else(|| format_err!("--env expects a value"))?;
+                let (k, val) = v
+                    .split_once('=')
+                    .ok_or_else(|| format_err!("--env expects K=V, got {v}"))?;
+                envs.push((k.to_string(), val.to_string()));
+            }
+            _ if a.starts_with('-') && module_path.is_none() => {
+                bail!("unknown flag before module: {a}");
+            }
+            _ => {
+                module_path = Some(a);
+                break;
+            }
+        }
+    }
+    let module_path = module_path.ok_or_else(|| format_err!("no module path given"))?;
+    // Everything after the module is guest argv; argv[0] is the module path
+    // as given (the wasmtime CLI convention the mentl shim relies on).
+    let mut argv = vec![module_path.clone()];
+    argv.extend(args);
+    Ok(Cli {
+        spec: RunSpec {
+            argv,
+            preopens,
+            envs,
+        },
+        module_path,
+    })
+}
+
+fn main() {
+    let code = match run() {
+        Ok(code) => code,
+        Err(e) => {
+            eprintln!("Error: {e:?}");
+            // A guest trap surfaces as an error here; the wasmtime CLI maps
+            // traps to exit 134 (128+SIGABRT) and the micro battery banks
+            // that number, so the runner speaks the same status.
+            if e.downcast_ref::<wasmtime::Trap>().is_some() {
+                134
+            } else {
+                1
+            }
+        }
+    };
+    std::process::exit(code);
+}
+
+fn run() -> Result<i32> {
+    let cli = parse_cli()?;
+
+    let mut config = Config::new();
+    config.wasm_threads(true);
+    // 43+ splits shared-memory support out of the threads proposal switch
+    // (the same split wt-env.sh probes at the CLI as -W shared-memory=y).
+    config.shared_memory(true);
+    config.wasm_tail_call(true);
+    let engine = Engine::new(&config)?;
+
+    let module = Module::from_file(&engine, &cli.module_path)
+        .map_err(|e| e.context(format!("loading {}", cli.module_path)))?;
+
+    let mut linker: Linker<Host> = Linker::new(&engine);
+    wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |h: &mut Host| &mut h.wasi)?;
+    linker.func_wrap(
+        "wasi",
+        "thread-spawn",
+        |caller: Caller<'_, Host>, start_arg: i32| -> i32 {
+            let ctx = caller.data().threads.clone();
+            ctx.spawn(start_arg)
+        },
+    )?;
+
+    let ctx = Arc::new(ThreadCtx {
+        engine: engine.clone(),
+        module: module.clone(),
+        linker: OnceLock::new(),
+        spec: cli.spec,
+        next_tid: AtomicI32::new(1),
+    });
+
+    let host = Host {
+        wasi: build_wasi(&ctx.spec),
+        threads: ctx.clone(),
+    };
+    let mut store = Store::new(&engine, host);
+
+    // A module following the wasi-threads convention IMPORTS its shared
+    // memory; create one at the exact declared type and link it under the
+    // import's own module/name so every instance (main + spawned) shares it.
+    // Mentl's current emit instead DEFINES + exports the memory, so this
+    // loop is a no-op there — each instance owns a fresh memory.
+    for import in module.imports() {
+        if let ExternType::Memory(mt) = import.ty() {
+            if !mt.is_shared() {
+                bail!(
+                    "memory import {}.{} is not shared; the runner only links shared memories",
+                    import.module(),
+                    import.name()
+                );
+            }
+            let mem = SharedMemory::new(&engine, mt)?;
+            linker.define(&mut store, import.module(), import.name(), mem)?;
+        }
+    }
+
+    ctx.linker
+        .set(linker.clone())
+        .map_err(|_| format_err!("linker initialized twice"))?;
+
+    let instance = linker.instantiate(&mut store, &module)?;
+    let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
+    match start.call(&mut store, ()) {
+        Ok(()) => Ok(0),
+        Err(e) => {
+            if let Some(exit) = e.downcast_ref::<I32Exit>() {
+                Ok(exit.0)
+            } else {
+                Err(e)
+            }
+        }
+    }
+}

@@ -2878,12 +2878,41 @@ window ~2026-06-09): wheel self-compile byte-identical and battery
 113/113 validated through 36 BEFORE flipping; wt-env.sh probes the
 flag-spelling delta once at source time (36 folds shared-memory into
 -W threads=y), so both binaries run with warm caches (the hosted CI
-workflow was later deleted whole — §11 col 5); (2) the runner's I/O-only
-half, whole battery byte-identical through it; (3) the spawn glue; (4)
-the repo's FIRST real-spawn fixture (~> parallel_compose, genuine
-concurrency — band E's "proven by real spawn" claim made true as a side
-effect); (5) swap wt-env.sh/install.sh (+ hosted CI when it returns, §11 col 5) to the runner,
-drop `-S threads=y`; (6) retire the LTS pin. shared-everything-threads is
+workflow was later deleted whole — §11 col 5); (2)+(3)+(4) EXECUTED
+2026-07-24 (an isolated Fable builder; every gate re-derived by the
+orchestrator on main before integrating): tools/runner — wasmtime crate
+47.0.2, accepting wt_run's exact argv so the swap stays one line —
+passes S1 byte-identity (runner m2.wat sha == CLI m2.wat sha,
+re-derived on the freshly pinned boot) and the battery through both
+legs (the builder measured 113/113 CLI == 113/113 runner with 0
+per-micro WAT diffs; the orchestrator re-ran the commit-class micros
+25/46/51 and the spawn smoke through it); S2 spawn smoke
+(tools/runner/smoke/spawn-import.wat — wasi-threads convention:
+IMPORTED shared memory re-exported for the p1 ABI) exits 42 through
+runner AND CLI 43. Import-surface CORRECTION: the wheel has NO memory
+import — emit DEFINES and exports the shared memory (wasm.mn:2054)
+beside the one `wasi.thread-spawn` import and 17 p1 fns; and
+wasmtime-wasi's p1 host locates guest memory through the instance's
+"memory" EXPORT, so an import-shape module must re-export it. (4) is a
+BANKED RED (tools/runner/smoke/mn-real-spawn.mn): `(2 <| (widen,
+widen)) ~> parallel_compose ~> wasi_threads` compiles with zero
+diagnostics and traps 134 unaligned-atomic in ffi_join identically on
+both engines (the sequential twin answers 60 on both) — the gap is the
+WHEEL's spawn glue, four links each artifact-verified: (a)
+threading.mn banks wasi_thread_spawn's return (the thread id) in
+ThreadHandle while ffi_join dereferences that payload as a CLOSURE
+POINTER — the handle==closure_ptr identity belonged to the
+sentinel-intrinsic era and broke when spawn became a Stage-4a direct
+import; (b) closure_pointer_intrinsic (threading.mn:230, a Pure body
+returning 0) has no lower/emit recognition, so every child's start_arg
+is literally 0; (c) emit_wasi_thread_start writes its done/result
+words one past the closure record's 8+4nc allocation; (d) the
+defined-memory shape gives every spawned instance a FRESH zeroed
+image — genuine sharing needs the import shape the runner already
+links generically. Closing (a)-(d) is the wheel-side spawn-glue arc —
+the `>< ~> Thread` unlock, band E's real-spawn claim made true; then
+(5) swap wt-env.sh/install.sh (+ hosted CI when it returns, §11 col 5)
+to the runner, drop `-S threads=y`; (6) retire the LTS pin. shared-everything-threads is
 the named eventual target, unimplemented in any host — name it, do not
 build toward it. Two artifact-prose corrections the recon surfaced:
 threading.mn's "sentinel" comments are STALE for wasi_thread_spawn (it is
@@ -2891,6 +2920,13 @@ a Stage-4a direct import, lower.mn:4674 — the handler arm is bypassed);
 and ide/index.html's thread-spawn stub always returns -1 with no
 ffi_join fallback path (latent, nothing calls it — the browser-Worker
 spawn is the runner pattern at the other host).
+
+`Hβ.query.comment-prose-search` (2026-07-24, the ⟳ self-build law's
+first named confession): the vocabulary sweep ran on grep while
+comments are already graph content — the medium's form is a query
+projection over the comment weave (find-by-word across attached prose,
+spans out, the same channel the Lede facet reads). Small, and it makes
+every future prose sweep a verb instead of a hand tool.
 
 `Hβ.runtime.cross-compile-durable-state` CLOSED (2026-07-23, the
 adversarial forensic-prober's independent dig — a fresh mind refuting

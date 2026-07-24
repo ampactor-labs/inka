@@ -2740,10 +2740,33 @@ reaches the LSP layer but does not yet write a hover result
 (Hβ.lsp.transport-runs-frontend)) ·
 `Hβ.lsp.transport-runs-frontend` (ensure_doc_open reads bytes, never
 lex/parse/infers — hover reads an unpopulated graph; v1 = the pipeline splice)
-· `Hβ.format.render-totality-before-fmt` (mentl fmt wiring is premature:
-render_body_tokens carries `<expr>`/`<stmt>`/`<pat>` surrender-fallbacks and
-format_chain is unreachable from format_program — totality first, then the
-verb) · `Hβ.multishot.handler-return-clause` (M5 — named twice in
+· `Hβ.format.render-totality-before-fmt` (SHARPENED 2026-07-23 — the exact
+census + the oracle design, ready to open): format.mn is 577 lines of
+DORMANT machinery (zero callers; the Format effect + format_program/
+format_at_handle/format_chain real). The three surrender-fallbacks measure
+as 18 missing arms: render_expr_tokens 17/25 (missing BlockExpr,
+LambdaExpr, MakeRecordExpr, MakeStringExpr — the interpolation re-render —
+MatchExpr, NamedRecordExpr, RecordUpdateExpr, ResumeExpr),
+render_stmt_tokens 4/9 (missing LetStmt, TypeDefStmt, EffectDeclStmt,
+HandlerDeclStmt, RefineStmt), render_pat_tokens 3/8 (missing PLit, PTuple,
+PList, PRecord, PAlt) — the easy spine renders, everything structural
+surrenders. THE BUILD: (1) the 18 arms + precedence-aware parenthesization
+(render must be parse's inverse under the ONE precedence table) + the
+COMMENT WEAVE projection (decl/interior/trailing comments are graph
+content now — the formatter is the weave's biggest consumer; dropping
+prose is destroying source); (2) the fmt verb as whole-file projection
+(read → frontend → render → write, the tighten driver's surgery
+generalized from one clause to the file); (3) THE ORACLE — the formatter
+judged by the self-hosting machinery itself: idempotence
+(format∘format == format, byte-equal), then format the ENTIRE WHEEL and
+the formatted wheel must compile census-0, hold comment-refs 0, pass
+battery + frontier, and reach its own m3'==m4' fixpoint — the formatted
+source then BECOMES canonical in the same landing. (4) The payoff ratchet:
+the 760 E_RedundantBraces (MachineApplicable, format-liftable) die as a
+side effect of canonical projection, with E_RedundantPerform and
+E_StatementSemicolon riding free — the medium's next batch-authored sweep
+after tighten. RED-first fixtures per missing arm class (today a match or
+lambda formats to `<expr>` — the gate) · `Hβ.multishot.handler-return-clause` (M5 — named twice in
 git history: docs/research/multishot-general-design.md as the next ladder step, absent
 here until now) · `Hβ.lower.branch-isolated-handler-state` (the multishot
 doc's own correction, missing from every band) ·

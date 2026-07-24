@@ -1053,6 +1053,28 @@ for i in "${!compilers[@]}"; do
   run_program "$compiler" world-arm-shadow \
     "$ROOT/tests/frontier/mn-world-arm-shadow.mn" 40 yes "$dir"
 
+  # ── the annotation verifier PROVES (never reads boundness) ──────────
+  # Seen RED on the pre-fix boot: an allocating main (++ carries its
+  # callee's row) was offered "!Alloc ... proven zero allocation" — the
+  # tentative-apply's post-bind NBound read was the whole check, and a
+  # bind always sticks. The fix returns row_subsumes(body_row, narrowing)
+  # from the apply — the fn-finalize gate's own engine. The control leg
+  # keeps the TRUE proposal alive.
+  cat "${RTLIBS[@]}" "$ROOT/tests/frontier/mn-teach-alloc-honest.mn" | wt_run "$compiler" teach - > "$dir/teach-alloc.out" 2>/dev/null
+  # Judge main's OWN line: teach projects every fn in the linked blob, and
+  # the runtime's non-allocating fns legitimately earn !Alloc lines.
+  if grep '^main:' "$dir/teach-alloc.out" | grep -q '!Alloc'; then
+    fail "teach-alloc-honest (an allocating body was offered !Alloc as proven)"
+  else
+    pass "teach-alloc-honest (no !Alloc proposal on an allocating body)"
+  fi
+  cat "${RTLIBS[@]}" "$ROOT/tests/frontier/mn-teach-pure-control.mn" | wt_run "$compiler" teach - > "$dir/teach-pure.out" 2>/dev/null
+  if grep '^main:' "$dir/teach-pure.out" | grep -q '!Alloc'; then
+    pass "teach-pure-control (a non-allocating body still unlocks !Alloc)"
+  else
+    fail "teach-pure-control (the true proposal died with the fix)"
+  fi
+
   # ── the cursor-address transport (mentl voice.mn:9) ─────────────────
   # Runs from the demo dir (the driver resolves imports CWD-relative).
   # Asserts the honest minimum the artifact produces today: the Query

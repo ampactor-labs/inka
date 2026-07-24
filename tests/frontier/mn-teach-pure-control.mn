@@ -1,0 +1,3 @@
+// The positive control: a body performing nothing still unlocks !Alloc —
+// the fix must kill the false proposal, never the true one.
+fn main() = 42

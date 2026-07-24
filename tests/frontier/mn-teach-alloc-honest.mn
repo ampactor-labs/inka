@@ -1,0 +1,8 @@
+// The annotation verifier proves, never reads boundness: this body's row
+// carries Alloc (++ carries its callee's row), so !Alloc must NOT be
+// offered as proven. Seen RED on the pre-fix boot: "add with !Alloc ...
+// (proven zero allocation)" on exactly this shape.
+fn main() = {
+  let s = "a" ++ "b"
+  42
+}

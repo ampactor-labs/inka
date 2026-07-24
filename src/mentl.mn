@@ -248,8 +248,8 @@ fn try_each_annotation(handle, candidates, base_ty) = {
   candidates
     |> map((ann) => {
          let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-         apply_annotation_tentatively(handle, ann, base_ty)
-         let ok = verify_after_apply(handle)
+         let proven = apply_annotation_tentatively(handle, ann, base_ty)
+         let ok = proven && verify_after_apply(handle)
          graph_rollback(cp)
          (ann, ok)
        })
@@ -257,22 +257,30 @@ fn try_each_annotation(handle, candidates, base_ty) = {
     |> map((pair) => { let (ann, _) = pair; (ann, unlock_capability(ann)) })
 }
 
-// Speculative apply: compute the narrowed type/row and graph_bind it.
-// graph_bind is one-write; within a checkpoint, the narrowed bind is
-// recorded in the trail and reverted on rollback.
+// Speculative apply: compute the narrowed type/row, graph_bind it, and
+// return the PROOF. For a row claim the proof is row_subsumes(body_row,
+// narrowing) — the SAME engine the fn-finalize gate runs — read from
+// base_ty's own row, the live body truth the graph already carries. The
+// old contract returned unit and left "proven" to a post-bind boundness
+// read; a bind always sticks, so an !Alloc claim on an allocating body
+// read back proven (the boundness-only hole, seen RED on `++`-carrying
+// main before this returned the subsumption).
 fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
-  APure(sp)          => narrow_row(handle, base_ty, mk_ef_pure(), sp),
-  ANotAlloc(sp)      => narrow_row(handle, base_ty, mk_ef_neg([ENamed("Alloc")]), sp),    // drift-audit: ignore — real drift 8 (EffName should have EAlloc variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
-  ANotIO(sp)         => narrow_row(handle, base_ty, mk_ef_neg([ENamed("IO")]), sp),       // drift-audit: ignore — real drift 8 (EffName should have EIO variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
-  ANotNetwork(sp)    => narrow_row(handle, base_ty, mk_ef_neg([ENamed("Network")]), sp),  // drift-audit: ignore — real drift 8 (EffName should have ENetwork variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
+  APure(sp)          => narrow_row_proven(handle, base_ty, mk_ef_pure(), sp),
+  ANotAlloc(sp)      => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed("Alloc")]), sp),    // drift-audit: ignore — real drift 8 (EffName should have EAlloc variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
+  ANotIO(sp)         => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed("IO")]), sp),       // drift-audit: ignore — real drift 8 (EffName should have EIO variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
+  ANotNetwork(sp)    => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed("Network")]), sp),  // drift-audit: ignore — real drift 8 (EffName should have ENetwork variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
   ARefined(_, pred, sp) => {
     // Narrowing the type via refinement — perform verify against the
-    // narrowed predicate. Ledger captures; rollback removes.
+    // narrowed predicate. Ledger captures; rollback removes. The ledger
+    // carries this claim's discharge (band F's own path), so the apply
+    // itself admits.
     let span = unwrap_source_span(sp)
     verify(span, pred, Refinement(pred, PTrue))
+    true
   },
-  AOwn(_, _) => (),    // parameter-level marker; type narrowing at call sites
-  ARef(_, _) => (),
+  AOwn(_, _) => true,    // parameter-level marker; type narrowing at call sites
+  ARef(_, _) => true,
 
   AWrapHandler(handler_name, _target, sp) => {
     // H5: speculatively narrow the row by subtracting the named
@@ -281,19 +289,38 @@ fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
     // wrap (splice `handle ... with handler_name` around body) is
     // a TEXT patch — out of substrate, into the patcher's surface.
     let absorbed = catalog_handled_effects(handler_name)
-    if len(absorbed) == 0 { () }
+    if len(absorbed) == 0 { true }
     else {
       let absorbed_row = mk_ef_closed(absorbed)
-      // The narrowed row is base_row - absorbed_row.
+      // The narrowed row is base_row - absorbed_row. The wrap's row
+      // arithmetic IS its proof: the proposed text patch installs the
+      // absorbing handler, so the residual row is true BY the wrap —
+      // unlike a bare narrowing, no body claim needs discharging.
       match base_ty {
         TFun(_params, _ret, base_row) => {
           let narrowed = diff_row(base_row, absorbed_row)
           narrow_row(handle, base_ty, narrowed, sp)
+          true
         },
-        _ => ()
+        _ => true
       }
     }
   }
+}
+
+// A row NARROWING's apply + proof, one home: bind the narrowed TFun
+// (trail-reverted on rollback) and return whether the body's own row —
+// base_ty's row, the live truth inference already wrote — subsumes into
+// the claim. row_subsumes is the fn-finalize gate's engine (the crown's
+// by-name negation membership included), so "proven" here means exactly
+// what the declaration gate would prove: with Pure demands the empty row,
+// !E demands E provably absent.
+fn narrow_row_proven(handle, base_ty, narrow, source_span) = match base_ty {
+  TFun(_, _, base_row) => {
+    narrow_row(handle, base_ty, narrow, source_span)
+    row_subsumes(resolve_row(base_row), narrow)
+  },
+  _ => false
 }
 
 fn unwrap_source_span(opt) with Pure = match opt {
@@ -366,9 +393,12 @@ fn narrow_row(handle, base_ty, narrow, source_span) = match base_ty {
   _ => ()
 }
 
-// Verify after tentative apply: read the target handle's state.
-// A candidate is "proven" if the post-apply handle is NBound (the
-// tentative narrowing stuck cleanly). Failure modes:
+// The STRUCTURAL belt after a tentative apply: the post-apply handle
+// must read NBound (the narrowing stuck without a structural conflict).
+// This is NOT the proof — a bind always sticks, so boundness alone once
+// admitted an !Alloc claim on an allocating body; the proof is the
+// row subsumption apply_annotation_tentatively now returns, conjoined
+// with this read at try_each_annotation. Failure modes here:
 //   NErrorHole — occurs check or a structural conflict caused
 //                inference to record failure on the handle.
 //   NFree     — the apply didn't bind (shouldn't happen for a

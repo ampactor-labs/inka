@@ -1026,6 +1026,20 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · THE ANNOTATION VERIFIER PROVES
+  (Hβ.mentl.verify-after-apply-boundness-only RESOLVED — the self-build
+  audit's gap 2 · pin fadbbee7): apply_annotation_tentatively returns
+  the PROOF — row_subsumes(body row read live from base_ty, narrowing),
+  the finalize gate's own engine — and boundness demotes to the
+  structural belt. Seen RED live: an allocating main was offered
+  "!Alloc ... proven zero allocation"; fixed, it loses the false claim
+  and gains the TRUE !IO severance, the pure control keeps !Alloc.
+  Frontier legs mn-teach-alloc-honest + mn-teach-pure-control (judging
+  main's own line — teach projects every fn in the blob). This clears
+  the soundness gap standing on the self-authorship path (the audit's
+  step 1a); the tighten driver is step 1b. Board: CLEAN m2 == m3 at
+  559,311 lines, census 0, comment-refs 0, frontier 223/0, battery
+  113/113.
 - 2026-07-23 · ▶▶ THE BRACKET LANDS — R5, the world arc's first
   wheel-internal consumer (Hβ.cli.infer-context-bracket RESOLVED · pin
   2644dab5): the analysis core installs as ONE fn — infer_context

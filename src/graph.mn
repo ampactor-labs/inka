@@ -123,9 +123,24 @@ handler graph_handler
     resume(if handle < len(program) { list_index(program, handle) } else { NHole(0) })
   },
 
+  // The checkpoint is the fork's STATE VALUE, not a trail index alone. The
+  // trail's per-slot undo inverts in-place writes, but a spine REALLOCATION
+  // (extend_to's doubling copy) is a mutation too, and its only precise
+  // inverse is the fork-time value — so the checkpoint snapshots every
+  // grow-able state list (O(1): thirteen words, allocated BEFORE the fork
+  // pair's heap_mark, so the record survives the region). Without this, a
+  // fork that grows any spine leaves the handler pointing into
+  // [mark, bump) — zeroed at heap_reset, re-occupied by the next
+  // allocation, read back as boundary/node truth one check later (the
+  // capability-hole stale-spine trap: boundaries[23] decoded the interned
+  // ": " as a PendingContinuationBoundary).
   graph_push_checkpoint() => {
     resume(trail_len)
-      with checkpoint_stack = push(checkpoint_stack, trail_len)
+      with checkpoint_stack = push(checkpoint_stack,
+        {boundaries, canon, comment_refs, comments, current_overlay,
+         current_overlay_idx, narrowing, next, nodes, overlay_bufs,
+         overlay_count, overlay_lens, overlay_names, program, span_index,
+         trail, trail_len})
   },
 
   // ─── Write ops ───────────────────────────────────────────────────
@@ -435,16 +450,51 @@ handler graph_handler
   },
 
   graph_rollback(target_idx) => {
-    let (new_nodes, new_boundaries, new_next) =
-      revert_trail(nodes, boundaries, trail, trail_len, target_idx, next)
     let n = len(checkpoint_stack)
-    let new_stack = if n == 0 { checkpoint_stack } else { slice(checkpoint_stack, 0, n - 1) }
-    resume()
-      with nodes = new_nodes,
-           boundaries = new_boundaries,
-           next = new_next,
-           trail_len = target_idx,
-           checkpoint_stack = new_stack
+    if n == 0 {
+      // Unpaired rollback (no snapshot on the stack): the per-slot walk
+      // over the current spines. Paired forks never reach this arm.
+      let (new_nodes, new_boundaries, new_next) =
+        revert_trail(nodes, boundaries, trail, trail_len, target_idx, next)
+      resume()
+        with nodes = new_nodes,
+             boundaries = new_boundaries,
+             next = new_next,
+             trail_len = target_idx
+    } else {
+      // Restore the fork-time spines, then walk the CURRENT trail backward
+      // INTO them. Backward order makes the oldest trailed old-value win
+      // per slot, so every in-place case lands on its pre-fork value; an
+      // entry whose slot exists only in a discarded grown spine is skipped
+      // by the bound; next/trail/every untrailed weave restore wholesale.
+      let cp = last(checkpoint_stack)
+      let (undone_nodes, undone_boundaries) =
+        revert_trail_into(cp.nodes, cp.boundaries, trail, trail_len, target_idx)
+      resume()
+        with nodes = undone_nodes,
+             boundaries = undone_boundaries,
+             next = cp.next,
+             trail = cp.trail,
+             trail_len = target_idx,
+             span_index = cp.span_index,
+             program = cp.program,
+             comments = cp.comments,
+             comment_refs = cp.comment_refs,
+             canon = cp.canon,
+             narrowing = cp.narrowing,
+             overlay_bufs = cp.overlay_bufs,
+             overlay_lens = cp.overlay_lens,
+             overlay_names = cp.overlay_names,
+             overlay_count = cp.overlay_count,
+             current_overlay_idx = cp.current_overlay_idx,
+             current_overlay = cp.current_overlay,
+             // drop_last, never slice: the pop runs BEFORE the caller's
+             // heap_reset, so a slice node minted here dies with the
+             // region and the next fork walks a zeroed cell. On the
+             // always-snoc stack drop_last is the parent READ — the pop
+             // allocates nothing and the surviving value is pre-fork.
+             checkpoint_stack = drop_last(checkpoint_stack)
+    }
   }
 }
 
@@ -794,6 +844,38 @@ fn occurs_in_eff_args_loop(handle, ref args, i, n) with !Mutate = {
 // Rollback resets trail_len; entries above the counter are stale
 // and get overwritten on next append. No snoc, no concat, no linked
 // walk. This is the substrate on which Mentl's oracle runs.
+
+// Bounded in-place undo write: a slot beyond the spine's bound lived only
+// in a grown spine the snapshot restore discards — skip, never extend (an
+// extend here would re-allocate into the region the fork is about to
+// reset, re-creating the doomed-spine class the snapshot exists to close).
+fn undo_set_within(own xs, h, own v) =
+  if h < len(xs) { list_set(xs, h, v) } else { xs }
+
+// The snapshot-path walker: undo the trail INTO the fork-time spines. A
+// slot within a snapshot spine's bound gets its in-place inverse (backward
+// walk — the oldest old-value per slot is the pre-fork one, and a slot
+// first written after a growth trails the growth-copied pre-fork value, so
+// every case converges); a slot beyond the bound lived only in a grown
+// spine the restore discards — skipped, never extended. MFreshNode needs
+// no step here: the checkpoint restores `next` wholesale.
+fn revert_trail_into(own nodes, own boundaries, ref trail, current, target) = {
+  if current <= target { (nodes, boundaries) }
+  else {
+    let idx = current - 1
+    let mutation = trail[idx]
+    match mutation {
+      MSetNode(h, old) =>
+        revert_trail_into(undo_set_within(nodes, h, old), boundaries, trail, idx, target),
+      MSetRow(h, old) =>
+        revert_trail_into(undo_set_within(nodes, h, old), boundaries, trail, idx, target),
+      MSetBoundary(h, old) =>
+        revert_trail_into(nodes, undo_set_within(boundaries, h, old), trail, idx, target),
+      MFreshNode(_) =>
+        revert_trail_into(nodes, boundaries, trail, idx, target)
+    }
+  }
+}
 
 fn revert_trail(own nodes, own boundaries, ref trail, current, target, next_handle) = {
   if current <= target { (nodes, boundaries, next_handle) }

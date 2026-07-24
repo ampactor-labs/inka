@@ -75,8 +75,8 @@ handler arm_state_ctx(fields, disc, hname) {
 // pre-register pass: the graph already names the handler's node, so an
 // install resolves its handler's decl directly (Anchor 1 — Carried-Truth).
 // The DISSOLVED handler_state_inits_registry re-derived into a name-keyed
-// ledger exactly what env_lookup holds live, and its own by-name scan
-// (find_registry_field → filter) ran inside a handler arm — re-triggering
+// ledger exactly what env_lookup holds live, and its own by-name filter
+// scan ran inside a handler arm — re-triggering
 // the nested-arm evidence gap it was a workaround for. The LHandleWith emit
 // arm stores each state-init at offset 8+i*4 of the freshly-allocated state
 // record per protocol_handler_is_state_is_closure_is_evidence.md.
@@ -127,17 +127,6 @@ fn lookup_handler_arm_names_of(hname) =
     None               => []
   }
 
-// The arm-ev ledger entry's typed projections ({evs, name}, minted at
-// arm_ev_end) — the boundary pin for the generic filter/project flow.
-fn registry_entry_name(e: {evs: [String], name: String}) -> String = e.name
-fn registry_entry_evs(e: {evs: [String], name: String}) -> [String] = e.evs
-
-fn find_registry_field(name: String, ledger, project) = {
-  let hits = filter((entry) => registry_entry_name(entry) == name, ledger)
-  if len(hits) == 0 { [] }
-  else { project(head(hits)) }
-}
-
 // ─── Lower-phase handler-stack ─────────────────────────────────────
 // Pushed at each `~>` / handle install (before the body lowers), popped
 // after. A Tier-1 perform inside the body resolves the innermost handler
@@ -169,8 +158,8 @@ handler lower_handler_stack_ctx with stack = [] {
 // (named fn, lambda, handler arm, fanout thunk, reified k) is a NEW WASM
 // function: the enclosing frame's locals do not exist there, so lexical
 // resolution STOPS at the frame boundary and the perform falls to the
-// singleton/evidence tiers (derive_ev_slots already threads enclosing
-// evidence through captures — transparent forwarding). Surfaced when THE
+// singleton/evidence tiers (the world chain carries the installs across
+// every frame boundary — dynamic by construction). Surfaced when THE
 // CUT flipped the wheel's choose/enumerate MultiShot and reify_frame_k
 // re-lowered pipeline remainders inside fresh k frames while the lexical
 // stack still held compile_source's installs (a reified k frame's dangling
@@ -179,42 +168,6 @@ handler lower_handler_stack_ctx with stack = [] {
 // can never shadow a real install.
 fn lower_frame_fence_push() = lower_handler_push("", 0)
 fn lower_frame_fence_pop() = lower_handler_pop()
-
-// ─── Arm-body evidence ledger ──────────────────────────────────────
-// While a handler's arm bodies lower, their Tier-2 performs NOTE the effects
-// they dispatch through — the SET, never an order (keying made order
-// meaningless). The install threads a keyed [effect][record][base] entry per
-// noted effect; the arm fn's LEvPerform KEY-SCANS for it. Closed per
-// discriminator into the hev registry so install sites read the set back.
-// Hβ.emit.handler-record-ev-capture; the seed's own copy died with it.
-effect ArmEvLedger {
-  arm_ev_begin() -> Int
-  arm_ev_note(String) -> Int
-  arm_ev_end(String) -> Int
-  lookup_handler_arm_ev_names(String) -> [String]
-}
-
-handler arm_ev_ledger_ctx with active = false, names = [], entries = [] {
-  arm_ev_begin()  => resume(0) with active = true, names = [],
-  arm_ev_note(ename) => {
-    // Append-once into the SET the install threads keyed entries for. The
-    // arm's read key-scans, so no positional index must be kept stable (the
-    // cure for position-as-the-bug). Outside an arm (inactive) → no-op.
-    if active && index_of_name(names, ename, 0) < 0 {
-      resume(0) with names = list_concat(names, [ename])
-    } else { resume(0) }
-  },
-  arm_ev_end(discriminator) => {
-    resume(0)
-      with entries = entries ++ [{name: discriminator, evs: names}],   // drift-audit: ignore — O(1) push at the end last/drop_last read
-           active  = false,
-           names   = []
-  },
-  lookup_handler_arm_ev_names(hname) => {
-    if hname == "" { resume([]) }
-    else { resume(find_registry_field(hname, entries, registry_entry_evs)) }
-  }
-}
 
 fn index_of_name(names: [String], target: String, i) = {
   if i >= len(names) { -1 }
@@ -234,7 +187,10 @@ type BoundaryInvariant
   | UnfinalizedContinuationBoundary(Int) // continuation graph handle
   | WrongContinuationBoundaryKind
   | NonMultiShotContinuation(ResumeDiscipline)
-  | PartialEffectfulCallee(Int)          // callee handle — Hβ.lower.partial-effectful-callee
+  // A resume whose "__k" resolves neither as the arm's param nor as a
+  // capture — impossible past infer's E_ResumeOutsideArm refusal; the
+  // typed loud floor for the impossible branch, never a fabricated k.
+  | ResumeKOutsideLadder
   | PartialCalleeShape(Int)              // callee handle — Hβ.lower.partial-local-callee
   // A VarRef whose name is in NO env entry. infer already proved it missing
   // (E_MissingVariable, MissingVar Reason); the lowering must not then GUESS
@@ -242,13 +198,13 @@ type BoundaryInvariant
   // the graph most clearly holds, and it emits WAT that no assembler accepts,
   // so the medium's own precise diagnostic surfaces 350k lines later as a
   // wat2wasm error about a symbol the developer never wrote. This is the
-  // VALUE-path twin of LUnresolvedEvidence: same class, same fix, one site
+  // VALUE-path twin of the typed-absence evidence floor: same class, one site
   // it never reached.
   | MissingName(String)                  // the unbound name
   // A singleton-tier perform whose state global is still 0 at runtime — the
   // handler was never installed in THIS dynamic extent. The singleton tier's
   // evidence IS the global; a null global is a missing-evidence refusal, the
-  // direct-call twin of LUnresolvedEvidence. Without the guard the arm reads
+  // direct-call twin of the typed-absence evidence floor. Without the guard the arm reads
   // address 0+offset (the null page) as its state — below every region mark,
   // never reset — and the corruption surfaces compiles later as a stale
   // pointer walk (the address-12 census root, 2026-07-22). The compile-time
@@ -267,7 +223,7 @@ fn show_boundary_invariant(invariant) with Memory + Alloc = match invariant {
   UnfinalizedContinuationBoundary(h) => "pending continuation boundary {int_to_str(h)}",
   WrongContinuationBoundaryKind  => "wrong boundary kind at continuation",
   NonMultiShotContinuation(disc) => "non-multishot continuation: {show_discipline(disc)}",
-  PartialEffectfulCallee(h)      => "partial over effectful callee {int_to_str(h)} — evidence capture at the mint unbuilt",
+  ResumeKOutsideLadder           => "resume k outside the argument/capture ladder — impossible past E_ResumeOutsideArm",
   PartialCalleeShape(h)          => "partial over non-global callee shape {int_to_str(h)}",
   MissingName(name)              => "unbound name {name} — infer proved it missing; the lowering will not guess it into a global",
   SingletonUninstalled(hname)    => "singleton op call with no live install: {hname} — the state global is 0 in this extent; install the handler (~> {hname}) around the calling walk"
@@ -288,18 +244,7 @@ type LowExpr
   | LTailCall(Int, LowExpr, [LowExpr])
   | LDirectCall(Int, Int, String, Bool, [LowExpr])  // call handle, callee-ref handle, fn name, tail, args — the DIRECT native call to a known top-level fn: lower resolved the callee's FnScheme, so the emit calls $name with NATIVE argument types (an f64 arg stays f64 — no spill cell, no word face, no wrapper hop) and `return_call` in tail position (true tails for wide results too — the word-face demotion and the wrapper's per-iteration frame leak both die at this node). __state stays the callee's own static-closure global, byte-equal semantics to the closure convention minus the table hop. The closure path remains for genuine VALUE callees; the callee-ref handle feeds the twin-demand scan (the reference's instantiated TFun lives there)
   | LReturn(Int, LowExpr)
-  | LMakeClosure(Int, LowFn, [LowExpr], [LowExpr]) // handle, fn, captures, ev_slots
-  // VALUE-position reference to an EXISTING named fn that DISPATCHES effects —
-  // the evidence-capturing twin of LGlobal (which carries NO ev region) and the
-  // dispatch-less twin of LSuspend (which CALLS). Builds the unified record
-  // [fn_ptr@0][capture_count=0@4][key,ev pairs @8+8*j] for `$<name>_idx` so a fn passed as a
-  // value (`each(infer_stmt, stmts)`) carries its evidence into the record
-  // the callee reads as __state — Carried-Truth: the two divergent fn-value
-  // paths (bare LGlobal vs evidence-bearing LMakeClosure) unified into ONE
-  // capture. Emits NO body (the fn is emitted at its own declaration). A pure
-  // fn-value stays bare LGlobal (len(ev)==0, Law 7); the CALLEE position stays
-  // bare LGlobal (lower_callee_ref collapses an LFnRef callee).
-  | LFnRef(Int, String, [LowExpr])               // handle, fn-name, ev_slots
+  | LMakeClosure(Int, LowFn, [LowExpr])          // handle, fn, captures
   // The YIELD of a MultiShot perform (band B, continuation-reification k1):
   // (frame, op_name, args, k). The frame = the REWRITTEN
   // FRAME's tail node — the yield's dummy returns through the frame's own
@@ -331,18 +276,20 @@ type LowExpr
   // install driver's parked $__hres), which is what makes the check correct
   // INSIDE an install body (a `(return)` here would skip the driver bracket).
   | LKExtend(Int, LowExpr)
-  | LMakeContinuation(Int, LowFn, [LowExpr], [LowExpr], Int, Int, Int)
+  | LMakeContinuation(Int, LowFn, [LowExpr], Int, Int)
   // H7 — multi-shot continuation record per the H7 walkthrough §1.2.
-  // handle, resume-fn, captures, ev_slots, state_index, ret_slot,
-  // world_tag. Heap-allocated through emit_alloc (one allocator per kernel
+  // handle, resume-fn, captures, state_index, ret_slot.
+  // Heap-allocated through emit_alloc (one allocator per kernel
   // crystallization #8 — the heap has one story); fn_index field
   // points to the synthesized __resume function registered in the
   // WASM funcref table; state_index discriminates which perform site
-  // resumed; ret_slot reserves the local slot for the resumed value;
-  // world_tag is the legacy 32-bit effect-name fingerprint. It is carried for
-  // layout compatibility only: collisions, parameter erasure, open tails, and
-  // missing activation identity make it unsuitable as a resume proof.
-  // Composes with LMakeClosure's capture/ev-store loops; emit shares
+  // resumed; ret_slot reserves the local slot for the resumed value.
+  // The record's LAST word is the FROZEN WORLD — the live $world_g at
+  // the reify moment, stored by emit (no lowered field: the value is a
+  // runtime fact, the world-as-value arc's R4). Resume rebinds through
+  // it (LResumeK), so the remainder's performs resolve in the world
+  // where the continuation was captured — !E lifted to TIME (§4③).
+  // Composes with LMakeClosure's capture-store loop; emit shares
   // the per-field store helpers (per H7 §4.2).
   | LDeclareFn(LowFn)                            // module-level fn declaration (handler arm) — no runtime slot
   | LIf(Int, LowExpr, [LowExpr], [LowExpr])
@@ -360,20 +307,25 @@ type LowExpr
   | LMakeRecord(Int, [LowExpr])                // handle, [field_value] sorted by field name
   | LMakeVariant(Int, TagId, [LowExpr])        // handle, tag_id, field exprs
   | LMatch(Int, LowExpr, [(LowPat, LowExpr)])
-  | LSuspend(Int, Int, LowExpr, [LowExpr], [LowExpr], Bool)   // handle, op_h, fn_expr, args, ev_slots, tail — mark_tail is the ONE writer of tail=true; emit renders return_call_indirect (the seed's clone-then-tail-call form; without it every evidence-threading recursion burned a frame per step — m3's iterate_from stack exhaustion, 2026-07-09)
-  // ~> desugaring. ONE handler record (handler IS state IS closure IS
-  // evidence): [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous][captured_evs].
+  // The MultiShot resume INVOKING its continuation record: handle, the k
+  // expr (the arm's __k argument / a lambda's captured __k), the resume
+  // value. Its own node — not an LCall — because the invocation REBINDS the
+  // world: emit brackets the call in the k record's frozen world (save
+  // $world_g, set from the record's last word, call through fn_ptr@0 by the
+  // W7 convention, restore), so the remainder's performs resolve where the
+  // continuation was captured, never where it happens to be resumed (the
+  // world-as-value arc's R4 — the arm-config class's TIME-axis sibling).
+  | LResumeK(Int, LowExpr, LowExpr)            // handle, k_expr, value
+  // ~> desugaring. ONE handler record (handler IS state IS closure):
+  // [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous].
   //   4th = handler_name ("" for anonymous — no per-handler state global).
   //   5th = the state inits ([LowExpr], source-order; written at 8+i*4).
   //   6th = arm_names — per-effect groups of (effect name, arm-fn names), op-decl
   //         order within each effect; emit lays each group contiguously and
-  //         builds a thin [record, base] evidence-entry per effect.
-  //   7th = captured_evs ([LowExpr]) — the install-site evidence the arm
-  //         bodies perform through, resolved at THIS position; written after
-  //         the arms so the arm fn's LowFn fence lands its LEvPerform reads.
-  // Per protocol_handler_is_state_is_closure_is_evidence.md +
-  // Hβ.lower.multi-effect-ev-index-map (Part 2) + Hβ.emit.handler-record-ev-capture.
-  | LHandleWith(Int, LowExpr, LowExpr, String, [LowExpr], [{arms: [String], ename: String}], [LowExpr])
+  //         builds a thin [record, base] evidence-entry per effect (the world
+  //         chain node's entry — the perform's ev_perform_node dispatch).
+  // Per protocol_handler_is_state_is_closure_is_evidence.md.
+  | LHandleWith(Int, LowExpr, LowExpr, String, [LowExpr], [{arms: [String], ename: String}])
   | LFeedback(Int, LowExpr, LowExpr)           // <~ desugaring (iterative ctx required)
   // (LF.B) the prior-iteration output of feedback handle h, read LIVE from the
   // $__fb_prev_<h> local the LFeedback emit declares + loads. A `<~` lambda
@@ -402,22 +354,6 @@ type LowExpr
   //            off the record's OWN nstate@4) — an interior read, never a
   //            static body-captures guess.
   | LEvPerform(Int, String, String, Int, [LowExpr]) // handle, op_name, effect-key, op_slot, args
-  // Forward THIS fn's evidence for an effect (the handler record the caller
-  // threaded into __state) by IDENTITY (effect_key) into a deeper callee's
-  // record or an install's captured-ev region — the caller fills the SAME key,
-  // so adding/removing a sibling effect shuffles nothing (the position-as-the-
-  // -bug cure). The polymorphic-scope companion of derive_ev_slots' keyed entries.
-  | LEvRef(Int, String)                        // handle, effect_key (the effect name)
-  // The typed-absence bottom: an effect with NO resolvable handler anywhere up
-  // the install chain (a genuine E_HandlerUninstallable). NOT slot-0 — slots no
-  // longer exist, so the fabrication is unsayable; this carries a Located Reason.
-  | LUnresolvedEvidence(Int, String)           // handle, effect_key
-  // A keyed captured-ev entry: the effect's IDENTITY (key) paired with its
-  // resolved evidence (LLocal / LGlobal / LEvRef). emit writes [key][record][base];
-  // a perform's key-scan matches `key` by str_eq. The list of these IS the
-  // self-describing captured_evs region — its ORDER carries no meaning (the cure
-  // for position-as-the-bug: a sibling effect appearing shuffles no key).
-  | LEvEntry(String, LowExpr)                  // effect_key, resolved evidence
   // W6: handle, record, SELECTOR. The byte offset is a PROJECTION of the
   // receiver's resolved type (prefix-sum of repr_width over the sorted
   // fields) and projects at EMIT under the active specialization bracket —
@@ -519,11 +455,11 @@ fn lexpr_handle(e) with Pure = match e {
   LTailCall(h, _, _)      => h,
   LDirectCall(h, _, _, _, _) => h,
   LReturn(h, _)           => h,
-  LMakeClosure(h, _, _, _) => h,
-  LFnRef(h, _, _)         => h,
+  LMakeClosure(h, _, _)   => h,
   LShow(h, _)             => h,
   LHash(h, _)             => h,
-  LMakeContinuation(h, _, _, _, _, _, _) => h,
+  LMakeContinuation(h, _, _, _, _) => h,
+  LResumeK(h, _, _)       => h,
   LYield(h, _, _, _)      => h,
   LKExtend(h, _)          => h,
   LDeclareFn(_)            => 0,
@@ -535,16 +471,12 @@ fn lexpr_handle(e) with Pure = match e {
   LMakeRecord(h, _)       => h,
   LMakeVariant(h, _, _)   => h,
   LMatch(h, _, _)         => h,
-  LSuspend(h, _, _, _, _, _) => h,
-  LHandleWith(h, _, _, _, _, _, _) => h,
+  LHandleWith(h, _, _, _, _, _) => h,
   LFeedback(h, _, _)      => h,
   LFeedbackPrior(h)       => h,
   LPerform(h, _, _, _)    => h,
   LDirectPerform(h, _, _, _, _) => h,
   LEvPerform(h, _, _, _, _) => h,
-  LEvRef(h, _)            => h,
-  LUnresolvedEvidence(h, _) => h,
-  LEvEntry(_, ev)         => lexpr_handle(ev),
   LFieldLoad(h, _, _)     => h,
   LConvert(h, _, _)       => h,
   LStateSlotStore(h, _, _, _) => h,
@@ -572,12 +504,6 @@ fn lexpr_handle(e) with Pure = match e {
 fn mark_tail(e) with Memory + Alloc = match e {
   LCall(h, fn_, args)         => LTailCall(h, fn_, args),
   LDirectCall(h, fh, n, _, args) => LDirectCall(h, fh, n, true, args),
-  // An evidence-threading call in tail position stays LSuspend — the sst_
-  // clone is argument computation — but the dispatch becomes a TAIL call.
-  // Without this arm the wildcard kept it plain and every effectful
-  // recursion (iterate_from over the 36k-line wheel) burned a frame per
-  // step: m3's m4-generation stack exhaustion, 2026-07-09.
-  LSuspend(h, o, f, args, ev, _) => LSuspend(h, o, f, args, ev, true),
   LIf(h, cond, then_b, else_b) =>
     LIf(h, cond, mark_tail_last_in(then_b), mark_tail_last_in(else_b)),
   LBlock(h, stmts) => LBlock(h, mark_tail_last_in(stmts)),
@@ -660,63 +586,40 @@ fn lower_callee_name(fbody) = match fbody {
 }
 
 // The `CallExpr` dispatch falls back to this when the callee isn't a
-// `SchemeKind`-recognized constructor or effect op. Monomorphic case:
-// direct `LCall` (callee's row is ground; no evidence needed).
-// Polymorphic case: `LSuspend` with its ev slots derived (`derive_ev_slots`) from the callee's
-// row — each unground op resolves to the global handler arm's `fn_idx`
-// via the `op_<name>` naming convention H1.4 established.
-// THE callee-position read: a fn being CALLED stays BARE. The value-position
-// consumer (VarRef RGlobal arm) now mints LFnRef for an effectful named-fn
-// VALUE; a CALLEE provides its evidence through __state threading (LSuspend) or
-// is monomorphic (LCall), so it must NOT carry a value-record. Collapse an
-// LFnRef callee back to the bare LGlobal it was before — byte-identical (LFnRef
-// carries the SAME handle+name the pre-split LGlobal held). The split that keeps
-// every effectful direct call's bytes untouched (Law 7).
-fn lower_callee_ref(f) = match lower_expr(f) {
-  LFnRef(h, n, _) => LGlobal(h, n),
-  lo              => lo
-}
-
+// `SchemeKind`-recognized constructor or effect op. Every call is BARE:
+// the callee's performs dispatch through the LIVE WORLD CHAIN
+// (ev_perform_node — the world-as-value arc's R2), so no call threads an
+// evidence region. The one thing a call may carry is the CONTINUATION:
+// a resume-BOUND callee (reachable from a MultiShot arm per the
+// resume_bindings closure)
+// takes the arm's k as a REAL trailing argument — the "argument, not
+// evidence" ruling executed: the callee's own resolve_resume_k finds its
+// __k as an ordinary param (RLocal), a lambda's as a capture (RUpval).
 fn lower_call_default(handle, f, fh, lo_args) = {
-  let lo_f = lower_callee_ref(f)
-  // The fork reads the SAME projection the threading fills: derive_ev_slots
-  // (the callee's escaping row, resolved in this caller's scope). Entries
-  // present ⇒ the callee's performs key-scan for them ⇒ thread the transient
-  // (LSuspend). Empty ⇒ bare call. The old monomorphic_at fork read the CALL
-  // node's type (the result — rarely a TFun) and called GROUND rows
-  // "monomorphic", so every effectful prelude call (Closed[Iterate]) went
-  // BARE and the callee's strict scan met an empty region — the 0/34 floor.
-  // Groundness is a row-VARIABLE fact; evidence need is an ESCAPING-ROW fact.
-  let ev_slots = derive_ev_slots(fh)
-  // THE CUT (bank Ruling 2/A3): a call to a resume-BOUND fn from a
-  // MultiShot context threads the "__resume" k evidence — the arm's
-  // lexical __k, a closure's captured __k, or a bound fn's own forwarded
-  // entry, all through the ONE resolve_resume_k ladder. The callee's
-  // resumes read it back by the same keyed scan every perform uses.
-  let ev_slots2 =
-    if resume_bind_target(fh) {
-      ev_slots ++ [LEvEntry("__resume", resolve_resume_k(handle))]   // drift-audit: ignore — one entry per call site, not a loop
-    } else { ev_slots }
-  if len(ev_slots2) == 0 {
-    // The direct cash-out: a callee lower resolved to a top-level fn's
-    // OWN global (LGlobal minted from a FnScheme VarRef — locals shadowed
-    // it first, value bindings carry another kind) calls the fn BY NAME
-    // with native args. Carried-Truth at the dispatch: lower proved the
-    // callee's identity; routing through the closure re-derived it at
-    // runtime through a table hop that broke tail-calls (the wf$ wrapper
-    // frame leak — one leaked frame per iteration of every deep tail
-    // recursion routed through a wide fn's word face, measured at 4096
-    // frames under the signal crucible).
-    match lo_f {
-      LGlobal(gh, gname) =>
-        match env_kind_of(gname) {
-          Some(FnScheme) => LDirectCall(handle, gh, gname, false, lo_args),
-          _              => LCall(handle, lo_f, lo_args)
-        },
-      _ => LCall(handle, lo_f, lo_args)
-    }
-  } else {
-    LSuspend(handle, fh, lo_f, lo_args, ev_slots2, false)
+  let lo_f = lower_expr(f)
+  // The append is unconditional on the CALLEE's boundness (never gated on
+  // the caller's discipline): a bound fn's emitted arity always includes
+  // __k, so every call must match it — resume_k_arg passes the live k
+  // where one is in scope and the loud dead-k word where none is.
+  let args2 =
+    if ls_resume_bind_of(callee_name_of_handle(fh)) == "" { lo_args }
+    else { lo_args ++ [resume_k_arg(handle)] }   // drift-audit: ignore — one k arg per call site, not a loop
+  // The direct cash-out: a callee lower resolved to a top-level fn's
+  // OWN global (LGlobal minted from a FnScheme VarRef — locals shadowed
+  // it first, value bindings carry another kind) calls the fn BY NAME
+  // with native args. Carried-Truth at the dispatch: lower proved the
+  // callee's identity; routing through the closure re-derived it at
+  // runtime through a table hop that broke tail-calls (the wf$ wrapper
+  // frame leak — one leaked frame per iteration of every deep tail
+  // recursion routed through a wide fn's word face, measured at 4096
+  // frames under the signal crucible).
+  match lo_f {
+    LGlobal(gh, gname) =>
+      match env_kind_of(gname) {
+        Some(FnScheme) => LDirectCall(handle, gh, gname, false, args2),
+        _              => LCall(handle, lo_f, args2)
+      },
+    _ => LCall(handle, lo_f, args2)
   }
 }
 
@@ -749,8 +652,8 @@ fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
           // Memory / Alloc ops ARE the instruction set — "the WASM runtime
           // IS the handler" (lib/runtime/memory.mn). They project to raw
           // instructions, never through evidence: routing them Tier-2 made
-          // the evidence scan's own loads dispatch through the evidence
-          // scan (`ev_scan` recursing into itself — the handler rung's
+          // the evidence walk's own loads dispatch through the evidence
+          // walk (the scan recursing into itself — the handler rung's
           // runtime stack overflow). LWasiCall is the direct-substrate
           // node; emit dispatches the name to its instruction.
           LWasiCall(handle, name, lo_args)
@@ -874,58 +777,35 @@ fn partial_callee_form(handle, fbody, fh) = match fbody {
 // PARTIAL APPLICATION AS A VALUE — the mint. The record is LambdaExpr's
 // exactly (fn_ptr@0, nc@4, captures@8; emit's deep walk lifts the LFn, the
 // caller dispatches through the same W7 closure-call convention), built by
-// the k1 lower-time LFn-synthesis precedent. The closure's evidence region
-// is derive_ev_slots(handle) — the partial node's own TFun row; a nonempty
-// region means the callee's performs would read evidence this mint does not
-// yet capture into the synthesized frame, so it floors typed
-// (Hβ.lower.partial-effectful-callee) instead of ever calling wrong.
+// the k1 lower-time LFn-synthesis precedent. An EFFECTFUL callee needs no
+// evidence in the synthesized frame — its performs dispatch through the
+// live world chain at call time (the world-as-value arc dissolved
+// Hβ.lower.partial-effectful-callee's typed floor).
 fn lower_call_partial(handle, fbody, fh, r_args, n_ps) =
   match partial_callee_form(handle, fbody, fh) {
     None => LInvariantFailure(handle, PartialCalleeShape(fh)),
     Some(form) => {
-      let evs = derive_ev_slots(handle)
-      if len(evs) != 0 { LInvariantFailure(handle, PartialEffectfulCallee(fh)) }
-      else {
-        let flat_args = list_to_flat(r_args)
-        let (captures, param_names, body_args) =
-          partial_split(flat_args, len(flat_args), n_ps, handle, 0, 0)
-        let fn_ir = LFn(
-          "partial_{int_to_str(handle)}",
-          len(param_names),
-          param_names,
-          [form(body_args)],
-          mk_ef_pure(),
-          len(captures))
-        LMakeClosure(handle, fn_ir, captures, evs)
-      }
+      let flat_args = list_to_flat(r_args)
+      let (captures, param_names, body_args) =
+        partial_split(flat_args, len(flat_args), n_ps, handle, 0, 0)
+      let fn_ir = LFn(
+        "partial_{int_to_str(handle)}",
+        len(param_names),
+        param_names,
+        [form(body_args)],
+        mk_ef_pure(),
+        len(captures))
+      LMakeClosure(handle, fn_ir, captures)
     }
   }
 
-// Is this callee a resume-bound fn called from a MultiShot context? Both
-// reads are live (the bindings registered at lower_program; the discipline
-// from the ambient arm context — which a bound fn's own wrap installs, so
-// deep chains forward the entry hop by hop).
-fn resume_bind_target(callee_handle) = {
-  let name = callee_name_of_handle(callee_handle)
-  if name == "" { false }
-  else {
-    if ls_resume_bind_of(name) == "" { false }
-    else {
-      match current_resume_discipline() {   // drift-audit: ignore — sequenced effectful arm-context read
-        MultiShot => true,
-        _         => false
-      }
-    }
-  }
-}
 
 // THE DISPATCHED-ROW PROJECTION (master plan §6 1★). The single read of a fn's
-// dispatched effect-row names — canonical order, builtins filtered. `derive_ev_slots`
-// (caller, building a callee's __state) and the keyed captured_evs read (callee)
-// both project through THIS ONE truth; evidence is then addressed by effect
-// IDENTITY (a key-scan over [key][record][base]), so the two sides agree BY THE
-// KEY, never a positional slot. The live form reads the flow-closure (escaping_row
-// — walk the body/call-edges, subtract installs), recovering forward-ref-dropped
+// dispatched effect-row names — canonical order, builtins filtered. The
+// escaping-row machinery (compute_escaping_rows) and the multishot-absence
+// gate (can_yield) both project through THIS ONE truth. The live form reads
+// the flow-closure (escaping_row — walk the body/call-edges, subtract
+// installs), recovering forward-ref-dropped
 // effects the frozen TFun row lost (docs/specs/simulations/polymorphism-as-flow-edges.md §8).
 fn effects_of(fn_ty) = match fn_ty {
   TFun(_, _, row) => effects_of_row(row),
@@ -957,65 +837,6 @@ fn effects_of_row(row) = {
 fn names_diff_strs(ref xs, ref mask) = filter((n) => !string_in_list(mask, n), xs)
 
 
-// The per-effect evidence the caller threads into a polymorphic callee's
-// __state record. ONE ev per effect in the callee's row — the ev is a RECORD
-// POINTER (handler IS state IS closure IS evidence), NOT a fn-index global
-// (drift 5), PAIRED with the effect's IDENTITY (the key). Each effect resolves
-// to the lexically-installed handler's state record (`LLocal "__hstate_<h>"`)
-// or a forward of THIS frame's own evidence by IDENTITY (`LEvRef` carries the
-// key, never a row position). The callee reads each back by KEY-SCAN, so the
-// row is consumed as a SET — order carries no meaning; a sibling effect shuffles
-// nothing (the cure for position-as-the-bug). The row is read from THE GRAPH
-// at the call site: lookup_ty(callee_handle) is the callee expression's
-// instantiated TFun, whose row the EtVar chase reads through bound vars —
-// per-call-site precision (an effect-polymorphic callee's row var is bound to
-// THIS call's concrete row by the time lower runs; inference is complete).
-// Named fn or lambda, ONE read; the name-keyed esc-map query this replaces
-// was a side-ledger re-derivation of the same live fact (Anchor 1).
-fn derive_ev_slots(callee_handle) = {
-  map((ename) => {
-    let ev = resolve_ev_for_ename(ename)
-    // The arm's ev-region must carry every effect the arm THREADS to a callee,
-    // not only the ones it performs directly (the arm_ev_note at the perform
-    // tier). When the effect resolves to an LEvRef — a keyed lookup INTO the
-    // arm's captured_evs, because no handler is lexically in scope here — the
-    // install must have written that entry, so note it. (A lexical LLocal is
-    // threaded from its own install, never the arm's region.) Without this, an
-    // arm that only CALLS a stateful-effect function — `verify_pending_at`,
-    // whose row carries Verify — through a `<|` fanout branch left its
-    // captured_evs missing that key, so the callee got a garbage record
-    // (the felt-read ev-seam: target=Verify, record=32, scan → OOB).
-    note_threaded_ev(ename, ev)
-    LEvEntry(ename, ev)
-  }, evidence_effects_of(callee_handle))
-}
-
-fn note_threaded_ev(ename, ev) = match ev {
-  LEvRef(_, _) => arm_ev_note(ename),
-  _            => 0
-}
-
-// The effects a caller threads evidence for: the per-call-site instantiated row
-// (`effects_of(lookup_ty)` — concrete, a higher-order arg's effect is bound
-// here) UNIONED with the callee's FLOW-CLOSURE (`escaping_row` — recovering the
-// forward-ref effects the frozen leaf drops: a callee bound AFTER its caller
-// generalized never entered the row, so the leaf reads [] and the callee's
-// perform misses its world node (`ev_perform_node` traps loudly) → the
-// ev-seam). Both
-// are needed — the leaf alone drops the forward-ref first-order case
-// (mint_param_placeholders, the m3 pre_register trap); the flow-closure alone
-// drops a higher-order arg whose effect is per-call-site. Keyed identity
-// (a key-scan, not a positional slot) makes over-placement forward-tolerant, so
-// the union never harms. This COMPLETES escaping_row's own seam (its doc names
-// derive_ev_slots as the consumer that was never wired). The deeper ultimate
-// form (order-free live inference) makes the leaf equal the flow-closure and
-// dissolves the union — peer Hβ.infer.order-free-live-row.
-fn evidence_effects_of(callee_handle) = {
-  let name = callee_name_of_handle(callee_handle)
-  let flow = if len(name) == 0 { lambda_escaping_row(callee_handle) } else { escaping_row(name) }
-  set_canonicalize(names_concat(effects_of(lookup_ty(callee_handle)), flow))
-}
-
 // ─── band B M1.3 — the A1 prove-absence gate (the bank Ruling 5) ─────────
 // can_yield(fh): may a yield unwind THROUGH a call to this callee? The k2
 // boundary check is inserted UNLESS the callee's row PROVES absence of every
@@ -1029,9 +850,8 @@ fn evidence_effects_of(callee_handle) = {
 //      once at lower_program). Pre-cut this is the wheel's whole story —
 //      zero wraps, bytes identical (Law 7).
 //   2. Any MultiShot-graded effect in the callee's KNOWN names (the leaf row
-//      ∪ the flow-closure — the same union derive_ev_slots threads, so a
-//      MultiShot effect fully handled INSIDE the callee has already
-//      subtracted out and the gate goes quiet) ⇒ check.
+//      ∪ the flow-closure — a MultiShot effect fully handled INSIDE the
+//      callee has already subtracted out and the gate goes quiet) ⇒ check.
 //   3. The leaf row's TAIL: a closed row (or an open one whose chase grounds
 //      to closed) with no MultiShot name PROVES absence ⇒ skip; a free tail,
 //      a negation/intersection form (¬X admits everything but X), or a
@@ -1201,21 +1021,6 @@ fn program_may_yield(stmts) =
     }
   }, stmts)
 
-// One ev per effect: the installed handler's record (LLocal) when a handler is
-// lexically in scope on the live `~>` stack, else a forward of THIS frame's own
-// evidence for the effect — by IDENTITY (LEvRef carries the key), never a row
-// position. The caller fills the same key; the chain bottoms at the `~>` install
-// where the handler resolves lexically. Both derive_ev_slots and an install's
-// captured_evs read through this one projection.
-fn resolve_ev_for_ename(ename) = {
-  let state_local = lower_resolve_handler_state_for_ename(ename)
-  if state_local == "" {
-    LEvRef(0, ename)
-  } else {
-    LLocal(0, state_local)
-  }
-}
-
 // Effect-row names as bare strings, in the row's (already-canonical) order.
 // EPure is the union identity and never enters a row name-set (consumed to
 // the pure row at build_declared_row), so its arm is the unreachable-but-total case:
@@ -1283,9 +1088,8 @@ fn clamp_index(i) = if i < 0 { 0 } else { i }
 // recursive callee bound AFTER `name` generalized, so its effect never
 // entered `name`'s row — `emit_module` losing `WasmOut` via `emit_header`)
 // is recovered by reading the effect off the CALL-EDGES live, not off the
-// frozen generalized scheme. derive_ev_slots (caller) reads THIS projection to
-// place keyed [key][ev] entries; the callee reads them back by KEY-SCAN, so the
-// two sides agree BY THE EFFECT KEY, never a positional slot
+// frozen generalized scheme. can_yield (the multishot-absence gate) reads
+// THIS projection
 // (docs/specs/simulations/polymorphism-as-flow-edges.md §8).
 //
 //   escaping(name) = ( own_dispatched(name)
@@ -1352,7 +1156,7 @@ fn lambda_escaping_row(h) = match graph_node_body(h) {
   _ => effects_of(lookup_ty(h))
 }
 
-// callee name for derive_ev_slots' handle: the AST fabric resolves any
+// callee name for the flow-closure's handle: the AST fabric resolves any
 // handle to its node body live; a VarRef/CallExpr callee yields its name, an
 // anonymous lambda/resume body yields "" (→ the lookup_ty own-evidence path).
 fn callee_name_of_handle(h) = lower_callee_name(graph_node_body(h))
@@ -1405,9 +1209,9 @@ fn flow_edges_expr(e) = match e {
   LitBool(_)   => ([], []),
   LitUnit      => ([], []),
   // VarRef contributes its name to the availability set — a value-referenced
-  // global FnScheme makes the enclosing fn's escaping row gain the slot the
-  // committed LFnRef forwards, so derive_ev_slots resolves to REAL evidence
-  // content (the §7-thread availability half, peer
+  // global FnScheme joins the enclosing fn's escaping row, so the
+  // flow-closure (can_yield's read) sees effects a fn-value carries
+  // (the §7-thread availability half, peer
   // Hβ.lower.value-fn-availability-edge, now LIVE). Names that resolve to a
   // local or a non-effecting global add nothing (the env lookup is empty), so
   // the set stays bounded by distinct effect-forwarding fns. The transitive-
@@ -1703,32 +1507,6 @@ fn schedule_in_stack(stack) =
     else { schedule_in_stack(drop_last(stack)) }
   }
 
-// Same, keyed by effect name (derive_ev_slots / captured_evs path), but
-// resolving to the per-effect ENTRY local "__hstate_<h>_<ename>" (the thin
-// [record, base] view the ev-slot forwards) — NOT the bare record. Resolve
-// through the effect's first op to find the install handle.
-fn lower_resolve_handler_state_for_ename(ename) = {
-  let ops = lookup_effect_op_names(ename)
-  if len(ops) == 0 { "" }
-  else {
-    match lower_resolve_handler_for_op(last(ops)) {
-      Some(r) => "__hstate_{int_to_str(resolve_handle(r))}_{ename}",
-      None    => ""
-    }
-  }
-}
-
-// The install-site evidence a handler's arm bodies perform through,
-// resolved at THIS install position, PAIRED with each effect's IDENTITY (the
-// key). Emit writes these after the record's arm region as the self-describing
-// [key][record][base] captured_evs region; the arm fn's LEvPerform KEY-SCANS
-// it for the effect-key. Symmetric with derive_ev_slots — both the install's
-// captured_evs and a callee's threaded ev_slots are ONE keyed-entry shape, so
-// a sibling effect appearing shuffles no key (the position-as-the-bug cure).
-fn lower_captured_evs_for(hname) =
-  map((ename) => LEvEntry(ename, resolve_ev_for_ename(ename)),
-      lookup_handler_arm_ev_names(hname))
-
 // Per-effect arm-fn-name groups [(ename, [arm_fn_name])], op-decl order
 // within each effect. A handler can cover multiple effects (graph_handler:
 // GraphWrite + GraphRead); op-slot is op-decl-relative WITHIN an effect, so
@@ -1926,7 +1704,6 @@ fn lower_perform_tiers(handle, op_name, lo_args) =
         Some(hname) => lower_singleton_perform(handle, op_name, hname, lo_args),
         None => {
           let ename = lower_effect_name_of_op(op_name)
-          arm_ev_note(ename)
           LEvPerform(handle, op_name, ename, lower_compute_ev_slot_for_op(op_name), lo_args)
         }
       }
@@ -2110,16 +1887,10 @@ fn lower_expr_body(e, handle, span) = match e {
         Some(ConstructorScheme(tag_id, _)) =>
           LMakeVariant(handle, tag_id, []),
         // A named-fn VALUE reference (FnScheme tag-0 — excludes HandlerKind,
-        // the PTee guard). When the fn DISPATCHES effects, capture its evidence
-        // into the unified record (LFnRef) so the consumer (`each(f, xs)`)
-        // reads it live as __state — the asymmetry with LambdaExpr's
-        // LMakeClosure(..., derive_ev_slots) closed. A PURE fn-value stays bare
-        // LGlobal (len(evs)==0 → byte-identical, Law 7).
-        Some(FnScheme) => {
-          let evs = derive_ev_slots(handle)
-          if len(evs) == 0 { LGlobal(handle, name) }
-          else { LFnRef(handle, name, evs) }
-        },
+        // the PTee guard). ALWAYS the bare LGlobal — emit resolves it to the
+        // fn's static closure record; the fn's performs dispatch through the
+        // live world chain when the consumer (`each(f, xs)`) calls it.
+        Some(FnScheme) => LGlobal(handle, name),
         // Found, some other kind (a value binding, an op, a record) — the
         // global read is the right projection.
         Some(_) => LGlobal(handle, name),
@@ -2294,13 +2065,20 @@ fn lower_expr_body(e, handle, span) = match e {
     let lambda_name = "lambda_{int_to_str(handle)}"
     let param_names_list = lower_param_names(params)
     let param_handles_list = param_handles_of(handle, params)
-    let free_names = collect_free_vars(body_node, param_names_list)
+    // Seed "__k" whenever a k is lexically in scope at the mint: any call
+    // to a resume-bound callee inside this body takes the k as a trailing
+    // argument (lower_call_default), so the closure must carry it — and
+    // the chain holds for arbitrary nesting by induction (each inner mint
+    // re-seeds from its own enclosing frame). Where no k is in scope the
+    // seed adds nothing. One dormant word per arm-context closure that
+    // never uses it — the price of a walk-free, stateless rule.
+    let free_names0 = collect_free_vars(body_node, param_names_list)
+    let free_names = lower_seed_k(free_names0)
     let (captures_names, captures_exprs, captures_handles) =
       resolve_captures_outer(free_names, handle)
     // Lambda is anonymous — empty fn_name; ls_outer_fn_name skips it.
-    // lambda_h = THIS lambda's own handle (the SAME handle derive_ev_slots /
-    // LMakeClosure use below), so the in-body ev READ indexes the lambda's own
-    // row — read==place by construction.
+    // lambda_h = THIS lambda's own handle (the handle LMakeClosure uses
+    // below).
     ls_enter_frame(
       "",
       param_names_list, param_handles_list,
@@ -2319,14 +2097,12 @@ fn lower_expr_body(e, handle, span) = match e {
       mk_ef_pure(),
       len(captures_exprs)   // closure fence = capture count
     )
-    // A closure IS state IS evidence: the lambda captures the evidence for
-    // the effects ITS BODY performs (derive_ev_slots reads the lambda's row),
-    // resolved at THIS definition site (where those effects' handlers are in
-    // scope). Without it the closure's evidence region is empty and a perform
-    // inside the lambda reads a bad slot when the closure is called elsewhere
-    // (e.g. a higher-order fn's arm calling `f(x)`). This is the per-closure
-    // mirror of a handler arm's captured_evs — the same record, four roles.
-    LMakeClosure(handle, fn_ir, captures_exprs, derive_ev_slots(handle))
+    // The record is [fn_ptr@0][nc@4][captures@8..] — captures only. The
+    // body's performs dispatch through the LIVE world chain at call time
+    // (a computation performs in the world where it is CALLED — R2's law),
+    // and a resume inside a MultiShot arm's lambda rides the captures as
+    // the ordinary __k free var (collect_free_vars' ResumeExpr arm).
+    LMakeClosure(handle, fn_ir, captures_exprs)
   },
 
   ResumeExpr(val, state_updates) =>
@@ -2398,16 +2174,10 @@ fn lower_pipe_complete(lo_l, right, handle) = {
   let lo_r = match rbody {
     NExpr(CallExpr(f2, args2)) => {
       let N(fbody2, _, fh2) = f2
-      // The same LFnRef→LGlobal callee-position collapse lower_callee_ref
-      // applies (a record-ctor identity can surface its arg's LFnRef) —
-      // byte-parity with the pre-extraction path.
-      match lower_call_dispatch(rfh, f2, fh2, fbody2,
-        resolve_call_args(lower_callee_name(fbody2), args2)) {
-        LFnRef(h2, n2, _) => LGlobal(h2, n2),
-        lo2               => lo2
-      }
+      lower_call_dispatch(rfh, f2, fh2, fbody2,
+        resolve_call_args(lower_callee_name(fbody2), args2))
     },
-    _ => lower_callee_ref(right)
+    _ => lower_expr(right)
   }
   let hole_at = match rbody {
     NExpr(CallExpr(_, cargs)) => pipe_hole_index(cargs, 0),
@@ -2426,27 +2196,19 @@ fn lower_pipe_complete(lo_l, right, handle) = {
       if hole_at >= 0      { LCall(ch, fn_, splice_at(args, hole_at, lo_l)) }
       else if is_partial   { LCall(ch, fn_, args ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node, not a loop accumulator
       else                 { LCall(handle, lo_r, [lo_l]) },
-    LSuspend(sh, oph, fnx, args, evs, tl) =>
-      if hole_at >= 0      { LSuspend(sh, oph, fnx, splice_at(args, hole_at, lo_l), evs, tl) }
-      else if is_partial   { LSuspend(sh, oph, fnx, args ++ [lo_l], evs, tl) }   // drift-audit: ignore — one completion per pipe node
-      else                 { LCall(handle, lo_r, [lo_l]) },
     LMakeVariant(vh, tag, vargs) =>
       if hole_at >= 0      { LMakeVariant(vh, tag, splice_at(vargs, hole_at, lo_l)) }
       else if is_partial   { LMakeVariant(vh, tag, vargs ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node
       else                 { LCall(handle, lo_r, [lo_l]) },
     _ => {
       // A bare fn-VALUE stage (`7 |> outer`): the completion call runs the
-      // SAME evidence fork every call runs — this arm minted a bare LCall
-      // and an effectful piped stage's callee starved (ev4's 134; ev2's
-      // block spelling of the same program was green). The already-lowered
-      // callee is reused; the fork reads the stage node's own type.
-      let evs = derive_ev_slots(rfh)
-      let evs2 =
-        if resume_bind_target(rfh) {
-          evs ++ [LEvEntry("__resume", resolve_resume_k(handle))]   // drift-audit: ignore — one entry per stage, not a loop
-        } else { evs }
-      if len(evs2) == 0 { LCall(handle, lo_r, [lo_l]) }
-      else              { LSuspend(handle, rfh, lo_r, [lo_l], evs2, false) }
+      // SAME k-append fork every call runs — a resume-bound stage takes the
+      // arm's k as the trailing argument (the "argument, not evidence"
+      // ruling; the callee's performs dispatch through the world chain).
+      let args2 =
+        if ls_resume_bind_of(callee_name_of_handle(rfh)) == "" { [lo_l] }
+        else { [lo_l] ++ [resume_k_arg(handle)] }   // drift-audit: ignore — one k arg per stage, not a loop
+      LCall(handle, lo_r, args2)
     }
   }
 }
@@ -2476,9 +2238,9 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     //
     // The ONE handler record (protocol_handler_is_state_is_closure_is_evidence)
     // carries config args (from `~> handler(args)`, written FIRST) then
-    // state inits at 8+i*4, the per-effect arm groups, and the arm-bodies'
-    // captured evidence — resolved at THIS install position (handler popped,
-    // so they route to the enclosing scope, not self).
+    // state inits at 8+i*4 and the per-effect arm groups; the arm bodies'
+    // performs dispatch through the live world chain, so the install
+    // threads no captured-evidence region.
     let lo_r = lower_expr(right)
     let hname = extract_handler_name(right)
     lower_handler_push(hname, handle)
@@ -2490,8 +2252,7 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     let config_inits = extract_handler_config_args(right) |> map(lower_expr)
     let all_inits = config_inits ++ lookup_handler_state_inits_of(hname)
     LHandleWith(handle, lo_l, lo_r, hname, all_inits,
-                lookup_handler_arm_names_of(hname),
-                lower_captured_evs_for(hname))
+                lookup_handler_arm_names_of(hname))
   },
 
   PFeedback => {
@@ -2821,7 +2582,7 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
 
 // Walk branch_nodes producing one LMakeClosure per branch. Each thunk body is
 // the ordinary call projection of the branch stage applied to the shared
-// input, carrying inference's result_h through LCall/LSuspend. Captures begin
+// input, carrying inference's result_h through the call lowering. Captures begin
 // with the shared input and then include the branch's free variables.
 //
 // Per H.2.e (lower-lambda-capture-substrate): the closure
@@ -2852,8 +2613,8 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   ls_enter_frame("", [], [], captures_names, captures_handles, -1)
   lower_frame_fence_push()
   // This is an ordinary call projected from an implicit application edge.
-  // Reuse the normal call lowering so effectful stages take LSuspend and pure
-  // stages take LCall; result_h is the application output infer minted.
+  // Reuse the normal call lowering so every stage takes the bare-call
+  // path; result_h is the application output infer minted.
   let branch_value = lower_call_default(
     result_h, branch_node, branch_h, [LUpval(input_h, 0)])
   let thunk_body = k2_guard(LMakeTuple(carrier_h, [branch_value]))
@@ -2863,16 +2624,11 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   Ok(thunk_row) => {
   let fn_ir = LFn(thunk_name, 0, [], [thunk_body],
                   thunk_row, len(captures_exprs))
-  // The captured evidence IS the branch's — a `<|` branch that performs a
-  // STATEFUL effect (verify_pending_at → Verify, teach_gradient → Teach) reads
-  // it live through the thunk's [key][record][base] region, exactly as a real
-  // lambda does (the `derive_ev_slots(handle)` sites above). The old `[]` gave
-  // the thunk no effect evidence, so a stateful-effect perform inside a branch
-  // met the strict perform-side miss (only singleton `!Mutate` handlers,
-  // dispatched off their `$..._state_g` global, resolved) — invisible until the
-  // felt read drove the eight-arm fanout through Verify/Teach.
+  // A `<|` branch that performs a STATEFUL effect (verify_pending_at →
+  // Verify, teach_gradient → Teach) dispatches through the live world
+  // chain exactly as a real lambda does — no thunk-local evidence.
   ScheduledBoundary(
-    LMakeClosure(thunk_h, fn_ir, captures_exprs, derive_ev_slots(thunk_h)),
+    LMakeClosure(thunk_h, fn_ir, captures_exprs),
     result_h, carrier_h, thread_ticket_h, persist_ticket_h)   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
   },
   Err(invariant) => InvalidScheduledBoundary(thunk_h, invariant)
@@ -2919,7 +2675,7 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node, boundary) = {
     len(captures_exprs)   // closure fence = capture count
   )
   ScheduledBoundary(
-    LMakeClosure(thunk_h, fn_ir, captures_exprs, derive_ev_slots(thunk_h)),
+    LMakeClosure(thunk_h, fn_ir, captures_exprs),
     result_h, carrier_h, thread_ticket_h, persist_ticket_h)   // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
   },
   Err(invariant) => InvalidScheduledBoundary(thunk_h, invariant)
@@ -3076,9 +2832,26 @@ fn lower_stmt_body(s, handle, span) = match s {
     // Bind the fn's name in the enclosing frame; the fn's handle is
     // the type handle (TFun bound to handle by infer).
     ls_bind_local(name, handle)
-    let param_names_list = lower_param_names(params)
-    let param_handles_list = param_handles_of(handle, params)
-    let free_names = collect_free_vars(body_node, param_names_list)
+    // A resume-BOUND callee — reachable from a MultiShot arm, per the
+    // resume_bindings closure at lower_program — takes the arm's continuation
+    // as an implicit TRAILING "__k" param: the k is an ARGUMENT, threaded
+    // by every MultiShot-context call site (lower_call_default), so the
+    // body's resumes resolve it as an ordinary local — never evidence.
+    let bind_h = ls_resume_bind_of(name)   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
+    let base_param_names = lower_param_names(params)
+    let param_names_list =
+      if bind_h == "" { base_param_names }
+      else { base_param_names ++ ["__k"] }
+    let base_param_handles = param_handles_of(handle, params)
+    let param_handles_list =
+      if bind_h == "" { base_param_handles }
+      else { base_param_handles ++ [0] }
+    // The same "__k" seeding the lambda mint applies (an UNBOUND nested
+    // fn inside an arm may still call a bound sibling); a bound fn's own
+    // __k param shadows the seed harmlessly.
+    let free_names0 = collect_free_vars(body_node, param_names_list)
+    let free_names =
+      if bind_h == "" { lower_seed_k(free_names0) } else { free_names0 }
     let (captures_names, captures_exprs, captures_handles) =
       resolve_captures_outer(free_names, handle)
     // Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):
@@ -3103,22 +2876,14 @@ fn lower_stmt_body(s, handle, span) = match s {
       -1   // named fn — not a lambda; the ev READ uses escaping_row(fn_name)
     )
     lower_frame_fence_push()
-    // THE CUT (bank A3): a resume-BOUND fn's body lowers under its
-    // handler's arm context — resumes inside it take the MultiShot
-    // discipline (lower_resume_callk), resolve their k through the
-    // evidence tier (resolve_resume_k's RGlobal arm → LEvRef "__resume",
-    // threaded by every MultiShot-context caller), commit state through
-    // the bracket-scoped singleton (S1), and re-dispatch owned re-yields
-    // through $op___redrive_<hname> (M2b). The install is UNCONDITIONAL —
-    // an unbound fn carries the boundary install's exact answers ([],
-    // OneShot, "") — because a conditional `~>` here poisons the WHEEL'S
-    // OWN evidence: boot lowers the install-body's call sites with the
-    // lexical __hstate local as their ArmStateContext evidence, and on
-    // the unwrapped branch that local is never assigned — every unbound
-    // fn's clone shipped an uninitialized record and the callee's keyed
-    // scan walked garbage (the probe: rec=89504 — the key's own address —
-    // nstate="ArmS" as bytes, fn_idx 0; the rw4 let-arm trap's root).
-    let bind_h = ls_resume_bind_of(name)   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
+    // THE CUT (bank A3, re-cut by the world arc): a resume-BOUND body
+    // lowers under its handler's arm context — resumes inside it take the
+    // MultiShot discipline (lower_resume_callk), resolve their k as the
+    // appended "__k" param (RLocal — the argument ladder), commit state
+    // through the bracket-scoped singleton (S1), and re-dispatch owned
+    // re-yields through $op___redrive_<hname> (M2b). The install is
+    // UNCONDITIONAL — an unbound body carries the boundary install's
+    // exact answers ([], OneShot, "").
     let bind_fields =
       if bind_h == "" { [] }
       else {
@@ -3134,13 +2899,13 @@ fn lower_stmt_body(s, handle, span) = match s {
     ls_exit_frame()
     let fn_ir = LFn(
       fn_name,
-      len(params),
+      len(param_names_list),   // includes the appended __k when resume-bound
       param_names_list,
       [lo_body],
       mk_ef_pure(),   // row resolved live via lookup_ty(handle)
       len(captures_exprs)   // closure fence = capture count
     )
-    LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs, derive_ev_slots(handle)))
+    LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs))
   },
 
   TypeDefStmt(_name, _variants)             => LConst(handle, LInt(0)),
@@ -3507,13 +3272,7 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = {
   // construction). Inline handle-exprs have no decl in env → 0 arms.
   let nstate = len(config) + len(state)
   let fence = nstate + sum_group_arm_lens(lookup_handler_arm_names_of(discriminator))
-  // Open the arm-body evidence ledger: Tier-2 performs in the arm bodies
-  // record their effects (first-encounter order); the indices ARE the
-  // captured-ev slots the install writes after the arms.
-  arm_ev_begin()
-  let decls = map((arm) => lower_one_arm_decl(arm, discriminator, config, state, fence), arms)
-  arm_ev_end(discriminator)
-  decls
+  map((arm) => lower_one_arm_decl(arm, discriminator, config, state, fence), arms)
 }
 
 fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discriminator, config, state, fence) = {
@@ -3684,7 +3443,7 @@ fn lower_resume_callk(handle, val, state_updates) = {
     if len(state_updates) == 0 { lower_expr(val) }
     else { LLocal(handle, val_name) }
   LBlock(handle, prefix ++ [
-    LLet(handle, kr, LCall(handle, resolve_resume_k(handle), [val_lo])),
+    LLet(handle, kr, LResumeK(handle, resolve_resume_k(handle), val_lo)),
     LLet(handle, kr2,
       LIf(handle, LGlobal(handle, "yield_flag"),
           [LBlock(handle, [
@@ -3707,28 +3466,52 @@ fn lower_resume_callk(handle, val, state_updates) = {
 }
 
 // The resume-resolution LADDER (band B M1.6, bank Ruling 2 as amended by
-// A3) — the k channel mirrors the perform's dispatch gradient exactly:
-//   lexical  — "__k" is the arm's own leading param (the k1 fast path,
-//              KEPT; arm params bind handle 0, so the node handle carries
-//              the type — byte-identical to the pre-ladder form).
+// A3) — the k is an ARGUMENT, never evidence:
+//   lexical  — "__k" is the arm's own leading param (the k1 fast path;
+//              arm params bind handle 0, so the node handle carries
+//              the type), or a resume-bound callee's appended trailing
+//              param (lower_call_default threads it as a real argument).
 //   capture  — "__k" was captured into this lambda's record (the
 //              ResumeExpr free-vars arm reports it; resolve_captures_outer
 //              threaded it) — the LUpval read, N frames deep.
-//   evidence — the "__resume" keyed entry (delimited-continuation
-//              semantics: the nearest enclosing prompt), threaded by the
-//              MultiShot arm's sst_ clone at its interior effectful call
-//              sites. THE WRITER LANDS AT THE CUT (A3: the capability mark
-//              — pre-cut it would change wheel bytes); until then this
-//              tier is unreachable (a called-fn resume lowers OneShot
-//              under the classifier gap), and an early arrival meets the
-//              strict keyed scan's LOUD miss, never a silent dummy.
+// A resume whose "__k" resolves NEITHER way is E_ResumeOutsideArm at
+// infer (the armed class), so the remaining two shapes are the
+// impossible branch — the typed loud floor, never a fabricated k.
+// The k as a CALL ARGUMENT — the tolerant sibling of resolve_resume_k:
+// where the strict form floors (a bound callee called from a context with
+// no k in scope — legal when that path never resumes), the argument form
+// passes the DEAD-K WORD 0, so the callee's arity always matches its
+// emitted signature and a resume through the dead k traps loudly at the
+// fn_ptr load of address 0, never silently.
+fn resume_k_arg(handle) = {
+  let (res, lh) = ls_resolve("__k")
+  match res {
+    RLocal       => LLocal(if lh == 0 { handle } else { lh }, "__k"),
+    RUpval(slot) => LUpval(if lh == 0 { handle } else { lh }, slot),
+    RFbPrior(_)  => LConst(handle, LInt(0)),
+    RGlobal      => LConst(handle, LInt(0))
+  }
+}
+
+// Merge "__k" into a closure mint's free set when a k is lexically in
+// scope (the arm's param, a bound fn's appended param, or an enclosing
+// capture) — read through the SAME ls_resolve ladder the resumes use.
+fn lower_seed_k(free_names) = {
+  let (res, _lh) = ls_resolve("__k")
+  match res {
+    RLocal    => free_vars_merge(["__k"], free_names),
+    RUpval(_) => free_vars_merge(["__k"], free_names),
+    _         => free_names
+  }
+}
+
 fn resolve_resume_k(handle) = {
   let (res, lh) = ls_resolve("__k")
   match res {
     RLocal       => LLocal(if lh == 0 { handle } else { lh }, "__k"),
     RUpval(slot) => LUpval(if lh == 0 { handle } else { lh }, slot),
-    RFbPrior(_)  => LEvRef(handle, "__resume"),
-    RGlobal      => LEvRef(handle, "__resume")
+    RFbPrior(_)  => LInvariantFailure(handle, ResumeKOutsideLadder),
+    RGlobal      => LInvariantFailure(handle, ResumeKOutsideLadder)
   }
 }
 
@@ -3830,7 +3613,7 @@ fn k_trivial(node, subs) = {
 // DEEPEST boundary — the first yield to cross at runtime. Two boundary
 // shapes this increment: a direct call with a trivial (VarRef, non-op)
 // callee, and a `|>` stage whose right is a bare VarRef (the :bare-value
-// completion — its LSuspend carries the PIPE node's handle, so the check
+// completion — its call carries the PIPE node's handle, so the check
 // wrap and the mint agree on the key by construction). A PTee is a
 // BOUNDARY, never descended — the install's driver guards its body; the
 // composition that crosses an install is A4's re-install-in-k (its
@@ -4018,9 +3801,9 @@ fn k_hole_name(ph) = "__resume_in_{int_to_str(ph)}"
 // level's hole through the same seeded recipe; its yield substitutes
 // mid-expression at the OP node's own width (never the frame's), minted
 // only when this k RUNS — fresh per call, live captures. state_idx /
-// ret_slot stay the spine-site handle; world_tag = the canonical row's
-// union-homomorphic bitmask (W06). Shared by the k1 yield producer and
-// the k2 boundary composition — one reifier.
+// ret_slot stay the spine-site handle; the frozen WORLD is stored by
+// emit (the live $world_g at the reify moment — R4). Shared by the k1
+// yield producer and the k2 boundary composition — one reifier.
 fn reify_frame_k(body_node, ph, outer_holes) = {
   match continuation_boundary_at(ph) {
   Ok(edge) => reify_frame_k_at(body_node, ph, outer_holes, edge),
@@ -4061,8 +3844,7 @@ fn reify_frame_k_at(body_node, ph, outer_holes, edge) = {
                  world, len(captures_exprs))
   if disc == MultiShot {
     LMakeContinuation(continuation_h, k_fn, captures_exprs,
-                      derive_ev_slots(continuation_h),
-                      ph, resume_input_h, world_tag_of_row(world))
+                      ph, resume_input_h)
   } else {
     report(EResumeWorldMismatch(disc, MultiShot, span_zero()))
     LInvariantFailure(ph, NonMultiShotContinuation(disc))
@@ -4153,7 +3935,7 @@ fn lower_body_reified(body_node) =
 // "EVERY non-tail can-yield call site carries the check, else a frame
 // computes on the dummy." The spine split composes the boundary it can
 // express; THIS walk makes every remaining one LOUD: a non-tail can-yield
-// LSuspend off the spine parks its result and traps at a raised flag (the
+// A can-yield call off the spine parks its result and traps at a raised flag (the
 // comment-marked yield floor — censusable, never a silent dummy). Skips,
 // each a real boundary elsewhere:
 //   tail == true            — return_call propagates; the CALLER's check
@@ -4197,15 +3979,13 @@ fn body_has_foreign_yield(e, hname) = match e {
 }
 
 fn k2_floor_guard(e, terminus) = match e {
-  LSuspend(h, o, f, args, ev, tail) => {
-    let walked = LSuspend(h, o, k2_floor_guard(f, false),
-                          k2_floor_list(args), k2_floor_list(ev), tail)
-    if tail || terminus || !can_yield(o) { walked }
-    else { k2_floor_wrap(h, walked) }
-  },
+  // A `__kr_` let is the k2 COMPOSITION JUNCTION's own park (the spine
+  // machinery minted the flag-check + LKExtend right below it), so its
+  // init's yield is already composed — walk it under terminus so the
+  // call-boundary wrap never double-wraps a handled boundary (the
+  // pre-cut LSuspend park exclusion, carried to the bare-call carrier).
   LLet(h, name, init) =>
-    if k2_is_park(name) { LLet(h, name, k2_park_children(init)) }
-    else { LLet(h, name, k2_floor_guard(init, false)) },
+    LLet(h, name, k2_floor_guard(init, k2_is_park(name))),
   LBlock(h, stmts)      => LBlock(h, k2_floor_last(stmts, terminus)),
   LIf(h, c, t, el)      => LIf(h, k2_floor_guard(c, false),
                                k2_floor_last(t, terminus),
@@ -4215,7 +3995,7 @@ fn k2_floor_guard(e, terminus) = match e {
                                     let (pat, body) = arm
                                     (pat, k2_floor_guard(body, terminus))
                                   }, arms)),
-  LHandleWith(h, b, hn, hname, inits, an, evs) => {
+  LHandleWith(h, b, hn, hname, inits, an) => {
     // The body's terminus is driver-guarded when a driver exists
     // (multishot_ops_of != []) AND the driver handles the body's OWN yield.
     // A DRIVERLESS install's yield exits the bracket as a flagged dummy; in a
@@ -4233,23 +4013,38 @@ fn k2_floor_guard(e, terminus) = match e {
     let has_driver = len(multishot_ops_of(hname)) > 0 && !body_has_foreign_yield(b, hname)
     let rebuilt = LHandleWith(h, k2_floor_guard(b, has_driver),
                               k2_floor_guard(hn, false), hname,
-                              k2_floor_list(inits), an, k2_floor_list(evs))
+                              k2_floor_list(inits), an)
     if has_driver || terminus { rebuilt } else { k2_floor_wrap(h, rebuilt) }
   },
   LReturn(h, inner)     => LReturn(h, k2_floor_guard(inner, true)),
-  LCall(h, f, args)     => LCall(h, k2_floor_guard(f, false), k2_floor_list(args)),
+  // The k2 call-boundary rides EVERY can-yield non-tail call (the carrier
+  // was LSuspend when evidence-threaded calls were a separate node; bare
+  // calls carry the same boundary by the same predicate). A tail call
+  // needs no wrap — the yield propagates through the return.
+  LCall(h, f, args)     => {
+    let wf = k2_floor_guard(f, false)
+    let walked = LCall(h, wf, k2_floor_list(args))
+    if terminus || !can_yield(lexpr_handle(wf)) { walked }
+    else { k2_floor_wrap(h, walked) }
+  },
   LShow(h, x)           => LShow(h, k2_floor_guard(x, false)),
   LHash(h, x)           => LHash(h, k2_floor_guard(x, false)),
   LTailCall(h, f, args) => LTailCall(h, k2_floor_guard(f, false), k2_floor_list(args)),
-  LDirectCall(h, fh, n, t, args) => LDirectCall(h, fh, n, t, k2_floor_list(args)),
+  LDirectCall(h, fh, n, t, args) => {
+    let walked = LDirectCall(h, fh, n, t, k2_floor_list(args))
+    if t || terminus || !can_yield(fh) { walked }
+    else { k2_floor_wrap(h, walked) }
+  },
   LBinOp(h, op, l, r)   => LBinOp(h, op, k2_floor_guard(l, false), k2_floor_guard(r, false)),
   LUnaryOp(h, op, x)    => LUnaryOp(h, op, k2_floor_guard(x, false)),
-  LMakeClosure(h, fn_, caps, ev)  => LMakeClosure(h, fn_, k2_floor_list(caps), k2_floor_list(ev)),
-  LMakeContinuation(h, fn_, caps, ev, si, rs, wt) =>
-    LMakeContinuation(h, fn_, k2_floor_list(caps), k2_floor_list(ev), si, rs, wt),
+  LMakeClosure(h, fn_, caps)  => LMakeClosure(h, fn_, k2_floor_list(caps)),
+  LMakeContinuation(h, fn_, caps, si, rs) =>
+    LMakeContinuation(h, fn_, k2_floor_list(caps), si, rs),
+  // The resume invocation is NEVER k2-wrapped: lower_resume_callk's own
+  // redrive LIf owns the raised flag at this exact boundary.
+  LResumeK(h, k, v)     => LResumeK(h, k2_floor_guard(k, false), k2_floor_guard(v, false)),
   LYield(h, op, args, k) => LYield(h, op, k2_floor_list(args), k2_floor_guard(k, false)),
   LKExtend(h, k)        => LKExtend(h, k2_floor_guard(k, false)),
-  LFnRef(h, n, ev)      => LFnRef(h, n, k2_floor_list(ev)),
   LDeclareFn(fn_)       => LDeclareFn(fn_),
   LMakeList(h, es)      => LMakeList(h, k2_floor_list(es)),
   LMakeTuple(h, es)     => LMakeTuple(h, k2_floor_list(es)),
@@ -4264,16 +4059,18 @@ fn k2_floor_guard(e, terminus) = match e {
   LFieldLoad(h, rec, o) => LFieldLoad(h, k2_floor_guard(rec, false), o),
   LConvert(h, k, x)     => LConvert(h, k, k2_floor_guard(x, false)),
   LStateSlotStore(h, o, v, home) => LStateSlotStore(h, o, k2_floor_guard(v, false), home),
-  LEvEntry(n, ev)       => LEvEntry(n, k2_floor_guard(ev, false)),
   LConst(_, _)          => e,
   LLocal(_, _)          => e,
   LGlobal(_, _)         => e,
   LUpval(_, _)          => e,
-  LEvRef(_, _)          => e,
   LFeedbackPrior(_)     => e,
-  LUnresolvedEvidence(_, _) => e,
   LInvariantFailure(_, _) => e
 }
+
+// The junction park's name test — `__kr_{handle}` is the spine machinery's
+// own mint (never a user name), the structural marker that its init's
+// boundary is already composed.
+fn k2_is_park(name: String) = len(name) >= 5 && str_slice(name, 0, 5) == "__kr_"
 
 fn k2_floor_list(es) = map((x) => k2_floor_guard(x, false), es)
 
@@ -4284,16 +4081,6 @@ fn k2_floor_last(stmts, terminus) = {
     let (i, s) = ix
     k2_floor_guard(s, if i == n - 1 { terminus } else { false })
   }, enumerate(stmts))
-}
-
-// The spine split's park local — its init is the one already-composed
-// suspend; children still walk.
-fn k2_is_park(name: String) = len(name) >= 5 && str_slice(name, 0, 5) == "__kr_"
-
-fn k2_park_children(init) = match init {
-  LSuspend(h, o, f, args, ev, tail) =>
-    LSuspend(h, o, k2_floor_guard(f, false), k2_floor_list(args), k2_floor_list(ev), tail),
-  other => k2_floor_guard(other, false)
 }
 
 // The loud floor: park width-honest, trap at a raised flag, else the value.
@@ -4323,44 +4110,6 @@ fn k2_floor_dummy(h) = match repr_of(lookup_ty(h)) {
   _    => LConst(h, LInt(0))
 }
 
-// world_tag_of_row - legacy effect-row fingerprint projected to a
-// union-homomorphic i32 bitmask. Each effect NAME
-// projects to one bit (its FNV-1a hash folded to a position mod 32); the
-// row's tag is the OR of its names' bits. The homomorphism is the point:
-// tag(A ∪ B) == i32_or(tag(A), tag(B)), so a COMPOSED continuation's world
-// is one i32.or at compose time — a hash-of-hashes cannot union (the
-// semantics refuter's kill of the head-only form), a bit-union always can.
-// A subset check over this value is UNSOUND as a capability gate: if required
-// A and unrelated live B collide, B satisfies A's bit. Parameter arguments and
-// activation identities are absent, and an open row tail contributes nothing.
-// Keep this only as a deterministic compatibility fingerprint until the graph
-// carries exact effect and handler-install identities.
-fn world_tag_of_row(row) = {
-  // The fingerprint folds referenced names regardless of polarity —
-  // documented as an unsound-for-gating compatibility hash; both fields
-  // contribute.
-  let EfRow(p, a, _) = row
-  i32_or(world_tag_or_names(eff_names_of(p), 0, 0),
-         world_tag_or_names(eff_names_of(a), 0, 0))
-}
-
-fn world_tag_or_names(names, i, acc) = {
-  if i >= len(names) { acc }
-  else {
-    let name = list_index(names, i)
-    let h = world_tag_hash_bytes(name, 0, byte_len(name), 2166136261)
-    world_tag_or_names(names, i + 1,
-      i32_or(acc, i32_shl(1, i32_and(h, 31))))
-  }
-}
-
-fn world_tag_hash_bytes(s, i, n, h) = {
-  if i >= n { h }
-  else {
-    let mixed = i32_xor(h, byte_at(s, i)) * 16777619
-    world_tag_hash_bytes(s, i + 1, n, mixed)
-  }
-}
 
 // Lower a ResumeExpr's value + state updates with SNAPSHOT semantics:
 // the resume value and every update RHS evaluate against the arm's
@@ -4984,10 +4733,8 @@ fn lower_program(stmts) = {
   // No pre-register pass: every handler decl's (config, state, arms) is
   // already in the env's HandlerKind (register_handler), so an install
   // resolves its handler's decl live (handler_decl_of) regardless of source
-  // order. The lower-handler-stack tracks lexical installs; the arm-ev ledger
-  // collects each handler's arm-body evidence.
+  // order. The lower-handler-stack tracks lexical installs.
   lower_stmt_list(stmts)
-    ~> arm_ev_ledger_ctx
     ~> lower_handler_stack_ctx
 }
 
@@ -5084,9 +4831,8 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = s
     // Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):
     // fn_name carries the named-fn discriminator for nested-fn naming
     // (lambda + synthetic frames pass ""). lambda_h carries the LambdaExpr's
-    // own handle for an anonymous-lambda frame (-1 otherwise), so the in-body
-    // ev-slot READ indexes the lambda's OWN row — the SAME effects_of(lookup_ty)
-    // projection derive_ev_slots PLACED against (place==read by construction).
+    // own handle for an anonymous-lambda frame (-1 otherwise) — the
+    // lambda-identity read ls_current_lambda_handle projects.
     // Field-sort discipline keeps the frame record alphabetical: capture_handles,
     // capture_order, captures, fn_name, lambda_h, local_handles, local_order, locals.
     let frame = {
@@ -5212,9 +4958,7 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = s
   ls_outer_fn_name() => resume(ls_outer_fn_name_loop(frames)),
 
   // The innermost enclosing lambda frame's own handle (-1 if a named-fn
-  // frame is hit first, or none). The in-lambda ev-slot READ uses this to
-  // index the lambda's OWN row (effects_of(lookup_ty(lh))) — the SAME
-  // projection derive_ev_slots PLACED against, so read==place by construction.
+  // frame is hit first, or none) — the lambda-identity read.
   // Peer of ls_outer_fn_name; ls_outer_fn_name itself stays untouched.
   ls_current_lambda_handle() => resume(ls_current_lambda_handle_loop(frames))
 }
@@ -5314,23 +5058,24 @@ fn reach_match_arms(arms, acc) = {
 fn reach_names_expr(expr, acc) = match expr {
   LGlobal(_, n)             => [n] ++ acc,
   LDirectCall(_h, _fh, n, _t, args) => reach_names_list(args, [n] ++ acc),
-  LFnRef(_h, n, ev)         => reach_names_list(ev, [n] ++ acc),
   // emit calls `$op_<target>` (the arm fn), so reach the arm fn by its emitted
   // name — the un-prefixed `target` matched nothing (installed handlers survived
   // via their reached decl-container, but a singleton dispatch to an UNINSTALLED
   // handler is the arm fn's only reference).
   LPerform(_h, target, args, _) => reach_names_list(args, ["op_{target}"] ++ acc),
   LDirectPerform(h, hn, op, st, args) => reach_names_expr(singleton_perform_block(h, hn, op, st, args), acc),
-  LHandleWith(_h, b, hn, _hname, inits, arm_names, evs) =>
-    reach_names_list(evs,
-      reach_names_list(inits,
-        reach_names_expr(hn,
-          reach_names_expr(b, reach_arm_group_names(arm_names, acc))))),
+  LHandleWith(_h, b, hn, _hname, inits, arm_names) =>
+    reach_names_list(inits,
+      reach_names_expr(hn,
+        reach_names_expr(b, reach_arm_group_names(arm_names, acc)))),
   LLet(_h, _n, inner)       => reach_names_expr(inner, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
-    reach_names_list(ev, reach_names_list(caps, reach_names_list(body, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
-    reach_names_list(ev, reach_names_list(caps, reach_names_list(body, acc))),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps) =>
+    reach_names_list(caps, reach_names_list(body, acc)),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, _, _) =>
+    reach_names_list(caps, reach_names_list(body, acc)),
+  // The resume invocation reaches through its k expr and value; the __k
+  // fn itself reaches via its LMakeContinuation record above.
+  LResumeK(_h, k, v)        => reach_names_expr(v, reach_names_expr(k, acc)),
   // A yield reaches through its k record (the __k fn's body + captures + ev);
   // the ARM reaches through the install's arm groups, the existing channel.
   LYield(_h, _op, args, k)  => reach_names_expr(k, reach_names_list(args, acc)),
@@ -5360,22 +5105,9 @@ fn reach_names_expr(expr, acc) = match expr {
   LMakeRecord(_h, fs)       => reach_names_list(fs, acc),
   LMakeVariant(_h, _t, fs)  => reach_names_list(fs, acc),
   LMatch(_h, s, arms)       => reach_match_arms(arms, reach_names_expr(s, acc)),
-  // op_h (field 2) is an Int op-handle, NOT a reachable name — the callee is
-  // reached via f (fn_expr). Prepending [o] enqueued a raw Int as a "name"; the
-  // scan-based reach_decl_refs tolerated it (str_eq rejects on a length mismatch
-  // before reading the garbage), but the O(1) index's str_hash iterates ALL
-  // byte_len(o) bytes — o read as a string pointer lands in low scratch memory,
-  // byte_len there is ~1.8e9, and str_hash hangs. Dropping [o] is byte-identical
-  // (an Int is never a decl name, so it was always a dead no-op leaf).
-  LSuspend(_h, _o, f, args, ev, _) =>
-    reach_names_list(ev,
-      reach_names_list(args, reach_names_expr(f, acc))),
   LFeedback(_h, b, s)       => reach_names_expr(s, reach_names_expr(b, acc)),
   LWasiCall(_h, _n, args)   => reach_names_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => reach_names_list(a, acc),
-  LEvRef(_h, _e)            => acc,
-  LEvEntry(_, ev)           => reach_names_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
   LInvariantFailure(_, _)   => acc,
   LFieldLoad(_h, rec, _off) => reach_names_expr(rec, acc),
   LConvert(_h, _, operand)  => reach_names_expr(operand, acc),
@@ -5390,8 +5122,8 @@ fn reach_names_expr(expr, acc) = match expr {
 // (module value lets stay unconditionally; they run in __init_lets).
 fn reach_decl_name(stmt) = match stmt {
   LDeclareFn(LFn(n, _, _, _, _, _))                  => n,
-  LLet(_, n, LMakeClosure(_, _, _, _))               => n,
-  LLet(_, n, LMakeContinuation(_, _, _, _, _, _, _)) => n,
+  LLet(_, n, LMakeClosure(_, _, _))                  => n,
+  LLet(_, n, LMakeContinuation(_, _, _, _, _))       => n,
   _                                                  => ""  // drift-audit: ignore — "" = stmt is not a named fn (module value lets run in __init_lets)
 }
 
@@ -5455,7 +5187,7 @@ fn reach_index_add_children(d, cnames, idx) with LookupTy + EnvRead + Memory + A
   LBlock(_h, stmts)   => reach_index_add_nested_list(stmts, cnames, idx),
   LLet(_h, _n, inner) => reach_index_add_children(inner, cnames, idx),
   LIf(_h, _c, t, e)   => reach_index_add_nested_list(e, cnames, reach_index_add_nested_list(t, cnames, idx)),
-  LHandleWith(_h, b, _hn, _hname, _inits, _an, _evs) => reach_index_add_children(b, cnames, idx),
+  LHandleWith(_h, b, _hn, _hname, _inits, _an) => reach_index_add_children(b, cnames, idx),
   _ => idx
 }
 
@@ -5468,7 +5200,7 @@ fn reach_index_add_nested(stmt, cnames, idx) with LookupTy + EnvRead + Memory + 
   LBlock(_h, stmts)   => reach_index_add_nested_list(stmts, cnames, idx),
   LLet(_h, _n, inner) => reach_index_add_nested(inner, cnames, idx),
   LIf(_h, _c, t, e)   => reach_index_add_nested_list(e, cnames, reach_index_add_nested_list(t, cnames, idx)),
-  LHandleWith(_h, b, _hn, _hname, _inits, _an, _evs) => reach_index_add_nested(b, cnames, idx),
+  LHandleWith(_h, b, _hn, _hname, _inits, _an) => reach_index_add_nested(b, cnames, idx),
   _ => idx
 }
 
@@ -5486,7 +5218,7 @@ fn reach_nested_names(d, acc) = match d {
   LBlock(_h, stmts)   => reach_nested_names_list(stmts, acc),
   LLet(_h, _n, inner) => reach_nested_names(inner, acc),
   LIf(_h, _c, t, e)   => reach_nested_names_list(e, reach_nested_names_list(t, acc)),
-  LHandleWith(_h, b, _hn, _hname, _inits, _an, _evs) =>
+  LHandleWith(_h, b, _hn, _hname, _inits, _an) =>
     reach_nested_names(b, acc),
   _ => acc
 }
@@ -5547,15 +5279,15 @@ fn collect_value_holes_expr(expr, acc) = match expr {
   LConst(h, _)              => if executable_hole(h) { [h] ++ acc } else { acc },
   LShow(_h, x)              => collect_value_holes_expr(x, acc),
   LHash(_h, x)              => collect_value_holes_expr(x, acc),
-  LHandleWith(_h, b, hn, _hname, inits, _an, evs) =>
-    collect_value_holes_list(evs,
-      collect_value_holes_list(inits,
-        collect_value_holes_expr(hn, collect_value_holes_expr(b, acc)))),
+  LHandleWith(_h, b, hn, _hname, inits, _an) =>
+    collect_value_holes_list(inits,
+      collect_value_holes_expr(hn, collect_value_holes_expr(b, acc))),
   LLet(_h, _n, inner)       => collect_value_holes_expr(inner, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
-    collect_value_holes_list(ev, collect_value_holes_list(caps, collect_value_holes_list(body, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
-    collect_value_holes_list(ev, collect_value_holes_list(caps, collect_value_holes_list(body, acc))),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps) =>
+    collect_value_holes_list(caps, collect_value_holes_list(body, acc)),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, _, _) =>
+    collect_value_holes_list(caps, collect_value_holes_list(body, acc)),
+  LResumeK(_h, k, v)        => collect_value_holes_expr(v, collect_value_holes_expr(k, acc)),
   LYield(_h, _op, args, k)  => collect_value_holes_expr(k, collect_value_holes_list(args, acc)),
   LKExtend(_h, k)           => collect_value_holes_expr(k, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_value_holes_list(body, acc),
@@ -5574,21 +5306,15 @@ fn collect_value_holes_expr(expr, acc) = match expr {
   LMakeRecord(_h, fs)       => collect_value_holes_list(fs, acc),
   LMakeVariant(_h, _t, fs)  => collect_value_holes_list(fs, acc),
   LMatch(_h, s, arms)       => collect_value_holes_arms(arms, collect_value_holes_expr(s, acc)),
-  LSuspend(_h, _o, f, args, ev, _) =>
-    collect_value_holes_list(ev, collect_value_holes_list(args, collect_value_holes_expr(f, acc))),
   LFeedback(_h, b, s)       => collect_value_holes_expr(s, collect_value_holes_expr(b, acc)),
   LPerform(_h, _n, args, _) => collect_value_holes_list(args, acc),
   LDirectPerform(_h, _hn, _op, _st, args) => collect_value_holes_list(args, acc),
   LWasiCall(_h, _n, args)   => collect_value_holes_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => collect_value_holes_list(a, acc),
-  LEvRef(_h, _e)            => acc,
-  LEvEntry(_, ev)           => collect_value_holes_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
   LInvariantFailure(_, _)   => acc,
   LFieldLoad(_h, rec, _off) => collect_value_holes_expr(rec, acc),
   LConvert(_h, _, operand)  => collect_value_holes_expr(operand, acc),
   LStateSlotStore(_h, _o, v, _) => collect_value_holes_expr(v, acc),
-  LFnRef(_h, _n, ev)        => collect_value_holes_list(ev, acc),
   LLocal(_, _)              => acc,
   LFeedbackPrior(_)         => acc,
   LGlobal(_, _)             => acc,
@@ -5934,23 +5660,23 @@ fn spec_subst_pairs(t, pairs) with GraphRead + Memory + Alloc = match t {
   _ => t
 }
 
-// ONE scan, two projections: the named-reference sites (LGlobal / LFnRef,
-// with their handles — the key-projection inputs) and the repr-sensitive
+// ONE scan, two projections: the named-reference sites (LGlobal /
+// LDirectCall, with their handles — the key-projection inputs) and the repr-sensitive
 // operand handles (arith / comparison / equality operands — the floor-is-
 // wrong witnesses the worthiness predicate reads). acc = (sites, ophs).
 fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
   LGlobal(h, n)             => { let (s, o) = acc; ([(h, n)] ++ s, o) },
   LDirectCall(_h, fh, n, _t, args) => { let (s, o) = spec_scan_list(args, acc); ([(fh, n)] ++ s, o) },
-  LFnRef(h, n, ev)          => { let (s, o) = spec_scan_list(ev, acc); ([(h, n)] ++ s, o) },
   LPerform(_h, _t, args, _) => spec_scan_list(args, acc),
   LDirectPerform(h, hn, op, st, args) => spec_scan_expr(singleton_perform_block(h, hn, op, st, args), acc),
-  LHandleWith(_h, b, hn, _hname, inits, _arms, evs) =>
-    spec_scan_list(evs, spec_scan_list(inits, spec_scan_expr(hn, spec_scan_expr(b, acc)))),
+  LHandleWith(_h, b, hn, _hname, inits, _arms) =>
+    spec_scan_list(inits, spec_scan_expr(hn, spec_scan_expr(b, acc))),
   LLet(_h, _n, inner)       => spec_scan_expr(inner, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
-    spec_scan_list(ev, spec_scan_list(caps, spec_scan_list(body, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
-    spec_scan_list(ev, spec_scan_list(caps, spec_scan_list(body, acc))),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps) =>
+    spec_scan_list(caps, spec_scan_list(body, acc)),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, _, _) =>
+    spec_scan_list(caps, spec_scan_list(body, acc)),
+  LResumeK(_h, k, v)        => spec_scan_expr(v, spec_scan_expr(k, acc)),
   LYield(_h, _op, args, k)  => spec_scan_expr(k, spec_scan_list(args, acc)),
   LKExtend(_h, k)           => spec_scan_expr(k, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => spec_scan_list(body, acc),
@@ -5997,14 +5723,9 @@ fn spec_scan_expr(expr, acc) with Memory + Alloc = match expr {
       (s2, [lexpr_handle(s)] ++ o)
     } else { acc2 }
   },
-  LSuspend(_h, _o, f, args, ev, _) =>
-    spec_scan_list(ev, spec_scan_list(args, spec_scan_expr(f, acc))),
   LFeedback(_h, b, s)       => spec_scan_expr(s, spec_scan_expr(b, acc)),
   LWasiCall(_h, _n, args)   => spec_scan_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => spec_scan_list(a, acc),
-  LEvRef(_h, _e)            => acc,
-  LEvEntry(_, ev)           => spec_scan_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
   LInvariantFailure(_, _)   => acc,
   // A field-load receiver is a STRUCTURE witness: a var-rooted receiver
   // bound at a site to a concrete record/tuple heals under that site's twin.
@@ -6064,8 +5785,8 @@ fn reachable_from_main(lowered) = {
     // Roots: main + every value-let init's references (they RUN before
     // main in __init_lets, so their callees are live by construction).
     let init_refs = fold([], (acc, d) => match d {
-      LLet(_, _, LMakeClosure(_, _, _, _))               => acc,
-      LLet(_, _, LMakeContinuation(_, _, _, _, _, _, _)) => acc,
+      LLet(_, _, LMakeClosure(_, _, _))                  => acc,
+      LLet(_, _, LMakeContinuation(_, _, _, _, _))       => acc,
       LLet(_, _, init)                                   => reach_names_expr(init, acc),
       _                                                  => acc
     }, lowered)
@@ -6127,9 +5848,9 @@ fn reachable_from_main(lowered) = {
 // ev-slot seam close.
 fn emit_runtime_contract() =
   // ev_perform_node (+ its world_find_from walk) is the world-read the
-  // LEvPerform arm mints (the world-as-value arc's R2); ev_lookup remains
-  // the FORWARD-side pair-builder's read (LEvRef, the __resume k-channel).
-  ["ev_lookup", "ev_perform_node", "world_find_from",
+  // LEvPerform arm mints (the world-as-value arc's R2) — the ONE runtime
+  // evidence read; the keyed-region machinery died with the region.
+  ["ev_perform_node", "world_find_from",
    "len",
    "list_compare", "list_concat", "list_eq", "list_index", "list_set",
    "make_list", "make_list_sc", "slice", "str_compare", "str_concat",
@@ -6179,7 +5900,7 @@ fn main_param_count(lowered) =
   fold(0, (acc, d) => match d {
     LDeclareFn(LFn(name, _arity, param_names, _body, _row, _fence)) =>
       if name == "main" { len(param_names) } else { acc },
-    LLet(_h, name, LMakeClosure(_h2, LFn(_n2, _a2, param_names, _b2, _r2, _f2), _caps, _evs)) =>
+    LLet(_h, name, LMakeClosure(_h2, LFn(_n2, _a2, param_names, _b2, _r2, _f2), _caps)) =>
       if name == "main" { len(param_names) } else { acc },
     _ => acc
   }, lowered)

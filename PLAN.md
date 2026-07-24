@@ -927,8 +927,10 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   `$<hname>_state_g`; polymorphic → `call_indirect` via an evidence-field on the
   closure record (Koka evidence-passing, **never** a vtable); MultiShot → heap
   continuation struct + trail rollback.
-- **Handler IS state IS closure IS evidence** — one heap record, four roles
-  (`[fn_ptr@0][nstate@4][state@8..][arms][captured_evs]`).
+- **Handler IS state IS closure** — one heap record
+  (`[fn_ptr@0][nstate@4][state@8..][arms]`); the EVIDENCE role dissolved
+  into the live world chain (the world-as-value arc — dispatch reads the
+  install chain, never a frame region).
 - **Non-ultimate by design (dissolve at L1):** the seed (hand-WAT); the bash
   scaffolds (state.sh, verify.sh, run-micro.sh, drift-audit.sh — each
   dissolves into the medium's own where/verify/audit verbs); the external
@@ -1026,6 +1028,113 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶▶▶▶ THE EVIDENCE REGION DIES WHOLE + THE FORK KEEPS ITS
+  SPINES (the world arc's foundation cut, rung two, landed WITH the
+  latent fork-pair root its one red surfaced · pin 612b6589): the
+  keyed-ev machinery deleted end to end — LSuspend
+  collapses into bare calls (every call direct or closure-conv, the
+  evidence fork gone), LFnRef/LEvRef/LEvEntry/LUnresolvedEvidence deleted
+  with every walker arm, closures are [fn_ptr][nc][captures] (no region,
+  no sentinel), the handler record loses captured_evs, and the k record is
+  [fn_ptr][nc][captures][state_idx][ret_slot][WORLD] — the LAST word the
+  LIVE $world_g at reify (the static world_tag fingerprint died with
+  world_tag_of_row), read by $__k_world at fixed offset 16+4*nc. R4's
+  rebind is REAL: LResumeK (the resume invocation's own node) brackets the
+  k call in the record's frozen world; $__k_extend stores the inner k's
+  world; $__k_compose re-sets at the fk transition. The __resume channel
+  is an ARGUMENT: resume-bound fns gain a trailing __k param (the
+  resume_bindings closure), call sites append it unconditionally-if-bound
+  (resume_k_arg — dead-k word 0 where no k is in scope), and closure
+  mints SEED __k whenever a k is lexically in scope (lower_seed_k — the
+  walk-free stateless rule after the synth-walk guard refused the
+  stateful ls read). The k2 call-boundary wrap migrated from LSuspend to
+  LCall/LDirectCall (same can_yield predicate; the __kr_ junction park
+  restored after the double-wrap measured 134 on four k-micros). persist
+  rewrote whole: signatures drop the caller-passed tags, the wire carries
+  a name-level chain fingerprint derived from the record's own world
+  slot, rehydrate refuses divergence and patches an equivalent world
+  live. ev_lookup/ev_scan stay in source ONE generation (boot's emitted
+  LEvRef sites — the ev_perform_entry precedent; delete at the next
+  pin). THE ONE RED became the dig, and the dig closed a LATENT class
+  as old as the fork pair: capability-hole's edit ACCEPT step trapped
+  134 in the re-infer, and TEN labels died to probes before the root
+  (count the kills): the yield-flag leak; the real-LYield theory; the
+  patched-scratch-file theory; the k2-floor theory (the new wheel
+  contains ZERO raise instructions — instruction-form count,
+  string-literal contamination excluded — so no floor guard can ever
+  pass, and the 5,259 dormant k2 wraps are can_yield over-approximating
+  a module that cannot raise: the raise-site absence proof deletes
+  them, banked below); the E_DuplicateFnName anomaly (pre-existing
+  session-weave noise, 311 in GREEN legs too); the virgin-globals read;
+  the nullary-ctor-sentinel decode of the row slot; and finally this
+  entry's own banked "a TCont's WORLD field written wrong" — REFUTED:
+  no writer existed, the record itself was alien. THE MEDIUM NARRATED
+  ITS OWN DEATH (Morgan's redirect, feedback-medium-diagnoses-itself —
+  stop hand-probing; make the medium speak): emit_match_arms'
+  exhaustive fallthrough became the in-scratch POSTMORTEM — scratch
+  word 0 = the failing cascade's own scrutinee ($scrut_tmp, exact by
+  construction since nested matches re-set it), word 4 = the match
+  node's graph handle baked as a code constant
+  (Hβ.emit.trap-as-exception-postmortem's larval form; every
+  ill-sorted destructure in every future build self-identifies) — and
+  the crash-branch probe called the wheel's OWN projections instead of
+  raw-offset decoding: lookup_ty through $lookup_ty_graph_state_g into
+  show_type, graph_chase's reason into show_reason. The narration:
+  finalize_continuation_boundaries' fatal slot was boundaries[23]
+  holding a pointer to the interned ": " — a data-section len-2 string
+  whose [len=2][tag=16] words tag-collide with
+  PendingContinuationBoundary — and the three implicated "handles"
+  were that string's own internals; two rounds of hand-decoding had
+  misread the same bytes as a nullary-ctor sentinel. THE ROOT, latent
+  since the fork pair landed (2026-07-23): graph_push_checkpoint
+  recorded only trail_len, so a state spine GROWN during a candidate
+  fork (extend_to's doubling copy) had no inverse — graph_rollback
+  restored slots into the region-doomed spine, heap_reset zeroed it,
+  the propose fan's renderer reused the memory, and check #2's
+  finalize walked the alien word into occurs_in_row's destructure
+  (deterministic per binary, vanishing under probe allocations — the
+  forensic-law fingerprint, measured across three lineages; the cut's
+  41%-smaller layout merely moved which constant landed there). THE
+  FIX AT THE REPRESENTATION: the checkpoint is the fork's STATE
+  VALUE — graph_push_checkpoint snapshots the seventeen grow-able /
+  co-varying state fields as one record (pre-mark, O(1));
+  graph_rollback walks the CURRENT trail backward INTO the snapshot's
+  spines (revert_trail_into over undo_set_within — bounded, never
+  extends; backward order makes the oldest old-value win per slot, so
+  every in-place case lands pre-fork, and a slot alive only in a
+  discarded grown spine is skipped) then restores every field
+  wholesale; the unpaired-rollback arm keeps the legacy walk. The
+  trail's own comment claimed "each mutation has a precise inverse" —
+  spine growth was the mutation with no entry. The fix's own first
+  two shapes were then REFUTED by the frontier (the gate catching the
+  fixer, twice): restoring HALF the overlay family desynced the
+  parallel quartet (count > restored bufs — propose-fan OOB'd in
+  overlays_to_pairs; the whole names/bufs/lens/count/current family
+  now forks together), and the pop's slice(stack, 0, n-1) MINTED ITS
+  SLICE NODE IN THE DYING REGION — the next fork walked a zeroed cell
+  (the doomed-allocation class recursing through its own cure); the
+  pop is drop_last, the snoc-parent READ, allocation-free. The repro
+  now runs the FULL edit loop green (fan → accept → patch → re-infer,
+  rc 0, the Why facet reading the patched line). MEASURED, the whole
+  board: the march ran TRANSITION m3 == m4 at 333,992 lines (pin
+  4900d2c7 — the 1,932-line m2/m3 diff was the postmortem emit
+  crossing one generation) then CLEAN m2 == m3 at 334,028 lines with
+  the overlay/pop completions (pin 612b6589, blessed) — the wheel 40%
+  smaller than the pre-cut 559k; census 0 at every generation;
+  comment-refs 0; battery 113/113; frontier 229/0 (capability-hole,
+  the field leg, and the fan leg all green); proof-exactness 9/9;
+  crown 5/5. Peer born of the fix's own build:
+  Hβ.infer.nested-alternative-branch-bracketing (named-residue
+  index — the medium refused two correct shapes of the walker before
+  the undo_set_within hoist). Banked structural findings, unchanged:
+  the 5,259 dormant k2 floors (delete via raise-site absence proof)
+  and the resume_k_arg dead-k word wanting its
+  SingletonUninstalled-style guard.
+  mn-world-resume-frozen (tests/frontier, UNREGISTERED) is the arc's
+  banked RED pair (134 today — the driverless-install crossing floors
+  before the world even matters; the A4 un-flooring is the next rung
+  with it as the gate). Fixture lathe-lag measured en route: an
+  ANNOTATED handler config param (`scaler(f: Int)`) does not parse.
 - 2026-07-23 · THE PERFORM SCAN'S CORPSE LEAVES THE SOURCE (the world
   arc's write-side cleanup, rung one · pin 9448692b): ev_perform_entry
   deleted with its reach seed — the fn its own comment scheduled for
@@ -2622,6 +2731,21 @@ __resume k-threading channel survives — it is an argument, not evidence)
 gate live → R5 the 14-chain bracket consolidation re-run → R6 the fork
 pair's world leg in synth/oracle. R2/R3 carry the whole-battery blast
 radius; the multishot-era gates (52→66) and the march arbitrate.
+
+`Hβ.infer.nested-alternative-branch-bracketing` (2026-07-24, born of the
+fork-spine fix's own build — the medium refusing its builder twice): the
+branch/scope ownership fix (1e06cdaa) brackets if/match arms as
+BAlternative, but an if-with-consumes NESTED INSIDE a match arm breaks
+the enclosing arm union — consumes in LATER sibling arms then collide
+cross-arm (E_OwnershipViolation "consumed twice" false positives).
+Measured twice on revert_trail_into: the if-in-argument-position shape
+AND the let-bound-if shape both refused, while the IDENTICAL cross-arm
+consume pattern in single-call arms (revert_trail, one fn over) passes —
+so the trigger is the nested alternative, not the arm consumes. The
+§4⑤ Hylo-quiet bar names this inference failing (a provably-safe shape
+demanded restructuring); the fix is the branch bracket nesting as a
+STACK (enter/exit balanced per alternative level), and the
+undo_set_within hoist is the passing form until it lands.
 
 `Hβ.ops.wasmtime-runner-migration` (2026-07-23, the threads-scout recon —
 design complete, artifact-grounded): every emitted module, boot included,

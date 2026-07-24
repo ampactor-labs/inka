@@ -1,0 +1,33 @@
+// expect: 42
+// mn-world-resume-frozen — the world-as-value arc's R4+A4 gate: a MultiShot
+// remainder performs an evidence-tier op whose handler was installed by a
+// DRIVERLESS install the yield crossed. Sound iff BOTH halves hold: the k
+// record freezes the live world at reify (R4 — scaler's chain node rides
+// the record) AND the driverless-install crossing composes instead of
+// flooring (the A4 un-flooring: the frozen world is exactly the evidence
+// the floor existed to protect, so the crossing's reason to floor is gone).
+//
+// MEASURED RED on pin 9448692b: exit 134 — the k2 loud floor's
+// `unreachable` fires in main at the scaler crossing before any perform
+// runs. GREEN = 42: chooser resumes 10 and 20; the remainder
+// `<p> + emitt(3)` under scaler(2) gives (10+6) + (20+6).
+//
+// scaler takes a config param (bare name — an annotated handler config
+// param is unparsed lathe-lag) so emitt dispatches through the EVIDENCE
+// tier (the world walk); a no-config singleton would direct-call past the
+// chain and prove nothing.
+
+effect Pick { pick() -> Int }
+effect Emitt { emitt(n: Int) -> Int }
+
+handler chooser {
+  pick() => resume(10) + resume(20)
+}
+
+handler scaler(f) {
+  emitt(n) => resume(n * f)
+}
+
+fn stage() with Pick + Emitt = pick() + emitt(3)
+
+fn main() = ({ stage() } ~> scaler(2)) ~> chooser

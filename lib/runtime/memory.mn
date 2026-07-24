@@ -47,10 +47,9 @@ effect Memory {
   i32_xor(Int, Int) -> Int   // (a, b) -> a XOR b
 
   // The XOR's siblings — i32.or / i32.and / i32.shl, the same substrate
-  // projection. i32_or is the union-homomorphic world-tag join (a composed
-  // continuation's world = the OR of its frames' tags, band B); i32_and +
-  // i32_shl serve the tag's bit projection and the value-gate's subset
-  // test ((k & ~live) == 0 admits — the world-widening resume).
+  // projection. Bitwise verbs for hash mixing and flag projection; the
+  // world rides continuation records as a HANDLE now (R4), so no tag
+  // arithmetic is load-bearing here.
   i32_or(Int, Int) -> Int    // (a, b) -> a OR b
   i32_and(Int, Int) -> Int   // (a, b) -> a AND b
   i32_shl(Int, Int) -> Int   // (a, n) -> a << (n mod 32)
@@ -98,21 +97,12 @@ effect Alloc {
 //   → performs nothing; row is the empty closed triple; type checker enforces
 //     that the body contains no perform statements.
 
-// ─── ev_lookup — the FORWARD-side keyed-evidence scan ───────────────────
-// The identity-addressed frame-region READ: a fn's captured_evs region
-// (based at `base` in its __state record) holds [key][entry-ptr] pairs
-// terminated by a key=0 sentinel; `target` is the effect's INTERNED name
-// offset (string constants dedup — W5 — so the key the caller PLACED and
-// the key the callee SEEKS are the SAME offset, an i32.eq match). A
-// sibling effect appearing shuffles NO key — the cure for
-// position-as-the-bug. This is the FORWARD side only (LEvRef building a
-// callee's pair from this frame, and the __resume k-channel): a miss is
-// ROUTINE — capture sets over-approximate (escaping_row), so a caller
-// legitimately lacks keys its callee never fires; 0 means the pair is
-// written unfilled, tolerant by design. The PERFORM side no longer reads
-// any frame region — it walks the live world chain (ev_perform_node
-// below, the world-as-value arc's R2; the miss-traps-loudly contract from
-// the 2026-07-03 garbage-dispatch measurement carries over there).
+// The PRIOR generation's forward-side keyed-region scan — the pinned
+// boot's emitted LEvRef sites still name it (m2 = boot(wheel) carries
+// them). The new emit mints no keyed regions at all; once the pin
+// crosses, this pair has zero callers, reach prunes it from every
+// emitted module, and its deletion from source is the transition's
+// second write-side cleanup (the ev_perform_entry precedent exactly).
 fn ev_lookup(state, base, target) with Memory = ev_scan(state, base, target, 0)
 
 fn ev_scan(state, base, target, j) with Memory = {
@@ -122,20 +112,19 @@ fn ev_scan(state, base, target, j) with Memory = {
   else { ev_scan(state, base, target, j + 1) }
 }
 
-// The PERFORM-side read is the WORLD walk (the world-as-value arc's R2):
-// the live install chain — [key@0][entry@4][parent@8][install_world@12]
+// ─── The evidence read IS the world walk (the world-as-value arc) ────────
+// The live install chain — [key@0][entry@4][parent@8][install_world@12]
 // nodes consed by every install's $world_push — is walked from world_top()
-// by interned-key i32.eq, and the perform dispatches through the FOUND
-// NODE: node.entry is the same [record][base] view the install built;
-// node.install_world is the world OUTSIDE that install, which the dispatch
-// sets around the arm call (the deep-handler law, delivered dynamically —
-// an arm's own performs resolve outer, never self). A computation
-// therefore performs in the world where it is CALLED, not the world where
-// its closure was minted — the mint-time evidence snapshot was a cache of
-// this dynamic fact. ev_lookup/ev_scan above remain the FORWARD-side
-// frame-region readers (LEvRef pair-building, the __resume k-channel);
-// their miss is routine (capture sets over-approximate, an unfilled pair
-// is legal). A perform miss is a BROKEN PROMISE and traps here, key in
+// by interned-key i32.eq (string constants dedup — W5 — so the key the
+// install PLACED and the key the perform SEEKS are the SAME offset), and
+// the perform dispatches through the FOUND NODE: node.entry is the same
+// [record][base] view the install built; node.install_world is the world
+// OUTSIDE that install, which the dispatch sets around the arm call (the
+// deep-handler law, delivered dynamically — an arm's own performs resolve
+// outer, never self). A computation therefore performs in the world where
+// it is CALLED, not the world where its closure was minted — the mint-time
+// evidence snapshot (the retired keyed frame regions) was a cache of this
+// dynamic fact. A perform miss is a BROKEN PROMISE and traps here, key in
 // hand: the sought key's interned offset goes to scratch word 0 (the
 // postmortem window), then a deterministic out-of-bounds load traps — the
 // backtrace names the perform site, the scratch word the effect.

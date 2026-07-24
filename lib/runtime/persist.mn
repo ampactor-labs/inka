@@ -7,10 +7,20 @@
 // byte range. After process loss or recompilation those words may have no valid
 // referents.
 //
-// The world tag is likewise a compatibility fingerprint, not a capability proof.
-// The current lowerer folds effect names into 32 bits, omits parameter arguments
-// and open row tails, and does not identify handler installs. Collisions can
-// admit the wrong world.
+// THE WORLD GATE (the world-as-value arc's R4 — band B's value gate, live):
+// a continuation record's LAST word is its FROZEN WORLD — the live install
+// chain head at the reify moment. In-process that handle is permanently
+// valid (the monotonic image never frees chain nodes), so an in-process
+// resume rebinds through it and the mismatch class is unsayable. ACROSS the
+// file boundary the handle is an address in a dead image, so the wire
+// carries a NAME-LEVEL fingerprint instead: the frozen chain walked at
+// persist time, each node's effect-key STRING hashed and order-mixed
+// (FNV-1a over bytes, sequence-mixed — exact name+order match, not the old
+// collision-prone bitmask OR). rehydrate walks the CURRENT live chain from
+// world_top() the same way; a differing fingerprint REFUSES (the runtime
+// twin of E_ResumeWorldMismatch), an equal one admits AND PATCHES the
+// rehydrated record's world slot to the live chain — resume then rebinds
+// into the equivalent-by-name world.
 //
 // The handler shape remains useful: storage and resource-rebind policy can be
 // selected by a handler. The bytes below are only a same-image encoding
@@ -27,16 +37,17 @@ import runtime/io
 type PersistHandle = PersistHandle(Int)
 
 // Persist writes an explicitly sized record to a path; rehydrate copies it into
-// fresh memory after comparing the caller-supplied compatibility fingerprint.
-// The catching handler decides storage location. It does not prove that the
-// record is a closed continuation image.
+// fresh memory after the fingerprint gate. Both derive their world facts from
+// the artifact — the record's own tail and the live chain — so neither takes a
+// caller-supplied world argument (a caller-passed tag was a re-derivation of
+// what the record already carries).
 //
 // `k` is an untyped pointer and rehydrate returns an untyped Int. This boundary
 // is not complete until the graph carries a typed continuation handle and its
 // transitive reachable image.
 effect Persist {
-  persist(k: Int, size: Int, world_tag: Int, path: String) -> ()
-  rehydrate(path: String, live_world_tag: Int) -> Int
+  persist(k: Int, size: Int, path: String) -> ()
+  rehydrate(path: String) -> Int
   // Prototype fanout storage hooks. The current implementation checkpoints a
   // closure header before invoking it and retains results only in live handler
   // state. It does not restore a branch after process loss.
@@ -44,15 +55,39 @@ effect Persist {
   join_persist(branch: PersistHandle) -> a
 }
 
+// The continuation record's frozen-world slot: head (8) + captures (4 each,
+// count at k+4) + state_idx + ret_slot precede it — the LAST word, the same
+// fixed offset the emitted $__k_world reads.
+fn k_world_offset(k) with Memory = 8 + 4 * load_i32(k + 4) + 8
+
+// The name-level fingerprint of a world chain: walk [key@0][entry@4][parent@8]
+// nodes from `w`, hash each node's effect-key string (FNV-1a over its bytes),
+// and MIX in walk order — an exact name+order summary that survives rebuilds
+// (interned offsets do not; name bytes do). 0 = the empty world.
+fn world_fingerprint(w) with Memory = {
+  if w == 0 { 0 }
+  else {
+    let key = str_of_buf(load_i32(w))
+    let h = fingerprint_bytes(key, 0, byte_len(key), 2166136261)
+    let deeper = world_fingerprint(load_i32(w + 8))
+    (h * 16777619) + deeper
+  }
+}
+
+fn fingerprint_bytes(s, i, n, h) with Memory = {
+  if i >= n { h }
+  else { fingerprint_bytes(s, i + 1, n, (h + byte_at(s, i)) * 16777619) }
+}
+
 // persist_to_disk - default record-copy handler for the prototype wire.
 handler persist_to_disk with branch_results = [] {
 
-  persist(k, size, world_tag, path) => {
+  persist(k, size, path) => {
     // Copy the caller-selected range. Reachability is not established here.
     // This handler IS the disk policy — it writes through the WASI substrate
     // layer directly (the swappable point is the Persist effect itself; a
     // bare fs_write_file resolves only inside the wheel's own compile).
-    let wire = persist_pack_record(world_tag, k, size)
+    let wire = persist_pack_record(k, size)
     fs_write_file_impl(path, wire)
     resume()
   },
@@ -70,48 +105,52 @@ handler persist_to_disk with branch_results = [] {
     resume(list_index(branch_results, idx))
   },
 
-  rehydrate(path, live_world_tag) => {
+  rehydrate(path) => {
     let wire = fs_read_file_impl(path)
     // The wire is a String (the byte record fs_read built); str_payload
     // projects its contiguous payload base — the seq-addr boundary in table
-    // form. Payload layout: [world_tag@0][size@4][k bytes@8].
+    // form. Payload layout: [fingerprint@0][size@4][k bytes@8].
     let p = str_payload(wire)
-    let captured_world = load_i32(p)
-    // This comparison catches unequal fingerprints. It cannot establish world
-    // equality: different worlds can collide, and 0 also represents omitted
-    // open requirements.
-    if captured_world != 0 && captured_world != live_world_tag {
-      // A cross-world resume is a REFUSAL, never a fabricated zero
-      // continuation. Fail is the runtime's failure effect; the installed
-      // policy decides (fail_exit prints + exits; a test handler collects).
-      // The compile-time twin of this gate is E_ResumeWorldMismatch on TCont.
-      fail("persist: rehydrate world {int_to_str(captured_world)} does not match live world {int_to_str(live_world_tag)}")
+    let captured = load_i32(p)
+    let live = world_fingerprint(world_top())
+    // Name-level world equality gates the resume. A cross-world rehydrate is
+    // a REFUSAL, never a fabricated zero continuation. Fail is the runtime's
+    // failure effect; the installed policy decides (fail_exit prints + exits;
+    // a test handler collects). The compile-time twin of this gate is
+    // E_ResumeWorldMismatch on TCont.
+    if captured != 0 && captured != live {
+      fail("persist: rehydrate world {int_to_str(captured)} does not match live world {int_to_str(live)}")
     } else {
-      // Copy into fresh memory. Any interior absolute pointer remains pointed at
-      // the old address; relocation safety is not established by this copy.
+      // Copy into fresh memory, then PATCH the record's frozen-world slot to
+      // the live chain head: the persisted handle addressed a dead image; the
+      // fingerprint just proved the live chain equivalent by name, so resume
+      // rebinds into it. Any other interior absolute pointer remains pointed
+      // at the old address; relocation safety is not established by this copy.
       let size = load_i32(p + 4)
       let k = alloc(size)
       mem_copy(k, p + 8, size)
+      store_i32(k + k_world_offset(k), world_top())
       resume(k)
     }
   }
 }
 
-// Copy the thunk prefix derived from nstate. This size does not prove that arm,
-// evidence, sentinel, or reachable capture bytes are included. World 0 records
-// no checked capability requirement.
+// Copy the whole continuation record: head + captures + the metadata tail
+// (state_idx, ret_slot, frozen world) — the record is contiguous, so its
+// exact size is 8 + 4*capture_count + 12. Reachable capture POINTEES are
+// still not included (the STATUS header's honest limit).
 fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Filesystem + Persist = {
-  let nstate = load_i32(thunk + 4)
-  let size = 8 + nstate * 4
-  persist(thunk, size, 0, "/tmp/mn-persist-branch-{int_to_str(idx)}.k")
+  let size = 8 + 4 * load_i32(thunk + 4) + 12
+  persist(thunk, size, "/tmp/mn-persist-branch-{int_to_str(idx)}.k")
 }
 
-// Lay out the prototype wire: [world_tag][size][bytes]. It is self-sized, not
-// self-describing: it carries no schema, code identity, pointer map, or resource
-// manifest.
-fn persist_pack_record(world_tag, k, size) with Memory + Alloc = {
+// Lay out the prototype wire: [fingerprint][size][bytes]. The fingerprint is
+// DERIVED from the record's own frozen-world slot (never caller-supplied);
+// self-sized, not self-describing: it carries no schema, code identity,
+// pointer map, or resource manifest.
+fn persist_pack_record(k, size) with Memory + Alloc = {
   let wire = bytes_buf(4 + 4 + size)    // the [count][tag] byte-record header
-  store_i32(wire + 8, world_tag)        // world_tag (the value-gate input)
+  store_i32(wire + 8, world_fingerprint(load_i32(k + k_world_offset(k))))
   store_i32(wire + 12, size)            // record byte size (self-describing)
   mem_copy(wire + 16, k, size)          // the continuation record, verbatim
   str_of_buf(wire)                      // the wire IS a String for fs_write

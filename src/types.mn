@@ -380,7 +380,7 @@ type Scheme
 
 // SchemeKind discriminates env entries by their CONSTRUCTION ORIGIN.
 // Same Scheme shape, three different downstream stories: lower
-// dispatches on this — FnScheme → LCall/LSuspend, ConstructorScheme
+// dispatches on this — FnScheme → LCall/LDirectCall, ConstructorScheme
 // → LMakeVariant with a known tag_id, EffectOpScheme → LPerform with
 // the declaring effect already attributed. The graph stores the
 // distinction directly rather than re-deriving it from type shape.
@@ -410,7 +410,7 @@ type Scheme
 // EffectDeclKind(op_names) is the effect declaration itself.
 // `env_lookup("Iterate")` reads this to know the effect's ops
 // (["yield", "result"]) — the graph carries effect→ops so
-// derive_ev_slots can produce per-op evidence at call sites,
+// the world-chain dispatch resolves op→effect at perform sites,
 // and the Cursor can project effect structure at any position.
 //
 // ParamScheme(authored) is a local parameter binding. VarRef inference reads it

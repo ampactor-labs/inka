@@ -196,7 +196,7 @@ handler string_table with idx = string_index_new() {
 
 // The specialization-twin registry (SpecTwins, types.mn) — seeded once by
 // emit_module's demand analysis, read by every reference-emitting arm
-// (LGlobal / LFnRef) before it redirects a wide-keyed site to a twin. The
+// (LGlobal / LDirectCall) before it redirects a wide-keyed site to a twin. The
 // twin set is tiny (leaf compute fns), so the membership scan is bounded.
 handler spec_registry with twins = [] {
   spec_twins_exist() => resume(len(twins) > 0),
@@ -716,10 +716,10 @@ fn emit_module(lowered) = {
   // fns, called directly like $str_eq; a program with no aggregate sites
   // collects none (byte-identical, Law 7).
   emit_fold_leaf_helpers(fold_closures)
-  // band B M1.2 — the composer pair + tag reader: $__k_compose (the
+  // band B M1.2 — the composer pair + world reader: $__k_compose (the
   // self-re-composing junction k, table-resident above), $__k_extend (the one
-  // bubble op), $__k_world_tag (the tail read). Dormant until a k2 boundary
-  // calls extend; emitted only when the module yields (Law 7).
+  // bubble op), $__k_world (the frozen-world read). Dormant until a k2
+  // boundary calls extend; emitted only when the module yields (Law 7).
   if yield_seen > 0 { emit_k_compose_pair() }
   // band B M2b — one redrive fn per LIVE MultiShot-armed handler (arm fns
   // in the emitted set): the dispatch loop's one home (the install bracket
@@ -1050,17 +1050,19 @@ fn walk_lemit_expr(expr) = match expr {
   // all_fn_names exactly as the lower-baked calls did — byte parity).
   LShow(h, x) => walk_lemit_expr(show_node_of(h, x)),
   LHash(h, x) => walk_lemit_expr(hash_node_of(h, x)),
-  LMakeClosure(_, LFn(name, _, _, body, _, _), captures, ev) => {
+  LMakeClosure(_, LFn(name, _, _, body, _, _), captures) => {
     visit_fn(name)
     walk_lemit_list(body)
     walk_lemit_list(captures)
-    walk_lemit_list(ev)
   },
-  LMakeContinuation(_, LFn(name, _, _, body, _, _), captures, ev, _, _, _) => {
+  LMakeContinuation(_, LFn(name, _, _, body, _, _), captures, _, _) => {
     visit_fn(name)
     walk_lemit_list(body)
     walk_lemit_list(captures)
-    walk_lemit_list(ev)
+  },
+  LResumeK(_, k, v) => {
+    walk_lemit_expr(k)
+    walk_lemit_expr(v)
   },
   // band B k1: a yield reads the yield globals and interns its op key (the
   // driver's compare reads the SAME offset); descend the k record. The floor
@@ -1079,10 +1081,6 @@ fn walk_lemit_expr(expr) = match expr {
     visit_yield()
     walk_lemit_expr(k)
   },
-  // LFnRef references an ALREADY-emitted named fn — NO visit_fn (the fn is
-  // collected at its own declaration; visiting here would double-register it).
-  // Walk only its ev region (the forwarded evidence LowExprs).
-  LFnRef(_, _, ev)          => walk_lemit_list(ev),
   LDeclareFn(LFn(name, _, _, body, _, _)) => {
     visit_fn(name)
     walk_lemit_list(body)
@@ -1124,17 +1122,11 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_expr(s)
     walk_lemit_arms(arms)
   },
-  LSuspend(_, _, f, args, ev, _) => {
-    walk_lemit_expr(f)
-    walk_lemit_list(args)
-    walk_lemit_list(ev)
-  },
-  LHandleWith(_, b, hn, hname, inits, arm_names, captured_evs) => {
+  LHandleWith(_, b, hn, hname, inits, arm_names) => {
     walk_install_groups(arm_names, 0)
     walk_lemit_expr(b)
     walk_lemit_expr(hn)
     walk_lemit_list(inits)
-    walk_lemit_list(captured_evs)
     // band B k1: a MultiShot-armed install carries the driver loop, which
     // reads the yield globals and compares the interned op keys — register
     // both through the same channels (the one decider multishot_ops_of;
@@ -1159,7 +1151,7 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_list(args)
   },
   // Fold the ev-key registration into the one walk: every effect-key the
-  // dispatch key-scans (LEvPerform/LEvRef/LEvEntry/LUnresolvedEvidence ename)
+  // world dispatch compares (LEvPerform ename)
   // is interned through the SAME visit_string channel user literals flow
   // through, so string_offset resolves it to a stable nonzero data offset
   // (else every key collides at 0). The keys ARE in the nodes this single
@@ -1170,12 +1162,6 @@ fn walk_lemit_expr(expr) = match expr {
     visit_effect_demand(ekey)
     walk_lemit_list(args)
   },
-  LEvRef(_, ekey)           => visit_string(ekey),
-  LEvEntry(key, ev)         => {
-    visit_string(key)
-    walk_lemit_expr(ev)
-  },
-  LUnresolvedEvidence(_, ekey) => visit_string(ekey),
   LInvariantFailure(_, _)   => (),
   LFieldLoad(_, rec, _)     => walk_lemit_expr(rec),
   LConvert(_, _, operand)   => walk_lemit_expr(operand),
@@ -1398,11 +1384,11 @@ fn emit_one_redrive(hname) = {
   wat_emit("  )\n")
 }
 
-// The composer pair + the tag reader (band B M1.2, the k2/k3 bank Ruling 1) —
+// The composer pair + the world reader (band B M1.2, the k2/k3 bank Ruling 1) —
 // the one generic self-re-composing junction. compose(inner, frame_k) is
 // ITSELF a k with the closure-identical head [fn_ptr=$__k_compose_idx][nc=2]
-// [inner@8][frame_k@12][ev-sentinel@16][state_idx=0@20][ret_slot=0@24]
-// [world_tag@28] — resume calls it through the SAME W7 convention as every k
+// [inner@8][frame_k@12][state_idx=0@16][ret_slot=0@20][world@24]
+// — resume calls it through the SAME W7 convention as every k
 // (no second calling convention, no chain walker). The body: r = inner(v); a
 // still-raised $yield_flag means inner suspended DEEPER — re-compose the
 // fresh $yield_k onto this record's own frame_k and propagate the dummy with
@@ -1410,47 +1396,46 @@ fn emit_one_redrive(hname) = {
 // fresh record per crossed suspension — never a post-mint mutation; the mint
 // in $__k_extend is the ONLY write in the k design); a clear flag feeds r to
 // frame_k as return_call_indirect — constant stack at any composition depth.
-// The composed world_tag is the OR-join of both children's (the M1.1
-// union-homomorphic representation: compose IS one i32.or; the full
-// row-in-tail form rides the Persist/value-gate band). Width: the composer ft
+// The composed record's world = the inner k's frozen world (the segment a
+// resume enters FIRST); the fk transition re-sets from fk's own slot — the
+// world rides each record, never a join. Width: the composer ft
 // is pinned word-uniform $ft2 — a non-i32 frame k meets a LOUD call_indirect
 // type trap (Hβ.emit.compose-width-floor; the f64 composer variant is the
 // named after), never a silent truncation. Dormant until a k2 boundary or a
 // junction calls $__k_extend; emitted only when the module yields (Law 7).
 fn emit_k_compose_pair() with WasmOut = {
-  // $__k_world_tag(k) — the tail read: skip the captures fence, walk the
-  // keyed ev region to its 0 sentinel (the SAME keyed region ev_scan
-  // walks), load world_tag at sentinel+12 — the record's last word, where
-  // LMakeContinuation stores it.
-  wat_emit("  (func $__k_world_tag (param $k i32) (result i32) (local $p i32)\n")
-  wat_emit("    (local.set $p (i32.add (local.get $k)\n")
-  wat_emit("      (i32.add (i32.const 8) (i32.shl (i32.load offset=4 (local.get $k)) (i32.const 2)))))\n")
-  wat_emit("    (block $tag_done (loop $tag_scan\n")   // drift-audit: ignore — WAT instruction text
-  wat_emit("      (br_if $tag_done (i32.eqz (i32.load (local.get $p))))\n")
-  wat_emit("      (local.set $p (i32.add (local.get $p) (i32.const 8)))\n")
-  wat_emit("      (br $tag_scan)))\n")
-  wat_emit("    (i32.load offset=12 (local.get $p))\n")
+  // $__k_world(k) — the frozen-world read: the record's LAST word at the
+  // FIXED offset 16 + 4*capture_count (head 8 + captures + state_idx +
+  // ret_slot precede it; no keyed region, no sentinel walk — the region
+  // died with the evidence machinery). LResumeK and the composer both
+  // read through this one projection.
+  wat_emit("  (func $__k_world (param $k i32) (result i32)\n")
+  wat_emit("    (i32.load (i32.add (local.get $k)\n")
+  wat_emit("      (i32.add (i32.const 16) (i32.shl (i32.load offset=4 (local.get $k)) (i32.const 2)))))\n")
   wat_emit("  )\n")
   // $__k_extend(frame_k) — the one operation every bubble junction performs:
   // $yield_k := compose($yield_k, frame_k). Reads the unwinding k, mints the
-  // 32-byte composer record, ORs the two world tags, republishes.
+  // 28-byte composer record, republishes. The composed record's world = the
+  // INNER k's world (the first-entered segment; each deeper composition
+  // preserves the deepest-first world by the same rule), so the LResumeK
+  // bracket's set-from-record is right for the first instruction that runs;
+  // $__k_compose re-sets at the fk transition.
   wat_emit("  (func $__k_extend (param $fk i32) (local $nk i32)\n")
-  wat_emit("    (local.set $nk (call $alloc (i32.const 32)))\n")
+  wat_emit("    (local.set $nk (call $alloc (i32.const 28)))\n")
   wat_emit("    (i32.store offset=0 (local.get $nk) (global.get $__k_compose_idx))\n")
   wat_emit("    (i32.store offset=4 (local.get $nk) (i32.const 2))\n")
   wat_emit("    (i32.store offset=8 (local.get $nk) (global.get $yield_k))\n")
   wat_emit("    (i32.store offset=12 (local.get $nk) (local.get $fk))\n")
   wat_emit("    (i32.store offset=16 (local.get $nk) (i32.const 0))\n")
   wat_emit("    (i32.store offset=20 (local.get $nk) (i32.const 0))\n")
-  wat_emit("    (i32.store offset=24 (local.get $nk) (i32.const 0))\n")
-  wat_emit("    (i32.store offset=28 (local.get $nk) (i32.or\n")
-  wat_emit("      (call $__k_world_tag (global.get $yield_k))\n")
-  wat_emit("      (call $__k_world_tag (local.get $fk))))\n")
+  wat_emit("    (i32.store offset=24 (local.get $nk) (call $__k_world (global.get $yield_k)))\n")
   wat_emit("    (global.set $yield_k (local.get $nk))\n")
   wat_emit("  )\n")
   // $__k_compose(__state, v) — W7 through and through: inner and frame_k are
   // its own captures; each junction call is the same park-push-load-indirect
-  // every closure call emits.
+  // every closure call emits. Segment transition: before the frame_k's tail
+  // call the world SETS from fk's own frozen slot (no save/restore — the
+  // outer LResumeK bracket restores at the resume expression's end).
   wat_emit("  (func $__k_compose (param $__state i32) (param $v i32) (result i32) (local $ik i32) (local $r i32)\n")
   wat_emit("    (local.set $ik (i32.load offset=8 (local.get $__state)))\n")
   wat_emit("    (local.get $ik) (local.get $v)\n")
@@ -1461,6 +1446,7 @@ fn emit_k_compose_pair() with WasmOut = {
   wat_emit("      (call $__k_extend (i32.load offset=12 (local.get $__state)))\n")
   wat_emit("      (i32.const 0) (return)))\n")   // drift-audit: ignore — WAT instruction text
   wat_emit("    (local.set $ik (i32.load offset=12 (local.get $__state)))\n")
+  wat_emit("    (global.set $world_g (call $__k_world (local.get $ik)))\n")
   wat_emit("    (local.get $ik) (local.get $r)\n")
   wat_emit("    (local.get $ik) (i32.load offset=0)\n")
   wat_emit("    (return_call_indirect (type $ft2))\n")
@@ -1494,19 +1480,19 @@ fn singleton_hnames_list(stmts, acc) = {
 fn singleton_hnames_expr(expr, acc) = match expr {
   LShow(_h, x) => singleton_hnames_expr(x, acc),
   LHash(_h, x) => singleton_hnames_expr(x, acc),
-  LHandleWith(_h, b, hn, hname, inits, _an, evs) => {
-    let deeper = singleton_hnames_list(evs,
-      singleton_hnames_list(inits,
-        singleton_hnames_expr(hn, singleton_hnames_expr(b, acc))))
+  LHandleWith(_h, b, hn, hname, inits, _an) => {
+    let deeper = singleton_hnames_list(inits,
+        singleton_hnames_expr(hn, singleton_hnames_expr(b, acc)))
     if hname == "" { deeper }
     else if ls_find_str_local(deeper, hname, 0) >= 0 { deeper }
     else { [hname] ++ deeper }
   },
   LLet(_h, _n, inner)       => singleton_hnames_expr(inner, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
-    singleton_hnames_list(ev, singleton_hnames_list(caps, singleton_hnames_list(body, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
-    singleton_hnames_list(ev, singleton_hnames_list(caps, singleton_hnames_list(body, acc))),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps) =>
+    singleton_hnames_list(caps, singleton_hnames_list(body, acc)),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, _, _) =>
+    singleton_hnames_list(caps, singleton_hnames_list(body, acc)),
+  LResumeK(_h, k, v)        => singleton_hnames_expr(v, singleton_hnames_expr(k, acc)),
   LYield(_h, _op, args, k)  => singleton_hnames_expr(k, singleton_hnames_list(args, acc)),
   LKExtend(_h, k)           => singleton_hnames_expr(k, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => singleton_hnames_list(body, acc),
@@ -1525,21 +1511,15 @@ fn singleton_hnames_expr(expr, acc) = match expr {
   LMakeRecord(_h, fs)       => singleton_hnames_list(fs, acc),
   LMakeVariant(_h, _t, fs)  => singleton_hnames_list(fs, acc),
   LMatch(_h, s, arms)       => singleton_hnames_arms(arms, singleton_hnames_expr(s, acc)),
-  LSuspend(_h, _o, f, args, ev, _) =>
-    singleton_hnames_list(ev, singleton_hnames_list(args, singleton_hnames_expr(f, acc))),
   LFeedback(_h, b, s)       => singleton_hnames_expr(s, singleton_hnames_expr(b, acc)),
   LPerform(_h, _n, args, _) => singleton_hnames_list(args, acc),
   LDirectPerform(_h, _hn, _op, _st, args) => singleton_hnames_list(args, acc),
   LWasiCall(_h, _n, args)   => singleton_hnames_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => singleton_hnames_list(a, acc),
-  LEvRef(_h, _e)            => acc,
-  LEvEntry(_, ev)           => singleton_hnames_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
   LInvariantFailure(_, _)   => acc,
   LFieldLoad(_h, rec, _off) => singleton_hnames_expr(rec, acc),
   LConvert(_h, _, operand)  => singleton_hnames_expr(operand, acc),
   LStateSlotStore(_h, _o, v, _) => singleton_hnames_expr(v, acc),
-  LFnRef(_h, _n, ev)        => singleton_hnames_list(ev, acc),
   LConst(_, _)              => acc,
   LLocal(_, _)              => acc,
   LFeedbackPrior(_)         => acc,
@@ -1587,8 +1567,8 @@ fn emit_string_bytes(s, i, n) = {
 // fire visit_top_fn at the correct sites. Returns "" for non-binding
 // shapes (caller treats "" as no-op).
 fn extract_top_fn_name(stmt) with Pure = match stmt {
-  LLet(_, name, LMakeClosure(_, _, _, _))           => name,
-  LLet(_, name, LMakeContinuation(_, _, _, _, _, _, _)) => name,
+  LLet(_, name, LMakeClosure(_, _, _))              => name,
+  LLet(_, name, LMakeContinuation(_, _, _, _, _))    => name,
   _                                                  => ""  // drift-audit: ignore — "" = non-binding shape (caller treats "" as no-op)
 }
 
@@ -1600,8 +1580,8 @@ fn extract_top_fn_name(stmt) with Pure = match stmt {
 fn collect_top_value_lets(stmts) =
   stmts
     |> map((stmt) => match stmt {
-         LLet(_, _, LMakeClosure(_, _, _, _))               => [],
-         LLet(_, _, LMakeContinuation(_, _, _, _, _, _, _)) => [],
+         LLet(_, _, LMakeClosure(_, _, _))                  => [],
+         LLet(_, _, LMakeContinuation(_, _, _, _, _))       => [],
          LLet(_, name, init)                                => [(name, init)],
          _                                                  => []
        })
@@ -1726,7 +1706,7 @@ fn emit_fn_index_globals(names, base_idx) = {
 // [0x800, 0x1000); the runtime owns no static address there (io.mn's old
 // scratch map is DELETED — every syscall record allocs per use — after a
 // record seated at 0x108 was clobbered by the first fs path write the
-// mentl server ever ran: ev_scan's fn_ptr became "x.ht", 2026-07-10);
+// mentl server ever ran: a runtime fn's fn_ptr became "x.ht", 2026-07-10);
 // (2) the eq/compare sentinel guard word-compares anything below
 // heap_base, and a closure record is a heap value. Interned data strings
 // begin at 0x10000, so the region holds 7680 records; the bump heap
@@ -1923,23 +1903,22 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
                              collect_call_vectors_list(args, vec_push(args, repr_of(lookup_ty(h)), acc))),
   LTailCall(h, f, args) => collect_call_vectors_expr(f,
                              collect_call_vectors_list(args, vec_push(args, repr_of(lookup_ty(h)), acc))),
-  LSuspend(h, _o, f, args, ev, _) => collect_call_vectors_expr(f,
-                             collect_call_vectors_list(args,
-                               collect_call_vectors_list(ev, vec_push(args, repr_of(lookup_ty(h)), acc)))),
+  // The resume invocation delegates through the SAME LCall shape its emit
+  // arm constructs — registration identical by construction.
+  LResumeK(h, k, v)     => collect_call_vectors_expr(LCall(h, k, [v]), acc),
   LEvPerform(h, _n, _e, _s, args) => collect_call_vectors_list(args, vec_push(args, repr_of(lookup_ty(h)), acc)),
   LLet(_h, _n, inner)   => collect_call_vectors_expr(inner, acc),
   LBinOp(_h, _op, l, r) => collect_call_vectors_expr(r, collect_call_vectors_expr(l, acc)),
   LUnaryOp(_h, _op, i)  => collect_call_vectors_expr(i, acc),
   LReturn(_h, i)        => collect_call_vectors_expr(i, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps) =>
     collect_call_vectors_list(body,
-      collect_call_vectors_list(caps, collect_call_vectors_list(ev, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
+      collect_call_vectors_list(caps, acc)),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, _, _) =>
     collect_call_vectors_list(body,
-      collect_call_vectors_list(caps, collect_call_vectors_list(ev, acc))),
+      collect_call_vectors_list(caps, acc)),
   LYield(_h, _op, args, k) => collect_call_vectors_expr(k, collect_call_vectors_list(args, acc)),
   LKExtend(_h, k)       => collect_call_vectors_expr(k, acc),
-  LFnRef(_h, _n, ev)    => collect_call_vectors_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_call_vectors_list(body, acc),
   LIf(_h, c, t, e)      => collect_call_vectors_list(e,
                              collect_call_vectors_list(t, collect_call_vectors_expr(c, acc))),
@@ -1950,10 +1929,10 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LMakeRecord(_h, fs)   => collect_call_vectors_list(fs, acc),
   LMakeVariant(_h, _t, fs) => collect_call_vectors_list(fs, acc),
   LMatch(_h, s, arms)   => collect_call_vectors_arms(arms, collect_call_vectors_expr(s, acc)),
-  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
+  LHandleWith(_h, b, hn, _hn2, inits, _arms) =>
     collect_call_vectors_expr(b,
       collect_call_vectors_expr(hn,
-        collect_call_vectors_list(inits, collect_call_vectors_list(cevs, acc)))),
+        collect_call_vectors_list(inits, acc))),
   LFeedback(_h, b, s)   => collect_call_vectors_expr(s, collect_call_vectors_expr(b, acc)),
   LPerform(_h, _n, args, _) => collect_call_vectors_list(args, acc),
   LDirectPerform(h, hn, op, st, args) => collect_call_vectors_expr(singleton_perform_block(h, hn, op, st, args), acc),
@@ -1966,9 +1945,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LFeedbackPrior(_)     => acc,
   LGlobal(_, _)         => acc,
   LUpval(_, _)          => acc,
-  LEvRef(_, _)          => acc,
-  LEvEntry(_, ev)       => collect_call_vectors_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
+
   LInvariantFailure(_, _) => acc
 }
 
@@ -2364,19 +2341,16 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LHash(_h, x) => collect_fn_emit_records_expr(x),
   // The LowFn fence IS the body-context every fn shape carries: closures
   // pass their capture count, handler arm fns nstate+total_arms, plain fns
-  // 0. emit_fn_body installs it so LEvPerform/LEvRef key-scan the region
-  // based at 8+4*fence — one rule, set at lower time, not re-derived per shape.
-  LMakeClosure(_h, LFn(name, _arity, param_names, body, _row, fence), captures, ev) => {
+  // 0 — one rule, set at lower time, not re-derived per shape.
+  LMakeClosure(_h, LFn(name, _arity, param_names, body, _row, fence), captures) => {
     [(name, param_names, body, fence)]
       ++ collect_fn_emit_records(body)
       ++ collect_fn_emit_records(captures)
-      ++ collect_fn_emit_records(ev)
   },
-  LMakeContinuation(_h, LFn(name, _arity, param_names, body, _row, fence), captures, ev, _, _, _) => {
+  LMakeContinuation(_h, LFn(name, _arity, param_names, body, _row, fence), captures, _, _) => {
     [(name, param_names, body, fence)]
       ++ collect_fn_emit_records(body)
       ++ collect_fn_emit_records(captures)
-      ++ collect_fn_emit_records(ev)
   },
   LYield(_h, _op, args, k) => collect_fn_emit_records(args) ++ collect_fn_emit_records_expr(k),
   LKExtend(_h, k)    => collect_fn_emit_records_expr(k),
@@ -2384,10 +2358,6 @@ fn collect_fn_emit_records_expr(expr) = match expr {
     [(name, param_names, body, fence)]
       ++ collect_fn_emit_records(body)
   },
-  // LFnRef references an EXISTING named fn — it emits NO body record (the fn is
-  // collected at its declaration; a record here would re-emit it → dup-fn
-  // corruption). Only its ev region carries nested LowExprs to descend.
-  LFnRef(_h, _n, ev)         => collect_fn_emit_records(ev),
   LLet(_h, _n, inner)        => collect_fn_emit_records_expr(inner),
   LBinOp(_h, _op, l, r)      => collect_fn_emit_records_expr(l)
                                   ++ collect_fn_emit_records_expr(r),
@@ -2409,23 +2379,19 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LMakeVariant(_h, _t, fs)   => collect_fn_emit_records(fs),
   LMatch(_h, s, arms)        => collect_fn_emit_records_expr(s)
                                   ++ fn_emit_records_arms(arms, 0),
-  LSuspend(_h, _o, f, args, ev, _) => collect_fn_emit_records_expr(f)
-                                     ++ collect_fn_emit_records(args)
-                                     ++ collect_fn_emit_records(ev),
-  LHandleWith(_h, b, hn, _hname, inits, _arm_names, captured_evs) =>
+  LResumeK(_h, k, v)         => collect_fn_emit_records_expr(k)
+                                  ++ collect_fn_emit_records_expr(v),
+  LHandleWith(_h, b, hn, _hname, inits, _arm_names) =>
     collect_fn_emit_records_expr(b)
       ++ collect_fn_emit_records_expr(hn)
-      ++ collect_fn_emit_records(inits)
-      ++ collect_fn_emit_records(captured_evs),
+      ++ collect_fn_emit_records(inits),
   LFeedback(_h, b, s)        => collect_fn_emit_records_expr(b)
                                   ++ collect_fn_emit_records_expr(s),
   LPerform(_h, _n, args, _)  => collect_fn_emit_records(args),
   LDirectPerform(_h, _hn, _op, _st, args) => collect_fn_emit_records(args),
   LWasiCall(_h, _n, args)    => collect_fn_emit_records(args),
   LEvPerform(_h, _n, _e, _s, a) => collect_fn_emit_records(a),
-  LEvRef(_h, _e)             => [],
-  LEvEntry(_, ev)            => collect_fn_emit_records_expr(ev),
-  LUnresolvedEvidence(_, _)  => [],
+
   LInvariantFailure(_, _)    => [],
   LFieldLoad(_h, rec, _off)  => collect_fn_emit_records_expr(rec),
   LConvert(_h, _, operand)   => collect_fn_emit_records_expr(operand),
@@ -2591,15 +2557,19 @@ fn walk_locals_expr(expr, acc) = match expr {
     walk_locals_expr(inner,
       [local_wat_name(name, r) ++ " " ++ repr_wat(r)] ++ acc)
   },
-  LMakeClosure(_, _, captures, ev) =>
+  LMakeClosure(_, _, captures) =>
     // The FN body is a boundary (its locals are its own) — but the CAPTURES
     // evaluate in the ENCLOSING frame at the mint (a partial's supplied arg
     // may be a call minting a result local here). Lambda captures are bare
     // LLocal/LUpval reads contributing no locals, so walking them is
     // byte-identical for the existing paths.
-    walk_locals_list(ev, walk_locals_list(captures, acc)),
-  LFnRef(_h, _n, ev)        => walk_locals_list(ev, acc),  // record reuses $state_tmp; ev forwards declare no locals
-  LMakeContinuation(_, _, _, _, _, _, _) => acc,  // resume_fn boundary — its locals are its own (H7)
+    walk_locals_list(captures, acc),
+  LMakeContinuation(_, _, _, _, _) => acc,  // resume_fn boundary — its locals are its own (H7)
+  // The resume invocation: its two bracket locals + whatever the delegated
+  // LCall shape mints (staging locals) — mirror-true to the emit arm.
+  LResumeK(h, k, v)         =>
+    walk_locals_expr(LCall(h, k, [v]),
+      ["__rk_wprev_{int_to_str(h)} i32"] ++ (["__rk_val_{int_to_str(h)} i32"] ++ acc)),
   LYield(h, _, args, k)     => {
     // k = the record boundary above. An args-bearing yield parks its
     // transient record ptr in a per-site local — the only slot inner arg
@@ -2639,12 +2609,7 @@ fn walk_locals_expr(expr, acc) = match expr {
     walk_locals_list(fs,
       if len(fs) > 0 { ["variant_{int_to_str(h)} i32"] ++ acc } else { acc }),
   LMatch(_h, s, arms)       => walk_locals_arms(arms, walk_locals_expr(s, acc)),
-  LSuspend(h, _o, f, args, ev, _) =>
-    // The transient's per-site scratch (the variant_{h} precedent): the
-    // suspend must survive its args' own emission. One entry (deduped).
-    walk_locals_list(ev, walk_locals_list(args,
-      walk_locals_expr(f, ["sst_{int_to_str(h)} i32"] ++ acc))),
-  LHandleWith(h, b, hn, hname, inits, arm_names, captured_evs) => {
+  LHandleWith(h, b, hn, hname, inits, arm_names) => {
     // The install's OWN minted locals — the handler record, the scoped-
     // singleton save (named installs only), and one [record, base] entry
     // per effect group — mirror-true to the LHandleWith emit arm +
@@ -2667,9 +2632,8 @@ fn walk_locals_expr(expr, acc) = match expr {
       if len(multishot_ops_of(hname)) > 0 {
         ["__hres_{int_to_str(h)} {repr_wat(repr_of(lookup_ty(h)))}"] ++ with_groups
       } else { with_groups }
-    walk_locals_list(captured_evs,
-      walk_locals_list(inits,
-        walk_locals_expr(hn, walk_locals_expr(b, with_ms))))
+    walk_locals_list(inits,
+      walk_locals_expr(hn, walk_locals_expr(b, with_ms)))
   },
   LFeedback(h, b, s)        => {
     // LF walkthrough §4.5: both per-site locals for the load-tee-store
@@ -2690,9 +2654,7 @@ fn walk_locals_expr(expr, acc) = match expr {
   // evn = the resolved world node, evw = the world saved around the arm call.
   LEvPerform(h, _n, _e, _s, a) =>
     walk_locals_list(a, ["evn_{int_to_str(h)} i32", "evw_{int_to_str(h)} i32"] ++ acc),
-  LEvRef(_h, _e)            => acc,
-  LEvEntry(_, ev)           => walk_locals_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
+
   LInvariantFailure(_, _)   => acc,
   LFieldLoad(_h, rec, _off) => walk_locals_expr(rec, acc),
   LConvert(_h, _, operand)  => walk_locals_expr(operand, acc),
@@ -3008,13 +2970,12 @@ fn find_local_handle_expr(name: String, expr) = match expr {
   // inside a nested lambda still has a live read here, and the param decl
   // must see the SAME handle the capture-store emits, or the two disagree on
   // width ($k i32 declared, $k.f64 read — the twin-assembly break this fixed).
-  LMakeClosure(_h, _fn, caps, ev) =>
-    { let ch = find_local_handle_list(name, caps)
-      if ch != 0 { ch } else { find_local_handle_list(name, ev) } },
-  LFnRef(_h, _n, ev)        => find_local_handle_list(name, ev),
-  LMakeContinuation(_h, _fn, caps, ev, _, _, _) =>
-    { let ch = find_local_handle_list(name, caps)
-      if ch != 0 { ch } else { find_local_handle_list(name, ev) } },
+  LMakeClosure(_h, _fn, caps) => find_local_handle_list(name, caps),
+  LMakeContinuation(_h, _fn, caps, _, _) => find_local_handle_list(name, caps),
+  LResumeK(_h, k, v)        => {
+    let kh = find_local_handle_expr(name, k)
+    if kh != 0 { kh } else { find_local_handle_expr(name, v) }
+  },
   LYield(_h, _op, args, k)  => {
     let ah = find_local_handle_list(name, args)
     if ah != 0 { ah } else { find_local_handle_expr(name, k) }
@@ -3055,19 +3016,14 @@ fn find_local_handle_expr(name: String, expr) = match expr {
     let sh = find_local_handle_expr(name, s)
     if sh != 0 { sh } else { find_local_handle_arms(name, arms, 0) }
   },
-  LSuspend(_h, _o, f, args, ev, _) => {
-    let fh = find_local_handle_expr(name, f)
-    if fh != 0 { fh } else { find_local_handle_list(name, args) }
-  },
-  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) => {
+  LHandleWith(_h, b, hn, _hn2, inits, _arms) => {
     let bh = find_local_handle_expr(name, b)
     if bh != 0 { bh }
     else {
       let hh = find_local_handle_expr(name, hn)
       if hh != 0 { hh }
       else {
-        let ih = find_local_handle_list(name, inits)
-        if ih != 0 { ih } else { find_local_handle_list(name, cevs) }
+        find_local_handle_list(name, inits)
       }
     }
   },
@@ -3086,9 +3042,7 @@ fn find_local_handle_expr(name: String, expr) = match expr {
   LFeedbackPrior(_)         => 0,
   LGlobal(_, _)             => 0,
   LUpval(_, _)              => 0,
-  LEvRef(_, _)              => 0,
-  LEvEntry(_, ev)           => find_local_handle_expr(name, ev),
-  LUnresolvedEvidence(_, _) => 0,
+
   LInvariantFailure(_, _)   => 0
 }
 
@@ -3320,92 +3274,6 @@ fn emit_arm_writes(state_local, nstate, base, arms, k) = {
   }
 }
 
-// Write the handler's arm-bodies' captured evidence as the self-describing
-// [key][record][base] region after the arm region, based at 8+4*(nstate+
-// total_arms). Each cev is an LEvEntry(key, ev); the arm fn's LEvPerform
-// KEY-SCANS this region (ev_lookup) by effect-key, so the install (place) and
-// the arm (read) agree by IDENTITY, never a positional slot — a sibling effect
-// appearing shuffles no key (the position-as-the-bug cure). One region writer
-// (emit_keyed_ev_region) serves the install AND every closure/value-fn/
-// continuation/suspend place — Carried-Truth: the keyed entry has ONE shape.
-fn emit_captured_evs(state_local, nstate, total_arms, cevs) =
-  emit_keyed_ev_region(state_local, cevs, 8 + 4 * (nstate + total_arms), 0)
-
-// Push the per-effect evidence ENTRY pointer, found by IDENTITY:
-// `(call $ev_lookup (local.get $__state) (local.get $__state) (i32.const base) (i32.const key_off))`
-// scans the captured_evs region (based at `base`) for the effect-key's interned
-// offset, returning the [record][base_field] entry. emit_levperform reads
-// record=entry[0], base_field=entry[1] off it. The key-scan replaces the old
-// positional `__state[8+4*fence+4*ev_slot]` — a sibling effect shuffles no key.
-fn emit_ev_entry_keyed(base, key_off) = {
-  // EVERY Mentl fn carries the leading calling-convention __state (cf.
-  // `call $str_concat (local.get $__state)`), so this is 4 args: <conv __state>
-  // <state = the record to scan> <base> <target>. ev_lookup ignores the
-  // convention slot (Memory is builtin, no evidence read); the record to scan
-  // IS this frame's __state — passed as the explicit `state` arg. This is the
-  // FORWARD-side read (LEvRef building a callee's pair): a miss returns 0 by
-  // design — capture sets over-approximate, so an unfilled pair is routine.
-  wat_emit("    (call $ev_lookup (local.get $__state) (local.get $__state) (i32.const ")
-  wat_emit(int_to_str(base))
-  wat_emit(") (i32.const ")
-  wat_emit(int_to_str(key_off))
-  wat_emit("))\n")
-}
-
-// (The PERFORM-side read lives in the LEvPerform arm itself now: one
-// ev_perform_node call resolving the WORLD node into the per-site local —
-// the world-as-value arc's R2; the frame-region perform scan is retired.)
-
-// Write a self-describing captured_evs region into record `state_local`: the
-// keyed [key][ev] PAIRS for each LEvEntry (2 words/entry, STRIDE 8) terminated
-// by a key=0 SENTINEL, so a perform's $ev_lookup key-scan finds each effect by
-// IDENTITY and stops at the sentinel. `base` is the region's record-relative
-// byte offset (8+4*fence, fence agreeing with the read's body-captures). The
-// list is consumed as a SET — its ORDER carries no meaning (the cure for
-// position-as-the-bug: a sibling effect appearing shuffles no key). The ONE
-// region writer the install / closure / value-fn / continuation places share.
-fn emit_keyed_ev_region(state_local, ev_exprs, base, base_j) = {
-  each((indexed) => {
-    let (j, entry) = indexed
-    emit_one_keyed_ev(state_local, entry, base + 8 * (base_j + j))
-  }, enumerate(ev_exprs))
-  // SENTINEL key=0 after the last pair — terminates the key-scan ($ev_lookup's
-  // `key == 0` arm). For a resolved effect the key is always found before here;
-  // the typed-absence trap is emitted upstream at LUnresolvedEvidence, so the
-  // sentinel is the loud-downstream backstop, never the normal exit.
-  wat_emit("    (local.get $")
-  wat_emit(state_local)
-  wat_emit(") (i32.const 0) (i32.store offset=")
-  wat_emit(int_to_str(base + 8 * (base_j + len(ev_exprs))))
-  wat_emit(")\n")
-}
-
-// Store ONE keyed entry: the effect-key's interned data offset (string_offset)
-// at `off`, the resolved evidence (emit_expr) at off+4. The pair the read's
-// $ev_lookup matches by str_eq(key) then dereferences as [record][base_field].
-// Entries are LEvEntry by construction (derive_ev_slots / lower_captured_evs_for);
-// a non-LEvEntry is the unsayable wrong move — a loud (unreachable) trap (PLAN
-// §0), never a fabricated key that would collide a foreign effect at the scan.
-fn emit_one_keyed_ev(state_local, entry, off) = match entry {
-  LEvEntry(key, ev) => {
-    wat_emit("    (local.get $")
-    wat_emit(state_local)
-    wat_emit(") (i32.const ")
-    wat_emit(int_to_str(string_offset(key)))
-    wat_emit(") (i32.store offset=")
-    wat_emit(int_to_str(off))
-    wat_emit(")\n")
-    wat_emit("    (local.get $")
-    wat_emit(state_local)
-    wat_emit(")")
-    emit_expr(ev)
-    wat_emit("    (i32.store offset=")
-    wat_emit(int_to_str(off + 4))
-    wat_emit(")\n")
-  },
-  _other => wat_emit("    (unreachable)  ;; captured-ev region holds only LEvEntry\n")
-}
-
 // Exhaustive match on every LowExpr variant; no _ fallback.
 
 fn emit_expr(expr) = match expr {
@@ -3430,7 +3298,7 @@ fn emit_expr(expr) = match expr {
 
   LGlobal(h, name) => {
     // The ONE reference surface every named use routes through (direct calls,
-    // tail calls, fn-as-value, LSuspend callees all evaluate their callee
+    // tail calls and fn-as-value all evaluate their callee
     // here). spec_target_name redirects a wide-keyed generic site to its
     // twin's record; everything else — value lets, monomorphic fns, floor
     // keys — prints the plain name, byte-identical.
@@ -3509,7 +3377,16 @@ fn emit_expr(expr) = match expr {
       let (i, a) = indexed
       emit_expr(a)
       let declared = list_index(param_reprs, i)
-      if repr_is_wide(declared) { () } else { emit_wide_ref(tail_expr_repr(a)) }
+      let actual = tail_expr_repr(a)
+      // The four width quadrants, total: native→native and word→word pass
+      // through; a wide value meeting a WORD slot spills (address as the
+      // word face); a word-protocol REFERENCE meeting a NATIVE-wide slot
+      // derefs (the word IS the address of the spilled value — the word
+      // protocol's invariant). The missing deref quadrant floored every
+      // former evidence-tier float call the direct tier absorbed.
+      if repr_is_wide(declared) {
+        if repr_is_wide(actual) { () } else { emit_wide_deref(declared) }
+      } else { emit_wide_ref(actual) }
     }, enumerate(args))
     let site_repr = repr_of(lookup_ty(h))
     // A tail call must agree with the ENCLOSING fn's native result exactly;
@@ -3595,27 +3472,22 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (return)\n") // drift-audit: ignore
   },
 
-  LMakeClosure(_h, LFn(fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs, ev_exprs) => {
+  LMakeClosure(_h, LFn(fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs) => {
     // H1 closure-record layout (the unified handler state):
     //   offset 0: fn_ptr (i32) — table index into $fns
-    //   offset 4: capture_count (i32) — fence between captures and evidence
-    //   offset 8 + 4*i:                   capture_i
-    //   offset 8 + 4*nc + 4*j:            ev_slot_j (handler arm fn_idx)
+    //   offset 4: capture_count (i32)
+    //   offset 8 + 4*i: capture_i
     //
     // MENTL-NATIVE: the record IS the calling convention's $__state.
-    // Captures and evidence are both projections of the same shape.
-    // DESIGN Ch 4 "handler IS state" in its ultimate form. Empty
-    // ev_exprs (the common case for monomorphic closures) collapses
-    // back to the prior captures-only layout — same WAT.
+    // The body's performs dispatch through the live world chain, so the
+    // record carries captures only — no evidence region.
     //
     // Allocation routes through `perform emit_alloc(size, target)`,
     // dispatched by the installed EmitMemory handler. Bump today;
     // future arena / GC handlers swap the WAT without touching
     // this site.
     let nc = len(captures_exprs)
-    let ne = len(ev_exprs)
-    // ev region is keyed: 2 words/entry ([key][ev]) + 1 key=0 sentinel word.
-    let size = 8 + 4 * (nc + 2 * ne + 1)
+    let size = 8 + 4 * nc
     emit_alloc(size, "state_tmp")
     // Store the table index at offset 0 (the nested twin's index when the
     // active bracket names one — spec_closure_name).
@@ -3643,63 +3515,28 @@ fn emit_expr(expr) = match expr {
     } else { () }
     // Store each capture at offset 8 + 4*i.
     emit_capture_stores(captures_exprs, 0)
-    // Store each ev_slot at offset 8 + 4*nc + 4*j.
-    emit_ev_slot_stores(ev_exprs, nc, 0)
     // Result: closure pointer on stack.
     wat_emit("    (local.get $state_tmp)\n")
   },
 
-  LFnRef(h, fn_name, ev_exprs) => {
-    // The unified record for an EXISTING named fn referenced as a VALUE —
-    // LMakeClosure's shape with ZERO captures:
-    // [fn_ptr@0][0@4][key_j,ev_j@8+8*j][key=0 sentinel].
-    // No body emit (the fn lives at its declaration; offset 0 reads its
-    // $<name>_idx). The callee key-scans evidence from its zero compile-time
-    // fence, so the keyed region starts at offset 8.
-    let ne = len(ev_exprs)
-    // ev region is keyed: 2 words/entry ([key][ev]) + 1 key=0 sentinel word.
-    let size = 8 + 4 * (2 * ne + 1)
-    emit_alloc(size, "state_tmp")
-    // Store the table index at offset 0 — the twin's index when this ref
-    // site's key names one (a wide-instantiated `min` passed to reduce
-    // reaches the table as $wf$min$sp2; the word protocol derefs at the leaf).
-    wat_emit("    (local.get $state_tmp)\n")
-    wat_emit("    (global.get $")
-    wat_emit(spec_target_name(h, fn_name))
-    wat_emit("_idx)\n")
-    wat_emit("    (i32.store offset=0)\n")
-    // Store capture_count=0 at offset 4. LSuspend clones this record using the
-    // same fence field; writing `ne` here made it copy evidence words as if they
-    // were captures and then append the new keyed region at the wrong offset.
-    wat_emit("    (local.get $state_tmp)\n")
-    wat_emit("    (i32.const 0) (i32.store offset=4)\n")
-    // Store each keyed evidence pair from offset 8 (nc=0).
-    emit_ev_slot_stores(ev_exprs, 0, 0)
-    // Result: record pointer on stack.
-    wat_emit("    (local.get $state_tmp)\n")
-  },
-
-  LMakeContinuation(_h, LFn(resume_fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs, ev_exprs, state_idx, ret_slot, world_tag) => {
+  LMakeContinuation(_h, LFn(resume_fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs, state_idx, ret_slot) => {
     // H7 — the multi-shot continuation record, CLOSURE-IDENTICAL HEAD
     // (band B k1): the k is CALLED through the same W7 convention every
-    // closure takes (park as __state, LUpval reads captures at 8+4*i, the
-    // in-body ev-scan keys from 8+4*fence), so its head must BE the closure
-    // head. The continuation metadata rides in a TAIL after the ev
-    // sentinel — invisible to the keyed scan (which stops at key=0), still
-    // inside the one contiguous record so persist = memcpy carries it whole.
+    // closure takes (park as __state, LUpval reads captures at 8+4*i), so
+    // its head must BE the closure head. The continuation metadata rides
+    // in a TAIL — one contiguous record, so persist = memcpy carries it
+    // whole.
     //
-    //   offset 0:                          fn_ptr (i32) — __k fn table index
-    //   offset 4:                          capture_count (i32) — the fence
-    //   offset 8 + 4*i:                    capture_i
-    //   offset 8 + 4*nc + 8*j:             [key_j][ev_j] — keyed pair
-    //   offset 8 + 4*nc + 8*ne:            key=0 sentinel (ends the scan)
-    //   offset 8 + 4*(nc + 2*ne + 1):      state_idx — perform-site discriminator
-    //   +4:                                ret_slot (documented: no live reader)
-    //   +8:                                world_tag (i32) — the frozen
-    //                                      handler-WORLD's interned hash (§5.U
-    //                                      TIME axis, W06); LAST so the Persist
-    //                                      load reads it to fire the value-gate
-    //                                      E_ResumeWorldMismatch.
+    //   offset 0:            fn_ptr (i32) — __k fn table index
+    //   offset 4:            capture_count (i32)
+    //   offset 8 + 4*i:      capture_i
+    //   offset 8 + 4*nc:     state_idx — perform-site discriminator
+    //   +4:                  ret_slot (documented: no live reader)
+    //   +8:                  the FROZEN WORLD — the live $world_g at this
+    //                        reify moment (world-as-value R4). LAST word;
+    //                        $__k_world reads it at fixed offset 16+4*nc;
+    //                        LResumeK rebinds through it so the remainder
+    //                        performs in the world where it was captured.
     //
     // The continuation IS Mentl's oracle substrate — allocated through the
     // SAME emit_alloc swap surface as every heap value (the heap has one
@@ -3707,9 +3544,8 @@ fn emit_expr(expr) = match expr {
     // between branch runs. No vtable: fn_ptr indexes the funcref table;
     // resume is call_indirect — Koka evidence passing (JFP 2022).
     let nc = len(captures_exprs)
-    let ne = len(ev_exprs)
-    // head (8) + captures + keyed evs incl. sentinel + [state_idx, ret, world].
-    let size = 8 + 4 * (nc + 2 * ne + 1) + 12
+    // head (8) + captures + [state_idx, ret, world].
+    let size = 8 + 4 * nc + 12
     emit_alloc(size, "state_tmp")
     // table index at 0 — the closure head (twin-redirected under a bracket).
     wat_emit("    (local.get $state_tmp)\n")
@@ -3717,17 +3553,15 @@ fn emit_expr(expr) = match expr {
     wat_emit(spec_closure_name(resume_fn_name))
     wat_emit("_idx)\n")
     wat_emit("    (i32.store offset=0)\n")
-    // capture count at 4 — the SAME fence slot every closure carries.
+    // capture count at 4 — the SAME slot every closure carries.
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (i32.const ")
     wat_emit(int_to_str(nc))
     wat_emit(") (i32.store offset=4)\n")
-    // captures at 8 + 4*i — where LUpval reads.
-    emit_capture_stores_at_offset(captures_exprs, 8, 0)
-    // keyed evs + sentinel at 8 + 4*nc — where the in-body scan keys.
-    emit_ev_slot_stores_at_offset(ev_exprs, 8 + 4 * nc, 0)
-    // The metadata tail, after the sentinel.
-    let state_idx_offset = 8 + 4 * (nc + 2 * ne + 1)
+    // captures at 8 + 4*i — where LUpval reads (base_i 0 = offset 8).
+    emit_capture_stores(captures_exprs, 0)
+    // The metadata tail.
+    let state_idx_offset = 8 + 4 * nc
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (i32.const ")
     wat_emit(int_to_str(state_idx))
@@ -3741,9 +3575,8 @@ fn emit_expr(expr) = match expr {
     wat_emit(int_to_str(state_idx_offset + 4))
     wat_emit(")\n")
     wat_emit("    (local.get $state_tmp)\n")
-    wat_emit("    (i32.const ")
-    wat_emit(int_to_str(world_tag))
-    wat_emit(") (i32.store offset=")
+    wat_emit("    (global.get $world_g)\n")
+    wat_emit("    (i32.store offset=")
     wat_emit(int_to_str(state_idx_offset + 8))
     wat_emit(")\n")
     // Result: continuation pointer on stack.
@@ -3897,7 +3730,7 @@ fn emit_expr(expr) = match expr {
     }
   },
 
-  LMatch(_h, scrutinee, arms) => {
+  LMatch(h, scrutinee, arms) => {
     // ADT match dispatch: cascading if-else over arm tag comparisons.
     // Per arm:
     //   - LPCon(_, tag, sub_pats): load tag at offset=0, compare to
@@ -3908,113 +3741,46 @@ fn emit_expr(expr) = match expr {
     //   - LPTuple / LPRecord / LPList: predicate + binds through the
     //     shared pattern walkers (pat_tuple_off / record offsets / the
     //     srep-licensed list reads).
-    // Empty arm list emits (unreachable) — exhaustiveness violation
+    // Empty arm list emits the POSTMORTEM trap — exhaustiveness violation
     // at runtime, complementing the inference-time check.
     emit_expr(scrutinee)
     wat_emit("    (local.set $scrut_tmp)\n")
-    emit_match_arms(arms, match_arms_repr(arms))
+    emit_match_arms(arms, match_arms_repr(arms), h)
   },
 
-  LSuspend(h, _op_h, func, args, ev_slots, tail) => {
-    // H1.6: poly call with transient evidence record. Build a
-    // fresh closure copy of the callee with the same fn_ptr +
-    // captures, plus ev_slots filled from the caller's scope.
-    // Empty ev_slots = the row was non-ground but no ops needed
-    // evidence (degenerate); same shape as today's monomorphic
-    // call_indirect path, just routed through a fresh transient.
-    //
-    // Layout matches LMakeClosure's:
-    //   offset 0 : fn_ptr (copied)
-    //   offset 4 : capture_count nc (copied)
-    //   offset 8 + 4*i              : capture_i (copied via runtime loop)
-    //   offset 8 + 4*nc + 8*j       : [key_j][ev_j] keyed pair (newly stored)
-    //   offset 8 + 4*nc + 8*ne      : key=0 sentinel (terminates the scan)
-    let ne = len(ev_slots)
-    // The transient's scratch is PER-SITE, named by the node's handle
-    // (the LMakeVariant variant_{h} precedent): the shared $state_tmp
-    // died here — emit_expr_list(args) below reuses it (an LMakeClosure
-    // argument parks its record there), so the dispatch's fn-idx load
-    // read the ARGUMENT's record and call_indirect'ed the wrong fn
-    // (hof-map's type mismatch: main suspended map but called the
-    // lambda's index with map's arity).
-    let sst = "sst_{int_to_str(h)}"
-    // Save callee closure pointer for header read + capture copy.
-    emit_expr(func)
-    wat_emit("    (local.set $callee_closure)\n")
-    // Read nc; allocate transient. The keyed ev region is 2*ne+1 words
-    // ([key][ev] pairs + sentinel) = 8*ne+4 bytes, so size = 12 + 4*nc + 8*ne.
-    wat_emit("    (i32.const 8)\n")
-    wat_emit("    (i32.const ")
-    wat_emit(int_to_str(8 * ne + 4))
-    wat_emit(")\n")
-    wat_emit("    (i32.add)\n")
-    wat_emit("    (local.get $callee_closure) (i32.load offset=4)\n")
-    wat_emit("    (i32.const 4) (i32.mul)\n")
-    wat_emit("    (i32.add)\n")
-    wat_emit("    (local.set $alloc_size)\n")
-    // Dynamic-size alloc: the runtime-computed $alloc_size feeds the one
-    // aligned $alloc; the pointer binds to the per-site sst local.
-    wat_emit("    (local.set ${sst} (call $alloc (local.get $alloc_size)))\n")
-    // Copy header (fn_ptr + capture_count = 8 bytes).
-    wat_emit("    (local.get ${sst}) (local.get $callee_closure) (i32.load offset=0) (i32.store offset=0)\n")
-    wat_emit("    (local.get ${sst}) (local.get $callee_closure) (i32.load offset=4) (i32.store offset=4)\n")
-    // Copy each capture from callee_closure[8 + 4*i] to
-    // sst[8 + 4*i] via runtime loop driven by capture_count.
-    wat_emit("    (i32.const 0) (local.set $loop_i)\n")
-    wat_emit("    (block $copy_done\n")
-    wat_emit("      (loop $copy_loop\n") // drift-audit: ignore
-    wat_emit("        (local.get $loop_i)\n")
-    wat_emit("        (local.get $callee_closure) (i32.load offset=4)\n")
-    wat_emit("        (i32.ge_u)\n")
-    wat_emit("        (br_if $copy_done)\n")
-    // dst = sst + 8 + 4*i
-    wat_emit("        (local.get ${sst})\n")
-    wat_emit("        (local.get $loop_i) (i32.const 4) (i32.mul) (i32.add)\n")
-    wat_emit("        (i32.const 8) (i32.add)\n")
-    // src = callee_closure + 8 + 4*i, loaded
-    wat_emit("        (local.get $callee_closure)\n")
-    wat_emit("        (local.get $loop_i) (i32.const 4) (i32.mul) (i32.add)\n")
-    wat_emit("        (i32.const 8) (i32.add)\n")
-    wat_emit("        (i32.load)\n")
-    wat_emit("        (i32.store)\n")
-    wat_emit("        (local.get $loop_i) (i32.const 1) (i32.add) (local.set $loop_i)\n")
-    wat_emit("        (br $copy_loop)\n")
-    wat_emit("      )\n")
-    wat_emit("    )\n")
-    // Store the keyed [key][ev] pairs + sentinel past the copied captures.
-    emit_ev_slots_dynamic(sst, ev_slots, 0)
-    // Dispatch: (sst, args..., fn_ptr) → call_indirect. The per-site
-    // local survives the args' own emission (they may park records in
-    // the shared scratch), so the fn-idx load reads the TRANSIENT.
-    wat_emit("    (local.get ${sst})\n")
-    emit_args_word(args)
-    wat_emit("    (local.get ${sst}) (i32.load offset=0)\n")
-    // Tail position (mark_tail's rewrite): the clone above is argument
-    // computation, so the dispatch itself return_calls — the seed's proven
-    // clone-then-tail form (m2's iterate_from). A WIDE result demotes to a
-    // plain call + deref (the word face cannot return_call a wide value);
-    // the value falls through as the tail value.
-    let wide = repr_is_wide(repr_of(lookup_ty(h)))
-    wat_emit(if tail && !wide { "    (return_call_indirect (type " }
-             else             { "    (call_indirect (type " })
-    wat_emit(call_ft_name(args, repr_of(lookup_ty(h))))
+  LResumeK(h, k_expr, val_expr) => {
+    // The MultiShot resume invoking its continuation record — the ONE site
+    // that rebinds the world (the world-as-value arc's R4): save $world_g,
+    // set it from the k record's frozen last word ($__k_world — fixed
+    // offset 16 + 4*capture_count), run the remainder through the ordinary
+    // W7 closure call, restore. The remainder's performs thereby resolve
+    // in the world where the continuation was CAPTURED, never the world it
+    // happens to be resumed under (the arm-config class's TIME sibling).
+    // Save/restore lives HERE (caller side) so the k body's own tail
+    // calls cannot leak the frozen world past the resume expression; the
+    // composer's interior segment transitions bare-set under this bracket.
+    // k_expr is the arm's __k param / a lambda's captured __k — a pure
+    // local/upval read, evaluable twice.
+    wat_emit("    (global.get $world_g) (local.set $__rk_wprev_{int_to_str(h)})\n")
+    wat_emit("    (global.set $world_g (call $__k_world ")
+    emit_expr(k_expr)
     wat_emit("))\n")
-    emit_wide_deref(repr_of(lookup_ty(h)))
+    emit_expr(LCall(h, k_expr, [val_expr]))
+    wat_emit("    (local.set $__rk_val_{int_to_str(h)})\n")
+    wat_emit("    (global.set $world_g (local.get $__rk_wprev_{int_to_str(h)}))\n")
+    wat_emit("    (local.get $__rk_val_{int_to_str(h)})\n")
   },
 
-  LHandleWith(h, body, _handler, hname, inits, arm_names, captured_evs) => {
+  LHandleWith(h, body, _handler, hname, inits, arm_names) => {
     // ~> install — build the ONE handler record (handler IS state IS
-    // closure IS evidence; protocol_handler_is_state_is_closure_is_evidence):
-    //   [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous][captured_evs]
-    // Mirrors the seed's $emit_lhandlewith so mentl3.wat matches mentl2.wat
-    // byte-for-byte at L1. The record is built regardless of hname; only the
+    // closure; protocol_handler_is_state_is_closure_is_evidence):
+    //   [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous]
+    // The record is built regardless of hname; only the
     // `_state_g` global binding is skipped for an anonymous handler.
     let local_name = "__hstate_{int_to_str(h)}"
     let nstate = len(inits)
     let total_arms = sum_arm_name_lens(arm_names)
-    let n_cevs = len(captured_evs)
-    // captured_evs region is keyed: 2 words/entry ([key][ev]) + 1 sentinel.
-    let size = 8 + 4 * (nstate + total_arms + 2 * n_cevs + 1)
+    let size = 8 + 4 * (nstate + total_arms)
     // alloc the handler-state record through the one aligned $alloc
     wat_emit("    (local.set $")
     wat_emit(local_name)
@@ -4031,8 +3797,6 @@ fn emit_expr(expr) = match expr {
     emit_state_init_writes(local_name, inits, 0)
     // each effect-group's arms contiguous + its [record, base] entry
     emit_handler_effect_entries(local_name, nstate, arm_names)
-    // the arm-bodies' captured evidence, after the arms
-    emit_captured_evs(local_name, nstate, total_arms, captured_evs)
     // The WORLD bracket — every install draws its runtime edge: save the
     // live chain, cons one [key][entry][parent][install_world] node per
     // absorbed effect group (entry = the group's [record][base] view built
@@ -4311,29 +4075,6 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (global.set $world_g (local.get $evw_{hs}))\n")
     emit_wide_deref(repr_of(lookup_ty(h)))
   },
-
-  // Forward THIS fn's own evidence for an effect by IDENTITY — push the
-  // handler-record ENTRY the caller threaded into __state, found by KEY-SCAN
-  // (not a positional slot). Used when an install's captured_evs region or a
-  // deeper callee's record needs the entry this frame already carries. The SAME
-  // `ev_lookup(__state, base, key_off)` the perform-dispatch reads it from, so
-  // a sibling effect appearing shuffles no key (the position-as-the-bug cure).
-  LEvRef(_h, ekey) => {
-    let fence = current_body_captures()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-    emit_ev_entry_keyed(8 + 4 * fence, string_offset(ekey))
-  },
-
-  // A keyed captured-ev entry reaching emit_expr in value position pushes its
-  // resolved evidence (the place helpers destructure LEvEntry directly and
-  // never route it here; this arm is the H6 total-coverage residue).
-  LEvEntry(_key, ev) => emit_expr(ev),
-
-  // The typed-absence bottom: an effect with NO resolvable handler anywhere up
-  // the install chain (a genuine E_HandlerUninstallable). Emit a loud trap —
-  // the medium makes the wrong move UNSAYABLE (PLAN §0), never a fabricated
-  // slot-0 evidence read that would dispatch through a foreign record.
-  LUnresolvedEvidence(_h, _ekey) =>
-    wat_emit("    (unreachable)  ;; unresolved evidence — effect has no installed handler\n"),
 
   // Compiler-created executable boundaries have no productive-under-error
   // value. Preserve the typed invariant in the WAT diagnostic and terminate;
@@ -4911,21 +4652,19 @@ fn collect_fold_tys_expr(expr, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]
   LBinOp(_h, op, l, r)  => collect_fold_tys_expr(r,
                              collect_fold_tys_expr(l,
                                fold_trigger_binop(op, lexpr_handle(l), acc))),
-  LSuspend(_h, _o, f, args, ev, _) => collect_fold_tys_expr(f,
-                              collect_fold_tys_list(args, collect_fold_tys_list(ev, acc))),
+  LResumeK(_h, k, v)     => collect_fold_tys_expr(v, collect_fold_tys_expr(k, acc)),
   LEvPerform(_h, _n, _e, _s, args) => collect_fold_tys_list(args, acc),
   LLet(_h, _n, inner)    => collect_fold_tys_expr(inner, acc),
   LUnaryOp(_h, _op, i)   => collect_fold_tys_expr(i, acc),
   LReturn(_h, i)         => collect_fold_tys_expr(i, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps) =>
     collect_fold_tys_list(body,
-      collect_fold_tys_list(caps, collect_fold_tys_list(ev, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
+      collect_fold_tys_list(caps, acc)),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, _, _) =>
     collect_fold_tys_list(body,
-      collect_fold_tys_list(caps, collect_fold_tys_list(ev, acc))),
+      collect_fold_tys_list(caps, acc)),
   LYield(_h, _op, args, k) => collect_fold_tys_expr(k, collect_fold_tys_list(args, acc)),
   LKExtend(_h, k)        => collect_fold_tys_expr(k, acc),
-  LFnRef(_h, _n, ev)     => collect_fold_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_fold_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_fold_tys_list(e,
                               collect_fold_tys_list(t, collect_fold_tys_expr(c, acc))),
@@ -4936,10 +4675,10 @@ fn collect_fold_tys_expr(expr, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]
   LMakeRecord(_h, fs)    => collect_fold_tys_list(fs, acc),
   LMakeVariant(_h, _t, fs) => collect_fold_tys_list(fs, acc),
   LMatch(_h, s, arms)    => collect_fold_tys_arms(arms, collect_fold_tys_expr(s, acc)),
-  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
+  LHandleWith(_h, b, hn, _hn2, inits, _arms) =>
     collect_fold_tys_expr(b,
       collect_fold_tys_expr(hn,
-        collect_fold_tys_list(inits, collect_fold_tys_list(cevs, acc)))),
+        collect_fold_tys_list(inits, acc))),
   LFeedback(_h, b, s)    => collect_fold_tys_expr(s, collect_fold_tys_expr(b, acc)),
   LPerform(_h, _n, args, _) => collect_fold_tys_list(args, acc),
   LDirectPerform(_h, _hn, _op, _st, args) => collect_fold_tys_list(args, acc),
@@ -4952,9 +4691,7 @@ fn collect_fold_tys_expr(expr, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]
   LFeedbackPrior(_)      => acc,
   LGlobal(_, _)          => acc,
   LUpval(_, _)           => acc,
-  LEvRef(_, _)           => acc,
-  LEvEntry(_, ev)        => collect_fold_tys_expr(ev, acc),
-  LUnresolvedEvidence(_, _) => acc,
+
   LInvariantFailure(_, _) => acc
 }
 
@@ -6397,87 +6134,6 @@ fn captures_self(captures, fn_name) =
     _             => false
   }, captures)
 
-// Emit the keyed captured_evs region for the closure record `$state_tmp`.
-// The region lives AFTER the captures, based at 8 + 4*nc, and holds the
-// [key][ev] PAIRS + key=0 sentinel emit_keyed_ev_region writes — the SAME
-// self-describing shape the install (emit_captured_evs) places, so the callee's
-// LEvPerform key-scan reads it identically (Carried-Truth: one entry shape, one
-// region writer). Each ev resolved at the evidence-providing scope (the LEvEntry
-// wraps an LLocal / LEvRef / LGlobal).
-fn emit_ev_slot_stores(ev_exprs, nc, base_j) =
-  emit_keyed_ev_region("state_tmp", ev_exprs, 8 + 4 * nc, base_j)
-
-// emit_capture_stores_at_offset — H7 variant of emit_capture_stores
-// with explicit base_offset parameter. LMakeContinuation's heap layout
-// shifts capture storage to start at offset 12 (header is fn_ptr +
-// state_index + capture_count = 12 bytes) instead of LMakeClosure's
-// offset 8 (no state_index). The substrate is otherwise identical;
-// only the base offset differs.
-
-fn emit_capture_stores_at_offset(captures, base_offset, base_i) = {
-  each((indexed) => {
-  let (i, capture) = indexed
-  wat_emit("    (local.get $state_tmp)\n")
-  emit_expr(capture)
-  emit_wide_ref(tail_expr_repr(capture))
-  wat_emit("    (i32.store offset=")
-  wat_emit(int_to_str(base_offset + (base_i + i) * 4))
-  wat_emit(")\n")
-  }, enumerate(captures))
-}
-
-// emit_ev_slot_stores_at_offset — H7 variant for LMakeContinuation, whose
-// header carries an extra state_index word so its keyed captured_evs region
-// starts at base_offset = 12 + 4*nc (vs the closure's 8 + 4*nc). Same keyed
-// [key][ev] PAIRS + sentinel writer; only the region base differs.
-fn emit_ev_slot_stores_at_offset(ev_exprs, base_offset, base_j) =
-  emit_keyed_ev_region("state_tmp", ev_exprs, base_offset, base_j)
-
-// H1.6: dynamic-offset KEYED variant for LSuspend's transient closure. nc is
-// runtime-known (loaded from $callee_closure[4]), so the keyed [key][ev] PAIRS
-// land past the copied captures at state_tmp + 8 + 4*nc, STRIDE 8, terminated by
-// the key=0 sentinel — the SAME self-describing region the static places write,
-// only its base offset is computed at runtime. The callee's LEvPerform key-scan
-// reads it identically (one entry shape; the fence agrees by construction).
-fn emit_ev_slots_dynamic(sst, ev_exprs, base_j) = {
-  each((indexed) => {
-    let (j, entry) = indexed
-    match entry {
-      LEvEntry(key, ev) => {
-        // key @ sst + 8 + 4*nc + 8*(base_j+j)
-        emit_dynamic_ev_addr(sst, 8 * (base_j + j))
-        wat_emit("    (i32.const ")
-        wat_emit(int_to_str(string_offset(key)))
-        wat_emit(")\n")
-        wat_emit("    (i32.store)\n")
-        // ev @ + 4
-        emit_dynamic_ev_addr(sst, 8 * (base_j + j) + 4)
-        emit_expr(ev)
-        wat_emit("    (i32.store)\n")
-      },
-      _other => wat_emit("    (unreachable)  ;; ev region holds only LEvEntry\n")
-    }
-  }, enumerate(ev_exprs))
-  // SENTINEL key=0 @ sst + 8 + 4*nc + 8*ne — terminates the key-scan.
-  emit_dynamic_ev_addr(sst, 8 * (base_j + len(ev_exprs)))
-  wat_emit("    (i32.const 0)\n")
-  wat_emit("    (i32.store)\n")
-}
-
-// Push the runtime address `state_tmp + 8 + 4*nc + extra` for LSuspend's keyed
-// region, where nc is the callee's runtime capture_count ($callee_closure[4]).
-// `extra` selects the key (8*j), ev (8*j+4), or sentinel (8*ne) byte within the
-// 8-strided pairs. The address is left on the stack for a following `(i32.store)`.
-fn emit_dynamic_ev_addr(sst, extra) = {
-  wat_emit("    (local.get ${sst})\n")
-  wat_emit("    (i32.const 8) (i32.add)\n")
-  wat_emit("    (local.get $callee_closure) (i32.load offset=4)\n")
-  wat_emit("    (i32.const 4) (i32.mul) (i32.add)\n")
-  wat_emit("    (i32.const ")
-  wat_emit(int_to_str(extra))
-  wat_emit(") (i32.add)\n")
-}
-
 // Emit the stores for each field in an ADT variant record.
 // Fields are indexed from 0; each stored at offset 4 + 4*i (offset 0
 // holds the tag_id). Mirrors emit_capture_stores; the only delta is
@@ -6618,8 +6274,23 @@ fn product_byte_size(fields) =
 // fork, no filtered cascades, no dropped pattern forms. Eliding the
 // guard when the scrutinee's type proves every constructor fielded is
 // a gradient cash-out (graph-driven), not a shape system.
-fn emit_match_arms(arms, w) = {
+fn emit_match_arms(arms, w, h) = {
   if len(arms) == 0 {
+    // The exhaustive fallthrough IS an autopsy, never a bare trap: an
+    // ill-sorted scrutinee — a value whose representation matches no arm
+    // of a total match, always a sort-boundary bug upstream — dies with
+    // its evidence in the postmortem window: scratch word 0 = the
+    // scrutinee's raw word ($scrut_tmp still holds the FAILING cascade's
+    // own scrutinee — nested matches re-set it on entry), word 4 = the
+    // match node's graph handle. The backtrace names the site; the two
+    // scratch words name the value and the graph address to interrogate —
+    // the medium narrating its own death instead of dying mute
+    // (Hβ.emit.trap-as-exception-postmortem, the larval in-scratch form;
+    // the ev_perform_node postmortem's shape at the match layer).
+    wat_emit("    (i32.const 0)(local.get $scrut_tmp)(i32.store)\n")
+    wat_emit("    (i32.const 4)(i32.const ")
+    wat_emit(int_to_str(h))
+    wat_emit(")(i32.store)\n")
     wat_emit("    (unreachable)\n")
   } else {
     // FIRST-match-wins: the cascade tests arms in SOURCE order. The prior
@@ -6641,7 +6312,7 @@ fn emit_match_arms(arms, w) = {
       emit_pat_binds(pat)
       emit_expr(body)
       wat_emit("      )\n      (else\n")
-      emit_match_arms(rest(arms), w)
+      emit_match_arms(rest(arms), w, h)
       wat_emit("      ))\n")
     }
   }

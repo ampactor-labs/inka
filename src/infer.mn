@@ -2418,7 +2418,7 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       graph_bind(handle, TVar(ret_h), Located(span, InferredPipeResult("|>", Inferred("result"))))
       // A pipe stage is an application; its result node is a suspension
       // boundary exactly as a CallExpr's is (lower's k2 spine keys the
-      // bare-VarRef stage's LSuspend by THIS pipe node's handle).
+      // bare-VarRef stage's completion call by THIS pipe node's handle).
       stage_continuation_boundary("|>", handle)
       // callee's row flows into caller's row — including the open row
       // VARIABLE when the piped-into fn is effect-polymorphic.
@@ -4668,7 +4668,7 @@ fn build_ctor_params(field_types, base_idx) = map((indexed) => {
 fn register_effect_ops(effect_name, ops) = {
   // Register the effect name itself with its op names.
   // EffectDeclKind is the graph's vocabulary for "this is an effect
-  // declaration carrying these ops." derive_ev_slots reads it;
+  // declaration carrying these ops." The world-chain dispatch reads it;
   // the Cursor can project it at any position mentioning the effect.
   let op_names = map(((n, _, _)) => n, ops)
   env_extend(effect_name,

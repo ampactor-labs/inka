@@ -358,6 +358,35 @@
 
 ---
 
+## ⟳ Mentl builds Mentl — the self-build ratchet (Morgan 2026-07-24) ⟳
+
+> **The medium is the FIRST instrument, and every landing leaves it building
+> more of itself.** Before hand-tooling — grep, bash probes, hand audits —
+> reach for the wheel's own verbs on its own source: `mentl <file:line>` (the
+> eight-aspect projection), `check`, `teach`, `tighten`, `fmt`, `query`, the
+> census, the in-scratch postmortem. A hand tool is a CONFESSION that a
+> projection is missing; the confession gets NAMED (a peer, or the capability
+> built in the same arc), never absorbed silently into habit.
+>
+> **The self-build audit runs at every landing:** which step of THIS landing
+> did Claude or Morgan perform that the medium could have performed? What is
+> the SMALLEST capability that lets the medium do it next time? Build it in
+> the same arc when it is in reach; name it as a peer when it is not. The
+> scaffolds' own written destinies — march → `mentl march`, drift-audit →
+> `mentl audit`, state.sh → state-as-projection, the fmt/tighten batch loop —
+> are the standing queue: ABSORPTION into verbs, never deletion of a safeguard.
+>
+> **Medium-authored change is the PREFERRED form wherever a verb exists** —
+> tighten-style batch authorship, gated by the board, approved by Morgan and
+> the copilot: §0's convergence executed (docs : Claude :: language :
+> developer :: human : mentl audit). The ratchet direction: each session ENDS
+> with the medium doing strictly MORE of its own construction than it began
+> with — a new verb, a new gate, an absorbed scaffold, a self-authored diff —
+> and the §7 ledger entry COUNTS it. This law is ALIVE (⚖): as verbs land,
+> the hand practice each retires is struck from these docs in place.
+
+---
+
 ## ⌁ Mentl's anchor — one graph, two operations ⌁
 
 > **One graph. Two operations: draw an edge, project. There is no third.**

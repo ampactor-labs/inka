@@ -1026,6 +1026,23 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶ THE BRACKET LANDS — R5, the world arc's first
+  wheel-internal consumer (Hβ.cli.infer-context-bracket RESOLVED · pin
+  2644dab5): the analysis core installs as ONE fn — infer_context
+  (pipeline.mn) brackets the body thunk in the eight-handler core in
+  the settled order; all 14 inference-reaching chains route through
+  it; the per-chain parallel/threads re-installs die (dispatch's
+  boundary installs them once); the wheel shrinks 2,168 lines. The
+  EXACT form refuted twenty-four hours earlier by the mint-time
+  evidence snapshot, now sound because a computation performs in the
+  world where it is CALLED — the refuting smoke re-run all green (at
+  projects, compile - emits, check refuses broken input). A future
+  verb structurally cannot mis-order or forget the core. Board whole:
+  CLEAN m2 == m3 at 558,997 lines, census 0, comment-refs 0, frontier
+  221/0, battery 113/113. The arc's remaining rungs: the write-side
+  cleanup (ev_perform_entry + the captured_evs perform role, zero
+  callers), R4 (the k record freezes the world; band B's value gate),
+  R6 (the fork pair's world leg in synth/oracle).
 - 2026-07-23 · ▶▶▶ THE PERFORM READS THE WORLD — R2+R3 land together
   (evidence dispatch goes dynamic; deep-handler law by construction ·
   pin e8bcfb14): every evidence-tier perform resolves through the LIVE
@@ -2449,8 +2466,12 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.cli.infer-context-bracket` (2026-07-23, the order settled + the fn-form
-REFUTED by measurement): the analysis-core ORDER LAW is written at its one
+`Hβ.cli.infer-context-bracket` RESOLVED: LANDED (2026-07-23, pin 2644dab5 —
+the R5 entry in the ledger; the arc: refuted by the mint-time evidence
+snapshot, then admissible the same night when the world-as-value R2 made
+performs resolve at the call site; infer_context is the one home, all 14
+chains route through it). The history below is the refutation record that
+priced the world arc: the analysis-core ORDER LAW is written at its one
 home (pipeline.mn's spine block) — ledgers innermost, lookup_ty before
 env before graph before mutate_sink, diagnostics outer to graph (its arms
 report: the occurs-check fires from graph_bind) — and doc_run's missing

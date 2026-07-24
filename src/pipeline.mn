@@ -50,8 +50,9 @@ import oracle
 // Read top-to-bottom: source flows DOWN through `|>`; handlers wrap
 // OUTWARD through `~>`. Outermost handler is the sandbox boundary.
 //
-// THE ANALYSIS-CORE ORDER LAW (the one home; every inference-reaching
-// chain instantiates it, inner to outer):
+// THE ANALYSIS-CORE ORDER LAW (the one home — infer_context below is
+// its single instantiation; every inference-reaching chain installs the
+// bracket), inner to outer:
 //
 //   affine_ledger / region_tracker / verify_ledger — the analysis
 //     ledgers, innermost: arms are pure state over the ops inference
@@ -62,28 +63,26 @@ import oracle
 //     to them.
 //   graph_handler before mutate_sink — graph writes perform
 //     graph_mutated, absorbed outward.
-//   diagnostics_handler outer to graph_handler — graph_bind's
-//     occurs-check report fires FROM a graph arm (graph.mn); today
-//     `report` is unique-handler (singleton tier, one state global) so
-//     any placement counts it — probed on at_run, exit 1 — but only
-//     the outer placement is correct independent of tier.
+//   diagnostics_handler outermost — graph_bind's occurs-check report
+//     fires FROM a graph arm (graph.mn); the outer placement counts it
+//     independent of dispatch tier.
 //
-// The chains instantiate this law BY HAND, one copy each, because the
-// fn-shaped consolidation is REFUTED by the evidence model
-// (Hβ.cli.infer-context-bracket, measured 2026-07-23): a bracket fn
-// taking the body as a thunk moves the body into a fenced frame — a
-// closure's evidence snapshot predates the bracket's installs, so
-// every evidence-dispatched core op (Verify with verify_ledger +
-// verify_smt both carrying it; the ambiguous cursor ops) faults its
-// ev-scan into the sentinel page, while singleton-tier ops keep
-// working through the state global. compile trapped at
-// executable_gate's verify_debt(); the at verb trapped on its cursor ops;
-// check/doc/teach/query/repl passed — the split is exactly
-// singleton-vs-evidence. The consolidation is DEP-gated on evidence
-// crossing fn boundaries dynamically, which the M3 lexical fence
-// deliberately forbids (an arm-internal re-perform must not re-enter
-// the outer handler) — the PLAN named-residue entry carries the
-// design space.
+// The fn-shaped bracket was REFUTED once (2026-07-23, the mint-time
+// evidence snapshot: a thunk's ops faulted where its creation site
+// lacked installs) and became ADMISSIBLE the same night when the
+// world-as-value arc's R2 made every evidence-tier perform resolve
+// through the live install chain — a computation performs in the world
+// where it is CALLED. The bracket is that arc's first wheel-internal
+// consumer; the three mn-world-* frontier legs gate the semantics it
+// rests on.
+//
+// The bracket takes the body as a thunk (the analyze_fns precedent);
+// verb-specific handlers chain INSIDE the thunk, so their ops resolve
+// innermost-first. parallel_compose + wasi_threads are NOT here: they
+// install ONCE at the dispatch boundary (main.mn) and every chain
+// inherits them. Nested installs stay isolating — a voice consult's
+// compile_source brackets fresh instances inside a session's bracket
+// (handler state is per-install).
 //
 // IC.4: compile / check now route through driver_check when invoked
 // with an entry-MODULE name. The single-source entry compile/
@@ -93,33 +92,37 @@ import oracle
 // (§2 cached-cursor mode), and cross-run skip is the image-persist
 // peer (Hβ.persist.module-image-cache).
 
-fn compile(entry_module) = {
-  {
-    // driver_check_entry infers the deps DAG + the entry ONCE and returns
-    // the entry's already-typed AST — compile lowers that live graph, no
-    // second fs_read / frontend / infer_program (Carried-Truth: the entry
-    // is proven once and read live, never re-derived).
-    entry_module |> driver_compile_entry |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module
-  }
-    ~> wat_stdout
-    ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache
-    ~> string_table          // W5 — compile-time interned string offsets
-    ~> emit_memory_bump      // swap for emit_memory_arena to prove surface
-    ~> body_context          // H1 — per-fn-body emit metadata
-    ~> mentl_default
+fn infer_context(body) = {
+  body()
     ~> affine_ledger
-    ~> region_tracker        // I12 — region-escape ledger (substrate prep)
+    ~> region_tracker
     ~> verify_ledger
-    ~> lower_scope
-    ~> arm_state_ctx([], OneShot, "")
-    ~> spec_registry
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
     ~> mutate_sink
-    ~> parallel_compose
-    ~> wasi_threads
     ~> diagnostics_handler
+}
+
+fn compile(entry_module) = {
+  infer_context(() =>
+    {
+      // driver_check_entry infers the deps DAG + the entry ONCE and returns
+      // the entry's already-typed AST — compile lowers that live graph, no
+      // second fs_read / frontend / infer_program (Carried-Truth: the entry
+      // is proven once and read live, never re-derived).
+      entry_module |> driver_compile_entry |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module
+    }
+      ~> wat_stdout
+      ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache
+      ~> string_table          // W5 — compile-time interned string offsets
+      ~> emit_memory_bump      // swap for emit_memory_arena to prove surface
+      ~> body_context          // H1 — per-fn-body emit metadata
+      ~> mentl_default
+      ~> lower_scope
+      ~> arm_state_ctx([], OneShot, "")
+      ~> spec_registry
+  )
 }
 
 // Per Hβ.first-light.compile-stdin-substrate (2026-05-09): canonical
@@ -402,27 +405,19 @@ fn report_holes(holes, i) =
   }
 
 fn compile_stdin() = {
-  read_stdin() |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module
+  infer_context(() =>
+    { read_stdin() |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module }
+      ~> wat_stdout
+      ~> wasi_filesystem
+      ~> string_table
+      ~> emit_memory_bump
+      ~> body_context
+      ~> mentl_default
+      ~> lower_scope
+      ~> arm_state_ctx([], OneShot, "")
+      ~> spec_registry
+  )
 }
-    ~> wat_stdout
-    ~> wasi_filesystem
-    ~> string_table
-    ~> emit_memory_bump
-    ~> body_context
-    ~> mentl_default
-    ~> affine_ledger
-    ~> region_tracker
-    ~> verify_ledger
-    ~> lower_scope
-    ~> arm_state_ctx([], OneShot, "")
-    ~> spec_registry
-    ~> lookup_ty_graph
-    ~> env_handler
-    ~> graph_handler
-    ~> mutate_sink
-    ~> parallel_compose
-    ~> wasi_threads
-    ~> diagnostics_handler
 
 // pipeline_check returns its own ERROR COUNT, because it owns the handler that
 // does the counting (the diagnostics_handler at the foot of this chain).
@@ -434,121 +429,78 @@ fn compile_stdin() = {
 // tally is honestly zero. The count and the counter are one handler; a reader
 // outside the install is reading a different ledger.
 fn pipeline_check(entry_module) = {
-  {
-    // Check reads the SAME one-namespace weave every other driver verb
-    // reads (compile / at / edit — driver_entry_with_ranges): whole-program
-    // truth, one span space. The old per-module walk (driver_check) inferred
-    // each module against only the layers already installed, so prelude's
-    // own body missed the substrate vocabulary its layer supplies —
-    // E_MissingVariable noise on a clean program. The per-module env
-    // overlay (Hβ.driver.per-module-env-overlay) is that walk's sequenced
-    // refinement; until it lands, the weave IS the check.
-    driver_entry_with_ranges(entry_module)
-    diag_errors()
-  }
-    ~> wasi_filesystem
-    ~> mentl_default
-    ~> affine_ledger
-    // The region ops infer_fn performs (check_escape at every return) need
-    // their handler in CHECK mode too — this chain lacked the install, so
-    // every region op ran DRIVERLESS with a zero state record, and
-    // region_index_get(0, …) read the zero-filled sentinel page as an empty
-    // bucket: check "worked" on garbage until list_index's bounds trap
-    // unmasked it (the probe: idx=0 len=0). Check runs the same analyses as
-    // compile; its chain installs the same analysis handlers.
-    ~> region_tracker
-    ~> verify_ledger
-    // The type-of-a-handle read infer's own unify_install_payload makes —
-    // the same install every inference-reaching chain carries (the
-    // SingletonUninstalled guard turned this chain's absence from silent
-    // null-page type reads into a loud refusal at the site).
-    ~> lookup_ty_graph
-    ~> env_handler
-    ~> graph_handler
-    ~> mutate_sink
-    ~> parallel_compose
-    ~> wasi_threads
-    ~> diagnostics_handler
+  // Check runs the same analyses as compile — the region-op and null-page
+  // classes this chain paid for (the zero-state sentinel reads, the
+  // SingletonUninstalled catches) are why EVERY inference-reaching chain
+  // installs the whole core; infer_context is that law as one home.
+  infer_context(() =>
+    {
+      // Check reads the SAME one-namespace weave every other driver verb
+      // reads (compile / at / edit — driver_entry_with_ranges): whole-program
+      // truth, one span space. The old per-module walk (driver_check) inferred
+      // each module against only the layers already installed, so prelude's
+      // own body missed the substrate vocabulary its layer supplies —
+      // E_MissingVariable noise on a clean program. The per-module env
+      // overlay (Hβ.driver.per-module-env-overlay) is that walk's sequenced
+      // refinement; until it lands, the weave IS the check.
+      driver_entry_with_ranges(entry_module)
+      diag_errors()
+    }
+      ~> wasi_filesystem
+      ~> mentl_default
+  )
 }
 
 // Legacy single-source entry — for tests that pass raw source
 // without filesystem layout. No caching; full re-infer each call.
 fn compile_source(source) = {
-  source
-    |> frontend
-    |> infer_program
-    |> lower_program
-    |> reachable_from_main
-    |> executable_gate
-    |> emit_module
-    ~> wat_stdout
-    ~> string_table
-    ~> emit_memory_bump
-    ~> body_context
-    ~> mentl_default
-    ~> affine_ledger
-    ~> region_tracker
-    ~> verify_ledger
-    ~> lower_scope
-    ~> arm_state_ctx([], OneShot, "")
-    ~> spec_registry
-    ~> lookup_ty_graph
-    ~> env_handler
-    ~> graph_handler
-    ~> mutate_sink
-    ~> parallel_compose
-    ~> wasi_threads
-    ~> diagnostics_handler
+  infer_context(() =>
+    source
+      |> frontend
+      |> infer_program
+      |> lower_program
+      |> reachable_from_main
+      |> executable_gate
+      |> emit_module
+      ~> wat_stdout
+      ~> string_table
+      ~> emit_memory_bump
+      ~> body_context
+      ~> mentl_default
+      ~> lower_scope
+      ~> arm_state_ctx([], OneShot, "")
+      ~> spec_registry
+  )
 }
 
 fn check_source(source) = {
-  source
-    |> frontend
-    |> infer_program
-    ~> mentl_default
-    ~> affine_ledger
-    // Same law as pipeline_check: infer_fn performs region ops, so every
-    // infer-reaching chain installs region_tracker — driverless region ops
-    // read a zero state record (the sentinel page masked it until the
-    // bounds trap; the edit-session fixtures were this chain's proof).
-    ~> region_tracker
-    ~> verify_ledger
-    ~> lookup_ty_graph
-    ~> env_handler
-    ~> graph_handler
-    ~> mutate_sink
-    ~> parallel_compose
-    ~> wasi_threads
-    ~> diagnostics_handler
+  infer_context(() =>
+    source
+      |> frontend
+      |> infer_program
+      ~> mentl_default
+  )
 }
 
 fn query(entry_module, question) = {
-  {
-    // driver_check_entry loads the module + its deps, infers ONCE, and
-    // hands back the entry's typed AST — the same load compile/check
-    // use. So `mentl query lib/foo "why bar"` reads the REAL graph, not
-    // the module NAME parsed as source (Carried-Truth: the driver
-    // already resolved+typed it; re-frontend-ing a name re-derived
-    // nothing and mis-parsed "tutorial/foo" as two variable refs).
-    let ast = driver_check_entry(entry_module)
-    let q = parse_query_string(question)
-    ask(q) |> render_query_result |> print_string
-  }
-    ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
-    ~> query_default
-    ~> mentl_default
-    ~> affine_ledger
-    ~> region_tracker
-    ~> verify_ledger
-    ~> arm_state_ctx([], OneShot, "")
-    ~> spec_registry
-    ~> lookup_ty_graph
-    ~> env_handler
-    ~> graph_handler
-    ~> mutate_sink
-    ~> parallel_compose
-    ~> wasi_threads
-    ~> diagnostics_handler
+  infer_context(() =>
+    {
+      // driver_check_entry loads the module + its deps, infers ONCE, and
+      // hands back the entry's typed AST — the same load compile/check
+      // use. So `mentl query lib/foo "why bar"` reads the REAL graph, not
+      // the module NAME parsed as source (Carried-Truth: the driver
+      // already resolved+typed it; re-frontend-ing a name re-derived
+      // nothing and mis-parsed "tutorial/foo" as two variable refs).
+      let ast = driver_check_entry(entry_module)
+      let q = parse_query_string(question)
+      ask(q) |> render_query_result |> print_string
+    }
+      ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
+      ~> query_default
+      ~> mentl_default
+      ~> arm_state_ctx([], OneShot, "")
+      ~> spec_registry
+  )
 }
 
 // analyze_fns — the shared analysis-verb cursor: load+check the module,
@@ -558,28 +510,20 @@ fn query(entry_module, question) = {
 // but for the project/render pair (Carried-Truth: one home now). query
 // stays separate: it ASKS a question, not a per-fn walk.
 fn analyze_fns(entry_module, project, render) = {
-  {
-    // "-" is the stdin contract (self-contained source, the bare
-    // compile's own path); anything else resolves through the driver DAG.
-    let ast =
-      if entry_module == "-" { read_stdin() |> frontend |> infer_program }
-      else { driver_check_entry(entry_module) }
-    map_fn_stmts(ast, project) |> render |> print_string
-  }
-    ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
-    ~> mentl_default
-    ~> affine_ledger
-    ~> region_tracker
-    ~> verify_ledger
-    ~> arm_state_ctx([], OneShot, "")
-    ~> spec_registry
-    ~> lookup_ty_graph
-    ~> env_handler
-    ~> graph_handler
-    ~> mutate_sink
-    ~> parallel_compose
-    ~> wasi_threads
-    ~> diagnostics_handler
+  infer_context(() =>
+    {
+      // "-" is the stdin contract (self-contained source, the bare
+      // compile's own path); anything else resolves through the driver DAG.
+      let ast =
+        if entry_module == "-" { read_stdin() |> frontend |> infer_program }
+        else { driver_check_entry(entry_module) }
+      map_fn_stmts(ast, project) |> render |> print_string
+    }
+      ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
+      ~> mentl_default
+      ~> arm_state_ctx([], OneShot, "")
+      ~> spec_registry
+  )
 }
 
 fn teach(entry_module) =

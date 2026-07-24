@@ -93,6 +93,7 @@ type EntryVerb
   | VServe
   | VSpace
   | VTighten(Option(String))
+  | VFmt(String)
   | VCompile(String)                 // target REQUIRED — carried non-optionally
   | VCompileStdin
   | VRun(String)
@@ -152,6 +153,7 @@ fn verb_specs() with Memory + Alloc = [
   VerbSpec("serve",   "",                  (a) => Invocation(VServe),                                                                 "the transport server"),
   VerbSpec("space",   "",                  (a) => Invocation(VSpace),                                                                 "the ide, served — open http://localhost:7378/ide/"),
   VerbSpec("tighten", "[path]",            (a) => Invocation(VTighten(optional_target(a, 2))),                                        "apply the first proven row tightening — the medium authors, you accept"),
+  VerbSpec("fmt",     "<path>",            (a) => if len(a) >= 3 { Invocation(VFmt(a[2])) } else { ParseError("fmt needs a target: mentl fmt <path>") }, "render the file canonical — layout is projection, never contract"),
   VerbSpec("repl",    "",                  (a) => Invocation(VRepl),                                                                  "line REPL"),
   VerbSpec("--with",  "<handler> [path]",  (a) => if len(a) >= 3 { Invocation(VWith(a[2], optional_target(a, 3))) } else { ParseError("--with needs a handler: mentl --with <handler> [path]") }, "install any handler over any verb"),
   VerbSpec("help",    "",                  (a) => Invocation(VWelcome),                                                               "this projection")
@@ -319,6 +321,7 @@ fn dispatch_invocation(verb) = {
       VServe               => serve_run(),
       VSpace               => space_run(),
       VTighten(target)     => tighten_run(target),
+      VFmt(target)         => fmt_run(target),
       VCompile(target)     => compile_run(target),
       VCompileStdin        =>
         // The bare invocation forks on the ONE substrate fact that
@@ -538,6 +541,36 @@ fn space_run() with Memory + Alloc + WASI = {
     space_loop(lfd)
     0
   }
+}
+
+// ─── fmt_run — the canonical render written back (`mentl fmt`)
+//
+// Layout is projection, never contract (SYNTAX principle 1): the file
+// re-renders from the graph in canonical form. The render is TOTAL over
+// the surface (every Expr/Stmt/Pat variant has its arm — the formatter
+// arc's totality landing), carries the comment weave, and re-escapes
+// string content, so format∘parse is the identity the module's own
+// comment always claimed. Idempotence is the gate: the second render is
+// byte-identical to the first.
+
+fn fmt_run(target) = {
+  infer_context(() =>
+    {
+      // The verb convention: the arg normalizes to a MODULE name, and the
+      // write-back path is the resolver's own answer — one resolution
+      // home, never the raw argv string carried past it.
+      let entry_module = path_to_module(target)
+      let path = driver_module_path(entry_module)
+      let ast = driver_check_entry(entry_module)
+      let rendered = format_program(ast)
+      fs_write_file(path, rendered)
+      print_string("fmt: {path} rendered canonical\n")
+      0
+    }
+      ~> format_default
+      ~> wasi_filesystem
+      ~> mentl_default
+  )
 }
 
 // ─── tighten_run — the medium authors its own row tightening

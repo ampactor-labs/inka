@@ -1026,6 +1026,32 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶▶ THE FORMATTER SPEAKS — render totality + `mentl fmt`
+  (the formatter arc's first landing · pin 013e26bd): the 18 missing
+  arms land (Expr 25/25, Stmt 9/9, Pat 8/8; the surrender-fallbacks
+  deleted into enumeration), and first light on the dormant module
+  killed four latent bugs — the reversed joiners (every list rendered
+  backwards, unseen at zero callers), the `{{`-is-not-an-escape class
+  (22 sites to SYNTAX's \{), unescaped string content
+  (format∘parse-identity made true), and the op/fn name collision at
+  the direct-call tier (graph_node_at — the class named
+  Hβ.emit.op-fn-name-collision-direct-call). Precedence-INVERSE
+  parenthesization under the one table; the gate is BEHAVIORAL (42
+  before and after — typechecking cannot tell (a+b)*c from a+b*c),
+  plus byte-exact idempotence and prose/annotation carry: three
+  frontier legs, RED on the pre-verb boot. The comment weave renders
+  back (trailing→leading is movement not loss, stable from pass two);
+  authored annotations survive with fields in the parse's own
+  alphabetical canon; assemble_render carries String intent boundaries
+  (the fan's elements arrive free — the §9 law's sibling). Named
+  refinements: sugar preservation (destructuring lets re-render as
+  their desugared match — the graph's truth), the width-aware layout
+  engine, and the summit: the wheel formatting ITSELF (the 760
+  E_RedundantBraces die there). The trecordopen-wrong-field class
+  gained its lambda-shaped repro en route (a lambda param's field read
+  on a plain record — annotated-closed dodges). Board whole: CLEAN
+  m2 == m3 at 577,765 lines, census 0, comment-refs 0, frontier 229/0,
+  battery 113/113.
 - 2026-07-23 · ▶▶▶ THE RATCHET RUNS — 77 medium-authored tightenings,
   19 corrected by the canonical judge (tighten goes batch · pin
   b0204323): every authorable T_OverDeclared applies per run (per file

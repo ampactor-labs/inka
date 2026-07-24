@@ -1106,6 +1106,44 @@ for i in "${!compilers[@]}"; do
     fail "tighten fixpoint (see $dir/tighten2.out)"
   fi
 
+  # ── mentl fmt — layout is projection, never contract ────────────────
+  # The render is TOTAL over the surface and precedence-inverse (an
+  # operand looser than its parent re-wraps in the parens the parse
+  # consumed). Three legs, RED on the pre-verb boot: (1) BEHAVIORAL —
+  # the fixture compiles+runs to 42 before AND after fmt (typechecking
+  # cannot tell (a+b)*c from a+b*c; only behavior can); (2) idempotence
+  # byte-exact; (3) the render carries comments and authored annotations.
+  fdemo2="$dir/fmt-demo"
+  mkdir -p "$fdemo2"
+  cp "$ROOT/tests/frontier/fmt-demo/rich.mn" "$fdemo2/rich.mn"
+  cat "${RTLIBS[@]}" "$fdemo2/rich.mn" | wt_run "$compiler" > "$fdemo2/pre.wat" 2>/dev/null \
+    && wt_asm "$fdemo2/pre.wat" "$fdemo2/pre.wasm" 2>/dev/null \
+    && "$WT" run "${WT_RUN_FLAGS[@]}" "$fdemo2/pre.wasm" >/dev/null 2>&1
+  fmt_pre=$?
+  (cd "$fdemo2" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo2" --dir /tmp "$compiler" fmt rich.mn) >"$dir/fmt.out" 2>&1
+  fmt_rc=$?
+  cat "${RTLIBS[@]}" "$fdemo2/rich.mn" | wt_run "$compiler" > "$fdemo2/post.wat" 2>/dev/null \
+    && wt_asm "$fdemo2/post.wat" "$fdemo2/post.wasm" 2>/dev/null \
+    && "$WT" run "${WT_RUN_FLAGS[@]}" "$fdemo2/post.wasm" >/dev/null 2>&1
+  fmt_post=$?
+  if [ $fmt_rc -eq 0 ] && [ "$fmt_pre" = "42" ] && [ "$fmt_post" = "42" ]; then
+    pass "fmt preserves behavior (42 before and after the canonical render)"
+  else
+    fail "fmt behavioral (fmt_rc=$fmt_rc pre=$fmt_pre post=$fmt_post; see $dir/fmt.out)"
+  fi
+  cp "$fdemo2/rich.mn" "$fdemo2/pass1.mn"
+  (cd "$fdemo2" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo2" --dir /tmp "$compiler" fmt rich.mn) >/dev/null 2>&1
+  if cmp -s "$fdemo2/rich.mn" "$fdemo2/pass1.mn"; then
+    pass "fmt is idempotent (second render byte-identical)"
+  else
+    fail "fmt idempotence"
+  fi
+  if grep -q '^// The fmt fixture' "$fdemo2/rich.mn" && grep -q 'b: { level: Int, kind: String }' "$fdemo2/rich.mn"; then
+    pass "fmt carries comments and authored annotations"
+  else
+    fail "fmt prose/annotation carry"
+  fi
+
   # ── the cursor-address transport (mentl voice.mn:9) ─────────────────
   # Runs from the demo dir (the driver resolves imports CWD-relative).
   # Asserts the honest minimum the artifact produces today: the Query

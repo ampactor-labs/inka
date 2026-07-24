@@ -1,0 +1,24 @@
+// The fmt fixture: one of every structural form the totality landing
+// added — block, lambda, match, records, interpolation, patterns.
+type Shade = Dark | Bright(Int)
+
+fn pick(s) = match s {
+  Dark      => 0,
+  Bright(n) => n
+}
+
+fn describe(x, tag) = "{tag}: {x}"
+
+// The closed annotation is the concrete receiver the open-record field
+// class needs (the lambda-param field read is that class's repro shape).
+fn level_plus(a, b: {kind: String, level: Int}) = a + b.level
+
+fn main() = {
+  let base = {kind: "b", level: 2}
+  let lifted = {...base, level: 3}
+  let g = (n) => n + 1
+  let (lo, hi) = (1, pick(Bright(40)))
+  let sharp = g((lo + hi) * 2) - (hi - lo) - 1
+  describe(level_plus(lo, lifted) + hi, "sum")
+  sharp + level_plus(lo, lifted) - 5
+}

@@ -106,19 +106,24 @@ handler format_default with !Mutate {
   // together; assemble_render composes them into the canonical String.
 
   format_at_handle(handle) => {
-    let node = graph_node_at(handle)
-    let kind = ast_kind_of(node)
+    // Handle-based throughout: the body reads via graph_node_body (the
+    // same projection the parent scan uses) — the old `graph_node_at(h)`
+    // one-arg call typechecked against an op binding while the
+    // direct-call tier emitted the two-arg raw fn, an op/fn name
+    // collision that only surfaced when this arm gained its first
+    // installer (the fmt verb).
+    let body = graph_node_body(handle)
     let ctx = render_context_at(handle)
-    let pos = (node, kind, ctx)
+    let pos = (body, handle, ctx)
     let (tokens, indent, line_break, comment, span, reason, sibling) =
       pos
         <| (
-          ((n, _, _))  => render_tokens_for(n),                      // 1. tokens
-          ((_, k, c))  => render_indent_for(k, c),                   // 2. indent (canonical)
-          ((_, k, _))  => render_line_break_after(k),                // 3. line break
-          ((n, _, _))  => render_comment_for(n),                     // 4. the one comment, read live from the weave
-          ((n, _, _))  => render_span_marker(n),                     // 5. span (debug only)
-          ((n, _, _))  => render_reason_chain(n),                    // 6. reason (debug)
+          ((b, _, _))  => render_body_tokens(b),                     // 1. tokens
+          ((b, _, c))  => render_indent_for(b, c),                   // 2. indent (canonical)
+          ((b, _, _))  => render_line_break_after(b),                // 3. line break
+          ((_, h, _))  => render_comment_at(h),                      // 4. the one comment, read live from the weave
+          ((_, _, _))  => "",                                        // 5. span (debug only)
+          ((_, h, _))  => render_reason_at(h),                       // 6. reason (debug)
           ((_, _, c))  => render_sibling_separator(c)                // 7. sibling glue
         )
     let assembled = assemble_render(tokens, indent, line_break, comment, span, reason, sibling)
@@ -295,12 +300,15 @@ fn parenthesize(s) with Pure = {
   "({s})"
 }
 
-fn join_lines(lines) with Memory = {
-  if len(lines) == 0 { "" }
-  else if len(lines) == 1 { last(lines) }
-  else {
-    "{last(lines)}\n{join_lines(drop_last(lines))}"
-  }
+// Head-first join: parser lists are source-ordered (built `[x] ++ rest`),
+// so iteration walks index 0 upward — the last/drop_last form rendered
+// every list REVERSED, unseen because this module had zero callers.
+fn join_lines(lines) with Memory = join_lines_from(lines, 0)
+
+fn join_lines_from(ref lines, i) with Memory = {
+  if i >= len(lines) { "" }
+  else if i == len(lines) - 1 { lines[i] }
+  else { "{lines[i]}\n{join_lines_from(lines, i + 1)}" }
 }
 
 // ─── Render-aspect helpers — one per cursor-projection lens ────────
@@ -327,13 +335,13 @@ fn render_body_tokens(body) with GraphRead + Memory + Alloc + !Mutate = match bo
 fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate = match e {
   LitInt(n)        => int_to_str(n),
   LitFloat(f)      => float_to_str(f),
-  LitString(s)     => "\"{s}\"",
+  LitString(s)     => "\"{escape_string_content(s)}\"",
   LitBool(b)       => if b { "true" } else { "false" },
   LitUnit          => "()",
   VarRef(name)     => name,
   BinOpExpr(op, l, r) =>
-    "{render_tokens_for(l)} {binop_to_str(op)} {render_tokens_for(r)}",
-  UnaryOpExpr(op, x) => "{unary_op_glyph(op)}{render_tokens_for(x)}",
+    "{render_operand(l, binop_prec(op), false)} {binop_to_str(op)} {render_operand(r, binop_prec(op), true)}",
+  UnaryOpExpr(op, x) => "{unary_op_glyph(op)}{render_operand(x, 90, true)}",
   CallExpr(callee, args) =>
     "{render_tokens_for(callee)}({render_node_list(args, ", ")})",
   LabeledArg(label, v) => "{label} = {render_tokens_for(v)}",
@@ -342,11 +350,26 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate = match e {
   PipeExpr(verb, l, r) =>
     "{render_tokens_for(l)} {show_pipe_kind(verb)} {render_tokens_for(r)}",
   IfExpr(c, t, el) =>
-    "if {render_tokens_for(c)} {{ {render_tokens_for(t)} }} else {{ {render_tokens_for(el)} }}",
+    "if {render_tokens_for(c)} \{ {render_tokens_for(t)} \} else \{ {render_tokens_for(el)} \}",
   MakeListExpr(elems)  => "[{render_node_list(elems, ", ")}]",
   MakeTupleExpr(elems) => "({render_node_list(elems, ", ")})",
   ExprPlaceholder      => "??",
-  _                    => "<expr>"
+  BlockExpr(stmts, final) =>
+    "\{\n{render_block_stmts(stmts, 0)}  {render_tokens_for(final)}\n\}",
+  LambdaExpr(params, body) =>
+    "({render_param_list(params)}) => {render_tokens_for(body)}",
+  MakeRecordExpr(fields) => "\{{render_field_inits(fields, 0)\}}",
+  NamedRecordExpr(tname, fields) =>
+    "{tname}\{{render_field_inits(fields, 0)\}}",
+  RecordUpdateExpr(base, fields) =>
+    "\{...{render_tokens_for(base)}, {render_field_inits(fields, 0)\}}",
+  // Interpolation is the parse's inverse: literal chunks re-escape,
+  // every other fragment renders as a live splice.
+  MakeStringExpr(parts) => "\"{render_string_parts(parts, 0)}\"",
+  MatchExpr(scrut, arms) =>
+    "match {render_tokens_for(scrut)} \{\n{render_match_arms(arms, 0)\}}",
+  ResumeExpr(v, updates) =>
+    "{render_resume_head(v)}{render_state_updates(updates, 0)}"
 }
 
 fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate = match s {
@@ -355,40 +378,305 @@ fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate = match s {
   ImportStmt(path)   => "import {path}",
   ExprStmt(e)        => render_tokens_for(e),
   AliasStmt(name, ty) => "type {name} = {show_type(ty)}",
-  _                  => "<stmt>"
+  LetStmt(pat, value, ann) =>
+    "let {render_pat_tokens(pat)}{render_let_ann(ann)} = {render_tokens_for(value)}",
+  TypeDefStmt(name, variants) =>
+    "type {name} = {render_variants(variants, 0)}",
+  // Op param NAMES are parse-consumed (the ADT stores types only), and
+  // bare types parse in op position — the render is the parse's inverse
+  // over what the graph carries.
+  EffectDeclStmt(name, ops) =>
+    "effect {name} \{\n{render_effect_ops(ops, 0)\}}",
+  HandlerDeclStmt(hname, _ename, config, states, arms) =>
+    "handler {hname}{render_config_params(config)}{render_state_inits(states, 0)} \{\n{render_handler_arms(arms, 0)\}}",
+  RefineStmt(name, ty, pred) =>
+    "type {name} = {show_type(ty)} where {show_predicate(pred)}"
 }
 
 fn render_pat_tokens(p) with GraphRead + Memory + Alloc + !Mutate = match p {
   PVar(name)     => name,
   PWild          => "_",
-  PCon(name, ps) => "{name}({render_pat_list(ps, ", ")})",
-  _              => "<pat>"
+  PCon(name, ps) =>
+    if len(ps) == 0 { name }
+    else { "{name}({render_pat_list(ps, ", ")})" },
+  PLit(lv)       => render_lit_value(lv),
+  PTuple(ps)     => "({render_pat_list(ps, ", ")})",
+  PList(ps, rest) => "[{render_plist_inner(ps, rest)}]",
+  PRecord(fields) => "\{{render_pat_fields(fields, 0)\}}",
+  PAlt(ps)       => render_pat_list(ps, " | ")
 }
 
-fn render_node_list(nodes, sep) with GraphRead + Memory + Alloc + !Mutate = {
-  if len(nodes) == 0 { "" }
-  else if len(nodes) == 1 { render_tokens_for(last(nodes)) }
-  else {
-    "{render_tokens_for(last(nodes))}{sep}{render_node_list(drop_last(nodes), sep)}"
+// Every list renderer walks HEAD-FIRST (index 0 upward): parser lists are
+// source-ordered, so the old last/drop_last walks rendered them reversed —
+// unseen while this module had zero callers.
+fn render_node_list(ref nodes, sep) with GraphRead + Memory + Alloc + !Mutate =
+  render_node_list_from(nodes, 0, sep)
+
+fn render_node_list_from(ref nodes, i, sep) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(nodes) { "" }
+  else if i == len(nodes) - 1 { render_tokens_for(nodes[i]) }
+  else { "{render_tokens_for(nodes[i])}{sep}{render_node_list_from(nodes, i + 1, sep)}" }
+}
+
+fn render_pat_list(ref pats, sep) with GraphRead + Memory + Alloc + !Mutate =
+  render_pat_list_from(pats, 0, sep)
+
+fn render_pat_list_from(ref pats, i, sep) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(pats) { "" }
+  else if i == len(pats) - 1 { render_pat_tokens(pats[i]) }
+  else { "{render_pat_tokens(pats[i])}{sep}{render_pat_list_from(pats, i + 1, sep)}" }
+}
+
+// A param renders its AUTHORED intent boundaries — the ownership marker
+// (TParam's authored slot, never the resolved one), the annotation when
+// one was written (an unannotated param's ty is the parse-minted TVar —
+// the structural discriminator), and the default. Dropping any of these
+// on round-trip would change semantics the affine/refinement checks read.
+fn render_param_list(ref params) with GraphRead + Memory + Alloc + !Mutate =
+  render_param_list_from(params, 0)
+
+fn render_param_list_from(ref params, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(params) { "" }
+  else if i == len(params) - 1 { render_one_param(params[i]) }
+  else { "{render_one_param(params[i])}, {render_param_list_from(params, i + 1)}" }
+}
+
+fn render_one_param(p) with GraphRead + Memory + Alloc + !Mutate = {
+  let marker = match param_authored(p) {
+    Own      => "own ",
+    Ref      => "ref ",
+    Unmarked => ""
   }
-}
-
-fn render_pat_list(pats, sep) with GraphRead + Memory + Alloc + !Mutate = {
-  if len(pats) == 0 { "" }
-  else if len(pats) == 1 { render_pat_tokens(last(pats)) }
-  else {
-    "{render_pat_tokens(last(pats))}{sep}{render_pat_list(drop_last(pats), sep)}"
+  let ann = match param_ty(p) {
+    TVar(_) => "",
+    ty      => ": {show_type(ty)}"
   }
+  let dflt = match param_default(p) {
+    Some(d) => " = {render_tokens_for(d)}",
+    None    => ""
+  }
+  "{marker}{param_name(p)}{ann}{dflt}"
 }
 
-// A param renders its name; its authored ownership + intent-boundary type are
-// surface annotations the cursor projects, not always in the canonical text.
-fn render_param_list(params) with Memory + Alloc = {
-  if len(params) == 0 { "" }
-  else if len(params) == 1 {
-    param_name(last(params))
+// ─── Precedence-inverse parenthesization ────────────────────────────
+//
+// The render is the parse's inverse under the ONE precedence table
+// (SYNTAX §Operator precedence), so an operand whose own precedence is
+// LOOSER than its parent's — or equal on the right of a left-assoc
+// operator — re-wraps in the parens the parse consumed. Without this,
+// (a + b) * c re-rendered as a + b * c: both typecheck, only behavior
+// tells — the fmt gate runs the program pre/post and compares exits.
+
+fn render_operand(child, parent_prec, is_right) with GraphRead + Memory + Alloc + !Mutate = {
+  let cp = expr_prec_of(child)
+  if cp < parent_prec || (cp == parent_prec && is_right) {
+    "({render_tokens_for(child)})"
   } else {
-    "{param_name(last(params))}, {render_param_list(drop_last(params))}"
+    render_tokens_for(child)
+  }
+}
+
+fn expr_prec_of(node) with GraphRead + Memory + !Mutate = match ast_kind_of(node) {
+  NExpr(BinOpExpr(op, _, _)) => binop_prec(op),
+  NExpr(PipeExpr(k, _, _))   => pipe_prec(k),
+  NExpr(UnaryOpExpr(_, _))   => 90,
+  NExpr(IfExpr(_, _, _))     => 15,
+  NExpr(MatchExpr(_, _))     => 15,
+  NExpr(LambdaExpr(_, _))    => 15,
+  _                          => 100
+}
+
+// The literal SYNTAX table integers (op_prec's own values — one table,
+// this is its render-side projection).
+fn binop_prec(op) with Pure = match op {
+  BMul    => 10,
+  BDiv    => 10,
+  BMod    => 10,
+  BAdd    => 9,
+  BSub    => 9,
+  BConcat => 8,
+  BLt     => 7,
+  BGt     => 7,
+  BLe     => 7,
+  BGe     => 7,
+  BEq     => 6,
+  BNe     => 6,
+  BAnd    => 5,
+  BOr     => 4
+}
+
+fn pipe_prec(k) with Pure = match k {
+  PForward    => 3,
+  PFanout(_)  => 2,
+  PFeedback   => 2,
+  PTee        => 1
+}
+
+// ─── The totality helpers — one per structural form ─────────────────
+
+// Re-escape string content to the surface escape set: the parse stored
+// resolved bytes; the render is the parse's inverse, so a quote, brace,
+// backslash, or control byte re-escapes (without this, format∘parse =
+// identity was FALSE for any string carrying one — the wheel's own
+// wat_emit lines included).
+fn escape_string_content(s) with Memory + Alloc = {
+  s
+    |> (x) => replace(x, "\\", "\\\\")
+    |> (x) => replace(x, "\"", "\\\"")
+    |> (x) => replace(x, "\n", "\\n")
+    |> (x) => replace(x, "\t", "\\t")
+    |> (x) => replace(x, "{", "\\{")
+    |> (x) => replace(x, "}", "\\}")
+}
+
+// Interior comments are graph content (the weave attaches them to the
+// following statement) — the block render carries each statement's prose
+// or the formatter would destroy it. A trailing same-line comment
+// re-renders as a leading block: movement, not loss, and stable from the
+// second pass (it re-parses as a leading comment).
+fn render_block_stmts(ref stmts, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(stmts) { "" }
+  else {
+    let c = graph_comment_at(node_handle(stmts[i]))
+    let cline = if c == "" { "" } else { "  //{replace(c, "\n", "\n  //")}\n" }
+    "{cline}  {render_tokens_for(stmts[i])}\n{render_block_stmts(stmts, i + 1)}"
+  }
+}
+
+fn render_field_inits(ref fields, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(fields) { "" }
+  else {
+    let (fname, v) = fields[i]
+    let one = "{fname}: {render_tokens_for(v)}"
+    if i == len(fields) - 1 { one }
+    else { "{one}, {render_field_inits(fields, i + 1)}" }
+  }
+}
+
+fn render_string_parts(ref parts, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(parts) { "" }
+  else {
+    let one = match ast_kind_of(parts[i]) {
+      NExpr(LitString(s)) => escape_string_content(s),
+      _                   => "\{{render_tokens_for(parts[i])\}}"
+    }
+    "{one}{render_string_parts(parts, i + 1)}"
+  }
+}
+
+fn render_match_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(arms) { "" }
+  else {
+    let (pat, body) = arms[i]
+    "  {render_pat_tokens(pat)} => {render_tokens_for(body)},\n{render_match_arms(arms, i + 1)}"
+  }
+}
+
+fn render_resume_head(v) with GraphRead + Memory + Alloc + !Mutate = match ast_kind_of(v) {
+  NExpr(LitUnit) => "resume()",
+  _              => "resume({render_tokens_for(v)})"
+}
+
+fn render_state_updates(ref updates, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(updates) { "" }
+  else {
+    let u = updates[i]
+    let one = "{u.name} = {render_tokens_for(u.init)}"
+    let lead = if i == 0 { " with " } else { ", " }
+    "{lead}{one}{render_state_updates(updates, i + 1)}"
+  }
+}
+
+fn render_let_ann(ann) with GraphRead + Memory + Alloc + !Mutate = match ast_kind_of(ann) {
+  NTypeAnn(ty) => ": {show_type(ty)}",
+  _            => ""   // drift-audit: ignore — the ADT's own absence sentinel: LetStmt's ann node is LitUnit when unannotated (the LetStmt decl comment); any non-NTypeAnn body IS that absence, rendered as no clause
+}
+
+fn render_variants(ref variants, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(variants) { "" }
+  else {
+    let (vname, tys) = variants[i]
+    let one = if len(tys) == 0 { vname } else { "{vname}({render_ty_list(tys, 0)})" }
+    if i == len(variants) - 1 { one }
+    else { "{one} | {render_variants(variants, i + 1)}" }
+  }
+}
+
+fn render_ty_list(ref tys, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(tys) { "" }
+  else if i == len(tys) - 1 { show_type(tys[i]) }
+  else { "{show_type(tys[i])}, {render_ty_list(tys, i + 1)}" }
+}
+
+fn render_effect_ops(ref ops, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(ops) { "" }
+  else {
+    let (oname, ptys, rty) = ops[i]
+    let ret = match rty {
+      TUnit => "",
+      t     => " -> {show_type(t)}"
+    }
+    "  {oname}({render_ty_list(ptys, 0)}){ret}\n{render_effect_ops(ops, i + 1)}"
+  }
+}
+
+fn render_config_params(ref config) with Memory + Alloc = {
+  if len(config) == 0 { "" }
+  else { "({render_name_list(config, 0)})" }
+}
+
+fn render_name_list(ref names, i) with Memory + Alloc = {
+  if i >= len(names) { "" }
+  else if i == len(names) - 1 { names[i] }
+  else { "{names[i]}, {render_name_list(names, i + 1)}" }
+}
+
+fn render_state_inits(ref states, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(states) { "" }
+  else {
+    let st = states[i]
+    let one = "{st.name} = {render_tokens_for(st.init)}"
+    let lead = if i == 0 { " with " } else { ", " }
+    "{lead}{one}{render_state_inits(states, i + 1)}"
+  }
+}
+
+fn render_handler_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(arms) { "" }
+  else {
+    let a = arms[i]
+    "  {a.op_name}({render_name_list(a.args, 0)}) => {render_tokens_for(a.body)},\n{render_handler_arms(arms, i + 1)}"
+  }
+}
+
+fn render_lit_value(lv) with Memory + Alloc = match lv {
+  LVInt(n)    => int_to_str(n),
+  LVFloat(f)  => float_to_str(f),
+  LVString(s) => "\"{escape_string_content(s)}\"",
+  LVBool(b)   => if b { "true" } else { "false" }
+}
+
+fn render_plist_inner(ref ps, rest) with GraphRead + Memory + Alloc + !Mutate = {
+  let prefix = render_pat_list(ps, ", ")
+  match rest {
+    Some(rname) =>
+      if len(ps) == 0 { "...{rname}" } else { "{prefix}, ...{rname}" },
+    None => prefix
+  }
+}
+
+fn render_pat_fields(ref fields, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(fields) { "" }
+  else {
+    let (fname, p) = fields[i]
+    // Punning is the canonical form when the pattern binds the field's
+    // own name (SYNTAX §records).
+    let one = match p {
+      PVar(n) => if n == fname { fname } else { "{fname}: {n}" },
+      other   => "{fname}: {render_pat_tokens(other)}"
+    }
+    if i == len(fields) - 1 { one }
+    else { "{one}, {render_pat_fields(fields, i + 1)}" }
   }
 }
 
@@ -425,21 +713,17 @@ fn render_line_break_after(kind) with Pure = match kind {
 // prefix on every line (re-prefixing each internal newline via `replace`) and a
 // trailing newline so the block leads the declaration. Empty string when the
 // node carries no comment (an honest read, not a stub).
-fn render_comment_for(node) with GraphRead + Memory + Alloc + !Mutate = {
-  let N(_, _, h) = node
+fn render_comment_at(h) with GraphRead + Memory + Alloc + !Mutate = {
   let text = graph_comment_at(h)
   if text == "" { "" }
   else { "//{replace(text, "\n", "\n//")}\n" }
 }
 
-fn render_span_marker(node) with Pure = ""
-
-// The reason aspect of the formatter's eight-fanout: the node's handle chases
-// to its GNode; the Reason renders via the ONE canonical show_reason
-// (types.mn) — never a second compressed walk of the 25-variant Reason ADT.
-// Debug aspect — assemble_render decides placement.
-fn render_reason_chain(node) with GraphRead + !Mutate + Alloc + Memory = {
-  let N(_, _, h) = node
+// The reason aspect of the formatter's fanout: the handle chases to its
+// GNode; the Reason renders via the ONE canonical show_reason (types.mn) —
+// never a second compressed walk. Debug aspect — assemble_render decides
+// placement (today: dropped from the assembled text).
+fn render_reason_at(h) with GraphRead + !Mutate + Alloc + Memory = {
   let GNode(_, reason) = graph_chase(h)
   show_reason(reason)
 }
@@ -535,7 +819,11 @@ fn render_non_chain(node) with Format + !Mutate = {
   format_at_handle(node_handle(node))
 }
 
-fn assemble_render(tokens, indent, line_break, comment, span, reason, sibling) with Alloc + Memory = {
+// String intent boundaries: the seven-fan's tuple elements reach here as
+// free vars (the branch returns don't ground the destructure), and `++`
+// on an unproven element is the loud floor — the annotations carry the
+// proof the concat dispatch reads (the §9 pointer-eq law's sibling).
+fn assemble_render(tokens: String, indent: String, line_break: String, comment: String, span: String, reason: String, sibling: String) with Alloc + Memory = {
   // The one comment renders as a leading block above the declaration (the
   // verbatim //-prefixed prose from the weave); then indent, tokens, glue.
   comment

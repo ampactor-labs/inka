@@ -1028,6 +1028,16 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · THE KEYED SCAN'S LAST CORPSE LEAVES THE SOURCE (the
+  foundation cut's second write-side cleanup · pin 9bfcf506):
+  ev_lookup/ev_scan — kept one generation for the prior boot's emitted
+  LEvRef sites — deleted exactly as their own comment scheduled (zero
+  references in the emitted artifact; reach had pruned them), and
+  pipeline.mn's grounding comment trued from the dead call-boundary
+  evidence-threading justification to the live one (the
+  stateful-default zero-state read the SingletonUninstalled guard
+  refuses). CLEAN m2 == m3; census 0; comment-refs 0. The keyed-ev
+  region's write side is now EMPTY of source.
 - 2026-07-24 · ▶▶▶▶ THE EVIDENCE REGION DIES WHOLE + THE FORK KEEPS ITS
   SPINES (the world arc's foundation cut, rung two, landed WITH the
   latent fork-pair root its one red surfaced · pin 612b6589): the

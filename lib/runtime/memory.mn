@@ -97,21 +97,6 @@ effect Alloc {
 //   → performs nothing; row is the empty closed triple; type checker enforces
 //     that the body contains no perform statements.
 
-// The PRIOR generation's forward-side keyed-region scan — the pinned
-// boot's emitted LEvRef sites still name it (m2 = boot(wheel) carries
-// them). The new emit mints no keyed regions at all; once the pin
-// crosses, this pair has zero callers, reach prunes it from every
-// emitted module, and its deletion from source is the transition's
-// second write-side cleanup (the ev_perform_entry precedent exactly).
-fn ev_lookup(state, base, target) with Memory = ev_scan(state, base, target, 0)
-
-fn ev_scan(state, base, target, j) with Memory = {
-  let key = load_i32(state + base + 8 * j)
-  if key == target { load_i32(state + base + 8 * j + 4) }
-  else if key == 0 { 0 }
-  else { ev_scan(state, base, target, j + 1) }
-}
-
 // ─── The evidence read IS the world walk (the world-as-value arc) ────────
 // The live install chain — [key@0][entry@4][parent@8][install_world@12]
 // nodes consed by every install's $world_push — is walked from world_top()

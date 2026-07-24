@@ -318,14 +318,14 @@ fn grounded_scan(ref bindings, i, n, ename: String) = {
     let ok = match kind {
       EffectOpScheme(op_effect, _, _, _) =>
         // Substrate projection or WASI import only. A DEFAULT HANDLER does
-        // NOT ground: the perform's singleton tier direct-calls it, but the
-        // CALL-BOUNDARY evidence threading still demands the effect's
-        // region at every seam the row crosses (the sst build's ev_lookup —
-        // measured: an uninstalled-singleton module emits a call to
-        // $ev_lookup that reach never includes, an assembly-loud break).
+        // NOT ground: the perform's singleton tier direct-calls it, but a
+        // STATEFUL default with no live install reads its zero state
+        // global — the silent-wrong the runtime guard refuses
+        // (SingletonUninstalled; in the retired keyed-evidence era the
+        // same shape broke at assembly, the sst build's ev_lookup).
         // The intrinsic families (to_string/hash) never reach the perform
-        // dispatch and never thread, so they ground through the
-        // not-performed conjunct, never through a default field.
+        // dispatch, so they ground through the not-performed conjunct,
+        // never through a default field.
         if op_effect == ename {
           is_substrate_mem_op(opname) || is_wasi_import_op(opname)
         } else { true },

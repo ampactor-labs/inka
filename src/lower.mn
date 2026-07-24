@@ -750,9 +750,9 @@ fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
           // IS the handler" (lib/runtime/memory.mn). They project to raw
           // instructions, never through evidence: routing them Tier-2 made
           // the evidence scan's own loads dispatch through the evidence
-          // scan (ev_perform_entry ⇄ ev_scan, the handler rung's runtime
-          // stack overflow). LWasiCall is the direct-substrate node; emit
-          // dispatches the name to its instruction.
+          // scan (`ev_scan` recursing into itself — the handler rung's
+          // runtime stack overflow). LWasiCall is the direct-substrate
+          // node; emit dispatches the name to its instruction.
           LWasiCall(handle, name, lo_args)
         } else { match env_kind_of(name) {
         Some(ConstructorScheme(tag_id, _)) =>
@@ -1000,7 +1000,8 @@ fn note_threaded_ev(ename, ev) = match ev {
 // here) UNIONED with the callee's FLOW-CLOSURE (`escaping_row` — recovering the
 // forward-ref effects the frozen leaf drops: a callee bound AFTER its caller
 // generalized never entered the row, so the leaf reads [] and the callee's
-// strict `ev_perform_entry` key-scan meets an empty region → the ev-seam). Both
+// perform misses its world node (`ev_perform_node` traps loudly) → the
+// ev-seam). Both
 // are needed — the leaf alone drops the forward-ref first-order case
 // (mint_param_placeholders, the m3 pre_register trap); the flow-closure alone
 // drops a higher-order arg whose effect is per-call-site. Keyed identity
@@ -2867,7 +2868,7 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   // it live through the thunk's [key][record][base] region, exactly as a real
   // lambda does (the `derive_ev_slots(handle)` sites above). The old `[]` gave
   // the thunk no effect evidence, so a stateful-effect perform inside a branch
-  // met the strict ev_perform_entry miss (only singleton `!Mutate` handlers,
+  // met the strict perform-side miss (only singleton `!Mutate` handlers,
   // dispatched off their `$..._state_g` global, resolved) — invisible until the
   // felt read drove the eight-arm fanout through Verify/Teach.
   ScheduledBoundary(
@@ -6116,8 +6117,8 @@ fn reachable_from_main(lowered) = {
 
 // The emit layer's substrate contract — every runtime fn an emit arm
 // dispatches to BY NAME as it cashes a proof ("the proof becomes the
-// dispatch": a String == mints `call $str_eq`, a perform's strict scan
-// mints `call $ev_perform_entry`). These references are minted at emit,
+// dispatch": a String == mints `call $str_eq`, a perform's world walk
+// mints `call $ev_perform_node`). These references are minted at emit,
 // after reachability projected the input, so the projection seeds its
 // frontier from this set — one home, maintained beside the arms that
 // mint the calls; an arm that gains a `call $<fn>` adds the name here.
@@ -6126,10 +6127,9 @@ fn reachable_from_main(lowered) = {
 // ev-slot seam close.
 fn emit_runtime_contract() =
   // ev_perform_node (+ its world_find_from walk) is the world-read the
-  // LEvPerform arm mints (the world-as-value arc's R2); ev_perform_entry
-  // stays seeded only while the PRIOR pin's emitted sites name it — it
-  // leaves this list with the write-side cleanup rung.
-  ["ev_lookup", "ev_perform_entry", "ev_perform_node", "world_find_from",
+  // LEvPerform arm mints (the world-as-value arc's R2); ev_lookup remains
+  // the FORWARD-side pair-builder's read (LEvRef, the __resume k-channel).
+  ["ev_lookup", "ev_perform_node", "world_find_from",
    "len",
    "list_compare", "list_concat", "list_eq", "list_index", "list_set",
    "make_list", "make_list_sc", "slice", "str_compare", "str_concat",

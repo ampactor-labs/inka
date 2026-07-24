@@ -110,7 +110,7 @@ effect Alloc {
 // ROUTINE — capture sets over-approximate (escaping_row), so a caller
 // legitimately lacks keys its callee never fires; 0 means the pair is
 // written unfilled, tolerant by design. The PERFORM side no longer reads
-// any frame region — it walks the live world chain (ev_perform_entry
+// any frame region — it walks the live world chain (ev_perform_node
 // below, the world-as-value arc's R2; the miss-traps-loudly contract from
 // the 2026-07-03 garbage-dispatch measurement carries over there).
 fn ev_lookup(state, base, target) with Memory = ev_scan(state, base, target, 0)
@@ -163,19 +163,4 @@ fn ev_perform_node(top, target) with Memory = {
     load_i32(0 - 1)
   }
   else { node }
-}
-
-// The PRIOR generation's perform-side read — the frame-region scan the
-// pinned boot's emitted call sites still name (m2 = boot(wheel) carries
-// them). The new emit calls ev_perform_node; once the pin crosses, this
-// fn has zero callers and reach prunes it from every emitted module —
-// its deletion from source is the arc's write-side cleanup rung.
-fn ev_perform_entry(state, base, target) with Memory = {
-  let entry = ev_lookup(state, base, target)
-  if entry == 0 {
-    store_i32(0, target)
-    store_i32(4, base)
-    load_i32(0 - 1)
-  }
-  else { entry }
 }

@@ -1026,6 +1026,20 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · THE PERFORM SCAN'S CORPSE LEAVES THE SOURCE (the world
+  arc's write-side cleanup, rung one · pin 9448692b): ev_perform_entry
+  deleted with its reach seed — the fn its own comment scheduled for
+  this rung, zero callers since the R2 pin crossed — and all nine
+  prose sites trued to ev_perform_node or reworded off the dead
+  symbol. CLEAN m2 == m3 at 577,727 lines (reach had already pruned
+  it; the deletion removes source only); board whole at the pin.
+  Rung two is the foundation cut the census forced: the keyed-ev
+  region dies WHOLE (effect entries write-only since R2; LSuspend's
+  evidence fork collapses to bare calls), the __resume channel becomes
+  a real trailing argument on resume-bound fns (the "argument, not
+  evidence" ruling executed), and the k record freezes the LIVE world
+  handle (the static world_tag fingerprint dies) with resume rebinding
+  through it — R4's semantics at the representation layer.
 - 2026-07-23 · ▶▶▶ THE FORMATTER SPEAKS — render totality + `mentl fmt`
   (the formatter arc's first landing · pin 013e26bd): the 18 missing
   arms land (Expr 25/25, Stmt 9/9, Pat 8/8; the surrender-fallbacks

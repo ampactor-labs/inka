@@ -109,7 +109,7 @@ effect EmitMemory {
 //
 // The emission is inlined in each arm (not factored to a shared fn) because the
 // call sites emit inside fn-body buffers where a fn boundary would thread the
-// WatOut evidence across the ev_perform_entry seam (PLAN §7); the arm performs
+// WatOut evidence across the evidence-dispatch seam (PLAN §7); the arm performs
 // wat_emit directly, exactly as before. Per-strategy $alloc BODIES chosen by the
 // installed handler are the seam-gated follow-up Hβ.emit.memory-strategy-body-swap
 // (a body-emitting `~>` perform trips the same evidence seam today); until it
@@ -1419,8 +1419,8 @@ fn emit_one_redrive(hname) = {
 // junction calls $__k_extend; emitted only when the module yields (Law 7).
 fn emit_k_compose_pair() with WasmOut = {
   // $__k_world_tag(k) — the tail read: skip the captures fence, walk the
-  // keyed ev region to its 0 sentinel (the SAME scan ev_perform_entry keys),
-  // load world_tag at sentinel+12 — the record's last word, where
+  // keyed ev region to its 0 sentinel (the SAME keyed region ev_scan
+  // walks), load world_tag at sentinel+12 — the record's last word, where
   // LMakeContinuation stores it.
   wat_emit("  (func $__k_world_tag (param $k i32) (result i32) (local $p i32)\n")
   wat_emit("    (local.set $p (i32.add (local.get $k)\n")
@@ -2198,7 +2198,7 @@ fn emit_memory_decl() = {
   // return $heap_ptr, advance it by (size+7)&-8 so every record starts 8-byte
   // aligned and the heap image stays memcpy-serializable (§5.U). Emitted directly
   // (not through a `~>` perform) because a body-emitting perform trips the
-  // ev_perform_entry evidence seam today; the arena/CAS body-swap is the named
+  // evidence-dispatch seam today; the arena/CAS body-swap is the named
   // follow-up Hβ.emit.memory-strategy-body-swap (gated on the seam, PLAN §7).
   wat_emit("  (func $alloc (param $size i32) (result i32)(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (local.get $ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr)(br_if 0 (i32.ge_u (global.get $heap_ptr)(local.get $ptr)))(unreachable))\n")
   // heap_reset RESTORES VIRGINITY: the region [mark, bump) is zeroed before
@@ -3099,7 +3099,7 @@ fn find_local_handle_expr(name: String, expr) = match expr {
 // return) emit no word, so no drop. A unit-typed op's Tier-2 perform
 // still yields the uniform i32 (every $ft results i32), so a
 // statement-position perform is exactly this law's instance — the
-// two scratch stores in ev_perform_entry's postmortem window were the
+// scratch stores in the perform-miss postmortem window were the
 // first on the m2 path and left [i32, i32] at an if-branch end.
 fn emit_body(stmts) = emit_body_seq(stmts, 0)
 
@@ -3353,7 +3353,7 @@ fn emit_ev_entry_keyed(base, key_off) = {
 }
 
 // (The PERFORM-side read lives in the LEvPerform arm itself now: one
-// ev_perform_entry call resolving the WORLD node into the per-site local —
+// ev_perform_node call resolving the WORLD node into the per-site local —
 // the world-as-value arc's R2; the frame-region perform scan is retired.)
 
 // Write a self-describing captured_evs region into record `state_local`: the
@@ -4039,7 +4039,7 @@ fn emit_expr(expr) = match expr {
     // above; install_world = the saved chain, what the arm dispatch sets
     // around the arm call), restore after the extent (the same
     // save/restore shape as the scoped-singleton global below, world
-    // outermost). The perform walks this chain (ev_perform_entry).
+    // outermost). The perform walks this chain (ev_perform_node).
     wat_emit("(global.get $world_g)(local.set $")
     wat_emit(local_name)
     wat_emit("_wprev)\n")
@@ -4262,7 +4262,7 @@ fn emit_expr(expr) = match expr {
   },
 
   // Tier-2 evidence-dispatched perform — the WORLD read (the arc's R2).
-  // ev_perform_entry walks the live install chain by interned key and
+  // ev_perform_node walks the live install chain by interned key and
   // returns the NODE [key@0][entry@4][parent@8][install_world@12] (miss =
   // the loud postmortem trap, memory.mn). The arm runs against the entry's
   // RECORD as its own __state (handler IS evidence); its fn_idx lives in
@@ -4273,7 +4273,7 @@ fn emit_expr(expr) = match expr {
   // law: the arm's own performs resolve outer, never self), restored
   // immediately after — so a tail-resumptive resume-as-return continues
   // the remainder under the perform-site world by construction.
-  //   node   = ev_perform_entry(key_off)            (key_off = string_offset(ename))
+  //   node   = ev_perform_node(world_g, key_off)    (key_off = string_offset(ename))
   //   entry  = node[4];  record = entry[0];  base_field = entry[1]
   //   arm_fn = record[(8 + 4*op_slot) + 4*base_field + 4*record[4]]
   //   dispatch = call_indirect (type $ft<argc+1>) (record, args…, arm_fn)

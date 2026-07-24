@@ -315,7 +315,7 @@
 <footer>
   <span><b>compiler</b> mentl-ide.wasm — the pinned wheel, 512MB-initial repack of boot</span>
   <span><b>loop</b> keystroke → compile → project → the live CursorView</span>
-  <span><b>server</b> ide/serve.mn — mentl, serving mentl</span>
+  <span><b>server</b> mentl space — mentl, serving mentl</span>
   <span><b>run</b> download .wat + wat2wasm — in-page run lands with binary emit (band N)</span>
 </footer>
 <script>
@@ -839,7 +839,7 @@ const RT_KEYS = ["lib/runtime/memory.mn","lib/runtime/strings.mn","lib/runtime/l
 let MODULE = null, RT = "", RESULT = null, PARSE = null, VFS = {};
 async function boot(){
   try {
-    if (!crossOriginIsolated) throw new Error("page is not cross-origin isolated — start it with `bash ide/serve.sh` (the compiler's shared memory needs COOP/COEP headers)");
+    if (!crossOriginIsolated) throw new Error("page is not cross-origin isolated — start it with `mentl space` (the compiler's shared memory needs COOP/COEP headers)");
     const [wasm, ...texts] = await Promise.all([
       fetch("mentl-ide.wasm").then(r => { if(!r.ok) throw new Error("mentl-ide.wasm missing"); return r.arrayBuffer(); }),
       ...VFS_LIBS.map(([, u]) => fetch(u).then(r => r.ok ? r.text() : "")),

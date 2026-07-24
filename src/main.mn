@@ -91,6 +91,7 @@ type EntryVerb
   = VEdit(Option(String))            // target optional → default "main"
   | VDoc(Option(String))
   | VServe
+  | VSpace
   | VCompile(String)                 // target REQUIRED — carried non-optionally
   | VCompileStdin
   | VRun(String)
@@ -148,6 +149,7 @@ fn verb_specs() with Memory + Alloc = [
   VerbSpec("test",    "[path]",            (a) => Invocation(VTest(optional_target(a, 2))),                                           "the test chain"),
   VerbSpec("new",     "<name>",            (a) => if len(a) >= 3 { Invocation(VNew(a[2])) } else { ParseError("new needs a name: mentl new <name>") }, "write <name>.mn here (one file; the imports are the manifest)"),
   VerbSpec("serve",   "",                  (a) => Invocation(VServe),                                                                 "the transport server"),
+  VerbSpec("space",   "",                  (a) => Invocation(VSpace),                                                                 "the ide, served — open http://localhost:7378/ide/"),
   VerbSpec("repl",    "",                  (a) => Invocation(VRepl),                                                                  "line REPL"),
   VerbSpec("--with",  "<handler> [path]",  (a) => if len(a) >= 3 { Invocation(VWith(a[2], optional_target(a, 3))) } else { ParseError("--with needs a handler: mentl --with <handler> [path]") }, "install any handler over any verb"),
   VerbSpec("help",    "",                  (a) => Invocation(VWelcome),                                                               "this projection")
@@ -313,6 +315,7 @@ fn dispatch_invocation(verb) = {
       VEdit(target)        => edit_run(target),
       VDoc(target)         => doc_run(target),
       VServe               => serve_run(),
+      VSpace               => space_run(),
       VCompile(target)     => compile_run(target),
       VCompileStdin        =>
         // The bare invocation forks on the ONE substrate fact that
@@ -434,6 +437,117 @@ fn entry_start_caret(entry_module, ranges) = {
         Inferred("mentl edit session start — at the entry")))
     },
     None => Caret(0, Inferred("mentl edit session start"))
+  }
+}
+
+// ─── space_run — the ide, served by the wheel (`mentl space`)
+//
+// The HTTP/1.1 file server that lived as ide/serve.mn, absorbed whole:
+// the accept loop is an evidence-threading tail call over the socket
+// substrate (lib/runtime/net.mn); every response carries the
+// cross-origin-isolation pair the IDE's shared-memory compiler requires.
+// The host preopens the repo dir and the listener
+// (-S tcplisten=127.0.0.1:7378 — the install shim's space seam);
+// find_listener reads the preopen table, so the fd never lives in source.
+
+fn space_mime_for(path: String) with Memory + Alloc =
+  if ends_with(path, ".html")      { "text/html; charset=utf-8" }
+  else if ends_with(path, ".wasm") { "application/wasm" }
+  else if ends_with(path, ".js")   { "text/javascript" }
+  else if ends_with(path, ".mjs")  { "text/javascript" }
+  else if ends_with(path, ".css")  { "text/css" }
+  else if ends_with(path, ".json") { "application/json" }
+  else if ends_with(path, ".svg")  { "image/svg+xml" }
+  else if ends_with(path, ".png")  { "image/png" }
+  else if ends_with(path, ".md")   { "text/markdown; charset=utf-8" }
+  else if ends_with(path, ".mn")   { "text/plain; charset=utf-8" }
+  else if ends_with(path, ".wat")  { "text/plain; charset=utf-8" }
+  else                             { "application/octet-stream" }
+
+// One read is the whole request for the GETs a static IDE makes. The bytes
+// materialize as a proper [count][tag][bytes@+8] String record (bytes_buf +
+// str_of_buf — io.mn's fd_read_all form).
+fn space_read_request(conn) with Memory + Alloc + WASI = {
+  let cap = 65536
+  let buf = alloc(cap)
+  let n = sock_read(conn, buf, cap)
+  let got = if n < 0 { 0 } else { n }
+  let str = bytes_buf(got)
+  mem_copy(str + 8, buf, got)
+  str_of_buf(str)
+}
+
+// The request line's path: bytes between the first two spaces, query
+// stripped. Empty on a malformed line (the caller 400s).
+fn space_request_path(req: String) with Memory + Alloc = {
+  let n = byte_len(req)
+  let sp1 = find_char(req, n, 0, 32)
+  if sp1 < 0 { "" }
+  else {
+    let sp2 = find_char(req, n, sp1 + 1, 32)
+    if sp2 < 0 { "" }
+    else {
+      let raw = str_slice(req, sp1 + 1, sp2)
+      let q = find_char(raw, byte_len(raw), 0, 63)   // '?'
+      if q < 0 { raw } else { str_slice(raw, 0, q) }
+    }
+  }
+}
+
+// Routing: "/" and any directory path serve its index.html; the leading
+// slash strips (fs paths are preopen-relative); ".." refuses.
+fn space_route(path: String) with Memory + Alloc =
+  if path == "" || path == "/" { "ide/index.html" }
+  else {
+    let full = if ends_with(path, "/") { str_concat(path, "index.html") } else { path }
+    str_slice(full, 1, byte_len(full))
+  }
+
+fn space_respond(conn, code_line: String, mime: String, body: String) with Memory + Alloc + WASI = {
+  let len_s = int_to_str(byte_len(body))
+  let head = "HTTP/1.1 {code_line}\r\nContent-Type: {mime}\r\nContent-Length: {len_s}\r\nCross-Origin-Opener-Policy: same-origin\r\nCross-Origin-Embedder-Policy: require-corp\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
+  sock_write_str(conn, head)
+  sock_write_str(conn, body)
+  ()
+}
+
+fn space_conn(conn) with Memory + Alloc + WASI = {
+  let req = space_read_request(conn)
+  let path = space_request_path(req)
+  if byte_len(path) == 0 {
+    space_respond(conn, "400 Bad Request", "text/plain", "bad request\n")
+  } else if str_contains(path, "..") {
+    space_respond(conn, "403 Forbidden", "text/plain", "no traversal\n")
+  } else {
+    let file = space_route(path)
+    if fs_exists_impl(file) {
+      space_respond(conn, "200 OK", space_mime_for(file), fs_read_file_impl(file))
+      print_string("200 {file}\n")
+    } else {
+      space_respond(conn, "404 Not Found", "text/plain", "not found: {file}\n")
+      print_string("404 {file}\n")
+    }
+  }
+  fd_close(conn)
+  ()
+}
+
+// The accept loop — constant stack forever (the tail form carrying its
+// own server).
+fn space_loop(lfd) with Memory + Alloc + WASI = {
+  space_conn(sock_accept_blocking(lfd))
+  space_loop(lfd)
+}
+
+fn space_run() with Memory + Alloc + WASI = {
+  let lfd = find_listener()   // drift-audit: ignore — sequenced effectful read consumed at TWO sites (the guard and the loop): the reuse exclusion, not a pipe stage
+  if lfd < 0 {
+    eprint_string("mentl space: no listener preopened — the install shim adds -S tcplisten=127.0.0.1:7378 for this verb; by hand from the repo root: wasmtime run <flags> --dir . -S tcplisten=127.0.0.1:7378 boot/mentl.wasm space\n")   // drift-audit: ignore — the flagged keyword is inside the teaching string (a quoted shell invocation), not control flow
+    1
+  } else {
+    print_string("mentl space -> http://localhost:7378/ide/\n")
+    space_loop(lfd)
+    0
   }
 }
 

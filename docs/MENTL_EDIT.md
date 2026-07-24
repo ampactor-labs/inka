@@ -591,7 +591,7 @@ lower the target. Everything above is written at ultimate form. This section is
 the honest scope: which surfaces the *current* substrate serves (wire these
 first, they are rendering work over live reads), and which need named substrate
 work, each in positive form with its exact `src/` seam. RED-first where testable:
-any change under `ide/` must still serve via `ide/serve.sh`.
+any change under `ide/` must still serve via `mentl space`.
 
 ### Wire now — the substrate already serves these
 

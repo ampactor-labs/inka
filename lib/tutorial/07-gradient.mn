@@ -13,7 +13,7 @@
 // it, and rolled it back before offering it. A `??` is you asking directly; it
 // names a hole the medium proposes into.
 //
-// Edit it:  bash ide/serve.sh   →   http://localhost:7378/ide/   (paste this in)
+// Edit it:  mentl space   →   http://localhost:7378/ide/   (paste this in)
 // Read it:  mentl lib/tutorial/07-gradient.mn:31   ← the Teach facet names the next move
 
 import runtime/io

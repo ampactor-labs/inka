@@ -1026,6 +1026,28 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · THE WHEEL SERVES ITS OWN IDE — `mentl space` (queue 4;
+  the serve scaffold's written dissolution executed · pin 61c10ab8):
+  ide/serve.mn absorbed whole as src/main.mn's space arms (mime
+  projection · one-read request · request-line path · route, with "/"
+  and directories to index.html and ".." refusing · the isolation-pair
+  respond · the tail accept loop, constant stack for the server's
+  life); serve.mn + serve.sh + serve.wasm DELETED, every reference
+  re-pointed (README, MENTL_EDIT, tutorials, §8, the runner design).
+  The listener is the install shim's seam — WASI p1 has no
+  bind/listen, so the host resource rides the same shim boundary as
+  run's exec seam (--dir "$MENTL_HOME::." maps the repo at guest "."
+  so the verb serves from ANY directory; -S tcplisten=127.0.0.1:7378,
+  override MENTL_SPACE_PORT); without a listener the verb refuses and
+  TEACHES the seam. Two frontier legs seen RED on the pre-verb boot:
+  the refusal-teach, and the live serve asserting 200 + the
+  cross-origin-isolation pair on ide/index.html; smoked end-to-end
+  through the installed shim from /tmp. One observation banked with
+  its one-line design: `mentl <unknown-verb>` prints the catalog and
+  exits 0 — the refusal law at the CLI surface wants exit 1 when argv
+  NAMED a verb (bare `mentl` stays the welcome projection at 0).
+  Board whole at the pin: CLEAN m2 == m3 at 559,432 lines, census 0,
+  comment-refs 0, frontier 212/0, battery 113/113.
 - 2026-07-23 · gradient_queue DELETED WHOLE (queue 3 · pin 56f01996):
   the built-exposed-zero-callers GradientQueue block (effect + handler +
   its four private fns, 107 lines) dies; the peer resolves as DELETE;
@@ -2380,7 +2402,7 @@ workflow was later deleted whole — §11 col 5); (2) the runner's I/O-only
 half, whole battery byte-identical through it; (3) the spawn glue; (4)
 the repo's FIRST real-spawn fixture (~> parallel_compose, genuine
 concurrency — band E's "proven by real spawn" claim made true as a side
-effect); (5) swap wt-env.sh/install.sh/serve.sh (+ hosted CI when it returns, §11 col 5) to the runner,
+effect); (5) swap wt-env.sh/install.sh (+ hosted CI when it returns, §11 col 5) to the runner,
 drop `-S threads=y`; (6) retire the LTS pin. shared-everything-threads is
 the named eventual target, unimplemented in any host — name it, do not
 build toward it. Two artifact-prose corrections the recon surfaced:
@@ -2568,7 +2590,7 @@ bash tools/march-gate.sh --micros   # rungs + battery through boot's wheel-emitt
 bash tools/march.sh            # THE RATCHET: boot→m2→m3, ASSERTS m2 == m3; on m2 ≠ m3 runs m4 ITSELF and rules TRANSITION (re-pin from m3) vs BROKEN
 bash tools/frontier-gate.sh    # scheduled matrix + ?? authoring workflows (--compiler fresh for the current wheel)
 bash tools/proof-exactness-gate.sh  # hole refuses · debt surfaces · suspension runs
-bash ide/serve.sh              # mentl edit in the browser (localhost:7378/ide/) — SERVED BY MENTL (ide/serve.mn)
+mentl space                    # mentl edit in the browser (localhost:7378/ide/) — SERVED BY THE WHEEL (src/main.mn space_run; the shim owns the tcplisten seam)
 #   (the seed + --from-seed are deleted, 7401c4b; the cold ladder lives at tag first-light)
 python3 tools/emit-diff.py m2.wat m3.wat        # the divergence pinner — run FIRST on any m3 trap (CLAUDE.md ⟲)
 python3 tools/emit-diff.py m2.wat m3.wat --trap # m3-side unreachable bodies m2 lacks (filter to comment-marked floors — bare else-unreachable is benign, SYNTAX §exhaustiveness)

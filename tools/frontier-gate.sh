@@ -1104,6 +1104,37 @@ for i in "${!compilers[@]}"; do
   else
     fail "cursor-address propose (got: $pout; see $dir/propose-at.err)"
   fi
+  # ── mentl space — the ide served by the wheel ──────────────────────
+  # The verb absorbs ide/serve.mn whole: the accept loop lives in
+  # src/main.mn, the listener is the shim's tcplisten preopen seam (WASI
+  # p1 has no bind/listen). Leg 1: without a listener the verb refuses
+  # and TEACHES the seam. Leg 2: with one preopened it serves
+  # ide/index.html carrying the cross-origin-isolation pair the
+  # shared-memory compiler requires. Both seen RED on the pre-verb boot
+  # ("unrecognized or under-specified command: space").
+  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT::." "$compiler" space >"$dir/space-refuse.out" 2>&1
+  if [ $? -ne 0 ] && grep -q 'no listener preopened' "$dir/space-refuse.out"; then
+    pass "space refuses without a listener (and teaches the seam)"
+  else
+    fail "space no-listener refusal (see $dir/space-refuse.out)"
+  fi
+  space_port=7379
+  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT::." -S "tcplisten=127.0.0.1:${space_port}" "$compiler" space >"$dir/space-serve.log" 2>&1 &
+  space_pid=$!
+  space_hdr=""
+  for _ in $(seq 1 20); do
+    space_hdr=$(curl -s -D - -o "$dir/space-index.html" "http://127.0.0.1:${space_port}/ide/index.html" 2>/dev/null) && break
+    sleep 0.3
+  done
+  kill "$space_pid" 2>/dev/null
+  wait "$space_pid" 2>/dev/null
+  if printf '%s' "$space_hdr" | grep -q '200 OK' \
+     && printf '%s' "$space_hdr" | grep -qi 'Cross-Origin-Embedder-Policy: require-corp' \
+     && [ -s "$dir/space-index.html" ]; then
+    pass "space serves ide/index.html with the isolation pair"
+  else
+    fail "space live serve (status: $(printf '%s' "$space_hdr" | head -1); see $dir/space-serve.log)"
+  fi
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

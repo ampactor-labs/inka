@@ -14,7 +14,7 @@
 // just says hello.
 //
 // Run it:   mentl run  lib/tutorial/00-hello.mn
-// Edit it:  bash ide/serve.sh   →   http://localhost:7378/ide/
+// Edit it:  mentl space   →   http://localhost:7378/ide/
 // Read it:  mentl lib/tutorial/00-hello.mn:30   ← put the cursor on greet; the medium answers
 
 import runtime/io

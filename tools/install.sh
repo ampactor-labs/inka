@@ -48,6 +48,17 @@ if [ "\${1:-}" = "run" ] && [ -n "\${2:-}" ]; then
   rm -rf "\$tmp"
   exit "\$rc"
 fi
+if [ "\${1:-}" = "space" ]; then
+  # space = the ide, served by the wheel. A listener is a HOST resource
+  # (WASI p1 has no bind/listen — the wheel's find_listener only reads the
+  # preopen table), so the shim owns this seam exactly as it owns run's
+  # exec seam. The repo maps at guest "." so the verb serves ide/ from any
+  # directory. Port override: MENTL_SPACE_PORT.
+  exec "\$WT" run "\${WT_RUN_FLAGS[@]}" \\
+    --dir "\$MENTL_HOME::." --dir /tmp \\
+    -S "tcplisten=127.0.0.1:\${MENTL_SPACE_PORT:-7378}" \\
+    "\$MENTL_HOME/boot/mentl.wasm" space
+fi
 exec_rc=0
 mentl_wasm "\$@" || exec_rc=\$?
 exit "\$exec_rc"

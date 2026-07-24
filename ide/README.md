@@ -12,14 +12,16 @@ from the committed boot:
 
 Run it:
 
-    bash ide/serve.sh           # then open http://localhost:7378/ide/
+    mentl space                 # then open http://localhost:7378/ide/
 
-THE SERVER IS MENTL. ide/serve.mn is an HTTP/1.1 file server written in
-Mentl, compiled by the fixpoint compiler, speaking WASI preview1 sockets
-(lib/runtime/net.mn: sock_accept + poll_oneoff over a listener wasmtime
-preopens with -S tcplisten; connections are plain fds). serve.sh only
-compiles-if-stale and hands wasmtime the invocation — a scaffold that
-dissolves at the `mentl serve` verb.
+THE SERVER IS THE WHEEL. `mentl space` is the compiler's own verb — an
+HTTP/1.1 file server in src/main.mn (the space arms), speaking WASI
+preview1 sockets (lib/runtime/net.mn: sock_accept + poll_oneoff over a
+listener the install shim preopens with -S tcplisten; connections are
+plain fds). The serve.mn/serve.sh scaffold this absorbed is git
+archaeology. By hand, from the repo root:
+
+    wasmtime run <flags> --dir . -S tcplisten=127.0.0.1:7378 boot/mentl.wasm space
 
 The isolation headers exist for one reason: the compiler's memory is
 SHARED (the threading substrate), and browsers require cross-origin

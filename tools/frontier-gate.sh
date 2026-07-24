@@ -447,7 +447,7 @@ run_cfc_rec() {
   # The fixture lives in the gate's OWN per-run dir, which run_program maps as
   # the guest's /tmp (--dir "$dir::/tmp") — the .mn source keeps its /tmp path
   # while the host never writes the shared world-writable /tmp (a predictable
-  # path there is a symlink-planting surface).
+  # path there is a symlink hazard).
   local tmp="$dir/mentl-cfc-recording.txt"
   cp -f "$rec" "$tmp"
   run_program "$compiler" cfc-rec \

@@ -395,7 +395,7 @@ matches BY NAME (`forbidden_names_disjoint` / `eff_name_str`) — `!E` proves th
 ABSENCE of the effect NAMED E (SYNTAX §Negation), every instance — because the old
 check compared names with pointer `i32.eq` and a byte-equal `ENamed("E")` from an
 effect decl and from a `with !E` clause are distinct heap objects, so a forbidden
-effect smuggled straight past the gate (direct, transitive `a→b→bad`, and
+effect passed straight through the gate (direct, transitive `a→b→bad`, and
 higher-order `run(() => op())` all leaked at baseline). By-name is robust to the
 `ENamed`/`EParameterized` split a structural `==` would itself leak through (a bare
 `!Sample` is `ENamed` while a performed `Sample` is `EParameterized`) and leaves the
@@ -2365,7 +2365,7 @@ between the wheel and its ultimate form, held open on purpose.
   the oracle shift TOGETHER, so the assertions are data-driven). Frontier
   135 → 144 / 0. Fixture transport hardened: the gate's own per-run dir is
   mapped as the guest's /tmp (wasmtime --dir "$dir::/tmp"), so the host
-  never writes the shared world-writable /tmp (the symlink-planting surface
+  never writes the shared world-writable /tmp (the predictable-path symlink hazard
   a commit-review flagged) — .mn sources keep their /tmp paths. THE HARVEST
   the validators paid immediately: building stats-float surfaced the
   monomorphization corner's SECOND face — a NAMED generic comparator passed

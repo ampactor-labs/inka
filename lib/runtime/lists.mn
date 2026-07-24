@@ -490,7 +490,7 @@ fn flat_raw(list) with Memory + Alloc = {
 }
 
 // flat_fill — walk the tree in forward order, storing each element into
-// the flat array. Dispatches on tag to exploit snoc structure where
+// the flat array. Dispatches on tag to read snoc structure directly where
 // possible, falls back to list_index for concat/slice nodes.
 fn flat_fill(flat, tree, i, n) with Memory + Alloc = {
   if i >= n { () }

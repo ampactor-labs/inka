@@ -81,7 +81,7 @@ process = checkpoint."
 The refuters found the same foreign-fluency in ≥3 layers each. Each is resolved
 once here and inherited, never re-litigated:
 
-- **`call`/`ret`/`%rsp` smuggled back in.** The root is real: the CPU's
+- **`call`/`ret`/`%rsp` creeping back in.** The root is real: the CPU's
   Return-Stack-Buffer predictor makes `call`/`ret` cheap and an indirect
   `jmp [cursor]` trashes it — a genuine misprediction cliff the "control edge"
   abstraction never priced. The honest resolution is not denial: **use hardware

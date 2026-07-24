@@ -67,7 +67,8 @@ the plugin API**: a theme is a `Render` handler, a keybinding is a handler on
 the `Input` effect, a custom pane is a projection function, a "linter" is a
 handler on `Verify`. Extending the IDE and writing Mentl are one act, so every
 extension is proven under the same rows as everything else, so a plugin cannot
-exfiltrate (`!Network` is checkable) and cannot lie about what it touches. VS
+reach the network unseen (`!Network` is checkable) and cannot lie about what it
+touches. VS
 Code's extension market is a trust problem; mentl edit's is a theorem.
 
 ---

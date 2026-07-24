@@ -6,8 +6,8 @@
 # the prelude's own positive-path noise doesn't mask the signal) through the
 # compiler-under-test.
 #
-#   smuggle-*  MUST emit E_EffectMismatch (a body performs a forbidden effect)
-#   sound-*    MUST NOT (the gate must not over-reject)
+#   leak-*   MUST emit E_EffectMismatch (a body performs a forbidden effect)
+#   sound-*  MUST NOT (the gate must not over-reject)
 #
 # Compiler-under-test: $GATE_WASM (default the keyed boot->m2 artifact), or point
 # MENTL_BOOT at any wheel. Pre-L1 shape of `mentl verify --crown`.
@@ -30,8 +30,8 @@ for f in tests/crown/*.mn; do
   err=$("$WT" run "${WT_RUN_FLAGS[@]}" "$M" < "$f" 2>&1 >/dev/null)
   n=$(printf '%s' "$err" | grep -c 'E_EffectMismatch')
   case "$name" in
-    smuggle-*) want="reject"; ok=$([ "$n" -ge 1 ] && echo 1 || echo 0);;
-    sound-*)   want="accept"; ok=$([ "$n" -eq 0 ] && echo 1 || echo 0);;
+    leak-*)  want="reject"; ok=$([ "$n" -ge 1 ] && echo 1 || echo 0);;
+    sound-*) want="accept"; ok=$([ "$n" -eq 0 ] && echo 1 || echo 0);;
     *)         want="?";      ok=0;;
   esac
   if [ "$ok" = 1 ]; then echo "✓ crown $name ($want, mismatch=$n)"; pass=$((pass+1))

@@ -318,7 +318,7 @@ The developer writes what they mean, not what a computer wants to see; a
 name that adds machinery-gloss over the topology is drift. Three rulings:
 
 - **A banished keyword never returns as a name.** Mentl removed `for`; a fn
-  named `for_each` smuggled the loop back into the reader's mouth — worse,
+  named `for_each` carried the loop back into the reader's mouth — worse,
   the `E_NotAKeyword` Quick Fix was teaching people OUT of `for` by handing
   them `for`. The iteration-for-effect stage is **`each`** (`xs |> each(f)` —
   read it aloud); its handler was named `each_handler` all along, the

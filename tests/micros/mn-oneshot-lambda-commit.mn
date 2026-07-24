@@ -1,0 +1,23 @@
+// expect: 25
+// The commit's record rides the __k rails — argument or capture, never a
+// global (the arm-closure-captures-record landing). A OneShot
+// resume-with-state inside a thunk: the thunk's own $__state is its
+// CLOSURE record, so the pre-ladder emit lost the commit into it
+// (measured 20 on the pre-landing boot — first = 10, read_it = the stale
+// 10). Through the ladder the thunk captures __hrec (the install record)
+// and the commit lands: first = 10, read_it = 15, exit 25.
+effect Cell {
+  bump() -> Int
+  read_it() -> Int
+}
+
+fn call_thunk(f) = f()
+
+handler cell with s = 10 {
+  bump()    => call_thunk(() => resume(s) with s = s + 5),
+  read_it() => resume(s)
+}
+
+fn body() with Cell = { let first = bump(); first + read_it() }
+
+fn main() = { body() } ~> cell

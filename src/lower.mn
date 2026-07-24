@@ -11,7 +11,7 @@
 //
 // Handler elimination (the dispatch gradient, PLAN §6):
 //   TailResumptive (~85%)  → direct call to the arm's own fn
-//   static singleton       → direct call against the handler's state global
+//   static singleton       → direct call, record from the live world chain
 //   polymorphic            → call_indirect via the evidence entry
 //   MultiShot              → heap continuation record + re-execution driver
 // Classification reads TCont's discipline. Monomorphic detection is a
@@ -383,7 +383,7 @@ type LowExpr
   // arm fn's __state IS the handler's state record per
   // protocol_handler_is_state_is_closure_is_evidence.md, so the store
   // mutates handler state across resume calls.
-  | LStateSlotStore(Int, Int, LowExpr, String)  // handle, slot_offset, value, record home ("" = the arm's $__state — byte-frozen OneShot; else $<name>_state_g, the bracket-scoped singleton a closure context reaches — the lambda's own $__state is its closure record, the measured 32-not-46 silent state loss)
+  | LStateSlotStore(Int, Int, LowExpr, LowExpr) // handle, slot_offset, value, record READ — resolved at lower through the __hrec ladder (arm frame: the LLet alias of the arm's own $__state; lambda: the seeded capture; resume-bound fn: the trailing param after __k). The record is a value the frame was born holding — the retired $<hname>_state_g singleton was a bracket-scoped CACHE of it, and a closure's own $__state is its closure record (the measured 32-not-46 / 20-not-25 silent state loss, both disciplines)
   | LShow(Int, LowExpr)             // to_string — operand type read at EMIT under the active
                                     //   specialization bracket (show_node_of, backends/wasm.mn —
                                     //   the one dispatch home; emit_binop_for's altitude)
@@ -612,7 +612,7 @@ fn lower_call_default(handle, f, fh, lo_args) = {
   // where one is in scope and the loud dead-k word where none is.
   let args2 =
     if ls_resume_bind_of(callee_name_of_handle(fh)) == "" { lo_args }
-    else { lo_args ++ [resume_k_arg(handle)] }   // drift-audit: ignore — one k arg per call site, not a loop
+    else { lo_args ++ [resume_k_arg(handle), resume_hrec_arg(handle)] }   // drift-audit: ignore — one k+record arg pair per call site, not a loop
   // The direct cash-out: a callee lower resolved to a top-level fn's
   // OWN global (LGlobal minted from a FnScheme VarRef — locals shadowed
   // it first, value bindings carry another kind) calls the fn BY NAME
@@ -2092,7 +2092,7 @@ fn lower_expr_body(e, handle, span) = match e {
     // seed adds nothing. One dormant word per arm-context closure that
     // never uses it — the price of a walk-free, stateless rule.
     let free_names0 = collect_free_vars(body_node, param_names_list)
-    let free_names = lower_seed_k(free_names0)
+    let free_names = lower_seed_hrec(lower_seed_k(free_names0))
     let (captures_names, captures_exprs, captures_handles) =
       resolve_captures_outer(free_names, handle)
     // Lambda is anonymous — empty fn_name; ls_outer_fn_name skips it.
@@ -2226,7 +2226,7 @@ fn lower_pipe_complete(lo_l, right, handle) = {
       // ruling; the callee's performs dispatch through the world chain).
       let args2 =
         if ls_resume_bind_of(callee_name_of_handle(rfh)) == "" { [lo_l] }
-        else { [lo_l] ++ [resume_k_arg(handle)] }   // drift-audit: ignore — one k arg per stage, not a loop
+        else { [lo_l] ++ [resume_k_arg(handle), resume_hrec_arg(handle)] }   // drift-audit: ignore — one k+record arg pair per stage, not a loop
       LCall(handle, lo_r, args2)
     }
   }
@@ -2277,7 +2277,7 @@ fn lower_pipe(kind, left, right, handle) = match kind {
   PFeedback => {
     // <~ feedback — requires iterative context. The LFeedback emit declares
     // and loads $__fb_prev_<h> (the prior-iteration output), so the body can
-    // read it LIVE. (LF.B) When the LHS is `(prev) => body`, `prev` binds to
+    // read it LIVE. (LF.B) When the LHS is (prev) => body, prev binds to
     // THIS feedback handle's prior node and the recurrence y[n]=f(x[n],y[n-1])
     // is expressed — not commented. The lambda is INLINED (its body lowers
     // directly into the cycle), never a closure: the prior is a register read,
@@ -2319,7 +2319,7 @@ fn callee_arity_of(f) = {
 fn splice_at(xs, i, v) =
   slice(xs, 0, i) ++ [v] ++ slice(xs, i + 1, len(xs))   // drift-audit: ignore — one three-way splice per completed hole, not a loop accumulator
 
-// binds `prev` to the feedback site's prior local and inlines the body —
+// binds prev to the feedback site's prior local and inlines the body —
 // the recurrence reads y[n-1] live. Any other LHS lowers as-is (a bare
 // expression computes on the current input only, the structural form).
 fn lower_feedback_body(left, fb_handle) = {
@@ -2860,17 +2860,17 @@ fn lower_stmt_body(s, handle, span) = match s {
     let base_param_names = lower_param_names(params)
     let param_names_list =
       if bind_h == "" { base_param_names }
-      else { base_param_names ++ ["__k"] }
+      else { base_param_names ++ ["__k", "__hrec"] }
     let base_param_handles = param_handles_of(handle, params)
     let param_handles_list =
       if bind_h == "" { base_param_handles }
-      else { base_param_handles ++ [0] }
+      else { base_param_handles ++ [0, 0] }
     // The same "__k" seeding the lambda mint applies (an UNBOUND nested
     // fn inside an arm may still call a bound sibling); a bound fn's own
     // __k param shadows the seed harmlessly.
     let free_names0 = collect_free_vars(body_node, param_names_list)
     let free_names =
-      if bind_h == "" { lower_seed_k(free_names0) } else { free_names0 }
+      if bind_h == "" { lower_seed_hrec(lower_seed_k(free_names0)) } else { free_names0 }
     let (captures_names, captures_exprs, captures_handles) =
       resolve_captures_outer(free_names, handle)
     // Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):
@@ -3333,6 +3333,17 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
     -1   // handler arm — not a lambda; the ev READ uses the arm's captured set / escaping_row
   )
   lower_frame_fence_push()
+  // A STATEFUL arm binds `__hrec` to its own $__state — the install
+  // record the driver passed — so commits at every depth reach it
+  // through the ONE ladder: at arm level the LLet local, in a lambda the
+  // seeded capture, in a bound callee the trailing param. The bind runs
+  // BEFORE body lowering so nested mints resolve it; the LLet
+  // materializes it below.
+  let stateful = len(captures_names) > 0
+  if stateful {
+    ls_bind_local("__hrec", 0)
+    ()
+  } else { () }
   // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
   // around arm body lowering so lower_expr's ResumeExpr arm resolves
   // `with field = NEW` updates' slot offsets via current_state_fields()
@@ -3342,7 +3353,10 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
   ls_exit_frame()
   // fence = nstate + total_arms; the arm's LEvPerform reads land on the
   // record's captured-ev region (past state AND arms).
-  let fn_ir = LFn(fn_name, len(arm_params), arm_params, [lo_body], mk_ef_pure(), fence)
+  let body_list =
+    if stateful { [LLet(0, "__hrec", LLocal(0, "__state")), lo_body] }
+    else { [lo_body] }
+  let fn_ir = LFn(fn_name, len(arm_params), arm_params, body_list, mk_ef_pure(), fence)
   LDeclareFn(fn_ir)
 }
 
@@ -3451,12 +3465,14 @@ fn lower_resume_callk(handle, val, state_updates) = {
     if len(state_updates) == 0 { ([], "") }
     else {
       let fields = current_state_fields()   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
-      // The MultiShot commit's record home is the bracket-scoped singleton
-      // $<hname>_state_g — the SAME record as the arm's $__state at arm
-      // level (the bracket set it), and the ONLY reachable home inside a
-      // closure (whose own $__state is its closure record — the measured
-      // 32-not-46 silent state loss, S1's unmasking gate).
-      resume_commit_prefix(handle, val, state_updates, fields, hname)
+      // The commit's record is a value the frame was BORN holding — the
+      // __hrec ladder resolves it (arm: the LLet alias of $__state;
+      // lambda: the seeded capture; bound fn: the trailing param), the
+      // same rails as __k. A closure's own $__state is its closure
+      // record (the measured 32-not-46 silent state loss, S1's unmasking
+      // gate), so the record is CARRIED, never re-read from a
+      // bracket-scoped cache a rebind can stale.
+      resume_commit_prefix(handle, val, state_updates, fields, resolve_hrec(handle))
     }
   let val_lo =
     if len(state_updates) == 0 { lower_expr(val) }
@@ -3521,6 +3537,53 @@ fn lower_seed_k(free_names) = {
     RLocal    => free_vars_merge(["__k"], free_names),
     RUpval(_) => free_vars_merge(["__k"], free_names),
     _         => free_names
+  }
+}
+
+// __hrec rides the same rule — the commit's record threads to closures
+// exactly as the k does: one ladder, both values the frame was born
+// holding. Where no stateful arm encloses the mint, the seed adds nothing.
+fn lower_seed_hrec(free_names) = {
+  let (res, _lh) = ls_resolve("__hrec")
+  match res {
+    RLocal    => free_vars_merge(["__hrec"], free_names),
+    RUpval(_) => free_vars_merge(["__hrec"], free_names),
+    _         => free_names
+  }
+}
+
+// The commit's record, resolved through the SAME ladder as the k (the
+// record is an ARGUMENT or a CAPTURE, never a global): the arm frame
+// binds `__hrec` as an LLet alias of its own $__state (the record the
+// driver passed), a lambda captures it (lower_seed_hrec), a resume-bound
+// fn takes it as the trailing param after __k. The unresolved arms fall
+// back to the frame's own $__state — sound exactly where no __hrec was
+// ever minted, because a frame with commits and no binding IS the
+// record's owner (the arm-level identity).
+fn resolve_hrec(handle) = {
+  let (res, _lh) = ls_resolve("__hrec")
+  match res {
+    RLocal       => LLocal(0, "__hrec"),
+    RUpval(slot) => LUpval(0, slot),
+    RFbPrior(_)  => LLocal(0, "__state"),
+    RGlobal      => LLocal(0, "__state")
+  }
+}
+
+// The record as a CALL ARGUMENT — the tolerant sibling (resume_k_arg's
+// exact shape): a resume-bound callee's emitted arity always includes
+// __hrec after __k, so every call site passes the live record where one
+// is in scope and the dead word 0 where none is. A path that never
+// resumes never commits; a commit on a dead-record path stores just
+// before its paired k-call's dead-word trap, so the path still dies
+// loudly at the resume itself.
+fn resume_hrec_arg(handle) = {
+  let (res, _lh) = ls_resolve("__hrec")
+  match res {
+    RLocal       => LLocal(0, "__hrec"),
+    RUpval(slot) => LUpval(0, slot),
+    RFbPrior(_)  => LConst(handle, LInt(0)),
+    RGlobal      => LConst(handle, LInt(0))
   }
 }
 
@@ -4132,7 +4195,7 @@ fn k2_floor_dummy(h) = match repr_of(lookup_ty(h)) {
 // offsets per protocol_resume_state_mutation_substrate.md
 // productive-under-error.
 fn lower_resume_snapshot(handle, val, updates, fields) = {
-  let (prefix, val_name) = resume_commit_prefix(handle, val, updates, fields, "")
+  let (prefix, val_name) = resume_commit_prefix(handle, val, updates, fields, resolve_hrec(handle))
   LBlock(handle,
     prefix ++ [LReturn(handle, LLocal(handle, val_name))])  // drift-audit: ignore — one-shot stmt-list concat, no loop
 }
@@ -4144,11 +4207,11 @@ fn lower_resume_snapshot(handle, val, updates, fields) = {
 // Returns (stmts, val_name) — the tail differs per discipline: OneShot
 // returns the snapshotted value (LReturn); MultiShot calls the k with it
 // (commit BEFORE k(v), so the resumed remainder re-enters against
-// committed state — LStateSlotStore writes through the arm's __state,
-// which IS the install record the driver pushed, and every arm state read
-// is a LIVE load through that record, so the next resume in the same arm
-// sees the committed value).
-fn resume_commit_prefix(handle, val, updates, fields, home) = {
+// committed state — LStateSlotStore writes through the RESOLVED record
+// read (the __hrec ladder), the install record the driver pushed, and
+// every arm state read is a LIVE load through that record, so the next
+// resume in the same arm sees the committed value).
+fn resume_commit_prefix(handle, val, updates, fields, record) = {
   let val_name = "__resume_val_{int_to_str(handle)}"
   let val_let = LLet(handle, val_name, lower_expr(val))
   let lets = map((upd) =>
@@ -4156,7 +4219,7 @@ fn resume_commit_prefix(handle, val, updates, fields, home) = {
          lower_expr(state_field_init(upd))), updates)
   let stores = map((upd) =>
     LStateSlotStore(handle, resolve_state_slot_offset(state_field_name(upd), fields),
-                    LLocal(handle, resume_upd_local(upd, handle)), home), updates)
+                    LLocal(handle, resume_upd_local(upd, handle)), record), updates)
   ([val_let] ++ lets ++ stores, val_name)   // drift-audit: ignore — one-shot stmt-list concat, no loop
 }
 
@@ -4926,7 +4989,7 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = s
 
   ls_resolve(name) => {
     // Feedback-prior bindings shadow frame locals (the recurrence body's
-    // `prev` IS the prior node — Carried-Truth, read live from $__fb_prev_<h>).
+    // prev IS the prior node — Carried-Truth, read live from $__fb_prev_<h>).
     let prior_h = fb_prior_handle_of(fb_priors, name)
     if prior_h >= 0 {
       resume((RFbPrior(prior_h), 0))
@@ -5264,8 +5327,8 @@ fn reach_enqueue(refs, rbuf, rn, fbuf, fcount) = {
 // NHole still riding an LConst in the tree is exactly the hole the
 // executable cannot carry (SYNTAX §«Partial application» — productive,
 // never executable). One pass, O(1) per node (authored_hole is one graph
-// read); the arm set mirrors singleton_hnames_expr — the two walk in
-// lockstep with LowExpr.
+// read); the arm set walks in lockstep with LowExpr — every constructor
+// present, H6's exhaustive-match law keeping it honest.
 // The gate's hole classifier reads the WEAVE span (parse_span_of) — the
 // parse truth no unification overwrites: a body/let-init hole unifies with
 // its binder's fresh var, the class root becomes that unlocated mint, and

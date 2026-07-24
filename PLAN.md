@@ -923,8 +923,8 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   discriminant) — note §4①: this flat form IS a sequence; the type split is the
   artifact to dissolve. Lists: tag 0=flat, 1=snoc, 3=concat, 4=slice.
 - **Handler elimination (the three tiers, "the proof becomes the dispatch"):**
-  tail-resumptive (~85%) → direct `call`; static singleton → direct call against
-  `$<hname>_state_g`; polymorphic → `call_indirect` via an evidence-field on the
+  tail-resumptive (~85%) → direct `call`; static singleton → direct call, the
+  record from the live world chain (`$world_find`); polymorphic → `call_indirect` via an evidence-field on the
   closure record (Koka evidence-passing, **never** a vtable); MultiShot → heap
   continuation struct + trail rollback.
 - **Handler IS state IS closure** — one heap record
@@ -1028,6 +1028,41 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶▶ THE COMMIT'S RECORD RIDES THE __k RAILS — the last
+  bracket-maintained cache dies (Hβ.emit.arm-closure-captures-record
+  RESOLVED, and the OneShot cousin the pre-build probe surfaced dies
+  with it · pin bb4b870e). LStateSlotStore's fourth field is the
+  resolved record READ, minted at lower through the __hrec ladder: a
+  stateful arm binds `__hrec` as an LLet alias of its own $__state (the
+  install record the driver passed; ls_bind_local before body lowering
+  so nested mints resolve it), a lambda captures it (lower_seed_hrec —
+  lower_seed_k's exact walk-free shape, transitive by induction), and a
+  resume-bound fn takes it as the SECOND trailing param after __k (both
+  call-site forks append the pair; dead-word 0 where no record is in
+  scope — a commit on a dead path stores just before its paired
+  k-call's dead-word trap, so the path still dies loudly at the
+  resume). With every commit path through the ONE ladder, the
+  $<hname>_state_g singleton globals, the install bracket's
+  save/set/restore triple, the _prev locals, and the singleton_hnames
+  walk family are DELETED — emitted artifacts carry ZERO _state_g, and
+  anonymous/named installs are one shape at the install site. THE PROBE
+  PAID FIRST: measured on the prior pin BEFORE building, a OneShot
+  resume-with-state inside a thunk LOST its commit into the thunk's
+  closure record (20-not-25, zero diagnostics; the classifier descends
+  lambdas, so the shape is reachable) — the 32-not-46 disease at the
+  other discipline, and the uniform ladder kills both (micro
+  mn-oneshot-lambda-commit, RED 20 on the prior pin, 25 here). The
+  medium caught its builder twice en route — census 0 → 1 → 0 (the
+  bind's if-arms Int-vs-(); the arms unify) and drift mode 15 on an
+  underscore binder (the residue form is the bare effect-statement) —
+  and the comment-refs ratchet surfaced an ACCIDENT-invariant (forensic
+  law 5): five backticked prev references had resolved only against the
+  doomed _prev bracket locals; unbackticked to prose, ratchet back to
+  0. Board whole at the pin: TRANSITION m3 == m4 at 329,794 lines (the
+  2,018-line m2/m3 diff is the emit change crossing one generation; the
+  new wheel SMALLER than its old-emit form), then CLEAN m2 == m3 with
+  the prose fixes; census 0; comment-refs 0; frontier 232/0;
+  proof-exactness 9/9; crown 5/5; the commit-class micros 25/46/46/51.
 - 2026-07-24 · ▶▶▶ THE SINGLETON TIER READS THE WORLD — R4 completes at
   the last dispatch tier, and A4 un-floors on top (the banked RED pair
   goes green · pin 8458415b). THE ARC: the A4 un-flooring (installs
@@ -2731,21 +2766,16 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.emit.arm-closure-captures-record` (2026-07-24, born of the
-singleton-reads-the-world landing): the LAST bracket-maintained cache is
-the $<hname>_state_g global, now read by exactly one site — the
-resume-commit store's closure home (LStateSlotStore with a handler name:
-a MultiShot arm's state commit from inside a closure, whose own __state
-is its closure record — the measured 32-not-46 silent state loss).
-Sound today because arm commits execute inside their install's live
-bracket; the ultimate form deletes the global whole: the arm closure
-CAPTURES the record it commits to (Carried-Truth — the record is a
-value in scope at the closure's mint), LStateSlotStore's home field
-dies, emit_singleton_globals dies, and the install bracket's
-save/set/restore triple dies with them. Keyed by the same hname the
-world chain now carries, so the capture can also be read as "the store
-resolves through $world_find like the perform" — but the capture is the
-deeper cut (no runtime walk for a value the closure was born holding).
+`Hβ.emit.arm-closure-captures-record` RESOLVED: LANDED (2026-07-24, pin
+bb4b870e — the ledger head carries the arc). The capture form won over
+the $world_find read exactly as this entry ruled, and for a soundness
+reason the ruling had not yet named: a commit targets its own install's
+record — a LEXICAL fact — while a chain walk under a rebound redrive
+world could resolve a same-named NESTED install's record instead. The
+__hrec ladder (LLet alias / seeded capture / trailing param) carries
+the record everywhere; the global, the bracket triple, and the
+singleton_hnames walk family are deleted; the OneShot-in-thunk cousin
+(20-not-25, silently wrong on the prior pin) died in the same landing.
 
 `Hβ.cli.infer-context-bracket` RESOLVED: LANDED (2026-07-23, pin 2644dab5 —
 the R5 entry in the ledger; the arc: refuted by the mint-time evidence

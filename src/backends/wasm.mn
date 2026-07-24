@@ -676,7 +676,6 @@ fn emit_module(lowered) = {
   emit_runtime_imports(wasi_ops)
   emit_memory_decl()
   emit_state_globals(state_slots)
-  emit_singleton_globals(lowered)
   // band B k1: the yield triple exists only in a module that yields —
   // $yield_flag (the out-of-band Koka-lineage yielding bit), $yield_op (the
   // interned op key the drivers compare), $yield_k (the reified k record).
@@ -1242,27 +1241,6 @@ fn emit_state_globals(slots) = {
   }, slots)
 }
 
-// ─── The scoped-singleton globals — one `$<hname>_state_g` per NAMED
-// install in the module. The install binds its record here; the DECLARATION
-// projects from the same LowIR the binds do — a pure walk collecting every
-// LHandleWith's hname, deduped. Anonymous installs ("" — an inline handler
-// expression) bind no singleton. The set is INSTALLED-only: the perform
-// resolves its record from the world chain (LWorldResolve), so a global
-// exists solely for its remaining reader — the resume-commit store's
-// closure home (LStateSlotStore with a handler name), which only an
-// executing arm reaches, and an executing arm implies its install. The
-// old union with every no-config DECLARED handler existed to make the
-// perform's global.get assemble for never-installed handlers; that read
-// is gone.
-fn emit_singleton_globals(lowered) with WasmOut + Memory + Alloc = {
-  let installed = singleton_hnames_list(lowered, [])
-  each((h) => {
-    wat_emit("  (global $")
-    wat_emit(h)
-    wat_emit("_state_g (mut i32) (i32.const 0))\n")
-  }, installed)
-}
-
 // The yield triple (band B k1) — the out-of-band MultiShot unwind protocol,
 // the Koka-lineage yielding bit as three per-instance globals (wasi-threads
 // share only MEMORY, so the flag is thread-local by construction): $yield_flag
@@ -1456,70 +1434,6 @@ fn emit_k_compose_pair() with WasmOut = {
   wat_emit("    (local.get $ik) (i32.load offset=0)\n")
   wat_emit("    (return_call_indirect (type $ft2))\n")
   wat_emit("  )\n")
-}
-
-fn singleton_hnames_list(stmts, acc) = {
-  if len(stmts) == 0 { acc }
-  else { singleton_hnames_list(drop_last(stmts), singleton_hnames_expr(last(stmts), acc)) }
-}
-
-fn singleton_hnames_expr(expr, acc) = match expr {
-  LWorldResolve(_, _) => acc,
-  LShow(_h, x) => singleton_hnames_expr(x, acc),
-  LHash(_h, x) => singleton_hnames_expr(x, acc),
-  LHandleWith(_h, b, hn, hname, inits, _an) => {
-    let deeper = singleton_hnames_list(inits,
-        singleton_hnames_expr(hn, singleton_hnames_expr(b, acc)))
-    if hname == "" { deeper }
-    else if ls_find_str_local(deeper, hname, 0) >= 0 { deeper }
-    else { [hname] ++ deeper }
-  },
-  LLet(_h, _n, inner)       => singleton_hnames_expr(inner, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps) =>
-    singleton_hnames_list(caps, singleton_hnames_list(body, acc)),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, _, _) =>
-    singleton_hnames_list(caps, singleton_hnames_list(body, acc)),
-  LResumeK(_h, k, v)        => singleton_hnames_expr(v, singleton_hnames_expr(k, acc)),
-  LYield(_h, _op, args, k)  => singleton_hnames_expr(k, singleton_hnames_list(args, acc)),
-  LKExtend(_h, k)           => singleton_hnames_expr(k, acc),
-  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => singleton_hnames_list(body, acc),
-  LBlock(_h, stmts)         => singleton_hnames_list(stmts, acc),
-  LIf(_h, c, t, e)          =>
-    singleton_hnames_list(e, singleton_hnames_list(t, singleton_hnames_expr(c, acc))),
-  LBinOp(_h, _op, lx, r)    => singleton_hnames_expr(r, singleton_hnames_expr(lx, acc)),
-  LUnaryOp(_h, _op, x)      => singleton_hnames_expr(x, acc),
-  LCall(_h, f, args)        => singleton_hnames_list(args, singleton_hnames_expr(f, acc)),
-  LDirectCall(_h, _fh, _n, _t, args) => singleton_hnames_list(args, acc),
-  LTailCall(_h, f, args)    => singleton_hnames_list(args, singleton_hnames_expr(f, acc)),
-  LReturn(_h, x)            => singleton_hnames_expr(x, acc),
-  LMakeList(_h, elems)      => singleton_hnames_list(elems, acc),
-  LMakeTuple(_h, elems)     => singleton_hnames_list(elems, acc),
-  LSimdLanes(_h, lanes)     => singleton_hnames_list(lanes, acc),
-  LMakeRecord(_h, fs)       => singleton_hnames_list(fs, acc),
-  LMakeVariant(_h, _t, fs)  => singleton_hnames_list(fs, acc),
-  LMatch(_h, s, arms)       => singleton_hnames_arms(arms, singleton_hnames_expr(s, acc)),
-  LFeedback(_h, b, s)       => singleton_hnames_expr(s, singleton_hnames_expr(b, acc)),
-  LPerform(_h, _n, args, _) => singleton_hnames_list(args, acc),
-  LDirectPerform(_h, _hn, _op, _st, args) => singleton_hnames_list(args, acc),
-  LWasiCall(_h, _n, args)   => singleton_hnames_list(args, acc),
-  LEvPerform(_h, _n, _e, _s, a) => singleton_hnames_list(a, acc),
-  LInvariantFailure(_, _)   => acc,
-  LFieldLoad(_h, rec, _off) => singleton_hnames_expr(rec, acc),
-  LConvert(_h, _, operand)  => singleton_hnames_expr(operand, acc),
-  LStateSlotStore(_h, _o, v, _) => singleton_hnames_expr(v, acc),
-  LConst(_, _)              => acc,
-  LLocal(_, _)              => acc,
-  LFeedbackPrior(_)         => acc,
-  LGlobal(_, _)             => acc,
-  LUpval(_, _)              => acc,
-}
-
-fn singleton_hnames_arms(arms, acc) = {
-  if len(arms) == 0 { acc }
-  else {
-    let (_, body) = last(arms)
-    singleton_hnames_arms(drop_last(arms), singleton_hnames_expr(body, acc))
-  }
 }
 
 // Emit `(data (i32.const <offset>) "<escaped-bytes>")` for each string
@@ -2621,10 +2535,7 @@ fn walk_locals_expr(expr, acc) = match expr {
     // unconditional — the invariant, not an optimization), so the
     // world-save local declares for anonymous installs too.
     let base = ["__hstate_{int_to_str(h)} i32", "__hstate_{int_to_str(h)}_wprev i32"] ++ acc
-    let with_prev =
-      if hname != "" { ["__hstate_{int_to_str(h)}_prev i32"] ++ base }
-      else           { base }
-    let with_groups = fold(with_prev,
+    let with_groups = fold(base,
       (a, g) => ["__hstate_{int_to_str(h)}_{group_ename(g)} i32"] ++ a,
       arm_names)
     // band B k1/M2b: a MultiShot-armed install parks the body result
@@ -3789,8 +3700,9 @@ fn emit_expr(expr) = match expr {
     // ~> install — build the ONE handler record (handler IS state IS
     // closure; protocol_handler_is_state_is_closure_is_evidence):
     //   [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous]
-    // The record is built regardless of hname; only the
-    // `_state_g` global binding is skipped for an anonymous handler.
+    // The record is built regardless of hname; commits reach it through
+    // the resolved record read on LStateSlotStore (the __hrec ladder),
+    // so anonymous and named installs are ONE shape — no global binds.
     let local_name = "__hstate_{int_to_str(h)}"
     let nstate = len(inits)
     let total_arms = sum_arm_name_lens(arm_names)
@@ -3837,30 +3749,6 @@ fn emit_expr(expr) = match expr {
       wat_emit(if hname == "" { "0" } else { int_to_str(string_offset(hname)) })
       wat_emit(")(call $world_push)\n")
     }, arm_names)
-    // bind the record to $<hname>_state_g for the resume-commit store's
-    // closure home (LStateSlotStore with a handler name — the one reader
-    // left; the PERFORM resolves through the world chain now) — SCOPED:
-    // the global is the INNERMOST live install's record, so save the
-    // enclosing install's record first and restore it after the body
-    // (global.set pops only its operand; the body's result stays on the
-    // stack). Without the restore, any NESTED same-handler session — map
-    // inside map, the collector family — leaves the OUTER session's
-    // store pointing at the INNER exhausted record. The named peer
-    // Hβ.emit.arm-closure-captures-record retires this global whole: the
-    // arm closure captures the record it commits to, and the last
-    // bracket-maintained cache dies.
-    if hname != "" {
-      wat_emit("(global.get $")
-      wat_emit(hname)
-      wat_emit("_state_g)(local.set $")
-      wat_emit(local_name)
-      wat_emit("_prev)\n")
-      wat_emit("(local.get $")
-      wat_emit(local_name)
-      wat_emit(")(global.set $")
-      wat_emit(hname)
-      wat_emit("_state_g)\n")
-    }
     emit_expr(body)
     // band B k1 — the yield DRIVER. Takes this install's record as its own
     // __state (the arm call carries it — no global re-read) and is a LOOP
@@ -3893,13 +3781,6 @@ fn emit_expr(expr) = match expr {
       wat_emit(hname)
       wat_emit(")(local.set $__hres_{hs})\n")
       wat_emit("    (local.get $__hres_{hs})\n")
-    }
-    if hname != "" {
-      wat_emit("(local.get $")
-      wat_emit(local_name)
-      wat_emit("_prev)(global.set $")
-      wat_emit(hname)
-      wat_emit("_state_g)\n")
     }
     // world restore — unconditional, mirroring the unconditional save
     // (world outermost of the two brackets).
@@ -4150,29 +4031,24 @@ fn emit_expr(expr) = match expr {
     wat_emit(")\n")
   },
 
-  LStateSlotStore(_h, slot_offset, value, home) => {
+  LStateSlotStore(_h, slot_offset, value, record) => {
     // Hβ.first-light.resume-with-state-mutation: store VALUE into the
     // handler state record at slot_offset, mutating handler state across
-    // resume calls. The record HOME (band B S1): "" reads the arm fn's own
-    // $__state (the install record at arm level — the byte-frozen OneShot
-    // form); a handler name reads the bracket-scoped $<name>_state_g
-    // singleton — the SAME record at arm level (the install bracket set
-    // it) and the ONLY home reachable inside a closure, whose own $__state
-    // is its closure record (writing through it was the measured 32-not-46
-    // silent state loss). The store WIDTH is the stored value's proven
-    // repr. Negative slot_offset = lower-time name-resolution miss
-    // (productive-under-error): emit the value as drop, no store.
+    // resume calls. The RECORD is a resolved read minted at lower (the
+    // __hrec ladder: the arm's LLet alias of its own $__state, a lambda's
+    // capture, a bound callee's trailing param) — a value the frame was
+    // born holding, so no bracket-scoped cache exists to go stale. The
+    // retired $<hname>_state_g singleton was that cache; a closure's own
+    // $__state is its closure record (the measured 32-not-46 / 20-not-25
+    // silent state loss, both disciplines). The store WIDTH is the stored
+    // value's proven repr. Negative slot_offset = lower-time
+    // name-resolution miss (productive-under-error): emit the value as
+    // drop, no store.
     if slot_offset < 0 {
       emit_expr(value)
       wat_emit("    (drop)\n")
     } else {
-      if home == "" {
-        wat_emit("    (local.get $__state)\n")
-      } else {
-        wat_emit("    (global.get $")
-        wat_emit(home)
-        wat_emit("_state_g)\n")
-      }
+      emit_expr(record)
       emit_expr(value)
       wat_emit("    (")
       wat_emit(repr_wat(repr_of(lookup_ty(lexpr_handle(value)))))

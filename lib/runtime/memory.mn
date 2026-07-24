@@ -29,6 +29,11 @@ effect Memory {
   // Bulk memory copy — src to dst, n bytes
   mem_copy(Int, Int, Int) -> ()   // (dst, src, n)
 
+  // The live world — the top of the install chain ($world_g; emit projects
+  // the global read, the heap_mark shape). 0 = the empty world. A Memory
+  // read, not an Alloc verb: the perform path reads it on every dispatch.
+  world_top() -> Int
+
   // 64-bit float store/load — the WIDE-value boundary pair (§5.U): a wide
   // value crosses the word altitude BY REFERENCE (its address is a word, a
   // handle IS a word); these two ops are the deref/ref that cash the native
@@ -93,34 +98,21 @@ effect Alloc {
 //   → performs nothing; row is the empty closed triple; type checker enforces
 //     that the body contains no perform statements.
 
-// ─── ev_lookup — the keyed-evidence scan ────────────────────────────────
-// The identity-addressed evidence READ that replaces positional ev-slot
-// indexing. A fn's captured_evs region (based at `base` in its __state record)
-// holds [key][entry-ptr] pairs terminated by a key=0 sentinel; `target` is the
-// effect's INTERNED name offset (string constants dedup — W5 — so the key the
-// caller PLACED and the key the callee SEEKS are the SAME offset, an i32.eq
-// match). Returns the entry-ptr: the [record][base] view the perform dispatches
-// through. A sibling effect appearing shuffles NO key — the cure for
-// position-as-the-bug. The scan serves TWO callers with DIFFERENT miss
-// semantics (measured 2026-07-03, the 0/8 board that taught it):
-//
-// FORWARD (ev_lookup — LEvRef building a callee's pair from this frame):
-// a miss is ROUTINE — capture sets over-approximate (escaping_row), so a
-// caller legitimately lacks keys its callee never fires. Returns 0: the
-// pair is written unfilled. Tolerant by design.
-//
-// PERFORM (ev_perform_entry — LEvPerform dispatching an op): a miss is a
-// BROKEN PROMISE, and so is a FOUND key whose entry is 0 (the unfilled
-// pair from a forward-miss — the promised evidence never materialized up
-// the chain). The old silent 0 made the perform read record=load(0)/
-// base=load(4) and dispatch through the int_to_str/iovec scratch words,
-// calling whichever VALID table fn their bytes named at that instant
-// (measured: instantiate's mint performing wat_stdout's wat_emit —
-// garbage WAT on stdout during INFERENCE). Both perform-side failures
-// trap HERE, where the key is still in hand: the sought key's interned
-// offset goes to scratch word 0, the scanned base to word 4 (the
-// postmortem window), then a deterministic out-of-bounds load traps —
-// the backtrace names the perform site, the scratch words the effect.
+// ─── ev_lookup — the FORWARD-side keyed-evidence scan ───────────────────
+// The identity-addressed frame-region READ: a fn's captured_evs region
+// (based at `base` in its __state record) holds [key][entry-ptr] pairs
+// terminated by a key=0 sentinel; `target` is the effect's INTERNED name
+// offset (string constants dedup — W5 — so the key the caller PLACED and
+// the key the callee SEEKS are the SAME offset, an i32.eq match). A
+// sibling effect appearing shuffles NO key — the cure for
+// position-as-the-bug. This is the FORWARD side only (LEvRef building a
+// callee's pair from this frame, and the __resume k-channel): a miss is
+// ROUTINE — capture sets over-approximate (escaping_row), so a caller
+// legitimately lacks keys its callee never fires; 0 means the pair is
+// written unfilled, tolerant by design. The PERFORM side no longer reads
+// any frame region — it walks the live world chain (ev_perform_entry
+// below, the world-as-value arc's R2; the miss-traps-loudly contract from
+// the 2026-07-03 garbage-dispatch measurement carries over there).
 fn ev_lookup(state, base, target) with Memory = ev_scan(state, base, target, 0)
 
 fn ev_scan(state, base, target, j) with Memory = {
@@ -130,16 +122,59 @@ fn ev_scan(state, base, target, j) with Memory = {
   else { ev_scan(state, base, target, j + 1) }
 }
 
-fn ev_perform_entry(state, base, target) with Memory = {
-  let entry = ev_lookup(state, base, target)
-  if entry == 0 {
+// The PERFORM-side read is the WORLD walk (the world-as-value arc's R2):
+// the live install chain — [key@0][entry@4][parent@8][install_world@12]
+// nodes consed by every install's $world_push — is walked from world_top()
+// by interned-key i32.eq, and the perform dispatches through the FOUND
+// NODE: node.entry is the same [record][base] view the install built;
+// node.install_world is the world OUTSIDE that install, which the dispatch
+// sets around the arm call (the deep-handler law, delivered dynamically —
+// an arm's own performs resolve outer, never self). A computation
+// therefore performs in the world where it is CALLED, not the world where
+// its closure was minted — the mint-time evidence snapshot was a cache of
+// this dynamic fact. ev_lookup/ev_scan above remain the FORWARD-side
+// frame-region readers (LEvRef pair-building, the __resume k-channel);
+// their miss is routine (capture sets over-approximate, an unfilled pair
+// is legal). A perform miss is a BROKEN PROMISE and traps here, key in
+// hand: the sought key's interned offset goes to scratch word 0 (the
+// postmortem window), then a deterministic out-of-bounds load traps — the
+// backtrace names the perform site, the scratch word the effect.
+fn world_find_from(n, target) with Memory = {
+  if n == 0 { 0 }
+  else if load_i32(n) == target { n }
+  else { world_find_from(load_i32(n + 8), target) }
+}
+
+// `top` arrives as an ARGUMENT — the perform site's emit passes
+// (global.get $world_g) inline, so this source performs no world_top op
+// (under the PRIOR pin's gate a new substrate op would floor as an
+// unhandled Memory demand — the crossing constraint; world_top stays
+// declared for wheel-source consumers once the pin carries its
+// recognition).
+fn ev_perform_node(top, target) with Memory = {
+  let node = world_find_from(top, target)
+  if node == 0 {
     store_i32(0, target)
-    store_i32(4, base)
     // 0 - 1 = 0xFFFFFFFF: a 4-byte load crossing 2^32 — out of bounds at
     // ANY wasm32 memory size, including the full 65536 pages. The prior
     // `0 - 8` went SILENT when memory grew to 4GB (2fc7544): 0xFFFFFFF8+4
     // is in bounds there, so a miss returned virgin 0 and the broken
     // promise cascaded to a garbage dispatch far from this site.
+    load_i32(0 - 1)
+  }
+  else { node }
+}
+
+// The PRIOR generation's perform-side read — the frame-region scan the
+// pinned boot's emitted call sites still name (m2 = boot(wheel) carries
+// them). The new emit calls ev_perform_node; once the pin crosses, this
+// fn has zero callers and reach prunes it from every emitted module —
+// its deletion from source is the arc's write-side cleanup rung.
+fn ev_perform_entry(state, base, target) with Memory = {
+  let entry = ev_lookup(state, base, target)
+  if entry == 0 {
+    store_i32(0, target)
+    store_i32(4, base)
     load_i32(0 - 1)
   }
   else { entry }

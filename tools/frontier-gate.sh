@@ -1040,6 +1040,19 @@ for i in "${!compilers[@]}"; do
   run_program "$compiler" handler-forward-ref \
     "$ROOT/tests/frontier/mn-handler-forward-ref.mn" 42 no "$dir"
 
+  # ── the world-as-value gates (R2: the perform reads the live chain) ──
+  # Seen RED on the pre-world boots: thunk 134 (mint-time evidence miss to
+  # the sentinel), arm-config 2 (silent wrong value — the config-param
+  # thunk's performs re-entered the outer handler), shadow 40 (the control,
+  # already correct). Under worlds: the call-site world resolves the thunk
+  # (42), the arm-internal install shadows (40), the control holds (40).
+  run_program "$compiler" world-thunk \
+    "$ROOT/tests/frontier/mn-world-thunk.mn" 42 yes "$dir"
+  run_program "$compiler" world-arm-config \
+    "$ROOT/tests/frontier/mn-world-arm-config.mn" 40 yes "$dir"
+  run_program "$compiler" world-arm-shadow \
+    "$ROOT/tests/frontier/mn-world-arm-shadow.mn" 40 yes "$dir"
+
   # ── the cursor-address transport (mentl voice.mn:9) ─────────────────
   # Runs from the demo dir (the driver resolves imports CWD-relative).
   # Asserts the honest minimum the artifact produces today: the Query

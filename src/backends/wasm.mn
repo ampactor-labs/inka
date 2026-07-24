@@ -2211,10 +2211,15 @@ fn emit_memory_decl() = {
   // A dedicated fn, never inline: the fill needs a temporary for the mark,
   // and the callers' scratch locals may be live (the wrong-scratch class).
   wat_emit("  (func $heap_reset_impl (param $mark i32)(local.get $mark)(i32.const 0)(global.get $heap_ptr)(local.get $mark)(i32.sub)(memory.fill)(global.set $heap_ptr (local.get $mark)))\n")
-  // $world_push — cons one [key][record][parent] node onto the live world
-  // chain (the install's runtime edge; a dedicated fn like $heap_reset_impl,
-  // never inline — the callers' scratch may be live at the install site).
-  wat_emit("  (func $world_push (param $key i32)(param $record i32)(local $n i32)(local.set $n (call $alloc (i32.const 12)))(local.get $n)(local.get $key)(i32.store offset=0)(local.get $n)(local.get $record)(i32.store offset=4)(local.get $n)(global.get $world_g)(i32.store offset=8)(global.set $world_g (local.get $n)))\n")
+  // $world_push — cons one [key@0][entry@4][parent@8][install_world@12]
+  // node onto the live world chain (the install's runtime edge; a dedicated
+  // fn like $heap_reset_impl, never inline — the callers' scratch may be
+  // live at the install site). entry is the install's own [record][base]
+  // view (ONE view object, never copied); install_world is the chain as
+  // saved BEFORE this install's pushes — the world the arm dispatch sets
+  // around the arm call (deep-handler semantics: an arm's performs resolve
+  // outer, never self).
+  wat_emit("  (func $world_push (param $key i32)(param $entry i32)(param $iw i32)(local $n i32)(local.set $n (call $alloc (i32.const 16)))(local.get $n)(local.get $key)(i32.store offset=0)(local.get $n)(local.get $entry)(i32.store offset=4)(local.get $n)(global.get $world_g)(i32.store offset=8)(local.get $n)(local.get $iw)(i32.store offset=12)(global.set $world_g (local.get $n)))\n")
   // Thread record region: [0x800, 0x1000) = 2KB / 16 bytes per record
   // = 128 thread slots. Layout per record (16 bytes):
   //   offset 0: closure_ptr (i32)
@@ -2681,7 +2686,10 @@ fn walk_locals_expr(expr, acc) = match expr {
   LPerform(_h, _n, args, _) => walk_locals_list(args, acc),
   LDirectPerform(h, hn, op, st, args) => walk_locals_expr(singleton_perform_block(h, hn, op, st, args), acc),
   LWasiCall(_h, _n, args)   => walk_locals_list(args, acc),
-  LEvPerform(_h, _n, _e, _s, a) => walk_locals_list(a, acc),
+  // The perform's per-site pair (mirror-true to the LEvPerform emit arm):
+  // evn = the resolved world node, evw = the world saved around the arm call.
+  LEvPerform(h, _n, _e, _s, a) =>
+    walk_locals_list(a, ["evn_{int_to_str(h)} i32", "evw_{int_to_str(h)} i32"] ++ acc),
   LEvRef(_h, _e)            => acc,
   LEvEntry(_, ev)           => walk_locals_expr(ev, acc),
   LUnresolvedEvidence(_, _) => acc,
@@ -3344,17 +3352,9 @@ fn emit_ev_entry_keyed(base, key_off) = {
   wat_emit("))\n")
 }
 
-// The PERFORM-side read: dispatching an op through a missing or unfilled
-// entry is the broken promise that dispatched through scratch memory (the
-// 2026-07-03 pin), so ev_perform_entry traps AT the read — sentinel-miss
-// and found-but-0 alike — with the sought key in the postmortem window.
-fn emit_ev_entry_perform(base, key_off) = {
-  wat_emit("    (call $ev_perform_entry (local.get $__state) (local.get $__state) (i32.const ")
-  wat_emit(int_to_str(base))
-  wat_emit(") (i32.const ")
-  wat_emit(int_to_str(key_off))
-  wat_emit("))\n")
-}
+// (The PERFORM-side read lives in the LEvPerform arm itself now: one
+// ev_perform_entry call resolving the WORLD node into the per-site local —
+// the world-as-value arc's R2; the frame-region perform scan is retired.)
 
 // Write a self-describing captured_evs region into record `state_local`: the
 // keyed [key][ev] PAIRS for each LEvEntry (2 words/entry, STRIDE 8) terminated
@@ -4034,10 +4034,12 @@ fn emit_expr(expr) = match expr {
     // the arm-bodies' captured evidence, after the arms
     emit_captured_evs(local_name, nstate, total_arms, captured_evs)
     // The WORLD bracket — every install draws its runtime edge: save the
-    // live chain, cons one [key][record][parent] node per absorbed effect
-    // group, restore after the extent (the same save/restore shape as the
-    // scoped-singleton global below, world outermost). R1: writers only —
-    // the perform swap is the reader rung.
+    // live chain, cons one [key][entry][parent][install_world] node per
+    // absorbed effect group (entry = the group's [record][base] view built
+    // above; install_world = the saved chain, what the arm dispatch sets
+    // around the arm call), restore after the extent (the same
+    // save/restore shape as the scoped-singleton global below, world
+    // outermost). The perform walks this chain (ev_perform_entry).
     wat_emit("(global.get $world_g)(local.set $")
     wat_emit(local_name)
     wat_emit("_wprev)\n")
@@ -4046,7 +4048,11 @@ fn emit_expr(expr) = match expr {
       wat_emit(int_to_str(string_offset(group_ename(g))))
       wat_emit(")(local.get $")
       wat_emit(local_name)
-      wat_emit(")(call $world_push)\n")
+      wat_emit("_")
+      wat_emit(group_ename(g))
+      wat_emit(")(local.get $")
+      wat_emit(local_name)
+      wat_emit("_wprev)(call $world_push)\n")
     }, arm_names)
     // bind the record to $<hname>_state_g for env-scan Tier-1 resolution —
     // SCOPED: the global is the INNERMOST live install's record, so save
@@ -4220,6 +4226,8 @@ fn emit_expr(expr) = match expr {
       wat_emit("    (call $alloc)\n")
     } else if import_name == "heap_mark" {
       wat_emit("    (global.get $heap_ptr)\n")
+    } else if import_name == "world_top" {
+      wat_emit("    (global.get $world_g)\n")
     } else if import_name == "heap_reset" {
       // unit-typed: the call consumes the arg; the (i32.const 0) closes the
       // result slot — the atomic_store precedent. The impl zeroes the
@@ -4253,44 +4261,54 @@ fn emit_expr(expr) = match expr {
     }
   },
 
-  // Tier-2 evidence-dispatched perform. The per-effect entry [record_ptr, base]
-  // is found by IDENTITY: `ev_lookup(__state, base, key)` scans the captured_evs
-  // region for the effect-key's interned offset and returns the entry. The arm
-  // runs against that RECORD as its own __state (handler IS evidence); its fn_idx
-  // lives in the record's arm region, fence-relative off the record's OWN nstate.
-  // An interior read of a graph-derived record — never a vtable, never a row slot.
-  //   base   = 8 + 4*fence                          (fence = this fn's body-context)
-  //   entry  = ev_lookup(__state, base, key_off)    (key_off = string_offset(ename))
-  //   record = entry[0];  base_field = entry[1]
+  // Tier-2 evidence-dispatched perform — the WORLD read (the arc's R2).
+  // ev_perform_entry walks the live install chain by interned key and
+  // returns the NODE [key@0][entry@4][parent@8][install_world@12] (miss =
+  // the loud postmortem trap, memory.mn). The arm runs against the entry's
+  // RECORD as its own __state (handler IS evidence); its fn_idx lives in
+  // the record's arm region, fence-relative off the record's OWN nstate.
+  // An interior read of a graph-derived record — never a vtable, never a
+  // row slot. The args evaluate under the PERFORM-SITE world; only the
+  // arm call itself runs under the node's install_world (deep-handler
+  // law: the arm's own performs resolve outer, never self), restored
+  // immediately after — so a tail-resumptive resume-as-return continues
+  // the remainder under the perform-site world by construction.
+  //   node   = ev_perform_entry(key_off)            (key_off = string_offset(ename))
+  //   entry  = node[4];  record = entry[0];  base_field = entry[1]
   //   arm_fn = record[(8 + 4*op_slot) + 4*base_field + 4*record[4]]
   //   dispatch = call_indirect (type $ft<argc+1>) (record, args…, arm_fn)
   LEvPerform(h, _op_name, ekey, op_slot, args) => {
-    let fence = current_body_captures()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-    let base = 8 + 4 * fence
     let key_off = string_offset(ekey)     // the effect-key's interned data offset (W5 dedup)
     let arm_const = 8 + 4 * op_slot
+    let hs = int_to_str(h)
+    // (0) resolve ONCE — the node into its per-site local. The live world
+    // passes as an ARGUMENT (the wheel source performs no world_top op —
+    // the crossing constraint, memory.mn's own note).
+    wat_emit("    (local.set $evn_{hs} (call $ev_perform_node (local.get $__state) (global.get $world_g) (i32.const ")
+    wat_emit(int_to_str(key_off))
+    wat_emit(")))\n")
     // (1) arm __state = record = entry[0]
-    emit_ev_entry_perform(base, key_off)
-    wat_emit("    (i32.load offset=0)\n")
+    wat_emit("    (local.get $evn_{hs})(i32.load offset=4)(i32.load offset=0)\n")
     // (2) user args — word-faced (wide payloads cross by reference)
     emit_args_word(args)
     // (3) arm fn_idx = record[arm_const + 4*base + 4*nstate]
-    emit_ev_entry_perform(base, key_off)
-    wat_emit("    (i32.load offset=0)\n")             // record
+    wat_emit("    (local.get $evn_{hs})(i32.load offset=4)(i32.load offset=0)\n") // record
     wat_emit("    (i32.const ")
     wat_emit(int_to_str(arm_const))
     wat_emit(")(i32.add)\n")                          // + arm_const
-    emit_ev_entry_perform(base, key_off)
-    wat_emit("    (i32.load offset=4)\n")             // base_field
+    wat_emit("    (local.get $evn_{hs})(i32.load offset=4)(i32.load offset=4)\n") // base_field
     wat_emit("    (i32.const 4)(i32.mul)(i32.add)\n") // + 4*base_field
-    emit_ev_entry_perform(base, key_off)
-    wat_emit("    (i32.load offset=0)(i32.load offset=4)\n")  // nstate = record[4]
+    wat_emit("    (local.get $evn_{hs})(i32.load offset=4)(i32.load offset=0)(i32.load offset=4)\n")  // nstate = record[4]
     wat_emit("    (i32.const 4)(i32.mul)(i32.add)\n") // + 4*nstate
     wat_emit("    (i32.load offset=0)\n")             // arm_fn idx
-    // (4) dispatch — the word-arity face; a wide result derefs back native.
+    // (4) the ARM WORLD BRACKET + dispatch — the word-arity face; a wide
+    // result derefs back native.
+    wat_emit("    (global.get $world_g)(local.set $evw_{hs})\n")
+    wat_emit("    (global.set $world_g (i32.load offset=12 (local.get $evn_{hs})))\n")
     wat_emit("    (call_indirect (type ")
     wat_emit(call_ft_name(args, repr_of(lookup_ty(h))))
     wat_emit("))\n")
+    wat_emit("    (global.set $world_g (local.get $evw_{hs}))\n")
     emit_wide_deref(repr_of(lookup_ty(h)))
   },
 

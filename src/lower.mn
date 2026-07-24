@@ -4713,7 +4713,7 @@ fn free_vars_contains(lst, s) = any((x) => x == s, lst)
 // $op_<name> handler-arm dispatch. Per
 // protocol_bootstrap_wasi_threads_substrate.md — the import IS the
 // bridge; no wrapper function required.
-// The seven substrate ops memory.mn declares — the boundary where the
+// The substrate ops memory.mn declares — the boundary where the
 // language meets the instruction set (the wasi-import list's sibling;
 // the op names ARE the identity, declared in one home).
 fn is_substrate_mem_op(name: String) with Pure = {
@@ -4731,6 +4731,7 @@ fn is_substrate_mem_op(name: String) with Pure = {
     || name == "alloc"
     || name == "heap_mark"
     || name == "heap_reset"
+    || name == "world_top"
 }
 
 fn is_wasi_import_op(name) with Pure = {
@@ -6124,7 +6125,12 @@ fn reachable_from_main(lowered) = {
 // visitor-walk projection of this set is the deeper form, gated on the
 // ev-slot seam close.
 fn emit_runtime_contract() =
-  ["ev_lookup", "ev_perform_entry", "len",
+  // ev_perform_node (+ its world_find_from walk) is the world-read the
+  // LEvPerform arm mints (the world-as-value arc's R2); ev_perform_entry
+  // stays seeded only while the PRIOR pin's emitted sites name it — it
+  // leaves this list with the write-side cleanup rung.
+  ["ev_lookup", "ev_perform_entry", "ev_perform_node", "world_find_from",
+   "len",
    "list_compare", "list_concat", "list_eq", "list_index", "list_set",
    "make_list", "make_list_sc", "slice", "str_compare", "str_concat",
    "str_eq", "str_hash"]

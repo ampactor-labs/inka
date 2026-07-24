@@ -1026,6 +1026,36 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-23 · ▶▶▶ THE PERFORM READS THE WORLD — R2+R3 land together
+  (evidence dispatch goes dynamic; deep-handler law by construction ·
+  pin e8bcfb14): every evidence-tier perform resolves through the LIVE
+  install chain — ev_perform_node walks [key][entry][parent]
+  [install_world] nodes from the world top (passed inline as
+  (global.get $world_g): the wheel source performs no world_top op,
+  the CROSSING CONSTRAINT — the prior pin's gate judges the source
+  with the prior recognition set, so a new substrate op must arrive
+  declared-but-unperformed; E_EffectUnhandled caught both wrong forms
+  before any binary ran, first the Alloc-declared world_top flooring
+  the root, then the performed form itself), resolves ONCE into a
+  per-site local (the old arm re-scanned the frame region four times
+  per perform), and the ARM CALL alone brackets in the node's
+  install_world — an arm's own performs resolve OUTER, never self;
+  args evaluate at the perform site; tail-resumptive resume-as-return
+  continues under the perform-site world by construction. THE THREE
+  GATES FLIPPED AND GRADUATED (tests/frontier/mn-world-*, RTLIBS
+  legs): thunk 134 → 42 (a thunk performs where CALLED, not where
+  minted — the class that refuted the queue-5 bracket), arm-config
+  2 → 40 (band N's Hβ.lower.config-fn-evidence-in-arm silent-wrong
+  class DEAD), shadow control 40. ev_perform_entry stays in source
+  solely for the prior pin's emitted sites (zero callers this
+  generation; reach prunes it) — its deletion plus the write-only
+  forward machinery (derive_ev_slots effect entries, the captured_evs
+  regions' perform role) is the named write-side cleanup rung; then
+  R4 (the k record freezes the world; the band-B value gate) and R5
+  (the 14-chain bracket consolidation re-run — now admissible). Board
+  whole at the pin: TRANSITION m3 == m4 at 561,165 lines (the
+  32,564-line m2/m3 diff is the dispatch crossing one generation),
+  census 0, comment-refs 0, frontier 221/0, battery 113/113.
 - 2026-07-23 · ▶ THE WORLD CHAIN — R1 of the world-as-value arc
   (writers only, the reader is R2 · pin 8156ee0c): every emitted
   install draws its runtime edge — $world_g + $world_push cons one

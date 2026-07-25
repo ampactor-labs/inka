@@ -4390,36 +4390,60 @@ LANDED — the paged spine, the planned mint, the layer-ordered final, the
 cursor config, the env view, the page pre-open (six pins, 0e3af09c →
 3a53f775). The field-access cluster landed as an audit-driven interleave
 (pins f0ab3177 + 723220b3 — the last known silent-wrong class closed).
-C1c-2's REMAINDER, design complete AND census-grounded (the recon-trio
-fleet pass, 2026-07-25 — the full handler table and ten risk findings):
-THE BRANCH BRACKET — per-stmt cursor composition mirroring the root's
-exact order (stmt ~> infer_ctx ~> fresh_for_inference ~>
-summaries_frozen(idx) [already the branch-ready config form] ~>
-affine_ledger ~> region_tracker ~> verify_ledger(fresh) ~>
-lookup_ty_graph ~> env_handler(base triple) ~> graph_handler(shared
-spine + planned range) ~> mutate_sink [required: no outward chain
-absorbs graph_mutated across a spawn] ~> diag ABSORBER ~> intern view).
-Census corrections baked in: the diag branch instance is a collecting
-ABSORBER, never the tighten_collector forwarder (no outward chain to
-forward into; all three Diag ops armed; rendering stays root-side under
-the root's outer intern); intern_table is the ONE missing config form —
-a frozen read-only view whose miss REFUSES loudly (a fresh instance is
-forbidden: handles are bracket-global, two tables fork name identity) —
-and the TRIAL IS THE PRE-WARM (both passes share one intern, so every
-final-pass intern_str is a probe hit); verify debt replays in stmt
-order (decidable predicates never enter debt, so replay re-decides
-deterministically); the fan REFUSES to fan any layer containing a
-no-key stmt (a missed order edge degrades to source order sequentially
-but becomes a live race concurrently); branch overflow is
-ABORT-AND-REQUEUE (rollback the branch trail, re-run the stmt
-sequentially post-join), never jump-and-continue (the shared mint_high
-target collides across branches). Gate: byte-equality against the
-layer-walk pin — the sequential rehearsal MASKS forgotten installs
-(they resolve silently to the root; only the spawn convicts), so the
-byte gate, not a clean rehearsal, is the trust. Then THE FAN: K
-spawned cursors over a shared CAS counter (numbering pre-assigned,
-deltas replayed in stmt order — output schedule-independent; the
-wheel-as-spawning-module memory flip is a TRANSITION). The branch bracket is the fused oracle's own substrate: the
+C1c-2's REMAINDER — the first join design (state-delta replay) was
+REFUTED by the adversarial pass (2026-07-25, thirteen findings, the
+two sharpest orchestrator-re-verified in the artifact), and the
+REVISED design supersedes it in place:
+THE BRANCH BRACKET, revised. Per-stmt cursor composition mirroring the
+root's order (stmt ~> infer_ctx ~> fresh_for_inference ~>
+summaries_frozen(idx) THREADED from infer_program_final — a fresh ctx
+answers UZero for every grade and mis-codegens dispatch; keep the
+classify entries, smap_build once ~> affine_ledger ~> region_tracker
+~> verify_ledger(fresh) ~> lookup_ty_graph ~> env_handler(base triple)
+~> graph_handler(shared spine + planned range) ~> mutate_sink ~> diag
+collector ~> intern view). THE JOIN IS AN ORDERED EVENT-LOG REPLAY,
+NEVER A STATE-DELTA MERGE: each branch banks ONE interleaved stream
+(rendered diagnostic lines + consume events + verify events + env
+publishes, in occurrence order — separate per-handler deltas cannot
+reproduce the interleaving, and verify's prepend discipline only
+event-order preserves), and READ-MODIFY-WRITE env updates RE-RUN as
+OPERATIONS at the join: draw_op_edges evolves (default, ambiguous,
+disc) per arm against the live env — two same-layer handlers of one
+op under value-replay lose the ambiguity join and cash a wrong
+singleton direct call, so the branch banks (arms, hname) and the join
+re-runs the edge-draw in walk order. DIAGNOSTICS RENDER AT COLLECT
+(the root arm renders live at the perform; a banked DiagKind replayed
+post-join renders against MOVED vars — bank the rendered line +
+severity + refuses-bit; counts fold at the join). OVERFLOW IS A LOUD
+ABORT-AND-REQUEUE built into the branch's graph arms — the landed
+overflow jump is ROOT-ONLY semantics (mint_high is not config and
+inits 0: a branch ceiling hit would mint handle 0 over the shared
+Module root's cell — verified live). FAN BARRIERS, computed at plan
+time: unkeyed stmts (the ""-key contract degrades to source order
+sequentially and becomes a live race concurrently) AND readers of
+monomorphic-with-free-residual publishes (graph binds are NOT
+range-confined — unification chases to sub-frontier shared cells, and
+a free residual's first same-layer reader binds it; under the fan the
+winner is schedule-dependent) — each such stmt runs sequentially
+post-join or as its own layer; a branch's sub-frontier bind of a FREE
+cell may alternatively abort-and-requeue. JOIN PROPAGATION: the root
+epoch advances by each branch's bind-count (the IC key and a diag
+payload both read it). INTERN: the read-only loud-miss view (a fresh
+instance forks handle identity; the TRIAL IS THE PRE-WARM — both
+passes share one table, every final-pass intern is a probe hit, and
+the loud miss turns any counterexample into a diagnosis). THE GATE,
+three legs: byte-equality of the WAT against the layer-walk pin
+(joined per LAYER, not per stmt — per-stmt joins never exercise
+base-visibility semantics and sail through green); an ERRORING
+fixture whose full stderr compares byte-for-byte through the bracket
+(the wheel is census-0, so WAT identity alone is vacuous on
+diagnostics); and post-fan address + IC-epoch probes. Then THE FAN: K
+spawned cursors over a shared CAS counter — with the pointer-identity
+census instrument run under it (branch-allocated record ADDRESSES
+become schedule-dependent; any surviving pointer-eq compare is
+convicted there) and the CAS-bump allocation tax measured before the
+layer commits (the wheel-as-spawning-module memory flip is a
+TRANSITION). The branch bracket is the fused oracle's own substrate: the
 compile-spine fan and the synth candidate fan are ONE machinery, two
 workloads. THE DEBT HIERARCHY (trued 2026-07-25 against §5's
 trustworthiness conjunction — the silent-wrong classes were the FLOOR'S

@@ -386,30 +386,57 @@ fn spec_candidate_of_site(site, acc) with EnvRead + LookupTy + GraphRead + Memor
 fn spec_candidates_from_sites(sites, acc) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
   fold(acc, (a, s) => spec_candidate_of_site(s, a), sites)
 
-fn spec_candidates_fix(work, done, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
-  if len(work) == 0 { done }
+fn spec_candidates_fix(work, done, facts, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+  if len(work) == 0 { (done, facts) }
   else {
     let d = work[0]
     let w2 = rest(work)
     let (m, base, pairs, enc) = d
-    if spec_demand_named(done, m) { spec_candidates_fix(w2, done, recs) }
+    if spec_demand_named(done, m) { spec_candidates_fix(w2, done, facts, recs) }
     else {
       match spec_find_rec(recs, base) {
-        None => spec_candidates_fix(w2, [d] ++ done, recs),
+        None => spec_candidates_fix(w2, [d] ++ done, [(m, false, [])] ++ facts, recs),
         Some(rec) => {
           let (_n, _ps, body, _f) = rec
+          // ONE structural scan; TWO lookup contexts. Interior keys and
+          // inner candidates project UNDER the instantiation (a twin's
+          // interior site keys against the specialized truth); the
+          // sensitivity witness reads CTX-CLEAR — "at the floor, no
+          // substitution: the var-ness is exactly what the floor emission
+          // sees" (spec_oph_wide_pair's own law). Running it under ctx
+          // masked every var, under-emitted 17k lines of twins, and
+          // re-opened the address-comparison class — caught by the float
+          // frontier leg (exit 1) before the pin was blessed.
           spec_ctx_set(pairs, enc)
-          let inner = {
-            let (sites, _o) = spec_scan_list(body, ([], []))
-            spec_candidates_from_sites(sites, [])
-          }
+          let (sites, ophs) = spec_scan_list(body, ([], []))
+          let inner = spec_candidates_from_sites(sites, [])
+          let interior = spec_interior_names(sites, 0, [])
           spec_ctx_clear()
-          spec_candidates_fix(inner ++ w2, [d] ++ done, recs)
+          let fact = (m, spec_ophs_sensitive(ophs, pairs, 0), interior)
+          spec_candidates_fix(inner ++ w2, [d] ++ done, [fact] ++ facts, recs)
         }
       }
     }
   }
 }
+
+// The two round-invariant facts, read off the fix's own scan. Raw loops
+// (the battery law): the sensitivity witness over the operand handles, and
+// the interior twin-name edges — a site whose emission-time key mangles is
+// a redirect edge for the worthiness closure.
+fn spec_ophs_sensitive(ref ophs, ref pairs, i) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
+  if i >= len(ophs) { false }
+  else if spec_oph_wide_pair(ophs[i], pairs) { true }
+  else { spec_ophs_sensitive(ophs, pairs, i + 1) }
+
+fn spec_interior_names(ref sites, i, acc) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
+  if i >= len(sites) { acc }
+  else {
+    let (h, n) = sites[i]
+    let m2 = spec_global_name(h, n)
+    if m2 == n { spec_interior_names(sites, i + 1, acc) }
+    else { spec_interior_names(sites, i + 1, [m2] ++ acc) }
+  }
 
 // The floor-is-wrong witness: an arith/compare/eq operand whose FLOOR type is
 // a pair var bound wide at this candidate's key. Read at the floor (no
@@ -481,61 +508,43 @@ fn sum_has_payload(ref specs, i) with Memory =
     if len(ptys) > 0 { true } else { sum_has_payload(specs, i + 1) }
   }
 
-fn spec_candidate_sensitive(d, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
-  let (_m, base, pairs, _enc) = d
-  match spec_find_rec(recs, base) {
-    None => false,
-    Some(rec) => {
-      let (_n, _ps, body, _f) = rec
-      let (_sites, ophs) = spec_scan_list(body, ([], []))
-      any((oh) => spec_oph_wide_pair(oh, pairs), ophs)
-    }
-  }
-}
-
 fn spec_name_in(names, m: String) with Memory + Alloc = any((x) => x == m, names)
 
-fn spec_candidate_calls_worthy(d, worthy, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
-  let (_m, base, pairs, enc) = d
-  match spec_find_rec(recs, base) {
-    None => false,
-    Some(rec) => {
-      let (_n, _ps, body, _f) = rec
-      spec_ctx_set(pairs, enc)
-      let verdict = {
-        let (sites, _o) = spec_scan_list(body, ([], []))
-        any((s) => {
-          let (h, n) = s
-          let m2 = spec_global_name(h, n)
-          if m2 == n { false } else { spec_name_in(worthy, m2) }
-        }, sites)
-      }
-      spec_ctx_clear()
-      verdict
-    }
-  }
+// The worthiness closure over the fix's precomputed facts — a candidate
+// joins when its own body is sensitive or any interior redirect edge
+// already leads to a worthy twin; iterate to the fixpoint. Pure name-set
+// work per round: zero scans, zero mints (the incremental cursor's
+// closure_fix, one subsystem over).
+fn spec_worthy_closure(facts, worthy) with Memory + Alloc = {
+  let (w2, changed) = fold((worthy, false), (acc, f) => {
+    let (w, ch) = acc
+    let (m, sens, interior) = f
+    if spec_name_in(w, m) { (w, ch) }
+    else if sens { ([m] ++ w, true) }
+    else if spec_any_name_in(interior, w, 0) { ([m] ++ w, true) }
+    else { (w, ch) }
+  }, facts)
+  if changed { spec_worthy_closure(facts, w2) } else { w2 }
 }
 
-fn spec_worthy_pass(cands, worthy, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
-  fold((worthy, false), (acc, d) => {
-    let (w, changed) = acc
-    let (m, _base, _p, _e) = d
-    if spec_name_in(w, m) { (w, changed) }
-    else if spec_candidate_sensitive(d, recs) { ([m] ++ w, true) }
-    else if spec_candidate_calls_worthy(d, w, recs) { ([m] ++ w, true) }
-    else { (w, changed) }
-  }, cands)
-
-fn spec_worthy_fix(cands, worthy, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
-  let (w2, changed) = spec_worthy_pass(cands, worthy, recs)
-  if changed { spec_worthy_fix(cands, w2, recs) } else { w2 }
-}
+fn spec_any_name_in(ref names, ref w, i) with Memory + Alloc =
+  if i >= len(names) { false }
+  else if spec_name_in(w, names[i]) { true }
+  else { spec_any_name_in(names, w, i + 1) }
 
 fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
   let (sites, _o) = spec_scan_list(lowered, ([], []))
   let seed = spec_candidates_from_sites(sites, [])
-  let cands = spec_candidates_fix(seed, [], recs)
-  let worthy = spec_worthy_fix(cands, [], recs)
+  // ONE body scan per candidate, total: the fix's transitive-closure scan
+  // also yields the two ROUND-INVARIANT worthiness facts — the body's own
+  // wide-operand sensitivity and the interior twin-name edges — so the
+  // worthiness fixpoint below is a pure name-set closure over facts
+  // (closure_fix's species), never a re-scan. The old two-fn fixpoint
+  // re-scanned every candidate's body and re-minted every interior site's
+  // mangled name PER ROUND (measured 2026-07-25: +274MB of the
+  // self-compile image — the demand analysis' true monster).
+  let (cands, facts) = spec_candidates_fix(seed, [], [], recs)
+  let worthy = spec_worthy_closure(facts, [])
   filter((d) => { let (m, _b, _p, _e) = d; spec_name_in(worthy, m) }, cands)
 }
 

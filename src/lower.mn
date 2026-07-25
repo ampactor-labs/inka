@@ -5569,7 +5569,58 @@ fn spec_pairs_add(pairs, root, t) with Memory + Alloc = match spec_pairs_find(pa
 // Deep site-type resolution THROUGH the LookupTy effect — under the spec_wty state
 // a substituted var resolves to its concrete, so interior sites in a twin
 // project their keys against the specialized truth.
-fn spec_resolve(t) with LookupTy + Memory + Alloc = match t {
+//
+// CHECK-THEN-BUILD (the instantiate-sharing law, A.3's exact shape — this
+// walk was its unfixed sibling): the eager form re-cloned the ENTIRE tree
+// even when nothing resolved — a fully-concrete site type reconstructed
+// identically at every one of ~1e5 reference reads, and the demand
+// analysis alone allocated 362MB of the self-compile image (measured
+// 2026-07-25; the old "zero new storage" claim was the comment an entity
+// that can be wrong wrote). The Bool change-walk returns words — zero
+// allocation on the unchanged path — and the build recurses through the
+// sharing face so unchanged subtrees re-share at every level.
+fn spec_resolve(t) with LookupTy + Memory + Alloc =
+  if spec_resolve_changes(t) { spec_resolve_build(t) } else { t }
+
+fn spec_resolve_changes(t) with LookupTy + Memory = match t {
+  TVar(h) => match lookup_ty(h) {
+    TVar(h2) => h2 != h,
+    _        => true
+  },
+  TList(e)          => spec_resolve_changes(e),
+  TTuple(es)        => spec_resolve_changes_list(es, 0),
+  TFun(ps, r, _)    => spec_resolve_changes_params(ps, 0) || spec_resolve_changes(r),
+  TName(_, args)    => spec_resolve_changes_list(args, 0),
+  TRecord(fs)       => spec_resolve_changes_fields(fs, 0),
+  TRecordOpen(fs, _) => spec_resolve_changes_fields(fs, 0),
+  TRefined(b, _)    => spec_resolve_changes(b),
+  TAlias(_, i)      => spec_resolve_changes(i),
+  TCont(i, a, _, _) => spec_resolve_changes(i) || spec_resolve_changes(a),
+  _ => false                    // scalars (TInt/TFloat/TUnit/TByte)
+}
+
+// Raw-recursion loops (the battery's own law): a closure-taking any()
+// would mint one record per node and the check-walk's whole point is the
+// zero-allocation unchanged path.
+fn spec_resolve_changes_list(ref xs, i) with LookupTy + Memory =
+  if i >= len(xs) { false }
+  else if spec_resolve_changes(xs[i]) { true }
+  else { spec_resolve_changes_list(xs, i + 1) }
+
+fn spec_resolve_changes_params(ref ps, i) with LookupTy + Memory =
+  if i >= len(ps) { false }
+  else if spec_resolve_changes(param_ty(ps[i])) { true }
+  else { spec_resolve_changes_params(ps, i + 1) }
+
+fn spec_resolve_changes_fields(ref fs, i) with LookupTy + Memory =
+  if i >= len(fs) { false }
+  else {
+    let (_, ft) = fs[i]
+    if spec_resolve_changes(ft) { true }
+    else { spec_resolve_changes_fields(fs, i + 1) }
+  }
+
+fn spec_resolve_build(t) with LookupTy + Memory + Alloc = match t {
   TVar(h) => match lookup_ty(h) {
     TVar(h2) => TVar(h2),       // genuinely free — the floor terminal
     other    => spec_resolve(other)

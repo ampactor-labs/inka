@@ -1038,6 +1038,41 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ THE WORTHINESS CLOSURE — the demand analysis' 274MB
+  monster dies, and the gate caught the fix's own first form
+  under-approximating (the arena arc's second strike · pin a9d0fb45).
+  The chain, each step measured: spec_resolve went CHECK-THEN-BUILD
+  (A.3's exact shape — the eager walk re-cloned every fully-concrete
+  site type at ~1e5 reference reads; the change-walk is raw-recursion
+  loops per the battery law, closures allocate; ~29MB); the sub-seam
+  probe then pinned spec_worthy_fix at +274MB — every ROUND re-scanned
+  every candidate's whole body TWICE and re-minted every interior
+  site's mangled name, though BOTH facts are ROUND-INVARIANT (sensitive
+  depends only on the body+pairs; the interior twin-name edges only on
+  the body+ctx). THE FUSED FORM: one body scan per candidate — inside
+  spec_candidates_fix's own transitive closure — yields the inner
+  candidates, the sensitivity witness, and the interior edges; the
+  worthiness fixpoint is then a pure name-set closure over facts
+  (closure_fix's species, the incremental cursor's sibling — zero
+  scans, zero mints per round); spec_worthy_fix / spec_worthy_pass /
+  spec_candidate_sensitive / spec_candidate_calls_worthy deleted whole.
+  THE CATCH, counted as the kill it is: the first fused form ran the
+  sensitivity witness UNDER the instantiation ctx — the witness's own
+  law says "at the floor, no substitution: the var-ness is exactly what
+  the floor emission sees" — ctx masked every var, the wheel
+  under-emitted 17k lines of twins, and the address-comparison
+  miscompile class RE-OPENED; the float frontier leg convicted the
+  unblessed intermediate (exit 1, the silent-wrong made loud), and the
+  witness moved ctx-clear while interior keys stay ctx-set (ONE
+  structural scan, TWO lookup contexts — stated at the site). MEASURED
+  on the corrected sound build: self-compile 6.78s → 4.71s (−31%), RSS
+  728MB → 407MB (−44%), every twin kept. Combined with the morning's
+  emission regions, the day's arena strikes: 6.4s/754MB-bump →
+  4.7s/407MB-RSS with Law 7 or the fixpoint held at every step.
+  TRANSITION m3 == m4 at 332,604 lines; census 0; frontier 266/0;
+  proof-exactness 9/9; crown 5/5; micros 114/114. The arc's remaining
+  named shares: infer +110MB and lower +99MB (the step-4 decl regions,
+  the genuine interleave), then the two-pass re-wire rides.
 - 2026-07-25 · ▶▶ THE EMIT PHASE JOINS THE ARENA — measure first, then
   the region (phase B-ii steps 1+3 open · pin 8ea44a73). The watermark
   probe named the image's true shape: post-read 11.8MB → parse 66.4 →

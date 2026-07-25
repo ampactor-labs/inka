@@ -4705,6 +4705,11 @@ fn emit_one_eq_helper(sig, ty) with EnvRead + Memory + WasmOut + Alloc = match f
     wat_emit(sig)
     wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)")
     wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
+    // Identity is the first structural fact: the same record is equal to
+    // itself, so one word compare short-circuits the whole field
+    // conjunction. Sound unconditionally; effective wherever canonical
+    // instances flow (the intern made that the common case for names).
+    wat_emit("    (if (i32.eq (local.get $a) (local.get $b)) (then (return (i32.const 1))))\n")   // drift-audit: ignore — WAT instruction text
     let fields = product_field_tys(ty)
     emit_eq_leaf_conjunction(fields, 0, len(fields), 0)
     wat_emit("  )\n")
@@ -4731,6 +4736,10 @@ fn emit_eq_leaf_sum(sig, type_name) with EnvRead + Alloc + Memory + WasmOut = {
   wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)")
   wat_emit(" (local $ta i32) (local $tb i32)")
   wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
+  // Identity short-circuit — the same word is the same value for every
+  // operand class (equal sentinels and identical records alike), one
+  // compare before any tag load.
+  wat_emit("    (if (i32.eq (local.get $a) (local.get $b)) (then (return (i32.const 1))))\n")   // drift-audit: ignore — WAT instruction text
   // Sentinel guard: either operand below heap_base ⇒ both are word-comparable
   // (nullary-vs-nullary value-eq, nullary-vs-fielded always-unequal).
   wat_emit("    (if (result i32)\n")

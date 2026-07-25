@@ -241,10 +241,17 @@ fn list_index_proven(list, i) with Memory = list_index_unchecked(list, i)
 // Elements compare via i32.eq (the scalar/pointer word); deep element
 // recursion for nested sequences rides the element-typed emit dispatch.
 fn list_eq(a, b) -> Bool with Memory = {
-  let la = load_i32(a)
-  let lb = load_i32(b)
-  if la != lb { false }
-  else { list_eq_loop(a, b, la, 0) }
+  // Identity is the first structural fact: the same node is equal to
+  // itself — sayable HERE because this raw body reads its operands as
+  // words. (str_eq's typed body cannot say it; its identity path is the
+  // named emit-wrapper strike.)
+  if a == b { true }
+  else {
+    let la = load_i32(a)
+    let lb = load_i32(b)
+    if la != lb { false }
+    else { list_eq_loop(a, b, la, 0) }
+  }
 }
 
 fn list_eq_loop(a, b, n, i) -> Bool with Memory =
@@ -303,10 +310,18 @@ fn list_hash(xs) -> Int with Memory = {
 // by the emit's TList(TFloat) routing arms; equal sequences through EITHER
 // physical stride agree (the value decides, never the representation).
 fn list_eq_f64(a, b) -> Bool with Memory = {
-  let la = load_i32(a)
-  let lb = load_i32(b)
-  if la != lb { false }
-  else { list_eq_f64_loop(a, b, la, 0) }
+  // The identity short-circuit is sound for the wide instance too: one
+  // node's elements equal themselves (a self-compare of a NaN-holding
+  // list answers true under identity where the element walk would answer
+  // false — identity is the stronger, value-faithful reading of "the
+  // same sequence").
+  if a == b { true }
+  else {
+    let la = load_i32(a)
+    let lb = load_i32(b)
+    if la != lb { false }
+    else { list_eq_f64_loop(a, b, la, 0) }
+  }
 }
 
 fn list_eq_f64_loop(a, b, n, i) -> Bool with Memory =

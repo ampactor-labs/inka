@@ -1038,6 +1038,19 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · IDENTITY IS THE FIRST STRUCTURAL FACT (the eq
+  short-circuit · pin 3d862357). The generated $eq_<sig> helpers open
+  with one word compare — the same record equals itself — before any
+  field conjunction or tag load; list_eq/list_eq_f64 say the same fact
+  in their raw bodies (identity is the value-faithful reading even for
+  a NaN-holding sequence self-compare). Sound unconditionally,
+  effective wherever canonical instances flow — the intern made that
+  the common case for names. TRANSITION m3 == m4 (the 20-line diff is
+  the two preambles crossing one generation); board whole; ~6.4s.
+  Named residue: str_eq's typed body cannot say pointer identity —
+  the String == identity path is a one-fn emit-wrapper strike. The A.4
+  adversarial mint-enumeration recon is DISPATCHED (Fable, worktree
+  snapshot) — its report opens the TString dissolution arc.
 - 2026-07-24 · THE CAST VOCABULARY — the word-face capability, zero
   readers by design (A.5 · pin 394917cf; phase A closes except A.4's
   own arc). effect Cast { addr(a) -> Int } lands beside effect Memory

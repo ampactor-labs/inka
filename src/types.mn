@@ -2359,11 +2359,14 @@ fn show_eff_name(ref name) with !Mutate = match name {
   _                       => "«invalid-effect»"   // drift-audit: ignore — display-totality floor; honest placeholder, not data classification
 }
 
-fn show_eff_arg(ref arg) with Memory = match arg {
+fn show_eff_arg(ref arg) with GraphRead + !Mutate + Alloc + Memory = match arg {
   EAInt(n)    => int_to_str(n),
   EAFloat(f)  => float_to_str(f),
   EAString(s) => "\"{s}\"",
-  EAType(_)   => "<type>",
+  // The instance's payload IS a type the renderer already speaks — the
+  // old opaque marker hid the exact instance the diagnostic exists to
+  // teach (!Cast vs Cast(<type>) named the class live, 2026-07-24).
+  EAType(t)   => show_type(t),
   EANode(h)   => "<operand #{int_to_str(h)}>"
 }
 
@@ -2416,6 +2419,11 @@ fn show_pred_operand(handle) with GraphRead + Alloc + Memory = {
       let N(_, _, rh) = r
       "{show_pred_operand(lh)} {binop_to_str(op)} {show_pred_operand(rh)}"
     },
+    // The canonical refinement vocabulary is call-shaped (len(self),
+    // abs(x)) — render the call rather than a placeholder; an exotic
+    // callee degrades through show_callee_name's own sentinel.
+    NExpr(CallExpr(callee, args)) =>
+      "{show_callee_name(callee)}({show_list(args, (a) => { let N(_, _, ah) = a show_pred_operand(ah) }, ", ")})",
     _                   => "<expr>"
   }
 }

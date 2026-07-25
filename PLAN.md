@@ -1038,6 +1038,16 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · THE VOICE SPEAKS ITS PAYLOADS (two #9 render singles ·
+  pin 10b79aa8). show_eff_arg's EAType arm renders the instance's real
+  type via show_type — the cast-refused crucible's message now carries
+  the live payload where an opaque marker sat — and show_pred_operand
+  gains the call-shaped arm, so len(self)/abs(x) predicates render as
+  calls. callee_name's sentinel is load-bearing, untouched. CLEAN
+  m2 == m3 at 333,222 lines; board whole. Banked en route: a
+  len(self) > 0 ground refusal still pends at Verify (the
+  ground-decidable fragment does not fold len — band F's fragment
+  growth, distinct from the render class).
 - 2026-07-24 · IDENTITY IS THE FIRST STRUCTURAL FACT (the eq
   short-circuit · pin 3d862357). The generated $eq_<sig> helpers open
   with one word compare — the same record equals itself — before any

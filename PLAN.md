@@ -1038,6 +1038,13 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ONE TYPE, ONE HASH (A.4 step 3 · pin 540eb950).
+  hash_node_of's list arm goes element-face: a byte face hashes as
+  TEXT (str_hash), the projection a String field always took — the
+  hash route split dies (one type, one hash fn), and the reach seed
+  mirrors the route. The scalar-faces oracle leg held green through
+  the change (its pins were deliberately route-agnostic). CLEAN
+  m2 == m3 at 333,019 lines; board whole.
 - 2026-07-24 · ▶ THE TSTRING DISSOLUTION OPENS — recon banked, oracle
   wave landed, the dead arms delete (A.4 steps 1–2 · pin e213ce1b).
   The Fable recon (worktree snapshot, self-adversarial re-grep) found

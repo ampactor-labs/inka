@@ -5496,9 +5496,19 @@ fn show_agg_reach(ty) with Memory + Alloc = {
 fn hash_reach_names(x) with LookupTy + Memory + Alloc = {
   let ty = fold_strip(lookup_ty(lexpr_handle(x)))
   match ty {
-    TList(e)           =>
-      if stride_of(seq_elem_face(e)) >= 8 { ["list_hash_f64", "float_to_str", "str_hash"] }
-      else { ["list_hash"] },
+    TList(e)           => {
+      // The seed mirrors hash_node_of's route exactly (the visitor-walk
+      // projection law): a byte face calls $str_hash, everything else at
+      // word width calls $list_hash, wide elements the f64 family.
+      let face = seq_elem_face(e)
+      if stride_of(face) >= 8 { ["list_hash_f64", "float_to_str", "str_hash"] }
+      else {
+        match face {
+          TByte => ["str_hash"],
+          _     => ["list_hash"]
+        }
+      }
+    },
     TFloat             => ["float_to_str", "str_hash"],
     TRecord(_)         => hash_agg_reach(ty),
     TRecordOpen(_, _)  => hash_agg_reach(ty),

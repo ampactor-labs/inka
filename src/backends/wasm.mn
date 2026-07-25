@@ -225,7 +225,15 @@ fn show_node_of(h, x) with Memory + LookupTy = {
 fn hash_node_of(h, x) with Memory + LookupTy = {
   let ty = show_hash_ty(x)
   match ty {
-    TList(_)           => LCall(h, LGlobal(h, "list_hash"), [x]),
+    // The byte face hashes as TEXT (str_hash) — the same projection a
+    // String FIELD takes (emit_field_hash's byte face), closing the hash
+    // route split the A.4 recon surfaced: top-level hash(s) ran the
+    // length-seeded list mix while a field ran the text mix — one type,
+    // two hash fns, the divergence the fold family exists to forbid.
+    TList(e)           => match seq_elem_face(e) {
+      TByte => LCall(h, LGlobal(h, "str_hash"), [x]),
+      _     => LCall(h, LGlobal(h, "list_hash"), [x])
+    },
     TFloat             => LCall(h, LGlobal(h, "str_hash"),
                             [LCall(h, LGlobal(h, "float_to_str"), [x])]),
     TTuple(_)          => x,

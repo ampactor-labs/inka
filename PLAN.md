@@ -1038,6 +1038,51 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · THE ARM-SPEC DESIGN REFUTED — a proven negative
+  redirects the payload arc (no code shipped; the fleet's adversarial
+  pass, orchestrator-re-derived from the micro sources). The named
+  successor Hβ.lower.arm-payload-specialization (spec-twins at handler
+  arms) could fix AT MOST 3 of the six 134-banked micros: the floors
+  SPLIT — payload/payload2/payloaddirect floor inside the ARM fn (the
+  arm is the medium's last "named generic compiled once at the decl's
+  floor" — install-independent, proven by an inline-perform probe
+  still trapping), while payload3/4/5 floor in MAIN on the
+  handle-result read ((run() ~> hold).beta) with word-shuttle arms no
+  arm machinery can reach; THAT root is the row representation's
+  fragment drop (two ops of one effect performed in one non-install
+  frame: the name-set union's by-name dedup drops the second
+  fragment's args outside install frames — the instance-crossing
+  landing's own "join by position" gate, measured by four probes:
+  both-inline 2, single-op-through-boundary 2, two-ops-one-callee
+  134, two-ops-two-callees 2). REPLACEMENT, two landings completing
+  EXISTING channels, ordered L1 → L2:
+  Hβ.effects.same-name-fragments-coexist (L1, fixes 3/4/5): same-named
+  EParameterized fragments COEXIST in the row — dedup by full identity,
+  not by name — until the install reconciles them (§4③'s own "the
+  handler is where the single instance is established";
+  unify_instances_to already iterates every fragment; only the
+  representation starves it). Compat gate: heterogeneous performs of
+  one op under ONE install become an honest install-site type error;
+  the fold-over-[Int]+[Float] caller is the green control.
+  Hβ.emit.arm-under-install-instantiation (L2, fixes payload/2/direct):
+  the arm emits under its installs' instantiation — demand channel =
+  the STATIC LHandleWith sites (the install is the one place the
+  instantiation is total; perform-site routing REFUTED — the singleton
+  tier bakes arm calls into arbitrary intermediate fns), pairs = the
+  handler env scheme's inst-var roots against lookup_ty of the install
+  value, through the EXISTING spec bracket + field_sel_offset;
+  all-installs-agree (the dominant case) = one arm under one bracket,
+  no twin, no routing; divergent + floor-sensitive = a LOUD compile
+  refusal naming the divergence (strictly better than the runtime
+  134); divergent + plumbing stays floored-and-correct (the
+  heterogeneous-install control runs green today). Also refuted en
+  route: per-DECL monomorphization (heterogeneous installs of one
+  plumbing handler are legal and live), runtime field-by-name (drift
+  8), annotate-the-param as the resolution (the standing charge's own
+  words; it survives only as a legitimate authored Intent Boundary).
+  The six micros' 134 expectations are the RED gates; three of their
+  comments carry the wrong diagnosis (polymorphic-op — actually the
+  fragment drop) and true with L1.
 - 2026-07-25 · ▶▶ THE OVERLAY FAMILY DIES WHOLE — the fleet's first
   executed census, and the C1b dividend undershot (pin 6913e09d). The
   recon-overlay agent's complete consumer census found the per-module
@@ -4385,13 +4430,13 @@ A/E — the open theoretical differentiator); (3) the gradient as the daily
 instrument (phase D — the ranker is gates×proximity, not yet the
 Reason-chain local-intent read). RANKED RESIDUE QUEUE:
 type-decl-name-registry (silent tag-merge; SchemeKind representation
-change) · Hβ.lower.arm-payload-specialization (the spec-twin machinery at
-handler arms closing the op-payload residual; six micros bank the honest
-134 floor awaiting it) · overlay_register_at dissolution (the planned
-ranges make per-mint overlay writes a range projection) · handler-config
-defaults (the parameter-product law at handler decls; probed unparsed
-2026-07-25) · the fmt SUMMIT (770 E_RedundantBraces) ·
-E_EffectMismatch arming (licence-gated).
+change; builder dispatched) · Hβ.effects.same-name-fragments-coexist +
+Hβ.emit.arm-under-install-instantiation (the L1→L2 pair that closes the
+six 134-banked payload micros; the arm-spec-twin predecessor REFUTED —
+the ledger entry carries the split and the probes) · handler-config
+defaults (builder dispatched) · the fmt SUMMIT (770 E_RedundantBraces;
+recon dispatched) · E_EffectMismatch arming (licence-gated). The
+overlay dissolution LANDED (pin 6913e09d).
 
 **One bar, both audiences** (decided with Morgan 2026-07-16): the external
 early adopter who clones, installs, and ships a wasm artifact from an

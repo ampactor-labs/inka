@@ -211,7 +211,6 @@ fn spec_is_agg(ty) with Pure = match ty {
 fn show_node_of(h, x) with Memory + LookupTy = {
   let ty = show_hash_ty(x)
   match ty {
-    TString            => x,
     TList(TByte)       => x,
     TFloat             => LCall(h, LGlobal(h, "float_to_str"), [x]),
     TList(_)           => x,
@@ -226,7 +225,6 @@ fn show_node_of(h, x) with Memory + LookupTy = {
 fn hash_node_of(h, x) with Memory + LookupTy = {
   let ty = show_hash_ty(x)
   match ty {
-    TString            => LCall(h, LGlobal(h, "str_hash"), [x]),
     TList(_)           => LCall(h, LGlobal(h, "list_hash"), [x]),
     TFloat             => LCall(h, LGlobal(h, "str_hash"),
                             [LCall(h, LGlobal(h, "float_to_str"), [x])]),
@@ -4418,13 +4416,6 @@ fn emit_struct_eq(left_h, neg) =
 // recursion — is the positive-form peer Hβ.eq.fold-sum-leaf (the generator
 // receives it next; nullary ADT tags ARE words and fold here as i32.eq).
 fn emit_eq_for_ty(ty, neg) = match ty {
-  // Sequence case — the [Byte] (str_eq) and [a] (list_eq) instances of the
-  // ONE length-then-element recursion. Both return Bool; != wraps i32.eqz.
-  TString => {
-    emit_fold_state_insert()
-    wat_emit("    (call $str_eq)\n")
-    if neg { wat_emit("    (i32.eqz)\n") } else { () }
-  },
   // ONE sequence arm, dispatched on the element's RESOLVED face: a byte
   // sequence routes to the [byte] family (so String and [byte] — one type
   // under §4① — can never diverge), a float sequence compares by VALUE
@@ -4886,9 +4877,6 @@ fn convert_op(k) with Pure = match k {
 // sum -> the named-peer floor. The eq/hash family CANNOT split: this IS the
 // same five-node-kind leaf emit_eq_for_ty drives at the top-level `==`.
 fn emit_field_eq(fty) = match fty {
-  TString  => { wat_emit("    (local.get $__state)\n")
-                emit_swap_under_state()
-                wat_emit("    (call $str_eq)\n") },
   // One sequence arm, element-face dispatched (the top-level eq's twin).
   TList(e) => { wat_emit("    (local.get $__state)\n")
                 emit_swap_under_state()
@@ -4955,7 +4943,6 @@ fn emit_struct_cmp(op, left_h) =
 // the arithmetic binops ride). A sequence is the str_compare/list_compare
 // [Byte]/[a] instance; a product/sum the generated $compare_<sig>.
 fn emit_cmp_for_ty(op, ty) = match ty {
-  TString => emit_cmp_seq_call("str_compare", op),
   // One sequence arm, element-face dispatched (the eq routing's twin).
   TList(e) => match seq_elem_face(e) {
     TByte  => emit_cmp_seq_call("str_compare", op),
@@ -5180,9 +5167,6 @@ fn emit_cmp_helper_chain(fields, i, n, off) = {
 // recursive $compare_<sig> call. The SAME five-node-kind leaf emit_cmp_for_ty
 // drives at the top-level compare — eq and compare cannot diverge.
 fn emit_field_cmp(fty) = match fty {
-  TString  => { wat_emit("    (local.get $__state)\n")
-                emit_swap_under_state()
-                wat_emit("    (call $str_compare)\n") },
   // One sequence arm, element-face dispatched (the eq routing's twin).
   TList(e) => { wat_emit("    (local.get $__state)\n")
                 emit_swap_under_state()
@@ -5432,7 +5416,6 @@ fn show_field_name(fname, is_record) with Pure = if is_record { "{fname}: " } el
 // renderer's argument. The renderer-name is the only degree of freedom; the
 // load is the SAME width-typed read the eq leaf and the store side use.
 fn emit_show_field_render(off, r, fty) = match fty {
-  TString => emit_show_field_load(off, r),
   // A byte sequence RENDERS AS TEXT (§4①: String is the text VIEW of [byte]) —
   // never the bracket-list render ("hi", not [104, 105]).
   TList(TByte)      => emit_show_field_load(off, r),
@@ -5558,7 +5541,6 @@ fn emit_show_variant_payloads(payloads, i, n) = {
 // is the payload's repr (emit_show_variant_load reads repr_of), so the show
 // reads the SAME width the store wrote (Carried-Truth).
 fn emit_show_variant_payload_render(off, pty) = match pty {
-  TString => emit_show_variant_load(off, pty),
   TList(TByte)      => emit_show_variant_load(off, pty),   // text view (§4①)
   TFloat            => emit_show_call_variant("float_to_str", off, pty),
   TList(_)          => emit_show_call_variant("show_{fold_sig(pty)}", off, pty),
@@ -5644,7 +5626,6 @@ fn emit_show_list_body_helper(sig, elem) = {
 // Render list element i: list_index(__state, a, i), wrapped in its leaf renderer.
 // The renderer-name is the only degree of freedom; the indexed load is its arg.
 fn emit_show_list_elem_render(elem) = match elem {
-  TString => emit_show_list_index(),
   TList(TByte)      => emit_show_list_index(),             // text view (§4①)
   // The element read yields the f64's REFERENCE (the word protocol); deref
   // before the native-faced renderer.
@@ -5874,7 +5855,6 @@ fn emit_hash_field_mix(fields, i, n, off) = {
 // product/sum → a recursive $hash_<sig> call. The SAME five-node-kind leaf the
 // lower_hash_dispatch drives — eq, compare, and hash cannot diverge.
 fn emit_field_hash(off, r, fty) = match fty {
-  TString  => emit_field_hash_seq_call(off, "str_hash"),
   // Byte sequence == the String family (§4①). Load-bearing here: list_hash
   // seeds its FNV mix with the length, str_hash does not — one type must
   // hash through ONE route or eq-equal values hash unequal.
@@ -6956,7 +6936,6 @@ fn emit_list_literal(h, elems) = {
 // An unresolved/non-list shape is the word floor (sc 0).
 fn literal_stride_class(h) = match fold_strip(lookup_ty(h)) {
   TList(e) => stride_class(stride_of(seq_elem_face(e))),
-  TString  => 1,
   _        => 0
 }
 

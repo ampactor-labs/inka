@@ -1038,6 +1038,29 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶ THE TSTRING DISSOLUTION OPENS — recon banked, oracle
+  wave landed, the dead arms delete (A.4 steps 1–2 · pin e213ce1b).
+  The Fable recon (worktree snapshot, self-adversarial re-grep) found
+  the fact the 2026-07-20 attempt lacked: EVERY backend fold dispatch
+  strips, so fold_strip(TString) = TList(TByte) makes the emit's
+  TString arms DEAD-BUT-AGREEING — and form (ii) is forced (delete
+  the ctor; "String" = one shared canonical TAlias("String",
+  TList(TByte)); H6 exhaustiveness turns every missed site into a
+  compile refusal, the anti-absorption mechanism itself). Two
+  pre-existing diseases surfaced: the HASH ROUTE SPLIT (top-level
+  hash(s) → list_hash, a String FIELD → str_hash — one type, two hash
+  fns) and [String] element == word-comparing at concrete sites. STEP
+  1: three oracle legs pin today's routes (scalar faces / aggregates /
+  the : String annotation boundary — the fixpoint is structurally
+  blind to string-route regressions; the wrong [String] == is
+  deliberately NOT pinned). STEP 2: thirteen dead arms delete whole —
+  census confirmed no exhaustiveness loss, CLEAN m2 == m3 at 332,942
+  lines (280 smaller), and the string battery ran green through the
+  arm-less wheel. REMAINING: step 3 (hash-route unification + BConcat
+  strip-first), step 4 (mint flip under peel-coexistence + the synth
+  byte-elem proposal arm + the C fixture), step 5 (ctor deletion,
+  H6-compile-guided sweep). The full corrected design is in the
+  campaign mirror.
 - 2026-07-24 · THE VOICE SPEAKS ITS PAYLOADS (two #9 render singles ·
   pin 10b79aa8). show_eff_arg's EAType arm renders the instance's real
   type via show_type — the cast-refused crucible's message now carries

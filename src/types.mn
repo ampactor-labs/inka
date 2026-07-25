@@ -1507,6 +1507,7 @@ type DiagKind
   | EMissingModule(String, String, Span)         // module name, expected path
   | EHandlerStateShadowsOp(String, String, Span) // handler name, state field that names an op of the handled effect — ambiguous by construction (the arm body cannot distinguish a state read from an op re-perform; measured: the collision compiles clean and returns the WRONG value)
   | EDuplicateFnName(String, Span)               // a second `fn name` in one namespace — the emitter would pick one silently (invalid WAT today; silent under a native path)
+  | EDuplicateTypeName(String, Span)             // a second `type name` in one namespace — the decls silently MERGE: disjoint ctor sets share tag ids and a cross-tag match returns the wrong arm (measured: exit 13 where 99 was meant, zero diagnostics)
   | EUnresolvedType(Int, Int, Span)              // unresolved handle, epoch (lower-time NFree)
   | EEffectUnhandled(String, String, Span)       // effect name, the graph-derived
                                                  // proposal (absorbing handlers in
@@ -1587,6 +1588,7 @@ fn diag_span(d) with Pure = match d {
   EMissingModule(_, _, s) => s,
   EHandlerStateShadowsOp(_, _, s) => s,
   EDuplicateFnName(_, s) => s,
+  EDuplicateTypeName(_, s) => s,
   EUnresolvedType(_, _, s) => s,
   EEffectUnhandled(_, _, s) => s,
   EUnresolvedHole(_, s) => s,
@@ -1641,6 +1643,7 @@ fn diag_source(d) with Pure = match d {
   EMissingModule(_, _, _) => "driver",
   EHandlerStateShadowsOp(_, _, _) => "infer",
   EDuplicateFnName(_, _) => "infer",
+  EDuplicateTypeName(_, _) => "infer",
   EUnresolvedType(_, _, _) => "lower",
   EEffectUnhandled(_, _, _) => "effects",
   EUnresolvedHole(_, _) => "verify",
@@ -1695,6 +1698,7 @@ fn diag_code(d) with Pure = match d {
   EMissingModule(_, _, _) => "E_MissingModule",
   EHandlerStateShadowsOp(_, _, _) => "E_HandlerStateShadowsOp",
   EDuplicateFnName(_, _) => "E_DuplicateFnName",
+  EDuplicateTypeName(_, _) => "E_DuplicateTypeName",
   EUnresolvedType(_, _, _) => "E_UnresolvedType",
   EEffectUnhandled(_, _, _) => "E_EffectUnhandled",
   EUnresolvedHole(_, _) => "E_UnresolvedHole",
@@ -1763,6 +1767,11 @@ fn diag_refuses(d) with Pure = match d {
   // no duplicate fn names, measured).
   EHandlerStateShadowsOp(_, _, _) => True,
   EDuplicateFnName(_, _) => True,
+  // ARMED at birth (2026-07-25), same licence as the two above: a DECL-SITE
+  // fact read from parsed structure — no resolution dependency. Census on
+  // the wheel blob at arming: 0 (the one Level pair lives in two tutorial
+  // files, both outside the blob and compiled standalone).
+  EDuplicateTypeName(_, _) => True,
   // ARMED at birth (2026-07-22): an EXECUTABLE-root fact read from main's
   // resolved row at the gate — the row representation is true (the triple),
   // the wheel's own main carries only substrate-grounded names (census 0 at
@@ -1886,6 +1895,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EMissingModule(name, path, _) => "module source not found: {name} (expected at {path})",
   EHandlerStateShadowsOp(hname, field, _) => "handler '{hname}' state field '{field}' names an op of the handled effect — a state read and an op call become indistinguishable in the arm bodies; rename the field",
   EDuplicateFnName(name, _) => "a second `fn {name}` in one namespace — the first declaration already binds it; rename one",
+  EDuplicateTypeName(name, _) => "a second `type {name}` in one namespace — the declarations would merge and their constructor sets share tag ids; rename one",
   EUnresolvedType(h, epoch, _) => "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",
   EEffectUnhandled(ename, proposal, _) => "effect {ename} reaches the executable root with no absorbing handler — calling one of its ops would read garbage evidence at runtime; nothing executes unproven. {proposal}",
   EUnresolvedHole(h, _) => "unresolved value hole (handle {int_to_str(h)}) — fill it (accept a proven survivor) or suspend it into a parameter product",

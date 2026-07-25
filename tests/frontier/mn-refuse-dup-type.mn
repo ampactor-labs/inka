@@ -1,0 +1,18 @@
+// ARMED-CLASS refusal fixture — E_DuplicateTypeName.
+// Two `type Signal` in one namespace silently MERGE: each decl's ctors tag
+// from 0, so Halt (tag 0 of the second decl) matches the FIRST decl's Go arm
+// (tag 0) — measured pre-refusal through the pinned boot: exit 13 where 99
+// was meant (Halt is neither Go nor Stop), zero diagnostics, 3,443B of WAT.
+// The second decl site refuses: nonzero exit, zero WAT bytes, the report at
+// the second decl's span.
+type Signal = Go | Stop
+type Signal = Halt | Run
+
+fn main() = {
+  let v = Halt
+  match v {
+    Go   => 13,
+    Stop => 42,
+    _    => 99,
+  }
+}

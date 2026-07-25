@@ -693,6 +693,7 @@ fn register_primitives() = {
 // / `Int vs ValidOffset` class, 362 census errors, Carried-Truth: the
 // graph drew the alias edge; quantify_ctor_ty re-derived a nominal name).
 fn pre_register_decls(stmts) = {
+  refuse_duplicate_type_decls(stmts, 0, len(stmts), smap_new())
   each(pre_register_alias, stmts)
   // The duplicate-fn refusal is keyed by THIS WALK's own seen-set, never
   // by the env: an existing FnScheme entry may be a PRIOR JUDGMENT of the
@@ -703,6 +704,42 @@ fn pre_register_decls(stmts) = {
   fold(smap_new(), pre_register_stmt, stmts)
   ()
 }
+
+// One `type` namespace, one walk: every type head — transparent alias,
+// refined alias, ADT/nominal record — claims its name once per registration
+// walk; a second claim reports EDuplicateTypeName at ITS decl span. Without
+// the refusal the decls silently MERGE: each decl's ctors tag from 0, so a
+// cross-tag match returns the wrong arm with zero diagnostics (measured:
+// exit 13 where 99 was meant — Halt, tag 0 of a second Signal decl, matched
+// the first decl's Go arm). Membership is a WALK-LOCAL seen-set, never an
+// env probe: a multi-variant decl registers only its CTOR names, so the env
+// holds nothing under the type name to probe, and the same name legitimately
+// re-registers across walks (the two-pass judge's trial and final; the main
+// walk overwriting pre-registered entries). Registration proceeds past the
+// report — productive under error; the armed class refuses the executable
+// at the gate. Both registration walks run it: the trial's copy is absorbed
+// by diag_quiet, the final's reports for real.
+fn refuse_duplicate_type_decls(stmts, i, n, seen) =
+  if i >= n { () }
+  else {
+    let N(body, span, _) = list_index(stmts, i)
+    let claimed = match body {
+      NStmt(AliasStmt(name, _))     => type_decl_claim(seen, name, span),
+      NStmt(RefineStmt(name, _, _)) => type_decl_claim(seen, name, span),
+      NStmt(TypeDefStmt(name, _))   => type_decl_claim(seen, name, span),
+      _ => seen
+    }
+    refuse_duplicate_type_decls(stmts, i + 1, n, claimed)
+  }
+
+fn type_decl_claim(seen, name, span) =
+  match smap_get(seen, name) {
+    Some(_) => {
+      report(EDuplicateTypeName(name, span))
+      seen
+    },
+    None => smap_add(seen, name, 1)
+  }
 
 // The alias edges — registration's ONE home. The main walk keeps only
 // RefineStmt's predicate Verify obligation.
@@ -1000,6 +1037,7 @@ fn backward_depth(ref name_idx, ref depths, name, i) = {
 fn infer_program_final(rows, layers, stmts) = {
   {
     register_primitives()
+    refuse_duplicate_type_decls(stmts, 0, len(stmts), smap_new())
     each(pre_register_alias, stmts)
     fold(smap_new(), pre_register_stmt_final, stmts)
     set_summaries(classify_fixpoint(stmts))

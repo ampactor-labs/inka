@@ -1274,6 +1274,12 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-refuse-state-shadows-op.mn" E_HandlerStateShadowsOp "$dir"
   run_refusal "$compiler" refuse-dup-fn \
     "$ROOT/tests/frontier/mn-refuse-dup-fn.mn" E_DuplicateFnName "$dir"
+  # E_DuplicateTypeName armed at birth (2026-07-25) — the last named
+  # silent-MERGE class: two `type X` decls share tag ids and a cross-tag
+  # match returns the wrong arm (measured pre-refusal: exit 13 where 99 was
+  # meant, zero diagnostics).
+  run_refusal "$compiler" refuse-dup-type \
+    "$ROOT/tests/frontier/mn-refuse-dup-type.mn" E_DuplicateTypeName "$dir"
   # E_MissingVariable armed 2026-07-18 — wheel census 0 and the user-path
   # licence measured: a no-import stdlib program resolves via the DAG's
   # prelude seed (compile exit 0, runs); the stdin contract is

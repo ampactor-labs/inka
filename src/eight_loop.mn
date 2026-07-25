@@ -212,7 +212,7 @@ handler interrogate_default with !Mutate {
   // Hβ.lower.schedule-specialized-callee).
   interrogate_all() => {
     let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-    let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+    let Graph(next, _overlays, _spans) = snapshot
     let positions = enumerate_handles(0, next)
     let reports =
       positions
@@ -276,7 +276,7 @@ fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory =
 // chain IS the graph (PLAN §2), never a transient stack copy.
 fn handle_under_tee_install(handle) with GraphRead + !Mutate = {
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+  let Graph(next, _overlays, _spans) = snapshot
   scan_for_tee_governing(handle, 0, next)
 }
 

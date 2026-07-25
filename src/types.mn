@@ -601,10 +601,14 @@ type ExecutableBoundary
   | PendingContinuationBoundary(Int, Int, Int, EffRow) // resume input, answer, continuation, world
   | ContinuationBoundary(ContinuationEdge)
 
+// The snapshot carries exactly what its consumers read: the mint bound,
+// the per-module overlay views, and the span index. The node cells are
+// NOT here — they live in the handler's paged spine and are read through
+// graph_chase/graph_node_body (a snapshot copy of them was a write-only
+// field: every destructure ignored it), and epoch reads through
+// graph_epoch.
 type Graph
   = Graph(
-      [GNode],           // nodes: flat array indexed by handle
-      Int,               // epoch: bumps on every bind
       Int,               // next: next fresh allocation
       [(String, [Int])], // overlays: [(module_name, [handle])]
       [(ValidSpan, Int)] // span_index: [(ValidSpan, Int)] for Mentl QTypeAt queries

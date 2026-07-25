@@ -758,7 +758,7 @@ fn render_sibling_separator(ctx) with Pure = match ctx {
 // project the 2-/4-space layout from this real position.
 fn render_context_at(handle) with GraphRead + !Mutate + Memory = {
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+  let Graph(next, _overlays, _spans) = snapshot
   scan_for_render_parent(handle, 0, next)
 }
 

@@ -946,7 +946,7 @@ fn resolve_cursor_target(target, current_handle) with GraphRead + Memory = {
     TargetHandle(h)    => h,
     TargetSpan(s)      => {
       let g = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-      let Graph(_, _, _, _, span_index) = g
+      let Graph(_, _, span_index) = g
       match find_tightest(span_index, s, None, 999999999) {
         None       => current_handle,
         Some(h)    => h

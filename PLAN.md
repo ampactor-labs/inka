@@ -1038,6 +1038,48 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ THE PAGED SPINE — six weaves become one page record,
+  and the graph stops moving (Phase C rung 1 step C1a, Law-7-inert ·
+  pin 0e3af09c). The six handle-weaves (nodes, program, comments,
+  canon, narrowing, boundaries) dissolve into ONE structural record
+  per band — six 16,384-slot columns allocated whole at band-open
+  (sized by the measured mint distribution: max 2,305/decl, p99 331),
+  written in place, never relocated. DELETED: graph_extend_to + the
+  NFree gap-fill (pages need no fill — a virgin cell is the absent
+  contract: mint-density guards nodes by `next` alone, program and
+  comments guard the cell's word face through the Cast read, canon
+  and narrowing read 0 as no-edge, a boundaries 0 IS NoBoundary at
+  nullary tag 0), the five per-weave extend+set+rebind arms (an
+  in-place cell write rebinds NO state), the seventeen-field
+  checkpoint (→ twelve fields, the spine contributing two words:
+  band table + open count), undo_set_within + the spine-merge
+  restore semantics (rollback = restore the COUNT + a plain backward
+  in-place trail walk; in-fork bands close by count, their cells
+  stale-and-overwritten at the next open — the trail's own
+  logical-length discipline one level up), the Graph snapshot's
+  zero-reader nodes and epoch fields (every destructure ignored
+  them), and current_overlay (a write-only cache of names[idx]).
+  The fork-spine class (the boundaries[23] stale-spine trap, the
+  seventeen-field snapshot's whole reason) is UNCONSTRUCTIBLE: a
+  page that never moves cannot dangle, and a spine snapshot stays
+  valid across mints. One trap en route, pinned against the binary
+  then named as its class: the page read's inferred open-record
+  receiver computed field offsets over the partial demanded set —
+  `.nodes` read offset 0, the boundaries column, GNode destructure
+  of a boundary word (trecordopen-wrong-field, measured live) — and
+  the judge REFUSED the first nominal-record fix with 12 exact
+  E_TypeMismatch sites (nominal TName vs the open-row field demand),
+  forcing the honest form: the page is STRUCTURAL (mechanism, not a
+  branded value), closed at the one annotated projection
+  (spine_page's return). MEASURED: 5.49s median / 511MB RSS —
+  neutral time inside the variance band, flat memory (+5MB = 13
+  bands × 384KB exactly), the doubling-copy churn gone. CLEAN
+  m2 == m3 at 291,710 lines; census 0; comment-refs 0 (the ratchet
+  caught five of this landing's own backticked narrations); frontier
+  266/0 through the paged rollback; proof-exactness 9/9; crown 5/5;
+  micros 114/114. C1b next: bands become DECL-grained (handle =
+  band·16384 + slot, a TRANSITION), which makes overlay membership a
+  band-range projection and the enclosing-decl edge an O(1) read.
 - 2026-07-25 · ▶▶ THE FORK TRIPLE — R6 closes the world arc, and the
   interleave shows its first live witness (Phase C rung 0 · pin
   09b95e50). Every candidate fork restores THREE legs — graph

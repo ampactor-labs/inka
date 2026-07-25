@@ -270,7 +270,7 @@ fn proven_to_item(pos, pair, anchor) with GraphRead + Memory + Alloc = {
 // span_index; the intent row is read per-handle from the node itself.
 
 fn compute_priority(pos, ann) with GraphRead + Memory + Alloc = {
-  let Graph(_nodes, _epoch, _next, _overlays, span_index) = graph_snapshot()
+  let Graph(_next, _overlays, span_index) = graph_snapshot()
   OraclePriority({
     tier:          tier_of_annotation(ann),
     intent_weight: intent_weight_at(pos),
@@ -411,7 +411,7 @@ fn collect_bound_positions(h, bound, acc) with GraphRead + Memory + Alloc = {
 // snapshot's overlays; the unowned position belongs to "global".
 
 fn current_overlay_of(pos) with GraphRead = {
-  let Graph(_nodes, _epoch, _next, overlays, _spans) = graph_snapshot()
+  let Graph(_next, overlays, _spans) = graph_snapshot()
   overlay_owning(overlays, pos)
 }
 

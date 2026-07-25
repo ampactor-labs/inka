@@ -82,7 +82,7 @@ handler query_default {
       // graph_chase below IS the live read; an unbound node's type IS its own
       // TVar (the chase terminated there), so the projection is total over the
       // NodeKind without a fabricated "Unresolved" name.
-      let Graph(_, _, _, _, span_index) = graph_snapshot()
+      let Graph(_, _, span_index) = graph_snapshot()
       match find_tightest(span_index, span, None, 999999999) {
         None => resume(QRError("no enclosing span found in AST index")),
         Some(handle) => {
@@ -334,7 +334,7 @@ fn walk_chain(handle, depth) with !Mutate = {
 // NExpr(VarRef(name)) — the inbound use-edge set, read live. No AST side-index.
 
 fn refs_of_name(name) with GraphRead + !Mutate + Alloc + Memory = {
-  let Graph(_, _, next, _, _) = graph_snapshot()
+  let Graph(next, _, _) = graph_snapshot()
   collect_var_ref_spans(name, 0, next)
 }
 
@@ -370,7 +370,7 @@ fn span_of_reason(reason) with Pure = match reason {
 // weave for the decl whose arms include OP; project its handler name.
 
 fn handler_providing_op(op_name) with GraphRead + !Mutate + Memory = {
-  let Graph(_, _, next, _, _) = graph_snapshot()
+  let Graph(next, _, _) = graph_snapshot()
   scan_handler_for_op(op_name, 0, next)
 }
 
@@ -404,7 +404,7 @@ fn arms_include_op(arms, op_name) with Memory = {
 // position→symbol side-index.
 
 fn name_at_span(span) with GraphRead + !Mutate + Memory = {
-  let Graph(_, _, _, _, span_index) = graph_snapshot()
+  let Graph(_, _, span_index) = graph_snapshot()
   match find_tightest(span_index, span, None, 999999999) {
     None         => None,
     Some(handle) => match graph_node_body(handle) {

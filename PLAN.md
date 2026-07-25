@@ -1038,6 +1038,24 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · THE PATTERN PATH FOLLOWS THE ENV'S OWN EDGE (phase A's
+  third strike · pin 8ba823f5). ctor_payload_tys_of re-derived a
+  constructor's entry by scanning the whole env snapshot backward per
+  LPCon bind (6.86% of the self-compile; a pinned str_eq the untyped
+  snapshot tuple forced) — while the env's bucket index already drew
+  the edge. env_lookup_ctor lands as the THIRD kind-filtered read
+  (env_lookup_type's exact validated-walk shape, predicate =
+  ConstructorScheme); the snapshot scan and its pointer-eq essay die
+  whole. CLEAN m2 == m3 at 330,107 lines; ctor_payload_tys_find gone
+  from the profile; ~8.5s → ~7.2s. The re-profile names the next two:
+  env_find_flat at 5.85% is NOT the rare stale-bucket case its comment
+  claims — env_resolve validates only the FIRST bucket hit and bails
+  to the O(n) scan on staleness, where the type/ctor siblings validate
+  INSIDE the walk and continue; folding the validation in makes the
+  fallback unreachable and deletes env_find_flat whole (§5.O's
+  documented villain). The ceremony residue (list_index_unchecked
+  20.8%, len 12.6%) is now call volume itself — caller-side hoists or
+  emit inlining, banked for the phase's re-measure.
 - 2026-07-24 · ▶▶ THE CEREMONY FUSE — 15.56s → 8.46s (1.84×; 8.35×
   across the two perf landings), and phase A's design survives its
   adversarial panel CORRECTED (· pin cec0f2df). THE PROFILE FIRST (the

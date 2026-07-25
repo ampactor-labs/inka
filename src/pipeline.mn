@@ -675,6 +675,39 @@ fn env_resolve_type(ref buf, count, ref idx, name: String) with Memory = {
   }
 }
 
+// The CTOR-position read — env_resolve_type's sibling at the third kind
+// resolved by name: the newest live ConstructorScheme entry. The pattern
+// path reads a constructor's payload types at every LPCon bind; the
+// snapshot scan this index read replaces walked the whole env backward per
+// read (6.86% of the self-compile, perf 2026-07-24) — the edge the index
+// already draws, followed instead of re-derived.
+fn env_entry_is_ctor(ref kind) with Pure =
+  match kind { ConstructorScheme(_, _) => true, _ => false }
+
+fn env_bucket_ctor_pos(ref buf, ref bucket, name: String, count, i, n) with Memory = {
+  if i >= n { -1 }
+  else {
+    let (bn, pos) = list_index(bucket, i)
+    if pos < count && bn == name {
+      let (en, _scheme, _reason, kind) = list_index(buf, pos)
+      if en == name && env_entry_is_ctor(kind) { pos }
+      else { env_bucket_ctor_pos(buf, bucket, name, count, i + 1, n) }
+    }
+    else { env_bucket_ctor_pos(buf, bucket, name, count, i + 1, n) }
+  }
+}
+
+fn env_resolve_ctor(ref buf, count, ref idx, name: String) with Memory = {
+  let b = i32_and(str_hash(name), 4095)
+  let bucket = list_index(idx, b)
+  let pos = env_bucket_ctor_pos(buf, bucket, name, count, 0, len(bucket))
+  if pos < 0 { None }
+  else {
+    let (_, scheme, reason, kind) = list_index(buf, pos)
+    Some((scheme, reason, kind))
+  }
+}
+
 handler env_handler with entries_buf = make_list(1024), entries_count = 0, scopes = [], index = env_index_new() {
 
   env_lookup(name) =>
@@ -682,6 +715,9 @@ handler env_handler with entries_buf = make_list(1024), entries_count = 0, scope
 
   env_lookup_type(name) =>
     resume(env_resolve_type(entries_buf, entries_count, index, name)),
+
+  env_lookup_ctor(name) =>
+    resume(env_resolve_ctor(entries_buf, entries_count, index, name)),
 
   env_snapshot() =>
     // Snapshots copy the live prefix — rare (module boundaries), and a

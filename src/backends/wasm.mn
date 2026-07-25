@@ -4505,41 +4505,21 @@ fn emit_eq_sum_call(sig, neg) = {
   if neg { wat_emit("    (i32.eqz)\n") } else { () }
 }
 
+// ctor_payload_tys_of — the payload types of a constructor BY NAME, resolved
+// through the env's own bucket index (env_lookup_ctor, the kind-filtered
+// read). The snapshot scan this replaces walked the whole env backward per
+// pattern bind (6.86% of the self-compile, perf 2026-07-24) and compared
+// names through a str_eq pin the untyped snapshot tuple forced; the index
+// walk compares under the String proof. No constructor entry → [] (a
+// nullary or unresolved ctor — the uniform-stride fallback is then
+// byte-identical).
 fn ctor_payload_tys_of(ctor_name) with EnvRead + Memory + Alloc = {
-  let Env(entries) = env_snapshot()
-  ctor_payload_tys_filter(entries, ctor_name)
-}
-
-// ctor_name is matched against each env entry's binding NAME. Both are byte
-// sequences, but the env is Env(List) (types.mn) — an UNTYPED list — so the
-// destructured `name` binds as TVar: no String proof reaches the equality,
-// which then lowers to i32.eq (pointer identity). The env-registered "Some"
-// (interned during infer) and the LPCon pattern's "Some" (interned during
-// lower) are DISTINCT objects, so pointer-eq never matches → the payload types
-// come back [] → variant_payload_offset returns -1 → the match-arm binder emits
-// (unreachable) and every user `Some(v) => v` traps. str_eq is exactly the
-// byte-compare `==` WOULD lower to under a String proof — the PLAN §7 pointer-eq
-// residue, pinned here as at ls_find_str_local/assoc_row/split_group; it
-// dissolves with band D (structural-== over a typed env). Sibling residue,
-// same class, not yet rung-exercised: string_offset_lookup's `s == target`
-// (adequate today only because the intern table is probed with the identical
-// object; byte-dedup would shift data offsets, so it waits for band D).
-fn ctor_payload_tys_filter(entries, ctor_name) with Memory + Alloc = {
-  ctor_payload_tys_find(entries, ctor_name, len(entries) - 1)
-}
-
-fn ctor_payload_tys_find(entries, ctor_name, i) with Memory + Alloc = {
-  if i < 0 { [] }
-  else {
-    let (name, scheme, _reason, kind) = list_index(entries, i)
-    match kind {
-      ConstructorScheme(_, _) =>
-        if str_eq(name, ctor_name) {   // drift-audit: ignore — the String case of structural ==; pointer-eq lie (PLAN §7)
-          let Forall(_, ty) = scheme
-          ctor_payload_tys(ty)
-        } else { ctor_payload_tys_find(entries, ctor_name, i - 1) },
-      _ => ctor_payload_tys_find(entries, ctor_name, i - 1)
-    }
+  match env_lookup_ctor(ctor_name) {
+    Some((scheme, _reason, _kind)) => {
+      let Forall(_, ty) = scheme
+      ctor_payload_tys(ty)
+    },
+    None => []
   }
 }
 

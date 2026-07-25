@@ -1327,6 +1327,7 @@ type Env
 effect EnvRead {
   env_lookup(String) -> Option((Scheme, Reason, SchemeKind))
   env_lookup_type(String) -> Option((Scheme, Reason, SchemeKind))
+  env_lookup_ctor(String) -> Option((Scheme, Reason, SchemeKind))
   env_snapshot() -> Env
 }
 

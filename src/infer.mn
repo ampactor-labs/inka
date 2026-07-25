@@ -894,9 +894,10 @@ fn infer_program_trial(stmts) = {
     register_primitives()
     pre_register_decls(stmts)
     set_summaries(classify_fixpoint(stmts))
-    let counts = infer_stmt_list_measured(stmts)
+    let start = graph_next()   // drift-audit: ignore — sequenced effectful read (the ranges' origin must precede the walk), CLAUDE.md Anchor 6 exclusion
+    let rows = infer_stmt_list_measured(stmts)
     finalize_continuation_boundaries(0, graph_next())
-    counts
+    (rows, start)
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
     // The trial is a WORLD of its own: fresh analysis ledgers absorb its
     // verify obligations and ownership/region facts, dying with the
@@ -909,25 +910,100 @@ fn infer_program_trial(stmts) = {
     ~> verify_ledger
 }
 
-// The trial IS the sizing oracle: each stmt's mint count is the graph_next
-// delta around its inference — a fact the graph already carries, read at
-// the stmt boundary. The counts feed the final pass's planned ranges (the
-// deterministic handle partition, types.mn's graph_mint_plan contract).
+// The trial IS the sizing oracle: each stmt's row is its declared name and
+// its mint count — the graph_next delta around its inference, a fact the
+// graph already carries, read at the stmt boundary. The rows feed the
+// final pass's planned ranges (the deterministic handle partition,
+// types.mn's graph_mint_plan contract) and the stmt-layer projection.
 fn infer_stmt_list_measured(stmts) = fold([], stmt_measure_step, stmts)
 
-fn stmt_measure_step(counts, ref node) = {
+fn stmt_measure_step(rows, ref node) = {
   let before = graph_next()   // drift-audit: ignore — sequenced effectful read (the boundary sample must precede the inference), CLAUDE.md Anchor 6 exclusion
   infer_stmt(node)
-  push(counts, graph_next() - before)
+  push(rows, (stmt_decl_name(node), graph_next() - before))
 }
 
-fn infer_program_final(counts, stmts) = {
+// The stmt's declared name — the layer projection's index key. A stmt with
+// no single name (a destructured let, an expression statement) contributes
+// no key; missing edges DEGRADE TO SOURCE ORDER (equal depths walk in
+// source order), never reorder a dependent before its dependency.
+fn stmt_decl_name(ref node) = {
+  let N(body, _, _) = node
+  match body {
+    NStmt(FnStmt(name, _, _, _, _))          => name,
+    NStmt(TypeDefStmt(name, _))              => name,
+    NStmt(EffectDeclStmt(name, _))           => name,
+    NStmt(HandlerDeclStmt(name, _, _, _, _)) => name,
+    NStmt(LetStmt(pat, _, _)) =>
+      match pat {
+        PVar(name) => name,
+        _          => ""   // drift-audit: ignore — the documented no-key contract (a destructured let contributes no index entry; equal depths keep source order)
+      },
+    _ => ""   // drift-audit: ignore — the documented no-key contract (an unnamed stmt contributes no index entry; equal depths keep source order)
+  }
+}
+
+// ─── The stmt-layer projection — the trial's reasons ARE the DAG ────────
+// Every reference the trial resolved drew a VarLookup Reason at its own
+// handle, so a stmt's outgoing edges are the VarLookup names over its
+// trial range — read from the graph, never re-walked from the AST. Only
+// BACKWARD edges order the walk: a forward fn reference resolves to the
+// trial's published final scheme (never a same-pass publish), and the
+// genuinely order-coupled stmts — top-level lets — precede their
+// dependents in source. Depths therefore compute in one ascending pass
+// (layer = 1 + max over backward refs' layers), the layer graph is
+// acyclic by construction, and any missing edge leaves equal depths whose
+// within-layer source order preserves today's behavior exactly.
+fn stmt_layers(ref rows, trial_start) = {
+  let name_idx = layer_name_index(rows, 0, smap_new())
+  layers_walk(rows, name_idx, make_list(len(rows)), trial_start, 0)
+}
+
+fn layer_name_index(ref rows, i, idx) = {
+  if i >= len(rows) { idx }
+  else {
+    let (name, _) = rows[i]
+    layer_name_index(rows, i + 1,
+      if byte_len(name) > 0 { smap_add(idx, name, i) } else { idx })
+  }
+}
+
+fn layers_walk(ref rows, ref name_idx, own depths, lo, i) = {
+  if i >= len(rows) { depths }
+  else {
+    let (_, count) = rows[i]
+    let d = range_ref_depth(name_idx, depths, lo, lo + count, i, 0)
+    layers_walk(rows, name_idx, list_set(depths, i, d), lo + count, i + 1)
+  }
+}
+
+fn range_ref_depth(ref name_idx, ref depths, lo, hi, i, best) = {
+  if lo >= hi { best }
+  else {
+    let d = match graph_reason_at(lo) {
+      Located(_, VarLookup(n, _)) => backward_depth(name_idx, depths, n, i),
+      VarLookup(n, _)             => backward_depth(name_idx, depths, n, i),
+      _                           => 0
+    }
+    range_ref_depth(name_idx, depths, lo + 1, hi, i,
+      if d > best { d } else { best })
+  }
+}
+
+fn backward_depth(ref name_idx, ref depths, name, i) = {
+  match smap_get(name_idx, name) {
+    Some(j) => if j < i { depths[j] + 1 } else { 0 },
+    None    => 0
+  }
+}
+
+fn infer_program_final(rows, layers, stmts) = {
   {
     register_primitives()
     each(pre_register_alias, stmts)
     fold(smap_new(), pre_register_stmt_final, stmts)
     set_summaries(classify_fixpoint(stmts))
-    infer_stmt_list_planned(counts, stmts)
+    infer_stmt_list_planned(rows, layers, stmts)
     finalize_continuation_boundaries(0, graph_next())
     comment_refs_check(stmts)
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
@@ -939,25 +1015,63 @@ fn infer_program_final(counts, stmts) = {
 // the trial's measured counts from the final's own post-prepass frontier,
 // so the numbering is a pure function of the source through the trial's
 // determinism (the parallel fan must reproduce it exactly, which is its
-// byte-equality gate). A stmt minting fewer than its measure leaves virgin
-// gap cells (absent by the column contract); one minting more overflows to
-// the open space above the plan (graph_fresh's overflow arm) — both
-// deterministic.
-fn infer_stmt_list_planned(counts, stmts) = {
-  let flat = list_to_flat(counts)
+// byte-equality gate). The walk proceeds LAYER BY LAYER — the execution
+// shape the fan parallelizes, with within-layer source order — and because
+// bases are pre-assigned by SOURCE order, the numbering is invariant to
+// the walk order: the fixpoint holding across this reordering IS the
+// order-independence proof. A stmt minting fewer than its measure leaves
+// virgin gap cells (absent by the column contract); one minting more
+// overflows to the open space above the plan (graph_fresh's overflow arm)
+// — both deterministic.
+fn infer_stmt_list_planned(rows, layers, stmts) = {
+  let flat = list_to_flat(rows)
   let start = graph_next()   // drift-audit: ignore — sequenced effectful read (the plan's frontier must precede the walk), CLAUDE.md Anchor 6 exclusion
-  graph_mint_plan(start + fold(0, (acc, c) => acc + c, flat))
-  planned_stmt_walk(flat, stmts, 0, start)
+  graph_mint_plan(start + rows_total(flat, 0, 0))
+  let bases = rows_bases(flat, start)
+  planned_layer_sweep(flat, layers, bases, stmts, 0, flat_max(layers, 0, 0))
   graph_mint_seal()
 }
 
-fn planned_stmt_walk(ref counts, ref stmts, i, base) = {
+fn rows_total(ref rows, i, acc) = {
+  if i >= len(rows) { acc }
+  else {
+    let (_, c) = rows[i]
+    rows_total(rows, i + 1, acc + c)
+  }
+}
+
+fn rows_bases(ref rows, start) = rows_bases_walk(rows, make_list(len(rows)), start, 0)
+
+fn rows_bases_walk(ref rows, own bases, base, i) = {
+  if i >= len(rows) { bases }
+  else {
+    let (_, c) = rows[i]
+    rows_bases_walk(rows, list_set(bases, i, base), base + c, i + 1)
+  }
+}
+
+fn flat_max(ref xs, i, best) = {
+  if i >= len(xs) { best }
+  else { flat_max(xs, i + 1, if xs[i] > best { xs[i] } else { best }) }
+}
+
+fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, l, maxl) = {
+  if l > maxl { () }
+  else {
+    planned_layer_stmts(rows, layers, bases, stmts, l, 0)
+    planned_layer_sweep(rows, layers, bases, stmts, l + 1, maxl)
+  }
+}
+
+fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, l, i) = {
   if i >= len(stmts) { () }
   else {
-    let count = if i < len(counts) { counts[i] } else { 0 }
-    graph_mint_at(base, base + count)
-    infer_stmt(stmts[i])
-    planned_stmt_walk(counts, stmts, i + 1, base + count)
+    if layers[i] == l {
+      let (_, count) = rows[i]
+      graph_mint_at(bases[i], bases[i] + count)
+      infer_stmt(stmts[i])
+    }
+    planned_layer_stmts(rows, layers, bases, stmts, l, i + 1)
   }
 }
 

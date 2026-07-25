@@ -242,6 +242,11 @@ handler graph_handler
     resume(Unified(r1, r2))
   },
 
+  graph_reason_at(handle) => {
+    let GNode(_, r) = graph_node_at(spine, next, handle)
+    resume(r)
+  },
+
   graph_snapshot() => {
     let overlays_view =
       overlays_to_pairs(overlay_names, overlay_bufs, overlay_lens, overlay_count)

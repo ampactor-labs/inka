@@ -1038,6 +1038,33 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE LAYER-ORDERED FINAL — the fan's execution shape
+  runs sequentially, and the fixpoint proves walk-order convergence
+  (Phase C rung 1 step C1c-1 · pin 406e4d2a). The trial's own reasons
+  ARE the stmt DAG: every reference it resolved drew a VarLookup
+  Reason, so a stmt's edges are the VarLookup names over its trial
+  range — read through the new graph_reason_at (the unchased reason
+  cell, the Why engine's raw read), never a second AST walker (the
+  40-arm walker copy refused; lower's reach walk stays DAG-forbidden
+  from infer). Only BACKWARD edges order the walk — a forward fn ref
+  resolves to the trial's published final scheme, and the genuinely
+  order-coupled stmts (top-level lets) precede their dependents in
+  source — so depths compute in ONE ascending pass, the layer graph
+  is acyclic by construction, and a missing edge (destructured let,
+  unnamed stmt) degrades to source order, never a reorder-before-dep.
+  The final pass walks LAYER BY LAYER with source-order pre-assigned
+  bases: numbering stays plan-determined; only the judgment order
+  changes — to exactly the order C1c-2's `>< ~> parallel_compose`
+  fan will run concurrently. The march's verdict is the finding: the
+  reorder is TRANSITION-grade (1,228 emit lines differ between the
+  source-order and layer-order judgments) and SELF-STABLE (m3 == m4)
+  — walk-order convergence proven by the fixpoint, the same gate the
+  concurrency will be held to. The medium refused two of this
+  landing's own first forms en route (census-named: LetStmt's pat is
+  a bare Pat, and the affine judge rejected let-_-then-reuse
+  threading at both walkers — thread list_set's return). TRANSITION
+  m3 == m4 at 294,828 lines; census 0; comment-refs 0; frontier
+  266/0; proof-exactness 9/9; crown 5/5; micros 114/114.
 - 2026-07-25 · ▶▶ THE PLANNED MINT — the deterministic handle partition
   goes live, sequential-planned (Phase C rung 1 step C1b · pin
   c53dd17b). The trial IS the sizing oracle: each stmt's mint count is

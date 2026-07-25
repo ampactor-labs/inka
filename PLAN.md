@@ -3623,7 +3623,13 @@ dependency spine, generative (each landing cashes out in the fused
 gradient loop AND in self-build) rather than columnar:
 **A** identity (intern-at-lex; crown positive residual dies; indexed-map
 primitive; instantiate-sharing; TString→alias; seq-addr-downcast; synth
-vocabulary) → **B-i** TIME (persist=cache=fork on the rooted image;
+vocabulary) — **LANDED 2026-07-24 except the TString alias** (eight pins,
+boot 394917cf; the §7 ledger carries each: the perf strikes 15.56s→6.4s,
+the intern substrate, EffName-as-handle with the crown residual closed by
+construction, check-then-build sharing after the flag-tuple kill, the
+Cast vocabulary; TString→alias is the one open arc, gated on a fresh
+adversarial mint-enumeration pass with the string battery as oracle) →
+**B-i** TIME (persist=cache=fork on the rooted image;
 module-image cache; IC + incremental march; session-as-value) ∥ **B-ii**
 the arena (then the two genuinely-gated un-reverts) → **C** SPACE (R6
 first; deterministic handle partition; parallel compile spine; THE FUSED

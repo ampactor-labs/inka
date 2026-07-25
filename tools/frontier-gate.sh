@@ -435,6 +435,56 @@ run_warm_start() {
   fi
 }
 
+# The incremental cursor gate (B-i landing 3): a three-module DAG, one
+# edit, one truth. Run 1 compiles cold and persists; b.mn is patched; run
+# 2 restores the image, names the re-derived cone (b main — a stays
+# cached), and its emission must equal a COLD compile of the patched tree
+# (the fixture is lambda-free, so handle numbering cannot leak into the
+# wat and byte-equality is the honest oracle at today's pin; the
+# deterministic handle partition generalizes it).
+run_warm_incremental() {
+  local compiler="$1" dir="$2" label="warm-inc"
+  local wdir="$dir/$label.proj" refdir="$dir/$label.ref" rc
+  mkdir -p "$wdir/.build" "$refdir/.build"
+  printf 'fn base() = 20\n' > "$wdir/a.mn"
+  printf 'import a\nfn mid() = base() + 1\n' > "$wdir/b.mn"
+  printf 'import b\nfn main() = mid() * 2\n' > "$wdir/main.mn"
+  wt_run --dir "$wdir::." --dir "$ROOT::/mentl-home" "$compiler" compile main \
+    > "$dir/$label.1.wat" 2> "$dir/$label.1.err"
+  rc=$?
+  if [ "$rc" -ne 0 ] || [ ! -s "$dir/$label.1.wat" ]; then
+    fail "$label cold compile (exit=$rc; see $dir/$label.1.err)"
+    return
+  fi
+  pass "$label cold compile"
+  printf 'import a\nfn mid() = base() + 2\n' > "$wdir/b.mn"
+  wt_run --dir "$wdir::." --dir "$ROOT::/mentl-home" "$compiler" compile main \
+    > "$dir/$label.2.wat" 2> "$dir/$label.2.err"
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    fail "$label incremental compile (exit=$rc; see $dir/$label.2.err)"
+    return
+  fi
+  if ! grep -q '^warm: re-deriving b main$' "$dir/$label.2.err"; then
+    fail "$label cone line (want 'warm: re-deriving b main'; see $dir/$label.2.err)"
+    return
+  fi
+  pass "$label cone named (b main re-derived, a cached)"
+  cp "$wdir/a.mn" "$wdir/b.mn" "$wdir/main.mn" "$refdir/"
+  wt_run --dir "$refdir::." --dir "$ROOT::/mentl-home" "$compiler" compile main \
+    > "$dir/$label.ref.wat" 2> "$dir/$label.ref.err"
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    fail "$label cold reference (exit=$rc; see $dir/$label.ref.err)"
+    return
+  fi
+  if cmp -s "$dir/$label.2.wat" "$dir/$label.ref.wat"; then
+    pass "$label incremental == cold-of-patched (byte-identical)"
+  else
+    fail "$label incremental diverges from cold (diff $dir/$label.2.wat $dir/$label.ref.wat)"
+  fi
+}
+
 # An ARMED class's contract: the diagnostic fires AND the executable refuses —
 # nonzero exit, ZERO WAT bytes (the refusal law, PLAN §11 col 2). run_diagnostic
 # asserts the productive form (exit 0, diagnostics on stderr); an armed class's
@@ -1027,6 +1077,11 @@ for i in "${!compilers[@]}"; do
   # image and must emit byte-identical WAT. RED before the landing: the
   # warm line never prints (every run re-derives).
   run_warm_start "$compiler" "$dir"
+  # B-i landing 3: the incremental cursor — patch one module, re-derive
+  # only its cone off the restored image. RED before the landing: a
+  # changed weave missed the weave-keyed cache and re-derived everything
+  # with no cone line.
+  run_warm_incremental "$compiler" "$dir"
   # Real host-thread spawn over the shared image (the task-record substrate:
   # import-shape memory, shared-cell allocator, $spawn_task_impl/$join_task_impl).
   # Seen RED on the pre-task-record boot: 134, unaligned atomic in the join.

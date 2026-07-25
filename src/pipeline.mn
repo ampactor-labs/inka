@@ -435,7 +435,7 @@ fn resume_image(img_path) = {
     {
       eprint_string("warm: restoring the persisted image\n")
       image_resume(img_path)
-      compile_remainder(list_index(warm_root, 0))
+      compile_remainder(warm_program())
     }
       ~> wat_stdout
       ~> persist_to_disk

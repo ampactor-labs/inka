@@ -694,7 +694,14 @@ fn register_primitives() = {
 // graph drew the alias edge; quantify_ctor_ty re-derived a nominal name).
 fn pre_register_decls(stmts) = {
   each(pre_register_alias, stmts)
-  each(pre_register_stmt, stmts)
+  // The duplicate-fn refusal is keyed by THIS WALK's own seen-set, never
+  // by the env: an existing FnScheme entry may be a PRIOR JUDGMENT of the
+  // same tree (the incremental cursor re-registers a changed module into
+  // the restored world; re-registration shadows, which IS the re-judgment
+  // semantics) — only a second decl within one statement list is the
+  // violation.
+  fold(smap_new(), pre_register_stmt, stmts)
+  ()
 }
 
 // The alias edges — registration's ONE home. The main walk keeps only
@@ -711,18 +718,34 @@ fn pre_register_alias(ref node) = {
   }
 }
 
-fn pre_register_stmt(ref node) = {
+fn pre_register_stmt(seen, ref node) = {
   let N(body, span, handle) = node
   match body {
-    NStmt(FnStmt(name, params, ret_ann, effs, _body_node)) =>
-      pre_register_fn_sig(name, params, declared_names_of(effs), ret_ann, handle, span),
-    NStmt(TypeDefStmt(name, variants)) =>
-      register_type_constructors(name, variants),
-    NStmt(EffectDeclStmt(name, ops)) =>
-      register_effect_ops(name, ops),
-    NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) =>
-      pre_register_handler_sig(hname, config, state, arms),
-    _ => ()
+    NStmt(FnStmt(name, params, ret_ann, effs, _body_node)) => {
+      match smap_get(seen, name) {
+        Some(_) => {
+          report(EDuplicateFnName(name, span))
+          seen
+        },
+        None => {
+          pre_register_fn_sig(name, params, declared_names_of(effs), ret_ann, handle, span)
+          smap_add(seen, name, 1)
+        }
+      }
+    },
+    NStmt(TypeDefStmt(name, variants)) => {
+      register_type_constructors(name, variants)
+      seen
+    },
+    NStmt(EffectDeclStmt(name, ops)) => {
+      register_effect_ops(name, ops)
+      seen
+    },
+    NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) => {
+      pre_register_handler_sig(hname, config, state, arms)
+      seen
+    },
+    _ => seen
   }
 }
 
@@ -801,23 +824,10 @@ fn declared_names_of(effs) =
   }, effs)
 
 fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: ValidSpan) = {
-  // A second `fn name` in one namespace is refused at ITS decl site — the
-  // emitter would otherwise pick one silently (CLAUDE.md §9's own bug list;
-  // measured: two `fn dup()` compiled exit 0 and emitted a WAT redefinition
-  // only wat2wasm caught). Pre-registration runs once per decl in one pass,
-  // so an existing FnScheme under this name IS a prior `fn` decl (aliases
-  // share the kind but live in the capitalized namespace — the case rule
-  // keeps them disjoint).
-  match env_lookup(name) {
-    Some(prior) => {
-      let (_, _, prior_kind) = prior
-      match prior_kind {
-        FnScheme => report(EDuplicateFnName(name, span)),
-        _        => ()
-      }
-    },
-    None => ()
-  }
+  // The duplicate-fn refusal lives in pre_register_stmt's walk-local
+  // seen-set (an env-based check misread a prior judgment's entry as a
+  // duplicate the moment the incremental cursor re-registered a module
+  // into the restored world).
   let param_handles = mint_param_placeholders(params, name)
   let ret_handle = mint(FnReturn(name, Inferred("return of '{name}'"))) // drift-audit: ignore — Reason string, not a control keyword
   // An authored `-> RetTy` is a CONSTRAINT the pre-scheme must CARRY, not

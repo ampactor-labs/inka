@@ -1038,6 +1038,50 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶▶ THE INCREMENTAL CURSOR — PHASE B-i COMPLETES (§2's
+  cached-cursor mode cross-run; landing 3 · pin dfe19175). Patch one
+  module of a DAG: the next compile restores the image, names the exact
+  cone ("warm: re-deriving b main" — a cached), re-judges ONLY the cone
+  into the restored world, and re-persists — the image tracks the tree
+  edit by edit, and the emission is BYTE-IDENTICAL to a cold compile of
+  the patched tree (the frontier's strongest oracle; the pure-warm third
+  run answers "image current — nothing re-derived"). The mechanism is
+  the swap-parameter dissolution completed: the image carries its OWN
+  manifest, entry name, and per-module statement buckets as typed roots
+  (warm_manifest / warm_entry / warm_asts), so the post-swap path takes
+  ZERO pre-swap heap arguments; the current tree reads fresh off the
+  host fs (files survive the swap by nature); re-registration shadows
+  the stale entries (the env's latest edge wins) and the entry is
+  ALWAYS in a nonempty cone (every DAG module is one of its transitive
+  deps). MORGAN'S MID-BUILD CUT — "8 interrogations" — found two
+  Carried-Truth violations the green byte-equality probe could not see:
+  warm_root was a STORED FLATTEN of warm_asts (the derived value
+  persisted beside its source — deleted; warm_program() is the read),
+  and the incremental path walked the module tree THREE times (the
+  pairs pass, the deps pass, the order pass — fused into ONE
+  driver_tree_scan whose three consumers are projections). Two classes
+  paid en route, both catalog entries firing live: the POINTER-EQ class
+  twice (module_in / manifest_hash_of compared erased elements at the
+  word floor — every module "changed" and NONE joined the cone, the
+  probe's own "warm: re-deriving " empty line the tell; `: String`
+  Intent-Boundary pins carry the proof until name-is-handle retires
+  str_eq), and E_DuplicateFnName DECOUPLED from the env into the
+  registration walk's own seen-set (the env-based check misread a prior
+  judgment's entry as a duplicate the moment the cone re-registered —
+  exactly the flaw the two-pass build named yesterday; its banked
+  decoupling is now the landed form, and the incremental cursor is its
+  first consumer). Honest bounds stated in place: the fixture's
+  byte-equality is exact because it is lambda-free (lambda names carry
+  handles; the deterministic handle partition, Phase C's keystone,
+  generalizes it); the split-by-ranges attribution reads the weave
+  fold's own carried product (the zero-reader per-module overlay
+  machinery belongs to the retired per-module check walk, not
+  fake-ridden); cone diagnostics carry file-local spans — sharper for
+  the user than weave lines. CLEAN m2 == m3 at 330,626 lines; census 0;
+  frontier 266/0 (twelve TIME legs); proof-exactness 9/9; crown 5/5;
+  micros 114/114. B-i's remaining felt tier — the edit-session as a
+  persisted value — rides Phase D's living session on exactly this
+  substrate.
 - 2026-07-25 · ▶▶▶ THE RESUME VERB + THE FINGERPRINT DISSOLUTION — the
   image IS the process, and the interrogation deleted a gate (phase B-i
   landing 4 · pin 99ecf00d). `mentl resume <image>` re-enters a

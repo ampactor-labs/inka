@@ -1038,6 +1038,28 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE TYPE NAMESPACE REFUSES — the last named
+  silent-MERGE class closes (fleet-built, transplanted, re-derived ·
+  pin 3f4fba83). Two `type X` decls in one namespace silently MERGED
+  — ctors tag from 0 per decl, a cross-tag match returns the wrong
+  arm, zero diagnostics (measured RED: exit 13 where 99 was honest).
+  E_DuplicateTypeName ARMED AT BIRTH (decl-site licence, blob census
+  0 at arming); refuse_duplicate_type_decls claims every type head in
+  a WALK-LOCAL seen-set (never an env probe — a multi-variant decl
+  registers only ctor names; cross-walk re-registration is the
+  two-pass judge's own legitimate shape); both registration walks run
+  it (trial absorbed by diag_quiet, final reports). Frontier
+  refuse-dup-type leg PASS; 273/0. Same pin arc, two singles landed
+  inline: THE UNSEEDED-OVERFLOW GUARD (pin ed5dc82b — the bracket
+  refutation's F1 hardened on the live arms: an overflow with
+  mint_high 0 is an unseeded branch cursor and traps loudly instead
+  of minting handle 0 over the shared Module root) and the
+  fleet-builder's HANDLER-CONFIG DEFAULTS landing complete in its
+  worktree (commit 572e487b — TParam carrier reuse, one default
+  representation, one fill through resolve_call_args; four-face
+  fixture 8/16/6/12=42; TRANSITION m3==m4 in-worktree; TRANSPLANT TO
+  MAIN PENDING, with the eleven-site bare-install collapse as its
+  cash-out and the inherited earlier-param-default lathe-lag noted).
 - 2026-07-25 · THE ARM-SPEC DESIGN REFUTED — a proven negative
   redirects the payload arc (no code shipped; the fleet's adversarial
   pass, orchestrator-re-derived from the micro sources). The named

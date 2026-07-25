@@ -4345,15 +4345,36 @@ LANDED — the paged spine, the planned mint, the layer-ordered final, the
 cursor config, the env view, the page pre-open (six pins, 0e3af09c →
 3a53f775). The field-access cluster landed as an audit-driven interleave
 (pins f0ab3177 + 723220b3 — the last known silent-wrong class closed).
-C1c-2's REMAINDER, design complete: THE BRANCH BRACKET — per-stmt cursor
-composition over shared state, every branch-local mutable fact (diags,
-env publishes, affine consumes, verify debt) returned as a DELTA replayed
-into the root in stmt order at the join; proven BYTE-IDENTICAL
-sequentially against the layer walk before any thread runs it — then THE
-FAN: K spawned cursors over a shared CAS counter (numbering pre-assigned
-by the plan, deltas replayed in stmt order, so output is
-schedule-independent; the wheel-as-spawning-module memory flip is a
-TRANSITION). The branch bracket is the fused oracle's own substrate: the
+C1c-2's REMAINDER, design complete AND census-grounded (the recon-trio
+fleet pass, 2026-07-25 — the full handler table and ten risk findings):
+THE BRANCH BRACKET — per-stmt cursor composition mirroring the root's
+exact order (stmt ~> infer_ctx ~> fresh_for_inference ~>
+summaries_frozen(idx) [already the branch-ready config form] ~>
+affine_ledger ~> region_tracker ~> verify_ledger(fresh) ~>
+lookup_ty_graph ~> env_handler(base triple) ~> graph_handler(shared
+spine + planned range) ~> mutate_sink [required: no outward chain
+absorbs graph_mutated across a spawn] ~> diag ABSORBER ~> intern view).
+Census corrections baked in: the diag branch instance is a collecting
+ABSORBER, never the tighten_collector forwarder (no outward chain to
+forward into; all three Diag ops armed; rendering stays root-side under
+the root's outer intern); intern_table is the ONE missing config form —
+a frozen read-only view whose miss REFUSES loudly (a fresh instance is
+forbidden: handles are bracket-global, two tables fork name identity) —
+and the TRIAL IS THE PRE-WARM (both passes share one intern, so every
+final-pass intern_str is a probe hit); verify debt replays in stmt
+order (decidable predicates never enter debt, so replay re-decides
+deterministically); the fan REFUSES to fan any layer containing a
+no-key stmt (a missed order edge degrades to source order sequentially
+but becomes a live race concurrently); branch overflow is
+ABORT-AND-REQUEUE (rollback the branch trail, re-run the stmt
+sequentially post-join), never jump-and-continue (the shared mint_high
+target collides across branches). Gate: byte-equality against the
+layer-walk pin — the sequential rehearsal MASKS forgotten installs
+(they resolve silently to the root; only the spawn convicts), so the
+byte gate, not a clean rehearsal, is the trust. Then THE FAN: K
+spawned cursors over a shared CAS counter (numbering pre-assigned,
+deltas replayed in stmt order — output schedule-independent; the
+wheel-as-spawning-module memory flip is a TRANSITION). The branch bracket is the fused oracle's own substrate: the
 compile-spine fan and the synth candidate fan are ONE machinery, two
 workloads. THE DEBT HIERARCHY (trued 2026-07-25 against §5's
 trustworthiness conjunction — the silent-wrong classes were the FLOOR'S

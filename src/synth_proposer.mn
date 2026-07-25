@@ -307,7 +307,7 @@ fn contains_name(names, target: String) with Memory + Alloc =
 // truth both walks read.)
 fn fn_body_by_name(name: String) with GraphRead + !Mutate = {
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(next, _overlays, _spans) = snapshot
+  let Graph(next, _spans) = snapshot
   fn_body_scan(name, 0, next)
 }
 

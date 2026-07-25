@@ -1038,6 +1038,32 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE OVERLAY FAMILY DIES WHOLE — the fleet's first
+  executed census, and the C1b dividend undershot (pin 6913e09d). The
+  recon-overlay agent's complete consumer census found the per-module
+  overlay index DEGENERATE: graph_fork had ZERO perform sites for the
+  structure's entire life (orchestrator re-derived before acting — the
+  pipeline law), so overlay_count was forever 1 and every mint fed one
+  "global" row whose only reader chain dead-ends at an op with zero
+  performs. DELETED whole: five state fields, the per-mint
+  overlay_register_at write (~200k × [2 index reads + extend + 3 sets
+  + a tuple alloc] per self-compile, off the hottest write path), the
+  graph_fork op+arm, five fns, the eager overlays_to_pairs build on
+  every snapshot (20 sites; 19 ignored it), the Graph middle field
+  (→ Graph(next, span_index)); checkpoint 12 → 7 fields, restore
+  10 → 5 (a smaller fork value for the C1c fan). The ONE real reader
+  — QueueItem.module_path, a construction-time SNAPSHOT of a live
+  fact — rewires to the live read: filter_by_module keys on
+  module_path_of_span(parse_span_of(pos)), NModule span containment;
+  the fn moves to graph.mn (DAG-homed beside parse_span_of).
+  Resolves Hβ.graph.fork-dead-code as DELETION. Named residue:
+  Hβ.oracle.module-queue-live-key — when a doc-batch surface first
+  performs query_module_queue, the live filter's O(next) NModule scan
+  takes its O(1) form (the handle-indexed span weave + the plan's
+  stmt→range projection); build WITH that first performer, never
+  before. Wheel 621 lines smaller. CLEAN m2 == m3 at 294,395 lines;
+  census 0; comment-refs 0; frontier 272/0; proof-exactness 9/9;
+  crown 5/5; micros 114/114.
 - 2026-07-25 · ▶▶▶ RESOLVED OR LOUD — the trecordopen-wrong-field
   silent-wrong class CLOSES (the field-access cluster's emit half ·
   pin 723220b3). resolve_field_offset's open-record arm resolves the

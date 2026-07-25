@@ -1051,7 +1051,7 @@ fn at_run(target, line, col) = {
 }
 
 fn span_index_of_snapshot() with GraphRead = {
-  let Graph(_x, _o, spans) = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let Graph(_x, spans) = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   spans
 }
 

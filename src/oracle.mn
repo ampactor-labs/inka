@@ -78,8 +78,7 @@ type QueueItem
       candidate:   Annotation,       // what to add (per src/mentl.mn Annotation)
       capability:  Capability,       // what it unlocks (per src/mentl.mn Capability)
       impact:      OraclePriority,
-      reason:      Reason,
-      module_path: String
+      reason:      Reason
     })
 
 // OraclePriority — ranking dimension, every input READ LIVE from the
@@ -252,8 +251,7 @@ fn proven_to_item(pos, pair, anchor) with GraphRead + Memory + Alloc = {
     candidate:   ann,
     capability:  cap,
     impact:      compute_priority(pos, ann),
-    reason:      suggestion_reason(ann, anchor),
-    module_path: current_overlay_of(pos)
+    reason:      suggestion_reason(ann, anchor)
   })
 }
 
@@ -270,7 +268,7 @@ fn proven_to_item(pos, pair, anchor) with GraphRead + Memory + Alloc = {
 // span_index; the intent row is read per-handle from the node itself.
 
 fn compute_priority(pos, ann) with GraphRead + Memory + Alloc = {
-  let Graph(_next, _overlays, span_index) = graph_snapshot()
+  let Graph(_next, span_index) = graph_snapshot()
   OraclePriority({
     tier:          tier_of_annotation(ann),
     intent_weight: intent_weight_at(pos),
@@ -405,23 +403,6 @@ fn collect_bound_positions(h, bound, acc) with GraphRead + Memory + Alloc = {
   }
 }
 
-// current_overlay_of — the module that owns a position. The graph's
-// overlays ([(module_name, [handle])]) carry the per-module handle
-// membership; the owning overlay is the module path. Read live from the
-// snapshot's overlays; the unowned position belongs to "global".
-
-fn current_overlay_of(pos) with GraphRead = {
-  let Graph(_next, overlays, _spans) = graph_snapshot()
-  overlay_owning(overlays, pos)
-}
-
-fn overlay_owning(overlays, pos) with Pure = match overlays {
-  []                 => "global",
-  [(name, handles), ...t] =>
-    if list_contains(handles, pos) { name }
-    else                           { overlay_owning(t, pos) }
-}
-
 fn list_contains(xs, target) with Pure = match xs {
   []        => false,
   [h, ...t] => if h == target { true } else { list_contains(t, target) }
@@ -524,7 +505,6 @@ fn tier_rank(t) with Pure = {
 
 fn qitem_position(item) with Pure = { let QueueItem(r) = item; r.position }
 fn qitem_impact(item) with Pure = { let QueueItem(r) = item; r.impact }
-fn qitem_module(item) with Pure = { let QueueItem(r) = item; r.module_path }
 
 // sort_by_priority — order QueueItems by DESCENDING priority. Merge sort
 // (stable, O(N log N)); the comparator is priority_gt over each item's
@@ -558,11 +538,17 @@ fn filter_at_position(items, handle) with Memory + Alloc = match items {
     else { filter_at_position(t, handle) }
 }
 
-// filter_by_module — items owned by this module path.
-fn filter_by_module(items, module_path) with Memory + Alloc = match items {
+// filter_by_module — items owned by this module path, read LIVE at the
+// filter: module-of-position is the NModule span containment the graph
+// already carries (module_path_of_span over the item's mint span), never
+// a field snapshotted at item construction (the Universal Audit — the
+// stored module_path was a copy of a live fact).
+fn filter_by_module(items, module_path) with Memory + Alloc + GraphRead = match items {
   []        => [],
   [h, ...t] =>
-    if qitem_module(h) == module_path { [h] ++ filter_by_module(t, module_path) }
+    if module_path_of_span(parse_span_of(qitem_position(h))) == module_path {
+      [h] ++ filter_by_module(t, module_path)
+    }
     else { filter_by_module(t, module_path) }
 }
 

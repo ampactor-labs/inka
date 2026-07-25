@@ -601,16 +601,17 @@ type ExecutableBoundary
   | PendingContinuationBoundary(Int, Int, Int, EffRow) // resume input, answer, continuation, world
   | ContinuationBoundary(ContinuationEdge)
 
-// The snapshot carries exactly what its consumers read: the mint bound,
-// the per-module overlay views, and the span index. The node cells are
-// NOT here — they live in the handler's paged spine and are read through
-// graph_chase/graph_node_body (a snapshot copy of them was a write-only
-// field: every destructure ignored it), and epoch reads through
-// graph_epoch.
+// The snapshot carries exactly what its consumers read: the mint bound
+// and the span index. The node cells are NOT here — they live in the
+// handler's paged spine and are read through graph_chase/graph_node_body
+// (a snapshot copy of them was a write-only field: every destructure
+// ignored it); epoch reads through graph_epoch; and the per-module
+// overlay view is DELETED whole (graph_fork never performed — the module
+// partition never existed at runtime, and module-of-position reads live
+// through NModule span containment via module_path_of_span).
 type Graph
   = Graph(
       Int,               // next: next fresh allocation
-      [(String, [Int])], // overlays: [(module_name, [handle])]
       [(ValidSpan, Int)] // span_index: [(ValidSpan, Int)] for Mentl QTypeAt queries
     )
 
@@ -1404,7 +1405,6 @@ effect GraphWrite {
   graph_bind_hole(Int, Reason) -> ()   // mark a node an OBSERVED FAILURE (NErrorHole) — the productive-under-error poison. An env miss binds this, never TVar(self): the self-var tripped graph_bind's own occurs check (a spurious 0:0 E_OccursCheck per missing name) and read downstream as a normal free var (the ownership move-default cascade). A hole is the fact itself: unify no-ops on it, generalize preserves the handle, consumers stay silent.
   graph_bind_row(Int, EffRow, Reason) -> ()
   graph_bind_record_row(Int, [(String, Ty)], Reason) -> ()
-  graph_fork(String) -> ()
   graph_rollback(Int) -> ()
   graph_index_span(ValidSpan, Int) -> ()
   // The deterministic handle partition (the planned mint): the final pass

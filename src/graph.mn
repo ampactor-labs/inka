@@ -33,13 +33,12 @@
 // Mentl's oracle (spec 09) depends on that O(M) guarantee to explore
 // hundreds of candidate patches per second.
 //
-// Overlays share the flat substrate. Per-module handle tracking
-// lives in three parallel flat arrays — overlay_names, overlay_bufs,
-// overlay_lens — with an overlay_count and current_overlay_idx. A
-// fresh allocation's cost is O(1) amortized: one list_index into
-// each array + one list_extend_to on the current handles buffer +
-// one list_set. graph_fork scans names only when entering a module
-// (rare); cross-module snapshot builds slice-views (O(1) per overlay).
+// The per-module overlay family is DELETED (2026-07-25): graph_fork
+// never performed anywhere in the tree, so the module partition never
+// existed at runtime — every mint registered into one "global" row
+// feeding a filter nobody called. Module-of-position reads LIVE through
+// NModule span containment (module_path_of_span below), never a
+// per-mint side-ledger.
 
 import types
 import effects
@@ -53,11 +52,6 @@ import runtime/strings
 //   trail_len           — logical length of trail (entries above are stale)
 //   epoch               — bumps on every bind; query observers key (handle, epoch)
 //   next                — next fresh handle to allocate
-//   overlay_names       — flat String buffer, one entry per module
-//   overlay_bufs        — flat buffer of handles-buffer pointers
-//   overlay_lens        — flat buffer of logical lengths for each handles-buffer
-//   overlay_count       — logical length of the three overlay arrays
-//   current_overlay_idx — index into overlay_* for the active module
 //
 // Threaded through the pipeline via ~>. Installed once at compile
 // entry. Every downstream pass (infer, lower, query, teach, emit,
@@ -205,11 +199,6 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
        trail = [], trail_len = 0,
        epoch = 0, next = next0,
        mint_limit = limit0, mint_high = 0,
-       overlay_names = ["global"],
-       overlay_bufs = [[]],
-       overlay_lens = [0],
-       overlay_count = 1,
-       current_overlay_idx = 0,
        span_index = [],
        checkpoint_stack = [],
        comment_refs = [] {
@@ -252,9 +241,7 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
   },
 
   graph_snapshot() => {
-    let overlays_view =
-      overlays_to_pairs(overlay_names, overlay_bufs, overlay_lens, overlay_count)
-    resume(Graph(next, overlays_view, span_index))
+    resume(Graph(next, span_index))
   },
 
   graph_node_body(handle) => {
@@ -264,8 +251,8 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
   // The checkpoint is the fork's STATE VALUE — but pages never move, so the
   // spine contributes two words (the band-table pointer, for the rare
   // in-fork table growth, and the open count) instead of six spine copies.
-  // The append-only logs (trail, span_index, comment_refs) and the overlay
-  // family restore wholesale exactly as before; per-cell truth restores by
+  // The append-only logs (trail, span_index, comment_refs) restore
+  // wholesale exactly as before; per-cell truth restores by
   // walking the trail backward IN PLACE (pages are stable, so every inverse
   // lands on its live cell — the boundaries[23] stale-spine trap is
   // unconstructible in this representation). The record allocates BEFORE
@@ -273,16 +260,12 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
   graph_push_checkpoint() => {
     resume(trail_len)
       with checkpoint_stack = push(checkpoint_stack,
-        {comment_refs, current_overlay_idx, next,
-         overlay_bufs, overlay_count, overlay_lens, overlay_names,
-         span_index, spine, spine_open, trail, trail_len})
+        {comment_refs, next, span_index, spine, spine_open, trail, trail_len})
   },
 
   // ─── Write ops ───────────────────────────────────────────────────
   // Each write appends a Mutation to the trail. The trail is the
-  // inverse log — on rollback we walk it backwards. Every fresh
-  // allocation also registers in the CURRENT overlay so Arc F.7
-  // (incremental compilation) can key per-module recomputation.
+  // inverse log — on rollback we walk it backwards.
 
   // A mint at a planned range's ceiling jumps to the open space above the
   // plan and clears the limit — the decl finishes there, deterministically
@@ -293,8 +276,6 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
     let handle = if overflow { mint_high } else { next }
     let (sp, so) = spine_ensure(spine, spine_open, spine_band(handle))
     spine_put_node(sp, handle, GNode(NFree(epoch), reason))
-    let (new_bufs, new_lens) =
-      overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
     let new_trail = trail_append(trail, trail_len, MFreshNode(handle))
     if len(checkpoint_stack) == 0 {
       graph_mutated(epoch, MFreshNode(handle))
@@ -305,9 +286,7 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
            next = handle + 1,
            mint_limit = if overflow { 0 } else { mint_limit },
            trail = new_trail,
-           trail_len = trail_len + 1,
-           overlay_bufs = new_bufs,
-           overlay_lens = new_lens
+           trail_len = trail_len + 1
   },
 
   graph_fresh_row(reason) => {
@@ -315,8 +294,6 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
     let handle = if overflow { mint_high } else { next }
     let (sp, so) = spine_ensure(spine, spine_open, spine_band(handle))
     spine_put_node(sp, handle, GNode(NRowFree(epoch), reason))
-    let (new_bufs, new_lens) =
-      overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
     let new_trail = trail_append(trail, trail_len, MFreshNode(handle))
     if len(checkpoint_stack) == 0 {
       graph_mutated(epoch, MFreshNode(handle))
@@ -327,9 +304,7 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
            next = handle + 1,
            mint_limit = if overflow { 0 } else { mint_limit },
            trail = new_trail,
-           trail_len = trail_len + 1,
-           overlay_bufs = new_bufs,
-           overlay_lens = new_lens
+           trail_len = trail_len + 1
   },
 
   // ─── The planned mint — the deterministic handle partition ─────────
@@ -371,8 +346,10 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
 
   // Edge-link a node's body into the one graph at its handle — the program
   // COLUMN of the handle's own SpinePage. Every AST node registers here at
-  // construction, so any handle resolves to its body live (graph_node_body).
-  // The parse-written program projection, distinct from the mutable
+  // construction, so any handle resolves to its body live (graph_node_body)
+  // — the incremental cursor keys per-module recomputation on the driver's
+  // tree scan and warm buckets, never a graph-side ledger. The
+  // parse-written program projection, distinct from the mutable
   // union-find type cell in the same page's nodes column — one handle, one
   // page, six columns. In-place cell write: no trail, no state rebind.
   graph_register_node(handle, body) => {
@@ -576,29 +553,6 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
     }
   },
 
-  graph_fork(module_name) => {
-    // Enter the named module's overlay. If it already exists (re-entry
-    // during incremental recompile), point current_overlay_idx at it;
-    // otherwise append a new (name, empty-handles, 0) triple to the
-    // three parallel arrays via list_extend_to. Subsequent fresh
-    // allocations register into the current overlay in O(1).
-    let existing_idx = overlay_find(overlay_names, overlay_count, module_name)
-    if existing_idx < overlay_count {
-      resume()
-        with current_overlay_idx = existing_idx
-    } else {
-      let new_names = list_set(list_extend_to(overlay_names, overlay_count + 1), overlay_count, module_name)
-      let new_bufs = list_set(list_extend_to(overlay_bufs, overlay_count + 1), overlay_count, make_list(0))
-      let new_lens = list_set(list_extend_to(overlay_lens, overlay_count + 1), overlay_count, 0)
-      resume()
-        with overlay_names = new_names,
-             overlay_bufs = new_bufs,
-             overlay_lens = new_lens,
-             overlay_count = overlay_count + 1,
-             current_overlay_idx = overlay_count
-    }
-  },
-
   // ─── Rollback — the oracle's undo ────────────────────────────────
   // Walk the trail backwards from trail_len down to target. Each
   // mutation has a precise inverse, applied IN PLACE (pages never move):
@@ -647,11 +601,6 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
              trail_len = target_idx,
              span_index = cp.span_index,
              comment_refs = cp.comment_refs,
-             overlay_bufs = cp.overlay_bufs,
-             overlay_lens = cp.overlay_lens,
-             overlay_names = cp.overlay_names,
-             overlay_count = cp.overlay_count,
-             current_overlay_idx = cp.current_overlay_idx,
              // drop_last, never slice: the pop runs BEFORE the caller's
              // heap_reset, so a slice node minted here dies with the
              // region and the next fork walks a zeroed cell. On the
@@ -1038,51 +987,6 @@ fn trail_append(own trail, trail_len, own mutation) = {
   list_set(list_extend_to(trail, trail_len + 1), trail_len, mutation)
 }
 
-// Overlay registration — flat-substrate per-module handle set
-// Three parallel arrays — names, bufs, lens — keyed by overlay index.
-// overlay_register_at writes into the current overlay's handles_buf
-// in O(1) amortized; overlay_find scans names only on graph_fork.
-// overlays_to_pairs reconstructs List[(name, handles_view)] for
-// graph_snapshot / F11 cross-module consumers using slice views (no
-// copying of the handle buffers).
-
-fn overlay_register_at(own overlay_bufs, own overlay_lens, idx, handle) = {
-  let handles_buf = list_index(overlay_bufs, idx)
-  let handles_len = list_index(overlay_lens, idx)
-  let new_handles = list_set(list_extend_to(handles_buf, handles_len + 1), handles_len, handle)
-  let new_bufs = list_set(overlay_bufs, idx, new_handles)
-  let new_lens = list_set(overlay_lens, idx, handles_len + 1)
-  (new_bufs, new_lens)
-}
-
-fn overlay_find(ref names, count, ref target) with !Mutate = {
-  overlay_find_loop(names, count, target, 0)
-}
-
-// Not-found sentinel is `count` (one past the last valid index).
-// Callers test `existing_idx < count` to branch on found/missing.
-fn overlay_find_loop(ref names, count, ref target, i) with !Mutate = {
-  if i >= count { count }
-  else if list_index(names, i) == target { i }
-  else { overlay_find_loop(names, count, target, i + 1) }
-}
-
-fn overlays_to_pairs(ref names, ref bufs, ref lens, count) with !Mutate = {
-  overlays_to_pairs_loop(names, bufs, lens, count, 0, make_list(count))
-}
-
-fn overlays_to_pairs_loop(ref names, ref bufs, ref lens, count, i, own acc) = {
-  if i >= count { acc }
-  else {
-    let handles_view = slice(list_index(bufs, i), 0, list_index(lens, i))
-    let pair = (list_index(names, i), handles_view)
-    overlays_to_pairs_loop(
-      names, bufs, lens, count, i + 1,
-      list_set(acc, i, pair)
-    )
-  }
-}
-
 // Effect-name set ops (H3.1)
 // merge_row routes through `name_set_union` from effects.mn — the
 // row entries are EffName values, not strings. Smart constructors
@@ -1114,8 +1018,32 @@ fn node_handle(node) = {
 // "declared as ..."), so a patch target must read the weave, never the
 // reason. O(n) scan at felt cadence (once per accepted action); the O(1)
 // form is the handle-indexed span weave (the §5.O name-is-handle sibling).
+// The module path enclosing a span: the NModule weave entry whose span
+// contains this span. "" when no module wraps it (single-unit weave).
+// DAG-homed here (oracle and cursor both read it; both import graph) —
+// module-of-position is a LIVE projection of the NModule spans, never a
+// per-mint side-ledger. The O(next) scan's O(1) destiny is the
+// handle-indexed span weave (the §5.O name-is-handle sibling).
+fn module_path_of_span(span) with GraphRead + !Mutate = {
+  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let Graph(next, _spans) = snapshot
+  scan_for_enclosing_module(span, 0, next)
+}
+
+fn scan_for_enclosing_module(target, i, n) with GraphRead + !Mutate = {
+  if i >= n { "" }
+  else {
+    match graph_node_body(i) {
+      NModule(m) =>
+        if span_contains(m.span, target) { m.path }
+        else { scan_for_enclosing_module(target, i + 1, n) },
+      _ => scan_for_enclosing_module(target, i + 1, n)
+    }
+  }
+}
+
 fn parse_span_of(handle) with Memory + Alloc + GraphRead = {
-  let Graph(_, _, span_index) = graph_snapshot()
+  let Graph(_, span_index) = graph_snapshot()
   match find((pair) => { let (_, h) = pair h == handle }, span_index) {
     Some(pair) => { let (span, _) = pair span },
     None       => span_zero()

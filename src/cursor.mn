@@ -248,12 +248,12 @@ fn authored_hole(handle) with GraphRead + !Mutate = match graph_node_body(handle
 }
 
 fn enumerate_hole_positions() with GraphRead + Alloc + Memory + !Mutate = {
-  let Graph(next, _overlays, _spans) = graph_snapshot()
+  let Graph(next, _spans) = graph_snapshot()
   filter(authored_hole, range(0, next))
 }
 
 fn enumerate_gradient_positions() with GraphRead + Teach + Alloc + Memory + !Mutate = {
-  let Graph(next, _overlays, _spans) = graph_snapshot()
+  let Graph(next, _spans) = graph_snapshot()
   filter((i) => match teach_gradient(i) {
     None    => false,
     Some(_) => true
@@ -370,25 +370,8 @@ fn transitive_dep(caret_span, target_span) with GraphRead + !Mutate + Memory + A
   else { module_imports(caret_mod, target_mod, []) }
 }
 
-// The module path enclosing a span: the NModule weave entry whose span
-// contains this span. "" when no module wraps it (single-unit weave).
-fn module_path_of_span(span) with GraphRead + !Mutate = {
-  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(next, _overlays, _spans) = snapshot
-  scan_for_enclosing_module(span, 0, next)
-}
-
-fn scan_for_enclosing_module(target, i, n) with GraphRead + !Mutate = {
-  if i >= n { "" }
-  else {
-    match graph_node_body(i) {
-      NModule(m) =>
-        if span_contains(m.span, target) { m.path }
-        else { scan_for_enclosing_module(target, i + 1, n) },
-      _ => scan_for_enclosing_module(target, i + 1, n)
-    }
-  }
-}
+// module_path_of_span lives in graph.mn (DAG-homed beside parse_span_of:
+// oracle reads it too, and both import graph).
 
 // Does module `from` import `target` (transitively)? Reads the live
 // ImportStmt edges in `from`'s NModule decls; the `seen` accumulator
@@ -411,7 +394,7 @@ fn any_imports(paths, target, seen) with GraphRead + Alloc + Memory + !Mutate = 
 // The direct import paths declared in module `path`'s NModule decls.
 fn module_import_paths(path) with GraphRead + !Mutate + Alloc + Memory = {
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(next, _overlays, _spans) = snapshot
+  let Graph(next, _spans) = snapshot
   scan_module_imports(path, 0, next)
 }
 
@@ -538,7 +521,7 @@ fn cursor_view_of(handle) with GraphRead = {
 // spans (address_resolve, main.mn) and projects via cursor_at_handle.
 fn handle_at_span(span) with GraphRead + !Mutate = {
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(next, _overlays, _spans) = snapshot
+  let Graph(next, _spans) = snapshot
   scan_for_span(span, 0, next)
 }
 
@@ -614,7 +597,7 @@ fn ownership_of_ty(ty) with Memory = match ty {
 // read, never the old constant NoPipe.
 fn pipe_context_of_handle(handle) with GraphRead + !Mutate = {
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(next, _overlays, _spans) = snapshot
+  let Graph(next, _spans) = snapshot
   scan_for_pipe_parent(handle, 0, next)
 }
 
@@ -701,7 +684,7 @@ fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + Alloc + !Mutate 
 // (Hβ.cursor.enclosing-decl-edge).
 fn enclosing_fn_decl_at(handle) with GraphRead + Memory + Alloc + !Mutate = {
   let target = parse_span_of(handle)
-  let Graph(next, _overlays, _spans) = graph_snapshot()
+  let Graph(next, _spans) = graph_snapshot()
   enclosing_fn_scan(target, 0, next, None, 999999999)
 }
 

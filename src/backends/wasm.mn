@@ -693,12 +693,15 @@ fn emit_module(lowered) = {
   // word-arity face like every other wide fn).
   each((rp) => {
     let (rec2, pairs, enc) = rp
+    // The twin's emission is a region too: pairs/enc live OUTSIDE the
+    // mark (allocated with spec_recs above), the registry commit stores
+    // pre-mark pointers, and both strings stream before the reset.
     spec_ctx_set(pairs, enc)
-    let s = emit_one_fn_to_string(rec2)
-    let w = if fn_record_is_wide(rec2) { emit_one_wrapper_to_string(rec2) } else { "" }
+    let m = heap_mark()   // drift-audit: ignore — sequenced effectful read; the region bracket's own mark
+    wat_emit(emit_one_fn_to_string(rec2))
+    wat_emit(if fn_record_is_wide(rec2) { emit_one_wrapper_to_string(rec2) } else { "" })
+    heap_reset(m)
     spec_ctx_clear()
-    wat_emit(s)
-    wat_emit(w)
   }, spec_recs)
   // The four fold leaves — eq / compare / hash / show — one recursive
   // $<leaf>_<sig> helper per distinct signature in each closure, all read
@@ -2303,10 +2306,22 @@ fn emit_memory_decl(threaded, wants_rmw) = {
 // preserving source order (Q-B.7.3 determinism guarantee). N-core emit
 // is a `><` fanout under `~> Thread` at this site
 // (Hβ.lower.schedule-specialized-callee).
+// Per-fn EMISSION IS A REGION (§5.O layer 3 at the emit phase — measured
+// 2026-07-25: the streamed product leaves the process, so per-fn
+// transients die at the fn boundary; post-region emission allocates ~0).
+// Build → stream → reset: the string is written before the reset, and
+// nothing durable is minted inside one fn's emission — the per-fn
+// metadata handlers (body_context and kin) OVERWRITE their state before
+// any read, so a dangling region pointer is never read; that
+// overwrite-before-read discipline is this bracket's standing contract.
+// The old map-then-each held EVERY fn's full text simultaneously — the
+// whole module's emission materialized before one byte was written.
 fn emit_functions(fn_records) = {
-  fn_records
-    |> map(emit_one_fn_to_string)
-    |> each((s) => wat_emit(s))
+  each((r) => {
+    let m = heap_mark()   // drift-audit: ignore — sequenced effectful read; the region bracket's own mark
+    wat_emit(emit_one_fn_to_string(r))
+    heap_reset(m)
+  }, fn_records)
 }
 
 // ─── The word-face wrappers (§5.U at the table boundary) ──────────────
@@ -2323,10 +2338,11 @@ fn fn_record_is_wide(r) = {
 }
 
 fn emit_wide_wrappers(fn_records) = {
-  fn_records
-    |> filter(fn_record_is_wide)
-    |> map(emit_one_wrapper_to_string)
-    |> each((s) => wat_emit(s))
+  each((r) => {
+    let m = heap_mark()   // drift-audit: ignore — sequenced effectful read; the region bracket's own mark
+    wat_emit(emit_one_wrapper_to_string(r))
+    heap_reset(m)
+  }, fn_records |> filter(fn_record_is_wide))
 }
 
 fn emit_one_wrapper_to_string(record) = {
@@ -4805,10 +4821,14 @@ fn emit_distinct_fold_leaves(op, tys, seen) with EnvRead + Alloc + Memory + Wasm
 // The four leaves behind the one walk. Emission order (eq, compare, hash,
 // show) preserves the module layout the four separate entry fns produced.
 fn emit_fold_leaf_helpers(closures: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) with EnvRead + Memory + Alloc + WasmOut + EmitMemory + GraphRead + LookupTy + SpecTwins + StringTable = {
+  // One region over the four leaf families: the closures record lives
+  // outside the mark; every generated helper streams as it is built.
+  let m = heap_mark()   // drift-audit: ignore — sequenced effectful read; the region bracket's own mark
   emit_distinct_fold_leaves(FoldEq, closures.eq, [])
   emit_distinct_fold_leaves(FoldCompare, closures.cmp, [])
   emit_distinct_fold_leaves(FoldHash, closures.hash, [])
   emit_distinct_fold_leaves(FoldShow, closures.show, [])
+  heap_reset(m)
 }
 
 

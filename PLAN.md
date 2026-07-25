@@ -1038,6 +1038,30 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE EMIT PHASE JOINS THE ARENA — measure first, then
+  the region (phase B-ii steps 1+3 open · pin 8ea44a73). The watermark
+  probe named the image's true shape: post-read 11.8MB → parse 66.4 →
+  infer 176.0 → saturate 178.0 → lower 277.5 → reach 307.8 → EMIT
+  753.8MB — emit owned 59% of the whole self-compile image. The
+  sub-seam probe split it exactly: spec_demands_of ALONE +362MB (its
+  own "zero new storage" comment refuted by the artifact — the
+  comments-can-be-wrong law with a number), record collection +15MB,
+  the per-fn emission churn ~54MB. THE CUT LANDED: emit_functions
+  built EVERY fn's full text before writing one byte (map-then-each —
+  the entire module's emission materialized simultaneously); each
+  record now builds → streams → resets under its own heap region, and
+  the twin loop, wide wrappers, and fold-leaf families ride the same
+  bracket — the compile spine's first per-fn regions, the battery's
+  arena pattern at the emit phase. MEASURED: emission's allocation
+  share fell to ~0 (pre-fns 699.0MB → post-fns 699.03MB); Law 7 held
+  BYTE-IDENTICAL (allocation addresses never reach the wat, proven not
+  assumed). The bracket's standing contract at the site: per-fn
+  metadata handlers (body_context and kin) overwrite before any read,
+  so a dangling region pointer is never read. The arc's next strike is
+  NAMED WITH ITS NUMBER: the 362MB spec-demand churn (the per-site
+  instantiation walks), then infer's +110MB and lower's +99MB — the
+  step-4 decl regions. CLEAN m2 == m3; census 0; frontier 266/0;
+  proof-exactness 9/9; crown 5/5; micros 114/114.
 - 2026-07-25 · ▶▶▶▶ THE INCREMENTAL CURSOR — PHASE B-i COMPLETES (§2's
   cached-cursor mode cross-run; landing 3 · pin dfe19175). Patch one
   module of a DAG: the next compile restores the image, names the exact

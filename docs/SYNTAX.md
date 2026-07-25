@@ -922,7 +922,7 @@ Creates `TAlias("X", Y)`. The alias and underlying type unify transparently — 
 
 ```
 type ValidPort = Int where self >= 1024 && self <= 65535
-type Sample = Float where -1.0 <= self <= 1.0
+type Sample = Float where -1.0 <= self && self <= 1.0
 ```
 
 Creates `TRefined(TAlias("X", Y), pred)`. The alias names the type; the refinement narrows it via predicate. Verify discharges the predicate at construction sites.
@@ -986,17 +986,27 @@ No `newtype` keyword required; the record name carries the brand. Field access v
 ### Refinement types
 
 ```
-type Sample = Float where -1.0 <= self <= 1.0
+type Sample = Float where -1.0 <= self && self <= 1.0
 type NonEmpty = [a] where len(self) > 0
 type Even = Int where self % 2 == 0
 ```
 
 `self` refers to the value being refined. The refinement is a `Predicate` discharged by the `Verify` effect at construction sites and elsewhere as needed.
 
+**The bounds join with `&&` — there is no comparison chaining.** A chained
+`-1.0 <= self <= 1.0` parses left-associatively as `(-1.0 <= self) <= 1.0`
+(one precedence table, no special case), an ill-sorted `Bool <= Float` that
+principle 2 already rules against as a second spelling of the conjunction.
+Today's predicate walk accepts that shape opaquely and degrades it to honest
+`V_Pending` debt (measured 2026-07-24 — this section's own examples carried
+the chain and silently lost their refusals); the loud inference rejection
+with a Reason arrives when predicates become ordinary expressions
+(`Hβ.types.predicate-is-expr`, the band-F chain head).
+
 ```
-let s: Sample = 0.5      // Verify discharges -1.0 <= 0.5 <= 1.0 statically
+let s: Sample = 0.5      // Verify discharges -1.0 <= 0.5 && 0.5 <= 1.0 statically
 let p: ValidPort = 8080  // statically discharged
-let bad: Sample = 1.5    // E_RefinementRejected — 1.5 violates -1.0 <= self <= 1.0
+let bad: Sample = 1.5    // E_RefinementRejected — 1.5 violates the Sample bounds
 ```
 
 The predicate is a compile-time obligation; at gradient-top it erases entirely (no runtime check). `Verify`'s default ledger accrues what it cannot discharge statically (`V_Pending`); the Arc F.1 SMT handler swap discharges those by residual theory — same source, deeper proof engine.

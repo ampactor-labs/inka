@@ -996,6 +996,22 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-heap-region.mn" 42 yes "$dir"
   run_program "$compiler" top-level-let \
     "$ROOT/tests/frontier/mn-top-level-let.mn" 42 yes "$dir"
+  # The Cast capability (phase-A vocabulary): addr erases at lower to its
+  # operand, so the row carries the whole meaning — the green leg proves
+  # word-face facts through the erase (RED on the pre-Cast boot: the op
+  # lowered as a handler-less demand and the executable gate refused).
+  run_program "$compiler" cast-addr \
+    "$ROOT/tests/frontier/mn-cast-addr.mn" 42 yes "$dir"
+  # !Cast severance REPORTS today (E_EffectMismatch at the declaration —
+  # not an armed refusing class; arming it is the refusal-law's own
+  # licence-gated landing). The leg asserts the report fires.
+  cat "${RTLIBS[@]}" "$ROOT/tests/frontier/mn-cast-refused.mn" \
+    | wt_run "$compiler" > /dev/null 2> "$dir/cast-refused.err"
+  if grep -q "E_EffectMismatch error" "$dir/cast-refused.err"; then
+    pass "cast-refused severance reported (E_EffectMismatch at the decl)"
+  else
+    fail "cast-refused severance silent (see $dir/cast-refused.err)"
+  fi
   run_refusal "$compiler" effect-unhandled \
     "$ROOT/tests/frontier/mn-effect-unhandled.mn" E_EffectUnhandled "$dir"
   run_refusal "$compiler" effect-stateful-uninstalled \

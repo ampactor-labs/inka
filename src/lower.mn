@@ -687,7 +687,13 @@ fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
           //     locally installed, direct call)
           // A WASI import op bridges directly to the WASM-level import
           // (no $op_<name> handler arm) — the import IS the bridge.
-          if is_wasi_import_op(name) {
+          // addr (effect Cast) erases to its OPERAND: the word face IS
+          // the address, so the emission is identity and no demand ever
+          // reaches the executable gate — the row carries the whole
+          // meaning (with Cast admits; !Cast severs).
+          if is_cast_erased_op(name) {
+            list_index(lo_args, 0)
+          } else if is_wasi_import_op(name) {
             LWasiCall(handle, name, lo_args)
           } else {
             lower_perform_dispatch(handle, name, lo_args)
@@ -4561,6 +4567,10 @@ fn is_substrate_mem_op(name: String) with Pure = {
     || name == "heap_reset"
     || name == "world_top"
 }
+
+// The Cast capability's one op — erased at lower to its operand (the
+// identity at the word level; memory.mn carries the decl and the law).
+fn is_cast_erased_op(name) with Pure = name == "addr"
 
 fn is_wasi_import_op(name) with Pure = {
   // Only ops with NO handler arm belong here — raw host imports, atomic

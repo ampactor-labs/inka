@@ -17,6 +17,22 @@
 // Memory — linear memory read/write. Operations on WASM's linear
 // memory. Each maps to one instruction. The developer writes the
 // intent; the substrate emits the opcode.
+// The structure-forgetting DOWN-cast (§5.R band D's seq-addr-downcast,
+// landed as phase-A vocabulary): addr projects any value's word face —
+// for a heap value that word IS its address ("a handle IS a word").
+// Sound in the negative position only (a concrete Int comes OUT; no
+// from_addr up-cast exists, ever — str_of_buf stays the one localized
+// coercion). Capability-gated by the row: `with Cast` admits it and a
+// declared `!Cast` severs it transitively, the user-effect class. Lower
+// ERASES the perform to its operand (identity at the word level, zero
+// emission), so the substrate is the handler and no census demand ever
+// reaches the executable gate — the row is the entire point. Zero
+// readers in the wheel; the first consumer is the arena-gated
+// signature-driven seq-op landing.
+effect Cast {
+  addr(a) -> Int
+}
+
 effect Memory {
   // 32-bit store/load — full i32 word at address
   store_i32(Int, Int) -> ()   // (addr, value)

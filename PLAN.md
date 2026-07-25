@@ -1038,6 +1038,31 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · THE CAST VOCABULARY — the word-face capability, zero
+  readers by design (A.5 · pin 394917cf; phase A closes except A.4's
+  own arc). effect Cast { addr(a) -> Int } lands beside effect Memory
+  (the substrate home RTLIBS and the wheel both see); lower erases the
+  perform to its operand — identity at the word level, zero emission —
+  so the substrate is the handler, no census demand reaches the
+  executable gate, and the ROW carries the whole meaning: with Cast
+  admits, a declared !Cast severs. No from_addr up-cast exists, ever
+  (str_of_buf stays the one localized coercion). Crucibles seen at
+  both poles: cast-addr proves word-face facts through the erase (42;
+  RED on the pre-Cast boot — the op lowered as a handler-less demand
+  and the gate refused the executable) and cast-refused proves the
+  severance REPORTS at the declaration, E_EffectMismatch naming
+  !Cast vs Cast(<type>) — the A.6 bare-name-matches-instance handle
+  compare doing exactly its job. Two truths banked from the probe:
+  E_EffectMismatch is NOT an armed refusing class (the
+  reference-memory "user-effect !E hard-refuses" claim describes a
+  different tier; arming the class is the refusal-law's licence-gated
+  landing, named here so it is never smuggled in as a rider), and the
+  parameterized instance renders its payload as `<type>` (the
+  E_RefinementRejected `<expr>` render class's sibling — the residue
+  queue carries both). CLEAN m2 == m3 at 333,002 lines; census 0;
+  frontier 245/0; board whole at the pin. The first consumer is the
+  arena-gated signature-driven seq-op landing (B-ii), where raw
+  bodies gain authored signatures and rows become true by inference.
 - 2026-07-24 · INSTANTIATE SHARES, NEVER CLONES — landed in its second
   form after the artifact killed the first (A.3 · pin 6d6ac5ab; the
   superseded first-form pin 0bb49387 stays in the PROVENANCE chain as

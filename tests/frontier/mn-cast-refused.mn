@@ -1,0 +1,7 @@
+// !Cast severs the word-face projection: a body performing addr under a
+// declared !Cast is a row-algebra violation — the user-effect class the
+// capability gate exists for. The severed fn never runs; the medium
+// refuses the claim at the declaration.
+fn peek(x) with !Cast = addr(x)
+
+fn main() = peek([1])

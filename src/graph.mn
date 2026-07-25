@@ -270,9 +270,15 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
   // A mint at a planned range's ceiling jumps to the open space above the
   // plan and clears the limit — the decl finishes there, deterministically
   // (decl order is). mint_limit 0 is the unlimited sequential mode (the
-  // Option-niche word: 0 = no ceiling, the slot_present precedent).
+  // Option-niche word: 0 = no ceiling, the slot_present precedent). The
+  // jump is ROOT-ONLY semantics: only the root's plan seeds mint_high, so
+  // an overflow with mint_high still 0 is an UNSEEDED instance (a branch
+  // cursor past its range) and minting would place handle 0 over the
+  // shared Module root's cell — the guard traps loudly instead (the
+  // branch protocol is abort-and-requeue, never jump).
   graph_fresh_ty(reason) => {
     let overflow = mint_limit > 0 && next >= mint_limit
+    if overflow && mint_high == 0 { load_i32(0 - 1) } else { 0 }
     let handle = if overflow { mint_high } else { next }
     let (sp, so) = spine_ensure(spine, spine_open, spine_band(handle))
     spine_put_node(sp, handle, GNode(NFree(epoch), reason))
@@ -291,6 +297,7 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
 
   graph_fresh_row(reason) => {
     let overflow = mint_limit > 0 && next >= mint_limit
+    if overflow && mint_high == 0 { load_i32(0 - 1) } else { 0 }
     let handle = if overflow { mint_high } else { next }
     let (sp, so) = spine_ensure(spine, spine_open, spine_band(handle))
     spine_put_node(sp, handle, GNode(NRowFree(epoch), reason))

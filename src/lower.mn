@@ -4565,6 +4565,7 @@ fn is_substrate_mem_op(name: String) with Pure = {
     || name == "heap_mark"
     || name == "heap_reset"
     || name == "world_top"
+    || name == "world_restore"
     || name == "image_key"
     || name == "globals_area"
     || name == "globals_save"

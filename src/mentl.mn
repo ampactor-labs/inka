@@ -245,12 +245,31 @@ fn suggestion_kind_label(k) with Pure = match k {
 // per-position dispatch at src/oracle.mn:309.
 // Returns [(Annotation, Capability)] for annotations that passed.
 fn try_each_annotation(handle, candidates, base_ty) = {
+  // PRE-WARM THE INTERN below the fork marks: the severed-effect names are
+  // interned here ONCE, so every in-fork intern_str is a pure probe HIT.
+  // A fork extent must never FIRST-intern — the table is durable state,
+  // and a first insert allocates its canonical row IN the region: the
+  // reset zeroes it and the next candidate's probe walks garbage
+  // (measured: the field leg trapped in intern_probe the moment this
+  // site's heap leg landed — the image/scratch interleave's first live
+  // case, the two-channel design's own witness).
+  intern_str("Alloc")     // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle (the apply arms' own convention)
+  intern_str("IO")        // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle
+  intern_str("Network")   // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle
   candidates
     |> map((ann) => {
+         // The FORK TRIPLE (R6): this site held only the graph leg — the
+         // recon's "half a fork pair" — so a candidate's allocations
+         // outlived it and its world isolation rode extent-balance alone.
+         // All three legs now, the synth fan's exact shape.
          let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+         let mark = heap_mark()   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
+         let w = world_top()   // drift-audit: ignore — sequenced effectful read (the fork's world leg, consumed by world_restore), CLAUDE.md Anchor 6 exclusion
          let proven = apply_annotation_tentatively(handle, ann, base_ty)
          let ok = proven && verify_after_apply(handle)
          graph_rollback(cp)
+         heap_reset(mark)
+         world_restore(w)
          (ann, ok)
        })
     |> filter((pair) => { let (_, ok) = pair; ok })

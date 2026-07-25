@@ -1038,6 +1038,37 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE FORK TRIPLE — R6 closes the world arc, and the
+  interleave shows its first live witness (Phase C rung 0 · pin
+  09b95e50). Every candidate fork restores THREE legs — graph
+  checkpoint, heap region, WORLD — at all three fork sites (the synth
+  fan's two loops; try_each_annotation, half a pair since birth, gains
+  its heap AND world legs). world_restore lands as the fork boundary's
+  world reset (a substrate op, NOT a general setter — its one sound use
+  is a value world_top() returned at the fork point, predating every
+  push the forked extent made; the world's other writers stay the
+  emitted pushes and bracket restores), crossing recognition in the
+  two-generation dance the crossing constraint demands — the gate
+  REFUSED the single-step form (E_EffectUnhandled: Memory at the root)
+  exactly as the world_top precedent says, and the law is now paid at
+  the substrate-op altitude twice. The world leg had held by
+  extent-balance alone — an accident-invariant made a contract before
+  the parallel fan (rung 3) needs it per-cursor. THE INTERLEAVE
+  WITNESS, counted: landing the heap leg at try_each_annotation
+  trapped the field leg in intern_probe — a candidate's
+  intern_str("Alloc") FIRST-inserted its canonical row IN the region,
+  the reset zeroed it, the next candidate's probe walked garbage (and
+  teach-pure-control's severed-name proposal died of the same root).
+  THE CONTRACT: the intern is DURABLE state; a fork extent must never
+  first-intern. The pre-warm (the severed-effect names interned once
+  below the fork marks) makes every in-fork intern a pure probe hit —
+  stated at the site, and banked as the two-channel design's first
+  measured case (durable-vs-transient inside one extent — exactly what
+  the §5.O image/scratch split exists for). CLEAN m2 == m3; census 0;
+  frontier 266/0; proof-exactness 9/9; crown 5/5; micros 114/114.
+  Phase C's remaining rungs: the deterministic handle partition (the
+  keystone, shared with native), the parallel compile spine, the fused
+  oracle.
 - 2026-07-25 · ▶▶▶▶▶ THE ORDER-INDEPENDENT JUDGE GOES LIVE — phase B-ii
   COMPLETES its payoff: the two-pass walk re-wires into compile_stdin,
   self-hosts, and costs ~12% (pin 5b693139). The re-measure law paid

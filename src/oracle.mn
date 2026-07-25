@@ -198,7 +198,7 @@ handler project_queue_merger
 // the graph epoch IS the cache. The e-graph supplies the TStyle-tier
 // equivalences (topology nudges) effect-awarely via egraph.mn.
 
-fn project_queue() with Verify + GraphRead + GraphWrite + Memory + Alloc = {
+fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Alloc = {
   positions_with_dependents()
     |> map((pos) => candidates_at(pos))
     |> flatten

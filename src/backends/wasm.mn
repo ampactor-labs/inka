@@ -4103,6 +4103,8 @@ fn emit_expr(expr) = match expr {
       wat_emit("    (call $heap_mark_impl)\n")
     } else if import_name == "world_top" {
       wat_emit("    (global.get $world_g)\n")
+    } else if import_name == "world_restore" {
+      wat_emit("    (global.set $world_g)(i32.const 0)\n")
     } else if import_name == "image_key" {
       // The build's identity word — an immutable global computed at emit
       // (emit_image_substrate); equal keys ⟺ a restored image's baked

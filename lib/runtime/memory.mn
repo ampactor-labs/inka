@@ -50,6 +50,15 @@ effect Memory {
   // read, not an Alloc verb: the perform path reads it on every dispatch.
   world_top() -> Int
 
+  // The fork boundary's world reset — the fork pair's THIRD leg (graph
+  // checkpoint + heap region + world). Writes $world_g back to a value
+  // world_top() returned at the fork point. NOT a general setter: its one
+  // sound use is the fork boundary, where the restored value predates
+  // every push the forked extent made (the chain nodes above it die with
+  // the region). Everywhere else the world's writers stay the emitted
+  // pushes and bracket restores.
+  world_restore(Int)
+
   // 64-bit float store/load — the WIDE-value boundary pair (§5.U): a wide
   // value crosses the word altitude BY REFERENCE (its address is a word, a
   // handle IS a word); these two ops are the deref/ref that cash the native

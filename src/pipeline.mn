@@ -125,6 +125,8 @@ fn compile(entry_module) = {
       entry_module |> driver_compile_entry |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module
     }
       ~> wat_stdout
+      ~> persist_to_disk       // the warm-start cache (driver_compile_entry)
+      ~> fail_exit             // rehydrate's refusal policy (probe-guarded)
       ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache
       ~> string_table          // W5 — compile-time interned string offsets
       ~> emit_memory_bump      // swap for emit_memory_arena to prove surface

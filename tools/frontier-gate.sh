@@ -347,6 +347,46 @@ run_persist_image() {
   fi
 }
 
+# The warm-start gate (B-i landing 2): ONE compiler, ONE project, TWO runs.
+# Run 1 (cold) analyzes, persists the rooted image into the project's
+# .build, and emits; run 2 restores the image (the warm line on stderr)
+# and lowers the SAME live graph — the emitted WAT must be byte-identical.
+# The repo maps as /mentl-home so the resolver reaches the stdlib.
+run_warm_start() {
+  local compiler="$1" dir="$2" label="warm-start"
+  local wdir="$dir/$label.proj" rc1 rc2
+  mkdir -p "$wdir/.build"
+  printf 'fn main() = 40 + 2\n' > "$wdir/main.mn"
+  wt_run --dir "$wdir::." --dir "$ROOT::/mentl-home" "$compiler" compile main \
+    > "$dir/$label.1.wat" 2> "$dir/$label.1.err"
+  rc1=$?
+  wt_run --dir "$wdir::." --dir "$ROOT::/mentl-home" "$compiler" compile main \
+    > "$dir/$label.2.wat" 2> "$dir/$label.2.err"
+  rc2=$?
+  if [ "$rc1" -ne 0 ] || [ ! -s "$dir/$label.1.wat" ]; then
+    fail "$label cold compile (exit=$rc1; see $dir/$label.1.err)"
+    return
+  fi
+  if grep -q '^warm:' "$dir/$label.1.err"; then
+    fail "$label cold run claimed warm (see $dir/$label.1.err)"
+    return
+  fi
+  pass "$label cold compile (exit=0, wire $(ls "$wdir/.build" 2>/dev/null | head -1))"
+  if [ "$rc2" -ne 0 ]; then
+    fail "$label warm compile (exit=$rc2; see $dir/$label.2.err)"
+    return
+  fi
+  if ! grep -q '^warm:' "$dir/$label.2.err"; then
+    fail "$label warm line absent (run 2 re-derived; see $dir/$label.2.err)"
+    return
+  fi
+  if cmp -s "$dir/$label.1.wat" "$dir/$label.2.wat"; then
+    pass "$label warm compile (byte-identical emission off the restored image)"
+  else
+    fail "$label warm emission diverges (diff $dir/$label.1.wat $dir/$label.2.wat)"
+  fi
+}
+
 # An ARMED class's contract: the diagnostic fires AND the executable refuses —
 # nonzero exit, ZERO WAT bytes (the refusal law, PLAN §11 col 2). run_diagnostic
 # asserts the productive form (exit 0, diagnostics on stderr); an armed class's
@@ -935,6 +975,10 @@ for i in "${!compilers[@]}"; do
   # 42). Seen RED on the pre-image boot: the image ops are unrecognized
   # substrate, so the executable refuses at compile.
   run_persist_image "$compiler" "$dir"
+  # B-i landing 2: the warm-start cache — run 2 restores run 1's analyzed
+  # image and must emit byte-identical WAT. RED before the landing: the
+  # warm line never prints (every run re-derives).
+  run_warm_start "$compiler" "$dir"
   # Real host-thread spawn over the shared image (the task-record substrate:
   # import-shape memory, shared-cell allocator, $spawn_task_impl/$join_task_impl).
   # Seen RED on the pre-task-record boot: 134, unaligned atomic in the join.

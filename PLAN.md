@@ -1038,6 +1038,49 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ THE WARM START — the compile restores its own analyzed
+  image (phase B-i landing 2 · pin 28eb3444). driver_compile_entry keys
+  the weave (every DAG module's text hashed in canonical order — the
+  prelude seed rides the same list the analysis weaves — mixed with the
+  build key), and on a CLEAN analysis persists the whole rooted image
+  into the project's .build; the next compile of the same weave probes
+  both wire gates COLD-SIDE (a stale or foreign cache falls back to
+  re-derivation instead of refusing; rehydrate's own gates stay the trap
+  beneath), restores, and lowers the live graph — frontend and inference
+  skipped whole (Hβ.persist.module-image-cache's first real form; the
+  dirty case re-derives honestly because the diagnostics ledger rides
+  the image as counts, not replayable prints). The typed re-entry is
+  warm_root — a top-level cell the globals record restores; the compile
+  chain grew ~> persist_to_disk ~> fail_exit. THE GATE (frontier
+  warm-start, RED before the landing): cold run persists and emits;
+  warm run prints the warm line and emits BYTE-IDENTICAL WAT off the
+  restored image — the strongest oracle the seam admits, and it held
+  despite the two runs lowering from different heap lines. TWO LAWS
+  PAID FOR EN ROUTE: (1) VIRGINITY IS THE RESTORE'S CONTRACT
+  ($heap_reset_impl's law at the image altitude) — $image_restore zeroes
+  [image-extent, old-bump): the restored line rewinds, so the resuming
+  process's dead pre-swap heap must read never-allocated, or
+  post-restore allocations serve stale bytes as unwritten slots.
+  Measured through five probe rounds (count the kills): the warm
+  saturate walk chased a garbage operand into list_index's i<0 bounds
+  trap (the 0x100000000 signature); the record, its canon spine, and
+  node 3389's cells all probed BYTE-FAITHFUL live-vs-wire before the
+  dead-region channel isolated by elimination; the two-process fixture
+  had survived only by allocating almost nothing post-swap — an
+  accident-invariant named a contract (forensic law 5). (2) A PREAMBLE
+  FIX CROSSES A GENERATION — the executing $image_restore is the
+  EMITTING compiler's preamble, so every probe of the fix through the
+  boot-emitted m2 ran the OLD form (the pattern-fill experiment
+  included; its assertion failure was the tell); the fix first executes
+  in m3's own body. The crossing constraint, already law at the
+  recognition layer (world_top), now named at the PREAMBLE altitude so
+  no future substrate-preamble fix is probed a generation early.
+  Residue banked: the cache is compile-seam only (check/at/teach ride
+  driver_entry_with_ranges — landing 3's per-module IC generalizes);
+  the wire doubles the image transiently at persist (the arena's
+  scratch channel absorbs it). TRANSITION m3 == m4 at 331,274 lines
+  (the 2-line crossing is the restore preamble); census 0; frontier
+  260/0; proof-exactness 9/9; crown 5/5; micros 114/114.
 - 2026-07-25 · ▶▶▶ THE ORDER-INDEPENDENT JUDGE'S HARVEST — the two-pass
   walk rebuilt, converged to judge-ZERO, measured, and its fifty
   findings landed while the machinery unwired (phase B-ii step 0

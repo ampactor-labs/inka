@@ -502,7 +502,6 @@ fn extract_row(ty) with Memory = match ty {
   TFun(_, _, row)   => row,
   TInt              => mk_ef_pure(),
   TFloat            => mk_ef_pure(),
-  TString           => mk_ef_pure(),
   TUnit             => mk_ef_pure(),
   TByte             => mk_ef_pure(),
   TList(_)          => mk_ef_pure(),

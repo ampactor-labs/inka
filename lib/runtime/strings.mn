@@ -365,7 +365,7 @@ fn int_to_str(n) with Memory + Alloc = {
 // show-derivation is a handler swap (Hβ.lower.to-string-show-
 // derivation), not a rewrite. The emit-time dispatch
 // (show_node_of, backends/wasm.mn) short-circuits proven sites
-// (TString identity / TFloat float_to_str / TInt int_to_str)
+// (String text-view identity / TFloat float_to_str / TInt int_to_str)
 // before the op round-trip. NOT the v1 dispatch-by-magnitude tumor
 // — the type is proven by the graph or deferred to the handler;
 // never guessed from the value.

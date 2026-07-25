@@ -301,7 +301,7 @@ fn unlines(ls) = join(ls, "\n")
 // This separation is load-bearing for WASM: the HM checker doesn't
 // instantiate user-defined generic functions, so all call sites of
 // `slice` share the same type variable. If both string and list call
-// sites use `slice`, the type variable unifies with TString, and the
+// sites use `slice`, the type variable unifies with the String alias, and the
 // WASM lowerer dispatches list-slicing to str_slice — corrupting
 // pointers. Using str_slice here keeps `slice` list-only.
 // str_eq BY NAME (the render-family precedent — the author states the

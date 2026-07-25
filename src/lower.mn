@@ -1897,7 +1897,7 @@ fn lower_expr_body(e, handle, span) = match e {
     // RGlobal where there's no separate local-binding handle.
     //
     // A GROUND binding (ty_handle_of returns 0 — a ctor's TFloat
-    // payload, a tuple's TString element) has no binding-time handle;
+    // payload, a tuple's String element) has no binding-time handle;
     // the USE node's own handle carries the same truth (infer_var_ref
     // bound it to the resolved type, and a local is monomorphic), so
     // the type-directed reads (the eq/binop gradient, ++'s element
@@ -3013,7 +3013,6 @@ fn ty_handle_of(ty) = match ty {
   TVar(handle)        => handle,
   TInt                => 0,
   TFloat              => 0,
-  TString             => 0,
   TUnit               => 0,
   TByte               => 0,
   TList(_)            => 0,
@@ -5581,7 +5580,7 @@ fn spec_resolve(t) with LookupTy + Memory + Alloc = match t {
   TRefined(b, p)    => TRefined(spec_resolve(b), p),
   TAlias(n, i)      => TAlias(n, spec_resolve(i)),
   TCont(i, a, d, w) => TCont(spec_resolve(i), spec_resolve(a), d, w),
-  _ => t                        // scalars (TInt/TFloat/TString/TUnit/TByte)
+  _ => t                        // scalars (TInt/TFloat/TUnit/TByte)
 }
 
 // The parallel walk: scheme side vs site side, same shape by construction

@@ -2367,7 +2367,7 @@ fn parse_type_atom(ref tokens, pos) = match kind_at(tokens, pos) {
     // nominal TName("Int", []) and later reports equal-looking `Int vs Int`.
     let base = if str_eq(v, "Int")        { TInt }
                else if str_eq(v, "Float")  { TFloat }
-               else if str_eq(v, "String") { TString }
+               else if str_eq(v, "String") { ty_string }
                else if str_eq(v, "Bool")   { TName("Bool", []) }
                else if str_eq(v, "Unit")   { TUnit }
                else                        { TName(v, []) }

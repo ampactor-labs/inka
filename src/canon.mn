@@ -1,0 +1,18 @@
+// canon.mn — THE CANON: shared canonical nodes, minted once at module
+// init and read by every consumer. One home per canonical value; the
+// file sorts early in the wheel blob so every later module's references
+// resolve under the current boot (top-level lets are not yet
+// pre-registered — the order-independence capability is the
+// Hβ.infer.order-independent-verdicts let-face; when it lands, the
+// placement constraint dissolves and this stays the semantic home).
+
+import types
+
+// THE ONE String — §4① made total: "String" IS this single canonical
+// alias node, shared by every annotation, literal bind, and face-table
+// row. The nullary-sentinel era's reasons retired on 2026-07-24:
+// instantiate SHARES unchanged subtrees (no per-instantiation clone
+// volume), and one shared node cannot partially migrate. The alias name
+// is the render (show_type's TAlias arm prints "String"); the inner
+// byte-list is the truth every walk sees through the peel.
+let ty_string = TAlias("String", TList(TByte))

@@ -34,7 +34,6 @@
 type Ty
   = TInt
   | TFloat
-  | TString
   | TUnit
   | TByte                         // the packed sequence ELEMENT-slot leaf: a
                                   //   byte VALUE is a word (repr RI32, arithmetic
@@ -119,7 +118,6 @@ fn repr_of(ty) with Pure = match ty {
   TRefined(base, _) => repr_of(base),
   TFloat            => RF64,    // inferred default; STEP 1's `repr f32` pin yields RF32
   TInt              => RI32,    // STEP 1's `repr i64` pin / fixed-point / i64-literal yields RI64
-  TString           => RI32,    // pointer into linear memory
   TUnit             => RI32,
   TByte             => RI32,    // a byte VALUE is a word (arithmetic is Int); the
                                 //   1-byte packing is a SLOT stride, not a value repr
@@ -218,11 +216,10 @@ fn repr_wat(r) with Pure = match r {
 fn fold_strip(ty) with Pure = match ty {
   TAlias(_, inner)  => fold_strip(inner),
   TRefined(base, _) => fold_strip(base),
-  // §4①: a String folds AS its byte-sequence, so fold_sig(TString) == "lb" ==
+  // §4①: a String folds AS its byte-sequence, so fold_sig on it derives "lb" ==
   // fold_sig(TList(TByte)) and a String field and a [byte] field share the one
   // generated `$eq_<sig>`/`$hash_<sig>`/`$show_<sig>` helpers at sig "lb" —
   // the eq/hash-divergence footgun unsayable.
-  TString           => TList(TByte),
   _                 => ty
 }
 
@@ -235,9 +232,6 @@ fn fold_sig(ty) with Memory = match fold_strip(ty) {
   TInt              => "i",
   TFloat            => "d",
   TUnit             => "u",
-  TString           => "lb",         // unreachable (fold_strip maps TString to
-                                     //   TList(TByte) first) — kept exhaustive,
-                                     //   and agreeing with the strip route
   TByte             => "b",          // packed 1-byte slot — distinct from "i" so
                                      //   [byte] and [Int] never share a fold helper
   TVar(_)           => "i",          // unresolved handle — a word
@@ -2087,7 +2081,6 @@ fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory = {
   match ty {
     TInt    => "Int",
     TFloat  => "Float",
-    TString => "String",
     TUnit   => "()",
     TByte   => "Byte",
     TList(elem) => "List({show_type(elem)})",
@@ -2553,7 +2546,6 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty
     flow_label_join(query_flow_label(input), query_flow_label(answer)),
   TInt     => Public,
   TFloat   => Public,
-  TString  => Public,
   TUnit    => Public,
   TByte    => Public,
   TVar(_)  => Public     // unresolved: open-world default (no proof = observable)

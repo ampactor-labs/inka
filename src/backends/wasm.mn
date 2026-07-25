@@ -4262,7 +4262,7 @@ fn emit_binop_for(op, l, r) = {
   // split"). The element/representation cash-out (byte-buffer vs
   // element-node) is a lower-time projection of the PROVEN element type —
   // never a guess. A resolved TList projects the element-node concat; a
-  // resolved byte-sequence (TString = [Byte]) projects the byte concat.
+  // resolved byte-sequence (String = [Byte]) projects the byte concat.
   // An UNRESOLVED operand is NOT a silent representation guess (the
   // dissolved E_ConcatTypeUnresolved / unresolved→str_concat fallback) —
   // it surfaces a Reason-carrying diagnostic, the no-silent-fallback law.
@@ -4272,13 +4272,12 @@ fn emit_binop_for(op, l, r) = {
     wat_emit("    (local.get $__state)\n")
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (local.get $callee_closure)\n")
-    // ONE concat: a String IS a stride-1 list, so both arms emit the SAME
-    // O(1) concat node (list_concat threads the carrier's sc). Routing the
-    // TString arm to $str_concat would self-recurse — str_concat's own body
-    // IS `a ++ b` under §4①.
-    match lookup_ty(left_h) {
+    // ONE concat: a String IS a stride-1 list — the strip resolves the
+    // alias to its byte-list truth, and the one list arm emits the O(1)
+    // concat node (list_concat threads the carrier's sc). An unresolved
+    // operand keeps the loud floor.
+    match fold_strip(lookup_ty(left_h)) {
       TList(_) => wat_emit("    (call $list_concat)\n"),
-      TString  => wat_emit("    (call $list_concat)\n"),
       other    => emit_concat_unresolved(other)
     }
   },

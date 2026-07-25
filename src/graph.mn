@@ -660,7 +660,6 @@ fn occurs_in(handle, ref ty) with !Mutate = {
   match ty {
     TInt             => false,
     TFloat           => false,
-    TString          => false,
     TUnit            => false,
     TByte            => false,
     // The leaf answers "does handle occur in the type GRAPH reachable from

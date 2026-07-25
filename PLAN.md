@@ -1038,6 +1038,28 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶▶▶▶ THE TSTRING DISSOLUTION LANDS WHOLE — PHASE A
+  COMPLETE (A.4 steps 4+5 in one arc · pin 5673c47c). The nullary
+  TString ctor is DELETED from Ty; "String" IS one canonical
+  TAlias("String", TList(TByte)) node in THE CANON (src/canon.mn, the
+  new one-home for shared canonical nodes — born when the census named
+  25 forward references: top-level lets are not pre-registered, so the
+  canon sorts early; order-independent-lets is the named dissolver and
+  the ef_pure_row shared form's future home). Every mint flipped
+  (parse_type_atom, four infer binds, eighteen face rows); the
+  unify/same_ground string arms, both already_string probes, and every
+  H6 scalar row deleted whole — the compile-guided sweep, census-named
+  at 26 → 0 across two rounds; BConcat strips first; synth's
+  byte-element dispatch keeps String holes proposing string literals.
+  The sentinel's own comment carried its retirement: the OOM died with
+  A.3's sharing, partial migration with the one shared node.
+  TRANSITION m3 == m4 at 332,555 lines (the 6,336-line crossing is the
+  type-representation change); census 0 at every generation; frontier
+  254/0 — every string-oracle leg green through the TString-free
+  compiler; crown 5/5; micros 114/114. §4①'s "String IS [Byte]" is now
+  a fact of the Ty ADT itself, not a claim bridged by special arms.
+  Named residue: the String-hole proposal leg (oracle gap 7, the
+  edit-harness shape) and the order-independent-lets capability.
 - 2026-07-24 · ONE TYPE, ONE HASH (A.4 step 3 · pin 540eb950).
   hash_node_of's list arm goes element-face: a byte face hashes as
   TEXT (str_hash), the projection a String field always took — the

@@ -176,7 +176,7 @@ handler synth_default with !Mutate {
 //
 //   1. If target is a TName (ADT), enumerate constructors.
 //   2. If target is a TFun, propose lambda shapes.
-//   3. If target is TInt/TFloat/TString/TUnit, propose literals.
+//   3. If target is TInt/TFloat/String/TUnit, propose literals.
 //   4. If target is TVar (unbound), propose ?? (nested hole).
 //
 // Each strategy yields a small set; verify_each_enriched discards
@@ -184,14 +184,13 @@ handler synth_default with !Mutate {
 // allowed_effects row.
 
 fn enumerate_typed(target_ty, allowed_effects, context)
-    with EnvRead + GraphRead + GraphWrite + Synth + !Mutate + Memory + Alloc = {
+    with EnvRead + GraphRead + GraphWrite + LookupTy + Synth + !Mutate + Memory + Alloc = {
   match target_ty {
     TName(name, args) => enumerate_constructors(name, args, context),
     TFun(params, ret, row) => enumerate_lambdas(params, ret, row, context),
     TInt    => enumerate_int_literals(context),
     TByte   => enumerate_int_literals(context),
     TFloat  => enumerate_float_literals(context),
-    TString => enumerate_string_literals(context),
     TUnit   => one_unit_candidate(context),
     TVar(_) => one_hole_candidate(context),
     TRecord(fields) => enumerate_records(fields, context),
@@ -199,7 +198,12 @@ fn enumerate_typed(target_ty, allowed_effects, context)
     TRefined(base, _pred) => enumerate_typed(base, allowed_effects, context),
     TAlias(_, inner) => enumerate_typed(inner, allowed_effects, context),
     TCont(_, _, _, _) => one_continuation_candidate(context),
-    TList(elem) => enumerate_list_candidates(elem, context),
+    // A byte-element list IS String (the canonical alias's inner) — a
+    // String-typed hole proposes string literals, never list literals.
+    TList(elem) => match seq_elem_face(elem) {
+      TByte => enumerate_string_literals(context),
+      _     => enumerate_list_candidates(elem, context)
+    },
     TTuple(elems) => enumerate_tuple_candidates(elems, context)
   }
 }

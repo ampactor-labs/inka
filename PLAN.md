@@ -4434,8 +4434,30 @@ change; builder dispatched) · Hβ.effects.same-name-fragments-coexist +
 Hβ.emit.arm-under-install-instantiation (the L1→L2 pair that closes the
 six 134-banked payload micros; the arm-spec-twin predecessor REFUTED —
 the ledger entry carries the split and the probes) · handler-config
-defaults (builder dispatched) · the fmt SUMMIT (770 E_RedundantBraces;
-recon dispatched) · E_EffectMismatch arming (licence-gated). The
+defaults (builder dispatched) · THE FMT SUMMIT — now MEASURED (the
+fleet census, 2026-07-25: 49 of 50 wheel files cannot format; the
+fmt-demo fixture undersamples every broken surface — no with-clause,
+no handler decl). The blocker ladder, in order, each RED-first: (1)
+the with-clause render reads the parser's SIGNED TRIPLES as bare
+EffNames — ≥2 entries trap in the dedup, exactly 1 silently renders
+«invalid-effect», destroying 41 declared rows across the five
+pass-once files; the fix renders the authored signed list directly
+(also the only faithful render for !/-/& — a closed-row rebuild
+cannot represent them); (2) render_handler_arms reads OPEN arm
+records (the trecordopen family at the formatter — the emitter
+floored it; every handler decl traps) — the typed closed projections
+handler_arm_op_name/arity/body already exist and are bypassed; (3)
+arm-body brace discipline = render∘parse identity — braces accrete
+per pass (+423 sites over 7 files) and pass-2 re-parses `{ x }` as
+the record pun {x: x}, a SEMANTIC FLIP (tensor.mn's float became a
+record); (4) FnStmt render drops authored return types (91 heads);
+(5) the comment weave renders only at statement altitude — 32% of
+parser.mn's prose (272 interior lines) silently lost, violating
+SYNTAX's "never dropped"; (6) shortest-round-trip float render
+(1.0 → sixteen digits today). Baseline trued: 778 E_RedundantBraces;
+the summit run (whole-wheel fmt → census 0 → fixpoint → formatted
+source canonical) only after 1–6 ·
+E_EffectMismatch arming (licence-gated). The
 overlay dissolution LANDED (pin 6913e09d).
 
 **One bar, both audiences** (decided with Morgan 2026-07-16): the external

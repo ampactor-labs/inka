@@ -1033,6 +1033,31 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶▶ THE PROSE GATE COST FIVE COMPILERS — 70.58s → 15.56s
+  (4.5×) from one flatten (the campaign's measure-first law paying within
+  its first hour). Host perf on the self-compile (the §8 recipe) showed
+  83% of ALL wall time inside comment_refs_check → crc_scope_at: the
+  backtick checker's scope list was snoc-spined and list_index walks the
+  spine per read, so every commented handle paid O(scopes²) spine steps —
+  while every documented perf target measured as noise (env_find_flat
+  0.53%, str_eq 0.47%). The fix is the iterate-flattens-once precedent:
+  crc_fn_scopes' result flattened ONE time before the per-comment scans.
+  No code-reading estimate had ever named the site — the third time
+  (after the classifier and the reachability scan) that the dominant
+  O(n^k) was invisible to static reading. The remaining profile is
+  representation ceremony (seq_stride/seq_tag/decode_stride header
+  decodes per element access — the carried-truth question at the list
+  altitude, Phase A/B's re-measure target). The README-transcript session
+  that rode this also surfaced, each banked in the residue queue: the
+  user-path diagnostic flood (every `mentl check` prints the SHIPPED
+  lib's own T_OverDeclared/RedundantBraces warnings — the tighten/fmt
+  sweep's felt face), the chained-comparison refinement degradation
+  (SYNTAX's own canonical `-1.0 <= self <= 1.0` parsed ill-sorted and
+  silently pended — SYNTAX trued to the `&&` form at three sites, the
+  loud rejection arriving with predicate-is-expr), the `<expr>` operand
+  render in E_RefinementRejected's message, and the `??)`-span slop in
+  the address projection. CLEAN m2 == m3 expected (a compiler-internal
+  perf change; the march arbitrates).
 - 2026-07-24 · THE SCOREBOARD THAT NEVER FIRED, FIRED (the completion
   campaign's opening move — instruments before arcs; no re-pin, tools
   only). march-gate --micros read a `micro:` registry that was EMPTY for
@@ -3368,6 +3393,31 @@ table idx 0, so "prints WAT mid-inference" can mean "the parser ate my arm").
 ---
 
 ## §11 · THE PRODUCTION BAR — everything before Mentl is production-ready
+
+**THE CAMPAIGN ORDER (2026-07-24, Morgan-approved; the working mirror is
+`~/.claude/plans/wait-i-thought-mentl-lively-wren.md` and THIS section is
+its one durable home — every landing updates both or the mirror is stale).**
+The whole laptop-reachable remainder, sequenced by a 3-agent-refuted
+dependency spine, generative (each landing cashes out in the fused
+gradient loop AND in self-build) rather than columnar:
+**A** identity (intern-at-lex; crown positive residual dies; indexed-map
+primitive; instantiate-sharing; TString→alias; seq-addr-downcast; synth
+vocabulary) → **B-i** TIME (persist=cache=fork on the rooted image;
+module-image cache; IC + incremental march; session-as-value) ∥ **B-ii**
+the arena (then the two genuinely-gated un-reverts) → **C** SPACE (R6
+first; deterministic handle partition; parallel compile spine; THE FUSED
+ORACLE — hole-fan, fix-fan, in-image selftest generator; gradient
+work-stealing; Simd-on-this-ISA; runner endgame) → **D** THE GRADIENT
+(decidable fragment first; living session; the ranker with e-graph dedup +
+`!E`-gated speculation + the minimality engine; LSP; oversight face —
+dashboard, time-travel, collab; CFC as `><`+persist demonstration; fmt
+SUMMIT; `mentl audit`; refusal-law completion; SYNTAX lathe-lag) → **E**
+proofs (modal world-index consuming world-as-value; IFC with
+PC-label-on-world; Verify inward, e-graph-EUF before SMT) → **F** native
+(overlaps D/E; band G early items pulled forward; S0–S13; DDC closes
+trusting-trust). Excluded by hardware only: MI300X/GPU-device/hosted-CI/
+wasmFX/shared-everything-threads. Every dispatched agent runs `fable`,
+passed explicitly; every landing re-derived on main; the board is the gate.
 
 **One bar, both audiences** (decided with Morgan 2026-07-16): the external
 early adopter who clones, installs, and ships a wasm artifact from an

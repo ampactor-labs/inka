@@ -294,7 +294,12 @@ fn infer_program(stmts) = {
 
 fn comment_refs_check(ref stmts) = {
   let cdix = comment_decl_index(stmts, 0, smap_new())
-  let scopes = crc_fn_scopes(stmts, 0, [])
+  // Flat ONCE before the per-comment scans: crc_scope_at indexes this list
+  // per scope per commented handle, and a snoc spine pays its depth on
+  // every read — measured 2026-07-24 at 83% of the ENTIRE self-compile
+  // (the prose gate cost five compilers; perf found it, no code-reading
+  // estimate ever named it).
+  let scopes = list_to_flat(crc_fn_scopes(stmts, 0, []))
   let dollars = crc_walk(0, graph_next(), cdix, scopes, [])
   if len(dollars) > 0 {
     let lvix = lit_vocab_build(0, graph_next(), smap_new())

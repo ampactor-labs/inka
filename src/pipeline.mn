@@ -467,8 +467,8 @@ handler diag_quiet {
 // re-frontend mints fresh nodes so the final pass re-infers cleanly; the
 // shared env carries the trial's finals to every pass-2 reference.
 fn infer_program_converged(src) = {
-  { src |> frontend |> infer_program_trial } ~> diag_quiet
-  src |> frontend |> infer_program_final
+  let counts = { src |> frontend |> infer_program_trial } ~> diag_quiet
+  src |> frontend |> infer_program_final(counts)
 }
 
 fn compile_stdin() = {

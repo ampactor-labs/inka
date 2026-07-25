@@ -1394,8 +1394,8 @@ effect GraphRead {
 effect GraphWrite {
   graph_fresh_ty(Reason) -> Handle
   graph_fresh_row(Reason) -> Handle
-  graph_register_node(Int, NodeBody) -> ()    // edge-link a node's body into the one graph at its handle (the parallel program weave); resolves via graph_node_body
-  graph_attach_comment(Int, String, Span) -> ()  // attach parse-collected comment prose + its span to a node's handle (the parallel comment weave); resolves via graph_comment_at — a comment is graph content
+  graph_register_node(Int, NodeBody) -> ()    // edge-link a node's body into the one graph at its handle (the program column of the handle's page); resolves via graph_node_body
+  graph_attach_comment(Int, String, Span) -> ()  // attach parse-collected comment prose + its span to a node's handle (the comment column of the handle's page); resolves via graph_comment_at — a comment is graph content
   graph_canon_set(Int, Int) -> ()              // draw the e-graph equivalence edge `from ≡ to` — point `from`'s canonical pointer at the cheaper `to`. The union-find `union` over the equivalence weave; saturation reads it back via graph_canon_at (find). Idempotent: re-pointing an already-rooted `from` overwrites in place (one cell), never grows a ledger.
   graph_narrow_set(Int, Int) -> ()             // draw the refinement-narrowing edge — point program-point `handle`'s narrowing pointer at the path-predicate's bool-node `pred_handle` proven to hold there (§4⑥). One co-indexed weave like `canon`; idempotent (one cell per handle), read back via graph_narrow_at by lower's check-elision.
   graph_boundary_set(Int, ExecutableBoundary) -> () // draw/replace one fanout's executable edges; trail-backed because inference runs under speculative checkpoints
@@ -1406,6 +1406,18 @@ effect GraphWrite {
   graph_fork(String) -> ()
   graph_rollback(Int) -> ()
   graph_index_span(ValidSpan, Int) -> ()
+  // The deterministic handle partition (the planned mint): the final pass
+  // pre-assigns each stmt a dense range of handles sized by the trial's
+  // measured mint counts, so numbering is a pure function of the source —
+  // the parallel fan must reproduce it exactly. plan(top) seeds the open
+  // space above every planned base (the overflow target); at(base, limit)
+  // continues minting at base with limit as the ceiling (a mint at the
+  // ceiling jumps to the open space and clears the limit — the decl
+  // finishes deterministically above the plan); seal() resumes sequential
+  // minting at the high-water mark.
+  graph_mint_plan(Int) -> ()
+  graph_mint_at(Int, Int) -> ()
+  graph_mint_seal() -> ()
 }
 
 // ─── Diagnostics as a graph projection (SYNTAX.md §Diagnostic catalog) ──

@@ -894,8 +894,9 @@ fn infer_program_trial(stmts) = {
     register_primitives()
     pre_register_decls(stmts)
     set_summaries(classify_fixpoint(stmts))
-    infer_stmt_list(stmts)
+    let counts = infer_stmt_list_measured(stmts)
     finalize_continuation_boundaries(0, graph_next())
+    counts
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
     // The trial is a WORLD of its own: fresh analysis ledgers absorb its
     // verify obligations and ownership/region facts, dying with the
@@ -906,20 +907,58 @@ fn infer_program_trial(stmts) = {
     ~> affine_ledger
     ~> region_tracker
     ~> verify_ledger
-  stmts
 }
 
-fn infer_program_final(stmts) = {
+// The trial IS the sizing oracle: each stmt's mint count is the graph_next
+// delta around its inference — a fact the graph already carries, read at
+// the stmt boundary. The counts feed the final pass's planned ranges (the
+// deterministic handle partition, types.mn's graph_mint_plan contract).
+fn infer_stmt_list_measured(stmts) = fold([], stmt_measure_step, stmts)
+
+fn stmt_measure_step(counts, ref node) = {
+  let before = graph_next()   // drift-audit: ignore — sequenced effectful read (the boundary sample must precede the inference), CLAUDE.md Anchor 6 exclusion
+  infer_stmt(node)
+  push(counts, graph_next() - before)
+}
+
+fn infer_program_final(counts, stmts) = {
   {
     register_primitives()
     each(pre_register_alias, stmts)
     fold(smap_new(), pre_register_stmt_final, stmts)
     set_summaries(classify_fixpoint(stmts))
-    infer_stmt_list(stmts)
+    infer_stmt_list_planned(counts, stmts)
     finalize_continuation_boundaries(0, graph_next())
     comment_refs_check(stmts)
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
   stmts
+}
+
+// The deterministic handle partition: each stmt's mints land in a
+// pre-assigned dense range [base, base + count) — bases are prefix sums of
+// the trial's measured counts from the final's own post-prepass frontier,
+// so the numbering is a pure function of the source through the trial's
+// determinism (the parallel fan must reproduce it exactly, which is its
+// byte-equality gate). A stmt minting fewer than its measure leaves virgin
+// gap cells (absent by the column contract); one minting more overflows to
+// the open space above the plan (graph_fresh's overflow arm) — both
+// deterministic.
+fn infer_stmt_list_planned(counts, stmts) = {
+  let flat = list_to_flat(counts)
+  let start = graph_next()   // drift-audit: ignore — sequenced effectful read (the plan's frontier must precede the walk), CLAUDE.md Anchor 6 exclusion
+  graph_mint_plan(start + fold(0, (acc, c) => acc + c, flat))
+  planned_stmt_walk(flat, stmts, 0, start)
+  graph_mint_seal()
+}
+
+fn planned_stmt_walk(ref counts, ref stmts, i, base) = {
+  if i >= len(stmts) { () }
+  else {
+    let count = if i < len(counts) { counts[i] } else { 0 }
+    graph_mint_at(base, base + count)
+    infer_stmt(stmts[i])
+    planned_stmt_walk(counts, stmts, i + 1, base + count)
+  }
 }
 
 // Types, effects, and handlers re-register per pass (fresh entries shadow

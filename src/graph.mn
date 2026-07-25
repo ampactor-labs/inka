@@ -200,6 +200,7 @@ handler graph_handler
   with spine = [], spine_open = 0,
        trail = [], trail_len = 0,
        epoch = 0, next = 0,
+       mint_limit = 0, mint_high = 0,
        overlay_names = ["global"],
        overlay_bufs = [[]],
        overlay_lens = [0],
@@ -274,8 +275,13 @@ handler graph_handler
   // allocation also registers in the CURRENT overlay so Arc F.7
   // (incremental compilation) can key per-module recomputation.
 
+  // A mint at a planned range's ceiling jumps to the open space above the
+  // plan and clears the limit — the decl finishes there, deterministically
+  // (decl order is). mint_limit 0 is the unlimited sequential mode (the
+  // Option-niche word: 0 = no ceiling, the slot_present precedent).
   graph_fresh_ty(reason) => {
-    let handle = next
+    let overflow = mint_limit > 0 && next >= mint_limit
+    let handle = if overflow { mint_high } else { next }
     let (sp, so) = spine_ensure(spine, spine_open, spine_band(handle))
     spine_put_node(sp, handle, GNode(NFree(epoch), reason))
     let (new_bufs, new_lens) =
@@ -287,7 +293,8 @@ handler graph_handler
     resume(handle)
       with spine = sp,
            spine_open = so,
-           next = next + 1,
+           next = handle + 1,
+           mint_limit = if overflow { 0 } else { mint_limit },
            trail = new_trail,
            trail_len = trail_len + 1,
            overlay_bufs = new_bufs,
@@ -295,7 +302,8 @@ handler graph_handler
   },
 
   graph_fresh_row(reason) => {
-    let handle = next
+    let overflow = mint_limit > 0 && next >= mint_limit
+    let handle = if overflow { mint_high } else { next }
     let (sp, so) = spine_ensure(spine, spine_open, spine_band(handle))
     spine_put_node(sp, handle, GNode(NRowFree(epoch), reason))
     let (new_bufs, new_lens) =
@@ -307,11 +315,41 @@ handler graph_handler
     resume(handle)
       with spine = sp,
            spine_open = so,
-           next = next + 1,
+           next = handle + 1,
+           mint_limit = if overflow { 0 } else { mint_limit },
            trail = new_trail,
            trail_len = trail_len + 1,
            overlay_bufs = new_bufs,
            overlay_lens = new_lens
+  },
+
+  // ─── The planned mint — the deterministic handle partition ─────────
+  // The final pass pre-assigns each stmt a dense range sized by the
+  // trial's measured counts (types.mn's op doc carries the contract).
+  // plan(top) seeds the overflow target above every planned base; each
+  // at(base, limit) raises the high-water past the range it leaves so an
+  // overflow never lands inside any planned range; seal() resumes
+  // sequential minting at the high-water mark. None of the three touch
+  // the trail: the plan is numbering, not mutation — rollback semantics
+  // ride `next` exactly as before.
+  graph_mint_plan(top) => {
+    resume()
+      with mint_high = if top > mint_high { top } else { mint_high }
+  },
+
+  graph_mint_at(base, limit) => {
+    resume()
+      with next = base,
+           mint_limit = limit,
+           mint_high = if next > mint_high { next } else { mint_high }
+  },
+
+  graph_mint_seal() => {
+    let high = if next > mint_high { next } else { mint_high }
+    resume()
+      with next = high,
+           mint_limit = 0,
+           mint_high = high
   },
 
   // Edge-link a node's body into the one graph at its handle — the program
@@ -705,14 +743,17 @@ fn merge_row(ref names, ref row) with !Mutate = {
   }
 }
 
-// The one nodes read. The nodes column is MINT-DENSE — every handle below
-// the mint bound was written at its own mint — so the bound is the entire
-// guard: a never-minted handle answers the synthesized NFree (defensive —
-// should not happen in well-formed compilation), and a live handle reads
-// its page cell unguarded.
-fn graph_node_at(ref spine, mint_bound, idx) with Memory = {
+// The one nodes read. Every minted handle's cell was written at its own
+// mint, so below the bound only PLAN GAPS are unwritten (a planned range's
+// final mints running under its trial measure — the cell stays virgin);
+// the word-face guard answers those and any never-minted defensive read
+// with the synthesized NFree, and a live handle reads its cell directly.
+fn graph_node_at(ref spine, mint_bound, idx) with Memory + Cast = {
   if idx >= mint_bound { GNode(NFree(0), Fresh(idx)) }
-  else { list_index(spine_page(spine, idx).nodes, spine_slot(idx)) }
+  else {
+    let cell = list_index(spine_page(spine, idx).nodes, spine_slot(idx))
+    if addr(cell) == 0 { GNode(NFree(0), Fresh(idx)) } else { cell }
+  }
 }
 
 // Occurs check

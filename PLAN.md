@@ -1038,6 +1038,39 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE PLANNED MINT — the deterministic handle partition
+  goes live, sequential-planned (Phase C rung 1 step C1b · pin
+  c53dd17b). The trial IS the sizing oracle: each stmt's mint count is
+  the graph_next delta around its trial inference — a fact the graph
+  already carries, read at the stmt boundary, zero instrumentation —
+  and the final pass mints each stmt into a pre-assigned dense range
+  [base, base+count), bases prefix-summed from the final's own
+  post-prepass frontier. The numbering is a pure function of the
+  source through the trial's determinism: EXACTLY what the parallel
+  fan (C1c) must reproduce, which is its byte-equality gate — landing
+  sequential-planned first splits the numbering TRANSITION from the
+  concurrency, so the fan marches as a NO-OP diff against this pin.
+  Three graph ops carry the plan (mint_plan / mint_at / mint_seal —
+  none touch the trail: the plan is numbering, not mutation); a mint
+  at a range's ceiling jumps deterministically to the open space
+  above the plan and clears the limit; an under-measure stmt leaves
+  virgin gap cells absorbed by the word-face guard on graph_node_at
+  (the C1a Cast read's second consumer). THE DESIGN CORRECTION that
+  made it this small: the banked per-decl BAND encoding (handle =
+  band<<14 | slot) died to arithmetic — sparse handle space forced
+  eager-page memory (1.8GB at decl grain), 15 range-iterator
+  migrations, and guard complexity; the landed form keeps handle
+  space DENSE and decouples the partition (a numbering plan) from
+  the storage (C1a's pages) entirely — zero iterator changes, zero
+  storage changes, ~90 lines. C1c's remaining prerequisites, named:
+  pre-open the plan's pages before the fan (spine_ensure once,
+  sequentially — cursors then write cells only, race-free by
+  construction) and the per-cursor overflow rule (requeue the decl
+  for a sequential post-join re-run — deterministic, the rare path).
+  TRANSITION m3 == m4 at 292,882 lines (the 6,586-line m2/m3 diff is
+  the planned numbering crossing one generation); census 0;
+  comment-refs 0; frontier 266/0; proof-exactness 9/9; crown 5/5;
+  micros 114/114; 5.57s median / 515MB — flat.
 - 2026-07-25 · ▶▶▶ THE PAGED SPINE — six weaves become one page record,
   and the graph stops moving (Phase C rung 1 step C1a, Law-7-inert ·
   pin 0e3af09c). The six handle-weaves (nodes, program, comments,

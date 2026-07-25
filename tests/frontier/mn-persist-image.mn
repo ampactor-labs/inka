@@ -17,7 +17,7 @@ fn build(n) = if n == 0 { [] } else { push(build(n - 1), n * n) }
 
 fn main(argv) = {
   if len(argv) > 1 {
-    let k = rehydrate("/tmp/mn-persist-image.img")
+    let k = image_resume("/tmp/mn-persist-image.img")
     let thunk = list_index(root, 0)
     if addr(thunk) == k { thunk() } else { 1 }
   } else {

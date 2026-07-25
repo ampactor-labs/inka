@@ -5,24 +5,24 @@
 // so one contiguous copy re-enters the exact address space with every
 // interior pointer valid — no serializer, no relocation, no reachability
 // walk. The emitter generates the module's own save/restore pair and build
-// key beside $alloc (emit_image_substrate); this file owns the wire and the
-// two refusal gates.
+// key beside $alloc (emit_image_substrate); this file owns the wire and
+// its gate.
 //
-// THE TWO GATES, each a refusal through Fail (the runtime policy decides;
-// fail_exit prints + exits, a test handler collects):
-//   1. THE BUILD KEY — same-build identity. The image's baked words (fn
-//      table indices, interned data offsets, static closure addresses, the
-//      globals record layout) resolve only in the build that wrote them;
-//      $build_key hashes exactly those three sources, so equal keys admit.
-//   2. THE WORLD FINGERPRINT — install-prefix correspondence. The restore
-//      happens INSIDE a perform's dynamic extent, and every enclosing
-//      dispatch bracket and install extent will, as it unwinds, write back
-//      a world value saved BEFORE the swap. Those saved words are valid in
-//      the restored image exactly when the resuming process reached its
-//      rehydrate under the SAME install prefix the persisting process had:
-//      same build + deterministic bump allocation then puts each saved
-//      chain node at the address the image expects. The name-level chain
-//      fingerprint (names + order, FNV-mixed) is that contract, checked.
+// ONE GATE — the build key, a refusal through Fail (the runtime policy
+// decides; fail_exit prints + exits, a test handler collects): the
+// image's baked words (fn table indices, interned data offsets, static
+// closure addresses, the globals record layout) resolve only in the
+// build that wrote them; $build_key hashes exactly those sources, so
+// equal keys admit. THE FINGERPRINT CONTRACT DISSOLVED (2026-07-25,
+// the resume-verb interrogation): its whole purpose was keeping the
+// post-swap UNWIND valid — every dispatch bracket writes back a world
+// saved before the swap — but image_resume calls the restore as a
+// DIRECT SUBSTRATE OP (no effect arm, no dispatch bracket), so the one
+// mid-trust-path stale write is gone; every remaining pre-swap-saved
+// write fires in the benign tail (extent-ends after the last perform),
+// and every post-swap dispatch walks the RESTORED $world_g — the world
+// is image-resident end to end. A gate that guards nothing is deleted,
+// not carried.
 //
 // Honest limits, named: host resources (open fds, the stdin position, live
 // sockets) are not in the image and do not restore — the shim re-derives
@@ -41,64 +41,58 @@ import runtime/io
 type PersistHandle = PersistHandle(Int)
 
 // persist names a continuation-shaped record (closure = continuation = one
-// record class) and writes the whole rooted image; rehydrate swaps the image
-// back in and returns that record's address — every pointer inside it valid
-// by construction. The typed re-entry channel is any root the globals record
-// restores (a top-level let the persisting process stored into); the
-// returned address is the word-face belt beside it.
+// record class) and writes the whole rooted image. The restore side is NOT
+// an effect: image_resume below calls the substrate directly — an arm-form
+// restore would put a dispatch bracket's pre-swap world write on the trust
+// path (the dissolved fingerprint contract's whole reason to exist). The
+// typed re-entry channel is any root the globals record restores (a
+// top-level let the persisting process stored into); the returned address
+// is the word-face belt beside it.
 effect Persist {
   persist(k: Int, path: String) -> ()
-  rehydrate(path: String) -> Int
   // Prototype fanout storage hooks. persist_branch checkpoints the whole
   // image before invoking the branch; results join from live handler state.
   persist_branch(thunk: () -> a) -> PersistHandle
   join_persist(branch: PersistHandle) -> a
 }
 
-// The name-level fingerprint of a world chain: walk [key@0][entry@4][parent@8]
-// nodes from `w`, hash each node's effect-key string (FNV-1a over its bytes),
-// and MIX in walk order — an exact name+order summary that survives rebuilds
-// (interned offsets do not; name bytes do). 0 = the empty world.
-fn world_fingerprint(w) with Memory = {
-  if w == 0 { 0 }
-  else {
-    let key = str_of_buf(load_i32(w))
-    let h = fingerprint_bytes(key, 0, byte_len(key), 2166136261)
-    let deeper = world_fingerprint(load_i32(w + 8))
-    (h * 16777619) + deeper
+// The restore, whole: read the wire, gate on the build key, swap the image
+// in. Every wire read lands in a local before the swap; after image_restore
+// returns, this process's pre-swap heap values are dead — the caller reads
+// its typed roots (the restored top-level lets), never its own old heap.
+fn image_resume(path) with Memory + Alloc + WASI + Fail = {
+  let wire = fs_read_file_impl(path)
+  let p = str_payload(wire)
+  if load_i32(p) != image_key() {
+    fail("persist: image key {int_to_str(load_i32(p))} is not this build ({int_to_str(image_key())})")
+  } else {
+    image_restore(p)
   }
 }
 
-fn fingerprint_bytes(s, i, n, h) with Memory = {
-  if i >= n { h }
-  else { fingerprint_bytes(s, i + 1, n, (h + byte_at(s, i)) * 16777619) }
-}
-
 // The wire, one byte-record String. Payload layout:
-//   +0   build key         (the same-build gate)
-//   +4   k                 (the named record's address in the image)
-//   +8   image size        (the heap line at the persist moment)
-//   +12  world fingerprint (the install-prefix gate)
-//   +16  globals count     ($image_restore's layout belt)
-//   +20  globals record    (8 bytes per slot; slot 0 = the heap line,
-//                           patched below to the image extent so restore
-//                           rewinds allocation to the persisted moment)
-//   +20+8G  image bytes [0, size)
+//   +0   build key      (the same-build gate)
+//   +4   k              (the named record's address in the image)
+//   +8   image size     (the heap line at the persist moment)
+//   +12  globals count  ($image_restore's layout belt)
+//   +16  globals record (8 bytes per slot; slot 0 = the heap line,
+//                        patched below to the image extent so restore
+//                        rewinds allocation to the persisted moment)
+//   +16+8G  image bytes [0, size)
 // The size reads FIRST — everything the persisting program built lies below
 // it; the wire itself allocates above and stays out of its own copy.
 fn image_pack(k) with Memory + Alloc = {
   let size = heap_mark()      // drift-audit: ignore — sequenced effectful read; MUST precede the wire's own allocation
   let gsz = globals_area()    // drift-audit: ignore — sequenced substrate read; sizes the wire and offsets the copy
-  let wire = bytes_buf(20 + gsz + size)
+  let wire = bytes_buf(16 + gsz + size)
   let p = wire + 8
   store_i32(p, image_key())
   store_i32(p + 4, k)
   store_i32(p + 8, size)
-  store_i32(p + 12, world_fingerprint(world_top()))
-  store_i32(p + 16, gsz / 8)
-  globals_save(p + 20)
-  store_i32(p + 20, size)
-  mem_copy(p + 20 + gsz, 0, size)
+  store_i32(p + 12, gsz / 8)
+  globals_save(p + 16)
+  store_i32(p + 16, size)
+  mem_copy(p + 16 + gsz, 0, size)
   str_of_buf(wire)
 }
 
@@ -127,23 +121,6 @@ handler persist_to_disk with branch_results = [] {
     resume(list_index(branch_results, idx))
   },
 
-  rehydrate(path) => {
-    // Every wire read lands in a local BEFORE the restore; after
-    // image_restore returns, this process's pre-swap heap values (wire, p,
-    // path, this arm's own install record) are dead — the arm touches none
-    // of them, and the resume is the tail. Both gates run pre-swap.
-    let wire = fs_read_file_impl(path)
-    let p = str_payload(wire)
-    let captured = load_i32(p + 12)
-    let live = world_fingerprint(world_top())
-    if load_i32(p) != image_key() {
-      fail("persist: image key {int_to_str(load_i32(p))} is not this build ({int_to_str(image_key())})")
-    } else if captured != live {
-      fail("persist: image world {int_to_str(captured)} does not correspond to live world {int_to_str(live)}")
-    } else {
-      resume(image_restore(p))
-    }
-  }
 }
 
 fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Cast + Filesystem + Persist =

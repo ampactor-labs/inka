@@ -1038,6 +1038,43 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ THE RESUME VERB + THE FINGERPRINT DISSOLUTION — the
+  image IS the process, and the interrogation deleted a gate (phase B-i
+  landing 4 · pin 99ecf00d). `mentl resume <image>` re-enters a
+  persisted compile image and emits with the SOURCE ABSENT — the
+  frontier leg deletes main.mn and the emission stays byte-identical:
+  the projection rode the image, absence is the proof. THE RESTRUCTURE
+  THAT MADE IT SOUND (the eight interrogations refusing the obvious
+  port): the resume verb under the arm-form rehydrate would have needed
+  the resuming process to replicate the persisting process's install
+  AND allocation prefix (its argv alone shifts every chain-node
+  address) — the fingerprint contract generalized to an unmeetable
+  demand. The root: an effect-arm restore puts ONE dispatch bracket's
+  pre-swap world write on the trust path. rehydrate DISSOLVED into
+  image_resume — the restore as a direct substrate call — and with it
+  every remaining pre-swap-saved world write fires in the benign tail
+  (extent-ends after the last perform) while every post-swap dispatch
+  walks the RESTORED $world_g: the world is image-resident end to end,
+  and an image is resumable from ANY same-build process, any argv, any
+  chain. The fingerprint, its walk (world_fingerprint /
+  fingerprint_bytes), its wire field, and the morning's own
+  install-prefix-correspondence law are DELETED — superseded by
+  structure, not softened (the ⚖ alive-law: the measurement that
+  binds rewrites the law in place; this morning's landing-1 entry
+  reads as the era's record). The wire is [key][k][size][gcount]
+  [globals][image]; the corruption legs pin both remaining guards RED
+  (build-key refusal naming both keys; corrupt-gcount tripping
+  $image_restore's layout belt). compile_remainder is the ONE home for
+  the projection half — cold, warm, and resume all run exactly it (the
+  three routes cannot drift); the verb rides the VerbSpec table with
+  its own raw-path builder (an image is a file, never a module). The
+  convergence loop en route: the sharper judgments named
+  driver_compile_entry's missing Fail/WASI and image_resume's
+  Filesystem-vs-WASI truth (the _impl substrate face, the persist
+  policy layer's own convention) — census 0 → 1 → 0 twice, the ratchet
+  refusing each intermediate. CLEAN m2 == m3 at 330,542 lines; census
+  0; frontier 263/0 (nine persist/warm/resume legs); proof-exactness
+  9/9; crown 5/5; micros 114/114.
 - 2026-07-25 · ▶▶▶ THE WARM START — the compile restores its own analyzed
   image (phase B-i landing 2 · pin 28eb3444). driver_compile_entry keys
   the weave (every DAG module's text hashed in canonical order — the

@@ -122,11 +122,11 @@ fn compile(entry_module) = {
       // the entry's already-typed AST — compile lowers that live graph, no
       // second fs_read / frontend / infer_program (Carried-Truth: the entry
       // is proven once and read live, never re-derived).
-      entry_module |> driver_compile_entry |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module
+      entry_module |> driver_compile_entry |> compile_remainder
     }
       ~> wat_stdout
       ~> persist_to_disk       // the warm-start cache (driver_compile_entry)
-      ~> fail_exit             // rehydrate's refusal policy (probe-guarded)
+      ~> fail_exit             // image_resume's refusal policy (probe-guarded)
       ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache
       ~> string_table          // W5 — compile-time interned string offsets
       ~> emit_memory_bump      // swap for emit_memory_arena to prove surface
@@ -417,9 +417,43 @@ fn report_holes(holes, i) =
     report_holes(holes, i + 1)
   }
 
+// The compile's projection half — everything after the analyzed graph.
+// ONE home: the cold path, the warm path, and the resume verb all run
+// exactly this remainder over their ast (the persisted image's typed
+// root included), so the three routes cannot drift.
+fn compile_remainder(ast) =
+  ast |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module
+
+// `mentl resume <img>` — the image IS the process: swap it in and run
+// the compile remainder over the restored typed root, the source not
+// required to exist (the projection rode the image — the absence is the
+// proof). The chain mirrors compile's: the pre-swap fs/fail ops resolve
+// through it, the executable gate's static demands ground in it, and
+// every post-swap dispatch walks the RESTORED world regardless.
+fn resume_image(img_path) = {
+  infer_context(() =>
+    {
+      eprint_string("warm: restoring the persisted image\n")
+      image_resume(img_path)
+      compile_remainder(list_index(warm_root, 0))
+    }
+      ~> wat_stdout
+      ~> persist_to_disk
+      ~> fail_exit
+      ~> wasi_filesystem
+      ~> string_table
+      ~> emit_memory_bump
+      ~> body_context
+      ~> mentl_default
+      ~> lower_scope
+      ~> arm_state_ctx([], OneShot, "")
+      ~> spec_registry
+  )
+}
+
 fn compile_stdin() = {
   infer_context(() =>
-    { read_stdin() |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main |> executable_gate |> emit_module }
+    { read_stdin() |> frontend |> infer_program |> compile_remainder }
       ~> wat_stdout
       ~> wasi_filesystem
       ~> string_table
@@ -471,10 +505,7 @@ fn compile_source(source) = {
     source
       |> frontend
       |> infer_program
-      |> lower_program
-      |> reachable_from_main
-      |> executable_gate
-      |> emit_module
+      |> compile_remainder
       ~> wat_stdout
       ~> string_table
       ~> emit_memory_bump

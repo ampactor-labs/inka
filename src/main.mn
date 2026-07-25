@@ -95,6 +95,7 @@ type EntryVerb
   | VTighten(Option(String))
   | VFmt(String)
   | VCompile(String)                 // target REQUIRED — carried non-optionally
+  | VResume(String)                  // a persisted image path — the file IS the argument
   | VCompileStdin
   | VRun(String)
   | VCheck(String)
@@ -143,6 +144,7 @@ fn verb_specs() with Memory + Alloc = [
   VerbSpec("run",     "<path>",            (a) => req_target(a, (t) => VRun(t),     "run needs a target: mentl run <path>"),          "compile, prove, execute (a hole or refuted claim REFUSES)"),
   VerbSpec("check",   "<path>",            (a) => req_target(a, (t) => VCheck(t),   "check needs a target: mentl check <path>"),      "diagnostics only, no emit"),
   VerbSpec("compile", "<path>",            (a) => req_target(a, (t) => VCompile(t), "compile needs a target: mentl compile <path>"),  "emit WAT to stdout"),
+  VerbSpec("resume",  "<image>",           (a) => if len(a) >= 3 { Invocation(VResume(a[2])) } else { ParseError("resume needs an image: mentl resume <image>") }, "re-enter a persisted image; the source need not exist"),
   VerbSpec("edit",    "[path]",            (a) => Invocation(VEdit(optional_target(a, 2))),                                           "the cursor session (eight aspects + proven proposals)"),
   VerbSpec("audit",   "<path>",            (a) => req_target(a, (t) => VAudit(t),   "audit needs a target: mentl audit <path>"),      "the capability set + severance unlocks"),
   VerbSpec("query",   "<path> <question>", (a) => if len(a) >= 4 { Invocation(VQuery(path_to_module(a[2]), a[3])) } else { ParseError("query needs a target and a question: mentl query <path> <question>") }, "why / type / effects / ownership, walked to your words"),
@@ -320,6 +322,7 @@ fn dispatch_invocation(verb) = {
       VTighten(target)     => tighten_run(target),
       VFmt(target)         => fmt_run(target),
       VCompile(target)     => compile_run(target),
+      VResume(img)         => resume_run(img),
       VCompileStdin        =>
         // The bare invocation forks on the ONE substrate fact that
         // distinguishes intent: fd 0's filetype. A pipe or file IS the
@@ -820,6 +823,18 @@ fn doc_project(entry_module) = {
 
 fn compile_run(target) = {
   compile(target)
+    ~> wat_stdout
+    ~> wasi_filesystem
+    ~> no_iter_context
+    ~> diagnostics_handler
+    ~> graph_handler
+    ~> mutate_sink
+}
+
+// `mentl resume <image>` — the compile projection re-entered from a
+// persisted image (pipeline.mn resume_image); same outer belt as compile.
+fn resume_run(img) = {
+  resume_image(img)
     ~> wat_stdout
     ~> wasi_filesystem
     ~> no_iter_context

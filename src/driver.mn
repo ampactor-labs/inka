@@ -331,9 +331,9 @@ fn count_lines_from(ref s, n, i, acc) with Memory = {
 // build; the next compile of the same weave RESTORES it and lowers the
 // live graph — frontend and inference skipped whole (§4④: the cross-run
 // module skip IS image-persist, never a second serializer). The probe
-// pre-checks BOTH wire gates (build key, world fingerprint) so a stale
-// or foreign cache falls back to the cold path instead of refusing;
-// rehydrate's own gates stay as the trap beneath. warm_root is the typed
+// pre-checks the build key so a stale or foreign cache falls back to
+// the cold path instead of refusing; image_resume's own gate stays as
+// the trap beneath. warm_root is the typed
 // re-entry: the globals record restores the let, whose cell hands back
 // the persisted run's typed AST (the persist-image fixture's proven
 // pattern — no up-cast exists on the path). Only a CLEAN analysis
@@ -356,20 +356,19 @@ fn driver_weave_key(ref entry_module) with Memory + Alloc + Filesystem = {
 fn driver_warm_ready(path) with Memory + Alloc + Filesystem = {
   if fs_exists(path) {
     let wire = fs_read_file(path)
-    if byte_len(wire) >= 20 {
+    if byte_len(wire) >= 16 {
       let p = str_payload(wire)
       load_i32(p) == image_key()
-        && load_i32(p + 12) == world_fingerprint(world_top())
     } else { false }
   } else { false }
 }
 
 fn driver_compile_entry(ref entry_module)
-  with Memory + Alloc + Cast + Persist + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   let path = ".build/warm-compile-{int_to_str(driver_weave_key(entry_module))}.img"
   if driver_warm_ready(path) {
     eprint_string("warm: restoring the analyzed image\n")
-    rehydrate(path)
+    image_resume(path)
     list_index(warm_root, 0)
   } else {
     let (ast, _ranges) = driver_entry_with_ranges(entry_module)

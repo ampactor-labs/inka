@@ -303,9 +303,12 @@ run_program() {
 
 # The rooted-image persist gate: one compile, one assemble, TWO processes of
 # the same wasm against one guest /tmp. Leg A writes the wire (exit 40); leg
-# B rehydrates and resumes A's continuation-shaped record through the
-# restored image (exit 42). A per-gate dir maps as the guest's /tmp so the
-# legs share the wire without touching the host's shared /tmp.
+# B swaps A's image in (image_resume — the direct-substrate restore) and
+# runs A's continuation-shaped record against A's heap (exit 42). A
+# per-gate dir maps as the guest's /tmp so the legs share the wire without
+# touching the host's shared /tmp. Two corruption legs see the gates RED:
+# a flipped build key refuses through fail with both keys named; a flipped
+# globals count trips $image_restore's layout belt (the structural trap).
 run_persist_image() {
   local compiler="$1" dir="$2" label="persist-image"
   local src="$ROOT/tests/frontier/mn-persist-image.mn"
@@ -344,6 +347,33 @@ run_persist_image() {
     pass "$label leg-b resume (exit=42 — a fresh process re-entered the image)"
   else
     fail "$label leg-b resume (exit=$rc expected=42; see $dir/$label.b.err)"
+    return
+  fi
+  cp "$pdir/mn-persist-image.img" "$pdir/good.img"
+  python3 - "$pdir/mn-persist-image.img" <<'PY'
+import sys
+p = sys.argv[1]; b = bytearray(open(p,'rb').read()); b[0] ^= 0xFF
+open(p,'wb').write(bytes(b))
+PY
+  wt_run --dir "$pdir::/tmp" "$wasm" resume > "$dir/$label.k.out" 2>&1
+  rc=$?
+  if [ "$rc" -ne 0 ] && grep -q 'is not this build' "$dir/$label.k.out"; then
+    pass "$label corrupt-key refusal (exit=$rc, both keys named)"
+  else
+    fail "$label corrupt-key admitted (exit=$rc; see $dir/$label.k.out)"
+  fi
+  cp "$pdir/good.img" "$pdir/mn-persist-image.img"
+  python3 - "$pdir/mn-persist-image.img" <<'PY'
+import sys
+p = sys.argv[1]; b = bytearray(open(p,'rb').read()); b[12] ^= 0xFF
+open(p,'wb').write(bytes(b))
+PY
+  wt_run --dir "$pdir::/tmp" "$wasm" resume > "$dir/$label.g.out" 2>&1
+  rc=$?
+  if [ "$rc" -ne 0 ] && [ "$rc" -ne 42 ]; then
+    pass "$label corrupt-gcount belt (exit=$rc — the layout trap fired)"
+  else
+    fail "$label corrupt-gcount admitted (exit=$rc; see $dir/$label.g.out)"
   fi
 }
 
@@ -384,6 +414,24 @@ run_warm_start() {
     pass "$label warm compile (byte-identical emission off the restored image)"
   else
     fail "$label warm emission diverges (diff $dir/$label.1.wat $dir/$label.2.wat)"
+    return
+  fi
+  # Leg 3 — the resume verb with the SOURCE ABSENT: the projection rode the
+  # image, so deleting main.mn and resuming the .img must emit the same WAT.
+  local img
+  img=$(ls "$wdir/.build"/warm-compile-*.img 2>/dev/null | head -1)
+  command rm -f "$wdir/main.mn"
+  wt_run --dir "$wdir::." --dir "$ROOT::/mentl-home" "$compiler" resume ".build/$(basename "$img")" \
+    > "$dir/$label.3.wat" 2> "$dir/$label.3.err"
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    fail "$label resume verb (exit=$rc; see $dir/$label.3.err)"
+    return
+  fi
+  if cmp -s "$dir/$label.1.wat" "$dir/$label.3.wat"; then
+    pass "$label resume with the source ABSENT (byte-identical — the projection rode the image)"
+  else
+    fail "$label resume emission diverges (diff $dir/$label.1.wat $dir/$label.3.wat)"
   fi
 }
 

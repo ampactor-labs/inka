@@ -64,6 +64,21 @@ fn str_eq(a, b) -> Bool with Memory =
   if la != lb { false }
   else { str_eq_loop(a, b, la, 0) }
 
+// str_eq_at — a[0..len(a)) == src[s..e) without minting the slice: the
+// intern probe's compare (a canonical instance against a source range).
+// Same byte walk as str_eq; the range spelling is what lets a repeat
+// identifier occurrence resolve with zero allocation.
+fn str_eq_at(a, src, s, e) -> Bool with Memory = {
+  let n = byte_len(a)
+  if n != e - s { false }
+  else { str_eq_at_loop(a, src, s, 0, n) }
+}
+
+fn str_eq_at_loop(a, src, s, i, n) -> Bool with Memory =
+  if i >= n { true }
+  else if byte_at(a, i) != byte_at(src, s + i) { false }
+  else { str_eq_at_loop(a, src, s, i + 1, n) }
+
 fn str_lt_loop(a, b, la, lb, i) -> Bool with Memory =
   if i >= la && i >= lb { false }
   else if i >= la { true }

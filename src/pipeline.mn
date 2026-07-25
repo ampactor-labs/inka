@@ -54,6 +54,9 @@ import oracle
 // its single instantiation; every inference-reaching chain installs the
 // bracket), inner to outer:
 //
+//   intern_table — the lex-name intern, the innermost leaf: pure state
+//     over intern_span, reading no other core state; lex runs inside
+//     every chain's bracket, so every identifier resolves through it.
 //   affine_ledger / region_tracker / verify_ledger — the analysis
 //     ledgers, innermost: arms are pure state over the ops inference
 //     performs (consume/borrow, region tags, proof debt).
@@ -95,6 +98,7 @@ import oracle
 
 fn infer_context(body) = {
   body()
+    ~> intern_table
     ~> affine_ledger
     ~> region_tracker
     ~> verify_ledger
@@ -713,6 +717,40 @@ fn env_resolve_ctor(ref buf, count, ref idx, name: String) with Memory = {
   else {
     let (_, scheme, reason, kind) = list_index(buf, pos)
     Some((scheme, reason, kind))
+  }
+}
+
+// ── The lex-name intern — intern_table (§5.O layer 1) ───────────────────────
+// One row per unique identifier: (canonical String, handle, keyword kind).
+// The canonical instance is materialized FLAT once at first sight and every
+// repeat occurrence returns the SAME pointer through a hash probe — zero
+// allocation, zero keyword compares (the row carries the classification the
+// old per-occurrence keyword chain re-derived ~1e5 times). str_hash_loop over
+// the source range IS the hash (no slice minted to hash); str_eq_at is the
+// range compare. Handle 0 reserved = absent; count starts at 1.
+fn intern_probe(ref bucket, ref src, s, e, i, n) with Memory =
+  if i >= n { None }
+  else {
+    let row = list_index(bucket, i)
+    let (canonical, _h, _kw) = row
+    if str_eq_at(canonical, src, s, e) { Some(row) }
+    else { intern_probe(bucket, src, s, e, i + 1, n) }
+  }
+
+handler intern_table with buckets = list_filled(4096, []), count = 1 {
+  intern_span(src, s, e) => {
+    let b = i32_and(str_hash_loop(src, s, e, 2166136261), 4095)
+    let bucket = list_index(buckets, b)
+    match intern_probe(bucket, src, s, e, 0, len(bucket)) {
+      Some(row) => resume(row),
+      None => {
+        let canonical = list_to_flat(str_slice(src, s, e))
+        let row = (canonical, count, keyword_kind(canonical))
+        resume(row)
+          with buckets = list_set(buckets, b, [row] ++ bucket),
+               count = count + 1
+      }
+    }
   }
 }
 

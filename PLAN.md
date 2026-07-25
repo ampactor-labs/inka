@@ -1038,6 +1038,36 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶▶ THE INTERN SUBSTRATE — a name is born once (A.2, the
+  phase-A spine · pin 66e097e9). effect Intern { intern_span } +
+  intern_table land as the analysis core's innermost handler (every
+  chain's lex runs inside the bracket): one row per unique identifier
+  — (canonical String, handle, keyword kind) — hashed over the source
+  RANGE, compared by the new str_eq_at, keyword-classified ONCE at
+  first sight; a repeat occurrence returns the SAME String pointer
+  with its banked kind — zero allocation, zero keyword compares (the
+  row-carries-kind form beats the refuter's 18-i32.eq floor: no
+  per-occurrence compare at all). The planned declared-row sweep never
+  fired — the frontend chain's rows are all inferred, so Intern flowed
+  to the bracket's absorption with ZERO census errors on first
+  compile. THE MARCH RULED TRANSITION (592 lines) AND THE ARBITRATION
+  FOUND A HEAL, NOT A LEAK (the refuter's Law-7 expectation was wrong
+  in premise, and its own accident-class warning was the mechanism):
+  the capture walk's dedup (set_contains, lower.mn:5009) compares
+  names WITHOUT a String proof — pointer identity — so boot's
+  per-occurrence slices double-captured twice-mentioned free names
+  (index_of's search captured sublen TWICE; counted in the m2 WAT, 2
+  reads vs m3's 1); canonical instances make that dedup byte-accurate
+  and 36 wheel fns' closure records shrink. Named forward: canonicity
+  MASKS the identity-sensitive compare class within a lex session —
+  an accident-invariant, not a fix; a runtime-constructed name still
+  pointer-misses. A.6's Int handle is the contract; the by-name-leaf
+  census instrument rides it. MEASURED: 6.42s → ~6.0s; str_eq 5.85%
+  → 4.0%; intern machinery below the profile floor; m3 == m4,
+  census 0 at every generation, board whole at the pin. Self-build
+  delta: the medium refused nothing and named nothing this landing
+  because there was nothing to name — the armed classes and the
+  fixpoint arbitration did the reviewing a human would have.
 - 2026-07-24 · THE STALE-BUCKET FALLBACK WAS THE SCAN — env_find_flat
   DELETED whole (phase A's fourth strike · pin 3d2b029c). The comment
   called the stale-bucket case rare; the profile priced it at 5.85% —

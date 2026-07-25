@@ -1337,6 +1337,19 @@ effect EnvWrite {
   env_scope_exit() -> ()
 }
 
+// The lex-name intern (§5.O layer 1) — an identifier's canonical String
+// instance, handle, and keyword classification, resolved ONCE per unique
+// name. lex_from performs it at every identifier; a repeat occurrence is a
+// hash probe returning the SAME String pointer — zero allocation, zero
+// keyword compares (the row carries the kind, classified at first sight).
+// Handle 0 is reserved = absent; handles are per-install and never cross
+// an analysis bracket (a nested infer_context minting its own table is the
+// isolation the session-weave contract demands at the name layer). Handled
+// by intern_table (pipeline.mn), innermost in the analysis core.
+effect Intern {
+  intern_span(String, Int, Int) -> (String, Int, Option(TokenKind))
+}
+
 // The Read/Write split IS the "one writer" invariant. Inference
 // declares both; lowering, query, display declare Read only.
 // A perform graph_bind in a read-only handler is a type error at

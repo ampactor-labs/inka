@@ -4217,7 +4217,13 @@ WAT for archaeology. `wasm-interp` CANNOT run m2 (no WASI — fails on the
     one command). And ask of every fix's diff: does it delete? Elegance is the
     axis fluency fakes best; a line count is not — a net-positive "less code"
     fix must say why in its commit (the `++` row fix claimed a deletion while
-    adding 43 lines; the flurry plan caught it).
+    adding 43 lines; the flurry plan caught it). The gate's OTHER face: a
+    banked expectation is a HYPOTHESIS about the era that banked it — when a
+    correct fix flips old gates RED, re-derive each truth by hand before
+    re-banking, because the old value may be the bug canonized (2026-07-25:
+    nine payload-ladder micros banked the wrong-slot alpha read as their
+    expected values; one of them had carried "Expected value when fixed: 2"
+    in its own comment since birth).
 
 **Bug classes that cost hours:** `match … with _` masking type errors · dup
 top-level fn names (emitter picks one silently) · flat-array ops in Snoc paths
@@ -4272,20 +4278,24 @@ table idx 0, so "prints WAT mid-inference" can mean "the parser ate my arm").
 
 ## §11 · THE PRODUCTION BAR — everything before Mentl is production-ready
 
-**THE CAMPAIGN ORDER (2026-07-24, Morgan-approved; the working mirror is
-`~/.claude/plans/wait-i-thought-mentl-lively-wren.md` and THIS section is
-its one durable home — every landing updates both or the mirror is stale).**
+**THE CAMPAIGN ORDER (2026-07-24, Morgan-approved; consolidated
+2026-07-25 — THIS section is the ONE home. The former working mirror at
+`~/.claude/plans/wait-i-thought-mentl-lively-wren.md` is RETIRED to
+archaeology: two homes for one campaign was the side-ledger pattern the
+three-doc contract forbids, and the global read-path already declares
+`~/.claude/plans/*` out of it. Landed arcs live in the §7 ledger;
+unlanded designs live here or in the named-residue index; nothing lives
+only in the mirror.)**
 The whole laptop-reachable remainder, sequenced by a 3-agent-refuted
 dependency spine, generative (each landing cashes out in the fused
 gradient loop AND in self-build) rather than columnar:
 **A** identity (intern-at-lex; crown positive residual dies; indexed-map
 primitive; instantiate-sharing; TString→alias; seq-addr-downcast; synth
-vocabulary) — **LANDED 2026-07-24 except the TString alias** (eight pins,
-boot 394917cf; the §7 ledger carries each: the perf strikes 15.56s→6.4s,
-the intern substrate, EffName-as-handle with the crown residual closed by
-construction, check-then-build sharing after the flag-tuple kill, the
-Cast vocabulary; TString→alias is the one open arc, gated on a fresh
-adversarial mint-enumeration pass with the string battery as oracle) →
+vocabulary) — **LANDED whole 2026-07-24** (nine pins; the §7 ledger
+carries each: the perf strikes 15.56s→6.4s, the intern substrate,
+EffName-as-handle with the crown residual closed by construction,
+check-then-build sharing, the Cast vocabulary, and the TString
+dissolution completing phase A at pin 5673c47c) →
 **B-i** TIME (persist=cache=fork on the rooted image;
 module-image cache; IC + incremental march; session-as-value) ∥ **B-ii**
 the arena (then the two genuinely-gated un-reverts) → **C** SPACE (R6
@@ -4302,6 +4312,39 @@ PC-label-on-world; Verify inward, e-graph-EUF before SMT) → **F** native
 trusting-trust). Excluded by hardware only: MI300X/GPU-device/hosted-CI/
 wasmFX/shared-everything-threads. Every dispatched agent runs `fable`,
 passed explicitly; every landing re-derived on main; the board is the gate.
+
+**CAMPAIGN STATE (2026-07-25).** A, B-i, B-ii: LANDED whole (the §7
+ledger). C rung 0 (the fork triple) and rung 1 through C1c-2's substrate:
+LANDED — the paged spine, the planned mint, the layer-ordered final, the
+cursor config, the env view, the page pre-open (six pins, 0e3af09c →
+3a53f775). The field-access cluster landed as an audit-driven interleave
+(pins f0ab3177 + 723220b3 — the last known silent-wrong class closed).
+C1c-2's REMAINDER, design complete: THE BRANCH BRACKET — per-stmt cursor
+composition over shared state, every branch-local mutable fact (diags,
+env publishes, affine consumes, verify debt) returned as a DELTA replayed
+into the root in stmt order at the join; proven BYTE-IDENTICAL
+sequentially against the layer walk before any thread runs it — then THE
+FAN: K spawned cursors over a shared CAS counter (numbering pre-assigned
+by the plan, deltas replayed in stmt order, so output is
+schedule-independent; the wheel-as-spawning-module memory flip is a
+TRANSITION). The branch bracket is the fused oracle's own substrate: the
+compile-spine fan and the synth candidate fan are ONE machinery, two
+workloads. THE DEBT HIERARCHY (trued 2026-07-25 against §5's
+trustworthiness conjunction — the silent-wrong classes were the FLOOR'S
+debt, not the whole): (1) the correctness oracle is still EXTERNAL
+(micros/battery judge the medium; correctness-oracle-internal + DDC are
+the deepest !Outside residue, gated on native); (2) the modal crown (band
+A/E — the open theoretical differentiator); (3) the gradient as the daily
+instrument (phase D — the ranker is gates×proximity, not yet the
+Reason-chain local-intent read). RANKED RESIDUE QUEUE:
+type-decl-name-registry (silent tag-merge; SchemeKind representation
+change) · Hβ.lower.arm-payload-specialization (the spec-twin machinery at
+handler arms closing the op-payload residual; six micros bank the honest
+134 floor awaiting it) · overlay_register_at dissolution (the planned
+ranges make per-mint overlay writes a range projection) · handler-config
+defaults (the parameter-product law at handler decls; probed unparsed
+2026-07-25) · the fmt SUMMIT (770 E_RedundantBraces) ·
+E_EffectMismatch arming (licence-gated).
 
 **One bar, both audiences** (decided with Morgan 2026-07-16): the external
 early adopter who clones, installs, and ships a wasm artifact from an

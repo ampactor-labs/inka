@@ -114,6 +114,10 @@
 >   The first symptom is rarely the ground; keep digging until it cannot reduce.
 > - **Verify every claim with a tool before asserting.** Session-memory and prose
 >   drift; the artifact is truth ("X is the cause" is a claim until a trace shows it).
+>   The number form of this law: NEVER write a digest, count, or measurement you
+>   did not read from the artifact THIS turn — a sha tail completed from memory is
+>   a fabrication (caught live 2026-07-25 at the mandatory re-read, before it
+>   reached PROVENANCE).
 > - **A "choice" between the ultimate form and a safer/lower-risk hedge is the
 >   drift.** The ultimate form wins; risk is paid by doing it right; you never
 >   hedge the wheel against the seed (that is shaping the wheel around its
@@ -184,6 +188,17 @@
 > refuted by the binary; the bug WAS the re-derivation, exactly as the law says.
 > Verify against the artifact — a rigorous-looking claim is a claim until a tool
 > shows it.)
+>
+> **A just-built ultimate form that FAILS is the instrument finding the next
+> non-ultimate fundamental — never panic, never retreat from the form**
+> (Morgan's cut, 2026-07-25, proven the same day twice: the paged spine's
+> first trap named the open-record offset class; the judge's 12-site refusal
+> of the nominal fix named the TName-vs-row unify gap; ascending that chain
+> closed the last known silent-wrong class). The wall the form hits belongs
+> to something ELSE — fix THAT, keep the form. And a workaround taken TWICE
+> for one class is the census signal at the design layer: the second
+> workaround is the STOP; root-fix the mechanism (this session worked around
+> the offset class twice before the audit charge surfaced it).
 
 ## ⊘ Report, don't perform ⊘
 

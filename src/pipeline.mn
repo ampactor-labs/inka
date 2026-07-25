@@ -108,7 +108,7 @@ fn infer_context(body) = {
     ~> region_tracker
     ~> verify_ledger
     ~> lookup_ty_graph
-    ~> env_handler
+    ~> env_handler(make_list(0), 0, env_index_new())
     ~> graph_handler([], 0, 0, 0)
     ~> mutate_sink
     ~> diagnostics_handler
@@ -840,24 +840,45 @@ handler intern_table with buckets = list_filled(4096, []), entries = make_list(1
   intern_name_of(h) => resume(list_index(entries, h))
 }
 
-handler env_handler with entries_buf = make_list(1024), entries_count = 0, scopes = [], index = env_index_new() {
+// Config: a BRANCH CURSOR (the parallel fan's per-thread instance) installs
+// over the root's SHARED entries as a read-only BASE — its own extends land
+// in a fresh private buffer that dies at the join (publishes re-apply
+// through the root, in stmt order). The root installs pass the empty base,
+// so every resolve is one level exactly as before; a branch resolve tries
+// its private level first, then the base.
+handler env_handler(base_buf, base_count, base_index)
+  with entries_buf = make_list(1024), entries_count = 0, scopes = [], index = env_index_new() {
 
   env_lookup(name) =>
-    resume(env_resolve(entries_buf, entries_count, index, name)),
+    resume(match env_resolve(entries_buf, entries_count, index, name) {
+      None  => env_resolve(base_buf, base_count, base_index, name),
+      found => found
+    }),
 
   env_lookup_type(name) =>
-    resume(env_resolve_type(entries_buf, entries_count, index, name)),
+    resume(match env_resolve_type(entries_buf, entries_count, index, name) {
+      None  => env_resolve_type(base_buf, base_count, base_index, name),
+      found => found
+    }),
 
   env_lookup_ctor(name) =>
-    resume(env_resolve_ctor(entries_buf, entries_count, index, name)),
+    resume(match env_resolve_ctor(entries_buf, entries_count, index, name) {
+      None  => env_resolve_ctor(base_buf, base_count, base_index, name),
+      found => found
+    }),
 
   env_lookup_variants(name) =>
-    resume(env_resolve_variants(entries_buf, entries_count, index, name)),
+    resume(match env_resolve_variants(entries_buf, entries_count, index, name) {
+      None  => env_resolve_variants(base_buf, base_count, base_index, name),
+      found => found
+    }),
 
   env_snapshot() =>
     // Snapshots copy the live prefix — rare (module boundaries), and a
     // snapshot that aliased the mutable buffer would be the stale-read lie.
-    resume(Env(slice(entries_buf, 0, entries_count))),
+    // A branch's snapshot is base-then-private in resolution order's
+    // reverse: the private prefix appended after the base view.
+    resume(Env(slice(base_buf, 0, base_count) ++ slice(entries_buf, 0, entries_count))),
 
   env_extend(name, scheme, reason, kind) => {
     let grown =

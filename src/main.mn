@@ -346,7 +346,7 @@ fn dispatch_invocation(verb) = {
       VWelcome             => welcome_run()
     }
   }
-    ~> env_handler
+    ~> env_handler(make_list(0), 0, env_index_new())
     ~> graph_handler([], 0, 0, 0)
     ~> mutate_sink
     ~> diagnostics_handler

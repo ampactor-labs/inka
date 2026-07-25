@@ -1038,6 +1038,20 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · THE ENV VIEW — the branch cursor's second leg lands
+  Law-7-inert (Phase C rung 1 step C1c-2b · pin d8c42e3a).
+  env_handler gains the base triple (base_buf, base_count,
+  base_index): a branch installs over the root's shared entries as a
+  read-only BASE — its extends land in a fresh private buffer that
+  dies at the join, publishes re-applied through the root in stmt
+  order — while the root passes the empty base, so root resolves stay
+  one-level. The four lookup arms compose the EXISTING env_resolve
+  family as private-then-base Option fallbacks (zero new resolve
+  machinery); a branch snapshot appends the private prefix to the
+  base view. CLEAN m2 == m3 at 294,988 lines; board whole. Remaining
+  C1c-2 rungs: the collecting diag branch instance, page pre-open at
+  graph_mint_plan, the branch bracket proven byte-identical
+  SEQUENTIALLY, then the fan.
 - 2026-07-25 · THE CURSOR CONFIG — the branch-cursor substrate lands
   Law-7-inert (Phase C rung 1 step C1c-2a · pin 3f4262bc).
   graph_handler gains config (spine0, spine_open0, next0, limit0): a

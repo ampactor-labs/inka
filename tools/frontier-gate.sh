@@ -1294,6 +1294,14 @@ for i in "${!compilers[@]}"; do
   run_lsp_hover "$compiler" "$dir" lsp
   run_program "$compiler" handler-forward-ref \
     "$ROOT/tests/frontier/mn-handler-forward-ref.mn" 42 no "$dir"
+  # Handler-config defaults — the parameter product at the handler decl
+  # (SYNTAX §«Default parameter values»). Seen RED on the pre-fix boot:
+  # `handler give(k = 7)` refused at parse (expected `)`, found `=`; exit 1,
+  # zero WAT). The four faces discriminate: bare install fills from the decl
+  # default, explicit fills the slot, omitting parens fills all, a labeled
+  # arg skips over — 8+16+6+12 = 42.
+  run_program "$compiler" handler-config-default \
+    "$ROOT/tests/frontier/mn-handler-config-default.mn" 42 no "$dir"
 
   # ── the world-as-value gates (R2: the perform reads the live chain) ──
   # Seen RED on the pre-world boots: thunk 134 (mint-time evidence miss to

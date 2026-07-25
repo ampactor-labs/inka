@@ -417,7 +417,7 @@ type SchemeKind
   | EffectOpScheme(String, String, Bool, ResumeDiscipline)   // tag 2 — (effect_name, default_handler, ambiguous, resume cardinality — the join over handlers' arm grades)
   | RecordSchemeKind([(String, Ty)])             // tag 3 — [(field_name, ty)]
   | EffectDeclKind([String])                     // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
-  | HandlerKind(Int, [String], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])   // tag 6 — (residual_row_handle, config param names, state fields, arms). Typed payloads: a bare List here erased the element types the consumers prove (the 581a92f class), and the pattern-constraint unification surfaces the conflict as E_TypeMismatch at every destructure.
+  | HandlerKind(Int, [TParam], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])   // tag 6 — (residual_row_handle, config params [the fn-param carrier: name + default ride the TParam, names project via lower_param_names], state fields, arms). Typed payloads: a bare List here erased the element types the consumers prove (the 581a92f class), and the pattern-constraint unification surfaces the conflict as E_TypeMismatch at every destructure.
   | ParamScheme(Ownership)                       // tag 7 — parameter binding carries authored ownership at the env edge
   | TypeVariants([(TagId, String, [Ty])])        // tag 8 — the TYPE's own entry: (tag, ctor name, payload tys) per variant, minted at registration where the list is in hand — the variant_specs whole-env scan family's cure
   // HandlerKind (tag 6) is the full handler-effect type AND the handler's
@@ -1186,9 +1186,13 @@ type Stmt
                            // effect name, ops (each is (op_name, param_tys, ret_ty);
                            // ResumeDiscipline is inferred at handler-decl time
                            // from each arm body, not declared on the effect op)
-  | HandlerDeclStmt(String, String, [String], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])
+  | HandlerDeclStmt(String, String, [TParam], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])
                            // handler name, effect name, config-params, state-fields, arms
-                           // config: [String] — closure-captured at install site
+                           // config: [TParam] — the fn-param carrier (SYNTAX §«Handler
+                           //   declarations»: the config list IS a parameter product, so
+                           //   each param carries the product's default slot); values are
+                           //   closure-captured at install site, absent fields fill from
+                           //   param_default through resolve_call_args
                            // state:  List<{name: String, init: Node}> — per-arm scope; updates via `resume(...) with f = e`
                            // The state element type is CARRIED in the ADT field
                            // (not bare `List`) so `.name`/`.init` resolve to sorted

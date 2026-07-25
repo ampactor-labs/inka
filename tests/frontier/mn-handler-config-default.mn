@@ -1,0 +1,33 @@
+// Handler-config DEFAULT values — the parameter-product law at the handler
+// decl (SYNTAX §«Handler declarations» + §«Default parameter values»: the
+// config list IS a parameter product, and a product field carries a
+// default). RED on the pre-fix boot: `handler give(k = 7)` refused at parse
+// (P_ExpectedToken "expected `)`, found `=`" at the config `=`, cascading
+// to E_MissingVariable on every config read; exit 1, zero WAT) — the
+// measured lathe-lag that forced nine wheel install sites to carry their
+// root defaults explicitly. The default rides the TParam's fifth slot (the
+// ONE representation fns already use) and fills through resolve_call_args
+// (the ONE product read infer and lower share); a bare `~> h` install is
+// the zero-arg product, every field drawn from its decl default, typed at
+// the decl in the handler's own parameter scope. Four faces, each
+// discriminating: bare-fill 8, explicit 16, omitting-parens 6, labeled
+// skip-over 12 — a garbage config word, a dropped label, or a missed fill
+// each break the 42.
+effect Ask { ask() -> Int }
+effect Mul { mul() -> Int }
+
+handler give(k = 7) with bonus = 1 {
+  ask() => resume(k + bonus)
+}
+
+handler times(base = 3, factor = 2) {
+  mul() => resume(base * factor)
+}
+
+fn main() = {
+  let a = { ask() } ~> give               // bare install: k defaults to 7 → 8
+  let b = { ask() } ~> give(15)           // explicit arg fills k → 16
+  let c = { mul() } ~> times()            // omitting parens: both default → 6
+  let d = { mul() } ~> times(factor = 4)  // label skips base's slot → 12
+  a + b + c + d
+}

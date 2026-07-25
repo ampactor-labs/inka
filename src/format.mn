@@ -624,9 +624,25 @@ fn render_effect_ops(ref ops, i) with GraphRead + Memory + Alloc + !Mutate + Int
   }
 }
 
-fn render_config_params(ref config) with Memory + Alloc = {
+// Config is [TParam] — render each field as `name` or `name = default`
+// (the product's default is authored surface, carried back verbatim;
+// format∘parse identity over SYNTAX §«Default parameter values»).
+fn render_config_params(ref config) with GraphRead + Intern + Memory + Alloc + !Mutate = {
   if len(config) == 0 { "" }
-  else { "({render_name_list(config, 0)})" }
+  else { "({render_config_list(config, 0)})" }
+}
+
+fn render_config_list(ref config, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(config) { "" }
+  else {
+    let p = config[i]
+    let one = match param_default(p) {
+      Some(d) => "{param_name(p)} = {render_tokens_for(d)}",
+      None    => param_name(p)
+    }
+    if i == len(config) - 1 { one }
+    else { "{one}, {render_config_list(config, i + 1)}" }
+  }
 }
 
 fn render_name_list(ref names, i) with Memory + Alloc = {

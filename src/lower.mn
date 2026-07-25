@@ -2394,12 +2394,24 @@ fn extract_handler_name(node) = {
 
 // Config args from `~> handler(arg1, arg2)` — the parameterized-handler
 // factory's arguments, lowered and written FIRST into the install record
-// (before state inits). A bare `~> handler` (VarRef) has none.
+// (before state inits). The install constructs the config PRODUCT, so the
+// args resolve through the ONE product read (resolve_call_args — labels to
+// positional order, absent fields drawn from the param defaults) exactly as
+// infer's CallExpr path resolved them: the two phases see the identical
+// order by construction (the seam pattern). A bare `~> handler` (VarRef) of
+// a config'd handler is the zero-arg product — every field fills from its
+// decl default (SYNTAX §«Default parameter values»); the HandlerKind guard
+// keeps a tee over a plain fn value at its positional passthrough.
 fn extract_handler_config_args(node) = {
   let N(body, _, _) = node
   match body {
-    NExpr(CallExpr(_callee, args)) => args,
-    _                              => []
+    NExpr(CallExpr(_callee, args)) => resolve_call_args(lower_callee_name(body), args),
+    NExpr(VarRef(name)) => match handler_decl_of(name) {
+      Some((config, _, _)) =>
+        if len(config) == 0 { [] } else { resolve_call_args(name, []) },
+      None => []
+    },
+    _ => []
   }
 }
 
@@ -2944,7 +2956,7 @@ fn lower_stmt_body(s, handle, span) = match s {
       if bind_h == "" { [] }
       else {
         match handler_decl_of(bind_h) {
-          Some((config, state, _)) => config ++ state_field_names_of(state),   // drift-audit: ignore — one-shot name-list build
+          Some((config, state, _)) => lower_param_names(config) ++ state_field_names_of(state),   // drift-audit: ignore — one-shot name-list build
           None => []
         }
       }
@@ -3344,7 +3356,7 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
   // for closure-record slots at install time). args go as locals
   // (arm fn params at WASM call-arity). zero handles per
   // bind_names_as_locals convention.
-  let config_names = config
+  let config_names = lower_param_names(config)
   let state_field_names = state_field_names_of(state)
   let captures_names = config_names ++ state_field_names
   let captures_handles = zeros_of_len(len(captures_names))
@@ -3424,14 +3436,16 @@ fn state_field_names_of(state: [{init: Node, name: String}]) = map(state_field_n
 // A config ref nested inside a larger expression (`acc = init + 1`) is a
 // peer: it needs the config-capture frame, which needs evidence-complete
 // effect propagation through the ~> install chain; the wheel has none.
-fn lower_state_field_inits(config, state) =
-  map((field) => lower_state_init(config, field), state)
+fn lower_state_field_inits(config, state) = {
+  let config_names = lower_param_names(config)
+  map((field) => lower_state_init(config_names, field), state)
+}
 
-fn lower_state_init(config, field: {init: Node, name: String}) = {
+fn lower_state_init(config_names, field: {init: Node, name: String}) = {
   let N(body, _, _) = field.init
   match body {
     NExpr(VarRef(name)) => {
-      let slot = index_of_name(config, name, 0)
+      let slot = index_of_name(config_names, name, 0)
       if slot >= 0 { LUpval(0, slot) } else { lower_expr(field.init) }
     },
     _ => lower_expr(field.init)

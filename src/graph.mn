@@ -1011,14 +1011,6 @@ fn node_handle(node) = {
   h
 }
 
-// Mint TParam list for handler config-params. Each name gets a
-// fresh tyvar handle (via mint), wrapped as TParam(name, TVar(h),
-// Unmarked, Unmarked) — Ownership is Unmarked (no authored marker;
-// arm-body usage may constrain). Per Hβ.first-light.handler-scheme-
-// tfun-shape (2026-05-06). Drift refused: 7 (one list of TParam
-// records, not (names, types) parallel arrays); 8 (TParam is the
-// established positional shape, not name-keyed map).
-
 // The MINT span of a handle — the reverse read of the span_index weave
 // (fresh_handle writes (span, handle) at every mint). A node's REASON span
 // can be overwritten by a later bind (a hole's reason becomes its binder's

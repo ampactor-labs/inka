@@ -548,7 +548,7 @@ fn comment_locals(h) =
     NStmt(FnStmt(_, params, _, _, fbody)) =>
       body_binders(fbody, cl_param_names(params, 0, [])),
     NStmt(HandlerDeclStmt(_, _, config, states, arms)) =>
-      cl_arm_names(arms, 0, cl_state_names(states, 0, config)),
+      cl_arm_names(arms, 0, cl_state_names(states, 0, cl_param_names(config, 0, []))),
     NStmt(EffectDeclStmt(_, ops)) => cl_op_names(ops, 0, []),
     NStmt(LetStmt(pat, val, _)) => body_binders(val, pat_binders(pat)),
     NStmt(TypeDefStmt(_, ctors)) => cl_ctor_names(ctors, 0, []),
@@ -5409,6 +5409,22 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
   // for every arm; per-arm scopes isolate only the op params.
   env_scope_enter()
   bind_handler_config_params(config_tparams, hname)
+  // A config DEFAULT is typed at its one home — the handler's own parameter
+  // scope (SYNTAX §«Default parameter values»: one home, the signature node;
+  // one evaluation context, the callee). The bare `~> h` install has no call
+  // node to splice the default through, so the decl is the scope that grounds
+  // it: infer the expr with the config params in scope, unify its type into
+  // the param's var. An omitting explicit install (`~> h()`) re-infers the
+  // spliced node at its site through resolve_call_args — the fn machinery's
+  // own multi-call-site contract for a shared default node.
+  each((p) => match param_default(p) {
+    Some(d) => {
+      infer_expr(d)
+      let N(_, dsp, dh) = d
+      unify_types(TVar(dh), param_ty(p), dsp, DefaultReason(param_name(p), dsp))
+    },
+    None => ()
+  }, config_tparams)
   let state_binds = infer_handler_state_inits(state)
   bind_handler_state_names(state_binds, hname, span)
   let s_h = mint(Inferred("handler result of '{hname}'"))
@@ -6157,11 +6173,16 @@ fn predicate_of_assert_arg(args) with Memory = {
   else { predicate_of_bool_expr(last(args)) }
 }
 
+// Config is [TParam] (the fn-param carrier): the graph-registered var is
+// minted HERE, superseding the parse-time placeholder, while the param's
+// NAME and DEFAULT ride through unchanged — the default's one home is the
+// TParam's fifth slot, read by resolve_call_args at every install that
+// omits the field (SYNTAX §«Default parameter values»).
 fn mint_handler_config_tparams(config, hname, base_idx) = map((indexed) => {
-  let (i, name) = indexed
+  let (i, p) = indexed
   let idx = base_idx + i
   let h = mint(FnParam(hname, idx, Inferred("config-param of '{hname}'")))
-  mk_param(name, TVar(h))
+  TParam(param_name(p), TVar(h), Unmarked, Unmarked, param_default(p))
 }, enumerate(config))
 
 // Utilities

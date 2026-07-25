@@ -1,4 +1,8 @@
-// expect: 1
+// expect: 2
+// EXPECTATION TRUED (2026-07-25): this micro's own comment named 2 as the
+// value-when-fixed; the resolved-or-loud offset landing plus the
+// nominal-satisfies-the-row unify arm delivered it — the old banked 1 was
+// the partial-set alpha read.
 // Field-access lambda through map over a list literal. r.beta must resolve from
 // the element {alpha,beta} flowing through map's element type. head→first elem→2.
 fn main(q) = last(map((r) => r.beta, [{alpha: 1, beta: 2}]))

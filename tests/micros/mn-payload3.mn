@@ -1,4 +1,12 @@
-// expect: 0
+// expect: 134
+// EXPECTATION TRUED (2026-07-25, the resolved-or-loud offset landing): the
+// old banked value was the PARTIAL-SET offset read — the arm's demanded
+// {beta | rho} summed offsets over {beta} alone, so .beta read offset 0,
+// the receiver's first SORTED field (alpha). resolve_field_offset now
+// resolves the full set through the row residual or floors LOUDLY; this
+// arm's rho is genuinely free (the op param is polymorphic across
+// performs), so the trap is the honest answer until arm specialization
+// (the spec-twin machinery at handler arms) closes the payload residual.
 // Rung 3: the element must flow through HANDLER STATE — put writes the record
 // into the slot list; get reads it back. This is map_collector's buf, minus
 // iterate/f/count. If state's element type flows from list_set's value, slot :

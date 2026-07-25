@@ -1038,6 +1038,32 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ RESOLVED OR LOUD — the trecordopen-wrong-field
+  silent-wrong class CLOSES (the field-access cluster's emit half ·
+  pin 723220b3). resolve_field_offset's open-record arm resolves the
+  FULL field set through the row residual the graph already carried
+  behind the row var (open_record_full_fields — NRecordRowBound,
+  chained open rows, or a closed bind, canonically sorted via the
+  parser's own sort) and floors -1 when any tail is genuinely free —
+  never again a prefix-sum over the partial demanded set. THE BYTES
+  SHOWED THE FIX BOTH WAYS (the 31-line m2/m3 crossing): offset=0
+  loads became offset=4 — LIVE wrong-slot reads in the wheel itself,
+  healed — and unprovable floors became correct reads through the
+  residual. THE NINE RED MICROS WERE THE FIX WORKING: the payload
+  ladder (2026-07-01's diagnostic rungs) had CANONIZED the wrong-slot
+  values — payloadfn's own comment carried "Expected value when
+  fixed: 2" since birth, and the banked 1 was alpha read through
+  offset 0. Re-banked: payloadfn/hoflambda/mapfield at the true 2;
+  the six genuinely-free-tail arms at the honest 134 floor (silent
+  wrong → loud), with the named successor
+  Hβ.lower.arm-payload-specialization — the spec-twin machinery at
+  handler arms closing the op-payload residual per instantiation (a
+  polymorphic op's arm is the same demand-analysis shape as a named
+  generic; until then the floor is the truth). With the judgment half
+  (the unify arm, pin f0ab3177) this closes the LAST known
+  silent-wrong class on the board. TRANSITION m3 == m4 at 295,451
+  lines; census 0; comment-refs 0; frontier 272/0; proof-exactness
+  9/9; crown 5/5; micros 114/114.
 - 2026-07-25 · ▶▶ THE NOMINAL SATISFIES THE ROW — a canonical SYNTAX
   form stops lying (the field-access cluster's judgment half · pin
   f0ab3177). Morgan's audit charge ("what's named? what's avoided?

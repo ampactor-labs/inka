@@ -1,4 +1,8 @@
-// expect: 1
+// expect: 2
+// EXPECTATION TRUED (2026-07-25): this micro's own comment named 2 as the
+// value-when-fixed; the resolved-or-loud offset landing plus the
+// nominal-satisfies-the-row unify arm delivered it — the old banked 1 was
+// the partial-set alpha read.
 // Minimal HOF passing a field-access LAMBDA, applied to a record literal.
 // apply's `a` mediates: f:(a)->b, x:a; the lambda's r must unify with {alpha,beta}
 // through `a`. If my unify fix propagates, r.beta@4 resolves → 2.

@@ -1,4 +1,8 @@
-// expect: 1
+// expect: 2
+// EXPECTATION TRUED (2026-07-25): this micro's own comment named 2 as the
+// value-when-fixed; the resolved-or-loud offset landing plus the
+// nominal-satisfies-the-row unify arm delivered it — the old banked 1 was
+// the partial-set alpha read.
 // ISOLATION (first-light blocker, 2026-07-01): payload → config-function param.
 //
 // This TRAPS (exit 134); mn-payloaddirect.mn (identical but the arm reads the

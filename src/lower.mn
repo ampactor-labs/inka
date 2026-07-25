@@ -2727,10 +2727,34 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node, boundary) = {
 // word-0 as the field value (a graph pointer) and `wat_emit` dumped the heap:
 // the emit corruption. The ultimate form refuses to guess an offset it cannot
 // prove; the loud trap names the unresolved receiver instead of masking it.
+// The full field set of an OPEN receiver, resolved through the row
+// residual the graph carries behind the row var (NRecordRowBound, or a
+// chain of further open rows), canonically sorted. None while any tail is
+// genuinely unresolved: the layout sorts over the FULL set, so an offset
+// prefix-summed over the partial demanded set is the wrong-slot class
+// (measured live — a {nodes, ...} demand read offset 0, the receiver's
+// first sorted field), and the unprovable case must floor loudly, never
+// return a partial sum.
+fn open_record_full_fields(fields, v) = {
+  match graph_chase(v) {
+    GNode(NRecordRowBound(residual), _) =>
+      Some(sort_record_type_fields(fields ++ residual)),
+    GNode(NBound(TRecordOpen(more, v2)), _) =>
+      open_record_full_fields(fields ++ more, v2),
+    GNode(NBound(TRecord(more)), _) =>
+      Some(sort_record_type_fields(fields ++ more)),
+    _ => None
+  }
+}
+
 fn resolve_field_offset(rec_handle, field_name) = {
   match lookup_ty(rec_handle) {
     TRecord(fields)        => field_byte_offset(fields, field_name, 0, len(fields)),
-    TRecordOpen(fields, _) => field_byte_offset(fields, field_name, 0, len(fields)),
+    TRecordOpen(fields, v) =>
+      match open_record_full_fields(fields, v) {
+        Some(full) => field_byte_offset(full, field_name, 0, len(full)),
+        None       => -1
+      },
     // H2.3: nominal records — chase TName through env to its
     // RecordSchemeKind for the field schema. Same offset arithmetic
     // (sorted-by-name, 4 bytes per i32-erased slot).

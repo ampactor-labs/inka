@@ -1,4 +1,12 @@
-// expect: 1
+// expect: 134
+// EXPECTATION TRUED (2026-07-25, the resolved-or-loud offset landing): the
+// old banked value was the PARTIAL-SET offset read — the arm's demanded
+// {beta | rho} summed offsets over {beta} alone, so .beta read offset 0,
+// the receiver's first SORTED field (alpha). resolve_field_offset now
+// resolves the full set through the row residual or floors LOUDLY; this
+// arm's rho is genuinely free (the op param is polymorphic across
+// performs), so the trap is the honest answer until arm specialization
+// (the spec-twin machinery at handler arms) closes the payload residual.
 // Rung 2: TRANSITIVE perform — the payload must survive being carried through
 // a function-call edge (run -> helper -> emit), i.e. through helper's effect
 // row. This is the map -> iterate -> yield shape, minus the buffer.

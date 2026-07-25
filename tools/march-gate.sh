@@ -11,10 +11,14 @@
 #                                                 # battery compiled through m2
 #   bash tools/march-gate.sh --no-build --micros # reuse m2.wasm, rungs + micros
 #
-# The --micros tier promotes every tests/micros/mn-NAME.mn carrying a
-# `micro:NAME=EXIT` line in tools/verify-baseline.txt from "boot compiles
-# and runs it" (verify.sh's claim) to "m2 — the wheel compiled by the
-# fixpoint wheel — compiles and runs it". It is a SCOREBOARD, not a gate:
+# The --micros tier runs EVERY tests/micros/mn-NAME.mn through m2, reading
+# each micro's own `// expect: N` first-line oracle (the same header
+# verify.sh reads — the expectation lives ON the artifact it gates, never in
+# a side-table; the baseline's `micro:` registry was a second home that sat
+# EMPTY for its whole life, so this tier gated nothing until 2026-07-24).
+# The claim upgrades from "boot compiles and runs it" (verify.sh) to "m2 —
+# the wheel compiled by the fixpoint wheel — compiles and runs it". It is a
+# SCOREBOARD, not a gate:
 # a ✗ here names a dig
 # site for the next session, never a wheel bug to chase inline (CLAUDE.md ⟲
 # — census, don't chase moles). Same RT link set as the +rt rungs
@@ -71,6 +75,15 @@ fi
 # WRONG fixpoint, so diff-empty alone proves nothing; PLAN §6).
 GATE_WASM="${GATE_WASM:-$OUT/m2.wasm}"
 
+# Every verdict names the binary it judged: a --no-build run reuses whatever
+# .build/probe/m2.wasm holds, and a scoreboard against a STALE probe is the
+# forensic-law trap (comparable only within one binary) — the resurrected
+# micro tier's first-ever firing hit exactly that (a prior-pin probe re-ran
+# the pre-fix 20-not-25). The sha line makes a stale verdict self-identifying.
+gate_wasm_stamp() {
+  [ -f "$GATE_WASM" ] && echo "── judging m2 sha $(sha256sum "$GATE_WASM" | cut -c1-16) ($GATE_WASM) ──"
+}
+
 # Ratchet (2026-07-04): the h=0 concat class is CLOSED — the str_concat-on-lists
 # root (union_row's match binders) died with the seed's ctor-payload proof
 # channel (b73748c). A proof-less list-`++` reappearing is a NEW silent-
@@ -87,6 +100,7 @@ fi
 # under-linked dependency surfaces as an undefined global at assemble.
 RT="lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn lib/prelude.mn"
 pass=0; fail=0
+gate_wasm_stamp
 
 # rung <name> <expected-exit> <<'EOF' ... source ... EOF
 rung() {
@@ -191,11 +205,11 @@ fi
 if [ "$DO_MICROS" = 1 ]; then
   echo "── micros-through-m2 (each: m2-compile → wat2wasm → run → exit, +rt) ──"
   pass_m=0; fail_m=0
-  while IFS= read -r line; do
-    name=${line#micro:}; m=${name%%=*}; want=${name#*=}
-    mf="tests/micros/mn-${m}.mn"
-    if [ ! -f "$mf" ]; then
-      echo "✗ micro $m: MISSING $mf"; fail_m=$((fail_m+1)); continue
+  for mf in tests/micros/mn-*.mn; do
+    m=$(basename "$mf" .mn); m=${m#mn-}
+    want=$(sed -n '1s|^// expect: \([0-9]\+\)$|\1|p' "$mf")
+    if [ -z "$want" ]; then
+      echo "✗ micro $m: no '// expect: N' header"; fail_m=$((fail_m+1)); continue
     fi
     src="$G/micro-$m.mn"
     { cat $RT; cat "$mf"; } > "$src"
@@ -213,7 +227,7 @@ if [ "$DO_MICROS" = 1 ]; then
     got=$?
     if [ "$got" = "$want" ]; then echo "✓ micro $m = $got"; pass_m=$((pass_m+1))
     else echo "✗ micro $m: RUN exit=$got want=$want"; fail_m=$((fail_m+1)); fi
-  done < <(grep -E '^micro:' tools/verify-baseline.txt)
+  done
   echo "── micros-through-m2: $pass_m pass / $fail_m fail ──"
 fi
 

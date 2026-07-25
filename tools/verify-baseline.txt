@@ -420,7 +420,10 @@ census_errors_max: 0
 # the projection they are larval forms of.
 comment_refs_max: 0
 
-# micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
+# The battery's expectations live ON the micros themselves (`// expect: N`,
+# each file's first line) — verify.sh and march-gate --micros both read that
+# header; no registry here (a `micro:NAME=EXIT` list once documented below
+# was a second home that stayed empty for its whole life — deleted 2026-07-24).
 # STEP 0 (repr_of): the representation-class read's width arithmetic round-trips
 # through the seed (5-arm Repr ADT, exhaustive 4/8/16 width match — never == 4).
 # The value gate (repr_of(TFloat) == RF64) lands with STEP 1's first caller,

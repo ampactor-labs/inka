@@ -1033,6 +1033,19 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · THE SCOREBOARD THAT NEVER FIRED, FIRED (the completion
+  campaign's opening move — instruments before arcs; no re-pin, tools
+  only). march-gate --micros read a `micro:` registry that was EMPTY for
+  all 85 revisions of verify-baseline.txt — a gate that could not fail,
+  gating nothing since birth (the 8458415b note's "since the backtick
+  sweep" attribution refuted by the git census). The tier now enumerates
+  tests/micros/mn-*.mn and reads each micro's OWN `// expect:` first-line
+  oracle — the one home verify.sh already reads; the registry doc is
+  deleted. Every verdict now stamps the sha of the m2 it judges: the
+  first firing ran a stale prior-pin probe and reported the pre-fix
+  20-not-25 — exactly the forensic one-binary law — and the stamp makes
+  that class self-identifying. Against the true m2 (sha == boot ==
+  8891428f, the fixpoint literal): 114/114.
 - 2026-07-24 · ▶▶▶ THE FANOUT SPAWNS FOR REAL — the task record lands
   whole and `>< ~> parallel_compose` runs branches on host threads over
   ONE shared image (band E's real-spawn claim made true; the
@@ -1183,9 +1196,10 @@ between the wheel and its ultimate form, held open on purpose.
   the pre-A4 boot, 30 under the cache read, 42 through the chain; the
   lsp serve leg RED under the ename key, healed by the hname key),
   proof-exactness 9/9, crown 5/5. Scaffold gap noted en route:
-  tools/verify-baseline.txt has carried zero `micro:` lines since the
-  backtick sweep (e3d0e39e), so march-gate --micros enumerates an
-  empty promoted tier — the verify battery is the live micro gate.
+  march-gate --micros enumerated an empty promoted tier (CLOSED
+  2026-07-24, the scoreboard entry above — the git census refuted this
+  note's own "since the backtick sweep" attribution: the registry was
+  empty for all 85 revisions of its life).
 - 2026-07-24 · THE KEYED SCAN'S LAST CORPSE LEAVES THE SOURCE (the
   foundation cut's second write-side cleanup · pin 9bfcf506):
   ev_lookup/ev_scan — kept one generation for the prior boot's emitted

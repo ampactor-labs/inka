@@ -598,12 +598,15 @@ fn frontend(source) = {
 // no truncation walk; lookup = a backward index-walk over the flat
 // buffer, ZERO allocation. Shadowing is position, exactly as before.
 // ── O(1) env resolution — the str_hash-bucket index (§5.O layer 2) ──────────
-// A binding is an edge env_extend DREW; env_find_flat RE-DERIVES it by a backward
-// by-name linear scan — O(n²) over the compile, the convergent hot path (§5.O).
-// The index reads the edge in O(1): a 4096-bucket str_hash array over the flat
-// buffer, each bucket a prepended list of (name, position). env_resolve returns
-// the first LIVE (position < count) binding — env_find_flat's latest-wins result,
-// byte-identical, O(1) amortized. Carried-Truth: read the handle, never re-scan.
+// A binding is an edge env_extend DREW; the index reads the edge in O(1): a
+// 4096-bucket str_hash array over the flat buffer, each bucket a prepended
+// list of (name, position). env_resolve returns the first LIVE
+// (position < count) binding validated against the buffer — latest-wins,
+// O(1) amortized. Carried-Truth: read the handle, never re-scan. (The
+// linear-scan form this replaced was the §5.O convergent hot path; its
+// fallback survived here until 2026-07-24, when the profile showed the
+// stale-bucket case was HOT, not rare — every scope re-entry reuses
+// positions — and the validated walk made it unreachable.)
 fn env_index_new() with Memory + Alloc = list_filled(4096, [])
 
 fn env_index_add(idx, name: String, pos) with Memory + Alloc = {
@@ -611,29 +614,34 @@ fn env_index_add(idx, name: String, pos) with Memory + Alloc = {
   list_set(idx, b, [(name, pos)] ++ list_index(idx, b))
 }
 
-// The first (name, pos) with pos < count — the latest LIVE binding position, or
-// -1. Prepended latest-first, so index 0 is the newest.
-fn env_bucket_pos(ref bucket, name: String, count, i, n) with Memory = {
+// The first (name, pos) whose BUFFER entry still bears the name — the latest
+// LIVE binding position, or -1. Prepended latest-first, so index 0 is the
+// newest. Validation happens INSIDE the walk (the type/ctor siblings' shape):
+// scope_exit reuses positions, so a bucket pair can go stale — the walk skips
+// it and continues to an older live pair. Complete by construction: every
+// env_extend adds its bucket pair and pairs are never removed, so no live
+// binding lacks one — which is why no linear-scan fallback exists.
+fn env_bucket_pos(ref buf, ref bucket, name: String, count, i, n) with Memory = {
   if i >= n { -1 }
   else {
     let (bn, pos) = list_index(bucket, i)
-    if pos < count && bn == name { pos }
-    else { env_bucket_pos(bucket, name, count, i + 1, n) }
+    if pos < count && bn == name {
+      let (en, _scheme, _reason, _kind) = list_index(buf, pos)
+      if en == name { pos }
+      else { env_bucket_pos(buf, bucket, name, count, i + 1, n) }
+    }
+    else { env_bucket_pos(buf, bucket, name, count, i + 1, n) }
   }
 }
 
-// Resolve via the index; re-validate against the BUFFER name, because scope_exit
-// can reuse a position and stale a bucket entry — fall back to the linear scan
-// for that rare case (byte-identical either way).
 fn env_resolve(ref buf, count, ref idx, name: String) with Memory = {
   let b = i32_and(str_hash(name), 4095)
   let bucket = list_index(idx, b)
-  let pos = env_bucket_pos(bucket, name, count, 0, len(bucket))
+  let pos = env_bucket_pos(buf, bucket, name, count, 0, len(bucket))
   if pos < 0 { None }
   else {
-    let (bn, scheme, reason, kind) = list_index(buf, pos)
-    if bn == name { Some((scheme, reason, kind)) }
-    else { env_find_flat(buf, count, name) }
+    let (_, scheme, reason, kind) = list_index(buf, pos)
+    Some((scheme, reason, kind))
   }
 }
 
@@ -747,15 +755,6 @@ handler env_handler with entries_buf = make_list(1024), entries_count = 0, scope
         with entries_count = mark,
              scopes = drop_last(scopes)
     }
-}
-
-fn env_find_flat(ref buf, count, name: String) = {
-  if count == 0 { None }
-  else {
-    let (k, scheme, reason, kind) = list_index(buf, count - 1)
-    if k == name { Some((scheme, reason, kind)) }
-    else { env_find_flat(buf, count - 1, name) }
-  }
 }
 
 // body_context — H1 emit-time per-fn-body metadata

@@ -1038,6 +1038,20 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · THE STALE-BUCKET FALLBACK WAS THE SCAN — env_find_flat
+  DELETED whole (phase A's fourth strike · pin 3d2b029c). The comment
+  called the stale-bucket case rare; the profile priced it at 5.85% —
+  every scope re-entry reuses positions, so env_resolve's
+  first-hit-then-bail shape ran the O(n) scan constantly.
+  env_bucket_pos validates against the buffer INSIDE the walk (the
+  type/ctor siblings' shape) and continues past stale pairs; complete
+  by construction (every env_extend adds its pair; pairs are never
+  removed), so the fallback is unreachable and §5.O's documented
+  villain dies as LESS code. CLEAN m2 == m3 at 330,057 lines (50
+  smaller); self-compile 6.42s — 15.56 → 6.42 across the day's three
+  strikes, 70.58 → 6.42 (11×) across the campaign's perf arc. The
+  medium's own verdicts gated every step (census 0, comment-refs 0 at
+  each generation — the prose about the deleted fn died with it).
 - 2026-07-24 · THE PATTERN PATH FOLLOWS THE ENV'S OWN EDGE (phase A's
   third strike · pin 8ba823f5). ctor_payload_tys_of re-derived a
   constructor's entry by scanning the whole env snapshot backward per

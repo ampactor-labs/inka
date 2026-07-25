@@ -1038,6 +1038,27 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · INSTANTIATE SHARES, NEVER CLONES — landed in its second
+  form after the artifact killed the first (A.3 · pin 6d6ac5ab; the
+  superseded first-form pin 0bb49387 stays in the PROVENANCE chain as
+  the counted kill). subst_ty and chase_deep_at are CHECK-THEN-BUILD:
+  a Bool change-walk (word returns — zero allocation) gates the
+  original eager arms, which recurse through the sharing face so
+  unchanged sub-subtrees re-share at every level; find_mapping's
+  per-leaf filter materialization is a plain walk. THE KILL, counted:
+  the first form flag-threaded (Ty, changed) tuple returns — and
+  tuples are heap records in this substrate, so every scalar arm
+  minted a record where the eager walk minted none; measured +6%
+  (6.42s → 6.82s medians, three runs each, same wheel through both
+  boots) with RSS flat — the panel priced the sharing but not the
+  flag's carrier. The check form measures NEUTRAL (6.51s median,
+  inside the reference band) and allocates nothing on unchanged
+  paths; max RSS stays ~717MB because the self-compile's peak lives
+  in lower/emit, not this channel — the sharing's real purchase is
+  HEADROOM for the TString alias dissolution (A.4), whose type-node
+  bloat multiplies through exactly the instantiate channel. CLEAN
+  m2 == m3 at 332,964 lines; census 0 at every generation; board
+  whole at the pin.
 - 2026-07-24 · ▶▶▶ EFFNAME IS A HANDLE — identity becomes a contract
   (A.6, the crown cash-out · pin 91e35f1e). ENamed(Int) |
   EParameterized(Int, [EffArg]); EPure = the absent 0. The

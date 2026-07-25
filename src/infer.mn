@@ -4004,7 +4004,108 @@ fn chase_probe_tag(ty) with Memory = match ty {
 }
 
 
-fn chase_deep_at(ty, d) = if d > 200 {
+// The canonical snapshot SHARES every unchanged subtree (A.3 — the second
+// unconditional reconstructor beside subst_ty, per the adversarial panel).
+// CHECK-THEN-BUILD: a Bool change-walk (word returns — zero allocation)
+// gates the eager build, and the build recurses through the sharing face,
+// so every unchanged sub-subtree inside a changed parent re-shares. The
+// first sharing form flag-threaded a tuple per arm return, and the
+// artifact refuted it: tuples are heap records here, so the scalar arms
+// minted garbage that canceled the sharing — a measured +6% on the
+// self-compile. Unchanged subtrees now pay ONE pure walk and zero
+// records; only the changed spine walks twice. Output SHAPE is exactly
+// the eager walk's; sharing changes where records come from, never what
+// they hold (Ty records are immutable values — the graph is the mutable
+// layer).
+fn chase_deep_at(ty, d) =
+  if chase_changes(ty, d) { chase_deep_build(ty, d) } else { ty }
+
+// Would the canonical snapshot differ from this record? An NBound var
+// inlines its binding (always differs); a free var differs only when it
+// canonicalizes off-root; aggregates OR their children (short-circuit —
+// the first change decides). The depth tripwire answers TRUE so the build
+// path runs and reports the cycle.
+fn chase_changes(ty, d) = if d > 200 { true } else { match ty {
+  TInt    => false,
+  TFloat  => false,
+  TString => false,
+  TUnit   => false,
+  TByte   => false,
+  TVar(h) => {
+    let GNode(kind, _) = graph_chase(h)
+    match kind {
+      NBound(_)          => true,
+      NFree(_)           => graph_chase_handle(h) != h,
+      NRowBound(_)       => false,
+      NRecordRowBound(_) => false,
+      NRowFree(_)        => false,
+      NErrorHole(_)      => false
+    }
+  },
+  TList(elem) => chase_changes(elem, d + 1),
+  TTuple(elems) => chase_list_changes(elems, d + 1, 0, len(elems)),
+  TFun(params, ret, eff) =>
+    chase_params_changes(params, d + 1, 0, len(params))
+      || chase_changes(ret, d + 1)
+      || chase_row_changes(eff, d + 1),
+  TName(_, args) => chase_list_changes(args, d + 1, 0, len(args)),
+  TRecord(fields) => chase_fields_changes(fields, d + 1, 0, len(fields)),
+  TRecordOpen(fields, _) => chase_fields_changes(fields, d + 1, 0, len(fields)),
+  TRefined(base, _) => chase_changes(base, d + 1),
+  TCont(input, answer, _, world) =>
+    chase_changes(input, d + 1)
+      || chase_changes(answer, d + 1)
+      || chase_row_changes(world, d + 1),
+  TAlias(_, inner) => chase_changes(inner, d + 1)
+} }
+
+fn chase_list_changes(tys, d, i, n) =
+  if i >= n { false }
+  else if chase_changes(list_index(tys, i), d) { true }
+  else { chase_list_changes(tys, d, i + 1, n) }
+
+fn chase_params_changes(params, d, i, n) =
+  if i >= n { false }
+  else if chase_changes(param_ty(list_index(params, i)), d) { true }
+  else { chase_params_changes(params, d, i + 1, n) }
+
+fn chase_fields_changes(fields, d, i, n) =
+  if i >= n { false }
+  else {
+    let (_, ty) = list_index(fields, i)
+    if chase_changes(ty, d) { true }
+    else { chase_fields_changes(fields, d, i + 1, n) }
+  }
+
+fn chase_row_changes(eff, d) = match eff {
+  EfRow(p, a, _) =>
+    chase_names_changes(p, d, 0, len(p)) || chase_names_changes(a, d, 0, len(a))
+}
+
+fn chase_names_changes(names, d, i, n) =
+  if i >= n { false }
+  else {
+    let hit = match list_index(names, i) {
+      EParameterized(_, args) => chase_args_changes(args, d, 0, len(args)),
+      ENamed(_) => false,
+      EPure     => false
+    }
+    if hit { true } else { chase_names_changes(names, d, i + 1, n) }
+  }
+
+fn chase_args_changes(args, d, i, n) =
+  if i >= n { false }
+  else {
+    let hit = match list_index(args, i) {
+      EAType(t2) => chase_changes(t2, d),
+      _          => false
+    }
+    if hit { true } else { chase_args_changes(args, d, i + 1, n) }
+  }
+
+// The eager build — runs only under a proven change; children recurse
+// through chase_deep_at, so unchanged subtrees re-share at every level.
+fn chase_deep_build(ty, d) = if d > 200 {
   // Unreachable once the occurs guard recurses bindings (no cycle can enter
   // the graph); a firing here means a write path slipped the guard — the
   // tripwire names the shape without recursing it (show_type would spin).
@@ -4017,8 +4118,7 @@ fn chase_deep_at(ty, d) = if d > 200 {
   TUnit   => ty,
   TByte   => ty,
   TVar(h) => {
-    let node = graph_chase(h)
-    let GNode(kind, _) = node
+    let GNode(kind, _) = graph_chase(h)
     match kind {
       NBound(inner) => chase_deep_at(inner, d + 1),
       // A free var canonicalizes to its union-find ROOT, never the surface
@@ -4056,14 +4156,14 @@ fn chase_deep_at(ty, d) = if d > 200 {
   TAlias(name, inner)  => TAlias(name, chase_deep_at(inner, d + 1))
 } }
 
-// The row half of the canonical snapshot: every EParameterized instance's
-// EAType payload chase-deeps like any type (bound vars inline their
-// binding; free vars canonicalize to roots). Value args and bare names
-// pass through; the tail's freshening stays the row-var machinery's.
-fn chase_row_deep(eff, d) = match eff {
-  EfRow(p, a, t) =>
-    ef_make(chase_eff_names(p, d), chase_eff_names(a, d), t)
-}
+// An unchanged row IS its own canonical form (rows are canonical at
+// birth), so the sharing face returns it whole.
+fn chase_row_deep(eff, d) =
+  if chase_row_changes(eff, d) {
+    match eff {
+      EfRow(p, a, t) => ef_make(chase_eff_names(p, d), chase_eff_names(a, d), t)
+    }
+  } else { eff }
 
 fn chase_eff_names(names, d) = map((e) => match e {
   EParameterized(n, args) =>
@@ -4218,10 +4318,118 @@ fn is_row_handle(h) = match graph_chase(h) {
   _                      => false
 }
 
-// H6: exhaustive Ty enumeration. Scalars pass through;
-// aggregates recurse. Substitution is identity for unresolved
-// sites where mapping doesn't have the handle.
-fn subst_ty(ty, mapping) = match ty {
+// H6: exhaustive Ty enumeration. Scalars pass through; aggregates recurse.
+// Substitution is identity for unresolved sites where mapping doesn't have
+// the handle — and identity SHARES (A.3: instantiate shares, never clones).
+// CHECK-THEN-BUILD, the chase_deep_at shape: subst_changes is the Bool
+// change-walk (word returns — zero allocation), and the eager build
+// recurses through this sharing face so unchanged sub-subtrees re-share.
+// A polymorphic reference's clone volume collapses to the mapped spine.
+fn subst_ty(ty, mapping) =
+  if subst_changes(ty, mapping) { subst_ty_build(ty, mapping) } else { ty }
+
+// Would substitution differ from this record? An NBound var inlines its
+// binding (always differs); a free var differs only when the mapping
+// carries its root; aggregates OR their children (short-circuit).
+fn subst_changes(ty, mapping) = match ty {
+  TInt    => false,
+  TFloat  => false,
+  TString => false,
+  TUnit   => false,
+  TByte   => false,
+  TVar(id) => match graph_chase(id) {
+    GNode(NBound(_), _) => true,
+    _ => find_mapping(mapping, graph_chase_handle(id)) >= 0
+  },
+  TList(elem) => subst_changes(elem, mapping),
+  TTuple(elems) => subst_list_changes(elems, mapping, 0, len(elems)),
+  TFun(params, ret, eff) =>
+    subst_params_changes(params, mapping, 0, len(params))
+      || subst_changes(ret, mapping)
+      || subst_row_changes(eff, mapping),
+  TName(_, args) => subst_list_changes(args, mapping, 0, len(args)),
+  TRecord(fields) => subst_fields_changes(fields, mapping, 0, len(fields)),
+  TRecordOpen(fields, v) => {
+    let tail_hit = match graph_chase(v) {
+      GNode(NRowFree(_), _) => find_mapping(mapping, graph_chase_handle(v)) >= 0,
+      _ => false
+    }
+    tail_hit || subst_fields_changes(fields, mapping, 0, len(fields))
+  },
+  TRefined(base, _) => subst_changes(base, mapping),
+  TCont(input, answer, _, world) =>
+    subst_changes(input, mapping)
+      || subst_changes(answer, mapping)
+      || subst_row_changes(world, mapping),
+  TAlias(_, inner) => subst_changes(inner, mapping)
+}
+
+fn subst_list_changes(tys, mapping, i, n) =
+  if i >= n { false }
+  else if subst_changes(list_index(tys, i), mapping) { true }
+  else { subst_list_changes(tys, mapping, i + 1, n) }
+
+fn subst_params_changes(params, mapping, i, n) =
+  if i >= n { false }
+  else if subst_changes(param_ty(list_index(params, i)), mapping) { true }
+  else { subst_params_changes(params, mapping, i + 1, n) }
+
+fn subst_fields_changes(fields, mapping, i, n) =
+  if i >= n { false }
+  else {
+    let (_, ty) = list_index(fields, i)
+    if subst_changes(ty, mapping) { true }
+    else { subst_fields_changes(fields, mapping, i + 1, n) }
+  }
+
+// The row's change test mirrors subst_row's arms exactly: a merge with a
+// solved bound row always rebuilds; a mapped tail always rebuilds; else
+// only a changed EParameterized payload does.
+fn subst_row_changes(eff, mapping) = {
+  let EfRow(ns, ab, t) = eff
+  let tail_hit = match t {
+    EtVar(v) => match graph_chase(v) {
+      GNode(NRowBound(inner), _) => {
+        let EfRow(_, _, it) = inner
+        match it {
+          EtVar(t2) => find_mapping(mapping, graph_chase_handle(t2)) >= 0,
+          _         => true
+        }
+      },
+      GNode(NRowFree(_), _) => find_mapping(mapping, graph_chase_handle(v)) >= 0,
+      _ => false
+    },
+    _ => false
+  }
+  tail_hit
+    || subst_names_changes(ns, mapping, 0, len(ns))
+    || subst_names_changes(ab, mapping, 0, len(ab))
+}
+
+fn subst_names_changes(names, mapping, i, n) =
+  if i >= n { false }
+  else {
+    let hit = match list_index(names, i) {
+      EParameterized(_, args) => subst_args_changes(args, mapping, 0, len(args)),
+      ENamed(_) => false,
+      EPure     => false
+    }
+    if hit { true } else { subst_names_changes(names, mapping, i + 1, n) }
+  }
+
+fn subst_args_changes(args, mapping, i, n) =
+  if i >= n { false }
+  else {
+    let hit = match list_index(args, i) {
+      EAType(ty) => subst_changes(ty, mapping),
+      _          => false
+    }
+    if hit { true } else { subst_args_changes(args, mapping, i + 1, n) }
+  }
+
+// The eager build — runs only under a proven change; children recurse
+// through subst_ty, so unchanged subtrees re-share at every level.
+fn subst_ty_build(ty, mapping) = match ty {
   TInt    => ty,
   TFloat  => ty,
   TString => ty,
@@ -4288,7 +4496,12 @@ fn subst_fields(fields, mapping) = map((fld) => {
 // fresh instance from the same mapping subst_ty reads. Row handles and type
 // handles are disjoint graph nodes, so the shared mapping never collides:
 // an open tail only ever matches a row entry, a TVar only a type entry.
-fn subst_row(eff, mapping) = {
+// An unchanged row IS its own canonical form (canonical at birth), so the
+// sharing face returns it whole.
+fn subst_row(eff, mapping) =
+  if subst_row_changes(eff, mapping) { subst_row_build(eff, mapping) } else { eff }
+
+fn subst_row_build(eff, mapping) = {
   // The triple, freshened: parameterized payload TYPES substitute on both
   // fields (each op USE a fresh effect instance); an EtVar tail resolves
   // live and substitutes its quantified ROOT, carrying the concrete
@@ -4339,26 +4552,22 @@ fn subst_eff_names(names, mapping) = map((n) => match n {
     EAType(ty) => EAType(subst_ty(ty, mapping)),
     _          => arg
   }, args)),
-  // ENamed and EPure carry NOTHING to substitute — carry the live value `n`,
-  // NEVER re-derive it. `ENamed(s) => ENamed(s)` was a Carried-Truth violation:
-  // it deconstructs then reconstructs a record identical to `n`, and that
-  // reconstruction is exactly the construction the seed can miscompile to a raw
-  // 0 on the op-call instantiation path (instantiate → subst_row → here) that
-  // detonates eff_name_eq. Carrying `n` is less code AND sidesteps the copy.
-  // Totality preserved over EffName — a missing arm IS a drop (nothing-drops).
+  // ENamed and EPure carry NOTHING to substitute — carry the live value,
+  // never re-derive it (nothing-drops; carrying the value sidesteps the copy).
   ENamed(_)               => n,
   EPure                   => n
 }, names)
 
-fn find_mapping(mapping, id) = {
-  let hits = filter((entry) => {
-    let (old, _) = entry
-    old == id
-  }, mapping)
-  if len(hits) == 0 { -1 }
+// The mapping probe — a direct walk, no per-leaf filter materialization
+// (the filter allocated a hits list at every TVar leaf of every
+// instantiation; the walk allocates nothing).
+fn find_mapping(mapping, id) = find_mapping_from(mapping, id, 0, len(mapping))
+
+fn find_mapping_from(mapping, id, i, n) = {
+  if i >= n { -1 }
   else {
-    let (_, fresh) = head(hits)
-    fresh
+    let (old, fresh) = list_index(mapping, i)
+    if old == id { fresh } else { find_mapping_from(mapping, id, i + 1, n) }
   }
 }
 

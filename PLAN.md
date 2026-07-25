@@ -1038,6 +1038,33 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ HANDLER-CONFIG DEFAULTS + THE BASE-FRESHNESS
+  CONTRACT + THE PUSH (pin 9de2ecc4). The product law lands at the
+  handler decl: config goes [String] → [TParam] — the fn-param
+  carrier itself, ONE default representation (the fifth slot), ONE
+  fill (resolve_call_args), zero second mechanisms; parse mirrors
+  parse_one_param's scalar face; defaults type in the handler's own
+  scope under a DefaultReason edge; the formatter renders them back.
+  Four-face fixture (bare fills / explicit / no-parens / labeled
+  skip) = 42; frontier 276/0. Fleet-built, cherry-picked three-way
+  onto live main, re-derived (one stale-base tax: a row predating the
+  intern era, widened; the numbering TRANSITION crossed in the same
+  march). THE PROCESS FIX the day demanded: the worktree machinery
+  had based builders on a snapshot ELEVEN PINS stale — root cause
+  consistent with basing on origin/main, unpushed since 7cc859ae —
+  so (1) tools/base-check.sh is every builder's mandatory first
+  action (the brief pastes main's sha; stale = rebase-or-abort,
+  never build), reified in CLAUDE.md's dispatch law; (2) four stray
+  worktrees from prior sessions pruned after verifying absorption;
+  (3) main PUSHED (54 commits, 7cc859ae..fd406556) and staying
+  pushed — an unpushed origin is a stale base factory. NAMED
+  CASH-OUT now unlocked: the eleven config-quadruple install sites
+  (graph_handler ×9, env_handler ×2) collapse to bare installs with
+  decl-site defaults. NEXT per Morgan: the fmt ladder (the formatter
+  is the anti-drift instrument — canonical projection makes layout
+  mechanical), rungs 1–2 first (the signed-triple row render and the
+  typed handler-arm reads — the same disease families root-fixed in
+  the compiler today).
 - 2026-07-25 · ▶▶ THE TYPE NAMESPACE REFUSES — the last named
   silent-MERGE class closes (fleet-built, transplanted, re-derived ·
   pin 3f4fba83). Two `type X` decls in one namespace silently MERGED

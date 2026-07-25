@@ -1038,10 +1038,18 @@ fn program_may_yield(stmts) =
 // buffer-counter builds now, slicing to their exact count — no null element
 // survives to this projection (the battery + self-compile arbitrated the
 // guard's removal).
+// THE STRING BOUNDARY: EffName carries the intern HANDLE; this projection
+// is where the lower layer's bare-string world (evidence keys, escaping
+// name-sets, "{hname}_{op}" targets) begins, so the handle renders to its
+// canonical spelling HERE — pushing the raw handle word into the erased
+// string list was invisible to inference (no type meets an erased list)
+// and surfaced only as str_lt walking a tiny address in the escaping
+// fixpoint (the A.6 m3 leg's alloc trap; the fixpoint oracle caught what
+// the census structurally could not).
 fn eff_names_of(names) = flatten(map((name) =>
   match name {
-    ENamed(s)            => [s],
-    EParameterized(s, _) => [s],
+    ENamed(h)            => [intern_name_of(h)],
+    EParameterized(h, _) => [intern_name_of(h)],
     EPure                => []
   }, names))
 

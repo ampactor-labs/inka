@@ -586,13 +586,17 @@ fn parse_one_effect(ref tokens, pos) = {
     (EPure, negated, p + 1)
   } else {
     let name = ident_at(tokens, p)
+    // The effect name's identity is its intern handle (the token's word is
+    // already canonical, so this probe is a hash + one pointer-fast compare;
+    // the token carrying its handle outright is the named next cut).
+    let nh = intern_str(name)
     let p1 = p + 1
     let p2 = skip_ws(tokens, p1)
     if at(tokens, p2, TLParen) {
       let (args, p3) = parse_eff_args(tokens, skip_ws(tokens, p2 + 1))
-      (EParameterized(name, args), negated, p3)
+      (EParameterized(nh, args), negated, p3)
     } else {
-      (ENamed(name), negated, p1)
+      (ENamed(nh), negated, p1)
     }
   }
 }

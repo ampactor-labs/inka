@@ -267,9 +267,13 @@ fn try_each_annotation(handle, candidates, base_ty) = {
 // main before this returned the subsumption).
 fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
   APure(sp)          => narrow_row_proven(handle, base_ty, mk_ef_pure(), sp),
-  ANotAlloc(sp)      => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed("Alloc")]), sp),    // drift-audit: ignore — real drift 8 (EffName should have EAlloc variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
-  ANotIO(sp)         => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed("IO")]), sp),       // drift-audit: ignore — real drift 8 (EffName should have EIO variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
-  ANotNetwork(sp)    => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed("Network")]), sp),  // drift-audit: ignore — real drift 8 (EffName should have ENetwork variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
+  // The literal names the effect the annotation severs — user-facing
+  // vocabulary at the one mint; identity is the intern handle from here on
+  // (EffName-is-a-handle LANDED; the old string-keyed-identity drift is
+  // structurally gone — comparisons are word i32.eq by type).
+  ANotAlloc(sp)      => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Alloc"))]), sp),    // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
+  ANotIO(sp)         => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("IO"))]), sp),       // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
+  ANotNetwork(sp)    => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Network"))]), sp),  // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
   ARefined(_, pred, sp) => {
     // Narrowing the type via refinement — perform verify against the
     // narrowed predicate. Ledger captures; rollback removes. The ledger
@@ -337,14 +341,14 @@ fn unwrap_source_span(opt) with Pure = match opt {
 // live; the string table that re-derived this is dissolved. A name
 // that binds no handler (not found, or a non-handler kind) absorbs
 // nothing.
-fn catalog_handled_effects(handler_name) with Memory + EnvRead + !Mutate = {
+fn catalog_handled_effects(handler_name) with Intern + Memory + EnvRead + !Mutate = {
   match env_lookup(handler_name) {
     None => [],
     Some(entry) => {
       let (_scheme, _reason, kind) = entry
       match kind {
         // The handled effect is a live projection of the arms (§2), not a field.
-        HandlerKind(_, _, _, arms) => [ENamed(derive_handler_ename(arms, handler_name))],
+        HandlerKind(_, _, _, arms) => [ENamed(intern_str(derive_handler_ename(arms, handler_name)))],
         _ => []
       }
     }
@@ -369,10 +373,10 @@ fn capabilities_for_annotation(ann) with Pure = match ann {
 // that doesn't perform E. Mirrors capabilities_for_annotation but
 // keyed by EffName (severance candidate's name).
 fn capabilities_for_severance(name) = match name {
-  ENamed(n) =>
-    if n == "Alloc"   { [CRealTime] }                          // drift-audit: ignore — capability-for-severance table; real drift 8 (should match on EAlloc/EIO variants); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle)
-    else if n == "IO" { [CCompileTimeEval, CSandbox] }          // drift-audit: ignore — same as above
-    else if n == "Network" { [CSandbox] }
+  ENamed(h) =>
+    if h == intern_str("Alloc")   { [CRealTime] }              // drift-audit: ignore — the literal NAMES the effect at this one severance table; identity is the intern handle (word ==)
+    else if h == intern_str("IO") { [CCompileTimeEval, CSandbox] }  // drift-audit: ignore — same as above
+    else if h == intern_str("Network") { [CSandbox] }
     else { [] },
   EParameterized(_, _) => [],
   EPure => []                  // the identity severs no capability

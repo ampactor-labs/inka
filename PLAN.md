@@ -1038,6 +1038,46 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶▶▶ EFFNAME IS A HANDLE — identity becomes a contract
+  (A.6, the crown cash-out · pin 91e35f1e). ENamed(Int) |
+  EParameterized(Int, [EffArg]); EPure = the absent 0. The
+  ripple-killer the adversarial panel missed: the projection SPLITS —
+  eff_name_handle (Pure, the comparison key: the six by-name str_eq
+  leaves go word i32.eq, and bare-vs-instance matching is the same
+  compare) beside eff_name_str (render-only, intern_name_of), so the
+  dreaded row widening never touches the hot family — only the few
+  cold render sites widened (eff_names_to_str, row_to_with_clause,
+  catalog_handled_effects, eff_name_label). The intern grew
+  intern_str + intern_name_of + entries (the reverse read arriving
+  WITH its reader), and intern_table moved OUTERMOST in the core: the
+  report arm renders diag_message live and an arm's performs resolve
+  outer to its install (R2's law at the core order — an inner intern
+  left diagnostics' row rendering handlerless). THE SWEEP WAS
+  MEDIUM-NAMED: 12 → 2 → 1 → 0 across four compiles, every typed site
+  an armed E_TypeMismatch naming its own line. THE BLIND SPOT the
+  census structurally cannot see, the FIXPOINT caught: eff_names_of
+  ("effect-row names as bare strings") pushed the raw handle word
+  into lower's ERASED string list — no type meets an erased list —
+  and the m3 leg trapped in the escaping fixpoint's set_insert where
+  str_lt walked a tiny address into a garbage make_list. One
+  projection renders the boundary now; the lesson is the two-oracle
+  law made concrete: the armed census gates the typed surface, the
+  self-application leg is the net beneath the erased one. MEASURED:
+  crown 5/5 with the positive-path residual (~146 byte-equal-but-
+  pointer-distinct false mismatches) closed BY CONSTRUCTION (the pair
+  is untypeable; a missed mint is a loud type error — the contract
+  the intern's masking lacked); CLEAN m2 == m3 at 330,661 lines
+  (handle assignment is a pure function of the source); frontier
+  241/0; proof-exactness 9/9; micros 114/114; census 0; 6.9s
+  self-compile (the row-mint probes cost ~0.3s against exactness —
+  honest, and the token-carries-handle cut removes them). NAMED
+  RESIDUE, each its own strike: TName's String names are the same
+  disease at the TYPE layer (type_name_eq's str_eq pin sits in
+  unify's hot path — the sequel identity cut); TIdent still DISCARDS
+  the handle lex returns (token-carries-handle unlocks env keying,
+  §5.O layer 2); instance-precise negation
+  (Hβ.effects.parameterized-negation-instance) stays the banked
+  follow-on with its own crucibles.
 - 2026-07-24 · ▶▶ THE INTERN SUBSTRATE — a name is born once (A.2, the
   phase-A spine · pin 66e097e9). effect Intern { intern_span } +
   intern_table land as the analysis core's innermost handler (every

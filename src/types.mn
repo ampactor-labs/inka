@@ -494,12 +494,24 @@ type EffTail
 // literal; row equality unifies node-bodies, not flattened literals.
 
 type EffName
-  = ENamed(String)
-  | EParameterized(String, [EffArg]) // name + [EffArg]
-  | EPure                           // the union identity — `with Pure` IS the
-                                    // empty row, made an ADT variant (drift-3:
-                                    // not a string key). build_declared_row   // drift-audit: ignore — describes the dissolution
-                                    // maps it to the pure row; it never enters a name-set.
+  = ENamed(Int)                      // the interned name HANDLE (§5.O layer 1:
+                                     // a name is a word; identity is i32.eq,
+                                     // exact by type — a missed intern is a
+                                     // loud E_TypeMismatch, never a silent
+                                     // pointer miss). The spelling is the
+                                     // render projection (eff_name_str →
+                                     // intern_name_of), read only by
+                                     // diagnostics/show/lower's extraction.
+  | EParameterized(Int, [EffArg])    // name handle + [EffArg]; shares the
+                                     // handle with its bare ENamed, so
+                                     // bare-name membership matches an
+                                     // instance by one word compare.
+  | EPure                            // the union identity — `with Pure` IS the
+                                     // empty row, made an ADT variant (drift-3:
+                                     // not a string key). build_declared_row   // drift-audit: ignore — describes the dissolution
+                                     // maps it to the pure row; it never enters
+                                     // a name-set. Its handle is the reserved
+                                     // absent 0.
 
 type EffArg
   = EAInt(Int)
@@ -1348,6 +1360,8 @@ effect EnvWrite {
 // by intern_table (pipeline.mn), innermost in the analysis core.
 effect Intern {
   intern_span(String, Int, Int) -> (String, Int, Option(TokenKind))
+  intern_str(String) -> Int
+  intern_name_of(Int) -> String
 }
 
 // The Read/Write split IS the "one writer" invariant. Inference
@@ -2329,8 +2343,8 @@ fn show_effrow(ref row) with GraphRead + Memory + !Mutate = {
 }
 
 fn show_eff_name(ref name) with !Mutate = match name {
-  ENamed(n)               => n,
-  EParameterized(n, args) => "{n}({show_list(args, show_eff_arg, ", ")})",
+  ENamed(h)               => intern_name_of(h),
+  EParameterized(h, args) => "{intern_name_of(h)}({show_list(args, show_eff_arg, ", ")})",
   EPure                   => "Pure",   // drift-audit: ignore — variant→surface-label render, not a name key
   // DISPLAY-TOTALITY, not a data-drop. The mentl voice must be TOTAL — it can
   // never crash while REPORTING a diagnostic (a renderer that traps mid-report

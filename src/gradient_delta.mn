@@ -295,7 +295,7 @@ fn row_strictly_narrower(body_row, decl_row) with Memory + GraphRead = {
 // type to apply the suggestion. Per GR §3.2 AnnotationSuggestion: the
 // `annotation` field IS the literal source residue.
 
-fn row_to_with_clause(row) with Memory = {
+fn row_to_with_clause(row) with Intern + Memory = {
   // The literal source residue: presents as `with A + B`, the absent
   // set as `!X` terms, an empty closed row as Pure; an open tail keeps
   // the honest ellipsis (surfacing the var is the named follow-up).
@@ -314,7 +314,7 @@ fn row_to_with_clause(row) with Memory = {
 fn neg_names_to_str(ref names) with Memory =
   show_list(names, (n) => "!{show_eff_name(n)}", " + ")
 
-fn eff_names_to_str(names) with Memory = {
+fn eff_names_to_str(names) with Intern + Memory = {
   if len(names) == 0 { "Pure" }                   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
   else if len(names) == 1 { eff_name_label(last(names)) }
   else {
@@ -322,9 +322,9 @@ fn eff_names_to_str(names) with Memory = {
   }
 }
 
-fn eff_name_label(name) with Pure = match name {
-  ENamed(s) => s,
-  EParameterized(s, _) => s,   // arg-aware rendering is named follow-up
+fn eff_name_label(name) with Intern = match name {
+  ENamed(h) => intern_name_of(h),
+  EParameterized(h, _) => intern_name_of(h),   // arg-aware rendering is named follow-up
   EPure => "Pure"              // drift-audit: ignore — variant→surface-label render, not a name key
 }
 
@@ -353,12 +353,12 @@ fn capabilities_unlocked_by(row) with Memory + Alloc = {
 
 fn negation_caps(names) with Memory + Alloc = flatten(map(caps_for_negated_eff, names))
 
-fn caps_for_negated_eff(name) with Pure = match name {
-  ENamed(s) =>
-    if s == "Alloc" { ["CRealTime"] }                          // drift-audit: ignore — real drift 3 (EffName should have EAlloc variant); tracked by Hβ.perf.name-is-handle (EffName-is-a-handle) — same pattern as mentl.mn:219
-    else if s == "IO" { ["CCompileTimeEval", "CSandbox"] }     // drift-audit: ignore — same as above
-    else if s == "Network" { ["CSandbox"] }                    // drift-audit: ignore — same as above
-    else if s == "Mutate" { ["CParallelize"] }                 // drift-audit: ignore — same as above
+fn caps_for_negated_eff(name) with Intern = match name {
+  ENamed(h) =>
+    if h == intern_str("Alloc") { ["CRealTime"] }                          // drift-audit: ignore — the literal NAMES the effect at this one severance table; identity is the intern handle (word ==)
+    else if h == intern_str("IO") { ["CCompileTimeEval", "CSandbox"] }     // drift-audit: ignore — same as above
+    else if h == intern_str("Network") { ["CSandbox"] }                    // drift-audit: ignore — same as above
+    else if h == intern_str("Mutate") { ["CParallelize"] }                 // drift-audit: ignore — same as above
     else { [] },
   EParameterized(_, _) => [],
   EPure => []                  // the identity unlocks no negated-capability

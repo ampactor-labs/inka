@@ -399,14 +399,28 @@ fn row_is_ground(ref row) with Pure = {
 
 fn sort_unique(ref names) with !Mutate = name_set_canonicalize(names)
 
-// The by-name deref of an EffName — the crown's negation gate compares TRUE
-// name identity across distinct source sites (an effect-decl `ENamed("E")` and
-// a `with !E` clause's `ENamed("E")` are distinct heap objects; pointer-eq
-// silently misses). The `name: EffName` annotation re-establishes the proof
-// list_index erased to a word.
-fn eff_name_str(name: EffName) -> String with Pure = match name {
-  ENamed(s)            => s,
-  EParameterized(s, _) => s,
+// The comparison KEY — name identity as the interned handle (one word;
+// §5.O layer 1 landed). An effect declaration's name and a negation
+// clause's name intern to the SAME handle, so identity is i32.eq by TYPE — the
+// pointer-miss class the old by-name str_eq family guarded against is
+// unconstructible, and a missed intern at a mint site is a loud
+// E_TypeMismatch, never a silent miss. ENamed and EParameterized of one
+// base name share the handle, so bare-name membership matches an instance
+// by the same word compare (instance-precise negation stays the named
+// follow-on, Hβ.effects.parameterized-negation-instance). EPure carries
+// the reserved absent handle 0 and never matches a named effect.
+fn eff_name_handle(name: EffName) -> Int with Pure = match name {
+  ENamed(h)            => h,
+  EParameterized(h, _) => h,
+  EPure                => 0
+}
+
+// The RENDER projection — handle → canonical spelling, read live from the
+// intern table. Comparisons never come here (eff_name_handle is the key);
+// diagnostics, show, and lower's ename extraction do.
+fn eff_name_str(name: EffName) -> String with Intern = match name {
+  ENamed(h)            => intern_name_of(h),
+  EParameterized(h, _) => intern_name_of(h),
   EPure                => ""
 }
 
@@ -418,13 +432,13 @@ fn forbidden_names_disjoint(ref body, ref forbidden) with !Mutate =
 
 fn forbidden_names_disjoint_loop(ref body, ref forbidden, i, n) with !Mutate =
   if i >= n { true }
-  else if name_in_forbidden(forbidden, eff_name_str(list_index(body, i)), 0, len(forbidden)) { false }
+  else if name_in_forbidden(forbidden, eff_name_handle(list_index(body, i)), 0, len(forbidden)) { false }
   else { forbidden_names_disjoint_loop(body, forbidden, i + 1, n) }
 
-fn name_in_forbidden(ref forbidden, s: String, i, n) with !Mutate =
+fn name_in_forbidden(ref forbidden, h, i, n) with !Mutate =
   if i >= n { false }
-  else if str_eq(eff_name_str(list_index(forbidden, i)), s) { true }   // drift-audit: ignore — the String case of ==; the nameable sequence leaf, band D
-  else { name_in_forbidden(forbidden, s, i + 1, n) }
+  else if eff_name_handle(list_index(forbidden, i)) == h { true }
+  else { name_in_forbidden(forbidden, h, i + 1, n) }
 
 // string_in_list — membership over a list of STRINGS (own.mn's ref-escape
 // names), NOT EffNames. It aliased name_set_contains, whose by-name leaf
@@ -523,7 +537,7 @@ fn name_set_prefix_index(ref buf, count, ref name) with !Mutate =
 
 fn name_set_prefix_index_loop(ref buf, ref name, i, n) with Memory = {
   if i >= n { 0 - 1 }
-  else if str_eq(eff_name_str(list_index(buf, i)), eff_name_str(name)) { i }   // drift-audit: ignore — the String case of ==; nameable-sequence leaf, band D
+  else if eff_name_handle(list_index(buf, i)) == eff_name_handle(name) { i }
   else { name_set_prefix_index_loop(buf, name, i + 1, n) }
 }
 
@@ -539,7 +553,7 @@ fn name_set_prefix_contains_loop(ref buf, ref name, i, n) with Memory = {
   // was still `==` (pointer-eq) after cc487f8 fixed membership, so two
   // byte-equal ENamed from distinct sites still failed to dedup HERE, and
   // rows kept bloating past the membership fix. The two must agree.
-  else if str_eq(eff_name_str(list_index(buf, i)), eff_name_str(name)) { true }   // drift-audit: ignore — the String case of ==; nameable-sequence leaf, band D
+  else if eff_name_handle(list_index(buf, i)) == eff_name_handle(name) { true }
   else { name_set_prefix_contains_loop(buf, name, i + 1, n) }
 }
 
@@ -681,7 +695,7 @@ fn name_set_contains_loop(ref set, ref name, i, n) with Memory = {
   // handles at the decl so this is i32.eq-on-identity and the whole by-name
   // family dissolves; that closes the parameterized residue str_eq conflates
   // — Hβ.effects.parameterized-negation-instance — and is §5.O layer 1.)
-  else if str_eq(eff_name_str(list_index(set, i)), eff_name_str(name)) { true }   // drift-audit: ignore — the String case of ==; nameable-sequence leaf, band D
+  else if eff_name_handle(list_index(set, i)) == eff_name_handle(name) { true }
   else { name_set_contains_loop(set, name, i + 1, n) }
 }
 

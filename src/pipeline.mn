@@ -54,9 +54,6 @@ import oracle
 // its single instantiation; every inference-reaching chain installs the
 // bracket), inner to outer:
 //
-//   intern_table — the lex-name intern, the innermost leaf: pure state
-//     over intern_span, reading no other core state; lex runs inside
-//     every chain's bracket, so every identifier resolves through it.
 //   affine_ledger / region_tracker / verify_ledger — the analysis
 //     ledgers, innermost: arms are pure state over the ops inference
 //     performs (consume/borrow, region tags, proof debt).
@@ -66,9 +63,18 @@ import oracle
 //     to them.
 //   graph_handler before mutate_sink — graph writes perform
 //     graph_mutated, absorbed outward.
-//   diagnostics_handler outermost — graph_bind's occurs-check report
+//   diagnostics_handler outer — graph_bind's occurs-check report
 //     fires FROM a graph arm (graph.mn); the outer placement counts it
 //     independent of dispatch tier.
+//   intern_table OUTERMOST — the lex-name intern. It must sit OUTSIDE
+//     diagnostics_handler because the report arm renders its message
+//     live (diag_message → show_effrow → eff_name_str → intern_name_of),
+//     and an arm's performs resolve OUTER to its own install (the
+//     world-as-value R2 law) — an inner intern would leave the render
+//     with no handler. Its own arms perform nothing but substrate ops,
+//     so nothing needs to sit outside it; every identifier and every
+//     EffName handle in the bracket resolves through this one instance,
+//     and a nested bracket's own outermost intern keeps its isolation.
 //
 // The fn-shaped bracket was REFUTED once (2026-07-23, the mint-time
 // evidence snapshot: a thunk's ops faulted where its creation site
@@ -98,7 +104,6 @@ import oracle
 
 fn infer_context(body) = {
   body()
-    ~> intern_table
     ~> affine_ledger
     ~> region_tracker
     ~> verify_ledger
@@ -107,6 +112,7 @@ fn infer_context(body) = {
     ~> graph_handler
     ~> mutate_sink
     ~> diagnostics_handler
+    ~> intern_table
 }
 
 fn compile(entry_module) = {
@@ -721,13 +727,19 @@ fn env_resolve_ctor(ref buf, count, ref idx, name: String) with Memory = {
 }
 
 // ── The lex-name intern — intern_table (§5.O layer 1) ───────────────────────
-// One row per unique identifier: (canonical String, handle, keyword kind).
-// The canonical instance is materialized FLAT once at first sight and every
+// One row per unique name: (canonical String, handle, keyword kind). The
+// canonical instance is materialized FLAT once at first sight and every
 // repeat occurrence returns the SAME pointer through a hash probe — zero
 // allocation, zero keyword compares (the row carries the classification the
 // old per-occurrence keyword chain re-derived ~1e5 times). str_hash_loop over
 // the source range IS the hash (no slice minted to hash); str_eq_at is the
-// range compare. Handle 0 reserved = absent; count starts at 1.
+// range compare. Handle 0 reserved = absent; count starts at 1. TWO entry
+// paths, one table: intern_span (lex — a source range) and intern_str (a
+// whole String — the EffName mints and any name born outside a token).
+// Both classify through keyword_kind at insert, so a name first seen via
+// intern_str still lexes correctly as a keyword on a later intern_span hit.
+// entries is the reverse read (handle → canonical) intern_name_of serves —
+// the render/emit projection; comparisons never read it.
 fn intern_probe(ref bucket, ref src, s, e, i, n) with Memory =
   if i >= n { None }
   else {
@@ -737,7 +749,7 @@ fn intern_probe(ref bucket, ref src, s, e, i, n) with Memory =
     else { intern_probe(bucket, src, s, e, i + 1, n) }
   }
 
-handler intern_table with buckets = list_filled(4096, []), count = 1 {
+handler intern_table with buckets = list_filled(4096, []), entries = make_list(1024), count = 1 {
   intern_span(src, s, e) => {
     let b = i32_and(str_hash_loop(src, s, e, 2166136261), 4095)
     let bucket = list_index(buckets, b)
@@ -748,10 +760,33 @@ handler intern_table with buckets = list_filled(4096, []), count = 1 {
         let row = (canonical, count, keyword_kind(canonical))
         resume(row)
           with buckets = list_set(buckets, b, [row] ++ bucket),
+               entries = list_set(list_extend_to(entries, count + 1), count, canonical),
                count = count + 1
       }
     }
-  }
+  },
+
+  intern_str(s) => {
+    let e = byte_len(s)
+    let b = i32_and(str_hash_loop(s, 0, e, 2166136261), 4095)
+    let bucket = list_index(buckets, b)
+    match intern_probe(bucket, s, 0, e, 0, len(bucket)) {
+      Some(row) => {
+        let (_canonical, h, _kw) = row
+        resume(h)
+      },
+      None => {
+        let canonical = list_to_flat(s)
+        let row = (canonical, count, keyword_kind(canonical))
+        resume(count)
+          with buckets = list_set(buckets, b, [row] ++ bucket),
+               entries = list_set(list_extend_to(entries, count + 1), count, canonical),
+               count = count + 1
+      }
+    }
+  },
+
+  intern_name_of(h) => resume(list_index(entries, h))
 }
 
 handler env_handler with entries_buf = make_list(1024), entries_count = 0, scopes = [], index = env_index_new() {
@@ -1057,7 +1092,10 @@ fn owner_names_of(ref owners, i, acc) = {
 // that the body does NOT perform. Adding `!E` for each unlocks a
 // capability without breaking the row.
 fn severance_candidates(reached) = {
-  let canonical = [ENamed("Alloc"), ENamed("IO"), ENamed("Network")]   // drift-audit: ignore — real drift 8 (EffName should have EAlloc/EIO/ENetwork variants); tracked by Hβ.perf.name-is-handle; EffName refactor
+  // The audit's canonical severance set — literals name the user-facing
+  // effects at this one mint; identity is the intern handle (EffName-is-a-
+  // handle landed; comparisons are word-identity by type).
+  let canonical = [ENamed(intern_str("Alloc")), ENamed(intern_str("IO")), ENamed(intern_str("Network"))]   // drift-audit: ignore — the literals NAME the severance set at its one mint; identity is the intern handle (EffName-is-a-handle landed)
   filter_not_in(canonical, reached, 0, len(canonical), [])
 }
 

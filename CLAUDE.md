@@ -237,7 +237,21 @@
 > Scope every dispatch so it does NOT need the live context (scout inline first,
 > hand a complete brief), OR use it precisely BECAUSE it is independent
 > (adversarial verify). Never hand off the live deep-reasoning thread on a cold
-> brief — that is the one proven drift. **EVERY DISPATCHED AGENT RUNS `fable`,
+> brief — that is the one proven drift.
+>
+> **THE BASE-FRESHNESS CONTRACT (measured 2026-07-25, non-negotiable):** the
+> worktree isolation machinery created builder worktrees from a
+> session-start snapshot ELEVEN PINS behind live main — the builders spent
+> their whole runs adapting to a two-day-old tree. Nothing ever builds
+> against a stale base again, mechanically: (1) every builder brief PASTES
+> the current main sha at dispatch, and the builder's MANDATORY FIRST
+> ACTION is `bash tools/base-check.sh <that-sha>` — on STALE it rebases
+> onto main and re-checks, or aborts and reports; it NEVER builds on the
+> stale base. (2) The orchestrator verifies the reported merge-base before
+> transplanting anything. (3) Worktrees are pruned at absorption — a
+> leftover worktree is a stale base waiting to be inherited (four strays
+> from prior sessions were found and pruned the day the contract was
+> written). **EVERY DISPATCHED AGENT RUNS `fable`,
 > PASSED EXPLICITLY (Morgan 2026-07-24, Fable-only — supersedes the 2026-07-02
 > sonnet/opus tiering).** Unlimited Fable capacity dissolved the scarcity that
 > priced the deepest model out of breadth, so recon sweeps, builders, judges,

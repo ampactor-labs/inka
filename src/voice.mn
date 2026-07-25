@@ -677,7 +677,7 @@ fn render_propose_arm(situation) with Pure = {
 // surfaces a "use |> instead" suggestion. silence_predicate gated on
 // nested_call_depth >= 3 (TopicFacts substrate from D.1.c).
 
-fn render_topology_arm(situation) with Memory = {
+fn render_topology_arm(situation) with Memory + Alloc = {
   let Situation(s) = situation
   let TopicFacts(f) = s.facts
   VoiceLine(TentTopology, FOffering, [
@@ -1117,7 +1117,7 @@ fn findings_from_debt(debt) with Pure = debt
 // addressing scheme (voice.mn §FileHandle), so the artifact path is derived
 // from the handle deterministically — a stable address tied to the real
 // handle, not a fabricated "emitted" literal.
-fn emitted_artifact_path(fh) with Memory = {
+fn emitted_artifact_path(fh) with Memory + Alloc = {
   let FileHandle(i) = fh
   Path(".build/unit-{int_to_str(i)}.wasm")
 }

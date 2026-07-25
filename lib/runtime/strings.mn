@@ -188,7 +188,7 @@ fn fill_concat_all(xs: [String], i, n, dest, w) with Memory + Alloc =
     fill_concat_all(xs, i + 1, n, dest, w + m)
   }
 
-fn str_slice(s, start, end) with Memory = slice(s, start, end)
+fn str_slice(s, start, end) with Memory + Alloc = slice(s, start, end)
 
 // str_payload(s) — a raw pointer to s's byte_len(s) CONTIGUOUS stride-1 bytes:
 // THE materialization boundary. A rope/slice flattens first (list_to_flat, a
@@ -525,7 +525,7 @@ fn float_extract_digits(scaled: Float, count, max_digits, acc) with Memory + All
 
 // float_format_digits: format a digit list and exponent into a decimal string.
 // Uses fixed notation for -4 <= exp <= 14, scientific otherwise.
-fn float_format_digits(digits, exp) with Memory = {
+fn float_format_digits(digits, exp) with Memory + Alloc = {
   if exp >= 0 - 4 && exp <= 14 {
     float_format_fixed(digits, exp)
   }

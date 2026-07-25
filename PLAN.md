@@ -1038,6 +1038,27 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶▶ THE SEQ-OP ROW UN-REVERTS — re-measurement, not the
+  arena, un-gated it (phase B-ii step 0 · pin 7aa2d7a0). The B-ii recon
+  banked the verdict: both OOM rulings were one representation era
+  stale (measured on the 559k-line wheel; the current wheel compiles at
+  ~694MB against the 4GB ceiling — 6× headroom). The 2026-07-17 revert
+  re-ran on the current pin: infer_seq_op reads the callee's OWN
+  declared row live (graph_chase(fh) — the read its own comment
+  prescribed for a year), the Memory floor surviving only for an
+  unresolved callee. NO OOM at the m3 leg; the honest-attribution
+  compiler immediately re-judged its own source and named NINETEEN
+  under-declared rows (the widen loop, 19 → 3 → 2 → 0: str_slice,
+  fs_path_view, chase_probe_tag, show_span, the whole synth
+  candidate-mint family) — the honest wheel lands 3,600 lines SMALLER.
+  CLEAN m2 == m3 at 329,046; census 0; board whole. The arena demotes
+  from keystone to amplifier; the two-pass walk's re-measure is the
+  remaining step-0 item. Recon reports for BOTH phase-B halves are
+  banked in the campaign mirror (persist: rehydrate is dead code, the
+  world-mismatch raise unwired, the emitter can generate
+  $globals_save/restore, four RED-first landings specified; arena:
+  the image/scratch two-channel design, the interleaving hazard map,
+  the fork-pair sweep find at try_each_annotation).
 - 2026-07-24 · ▶▶▶▶ THE TSTRING DISSOLUTION LANDS WHOLE — PHASE A
   COMPLETE (A.4 steps 4+5 in one arc · pin 5673c47c). The nullary
   TString ctor is DELETED from Ty; "String" IS one canonical

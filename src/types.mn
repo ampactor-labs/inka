@@ -2459,7 +2459,7 @@ fn show_reason(ref reason) with GraphRead + Memory + Alloc + !Mutate = {
   }
 }
 
-fn show_span(ref span) with Memory = {
+fn show_span(ref span) with Memory + Alloc = {
   let Span(sl, sc, el, ec) = span
   "{int_to_str(sl)}:{int_to_str(sc)}-{int_to_str(el)}:{int_to_str(ec)}"
 }

@@ -348,7 +348,7 @@ fn ctors_of_type(entries, type_name, context)
 }
 
 fn ctors_of_type_from(entries, type_name, i, n, own buf, count)
-    with GraphRead + GraphWrite + Memory + !Mutate = {
+    with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   if i >= n { slice(buf, 0, count) }
   else {
     let (name, scheme, reason, kind) = list_index(entries, i)
@@ -374,7 +374,7 @@ fn scheme_result_is(ty, type_name) with Pure = match ty {
 }
 
 fn ctor_to_enriched_candidate(name, scheme, reason)
-    with GraphRead + GraphWrite + !Mutate + Memory = {
+    with GraphRead + GraphWrite + !Mutate + Memory + Alloc = {
   EnrichedCandidate({
     node:    synthesize_ctor_call_node(name, scheme),
     reason:  Located(span_zero(),
@@ -384,7 +384,7 @@ fn ctor_to_enriched_candidate(name, scheme, reason)
   })
 }
 
-fn enumerate_lambdas(params, ret, row, context) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn enumerate_lambdas(params, ret, row, context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   // Single anonymous-fn candidate: (param_names) => ?? body. The
   // body becomes a nested Synth invocation; the chain re-enters
   // recursively at parse-time when the user accepts.
@@ -400,7 +400,7 @@ fn enumerate_lambdas(params, ret, row, context) with GraphRead + GraphWrite + Me
   buf
 }
 
-fn enumerate_int_literals(context) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn enumerate_int_literals(context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   // Literal seeds: 0, 1, -1. Three candidates per the Numerical
   // Survey discipline (least-trivial inhabitants of TInt).
   let buf = make_list(3)
@@ -420,7 +420,7 @@ fn int_literal_candidate(n) with GraphRead + GraphWrite + !Mutate = {
   })
 }
 
-fn enumerate_float_literals(context) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn enumerate_float_literals(context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let buf = make_list(2)
   list_set(buf, 0, float_literal_candidate(0.0))
   list_set(buf, 1, float_literal_candidate(1.0))
@@ -437,7 +437,7 @@ fn float_literal_candidate(f) with GraphRead + GraphWrite + !Mutate = {
   })
 }
 
-fn enumerate_string_literals(context) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn enumerate_string_literals(context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_string_literal_node(""),
@@ -449,7 +449,7 @@ fn enumerate_string_literals(context) with GraphRead + GraphWrite + Memory + !Mu
   buf
 }
 
-fn one_unit_candidate(context) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn one_unit_candidate(context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_unit_literal_node(),
@@ -461,7 +461,7 @@ fn one_unit_candidate(context) with GraphRead + GraphWrite + Memory + !Mutate = 
   buf
 }
 
-fn one_hole_candidate(context) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn one_hole_candidate(context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   // ?? at unbound positions. The recursive case: hole-fills-with-
   // hole, leaving the gradient to narrow further at the next layer.
   let buf = make_list(1)
@@ -475,7 +475,7 @@ fn one_hole_candidate(context) with GraphRead + GraphWrite + Memory + !Mutate = 
   buf
 }
 
-fn one_continuation_candidate(context) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn one_continuation_candidate(context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_resume_node(),
@@ -487,7 +487,7 @@ fn one_continuation_candidate(context) with GraphRead + GraphWrite + Memory + !M
   buf
 }
 
-fn enumerate_records(fields, context) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn enumerate_records(fields, context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_record_node(fields),
@@ -499,7 +499,7 @@ fn enumerate_records(fields, context) with GraphRead + GraphWrite + Memory + !Mu
   buf
 }
 
-fn enumerate_list_candidates(elem, context) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn enumerate_list_candidates(elem, context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   // Two candidates: empty list, single-element with elem-hole.
   let buf = make_list(2)
   list_set(buf, 0, EnrichedCandidate({
@@ -519,7 +519,7 @@ fn enumerate_list_candidates(elem, context) with GraphRead + GraphWrite + Memory
   buf
 }
 
-fn enumerate_tuple_candidates(elems, context) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn enumerate_tuple_candidates(elems, context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_tuple_node(elems),
@@ -599,15 +599,15 @@ fn synthesize_singleton_list_node(elem) with GraphRead + GraphWrite + !Mutate = 
   synth_node(MakeListExpr([synth_hole_node()]))
 }
 
-fn synthesize_tuple_node(elems) with GraphRead + GraphWrite + !Mutate + Memory = {
+fn synthesize_tuple_node(elems) with GraphRead + GraphWrite + !Mutate + Memory + Alloc = {
   synth_node(MakeTupleExpr(synth_holes_for(elems)))
 }
 
-fn synthesize_record_node(fields) with GraphRead + GraphWrite + !Mutate + Memory = {
+fn synthesize_record_node(fields) with GraphRead + GraphWrite + !Mutate + Memory + Alloc = {
   synth_node(MakeRecordExpr(synth_record_holes_for(fields)))
 }
 
-fn synthesize_ctor_call_node(name, scheme) with GraphRead + GraphWrite + !Mutate + Memory = {
+fn synthesize_ctor_call_node(name, scheme) with GraphRead + GraphWrite + !Mutate + Memory + Alloc = {
   synth_node(CallExpr(synth_node(VarRef(name)), synth_holes_for_scheme(scheme)))
 }
 
@@ -636,7 +636,7 @@ fn synth_hole_node() with GraphRead + GraphWrite + !Mutate = {
   mint_node(NHole(0), span_zero())
 }
 
-fn synth_holes_for(elems) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn synth_holes_for(elems) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   if len(elems) == 0 { [] }
   else {
     let n = len(elems)
@@ -645,7 +645,7 @@ fn synth_holes_for(elems) with GraphRead + GraphWrite + Memory + !Mutate = {
   }
 }
 
-fn synth_holes_loop(i, n, buf) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn synth_holes_loop(i, n, buf) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   if i >= n { buf }
   else {
     list_set(buf, i, synth_hole_node())
@@ -653,9 +653,9 @@ fn synth_holes_loop(i, n, buf) with GraphRead + GraphWrite + Memory + !Mutate = 
   }
 }
 
-fn synth_record_holes_for(fields) with GraphRead + GraphWrite + Memory + !Mutate = synth_holes_for(fields)
+fn synth_record_holes_for(fields) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = synth_holes_for(fields)
 
-fn synth_holes_for_scheme(scheme) with GraphRead + GraphWrite + Memory + !Mutate = {
+fn synth_holes_for_scheme(scheme) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let Forall(_, ty) = scheme
   match ty {
     TFun(params, _, _) => synth_holes_for(params),

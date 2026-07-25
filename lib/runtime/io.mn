@@ -289,7 +289,7 @@ fn read_line_loop(buf, offset, capacity) with Memory + Alloc + WASI = {
 // paths carry explicit lengths; str_payload materializes a rope/slice
 // exactly here, and a flat path is zero-copy — the bytes already sit
 // where the syscall wants them.
-fn fs_path_view(s) with Memory = {
+fn fs_path_view(s) with Memory + Alloc = {
   (str_payload(s), byte_len(s))
 }
 

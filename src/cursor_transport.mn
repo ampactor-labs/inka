@@ -375,7 +375,7 @@ fn render_literal_source(h) with GraphRead + Alloc + Memory + !Mutate = {
 
 // ─── Format / parse helpers per transport ──────────────────────────
 
-fn show_handle_label(cursor) with Memory = {
+fn show_handle_label(cursor) with Memory + Alloc = {
   let Cursor(handle, _, _) = cursor
   "handle={int_to_str(handle)}"
 }

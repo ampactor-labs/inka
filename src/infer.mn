@@ -1842,7 +1842,7 @@ fn seq_force_list(ah, ptys, i, span: ValidSpan) =
     seq_force_list(ah, ptys, i + 1, span)
   }
 
-fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
+fn infer_seq_op(cname, fh, args, handle, span: ValidSpan) = {
   let ah = collect_handles(args)
   let elem = TVar(mint(Inferred("sequence element")))
   match seq_op_sig(cname, elem) {
@@ -1856,20 +1856,20 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
     // productive-under-error alive if they ever diverge.
     None => graph_bind(handle, TList(elem), Located(span, Inferred("sequence")))
   }
-  // Hβ.infer.seq-op-row-from-callee (PLAN §11 col 2): the ULTIMATE form reads the
-  // callee's OWN declared row live — `match graph_chase(fh) { NBound(TFun(_,_,crow))
-  // => inf_add_row(crow) }` — the same Carried-Truth read infer_call_saturated
-  // makes, deleting this hardcode. It is CORRECT and DROPS the Alloc-fabrication
-  // (push/slice/list_concat/make_list/drop_last are `with Memory + Alloc`,
-  // lists.mn), but it BREAKS SELF-HOSTING on the current substrate: the extra
-  // Alloc attribution shifts ev-slot emit (m2 ≠ m3 by 302 lines), and the
-  // slightly larger wheel compile tips the 4GB never-free bump image OVER its
-  // ceiling — m3 OOMs in infer_program (verified 2026-07-17: memory fault at
-  // 0x100000000, shallow stack, not a logic loop). So it is DEP-gated on §5.O's
-  // per-decl-arena (Hβ.perf.per-decl-arena), which collapses the 4GB working set
-  // to one decl's live set. Until then the Memory floor stands — a known
-  // under-attribution, named here, not a silent one.
-  inf_add_row(mk_ef_closed([ENamed(intern_str("Memory"))]))
+  // Hβ.infer.seq-op-row-from-callee RESOLVED (2026-07-24): the callee's OWN
+  // declared row, read live — the same Carried-Truth read
+  // infer_call_saturated makes. The seq-op family's honest rows
+  // (push/slice/list_concat/make_list carry Memory + Alloc, lists.mn) now
+  // attribute at every call site. The 2026-07-17 revert's OOM was one
+  // representation era stale (measured then on the 559k-line wheel against
+  // the 4GB ceiling; the current wheel compiles at ~694MB peak — the
+  // re-measurement, not the arena, un-gated this). The Memory floor
+  // survives only for an unresolved callee (productive-under-error, the
+  // seq_op_sig None floor's twin).
+  match graph_chase(fh) {
+    GNode(NBound(TFun(_, _, crow)), _) => inf_add_row(crow),
+    _ => inf_add_row(mk_ef_closed([ENamed(intern_str("Memory"))]))
+  }
   // EVERY application result is a possible suspension boundary
   // (stage_continuation_boundary's own law) — the fast path is still an
   // application. Skipping the staging here left lower's k2 crossing
@@ -1891,7 +1891,7 @@ fn infer_call(func, args, handle, span: ValidSpan) = {
   // the product-with-holes like any other call.
   if is_seq_op(cname) && call_hole_index(args, 0) < 0
      && len(args) == len(callee_params(cname)) {
-    infer_seq_op(cname, args, handle, span)
+    infer_seq_op(cname, fh, args, handle, span)
   }
   // A HOLED/under-applied substrate call is the product-with-holes built
   // from the FACE (seq_op_sig — the same one home the saturated path
@@ -3957,7 +3957,7 @@ fn generalize(handle) = {
 // paranoia, not a semantics: no real resolved type nests 200 deep, so
 // crossing it IS the cycle, reported once with the shape in hand.
 fn chase_deep(ty) = chase_deep_at(ty, 0)
-fn chase_probe_tag(ty) with Memory = match ty {
+fn chase_probe_tag(ty) with Memory + Alloc = match ty {
   TVar(h) => "TVar({int_to_str(h)})",
   TFun(ps, _, _) => "TFun/{int_to_str(len(ps))}",
   TList(_) => "TList", TTuple(_) => "TTuple", TName(n, _) => "TName({n})",

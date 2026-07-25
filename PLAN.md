@@ -1038,6 +1038,22 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · THE CURSOR CONFIG — the branch-cursor substrate lands
+  Law-7-inert (Phase C rung 1 step C1c-2a · pin 3f4262bc).
+  graph_handler gains config (spine0, spine_open0, next0, limit0): a
+  parallel branch cursor installs over the SHARED spine table with a
+  private planned range; the nine root installs pass the empty graph
+  explicitly. State records live in shared heap, the install chain
+  stays per-instance — the spawn substrate's own shape. Probed en
+  route: handler-config DEFAULTS don't parse (the parameter-product
+  law implies them — parse_arg_names takes bare names; the lathe-lag
+  named, the explicit quadruple honest until that turn). CLEAN
+  m2 == m3 at 294,873 lines; board whole. C1c-2's remaining rungs,
+  design banked in the mirror: the env-view config (branch reads the
+  shared buffer, private extends die at join), per-branch diag
+  collection re-reported in stmt order, pre-open the plan's pages
+  before the fan, and the fan itself gated on byte-equality with
+  C1c-1's sequential layer walk.
 - 2026-07-25 · ▶▶ THE LAYER-ORDERED FINAL — the fan's execution shape
   runs sequentially, and the fixpoint proves walk-order convergence
   (Phase C rung 1 step C1c-1 · pin 406e4d2a). The trial's own reasons

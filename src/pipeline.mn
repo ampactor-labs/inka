@@ -109,7 +109,7 @@ fn infer_context(body) = {
     ~> verify_ledger
     ~> lookup_ty_graph
     ~> env_handler
-    ~> graph_handler
+    ~> graph_handler([], 0, 0, 0)
     ~> mutate_sink
     ~> diagnostics_handler
     ~> intern_table

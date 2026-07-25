@@ -196,11 +196,15 @@ fn spine_boundary_at(ref spine, spine_open, h) with Memory =
   if spine_band(h) >= spine_open { NoBoundary }
   else { list_index(spine_page(spine, h).boundaries, spine_slot(h)) }
 
-handler graph_handler
-  with spine = [], spine_open = 0,
+// Config: a BRANCH CURSOR (the parallel fan's per-thread instance) installs
+// over the SHARED spine with a private planned range — the root install is
+// bare and the defaults are the empty graph. Handler state records live in
+// shared heap; the install chain stays per-instance, correctly private.
+handler graph_handler(spine0, spine_open0, next0, limit0)
+  with spine = spine0, spine_open = spine_open0,
        trail = [], trail_len = 0,
-       epoch = 0, next = 0,
-       mint_limit = 0, mint_high = 0,
+       epoch = 0, next = next0,
+       mint_limit = limit0, mint_high = 0,
        overlay_names = ["global"],
        overlay_bufs = [[]],
        overlay_lens = [0],

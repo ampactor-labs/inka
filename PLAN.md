@@ -702,9 +702,11 @@ compiler re-derives BY NAME what a HANDLE already connects:
   Still super-constant — the O(1) target is a handle-set bit (layer 2).
 - **`esc_assoc` — O(n²)** (lower.mn:1383): a name-keyed escaping-row side-ledger
   re-scanned per call site, three stacked passes.
-- **`instantiate` → `subst_ty` tree-clone** (infer.mn:2687) + **`find_mapping`'s
-  per-leaf `filter`-alloc** (infer.mn:2840): a full type-tree clone per
-  polymorphic reference, garbage per TVar leaf.
+- **`instantiate` → `subst_ty` tree-clone** (infer.mn:4185) + **`find_mapping`'s
+  per-leaf `filter`-alloc** (infer.mn:4351): a full type-tree clone per
+  polymorphic reference, garbage per TVar leaf. (Perf-trued 2026-07-24: the
+  cluster samples at ~0% of the post-crc compile — its cost is ALLOCATION
+  volume, the OOM channel, not time; the sharing fix gates on an alloc count.)
 - **The 4GB never-free bump image** (memory.mn): ~1e8 transient records → a
   cache-hostile working set that MULTIPLIES the constant factor of every
   pointer-chase — the amplifier on all of the above.
@@ -737,9 +739,10 @@ they dissolve — a name is a HANDLE, and reachability an EDGE
 (`Hβ.lower.reach-edge-on-node`), not a name scanned live.
 
 **The unifying fix — a name is a HANDLE, not a byte-sequence.** Interned ONCE at
-lex (the content-intern table is the one O(1)-amortized hash — and it ALREADY
-exists for the data section, `string_offset_lookup`, today O(n)-scanned at
-wasm.mn:199; fix IT to O(1) and its offsets ARE the universal name-handles). Then
+lex (the content-intern hash ALREADY exists at emit — `string_offset` is
+O(1)-bucketed since the interner landed — but it is emit-scoped and offset-keyed;
+the phase-A move is birthing the table at LEX, where scan_ident today mints a
+fresh slice per occurrence and the canonical instance can be stored once). Then
 every downstream compare is `i32.eq` (never `str_eq`), every table is
 handle-keyed (O(1) index, never a name scan), every set is a handle-bit. This
 dissolves env / dedup / find_mapping / esc into the graph's O(1) chase — LESS
@@ -757,11 +760,13 @@ projection (arm 7's gradient cash-out: a name's ultimate representation is a wor
    (`Hβ.infer.instantiate-shares-never-clones`), and REACHABILITY — the emitted-fn
    set as EDGE-following from main (`Hβ.lower.reach-edge-on-node`), the name scan
    gone (the `reach_has` membership's remaining O(n²) is `Hβ.lower.reach-membership-o1`).
-   The str_hash indexes shipped as WAYPOINTS (summary/region/env/base/esc/reach —
-   six hand-rolled copies) are ONE primitive, `Hβ.runtime.indexed-map-primitive`:
-   a `Map(k,v)`/`Set(k)` over the sequence/product node-kinds, key-type-dispatched
-   by the same proof-becomes-dispatch the emit already does — ~200 lines deleted
-   once names are handles. Each a Carried-Truth deletion.
+   The str_hash WAYPOINTS largely converged already (trued 2026-07-24): smap
+   (lib/runtime/imap.mn, the one String-keyed primitive) carries the infer/lower
+   indexes; the two hand-rolled survivors are the env index (pipeline.mn
+   env_index_new/env_bucket_pos family) and the emit string table (wasm.mn's own
+   buckets). `Hβ.runtime.indexed-map-primitive` finishes as: those two re-key by
+   handle onto the one primitive once names are handles. Each a Carried-Truth
+   deletion.
 3. **Per-decl arena** (`Hβ.perf.per-decl-arena`, gated on
    `Hβ.infer.region-on-tee-alloc-absorb`) — each decl's transient scratch is
    `own`ed and `Consume`d at the decl boundary; the region drop IS the arena reset
@@ -831,7 +836,7 @@ substrate-honest floor of "unsurpassed speed."
 
 **A · Effects & the modal crown (arm 4) — gates ownership, !Thread, IFC negation.** `Hβ.effects.sound-neg-under-poly` (the soundness GATE LANDED 2026-07-13 — `row_subsumes` EfNeg by-name membership; tests/crown/ + tools/crown-gate.sh; m2==m3 byte-identical, 66/66 micros; the open tier is the modal world-index below plus the two exposed follow-ups `Hβ.effects.positive-row-pointer-eq` and `Hβ.effects.parameterized-negation-instance`) · `Hβ.effects.modal-world-index` (rows+capabilities+negation sound simultaneously, as a graph fact; POPL-2026 cite at effects.mn:12) · `Hβ.infer.modal-capability-at-tee` (the modal rule: a row var becomes a lexical capability handle at the `~>` edge, no new surface form) · `Hβ.syntax.perform-dissolution`.
 
-**B · Continuations & TIME (arm 2, §4④) — the binding keystone. LANDED: `Hβ.lower.continuation-reification-codegen` (the k1→M4 arc self-hosted through the fixpoint, §7); `Hβ.continuations.multishot-reexecution-driver` is SUPERSEDED (the 2026-07-11 pivot — re-execution restarts, the felt spec demands resume), `Hβ.lower.arm-internal-perform-scope` closed by the M3 lexical-evidence fence.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (at the multi-shot producer's reify site) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed; the standardized multiple-memories proposal is this peer's substrate cash-out — a dedicated IMAGE memory snapshots whole while scratch lives apart, the memcpy boundary drawn by the module format itself) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` *(substrate PROBED 2026-07-10: wasmtime 43 `-W stack-switching` + wasm-tools 1.252 assemble native typed-continuations — single suspend/resume runs (fx1→10) — but the cont is LINEAR: resuming one twice PANICS the engine (`ptr::eq(head, self)`). So native gives ONE-shot free (already fast-pathed by direct-call) and does NOT solve MULTI-shot; the multi-shot keystone is RE-EXECUTION — `cont.new(body)` fresh per resume, replaying prior performs, the trail/rollback substrate the driver — not native cloning. `perform`→`suspend`, `resume(v)`→fresh-cont resume; the emit path switches to wasm-tools for continuation modules (WABT can't assemble `cont`). This IS the producer-invocation keystone the cardinality fix unblocked — see §7)* · `Hβ.continuations.multishot-reexecution-driver` *(the re-execution driver — PROVEN END-TO-END 2026-07-11, crucibles in tests/native-cont/: native-cont `twice` → 3 (identity) and 13 (non-identity `pick()+5`, the continuation after the perform captured natively), and the same model in Mentl source → 30 through boot. A multi-shot handler is a DRIVER over re-runs: `resume(v)` = fresh `cont.new(body)` resumed to the `suspend`, then resumed with v; `suspend` unwinds the perform to the driver so the arm runs OUTSIDE the body's stack (no re-entrancy — the trap the pure-Mentl outer-install form hit). Correct for identity / non-identity / no-perform. **BUT native conts are BLOCKED under WASI `_start` (wasmtime 43, verified 2026-07-11): a single `cont.new`+`resume` under `_start` panics `ptr::eq(head, self)` — the command entry runs on wasmtime's own fiber and a user continuation violates its stack invariant; `--invoke` works, `_start` (every real program) does not, and no flag avoids it.** So native conts are the O(1) future (an `!Outside` dependency until wasmtime carries them under `_start`), NOT the shipping substrate. THE SHIPPING PATH is the PURE-MENTL re-execution driver — `resume(v)` re-runs the body thunk under a one-shot replay handler, all ordinary handlers, works under `_start`: the DIRECT form (arm logic as a driver fn, no outer install) is proven (reexec-model.mn → 30) and correct when the body performs the op unconditionally (mn-multishot). The general form (conditional / no-perform bodies) needs the ARM-INTERNAL-PERFORM GAP closed — the re-run's perform must resolve to the inner replay, not re-enter the outer handler (the pure-Mentl outer-install driver's 134 trap). THAT is the real keystone dig, `!Outside`-clean. Each rerun is a stateless fork → trivially parallel + durable, the SPACE=TIME fork §5.U scheduled by `~> Schedule`)* · `Hβ.lower.arm-internal-perform-scope` *(new — the gate under multi-shot: a handler installed INSIDE an arm body (`bt() ~> replay(v)`) must shadow the enclosing handler for performs in the re-run; today the re-run's perform re-enters the outer handler (evidence threads to the wrong install). Closing it makes the pure-Mentl re-execution driver fully correct AND fixes arm-internal effectful installs generally — core handler correctness, not just multi-shot)* · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:3174) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
+**B · Continuations & TIME (arm 2, §4④) — the binding keystone. LANDED: `Hβ.lower.continuation-reification-codegen` (the k1→M4 arc self-hosted through the fixpoint, §7); `Hβ.continuations.multishot-reexecution-driver` is SUPERSEDED (the 2026-07-11 pivot — re-execution restarts, the felt spec demands resume), `Hβ.lower.arm-internal-perform-scope` closed by the M3 lexical-evidence fence.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (at the multi-shot producer's reify site) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed; the standardized multiple-memories proposal is this peer's substrate cash-out — a dedicated IMAGE memory snapshots whole while scratch lives apart, the memcpy boundary drawn by the module format itself) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` *(substrate PROBED 2026-07-10: wasmtime 43 `-W stack-switching` + wasm-tools 1.252 assemble native typed-continuations — single suspend/resume runs (fx1→10) — but the cont is LINEAR: resuming one twice PANICS the engine (`ptr::eq(head, self)`). So native gives ONE-shot free (already fast-pathed by direct-call) and does NOT solve MULTI-shot; the multi-shot keystone is RE-EXECUTION — `cont.new(body)` fresh per resume, replaying prior performs, the trail/rollback substrate the driver — not native cloning. `perform`→`suspend`, `resume(v)`→fresh-cont resume; the emit path switches to wasm-tools for continuation modules (WABT can't assemble `cont`). This IS the producer-invocation keystone the cardinality fix unblocked — see §7)* · `Hβ.continuations.multishot-reexecution-driver` *(the re-execution driver — PROVEN END-TO-END 2026-07-11, crucibles in tests/native-cont/: native-cont `twice` → 3 (identity) and 13 (non-identity `pick()+5`, the continuation after the perform captured natively), and the same model in Mentl source → 30 through boot. A multi-shot handler is a DRIVER over re-runs: `resume(v)` = fresh `cont.new(body)` resumed to the `suspend`, then resumed with v; `suspend` unwinds the perform to the driver so the arm runs OUTSIDE the body's stack (no re-entrancy — the trap the pure-Mentl outer-install form hit). Correct for identity / non-identity / no-perform. **BUT native conts are BLOCKED under WASI `_start` (wasmtime 43, verified 2026-07-11): a single `cont.new`+`resume` under `_start` panics `ptr::eq(head, self)` — the command entry runs on wasmtime's own fiber and a user continuation violates its stack invariant; `--invoke` works, `_start` (every real program) does not, and no flag avoids it.** So native conts are the O(1) future (an `!Outside` dependency until wasmtime carries them under `_start`), NOT the shipping substrate. THE SHIPPING PATH is the PURE-MENTL re-execution driver — `resume(v)` re-runs the body thunk under a one-shot replay handler, all ordinary handlers, works under `_start`: the DIRECT form (arm logic as a driver fn, no outer install) is proven (reexec-model.mn → 30) and correct when the body performs the op unconditionally (mn-multishot). The general form (conditional / no-perform bodies) needs the ARM-INTERNAL-PERFORM GAP closed — the re-run's perform must resolve to the inner replay, not re-enter the outer handler (the pure-Mentl outer-install driver's 134 trap). THAT is the real keystone dig, `!Outside`-clean. Each rerun is a stateless fork → trivially parallel + durable, the SPACE=TIME fork §5.U scheduled by `~> Schedule`)* · `Hβ.lower.arm-internal-perform-scope` *(new — the gate under multi-shot: a handler installed INSIDE an arm body (`bt() ~> replay(v)`) must shadow the enclosing handler for performs in the re-run; today the re-run's perform re-enters the outer handler (evidence threads to the wrong install). Closing it makes the pure-Mentl re-execution driver fully correct AND fixes arm-internal effectful installs generally — core handler correctness, not just multi-shot)* · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:5023) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
 
 **C · `!Flow` — the crown applied to data flow (arm 4/6, §4⑥; W31 scaffold landed).**
 IFC is `!E` on the data-flow lattice: prove transitively, like `!Alloc`, that a
@@ -1033,6 +1038,74 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-24 · ▶▶ THE CEREMONY FUSE — 15.56s → 8.46s (1.84×; 8.35×
+  across the two perf landings), and phase A's design survives its
+  adversarial panel CORRECTED (· pin cec0f2df). THE PROFILE FIRST (the
+  campaign's measure-first law, third strike): host perf on the
+  post-crc compile put the sequence header ceremony on top —
+  seq_stride 9.4% + seq_tag 4.5% + decode_stride 4.2% +
+  load/store_strided 5.8% raw, paid per element by
+  list_index_unchecked (18.3%) and the fill walks — while the
+  documented instantiate/subst_ty/find_mapping cluster sampled ~0%
+  (its cost is ALLOCATION volume, the OOM channel; the sharing fix
+  gates on an alloc count now, not a profile line). THE FUSE is the
+  carried-truth law at the representation layer: the accessor-call
+  form read the SAME tag word three times per element; the fused
+  arms read it once and derive both projections locally — the word
+  fast path is a single load, concat/slice recursion derives no
+  stride at all, list_set keeps the byte range-trap and the wide
+  copy-protocol through store_strided, and the flat_fill family
+  collapses to native mem_copy for flat-to-flat ranges (three
+  per-element strided loops became one bulk copy each; snoc fills
+  derive their stride once per node). Uniform stride through a fill
+  is the construction law (flat_raw allocates with the tree's own
+  sc; sub-nodes carry the parent's), stated at the site. Lib-source
+  only: CLEAN m2 == m3 at 329,959 lines, census 0, battery green,
+  frontier/proof-exactness/crown/micro-tier green at the pin. THE
+  PANEL'S PHASE-A VERDICT, banked as the corrected design: the
+  `with Cast` body sweep REFUTED outright (masked by the seq-op
+  Memory hardcode, self-deleting under tighten's T_OverDeclared
+  authorship, inconsistent across the cascade — phase A lands
+  `effect Cast { addr }` + lower-erase + RED-first crucible as
+  ZERO-READER vocabulary, the RI8 precedent; the body sweep moves to
+  the arena-gated signature-driven landing where rows become true by
+  INFERENCE); the intern is a NINTH core handler in infer_context
+  (string_table's install covers only 3 of 14 chains), emit offsets
+  stay VISIT-ASSIGNED (pre-seeding = ~300KB dead-name bloat + an
+  O(U²) dedup gate; the intern handle is compile-scoped, the offset
+  its emit-time projection — two reads of one row), and A.2's gate
+  expectation INVERTS to Law-7 byte-identical (an observed
+  TRANSITION means lex state leaked into emit — a bug signal, not a
+  crossing); the subst_ty changed-flag means "returned value differs
+  from the input record" (an NBound resolution always reports
+  changed — the shape-preserving reading; the freshened-only reading
+  silently hands consumers unresolved TVar subtrees), and chase_deep
+  is the SECOND unconditional reconstructor the alias dissolution
+  must measure; ENamed's representation is FORCED to the Int handle
+  (surface == on Strings is byte-compare by the structural law, so
+  the String pick cannot deliver i32.eq; a missed mint becomes a
+  loud type error — the enforcement the mint-law convention lacked,
+  with six constructed-name families the design had missed); persist
+  is SAFE either way (world_fingerprint hashes name BYTES from the
+  image). Two traps named for the build: nested infer_context
+  brackets must not shadow the intern (or handles never cross a
+  bracket — the contract, instrumented at the three by-name leaves:
+  a byte-equal-but-handle-distinct pair fires the census); the
+  intern op's row ripples through lex_from into every chain body
+  (plan the declared-row sweep, the ++-carries-row precedent). A.0
+  doc-truths landed with the fuse: the §5.O instantiate anchors
+  (2687/2840 → 4185/4351), the stale string_offset O(n) claim (it
+  is O(1)-bucketed; the phase-A move is birth-at-LEX), the six-
+  waypoint claim trued to its converged state (smap carries the
+  infer/lower indexes; env_index and the emit string table are the
+  two hand-rolled survivors), the band-B anchor (3174 → 5023), and
+  graph.mn's checkpoint comment (thirteen → seventeen words).
+  BANKED from the same profile, the next strikes: ctor_payload_tys_find
+  6.86% + variant_specs_filter_from 0.61% are ONE scan family (a
+  backward str_eq walk of the whole env snapshot per pattern bind /
+  per variant read at EMIT — env_find_flat's sibling, itself 3.39%);
+  the fix is one name-keyed read on the emit state serving both,
+  Law-7 byte-identical expected.
 - 2026-07-24 · ▶▶ THE PROSE GATE COST FIVE COMPILERS — 70.58s → 15.56s
   (4.5×) from one flatten (the campaign's measure-first law paying within
   its first hour). Host perf on the self-compile (the §8 recipe) showed

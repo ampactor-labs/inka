@@ -121,7 +121,12 @@ fn len(ref xs) with Memory = load_i32(xs)
 // Caller asserts tag=0 — calling list_set on a snoc/concat/slice is
 // a structural contract violation (the list should be list_to_flat'd first).
 fn list_set(l, idx, val) with Memory = {
-  store_strided(l + 8, idx, seq_stride(l), val)
+  // One tag-word read; 0 == pack_tag(0, 0), the flat word list — a direct
+  // store. Byte lists route through store_strided so the 0..255 range trap
+  // holds; wide slots keep the copy-from-reference protocol.
+  let tw = load_i32(l + 4)
+  if tw == 0 { store_i32(l + 8 + idx * 4, val) }
+  else { store_strided(l + 8, idx, decode_stride(tw / 16), val) }
   l
 }
 
@@ -179,15 +184,30 @@ fn list_index(ref list, i) with Memory = {
 // The raw traversal — every entry already carries a discharged bounds
 // obligation (list_index's boundary check, or list_index_proven's proof).
 // Exhaustive on all four tags — no fallback sentinel.
+//
+// The tag WORD is read ONCE and both projections (tag, stride) derive
+// locally from it. The accessor-call form re-read the same word three
+// times per element (seq_stride + seq_tag + load_strided's branches) and
+// priced at ~21% of the whole self-compile (perf, 2026-07-24) — the
+// carried-truth law at the representation layer: one load already holds
+// both facts. In the tag-0 arm the word IS pack_tag(0, sc) = sc*16, so
+// 0 is the word floor and 16 the byte code; in the snoc arm it is
+// sc*16 + 1. Concat/slice recursion derives no stride at all (the child
+// node carries its own word).
 fn list_index_unchecked(ref list, i) with Memory = {
-  let stride = seq_stride(list)
-  match seq_tag(list) {
-    0 => load_strided(list + 8, i, stride),
+  let tw = load_i32(list + 4)
+  match i32_and(tw, 15) {
+    0 => {
+      if tw == 0 { load_i32(list + 8 + i * 4) }
+      else if tw == 16 { load_i8(list + 8 + i) }
+      else { load_strided(list + 8, i, decode_stride(tw / 16)) }
+    },
     1 => {
       let left     = load_i32(list + 8)
       let left_len = load_i32(left)
       if i < left_len { list_index_unchecked(left, i) }
-      else { load_strided(list + 12, 0, stride) }
+      else if tw == 1 { load_i32(list + 12) }
+      else { load_strided(list + 12, 0, decode_stride(tw / 16)) }
     },
     3 => {
       let left     = load_i32(list + 8)
@@ -336,14 +356,15 @@ fn list_hash_f64_loop(xs, i, n, h) -> Int with Memory + Alloc =
 // push allocates a 16-byte snoc node.
 fn push(list, val) with Memory + Alloc = {
   let old_len = load_i32(list)
-  let sc = seq_sc(list)
+  let sc = load_i32(list + 4) / 16
+  let st = decode_stride(sc)
   // The value slot at +12 is stride-sized: 12+4=16 for a word list
   // (byte-identical floor), 12+8 for a packed f64, 12+1 for a byte.
-  let snoc = alloc(12 + decode_stride(sc))
+  let snoc = alloc(12 + st)
   store_i32(snoc, old_len + 1)
   store_i32(snoc + 4, pack_tag(1, sc))
   store_i32(snoc + 8, list)
-  store_strided(snoc + 12, 0, decode_stride(sc), val)
+  store_strided(snoc + 12, 0, st, val)
   snoc
 }
 
@@ -504,22 +525,31 @@ fn flat_fill(flat, tree, i, n) with Memory + Alloc = {
   }
 }
 
+// A flat source into a flat destination at the same index range is ONE
+// contiguous copy — the per-element strided loop re-derived two loop-invariant
+// strides per element (the ceremony the 2026-07-24 perf pass priced). The
+// stride is uniform through a fill by construction: flat_raw allocates the
+// destination with the tree's own sc, and every sub-node carries its parent's
+// sc — so one mem_copy is byte-exact for word, byte, and wide elements alike.
 fn flat_fill_flat_src(flat, src, i, n) with Memory + Alloc = {
   if i >= n { () }
   else {
-    store_strided(flat + 8, i, seq_stride(flat), load_strided(src + 8, i, seq_stride(src)))
-    flat_fill_flat_src(flat, src, i + 1, n)
+    let st = decode_stride(load_i32(flat + 4) / 16)
+    mem_copy(flat + 8 + i * st, src + 8 + i * st, (n - i) * st)
   }
 }
 
 fn flat_fill_snoc(flat, tree, i, n) with Memory + Alloc = {
-  // snoc node: [count][tag=1][left:ptr][last:i32]
-  // Write from right: the last element goes at position n-1,
-  // then recurse into left for positions 0..n-2.
+  // snoc node: [count][tag=1][left:ptr][last at stride]
+  // Write from right: the last element goes at position n-1, then recurse
+  // into left for positions 0..n-2. A snoc CHAIN pays this once per element,
+  // so the stride derives once from the node's own tag word (uniform through
+  // the fill) and the word case is a direct load/store pair.
   let count = load_i32(tree)
   let last_pos = count - 1
-  let last_val = load_strided(tree + 12, 0, seq_stride(tree))
-  store_strided(flat + 8, last_pos, seq_stride(flat), last_val)
+  let st = decode_stride(load_i32(tree + 4) / 16)
+  if st == 4 { store_i32(flat + 8 + last_pos * 4, load_i32(tree + 12)) }
+  else { store_strided(flat + 8, last_pos, st, load_strided(tree + 12, 0, st)) }
   let left = load_i32(tree + 8)
   flat_fill(flat, left, i, last_pos)
 }
@@ -552,18 +582,24 @@ fn flat_fill_flat_src_offset(flat, src, offset, n) with Memory + Alloc = {
   }
 }
 
+// Flat-to-flat at distinct offsets: the same one-mem_copy collapse as
+// flat_fill_flat_src (uniform stride through the fill by construction).
 fn copy_range(flat, src, dest_off, src_off, n) with Memory + Alloc = {
   if n == 0 { () }
   else {
-    store_strided(flat + 8, dest_off, seq_stride(flat), load_strided(src + 8, src_off, seq_stride(src)))
-    copy_range(flat, src, dest_off + 1, src_off + 1, n - 1)
+    let st = decode_stride(load_i32(flat + 4) / 16)
+    mem_copy(flat + 8 + dest_off * st, src + 8 + src_off * st, n * st)
   }
 }
 
 fn flat_fill_snoc_offset(flat, src, offset, n) with Memory + Alloc = {
-  let count    = load_i32(src)
-  let last_val = load_strided(src + 12, 0, seq_stride(src))
-  store_strided(flat + 8, offset + count - 1, seq_stride(flat), last_val)
+  // The offset twin of flat_fill_snoc — same once-per-element cost, same
+  // one-read stride derivation and word fast path.
+  let count = load_i32(src)
+  let pos   = offset + count - 1
+  let st = decode_stride(load_i32(src + 4) / 16)
+  if st == 4 { store_i32(flat + 8 + pos * 4, load_i32(src + 12)) }
+  else { store_strided(flat + 8, pos, st, load_strided(src + 12, 0, st)) }
   let left = load_i32(src + 8)
   flat_fill_at_offset(flat, left, offset, count - 1)
 }
@@ -586,13 +622,27 @@ fn flat_fill_slice_offset(flat, src, offset, n) with Memory + Alloc = {
 fn flat_fill_slice_range(flat, base, dest_off, src_start, n) with Memory + Alloc = {
   if n == 0 { () }
   else {
+    // A slice over a FLAT base — the dominant shape — is one contiguous
+    // mem_copy. A structured base falls to the per-element walk with the
+    // stride hoisted once (it is loop-invariant; deriving it per element was
+    // the priced ceremony).
+    let st = decode_stride(load_i32(flat + 4) / 16)
+    if i32_and(load_i32(base + 4), 15) == 0 {
+      mem_copy(flat + 8 + dest_off * st, base + 8 + src_start * st, n * st)
+    }
+    else { flat_fill_slice_walk(flat, base, dest_off, src_start, n, st) }
+  }
+}
+
+fn flat_fill_slice_walk(flat, base, dest_off, src_start, n, st) with Memory = {
+  if n == 0 { () }
+  else {
     // Unchecked by construction: the walk's n came from the slice node's own
     // length, so src_start stays inside base for every step — the checked
     // list_index would also be a table-typed call forcing [a] onto this raw
     // walk's word locals.
-    let val = list_index_unchecked(base, src_start)
-    store_strided(flat + 8, dest_off, seq_stride(flat), val)
-    flat_fill_slice_range(flat, base, dest_off + 1, src_start + 1, n - 1)
+    store_strided(flat + 8, dest_off, st, list_index_unchecked(base, src_start))
+    flat_fill_slice_walk(flat, base, dest_off + 1, src_start + 1, n - 1, st)
   }
 }
 

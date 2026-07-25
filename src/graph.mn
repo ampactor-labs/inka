@@ -127,7 +127,7 @@ handler graph_handler
   // trail's per-slot undo inverts in-place writes, but a spine REALLOCATION
   // (extend_to's doubling copy) is a mutation too, and its only precise
   // inverse is the fork-time value — so the checkpoint snapshots every
-  // grow-able state list (O(1): thirteen words, allocated BEFORE the fork
+  // grow-able state list (O(1): seventeen words, allocated BEFORE the fork
   // pair's heap_mark, so the record survives the region). Without this, a
   // fork that grows any spine leaves the handler pointing into
   // [mark, bump) — zeroed at heap_reset, re-occupied by the next

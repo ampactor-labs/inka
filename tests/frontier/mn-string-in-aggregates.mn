@@ -1,0 +1,24 @@
+// String-carrying aggregates, pinned before the TString dissolution
+// (A.4 step 1): a record field and an ADT payload compare, render, and
+// hash through the byte faces — the routes the dead-arm deletions and
+// the mint flip must preserve. [String] SHOW renders elements as text.
+// [String] element == is deliberately NOT pinned here: at concrete
+// sites it word-compares today (list_eq's element loop; the twins heal
+// only generic bodies) — a pre-existing class the dissolution must not
+// canonize, banked in the plan with its decision.
+type Tag = Named(String) | Anon
+
+fn main() = {
+  let a = {name: "ada", n: 1}
+  let b = {name: "ada", n: 1}
+  let c = {name: "bob", n: 1}
+  let t1 = Named("x")
+  let t2 = Named("x")
+  let t3 = Named("y")
+  if a == b && a != c
+    && t1 == t2 && t1 != t3
+    && hash(t1) == hash(t2)
+    && to_string(a) == to_string(b)
+    && to_string(["ada", "bob"]) == to_string(["ada", "bob"])
+  { 42 } else { 1 }
+}

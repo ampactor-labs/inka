@@ -1,0 +1,12 @@
+// The annotation boundary, pinned before the TString dissolution (A.4
+// step 1): a map-built byte sequence satisfies a `: String` parameter —
+// the exact edge parse_type_atom's mint flip rewires (today the
+// annotation mints the TString sentinel and the merge's unify arms
+// bridge; under the alias both sides are one TList(TByte) node). The
+// un-annotated direction lives in mn-string-cross-stride.
+fn take_s(s: String) = byte_len(s)
+
+fn main() = {
+  let built = map((b) => b, "hi")
+  if take_s(built) == 2 && take_s("abc") == 3 { 42 } else { 1 }
+}

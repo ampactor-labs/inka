@@ -996,6 +996,19 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-heap-region.mn" 42 yes "$dir"
   run_program "$compiler" top-level-let \
     "$ROOT/tests/frontier/mn-top-level-let.mn" 42 yes "$dir"
+  # The A.4 oracle wave (step 1 of the TString dissolution): these pin
+  # TODAY'S string routes — show/hash/ordering scalar faces, the byte
+  # faces inside record fields and ADT payloads, and the `: String`
+  # annotation boundary — because the fixpoint is structurally blind to
+  # a string-route regression. The remaining planned leg is the
+  # String-typed hole proposing string literals (the edit-harness
+  # shape), landing with A.4 step 4's synth rewrite.
+  run_program "$compiler" string-scalar-faces \
+    "$ROOT/tests/frontier/mn-string-scalar-faces.mn" 42 yes "$dir"
+  run_program "$compiler" string-in-aggregates \
+    "$ROOT/tests/frontier/mn-string-in-aggregates.mn" 42 yes "$dir"
+  run_program "$compiler" string-annotation-boundary \
+    "$ROOT/tests/frontier/mn-string-annotation-boundary.mn" 42 yes "$dir"
   # The Cast capability (phase-A vocabulary): addr erases at lower to its
   # operand, so the row carries the whole meaning — the green leg proves
   # word-face facts through the erase (RED on the pre-Cast boot: the op

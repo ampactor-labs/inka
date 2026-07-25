@@ -1,0 +1,16 @@
+// The string scalar faces, pinned before the TString dissolution (A.4
+// step 1): to_string is identity on a String, hash is self-consistent
+// and discriminating, ordering is lexicographic byte order. These pin
+// the show/hash/compare ROUTING the dissolution rewires — the fixpoint
+// is structurally blind to a string-route regression; this leg is not.
+fn main() = {
+  let hi = "hi"
+  let ho = "ho"
+  if to_string(hi) == "hi"
+    && hash(hi) == hash("hi")
+    && hash(hi) != hash(ho)
+    && "ab" < "b"
+    && "ab" <= "ab"
+    && "b" > "ab"
+  { 42 } else { 1 }
+}

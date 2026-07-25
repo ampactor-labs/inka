@@ -1500,7 +1500,6 @@ type DiagKind
                                                  // §«Partial application» — productive,
                                                  // never executable)
   | EReplayExhausted(Span)                        // clock-replay trace ran out
-  | EResumeWorldMismatchWorld(Int, Int, Span)    // captured vs live world-tag (persist)
 
 // report takes ONE DiagKind — the structured fact. The handler PROJECTS
 // every surface (source/code/kind/message/span/applicability) from it.
@@ -1572,8 +1571,7 @@ fn diag_span(d) with Pure = match d {
   EUnresolvedType(_, _, s) => s,
   EEffectUnhandled(_, _, s) => s,
   EUnresolvedHole(_, s) => s,
-  EReplayExhausted(s) => s,
-  EResumeWorldMismatchWorld(_, _, s) => s
+  EReplayExhausted(s) => s
 }
 
 // The originating tentacle/stage — a projection, not a copied label.
@@ -1627,8 +1625,7 @@ fn diag_source(d) with Pure = match d {
   EUnresolvedType(_, _, _) => "lower",
   EEffectUnhandled(_, _, _) => "effects",
   EUnresolvedHole(_, _) => "verify",
-  EReplayExhausted(_) => "clock",
-  EResumeWorldMismatchWorld(_, _, _) => "persist"
+  EReplayExhausted(_) => "clock"
 }
 
 // The wire code — the stable identifier (`docs/errors/<CODE>.md`).
@@ -1682,8 +1679,7 @@ fn diag_code(d) with Pure = match d {
   EUnresolvedType(_, _, _) => "E_UnresolvedType",
   EEffectUnhandled(_, _, _) => "E_EffectUnhandled",
   EUnresolvedHole(_, _) => "E_UnresolvedHole",
-  EReplayExhausted(_) => "E_ReplayExhausted",
-  EResumeWorldMismatchWorld(_, _, _) => "E_ResumeWorldMismatch"
+  EReplayExhausted(_) => "E_ReplayExhausted"
 }
 
 // Severity — the error-vs-narration axis (a projection).
@@ -1874,8 +1870,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
   EUnresolvedType(h, epoch, _) => "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",
   EEffectUnhandled(ename, proposal, _) => "effect {ename} reaches the executable root with no absorbing handler — calling one of its ops would read garbage evidence at runtime; nothing executes unproven. {proposal}",
   EUnresolvedHole(h, _) => "unresolved value hole (handle {int_to_str(h)}) — fill it (accept a proven survivor) or suspend it into a parameter product",
-  EReplayExhausted(_) => "clock replay trace exhausted",
-  EResumeWorldMismatchWorld(captured, live, _) => "continuation frozen under world {int_to_str(captured)} cannot resume under world {int_to_str(live)}"
+  EReplayExhausted(_) => "clock replay trace exhausted"
 }
 
 // Universal short-circuit / early return.

@@ -1,30 +1,34 @@
-// persist.mn - same-image record-copy prototype.
+// persist.mn — the rooted-image persist (§4④: persist = memcpy).
 //
-// STATUS: this is not yet durable continuation persistence. It copies exactly
-// `size` bytes beginning at `k`. A real continuation record can contain linear-
-// memory pointers and a function-table index whose reachable heap, globals,
-// table/code identity, handler installs, and host resources are not in that
-// byte range. After process loss or recompilation those words may have no valid
-// referents.
+// The image [0, heap-line) plus the mutable-global record IS the whole
+// program state: wasm call frames live engine-side, outside linear memory,
+// so one contiguous copy re-enters the exact address space with every
+// interior pointer valid — no serializer, no relocation, no reachability
+// walk. The emitter generates the module's own save/restore pair and build
+// key beside $alloc (emit_image_substrate); this file owns the wire and the
+// two refusal gates.
 //
-// THE WORLD GATE (the world-as-value arc's R4 — band B's value gate, live):
-// a continuation record's LAST word is its FROZEN WORLD — the live install
-// chain head at the reify moment. In-process that handle is permanently
-// valid (the monotonic image never frees chain nodes), so an in-process
-// resume rebinds through it and the mismatch class is unsayable. ACROSS the
-// file boundary the handle is an address in a dead image, so the wire
-// carries a NAME-LEVEL fingerprint instead: the frozen chain walked at
-// persist time, each node's effect-key STRING hashed and order-mixed
-// (FNV-1a over bytes, sequence-mixed — exact name+order match, not the old
-// collision-prone bitmask OR). rehydrate walks the CURRENT live chain from
-// world_top() the same way; a differing fingerprint REFUSES (the runtime
-// twin of E_ResumeWorldMismatch), an equal one admits AND PATCHES the
-// rehydrated record's world slot to the live chain — resume then rebinds
-// into the equivalent-by-name world.
+// THE TWO GATES, each a refusal through Fail (the runtime policy decides;
+// fail_exit prints + exits, a test handler collects):
+//   1. THE BUILD KEY — same-build identity. The image's baked words (fn
+//      table indices, interned data offsets, static closure addresses, the
+//      globals record layout) resolve only in the build that wrote them;
+//      $build_key hashes exactly those three sources, so equal keys admit.
+//   2. THE WORLD FINGERPRINT — install-prefix correspondence. The restore
+//      happens INSIDE a perform's dynamic extent, and every enclosing
+//      dispatch bracket and install extent will, as it unwinds, write back
+//      a world value saved BEFORE the swap. Those saved words are valid in
+//      the restored image exactly when the resuming process reached its
+//      rehydrate under the SAME install prefix the persisting process had:
+//      same build + deterministic bump allocation then puts each saved
+//      chain node at the address the image expects. The name-level chain
+//      fingerprint (names + order, FNV-mixed) is that contract, checked.
 //
-// The handler shape remains useful: storage and resource-rebind policy can be
-// selected by a handler. The bytes below are only a same-image encoding
-// experiment until an exact rooted image and typed Continuation value own them.
+// Honest limits, named: host resources (open fds, the stdin position, live
+// sockets) are not in the image and do not restore — the shim re-derives
+// preopens per process; a spawning (shared-memory) module's heap line lives
+// in the image at cell 64 and restores consistently, but persisting one
+// mid-spawn is Phase C's fusion work, not claimed here.
 
 import runtime/memory
 import runtime/strings
@@ -36,29 +40,20 @@ import runtime/io
 // `join_persist : PersistHandle -> a`.
 type PersistHandle = PersistHandle(Int)
 
-// Persist writes an explicitly sized record to a path; rehydrate copies it into
-// fresh memory after the fingerprint gate. Both derive their world facts from
-// the artifact — the record's own tail and the live chain — so neither takes a
-// caller-supplied world argument (a caller-passed tag was a re-derivation of
-// what the record already carries).
-//
-// `k` is an untyped pointer and rehydrate returns an untyped Int. This boundary
-// is not complete until the graph carries a typed continuation handle and its
-// transitive reachable image.
+// persist names a continuation-shaped record (closure = continuation = one
+// record class) and writes the whole rooted image; rehydrate swaps the image
+// back in and returns that record's address — every pointer inside it valid
+// by construction. The typed re-entry channel is any root the globals record
+// restores (a top-level let the persisting process stored into); the
+// returned address is the word-face belt beside it.
 effect Persist {
-  persist(k: Int, size: Int, path: String) -> ()
+  persist(k: Int, path: String) -> ()
   rehydrate(path: String) -> Int
-  // Prototype fanout storage hooks. The current implementation checkpoints a
-  // closure header before invoking it and retains results only in live handler
-  // state. It does not restore a branch after process loss.
+  // Prototype fanout storage hooks. persist_branch checkpoints the whole
+  // image before invoking the branch; results join from live handler state.
   persist_branch(thunk: () -> a) -> PersistHandle
   join_persist(branch: PersistHandle) -> a
 }
-
-// The continuation record's frozen-world slot: head (8) + captures (4 each,
-// count at k+4) + state_idx + ret_slot precede it — the LAST word, the same
-// fixed offset the emitted $__k_world reads.
-fn k_world_offset(k) with Memory = 8 + 4 * load_i32(k + 4) + 8
 
 // The name-level fingerprint of a world chain: walk [key@0][entry@4][parent@8]
 // nodes from `w`, hash each node's effect-key string (FNV-1a over its bytes),
@@ -79,21 +74,48 @@ fn fingerprint_bytes(s, i, n, h) with Memory = {
   else { fingerprint_bytes(s, i + 1, n, (h + byte_at(s, i)) * 16777619) }
 }
 
-// persist_to_disk - default record-copy handler for the prototype wire.
+// The wire, one byte-record String. Payload layout:
+//   +0   build key         (the same-build gate)
+//   +4   k                 (the named record's address in the image)
+//   +8   image size        (the heap line at the persist moment)
+//   +12  world fingerprint (the install-prefix gate)
+//   +16  globals count     ($image_restore's layout belt)
+//   +20  globals record    (8 bytes per slot; slot 0 = the heap line,
+//                           patched below to the image extent so restore
+//                           rewinds allocation to the persisted moment)
+//   +20+8G  image bytes [0, size)
+// The size reads FIRST — everything the persisting program built lies below
+// it; the wire itself allocates above and stays out of its own copy.
+fn image_pack(k) with Memory + Alloc = {
+  let size = heap_mark()      // drift-audit: ignore — sequenced effectful read; MUST precede the wire's own allocation
+  let gsz = globals_area()    // drift-audit: ignore — sequenced substrate read; sizes the wire and offsets the copy
+  let wire = bytes_buf(20 + gsz + size)
+  let p = wire + 8
+  store_i32(p, image_key())
+  store_i32(p + 4, k)
+  store_i32(p + 8, size)
+  store_i32(p + 12, world_fingerprint(world_top()))
+  store_i32(p + 16, gsz / 8)
+  globals_save(p + 20)
+  store_i32(p + 20, size)
+  mem_copy(p + 20 + gsz, 0, size)
+  str_of_buf(wire)
+}
+
+// persist_to_disk — the default disk policy for the rooted-image wire.
 handler persist_to_disk with branch_results = [] {
 
-  persist(k, size, path) => {
-    // Copy the caller-selected range. Reachability is not established here.
+  persist(k, path) => {
     // This handler IS the disk policy — it writes through the WASI substrate
     // layer directly (the swappable point is the Persist effect itself; a
     // bare fs_write_file resolves only inside the wheel's own compile).
-    let wire = persist_pack_record(k, size)
-    fs_write_file_impl(path, wire)
+    fs_write_file_impl(path, image_pack(k))
     resume()
   },
 
-  // Checkpoint the prototype thunk header before running, then retain the result
-  // in this live handler activation. No restart path consumes that checkpoint.
+  // Checkpoint the whole image before running the branch, then retain the
+  // result in this live handler activation; a crashed branch re-enters from
+  // its wire (the SPACE=TIME fork, §4④).
   persist_branch(thunk) => {
     persist_checkpoint_thunk(thunk, len(branch_results))
     let result = thunk()  // drift-audit: ignore — thunk() is the effectful branch body; result feeds the with-clause accumulator, not chain position
@@ -106,52 +128,23 @@ handler persist_to_disk with branch_results = [] {
   },
 
   rehydrate(path) => {
+    // Every wire read lands in a local BEFORE the restore; after
+    // image_restore returns, this process's pre-swap heap values (wire, p,
+    // path, this arm's own install record) are dead — the arm touches none
+    // of them, and the resume is the tail. Both gates run pre-swap.
     let wire = fs_read_file_impl(path)
-    // The wire is a String (the byte record fs_read built); str_payload
-    // projects its contiguous payload base — the seq-addr boundary in table
-    // form. Payload layout: [fingerprint@0][size@4][k bytes@8].
     let p = str_payload(wire)
-    let captured = load_i32(p)
+    let captured = load_i32(p + 12)
     let live = world_fingerprint(world_top())
-    // Name-level world equality gates the resume. A cross-world rehydrate is
-    // a REFUSAL, never a fabricated zero continuation. Fail is the runtime's
-    // failure effect; the installed policy decides (fail_exit prints + exits;
-    // a test handler collects). The compile-time twin of this gate is
-    // E_ResumeWorldMismatch on TCont.
-    if captured != 0 && captured != live {
-      fail("persist: rehydrate world {int_to_str(captured)} does not match live world {int_to_str(live)}")
+    if load_i32(p) != image_key() {
+      fail("persist: image key {int_to_str(load_i32(p))} is not this build ({int_to_str(image_key())})")
+    } else if captured != live {
+      fail("persist: image world {int_to_str(captured)} does not correspond to live world {int_to_str(live)}")
     } else {
-      // Copy into fresh memory, then PATCH the record's frozen-world slot to
-      // the live chain head: the persisted handle addressed a dead image; the
-      // fingerprint just proved the live chain equivalent by name, so resume
-      // rebinds into it. Any other interior absolute pointer remains pointed
-      // at the old address; relocation safety is not established by this copy.
-      let size = load_i32(p + 4)
-      let k = alloc(size)
-      mem_copy(k, p + 8, size)
-      store_i32(k + k_world_offset(k), world_top())
-      resume(k)
+      resume(image_restore(p))
     }
   }
 }
 
-// Copy the whole continuation record: head + captures + the metadata tail
-// (state_idx, ret_slot, frozen world) — the record is contiguous, so its
-// exact size is 8 + 4*capture_count + 12. Reachable capture POINTEES are
-// still not included (the STATUS header's honest limit).
-fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Filesystem + Persist = {
-  let size = 8 + 4 * load_i32(thunk + 4) + 12
-  persist(thunk, size, "/tmp/mn-persist-branch-{int_to_str(idx)}.k")
-}
-
-// Lay out the prototype wire: [fingerprint][size][bytes]. The fingerprint is
-// DERIVED from the record's own frozen-world slot (never caller-supplied);
-// self-sized, not self-describing: it carries no schema, code identity,
-// pointer map, or resource manifest.
-fn persist_pack_record(k, size) with Memory + Alloc = {
-  let wire = bytes_buf(4 + 4 + size)    // the [count][tag] byte-record header
-  store_i32(wire + 8, world_fingerprint(load_i32(k + k_world_offset(k))))
-  store_i32(wire + 12, size)            // record byte size (self-describing)
-  mem_copy(wire + 16, k, size)          // the continuation record, verbatim
-  str_of_buf(wire)                      // the wire IS a String for fs_write
-}
+fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Cast + Filesystem + Persist =
+  persist(addr(thunk), "/tmp/mn-persist-branch-{int_to_str(idx)}.k")

@@ -1038,6 +1038,57 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ THE ROOTED-IMAGE PERSIST — persist = memcpy made real,
+  proven by a fresh process (phase B-i landing 1 · pin 88c1b888). The
+  image [0, heap-line) plus the mutable-global record IS the whole
+  program state (wasm call frames live engine-side), so the emitter now
+  projects three facts of a module over ITSELF, emitted only when the
+  reachable tree performs an image op (Law 7 — the wheel stays
+  byte-identical): $build_key (a hash of the fn table names, interned
+  data, and mutable-global census — exactly the three same-build-only
+  word classes a restored image's baked words depend on; the key IS the
+  compatibility contract, no over-refusal), $globals_save/$globals_restore
+  (the census record, slot 0 the heap line, wide feedback slots at their
+  own repr), and $image_restore — globals from the wire FIRST (the wire
+  may lie inside the image range), then ONE memory.copy of the image
+  over [0, size): memmove semantics make the overlapping self-copy
+  exact, so the staged-scratch choreography the first design carried
+  DELETED ITSELF (the law smiling: less code). persist.mn sheds the
+  record-copy prototype whole — persist(k, path) drops the caller-
+  supplied size (heap_mark reads it live), the wire is [key][k][size]
+  [fingerprint][gcount][globals][image], and rehydrate refuses through
+  TWO gates: the build key, and the world fingerprint RE-PURPOSED by
+  interrogation — the first design deleted it as vacuous (the world
+  rides the image), then the unwind walk resurrected it: the restore
+  happens INSIDE a perform's dynamic extent, every enclosing dispatch
+  bracket writes back a pre-swap world address as it unwinds, and those
+  addresses are valid exactly when the resuming process reached
+  rehydrate under the SAME install prefix (same build + deterministic
+  bump ⇒ same addresses) — the name-level fingerprint is that contract,
+  checked, an accident-invariant made a contract before it ever fired
+  (forensic law 5 ahead of the crash). The declared-unwired
+  E_ResumeWorldMismatchWorld DELETED (wire-or-delete resolved: refusal
+  rides fail; the cross-world-resume class dissolves when the world is
+  image data). The typed re-entry channel is a restored top-level ROOT
+  — leg B reads A's thunk through the restored let global, fully typed,
+  and the no-from_addr law holds untouched (rehydrate's returned word
+  is the belt beside it, tied by Cast's addr). GATES at all four
+  corners: leg A persists mid-computation (exit 40, ~1MB wire); leg B —
+  a FRESH PROCESS of the same wasm — passes both gates, swaps A's image
+  in, chases three A-heap records (root list → thunk record → captures)
+  and runs A's thunk (exit 42); a corrupted key refuses naming both
+  keys; a corrupted fingerprint refuses naming both worlds. Counted
+  kill en route: the first gate probes corrupted disk+8/+20 believing
+  an on-disk header exists — fs_write writes the PAYLOAD, the file IS
+  the wire; both "gates failed" verdicts were the prober violating the
+  protocol it probed (forensic law 2), dead in one re-read. RED on the
+  pre-image boot (unrecognized substrate ops → compile refusal, zero
+  WAT). Board whole at the pin: CLEAN m2 == m3 at 330,102 lines;
+  census 0; frontier 258/0; proof-exactness 9/9; crown 5/5; micros
+  114/114. B-i's named remainder: the warm-start cache (landing 2),
+  per-module IC on the overlay write-half (landing 3), `mentl resume
+  <img>` re-projecting at the saved caret with the source absent
+  (landing 4), and session-as-value as the felt gate.
 - 2026-07-24 · ▶▶ THE SEQ-OP ROW UN-REVERTS — re-measurement, not the
   arena, un-gated it (phase B-ii step 0 · pin 7aa2d7a0). The B-ii recon
   banked the verdict: both OOM rulings were one representation era

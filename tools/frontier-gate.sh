@@ -301,6 +301,52 @@ run_program() {
   fi
 }
 
+# The rooted-image persist gate: one compile, one assemble, TWO processes of
+# the same wasm against one guest /tmp. Leg A writes the wire (exit 40); leg
+# B rehydrates and resumes A's continuation-shaped record through the
+# restored image (exit 42). A per-gate dir maps as the guest's /tmp so the
+# legs share the wire without touching the host's shared /tmp.
+run_persist_image() {
+  local compiler="$1" dir="$2" label="persist-image"
+  local src="$ROOT/tests/frontier/mn-persist-image.mn"
+  local wat="$dir/$label.wat" wasm="$dir/$label.wasm"
+  local cerr="$dir/$label.compile.err" aerr="$dir/$label.assemble.err"
+  local pdir="$dir/$label.tmp" rc
+
+  cat "${PERSIST_RTLIBS[@]}" "$src" | wt_run "$compiler" > "$wat" 2> "$cerr"
+  rc=$?
+  local normalized="$dir/$label.normalized" unexpected="$dir/$label.unexpected"
+  normalize_errors "$cerr" > "$normalized"
+  comm -23 "$normalized" "$PERSIST_SHADOW" > "$unexpected"
+  local errors; errors=$(wc -l < "$unexpected")
+  if [ "$rc" -ne 0 ] || [ "$errors" -ne 0 ]; then
+    fail "$label compile (exit=$rc new-errors=$errors; see $cerr)"
+    return
+  fi
+  pass "$label compile"
+  if ! wt_asm "$wat" "$wasm" 2> "$aerr"; then
+    fail "$label assemble ($(head -1 "$aerr"))"
+    return
+  fi
+  pass "$label assemble"
+  mkdir -p "$pdir"
+  rm -f "$pdir/mn-persist-image.img"
+  wt_run --dir "$pdir::/tmp" "$wasm" > "$dir/$label.a.out" 2> "$dir/$label.a.err"
+  rc=$?
+  if [ "$rc" -ne 40 ]; then
+    fail "$label leg-a persist (exit=$rc expected=40; see $dir/$label.a.err)"
+    return
+  fi
+  pass "$label leg-a persist (exit=40, wire $(wc -c < "$pdir/mn-persist-image.img" 2>/dev/null || echo 0)B)"
+  wt_run --dir "$pdir::/tmp" "$wasm" resume > "$dir/$label.b.out" 2> "$dir/$label.b.err"
+  rc=$?
+  if [ "$rc" -eq 42 ]; then
+    pass "$label leg-b resume (exit=42 — a fresh process re-entered the image)"
+  else
+    fail "$label leg-b resume (exit=$rc expected=42; see $dir/$label.b.err)"
+  fi
+}
+
 # An ARMED class's contract: the diagnostic fires AND the executable refuses —
 # nonzero exit, ZERO WAT bytes (the refusal law, PLAN §11 col 2). run_diagnostic
 # asserts the productive form (exit 0, diagnostics on stderr); an armed class's
@@ -881,6 +927,14 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-scheduled-fanout-effect.mn" 25 yes "$dir"
   run_program "$compiler" scheduled-persist-float \
     "$ROOT/tests/frontier/mn-scheduled-fanout-persist-float.mn" 60 persist "$dir"
+  # The rooted-image persist (B-i landing 1): ONE build, TWO processes. Leg A
+  # persists the whole image mid-computation (exit 40); leg B — a fresh
+  # process of the SAME wasm — passes the build-key + world-fingerprint
+  # gates, swaps A's image in, reads the typed root through the restored
+  # globals record, and resumes A's thunk against A's heap pointees (exit
+  # 42). Seen RED on the pre-image boot: the image ops are unrecognized
+  # substrate, so the executable refuses at compile.
+  run_persist_image "$compiler" "$dir"
   # Real host-thread spawn over the shared image (the task-record substrate:
   # import-shape memory, shared-cell allocator, $spawn_task_impl/$join_task_impl).
   # Seen RED on the pre-task-record boot: 134, unaligned atomic in the join.

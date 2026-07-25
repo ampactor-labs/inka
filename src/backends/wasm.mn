@@ -683,6 +683,8 @@ fn emit_module(lowered) = {
   // the init half (never two walks of one tree).
   let value_lets = collect_top_value_lets(lowered)
   emit_top_let_globals(value_lets)
+  emit_image_substrate(wasi_ops, state_slots, value_lets, yield_seen,
+    table_all, string_entries)
   emit_functions(fn_records)
   emit_wide_wrappers(fn_records)
   // The twins: the SAME per-fn emission, each under its instantiation
@@ -1626,6 +1628,107 @@ fn emit_top_let_globals(value_lets) = {
       wat_emit(" (mut i32) (i32.const 0))\n")
     })
 }
+
+// ─── The rooted-image persist substrate (§4④: persist = memcpy) ─────
+// Emitted only when the reachable tree performs an image op (Law 7: an
+// image-free module — the wheel included — stays byte-identical). The
+// module projects three facts over ITSELF:
+//   $build_key — a hash of the fn table names, the interned data, and the
+//     mutable-global census: exactly the same-build-only word classes a
+//     restored image's baked words depend on (table indices, interned
+//     offsets, the globals record layout). Equal keys ⟺ the image's
+//     pointers and indices resolve identically in this module.
+//   $globals_save / $globals_restore — the mutable-global record, slot
+//     order = image_global_slots below, 8 bytes per slot (a wide feedback
+//     slot stores at its own repr). Slot 0 is the heap line; the persist
+//     packer patches it to the image extent so a restore rewinds
+//     allocation to the persisted moment.
+//   $image_restore — read the wire header into locals, restore the
+//     globals FROM THE WIRE (before the copy: the wire may lie inside the
+//     image range), then ONE memory.copy of the image over [0, size).
+//     memory.copy has memmove semantics — the overlapping self-copy is
+//     exact by spec — so no staging buffer exists; wasm call frames live
+//     engine-side, so the executing stack survives its own image swap.
+fn emit_image_substrate(wasi_ops, state_slots, value_lets, yield_seen,
+    table_all, string_entries) = {
+  let used = ls_find_str_local(wasi_ops, "image_key", 0) >= 0
+    || ls_find_str_local(wasi_ops, "globals_area", 0) >= 0
+    || ls_find_str_local(wasi_ops, "globals_save", 0) >= 0
+    || ls_find_str_local(wasi_ops, "image_restore", 0) >= 0
+  if used {
+    let slots = image_global_slots(state_slots, value_lets, yield_seen)
+    emit_build_key(table_all, string_entries, slots)
+    wat_emit("  (func $globals_area_impl (result i32)(i32.const ")
+    wat_emit(int_to_str(8 * len(slots)))
+    wat_emit("))\n")
+    emit_globals_pair(slots)
+    wat_emit("  (func $image_restore (param $p i32) (result i32) (local $k i32) (local $size i32) (local $g i32)(local.set $k (i32.load offset=4 (local.get $p)))(local.set $size (i32.load offset=8 (local.get $p)))(local.set $g (i32.mul (i32.load offset=16 (local.get $p)) (i32.const 8)))(if (i32.ne (local.get $g) (call $globals_area_impl))(then (unreachable)))(call $globals_restore (i32.add (local.get $p) (i32.const 20)))(memory.copy (i32.const 0)(i32.add (i32.add (local.get $p) (i32.const 20)) (local.get $g))(local.get $size))(local.get $k))\n")   // drift-audit: ignore — WAT instruction text
+  } else { () }
+}
+
+// The census: every mutable global this module declares, in the record's
+// slot order — the substrate quartet, the yield quartet when the module
+// yields, each feedback slot at its own live repr, one word per top-level
+// let (their globals are word-faced by construction).
+fn image_global_slots(state_slots, value_lets, yield_seen) = {
+  let yq = if yield_seen > 0 {
+    [("yield_flag", "i32"), ("yield_op", "i32"),
+     ("yield_k", "i32"), ("yield_args", "i32")]
+  } else { [] }
+  [("heap_ptr", "i32"), ("arena_ptr", "i32"),
+   ("world_g", "i32"), ("tid_g", "i32")]
+    ++ yq
+    ++ map((slot) =>
+         ("s" ++ int_to_str(slot), repr_wat(repr_of(lookup_ty(slot)))),
+       state_slots)
+    ++ map(((name, _)) => (name, "i32"), value_lets)
+}
+
+fn emit_globals_pair(slots) = {
+  wat_emit("  (func $globals_save (param $dst i32)\n")
+  each((iv) => {
+    let (i, sl) = iv
+    let (name, rw) = sl
+    wat_emit("    (")
+    wat_emit(rw)
+    wat_emit(".store offset=")
+    wat_emit(int_to_str(8 * i))
+    wat_emit(" (local.get $dst) (global.get $")
+    wat_emit(name)
+    wat_emit("))\n")
+  }, enumerate(slots))
+  wat_emit("  )\n")
+  wat_emit("  (func $globals_restore (param $src i32)\n")
+  each((iv) => {
+    let (i, sl) = iv
+    let (name, rw) = sl
+    wat_emit("    (global.set $")
+    wat_emit(name)
+    wat_emit(" (")
+    wat_emit(rw)
+    wat_emit(".load offset=")
+    wat_emit(int_to_str(8 * i))
+    wat_emit(" (local.get $src)))\n")
+  }, enumerate(slots))
+  wat_emit("  )\n")
+}
+
+// The key mixes name content order-sensitively (FNV-style, wrapping i32
+// arithmetic): a reordered table, a changed literal, or a reshaped
+// globals record all move the key, and nothing else the image depends on
+// exists outside those three sources.
+fn emit_build_key(table_all, string_entries, slots) = {
+  let h1 = fold(16777619, image_key_mix, table_all)
+  let h2 = fold(h1, (h, entry) => { let (s, _) = entry
+                                    image_key_mix(h, s) }, string_entries)
+  let h3 = fold(h2, (h, sl) => { let (nm, _) = sl
+                                 image_key_mix(h, nm) }, slots)
+  wat_emit("  (global $build_key i32 (i32.const ")
+  wat_emit(int_to_str(h3))
+  wat_emit("))\n")
+}
+
+fn image_key_mix(h, s) = i32_xor(h * 16777619, str_hash(s))
 
 // The module init fn — every top-level value let's init expression runs in
 // SOURCE ORDER, each result stored to its global, before _start invokes
@@ -3965,6 +4068,17 @@ fn emit_expr(expr) = match expr {
       wat_emit("    (call $heap_mark_impl)\n")
     } else if import_name == "world_top" {
       wat_emit("    (global.get $world_g)\n")
+    } else if import_name == "image_key" {
+      // The build's identity word — an immutable global computed at emit
+      // (emit_image_substrate); equal keys ⟺ a restored image's baked
+      // words (table indices, interned offsets) resolve identically.
+      wat_emit("    (global.get $build_key)\n")
+    } else if import_name == "globals_area" {
+      wat_emit("    (call $globals_area_impl)\n")
+    } else if import_name == "globals_save" {
+      wat_emit("    (call $globals_save)(i32.const 0)\n")
+    } else if import_name == "image_restore" {
+      wat_emit("    (call $image_restore)\n")
     } else if import_name == "heap_reset" {
       // unit-typed: the call consumes the arg; the (i32.const 0) closes the
       // result slot — the atomic_store precedent. The impl zeroes the

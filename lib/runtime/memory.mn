@@ -57,6 +57,33 @@ effect Memory {
   store_f64(Int, Float) -> ()   // (addr, value)
   load_f64(Int) -> Float   // (addr) -> value
 
+  // ─── The rooted-image persist substrate (§4④: persist = memcpy) ────
+  // The image [0, heap-line) plus the mutable globals IS the whole program
+  // state (wasm call frames live engine-side, outside linear memory), so a
+  // persisted process is one contiguous copy + one globals record — no
+  // serializer, no relocation: a same-build restore re-enters the exact
+  // address space. The emitter owns the census (it declared every mutable
+  // global), so the save/restore pair and the build key are PROJECTIONS of
+  // the module over itself, emitted beside $alloc.
+  //
+  // image_key — this build's identity word: a hash of the fn table (indices),
+  // the interned data (offsets), and the mutable-global census (record
+  // layout) — exactly the three same-build-only word classes an image copy
+  // depends on. Equal keys ⟺ the image's baked words resolve identically.
+  image_key() -> Int
+  // globals_area — the globals record's byte size (8 bytes per global).
+  globals_area() -> Int
+  // globals_save — write every mutable global to an 8-byte-slot record at
+  // dst. Slot 0 is the heap line (the persist packer patches it to the
+  // image extent so restore rewinds allocation to the persisted moment).
+  globals_save(Int) -> ()
+  // image_restore — the whole-image swap: stage the wire's globals+image
+  // above both heaps, copy the image down over [0, size), restore the
+  // globals, return the wire's named continuation address. Raw preamble
+  // choreography (no allocation may interleave; the caller's heap values
+  // die under it — read everything you need into locals first).
+  image_restore(Int) -> Int
+
   // Integer XOR — two i32 values, returns i32
   // Lowers to WASM's i32.xor. Not a bitwise operator in the
   // language — a substrate primitive. Used by hash functions.

@@ -929,6 +929,8 @@ fn handler_arm_arity(a: {args: [String], body: Node, op_name: String}) -> Int = 
 // exactly as handler_arm_op_name reads the op name).
 fn handler_arm_body(a: {args: [String], body: Node, op_name: String}) -> Node = a.body
 
+fn handler_arm_args(a: {args: [String], body: Node, op_name: String}) -> [String] = a.args
+
 fn parse_handler_state_fields(ref tokens, pos) = {
   let name = ident_at(tokens, pos)
   let p_eq = expect(tokens, skip_ws(tokens, pos + 1), TEq)

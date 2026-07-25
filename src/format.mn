@@ -377,8 +377,8 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
 }
 
 fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate + Intern = match s {
-  FnStmt(name, params, _retty, effs, body) =>
-    "fn {name}({render_param_list(params)}){render_with_clause(effs)} = {render_tokens_for(body)}",
+  FnStmt(name, params, retty, effs, body) =>
+    "fn {name}({render_param_list(params)}){render_retty(retty)}{render_with_clause(effs)} = {render_tokens_for(body)}",
   ImportStmt(path)   => "import {path}",
   ExprStmt(e)        => render_tokens_for(e),
   AliasStmt(name, ty) => "type {name} = {show_type(ty)}",
@@ -651,11 +651,16 @@ fn render_name_list(ref names, i) with Memory + Alloc = {
   else { "{names[i]}, {render_name_list(names, i + 1)}" }
 }
 
+// Both handler renders read through the TYPED closed projections
+// (state_field_name/init, handler_arm_op_name/args/body — parser.mn's own
+// accessors): the bare field reads on the open records computed offsets
+// over the partial demanded set and the emitter floored every handler
+// decl (the fmt census's blocker 2; the cure existed and was bypassed).
 fn render_state_inits(ref states, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(states) { "" }
   else {
     let st = states[i]
-    let one = "{st.name} = {render_tokens_for(st.init)}"
+    let one = "{state_field_name(st)} = {render_tokens_for(state_field_init(st))}"
     let lead = if i == 0 { " with " } else { ", " }
     "{lead}{one}{render_state_inits(states, i + 1)}"
   }
@@ -665,7 +670,7 @@ fn render_handler_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate + 
   if i >= len(arms) { "" }
   else {
     let a = arms[i]
-    "  {a.op_name}({render_name_list(a.args, 0)}) => {render_tokens_for(a.body)},\n{render_handler_arms(arms, i + 1)}"
+    "  {handler_arm_op_name(a)}({render_name_list(handler_arm_args(a), 0)}) => {render_tokens_for(handler_arm_body(a))},\n{render_handler_arms(arms, i + 1)}"
   }
 }
 
@@ -700,16 +705,62 @@ fn render_pat_fields(ref fields, i) with GraphRead + Memory + Alloc + !Mutate = 
   }
 }
 
-// The declared with-clause, rendered via the ONE canonical show_effrow. A Pure
-// row carries no clause (the identity element — SYNTAX.md §175).
+// The declared with-clause, rendered from the parser's SIGNED TRIPLES —
+// [(EffName, negated, EConn)] — verbatim: the authored surface is the only
+// faithful render (a closed-row rebuild cannot represent - / & connectors
+// or per-entry !, and feeding the triples to the row constructor read
+// tuples as bare EffNames — «invalid-effect» destroyed 41 declared rows
+// across the five pass-once files, the fmt census's blocker 1).
 fn render_with_clause(effs) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if len(effs) == 0 { "" }
-  else { " with {show_effrow(build_row_from_effs(effs))}" }
+  else { " with {render_signed_effs(effs, 0)}" }
 }
 
-// effs is the parser's [EffName] list; the canonical row is the closed triple
-// over it (mk_ef_closed canonicalizes the set — the Memory row is that dedup).
-fn build_row_from_effs(effs) with Memory = mk_ef_closed(effs)
+fn render_signed_effs(ref effs, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  if i >= len(effs) { "" }
+  else {
+    let (name, negated, conn) = effs[i]
+    // The first entry's connector is its position; each later entry
+    // carries the operator the author joined it with.
+    let lead = if i == 0 { "" } else {
+      match conn {
+        EcUnion => " + ",
+        EcDiff  => " - ",
+        EcInter => " & "
+      }
+    }
+    let bang = if negated { "!" } else { "" }
+    "{lead}{bang}{render_authored_eff_name(name)}{render_signed_effs(effs, i + 1)}"
+  }
+}
+
+fn render_authored_eff_name(name) with GraphRead + Memory + Alloc + !Mutate + Intern = match name {
+  EPure                   => "Pure",   // drift-audit: ignore — the ADT match RENDERING the surface keyword, not a string-keyed dispatch
+  ENamed(h)               => intern_name_of(h),
+  EParameterized(h, args) => "{intern_name_of(h)}({render_authored_eff_args(args, 0)})"
+}
+
+// The instance args render through show_eff_arg — the ONE arg renderer
+// (the diagnostics voice and the formatter speak the same projection).
+fn render_authored_eff_args(ref args, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  if i >= len(args) { "" }
+  else {
+    let one = show_eff_arg(args[i])
+    if i == len(args) - 1 { one }
+    else { "{one}, {render_authored_eff_args(args, i + 1)}" }
+  }
+}
+
+// An authored `-> RetTy` carries back verbatim (the fmt census's blocker
+// 4: the discarded binder silently dropped 91 authored heads); the absent
+// annotation renders nothing.
+fn render_retty(retty) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  let N(b, _, _) = retty
+  match b {
+    NTypeAnn(ann_ty) => " -> {show_type(ann_ty)}",
+    _                => ""   // drift-audit: ignore — the documented absent-annotation contract (an inferred return renders no clause)
+  }
+}
 
 fn render_indent_for(kind, ctx) with Pure = {
   // Canonical indent depth per node kind. Match-arm bodies +2; let-

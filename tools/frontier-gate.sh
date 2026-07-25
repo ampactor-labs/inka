@@ -1414,6 +1414,37 @@ for i in "${!compilers[@]}"; do
   else
     fail "fmt prose/annotation carry"
   fi
+  # ── fmt rungs 1/2/4 (the census's universal blockers) — RED pre-fix:
+  # the signed with-clause rendered «invalid-effect», every handler decl
+  # trapped in render_handler_arms, and authored `-> RetTy` dropped.
+  cp "$ROOT/tests/frontier/fmt-demo/voicey.mn" "$fdemo2/voicey.mn"
+  cat "${RTLIBS[@]}" "$fdemo2/voicey.mn" | wt_run "$compiler" > "$fdemo2/vpre.wat" 2>/dev/null \
+    && wt_asm "$fdemo2/vpre.wat" "$fdemo2/vpre.wasm" 2>/dev/null \
+    && "$WT" run "${WT_RUN_FLAGS[@]}" "$fdemo2/vpre.wasm" >/dev/null 2>&1
+  vfmt_pre=$?
+  (cd "$fdemo2" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo2" --dir /tmp "$compiler" fmt voicey.mn) >"$dir/vfmt.out" 2>&1
+  vfmt_rc=$?
+  cat "${RTLIBS[@]}" "$fdemo2/voicey.mn" | wt_run "$compiler" > "$fdemo2/vpost.wat" 2>/dev/null \
+    && wt_asm "$fdemo2/vpost.wat" "$fdemo2/vpost.wasm" 2>/dev/null \
+    && "$WT" run "${WT_RUN_FLAGS[@]}" "$fdemo2/vpost.wasm" >/dev/null 2>&1
+  vfmt_post=$?
+  if [ $vfmt_rc -eq 0 ] && [ "$vfmt_pre" = "42" ] && [ "$vfmt_post" = "42" ]; then
+    pass "fmt row/retty/handler behavioral (42 before and after)"
+  else
+    fail "fmt row/retty/handler behavioral (rc=$vfmt_rc pre=$vfmt_pre post=$vfmt_post; see $dir/vfmt.out)"
+  fi
+  if grep -q 'with Ping + !Pong' "$fdemo2/voicey.mn" && grep -q -- '-> Int' "$fdemo2/voicey.mn" && grep -q 'ping() => resume' "$fdemo2/voicey.mn"; then
+    pass "fmt carries the signed row, the authored retty, and the handler arm"
+  else
+    fail "fmt row/retty/handler carry (see $fdemo2/voicey.mn)"
+  fi
+  cp "$fdemo2/voicey.mn" "$fdemo2/vpass1.mn"
+  (cd "$fdemo2" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo2" --dir /tmp "$compiler" fmt voicey.mn) >/dev/null 2>&1
+  if cmp -s "$fdemo2/voicey.mn" "$fdemo2/vpass1.mn"; then
+    pass "fmt row/retty/handler idempotent"
+  else
+    fail "fmt row/retty/handler idempotence"
+  fi
 
   # ── the cursor-address transport (mentl voice.mn:9) ─────────────────
   # Runs from the demo dir (the driver resolves imports CWD-relative).

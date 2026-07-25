@@ -1038,6 +1038,28 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ FMT RUNGS 1·2·4 — the render register of the voice
+  stops lying (pin 7215e8c2). The with-clause renders the SIGNED
+  TRIPLES verbatim (connector per entry, per-entry !, instance args
+  through show_eff_arg — the diagnostics voice and the formatter now
+  speak the SAME arg projection, one home), replacing the closed-row
+  rebuild that destroyed 41 declared rows as «invalid-effect»; the
+  handler renders read the TYPED closed projections (the bypassed
+  cure — every handler decl trapped before); authored -> RetTy
+  carries (91 heads were dropping). Three RED-first legs (voicey):
+  behavioral 42, verbatim carries, byte idempotence; frontier 279/0;
+  CLEAN m2 == m3 at 295,930. THE VOICE FRAME (Morgan's charge, made
+  structural): fmt is ONE REGISTER of the medium's voice — the same
+  projection machinery reading the graph back to the human at three
+  registers: diagnostics NARRATE (spans, Reasons, quick-fixes), fmt
+  RENDERS (the canonical shape — layout as projection is what keeps
+  human text and graph truth in byte-agreement, so every downstream
+  span/patch/census points at stable text), teach/tighten/the ??-fan
+  PROPOSE. The daily loop: write loosely → the medium normalizes +
+  narrates + proposes. Remaining rungs: 3 (arm-body brace discipline
+  = render∘parse identity — the {x}→{x: x} pun flip), 5 (the weave
+  at every attachment altitude — 32% interior prose loss), 6
+  (shortest-round-trip floats); then the SUMMIT.
 - 2026-07-25 · ▶▶ HANDLER-CONFIG DEFAULTS + THE BASE-FRESHNESS
   CONTRACT + THE PUSH (pin 9de2ecc4). The product law lands at the
   handler decl: config goes [String] → [TParam] — the fn-param

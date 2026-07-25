@@ -1,0 +1,17 @@
+// The fmt row/retty/handler fixture — the census's blockers 1, 2, and 4
+// seen RED on the pre-fix boot: the signed with-clause rendered as the
+// literal text «invalid-effect» (the triples fed to the row constructor
+// as bare EffNames), the handler decl trapped in render_handler_arms
+// (open-record field reads), and the authored -> Int silently vanished
+// (the discarded retty binder).
+effect Ping { ping() -> Int }
+
+effect Pong { pong_op() -> Int }
+
+handler ponger with n = 40 {
+  ping() => resume(n + 2)
+}
+
+fn probe() -> Int with Ping + !Pong = ping()
+
+fn main() = probe() ~> ponger

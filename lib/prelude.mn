@@ -263,7 +263,13 @@ fn nth(xs, n, default) = if n >= 0 && n < len(xs) { xs[n] } else { default }
 fn min(a, b) with Pure = if a <= b { a } else { b }
 fn max(a, b) with Pure = if a <= b { b } else { a }
 fn clamp(x, lo, hi) with Pure = min(max(x, lo), hi)
-fn abs(x) with Pure = if x < 0 { 0 - x } else { x }
+// Float-typed by its own literals: every caller in the corpus is a dsp
+// Float site, and the old `0` pins made abs Int -> Int — each forward
+// call site unified Float against the LOOSE pre-scheme while the compiled
+// body word-floored, so abs was an identity on negative floats (caught by
+// the order-independent judge, 2026-07-25). An integer magnitude reads
+// `if n < 0 { 0 - n } else { n }` at its own width.
+fn abs(x) with Pure = if x < 0.0 { 0.0 - x } else { x }
 
 // ─── Sort (merge sort — pure, not an Iterate handler) ───────
 

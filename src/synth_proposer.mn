@@ -231,7 +231,7 @@ fn concat_candidates(a: [EnrichedCandidate], b: [EnrichedCandidate]) -> [Enriche
 // (Hβ.synth.vocabulary-arg-holes); the reach walk's O(1) form is the
 // call-edge index (Hβ.synth.vocabulary-reach-index).
 fn enumerate_vocabulary_calls(target_ty, allowed_row, context)
-    with GraphRead + GraphWrite + Alloc + Memory + !Mutate = {
+    with GraphRead + GraphWrite + Intern + Alloc + Memory + !Mutate = {
   let Context(scope_bindings, _active, enclosing) = context
   fold(([], []), (acc, entry) => {
     let (accepted, rejected) = acc
@@ -268,7 +268,7 @@ fn vocabulary_ret_matches(ret, target_ty) with Pure = match target_ty {
 }
 
 fn vocabulary_call_candidate(name, row, allowed_row)
-    with GraphRead + GraphWrite + !Mutate + Memory = {
+    with GraphRead + GraphWrite + Intern + !Mutate + Alloc + Memory = {
   EnrichedCandidate({
     node:    synth_node(CallExpr(synth_node(VarRef(name)), [])),
     reason:  Located(span_zero(),

@@ -1820,7 +1820,7 @@ fn diag_applicability(d) with Pure = match d {
 // The rendered message — operands read LIVE from the constructor, never a
 // String copied at the call site. This is the Carried-Truth win: the fact
 // is structured; the prose is its projection.
-fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
+fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d {
   PExpectedToken(note, _) => "expected token: {note}",
   POrphanDocstring(_) => "comment has no following declaration to attach to",
   PUnclosedConstruct(detail, _) => detail,
@@ -2072,7 +2072,7 @@ effect Filesystem {
 // the query layer reads that as "unresolved at epoch e." No cached
 // display. Same discipline as lowering: live observer, never mirror.
 
-fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory = {
+fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory + Intern = {
   match ty {
     TInt    => "Int",
     TFloat  => "Float",
@@ -2100,7 +2100,7 @@ fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory = {
 // so query can surface "unresolved at epoch e"; error holes show the
 // failure reason inline.
 
-fn show_handle(h) with GraphRead + Memory + Alloc + !Mutate = {
+fn show_handle(h) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   let node = graph_chase(h)
   match node {
     GNode(NBound(ty), _)      => show_type(ty),
@@ -2268,7 +2268,7 @@ fn collect_slot_nodes(params, slots, i, n, out, count) with Memory + Alloc = {
   }
 }
 
-fn show_tparam(ref tp) with Pure = {
+fn show_tparam(ref tp) with Alloc + GraphRead + Intern + Memory = {
   let base = "{param_name(tp)}: {show_type(param_ty(tp))}"
   match param_authored(tp) {
     Unmarked => match param_resolved(tp) {
@@ -2296,7 +2296,7 @@ fn show_discipline(d) with Pure = {
   }
 }
 
-fn show_field(ref field) with GraphRead + !Mutate + Alloc + Memory = {
+fn show_field(ref field) with GraphRead + !Mutate + Alloc + Memory + Intern = {
   let (name, ty) = field
   "{name}: {show_type(ty)}"
 }
@@ -2306,14 +2306,14 @@ fn show_type_args(ref args) with GraphRead + Memory + !Mutate = {
   else { "({show_list(args, show_type, ", ")})" }
 }
 
-fn show_row_suffix(ref row) with GraphRead + !Mutate + Memory = {
+fn show_row_suffix(ref row) with GraphRead + !Mutate + Intern + Memory + Alloc = {
   match row {
     EfRow([], [], EtClosed) => "",
     _      => " with {show_effrow(row)}"
   }
 }
 
-fn show_effrow(ref row) with GraphRead + Memory + !Mutate = {
+fn show_effrow(ref row) with GraphRead + Memory + !Mutate + Alloc + Intern = {
   // The triple's voice: presents joined with `+`, the absent set as `!X`
   // terms, the tail as its var handle; an empty closed row is Pure.   // drift-audit: ignore — human-facing rendering string for diagnostics/show; not an effect-keyed lookup; tracked by Hβ.perf.name-is-handle; effect-rendering normalization
   let EfRow(p, a, t) = row
@@ -2347,7 +2347,7 @@ fn show_eff_name(ref name) with !Mutate = match name {
   _                       => "«invalid-effect»"   // drift-audit: ignore — display-totality floor; honest placeholder, not data classification
 }
 
-fn show_eff_arg(ref arg) with GraphRead + !Mutate + Alloc + Memory = match arg {
+fn show_eff_arg(ref arg) with GraphRead + !Mutate + Alloc + Memory + Intern = match arg {
   EAInt(n)    => int_to_str(n),
   EAFloat(f)  => float_to_str(f),
   EAString(s) => "\"{s}\"",
@@ -2424,7 +2424,7 @@ fn show_callee_name(ref callee) with Pure = {
   }
 }
 
-fn show_reason(ref reason) with GraphRead + Memory + Alloc + !Mutate = {
+fn show_reason(ref reason) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   match reason {
     Declared(name)             => "declared as {name}",
     Inferred(ctx)              => "inferred from {ctx}",

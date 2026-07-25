@@ -52,7 +52,7 @@ import graph
 // format_default arms call resume exactly once → OneShot.
 
 effect Format {
-  format_program(Node) -> String
+  format_program([Node]) -> String
   format_at_handle(Int) -> String
   format_chain(Node) -> String
 }
@@ -140,15 +140,19 @@ handler format_default with !Mutate {
 
   format_chain(chain_node) => {
     let kind = ast_kind_of(chain_node)
+    // ast_kind_of projects the NodeBody altitude — the Expr sits one
+    // constructor in (NExpr(PipeExpr(..))); the bare-Expr arms never
+    // matched and every chain fell to the non-chain render (order-masked;
+    // the order-independent judge named it, 2026-07-25).
     let rendered = match kind {
-      PipeExpr(PForward, l, r)            => render_converge_chain(l, r),  // |>
+      NExpr(PipeExpr(PForward, l, r))            => render_converge_chain(l, r),  // |>
       // `<|`/`><` are ONE PFanout; the formatter projects the glyph from
       // the ownership aspect — FanShare → `<|`, FanDistribute → `><` (the
       // surface keeps both authored glyphs as intent).
-      PipeExpr(PFanout(FanShare), l, r)      => render_diverge_chain(l, r),   // <|
-      PipeExpr(PFanout(FanDistribute), l, r) => render_compose_chain(l, r),   // ><
-      PipeExpr(PTee, l, r)        => render_tee(l, r),             // ~>
-      PipeExpr(PFeedback, l, r)   => render_feedback_chain(l, r),  // <~
+      NExpr(PipeExpr(PFanout(FanShare), l, r))      => render_diverge_chain(l, r),   // <|
+      NExpr(PipeExpr(PFanout(FanDistribute), l, r)) => render_compose_chain(l, r),   // ><
+      NExpr(PipeExpr(PTee, l, r))        => render_tee(l, r),             // ~>
+      NExpr(PipeExpr(PFeedback, l, r))   => render_feedback_chain(l, r),  // <~
       _                            => render_non_chain(chain_node)
     }
     resume(rendered)
@@ -240,7 +244,7 @@ fn render_tee(body, handler_expr) with Format + !Mutate = {
   let body_str = format_chain(body)
   let handler_str = format_chain(handler_expr)
   match ast_kind_of(body) {
-    PipeExpr(_, _, _) =>
+    NExpr(PipeExpr(_, _, _)) =>
       "{body_str}\n{spaces(left_edge_indent())}~> {handler_str}",
     _ =>
       "{body_str} ~> {handler_str}"
@@ -318,12 +322,12 @@ fn join_lines_from(ref lines, i) with Memory = {
 // (format∘parse = identity). Each AST variant reads its child nodes live and
 // renders them recursively — the formatter shares the surface SYNTAX.md binds,
 // so the bytes round-trip. No "node@42" placeholder.
-fn render_tokens_for(node) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_tokens_for(node) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   let N(body, _, _) = node
   render_body_tokens(body)
 }
 
-fn render_body_tokens(body) with GraphRead + Memory + Alloc + !Mutate = match body {
+fn render_body_tokens(body) with GraphRead + Memory + Alloc + !Mutate + Intern = match body {
   NExpr(e)     => render_expr_tokens(e),
   NStmt(s)     => render_stmt_tokens(s),
   NPat(p)      => render_pat_tokens(p),
@@ -332,7 +336,7 @@ fn render_body_tokens(body) with GraphRead + Memory + Alloc + !Mutate = match bo
   NTypeAnn(ty) => show_type(ty)
 }
 
-fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate = match e {
+fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = match e {
   LitInt(n)        => int_to_str(n),
   LitFloat(f)      => float_to_str(f),
   LitString(s)     => "\"{escape_string_content(s)}\"",
@@ -372,7 +376,7 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate = match e {
     "{render_resume_head(v)}{render_state_updates(updates, 0)}"
 }
 
-fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate = match s {
+fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate + Intern = match s {
   FnStmt(name, params, _retty, effs, body) =>
     "fn {name}({render_param_list(params)}){render_with_clause(effs)} = {render_tokens_for(body)}",
   ImportStmt(path)   => "import {path}",
@@ -409,10 +413,10 @@ fn render_pat_tokens(p) with GraphRead + Memory + Alloc + !Mutate = match p {
 // Every list renderer walks HEAD-FIRST (index 0 upward): parser lists are
 // source-ordered, so the old last/drop_last walks rendered them reversed —
 // unseen while this module had zero callers.
-fn render_node_list(ref nodes, sep) with GraphRead + Memory + Alloc + !Mutate =
+fn render_node_list(ref nodes, sep) with GraphRead + Memory + Alloc + !Mutate + Intern =
   render_node_list_from(nodes, 0, sep)
 
-fn render_node_list_from(ref nodes, i, sep) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_node_list_from(ref nodes, i, sep) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(nodes) { "" }
   else if i == len(nodes) - 1 { render_tokens_for(nodes[i]) }
   else { "{render_tokens_for(nodes[i])}{sep}{render_node_list_from(nodes, i + 1, sep)}" }
@@ -432,16 +436,16 @@ fn render_pat_list_from(ref pats, i, sep) with GraphRead + Memory + Alloc + !Mut
 // one was written (an unannotated param's ty is the parse-minted TVar —
 // the structural discriminator), and the default. Dropping any of these
 // on round-trip would change semantics the affine/refinement checks read.
-fn render_param_list(ref params) with GraphRead + Memory + Alloc + !Mutate =
+fn render_param_list(ref params) with GraphRead + Memory + Alloc + !Mutate + Intern =
   render_param_list_from(params, 0)
 
-fn render_param_list_from(ref params, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_param_list_from(ref params, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(params) { "" }
   else if i == len(params) - 1 { render_one_param(params[i]) }
   else { "{render_one_param(params[i])}, {render_param_list_from(params, i + 1)}" }
 }
 
-fn render_one_param(p) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_one_param(p) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   let marker = match param_authored(p) {
     Own      => "own ",
     Ref      => "ref ",
@@ -467,7 +471,7 @@ fn render_one_param(p) with GraphRead + Memory + Alloc + !Mutate = {
 // (a + b) * c re-rendered as a + b * c: both typecheck, only behavior
 // tells — the fmt gate runs the program pre/post and compares exits.
 
-fn render_operand(child, parent_prec, is_right) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_operand(child, parent_prec, is_right) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   let cp = expr_prec_of(child)
   if cp < parent_prec || (cp == parent_prec && is_right) {
     "({render_tokens_for(child)})"
@@ -534,7 +538,7 @@ fn escape_string_content(s) with Memory + Alloc = {
 // or the formatter would destroy it. A trailing same-line comment
 // re-renders as a leading block: movement, not loss, and stable from the
 // second pass (it re-parses as a leading comment).
-fn render_block_stmts(ref stmts, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_block_stmts(ref stmts, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(stmts) { "" }
   else {
     let c = graph_comment_at(node_handle(stmts[i]))
@@ -543,7 +547,7 @@ fn render_block_stmts(ref stmts, i) with GraphRead + Memory + Alloc + !Mutate = 
   }
 }
 
-fn render_field_inits(ref fields, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_field_inits(ref fields, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(fields) { "" }
   else {
     let (fname, v) = fields[i]
@@ -553,7 +557,7 @@ fn render_field_inits(ref fields, i) with GraphRead + Memory + Alloc + !Mutate =
   }
 }
 
-fn render_string_parts(ref parts, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_string_parts(ref parts, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(parts) { "" }
   else {
     let one = match ast_kind_of(parts[i]) {
@@ -564,7 +568,7 @@ fn render_string_parts(ref parts, i) with GraphRead + Memory + Alloc + !Mutate =
   }
 }
 
-fn render_match_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_match_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(arms) { "" }
   else {
     let (pat, body) = arms[i]
@@ -572,12 +576,12 @@ fn render_match_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate = {
   }
 }
 
-fn render_resume_head(v) with GraphRead + Memory + Alloc + !Mutate = match ast_kind_of(v) {
+fn render_resume_head(v) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(v) {
   NExpr(LitUnit) => "resume()",
   _              => "resume({render_tokens_for(v)})"
 }
 
-fn render_state_updates(ref updates, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_state_updates(ref updates, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(updates) { "" }
   else {
     let u = updates[i]
@@ -587,12 +591,12 @@ fn render_state_updates(ref updates, i) with GraphRead + Memory + Alloc + !Mutat
   }
 }
 
-fn render_let_ann(ann) with GraphRead + Memory + Alloc + !Mutate = match ast_kind_of(ann) {
+fn render_let_ann(ann) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(ann) {
   NTypeAnn(ty) => ": {show_type(ty)}",
   _            => ""   // drift-audit: ignore — the ADT's own absence sentinel: LetStmt's ann node is LitUnit when unannotated (the LetStmt decl comment); any non-NTypeAnn body IS that absence, rendered as no clause
 }
 
-fn render_variants(ref variants, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_variants(ref variants, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(variants) { "" }
   else {
     let (vname, tys) = variants[i]
@@ -602,13 +606,13 @@ fn render_variants(ref variants, i) with GraphRead + Memory + Alloc + !Mutate = 
   }
 }
 
-fn render_ty_list(ref tys, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_ty_list(ref tys, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(tys) { "" }
   else if i == len(tys) - 1 { show_type(tys[i]) }
   else { "{show_type(tys[i])}, {render_ty_list(tys, i + 1)}" }
 }
 
-fn render_effect_ops(ref ops, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_effect_ops(ref ops, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(ops) { "" }
   else {
     let (oname, ptys, rty) = ops[i]
@@ -631,7 +635,7 @@ fn render_name_list(ref names, i) with Memory + Alloc = {
   else { "{names[i]}, {render_name_list(names, i + 1)}" }
 }
 
-fn render_state_inits(ref states, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_state_inits(ref states, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(states) { "" }
   else {
     let st = states[i]
@@ -641,7 +645,7 @@ fn render_state_inits(ref states, i) with GraphRead + Memory + Alloc + !Mutate =
   }
 }
 
-fn render_handler_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_handler_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(arms) { "" }
   else {
     let a = arms[i]
@@ -682,7 +686,7 @@ fn render_pat_fields(ref fields, i) with GraphRead + Memory + Alloc + !Mutate = 
 
 // The declared with-clause, rendered via the ONE canonical show_effrow. A Pure
 // row carries no clause (the identity element — SYNTAX.md §175).
-fn render_with_clause(effs) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_with_clause(effs) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if len(effs) == 0 { "" }
   else { " with {show_effrow(build_row_from_effs(effs))}" }
 }
@@ -723,7 +727,7 @@ fn render_comment_at(h) with GraphRead + Memory + Alloc + !Mutate = {
 // GNode; the Reason renders via the ONE canonical show_reason (types.mn) —
 // never a second compressed walk. Debug aspect — assemble_render decides
 // placement (today: dropped from the assembled text).
-fn render_reason_at(h) with GraphRead + !Mutate + Alloc + Memory = {
+fn render_reason_at(h) with GraphRead + !Mutate + Alloc + Memory + Intern = {
   let GNode(_, reason) = graph_chase(h)
   show_reason(reason)
 }

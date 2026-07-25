@@ -1133,20 +1133,20 @@ fn emitted_artifact_path(fh) with Memory + Alloc = {
 // not fill space). The slots a hover should show are NO LONGER computed then
 // discarded — this fn is the terminal read every voice surface shares.
 
-fn render_voiceline(line) with GraphRead + Memory + Alloc + !Mutate = match line {
+fn render_voiceline(line) with GraphRead + Memory + Alloc + !Mutate + Intern = match line {
   Silence                       => "",
   VoiceLine(_, _, slots, modif) =>
     "{render_slots(slots)}{render_modifier(modif)}"
 }
 
-fn render_slots(slots) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_slots(slots) with GraphRead + Intern + Memory + Alloc + !Mutate = {
   if len(slots) == 0 { "" }
   else {
     "{render_slot(last(slots))}{render_slots(drop_last(slots))}"
   }
 }
 
-fn render_slot(slot) with GraphRead + Memory + Alloc + !Mutate = match slot {
+fn render_slot(slot) with GraphRead + Memory + Alloc + !Mutate + Intern = match slot {
   SIdent(name)   => "`{name}`",
   SType(ty)      => show_type(ty),
   SRow(row)      => show_effrow(row),

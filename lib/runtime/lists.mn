@@ -257,7 +257,11 @@ fn list_eq(a, b) -> Bool with Memory = {
 fn list_eq_loop(a, b, n, i) -> Bool with Memory =
   if i >= n { true }
   else {
-    if list_index(a, i) != list_index(b, i) { false }
+    // The raw altitude end to end: list_index (a typed face) would pin the
+    // loop's operands [t] while list_eq's own body reads them as words —
+    // the unchecked read is the f64 siblings' exact form, bounds discharged
+    // by the loop guard over the header length.
+    if list_index_unchecked(a, i) != list_index_unchecked(b, i) { false }
     else { list_eq_loop(a, b, n, i + 1) }
   }
 

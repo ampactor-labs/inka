@@ -171,7 +171,7 @@ handler terminal_transport with state = transport_state_init(Caret(0, Inferred("
 // labeled aspects into ONE string; the transport arm writes it at
 // the WASI boundary in one print_string. Any text-mode surface
 // (terminal, CI log, doc snapshot) reads the same projection.
-fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate = {
+fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate + Intern = {
   let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
   "Mentl @ "
     ++ show_handle_label(cursor)
@@ -234,7 +234,7 @@ fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate =
 // `<~` verb un-named — the exact drift the prime directive forbids. The
 // state threads through `<~ accumulate`; cursor_step is one cycle.
 
-fn cursor_session(initial_caret) with Surface = {
+fn cursor_session(initial_caret) with Surface + CursorRead + GraphRead + PatchWrite + Memory + Alloc = {
   surface_handshake()
   transport_state_init(initial_caret)
     |> cursor_step
@@ -405,7 +405,7 @@ fn show_proposals(props) with GraphRead + Alloc + Memory + !Mutate = {
   }
 }
 
-fn show_one_rejection(pair) with GraphRead + !Mutate + Alloc + Memory = {
+fn show_one_rejection(pair) with GraphRead + !Mutate + Alloc + Memory + Intern = {
   let (name, reason) = pair
   " · rejected {name} — {show_reason(reason)}"
 }
@@ -413,7 +413,7 @@ fn show_one_rejection(pair) with GraphRead + !Mutate + Alloc + Memory = {
 // Each survivor: its source text and its Reason — the pair the Synth
 // contract carries (the seed reason lives in the candidate record, not on
 // the node's mint placeholder).
-fn show_one_proposal(proposal) with GraphRead + Memory + !Mutate + Alloc = {
+fn show_one_proposal(proposal) with GraphRead + Memory + !Mutate + Alloc + Intern = {
   let (node, reason) = proposal
   " · {render_candidate_source(node)} — {show_reason(reason)}"
 }

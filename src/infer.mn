@@ -265,6 +265,7 @@ fn infer_program(stmts) = {
   stmts
 }
 
+
 // ─── comment references — the backtick contract ─────────────────────
 //
 // A comment is a Reason edge (SYNTAX §Comments); a `backticked`
@@ -3431,15 +3432,18 @@ fn named_fn_row(name: String) = match env_lookup(name) {
   None => mk_ef_pure()
 }
 
+// The op is the parser's UnaryOp ADT (UNeg | UNot — types.mn), matched
+// exhaustively. The old string arms compared "Neg"/"Not" against ADT
+// values, never matched, and every unary op fell to a fabricating
+// catch-all — `!x` typed as its operand instead of Bool (caught by the
+// order-independent judge, 2026-07-25).
 fn infer_unaryop(handle, op, ih, span: ValidSpan) = match op {
-  "Neg" =>
-    graph_bind(handle, TVar(ih), Located(span, OpConstraint(op, Inferred("negate"), Inferred("operand")))),
-  "Not" => {
-    graph_bind(ih, TName("Bool", []), Located(span, OpConstraint(op, Inferred("not"), Declared("bool"))))
-    graph_bind(handle, TName("Bool", []), Located(span, OpConstraint(op, Inferred("result"), Declared("bool"))))
-  },
-  _ =>
-    graph_bind(handle, TVar(ih), Located(span, Inferred("unary op")))
+  UNeg =>
+    graph_bind(handle, TVar(ih), Located(span, OpConstraint("Neg", Inferred("negate"), Inferred("operand")))),
+  UNot => {
+    graph_bind(ih, TName("Bool", []), Located(span, OpConstraint("Not", Inferred("not"), Declared("bool"))))
+    graph_bind(handle, TName("Bool", []), Located(span, OpConstraint("Not", Inferred("result"), Declared("bool"))))
+  }
 }
 
 // Pattern inference

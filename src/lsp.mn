@@ -158,7 +158,7 @@ fn classify_method(method) with Pure = {
 // exhaustive over LspMethodKind. Notification-shaped methods that
 // arrive as requests get LspNullResp (graceful protocol tolerance).
 
-fn dispatch_request(kind, params) with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate + EnvRead = {
+fn dispatch_request(kind, params) with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate + EnvRead + Intern = {
   match kind {
     LspInitialize           => handle_initialize(params),
     LspShutdown             => LspNullResp,
@@ -278,7 +278,7 @@ fn handle_initialize(_params) with Interact = {
 }
 
 // handle_hover — focus + ask(QTypeAt) → HoverContent. Per MV §2.8 AT1.
-fn handle_hover(params) with Memory + Alloc + Interact + GraphRead = {
+fn handle_hover(params) with Memory + Alloc + Interact + GraphRead + Intern = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
@@ -331,7 +331,7 @@ fn handle_code_action(params) with Interact + Alloc + Memory = {
 // obligations the graph holds; project each (span, predicate, reason)
 // to an LSP LspDiagnostic. The verify-debt IS the diagnostic set (the
 // graph proved it) — read live, never an empty []-fabrication.
-fn handle_diagnostic(params) with Memory + Alloc + Interact + GraphRead + EnvRead = {
+fn handle_diagnostic(params) with Memory + Alloc + Interact + GraphRead + EnvRead + Intern = {
   let uri = lsp_extract_uri(params)
   ensure_doc_open(uri)
   match consult(QVerifyDebt) {
@@ -410,11 +410,11 @@ fn map_spans_to_locations(spans, uri, i, n, acc_rev) with Memory + Alloc = {
 // predicate, reason) to an LSP LspDiagnostic. severity 1 = Error (a refinement
 // the path could not discharge). The predicate's text is the message; the
 // span is the obligation site (read live from the debt the graph holds).
-fn diagnostics_from_debt_lsp(debt, uri) with Memory + Alloc + GraphRead + !Mutate = {
+fn diagnostics_from_debt_lsp(debt, uri) with Memory + Alloc + GraphRead + !Mutate + Intern = {
   map_debt_to_diagnostics(debt, 0, len(debt), [])
 }
 
-fn map_debt_to_diagnostics(debt, i, n, acc_rev) with Memory + Alloc + GraphRead + !Mutate = {
+fn map_debt_to_diagnostics(debt, i, n, acc_rev) with Memory + Alloc + GraphRead + !Mutate + Intern = {
   if i >= n { reverse(acc_rev) }
   else {
     let (span, predicate, reason) = list_index(debt, i)
@@ -517,17 +517,17 @@ fn uri_starts_with(uri, prefix, i, n) with Memory = {
 
 // ─── HoverContent / CompletionItem / CodeAction projection ────────────
 
-fn hover_from_type(ty, _reason) with Memory + Alloc + GraphRead + !Mutate = {
+fn hover_from_type(ty, _reason) with Memory + Alloc + GraphRead + !Mutate + Intern = {
   let type_text = show_type(ty)
   HoverContent("`{type_text}`")
 }
 
-fn hover_from_row(row, _reason) with Memory + Alloc + GraphRead + !Mutate = {
+fn hover_from_row(row, _reason) with Memory + Alloc + GraphRead + !Mutate + Intern = {
   let row_text = show_effrow(row)
   HoverContent("Effect row: `{row_text}`")
 }
 
-fn hover_from_reason(reason) with Memory + Alloc + GraphRead + !Mutate = {
+fn hover_from_reason(reason) with Memory + Alloc + GraphRead + !Mutate + Intern = {
   HoverContent("Reason: {show_reason(reason)}")
 }
 

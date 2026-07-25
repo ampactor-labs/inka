@@ -1038,6 +1038,57 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ THE ORDER-INDEPENDENT JUDGE'S HARVEST — the two-pass
+  walk rebuilt, converged to judge-ZERO, measured, and its fifty
+  findings landed while the machinery unwired (phase B-ii step 0
+  closes · pin 6965d5bb). The banked design built clean in one pass:
+  a diag_quiet handler (all three Diagnostic ops armed) absorbs the
+  TRIAL pass, whose one product is the env holding every fn's FINAL
+  scheme; the FINAL pass re-judges fresh nodes with every reference —
+  forward included — resolving those finals (fn pre-registration
+  skipped: infer_fn's unbound-handle arm self-registers monomorphic
+  recursion; the duplicate-fn refusal decoupled into its own seen-set
+  walk). THE JUDGE CONVICTED THE WHEEL of ~20 real order-masked
+  wrongs, 50 errors → 0 across five convergence rounds, every fix
+  valid under today's judgment too (boot census held 0): abs was an
+  IDENTITY on negative floats (its `0` literals pinned Int -> Int
+  while all three callers — the dsp envelope/peak/flux family — pass
+  Float; each forward site unified loose while the compiled body
+  word-floored); infer_unaryop string-matched "Neg"/"Not" against the
+  parser's UNeg/UNot ADT — no arm ever matched, and the deleted
+  catch-all fabricated `!x` as its operand's type instead of Bool;
+  the formatter's five chain arms matched PipeExpr at the wrong
+  altitude (ast_kind_of projects NodeBody; every chain fell to the
+  non-chain render — the render-totality arc's own arms, dead since
+  birth); autodiff under-dimensioned its matrix ([Float] at the op
+  decl AND the tape field; transpose named the truth); the
+  record-literal field carrier is the parser's (name, value) TUPLE —
+  oracle's three literal arms read .init off tuples (the 6807a214
+  claim corrected; resume updates alone are records); the str-raw
+  satellites (driver count_lines, main's line helpers, lsp_frame's
+  whole header family) re-typed through byte_len/byte_at with
+  read_headers_until_blank gaining its str_of_buf boundary; list_eq's
+  loop un-crossed altitudes (list_index_unchecked, the f64 siblings'
+  form); driver_check_module's if arms agreed on (); with_run exits 1
+  on its unbuilt verb; and ~35 declared rows widened to their bodies'
+  truth (the widen loop 13 → 22 → 18 → 6 → 2 → 0, automated per-round,
+  two multi-line heads hand-fixed per the never-mangle rule). THE
+  MEASUREMENT THE STEP CHARTERED: the judge-0 wheel's m3-leg
+  self-compile still dies — alloc's wraparound guard at
+  emit_wide_wrappers, ~28s, 1.1GB RSS with the 4GB bump extent
+  exhausted — so the two-pass OOM verdict is CURRENT, not stale
+  (unlike seq-op's), and the machinery unwired whole (drift-9-clean:
+  zero dead code stays). Banked on the peer: the working build recipe,
+  the convergence protocol (fix the JUDGED source under the standing
+  judge, rebuild the judge, repeat), and the DEP now measured at the
+  exact site — the arena's image/scratch split, or wasm64's ceiling
+  lift. En route kills, counted: the first error map skipped
+  wt_wheel's tutorial exclusion (all src lines shifted — the
+  one-binary/one-blob forensic law at the map layer); the second
+  drifted +7 after the abs fix edited the blob under it. TRANSITION
+  m3 == m4 at 330,255 lines (the 14-line crossing is infer_unaryop's
+  corrected graph); census 0; frontier 258/0; proof-exactness 9/9;
+  crown 5/5; micros 114/114.
 - 2026-07-25 · ▶▶▶ THE ROOTED-IMAGE PERSIST — persist = memcpy made real,
   proven by a fresh process (phase B-i landing 1 · pin 88c1b888). The
   image [0, heap-line) plus the mutable-global record IS the whole
@@ -3405,16 +3456,24 @@ runtime fn declared before its prelude consumer meets the TIGHT inferred
 scheme where the canonical order met the loose pre-registered one — three
 real latent mismatches at prelude sum/chunk/trim under a leaves-first
 weave; the canonical sort sidesteps, the class remains; repro: swap
-lists/strings before prelude on stdin. The COMPLETE form was BUILT and
-REVERTED by measurement (2026-07-23, the instance-crossing landing): a
-TWO-PASS WALK — pass 1 quiet-trial finalizes schemes, pass 2 re-parses
-and pre-registers every fn from pass 1's FINAL scheme — closes the class
-whole, and its second pass tips the 4GB bump image at the m3 emit
-(alloc-unreachable in the reach walk; the seq-op-row precedent exactly).
-DEP-gated on Hβ.perf.per-decl-arena; the reverted build was never
-committed — its design is three pieces: a quiet diagnostics trial
-bracketing pass 1, pass-2 pre-registration binding each FnStmt handle
-from the pass-1 FINAL scheme, and the compile seams calling the pair.
+lists/strings before prelude on stdin. The COMPLETE form was BUILT TWICE and
+unwired twice by the SAME measured wall (2026-07-23 in the
+instance-crossing landing; RE-BUILT AND RE-MEASURED 2026-07-25, phase
+B-ii step 0 — the ledger entry carries the arc): a TWO-PASS WALK — a
+diag_quiet trial finalizes every scheme; the final pass re-judges fresh
+nodes against those finals (fn pre-registration SKIPPED — infer_fn's
+unbound-handle arm self-registers monomorphic recursion; the
+duplicate-fn refusal decoupled into its own seen-set walk) — closes the
+class whole: its verdicts on the wheel converged 50 → 0 and the fifty
+findings LANDED as the 2026-07-25 harvest (abs, infer_unaryop, the
+formatter's chain arms, autodiff's matrix, the field-carrier split, the
+str-raw satellites, ~35 row widens). The wall is CURRENT, not stale:
+the judge-0 wheel's m3-leg self-compile exhausts the 4GB bump extent at
+emit_wide_wrappers (alloc's wraparound guard; ~28s, 1.1GB RSS). DEP:
+Hβ.perf.per-decl-arena's image/scratch split OR wasm64's ceiling lift —
+whichever lands first re-wires the pair (the 2026-07-25 build is the
+recipe, banked in the campaign mirror; the convergence protocol: fix
+the JUDGED source under the standing judge, rebuild the judge, repeat).
 THE CALLEE-FIRST BLOB (2026-07-23, the field landing) kills the class's
 src→lib face whole: the canonical wheel input is lib-before-src, so
 every cross-layer reference is BACKWARD; the bare-scheme census fell

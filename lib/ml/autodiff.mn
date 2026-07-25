@@ -7,7 +7,7 @@ import ml/tensor
 // ── Tape entries ────────────────────────────────────────────
 
 type TapeEntry =
-    TapeMatVecMul({ w: [Float], x: [Float], out: [Float] })
+    TapeMatVecMul({ w: [[Float]], x: [Float], out: [Float] })
   | TapeVecAdd({ a: [Float], b: [Float] })
   | TapeRelu({ input: [Float] })
   | TapeSigmoid({ out: [Float] })
@@ -17,7 +17,7 @@ type TapeEntry =
 // unification but the runtime passes actual lists/matrices.
 
 effect Compute {
-  forward_mat_vec_mul(w: [Float], x: [Float]) -> [Float]
+  forward_mat_vec_mul(w: [[Float]], x: [Float]) -> [Float]
   forward_vec_add(a: [Float], b: [Float]) -> [Float]
   forward_relu(xs: [Float]) -> [Float]
   forward_sigmoid(xs: [Float]) -> [Float]

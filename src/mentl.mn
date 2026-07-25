@@ -664,7 +664,7 @@ fn render_leaf(reason, depth) = {
 // teach_why_string ties the effect-returning teach_why to the pure
 // renderer. Callers (LSP hover, explain surface, Quick Fix surface)
 // invoke this directly.
-fn teach_why_string(handle) with GraphRead = {
+fn teach_why_string(handle) with GraphRead + Memory + Alloc = {
   render_why(why_from_handle(handle))
 }
 

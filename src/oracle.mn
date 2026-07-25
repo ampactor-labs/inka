@@ -348,9 +348,11 @@ fn expr_child_handles(e) with Alloc + Memory = match e {
   ResumeExpr(v, updates)   => [node_handle(v)] ++ map(record_field_handle, updates),
   MakeListExpr(elems)      => map(node_handle, elems),
   MakeTupleExpr(elems)     => map(node_handle, elems),
-  MakeRecordExpr(fields)   => map(record_field_handle, fields),
-  RecordUpdateExpr(base, flds) => [node_handle(base)] ++ map(record_field_handle, flds),
-  NamedRecordExpr(_, flds) => map(record_field_handle, flds),
+  // Record LITERALS carry the parser's (name, value) tuples
+  // (parse_record_fields); only resume updates are {name, init} records.
+  MakeRecordExpr(fields)   => map(tuple_field_handle, fields),
+  RecordUpdateExpr(base, flds) => [node_handle(base)] ++ map(tuple_field_handle, flds),
+  NamedRecordExpr(_, flds) => map(tuple_field_handle, flds),
   IndexExpr(recv, idx)     => [node_handle(recv), node_handle(idx)],
   MakeStringExpr(frags)    => map(node_handle, frags),
   FieldExpr(recv, _)       => [node_handle(recv)],
@@ -362,6 +364,11 @@ fn expr_child_handles(e) with Alloc + Memory = match e {
 // The field IS the parser's {name, init} record — read the init edge by
 // name (the tuple destructure read a record as positions and met Node).
 fn record_field_handle(field) with Pure = node_handle(field.init)
+
+fn tuple_field_handle(field) with Pure = {
+  let (_, v) = field
+  node_handle(v)
+}
 
 // locality_at — byte distance from the cursor, read from the graph's
 // span_index ([(ValidSpan, Int)]). The position's span start IS the

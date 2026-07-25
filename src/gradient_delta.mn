@@ -216,7 +216,7 @@ fn row_suggestion(handle, ann_text, capability_labels) with Pure = {
   )
 }
 
-fn ownership_suggestion(param_name, marker_text, capability_labels) with Pure = {
+fn ownership_suggestion(param_name, marker_text, capability_labels) with Memory + Alloc = {
   AnnotationSuggestion(
     SuggestOwnership,
     "{marker_text} {param_name}",
@@ -226,7 +226,7 @@ fn ownership_suggestion(param_name, marker_text, capability_labels) with Pure = 
   )
 }
 
-fn refinement_suggestion(handle, predicate) with Pure = {
+fn refinement_suggestion(handle, predicate) with Memory + Alloc + GraphRead = {
   AnnotationSuggestion(
     SuggestRefinement,
     predicate_to_where_clause(predicate),
@@ -252,7 +252,7 @@ fn fn_body_handle(handle) with GraphRead + !Mutate = {
   }
 }
 
-fn first_inferred_with_classification(params, fn_handle) with Memory = {
+fn first_inferred_with_classification(params, fn_handle) with Memory + Alloc = {
   if len(params) == 0 { None }
   else {
     let p = last(params)
@@ -311,7 +311,7 @@ fn row_to_with_clause(row) with Intern + Memory = {
   }
 }
 
-fn neg_names_to_str(ref names) with Memory =
+fn neg_names_to_str(ref names) with Intern + Memory =
   show_list(names, (n) => "!{show_eff_name(n)}", " + ")
 
 fn eff_names_to_str(names) with Intern + Memory = {

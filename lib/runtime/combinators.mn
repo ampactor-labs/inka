@@ -132,7 +132,7 @@ fn race_internal(handlers) with GraphRead + GraphWrite + Memory + Alloc = {
 // succeeded. Cap at 8 per MO §2 (one fork per Mentl tentacle as
 // the natural concurrency budget).
 
-fn collect_verified_survivors(handlers, checkpoint) with GraphRead + GraphWrite = {
+fn collect_verified_survivors(handlers, checkpoint) with GraphRead + GraphWrite + Memory + Alloc = {
   handlers
     |> take(8)
     |> map_list(??, (h) => try_handler_with_rollback(h, checkpoint))

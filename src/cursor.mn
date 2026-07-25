@@ -409,13 +409,13 @@ fn any_imports(paths, target, seen) with GraphRead + Alloc + Memory + !Mutate = 
 }
 
 // The direct import paths declared in module `path`'s NModule decls.
-fn module_import_paths(path) with GraphRead + !Mutate = {
+fn module_import_paths(path) with GraphRead + !Mutate + Alloc + Memory = {
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
   scan_module_imports(path, 0, next)
 }
 
-fn scan_module_imports(path, i, n) with GraphRead + !Mutate = {
+fn scan_module_imports(path, i, n) with GraphRead + !Mutate + Alloc + Memory = {
   if i >= n { [] }
   else {
     match graph_node_body(i) {
@@ -427,7 +427,7 @@ fn scan_module_imports(path, i, n) with GraphRead + !Mutate = {
   }
 }
 
-fn import_paths_of_decls(decls) with Pure = {
+fn import_paths_of_decls(decls) with Alloc + Memory = {
   decls
     |> filter_map_imports
 }
@@ -483,7 +483,7 @@ fn argmax_or_default(scored, caret) with Memory + Alloc = {
 // The pin override is read by case from the Reason chain: a `??`-pinned
 // cursor carries Located(span, Inferred("user pinned via ??")). Structural
 // projection — no magic float.
-fn reason_is_pinned(reason) with Pure = match reason {
+fn reason_is_pinned(reason) with Memory + Alloc = match reason {
   Located(_, Inferred(ctx)) => contains(ctx, "user pinned"),
   _                         => false
 }

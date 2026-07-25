@@ -2,20 +2,97 @@
 
 Machines now write most new code, and nobody can read it all. Trust has to
 come from somewhere other than review. Mentl is a programming language whose
-compiler *proves* what your program does — and what it cannot do — and teaches
-you, in words, as you write. Any intelligence may propose; nothing executes
-unproven; intent is never lost; capability is always bounded.
+compiler *proves* what your program does — and what it can never do — and
+teaches you, in words, as you write. Any intelligence may propose; nothing
+executes unproven; intent is never lost; capability is always bounded.
 
-If you have never written code: the transcripts below are conversations, and
-you can read them. If you write compilers for a living: the kernel is one
-graph, two operations, and a self-hosted fixed point, and the receipts are one
-command. This page is the door for both of you; the school is inside.
+If you have never written code: everything below is written to be read, and
+the transcripts are conversations. If you write compilers for a living: the
+kernel is one graph, two operations, and a self-hosted fixed point, and the
+receipts are one command. This page is the door. The school is inside.
+
+## The shape of it
+
+There are exactly five verbs of flow in this medium, and they are the
+complete vocabulary; every program you will ever read is these five shapes
+combined. `|>` is "and then." `<|` fans one value out to several readers.
+`><` runs independent things side by side — read the page: they are literally
+side by side, because the shape on the page is the shape of the work, and the
+formatter keeps that true. `~>` installs an answerer over everything to its
+left. And `<~` is the one to slow down for.
+
+Sound has memory. An echo is now plus a little of before; there is no echo
+without a before. Most languages make you build memory out of scaffolding.
+Here, memory is a shape you draw — a loop in the graph:
+
+```
+fn echo(mix, x) with Clock(48_000) =
+  ((prev) => x + mix * prev) <~ delay(24_000)
+```
+
+`<~` means "feeds back." The right side is a memory element: it hands back
+what you gave it 24,000 ticks ago, and at 48,000 ticks a second that is half
+a second — the slap of a stone room. The left side is what to do each tick:
+`prev` is the echo's own past arriving back; the new sample is now plus a
+share of before. The whole physics of an echo, in one line you can read
+aloud. And a promise rides inside it: `prev` is not a box secretly allocated
+each tick. The medium inlines the loop into a register, which is why this
+same echo can sit inside a function that has sworn never to allocate, and
+the oath will hold.
+
+## The second hand
+
+A function's effect row has two hands. The first says what it needs. The
+second says what it can never do, and this is the hand that holds the true
+name.
+
+Picture the third night of a tour. Two thousand people. Fifty seconds into
+the set, the voice stutters — one dropped buffer, a click like a snapped
+string — because somewhere down the call tree one line allocated memory at
+the wrong moment. Every audio programmer alive holds that dread at bay the
+same way: discipline, review, a wiki page that says *never allocate on the
+audio thread*. A promise. Here is the same intention, said in this medium:
+
+```
+fn voice(x) with Clock(48_000) + !Alloc =
+  x
+    |> gain(-3.0)
+    |> lowpass(0.2)
+    |> echo(0.35)
+```
+
+`!Alloc`. Read it: *cannot allocate*. Not "does not," not "was tested and
+didn't," not "the team agreed not to." Cannot — proven, transitively: the
+gain, the filter, the echo and its half-second memory, everything they call,
+to the bottom. If one line anywhere beneath this signature allocates, the
+program does not build, and the refusal arrives with the chain of reasons
+walked back to the guilty line. The dread does not get quieter. It gets
+impossible.
+
+This is `!E`, effect negation, and you should know plainly: everything else
+in this medium has cousins scattered across other languages. The proven
+negative — transitive, compile-time — does not. And it is the guarantee the
+machine-writing age actually needs:
+
+```
+fn admit(pedal, x) with !Network + !FileSystem =
+  play_through(pedal, x)
+```
+
+A guest effect — a pedal someone else built, plugged into your voice. You
+did not read its code. You cannot; there is too much of it, and tomorrow
+there will be more, and no one you trust wrote it. You do not need to. The
+row is the door policy: inside this signature the guest cannot reach the
+network and cannot touch a file, and if anything inside it tries, there is
+no built program to run. It can be brilliant. It can be a thousand times
+cleverer than you. It cannot phone home. Let the machine write. Let anything
+write.
 
 ## Watch it speak
 
-Leave a hole where a value should go, and the medium proposes a proven fill.
-Here `??` must be a `Positive` number, and asking at the hole's address
-projects what the medium knows:
+The proofs above are the medium's spine; here it is talking, today, through
+the pinned compiler in this repository. Leave a hole where a value should
+go, and it proposes a proven fill:
 
 ```
 type Positive = Int where self > 0
@@ -31,8 +108,8 @@ Propose: 1
 Why: declaration-order param, at hole.mn:5
 ```
 
-Claim something false, and the medium refuses to build the program — and says
-why, at the exact line:
+Claim something false, and it refuses to build the program — at the exact
+line, in words:
 
 ```
 type Sample = Float where -1.0 <= self && self <= 1.0
@@ -51,11 +128,7 @@ $ echo $?
 ```
 
 No warning you can ignore, no runtime crash later: a false claim produces no
-executable at all. That is the whole thesis in one exit code. The deepest form
-of it is negation — `!E` proves the *absence* of a capability, transitively:
-that a function cannot reach the network, cannot allocate, cannot touch a
-secret, no matter what it calls. Proving what software *won't* do is the
-guarantee autonomous systems actually need, and it is Mentl's native verb.
+executable at all. That is the whole thesis in one exit code.
 
 ## Try it
 
@@ -87,7 +160,7 @@ Hello, octopus. The medium is reading you back.
 
 Walk them in order: `00-hello` (meet the medium) · `01-graph` (everything is
 one graph) · `02-handlers` (effects are answered, not feared) · `03-verbs`
-(the five pipe shapes) · `04-row` (declaring and denying capabilities) ·
+(the five shapes) · `04-row` (declaring and denying capabilities) ·
 `05-ownership` (who holds a value) · `06-refinement` (types that carry
 bounds) · `07-gradient` (the medium proposes) · `08-reasons` (ask *why*) ·
 `09-all` (everything at once). At any line of any lesson,

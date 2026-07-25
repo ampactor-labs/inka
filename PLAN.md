@@ -1038,6 +1038,19 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · THE PAGE PRE-OPEN — the fan's band opens become
+  unraceable (Phase C rung 1 step C1c-2c opening move · pin
+  3a53f775). graph_mint_plan pre-opens every band the plan touches,
+  sequentially, before any planned walk — a branch cursor then only
+  writes cells, never opens a band, so page opens cannot race by
+  construction. CLEAN m2 == m3 at 295,016 lines; board whole. THE
+  JOIN PROTOCOL, derived and banked in the mirror for the bracket
+  build: every branch-local mutable fact (diagnostics, env publishes,
+  affine consumes, verify debt) returns as a DELTA replayed into the
+  root in stmt order at the join — collisions and refusals re-detect
+  deterministically at the replay, so branch instances stay fresh and
+  the sequential judgment reproduces exactly; the bracket proves
+  itself byte-identical SEQUENTIALLY before any thread runs it.
 - 2026-07-25 · THE ENV VIEW — the branch cursor's second leg lands
   Law-7-inert (Phase C rung 1 step C1c-2b · pin d8c42e3a).
   env_handler gains the base triple (base_buf, base_count,

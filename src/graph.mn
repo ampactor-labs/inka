@@ -342,8 +342,16 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
   // the trail: the plan is numbering, not mutation — rollback semantics
   // ride `next` exactly as before.
   graph_mint_plan(top) => {
+    // Pre-open every band the plan will touch, HERE, sequentially — a
+    // branch cursor then only writes cells, never opens a band, so the
+    // fan's page opens cannot race by construction (two cursors whose
+    // ranges share a band boundary would otherwise both allocate it and
+    // one page would leak with writes lost).
+    let (sp, so) = spine_ensure(spine, spine_open, spine_band(top - 1))
     resume()
-      with mint_high = if top > mint_high { top } else { mint_high }
+      with spine = sp,
+           spine_open = so,
+           mint_high = if top > mint_high { top } else { mint_high }
   },
 
   graph_mint_at(base, limit) => {

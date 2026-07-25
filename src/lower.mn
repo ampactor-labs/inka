@@ -6128,37 +6128,22 @@ fn ls_find_str_local_loop(lst: [String], target: String, i, n) = {
 // constructors). A nullary ctor's scheme is bare TName -> []; a fielded ctor's
 // is TFun(params, TName, _) -> the param types. Carried-Truth: the payload
 // types are read LIVE from the constructor's scheme, never re-derived.
-fn variant_specs_of(type_name) with EnvRead + Memory + Alloc = {
-  let Env(entries) = env_snapshot()
-  variant_specs_filter(entries, type_name)
-}
-
-// Backward index walk (newest-first, the same order the drop_last form
-// produced) — face 11: drop_last on the env SNAPSHOT (a slice view since
-// the flat-buffer env) stacked a slice layer per step until element access
-// recursed thousands deep and killed the stack inside `last`.
-
-fn variant_specs_filter(entries, type_name) with Memory + Alloc = {
-  let n = len(entries)
-  variant_specs_filter_from(entries, type_name, n - 1, make_list(n), 0)
-}
-
-fn variant_specs_filter_from(entries, type_name, i, own buf, count) with Memory + Alloc = {
-  if i < 0 { slice(buf, 0, count) }
-  else {
-    let (_name, scheme, _reason, kind) = list_index(entries, i)
-    match kind {
-      ConstructorScheme(tag_id, _total) => {
-        let Forall(_, ty) = scheme
-        if ctor_result_is(ty, type_name) {
-          variant_specs_filter_from(entries, type_name, i - 1,
-            list_set(buf, count, (tag_id, ctor_payload_tys(ty))), count + 1)
-        } else { variant_specs_filter_from(entries, type_name, i - 1, buf, count) }
-      },
-      _ => variant_specs_filter_from(entries, type_name, i - 1, buf, count)
-    }
+// The keyed read: the type's own entry carries its variant specs
+// (TypeVariants, minted at registration). The whole-env backward scan
+// this replaces re-derived the grouping per read.
+fn variant_specs_of(type_name) with EnvRead + Memory + Alloc =
+  match env_lookup_variants(type_name) {
+    Some(entry) => {
+      let (_, _r, kind) = entry
+      match kind {
+        TypeVariants(specs) =>
+          map((sp) => { let (t, _, tys) = sp
+                        (t, tys) }, specs),
+        _ => []
+      }
+    },
+    None => []
   }
-}
 
 // A constructor's scheme result type is TName(type_name, _) (nullary, bare) or
 // TFun(_, TName(type_name, _), _) (fielded) — the same test synth uses.

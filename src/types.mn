@@ -419,6 +419,7 @@ type SchemeKind
   | EffectDeclKind([String])                     // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
   | HandlerKind(Int, [String], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])   // tag 6 — (residual_row_handle, config param names, state fields, arms). Typed payloads: a bare List here erased the element types the consumers prove (the 581a92f class), and the pattern-constraint unification surfaces the conflict as E_TypeMismatch at every destructure.
   | ParamScheme(Ownership)                       // tag 7 — parameter binding carries authored ownership at the env edge
+  | TypeVariants([(TagId, String, [Ty])])        // tag 8 — the TYPE's own entry: (tag, ctor name, payload tys) per variant, minted at registration where the list is in hand — the variant_specs whole-env scan family's cure
   // HandlerKind (tag 6) is the full handler-effect type AND the handler's
   // identity: a handler is
   // (a ! E+r) ⟿ (a ! R+r) — it REMOVES the handled effect E AND
@@ -1334,6 +1335,7 @@ effect EnvRead {
   env_lookup(String) -> Option((Scheme, Reason, SchemeKind))
   env_lookup_type(String) -> Option((Scheme, Reason, SchemeKind))
   env_lookup_ctor(String) -> Option((Scheme, Reason, SchemeKind))
+  env_lookup_variants(String) -> Option((Scheme, Reason, SchemeKind))
   env_snapshot() -> Env
 }
 

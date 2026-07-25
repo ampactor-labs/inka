@@ -874,6 +874,88 @@ fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: Vali
   env_extend(name, Forall(free_in_ty(fn_ty), fn_ty), Located(span, Declared(name)), FnScheme)
 }
 
+// ─── Order-independent verdicts (Hβ.infer.order-independent-verdicts) ───
+// A forward reference reads whatever the env holds at the call site: under
+// one pass that is the LOOSE pre-registered scheme, so a caller's verdict
+// depends on source ORDER. The pair closes the class: the TRIAL pass runs
+// the whole walk with diagnostics absorbed — its one product is the env
+// holding every fn's FINAL scheme — and the FINAL pass re-judges fresh
+// nodes with every reference, forward included, resolving those finals.
+// Two passes of one walk, sharing one graph and one env (pass-2 entries
+// shadow; pass-1 handles stay live under them). The trial skips the prose
+// gate (comment_refs_check judges once, in the reporting pass); the final
+// skips fn PRE-registration — the env already holds the truth, and
+// infer_fn's unbound-handle arm self-registers monomorphic recursion. The
+// duplicate-fn refusal already lives in the registration walk's own
+// seen-set (the incremental cursor's landing), so re-registration is
+// clean by construction.
+fn infer_program_trial(stmts) = {
+  {
+    register_primitives()
+    pre_register_decls(stmts)
+    set_summaries(classify_fixpoint(stmts))
+    infer_stmt_list(stmts)
+    finalize_continuation_boundaries(0, graph_next())
+  } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
+    // The trial is a WORLD of its own: fresh analysis ledgers absorb its
+    // verify obligations and ownership/region facts, dying with the
+    // bracket — without them the trial's undischarged debt accrued into
+    // the SHARED verify ledger and the final judgment reported doubled
+    // V_Pending (the capability-hole leg caught the leak as one
+    // unexpected obligation).
+    ~> affine_ledger
+    ~> region_tracker
+    ~> verify_ledger
+  stmts
+}
+
+fn infer_program_final(stmts) = {
+  {
+    register_primitives()
+    each(pre_register_alias, stmts)
+    fold(smap_new(), pre_register_stmt_final, stmts)
+    set_summaries(classify_fixpoint(stmts))
+    infer_stmt_list(stmts)
+    finalize_continuation_boundaries(0, graph_next())
+    comment_refs_check(stmts)
+  } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
+  stmts
+}
+
+// Types, effects, and handlers re-register per pass (fresh entries shadow
+// pass-1's with deterministic identical tags; the handler arm re-runs the
+// armed state-shadow check the quiet trial absorbed). Fn signatures do
+// NOT: the env's latest entry per fn name IS pass 1's final scheme, which
+// every pass-2 reference — forward included — resolves. The seen-set
+// still refuses a true within-list duplicate.
+fn pre_register_stmt_final(seen, ref node) = {
+  let N(body, span, _) = node
+  match body {
+    NStmt(FnStmt(name, _, _, _, _)) => {
+      match smap_get(seen, name) {
+        Some(_) => {
+          report(EDuplicateFnName(name, span))
+          seen
+        },
+        None => smap_add(seen, name, 1)
+      }
+    },
+    NStmt(TypeDefStmt(name, variants)) => {
+      register_type_constructors(name, variants)
+      seen
+    },
+    NStmt(EffectDeclStmt(name, ops)) => {
+      register_effect_ops(name, ops)
+      seen
+    },
+    NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) => {
+      pre_register_handler_sig(hname, config, state, arms)
+      seen
+    },
+    _ => seen
+  }
+}
+
 fn infer_stmt_list(stmts) = each(infer_stmt, stmts)
 
 // Statement inference
@@ -1012,6 +1094,18 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
       // 0 < 1 on the literal; a non-constant body stays honest V_Pending.
       let N(_, _, body_h) = body_node
       apply_refinement_constraint(resolved_ann, body_h, ret_span)
+      // THE CLASS EXPOSES ITS MOST-REFINED MEMBER (the representative-
+      // choice projection, written at the decl's own pin): the unify above
+      // peels the wrapper into the class, so without this rebind the ret's
+      // stored member is the bare base — generalize then publishes a
+      // PEELED final, every caller's ann-pin meets bare Int where the
+      // typed-identity admit needed the alias, and each call edge raises
+      // an undischargeable copy of a proof this decl already carried
+      // (measured: four spurious V_Pending on the capability fixture the
+      // moment the order-independent judge resolved finals). Rebinding the
+      // ret class to the resolved annotation makes the refined form the
+      // representative every reader — generalize first — projects.
+      graph_bind(ret_handle, resolved_ann, Located(ret_span, Declared(name)))
     },
     _ => ()
   }
@@ -4650,6 +4744,35 @@ fn register_type_constructors(type_name, variants) = {
   let param_handles = filter((h) => !is_row_handle(h), all_handles)
   let result_ty = TName(type_name, map((h) => TVar(h), param_handles))
   let qhandles = all_handles
+  // THE GROUPING IS CARRIED, NEVER RE-DERIVED: the type's own env entry
+  // holds its variant specs — minted here where the list is already in
+  // hand. Every reader (the eq/show sum leaves, the worthiness witness's
+  // structure test) was re-deriving this grouping by scanning the WHOLE
+  // env snapshot backward per read — 46% of the two-pass self-compile
+  // once the env doubled. The nominal-record shape registers none
+  // (RecordSchemeKind is its channel), mirroring exactly the set the
+  // deleted scans produced.
+  let single_record =
+    if total == 1 {
+      let (cn0, _) = list_index(variants, 0)
+      let f0 = list_index(converted, 0)
+      if len(f0) == 1 && cn0 == type_name { is_record_ty(list_index(f0, 0)) }
+      else { false }
+    } else { false }
+  if single_record { () }
+  else {
+    // Registered BEFORE the ctors so a same-named single-variant ctor
+    // (type Instant = Instant(Int)) SHADOWS this entry for value-position
+    // resolution — the kind-filtered env_lookup_variants walk is the one
+    // reader that reaches past the shadow (the KIND IS THE NAMESPACE).
+    env_extend(type_name, Forall(qhandles, result_ty),
+      Declared(type_name),
+      TypeVariants(map((ix) => {
+        let (tag_id, v) = ix
+        let (cn, _) = v
+        (tag_id, cn, list_index(converted, tag_id))
+      }, enumerate(variants))))
+  }
   each((indexed) => {
     let (tag_id, variant) = indexed
     register_one_variant(type_name, result_ty, qhandles,

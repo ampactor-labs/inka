@@ -451,9 +451,29 @@ fn resume_image(img_path) = {
   )
 }
 
+// The quiet trial's diagnostics policy: the trial pass exists only to
+// finalize schemes — every verdict re-derives sharper in the final pass,
+// so reports drop and the ledger reads answer empty. All three Diagnostic
+// ops carry arms (a partial-effect handler leaves zero fn slots; a perform
+// through one is a garbage dispatch — the tighten_collector constraint).
+handler diag_quiet {
+  report(d) => resume(),
+  diag_errors() => resume(0),
+  diag_refusals() => resume(0),
+}
+
+// The converged judgment (Hβ.infer.order-independent-verdicts): one source,
+// two passes of the one walk — the trial absorbed, the final reported. The
+// re-frontend mints fresh nodes so the final pass re-infers cleanly; the
+// shared env carries the trial's finals to every pass-2 reference.
+fn infer_program_converged(src) = {
+  { src |> frontend |> infer_program_trial } ~> diag_quiet
+  src |> frontend |> infer_program_final
+}
+
 fn compile_stdin() = {
   infer_context(() =>
-    { read_stdin() |> frontend |> infer_program |> compile_remainder }
+    { read_stdin() |> infer_program_converged |> compile_remainder }
       ~> wat_stdout
       ~> wasi_filesystem
       ~> string_table
@@ -702,29 +722,38 @@ fn env_entry_is_type(ref scheme, ref kind) with Pure =
     _ => match kind { RecordSchemeKind(_) => true, _ => false }
   }
 
-fn env_bucket_type_pos(ref buf, ref bucket, name: String, count, i, n) with Memory = {
+// ONE predicated walk serves every kind-filtered read (type / ctor /
+// variants — the fourth copy was the eight-interrogations' catch): the
+// predicate is a TOP-LEVEL fn passed as its static closure pointer, so
+// the parameterization allocates nothing. The PLAIN resolve keeps its
+// own predicate-free walk — it is the compiler's hottest path and its
+// shape genuinely differs (no filter slot at all).
+fn env_bucket_pos_where(ref buf, ref bucket, name: String, count, i, n, pred) with Memory = {
   if i >= n { -1 }
   else {
     let (bn, pos) = list_index(bucket, i)
     if pos < count && bn == name {
       let (en, scheme, _, kind) = list_index(buf, pos)
-      if en == name && env_entry_is_type(scheme, kind) { pos }
-      else { env_bucket_type_pos(buf, bucket, name, count, i + 1, n) }
+      if en == name && pred(scheme, kind) { pos }
+      else { env_bucket_pos_where(buf, bucket, name, count, i + 1, n, pred) }
     }
-    else { env_bucket_type_pos(buf, bucket, name, count, i + 1, n) }
+    else { env_bucket_pos_where(buf, bucket, name, count, i + 1, n, pred) }
   }
 }
 
-fn env_resolve_type(ref buf, count, ref idx, name: String) with Memory = {
+fn env_resolve_where(ref buf, count, ref idx, name: String, pred) with Memory = {
   let b = i32_and(str_hash(name), 4095)
   let bucket = list_index(idx, b)
-  let pos = env_bucket_type_pos(buf, bucket, name, count, 0, len(bucket))
+  let pos = env_bucket_pos_where(buf, bucket, name, count, 0, len(bucket), pred)
   if pos < 0 { None }
   else {
     let (_, scheme, reason, kind) = list_index(buf, pos)
     Some((scheme, reason, kind))
   }
 }
+
+fn env_resolve_type(ref buf, count, ref idx, name: String) with Memory =
+  env_resolve_where(buf, count, idx, name, env_entry_is_type)
 
 // The CTOR-position read — env_resolve_type's sibling at the third kind
 // resolved by name: the newest live ConstructorScheme entry. The pattern
@@ -732,32 +761,19 @@ fn env_resolve_type(ref buf, count, ref idx, name: String) with Memory = {
 // snapshot scan this index read replaces walked the whole env backward per
 // read (6.86% of the self-compile, perf 2026-07-24) — the edge the index
 // already draws, followed instead of re-derived.
-fn env_entry_is_ctor(ref kind) with Pure =
+fn env_entry_is_ctor(ref _scheme, ref kind) with Pure =
   match kind { ConstructorScheme(_, _) => true, _ => false }
 
-fn env_bucket_ctor_pos(ref buf, ref bucket, name: String, count, i, n) with Memory = {
-  if i >= n { -1 }
-  else {
-    let (bn, pos) = list_index(bucket, i)
-    if pos < count && bn == name {
-      let (en, _scheme, _reason, kind) = list_index(buf, pos)
-      if en == name && env_entry_is_ctor(kind) { pos }
-      else { env_bucket_ctor_pos(buf, bucket, name, count, i + 1, n) }
-    }
-    else { env_bucket_ctor_pos(buf, bucket, name, count, i + 1, n) }
-  }
-}
+fn env_resolve_ctor(ref buf, count, ref idx, name: String) with Memory =
+  env_resolve_where(buf, count, idx, name, env_entry_is_ctor)
 
-fn env_resolve_ctor(ref buf, count, ref idx, name: String) with Memory = {
-  let b = i32_and(str_hash(name), 4095)
-  let bucket = list_index(idx, b)
-  let pos = env_bucket_ctor_pos(buf, bucket, name, count, 0, len(bucket))
-  if pos < 0 { None }
-  else {
-    let (_, scheme, reason, kind) = list_index(buf, pos)
-    Some((scheme, reason, kind))
-  }
-}
+// A type's TypeVariants entry, reached past any same-named ctor shadow
+// (the single-variant `type Instant = Instant(_)` shape).
+fn env_entry_is_variants(ref _scheme, ref kind) with Pure =
+  match kind { TypeVariants(_) => true, _ => false }
+
+fn env_resolve_variants(ref buf, count, ref idx, name: String) with Memory =
+  env_resolve_where(buf, count, idx, name, env_entry_is_variants)
 
 // ── The lex-name intern — intern_table (§5.O layer 1) ───────────────────────
 // One row per unique name: (canonical String, handle, keyword kind). The
@@ -832,6 +848,9 @@ handler env_handler with entries_buf = make_list(1024), entries_count = 0, scope
 
   env_lookup_ctor(name) =>
     resume(env_resolve_ctor(entries_buf, entries_count, index, name)),
+
+  env_lookup_variants(name) =>
+    resume(env_resolve_variants(entries_buf, entries_count, index, name)),
 
   env_snapshot() =>
     // Snapshots copy the live prefix — rare (module boundaries), and a

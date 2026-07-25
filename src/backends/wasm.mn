@@ -6077,41 +6077,20 @@ fn hash_operand_contrib(arg, acc) with LookupTy + Alloc + Memory + EnvRead = {
 // variant's constructor NAME (show prints it; eq does not need it). Read live
 // from the env's ConstructorScheme — (tag_id, ctor_name, [payload_ty]) in
 // declaration (tag) order.
-fn variant_named_specs_of(type_name) with EnvRead + Memory + Alloc = {
-  let Env(entries) = env_snapshot()
-  variant_named_specs_filter(entries, type_name)
-}
-
-fn variant_named_specs_filter(entries, type_name) with Memory + Alloc = {
-  let n = len(entries)
-  variant_named_specs_from(entries, type_name, n - 1, make_list(n), 0)
-}
-
-fn variant_named_specs_from(entries, type_name, i, own buf, count) with Memory + Alloc = {
-  if i < 0 { slice(buf, 0, count) }
-  else {
-    let (name, scheme, _reason, kind) = list_index(entries, i)
-    match kind {
-      ConstructorScheme(tag_id, _total) => {
-        let Forall(_, ty) = scheme
-        if ctor_result_is(ty, type_name) {
-          variant_named_specs_from(entries, type_name, i - 1,
-            list_set(buf, count, (tag_id, name, ctor_payload_tys(ty))), count + 1)
-        } else { variant_named_specs_from(entries, type_name, i - 1, buf, count) }
-      },
-      _ => variant_named_specs_from(entries, type_name, i - 1, buf, count)
-    }
+// The keyed read: the TypeVariants entry IS the (tag, name, payloads)
+// triple this projection returns — one env lookup, the scan deleted.
+fn variant_named_specs_of(type_name) with EnvRead + Memory + Alloc =
+  match env_lookup_variants(type_name) {
+    Some(entry) => {
+      let (_, _r, kind) = entry
+      match kind {
+        TypeVariants(specs) => specs,
+        _ => []
+      }
+    },
+    None => []
   }
-}
 
-// emit_binop_repr — the arithmetic/comparison binop projected at the operand's
-// representation. The (op, repr) pair selects the machine instruction: the
-// RI32 arm IS emit_binop's i32.* floor (byte-identical, Law 7); the RF64/RF32
-// arms are the float cash-outs (f64.add, f32.mul — no box, no NaN-tax);
-// RI64 is the wide-integer cash-out; RV128 the SIMD lane cash-out. Comparison
-// results are a Bool (RI32) regardless of operand width, so the comparison
-// arms below project f64.lt etc. but the value they leave is i32. div/mod on
-// floats use f64.div (no _s); integer div keeps the signed form.
 fn emit_binop_repr(op, r) = match r {
   RI32  => emit_binop(op),
   RF64  => emit_binop_f64(op),

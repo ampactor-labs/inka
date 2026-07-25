@@ -1038,6 +1038,46 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶▶▶ THE ORDER-INDEPENDENT JUDGE GOES LIVE — phase B-ii
+  COMPLETES its payoff: the two-pass walk re-wires into compile_stdin,
+  self-hosts, and costs ~12% (pin 5b693139). The re-measure law paid
+  twice today: the banked recipe re-landed and self-compiled with NO
+  OOM on the first try (the morning's arena strikes had already
+  un-gated it — the arena demoted from gate to amplifier for the
+  SECOND time), and the first timing (24.5s, 5.2× over single-pass)
+  fell to 5.3s through four cuts the landing itself forced, each
+  caught by a gate or a probe: (1) TypeVariants — the type's own env
+  entry CARRIES its variant specs, minted at registration where the
+  list is in hand; the whole-env backward scans (46% of the two-pass
+  compile once the env doubled — perf named variant_specs_filter_from
+  at 45.9%) deleted whole; the entry registers BEFORE the ctors so a
+  same-named single-variant ctor shadows it in value position (the
+  585-error refusal that taught the order — `Instant(ns)` resolving
+  the arrow-less type entry), and the read is the kind-filtered walk.
+  (2) The env walk family UNIFIED: the three predicated bucket walks
+  are ONE env_bucket_pos_where over top-level predicate fns passed as
+  static closure pointers — zero allocation (Morgan's "lookup? 8
+  interrogations" cut: the fourth copy of the validated-continue shape
+  was drift-7 at the env layer); the plain hottest-path resolve keeps
+  its own predicate-free shape deliberately. (3) The trial is a WORLD
+  of its own — fresh affine/region/verify ledgers die with its
+  bracket. (4) THE CLASS EXPOSES ITS MOST-REFINED MEMBER (the
+  representative-choice projection the alias-preserving peer
+  prescribed, written at the decl's own ret pin): the ann-pin's unify
+  peels the wrapper into the class, so generalize published PEELED
+  finals and every caller's edge raised an undischargeable copy of a
+  proof the decl already carried — four spurious `self == 7` pends on
+  the capability fixture the moment finals resolved (the ledger-speak
+  probe named every one); the rebind makes the refined form the
+  representative, generalize publishes refined finals, and callers
+  inherit the decl's proof — debt 0. THE JUDGMENT ITSELF: verdicts no
+  longer depend on declaration order anywhere on the stdin path;
+  the emitted wheel is ~40k lines SMALLER than the single-pass wheel
+  (finals prune what looseness padded); 5.3s / 506MB RSS. CLEAN
+  m2 == m3 at 290,409 lines; census 0; frontier 266/0; proof-exactness
+  9/9; crown 5/5; micros 114/114. B-ii's residue: the step-4 decl
+  regions (infer +91MB walk, lower +99MB) remain the arena's remaining
+  shares — amplifiers now, gating nothing.
 - 2026-07-25 · ▶▶▶ THE WORTHINESS CLOSURE — the demand analysis' 274MB
   monster dies, and the gate caught the fix's own first form
   under-approximating (the arena arc's second strike · pin a9d0fb45).

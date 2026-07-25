@@ -1,0 +1,11 @@
+// Row polymorphism composing with nominal records: a `{age: Int, ...}`
+// parameter accepts a Person — the open demand unifies against the
+// nominal's declared fields through the env edge; the brand never erases.
+type Person = {age: Int, name: String}
+
+fn age_of(u: {age: Int, ...}) = u.age
+
+fn main() = {
+  let p = Person{age: 40, name: "M"}
+  age_of(p) + p.age - 38
+}

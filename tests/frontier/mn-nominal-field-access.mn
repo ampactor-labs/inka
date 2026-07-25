@@ -1,0 +1,11 @@
+// The canonical nominal-record read: a let-bound Person and `p.age` on it.
+// Before the TName-vs-open-row unify arm this raised a FALSE E_TypeMismatch
+// (Person vs {age: t | r}) on SYNTAX's own documented form while the emit
+// path resolved the offset correctly — the judgment lying about correct
+// code.
+type Person = {age: Int, name: String}
+
+fn main() = {
+  let p = Person{age: 42, name: "M"}
+  p.age
+}

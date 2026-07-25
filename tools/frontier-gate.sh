@@ -1197,6 +1197,16 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-heap-region.mn" 42 yes "$dir"
   run_program "$compiler" top-level-let \
     "$ROOT/tests/frontier/mn-top-level-let.mn" 42 yes "$dir"
+  # A nominal record satisfies a structural field demand by its own
+  # declaration, read through the env edge (the TName-vs-TRecordOpen unify
+  # arm). RED on the pre-arm boot: `p.age` on a let-bound Person raised a
+  # false E_TypeMismatch (Person vs {age: t | r}) on the canonical SYNTAX
+  # form, and a row-polymorphic `{age: Int, ...}` parameter refused a
+  # Person outright.
+  run_program "$compiler" nominal-field-access \
+    "$ROOT/tests/frontier/mn-nominal-field-access.mn" 42 yes "$dir"
+  run_program "$compiler" rowpoly-accepts-nominal \
+    "$ROOT/tests/frontier/mn-rowpoly-accepts-nominal.mn" 42 yes "$dir"
   # The A.4 oracle wave (step 1 of the TString dissolution): these pin
   # TODAY'S string routes — show/hash/ordering scalar faces, the byte
   # faces inside record fields and ADT payloads, and the `: String`

@@ -1038,6 +1038,32 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE NOMINAL SATISFIES THE ROW — a canonical SYNTAX
+  form stops lying (the field-access cluster's judgment half · pin
+  f0ab3177). Morgan's audit charge ("what's named? what's avoided?
+  any fundamentals not ultimate?") surfaced the cluster this session
+  had WORKED AROUND twice instead of root-fixing: nominal-record
+  field access. Probed RED on the artifact first: `p.age` on a
+  let-bound Person raised a false E_TypeMismatch (Person vs
+  {age: t | r}) on SYNTAX's own documented form — while emit resolved
+  the offset correctly, the judgment lying about correct code — and a
+  row-polymorphic {age: Int, ...} parameter refused a Person
+  outright. THE FIX IS A LIVE-EDGE READ, not a patch: unify's TName
+  arm gains the TRecordOpen case — a nominal record satisfies a
+  structural field demand by its own declaration, read through
+  nominal_record_fields (the THIRD reader of RecordSchemeKind beside
+  the literal check and the ctor arrow view; one channel, three
+  readers), delegating to unify_record_open_against_closed (zero new
+  unifiers). The brand never erases: the TName side stays bound, only
+  the demand's field vars and row residual bind; a CLOSED structural
+  demand still refuses (exact-shape identity is the brand's point).
+  Both probes heal to 42; two frontier legs registered RED-first;
+  frontier 266 → 272/0. CLEAN m2 == m3 at 295,191 lines; census 0;
+  board whole. The cluster's EMIT half stays named with its design:
+  trecordopen-wrong-field — a receiver still GENUINELY open at emit
+  computes offsets over the partial demanded set (silent wrong reads;
+  the fix resolves through the row residual or refuses loudly, never
+  a partial-set offset).
 - 2026-07-25 · THE PAGE PRE-OPEN — the fan's band opens become
   unraceable (Phase C rung 1 step C1c-2c opening move · pin
   3a53f775). graph_mint_plan pre-opens every band the plan touches,

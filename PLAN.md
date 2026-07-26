@@ -5003,9 +5003,38 @@ records): the convergence loop + branch bracket + four roots, then the
 value-boundary landing — five more roots, census 0 WITH convergence,
 the incremental cone, the ratchet's raised lane closed. The judgment is
 now a pure function of (source, finals): published schemes leak no live
-vars — the fan's own blessing condition. NEXT: the fan itself (layers
-onto spawned cursors, byte-equality against the sequential pin), then
-the ??-fan on threads — the fused oracle as default behavior. The dig
+vars — the fan's own blessing condition. THE BRACKET'S SELF-CONTAINMENT
+IS THREE RUNGS IN (each CLEAN m2 == m3, pushed): the barrier shape
+(judge-then-join at the layer, fa5bedca), the three ledgers
+branch-local (affine seeded via consume_seed/base/log + join replay;
+verify bank+re-perform, exact by the operands-in-own-range stability
+argument; region zero-replay — top-level tags are region 0, a fresh
+instance's None answers the same verdicts; a33c6dfc), and the inner
+trio (infer_ctx + fresh stmt-local-fresh; summaries re-armed over the
+threaded classify value; 78a7575d). Eight of eleven handlers are
+branch-local. THE REMAINING RUNG 2b, design measured against the
+artifact: lookup_ty_graph (fresh — spec state is emit-era, [] during
+infer) + mutate_sink (stateless swallow) + graph_handler as the
+config'd shared-spine instance — widen config (spine0, spine_open0,
+next0, limit0) with span_index0 + mint_high0 (nine bare root installs
+gain two args; the branch's config = the root's live values via a new
+GraphRead export op `graph_branch_seed() -> (spine, open, span_index,
+mint_high)` whose spine element type copies spine_page's closed
+annotation), the branch's own graph_index_span appends banked (drop
+the seeded prefix off the branch's snapshot) and re-performed at the
+join, comment_refs config [] with NO replay (refs draw only at the
+root's post-walk infer tail), overflow keeping root jump semantics
+sequentially and tightening to abort-and-requeue at the spawn, and
+graph_mint_at dissolving into the branch config (next0 = the stmt's
+base, limit0 = its ceiling). THEN RUNG 3, the spawn: chunk
+layer_judge_walk's iterations onto spawn_task closures (the bracket is
+the task body; the intern rides as the read-only pre-warmed view),
+joins ordered by stmt as today, the wheel's shared-image memory flip
+as the measured TRANSITION, the CAS-bump tax + the pointer-identity
+census run under it, and the same-layer handler-sig install
+unification as the one barrier class to settle (both installs bind one
+prepass-minted sig — sequential-post-join or own-layer those stmts).
+Then the ??-fan on threads — the fused oracle as default behavior. The dig
 narrative below is the ERA'S RECORD of how the bracket and loop landed,
 superseded where it speculates: THE BRANCH BRACKET'S
 FIRST SEQUENTIAL RUN (2026-07-26, in-tree uncommitted: BranchEnv/

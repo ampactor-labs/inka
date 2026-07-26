@@ -501,6 +501,18 @@ fn fs_open_impl(path_str) with Memory + Alloc + WASI = {
   else { load_i32(fd_cell) }
 }
 
+// fs_create_impl — path_open write+create+trunc RETURNING the fd: the
+// streaming half of fs_write_file (same flags), for writers that emit
+// through the fd across a long extent instead of banking one buffer.
+// 0 on failure (the fs_open_impl convention).
+fn fs_create_impl(path_str) with Memory + Alloc + WASI = {
+  let (dfd, pp, plen) = fs_at(path_str)
+  let fd_cell = alloc(4)
+  let open_errno = path_open(dfd, 0, pp, plen, 9, 64, 64, 0, fd_cell)
+  if open_errno != 0 { 0 }
+  else { load_i32(fd_cell) }
+}
+
 // fs_close_impl — fd_close; errno absorbed (idempotent at runtime
 // per WASI errno-9 EBADF semantics).
 fn fs_close_impl(fd) with WASI = {

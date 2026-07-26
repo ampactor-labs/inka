@@ -578,12 +578,43 @@ fn flat_fill_snoc(flat, tree, i, n) with Memory + Alloc = {
   flat_fill(flat, left, i, last_pos)
 }
 
-fn flat_fill_concat(flat, tree, i, n) with Memory + Alloc = {
-  let left     = load_i32(tree + 8)
-  let right    = load_i32(tree + 12)
-  let left_len = load_i32(left)
-  flat_fill(flat, left, 0, left_len)
-  flat_fill_at_offset(flat, right, left_len, load_i32(right))
+// The concat fill drains an EXPLICIT heap stack of (node, offset) pairs —
+// destinations are absolute, so sibling order is irrelevant and the walk
+// needs no call stack. The native left-recursion form died at rope depth:
+// a ++-folded chain leans left one node per append, and the full-wheel
+// emission collect was the first caller to materialize a fold-built line
+// thousands of nodes deep (call stack exhausted at flat_fill_concat).
+// Non-concat nodes fall to their own walkers; a concat reached THROUGH a
+// snoc or slice re-enters here as a fresh drain, so call depth is the
+// representation ALTERNATION depth, never the concat depth.
+fn flat_fill_concat(flat, tree, i, n) with Memory + Alloc =
+  ff_concat_drain(flat, ff_push(ff_push(make_list(16), 0, 0, 0), 1, tree, 0), 2)
+
+fn flat_fill_concat_offset(flat, src, offset, n) with Memory + Alloc =
+  ff_concat_drain(flat, ff_push(ff_push(make_list(16), 0, 0, 0), 1, src, offset), 2)
+
+// The stack: two words per entry, [2k] = node, [2k+1] = absolute offset;
+// entry 0 is a permanent floor so sp == 1 means empty.
+fn ff_push(stack, k, node, off) with Memory + Alloc = {
+  let grown = list_extend_to(stack, k * 2 + 2)
+  list_set(list_set(grown, k * 2, node), k * 2 + 1, off)
+}
+
+fn ff_concat_drain(flat, stack, sp) with Memory + Alloc = {
+  if sp <= 1 { () }
+  else {
+    let node = stack[(sp - 1) * 2]
+    let off  = stack[(sp - 1) * 2 + 1]
+    if seq_tag(node) == 3 {
+      let left  = load_i32(node + 8)
+      let right = load_i32(node + 12)
+      let left_len = load_i32(left)
+      ff_concat_drain(flat, ff_push(ff_push(stack, sp - 1, right, off + left_len), sp, left, off), sp + 1)
+    } else {
+      flat_fill_at_offset(flat, node, off, load_i32(node))
+      ff_concat_drain(flat, stack, sp - 1)
+    }
+  }
 }
 
 fn flat_fill_at_offset(flat, src, offset, n) with Memory + Alloc = {
@@ -628,13 +659,6 @@ fn flat_fill_snoc_offset(flat, src, offset, n) with Memory + Alloc = {
   flat_fill_at_offset(flat, left, offset, count - 1)
 }
 
-fn flat_fill_concat_offset(flat, src, offset, n) with Memory + Alloc = {
-  let left     = load_i32(src + 8)
-  let right    = load_i32(src + 12)
-  let left_len = load_i32(left)
-  flat_fill_at_offset(flat, left, offset, left_len)
-  flat_fill_at_offset(flat, right, offset + left_len, load_i32(right))
-}
 
 fn flat_fill_slice_offset(flat, src, offset, n) with Memory + Alloc = {
   let base       = load_i32(src + 8)

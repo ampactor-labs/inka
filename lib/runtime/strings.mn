@@ -716,40 +716,7 @@ fn parse_int_digits(s, slen, i, acc) with Memory = {
   }
 }
 
-// parse_float: convert a decimal string to a float.
-// Handles sign, integer part, fractional part, and optional 'e'/'E' exponent.
-// Returns 0.0 on empty or malformed input.
-fn parse_float(s) with Memory + Alloc = {
-  let slen = byte_len(s)
-  if slen == 0 { 0.0 }
-  else {
-    let first = byte_at(s, 0)
-    let start = if first == 45 { 1 } else { 0 }
-    let sign   = if first == 45 { 0 - 1 } else { 1 }
-    let result = parse_float_body(s, slen, start)
-    float_of_int(sign) * result
-  }
-}
-
-fn parse_float_body(s, slen, i) with Memory + Alloc = {
-  // The mantissa accumulates as ONE f64 integer — exact through 2^53,
-  // which covers every authored literal — and the decimal point only
-  // COUNTS digits, so the single scale by the exact power of ten is the
-  // one rounded operation: parse_float agrees with the assembler's
-  // correctly-rounded reader over the exact-mantissa range. A per-digit
-  // fraction division would pay one rounding per digit and split the
-  // two readers (the fmt idempotence failure that forced this form).
-  let mant = parse_mantissa_f64(s, slen, i, 0.0)
-  let dot_pos = find_char(s, slen, i, 46)         // '.'
-  let frac_len = if dot_pos < 0 { 0 }
-                 else { count_mantissa_digits(s, slen, dot_pos + 1) }
-  let e_pos = find_char_either(s, slen, i, 101, 69) // 'e' or 'E'
-  let exp = if e_pos < 0 { 0 }
-            else { parse_int_sign(s, slen, e_pos + 1) }
-  float_scale10(mant, exp - frac_len)
-}
-
-fn parse_mantissa_f64(s, slen, i, acc) with Memory + Alloc = {
+fn parse_mantissa_f64(s, slen, i, acc: Float) -> Float with Memory + Alloc = {
   // digits and at most one '.' — the dot contributes nothing; any other
   // byte (the exponent marker included) ends the mantissa
   if i >= slen { acc }
@@ -772,7 +739,7 @@ fn count_mantissa_digits(s, slen, i) with Memory + Alloc = {
   }
 }
 
-fn float_scale10(m, k) with Memory + Alloc = {
+fn float_scale10(m: Float, k) -> Float with Memory + Alloc = {
   // 10^k is exactly representable through k = 22 (5^22 < 2^53), so one
   // multiply or divide inside that range is one correctly-rounded step;
   // a wider exponent splits at the boundary and pays one extra rounding
@@ -811,6 +778,42 @@ fn find_char_either(s, slen, start, ch1, ch2) with Memory = {
     if b == ch1 || b == ch2 { start }
     else { find_char_either(s, slen, start + 1, ch1, ch2) }
   }
+}
+
+// parse_float: convert a decimal string to a float.
+// Handles sign, integer part, fractional part, and optional 'e'/'E' exponent.
+// Returns 0.0 on empty or malformed input. Sits below its whole callee
+// family (callee-first in-file order): the DAG judgment is single-pass, so
+// a forward reference reads the loose pre-registered scheme and floors the
+// f64 mantissa to a word — measured as an assembly refusal in mentl run.
+fn parse_float(s) -> Float with Memory + Alloc = {
+  let slen = byte_len(s)
+  if slen == 0 { 0.0 }
+  else {
+    let first = byte_at(s, 0)
+    let start = if first == 45 { 1 } else { 0 }
+    let sign   = if first == 45 { 0 - 1 } else { 1 }
+    let result = parse_float_body(s, slen, start)
+    float_of_int(sign) * result
+  }
+}
+
+fn parse_float_body(s, slen, i) -> Float with Memory + Alloc = {
+  // The mantissa accumulates as ONE f64 integer — exact through 2^53,
+  // which covers every authored literal — and the decimal point only
+  // COUNTS digits, so the single scale by the exact power of ten is the
+  // one rounded operation: parse_float agrees with the assembler's
+  // correctly-rounded reader over the exact-mantissa range. A per-digit
+  // fraction division would pay one rounding per digit and split the
+  // two readers (the fmt idempotence failure that forced this form).
+  let mant = parse_mantissa_f64(s, slen, i, 0.0)
+  let dot_pos = find_char(s, slen, i, 46)         // '.'
+  let frac_len = if dot_pos < 0 { 0 }
+                 else { count_mantissa_digits(s, slen, dot_pos + 1) }
+  let e_pos = find_char_either(s, slen, i, 101, 69) // 'e' or 'E'
+  let exp = if e_pos < 0 { 0 }
+            else { parse_int_sign(s, slen, e_pos + 1) }
+  float_scale10(mant, exp - frac_len)
 }
 
 // String sets — sorted flat arrays + binary search.

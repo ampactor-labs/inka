@@ -44,9 +44,40 @@ handler wat_stdout {
   }
 }
 
+// wat_to_file — the write-through sink aimed at an fd (fs_create_impl's
+// streaming open). Region-immune by construction: each arm hands the
+// segment's bytes to the HOST before resuming, so the emit phase's
+// per-fn region resets can never touch the product — the property
+// wat_stdout always had, with the destination a config edge instead of
+// fd 1. This is the ONLY sound whole-compile sink shape beside stdout:
+// the collecting sink below banks heap pointers, and a whole-compile
+// install of it reads region-reset records at collect (the in-process
+// battery measured exactly that after the emit-arena landed).
+// CONFIG CAVEAT (Hβ.lower.install-config-capture-read): an install-config
+// argument that references a CLOSURE CAPTURE reads 0 — the install-init
+// emission resolves locals but not captures (measured: march_emit's
+// param-captured fd arrived 0 in this arm across 288k performs while a
+// let-local arrived intact). Until the init path rides the same
+// resolution ladder as ordinary exprs, bind the config value to a LOCAL
+// in the installing scope first.
+handler wat_to_file(fd) {
+  wat_emit(s) => {
+    fd_write_bytes(fd, str_payload(s), byte_len(s))
+    resume()
+  }
+}
+
 // wat_to_string — buffer wat_emit calls into a flat String; wat_collect
 // materializes ONCE at the end via str_concat_all. Handles BOTH
 // WasmOut.wat_emit AND WatBuffer.wat_collect — one handler, two effects.
+//
+// SCOPE LAW: per-fn installs ONLY — one record, inside one region
+// bracket, collected before that region resets. A whole-compile install
+// banks each segment's POINTER while the emit phase's per-fn region
+// resets zero the segments beneath it; the collect then walks reset
+// records (garbage tags at flat_fill, runaway lengths at the drain).
+// Whole-compile products stream through wat_stdout / wat_to_file, whose
+// arms hand the bytes to the host before any reset can run.
 //
 // Per the eight interrogations on the substrate-honest accumulator:
 //   Graph:      buf is a List<String-handle>; count tracks position.

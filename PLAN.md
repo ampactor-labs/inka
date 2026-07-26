@@ -1038,6 +1038,48 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-26 · ▶▶▶ MENTL MARCH — the wheel judges its own generation
+  in-process, and the dig healed three latent breaks (· pin 0d153e0c).
+  THE VERB: walk the wheel's files (fd_readdir's self/parent links
+  skipped — the unfiltered walk descended src/./. forever, +2 bytes a
+  level to the alloc ceiling, the trace's own numbers), compile
+  in-process through the canonical converged stdin chain, STREAM the
+  emission through wat_to_file into .build/march/m2.wat, read the
+  census inside the same install, verdict against the last generation.
+  Its FIRST CLEAN was against the bash march's own m2 — the in-process
+  and exec routes proven byte-identical — and the re-run is CLEAN
+  against itself. The all-day hand loop (rebuild + census-grep +
+  compare) dies into one verb. THE SINK LAW: wat_to_file(fd) is the
+  third sink — write-through, region-immune (bytes reach the host at
+  each arm; fs_create_impl the streaming open) — and the scope law now
+  written at wat_to_string's decl says the COLLECTING sink is per-fn
+  only: a whole-compile install banks segment pointers the emit
+  phase's per-fn region resets zero. That was exactly the in-process
+  battery's SILENT BREAK since the emit-arena landed (its verb gate
+  never re-ran; the board's micros ran through the bash loop — the
+  two-oracle lesson at the gate layer): `mentl test tests/micros` now
+  streams per-micro wat and runs 114/114. RIDING THE SAME ARC: the
+  explicit-stack concat drain (flat_fill_concat — call depth =
+  representation alternation, never concat depth; proven on a
+  5000-deep rope after the recursive form died at fold-built line
+  depth) and the correctly-rounded float family made DAG-honest
+  (callee-first order + Float pins on parse_float/parse_float_body/
+  parse_mantissa_f64 — the single-pass DAG judgment floored loose
+  forward schemes' f64 results to words, an assembly refusal in mentl
+  run). THE COUNTED KILLS of the dig, each a probe: the stale-fixture
+  lib copy in the probe dir (the resolver prefers cwd — the forensic
+  one-blob law), str_payload misread as a record (its comment was TRUE;
+  the -B4 window truncated it), the warm-image theory, the
+  stateless-config theory, and the drain itself vindicated three
+  times. NAMED with its 9-line RED fixture
+  (tests/frontier/mn-install-config-capture, unregistered):
+  Hβ.lower.install-config-capture-read — an install-config arg that
+  references a CLOSURE CAPTURE reads 0 silently (a let-local reads
+  true; the fix routes install-init emission through the same
+  capture-resolution ladder ordinary exprs ride; march_emit binds
+  sink_fd locally until then). Board whole at the pin: CLEAN m2 == m3;
+  census 0; comment-refs 0; frontier 279/0; proof-exactness 9/9;
+  crown 5/5; micros-through-m2 114/114; in-process battery 114/114.
 - 2026-07-26 · ▶ THE REFS FACET SPEAKS ITS SPANS (the
   self-exemplification pass's opening move #1 · pin 758f65f2).
   `refs of NAME` collected every use-edge span and rendered a bare

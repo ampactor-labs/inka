@@ -105,6 +105,7 @@ type EntryVerb
   | VQuery(String, String)           // target, question — both required
   | VTeach(Option(String))
   | VRepl
+  | VMarch                           // the medium judges its own generation
   | VNew(String)                     // project name — required
   | VWith(String, Option(String))    // handler name, optional target
   | VWelcome                         // bare tty invocation / `mentl help` —
@@ -157,6 +158,7 @@ fn verb_specs() with Memory + Alloc = [
   VerbSpec("tighten", "[path]",            (a) => Invocation(VTighten(optional_target(a, 2))),                                        "apply the first proven row tightening — the medium authors, you accept"),
   VerbSpec("fmt",     "<path>",            (a) => if len(a) >= 3 { Invocation(VFmt(a[2])) } else { ParseError("fmt needs a target: mentl fmt <path>") }, "render the file canonical — layout is projection, never contract"),
   VerbSpec("repl",    "",                  (a) => Invocation(VRepl),                                                                  "line REPL"),
+  VerbSpec("march",   "",                  (a) => Invocation(VMarch),                                                                 "judge the wheel: emit, compare against the last generation, verdict"),
   VerbSpec("--with",  "<handler> [path]",  (a) => if len(a) >= 3 { Invocation(VWith(a[2], optional_target(a, 3))) } else { ParseError("--with needs a handler: mentl --with <handler> [path]") }, "install any handler over any verb"),
   VerbSpec("help",    "",                  (a) => Invocation(VWelcome),                                                               "this projection")
 ]
@@ -341,6 +343,7 @@ fn dispatch_invocation(verb) = {
       VQuery(target, q)    => query_run(target, q),
       VTeach(target)       => teach_run(target),
       VRepl                => repl_run(),
+      VMarch               => march_run(),
       VNew(name)           => new_project(name),
       VWith(hname, target) => with_run(hname, target),
       VWelcome             => welcome_run()
@@ -539,6 +542,170 @@ fn space_run() with Memory + Alloc + WASI = {
     space_loop(lfd)
     0
   }
+}
+
+// ─── march_run — the medium judges its own generation (`mentl march`)
+//
+// The wheel compiles IN-PROCESS through the canonical stdin chain with
+// the emission STREAMED through wat_to_file — bytes reach the host at
+// every segment, so the emit phase's per-fn region resets never touch
+// the product (the collecting sink's whole-compile install read reset
+// records; its scope law lives at wat_to_string's decl). The fresh
+// generation compares against the verb's OWN previous one
+// (.build/march/m2.wat, read before written). Never the keyed bash
+// cache: that cache equals this very emission whenever it is fresh — a
+// comparison that cannot fail. The self-application half (the next
+// generation reproducing itself, m3 == m4) needs the exec seam and
+// stays at tools/march.sh — the whole-world bash march's audit role.
+fn march_run() = {
+  {
+    let files = march_wheel_files()   // drift-audit: ignore — sequenced effectful read (the fs walk, consumed by the read+concat below)
+    if len(files) == 0 {
+      print_string("march: no wheel source found — run beside the repo (lib/ + src/) or through the installed shim\n")
+      1
+    } else {
+      let texts = march_read_files(files, 0, make_list(len(files)))
+      let source = str_concat_all(texts)
+      let gen_path = ".build/march/m2.wat"
+      let new_path = ".build/march/m2.new"
+      let prev = if fs_exists_impl(gen_path) { fs_read_file(gen_path) } else { "" }
+      fs_mkdir_impl(".build")
+      fs_mkdir_impl(".build/march")
+      let fd = fs_create_impl(new_path)
+      if fd == 0 {
+        print_string("march: cannot open {new_path} — no fresh generation written\n")
+        1
+      } else {
+        let errors = march_emit(source, fd)
+        fs_close_impl(fd)
+        if errors > 0 {
+          fs_unlink_impl(new_path)
+          print_string("march: {int_to_str(len(files))} files · {int_to_str(count_newlines(source))} source lines · census {int_to_str(errors)}\n")
+          print_string("march: the judgment REFUSES — no verdict from a refused wheel\n")
+          1
+        } else {
+          let emission = fs_read_file(new_path)
+          fs_rename_impl(new_path, gen_path)
+          print_string("march: {int_to_str(len(files))} files · {int_to_str(count_newlines(source))} source lines · {int_to_str(count_newlines(emission))} wat lines · census 0\n")
+          if byte_len(prev) == 0 {
+            print_string("march: baseline written ({gen_path}) — the next march compares against it\n")
+            0
+          } else if emission == prev {
+            print_string("march: the emission reproduces the last generation — CLEAN candidate; the exec legs (m3 == m4) arbitrate at the seam: tools/march.sh\n")
+            0
+          } else {
+            print_string("march: the emission DIVERGES from the last generation ({int_to_str(count_newlines(prev))} → {int_to_str(count_newlines(emission))} wat lines) — a change crossed; the exec legs arbitrate: tools/march.sh\n")
+            0
+          }
+        }
+      }
+    }
+  }
+    ~> stdout_console
+    ~> wasi_filesystem
+    ~> no_iter_context
+    ~> diagnostics_handler
+    ~> graph_handler([], 0, 0, 0)
+    ~> mutate_sink
+}
+
+// The canonical stdin chain with the streaming sink; the census count
+// reads INSIDE the same install (the count and the counter are one
+// handler — pipeline_check's own law).
+fn march_emit(source, fd) = {
+  infer_context(() => {
+    // The outer thunk captures fd; the install-config caveat at
+    // wat_to_file's decl means a capture-referencing config arg reads 0 —
+    // the local bind is the sound shape until the init path resolves
+    // captures. body() ~> chain is infer_context's own idiom.
+    let sink_fd = fd + 0
+    let body = () => {
+      source |> infer_program_converged |> compile_remainder
+      diag_errors()
+    }
+    body()
+      ~> wat_to_file(sink_fd)
+      ~> wasi_filesystem
+      ~> string_table
+      ~> emit_memory_bump
+      ~> body_context
+      ~> mentl_default
+      ~> lower_scope
+      ~> arm_state_ctx([], OneShot, "")
+      ~> spec_registry
+  })
+}
+
+// The wheel's canonical file set: every .mn under lib then src (tutorials
+// excluded), each directory's entries sorted lexicographically — the DFS
+// order equals the flat byte-sort the bash blob uses (`find lib src | sort`)
+// because '/' sorts below every name byte. The repo resolves relative
+// (dev flow) or at the shim's well-known mount.
+fn march_wheel_files() = {
+  let local = march_walk("src", march_walk("lib", make_list(0)))
+  if len(local) > 0 { local }
+  else { march_walk("/mentl-home/src", march_walk("/mentl-home/lib", make_list(0))) }
+}
+
+fn march_walk(dir, acc) = match fs_list_dir_impl(dir) {
+  None => acc,
+  Some(names) => march_walk_entries(dir, march_sort_names(names), 0, acc)
+}
+
+fn march_walk_entries(dir, ref names, i, acc) = {
+  if i >= len(names) { acc }
+  else {
+    let name = names[i]
+    // fd_readdir reports the self and parent links; a recursive walk that
+    // descends them loops "src/./." forever (measured: 3,000-byte paths,
+    // +2 per level, until the alloc ceiling). A tree walk visits children.
+    if name == "." || name == ".." || name == "tutorial" { march_walk_entries(dir, names, i + 1, acc) }
+    else {
+      let path = "{dir}/{name}"
+      match fs_list_dir_impl(path) {
+        Some(sub) => march_walk_entries(dir, names, i + 1, march_walk_entries(path, march_sort_names(sub), 0, acc)),
+        None =>
+          if ends_with(name, ".mn") { march_walk_entries(dir, names, i + 1, push(acc, path)) }
+          else { march_walk_entries(dir, names, i + 1, acc) }
+      }
+    }
+  }
+}
+
+// Lexicographic insertion sort through str_lt directly — the typed
+// byte-compare — never the generic sort, whose word floor would order
+// a [String] by ADDRESS (the validator tier's measured class). The
+// readdir names arrive push-built (snoc), so the sort flattens first:
+// list_set's flat contract refused the chain loudly on the verb's very
+// first run — the gate catching its builder.
+fn march_sort_names(names) = march_sort_insert(list_to_flat(names), 1)
+
+fn march_sort_insert(names, i) = {
+  if i >= len(names) { names }
+  else { march_sort_insert(march_sift(names, i), i + 1) }
+}
+
+fn march_sift(names, i) = {
+  if i == 0 { names }
+  else {
+    let a = names[i - 1]
+    let b = names[i]
+    if str_lt(b, a) { march_sift(list_set(list_set(names, i - 1, b), i, a), i - 1) }
+    else { names }
+  }
+}
+
+fn march_read_files(ref files, i, acc) = {
+  if i >= len(files) { acc }
+  else { march_read_files(files, i + 1, list_set(acc, i, fs_read_file(files[i]))) }
+}
+
+fn count_newlines(s) = count_newlines_from(s, 0, byte_len(s), 0)
+
+fn count_newlines_from(s, i, n, acc) = {
+  if i >= n { acc }
+  else if byte_at(s, i) == 10 { count_newlines_from(s, i + 1, n, acc + 1) }
+  else { count_newlines_from(s, i + 1, n, acc) }
 }
 
 // ─── fmt_run — the canonical render written back (`mentl fmt`)
@@ -1541,9 +1708,12 @@ fn battery_expect_digits(src, i, acc) with Memory = {
 }
 
 // One micro, one fresh chain — the same chain compile_stdin drives, with
-// wat_to_string collecting the module instead of streaming to stdout. The
-// verdict pair: (wat, 0) on success, ("", 1) on a ledger-refused compile.
-fn battery_compile(src) = {
+// the emission STREAMED through wat_to_file straight into the micro's
+// .build/test wat (the whole-compile collecting install read region-reset
+// segments — the scope law at wat_to_string's decl). Verdict: 0 on an
+// emitted module, 1 on a ledger-refused compile (no file written) or an
+// unopenable destination.
+fn battery_compile(src, wat_path) = {
   infer_context(() =>
     {
     let lowered = src |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main
@@ -1554,13 +1724,17 @@ fn battery_compile(src) = {
     // the check verb tolerates).
     let holes = collect_value_holes_decls(lowered)
     let refused = diag_refusals()   // drift-audit: ignore — sequenced effectful ledger read (the executable_gate precedent)
-    if len(holes) > 0 || refused > 0 { ("", 1) }
+    if len(holes) > 0 || refused > 0 { 1 }
     else {
-      emit_module(lowered)
-      (wat_collect(), 0)
+      let fd = fs_create_impl(wat_path)
+      if fd == 0 { 1 }
+      else {
+        { emit_module(lowered) } ~> wat_to_file(fd)
+        fs_close_impl(fd)
+        0
+      }
     }
   }
-      ~> wat_to_string
       ~> wasi_filesystem
       ~> string_table
       ~> emit_memory_bump
@@ -1621,12 +1795,11 @@ fn battery_loop(dir, libs, micros, i, fails) = {
         1
       },
       Some(want) => {
-        let (wat, failed) = battery_compile(libs ++ src)
+        let failed = battery_compile(libs ++ src, ".build/test/{stem}.wat")
         if failed > 0 {
           print_string("FAILC {stem}\n")
           1
         } else {
-          fs_write_file_impl(".build/test/{stem}.wat", wat)
           print_string("MICRO {stem} .build/test/{stem}.wat {int_to_str(want)}\n")
           0
         }

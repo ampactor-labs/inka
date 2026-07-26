@@ -88,10 +88,15 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
   // branch_enter — snapshot the current `used` as the frame's base;
   // deltas list starts empty; the mode rides the frame so branch_exit
   // knows whether the arms run in parallel (collision) or as
-  // alternatives (union). Nested branches push onto the stack.
+  // alternatives (union). Nested branches push onto the stack — at the
+  // END, like every Mentl stack (§9's wrong-end class: the old prepend
+  // met last/drop_last readers, so ONE frame worked while a NESTED
+  // alternative's divider and exit operated on the ENCLOSING frame —
+  // the measured break the hoist workarounds were passing around,
+  // Hβ.infer.nested-alternative-branch-bracketing's true root).
   branch_enter(mode) => {
     resume()
-      with branches = [(used, [], mode)] ++ branches
+      with branches = branches ++ [(used, [], mode)]   // drift-audit: ignore — bounded by lexical branch-nesting depth, not a data loop
   },
 
   // branch_divider — called between branches of `><` or between
@@ -106,7 +111,7 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
       let delta = set_diff(used, base)
       resume()
         with used = base,
-             branches = [(base, [delta] ++ deltas, mode)] ++ drop_last(branches)
+             branches = drop_last(branches) ++ [(base, [delta] ++ deltas, mode)]   // drift-audit: ignore — bounded by lexical branch-nesting depth, not a data loop
     }
   },
 

@@ -1354,6 +1354,22 @@ effect EnvWrite {
   env_scope_exit() -> ()
 }
 
+// The branch cursor's env join surface (Phase C, C1c-2). Both ops are
+// armed on env_handler and answer BY INSTANCE POSITION: performed
+// outside any branch bracket they read the ROOT's live triple (the
+// layer-start base capture); performed inside one they read the
+// BRANCH's private entries (the publish log the join replays). A
+// separate effect — not new EnvRead ops — so no other handler's arm
+// set grows (the one-handler-two-effects precedent).
+effect BranchEnv {
+  // The index is env_index_new's concrete shape — a free var here would
+  // PARAMETERIZE the effect and the handler-arm binding refuses a
+  // parameterized/bare mix on one handler (measured: BranchEnv(t) vs
+  // EnvWrite at both arm sites).
+  env_base_view() -> ([(String, Scheme, Reason, SchemeKind)], Int, [[(String, Int)]])
+  env_publishes() -> [(String, Scheme, Reason, SchemeKind)]
+}
+
 // The lex-name intern (§5.O layer 1) — an identifier's canonical String
 // instance, handle, and keyword classification, resolved ONCE per unique
 // name. lex_from performs it at every identifier; a repeat occurrence is a
@@ -1538,6 +1554,19 @@ effect Diagnostic {
   // instrument: the handler knows; nobody read it.
   diag_errors() -> Int      // every SError seen. `check`'s exit code.
   diag_refusals() -> Int    // only the ARMED classes (diag_refuses). The emit gate.
+}
+
+// The branch cursor's diagnostic join surface (Phase C, C1c-2). A branch
+// RENDERS at collect — the projections read live values at the perform,
+// so a banked line is safe where a banked DiagKind would render against
+// post-join state — and the join re-prints the lines in stmt order, folding
+// the counts into the root tally. diag_lines_taken is armed on
+// diag_branch (the per-stmt collector); diag_absorb on the root
+// diagnostics_handler. A separate effect so tighten_collector and
+// diag_quiet keep their arm sets untouched.
+effect BranchDiag {
+  diag_lines_taken() -> ([String], Int, Int)
+  diag_absorb([String], Int, Int) -> ()
 }
 
 // ─── The catalog AS projections of the DiagKind constructors ───────────

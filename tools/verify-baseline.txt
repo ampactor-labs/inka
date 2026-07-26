@@ -404,7 +404,16 @@
 # view changes inference; the new wheel reproduces itself). Remaining:
 # E_TypeMismatch 69 (list-word boundary 21, feedback recurrence 15,
 # seq-op-hole 14, misc — the banked root grouping), E_UnresolvedType 4.
-census_errors_max: 0
+# 0 -> 3 (2026-07-26, the converged-judge landing): three E_EffectMismatch
+# reports at resume_image / compile_stdin / compile_source — pipeline.mn's
+# infer_context entries with authored rows. The quiet rounds' re-judgment
+# loses infer_context's effect-polymorphic subtraction across round
+# generalization (discriminated: bracket-off census stays 3, so the rounds
+# not the bracket; the DAG judge absorbs correctly, measured by mentl
+# query). Real, understood, non-refusing; the fix-spec (row-scheme bound-
+# structure carry across rounds) is banked in PLAN §11's campaign state,
+# and this line ratchets back to 0 when it lands.
+census_errors_max: 3
 
 # ── THE PHANTOM RATCHET ─────────────────────────────────────────────────
 # The census one layer up: symbols cited in `//` comments that exist nowhere

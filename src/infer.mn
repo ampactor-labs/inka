@@ -947,6 +947,239 @@ fn infer_program_trial(stmts) = {
     ~> verify_ledger
 }
 
+// ─── The convergence loop — the judgment as an honest fixpoint ─────────
+//
+// The trial's finals are HYPOTHESES: its source-order walk judges an
+// early fn against its callees' loose pre-registrations, so a
+// forward-referencing fn's "final" is unconverged — measured 2026-07-26
+// as lb↔i enc flips across the classify/escape/crc family when the
+// branch bracket read trial finals uniformly, and the wheel emitted
+// from that uniform-but-unconverged side died at its first mint. The
+// old walk's mid-walk publish shadowing read a self-consistent MIX,
+// which hid the divergence and gated nothing. The honest form: QUIET
+// ROUNDS re-judge the whole program against the prior round's finals
+// (latest-wins env — each round's publishes shadow the last) until the
+// published schemes' fingerprints stabilize; only then does the
+// reporting, planned, bracketed final run — whose publishes EQUAL the
+// converged set by the stop condition, so the branch bracket's frozen
+// layer bases read the same truth the live walk would. This loop is the
+// manual convergence protocol (⟲ — "fix the judged source under the
+// standing judge, rebuild the judge, repeat") absorbed into the wheel,
+// and a larval forked-cursor search: the fan parallelizes each round's
+// layers; the IC cursor's warm path can one day skip names whose
+// fingerprints held.
+
+// infer_program_round — a quiet re-judgment: the trial's measured walk
+// with fn pre-registration SKIPPED (every name already carries the prior
+// round's final; monomorphic recursion self-registers via infer_fn's
+// unbound-handle arm) and the final's prepass re-registering types /
+// effects / handlers (fresh entries shadow with deterministic identical
+// tags). Runs under diag_quiet at the call site.
+fn infer_program_round(stmts) = {
+  {
+    register_primitives()
+    each(pre_register_alias, stmts)
+    fold(smap_new(), pre_register_stmt_final, stmts)
+    set_summaries(classify_fixpoint(stmts))
+    let start = graph_next()   // drift-audit: ignore — sequenced effectful read (the ranges' origin must precede the walk), CLAUDE.md Anchor 6 exclusion
+    let rows = infer_stmt_list_measured(stmts)
+    finalize_continuation_boundaries(0, graph_next())
+    (rows, start)
+  } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
+    ~> affine_ledger
+    ~> region_tracker
+    ~> verify_ledger
+}
+
+// round_prints — each named stmt's published scheme, fingerprinted. The
+// convergence signal the loop compares round over round.
+fn round_prints(ref rows) = round_prints_walk(rows, 0, make_list(len(rows)))
+
+// The print computation sits one fn over as the CROSSING form: the
+// branch-stack wrong-end fix rides this same landing, but the m2 leg
+// judges under the PINNED boot's old judge, which still mis-brackets a
+// nested alternative in a consuming arm — the fix cannot accept its own
+// natural shape until a fixed judge is pinned (the world_top crossing
+// law at the ownership layer). The generation after this pin inlines
+// the if/match here and this fn dissolves.
+fn row_print(name) = {
+  if name == "" { "" }
+  else {
+    match env_lookup(name) {
+      Some((Forall(_, ty), _, _)) => ty_fingerprint(ty),
+      None => ""
+    }
+  }
+}
+
+fn round_prints_walk(ref rows, i, own out) = {
+  if i >= len(rows) { out }
+  else {
+    let (name, _) = rows[i]
+    round_prints_walk(rows, i + 1, list_set(out, i, row_print(name)))
+  }
+}
+
+fn prints_equal(ref a, ref b) = {
+  if len(a) != len(b) { false }
+  else { prints_equal_walk(a, b, 0) }
+}
+
+fn prints_equal_walk(ref a, ref b, i) = {
+  if i >= len(a) { true }
+  else if a[i] == b[i] { prints_equal_walk(a, b, i + 1) }
+  else { false }
+}
+
+// ─── ty_fingerprint — the alpha-normalized deterministic scheme render ──
+//
+// Two rounds' judgments of one fn agree exactly when their schemes are
+// alpha-equal — but the var HANDLES are fresh per round, so structural ==
+// can never say so. The fingerprint renders a type with vars numbered by
+// first occurrence (the alpha normal form), chasing bound vars live, so
+// equal judgments print equal strings across rounds. Scope, stated
+// honestly: rows render by interned name handle (stable per process),
+// EANode effect args and refinement predicates render opaque (their
+// nodes re-mint per round; a false CONVERGED there is backstopped by the
+// march's m3 == m4 oracle, never a false diverged). Emission dispatches
+// on reprs, structure, and rows — all inside the fingerprint.
+fn ty_fingerprint(ty) with GraphRead + Memory + Alloc = {
+  let (s, _, _) = fp_ty(ty, smap_new(), 0)
+  s
+}
+
+fn fp_ty(ty, map, n) with GraphRead + Memory + Alloc = match ty {
+  TInt   => ("i", map, n),
+  TFloat => ("f", map, n),
+  TUnit  => ("u", map, n),
+  TByte  => ("b", map, n),
+  TList(el) => {
+    let (s, m2, n2) = fp_ty(el, map, n)
+    ("l{s}", m2, n2)
+  },
+  TTuple(els) => {
+    let (s, m2, n2) = fp_ty_list(els, map, n)
+    ("t({s})", m2, n2)
+  },
+  TFun(params, ret, row) => {
+    let (ps, m2, n2) = fp_params(params, map, n)
+    let (rs, m3, n3) = fp_ty(ret, m2, n2)
+    let (es, m4, n4) = fp_row(row, m3, n3)
+    ("fn({ps})->{rs}!{es}", m4, n4)
+  },
+  TVar(h) => {
+    match graph_chase(h) {
+      GNode(NBound(inner), _) => fp_ty(inner, map, n),
+      _ => fp_var(h, map, n)
+    }
+  },
+  TName(name, args) => {
+    let (s, m2, n2) = fp_ty_list(args, map, n)
+    ("N{name}({s})", m2, n2)
+  },
+  TRecord(fields) => {
+    let (s, m2, n2) = fp_fields(fields, map, n)
+    ("r\{{s}\}", m2, n2)
+  },
+  TRecordOpen(fields, rv) => {
+    let (s, m2, n2) = fp_fields(fields, map, n)
+    let (vs, m3, n3) = fp_var(rv, m2, n2)
+    ("ro\{{s}|{vs}\}", m3, n3)
+  },
+  TRefined(base, _) => {
+    // The predicate's nodes re-mint per round — render the base plus an
+    // opaque refinement marker (Verify-side, emission-blind).
+    let (s, m2, n2) = fp_ty(base, map, n)
+    ("&{s}", m2, n2)
+  },
+  TCont(r, ans, disc, row) => {
+    let (rs, m2, n2) = fp_ty(r, map, n)
+    let (as_, m3, n3) = fp_ty(ans, m2, n2)
+    let ds = match disc {
+      OneShot => "1", MultiShot => "*", Either => "e", Abandon => "a"
+    }
+    let (es, m4, n4) = fp_row(row, m3, n3)
+    ("k({rs}->{ds}{as_}!{es})", m4, n4)
+  },
+  TAlias(name, inner) => {
+    let (s, m2, n2) = fp_ty(inner, map, n)
+    ("A{name}={s}", m2, n2)
+  }
+}
+
+fn fp_var(h, map, n) with Memory + Alloc = {
+  let key = int_to_str(h)
+  match smap_get(map, key) {
+    Some(ord) => ("%{int_to_str(ord)}", map, n),
+    None => ("%{int_to_str(n)}", smap_add(map, key, n), n + 1)
+  }
+}
+
+fn fp_ty_list(ref tys, map, n) with GraphRead + Memory + Alloc =
+  fp_ty_list_walk(tys, 0, "", map, n)
+
+fn fp_ty_list_walk(ref tys, i, acc, map, n) with GraphRead + Memory + Alloc = {
+  if i >= len(tys) { (acc, map, n) }
+  else {
+    let (s, m2, n2) = fp_ty(tys[i], map, n)
+    fp_ty_list_walk(tys, i + 1, "{acc}{s},", m2, n2)
+  }
+}
+
+fn fp_params(ref params, map, n) with GraphRead + Memory + Alloc =
+  fp_params_walk(params, 0, "", map, n)
+
+fn fp_params_walk(ref params, i, acc, map, n) with GraphRead + Memory + Alloc = {
+  if i >= len(params) { (acc, map, n) }
+  else {
+    let TParam(pname, pty, _, resolved, _) = params[i]
+    let os = match resolved { Own => "o", Ref => "r", Unmarked => "" }
+    let (s, m2, n2) = fp_ty(pty, map, n)
+    fp_params_walk(params, i + 1, "{acc}{pname}:{os}{s},", m2, n2)
+  }
+}
+
+fn fp_fields(ref fields, map, n) with GraphRead + Memory + Alloc =
+  fp_fields_walk(fields, 0, "", map, n)
+
+fn fp_fields_walk(ref fields, i, acc, map, n) with GraphRead + Memory + Alloc = {
+  if i >= len(fields) { (acc, map, n) }
+  else {
+    let (fname, fty) = fields[i]
+    let (s, m2, n2) = fp_ty(fty, map, n)
+    fp_fields_walk(fields, i + 1, "{acc}{fname}:{s},", m2, n2)
+  }
+}
+
+// Rows render by interned name handle — stable within one process, which
+// is the loop's whole lifetime. Present and absent sets are canonical
+// (sorted at birth); a var tail joins the alpha map.
+fn fp_row(row, map, n) with GraphRead + Memory + Alloc = {
+  let EfRow(present, absent, tail) = row
+  let ps = fp_names(present, 0, "")
+  let as_ = fp_names(absent, 0, "")
+  match tail {
+    EtClosed => ("{ps}-{as_}.", map, n),
+    EtAll    => ("{ps}-{as_}!", map, n),
+    EtVar(v) => {
+      let (vs, m2, n2) = fp_var(v, map, n)
+      ("{ps}-{as_}{vs}", m2, n2)
+    }
+  }
+}
+
+fn fp_names(ref names, i, acc) with Memory + Alloc = {
+  if i >= len(names) { acc }
+  else {
+    let s = match names[i] {
+      ENamed(h) => int_to_str(h),
+      EParameterized(h, _) => "{int_to_str(h)}(_)",
+      EPure => ""
+    }
+    fp_names(names, i + 1, "{acc}{s}+")
+  }
+}
+
 // The trial IS the sizing oracle: each stmt's row is its declared name and
 // its mint count — the graph_next delta around its inference, a fact the
 // graph already carries, read at the stmt boundary. The rows feed the
@@ -991,11 +1224,6 @@ fn stmt_decl_name(ref node) = {
 // (layer = 1 + max over backward refs' layers), the layer graph is
 // acyclic by construction, and any missing edge leaves equal depths whose
 // within-layer source order preserves today's behavior exactly.
-fn stmt_layers(ref rows, trial_start) = {
-  let name_idx = layer_name_index(rows, 0, smap_new())
-  layers_walk(rows, name_idx, make_list(len(rows)), trial_start, 0)
-}
-
 fn layer_name_index(ref rows, i, idx) = {
   if i >= len(rows) { idx }
   else {
@@ -1005,27 +1233,12 @@ fn layer_name_index(ref rows, i, idx) = {
   }
 }
 
-fn layers_walk(ref rows, ref name_idx, own depths, lo, i) = {
-  if i >= len(rows) { depths }
-  else {
-    let (_, count) = rows[i]
-    let d = range_ref_depth(name_idx, depths, lo, lo + count, i, 0)
-    layers_walk(rows, name_idx, list_set(depths, i, d), lo + count, i + 1)
-  }
-}
-
-fn range_ref_depth(ref name_idx, ref depths, lo, hi, i, best) = {
-  if lo >= hi { best }
-  else {
-    let d = match graph_reason_at(lo) {
-      Located(_, VarLookup(n, _)) => backward_depth(name_idx, depths, n, i),
-      VarLookup(n, _)             => backward_depth(name_idx, depths, n, i),
-      _                           => 0
-    }
-    range_ref_depth(name_idx, depths, lo + 1, hi, i,
-      if d > best { d } else { best })
-  }
-}
+// The range-reason scan is RETIRED (2026-07-26): it read reasons inside
+// each stmt's inference-mint range, but VarLookup reasons land on PARSE
+// nodes — outside every range — so it saw zero edges (measured). The
+// layer projection reads parse truth now: pipeline.mn's stmt_layers_ast
+// over collect_free_vars. layer_name_index and backward_depth stay as
+// its readers.
 
 fn backward_depth(ref name_idx, ref depths, name, i) = {
   match smap_get(name_idx, name) {
@@ -1096,20 +1309,96 @@ fn flat_max(ref xs, i, best) = {
 fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, l, maxl) = {
   if l > maxl { () }
   else {
-    planned_layer_stmts(rows, layers, bases, stmts, l, 0)
+    // The layer-start base capture: performed OUTSIDE any branch bracket,
+    // so the root env instance answers — every branch of this layer reads
+    // the same frozen extent (append-only buffer + frozen count = a true
+    // snapshot), which is exactly the visibility the fan's concurrent
+    // branches will have. Per-stmt replay keeps the sequential stderr and
+    // env byte-identical; the fan defers the same replay to this barrier.
+    let base = env_base_view()   // drift-audit: ignore — sequenced effectful read (the layer-start snapshot, consumed by every branch of the layer)
+    planned_layer_stmts(rows, layers, bases, stmts, l, 0, base)
     planned_layer_sweep(rows, layers, bases, stmts, l + 1, maxl)
   }
 }
 
-fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, l, i) = {
+fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, l, i, base) = {
   if i >= len(stmts) { () }
   else {
     if layers[i] == l {
       let (_, count) = rows[i]
       graph_mint_at(bases[i], bases[i] + count)
-      infer_stmt(stmts[i])
+      branch_join(branch_judge(stmts[i], base))
     }
-    planned_layer_stmts(rows, layers, bases, stmts, l, i + 1)
+    planned_layer_stmts(rows, layers, bases, stmts, l, i + 1, base)
+  }
+}
+
+// The branch bracket (Phase C, C1c-2): one stmt judged under its own
+// cursor pair — env over the frozen layer-start base (private extends
+// die at the join; publishes replay through the root) and diagnostics
+// rendered at collect. Graph, intern, the ledgers, and the summaries
+// stay the root's live instances — the sequential form the fan's
+// per-thread tapes extend. Config args are frame locals by construction
+// (Hβ.lower.install-config-capture-read: a capture-referencing config
+// arg reads 0; params read true).
+fn branch_judge(stmt, base) = {
+  let (bb, bc, bi) = base
+  let body = () => {
+    infer_stmt(stmt)
+    let pubs = env_publishes()   // drift-audit: ignore — sequenced effectful read (the branch's publish log, collected inside its own bracket)
+    let dfacts = diag_lines_taken()   // drift-audit: ignore — sequenced effectful read (the branch's rendered lines + tally, collected inside its own bracket)
+    (pubs, dfacts)
+  }
+  body()
+    ~> env_handler(bb, bc, bi)
+    ~> diag_branch
+}
+
+// The join: replay the branch's facts into the root in occurrence order —
+// publishes re-perform env_extend (the Reason edge rides whole), the
+// rendered lines re-print, the tally folds. Runs AFTER the bracket
+// closes, so every perform here resolves to the root instances.
+fn branch_join(facts) = {
+  let (pubs, dfacts) = facts
+  let (dlines, derr, dref) = dfacts
+  branch_replay_pubs(pubs, 0)
+  diag_absorb(dlines, derr, dref)
+}
+
+fn branch_replay_pubs(ref pubs, i) = {
+  if i >= len(pubs) { () }
+  else {
+    let (name, scheme, reason, kind) = pubs[i]
+    branch_replay_one(name, scheme, reason, kind)
+    branch_replay_pubs(pubs, i + 1)
+  }
+}
+
+// An EffectOpScheme publish is a READ-MODIFY-WRITE of the op→handler
+// edge — value-replay is the banked ambiguity loss (two same-layer
+// handlers each evolve the FROZEN base independently and latest-wins
+// erases the second sighting; measured as graph_mutated collapsing to a
+// lsp_adapter singleton and the SingletonUninstalled floor firing at
+// every compile's first commit-boundary mint). The join RE-RUNS
+// draw_op_edges' own default/ambiguous algebra against the root's live
+// entry, the branch's verdict as the sighting; disc joins monotone.
+fn branch_replay_one(name, scheme, reason, kind) = {
+  match kind {
+    EffectOpScheme(ename, bd, ba, bdisc) => {
+      let joined = match env_lookup(name) {
+        Some((_, _, EffectOpScheme(_, rd, ra, rdisc))) => {
+          let disc = disc_join(rdisc, bdisc)
+          let (nd, na) =
+            if ra || field_name_eq(rd, bd) { (rd, ra) }
+            else if field_name_eq(rd, "") { (bd, ba) }
+            else { (rd, true) }
+          EffectOpScheme(ename, nd, na, disc)
+        },
+        _ => kind
+      }
+      env_extend(name, scheme, reason, joined)
+    },
+    _ => env_extend(name, scheme, reason, kind)
   }
 }
 

@@ -462,15 +462,81 @@ handler diag_quiet {
   diag_refusals() => resume(0),
 }
 
-// The converged judgment (Hβ.infer.order-independent-verdicts): one source,
-// two passes of the one walk — the trial absorbed, the final reported. The
-// re-frontend mints fresh nodes so the final pass re-infers cleanly; the
-// shared env carries the trial's finals to every pass-2 reference.
+// The converged judgment (Hβ.infer.order-independent-verdicts): one
+// source, quiet rounds of the one walk until the published schemes'
+// fingerprints STABILIZE, then the reporting final. The trial's finals
+// are hypotheses (its source-order walk reads loose pre-registrations at
+// forward references — the measured lb↔i divergence on the classify /
+// escape / crc family); each quiet round re-judges fresh nodes against
+// the prior round's finals through the latest-wins env, and the stop
+// condition — round K's fingerprints == round K-1's — is the convergence
+// contract made mechanical. The reporting final then publishes schemes
+// EQUAL to the converged set, so the branch bracket's frozen layer bases
+// read the same truth the live walk would. A bounded non-convergence is
+// LOUD (the names' judgments oscillate — an order-sensitivity the medium
+// names instead of laundering); the march's m3 == m4 stays the outer
+// oracle.
 fn infer_program_converged(src) = {
   let (rows, trial_start) = { src |> frontend |> infer_program_trial } ~> diag_quiet
   let flat_rows = list_to_flat(rows)
-  let layers = stmt_layers(flat_rows, trial_start)
+  // THE LAYERS ARE PARSE TRUTH, read where it lives: each stmt's free
+  // names (collect_free_vars over its own subtree) are its reference
+  // edges — the DAG, total and judgment-independent. The retired
+  // range-scan re-derived dependency from reasons inside each stmt's
+  // INFERENCE-mint range, but VarLookup reasons land on the PARSE
+  // nodes — minted before the trial's watermark, outside every range —
+  // so the scan read zero edges (measured: every stmt layer 0, every
+  // frozen base the prepass env, payloadfn's residual chain severed at
+  // the pre-arms scheme).
+  let layers = stmt_layers_ast(frontend(src), flat_rows)
+  let prints = round_prints(flat_rows)
+  converge_rounds(src, flat_rows, layers, prints, 1)
+}
+
+fn converge_rounds(src, flat_rows, layers, prints, round) = {
+  if round >= 6 {
+    eprint_string("convergence: schemes still moving after {int_to_str(round)} rounds — judging with the last round's finals; the fixpoint oracle arbitrates\n")
+    converge_finish(src, flat_rows, layers)
+  } else {
+    let (rows2, _start2) = { src |> frontend |> infer_program_round } ~> diag_quiet
+    let flat2 = list_to_flat(rows2)
+    let prints2 = round_prints(flat2)
+    if prints_equal(prints, prints2) { converge_finish(src, flat2, layers) }
+    else { converge_rounds(src, flat2, layers, prints2, round + 1) }
+  }
+}
+
+fn converge_finish(src, flat_rows, layers) =
   src |> frontend |> infer_program_final(flat_rows, layers)
+
+// The stmt-layer projection over PARSE truth: a stmt's depth is one past
+// the deepest earlier stmt its free names reference (backward edges
+// only — a forward name resolves the published final and orders
+// nothing). Free names that key no decl (lib vocabulary, locals) answer
+// depth 0 through the index miss. This is the DAG the fan's frozen
+// bases require complete: every reference IS an edge here, because
+// collect_free_vars walks the source itself.
+fn stmt_layers_ast(ref stmts, ref rows) = {
+  let name_idx = layer_name_index(rows, 0, smap_new())
+  ast_layers_walk(stmts, name_idx, make_list(len(stmts)), 0)
+}
+
+fn ast_layers_walk(ref stmts, ref name_idx, own depths, i) = {
+  if i >= len(stmts) { depths }
+  else {
+    let frees = list_to_flat(collect_free_vars(stmts[i], []))
+    let d = frees_depth(frees, name_idx, depths, i, 0, 0)
+    ast_layers_walk(stmts, name_idx, list_set(depths, i, d), i + 1)
+  }
+}
+
+fn frees_depth(ref frees, ref name_idx, ref depths, i, j, best) = {
+  if j >= len(frees) { best }
+  else {
+    let d = backward_depth(name_idx, depths, frees[j], i)
+    frees_depth(frees, name_idx, depths, i, j + 1,
+      if d > best { d } else { best })
+  }
 }
 
 fn compile_stdin() = {
@@ -880,6 +946,16 @@ handler env_handler(base_buf, base_count, base_index)
     // reverse: the private prefix appended after the base view.
     resume(Env(slice(base_buf, 0, base_count) ++ slice(entries_buf, 0, entries_count))),
 
+  // The branch join surface (BranchEnv), answering by instance position:
+  // the ROOT instance's view is the layer-start base capture (the buffer
+  // is append-only and the count freezes the extent, so the triple is a
+  // true snapshot without a copy); a BRANCH instance's publishes are its
+  // private entries in occurrence order — the log the join replays
+  // through the root's env_extend, Reasons riding whole.
+  env_base_view() => resume((entries_buf, entries_count, index)),
+
+  env_publishes() => resume(list_to_flat(slice(entries_buf, 0, entries_count))),
+
   env_extend(name, scheme, reason, kind) => {
     let grown =
       if entries_count >= len(entries_buf) {
@@ -1059,6 +1135,47 @@ handler diagnostics_handler with errors = 0, refusals = 0 {
 
   diag_errors()   => resume(errors)
   diag_refusals() => resume(refusals)
+
+  // The branch join (BranchDiag): re-print the branch's pre-rendered
+  // lines in their occurrence order and fold its tally into this one —
+  // the count and the counter stay one handler.
+  diag_absorb(dlines, derr, dref) => {
+    each(eprint_string, dlines)
+    resume() with errors = errors + derr, refusals = refusals + dref
+  }
+}
+
+// diag_branch — the branch cursor's per-stmt collector (Phase C, C1c-2).
+// Same projections as the root arm, rendered AT THE PERFORM (live
+// values), banked as lines instead of printed; the local tally answers
+// any in-branch diag_errors/diag_refusals read with branch-local truth.
+// diag_lines_taken hands the whole fact set to the join.
+handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals = 0 {
+
+  report(diag) => {
+    let src = diag_source(diag)
+    let code = diag_code(diag)
+    let kindw = diag_kind(diag)
+    let msg = diag_message(diag)
+    let sp = show_span(diag_span(diag))
+    let line = "{src}: {code} {kindw}: {msg} at {sp}\n"
+    let grown = list_set(list_extend_to(lines, count + 1), count, line)
+    if diag_severity(diag) == SError {
+      if diag_refuses(diag) {
+        resume() with lines = grown, count = count + 1,
+                      errors = errors + 1, refusals = refusals + 1
+      } else {
+        resume() with lines = grown, count = count + 1, errors = errors + 1
+      }
+    } else {
+      resume() with lines = grown, count = count + 1
+    }
+  }
+
+  diag_errors()   => resume(errors)
+  diag_refusals() => resume(refusals)
+
+  diag_lines_taken() => resume((list_to_flat(slice(lines, 0, count)), errors, refusals))
 }
 
 // FreshHandle — two handlers, same function. Inference mints via

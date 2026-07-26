@@ -706,19 +706,18 @@ fn enclosing_fn_scan(target, i, n, best, best_area) with GraphRead + Memory + Al
 }
 
 // verify_pending_at — Verify ledger holds ALL pending refinement
-// obligations as a List. Consumers (CursorView.verify, gradient
-// delta-refinement, eight-loop refinement verdict) want the subset
-// associated with one handle. verify_debt returns (Span, Predicate,
-// Reason) triples; filter by span overlap with the handle's span.
+// obligations as (Span, Predicate, Reason) rows — the one order both
+// accrual sites (verify_ledger and verify_smt's unknown-debt) speak and
+// CursorView's verify slot declares. Consumers want the subset at one
+// handle, WHOLE: the Reason is the Why-walk's edge and the Span the
+// render's anchor — the old map-to-Predicate discarded both (the
+// converged judge caught the slot mismatch it left).
 
-fn verify_pending_at(handle) with Verify + GraphRead + !Mutate = {
+fn verify_pending_at(handle) with Verify + GraphRead + Memory + Alloc + !Mutate = {
   let target_span = caret_span_of_handle(handle)
   filter_by_span(target_span, verify_debt())
 }
 
-fn filter_by_span(target, debt) with Pure = {
-  debt
-    |> filter(((debt_span, _, _)) => span_overlaps(target, debt_span))
-    |> map(((_, predicate, _)) => predicate)
-}
+fn filter_by_span(target, debt) with Memory + Alloc =
+  filter(((debt_span, _, _)) => span_overlaps(target, debt_span), debt)
 

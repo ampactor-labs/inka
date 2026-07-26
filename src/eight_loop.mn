@@ -353,7 +353,7 @@ fn ownership_verdict_for(handle, kind, reason) with Memory = {
   }
 }
 
-fn refinement_verdict_for(handle, reason) with Verify + GraphRead + Memory + !Mutate = {
+fn refinement_verdict_for(handle, reason) with Verify + GraphRead + Memory + Alloc + !Mutate = {
   // Refinement clears when no Verify-pending predicates attach to
   // this handle. Pending obligations surface as invites (the
   // gradient could resolve them via SMT or refinement annotation).

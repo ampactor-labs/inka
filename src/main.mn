@@ -755,6 +755,7 @@ fn fmt_run(target) = {
       ~> wasi_filesystem
       ~> mentl_default
   )
+  0
 }
 
 // The gate NAMES its losses: each source comment line whose text appears
@@ -986,6 +987,7 @@ fn serve_run() = {
       ~> wasi_filesystem
       ~> no_iter_context
   )
+  0
 }
 
 fn mentl_lsp_session() = {
@@ -1022,6 +1024,7 @@ fn doc_run(target_opt) = {
       ~> wasi_filesystem
       ~> mentl_default
   )
+  0
 }
 
 fn doc_project(entry_module) = {
@@ -1053,6 +1056,9 @@ fn compile_run(target) = {
     ~> diagnostics_handler
     ~> graph_handler([], 0, 0, 0)
     ~> mutate_sink
+  // The dispatch exit-code contract: main's value IS the process exit.
+  // Refusal paths already exit nonzero through the gate; success is 0.
+  0
 }
 
 // `mentl resume <image>` — the compile projection re-entered from a
@@ -1065,6 +1071,7 @@ fn resume_run(img) = {
     ~> diagnostics_handler
     ~> graph_handler([], 0, 0, 0)
     ~> mutate_sink
+  0
 }
 
 // Per Hβ.first-light.compile-stdin-substrate: stdin-source compile entry.
@@ -1078,6 +1085,7 @@ fn compile_stdin_run() = {
     ~> diagnostics_handler
     ~> graph_handler([], 0, 0, 0)
     ~> mutate_sink
+  0
 }
 
 // Process — the execute-the-compiled-module effect. process_exec is the
@@ -1134,6 +1142,7 @@ fn run_run(target) = {
     ~> diagnostics_handler
     ~> graph_handler([], 0, 0, 0)
     ~> mutate_sink
+  1
 }
 
 // ─── check_run — diagnostics; no emit
@@ -1174,7 +1183,15 @@ fn field_positions(handles, fstart, nlines) with GraphRead + Memory + Alloc + !M
 // (score, handle) pair — the compare fold's f64 leaf orders the score,
 // the handle breaks ties deterministically — then reverse. The pair list
 // rides the same wide-tuple machinery mn-generic-wide-tuple-pattern gates.
-fn field_ranked(handles, caret0) with GraphRead + Memory + Teach + Alloc + !Mutate =
+// The return is PINNED (Float, Int): the score is wide and the pair
+// flows through generic sort/reverse whose schemes launder the element
+// to a var — the destructure downstream then floors ph to the f64's
+// interior word (measured: offset 4 in m3.wat, t1072064102 =
+// 0x3FE68F5C = the score's high bits rendered as a handle). The pin is
+// the representation Intent Boundary at the polymorphic boundary (the
+// CFC precedent) until instantiation carries bound structure across
+// the converged rounds.
+fn field_ranked(handles, caret0) -> [(Float, Int)] with GraphRead + Memory + Teach + Alloc + !Mutate =
   reverse(sort(map((h) => {
     let Cursor(_, _, sc) = score_one_position(h, caret0)
     (sc, h)
@@ -1840,6 +1857,7 @@ fn audit_run(target) = {
     ~> diagnostics_handler
     ~> graph_handler([], 0, 0, 0)
     ~> mutate_sink
+  0
 }
 
 // ─── query_run — structured ad-hoc query
@@ -1855,6 +1873,7 @@ fn query_run(target, question) = {
     ~> diagnostics_handler
     ~> graph_handler([], 0, 0, 0)
     ~> mutate_sink
+  0
 }
 
 // ─── with_run — the universal escape hatch (env_lookup resolution)
@@ -1905,6 +1924,7 @@ fn teach_run(target_opt) = {
       ~> mentl_voice_default
       ~> query_default          // mentl_voice_default's consult/run_query bubble Query.ask here
   )
+  0
 }
 
 // ─── repl_run — the line-eval cursor
@@ -1927,6 +1947,7 @@ fn repl_run() = {
       ~> mentl_voice_default
       ~> query_default
   )
+  0
 }
 
 // repl_eval_line — one cursor read of a source line: lex |> parse |> infer,
@@ -1975,6 +1996,7 @@ fn new_project(name) = {
     ~> diagnostics_handler
     ~> graph_handler([], 0, 0, 0)
     ~> mutate_sink
+  0
 }
 
 fn scaffold_project(name) = {
@@ -2008,6 +2030,9 @@ fn print_error_and_help(msg) = {
   eprint_string(msg)
   eprint_string("\n\n")
   print_help()
+  // A malformed invocation exits 2 (the usage-error convention the gate
+  // scripts already speak) — main's value is the process exit code.
+  2
 }
 
 // The verb catalog — ONE surface projected from the verb table, so the help a

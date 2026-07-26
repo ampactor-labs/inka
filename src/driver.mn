@@ -127,7 +127,7 @@ fn driver_collect_visit(ref module_name, own collected, own visited)
 }
 
 fn driver_collect_visit_list(ref modules, own collected, own visited)
-  with Memory + Alloc + Filesystem = {
+  with Memory + Alloc + Filesystem + GraphWrite + GraphRead = {
   fold((collected, visited), (acc, m) => {
     let (c, v) = acc
     driver_collect_visit(m, c, v)
@@ -568,7 +568,7 @@ fn driver_check_entry(ref entry_module)
 // out missing-module fallbacks that have no source). Returns
 // `[(module_name, [dep_name])]` in post-order.
 fn driver_collect_dag_with_deps(ref entry_module)
-  with Memory + Alloc + Filesystem = {
+  with Memory + Alloc + Filesystem + GraphWrite + GraphRead = {
   let modules = driver_collect_dag(entry_module)
   map((m) => (m, driver_module_in_dag_deps(m, modules)), modules)
 }

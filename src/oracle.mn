@@ -211,7 +211,7 @@ fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Allo
 // (gradient_candidates_at); each survivor carries the e-graph-aware
 // priority and the Why-walkable Reason mentl.mn already minted.
 
-fn candidates_at(pos) with Verify + GraphRead + GraphWrite + Alloc + Memory = {
+fn candidates_at(pos) with Verify + GraphRead + GraphWrite + Alloc + Memory + Intern = {
   let node = graph_chase(pos)
   let GNode(kind, anchor) = node
   match kind {

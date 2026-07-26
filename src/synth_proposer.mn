@@ -622,7 +622,10 @@ fn synthesize_ctor_call_node(name, scheme) with GraphRead + GraphWrite + !Mutate
 }
 
 fn synthesize_lambda_node(params, ret) with GraphRead + GraphWrite + !Mutate + Memory = {
-  synth_node(LambdaExpr(synth_param_names(params), synth_hole_node()))
+  // params arrive as the scheme's own [TParam] — LambdaExpr's exact
+  // carrier; rebuilding name lists from them was the mismatch the
+  // converged judge caught (the param-product law reaching synth).
+  synth_node(LambdaExpr(params, synth_hole_node()))
 }
 
 // ─── Synthesis primitives — structured Node construction ───────────
@@ -663,27 +666,20 @@ fn synth_holes_loop(i, n, buf) with GraphRead + GraphWrite + Memory + Alloc + !M
   }
 }
 
-fn synth_record_holes_for(fields) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = synth_holes_for(fields)
+// A record literal's carrier is the parser's (name, value) pair list —
+// bare holes lost the names (the converged judge's catch); each demanded
+// field keeps its name with a hole as its value.
+fn synth_record_holes_for(fields) with GraphRead + GraphWrite + Memory + Alloc + !Mutate =
+  map((f) => {
+    let (fname, _) = f
+    (fname, synth_hole_node())
+  }, fields)
 
 fn synth_holes_for_scheme(scheme) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let Forall(_, ty) = scheme
   match ty {
     TFun(params, _, _) => synth_holes_for(params),
     _ => []
-  }
-}
-
-fn synth_param_names(params) with Memory = {
-  let n = len(params)
-  let buf = make_list(n)
-  synth_param_loop(params, 0, n, buf)
-}
-
-fn synth_param_loop(params, i, n, buf) with Memory = {
-  if i >= n { buf }
-  else {
-    list_set(buf, i, param_name(list_index(params, i)))
-    synth_param_loop(params, i + 1, n, buf)
   }
 }
 

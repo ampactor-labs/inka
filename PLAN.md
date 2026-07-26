@@ -1038,6 +1038,167 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-26 · ▶▶▶▶▶ THE JUDGMENT BECOMES AN HONEST FIXPOINT AND THE
+  BRANCH CURSOR LANDS SOUND (Phase C's C1c-2 whole; pin = the march in
+  flight at write time, blessed in PROVENANCE). THE CONVERGENCE LOOP:
+  infer_program_converged iterates QUIET ROUNDS (the trial's measured
+  walk, fn pre-registration skipped, the final's prepass) until
+  round-over-round scheme FINGERPRINTS stabilize (ty_fingerprint — the
+  alpha-normalized total render: vars by first occurrence, rows by
+  intern handle, EANode/predicates opaque with m3==m4 as the outer
+  net), then ONE reporting, planned, bracketed final whose publishes
+  EQUAL the converged set. The trial's finals were HYPOTHESES (its
+  source-order walk read loose pre-registrations at forward refs —
+  measured as lb↔i twin-enc flips across the classify/escape/crc
+  family, and a wheel emitted from the uniform-but-unconverged side
+  died at its first mint); the old walk's mid-walk shadowing read a
+  self-consistent MIX that hid the divergence unGATED. THE BRANCH
+  BRACKET (sequential form): every stmt judges under its own cursor
+  pair — env over the frozen layer-start base (env_base_view /
+  env_publishes armed on env_handler, answering BY INSTANCE POSITION:
+  root = the capture, branch = the log) and diag_branch rendering AT
+  COLLECT — with per-stmt replay through branch_join. FOUR ROOTS FELL
+  TO MAKE IT TRUE, each measured first: (1) the affine branch stack
+  pushed at the WRONG END (§9's own class — prepend vs last/drop_last;
+  one frame worked by accident, nested alternatives corrupted the
+  ENCLOSING frame — Hβ.infer.nested-alternative-branch-bracketing
+  resolved at root, the hoist workarounds retired; the natural shape
+  crosses one generation as row_print per the crossing law); (2) the
+  EDGE-EVOLUTION JOIN — an EffectOpScheme publish is READ-MODIFY-WRITE,
+  and value-replay lost the ambiguity join EXACTLY as the banked fan
+  design predicted (measured: graph_mutated collapsed to a lsp_adapter
+  singleton and the SingletonUninstalled floor fired at every
+  compile's first commit-boundary mint, the floor's own baked teaching
+  comment naming it); branch_replay_one re-runs draw_op_edges' own
+  default/ambiguous algebra against the root's live entry; (3) THE
+  LAYERS ARE PARSE TRUTH — the range-reason scan read ZERO edges
+  (measured: VarLookup reasons land on PARSE nodes, minted before the
+  trial's watermark, outside every stmt's inference-mint range — all
+  stmts layer 0, every frozen base the prepass env, payloadfn's
+  residual chain severed at the pre-arms scheme, diagnosed by the
+  twin bracket-on/off experiments and the RowFree/RowBound floor-probe
+  diff); stmt_layers_ast reads each stmt's own free names
+  (collect_free_vars — the source itself), the range machinery
+  deleted; (4) a free var in a piggyback effect's op return
+  PARAMETERIZES the effect and the handler-arm binding refuses the
+  mix (the de-parameterization law, stated at BranchEnv's decl). THE
+  HARVEST the sharper judge convicted (census 15 → 0, every fix
+  Law-honest): the dispatch EXIT-CODE CONTRACT across thirteen verbs
+  (main's value IS the process exit; run_run 1, usage errors 2), the
+  verify facet flowing WHOLE (Span, Predicate, Reason) obligations
+  (the map-to-Predicate deleted; three row widens), the `<|` render
+  unpacking its branch-tuple NODE, the record synth keeping field
+  names with its holes, the lambda synth passing the scheme's own
+  [TParam] (two fns deleted), and four honest row widens
+  (driver collectors +GraphWrite+GraphRead, render_feedback_chain,
+  candidates_at +Intern). RIDES WITH IT: the fmt write-time hook
+  (post-edit-mn.sh's fmt rung — the parser's own P_ lines on a scratch
+  copy, both faces seen RED/GREEN) and the payload-ladder micro
+  payloadfn GREEN at its true 2 through the whole machinery. THE
+  PROOF: the march's TRANSITION (m3 == m4) — the converged judgment
+  REPRODUCING ITSELF — plus frontier 279/0, proof-exactness 9/9,
+  crown 5/5, battery 114 in-process, census 0, comment-refs 0.
+  THE PIN'S OWN RATCHET HOLDS IT UNBLESSED (correctly) ON THE LAST
+  REMAINDER, measured to its doorstep: the blob-converged judge reports
+  E_EffectMismatch ×3 at resume_image / compile_stdin / compile_source
+  (pipeline.mn's three infer_context entries with AUTHORED rows) —
+  their body rows carry the WHOLE analysis core unabsorbed, while the
+  DAG judge absorbs correctly (measured by mentl query: infer_context's
+  scheme row = Cast+Alloc+Memory+var, compile_stdin = WasmOut+WASI+…,
+  both the absorbed truth). DISCRIMINATED (bracket-off census = 3): THE
+  ROUNDS break the absorption, the bracket is INNOCENT — the quiet
+  rounds' re-judgment of infer_context loses the effect-polymorphic
+  subtraction across round generalization/instantiation (the callers
+  then read body-row = result-row, the core leaking whole). The dig:
+  how infer_context's scheme carries the r_result-to-r_body
+  subtraction through generalize (bound-var sharing vs quantified
+  collapse), compared round-1-final vs round-2-final via
+  ty_fingerprint extended to render row-var IDENTITY links. AND the
+  field-leg's collection suspect is CONVICTED-ADJACENT:
+  enumerate_gradient_positions filters EVERY handle through
+  teach_gradient — whose callee chain consumes the verify entries the
+  arc changed from bare Predicate to whole (Span, Predicate, Reason)
+  triples; a consumer still destructuring the old shape flips
+  Some/None on junk (7 garbage positions, negative spans). Dig
+  advanced two steps: refinement_invite_for's predicate param is
+  UNUSED (the triple-as-Predicate pass is value-harmless), so the
+  junk's mechanism is upstream — refinement_verdict_for computes
+  pending = filter_by_span(caret_span_of_handle(h), debt) for EVERY
+  handle enumerate_gradient_positions walks (range(0, next) — VIRGIN
+  and gap cells included!), and a garbage span from an unminted cell
+  can span_overlap real debt rows → nonempty pending → VerdictInvites
+  → a junk handle enters the field. The root candidates: the
+  enumerators walking unminted cells at all (the graph knows a virgin
+  cell — filter by chased kind), and the rounds multiplying `next` so
+  the stale/virgin population grew past the field leg's tolerance.
+  Fix at the enumerator (minted-only walk), re-run the field leg.
+  SHARPENED ONE MORE STEP at the wire: the rendered `-5240` is
+  `sl - fstart + 1` with fstart ≈ the module's weave start (~5250 —
+  two.mn sits after prelude+libs in the DAG blob) and sl ≈ 10 — the
+  junk positions are LIB-RANGE nodes leaking through a filter that
+  should have excluded them (field_positions demands
+  sl >= fstart && sl < fstart + nlines), so either the filter's
+  fstart and the render's fstart differ, or the two
+  caret_span_of_handle reads disagree across the ranked re-read.
+  RESOLVED TO THE BYTE: t1072064102 = 0x3FE68F5C — THE FLOAT
+  SCORE'S HIGH WORD read as the handle. field_ranked mints (sc, h)
+  pairs with sc: Float (Cursor's third field via score_one_position);
+  render_field_tier's `let (_, ph) = ranked[i]` destructure compiled
+  AT THE WORD FLOOR (ph read at offset 4 = inside the f64) where the
+  old pin emitted the align-aware offset 8 — the
+  generic-wide-tuple-pattern class (its match-shaped gate exists:
+  mn-generic-wide-tuple-pattern) at the LET-destructure, regressed
+  because the CONVERGED finals floor sc's repr somewhere in the
+  score_one_position → Cursor → field_ranked chain. CONFIRMED IN THE
+  PINNED ARTIFACT: m3.wat's $render_field_tier reads the ranked tuple
+  with `(i32.load offset=4)` — inside the f64 — exactly the word-floor
+  destructure the theory named. THE FIX-SPEC COMPLETE
+  (every input measured): Cursor is DECLARED Cursor(Handle, Reason,
+  Float) [types.mn:765] and score_one_position's judged scheme returns
+  it whole — so field_ranked's (sc, h) is concretely (Float, Int),
+  and render_field_tier's let-destructure is the WIDE-TUPLE-PATTERN
+  class at a CONCRETE site (the mn-generic-wide-tuple-pattern gate
+  covered MATCH patterns via pat_elem_repr/pat_tuple_off reading live
+  reprs; this LET path compiled the word floor, and the converged
+  finals' changed twin/demand coverage is why the old pin emitted
+  offset 8 here and the new one offset 4). Fix = the tuple-pattern
+  landing's own recipe at the let-destructure lowering (element reprs
+  read live through lookup_ty, offsets prefix-summed by repr_width),
+  which also hardens every sibling let over wide tuples; then the
+  field leg re-runs, the three absorption reports get the rounds-side
+  scheme-carry dig (their fix-spec above), the board greens, and
+  8b50846d blesses with the drafted PROVENANCE. The spurious "7
+  gradient positions" remain the enumerator's virgin-walk question —
+  second-order, after the repr fix. And frontier's ONE red is the cursor-address
+  FIELD leg — NOT a count shift, a REAL regression measured by hand:
+  `mentl two.mn:0` under pin 8b50846d renders every hole at span
+  `two:-5240:0` (negative line — span arithmetic over garbage) with
+  Query `t1072064102@e0` (a junk word read as a handle, rendered as a
+  fresh var) where the banked green showed both holes' Propose fans.
+  The address path is the DAG judge (single-pass), so the suspects are
+  the arc's only address-path touches: cursor.mn's verify-facet change
+  (filter_by_span now returns whole triples — its consumers' element
+  destructures must agree) and the CursorView verify-slot flow into
+  render_at. PROBE RAN: `mentl two.mn:8:30` is
+  PERFECT (Query `?? : Bit`, the 2-survivor fan with the tie-teach,
+  the Why chain) — the shared render path is HEALTHY and the break is
+  CONFINED to the field walk's hole/gradient COLLECTION (junk handles
+  entering the field's position list). Suspects, ordered: a consumer
+  of CursorView.verify still destructuring elements as bare Predicate
+  now that verify_pending_at returns the declared whole triples (the
+  green leg had tolerated the OLD producer/decl mismatch loosely);
+  the field tier's gradient-position source. Dig: grep the consumers
+  of the CursorView verify slot + field_positions' handle source in
+  at_run's field arm. Fix both, re-march, bless with the drafted
+  PROVENANCE (scratchpad provenance-draft.md carries it; the march's
+  own line: TRANSITION, boot ← m3, sha 8b50846d5807f1fb… re-read whole
+  at write). MENTL'S OWN STEERING, banked as the next rungs: (a) INCREMENTAL
+  ROUNDS — re-judge only the changed cone per round (the fingerprints
+  are already computed; a stable name's re-judgment is waste — the IC
+  cursor inside the judgment); (b) THE FAN (the brackets now sound);
+  (c) the instruments KEPT as projections (the layer answer into
+  `mentl query`; ty_fingerprint as the scheme-stability read) — the
+  probe-then-delete dance this landing paid five times ends there.
 - 2026-07-26 · ▶▶▶ MENTL MARCH — the wheel judges its own generation
   in-process, and the dig healed three latent breaks (· pin 0d153e0c).
   THE VERB: walk the wheel's files (fd_readdir's self/parent links
@@ -4765,11 +4926,168 @@ trusting-trust). Excluded by hardware only: MI300X/GPU-device/hosted-CI/
 wasmFX/shared-everything-threads. Every dispatched agent runs `fable`,
 passed explicitly; every landing re-derived on main; the board is the gate.
 
-**CAMPAIGN STATE (2026-07-25).** A, B-i, B-ii: LANDED whole (the §7
-ledger). C rung 0 (the fork triple) and rung 1 through C1c-2's substrate:
-LANDED — the paged spine, the planned mint, the layer-ordered final, the
-cursor config, the env view, the page pre-open (six pins, 0e3af09c →
-3a53f775). The field-access cluster landed as an audit-driven interleave
+**CAMPAIGN STATE (2026-07-25; C1c-2 first-run measurement 2026-07-26).**
+A, B-i, B-ii: LANDED whole (the §7 ledger). C rung 0 (the fork triple)
+and rung 1 through C1c-2's substrate: LANDED — the paged spine, the
+planned mint, the layer-ordered final, the cursor config, the env view,
+the page pre-open (six pins, 0e3af09c → 3a53f775). THE BRANCH BRACKET'S
+FIRST SEQUENTIAL RUN (2026-07-26, in-tree uncommitted: BranchEnv/
+BranchDiag effects + env_base_view/env_publishes arms + diag_branch +
+the per-stmt bracket in planned_layer_stmts) MEASURED A LATENT
+TRIAL-VS-FINAL SCHEME DIVERGENCE the old walk had masked: with every
+same-layer reference resolving the TRIAL's finals uniformly (the
+two-pass design's own stated intent), the m3-leg census converged 0
+after one widen round (driver_collect_visit_list /
+driver_collect_dag_with_deps +GraphWrite+GraphRead,
+render_feedback_chain +Memory+GraphRead, candidates_at +Intern; plus
+the de-parameterization law: a free var in a piggyback effect's op
+return parameterizes the effect and the handler-arm binding refuses
+the mix) — yet the emitted wheel DIVERGED 48k lines with 40 EXTRA
+twins whose encs flip lb↔i at name-carrying positions
+(analyze_fns / bind_from_handlers / escaping_fixpoint / crc_* /
+free_vars_* / driver_*; body_to_smt newly reachable), and that wheel
+dies at its FIRST mint (m4 exit 134 in graph_fresh_ty's arm). Reading:
+the trial's finals and the final pass's finals GENUINELY DISAGREE on
+the classify/escape/crc family (String-vs-handle at scale); the old
+root-live walk read a self-consistent MIX (final-pass publishes
+shadowing trial's mid-walk), so the disagreement was invisible and
+UNGATED. The bracket is the instrument that exposes it. THE CONVERGENCE LOOP IS
+BUILT AND RUNNING (in-tree with the bracket, uncommitted):
+infer_program_converged iterates QUIET ROUNDS (infer_program_round —
+the trial's measured walk with fn pre-registration skipped and the
+final's prepass) until round-over-round scheme FINGERPRINTS stabilize
+(ty_fingerprint — alpha-normalized total render, vars by first
+occurrence, rows by intern handle; EANode/predicates opaque, the
+m3==m4 oracle backstopping), then runs the reporting final — whose
+publishes equal the converged set, restoring the bracket's frozen-base
+truth. En route the medium refused two of the loop's own forms
+(BranchEnv parameterized by a free op-return var → the handler-arm mix
+refusal; round_prints_walk's nested-alternative own collision → the
+hoist recipe). THE LOOP'S FIRST HARVEST (m3-leg census 15, the
+converged judge convicting the wheel — the 50-findings precedent):
+(1) THE DISPATCH EXIT-CODE CONTRACT — dispatch_invocation's arms mix
+() / String / Int (7+1 at the match head; the two `Int vs ()` singles
+are main's ParseError arm — print_error_and_help returns () — and the
+VCompileStdin tty fork's welcome/compile pair); main's value is the
+process exit code, so every *_run must return Int. edit/space/march
+return Int already; the infer_context-enders (doc/tighten/fmt/at/
+teach/repl/serve) and the chain-enders (compile/resume/run/audit/
+query) take a trailing honest 0 (their refusal paths already exit
+through the gate/fail); ONE arm returns String — the List(Byte) vs
+Int — likely the welcome/catalog render; find it by fixing the rest
+and re-judging. The wrong-end branch-stack fix and the crossing-form
+row_print ride this same landing: after the pin, inline row_print
+back (the natural nested-alternative shape is legal under the fixed
+judge; the old judge in boot refuses it, so the un-hoist is
+generation-two — the world_top crossing law at the ownership layer).
+(2) THE VERIFY TRIPLE SPLIT — verify_ledger accrues
+(span, predicate, reason) [verify.mn:44] while the judged flow says a
+(Reason, Predicate, Span) row reaches filter_by_span: Verify is
+MULTI-HANDLER (verify_ledger + verify_smt, verify.mn:336), and the two
+handlers' debt rows disagree on field order — the real root; ONE
+canonical order at both accrual sites, then filter_by_span's
+destructure follows it (the first inversion attempt just moved the
+error: 14154 persists + a new Reason-vs-Span at 14363 — cursor.mn's
+filter now leads the ledger; revert it to span-first WITH the smt
+handler aligned). (3) the render match at format.mn ~154: an arm after
+the PTee arm returns Node/[Node] where the match's arms unify String —
+read the arms below PTee to name it. (4) render_chain_pos row widened
+— DONE. (5) synthesize_lambda_node now passes params straight to
+LambdaExpr([TParam],_) and synth_param_names/loop are deleted — but the
+error persists as Node vs (Node, String): enumerate_lambdas' OWN
+params arrive as [(Node, String)] from ITS caller — walk the chain
+one caller up (grep enumerate_lambdas call sites) and pass the
+scheme's true [TParam] down. (6) List(Byte) vs TParam cleared with
+(5)'s first half. Exit-code sweep LANDED (twelve tails: compile /
+resume / run=1 / audit / query / new_project / fmt / doc / serve /
+teach / repl / compile_stdin + print_error_and_help=2); census
+15 → 4. The recipe: fix each under the
+standing judge, re-march, iterate to census 0; the landing gate is
+then TRANSITION (m3 == m4 — the converged judgment self-reproducing).
+CENSUS 0 REACHED (2026-07-26, all six classes fixed: exit codes ×13,
+the verify facet flowing whole triples with three row widens, the
+diverge-chain render unpacking the tuple node, the record-synth
+name+hole pairs, the lambda TParams direct). THE REMAINING BREAK is
+census-invisible and MEASURED at one arm: m2's
+op_graph_handler_graph_fresh_ty carries evidence-walk locals
+(evw/evn — an evidence-tier perform in the arm) that m3's emission of
+the SAME arm LACKS (a variant + wildcard local instead) — a
+dispatch-tier collapse across generations; m4 dies at the first mint
+inside that arm (parse_import → mint_node). Suspects, in order: the
+banked draw_op_edges warning (a handler-registration entry
+value-replayed through the branch bracket baking a
+construction-time-unique op edge → the emission cashes a
+direct/singleton call for a multi-handler op), or a converged-judgment
+input to the tier chooser diverging between rounds. THE OP IS NAMED (2026-07-26, the eighth interrogation run on the
+collapse): m2's arm performs graph_mutated (ename intern 97356) through
+ev_perform_node at the commit boundary (guarded by the
+checkpoint-stack read at __state offset 48) — and graph_mutated is
+LEGITIMATELY multi-handler (lsp.mn:677's arm + the oracle's
+project_queue_merger), so m2's evidence walk is the CORRECT tier. MEASURED TO THE ROOT'S DOORSTEP: m3's arm line 129 is the
+SingletonUninstalled floor — "singleton op call with no live install:
+lsp_adapter" — the converged judgment resolved graph_mutated to the
+SINGLETON tier keyed on lsp_adapter (ONE of its two handlers), so
+every compile's first commit-boundary mint hits the armed guard. Boot's
+judgment saw both handlers (ambiguous → the evidence walk m2 carries —
+correct). THE REMAINING WHY, one read from closed: where the op→handler
+edge evolution lives (unique → ambiguous on second sight) and which of
+the two registrations the quiet rounds lose — lsp_adapter registers via
+HandlerDeclStmt (the prepass re-registers per round) while the oracle
+merger's edge likely draws at its INSTALL SITE during the walk; if the
+edge home resets per round while only decl-side edges re-draw, the
+install-side sighting is lost and the op reads unique. FIXED AND PROVEN (2026-07-26): branch_replay_one re-runs
+draw_op_edges' default/ambiguous algebra against the root's live entry
+(the branch's verdict as the sighting, disc joined monotone) — and the
+march ruled ✓✓ TRANSITION m3 == m4 at 298,595 lines, census 0: THE
+CONVERGED JUDGMENT REPRODUCES ITSELF. Boot repinned to 2257e06c
+(UNBLESSED — PROVENANCE unwritten). THE BOARD AT THE PIN: frontier
+279/0 · proof-exactness 9/9 · crown 5/5 · in-process battery 114 ·
+census 0 · comment-refs 0 · micros-through-m2 113/1 — ONE RED:
+payloadfn (RUN exit 134, want 2 — the payload-ladder micro re-banked
+at its true value in the trecordopen landing, now trapping under the
+converged judgment). The last gate before blessing, MEASURED TO THE FRAME
+(2026-07-26): the gate's wat traps at lambda_72481 ← op_collect_emit —
+INSIDE the install-site lambda `(r) => r.beta`, at the
+"field offset unprovable" floor (line 3053 of the gate wat; the
+singleton guard at 3026 sits on a dead path both wats share). THE
+EXACT DIVERGENCE, twin-artifact-proven: the BATTERY's wat
+(.build/test/mn-payloadfn.wat — battery_compile = SINGLE-pass
+infer_program) runs exit 2 — the lambda's ρ resolves; the GATE's wat
+(.build/probe/gate/micro-payloadfn.wat — the stdin CONVERGED path)
+floors — ρ free at emit. So the converged rounds sever the resolution
+chain that binds the lambda's open-record residual to run()'s concrete
+payload: the chain runs arm-f(v) ~ handler-sig f-node ~ install-site
+lambda + op-sig x ~ payload, across three stmts on shared sig/op
+nodes — and the rounds RE-REGISTER handler sigs and effect ops per
+round (fresh node generations), so the final round's cross-stmt chain
+must land on ONE generation; somewhere it straddles two (or an
+instantiation copies where single-pass kept the live node). THE TWIN EXPERIMENTS RAN
+(2026-07-26, both bypasses built, measured, and RESTORED — the tree
+holds the whole design): (a) rounds bypassed (trial+final only,
+bracket ON) → 134 — THE ROUNDS ARE INNOCENT; (b) bracket bypassed
+(plain infer_stmt in the planned walk) → 2 — THE BRACKET IS CONVICTED.
+And the layering is RIGHT: VarRef(collect) draws VarLookup at
+infer.mn:2257, so main layers after the handler decl and its base
+holds the replayed post-arms scheme. The seam therefore lives in what
+the bracket changes about the ARM'S ROW CHAIN: bracket-free, main's
+install-unify lands on the arm's LIVE row node and run()'s later
+emit-bind flows concreteness into the shared class before emit reads
+the offset; bracketed, some link of that chain (the re-generalization
+quantifying the arm's still-free row? the replayed scheme's
+instantiation copying where root-live shared?) severs. THE ONE PROBE
+that decides it: eprint at resolve_field_offset's -1 arm printing the
+receiver row's CHASED state (tail var handle + binding), run the micro
+bracket-on vs bracket-off, diff the two prints — the free node's
+identity names the severed link; fix at that link, re-march, THEN
+bless (PROVENANCE with the re-read sha + the §7 ledger
+entry for the whole arc: the fixpoint rounds, the branch bracket, the
+wrong-end stack, the exit-code contract, the edge-evolution join, the
+fmt hook; the crossing-form row_print inlines back in the
+generation AFTER the blessed pin).
+Boot stays at pin 0d153e0c (BROKEN runs never re-pin; the arbiter
+held). The fmt write-time hook (post-edit-mn.sh's fmt rung — parse
+verdict from the parser's own P_ lines on a scratch copy, both faces
+seen RED/GREEN) guards every edit of the sweep. The field-access cluster landed as an audit-driven interleave
 (pins f0ab3177 + 723220b3 — the last known silent-wrong class closed).
 C1c-2's REMAINDER — the first join design (state-delta replay) was
 REFUTED by the adversarial pass (2026-07-25, thirteen findings, the

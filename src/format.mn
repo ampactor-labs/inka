@@ -184,7 +184,7 @@ fn indented_center() with Pure = 4
 // absorbs the verb into the body (the recurrence `((prev) => …) <~ delay(1)`
 // rendered bare read back as `delay(1)(prev)` — an application). One read
 // of the ONE table, shared by every chain renderer's head.
-fn render_chain_pos(node) with Format + !Mutate = {
+fn render_chain_pos(node) with Format + Memory + GraphRead + !Mutate = {
   if expr_prec_of(node) < 1 { parenthesize(format_chain(node)) }
   else { format_chain(node) }
 }
@@ -197,7 +197,14 @@ fn render_converge_chain(left, right) with Format + GraphRead + Memory + Alloc +
 
 fn render_diverge_chain(input, branches_tuple) with Format + !Mutate + Memory + Alloc = {
   let input_str = format_chain(input)
-  let branches = render_branch_tuple(branches_tuple)
+  // The right operand is the branch-tuple NODE; render_branch_tuple eats
+  // the element LIST (the converged judge caught the node passed whole).
+  // A non-tuple right operand is a single branch, rendered as one chain.
+  let N(bkind, _, _) = branches_tuple
+  let branches = match bkind {
+    NExpr(MakeTupleExpr(elems)) => render_branch_tuple(elems),
+    _ => "{spaces(indented_center())}{format_chain(branches_tuple)},"
+  }
   "{input_str}\n{spaces(left_edge_indent())}<| (\n{branches}\n{spaces(left_edge_indent())})"
 }
 
@@ -259,7 +266,7 @@ fn render_tee(body, handler_expr) with Format + GraphRead + Memory + Alloc + !Mu
 // line. Requires iterative context (Sample / Tick / Clock / IC handler
 // installed upstream); without it, parser rejects with E_FeedbackNoContext.
 
-fn render_feedback_chain(input, spec) with Format + !Mutate = {
+fn render_feedback_chain(input, spec) with Format + Memory + GraphRead + !Mutate = {
   let input_str = render_chain_pos(input)
   let spec_str = render_chain_pos(spec)
   "{input_str}\n{spaces(indented_center())}<~ {spec_str}"

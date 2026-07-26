@@ -1038,6 +1038,34 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-26 · ▶▶▶▶ THE BRANCH CURSOR IS WHOLE — every handler
+  branch-local, the spawn now pure scheduling (rung 2b closes the
+  bracket's self-containment · pin 4a1363ab). The graph instance is
+  the C1c-2a config cashed out: six slots (span_index0 + high0 join
+  the four), the graph_branch_seed export (the post-plan spine table +
+  open count + the span index, complete because graph_index_span is
+  parse-only — measured, one grep), graph_mint_at DISSOLVED into
+  per-branch config, and lookup_ty_graph + mutate_sink fresh in the
+  chain. THE ONE TRAP taught the design's own law back: the first
+  branch-instance run faulted at the 4GB boundary inside
+  graph_fresh_ty — overflow is a DESIGNED path (C1b: an over-measure
+  stmt jumps above the plan), the root healed it through its live
+  mint_high, and a branch's zero high minted at handle 0 over the
+  Module root. The open-space frontier now THREADS branch to branch
+  (graph_mint_high read at each branch's end feeds the next branch's
+  config; layers thread it too) — the root's sequential semantics
+  exactly, with the spawn era's abort-and-requeue the banked
+  tightening. TRANSITION m3 == m4 at 323,185 lines (the 7,778-line
+  m2/m3 crossing is the new machinery + the shifted judgment paths);
+  census 0 at every generation; comment-refs 0; frontier 279/0;
+  proof-exactness 9/9; crown 5/5; micros-through-m2 116/0. With rungs
+  1–2a (the barrier shape fa5bedca; the three ledgers a33c6dfc; the
+  inner trio 78a7575d — each CLEAN m2 == m3), the branch bracket now
+  carries ALL ELEVEN handlers; the intern rides ambient read-only
+  (trial-pre-warmed). Rung 3 — the spawn itself — is scheduling: the
+  bracket becomes the task body, joins stay stmt-ordered, the
+  shared-image memory flip is the measured TRANSITION, and the
+  same-layer handler-sig barrier class is the one settle before K>1.
 - 2026-07-26 · ▶▶▶▶▶ THE SCHEME BOUNDARY BECOMES A VALUE BOUNDARY —
   census 0 with the judge CONVERGING, the incremental cone lands, and
   five roots fall in one continuous dig (the ratchet's raised lane

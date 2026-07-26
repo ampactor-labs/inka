@@ -1411,6 +1411,18 @@ effect GraphRead {
   graph_canon_at(Int) -> Int          // the e-graph canonical pointer at a handle — the equivalence weave's find step (returns the handle itself if it is its own e-class root). One co-indexed weave, exactly like the nodes column's TVar union-find; egraph_extract chases it live.
   graph_narrow_at(Int) -> Int         // the refinement-narrowing pointer at a handle — the path-predicate's bool-node handle proven to hold AT this program point (0 = no narrowing). One co-indexed weave like the canon column; lower's verify-obligation read chases it live to elide a check the path already proves (§4⑥). Appropriate as a side-table: narrowing is a per-program-point boolean fact, not a unifiable variable.
   graph_boundary_at(Int) -> ExecutableBoundary // exact compiler-created executable edges keyed by fanout site
+  // The branch cursor's config seed (the fan, C1c-2): the root's live
+  // spine table, open count, and span index, read once after the plan
+  // pre-opens every band — the spine is then stable for the whole walk
+  // and the span index is complete (graph_index_span is parse-only, so
+  // no branch ever appends). A branch graph_handler installs over
+  // these with its stmt's planned range as (next0, limit0).
+  graph_branch_seed() -> ([{boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody]}], Int, [(ValidSpan, Int)])
+  // The instance's open-space frontier (seal's own max) — the walk
+  // threads it branch to branch so an over-measure stmt's overflow
+  // jump lands above every prior branch's mints, exactly the root
+  // instance's sequential semantics.
+  graph_mint_high() -> Int
 }
 
 effect GraphWrite {

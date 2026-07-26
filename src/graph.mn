@@ -194,12 +194,12 @@ fn spine_boundary_at(ref spine, spine_open, h) with Memory =
 // over the SHARED spine with a private planned range — the root install is
 // bare and the defaults are the empty graph. Handler state records live in
 // shared heap; the install chain stays per-instance, correctly private.
-handler graph_handler(spine0, spine_open0, next0, limit0)
+handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0)
   with spine = spine0, spine_open = spine_open0,
        trail = [], trail_len = 0,
        epoch = 0, next = next0,
-       mint_limit = limit0, mint_high = 0,
-       span_index = [],
+       mint_limit = limit0, mint_high = high0,
+       span_index = span_index0,
        checkpoint_stack = [],
        comment_refs = [] {
 
@@ -574,6 +574,14 @@ handler graph_handler(spine0, spine_open0, next0, limit0)
 
   graph_index_span(span, handle) => {
     resume() with span_index = push(span_index, (span, handle))
+  },
+
+  graph_branch_seed() => {
+    resume((spine, spine_open, span_index))
+  },
+
+  graph_mint_high() => {
+    resume(if next > mint_high { next } else { mint_high })
   },
 
   graph_rollback(target_idx) => {

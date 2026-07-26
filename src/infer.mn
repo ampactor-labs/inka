@@ -1294,8 +1294,14 @@ fn infer_program_final(rows, layers, stmts) = {
     refuse_duplicate_type_decls(stmts, 0, len(stmts), smap_new())
     each(pre_register_alias, stmts)
     fold(smap_new(), pre_register_stmt_final, stmts)
-    set_summaries(classify_fixpoint(stmts))
-    infer_stmt_list_planned(rows, layers, stmts)
+    // The summaries value is captured ONCE and threaded to every branch
+    // bracket — each branch installs its own resume_summaries_ctx over
+    // the same value (a fresh ctx would answer UZero for every grade
+    // and mis-tier dispatch), so a spawned cursor reads grades without
+    // reaching this ambient instance.
+    let summ = classify_fixpoint(stmts)
+    set_summaries(summ)
+    infer_stmt_list_planned(rows, layers, stmts, summ)
     finalize_continuation_boundaries(0, graph_next())
     comment_refs_check(stmts)
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
@@ -1315,12 +1321,12 @@ fn infer_program_final(rows, layers, stmts) = {
 // virgin gap cells (absent by the column contract); one minting more
 // overflows to the open space above the plan (graph_fresh's overflow arm)
 // — both deterministic.
-fn infer_stmt_list_planned(rows, layers, stmts) = {
+fn infer_stmt_list_planned(rows, layers, stmts, summ) = {
   let flat = list_to_flat(rows)
   let start = graph_next()   // drift-audit: ignore — sequenced effectful read (the plan's frontier must precede the walk), CLAUDE.md Anchor 6 exclusion
   graph_mint_plan(start + rows_total(flat, 0, 0))
   let bases = rows_bases(flat, start)
-  planned_layer_sweep(flat, layers, bases, stmts, 0, flat_max(layers, 0, 0))
+  planned_layer_sweep(flat, layers, bases, stmts, summ, 0, flat_max(layers, 0, 0))
   graph_mint_seal()
 }
 
@@ -1347,7 +1353,7 @@ fn flat_max(ref xs, i, best) = {
   else { flat_max(xs, i + 1, if xs[i] > best { xs[i] } else { best }) }
 }
 
-fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, l, maxl) = {
+fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, summ, l, maxl) = {
   if l > maxl { () }
   else {
     // The layer-start base capture: performed OUTSIDE any branch bracket,
@@ -1358,8 +1364,8 @@ fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, l, maxl) = {
     // env byte-identical; the fan defers the same replay to this barrier.
     let base = env_base_view()   // drift-audit: ignore — sequenced effectful read (the layer-start snapshot, consumed by every branch of the layer)
     let seed = consume_base()   // drift-audit: ignore — sequenced effectful read (the root's consumed-set at layer start, the branch ledgers' shared seed)
-    planned_layer_stmts(rows, layers, bases, stmts, l, 0, base, seed)
-    planned_layer_sweep(rows, layers, bases, stmts, l + 1, maxl)
+    planned_layer_stmts(rows, layers, bases, stmts, summ, l, 0, base, seed)
+    planned_layer_sweep(rows, layers, bases, stmts, summ, l + 1, maxl)
   }
 }
 
@@ -1372,19 +1378,19 @@ fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, l, maxl) = {
 // byte-identical by construction, and the fan's concurrent form changes
 // only WHO runs layer_judge_walk's iterations, never what the joins
 // replay.
-fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, l, i, base, seed) = {
-  let facts = layer_judge_walk(rows, layers, bases, stmts, l, 0, base, seed, [])
+fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, l, i, base, seed) = {
+  let facts = layer_judge_walk(rows, layers, bases, stmts, summ, l, 0, base, seed, [])
   layer_join_walk(facts, 0)
 }
 
-fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, l, i, base, seed, own acc) = {
+fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, summ, l, i, base, seed, own acc) = {
   if i >= len(stmts) { acc }
   else {
-    layer_judge_walk(rows, layers, bases, stmts, l, i + 1, base, seed,
+    layer_judge_walk(rows, layers, bases, stmts, summ, l, i + 1, base, seed,
       if layers[i] == l {
         let (_, count) = rows[i]
         graph_mint_at(bases[i], bases[i] + count)
-        push(acc, branch_judge(stmts[i], base, seed))
+        push(acc, branch_judge(stmts[i], base, seed, summ))
       } else { acc })
   }
 }
@@ -1405,9 +1411,10 @@ fn layer_join_walk(ref facts, j) = {
 // per-thread tapes extend. Config args are frame locals by construction
 // (Hβ.lower.install-config-capture-read: a capture-referencing config
 // arg reads 0; params read true).
-fn branch_judge(stmt, base, seed) = {
+fn branch_judge(stmt, base, seed, summ) = {
   let (bb, bc, bi) = base
   let body = () => {
+    set_summaries(summ)
     consume_seed(seed)
     infer_stmt(stmt)
     let vdebt = verify_debt()   // drift-audit: ignore — sequenced effectful read (the branch's own accruals, collected inside its bracket)
@@ -1416,8 +1423,12 @@ fn branch_judge(stmt, base, seed) = {
     let dfacts = diag_lines_taken()   // drift-audit: ignore — sequenced effectful read (the branch's rendered lines + tally, collected inside its own bracket)
     (pubs, dfacts, vdebt, clog)
   }
-  // The three ledgers install BRANCH-FRESH, mirroring the analysis
-  // core's order (pipeline.mn's spine law — ledgers innermost). The
+  // The bracket mirrors the ambient chain's order whole (the final's
+  // trio innermost, then pipeline.mn's spine law — ledgers inside env
+  // inside diagnostics): infer_ctx's frames and fresh_for_inference are
+  // stmt-local, so fresh instances are exact; the summaries instance
+  // re-arms over the SAME value the root computed (set_summaries at
+  // entry — a fresh ctx would answer UZero and mis-tier dispatch). The
   // affine instance seeds from the root's frozen consumed-set; its log
   // replays at the join. verify accrues branch-locally; the debt
   // replays by re-perform — EXACT because a predicate's operands live
@@ -1429,6 +1440,9 @@ fn branch_judge(stmt, base, seed) = {
   // arms' reports resolve outward to diag_branch (rendered at
   // collect), so every refusal a branch raises rides the banked lines.
   body()
+    ~> infer_ctx
+    ~> fresh_for_inference
+    ~> resume_summaries_ctx
     ~> affine_ledger
     ~> region_tracker
     ~> verify_ledger

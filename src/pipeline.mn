@@ -487,27 +487,113 @@ fn infer_program_converged(src) = {
   // nodes — minted before the trial's watermark, outside every range —
   // so the scan read zero edges (measured: every stmt layer 0, every
   // frozen base the prepass env, payloadfn's residual chain severed at
-  // the pre-arms scheme).
-  let layers = stmt_layers_ast(frontend(src), flat_rows)
+  // the pre-arms scheme). The frees collect ONCE and serve both the
+  // layers and the incremental cone below.
+  let frees_all = stmt_frees(frontend(src))
+  let layers = stmt_layers_ast(frees_all, flat_rows)
   let prints = round_prints(flat_rows)
-  converge_rounds(src, flat_rows, layers, prints, 1)
+  converge_rounds(src, flat_rows, layers, frees_all, prints, prints, 1)
 }
 
-fn converge_rounds(src, flat_rows, layers, prints, round) = {
-  if round >= 6 {
+// THE INCREMENTAL ROUNDS — the changed cone (Mentl's own steering,
+// 2026-07-26: "the unchanged names are a warm cone he re-judges
+// anyway"). Round 1 re-judges everything (every input moved
+// loose → final); round K+1 re-judges ONLY stmts whose own fingerprint
+// moved between the last two rounds or whose free names' fingerprints
+// moved — the one-hop cone, which the iteration closes transitively. A
+// skipped stmt's final persists in the env by latest-wins, so its
+// fingerprint CARRIES through round_prints with zero special-casing,
+// and the stop condition is unchanged. The cone is a pure comparison
+// of the two carried print lists — the live env at cone time IS the
+// last round's finals, so an env read here could only ever answer
+// "unmoved"; the delta lives in the pair. This is the incremental
+// cursor running inside the judgment itself.
+fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round) = {
+  if round >= 12 {
     eprint_string("convergence: schemes still moving after {int_to_str(round)} rounds — judging with the last round's finals; the fixpoint oracle arbitrates\n")
+    eprint_string("convergence: movers:{movers_line(flat_rows, prev_prints, prints, 0, 0)}\n")
     converge_finish(src, flat_rows, layers)
   } else {
-    let (rows2, _start2) = { src |> frontend |> infer_program_round } ~> diag_quiet
+    let mask =
+      if round == 1 { mask_all(len(flat_rows)) }
+      else { cone_mask(flat_rows, prev_prints, prints, frees_all) }
+    let (rows2, _start2) = { src |> frontend |> infer_program_round(mask, flat_rows) } ~> diag_quiet
     let flat2 = list_to_flat(rows2)
     let prints2 = round_prints(flat2)
     if prints_equal(prints, prints2) { converge_finish(src, flat2, layers) }
-    else { converge_rounds(src, flat2, layers, prints2, round + 1) }
+    else { converge_rounds(src, flat2, layers, frees_all, prints, prints2, round + 1) }
   }
 }
 
 fn converge_finish(src, flat_rows, layers) =
   src |> frontend |> infer_program_final(flat_rows, layers)
+
+fn mask_all(n) = mask_all_walk(make_list(n), 0, n)
+
+fn mask_all_walk(own m, i, n) = {
+  if i >= n { m }
+  else { mask_all_walk(list_set(m, i, true), i + 1, n) }
+}
+
+// The bound-hit report names its residue: which stmts' fingerprints were
+// still moving when the round bound cut the loop (first sixteen — the
+// class is what matters, not the tail).
+fn movers_line(ref rows, ref prev_prints, ref cur_prints, i, shown) = {
+  if i >= len(rows) || shown >= 16 { "" }
+  else {
+    let (name, _) = rows[i]
+    if name != "" && cur_prints[i] != prev_prints[i] {
+      " {name}{movers_line(rows, prev_prints, cur_prints, i + 1, shown + 1)}"
+    }
+    else { movers_line(rows, prev_prints, cur_prints, i + 1, shown) }
+  }
+}
+
+// The cone: a stmt re-judges when its own print moved between the last
+// two rounds, or any free name it references moved in that window.
+fn cone_mask(ref rows, ref prev_prints, ref cur_prints, ref frees_all) = {
+  let moved = moved_names(rows, prev_prints, cur_prints, 0, smap_new())
+  cone_mask_walk(prev_prints, cur_prints, frees_all, moved, make_list(len(rows)), 0)
+}
+
+fn moved_names(ref rows, ref prev_prints, ref cur_prints, i, acc) = {
+  if i >= len(rows) { acc }
+  else {
+    let (name, _) = rows[i]
+    moved_names(rows, prev_prints, cur_prints, i + 1,
+      if name == "" || cur_prints[i] == prev_prints[i] { acc }
+      else { smap_add(acc, name, 1) })
+  }
+}
+
+fn cone_mask_walk(ref prev_prints, ref cur_prints, ref frees_all, ref moved, own m, i) = {
+  if i >= len(prev_prints) { m }
+  else {
+    let hit = cur_prints[i] != prev_prints[i] || frees_hit(frees_all[i], moved, 0)
+    cone_mask_walk(prev_prints, cur_prints, frees_all, moved, list_set(m, i, hit), i + 1)
+  }
+}
+
+fn frees_hit(ref frees, ref moved, j) = {
+  if j >= len(frees) { false }
+  else {
+    match smap_get(moved, frees[j]) {
+      Some(_) => true,
+      None    => frees_hit(frees, moved, j + 1)
+    }
+  }
+}
+
+// Every stmt's free-name list, collected once from the parse tree.
+fn stmt_frees(ref stmts) = stmt_frees_walk(stmts, make_list(len(stmts)), 0)
+
+fn stmt_frees_walk(ref stmts, own out, i) = {
+  if i >= len(stmts) { out }
+  else {
+    stmt_frees_walk(stmts,
+      list_set(out, i, list_to_flat(collect_free_vars(stmts[i], []))), i + 1)
+  }
+}
 
 // The stmt-layer projection over PARSE truth: a stmt's depth is one past
 // the deepest earlier stmt its free names reference (backward edges
@@ -516,17 +602,16 @@ fn converge_finish(src, flat_rows, layers) =
 // depth 0 through the index miss. This is the DAG the fan's frozen
 // bases require complete: every reference IS an edge here, because
 // collect_free_vars walks the source itself.
-fn stmt_layers_ast(ref stmts, ref rows) = {
+fn stmt_layers_ast(ref frees_all, ref rows) = {
   let name_idx = layer_name_index(rows, 0, smap_new())
-  ast_layers_walk(stmts, name_idx, make_list(len(stmts)), 0)
+  ast_layers_walk(frees_all, name_idx, make_list(len(frees_all)), 0)
 }
 
-fn ast_layers_walk(ref stmts, ref name_idx, own depths, i) = {
-  if i >= len(stmts) { depths }
+fn ast_layers_walk(ref frees_all, ref name_idx, own depths, i) = {
+  if i >= len(frees_all) { depths }
   else {
-    let frees = list_to_flat(collect_free_vars(stmts[i], []))
-    let d = frees_depth(frees, name_idx, depths, i, 0, 0)
-    ast_layers_walk(stmts, name_idx, list_set(depths, i, d), i + 1)
+    let d = frees_depth(frees_all[i], name_idx, depths, i, 0, 0)
+    ast_layers_walk(frees_all, name_idx, list_set(depths, i, d), i + 1)
   }
 }
 

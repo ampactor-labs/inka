@@ -974,21 +974,62 @@ fn infer_program_trial(stmts) = {
 // round's final; monomorphic recursion self-registers via infer_fn's
 // unbound-handle arm) and the final's prepass re-registering types /
 // effects / handlers (fresh entries shadow with deterministic identical
-// tags). Runs under diag_quiet at the call site.
-fn infer_program_round(stmts) = {
+// tags). The MASK is the incremental cone (pipeline.mn's cone_mask): a
+// masked-out stmt is not re-judged — its prior-round final stays latest
+// in the env, and its sizing row carries from prev_rows. The prepass
+// and summaries still run whole (deterministic per source, cheap; the
+// grades read arm STRUCTURE, which no round changes). Runs under
+// diag_quiet at the call site.
+fn infer_program_round(ref mask, ref prev_rows, stmts) = {
   {
     register_primitives()
     each(pre_register_alias, stmts)
-    fold(smap_new(), pre_register_stmt_final, stmts)
+    pre_register_masked(stmts, mask, 0)
     set_summaries(classify_fixpoint(stmts))
     let start = graph_next()   // drift-audit: ignore — sequenced effectful read (the ranges' origin must precede the walk), CLAUDE.md Anchor 6 exclusion
-    let rows = infer_stmt_list_measured(stmts)
+    let rows = infer_stmt_list_masked(stmts, mask, prev_rows)
     finalize_continuation_boundaries(0, graph_next())
     (rows, start)
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
     ~> affine_ledger
     ~> region_tracker
     ~> verify_ledger
+}
+
+// The round's prepass, cone-gated: a masked-out declaration keeps its
+// prior-round entry — resolved by its own decl judgment — instead of a
+// fresh re-registration nobody re-binds (measured: the unconditional
+// fold re-minted every handler sig each round while the cone masked the
+// decl's judgment out, so the entries flipped bare↔resolved and the
+// whole iterate-handler family read as movers forever). The trial owns
+// the duplicate-fn check; the round's reports are absorbed anyway.
+fn pre_register_masked(ref stmts, ref mask, i) = {
+  if i >= len(stmts) { () }
+  else {
+    if mask[i] {
+      let N(body, _, _) = stmts[i]
+      match body {
+        NStmt(TypeDefStmt(name, variants)) => register_type_constructors(name, variants),
+        NStmt(EffectDeclStmt(name, ops))   => register_effect_ops(name, ops),
+        NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) =>
+          pre_register_handler_sig(hname, config, state, arms),
+        _ => ()
+      }
+    } else { () }
+    pre_register_masked(stmts, mask, i + 1)
+  }
+}
+
+fn infer_stmt_list_masked(ref stmts, ref mask, ref prev_rows) =
+  masked_measure_walk(stmts, mask, prev_rows, [], 0)
+
+fn masked_measure_walk(ref stmts, ref mask, ref prev_rows, own rows, i) = {
+  if i >= len(stmts) { rows }
+  else {
+    masked_measure_walk(stmts, mask, prev_rows,
+      if mask[i] { stmt_measure_step(rows, stmts[i]) }
+      else { push(rows, prev_rows[i]) }, i + 1)
+  }
 }
 
 // round_prints — each named stmt's published scheme, fingerprinted. The
@@ -2128,14 +2169,19 @@ fn infer_expr(ref node) = {
       inf_enter_fn(row_handle, bh, span, [])
       infer_expr(body_node)
       inf_exit_fn()
-      // CREATE-CAPTURES-EVIDENCE flow edge: a closure created here captures THIS
-      // fn's evidence for the effects it performs (it reads that frame at call
-      // time), so the enclosing fn's row receives the closure's row — read live.
-      // The dual of the call edge (the NRowBound/NRowFree inf_add_row below) that
-      // flows a callee's row into the frame; closure-creation flowed nothing, and
-      // that asymmetry lost an escaping closure's effects (the higher-order-effect
-      // leak). The graph already proved the lambda's row; flow it, never re-derive.
-      inf_add_row(mk_ef_open([], row_handle))
+      // ABSTRACTION IS PURE — creating a closure performs nothing. The
+      // lambda's row rides its TYPE (the TFun below); every APPLIER is
+      // charged by the call edge, an escaping closure included (its
+      // eventual call site reads the row off the closure's type), and
+      // the runtime evidence resolves through the live install chain at
+      // the perform site (world-as-value R2 — a thunk performs where
+      // CALLED). The former create-flows-row edge here charged the
+      // CREATOR with the closure's whole row — a mint-time-evidence
+      // relic that made every absorbed-thunk pattern leak: a thunk
+      // passed to an absorbing bracket polluted the creator's row with
+      // effects the bracket provably absorbs (measured: Ping through
+      // bracket(() => ping()), and infer_context's three wheel callers
+      // carrying the whole analysis core unsubtracted).
       graph_bind(handle, TFun(
         build_param_types(params, param_handles),
         TVar(bh),
@@ -2675,7 +2721,26 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
     _ =>
       match graph_chase(row_h) {
         GNode(NRowBound(row), _) => inf_add_row_unified(row),
-        GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], row_h)),
+        GNode(NRowFree(_), _)    =>
+          // Share a live row VAR only when it is this judgment's own —
+          // an effect-polymorphic param or local closure (map's f: the
+          // var is fn-local, generalize quantifies it, call sites
+          // instantiate it fresh). A top-level FnScheme callee whose
+          // row is still free is a pre-registration loose scheme (the
+          // trial's forward reference): sharing ITS handle leaks
+          // another decl's live row identity into this frame, and the
+          // next judgment's bind then reads through every holder
+          // (measured: infer_context's four callers chained one shared
+          // row; the first binder won and the other three raised the
+          // E_EffectMismatch trio). The rounds carry forward-ref truth
+          // by ITERATION — the quiet trial under-attributes here by
+          // design and round 1 re-judges with the published final. A
+          // recursive self-call loses nothing: its contribution was
+          // the fn's own row, vacuous by row-set idempotence.
+          match env_lookup(cname) {
+            Some((_, _, FnScheme)) => (),
+            _ => inf_add_row(mk_ef_open([], row_h))
+          },
         _ => ()
       }
   }
@@ -2993,11 +3058,21 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       // bare-VarRef stage's completion call by THIS pipe node's handle).
       stage_continuation_boundary("|>", handle)
       // callee's row flows into caller's row — including the open row
-      // VARIABLE when the piped-into fn is effect-polymorphic.
+      // VARIABLE when the piped-into fn is effect-polymorphic. The
+      // share-guard mirrors the call edge's: a bare top-level FnScheme
+      // stage whose row is still free is a loose forward reference —
+      // never share its live handle; the rounds iterate the truth in.
       let row_node = graph_chase(row_h)
       match row_node {
         GNode(NRowBound(row), _) => inf_add_row_unified(row),
-        GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], row_h)),
+        GNode(NRowFree(_), _)    => {
+          let N(rb2, _, _) = right
+          let stage_name = match rb2 { NExpr(VarRef(n)) => n, _ => "" }   // drift-audit: ignore — the documented no-key contract (a non-VarRef stage names no top-level entry; the env miss keeps the local/lambda share)
+          match env_lookup(stage_name) {
+            Some((_, _, FnScheme)) => (),
+            _ => inf_add_row(mk_ef_open([], row_h))
+          }
+        },
         _ => ()
       }
     },
@@ -4860,6 +4935,16 @@ fn free_in_eff_arg(arg) = match arg {
 
 fn row_var_is_free(v) = match graph_chase(v) {
   GNode(NRowFree(_), _) => true,
+  // A free node in ROW POSITION is a free row var regardless of its
+  // mint sort: the loose pre-registration and parse_type_ty mint
+  // function-type row vars as TYPE handles (NFree, reason e0 — the
+  // named parser residue), and a sort-blind freeness check made those
+  // tails INVISIBLE to collection while subst_row's catch-all SHARED
+  // them — every caller of an effect-polymorphic scheme then chained
+  // one live row (measured: infer_context's stored scheme mutating
+  // between its callers' reads; the E_EffectMismatch quartet). The
+  // three walks agree by tolerating the sort at the same leaf.
+  GNode(NFree(_), _)    => true,
   _                     => false
 }
 
@@ -4980,6 +5065,9 @@ fn subst_row_changes(eff, mapping) = {
         }
       },
       GNode(NRowFree(_), _) => find_mapping(mapping, graph_chase_handle(v)) >= 0,
+      // The T-handle row-var tolerance's check face (row_var_is_free's
+      // sibling): a free type-sort tail with a mapping hit IS a change.
+      GNode(NFree(_), _)    => find_mapping(mapping, graph_chase_handle(v)) >= 0,
       _ => false
     },
     _ => false
@@ -5098,8 +5186,20 @@ fn subst_row_build(eff, mapping) = {
         let EfRow(c, ia, it) = inner
         match it {
           EtVar(t2) => {
+            // The inner ABSENT rides the freshening — it IS the pending
+            // subtraction (an install's `tail ∖ handled` mask, minted by
+            // diff_row as this bound triple). Carrying only the present
+            // set here dropped every effect-polymorphic bracket's
+            // subtraction at instantiation: bracket(() => ping()) leaked
+            // Ping to the caller (measured — the absorb-poly fixture,
+            // and infer_context's three wheel callers reading the whole
+            // analysis core unsubtracted). The solved branch below
+            // always carried it; this arm is its mirror.
             let r = find_mapping(mapping, graph_chase_handle(t2))
-            if r >= 0 { ef_make(name_set_union(ns2, subst_eff_names(c, mapping)), ab2, EtVar(r)) }
+            if r >= 0 {
+              ef_make(name_set_union(ns2, subst_eff_names(c, mapping)),
+                      name_set_union(ab2, subst_eff_names(ia, mapping)), EtVar(r))
+            }
             else { ef_make(ns2, ab2, EtVar(v)) }
           },
           // The var is SOLVED to a closed/all row — the instance IS the
@@ -5116,6 +5216,14 @@ fn subst_row_build(eff, mapping) = {
         }
       },
       GNode(NRowFree(_), _) => {
+        let r = find_mapping(mapping, graph_chase_handle(v))
+        if r >= 0 { ef_make(ns2, ab2, EtVar(r)) } else { ef_make(ns2, ab2, EtVar(v)) }
+      },
+      // A free TYPE-sort node in row position freshens exactly like a
+      // row var (row_var_is_free's tolerance, the subst face): the
+      // catch-all used to SHARE these — the T-handle row-var class
+      // leaking one live tail into every instantiation.
+      GNode(NFree(_), _) => {
         let r = find_mapping(mapping, graph_chase_handle(v))
         if r >= 0 { ef_make(ns2, ab2, EtVar(r)) } else { ef_make(ns2, ab2, EtVar(v)) }
       },

@@ -1,0 +1,17 @@
+// expect: 42
+// The forward-referenced face of the effect-polymorphic absorption: the
+// caller precedes the bracket in source, so the trial reads the loose
+// pre-registration and only the convergence rounds see the masked final.
+// The rounds exist for exactly this — round 1's re-judgment reads
+// bracket's published subtraction and the caller's Pure proof lands.
+effect Ping { ping() -> Int }
+
+handler pong {
+  ping() => resume(7)
+}
+
+fn caller() -> Int with Pure = bracket(() => ping())
+
+fn bracket(body) = body() ~> pong
+
+fn main() = caller() * 6

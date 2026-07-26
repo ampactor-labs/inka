@@ -405,25 +405,35 @@
 > `mentl audit`, state.sh → state-as-projection, the fmt/tighten batch loop —
 > are the standing queue: ABSORPTION into verbs, never deletion of a safeguard.
 >
-> **THE WORKING DISCIPLINE, paid for 2026-07-25 (Morgan's cut caught both):**
+> **THE WORKING DISCIPLINE, paid for 2026-07-25 (Morgan's cut caught both)
+> — and it binds WHOEVER PROPOSES (Claude today, any intelligence behind
+> the Synth gate tomorrow): proposer-invariant, converging into `mentl
+> audit`:**
 > (1) **Source edits go through the Edit tool, never a python/sed write** —
 > the drift-audit and cursor-projection hooks fire on Edit-tool writes ONLY;
 > a heredoc `open().write()` edits the wheel OUTSIDE the medium's own gate
 > (a full day's comment-arc edits ran unaudited before the catch). (2) **The
-> medium's projections before shell reads**: the census's spans, `mentl
-> <file:line>`, and the verbs' own reports replace blob-offset seds and
-> grep archaeology; when a verb's report is missing a fact you need, teach
-> the VERB to report it (fmt's lost-line naming replaced the last external
-> diff in one edit). And the invocation is the INSTALLED SHIM — plain
-> `mentl <verb>` from any directory (`tools/install.sh` → ~/.local/bin, a
-> pointer to the live pin, current by construction); hand-assembling
-> `source wt-env && wt_run --dir … boot/mentl.wasm` per command is the
-> same ceremony one layer down (wt-env's helpers belong to the gate
-> scripts' internals, never to verb invocations — caught 2026-07-26
-> after a full session of it). (3) **A verb can write its own fixpoint**: fmt renders,
+> medium's projection FIRST — as an order, not a preference**: the opening
+> probe of ANY dig is a verb on the artifact (`mentl query/check/at
+> <address>`, the census's spans, the verbs' own reports); a shell read or
+> hand tool is legal only AFTER the medium's projection is shown missing,
+> and that absence is BANKED as the verb to grow in the same landing —
+> the unnamed confession is the violation ("gate-script internals" is not
+> a loophole: the invocation is the INSTALLED SHIM, plain `mentl <verb>`
+> from any directory; hand-assembling `source wt-env && wt_run …` per
+> command is the same ceremony one layer down, caught 2026-07-26 after a
+> full session of it). When a verb's report is missing a fact you need,
+> teach the VERB to report it (fmt's lost-line naming replaced the last
+> external diff in one edit). (3) **A probe that answered a question
+> GRADUATES — never deleted into memory**: an eprint probe is a larval
+> projection of the medium's own state (the movers line began as one);
+> before its landing closes it becomes a diagnostic, a query facet, or a
+> verb report — or its projection is a named peer. Deleting an instrument
+> without banking its projection discards a measurement channel the dig
+> paid to open. (4) **A verb can write its own fixpoint**: fmt renders,
 > re-parses, re-renders and writes the SECOND render — one invocation is
 > idempotent by construction; any verb whose output feeds its own reader
-> can carry the same internal loop. (4) **The uniform pass beats the
+> can carry the same internal loop. (5) **The uniform pass beats the
 > per-site family** — the comment weave's lesson at full scale: nine
 > hand-closed families of one probe-consume law were replaced by ONE
 > span-keyed attachment pass plus ONE emission point at the shared render

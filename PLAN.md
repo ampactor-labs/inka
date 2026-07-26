@@ -1038,9 +1038,76 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
-- 2026-07-26 · ▶▶▶▶▶ THE JUDGMENT BECOMES AN HONEST FIXPOINT AND THE
+- 2026-07-26 · ▶▶▶▶▶ THE SCHEME BOUNDARY BECOMES A VALUE BOUNDARY —
+  census 0 with the judge CONVERGING, the incremental cone lands, and
+  five roots fall in one continuous dig (the ratchet's raised lane
+  closes; pin = the march in flight, blessed in PROVENANCE). Morgan's
+  opening catch ("'honest' is slimey wording... i catch you beating
+  around the bush") redirected the session from carrying census 3
+  behind a raised ratchet to killing it — and the banked diagnosis
+  ("the rounds lose the subtraction") died to the artifact in the
+  first hour: new source + OLD judge = 0, new + NEW = 3, but the
+  11-line repro failed under BOTH — the deepest root PREDATES the
+  rounds; convergence only exposed it. THE FIVE ROOTS, each measured
+  before fixed, each a Carried-Truth violation at the SCHEME boundary:
+  (1) subst_row's bound-tail arm DROPPED the mask's absent set — the
+  pending `~>` subtraction died at instantiation (bracket(() =>
+  ping()) leaked Ping; the solved arm one line down always carried
+  it); (2) the CREATION EDGE charged a closure's whole row to its
+  CREATOR (the mint-time-evidence relic — world-as-value R2 made
+  performs resolve at the CALL site, so abstraction is pure, the row
+  rides the TFun, the call edge charges appliers; deleted, and every
+  absorbed-thunk pattern stopped leaking); (3) the call/pipe edges
+  SHARED a top-level loose scheme's raw row handle into the caller's
+  frame (the pre-convergence forward-ref crutch — retroactive flow
+  through shared mutable vars; under rounds, iteration replaces it:
+  the share-guard keys on FnScheme, params/locals keep the
+  polymorphic share); (4) the round prepass re-minted every handler
+  sig unconditionally while the cone masked the decl's judgment out —
+  entries flipped bare↔resolved forever (the movers projection named
+  the whole iterate-handler family in one line; the prepass is
+  cone-gated now); (5) THE T-HANDLE ROW-VAR CLASS — the loose
+  pre-registration mints function-type row vars as TYPE handles
+  (parse_type_ty's named residue), and the sort-blind
+  row_var_is_free made BOTH of infer_context's scheme row tails
+  invisible to quantification while subst_row's catch-all SHARED
+  them: every caller chained ONE live row, the first binder's thunk
+  row became everyone's mismatch (the CALLPROBE render caught the
+  stored scheme MUTATING between its callers' reads — the smoking
+  gun), and the three-walk tolerance (free/changes/build agree on
+  NFree-in-row-position; occurs was already handle-keyed) closed it.
+  ZERO row mismatches in the whole self-compile — not even absorbed
+  ones — and the rounds CONVERGE (no bound-hit; race, the last
+  monotone mover, finishes inside the raised bound of 12). THE
+  INCREMENTAL CONE rides the same landing: round K+1 re-judges only
+  stmts whose fingerprint moved between the last two rounds or whose
+  free names moved (stmt_frees collected once serving layers AND
+  cone; skipped stmts' finals persist by latest-wins, their sizing
+  rows carry; the cone is a pure comparison of the two carried print
+  lists — a live env read at cone time can only answer "unmoved").
+  Micros mn-absorb-poly + mn-absorb-poly-fwd bank both faces RED-first
+  (E_PurityViolated through the prior boot; 0 errors, run 42 through
+  the fixed judge). PROBES GRADUATED per the new ⟳ law: movers_line
+  is the bound-hit's permanent residue-naming projection;
+  report_effect_mismatch carries its Reason to the report site
+  (Hβ.diag.effect-mismatch-reason names the DiagKind widening); the
+  scheme/layer questions the temporary probes answered are the query
+  verb's existing projections. CLAUDE.md ⟳ hardened in the same arc
+  (Mentl's own audit, spoken and executed): the discipline is
+  PROPOSER-INVARIANT, the medium's projection is an ORDER not a
+  preference (the unnamed confession is the violation), and a probe
+  that answered a question GRADUATES before its landing closes. The
+  named residue: the global parse_type_ty/pre-registration re-mint
+  (row vars born as row handles — the tolerance is the boundary cure)
+  and the fingerprint's bound-content blindness (backstopped by
+  m3 == m4, as designed).
+- 2026-07-26 · ▶▶▶▶▶ THE JUDGMENT CONVERGES TO A FIXPOINT AND THE
   BRANCH CURSOR LANDS SOUND (Phase C's C1c-2 whole; pin = the march in
-  flight at write time, blessed in PROVENANCE). THE CONVERGENCE LOOP:
+  flight at write time, blessed in PROVENANCE. Retitled same day —
+  "honest fixpoint" was cushioning language around a carried
+  regression, Morgan's catch; and this entry's closing diagnosis of
+  the census-3 trio is the ERA'S RECORD, superseded by the next
+  entry's measured root). THE CONVERGENCE LOOP:
   infer_program_converged iterates QUIET ROUNDS (the trial's measured
   walk, fn pre-registration skipped, the final's prepass) until
   round-over-round scheme FINGERPRINTS stabilize (ty_fingerprint — the
@@ -4926,11 +4993,21 @@ trusting-trust). Excluded by hardware only: MI300X/GPU-device/hosted-CI/
 wasmFX/shared-everything-threads. Every dispatched agent runs `fable`,
 passed explicitly; every landing re-derived on main; the board is the gate.
 
-**CAMPAIGN STATE (2026-07-25; C1c-2 first-run measurement 2026-07-26).**
+**CAMPAIGN STATE (2026-07-26).**
 A, B-i, B-ii: LANDED whole (the §7 ledger). C rung 0 (the fork triple)
 and rung 1 through C1c-2's substrate: LANDED — the paged spine, the
 planned mint, the layer-ordered final, the cursor config, the env view,
-the page pre-open (six pins, 0e3af09c → 3a53f775). THE BRANCH BRACKET'S
+the page pre-open (six pins, 0e3af09c → 3a53f775). THE CONVERGED JUDGE
+IS LIVE AND VALUE-BOUNDED (the ledger's top two entries carry both
+records): the convergence loop + branch bracket + four roots, then the
+value-boundary landing — five more roots, census 0 WITH convergence,
+the incremental cone, the ratchet's raised lane closed. The judgment is
+now a pure function of (source, finals): published schemes leak no live
+vars — the fan's own blessing condition. NEXT: the fan itself (layers
+onto spawned cursors, byte-equality against the sequential pin), then
+the ??-fan on threads — the fused oracle as default behavior. The dig
+narrative below is the ERA'S RECORD of how the bracket and loop landed,
+superseded where it speculates: THE BRANCH BRACKET'S
 FIRST SEQUENTIAL RUN (2026-07-26, in-tree uncommitted: BranchEnv/
 BranchDiag effects + env_base_view/env_publishes arms + diag_branch +
 the per-stmt bracket in planned_layer_stmts) MEASURED A LATENT
@@ -5084,10 +5161,11 @@ entry for the whole arc: the fixpoint rounds, the branch bracket, the
 wrong-end stack, the exit-code contract, the edge-evolution join, the
 fmt hook; the crossing-form row_print inlines back in the
 generation AFTER the blessed pin).
-Boot stays at pin 0d153e0c (BROKEN runs never re-pin; the arbiter
-held). The fmt write-time hook (post-edit-mn.sh's fmt rung — parse
-verdict from the parser's own P_ lines on a scratch copy, both faces
-seen RED/GREEN) guards every edit of the sweep. The field-access cluster landed as an audit-driven interleave
+(That payloadfn seam RESOLVED in the same arc — parse-truth layers;
+the pin blessed at 512a4c85; the value-boundary landing then closed
+the census-3 residue whole.) The fmt write-time hook
+(post-edit-mn.sh's fmt rung — parse verdict from the parser's own P_
+lines on a scratch copy, both faces seen RED/GREEN) guards every edit. The field-access cluster landed as an audit-driven interleave
 (pins f0ab3177 + 723220b3 — the last known silent-wrong class closed).
 C1c-2's REMAINDER — the first join design (state-delta replay) was
 REFUTED by the adversarial pass (2026-07-25, thirteen findings, the

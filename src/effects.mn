@@ -342,24 +342,24 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
   match ta {
     EtClosed => match tb {
       EtClosed =>
-        if name_set_eq(pa, pb) { () } else { report_effect_mismatch(a, b, span) },
+        if name_set_eq(pa, pb) { () } else { report_effect_mismatch(a, b, span, reason) },
       EtVar(vb) =>
         // Closed(A) ~ (B + tail∖ab): tail := (A ∖ B) minus what b masks —
         // a masked name demanded by A is a genuine mismatch.
         if forbidden_names_disjoint(pa, ab) {
           graph_bind_row(vb, ef_make(name_set_diff(pa, pb), [], EtClosed), Located(span, reason))
-        } else { report_effect_mismatch(a, b, span) },
+        } else { report_effect_mismatch(a, b, span, reason) },
       EtAll =>
-        report_effect_mismatch(a, b, span)
+        report_effect_mismatch(a, b, span, reason)
     },
     EtVar(va) => match tb {
       EtClosed =>
         if forbidden_names_disjoint(pb, aa) {
           graph_bind_row(va, ef_make(name_set_diff(pb, pa), [], EtClosed), Located(span, reason))
-        } else { report_effect_mismatch(a, b, span) },
+        } else { report_effect_mismatch(a, b, span, reason) },
       EtVar(vb) =>
         if va == vb {
-          if name_set_eq(pa, pb) { () } else { report_effect_mismatch(a, b, span) }
+          if name_set_eq(pa, pb) { () } else { report_effect_mismatch(a, b, span, reason) }
         } else {
           graph_bind_row(va, ef_make(name_set_diff(pb, pa), name_set_diff(ab, pa), EtVar(vb)), Located(span, reason))
         },
@@ -368,24 +368,29 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
         // negative capability forward; the knowns must avoid B.
         if forbidden_names_disjoint(pa, ab) {
           graph_bind_row(va, EfRow([], ab, EtAll), Located(span, reason))
-        } else { report_effect_mismatch(a, b, span) }
+        } else { report_effect_mismatch(a, b, span, reason) }
     },
     EtAll => match tb {
       EtAll =>
         if name_set_eq(aa, ab) && name_set_eq(pa, pb) { () }
-        else { report_effect_mismatch(a, b, span) },
+        else { report_effect_mismatch(a, b, span, reason) },
       EtVar(vb) =>
         if forbidden_names_disjoint(pb, aa) {
           graph_bind_row(vb, EfRow([], aa, EtAll), Located(span, reason))
-        } else { report_effect_mismatch(a, b, span) },
+        } else { report_effect_mismatch(a, b, span, reason) },
       EtClosed =>
-        report_effect_mismatch(a, b, span)
+        report_effect_mismatch(a, b, span, reason)
     }
   }
 }
 
 
-fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate =
+// The reason rides to the report site so the mismatch can NAME its
+// construction (it pinned the E_EffectMismatch quartet to one call form
+// in a single read). Carrying it into the rendered diagnostic is the
+// named peer Hβ.diag.effect-mismatch-reason — DiagKind's ctor widens
+// with a Reason field and diag_message renders it through show_reason.
+fn report_effect_mismatch(ref a, ref b, ref span, ref reason) with !Mutate =
   report(EEffectMismatch(a, b, span))
 
 // Ground: no row variable anywhere the dispatch would need resolved.

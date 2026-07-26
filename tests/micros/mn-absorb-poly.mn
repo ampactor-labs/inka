@@ -1,0 +1,19 @@
+// expect: 42
+// The effect-polymorphic absorption crossing a scheme boundary: bracket's
+// row is its thunk's row minus the install's handled set (the pending
+// mask, diff_row's bound triple), generalized and instantiated at the
+// caller. The caller proves Pure — the subtraction must survive
+// instantiation (subst_row carries the mask's absent set; the drop was
+// measured as Ping leaking here, and as infer_context's three wheel
+// callers reading the whole analysis core unsubtracted).
+effect Ping { ping() -> Int }
+
+handler pong {
+  ping() => resume(7)
+}
+
+fn bracket(body) = body() ~> pong
+
+fn caller() -> Int with Pure = bracket(() => ping())
+
+fn main() = caller() * 6

@@ -415,6 +415,9 @@ fn cw_attach_all(ref runs: [CwRun], ref leads, ref trails, k, next_target) with 
     let r = runs[k]
     let (_, _, _, _, th) = trails[k]
     let (_, _, _, _, lh) = leads[k]
+    // A trailing run whose line holds no node (the arm's body sits on
+    // another line; a type-field line mints nothing) falls back to its
+    // LEAD candidate before inheriting.
     let own_target = if r.trailing && th != 0 { th } else { lh }
     // Blank-separated blocks share one following declaration: each NODE
     // competes only for its nearest preceding run, so an earlier run has
@@ -1356,8 +1359,8 @@ fn parse_let_expr(ref tokens, pos, start_span) = {
   // explicit block was the final expression — nothing followed it.
   match body {
     N(NExpr(BlockExpr(stmts2, final2)), _, _) =>
-      (nexpr(desugar_block([let_stmt] ++ stmts2, final2, start_span), start_span), p7),
-    _ => (nexpr(desugar_block([let_stmt], body, start_span), start_span), p7),
+      (desugar_block([let_stmt] ++ stmts2, final2, start_span), p7),
+    _ => (desugar_block([let_stmt], body, start_span), p7),
   }
 }
 
@@ -1705,7 +1708,7 @@ fn pat_param_and_let(pat, span: ValidSpan) = match pat {
 // (byte-identical to a fn whose params are all bare names).
 fn bind_param_destructures(lets, body, span: ValidSpan) =
   if len(lets) == 0 { body }
-  else { nexpr(desugar_block(lets, body, span), span) }
+  else { desugar_block(lets, body, span) }
 
 // Convert a list of parsed expr nodes (paren-lambda params) into a TParam list
 // PLUS the destructure-let bindings — each elem's pattern (expr_to_pat) drives
@@ -2027,7 +2030,7 @@ fn record_field_copy_suffix(src, dst, src_idx, dst_idx, n) = {
 fn parse_block_expr(ref tokens, pos, start_span) = {
   let buf = make_list(8)
   let (final_buf, final_count, final_e, p) = parse_block_body(tokens, pos, buf, 0)
-  (nexpr(desugar_block(slice(final_buf, 0, final_count), final_e, start_span), start_span), p)
+  (desugar_block(slice(final_buf, 0, final_count), final_e, start_span), p)
 }
 // The position past any separator/comment mix — a plain-Int lookahead for
 // the block's is-this-the-final-expr test (the collect happens only in the
@@ -2100,20 +2103,25 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
 // construction. The audit: a let-destructure RE-DERIVES match; unify it INTO
 // match at the node's birth, never re-derive it downstream.
 // (protocol_one_graph_two_operations.)
-fn desugar_block(stmts, final_e, span) = match find_destructure_let(stmts, 0) {
-  None    => BlockExpr(stmts, final_e),
+// desugar_block returns the minted NODE (not a bare body): the
+// head-destructure match mints AT THE LET'S SPAN, so the weave pass's
+// span-tie rule (latest mint wins) resolves a body-head comment to the
+// LIVE match instead of the dissolved let — the last silent prose-drop
+// class the conservation gate named.
+fn desugar_block(stmts, final_e, span: ValidSpan) = match find_destructure_let(stmts, 0) {
+  None    => nexpr(BlockExpr(stmts, final_e), span),
   Some(i) => {
     let N(NStmt(LetStmt(pat, v, _)), lsp, lh) = list_index(stmts, i)
     let rest_stmts = slice(stmts, i + 1, len(stmts))
     // The arm body is exactly what follows the destructure — a bare final when
     // nothing intervenes, else the desugared remainder. No redundant block.
     let arm_body = if len(rest_stmts) == 0 { final_e }
-                   else { nexpr(desugar_block(rest_stmts, final_e, lsp), lsp) }
+                   else { desugar_block(rest_stmts, final_e, lsp) }
     let m = MatchExpr(v, [(pat, arm_body)])
     // A destructure at the head IS the match (no empty-prefix block); otherwise
     // the prefix stmts carry the match as their final. Byte-for-byte a
     // hand-written `match`.
-    if i == 0 { m } else { BlockExpr(slice(stmts, 0, i), nexpr(m, lsp)) }
+    if i == 0 { nexpr(m, lsp) } else { nexpr(BlockExpr(slice(stmts, 0, i), nexpr(m, lsp)), span) }
   }
 }
 

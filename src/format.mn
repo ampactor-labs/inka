@@ -664,10 +664,16 @@ fn render_branch_block(n) with GraphRead + Memory + Alloc + !Mutate + Intern = m
   _ => "\{\n{indent_block(render_grouped_body(n))}\n\}"
 }
 
+// The else-if DESTRUCTURES its child node and renders the pieces, so the
+// child's uniform emission never fires — its attached prose emits here,
+// uncuddling the chain at exactly the prose-carrying link.
 fn render_else_block(el) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(el) {
   NExpr(LitUnit) => "",
-  NExpr(IfExpr(c2, t2, e2)) =>
-    " else if {render_tokens_for(c2)} {render_branch_block(t2)}{render_else_block(e2)}",
+  NExpr(IfExpr(c2, t2, e2)) => {
+    let core = "else if {render_tokens_for(c2)} {render_branch_block(t2)}{render_else_block(e2)}"
+    let ec = graph_comment_at(node_handle(el))
+    if ec == "" { " {core}" } else { "\n//{replace(ec, "\n", "\n//")}\n{core}" }
+  },
   _ => " else {render_branch_block(el)}"
 }
 

@@ -1038,6 +1038,19 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶▶▶ ZERO PROSE LOST — the weave conserves the whole
+  wheel (· pin 6cd7a75e; the comment arc's terminus: 2,803 → 0 on all
+  50 files, one-invocation idempotence, measured by the verb's own
+  lexical gate). Two closures: the else-if DESTRUCTURES its child so
+  its uniform emission never fired (render_else_block emits the nested
+  if's prose itself, uncuddling at the prose link — the lexer's
+  two-char table was the class); and desugar_block returns the MINTED
+  NODE with the head-destructure match at THE LET'S SPAN, so the
+  span-tie rule resolves body-head prose to the live match, never the
+  dissolved let (callers' wraps delete with the contract). The fmt
+  summit's prose gate is fully open; remaining swap-gates: sugar
+  re-preservation (the __dp lambda-destructure render) + the
+  drift-audit leading-marker accommodation. Board whole.
 - 2026-07-25 · ▶▶▶▶ THE WEAVE INVERTS — one attachment pass, one
   emission point; ~50 sites delete (· pin ffc3fd58). Morgan's cut
   ("isn't there a better way") ended the mole war: attach_comment_weave

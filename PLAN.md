@@ -1038,6 +1038,21 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE PROBE LAW COMPLETES — 2,803 → 35 (99.8%
+  conservation · pin 4e7d5013). Two more probe-consume sites fell to
+  the verb's own lost-line reports: the resume-with update list's
+  comma probe (the drift-audit markers live exactly there) and
+  binop_loop's ENTRY skip (prose before a chain continuation — `//
+  why` above `~> affine_ledger` — now attaches to the following stage
+  when an operator follows, returns pre-run when none does). infer 28
+  → 3; main fully conserved. THE TRUE REMAINDER: 35 lines, one
+  structural leaf — trailing comments on record-TYPE fields, where a
+  carrier cannot live (TRecord is a TYPE; a node in its field tuple
+  would make prose part of type identity) — named
+  Hβ.parser.record-field-comment-attach with that reason. The swap
+  bridge: true those 35 authored sites to carriable positions + the
+  drift-audit hook learns the leading-position marker. Board whole;
+  idempotent-all-50.
 - 2026-07-25 · ▶▶ THE CHAIN BREAKS AT PROSE + THE GATE NAMES ITS LOSSES
   (· pin 45153159). Prose after a binary operator belongs to the RIGHT
   operand: binop_loop (the one path pipes and binops share) collects

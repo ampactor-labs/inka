@@ -1003,6 +1003,10 @@ fn parse_resume_state_updates(ref tokens, pos) = {
   let p_eq = expect(tokens, skip_ws(tokens, pos + 1), TEq)
   let (init, p_after_init) = parse_expr(tokens, skip_ws(tokens, p_eq))
   let field = {name: name, init: init}
+  // The comma PROBE returns the pre-probe position on a miss (the
+  // non-consuming probe law): the trailing marker on an update line —
+  // the drift-audit suppressions live exactly there — stays for the
+  // block layer's backward attach.
   let p_next = skip_ws(tokens, p_after_init)
   if at(tokens, p_next, TComma) {
     let p_la = skip_ws(tokens, p_next + 1)
@@ -1017,7 +1021,7 @@ fn parse_resume_state_updates(ref tokens, pos) = {
       _ => ([field], p_next)
     }
   } else {
-    ([field], p_next)
+    ([field], p_after_init)
   }
 }
 
@@ -1237,7 +1241,11 @@ fn parse_binop(ref tokens, pos, min_prec, slot) = {
 }
 
 fn binop_loop(ref tokens, left, pos, min_prec, slot) = {
-  let p = skip_ws(tokens, pos)
+  // The operator PROBE scans the run without consuming it: prose before a
+  // chain continuation (`// why\n  ~> handler`) belongs to the FOLLOWING
+  // stage when an operator follows, and to the statement layer when none
+  // does (the else returns the pre-run position).
+  let (pretext, presp, p) = collect_leading_comments(tokens, pos, "", span_zero())
   let k = kind_at(tokens, p)
   let prec = op_prec(k)
   if prec >= min_prec && prec > 0 {
@@ -1254,6 +1262,7 @@ fn binop_loop(ref tokens, left, pos, min_prec, slot) = {
     // operand to emit it.
     let (otext, osp, po) = collect_leading_comments(tokens, p + 1, "", span_zero())
     let (right, p2) = parse_binop(tokens, po, prec + 1, slot)
+    if len(pretext) > 0 { graph_attach_comment(node_handle(right), pretext, presp) } else { () }
     if len(otext) > 0 { graph_attach_comment(node_handle(right), otext, osp) } else { () }
     let N(_, left_span, _) = left
     let combined_span = span_join(left_span, op_span)

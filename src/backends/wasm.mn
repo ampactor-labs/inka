@@ -4372,23 +4372,23 @@ fn emit_const(v, h) = match v {
 fn emit_float_const(f: Float, r) = match r {
   RF64 => {
     wat_emit("    (f64.const ")
-    wat_emit(float_to_str(f))
+    wat_emit(float_to_str_bits(f))
     wat_emit(")\n")
   },
   RF32 => {
     wat_emit("    (f32.const ")
-    wat_emit(float_to_str(f))
+    wat_emit(float_to_str_bits(f))
     wat_emit(")\n")
   },
   RV128 => {
     wat_emit("    (v128.const f32x4 ")
-    wat_emit(float_to_str(f))
+    wat_emit(float_to_str_bits(f))
     wat_emit(" ")
-    wat_emit(float_to_str(f))
+    wat_emit(float_to_str_bits(f))
     wat_emit(" ")
-    wat_emit(float_to_str(f))
+    wat_emit(float_to_str_bits(f))
     wat_emit(" ")
-    wat_emit(float_to_str(f))
+    wat_emit(float_to_str_bits(f))
     wat_emit(")\n")
   },
   _ => {
@@ -6990,7 +6990,7 @@ fn emit_low_value_const(lv) = match lv {
   // width. The pattern and expression positions project the SAME repr.
   LFloat(f)  => {
     wat_emit("    (f64.const ")
-    wat_emit(float_to_str(f))
+    wat_emit(float_to_str_bits(f))
     wat_emit(")\n")
   },
   // A string literal in pattern position is the SAME interned constant the

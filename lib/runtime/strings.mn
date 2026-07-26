@@ -483,10 +483,64 @@ fn str_literal_5(s) with Pure = {
 // i32.div_s against extract_digits' f64 slot (m3's one residual mismatch).
 // The inference-order completion is the named band
 // Hβ.infer.scc-ordered-walk; the pin is the Intent Boundary bridging it.
+// The SHORTEST FAITHFUL render: the fewest digits whose parse-back equals
+// the value exactly — 1.0 renders "1.0", never the seventeen-digit
+// inflation. The oracle is parse_float ITSELF (the lexer's own conversion,
+// lexer.mn's TFloatLit — one conversion, one home), so render∘parse
+// identity holds under the medium's real reader by construction. The
+// ascent tries the truncated digit run, then the last digit rounded up
+// (the 9-ripple case falls through to a longer run — always exact,
+// occasionally one digit past optimal); seventeen digits always suffice
+// for an f64, so the ascent terminates at today's render.
 fn float_render_positive(f: Float) with Memory + Alloc = {
   let exp = float_floor_log10(f)
-  let digits = float_extract_digits(f / float_pow10(exp), 0, 17, make_list(0))
-  float_format_digits(digits, exp)
+  float_render_shortest(f, f / float_pow10(exp), exp, 1)
+}
+
+// The BITS-FAITHFUL render — seventeen significant digits, which uniquely
+// identify an f64 under any CORRECTLY-ROUNDED reader. The emit boundary
+// must use THIS projection, never the shortest one: an emitted constant is
+// re-read by the assembler's correctly-rounded conversion, while the
+// shortest render's oracle is parse_float — and the two readers DISAGREE
+// (measured: parse_float("0.3") != the wat-born 0.3; parse_float's naive
+// digit/scale summation is not correctly rounded — the named class
+// Hβ.runtime.parse-float-correctly-rounded, whose closing dissolves this
+// split back into one render).
+fn float_to_str_bits(f) with Memory + Alloc = {
+  if float_is_nan(f) { str_literal_5("NaN") }
+  else if float_is_inf(f) {
+    if float_is_negative(f) { str_literal_5("-Inf") }
+    else { str_literal_5("Inf") }
+  }
+  else if float_is_zero(f) {
+    if float_is_negative(f) { str_literal_5("-0.0") }
+    else { str_literal_5("0.0") }
+  }
+  else {
+    let sign = float_is_negative(f)
+    let abs_f = if sign == 1 { 0.0 - f } else { f }
+    let exp = float_floor_log10(abs_f)
+    let digits = float_extract_digits(abs_f / float_pow10(exp), 0, 17, make_list(0))
+    let rendered = float_format_digits(digits, exp)
+    if sign == 1 { str_of_single_byte(45) ++ rendered }
+    else { rendered }
+  }
+}
+
+fn float_render_shortest(f: Float, scaled: Float, exp, nd) with Memory + Alloc = {
+  let digits = float_extract_digits(scaled, 0, nd, make_list(0))
+  let cand = float_format_digits(digits, exp)
+  if nd >= 17 { cand }
+  else if parse_float(cand) == f { cand }
+  else {
+    let last = digits[nd - 1]
+    if last < 9 {
+      let cand2 = float_format_digits(list_set(digits, nd - 1, last + 1), exp)
+      if parse_float(cand2) == f { cand2 }
+      else { float_render_shortest(f, scaled, exp, nd + 1) }
+    }
+    else { float_render_shortest(f, scaled, exp, nd + 1) }
+  }
 }
 
 // float_floor_log10: floor(log10(f)) for positive f.
@@ -537,17 +591,22 @@ fn float_format_fixed(digits, exp) with Memory + Alloc = {
   // exp=0 and digits=[1,2,3] → "1.23"
   // exp=-1 and digits=[1,2,3] → "0.123"
   // exp=-2 and digits=[1,2,3] → "0.0123"
+  // The digit list is exactly the FAITHFUL digits (the shortest render
+  // passes as few as one): the integer side zero-fills its tail through
+  // digit_at's total read, and the fraction ends at the LIST — the old
+  // fixed 17 end is what inflated every float to seventeen digits.
+  let n = len(digits)
   let int_digits = exp + 1
   if int_digits <= 0 {
     // All digits are fractional; need leading zeros after "0."
     let zero = str_of_single_byte(48)           // "0"
     let dot = str_of_single_byte(46)            // "."
     let leading = float_zero_pad(0 - int_digits)  // |int_digits| zeros // drift-audit: ignore
-    let frac = float_digits_to_str(digits, 0, 17)
+    let frac = float_digits_to_str(digits, 0, n)
     zero ++ dot ++ leading ++ frac
   } else {
     let int_part = float_digits_to_str(digits, 0, int_digits)
-    let frac_part = float_digits_to_str(digits, int_digits, 17)
+    let frac_part = float_digits_to_str(digits, int_digits, n)
     let dot = str_of_single_byte(46)
     int_part ++ dot ++ frac_part
   }
@@ -647,8 +706,12 @@ fn float_is_negative_zero(f) = f == 0.0 - 0.0 && 1.0 / f < 0.0
 // ─── Digit list helpers ───────────────────────────────────────────
 // A digit list is a flat Mentl list of Int (values 0-9).
 
+// Total over any index: past the list is the zero digit — this is what
+// makes float_digits_to_str's documented zero-padding TRUE (the raw
+// list_index here trapped the first time a SHORT digit list arrived; the
+// old seventeen-digit caller never exposed it).
 fn digit_at(digits, i) with Memory = {
-  list_index(digits, i)
+  if i < len(digits) { list_index(digits, i) } else { 0 }
 }
 
 fn parse_int_digits(s, slen, i, acc) with Memory = {

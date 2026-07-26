@@ -1070,8 +1070,18 @@ between the wheel and its ultimate form, held open on purpose.
   formats clean where it trapped; the remaining drops classify to
   the expression-interior positions the parser never attaches —
   Hβ.parser.expr-interior-comment-attach, a parser refinement, not
-  render debt). Remaining: 6 (shortest-round-trip floats); then the
-  SUMMIT.
+  render debt). Rung 6 LANDED same day (pin 997e42f5 — the
+  shortest faithful render whose oracle is parse_float itself, the
+  lexer's own conversion; en route the probe named
+  Hβ.runtime.parse-float-correctly-rounded: parse_float's naive
+  digit/scale summation disagrees with the assembler's
+  correctly-rounded reader — parse_float("0.3") != the wat-born 0.3,
+  measured — so the EMIT boundary keeps the bits-faithful
+  seventeen-digit projection (float_to_str_bits) until the parse is
+  correctly rounded, and digit_at's false zero-pad doc became true
+  at the one reader). ALL SIX RUNGS LANDED; the SUMMIT (whole-wheel
+  fmt → census 0 → fixpoint → formatted source canonical, retiring
+  the 778) is the next fmt arc.
 - 2026-07-25 · ▶▶ HANDLER-CONFIG DEFAULTS + THE BASE-FRESHNESS
   CONTRACT + THE PUSH (pin 9de2ecc4). The product law lands at the
   handler decl: config goes [String] → [TParam] — the fn-param

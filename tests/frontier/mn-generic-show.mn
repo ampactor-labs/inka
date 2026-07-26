@@ -7,6 +7,9 @@
 // var-touching op is a render still twins. RED (run 1) on the pre-build boot.
 fn describe(x) with Memory + Alloc + Show = "val: " ++ to_string(x)
 
+// EXPECTATION TRUED (2026-07-25, the shortest-faithful float render):
+// the old banked "2.5000000000000000" was the seventeen-digit inflation
+// era's text; 2.5 is exactly representable and renders shortest.
 fn main() with Memory + Alloc + Show = {
-  if describe(2.5) == "val: 2.5000000000000000" { 42 } else { 1 }
+  if describe(2.5) == "val: 2.5" { 42 } else { 1 }
 }

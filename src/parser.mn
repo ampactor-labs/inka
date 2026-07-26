@@ -2005,11 +2005,16 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
       let (b1, c1) = push_node(buf, count, stmt)
       parse_block_body(tokens, p2t, b1, c1)
     } else {
+      // The attach target is the node the statement LIST will hold: a
+      // mid-block expr wraps in a fresh ExprStmt node, so attaching to the
+      // inner expr before the branch put the prose on a handle the block
+      // render never reads (measured: every mid-block statement comment
+      // dropped while let/fn statements carried theirs).
       let (expr, p2) = parse_expr(tokens, p)
-      attach_leading_prose(tokens, pos, node_handle(expr))
-      let p2t = attach_trailing_comment(tokens, p2, node_handle(expr))
-      let p3 = peek_past_comments(tokens, p2t)
+      let p3 = peek_past_comments(tokens, p2)
       if at(tokens, p3, TRBrace) {
+        attach_leading_prose(tokens, pos, node_handle(expr))
+        let p2t = attach_trailing_comment(tokens, p2, node_handle(expr))
         // Prose between the last expr and `}` has the expr as its finest
         // preceding node and nothing following — it attaches there, never
         // vanishes into layout.
@@ -2017,7 +2022,10 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
         (buf, count, expr, p3 + 1)
       } else {
         let start = span_at(tokens, p)
-        let (b1, c1) = push_node(buf, count, nstmt(ExprStmt(expr), start))
+        let wrapped = nstmt(ExprStmt(expr), start)
+        attach_leading_prose(tokens, pos, node_handle(wrapped))
+        let p2t = attach_trailing_comment(tokens, p2, node_handle(wrapped))
+        let (b1, c1) = push_node(buf, count, wrapped)
         parse_block_body(tokens, p2t, b1, c1)
       }
     }

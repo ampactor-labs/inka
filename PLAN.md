@@ -1038,6 +1038,22 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶ THE ATTACH TARGET IS THE LIST'S NODE — the sixth
+  comment family (mid-block statements) + the content-matched census
+  (· pin ae600b3b). A mid-block expr statement wraps in a fresh
+  ExprStmt node AFTER the leg's leading attach — prose landed on the
+  inner expr's handle while the block render reads the wrapper's;
+  every mid-block statement comment dropped while let/fn carried
+  theirs. The fix attaches per-branch to the node the statement list
+  holds. IDEMPOTENT-ALL-50 holds; the line-count metric SATURATED
+  (trailing→own-line movement inflates lines while preserving
+  content), so the honest measure is the content-matched census: 513
+  authored comment lines not surviving — file tails 155 (Module-handle
+  attach + end-of-render emission), before else/else-if 150 (the else
+  probe consumes the run; the else node is the target), match heads
+  45, variant-inline 19, argument-interior ~80.
+  Hβ.parser.expr-interior-comment-attach carries exactly those shapes
+  with the six-times-proven recipe. Board whole at the pin.
 - 2026-07-25 · ▶▶▶ THE PROSE JOINS THE WEAVE — five comment families
   attach, ops and variants become addressable, the probe law lands
   (· pin 694716c1). The summit's 2,803 dropped comment lines fall to

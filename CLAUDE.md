@@ -414,7 +414,13 @@
 > <file:line>`, and the verbs' own reports replace blob-offset seds and
 > grep archaeology; when a verb's report is missing a fact you need, teach
 > the VERB to report it (fmt's lost-line naming replaced the last external
-> diff in one edit). (3) **A verb can write its own fixpoint**: fmt renders,
+> diff in one edit). And the invocation is the INSTALLED SHIM — plain
+> `mentl <verb>` from any directory (`tools/install.sh` → ~/.local/bin, a
+> pointer to the live pin, current by construction); hand-assembling
+> `source wt-env && wt_run --dir … boot/mentl.wasm` per command is the
+> same ceremony one layer down (wt-env's helpers belong to the gate
+> scripts' internals, never to verb invocations — caught 2026-07-26
+> after a full session of it). (3) **A verb can write its own fixpoint**: fmt renders,
 > re-parses, re-renders and writes the SECOND render — one invocation is
 > idempotent by construction; any verb whose output feeds its own reader
 > can carry the same internal loop. (4) **The uniform pass beats the

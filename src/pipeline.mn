@@ -559,7 +559,7 @@ fn query(entry_module, question) = {
       // nothing and mis-parsed "tutorial/foo" as two variable refs).
       let ast = driver_check_entry(entry_module)
       let q = parse_query_string(question)
-      ask(q) |> render_query_result |> print_string
+      ask(q) |> render_query_result |> println
     }
       ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
       ~> query_default
@@ -1231,6 +1231,10 @@ fn render_audit(entries) = {
 
 // Query rendering — delegates to query.mn for Question parsing
 
+fn render_ref_spans(ref spans, i) with Memory + Alloc =
+  if i >= len(spans) { "" }
+  else { "\n  at {show_span(spans[i])}{render_ref_spans(spans, i + 1)}" }
+
 fn render_query_result(result) = match result {
   QRType(ty, reason) => "→ {show_type(ty)}\n  Reason: {show_reason(reason)}",
   QRIntent(effs) => {
@@ -1248,7 +1252,12 @@ fn render_query_result(result) = match result {
   QROwnership(params) => "→ {int_to_str(len(params))} params",
   QRWhy(reason) =>
     show_reason(reason),
-  QRRefs(spans) => "→ {int_to_str(len(spans))} reference(s)",
+  // The refs facet renders WHAT the graph computed, not just how much:
+  // one located line per inbound use-edge (the seam the propose-facet fix
+  // convicted once already — the graph computed it, the terminal threw it
+  // away). Every "who calls X" grep this replaces was a re-derivation of
+  // edges the weave holds.
+  QRRefs(spans) => "→ {int_to_str(len(spans))} reference(s){render_ref_spans(spans, 0)}",
   QRVerifyDebt(obligations) => "→ {int_to_str(len(obligations))} verification obligations pending",
   QRHandlerProvider(provider) => match provider {
     Some(name) => "→ handled by {name}",

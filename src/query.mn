@@ -335,17 +335,26 @@ fn walk_chain(handle, depth) with !Mutate = {
 
 fn refs_of_name(name) with GraphRead + !Mutate + Alloc + Memory = {
   let Graph(next, _) = graph_snapshot()
-  collect_var_ref_spans(name, 0, next)
+  collect_var_ref_spans(name, 0, next, make_list(0))
 }
 
-fn collect_var_ref_spans(name, i, n) with GraphRead + Memory + Alloc + !Mutate = {
-  if i >= n { [] }
+// Tail walk with an accumulator — the prior non-tail form's stack depth
+// was the whole handle space, so a DAG-scale graph exhausted the call
+// stack the first time the refs facet ran against a full compile.
+fn collect_var_ref_spans(name, i, n, acc) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= n { acc }
   else {
-    let rest = collect_var_ref_spans(name, i + 1, n)
     match graph_node_body(i) {
       NExpr(VarRef(ref_name)) =>
-        if ref_name == name { [span_of_handle(i)] ++ rest } else { rest },
-      _ => rest
+        if ref_name == name {
+          // A zero span is a synthetic mint (a pre-registration ghost),
+          // not a source site — the located answer skips it.
+          let sp = span_of_handle(i)
+          if sp == span_zero() { collect_var_ref_spans(name, i + 1, n, acc) }
+          else { collect_var_ref_spans(name, i + 1, n, push(acc, sp)) }
+        }
+        else { collect_var_ref_spans(name, i + 1, n, acc) },
+      _ => collect_var_ref_spans(name, i + 1, n, acc)
     }
   }
 }

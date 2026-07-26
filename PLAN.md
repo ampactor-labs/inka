@@ -1038,6 +1038,23 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-26 · ▶ THE REFS FACET SPEAKS ITS SPANS (the
+  self-exemplification pass's opening move #1 · pin 758f65f2).
+  `refs of NAME` collected every use-edge span and rendered a bare
+  count — the propose-facet seam one facet over; QRRefs now renders
+  one located line per inbound edge. En route: the collector's
+  non-tail recursion (depth = the handle space) went
+  tail-with-accumulator at its first DAG-scale query; zero-span
+  synthetic mints filter (a ghost is not a source site); the query
+  print gained its final newline. THE RESEARCH PASS is banked
+  (scratchpad self-exemplify-report.md): opening moves = this render
+  · fixtures state their own contracts (`// expect: refuse E_*` —
+  the 1,556-line frontier bash dissolving into `mentl test`) ·
+  interrogate_at wired into the address surface (the eight running
+  as code); `mentl march` measured UNBLOCKED (B-i's warm image was
+  the dep); the 223 drift-ignore markers + the 21+17 hand walks +
+  the zero-`><`-in-the-wheel measurement all named with their
+  peers. Board whole.
 - 2026-07-25 · ▶▶▶▶▶ ZERO PROSE LOST — the weave conserves the whole
   wheel (· pin 6cd7a75e; the comment arc's terminus: 2,803 → 0 on all
   50 files, one-invocation idempotence, measured by the verb's own

@@ -1038,6 +1038,32 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶▶ THE WEAVE INVERTS — one attachment pass, one
+  emission point; ~50 sites delete (· pin ffc3fd58). Morgan's cut
+  ("isn't there a better way") ended the mole war: attach_comment_weave
+  runs ONCE after parse_program, resolving every comment run by SPAN
+  against the node weave (trailing → widest node starting on the run's
+  line; leading → widest at the minimal start past it; span ties → the
+  latest mint, which retires the desugar transfer; a blank-separated
+  earlier block INHERITS the next run's target). Emission went uniform
+  at render_tokens_for — every node's prose prefixes its tokens; the
+  per-construct emissions delete (rows keep theirs), and prose-forced
+  breaks CASCADE from fits_inline seeing the emitted newline. The verb
+  writes its own FIXPOINT (render → reparse → re-render; the second
+  render is the file), so one invocation is idempotent by
+  construction. The nine per-site families, the probe-law
+  contortions, and the four attach/collect fns delete whole; the
+  parser's skips are comment-transparent again. Artifact-taught en
+  route: the run record is NOMINAL (CwRun — generic walkers compile
+  once; the brand + param Intent Boundaries prove the field offsets),
+  and the inherit rule (each node competes only for its nearest run).
+  MEASURED: conservation 1,969 → 741 → 106; IDEMPOTENT-ALL-50; whole
+  board green. The working discipline reified in CLAUDE.md ⟳
+  (Edit-tool-only source writes — heredocs bypassed the audit hooks;
+  the medium's projections before shell reads; verbs carry their own
+  fixpoints; the uniform pass beats the per-site family). Remainder:
+  the 106 (record-type-field trailing + a tail class the verb will
+  name), and `mentl march` stays the loudest absorption ask.
 - 2026-07-25 · ▶▶ THE PROBE LAW COMPLETES — 2,803 → 35 (99.8%
   conservation · pin 4e7d5013). Two more probe-consume sites fell to
   the verb's own lost-line reports: the resume-with update list's

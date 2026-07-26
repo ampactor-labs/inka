@@ -139,7 +139,7 @@ fn driver_collect_visit_list(ref modules, own collected, own visited)
 // only, no env work yet. The parser produces a top-level stmt list;
 // flatten + map projects each ImportStmt's path; non-import stmts
 // project [] and flatten collapses them out.
-fn driver_extract_imports(ref source) with Memory + Alloc = {
+fn driver_extract_imports(ref source) with Memory + Alloc + GraphRead + GraphWrite = {
   source
     |> lex
     |> parse_program
@@ -577,7 +577,7 @@ fn driver_collect_dag_with_deps(ref entry_module)
 // Out-of-DAG names (missing modules, vocabulary aliases the driver doesn't
 // process) contribute nothing to the layer-partition's wait condition.
 fn driver_module_in_dag_deps(ref module_name, ref dag_modules)
-  with Memory + Alloc + Filesystem = {
+  with Memory + Alloc + Filesystem + GraphRead + GraphWrite = {
   let path = driver_module_path(module_name)
   if !fs_exists(path) { [] }
   else {

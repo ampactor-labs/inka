@@ -560,7 +560,12 @@ fn fmt_run(target) = {
       let entry_module = path_to_module(target)
       let path = driver_module_path(entry_module)
       let ast = driver_check_entry(entry_module)
-      let rendered = format_program(ast)
+      // The verb writes its own FIXPOINT: render once, re-parse, render
+      // again — a mid-line prose attach moves to its line-start home in
+      // the first render and is stable from the second, so the WRITTEN
+      // file is idempotent in one invocation.
+      let first = format_program(ast)
+      let rendered = format_program(frontend(first))
       // THE CONSERVATION GATE — the verb lexes its own render beside the
       // source and compares comment-token counts: the lexer emits one
       // TComment per authored line, so the difference IS the number of

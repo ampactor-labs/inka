@@ -405,6 +405,26 @@
 > `mentl audit`, state.sh → state-as-projection, the fmt/tighten batch loop —
 > are the standing queue: ABSORPTION into verbs, never deletion of a safeguard.
 >
+> **THE WORKING DISCIPLINE, paid for 2026-07-25 (Morgan's cut caught both):**
+> (1) **Source edits go through the Edit tool, never a python/sed write** —
+> the drift-audit and cursor-projection hooks fire on Edit-tool writes ONLY;
+> a heredoc `open().write()` edits the wheel OUTSIDE the medium's own gate
+> (a full day's comment-arc edits ran unaudited before the catch). (2) **The
+> medium's projections before shell reads**: the census's spans, `mentl
+> <file:line>`, and the verbs' own reports replace blob-offset seds and
+> grep archaeology; when a verb's report is missing a fact you need, teach
+> the VERB to report it (fmt's lost-line naming replaced the last external
+> diff in one edit). (3) **A verb can write its own fixpoint**: fmt renders,
+> re-parses, re-renders and writes the SECOND render — one invocation is
+> idempotent by construction; any verb whose output feeds its own reader
+> can carry the same internal loop. (4) **The uniform pass beats the
+> per-site family** — the comment weave's lesson at full scale: nine
+> hand-closed families of one probe-consume law were replaced by ONE
+> span-keyed attachment pass plus ONE emission point at the shared render
+> entry, deleting ~50 sites and covering every future construct by
+> construction. When the second site of a shape appears, design the pass
+> that makes ALL sites impossible — the census law's constructive half.
+>
 > **Medium-authored change is the PREFERRED form wherever a verb exists** —
 > tighten-style batch authorship, gated by the board, approved by Morgan and
 > the copilot: §0's convergence executed (docs : Claude :: language :

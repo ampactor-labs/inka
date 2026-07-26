@@ -1062,8 +1062,15 @@ between the wheel and its ultimate form, held open on purpose.
   accreted a wrap per pass until the inner pair re-parsed as the
   record pun; else-if renders bare; the implicit-unit else renders
   nothing — the identity; the voicey leg asserts no accretion).
-  Remaining: 5 (the weave at every attachment altitude — 32%
-  interior prose loss), 6 (shortest-round-trip floats); then the
+  Rung 5 LANDED same day (pin 5ad4aef6 — the
+  render goes TOTAL over the weave: the block final's prose renders
+  via the one render_stmt_comment projection, and attached prose
+  forces the block layout at an if branch; parser.mn 809 → 623
+  comment lines kept, 77% from the census's 68%, and the file
+  formats clean where it trapped; the remaining drops classify to
+  the expression-interior positions the parser never attaches —
+  Hβ.parser.expr-interior-comment-attach, a parser refinement, not
+  render debt). Remaining: 6 (shortest-round-trip floats); then the
   SUMMIT.
 - 2026-07-25 · ▶▶ HANDLER-CONFIG DEFAULTS + THE BASE-FRESHNESS
   CONTRACT + THE PUSH (pin 9de2ecc4). The product law lands at the

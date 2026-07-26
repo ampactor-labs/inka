@@ -357,8 +357,14 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   MakeListExpr(elems)  => "[{render_node_list(elems, ", ")}]",
   MakeTupleExpr(elems) => "({render_node_list(elems, ", ")})",
   ExprPlaceholder      => "??",
+  // The final expr's attached prose renders exactly as a statement's does
+  // — the weave attaches a before-final interior comment (and the
+  // block-tail comment, whose home is the final's own handle when nothing
+  // follows) to the final, and dropping it violated "never dropped" (the
+  // fmt census's blocker 5: a third of parser.mn's prose was
+  // body-interior).
   BlockExpr(stmts, final) =>
-    "\{\n{render_block_stmts(stmts, 0)}  {render_tokens_for(final)}\n\}",
+    "\{\n{render_block_stmts(stmts, 0)}{render_stmt_comment(final)}  {render_tokens_for(final)}\n\}",
   LambdaExpr(params, body) =>
     "({render_param_list(params)}) => {render_tokens_for(body)}",
   MakeRecordExpr(fields) => "\{{render_field_inits(fields, 0)\}}",
@@ -540,10 +546,17 @@ fn escape_string_content(s) with Memory + Alloc = {
 fn render_block_stmts(ref stmts, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(stmts) { "" }
   else {
-    let c = graph_comment_at(node_handle(stmts[i]))
-    let cline = if c == "" { "" } else { "  //{replace(c, "\n", "\n  //")}\n" }
-    "{cline}  {render_tokens_for(stmts[i])}\n{render_block_stmts(stmts, i + 1)}"
+    "{render_stmt_comment(stmts[i])}  {render_tokens_for(stmts[i])}\n{render_block_stmts(stmts, i + 1)}"
   }
+}
+
+// The one interior-prose render — a node's attached comment as leading
+// `//` lines at block indent (trailing attachments merged into the same
+// cell render as leading: movement, never loss — the decl-comment
+// contract at the interior altitude).
+fn render_stmt_comment(n) with GraphRead + Memory + Alloc + !Mutate = {
+  let c = graph_comment_at(node_handle(n))
+  if c == "" { "" } else { "  //{replace(c, "\n", "\n  //")}\n" }
 }
 
 fn render_field_inits(ref fields, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
@@ -579,7 +592,12 @@ fn render_string_parts(ref parts, i) with GraphRead + Memory + Alloc + !Mutate +
 // brace-less branch (the parse_expr arm) gains the canonical braces.
 fn render_if_branch(n) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(n) {
   NExpr(BlockExpr(stmts, final)) =>
-    if len(stmts) == 0 { "\{ {render_tokens_for(final)} \}" }
+    // Attached prose forces the block layout — a comment needs its own
+    // line, and the single-line form would drop it (measured: the
+    // if-branch finals were the interior-prose loss's biggest residue).
+    if len(stmts) == 0 && graph_comment_at(node_handle(final)) == "" {
+      "\{ {render_tokens_for(final)} \}"
+    }
     else { render_tokens_for(n) },
   NExpr(IfExpr(_, _, _)) => render_tokens_for(n),
   _ => "\{ {render_tokens_for(n)} \}"

@@ -1433,10 +1433,10 @@ for i in "${!compilers[@]}"; do
   else
     fail "fmt row/retty/handler behavioral (rc=$vfmt_rc pre=$vfmt_pre post=$vfmt_post; see $dir/vfmt.out)"
   fi
-  if grep -q 'with Ping + !Pong' "$fdemo2/voicey.mn" && grep -q -- '-> Int' "$fdemo2/voicey.mn" && grep -q 'ping() => resume' "$fdemo2/voicey.mn"; then
-    pass "fmt carries the signed row, the authored retty, and the handler arm"
+  if grep -q 'with Ping + !Pong' "$fdemo2/voicey.mn" && grep -q -- '-> Int' "$fdemo2/voicey.mn" && grep -q 'ping() => resume' "$fdemo2/voicey.mn" && ! grep -q '\{ \{' "$fdemo2/voicey.mn"; then
+    pass "fmt carries the signed row, the retty, the handler arm; braces never accrete"
   else
-    fail "fmt row/retty/handler carry (see $fdemo2/voicey.mn)"
+    fail "fmt row/retty/handler/brace carry (see $fdemo2/voicey.mn)"
   fi
   cp "$fdemo2/voicey.mn" "$fdemo2/vpass1.mn"
   (cd "$fdemo2" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo2" --dir /tmp "$compiler" fmt voicey.mn) >/dev/null 2>&1

@@ -353,8 +353,7 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   IndexExpr(recv, idx)   => "{render_tokens_for(recv)}[{render_tokens_for(idx)}]",
   PipeExpr(verb, l, r) =>
     "{render_tokens_for(l)} {show_pipe_kind(verb)} {render_tokens_for(r)}",
-  IfExpr(c, t, el) =>
-    "if {render_tokens_for(c)} \{ {render_tokens_for(t)} \} else \{ {render_tokens_for(el)} \}",
+  IfExpr(c, t, el) => "if {render_tokens_for(c)} {render_if_branch(t)}{render_else(el)}",
   MakeListExpr(elems)  => "[{render_node_list(elems, ", ")}]",
   MakeTupleExpr(elems) => "({render_node_list(elems, ", ")})",
   ExprPlaceholder      => "??",
@@ -566,6 +565,32 @@ fn render_string_parts(ref parts, i) with GraphRead + Memory + Alloc + !Mutate +
     }
     "{one}{render_string_parts(parts, i + 1)}"
   }
+}
+
+// An if-branch is braced by the IF SURFACE itself (the header rule: the
+// condition ends at `{`), and the parser wraps a braced branch in a
+// BlockExpr — so the render supplies the braces EXACTLY ONCE (render∘parse
+// identity, the fmt census's blocker 3): a statement-carrying block takes
+// the multi-line block render (its own braces); a single-expression block
+// takes the single-line braced form — never literal braces AROUND the
+// block render, which accreted a wrap per pass until the inner `\{ x \}`
+// re-parsed as the record pun `\{x: x\}`, a float becoming a record; an
+// else-if chain renders bare (`else if …`, never `else \{ if … \}`); a
+// brace-less branch (the parse_expr arm) gains the canonical braces.
+fn render_if_branch(n) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(n) {
+  NExpr(BlockExpr(stmts, final)) =>
+    if len(stmts) == 0 { "\{ {render_tokens_for(final)} \}" }
+    else { render_tokens_for(n) },
+  NExpr(IfExpr(_, _, _)) => render_tokens_for(n),
+  _ => "\{ {render_tokens_for(n)} \}"
+}
+
+// The implicit else is the parser's own unit node — rendering it back
+// would add `else \{ () \}` to every authored else-less if; omitting it is
+// the identity (the re-parse re-inserts the same unit node).
+fn render_else(el) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(el) {
+  NExpr(LitUnit) => "",
+  _              => " else {render_if_branch(el)}"
 }
 
 fn render_match_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {

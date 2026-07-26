@@ -14,4 +14,10 @@ handler ponger with n = 40 {
 
 fn probe() -> Int with Ping + !Pong = ping()
 
-fn main() = probe() ~> ponger
+// Rung 3's face: a bare-expression if-branch renders its braces EXACTLY
+// once (pre-fix the render double-wrapped the parsed BlockExpr and the
+// inner braces re-parsed as the record pun — a value silently became a
+// record).
+fn clampish(n) -> Int = if n > 0 { n } else { 0 }
+
+fn main() = (probe() ~> ponger) + clampish(0 - 5)

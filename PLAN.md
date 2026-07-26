@@ -1056,10 +1056,15 @@ between the wheel and its ultimate form, held open on purpose.
   human text and graph truth in byte-agreement, so every downstream
   span/patch/census points at stable text), teach/tighten/the ??-fan
   PROPOSE. The daily loop: write loosely → the medium normalizes +
-  narrates + proposes. Remaining rungs: 3 (arm-body brace discipline
-  = render∘parse identity — the {x}→{x: x} pun flip), 5 (the weave
-  at every attachment altitude — 32% interior prose loss), 6
-  (shortest-round-trip floats); then the SUMMIT.
+  narrates + proposes. Rung 3 LANDED same day (pin a0172f04 —
+  render_if_branch supplies braces EXACTLY ONCE: the parser wraps a
+  braced branch in a BlockExpr and the old render's literal braces
+  accreted a wrap per pass until the inner pair re-parsed as the
+  record pun; else-if renders bare; the implicit-unit else renders
+  nothing — the identity; the voicey leg asserts no accretion).
+  Remaining: 5 (the weave at every attachment altitude — 32%
+  interior prose loss), 6 (shortest-round-trip floats); then the
+  SUMMIT.
 - 2026-07-25 · ▶▶ HANDLER-CONFIG DEFAULTS + THE BASE-FRESHNESS
   CONTRACT + THE PUSH (pin 9de2ecc4). The product law lands at the
   handler decl: config goes [String] → [TParam] — the fn-param

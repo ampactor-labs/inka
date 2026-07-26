@@ -1409,7 +1409,12 @@ for i in "${!compilers[@]}"; do
   else
     fail "fmt idempotence"
   fi
-  if grep -q '^// The fmt fixture' "$fdemo2/rich.mn" && grep -q 'b: { level: Int, kind: String }' "$fdemo2/rich.mn"; then
+  # The annotation carry expects the SURFACE-canonical spelling — the
+  # authored `{kind: String, level: Int}` byte-for-byte (space-free,
+  # parse-sorted). The earlier banked `{ level: Int, kind: String }` was
+  # show_type's voice spacing, retired when the formatter grew its own
+  # surface-type projection.
+  if grep -q '^// The fmt fixture' "$fdemo2/rich.mn" && grep -q 'b: {kind: String, level: Int}' "$fdemo2/rich.mn"; then
     pass "fmt carries comments and authored annotations"
   else
     fail "fmt prose/annotation carry"

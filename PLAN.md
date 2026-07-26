@@ -1038,6 +1038,39 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ IDEMPOTENT-ALL-50 — the fmt fixpoint reached; the
+  summit's swap gated by its own comment law (· pin 672a924b). Four
+  render roots + one parse canonicalization, each convicted by the
+  sweep: the LET-CHAIN FLATTENS AT PARSE (a braceless chain parsed to
+  nested per-let BlockExprs while the braced spelling parsed flat —
+  two graphs for one meaning; parse_let_expr merges the continuation
+  into ONE statement sequence, Law-7 byte-identical); the SURFACE-TYPE
+  PROJECTION (the formatter borrowed show_type — the VOICE — and
+  leaked `with t45323@e23311` into an effect op's rendered source,
+  which pass 2 misparsed into three bogus op declarations;
+  render_type_tokens is the parse's inverse, swapped at all eight fmt
+  type sites — §5.U's voice/format boundary enforced); a LAMBDA
+  OPERAND ALWAYS RE-WRAPS (prec 0 + render_chain_pos at every chain
+  head — the recurrence rendered paren-free read back as
+  `delay(1)(prev)`); a BODY-LEAD `{` IS THE BLOCK (record
+  literal/update as fn/lambda/arm body re-wraps — render_grouped_body
+  at five surfaces); INT_MIN renders its wrapping positive spelling
+  (the minus accreted one per pass). ORACLES: all 50 wheel files
+  format to a byte-fixpoint in one pass; the formatted tree compiles
+  census-0, wat value-identical to pristine modulo three CLASSIFIED
+  diffs (handle renumbering; the FNV const-fold firing
+  order-sensitively — value-identical, banked with band G's
+  typed-rulecyclic; yield_from's open-record demand-order offsets —
+  the named trecordopen class). THE GATE HOLDS THE SUMMIT: the
+  formatted tree DROPS 2,803 comment lines (16.7% of authored prose —
+  expression-interior comments consumed as layout,
+  Hβ.parser.expr-interior-comment-attach) and doubles >100-char lines
+  (572 → 1208, the width-aware layout engine); canonizing prose
+  destruction is forbidden by the weave's own law, so the SWAP gates
+  on exactly those two builds. The voicey carry leg re-banked to the
+  surface-canonical spelling (authored byte-identical). CLEAN
+  m2 == m3 at 298,159 lines; census 0; comment-refs 0; frontier
+  279/0; proof-exactness 9/9; crown 5/5; micros 114/114.
 - 2026-07-25 · ▶▶▶ THE TWO READERS AGREE — parse_float goes correctly
   rounded, one float projection survives, and list_set's flat contract
   goes loud (the fmt summit's idempotence sweep forced all three roots ·

@@ -1156,7 +1156,19 @@ fn parse_let_expr(ref tokens, pos, start_span) = {
   // Reuse the value node as the absent-annotation sentinel (byte-identical;
   // the expr-form let does not carry an annotation — Hβ.parser.let-expr-annotation).
   let let_stmt = nstmt(LetStmt(pat, val, val), start_span)
-  (nexpr(desugar_block([let_stmt], body, start_span), start_span), p7)
+  // THE CHAIN FLATTENS AT PARSE: a continuation that is itself a block
+  // merges into ONE statement sequence, so the braceless let-chain and the
+  // braced block parse to the SAME graph (principle 2 — one meaning, one
+  // graph; the per-let nested BlockExpr was a second shape for the same
+  // program, and the formatter faithfully rendered the redundancy as a
+  // brace pyramid). Scoping is identical: a statement-list let scopes over
+  // the rest of its block exactly as the nesting did, and a merged
+  // explicit block was the final expression — nothing followed it.
+  match body {
+    N(NExpr(BlockExpr(stmts2, final2)), _, _) =>
+      (nexpr(desugar_block([let_stmt] ++ stmts2, final2, start_span), start_span), p7),
+    _ => (nexpr(desugar_block([let_stmt], body, start_span), start_span), p7),
+  }
 }
 
 fn parse_binop(ref tokens, pos, min_prec, slot) = {

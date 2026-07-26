@@ -179,9 +179,19 @@ fn indented_center() with Pure = 4
 // Input on its own line at base indent; |> at base + 2; stages on
 // the same line as their |>. The chain reads top-to-bottom = data flow.
 
+// A chain-position operand below every operator's precedence (the lambda,
+// prec 0 — its body extends maximally rightward) re-wraps, or the re-parse
+// absorbs the verb into the body (the recurrence `((prev) => …) <~ delay(1)`
+// rendered bare read back as `delay(1)(prev)` — an application). One read
+// of the ONE table, shared by every chain renderer's head.
+fn render_chain_pos(node) with Format + !Mutate = {
+  if expr_prec_of(node) < 1 { parenthesize(format_chain(node)) }
+  else { format_chain(node) }
+}
+
 fn render_converge_chain(left, right) with Format + !Mutate = {
-  let left_str = format_chain(left)
-  let right_str = format_chain(right)
+  let left_str = render_chain_pos(left)
+  let right_str = render_chain_pos(right)
   "{left_str}\n{spaces(left_edge_indent())}|> {right_str}"
 }
 
@@ -241,8 +251,8 @@ fn render_compose_chain(left, right) with Format + !Mutate = {
 //   (try_fn()) ~> catch_abort
 
 fn render_tee(body, handler_expr) with Format + !Mutate = {
-  let body_str = format_chain(body)
-  let handler_str = format_chain(handler_expr)
+  let body_str = render_chain_pos(body)
+  let handler_str = render_chain_pos(handler_expr)
   match ast_kind_of(body) {
     NExpr(PipeExpr(_, _, _)) =>
       "{body_str}\n{spaces(left_edge_indent())}~> {handler_str}",
@@ -263,8 +273,8 @@ fn render_tee(body, handler_expr) with Format + !Mutate = {
 // installed upstream); without it, parser rejects with E_FeedbackNoContext.
 
 fn render_feedback_chain(input, spec) with Format + !Mutate = {
-  let input_str = format_chain(input)
-  let spec_str = format_chain(spec)
+  let input_str = render_chain_pos(input)
+  let spec_str = render_chain_pos(spec)
   "{input_str}\n{spaces(indented_center())}<~ {spec_str}"
 }
 
@@ -333,11 +343,16 @@ fn render_body_tokens(body) with GraphRead + Memory + Alloc + !Mutate + Intern =
   NPat(p)      => render_pat_tokens(p),
   NHole(_)     => "??",
   NModule(m)   => "// module {m.path}",
-  NTypeAnn(ty) => show_type(ty)
+  NTypeAnn(ty) => render_type_tokens(ty)
 }
 
 fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = match e {
-  LitInt(n)        => int_to_str(n),
+  // int_to_str(INT_MIN) prints its own minus, which re-parses as a unary
+  // minus over the WRAPPING positive literal and accretes one `-` per fmt
+  // pass. The wrapping spelling IS the authored surface (the lexer wraps
+  // 2147483648 back to INT_MIN) — value-identical, idempotent. Every
+  // other negative is stable: `-5` re-parses UNeg(5) and re-renders `-5`.
+  LitInt(n)        => if n == 0 - 2147483648 { "2147483648" } else { int_to_str(n) },
   LitFloat(f)      => float_to_str(f),
   LitString(s)     => "\"{escape_string_content(s)}\"",
   LitBool(b)       => if b { "true" } else { "false" },
@@ -352,7 +367,7 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   FieldExpr(recv, field) => "{render_tokens_for(recv)}.{field}",
   IndexExpr(recv, idx)   => "{render_tokens_for(recv)}[{render_tokens_for(idx)}]",
   PipeExpr(verb, l, r) =>
-    "{render_tokens_for(l)} {show_pipe_kind(verb)} {render_tokens_for(r)}",
+    "{render_operand(l, pipe_prec(verb), false)} {show_pipe_kind(verb)} {render_operand(r, pipe_prec(verb), true)}",
   IfExpr(c, t, el) => "if {render_tokens_for(c)} {render_if_branch(t)}{render_else(el)}",
   MakeListExpr(elems)  => "[{render_node_list(elems, ", ")}]",
   MakeTupleExpr(elems) => "({render_node_list(elems, ", ")})",
@@ -364,9 +379,9 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   // fmt census's blocker 5: a third of parser.mn's prose was
   // body-interior).
   BlockExpr(stmts, final) =>
-    "\{\n{render_block_stmts(stmts, 0)}{render_stmt_comment(final)}  {render_tokens_for(final)}\n\}",
+    "\{\n{render_block_stmts(stmts, 0)}{render_stmt_comment(final)}  {render_grouped_body(final)}\n\}",
   LambdaExpr(params, body) =>
-    "({render_param_list(params)}) => {render_tokens_for(body)}",
+    "({render_param_list(params)}) => {render_grouped_body(body)}",
   MakeRecordExpr(fields) => "\{{render_field_inits(fields, 0)\}}",
   NamedRecordExpr(tname, fields) =>
     "{tname}\{{render_field_inits(fields, 0)\}}",
@@ -383,10 +398,10 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
 
 fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate + Intern = match s {
   FnStmt(name, params, retty, effs, body) =>
-    "fn {name}({render_param_list(params)}){render_retty(retty)}{render_with_clause(effs)} = {render_tokens_for(body)}",
+    "fn {name}({render_param_list(params)}){render_retty(retty)}{render_with_clause(effs)} = {render_grouped_body(body)}",
   ImportStmt(path)   => "import {path}",
-  ExprStmt(e)        => render_tokens_for(e),
-  AliasStmt(name, ty) => "type {name} = {show_type(ty)}",
+  ExprStmt(e)        => render_grouped_body(e),
+  AliasStmt(name, ty) => "type {name} = {render_type_tokens(ty)}",
   LetStmt(pat, value, ann) =>
     "let {render_pat_tokens(pat)}{render_let_ann(ann)} = {render_tokens_for(value)}",
   TypeDefStmt(name, variants) =>
@@ -399,7 +414,7 @@ fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   HandlerDeclStmt(hname, _ename, config, states, arms) =>
     "handler {hname}{render_config_params(config)}{render_state_inits(states, 0)} \{\n{render_handler_arms(arms, 0)\}}",
   RefineStmt(name, ty, pred) =>
-    "type {name} = {show_type(ty)} where {show_predicate(pred)}"
+    "type {name} = {render_type_tokens(ty)} where {show_predicate(pred)}"
 }
 
 fn render_pat_tokens(p) with GraphRead + Memory + Alloc + !Mutate = match p {
@@ -458,7 +473,7 @@ fn render_one_param(p) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   }
   let ann = match param_ty(p) {
     TVar(_) => "",
-    ty      => ": {show_type(ty)}"
+    ty      => ": {render_type_tokens(ty)}"
   }
   let dflt = match param_default(p) {
     Some(d) => " = {render_tokens_for(d)}",
@@ -491,7 +506,13 @@ fn expr_prec_of(node) with GraphRead + Memory + !Mutate = match ast_kind_of(node
   NExpr(UnaryOpExpr(_, _))   => 90,
   NExpr(IfExpr(_, _, _))     => 15,
   NExpr(MatchExpr(_, _))     => 15,
-  NExpr(LambdaExpr(_, _))    => 15,
+  // A lambda's body extends maximally rightward — as an operand it must
+  // ALWAYS re-wrap, or the re-parse absorbs the operator into the body
+  // (measured: the recurrence `((prev) => …) <~ delay(1)` rendered
+  // paren-free, and pass 2 read `delay(1)(prev)` as an application).
+  // Prec 0 sits below every operator, so render_operand wraps it in
+  // every operand position — SYNTAX's own canonical spelling.
+  NExpr(LambdaExpr(_, _))    => 0,
   _                          => 100
 }
 
@@ -611,11 +632,23 @@ fn render_else(el) with GraphRead + Memory + Alloc + !Mutate + Intern = match as
   _              => " else {render_if_branch(el)}"
 }
 
+// A body/statement-lead position reads a leading `{` as the BlockExpr
+// literal (SYNTAX: the braces ARE the block), so a record literal or
+// record update THERE requires the parens the parser consumed — dropping
+// them turned `= ({cmp: [], …})` into a block misparse on the second
+// pass. Operand and argument positions stay bare (the parser reads them
+// greedily); only the five body-lead surfaces route through this.
+fn render_grouped_body(node) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(node) {
+  NExpr(MakeRecordExpr(_))      => "({render_tokens_for(node)})",
+  NExpr(RecordUpdateExpr(_, _)) => "({render_tokens_for(node)})",
+  _                             => render_tokens_for(node)   // drift-audit: ignore — the two brace-lead expr forms are the enumerated class; everything else renders unwrapped by design
+}
+
 fn render_match_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(arms) { "" }
   else {
     let (pat, body) = arms[i]
-    "  {render_pat_tokens(pat)} => {render_tokens_for(body)},\n{render_match_arms(arms, i + 1)}"
+    "  {render_pat_tokens(pat)} => {render_grouped_body(body)},\n{render_match_arms(arms, i + 1)}"
   }
 }
 
@@ -635,7 +668,7 @@ fn render_state_updates(ref updates, i) with GraphRead + Memory + Alloc + !Mutat
 }
 
 fn render_let_ann(ann) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(ann) {
-  NTypeAnn(ty) => ": {show_type(ty)}",
+  NTypeAnn(ty) => ": {render_type_tokens(ty)}",
   _            => ""   // drift-audit: ignore — the ADT's own absence sentinel: LetStmt's ann node is LitUnit when unannotated (the LetStmt decl comment); any non-NTypeAnn body IS that absence, rendered as no clause
 }
 
@@ -649,10 +682,105 @@ fn render_variants(ref variants, i) with GraphRead + Memory + Alloc + !Mutate + 
   }
 }
 
+// ─── The SURFACE-type projection — the parse's inverse over authored
+// type syntax, the formatter's ONE type renderer. show_type is the VOICE
+// (diagnostics: List(T) spellings, tN@eN free-var handles, every row
+// rendered) and borrowing it here leaked internals into rendered source —
+// an effect op's fn-typed param rendered `with t45323@e23311`, which the
+// second fmt pass misparsed into three bogus op declarations. Surface
+// rules: [T] never List(T); fn-type params are TYPES (a type position
+// carries no names — the voice's `_:` invention does not parse); a row
+// renders only its AUTHORED content (present + !absent), because a bare
+// parse-minted tail var IS authored absence.
+fn render_type_tokens(ref ty) with GraphRead + Memory + Alloc + !Mutate + Intern = match ty {
+  TInt    => "Int",
+  TFloat  => "Float",
+  TUnit   => "()",
+  TByte   => "Byte",
+  TList(elem)   => "[{render_type_tokens(elem)}]",
+  TTuple(elems) => "({render_type_list(elems, 0)})",
+  TFun(params, ret, row) =>
+    "({render_tparam_types(params, 0)}) -> {render_type_tokens(ret)}{render_row_surface(row)}",
+  TVar(id) => render_type_handle(id),
+  TName(name, args) =>
+    if len(args) == 0 { name } else { "{name}({render_type_list(args, 0)})" },
+  TRecord(fields)      => "\{{render_type_fields(fields, 0)}\}",
+  TRecordOpen(fields, _) => "\{{render_type_fields(fields, 0)}, ...\}",
+  TRefined(base, pred) => "{render_type_tokens(base)} where {show_predicate(pred)}",
+  TCont(input, answer, disc, world) => show_type(TCont(input, answer, disc, world)),
+  TAlias(name, _) => name
+}
+
+fn render_type_list(ref tys, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  if i >= len(tys) { "" }
+  else if i == len(tys) - 1 { render_type_tokens(tys[i]) }
+  else { "{render_type_tokens(tys[i])}, {render_type_list(tys, i + 1)}" }
+}
+
+fn render_tparam_types(ref params, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  if i >= len(params) { "" }
+  else if i == len(params) - 1 { render_type_tokens(param_ty(params[i])) }
+  else { "{render_type_tokens(param_ty(params[i]))}, {render_tparam_types(params, i + 1)}" }
+}
+
+fn render_type_fields(ref fields, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  if i >= len(fields) { "" }
+  else {
+    let (name, fty) = fields[i]
+    let one = "{name}: {render_type_tokens(fty)}"
+    if i == len(fields) - 1 { one } else { "{one}, {render_type_fields(fields, i + 1)}" }
+  }
+}
+
+// A bound var renders its binding (the resolved surface); a free or
+// row-state handle has NO parseable surface spelling, so it delegates to
+// the voice — loud in the idempotence gate if it ever reaches source,
+// never silently absorbed.
+fn render_type_handle(h) with GraphRead + Memory + Alloc + !Mutate + Intern = match graph_chase(h) {
+  GNode(NBound(ty), _)              => render_type_tokens(ty),
+  GNode(NRecordRowBound(fields), _) => render_type_tokens(TRecord(fields)),
+  GNode(NFree(_), _)                => show_handle(h),
+  GNode(NRowBound(_), _)            => show_handle(h),
+  GNode(NRowFree(_), _)             => show_handle(h),
+  GNode(NErrorHole(_), _)           => show_handle(h)
+}
+
+// The row's AUTHORED face: present and absent sets render; the tail never
+// does (no surface syntax spells a tail — an open var is authored absence,
+// and a Pure-closed empty row is the identity `with Pure` canonically
+// drops).
+fn render_row_surface(ref row) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  let EfRow(p, a, _) = row
+  if len(p) == 0 && len(a) == 0 { "" }
+  else {
+    let pos = render_row_names(p, 0, "")
+    let joined = render_row_negs(a, 0, pos)
+    " with {joined}"
+  }
+}
+
+fn render_row_names(ref names, i, acc) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  if i >= len(names) { acc }
+  else {
+    let one = render_authored_eff_name(names[i])
+    let next = if acc == "" { one } else { "{acc} + {one}" }
+    render_row_names(names, i + 1, next)
+  }
+}
+
+fn render_row_negs(ref names, i, acc) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  if i >= len(names) { acc }
+  else {
+    let one = "!{render_authored_eff_name(names[i])}"
+    let next = if acc == "" { one } else { "{acc} + {one}" }
+    render_row_negs(names, i + 1, next)
+  }
+}
+
 fn render_ty_list(ref tys, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(tys) { "" }
-  else if i == len(tys) - 1 { show_type(tys[i]) }
-  else { "{show_type(tys[i])}, {render_ty_list(tys, i + 1)}" }
+  else if i == len(tys) - 1 { render_type_tokens(tys[i]) }
+  else { "{render_type_tokens(tys[i])}, {render_ty_list(tys, i + 1)}" }
 }
 
 fn render_effect_ops(ref ops, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
@@ -661,7 +789,7 @@ fn render_effect_ops(ref ops, i) with GraphRead + Memory + Alloc + !Mutate + Int
     let (oname, ptys, rty) = ops[i]
     let ret = match rty {
       TUnit => "",
-      t     => " -> {show_type(t)}"
+      t     => " -> {render_type_tokens(t)}"
     }
     "  {oname}({render_ty_list(ptys, 0)}){ret}\n{render_effect_ops(ops, i + 1)}"
   }
@@ -800,7 +928,7 @@ fn render_authored_eff_args(ref args, i) with GraphRead + Memory + Alloc + !Muta
 fn render_retty(retty) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   let N(b, _, _) = retty
   match b {
-    NTypeAnn(ann_ty) => " -> {show_type(ann_ty)}",
+    NTypeAnn(ann_ty) => " -> {render_type_tokens(ann_ty)}",
     _                => ""   // drift-audit: ignore — the documented absent-annotation contract (an inferred return renders no clause)
   }
 }

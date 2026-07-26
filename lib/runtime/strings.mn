@@ -494,41 +494,31 @@ fn str_literal_5(s) with Pure = {
 // for an f64, so the ascent terminates at today's render.
 fn float_render_positive(f: Float) with Memory + Alloc = {
   let exp = float_floor_log10(f)
-  float_render_shortest(f, f / float_pow10(exp), exp, 1)
+  // Normalize by the EXACT positive power: 10^k is representable through
+  // k = 22, so a negative exponent MULTIPLIES — one correctly-rounded
+  // step. Dividing by float_pow10(exp < 0) divided by an unrepresentable
+  // power (1/10 itself rounds) and skewed scaled a whole ulp near decade
+  // boundaries — 0.3 normalized to 2.9999999999999996 instead of 3.0.
+  // The re-clamp catches a normalization that rounds up across the
+  // decade (scaled landing exactly 10.0).
+  let scaled = if exp < 0 { f * float_pow10(0 - exp) } else { f / float_pow10(exp) }
+  if scaled >= 10.0 { float_render_shortest(f, scaled / 10.0, exp + 1, 1) }
+  else { float_render_shortest(f, scaled, exp, 1) }
 }
 
-// The BITS-FAITHFUL render — seventeen significant digits, which uniquely
-// identify an f64 under any CORRECTLY-ROUNDED reader. The emit boundary
-// must use THIS projection, never the shortest one: an emitted constant is
-// re-read by the assembler's correctly-rounded conversion, while the
-// shortest render's oracle is parse_float — and the two readers DISAGREE
-// (measured: parse_float("0.3") != the wat-born 0.3; parse_float's naive
-// digit/scale summation is not correctly rounded — the named class
-// Hβ.runtime.parse-float-correctly-rounded, whose closing dissolves this
-// split back into one render).
-fn float_to_str_bits(f) with Memory + Alloc = {
-  if float_is_nan(f) { str_literal_5("NaN") }
-  else if float_is_inf(f) {
-    if float_is_negative(f) { str_literal_5("-Inf") }
-    else { str_literal_5("Inf") }
-  }
-  else if float_is_zero(f) {
-    if float_is_negative(f) { str_literal_5("-0.0") }
-    else { str_literal_5("0.0") }
-  }
-  else {
-    let sign = float_is_negative(f)
-    let abs_f = if sign == 1 { 0.0 - f } else { f }
-    let exp = float_floor_log10(abs_f)
-    let digits = float_extract_digits(abs_f / float_pow10(exp), 0, 17, make_list(0))
-    let rendered = float_format_digits(digits, exp)
-    if sign == 1 { str_of_single_byte(45) ++ rendered }
-    else { rendered }
-  }
-}
-
+// The shortest render IS the emit form: parse_float is correctly rounded
+// over the exact-mantissa range (one f64-integer accumulation + one exact
+// power-of-ten scale), so its oracle below — parse_float(cand) == f — is
+// the same verdict the assembler's correctly-rounded reader gives on every
+// short candidate. The two readers agree; the separate seventeen-digit
+// bits render this agreement retired was compensating for the old
+// per-digit parse. The residue is the UNVERIFIED nd=17 tail (a value with
+// no shorter round-trip — never a lexed literal, whose own spelling is a
+// short witness): its digit extraction is float-stepped and can sit a ulp
+// off — Hβ.runtime.float-render-17-digit-exact names the exact-extraction
+// upgrade (digit generation from the stored bits read through memory).
 fn float_render_shortest(f: Float, scaled: Float, exp, nd) with Memory + Alloc = {
-  let digits = float_extract_digits(scaled, 0, nd, make_list(0))
+  let digits = float_extract_digits(scaled, 0, nd, make_list(nd))
   let cand = float_format_digits(digits, exp)
   if nd >= 17 { cand }
   else if parse_float(cand) == f { cand }
@@ -564,16 +554,17 @@ fn float_floor_log10(f) with Memory + Alloc = {
 // so a scaled allowed to grow past 2^31 traps (integer overflow). Returns a
 // flat list of digit values (0-9).
 fn float_extract_digits(scaled: Float, count, max_digits, acc) with Memory + Alloc = {
-  // Accumulate FORWARD: each digit appends at the END (the one push law),
-  // so the list reads most-significant first exactly as every consumer
-  // indexes it. The prior shape pushed the significant digit onto the
-  // RECURSION's result — push appends, so the whole list came out
-  // REVERSED and 2.5 rendered "0.000…" (the digits read backward).
+  // acc is a PREALLOCATED FLAT list of max_digits slots — each digit
+  // lands by index (list_set's flat contract). The push-built snoc
+  // accumulator was the render bug: the shortest ascent's rounded-last
+  // bump list_set into the snoc chain, whose headers sit where flat
+  // elements would, so the bump never took effect and every ascent fell
+  // to the 17-digit tail.
   if count >= max_digits { acc }
   else {
     let digit = float_to_int(scaled)
     let next = (scaled - float_of_int(digit)) * 10.0
-    float_extract_digits(next, count + 1, max_digits, push(acc, digit))
+    float_extract_digits(next, count + 1, max_digits, list_set(acc, count, digit))
   }
 }
 
@@ -741,27 +732,59 @@ fn parse_float(s) with Memory + Alloc = {
 }
 
 fn parse_float_body(s, slen, i) with Memory + Alloc = {
-  let int_part = parse_int_digits(s, slen, i, 0)
-  let dot_pos  = find_char(s, slen, i, 46)        // '.'
-  let frac = if dot_pos < 0 { 0.0 }
-             else { parse_frac_digits(s, slen, dot_pos + 1, 1.0) }
+  // The mantissa accumulates as ONE f64 integer — exact through 2^53,
+  // which covers every authored literal — and the decimal point only
+  // COUNTS digits, so the single scale by the exact power of ten is the
+  // one rounded operation: parse_float agrees with the assembler's
+  // correctly-rounded reader over the exact-mantissa range. A per-digit
+  // fraction division would pay one rounding per digit and split the
+  // two readers (the fmt idempotence failure that forced this form).
+  let mant = parse_mantissa_f64(s, slen, i, 0.0)
+  let dot_pos = find_char(s, slen, i, 46)         // '.'
+  let frac_len = if dot_pos < 0 { 0 }
+                 else { count_mantissa_digits(s, slen, dot_pos + 1) }
   let e_pos = find_char_either(s, slen, i, 101, 69) // 'e' or 'E'
   let exp = if e_pos < 0 { 0 }
             else { parse_int_sign(s, slen, e_pos + 1) }
-  let base = float_of_int(int_part) + frac
-  base * float_pow10(exp)
+  float_scale10(mant, exp - frac_len)
 }
 
-fn parse_frac_digits(s, slen, i, scale) with Memory + Alloc = {
-  if i >= slen { 0.0 }
+fn parse_mantissa_f64(s, slen, i, acc) with Memory + Alloc = {
+  // digits and at most one '.' — the dot contributes nothing; any other
+  // byte (the exponent marker included) ends the mantissa
+  if i >= slen { acc }
   else {
     let ch = byte_at(s, i)
     if ch >= 48 && ch <= 57 {
-      let new_scale = scale * 10.0
-      let digit_f = float_of_int(ch - 48) / new_scale
-      digit_f + parse_frac_digits(s, slen, i + 1, new_scale)
+      parse_mantissa_f64(s, slen, i + 1, acc * 10.0 + float_of_int(ch - 48))
     }
-    else { 0.0 }
+    else if ch == 46 { parse_mantissa_f64(s, slen, i + 1, acc) }
+    else { acc }
+  }
+}
+
+fn count_mantissa_digits(s, slen, i) with Memory + Alloc = {
+  if i >= slen { 0 }
+  else {
+    let ch = byte_at(s, i)
+    if ch >= 48 && ch <= 57 { 1 + count_mantissa_digits(s, slen, i + 1) }
+    else { 0 }
+  }
+}
+
+fn float_scale10(m, k) with Memory + Alloc = {
+  // 10^k is exactly representable through k = 22 (5^22 < 2^53), so one
+  // multiply or divide inside that range is one correctly-rounded step;
+  // a wider exponent splits at the boundary and pays one extra rounding
+  // only past every authored spelling
+  if k == 0 { m }
+  else if k > 0 {
+    if k > 22 { float_scale10(m * float_pow10(22), k - 22) }
+    else { m * float_pow10(k) }
+  }
+  else {
+    if k < 0 - 22 { float_scale10(m / float_pow10(22), k + 22) }
+    else { m / float_pow10(0 - k) }
   }
 }
 

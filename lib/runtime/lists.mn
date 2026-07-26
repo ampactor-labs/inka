@@ -123,10 +123,15 @@ fn len(ref xs) with Memory = load_i32(xs)
 fn list_set(l, idx, val) with Memory = {
   // One tag-word read; 0 == pack_tag(0, 0), the flat word list — a direct
   // store. Byte lists route through store_strided so the 0..255 range trap
-  // holds; wide slots keep the copy-from-reference protocol.
+  // holds; wide slots keep the copy-from-reference protocol. The base
+  // refuses a structured tag LOUDLY: a snoc/concat/slice node has headers
+  // where flat elements would sit, and the old silent path wrote through
+  // them (the float-render bump stored a digit over a snoc's parent
+  // pointer) — corruption, never a wrong element.
   let tw = load_i32(l + 4)
-  if tw == 0 { store_i32(l + 8 + idx * 4, val) }
-  else { store_strided(l + 8, idx, decode_stride(tw / 16), val) }
+  let base = if tw % 16 == 0 { l + 8 } else { load_i32(0 - 1) }
+  if tw == 0 { store_i32(base + idx * 4, val) }
+  else { store_strided(base, idx, decode_stride(tw / 16), val) }
   l
 }
 

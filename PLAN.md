@@ -1038,6 +1038,40 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ THE TWO READERS AGREE — parse_float goes correctly
+  rounded, one float projection survives, and list_set's flat contract
+  goes loud (the fmt summit's idempotence sweep forced all three roots ·
+  pin ea643e6c). The summit's 19 non-idempotent files were ONE mechanism,
+  three liars, each convicted by probe: parse_float paid one rounding per
+  fractional digit (rebuilt: ONE f64-integer mantissa accumulation —
+  exact through 2^53, every authored literal — + ONE scale by the exact
+  power of ten; proven EQUAL to IEEE division at the probe, closing
+  Hβ.runtime.parse-float-correctly-rounded over the exact-mantissa
+  range); the render normalization divided by an UNREPRESENTABLE
+  negative power (0.3's scaled arrived 2.9999999999999996, a whole ulp
+  off — negative exponents now MULTIPLY by the exact positive power);
+  and the root under the root — the shortest ascent's rounded-last bump
+  list_set a PUSH-BUILT digits list, and list_set computed FLAT
+  addresses for every tag, writing the digit over the snoc's PARENT
+  POINTER: the round-last arm was dead since birth (measured:
+  list_set(push(make_list(0),2),0,3)[0] == 2; index 1 on a two-element
+  snoc "worked" by layout coincidence). list_set's base now REFUSES a
+  structured tag loudly — the documented contract enforced, the census
+  instrument for any other violator (the board ran clean: one instance
+  existed). With parse correct, the shortest oracle parse(cand)==f gives
+  the assembler's own verdict on every short candidate — so
+  float_to_str_bits DELETED whole, the emit boundary reverts to
+  float_to_str, and the wheel's f64 constants are TRUE to their authored
+  spellings for the first time (the fixpoint was structurally blind to
+  this: the wat text was the fixpoint object while values drifted from
+  intent — the m2/m3 TRANSITION's 76 lines are the corrections crossing
+  one generation). Probe battery: 0.3/0.995/6.02/2.5/1.0/100.5/0.001
+  all canonical-short; 0.1+0.2 = "0.30000000000000004"; READERS-AGREE.
+  Named residue: Hβ.runtime.float-render-17-digit-exact (the unverified
+  nd=17 tail's float-stepped extraction — never reached by a lexed
+  literal, whose own spelling is a short witness). TRANSITION m3 == m4
+  at 296,456 lines; census 0; comment-refs 0; frontier 279/0;
+  proof-exactness 9/9; crown 5/5; micros 114/114.
 - 2026-07-25 · ▶▶ FMT RUNGS 1·2·4 — the render register of the voice
   stops lying (pin 7215e8c2). The with-clause renders the SIGNED
   TRIPLES verbatim (connector per entry, per-entry !, instance args

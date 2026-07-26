@@ -1040,7 +1040,9 @@ fn parse_handler_arms(ref tokens, pos) = {
     let p2 = expect(tokens, skip_ws(tokens, p + 1), TLParen)
     let (args, p3) = parse_arg_names(tokens, skip_ws(tokens, p2))
     let p4 = expect(tokens, skip_ws(tokens, p3), TFatArrow)
-    let (body, p5) = parse_expr(tokens, skip_ws(tokens, p4))
+    let (btext, bsp, p4c) = collect_leading_comments(tokens, p4, "", span_zero())
+    let (body, p5) = parse_expr(tokens, p4c)
+    if len(btext) > 0 { graph_attach_comment(node_handle(body), btext, bsp) } else { () }
     // Arm separator IS the match-arm separator — handler arms mirror
     // parse_match_arms (seed parser_handler.wat $parse_handler_arms
     // asserts this mirror). Optional `,` between arms (SYNTAX.md:862
@@ -2146,8 +2148,13 @@ fn parse_match_arms(ref tokens, pos, own buf, count) = {
     _       => {
       let (pat, p2) = parse_pat_alt(tokens, p)
       let p3 = expect(tokens, skip_ws(tokens, p2), TFatArrow)
-      let (body, p4) = parse_expr(tokens, skip_ws(tokens, p3))
+      // Prose between the arrow and the body is the arm's own (the block
+      // above a multi-line arm body) — it collects here and attaches to
+      // the same body handle the leading run uses; the weave merges.
+      let (btext, bsp, p3c) = collect_leading_comments(tokens, p3, "", span_zero())
+      let (body, p4) = parse_expr(tokens, p3c)
       if len(ctext) > 0 { graph_attach_comment(node_handle(body), ctext, csp) } else { () }
+      if len(btext) > 0 { graph_attach_comment(node_handle(body), btext, bsp) } else { () }
       let p5 = skip_ws(tokens, p4)
       let p6 = if at(tokens, p5, TComma) { p5 + 1 } else { p4 }
       let p7 = attach_trailing_comment(tokens, p6, node_handle(body))

@@ -1038,6 +1038,23 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE ARM'S ARROW STOPS EATING + THE GATE GOES LEXICAL
+  (· pin 409fc675). The ninth family: prose between an arm's `=>` and
+  its body — the single biggest remainder (lower.mn alone 116) —
+  collects at both arm loops' arrows onto the body handle; lower.mn
+  → ZERO, infer 84 → 31. The conservation gate's blind spot, found by
+  cross-checking its verdict against the independent census: a
+  weave-to-weave compare sees only what the parse ATTACHES — a
+  layout-consumed line is invisible both sides. The metric went
+  LEXICAL (one TComment per authored line; fmt lexes source and
+  render, the count difference IS the loss, never-attached included);
+  the weave-walk fns deleted. The verb's verdict now matches the
+  external census line-for-line; the python census retires for real.
+  Remaining ~65 lines are ONE class — prose in OPERATOR chains
+  (is_seq_op's || ladder, ~> stage gaps, closers) — attachable now,
+  renderable only under multi-line operator layout: the residue
+  MERGES into the width-engine build (the summit's other dep — one
+  build, not two). Board whole; idempotent-all-50.
 - 2026-07-25 · ▶▶ THE VERB CARRIES ITS OWN CENSUS — fmt's prose
   conservation gate + the else and file-tail families (· pin
   7b1b8b61). Morgan's cut ("I wish we didn't have to run python just

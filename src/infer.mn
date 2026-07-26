@@ -1357,7 +1357,8 @@ fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, l, maxl) = {
     // branches will have. Per-stmt replay keeps the sequential stderr and
     // env byte-identical; the fan defers the same replay to this barrier.
     let base = env_base_view()   // drift-audit: ignore — sequenced effectful read (the layer-start snapshot, consumed by every branch of the layer)
-    planned_layer_stmts(rows, layers, bases, stmts, l, 0, base)
+    let seed = consume_base()   // drift-audit: ignore — sequenced effectful read (the root's consumed-set at layer start, the branch ledgers' shared seed)
+    planned_layer_stmts(rows, layers, bases, stmts, l, 0, base, seed)
     planned_layer_sweep(rows, layers, bases, stmts, l + 1, maxl)
   }
 }
@@ -1371,19 +1372,19 @@ fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, l, maxl) = {
 // byte-identical by construction, and the fan's concurrent form changes
 // only WHO runs layer_judge_walk's iterations, never what the joins
 // replay.
-fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, l, i, base) = {
-  let facts = layer_judge_walk(rows, layers, bases, stmts, l, 0, base, [])
+fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, l, i, base, seed) = {
+  let facts = layer_judge_walk(rows, layers, bases, stmts, l, 0, base, seed, [])
   layer_join_walk(facts, 0)
 }
 
-fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, l, i, base, own acc) = {
+fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, l, i, base, seed, own acc) = {
   if i >= len(stmts) { acc }
   else {
-    layer_judge_walk(rows, layers, bases, stmts, l, i + 1, base,
+    layer_judge_walk(rows, layers, bases, stmts, l, i + 1, base, seed,
       if layers[i] == l {
         let (_, count) = rows[i]
         graph_mint_at(bases[i], bases[i] + count)
-        push(acc, branch_judge(stmts[i], base))
+        push(acc, branch_judge(stmts[i], base, seed))
       } else { acc })
   }
 }
@@ -1404,15 +1405,33 @@ fn layer_join_walk(ref facts, j) = {
 // per-thread tapes extend. Config args are frame locals by construction
 // (Hβ.lower.install-config-capture-read: a capture-referencing config
 // arg reads 0; params read true).
-fn branch_judge(stmt, base) = {
+fn branch_judge(stmt, base, seed) = {
   let (bb, bc, bi) = base
   let body = () => {
+    consume_seed(seed)
     infer_stmt(stmt)
+    let vdebt = verify_debt()   // drift-audit: ignore — sequenced effectful read (the branch's own accruals, collected inside its bracket)
+    let clog = consume_log()   // drift-audit: ignore — sequenced effectful read (the branch's own first-consumes, collected inside its bracket)
     let pubs = env_publishes()   // drift-audit: ignore — sequenced effectful read (the branch's publish log, collected inside its own bracket)
     let dfacts = diag_lines_taken()   // drift-audit: ignore — sequenced effectful read (the branch's rendered lines + tally, collected inside its own bracket)
-    (pubs, dfacts)
+    (pubs, dfacts, vdebt, clog)
   }
+  // The three ledgers install BRANCH-FRESH, mirroring the analysis
+  // core's order (pipeline.mn's spine law — ledgers innermost). The
+  // affine instance seeds from the root's frozen consumed-set; its log
+  // replays at the join. verify accrues branch-locally; the debt
+  // replays by re-perform — EXACT because a predicate's operands live
+  // in the branch's own planned range, so no sibling bind can move a
+  // decision between judge and join. region_tracker needs NO replay:
+  // top-level values tag region 0 (global) by construction, and a
+  // fresh instance's None answers check_escape exactly as the root's
+  // Some((_, 0)) would — same verdict, zero cross-branch state. Their
+  // arms' reports resolve outward to diag_branch (rendered at
+  // collect), so every refusal a branch raises rides the banked lines.
   body()
+    ~> affine_ledger
+    ~> region_tracker
+    ~> verify_ledger
     ~> env_handler(bb, bc, bi)
     ~> diag_branch
 }
@@ -1422,10 +1441,36 @@ fn branch_judge(stmt, base) = {
 // rendered lines re-print, the tally folds. Runs AFTER the bracket
 // closes, so every perform here resolves to the root instances.
 fn branch_join(facts) = {
-  let (pubs, dfacts) = facts
+  let (pubs, dfacts, vdebt, clog) = facts
   let (dlines, derr, dref) = dfacts
   branch_replay_pubs(pubs, 0)
+  // Both ledgers' logs are PREPEND-ordered; the replay walks from the
+  // tail so the root re-performs in occurrence order. Consumes re-check
+  // against the root's live set — a same-layer double-consume refuses
+  // HERE, deterministically, exactly as the join protocol demands. Only
+  // Own consumes ever enter the sites log (the arm's else branch), so
+  // the replay's ownership arg is Own by construction.
+  branch_replay_consumes(clog, len(clog) - 1)
+  branch_replay_verify(vdebt, len(vdebt) - 1)
   diag_absorb(dlines, derr, dref)
+}
+
+fn branch_replay_consumes(ref clog, i) = {
+  if i < 0 { () }
+  else {
+    let (name, span) = clog[i]
+    consume(name, Own, span)
+    branch_replay_consumes(clog, i - 1)
+  }
+}
+
+fn branch_replay_verify(ref vdebt, i) = {
+  if i < 0 { () }
+  else {
+    let (span, pred, reason) = vdebt[i]
+    verify(span, pred, reason)
+    branch_replay_verify(vdebt, i - 1)
+  }
 }
 
 fn branch_replay_pubs(ref pubs, i) = {

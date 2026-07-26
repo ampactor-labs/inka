@@ -137,7 +137,15 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
         with used = set_union(base, union_all_deltas(all_deltas)),
              branches = drop_last(branches)
     }
-  }
+  },
+
+  // The branch-cursor triple (the fan, C1c-2 — the op decl carries the
+  // protocol). seed replaces the consumed-set whole: the branch's fresh
+  // instance adopts the root's frozen view, its sites list stays empty
+  // so the log is exactly the branch's own first-consumes.
+  consume_seed(names) => resume() with used = names,
+  consume_base() => resume(used),
+  consume_log() => resume(used_sites)
 }
 
 // Flat-array union across all branch deltas. Every delta is already

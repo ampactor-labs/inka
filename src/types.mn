@@ -2089,6 +2089,16 @@ effect Consume {
   // here stays available in the arms). Nested via a depth counter.
   borrow_enter() -> ()
   borrow_exit() -> ()
+  // The branch-cursor triple (the fan, C1c-2): a branch judges under a
+  // FRESH ledger seeded with the root's consumed-set frozen at layer
+  // start (consume_seed at bracket entry; consume_base is the root-side
+  // capture), banks its own successful first-consumes (consume_log —
+  // the sites list, prepend-ordered), and the join re-performs them at
+  // the root in occurrence order — a same-layer double-consume
+  // re-detects deterministically at the replay, never inside a branch.
+  consume_seed([String]) -> ()
+  consume_base() -> [String]
+  consume_log() -> [(String, Span)]
 }
 
 // Generic file I/O (read/write, mkdir, exists) — the driver's module

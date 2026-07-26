@@ -1418,11 +1418,6 @@ effect GraphRead {
   // no branch ever appends). A branch graph_handler installs over
   // these with its stmt's planned range as (next0, limit0).
   graph_branch_seed() -> ([{boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody]}], Int, [(ValidSpan, Int)])
-  // The instance's open-space frontier (seal's own max) — the walk
-  // threads it branch to branch so an over-measure stmt's overflow
-  // jump lands above every prior branch's mints, exactly the root
-  // instance's sequential semantics.
-  graph_mint_high() -> Int
 }
 
 effect GraphWrite {
@@ -1450,7 +1445,12 @@ effect GraphWrite {
   // minting at the high-water mark.
   graph_mint_plan(Int) -> ()
   graph_mint_at(Int, Int) -> ()
-  graph_mint_seal() -> ()
+  // seal takes the WALK's threaded ending frontier: branch instances'
+  // overflow mints land above the plan in THEIR state, invisible to the
+  // root's own mint_high — sealing at the root's view alone parked
+  // `next` below the branches' overflow mints and every post-seal mint
+  // would collide with them.
+  graph_mint_seal(Int) -> ()
 }
 
 // ─── Diagnostics as a graph projection (SYNTAX.md §Diagnostic catalog) ──

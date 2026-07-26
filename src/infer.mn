@@ -1321,25 +1321,33 @@ fn infer_program_final(rows, layers, stmts) = {
 // virgin gap cells (absent by the column contract); one minting more
 // overflows to the open space above the plan (graph_fresh's overflow arm)
 // — both deterministic.
+// Each branch's private overflow band, above the plan. The measured
+// distribution (2026-07-26, the whole self-compile): 324 over-measure
+// stmts, every delta 1 or 2 — the fingerprint-blindness residue on the
+// convergence's carried counts — so 64 is a 32× margin, and a stmt
+// crossing its band hits the unseeded guard loudly instead of invading
+// its neighbor's. Banded overflow makes the WHOLE numbering — jumps
+// included — a pure function of the source and the plan: the keystone
+// property (deterministic handle partition) with no execution-order
+// input, which is exactly what lets the fan reproduce the sequential
+// bytes at any K.
+let mint_overflow_quota = 64
+
 fn infer_stmt_list_planned(rows, layers, stmts, summ) = {
   let flat = list_to_flat(rows)
   let start = graph_next()   // drift-audit: ignore — sequenced effectful read (the plan's frontier must precede the walk), CLAUDE.md Anchor 6 exclusion
-  graph_mint_plan(start + rows_total(flat, 0, 0))
+  // The plan covers the ranges AND the overflow bands — one region,
+  // pre-opened whole, so no branch ever opens a page.
+  let top0 = start + rows_total(flat, 0, 0)
+  let region_end = top0 + len(flat) * mint_overflow_quota
+  graph_mint_plan(region_end)
   // The branch cursors' shared graph seed, read ONCE after the plan:
-  // the plan pre-opened every band, so the spine table is stable for
-  // the whole walk, and the span index is complete (parse-only writes).
-  // The root's own next/mint_high stay plan-governed — seal reads the
-  // plan's top, so the walk needs no root-side mint_at at all.
+  // the spine table is stable for the whole walk, and the span index
+  // is complete (graph_index_span is parse-only).
   let gseed = graph_branch_seed()   // drift-audit: ignore — sequenced effectful read (the post-plan spine snapshot, every branch's config)
-  // The open-space frontier THREADS branch to branch: an over-measure
-  // stmt's overflow jump is a DESIGNED path (C1b — it allocates above
-  // the plan), so each branch's config carries the frontier the prior
-  // branch ended at, and its own ending frontier feeds the next. The
-  // root's own high stays plan-governed for the seal.
-  let top0 = graph_mint_high()   // drift-audit: ignore — sequenced effectful read (the plan's open-space frontier, the first branch's config)
   let bases = rows_bases(flat, start)
   planned_layer_sweep(flat, layers, bases, stmts, summ, gseed, top0, 0, flat_max(layers, 0, 0))
-  graph_mint_seal()
+  graph_mint_seal(region_end)
 }
 
 fn rows_total(ref rows, i, acc) = {
@@ -1365,7 +1373,7 @@ fn flat_max(ref xs, i, best) = {
   else { flat_max(xs, i + 1, if xs[i] > best { xs[i] } else { best }) }
 }
 
-fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, summ, gseed, high, l, maxl) = {
+fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, summ, gseed, top0, l, maxl) = {
   if l > maxl { () }
   else {
     // The layer-start base capture: performed OUTSIDE any branch bracket,
@@ -1376,8 +1384,8 @@ fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
     // env byte-identical; the fan defers the same replay to this barrier.
     let base = env_base_view()   // drift-audit: ignore — sequenced effectful read (the layer-start snapshot, consumed by every branch of the layer)
     let seed = consume_base()   // drift-audit: ignore — sequenced effectful read (the root's consumed-set at layer start, the branch ledgers' shared seed)
-    let hend = planned_layer_stmts(rows, layers, bases, stmts, summ, gseed, l, 0, base, seed, high)
-    planned_layer_sweep(rows, layers, bases, stmts, summ, gseed, hend, l + 1, maxl)
+    planned_layer_stmts(rows, layers, bases, stmts, summ, gseed, l, 0, base, seed, top0)
+    planned_layer_sweep(rows, layers, bases, stmts, summ, gseed, top0, l + 1, maxl)
   }
 }
 
@@ -1390,22 +1398,20 @@ fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
 // byte-identical by construction, and the fan's concurrent form changes
 // only WHO runs layer_judge_walk's iterations, never what the joins
 // replay.
-fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, l, i, base, seed, high) = {
-  let (facts, hend) = layer_judge_walk(rows, layers, bases, stmts, summ, gseed, l, 0, base, seed, high, [])
+fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, l, i, base, seed, top0) = {
+  let facts = layer_judge_walk(rows, layers, bases, stmts, summ, gseed, l, 0, base, seed, top0, [])
   layer_join_walk(facts, 0)
-  hend
 }
 
-fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, summ, gseed, l, i, base, seed, high, own acc) = {
-  if i >= len(stmts) { (acc, high) }
+fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, summ, gseed, l, i, base, seed, top0, own acc) = {
+  if i >= len(stmts) { acc }
   else {
-    if layers[i] == l {
-      let (_, count) = rows[i]
-      let facts = branch_judge(stmts[i], base, seed, summ, gseed, (bases[i], bases[i] + count, high))
-      let (_, _, _, _, bhigh) = facts
-      layer_judge_walk(rows, layers, bases, stmts, summ, gseed, l, i + 1, base, seed, bhigh, push(acc, facts))
-    }
-    else { layer_judge_walk(rows, layers, bases, stmts, summ, gseed, l, i + 1, base, seed, high, acc) }
+    layer_judge_walk(rows, layers, bases, stmts, summ, gseed, l, i + 1, base, seed, top0,
+      if layers[i] == l {
+        let (_, count) = rows[i]
+        push(acc, branch_judge(stmts[i], base, seed, summ, gseed,
+          (bases[i], bases[i] + count, top0 + i * mint_overflow_quota)))
+      } else { acc })
   }
 }
 
@@ -1437,8 +1443,7 @@ fn branch_judge(stmt, base, seed, summ, gseed, range) = {
     let clog = consume_log()   // drift-audit: ignore — sequenced effectful read (the branch's own first-consumes, collected inside its bracket)
     let pubs = env_publishes()   // drift-audit: ignore — sequenced effectful read (the branch's publish log, collected inside its own bracket)
     let dfacts = diag_lines_taken()   // drift-audit: ignore — sequenced effectful read (the branch's rendered lines + tally, collected inside its own bracket)
-    let bhigh = graph_mint_high()   // drift-audit: ignore — sequenced effectful read (the branch's ending open-space frontier, threaded to the next branch)
-    (pubs, dfacts, vdebt, clog, bhigh)
+    (pubs, dfacts, vdebt, clog)
   }
   // The bracket mirrors the ambient chain's order whole (the final's
   // trio innermost, then pipeline.mn's spine law — ledgers inside env
@@ -1459,13 +1464,15 @@ fn branch_judge(stmt, base, seed, summ, gseed, range) = {
   // The graph instance is the C1c-2a config cashed out: the branch
   // installs over the SHARED spine (pre-opened by the plan, stable for
   // the walk) with its stmt's planned range as (next0, limit0) — the
-  // former root-side graph_mint_at dissolved into this config — and
-  // the root's complete span index (parse-only writes). Its trail and
-  // checkpoints are branch-local; binds land in shared cells the plan
-  // partitioned. A branch that overflows its measured range hits the
-  // unseeded-overflow guard LOUDLY (mint_high 0) — the spawn era's
-  // abort-and-requeue tightening; the converged rounds' exact measures
-  // make the ceiling unreachable on a converging program.
+  // former root-side graph_mint_at dissolved into this config — the
+  // root's complete span index (parse-only writes), and its PRIVATE
+  // overflow band [bh, bh + quota) above the plan. An over-measure
+  // stmt jumps into its own band (the measured residue: deltas of 1–2
+  // on ~324 stmts); crossing the band trips the unseeded guard loudly.
+  // Numbering — jumps included — is therefore a pure function of the
+  // source and the plan, independent of execution order: the fan
+  // reproduces these bytes at any K. Trail and checkpoints are
+  // branch-local; binds land in shared cells the plan partitioned.
   body()
     ~> infer_ctx
     ~> fresh_for_inference
@@ -1475,7 +1482,7 @@ fn branch_judge(stmt, base, seed, summ, gseed, range) = {
     ~> verify_ledger
     ~> lookup_ty_graph
     ~> env_handler(bb, bc, bi)
-    ~> graph_handler(gspine, gopen, mb, mc, gspan, bh)
+    ~> graph_handler(gspine, gopen, mb, mc, gspan, bh, bh + mint_overflow_quota)
     ~> mutate_sink
     ~> diag_branch
 }
@@ -1485,7 +1492,7 @@ fn branch_judge(stmt, base, seed, summ, gseed, range) = {
 // rendered lines re-print, the tally folds. Runs AFTER the bracket
 // closes, so every perform here resolves to the root instances.
 fn branch_join(facts) = {
-  let (pubs, dfacts, vdebt, clog, _bhigh) = facts
+  let (pubs, dfacts, vdebt, clog) = facts
   let (dlines, derr, dref) = dfacts
   branch_replay_pubs(pubs, 0)
   // Both ledgers' logs are PREPEND-ordered; the replay walks from the

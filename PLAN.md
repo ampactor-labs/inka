@@ -1038,6 +1038,41 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-26 · ▶▶▶ THE PARTITION GOES EXECUTION-ORDER-FREE — banded
+  overflow completes the deterministic-handle-partition keystone
+  (rung 3's opening pair · pin f7c96d1b). The interrogation on the
+  spawn found the threaded form's own latent collision first: branch
+  overflow mints live above a seal that parked `next` below them —
+  graph_mint_seal now takes the walk's true frontier. MEASURED
+  (OVERFLOWPROBE, probe-then-decide): 612 overflow handles across 324
+  stmts, EVERY delta 1 or 2 — the fingerprint-blindness residue on
+  the convergence's carried counts, systematic and tiny — so the
+  threading DIES into per-stmt PRIVATE overflow bands (64 handles,
+  32× margin, ~11 pre-opened spine bands ≈ 4MB): the mint arm's jump
+  takes the banded ceiling (high_limit, config slot 7; 0 = the root's
+  unlimited today-form) and CONSUMES the target, so a band-crossing
+  mint meets mint_high 0 and the EXISTING unseeded guard traps loudly
+  instead of invading a neighbor's band. graph_mint_high and the
+  branch-to-branch high threading DELETED (the region end is static —
+  less code, the law smiling). Numbering — overflow jumps included —
+  is now a PURE FUNCTION of (source, plan) with zero execution-order
+  input: the fan reproduces the sequential bytes at ANY K, which
+  upgrades the C1c gate from self-stability to true byte-equality.
+  TRANSITION m3 == m4 at 322,925 lines; census 0 at every generation;
+  frontier 279/0; proof-exactness 9/9; crown 5/5; micros 116/0. THE
+  SPAWN'S REMAINING PAIR, scoped exactly: (1) the intern VIEW —
+  intern_table gains the config triple (buckets0, entries0, count0) +
+  an intern_seed export; a branch view's READS serve (renders need
+  intern_name_of); its MISS is LOUD by the banked law (a
+  branch-minted intern handle escaping into published state would
+  read garbage at the root — never an accident-invariant); measured
+  expectation: zero misses (all names intern at parse). (2) the
+  spawn walk — spawn-per-branch join-immediately first (every branch
+  a REAL task via the substrate's spawn_task/join_task, the wheel's
+  shared-image memory flip as the measured TRANSITION, zero race
+  surface), then K>1 with the same-layer handler-sig barrier class
+  settled (both installs bind one prepass-minted sig — sequential
+  post-join or own-layer those stmts).
 - 2026-07-26 · ▶▶▶▶ THE BRANCH CURSOR IS WHOLE — every handler
   branch-local, the spawn now pure scheduling (rung 2b closes the
   bracket's self-containment · pin 4a1363ab). The graph instance is

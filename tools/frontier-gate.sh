@@ -1414,7 +1414,8 @@ for i in "${!compilers[@]}"; do
   # parse-sorted). The earlier banked `{ level: Int, kind: String }` was
   # show_type's voice spacing, retired when the formatter grew its own
   # surface-type projection.
-  if grep -q '^// The fmt fixture' "$fdemo2/rich.mn" && grep -q 'b: {kind: String, level: Int}' "$fdemo2/rich.mn"; then
+  if grep -q '^// The fmt fixture' "$fdemo2/rich.mn" && grep -q 'b: {kind: String, level: Int}' "$fdemo2/rich.mn" \
+     && grep -q 'the zero arm teaches the dark default' "$fdemo2/rich.mn"; then
     pass "fmt carries comments and authored annotations"
   else
     fail "fmt prose/annotation carry"

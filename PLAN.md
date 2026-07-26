@@ -1038,6 +1038,35 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ THE PROSE JOINS THE WEAVE — five comment families
+  attach, ops and variants become addressable, the probe law lands
+  (· pin 694716c1). The summit's 2,803 dropped comment lines fall to
+  469 (83% recovered) with IDEMPOTENT-ALL-50 held. Families, each
+  census-measured RED first: MATCH ARMS (1,353 — leading prose to the
+  arm's BODY node, the arm's one handle; the caller's skip_ws ate the
+  run before the loop's collect); HANDLER ARMS (the same recipe closes
+  Hβ.parser.handler-arm-doc-attachment, a seed-era "for now");
+  BRACELESS-CHAIN CONTINUATIONS (344 — the expr-position let runs the
+  block loop's full discipline, and desugar_block TRANSFERS a
+  dissolving destructure-let's prose to the arm body: movement, never
+  loss); EFFECT OPS (677) and TYPE VARIANTS (312) become ADDRESSABLE —
+  each row widens with its minted NTypeAnn node (the row's genuine
+  type fact, its handle in the weave); the census named all thirteen
+  consumer destructures. THE NON-CONSUMING PROBE LAW, paid for by the
+  alternating-drop memory.mn measured (every arrowless op swallowed
+  its successor's prose): a lookahead probe returns the PRE-probe
+  position on a miss — a scan is a read, never a consume. The
+  vertical variant layout renders prose-carrying ADTs (connective
+  owned by the variant render); parse_type_decl routes the
+  name-to-`=` run to the first variant. THE RATCHET'S OWN PROOF: the
+  moment op/arm/variant prose entered the weave the comment-refs gate
+  judged it — 16 never-audited phantoms fired, each trued to 0.
+  Named remainder (469): before if/else (286) + before match head
+  (126) — expression-position runs needing render sites at the
+  if/match projections — plus closer/eof tails;
+  Hβ.parser.expr-interior-comment-attach narrows to exactly that.
+  CLEAN m2 == m3 at 299,248 lines; census 0; comment-refs 0; frontier
+  279/0; proof-exactness 9/9; crown 5/5; micros 114/114.
 - 2026-07-25 · ▶▶▶ IDEMPOTENT-ALL-50 — the fmt fixpoint reached; the
   summit's swap gated by its own comment law (· pin 672a924b). Four
   render roots + one parse canonicalization, each convicted by the

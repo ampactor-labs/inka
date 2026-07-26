@@ -149,7 +149,7 @@ type TopicFacts
 // users rarely override.
 
 type FormKind
-  = FFactual          // "`x` is Pure." (Query)
+  = FFactual          // "x is Pure." (Query)
   | FOffering         // "Adding `with Pure` unlocks memoization." (Propose / Topology)
   | FRefutation       // "`own x` consumed twice at L40." (Trace)
   | FNavigation       // "`env_lookup` — returns `Option(Entry)`." (Query deep)

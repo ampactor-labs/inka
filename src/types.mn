@@ -723,7 +723,7 @@ type Reason
   | FreshInContext(Int, String)          // handle, context_name — "fresh in 'process'" not "fresh 42"
   | DefaultReason(String, Span)          // a param defaulted from `= expr` at the
                                          // decl_site — the Why projection at a
-                                         // defaulted call slot walks here ("`ratio`
+                                         // defaulted call slot walks here ("ratio
                                          // defaulted to its declaration; annotate to
                                          // pin"). SYNTAX.md §«Default parameter values».
   | VerifyWitness(String)                // the SAT model the SMT handler produced
@@ -1180,9 +1180,9 @@ type Stmt
   = LetStmt(Pat, Node, Node)     // pat, value, annotation node (NTypeAnn(ty) present, LitUnit absent — mirrors FnStmt's ret_ann)
   | FnStmt(String, [TParam], Node, [(EffName, Bool, EConn)], Node)
                            // name, params (TParam), retty, effects, body
-  | TypeDefStmt(String, [(String, [Ty])])
+  | TypeDefStmt(String, [(String, [Ty], Node)])
                            // name, then per variant its name + field types
-  | EffectDeclStmt(String, [(String, [Ty], Ty)])
+  | EffectDeclStmt(String, [(String, [Ty], Ty, Node)])
                            // effect name, ops (each is (op_name, param_tys, ret_ty);
                            // ResumeDiscipline is inferred at handler-decl time
                            // from each arm body, not declared on the effect op)
@@ -1392,8 +1392,8 @@ effect GraphRead {
   graph_comment_span_at(Int) -> Span  // the comment's own source span, carried from parse (zero span if absent) — the reference diagnostics anchor here
   graph_attach_comment_ref(Int, Int) -> ()  // draw a resolved comment-reference edge (owner node -> referent decl node); drawn once at the infer tail
   graph_comment_refs_of(Int) -> [Int]       // reverse read: the comment owners referencing this decl — the audit's referenced-by projection
-  graph_canon_at(Int) -> Int          // the e-graph canonical pointer at a handle — the equivalence weave's `find` step (returns the handle itself if it is its own e-class root). One co-indexed weave, exactly like `nodes`' TVar union-find; egraph_extract chases it live.
-  graph_narrow_at(Int) -> Int         // the refinement-narrowing pointer at a handle — the path-predicate's bool-node handle proven to hold AT this program point (0 = no narrowing). One co-indexed weave like `canon`; lower's verify-obligation read chases it live to elide a check the path already proves (§4⑥). Appropriate as a side-table: narrowing is a per-program-point boolean fact, not a unifiable variable.
+  graph_canon_at(Int) -> Int          // the e-graph canonical pointer at a handle — the equivalence weave's find step (returns the handle itself if it is its own e-class root). One co-indexed weave, exactly like the nodes column's TVar union-find; egraph_extract chases it live.
+  graph_narrow_at(Int) -> Int         // the refinement-narrowing pointer at a handle — the path-predicate's bool-node handle proven to hold AT this program point (0 = no narrowing). One co-indexed weave like the canon column; lower's verify-obligation read chases it live to elide a check the path already proves (§4⑥). Appropriate as a side-table: narrowing is a per-program-point boolean fact, not a unifiable variable.
   graph_boundary_at(Int) -> ExecutableBoundary // exact compiler-created executable edges keyed by fanout site
 }
 
@@ -1402,8 +1402,8 @@ effect GraphWrite {
   graph_fresh_row(Reason) -> Handle
   graph_register_node(Int, NodeBody) -> ()    // edge-link a node's body into the one graph at its handle (the program column of the handle's page); resolves via graph_node_body
   graph_attach_comment(Int, String, Span) -> ()  // attach parse-collected comment prose + its span to a node's handle (the comment column of the handle's page); resolves via graph_comment_at — a comment is graph content
-  graph_canon_set(Int, Int) -> ()              // draw the e-graph equivalence edge `from ≡ to` — point `from`'s canonical pointer at the cheaper `to`. The union-find `union` over the equivalence weave; saturation reads it back via graph_canon_at (find). Idempotent: re-pointing an already-rooted `from` overwrites in place (one cell), never grows a ledger.
-  graph_narrow_set(Int, Int) -> ()             // draw the refinement-narrowing edge — point program-point `handle`'s narrowing pointer at the path-predicate's bool-node `pred_handle` proven to hold there (§4⑥). One co-indexed weave like `canon`; idempotent (one cell per handle), read back via graph_narrow_at by lower's check-elision.
+  graph_canon_set(Int, Int) -> ()              // draw the e-graph equivalence edge from ≡ to — point the from-side's canonical pointer at the cheaper target. The union-find union step over the equivalence weave; saturation reads it back via graph_canon_at (find). Idempotent: re-pointing an already-rooted source overwrites in place (one cell), never grows a ledger.
+  graph_narrow_set(Int, Int) -> ()             // draw the refinement-narrowing edge — point the program point's narrowing pointer at the path-predicate's bool-node proven to hold there (§4⑥). One co-indexed weave like the canon column; idempotent (one cell per handle), read back via graph_narrow_at by lower's check-elision.
   graph_boundary_set(Int, ExecutableBoundary) -> () // draw/replace one fanout's executable edges; trail-backed because inference runs under speculative checkpoints
   graph_bind(Int, Ty, Reason) -> ()
   graph_bind_hole(Int, Reason) -> ()   // mark a node an OBSERVED FAILURE (NErrorHole) — the productive-under-error poison. An env miss binds this, never TVar(self): the self-var tripped graph_bind's own occurs check (a spurious 0:0 E_OccursCheck per missing name) and read downstream as a normal free var (the ownership move-default cascade). A hole is the fact itself: unify no-ops on it, generalize preserves the handle, consumers stay silent.

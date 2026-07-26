@@ -675,7 +675,11 @@ fn parse_let(ref tokens, pos) = {
 fn parse_type_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
-  let p = skip_ws(tokens, pos + 1)
+  // The vertical variant layout puts the first variant's prose between
+  // the name and the `=` — the run collects HERE and routes to the first
+  // variant's node (or, for the other decl shapes, to the decl node),
+  // where the old skip_ws consumed it as layout.
+  let (dtext, dsp, p) = collect_leading_comments(tokens, pos + 1, "", span_zero())
   let p2 = if at(tokens, p, TEq) { skip_ws(tokens, p + 1) } else { p }
 
   if at(tokens, p2, TLBrace) {
@@ -688,7 +692,7 @@ fn parse_type_decl(ref tokens, pos) = {
     // A nominal record is closed by definition — its name IS the brand,
     // so an open rest is meaningless here; the closed TRecord is the body.
     let body = TRecord(sorted)
-    let variant = (name, [body])     // single variant named after the type
+    let variant = (name, [body], mint_node(NTypeAnn(body), start))
     (nstmt(TypeDefStmt(name, [variant]), start), p3)
   } else {
     // The RHS is a type expression. Parse it WHOLE, then branch on what
@@ -709,12 +713,16 @@ fn parse_type_decl(ref tokens, pos) = {
     } else if at(tokens, term, TPipe) || at(tokens, term, TPlus)
        || at(tokens, term, TMinus) || at(tokens, term, TAmp) {
       let (variants, p3) = parse_variants(tokens, p2)
+      if len(dtext) > 0 && len(variants) > 0 {
+        let (_, _, cn0) = variants[0]
+        graph_attach_comment(node_handle(cn0), dtext, dsp)
+      } else { () }
       (nstmt(TypeDefStmt(name, variants), start), p3)
     } else {
       match alias_ty {
         TName(vname, fields) =>
           if len(fields) > 0 {
-            (nstmt(TypeDefStmt(name, [(vname, fields)]), start), p_alias)
+            (nstmt(TypeDefStmt(name, [(vname, fields, mint_node(NTypeAnn(TTuple(fields)), start))]), start), p_alias)
           } else {
             (nstmt(AliasStmt(name, alias_ty), start), p_alias)
           },
@@ -725,7 +733,12 @@ fn parse_type_decl(ref tokens, pos) = {
 }
 
 fn parse_variants(ref tokens, pos) = {
-  let p = skip_ws(tokens, pos)
+  // A variant's prose attaches to the variant's OWN node — the minted
+  // NTypeAnn carrying its payload product (the ctor's type fact, its
+  // handle in the comment weave); the row widens to carry it, and the
+  // render emits the prose above the variant (312 variant comments were
+  // consumed as layout by the old head skip_ws).
+  let (ctext, csp, p) = collect_leading_comments(tokens, pos, "", span_zero())
   if at(tokens, p, TEof) {
     // EOF inside variant declarations — halt with the empty list
     // and emit ONE diagnostic per the unclosed-construct discipline.
@@ -736,6 +749,7 @@ fn parse_variants(ref tokens, pos) = {
     report(PUnclosedConstruct("unexpected end of input inside type-decl variants; expected a variant name or `|`", span_at(tokens, p)))
     ([], p)
   } else {
+    let vspan = span_at(tokens, p)
     let vname = ident_at(tokens, p)
     let p2 = p + 1
     let (fields, p3) =
@@ -744,15 +758,27 @@ fn parse_variants(ref tokens, pos) = {
       } else {
         ([], p2)
       }
-    let variant = (vname, fields)
-    let p4 = skip_ws(tokens, p3)
+    let cnode = mint_node(NTypeAnn(TTuple(fields)), vspan)
+    if len(ctext) > 0 { graph_attach_comment(node_handle(cnode), ctext, csp) } else { () }
+    let p3t = attach_trailing_comment(tokens, p3, node_handle(cnode))
+    let variant = (vname, fields, cnode)
+    // Between-variant prose precedes the `|`, so the run is scanned HERE:
+    // with a `|` continuation it attaches to the NEXT variant's node
+    // (rest's head); with none, the pre-run position returns unchanged so
+    // the run attaches at the statement layer — a scan is a read, never a
+    // consume.
+    let (ctext2, csp2, p4) = collect_leading_comments(tokens, p3t, "", span_zero())
     if at(tokens, p4, TPipe) {
-      let (rest, p5) = parse_variants(tokens, skip_ws(tokens, p4 + 1))
+      let (rest, p5) = parse_variants(tokens, p4 + 1)
+      if len(ctext2) > 0 && len(rest) > 0 {
+        let (_, _, cn0) = rest[0]
+        graph_attach_comment(node_handle(cn0), ctext2, csp2)
+      } else { () }
       ([variant] ++ rest, p5)
     } else {
       // Same law as binop_loop: no `|` continuation — resume at any
       // following comment run so it attaches at the statement layer.
-      ([variant], skip_seps_only(tokens, p3))
+      ([variant], skip_seps_only(tokens, p3t))
     }
   }
 }
@@ -779,34 +805,46 @@ fn parse_effect_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
   let p = expect(tokens, skip_ws(tokens, pos + 1), TLBrace)
-  let (ops, p2) = parse_effect_ops(tokens, skip_ws(tokens, p))
+  let (ops, p2) = parse_effect_ops(tokens, p)
   (nstmt(EffectDeclStmt(name, ops), start), p2)
 }
 
 fn parse_effect_ops(ref tokens, pos) = {
-  let p = skip_ws(tokens, pos)
+  // An op's prose attaches to the op's OWN node — the minted NTypeAnn
+  // carrying its return type is the op's handle in the comment weave, and
+  // the row widens to carry it (registration ignores the slot; the render
+  // emits the prose above the op). This makes ops ADDRESSABLE: the second
+  // biggest class of the fmt sweep's dropped comments (677 op-decl lines
+  // consumed as layout by the old head's null-recovery skip).
+  let (ctext, csp, p) = collect_leading_comments(tokens, pos, "", span_zero())
   if at(tokens, p, TRBrace) || at(tokens, p, TEof) { ([], p + 1) }
   else if !is_param_name_tok(tokens, p) {
-    // Not an op-name here — e.g. a TComment preceding the op. An op is not a
-    // top-level decl handle in the comment weave, so the comment is not attached
-    // here; it advances past. Seed parity: $parse_effect_ops null-recovery
-    // (protocol_parser_fabrication_substrate) — advance past the token, skip
-    // separators, retry. TEof above bounds the recursion.
+    // Not an op-name here — stray tokens. Seed parity: $parse_effect_ops
+    // null-recovery (protocol_parser_fabrication_substrate) — advance
+    // past the token, skip separators, retry. TEof above bounds the
+    // recursion.
     parse_effect_ops(tokens, skip_sep(tokens, p + 1))
   } else {
+    let op_span = span_at(tokens, p)
     let op_name = ident_at(tokens, p)
     let p2 = expect(tokens, skip_ws(tokens, p + 1), TLParen)
     let (param_tys, p3) = parse_op_params(tokens, skip_ws(tokens, p2))
+    // The arrow PROBE must not consume: a miss returns the pre-probe
+    // position, or the skip eats the NEXT op's leading comment run (the
+    // alternating-drop the memory.mn idempotence diff measured — every
+    // arrowless op swallowed its successor's prose).
     let p4 = skip_ws(tokens, p3)
     let (ret_ty, p5) =
       if at(tokens, p4, TArrow) {
         parse_type_ty(tokens, skip_ws(tokens, p4 + 1))
       } else {
-        (TUnit, p4)
+        (TUnit, p3)
       }
-    let p6 = skip_sep(tokens, p5)
-    let (rest, p7) = parse_effect_ops(tokens, p6)
-    ([(op_name, param_tys, ret_ty)] ++ rest, p7)
+    let cnode = mint_node(NTypeAnn(ret_ty), op_span)
+    if len(ctext) > 0 { graph_attach_comment(node_handle(cnode), ctext, csp) } else { () }
+    let p5t = attach_trailing_comment(tokens, p5, node_handle(cnode))
+    let (rest, p7) = parse_effect_ops(tokens, p5t)
+    ([(op_name, param_tys, ret_ty, cnode)] ++ rest, p7)
   }
 }
 
@@ -902,7 +940,7 @@ fn parse_handler_decl(ref tokens, pos) = {
       }
     } else { ([], p_after_config) }
   let p_open = expect(tokens, skip_ws(tokens, p_after_state), TLBrace)
-  let (arms, p_close) = parse_handler_arms(tokens, skip_ws(tokens, p_open))
+  let (arms, p_close) = parse_handler_arms(tokens, p_open)
   (nstmt(HandlerDeclStmt(name, "", config, state, arms), start), p_close)
 }
 
@@ -979,16 +1017,18 @@ fn parse_resume_state_updates(ref tokens, pos) = {
 }
 
 fn parse_handler_arms(ref tokens, pos) = {
-  let p = skip_ws(tokens, pos)
+  // An arm's leading prose attaches to the arm's BODY node exactly as
+  // match arms do — one recipe, both arm families (this closes
+  // Hβ.parser.handler-arm-doc-attachment; the old head skip_ws consumed
+  // the run as layout).
+  let (ctext, csp, p) = collect_leading_comments(tokens, pos, "", span_zero())
   if at(tokens, p, TRBrace) { ([], p + 1) }
   else if at(tokens, p, TEof) { ([], p) }
   else if !is_param_name_tok(tokens, p) {
-    // Non-ident at arm start (e.g., `///` doc-comment preceding the arm,
-    // or stray tokens). Seed parity: $parse_handler_arm returns null when
-    // $ident_at_p returns null → arm loop terminates. Doc-comment
-    // attachment inside handler blocks is a named post-L1 peer
-    // (Hβ.parser.handler-arm-doc-attachment); for now, skip the token
-    // and retry — same discipline as parse_effect_ops (line 693-700).
+    // Non-ident at arm start (stray tokens). Seed parity:
+    // $parse_handler_arm returns null when $ident_at_p returns null →
+    // arm loop terminates; skip the token and retry — same discipline as
+    // parse_effect_ops.
     parse_handler_arms(tokens, skip_sep(tokens, p + 1))
   } else {
     let op_name = ident_at(tokens, p)
@@ -1003,8 +1043,10 @@ fn parse_handler_arms(ref tokens, pos) = {
     // arms. Converges the prior skip_sep divergence to the canonical
     // sibling idiom.
     let p5b = skip_ws(tokens, p5)
-    let p6 = if at(tokens, p5b, TComma) { p5b + 1 } else { p5b }
-    let (rest, p7) = parse_handler_arms(tokens, skip_ws(tokens, p6))
+    let p6 = if at(tokens, p5b, TComma) { p5b + 1 } else { p5 }
+    if len(ctext) > 0 { graph_attach_comment(node_handle(body), ctext, csp) } else { () }
+    let p6t = attach_trailing_comment(tokens, p6, node_handle(body))
+    let (rest, p7) = parse_handler_arms(tokens, p6t)
     // Per Ω.5 frame-record discipline + H1.4 future wiring,
     // arms are records keyed by field name. New fields (e.g.,
     // arm_fn_idx for handler arm fn indexing) land additively.
@@ -1146,16 +1188,27 @@ fn parse_let_expr(ref tokens, pos, start_span) = {
   } else { p2 }
   let p4 = expect(tokens, p3, TEq)
   let (val, p5) = parse_expr(tokens, skip_ws(tokens, p4))
-  // Continuation: after the value, skip separator (; or newline) and
-  // parse the body expression.
-  let p6 = skip_sep(tokens, p5)
-  let (body, p7) = parse_expr(tokens, p6)
-  // Desugar: wrap as BlockExpr([LetStmt(pat, val)], body)
-  // BlockExpr takes (stmts, final_expr) — the let is a statement,
-  // body is the final expression value of the block.
-  // Reuse the value node as the absent-annotation sentinel (byte-identical;
-  // the expr-form let does not carry an annotation — Hβ.parser.let-expr-annotation).
+  // Continuation: after the value, a trailing same-line comment attaches
+  // backward to THIS let, a leading run attaches forward to the
+  // continuation's first node, and only then does the body parse — the
+  // old skip_sep consumed both runs as layout (344 braceless-chain
+  // comments in the fmt sweep's census). The let node mints before the
+  // continuation so the backward attach has its handle; handle order is
+  // a per-compile fact, not a meaning.
   let let_stmt = nstmt(LetStmt(pat, val, val), start_span)
+  let p5t = attach_trailing_comment(tokens, p5, node_handle(let_stmt))
+  let (ctext, csp, p6) = collect_leading_comments(tokens, p5t, "", span_zero())
+  let (body, p7) = parse_expr(tokens, p6)
+  // The collected leading run attaches to the continuation's FIRST node —
+  // the flattened block's head statement, else the final expression —
+  // where the block render already emits it (render_stmt_comment); the
+  // desugar reuses the value node as the absent-annotation sentinel
+  // (Hβ.parser.let-expr-annotation).
+  let target = match body {
+    N(NExpr(BlockExpr(stmts2, _)), _, _) => node_handle(stmts2[0]),
+    _                                    => node_handle(body),
+  }
+  if len(ctext) > 0 { graph_attach_comment(target, ctext, csp) } else { () }
   // THE CHAIN FLATTENS AT PARSE: a continuation that is itself a block
   // merges into ONE statement sequence, so the braceless let-chain and the
   // braced block parse to the SAME graph (principle 2 — one meaning, one
@@ -1982,12 +2035,17 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
 fn desugar_block(stmts, final_e, span) = match find_destructure_let(stmts, 0) {
   None    => BlockExpr(stmts, final_e),
   Some(i) => {
-    let N(NStmt(LetStmt(pat, v, _)), lsp, _) = list_index(stmts, i)
+    let N(NStmt(LetStmt(pat, v, _)), lsp, lh) = list_index(stmts, i)
     let rest_stmts = slice(stmts, i + 1, len(stmts))
     // The arm body is exactly what follows the destructure — a bare final when
     // nothing intervenes, else the desugared remainder. No redundant block.
     let arm_body = if len(rest_stmts) == 0 { final_e }
                    else { nexpr(desugar_block(rest_stmts, final_e, lsp), lsp) }
+    // The let node dissolves here, so its attached prose transfers to the
+    // arm body — the arm render emits it above the pattern that WAS the
+    // let, and a reparse re-attaches it there (movement, never loss).
+    let lc = graph_comment_at(lh)
+    if len(lc) > 0 { graph_attach_comment(node_handle(arm_body), lc, lsp) } else { () }
     let m = MatchExpr(v, [(pat, arm_body)])
     // A destructure at the head IS the match (no empty-prefix block); otherwise
     // the prefix stmts carry the match as their final. Byte-for-byte a
@@ -2052,12 +2110,18 @@ fn parse_match(ref tokens, pos, span: ValidSpan) = {
   let p2 = expect(tokens, skip_ws(tokens, p), TLBrace)
   let buf = make_list(4)
   let (final_buf, final_count, p3) =
-    parse_match_arms(tokens, skip_ws(tokens, p2), buf, 0)
+    parse_match_arms(tokens, p2, buf, 0)
   (nexpr(MatchExpr(scrutinee, slice(final_buf, 0, final_count)), span), p3)
 }
 
 fn parse_match_arms(ref tokens, pos, own buf, count) = {
-  let p = skip_ws(tokens, pos)
+  // An arm's leading prose attaches to the arm's BODY node — the arm's
+  // one handle (patterns are bare values) — and a trailing same-line
+  // comment attaches backward to the same handle, so per-arm prose is
+  // graph content the render emits above the arm (the biggest class of
+  // the fmt sweep's dropped comments: 1,353 arm comments consumed as
+  // layout by the old skip_ws entry).
+  let (ctext, csp, p) = collect_leading_comments(tokens, pos, "", span_zero())
   match kind_at(tokens, p) {
     TRBrace => (buf, count, p + 1),
     TEof    => unclosed_eof(tokens, p, "match arms", buf, count),
@@ -2065,10 +2129,12 @@ fn parse_match_arms(ref tokens, pos, own buf, count) = {
       let (pat, p2) = parse_pat_alt(tokens, p)
       let p3 = expect(tokens, skip_ws(tokens, p2), TFatArrow)
       let (body, p4) = parse_expr(tokens, skip_ws(tokens, p3))
+      if len(ctext) > 0 { graph_attach_comment(node_handle(body), ctext, csp) } else { () }
       let p5 = skip_ws(tokens, p4)
-      let p6 = if at(tokens, p5, TComma) { p5 + 1 } else { p5 }
+      let p6 = if at(tokens, p5, TComma) { p5 + 1 } else { p4 }
+      let p7 = attach_trailing_comment(tokens, p6, node_handle(body))
       let (b1, c1) = push_node(buf, count, (pat, body))
-      parse_match_arms(tokens, skip_ws(tokens, p6), b1, c1)
+      parse_match_arms(tokens, p7, b1, c1)
     }
   }
 }

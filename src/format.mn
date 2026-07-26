@@ -405,7 +405,7 @@ fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   LetStmt(pat, value, ann) =>
     "let {render_pat_tokens(pat)}{render_let_ann(ann)} = {render_tokens_for(value)}",
   TypeDefStmt(name, variants) =>
-    "type {name} = {render_variants(variants, 0)}",
+    "type {name}{render_variants(variants, 0)}",
   // Op param NAMES are parse-consumed (the ADT stores types only), and
   // bare types parse in op position — the render is the parse's inverse
   // over what the graph carries.
@@ -648,7 +648,7 @@ fn render_match_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate + In
   if i >= len(arms) { "" }
   else {
     let (pat, body) = arms[i]
-    "  {render_pat_tokens(pat)} => {render_grouped_body(body)},\n{render_match_arms(arms, i + 1)}"
+    "{render_stmt_comment(body)}  {render_pat_tokens(pat)} => {render_grouped_body(body)},\n{render_match_arms(arms, i + 1)}"
   }
 }
 
@@ -672,13 +672,40 @@ fn render_let_ann(ann) with GraphRead + Memory + Alloc + !Mutate + Intern = matc
   _            => ""   // drift-audit: ignore — the ADT's own absence sentinel: LetStmt's ann node is LitUnit when unannotated (the LetStmt decl comment); any non-NTypeAnn body IS that absence, rendered as no clause
 }
 
+// A commented variant set renders VERTICAL (prose above each variant,
+// `=`/`|` leading); a prose-free set keeps the inline ` | ` join.
 fn render_variants(ref variants, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  if variants_carry_prose(variants, 0) { "\n{render_variants_vertical(variants, 0)}" }
+  else { " = {render_variants_inline(variants, i)}" }
+}
+
+fn variants_carry_prose(ref variants, i) with GraphRead + Memory + Alloc + !Mutate = {
+  if i >= len(variants) { false }
+  else {
+    let (_, _, cn) = variants[i]
+    if graph_comment_at(node_handle(cn)) == "" { variants_carry_prose(variants, i + 1) }
+    else { true }
+  }
+}
+
+fn render_variants_inline(ref variants, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(variants) { "" }
   else {
-    let (vname, tys) = variants[i]
+    let (vname, tys, _) = variants[i]
     let one = if len(tys) == 0 { vname } else { "{vname}({render_ty_list(tys, 0)})" }
     if i == len(variants) - 1 { one }
-    else { "{one} | {render_variants(variants, i + 1)}" }
+    else { "{one} | {render_variants_inline(variants, i + 1)}" }
+  }
+}
+
+fn render_variants_vertical(ref variants, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  if i >= len(variants) { "" }
+  else {
+    let (vname, tys, cn) = variants[i]
+    let one = if len(tys) == 0 { vname } else { "{vname}({render_ty_list(tys, 0)})" }
+    let lead = if i == 0 { "=" } else { "|" }
+    let tail = if i == len(variants) - 1 { "" } else { "\n{render_variants_vertical(variants, i + 1)}" }
+    "{render_stmt_comment(cn)}  {lead} {one}{tail}"
   }
 }
 
@@ -786,12 +813,12 @@ fn render_ty_list(ref tys, i) with GraphRead + Memory + Alloc + !Mutate + Intern
 fn render_effect_ops(ref ops, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(ops) { "" }
   else {
-    let (oname, ptys, rty) = ops[i]
+    let (oname, ptys, rty, cnode) = ops[i]
     let ret = match rty {
       TUnit => "",
       t     => " -> {render_type_tokens(t)}"
     }
-    "  {oname}({render_ty_list(ptys, 0)}){ret}\n{render_effect_ops(ops, i + 1)}"
+    "{render_stmt_comment(cnode)}  {oname}({render_ty_list(ptys, 0)}){ret}\n{render_effect_ops(ops, i + 1)}"
   }
 }
 
@@ -841,7 +868,7 @@ fn render_handler_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate + 
   if i >= len(arms) { "" }
   else {
     let a = arms[i]
-    "  {handler_arm_op_name(a)}({render_name_list(handler_arm_args(a), 0)}) => {render_tokens_for(handler_arm_body(a))},\n{render_handler_arms(arms, i + 1)}"
+    "{render_stmt_comment(handler_arm_body(a))}  {handler_arm_op_name(a)}({render_name_list(handler_arm_args(a), 0)}) => {render_grouped_body(handler_arm_body(a))},\n{render_handler_arms(arms, i + 1)}"
   }
 }
 

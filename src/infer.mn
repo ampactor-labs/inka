@@ -357,7 +357,7 @@ fn comment_decl_index(ref stmts, i, idx) = {
 fn ctor_index_add(ref ctors, i, idx, h) = {
   if i >= len(ctors) { idx }
   else {
-    let (cname, _) = list_index(ctors, i)
+    let (cname, _, _) = list_index(ctors, i)
     ctor_index_add(ctors, i + 1, smap_add(idx, cname, h), h)
   }
 }
@@ -365,7 +365,7 @@ fn ctor_index_add(ref ctors, i, idx, h) = {
 fn op_index_add(ref ops, i, idx, h) = {
   if i >= len(ops) { idx }
   else {
-    let (opname, _, _) = list_index(ops, i)
+    let (opname, _, _, _) = list_index(ops, i)
     op_index_add(ops, i + 1, smap_add(idx, opname, h), h)
   }
 }
@@ -561,7 +561,7 @@ fn comment_locals(h) =
 fn cl_ctor_names(ref ctors, i, acc) =
   if i >= len(ctors) { acc }
   else {
-    let (cname, tys) = list_index(ctors, i)
+    let (cname, tys, _) = list_index(ctors, i)
     cl_ctor_names(ctors, i + 1, cl_ctor_field_names(tys, 0, acc ++ [cname]))
   }
 
@@ -661,7 +661,7 @@ fn cl_arm_names(ref arms: [{args: [String], body: Node, op_name: String}], i, ac
 fn cl_op_names(ref ops, i, acc) =
   if i >= len(ops) { acc }
   else {
-    let (opname, _, _) = list_index(ops, i)
+    let (opname, _, _, _) = list_index(ops, i)
     cl_op_names(ops, i + 1, acc ++ [opname])
   }
 
@@ -3093,13 +3093,14 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
       TVar(ha) =>
         match b {
           TVar(hb) => unify(ha, hb, span, reason),
-        // CARRIED-TRUTH: `ha` may ALREADY be bound (a use-site handle the graph
+        // CARRIED-TRUTH: the left handle may ALREADY be bound (a use-site handle the graph
         // proved — e.g. a lambda arg's `(r) -> ret`). Read it live: if NBound,
         // unify `b` AGAINST that existing type, never `graph_bind` over it. The
         // raw bind discards the proof and orphans its inner vars — the config-fn
-        // /HOF field-access disconnect (`f`'s resolved `(P) -> R` bound onto the
-        // lambda handle erased `(r) -> ret`, so `P` never met `r` and `r.field`
-        // floored on an open row). A genuinely-free var still binds.
+        // /HOF field-access disconnect (a callee's resolved param type bound
+        // onto the lambda handle erased the lambda's own arrow, so the param
+        // never met the binder and its field read floored on an open row). A
+        // genuinely-free var still binds.
         _ => {
           let root = graph_chase_handle(ha)
           match graph_chase(root) {
@@ -4979,7 +4980,7 @@ fn register_type_constructors(type_name, variants) = {
   // deleted scans produced.
   let single_record =
     if total == 1 {
-      let (cn0, _) = list_index(variants, 0)
+      let (cn0, _, _) = list_index(variants, 0)
       let f0 = list_index(converted, 0)
       if len(f0) == 1 && cn0 == type_name { is_record_ty(list_index(f0, 0)) }
       else { false }
@@ -4994,7 +4995,7 @@ fn register_type_constructors(type_name, variants) = {
       Declared(type_name),
       TypeVariants(map((ix) => {
         let (tag_id, v) = ix
-        let (cn, _) = v
+        let (cn, _, _) = v
         (tag_id, cn, list_index(converted, tag_id))
       }, enumerate(variants))))
   }
@@ -5010,7 +5011,7 @@ fn register_type_constructors(type_name, variants) = {
 fn quantify_variants(variants, buf, i, n, qmap) = {
   if i >= n { (slice(buf, 0, n), qmap) }
   else {
-    let (_, field_types) = list_index(variants, i)
+    let (_, field_types, _) = list_index(variants, i)
     let (fields2, q2) = quantify_ty_list(field_types, qmap)
     quantify_variants(variants, list_set(buf, i, fields2), i + 1, n, q2)
   }
@@ -5151,7 +5152,7 @@ fn qmap_find(qmap, name: String) = {
 }
 
 fn register_one_variant(type_name: String, result_ty, qhandles, field_types, variant, tag_id, total) = {
-  let (ctor_name, _) = variant
+  let (ctor_name, _, _) = variant
   // H2.3 nominal record: a single-variant type whose body is a
   // TRecord registers as RecordSchemeKind, not ConstructorScheme.
   // The env entry binds the type's name to TName directly (no
@@ -5207,7 +5208,7 @@ fn register_effect_ops(effect_name, ops) = {
   // EffectDeclKind is the graph's vocabulary for "this is an effect
   // declaration carrying these ops." The world-chain dispatch reads it;
   // the Cursor can project it at any position mentioning the effect.
-  let op_names = map(((n, _, _)) => n, ops)
+  let op_names = map(((n, _, _, _)) => n, ops)
   env_extend(effect_name,
     Forall([], TTuple([])),
     Declared(effect_name),
@@ -5254,24 +5255,24 @@ fn quantify_effect_ops(ops) = {
 fn quantify_effect_ops_loop(ops, qmap, i) =
   if i >= len(ops) { ([], qmap) }
   else {
-    let (name, ptys, rty) = list_index(ops, i)
+    let (name, ptys, rty, cn) = list_index(ops, i)
     let (qptys, q1) = quantify_ty_list(ptys, qmap)
     let (qrty, q2)  = quantify_ctor_ty(rty, q1)
     let (rest, q3)  = quantify_effect_ops_loop(ops, q2, i + 1)
-    ([(name, qptys, qrty)] ++ rest, q3)
+    ([(name, qptys, qrty, cn)] ++ rest, q3)
   }
 
 
 fn effect_type_vars(ops) =
   ops
     |> map((op) => {
-         let (_, ptys, rty) = op
+         let (_, ptys, rty, _) = op
          flatten(map(free_in_ty, ptys)) ++ free_in_ty(rty)
        })
     |> flatten
 
 fn register_one_op(effect_name, eff_name, op) = {
-  let (op_name, param_types, ret_type) = op
+  let (op_name, param_types, ret_type, _) = op
   let params = build_ctor_params(param_types, 0)
   // Every op of the effect carries the SAME instance row (eff_name), so the
   // payload flows performer→handler at the install. Generalize over the

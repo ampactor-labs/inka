@@ -292,8 +292,13 @@ fn parse_stmt(ref tokens, pos) = match kind_at(tokens, pos) {
     // the weave merges blocks sharing one declaration.
     let p2 = skip_seps_only(tokens, p)
     if at(tokens, p2, TEof) {
-      report(POrphanDocstring(comment_span))
-      (nstmt(ExprStmt(nexpr(LitUnit, comment_span)), comment_span), p2)
+      // The file-tail block attaches to a synthetic unit carrier — never
+      // dropped (SYNTAX Comments: an orphan run binds to its enclosing
+      // node); the render emits the prose and no tokens for the carrier,
+      // so the tail round-trips.
+      let carrier = nstmt(ExprStmt(nexpr(LitUnit, comment_span)), comment_span)
+      graph_attach_comment(node_handle(carrier), full_text, comment_span)
+      (carrier, p2)
     } else {
       let (inner_stmt, p3) = parse_stmt(tokens, p2)
       let N(_, _, h) = inner_stmt
@@ -2095,7 +2100,11 @@ fn parse_if(ref tokens, pos, span: ValidSpan) = {
     } else {
       parse_expr(tokens, p2)
     }
-  let p4 = skip_ws(tokens, p3)
+  // The else PROBE scans the run without consuming it: with an else the
+  // prose attaches to the else-branch's node (the render emits it above
+  // the else line); with none, the pre-run position returns so the run
+  // attaches at the statement layer.
+  let (etext, esp, p4) = collect_leading_comments(tokens, p3, "", span_zero())
   if at(tokens, p4, TElse) {
     let p5 = skip_ws(tokens, p4 + 1)
     let (else_e, p6) =
@@ -2106,6 +2115,7 @@ fn parse_if(ref tokens, pos, span: ValidSpan) = {
       } else {
         parse_expr(tokens, p5)
       }
+    if len(etext) > 0 { graph_attach_comment(node_handle(else_e), etext, esp) } else { () }
     (nexpr(IfExpr(cond, then_e, else_e), span), p6)
   } else {
     // No else: resume at any following comment run, not past it.

@@ -400,7 +400,13 @@ fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   FnStmt(name, params, retty, effs, body) =>
     "fn {name}({render_param_list(params)}){render_retty(retty)}{render_with_clause(effs)} = {render_grouped_body(body)}",
   ImportStmt(path)   => "import {path}",
-  ExprStmt(e)        => render_grouped_body(e),
+  // A unit expression statement is the file-tail prose CARRIER (and a
+  // bare `()` statement is dead weight either way): its comment renders,
+  // its tokens do not.
+  ExprStmt(e)        => match ast_kind_of(e) {
+    NExpr(LitUnit) => "",
+    _              => render_grouped_body(e)
+  },
   AliasStmt(name, ty) => "type {name} = {render_type_tokens(ty)}",
   LetStmt(pat, value, ann) =>
     "let {render_pat_tokens(pat)}{render_let_ann(ann)} = {render_tokens_for(value)}",
@@ -629,7 +635,13 @@ fn render_if_branch(n) with GraphRead + Memory + Alloc + !Mutate + Intern = matc
 // the identity (the re-parse re-inserts the same unit node).
 fn render_else(el) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(el) {
   NExpr(LitUnit) => "",
-  _              => " else {render_if_branch(el)}"
+  _              => {
+    // An else carrying prose breaks the line: the comment renders above
+    // its own `else` (the parse re-collects it at the else probe).
+    let c = graph_comment_at(node_handle(el))
+    if c == "" { " else {render_if_branch(el)}" }
+    else { "\n{render_stmt_comment(el)}  else {render_if_branch(el)}" }
+  }
 }
 
 // A body/statement-lead position reads a leading `{` as the BlockExpr

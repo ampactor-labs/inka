@@ -1038,6 +1038,24 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE VERB CARRIES ITS OWN CENSUS — fmt's prose
+  conservation gate + the else and file-tail families (· pin
+  7b1b8b61). Morgan's cut ("I wish we didn't have to run python just
+  to run Mentl stuff") absorbed per ⟳: fmt_run re-parses its own
+  render (two watermark-bracketed single-file frontends in the same
+  context), counts the weave both sides, and REPORTS — "prose
+  conserved (25 blocks)" / "8 of 435 prose blocks would not survive a
+  reparse" — the medium naming its own residue per file; the python
+  comment-diff retires. Families 7+8: BEFORE-ELSE (the else probe
+  scans without consuming; prose attaches to the else node;
+  render_else breaks the line to emit it above its own else) and FILE
+  TAILS (the end-of-file block attaches to the TComment arm's
+  synthetic unit carrier, which renders prose-and-no-tokens; the
+  POrphanDocstring raise retires — the orphan has a home, as SYNTAX's
+  "never dropped" always claimed). Content census 513 → 299; the
+  remainder (match-heads in expr position, argument interiors,
+  variant-inline) is now visible through the verb's own report.
+  Board whole; idempotent-all-50.
 - 2026-07-25 · ▶ THE ATTACH TARGET IS THE LIST'S NODE — the sixth
   comment family (mid-block statements) + the content-matched census
   (· pin ae600b3b). A mid-block expr statement wraps in a fresh

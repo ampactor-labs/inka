@@ -561,8 +561,26 @@ fn fmt_run(target) = {
       let path = driver_module_path(entry_module)
       let ast = driver_check_entry(entry_module)
       let rendered = format_program(ast)
+      // THE CONSERVATION GATE — the verb re-parses its own render and
+      // counts the weave on both sides: prose the render would lose is
+      // reported by the medium itself (this absorbed the hand-run
+      // comment census; a hand tool is a confession that a projection
+      // is missing, ⟳). Two single-file parses bracket the handle
+      // watermarks so the DAG's other modules never skew the count.
+      let src_text = fs_read_file(path)
+      let m1 = graph_next()   // drift-audit: ignore — sequenced effectful read (handle watermark bracketing the parse, consumed by the census)
+      frontend(src_text)
+      let m2 = graph_next()   // drift-audit: ignore — sequenced effectful read (watermark between the two parses)
+      frontend(rendered)
+      let m3 = graph_next()   // drift-audit: ignore — sequenced effectful read (the closing watermark)
+      let src_prose = weave_block_count(m1, m2, 0)
+      let out_prose = weave_block_count(m2, m3, 0)
       fs_write_file(path, rendered)
-      print_string("fmt: {path} rendered canonical\n")
+      if out_prose < src_prose {
+        print_string("fmt: {path} rendered canonical — {int_to_str(src_prose - out_prose)} of {int_to_str(src_prose)} prose blocks would not survive a reparse\n")
+      } else {
+        print_string("fmt: {path} rendered canonical — prose conserved ({int_to_str(src_prose)} blocks)\n")
+      }
       0
     }
       ~> format_default
@@ -570,6 +588,14 @@ fn fmt_run(target) = {
       ~> mentl_default
   )
 }
+
+// The weave census between two handle watermarks: every nonempty comment
+// cell is one attached prose block. The fmt conservation gate reads it on
+// both sides of a render∘parse round trip.
+fn weave_block_count(h, to, acc) with GraphRead + Memory + Alloc =
+  if h >= to { acc }
+  else if graph_comment_at(h) == "" { weave_block_count(h + 1, to, acc) }
+  else { weave_block_count(h + 1, to, acc + 1) }
 
 // ─── tighten_run — the medium authors its own row tightening
 //

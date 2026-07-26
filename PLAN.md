@@ -1038,6 +1038,21 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶▶ DEPTH IS COMPOSITION + FITS-OR-BREAKS — the layout
+  engine's two primitives (· pin e4d6897f). REINDENT-ON-COMPOSE:
+  interiors render at depth ZERO; each enclosing block indents its
+  whole interior once (indent_block) — depth is never threaded and
+  never wrong, because nesting depth IS composition depth (the fixed
+  two-space literals had rendered nested arms at column 2 at any
+  depth). Six wrappers recomposed. FITS-OR-BREAKS: one line within
+  100 columns survives inline, else the block layout — fn/let break
+  after `=`; an overflowing if takes the cuddled-block vertical
+  (SYNTAX's chase_node shape); an overflowing call breaks
+  arg-per-line; a long variant set goes vertical. MEASURED: >100-col
+  non-comment lines 1,335 → 628 against authored 568 (2× regression
+  → near-parity), IDEMPOTENT-ALL-50 at every rung, march CLEAN
+  through all three pins. Swap-gate remainder: the ~65
+  operator-interior prose lines (chain-break-at-prose).
 - 2026-07-25 · ▶▶ THE ARM'S ARROW STOPS EATING + THE GATE GOES LEXICAL
   (· pin 409fc675). The ninth family: prose between an arm's `=>` and
   its body — the single biggest remainder (lower.mn alone 116) —

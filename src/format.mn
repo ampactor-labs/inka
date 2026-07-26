@@ -361,14 +361,23 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   BinOpExpr(op, l, r) =>
     "{render_operand(l, binop_prec(op), false)} {binop_to_str(op)} {render_operand(r, binop_prec(op), true)}",
   UnaryOpExpr(op, x) => "{unary_op_glyph(op)}{render_operand(x, 90, true)}",
-  CallExpr(callee, args) =>
-    "{render_tokens_for(callee)}({render_node_list(args, ", ")})",
+  CallExpr(callee, args) => {
+    let inline = "{render_tokens_for(callee)}({render_node_list(args, ", ")})"
+    if fits_inline(inline) || len(args) < 2 { inline }
+    else {
+      "{render_tokens_for(callee)}(\n{indent_block(render_node_list(args, ",\n"))}\n)"
+    }
+  },
   LabeledArg(label, v) => "{label} = {render_tokens_for(v)}",
   FieldExpr(recv, field) => "{render_tokens_for(recv)}.{field}",
   IndexExpr(recv, idx)   => "{render_tokens_for(recv)}[{render_tokens_for(idx)}]",
   PipeExpr(verb, l, r) =>
     "{render_operand(l, pipe_prec(verb), false)} {show_pipe_kind(verb)} {render_operand(r, pipe_prec(verb), true)}",
-  IfExpr(c, t, el) => "if {render_tokens_for(c)} {render_if_branch(t)}{render_else(el)}",
+  IfExpr(c, t, el) => {
+    let inline = "if {render_tokens_for(c)} {render_if_branch(t)}{render_else(el)}"
+    if fits_inline(inline) || graph_comment_at(node_handle(el)) != "" { inline }
+    else { "if {render_tokens_for(c)} {render_branch_block(t)}{render_else_block(el)}" }
+  },
   MakeListExpr(elems)  => "[{render_node_list(elems, ", ")}]",
   MakeTupleExpr(elems) => "({render_node_list(elems, ", ")})",
   ExprPlaceholder      => "??",
@@ -379,7 +388,7 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   // fmt census's blocker 5: a third of parser.mn's prose was
   // body-interior).
   BlockExpr(stmts, final) =>
-    "\{\n{render_block_stmts(stmts, 0)}{render_stmt_comment(final)}  {render_grouped_body(final)}\n\}",
+    "\{\n{indent_block("{render_block_stmts(stmts, 0)}{render_stmt_comment(final)}{render_grouped_body(final)}")}\n\}",
   LambdaExpr(params, body) =>
     "({render_param_list(params)}) => {render_grouped_body(body)}",
   MakeRecordExpr(fields) => "\{{render_field_inits(fields, 0)\}}",
@@ -391,14 +400,18 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   // every other fragment renders as a live splice.
   MakeStringExpr(parts) => "\"{render_string_parts(parts, 0)}\"",
   MatchExpr(scrut, arms) =>
-    "match {render_tokens_for(scrut)} \{\n{render_match_arms(arms, 0)\}}",
+    "match {render_tokens_for(scrut)} \{\n{indent_block(strip_trailing_nl(render_match_arms(arms, 0)))}\n\}",
   ResumeExpr(v, updates) =>
     "{render_resume_head(v)}{render_state_updates(updates, 0)}"
 }
 
 fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate + Intern = match s {
-  FnStmt(name, params, retty, effs, body) =>
-    "fn {name}({render_param_list(params)}){render_retty(retty)}{render_with_clause(effs)} = {render_grouped_body(body)}",
+  FnStmt(name, params, retty, effs, body) => {
+    let head = "fn {name}({render_param_list(params)}){render_retty(retty)}{render_with_clause(effs)} ="
+    let b = render_grouped_body(body)
+    if str_contains(b, "\n") || fits_inline("{head} {b}") { "{head} {b}" }
+    else { "{head}\n{indent_block(b)}" }
+  },
   ImportStmt(path)   => "import {path}",
   // A unit expression statement is the file-tail prose CARRIER (and a
   // bare `()` statement is dead weight either way): its comment renders,
@@ -409,16 +422,21 @@ fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   },
   AliasStmt(name, ty) => "type {name} = {render_type_tokens(ty)}",
   LetStmt(pat, value, ann) =>
-    "let {render_pat_tokens(pat)}{render_let_ann(ann)} = {render_tokens_for(value)}",
+    {
+      let lhead = "let {render_pat_tokens(pat)}{render_let_ann(ann)} ="
+      let lv = render_tokens_for(value)
+      if str_contains(lv, "\n") || fits_inline("{lhead} {lv}") { "{lhead} {lv}" }
+      else { "{lhead}\n{indent_block(lv)}" }
+    },
   TypeDefStmt(name, variants) =>
     "type {name}{render_variants(variants, 0)}",
   // Op param NAMES are parse-consumed (the ADT stores types only), and
   // bare types parse in op position — the render is the parse's inverse
   // over what the graph carries.
   EffectDeclStmt(name, ops) =>
-    "effect {name} \{\n{render_effect_ops(ops, 0)\}}",
+    "effect {name} \{\n{indent_block(strip_trailing_nl(render_effect_ops(ops, 0)))}\n\}",
   HandlerDeclStmt(hname, _ename, config, states, arms) =>
-    "handler {hname}{render_config_params(config)}{render_state_inits(states, 0)} \{\n{render_handler_arms(arms, 0)\}}",
+    "handler {hname}{render_config_params(config)}{render_state_inits(states, 0)} \{\n{indent_block(strip_trailing_nl(render_handler_arms(arms, 0)))}\n\}",
   RefineStmt(name, ty, pred) =>
     "type {name} = {render_type_tokens(ty)} where {show_predicate(pred)}"
 }
@@ -573,7 +591,7 @@ fn escape_string_content(s) with Memory + Alloc = {
 fn render_block_stmts(ref stmts, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   if i >= len(stmts) { "" }
   else {
-    "{render_stmt_comment(stmts[i])}  {render_tokens_for(stmts[i])}\n{render_block_stmts(stmts, i + 1)}"
+    "{render_stmt_comment(stmts[i])}{render_tokens_for(stmts[i])}\n{render_block_stmts(stmts, i + 1)}"
   }
 }
 
@@ -583,7 +601,7 @@ fn render_block_stmts(ref stmts, i) with GraphRead + Memory + Alloc + !Mutate + 
 // contract at the interior altitude).
 fn render_stmt_comment(n) with GraphRead + Memory + Alloc + !Mutate = {
   let c = graph_comment_at(node_handle(n))
-  if c == "" { "" } else { "  //{replace(c, "\n", "\n  //")}\n" }
+  if c == "" { "" } else { "//{replace(c, "\n", "\n//")}\n" }
 }
 
 fn render_field_inits(ref fields, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
@@ -617,6 +635,22 @@ fn render_string_parts(ref parts, i) with GraphRead + Memory + Alloc + !Mutate +
 // re-parsed as the record pun `\{x: x\}`, a float becoming a record; an
 // else-if chain renders bare (`else if …`, never `else \{ if … \}`); a
 // brace-less branch (the parse_expr arm) gains the canonical braces.
+// The overflow form: every branch takes its brace block and the chain
+// stays cuddled (`} else {`, `} else if c {`) — SYNTAX's own chase_node
+// shape. A prose-carrying else keeps the line-broken form render_else
+// already emits.
+fn render_branch_block(n) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(n) {
+  NExpr(BlockExpr(_, _)) => render_tokens_for(n),
+  _ => "\{\n{indent_block(render_grouped_body(n))}\n\}"
+}
+
+fn render_else_block(el) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(el) {
+  NExpr(LitUnit) => "",
+  NExpr(IfExpr(c2, t2, e2)) =>
+    " else if {render_tokens_for(c2)} {render_branch_block(t2)}{render_else_block(e2)}",
+  _ => " else {render_branch_block(el)}"
+}
+
 fn render_if_branch(n) with GraphRead + Memory + Alloc + !Mutate + Intern = match ast_kind_of(n) {
   NExpr(BlockExpr(stmts, final)) =>
     // Attached prose forces the block layout — a comment needs its own
@@ -640,8 +674,29 @@ fn render_else(el) with GraphRead + Memory + Alloc + !Mutate + Intern = match as
     // its own `else` (the parse re-collects it at the else probe).
     let c = graph_comment_at(node_handle(el))
     if c == "" { " else {render_if_branch(el)}" }
-    else { "\n{render_stmt_comment(el)}  else {render_if_branch(el)}" }
+    else { "\n{render_stmt_comment(el)}else {render_if_branch(el)}" }
   }
+}
+
+// ─── Reindent-on-compose — the depth engine's one primitive ─────────
+//
+// Every interior renders at depth ZERO; each enclosing block indents its
+// WHOLE interior exactly once at composition. Depth is therefore never
+// threaded and never wrong: nesting depth IS composition depth (the old
+// fixed two-space literals rendered a nested match's arms at column 2
+// regardless of depth).
+fn indent_block(s) with Memory + Alloc = "  {replace(s, "\n", "\n  ")}"
+
+// The fits-or-breaks rule: an inline render survives when it is one line
+// within the budget; otherwise the construct takes its block layout. The
+// budget measures at depth zero (reindent-on-compose means a render never
+// knows its depth) — deep code runs a few columns wider, the honest
+// approximation until the layout engine threads exact width.
+fn fits_inline(s) -> Bool with Memory + Alloc = byte_len(s) <= 100 && !str_contains(s, "\n")
+
+fn strip_trailing_nl(s) with Memory + Alloc = {
+  let n = byte_len(s)
+  if n > 0 && byte_at(s, n - 1) == 10 { str_slice(s, 0, n - 1) } else { s }
 }
 
 // A body/statement-lead position reads a leading `{` as the BlockExpr
@@ -660,7 +715,7 @@ fn render_match_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate + In
   if i >= len(arms) { "" }
   else {
     let (pat, body) = arms[i]
-    "{render_stmt_comment(body)}  {render_pat_tokens(pat)} => {render_grouped_body(body)},\n{render_match_arms(arms, i + 1)}"
+    "{render_stmt_comment(body)}{render_pat_tokens(pat)} => {render_grouped_body(body)},\n{render_match_arms(arms, i + 1)}"
   }
 }
 
@@ -687,8 +742,12 @@ fn render_let_ann(ann) with GraphRead + Memory + Alloc + !Mutate + Intern = matc
 // A commented variant set renders VERTICAL (prose above each variant,
 // `=`/`|` leading); a prose-free set keeps the inline ` | ` join.
 fn render_variants(ref variants, i) with GraphRead + Memory + Alloc + !Mutate + Intern = {
-  if variants_carry_prose(variants, 0) { "\n{render_variants_vertical(variants, 0)}" }
-  else { " = {render_variants_inline(variants, i)}" }
+  if variants_carry_prose(variants, 0) { "\n{indent_block(render_variants_vertical(variants, 0))}" }
+  else {
+    let inline = " = {render_variants_inline(variants, i)}"
+    if fits_inline(inline) { inline }
+    else { "\n{indent_block(render_variants_vertical(variants, 0))}" }
+  }
 }
 
 fn variants_carry_prose(ref variants, i) with GraphRead + Memory + Alloc + !Mutate = {
@@ -717,7 +776,7 @@ fn render_variants_vertical(ref variants, i) with GraphRead + Memory + Alloc + !
     let one = if len(tys) == 0 { vname } else { "{vname}({render_ty_list(tys, 0)})" }
     let lead = if i == 0 { "=" } else { "|" }
     let tail = if i == len(variants) - 1 { "" } else { "\n{render_variants_vertical(variants, i + 1)}" }
-    "{render_stmt_comment(cn)}  {lead} {one}{tail}"
+    "{render_stmt_comment(cn)}{lead} {one}{tail}"
   }
 }
 
@@ -830,7 +889,7 @@ fn render_effect_ops(ref ops, i) with GraphRead + Memory + Alloc + !Mutate + Int
       TUnit => "",
       t     => " -> {render_type_tokens(t)}"
     }
-    "{render_stmt_comment(cnode)}  {oname}({render_ty_list(ptys, 0)}){ret}\n{render_effect_ops(ops, i + 1)}"
+    "{render_stmt_comment(cnode)}{oname}({render_ty_list(ptys, 0)}){ret}\n{render_effect_ops(ops, i + 1)}"
   }
 }
 
@@ -880,7 +939,7 @@ fn render_handler_arms(ref arms, i) with GraphRead + Memory + Alloc + !Mutate + 
   if i >= len(arms) { "" }
   else {
     let a = arms[i]
-    "{render_stmt_comment(handler_arm_body(a))}  {handler_arm_op_name(a)}({render_name_list(handler_arm_args(a), 0)}) => {render_grouped_body(handler_arm_body(a))},\n{render_handler_arms(arms, i + 1)}"
+    "{render_stmt_comment(handler_arm_body(a))}{handler_arm_op_name(a)}({render_name_list(handler_arm_args(a), 0)}) => {render_grouped_body(handler_arm_body(a))},\n{render_handler_arms(arms, i + 1)}"
   }
 }
 

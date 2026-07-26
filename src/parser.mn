@@ -1248,7 +1248,13 @@ fn binop_loop(ref tokens, left, pos, min_prec, slot) = {
     // trailing newline) → parse_primary truncates the chain. Newlines
     // around a binop are transparent in BOTH directions (SYNTAX.md —
     // layout is never semantics; the table is the only scope law).
-    let (right, p2) = parse_binop(tokens, skip_ws(tokens, p + 1), prec + 1, slot)
+    // Prose after the operator belongs to the RIGHT operand (the || ladder
+    // and chain-stage blocks) — it collects here and attaches to the
+    // operand's node; the render breaks the chain at a prose-carrying
+    // operand to emit it.
+    let (otext, osp, po) = collect_leading_comments(tokens, p + 1, "", span_zero())
+    let (right, p2) = parse_binop(tokens, po, prec + 1, slot)
+    if len(otext) > 0 { graph_attach_comment(node_handle(right), otext, osp) } else { () }
     let N(_, left_span, _) = left
     let combined_span = span_join(left_span, op_span)
     let node = match op_to_pipe_kind(k) {

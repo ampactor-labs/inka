@@ -189,10 +189,18 @@ fn render_chain_pos(node) with Format + !Mutate = {
   else { format_chain(node) }
 }
 
-fn render_converge_chain(left, right) with Format + !Mutate = {
+fn render_converge_chain(left, right) with Format + GraphRead + Memory + Alloc + !Mutate = {
   let left_str = render_chain_pos(left)
   let right_str = render_chain_pos(right)
-  "{left_str}\n{spaces(left_edge_indent())}|> {right_str}"
+  "{left_str}\n{render_stage_comment(right)}{spaces(left_edge_indent())}|> {right_str}"
+}
+
+// A chain stage's attached prose renders above its verb line at the
+// stage indent (chains keep their own SYNTAX layout constants, so the
+// comment indents to match rather than riding reindent-on-compose).
+fn render_stage_comment(n) with GraphRead + Memory + Alloc + !Mutate = {
+  let c = graph_comment_at(node_handle(n))
+  if c == "" { "" } else { "{indent_block(strip_trailing_nl(render_stmt_comment(n)))}\n" }
 }
 
 // ─── Render a <| chain — divergence with branch tuple ───────────────
@@ -250,14 +258,16 @@ fn render_compose_chain(left, right) with Format + !Mutate = {
 //
 //   (try_fn()) ~> catch_abort
 
-fn render_tee(body, handler_expr) with Format + !Mutate = {
+fn render_tee(body, handler_expr) with Format + GraphRead + Memory + Alloc + !Mutate = {
   let body_str = render_chain_pos(body)
   let handler_str = render_chain_pos(handler_expr)
+  let hc = graph_comment_at(node_handle(handler_expr))
   match ast_kind_of(body) {
     NExpr(PipeExpr(_, _, _)) =>
-      "{body_str}\n{spaces(left_edge_indent())}~> {handler_str}",
+      "{body_str}\n{render_stage_comment(handler_expr)}{spaces(left_edge_indent())}~> {handler_str}",
     _ =>
-      "{body_str} ~> {handler_str}"
+      if hc == "" { "{body_str} ~> {handler_str}" }
+      else { "{body_str}\n{render_stage_comment(handler_expr)}{spaces(left_edge_indent())}~> {handler_str}" }
   }
 }
 
@@ -359,7 +369,11 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   LitUnit          => "()",
   VarRef(name)     => name,
   BinOpExpr(op, l, r) =>
-    "{render_operand(l, binop_prec(op), false)} {binop_to_str(op)} {render_operand(r, binop_prec(op), true)}",
+    {
+      let rc = graph_comment_at(node_handle(r))
+      if rc == "" { "{render_operand(l, binop_prec(op), false)} {binop_to_str(op)} {render_operand(r, binop_prec(op), true)}" }
+      else { "{render_operand(l, binop_prec(op), false)} {binop_to_str(op)}\n{render_stmt_comment(r)}{render_operand(r, binop_prec(op), true)}" }
+    },
   UnaryOpExpr(op, x) => "{unary_op_glyph(op)}{render_operand(x, 90, true)}",
   CallExpr(callee, args) => {
     let inline = "{render_tokens_for(callee)}({render_node_list(args, ", ")})"
@@ -371,8 +385,11 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   LabeledArg(label, v) => "{label} = {render_tokens_for(v)}",
   FieldExpr(recv, field) => "{render_tokens_for(recv)}.{field}",
   IndexExpr(recv, idx)   => "{render_tokens_for(recv)}[{render_tokens_for(idx)}]",
-  PipeExpr(verb, l, r) =>
-    "{render_operand(l, pipe_prec(verb), false)} {show_pipe_kind(verb)} {render_operand(r, pipe_prec(verb), true)}",
+  PipeExpr(verb, l, r) => {
+    let rc = graph_comment_at(node_handle(r))
+    if rc == "" { "{render_operand(l, pipe_prec(verb), false)} {show_pipe_kind(verb)} {render_operand(r, pipe_prec(verb), true)}" }
+    else { "{render_operand(l, pipe_prec(verb), false)} {show_pipe_kind(verb)}\n{render_stmt_comment(r)}{render_operand(r, pipe_prec(verb), true)}" }
+  },
   IfExpr(c, t, el) => {
     let inline = "if {render_tokens_for(c)} {render_if_branch(t)}{render_else(el)}"
     if fits_inline(inline) || graph_comment_at(node_handle(el)) != "" { inline }

@@ -573,6 +573,7 @@ fn fmt_run(target) = {
       fs_write_file(path, rendered)
       if out_lines < src_lines {
         print_string("fmt: {path} rendered canonical — {int_to_str(src_lines - out_lines)} of {int_to_str(src_lines)} prose lines would not survive a reparse\n")
+        print_lost_comments(lex(src_text), lex(rendered), 0, 0)
       } else {
         print_string("fmt: {path} rendered canonical — prose conserved ({int_to_str(src_lines)} lines)\n")
       }
@@ -583,6 +584,33 @@ fn fmt_run(target) = {
       ~> mentl_default
   )
 }
+
+// The gate NAMES its losses: each source comment line whose text appears
+// nowhere in the render's lex prints with its line number — the report
+// that retired the external diff for good (up to eight, the shape is
+// what matters).
+fn print_lost_comments(ref src_toks, ref out_toks, i, shown) with WASI + Memory + Alloc =
+  if i >= len(src_toks) || shown >= 8 { () }
+  else {
+    match token_kind(src_toks[i]) {
+      TComment(t) =>
+        if comment_text_present(out_toks, t, 0) { print_lost_comments(src_toks, out_toks, i + 1, shown) }
+        else {
+          print_string("  lost: //{t}\n")
+          print_lost_comments(src_toks, out_toks, i + 1, shown + 1)
+        },
+      _ => print_lost_comments(src_toks, out_toks, i + 1, shown)
+    }
+  }
+
+fn comment_text_present(ref toks, t: String, i) -> Bool with Memory + Alloc =
+  if i >= len(toks) { false }
+  else {
+    match token_kind(toks[i]) {
+      TComment(u) => if u == t { true } else { comment_text_present(toks, t, i + 1) },
+      _           => comment_text_present(toks, t, i + 1)
+    }
+  }
 
 // One TComment token per authored prose line — the lexical census the
 // fmt conservation gate reads on both sides of the round trip.

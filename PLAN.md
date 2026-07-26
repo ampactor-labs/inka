@@ -1038,6 +1038,19 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-25 · ▶▶ THE CHAIN BREAKS AT PROSE + THE GATE NAMES ITS LOSSES
+  (· pin 45153159). Prose after a binary operator belongs to the RIGHT
+  operand: binop_loop (the one path pipes and binops share) collects
+  after the operator onto the operand's node; the renders break the
+  chain there (operator at line end, comment above the operand — the
+  || ladder shape; chains emit stage prose via render_stage_comment).
+  The conservation gate NAMES its losses ("  lost: // …" per missing
+  line) — the verb replaced the last hand diff, and its first report
+  identified the residue: trailing drift-audit markers (load-bearing —
+  the audit hook reads them per line), argument-interior trailing
+  series, one block shape (~70 lines). The census ratchet caught this
+  landing's own two under-declared chain-render rows (widened to
+  their bodies' weave reads). Board whole; idempotent-all-50.
 - 2026-07-25 · ▶▶▶ DEPTH IS COMPOSITION + FITS-OR-BREAKS — the layout
   engine's two primitives (· pin e4d6897f). REINDENT-ON-COMPOSE:
   interiors render at depth ZERO; each enclosing block indents its

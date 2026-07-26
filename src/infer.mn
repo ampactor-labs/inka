@@ -1362,15 +1362,37 @@ fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, l, maxl) = {
   }
 }
 
+// THE FAN'S EXECUTION SHAPE, sequential form: judge every branch of the
+// layer first (each banks its facts under its own bracket), then join
+// them all IN STMT ORDER at the layer barrier. Same-layer visibility is
+// invariant between the interleaved and barrier forms — a branch reads
+// the FROZEN base, never a sibling's replay, and op-edge evolution
+// lands in the root for LATER layers only — so this restructure is
+// byte-identical by construction, and the fan's concurrent form changes
+// only WHO runs layer_judge_walk's iterations, never what the joins
+// replay.
 fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, l, i, base) = {
-  if i >= len(stmts) { () }
+  let facts = layer_judge_walk(rows, layers, bases, stmts, l, 0, base, [])
+  layer_join_walk(facts, 0)
+}
+
+fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, l, i, base, own acc) = {
+  if i >= len(stmts) { acc }
   else {
-    if layers[i] == l {
-      let (_, count) = rows[i]
-      graph_mint_at(bases[i], bases[i] + count)
-      branch_join(branch_judge(stmts[i], base))
-    }
-    planned_layer_stmts(rows, layers, bases, stmts, l, i + 1, base)
+    layer_judge_walk(rows, layers, bases, stmts, l, i + 1, base,
+      if layers[i] == l {
+        let (_, count) = rows[i]
+        graph_mint_at(bases[i], bases[i] + count)
+        push(acc, branch_judge(stmts[i], base))
+      } else { acc })
+  }
+}
+
+fn layer_join_walk(ref facts, j) = {
+  if j >= len(facts) { () }
+  else {
+    branch_join(facts[j])
+    layer_join_walk(facts, j + 1)
   }
 }
 

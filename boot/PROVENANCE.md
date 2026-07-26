@@ -16,7 +16,7 @@ Provenance, self-confirmed at pin time:
 
 - source: THE REFS FACET SPEAKS ITS SPANS (2026-07-25→26; the
   self-exemplification research pass's opening move #1, executed the
-  hour its report landed). `mentl query <t> "refs of NAME"` walked
+  hour its report landed). `mentl query <path> "refs of NAME"` walked
   the live weave, collected every use-edge span, and the render threw
   them away as a bare count — the propose-facet seam one facet over.
   QRRefs now renders one located line per inbound use-edge

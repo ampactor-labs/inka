@@ -1038,6 +1038,41 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-27 · ▶▶ THE BOUND TAIL FOLDS BY RECURSION — the trio law
+  completes at the subst face, and the rebind chain gets its name
+  (the K>1 dig's third arc · pin 2ef0964e). subst_row_build's merge
+  arm checked ONE level of a bound row chain and SHARED the whole
+  chain on the inner-tail miss (ef_make(ns2, ab2, EtVar(v))) — but
+  free_in_row DESCENDS bound tails recursively, so a chain bound two
+  deep carried its free terminal in the OWNER's band past both the
+  quantify and the mapping: every caller of a recursive fn's scheme
+  read the owner's live cell and the first caller bound it (the
+  reason census caught cell 1873202 bound at four handle_to_smt call
+  sites across two branches). The arm now RECURSES into the binding
+  — the recursion's own arms subsume both former branches (an inner
+  free tail freshens through the mapping with the pending-
+  subtraction's absent set riding; a solved tail merges whole),
+  nested frees freshen at ANY depth, the chain is never shared, and
+  the inner fork DELETES (the wheel 178 lines smaller — the law
+  smiling). The check twin answers true for every bound tail
+  (folding IS the change). THE BORN-REASON CENSUS then named the
+  surviving window-8 flip whole: each foreign row bind printed with
+  the PREVIOUS binding's reason, and one shared row cell per
+  mutual-recursion family (emit_expr's, walk_locals_pat's,
+  list_copy_into's) showed a born-to-why chain FIVE DEEP — the same
+  cell SERIALLY REBOUND by its same-layer caller branches, each
+  call-edge unify graph_bind_row-ing an ALREADY-BOUND root, the
+  surviving binding whichever branch ran last (lower's can_yield
+  reads the schedule's pick — the float-trio k2 wrap flip, two
+  self-stable attractors, census 0 in both). Rebinding a bound root
+  is the union-find law violated regardless of concurrency; the
+  rebind instrument (print when graph_bind_row's target already
+  chases NRowBound — a small set naming every rebinding unify path)
+  and the kill plan (those paths recurse into the binding instead)
+  are banked at judge_window's decl. The window holds at ONE. Board
+  whole at the pin: CLEAN m2 == m3 at 323,700 lines; census 0;
+  comment-refs 0; frontier 279/0; proof-exactness 9/9; crown 5/5;
+  micros-through-m2 116/0.
 - 2026-07-27 · ▶▶▶ THE KILL LEDGER REACHES THE WRITERS — the value
   boundary closes at generalize, and compression leaves the branches
   (the K>1 dig's second arc · pin 714431ce). Six probe batteries —

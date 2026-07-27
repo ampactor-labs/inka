@@ -1434,21 +1434,25 @@ fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
 // optimization) and it now rides its own op, graph_compress_row,
 // whose branch arm SKIPS (the root's sequential walks re-compress) —
 // measured innocent of the flip but a true determinism hazard closed.
-// THE RESIDUE, confined and named: the float-format family
-// (float_to_str / float_format_fixed / float_format_scientific)
-// still flips its k2 yield-floor wraps between TWO self-stable
-// attractors (4-2 at window 8, ±55 lines, census 0 in both) — the
-// callee-node row tails at their str_of_single_byte call sites read
-// bound-vs-free at lower depending on branch interleave, and the
-// surviving writer class is the ~2,000 per-compile Located
-// unify-path binds through shared reaches (the parse-band call-node
-// cells the caller's own judgment binds, whose upstream chase
-// crosses a sibling-observable cell). The window holds at ONE —
-// every branch a real spawned instance, byte-proven CLEAN — and K>1
-// lands when the raced unify-bind's carrier falls: re-arm the bind
-// census (mint_limit>0 && handle<band-base, reason-rendered), diff
-// the flipped attractor's foreign-bind set, and fix the named
-// carrier at its mint.
+// THE RESIDUE, measured to its mechanism (the born-reason census —
+// each foreign row bind printed with the PREVIOUS binding's reason):
+// one shared row cell per mutual-recursion family (emit_expr's, the
+// walk_locals_pat/list_copy_into families) is SERIALLY REBOUND by
+// its same-layer caller branches — a born→why chain five deep, each
+// caller's call-edge unify graph_bind_row-ing an ALREADY-BOUND root
+// with its own re-teaching, so the surviving binding is whichever
+// branch ran last and lower's can_yield reads the schedule's pick
+// (the float-format trio's k2 wrap flip, two self-stable attractors,
+// census 0 in both). Rebinding a bound root is the union-find law
+// violated regardless of concurrency; the chain's ENTRY is a
+// residual subst share of a round-era cell (the collection gap the
+// recursive bound-tail fold did not close). The window holds at ONE
+// — every branch a real spawned instance, byte-proven CLEAN — and
+// K>1 lands when the rebind class dies: instrument graph_bind_row
+// to print when its target already chases NRowBound (both reasons —
+// the set is small and names every rebinding unify path), then make
+// those paths recurse into the binding instead of rebinding, and
+// re-run the six-battery.
 let judge_window = 1
 
 // THE FAN: every layer branch runs as a REAL task — a spawned
@@ -5309,13 +5313,12 @@ fn subst_row_changes(eff, mapping) = {
   let EfRow(ns, ab, t) = eff
   let tail_hit = match t {
     EtVar(v) => match graph_chase(v) {
-      GNode(NRowBound(inner), _) => {
-        let EfRow(_, _, it) = inner
-        match it {
-          EtVar(t2) => find_mapping(mapping, graph_chase_handle(t2)) >= 0,
-          _         => true
-        }
-      },
+      // A bound tail ALWAYS rebuilds: the build arm folds the binding by
+      // recursion (freshening nested frees at any depth), so answering
+      // false here shared the whole chain — the one-level t2 check let a
+      // two-deep chain's free terminal ride into every caller (the
+      // window-8 first-binder race). Folding IS the change.
+      GNode(NRowBound(_), _) => true,
       GNode(NRowFree(_), _) => find_mapping(mapping, graph_chase_handle(v)) >= 0,
       // The T-handle row-var tolerance's check face (row_var_is_free's
       // sibling): a free type-sort tail with a mapping hit IS a change.
@@ -5435,37 +5438,23 @@ fn subst_row_build(eff, mapping) = {
   match t {
     EtVar(v) => match graph_chase(v) {
       GNode(NRowBound(inner), _) => {
-        let EfRow(c, ia, it) = inner
-        match it {
-          EtVar(t2) => {
-            // The inner ABSENT rides the freshening — it IS the pending
-            // subtraction (an install's `tail ∖ handled` mask, minted by
-            // diff_row as this bound triple). Carrying only the present
-            // set here dropped every effect-polymorphic bracket's
-            // subtraction at instantiation: bracket(() => ping()) leaked
-            // Ping to the caller (measured — the absorb-poly fixture,
-            // and infer_context's three wheel callers reading the whole
-            // analysis core unsubtracted). The solved branch below
-            // always carried it; this arm is its mirror.
-            let r = find_mapping(mapping, graph_chase_handle(t2))
-            if r >= 0 {
-              ef_make(name_set_union(ns2, subst_eff_names(c, mapping)),
-                      name_set_union(ab2, subst_eff_names(ia, mapping)), EtVar(r))
-            }
-            else { ef_make(ns2, ab2, EtVar(v)) }
-          },
-          // The var is SOLVED to a closed/all row — the instance IS the
-          // inner's names (freshened through the SAME mapping the params
-          // read, so an effect-instance arg and its param occurrence stay
-          // one fresh var) under the solved tail. The old arm returned the
-          // empty row with the var tail, DISCARDING the bound row's whole
-          // present set — every caller of every declared-row fn read a
-          // BARE row, which is why no effect instance ever crossed a fn
-          // boundary (the fold-family element severance's true root: the
-          // birth probe read rowargs=[] off a correct publish).
-          _ => ef_make(name_set_union(ns2, subst_eff_names(c, mapping)),
-                       name_set_union(ab2, ia), it)
-        }
+        // A bound tail folds by RECURSION — the substitution descends the
+        // binding exactly as deep as free_in_row's collection does (the
+        // trio law at the subst face). The one-level form checked only the
+        // inner tail's mapping and SHARED the whole chain on a miss
+        // (ef_make(ns2, ab2, EtVar(v))) — but a chain bound two deep
+        // carries its free terminal in the OWNER's band, so every caller
+        // of a recursive fn's scheme read the owner's live cell and the
+        // FIRST caller bound it (the window-8 first-binder race: cell
+        // 1873202 bound at four handle_to_smt call sites across two
+        // branches, measured by the reason census). The recursion's own
+        // arms subsume both former branches: an inner free tail freshens
+        // through the mapping (the pending-subtraction mask's absent set
+        // rides — the absorb-poly fixture's law), a solved tail merges
+        // whole; nested frees freshen at ANY depth, and the chain is
+        // never shared.
+        let EfRow(c2, ia2, it2) = subst_row_build(inner, mapping)
+        ef_make(name_set_union(ns2, c2), name_set_union(ab2, ia2), it2)
       },
       GNode(NRowFree(_), _) => {
         let r = find_mapping(mapping, graph_chase_handle(v))

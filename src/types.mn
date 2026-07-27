@@ -1383,6 +1383,13 @@ effect Intern {
   intern_span(String, Int, Int) -> (String, Int, Option(TokenKind))
   intern_str(String) -> Int
   intern_name_of(Int) -> String
+  // The branch view's config seed (the fan): the root's live table,
+  // read once per walk. A spawned cursor's view serves READS (probe
+  // hits and name_of — every name interns at parse, so the walk is
+  // pre-warmed); its miss is LOUD by construction (a view-minted
+  // handle escaping into published state would render garbage at the
+  // root — never an accident-invariant).
+  intern_seed() -> ([[(String, Int, Option(TokenKind))]], [String], Int)
 }
 
 // The Read/Write split IS the "one writer" invariant. Inference

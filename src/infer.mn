@@ -1345,8 +1345,9 @@ fn infer_stmt_list_planned(rows, layers, stmts, summ) = {
   // the spine table is stable for the whole walk, and the span index
   // is complete (graph_index_span is parse-only).
   let gseed = graph_branch_seed()   // drift-audit: ignore — sequenced effectful read (the post-plan spine snapshot, every branch's config)
+  let iseed = intern_seed()   // drift-audit: ignore — sequenced effectful read (the root's intern table, stable for the walk — every name interns at parse)
   let bases = rows_bases(flat, start)
-  planned_layer_sweep(flat, layers, bases, stmts, summ, gseed, top0, 0, flat_max(layers, 0, 0))
+  planned_layer_sweep(flat, layers, bases, stmts, summ, gseed, iseed, top0, 0, flat_max(layers, 0, 0))
   graph_mint_seal(region_end)
 }
 
@@ -1373,7 +1374,7 @@ fn flat_max(ref xs, i, best) = {
   else { flat_max(xs, i + 1, if xs[i] > best { xs[i] } else { best }) }
 }
 
-fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, summ, gseed, top0, l, maxl) = {
+fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, summ, gseed, iseed, top0, l, maxl) = {
   if l > maxl { () }
   else {
     // The layer-start base capture: performed OUTSIDE any branch bracket,
@@ -1384,8 +1385,8 @@ fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
     // env byte-identical; the fan defers the same replay to this barrier.
     let base = env_base_view()   // drift-audit: ignore — sequenced effectful read (the layer-start snapshot, consumed by every branch of the layer)
     let seed = consume_base()   // drift-audit: ignore — sequenced effectful read (the root's consumed-set at layer start, the branch ledgers' shared seed)
-    planned_layer_stmts(rows, layers, bases, stmts, summ, gseed, l, 0, base, seed, top0)
-    planned_layer_sweep(rows, layers, bases, stmts, summ, gseed, top0, l + 1, maxl)
+    planned_layer_stmts(rows, layers, bases, stmts, summ, gseed, iseed, l, 0, base, seed, top0)
+    planned_layer_sweep(rows, layers, bases, stmts, summ, gseed, iseed, top0, l + 1, maxl)
   }
 }
 
@@ -1398,19 +1399,43 @@ fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
 // byte-identical by construction, and the fan's concurrent form changes
 // only WHO runs layer_judge_walk's iterations, never what the joins
 // replay.
-fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, l, i, base, seed, top0) = {
-  let facts = layer_judge_walk(rows, layers, bases, stmts, summ, gseed, l, 0, base, seed, top0, [])
+fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, iseed, l, i, base, seed, top0) = {
+  let facts = layer_judge_walk(rows, layers, bases, stmts, summ, gseed, iseed, l, 0, base, seed, top0, [])
   layer_join_walk(facts, 0)
 }
 
-fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, summ, gseed, l, i, base, seed, top0, own acc) = {
+// THE SPAWN: every layer branch runs as a REAL task — a spawned
+// instance of the whole module over the shared image, its world born
+// empty and populated by the bracket's eleven-handler cursor, its
+// facts crossing back as one shared heap record at join. The spawn-join is
+// IMMEDIATE (one task in flight), so the substrate — task records,
+// per-instance identity, the shared-image memory shape, the
+// self-contained bracket — is proven under the byte gate with zero
+// race surface; concurrency is then the in-flight count, not a
+// semantics change. The task closure's captures reach branch_judge as
+// ordinary call arguments (the install-config-capture class never
+// fires on params).
+fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, summ, gseed, iseed, l, i, base, seed, top0, own acc) = {
   if i >= len(stmts) { acc }
   else {
-    layer_judge_walk(rows, layers, bases, stmts, summ, gseed, l, i + 1, base, seed, top0,
+    layer_judge_walk(rows, layers, bases, stmts, summ, gseed, iseed, l, i + 1, base, seed, top0,
       if layers[i] == l {
         let (_, count) = rows[i]
-        push(acc, branch_judge(stmts[i], base, seed, summ, gseed,
-          (bases[i], bases[i] + count, top0 + i * mint_overflow_quota)))
+        let range = (bases[i], bases[i] + count, top0 + i * mint_overflow_quota)
+        // The task body mirrors the root's OUTER shape: an arm's performs
+        // resolve outer to its install (R2), so diag_branch's renders
+        // chase OUTSIDE the bracket — sequentially they land on the
+        // dispatch chain's empty graph instance (whose density guard
+        // answers virgin t{h}@e0 for unminted-by-it handles); a spawned
+        // instance's world would be EMPTY there and the render died
+        // garbage (measured: show_handle's exhaustive else, the 6,444-line
+        // repro). The wrapper reproduces the root's answers byte-for-byte;
+        // the render-reads-the-guard's-fabrication class is named for its
+        // own landing (Hβ.diag.render-chases-wrong-instance).
+        let rec = spawn_task(() =>
+          branch_judge(stmts[i], base, seed, summ, gseed, iseed, range)
+            ~> graph_handler([], 0, 0, 0, [], 0, 0))
+        push(acc, join_task(rec))
       } else { acc })
   }
 }
@@ -1431,9 +1456,10 @@ fn layer_join_walk(ref facts, j) = {
 // per-thread tapes extend. Config args are frame locals by construction
 // (Hβ.lower.install-config-capture-read: a capture-referencing config
 // arg reads 0; params read true).
-fn branch_judge(stmt, base, seed, summ, gseed, range) = {
+fn branch_judge(stmt, base, seed, summ, gseed, iseed, range) = {
   let (bb, bc, bi) = base
   let (gspine, gopen, gspan) = gseed
+  let (ib, ie, ic) = iseed
   let (mb, mc, bh) = range
   let body = () => {
     set_summaries(summ)
@@ -1485,6 +1511,7 @@ fn branch_judge(stmt, base, seed, summ, gseed, range) = {
     ~> graph_handler(gspine, gopen, mb, mc, gspan, bh, bh + mint_overflow_quota)
     ~> mutate_sink
     ~> diag_branch
+    ~> intern_view(ib, ie, ic)
 }
 
 // The join: replay the branch's facts into the root in occurrence order —

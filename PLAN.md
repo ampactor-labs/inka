@@ -1038,6 +1038,47 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-26 · ▶▶▶▶▶ THE JUDGMENT SPAWNS — every stmt's judgment runs
+  as a REAL host thread over the shared image, and the spawned judge's
+  bytes EQUAL the sequential judge's (rung 3 lands; the fused oracle's
+  execution substrate is LIVE · pin 5cb95039). layer_judge_walk spawns
+  each layer branch as a task — spawn_task/join_task direct (substrate
+  ops, no install), spawn-join IMMEDIATE so the whole substrate (task
+  records, per-instance identity and init, the shared-image memory
+  flip, the self-contained bracket, the facts record crossing back at
+  join) is proven under the byte gate with zero race surface;
+  concurrency is now the in-flight count, not a semantics change. TWO
+  pieces completed the task body: the INTERN VIEW (read-only over the
+  root's table via the intern_seed export; probe hits serve — the walk
+  is parse-pre-warmed — and a miss traps loudly, since a view-minted
+  handle would fork identity into published state) and the OUTER
+  SHAPE — the one trap of the landing, measured to its floor with a
+  6,444-line repro in ~40s: an arm's performs resolve OUTER to its
+  install (R2), so diag_branch's renders chase OUTSIDE the bracket;
+  sequentially they land on the dispatch chain's EMPTY graph instance,
+  whose density guard answers virgin t{h}@e0 — a DISCOVERED latent
+  wrong-instance read (the sequential renders were reading the
+  guard's fabrication all along, named
+  Hβ.diag.render-chases-wrong-instance for its truth-landing) — and a
+  spawned world had NOTHING there, so show_handle died on garbage.
+  The task body now wraps the bracket in the root's own outer shape
+  (an empty dispatch graph instance), reproducing the sequential
+  answers byte-for-byte. THE VERDICT IS THE STRONGEST FORM the design
+  admits: the march ruled CLEAN m2 == m3 — the spawned judgment
+  reproduces the SEQUENTIAL judgment's bytes EXACTLY (the banded
+  partition's execution-order-free numbering cashing out at the
+  march itself), and the WHOLE BOARD holds through the spawning
+  compiler: census 0, comment-refs 0, frontier 279/0, proof-exactness
+  9/9, crown 5/5, micros 116/0 — every gate's every compile spawning
+  a thread per stmt. The wheel is a SPAWNING MODULE: shared-image
+  import, CAS-bump allocation, per-instance init. Cost measured:
+  ~5:42 spawned vs ~5:31 sequential (the serial spawn tax ≈ 3%). THE
+  REMAINDER is now literally a scheduler: K>1 in-flight tasks per
+  layer (the joins already run in stmt order regardless of completion
+  order) gated by the same-layer handler-sig barrier class (both
+  installs bind one prepass-minted sig — sequential post-join or
+  own-layer those stmts) + the pointer-identity census under real
+  concurrency; then the ??-fan rides the identical machinery.
 - 2026-07-26 · ▶▶▶ THE PARTITION GOES EXECUTION-ORDER-FREE — banded
   overflow completes the deterministic-handle-partition keystone
   (rung 3's opening pair · pin f7c96d1b). The interrogation on the

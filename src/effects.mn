@@ -161,7 +161,10 @@ fn resolve_row(row) with !Mutate = {
 // semantically equal), so every later read is one hop. UNIFY-ONLY: the
 // graph has one writer, so only unify_row (inference's own bind site)
 // compresses; every other reader takes resolve_row and rides the web
-// unify already compressed.
+// unify already compressed. The write goes through graph_compress_row —
+// the OPTIMIZATION op, whose branch-cursor arm skips it (a branch
+// rebinding shared chain cells makes sibling chases schedule-dependent;
+// the root's sequential walks compress the web).
 fn resolve_row_compress(row) = {
   let EfRow(p, a, t) = row
   match t {
@@ -170,7 +173,7 @@ fn resolve_row_compress(row) = {
       match kind {
         NRowBound(inner) => {
           let ri = resolve_row_compress(inner)
-          graph_bind_row(v, ri, Inferred("row path compression"))
+          graph_compress_row(v, ri)
           let EfRow(cp, ca, ct) = ri
           ef_make(name_set_union(p, name_set_diff(cp, a)), name_set_union(a, ca), ct)
         },

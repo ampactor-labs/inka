@@ -551,6 +551,33 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
     }
   },
 
+  // Path compression at the row sort — an OPTIMIZATION write, distinct
+  // from the judgment bind by OP so the policy lives where the band facts
+  // live: a BRANCH cursor (mint_limit > 0) SKIPS it, because a branch
+  // rebinding shared chain cells makes sibling chases schedule-dependent —
+  // the measured k2 yield-floor flips at window 8 traced to exactly these
+  // writes (1,463 foreign row binds, every one "row path compression") —
+  // while the ROOT's sequential walks re-compress the web at full
+  // strength. Skipping costs a re-walk of an uncompressed chain, never a
+  // divergence. The target is NRowBound by construction (compression only
+  // fires on a bound link), so no self-loop guard.
+  graph_compress_row(v, row) => {
+    if mint_limit > 0 { resume() }
+    else {
+      let old_node = graph_node_at(spine, next, v)
+      spine_put_node(spine, v, GNode(NRowBound(row), Inferred("row path compression")))
+      let new_trail = trail_append(trail, trail_len, MSetRow(v, old_node))
+      let new_epoch = epoch + 1
+      if len(checkpoint_stack) == 0 {
+        graph_mutated(new_epoch, MSetRow(v, old_node))
+      }
+      resume()
+        with epoch = new_epoch,
+             trail = new_trail,
+             trail_len = trail_len + 1
+    }
+  },
+
   // The record-row residual bind — a `...R` rest's remaining fields, under
   // its OWN node kind (NRecordRowBound). Binding residuals under NRowBound
   // made the row slot an untagged EffRow-or-Ty union every row walk's

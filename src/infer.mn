@@ -1417,25 +1417,38 @@ fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
 // The in-flight window — a scheduling constant, never a semantics
 // input BY DESIGN: the banded partition makes the emitted bytes a
 // pure function of source and plan, so any window size must produce
-// identical output, and the run-variance diff is the standing
-// instrument. AT 8 THE INSTRUMENT CONVICTED THE CLASS AND THE DIG
-// NARROWED IT TO ITS CELLS (2026-07-26, six-run batteries): per-run
-// single-callee k2 yield-floor flips — the float-format family, then
-// driver_incremental — each a can_yield chase finding one row var
-// bound in some runs and free in others. The publish freeze (every
-// join-crossing scheme chase_deep'd to a value, landed in
-// branch_replay_one) removed the env-publish channel and the flip
-// MOVED, which convicts the remaining shared-live-var carrier: the
-// PREPASS registrations (register_effect_ops /
-// pre_register_handler_sig) hold live sig vars every branch's
-// installs and op edges unify against — same-block concurrent binds
-// on one prepass cell are the race. The window holds at ONE (every
-// branch a real spawned instance, deterministic, byte-proven); K>1
-// lands when the value-boundary law reaches the prepass: op and
-// handler registrations publish quantified VALUE schemes, each
-// branch instantiates fresh at its install or op edge, and
-// cross-branch instance agreement rides the join's replay algebra
-// (branch_replay_one's edge-evolution already carries the op half).
+// identical output, and the six-run-variance diff is the standing
+// instrument. THE K>1 DIG'S KILL LEDGER (2026-07-27, six probe
+// batteries — the bind census with per-branch band bounds, the
+// can_yield tail census, the reason census): SIX labels died to the
+// artifact. The prepass registrations were INNOCENT (op schemes are
+// fully quantified — register_one_op's qvars span params + ret +
+// row; the 101 prepass-band binds are each handler decl's OWN branch
+// binding its residual, layer-protected). The NFree/NRowFree publish
+// fallbacks were REAL shared cells (generalize now QUANTIFIES its
+// unresolved arms — callers freshen instead of teaching the decl
+// through the publish; Law-7 byte-identical on the wheel, m2 == m3).
+// Row path compression was the LARGEST shared-write class (1,463
+// foreign row binds per compile, every reason "row path compression"
+// — branches rebinding prior-generation chain cells as an
+// optimization) and it now rides its own op, graph_compress_row,
+// whose branch arm SKIPS (the root's sequential walks re-compress) —
+// measured innocent of the flip but a true determinism hazard closed.
+// THE RESIDUE, confined and named: the float-format family
+// (float_to_str / float_format_fixed / float_format_scientific)
+// still flips its k2 yield-floor wraps between TWO self-stable
+// attractors (4-2 at window 8, ±55 lines, census 0 in both) — the
+// callee-node row tails at their str_of_single_byte call sites read
+// bound-vs-free at lower depending on branch interleave, and the
+// surviving writer class is the ~2,000 per-compile Located
+// unify-path binds through shared reaches (the parse-band call-node
+// cells the caller's own judgment binds, whose upstream chase
+// crosses a sibling-observable cell). The window holds at ONE —
+// every branch a real spawned instance, byte-proven CLEAN — and K>1
+// lands when the raced unify-bind's carrier falls: re-arm the bind
+// census (mint_limit>0 && handle<band-base, reason-rendered), diff
+// the flipped attractor's foreign-bind set, and fix the named
+// carrier at its mint.
 let judge_window = 1
 
 // THE FAN: every layer branch runs as a REAL task — a spawned
@@ -4868,10 +4881,17 @@ fn generalize(handle) = {
       let body_ty = chase_deep(ty)
       Forall(free_in_ty(body_ty), body_ty)
     },
-    NFree(_)      => Forall([], TVar(handle)),    // unresolved — monotype stays
-    NRowBound(_)  => Forall([], TVar(handle)),    // row handle — not a Ty; monotype
-    NRecordRowBound(_) => Forall([], TVar(handle)),   // record-row residual — row sort; monotype
-    NRowFree(_)   => Forall([], TVar(handle)),    // unresolved row — monotype
+    // An unresolved publish QUANTIFIES its own cell: sharing the live cell
+    // let every caller bind it (callers teaching the decl through the
+    // publish — the order-conditional disease at the value boundary; under
+    // the converged judge the decl learns only through its own re-judgment,
+    // and the parallel fan's branches must never bind a shared cell). Each
+    // instantiation freshens into its own band; the decl's cell stays the
+    // decl's own verdict.
+    NFree(_)      => Forall([handle], TVar(handle)),
+    NRowBound(_)  => Forall([], TVar(handle)),    // row handle — BOUND content; shared reads only
+    NRecordRowBound(_) => Forall([], TVar(handle)),   // record-row residual — bound; row sort
+    NRowFree(_)   => Forall([handle], TVar(handle)),  // unresolved row — quantified like NFree; instantiate's row-sort mint freshens
     NErrorHole(_) => Forall([], TVar(handle))     // error — preserve handle for diagnostics
   }
 }

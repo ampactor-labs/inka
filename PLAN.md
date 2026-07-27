@@ -1038,6 +1038,49 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-27 · ▶▶▶ THE KILL LEDGER REACHES THE WRITERS — the value
+  boundary closes at generalize, and compression leaves the branches
+  (the K>1 dig's second arc · pin 714431ce). Six probe batteries —
+  the per-branch bind census with band bounds (the branch's own base
+  as the self-locating gate, after hard-coded targets died to their
+  own tree-shift), the can_yield tail census, and the REASON census
+  whose every prior-generation row bind confessed one string — killed
+  SIX labels against the artifact: (1) the prepass registrations were
+  INNOCENT (register_one_op's qvars span params + ret + row — op
+  schemes were fully quantified all along; the 101 prepass-band binds
+  are each handler decl's OWN branch binding its residual,
+  layer-protected by the VarLookup edge); (2) the NFree/NRowFree
+  publish fallbacks were REAL shared cells — generalize published
+  Forall([], TVar(handle)) and every caller shared-and-bound the live
+  cell, callers teaching the decl through the publish (the
+  order-conditional disease at the value boundary) — generalize now
+  QUANTIFIES its unresolved arms, instantiate's sort-aware mint
+  freshens per caller, and the wheel proved the fix Law-7-inert
+  (CLEAN m2 == m3 at window 1: no reachable site ever depended on
+  caller-taught bindings — the converged judge had left none); (3)
+  row path compression was the LARGEST shared-write class (1,463
+  foreign row binds per compile, reason "row path compression" —
+  branches rebinding prior-generation chain cells as an optimization,
+  making sibling chases schedule-dependent) — compression now rides
+  its OWN op, graph_compress_row, whose branch arm SKIPS while the
+  root's sequential walks re-compress: the write's INTENT carried by
+  the op, the policy in the arm where the band facts live, no flag.
+  Also counted as kills: the conflict-requeue fan design (refuted by
+  its own volume census — 707 branches bind prior-gen cells, requeue
+  would collapse the fan to sequential), EANode as the walk gap
+  (effects.mn never touches it — skip-skip symmetry holds), and the
+  paired-lim cross-branch-judgment theory (the pairs are ONE branch
+  pre/post overflow — limit0 vs high_limit). THE RESIDUE, confined
+  and named at judge_window's decl: the float-format trio's k2
+  yield-floor wraps still flip between TWO self-stable attractors
+  (4-2 at window 8, ±55 lines, census 0 in both); the surviving
+  writer class is the ~2,000 Located unify-path binds through shared
+  reaches, and the next probe is banked (re-arm the bind census,
+  diff the flipped attractor's foreign-bind set, fix the named
+  carrier at its mint). The window holds at ONE — byte-proven CLEAN.
+  Board whole at the pin: CLEAN m2 == m3 at 323,878 lines (~22s/leg);
+  census 0; comment-refs 0; frontier 279/0; proof-exactness 9/9;
+  crown 5/5; micros-through-m2 116/0.
 - 2026-07-26 · ▶▶▶ THE DIG NAMES THE RACE'S CELLS AND THE PUBLISH
   FREEZES (the K>1 dig's first arc · pin 2df771e2). Six-run window-8
   batteries turned the flip into a mechanism, three measurements

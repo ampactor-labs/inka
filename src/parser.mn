@@ -266,7 +266,13 @@ fn push_node(own buf, count, node) = {
 // source-ordered.
 
 fn attach_comment_weave(ref tokens, h_from) with GraphRead + GraphWrite + Memory + Alloc = {
-  let runs = cw_collect_runs(tokens, 0, 0 - 1, make_list(0))
+  // Flatten ONCE before the per-node bsearches (the iterate-flattens-once
+  // law): the push-built runs list is snoc-spined, so every bsearch probe's
+  // runs[mid] walked the spine — O(R) per probe, O(nodes × R log R) per
+  // parse, multiplied by every re-frontend the convergence runs (measured
+  // 2026-07-26: 98% of the WHOLE self-compile inside cw_scan_index's
+  // list_index_unchecked — the crc_scope disease at the weave layer).
+  let runs = list_to_flat(cw_collect_runs(tokens, 0, 0 - 1, make_list(0)))
   if len(runs) == 0 { () }
   else {
     let Graph(_, span_index) = graph_snapshot()

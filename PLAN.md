@@ -1038,6 +1038,45 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-26 · ▶▶▶▶ THE WEAVE FLATTENS AND THE FAN MEASURES ITS FIRST
+  RESIDUE (Morgan's catch executed · pin c7f08fdf). "Since when does
+  Mentl take so long?" — the convergence landings had shipped a ~60×
+  wall-time regression UNMEASURED (5.3s at the B-ii pin → 5:42), and
+  the session normalized it to the point of comparing spawn-vs-
+  sequential at the bloated baseline and calling 3% fine. §5.O
+  re-applied: host perf named the whole thing in ONE line — 98% of
+  the self-compile inside attach_comment_weave → cw_scan_index →
+  list_index_unchecked (97.9% self): the bsearches were already
+  O(log R), but every runs[mid] probe walked a push-built SNOC spine
+  (the crc_scope disease at the weave layer), and the cost multiplied
+  by every re-frontend the trial/rounds/final run. ONE FLATTEN
+  (list_to_flat at the attach boundary — span_index one line above
+  was already flattened) recovered 15×: 5:42 → ~23s, ~2.3s/pass at
+  the convergence's pass count — the architecture honest again. THEN
+  THE FAN AT K=8: the block window (spawn a block, join in stmt
+  order) ran the whole self-compile at 140% CPU — and ITS OWN
+  instrument convicted the first residue: one lambda's k2 yield-floor
+  wrap (lambda_1731074's __kf local + multishot floor) flipped in ONE
+  of FOUR otherwise byte-identical runs — a rare schedule-dependent
+  race in a post-seal lower-era staging read of branch-written state.
+  Un-pinnable at K=8 by its own gate; the window holds at ONE (every
+  branch still a REAL spawned instance — the substrate stays live and
+  byte-proven; CLEAN m2 == m3 at ~26s/leg, deterministic across
+  runs). THE K>1 DIG, banked with its instruments: repro = the
+  window-8 self-compile diffed across ~4 runs; suspect set = the
+  boundary-cell writes same-block siblings can interleave + any
+  pointer-identity compare the CAS-bump's schedule-varying addresses
+  can flip; the index-read borrow law also landed (an xs[i] receiver
+  is the read-is-a-borrow law's fourth surface — the affine ledger
+  demanded restructuring of the fan's provably-safe join, the
+  Hylo-quiet bar naming the gap; judges from the next generation).
+  Named next flatten-class strike: crc_walk (19% of the healed
+  profile, list_index beneath it). THE LESSON, now law-shaped: a
+  landing that multiplies passes RE-MEASURES wall time in its own
+  entry — the convergence entries shipped without a single timing
+  and the regression rode two sessions unchallenged. Board whole:
+  census 0, comment-refs 0, frontier 279/0, proof-exactness 9/9,
+  crown 5/5, micros 116/0.
 - 2026-07-26 · ▶▶▶▶▶ THE JUDGMENT SPAWNS — every stmt's judgment runs
   as a REAL host thread over the shared image, and the spawned judge's
   bytes EQUAL the sequential judge's (rung 3 lands; the fused oracle's

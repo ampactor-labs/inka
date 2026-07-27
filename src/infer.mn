@@ -1404,40 +1404,91 @@ fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
   layer_join_walk(facts, 0)
 }
 
-// THE SPAWN: every layer branch runs as a REAL task — a spawned
+// The in-flight window — a scheduling constant, never a semantics
+// input BY DESIGN: the banded partition makes the emitted bytes a
+// pure function of source and plan, so any window size must produce
+// identical output, and the run-variance diff is the standing
+// instrument. AT 8 THE INSTRUMENT CONVICTED A RESIDUE (2026-07-26,
+// the window's first measurement): one lambda's k2 yield-floor wrap
+// flipped in one of four otherwise byte-identical self-compiles
+// (lambda_1731074's __kf local + multishot floor present in three
+// runs, absent in one — a post-seal lower-era node whose staging
+// reads branch-written state through a window a concurrent sibling
+// can race). The window holds at ONE — every branch still a real
+// spawned instance, the whole substrate live and byte-proven — and
+// the K>1 dig owns the flip with its repro cadence in hand: re-run
+// the self-compile at window 8 and diff (1-in-4), suspect set = the
+// boundary-cell writes same-block siblings can interleave and any
+// pointer-identity compare the CAS-bump allocator's schedule-varying
+// addresses can flip.
+let judge_window = 1
+
+// THE FAN: every layer branch runs as a REAL task — a spawned
 // instance of the whole module over the shared image, its world born
 // empty and populated by the bracket's eleven-handler cursor, its
-// facts crossing back as one shared heap record at join. The spawn-join is
-// IMMEDIATE (one task in flight), so the substrate — task records,
-// per-instance identity, the shared-image memory shape, the
-// self-contained bracket — is proven under the byte gate with zero
-// race surface; concurrency is then the in-flight count, not a
-// semantics change. The task closure's captures reach branch_judge as
+// facts crossing back as one shared heap record at join. The window
+// spawns ahead up to judge_window tasks and joins IN STMT ORDER —
+// completion order never matters (join_task's atomic wait delivers
+// each branch's facts whole), so the replay stream is byte-identical
+// to the sequential walk by construction. Same-layer branches share
+// only frozen or partitioned state: the value-boundary law keeps
+// published schemes free of live vars, mint ranges and overflow bands
+// are disjoint, ledgers are branch-local, and the intern is a
+// read-only view. The task closure's captures reach branch_judge as
 // ordinary call arguments (the install-config-capture class never
 // fires on params).
 fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, summ, gseed, iseed, l, i, base, seed, top0, own acc) = {
-  if i >= len(stmts) { acc }
+  let idxs = layer_indices(layers, l, 0, [])
+  judge_blocks(rows, bases, stmts, summ, gseed, iseed, base, seed, top0, idxs, 0, acc)
+}
+
+fn layer_indices(ref layers, l, i, own out) = {
+  if i >= len(layers) { out }
+  else { layer_indices(layers, l, i + 1, if layers[i] == l { push(out, i) } else { out }) }
+}
+
+// Block-wise concurrency: spawn a block of up to judge_window tasks,
+// then join the block in stmt order — at most judge_window instances
+// live at once, and the joins' replay stream is byte-identical to the
+// sequential walk at any block size (completion order never matters;
+// join_task's atomic wait delivers each branch's facts whole).
+fn judge_blocks(ref rows, ref bases, ref stmts, summ, gseed, iseed, base, seed, top0, ref idxs, b, own acc) = {
+  if b >= len(idxs) { acc }
   else {
-    layer_judge_walk(rows, layers, bases, stmts, summ, gseed, iseed, l, i + 1, base, seed, top0,
-      if layers[i] == l {
-        let (_, count) = rows[i]
-        let range = (bases[i], bases[i] + count, top0 + i * mint_overflow_quota)
-        // The task body mirrors the root's OUTER shape: an arm's performs
-        // resolve outer to its install (R2), so diag_branch's renders
-        // chase OUTSIDE the bracket — sequentially they land on the
-        // dispatch chain's empty graph instance (whose density guard
-        // answers virgin t{h}@e0 for unminted-by-it handles); a spawned
-        // instance's world would be EMPTY there and the render died
-        // garbage (measured: show_handle's exhaustive else, the 6,444-line
-        // repro). The wrapper reproduces the root's answers byte-for-byte;
-        // the render-reads-the-guard's-fabrication class is named for its
-        // own landing (Hβ.diag.render-chases-wrong-instance).
-        let rec = spawn_task(() =>
-          branch_judge(stmts[i], base, seed, summ, gseed, iseed, range)
-            ~> graph_handler([], 0, 0, 0, [], 0, 0))
-        push(acc, join_task(rec))
-      } else { acc })
+    let hi = if b + judge_window < len(idxs) { b + judge_window } else { len(idxs) }
+    let recs = spawn_block(rows, bases, stmts, summ, gseed, iseed, base, seed, top0, idxs, b, hi, [])
+    judge_blocks(rows, bases, stmts, summ, gseed, iseed, base, seed, top0, idxs, hi,
+      join_block(recs, 0, acc))
   }
+}
+
+fn spawn_block(ref rows, ref bases, ref stmts, summ, gseed, iseed, base, seed, top0, ref idxs, j, hi, own recs) = {
+  if j >= hi { recs }
+  else {
+    let i = idxs[j]
+    let (_, count) = rows[i]
+    let range = (bases[i], bases[i] + count, top0 + i * mint_overflow_quota)
+    // The task body mirrors the root's OUTER shape: an arm's performs
+    // resolve outer to its install (R2), so diag_branch's renders
+    // chase OUTSIDE the bracket — sequentially they land on the
+    // dispatch chain's empty graph instance (whose density guard
+    // answers virgin t{h}@e0 for unminted-by-it handles); a spawned
+    // instance's world would be EMPTY there and the render died
+    // garbage (measured: show_handle's exhaustive else, the 6,444-line
+    // repro). The wrapper reproduces the root's answers byte-for-byte;
+    // the render-reads-the-guard's-fabrication class is named for its
+    // own landing (Hβ.diag.render-chases-wrong-instance).
+    let rec = spawn_task(() =>
+      branch_judge(stmts[i], base, seed, summ, gseed, iseed, range)
+        ~> graph_handler([], 0, 0, 0, [], 0, 0))
+    spawn_block(rows, bases, stmts, summ, gseed, iseed, base, seed, top0, idxs, j + 1, hi,
+      push(recs, rec))
+  }
+}
+
+fn join_block(ref recs, j, own acc) = {
+  if j >= len(recs) { acc }
+  else { join_block(recs, j + 1, push(acc, join_task(recs[j]))) }
 }
 
 fn layer_join_walk(ref facts, j) = {
@@ -2158,7 +2209,16 @@ fn infer_expr(ref node) = {
       // proven-String receiver is SATISFIED (§4① — a String IS a
       // sequence); its element is the byte. Tuple-const-index /
       // record-int-key remain the named peer Hβ.infer.index-expr-dispatch.
+      // An INDEX READ is a borrow — the read-is-a-borrow law's fourth
+      // surface beside the if condition, the match scrutinee, and the
+      // field receiver: xs[i] reads an element without moving xs, so an
+      // `own` list indexed then passed onward is one consume, not two
+      // (measured: the fan's join arm read recs[jn] before threading
+      // recs, and the ledger demanded restructuring provably-safe code —
+      // the Hylo-quiet bar naming the inference gap).
+      borrow_enter()
       infer_expr(receiver)
+      borrow_exit()
       infer_expr(index)
       let N(_, _, rh) = receiver
       let N(_, _, ih) = index

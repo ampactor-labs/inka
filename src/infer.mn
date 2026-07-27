@@ -1449,15 +1449,23 @@ fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
 // recursive bound-tail fold did not close). The rebind census RAN
 // (9,676 per compile): rebinding is pervasive and partly DELIBERATE
 // — inf_exit_fn's "fn effect row" bind OVERWRITES the placeholder
-// binding as finalization (1,982 as the rebinder, 4,674 as the
-// prior binding) — so the blanket never-rebind-a-bound-root rule is
-// refuted as the fix shape. The racy subset is the FOREIGN rebinds
-// only. The window holds at ONE — every branch a real spawned
-// instance, byte-proven CLEAN — and K>1 lands when the foreign
-// rebind class dies: gate the rebind census on cells outside the
-// binder's own bands (the base0 probe form), name the few
-// cross-branch rebinding paths, and make exactly those recurse into
-// the binding or requeue; then the six-battery.
+// binding as finalization — so the blanket never-rebind rule is
+// refuted as the fix shape. THE ULTIMATE FORM IS PROVEN on the
+// lattice-join branch (ed656d32), research-grounded in LVars/CALM,
+// Burckhardt's concurrent revisions, CRDT join-state, and semi-naive
+// datalog: the teaching write on a bound row cell JOINS (row_join —
+// bare names union, parameterized instances coexist as fragments;
+// joins commute, so all schedules converge), the decl-exit REPLACE
+// rides graph_finalize_row, and the infer→lower boundary is the LVar
+// freeze. MEASURED there: SIX IDENTICAL shas at window 8, twice,
+// under two join variants — determinism by algebra where every
+// scheduling discipline still flipped 4-2. The branch stays off main
+// on the census gate (86 E_TypeMismatch: instance payloads meeting
+// positionally across coexisting fragments at arm-resume sites and
+// effect-polymorphic folds) — the reconciliation is exactly the
+// banked same-name-fragments-coexist landing (unify_instances_to and
+// the install reconciliation learn fragments), and K>1 lands as its
+// dividend. The window holds at ONE on main.
 let judge_window = 1
 
 // THE FAN: every layer branch runs as a REAL task — a spawned

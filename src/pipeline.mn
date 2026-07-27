@@ -525,8 +525,13 @@ fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round
   }
 }
 
-fn converge_finish(src, flat_rows, layers) =
-  src |> frontend |> infer_program_final(flat_rows, layers)
+fn converge_finish(src, flat_rows, layers) = {
+  // The final's parse START, captured before its own frontend: the crc
+  // walk's lower bound, so the backtick judge reads only THIS pass's
+  // comment cells — prior generations' parses left their text in place.
+  let pstart = graph_next()   // drift-audit: ignore — sequenced effectful read (the pre-frontend frontier, the comment walk's lower bound)
+  src |> frontend |> infer_program_final(flat_rows, layers, pstart)
+}
 
 fn mask_all(n) = mask_all_walk(make_list(n), 0, n)
 

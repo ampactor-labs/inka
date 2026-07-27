@@ -245,6 +245,7 @@ fn inf_add_row_unified(row) = {
 
 fn infer_program(stmts) = {
   {
+    let parse_end = graph_next()   // drift-audit: ignore — sequenced effectful read (the parse watermark, the comment walk's exact bound)
     register_primitives()
     pre_register_decls(stmts)
     // THE CUT: the resume-summary classifier runs between registration and
@@ -260,7 +261,7 @@ fn infer_program(stmts) = {
     // reference, the handler resolves it"): after the walk the env holds
     // every decl, so each comment's backticked references resolve here —
     // every compile keeps the weave honest, never a separate audit pass.
-    comment_refs_check(stmts)
+    comment_refs_check(stmts, 0, parse_end)
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
   stmts
 }
@@ -293,7 +294,7 @@ fn infer_program(stmts) = {
 // doc-test frontier) and `<...>` marks a schematic template — neither
 // is a reference.
 
-fn comment_refs_check(ref stmts) = {
+fn comment_refs_check(ref stmts, parse_start, parse_end) = {
   let cdix = comment_decl_index(stmts, 0, smap_new())
   // Flat ONCE before the per-comment scans: crc_scope_at indexes this list
   // per scope per commented handle, and a snoc spine pays its depth on
@@ -301,7 +302,15 @@ fn comment_refs_check(ref stmts) = {
   // (the prose gate cost five compilers; perf found it, no code-reading
   // estimate ever named it).
   let scopes = list_to_flat(crc_fn_scopes(stmts, 0, []))
-  let dollars = crc_walk(0, graph_next(), cdix, scopes, [])
+  // The walk's bounds are THIS pass's own parse range: comments attach
+  // only at parse (graph_attach_comment, like graph_index_span), so
+  // handles above the frontend's frontier are comment-free by
+  // construction, and handles BELOW its start belong to prior
+  // generations whose comment cells still hold text — the old 0-to-
+  // graph_next walk judged every stale generation's copy and probed
+  // the judgment's millions of mints for prose (the crc share of the
+  // healed profile, 19%, 2026-07-26).
+  let dollars = crc_walk(parse_start, parse_end, cdix, scopes, [])
   if len(dollars) > 0 {
     let lvix = lit_vocab_build(0, graph_next(), smap_new())
     crc_judge_dollars(dollars, 0, lvix, cdix)
@@ -1288,8 +1297,9 @@ fn backward_depth(ref name_idx, ref depths, name, i) = {
   }
 }
 
-fn infer_program_final(rows, layers, stmts) = {
+fn infer_program_final(rows, layers, pstart, stmts) = {
   {
+    let parse_end = graph_next()   // drift-audit: ignore — sequenced effectful read (the parse watermark, the comment walk's exact bound)
     register_primitives()
     refuse_duplicate_type_decls(stmts, 0, len(stmts), smap_new())
     each(pre_register_alias, stmts)
@@ -1303,7 +1313,7 @@ fn infer_program_final(rows, layers, stmts) = {
     set_summaries(summ)
     infer_stmt_list_planned(rows, layers, stmts, summ)
     finalize_continuation_boundaries(0, graph_next())
-    comment_refs_check(stmts)
+    comment_refs_check(stmts, pstart, parse_end)
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
   stmts
 }
@@ -1408,19 +1418,24 @@ fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
 // input BY DESIGN: the banded partition makes the emitted bytes a
 // pure function of source and plan, so any window size must produce
 // identical output, and the run-variance diff is the standing
-// instrument. AT 8 THE INSTRUMENT CONVICTED A RESIDUE (2026-07-26,
-// the window's first measurement): one lambda's k2 yield-floor wrap
-// flipped in one of four otherwise byte-identical self-compiles
-// (lambda_1731074's __kf local + multishot floor present in three
-// runs, absent in one — a post-seal lower-era node whose staging
-// reads branch-written state through a window a concurrent sibling
-// can race). The window holds at ONE — every branch still a real
-// spawned instance, the whole substrate live and byte-proven — and
-// the K>1 dig owns the flip with its repro cadence in hand: re-run
-// the self-compile at window 8 and diff (1-in-4), suspect set = the
-// boundary-cell writes same-block siblings can interleave and any
-// pointer-identity compare the CAS-bump allocator's schedule-varying
-// addresses can flip.
+// instrument. AT 8 THE INSTRUMENT CONVICTED THE CLASS AND THE DIG
+// NARROWED IT TO ITS CELLS (2026-07-26, six-run batteries): per-run
+// single-callee k2 yield-floor flips — the float-format family, then
+// driver_incremental — each a can_yield chase finding one row var
+// bound in some runs and free in others. The publish freeze (every
+// join-crossing scheme chase_deep'd to a value, landed in
+// branch_replay_one) removed the env-publish channel and the flip
+// MOVED, which convicts the remaining shared-live-var carrier: the
+// PREPASS registrations (register_effect_ops /
+// pre_register_handler_sig) hold live sig vars every branch's
+// installs and op edges unify against — same-block concurrent binds
+// on one prepass cell are the race. The window holds at ONE (every
+// branch a real spawned instance, deterministic, byte-proven); K>1
+// lands when the value-boundary law reaches the prepass: op and
+// handler registrations publish quantified VALUE schemes, each
+// branch instantiates fresh at its install or op edge, and
+// cross-branch instance agreement rides the join's replay algebra
+// (branch_replay_one's edge-evolution already carries the op half).
 let judge_window = 1
 
 // THE FAN: every layer branch runs as a REAL task — a spawned
@@ -1620,6 +1635,18 @@ fn branch_replay_pubs(ref pubs, i) = {
 // draw_op_edges' own default/ambiguous algebra against the root's live
 // entry, the branch's verdict as the sighting; disc joins monotone.
 fn branch_replay_one(name, scheme, reason, kind) = {
+  // THE VALUE BOUNDARY AT EVERY PUBLISH: the scheme crosses the join as
+  // a chase_deep'd VALUE — quantified vars stay free leaves; everything
+  // bound inlines its resolution — so no published entry of ANY kind
+  // carries a live cell a concurrent sibling could bind. FnScheme
+  // finals got this law first (the subst/quantification landing);
+  // op-scheme and handler-sig publishes still carried live handles,
+  // and a same-block race on one such cell was the K>1 flip's target
+  // set (measured: str_of_single_byte's can_yield chasing a row var
+  // bound in four of six runs, free in two — the k2 wrap flipping the
+  // whole float-format family).
+  let Forall(q, sty) = scheme
+  let frozen = Forall(q, chase_deep(sty))
   match kind {
     EffectOpScheme(ename, bd, ba, bdisc) => {
       let joined = match env_lookup(name) {
@@ -1633,9 +1660,9 @@ fn branch_replay_one(name, scheme, reason, kind) = {
         },
         _ => kind
       }
-      env_extend(name, scheme, reason, joined)
+      env_extend(name, frozen, reason, joined)
     },
-    _ => env_extend(name, scheme, reason, kind)
+    _ => env_extend(name, frozen, reason, kind)
   }
 }
 

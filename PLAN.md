@@ -1038,6 +1038,39 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-26 · ▶▶▶ THE DIG NAMES THE RACE'S CELLS AND THE PUBLISH
+  FREEZES (the K>1 dig's first arc · pin 2df771e2). Six-run window-8
+  batteries turned the flip into a mechanism, three measurements
+  deep: (1) the flip is per-run single-callee k2 yield-floor wraps —
+  the float-format family (2-in-6, both flipped runs IDENTICAL: two
+  deterministic attractors), then driver_incremental — each traced to
+  can_yield → row_may_multishot chasing ONE row var bound in some
+  runs, free in others; (2) the callee's scheme is DECLARED-CLOSED
+  (mentl query read it), so the raced cell is upstream of the scheme;
+  (3) THE PUBLISH FREEZE landed — branch_replay_one chase_deeps every
+  join-crossing scheme to a VALUE, the value-boundary law at every
+  publish kind, not just FnScheme — and the flip MOVED instead of
+  dying, which CONVICTS the remaining shared-live-var carrier: the
+  PREPASS registrations (register_effect_ops /
+  pre_register_handler_sig) hold live sig vars every branch's
+  installs and op edges unify against; same-block concurrent binds on
+  one prepass cell are the race. The handler-sig barrier class is
+  thereby confirmed REAL (my earlier "measured-implied vacuous" was
+  wrong — counted as the kill it is). K>1's landing design, banked at
+  judge_window's decl: the value-boundary law reaches the PREPASS —
+  op and handler registrations publish quantified VALUE schemes, each
+  branch instantiates fresh at its install or op edge, and
+  cross-branch instance agreement rides the join's replay algebra
+  (the op half already built as branch_replay_one's edge-evolution).
+  ALSO LANDED: the crc walk bounded to its own pass's parse range
+  (comments attach at parse — the old 0-to-graph_next walk probed the
+  judgment's millions of mints AND judged every stale generation's
+  comment copies; the 19% profile share dies, ~23s → ~20s/leg), and
+  the window at ONE, proven deterministic across three identical
+  runs. The freeze's 8-line m2/m3 crossing is Reason renders
+  sharpening through frozen values (TRANSITION m3 == m4). Board
+  whole: census 0, comment-refs 0, frontier 279/0, proof-exactness
+  9/9, crown 5/5, micros 116/0.
 - 2026-07-26 · ▶▶▶▶ THE WEAVE FLATTENS AND THE FAN MEASURES ITS FIRST
   RESIDUE (Morgan's catch executed · pin c7f08fdf). "Since when does
   Mentl take so long?" — the convergence landings had shipped a ~60×

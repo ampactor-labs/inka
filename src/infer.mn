@@ -1446,13 +1446,18 @@ fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
 // census 0 in both). Rebinding a bound root is the union-find law
 // violated regardless of concurrency; the chain's ENTRY is a
 // residual subst share of a round-era cell (the collection gap the
-// recursive bound-tail fold did not close). The window holds at ONE
-// — every branch a real spawned instance, byte-proven CLEAN — and
-// K>1 lands when the rebind class dies: instrument graph_bind_row
-// to print when its target already chases NRowBound (both reasons —
-// the set is small and names every rebinding unify path), then make
-// those paths recurse into the binding instead of rebinding, and
-// re-run the six-battery.
+// recursive bound-tail fold did not close). The rebind census RAN
+// (9,676 per compile): rebinding is pervasive and partly DELIBERATE
+// — inf_exit_fn's "fn effect row" bind OVERWRITES the placeholder
+// binding as finalization (1,982 as the rebinder, 4,674 as the
+// prior binding) — so the blanket never-rebind-a-bound-root rule is
+// refuted as the fix shape. The racy subset is the FOREIGN rebinds
+// only. The window holds at ONE — every branch a real spawned
+// instance, byte-proven CLEAN — and K>1 lands when the foreign
+// rebind class dies: gate the rebind census on cells outside the
+// binder's own bands (the base0 probe form), name the few
+// cross-branch rebinding paths, and make exactly those recurse into
+// the binding or requeue; then the six-battery.
 let judge_window = 1
 
 // THE FAN: every layer branch runs as a REAL task — a spawned

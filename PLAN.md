@@ -1092,6 +1092,30 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶ THE README RIDES THE GRADIENT — a door, then two lanes
+  (no re-pin — docs + one tutorial comment; the readme-gradient research
+  pass's design executed, its report in the session scratchpad). The
+  door routes both audiences explicitly (the uv persona-fork precedent);
+  the guest cage + the domain-neutral Percent refusal are the one
+  universal example (probed: exit 1, refusing to emit); the novice lane
+  is one continuous PRIMM cycle — run it / ask it / break it / leave a
+  hole — every transcript re-derived against the live pin, whole lines
+  verbatim (the open row var renders and STAYS — truth over polish);
+  the expert lane compresses onto docs/POSITIONING.md (previously never
+  linked from the README) with the receipts as before-the-fold
+  benchmarks (the ripgrep order). The echo and the tour-night narrative
+  are HOMED, not exiled: lib/dsp/README.md is new (the echo in its
+  honest Clock form per E_FeedbackNoContext, the voice oath, Sample,
+  the module map, the crucible receipts) and lib/ml/README.md is new
+  (autodiff-as-multishot, the crucibles). The probe pass's adversarial
+  find is TRUED in place: 00-hello's comment claimed !Alloc-on-greet
+  "would refuse this body" while the unarmed class REPORTS and the
+  program runs (measured, exit 0) — the comment now states the licence
+  law (substrate rows report; a user effect's broken claim refuses).
+  Second witness banked for the span-slop render family: the :30 decl
+  render slices greet's name to "gree" (the `??)`-slop class at the
+  decl name). The board is untouched (README/lib .md files are outside
+  the weave; the tutorial edit is comment-only, lesson runs green).
 - 2026-07-28 · ▶▶ THE RANKER READS LOCAL INTENT — cost gets its first
   reader; the Arc 4 pull-forward lands (· pin 3b69fb7d). Every
   candidate carried `cost: Float // gradient-rank score` with fourteen

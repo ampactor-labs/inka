@@ -6,142 +6,37 @@ compiler *proves* what your program does — and what it can never do — and
 teaches you, in words, as you write. Any intelligence may propose; nothing
 executes unproven; intent is never lost; capability is always bounded.
 
-If you have never written code: everything below is written to be read, and
-the transcripts are conversations. If you write compilers for a living: the
-kernel is one graph, two operations, and a self-hosted fixed point, and the
-receipts are one command. This page is the door. The school is inside.
+This page is a door with two ways through. If you have never written code:
+install below, then walk [Five minutes with the teacher](#five-minutes-with-the-teacher)
+— the compiler does the teaching, and the school inside assumes nothing. If
+you build compilers or verify software for a living: every claim here has a
+command — start at [The receipts](#the-receipts), and the full positioned
+statement is [docs/POSITIONING.md](docs/POSITIONING.md).
 
-## The shape of it
+## One signature, read aloud
 
-There are exactly five verbs of flow in this medium, and they are the
-complete vocabulary; every program you will ever read is these five shapes
-combined. `|>` is "and then." `<|` fans one value out to several readers.
-`><` runs independent things side by side — read the page: they are literally
-side by side, because the shape on the page is the shape of the work, and the
-formatter keeps that true. `~>` installs an answerer over everything to its
-left. And `<~` is the one to slow down for.
-
-Sound has memory. An echo is now plus a little of before; there is no echo
-without a before. Most languages make you build memory out of scaffolding.
-Here, memory is a shape you draw — a loop in the graph:
+Here is a function that runs a plugin — code you did not write and will
+never read. The `with` clause is its door policy:
 
 ```
-fn echo(mix, x) with Clock(48_000) =
-  ((prev) => x + mix * prev) <~ delay(24_000)
+fn admit(plugin, x) with !Network + !FileSystem =
+  apply(plugin, x)
 ```
 
-`<~` means "feeds back." The right side is a memory element: it hands back
-what you gave it 24,000 ticks ago, and at 48,000 ticks a second that is half
-a second — the slap of a stone room. The left side is what to do each tick:
-`prev` is the echo's own past arriving back; the new sample is now plus a
-share of before. The whole physics of an echo, in one line you can read
-aloud. And a promise rides inside it: `prev` is not a box secretly allocated
-each tick. The medium inlines the loop into a register, which is why this
-same echo can sit inside a function that has sworn never to allocate, and
-the oath will hold.
+`!Network` reads *cannot reach the network*. Not "does not," not "was tested
+and didn't," not "the team agreed not to." Cannot — proven at compile time,
+transitively, through everything the plugin calls, to the bottom. If
+anything inside it tries, there is no built program to run. It can be
+brilliant. It can be a thousand times cleverer than you. It cannot phone
+home. Let the machine write. Let anything write.
 
-## The second hand
-
-A function's effect row has two hands. The first says what it needs. The
-second says what it can never do, and this is the hand that holds the true
-name.
-
-Picture the third night of a tour. Two thousand people. Fifty seconds into
-the set, the voice stutters — one dropped buffer, a click like a snapped
-string — because somewhere down the call tree one line allocated memory at
-the wrong moment. Every audio programmer alive holds that dread at bay the
-same way: discipline, review, a wiki page that says *never allocate on the
-audio thread*. A promise. Here is the same intention, said in this medium:
+And when a claim is false, the compiler does not warn — it refuses:
 
 ```
-fn voice(x) with Clock(48_000) + !Alloc =
-  x
-    |> gain(-3.0)
-    |> lowpass(0.2)
-    |> echo(0.35)
-```
-
-`!Alloc`. Read it: *cannot allocate*. Not "does not," not "was tested and
-didn't," not "the team agreed not to." Cannot — proven, transitively: the
-gain, the filter, the echo and its half-second memory, everything they call,
-to the bottom. If one line anywhere beneath this signature allocates, the
-program does not build, and the refusal arrives with the chain of reasons
-walked back to the guilty line. The dread does not get quieter. It gets
-impossible.
-
-This is `!E`, effect negation, and you should know plainly: everything else
-in this medium has cousins scattered across other languages. The proven
-negative — transitive, compile-time — does not. And it is the guarantee the
-machine-writing age actually needs:
-
-```
-fn admit(pedal, x) with !Network + !FileSystem =
-  play_through(pedal, x)
-```
-
-A guest effect — a pedal someone else built, plugged into your voice. You
-did not read its code. You cannot; there is too much of it, and tomorrow
-there will be more, and no one you trust wrote it. You do not need to. The
-row is the door policy: inside this signature the guest cannot reach the
-network and cannot touch a file, and if anything inside it tries, there is
-no built program to run. It can be brilliant. It can be a thousand times
-cleverer than you. It cannot phone home. Let the machine write. Let anything
-write.
-
-## Watch it speak
-
-The proofs above are the medium's spine; here it is talking, today, through
-the pinned compiler in this repository. Leave a hole where a value should
-go, and it proposes a proven fill:
-
-```
-type Positive = Int where self > 0
-
-fn choose(n: Positive) = n * 2
-
-fn main() = choose(??)
-```
-```
-$ mentl hole.mn:5:20
-Query: ??) : Positive
-Propose: 1
-Why: declaration-order param, at hole.mn:5
-```
-
-When more than one candidate survives the proof, it does not guess. It shows
-you the whole proven space and names the move that collapses it:
-
-```
-type Bit = Int where 0 <= self && self <= 1
-
-fn pick() -> Bit with Pure = ??
-```
-```
-$ mentl bit.mn:3:30
-Query: ?? : Bit
-Propose: 2 proven survivors — a tie:
-  0  — inferred from the type's integer inhabitants
-  1  — inferred from the type's integer inhabitants
-  one more constraint (a refinement, a type, an example) collapses it
-Why: declared pick, at bit.mn:3
-```
-
-Every line of that answer is a live read of the graph — the type from your
-refinement, the survivors from a checkpoint-verify-rollback pass over each
-candidate, the Why from the declaration that constrained the hole. Tighten
-the refinement one notch and the tie collapses to the one proven fill. This
-is the difference between a tool that autocompletes and a medium that
-proves: nothing is offered that did not survive the gate, and a tie teaches
-instead of picking silently.
-
-Claim something false, and it refuses to build the program — at the exact
-line, in words:
-
-```
-type Sample = Float where -1.0 <= self && self <= 1.0
+type Percent = Int where 0 <= self && self <= 100
 
 fn main() = {
-  let bad: Sample = 1.5
+  let p: Percent = 140
   42
 }
 ```
@@ -170,12 +65,142 @@ mentl                                 # project the current directory — where 
 manager, no manifest, no version pin: the pinned boot *is* the release, and
 every re-pin is instantly the global command.
 
+## The shape of it
+
+There are exactly five verbs of flow in this medium, and they are the
+complete vocabulary; every program you will ever read is these five shapes
+combined. `|>` is "and then." `<|` fans one value out to several readers.
+`><` runs independent things side by side — literally side by side on the
+page, because the shape on the page is the shape of the work, and the
+formatter keeps that true. `~>` installs an answerer over everything to its
+left. And `<~` feeds a result back to become the next input — the shape
+memory is made of, and the shape this medium was born for: sound. That
+story, with the echo you can read aloud, lives at
+[lib/dsp](lib/dsp/README.md).
+
+## Five minutes with the teacher
+
+The course is ten small programs in `lib/tutorial/`, written to be read
+first and run second; no prior programming is assumed. But the teacher is
+not the prose — it is the compiler. Here is the first lesson's loop, whole.
+
+**Run it.**
+
+```
+$ mentl run lib/tutorial/00-hello.mn
+Hello, kernel. The medium is reading you back.
+Hello, oracle. The medium is reading you back.
+Hello, octopus. The medium is reading you back.
+```
+
+**Ask it.** At any line of any file, the medium answers what it knows there
+— the type, the effects, and the why. The lesson's own header names the
+line to ask about:
+
+```
+$ mentl lib/tutorial/00-hello.mn:32
+Query: print_string : (s: String) -> () with WASI + Alloc + Memory + r36338@e21797
+Effects: WASI + Alloc + Memory + r36338@e21797
+Why: print_string flows in here, at lib/tutorial/00-hello.mn:32
+     declared print_string, at lib/runtime/io.mn:173
+```
+
+**Break it.** The lesson's comment dares you: greet joins text, and joining
+allocates. Ask greet to promise it never allocates — add `with !Alloc` to
+its signature — and the medium answers back, at the exact lines:
+
+```
+effects: E_EffectMismatch error: effect row mismatch: !Alloc vs Alloc + Memory
+```
+
+You claimed *never*; it read the body and named where the claim breaks.
+(The door's Percent showed the stronger form — a false claim that refuses
+to build at all. Refusal classes arm one at a time, each once the compiler's
+own source is clean of it.)
+
+**Leave a hole.** Write `??` where a value should go and the medium
+proposes only what it can prove:
+
+```
+type Positive = Int where self > 0
+
+fn choose(n: Positive) = n * 2
+
+fn main() = choose(??)
+```
+```
+$ mentl hole.mn:5:20
+Query: ??) : Positive
+Propose: 1
+Why: declaration-order param, at hole.mn:5
+```
+
+And when more than one candidate survives the proof, it does not guess. It
+shows the whole proven space and names the move that collapses it:
+
+```
+type Bit = Int where 0 <= self && self <= 1
+
+fn pick() -> Bit with Pure = ??
+```
+```
+$ mentl bit.mn:3:30
+Query: ?? : Bit
+Propose: 2 proven survivors — a tie:
+  0  — inferred from the type's integer inhabitants
+  1  — inferred from the type's integer inhabitants
+  one more constraint (a refinement, a type, an example) collapses it
+Why: declared pick, at bit.mn:3
+```
+
+Nothing is offered that did not survive the gate, and a tie teaches instead
+of picking silently. That is the loop the whole school rides: read a
+little, run it, break it on purpose, let the refusal teach, and ask at any
+line. Walk the lessons in order: `00-hello` (meet the medium) · `01-graph`
+(everything is one graph) · `02-handlers` (effects are answered, not
+feared) · `03-verbs` (the five shapes) · `04-row` (declaring and denying
+capabilities) · `05-ownership` (who holds a value) · `06-refinement` (types
+that carry bounds) · `07-gradient` (the medium proposes) · `08-reasons`
+(ask *why*) · `09-all` (everything at once).
+
+## The receipts
+
+For the skeptical: each claim with its command, and nothing that asks to be
+believed. The full statement — the category, the wedges, the prior art, the
+honest boundary — is [docs/POSITIONING.md](docs/POSITIONING.md).
+
+- **The negative is provable.** Thirteen programs whose first line states
+  what must prove or refuse — severance, transitivity, the higher-order
+  leak, absence through stored closures, reachability on the quiet branch —
+  judged by the compiler itself: `bash benchmarks/absence/run.sh` (13/13
+  today; the podium this enters is empty — no current verification
+  benchmark measures proving the negative).
+- **It self-hosts to a byte-identical fixed point.** `bash tools/march.sh`
+  compiles the compiler with itself and asserts the bytes reproduce — and
+  the parallel judge (eight spawned cursors over one shared image) produces
+  the same bytes as the sequential one, gated by sha:
+  `bash tools/frontier-gate.sh`.
+- **The hole is a proven fan, and ties teach.**
+  `mentl lib/tutorial/07-gradient.mn:0` ranks a file's whole absence field;
+  at any authored `??` the survivors carry their Reasons.
+- **The whole board is the release gate.** `bash tools/state.sh` — git,
+  the fixpoint, the frontier contracts, proof-exactness, the `!E` crucibles,
+  one scoreboard.
+
+Underneath: one graph; two operations (draw an edge, project a read). Every
+subsystem is the same read in a different mode — the compiler, the IDE, the
+prover, the proposal engine. Effects are rows with Boolean negation
+(`with IO + !Alloc`); handlers are the one dynamic mechanism, and
+handler = state = closure = continuation is one heap record, which is why a
+paused computation can be persisted by copying bytes. Ownership and
+refinement are inferred, not annotated; annotations are inputs that unlock
+capability, never ceremony.
+
 ## For agents — the gate over MCP
 
-Every agent framework fences its agents at runtime; the incident record
-shows those fences keep failing. Mentl doesn't fence — it proves. `mentl
-mcp` serves the verification gate as an MCP server (newline-delimited
-JSON-RPC on stdio) with one tool, because the category is one property:
+Everyone fences agents at runtime; Mentl proves at compile time. `mentl mcp`
+serves the verification gate as an MCP server (newline-delimited JSON-RPC on
+stdio) with one tool, because the category is one property:
 
 ```json
 {"mcpServers": {"mentl-gate": {"command": "mentl", "args": ["mcp"]}}}
@@ -205,28 +230,6 @@ infer: T_OverDeclared Warning: function 'good' declares !E but body only
 
 It teaches even when it accepts.
 
-## The school
-
-The full course lives in `lib/tutorial/` — ten lessons, each a runnable
-program whose comments are the teaching (Mentl keeps comments as part of the
-program's graph, so the medium can read your intent back to you). They are
-written to be read first and run second; no prior programming is assumed.
-
-```
-$ mentl run lib/tutorial/00-hello.mn
-Hello, kernel. The medium is reading you back.
-Hello, oracle. The medium is reading you back.
-Hello, octopus. The medium is reading you back.
-```
-
-Walk them in order: `00-hello` (meet the medium) · `01-graph` (everything is
-one graph) · `02-handlers` (effects are answered, not feared) · `03-verbs`
-(the five shapes) · `04-row` (declaring and denying capabilities) ·
-`05-ownership` (who holds a value) · `06-refinement` (types that carry
-bounds) · `07-gradient` (the medium proposes) · `08-reasons` (ask *why*) ·
-`09-all` (everything at once). At any line of any lesson,
-`mentl <file>:<line>` projects what the medium knows there.
-
 ## The surface
 
 ```
@@ -237,45 +240,13 @@ mentl edit [path]       the cursor session — eight aspects + proven proposals
 mentl <file>:<line>     project a position: type, effects, ownership, why
 mentl audit <path>      the capability set + severance unlocks
 mentl fmt <path>        canonical layout (the shape on the page is the graph)
+mentl mcp               the gate on MCP stdio — agents propose, nothing executes unproven
 mentl new <name>        write <name>.mn here
 mentl help              the full projection
 ```
 
 A target is a module name or a file path, from any directory. A bare `mentl`
 reads where you are and offers each source's next keystroke.
-
-## The kernel, for the skeptical
-
-One graph; two operations (draw an edge, project a read). Every subsystem is
-the same read in a different mode: the compiler, the IDE, the prover, the
-proposal engine. Effects are rows with Boolean negation (`with IO + !Alloc`);
-handlers are the one dynamic mechanism, and handler = state = closure =
-continuation is one heap record, which is why a paused computation can be
-persisted by copying bytes. Ownership and refinement are inferred, not
-annotated; annotations are inputs that unlock capability, never ceremony.
-
-It self-hosts. The compiler compiles itself to a byte-identical fixed point;
-that binary, `boot/mentl.wasm`, is Mentl, and every landing must reproduce it:
-
-```sh
-bash tools/state.sh     # git → verify → the self-hosting fixpoint → frontier → proof-exactness → crown
-```
-
-The board is the release gate. Today it holds: the fixpoint byte-identical;
-zero errors from the medium on its own source; `!E` soundness gated by five
-crucibles; refusal classes armed one at a time as each reaches zero on the
-wheel itself; real host-thread parallelism over one shared image, gated by
-fixtures that answer the same number sequential and spawned.
-
-For the negative-capability claim specifically, there is a runnable receipt:
-`bash benchmarks/absence/run.sh` compiles thirteen small programs whose
-first line states what must prove or refuse — severance, transitivity, the
-higher-order leak, absence through stored closures, reachability on the
-quiet branch — and reads the verdict from the compiler's own diagnostic
-stream. `benchmarks/absence/README.md` states the scope, the controls, and
-the nearest prior art. No current verification benchmark measures proving
-the negative; this one is small enough to translate into any system that
-believes it can.
 
 ## The three documents
 

@@ -1,33 +1,35 @@
 // Pure tensor operations for Lux ML framework.
 // All functions are pure — no effects, no mutation.
 // Vectors are [Float], matrices are List<[Float]>.
-
+//
 // ── Vector constructors ─────────────────────────────────────
-
 fn zeros(n) = map((_) => 0.0, range(0, n))
+
 fn ones(n) = map((_) => 1.0, range(0, n))
 
 // ── Vector arithmetic ───────────────────────────────────────
-
 fn vec_add(a, b) = zip_with((x, y) => x + y, a, b)
+
 fn vec_sub(a, b) = zip_with((x, y) => x - y, a, b)
+
 fn vec_mul(a, b) = zip_with((x, y) => x * y, a, b)
+
 fn scalar_mul(s, xs) = map((x) => s * x, xs)
+
 fn sumf(xs) = fold(0.0, (acc, x) => acc + x, xs)
+
 fn dot(a, b) = sumf(zip_with((x, y) => x * y, a, b))
 
 // ── Matrix operations ───────────────────────────────────────
-
 fn mat_vec_mul(w, x) = map((row) => dot(row, x), w)
 
 fn outer_product(a, b) = map((ai) => scalar_mul(ai, b), a)
 
-fn transpose(m) = {
-  if len(m) == 0 { [] }
-  else {
-    let cols = len(m[0])
-    map((j) => map((row) => row[j], m), range(0, cols))
-  }
+fn transpose(m) = if len(m) == 0 {
+  []
+} else {
+  let cols = len(m[0])
+  map((j) => map((row) => row[j], m), range(0, cols))
 }
 
 fn mat_sub(a, b) = zip_with((ra, rb) => vec_sub(ra, rb), a, b)
@@ -37,7 +39,6 @@ fn scalar_mat_mul(s, m) = map((row) => scalar_mul(s, row), m)
 fn mat_add(a, b) = zip_with((ra, rb) => vec_add(ra, rb), a, b)
 
 // ── Activations (pure, element-wise) ────────────────────────
-
 fn relu_vec(xs) = map((x) => if x > 0.0 { x } else { 0.0 }, xs)
 
 fn sigmoid_scalar(x) = 1.0 / (1.0 + exp(-x))
@@ -45,14 +46,10 @@ fn sigmoid_scalar(x) = 1.0 / (1.0 + exp(-x))
 fn sigmoid_vec(xs) = map((x) => sigmoid_scalar(x), xs)
 
 // ── Loss ────────────────────────────────────────────────────
-
 fn mse(pred, target) = {
   let diffs = vec_sub(pred, target)
   let sq = vec_mul(diffs, diffs)
   sumf(sq) / float_of_int(len(pred))
 }
 
-fn mse_grad(pred, target) = {
-  scalar_mul(2.0 / float_of_int(len(pred)), vec_sub(pred, target))
-}
-
+fn mse_grad(pred, target) = scalar_mul(2.0 / float_of_int(len(pred)), vec_sub(pred, target))

@@ -1,0 +1,25 @@
+// expect: 42
+// A splice carries the spliced node's OWN type and renders through the
+// structural show (SYNTAX Strings — the implicit to_string). RED on the
+// fragment-clobber boot: unify_string_fragments bound every fragment to
+// String, and a literal-int splice reached str_concat as a raw word —
+// the null-page read rendered "" (Hβ.emit.int-splice-empty). The four
+// faces: int literal, int var, int call, and a call whose argument list
+// carries a nested string and spans lines (the splice line-carry).
+fn pad(a, b) with Pure = a + b
+fn tag(x, sep) with Pure = x
+fn main() = {
+  let k = 3
+  let lit = "I{7}J"
+  let var = "K{k}L"
+  let call = "C{pad(1, 2)}D"
+  let multi = "w({tag(
+    7,
+    ", "
+  )})"
+  let ok1 = if lit == "I7J" { 0 } else { 1 }
+  let ok2 = if var == "K3L" { 0 } else { 2 }
+  let ok3 = if call == "C3D" { 0 } else { 4 }
+  let ok4 = if multi == "w(7)" { 0 } else { 8 }
+  if ok1 + ok2 + ok3 + ok4 == 0 { 42 } else { ok1 + ok2 + ok3 + ok4 }
+}

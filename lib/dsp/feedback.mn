@@ -54,27 +54,25 @@
 //   Live" (commit 9a726f2)
 // - src/backends/wasm.mn LFeedback emit (commit 7f8ff5f)
 // - lib/dsp/clock.mn (Sample / Tick / Clock effects + handlers)
-
 import dsp/processors
+
 import dsp/signal
+
 import dsp/clock
 
 // Hz — audio frequency. Refinement type per DM §1.1; constrained
 // to Nyquist-safe range (44.1kHz / 2 = 22050 Hz ceiling). Per
 // DM-Q1 the ceiling is hard-coded for v1; dependent refinement on
 // ambient Sample(rate) is post-first-light.
-
 type Hz = Float where 0.0 < self && self < 22050.0
 
 // Sample — audio sample, normalized to [-1.0, 1.0]. Clipping is
 // refinement-checked at primitive boundaries; verify_ledger logs
 // pending obligations until verify_smt swap.
-
 type Sample = Float where 0.0 - 1.0 <= self && self <= 1.0
 
 // Gain — linear gain factor. Unity = 1.0. Attenuation in [0, 1);
 // amplification > 1.0 carries a clip-safety obligation on output.
-
 type Gain = Float where 0.0 <= self
 
 // Filter coefficient α derived from cutoff frequency + sample rate.
@@ -84,10 +82,10 @@ type Gain = Float where 0.0 <= self
 //
 // Per H6: exhaustive over the cutoff range; refinement on Hz
 // excludes invalid values upstream.
-
-fn compute_alpha(cutoff: Hz, sr: Int) -> Float with Pure + !Alloc =
+fn compute_alpha(cutoff: Hz, sr: Int) -> Float with Pure + !Alloc = {
   let omega = 6.283185307 * cutoff / float_of_int(sr)
   1.0 - exp(0.0 - omega)
+}
 
 // One-pole low-pass IIR filter. The `<~ delay(1)` back-edge feeds
 // the prior output into the next iteration; under Sample(rate) the
@@ -101,26 +99,23 @@ fn compute_alpha(cutoff: Hz, sr: Int) -> Float with Pure + !Alloc =
 // Primitive #3 (`<~`) drawn; primitive #4 (`with Sample(rate) +
 // Pure + !Alloc`) proven; primitive #5 (own input consumed); primitive
 // #6 (Sample / Hz refinements discharged at boundaries).
-
-fn lowpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample
-    with Sample + Pure + !Alloc =
+fn lowpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Pure + !Alloc = {
   let alpha = compute_alpha(cutoff, sr)
   ((prev) => input * alpha + (1.0 - alpha) * prev) <~ delay(1)
+}
 
 // One-pole high-pass IIR filter — HP = signal - LP. The prior output
 // y[n-1] is the smoothed (low-pass) component; subtracting it from the
 // input leaves the high-frequency residue. Same `<~ delay(1)` substrate.
-
-fn highpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample
-    with Sample + Pure + !Alloc =
+fn highpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Pure + !Alloc = {
   let alpha = compute_alpha(cutoff, sr)
   ((prev) => input - (alpha * input + (1.0 - alpha) * prev)) <~ delay(1)
+}
 
 // Single-pole DC blocker: y[n] = x[n] - x[n-1] + R·y[n-1] with the
 // pole R near unity. Removes DC bias at the signal-chain entry. Here
 // prev is the prior OUTPUT y[n-1]; the standard form folds the input
 // difference into the recurrence with R = 0.995.
-
 fn dc_blocker(input: Sample) -> Sample with Sample + Pure + !Alloc =
   ((prev) => input + 0.995 * prev) <~ delay(1)
 
@@ -128,12 +123,11 @@ fn dc_blocker(input: Sample) -> Sample with Sample + Pure + !Alloc =
 // across ticks via `<~ delay(1)`; each sample relaxes the prior
 // envelope toward the current magnitude: env[n] = α·|x[n]| + (1-α)·env[n-1].
 // Refinement keeps attack + release as positive Hz values.
-
-fn envelope_follower(input: Sample, attack: Hz, release: Hz, sr: Int)
-    -> Sample with Sample + Pure + !Alloc =
+fn envelope_follower(input: Sample, attack: Hz, release: Hz, sr: Int) -> Sample with Sample + Pure + !Alloc = {
   let abs_input = if input >= 0.0 { input } else { 0.0 - input }
   let alpha = compute_alpha(attack, sr)
   ((prev) => abs_input * alpha + (1.0 - alpha) * prev) <~ delay(1)
+}
 
 // ─── Composition example: real-time audio chain ──────────────────────
 //
@@ -142,13 +136,8 @@ fn envelope_follower(input: Sample, attack: Hz, release: Hz, sr: Int)
 // row. The chain below — DC blocker → low-pass → soft-clip — is
 // real-time-safe by row proof, allocation-free by !Alloc proof, and
 // feedback-stable by `<~ delay(1)`'s state-machine emission.
-
-fn audio_chain(input: Sample, cutoff: Hz, sr: Int) -> Sample
-    with Sample + Pure + !Alloc =
-  input
-    |> dc_blocker
-    |> ((x) => lowpass_iir(x, cutoff, sr))
-    |> soft_clip
+fn audio_chain(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Pure + !Alloc =
+  input |> dc_blocker |> ((x) => lowpass_iir(x, cutoff, sr)) |> soft_clip
 
 // ─── Parallel topology: a stereo chain (the §5.U PARALLEL DSP demo) ───
 //
@@ -165,12 +154,8 @@ fn audio_chain(input: Sample, cutoff: Hz, sr: Int) -> Sample
 // surpassing Faust (global precision, no row proof) and JAX (schedule baked at
 // trace time, here it is a live `~>` edge). Install `~> parallel_compose`
 // (lib/runtime/threading.mn) at the call site for true-parallel stereo.
-
-fn stereo_chain(left: Sample, right: Sample, cutoff: Hz, sr: Int)
-    -> (Sample, Sample) with Sample + Pure + !Alloc =
-  (left  |> dc_blocker |> ((x) => audio_chain(x, cutoff, sr)))
-    ><
-  (right |> dc_blocker |> ((x) => audio_chain(x, cutoff, sr)))
+fn stereo_chain(left: Sample, right: Sample, cutoff: Hz, sr: Int) -> (Sample, Sample) with Sample + Pure + !Alloc =
+  left |> dc_blocker |> ((x) => audio_chain(x, cutoff, sr)) >< right |> dc_blocker |> ((x) => audio_chain(x, cutoff, sr))
 
 // ─── Peer sub-handles (named per drift mode 9 — deferred-by-omission) ─
 //
@@ -200,7 +185,7 @@ fn stereo_chain(left: Sample, right: Sample, cutoff: Hz, sr: Int)
 //   Hz, Gain bounds. Currently verify_ledger logs pending; after
 //   B.6 verify_smt handler-swap (Arc F.1, post-first-light), every
 //   bound discharges at compile time.
-
+//
 // ─── What this file refuses ──────────────────────────────────────────
 //
 // - `Feedback` shadow effect (drift mode 1 — Rust vtable + drift
@@ -229,3 +214,4 @@ fn stereo_chain(left: Sample, right: Sample, cutoff: Hz, sr: Int)
 //   filter-design + apply pattern. DSP in Mentl IS refinement-typed
 //   primitives + `<~` topology + Sample(rate) parameterized
 //   effect; the framework dissolves into the substrate.
+

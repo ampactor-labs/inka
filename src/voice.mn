@@ -8,16 +8,24 @@
 // Every tentacle reads the graph through the same Situation shape;
 // every tentacle produces the same VoiceLine shape. Eight tentacles,
 // one kernel, one voice grammar.
-
 import types
+
 import mentl
+
 import graph
+
 import own
+
 import query
+
 import pipeline
+
 import driver
+
 import runtime/strings
+
 import oracle
+
 import egraph
 
 // Topic is the focus of one voice turn. Caret-of-attention projects
@@ -25,38 +33,45 @@ import egraph
 // cover the four load-bearing attention surfaces (identifier / graph
 // handle / cursor position / named error) plus the explicit ask path.
 // Primitive: #1 (Query tentacle reads the graph at a Topic).
-
 type Topic
-  = TopicIdent(String)                   // hover on identifier
-  | TopicHandle(Int)                     // direct graph node
-  | TopicSpan(Span)                      // caret position
-  | TopicError(String, Span)             // specific diagnostic (code, span)
-  | TopicAsk(Question)                   // user asked explicitly (via query.mn's Question)
+  // hover on identifier
+  = TopicIdent(String)
+  // direct graph node
+  | TopicHandle(Int)
+  // caret position
+  | TopicSpan(Span)
+  // specific diagnostic (code, span)
+  | TopicError(String, Span)
+  // user asked explicitly (via query.mn's Question)
+  | TopicAsk(Question)
 
 // One tentacle per kernel primitive. Eight primitives · eight
 // tentacles · eight interrogations — the octopus IS the kernel made
 // voice. Never a ninth; never a seventh.
-
 type Tentacle
-  = TentQuery       // #1 — graph state at topic
-  | TentPropose     // #2 — handler / candidate surfaces
-  | TentTopology    // #3 — verb / pipe-shape nudges
-  | TentUnlock      // #4 — capability narrowings via row algebra
-  | TentTrace       // #5 — ownership / region trails
-  | TentVerify      // #6 — refinement obligations + discharges
-  | TentTeach       // #7 — gradient's one next step
-  | TentWhy         // #8 — Reason chain walks
+  // #1 — graph state at topic
+  = TentQuery
+  // #2 — handler / candidate surfaces
+  | TentPropose
+  // #3 — verb / pipe-shape nudges
+  | TentTopology
+  // #4 — capability narrowings via row algebra
+  | TentUnlock
+  // #5 — ownership / region trails
+  | TentTrace
+  // #6 — refinement obligations + discharges
+  | TentVerify
+  // #7 — gradient's one next step
+  | TentTeach
+  // #8 — Reason chain walks
+  | TentWhy
 
 // Three registers. V1 default is RPlayful — warm but sparse.
 // RTerse is the keyboard-shortcut register. RExplain opens the
 // Reason chain (multi-sentence, used when user asked QWhy).
 // The register is a rendering input; it does not change what's
 // surfaced, only how densely.
-
-type Register
-  = RTerse
-  | RPlayful
-  | RExplain
+type Register = RTerse | RPlayful | RExplain
 
 // Every gradient step is a theorem: Mentl has proved (via the
 // speculative oracle at src/mentl.mn:134) that annotating a site
@@ -68,13 +83,11 @@ type Register
 // `AnnotationSuggestion(SuggestionKind, String, List, Reason)` from
 // types.mn — kind / the annotation text / the unlocked labels / reason. The
 // site span lives inside the Reason's outer Located wrapper.
-
+//
 // Env-entries reach Mentl as snapshots so a turn is stateless w.r.t.
 // env updates. Name + Scheme + Reason + SchemeKind mirrors Env's
 // existing shape (per types.mn SchemeKind).
-
-type EnvEntry
-  = EnvEntry(String, Scheme, Reason, SchemeKind)
+type EnvEntry = EnvEntry(String, Scheme, Reason, SchemeKind)
 
 // The ~> chain is a capability stack (SUBSTRATE.md "The Handler Chain
 // Is a Capability Stack"). HandlerEntry captures one position in it:
@@ -82,14 +95,7 @@ type EnvEntry
 // it here. Mentl's Unlock tentacle reads this to surface "this
 // handler is why `Alloc` is absorbed here."
 // Primitive: #2 + #4.
-
-type HandlerEntry
-  = HandlerEntry({
-      name:              String,
-      absorbs:           EffRow,
-      install_reason:    Reason,
-      install_span:      Span
-    })
+type HandlerEntry = HandlerEntry({absorbs: EffRow, install_reason: Reason, install_span: Span, name: String})
 
 // Every speak op receives a Situation. All 13 fields are load-bearing.
 // No external state consulted — stateless-per-turn except
@@ -100,26 +106,17 @@ type HandlerEntry
 // turn.
 // Primitives: #1 (graph), #2 (handlers_installed), #4 (rows),
 // #5 (ownership), #6 (refinements), #7 (gradient_next), #8 (reason).
-
 type Situation
-  = Situation({
-      tentacle:              Tentacle,
-      topic:                 Topic,
-      handle:                Option(Int),
-      env_snapshot:          [EnvEntry],
-      reason_at_topic:       Option(Reason),
-      row_at_topic:          Option(EffRow),
-      row_declared:          Option(EffRow),         // differs from row_at_topic → subsumption diag
-      ownership_at_topic:    Option(Ownership),
-      refinements:           [Predicate],
-      gradient_next:         Option(AnnotationSuggestion),
-      handlers_installed:    [HandlerEntry],
-      prior_turn_topic:      Option(Topic),          // silence predicate input
-      prior_turn_tentacle:   Option(Tentacle),       // travels with prior_turn_topic for tentacle-different check
-      facts:                 TopicFacts,             // pre-computed predicates over topic
-      register:              Register
-    })
+  = Situation({env_snapshot: [EnvEntry], facts: TopicFacts, gradient_next: Option(AnnotationSuggestion), handle: Option(Int), handlers_installed: [HandlerEntry], ownership_at_topic: Option(Ownership), prior_turn_tentacle: Option(Tentacle), prior_turn_topic: Option(Topic), reason_at_topic: Option(Reason), refinements: [Predicate], register: Register, row_at_topic: Option(EffRow), row_declared: Option(EffRow), tentacle: Tentacle, topic: Topic})
 
+// differs from row_at_topic → subsumption diag
+//
+// silence predicate input
+//
+// travels with prior_turn_topic for tentacle-different check
+//
+// pre-computed predicates over topic
+//
 // §2.7.5's silence predicate references per-aspect reads (is the
 // handle a hole, is there an error here, which nested calls sit in
 // the span, which capability unlocks, which obligations stand)
@@ -135,56 +132,72 @@ type Situation
 // row_declared) are NOT duplicated here — those stay on Situation
 // and silence_predicate reads them directly. TopicFacts holds only
 // the three truly-new computations.
+type TopicFacts = TopicFacts({error_code_at: Option(String), is_hole: Bool, nested_call_depth: Int})
 
-type TopicFacts
-  = TopicFacts({
-      is_hole:                Bool,                 // TentPropose → TopicHandle(h): handle_is_hole(h)
-      error_code_at:          Option(String),       // TentPropose → TopicHandle(h): error_at(h)
-      nested_call_depth:      Int                   // TentTopology → nested_calls_at_span(topic)
-    })
-
+// TentPropose → TopicHandle(h): handle_is_hole(h)
+//
+// TentPropose → TopicHandle(h): error_at(h)
+//
+// TentTopology → nested_calls_at_span(topic)
+//
 // Eight shapes, one per default-tentacle. Tone is NOT a separate
 // enum: tentacle + FormKind + Modifier compose the register-shape
 // of each VoiceLine. Tentacle→FormKind is the §2.7.3 mapping;
 // users rarely override.
-
 type FormKind
-  = FFactual          // "x is Pure." (Query)
-  | FOffering         // "Adding `with Pure` unlocks memoization." (Propose / Topology)
-  | FRefutation       // "`own x` consumed twice at L40." (Trace)
-  | FNavigation       // "`env_lookup` — returns `Option(Entry)`." (Query deep)
-  | FCapability       // "`!Alloc` — real-time-safe." (Unlock)
-  | FRefinement       // "`99999` violates `self <= 65535`." (Verify)
-  | FGradient         // "Next: `with Pure` on line 12." (Teach)
-  | FTrace            // "Bound L18; `+` at L42 said `Int`." (Why)
+  // "x is Pure." (Query)
+  = FFactual
+  // "Adding `with Pure` unlocks memoization." (Propose / Topology)
+  | FOffering
+  // "`own x` consumed twice at L40." (Trace)
+  | FRefutation
+  // "`env_lookup` — returns `Option(Entry)`." (Query deep)
+  | FNavigation
+  // "`!Alloc` — real-time-safe." (Unlock)
+  | FCapability
+  // "`99999` violates `self <= 65535`." (Verify)
+  | FRefinement
+  // "Next: `with Pure` on line 12." (Teach)
+  | FGradient
+  // "Bound L18; `+` at L42 said `Int`." (Why)
+  | FTrace
 
 // Each slot renders through a canonical renderer (show_type,
 // show_effrow, show_reason). No ad-hoc formatting at the voice layer —
 // the graph's own self-projection is the source of strings.
 // Backtick-wrapping lives in the slot's render, not in handwritten
 // prose.
-
 type Slot
-  = SIdent(String)         // backtick-wrapped at render
-  | SType(Ty)              // via canonical show_type
-  | SRow(EffRow)           // via canonical show_row
-  | SSpan(Span)            // rendered "(L{line})" or "(L{line}:{col})"
-  | SReason(Reason)        // via show_reason (compressed)
-  | SCap(String)           // capability name, plain (e.g., "CRealTime")
-  | SAnnot(String)         // annotation, backtick-wrapped
-  | SLit(String)           // literal text (for offering closers)
+  // backtick-wrapped at render
+  = SIdent(String)
+  // via canonical show_type
+  | SType(Ty)
+  // via canonical show_row
+  | SRow(EffRow)
+  // rendered "(L{line})" or "(L{line}:{col})"
+  | SSpan(Span)
+  // via show_reason (compressed)
+  | SReason(Reason)
+  // capability name, plain (e.g., "CRealTime")
+  | SCap(String)
+  // annotation, backtick-wrapped
+  | SAnnot(String)
+  // literal text (for offering closers)
+  | SLit(String)
 
 // RPlayful picks AT MOST ONE modifier per VoiceLine. RTerse → NoMod.
 // RExplain allows one per sentence max. Modifier selection is
 // deterministic — same Situation hash → same modifier — so
 // repeated renders are reproducible (§2.7.4 applicable subsets
 // live in the handler's render path, MV.2.d).
-
 type Modifier
   = NoMod
-  | TailConsequence(String)   // " — memoization's on the table."
-  | ParenQualifier(String)    // " (L40)"
-  | EmphasisClose(String)     // " — can't have it both ways."
+  // " — memoization's on the table."
+  | TailConsequence(String)
+  // " (L40)"
+  | ParenQualifier(String)
+  // " — can't have it both ways."
+  | EmphasisClose(String)
 
 // Silence is the default. When a turn produces nothing proven-worth-
 // surfacing (silence_predicate returns false), the surface handler
@@ -198,24 +211,14 @@ type Modifier
 // per MV §2.8).
 // Primitives: #2 (tentacle's resume discipline), #8 (Reason on every
 // non-Silence VoiceLine).
-
-type VoiceLine
-  = Silence
-  | VoiceLine(Tentacle, FormKind, [Slot], Modifier)
+type VoiceLine = Silence | VoiceLine(Tentacle, FormKind, [Slot], Modifier)
 
 // History feeds the silence predicate's is-this-new-since-last-turn
 // check. Bounded ring — the session
 // keeps the last N turns, older entries drop. Ring size is a
 // handler-install parameter, not a substrate constant (configured
 // at handler install per H3.1 parameterized effects).
-
-type TurnRecord
-  = TurnRecord({
-      tentacle:  Tentacle,
-      topic:     Topic,
-      line:      VoiceLine,
-      span_at:   Span
-    })
+type TurnRecord = TurnRecord({line: VoiceLine, span_at: Span, tentacle: Tentacle, topic: Topic})
 
 // Path wraps a String. Nominal — distinguishes file-system paths from
 // arbitrary strings at the type layer. Construction is explicit:
@@ -224,9 +227,7 @@ type TurnRecord
 // lands (post-first-light territory).
 // Primitive: #6 (Path is a refinement-ready alias — today without
 // predicate; tomorrow with).
-
-type Path
-  = Path(String)
+type Path = Path(String)
 
 // FileHandle wraps an integer index into the session's open-file
 // table. Opaque at the user surface — the handler that holds the
@@ -234,92 +235,90 @@ type Path
 // + save_file. The distinction from Path is lifecycle: Path is the
 // addressing scheme; FileHandle is the live resource Mentl holds
 // while editing.
-
-type FileHandle
-  = FileHandle(Int)
+type FileHandle = FileHandle(Int)
 
 // tree_list projects the on-disk tree. Each entry is file or
 // directory; lazy (directories expand on demand).
-
 type TreeEntry
   = TreeFile(Path)
-  | TreeDir(Path)                   // expand via another tree_list call
+  // expand via another tree_list call
+  | TreeDir(Path)
 
 // Caret is the human's attention at a moment. Handle + Reason —
 // which graph node, and why Mentl thinks so (last focus op / last
 // edit's mutation site / last ask's target — the Reason traces
 // back).
 // Primitives: #1 (Handle) + #8 (Reason).
-
-
+//
 // CaretTarget is the input to `focus` — the various ways a surface
 // can name what to attend to. Maps to a Caret by resolving through
 // the graph (span → handle lookup via span_index).
-
-type CaretTarget
-  = TargetHandle(Int)
-  | TargetSpan(Span)
-  | TargetIdent(String)
+type CaretTarget = TargetHandle(Int) | TargetSpan(Span) | TargetIdent(String)
 
 // Question (declared in query.mn) is structured: QTypeAt, QWhy,
 // QRefsOf, etc. Answer is the response — always carries the Reason
 // supporting it (acceptance criterion: no Answer without Reason).
 // Silence is a valid Answer when the question is ill-posed or
 // unprovable.
-
 type Answer
   = AnsType(Ty, Reason)
   | AnsRow(EffRow, Reason)
-  | AnsReason(Reason)               // full Reason chain for QWhy
-  | AnsRefs([Span], Reason)         // references
-  | AnsDebt([(Span, Predicate, Reason)], Reason) // pending obligations
+  // full Reason chain for QWhy
+  | AnsReason(Reason)
+  // references
+  | AnsRefs([Span], Reason)
+  // pending obligations
+  | AnsDebt([(Span, Predicate, Reason)], Reason)
   | AnsSilence
 
 // Edit is a Patch applied to a FileHandle. Outcome is either
 // accepted (graph re-projected, new handle set) or rejected (the
 // resulting text failed to parse / lower / type-check).
 // Rejection carries the diagnostic so the surface can render it.
-
 type EditOutcome
-  = EditAccepted(FileHandle)        // graph re-projected; new live handle
-  | EditRejected(String, Span)      // code, span — diagnostic for surface to render
+  // graph re-projected; new live handle
+  = EditAccepted(FileHandle)
+  // code, span — diagnostic for surface to render
+  | EditRejected(String, Span)
 
 // run_compile returns a binary's Path (or diagnostic).
 // run_check returns the diagnostic list from inference + verify.
 // run_audit is the drift-audit + plan-audit + effect-registry-audit
 // projection — the substrate that F.1/F.2/F.3 dissolve docs/ into.
-
 type CompileOutcome
-  = CompileOk(Path)                 // emitted binary
-  | CompileFailed([DiagKind])       // the failure diagnostics
+  // emitted binary
+  = CompileOk(Path)
+  // the failure diagnostics
+  | CompileFailed([DiagKind])
 
-type CheckOutcome
-  = CheckOutcome([DiagKind], [(Span, Predicate, Reason)]) // diagnostics, pending obligations
+type CheckOutcome = CheckOutcome([DiagKind], [(Span, Predicate, Reason)])
 
-type AuditReport
-  = AuditReport([(Span, Predicate, Reason)]) // the live pending obligations — drift + plan + effect-registry surfaces
+// diagnostics, pending obligations
+type AuditReport = AuditReport([(Span, Predicate, Reason)])
 
+// the live pending obligations — drift + plan + effect-registry surfaces
+//
 // `declare_intent` lets the human say "I'm targeting embedded; keep
 // me honest" — a constraint the silence predicate and Trace
 // tentacle weigh against subsequent edits. IntentId is opaque; the
 // handler that holds the intent table projects it.
 // Primitive: #7 (gradient — intents are user-side gradient
 // declarations).
-
 type Intent
-  = IntEmbedded                     // !Alloc + !IO sought on real-time paths
-  | IntRealTime                     // !Alloc + deadline-sensitive
-  | IntSandbox                      // !Network + !Filesystem sought on plugin paths
-  | IntNoPanic                      // avoid Abort effect where possible
-  | IntUserDefined({
-      name:       String,
-      absent:     EffRow,           // effects the user wants negated (!E style)
-      present:    EffRow,           // effects the user confirms are OK
-      reason:     Reason
-    })
+  // !Alloc + !IO sought on real-time paths
+  = IntEmbedded
+  // !Alloc + deadline-sensitive
+  | IntRealTime
+  // !Network + !Filesystem sought on plugin paths
+  | IntSandbox
+  // avoid Abort effect where possible
+  | IntNoPanic
+  | IntUserDefined({absent: EffRow, name: String, present: EffRow, reason: Reason})
 
-type IntentId
-  = IntentId(Int)
+// effects the user wants negated (!E style)
+//
+// effects the user confirms are OK
+type IntentId = IntentId(Int)
 
 // Every surface that Mentl speaks through — LSP adapter, batch CLI,
 // terminal IDE, web playground, desktop client — is a peer handler
@@ -338,64 +337,52 @@ type IntentId
 // Primitives: #2 (this effect), #1 (ops read the graph),
 // #4 (handler rows compose with Interact via `~>`),
 // #7 (gradient surfaces through propose + speak).
-
 effect Interact {
   // ─── Project / file ops (8) ─────────────────────────────────────
   // Text-files-first is a hard constraint. These ops are first-class.
-
-  project_root()                 -> Path
-  tree_list(Path)                -> [TreeEntry]
-  open_file(Path)                -> FileHandle
-  save_file(FileHandle)          -> ()
-  create_file(Path, String)      -> FileHandle
-  rename_path(Path, Path)        -> ()
-  delete_path(Path)              -> ()
-  file_text(FileHandle)          -> String
-
+  project_root() -> Path
+  tree_list(Path) -> [TreeEntry]
+  open_file(Path) -> FileHandle
+  save_file(FileHandle)
+  create_file(Path, String) -> FileHandle
+  rename_path(Path, Path)
+  delete_path(Path)
+  file_text(FileHandle) -> String
   // ─── Edit op (1) ────────────────────────────────────────────────
   // An edit is a Patch against a FileHandle. The handler re-projects
   // the edited text through the full pipeline and reports outcome.
   // Graph is live; the edit either succeeds (graph updates) or is
   // rejected with a diagnostic.
-
-  edit(FileHandle, Patch)        -> EditOutcome
-
+  edit(FileHandle, Patch) -> EditOutcome
   // ─── Attention ops (2) ──────────────────────────────────────────
   // Caret-of-attention is (Handle, Reason). focus sets it; cursor
   // reads it.
-
-  focus(CaretTarget)            -> ()
-  caret()                       -> Caret
-
+  focus(CaretTarget)
+  caret() -> Caret
   // ─── Mentl voice ops (3) ────────────────────────────────────────
   // ask is user-initiated (Question); propose is Mentl-initiated
   // at a target (returns the survivor candidate as VoiceLine);
   // speak surfaces a VoiceLine the surface should render.
-
-  consult(Question)              -> Answer
-  propose(CaretTarget)          -> VoiceLine
-  speak(VoiceLine)               -> ()
-
+  consult(Question) -> Answer
+  propose(CaretTarget) -> VoiceLine
+  speak(VoiceLine)
   // ─── Run ops (4) ────────────────────────────────────────────────
   // Batch-shape operations. Terminal IDE exposes as commands; CLI
   // invokes directly. `run_audit` projects docs/ / PLAN / drift into
   // one report — F.1/F.2/F.3 substrate dissolution lives here.
-
-  run_compile(FileHandle)        -> CompileOutcome
-  run_check(FileHandle)          -> CheckOutcome
-  run_audit(FileHandle)          -> AuditReport
-  run_query(Question)            -> Answer
-
+  run_compile(FileHandle) -> CompileOutcome
+  run_check(FileHandle) -> CheckOutcome
+  run_audit(FileHandle) -> AuditReport
+  run_query(Question) -> Answer
   // ─── Session ops (4) ────────────────────────────────────────────
   // Intent shapes the silence predicate and Trace tentacle's weights.
   // History records each turn (the silence gate reads the oracle queue,
   // not per-turn deltas). cancel_pending rolls back a tentative
   // application.
-
-  declare_intent(Intent)         -> ()
-  retract_intent(IntentId)       -> ()
-  history(Int)                   -> [TurnRecord]
-  cancel_pending()               -> ()
+  declare_intent(Intent)
+  retract_intent(IntentId)
+  history(Int) -> [TurnRecord]
+  cancel_pending()
 }
 
 // silence_predicate — Mentl does NOT fill space to fill space. Silence is
@@ -408,12 +395,14 @@ effect Interact {
 // and voice_queue_walk projects it. silence_predicate performs
 // OracleQuery's query_project_queue and returns true (silence) iff the
 // queue is empty.
-
 fn silence_predicate(situation) with OracleQuery = {
-  let queue = query_project_queue()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let queue = query_project_queue()
   match queue {
-    []        => true,    // gradient at top — full silence
-    [_, ..._] => false    // queue has items — Mentl surfaces something
+    [] => // gradient at top — full silence
+    true,
+    [_, ..._] => // queue has items — Mentl surfaces something
+    false,
   }
 }
 
@@ -421,25 +410,22 @@ fn silence_predicate(situation) with OracleQuery = {
 // turn: per-turn novelty was the per-Topic silence framing insight #11
 // retired. The queue-empty gate (silence_predicate) is the one silence
 // read; Topic / Tentacle equality is no longer a voice-layer fact.
-
+//
 // tentacle_to_form_kind — per MV §2.7.3, eight-variant exhaustive
 // mapping from Tentacle to its default FormKind. The §2.7.3 table
 // is the authority: Query→FFactual, Propose→FOffering,
 // Topology→FOffering, Unlock→FCapability, Trace→FRefutation,
 // Verify→FRefinement, Teach→FGradient, Why→FTrace. H6 discipline:
 // no wildcard arm; every Tentacle variant's mapping is named.
-
-fn tentacle_to_form_kind(tentacle) with Pure = {
-  match tentacle {
-    TentQuery     => FFactual,
-    TentPropose   => FOffering,
-    TentTopology  => FOffering,
-    TentUnlock    => FCapability,
-    TentTrace     => FRefutation,
-    TentVerify    => FRefinement,
-    TentTeach     => FGradient,
-    TentWhy       => FTrace
-  }
+fn tentacle_to_form_kind(tentacle) with Pure = match tentacle {
+  TentQuery => FFactual,
+  TentPropose => FOffering,
+  TentTopology => FOffering,
+  TentUnlock => FCapability,
+  TentTrace => FRefutation,
+  TentVerify => FRefinement,
+  TentTeach => FGradient,
+  TentWhy => FTrace,
 }
 
 // applicable_modifiers_for_tentacle — per MV §2.7.4, the per-tentacle
@@ -448,48 +434,15 @@ fn tentacle_to_form_kind(tentacle) with Pure = {
 // ParenQualifier instances with their canonical phrase strings.
 // Keyed on Tentacle (not FormKind — three tentacles share FOffering
 // but have distinct subsets per §2.7.4 lines 559-567). H6 discipline.
-
-fn applicable_modifiers_for_tentacle(tentacle) with Pure = {
-  match tentacle {
-    TentQuery     => [
-      ParenQualifier(" (L{N})"),
-      ParenQualifier(" (graph-direct)")
-    ],
-    TentPropose   => [
-      EmphasisClose(" fits here."),
-      EmphasisClose(" — try it?")
-    ],
-    TentTopology  => [
-      EmphasisClose(" draws it better."),
-      EmphasisClose(" — try it?")
-    ],
-    TentUnlock    => [
-      TailConsequence(" — on the table."),
-      TailConsequence(" — memoizable."),
-      TailConsequence(" — real-time-safe."),
-      TailConsequence(" — no allocation.")
-    ],
-    TentTrace     => [
-      EmphasisClose(" — can't have it both ways."),
-      EmphasisClose(" — `ref` if you're reading only."),
-      ParenQualifier(" (L{N})")
-    ],
-    TentVerify    => [
-      ParenQualifier(" (L{N})"),
-      ParenQualifier(" (proven)"),
-      ParenQualifier(" (pending verify)")
-    ],
-    TentTeach     => [
-      TailConsequence(" — on the table."),
-      TailConsequence(" — memoizable."),
-      TailConsequence(" — real-time-safe."),
-      TailConsequence(" — cheaper direct.")
-    ],
-    TentWhy       => [
-      TailConsequence(" — the graph says so."),
-      ParenQualifier(" (L{N})")
-    ]
-  }
+fn applicable_modifiers_for_tentacle(tentacle) with Pure = match tentacle {
+  TentQuery => [ParenQualifier(" (L{N})"), ParenQualifier(" (graph-direct)")],
+  TentPropose => [EmphasisClose(" fits here."), EmphasisClose(" — try it?")],
+  TentTopology => [EmphasisClose(" draws it better."), EmphasisClose(" — try it?")],
+  TentUnlock => [TailConsequence(" — on the table."), TailConsequence(" — memoizable."), TailConsequence(" — real-time-safe."), TailConsequence(" — no allocation.")],
+  TentTrace => [EmphasisClose(" — can't have it both ways."), EmphasisClose(" — `ref` if you're reading only."), ParenQualifier(" (L{N})")],
+  TentVerify => [ParenQualifier(" (L{N})"), ParenQualifier(" (proven)"), ParenQualifier(" (pending verify)")],
+  TentTeach => [TailConsequence(" — on the table."), TailConsequence(" — memoizable."), TailConsequence(" — real-time-safe."), TailConsequence(" — cheaper direct.")],
+  TentWhy => [TailConsequence(" — the graph says so."), ParenQualifier(" (L{N})")],
 }
 
 // tentacle_tag — pure projection from Tentacle to a small Int. Used
@@ -497,33 +450,27 @@ fn applicable_modifiers_for_tentacle(tentacle) with Pure = {
 // internal to hashing; downstream consumers always use the Tentacle
 // ADT directly. (Structural projection, not drift mode 8 int-coded
 // dispatch.) H6 discipline.
-
-fn tentacle_tag(tentacle) with Pure = {
-  match tentacle {
-    TentQuery     => 0,
-    TentPropose   => 1,
-    TentTopology  => 2,
-    TentUnlock    => 3,
-    TentTrace     => 4,
-    TentVerify    => 5,
-    TentTeach     => 6,
-    TentWhy       => 7
-  }
+fn tentacle_tag(tentacle) with Pure = match tentacle {
+  TentQuery => 0,
+  TentPropose => 1,
+  TentTopology => 2,
+  TentUnlock => 3,
+  TentTrace => 4,
+  TentVerify => 5,
+  TentTeach => 6,
+  TentWhy => 7,
 }
 
 // topic_discriminant — pure projection from Topic to a small Int.
 // Payload values are intentionally NOT folded in; per-tentacle
 // rotation supplies the dominant variation source for modifier
 // selection. H6 discipline.
-
-fn topic_discriminant(topic) with Pure = {
-  match topic {
-    TopicIdent(_)        => 0,
-    TopicHandle(_)       => 1,
-    TopicSpan(_)         => 2,
-    TopicError(_, _)     => 3,
-    TopicAsk(_)          => 4
-  }
+fn topic_discriminant(topic) with Pure = match topic {
+  TopicIdent(_) => 0,
+  TopicHandle(_) => 1,
+  TopicSpan(_) => 2,
+  TopicError(_, _) => 3,
+  TopicAsk(_) => 4,
 }
 
 // situation_hash — pure deterministic Int hash over Situation's
@@ -533,22 +480,18 @@ fn topic_discriminant(topic) with Pure = {
 // primitive needed at this scale (modulo'd by applicable-subset
 // length, which is at most 6 per §2.7.4). Prime multipliers
 // minimize collision over the small index space we modulo into.
-
-fn situation_hash(situation) with Pure = {
-  let Situation(s) = situation
-  tentacle_tag(s.tentacle) * 31 + topic_discriminant(s.topic) * 17
+fn situation_hash(situation) with Pure = match situation {
+  Situation(s) => tentacle_tag(s.tentacle) * 31 + topic_discriminant(s.topic) * 17,
 }
 
 // pick_from_pool — index into the tentacle's applicable-modifier list
 // via hash mod pool length. Empty pool returns NoMod (defensive — no
 // pool is empty per §2.7.4, but the substrate refuses to fabricate
 // when the invariant ever shifts).
-
 fn pick_from_pool(tentacle, hash) with Memory = {
   let pool = applicable_modifiers_for_tentacle(tentacle)
-  let n    = len(pool)
-  if n == 0 { NoMod }
-  else      { list_index(pool, hash % n) }
+  let n = len(pool)
+  if n == 0 { NoMod } else { list_index(pool, hash % n) }
 }
 
 // select_modifier — composes hash + applicable-subset to pick one
@@ -556,14 +499,12 @@ fn pick_from_pool(tentacle, hash) with Memory = {
 // §2.7.4 line 532). RPlayful and RExplain pick from the per-tentacle
 // applicable subset via hash-mod-len. Same Situation + same Register
 // → same Modifier, every call. H6 discipline on Register match.
-
-fn select_modifier(situation, register) with Memory = {
-  let Situation(s) = situation
-  match register {
-    RTerse    => NoMod,
-    RPlayful  => pick_from_pool(s.tentacle, situation_hash(situation)),
-    RExplain  => pick_from_pool(s.tentacle, situation_hash(situation))
-  }
+fn select_modifier(situation, register) with Memory = match situation {
+  Situation(s) => match register {
+    RTerse => NoMod,
+    RPlayful => pick_from_pool(s.tentacle, situation_hash(situation)),
+    RExplain => pick_from_pool(s.tentacle, situation_hash(situation)),
+  },
 }
 
 // with_tentacle — pure update of Situation's tentacle field. Used by
@@ -572,26 +513,8 @@ fn select_modifier(situation, register) with Memory = {
 // (topic, handle, env_snapshot, reasons, rows, ownership, refinements,
 // gradient_next, handlers_installed, prior_turn_topic, facts,
 // register) survive unchanged — only the tentacle perspective shifts.
-
-fn with_tentacle(situation, tentacle) with Pure = {
-  let Situation(s) = situation
-  Situation({
-    tentacle:              tentacle,
-    topic:                 s.topic,
-    handle:                s.handle,
-    env_snapshot:          s.env_snapshot,
-    reason_at_topic:       s.reason_at_topic,
-    row_at_topic:          s.row_at_topic,
-    row_declared:          s.row_declared,
-    ownership_at_topic:    s.ownership_at_topic,
-    refinements:           s.refinements,
-    gradient_next:         s.gradient_next,
-    handlers_installed:    s.handlers_installed,
-    prior_turn_topic:      s.prior_turn_topic,
-    prior_turn_tentacle:   s.prior_turn_tentacle,
-    facts:                 s.facts,
-    register:              s.register
-  })
+fn with_tentacle(situation, tentacle) with Pure = match situation {
+  Situation(s) => Situation({env_snapshot: s.env_snapshot, facts: s.facts, gradient_next: s.gradient_next, handle: s.handle, handlers_installed: s.handlers_installed, ownership_at_topic: s.ownership_at_topic, prior_turn_tentacle: s.prior_turn_tentacle, prior_turn_topic: s.prior_turn_topic, reason_at_topic: s.reason_at_topic, refinements: s.refinements, register: s.register, row_at_topic: s.row_at_topic, row_declared: s.row_declared, tentacle: tentacle, topic: s.topic}),
 }
 
 // topic_ident_or_empty — pure projection of a Topic to its identifier
@@ -599,30 +522,24 @@ fn with_tentacle(situation, tentacle) with Pure = {
 // yields the code; other variants yield empty string. Used by render
 // arms to populate SIdent slots without re-routing through graph.
 // H6 exhaustive over Topic.
-
-fn topic_ident_or_empty(topic) with Pure = {
-  match topic {
-    TopicIdent(name)        => name,
-    TopicHandle(_)          => "",
-    TopicSpan(_)            => "",
-    TopicError(code, _)     => code,
-    TopicAsk(_)             => ""
-  }
+fn topic_ident_or_empty(topic) with Pure = match topic {
+  TopicIdent(name) => name,
+  TopicHandle(_) => "",
+  TopicSpan(_) => "",
+  TopicError(code, _) => code,
+  TopicAsk(_) => "",
 }
 
 // topic_span_or_zero — pure projection of a Topic to a Span. Variants
 // without a natural span (TopicIdent / TopicHandle / TopicAsk) yield
 // the zero-Span sentinel. Used for SSpan slot construction at render
 // time. H6 exhaustive over Topic.
-
-fn topic_span_or_zero(topic) with Pure = {
-  match topic {
-    TopicIdent(_)        => Span(0, 0, 0, 0),
-    TopicHandle(_)       => Span(0, 0, 0, 0),
-    TopicSpan(span)      => span,
-    TopicError(_, span)  => span,
-    TopicAsk(_)          => Span(0, 0, 0, 0)
-  }
+fn topic_span_or_zero(topic) with Pure = match topic {
+  TopicIdent(_) => Span(0, 0, 0, 0),
+  TopicHandle(_) => Span(0, 0, 0, 0),
+  TopicSpan(span) => span,
+  TopicError(_, span) => span,
+  TopicAsk(_) => Span(0, 0, 0, 0),
 }
 
 // render_query_arm — TentQuery's render. Per MV §2.7.3 form FFactual,
@@ -630,22 +547,20 @@ fn topic_span_or_zero(topic) with Pure = {
 // identifier from topic, the inferred type from row_at_topic context,
 // and the row itself. silence_predicate gated upstream — fires only
 // when reason_at_topic is Some (per MV §2.7.5 TentQuery arm).
-
-fn render_query_arm(situation) with Memory = {
-  let Situation(s) = situation
-  let name = topic_ident_or_empty(s.topic)
-  let row_slot = match s.row_at_topic {
-    None         => SLit(""),
-    Some(row)    => SRow(row)
-  }
-  VoiceLine(TentQuery, FFactual, [
-    SIdent(name),
-    SLit(" — bound at "),
-    SSpan(topic_span_or_zero(s.topic)),
-    SLit(". Row: "),
-    row_slot,
-    SLit(".")
-  ], select_modifier(situation, s.register))
+fn render_query_arm(situation) with Memory = match situation {
+  Situation(s) => {
+    let name = topic_ident_or_empty(s.topic)
+    let row_slot = match s.row_at_topic {
+      None => SLit(""),
+      Some(row) => SRow(row),
+    }
+    VoiceLine(
+      TentQuery,
+      FFactual,
+      [SIdent(name), SLit(" — bound at "), SSpan(topic_span_or_zero(s.topic)), SLit(". Row: "), row_slot, SLit(".")],
+      select_modifier(situation, s.register)
+    )
+  },
 }
 
 // render_propose_arm — TentPropose's render. Per MV §2.7.3 form
@@ -653,60 +568,61 @@ fn render_query_arm(situation) with Memory = {
 // Topic discriminates: TopicHandle (hole at handle) → "Hole expects
 // `Type`"; TopicError (typo / missing) → "Did you mean ...?";
 // TopicAsk (explicit ask) → echoes ask. silence_predicate gated.
-
-fn render_propose_arm(situation) with Memory = {
-  let Situation(s) = situation
-  let TopicFacts(f) = s.facts
-  let body = match s.topic {
-    TopicHandle(_)       => [
-      // The guarded read in its non-failing form: the match IS the guard,
-      // so the row stays Pure (unwrap performs Fail even under is_some).
-      SLit(if f.is_hole { "Hole expects synthesis here." }
-           else { match f.error_code_at { Some(c) => c, None => "" } })
-    ],
-    TopicError(code, _)  => [SLit("Diagnostic at "), SIdent(code), SLit(" — codeAction available.")],
-    TopicAsk(_)          => [SLit("Ask received — proposing.")],
-    TopicIdent(_)        => [SLit("")],
-    TopicSpan(_)         => [SLit("")]
-  }
-  VoiceLine(TentPropose, FOffering, body, select_modifier(situation, s.register))
+fn render_propose_arm(situation) with Memory = match situation {
+  Situation(s) => match s.facts {
+    TopicFacts(f) => {
+      let body = match s.topic {
+        TopicHandle(_) => [
+          // The guarded read in its non-failing form: the match IS the guard,
+          // so the row stays Pure (unwrap performs Fail even under is_some).
+          SLit(if f.is_hole {
+            "Hole expects synthesis here."
+          } else {
+            match f.error_code_at {
+              Some(c) => c,
+              None => "",
+            }
+          })
+        ],
+        TopicError(code, _) => [SLit("Diagnostic at "), SIdent(code), SLit(" — codeAction available.")],
+        TopicAsk(_) => [SLit("Ask received — proposing.")],
+        TopicIdent(_) => [SLit("")],
+        TopicSpan(_) => [SLit("")],
+      }
+      VoiceLine(TentPropose, FOffering, body, select_modifier(situation, s.register))
+    },
+  },
 }
 
 // render_topology_arm — TentTopology's render. Per MV §2.7.3 form
 // FOffering with STYLE_NUDGE stance. Per AT4: nested-call depth >= 3
 // surfaces a "use |> instead" suggestion. silence_predicate gated on
 // nested_call_depth >= 3 (TopicFacts substrate from D.1.c).
-
-fn render_topology_arm(situation) with Memory + Alloc = {
-  let Situation(s) = situation
-  let TopicFacts(f) = s.facts
-  VoiceLine(TentTopology, FOffering, [
-    SLit("Nested-call depth "),
-    SLit(int_to_str(f.nested_call_depth)),
-    SLit(" — `|>` would draw the topology")
-  ], select_modifier(situation, s.register))
+fn render_topology_arm(situation) with Memory + Alloc = match situation {
+  Situation(s) => match s.facts {
+    TopicFacts(f) => VoiceLine(
+      TentTopology,
+      FOffering,
+      [SLit("Nested-call depth "), SLit(int_to_str(f.nested_call_depth)), SLit(" — `|>` would draw the topology")],
+      select_modifier(situation, s.register)
+    ),
+  },
 }
 
 // render_unlock_arm — TentUnlock's render. Per MV §2.7.3 form
 // FCapability with EXCITED stance. Surfaces a capability that the
 // gradient_next would unlock. silence_predicate gated on gradient_next
 // AND gradient_unlocks_capability(gradient_next).
-
-fn render_unlock_arm(situation) with Memory + Alloc = {
-  let Situation(s) = situation
-  let body = match s.gradient_next {
-    None              => [SLit("")],
-    Some(suggestion)  => {
-      let AnnotationSuggestion(_kind, ann_text, unlocks, _reason) = suggestion
-      [
-        SLit("Adding "),
-        SAnnot(ann_text),
-        SLit(" unlocks "),
-        SCap(join_capability_labels(unlocks))
-      ]
+fn render_unlock_arm(situation) with Memory + Alloc = match situation {
+  Situation(s) => {
+    let body = match s.gradient_next {
+      None => [SLit("")],
+      Some(suggestion) => match suggestion {
+        AnnotationSuggestion(_kind, ann_text, unlocks, _reason) => [SLit("Adding "), SAnnot(ann_text), SLit(" unlocks "), SCap(join_capability_labels(unlocks))],
+      },
     }
-  }
-  VoiceLine(TentUnlock, FCapability, body, select_modifier(situation, s.register))
+    VoiceLine(TentUnlock, FCapability, body, select_modifier(situation, s.register))
+  },
 }
 
 // render_trace_arm — TentTrace's render. Per MV §2.7.3 form
@@ -714,37 +630,27 @@ fn render_unlock_arm(situation) with Memory + Alloc = {
 // violation / dropped capability / missing import — Trace surfaces
 // the violation site. silence_predicate gated on ownership_at_topic
 // being Some OR row_subsumption_fails.
-
-fn render_trace_arm(situation) with Memory = {
-  let Situation(s) = situation
-  let body = match s.ownership_at_topic {
-    Some(_)  => [
-      SLit("Ownership at "),
-      SSpan(topic_span_or_zero(s.topic)),
-      SLit(" — consumed; can't have it both ways")
-    ],
-    None     => [
-      SLit("Row narrowing failed at "),
-      SSpan(topic_span_or_zero(s.topic))
-    ]
-  }
-  VoiceLine(TentTrace, FRefutation, body, select_modifier(situation, s.register))
+fn render_trace_arm(situation) with Memory = match situation {
+  Situation(s) => {
+    let body = match s.ownership_at_topic {
+      Some(_) => [SLit("Ownership at "), SSpan(topic_span_or_zero(s.topic)), SLit(" — consumed; can't have it both ways")],
+      None => [SLit("Row narrowing failed at "), SSpan(topic_span_or_zero(s.topic))],
+    }
+    VoiceLine(TentTrace, FRefutation, body, select_modifier(situation, s.register))
+  },
 }
 
 // render_verify_arm — TentVerify's render. Per MV §2.7.3 form
 // FRefinement with THE-MATH-SAYS stance. Per AT2: refinement
 // obligations + discharges. silence_predicate gated on
 // list_non_empty(refinements).
-
-fn render_verify_arm(situation) with Memory + Alloc = {
-  let Situation(s) = situation
-  VoiceLine(TentVerify, FRefinement, [
-    SLit("Refinements at "),
-    SSpan(topic_span_or_zero(s.topic)),
-    SLit(": "),
-    SLit(int_to_str(len(s.refinements))),
-    SLit(" obligations")
-  ], select_modifier(situation, s.register))
+fn render_verify_arm(situation) with Memory + Alloc = match situation {
+  Situation(s) => VoiceLine(
+    TentVerify,
+    FRefinement,
+    [SLit("Refinements at "), SSpan(topic_span_or_zero(s.topic)), SLit(": "), SLit(int_to_str(len(s.refinements))), SLit(" obligations")],
+    select_modifier(situation, s.register)
+  ),
 }
 
 // render_teach_arm — TentTeach's render. Per MV §2.7.3 form
@@ -752,59 +658,47 @@ fn render_verify_arm(situation) with Memory + Alloc = {
 // canonical "next step" voice — surface gradient_next as one
 // annotation that unlocks one capability. silence_predicate gated on
 // gradient_next being Some.
-
-fn render_teach_arm(situation) with Memory = {
-  let Situation(s) = situation
-  let body = match s.gradient_next {
-    None              => [SLit("")],
-    Some(suggestion)  => {
-      let AnnotationSuggestion(_kind, ann_text, _unlocks, reason) = suggestion
-      [
-        SLit("Next: add "),
-        SAnnot(ann_text),
-        SLit(" on "),
-        SSpan(suggestion_site_from_reason(reason))
-      ]
+fn render_teach_arm(situation) with Memory = match situation {
+  Situation(s) => {
+    let body = match s.gradient_next {
+      None => [SLit("")],
+      Some(suggestion) => match suggestion {
+        AnnotationSuggestion(_kind, ann_text, _unlocks, reason) => [SLit("Next: add "), SAnnot(ann_text), SLit(" on "), SSpan(suggestion_site_from_reason(reason))],
+      },
     }
-  }
-  VoiceLine(TentTeach, FGradient, body, select_modifier(situation, s.register))
+    VoiceLine(TentTeach, FGradient, body, select_modifier(situation, s.register))
+  },
 }
 
 // render_why_arm — TentWhy's render. Per MV §2.7.3 form FTrace with
 // REFLECTIVE stance. Per AT6: walks the Reason chain when the user
 // explicitly asked a Why question. silence_predicate gated on
 // TopicAsk(QWhy(_)) — only fires for explicit asks per MV §2.7.5.
-
-fn render_why_arm(situation) with Memory = {
-  let Situation(s) = situation
-  let body = match s.reason_at_topic {
-    None              => [SLit("")],
-    Some(reason)      => [
-      SLit("Walking provenance: "),
-      SReason(reason)
-    ]
-  }
-  VoiceLine(TentWhy, FTrace, body, select_modifier(situation, s.register))
+fn render_why_arm(situation) with Memory = match situation {
+  Situation(s) => {
+    let body = match s.reason_at_topic {
+      None => [SLit("")],
+      Some(reason) => [SLit("Walking provenance: "), SReason(reason)],
+    }
+    VoiceLine(TentWhy, FTrace, body, select_modifier(situation, s.register))
+  },
 }
 
 // render_for_tentacle — dispatches to the right per-tentacle render
 // arm. H6 exhaustive 8-arm match. Each arm produces a VoiceLine
 // (assumed silence_predicate has already passed for this tentacle).
-
-fn render_for_tentacle(situation) with Alloc + Memory = {
-  let Situation(s) = situation
-  match s.tentacle {
-    TentQuery     => render_query_arm(situation),
-    TentPropose   => render_propose_arm(situation),
-    TentTopology  => render_topology_arm(situation),
-    TentUnlock    => render_unlock_arm(situation),
-    TentTrace     => render_trace_arm(situation),
-    TentVerify    => render_verify_arm(situation),
-    TentTeach     => render_teach_arm(situation),
-    TentWhy       => render_why_arm(situation)
-  }
+fn render_for_tentacle(situation) with Alloc + Memory = match situation {
+  Situation(s) => match s.tentacle {
+    TentQuery => render_query_arm(situation),
+    TentPropose => render_propose_arm(situation),
+    TentTopology => render_topology_arm(situation),
+    TentUnlock => render_unlock_arm(situation),
+    TentTrace => render_trace_arm(situation),
+    TentVerify => render_verify_arm(situation),
+    TentTeach => render_teach_arm(situation),
+    TentWhy => render_why_arm(situation),
+  },
 }
-
 
 // The per-tentacle fold (the prior voice_lines_for / fold_tentacles_to_
 // voicelines / proof_derivable triple) is DISSOLVED. Insight #11 superseded
@@ -815,7 +709,7 @@ fn render_for_tentacle(situation) with Alloc + Memory = {
 // queue item IS the proven-worth-surfacing fact. There is no second
 // silence machinery to maintain — the queue-empty gate is the one silence
 // gate, and the tier→tentacle read is the one fold.
-
+//
 // voice_queue_walk — queue-projection per insight #11. Queries the
 // project queue via OracleQuery (cursor-relevance filtered when the
 // situation has a cursor; project-wide otherwise); for each
@@ -839,21 +733,21 @@ fn render_for_tentacle(situation) with Alloc + Memory = {
 // free that name for the actual `Interact` handler declared at
 // end-of-file. The handler internally folds the project queue via
 // this projector.
-
-fn voice_queue_walk(situation_seed) with OracleQuery + Memory + Alloc = {
-  let Situation(s) = situation_seed
-  let queue_items = match s.handle {
-    None       => query_project_queue(),
-    Some(h)    => {
-      let local = cursor_relevant(h, 200)
-      match local {
-        []           => query_project_queue(),
-        [_, ..._]    => local
-      }
+fn voice_queue_walk(situation_seed) with OracleQuery + Memory + Alloc = match situation_seed {
+  Situation(s) => {
+    let queue_items = match s.handle {
+      None => query_project_queue(),
+      Some(h) => {
+        let local = cursor_relevant(h, 200)
+        match local {
+          [] => query_project_queue(),
+          [_, ..._] => local,
+        }
+      },
     }
-  }
-  let n = len(queue_items)
-  fold_queue_items(situation_seed, queue_items, 0, n, make_list(n), 0)
+    let n = len(queue_items)
+    fold_queue_items(situation_seed, queue_items, 0, n, make_list(n), 0)
+  },
 }
 
 // fold_queue_items — walk the queue items in priority order; per item,
@@ -861,19 +755,21 @@ fn voice_queue_walk(situation_seed) with OracleQuery + Memory + Alloc = {
 // mapping) and call the per-tentacle render arm. Tail-recursive
 // accumulator pattern; flat-buffer-plus-counter substrate (Ω.3 —
 // list_extend_to + list_set + counter + slice).
-
-fn fold_queue_items(situation, items, i, n, acc, count) with OracleQuery + Alloc + Memory = {
-  if i >= n { slice(acc, 0, count) }
-  else {
-    let item = list_index(items, i)
-    let QueueItem(it) = item
-    let OraclePriority(p) = it.impact
-    let tentacle = tier_to_tentacle(p.tier)
-    let situation_for_t = with_tentacle(situation, tentacle)
-    let voiceline = render_for_tentacle(situation_for_t)
-    let extended  = list_extend_to(acc, count + 1)
-    let written   = list_set(extended, count, voiceline)
-    fold_queue_items(situation, items, i + 1, n, written, count + 1)
+fn fold_queue_items(situation, items, i, n, acc, count) with OracleQuery + Alloc + Memory = if i >= n {
+  slice(acc, 0, count)
+} else {
+  let item = list_index(items, i)
+  match item {
+    QueueItem(it) => match it.impact {
+      OraclePriority(p) => {
+        let tentacle = tier_to_tentacle(p.tier)
+        let situation_for_t = with_tentacle(situation, tentacle)
+        let voiceline = render_for_tentacle(situation_for_t)
+        let extended = list_extend_to(acc, count + 1)
+        let written = list_set(extended, count, voiceline)
+        fold_queue_items(situation, items, i + 1, n, written, count + 1)
+      },
+    },
   }
 }
 
@@ -885,15 +781,12 @@ fn fold_queue_items(situation, items, i, n, acc, count) with OracleQuery + Alloc
 // - TPending → TentVerify (V_Pending refinement obligation)
 // - TUnlock → TentUnlock (capability available; the gradient surface)
 // - TStyle → TentTopology (topology nudge; FOffering / STYLE_NUDGE)
-
-fn tier_to_tentacle(tier) with Pure = {
-  match tier {
-    TBlocking   => TentTrace,
-    TViolation  => TentTrace,
-    TPending    => TentVerify,
-    TUnlock     => TentUnlock,
-    TStyle      => TentTopology
-  }
+fn tier_to_tentacle(tier) with Pure = match tier {
+  TBlocking => TentTrace,
+  TViolation => TentTrace,
+  TPending => TentVerify,
+  TUnlock => TentUnlock,
+  TStyle => TentTopology,
 }
 
 // ─── unimplemented_arm — sentinel for arms not yet in their batch ─────
@@ -909,10 +802,7 @@ fn tier_to_tentacle(tier) with Pure = {
 // The Abort effect installed above this handler is the surface's
 // responsibility: lsp_adapter installs catch_abort; CLI installs its
 // own. The handler declares its row honestly.
-
-fn unimplemented_arm(op_name) with Abort = {
-  abort()
-}
+fn unimplemented_arm(op_name) with Abort = abort()
 
 // ─── MV.2.e.Q — Query tentacle helpers ────────────────────────────────
 //
@@ -930,7 +820,7 @@ fn unimplemented_arm(op_name) with Abort = {
 //   Refine?  — Caret.handle refinement deferred to MV.2.e.Q.refine
 //   Gradient? each arm = one step toward LSP usability
 //   Reason?  — every cursor write threads a Reason per CaretTarget
-
+//
 // resolve_cursor_target — project a CaretTarget into a graph Handle.
 // TargetHandle: identity. TargetSpan: span_index lookup via
 // graph_snapshot (per query.mn find_tightest substrate). TargetIdent:
@@ -940,33 +830,29 @@ fn unimplemented_arm(op_name) with Abort = {
 // The MV.2.e.Q.ident peer sub-handle wires env→handle resolution.
 //
 // H6 exhaustive over CaretTarget — no `_` wildcard.
-
-fn resolve_cursor_target(target, current_handle) with GraphRead + Memory + Alloc = {
-  match target {
-    TargetHandle(h)    => h,
-    TargetSpan(s)      => {
-      let g = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-      let Graph(_, span_index) = g
-      match find_tightest(span_index, s, None, 999999999) {
-        None       => current_handle,
-        Some(h)    => h
-      }
-    },
-    TargetIdent(_name) => current_handle
-  }
+fn resolve_cursor_target(target, current_handle) with GraphRead + Memory + Alloc = match target {
+  TargetHandle(h) => h,
+  TargetSpan(s) => {
+    // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+    let g = graph_snapshot()
+    match g {
+      Graph(_, span_index) => match find_tightest(span_index, s, None, 999999999) {
+        None => current_handle,
+        Some(h) => h,
+      },
+    }
+  },
+  TargetIdent(_name) => current_handle,
 }
 
 // focus_reason — synthesize the Caret's Reason from the focus
 // gesture. Per MV §2 Q5 + primitive #8: every cursor write threads a
 // Reason so the Why tentacle can later answer "why this cursor?". H6
 // exhaustive over CaretTarget.
-
-fn focus_reason(target) with Pure = {
-  match target {
-    TargetHandle(_)    => Inferred("explicit handle focus"),
-    TargetSpan(s)      => Located(s, Inferred("span focus gesture")),
-    TargetIdent(name)  => Inferred("identifier focus: {name}")
-  }
+fn focus_reason(target) with Pure = match target {
+  TargetHandle(_) => Inferred("explicit handle focus"),
+  TargetSpan(s) => Located(s, Inferred("span focus gesture")),
+  TargetIdent(name) => Inferred("identifier focus: {name}"),
 }
 
 // tentacle_for_question — Question variant decides the tentacle that
@@ -975,33 +861,20 @@ fn focus_reason(target) with Pure = {
 // QOwnership is Trace-tentacle (ownership trail); QVerifyDebt is
 // Verify-tentacle (refinement obligations). H6 exhaustive over
 // Question's 13 variants via pattern alternation per SYNTAX.md L956.
-
-fn tentacle_for_question(question) with Pure = {
-  match question {
-    QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved
-    | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_)
-    | QUnknown(_)
-                          => TentQuery,
-    QOwnership(_)         => TentTrace,
-    QWhy(_) | QSubstChain(_)
-                          => TentWhy,
-    QVerifyDebt           => TentVerify
-  }
+fn tentacle_for_question(question) with Pure = match question {
+  QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_) | QUnknown(_) => TentQuery,
+  QOwnership(_) => TentTrace,
+  QWhy(_) | QSubstChain(_) => TentWhy,
+  QVerifyDebt => TentVerify,
 }
 
 // question_span — extract Span from Question. Only QTypeAt carries a
 // natural Span; other variants project to span_zero. The TurnRecord's
 // span_at field captures this for next-turn observation deltas. H6
 // exhaustive over Question via pattern alternation.
-
-fn question_span(question) with Pure = {
-  match question {
-    QTypeAt(s)             => s,
-    QTypeOf(_) | QIntentOf(_) | QUnresolved | QSubstChain(_)
-    | QEffects(_) | QOwnership(_) | QWhy(_) | QRefsOf(_)
-    | QVerifyDebt | QHandlerProvider(_) | QFlowOf(_) | QUnknown(_)
-                           => span_zero()
-  }
+fn question_span(question) with Pure = match question {
+  QTypeAt(s) => s,
+  QTypeOf(_) | QIntentOf(_) | QUnresolved | QSubstChain(_) | QEffects(_) | QOwnership(_) | QWhy(_) | QRefsOf(_) | QVerifyDebt | QHandlerProvider(_) | QFlowOf(_) | QUnknown(_) => span_zero(),
 }
 
 // compose_propose_situation — sparse Situation for a propose gesture.
@@ -1021,36 +894,13 @@ fn question_span(question) with Pure = {
 // second instance of sparse Situation composition; one more (likely
 // run_query for batch path) earns the abstraction. Until then,
 // parallel forms honest about not-yet-generic.
-
-fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure = {
-  let (prior_topic, prior_tent) = match prior_turn {
-    None        => (None, None),
-    Some(rec)   => {
-      let TurnRecord(r) = rec
-      (Some(r.topic), Some(r.tentacle))
-    }
-  }
-  Situation({
-    tentacle:              TentPropose,
-    topic:                 TopicHandle(target_handle),
-    handle:                Some(target_handle),
-    env_snapshot:          [],
-    reason_at_topic:       Some(target_reason),
-    row_at_topic:          None,
-    row_declared:          None,
-    ownership_at_topic:    None,
-    refinements:           [],
-    gradient_next:         None,
-    handlers_installed:    [],
-    prior_turn_topic:      prior_topic,
-    prior_turn_tentacle:   prior_tent,
-    facts:                 TopicFacts({
-      is_hole:           false,
-      error_code_at:     None,
-      nested_call_depth: 0
-    }),
-    register:              RPlayful
-  })
+fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure = match match prior_turn {
+  None => (None, None),
+  Some(rec) => match rec {
+    TurnRecord(r) => (Some(r.topic), Some(r.tentacle)),
+  },
+} {
+  (prior_topic, prior_tent) => Situation({env_snapshot: [], facts: TopicFacts({error_code_at: None, is_hole: false, nested_call_depth: 0}), gradient_next: None, handle: Some(target_handle), handlers_installed: [], ownership_at_topic: None, prior_turn_tentacle: prior_tent, prior_turn_topic: prior_topic, reason_at_topic: Some(target_reason), refinements: [], register: RPlayful, row_at_topic: None, row_declared: None, tentacle: TentPropose, topic: TopicHandle(target_handle)}),
 }
 
 // query_result_to_answer — project query.mn's live QueryResult into the
@@ -1075,20 +925,19 @@ fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure
 // rather than a fabricated Reason. QRError → AnsSilence: an ill-posed or
 // unprovable question is a valid Silence (voice.mn:265). H6 exhaustive over
 // QueryResult's 12 variants — no wildcard.
-
 fn query_result_to_answer(result) with Memory + Alloc = match result {
-  QRType(ty, reason)      => AnsType(ty, reason),
-  QRWhy(reason)           => AnsReason(reason),
-  QRRefs(spans)           => AnsRefs(spans, Inferred("refs-of: {int_to_str(len(spans))} reference(s)")),
-  QRVerifyDebt(debt)      => AnsDebt(debt, Inferred("verify-debt: {int_to_str(len(debt))} obligation(s)")),
-  QREffects(_)            => AnsSilence,
-  QRUnresolved(_)         => AnsSilence,
-  QRChain(_)              => AnsSilence,
-  QRIntent(_)             => AnsSilence,
-  QROwnership(_)          => AnsSilence,
-  QRHandlerProvider(_)    => AnsSilence,
-  QRFlowLabel(_, _)       => AnsSilence,
-  QRError(_)              => AnsSilence
+  QRType(ty, reason) => AnsType(ty, reason),
+  QRWhy(reason) => AnsReason(reason),
+  QRRefs(spans) => AnsRefs(spans, Inferred("refs-of: {int_to_str(len(spans))} reference(s)")),
+  QRVerifyDebt(debt) => AnsDebt(debt, Inferred("verify-debt: {int_to_str(len(debt))} obligation(s)")),
+  QREffects(_) => AnsSilence,
+  QRUnresolved(_) => AnsSilence,
+  QRChain(_) => AnsSilence,
+  QRIntent(_) => AnsSilence,
+  QROwnership(_) => AnsSilence,
+  QRHandlerProvider(_) => AnsSilence,
+  QRFlowLabel(_, _) => AnsSilence,
+  QRError(_) => AnsSilence,
 }
 
 // ─── Live forensic-result projections — the run ops read the graph ────
@@ -1098,13 +947,11 @@ fn query_result_to_answer(result) with Memory + Alloc = match result {
 // obligation (span, predicate, reason) is the refinement the path could not
 // discharge statically: ERefinementRejected IS its canonical DiagKind. The
 // audit findings are the same obligations — the forensic surface is one read.
-
-fn diagnostics_from_debt(debt) with Alloc + Memory = {
-  if len(debt) == 0 { [] }
-  else {
-    let (span, predicate, _reason) = last(debt)
-    [ERefinementRejected(predicate, span)]
-      ++ diagnostics_from_debt(drop_last(debt))
+fn diagnostics_from_debt(debt) with Alloc + Memory = if len(debt) == 0 {
+  []
+} else {
+  match last(debt) {
+    (span, predicate, _reason) => [ERefinementRejected(predicate, span)] ++ diagnostics_from_debt(drop_last(debt)),
   }
 }
 
@@ -1117,9 +964,8 @@ fn findings_from_debt(debt) with Pure = debt
 // addressing scheme (voice.mn §FileHandle), so the artifact path is derived
 // from the handle deterministically — a stable address tied to the real
 // handle, not a fabricated "emitted" literal.
-fn emitted_artifact_path(fh) with Memory + Alloc = {
-  let FileHandle(i) = fh
-  Path(".build/unit-{int_to_str(i)}.wasm")
+fn emitted_artifact_path(fh) with Memory + Alloc = match fh {
+  FileHandle(i) => Path(".build/unit-{int_to_str(i)}.wasm"),
 }
 
 // ─── render_voiceline / render_slot — the ONE terminal voice projection ─
@@ -1132,36 +978,30 @@ fn emitted_artifact_path(fh) with Memory + Alloc = {
 // projection, surpassing every LSP). Silence renders empty (the medium does
 // not fill space). The slots a hover should show are NO LONGER computed then
 // discarded — this fn is the terminal read every voice surface shares.
-
 fn render_voiceline(line) with GraphRead + Memory + Alloc + !Mutate + Intern = match line {
-  Silence                       => "",
-  VoiceLine(_, _, slots, modif) =>
-    "{render_slots(slots)}{render_modifier(modif)}"
+  Silence => "",
+  VoiceLine(_, _, slots, modif) => "{render_slots(slots)}{render_modifier(modif)}",
 }
 
-fn render_slots(slots) with GraphRead + Intern + Memory + Alloc + !Mutate = {
-  if len(slots) == 0 { "" }
-  else {
-    "{render_slot(last(slots))}{render_slots(drop_last(slots))}"
-  }
-}
+fn render_slots(slots) with GraphRead + Intern + Memory + Alloc + !Mutate =
+  if len(slots) == 0 { "" } else { "{render_slot(last(slots))}{render_slots(drop_last(slots))}" }
 
 fn render_slot(slot) with GraphRead + Memory + Alloc + !Mutate + Intern = match slot {
-  SIdent(name)   => "`{name}`",
-  SType(ty)      => show_type(ty),
-  SRow(row)      => show_effrow(row),
-  SSpan(span)    => "({show_span(span)})",
+  SIdent(name) => "`{name}`",
+  SType(ty) => show_type(ty),
+  SRow(row) => show_effrow(row),
+  SSpan(span) => "({show_span(span)})",
   SReason(reason) => show_reason(reason),
-  SCap(name)     => name,
-  SAnnot(text)   => "`{text}`",
-  SLit(text)     => text
+  SCap(name) => name,
+  SAnnot(text) => "`{text}`",
+  SLit(text) => text,
 }
 
 fn render_modifier(modif) with Pure = match modif {
-  NoMod                => "",
-  TailConsequence(s)   => s,
-  ParenQualifier(s)    => s,
-  EmphasisClose(s)     => s
+  NoMod => "",
+  TailConsequence(s) => s,
+  ParenQualifier(s) => s,
+  EmphasisClose(s) => s,
 }
 
 // ─── MV.2.e.Session — Session-tentacle helpers ────────────────────────
@@ -1171,14 +1011,13 @@ fn render_modifier(modif) with Pure = match modif {
 // state, NOT as parallel [IntentId] + [Intent] arrays. Per
 // drift mode 8: IntentId is a structured ADT (Int wrapper), not a
 // raw integer.
-
+//
 // intent_id_eq — IntentId equality. IntentId wraps an Int; compare
 // via destructure + integer compare. H6 implicit (single-variant ADT).
-
-fn intent_id_eq(a, b) with Pure = {
-  let IntentId(ai) = a
-  let IntentId(bi) = b
-  ai == bi
+fn intent_id_eq(a, b) with Pure = match a {
+  IntentId(ai) => match b {
+    IntentId(bi) => ai == bi,
+  },
 }
 
 // intents_without — return intents list with the entry whose id
@@ -1187,13 +1026,12 @@ fn intent_id_eq(a, b) with Pure = {
 // length is bounded by user-declared intent count (small N typical),
 // so the simple form is honest. Substrate idiom (list_extend_to +
 // counter) reserved for genuinely-large N — this is not it.
-
-fn intents_without(intents, id) with Alloc + Memory = {
-  filter((intent) => {
-    let (head_id, _) = intent
-    !intent_id_eq(head_id, id)
-  }, intents)
-}
+fn intents_without(intents, id) with Alloc + Memory = filter(
+  (intent) => match intent {
+    (head_id, _) => !intent_id_eq(head_id, id),
+  },
+  intents
+)
 
 // ─── mentl_voice_default — Interact handler ───────────────────────────
 //
@@ -1232,56 +1070,41 @@ fn intents_without(intents, id) with Alloc + Memory = {
 // Primitives audited: #1 (Graph — cursor handle indexes graph),
 // #2 (this handler IS primitive #2 incarnate), #4 (handler row composes
 // via ~> with caller rows), #8 (every cursor write threads a Reason).
-
-handler mentl_voice_default
-  with caret_now          = Caret(0, Inferred("session start")),
-       prior_turn          = None,
-       turns               = [],
-       intents             = [],
-       next_intent_id      = 0 {
-
-  // ─── Project / file ops (8) — handled by mentl_voice_filesystem ─
+handler mentl_voice_default with caret_now = Caret(0, Inferred("session start")), prior_turn = None, turns = [], intents = [], next_intent_id = 0 {
+  focus(target) => // ─── Project / file ops (8) — handled by mentl_voice_filesystem ─
   // Per FX walkthrough §3: file ops migrate to peer handler at
   // end-of-file; mentl_voice_default no longer declares them.
   // Composition via ~> chain: surface ~> mentl_voice_filesystem ~>
   // mentl_voice_default ~> wasi_filesystem.
-
+  //
   // ─── Edit op (1) — handled by mentl_voice_filesystem ─────────────
   // Per FX walkthrough §3 + symmetry with project/file ops: edit
   // lives in mentl_voice_filesystem because it needs handles_table
   // to look up the FileHandle's path + cached text.
-
+  //
   // ─── Attention ops (2) — MV.2.e.Q ─────────────────────────────────
-
+  //
   /// focus — set the caret-of-attention from a CaretTarget. Per MV
   /// §2 Q5: every focus resets the cursor. The Caret's Reason traces
   /// back to the focus gesture (per CaretTarget variant via
   /// focus_reason). TargetSpan path performs graph_snapshot for span
   /// resolution; TargetIdent falls back to current handle (MV.2.e.Q.ident
   /// peer sub-handle wires env→handle resolution).
-  focus(target)         => {
-    let Caret(current_handle, _) = caret_now
-    let new_handle = resolve_cursor_target(target, current_handle)
-    let new_reason = focus_reason(target)
-    let new_cursor = Caret(new_handle, new_reason)
-    let new_turn = TurnRecord({
-      tentacle: TentQuery,
-      topic:    TopicHandle(new_handle),
-      line:     Silence,
-      span_at:  span_zero()
-    })
-    resume()
-      with caret_now = new_cursor,
-           prior_turn = Some(new_turn),
-           turns      = [new_turn] ++ turns
+  match caret_now {
+    Caret(current_handle, _) => {
+      let new_handle = resolve_cursor_target(target, current_handle)
+      let new_reason = focus_reason(target)
+      let new_cursor = Caret(new_handle, new_reason)
+      let new_turn =
+        TurnRecord({line: Silence, span_at: span_zero(), tentacle: TentQuery, topic: TopicHandle(new_handle)})
+      resume() with caret_now = new_cursor, prior_turn = Some(new_turn), turns = [new_turn] ++ turns
+    },
   },
-
-  /// caret — read the caret-of-attention. Pure read of handler
+  caret() => /// caret — read the caret-of-attention. Pure read of handler
   /// state; per MV §2.7.1 cursor lives in handler state.
-  caret()              => resume(caret_now),
-
-  // ─── Mentl voice ops (3) — ask in Q; propose + speak in MV.2.e.P ─
-
+  resume(caret_now),
+  consult(question) => // ─── Mentl voice ops (3) — ask in Q; propose + speak in MV.2.e.P ─
+  //
   // consult — user-initiated forensic query. Per MV §2.7.6 each ask is a
   // turn. The answer is what query.mn's `ask` proves LIVE from env/graph
   // (query.mn:56-163) — voice carries the QueryResult handle and projects
@@ -1291,20 +1114,13 @@ handler mentl_voice_default
   // The turn is recorded at the question's tentacle/topic for the
   // next-turn observation delta; the rendered VoiceLine for that turn is
   // the Answer projected back through render (Silence when AnsSilence).
-  consult(question)     => {
+  {
     let answer = ask(question)
-    let new_turn = TurnRecord({
-      tentacle: tentacle_for_question(question),
-      topic:    TopicAsk(question),
-      line:     Silence,
-      span_at:  question_span(question)
-    })
-    resume(query_result_to_answer(answer))
-      with prior_turn = Some(new_turn),
-           turns      = [new_turn] ++ turns
+    let new_turn =
+      TurnRecord({line: Silence, span_at: question_span(question), tentacle: tentacle_for_question(question), topic: TopicAsk(question)})
+    resume(query_result_to_answer(answer)) with prior_turn = Some(new_turn), turns = [new_turn] ++ turns
   },
-
-  /// propose — Mentl-initiated proposal at a CaretTarget. Compose
+  propose(target) => /// propose — Mentl-initiated proposal at a CaretTarget. Compose
   /// Propose-tentacle Situation at the target → silence_predicate →
   /// render_propose_arm → return VoiceLine. Update prior_turn +
   /// history.
@@ -1314,28 +1130,18 @@ handler mentl_voice_default
   /// (Synth.propose enumeration + verify + rank) is the MV.2.e.P.synth
   /// peer sub-handle. This sparse form ships the structural composition
   /// while oracle plumbing lands separately.
-  propose(target)       => {
-    let Caret(current_handle, _) = caret_now
-    let target_handle = resolve_cursor_target(target, current_handle)
-    let target_reason = focus_reason(target)
-    let situation = compose_propose_situation(target_handle, target_reason, prior_turn)
-    let voiceline = if silence_predicate(situation) {
-      Silence
-    } else {
-      render_for_tentacle(situation)
-    }
-    let new_turn = TurnRecord({
-      tentacle: TentPropose,
-      topic:    TopicHandle(target_handle),
-      line:     voiceline,
-      span_at:  span_zero()
-    })
-    resume(voiceline)
-      with prior_turn = Some(new_turn),
-           turns      = [new_turn] ++ turns
+  match caret_now {
+    Caret(current_handle, _) => {
+      let target_handle = resolve_cursor_target(target, current_handle)
+      let target_reason = focus_reason(target)
+      let situation = compose_propose_situation(target_handle, target_reason, prior_turn)
+      let voiceline = if silence_predicate(situation) { Silence } else { render_for_tentacle(situation) }
+      let new_turn =
+        TurnRecord({line: voiceline, span_at: span_zero(), tentacle: TentPropose, topic: TopicHandle(target_handle)})
+      resume(voiceline) with prior_turn = Some(new_turn), turns = [new_turn] ++ turns
+    },
   },
-
-  /// speak — Mentl-initiated voice surfacing of a pre-composed
+  speak(voiceline) => /// speak — Mentl-initiated voice surfacing of a pre-composed
   /// VoiceLine. The handler doesn't render; it just records the turn
   /// (so silence_predicate sees this as a turn for next-turn
   /// observation-delta) and projects to the surface. Per MV §1.5: the
@@ -1345,23 +1151,16 @@ handler mentl_voice_default
   /// Tentacle extracted from VoiceLine; Silence defaults to TentQuery
   /// (sentinel — speak with Silence is a no-op turn but still records).
   /// Topic is TopicHandle(0) since speak isn't tied to a graph topic.
-  speak(voiceline)      => {
+  {
     let tentacle = match voiceline {
-      Silence                       => TentQuery,
-      VoiceLine(t, _, _, _)         => t
+      Silence => TentQuery,
+      VoiceLine(t, _, _, _) => t,
     }
-    let new_turn = TurnRecord({
-      tentacle: tentacle,
-      topic:    TopicHandle(0),
-      line:     voiceline,
-      span_at:  span_zero()
-    })
-    resume()
-      with prior_turn = Some(new_turn),
-           turns      = [new_turn] ++ turns
+    let new_turn =
+      TurnRecord({line: voiceline, span_at: span_zero(), tentacle: tentacle, topic: TopicHandle(0)})
+    resume() with prior_turn = Some(new_turn), turns = [new_turn] ++ turns
   },
-
-  // ─── Run ops (4) — MV.2.e.V (run_check) + MV.2.e.Run (rest) ──────
+  run_compile(fh) => // ─── Run ops (4) — MV.2.e.V (run_check) + MV.2.e.Run (rest) ──────
   // The outcomes are READ LIVE from the graph the pipeline wrote, never
   // fabricated. compile_source/check_source/audit run the pipeline for effect
   // (inference + verify write their results into the live ledger); the arm
@@ -1369,48 +1168,41 @@ handler mentl_voice_default
   // proves it could NOT discharge statically — into the outcome. Compilation
   // failed iff obligations remain; success carries the emitted path. No
   // CompileOk(Path("emitted")) literal, no empty-list-regardless.
-  run_compile(fh)       => {
+  {
     let text = file_text(fh)
     compile_source(text)
-    let debt = verify_debt()   // drift-audit: ignore — sequenced effectful read (verify-ledger stream-consumer), reused by match + diagnostics (a <| reuse), CLAUDE.md Anchor 6 exclusion
+    // drift-audit: ignore — sequenced effectful read (verify-ledger stream-consumer), reused by match + diagnostics (a <| reuse), CLAUDE.md Anchor 6 exclusion
+    let debt = verify_debt()
     match debt {
-      []        => resume(CompileOk(emitted_artifact_path(fh))),
-      [_, ..._] => resume(CompileFailed(diagnostics_from_debt(debt)))
+      [] => resume(CompileOk(emitted_artifact_path(fh))),
+      [_, ..._] => resume(CompileFailed(diagnostics_from_debt(debt))),
     }
   },
-
-  run_check(fh)         => {
+  run_check(fh) => {
     let text = file_text(fh)
     check_source(text)
-    let debt = verify_debt()   // drift-audit: ignore — sequenced effectful read (verify-ledger stream-consumer), reused as diagnostics + obligations (a <| reuse), CLAUDE.md Anchor 6 exclusion
+    // drift-audit: ignore — sequenced effectful read (verify-ledger stream-consumer), reused as diagnostics + obligations (a <| reuse), CLAUDE.md Anchor 6 exclusion
+    let debt = verify_debt()
     resume(CheckOutcome(diagnostics_from_debt(debt), debt))
   },
-
-  run_audit(fh)         => {
+  run_audit(fh) => {
     let text = file_text(fh)
     audit(text)
     resume(AuditReport(findings_from_debt(verify_debt())))
   },
-  // run_query — batch/CLI surface of consult. Same live forensic path:
+  run_query(question) => // run_query — batch/CLI surface of consult. Same live forensic path:
   // `perform ask` reads query.mn's QueryResult, query_result_to_answer
   // projects it. CLI invokes directly (per Interact §"Run ops"); the
   // only difference from consult is the invocation surface, so the body
   // is the same render-only projection over the one proven result.
-  run_query(question)   => {
+  {
     let answer = ask(question)
-    let new_turn = TurnRecord({
-      tentacle: tentacle_for_question(question),
-      topic:    TopicAsk(question),
-      line:     Silence,
-      span_at:  question_span(question)
-    })
-    resume(query_result_to_answer(answer))
-      with prior_turn = Some(new_turn),
-           turns      = [new_turn] ++ turns
+    let new_turn =
+      TurnRecord({line: Silence, span_at: question_span(question), tentacle: tentacle_for_question(question), topic: TopicAsk(question)})
+    resume(query_result_to_answer(answer)) with prior_turn = Some(new_turn), turns = [new_turn] ++ turns
   },
-
-  // ─── Session ops (4) — MV.2.e.Session ────────────────────────────
-
+  declare_intent(intent) => // ─── Session ops (4) — MV.2.e.Session ────────────────────────────
+  //
   /// declare_intent — append an Intent to the handler's intents list.
   /// Mints a fresh IntentId from next_intent_id counter; the new entry
   /// goes to the head (cons), so most-recent intents are first. The op
@@ -1421,44 +1213,37 @@ handler mentl_voice_default
   /// Per MV §2.7.1: intents are gradient/intent-gating substrate — the
   /// silence_predicate and Trace tentacle weigh declared intents
   /// against subsequent edits.
-  declare_intent(intent) => {
-    let new_id      = IntentId(next_intent_id)
+  {
+    let new_id = IntentId(next_intent_id)
     let new_intents = [(new_id, intent)] ++ intents
-    resume()
-      with intents        = new_intents,
-           next_intent_id = next_intent_id + 1
+    resume() with intents = new_intents, next_intent_id = next_intent_id + 1
   },
-
-  /// retract_intent — remove the entry whose IntentId matches. If no
+  retract_intent(id) => /// retract_intent — remove the entry whose IntentId matches. If no
   /// entry matches, intents stays unchanged (idempotent retract is the
   /// honest semantics — caller may have already retracted, or used a
   /// stale id from history).
-  retract_intent(id) => {
+  {
     let new_intents = intents_without(intents, id)
-    resume()
-      with intents = new_intents
+    resume() with intents = new_intents
   },
-
-  /// history — return the last n turn records. If n exceeds the actual
+  history(n) => /// history — return the last n turn records. If n exceeds the actual
   /// history length, return all of history. The list is in
   /// most-recent-first order (cons-pattern; latest TurnRecord at head).
   ///
   /// Per MV §2.7.6: TurnRecord captures one turn's tentacle / topic /
   /// VoiceLine / span; surfaces use this for observation-delta
   /// reasoning (silence_predicate's prior_turn input is the head).
-  history(n) => {
+  {
     let h_len = len(turns)
-    if n >= h_len { resume(turns) }
-    else          { resume(slice(turns, h_len - n, h_len)) }
+    if n >= h_len { resume(turns) } else { resume(slice(turns, h_len - n, h_len)) }
   },
-
-  /// cancel_pending — clear prior_turn so the next turn doesn't
+  cancel_pending() => /// cancel_pending — clear prior_turn so the next turn doesn't
   /// observation-delta against the current prior. Per Interact effect
   /// comment: "rolls back a tentative application." Pre-pending-edit
   /// substrate (MV.2.e.P), the only tentative state observable is
   /// prior_turn; resetting it gives surfaces a clean turn boundary
   /// when the user explicitly invalidates a Mentl-initiated proposal.
-  cancel_pending() => resume() with prior_turn = None
+  resume() with prior_turn = None,
 }
 
 // ─── MV.2.e.Filesystem — mentl_voice_filesystem handler (FX.B) ────────
@@ -1483,33 +1268,31 @@ handler mentl_voice_default
 // tree_list arm stubs to unimplemented_arm pending FX.A.dirent (which
 // adds fs_list_dir + dirent parsing) + FX.1 (which adds
 // fs_filestat_is_dir for TreeFile vs TreeDir projection).
-
+//
 // handles_table_lookup — find the (FileHandle, Path, String) entry
 // matching a target FileHandle. Returns Option<(FileHandle, Path,
 // String)>. Single-pass cons recursion; small N typical (handles
 // table holds open editor sessions, not arbitrary file enumerations).
-
-fn handles_table_lookup(table, target_handle) with Memory + Alloc = {
-  if len(table) == 0 { None }
-  else {
-    let head = last(table)
-    let rest = drop_last(table)
-    let (entry_handle, _, _) = head
-    if file_handle_eq(entry_handle, target_handle) {
+fn handles_table_lookup(table, target_handle) with Memory + Alloc = if len(table) == 0 {
+  None
+} else {
+  let head = last(table)
+  let rest = drop_last(table)
+  match head {
+    (entry_handle, _, _) => if file_handle_eq(entry_handle, target_handle) {
       Some(head)
     } else {
       handles_table_lookup(rest, target_handle)
-    }
+    },
   }
 }
 
 // file_handle_eq — FileHandle equality. Single-variant ADT wrapping Int;
 // destructure + integer compare. H6 implicit (single variant).
-
-fn file_handle_eq(a, b) with Pure = {
-  let FileHandle(ai) = a
-  let FileHandle(bi) = b
-  ai == bi
+fn file_handle_eq(a, b) with Pure = match a {
+  FileHandle(ai) => match b {
+    FileHandle(bi) => ai == bi,
+  },
 }
 
 // join_capability_labels — fold [String] into a comma-joined
@@ -1517,15 +1300,12 @@ fn file_handle_eq(a, b) with Pure = {
 // bounded by total label length. The capabilities_for_annotation
 // substrate produces lists of size ≤ 3 today, so a flat fold is
 // honest.
-
-fn join_capability_labels(labels) with Memory + Alloc = {
-  if len(labels) == 0 { "" }
-  else {
-    let head = last(labels)
-    let tail = drop_last(labels)
-    if len(tail) == 0 { head }
-    else { "{head}, {join_capability_labels(tail)}" }
-  }
+fn join_capability_labels(labels) with Memory + Alloc = if len(labels) == 0 {
+  ""
+} else {
+  let head = last(labels)
+  let tail = drop_last(labels)
+  if len(tail) == 0 { head } else { "{head}, {join_capability_labels(tail)}" }
 }
 
 // suggestion_site_from_reason — extract the source Span from an
@@ -1534,153 +1314,148 @@ fn join_capability_labels(labels) with Memory + Alloc = {
 // so the span is one peel away. Falls back to span_zero on
 // non-Located reasons (theoretical; suggestion_reason always
 // produces Located).
-
 fn suggestion_site_from_reason(reason) with Pure = match reason {
   Located(sp, _) => sp,
-  _              => span_zero()
+  _ => span_zero(),
 }
 
-handler mentl_voice_filesystem
-  with handles_table       = [],
-       next_handle_id      = 1,
-       project_root_cache  = Path("./") {
-
-  /// project_root — resolved project root Path. v1 returns
+handler mentl_voice_filesystem with handles_table = [], next_handle_id = 1, project_root_cache = Path("./") {
+  project_root() => /// project_root — resolved project root Path. v1 returns
   /// project_root_cache (Path("./") at session start). Refined
   /// resolution via Module-handle synthesis lands as FX.4 peer
   /// sub-handle when surfaces need absolute paths.
-  project_root()        => resume(project_root_cache),
-
-  /// tree_list — directory listing as [TreeEntry]. Stubbed
+  resume(project_root_cache),
+  tree_list(_path) => /// tree_list — directory listing as [TreeEntry]. Stubbed
   /// pending FX.A.dirent (fs_list_dir + dirent parsing) + FX.1
   /// (fs_filestat_is_dir for TreeFile vs TreeDir projection). Per
   /// drift mode 9: gap is named explicitly, not silently absorbed.
-  tree_list(_path)      => resume(unimplemented_arm("tree_list")),
-
-  /// open_file — fs_open the path; on success, snapshot text via
+  resume(unimplemented_arm("tree_list")),
+  open_file(path) => /// open_file — fs_open the path; on success, snapshot text via
   /// fs_read_file, mint fresh FileHandle, append to handles_table.
   /// On open failure, return invalid-handle sentinel FileHandle(0)
   /// (caller distinguishes via fs_exists if needed).
-  open_file(path)       => {
-    let Path(s) = path
-    let fd = fs_open(s)
-    if fd == 0 {
-      resume(FileHandle(0))
-    } else {
-      let text = fs_read_file(s)
-      let new_handle = FileHandle(next_handle_id)
-      let new_table = [(new_handle, path, text)] ++ handles_table
-      resume(new_handle)
-        with handles_table  = new_table,
-             next_handle_id = next_handle_id + 1
-    }
+  match path {
+    Path(s) => {
+      let fd = fs_open(s)
+      if fd == 0 {
+        resume(FileHandle(0))
+      } else {
+        let text = fs_read_file(s)
+        let new_handle = FileHandle(next_handle_id)
+        let new_table = [(new_handle, path, text)] ++ handles_table
+        resume(new_handle) with handles_table = new_table, next_handle_id = next_handle_id + 1
+      }
+    },
   },
-
-  /// save_file — write the cached text back to the file at the
+  save_file(fh) => /// save_file — write the cached text back to the file at the
   /// handle's recorded path. Invalid handle silently absorbs
   /// (idempotent save on stale handle is honest semantics).
-  save_file(fh)         => {
+  {
     let entry = handles_table_lookup(handles_table, fh)
     match entry {
-      None              => resume(),
-      Some(triple)      => {
-        let (_, path, text) = triple
-        let Path(s) = path
-        fs_write_file(s, text)
-        resume()
-      }
+      None => resume(),
+      Some(triple) => match triple {
+        (_, path, text) => match path {
+          Path(s) => {
+            fs_write_file(s, text)
+            resume()
+          },
+        },
+      },
     }
   },
-
-  /// create_file — write text to path, then open and register a
+  create_file(p, text) => /// create_file — write text to path, then open and register a
   /// FileHandle. On open failure, return invalid sentinel.
-  create_file(p, text)  => {
-    let Path(s) = p
-    fs_write_file(s, text)
-    let fd = fs_open(s)
-    if fd == 0 {
-      resume(FileHandle(0))
-    } else {
-      let new_handle = FileHandle(next_handle_id)
-      let new_table = [(new_handle, p, text)] ++ handles_table
-      resume(new_handle)
-        with handles_table  = new_table,
-             next_handle_id = next_handle_id + 1
-    }
+  match p {
+    Path(s) => {
+      fs_write_file(s, text)
+      let fd = fs_open(s)
+      if fd == 0 {
+        resume(FileHandle(0))
+      } else {
+        let new_handle = FileHandle(next_handle_id)
+        let new_table = [(new_handle, p, text)] ++ handles_table
+        resume(new_handle) with handles_table = new_table, next_handle_id = next_handle_id + 1
+      }
+    },
   },
-
-  /// rename_path — fs_rename old → new. Returns () regardless of
+  rename_path(old_p, new_p) => /// rename_path — fs_rename old → new. Returns () regardless of
   /// errno (Bool result absorbed; surface checks fs_exists if
   /// needed). The handles_table is NOT updated to reflect the rename
   /// today — open handles continue to reference old paths via their
   /// recorded Path. Path-update on rename is FX.6 peer sub-handle
   /// when LSP didRename plumbing matters.
-  rename_path(old_p, new_p) => {
-    let Path(o) = old_p
-    let Path(n) = new_p
-    fs_rename(o, n)
-    resume()
+  match old_p {
+    Path(o) => match new_p {
+      Path(n) => {
+        fs_rename(o, n)
+        resume()
+      },
+    },
   },
-
-  /// delete_path — fs_unlink the path. Result Bool absorbed; surface
+  delete_path(p) => /// delete_path — fs_unlink the path. Result Bool absorbed; surface
   /// checks fs_exists if needed. handles_table not pruned of stale
   /// entries (delete-while-open semantics owned by FX.5 close_file).
-  delete_path(p)        => {
-    let Path(s) = p
-    fs_unlink(s)
-    resume()
+  match p {
+    Path(s) => {
+      fs_unlink(s)
+      resume()
+    },
   },
-
-  /// file_text — return the cached text snapshot for an open
+  file_text(fh) => /// file_text — return the cached text snapshot for an open
   /// FileHandle. Invalid handle returns empty string (honest
   /// fallback; surface distinguishes via fs_exists if needed).
-  file_text(fh)         => {
+  {
     let entry = handles_table_lookup(handles_table, fh)
     match entry {
-      None              => resume(""),
-      Some(triple)      => {
-        let (_, _, text) = triple
-        resume(text)
-      }
+      None => resume(""),
+      Some(triple) => match triple {
+        (_, _, text) => resume(text),
+      },
     }
   },
-
-  edit(fh, patch)       => {
+  edit(fh, patch) => {
     let entry = handles_table_lookup(handles_table, fh)
     match entry {
-      None              =>
-        resume(EditRejected("E_InvalidFileHandle", span_zero())),
-      Some(triple)      => {
-        let (_, path, old_text) = triple
-        let Patch(span, replacement) = patch
-        let new_text = replace_span_in_text(old_text, span, replacement)
-        let Path(s) = path
-        fs_write_file(s, new_text)
-        let new_table = update_file_text(handles_table, fh, path, new_text)
-        driver_check(path_to_module_name(s))
-        resume(EditAccepted(fh))
-          with handles_table = new_table
-      }
+      None => resume(EditRejected("E_InvalidFileHandle", span_zero())),
+      Some(triple) => match triple {
+        (_, path, old_text) => match patch {
+          Patch(span, replacement) => {
+            let new_text = replace_span_in_text(old_text, span, replacement)
+            match path {
+              Path(s) => {
+                fs_write_file(s, new_text)
+                let new_table = update_file_text(handles_table, fh, path, new_text)
+                driver_check(path_to_module_name(s))
+                resume(EditAccepted(fh)) with handles_table = new_table
+              },
+            }
+          },
+        },
+      },
     }
-  }
+  },
 }
 
 fn replace_span_in_text(ref source, span, ref replacement) with Memory + Alloc = {
   let n = byte_len(source)
-  let Span(sl, sc, el, ec) = span
-  let start_pos = byte_offset_at(source, sl, sc, 0, 1, 1, n)
-  let end_pos = byte_offset_at(source, el, ec, 0, 1, 1, n)
-  "{str_slice(source, 0, start_pos)}{replacement}{str_slice(source, end_pos, n)}"
+  match span {
+    Span(sl, sc, el, ec) => {
+      let start_pos = byte_offset_at(source, sl, sc, 0, 1, 1, n)
+      let end_pos = byte_offset_at(source, el, ec, 0, 1, 1, n)
+      "{str_slice(source, 0, start_pos)}{replacement}{str_slice(source, end_pos, n)}"
+    },
+  }
 }
 
-fn byte_offset_at(ref source, target_l, target_c, idx, line, col, n) with Memory = {
-  if line >= target_l && col >= target_c { idx }
-  else if idx >= n { n }
-  else if byte_at(source, idx) == 10 {
-    byte_offset_at(source, target_l, target_c, idx + 1, line + 1, 1, n)
-  } else {
-    byte_offset_at(source, target_l, target_c, idx + 1, line, col + 1, n)
-  }
+fn byte_offset_at(ref source, target_l, target_c, idx, line, col, n) with Memory = if line >= target_l && col >= target_c {
+  idx
+} else if idx >= n {
+  n
+} else if byte_at(source, idx) == 10 {
+  byte_offset_at(source, target_l, target_c, idx + 1, line + 1, 1, n)
+} else {
+  byte_offset_at(source, target_l, target_c, idx + 1, line, col + 1, n)
 }
 
 fn update_file_text(ref table, fh, ref path, ref text) with Memory + Alloc = {
@@ -1689,16 +1464,16 @@ fn update_file_text(ref table, fh, ref path, ref text) with Memory + Alloc = {
   update_file_text_loop(table, fh, path, text, 0, n, buf)
 }
 
-fn update_file_text_loop(ref table, fh, ref path, ref text, i, n, own buf) with Memory + Alloc = {
-  if i >= n { buf }
-  else {
-    let entry = list_index(table, i)
-    let (h, p, t) = entry
-    let replacement = if file_handle_eq(h, fh) {
-      (h, path, text)
-    } else { entry }
-    let next_buf = list_set(buf, i, replacement)
-    update_file_text_loop(table, fh, path, text, i + 1, n, next_buf)
+fn update_file_text_loop(ref table, fh, ref path, ref text, i, n, own buf) with Memory + Alloc = if i >= n {
+  buf
+} else {
+  let entry = list_index(table, i)
+  match entry {
+    (h, p, t) => {
+      let replacement = if file_handle_eq(h, fh) { (h, path, text) } else { entry }
+      let next_buf = list_set(buf, i, replacement)
+      update_file_text_loop(table, fh, path, text, i + 1, n, next_buf)
+    },
   }
 }
 
@@ -1707,8 +1482,12 @@ fn path_to_module_name(ref s) with Memory + Alloc = {
     str_slice(s, 4, byte_len(s))
   } else if starts_with(s, "lib/") {
     str_slice(s, 5, byte_len(s))
-  } else { s }
+  } else {
+    s
+  }
   if ends_with(stripped_prefix, ".mn") {
     str_slice(stripped_prefix, 0, byte_len(stripped_prefix) - 3)
-  } else { stripped_prefix }
+  } else {
+    stripped_prefix
+  }
 }

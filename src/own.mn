@@ -9,8 +9,8 @@
 // Explicit own is enforced by the Consume handler during inference. Unmarked
 // params are resolved after the body walk by the structural use-count pass, then
 // written back into the function type for lower/query to read live.
-
 import types
+
 import runtime/strings
 
 // affine_ledger — the Consume handler. Installed per-function body.
@@ -18,7 +18,7 @@ import runtime/strings
 // pinpointing). `with !Consume` on the handler would statically
 // prevent the arms from recursing through consume — the Boolean
 // algebra gate.
-
+//
 // State:
 //   used          — flat sorted set of consumed names (O(log N) membership)
 //   used_sites    — insertion-ordered [(name, span)] for first-use diagnosis
@@ -27,65 +27,51 @@ import runtime/strings
 //                   branch's captured delta; branch_exit pairwise-checks
 //                   and merges. Stack shape naturally supports nested
 //                   branches (e.g. (a >< b) >< c).
-
 handler catch_abort {
-  abort() => None
+  abort() => None,
 }
 
 handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved = [], borrow_depth = 0 {
-
-  // A borrow scope reads without moving — inside it consume is a no-op, so
+  borrow_enter() => // A borrow scope reads without moving — inside it consume is a no-op, so
   // an `own` value used in an `if` condition / `match` scrutinee stays
   // available in the arms. A depth counter, not a flag: nested borrows
   // (a field access inside a condition) each add one.
-  borrow_enter() => resume() with borrow_depth = borrow_depth + 1,
-  borrow_exit()  => resume() with borrow_depth = borrow_depth - 1,
-
-
-  // A function body opens a fresh consume scope; its close restores the
+  resume() with borrow_depth = borrow_depth + 1,
+  borrow_exit() => resume() with borrow_depth = borrow_depth - 1,
+  consume_enter_fn() => // A function body opens a fresh consume scope; its close restores the
   // parent's. The whole (used, used_sites, branches) triple is saved so a
   // nested fn decl inferred mid-branch cannot leak its consumes outward —
   // the enclosing frame comes back exactly as it was. Push/pop at the END
   // (§9 stack discipline): bounded by lexical fn-nesting depth, not a data
   // loop.
-  consume_enter_fn() =>
+  //
+  // drift-audit: ignore — bounded by lexical fn-nesting depth, not a data loop
+  resume() with fn_saved = fn_saved ++ [(used, used_sites, branches)], used = [], used_sites = [], branches = [],
+  consume_exit_fn() => if len(fn_saved) == 0 {
     resume()
-      with fn_saved = fn_saved ++ [(used, used_sites, branches)],   // drift-audit: ignore — bounded by lexical fn-nesting depth, not a data loop
-           used = [], used_sites = [], branches = [],
-
-  consume_exit_fn() => {
-    if len(fn_saved) == 0 { resume() }
-    else {
-      let (u, us, br) = last(fn_saved)
+  } else {
+    match last(fn_saved) {
+      (u, us, br) => resume() with used = u, used_sites = us, branches = br, fn_saved = drop_last(fn_saved),
+    }
+  },
+  consume(name, ownership, span) => match ownership {
+    Own => // Inside a borrow scope the value is READ, not moved — record nothing.
+    if borrow_depth > 0 {
       resume()
-        with used = u, used_sites = us, branches = br,
-             fn_saved = drop_last(fn_saved)
-    }
+    } else if set_contains(used, name) {
+      let first = find_first_span(used_sites, name)
+      report(EOwnershipViolation("'{name}' consumed twice (first at {show_span(first)})", span))
+      resume()
+    } else {
+      // `used` maintains sort invariant via set_insert — every read
+      // (set_contains above) is O(log N) without boundary normalization.
+      // `used_sites` keeps insertion order so find_first_span returns
+      // the actual first-use span (sorting it would lose temporal order).
+      resume() with used = set_insert(used, name), used_sites = [(name, span)] ++ used_sites
+    },
+    _ => resume(),
   },
-
-  consume(name, ownership, span) => {
-    match ownership {
-      Own =>
-        // Inside a borrow scope the value is READ, not moved — record nothing.
-        if borrow_depth > 0 { resume() }
-        else if set_contains(used, name) {
-          let first = find_first_span(used_sites, name)
-          report(EOwnershipViolation("'{name}' consumed twice (first at {show_span(first)})", span))
-          resume()
-        } else {
-          // `used` maintains sort invariant via set_insert — every read
-          // (set_contains above) is O(log N) without boundary normalization.
-          // `used_sites` keeps insertion order so find_first_span returns
-          // the actual first-use span (sorting it would lose temporal order).
-          resume()
-            with used = set_insert(used, name),
-                 used_sites = [(name, span)] ++ used_sites
-        },
-      _ => resume()
-    }
-  },
-
-  // branch_enter — snapshot the current `used` as the frame's base;
+  branch_enter(mode) => // branch_enter — snapshot the current `used` as the frame's base;
   // deltas list starts empty; the mode rides the frame so branch_exit
   // knows whether the arms run in parallel (collision) or as
   // alternatives (union). Nested branches push onto the stack — at the
@@ -94,66 +80,67 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
   // alternative's divider and exit operated on the ENCLOSING frame —
   // the measured break the hoist workarounds were passing around,
   // Hβ.infer.nested-alternative-branch-bracketing's true root).
-  branch_enter(mode) => {
-    resume()
-      with branches = branches ++ [(used, [], mode)]   // drift-audit: ignore — bounded by lexical branch-nesting depth, not a data loop
+  {
+    // drift-audit: ignore — bounded by lexical branch-nesting depth, not a data loop
+    resume() with branches = branches ++ [(used, [], mode)]
   },
-
-  // branch_divider — called between branches of `><` or between
+  branch_divider(_span) => // branch_divider — called between branches of `><` or between
   // non-last branches of `<|`. Captures the just-finished branch's
   // delta (names consumed in this branch, i.e. used \ base), appends
   // to the frame's deltas list, then resets `used` to base so the
   // next branch sees the original scope.
-  branch_divider(_span) => {
-    if len(branches) == 0 { resume() }
-    else {
-      let (base, deltas, mode) = last(branches)
-      let delta = set_diff(used, base)
+  {
+    if len(branches) == 0 {
       resume()
-        with used = base,
-             branches = drop_last(branches) ++ [(base, [delta] ++ deltas, mode)]   // drift-audit: ignore — bounded by lexical branch-nesting depth, not a data loop
+    } else {
+      match last(branches) {
+        (base, deltas, mode) => {
+          let delta = set_diff(used, base)
+          // drift-audit: ignore — bounded by lexical branch-nesting depth, not a data loop
+          resume() with used = base, branches = drop_last(branches) ++ [(base, [delta] ++ deltas, mode)]
+        },
+      }
     }
   },
-
-  // branch_exit — captures the last branch's delta, pairwise-checks
+  branch_exit(span) => // branch_exit — captures the last branch's delta, pairwise-checks
   // collisions against already-captured deltas (each collision is an
   // E_OwnershipViolation at the branch site), merges all deltas into
   // `used` as base ∪ union(deltas), pops the frame.
-  branch_exit(span) => {
-    if len(branches) == 0 { resume() }
-    else {
-      let (base, prior_deltas, mode) = last(branches)
-      let last_delta = set_diff(used, base)
-      let all_deltas = [last_delta] ++ prior_deltas
-      // Parallel arms both run, so a name in two deltas is consumed
-      // twice at runtime — a violation. Alternative arms run exactly
-      // one, so a name across deltas is one consume on the taken path:
-      // union it in, never a collision.
-      match mode {
-        BParallel    => report_branch_collisions(all_deltas, span),
-        BAlternative => ()
-      }
+  {
+    if len(branches) == 0 {
       resume()
-        with used = set_union(base, union_all_deltas(all_deltas)),
-             branches = drop_last(branches)
+    } else {
+      match last(branches) {
+        (base, prior_deltas, mode) => {
+          let last_delta = set_diff(used, base)
+          let all_deltas = [last_delta] ++ prior_deltas
+          // Parallel arms both run, so a name in two deltas is consumed
+          // twice at runtime — a violation. Alternative arms run exactly
+          // one, so a name across deltas is one consume on the taken path:
+          // union it in, never a collision.
+          match mode {
+            BParallel => report_branch_collisions(all_deltas, span),
+            BAlternative => (),
+          }
+          resume() with used = set_union(base, union_all_deltas(all_deltas)), branches = drop_last(branches)
+        },
+      }
     }
   },
-
-  // The branch-cursor triple (the fan, C1c-2 — the op decl carries the
+  consume_seed(names) => // The branch-cursor triple (the fan, C1c-2 — the op decl carries the
   // protocol). seed replaces the consumed-set whole: the branch's fresh
   // instance adopts the root's frozen view, its sites list stays empty
   // so the log is exactly the branch's own first-consumes.
-  consume_seed(names) => resume() with used = names,
+  resume() with used = names,
   consume_base() => resume(used),
-  consume_log() => resume(used_sites)
+  consume_log() => resume(used_sites),
 }
 
 // Flat-array union across all branch deltas. Every delta is already
 // a sorted set (maintained by set_insert during consume), so folding
 // set_union across them preserves the invariant.
-fn union_all_deltas(ref deltas) with !Mutate = {
+fn union_all_deltas(ref deltas) with !Mutate =
   fold([], (acc, delta) => set_union(acc, delta), deltas)
-}
 
 // Pairwise collision check across branch deltas. For each pair of
 // branch deltas (i < j), any name in their intersection was
@@ -164,12 +151,16 @@ fn union_all_deltas(ref deltas) with !Mutate = {
 // span — the site where the violation becomes observable.
 fn report_branch_collisions(ref deltas, ref span) with !Mutate = {
   let n = len(deltas)
-  each((i) => {
-    each((j) => {
-      let collisions = set_intersect(list_index(deltas, i), list_index(deltas, j))
-      report_each_collision(collisions, span)
-    }, range(i + 1, n))
-  }, range(0, n))
+  each(
+    (i) => each(
+      (j) => {
+        let collisions = set_intersect(list_index(deltas, i), list_index(deltas, j))
+        report_each_collision(collisions, span)
+      },
+      range(i + 1, n)
+    ),
+    range(0, n)
+  )
 }
 
 // Tofte-Talpin region escape tracker (I12). Installed per-function
@@ -189,7 +180,6 @@ fn report_branch_collisions(ref deltas, ref span) with !Mutate = {
 // fields — preventing inner-region pointers from escaping via the
 // composite.
 handler region_tracker with region_stack = [], next_region = 0, region_index = region_index_new() {
-
   region_enter(span) => {
     // Push at the END — every Mentl stack does (§9's wrong-end class: the
     // old front-push met last/drop_last readers, an enter-front/pop-bottom
@@ -197,24 +187,17 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
     // no-region/global sentinel every tag test reads, and the first live
     // region must never collide with it. Bounded by fn-nesting depth.
     let rid = next_region + 1
-    resume(rid)
-      with region_stack = region_stack ++ [Region(rid, span)],   // drift-audit: ignore — bounded by lexical fn-nesting depth, not a data loop
-           next_region = rid
+    // drift-audit: ignore — bounded by lexical fn-nesting depth, not a data loop
+    resume(rid) with region_stack = region_stack ++ [Region(rid, span)], next_region = rid
   },
-
-  region_exit(_rid) => {
-    if len(region_stack) == 0 { resume() }
-    else { resume() with region_stack = drop_last(region_stack) }
-  },
-
-  current_region() => {
-    if len(region_stack) == 0 { resume(0) }
-    else {
-      let Region(rid, _) = last(region_stack)
-      resume(rid)
+  region_exit(_rid) => if len(region_stack) == 0 { resume() } else { resume() with region_stack = drop_last(region_stack) },
+  current_region() => if len(region_stack) == 0 {
+    resume(0)
+  } else {
+    match last(region_stack) {
+      Region(rid, _) => resume(rid),
     }
   },
-
   tag_alloc(value_handle) => {
     // Stamp the value with the current-top region (or 0 = no
     // region active = global lifetime). A tag is the TUPLE
@@ -226,14 +209,22 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
     // region — the six false E_RegionEscape). Positional destructure
     // is provable with no type flow — the render_audit precedent. The
     // old handle field duplicated the bucket key and had zero readers.
-    let rid = if len(region_stack) == 0 { 0 }
-              else { let Region(r, _) = last(region_stack); r }
-    let install_span = if len(region_stack) == 0 { span_zero() }
-                       else { let Region(_, s) = last(region_stack); s }
-    resume()
-      with region_index = region_index_add(region_index, value_handle, (install_span, rid))
+    let rid = if len(region_stack) == 0 {
+      0
+    } else {
+      match last(region_stack) {
+        Region(r, _) => r,
+      }
+    }
+    let install_span = if len(region_stack) == 0 {
+      span_zero()
+    } else {
+      match last(region_stack) {
+        Region(_, s) => s,
+      }
+    }
+    resume() with region_index = region_index_add(region_index, value_handle, (install_span, rid))
   },
-
   tag_alloc_join(value_handle, field_handles) => {
     // H4.1: composite values (record / variant with fields) take
     // the DEEPEST (innermost = largest region_id) region across
@@ -242,15 +233,23 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
     // escaping the composite to outer scope would orphan the
     // inner-region pointer field. The escape check at fn return
     // uses this max-region tag.
-    let cur_rid = if len(region_stack) == 0 { 0 }
-                  else { let Region(r, _) = last(region_stack); r }
-    let install_span = if len(region_stack) == 0 { span_zero() }
-                       else { let Region(_, s) = last(region_stack); s }
+    let cur_rid = if len(region_stack) == 0 {
+      0
+    } else {
+      match last(region_stack) {
+        Region(r, _) => r,
+      }
+    }
+    let install_span = if len(region_stack) == 0 {
+      span_zero()
+    } else {
+      match last(region_stack) {
+        Region(_, s) => s,
+      }
+    }
     let joined = join_field_regions(region_index, field_handles, cur_rid)
-    resume()
-      with region_index = region_index_add(region_index, value_handle, (install_span, joined))
+    resume() with region_index = region_index_add(region_index, value_handle, (install_span, joined))
   },
-
   check_escape(value_handle, escape_span) => {
     // The fn-return read, three verdicts (regions are LIVE — infer_fn
     // brackets every fn body in its own region, §5.O layer 3):
@@ -266,27 +265,41 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
     let entry = lookup_tag(region_index, value_handle)
     match entry {
       None => resume(),
-      Some(tag) => {
-        let (install_span, region_id) = tag
-        let depth = len(region_stack)
-        let top_rid = if depth == 0 { 0 }
-                      else { let Region(r, _) = last(region_stack); r }
-        if region_id == 0 {
-          resume()
-        } else if region_id == top_rid {
-          let parent = if depth < 2 { 0 }
-                       else { let Region(p, _) = list_index(region_stack, depth - 2); p }
-          resume()
-            with region_index = region_index_add(region_index, value_handle, (install_span, parent))
-        } else if region_on_stack(region_stack, region_id) {
-          resume()
-        } else {
-          report(ERegionEscape("value allocated in a region (opened at {show_span(install_span)}) that ended before this return — region {int_to_str(region_id)} no longer live", escape_span))   // drift-audit: ignore
-          resume()
-        }
-      }
+      Some(tag) => match tag {
+        (install_span, region_id) => {
+          let depth = len(region_stack)
+          let top_rid = if depth == 0 {
+            0
+          } else {
+            match last(region_stack) {
+              Region(r, _) => r,
+            }
+          }
+          if region_id == 0 {
+            resume()
+          } else if region_id == top_rid {
+            let parent = if depth < 2 {
+              0
+            } else {
+              match list_index(region_stack, depth - 2) {
+                Region(p, _) => p,
+              }
+            }
+            resume() with region_index = region_index_add(region_index, value_handle, (install_span, parent))
+          } else if region_on_stack(region_stack, region_id) {
+            resume()
+          } else {
+            // drift-audit: ignore
+            report(ERegionEscape(
+              "value allocated in a region (opened at {show_span(install_span)}) that ended before this return — region {int_to_str(region_id)} no longer live",
+              escape_span
+            ))
+            resume()
+          }
+        },
+      },
     }
-  }
+  },
 }
 
 // O(1) region lookup — the region ledger is a handle-indexed hash bucket
@@ -309,50 +322,57 @@ fn region_index_get(ref idx, handle) with Memory = {
   region_bucket_scan(list_index(idx, b), handle, 0)
 }
 
-fn region_bucket_scan(ref bucket, handle, i) with Memory = {
-  if i >= len(bucket) { None }
-  else {
-    let (h, tag) = list_index(bucket, i)
-    if h == handle { Some(tag) } else { region_bucket_scan(bucket, handle, i + 1) }
+fn region_bucket_scan(ref bucket, handle, i) with Memory = if i >= len(bucket) {
+  None
+} else {
+  match list_index(bucket, i) {
+    (h, tag) => if h == handle { Some(tag) } else { region_bucket_scan(bucket, handle, i + 1) },
   }
 }
 
-fn region_on_stack(ref stack, rid) with Memory + Alloc = {
-  any((r) => {
-    let Region(rid_on_stack, _) = r
-    rid_on_stack == rid
-  }, stack)
-}
+fn region_on_stack(ref stack, rid) with Memory + Alloc = any(
+  (r) => match r {
+    Region(rid_on_stack, _) => rid_on_stack == rid,
+  },
+  stack
+)
 
 // H4.1: join field regions with current region — returns the MAX
 // (innermost) region_id. Untagged fields (scalars, never alloc'd)
 // contribute region 0 (global lifetime, doesn't bound the join).
 // The result is the composite's pinning region.
-fn join_field_regions(ref tags, ref fields, current) with !Mutate = {
-  fold(current, (acc, fh) => {
+fn join_field_regions(ref tags, ref fields, current) with !Mutate = fold(
+  current,
+  (acc, fh) => {
     let field_rid = match lookup_tag(tags, fh) {
-      None     => 0,
-      Some(t)  => { let (_, rid) = t rid }
+      None => 0,
+      Some(t) => match t {
+        (_, rid) => rid,
+      },
     }
     if field_rid > acc { field_rid } else { acc }
-  }, fields)
-}
+  },
+  fields
+)
 
-fn report_each_collision(ref names, ref span) with Diagnostic + Memory + Alloc = {
-  each((name) => {
-    report(EOwnershipViolation("'{name}' consumed in two parallel branches", span))
-  }, names)
-}
+fn report_each_collision(ref names, ref span) with Diagnostic + Memory + Alloc = each(
+  (name) => report(EOwnershipViolation("'{name}' consumed in two parallel branches", span)),
+  names
+)
 
 fn find_first_span(ref sites, ref name: String) with Alloc + Memory = {
-  let hits = filter((entry) => {
-    let (entry_name, _) = entry
-    entry_name == name
-  }, sites)
-  if len(hits) == 0 { span_zero() }
-  else {
-    let (_, sp) = head(hits)
-    sp
+  let hits = filter(
+    (entry) => match entry {
+      (entry_name, _) => entry_name == name,
+    },
+    sites
+  )
+  if len(hits) == 0 {
+    span_zero()
+  } else {
+    match head(hits) {
+      (_, sp) => sp,
+    }
   }
 }
 
@@ -360,7 +380,7 @@ fn find_first_span(ref sites, ref name: String) with Alloc + Memory = {
 // construction (set_insert in consume), so set_contains runs at
 // O(log N) without boundary canonicalize. The local string_in_list
 // adapter is gone — call sites use set_contains directly.
-
+//
 // DELETED 2026-07-17 (Stage 1b): check_ref_escape / collect_ref_params /
 // walk_return_positions / walk_match_arms — a purely SYNTACTIC escape check with
 // ZERO hazard model. It fired when a param inference had graded `Ref` (use-count
@@ -385,101 +405,89 @@ fn find_first_span(ref sites, ref name: String) with Alloc + Memory = {
 // (the anti-pattern types.mn:288 warns against) instead of sharing resume_grade's
 // usage_seq/usage_join lattice. Worth doing as a Usage-lattice dedup, but NOT
 // this deletion, and it would not have cleared the compare-then-return subclass.
-
+//
 // Deduce `Own` vs `Ref` for `Unmarked`-marked parameters by counting
 // uses in the function body: 0 uses → `Unmarked` (mark stays),
 // 1 use → `Own` (consumed once — affine), ≥ 2 uses → `Ref`
 // (borrowed multiple times).
-fn infer_ownership(ref params, ref body) with !Mutate = {
-  map((p) => {
+fn infer_ownership(ref params, ref body) with !Mutate = map(
+  (p) => {
     let inferred = match param_authored(p) {
       Unmarked => classify_usage(param_name(p), body),
-      _        => param_authored(p)
+      _ => param_authored(p),
     }
     // Only the resolved-ownership slot is written; type, name, authored
     // marker, and default travel unchanged BY CONSTRUCTION via the updater
     // (Carried-Truth — dropping the default would lose the param's `= expr`
     // fallback at every call site; param_with_resolved cannot drop it).
     param_with_resolved(p, inferred)
-  }, list_to_flat(params))
-}
+  },
+  list_to_flat(params)
+)
 
 fn classify_usage(ref name, ref body) with !Mutate = {
   let count = count_uses(name, body)
-  if count == 0      { Unmarked }
-  else if count == 1 { Own }
-  else               { Ref }
+  if count == 0 { Unmarked } else if count == 1 { Own } else { Ref }
 }
 
-fn count_uses(ref name: String, ref node) with !Mutate = {
-  let N(body, _, _) = node
-  match body {
-    NExpr(VarRef(n)) =>
-      if n == name { 1 } else { 0 },
-    NExpr(CallExpr(f, args)) =>
-      count_uses(name, f) + count_uses_list(name, args),
-    NExpr(BinOpExpr(_, l, r)) =>
-      count_uses(name, l) + count_uses(name, r),
-    NExpr(UnaryOpExpr(_, inner)) =>
-      count_uses(name, inner),
-    NExpr(IfExpr(c, t, e)) =>
-      count_uses(name, c) + count_uses(name, t) + count_uses(name, e),
-    NExpr(BlockExpr(stmts, final_e)) =>
-      count_uses_list(name, stmts) + count_uses(name, final_e),
-    NExpr(LambdaExpr(_, lb)) =>
-      count_uses(name, lb),
-    NExpr(PipeExpr(_, l, r)) =>
-      count_uses(name, l) + count_uses(name, r),
-    NExpr(MatchExpr(s, arms)) =>
-      count_uses(name, s) + count_match_arms(name, arms),
-    NExpr(MakeListExpr(elems))  => count_uses_list(name, elems),
+fn count_uses(ref name: String, ref node) with !Mutate = match node {
+  N(body, _, _) => match body {
+    NExpr(VarRef(n)) => if n == name { 1 } else { 0 },
+    NExpr(CallExpr(f, args)) => count_uses(name, f) + count_uses_list(name, args),
+    NExpr(BinOpExpr(_, l, r)) => count_uses(name, l) + count_uses(name, r),
+    NExpr(UnaryOpExpr(_, inner)) => count_uses(name, inner),
+    NExpr(IfExpr(c, t, e)) => count_uses(name, c) + count_uses(name, t) + count_uses(name, e),
+    NExpr(BlockExpr(stmts, final_e)) => count_uses_list(name, stmts) + count_uses(name, final_e),
+    NExpr(LambdaExpr(_, lb)) => count_uses(name, lb),
+    NExpr(PipeExpr(_, l, r)) => count_uses(name, l) + count_uses(name, r),
+    NExpr(MatchExpr(s, arms)) => count_uses(name, s) + count_match_arms(name, arms),
+    NExpr(MakeListExpr(elems)) => count_uses_list(name, elems),
     NExpr(MakeTupleExpr(elems)) => count_uses_list(name, elems),
     NExpr(MakeStringExpr(fragments)) => count_uses_list(name, fragments),
-    NExpr(IndexExpr(receiver, index)) =>
-      count_uses(name, receiver) + count_uses(name, index),
+    NExpr(IndexExpr(receiver, index)) => count_uses(name, receiver) + count_uses(name, index),
     NExpr(MakeRecordExpr(flds)) => count_uses_record_fields(name, flds),
-    NExpr(RecordUpdateExpr(base, flds)) =>
-      count_uses(name, base) + count_uses_record_fields(name, flds),
+    NExpr(RecordUpdateExpr(base, flds)) => count_uses(name, base) + count_uses_record_fields(name, flds),
     NExpr(NamedRecordExpr(_, flds)) => count_uses_record_fields(name, flds),
-    NExpr(FieldExpr(rec, _))    => count_uses(name, rec),
-
-    // H6: exhaustive. Remaining Expr variants hold no sub-exprs
+    NExpr(FieldExpr(rec, _)) => count_uses(name, rec),
+    NExpr(LitInt(_)) => // H6: exhaustive. Remaining Expr variants hold no sub-exprs
     // containing VarRefs that would count against this name
     // (literals, ResumeExpr is stubby, ExprPlaceholder is a hole).
     // NStmt / NPat / NHole contribute no variable references.
-    NExpr(LitInt(_))       => 0,
-    NExpr(LitFloat(_))     => 0,
-    NExpr(LitString(_))    => 0,
-    NExpr(LitBool(_))      => 0,
-    NExpr(LitUnit)         => 0,
+    0,
+    NExpr(LitFloat(_)) => 0,
+    NExpr(LitString(_)) => 0,
+    NExpr(LitBool(_)) => 0,
+    NExpr(LitUnit) => 0,
     NExpr(ResumeExpr(v, _)) => count_uses(name, v),
-    NExpr(LabeledArg(_, v)) => count_uses(name, v),  // the labeled value may ref name
+    NExpr(LabeledArg(_, v)) => // the labeled value may ref name
+    count_uses(name, v),
     NExpr(ExprPlaceholder) => 0,
     NStmt(_) => 0,
-    NPat(_)  => 0,
+    NPat(_) => 0,
     NHole(_) => 0,
-    // NModule's decls are top-level (never a sub-node inside a scanned fn
+    NModule(_) => // NModule's decls are top-level (never a sub-node inside a scanned fn
     // body) and NTypeAnn wraps a Ty, not an Expr — neither carries an
     // expr-level VarRef to count.
-    NModule(_) => 0,
-    NTypeAnn(_) => 0
-  }
+    0,
+    NTypeAnn(_) => 0,
+  },
 }
 
-fn count_uses_list(ref name, ref nodes) with !Mutate = {
+fn count_uses_list(ref name, ref nodes) with !Mutate =
   fold(0, (acc, node) => acc + count_uses(name, node), nodes)
-}
 
-fn count_uses_record_fields(ref name, ref flds) with !Mutate = {
-  fold(0, (acc, fld) => {
-    let (_, value) = fld
-    acc + count_uses(name, value)
-  }, flds)
-}
+fn count_uses_record_fields(ref name, ref flds) with !Mutate = fold(
+  0,
+  (acc, fld) => match fld {
+    (_, value) => acc + count_uses(name, value),
+  },
+  flds
+)
 
-fn count_match_arms(ref name, ref arms) with !Mutate = {
-  fold(0, (acc, arm) => {
-    let (_, body) = arm
-    acc + count_uses(name, body)
-  }, arms)
-}
+fn count_match_arms(ref name, ref arms) with !Mutate = fold(
+  0,
+  (acc, arm) => match arm {
+    (_, body) => acc + count_uses(name, body),
+  },
+  arms
+)

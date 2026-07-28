@@ -6,68 +6,53 @@
 // check() is an effect. The handler decides what happens.
 // Same test code → test handler (pass/fail) → benchmark handler
 // (timing) → property handler (random inputs).
-
+//
 // ─── The Test Effect ─────────────────────────────────────────
-
 effect Test {
-  check(condition: Bool, msg: String) -> ()
+  check(Bool, String)
   get_results() -> (Int, Int)
 }
 
 // ─── Convenience ─────────────────────────────────────────────
+fn expect_eq(actual, expected) =
+  check(actual == expected, "expected " ++ to_string(expected) ++ " got " ++ to_string(actual))
 
-fn expect_eq(actual, expected) = {
-  check(actual == expected,
-    "expected " ++ to_string(expected) ++ " got " ++ to_string(actual))
-}
+fn expect_ne(actual, expected) = check(actual != expected, "expected not " ++ to_string(expected))
 
-fn expect_ne(actual, expected) = {
-  check(actual != expected,
-    "expected not " ++ to_string(expected))
-}
+fn expect_true(value) = check(value, "expected true")
 
-fn expect_true(value) = {
-  check(value, "expected true")
-}
-
-fn expect_false(value) = {
-  check(!value, "expected false")
-}
+fn expect_false(value) = check(!value, "expected false")
 
 // ─── The per-test counter handlers ───────────────────────────
 // Testing IS a handler swap: the SAME test body performs `check`;
 // the installed counter decides pass/fail accounting and output.
 // `~> test_counter(name)` is the one install verb (SYNTAX §tee).
-
 handler test_counter(name) with counts = (0, 0) {
-  check(cond, msg) => {
-    let (passed, failed) = counts
-    if cond {
+  check(cond, msg) => match counts {
+    (passed, failed) => if cond {
       resume() with counts = (passed + 1, failed)
     } else {
       println("  FAIL [" ++ name ++ "]: " ++ msg)
       resume() with counts = (passed, failed + 1)
-    }
+    },
   },
   get_results() => resume(counts),
 }
 
 handler suite_counter with counts = (0, 0) {
-  check(cond, msg) => {
-    let (passed, failed) = counts
-    if cond {
+  check(cond, msg) => match counts {
+    (passed, failed) => if cond {
       println("  ✓ " ++ msg)
       resume() with counts = (passed + 1, failed)
     } else {
       println("  ✗ " ++ msg)
       resume() with counts = (passed, failed + 1)
-    }
+    },
   },
   get_results() => resume(counts),
 }
 
 // ─── run_tests: compact output ───────────────────────────────
-
 fn run_tests(tests) = {
   // Each test is independent — its assertion counts compose by fold-sum
   // and its failure messages have no order dependency; map's tail loop
@@ -77,47 +62,65 @@ fn run_tests(tests) = {
   // per-test output buffering rides peer Hβ.test.per-test-output-buffer
   // (a wat_to_string-style per-thread println buffer for a sequential
   // surface).
-  let results = map((test) => {
-    let (name, test_fn) = test
-    {
-      test_fn()
-      get_results()
-    } ~> test_counter(name)
-  }, tests)
-  let totals = fold((0, 0), (acc, r) => {
-    let (tp, tf) = acc
-    let (p, f) = r
-    (tp + p, tf + f)
-  }, results)
-  let (passed, failed) = totals
-  let total = passed + failed
-  if failed == 0 {
-    println("✓ " ++ to_string(total) ++ " passed")
-  } else {
-    println("✗ " ++ to_string(passed) ++ "/" ++ to_string(total) ++ " passed")
+  let results = map(
+    (test) => match test {
+      (name, test_fn) => {
+        test_fn()
+        get_results()
+      } ~> test_counter(name),
+    },
+    tests
+  )
+  let totals = fold(
+    (0, 0),
+    (acc, r) => match acc {
+      (tp, tf) => match r {
+        (p, f) => (tp + p, tf + f),
+      },
+    },
+    results
+  )
+  match totals {
+    (passed, failed) => {
+      let total = passed + failed
+      if failed == 0 {
+        println("✓ " ++ to_string(total) ++ " passed")
+      } else {
+        println("✗ " ++ to_string(passed) ++ "/" ++ to_string(total) ++ " passed")
+      }
+      totals
+    },
   }
-  totals
 }
 
 // ─── run_suite: verbose ✓/✗ per assertion ────────────────────
-
 fn run_suite(tests) = {
-  let totals = fold((0, 0), (acc, test) => {
-    let (name, test_fn) = test
-    println("── " ++ name ++ " ──")
-    let (p, f) = {
-      test_fn()
-      get_results()
-    } ~> suite_counter
-    let (tp, tf) = acc
-    (tp + p, tf + f)
-  }, tests)
-  let (passed, failed) = totals
-  let total = passed + failed
-  if failed == 0 {
-    println("✓ " ++ to_string(total) ++ " passed")
-  } else {
-    println("✗ " ++ to_string(passed) ++ "/" ++ to_string(total) ++ " passed")
+  let totals = fold(
+    (0, 0),
+    (acc, test) => match test {
+      (name, test_fn) => {
+        println("── " ++ name ++ " ──")
+        match {
+          test_fn()
+          get_results()
+        } ~> suite_counter {
+          (p, f) => match acc {
+            (tp, tf) => (tp + p, tf + f),
+          },
+        }
+      },
+    },
+    tests
+  )
+  match totals {
+    (passed, failed) => {
+      let total = passed + failed
+      if failed == 0 {
+        println("✓ " ++ to_string(total) ++ " passed")
+      } else {
+        println("✗ " ++ to_string(passed) ++ "/" ++ to_string(total) ++ " passed")
+      }
+      totals
+    },
   }
-  totals
 }

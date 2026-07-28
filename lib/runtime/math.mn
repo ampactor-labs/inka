@@ -24,7 +24,6 @@
 // reason it isn't this commit: strings.mn's formatting internals
 // consume the family throughout; the relocation is an orthogonal
 // dependency-graph move with no diagnostic payoff.
-
 import runtime/strings
 
 // Float parameters are annotated `: Float` throughout. This is a
@@ -38,15 +37,16 @@ import runtime/strings
 // infer. Named peer Hβ.emit.float-evidence-ft (PLAN §7): the gradient
 // propagating a param's repr from its use makes every `: Float` here
 // redundant and the annotations dissolve.
-
+//
 // ─── Constants — f64 literals at 17 significant digits ─────────────
+fn ln2() with Pure = 0.6931471805599453
 
-fn ln2()    with Pure = 0.6931471805599453
-fn pi()     with Pure = 3.141592653589793
+fn pi() with Pure = 3.141592653589793
+
 fn two_pi() -> Float with Pure = 6.283185307179586
 
 // ─── floor / pow2 ───────────────────────────────────────────────────
-
+//
 // float_to_int truncates toward zero; floor differs only for
 // negative non-integers.
 fn float_floor(f: Float) -> Float with Pure = {
@@ -54,29 +54,24 @@ fn float_floor(f: Float) -> Float with Pure = {
   if f < t { t - 1.0 } else { t }
 }
 
-fn float_pow2(k: Int) -> Float with Pure = {
-  if k == 0 { 1.0 }
-  else if k > 0 { 2.0 * float_pow2(k - 1) }
-  else { 1.0 / float_pow2(0 - k) }
-}
+fn float_pow2(k: Int) -> Float with Pure =
+  if k == 0 { 1.0 } else if k > 0 { 2.0 * float_pow2(k - 1) } else { 1.0 / float_pow2(0 - k) }
 
 // ─── exp — range-reduced Taylor ─────────────────────────────────────
 //
 // x = k·ln2 + r with r ∈ [0, ln2); exp(x) = 2^k · Σ rⁿ/n!.
 // 13 terms bound the series error below f64 epsilon on [0, ln2).
-
 fn exp(x: Float) -> Float with Pure = {
   let k = float_to_int(float_floor(x / ln2()))
   let r = x - float_of_int(k) * ln2()
   float_pow2(k) * exp_series(r, 1, 1.0, 1.0)
 }
 
-fn exp_series(r: Float, n: Int, term: Float, acc: Float) -> Float with Pure = {
-  if n > 13 { acc }
-  else {
-    let t = (term * r) / float_of_int(n)
-    exp_series(r, n + 1, t, acc + t)
-  }
+fn exp_series(r: Float, n: Int, term: Float, acc: Float) -> Float with Pure = if n > 13 {
+  acc
+} else {
+  let t = term * r / float_of_int(n)
+  exp_series(r, n + 1, t, acc + t)
 }
 
 // ─── log — normalize + atanh series ─────────────────────────────────
@@ -85,37 +80,31 @@ fn exp_series(r: Float, n: Int, term: Float, acc: Float) -> Float with Pure = {
 // t = (m-1)/(m+1) ∈ [0, 1/3] so nine odd terms reach f64 epsilon.
 // Non-positive input returns 0.0 — productive-under-error, same
 // guard discipline as float_div's zero case (strings.mn).
+fn log(x: Float) -> Float with Pure =
+  if x < 0.0 { 0.0 } else if x == 0.0 { 0.0 } else { log_normalized(x, 0) }
 
-fn log(x: Float) -> Float with Pure = {
-  if x < 0.0 { 0.0 }
-  else if x == 0.0 { 0.0 }
-  else { log_normalized(x, 0) }
-}
-
-fn log_normalized(m: Float, k: Int) -> Float with Pure = {
-  if m >= 2.0 { log_normalized(m / 2.0, k + 1) }
-  else if m < 1.0 { log_normalized(m * 2.0, k - 1) }
-  else {
-    let t = (m - 1.0) / (m + 1.0)
-    float_of_int(k) * ln2() + 2.0 * atanh_series(t * t, 1, t, t)
-  }
+fn log_normalized(m: Float, k: Int) -> Float with Pure = if m >= 2.0 {
+  log_normalized(m / 2.0, k + 1)
+} else if m < 1.0 {
+  log_normalized(m * 2.0, k - 1)
+} else {
+  let t = (m - 1.0) / (m + 1.0)
+  float_of_int(k) * ln2() + 2.0 * atanh_series(t * t, 1, t, t)
 }
 
 // atanh(t) = t + t³/3 + t⁵/5 + … ; term advances by t².
-fn atanh_series(t2: Float, n: Int, term: Float, acc: Float) -> Float with Pure = {
-  if n > 9 { acc }
-  else {
-    let next_term = term * t2
-    let odd = float_of_int(2 * n + 1)
-    atanh_series(t2, n + 1, next_term, acc + next_term / odd)
-  }
+fn atanh_series(t2: Float, n: Int, term: Float, acc: Float) -> Float with Pure = if n > 9 {
+  acc
+} else {
+  let next_term = term * t2
+  let odd = float_of_int(2 * n + 1)
+  atanh_series(t2, n + 1, next_term, acc + next_term / odd)
 }
 
 // ─── sin — range-reduced Taylor ─────────────────────────────────────
 //
 // Reduce to [-π, π), then x - x³/3! + x⁵/5! - …; eight alternating
 // terms bound the error below f64 epsilon on the reduced range.
-
 fn sin(x: Float) -> Float with Pure = {
   let r0 = x - two_pi() * float_floor(x / two_pi())
   let r = if r0 >= pi() { r0 - two_pi() } else { r0 }
@@ -123,13 +112,12 @@ fn sin(x: Float) -> Float with Pure = {
 }
 
 // term advances by -r² / ((2n)(2n+1)).
-fn sin_series(r2: Float, n: Int, term: Float, acc: Float) -> Float with Pure = {
-  if n > 8 { acc }
-  else {
-    let d = float_of_int(2 * n * (2 * n + 1))
-    let next_term = 0.0 - (term * r2) / d
-    sin_series(r2, n + 1, next_term, acc + next_term)
-  }
+fn sin_series(r2: Float, n: Int, term: Float, acc: Float) -> Float with Pure = if n > 8 {
+  acc
+} else {
+  let d = float_of_int(2 * n * (2 * n + 1))
+  let next_term = 0.0 - term * r2 / d
+  sin_series(r2, n + 1, next_term, acc + next_term)
 }
 
 // ─── tanh — via exp, saturating ─────────────────────────────────────
@@ -137,14 +125,13 @@ fn sin_series(r2: Float, n: Int, term: Float, acc: Float) -> Float with Pure = {
 // (e^{2x} - 1)/(e^{2x} + 1); magnitude past 20 saturates to ±1 (e^{40}
 // overflows the series' useful range while tanh is already 1.0
 // to f64 precision).
-
-fn tanh(x: Float) -> Float with Pure = {
-  if x >= 20.0 { 1.0 }
-  else if x < 0.0 - 20.0 { 0.0 - 1.0 }
-  else {
-    let e2 = exp(2.0 * x)
-    (e2 - 1.0) / (e2 + 1.0)
-  }
+fn tanh(x: Float) -> Float with Pure = if x >= 20.0 {
+  1.0
+} else if x < 0.0 - 20.0 {
+  0.0 - 1.0
+} else {
+  let e2 = exp(2.0 * x)
+  (e2 - 1.0) / (e2 + 1.0)
 }
 
 // ─── cos — the quarter-turn view of sin ─────────────────────────────
@@ -152,7 +139,6 @@ fn tanh(x: Float) -> Float with Pure = {
 // cos(x) = sin(x + π/2). The range reduction and eight-term alternating
 // series live in sin; cos reads the same wheel a quarter turn along, so
 // there is one trig series in the file, not two.
-
 fn cos(x: Float) -> Float with Pure = sin(x + pi() / 2.0)
 
 // ─── sqrt — range-reduced Newton-Raphson ────────────────────────────
@@ -169,24 +155,20 @@ fn cos(x: Float) -> Float with Pure = sin(x + pi() / 2.0)
 // f64.sqrt), the same arm float_of_int/float_to_int ride. Until that
 // arm lands, the series is the substrate-honest floor — correct on every
 // f64, never a stub.
-
-fn sqrt(x: Float) -> Float with Pure = {
-  if x <= 0.0 { 0.0 }
-  else { sqrt_reduce(x, 0) }
-}
+fn sqrt(x: Float) -> Float with Pure = if x <= 0.0 { 0.0 } else { sqrt_reduce(x, 0) }
 
 // Fold m into [1, 4) by factors of four, tracking the halved exponent k.
-fn sqrt_reduce(m: Float, k: Int) -> Float with Pure = {
-  if m >= 4.0 { sqrt_reduce(m / 4.0, k + 1) }
-  else if m < 1.0 { sqrt_reduce(m * 4.0, k - 1) }
-  else { float_pow2(k) * sqrt_newton(m, 8, 1.0 + m / 4.0) }
+fn sqrt_reduce(m: Float, k: Int) -> Float with Pure = if m >= 4.0 {
+  sqrt_reduce(m / 4.0, k + 1)
+} else if m < 1.0 {
+  sqrt_reduce(m * 4.0, k - 1)
+} else {
+  float_pow2(k) * sqrt_newton(m, 8, 1.0 + m / 4.0)
 }
 
 // Newton on √m for m ∈ [1, 4): yₙ₊₁ = (yₙ + m/yₙ)/2.
-fn sqrt_newton(m: Float, n: Int, y: Float) -> Float with Pure = {
-  if n <= 0 { y }
-  else { sqrt_newton(m, n - 1, (y + m / y) / 2.0) }
-}
+fn sqrt_newton(m: Float, n: Int, y: Float) -> Float with Pure =
+  if n <= 0 { y } else { sqrt_newton(m, n - 1, (y + m / y) / 2.0) }
 
 // ─── atan / atan2 — half-angle-reduced arctangent ───────────────────
 //
@@ -195,38 +177,31 @@ fn sqrt_newton(m: Float, n: Int, y: Float) -> Float with Pure = {
 // atan(x) = 2·atan(x / (1 + √(1+x²))) shrinks the argument below 0.42 —
 // the plain series crawls near x = 1 (π/4 needs thousands of terms), so
 // the reduction is what makes twelve odd terms reach f64 epsilon.
-
-fn atan(x: Float) -> Float with Pure = {
-  if x < 0.0 { 0.0 - atan(0.0 - x) }
-  else if x > 1.0 { pi() / 2.0 - atan(1.0 / x) }
-  else {
-    let r = x / (1.0 + sqrt(1.0 + x * x))
-    2.0 * atan_series(r * r, 1, r, r)
-  }
+fn atan(x: Float) -> Float with Pure = if x < 0.0 {
+  0.0 - atan(0.0 - x)
+} else if x > 1.0 {
+  pi() / 2.0 - atan(1.0 / x)
+} else {
+  let r = x / (1.0 + sqrt(1.0 + x * x))
+  2.0 * atan_series(r * r, 1, r, r)
 }
 
 // atan(r) = r − r³/3 + r⁵/5 − … ; term advances by −r².
-fn atan_series(r2: Float, n: Int, term: Float, acc: Float) -> Float with Pure = {
-  if n > 12 { acc }
-  else {
-    let next_term = 0.0 - term * r2
-    let odd = float_of_int(2 * n + 1)
-    atan_series(r2, n + 1, next_term, acc + next_term / odd)
-  }
+fn atan_series(r2: Float, n: Int, term: Float, acc: Float) -> Float with Pure = if n > 12 {
+  acc
+} else {
+  let next_term = 0.0 - term * r2
+  let odd = float_of_int(2 * n + 1)
+  atan_series(r2, n + 1, next_term, acc + next_term / odd)
 }
 
 // atan2 — full-quadrant angle of (x, y). The sign of x picks the branch;
 // the y sign resolves the ±π ambiguity on the negative-x half-plane and
 // the ±π/2 poles where x is zero. The (0, 0) degenerate returns 0.0.
-fn atan2(y: Float, x: Float) -> Float with Pure = {
-  if x > 0.0 { atan(y / x) }
-  else if x < 0.0 {
-    if y >= 0.0 { atan(y / x) + pi() }
-    else { atan(y / x) - pi() }
-  }
-  else {
-    if y > 0.0 { pi() / 2.0 }
-    else if y < 0.0 { 0.0 - pi() / 2.0 }
-    else { 0.0 }
-  }
+fn atan2(y: Float, x: Float) -> Float with Pure = if x > 0.0 {
+  atan(y / x)
+} else if x < 0.0 {
+  if y >= 0.0 { atan(y / x) + pi() } else { atan(y / x) - pi() }
+} else {
+  if y > 0.0 { pi() / 2.0 } else if y < 0.0 { 0.0 - pi() / 2.0 } else { 0.0 }
 }

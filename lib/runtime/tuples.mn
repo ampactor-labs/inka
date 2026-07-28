@@ -19,17 +19,14 @@
 // Named peer: Hβ.lower.tuple-as-product.
 //
 // Effects declared in std/compiler/types.mn — not re-declared here.
-
 import types
 
 // make_tuple — allocate `arity` 4-byte slots (uninitialized).
 // Callers fill slots immediately via tuple_set before the tuple escapes.
-fn make_tuple(arity) with Alloc = {
-  alloc(arity * 4)
-}
+fn make_tuple(arity) with Alloc = alloc(arity * 4)
 
 // Access
-
+//
 // tuple_set — store val into slot idx (0-indexed). Returns the tuple
 // pointer so calls can be chained:
 //   make_tuple(2) |> tuple_set(0, a) |> tuple_set(1, b)
@@ -39,6 +36,4 @@ fn tuple_set(t, idx, val) with Memory = {
 }
 
 // tuple_get — load the value at slot idx.
-fn tuple_get(t, idx) with Memory = {
-  load_i32(t + idx * 4)
-}
+fn tuple_get(t, idx) with Memory = load_i32(t + idx * 4)

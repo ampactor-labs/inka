@@ -1632,6 +1632,18 @@ for i in "${!compilers[@]}"; do
   else
     fail "ranker order (first survivor: $first_survivor)"
   fi
+  # ── the splice line carry ──────────────────────────────────────────
+  # A splice spanning newlines resumes the outer string scan at the TRUE
+  # line, so nodes after it keep truthful spans and the address resolves
+  # to the decl, never the module placeholder. Seen RED on the stale-line
+  # boot: the whole fixture module answered `placeholder`.
+  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT::." "$compiler" tests/frontier/mn-splice-line-carry.mn:12:31 >"$dir/splice-carry.out" 2>/dev/null
+  if grep -q 'Query' "$dir/splice-carry.out" && grep -q ': Int' "$dir/splice-carry.out" \
+     && ! grep -q 'placeholder' "$dir/splice-carry.out"; then
+    pass "splice line carry (post-string spans truthful; the address resolves)"
+  else
+    fail "splice line carry (see $dir/splice-carry.out)"
+  fi
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

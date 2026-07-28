@@ -4,15 +4,17 @@
 // fd_read / fd_write / fd_close already speak. Both the listener and its
 // connections are NONBLOCKING, so every wait is an honest poll_oneoff —
 // never a spin on EAGAIN (errno 6).
-
+//
 // poll_fd — block until fd is ready. tag 1 = readable, 2 = writable
 // (the preview1 subscription tags). One 48-byte subscription + one
 // 32-byte event, allocated per wait (the bump image never frees; a
 // serve loop's waits are droplets beside the compile's lake).
 fn poll_fd(fd, tag) with Memory + Alloc + WASI = {
   let sub = alloc(48)
-  store_i32(sub, 7)              // userdata lo (an arbitrary marker)
-  store_i32(sub + 4, 0)          // userdata hi
+  // userdata lo (an arbitrary marker)
+  store_i32(sub, 7)
+  // userdata hi
+  store_i32(sub + 4, 0)
   store_i8(sub + 8, tag)
   store_i32(sub + 16, fd)
   let ev = alloc(32)
@@ -27,8 +29,7 @@ fn sock_accept_blocking(listen_fd) with Memory + Alloc + WASI = {
   poll_fd(listen_fd, 1)
   let ro = alloc(4)
   let errno = sock_accept(listen_fd, 0, ro)
-  if errno == 0 { load_i32(ro) }
-  else { sock_accept_blocking(listen_fd) }
+  if errno == 0 { load_i32(ro) } else { sock_accept_blocking(listen_fd) }
 }
 
 // find_listener — the preopen table is positional (dirs first, then
@@ -38,14 +39,19 @@ fn sock_accept_blocking(listen_fd) with Memory + Alloc + WASI = {
 // -1 = no listener preopened (the caller reports and exits).
 fn find_listener() with Memory + Alloc + WASI = find_listener_from(3)
 
-fn find_listener_from(fd) with Memory + Alloc + WASI = {
-  if fd >= 8 { 0 - 1 }
-  else {
-    let ro = alloc(4)
-    let errno = sock_accept(fd, 0, ro)
-    if errno == 0 { fd_close(load_i32(ro)) fd }   // a real early connection: serve it next accept
-    else if errno == 6 { fd }
-    else { find_listener_from(fd + 1) }
+fn find_listener_from(fd) with Memory + Alloc + WASI = if fd >= 8 {
+  0 - 1
+} else {
+  let ro = alloc(4)
+  let errno = sock_accept(fd, 0, ro)
+  // a real early connection: serve it next accept
+  if errno == 0 {
+    fd_close(load_i32(ro))
+    fd
+  } else if errno == 6 {
+    fd
+  } else {
+    find_listener_from(fd + 1)
   }
 }
 
@@ -58,38 +64,33 @@ fn sock_read(fd, buf, cap) with Memory + Alloc + WASI = {
   store_i32(iov, buf)
   store_i32(iov + 4, cap)
   let errno = fd_read(fd, iov, 1, nread_ptr)
-  if errno == 0 { load_i32(nread_ptr) }
-  else if errno == 6 { sock_read(fd, buf, cap) }
-  else { 0 }
+  if errno == 0 { load_i32(nread_ptr) } else if errno == 6 { sock_read(fd, buf, cap) } else { 0 }
 }
 
 // sock_write_all — write the whole [ptr, ptr+len) region, looping on
 // partial writes (a socket buffer fills mid-stream on anything big) and
 // polling writable on EAGAIN. The write loop IS the contract; a single
 // fd_write on a 1.9MB wasm body silently truncates.
-fn sock_write_all(fd, ptr, len) with Memory + Alloc + WASI = {
-  if len <= 0 { () }
-  else {
-    let iov = alloc(8)
-    let nw_ptr = alloc(4)
-    store_i32(iov, ptr)
-    store_i32(iov + 4, len)
-    let errno = fd_write(fd, iov, 1, nw_ptr)
-    if errno == 0 {
-      let nw = load_i32(nw_ptr)
-      if nw <= 0 { () }
-      else { sock_write_all(fd, ptr + nw, len - nw) }
-    }
-    else if errno == 6 {
-      poll_fd(fd, 2)
-      sock_write_all(fd, ptr, len)
-    }
-    else { () }
+fn sock_write_all(fd, ptr, len) with Memory + Alloc + WASI = if len <= 0 {
+  ()
+} else {
+  let iov = alloc(8)
+  let nw_ptr = alloc(4)
+  store_i32(iov, ptr)
+  store_i32(iov + 4, len)
+  let errno = fd_write(fd, iov, 1, nw_ptr)
+  if errno == 0 {
+    let nw = load_i32(nw_ptr)
+    if nw <= 0 { () } else { sock_write_all(fd, ptr + nw, len - nw) }
+  } else if errno == 6 {
+    poll_fd(fd, 2)
+    sock_write_all(fd, ptr, len)
+  } else {
+    ()
   }
 }
 
 // sock_write_str — a Mentl string (any shape) onto the socket, whole.
 // str_payload is the materialization boundary: rope/slice flattens here.
-fn sock_write_str(fd, s) with Memory + Alloc + WASI = {
+fn sock_write_str(fd, s) with Memory + Alloc + WASI =
   sock_write_all(fd, str_payload(s), byte_len(s))
-}

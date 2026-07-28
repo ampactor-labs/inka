@@ -20,7 +20,6 @@
 // recursion) fall through to the ledger as before. The Arc F.1 swap
 // to verify_smt narrows the undecidable set further; the discharge
 // path stays identical.
-
 import types
 
 // Discharges the decidable subset compile-time; defers the rest to
@@ -31,21 +30,15 @@ import types
 // the swap targets the undecidable arm; the decidable arm here stays
 // load-bearing across the swap.
 handler verify_ledger with debt = [] {
-
-  verify(span, predicate, reason) =>
-    match predicate_decide(predicate) {
-      Some(true)  => resume(),
-      Some(false) => {
-        report_refinement_rejected(predicate, span, reason)
-        resume()
-      },
-      None        =>
-        resume()
-          with debt = [(span, predicate, reason)] ++ debt
+  verify(span, predicate, reason) => match predicate_decide(predicate) {
+    Some(true) => resume(),
+    Some(false) => {
+      report_refinement_rejected(predicate, span, reason)
+      resume()
     },
-
-  verify_debt() =>
-    resume(debt)
+    None => resume() with debt = [(span, predicate, reason)] ++ debt,
+  },
+  verify_debt() => resume(debt),
 }
 
 // Compile-time decidable discharge. Returns Some(true) when the predicate
@@ -64,15 +57,19 @@ fn predicate_decide(ref pred) with GraphRead = predicate_decide_at(pred, 0)
 // self_h is the value-node handle `self` resolves to (0 = no `self` in scope,
 // so `self` is undecidable). PWithSelf(sh, inner) rebinds it over inner.
 fn predicate_decide_at(ref pred, self_h) with GraphRead = match pred {
-  PTrue                => Some(true),
-  PCompare(op, l, r)   => compare_decide_at(op, l, r, self_h),
-  PAnd(a, b)           => and_decide(predicate_decide_at(a, self_h), predicate_decide_at(b, self_h)),
-  POr(a, b)            => or_decide(predicate_decide_at(a, self_h), predicate_decide_at(b, self_h)),
-  PNot(inner)          => not_decide(predicate_decide_at(inner, self_h)),
-  PBoolNode(_)         => None,        // a bool expr node — the SMT tier resolves it live
-  PPatternMatch(_, _)  => None,        // match-narrowing — the SMT tier evaluates
-  PFlowLe(a, b)        => Some(flow_le(a, b)),  // IFC: finite lattice, always decidable
-  PWithSelf(sh, inner) => predicate_decide_at(inner, sh)  // bind `self` = sh over inner
+  PTrue => Some(true),
+  PCompare(op, l, r) => compare_decide_at(op, l, r, self_h),
+  PAnd(a, b) => and_decide(predicate_decide_at(a, self_h), predicate_decide_at(b, self_h)),
+  POr(a, b) => or_decide(predicate_decide_at(a, self_h), predicate_decide_at(b, self_h)),
+  PNot(inner) => not_decide(predicate_decide_at(inner, self_h)),
+  PBoolNode(_) => // a bool expr node — the SMT tier resolves it live
+  None,
+  PPatternMatch(_, _) => // match-narrowing — the SMT tier evaluates
+  None,
+  PFlowLe(a, b) => // IFC: finite lattice, always decidable
+  Some(flow_le(a, b)),
+  PWithSelf(sh, inner) => // bind `self` = sh over inner
+  predicate_decide_at(inner, sh),
 }
 
 // A comparison decides iff BOTH operands reduce to ground constants under the
@@ -80,9 +77,9 @@ fn predicate_decide_at(ref pred, self_h) with GraphRead = match pred {
 fn compare_decide_at(op, lh, rh, self_h) with GraphRead = match node_const_at(lh, self_h) {
   Some(lv) => match node_const_at(rh, self_h) {
     Some(rv) => litval_compare(op, lv, rv),
-    None     => None
+    None => None,
   },
-  None => None
+  None => None,
 }
 
 // Resolve an operand HANDLE to a ground constant, reading the Expr LIVE from the
@@ -95,30 +92,27 @@ fn compare_decide_at(op, lh, rh, self_h) with GraphRead = match node_const_at(lh
 fn node_const(handle) with GraphRead = node_const_at(handle, 0)
 
 fn node_const_at(handle, self_h) with GraphRead = match graph_node_body(handle) {
-  NExpr(LitInt(n))    => Some(LVInt(n)),
-  NExpr(LitFloat(f))  => Some(LVFloat(f)),
+  NExpr(LitInt(n)) => Some(LVInt(n)),
+  NExpr(LitFloat(f)) => Some(LVFloat(f)),
   NExpr(LitString(s)) => Some(LVString(s)),
-  NExpr(LitBool(b))   => Some(LVBool(b)),
+  NExpr(LitBool(b)) => Some(LVBool(b)),
   NExpr(VarRef(name)) => resolve_self_operand(name, self_h),
-  NExpr(BinOpExpr(op, l, r)) => {
-    let N(_, _, lh) = l
-    let N(_, _, rh) = r
-    litval_arith_opt(op, node_const_at(lh, self_h), node_const_at(rh, self_h))
+  NExpr(BinOpExpr(op, l, r)) => match l {
+    N(_, _, lh) => match r {
+      N(_, _, rh) => litval_arith_opt(op, node_const_at(lh, self_h), node_const_at(rh, self_h)),
+    },
   },
-  NExpr(UnaryOpExpr(op, x)) => {
-    let N(_, _, xh) = x
-    litval_unary_opt(op, node_const_at(xh, self_h))
+  NExpr(UnaryOpExpr(op, x)) => match x {
+    N(_, _, xh) => litval_unary_opt(op, node_const_at(xh, self_h)),
   },
-  _                   => None
+  _ => None,
 }
 
 // `self` resolves to the bound value node (read as a ground constant); any other
 // free variable is genuinely non-constant. self_h == 0 means no `self` is in
 // scope — undecidable, never a chase of handle 0.
 fn resolve_self_operand(name: String, self_h) with GraphRead =
-  if name == "self" {
-    if self_h == 0 { None } else { node_const_at(self_h, 0) }
-  } else { None }
+  if name == "self" { if self_h == 0 { None } else { node_const_at(self_h, 0) } } else { None }
 
 // Bind the refinement's `self` to the value node being refined. A predicate's
 // operands are node HANDLES (types.mn Predicate) and `self` may sit NESTED inside
@@ -136,7 +130,7 @@ fn subst_self(pred, value_handle) with Pure = PWithSelf(value_handle, pred)
 // exists to refuse. Transparent aliases recurse; an unrefined target
 // admits by type alone.
 fn refinement_admits(ty, value_handle) with GraphRead = match ty {
-  // A candidate whose INFERRED type is the SAME refined alias is admitted
+  TAlias(aname, inner) => // A candidate whose INFERRED type is the SAME refined alias is admitted
   // by TYPED IDENTITY — which proves the callee's DECLARATION, never its
   // discharge. The layering is deliberate, each proof question at its one
   // home: the callee's return obligation lives in the ledger AT ITS decl
@@ -146,26 +140,26 @@ fn refinement_admits(ty, value_handle) with GraphRead = match ty {
   // refusal on remaining debt is R5's gate at the emit boundary. The synth
   // gate answers only "does this filling fit the target type" — it never
   // re-decides a proof another site owns.
-  TAlias(aname, inner) =>
-    if inferred_alias_name(value_handle) == aname { true }
-    else { refinement_admits(inner, value_handle) },
-  TRefined(base, pred) =>
-    refinement_admits(base, value_handle)
-      && (match predicate_decide(subst_self(pred, value_handle)) {
-            Some(decided) => decided,
-            None          => false
-          }),
-  _ => true
+  if inferred_alias_name(value_handle) == aname {
+    true
+  } else {
+    refinement_admits(inner, value_handle)
+  },
+  TRefined(base, pred) => refinement_admits(base, value_handle) && match predicate_decide(subst_self(pred, value_handle)) {
+    Some(decided) => decided,
+    None => false,
+  },
+  _ => true,
 }
 
 // The alias NAME of a value node's inferred type ("" when unaliased) —
 // read live through the chase after the candidate's infer pass.
-fn inferred_alias_name(value_handle) with GraphRead = {
-  let GNode(kind, _) = graph_chase(value_handle)
-  match kind {
+fn inferred_alias_name(value_handle) with GraphRead = match graph_chase(value_handle) {
+  GNode(kind, _) => match kind {
     NBound(TAlias(aname, _)) => aname,
-    _                        => ""   // drift-audit: ignore — "" IS the documented no-alias sentinel this projection's one caller compares against (an alias name is never empty)
-  }
+    _ => // drift-audit: ignore — "" IS the documented no-alias sentinel this projection's one caller compares against (an alias name is never empty)
+    "",
+  },
 }
 
 // Fold a comparison over two constant operand values.
@@ -173,39 +167,82 @@ fn litval_compare(ref op, ref a, ref b) with Pure = match op {
   BEq => litval_eq(a, b),
   BLt => litval_lt(a, b),
   BLe => litval_le(a, b),
-  _   => None
+  _ => None,
 }
 
 // Equality over constants. Same-kind compares; cross-kind is Some(false)
 // (different-kind constants are unequal — a stronger refusal than None).
 fn litval_eq(ref a, ref b) with Pure = match a {
-  LVInt(na)    => match b { LVInt(nb) => Some(na == nb), LVFloat(_) => Some(false), LVString(_) => Some(false), LVBool(_) => Some(false) },
-  LVFloat(fa)  => match b { LVInt(_) => Some(false), LVFloat(fb) => Some(fa == fb), LVString(_) => Some(false), LVBool(_) => Some(false) },
-  LVString(sa) => match b { LVInt(_) => Some(false), LVFloat(_) => Some(false), LVString(sb) => Some(sa == sb), LVBool(_) => Some(false) },
-  LVBool(ba)   => match b { LVInt(_) => Some(false), LVFloat(_) => Some(false), LVString(_) => Some(false), LVBool(bb) => Some(ba == bb) }
+  LVInt(na) => match b {
+    LVInt(nb) => Some(na == nb),
+    LVFloat(_) => Some(false),
+    LVString(_) => Some(false),
+    LVBool(_) => Some(false),
+  },
+  LVFloat(fa) => match b {
+    LVInt(_) => Some(false),
+    LVFloat(fb) => Some(fa == fb),
+    LVString(_) => Some(false),
+    LVBool(_) => Some(false),
+  },
+  LVString(sa) => match b {
+    LVInt(_) => Some(false),
+    LVFloat(_) => Some(false),
+    LVString(sb) => Some(sa == sb),
+    LVBool(_) => Some(false),
+  },
+  LVBool(ba) => match b {
+    LVInt(_) => Some(false),
+    LVFloat(_) => Some(false),
+    LVString(_) => Some(false),
+    LVBool(bb) => Some(ba == bb),
+  },
 }
 
 // Strict order over numeric constants; strings/bools carry no order
 // here (None — defer); cross-kind numeric is None.
 fn litval_lt(ref a, ref b) with Pure = match a {
-  LVInt(na)    => match b { LVInt(nb) => Some(na < nb), LVFloat(_) => None, LVString(_) => None, LVBool(_) => None },
-  LVFloat(fa)  => match b { LVInt(_) => None, LVFloat(fb) => Some(fa < fb), LVString(_) => None, LVBool(_) => None },
-  LVString(_)  => None,
-  LVBool(_)    => None
+  LVInt(na) => match b {
+    LVInt(nb) => Some(na < nb),
+    LVFloat(_) => None,
+    LVString(_) => None,
+    LVBool(_) => None,
+  },
+  LVFloat(fa) => match b {
+    LVInt(_) => None,
+    LVFloat(fb) => Some(fa < fb),
+    LVString(_) => None,
+    LVBool(_) => None,
+  },
+  LVString(_) => None,
+  LVBool(_) => None,
 }
 
 fn litval_le(ref a, ref b) with Pure = match a {
-  LVInt(na)    => match b { LVInt(nb) => Some(na <= nb), LVFloat(_) => None, LVString(_) => None, LVBool(_) => None },
-  LVFloat(fa)  => match b { LVInt(_) => None, LVFloat(fb) => Some(fa <= fb), LVString(_) => None, LVBool(_) => None },
-  LVString(_)  => None,
-  LVBool(_)    => None
+  LVInt(na) => match b {
+    LVInt(nb) => Some(na <= nb),
+    LVFloat(_) => None,
+    LVString(_) => None,
+    LVBool(_) => None,
+  },
+  LVFloat(fa) => match b {
+    LVInt(_) => None,
+    LVFloat(fb) => Some(fa <= fb),
+    LVString(_) => None,
+    LVBool(_) => None,
+  },
+  LVString(_) => None,
+  LVBool(_) => None,
 }
 
 // Fold an arithmetic BinOp over two OPTIONAL ground operands (the decidable
 // fragment); either None makes the fold None.
 fn litval_arith_opt(op, ref ea, ref eb) with Pure = match ea {
-  Some(a) => match eb { Some(b) => litval_arith(op, a, b), None => None },
-  None    => None
+  Some(a) => match eb {
+    Some(b) => litval_arith(op, a, b),
+    None => None,
+  },
+  None => None,
 }
 
 // Fold +,-,*,/,% over two ground operands. SAME-KIND only: Int op Int -> Int,
@@ -219,29 +256,33 @@ fn litval_arith_opt(op, ref ea, ref eb) with Pure = match ea {
 // compiler's own f64 ops (identical wasm IEEE-754 semantics; f64 `/ 0.0` is
 // inf/nan, not a trap). No float modulo; a comparison/logical op defers to None.
 fn litval_arith(ref op, ref a, ref b) with Pure = match a {
-  LVInt(na)    => match b {
+  LVInt(na) => match b {
     LVInt(nb) => match op {
       BAdd => Some(LVInt(na + nb)),
       BSub => Some(LVInt(na - nb)),
       BMul => Some(LVInt(na * nb)),
       BDiv => if nb == 0 { None } else { Some(LVInt(na / nb)) },
       BMod => if nb == 0 { None } else { Some(LVInt(na % nb)) },
-      _    => None
+      _ => None,
     },
-    LVFloat(_) => None, LVString(_) => None, LVBool(_) => None
+    LVFloat(_) => None,
+    LVString(_) => None,
+    LVBool(_) => None,
   },
-  LVFloat(fa)  => match b {
+  LVFloat(fa) => match b {
     LVFloat(fb) => match op {
       BAdd => Some(LVFloat(fa + fb)),
       BSub => Some(LVFloat(fa - fb)),
       BMul => Some(LVFloat(fa * fb)),
       BDiv => Some(LVFloat(fa / fb)),
-      _    => None
+      _ => None,
     },
-    LVInt(_) => None, LVString(_) => None, LVBool(_) => None
+    LVInt(_) => None,
+    LVString(_) => None,
+    LVBool(_) => None,
   },
-  LVString(_)  => None,
-  LVBool(_)    => None
+  LVString(_) => None,
+  LVBool(_) => None,
 }
 
 // Fold a unary op over an OPTIONAL ground operand. UNeg negates a numeric
@@ -249,12 +290,17 @@ fn litval_arith(ref op, ref a, ref b) with Pure = match a {
 // arithmetic fragment (defer to None).
 fn litval_unary_opt(op, ref e) with Pure = match e {
   Some(v) => litval_unary(op, v),
-  None    => None
+  None => None,
 }
 
 fn litval_unary(ref op, ref v) with Pure = match op {
-  UNeg => match v { LVInt(n) => Some(LVInt(0 - n)), LVFloat(f) => Some(LVFloat(0.0 - f)), LVString(_) => None, LVBool(_) => None },
-  UNot => None
+  UNeg => match v {
+    LVInt(n) => Some(LVInt(0 - n)),
+    LVFloat(f) => Some(LVFloat(0.0 - f)),
+    LVString(_) => None,
+    LVBool(_) => None,
+  },
+  UNot => None,
 }
 
 // Conjunction with three-valued short-circuit. Some(false) on either
@@ -264,36 +310,36 @@ fn litval_unary(ref op, ref v) with Pure = match op {
 // fully-decidable true.
 fn and_decide(ref ea, ref eb) with Pure = match ea {
   Some(false) => Some(false),
-  Some(true)  => match eb {
+  Some(true) => match eb {
     Some(false) => Some(false),
-    Some(true)  => Some(true),
-    None        => None
+    Some(true) => Some(true),
+    None => None,
   },
-  None        => match eb {
+  None => match eb {
     Some(false) => Some(false),
-    Some(true)  => None,
-    None        => None
-  }
+    Some(true) => None,
+    None => None,
+  },
 }
 
 fn or_decide(ref ea, ref eb) with Pure = match ea {
-  Some(true)  => Some(true),
+  Some(true) => Some(true),
   Some(false) => match eb {
-    Some(true)  => Some(true),
+    Some(true) => Some(true),
     Some(false) => Some(false),
-    None        => None
+    None => None,
   },
-  None        => match eb {
-    Some(true)  => Some(true),
+  None => match eb {
+    Some(true) => Some(true),
     Some(false) => None,
-    None        => None
-  }
+    None => None,
+  },
 }
 
 fn not_decide(ref e) with Pure = match e {
-  Some(true)  => Some(false),
+  Some(true) => Some(false),
   Some(false) => Some(true),
-  None        => None
+  None => None,
 }
 
 // Compile-time refusal at the construction site. The verifier proved
@@ -305,77 +351,64 @@ fn report_refinement_rejected(ref pred, ref span, ref reason) with !Mutate =
 
 // Emit a single diagnostic summarising pending verification debt.
 // Called at compile end by the driver. Zero debt → no diagnostic.
-fn report_verify_debt(debt) = {
-  if len(debt) == 0 { () }
-  else {
-    report(VPending(len(debt), span_zero()))
-  }
-}
+fn report_verify_debt(debt) =
+  if len(debt) == 0 { () } else { report(VPending(len(debt), span_zero())) }
 
 fn classify_predicate(pred) with Pure = match pred {
-  PTrue        => "trivial",
-  PNot(_)      => "negation",
-  PAnd(_, _)   => "conjunction",
-  POr(_, _)    => "disjunction",
+  PTrue => "trivial",
+  PNot(_) => "negation",
+  PAnd(_, _) => "conjunction",
+  POr(_, _) => "disjunction",
   PCompare(_, _, _) => "comparison",
   PBoolNode(_) => "graph-deferred",
   PPatternMatch(_, _) => "match-narrowing",
-  PFlowLe(_, _) => "ifc-flow",  // IFC: always decides at compile time via flow_le
-  PWithSelf(_, inner) => classify_predicate(inner)  // the binder classifies as its body
+  PFlowLe(_, _) => // IFC: always decides at compile time via flow_le
+  "ifc-flow",
+  PWithSelf(_, inner) => // the binder classifies as its body
+  classify_predicate(inner),
 }
 
-type SmtResult
-  = SmtSat(String)
-  | SmtUnsat
-  | SmtUnknown
+type SmtResult = SmtSat(String) | SmtUnsat | SmtUnknown
 
 effect SmtSolver {
   smt_solve(String) -> SmtResult
 }
 
 handler verify_smt with witnesses = [], debt = [] {
-
-  verify(span, predicate, reason) =>
-    match predicate_decide(predicate) {
-      Some(true)  => resume(),
-      Some(false) => {
-        report_refinement_rejected(predicate, span, reason)
-        resume()
-      },
-      None        =>
-        // Only OPEN predicates reach the solver (predicate_decide short-circuits
-        // ground ones above), so validity is the question — and validity is the
-        // NEGATION's unsatisfiability. Solving the predicate itself and reading
-        // SAT as discharge admits any predicate SOME assignment satisfies: the
-        // inverted-polarity hole. UNSAT(¬P) proves P for every assignment;
-        // SAT(¬P) hands back the violating assignment — a COUNTEREXAMPLE the
-        // cursor surfaces at the rejection, not proof-evidence.
-        match smt_solve(predicate_to_smt_lib(PNot(predicate))) {
-          SmtUnsat => resume(),
-          SmtSat(counterexample) => {
-            report_refinement_rejected(predicate, span, reason)
-            resume()
-              with witnesses = [(span, predicate, counterexample)] ++ witnesses
-          },
-          // SmtUnknown is a GENUINELY undischarged obligation — accrue it as
-          // pending debt (never silently resume, which would discharge an
-          // obligation the solver could not prove; the no-silent-fallback law
-          // at the proof gate). It lives in the SAME debt ledger verify_ledger
-          // keeps, so verify_debt projects it live.
-          SmtUnknown =>
-            resume()
-              with debt = [(span, predicate, reason)] ++ debt
-        }
+  verify(span, predicate, reason) => match predicate_decide(predicate) {
+    Some(true) => resume(),
+    Some(false) => {
+      report_refinement_rejected(predicate, span, reason)
+      resume()
     },
-
-  // verify_debt projects the SMT handler's residual LIVE (Carried-Truth — the
+    None => // Only OPEN predicates reach the solver (predicate_decide short-circuits
+    // ground ones above), so validity is the question — and validity is the
+    // NEGATION's unsatisfiability. Solving the predicate itself and reading
+    // SAT as discharge admits any predicate SOME assignment satisfies: the
+    // inverted-polarity hole. UNSAT(¬P) proves P for every assignment;
+    // SAT(¬P) hands back the violating assignment — a COUNTEREXAMPLE the
+    // cursor surfaces at the rejection, not proof-evidence.
+    match smt_solve(predicate_to_smt_lib(PNot(predicate))) {
+      SmtUnsat => resume(),
+      SmtSat(counterexample) => {
+        report_refinement_rejected(predicate, span, reason)
+        resume() with witnesses = [(span, predicate, counterexample)] ++ witnesses
+      },
+      SmtUnknown => // SmtUnknown is a GENUINELY undischarged obligation — accrue it as
+      // pending debt (never silently resume, which would discharge an
+      // obligation the solver could not prove; the no-silent-fallback law
+      // at the proof gate). It lives in the SAME debt ledger verify_ledger
+      // keeps, so verify_debt projects it live.
+      resume() with debt = [(span, predicate, reason)] ++ debt,
+    },
+  },
+  verify_debt() => // verify_debt projects the SMT handler's residual LIVE (Carried-Truth — the
   // witnesses + the unknown-debt are graph state the handler proved; reading
   // resume([]) fabricated an empty ledger). SmtSat counterexamples are the
   // violating assignments behind each rejection (mentl-why walks to the model);
   // SmtUnknown obligations are retained debt. Both flow back as the residual,
   // never dropped.
-  verify_debt() =>
-    resume(verify_residual(debt, witnesses))
+  resume(verify_residual(debt, witnesses)),
 }
 
 // The SMT handler's residual: undischarged debt PLUS the SAT-witness ledger
@@ -384,50 +417,48 @@ handler verify_smt with witnesses = [], debt = [] {
 // list, read live — the cursor's projection of what the solver established
 // and what it could not. (Surpasses Dafny/F*: the witness is a walkable Reason
 // edge, not a separate counterexample dump.)
-fn verify_residual(ref debt, ref witnesses) with Memory + Alloc = {
-  debt ++ map((w) => {
-    let (span, pred, model) = w
-    (span, pred, VerifyWitness(model))
-  }, witnesses)
-}
+fn verify_residual(ref debt, ref witnesses) with Memory + Alloc = debt ++ map(
+  (w) => match w {
+    (span, pred, model) => (span, pred, VerifyWitness(model)),
+  },
+  witnesses
+)
 
-fn predicate_to_smt_lib(ref pred) with Memory + Alloc + GraphRead + Diagnostic = {
+fn predicate_to_smt_lib(ref pred) with Memory + Alloc + GraphRead + Diagnostic =
   "(assert {predicate_to_smt(pred)})\n(check-sat)"
-}
 
 fn predicate_to_smt(ref pred) with GraphRead + Memory + Alloc + Diagnostic = match pred {
-  PTrue              => "true",
+  PTrue => "true",
   PCompare(op, l, r) => "({smt_cmp_op(op)} {handle_to_smt(l)} {handle_to_smt(r)})",
-  PAnd(a, b)         => smt_logop("and", a, b),
-  POr(a, b)          => smt_logop("or", a, b),
-  PNot(inner)        => "(not {predicate_to_smt(inner)})",
-  PBoolNode(n)       => handle_to_smt(n),
+  PAnd(a, b) => smt_logop("and", a, b),
+  POr(a, b) => smt_logop("or", a, b),
+  PNot(inner) => "(not {predicate_to_smt(inner)})",
+  PBoolNode(n) => handle_to_smt(n),
   PPatternMatch(_, n) => handle_to_smt(n),
-  PFlowLe(a, b)      => if flow_le(a, b) { "true" } else { "false" },  // finite lattice: literal
+  PFlowLe(a, b) => // finite lattice: literal
   // The self binder renders as its body — `self` stays symbolic in SMT-LIB
   // (the solver's declared variable), exactly the diagnostic's reading.
-  PWithSelf(_, inner) => predicate_to_smt(inner)
+  if flow_le(a, b) { "true" } else { "false" },
+  PWithSelf(_, inner) => predicate_to_smt(inner),
 }
 
 fn smt_cmp_op(ref op) with Pure = match op {
   BEq => "=",
   BLt => "<",
   BLe => "<=",
-  _   => "="
+  _ => "=",
 }
 
-fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc + Diagnostic = {
+fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc + Diagnostic =
   "({op} {predicate_to_smt(a)} {predicate_to_smt(b)})"
-}
 
 // ONE SMT-render projection, keyed on HANDLES throughout (Carried-Truth: the
 // predicate's operands ARE handles into the one graph; every operand — top-
 // level and nested call arg — is resolved via graph_node_body and rendered
 // uniformly, never a second node-destructure path). Follow the edge, read the
 // live node — the AST-in-graph fabric makes every sub-node a resolvable handle.
-fn handle_to_smt(handle) with GraphRead + Memory + Alloc + Diagnostic = {
+fn handle_to_smt(handle) with GraphRead + Memory + Alloc + Diagnostic =
   body_to_smt(graph_node_body(handle))
-}
 
 // Render a NodeBody as an SMT term. Every node-kind that can appear in a
 // refinement-predicate operand is enumerated; a genuinely non-encodable shape
@@ -437,64 +468,76 @@ fn handle_to_smt(handle) with GraphRead + Memory + Alloc + Diagnostic = {
 // the no-silent-fallback law, deleted not wrapped). A call's args are HANDLES
 // (the AST-in-graph fabric), mapped through handle_to_smt — no i/n index loop.
 fn body_to_smt(body) with GraphRead + Memory + Alloc + Diagnostic = match body {
-  NExpr(LitInt(n))    => int_to_str(n),
-  NExpr(LitFloat(f))  => float_to_str(f),
+  NExpr(LitInt(n)) => int_to_str(n),
+  NExpr(LitFloat(f)) => float_to_str(f),
   NExpr(LitString(s)) => "\"{s}\"",
-  NExpr(LitBool(b))   => if b { "true" } else { "false" },
+  NExpr(LitBool(b)) => if b { "true" } else { "false" },
   NExpr(VarRef(name)) => name,
   NExpr(CallExpr(callee, args)) => smt_call(callee, args),
   NExpr(BinOpExpr(op, l, r)) => smt_binop(op, l, r),
   NExpr(UnaryOpExpr(op, x)) => smt_unop(op, x),
-  _                   => {
+  _ => {
     report(EVerifyUnencodable(span_zero()))
     "false"
-  }
+  },
 }
 
 // A call renders as `(fname arg…)` with every arg resolved through its handle
 // (the operand-Node channel PCompare already uses); the fname is the callee's
 // name read live from its node body, or the unencodable sentinel if it is not a
 // bare name reference.
-fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc + Diagnostic = {
-  let N(cbody, _, _) = callee
-  let fname = match cbody {
-    NExpr(VarRef(n)) => n,
-    _                => {
-      report(EVerifyUnencodable(span_zero()))
-      "false"
+fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc + Diagnostic = match callee {
+  N(cbody, _, _) => {
+    let fname = match cbody {
+      NExpr(VarRef(n)) => n,
+      _ => {
+        report(EVerifyUnencodable(span_zero()))
+        "false"
+      },
     }
-  }
-  "({fname}{smt_arg_terms(args)})"
+    "({fname}{smt_arg_terms(args)})"
+  },
 }
 
 // Each arg is a handle — map through handle_to_smt and join (map/fold, never an
 // imperative i/n counter; Anchor 6).
-fn smt_arg_terms(ref args) with GraphRead + Memory + Alloc + Diagnostic =
-  fold("", (acc, arg) => {
-    let N(_, _, h) = arg
-    "{acc} {handle_to_smt(h)}"
-  }, args)
+fn smt_arg_terms(ref args) with GraphRead + Memory + Alloc + Diagnostic = fold(
+  "",
+  (acc, arg) => match arg {
+    N(_, _, h) => "{acc} {handle_to_smt(h)}",
+  },
+  args
+)
 
-fn smt_binop(ref op, ref l, ref r) with GraphRead + Memory + Alloc + Diagnostic = {
-  let N(_, _, lh) = l
-  let N(_, _, rh) = r
-  "({smt_binop_sym(op)} {handle_to_smt(lh)} {handle_to_smt(rh)})"
+fn smt_binop(ref op, ref l, ref r) with GraphRead + Memory + Alloc + Diagnostic = match l {
+  N(_, _, lh) => match r {
+    N(_, _, rh) => "({smt_binop_sym(op)} {handle_to_smt(lh)} {handle_to_smt(rh)})",
+  },
 }
 
-fn smt_unop(ref op, ref x) with GraphRead + Memory + Alloc + Diagnostic = {
-  let N(_, _, xh) = x
-  match op {
+fn smt_unop(ref op, ref x) with GraphRead + Memory + Alloc + Diagnostic = match x {
+  N(_, _, xh) => match op {
     UNot => "(not {handle_to_smt(xh)})",
-    UNeg => "(- {handle_to_smt(xh)})"
-  }
+    UNeg => "(- {handle_to_smt(xh)})",
+  },
 }
 
 // Every BinOp rendered to its SMT-LIB symbol — exhaustive over the ADT (no
 // `_ => "="` fabrication that would mis-render `%`/`*` as equality in a
 // predicate like `self % 2 == 0`).
 fn smt_binop_sym(ref op) with Pure = match op {
-  BAdd => "+", BSub => "-", BMul => "*", BDiv => "div", BMod => "mod",
-  BEq  => "=", BNe => "distinct", BLt => "<", BGt => ">", BLe => "<=", BGe => ">=",
-  BAnd => "and", BOr => "or",
-  BConcat => "str.++"
+  BAdd => "+",
+  BSub => "-",
+  BMul => "*",
+  BDiv => "div",
+  BMod => "mod",
+  BEq => "=",
+  BNe => "distinct",
+  BLt => "<",
+  BGt => ">",
+  BLe => "<=",
+  BGe => ">=",
+  BAnd => "and",
+  BOr => "or",
+  BConcat => "str.++",
 }

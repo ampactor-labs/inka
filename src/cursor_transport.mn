@@ -51,18 +51,28 @@
 //                           Web-WASM substrate is a separate handle
 //                           (Hμ.cursor.transport.web) for Tier 3 +
 //                           browser-WASM compile.
-
 import types
+
 import effects
+
 import cursor
+
 import mentl
+
 import voice
+
 import driver
+
 import query
+
 import verify
+
 import runtime/strings
+
 import runtime/io
+
 import oracle
+
 import egraph
 
 // ─── The Surface effect ─────────────────────────────────────────────
@@ -71,25 +81,22 @@ import egraph
 // CursorView for its target surface. The Surface effect is HOW the
 // medium speaks to the human — every IDE, LSP, terminal hover,
 // browser-WASM editor, vim plugin routes through here.
-
 effect Surface {
   /// Render the eight-aspect CursorView at the cursor's position.
   /// Called whenever CursorRead's argmax shifts (graph delta + caret
   /// change). Cadence is the transport's responsibility.
-  surface_render(Cursor, CursorView) -> ()
-
+  surface_render(Cursor, CursorView)
   /// Receive an action from the human — accept, defer, override,
   /// caret-move. The transport translates input events into Action
   /// values; the kernel reads them through the same effect.
   surface_action() -> Action
-
   /// Negotiate transport readiness (handshake; LSP-style for IDEs;
   /// no-op for terminal). Called once per session.
-  surface_handshake() -> ()
+  surface_handshake()
 }
 
 // ─── ADTs the transport reads + writes ──────────────────────────────
-
+//
 // What the human can do at a Cursor's surfaced proposal. The four
 // arms are exhaustive per Hμ-cursor.md §5.3:
 //
@@ -97,21 +104,19 @@ effect Surface {
 //   Defer  — skip; cursor advances to next argmax
 //   Override(span) — pin cursor to user-chosen position (`??`)
 //   CaretMove(span) — text-caret moved; argmax may shift
-
-type Action
-  = AccAccept
-  | AccDefer
-  | AccOverride(Span)
-  | AccCaretMove(Span)
+type Action = AccAccept | AccDefer | AccOverride(Span) | AccCaretMove(Span)
 
 // Cadence — when the transport surfaces Cursor updates.
 // Drift 8 closure: tagged ADT, not string flag.
-
 type Cadence
-  = CadRealtime                  // every keystroke
-  | CadDebounced(Int)            // ms idle pause threshold
-  | CadOnSave                    // explicit save events
-  | CadOnAsk                     // user invokes "what's next?"
+  // every keystroke
+  = CadRealtime
+  // ms idle pause threshold
+  | CadDebounced(Int)
+  // explicit save events
+  | CadOnSave
+  // user invokes "what's next?"
+  | CadOnAsk
 
 // Default cadence per Hμ-cursor.md §10.4: ~250ms idle-debounced.
 fn default_cadence() with Pure = CadDebounced(250)
@@ -120,25 +125,20 @@ fn default_cadence() with Pure = CadDebounced(250)
 //
 // Drift 5 + Drift 7 closure: caret + cursor + cadence + buffer fold
 // into ONE record. No parallel arrays of {names, spans, ...}.
-
 type TransportState
-  = TransportState({
-      caret:        Caret,             // user's text-attention
-      cursor:       Cursor,            // gradient argmax (cached read)
-      cadence:      Cadence,           // surfacing strategy
-      session_id:   Int,               // monotonically incrementing
-      last_render:  Reason              // why-chain of last surfaced view
-    })
+  = TransportState({cadence: Cadence, caret: Caret, cursor: Cursor, last_render: Reason, session_id: Int})
 
-fn transport_state_init(initial_caret) with Pure = {
-  TransportState({
-  caret:       initial_caret,
-  cursor:      Cursor(0, Inferred("session-init"), 0.0),
-  cadence:     default_cadence(),
-  session_id:  0,
-  last_render: Inferred("none")
-  })
-}
+// user's text-attention
+//
+// gradient argmax (cached read)
+//
+// surfacing strategy
+//
+// monotonically incrementing
+//
+// why-chain of last surfaced view
+fn transport_state_init(initial_caret) with Pure =
+  TransportState({cadence: default_cadence(), caret: initial_caret, cursor: Cursor(0, Inferred("session-init"), 0.0), last_render: Inferred("none"), session_id: 0})
 
 // ─── terminal_transport — text-mode rendering ───────────────────────
 //
@@ -146,24 +146,18 @@ fn transport_state_init(initial_caret) with Pure = {
 // text to fd 1 (stdout). Used by `mentl teach`, `mentl query`, and
 // terminal-only sessions. Eight-tentacle voice surfaces as labeled
 // blocks; cadence default = on-explicit-ask (CLI is interactive).
-
 handler terminal_transport with state = transport_state_init(Caret(0, Inferred("term-init"))) {
-
   surface_handshake() => {
     // Verb-neutral: terminal_transport serves teach, query, AND edit —
     // a handshake naming one verb lies on the other routes.
     print_string("Mentl — eight tentacles ready.\n")
     resume()
   },
-
   surface_render(cursor, view) => {
     print_string(render_cursor_block(cursor, view))
     resume() with state = state_with_render(state, cursor)
   },
-
-  surface_action() => {
-    resume(parse_action(read_stdin_line()))
-  }
+  surface_action() => resume(parse_action(read_stdin_line())),
 }
 
 // render_cursor_block — project the eight-aspect CursorView to its
@@ -171,28 +165,8 @@ handler terminal_transport with state = transport_state_init(Caret(0, Inferred("
 // labeled aspects into ONE string; the transport arm writes it at
 // the WASI boundary in one print_string. Any text-mode surface
 // (terminal, CI log, doc snapshot) reads the same projection.
-fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate + Intern = {
-  let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
-  "Mentl @ "
-    ++ show_handle_label(cursor)
-    ++ "\n────────────────────────────────────────────\n"
-    ++ "Query    │ "
-    ++ show_node_kind(query)
-    ++ "\nPropose  │ "
-    ++ show_proposals(propose)
-    ++ "\nTopology │ "
-    ++ show_pipe_context(topology)
-    ++ "\nRow      │ "
-    ++ show_effrow(row)
-    ++ "\nTrace    │ "
-    ++ show_ownership(trace)
-    ++ "\nVerify   │ "
-    ++ show_verify_count(verify)
-    ++ "\nTeach    │ "
-    ++ show_suggestion(teach)
-    ++ "\nWhy      │ "
-    ++ show_reason(why)
-    ++ "\n"
+fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate + Intern = match view {
+  CursorView(query, propose, topology, row, trace, verify, teach, why) => "Mentl @ " ++ show_handle_label(cursor) ++ "\n────────────────────────────────────────────\n" ++ "Query    │ " ++ show_node_kind(query) ++ "\nPropose  │ " ++ show_proposals(propose) ++ "\nTopology │ " ++ show_pipe_context(topology) ++ "\nRow      │ " ++ show_effrow(row) ++ "\nTrace    │ " ++ show_ownership(trace) ++ "\nVerify   │ " ++ show_verify_count(verify) ++ "\nTeach    │ " ++ show_suggestion(teach) ++ "\nWhy      │ " ++ show_reason(why) ++ "\n",
 }
 
 // ─── LSP / web / vim transports — peer frame-adapters ───────────────
@@ -218,7 +192,7 @@ fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate +
 // Their absence is the statement: the projection is one; only the wire is
 // per-host, and a wire is implemented at the host boundary, not fabricated
 // as dead Mentl that never installs.
-
+//
 // ─── The bus-compressor loop — `<~` at the human boundary ───────────
 //
 // Per Hμ-cursor.md §3.4 + ULTIMATE_MEDIUM.md §3.4: the kernel's
@@ -226,118 +200,92 @@ fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate +
 // model. The cursor-transport loop IS `<~` applied at the human-
 // medium boundary. Pipe verbs are visible on the page; the loop
 // is visible in the substrate.
-
+//
 // The edit session IS the `<~` feedback verb at the human-medium
 // boundary (SYNTAX.md §`<~`): one cycle's output state loops back as the
 // next cycle's input under the Surface iterate-class context. The DELETED
 // hand-rolled tail-recursion (cursor_loop calling itself per arm) was the
 // `<~` verb un-named — the exact drift the prime directive forbids. The
 // state threads through `<~ accumulate`; cursor_step is one cycle.
-
 fn cursor_session(initial_caret) with Surface + CursorRead + GraphRead + PatchWrite + Memory + Alloc = {
   surface_handshake()
-  transport_state_init(initial_caret)
-    |> cursor_step
-      <~ accumulate(transport_state_init(initial_caret))
+  transport_state_init(initial_caret) |> cursor_step <~ accumulate(transport_state_init(initial_caret))
 }
 
 // cursor_step — ONE feedback cycle: project the cursor + view, render,
 // read the human action, fold it into the next state. The `<~` closure
 // feeds this next state back as the cycle's input (no self-recursion —
 // the feedback verb carries the loop).
-fn cursor_step(state) with Surface + GraphRead + CursorRead + !Mutate + Memory + PatchWrite + Alloc = {
-  let TransportState(s) = state
-  // Compute the cursor: gradient argmax with caret bias.
-  let cursor = cursor_argmax(s.caret)
-  // Project the eight-aspect CursorView at the cursor's position.
-  let view = cursor_at(span_of_cursor(cursor))
-  // Render through the installed transport handler.
-  surface_render(cursor, view)
-  // Receive an action from the human, fold into the next state.
-  match surface_action() {
-    AccAccept => {
-      apply_suggestion(cursor, view)
-      state_advance(state, cursor)
-    },
-    AccDefer => state_advance(state, cursor),
-    AccOverride(span) => {
-      let pinned = cursor_pinned(handle_at_span(span))
-      state_with_caret(state, Caret(handle_at_span(span),
-                                    Inferred("?? override")))
-    },
-    AccCaretMove(span) =>
-      state_with_caret(state, Caret(handle_at_span(span),
-                                    Inferred("text-caret-move")))
-  }
+fn cursor_step(state) with Surface + GraphRead + CursorRead + !Mutate + Memory + PatchWrite + Alloc = match state {
+  TransportState(s) => {
+    // Compute the cursor: gradient argmax with caret bias.
+    let cursor = cursor_argmax(s.caret)
+    // Project the eight-aspect CursorView at the cursor's position.
+    let view = cursor_at(span_of_cursor(cursor))
+    // Render through the installed transport handler.
+    surface_render(cursor, view)
+    // Receive an action from the human, fold into the next state.
+    match surface_action() {
+      AccAccept => {
+        apply_suggestion(cursor, view)
+        state_advance(state, cursor)
+      },
+      AccDefer => state_advance(state, cursor),
+      AccOverride(span) => {
+        let pinned = cursor_pinned(handle_at_span(span))
+        state_with_caret(state, Caret(handle_at_span(span), Inferred("?? override")))
+      },
+      AccCaretMove(span) => state_with_caret(state, Caret(handle_at_span(span), Inferred("text-caret-move"))),
+    }
+  },
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
-
-fn state_advance(state, latest_cursor) with Pure = {
-  let TransportState(s) = state
-  let Cursor(_, reason, _) = latest_cursor
-  TransportState({
-    caret:       s.caret,
-    cursor:      latest_cursor,
-    cadence:     s.cadence,
-    session_id:  s.session_id + 1,
-    last_render: reason
-  })
+fn state_advance(state, latest_cursor) with Pure = match state {
+  TransportState(s) => match latest_cursor {
+    Cursor(_, reason, _) => TransportState({cadence: s.cadence, caret: s.caret, cursor: latest_cursor, last_render: reason, session_id: s.session_id + 1}),
+  },
 }
 
-fn state_with_render(state, cursor) with Pure = {
-  let TransportState(s) = state
-  let Cursor(_, reason, _) = cursor
-  TransportState({
-    caret:       s.caret,
-    cursor:      cursor,
-    cadence:     s.cadence,
-    session_id:  s.session_id,
-    last_render: reason
-  })
+fn state_with_render(state, cursor) with Pure = match state {
+  TransportState(s) => match cursor {
+    Cursor(_, reason, _) => TransportState({cadence: s.cadence, caret: s.caret, cursor: cursor, last_render: reason, session_id: s.session_id}),
+  },
 }
 
-fn state_with_caret(state, new_caret) with Pure = {
-  let TransportState(s) = state
-  TransportState({
-    caret:       new_caret,
-    cursor:      s.cursor,
-    cadence:     s.cadence,
-    session_id:  s.session_id + 1,
-    last_render: s.last_render
-  })
+fn state_with_caret(state, new_caret) with Pure = match state {
+  TransportState(s) => TransportState({cadence: s.cadence, caret: new_caret, cursor: s.cursor, last_render: s.last_render, session_id: s.session_id + 1}),
 }
 
-fn span_of_cursor(cursor) with GraphRead = {
-  let Cursor(handle, _, _) = cursor
-  span_of_handle(handle)
+fn span_of_cursor(cursor) with GraphRead = match cursor {
+  Cursor(handle, _, _) => span_of_handle(handle),
 }
 
 // handle_at_span() — see src/cursor.mn (canonical scan-based impl).
 // Substrate-honest peer Hβ.graph.handle-at-span-effect-op would
 // promote this to a handle-at-span op on GraphRead;
 // blocked on adding the op to graph.mn's effect declaration.
-
-fn apply_suggestion(cursor, view) with GraphRead + PatchWrite + Memory + !Mutate + Alloc = {
-  let Cursor(handle, _, _) = cursor
-  let CursorView(_, propose, _, _, _, _, teach, _) = view
-  // A hole accepts its PROPOSE survivor: exactly one proven candidate is
-  // the medium's answer. Two or more is the teaching TIE-BREAK — surface
-  // the tie, never guess between proven survivors (PLAN §5). Non-hole
-  // positions accept the teach annotation as before.
-  let Proposals(survivors, _rejected) = propose
-  if authored_hole(handle) && len(survivors) == 1 {
-    let (survivor, _reason) = head(survivors)
-    replace_span(parse_span_of(handle), render_candidate_source(survivor))
-  } else {
-    match teach {
-      None => (),
-      Some(suggestion) => {
-        let AnnotationSuggestion(_kind, ann_text, _unlocks, reason) = suggestion
-        apply_patch_at_cursor(span_of_reason(reason), ann_text)
-      }
-    }
-  }
+fn apply_suggestion(cursor, view) with GraphRead + PatchWrite + Memory + !Mutate + Alloc = match cursor {
+  Cursor(handle, _, _) => match view {
+    CursorView(_, propose, _, _, _, _, teach, _) => // A hole accepts its PROPOSE survivor: exactly one proven candidate is
+    // the medium's answer. Two or more is the teaching TIE-BREAK — surface
+    // the tie, never guess between proven survivors (PLAN §5). Non-hole
+    // positions accept the teach annotation as before.
+    match propose {
+      Proposals(survivors, _rejected) => if authored_hole(handle) && len(survivors) == 1 {
+        match head(survivors) {
+          (survivor, _reason) => replace_span(parse_span_of(handle), render_candidate_source(survivor)),
+        }
+      } else {
+        match teach {
+          None => (),
+          Some(suggestion) => match suggestion {
+            AnnotationSuggestion(_kind, ann_text, _unlocks, reason) => apply_patch_at_cursor(span_of_reason(reason), ann_text),
+          },
+        }
+      },
+    },
+  },
 }
 
 // A proven literal survivor renders as its source text. A non-constant
@@ -345,39 +293,32 @@ fn apply_suggestion(cursor, view) with GraphRead + PatchWrite + Memory + !Mutate
 // is the honest no-op, never a spliced fabrication; the general candidate
 // renderer is the formatter projection (Hβ.felt.candidate-render-is-format),
 // unreached while the enumerators seed literals.
-fn render_candidate_source(node) with GraphRead + Memory + !Mutate + Alloc = {
-  let N(body, _, h) = node
-  match body {
-    // An in-scope vocabulary call renders as its source form.
-    NExpr(CallExpr(callee, args)) =>
-      if len(args) == 0 { "{callee_var_name(callee)}()" } else { "??" },
-    _ => render_literal_source(h)
-  }
+fn render_candidate_source(node) with GraphRead + Memory + !Mutate + Alloc = match node {
+  N(body, _, h) => match body {
+    NExpr(CallExpr(callee, args)) => // An in-scope vocabulary call renders as its source form.
+    if len(args) == 0 { "{callee_var_name(callee)}()" } else { "??" },
+    _ => render_literal_source(h),
+  },
 }
 
-fn callee_var_name(callee) with Pure = {
-  let N(cb, _, _) = callee
-  match cb {
+fn callee_var_name(callee) with Pure = match callee {
+  N(cb, _, _) => match cb {
     NExpr(VarRef(name)) => name,
-    _                   => "??"
-  }
+    _ => "??",
+  },
 }
 
-fn render_literal_source(h) with GraphRead + Alloc + Memory + !Mutate = {
-  match node_const(h) {
-    Some(LVInt(n))    => int_to_str(n),
-    Some(LVFloat(f))  => float_to_str(f),
-    Some(LVString(lit)) => "\"{lit}\"",
-    Some(LVBool(b))   => if b { "true" } else { "false" },
-    None              => "??"
-  }
+fn render_literal_source(h) with GraphRead + Alloc + Memory + !Mutate = match node_const(h) {
+  Some(LVInt(n)) => int_to_str(n),
+  Some(LVFloat(f)) => float_to_str(f),
+  Some(LVString(lit)) => "\"{lit}\"",
+  Some(LVBool(b)) => if b { "true" } else { "false" },
+  None => "??",
 }
 
 // ─── Format / parse helpers per transport ──────────────────────────
-
-fn show_handle_label(cursor) with Memory + Alloc = {
-  let Cursor(handle, _, _) = cursor
-  "handle={int_to_str(handle)}"
+fn show_handle_label(cursor) with Memory + Alloc = match cursor {
+  Cursor(handle, _, _) => "handle={int_to_str(handle)}",
 }
 
 fn show_node_kind(kind) with Pure = match kind {
@@ -386,92 +327,89 @@ fn show_node_kind(kind) with Pure = match kind {
   NRowBound(_) => "row-bound",
   NRowFree(_) => "row-free",
   NRecordRowBound(_) => "record-row-bound",
-  NErrorHole(_) => "error-hole"
+  NErrorHole(_) => "error-hole",
 }
 
-fn show_proposals(props) with GraphRead + Alloc + Memory + !Mutate = {
-  let Proposals(survivors, rejected) = props
-  let survivors_block =
-    if len(survivors) == 0 { "(none)" }
-    else {
+fn show_proposals(props) with GraphRead + Alloc + Memory + !Mutate = match props {
+  Proposals(survivors, rejected) => {
+    let survivors_block = if len(survivors) == 0 {
+      "(none)"
+    } else {
       "{int_to_str(len(survivors))} candidate(s){str_concat_all(map(show_one_proposal, survivors))}"
     }
-  // The rejections TEACH: each row-refused name keeps its Why on the same
-  // projection (a pruned candidate the developer cannot see is a guess
-  // they cannot audit — PLAN §5).
-  if len(rejected) == 0 { survivors_block }
-  else {
-    "{survivors_block}{str_concat_all(map(show_one_rejection, rejected))}"
-  }
+    // The rejections TEACH: each row-refused name keeps its Why on the same
+    // projection (a pruned candidate the developer cannot see is a guess
+    // they cannot audit — PLAN §5).
+    if len(rejected) == 0 {
+      survivors_block
+    } else {
+      "{survivors_block}{str_concat_all(map(show_one_rejection, rejected))}"
+    }
+  },
 }
 
-fn show_one_rejection(pair) with GraphRead + !Mutate + Alloc + Memory + Intern = {
-  let (name, reason) = pair
-  " · rejected {name} — {show_reason(reason)}"
+// The pair pin is an Intent Boundary (spec_mangle's law): name's only
+// use is the splice, so unpinned it generalizes and the floor renders
+// the rejected candidate as a pointer numeral instead of its name.
+fn show_one_rejection(pair: (String, Reason)) with GraphRead + !Mutate + Alloc + Memory + Intern = match pair {
+  (name, reason) => " · rejected {name} — {show_reason(reason)}",
 }
 
 // Each survivor: its source text and its Reason — the pair the Synth
 // contract carries (the seed reason lives in the candidate record, not on
 // the node's mint placeholder).
-fn show_one_proposal(proposal) with GraphRead + Memory + !Mutate + Alloc + Intern = {
-  let (node, reason) = proposal
-  " · {render_candidate_source(node)} — {show_reason(reason)}"
+fn show_one_proposal(proposal) with GraphRead + Memory + !Mutate + Alloc + Intern = match proposal {
+  (node, reason) => " · {render_candidate_source(node)} — {show_reason(reason)}",
 }
 
 fn show_pipe_context(ctx) with Pure = match ctx {
   NoPipe => "(none)",
   InsidePipe(pk) => "inside {show_pipe_kind(pk)}",
   StartingPipe => "starts pipe",
-  EndingPipe => "ends pipe"
+  EndingPipe => "ends pipe",
 }
 
 fn show_verify_count(preds) with Alloc + Memory =
-  if len(preds) == 0 { "no obligations" }
-  else { "{int_to_str(len(preds))} pending" }
+  if len(preds) == 0 { "no obligations" } else { "{int_to_str(len(preds))} pending" }
 
 fn show_suggestion(opt) with Memory + Alloc = match opt {
   None => "(no next-step)",
-  Some(suggestion) => {
-    let AnnotationSuggestion(_, ann_text, unlocks, _) = suggestion
-    "add `{ann_text}` to unlock {int_to_str(len(unlocks))} capability(ies)"
-  }
+  Some(suggestion) => match suggestion {
+    AnnotationSuggestion(_, ann_text, unlocks, _) => "add `{ann_text}` to unlock {int_to_str(len(unlocks))} capability(ies)",
+  },
 }
 
 fn parse_action(line) with Pure =
-  if line == "y" { AccAccept }
-  else if line == "n" { AccDefer }
-  else { AccDefer }
+  if line == "y" { AccAccept } else if line == "n" { AccDefer } else { AccDefer }
 
 // ─── Patch — the apply-suggestion-to-file effect ────────────────────
 //
 // The Surface effect's terminal_transport projects the cursor; Patch is
 // how an Accept lands a suggestion into the source. One effect, one
 // handler (patch_to_file), composed in edit_run's chain.
-
 effect PatchWrite {
-  patch_set_target(String) -> ()
-  apply_patch_at_cursor(Span, String) -> ()
+  patch_set_target(String)
+  apply_patch_at_cursor(Span, String)
   // Replace the exact byte range a source span covers — the hole-fill
   // primitive (the Patch value's own semantic: span to replace, new text).
   // apply_patch_at_cursor stays the annotation form (insert-above-line).
-  replace_span(Span, String) -> ()
+  replace_span(Span, String)
 }
 
 handler patch_to_file with target_module = "" {
-
-  patch_set_target(name) =>
-    resume() with target_module = name,
-
+  patch_set_target(name) => resume() with target_module = name,
   apply_patch_at_cursor(span, text) => {
     let path = driver_module_path(target_module)
     let source = fs_read_file(path)
-    let Span(line, _, _, _) = span
-    let edited = splice_before_line(source, line, indent_annotation(text))
-    fs_write_file(path, edited)
-    driver_check(target_module)
-    resume()
+    match span {
+      Span(line, _, _, _) => {
+        let edited = splice_before_line(source, line, indent_annotation(text))
+        fs_write_file(path, edited)
+        driver_check(target_module)
+        resume()
+      },
+    }
   },
-
   replace_span(span, text) => {
     let path = driver_module_path(target_module)
     let source = fs_read_file(path)
@@ -479,22 +417,23 @@ handler patch_to_file with target_module = "" {
     fs_write_file(path, edited)
     driver_check(target_module)
     resume()
-  }
+  },
 }
 
 // Replace the byte range a source span covers. Lines and columns are
 // 1-based (the lexer's token spans); the end column is exclusive.
 fn splice_span(ref source, ref span, ref text) with Memory + Alloc = {
   let n = byte_len(source)
-  let Span(sl, sc, el, ec) = span
-  let start = find_line_start(source, sl, 1, 0, n) + (sc - 1)
-  let end   = find_line_start(source, el, 1, 0, n) + (ec - 1)
-  "{str_slice(source, 0, start)}{text}{str_slice(source, end, n)}"
+  match span {
+    Span(sl, sc, el, ec) => {
+      let start = find_line_start(source, sl, 1, 0, n) + (sc - 1)
+      let end = find_line_start(source, el, 1, 0, n) + (ec - 1)
+      "{str_slice(source, 0, start)}{text}{str_slice(source, end, n)}"
+    },
+  }
 }
 
-fn indent_annotation(ref text) with Pure = {
-  "  {text}\n"
-}
+fn indent_annotation(ref text) with Pure = "  {text}\n"
 
 fn splice_before_line(ref source, target_line, ref insert) with Memory + Alloc = {
   let n = byte_len(source)
@@ -502,13 +441,12 @@ fn splice_before_line(ref source, target_line, ref insert) with Memory + Alloc =
   "{str_slice(source, 0, pos)}{insert}{str_slice(source, pos, n)}"
 }
 
-fn find_line_start(ref source, target, current, idx, n) with Memory = {
-  if current >= target { idx }
-  else if idx >= n { n }
-  else if byte_at(source, idx) == 10 {
-    find_line_start(source, target, current + 1, idx + 1, n)
-  } else {
-    find_line_start(source, target, current, idx + 1, n)
-  }
+fn find_line_start(ref source, target, current, idx, n) with Memory = if current >= target {
+  idx
+} else if idx >= n {
+  n
+} else if byte_at(source, idx) == 10 {
+  find_line_start(source, target, current + 1, idx + 1, n)
+} else {
+  find_line_start(source, target, current, idx + 1, n)
 }
-

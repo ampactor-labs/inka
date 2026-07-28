@@ -21,8 +21,7 @@
 // TVar(id) is a HANDLE into Graph. There is no apply(subst, ty).
 // Graph chase (perform graph_chase) replaces any subst-apply pattern.
 // The graph IS the subst.
-
-
+//
 // HEAP_BASE = 4096 — substrate invariant (HB / nullary-sentinel).
 // The bump allocator's $heap_ptr starts at 1048576 (1 MiB).
 // Sentinel values for nullary ADT variants live in [0, HEAP_BASE);
@@ -30,32 +29,40 @@
 // dispatch in backends/wasm.mn uses this threshold to discriminate
 // sentinel from pointer. Bool is the canonical example:
 // `type Bool = False | True` — False=0, True=1, both sentinels.
-
 type Ty
   = TInt
   | TFloat
   | TUnit
-  | TByte                         // the packed sequence ELEMENT-slot leaf: a
-                                  //   byte VALUE is a word (repr RI32, arithmetic
-                                  //   is Int), but its SLOT stride in a packed
-                                  //   sequence is 1 — so [byte] (TList(TByte),
-                                  //   the §4① String) folds distinctly from
-                                  //   [Int] and lowers to load_i8/store_i8. The
-                                  //   value/slot split is the novel move: Rust's
-                                  //   u8 conflates them. Dead vocabulary until
-                                  //   String = TList(TByte) (the RI64/RF32
-                                  //   gradient-arm precedent — a trigger, not a
-                                  //   new scalar).
+  // the packed sequence ELEMENT-slot leaf: a
+  //   byte VALUE is a word (repr RI32, arithmetic
+  //   is Int), but its SLOT stride in a packed
+  //   sequence is 1 — so [byte] (TList(TByte),
+  //   the §4① String) folds distinctly from
+  //   [Int] and lowers to load_i8/store_i8. The
+  //   value/slot split is the novel move: Rust's
+  //   u8 conflates them. Dead vocabulary until
+  //   String = TList(TByte) (the RI64/RF32
+  //   gradient-arm precedent — a trigger, not a
+  //   new scalar).
+  | TByte
   | TList(Ty)
   | TTuple([Ty])
-  | TFun([TParam], Ty, EffRow)    // params, return, effects
-  | TVar(Int)                     // handle into Graph
-  | TName(String, [Ty])           // nominal type + type args (Bool lives here)
-  | TRecord([(String, Ty)])       // [(name, Ty)]
-  | TRecordOpen([(String, Ty)], Int) // fields + row-variable handle
-  | TRefined(Ty, Predicate)       // refinement type (Verify discharges)
-  | TCont(Ty, Ty, ResumeDiscipline, EffRow)   // handler continuation R -> S: resume input, answer, cardinality, and the effect-WORLD it was frozen under (the modal-effect lexical-capability set — !E lifted to the TIME axis; a persisted resume under a changed handler-set is a row unification -> E_ResumeWorldMismatch, never a silent memcpy'd miscompile)
-  | TAlias(String, Ty)            // RN.1 — authored alias name (e.g. "Port") wrapping resolved type
+  // params, return, effects
+  | TFun([TParam], Ty, EffRow)
+  // handle into Graph
+  | TVar(Int)
+  // nominal type + type args (Bool lives here)
+  | TName(String, [Ty])
+  // [(name, Ty)]
+  | TRecord([(String, Ty)])
+  // fields + row-variable handle
+  | TRecordOpen([(String, Ty)], Int)
+  // refinement type (Verify discharges)
+  | TRefined(Ty, Predicate)
+  // handler continuation R -> S: resume input, answer, cardinality, and the effect-WORLD it was frozen under (the modal-effect lexical-capability set — !E lifted to the TIME axis; a persisted resume under a changed handler-set is a row unification -> E_ResumeWorldMismatch, never a silent memcpy'd miscompile)
+  | TCont(Ty, Ty, ResumeDiscipline, EffRow)
+  // RN.1 — authored alias name (e.g. "Port") wrapping resolved type
+  | TAlias(String, Ty)
 
 // ─── Representation — the value-representation gradient (STEP 0) ─────
 // Repr is the SHARED READ all four deep axes ride: the cursor's answer
@@ -81,23 +88,23 @@ type Ty
 // floor where the tag branch is real information). Consumers read it as a
 // license: a proven rep turns a runtime dispatch back into the direct
 // form, per receiver — the proof becomes the dispatch at the value layer.
-type SeqRep
-  = SRFlat
-  | SRSnoc
-  | SRRope
-  | SRSlice
-  | SRUnknown
+type SeqRep = SRFlat | SRSnoc | SRRope | SRSlice | SRUnknown
 
 type Repr
-  = RI32          // 32-bit word: TInt/TBool/TUnit/nullary-tag AND every
-                  //   pointer-kind (string/list/tuple/record/fun/cont) AND
-                  //   the unresolved-TVar floor (a handle is a 32-bit word)
-  | RI64          // 64-bit int: `repr i64` pin / fixed-point refinement /
-                  //   a literal exceeding i32 range (STEP 1 trigger)
-  | RF64          // 64-bit float: TFloat's inferred default (the live decider)
-  | RF32          // 32-bit float: TFloat pinned `repr f32` (STEP 1 trigger)
-  | RV128         // 128-bit lane vector: a homogeneous fixed-width
-                  //   lane-sequence (STEP 1 / STEP 4 SIMD cashout)
+  // 32-bit word: TInt/TBool/TUnit/nullary-tag AND every
+  //   pointer-kind (string/list/tuple/record/fun/cont) AND
+  //   the unresolved-TVar floor (a handle is a 32-bit word)
+  = RI32
+  // 64-bit int: `repr i64` pin / fixed-point refinement /
+  //   a literal exceeding i32 range (STEP 1 trigger)
+  | RI64
+  // 64-bit float: TFloat's inferred default (the live decider)
+  | RF64
+  // 32-bit float: TFloat pinned `repr f32` (STEP 1 trigger)
+  | RF32
+  // 128-bit lane vector: a homogeneous fixed-width
+  //   lane-sequence (STEP 1 / STEP 4 SIMD cashout)
+  | RV128
 
 // repr_of — the SHARED READ (STEP 0). The cursor projects a Ty to its
 // machine-representation class. H6-exhaustive over all 14 Ty constructors.
@@ -114,21 +121,32 @@ type Repr
 // gradient-INPUT pins land — no arm fabricates them from the current Ty, so
 // the existing i32/f64 emit paths stay byte-identical (LAW 7).
 fn repr_of(ty) with Pure = match ty {
-  TAlias(_, inner)  => repr_of(inner),
+  TAlias(_, inner) => repr_of(inner),
   TRefined(base, _) => repr_of(base),
-  TFloat            => RF64,    // inferred default; STEP 1's `repr f32` pin yields RF32
-  TInt              => RI32,    // STEP 1's `repr i64` pin / fixed-point / i64-literal yields RI64
-  TUnit             => RI32,
-  TByte             => RI32,    // a byte VALUE is a word (arithmetic is Int); the
-                                //   1-byte packing is a SLOT stride, not a value repr
-  TList(_)          => RI32,    // pointer (STEP 1/4: a fixed-width lane-sequence pins RV128)
-  TTuple(_)         => RI32,    // pointer
-  TFun(_, _, _)     => RI32,    // table index / closure ptr
-  TVar(_)           => RI32,    // genuinely-unresolved handle — a 32-bit word
-  TName(_, _)       => RI32,    // variant pointer (Bool lives here — a tag is a word)
-  TRecord(_)        => RI32,    // record pointer
-  TRecordOpen(_, _) => RI32,    // record pointer
-  TCont(_, _, _, _) => RI32     // continuation pointer
+  TFloat => // inferred default; STEP 1's `repr f32` pin yields RF32
+  RF64,
+  TInt => // STEP 1's `repr i64` pin / fixed-point / i64-literal yields RI64
+  RI32,
+  TUnit => RI32,
+  TByte => // a byte VALUE is a word (arithmetic is Int); the
+  //   1-byte packing is a SLOT stride, not a value repr
+  RI32,
+  TList(_) => // pointer (STEP 1/4: a fixed-width lane-sequence pins RV128)
+  RI32,
+  TTuple(_) => // pointer
+  RI32,
+  TFun(_, _, _) => // table index / closure ptr
+  RI32,
+  TVar(_) => // genuinely-unresolved handle — a 32-bit word
+  RI32,
+  TName(_, _) => // variant pointer (Bool lives here — a tag is a word)
+  RI32,
+  TRecord(_) => // record pointer
+  RI32,
+  TRecordOpen(_, _) => // record pointer
+  RI32,
+  TCont(_, _, _, _) => // continuation pointer
+  RI32,
 }
 
 // repr_of_resolved — repr_of through a graph chase. A TTuple's element Tys
@@ -142,24 +160,24 @@ fn repr_of(ty) with Pure = match ty {
 // productive-under-error floor, never a fabricated width). One chase per
 // element, read live; no parallel width table.
 fn repr_of_resolved(ty) with GraphRead = match ty {
-  TVar(h)           => match graph_chase(h) {
+  TVar(h) => match graph_chase(h) {
     GNode(NBound(inner), _) => repr_of_resolved(inner),
-    _                       => RI32
+    _ => RI32,
   },
-  TAlias(_, inner)  => repr_of_resolved(inner),
+  TAlias(_, inner) => repr_of_resolved(inner),
   TRefined(base, _) => repr_of_resolved(base),
-  _                 => repr_of(ty)
+  _ => repr_of(ty),
 }
 
 // repr_width — the byte width of a representation class, by ADT match
 // (never `== 4`/`== 8` — drift mode 8). STEP 1's resolve_field_offset
 // prefix-sums this over a record's sorted fields; RV128 lanes pad to 16.
 fn repr_width(r) with Pure = match r {
-  RI32  => 4,
-  RI64  => 8,
-  RF64  => 8,
-  RF32  => 4,
-  RV128 => 16
+  RI32 => 4,
+  RI64 => 8,
+  RF64 => 8,
+  RF32 => 4,
+  RV128 => 16,
 }
 
 // stride_of — the byte STRIDE of a sequence's element SLOT, the axis below
@@ -172,7 +190,7 @@ fn repr_width(r) with Pure = match r {
 // reads it (the RI64/RF32 gradient-arm precedent — a trigger, not a live path).
 fn stride_of(elem_ty) with Pure = match elem_ty {
   TByte => 1,
-  _     => repr_width(repr_of(elem_ty))
+  _ => repr_width(repr_of(elem_ty)),
 }
 
 // stride_class — the ZERO-BIASED carrier codec, EMIT side: the stride-code the
@@ -186,7 +204,12 @@ fn stride_of(elem_ty) with Pure = match elem_ty {
 // The RUNTIME inverse (`decode_stride`, sc => stride) lives in lib/runtime/
 // lists.mn beside the readers that consume it — the RTLIBS blob has no src/.
 fn stride_class(stride) with Pure = match stride {
-  4 => 0, 1 => 1, 8 => 2, 16 => 3, 2 => 4, _ => 0
+  4 => 0,
+  1 => 1,
+  8 => 2,
+  16 => 3,
+  2 => 4,
+  _ => 0,   // drift-audit: ignore — the word class IS stride 4; any unlisted stride is word-classed by definition, not a fabricated default
 }
 
 // repr_wat — the WAT value-type token for a representation class. STEP 1's
@@ -194,11 +217,11 @@ fn stride_class(stride) with Pure = match stride {
 // re-deriving i32 from arity. ty_to_wasm_type (backends/wasm.mn) is the
 // first reader: it becomes `ty |> repr_of |> repr_wat`.
 fn repr_wat(r) with Pure = match r {
-  RI32  => "i32",
-  RI64  => "i64",
-  RF64  => "f64",
-  RF32  => "f32",
-  RV128 => "v128"
+  RI32 => "i32",
+  RI64 => "i64",
+  RF64 => "f64",
+  RF32 => "f32",
+  RV128 => "v128",
 }
 
 // ─── The structural FOLD's shared skeleton: strip + signature ─────────────
@@ -208,19 +231,19 @@ fn repr_wat(r) with Pure = match r {
 // home — not in any single backend (the eq leaf was the first reader; show /
 // compare / hash / pack join it, reading the SAME structural name). This is the
 // Carried-Truth home: a type's fold-signature is a property OF THE TYPE.
-
+//
 // fold_strip — alias-strip / refinement-unwrap FIRST (TAlias->inner,
 // TRefined->base), structurally identical to repr_of's prologue. A Port-style
 // (= Int) folds as Int; a `Sample` (= Float where ..) folds as Float. The
 // predicate is erased at runtime, so the leaf reads the underlying value.
 fn fold_strip(ty) with Pure = match ty {
-  TAlias(_, inner)  => fold_strip(inner),
+  TAlias(_, inner) => fold_strip(inner),
   TRefined(base, _) => fold_strip(base),
-  // §4①: a String folds AS its byte-sequence, so fold_sig on it derives "lb" ==
+  _ => // §4①: a String folds AS its byte-sequence, so fold_sig on it derives "lb" ==
   // fold_sig(TList(TByte)) and a String field and a [byte] field share the one
   // generated `$eq_<sig>`/`$hash_<sig>`/`$show_<sig>` helpers at sig "lb" —
   // the eq/hash-divergence footgun unsayable.
-  _                 => ty
+  ty,
 }
 
 // fold_sig — a deterministic structural name for a type: the dedup key and the
@@ -229,57 +252,63 @@ fn fold_strip(ty) with Pure = match ty {
 // cursor derives for records — the proof IS the name). Alias/refinement-stripped
 // first, like every other fold-through.
 fn fold_sig(ty) with Memory = match fold_strip(ty) {
-  TInt              => "i",
-  TFloat            => "d",
-  TUnit             => "u",
-  TByte             => "b",          // packed 1-byte slot — distinct from "i" so
-                                     //   [byte] and [Int] never share a fold helper
-  TVar(_)           => "i",          // unresolved handle — a word
-  TList(elem)       => "l{fold_sig(elem)}",
-  TName(n, _)       => "n{n}",       // nominal — name carries identity
-  TTuple(elems)     => "t{fold_sig_list(elems, 0, len(elems))}_",
-  TRecord(fs)       => "r{fold_sig_fields(fs, 0, len(fs))}_",
-  TRecordOpen(fs,_) => "r{fold_sig_fields(fs, 0, len(fs))}_",
-  TFun(_, _, _)     => "fn",         // closure — folds at the function leaf
-  TCont(_, _, _, _) => "k",          // continuation pointer — a word here
+  TInt => "i",
+  TFloat => "d",
+  TUnit => "u",
+  TByte => // packed 1-byte slot — distinct from "i" so
+  //   [byte] and [Int] never share a fold helper
+  "b",
+  TVar(_) => // unresolved handle — a word
+  "i",
+  TList(elem) => "l{fold_sig(elem)}",
+  TName(n, _) => // nominal — name carries identity
+  "n{n}",
+  TTuple(elems) => "t{fold_sig_list(elems, 0, len(elems))}_",
+  TRecord(fs) => "r{fold_sig_fields(fs, 0, len(fs))}_",
+  TRecordOpen(fs, _) => "r{fold_sig_fields(fs, 0, len(fs))}_",
+  TFun(_, _, _) => // closure — folds at the function leaf
+  "fn",
+  TCont(_, _, _, _) => // continuation pointer — a word here
   // fold_strip already removed TAlias/TRefined; reaching them is impossible.
-  TAlias(_, inner)  => fold_sig(inner),
-  TRefined(base, _) => fold_sig(base)
+  "k",
+  TAlias(_, inner) => fold_sig(inner),
+  TRefined(base, _) => fold_sig(base),
 }
 
 fn fold_sig_list(elems, i, n) with Memory =
-  if i >= n { "" }
-  else { "_{fold_sig(list_index(elems, i))}{fold_sig_list(elems, i + 1, n)}" }
+  if i >= n { "" } else { "_{fold_sig(list_index(elems, i))}{fold_sig_list(elems, i + 1, n)}" }
 
-fn fold_sig_fields(fields, i, n) with Memory =
-  if i >= n { "" }
-  else {
-    let (name, ty) = list_index(fields, i)
-    "_{name}{fold_sig(ty)}{fold_sig_fields(fields, i + 1, n)}"
+fn fold_sig_fields(fields, i, n) with Memory = if i >= n {
+  ""
+} else {
+  match list_index(fields, i) {
+    (name, ty) => "_{name}{fold_sig(ty)}{fold_sig_fields(fields, i + 1, n)}",
   }
+}
 
 // ─── Ownership (spec 02 · spec 07) ─────────────────────────────────
 // Every function parameter wraps Ty with an Ownership marker.
 // Inference fills unmarked parameters; Own/Ref are explicit commitments.
+type TParam = TParam(String, Ty, Ownership, Ownership, Option(Node))
 
-type TParam
-  = TParam(String, Ty, Ownership, Ownership, Option(Node))
-                                   // name, ty, authored, resolved, default
-                                   // OW.2 — authored = what developer typed (Own/Ref/Unmarked)
-                                   //        resolved = what infer_ownership determined
-                                   // default = Some(expr_node) when the param has a
-                                   //   trailing `= expr` (SYNTAX.md §«Default parameter
-                                   //   values»); None otherwise. The default node lives
-                                   //   in the graph (parser-minted); lower fills an
-                                   //   absent call-site arg edge by projecting it in the
-                                   //   callee's scope — the default has ONE home (this
-                                   //   slot) and one eval context (the callee). A
-                                   //   defaulted slot leaves a DefaultReason edge.
-
+// name, ty, authored, resolved, default
+// OW.2 — authored = what developer typed (Own/Ref/Unmarked)
+//        resolved = what infer_ownership determined
+// default = Some(expr_node) when the param has a
+//   trailing `= expr` (SYNTAX.md §«Default parameter
+//   values»); None otherwise. The default node lives
+//   in the graph (parser-minted); lower fills an
+//   absent call-site arg edge by projecting it in the
+//   callee's scope — the default has ONE home (this
+//   slot) and one eval context (the callee). A
+//   defaulted slot leaves a DefaultReason edge.
 type Ownership
-  = Unmarked     // compiler decides (default)
-  | Own          // affine: consumed at use (performs Consume)
-  | Ref          // borrowed: cannot escape return position
+  // compiler decides (default)
+  = Unmarked
+  // affine: consumed at use (performs Consume)
+  | Own
+  // borrowed: cannot escape return position
+  | Ref
 
 // How a branch frame's arms relate at runtime — the affine ledger reads it
 // at branch_exit to decide whether consuming one name in two arms is a
@@ -288,8 +317,10 @@ type Ownership
 // (BAlternative), so consuming a name across arms is a single consume on
 // whichever path is taken — the arms UNION, never collide.
 type BranchMode
-  = BParallel      // >< / <| — all arms execute; cross-arm consume is a collision
-  | BAlternative   // if / match — one arm executes; cross-arm consume unions
+  // >< / <| — all arms execute; cross-arm consume is a collision
+  = BParallel
+  // if / match — one arm executes; cross-arm consume unions
+  | BAlternative
 
 // ─── TParam projections — the §2 'project' operation made literal ──
 // A param is a PRODUCT node CARRIED whole; every aspect is read through
@@ -312,15 +343,34 @@ type BranchMode
 // refined type — and the 5-tuple DISSOLVES. These accessor bodies are that
 // collapse's larval seam: the {type,row} form swaps behind them with no
 // consumer touched (peer Hβ.types.param-projects-to-type-row).
-fn param_name(p)     = let TParam(n, _, _, _, _) = p; n
-fn param_ty(p)       = let TParam(_, t, _, _, _) = p; t
-fn param_authored(p) = let TParam(_, _, a, _, _) = p; a
-fn param_resolved(p) = let TParam(_, _, _, r, _) = p; r
-fn param_default(p)  = let TParam(_, _, _, _, d) = p; d
+fn param_name(p) = match p {
+  TParam(n, _, _, _, _) => n,
+}
+
+fn param_ty(p) = match p {
+  TParam(_, t, _, _, _) => t,
+}
+
+fn param_authored(p) = match p {
+  TParam(_, _, a, _, _) => a,
+}
+
+fn param_resolved(p) = match p {
+  TParam(_, _, _, r, _) => r,
+}
+
+fn param_default(p) = match p {
+  TParam(_, _, _, _, d) => d,
+}
 
 // Structure-preserving updaters for PROPAGATORS — carry the other four.
-fn param_with_ty(p, t)        = let TParam(n, _, a, r, d) = p; TParam(n, t, a, r, d)
-fn param_with_resolved(p, r2) = let TParam(n, t, a, _, d) = p; TParam(n, t, a, r2, d)
+fn param_with_ty(p, t) = match p {
+  TParam(n, _, a, r, d) => TParam(n, t, a, r, d),
+}
+
+fn param_with_resolved(p, r2) = match p {
+  TParam(n, t, a, _, d) => TParam(n, t, a, r2, d),
+}
 
 // Smart constructor for inferred/synthetic PRODUCERS — no authored aspect.
 fn mk_param(name, ty) = TParam(name, ty, Unmarked, Unmarked, None)
@@ -335,12 +385,12 @@ fn mk_param(name, ty) = TParam(name, ty, Unmarked, Unmarked, None)
 // @resume= annotation; the body IS the contract per
 // protocol_cursor_is_the_substrate.md. The write is inference's (the
 // one writer), read live by lower — never a second hand-walk at lower.
-
 type ResumeDiscipline
   = OneShot
   | MultiShot
   | Either
-  | Abandon   // M4 — the arm NEVER resumes AND returns a meaningful value: it delivers that value as the INSTALL's, abandoning the continuation (a UZero grade over a concrete return; `abort() -> Option`). A dead continuation, so the perform yields with a dummy k and the remainder deadens — distinct from MultiShot (live k, off-spine unsupportable → floor) and OneShot (bottom/noreturn: `fail -> a`, no value to abandon)
+  // M4 — the arm NEVER resumes AND returns a meaningful value: it delivers that value as the INSTALL's, abandoning the continuation (a UZero grade over a concrete return; `abort() -> Option`). A dead continuation, so the perform yields with a dummy k and the remainder deadens — distinct from MultiShot (live k, off-spine unsupportable → floor) and OneShot (bottom/noreturn: `fail -> a`, no value to abandon)
+  | Abandon
 
 // ─── Usage — the coeffect multiplicity grade {0, 1, ω} ─────────────
 // How many times a value is used, as a join-semilattice. THE shared
@@ -359,18 +409,12 @@ type ResumeDiscipline
 // (Ownership's own.mn classifier is the syntactic-count shadow of this
 // grade; unifying them onto one `count_uses(predicate, body)` is the named
 // peer Hβ.infer.usage-grade-unifies-cardinality-ownership.)
-
-type Usage
-  = UZero
-  | UOne
-  | UMany
+type Usage = UZero | UOne | UMany
 
 // ─── Scheme (spec 04) — let-generalization ─────────────────────────
 // Forall(the quantified handles, the body type). A monomorphic binding is
 // Forall([], ty). env_lookup returns Option<(Scheme, Reason)>.
-
-type Scheme
-  = Forall([Int], Ty)
+type Scheme = Forall([Int], Ty)
 
 // SchemeKind discriminates env entries by their CONSTRUCTION ORIGIN.
 // Same Scheme shape, three different downstream stories: lower
@@ -412,14 +456,21 @@ type Scheme
 // Consume. Inferred ownership is written later into the owning TFun's params.
 //
 type SchemeKind
-  = FnScheme                                     // tag 0
-  | ConstructorScheme(TagId, Int)                // tag 1
-  | EffectOpScheme(String, String, Bool, ResumeDiscipline)   // tag 2 — (effect_name, default_handler, ambiguous, resume cardinality — the join over handlers' arm grades)
-  | RecordSchemeKind([(String, Ty)])             // tag 3 — [(field_name, ty)]
-  | EffectDeclKind([String])                     // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
-  | HandlerKind(Int, [TParam], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])   // tag 6 — (residual_row_handle, config params [the fn-param carrier: name + default ride the TParam, names project via lower_param_names], state fields, arms). Typed payloads: a bare List here erased the element types the consumers prove (the 581a92f class), and the pattern-constraint unification surfaces the conflict as E_TypeMismatch at every destructure.
-  | ParamScheme(Ownership)                       // tag 7 — parameter binding carries authored ownership at the env edge
-  | TypeVariants([(TagId, String, [Ty])])        // tag 8 — the TYPE's own entry: (tag, ctor name, payload tys) per variant, minted at registration where the list is in hand — the variant_specs whole-env scan family's cure
+  // tag 0
+  = FnScheme
+  // tag 1
+  | ConstructorScheme(TagId, Int)
+  // tag 2 — (effect_name, default_handler, ambiguous, resume cardinality — the join over handlers' arm grades)
+  | EffectOpScheme(String, String, Bool, ResumeDiscipline)
+  // tag 3 — [(field_name, ty)]
+  | RecordSchemeKind([(String, Ty)])
+  // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
+  | EffectDeclKind([String])
+  // tag 6 — (residual_row_handle, config params [the fn-param carrier: name + default ride the TParam, names project via lower_param_names], state fields, arms). Typed payloads: a bare List here erased the element types the consumers prove (the 581a92f class), and the pattern-constraint unification surfaces the conflict as E_TypeMismatch at every destructure.
+  | HandlerKind(Int, [TParam], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])
+  // tag 7 — parameter binding carries authored ownership at the env edge
+  | ParamScheme(Ownership)
+  // tag 8 — the TYPE's own entry: (tag, ctor name, payload tys) per variant, minted at registration where the list is in hand — the variant_specs whole-env scan family's cure
   // HandlerKind (tag 6) is the full handler-effect type AND the handler's
   // identity: a handler is
   // (a ! E+r) ⟿ (a ! R+r) — it REMOVES the handled effect E AND
@@ -438,6 +489,7 @@ type SchemeKind
   // to the parsed decl (the one home), never copies. (config/state/arms are not
   // cache-serialized — live-only; cross-file handler caching reconstructs them
   // from the decl, peer Hβ.cache.handler-decl-from-source, post-L1.)
+  | TypeVariants([(TagId, String, [Ty])])
 
 // The Boolean algebra lives as functions in effects.mn; the ADT lives
 // here so every module that speaks types can speak rows.
@@ -463,14 +515,16 @@ type SchemeKind
 // present ∩ absent = ∅, and EtClosed ⇒ absent = [] (a closed tail makes
 // absence vacuous). Unification and subsumption are fieldwise set ops —
 // no wrapper trees, no rewrite passes, no read-time re-derivation.
+type EffRow = EfRow([EffName], [EffName], EffTail)
 
-type EffRow
-  = EfRow([EffName], [EffName], EffTail)   // present, absent, tail
-
+// present, absent, tail
 type EffTail
-  = EtClosed        // nothing beyond the present set
-  | EtVar(Int)      // a row variable: more may arrive (masked by the absent set)
-  | EtAll           // the universe: anything EXCEPT the absent set (the !B form)
+  // nothing beyond the present set
+  = EtClosed
+  // a row variable: more may arrive (masked by the absent set)
+  | EtVar(Int)
+  // the universe: anything EXCEPT the absent set (the !B form)
+  | EtAll
 
 // Effect names carry optional install-time arguments. The `with IO`
 // declaration is an ENamed wrapping the name IO; `with Sample(44100)`
@@ -487,39 +541,43 @@ type EffTail
 // PExpr-dissolution precedent (predicate operands are handles too, PCompare). The
 // EffArg ADT is thus the projection channel, never a parallel re-derivation of the
 // literal; row equality unifies node-bodies, not flattened literals.
-
 type EffName
-  = ENamed(Int)                      // the interned name HANDLE (§5.O layer 1:
-                                     // a name is a word; identity is i32.eq,
-                                     // exact by type — a missed intern is a
-                                     // loud E_TypeMismatch, never a silent
-                                     // pointer miss). The spelling is the
-                                     // render projection (eff_name_str →
-                                     // intern_name_of), read only by
-                                     // diagnostics/show/lower's extraction.
-  | EParameterized(Int, [EffArg])    // name handle + [EffArg]; shares the
-                                     // handle with its bare ENamed, so
-                                     // bare-name membership matches an
-                                     // instance by one word compare.
-  | EPure                            // the union identity — `with Pure` IS the
-                                     // empty row, made an ADT variant (drift-3:
-                                     // not a string key). build_declared_row   // drift-audit: ignore — describes the dissolution
-                                     // maps it to the pure row; it never enters
-                                     // a name-set. Its handle is the reserved
-                                     // absent 0.
+  // the interned name HANDLE (§5.O layer 1:
+  // a name is a word; identity is i32.eq,
+  // exact by type — a missed intern is a
+  // loud E_TypeMismatch, never a silent
+  // pointer miss). The spelling is the
+  // render projection (eff_name_str →
+  // intern_name_of), read only by
+  // diagnostics/show/lower's extraction.
+  = ENamed(Int)
+  // name handle + [EffArg]; shares the
+  // handle with its bare ENamed, so
+  // bare-name membership matches an
+  // instance by one word compare.
+  | EParameterized(Int, [EffArg])
+  // the union identity — `with Pure` IS the
+  // empty row, made an ADT variant (drift-3:
+  // not a string key). build_declared_row   // drift-audit: ignore — describes the dissolution
+  // maps it to the pure row; it never enters
+  // a name-set. Its handle is the reserved
+  // absent 0.
+  | EPure
 
 type EffArg
   = EAInt(Int)
   | EAFloat(Float)
   | EAString(String)
-  | EAType(Ty)                     // type payload — the effect's op payload type
-                                   // (Iterate(a)). Flows performer→handler at the
-                                   // install; unified, not value-compared. Emit erases.
-  | EANode(Int)                    // a non-literal arg (`Clock(monotonic)`,
-                                   // `Sample(rate)`) — an operand Node handle resolved
-                                   // LIVE via graph_node_body (the PExpr-dissolution
-                                   // precedent). Row equality compares the resolved
-                                   // node bodies, not a flattened literal; emit erases.
+  // type payload — the effect's op payload type
+  // (Iterate(a)). Flows performer→handler at the
+  // install; unified, not value-compared. Emit erases.
+  | EAType(Ty)
+  // a non-literal arg (`Clock(monotonic)`,
+  // `Sample(rate)`) — an operand Node handle resolved
+  // LIVE via graph_node_body (the PExpr-dissolution
+  // precedent). Row equality compares the resolved
+  // node bodies, not a flattened literal; emit erases.
+  | EANode(Int)
 
 // The Boolean connective joining a surface effect term to the row
 // accumulated to its left — the topology the surface `+ - &` draws
@@ -530,26 +588,33 @@ type EffArg
 // diff_row / inter_row) — the parser names the connective, infer
 // applies it; no row is re-derived.
 type EConn
-  = EcUnion                        // `+` — set union
-  | EcDiff                         // `-` — set difference (E - F = E & !F)
-  | EcInter                        // `&` — set intersection
+  // `+` — set union
+  = EcUnion
+  // `-` — set difference (E - F = E & !F)
+  | EcDiff
+  // `&` — set intersection
+  | EcInter
 
 // Substrate owned by graph.mn. The ADTs live here because every
 // consumer of the graph names them — Read/Write/Speculate effects,
 // chase return type, trail mutations, overlay tags.
-
 type NodeKind
-  = NBound(Ty)          // resolved — chase terminates; delivers Ty
-  | NFree(Int)          // unresolved — epoch at allocation time
-  | NRowBound(EffRow)   // resolved effect row — the payload is EffRow, ONLY
-  | NRowFree(Int)       // unresolved effect row variable
-  | NRecordRowBound([(String, Ty)])  // record-row residual — a `...R` rest's
-                        // remaining (name, ty) fields. Its own kind: binding
-                        // the residual under NRowBound made the row slot an
-                        // untagged EffRow-or-Ty union, and every row walk's
-                        // catch-all silently crossed sorts (the census's
-                        // EffRow-vs-Ty at occurs_in_row's delegation).
-  | NErrorHole(Reason)  // inference observed failure (Hazel marked hole)
+  // resolved — chase terminates; delivers Ty
+  = NBound(Ty)
+  // unresolved — epoch at allocation time
+  | NFree(Int)
+  // resolved effect row — the payload is EffRow, ONLY
+  | NRowBound(EffRow)
+  // unresolved effect row variable
+  | NRowFree(Int)
+  // record-row residual — a `...R` rest's
+  // remaining (name, ty) fields. Its own kind: binding
+  // the residual under NRowBound made the row slot an
+  // untagged EffRow-or-Ty union, and every row walk's
+  // catch-all silently crossed sorts (the census's
+  // EffRow-vs-Ty at occurs_in_row's delegation).
+  | NRecordRowBound([(String, Ty)])
+  // inference observed failure (Hazel marked hole)
   // IFC (§4⑥): no separate NFlowBound/NFlowFree dimension needed. The existing
   // graph already encodes information-flow constraints through two mechanisms:
   //   1. the row's absent set (`!IO + !Network`) — a function proved to carry !IO
@@ -561,10 +626,12 @@ type NodeKind
   // FlowLabel (below) remains as a pure lattice for use in annotations and the
   // mentl-voice projection (`mentl query flow name`) — a read over the type the graph
   // already holds, not a new graph dimension.
+  | NErrorHole(Reason)
 
-type GNode
-  = GNode(NodeKind, Reason)   // every node carries its justification
+type GNode = GNode(NodeKind, Reason)
 
+// every node carries its justification
+//
 // Inference-created executable boundaries are graph edges, not lowering
 // conventions. Each fanout site owns one ordered edge per branch:
 //
@@ -580,9 +647,10 @@ type GNode
 // while the field keeps the result's exact repr (f64/f32/v128 included). Lower
 // follows the edge and immediately projects field 0. No name lookup, cache, or
 // boxing policy exists outside the graph.
-type BoundaryEdge
-  = BoundaryEdge(Int, Int, Int, Int, Int) // result, thunk, carrier, Thread ticket, Persist ticket
+type BoundaryEdge = BoundaryEdge(Int, Int, Int, Int, Int)
 
+// result, thunk, carrier, Thread ticket, Persist ticket
+//
 // A suspended effect call has three identities: resume_input_h is the typed R
 // hole the continuation accepts, answer_h is the enclosing frame's S result,
 // and continuation_h is the heap record itself. The latter is bound to
@@ -590,15 +658,17 @@ type BoundaryEdge
 // three on one edge prevents either value representation from doubling as a
 // pointer type, and makes the captured capability world an inference fact lower
 // only reads.
-type ContinuationEdge
-  = ContinuationEdge(Int, Int, Int, ResumeDiscipline, EffRow) // resume input, answer, continuation, discipline, world
+type ContinuationEdge = ContinuationEdge(Int, Int, Int, ResumeDiscipline, EffRow)
 
+// resume input, answer, continuation, discipline, world
 type ExecutableBoundary
   = NoBoundary
-  | FanoutBoundary([BoundaryEdge]) // ordered BoundaryEdge values, one per branch
+  // ordered BoundaryEdge values, one per branch
   // The call is seen while its InferCtx frame is live, before later handler
   // declarations have necessarily completed the op's cardinality join.
-  | PendingContinuationBoundary(Int, Int, Int, EffRow) // resume input, answer, continuation, world
+  | FanoutBoundary([BoundaryEdge])
+  // resume input, answer, continuation, world
+  | PendingContinuationBoundary(Int, Int, Int, EffRow)
   | ContinuationBoundary(ContinuationEdge)
 
 // The snapshot carries exactly what its consumers read: the mint bound
@@ -609,20 +679,23 @@ type ExecutableBoundary
 // overlay view is DELETED whole (graph_fork never performed — the module
 // partition never existed at runtime, and module-of-position reads live
 // through NModule span containment via module_path_of_span).
-type Graph
-  = Graph(
-      Int,               // next: next fresh allocation
-      [(ValidSpan, Int)] // span_index: [(ValidSpan, Int)] for Mentl QTypeAt queries
-    )
+type Graph = Graph(Int, [(ValidSpan, Int)])
 
+// next: next fresh allocation
+//
+// span_index: [(ValidSpan, Int)] for Mentl QTypeAt queries
+//
 // Trail mutations — append during forward execution, walk backwards
 // on rollback. Powers Mentl's speculative oracle (spec 09).
-
 type Mutation
-  = MSetNode(Int, GNode)    // handle, old_node (before overwrite)
-  | MSetRow(Int, GNode)     // handle, old_node (row variant)
-  | MSetBoundary(Int, ExecutableBoundary) // fanout site handle, old boundary edges
-  | MFreshNode(Int)         // handle allocated (undo = shrink)
+  // handle, old_node (before overwrite)
+  = MSetNode(Int, GNode)
+  // handle, old_node (row variant)
+  | MSetRow(Int, GNode)
+  // fanout site handle, old boundary edges
+  | MSetBoundary(Int, ExecutableBoundary)
+  // handle allocated (undo = shrink)
+  | MFreshNode(Int)
 
 // 14 variants, one per operator form in SYNTAX.md's operator
 // precedence table. Exhaustive set; add a variant here AND update
@@ -637,12 +710,25 @@ type Mutation
 // by infer_binop for type-class dispatch. Two orthogonal axes:
 // BinOp carries operator identity (for Reason/emit); BinOpKind
 // carries semantic behavior (for inference rules).
-
 type BinOp
-  = BAdd | BSub | BMul | BDiv | BMod          // arithmetic (5)
-  | BEq  | BNe  | BLt  | BGt  | BLe  | BGe    // comparison (6)
-  | BAnd | BOr                                 // boolean (2)
-  | BConcat                                    // seq_concat over the unified sequence kind (1)
+  // arithmetic (5)
+  = BAdd
+  | BSub
+  | BMul
+  | BDiv
+  | BMod
+  // comparison (6)
+  | BEq
+  | BNe
+  | BLt
+  | BGt
+  | BLe
+  | BGe
+  // boolean (2)
+  | BAnd
+  | BOr
+  // seq_concat over the unified sequence kind (1)
+  | BConcat
 
 // UnaryOp — the two unary operators per SYNTAX.md operator table
 // (line 1119): unary `-` and unary `!`. Mirrors BinOp's ADT discipline;
@@ -651,52 +737,58 @@ type BinOp
 // Seed transcription maps to integer sentinels in the 160-179 reserved
 // region (mirror of BinOp's 140-153 region).
 type UnaryOp
-  = UNeg                                       // unary `-` per SYNTAX.md
-  | UNot                                       // unary `!` per SYNTAX.md
+  // unary `-` per SYNTAX.md
+  = UNeg
+  // unary `!` per SYNTAX.md
+  | UNot
 
 type BinOpKind
-  = BKArith    // +, -, *, /, %
-  | BKCmp      // ==, !=, <, >, <=, >=
-  | BKBool     // &&, ||
-  | BKConcat   // ++
+  // +, -, *, /, %
+  = BKArith
+  // ==, !=, <, >, <=, >=
+  | BKCmp
+  // &&, ||
+  | BKBool
+  // ++
+  | BKConcat
 
 fn binop_kind(op) with Pure = match op {
-  BAdd    => BKArith,
-  BSub    => BKArith,
-  BMul    => BKArith,
-  BDiv    => BKArith,
-  BMod    => BKArith,
-  BEq     => BKCmp,
-  BNe     => BKCmp,
-  BLt     => BKCmp,
-  BGt     => BKCmp,
-  BLe     => BKCmp,
-  BGe     => BKCmp,
-  BAnd    => BKBool,
-  BOr     => BKBool,
-  BConcat => BKConcat
+  BAdd => BKArith,
+  BSub => BKArith,
+  BMul => BKArith,
+  BDiv => BKArith,
+  BMod => BKArith,
+  BEq => BKCmp,
+  BNe => BKCmp,
+  BLt => BKCmp,
+  BGt => BKCmp,
+  BLe => BKCmp,
+  BGe => BKCmp,
+  BAnd => BKBool,
+  BOr => BKBool,
+  BConcat => BKConcat,
 }
 
 fn binop_to_str(op) with Pure = match op {
-  BAdd    => "+",
-  BSub    => "-",
-  BMul    => "*",
-  BDiv    => "/",
-  BMod    => "%",
-  BEq     => "==",   // drift-audit: ignore — BinOp→canonical-string rendering for Reason labels; NOT runtime string compare. Centralizes the only "==" string-literal site in the compiler (parser op_string / infer classify_binop / wasm emit_binop no longer carry it post-11.B.1).
-  BNe     => "!=",
-  BLt     => "<",
-  BGt     => ">",
-  BLe     => "<=",
-  BGe     => ">=",
-  BAnd    => "&&",
-  BOr     => "||",
-  BConcat => "++"
+  BAdd => "+",
+  BSub => "-",
+  BMul => "*",
+  BDiv => "/",
+  BMod => "%",
+  BEq => // drift-audit: ignore — BinOp→canonical-string rendering for Reason labels; NOT runtime string compare. Centralizes the only "==" string-literal site in the compiler (parser op_string / infer classify_binop / wasm emit_binop no longer carry it post-11.B.1).
+  "==",
+  BNe => "!=",
+  BLt => "<",
+  BGt => ">",
+  BLe => "<=",
+  BGe => ">=",
+  BAnd => "&&",
+  BOr => "||",
+  BConcat => "++",
 }
 
 // Every graph node and every unification records a Reason. Mentl's
 // teach_why (spec 09) walks this DAG. Full provenance falls out.
-
 type Reason
   = Declared(String)
   | Inferred(String)
@@ -716,22 +808,27 @@ type Reason
   | BinOpPlaceholder(BinOp)
   | MissingVar(String)
   | Refinement(Predicate, Predicate)
-  | Located(Span, Reason)      // spec I13 — site-annotated reasoning edge
+  // spec I13 — site-annotated reasoning edge
   // RX.2 — high-intent structured variants (replacing mechanism-speak strings)
-  | InferredCallReturn(String, Reason)   // callee_name, inner — "return of call to 'process'"
-  | InferredPipeResult(String, Reason)   // pipe_verb ("|>", "~>", "<~"), inner — verb identity in Why chain
-  | FreshInContext(Int, String)          // handle, context_name — "fresh in 'process'" not "fresh 42"
-  | DefaultReason(String, Span)          // a param defaulted from `= expr` at the
-                                         // decl_site — the Why projection at a
-                                         // defaulted call slot walks here ("ratio
-                                         // defaulted to its declaration; annotate to
-                                         // pin"). SYNTAX.md §«Default parameter values».
-  | VerifyWitness(String)                // the SAT model the SMT handler produced
-                                         // for a discharged obligation — proof-
-                                         // evidence the Why-walker reaches (the
-                                         // counterexample/model, surpassing Dafny/F*'s
-                                         // separate dump: the witness IS a Reason edge).
-
+  | Located(Span, Reason)
+  // callee_name, inner — "return of call to 'process'"
+  | InferredCallReturn(String, Reason)
+  // pipe_verb ("|>", "~>", "<~"), inner — verb identity in Why chain
+  | InferredPipeResult(String, Reason)
+  // handle, context_name — "fresh in 'process'" not "fresh 42"
+  | FreshInContext(Int, String)
+  // a param defaulted from `= expr` at the
+  // decl_site — the Why projection at a
+  // defaulted call slot walks here ("ratio
+  // defaulted to its declaration; annotate to
+  // pin"). SYNTAX.md §«Default parameter values».
+  | DefaultReason(String, Span)
+  // the SAT model the SMT handler produced
+  // for a discharged obligation — proof-
+  // evidence the Why-walker reaches (the
+  // counterexample/model, surpassing Dafny/F*'s
+  // separate dump: the witness IS a Reason edge).
+  | VerifyWitness(String)
 
 // Caret — the user's text-attention position. ONE input among many to
 // Cursor's argmax computation. Updated by the editor's transport
@@ -744,9 +841,7 @@ type Reason
 // position with the gradient's argmax, which is drift mode 5 by
 // SUBSTRATE.md §I "The Heap Has One Story" applied to handler-state
 // shape.)
-
-type Caret
-  = Caret(Handle, Reason)
+type Caret = Caret(Handle, Reason)
 
 // Cursor — the gradient's global argmax over the live graph at the
 // moment of query. Cursor is attention, not position. The text-caret
@@ -760,19 +855,12 @@ type Caret
 //
 // See SUBSTRATE.md §VI "Cursor: The Gradient's Global Argmax" and
 // `protocol_cursor_is_argmax.md`.
-
-type Cursor
-  = Cursor(Handle, Reason, Float)
+type Cursor = Cursor(Handle, Reason, Float)
 
 // SuggestionKind — exhaustive ADT for the axis of an annotation
 // suggestion. Drift 8 closure: never a string flag; always tagged
 // dispatch. Per GR-gradient-delta.md §3.2 promotion to live.
-
-type SuggestionKind
-  = SuggestEffectRow
-  | SuggestOwnership
-  | SuggestRefinement
-  | SuggestReturnType
+type SuggestionKind = SuggestEffectRow | SuggestOwnership | SuggestRefinement | SuggestReturnType
 
 // AnnotationSuggestion — promoted from GR-gradient-delta.md §3.2
 // (was shape-only) to live ADT. teach_gradient (mentl.mn) returns
@@ -783,19 +871,12 @@ type SuggestionKind
 //   annotation  — literal source text to add (e.g., "with Pure")
 //   unlocks     — capability labels unlocked (e.g., ["CMemoize", "CCompileTimeEval"])
 //   reason      — why the suggestion is highest-leverage at the position
-
-type AnnotationSuggestion
-  = AnnotationSuggestion(SuggestionKind, String, [String], Reason)
+type AnnotationSuggestion = AnnotationSuggestion(SuggestionKind, String, [String], Reason)
 
 // PipeContext — surrounding pipe topology at a position.
 // CursorView.topology reads the context. Reuses existing PipeKind for
 // the InsidePipe variant. Per Hμ-cursor.md §2.1 + §4.
-
-type PipeContext
-  = NoPipe
-  | InsidePipe(PipeKind)
-  | StartingPipe
-  | EndingPipe
+type PipeContext = NoPipe | InsidePipe(PipeKind) | StartingPipe | EndingPipe
 
 // CursorView — what cursor_default projects at the cursor's handle.
 // Each field is one of the eight kernel primitives, read off the
@@ -812,34 +893,32 @@ type PipeContext
 //
 // Annotation is mentl.mn's existing ADT (8 variants APure/ANotAlloc/...).
 // Predicate is at types.mn:568.
-
 type CursorView
   = CursorView(NodeKind, Proposals, PipeContext, EffRow, Ownership, [(Span, Predicate, Reason)], Option(AnnotationSuggestion), Reason)
-                              // query   propose  topology     row     trace      verify  teach    why
 
+// query   propose  topology     row     trace      verify  teach    why
+type Span = Span(Int, Int, Int, Int)
 
-type Span
-  = Span(Int, Int, Int, Int)    // start_line, start_col, end_line, end_col
-
-fn span_join(a, b) with Pure = {
-  let Span(sl, sc, _, _) = a
-  let Span(_, _, el, ec) = b
-  Span(sl, sc, el, ec)
+// start_line, start_col, end_line, end_col
+fn span_join(a, b) with Pure = match a {
+  Span(sl, sc, _, _) => match b {
+    Span(_, _, el, ec) => Span(sl, sc, el, ec),
+  },
 }
 
-fn span_eq(a, b) with Pure = {
-  let Span(asl, asc, ael, aec) = a
-  let Span(bsl, bsc, bel, bec) = b
-  asl == bsl && asc == bsc && ael == bel && aec == bec
+fn span_eq(a, b) with Pure = match a {
+  Span(asl, asc, ael, aec) => match b {
+    Span(bsl, bsc, bel, bec) => asl == bsl && asc == bsc && ael == bel && aec == bec,
+  },
 }
 
 // Closed-interval overlap on line numbers. Sufficient for the
 // proximity-tier classification; column-precise comparison is
 // peer-handle territory.
-fn span_overlaps(a, b) with Pure = {
-  let Span(asl, _asc, ael, _aec) = a
-  let Span(bsl, _bsc, bel, _bec) = b
-  ael >= bsl && bel >= asl
+fn span_overlaps(a, b) with Pure = match a {
+  Span(asl, _asc, ael, _aec) => match b {
+    Span(bsl, _bsc, bel, _bec) => ael >= bsl && bel >= asl,
+  },
 }
 
 fn span_zero() with Pure = Span(0, 0, 0, 0)
@@ -849,31 +928,31 @@ fn span_zero() with Pure = Span(0, 0, 0, 0)
 // read THIS instead of flooring to 0:0 (SYNTAX principle 5).
 fn reason_span_or_zero(ref reason) with Pure = match reason {
   Located(span, _) => span,
-  _                => span_zero()
+  _ => span_zero(),
 }
 
 // Inference + Verify ledger discharges obligations at construction
 // sites. Runtime-erased. Failed discharge surfaces as V_Pending or
 // V_Failed diagnostic with the predicate and the failing expression
 // span.
-
 type Handle = Int where 0 <= self
-type TagId = Int where 0 <= self && self <= 255
-type ValidOffset = Int where 0 <= self
-type NonEmptyList = [a] where len(self) > 0
 
-fn span_valid(s) with Pure = {
-  let Span(sl, sc, el, ec) = s
-  sl >= 0 && sc >= 0 && el >= sl && (el > sl || ec >= sc)
+type TagId = Int where 0 <= self && self <= 255
+
+type ValidOffset = Int where 0 <= self
+
+type NonEmptyList = [a] where 0 < len(self)
+
+fn span_valid(s) with Pure = match s {
+  Span(sl, sc, el, ec) => sl >= 0 && sc >= 0 && el >= sl && (el > sl || ec >= sc),
 }
 
 type ValidSpan = Span where span_valid(self)
 
-fn span_contains(outer, inner) with Pure = {
-  let Span(osl, osc, oel, oec) = outer
-  let Span(isl, isc, iel, iec) = inner
-  (osl < isl || (osl == isl && osc <= isc))
-    && (oel > iel || (oel == iel && oec >= iec))
+fn span_contains(outer, inner) with Pure = match outer {
+  Span(osl, osc, oel, oec) => match inner {
+    Span(isl, isc, iel, iec) => (osl < isl || osl == isl && osc <= isc) && (oel > iel || oel == iel && oec >= iec),
+  },
 }
 
 // Tokens are the lexer's output; the parser's input. The wrapper
@@ -888,84 +967,132 @@ fn span_contains(outer, inner) with Pure = {
 // adding a TokenKind variant fails compilation across every match
 // site until the variant is handled (H6's discipline at the lexical
 // layer).
-
 type Token = Tok(TokenKind, Span)
 
 type TokenKind
   // ─── Keywords (19) ───────────────────────────────────────────────
-  = TFn | TLet | TIf | TElse | TMatch | TType
-  | TEffect | THandler | TWith
-  | TResume | TPerform
-
-  | TImport | TWhere
-  | TOwn | TRef | TPure
-  | TTrue | TFalse
-
+  = TFn
+  | TLet
+  | TIf
+  | TElse
+  | TMatch
+  | TType
+  | TEffect
+  | THandler
+  | TWith
+  | TResume
+  | TPerform
+  | TImport
+  | TWhere
+  | TOwn
+  | TRef
+  | TPure
+  | TTrue
+  | TFalse
   // ─── Identifiers and literals (7) ────────────────────────────────
   | TIdent(String)
   | TIntLit(Int)
   | TFloatLit(Float)
   | TStringLit(String)
-  | TComment(String)                // // — every comment is graph content,
-                                    //   attached to the next decl / enclosing node
-  | TStringPart(String)             // literal chunk of a "..." string
-                                    //   (amendment C brace-interpolation)
-  | TStringSplice                   // marks the start of a {expr} splice;
-                                    //   followed by ordinary tokens then
-                                    //   TRBrace (re-used) closes it
-
+  // // — every comment is graph content,
+  //   attached to the next decl / enclosing node
+  | TComment(String)
+  // literal chunk of a "..." string
+  //   (amendment C brace-interpolation)
+  | TStringPart(String)
+  // marks the start of a {expr} splice;
+  //   followed by ordinary tokens then
+  //   TRBrace (re-used) closes it
+  | TStringSplice
   // ─── Two-character operators (14) ────────────────────────────────
-  | TEqEq | TBangEq | TLtEq | TGtEq          // comparison
-  | TArrow | TFatArrow                       // -> and =>
-  | TPlusPlus                                // ++ concat
-  | TPipeGt | TLtPipe | TGtLt | TTildeGt | TLtTilde   // five verbs
-  | TAndAnd | TOrOr                          // logical
-
+  //
+  // comparison
+  | TEqEq
+  | TBangEq
+  | TLtEq
+  | TGtEq
+  // -> and =>
+  | TArrow
+  | TFatArrow
+  // ++ concat
+  | TPlusPlus
+  // five verbs
+  | TPipeGt
+  | TLtPipe
+  | TGtLt
+  | TTildeGt
+  | TLtTilde
+  // logical
+  | TAndAnd
+  | TOrOr
   // ─── Single-character operators and punctuation (22) ─────────────
-  | TLParen | TRParen | TLBrace | TRBrace | TLBracket | TRBracket
-  | TComma | TDot | TColon | TSemicolon
-  | TPlus | TMinus | TStar | TSlash | TPercent
-  | TEq | TLt | TGt | TBang
-  | TAmp                            // `&` — effect-row intersection (inter_row);
-                                    // the surface of the Boolean row algebra's `&`
-                                    // (SYNTAX.md §«Named effect rows»). `&&` is the
-                                    // distinct TAndAnd (logical and); maximal munch
-                                    // lexes `&&` before a bare `&` reaches here.
-  | TPipe | TAt | THole
-
+  | TLParen
+  | TRParen
+  | TLBrace
+  | TRBrace
+  | TLBracket
+  | TRBracket
+  | TComma
+  | TDot
+  | TColon
+  | TSemicolon
+  | TPlus
+  | TMinus
+  | TStar
+  | TSlash
+  | TPercent
+  | TEq
+  | TLt
+  | TGt
+  | TBang
+  // `&` — effect-row intersection (inter_row);
+  // the surface of the Boolean row algebra's `&`
+  // (SYNTAX.md §«Named effect rows»). `&&` is the
+  // distinct TAndAnd (logical and); maximal munch
+  // lexes `&&` before a bare `&` reaches here.
+  | TAmp
+  | TPipe
+  | TAt
+  | THole
   // ─── Layout / structural (2) ─────────────────────────────────────
-  | TNewline                        // statement separator; transparent around binops (layout is never semantics)
-  | TEof                            // end of input — always last
+  //
+  // statement separator; transparent around binops (layout is never semantics)
+  | TNewline
+  // end of input — always last
+  | TEof
 
 // Token accessors — uniform with N-pattern accessors.
+fn token_kind(t) with Pure = match t {
+  Tok(k, _) => k,
+}
 
-fn token_kind(t) with Pure = let Tok(k, _) = t; k
-fn token_span(t) with Pure = let Tok(_, s) = t; s
+fn token_span(t) with Pure = match t {
+  Tok(_, s) => s,
+}
 
 // Every expression site is an N(body, span, handle). The handle is
 // allocated at parse time via graph_fresh_ty(Placeholder(span)) and
 // populated during inference. No null handle. No sentinel zero.
 // Type resolution is always a live chase via LookupTy — never a
 // cached Ty field.
+type Node = N(NodeBody, Span, Int)
 
-type Node
-  = N(NodeBody, Span, Int)   // body, span, TypeHandle
-
-fn span_of_node(node) = {
-  let N(_, span, _) = node
-  span
+// body, span, TypeHandle
+fn span_of_node(node) = match node {
+  N(_, span, _) => span,
 }
 
 type NodeBody
   = NExpr(Expr)
   | NStmt(Stmt)
   | NPat(Pat)
-  | NHole(Int)               // Hazel marked hole — inference populates with reason
+  // Hazel marked hole — inference populates with reason
   // Synthetic module entity — one per source file. An orphan module-level
   // comment attaches to this handle in the comment weave (graph_attach_comment);
   // decls lists every top-level Handle so a doc/render projection can
   // walk the module without re-parsing source.
-  | NModule({path: String, decls: [Node], span: Span})
+  | NHole(Int)
+  | NModule({decls: [Node], path: String, span: Span})
   // An authored type annotation carried live in the graph — the `-> RetTy`
   // return annotation (SYNTAX.md «Return type omission»: absent = inferred,
   // present = a CONSTRAINT). parse_type_expr mints this carrying the real Ty
@@ -977,7 +1104,6 @@ type NodeBody
   | NTypeAnn(Ty)
 
 // ─── Expr (spec 03) ────────────────────────────────────────────────
-
 type Expr
   = LitInt(Int)
   | LitFloat(Float)
@@ -988,60 +1114,72 @@ type Expr
   | BinOpExpr(BinOp, Node, Node)
   | UnaryOpExpr(UnaryOp, Node)
   | CallExpr(Node, [Node])
-  | LabeledArg(String, Node)       // a `name = value` call argument (SYNTAX.md
-                                   // §«Labeled call arguments»). The label is the
-                                   // PRODUCT-FIELD name of the parameter-list-as-
-                                   // product: a call constructs its arg product
-                                   // positionally, by field, or mixed — the SAME
-                                   // machinery as a record literal. resolve_call_args
-                                   // reorders these to positional against the callee's
-                                   // declared param names (one read, both infer + lower
-                                   // see the identical order). The wrapper never reaches
-                                   // infer_expr / lower_expr — it is resolved away first.
-  | LambdaExpr([TParam], Node)     // params, body
+  // a `name = value` call argument (SYNTAX.md
+  // §«Labeled call arguments»). The label is the
+  // PRODUCT-FIELD name of the parameter-list-as-
+  // product: a call constructs its arg product
+  // positionally, by field, or mixed — the SAME
+  // machinery as a record literal. resolve_call_args
+  // reorders these to positional against the callee's
+  // declared param names (one read, both infer + lower
+  // see the identical order). The wrapper never reaches
+  // infer_expr / lower_expr — it is resolved away first.
+  | LabeledArg(String, Node)
+  // params, body
+  | LambdaExpr([TParam], Node)
   | IfExpr(Node, Node, Node)
-  | BlockExpr([Node], Node)        // stmts, final expr
-  | MatchExpr(Node, [(Pat, Node)]) // scrutinee, arms
-  | ResumeExpr(Node, [{init: Node, name: String}]) // value, state updates
+  // stmts, final expr
+  | BlockExpr([Node], Node)
+  // scrutinee, arms
+  | MatchExpr(Node, [(Pat, Node)])
+  // value, state updates
+  | ResumeExpr(Node, [{init: Node, name: String}])
   | MakeListExpr([Node])
   | MakeTupleExpr([Node])
-  | MakeRecordExpr([(String, Node)]) // [(field_name: String, value: Node)] — sorted at parse
-  | RecordUpdateExpr(Node, [(String, Node)]) // {...base, f: v, ...} — non-destructive update:
-                                   // copy base's fields, overwrite/add the listed
-                                   // [(name, value)] (sorted). base is owned-read,
-                                   // not mutated (SYNTAX.md §«Record update»). One
-                                   // spread base per literal; the override fields
-                                   // are the same product-field machinery as
-                                   // MakeRecordExpr.
-  | NamedRecordExpr(String, [(String, Node)]) // type_name + sorted fields — nominal record literal
-  | IndexExpr(Node, Node)          // `xs[i]` semantic AST — receiver, index.
-                                   // Infer dispatches on receiver's type:
-                                   // TList → list_index (runtime); TTuple →
-                                   // compile-time slot from constant index;
-                                   // TRecord by int-key → the field-offset
-                                   // load. The eager
-                                   // parse-time fold to CallExpr(VarRef("list_index"))
-                                   // was drift mode 9 (eager-form-commitment) —
-                                   // it committed the dispatch before infer knew
-                                   // the receiver's shape. Per #139.
-  | MakeStringExpr([Node])         // string interpolation fragments — Node list
-                                   // where each Node is either NExpr(LitString(s))
-                                   // for literal chunks OR an arbitrary expression
-                                   // node for a splice. Semantic-preserving form
-                                   // per #138; parser produces this instead of an
-                                   // eager str_concat fold so infer can narrow
-                                   // (each splice must be Showable) and the
-                                   // gradient can teach which splices are constant
-                                   // (foldable at compile time) per Mentl-ultimate
-                                   // string-substrate discipline.
+  // [(field_name: String, value: Node)] — sorted at parse
+  | MakeRecordExpr([(String, Node)])
+  // {...base, f: v, ...} — non-destructive update:
+  // copy base's fields, overwrite/add the listed
+  // [(name, value)] (sorted). base is owned-read,
+  // not mutated (SYNTAX.md §«Record update»). One
+  // spread base per literal; the override fields
+  // are the same product-field machinery as
+  // MakeRecordExpr.
+  | RecordUpdateExpr(Node, [(String, Node)])
+  // type_name + sorted fields — nominal record literal
+  | NamedRecordExpr(String, [(String, Node)])
+  // `xs[i]` semantic AST — receiver, index.
+  // Infer dispatches on receiver's type:
+  // TList → list_index (runtime); TTuple →
+  // compile-time slot from constant index;
+  // TRecord by int-key → the field-offset
+  // load. The eager
+  // parse-time fold to CallExpr(VarRef("list_index"))
+  // was drift mode 9 (eager-form-commitment) —
+  // it committed the dispatch before infer knew
+  // the receiver's shape. Per #139.
+  | IndexExpr(Node, Node)
+  // string interpolation fragments — Node list
+  // where each Node is either NExpr(LitString(s))
+  // for literal chunks OR an arbitrary expression
+  // node for a splice. Semantic-preserving form
+  // per #138; parser produces this instead of an
+  // eager str_concat fold so infer can narrow
+  // (each splice must be Showable) and the
+  // gradient can teach which splices are constant
+  // (foldable at compile time) per Mentl-ultimate
+  // string-substrate discipline.
+  | MakeStringExpr([Node])
   | FieldExpr(Node, String)
-  | PipeExpr(PipeKind, Node, Node) // |> <| >< ~> <~
-  | ExprPlaceholder                // ? — parser spawns NHole
+  // |> <| >< ~> <~
+  | PipeExpr(PipeKind, Node, Node)
+  // ? — parser spawns NHole
+  | ExprPlaceholder
 
 // ─── The five verbs (spec 10) ──────────────────────────────────────
 // Shape IS the computation graph. Formatter (a handler) emits
 // sequential ops at left edge; convergent ops at indented center.
-
+//
 // ~> has ONE precedence (1, the loosest binary operator — SYNTAX.md
 // §Precedence): the handler at the foot of a chain governs everything
 // to its left; parenthesize to narrow. Layout is never semantics —
@@ -1060,14 +1198,20 @@ type Expr
 // Gpu) is a `~>` handler choice over the pure-topology verb, never
 // baked into the verb. SYNTAX.md §«><»/§«<|».
 type FanOwnership
-  = FanShare        // <|   ONE input ref-borrowed across all branches
-  | FanDistribute   // ><   N independent owned inputs
+  // <|   ONE input ref-borrowed across all branches
+  = FanShare
+  // ><   N independent owned inputs
+  | FanDistribute
 
 type PipeKind
-  = PForward          // |>   converge — transparent wire
-  | PFanout(FanOwnership)  // <| / ><   parallel fanout, ownership-discriminated
-  | PTee              // ~>   handler-attach — governs the whole chain to its left
-  | PFeedback         // <~   feedback — closes cycle under ambient clock
+  // |>   converge — transparent wire
+  = PForward
+  // <| / ><   parallel fanout, ownership-discriminated
+  | PFanout(FanOwnership)
+  // ~>   handler-attach — governs the whole chain to its left
+  | PTee
+  // <~   feedback — closes cycle under ambient clock
+  | PFeedback
 
 // The `<~` RHS vocabulary (FeedbackSpec) has ONE home: lib/prelude.mn's
 // Delay/Accumulate/FilterSpec + their constructor fns — the surface SYNTAX
@@ -1077,7 +1221,7 @@ type PipeKind
 // Deleted 2026-07-18 — the duplicate-type-name silent merge, in the wheel's
 // own source (the decl-site refusal for the class is the named peer
 // Hβ.infer.type-decl-name-registry).
-
+//
 // Region (spec I12) — Tofte-Talpin region identity for escape
 // analysis. Each region scope (a `~>`-installed arena handler)
 // produces a region; values allocated inside it carry that region as a
@@ -1089,8 +1233,7 @@ type PipeKind
 // arena install) and the span where the region was installed.
 // Span tracking lets escape diagnostics point at the ORIGINAL
 // region site rather than the escape attempt alone.
-type Region
-  = Region(Int, Span)
+type Region = Region(Int, Span)
 
 // RegionTrack (spec I12) — intercepts alloc sites to tag each value
 // with its originating region; checks values at return sites for
@@ -1103,16 +1246,17 @@ type Region
 // compares a returned value's region against the ambient region
 // on fn return.
 fn mk_tok(kind, sl, sc, el, ec) with Pure = Tok(kind, Span(sl, sc, el, ec))
+
 effect RegionTrack {
   region_enter(Span) -> Int
-  region_exit(Int) -> ()
-  tag_alloc(Int) -> ()
-  tag_alloc_join(Int, [Int]) -> ()
-                                                  // value_handle, field_handles —
-                                                  // tag with the deepest (innermost)
-                                                  // region across (current, fields).
-                                                  // Used by record/variant construction.
-  check_escape(Int, Span) -> ()
+  region_exit(Int)
+  tag_alloc(Int)
+  tag_alloc_join(Int, [Int])
+  // value_handle, field_handles —
+  // tag with the deepest (innermost)
+  // region across (current, fields).
+  // Used by record/variant construction.
+  check_escape(Int, Span)
   current_region() -> Int
 }
 
@@ -1126,7 +1270,7 @@ effect RegionTrack {
 // after collection to populate the handler's state.
 effect StringTable {
   string_offset(String) -> Int
-  set_string_entries([(String, Int)]) -> ()
+  set_string_entries([(String, Int)])
 }
 
 // SpecTwins — the specialization registry (the StringTable pattern one shelf
@@ -1138,7 +1282,7 @@ effect StringTable {
 effect SpecTwins {
   spec_twins_exist() -> Bool
   spec_twin_known(String) -> Bool
-  set_spec_twins([String]) -> ()
+  set_spec_twins([String])
 }
 
 // Evidence (spec W4) — runtime witness of an effect-to-handler-arm
@@ -1156,111 +1300,114 @@ effect SpecTwins {
 //   offset 8+4*C+4*j: the j-th evidence fn idx (C = capture_count)
 // The body's evidence count and capture_count are known at emit time;
 // LEvPerform's offset arithmetic is compile-time-resolved.
-type Evidence
-  = Ev(String, Int)   // op_name, slot_idx — the slot in __state where
-                      // the arm's fn_idx was written by the caller.
+type Evidence = Ev(String, Int)
 
+// op_name, slot_idx — the slot in __state where
+// the arm's fn_idx was written by the caller.
+//
 // ─── BodyContext (H1) ──────────────────────────────────────────────
 // Per-fn-body emit-time metadata: how many captures the body's
 // closure has (the fence between captures and evidence in __state)
 // and the body's evidence shape (which ops resolve through which
 // slots). Set at emit_fn_body entry; read by LEvPerform's offset
 // arithmetic and any future evidence-aware emit site.
-
 effect BodyContext {
   current_body_captures() -> Int
-  set_body_captures(Int) -> ()
+  set_body_captures(Int)
   current_body_evidence() -> [Int]
-  set_body_evidence([Int]) -> ()
+  set_body_evidence([Int])
 }
 
 // ─── Stmt (spec 03) ────────────────────────────────────────────────
-
 type Stmt
-  = LetStmt(Pat, Node, Node)     // pat, value, annotation node (NTypeAnn(ty) present, LitUnit absent — mirrors FnStmt's ret_ann)
+  // pat, value, annotation node (NTypeAnn(ty) present, LitUnit absent — mirrors FnStmt's ret_ann)
+  = LetStmt(Pat, Node, Node)
   | FnStmt(String, [TParam], Node, [(EffName, Bool, EConn)], Node)
-                           // name, params (TParam), retty, effects, body
+  // name, params (TParam), retty, effects, body
   | TypeDefStmt(String, [(String, [Ty], Node)])
-                           // name, then per variant its name + field types
+  // name, then per variant its name + field types
   | EffectDeclStmt(String, [(String, [Ty], Ty, Node)])
-                           // effect name, ops (each is (op_name, param_tys, ret_ty);
-                           // ResumeDiscipline is inferred at handler-decl time
-                           // from each arm body, not declared on the effect op)
+  // effect name, ops (each is (op_name, param_tys, ret_ty);
+  // ResumeDiscipline is inferred at handler-decl time
+  // from each arm body, not declared on the effect op)
   | HandlerDeclStmt(String, String, [TParam], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])
-                           // handler name, effect name, config-params, state-fields, arms
-                           // config: [TParam] — the fn-param carrier (SYNTAX §«Handler
-                           //   declarations»: the config list IS a parameter product, so
-                           //   each param carries the product's default slot); values are
-                           //   closure-captured at install site, absent fields fill from
-                           //   param_default through resolve_call_args
-                           // state:  List<{name: String, init: Node}> — per-arm scope; updates via `resume(...) with f = e`
-                           // The state element type is CARRIED in the ADT field
-                           // (not bare `List`) so `.name`/`.init` resolve to sorted
-                           // offsets at lower-time — never field-offset-resolution's
-                           // silent offset-0 fabrication on an erased element type.
-                           // arms:   List<{args, body, op_name}>
-                           // Per Hβ.first-light.handler-config-state-substrate (2026-05-06):
-                           // config + state extracted at parse time; bound in arm scope at infer + lower
+  // handler name, effect name, config-params, state-fields, arms
+  // config: [TParam] — the fn-param carrier (SYNTAX §«Handler
+  //   declarations»: the config list IS a parameter product, so
+  //   each param carries the product's default slot); values are
+  //   closure-captured at install site, absent fields fill from
+  //   param_default through resolve_call_args
+  // state:  List<{name: String, init: Node}> — per-arm scope; updates via `resume(...) with f = e`
+  // The state element type is CARRIED in the ADT field
+  // (not bare `List`) so `.name`/`.init` resolve to sorted
+  // offsets at lower-time — never field-offset-resolution's
+  // silent offset-0 fabrication on an erased element type.
+  // arms:   List<{args, body, op_name}>
+  // Per Hβ.first-light.handler-config-state-substrate (2026-05-06):
+  // config + state extracted at parse time; bound in arm scope at infer + lower
   | ExprStmt(Node)
   | ImportStmt(String)
   | RefineStmt(String, Ty, Predicate)
-                           // type X = T where P — nominal refinement
+  // type X = T where P — nominal refinement
   | AliasStmt(String, Ty)
-                           // type X = T — transparent alias (no `where`, RHS a
-                           // single type-expression, not a record literal, not a
-                           // `|`-alternation). Infer registers TAlias(X, T); X and
-                           // T unify transparently (SYNTAX.md §«Type aliases»). The
-                           // authored name travels in the TAlias for Reason chains.
 
+// type X = T — transparent alias (no `where`, RHS a
+// single type-expression, not a record literal, not a
+// `|`-alternation). Infer registers TAlias(X, T); X and
+// T unify transparently (SYNTAX.md §«Type aliases»). The
+// authored name travels in the TAlias for Reason chains.
+//
 // ─── Pat (spec 03) ─────────────────────────────────────────────────
-
 type Pat
   = PVar(String)
   | PWild
   | PLit(LitValue)
   | PCon(String, [Pat])
   | PTuple([Pat])
-  | PList([Pat], Option(String))    // prefix pats, optional rest name (`...rest`)
-  | PRecord([(String, Pat)]) // [(fieldname, Pat)]
-  | PAlt([Pat])             // pat_1 | pat_2 | ... — any branch matches; branches
-                            // bind the same names with unifiable types (SYNTAX.md
-                            // §"Pattern alternation — rule")
+  // prefix pats, optional rest name (`...rest`)
+  | PList([Pat], Option(String))
+  // [(fieldname, Pat)]
+  | PRecord([(String, Pat)])
+  // pat_1 | pat_2 | ... — any branch matches; branches
+  // bind the same names with unifiable types (SYNTAX.md
+  // §"Pattern alternation — rule")
+  | PAlt([Pat])
 
-type LitValue
-  = LVInt(Int)
-  | LVFloat(Float)
-  | LVString(String)
-  | LVBool(Bool)
+type LitValue = LVInt(Int) | LVFloat(Float) | LVString(String) | LVBool(Bool)
 
 // Decidable shape. Verify discharges: ledger (Phase 1) accumulates;
 // verify_smt (Arc F.1) routes by theory — Z3 / cvc5 / Bitwuzla.
-
 type Predicate
   = PTrue
-  | PCompare(BinOp, Int, Int)    // op over two operand node HANDLES — graph_node_body resolves each Expr live; the AST lives in the graph, the predicate carries the edge
+  // op over two operand node HANDLES — graph_node_body resolves each Expr live; the AST lives in the graph, the predicate carries the edge
+  | PCompare(BinOp, Int, Int)
   | PAnd(Predicate, Predicate)
   | POr(Predicate, Predicate)
   | PNot(Predicate)
-  | PBoolNode(Int)               // predicate IS a bool expr node, by handle (a boolean call or bare bool var folds in here)
-  | PPatternMatch(Pat, Int)      // scrutinee node handle matches pat — match-narrowing
-  | PFlowLe(FlowLabel, FlowLabel) // IFC obligation (§4⑥): src ⊑ dst in the flow lattice.
-                                 // Compile-time decidable by flow_le — ALWAYS Some(true/false),
-                                 // never deferred. verify(span, PFlowLe(src, dst), reason)
-                                 // IS the flow check; ERefinementRejected carries the violation.
-                                 // No new effect op, no new diagnostic, no new handler arm.
-  | PWithSelf(Int, Predicate)    // the `self` BINDER: the value-node handle self resolves
-                                 // to, carried WITH the predicate as data. self may sit
-                                 // NESTED inside an arithmetic operand (`self + 1`), where a
-                                 // physical operand swap cannot reach without minting a
-                                 // rewritten node — the binder threads through
-                                 // predicate_decide_at into every node_const_at instead.
-                                 // Appended LAST so existing variant tags are unshifted.
+  // predicate IS a bool expr node, by handle (a boolean call or bare bool var folds in here)
+  | PBoolNode(Int)
+  // scrutinee node handle matches pat — match-narrowing
+  | PPatternMatch(Pat, Int)
+  // IFC obligation (§4⑥): src ⊑ dst in the flow lattice.
+  // Compile-time decidable by flow_le — ALWAYS Some(true/false),
+  // never deferred. verify(span, PFlowLe(src, dst), reason)
+  // IS the flow check; ERefinementRejected carries the violation.
+  // No new effect op, no new diagnostic, no new handler arm.
+  | PFlowLe(FlowLabel, FlowLabel)
+  // the `self` BINDER: the value-node handle self resolves
+  // to, carried WITH the predicate as data. self may sit
+  // NESTED inside an arithmetic operand (`self + 1`), where a
+  // physical operand swap cannot reach without minting a
+  // rewritten node — the binder threads through
+  // predicate_decide_at into every node_const_at instead.
+  // Appended LAST so existing variant tags are unshifted.
+  | PWithSelf(Int, Predicate)
 
 // PExpr is DELETED: its leaves (PSelf/PInt/PEVar/PApp) were a lossy COPY of the
 // expression the AST node already holds (the deleted node_to_pexpr re-derived it with a
 // `_ => PEVar("?")` surrender). The predicate now carries the live operand Node
 // and Verify reads its Expr live — carry the handle, read live, delete the copy.
-
+//
 // ─── FlowLabel — the IFC frontier (PLAN.md §4⑥, SYNTAX.md §4⑥) ──────────
 //
 // The three-level information-flow lattice. Every expression node in the graph
@@ -1291,55 +1438,68 @@ type Predicate
 // The ADT is real now; infer.mn's MakeStringExpr arm emits the flow check when the
 // splice is Secret or Tainted into a Public-bound context (Arc F.1 discharge).
 // The handler swap is verify_smt (not verify_ledger). No new surface form.
-
 type FlowLabel
-  = Public     // safe to observe; default for all unannotated expressions
-  | Tainted    // derived from Secret through computation — carries the taint
-  | Secret     // must not flow into any Public-observable (log/net/stderr)
+  // safe to observe; default for all unannotated expressions
+  = Public
+  // derived from Secret through computation — carries the taint
+  | Tainted
+  // must not flow into any Public-observable (log/net/stderr)
+  | Secret
 
 // flow_label_join — lattice join: the label of a derived expression reaches the
 // join of its operands' labels. Pure — the lattice is a compile-time fact.
 // H6: exhaustive over all 3×3 pairs; no wildcard arms on a load-bearing ADT.
 fn flow_label_join(a, b) with Pure = match a {
-  Secret  => Secret,
+  Secret => Secret,
   Tainted => match b {
-    Secret  => Secret,
+    Secret => Secret,
     Tainted => Tainted,
-    Public  => Tainted
+    Public => Tainted,
   },
-  Public  => match b {
-    Secret  => Secret,
+  Public => match b {
+    Secret => Secret,
     Tainted => Tainted,
-    Public  => Public
-  }
+    Public => Public,
+  },
 }
 
 // flow_le — lattice order: a ⊑ b (a is at least as restrictive as b).
 // Public ⊑ Public ⊑ Tainted ⊑ Secret. H6: exhaustive over both dimensions.
 fn flow_le(a, b) with Pure = match a {
-  Secret  => match b { Secret => true,  Tainted => false, Public => false },
-  Tainted => match b { Secret => true,  Tainted => true,  Public => false },
-  Public  => match b { Secret => true,  Tainted => true,  Public => true  }
+  Secret => match b {
+    Secret => true,
+    Tainted => false,
+    Public => false,
+  },
+  Tainted => match b {
+    Secret => true,
+    Tainted => true,
+    Public => false,
+  },
+  Public => match b {
+    Secret => true,
+    Tainted => true,
+    Public => true,
+  },
 }
 
 fn show_flow_label(label) with Pure = match label {
-  Public  => "Public",
+  Public => "Public",
   Tainted => "Tainted",
-  Secret  => "Secret"
+  Secret => "Secret",
 }
 
 // Option lives in lib/prelude.mn — the vocabulary type at the vocabulary
 // home, ONE declaration serving the wheel's self-build (src+lib) and every
 // program that links the prelude.
-
+//
 // Scoped bindings via push/pop mark. Env is never passed as argument.
 // Every read performs env_lookup; every write performs env_extend.
 // Entries are 4-tuples (name, Scheme, Reason, SchemeKind) — SchemeKind
 // carries construction-origin metadata that lower dispatches on.
+type Env = Env([(String, Scheme, Reason, SchemeKind)])
 
-type Env
-  = Env([(String, Scheme, Reason, SchemeKind)])   // [(name, Scheme, Reason, SchemeKind)]
-
+// [(name, Scheme, Reason, SchemeKind)]
 effect EnvRead {
   env_lookup(String) -> Option((Scheme, Reason, SchemeKind))
   env_lookup_type(String) -> Option((Scheme, Reason, SchemeKind))
@@ -1349,9 +1509,9 @@ effect EnvRead {
 }
 
 effect EnvWrite {
-  env_extend(String, Scheme, Reason, SchemeKind) -> ()
-  env_scope_enter() -> ()
-  env_scope_exit() -> ()
+  env_extend(String, Scheme, Reason, SchemeKind)
+  env_scope_enter()
+  env_scope_exit()
 }
 
 // The branch cursor's env join surface (Phase C, C1c-2). Both ops are
@@ -1400,49 +1560,67 @@ effect Intern {
 // graph_push_checkpoint / graph_rollback are the speculative surface:
 // Mentl's oracle captures the trail length, tries a tentative patch,
 // rolls back to restore. Trail-based; O(M) where M is mutations.
-
 effect GraphRead {
   graph_chase(Int) -> GNode
-  graph_chase_handle(Int) -> Int    // the canonical ROOT handle of a TVar chain (union-find find)
+  // the canonical ROOT handle of a TVar chain (union-find find)
+  graph_chase_handle(Int) -> Int
   graph_epoch() -> Int
-  graph_next() -> Int                 // the fresh-handle counter — the node-space bound for saturation
+  // the fresh-handle counter — the node-space bound for saturation
+  graph_next() -> Int
   graph_reason_edge(Int, Int) -> Reason
-  graph_reason_at(Int) -> Reason      // the handle's OWN reason cell, unchased — a bind's VarLookup survives here even when the bound type is a var the chase would follow; the stmt-layer projection reads reference edges through it
+  // the handle's OWN reason cell, unchased — a bind's VarLookup survives here even when the bound type is a var the chase would follow; the stmt-layer projection reads reference edges through it
+  graph_reason_at(Int) -> Reason
   graph_snapshot() -> Graph
   graph_push_checkpoint() -> Int
-  graph_node_body(Int) -> NodeBody    // resolve a node's body by its handle from the parallel program weave — every AST node is registered there at construction (NHole if absent)
-  graph_comment_at(Int) -> String     // resolve a node's parse-attached comment prose from the parallel comment weave (empty string if absent); the Why engine / formatter / cursor project it
-  graph_comment_span_at(Int) -> Span  // the comment's own source span, carried from parse (zero span if absent) — the reference diagnostics anchor here
-  graph_attach_comment_ref(Int, Int) -> ()  // draw a resolved comment-reference edge (owner node -> referent decl node); drawn once at the infer tail
-  graph_comment_refs_of(Int) -> [Int]       // reverse read: the comment owners referencing this decl — the audit's referenced-by projection
-  graph_canon_at(Int) -> Int          // the e-graph canonical pointer at a handle — the equivalence weave's find step (returns the handle itself if it is its own e-class root). One co-indexed weave, exactly like the nodes column's TVar union-find; egraph_extract chases it live.
-  graph_narrow_at(Int) -> Int         // the refinement-narrowing pointer at a handle — the path-predicate's bool-node handle proven to hold AT this program point (0 = no narrowing). One co-indexed weave like the canon column; lower's verify-obligation read chases it live to elide a check the path already proves (§4⑥). Appropriate as a side-table: narrowing is a per-program-point boolean fact, not a unifiable variable.
-  graph_boundary_at(Int) -> ExecutableBoundary // exact compiler-created executable edges keyed by fanout site
+  // resolve a node's body by its handle from the parallel program weave — every AST node is registered there at construction (NHole if absent)
+  graph_node_body(Int) -> NodeBody
+  // resolve a node's parse-attached comment prose from the parallel comment weave (empty string if absent); the Why engine / formatter / cursor project it
+  graph_comment_at(Int) -> String
+  // the comment's own source span, carried from parse (zero span if absent) — the reference diagnostics anchor here
+  graph_comment_span_at(Int) -> Span
+  // draw a resolved comment-reference edge (owner node -> referent decl node); drawn once at the infer tail
+  graph_attach_comment_ref(Int, Int)
+  // reverse read: the comment owners referencing this decl — the audit's referenced-by projection
+  graph_comment_refs_of(Int) -> [Int]
+  // the e-graph canonical pointer at a handle — the equivalence weave's find step (returns the handle itself if it is its own e-class root). One co-indexed weave, exactly like the nodes column's TVar union-find; egraph_extract chases it live.
+  graph_canon_at(Int) -> Int
+  // the refinement-narrowing pointer at a handle — the path-predicate's bool-node handle proven to hold AT this program point (0 = no narrowing). One co-indexed weave like the canon column; lower's verify-obligation read chases it live to elide a check the path already proves (§4⑥). Appropriate as a side-table: narrowing is a per-program-point boolean fact, not a unifiable variable.
+  graph_narrow_at(Int) -> Int
+  // exact compiler-created executable edges keyed by fanout site
   // The branch cursor's config seed (the fan, C1c-2): the root's live
   // spine table, open count, and span index, read once after the plan
   // pre-opens every band — the spine is then stable for the whole walk
   // and the span index is complete (graph_index_span is parse-only, so
   // no branch ever appends). A branch graph_handler installs over
   // these with its stmt's planned range as (next0, limit0).
+  graph_boundary_at(Int) -> ExecutableBoundary
   graph_branch_seed() -> ([{boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody]}], Int, [(ValidSpan, Int)])
 }
 
 effect GraphWrite {
   graph_fresh_ty(Reason) -> Handle
   graph_fresh_row(Reason) -> Handle
-  graph_register_node(Int, NodeBody) -> ()    // edge-link a node's body into the one graph at its handle (the program column of the handle's page); resolves via graph_node_body
-  graph_attach_comment(Int, String, Span) -> ()  // attach parse-collected comment prose + its span to a node's handle (the comment column of the handle's page); resolves via graph_comment_at — a comment is graph content
-  graph_canon_set(Int, Int) -> ()              // draw the e-graph equivalence edge from ≡ to — point the from-side's canonical pointer at the cheaper target. The union-find union step over the equivalence weave; saturation reads it back via graph_canon_at (find). Idempotent: re-pointing an already-rooted source overwrites in place (one cell), never grows a ledger.
-  graph_narrow_set(Int, Int) -> ()             // draw the refinement-narrowing edge — point the program point's narrowing pointer at the path-predicate's bool-node proven to hold there (§4⑥). One co-indexed weave like the canon column; idempotent (one cell per handle), read back via graph_narrow_at by lower's check-elision.
-  graph_boundary_set(Int, ExecutableBoundary) -> () // draw/replace one fanout's executable edges; trail-backed because inference runs under speculative checkpoints
-  graph_bind(Int, Ty, Reason) -> ()
-  graph_bind_hole(Int, Reason) -> ()   // mark a node an OBSERVED FAILURE (NErrorHole) — the productive-under-error poison. An env miss binds this, never TVar(self): the self-var tripped graph_bind's own occurs check (a spurious 0:0 E_OccursCheck per missing name) and read downstream as a normal free var (the ownership move-default cascade). A hole is the fact itself: unify no-ops on it, generalize preserves the handle, consumers stay silent.
-  graph_bind_row(Int, EffRow, Reason) -> ()
-  graph_finalize_row(Int, EffRow, Reason) -> ()  // the decl-exit REPLACE — inf_exit_fn publishing the frame's accumulated row as the fn's verdict. Distinct from graph_bind_row BY OP because the two writes have different algebra: a teaching bind on an already-bound row cell JOINS (the row is a join-semilattice; joins commute, so N caller branches teaching one cell converge to the same value in any order — LVars' law), while the finalization REPLACES (the frame's accumulation is the decl's own total, already containing everything taught)
-  graph_compress_row(Int, EffRow) -> ()  // union-find path compression at the row sort — an OPTIMIZATION write, distinct from the judgment bind: a BRANCH cursor's arm skips it (a branch writing shared chain cells makes sibling chases schedule-dependent — the measured k2 yield-floor flips; the root's sequential walks re-compress), the root's arm rebinds the chain link to its resolved terminal
-  graph_bind_record_row(Int, [(String, Ty)], Reason) -> ()
-  graph_rollback(Int) -> ()
-  graph_index_span(ValidSpan, Int) -> ()
+  // edge-link a node's body into the one graph at its handle (the program column of the handle's page); resolves via graph_node_body
+  graph_register_node(Int, NodeBody)
+  // attach parse-collected comment prose + its span to a node's handle (the comment column of the handle's page); resolves via graph_comment_at — a comment is graph content
+  graph_attach_comment(Int, String, Span)
+  // draw the e-graph equivalence edge from ≡ to — point the from-side's canonical pointer at the cheaper target. The union-find union step over the equivalence weave; saturation reads it back via graph_canon_at (find). Idempotent: re-pointing an already-rooted source overwrites in place (one cell), never grows a ledger.
+  graph_canon_set(Int, Int)
+  // draw the refinement-narrowing edge — point the program point's narrowing pointer at the path-predicate's bool-node proven to hold there (§4⑥). One co-indexed weave like the canon column; idempotent (one cell per handle), read back via graph_narrow_at by lower's check-elision.
+  graph_narrow_set(Int, Int)
+  // draw/replace one fanout's executable edges; trail-backed because inference runs under speculative checkpoints
+  graph_boundary_set(Int, ExecutableBoundary)
+  graph_bind(Int, Ty, Reason)
+  // mark a node an OBSERVED FAILURE (NErrorHole) — the productive-under-error poison. An env miss binds this, never TVar(self): the self-var tripped graph_bind's own occurs check (a spurious 0:0 E_OccursCheck per missing name) and read downstream as a normal free var (the ownership move-default cascade). A hole is the fact itself: unify no-ops on it, generalize preserves the handle, consumers stay silent.
+  graph_bind_hole(Int, Reason)
+  graph_bind_row(Int, EffRow, Reason)
+  // the decl-exit REPLACE — inf_exit_fn publishing the frame's accumulated row as the fn's verdict. Distinct from graph_bind_row BY OP because the two writes have different algebra: a teaching bind on an already-bound row cell JOINS (the row is a join-semilattice; joins commute, so N caller branches teaching one cell converge to the same value in any order — LVars' law), while the finalization REPLACES (the frame's accumulation is the decl's own total, already containing everything taught)
+  graph_finalize_row(Int, EffRow, Reason)
+  // union-find path compression at the row sort — an OPTIMIZATION write, distinct from the judgment bind: a BRANCH cursor's arm skips it (a branch writing shared chain cells makes sibling chases schedule-dependent — the measured k2 yield-floor flips; the root's sequential walks re-compress), the root's arm rebinds the chain link to its resolved terminal
+  graph_compress_row(Int, EffRow)
+  graph_bind_record_row(Int, [(String, Ty)], Reason)
+  graph_rollback(Int)
+  graph_index_span(ValidSpan, Int)
   // The deterministic handle partition (the planned mint): the final pass
   // pre-assigns each stmt a dense range of handles sized by the trial's
   // measured mint counts, so numbering is a pure function of the source —
@@ -1452,14 +1630,14 @@ effect GraphWrite {
   // ceiling jumps to the open space and clears the limit — the decl
   // finishes deterministically above the plan); seal() resumes sequential
   // minting at the high-water mark.
-  graph_mint_plan(Int) -> ()
-  graph_mint_at(Int, Int) -> ()
+  graph_mint_plan(Int)
+  graph_mint_at(Int, Int)
   // seal takes the WALK's threaded ending frontier: branch instances'
   // overflow mints land above the plan in THEIR state, invisible to the
   // root's own mint_high — sealing at the root's view alone parked
   // `next` below the branches' overflow mints and every post-seal mint
   // would collide with them.
-  graph_mint_seal(Int) -> ()
+  graph_mint_seal(Int)
 }
 
 // ─── Diagnostics as a graph projection (SYNTAX.md §Diagnostic catalog) ──
@@ -1480,28 +1658,30 @@ effect GraphWrite {
 // Applicability is the four-value automation axis (SYNTAX.md): an ADT, never
 // a string. MachineApplicable auto-applies; MaybeIncorrect confirms;
 // HasPlaceholders fills in; Unspecified is text-only.
-
-type Applicability
-  = MachineApplicable
-  | MaybeIncorrect
-  | HasPlaceholders
-  | Unspecified
+type Applicability = MachineApplicable | MaybeIncorrect | HasPlaceholders | Unspecified
 
 // Severity is the error-vs-narration axis. The category (format-liftable /
 // hard error / gradient narration) is the PRODUCT of severity × applicability
 // (SYNTAX.md: "the category is their product, not a third column"), read by
 // the consumer, never a stored third field.
 type Severity
-  = SError                          // a substrate violation
-  | SWarning                        // gradient narration / format-liftable
-  | SVerificationPending            // accrued proof debt (V_Pending)
+  // a substrate violation
+  = SError
+  // gradient narration / format-liftable
+  | SWarning
+  // accrued proof debt (V_Pending)
+  | SVerificationPending
 
 type DiagKind
   // ─── parser (P_/E_) ──────────────────────────────────────────────
-  = PExpectedToken(String, Span)                 // expected one kind, found another
+  //
+  // expected one kind, found another
+  = PExpectedToken(String, Span)
   | POrphanDocstring(Span)
-  | PUnclosedConstruct(String, Span)             // construct name
-  | PUnexpectedToken(String, Span)               // context note
+  // construct name
+  | PUnclosedConstruct(String, Span)
+  // context note
+  | PUnexpectedToken(String, Span)
   | ERedundantBraces(Span)
   | EBlockNeedsBraces(Span)
   | ERedundantPerform(Span)
@@ -1509,72 +1689,105 @@ type DiagKind
   | ERedundantFnOnLambda(Span)
   | ELambdaAsOrOr(Span)
   | EOrphanHandlerAttach(Span)
-  | ENotAKeyword(String, Span)                   // the typed keyword
+  // the typed keyword
+  | ENotAKeyword(String, Span)
   | EEffArgNotLiteral(Span)
-  | EInternalInvariant(String, Span)             // invariant note
+  // invariant note
+  | EInternalInvariant(String, Span)
   | WRedundantWhere(Span)
-  | WCommentRefUnresolved(String, String, Span)  // owner name, referenced name, the comment's span
+  // owner name, referenced name, the comment's span
   // ─── infer (E_/T_) ───────────────────────────────────────────────
-  | ETypeMismatch(Ty, Ty, Span)                  // a vs b — operands carried live
-  | ETypeArityMismatch(Int, Int, Span)           // type-list arity a vs b
-  | EConstructorArity(String, Int, Int, Span)    // ctor name, declared fields, pattern binds
-  | EHandlerArmArity(String, Int, Int, Span)     // op name, declared params, arm binds
-  | EFnArityMismatch(Int, Int, Span)             // fn param-count a vs b
-  | EOccursCheck(Int, Ty, Span)                  // handle occurs in ty
-  | EMissingVariable(String, Span)               // the unresolved context (name / "constructor: X" / ...)
-  | ENotARecordType(String, Span)                // the type name
+  | WCommentRefUnresolved(String, String, Span)
+  // a vs b — operands carried live
+  | ETypeMismatch(Ty, Ty, Span)
+  // type-list arity a vs b
+  | ETypeArityMismatch(Int, Int, Span)
+  // ctor name, declared fields, pattern binds
+  | EConstructorArity(String, Int, Int, Span)
+  // op name, declared params, arm binds
+  | EHandlerArmArity(String, Int, Int, Span)
+  // fn param-count a vs b
+  | EFnArityMismatch(Int, Int, Span)
+  // handle occurs in ty
+  | EOccursCheck(Int, Ty, Span)
+  // the unresolved context (name / "constructor: X" / ...)
+  | EMissingVariable(String, Span)
+  // the type name
+  | ENotARecordType(String, Span)
   | EResumeOutsideArm(Span)
-  | EResumeAmbiguousOp(String, Span)   // THE CUT (bank A3): a resume-bearing fn reachable from arms of TWO different handlers — the k's op binding is ambiguous; narrow the call graph
+  // THE CUT (bank A3): a resume-bearing fn reachable from arms of TWO different handlers — the k's op binding is ambiguous; narrow the call graph
+  | EResumeAmbiguousOp(String, Span)
   | EResumeWorldMismatch(ResumeDiscipline, ResumeDiscipline, Span)
-  | EUnknownArgLabel(String, Span)               // the label-resolution detail
+  // the label-resolution detail
+  | EUnknownArgLabel(String, Span)
   | EFeedbackNoContext(Span)
   | EBranchNotStage(Span)
-  | ERecordFieldExtra(String, String, Span)      // field, type_name
-  | ERecordFieldMissing(String, String, Span)    // field, type_name
-  | EPatternInexhaustive(Int, Int, Span)         // missing, total
-  | EPatternAlternationBindingMismatch(String, Span)  // the binding-conflict detail
+  // field, type_name
+  | ERecordFieldExtra(String, String, Span)
+  // field, type_name
+  | ERecordFieldMissing(String, String, Span)
+  // missing, total
+  | EPatternInexhaustive(Int, Int, Span)
+  // the binding-conflict detail
+  | EPatternAlternationBindingMismatch(String, Span)
   | EIfMissingElse(Span)
-  | TOverDeclared(EffRow, EffRow, String, Span)  // declared, used, fn name
-  | EEffectMismatch(EffRow, EffRow, Span)        // declared vs inferred
-  | EPurityViolated(EffRow, Span)                // the offending row
+  // declared, used, fn name
+  | TOverDeclared(EffRow, EffRow, String, Span)
+  // declared vs inferred
+  | EEffectMismatch(EffRow, EffRow, Span)
+  // the offending row
   // ─── verify / own / graph / driver ───────────────────────────────
+  | EPurityViolated(EffRow, Span)
   | ERefinementRejected(Predicate, Span)
-  | EVerifyUnencodable(Span)                     // a predicate operand the SMT renderer
-                                                 // cannot encode — accrues as undischarged
-                                                 // (never a fabricated `true` at the proof gate)
-  | VPending(Int, Span)                          // obligation count
-  | EOwnershipViolation(String, Span)            // the violated-name detail
+  // a predicate operand the SMT renderer
+  // cannot encode — accrues as undischarged
+  // (never a fabricated `true` at the proof gate)
+  | EVerifyUnencodable(Span)
+  // obligation count
+  | VPending(Int, Span)
+  // the violated-name detail
+  | EOwnershipViolation(String, Span)
   | ERegionEscape(String, Span)
-  | EMissingModule(String, String, Span)         // module name, expected path
-  | EHandlerStateShadowsOp(String, String, Span) // handler name, state field that names an op of the handled effect — ambiguous by construction (the arm body cannot distinguish a state read from an op re-perform; measured: the collision compiles clean and returns the WRONG value)
-  | EDuplicateFnName(String, Span)               // a second `fn name` in one namespace — the emitter would pick one silently (invalid WAT today; silent under a native path)
-  | EDuplicateTypeName(String, Span)             // a second `type name` in one namespace — the decls silently MERGE: disjoint ctor sets share tag ids and a cross-tag match returns the wrong arm (measured: exit 13 where 99 was meant, zero diagnostics)
-  | EUnresolvedType(Int, Int, Span)              // unresolved handle, epoch (lower-time NFree)
-  | EEffectUnhandled(String, String, Span)       // effect name, the graph-derived
-                                                 // proposal (absorbing handlers in
-                                                 // scope, or the declare-one teach),
-                                                 // main's span — an EVIDENCE hole:
-                                                 // the effect reaches the executable
-                                                 // root with no absorbing install
-  | EUnresolvedHole(Int, Span)                   // authored value-position hole surviving
-                                                 // into the reachable executable (SYNTAX
-                                                 // §«Partial application» — productive,
-                                                 // never executable)
-  | EReplayExhausted(Span)                        // clock-replay trace ran out
+  // module name, expected path
+  | EMissingModule(String, String, Span)
+  // handler name, state field that names an op of the handled effect — ambiguous by construction (the arm body cannot distinguish a state read from an op re-perform; measured: the collision compiles clean and returns the WRONG value)
+  | EHandlerStateShadowsOp(String, String, Span)
+  // a second `fn name` in one namespace — the emitter would pick one silently (invalid WAT today; silent under a native path)
+  | EDuplicateFnName(String, Span)
+  // a second `type name` in one namespace — the decls silently MERGE: disjoint ctor sets share tag ids and a cross-tag match returns the wrong arm (measured: exit 13 where 99 was meant, zero diagnostics)
+  | EDuplicateTypeName(String, Span)
+  // unresolved handle, epoch (lower-time NFree)
+  | EUnresolvedType(Int, Int, Span)
+  // effect name, the graph-derived
+  // proposal (absorbing handlers in
+  // scope, or the declare-one teach),
+  // main's span — an EVIDENCE hole:
+  // the effect reaches the executable
+  // root with no absorbing install
+  | EEffectUnhandled(String, String, Span)
+  // authored value-position hole surviving
+  // into the reachable executable (SYNTAX
+  // §«Partial application» — productive,
+  // never executable)
+  | EUnresolvedHole(Int, Span)
+  // clock-replay trace ran out
+  | EReplayExhausted(Span)
 
 // report takes ONE DiagKind — the structured fact. The handler PROJECTS
 // every surface (source/code/kind/message/span/applicability) from it.
 // !Diagnostic gates the handler, not the effect.
-
 effect Diagnostic {
-  report(DiagKind) -> ()
+  report(DiagKind)
   // The two live reads of the ledger the handler already keeps. The exit code
   // and the emit gate were both RE-DERIVING this as 0 — the handler saw every
   // diagnostic, printed it, and threw the severity away, so `mentl check` on a
   // missing module printed E_MissingModule and exited 0. Carried-Truth at the
   // instrument: the handler knows; nobody read it.
-  diag_errors() -> Int      // every SError seen. `check`'s exit code.
-  diag_refusals() -> Int    // only the ARMED classes (diag_refuses). The emit gate.
+  //
+  // every SError seen. `check`'s exit code.
+  diag_errors() -> Int
+  // only the ARMED classes (diag_refuses). The emit gate.
+  diag_refusals() -> Int
 }
 
 // The render REGISTER (SYNTAX: how much surfaces is the gradient reading
@@ -1595,10 +1808,7 @@ effect Diagnostic {
 // warning printed TWICE: once per parse, the discovery copy in
 // file-local coordinates no range can place). Errors still render in
 // every scope, discovery included.
-type DiagScope
-  = ScopeAll
-  | ScopeNone
-  | ScopeAt(Int, Int)
+type DiagScope = ScopeAll | ScopeNone | ScopeAt(Int, Int)
 
 // Armed on the root diagnostics_handler only (the register lives where
 // the render lives); a separate effect so the quiet trial, the branch
@@ -1608,7 +1818,7 @@ type DiagScope
 // user-target chain is scoped at one home and no narration predates the
 // range.
 effect DiagRegister {
-  diag_scope(DiagScope) -> ()
+  diag_scope(DiagScope)
 }
 
 // The branch cursor's diagnostic join surface (Phase C, C1c-2). A branch
@@ -1626,14 +1836,13 @@ effect DiagRegister {
 // register has one home).
 effect BranchDiag {
   diag_lines_taken() -> ([(String, Int, Bool)], Int, Int)
-  diag_absorb([(String, Int, Bool)], Int, Int) -> ()
+  diag_absorb([(String, Int, Bool)], Int, Int)
 }
 
 // ─── The catalog AS projections of the DiagKind constructors ───────────
 // `mentl diagnostics` walks these. No hand-maintained code registry —
 // the constructor IS the identity; source/code/kind/applicability/message
 // are READS of it.
-
 fn diag_span(d) with Pure = match d {
   PExpectedToken(_, s) => s,
   POrphanDocstring(s) => s,
@@ -1685,7 +1894,7 @@ fn diag_span(d) with Pure = match d {
   EUnresolvedType(_, _, s) => s,
   EEffectUnhandled(_, _, s) => s,
   EUnresolvedHole(_, s) => s,
-  EReplayExhausted(s) => s
+  EReplayExhausted(s) => s,
 }
 
 // The originating tentacle/stage — a projection, not a copied label.
@@ -1740,7 +1949,7 @@ fn diag_source(d) with Pure = match d {
   EUnresolvedType(_, _, _) => "lower",
   EEffectUnhandled(_, _, _) => "effects",
   EUnresolvedHole(_, _) => "verify",
-  EReplayExhausted(_) => "clock"
+  EReplayExhausted(_) => "clock",
 }
 
 // The wire code — the stable identifier (`docs/errors/<CODE>.md`).
@@ -1795,7 +2004,7 @@ fn diag_code(d) with Pure = match d {
   EUnresolvedType(_, _, _) => "E_UnresolvedType",
   EEffectUnhandled(_, _, _) => "E_EffectUnhandled",
   EUnresolvedHole(_, _) => "E_UnresolvedHole",
-  EReplayExhausted(_) => "E_ReplayExhausted"
+  EReplayExhausted(_) => "E_ReplayExhausted",
 }
 
 // Severity — the error-vs-narration axis (a projection).
@@ -1815,7 +2024,7 @@ fn diag_severity(d) with Pure = match d {
   TOverDeclared(_, _, _, _) => SWarning,
   VPending(_, _) => SVerificationPending,
   EVerifyUnencodable(_) => SVerificationPending,
-  _ => SError
+  _ => SError,
 }
 
 // diag_refuses — the ARMED classes of the refusal law, a projection beside
@@ -1847,32 +2056,32 @@ fn diag_severity(d) with Pure = match d {
 // listed, and the list only grows. When the last one arms, this projection and
 // the census line are both DELETED and the law is `diag_severity(d) == SError`.
 fn diag_refuses(d) with Pure = match d {
-  // ARMED 2026-07-17. Census on the wheel: 0. Its silent skip in
+  EMissingModule(_, _, _) => // ARMED 2026-07-17. Census on the wheel: 0. Its silent skip in
   // driver_compile_entry's fold was fixed the same day — `mentl check` reported
   // it while `mentl compile` on the same source said nothing and shipped 2,432
   // bytes of WAT.
-  EMissingModule(_, _, _) => True,
-  // ARMED at birth (2026-07-18): both are DECL-SITE facts read from parsed
+  True,
+  EHandlerStateShadowsOp(_, _, _) => // ARMED at birth (2026-07-18): both are DECL-SITE facts read from parsed
   // structure — no resolution dependency, so the blob-vs-user-path licence
   // gap the adversarial panel found for name-dependent classes cannot apply.
   // Census on the wheel at arming: 0 (the wheel's one state-shadow — the
   // voice history field — was renamed in the arming commit; the wheel has
   // no duplicate fn names, measured).
-  EHandlerStateShadowsOp(_, _, _) => True,
+  True,
   EDuplicateFnName(_, _) => True,
-  // ARMED at birth (2026-07-25), same licence as the two above: a DECL-SITE
+  EDuplicateTypeName(_, _) => // ARMED at birth (2026-07-25), same licence as the two above: a DECL-SITE
   // fact read from parsed structure — no resolution dependency. Census on
   // the wheel blob at arming: 0 (the one Level pair lives in two tutorial
   // files, both outside the blob and compiled standalone).
-  EDuplicateTypeName(_, _) => True,
-  // ARMED at birth (2026-07-22): an EXECUTABLE-root fact read from main's
+  True,
+  EEffectUnhandled(_, _, _) => // ARMED at birth (2026-07-22): an EXECUTABLE-root fact read from main's
   // resolved row at the gate — the row representation is true (the triple),
   // the wheel's own main carries only substrate-grounded names (census 0 at
   // arming), and check/edit never route through the gate, so the productive
   // surfaces stay open. The unhandled effect was the LAST undiagnosed
   // 0x100000000 class: a perform whose evidence no install threads.
-  EEffectUnhandled(_, _, _) => True,
-  // ARMED 2026-07-18, panel-corrected licence: census 0 on the wheel AND the
+  True,
+  ERefinementRejected(_, _) => // ARMED 2026-07-18, panel-corrected licence: census 0 on the wheel AND the
   // user-path channel verified. ERefinementRejected fires only on a predicate
   // DECIDED false (undecidable defers to V_Pending, decidable-true passes —
   // the panel found no false-refusal channel); §11 claimed this class was
@@ -1881,17 +2090,17 @@ fn diag_refuses(d) with Pure = match d {
   // callee's move default) died with graph_bind_hole + the callee-miss borrow
   // guard; the detector survived adversarial falsification on resolved
   // programs (a genuine double move still refuses, disjoint arms still pass).
-  ERefinementRejected(_, _) => True,
+  True,
   EOwnershipViolation(_, _) => True,
-  // ARMED 2026-07-18, the manifest arc's dividend: wheel census 0, and the
+  EMissingVariable(_, _) => // ARMED 2026-07-18, the manifest arc's dividend: wheel census 0, and the
   // user-path licence MEASURED — a no-import stdlib program (map / fold /
   // len / any) resolves via the DAG's prelude seed and runs; the stdin
   // contract is self-contained input (the wheel's own build form), where a
   // missing name is a real break. Pre-arming, the refusal fixture compiled
   // a missing-name executable to 2,795 bytes at exit 0 with the diagnostic
   // on stderr — the silent-wrong this class's arming deletes.
-  EMissingVariable(_, _) => True,
-  // ARMED 2026-07-18, the eighth — the same day its fixture found the spin:
+  True,
+  EOccursCheck(_, _, _) => // ARMED 2026-07-18, the eighth — the same day its fixture found the spin:
   // a genuinely infinite type (selfapply f = f(f)) used to TRAP the compiler
   // (chase_deep / subst_ty stack exhaustion, zero reports) because the occurs
   // leaf compared handles where the cycle lived in BOUND STRUCTURE (bind
@@ -1900,8 +2109,8 @@ fn diag_refuses(d) with Pure = match d {
   // it). The leaf now recurses into the root's binding, the write guard is
   // total, and the fixture reports E_OccursCheck and refuses. Wheel census 0
   // throughout; the phantom cascade stayed dead (one miss, one diagnostic).
-  EOccursCheck(_, _, _) => True,
-  _                       => False
+  True,
+  _ => False,
 }
 
 // The severity-class label the stderr line prints (the legacy `kind`
@@ -1909,7 +2118,7 @@ fn diag_refuses(d) with Pure = match d {
 fn diag_kind(d) with Pure = match diag_severity(d) {
   SWarning => "Warning",
   SVerificationPending => "VerificationPending",
-  SError => "error"
+  SError => "error",
 }
 
 // Applicability — the automation axis (SYNTAX.md table), a projection.
@@ -1935,7 +2144,7 @@ fn diag_applicability(d) with Pure = match d {
   EOrphanHandlerAttach(_) => Unspecified,
   EResumeOutsideArm(_) => Unspecified,
   EResumeAmbiguousOp(_, _) => MaybeIncorrect,
-  _ => MaybeIncorrect
+  _ => MaybeIncorrect,
 }
 
 // The rendered message — operands read LIVE from the constructor, never a
@@ -1949,9 +2158,12 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   ERedundantBraces(_) => "redundant braces around a non-block body",
   EBlockNeedsBraces(_) => "statements require braces",
   ERedundantPerform(_) => "`perform` is redundant — effect ops are bare calls",
-  ELambdaFence(_) => "`|params|` lambda fence — use `(params) => body`",   // drift-audit: ignore — diagnostic message prose, not Mentl syntax
-  ERedundantFnOnLambda(_) => "`fn` is reserved for named declarations — remove it for a lambda",   // drift-audit: ignore — diagnostic message prose
-  ELambdaAsOrOr(_) => "`||` is logical or — use `() => expr` for a zero-arg lambda",   // drift-audit: ignore — diagnostic message prose
+  ELambdaFence(_) => // drift-audit: ignore — diagnostic message prose, not Mentl syntax
+  "`|params|` lambda fence — use `(params) => body`",
+  ERedundantFnOnLambda(_) => // drift-audit: ignore — diagnostic message prose
+  "`fn` is reserved for named declarations — remove it for a lambda",
+  ELambdaAsOrOr(_) => // drift-audit: ignore — diagnostic message prose
+  "`||` is logical or — use `() => expr` for a zero-arg lambda",
   EOrphanHandlerAttach(_) => "`~>` with no preceding chain",
   ENotAKeyword(kw, _) => "`{kw}` is not a Mentl keyword — use the verb form",
   EEffArgNotLiteral(_) => "parameterized-effect argument must be a literal",
@@ -1972,8 +2184,10 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EUnknownArgLabel(detail, _) => detail,
   EFeedbackNoContext(_) => "`<~` used outside an iterative context",
   EBranchNotStage(_) => "`><` branch is a value, not a stage",
-  ERecordFieldExtra(field, tn, _) => "record literal has unknown field '{field}' for type {tn}",   // drift-audit: ignore — diagnostic message string, not a control keyword
-  ERecordFieldMissing(field, tn, _) => "record literal missing field '{field}' for type {tn}",   // drift-audit: ignore — diagnostic message string, not a control keyword
+  ERecordFieldExtra(field, tn, _) => // drift-audit: ignore — diagnostic message string, not a control keyword
+  "record literal has unknown field '{field}' for type {tn}",
+  ERecordFieldMissing(field, tn, _) => // drift-audit: ignore — diagnostic message string, not a control keyword
+  "record literal missing field '{field}' for type {tn}",
   EPatternInexhaustive(missing, total, _) => "match misses {int_to_str(missing)} of {int_to_str(total)} variants — add the missing arms or a wildcard",
   EPatternAlternationBindingMismatch(detail, _) => detail,
   EIfMissingElse(_) => "`if` without `else` requires a unit body",
@@ -1981,7 +2195,8 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EEffectMismatch(declared, inferred, _) => "effect row mismatch: {show_effrow(declared)} vs {show_effrow(inferred)}",
   EPurityViolated(row, _) => "expected Pure but found effects: {show_effrow(row)}",
   ERefinementRejected(pred, _) => "refinement predicate proven false at compile time: {show_predicate(pred)}",
-  EVerifyUnencodable(_) => "refinement predicate operand cannot be encoded for the solver — obligation accrued as pending",   // drift-audit: ignore — diagnostic message string
+  EVerifyUnencodable(_) => // drift-audit: ignore — diagnostic message string
+  "refinement predicate operand cannot be encoded for the solver — obligation accrued as pending",
   VPending(count, _) => "{int_to_str(count)} verification obligations pending",
   EOwnershipViolation(detail, _) => detail,
   ERegionEscape(detail, _) => detail,
@@ -1992,7 +2207,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EUnresolvedType(h, epoch, _) => "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",
   EEffectUnhandled(ename, proposal, _) => "effect {ename} reaches the executable root with no absorbing handler — calling one of its ops would read garbage evidence at runtime; nothing executes unproven. {proposal}",
   EUnresolvedHole(h, _) => "unresolved value hole (handle {int_to_str(h)}) — fill it (accept a proven survivor) or suspend it into a parameter product",
-  EReplayExhausted(_) => "clock replay trace exhausted"
+  EReplayExhausted(_) => "clock replay trace exhausted",
 }
 
 // Universal short-circuit / early return.
@@ -2026,14 +2241,12 @@ effect Abort {
 // src/types.mn:163). The event carries enough for the projection to
 // re-derive over the changed graph (Q-2 (B) scope: transitive dependents
 // via Reason chain).
-
 effect Mutate {
-  graph_mutated(Int, Mutation) -> ()
+  graph_mutated(Int, Mutation)
 }
 
 // The ONLY route from a TypeHandle to a resolved Ty. Delegates to
 // graph_chase. No cache. No staleness. Every observer reads live.
-
 effect LookupTy {
   lookup_ty(Int) -> Ty
   // The specialization bracket (named-generic twins): while set, the handler
@@ -2043,14 +2256,13 @@ effect LookupTy {
   // active enc lets the closure-mint arm redirect a nested lambda to its
   // twin record. State on the ONE LookupTy handler — never a second handler
   // (singleton tier).
-  spec_ctx_set([(Int, Ty)], String) -> ()
-  spec_ctx_clear() -> ()
+  spec_ctx_set([(Int, Ty)], String)
+  spec_ctx_clear()
   spec_enc_active() -> String
 }
 
 // Inference mints via graph_fresh_ty; query mints display ids. One
 // function, two handlers, different semantics for the same op.
-
 effect FreshHandle {
   mint(Reason) -> Int
   mint_row(Reason) -> Int
@@ -2062,16 +2274,19 @@ effect FreshHandle {
 // then ls_enter_frame with (params, captures). Body lowering
 // dispatches every VarRef through ls_resolve. Closure heap records
 // materialize from the captures_exprs list in LMakeClosure.
-
 type Resolution
-  = RLocal          // name is a local of the current frame — emit references $<name>
-  | RUpval(Int)     // name is captured at slot; emit offset-loads from __state
-  | RGlobal         // top-level name — emit references $<name> as a global
-  | RFbPrior(Int)   // name is a `<~`-bound prior — emit references $__fb_prev_<h>
-                    // (LF.B): the `(prev) => body <~ delay(1)` lambda param resolves
-                    // to the feedback handle's prior-iteration local, read LIVE at
-                    // the body. The prior is the feedback NODE; no copy/snapshot —
-                    // the emit-declared $__fb_prev_<h> local IS the carried value.
+  // name is a local of the current frame — emit references $<name>
+  = RLocal
+  // name is captured at slot; emit offset-loads from __state
+  | RUpval(Int)
+  // top-level name — emit references $<name> as a global
+  | RGlobal
+  // name is a `<~`-bound prior — emit references $__fb_prev_<h>
+  // (LF.B): the `(prev) => body <~ delay(1)` lambda param resolves
+  // to the feedback handle's prior-iteration local, read LIVE at
+  // the body. The prior is the feedback NODE; no copy/snapshot —
+  // the emit-declared $__fb_prev_<h> local IS the carried value.
+  | RFbPrior(Int)
 
 // `ls_resolve` returns (Resolution, type_handle) where type_handle is
 // the type handle the local was BOUND with (via ls_bind_local). For
@@ -2079,40 +2294,53 @@ type Resolution
 // the enclosing frame — the LowExpr describing the captured value's
 // type. RGlobal returns the var-ref's enclosing handle (caller-side
 // fallback). This is the W7 + A1 capture-handle correctness fix.
-
 effect LowerScope {
-  ls_enter_frame(String, [String], [Int], [String], [Int], Int) -> ()  // fn_name, locals_names, locals_handles, captures_names, captures_handles, lambda_h (-1 = not a lambda frame)
-  ls_exit_frame() -> ()
-  ls_bind_local(String, Int) -> Int  // append (name, handle); returns slot
-  ls_bind_fb_prior(String, Int) -> ()  // (LF.B) push a `<~` lambda param → feedback handle's prior local
-  ls_unbind_fb_prior() -> ()           // (LF.B) pop the innermost `<~` prior binding after its body lowers
+  // fn_name, locals_names, locals_handles, captures_names, captures_handles, lambda_h (-1 = not a lambda frame)
+  ls_enter_frame(String, [String], [Int], [String], [Int], Int)
+  ls_exit_frame()
+  // append (name, handle); returns slot
+  ls_bind_local(String, Int) -> Int
+  // (LF.B) push a `<~` lambda param → feedback handle's prior local
+  ls_bind_fb_prior(String, Int)
+  // (LF.B) pop the innermost `<~` prior binding after its body lowers
+  ls_unbind_fb_prior()
   ls_resolve(String) -> (Resolution, Int)
-  ls_register_globals([String]) -> ()
-  ls_outer_fn_name() -> String  // closest enclosing named-fn frame; "" for top-level
-  ls_current_lambda_handle() -> Int  // innermost-first: the enclosing lambda frame's handle, or -1 if a named-fn frame is hit first / none
-  ls_push_scope() -> Int  // checkpoint = current frame's local count
-  ls_pop_scope(Int) -> ()  // truncate frame locals back to checkpoint
-  ls_register_escaping([(String, [String])]) -> ()  // install the flow-closure map (name → escaping name-set; elements are the interned effect NAMES — eff_names_of's form, the ev ledger's native key)
-  ls_escaping_of(String) -> Option([String])   // a name's flow-closure name-set — the same string elements the register wrote (None = not a top-level fn → leaf); escaping_row lifts it at the one consumer
-  ls_register_may_yield(Bool) -> ()  // band B M1.3 — does ANY declared effect carry a MultiShot op? (computed once at lower_program)
-  ls_program_may_yield() -> Bool     // the A1 prove-absence gate's global short-circuit: no MultiShot op anywhere ⇒ nothing can yield ⇒ every row proves absence
-  ls_register_resume_binds([(String, String)]) -> ()  // THE CUT (bank A3) — [(fn_name, hname)]: resume-bearing fns reachable from a MultiShot arm, bound to their handler (computed once at lower_program)
-  ls_resume_bind_of(String) -> String   // the fn's bound handler name; "" = unbound (no wrap, no evidence threading)
+  ls_register_globals([String])
+  // closest enclosing named-fn frame; "" for top-level
+  ls_outer_fn_name() -> String
+  // innermost-first: the enclosing lambda frame's handle, or -1 if a named-fn frame is hit first / none
+  ls_current_lambda_handle() -> Int
+  // checkpoint = current frame's local count
+  ls_push_scope() -> Int
+  // truncate frame locals back to checkpoint
+  ls_pop_scope(Int)
+  // install the flow-closure map (name → escaping name-set; elements are the interned effect NAMES — eff_names_of's form, the ev ledger's native key)
+  ls_register_escaping([(String, [String])])
+  // a name's flow-closure name-set — the same string elements the register wrote (None = not a top-level fn → leaf); escaping_row lifts it at the one consumer
+  ls_escaping_of(String) -> Option([String])
+  // band B M1.3 — does ANY declared effect carry a MultiShot op? (computed once at lower_program)
+  ls_register_may_yield(Bool)
+  // the A1 prove-absence gate's global short-circuit: no MultiShot op anywhere ⇒ nothing can yield ⇒ every row proves absence
+  ls_program_may_yield() -> Bool
+  // THE CUT (bank A3) — [(fn_name, hname)]: resume-bearing fns reachable from a MultiShot arm, bound to their handler (computed once at lower_program)
+  ls_register_resume_binds([(String, String)])
+  // the fn's bound handler name; "" = unbound (no wrap, no evidence threading)
+  ls_resume_bind_of(String) -> String
 }
 
 // Every refinement unification performs verify(span, pred, reason).
 // verify_ledger accumulates (V_Pending); verify_smt discharges (E_RefinementRejected on
 // reject). Handler swap; source code unchanged.
-
 effect Verify {
-  verify(Span, Predicate, Reason) -> ()
+  verify(Span, Predicate, Reason)
   verify_debt() -> [(Span, Predicate, Reason)]
-  // ifc non-interference: verify(span, PFlowLe(src, dst), reason)
-  // predicate_decide(PFlowLe(a,b)) = Some(flow_le(a,b)) — always compile-time decidable.
-  // ERefinementRejected carries the violation; show_predicate renders "Secret ⊑ Public".
-  // No separate op. No separate handler arm. No separate diagnostic.
 }
 
+// ifc non-interference: verify(span, PFlowLe(src, dst), reason)
+// predicate_decide(PFlowLe(a,b)) = Some(flow_le(a,b)) — always compile-time decidable.
+// ERefinementRejected carries the violation; show_predicate renders "Secret ⊑ Public".
+// No separate op. No separate handler arm. No separate diagnostic.
+//
 // Every VarRef performs consume(name, ownership, span), carrying authored
 // parameter ownership from the env lookup that already happened at the use-site.
 // affine_ledger enforces linearity only for authored Own. Unmarked params are
@@ -2129,26 +2357,25 @@ effect Verify {
 // consume → E_OwnershipViolation). Alternative arms never collide: only
 // one runs, so a name consumed across arms is one consume on the taken
 // path.
-
 effect Consume {
-  consume(String, Ownership, Span) -> ()
-  branch_enter(BranchMode) -> ()
-  branch_divider(Span) -> ()
-  branch_exit(Span) -> ()
+  consume(String, Ownership, Span)
+  branch_enter(BranchMode)
+  branch_divider(Span)
+  branch_exit(Span)
   // A function body is a consume SCOPE — its `own` params are its own
   // linear resources, unrelated to any other body's. infer_fn brackets
   // each body with enter/exit so a name consumed in one function never
   // pollutes the next (affine_ledger is installed once at the pipeline,
   // not per body). Re-entrant for nested fn decls: enter pushes a fresh
   // frame, exit restores the parent's.
-  consume_enter_fn() -> ()
-  consume_exit_fn() -> ()
+  consume_enter_fn()
+  consume_exit_fn()
   // A BORROW scope — an `if` condition / `match` scrutinee is READ to
   // decide control, never moved, so a use inside it is a borrow, not a
   // consume. Between enter/exit the ledger drops consumes (a value read
   // here stays available in the arms). Nested via a depth counter.
-  borrow_enter() -> ()
-  borrow_exit() -> ()
+  borrow_enter()
+  borrow_exit()
   // The branch-cursor triple (the fan, C1c-2): a branch judges under a
   // FRESH ledger seeded with the root's consumed-set frozen at layer
   // start (consume_seed at bracket entry; consume_base is the root-side
@@ -2156,7 +2383,7 @@ effect Consume {
   // the sites list, prepend-ordered), and the join re-performs them at
   // the root in occurrence order — a same-layer double-consume
   // re-detects deterministically at the replay, never inside a branch.
-  consume_seed([String]) -> ()
+  consume_seed([String])
   consume_base() -> [String]
   consume_log() -> [(String, Span)]
 }
@@ -2176,14 +2403,12 @@ effect Consume {
 //
 // Returns bytes as a flat Mentl String (length prefix + bytes) —
 // same shape as read_stdin for uniform downstream handling.
-
 effect Filesystem {
   // ─── Original 4 ops (FS walkthrough; commit 1debfdc) ──────────
   fs_exists(String) -> Bool
   fs_read_file(String) -> String
-  fs_write_file(String, String) -> ()
-  fs_mkdir(String) -> ()
-
+  fs_write_file(String, String)
+  fs_mkdir(String)
   // ─── FX.A.basics extension ops (FX walkthrough §1) ────────────
   // Cover the FileHandle-shaped surface Mentl-voice's Interact ops
   // need. Returns are domain-free (Int fd / Bool errno); ADT
@@ -2192,9 +2417,8 @@ effect Filesystem {
   //
   // fs_list_dir lands separately as FX.A.dirent (dirent record parsing
   // is its own focused sub-handle).
-
   fs_open(String) -> Int
-  fs_close(Int) -> ()
+  fs_close(Int)
   fs_unlink(String) -> Bool
   fs_rename(String, String) -> Bool
 }
@@ -2203,44 +2427,37 @@ effect Filesystem {
 // A raw handle only appears when chase terminates on NFree/NRowFree —
 // the query layer reads that as "unresolved at epoch e." No cached
 // display. Same discipline as lowering: live observer, never mirror.
-
-fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory + Intern = {
-  match ty {
-    TInt    => "Int",
-    TFloat  => "Float",
-    TUnit   => "()",
-    TByte   => "Byte",
-    TList(elem) => "List({show_type(elem)})",
-    TTuple(elems) => "({show_list(elems, show_type, ", ")})",
-    TFun(params, ret, row) =>
-      "({show_list(params, show_tparam, ", ")}) -> {show_type(ret)}{show_row_suffix(row)}",
-    TVar(id) => show_handle(id),
-    TName(name, args) =>
-      "{name}{show_type_args(args)}",
-    TRecord(fields) => "\{ {show_list(fields, show_field, ", ")} \}",
-    TRecordOpen(fields, v) =>
-      "\{ {show_list(fields, show_field, ", ")} | {show_handle(v)} \}",
-    TRefined(base, pred) => "{show_type(base)} where {show_predicate(pred)}",
-    TCont(input, answer, disc, world) => "Cont({show_type(input)} {show_discipline(disc)} {show_type(answer)}{show_row_suffix(world)})",
-    // RN.1 — show the alias name (intent), not the resolved type
-    TAlias(name, _) => name
-  }
+fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory + Intern = match ty {
+  TInt => "Int",
+  TFloat => "Float",
+  TUnit => "()",
+  TByte => "Byte",
+  TList(elem) => "List({show_type(elem)})",
+  TTuple(elems) => "({show_list(elems, show_type, ", ")})",
+  TFun(params, ret, row) => "({show_list(params, show_tparam, ", ")}) -> {show_type(ret)}{show_row_suffix(row)}",
+  TVar(id) => show_handle(id),
+  TName(name, args) => "{name}{show_type_args(args)}",
+  TRecord(fields) => "\{ {show_list(fields, show_field, ", ")} \}",
+  TRecordOpen(fields, v) => "\{ {show_list(fields, show_field, ", ")} | {show_handle(v)} \}",
+  TRefined(base, pred) => "{show_type(base)} where {show_predicate(pred)}",
+  TCont(input, answer, disc, world) => "Cont({show_type(input)} {show_discipline(disc)} {show_type(answer)}{show_row_suffix(world)})",
+  TAlias(name, _) => // RN.1 — show the alias name (intent), not the resolved type
+  name,
 }
 
 // show_handle — the live-chase projection. Resolved handles show the
 // bound type; free handles show the raw handle with allocation epoch
 // so query can surface "unresolved at epoch e"; error holes show the
 // failure reason inline.
-
 fn show_handle(h) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   let node = graph_chase(h)
   match node {
-    GNode(NBound(ty), _)      => show_type(ty),
-    GNode(NRowBound(row), _)  => show_effrow(row),
+    GNode(NBound(ty), _) => show_type(ty),
+    GNode(NRowBound(row), _) => show_effrow(row),
     GNode(NRecordRowBound(fields), _) => show_type(TRecord(fields)),
-    GNode(NFree(epoch), _)    => "t{int_to_str(h)}@e{int_to_str(epoch)}",
+    GNode(NFree(epoch), _) => "t{int_to_str(h)}@e{int_to_str(epoch)}",
     GNode(NRowFree(epoch), _) => "r{int_to_str(h)}@e{int_to_str(epoch)}",
-    GNode(NErrorHole(reason), _) => "!hole[{show_reason(reason)}]"
+    GNode(NErrorHole(reason), _) => "!hole[{show_reason(reason)}]",
   }
 }
 
@@ -2253,24 +2470,23 @@ fn show_handle(h) with GraphRead + Memory + Alloc + !Mutate + Intern = {
 // they see the IDENTICAL positional order by construction (the seam pattern —
 // one truth, two consumers, no re-derivation). The LabeledArg wrappers and the
 // reorder are resolved away here; downstream sees only positional value nodes.
-
+//
 // The callee's declared param TParams, read LIVE off its TFun (the one home —
 // no copy, no cache). [] when the callee's scheme isn't a ground function
 // (an unbound forward ref, a param-position fn) — then there are no labels to
 // resolve and the args pass through positionally.
 fn callee_params(name) with EnvRead + GraphRead = match env_lookup(name) {
-  Some(entry) => {
-    let (scheme, _, _) = entry
-    match scheme {
+  Some(entry) => match entry {
+    (scheme, _, _) => match scheme {
       Forall(_, TVar(h)) => match graph_chase(h) {
         GNode(NBound(TFun(params, _, _)), _) => params,
-        _ => []
+        _ => [],
       },
       Forall(_, TFun(params, _, _)) => params,
-      _ => []
-    }
+      _ => [],
+    },
   },
-  None => []
+  None => [],
 }
 
 // Resolve a call's arg list (carrying optional LabeledArg wrappers) to the
@@ -2284,17 +2500,15 @@ fn resolve_call_args(cname, args) with EnvRead + GraphRead + Memory + Alloc + Di
   // No declared params (forward ref / fn-param callee / constructor): no labels
   // to resolve against. Strip any stray LabeledArg wrappers to their value so
   // downstream never meets the wrapper, and keep positional order.
-  if len(params) == 0 { map(unwrap_labeled_arg, args) }
-  else { fill_arg_slots(params, args, cname) }
+  if len(params) == 0 { map(unwrap_labeled_arg, args) } else { fill_arg_slots(params, args, cname) }
 }
 
 // Unwrap a LabeledArg to its value node; a positional arg passes through.
-fn unwrap_labeled_arg(arg) with Pure = {
-  let N(body, _, _) = arg
-  match body {
+fn unwrap_labeled_arg(arg) with Pure = match arg {
+  N(body, _, _) => match body {
     NExpr(LabeledArg(_, v)) => v,
-    _                       => arg
-  }
+    _ => arg,
+  },
 }
 
 // Build the positional slot buffer (one slot per declared param, 0 = unfilled
@@ -2312,36 +2526,38 @@ fn fill_arg_slots(params, args, cname) with EnvRead + GraphRead + Memory + Alloc
 // Pass 1 — place each LabeledArg at its named param slot; positional args are
 // skipped here. An unknown label is E_UnknownArgLabel (Located, productive:
 // the arg is dropped, the remaining args resolve). Returns the slot buffer.
-fn place_labeled(params, args, i, slots, cname) with GraphRead + Memory + Diagnostic = {
-  if i >= len(args) { slots }
-  else {
-    let arg = list_index(args, i)
-    let N(body, sp, _) = arg
-    let next = match body {
-      NExpr(LabeledArg(label, v)) => {
-        let idx = param_index(params, label, 0)
-        if idx < 0 {
-          report(EUnknownArgLabel("no parameter named `{label}` on `{cname}`", sp))
-          slots
-        } else {
-          list_set(slots, idx, v)
-        }
-      },
-      _ => slots
-    }
-    place_labeled(params, args, i + 1, next, cname)
+fn place_labeled(params, args, i, slots, cname) with GraphRead + Memory + Diagnostic = if i >= len(args) {
+  slots
+} else {
+  let arg = list_index(args, i)
+  match arg {
+    N(body, sp, _) => {
+      let next = match body {
+        NExpr(LabeledArg(label, v)) => {
+          let idx = param_index(params, label, 0)
+          if idx < 0 {
+            report(EUnknownArgLabel("no parameter named `{label}` on `{cname}`", sp))
+            slots
+          } else {
+            list_set(slots, idx, v)
+          }
+        },
+        _ => slots,
+      }
+      place_labeled(params, args, i + 1, next, cname)
+    },
   }
 }
 
 // Pass 2 — fill positional (non-labeled) args into the next unfilled slot,
 // left-to-right, skipping slots a label already claimed. `cur` is the arg
 // cursor; `slot` advances past filled slots.
-fn place_positional(args, cur, slot, slots, n) with GraphRead + Memory = {
-  if cur >= len(args) { slots }
-  else {
-    let arg = list_index(args, cur)
-    let N(body, _, _) = arg
-    match body {
+fn place_positional(args, cur, slot, slots, n) with GraphRead + Memory = if cur >= len(args) {
+  slots
+} else {
+  let arg = list_index(args, cur)
+  match arg {
+    N(body, _, _) => match body {
       NExpr(LabeledArg(_, _)) => place_positional(args, cur + 1, slot, slots, n),
       _ => {
         let free = next_free_slot(slots, slot, n)
@@ -2352,8 +2568,8 @@ fn place_positional(args, cur, slot, slots, n) with GraphRead + Memory = {
         } else {
           place_positional(args, cur + 1, free + 1, list_set(slots, free, arg), n)
         }
-      }
-    }
+      },
+    },
   }
 }
 
@@ -2367,35 +2583,35 @@ fn place_positional(args, cur, slot, slots, n) with GraphRead + Memory = {
 fn slot_present(w) with Pure = w != 0
 
 // The first slot at or after `from` still absent; n when none remain.
-fn next_free_slot(slots, from, n) with Memory =
-  if from >= n { n }
-  else if slot_present(list_index(slots, from)) { next_free_slot(slots, from + 1, n) }
-  else { from }
+fn next_free_slot(slots, from, n) with Memory = if from >= n {
+  n
+} else if slot_present(list_index(slots, from)) {
+  next_free_slot(slots, from + 1, n)
+} else {
+  from
+}
 
 // The param index whose name is `label`, or -1 when no param bears it.
-fn param_index(params, label, i) with Memory =
-  if i >= len(params) { -1 }
-  else {
-    if param_name(list_index(params, i)) == label { i }
-    else { param_index(params, label, i + 1) }
-  }
+fn param_index(params, label, i) with Memory = if i >= len(params) {
+  -1
+} else {
+  if param_name(list_index(params, i)) == label { i } else { param_index(params, label, i + 1) }
+}
 
 // Project each slot to its placed value node, or — when the slot is the 0
 // sentinel — the param's default node. A sentinel slot with no default is
 // dropped (a genuinely-missing required arg is infer's arity check, surfaced
 // at the call). The contiguous prefix of present args is returned in order.
-fn collect_slot_nodes(params, slots, i, n, out, count) with Memory + Alloc = {
-  if i >= n { slice(out, 0, count) }
-  else {
-    let placed = list_index(slots, i)
-    if slot_present(placed) {
-      collect_slot_nodes(params, slots, i + 1, n, list_set(out, count, placed), count + 1)
-    } else {
-      match param_default(list_index(params, i)) {
-        Some(expr) =>
-          collect_slot_nodes(params, slots, i + 1, n, list_set(out, count, expr), count + 1),
-        None => collect_slot_nodes(params, slots, i + 1, n, out, count)
-      }
+fn collect_slot_nodes(params, slots, i, n, out, count) with Memory + Alloc = if i >= n {
+  slice(out, 0, count)
+} else {
+  let placed = list_index(slots, i)
+  if slot_present(placed) {
+    collect_slot_nodes(params, slots, i + 1, n, list_set(out, count, placed), count + 1)
+  } else {
+    match param_default(list_index(params, i)) {
+      Some(expr) => collect_slot_nodes(params, slots, i + 1, n, list_set(out, count, expr), count + 1),
+      None => collect_slot_nodes(params, slots, i + 1, n, out, count),
     }
   }
 }
@@ -2405,67 +2621,58 @@ fn show_tparam(ref tp) with Alloc + GraphRead + Intern + Memory = {
   match param_authored(tp) {
     Unmarked => match param_resolved(tp) {
       Unmarked => base,
-      _        => "{base}{show_ownership(param_resolved(tp))} — inferred"
+      _ => "{base}{show_ownership(param_resolved(tp))} — inferred",
     },
-    _ => "{base}{show_ownership(param_authored(tp))} — declared"
+    _ => "{base}{show_ownership(param_authored(tp))} — declared",
   }
 }
 
-fn show_ownership(o) with Pure = {
-  match o {
-    Unmarked => "",
-    Own      => " own",
-    Ref      => " ref"
-  }
+fn show_ownership(o) with Pure = match o {
+  Unmarked => "",
+  Own => " own",
+  Ref => " ref",
 }
 
-fn show_discipline(d) with Pure = {
-  match d {
-    OneShot   => "OneShot",
-    MultiShot => "MultiShot",
-    Either    => "Either",
-    Abandon   => "Abandon"
-  }
+fn show_discipline(d) with Pure = match d {
+  OneShot => "OneShot",
+  MultiShot => "MultiShot",
+  Either => "Either",
+  Abandon => "Abandon",
 }
 
-fn show_field(ref field) with GraphRead + !Mutate + Alloc + Memory + Intern = {
-  let (name, ty) = field
-  "{name}: {show_type(ty)}"
+fn show_field(ref field) with GraphRead + !Mutate + Alloc + Memory + Intern = match field {
+  (name, ty) => "{name}: {show_type(ty)}",
 }
 
-fn show_type_args(ref args) with GraphRead + Memory + !Mutate + Intern + Alloc = {
-  if len(args) == 0 { "" }
-  else { "({show_list(args, show_type, ", ")})" }
+fn show_type_args(ref args) with GraphRead + Memory + !Mutate + Intern + Alloc =
+  if len(args) == 0 { "" } else { "({show_list(args, show_type, ", ")})" }
+
+fn show_row_suffix(ref row) with GraphRead + !Mutate + Intern + Memory + Alloc = match row {
+  EfRow([], [], EtClosed) => "",
+  _ => " with {show_effrow(row)}",
 }
 
-fn show_row_suffix(ref row) with GraphRead + !Mutate + Intern + Memory + Alloc = {
-  match row {
-    EfRow([], [], EtClosed) => "",
-    _      => " with {show_effrow(row)}"
-  }
-}
-
-fn show_effrow(ref row) with GraphRead + Memory + !Mutate + Alloc + Intern = {
-  // The triple's voice: presents joined with `+`, the absent set as `!X`
-  // terms, the tail as its var handle; an empty closed row is Pure.   // drift-audit: ignore — human-facing rendering string for diagnostics/show; not an effect-keyed lookup; tracked by Hβ.perf.name-is-handle; effect-rendering normalization
-  let EfRow(p, a, t) = row
-  let parts = show_list(p, show_eff_name, " + ")
-  let negs = show_list(a, (n) => "!{show_eff_name(n)}", " + ")
-  let joiner = if len(p) > 0 && len(a) > 0 { " + " } else { "" }
-  let head = "{parts}{joiner}{negs}"
-  match t {
-    EtClosed => if len(p) == 0 && len(a) == 0 { "Pure" } else { head },   // drift-audit: ignore — the renderer WRITES the surface word for the empty row (SYNTAX: Pure is the identity's spelling); no dispatch reads it
-    EtAll    => if len(p) == 0 && len(a) == 0 { "Any" } else { head },
-    EtVar(v) =>
-      if len(p) == 0 && len(a) == 0 { show_handle(v) }
-      else { "{head} + {show_handle(v)}" }
-  }
+// The triple's voice: presents joined with `+`, the absent set as `!X`
+// terms, the tail as its var handle; an empty closed row is Pure.   // drift-audit: ignore — human-facing rendering string for diagnostics/show; not an effect-keyed lookup; tracked by Hβ.perf.name-is-handle; effect-rendering normalization
+fn show_effrow(ref row) with GraphRead + Memory + !Mutate + Alloc + Intern = match row {
+  EfRow(p, a, t) => {
+    let parts = show_list(p, show_eff_name, " + ")
+    let negs = show_list(a, (n) => "!{show_eff_name(n)}", " + ")
+    let joiner = if len(p) > 0 && len(a) > 0 { " + " } else { "" }
+    let head = "{parts}{joiner}{negs}"
+    match t {
+      EtClosed => // drift-audit: ignore — the renderer WRITES the surface word for the empty row (SYNTAX: Pure is the identity's spelling); no dispatch reads it
+      if len(p) == 0 && len(a) == 0 { "Pure" } else { head },
+      EtAll => if len(p) == 0 && len(a) == 0 { "Any" } else { head },
+      EtVar(v) => if len(p) == 0 && len(a) == 0 { show_handle(v) } else { "{head} + {show_handle(v)}" },
+    }
+  },
 }
 
 fn show_eff_name(ref name) with !Mutate = match name {
-  ENamed(h)               => intern_name_of(h),
+  ENamed(h) => intern_name_of(h),
   EParameterized(h, args) => "{intern_name_of(h)}({show_list(args, show_eff_arg, ", ")})",
-  EPure                   => "Pure",   // drift-audit: ignore — variant→surface-label render, not a name key
+  EPure => // drift-audit: ignore — variant→surface-label render, not a name key
   // DISPLAY-TOTALITY, not a data-drop. The mentl voice must be TOTAL — it can
   // never crash while REPORTING a diagnostic (a renderer that traps mid-report
   // is the worst failure). A malformed name-slot (a non-EffName the seed's
@@ -2476,146 +2683,140 @@ fn show_eff_name(ref name) with !Mutate = match name {
   // Hβ.infer.effect-row-no-null-name shrinks the census (§7 shadow) toward 0;
   // this is the voice's total floor, on the m3-produced (productive-under-error)
   // half of first-light, orthogonal to the m3==m4 fixpoint (WAT-only).
-  _                       => "«invalid-effect»"   // drift-audit: ignore — display-totality floor; honest placeholder, not data classification
+  "Pure",
+  _ => // drift-audit: ignore — display-totality floor; honest placeholder, not data classification
+  "«invalid-effect»",
 }
 
 fn show_eff_arg(ref arg) with GraphRead + !Mutate + Alloc + Memory + Intern = match arg {
-  EAInt(n)    => int_to_str(n),
-  EAFloat(f)  => float_to_str(f),
+  EAInt(n) => int_to_str(n),
+  EAFloat(f) => float_to_str(f),
   EAString(s) => "\"{s}\"",
-  // The instance's payload IS a type the renderer already speaks — the
+  EAType(t) => // The instance's payload IS a type the renderer already speaks — the
   // old opaque marker hid the exact instance the diagnostic exists to
   // teach (!Cast vs Cast(<type>) named the class live, 2026-07-24).
-  EAType(t)   => show_type(t),
-  EANode(h)   => "<operand #{int_to_str(h)}>"
+  show_type(t),
+  EANode(h) => "<operand #{int_to_str(h)}>",
 }
 
-fn show_predicate(ref pred) with GraphRead + Memory + Alloc = {
-  match pred {
-    PTrue      => "true",
-    PCompare(op, a, b) => "{show_pred_operand(a)} {show_cmp_op(op)} {show_pred_operand(b)}",
-    PAnd(a, b) => "{show_predicate(a)} && {show_predicate(b)}",
-    POr(a, b)  => "{show_predicate(a)} || {show_predicate(b)}",
-    PNot(p)    => "!{show_predicate(p)}",
-    PBoolNode(n) => show_pred_operand(n),
-    PPatternMatch(_, n) => "{show_pred_operand(n)} matches _",
-    PFlowLe(src, dst)   => "{show_flow_label(src)} ⊑ {show_flow_label(dst)}",  // IFC: src must not exceed dst in the lattice
-    // The binder renders as its body — the diagnostic reads `self + 1 <= 10`
-    // with self SYMBOLIC (the SYNTAX-canonical spelling), never the
-    // substituted value.
-    PWithSelf(_, inner) => show_predicate(inner)
-  }
+fn show_predicate(ref pred) with GraphRead + Memory + Alloc = match pred {
+  PTrue => "true",
+  PCompare(op, a, b) => "{show_pred_operand(a)} {show_cmp_op(op)} {show_pred_operand(b)}",
+  PAnd(a, b) => "{show_predicate(a)} && {show_predicate(b)}",
+  POr(a, b) => "{show_predicate(a)} || {show_predicate(b)}",
+  PNot(p) => "!{show_predicate(p)}",
+  PBoolNode(n) => show_pred_operand(n),
+  PPatternMatch(_, n) => "{show_pred_operand(n)} matches _",
+  PFlowLe(src, dst) => // IFC: src must not exceed dst in the lattice
+  // The binder renders as its body — the diagnostic reads `self + 1 <= 10`
+  // with self SYMBOLIC (the SYNTAX-canonical spelling), never the
+  // substituted value.
+  "{show_flow_label(src)} ⊑ {show_flow_label(dst)}",
+  PWithSelf(_, inner) => show_predicate(inner),
 }
 
 fn show_cmp_op(ref op) with Pure = match op {
   BEq => "==",
   BLt => "<",
   BLe => "<=",
-  _   => "?"
+  _ => "?",
 }
 
 // Resolve a predicate operand HANDLE to its Expr live and render it.
-fn show_pred_operand(handle) with GraphRead + Alloc + Memory = {
-  match graph_node_body(handle) {
-    NExpr(VarRef(name)) => name,
-    NExpr(LitInt(n))    => int_to_str(n),
-    NExpr(LitFloat(f))  => float_to_str(f),
-    NExpr(LitString(s)) => "\"{s}\"",
-    NExpr(CallExpr(callee, _)) => "{show_callee_name(callee)}(...)",
-    // The predicate grammar's compound operands render recursively — a
-    // refinement's `-1.0 <= self` carries UnaryOpExpr(UNeg, LitFloat) on the
-    // left, and `self % 2` carries a BinOpExpr; both rendered `<expr>` before,
-    // fabricating away the exact bound the diagnostic exists to teach.
-    NExpr(UnaryOpExpr(UNeg, inner)) => {
-      let N(_, _, ih) = inner
-      "-{show_pred_operand(ih)}"
+fn show_pred_operand(handle) with GraphRead + Alloc + Memory = match graph_node_body(handle) {
+  NExpr(VarRef(name)) => name,
+  NExpr(LitInt(n)) => int_to_str(n),
+  NExpr(LitFloat(f)) => float_to_str(f),
+  NExpr(LitString(s)) => "\"{s}\"",
+  NExpr(CallExpr(callee, _)) => "{show_callee_name(callee)}(...)",
+  NExpr(UnaryOpExpr(UNeg, inner)) => // The predicate grammar's compound operands render recursively — a
+  // refinement's `-1.0 <= self` carries UnaryOpExpr(UNeg, LitFloat) on the
+  // left, and `self % 2` carries a BinOpExpr; both rendered `<expr>` before,
+  // fabricating away the exact bound the diagnostic exists to teach.
+  match inner {
+    N(_, _, ih) => "-{show_pred_operand(ih)}",
+  },
+  NExpr(UnaryOpExpr(UNot, inner)) => match inner {
+    N(_, _, ih) => "!{show_pred_operand(ih)}",
+  },
+  NExpr(BinOpExpr(op, l, r)) => match l {
+    N(_, _, lh) => match r {
+      N(_, _, rh) => "{show_pred_operand(lh)} {binop_to_str(op)} {show_pred_operand(rh)}",
     },
-    NExpr(UnaryOpExpr(UNot, inner)) => {
-      let N(_, _, ih) = inner
-      "!{show_pred_operand(ih)}"
+  },
+  NExpr(CallExpr(callee, args)) => // The canonical refinement vocabulary is call-shaped (len(self),
+  // abs(x)) — render the call rather than a placeholder; an exotic
+  // callee degrades through show_callee_name's own sentinel.
+  "{show_callee_name(callee)}({show_list(
+    args,
+    (a) => match a {
+      N(_, _, ah) => show_pred_operand(ah),
     },
-    NExpr(BinOpExpr(op, l, r)) => {
-      let N(_, _, lh) = l
-      let N(_, _, rh) = r
-      "{show_pred_operand(lh)} {binop_to_str(op)} {show_pred_operand(rh)}"
-    },
-    // The canonical refinement vocabulary is call-shaped (len(self),
-    // abs(x)) — render the call rather than a placeholder; an exotic
-    // callee degrades through show_callee_name's own sentinel.
-    NExpr(CallExpr(callee, args)) =>
-      "{show_callee_name(callee)}({show_list(args, (a) => { let N(_, _, ah) = a show_pred_operand(ah) }, ", ")})",
-    _                   => "<expr>"
-  }
+    ", "
+  )})",
+  _ => "<expr>",
 }
 
-fn show_callee_name(ref callee) with Pure = {
-  let N(cbody, _, _) = callee
-  match cbody {
+fn show_callee_name(ref callee) with Pure = match callee {
+  N(cbody, _, _) => match cbody {
     NExpr(VarRef(n)) => n,
-    _                => "_"
-  }
+    _ => "_",
+  },
 }
 
-fn show_reason(ref reason) with GraphRead + Memory + Alloc + !Mutate + Intern = {
-  match reason {
-    Declared(name)             => "declared as {name}",
-    Inferred(ctx)              => "inferred from {ctx}",
-    Fresh(id)                  => "fresh {show_handle(id)}",
-    OpConstraint(op, l, r)     => "operator {op} constrains {show_reason(l)} with {show_reason(r)}",
-    VarLookup(name, inner)     => "lookup {name} → {show_reason(inner)}",
-    FnReturn(name, inner)      => "return of {name} → {show_reason(inner)}", // drift-audit: ignore — "return of" is a Reason rendering string, not a control keyword
-    FnParam(name, idx, inner)  => "param {int_to_str(idx)} of {name} → {show_reason(inner)}",
-    MatchBranch(a, b)          => "match branch: {show_reason(a)} ~ {show_reason(b)}",
-    ListElement(inner)         => "list element: {show_reason(inner)}",
-    IfBranch(inner)            => "if branch: {show_reason(inner)}",
-    LetBinding(name, inner)    => "let {name} = {show_reason(inner)}",
-    Unified(a, b)              => "{show_reason(a)} unified with {show_reason(b)}",
-    Instantiation(name, inner) => "instantiate {name} → {show_reason(inner)}",
-    UnifyFailed(ta, tb)        => "cannot unify {show_type(ta)} with {show_type(tb)}",
-    Placeholder(span)          => "placeholder at {show_span(span)}",
-    BinOpPlaceholder(op)       => "binop {binop_to_str(op)}",
-    MissingVar(name)           => "unbound variable: {name}",
-    Refinement(p, q)           => "refinement: {show_predicate(p)} ∧ {show_predicate(q)}",
-    Located(span, inner)       => "at {show_span(span)}: {show_reason(inner)}",
-    // RX.2 — high-intent structured variants
-    InferredCallReturn(callee, inner) => "call to '{callee}' → {show_reason(inner)}",
-    InferredPipeResult(verb, inner)   => "{verb} pipe → {show_reason(inner)}",
-    FreshInContext(id, ctx)           => "fresh {show_handle(id)} in '{ctx}'",
-    DefaultReason(pname, span)        => "{pname} defaulted at {show_span(span)}",
-    VerifyWitness(model)              => "proved by SMT witness: {model}"
-  }
+fn show_reason(ref reason) with GraphRead + Memory + Alloc + !Mutate + Intern = match reason {
+  Declared(name) => "declared as {name}",
+  Inferred(ctx) => "inferred from {ctx}",
+  Fresh(id) => "fresh {show_handle(id)}",
+  OpConstraint(op, l, r) => "operator {op} constrains {show_reason(l)} with {show_reason(r)}",
+  VarLookup(name, inner) => "lookup {name} → {show_reason(inner)}",
+  FnReturn(name, inner) => // drift-audit: ignore — "return of" is a Reason rendering string, not a control keyword
+  "return of {name} → {show_reason(inner)}",
+  FnParam(name, idx, inner) => "param {int_to_str(idx)} of {name} → {show_reason(inner)}",
+  MatchBranch(a, b) => "match branch: {show_reason(a)} ~ {show_reason(b)}",
+  ListElement(inner) => "list element: {show_reason(inner)}",
+  IfBranch(inner) => "if branch: {show_reason(inner)}",
+  LetBinding(name, inner) => "let {name} = {show_reason(inner)}",
+  Unified(a, b) => "{show_reason(a)} unified with {show_reason(b)}",
+  Instantiation(name, inner) => "instantiate {name} → {show_reason(inner)}",
+  UnifyFailed(ta, tb) => "cannot unify {show_type(ta)} with {show_type(tb)}",
+  Placeholder(span) => "placeholder at {show_span(span)}",
+  BinOpPlaceholder(op) => "binop {binop_to_str(op)}",
+  MissingVar(name) => "unbound variable: {name}",
+  Refinement(p, q) => "refinement: {show_predicate(p)} ∧ {show_predicate(q)}",
+  Located(span, inner) => "at {show_span(span)}: {show_reason(inner)}",
+  InferredCallReturn(callee, inner) => // RX.2 — high-intent structured variants
+  "call to '{callee}' → {show_reason(inner)}",
+  InferredPipeResult(verb, inner) => "{verb} pipe → {show_reason(inner)}",
+  FreshInContext(id, ctx) => "fresh {show_handle(id)} in '{ctx}'",
+  DefaultReason(pname, span) => "{pname} defaulted at {show_span(span)}",
+  VerifyWitness(model) => "proved by SMT witness: {model}",
 }
 
-fn show_span(ref span) with Memory + Alloc = {
-  let Span(sl, sc, el, ec) = span
-  "{int_to_str(sl)}:{int_to_str(sc)}-{int_to_str(el)}:{int_to_str(ec)}"
+fn show_span(ref span) with Memory + Alloc = match span {
+  Span(sl, sc, el, ec) => "{int_to_str(sl)}:{int_to_str(sc)}-{int_to_str(el)}:{int_to_str(ec)}",
 }
 
-fn show_pipe_kind(pk) with Pure = {
-  match pk {
-    PForward              => "|>",
-    PFanout(FanShare)     => "<|",
-    PFanout(FanDistribute) => "><",
-    PTee                  => "~>",
-    PFeedback             => "<~"
-  }
+fn show_pipe_kind(pk) with Pure = match pk {
+  PForward => "|>",
+  PFanout(FanShare) => "<|",
+  PFanout(FanDistribute) => "><",
+  PTee => "~>",
+  PFeedback => "<~",
 }
 
-
-fn show_list(ref items, ref render, ref sep) with !Mutate = {
-  if len(items) == 0 { "" }
-  else if len(items) == 1 { render(last(items)) }
-  else {
-    render(last(items))
-      ++ sep
-      ++ show_list(drop_last(items), render, sep)
-  }
+fn show_list(ref items, ref render, ref sep) with !Mutate = if len(items) == 0 {
+  ""
+} else if len(items) == 1 {
+  render(last(items))
+} else {
+  render(last(items)) ++ sep ++ show_list(drop_last(items), render, sep)
 }
 
 // ── DAG-homed here (the import-truth sweep, 2026-07-23): each fn below
 // moved from a module DOWNSTREAM of its users so every user reaches it
 // through a forward import edge — the manifest tells the truth.
-
+//
 // query_flow_label — the IFC projection (§4⑥).
 // Reads FlowLabel from the Ty the graph already holds; no new state.
 //
@@ -2630,52 +2831,43 @@ fn show_list(ref items, ref render, ref sep) with !Mutate = {
 // H6: exhaustive over all 14 Ty constructors.
 // GraphRead + EnvRead: predicate_flow_label follows PBoolNode handles into graph;
 // TName arm follows the type's env entry to read its predicate.
-
 fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty {
-  TRefined(base, pred) =>
-    flow_label_join(pred |> predicate_flow_label, query_flow_label(base)),
-  TName(name, _) =>
-    // Follow the type's env entry to its TypeDecl predicate — graph-native.
-    // A nominal type with a refinement predicate (e.g. `type SecretKey = Bytes
-    // where classified(self)`) carries its IFC classification in that predicate.
-    // No string matching: the graph's env entry IS the source of truth.
-    match env_lookup(name) {
-      None      => Public,  // unknown type: open-world default
-      Some(entry) => {
-        let (scheme, _, _) = entry
-        let Forall(_, ty) = scheme
-        match ty {
+  TRefined(base, pred) => flow_label_join(pred |> predicate_flow_label, query_flow_label(base)),
+  TName(name, _) => // Follow the type's env entry to its TypeDecl predicate — graph-native.
+  // A nominal type with a refinement predicate (e.g. `type SecretKey = Bytes
+  // where classified(self)`) carries its IFC classification in that predicate.
+  // No string matching: the graph's env entry IS the source of truth.
+  match env_lookup(name) {
+    None => // unknown type: open-world default
+    Public,
+    Some(entry) => match entry {
+      (scheme, _, _) => match scheme {
+        Forall(_, ty) => match ty {
           TAlias(_, TRefined(_, pred)) => predicate_flow_label(pred),
-          TRefined(_, pred)            => predicate_flow_label(pred),
-          _                            => Public  // non-refined nominal: Public
-        }
-      }
+          TRefined(_, pred) => predicate_flow_label(pred),
+          _ => // non-refined nominal: Public
+          Public,
+        },
+      },
     },
-  TFun(_, _, row) =>
-    row |> row_flow_label,
-  TAlias(_, inner) =>
-    inner |> query_flow_label,
-  TList(elem) =>
-    elem |> query_flow_label,
-  TTuple(elems) =>
-    elems
-      |> map((e) => query_flow_label(e))
-      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
-  TRecord(fields) =>
-    fields
-      |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
-      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
-  TRecordOpen(fields, _) =>
-    fields
-      |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
-      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
-  TCont(input, answer, _, _) =>
-    flow_label_join(query_flow_label(input), query_flow_label(answer)),
-  TInt     => Public,
-  TFloat   => Public,
-  TUnit    => Public,
-  TByte    => Public,
-  TVar(_)  => Public     // unresolved: open-world default (no proof = observable)
+  },
+  TFun(_, _, row) => row |> row_flow_label,
+  TAlias(_, inner) => inner |> query_flow_label,
+  TList(elem) => elem |> query_flow_label,
+  TTuple(elems) => elems |> map((e) => query_flow_label(e)) |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  TRecord(fields) => fields |> map((f) => match f {
+    (_, fty) => query_flow_label(fty),
+  }) |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  TRecordOpen(fields, _) => fields |> map((f) => match f {
+    (_, fty) => query_flow_label(fty),
+  }) |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  TCont(input, answer, _, _) => flow_label_join(query_flow_label(input), query_flow_label(answer)),
+  TInt => Public,
+  TFloat => Public,
+  TUnit => Public,
+  TByte => Public,
+  TVar(_) => // unresolved: open-world default (no proof = observable)
+  Public,
 }
 
 // predicate_flow_label — classify a Predicate's flow sensitivity.
@@ -2684,32 +2876,35 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty
 // sensitive raises the label. This reads the AUTHORED name
 // from the graph — not re-deriving, reading what the graph holds.
 // H6: exhaustive over all 8 Predicate variants (7 + PFlowLe).
-
 fn predicate_flow_label(ref pred) with GraphRead + Memory + Alloc = match pred {
-  PTrue              => Public,
-  PCompare(_, _, _)  => Public,   // numeric comparison: not a secrecy annotation
-  PPatternMatch(_,_) => Public,   // match-narrowing: not a secrecy signal
-  PNot(_)            => Public,   // negation of secret IS NOT secret (non-monotone)
-  PFlowLe(a, _)      => a,        // the predicate itself carries the src label
-  PAnd(a, b)         => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
-  POr(a, b)          => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
-  PWithSelf(_, inner) => predicate_flow_label(inner),  // the `self` binder is transparent to flow
-  PBoolNode(h)       =>
-    // Follow the handle into the graph — read the actual call node's callee name.
-    // The callee name IS the authored intent; reading it is reading the graph.
-    match graph_node_body(h) {
-      NExpr(CallExpr(callee, _)) => {
-        let N(cbody, _, _) = callee
-        match cbody {
-          NExpr(VarRef(fname)) =>
-            if str_contains(fname, "secret") || str_contains(fname, "classified")
-                 || str_contains(fname, "sensitive") { Secret }
-            else { Public },
-          _ => Public
-        }
+  PTrue => Public,
+  PCompare(_, _, _) => // numeric comparison: not a secrecy annotation
+  Public,
+  PPatternMatch(_, _) => // match-narrowing: not a secrecy signal
+  Public,
+  PNot(_) => // negation of secret IS NOT secret (non-monotone)
+  Public,
+  PFlowLe(a, _) => // the predicate itself carries the src label
+  a,
+  PAnd(a, b) => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
+  POr(a, b) => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
+  PWithSelf(_, inner) => // the `self` binder is transparent to flow
+  predicate_flow_label(inner),
+  PBoolNode(h) => // Follow the handle into the graph — read the actual call node's callee name.
+  // The callee name IS the authored intent; reading it is reading the graph.
+  match graph_node_body(h) {
+    NExpr(CallExpr(callee, _)) => match callee {
+      N(cbody, _, _) => match cbody {
+        NExpr(VarRef(fname)) => if str_contains(fname, "secret") || str_contains(fname, "classified") || str_contains(fname, "sensitive") {
+          Secret
+        } else {
+          Public
+        },
+        _ => Public,
       },
-      _ => Public
-    }
+    },
+    _ => Public,
+  },
 }
 
 // row_flow_label — the absent set in a function's row IS the non-interference
@@ -2718,16 +2913,13 @@ fn predicate_flow_label(ref pred) with GraphRead + Memory + Alloc = match pred {
 // proved-absence form (masked universe); EtClosed/EtVar rows are observably
 // Public (their absent set records proofs but the row itself flows). H6:
 // exhaustive over the three tails.
-
 fn row_flow_label(ref row) with Pure = match row {
-  // A universal tail is the proved-absence stance (!E) — Secret; every
+  EfRow(_, _, EtAll) => // A universal tail is the proved-absence stance (!E) — Secret; every
   // other form is observably Public (subtraction/openness conservative).
-  EfRow(_, _, EtAll)     => Secret,
-  EfRow(_, _, EtVar(_))  => Public,
-  EfRow(_, _, EtClosed)  => Public
+  Secret,
+  EfRow(_, _, EtVar(_)) => Public,
+  EfRow(_, _, EtClosed) => Public,
 }
-
-
 
 // Resolve every `TVar` transitively through the graph. Every query
 // that returns a `Ty` calls this so the user sees the resolved shape,

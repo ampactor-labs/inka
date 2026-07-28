@@ -18,7 +18,6 @@
 // receiving a borrowed List always allocate a new node.
 //
 // Effects declared in std/compiler/types.mn — not re-declared here.
-
 import types
 
 // The stride carrier. A sequence's element byte-stride rides the HIGH bits of
@@ -37,12 +36,20 @@ import types
 // (memory + strings + lists + prelude, how the micros compile) has no src/ — a
 // runtime reader must resolve to a runtime definition.
 fn decode_stride(sc) with Pure = match sc {
-  0 => 4, 1 => 1, 2 => 8, 3 => 16, 4 => 2, _ => 4
+  0 => 4,
+  1 => 1,
+  2 => 8,
+  3 => 16,
+  4 => 2,
+  _ => 4,
 }
 
 fn pack_tag(tag, sc) with Pure = sc * 16 + tag
+
 fn seq_stride(ref list) with Memory = decode_stride(load_i32(list + 4) / 16)
+
 fn seq_tag(ref list) with Memory = i32_and(load_i32(list + 4), 15)
+
 fn seq_sc(ref list) with Memory = load_i32(list + 4) / 16
 
 // Element access at a runtime-carried stride — the WORD PROTOCOL, total and
@@ -53,10 +60,13 @@ fn seq_sc(ref list) with Memory = load_i32(list + 4) / 16
 // site cashes the width through load_f64/store_f64 at the boundary. Stride 2
 // (the reserved u16 code) has no producer; it rides the wide arm's
 // address/copy protocol until a by-value arm earns a producer.
-fn load_strided(base, i, stride) with Memory =
-  if stride == 1 { load_i8(base + i * stride) }
-  else if stride == 4 { load_i32(base + i * stride) }
-  else { base + i * stride }
+fn load_strided(base, i, stride) with Memory = if stride == 1 {
+  load_i8(base + i * stride)
+} else if stride == 4 {
+  load_i32(base + i * stride)
+} else {
+  base + i * stride
+}
 
 // The stride-1 store carries the byte RANGE trap (the list_index bounds-trap
 // precedent, same load_i32(-1) OOB idiom): a word outside 0..255 entering a
@@ -64,17 +74,18 @@ fn load_strided(base, i, stride) with Memory =
 // the narrowing corruption class §4① band D names. Runtime-total; the
 // compile-time ground discharge on top is the named refinement tier
 // (Hβ.infer.byte-narrowing-ground-discharge).
-fn store_strided(base, i, stride, val) with Memory =
-  if stride == 1 {
-    store_i8(base + i * stride, if val < 0 || val > 255 { load_i32(0 - 1) } else { val })
-  }
-  else if stride == 4 { store_i32(base + i * stride, val) }
-  // Wide slot: val is the REFERENCE (the word face of a wide value); the
-  // store copies the stride's bytes from behind it into the packed slot.
-  else { mem_copy(base + i * stride, val, stride) }
+fn store_strided(base, i, stride, val) with Memory = if stride == 1 {
+  store_i8(base + i * stride, if val < 0 || val > 255 { load_i32(0 - 1) } else { val })
+} else if stride == 4 {
+  store_i32(base + i * stride, val)
+} else // Wide slot: val is the REFERENCE (the word face of a wide value); the
+// store copies the stride's bytes from behind it into the packed slot.
+{
+  mem_copy(base + i * stride, val, stride)
+}
 
 // Construction
-
+//
 // make_list — allocate a flat tag=0 list of `count` slots (uninitialized).
 // Callers must fill slots with list_set before the list escapes.
 // The representation layer speaks TWO altitudes, and the names carry the
@@ -106,8 +117,7 @@ fn make_list_sc(count, sc) with Memory + Alloc = alloc_list_sc(count, sc)
 fn list_filled(n, v) with Memory + Alloc = list_filled_from(make_list(n), v, 0, n)
 
 fn list_filled_from(xs, v, i, n) with Memory + Alloc =
-  if i >= n { xs }
-  else { list_filled_from(list_set(xs, i, v), v, i + 1, n) }
+  if i >= n { xs } else { list_filled_from(list_set(xs, i, v), v, i + 1, n) }
 
 // len — element count of any list. Every node shape carries its
 // count at offset 0 (flat, snoc, concat, slice alike) — one load;
@@ -115,7 +125,7 @@ fn list_filled_from(xs, v, i, n) with Memory + Alloc =
 fn len(ref xs) with Memory = load_i32(xs)
 
 // Mutation and access (tag-dispatched)
-
+//
 // list_set — write val into slot idx of a flat tag=0 list. Returns the
 // list pointer so callers can chain: make_list(3) |> list_set(0, a) ...
 // Caller asserts tag=0 — calling list_set on a snoc/concat/slice is
@@ -130,8 +140,11 @@ fn list_set(l, idx, val) with Memory = {
   // pointer) — corruption, never a wrong element.
   let tw = load_i32(l + 4)
   let base = if tw % 16 == 0 { l + 8 } else { load_i32(0 - 1) }
-  if tw == 0 { store_i32(base + idx * 4, val) }
-  else { store_strided(base, idx, decode_stride(tw / 16), val) }
+  if tw == 0 {
+    store_i32(base + idx * 4, val)
+  } else {
+    store_strided(base, idx, decode_stride(tw / 16), val)
+  }
   l
 }
 
@@ -153,8 +166,9 @@ fn list_set(l, idx, val) with Memory = {
 // logical length separately and never read uninitialized slots.
 fn list_extend_to(list, min_size) with Memory + Alloc = {
   let cur_len = len(list)
-  if cur_len >= min_size { list }
-  else {
+  if cur_len >= min_size {
+    list
+  } else {
     let new_cap = if min_size > cur_len * 2 { min_size } else { cur_len * 2 }
     let fresh = make_list(new_cap)
     list_copy_into(list, fresh, 0, cur_len)
@@ -165,11 +179,10 @@ fn list_extend_to(list, min_size) with Memory + Alloc = {
 // through list_index so src may be any tag; dst must be tag=0.
 // Callers should keep src tag=0 for O(count) cost; non-flat sources
 // pay list_index dispatch per element.
-fn list_copy_into(src, dst, i, count) with Memory + Alloc = {
-  if i >= count { dst }
-  else {
-    list_copy_into(src, list_set(dst, i, list_index(src, i)), i + 1, count)
-  }
+fn list_copy_into(src, dst, i, count) with Memory + Alloc = if i >= count {
+  dst
+} else {
+  list_copy_into(src, list_set(dst, i, list_index(src, i)), i + 1, count)
 }
 
 // list_index — O(1) for tag=0, O(log N) for snoc chains, O(depth) for
@@ -180,10 +193,12 @@ fn list_copy_into(src, dst, i, count) with Memory + Alloc = {
 // ev-miss precedent (3b19771c): a 4-byte load crossing 2^32 is out of
 // bounds at every wasm32 memory size. One check at the boundary; the
 // traversal below it runs unchecked — ONE home, no duplicate to drift.
-fn list_index(ref list, i) with Memory = {
-  if i < 0 { load_i32(0 - 1) }
-  else if i >= load_i32(list) { load_i32(0 - 1) }
-  else { list_index_unchecked(list, i) }
+fn list_index(ref list, i) with Memory = if i < 0 {
+  load_i32(0 - 1)
+} else if i >= load_i32(list) {
+  load_i32(0 - 1)
+} else {
+  list_index_unchecked(list, i)
 }
 
 // The raw traversal — every entry already carries a discharged bounds
@@ -202,29 +217,38 @@ fn list_index(ref list, i) with Memory = {
 fn list_index_unchecked(ref list, i) with Memory = {
   let tw = load_i32(list + 4)
   match i32_and(tw, 15) {
-    0 => {
-      if tw == 0 { load_i32(list + 8 + i * 4) }
-      else if tw == 16 { load_i8(list + 8 + i) }
-      else { load_strided(list + 8, i, decode_stride(tw / 16)) }
+    0 => if tw == 0 {
+      load_i32(list + 8 + i * 4)
+    } else if tw == 16 {
+      load_i8(list + 8 + i)
+    } else {
+      load_strided(list + 8, i, decode_stride(tw / 16))
     },
     1 => {
-      let left     = load_i32(list + 8)
+      let left = load_i32(list + 8)
       let left_len = load_i32(left)
-      if i < left_len { list_index_unchecked(left, i) }
-      else if tw == 1 { load_i32(list + 12) }
-      else { load_strided(list + 12, 0, decode_stride(tw / 16)) }
+      if i < left_len {
+        list_index_unchecked(left, i)
+      } else if tw == 1 {
+        load_i32(list + 12)
+      } else {
+        load_strided(list + 12, 0, decode_stride(tw / 16))
+      }
     },
     3 => {
-      let left     = load_i32(list + 8)
+      let left = load_i32(list + 8)
       let left_len = load_i32(left)
-      if i < left_len { list_index_unchecked(left, i) }
-      else { list_index_unchecked(load_i32(list + 12), i - left_len) }
+      if i < left_len {
+        list_index_unchecked(left, i)
+      } else {
+        list_index_unchecked(load_i32(list + 12), i - left_len)
+      }
     },
     4 => {
-      let base  = load_i32(list + 8)
+      let base = load_i32(list + 8)
       let start = load_i32(list + 12)
       list_index_unchecked(base, start + i)
-    }
+    },
   }
 }
 
@@ -237,7 +261,7 @@ fn list_index_unchecked(ref list, i) with Memory = {
 fn list_index_proven(list, i) with Memory = list_index_unchecked(list, i)
 
 // Structural equality — the sequence case of the one == derivation.
-
+//
 // list_eq — length-then-element structural equality over the sequence
 // node-kind (SYNTAX.md §Equality: "sequence ([a], incl. String = [Byte])
 // -> length-then-element recursion"). This is the [a] instance of the
@@ -245,30 +269,32 @@ fn list_index_proven(list, i) with Memory = list_index_unchecked(list, i)
 // instance), and both are the ONE sequence projection — not two operators.
 // Elements compare via i32.eq (the scalar/pointer word); deep element
 // recursion for nested sequences rides the element-typed emit dispatch.
-fn list_eq(a, b) -> Bool with Memory = {
-  // Identity is the first structural fact: the same node is equal to
-  // itself — sayable HERE because this raw body reads its operands as
-  // words. (str_eq's typed body cannot say it; its identity path is the
-  // named emit-wrapper strike.)
-  if a == b { true }
-  else {
-    let la = load_i32(a)
-    let lb = load_i32(b)
-    if la != lb { false }
-    else { list_eq_loop(a, b, la, 0) }
-  }
+//
+// Identity is the first structural fact: the same node is equal to
+// itself — sayable HERE because this raw body reads its operands as
+// words. (str_eq's typed body cannot say it; its identity path is the
+// named emit-wrapper strike.)
+fn list_eq(a, b) -> Bool with Memory = if a == b {
+  true
+} else {
+  let la = load_i32(a)
+  let lb = load_i32(b)
+  if la != lb { false } else { list_eq_loop(a, b, la, 0) }
 }
 
-fn list_eq_loop(a, b, n, i) -> Bool with Memory =
-  if i >= n { true }
-  else {
-    // The raw altitude end to end: list_index (a typed face) would pin the
-    // loop's operands [t] while list_eq's own body reads them as words —
-    // the unchecked read is the f64 siblings' exact form, bounds discharged
-    // by the loop guard over the header length.
-    if list_index_unchecked(a, i) != list_index_unchecked(b, i) { false }
-    else { list_eq_loop(a, b, n, i + 1) }
+fn list_eq_loop(a, b, n, i) -> Bool with Memory = if i >= n {
+  true
+} else {
+  // The raw altitude end to end: list_index (a typed face) would pin the
+  // loop's operands [t] while list_eq's own body reads them as words —
+  // the unchecked read is the f64 siblings' exact form, bounds discharged
+  // by the loop guard over the header length.
+  if list_index_unchecked(a, i) != list_index_unchecked(b, i) {
+    false
+  } else {
+    list_eq_loop(a, b, n, i + 1)
   }
+}
 
 // list_compare — the 3-way lexicographic ordering: the [a] instance of the ONE
 // compare leaf (sibling of str_compare's [Byte] instance). Returns -1 / 0 / 1.
@@ -278,37 +304,37 @@ fn list_eq_loop(a, b, n, i) -> Bool with Memory =
 // emit layer, the same place the eq leaf does. The SAME lexicographic walk
 // str_compare's [byte] instance makes, so a byte sequence orders identically
 // through either route.
-fn list_compare_loop(a, b, la, lb, i) -> Int with Memory =
-  if i >= la && i >= lb { 0 }
-  else if i >= la { 0 - 1 }
-  else if i >= lb { 1 }
-  else {
-    let ea = list_index(a, i)
-    let eb = list_index(b, i)
-    if ea < eb { 0 - 1 }
-    else if ea > eb { 1 }
-    else { list_compare_loop(a, b, la, lb, i + 1) }
-  }
+fn list_compare_loop(a, b, la, lb, i) -> Int with Memory = if i >= la && i >= lb {
+  0
+} else if i >= la {
+  0 - 1
+} else if i >= lb {
+  1
+} else {
+  let ea = list_index(a, i)
+  let eb = list_index(b, i)
+  if ea < eb { 0 - 1 } else if ea > eb { 1 } else { list_compare_loop(a, b, la, lb, i + 1) }
+}
 
 // The length reads route through the structural `len` (a seq-op, typed
 // [x] -> Int), not raw load_i32: `a`/`b` are also list_index'd in the loop,
 // so a raw load_i32 would pun one value as both Int and [x] in one body.
-fn list_compare(a, b) -> Int with Memory =
+fn list_compare(a, b) -> Int with Memory = {
   let la = len(a)
   let lb = len(b)
   list_compare_loop(a, b, la, lb, 0)
+}
 
 // list_hash — FNV-1a over the elements: the [a] instance of the ONE hash leaf.
 // Structural-equal lists (element-equal, equal length) hash equal (list_eq ⇒
 // list_hash equal — the eq/hash agreement). The length seeds the mix so [1] and
 // [1,1] differ; the same FNV constants str_hash / hash_source share.
 fn list_hash_loop(xs, i, n, h) -> Int with Memory =
-  if i >= n { h }
-  else { list_hash_loop(xs, i + 1, n, i32_xor(h, list_index(xs, i)) * 16777619) }
+  if i >= n { h } else { list_hash_loop(xs, i + 1, n, i32_xor(h, list_index(xs, i)) * 16777619) }
 
 fn list_hash(xs) -> Int with Memory = {
   let n = len(xs)
-  list_hash_loop(xs, 0, n, i32_xor(2166136261, n) * 16777619)
+  list_hash_loop(xs, 0, n, i32_xor(-2128831035, n) * 16777619)
 }
 
 // The [Float] instances of the eq / compare / hash leaves — the wide-element
@@ -318,27 +344,29 @@ fn list_hash(xs) -> Int with Memory = {
 // cashes the width, and the comparison/mix runs on the native value. Called
 // by the emit's TList(TFloat) routing arms; equal sequences through EITHER
 // physical stride agree (the value decides, never the representation).
-fn list_eq_f64(a, b) -> Bool with Memory = {
-  // The identity short-circuit is sound for the wide instance too: one
-  // node's elements equal themselves (a self-compare of a NaN-holding
-  // list answers true under identity where the element walk would answer
-  // false — identity is the stronger, value-faithful reading of "the
-  // same sequence").
-  if a == b { true }
-  else {
-    let la = load_i32(a)
-    let lb = load_i32(b)
-    if la != lb { false }
-    else { list_eq_f64_loop(a, b, la, 0) }
-  }
+//
+// The identity short-circuit is sound for the wide instance too: one
+// node's elements equal themselves (a self-compare of a NaN-holding
+// list answers true under identity where the element walk would answer
+// false — identity is the stronger, value-faithful reading of "the
+// same sequence").
+fn list_eq_f64(a, b) -> Bool with Memory = if a == b {
+  true
+} else {
+  let la = load_i32(a)
+  let lb = load_i32(b)
+  if la != lb { false } else { list_eq_f64_loop(a, b, la, 0) }
 }
 
-fn list_eq_f64_loop(a, b, n, i) -> Bool with Memory =
-  if i >= n { true }
-  else {
-    if load_f64(list_index_unchecked(a, i)) != load_f64(list_index_unchecked(b, i)) { false }
-    else { list_eq_f64_loop(a, b, n, i + 1) }
+fn list_eq_f64_loop(a, b, n, i) -> Bool with Memory = if i >= n {
+  true
+} else {
+  if load_f64(list_index_unchecked(a, i)) != load_f64(list_index_unchecked(b, i)) {
+    false
+  } else {
+    list_eq_f64_loop(a, b, n, i + 1)
   }
+}
 
 fn list_compare_f64(a, b) -> Int with Memory = {
   let la = load_i32(a)
@@ -346,34 +374,34 @@ fn list_compare_f64(a, b) -> Int with Memory = {
   list_compare_f64_loop(a, b, la, lb, 0)
 }
 
-fn list_compare_f64_loop(a, b, la, lb, i) -> Int with Memory =
-  if i >= la && i >= lb { 0 }
-  else if i >= la { 0 - 1 }
-  else if i >= lb { 1 }
-  else {
-    let ea = load_f64(list_index_unchecked(a, i))
-    let eb = load_f64(list_index_unchecked(b, i))
-    if ea < eb { 0 - 1 }
-    else if ea > eb { 1 }
-    else { list_compare_f64_loop(a, b, la, lb, i + 1) }
-  }
+fn list_compare_f64_loop(a, b, la, lb, i) -> Int with Memory = if i >= la && i >= lb {
+  0
+} else if i >= la {
+  0 - 1
+} else if i >= lb {
+  1
+} else {
+  let ea = load_f64(list_index_unchecked(a, i))
+  let eb = load_f64(list_index_unchecked(b, i))
+  if ea < eb { 0 - 1 } else if ea > eb { 1 } else { list_compare_f64_loop(a, b, la, lb, i + 1) }
+}
 
 // Hash via the decimal rendering (the field-hash precedent: value-faithful —
 // equal f64 => equal rendering => equal hash; the eq/hash agreement holds).
 fn list_hash_f64(xs) -> Int with Memory + Alloc = {
   let n = load_i32(xs)
-  list_hash_f64_loop(xs, 0, n, i32_xor(2166136261, n) * 16777619)
+  list_hash_f64_loop(xs, 0, n, i32_xor(-2128831035, n) * 16777619)
 }
 
-fn list_hash_f64_loop(xs, i, n, h) -> Int with Memory + Alloc =
-  if i >= n { h }
-  else {
-    let sh = str_hash(float_to_str(load_f64(list_index_unchecked(xs, i))))
-    list_hash_f64_loop(xs, i + 1, n, i32_xor(h, sh) * 16777619)
-  }
+fn list_hash_f64_loop(xs, i, n, h) -> Int with Memory + Alloc = if i >= n {
+  h
+} else {
+  let sh = str_hash(float_to_str(load_f64(list_index_unchecked(xs, i))))
+  list_hash_f64_loop(xs, i + 1, n, i32_xor(h, sh) * 16777619)
+}
 
 // Push — O(1) snoc
-
+//
 // push — append val to list, returning a new snoc node (tag=1).
 // Ownership-aware path: if the list is tag=0 AND owned AND has capacity,
 // list_set is preferred by the caller (no node allocation). Otherwise
@@ -393,7 +421,7 @@ fn push(list, val) with Memory + Alloc = {
 }
 
 // Concatenation — O(1) concat node
-
+//
 // list_concat — join two lists. Returns either input directly if the other
 // list_pop — remove the last element of `list`, returning (rest, last).
 // Allocates a fresh tag=0 list of capacity n-1 and copies the prefix
@@ -405,11 +433,12 @@ fn list_pop(list) with Memory + Alloc = {
     (make_list(0), 0)
   } else {
     let end_val = list_index(list, n - 1)
-    let rest = if n == 1 { make_list(0) }
-               else {
-                 let buf = make_list(n - 1)
-                 list_copy_into(list, buf, 0, n - 1)
-               }
+    let rest = if n == 1 {
+      make_list(0)
+    } else {
+      let buf = make_list(n - 1)
+      list_copy_into(list, buf, 0, n - 1)
+    }
     (rest, end_val)
   }
 }
@@ -422,18 +451,18 @@ fn range(start, end) with Memory + Alloc = {
   range_fill(buf, start, end, 0)
 }
 
-fn range_fill(buf, cur, end, idx) with Memory = {
-  if cur >= end { buf }
-  else { range_fill(list_set(buf, idx, cur), cur + 1, end, idx + 1) }
-}
+fn range_fill(buf, cur, end, idx) with Memory =
+  if cur >= end { buf } else { range_fill(list_set(buf, idx, cur), cur + 1, end, idx + 1) }
 
 // is empty (no allocation), otherwise allocates a 16-byte concat node (tag=3).
 fn list_concat(a, b) with Memory + Alloc = {
   let len_a = load_i32(a)
   let len_b = load_i32(b)
-  if len_a == 0 { b }
-  else if len_b == 0 { a }
-  else {
+  if len_a == 0 {
+    b
+  } else if len_b == 0 {
+    a
+  } else {
     let total = len_a + len_b
     let node = alloc(16)
     store_i32(node, total)
@@ -445,7 +474,7 @@ fn list_concat(a, b) with Memory + Alloc = {
 }
 
 // Slice — O(1) view
-
+//
 // slice — return a view into list[start..end) (exclusive end).
 // Clamps to valid range. Returns the empty list for an empty range.
 // Allocates a 16-byte slice node (tag=4) — no copying. `slice` is the
@@ -456,10 +485,11 @@ fn slice(list, start, end) with Memory + Alloc = slice_raw(list, start, end)
 fn slice_raw(list, start, end) with Memory + Alloc = {
   let total = load_i32(list)
   let cstart = if start < 0 { 0 } else if start > total { total } else { start }
-  let cend   = if end < cstart { cstart } else if end > total { total } else { end }
+  let cend = if end < cstart { cstart } else if end > total { total } else { end }
   let new_len = cend - cstart
-  if new_len <= 0 { alloc_list_sc(0, seq_sc(list)) }
-  else {
+  if new_len <= 0 {
+    alloc_list_sc(0, seq_sc(list))
+  } else {
     let node = alloc(16)
     store_i32(node, new_len)
     store_i32(node + 4, pack_tag(4, seq_sc(list)))
@@ -475,7 +505,7 @@ fn slice_raw(list, start, end) with Memory + Alloc = {
 // the LAST element (most recently pushed) and "tail" is the prefix.
 // This matches env_lookup traversal: the innermost binding is at the
 // head of the snoc stack.
-
+//
 // last — the head element. Read through the kernel sequence-index
 // projection `xs[i]`, which CARRIES the element type `a` from the sequence's
 // `TList(a)` (the Carried-Truth Law at the value-ontology layer), rather than
@@ -486,8 +516,6 @@ fn slice_raw(list, start, end) with Memory + Alloc = {
 // index `len-1`. No `_ => 0` silent fallback: head-of-empty is undefined.
 fn last(xs) with Memory = xs[len(xs) - 1]
 
-
-
 // drop_last — return the list without its last element.
 // O(1) for snoc nodes (reads the left pointer). Creates a slice for
 // other tag variants — still O(1) allocation, O(1) by-reference.
@@ -496,18 +524,18 @@ fn last(xs) with Memory = xs[len(xs) - 1]
 // degrades gracefully.
 fn drop_last(list) with Memory + Alloc = {
   let list_len = load_i32(list)
-  let tag      = seq_tag(list)
+  let tag = seq_tag(list)
   match tag {
     1 => load_i32(list + 8),
     0 => slice_raw(list, 0, list_len - 1),
     3 => slice_raw(list, 0, list_len - 1),
     4 => slice_raw(list, 0, list_len - 1),
-    _ => alloc_list(0)
+    _ => alloc_list(0),
   }
 }
 
 // Materialization
-
+//
 // list_to_flat — convert any list tree to a contiguous tag=0 array.
 // O(N) time, O(N) space. Returns the input unchanged if already flat.
 // Call this at hot-path entrances when O(1) random access is required.
@@ -523,10 +551,12 @@ fn list_to_flat(list) with Memory + Alloc = flat_raw(list)
 
 fn flat_raw(list) with Memory + Alloc = {
   let n = load_i32(list)
-  if n == 0 { list }
-  else {
-    if seq_tag(list) == 0 { list }
-    else {
+  if n == 0 {
+    list
+  } else {
+    if seq_tag(list) == 0 {
+      list
+    } else {
       let flat = alloc_list_sc(n, seq_sc(list))
       flat_fill(flat, list, 0, n)
       flat
@@ -537,15 +567,14 @@ fn flat_raw(list) with Memory + Alloc = {
 // flat_fill — walk the tree in forward order, storing each element into
 // the flat array. Dispatches on tag to read snoc structure directly where
 // possible, falls back to list_index for concat/slice nodes.
-fn flat_fill(flat, tree, i, n) with Memory + Alloc = {
-  if i >= n { () }
-  else {
-    match seq_tag(tree) {
-      0 => flat_fill_flat_src(flat, tree, i, n),
-      1 => flat_fill_snoc(flat, tree, i, n),
-      3 => flat_fill_concat(flat, tree, i, n),
-      4 => flat_fill_slice(flat, tree, i, n)
-    }
+fn flat_fill(flat, tree, i, n) with Memory + Alloc = if i >= n {
+  ()
+} else {
+  match seq_tag(tree) {
+    0 => flat_fill_flat_src(flat, tree, i, n),
+    1 => flat_fill_snoc(flat, tree, i, n),
+    3 => flat_fill_concat(flat, tree, i, n),
+    4 => flat_fill_slice(flat, tree, i, n),
   }
 }
 
@@ -555,12 +584,11 @@ fn flat_fill(flat, tree, i, n) with Memory + Alloc = {
 // stride is uniform through a fill by construction: flat_raw allocates the
 // destination with the tree's own sc, and every sub-node carries its parent's
 // sc — so one mem_copy is byte-exact for word, byte, and wide elements alike.
-fn flat_fill_flat_src(flat, src, i, n) with Memory + Alloc = {
-  if i >= n { () }
-  else {
-    let st = decode_stride(load_i32(flat + 4) / 16)
-    mem_copy(flat + 8 + i * st, src + 8 + i * st, (n - i) * st)
-  }
+fn flat_fill_flat_src(flat, src, i, n) with Memory + Alloc = if i >= n {
+  ()
+} else {
+  let st = decode_stride(load_i32(flat + 4) / 16)
+  mem_copy(flat + 8 + i * st, src + 8 + i * st, (n - i) * st)
 }
 
 fn flat_fill_snoc(flat, tree, i, n) with Memory + Alloc = {
@@ -572,8 +600,11 @@ fn flat_fill_snoc(flat, tree, i, n) with Memory + Alloc = {
   let count = load_i32(tree)
   let last_pos = count - 1
   let st = decode_stride(load_i32(tree + 4) / 16)
-  if st == 4 { store_i32(flat + 8 + last_pos * 4, load_i32(tree + 12)) }
-  else { store_strided(flat + 8, last_pos, st, load_strided(tree + 12, 0, st)) }
+  if st == 4 {
+    store_i32(flat + 8 + last_pos * 4, load_i32(tree + 12))
+  } else {
+    store_strided(flat + 8, last_pos, st, load_strided(tree + 12, 0, st))
+  }
   let left = load_i32(tree + 8)
   flat_fill(flat, left, i, last_pos)
 }
@@ -600,103 +631,100 @@ fn ff_push(stack, k, node, off) with Memory + Alloc = {
   list_set(list_set(grown, k * 2, node), k * 2 + 1, off)
 }
 
-fn ff_concat_drain(flat, stack, sp) with Memory + Alloc = {
-  if sp <= 1 { () }
-  else {
-    let node = stack[(sp - 1) * 2]
-    let off  = stack[(sp - 1) * 2 + 1]
-    if seq_tag(node) == 3 {
-      let left  = load_i32(node + 8)
-      let right = load_i32(node + 12)
-      let left_len = load_i32(left)
-      ff_concat_drain(flat, ff_push(ff_push(stack, sp - 1, right, off + left_len), sp, left, off), sp + 1)
-    } else {
-      flat_fill_at_offset(flat, node, off, load_i32(node))
-      ff_concat_drain(flat, stack, sp - 1)
-    }
+fn ff_concat_drain(flat, stack, sp) with Memory + Alloc = if sp <= 1 {
+  ()
+} else {
+  let node = stack[(sp - 1) * 2]
+  let off = stack[(sp - 1) * 2 + 1]
+  if seq_tag(node) == 3 {
+    let left = load_i32(node + 8)
+    let right = load_i32(node + 12)
+    let left_len = load_i32(left)
+    ff_concat_drain(flat, ff_push(ff_push(stack, sp - 1, right, off + left_len), sp, left, off), sp + 1)
+  } else {
+    flat_fill_at_offset(flat, node, off, load_i32(node))
+    ff_concat_drain(flat, stack, sp - 1)
   }
 }
 
-fn flat_fill_at_offset(flat, src, offset, n) with Memory + Alloc = {
-  if n == 0 { () }
-  else {
-    match seq_tag(src) {
-      0 => flat_fill_flat_src_offset(flat, src, offset, n),
-      1 => flat_fill_snoc_offset(flat, src, offset, n),
-      3 => flat_fill_concat_offset(flat, src, offset, n),
-      4 => flat_fill_slice_offset(flat, src, offset, n)
-    }
+fn flat_fill_at_offset(flat, src, offset, n) with Memory + Alloc = if n == 0 {
+  ()
+} else {
+  match seq_tag(src) {
+    0 => flat_fill_flat_src_offset(flat, src, offset, n),
+    1 => flat_fill_snoc_offset(flat, src, offset, n),
+    3 => flat_fill_concat_offset(flat, src, offset, n),
+    4 => flat_fill_slice_offset(flat, src, offset, n),
   }
 }
 
-fn flat_fill_flat_src_offset(flat, src, offset, n) with Memory + Alloc = {
-  if n == 0 { () }
-  else {
-    let src_len = load_i32(src)
-    copy_range(flat, src, offset, 0, src_len)
-  }
+fn flat_fill_flat_src_offset(flat, src, offset, n) with Memory + Alloc = if n == 0 {
+  ()
+} else {
+  let src_len = load_i32(src)
+  copy_range(flat, src, offset, 0, src_len)
 }
 
 // Flat-to-flat at distinct offsets: the same one-mem_copy collapse as
 // flat_fill_flat_src (uniform stride through the fill by construction).
-fn copy_range(flat, src, dest_off, src_off, n) with Memory + Alloc = {
-  if n == 0 { () }
-  else {
-    let st = decode_stride(load_i32(flat + 4) / 16)
-    mem_copy(flat + 8 + dest_off * st, src + 8 + src_off * st, n * st)
-  }
+fn copy_range(flat, src, dest_off, src_off, n) with Memory + Alloc = if n == 0 {
+  ()
+} else {
+  let st = decode_stride(load_i32(flat + 4) / 16)
+  mem_copy(flat + 8 + dest_off * st, src + 8 + src_off * st, n * st)
 }
 
 fn flat_fill_snoc_offset(flat, src, offset, n) with Memory + Alloc = {
   // The offset twin of flat_fill_snoc — same once-per-element cost, same
   // one-read stride derivation and word fast path.
   let count = load_i32(src)
-  let pos   = offset + count - 1
+  let pos = offset + count - 1
   let st = decode_stride(load_i32(src + 4) / 16)
-  if st == 4 { store_i32(flat + 8 + pos * 4, load_i32(src + 12)) }
-  else { store_strided(flat + 8, pos, st, load_strided(src + 12, 0, st)) }
+  if st == 4 {
+    store_i32(flat + 8 + pos * 4, load_i32(src + 12))
+  } else {
+    store_strided(flat + 8, pos, st, load_strided(src + 12, 0, st))
+  }
   let left = load_i32(src + 8)
   flat_fill_at_offset(flat, left, offset, count - 1)
 }
 
-
 fn flat_fill_slice_offset(flat, src, offset, n) with Memory + Alloc = {
-  let base       = load_i32(src + 8)
+  let base = load_i32(src + 8)
   let slice_start = load_i32(src + 12)
-  let slice_len  = load_i32(src)
+  let slice_len = load_i32(src)
   flat_fill_slice_range(flat, base, offset, slice_start, slice_len)
 }
 
-fn flat_fill_slice_range(flat, base, dest_off, src_start, n) with Memory + Alloc = {
-  if n == 0 { () }
-  else {
-    // A slice over a FLAT base — the dominant shape — is one contiguous
-    // mem_copy. A structured base falls to the per-element walk with the
-    // stride hoisted once (it is loop-invariant; deriving it per element was
-    // the priced ceremony).
-    let st = decode_stride(load_i32(flat + 4) / 16)
-    if i32_and(load_i32(base + 4), 15) == 0 {
-      mem_copy(flat + 8 + dest_off * st, base + 8 + src_start * st, n * st)
-    }
-    else { flat_fill_slice_walk(flat, base, dest_off, src_start, n, st) }
+fn flat_fill_slice_range(flat, base, dest_off, src_start, n) with Memory + Alloc = if n == 0 {
+  ()
+} else {
+  // A slice over a FLAT base — the dominant shape — is one contiguous
+  // mem_copy. A structured base falls to the per-element walk with the
+  // stride hoisted once (it is loop-invariant; deriving it per element was
+  // the priced ceremony).
+  let st = decode_stride(load_i32(flat + 4) / 16)
+  if i32_and(load_i32(base + 4), 15) == 0 {
+    mem_copy(flat + 8 + dest_off * st, base + 8 + src_start * st, n * st)
+  } else {
+    flat_fill_slice_walk(flat, base, dest_off, src_start, n, st)
   }
 }
 
-fn flat_fill_slice_walk(flat, base, dest_off, src_start, n, st) with Memory = {
-  if n == 0 { () }
-  else {
-    // Unchecked by construction: the walk's n came from the slice node's own
-    // length, so src_start stays inside base for every step — the checked
-    // list_index would also be a table-typed call forcing [a] onto this raw
-    // walk's word locals.
-    store_strided(flat + 8, dest_off, st, list_index_unchecked(base, src_start))
-    flat_fill_slice_walk(flat, base, dest_off + 1, src_start + 1, n - 1, st)
-  }
+fn flat_fill_slice_walk(flat, base, dest_off, src_start, n, st) with Memory = if n == 0 {
+  ()
+} else {
+  // Unchecked by construction: the walk's n came from the slice node's own
+  // length, so src_start stays inside base for every step — the checked
+  // list_index would also be a table-typed call forcing [a] onto this raw
+  // walk's word locals.
+  store_strided(flat + 8, dest_off, st, list_index_unchecked(base, src_start))
+  flat_fill_slice_walk(flat, base, dest_off + 1, src_start + 1, n - 1, st)
 }
 
 fn flat_fill_slice(flat, tree, i, n) with Memory + Alloc = {
-  let base        = load_i32(tree + 8)
+  let base = load_i32(tree + 8)
   let slice_start = load_i32(tree + 12)
-  let slice_len   = load_i32(tree)
+  let slice_len = load_i32(tree)
   flat_fill_slice_range(flat, base, i, slice_start, slice_len)
 }

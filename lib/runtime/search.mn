@@ -50,8 +50,8 @@
 // - SUBSTRATE.md §"Inference IS the Light" (L50-66), §"The Continuous
 //   Oracle IS Incremental Compilation Plus One Cached Value" (commit
 //   636c365)
-
 import types
+
 // own supplies the catch_abort handler.
 import own
 
@@ -68,9 +68,8 @@ import own
 // substrate mechanism. Primitive #4 (effect row algebra): `with
 // Choice` admits the call; `!Choice` proves determinism (no fork at
 // that call site).
-
 effect Choice {
-  choose(options: [a]) -> a
+  choose([a]) -> a
 }
 
 // pick_first — OneShot terminal handler. Per CE §1.2: resumes with
@@ -85,11 +84,8 @@ effect Choice {
 // at this site. Row subsumption at handler install lets it pass.
 // Primitive #2's pattern would formalize this; for
 // V1 the narrowing is implicit in pick_first being named OneShot.
-
 handler pick_first {
-  choose(options) =>
-    if len(options) == 0 { abort() }
-    else                 { resume(list_index(options, 0)) }
+  choose(options) => if len(options) == 0 { abort() } else { resume(list_index(options, 0)) },
 }
 
 // try_with_abort_catch — the combinator backtrack uses to catch
@@ -105,12 +101,11 @@ handler pick_first {
 // Note: try_fn and catch_fn are both `with Abort` to allow the
 // outer scope's effects to flow. For backtrack's call site, both
 // thunks are closures over the surrounding try_each state.
-
 fn try_with_abort_catch(try_fn, catch_fn) with Abort = {
-  let attempted = (try_fn()) ~> catch_abort
+  let attempted = try_fn() ~> catch_abort
   match attempted {
-    Some(value)   => value,
-    None          => catch_fn()
+    Some(value) => value,
+    None => catch_fn(),
   }
 }
 
@@ -131,27 +126,27 @@ fn try_with_abort_catch(try_fn, catch_fn) with Abort = {
 // backtrack catches. Nothing here is Prolog-specific or DPLL-
 // specific — backtrack is the substrate primitive for every "try
 // each alternative, commit the first that doesn't dead-end" pattern.
-
-handler backtrack with Choice + GraphRead + GraphWrite + Abort {
+handler backtrack {
   choose(options) => {
-    fn try_each(i) =
-      if i >= len(options) { abort() }
-      else {
-        let checkpoint = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-        try_with_abort_catch(
-          () => resume(list_index(options, i)),
-          () => {
-            graph_rollback(checkpoint)
-            try_each(i + 1)
-          }
-        )
-      }
+    fn try_each(i) = if i >= len(options) {
+      abort()
+    } else {
+      // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+      let checkpoint = graph_push_checkpoint()
+      try_with_abort_catch(
+        () => resume(list_index(options, i)),
+        () => {
+          graph_rollback(checkpoint)
+          try_each(i + 1)
+        }
+      )
+    }
     try_each(0)
-  }
+  },
 }
 
 // ─── Connection to the kernel ─────────────────────────────────────────
-
+//
 // Primitive #1 (Graph + Env) — backtrack uses graph_push_checkpoint
 // + graph_rollback (the existing graph trail substrate). Per the
 // graph_handler edits at commit a2edd50, the checkpoint stack
@@ -195,9 +190,9 @@ handler backtrack with Choice + GraphRead + GraphWrite + Abort {
 // Reason (ChoiceFork(option_index)); the Why Engine walks
 // to "why this option won?" through the surviving fork's Reason
 // chain.
-
+//
 // ─── What this substrate refuses ──────────────────────────────────────
-
+//
 // - Re-declaring Abort or catch_abort. Both already exist
 //   (src/types.mn:637 + src/own.mn:31). Per Q-B.3 halt-signal:
 //   compose on the existing substrate; don't redeclare.
@@ -217,3 +212,4 @@ handler backtrack with Choice + GraphRead + GraphWrite + Abort {
 //   order [0, 1, 2, ...]; first non-abort wins. Determinism is
 //   load-bearing for reproducibility (per the Mentl-is-100%-deterministic
 //   doctrine + INSIGHTS L1011-1084 compound interest of self-reference).
+

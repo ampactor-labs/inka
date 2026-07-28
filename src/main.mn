@@ -45,36 +45,60 @@
 // The outermost handlers — diagnostics, wat_stdout, wasi_filesystem,
 // terminal_transport — are the sandbox boundary. Every inward
 // handler receives narrower capability.
-
 import pipeline
+
 import own
+
 import query
+
 import infer
+
 import backends/wasm
+
 import dsp/clock
+
 import voice
+
 import lsp
+
 import driver
+
 import cursor
+
 import cursor_transport
+
 import gradient_delta
+
 import synth_proposer
+
 import eight_loop
+
 import oracle
+
 import test
+
 import mcp
+
 import runtime/io
+
 // The shipped surface — the stdlib the medium's binary carries whether or
 // not the compiler's own body reaches it: format's verb substrate, the DSP
 // vocabulary, the runtime families a user program may import. The DAG that
 // builds the medium IS the manifest of what the medium ships.
 import format
+
 import dsp/feedback
+
 import dsp/signal
+
 import dsp/spectral
+
 import ml/tensor
+
 import runtime/math
+
 import runtime/net
+
 import runtime/tuples
 
 // ─── EntryVerb ADT — the verb carries its target where required ───────
@@ -87,35 +111,42 @@ import runtime/tuples
 // (Edit/Doc/Teach/Test) carry an Option; verbs with none (Serve/Repl) carry
 // nothing. Dispatch matches the ADT structurally — never a string re-compare
 // (drift 8): parse_cli_args proved the verb, and dispatch reads that proof.
-
 type EntryVerb
-  = VEdit(Option(String))            // target optional → default "main"
+  // target optional → default "main"
+  = VEdit(Option(String))
   | VDoc(Option(String))
   | VServe
   | VSpace
   | VTighten(Option(String))
   | VFmt(String)
-  | VCompile(String)                 // target REQUIRED — carried non-optionally
-  | VResume(String)                  // a persisted image path — the file IS the argument
+  // target REQUIRED — carried non-optionally
+  | VCompile(String)
+  // a persisted image path — the file IS the argument
+  | VResume(String)
   | VCompileStdin
   | VRun(String)
   | VCheck(String)
-  | VAt(String, Int, Int)            // the cursor-address form — `mentl lib/tutorial/09-all.mn:40:20`: target, line, col (0 = whole-line). Drift-38's endpoint: the address IS the surface; verbs are transports
+  // the cursor-address form — `mentl lib/tutorial/09-all.mn:40:20`: target, line, col (0 = whole-line). Drift-38's endpoint: the address IS the surface; verbs are transports
+  | VAt(String, Int, Int)
   | VTest(Option(String))
   | VAudit(String)
-  | VQuery(String, String)           // target, question — both required
+  // target, question — both required
+  | VQuery(String, String)
   | VTeach(Option(String))
   | VRepl
-  | VMarch                           // the medium judges its own generation
-  | VMcp                             // the gate on MCP stdio — agents propose, nothing executes unproven
-  | VNew(String)                     // project name — required
-  | VWith(String, Option(String))    // handler name, optional target
-  | VWelcome                         // bare tty invocation / `mentl help` —
-                                     // the directory PROJECTION, never a hang
+  // the medium judges its own generation
+  | VMarch
+  // the gate on MCP stdio — agents propose, nothing executes unproven
+  | VMcp
+  // project name — required
+  | VNew(String)
+  // handler name, optional target
+  | VWith(String, Option(String))
+  // bare tty invocation / `mentl help` —
+  // the directory PROJECTION, never a hang
+  | VWelcome
 
-type EntryHandlerInvocation
-  = Invocation(EntryVerb)
-  | ParseError(String)
+type EntryHandlerInvocation = Invocation(EntryVerb) | ParseError(String)
 
 // ─── The verb table — ONE home the parser AND the help project ────────
 //
@@ -137,44 +168,119 @@ type VerbSpec = VerbSpec(String, String, ([String]) -> EntryHandlerInvocation, S
 // check / audit): argv[2] resolved to a module, or a ParseError that names the
 // verb and shows its usage. `mk` builds the variant from the resolved module.
 fn req_target(argv, mk, msg) with Memory + Alloc =
-  if len(argv) >= 3 { Invocation(mk(path_to_module(argv[2]))) }
-  else { ParseError(msg) }
+  if len(argv) >= 3 { Invocation(mk(path_to_module(argv[2]))) } else { ParseError(msg) }
 
 // The verbs, in help-presentation order (the parser matches by name, so order
 // here is the human's reading order, never the dispatch order). A `""` hint is
 // a no-argument verb.
-fn verb_specs() with Memory + Alloc = [
-  VerbSpec("run",     "<path>",            (a) => req_target(a, (t) => VRun(t),     "run needs a target: mentl run <path>"),          "compile, prove, execute (a hole or refuted claim REFUSES)"),
-  VerbSpec("check",   "<path>",            (a) => req_target(a, (t) => VCheck(t),   "check needs a target: mentl check <path>"),      "diagnostics only, no emit"),
-  VerbSpec("compile", "<path>",            (a) => req_target(a, (t) => VCompile(t), "compile needs a target: mentl compile <path>"),  "emit WAT to stdout"),
-  VerbSpec("resume",  "<image>",           (a) => if len(a) >= 3 { Invocation(VResume(a[2])) } else { ParseError("resume needs an image: mentl resume <image>") }, "re-enter a persisted image; the source need not exist"),
-  VerbSpec("edit",    "[path]",            (a) => Invocation(VEdit(optional_target(a, 2))),                                           "the cursor session (eight aspects + proven proposals)"),
-  VerbSpec("audit",   "<path>",            (a) => req_target(a, (t) => VAudit(t),   "audit needs a target: mentl audit <path>"),      "the capability set + severance unlocks"),
-  VerbSpec("query",   "<path> <question>", (a) => if len(a) >= 4 { Invocation(VQuery(path_to_module(a[2]), a[3])) } else { ParseError("query needs a target and a question: mentl query <path> <question>") }, "why / type / effects / ownership, walked to your words"),
-  VerbSpec("teach",   "[path]",            (a) => Invocation(VTeach(optional_target(a, 2))),                                          "the gradient narrated"),
-  VerbSpec("doc",     "[path]",            (a) => Invocation(VDoc(optional_target(a, 2))),                                            "documentation projection"),
-  VerbSpec("test",    "[path]",            (a) => Invocation(VTest(optional_target(a, 2))),                                           "the test chain"),
-  VerbSpec("new",     "<name>",            (a) => if len(a) >= 3 { Invocation(VNew(a[2])) } else { ParseError("new needs a name: mentl new <name>") }, "write <name>.mn here (one file; the imports are the manifest)"),
-  VerbSpec("serve",   "",                  (a) => Invocation(VServe),                                                                 "the transport server"),
-  VerbSpec("space",   "",                  (a) => Invocation(VSpace),                                                                 "the ide, served — open http://localhost:7378/ide/"),
-  VerbSpec("tighten", "[path]",            (a) => Invocation(VTighten(optional_target(a, 2))),                                        "apply the first proven row tightening — the medium authors, you accept"),
-  VerbSpec("fmt",     "<path>",            (a) => if len(a) >= 3 { Invocation(VFmt(a[2])) } else { ParseError("fmt needs a target: mentl fmt <path>") }, "render the file canonical — layout is projection, never contract"),
-  VerbSpec("repl",    "",                  (a) => Invocation(VRepl),                                                                  "line REPL"),
-  VerbSpec("march",   "",                  (a) => Invocation(VMarch),                                                                 "judge the wheel: emit, compare against the last generation, verdict"),
-  VerbSpec("mcp",     "",                  (a) => Invocation(VMcp),                                                                   "the gate on MCP stdio — agents propose, nothing executes unproven"),
-  VerbSpec("--with",  "<handler> [path]",  (a) => if len(a) >= 3 { Invocation(VWith(a[2], optional_target(a, 3))) } else { ParseError("--with needs a handler: mentl --with <handler> [path]") }, "install any handler over any verb"),
-  VerbSpec("help",    "",                  (a) => Invocation(VWelcome),                                                               "this projection")
-]
+fn verb_specs() with Memory + Alloc = [VerbSpec(
+  "run",
+  "<path>",
+  (a) => req_target(a, (t) => VRun(t), "run needs a target: mentl run <path>"),
+  "compile, prove, execute (a hole or refuted claim REFUSES)"
+), VerbSpec(
+  "check",
+  "<path>",
+  (a) => req_target(a, (t) => VCheck(t), "check needs a target: mentl check <path>"),
+  "diagnostics only, no emit"
+), VerbSpec(
+  "compile",
+  "<path>",
+  (a) => req_target(a, (t) => VCompile(t), "compile needs a target: mentl compile <path>"),
+  "emit WAT to stdout"
+), VerbSpec(
+  "resume",
+  "<image>",
+  (a) => if len(a) >= 3 {
+    Invocation(VResume(a[2]))
+  } else {
+    ParseError("resume needs an image: mentl resume <image>")
+  },
+  "re-enter a persisted image; the source need not exist"
+), VerbSpec(
+  "edit",
+  "[path]",
+  (a) => Invocation(VEdit(optional_target(a, 2))),
+  "the cursor session (eight aspects + proven proposals)"
+), VerbSpec(
+  "audit",
+  "<path>",
+  (a) => req_target(a, (t) => VAudit(t), "audit needs a target: mentl audit <path>"),
+  "the capability set + severance unlocks"
+), VerbSpec(
+  "query",
+  "<path> <question>",
+  (a) => if len(a) >= 4 {
+    Invocation(VQuery(path_to_module(a[2]), a[3]))
+  } else {
+    ParseError("query needs a target and a question: mentl query <path> <question>")
+  },
+  "why / type / effects / ownership, walked to your words"
+), VerbSpec(
+  "teach",
+  "[path]",
+  (a) => Invocation(VTeach(optional_target(a, 2))),
+  "the gradient narrated"
+), VerbSpec(
+  "doc",
+  "[path]",
+  (a) => Invocation(VDoc(optional_target(a, 2))),
+  "documentation projection"
+), VerbSpec("test", "[path]", (a) => Invocation(VTest(optional_target(a, 2))), "the test chain"), VerbSpec(
+  "new",
+  "<name>",
+  (a) => if len(a) >= 3 { Invocation(VNew(a[2])) } else { ParseError("new needs a name: mentl new <name>") },
+  "write <name>.mn here (one file; the imports are the manifest)"
+), VerbSpec("serve", "", (a) => Invocation(VServe), "the transport server"), VerbSpec(
+  "space",
+  "",
+  (a) => Invocation(VSpace),
+  "the ide, served — open http://localhost:7378/ide/"
+), VerbSpec(
+  "tighten",
+  "[path]",
+  (a) => Invocation(VTighten(optional_target(a, 2))),
+  "apply the first proven row tightening — the medium authors, you accept"
+), VerbSpec(
+  "fmt",
+  "<path>",
+  (a) => if len(a) >= 3 {
+    Invocation(VFmt(a[2]))
+  } else {
+    ParseError("fmt needs a target: mentl fmt <path>")
+  },
+  "render the file canonical — layout is projection, never contract"
+), VerbSpec("repl", "", (a) => Invocation(VRepl), "line REPL"), VerbSpec(
+  "march",
+  "",
+  (a) => Invocation(VMarch),
+  "judge the wheel: emit, compare against the last generation, verdict"
+), VerbSpec(
+  "mcp",
+  "",
+  (a) => Invocation(VMcp),
+  "the gate on MCP stdio — agents propose, nothing executes unproven"
+), VerbSpec(
+  "--with",
+  "<handler> [path]",
+  (a) => if len(a) >= 3 {
+    Invocation(VWith(a[2], optional_target(a, 3)))
+  } else {
+    ParseError("--with needs a handler: mentl --with <handler> [path]")
+  },
+  "install any handler over any verb"
+), VerbSpec("help", "", (a) => Invocation(VWelcome), "this projection")]
 
 // find_verb — the name → spec projection over the table (names are unique, so
 // either end serves; last/drop_last is the O(1) snoc walk). None when no match.
-fn find_verb(name, specs) with Memory + Alloc =
-  if len(specs) == 0 { None }
-  else {
-    let spec = last(specs)
-    let VerbSpec(n, _, _, _) = spec
-    if n == name { Some(spec) } else { find_verb(name, drop_last(specs)) }
+fn find_verb(name, specs) with Memory + Alloc = if len(specs) == 0 {
+  None
+} else {
+  let spec = last(specs)
+  match spec {
+    VerbSpec(n, _, _, _) => if n == name { Some(spec) } else { find_verb(name, drop_last(specs)) },
   }
+}
 
 // ─── argv parsing ─────────────────────────────────────────────────
 //
@@ -182,31 +288,28 @@ fn find_verb(name, specs) with Memory + Alloc =
 // VCompileStdin (Unix `cmd <input`). `--with <name>` is the universal
 // escape hatch. A target-requiring verb given no target is a ParseError
 // here (the one boundary), never a fabricated "" downstream.
-
-fn parse_cli_args(argv) with Memory + Alloc = {
-  if len(argv) < 2 { Invocation(VCompileStdin) }
-  else {
-    let mode = argv[1]
-    // The cursor-address probe FIRST — `mentl <target>:<line>[:<col>]` is
-    // the medium's primary surface (drift-38: projections fire AT-CURSOR;
-    // the named verbs are transports). The parse is shape-only; the runner
-    // resolves the target exactly like every verb and refuses honestly.
-    match parse_address(mode) {
-      Some(addr) => {
-        let (target, line, col) = addr
-        Invocation(VAt(path_to_module(target), line, col))
-      },
-      // The verb ladder is ONE table projection now (verb_specs): normalize the
-      // help aliases to the canonical name, find the spec, run its builder. An
-      // unknown name is the honest ParseError — never a fabricated fallback.
-      None => {
-        let name = if mode == "-h" || mode == "--help" { "help" } else { mode }
-        match find_verb(name, verb_specs()) {
-          Some(VerbSpec(_, _, build, _)) => build(argv),
-          None => ParseError("unrecognized or under-specified command: " ++ mode)
-        }
+fn parse_cli_args(argv) with Memory + Alloc = if len(argv) < 2 {
+  Invocation(VCompileStdin)
+} else {
+  let mode = argv[1]
+  // The cursor-address probe FIRST — `mentl <target>:<line>[:<col>]` is
+  // the medium's primary surface (drift-38: projections fire AT-CURSOR;
+  // the named verbs are transports). The parse is shape-only; the runner
+  // resolves the target exactly like every verb and refuses honestly.
+  match parse_address(mode) {
+    Some(addr) => match addr {
+      (target, line, col) => Invocation(VAt(path_to_module(target), line, col)),
+    },
+    None => // The verb ladder is ONE table projection now (verb_specs): normalize the
+    // help aliases to the canonical name, find the spec, run its builder. An
+    // unknown name is the honest ParseError — never a fabricated fallback.
+    {
+      let name = if mode == "-h" || mode == "--help" { "help" } else { mode }
+      match find_verb(name, verb_specs()) {
+        Some(VerbSpec(_, _, build, _)) => build(argv),
+        None => ParseError("unrecognized or under-specified command: " ++ mode),
       }
-    }
+    },
   }
 }
 
@@ -217,72 +320,66 @@ fn parse_cli_args(argv) with Memory + Alloc = {
 fn parse_address(ref s) with Memory + Alloc = {
   let n = byte_len(s)
   let c1 = addr_colon_from(s, 0, n)
-  if c1 <= 0 { None }
-  else {
+  if c1 <= 0 {
+    None
+  } else {
     let c2 = addr_colon_from(s, c1 + 1, n)
     if c2 < 0 {
       match addr_int(s, c1 + 1, n) {
         Some(line) => Some((str_slice(s, 0, c1), line, 0)),
-        None       => None
+        None => None,
       }
     } else {
       match addr_int(s, c1 + 1, c2) {
         Some(line) => match addr_int(s, c2 + 1, n) {
           Some(col) => Some((str_slice(s, 0, c1), line, col)),
-          None      => None
+          None => None,
         },
-        None => None
+        None => None,
       }
     }
   }
 }
 
 // The first ':' at or after i; -1 when none.
-fn addr_colon_from(ref s, i, n) with Memory = {
-  if i >= n { 0 - 1 }
-  else if byte_at(s, i) == 58 { i }
-  else { addr_colon_from(s, i + 1, n) }
-}
+fn addr_colon_from(ref s, i, n) with Memory =
+  if i >= n { 0 - 1 } else if byte_at(s, i) == 58 { i } else { addr_colon_from(s, i + 1, n) }
 
 // The all-digits segment [i, end) as Some(value); None when empty or any
 // non-digit byte (so `web:site.mn` never parses as an address).
-fn addr_int(ref s, i, end) with Memory + Alloc = {
-  if i >= end { None }
-  else { addr_int_loop(s, i, end, 0) }
-}
+fn addr_int(ref s, i, end) with Memory + Alloc =
+  if i >= end { None } else { addr_int_loop(s, i, end, 0) }
 
-fn addr_int_loop(ref s, i, end, acc) with Memory + Alloc = {
-  if i >= end { Some(acc) }
-  else {
-    let ch = byte_at(s, i)
-    if ch >= 48 && ch <= 57 { addr_int_loop(s, i + 1, end, acc * 10 + (ch - 48)) }
-    else { None }
-  }
+fn addr_int_loop(ref s, i, end, acc) with Memory + Alloc = if i >= end {
+  Some(acc)
+} else {
+  let ch = byte_at(s, i)
+  if ch >= 48 && ch <= 57 { addr_int_loop(s, i + 1, end, acc * 10 + (ch - 48)) } else { None }
 }
 
 // optional_target — for verbs where target is optional (edit / doc
 // / teach / test). Returns Some(module-name) when present; None
 // otherwise. Strips src/ / lib/ prefixes + .mn suffix per
 // path_to_module.
-
-fn optional_target(argv, idx) with Memory + Alloc = {
-  if len(argv) > idx { Some(path_to_module(argv[idx])) }
-  else { None }
-}
+fn optional_target(argv, idx) with Memory + Alloc =
+  if len(argv) > idx { Some(path_to_module(argv[idx])) } else { None }
 
 // path_to_module — accept either a module name ("main") or a file
 // path ("src/main.mn"). Strip "src/" or "lib/" prefix and ".mn"
 // suffix when present. Idempotent on bare module names.
-
 fn path_to_module(arg) with Alloc + Memory = {
   let stripped_prefix = if starts_with(arg, "src/") {
     str_slice(arg, 4, byte_len(arg))
   } else if starts_with(arg, "lib/") {
     str_slice(arg, 4, byte_len(arg))
-  } else { arg }
+  } else {
+    arg
+  }
   if ends_with(stripped_prefix, ".mn") {
     str_slice(stripped_prefix, 0, byte_len(stripped_prefix) - 3)
-  } else { stripped_prefix }
+  } else {
+    stripped_prefix
+  }
 }
 
 // ─── Entry — argv → Invocation → dispatch ─────────────────────────
@@ -292,12 +389,9 @@ fn path_to_module(arg) with Alloc + Memory = {
 // (handler chain IS capability stack): each entry-handler's chain
 // places the surface adapter (terminal_transport / lsp_adapter /
 // wat_stdout) OUTERMOST = least trusted = sandbox boundary.
-
 fn main(argv) = match parse_cli_args(argv) {
-  ParseError(msg) =>
-    print_error_and_help(msg),
-  Invocation(verb) =>
-    dispatch_invocation(verb)
+  ParseError(msg) => print_error_and_help(msg),
+  Invocation(verb) => dispatch_invocation(verb),
 }
 
 // dispatch_invocation — the substrate handlers (env/graph/diagnostics)
@@ -318,46 +412,39 @@ fn main(argv) = match parse_cli_args(argv) {
 // schedule installs lexically at the fanout it schedules — SYNTAX §`><`:
 // no Schedule installed → Seq, the invisible default.
 fn dispatch_invocation(verb) = {
-  {
-    match verb {
-      VEdit(target)        => edit_run(target),
-      VDoc(target)         => doc_run(target),
-      VServe               => serve_run(),
-      VSpace               => space_run(),
-      VTighten(target)     => tighten_run(target),
-      VFmt(target)         => fmt_run(target),
-      VCompile(target)     => compile_run(target),
-      VResume(img)         => resume_run(img),
-      VCompileStdin        =>
-        // The bare invocation forks on the ONE substrate fact that
-        // distinguishes intent: fd 0's filetype. A pipe or file IS the
-        // compile-stdin contract (`mentl < wheel.mn` — the fixpoint path,
-        // untouched); a terminal is a human with no program yet — project
-        // the welcome instead of hanging on a read that never comes.
-        // (Landed as the second rung of a two-step ladder: the ops' import
-        // tables crossed on the prior pin, so this generation's boot
-        // lowers the call it is about to execute.)
-        if stdin_is_tty() { welcome_run() } else { compile_stdin_run() },
-      VRun(target)         => run_run(target),
-      VCheck(target)       => check_run(target),
-      VAt(target, line, col) => at_run(target, line, col),
-      VTest(target)        => test_run(target),
-      VAudit(target)       => audit_run(target),
-      VQuery(target, q)    => query_run(target, q),
-      VTeach(target)       => teach_run(target),
-      VRepl                => repl_run(),
-      VMarch               => march_run(),
-      VMcp                 => mcp_run(),
-      VNew(name)           => new_project(name),
-      VWith(hname, target) => with_run(hname, target),
-      VWelcome             => welcome_run()
-    }
+  match verb {
+    VEdit(target) => edit_run(target),
+    VDoc(target) => doc_run(target),
+    VServe => serve_run(),
+    VSpace => space_run(),
+    VTighten(target) => tighten_run(target),
+    VFmt(target) => fmt_run(target),
+    VCompile(target) => compile_run(target),
+    VResume(img) => resume_run(img),
+    VCompileStdin => // The bare invocation forks on the ONE substrate fact that
+    // distinguishes intent: fd 0's filetype. A pipe or file IS the
+    // compile-stdin contract (`mentl < wheel.mn` — the fixpoint path,
+    // untouched); a terminal is a human with no program yet — project
+    // the welcome instead of hanging on a read that never comes.
+    // (Landed as the second rung of a two-step ladder: the ops' import
+    // tables crossed on the prior pin, so this generation's boot
+    // lowers the call it is about to execute.)
+    if stdin_is_tty() { welcome_run() } else { compile_stdin_run() },
+    VRun(target) => run_run(target),
+    VCheck(target) => check_run(target),
+    VAt(target, line, col) => at_run(target, line, col),
+    VTest(target) => test_run(target),
+    VAudit(target) => audit_run(target),
+    VQuery(target, q) => query_run(target, q),
+    VTeach(target) => teach_run(target),
+    VRepl => repl_run(),
+    VMarch => march_run(),
+    VMcp => mcp_run(),
+    VNew(name) => new_project(name),
+    VWith(hname, target) => with_run(hname, target),
+    VWelcome => welcome_run(),
   }
-    ~> env_handler(make_list(0), 0, env_index_new())
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
-    ~> diagnostics_handler
-}
+} ~> env_handler(make_list(0), 0, env_index_new()) ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink ~> diagnostics_handler
 
 // ─── edit_run — canonical Web IDE (browser-WASM; per IE walkthrough)
 //
@@ -372,11 +459,11 @@ fn dispatch_invocation(verb) = {
 //
 // Browser-WASM transport (per IE §0): same kernel, different transport
 // adapter. Named follow-up: Hμ.cursor.transport.browser-wasm.
-
 fn edit_run(target_opt) = {
   let entry_module = match target_opt {
     Some(t) => t,
-    None    => "main"  // default project entry
+    None => // default project entry
+    "main",
   }
   // The session's final TransportState is a record pointer, not an exit
   // code (main's result IS the process exit); the chain is a statement —
@@ -387,24 +474,15 @@ fn edit_run(target_opt) = {
   // affine/region ledgers reading the sentinel page as empty, and every
   // lookup_ty running as a null-state singleton until the
   // SingletonUninstalled guard refused it.
-  infer_context(() =>
-    mentl_edit_session(entry_module)
-      ~> patch_to_file
-      ~> terminal_transport
-      // cursor_default innermost of the projection handlers: its arms fan the
-      // eight tentacles, performing Synth / Interrogate / Teach / Verify /
-      // Graph ops that bubble OUTWARD to the installs around them. Without
-      // this install the Cursor ops (cursor_at / cursor_argmax / cursor_pinned)
-      // have no evidence on the session route — cursor_argmax is AMBIGUOUS
-      // (ic_fixpoint_handler carries an arm too), so the singleton tier
-      // cannot pick, and the first perform met the strict ev-scan miss.
-      ~> cursor_default
-      ~> delta_default
-      ~> synth_default
-      ~> interrogate_default
-      ~> mentl_default
-      ~> wasi_filesystem
-  )
+  infer_context(() => mentl_edit_session(entry_module) ~> patch_to_file ~> terminal_transport ~>
+  // cursor_default innermost of the projection handlers: its arms fan the
+  // eight tentacles, performing Synth / Interrogate / Teach / Verify /
+  // Graph ops that bubble OUTWARD to the installs around them. Without
+  // this install the Cursor ops (cursor_at / cursor_argmax / cursor_pinned)
+  // have no evidence on the session route — cursor_argmax is AMBIGUOUS
+  // (ic_fixpoint_handler carries an arm too), so the singleton tier
+  // cannot pick, and the first perform met the strict ev-scan miss.
+  cursor_default ~> delta_default ~> synth_default ~> interrogate_default ~> mentl_default ~> wasi_filesystem)
   0
 }
 
@@ -417,24 +495,29 @@ fn edit_run(target_opt) = {
 // and the caret OPENS AT THE ENTRY — its Located span is the entry's first
 // weave line, so the module-aware proximity decay ranks the entry's own
 // absences above the closure's.
-fn mentl_edit_session(entry_module) = {
-  let (_ast, ranges) = driver_entry_with_ranges(entry_module)
-  let opening = entry_start_caret(entry_module, ranges)
-  patch_set_target(entry_module)
-  cursor_session(opening)
+fn mentl_edit_session(entry_module) = match driver_entry_with_ranges(entry_module) {
+  (_ast, ranges) => {
+    let opening = entry_start_caret(entry_module, ranges)
+    patch_set_target(entry_module)
+    cursor_session(opening)
+  },
 }
 
-fn entry_start_caret(entry_module, ranges) = {
-  // type_name_eq pins the compare `: String` — a bare `==` on two names
-  // allocated by different passes is the pointer-eq class and never matches.
-  match find((r) => { let (m, _, _, _) = r; type_name_eq(m, entry_module) }, ranges) {
-    Some(r) => {
-      let (_, _, line_start, _) = r
-      Caret(0, Located(Span(line_start, 1, line_start, 1),
-        Inferred("mentl edit session start — at the entry")))
-    },
-    None => Caret(0, Inferred("mentl edit session start"))
-  }
+// type_name_eq pins the compare `: String` — a bare `==` on two names
+// allocated by different passes is the pointer-eq class and never matches.
+fn entry_start_caret(entry_module, ranges) = match find(
+  (r) => match r {
+    (m, _, _, _) => type_name_eq(m, entry_module),
+  },
+  ranges
+) {
+  Some(r) => match r {
+    (_, _, line_start, _) => Caret(
+      0,
+      Located(Span(line_start, 1, line_start, 1), Inferred("mentl edit session start — at the entry"))
+    ),
+  },
+  None => Caret(0, Inferred("mentl edit session start")),
 }
 
 // ─── space_run — the ide, served by the wheel (`mentl space`)
@@ -446,20 +529,31 @@ fn entry_start_caret(entry_module, ranges) = {
 // The host preopens the repo dir and the listener
 // (-S tcplisten=127.0.0.1:7378 — the install shim's space seam);
 // find_listener reads the preopen table, so the fd never lives in source.
-
-fn space_mime_for(path: String) with Memory + Alloc =
-  if ends_with(path, ".html")      { "text/html; charset=utf-8" }
-  else if ends_with(path, ".wasm") { "application/wasm" }
-  else if ends_with(path, ".js")   { "text/javascript" }
-  else if ends_with(path, ".mjs")  { "text/javascript" }
-  else if ends_with(path, ".css")  { "text/css" }
-  else if ends_with(path, ".json") { "application/json" }
-  else if ends_with(path, ".svg")  { "image/svg+xml" }
-  else if ends_with(path, ".png")  { "image/png" }
-  else if ends_with(path, ".md")   { "text/markdown; charset=utf-8" }
-  else if ends_with(path, ".mn")   { "text/plain; charset=utf-8" }
-  else if ends_with(path, ".wat")  { "text/plain; charset=utf-8" }
-  else                             { "application/octet-stream" }
+fn space_mime_for(path: String) with Memory + Alloc = if ends_with(path, ".html") {
+  "text/html; charset=utf-8"
+} else if ends_with(path, ".wasm") {
+  "application/wasm"
+} else if ends_with(path, ".js") {
+  "text/javascript"
+} else if ends_with(path, ".mjs") {
+  "text/javascript"
+} else if ends_with(path, ".css") {
+  "text/css"
+} else if ends_with(path, ".json") {
+  "application/json"
+} else if ends_with(path, ".svg") {
+  "image/svg+xml"
+} else if ends_with(path, ".png") {
+  "image/png"
+} else if ends_with(path, ".md") {
+  "text/markdown; charset=utf-8"
+} else if ends_with(path, ".mn") {
+  "text/plain; charset=utf-8"
+} else if ends_with(path, ".wat") {
+  "text/plain; charset=utf-8"
+} else {
+  "application/octet-stream"
+}
 
 // One read is the whole request for the GETs a static IDE makes. The bytes
 // materialize as a proper [count][tag][bytes@+8] String record (bytes_buf +
@@ -479,13 +573,16 @@ fn space_read_request(conn) with Memory + Alloc + WASI = {
 fn space_request_path(req: String) with Memory + Alloc = {
   let n = byte_len(req)
   let sp1 = find_char(req, n, 0, 32)
-  if sp1 < 0 { "" }
-  else {
+  if sp1 < 0 {
+    ""
+  } else {
     let sp2 = find_char(req, n, sp1 + 1, 32)
-    if sp2 < 0 { "" }
-    else {
+    if sp2 < 0 {
+      ""
+    } else {
       let raw = str_slice(req, sp1 + 1, sp2)
-      let q = find_char(raw, byte_len(raw), 0, 63)   // '?'
+      // '?'
+      let q = find_char(raw, byte_len(raw), 0, 63)
       if q < 0 { raw } else { str_slice(raw, 0, q) }
     }
   }
@@ -493,16 +590,17 @@ fn space_request_path(req: String) with Memory + Alloc = {
 
 // Routing: "/" and any directory path serve its index.html; the leading
 // slash strips (fs paths are preopen-relative); ".." refuses.
-fn space_route(path: String) with Memory + Alloc =
-  if path == "" || path == "/" { "ide/index.html" }
-  else {
-    let full = if ends_with(path, "/") { str_concat(path, "index.html") } else { path }
-    str_slice(full, 1, byte_len(full))
-  }
+fn space_route(path: String) with Memory + Alloc = if path == "" || path == "/" {
+  "ide/index.html"
+} else {
+  let full = if ends_with(path, "/") { str_concat(path, "index.html") } else { path }
+  str_slice(full, 1, byte_len(full))
+}
 
 fn space_respond(conn, code_line: String, mime: String, body: String) with Memory + Alloc + WASI = {
   let len_s = int_to_str(byte_len(body))
-  let head = "HTTP/1.1 {code_line}\r\nContent-Type: {mime}\r\nContent-Length: {len_s}\r\nCross-Origin-Opener-Policy: same-origin\r\nCross-Origin-Embedder-Policy: require-corp\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
+  let head =
+    "HTTP/1.1 {code_line}\nContent-Type: {mime}\nContent-Length: {len_s}\nCross-Origin-Opener-Policy: same-origin\nCross-Origin-Embedder-Policy: require-corp\nCache-Control: no-store\nConnection: close\n\n"
   sock_write_str(conn, head)
   sock_write_str(conn, body)
   ()
@@ -537,9 +635,11 @@ fn space_loop(lfd) with Memory + Alloc + WASI = {
 }
 
 fn space_run() with Memory + Alloc + WASI = {
-  let lfd = find_listener()   // drift-audit: ignore — sequenced effectful read consumed at TWO sites (the guard and the loop): the reuse exclusion, not a pipe stage
+  // drift-audit: ignore — sequenced effectful read consumed at TWO sites (the guard and the loop): the reuse exclusion, not a pipe stage
+  let lfd = find_listener()
   if lfd < 0 {
-    eprint_string("mentl space: no listener preopened — the install shim adds -S tcplisten=127.0.0.1:7378 for this verb; by hand from the repo root: wasmtime run <flags> --dir . -S tcplisten=127.0.0.1:7378 boot/mentl.wasm space\n")   // drift-audit: ignore — the flagged keyword is inside the teaching string (a quoted shell invocation), not control flow
+    // drift-audit: ignore — the flagged keyword is inside the teaching string (a quoted shell invocation), not control flow
+    eprint_string("mentl space: no listener preopened — the install shim adds -S tcplisten=127.0.0.1:7378 for this verb; by hand from the repo root: wasmtime run <flags> --dir . -S tcplisten=127.0.0.1:7378 boot/mentl.wasm space\n")
     1
   } else {
     print_string("mentl space -> http://localhost:7378/ide/\n")
@@ -562,83 +662,65 @@ fn space_run() with Memory + Alloc + WASI = {
 // generation reproducing itself, m3 == m4) needs the exec seam and
 // stays at tools/march.sh — the whole-world bash march's audit role.
 fn march_run() = {
-  {
-    let files = march_wheel_files()   // drift-audit: ignore — sequenced effectful read (the fs walk, consumed by the read+concat below)
-    if len(files) == 0 {
-      print_string("march: no wheel source found — run beside the repo (lib/ + src/) or through the installed shim\n")
+  // drift-audit: ignore — sequenced effectful read (the fs walk, consumed by the read+concat below)
+  let files = march_wheel_files()
+  if len(files) == 0 {
+    print_string("march: no wheel source found — run beside the repo (lib/ + src/) or through the installed shim\n")
+    1
+  } else {
+    let texts = march_read_files(files, 0, make_list(len(files)))
+    let source = str_concat_all(texts)
+    let gen_path = ".build/march/m2.wat"
+    let new_path = ".build/march/m2.new"
+    let prev = if fs_exists_impl(gen_path) { fs_read_file(gen_path) } else { "" }
+    fs_mkdir_impl(".build")
+    fs_mkdir_impl(".build/march")
+    let fd = fs_create_impl(new_path)
+    if fd == 0 {
+      print_string("march: cannot open {new_path} — no fresh generation written\n")
       1
     } else {
-      let texts = march_read_files(files, 0, make_list(len(files)))
-      let source = str_concat_all(texts)
-      let gen_path = ".build/march/m2.wat"
-      let new_path = ".build/march/m2.new"
-      let prev = if fs_exists_impl(gen_path) { fs_read_file(gen_path) } else { "" }
-      fs_mkdir_impl(".build")
-      fs_mkdir_impl(".build/march")
-      let fd = fs_create_impl(new_path)
-      if fd == 0 {
-        print_string("march: cannot open {new_path} — no fresh generation written\n")
+      let errors = march_emit(source, fd)
+      fs_close_impl(fd)
+      if errors > 0 {
+        fs_unlink_impl(new_path)
+        print_string("march: {int_to_str(len(files))} files · {int_to_str(count_newlines(source))} source lines · census {int_to_str(errors)}\n")
+        print_string("march: the judgment REFUSES — no verdict from a refused wheel\n")
         1
       } else {
-        let errors = march_emit(source, fd)
-        fs_close_impl(fd)
-        if errors > 0 {
-          fs_unlink_impl(new_path)
-          print_string("march: {int_to_str(len(files))} files · {int_to_str(count_newlines(source))} source lines · census {int_to_str(errors)}\n")
-          print_string("march: the judgment REFUSES — no verdict from a refused wheel\n")
-          1
+        let emission = fs_read_file(new_path)
+        fs_rename_impl(new_path, gen_path)
+        print_string("march: {int_to_str(len(files))} files · {int_to_str(count_newlines(source))} source lines · {int_to_str(count_newlines(emission))} wat lines · census 0\n")
+        if byte_len(prev) == 0 {
+          print_string("march: baseline written ({gen_path}) — the next march compares against it\n")
+          0
+        } else if emission == prev {
+          print_string("march: the emission reproduces the last generation — CLEAN candidate; the exec legs (m3 == m4) arbitrate at the seam: tools/march.sh\n")
+          0
         } else {
-          let emission = fs_read_file(new_path)
-          fs_rename_impl(new_path, gen_path)
-          print_string("march: {int_to_str(len(files))} files · {int_to_str(count_newlines(source))} source lines · {int_to_str(count_newlines(emission))} wat lines · census 0\n")
-          if byte_len(prev) == 0 {
-            print_string("march: baseline written ({gen_path}) — the next march compares against it\n")
-            0
-          } else if emission == prev {
-            print_string("march: the emission reproduces the last generation — CLEAN candidate; the exec legs (m3 == m4) arbitrate at the seam: tools/march.sh\n")
-            0
-          } else {
-            print_string("march: the emission DIVERGES from the last generation ({int_to_str(count_newlines(prev))} → {int_to_str(count_newlines(emission))} wat lines) — a change crossed; the exec legs arbitrate: tools/march.sh\n")
-            0
-          }
+          print_string("march: the emission DIVERGES from the last generation ({int_to_str(count_newlines(prev))} → {int_to_str(count_newlines(emission))} wat lines) — a change crossed; the exec legs arbitrate: tools/march.sh\n")
+          0
         }
       }
     }
   }
-    ~> stdout_console
-    ~> wasi_filesystem
-    ~> no_iter_context
-    ~> diagnostics_handler
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
-}
+} ~> stdout_console ~> wasi_filesystem ~> no_iter_context ~> diagnostics_handler ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink
 
 // The canonical stdin chain with the streaming sink; the census count
 // reads INSIDE the same install (the count and the counter are one
 // handler — pipeline_check's own law).
-fn march_emit(source, fd) = {
-  infer_context(() => {
-    // The outer thunk captures fd; the install-config caveat at
-    // wat_to_file's decl means a capture-referencing config arg reads 0 —
-    // the local bind is the sound shape until the init path resolves
-    // captures. body() ~> chain is infer_context's own idiom.
-    let sink_fd = fd + 0
-    let body = () => {
-      source |> infer_program_converged |> compile_remainder
-      diag_errors()
-    }
-    body()
-      ~> wat_to_file(sink_fd)
-      ~> wasi_filesystem
-      ~> string_table
-      ~> emit_memory_bump
-      ~> body_context
-      ~> mentl_default
-      ~> lower_scope
-      ~> arm_state_ctx([], OneShot, "")
-      ~> spec_registry
-  })
-}
+fn march_emit(source, fd) = infer_context(() => {
+  // The outer thunk captures fd; the install-config caveat at
+  // wat_to_file's decl means a capture-referencing config arg reads 0 —
+  // the local bind is the sound shape until the init path resolves
+  // captures. body() ~> chain is infer_context's own idiom.
+  let sink_fd = fd + 0
+  let body = () => {
+    source |> infer_program_converged |> compile_remainder
+    diag_errors()
+  }
+  body() ~> wat_to_file(sink_fd) ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry
+})
 
 // The wheel's canonical file set: every .mn under lib then src (tutorials
 // excluded), each directory's entries sorted lexicographically — the DFS
@@ -647,31 +729,36 @@ fn march_emit(source, fd) = {
 // (dev flow) or at the shim's well-known mount.
 fn march_wheel_files() = {
   let local = march_walk("src", march_walk("lib", make_list(0)))
-  if len(local) > 0 { local }
-  else { march_walk("/mentl-home/src", march_walk("/mentl-home/lib", make_list(0))) }
+  if len(local) > 0 {
+    local
+  } else {
+    march_walk("/mentl-home/src", march_walk("/mentl-home/lib", make_list(0)))
+  }
 }
 
 fn march_walk(dir, acc) = match fs_list_dir_impl(dir) {
   None => acc,
-  Some(names) => march_walk_entries(dir, march_sort_names(names), 0, acc)
+  Some(names) => march_walk_entries(dir, march_sort_names(names), 0, acc),
 }
 
-fn march_walk_entries(dir, ref names, i, acc) = {
-  if i >= len(names) { acc }
-  else {
-    let name = names[i]
-    // fd_readdir reports the self and parent links; a recursive walk that
-    // descends them loops "src/./." forever (measured: 3,000-byte paths,
-    // +2 per level, until the alloc ceiling). A tree walk visits children.
-    if name == "." || name == ".." || name == "tutorial" { march_walk_entries(dir, names, i + 1, acc) }
-    else {
-      let path = "{dir}/{name}"
-      match fs_list_dir_impl(path) {
-        Some(sub) => march_walk_entries(dir, names, i + 1, march_walk_entries(path, march_sort_names(sub), 0, acc)),
-        None =>
-          if ends_with(name, ".mn") { march_walk_entries(dir, names, i + 1, push(acc, path)) }
-          else { march_walk_entries(dir, names, i + 1, acc) }
-      }
+fn march_walk_entries(dir, ref names, i, acc) = if i >= len(names) {
+  acc
+} else {
+  let name = names[i]
+  // fd_readdir reports the self and parent links; a recursive walk that
+  // descends them loops "src/./." forever (measured: 3,000-byte paths,
+  // +2 per level, until the alloc ceiling). A tree walk visits children.
+  if name == "." || name == ".." || name == "tutorial" {
+    march_walk_entries(dir, names, i + 1, acc)
+  } else {
+    let path = "{dir}/{name}"
+    match fs_list_dir_impl(path) {
+      Some(sub) => march_walk_entries(dir, names, i + 1, march_walk_entries(path, march_sort_names(sub), 0, acc)),
+      None => if ends_with(name, ".mn") {
+        march_walk_entries(dir, names, i + 1, push(acc, path))
+      } else {
+        march_walk_entries(dir, names, i + 1, acc)
+      },
     }
   }
 }
@@ -684,32 +771,31 @@ fn march_walk_entries(dir, ref names, i, acc) = {
 // first run — the gate catching its builder.
 fn march_sort_names(names) = march_sort_insert(list_to_flat(names), 1)
 
-fn march_sort_insert(names, i) = {
-  if i >= len(names) { names }
-  else { march_sort_insert(march_sift(names, i), i + 1) }
+fn march_sort_insert(names, i) =
+  if i >= len(names) { names } else { march_sort_insert(march_sift(names, i), i + 1) }
+
+fn march_sift(names, i) = if i == 0 {
+  names
+} else {
+  let a = names[i - 1]
+  let b = names[i]
+  if str_lt(b, a) { march_sift(list_set(list_set(names, i - 1, b), i, a), i - 1) } else { names }
 }
 
-fn march_sift(names, i) = {
-  if i == 0 { names }
-  else {
-    let a = names[i - 1]
-    let b = names[i]
-    if str_lt(b, a) { march_sift(list_set(list_set(names, i - 1, b), i, a), i - 1) }
-    else { names }
-  }
-}
-
-fn march_read_files(ref files, i, acc) = {
-  if i >= len(files) { acc }
-  else { march_read_files(files, i + 1, list_set(acc, i, fs_read_file(files[i]))) }
+fn march_read_files(ref files, i, acc) = if i >= len(files) {
+  acc
+} else {
+  march_read_files(files, i + 1, list_set(acc, i, fs_read_file(files[i])))
 }
 
 fn count_newlines(s) = count_newlines_from(s, 0, byte_len(s), 0)
 
-fn count_newlines_from(s, i, n, acc) = {
-  if i >= n { acc }
-  else if byte_at(s, i) == 10 { count_newlines_from(s, i + 1, n, acc + 1) }
-  else { count_newlines_from(s, i + 1, n, acc) }
+fn count_newlines_from(s, i, n, acc) = if i >= n {
+  acc
+} else if byte_at(s, i) == 10 {
+  count_newlines_from(s, i + 1, n, acc + 1)
+} else {
+  count_newlines_from(s, i + 1, n, acc)
 }
 
 // ─── fmt_run — the canonical render written back (`mentl fmt`)
@@ -721,44 +807,38 @@ fn count_newlines_from(s, i, n, acc) = {
 // string content, so format∘parse is the identity the module's own
 // comment always claimed. Idempotence is the gate: the second render is
 // byte-identical to the first.
-
 fn fmt_run(target) = {
-  infer_context(() =>
-    {
-      // The verb convention: the arg normalizes to a MODULE name, and the
-      // write-back path is the resolver's own answer — one resolution
-      // home, never the raw argv string carried past it.
-      let entry_module = path_to_module(target)
-      let path = driver_module_path(entry_module)
-      let ast = driver_check_entry(entry_module)
-      // The verb writes its own FIXPOINT: render once, re-parse, render
-      // again — a mid-line prose attach moves to its line-start home in
-      // the first render and is stable from the second, so the WRITTEN
-      // file is idempotent in one invocation.
-      let first = format_program(ast)
-      let rendered = format_program(frontend(first))
-      // THE CONSERVATION GATE — the verb lexes its own render beside the
-      // source and compares comment-token counts: the lexer emits one
-      // TComment per authored line, so the difference IS the number of
-      // prose lines the round trip loses (this absorbed the hand-run
-      // comment census — ⟳; and the LEXICAL count sees lines the parse
-      // never attaches, which a weave-to-weave compare was blind to).
-      let src_text = fs_read_file(path)
-      let src_lines = count_comment_tokens(lex(src_text), 0, 0)
-      let out_lines = count_comment_tokens(lex(rendered), 0, 0)
-      fs_write_file(path, rendered)
-      if out_lines < src_lines {
-        print_string("fmt: {path} rendered canonical — {int_to_str(src_lines - out_lines)} of {int_to_str(src_lines)} prose lines would not survive a reparse\n")
-        print_lost_comments(lex(src_text), lex(rendered), 0, 0)
-      } else {
-        print_string("fmt: {path} rendered canonical — prose conserved ({int_to_str(src_lines)} lines)\n")
-      }
-      0
+  infer_context(() => {
+    // The verb convention: the arg normalizes to a MODULE name, and the
+    // write-back path is the resolver's own answer — one resolution
+    // home, never the raw argv string carried past it.
+    let entry_module = path_to_module(target)
+    let path = driver_module_path(entry_module)
+    let ast = driver_check_entry(entry_module)
+    // The verb writes its own FIXPOINT: render once, re-parse, render
+    // again — a mid-line prose attach moves to its line-start home in
+    // the first render and is stable from the second, so the WRITTEN
+    // file is idempotent in one invocation.
+    let first = format_program(ast)
+    let rendered = format_program(frontend(first))
+    // THE CONSERVATION GATE — the verb lexes its own render beside the
+    // source and compares comment-token counts: the lexer emits one
+    // TComment per authored line, so the difference IS the number of
+    // prose lines the round trip loses (this absorbed the hand-run
+    // comment census — ⟳; and the LEXICAL count sees lines the parse
+    // never attaches, which a weave-to-weave compare was blind to).
+    let src_text = fs_read_file(path)
+    let src_lines = count_comment_tokens(lex(src_text), 0, 0)
+    let out_lines = count_comment_tokens(lex(rendered), 0, 0)
+    fs_write_file(path, rendered)
+    if out_lines < src_lines {
+      print_string("fmt: {path} rendered canonical — {int_to_str(src_lines - out_lines)} of {int_to_str(src_lines)} prose lines would not survive a reparse\n")
+      print_lost_comments(lex(src_text), lex(rendered), 0, 0)
+    } else {
+      print_string("fmt: {path} rendered canonical — prose conserved ({int_to_str(src_lines)} lines)\n")
     }
-      ~> format_default
-      ~> wasi_filesystem
-      ~> mentl_default
-  )
+    0
+  } ~> format_default ~> wasi_filesystem ~> mentl_default)
   0
 }
 
@@ -766,39 +846,39 @@ fn fmt_run(target) = {
 // nowhere in the render's lex prints with its line number — the report
 // that retired the external diff for good (up to eight, the shape is
 // what matters).
-fn print_lost_comments(ref src_toks, ref out_toks, i, shown) with WASI + Memory + Alloc =
-  if i >= len(src_toks) || shown >= 8 { () }
-  else {
-    match token_kind(src_toks[i]) {
-      TComment(t) =>
-        if comment_text_present(out_toks, t, 0) { print_lost_comments(src_toks, out_toks, i + 1, shown) }
-        else {
-          print_string("  lost: //{t}\n")
-          print_lost_comments(src_toks, out_toks, i + 1, shown + 1)
-        },
-      _ => print_lost_comments(src_toks, out_toks, i + 1, shown)
-    }
+fn print_lost_comments(ref src_toks, ref out_toks, i, shown) with WASI + Memory + Alloc = if i >= len(src_toks) || shown >= 8 {
+  ()
+} else {
+  match token_kind(src_toks[i]) {
+    TComment(t) => if comment_text_present(out_toks, t, 0) {
+      print_lost_comments(src_toks, out_toks, i + 1, shown)
+    } else {
+      print_string("  lost: //{t}\n")
+      print_lost_comments(src_toks, out_toks, i + 1, shown + 1)
+    },
+    _ => print_lost_comments(src_toks, out_toks, i + 1, shown),
   }
+}
 
-fn comment_text_present(ref toks, t: String, i) -> Bool with Memory + Alloc =
-  if i >= len(toks) { false }
-  else {
-    match token_kind(toks[i]) {
-      TComment(u) => if u == t { true } else { comment_text_present(toks, t, i + 1) },
-      _           => comment_text_present(toks, t, i + 1)
-    }
+fn comment_text_present(ref toks, t: String, i) -> Bool with Memory + Alloc = if i >= len(toks) {
+  false
+} else {
+  match token_kind(toks[i]) {
+    TComment(u) => if u == t { true } else { comment_text_present(toks, t, i + 1) },
+    _ => comment_text_present(toks, t, i + 1),
   }
+}
 
 // One TComment token per authored prose line — the lexical census the
 // fmt conservation gate reads on both sides of the round trip.
-fn count_comment_tokens(ref tokens, i, acc) with Memory + Alloc =
-  if i >= len(tokens) { acc }
-  else {
-    match token_kind(tokens[i]) {
-      TComment(_) => count_comment_tokens(tokens, i + 1, acc + 1),
-      _           => count_comment_tokens(tokens, i + 1, acc)
-    }
+fn count_comment_tokens(ref tokens, i, acc) with Memory + Alloc = if i >= len(tokens) {
+  acc
+} else {
+  match token_kind(tokens[i]) {
+    TComment(_) => count_comment_tokens(tokens, i + 1, acc + 1),
+    _ => count_comment_tokens(tokens, i + 1, acc),
   }
+}
 
 // ─── tighten_run — the medium authors its own row tightening
 //
@@ -812,7 +892,6 @@ fn count_comment_tokens(ref tokens, i, acc) with Memory + Alloc =
 // declaration can only shrink what callers accumulate, so it can create
 // new T_OverDeclared warnings (the next ratchet turns) but never an
 // E_EffectMismatch.
-
 effect Tighten {
   tightenables() -> [(EffRow, EffRow, String, Span)]
 }
@@ -829,26 +908,30 @@ handler tighten_collector with found = [] {
   report(diag) => {
     report(diag)
     match diag {
-      TOverDeclared(declared, used, name, span) =>
-        resume() with found = push(found, (declared, used, name, span)),
-      _ => resume()
+      TOverDeclared(declared, used, name, span) => resume() with found = push(found, (declared, used, name, span)),
+      _ => resume(),
     }
   },
-  diag_errors()   => resume(diag_errors()),
+  diag_errors() => resume(diag_errors()),
   diag_refusals() => resume(diag_refusals()),
-  tightenables()  => resume(found)
+  tightenables() => resume(found),
 }
 
 fn tighten_run(target_opt) = {
   let entry_module = match target_opt {
     Some(t) => t,
-    None    => "main"
+    None => "main",
   }
-  infer_context(() =>
-    {
-      let (_ast, ranges) = driver_entry_with_ranges(entry_module)
-      let cands = tightenables()   // drift-audit: ignore — sequenced effectful ledger read (the diag_refusals precedent): the collector's state is read once after the check populates it
-      let authorable = filter((c) => { let (_, used, _, _) = c row_is_authorable(used) }, cands)
+  infer_context(() => match driver_entry_with_ranges(entry_module) {
+    (_ast, ranges) => {
+      // drift-audit: ignore — sequenced effectful ledger read (the diag_refusals precedent): the collector's state is read once after the check populates it
+      let cands = tightenables()
+      let authorable = filter(
+        (c) => match c {
+          (_, used, _, _) => row_is_authorable(used),
+        },
+        cands
+      )
       if len(authorable) == 0 {
         print_string("mentl tighten: nothing to tighten ({int_to_str(len(cands))} over-declared, none authorable)\n")
         0
@@ -862,22 +945,18 @@ fn tighten_run(target_opt) = {
         print_string("tighten: {int_to_str(n)} of {int_to_str(len(authorable))} authorable applied — the medium authored these; verify with a fresh check + the gates\n")
         if n > 0 { 0 } else { 1 }
       }
-    }
-      ~> tighten_collector
-      ~> wasi_filesystem
-      ~> mentl_default
-  )
+    },
+  } ~> tighten_collector ~> wasi_filesystem ~> mentl_default)
 }
 
 // Authorable = the proven row renders as source: a closed tail. A var
 // tail renders as a handle name — never authored into a signature.
-fn row_is_authorable(ref used) = {
-  let EfRow(_, _, t) = used
-  match t {
-    EtClosed  => true,
-    EtVar(_)  => false,
-    EtAll     => false
-  }
+fn row_is_authorable(ref used) = match used {
+  EfRow(_, _, t) => match t {
+    EtClosed => true,
+    EtVar(_) => false,
+    EtAll => false,
+  },
 }
 
 // The batch applier: locate every candidate (drop unmappable spans),
@@ -885,44 +964,46 @@ fn row_is_authorable(ref used) = {
 // file patches bottom-up and earlier offsets never shift, then fold with
 // one open file at a time (read on path change, write on leave).
 fn apply_tightenings(cands, ranges) = {
-  let located = flatten(map((c) => {
-    let (declared, used, name, span) = c
-    match file_line_of(ranges, span) {
-      Some(pl) => {
-        // A list literal after a let must open on its own line — on one
+  let located = flatten(map(
+    (c) => match c {
+      (declared, used, name, span) => match file_line_of(ranges, span) {
+        Some(pl) => // A list literal after a let must open on its own line — on one
         // line `pl [(…)]` parses as indexing.
-        let (p, l) = pl
-        [(p, 0 - l, name, declared, used)]
+        match pl {
+          (p, l) => [(p, 0 - l, name, declared, used)],
+        },
+        None => [],
       },
-      None     => []
-    }
-  }, cands))
+    },
+    cands
+  ))
   tighten_fold(sort(located), 0, "", "", 0)
 }
 
-fn tighten_fold(items, i, cur_path, cur_text, applied) = {
-  if i >= len(items) {
-    if byte_len(cur_path) > 0 { fs_write_file(cur_path, cur_text) }
-    applied
-  } else {
-    let (path, negline, name, declared, used) = list_index(items, i)
-    let line1 = 0 - negline
-    let text0 =
-      if path == cur_path { cur_text }
-      else {
+fn tighten_fold(items, i, cur_path, cur_text, applied) = if i >= len(items) {
+  if byte_len(cur_path) > 0 { fs_write_file(cur_path, cur_text) }
+  applied
+} else {
+  match list_index(items, i) {
+    (path, negline, name, declared, used) => {
+      let line1 = 0 - negline
+      let text0 = if path == cur_path {
+        cur_text
+      } else {
         if byte_len(cur_path) > 0 { fs_write_file(cur_path, cur_text) }
         fs_read_file(path)
       }
-    match patch_with_clause(text0, line1, used) {
-      Some(t2) => {
-        print_string("tighten: {name} ({path}:{int_to_str(line1)})  with {show_effrow(declared)}  →  with {show_effrow(used)}\n")
-        tighten_fold(items, i + 1, path, t2, applied + 1)
-      },
-      None => {
-        eprint_string("mentl tighten: {name} at {path}:{int_to_str(line1)} — no single-line with-clause; skipped\n")
-        tighten_fold(items, i + 1, path, text0, applied)
+      match patch_with_clause(text0, line1, used) {
+        Some(t2) => {
+          print_string("tighten: {name} ({path}:{int_to_str(line1)})  with {show_effrow(declared)}  →  with {show_effrow(used)}\n")
+          tighten_fold(items, i + 1, path, t2, applied + 1)
+        },
+        None => {
+          eprint_string("mentl tighten: {name} at {path}:{int_to_str(line1)} — no single-line with-clause; skipped\n")
+          tighten_fold(items, i + 1, path, text0, applied)
+        },
       }
-    }
+    },
   }
 }
 
@@ -935,13 +1016,16 @@ fn patch_with_clause(ref text, line1, ref used) = {
   let le = line_end_offset(text, ls)
   let line = str_slice(text, ls, le)
   let wi = index_of(line, " with ")
-  if wi < 0 { None }
-  else {
+  if wi < 0 {
+    None
+  } else {
     let after = str_slice(line, wi + 6, byte_len(line))
     let eq = index_of(after, " = ")
-    if eq < 0 { None }
-    else {
-      let new_line = "{str_slice(line, 0, wi + 6)}{show_effrow(used)}{str_slice(after, eq, byte_len(after))}"
+    if eq < 0 {
+      None
+    } else {
+      let new_line =
+        "{str_slice(line, 0, wi + 6)}{show_effrow(used)}{str_slice(after, eq, byte_len(after))}"
       Some("{str_slice(text, 0, ls)}{new_line}{str_slice(text, le, byte_len(text))}")
     }
   }
@@ -949,21 +1033,22 @@ fn patch_with_clause(ref text, line1, ref used) = {
 
 fn line_start_offset(ref text, line1) = line_start_walk(text, 1, 0, line1)
 
-fn line_start_walk(ref text, at_line, off, line1) = {
-  if at_line >= line1 { off }
-  else {
-    let n = byte_len(text)
-    if off >= n { off }
-    else if byte_at(text, off) == 10 { line_start_walk(text, at_line + 1, off + 1, line1) }
-    else { line_start_walk(text, at_line, off + 1, line1) }
+fn line_start_walk(ref text, at_line, off, line1) = if at_line >= line1 {
+  off
+} else {
+  let n = byte_len(text)
+  if off >= n {
+    off
+  } else if byte_at(text, off) == 10 {
+    line_start_walk(text, at_line + 1, off + 1, line1)
+  } else {
+    line_start_walk(text, at_line, off + 1, line1)
   }
 }
 
 fn line_end_offset(ref text, ls) = {
   let n = byte_len(text)
-  if ls >= n { n }
-  else if byte_at(text, ls) == 10 { ls }
-  else { line_end_offset(text, ls + 1) }
+  if ls >= n { n } else if byte_at(text, ls) == 10 { ls } else { line_end_offset(text, ls + 1) }
 }
 
 // ─── serve_run — LSP transport on stdio
@@ -971,7 +1056,6 @@ fn line_end_offset(ref text, ls) = {
 // vim / helix / VSCode (with Mentl extension) consume this. The
 // kernel is identical to edit_run; the surface adapter (lsp_adapter)
 // is OUTERMOST. Per MV-LSP-adapter.md substrate.
-
 fn serve_run() = {
   // The transport reads a LIVE graph: handle_did_open runs driver_check, whose
   // inference performs Consume / Region / Verify / LookupTy (the analysis ops
@@ -982,23 +1066,15 @@ fn serve_run() = {
   // reference in the session — the driverless chain (open_file only) read an
   // unpopulated graph and every query fell to AnsSilence
   // (Hβ.lsp.transport-runs-frontend).
-  infer_context(() =>
-    mentl_lsp_session()
-      ~> lsp_adapter
-      ~> mentl_voice_filesystem
-      ~> mentl_voice_default
-      ~> query_default          // consult/run_query bubble Query.ask here — the live forensic read
-      ~> wasi_filesystem
-      ~> no_iter_context
-  )
+  infer_context(() => mentl_lsp_session() ~> lsp_adapter ~> mentl_voice_filesystem ~> mentl_voice_default ~>
+  // consult/run_query bubble Query.ask here — the live forensic read
+  query_default ~> wasi_filesystem ~> no_iter_context)
   0
 }
 
-fn mentl_lsp_session() = {
-  // Reads JSON-RPC frames from stdin; routes to Query / Teach /
-  // Synth via lsp_adapter; writes responses to stdout. Per MV-LSP-adapter.
-  lsp_session()
-}
+// Reads JSON-RPC frames from stdin; routes to Query / Teach /
+// Synth via lsp_adapter; writes responses to stdout. Per MV-LSP-adapter.
+fn mentl_lsp_session() = lsp_session()
 
 // ─── doc_run — documentation projection (F.1 substrate)
 //
@@ -1011,35 +1087,27 @@ fn mentl_lsp_session() = {
 // per F.1 §13 file-creation order). Today this routes through
 // mentl_default + diagnostics for the projection-only mode; the
 // dedicated doc_handler is gated.
-
 fn doc_run(target_opt) = {
   let entry_module = match target_opt {
     Some(t) => t,
-    None    => "main"
+    None => "main",
   }
   // driver_check's per-module inference performs the same analysis ops
   // every other inference-reaching chain absorbs — this chain ran them all
   // driverless until the SingletonUninstalled guard made the class loud,
   // then carried the core WITHOUT env_handler until the order-law audit
   // completed it; the bracket makes both classes unforgettable.
-  infer_context(() =>
-    doc_project(entry_module)
-      ~> stdout_console
-      ~> wasi_filesystem
-      ~> mentl_default
-  )
+  infer_context(() => doc_project(entry_module) ~> stdout_console ~> wasi_filesystem ~> mentl_default)
   0
 }
 
-fn doc_project(entry_module) = {
-  // Today the doc projection IS driver_check: it validates the module and
-  // surfaces its `///` Reasons through the diagnostics handler. The dedicated
-  // render step (md / html / llms handlers over the module signature) is a
-  // NAMED gated peer — Hβ.f1.doc-handler-substrate — not a phantom call:
-  // doc_emit_for_module was referenced but never defined (reachable_from_main
-  // emitted the dangling global), so the honest form names the peer and stops.
-  driver_check(entry_module)
-}
+// Today the doc projection IS driver_check: it validates the module and
+// surfaces its `///` Reasons through the diagnostics handler. The dedicated
+// render step (md / html / llms handlers over the module signature) is a
+// NAMED gated peer — Hβ.f1.doc-handler-substrate — not a phantom call:
+// doc_emit_for_module was referenced but never defined (reachable_from_main
+// emitted the dangling global), so the honest form names the peer and stops.
+fn doc_project(entry_module) = driver_check(entry_module)
 
 // ─── compile_run / run_run — emit WAT / compile + execute
 //
@@ -1051,15 +1119,8 @@ fn doc_project(entry_module) = {
 // the ONLY external surface (the wasmtime wire, peer of the browser/nvim
 // wires) — its handler body crosses out of the medium into the host
 // process boundary, named Hβ.cli.process-exec-wire.
-
 fn compile_run(target) = {
-  compile(target)
-    ~> wat_stdout
-    ~> wasi_filesystem
-    ~> no_iter_context
-    ~> diagnostics_handler
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
+  compile(target) ~> wat_stdout ~> wasi_filesystem ~> no_iter_context ~> diagnostics_handler ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink
   // The dispatch exit-code contract: main's value IS the process exit.
   // Refusal paths already exit nonzero through the gate; success is 0.
   0
@@ -1068,13 +1129,7 @@ fn compile_run(target) = {
 // `mentl resume <image>` — the compile projection re-entered from a
 // persisted image (pipeline.mn resume_image); same outer belt as compile.
 fn resume_run(img) = {
-  resume_image(img)
-    ~> wat_stdout
-    ~> wasi_filesystem
-    ~> no_iter_context
-    ~> diagnostics_handler
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
+  resume_image(img) ~> wat_stdout ~> wasi_filesystem ~> no_iter_context ~> diagnostics_handler ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink
   0
 }
 
@@ -1084,11 +1139,7 @@ fn resume_run(img) = {
 // handler chain — wat_stdout for emit + wasi_filesystem (stdin via fd 0
 // goes through the same handler) + the substrate stack.
 fn compile_stdin_run() = {
-  compile_stdin()
-    ~> no_iter_context
-    ~> diagnostics_handler
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
+  compile_stdin() ~> no_iter_context ~> diagnostics_handler ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink
   0
 }
 
@@ -1101,9 +1152,9 @@ fn compile_stdin_run() = {
 // reads it by entry — no fabricated WAT string threaded out of compile.
 // The handler body crossing into the host (wasmtime spawn) is the
 // external wire, peer of the web/nvim wires — Hβ.cli.process-exec-wire.
-
 effect Process {
-  process_exec(entry: String) -> Int   // exit code
+  // exit code
+  process_exec(String) -> Int
 }
 
 // The op is right and stays: `run` IS compile-then-`process_exec`, one handler
@@ -1127,7 +1178,7 @@ handler process_no_exec {
     eprint_string("  the install shim owns this seam: `mentl run {entry}` via ~/.local/bin/mentl\n")
     eprint_string("  compiles, assembles, and runs it, returning the program's own exit code.\n")
     resume(1)
-  }
+  },
 }
 
 fn run_run(target) = {
@@ -1138,14 +1189,7 @@ fn run_run(target) = {
   {
     compile(target)
     process_exec(target)
-  }
-    ~> process_no_exec
-    ~> wat_stdout
-    ~> wasi_filesystem
-    ~> no_iter_context
-    ~> diagnostics_handler
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
+  } ~> process_no_exec ~> wat_stdout ~> wasi_filesystem ~> no_iter_context ~> diagnostics_handler ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink
   1
 }
 
@@ -1153,7 +1197,7 @@ fn run_run(target) = {
 //
 // Same handler chain as compile_run minus wat_stdout — the diagnostic
 // pipeline is the value; emission is suppressed.
-
+//
 // check's exit code IS the ledger, read live. It reported E_MissingModule and
 // exited 0 — a claim about the program ("fine") that the handler one frame away
 // knew was false. The read must sit INSIDE the chain: diagnostics_handler is
@@ -1171,17 +1215,17 @@ fn run_run(target) = {
 // installs wasi_filesystem / graph_handler / mutate_sink / diagnostics_handler
 // at its own foot, so those were shadowed duplicates, and the surviving
 // expression is pure arithmetic over the count.
-fn check_run(target) =
-  if pipeline_check(target) > 0 { 1 } else { 0 }
+fn check_run(target) = if pipeline_check(target) > 0 { 1 } else { 0 }
 
 // The file's own positions: a graph handle joins the field iff its span
 // lies inside the target's weave range — the range map is the one
 // authority on which lines are this file's.
-fn field_positions(handles, fstart, nlines) with GraphRead + Memory + Alloc + !Mutate =
-  filter((h) => {
-    let Span(sl, _, _, _) = caret_span_of_handle(h)
-    sl >= fstart && sl < fstart + nlines
-  }, handles)
+fn field_positions(handles, fstart, nlines) with GraphRead + Memory + Alloc + !Mutate = filter(
+  (h) => match caret_span_of_handle(h) {
+    Span(sl, _, _, _) => sl >= fstart && sl < fstart + nlines,
+  },
+  handles
+)
 
 // Rank by the one scorer, descending: structural sort ascends by the
 // (score, handle) pair — the compare fold's f64 leaf orders the score,
@@ -1195,21 +1239,27 @@ fn field_positions(handles, fstart, nlines) with GraphRead + Memory + Alloc + !M
 // the representation Intent Boundary at the polymorphic boundary (the
 // CFC precedent) until instantiation carries bound structure across
 // the converged rounds.
-fn field_ranked(handles, caret0) -> [(Float, Int)] with GraphRead + Memory + Teach + Alloc + !Mutate =
-  reverse(sort(map((h) => {
-    let Cursor(_, _, sc) = score_one_position(h, caret0)
-    (sc, h)
-  }, handles)))
+fn field_ranked(handles, caret0) -> [(Float, Int)] with GraphRead + Memory + Teach + Alloc + !Mutate = reverse(sort(map(
+  (h) => match score_one_position(h, caret0) {
+    Cursor(_, _, sc) => (sc, h),
+  },
+  handles
+)))
 
-fn render_field_tier(ranked, target, ranges, fstart, i) = {
-  if i >= len(ranked) { () }
-  else {
-    let (_, ph) = list_index(ranked, i)
-    let pspan = caret_span_of_handle(ph)
-    let Span(sl, sc, _, _) = pspan
-    print_string("\n── {target}:{int_to_str(sl - fstart + 1)}:{int_to_str(sc)}\n")
-    render_at(cursor_at_handle(ph), ph, pspan, ranges)
-    render_field_tier(ranked, target, ranges, fstart, i + 1)
+fn render_field_tier(ranked, target, ranges, fstart, i) = if i >= len(ranked) {
+  ()
+} else {
+  match list_index(ranked, i) {
+    (_, ph) => {
+      let pspan = caret_span_of_handle(ph)
+      match pspan {
+        Span(sl, sc, _, _) => {
+          print_string("\n── {target}:{int_to_str(sl - fstart + 1)}:{int_to_str(sc)}\n")
+          render_at(cursor_at_handle(ph), ph, pspan, ranges)
+          render_field_tier(ranked, target, ranges, fstart, i + 1)
+        },
+      }
+    },
   }
 }
 
@@ -1247,75 +1297,81 @@ fn render_field(target, ranges, fstart, nlines) = {
 // through the module-range map the driver's own concatenation fold
 // carries (driver_entry_with_ranges — computed where the fold runs,
 // once, never a second ledger).
-fn at_run(target, line, col) = {
-  infer_context(() =>
-    {
-    let (_ast, ranges) = driver_entry_with_ranges(target)
-    if diag_errors() > 0 { 1 }
-    else {
-      match range_of_module(ranges, target) {
-        None => {
-          eprint_string("mentl: {target} did not load — nothing to project\n")
+fn at_run(target, line, col) = infer_context(() => match driver_entry_with_ranges(target) {
+  // Productive under error IS the address contract (the README's own
+  // voice.mn:9 answers OVER its unresolved `mix` — an env miss binds
+  // NErrorHole and the graph still projects). The old diag_errors()
+  // refusal here was an era crutch: branch-judged errors never reached
+  // the root count, so it never fired — the moment the join carried
+  // them truthfully it refused exactly the files the projection exists
+  // to serve. The diagnostics render on stderr beside the answer.
+  (_ast, ranges) => {
+    match range_of_module(ranges, target) {
+      None => {
+        eprint_string("mentl: {target} did not load — nothing to project\n")
+        1
+      },
+      Some(r) => match r {
+        (_m, _p, start, nlines) => if line == 0 {
+          render_field(target, ranges, start, nlines)
+        } else if line < 0 {
+          eprint_string("mentl: line {int_to_str(line)} — lines count from 1 (0 = the whole-file field)\n")
           1
-        },
-        Some(r) => {
-          let (_m, _p, start, nlines) = r
-          if line == 0 { render_field(target, ranges, start, nlines) }
-          else if line < 0 { eprint_string("mentl: line {int_to_str(line)} — lines count from 1 (0 = the whole-file field)\n") 1 }
-          else if line > nlines {
-            eprint_string("mentl: {target} has {int_to_str(nlines)} lines; {int_to_str(line)} is past the end\n")
-            1
-          } else {
-            let gline = start + line - 1
-            let spans = span_index_of_snapshot()   // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
-            match address_resolve(spans, gline, col) {
-              None => {
-                eprint_string("mentl: no node at {target}:{int_to_str(line)} (a blank or comment-only line)\n")
-                1
-              },
-              Some(pick) => {
-                let (pspan, ph) = pick
+        } else if line > nlines {
+          eprint_string("mentl: {target} has {int_to_str(nlines)} lines; {int_to_str(line)} is past the end\n")
+          1
+        } else {
+          let gline = start + line - 1
+          // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
+          let spans = span_index_of_snapshot()
+          match address_resolve(spans, gline, col) {
+            None => {
+              eprint_string("mentl: no node at {target}:{int_to_str(line)} (a blank or comment-only line)\n")
+              1
+            },
+            Some(pick) => match pick {
+              (pspan, ph) => {
                 render_at(cursor_at_handle(ph), ph, pspan, ranges)
                 0
-              }
-            }
+              },
+            },
           }
-        }
-      }
+        },
+      },
     }
-  }
-      ~> patch_to_file
-      ~> terminal_transport
-      ~> cursor_default
-      ~> delta_default
-      ~> synth_default
-      ~> interrogate_default
-      ~> mentl_default
-      ~> wasi_filesystem
-  )
-}
+  },
+} ~> patch_to_file ~> terminal_transport ~> cursor_default ~> delta_default ~> synth_default ~> interrogate_default ~> mentl_default ~> wasi_filesystem)
 
-fn span_index_of_snapshot() with GraphRead = {
-  let Graph(_x, spans) = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  spans
+// drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+fn span_index_of_snapshot() with GraphRead = match graph_snapshot() {
+  Graph(_x, spans) => spans,
 }
 
 // The span's file:line through the module-range map — the render-side
 // inverse of the concatenation fold. (range_of_module lives in driver.mn,
 // beside the fold that mints the map.)
-fn file_line_of(ref ranges, ref span) with Memory + Alloc = {
-  let Span(sl, _, _, _) = span
-  match find((r) => { let (_, _, start, nlines) = r sl >= start && sl < start + nlines }, ranges) {
-    Some(r) => { let (_, p, start, _) = r Some((p, sl - start + 1)) },
-    None    => None
-  }
+fn file_line_of(ref ranges, ref span) with Memory + Alloc = match span {
+  Span(sl, _, _, _) => match find(
+    (r) => match r {
+      (_, _, start, nlines) => sl >= start && sl < start + nlines,
+    },
+    ranges
+  ) {
+    Some(r) => match r {
+      (_, p, start, _) => Some((p, sl - start + 1)),
+    },
+    None => None,
+  },
 }
 
-fn file_line(ref ranges, ref span) with Memory + Alloc =
-  match file_line_of(ranges, span) {
-    Some(pl) => { let (p, l) = pl "{p}:{int_to_str(l)}" },
-    None     => { let Span(sl, _, _, _) = span "line {int_to_str(sl)}" }
-  }
+fn file_line(ref ranges, ref span) with Memory + Alloc = match file_line_of(ranges, span) {
+  Some(pl) => match pl {
+    (p, l) => "{p}:{int_to_str(l)}",
+  },
+  None => match span {
+    Span(sl, _, _, _) => "line {int_to_str(sl)}",
+  },
+}
 
 // The three-case line rule (the panel's corrected form, deterministic):
 //  (a) among nodes whose span STARTS on the line (and, with a column,
@@ -1324,29 +1380,32 @@ fn file_line(ref ranges, ref span) with Memory + Alloc =
 //  (b) else the tightest node COVERING the point (a continuation line);
 //  (c) else the nearest node by start line (the no-Module-root top-level
 //      gap — blank lines between decls are ordinary addresses, not errors).
-fn address_resolve(ref spans, gline, col) with Memory + Alloc = {
-  match address_case_a(spans, gline, col, 0, len(spans), None) {
-    Some(pick) => Some(pick),
-    None => {
-      let point = Span(gline, if col > 0 { col } else { 1 }, gline, if col > 0 { col } else { 1 })
-      match find_tightest(spans, point, None, 1000000000) {
-        Some(h) => span_pick_of(spans, h),
-        None    => address_case_c(spans, gline, 0, len(spans), None)
-      }
+fn address_resolve(ref spans, gline, col) with Memory + Alloc = match address_case_a(spans, gline, col, 0, len(spans), None) {
+  Some(pick) => Some(pick),
+  None => {
+    let point = Span(gline, if col > 0 { col } else { 1 }, gline, if col > 0 { col } else { 1 })
+    match find_tightest(spans, point, None, 1000000000) {
+      Some(h) => span_pick_of(spans, h),
+      None => address_case_c(spans, gline, 0, len(spans), None),
     }
-  }
+  },
 }
 
-fn address_case_a(ref spans, gline, col, i, n, best) with Memory = {
-  if i >= n { best }
-  else {
-    let (s, h) = list_index(spans, i)
-    let Span(sl, sc, _, _) = s
-    let hits = if sl == gline {
-      if col > 0 { span_contains(s, Span(gline, col, gline, col)) } else { true }
-    } else { false }
-    let next = if hits { address_better_a(col, best, (s, h)) } else { best }
-    address_case_a(spans, gline, col, i + 1, n, next)
+fn address_case_a(ref spans, gline, col, i, n, best) with Memory = if i >= n {
+  best
+} else {
+  match list_index(spans, i) {
+    (s, h) => match s {
+      Span(sl, sc, _, _) => {
+        let hits = if sl == gline {
+          if col > 0 { span_contains(s, Span(gline, col, gline, col)) } else { true }
+        } else {
+          false
+        }
+        let next = if hits { address_better_a(col, best, (s, h)) } else { best }
+        address_case_a(spans, gline, col, i + 1, n, next)
+      },
+    },
   }
 }
 
@@ -1359,143 +1418,161 @@ fn address_case_a(ref spans, gline, col, i, n, best) with Memory = {
 // that also contains the column. Ties break leftward in both modes.
 fn address_better_a(col, best, cand) with Memory = match best {
   None => Some(cand),
-  Some(b) => {
-    let (bs, _) = b
-    let (cs, _) = cand
-    let Span(_, bsc, _, _) = bs
-    let Span(_, csc, _, _) = cs
-    let narrower = if col > 0 { span_area(cs) < span_area(bs) }
-                   else       { span_area(cs) > span_area(bs) }
-    if narrower { Some(cand) }
-    else if span_area(cs) == span_area(bs) {
-      // Identical spans: the LATEST mint wins — mint order builds
-      // constituents before composites, so the later node is the more
-      // derived reading of the same position (a `??` mints its id cell
-      // first, then the NHole node over the same span; the address must
-      // reach the NHole, whose Propose facet speaks). Distinct starts
-      // keep the leftward tie-break.
-      if csc == bsc { Some(cand) }
-      else if csc < bsc { Some(cand) } else { best }
-    }
-    else { best }
-  }
+  Some(b) => match b {
+    (bs, _) => match cand {
+      (cs, _) => match bs {
+        Span(_, bsc, _, _) => match cs {
+          Span(_, csc, _, _) => {
+            let narrower = if col > 0 { span_area(cs) < span_area(bs) } else { span_area(cs) > span_area(bs) }
+            if narrower {
+              Some(cand)
+            } else if span_area(cs) == span_area(bs) {
+              // Identical spans: the LATEST mint wins — mint order builds
+              // constituents before composites, so the later node is the more
+              // derived reading of the same position (a `??` mints its id cell
+              // first, then the NHole node over the same span; the address must
+              // reach the NHole, whose Propose facet speaks). Distinct starts
+              // keep the leftward tie-break.
+              if csc == bsc { Some(cand) } else if csc < bsc { Some(cand) } else { best }
+            } else {
+              best
+            }
+          },
+        },
+      },
+    },
+  },
 }
 
-fn span_pick_of(ref spans, h) with Memory + Alloc = {
-  match find((e) => { let (_, eh) = e eh == h }, spans) {
-    Some(e) => { let (s, _) = e Some((s, h)) },
-    None    => None
-  }
+fn span_pick_of(ref spans, h) with Memory + Alloc = match find(
+  (e) => match e {
+    (_, eh) => eh == h,
+  },
+  spans
+) {
+  Some(e) => match e {
+    (s, _) => Some((s, h)),
+  },
+  None => None,
 }
 
-fn address_case_c(ref spans, gline, i, n, best) with Memory = {
-  if i >= n { best }
-  else {
-    let (s, h) = list_index(spans, i)
-    let Span(sl, _, _, _) = s
-    let d = if sl > gline { sl - gline } else { gline - sl }
-    let next = match best {
-      None => Some((s, h)),
-      Some(b) => {
-        let (bs, _) = b
-        let Span(bsl, _, _, _) = bs
-        let bd = if bsl > gline { bsl - gline } else { gline - bsl }
-        if d < bd { Some((s, h)) } else { best }
-      }
-    }
-    address_case_c(spans, gline, i + 1, n, next)
+fn address_case_c(ref spans, gline, i, n, best) with Memory = if i >= n {
+  best
+} else {
+  match list_index(spans, i) {
+    (s, h) => match s {
+      Span(sl, _, _, _) => {
+        let d = if sl > gline { sl - gline } else { gline - sl }
+        let next = match best {
+          None => Some((s, h)),
+          Some(b) => match b {
+            (bs, _) => match bs {
+              Span(bsl, _, _, _) => {
+                let bd = if bsl > gline { bsl - gline } else { gline - bsl }
+                if d < bd { Some((s, h)) } else { best }
+              },
+            },
+          },
+        }
+        address_case_c(spans, gline, i + 1, n, next)
+      },
+    },
   }
 }
 
 // ─── the terse render — facet-silence at the terminal
-fn render_at(view, h, pspan, ranges) = {
-  let CursorView(kind, propose, _topology, row, trace, verify, teach, why) = view
-  // The register-gated lede — the read side of the comment weave the
-  // parser fills: a node carrying authored prose speaks its first line
-  // before the Query facet, the same edge the Why engine walks.
-  let prose = graph_comment_at(h)
-  if len(prose) > 0 {
-    print_string("Lede: {comment_first_line(prose)}\n")
-  } else { () }
-  print_string("Query: {source_slice(pspan, ranges)}{node_query_line(h, kind)}\n")
-  // The Propose facet — the socket's content at the address surface. The
-  // graph already computed it (propose_at runs synth at an authored hole;
-  // empty everywhere else, so silence needs no second hole check). Exactly
-  // one proven survivor is the medium's answer, rendered through the SAME
-  // projection the edit transport's accept path uses; two or more is the
-  // tie that TEACHES (never a hidden first-wins pick between proven
-  // survivors — PLAN §5's tie-break law at this surface too).
-  match propose {
-    Proposals([], _)         => (),
-    Proposals([only], _)     => {
-      let (survivor, _r) = only
-      print_string("Propose: {render_candidate_source(survivor)}\n")
-    },
-    Proposals(survivors, _)  => {
-      // The FAN projected: a tie TEACHES by showing the actual proven
-      // space — every survivor rendered with its Reason — then names the
-      // move that collapses it. Never a hidden first-wins pick.
-      print_string("Propose: {int_to_str(len(survivors))} proven survivors — a tie:\n")
-      each((pair) => {
-        let (node, reason) = pair
-        print_string("  {render_candidate_source(node)}  — {show_reason(reason)}\n")
-      }, survivors)
-      print_string("  one more constraint (a refinement, a type, an example) collapses it\n")
+fn render_at(view, h, pspan, ranges) = match view {
+  CursorView(kind, propose, _topology, row, trace, verify, teach, why) => {
+    // The register-gated lede — the read side of the comment weave the
+    // parser fills: a node carrying authored prose speaks its first line
+    // before the Query facet, the same edge the Why engine walks.
+    let prose = graph_comment_at(h)
+    if len(prose) > 0 { print_string("Lede: {comment_first_line(prose)}\n") } else { () }
+    print_string("Query: {source_slice(pspan, ranges)}{node_query_line(h, kind)}\n")
+    // The Propose facet — the socket's content at the address surface. The
+    // graph already computed it (propose_at runs synth at an authored hole;
+    // empty everywhere else, so silence needs no second hole check). Exactly
+    // one proven survivor is the medium's answer, rendered through the SAME
+    // projection the edit transport's accept path uses; two or more is the
+    // tie that TEACHES (never a hidden first-wins pick between proven
+    // survivors — PLAN §5's tie-break law at this surface too).
+    match propose {
+      Proposals([], _) => (),
+      Proposals([only], _) => match only {
+        (survivor, _r) => print_string("Propose: {render_candidate_source(survivor)}\n"),
+      },
+      Proposals(survivors, _) => {
+        // The FAN projected: a tie TEACHES by showing the actual proven
+        // space — every survivor rendered with its Reason — then names the
+        // move that collapses it. Never a hidden first-wins pick.
+        print_string("Propose: {int_to_str(len(survivors))} proven survivors — a tie:\n")
+        each(
+          (pair) => match pair {
+            (node, reason) => print_string("  {render_candidate_source(node)}  — {show_reason(reason)}\n"),
+          },
+          survivors
+        )
+        print_string("  one more constraint (a refinement, a type, an example) collapses it\n")
+      },
     }
-  }
-  match row {
-    EfRow([], [], EtClosed) => (),
-    _      => print_string("Effects: {show_effrow(row)}\n")
-  }
-  match trace {
-    Unmarked => (),
-    Own      => print_string("Ownership: own\n"),
-    Ref      => print_string("Ownership: ref\n")
-  }
-  if len(verify) > 0 {
-    print_string("Verify: {int_to_str(len(verify))} obligation(s) at this node\n")
-  } else { () }
-  match teach {
-    None    => (),
-    Some(_) => print_string("Teach: an annotation here would unlock a capability — `mentl teach` names it\n")
-  }
-  print_string("Why: ")
-  render_why_hops(why_expand(why, 0), ranges, 0)
+    match row {
+      EfRow([], [], EtClosed) => (),
+      _ => print_string("Effects: {show_effrow(row)}\n"),
+    }
+    match trace {
+      Unmarked => (),
+      Own => print_string("Ownership: own\n"),
+      Ref => print_string("Ownership: ref\n"),
+    }
+    if len(verify) > 0 {
+      print_string("Verify: {int_to_str(len(verify))} obligation(s) at this node\n")
+    } else {
+      ()
+    }
+    match teach {
+      None => (),
+      Some(_) => print_string("Teach: an annotation here would unlock a capability — `mentl teach` names it\n"),
+    }
+    print_string("Why: ")
+    render_why_hops(why_expand(why, 0), ranges, 0)
+  },
 }
 
-fn node_query_line(h, kind) with GraphRead + EnvRead + Memory + Alloc + Intern = {
-  // A declaration node's own graph cell is a free var (the scheme lives in
-  // the env — read it there, never render the raw t-var); every other node
-  // shows its inferred type.
-  match graph_node_body(h) {
-    NStmt(FnStmt(name, _, _, _, _)) => match env_lookup(name) {
-      Some(entry) => {
-        let (scheme, _, _) = entry
-        match scheme { Forall(_, ty) => show_type(ty) }
+// A declaration node's own graph cell is a free var (the scheme lives in
+// the env — read it there, never render the raw t-var); every other node
+// shows its inferred type.
+fn node_query_line(h, kind) with GraphRead + EnvRead + Memory + Alloc + Intern = match graph_node_body(h) {
+  NStmt(FnStmt(name, _, _, _, _)) => match env_lookup(name) {
+    Some(entry) => match entry {
+      (scheme, _, _) => match scheme {
+        Forall(_, ty) => show_type(ty),
       },
-      None => show_type(ty_of_kind(h, kind))
     },
-    // A literal's type IS its body when the cell is still free (a top-level
-    // let's value node keeps its own cell unbound; the body already proves
-    // the answer — read it, never render the raw t-var).
-    NExpr(LitFloat(_))  => "Float",
-    NExpr(LitInt(_))    => "Int",
-    NExpr(LitString(_)) => "String",
-    NExpr(LitBool(_))   => "Bool",
-    _ => show_type(ty_of_kind(h, kind))
-  }
+    None => show_type(ty_of_kind(h, kind)),
+  },
+  NExpr(LitFloat(_)) => // A literal's type IS its body when the cell is still free (a top-level
+  // let's value node keeps its own cell unbound; the body already proves
+  // the answer — read it, never render the raw t-var).
+  "Float",
+  NExpr(LitInt(_)) => "Int",
+  NExpr(LitString(_)) => "String",
+  NExpr(LitBool(_)) => "Bool",
+  _ => show_type(ty_of_kind(h, kind)),
 }
 
 // The addressed source text itself, read back through the range map — the
 // line the user pointed at, sliced to the node's span. The file is the one
 // authority on its own text.
-fn source_slice(ref span, ref ranges) with Filesystem + Memory + Alloc = {
-  let Span(sl, sc, _, ec) = span
-  match find((r) => { let (_, _, start, nlines) = r sl >= start && sl < start + nlines }, ranges) {
+fn source_slice(ref span, ref ranges) with Filesystem + Memory + Alloc = match span {
+  Span(sl, sc, _, ec) => match find(
+    (r) => match r {
+      (_, _, start, nlines) => sl >= start && sl < start + nlines,
+    },
+    ranges
+  ) {
     None => "",
-    Some(r) => {
-      let (_, p, start, _) = r
-      if fs_exists(p) {
+    Some(r) => match r {
+      (_, p, start, _) => if fs_exists(p) {
         let text = fs_read_file(p)
         let lstart = nth_line_offset(text, sl - start, 0, 0)
         let lend = line_end_from(text, lstart)
@@ -1504,23 +1581,30 @@ fn source_slice(ref span, ref ranges) with Filesystem + Memory + Alloc = {
         let lo = if a < lend { a } else { lstart }
         let hi = if b <= lend { b } else { lend }
         if hi > lo { "{str_slice(text, lo, hi)} : " } else { "" }
-      } else { "" }
-    }
-  }
+      } else {
+        ""
+      },
+    },
+  },
 }
 
 // Byte offset of the k-th line (0-based) — a forward newline walk.
-fn nth_line_offset(ref text, k, i, line) with Memory = {
-  if line >= k { i }
-  else if i >= byte_len(text) { i }
-  else if byte_at(text, i) == 10 { nth_line_offset(text, k, i + 1, line + 1) }
-  else { nth_line_offset(text, k, i + 1, line) }
+fn nth_line_offset(ref text, k, i, line) with Memory = if line >= k {
+  i
+} else if i >= byte_len(text) {
+  i
+} else if byte_at(text, i) == 10 {
+  nth_line_offset(text, k, i + 1, line + 1)
+} else {
+  nth_line_offset(text, k, i + 1, line)
 }
 
-fn line_end_from(ref text, i) with Memory = {
-  if i >= byte_len(text) { i }
-  else if byte_at(text, i) == 10 { i }
-  else { line_end_from(text, i + 1) }
+fn line_end_from(ref text, i) with Memory = if i >= byte_len(text) {
+  i
+} else if byte_at(text, i) == 10 {
+  i
+} else {
+  line_end_from(text, i + 1)
 }
 
 // The Why chain, one hop per line: file:line through the range map, the
@@ -1528,61 +1612,60 @@ fn line_end_from(ref text, i) with Memory = {
 // literal value (node_const at the let's value node, read live) and the
 // author's attached `//` lede (graph_comment_at). The prose rides the
 // same rails as the types: nothing here is stored twice.
-fn render_why_hops(reason, ranges, depth) = {
-  if depth > 7 { print_string("\n") }
-  else {
-    match reason {
-      Located(span, inner) => {
-        if depth > 0 { print_string("     ") } else { () }
-        print_string("{reason_phrase(inner)}, at {file_line(ranges, span)}{binding_ledes(span, inner)}\n")
-        render_why_deeper(inner, ranges, depth)
-      },
-      VarLookup(name, br) => {
-        if depth > 0 { print_string("     ") } else { () }
-        print_string("{name} read here\n")
-        render_why_hops(br, ranges, depth + 1)
-      },
-      _ => {
-        if depth > 0 { print_string("     ") } else { () }
-        print_string("{show_reason(reason)}\n")
-      }
-    }
+fn render_why_hops(reason, ranges, depth) = if depth > 7 {
+  print_string("\n")
+} else {
+  match reason {
+    Located(span, inner) => {
+      if depth > 0 { print_string("     ") } else { () }
+      print_string("{reason_phrase(inner)}, at {file_line(ranges, span)}{binding_ledes(span, inner)}\n")
+      render_why_deeper(inner, ranges, depth)
+    },
+    VarLookup(name, br) => {
+      if depth > 0 { print_string("     ") } else { () }
+      print_string("{name} read here\n")
+      render_why_hops(br, ranges, depth + 1)
+    },
+    _ => {
+      if depth > 0 { print_string("     ") } else { () }
+      print_string("{show_reason(reason)}\n")
+    },
   }
 }
 
 fn render_why_deeper(inner, ranges, depth) = match inner {
-  VarLookup(_, br)          => render_why_hops(br, ranges, depth + 1),
-  LetBinding(_, br)         => render_why_hops(br, ranges, depth + 1),
-  FnReturn(_, br)           => render_why_hops(br, ranges, depth + 1),
+  VarLookup(_, br) => render_why_hops(br, ranges, depth + 1),
+  LetBinding(_, br) => render_why_hops(br, ranges, depth + 1),
+  FnReturn(_, br) => render_why_hops(br, ranges, depth + 1),
   InferredCallReturn(_, br) => render_why_hops(br, ranges, depth + 1),
   InferredPipeResult(_, br) => render_why_hops(br, ranges, depth + 1),
-  // A unification joins TWO provenances — walk both (the second indented
+  Unified(a, b) => // A unification joins TWO provenances — walk both (the second indented
   // as its own branch), the DAG rendered as the tree it is.
-  Unified(a, b)             => {
+  {
     render_why_hops(a, ranges, depth + 1)
     render_why_hops(b, ranges, depth + 1)
   },
-  OpConstraint(_, a, b)     => {
+  OpConstraint(_, a, b) => {
     render_why_hops(a, ranges, depth + 1)
     render_why_hops(b, ranges, depth + 1)
   },
-  IfBranch(br)              => render_why_hops(br, ranges, depth + 1),
-  Instantiation(_, br)      => render_why_hops(br, ranges, depth + 1),
-  _                         => print_string("")
+  IfBranch(br) => render_why_hops(br, ranges, depth + 1),
+  Instantiation(_, br) => render_why_hops(br, ranges, depth + 1),
+  _ => print_string(""),
 }
 
 fn reason_phrase(inner) with Memory + GraphRead + Alloc + Intern = match inner {
-  VarLookup(name, _)          => "{name} flows in here",
-  LetBinding(name, _)         => "let {name}",
-  Declared(name)              => "declared {name}",
-  Inferred(s)                 => s,
-  FnReturn(name, _)           => "returned from {name}",
-  FnParam(name, i, _)         => "parameter {name}",
+  VarLookup(name, _) => "{name} flows in here",
+  LetBinding(name, _) => "let {name}",
+  Declared(name) => "declared {name}",
+  Inferred(s) => s,
+  FnReturn(name, _) => "returned from {name}",
+  FnParam(name, i, _) => "parameter {name}",
   InferredCallReturn(name, _) => "the call to {name}",
-  InferredPipeResult(v, _)    => "through {v}",
-  MissingVar(name)            => "{name} is unresolved",
-  Placeholder(_)              => "authored here",
-  _                           => show_reason(inner)
+  InferredPipeResult(v, _) => "through {v}",
+  MissingVar(name) => "{name} is unresolved",
+  Placeholder(_) => "authored here",
+  _ => show_reason(inner),
 }
 
 // The value + comment ledes at a binding hop — both read LIVE from the
@@ -1590,32 +1673,35 @@ fn reason_phrase(inner) with Memory + GraphRead + Alloc + Intern = match inner {
 // the comment weave). Empty strings when the graph carries neither.
 fn binding_ledes(span, inner) with GraphRead + Memory + Alloc = match inner {
   LetBinding(_, _) => {
-    let spans = span_index_of_snapshot()   // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
+    // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
+    let spans = span_index_of_snapshot()
     match address_case_a(spans, span_line_of(span), 0, 0, len(spans), None) {
       None => "",
-      Some(pick) => {
-        let (_, sh) = pick
-        "{value_lede(sh)}{comment_lede(sh)}"
-      }
+      Some(pick) => match pick {
+        (_, sh) => "{value_lede(sh)}{comment_lede(sh)}",
+      },
     }
   },
-  _ => ""   // drift-audit: ignore — genuine String-null lede: a non-binding hop carries no value/comment lede by construction
+  _ => // drift-audit: ignore — genuine String-null lede: a non-binding hop carries no value/comment lede by construction
+  "",
 }
 
-fn span_line_of(ref s) with Pure = { let Span(sl, _, _, _) = s sl }
+fn span_line_of(ref s) with Pure = match s {
+  Span(sl, _, _, _) => sl,
+}
 
 fn value_lede(sh) with GraphRead + Alloc + Memory = match graph_node_body(sh) {
-  NStmt(LetStmt(_, value, _)) => {
-    let N(_, _, vh) = value
-    match node_const(vh) {
-      Some(LVInt(n))    => " = {int_to_str(n)}",
-      Some(LVFloat(f))  => " = {float_to_str(f)}",
+  NStmt(LetStmt(_, value, _)) => match value {
+    N(_, _, vh) => match node_const(vh) {
+      Some(LVInt(n)) => " = {int_to_str(n)}",
+      Some(LVFloat(f)) => " = {float_to_str(f)}",
       Some(LVString(s)) => " = \"{s}\"",
-      Some(LVBool(b))   => if b { " = true" } else { " = false" },
-      None              => ""
-    }
+      Some(LVBool(b)) => if b { " = true" } else { " = false" },
+      None => "",
+    },
   },
-  _ => ""   // drift-audit: ignore — genuine String-null lede: a non-let node has no binding value to render
+  _ => // drift-audit: ignore — genuine String-null lede: a non-let node has no binding value to render
+  "",
 }
 
 fn comment_lede(sh) with GraphRead + Alloc + Memory = {
@@ -1628,18 +1714,15 @@ fn comment_first_line(ref c) with Memory + Alloc = {
   if cut < 0 { c } else { str_slice(c, 0, cut) }
 }
 
-fn addr_newline_at(ref s, i, n) with Memory = {
-  if i >= n { 0 - 1 }
-  else if byte_at(s, i) == 10 { i }
-  else { addr_newline_at(s, i + 1, n) }
-}
+fn addr_newline_at(ref s, i, n) with Memory =
+  if i >= n { 0 - 1 } else if byte_at(s, i) == 10 { i } else { addr_newline_at(s, i + 1, n) }
 
 // ─── test_run — Test effect handler chain
 //
 // Per EH §1.3 + lib/test.mn: assert / assert_eq / assert_near
 // dispatch through assert_reporter (runtime) + verify_assert
 // (compile-time lifting). Named follow-up: Hβ.test.lib-test-mn-substrate.
-
+//
 // test = the Test effect handler chain over the checked graph. The test
 // module is checked (its assertions typecheck against the one graph), then
 // its check arms dispatch through assert_reporter — assert/assert_eq are
@@ -1649,11 +1732,11 @@ fn addr_newline_at(ref s, i, n) with Memory = {
 // handler (timing). Execution of the test fns reaches the process boundary
 // (Hβ.cli.process-exec-wire, shared with run); the check + reporter chain
 // is the structural form, real now.
-
 fn test_run(target_opt) = {
   let entry_module = match target_opt {
     Some(t) => t,
-    None    => "test"  // default test entry module
+    None => // default test entry module
+    "test",
   }
   // A DIRECTORY target is the BATTERY: every .mn inside is a self-describing
   // gate (its first comment declares `// expect: N` — the expectation lives
@@ -1673,24 +1756,13 @@ fn test_run(target_opt) = {
   {
     match fs_list_dir_impl(entry_module) {
       Some(names) => battery_run(entry_module, names),
-      None => test_check_run(entry_module)
+      None => test_check_run(entry_module),
     }
-  }
-    ~> stdout_console
-    ~> wasi_filesystem
-    ~> diagnostics_handler
+  } ~> stdout_console ~> wasi_filesystem ~> diagnostics_handler
 }
 
-fn test_check_run(entry_module) = {
-  pipeline_check(entry_module)
-    ~> assert_reporter
-    ~> stdout_console
-    ~> wasi_filesystem
-    ~> no_iter_context
-    ~> diagnostics_handler
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
-}
+fn test_check_run(entry_module) =
+  pipeline_check(entry_module) ~> assert_reporter ~> stdout_console ~> wasi_filesystem ~> no_iter_context ~> diagnostics_handler ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink
 
 // ─── The battery: `mentl test <dir>` ────────────────────────────────────
 // The micro battery IS the medium reading its own gates: glob the directory,
@@ -1700,29 +1772,27 @@ fn test_check_run(entry_module) = {
 // armed refusals gets a FAILC line and NO WAT (the same
 // errors-holes-refusals read executable_gate makes; here the boundary is the
 // batch, so the verdict is a manifest line instead of proc_exit).
-
 fn battery_libs() -> String with Memory + Alloc + WASI =
-  fs_read_file_impl("lib/runtime/memory.mn")
-    ++ fs_read_file_impl("lib/runtime/strings.mn")
-    ++ fs_read_file_impl("lib/runtime/lists.mn")
-    ++ fs_read_file_impl("lib/prelude.mn")
+  fs_read_file_impl("lib/runtime/memory.mn") ++ fs_read_file_impl("lib/runtime/strings.mn") ++ fs_read_file_impl("lib/runtime/lists.mn") ++ fs_read_file_impl("lib/prelude.mn")
 
 // The micro's own expectation: first line `// expect: N`. None = not a
 // battery member (skipped loudly by the manifest consumer).
 fn battery_expect(src) with Memory + Alloc = {
   let prefix = "// expect: "
-  if byte_len(src) < 12 { None }
-  else if !str_eq(str_slice(src, 0, 11), prefix) { None }
-  else { Some(battery_expect_digits(src, 11, 0)) }
+  if byte_len(src) < 12 {
+    None
+  } else if !str_eq(str_slice(src, 0, 11), prefix) {
+    None
+  } else {
+    Some(battery_expect_digits(src, 11, 0))
+  }
 }
 
-fn battery_expect_digits(src, i, acc) with Memory = {
-  if i >= byte_len(src) { acc }
-  else {
-    let b = byte_at(src, i)
-    if b >= 48 && b <= 57 { battery_expect_digits(src, i + 1, acc * 10 + (b - 48)) }
-    else { acc }
-  }
+fn battery_expect_digits(src, i, acc) with Memory = if i >= byte_len(src) {
+  acc
+} else {
+  let b = byte_at(src, i)
+  if b >= 48 && b <= 57 { battery_expect_digits(src, i + 1, acc * 10 + (b - 48)) } else { acc }
 }
 
 // One micro, one fresh chain — the same chain compile_stdin drives, with
@@ -1731,38 +1801,32 @@ fn battery_expect_digits(src, i, acc) with Memory = {
 // segments — the scope law at wat_to_string's decl). Verdict: 0 on an
 // emitted module, 1 on a ledger-refused compile (no file written) or an
 // unopenable destination.
-fn battery_compile(src, wat_path) = {
-  infer_context(() =>
-    {
-    let lowered = src |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main
-    // THE SAME law executable_gate applies, batch-shaped: refusal = holes +
-    // ARMED classes only. Unarmed errors surface on stderr and the compile
-    // proceeds — the sound-incomplete contract; the battery must not be
-    // stricter than the medium (it FAILC'd ev2 for an unarmed row mismatch
-    // the check verb tolerates). gate_reads is the law's one home; this
-    // policy counts and continues where the CLI compile proc_exits.
-    let (nholes, refused) = gate_reads(lowered)
-    if nholes > 0 || refused > 0 { 1 }
-    else {
+fn battery_compile(src, wat_path) = infer_context(() => {
+  let lowered =
+    src |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main
+  // THE SAME law executable_gate applies, batch-shaped: refusal = holes +
+  // ARMED classes only. Unarmed errors surface on stderr and the compile
+  // proceeds — the sound-incomplete contract; the battery must not be
+  // stricter than the medium (it FAILC'd ev2 for an unarmed row mismatch
+  // the check verb tolerates). gate_reads is the law's one home; this
+  // policy counts and continues where the CLI compile proc_exits.
+  match gate_reads(lowered) {
+    (nholes, refused) => if nholes > 0 || refused > 0 {
+      1
+    } else {
       let fd = fs_create_impl(wat_path)
-      if fd == 0 { 1 }
-      else {
-        { emit_module(lowered) } ~> wat_to_file(fd)
+      if fd == 0 {
+        1
+      } else {
+        {
+          emit_module(lowered)
+        } ~> wat_to_file(fd)
         fs_close_impl(fd)
         0
       }
-    }
+    },
   }
-      ~> wasi_filesystem
-      ~> string_table
-      ~> emit_memory_bump
-      ~> body_context
-      ~> mentl_default
-      ~> lower_scope
-      ~> arm_state_ctx([], OneShot, "")
-      ~> spec_registry
-  )
-}
+} ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 fn battery_run(dir, names) = {
   fs_mkdir(".build")
@@ -1789,43 +1853,44 @@ fn battery_run(dir, names) = {
   battery_loop(dir, libs, micros, 0, 0)
 }
 
-fn battery_loop(dir, libs, micros, i, fails) = {
-  if i >= len(micros) { fails }
-  else {
-    // Each micro's compile is a REGION: mark before, reset after — the
-    // virginity contract (heap_reset zeroes [mark, bump)) makes every
-    // compile start at the same watermark with genuinely virgin memory, so
-    // per-micro output is deterministic regardless of predecessors and the
-    // battery's peak stays one compile's live set (~192MB measured), not
-    // the sum. The cross-compile trap that blocked this form was the
-    // effect-census collector running as a NULL-STATE singleton in emit's
-    // walk extent (its accumulator at address 12 — below the mark, never
-    // reset, holding a stale pointer into the region): closed at the root
-    // by the project_emit_state install + the SingletonUninstalled guard,
-    // and the full battery runs region-bracketed 112/112.
-    let mark = heap_mark()   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
-    let name = micros[i]
-    let stem = str_slice(name, 0, byte_len(name) - 3)
-    let src = fs_read_file_impl("{dir}/{name}")
-    let step = match battery_expect(src) {
-      None => {
-        print_string("NOEXPECT {stem}\n")
+fn battery_loop(dir, libs, micros, i, fails) = if i >= len(micros) {
+  fails
+} else {
+  // Each micro's compile is a REGION: mark before, reset after — the
+  // virginity contract (heap_reset zeroes [mark, bump)) makes every
+  // compile start at the same watermark with genuinely virgin memory, so
+  // per-micro output is deterministic regardless of predecessors and the
+  // battery's peak stays one compile's live set (~192MB measured), not
+  // the sum. The cross-compile trap that blocked this form was the
+  // effect-census collector running as a NULL-STATE singleton in emit's
+  // walk extent (its accumulator at address 12 — below the mark, never
+  // reset, holding a stale pointer into the region): closed at the root
+  // by the project_emit_state install + the SingletonUninstalled guard,
+  // and the full battery runs region-bracketed 112/112.
+  //
+  // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
+  let mark = heap_mark()
+  let name = micros[i]
+  let stem = str_slice(name, 0, byte_len(name) - 3)
+  let src = fs_read_file_impl("{dir}/{name}")
+  let step = match battery_expect(src) {
+    None => {
+      print_string("NOEXPECT {stem}\n")
+      1
+    },
+    Some(want) => {
+      let failed = battery_compile(libs ++ src, ".build/test/{stem}.wat")
+      if failed > 0 {
+        print_string("FAILC {stem}\n")
         1
-      },
-      Some(want) => {
-        let failed = battery_compile(libs ++ src, ".build/test/{stem}.wat")
-        if failed > 0 {
-          print_string("FAILC {stem}\n")
-          1
-        } else {
-          print_string("MICRO {stem} .build/test/{stem}.wat {int_to_str(want)}\n")
-          0
-        }
+      } else {
+        print_string("MICRO {stem} .build/test/{stem}.wat {int_to_str(want)}\n")
+        0
       }
-    }
-    heap_reset(mark)
-    battery_loop(dir, libs, micros, i + 1, fails + step)
+    },
   }
+  heap_reset(mark)
+  battery_loop(dir, libs, micros, i + 1, fails + step)
 }
 
 // assert_reporter — the Test effect's pass/fail reporter handler. Each
@@ -1834,30 +1899,21 @@ fn battery_loop(dir, libs, micros, i, fails) = {
 // lib/test.mn). State threads the counts; a failing assertion surfaces its
 // message at the WASI boundary.
 handler assert_reporter with passed = 0, failed = 0 {
-  check(cond, msg) =>
-    if cond {
-      resume() with passed = passed + 1
-    } else {
-      eprint_string("  FAIL: {msg}\n")
-      resume() with failed = failed + 1
-    },
-  get_results() => resume((passed, failed))
+  check(cond, msg) => if cond {
+    resume() with passed = passed + 1
+  } else {
+    eprint_string("  FAIL: {msg}\n")
+    resume() with failed = failed + 1
+  },
+  get_results() => resume((passed, failed)),
 }
 
 // ─── audit_run — capability set + severance suggestions
 //
 // Walks the ~> chain; collects effect rows transitively; emits
 // AuditReport. Per DESIGN §9.1 + traces/a-day §1400.
-
 fn audit_run(target) = {
-  audit(target)
-    ~> stdout_console
-    ~> wasi_filesystem
-    ~> mentl_default
-    ~> verify_ledger
-    ~> diagnostics_handler
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
+  audit(target) ~> stdout_console ~> wasi_filesystem ~> mentl_default ~> verify_ledger ~> diagnostics_handler ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink
   0
 }
 
@@ -1865,15 +1921,8 @@ fn audit_run(target) = {
 //
 // `mentl query <module> "<question>"` — read-only query against
 // the substrate. Per traces/a-day §0800 + DESIGN §8 mentl query.
-
 fn query_run(target, question) = {
-  query(target, question)
-    ~> stdout_console
-    ~> wasi_filesystem
-    ~> mentl_default
-    ~> diagnostics_handler
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
+  query(target, question) ~> stdout_console ~> wasi_filesystem ~> mentl_default ~> diagnostics_handler ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink
   0
 }
 
@@ -1887,16 +1936,15 @@ fn query_run(target, question) = {
 // Resolution of the handle into the install site is the named peer
 // Hβ.cli.user-defined-entry-handler-resolution — the env overlay it
 // reads is the per-module env the driver populates (driver IC.3 chase).
-
 fn with_run(handler_name, target_opt) = {
   let entry_module = match target_opt {
     Some(t) => t,
-    None    => "main"
+    None => "main",
   }
   pipeline_check(entry_module)
   match env_lookup(handler_name) {
-    None    => eprint_string("mentl --with: no handler named {handler_name} in the checked env\n"),
-    Some(_) => eprint_string("mentl --with {handler_name}: resolved; install via Hβ.cli.user-defined-entry-handler-resolution\n")
+    None => eprint_string("mentl --with: no handler named {handler_name} in the checked env\n"),
+    Some(_) => eprint_string("mentl --with {handler_name}: resolved; install via Hβ.cli.user-defined-entry-handler-resolution\n"),
   }
   // The verb is named but its install path is unbuilt — the CLI refusal
   // law: a named verb that cannot do its work exits nonzero.
@@ -1908,23 +1956,18 @@ fn with_run(handler_name, target_opt) = {
 // Bare `mentl` defaults here per EH. Gradient narration; one
 // suggestion per turn; Mentl's voice in the terminal for
 // vim/helix/terminal-only users.
-
 fn teach_run(target_opt) = {
   let entry_module = match target_opt {
     Some(t) => t,
-    None    => "main"
+    None => "main",
   }
   // teach reaches inference — the core installs as the one bracket (this
   // chain was the eighth found missing the analysis handlers, by design
   // pass not by trap; query_default's env_lookup / env_snapshot resolve
   // into the bracket's env).
-  infer_context(() =>
-    teach(entry_module)
-      ~> stdout_console
-      ~> wasi_filesystem
-      ~> mentl_voice_default
-      ~> query_default          // mentl_voice_default's consult/run_query bubble Query.ask here
-  )
+  infer_context(() => teach(entry_module) ~> stdout_console ~> wasi_filesystem ~> mentl_voice_default ~>
+  // mentl_voice_default's consult/run_query bubble Query.ask here
+  query_default)
   0
 }
 
@@ -1937,30 +1980,22 @@ fn teach_run(target_opt) = {
 // one cursor, the terminal transport, fed line-by-line. The stdin line
 // reader is the host boundary (Hβ.repl.line-read-wire, peer of the
 // process/web/nvim wires); the eval-and-project chain is real now.
-
 fn repl_run() = {
   // The line-eval runs infer; the core installs as the one bracket (the
   // driverless-zero-state class the bounds trap unmasked lives in its law).
-  infer_context(() =>
-    repl_eval_line(read_stdin_line())
-      ~> stdout_console
-      ~> wasi_filesystem
-      ~> mentl_voice_default
-      ~> query_default
-  )
+  infer_context(() => repl_eval_line(read_stdin_line()) ~> stdout_console ~> wasi_filesystem ~> mentl_voice_default ~> query_default)
   0
 }
 
 // repl_eval_line — one cursor read of a source line: lex |> parse |> infer,
 // then project the inferred shape through the voice surface. Empty line is
 // the empty projection (the cursor at rest), never a fabricated value.
-fn repl_eval_line(line) = {
-  if byte_len(line) == 0 { "" }
-  else {
-    let ast = line |> frontend
-    infer_program(ast)
-    render_query_result(ask(parse_query_string("type main")))
-  }
+fn repl_eval_line(line) = if byte_len(line) == 0 {
+  ""
+} else {
+  let ast = line |> frontend
+  infer_program(ast)
+  render_query_result(ask(parse_query_string("type main")))
 }
 
 // ─── new — the welcome's own WRITE
@@ -1989,14 +2024,8 @@ fn repl_eval_line(line) = {
 // hello.mn"; it re-projects the directory and lets the file speak for
 // itself — a write followed by the live read is unfalsifiable, and it is
 // the same `<~` the cursor session runs (draw the edge, re-project).
-
 fn new_project(name) = {
-  scaffold_project(name)
-    ~> wasi_filesystem
-    ~> no_iter_context
-    ~> diagnostics_handler
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
+  scaffold_project(name) ~> wasi_filesystem ~> no_iter_context ~> diagnostics_handler ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink
   0
 }
 
@@ -2022,10 +2051,9 @@ fn scaffold_project(name) = {
 // The `\{who\}` escapes emit literal braces, so the FILE gets a live
 // interpolation the user's own compile reads.
 fn new_seed() =
-  "// this file is the whole project — the imports are the manifest.\n//\n// the comment you are reading is not a remark the lexer discards: it is\n// a Reason edge in the graph. ask the medium about this file:\n//   mentl audit   — what it is allowed to do\n//   mentl edit    — the cursor, and what it proposes\n\nimport runtime/io\n\n// `|>` is the sequential verb — the string flows into print_string.\n// the topology is on the page; there is no hidden control flow.\nfn greet(who) = \"hello, \{who\} — the medium is reading you back\\n\" |> print_string\n\nfn main() = {\n  greet(\"world\")\n  0\n}\n"
+  "// this file is the whole project — the imports are the manifest.\n//\n// the comment you are reading is not a remark the lexer discards: it is\n// a Reason edge in the graph. ask the medium about this file:\n//   mentl audit   — what it is allowed to do\n//   mentl edit    — the cursor, and what it proposes\n\nimport runtime/io\n\n// `|>` is the sequential verb — the string flows into print_string.\n// the topology is on the page; there is no hidden control flow.\nfn greet(who) = \"hello, \{who\} — the medium is reading you back\\n\" |> print_string\n\nfn main() = \{\n  greet(\"world\")\n  0\n\}\n"
 
 // ─── help + error surface ─────────────────────────────────────────
-
 fn print_error_and_help(msg) = {
   eprint_string("mentl: ")
   eprint_string(msg)
@@ -2041,27 +2069,25 @@ fn print_error_and_help(msg) = {
 // `mentl` line (the directory projection, not a named verb) frames the list;
 // every verb line is verb_specs()[i] rendered uniformly.
 fn verb_catalog() with Memory + Alloc =
-  "the verbs:\n  mentl                          — project this directory (a pipe compiles stdin)\n"
-    ++ catalog_lines(verb_specs(), 0, len(verb_specs()), "")
-    ++ "\na target is a module name or a file path, from any directory.\n"
-    ++ "the surface: PLAN.md §11 (the production bar) · docs/SYNTAX.md (the language)\n"
+  "the verbs:\n  mentl                          — project this directory (a pipe compiles stdin)\n" ++ catalog_lines(verb_specs(), 0, len(verb_specs()), "") ++ "\na target is a module name or a file path, from any directory.\n" ++ "the surface: PLAN.md §11 (the production bar) · docs/SYNTAX.md (the language)\n"
 
 // One catalog line per spec: `  mentl <name> <hint>` padded to a column, then
 // `— <desc>`. The `++` accumulator IS the O(1) concat rope (§4①), not a loop
 // re-alloc — the string grows by pointer, never by copy.
-fn catalog_lines(specs, i, n, acc) with Memory + Alloc =
-  if i >= n { acc }
-  else {
-    let VerbSpec(name, hint, _, desc) = specs[i]
-    let usage = if byte_len(hint) > 0 { name ++ " " ++ hint } else { name }
-    catalog_lines(specs, i + 1, n,
-      acc ++ "  mentl " ++ pad_right(usage, 25) ++ "— " ++ desc ++ "\n")
+fn catalog_lines(specs, i, n, acc) with Memory + Alloc = if i >= n {
+  acc
+} else {
+  match specs[i] {
+    VerbSpec(name, hint, _, desc) => {
+      let usage = if byte_len(hint) > 0 { name ++ " " ++ hint } else { name }
+      catalog_lines(specs, i + 1, n, acc ++ "  mentl " ++ pad_right(usage, 25) ++ "— " ++ desc ++ "\n")
+    },
   }
+}
 
 // pad_right — right-pad with spaces to width w (the alignment column). A no-op
 // once s already reaches w. Small, bounded, one home for the help alignment.
-fn pad_right(s, w) with Memory + Alloc =
-  if byte_len(s) >= w { s } else { pad_right(s ++ " ", w) }
+fn pad_right(s, w) with Memory + Alloc = if byte_len(s) >= w { s } else { pad_right(s ++ " ", w) }
 
 fn print_help() = eprint_string(verb_catalog())
 
@@ -2090,10 +2116,13 @@ fn project_directory() = {
   let sources = filter((n) => ends_with(n, ".mn"), fs_list_dir_names())
   if len(sources) > 0 {
     print_string("in this directory:\n")
-    each((n) => {
-      let stem = str_slice(n, 0, byte_len(n) - 3)
-      print_string("  {n}  →  mentl run {stem} · mentl edit {stem} · mentl check {stem}\n")
-    }, sources)
+    each(
+      (n) => {
+        let stem = str_slice(n, 0, byte_len(n) - 3)
+        print_string("  {n}  →  mentl run {stem} · mentl edit {stem} · mentl check {stem}\n")
+      },
+      sources
+    )
     print_string("\n")
   } else {
     print_string("nothing to read here yet — begin:\n  mentl new hello && mentl run hello\n\n")

@@ -29,9 +29,10 @@
 // preopens per process; a spawning (shared-memory) module's heap line lives
 // in the image at cell 64 and restores consistently, but persisting one
 // mid-spawn is Phase C's fusion work, not claimed here.
-
 import runtime/memory
+
 import runtime/strings
+
 import runtime/io
 
 // A durable-branch ticket is opaque to its consumer. The handler owns the
@@ -49,11 +50,11 @@ type PersistHandle = PersistHandle(Int)
 // top-level let the persisting process stored into); the returned address
 // is the word-face belt beside it.
 effect Persist {
-  persist(k: Int, path: String) -> ()
+  persist(Int, String)
   // Prototype fanout storage hooks. persist_branch checkpoints the whole
   // image before invoking the branch; results join from live handler state.
-  persist_branch(thunk: () -> a) -> PersistHandle
-  join_persist(branch: PersistHandle) -> a
+  persist_branch(() -> a) -> PersistHandle
+  join_persist(PersistHandle) -> a
 }
 
 // The restore, whole: read the wire, gate on the build key, swap the image
@@ -82,8 +83,10 @@ fn image_resume(path) with Memory + Alloc + WASI + Fail = {
 // The size reads FIRST — everything the persisting program built lies below
 // it; the wire itself allocates above and stays out of its own copy.
 fn image_pack(k) with Memory + Alloc = {
-  let size = heap_mark()      // drift-audit: ignore — sequenced effectful read; MUST precede the wire's own allocation
-  let gsz = globals_area()    // drift-audit: ignore — sequenced substrate read; sizes the wire and offsets the copy
+  // drift-audit: ignore — sequenced effectful read; MUST precede the wire's own allocation
+  let size = heap_mark()
+  // drift-audit: ignore — sequenced substrate read; sizes the wire and offsets the copy
+  let gsz = globals_area()
   let wire = bytes_buf(16 + gsz + size)
   let p = wire + 8
   store_i32(p, image_key())
@@ -98,7 +101,6 @@ fn image_pack(k) with Memory + Alloc = {
 
 // persist_to_disk — the default disk policy for the rooted-image wire.
 handler persist_to_disk with branch_results = [] {
-
   persist(k, path) => {
     // This handler IS the disk policy — it writes through the WASI substrate
     // layer directly (the swappable point is the Persist effect itself; a
@@ -106,21 +108,18 @@ handler persist_to_disk with branch_results = [] {
     fs_write_file_impl(path, image_pack(k))
     resume()
   },
-
-  // Checkpoint the whole image before running the branch, then retain the
+  persist_branch(thunk) => // Checkpoint the whole image before running the branch, then retain the
   // result in this live handler activation; a crashed branch re-enters from
   // its wire (the SPACE=TIME fork, §4④).
-  persist_branch(thunk) => {
+  {
     persist_checkpoint_thunk(thunk, len(branch_results))
-    let result = thunk()  // drift-audit: ignore — thunk() is the effectful branch body; result feeds the with-clause accumulator, not chain position
+    // drift-audit: ignore — thunk() is the effectful branch body; result feeds the with-clause accumulator, not chain position
+    let result = thunk()
     resume(PersistHandle(len(branch_results))) with branch_results = push(branch_results, result)
   },
-
-  join_persist(branch) => {
-    let PersistHandle(idx) = branch
-    resume(list_index(branch_results, idx))
+  join_persist(branch) => match branch {
+    PersistHandle(idx) => resume(list_index(branch_results, idx)),
   },
-
 }
 
 fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Cast + Filesystem + Persist =

@@ -9,10 +9,12 @@
 // driver's dep walk — memory (the substrate ops), strings, lists,
 // threading. The wheel's own one-namespace concatenation reads these as
 // inert statements; the driver reads them as the dep DAG.
-
 import runtime/memory
+
 import runtime/strings
+
 import runtime/lists
+
 import runtime/threading
 
 // ─── Bool (HB) ──────────────────────────────────────────────
@@ -20,21 +22,18 @@ import runtime/threading
 // i32 truthiness convention so `(if cond ...)` works directly.
 // Both compile to (i32.const N); zero allocation. The substrate
 // has ONE story for tagged values; Bool is its canonical instance.
-
+//
 // The vocabulary's own carrier type — ONE home (the wheel's types.mn
 // points here; a rung linking the prelude gets the constructors the
 // stage fns speak in).
-type Option
-  = None
-  | Some(a)
+type Option = None | Some(a)
 
 type Bool = False | True
 
 // ─── The Iterate Effect ─────────────────────────────────────
 // One effect. Every collection operation is a handler on it.
-
 effect Iterate {
-  yield(element) -> ()
+  yield(element)
   // result() DELIVERS the handler's collected value — the accumulator for
   // fold, [b] for map, the count for count — so its return type IS the
   // handler's result, polymorphic in `r` (the case rule; `r` = a type param).
@@ -63,9 +62,12 @@ effect Iterate {
 // the Iterate instance args died exactly there, orphaning every
 // fold-family element. Source order kills this instance; the class
 // (order-independent verdicts) is the named peer in PLAN.
-fn iterate_from(xs, i, n) with Iterate =
-  if i < n { yield(xs[i]); iterate_from(xs, i + 1, n) }
-  else { () }
+fn iterate_from(xs, i, n) with Iterate = if i < n {
+  yield(xs[i])
+  iterate_from(xs, i + 1, n)
+} else {
+  ()
+}
 
 fn iterate(xs) with Iterate + Alloc + Memory = iterate_from(list_to_flat(xs), 0, len(xs))
 
@@ -92,71 +94,80 @@ fn iterate(xs) with Iterate + Alloc + Memory = iterate_from(list_to_flat(xs), 0,
 // use named handlers + ~> pipe — uniform with map/filter/take/drop.
 // Per Hβ.prelude-ultimate-form (2026-05-14): all iteration operations
 // use the canonical ~> pipe verb form per SYNTAX.md §1466-1468.
-
 handler map_collector(f) with buf = make_list(16), count = 0 {
   yield(elem) => {
     let v = f(elem)
     let extended = list_extend_to(buf, count + 1)
-    let written  = list_set(extended, count, v)
+    let written = list_set(extended, count, v)
     resume() with buf = written, count = count + 1
   },
-  result() => resume(list_to_flat(slice(buf, 0, count)))
+  result() => resume(list_to_flat(slice(buf, 0, count))),
 }
 
 handler filter_collector(pred) with buf = make_list(16), count = 0 {
-  yield(elem) =>
-    if pred(elem) {
-      let extended = list_extend_to(buf, count + 1)
-      let written  = list_set(extended, count, elem)
-      resume() with buf = written, count = count + 1
-    } else {
-      resume()
-    },
-  result() => resume(list_to_flat(slice(buf, 0, count)))
+  yield(elem) => if pred(elem) {
+    let extended = list_extend_to(buf, count + 1)
+    let written = list_set(extended, count, elem)
+    resume() with buf = written, count = count + 1
+  } else {
+    resume()
+  },
+  result() => resume(list_to_flat(slice(buf, 0, count))),
 }
 
 handler take_collector(n) with buf = make_list(16), count = 0, remaining = n {
-  yield(elem) =>
-    if remaining > 0 {
-      let extended = list_extend_to(buf, count + 1)
-      let written  = list_set(extended, count, elem)
-      resume() with buf = written, count = count + 1, remaining = remaining - 1
-    } else {
-      resume()
-    },
-  result() => resume(list_to_flat(slice(buf, 0, count)))
+  yield(elem) => if remaining > 0 {
+    let extended = list_extend_to(buf, count + 1)
+    let written = list_set(extended, count, elem)
+    resume() with buf = written, count = count + 1, remaining = remaining - 1
+  } else {
+    resume()
+  },
+  result() => resume(list_to_flat(slice(buf, 0, count))),
 }
 
 handler drop_collector(n) with buf = make_list(16), count = 0, skipped = 0 {
-  yield(elem) =>
-    if skipped < n {
-      resume() with skipped = skipped + 1
-    } else {
-      let extended = list_extend_to(buf, count + 1)
-      let written  = list_set(extended, count, elem)
-      resume() with buf = written, count = count + 1
-    },
-  result() => resume(list_to_flat(slice(buf, 0, count)))
+  yield(elem) => if skipped < n {
+    resume() with skipped = skipped + 1
+  } else {
+    let extended = list_extend_to(buf, count + 1)
+    let written = list_set(extended, count, elem)
+    resume() with buf = written, count = count + 1
+  },
+  result() => resume(list_to_flat(slice(buf, 0, count))),
 }
 
 // General collector — for direct user use when materializing arbitrary
 // yields without transform. `{ source_emitting_yields() } ~> collector`.
-
 handler collector with buf = make_list(16), count = 0 {
   yield(elem) => {
     let extended = list_extend_to(buf, count + 1)
-    let written  = list_set(extended, count, elem)
+    let written = list_set(extended, count, elem)
     resume() with buf = written, count = count + 1
   },
-  result() => resume(list_to_flat(slice(buf, 0, count)))
+  result() => resume(list_to_flat(slice(buf, 0, count))),
 }
 
 // List-producing operations — single fused handler per op.
+fn map(f, xs) = {
+  iterate(xs)
+  result()
+} ~> map_collector(f)
 
-fn map(f, xs)     = { iterate(xs); result() } ~> map_collector(f)
-fn filter(p, xs)  = { iterate(xs); result() } ~> filter_collector(p)
-fn take(n, xs)    = { iterate(xs); result() } ~> take_collector(n)
-fn drop(n, xs)    = { iterate(xs); result() } ~> drop_collector(n)
+fn filter(p, xs) = {
+  iterate(xs)
+  result()
+} ~> filter_collector(p)
+
+fn take(n, xs) = {
+  iterate(xs)
+  result()
+} ~> take_collector(n)
+
+fn drop(n, xs) = {
+  iterate(xs)
+  result()
+} ~> drop_collector(n)
 
 // Scalar-producing operations — named handler + ~> pipe form.
 // Per Hβ.prelude-ultimate-form (2026-05-14): the inline handle-block
@@ -165,89 +176,134 @@ fn drop(n, xs)    = { iterate(xs); result() } ~> drop_collector(n)
 // map/filter/take/drop above, and the PTee path pushes the handler
 // stack and carries the row algebra `(body − E) ⊕ R` live. Zero
 // call-site changes — function signatures unchanged.
-
 handler fold_handler(f, init) with acc = init {
   yield(elem) => resume() with acc = f(acc, elem),
-  result() => resume(acc)
+  result() => resume(acc),
 }
 
 handler each_handler(f) {
-  yield(elem) => { f(elem); resume() }
+  yield(elem) => {
+    f(elem)
+    resume()
+  },
 }
 
 handler any_handler(pred) with found = false {
   yield(elem) => if pred(elem) { resume() with found = true } else { resume() },
-  result() => resume(found)
+  result() => resume(found),
 }
 
 handler all_handler(pred) with ok = true {
   yield(elem) => if pred(elem) { resume() } else { resume() with ok = false },
-  result() => resume(ok)
+  result() => resume(ok),
 }
 
 handler find_handler(pred) with found = None {
   yield(elem) => match found {
     Some(_) => resume(),
-    None    => if pred(elem) { resume() with found = Some(elem) } else { resume() },
+    None => if pred(elem) { resume() with found = Some(elem) } else { resume() },
   },
-  result() => resume(found)
+  result() => resume(found),
 }
 
 handler count_handler(pred) with n = 0 {
   yield(elem) => if pred(elem) { resume() with n = n + 1 } else { resume() },
-  result() => resume(n)
+  result() => resume(n),
 }
 
 // Scalar-producing operations — ~> pipe with named handlers.
+fn fold(init, f, xs) = {
+  iterate(xs)
+  result()
+} ~> fold_handler(f, init)
 
-fn fold(init, f, xs) = { iterate(xs); result() } ~> fold_handler(f, init)
-fn each(f, xs)   = { iterate(xs) } ~> each_handler(f)
-fn any(pred, xs)     = { iterate(xs); result() } ~> any_handler(pred)
-fn all(pred, xs)     = { iterate(xs); result() } ~> all_handler(pred)
-fn find(pred, xs)    = { iterate(xs); result() } ~> find_handler(pred)
-fn count(pred, xs)   = { iterate(xs); result() } ~> count_handler(pred)
+fn each(f, xs) = {
+  iterate(xs)
+} ~> each_handler(f)
+
+fn any(pred, xs) = {
+  iterate(xs)
+  result()
+} ~> any_handler(pred)
+
+fn all(pred, xs) = {
+  iterate(xs)
+  result()
+} ~> all_handler(pred)
+
+fn find(pred, xs) = {
+  iterate(xs)
+  result()
+} ~> find_handler(pred)
+
+fn count(pred, xs) = {
+  iterate(xs)
+  result()
+} ~> count_handler(pred)
 
 // ─── Derived (built on the handlers above) ──────────────────
-
 fn head(xs) = xs[0]
+
 fn rest(xs) = slice(xs, 1, len(xs))
+
 fn reverse(xs) = fold([], (acc, x) => [x] ++ acc, xs)
+
 fn flatten(xss) = fold([], (acc, xs) => acc ++ xs, xss)
+
 fn flat_map(f, xs) = flatten(map(f, xs))
+
 fn sum(xs) = fold(0, (acc, x) => acc + x, xs)
+
 fn product(xs) = fold(1, (acc, x) => acc * x, xs)
+
 fn concat(xss) = flatten(xss)
+
 fn reduce(xs, f) = fold(head(xs), f, rest(xs))
 
-fn zip_with(f, xs, ys) = if len(xs) == 0 || len(ys) == 0 { [] }
-  else { [f(xs[0], ys[0])] ++ zip_with(f, rest(xs), rest(ys)) }
+fn zip_with(f, xs, ys) =
+  if len(xs) == 0 || len(ys) == 0 { [] } else { [f(xs[0], ys[0])] ++ zip_with(f, rest(xs), rest(ys)) }
+
 fn zip(xs, ys) = zip_with((a, b) => (a, b), xs, ys)
 
 fn enumerate(xs) = zip(range(0, len(xs)), xs)
+
 fn unique(xs) = fold([], (acc, x) => if any((a) => a == x, acc) { acc } else { push(acc, x) }, xs)
 
 fn partition(pred, xs) = (filter(pred, xs), filter((x) => !pred(x), xs))
+
 fn range_inclusive(start, end) = range(start, end + 1)
+
 fn intersperse(sep, xs) = if len(xs) <= 1 { xs } else { [xs[0], sep] ++ intersperse(sep, rest(xs)) }
-fn scanl(xs, init, f) = if len(xs) == 0 { [init] } else { let next = f(init, xs[0]); [init] ++ scanl(rest(xs), next, f) }
+
+fn scanl(xs, init, f) = if len(xs) == 0 {
+  [init]
+} else {
+  let next = f(init, xs[0])
+  [init] ++ scanl(rest(xs), next, f)
+}
+
 fn repeat(n, x) = if n <= 0 { [] } else { [x] ++ repeat(n - 1, x) }
+
 fn chunk(n, xs) = if len(xs) == 0 { [] } else { [take(n, xs)] ++ chunk(n, drop(n, xs)) }
 
 // ─── Aggregation with projection ────────────────────────────
-
 fn sum_by(f, xs) = fold(0, (acc, x) => acc + f(x), xs)
+
 fn max_by(f, xs) = reduce(xs, (a, b) => if f(a) >= f(b) { a } else { b })
+
 fn min_by(f, xs) = reduce(xs, (a, b) => if f(a) <= f(b) { a } else { b })
 
 // ─── Composition ────────────────────────────────────────────
 // compose IS <> for when you need a function instead of syntax.
 // id is the identity element: f <> id = f, id <> f = f.
 // build_pipeline folds a list of functions into one composed pipeline.
-
+//
 // compose matches <> — f first, then g. Left to right.
 // x |> (f <> g) = x |> f |> g
 fn compose(f, g) = (x) => g(f(x))
+
 fn id(x) with Pure = x
+
 fn not(x) with Pure = if x { false } else { true }
 
 // Build a pipeline from a list of functions. Fold with compose.
@@ -255,14 +311,15 @@ fn not(x) with Pure = if x { false } else { true }
 fn build_pipeline(steps) = fold(id, (acc, step) => (x) => step(acc(x)), steps)
 
 // ─── Safe access ────────────────────────────────────────────
-
 fn nth(xs, n, default) = if n >= 0 && n < len(xs) { xs[n] } else { default }
 
 // ─── Math ───────────────────────────────────────────────────
-
 fn min(a, b) with Pure = if a <= b { a } else { b }
+
 fn max(a, b) with Pure = if a <= b { b } else { a }
+
 fn clamp(x, lo, hi) with Pure = min(max(x, lo), hi)
+
 // Float-typed by its own literals: every caller in the corpus is a dsp
 // Float site, and the old `0` pins made abs Int -> Int — each forward
 // call site unified Float against the LOOSE pre-scheme while the compiled
@@ -272,37 +329,42 @@ fn clamp(x, lo, hi) with Pure = min(max(x, lo), hi)
 fn abs(x) with Pure = if x < 0.0 { 0.0 - x } else { x }
 
 // ─── Sort (merge sort — pure, not an Iterate handler) ───────
-
-fn merge(xs, ys) = {
-  if len(xs) == 0 { ys }
-  else { if len(ys) == 0 { xs }
-  else { if xs[0] <= ys[0] { [xs[0]] ++ merge(rest(xs), ys) }
-  else { [ys[0]] ++ merge(xs, rest(ys)) } } }
-}
-
-fn sort(xs) = {
-  if len(xs) <= 1 { xs }
-  else {
-    let mid = len(xs) / 2
-    merge(sort(slice(xs, 0, mid)), sort(slice(xs, mid, len(xs))))
+fn merge(xs, ys) = if len(xs) == 0 {
+  ys
+} else {
+  if len(ys) == 0 {
+    xs
+  } else {
+    if xs[0] <= ys[0] { [xs[0]] ++ merge(rest(xs), ys) } else { [ys[0]] ++ merge(xs, rest(ys)) }
   }
 }
 
-// ─── String operations (pure Mentl) ───────────────────────────
+fn sort(xs) = if len(xs) <= 1 {
+  xs
+} else {
+  let mid = len(xs) / 2
+  merge(sort(slice(xs, 0, mid)), sort(slice(xs, mid, len(xs))))
+}
 
+// ─── String operations (pure Mentl) ───────────────────────────
+//
 // Explicit recursive loop — avoids fold's polymorphic-lambda issue where
 // the concat inside `|acc, x| acc ++ sep ++ x` gets committed to list_concat // drift-audit: ignore
 // via prelude-first-use type inference. Explicit str_concat threads the
 // String type directly through the loop, no polymorphism, no ambiguity.
-fn join_loop(xs, sep, i, acc) = {
-  if i >= len(xs) { acc }
-  else { join_loop(xs, sep, i + 1, acc ++ sep ++ xs[i]) }
-}
+fn join_loop(xs, sep, i, acc) =
+  if i >= len(xs) { acc } else { join_loop(xs, sep, i + 1, acc ++ sep ++ xs[i]) }
+
 fn join(xs, sep) = if len(xs) == 0 { "" } else { join_loop(xs, sep, 1, xs[0]) }
+
 fn words(s) = split(s, " ")
+
 fn unwords(ws) = join(ws, " ")
+
 fn lines(s) = split(s, "\n")
+
 fn unlines(ls) = join(ls, "\n")
+
 // String functions use str_slice (byte-level) not slice (list-level).
 // This separation is load-bearing for WASM: the HM checker doesn't
 // instantiate user-defined generic functions, so all call sites of
@@ -317,34 +379,46 @@ fn unlines(ls) = join(ls, "\n")
 // mentl server routed every "/dir/" request to a 404 (2026-07-10). The
 // param pins alone were refuted at the artifact; §4① String=[Byte]
 // dissolves the residue.
-fn starts_with(s: String, prefix: String) = byte_len(s) >= byte_len(prefix) && str_eq(str_slice(s, 0, byte_len(prefix)), prefix)
-fn ends_with(s: String, suffix: String) = byte_len(s) >= byte_len(suffix) && str_eq(str_slice(s, byte_len(s) - byte_len(suffix), byte_len(s)), suffix)
+fn starts_with(s: String, prefix: String) =
+  byte_len(s) >= byte_len(prefix) && str_eq(str_slice(s, 0, byte_len(prefix)), prefix)
+
+fn ends_with(s: String, suffix: String) =
+  byte_len(s) >= byte_len(suffix) && str_eq(str_slice(s, byte_len(s) - byte_len(suffix), byte_len(s)), suffix)
+
 fn contains(s: String, sub: String) = index_of(s, sub) >= 0
+
 fn index_of(s: String, sub: String) = {
   let slen = byte_len(s)
   let sublen = byte_len(sub)
-  fn search(i) =
-    if i + sublen > slen { 0 - 1 }
-    else { if str_eq(str_slice(s, i, i + sublen), sub) { i } else { search(i + 1) } }
+  fn search(i) = if i + sublen > slen {
+    0 - 1
+  } else {
+    if str_eq(str_slice(s, i, i + sublen), sub) { i } else { search(i + 1) }
+  }
   search(0)
 }
+
 fn replace(s, old, new) = {
   let idx = index_of(s, old)
-  if idx < 0 { s }
-  else { str_slice(s, 0, idx) ++ new ++ replace(str_slice(s, idx + byte_len(old), byte_len(s)), old, new) }
+  if idx < 0 {
+    s
+  } else {
+    str_slice(s, 0, idx) ++ new ++ replace(str_slice(s, idx + byte_len(old), byte_len(s)), old, new)
+  }
 }
+
 fn trim(s) = {
   let n = byte_len(s)
   fn is_ws(b) = b == 32 || b == 9 || b == 10 || b == 13
   fn trim_left(i) = if i >= n { i } else { if is_ws(byte_at(s, i)) { trim_left(i + 1) } else { i } }
-  fn trim_right(i) = if i <= 0 { 0 } else { if is_ws(byte_at(s, i - 1)) { trim_right(i - 1) } else { i } }
+  fn trim_right(i) =
+    if i <= 0 { 0 } else { if is_ws(byte_at(s, i - 1)) { trim_right(i - 1) } else { i } }
   let start = trim_left(0)
   let end = trim_right(n)
   if start >= end { "" } else { str_slice(s, start, end) }
 }
 
 // ─── Parsing (pure Mentl) ─────────────────────────────────────
-
 fn parse_int(s) = {
   let n = byte_len(s)
   fn digit(b) = b - 48
@@ -360,11 +434,7 @@ fn parse_int(s) = {
 // file re-uses it and adds the handful of helpers every program
 // wants, plus Result (which the compiler does not need but user
 // programs do).
-
-
-type Result
-  = Ok(a)
-  | Err(e)
+type Result = Ok(a) | Err(e)
 
 // Failure IS an effect — the kernel's answer to bottom. `fail` never
 // resumes, so its polymorphic return unifies with any consumer; the
@@ -372,20 +442,58 @@ type Result
 // exits; a test handler collects instead). Fail is distinct from the
 // control-cut Abort effect: their declarations must never share identity.
 effect Fail {
-  fail(msg: String) -> a
+  fail(String) -> a
 }
 
-fn unwrap(opt)            = match opt { Some(v) => v, None => fail("unwrap on None") }
-fn unwrap_or(opt, default) = match opt { Some(v) => v, None => default }
-fn is_some(opt)           = match opt { Some(_) => true,  None => false }
-fn is_none(opt)           = match opt { Some(_) => false, None => true }
-fn map_option(f, opt)     = match opt { Some(v) => Some(f(v)), None => None }
-fn and_then(f, opt)       = match opt { Some(v) => f(v),       None => None }
+fn unwrap(opt) = match opt {
+  Some(v) => v,
+  None => fail("unwrap on None"),
+}
 
-fn ok(res)        = match res { Ok(v) => Some(v), Err(_) => None }
-fn err_val(res)   = match res { Ok(_) => None,    Err(e) => Some(e) }
-fn is_ok(res)     = match res { Ok(_) => true,    Err(_) => false }
-fn map_result(f, res) = match res { Ok(v) => Ok(f(v)), Err(e) => Err(e) }
+fn unwrap_or(opt, default) = match opt {
+  Some(v) => v,
+  None => default,
+}
+
+fn is_some(opt) = match opt {
+  Some(_) => true,
+  None => false,
+}
+
+fn is_none(opt) = match opt {
+  Some(_) => false,
+  None => true,
+}
+
+fn map_option(f, opt) = match opt {
+  Some(v) => Some(f(v)),
+  None => None,
+}
+
+fn and_then(f, opt) = match opt {
+  Some(v) => f(v),
+  None => None,
+}
+
+fn ok(res) = match res {
+  Ok(v) => Some(v),
+  Err(_) => None,
+}
+
+fn err_val(res) = match res {
+  Ok(_) => None,
+  Err(e) => Some(e),
+}
+
+fn is_ok(res) = match res {
+  Ok(_) => true,
+  Err(_) => false,
+}
+
+fn map_result(f, res) = match res {
+  Ok(v) => Ok(f(v)),
+  Err(e) => Err(e),
+}
 
 // ─── Feedback specs — the `<~` verb's RHS contract ──────────────────
 //
@@ -395,12 +503,10 @@ fn map_result(f, res) = match res { Ok(v) => Ok(f(v)), Err(e) => Err(e) }
 // prior outputs through coefficient taps. The spec names WHAT flows
 // back; the installed iterative handler (Sample/Tick/Clock) decides
 // WHEN the cycle advances.
-
-type FeedbackSpec
-  = Delay(Int)
-  | Accumulate(a)
-  | FilterSpec(Int, [Float])
+type FeedbackSpec = Delay(Int) | Accumulate(a) | FilterSpec(Int, [Float])
 
 fn delay(n) = Delay(n)
+
 fn accumulate(init) = Accumulate(init)
+
 fn filter_spec(n, coeffs) = FilterSpec(n, coeffs)

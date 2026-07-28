@@ -1092,6 +1092,88 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶▶▶ THE SPLICE TELLS THE TRUTH — four roots under one
+  law, and the canonical page lands (the fmt summit closes ·
+  pin a971601e). The whole-wheel sweep's red legs reduced to FOUR
+  Carried-Truth violations at four layers, each measured before fixed:
+  (1) THE FORMATTER BORROWED THE VOICE at the predicate — RefineStmt/
+  TRefined rendered through show_predicate, whose call arm compresses
+  arguments to `(...)` (diagnostic economy), and the canonical page
+  DESTROYED authored refinements (`len(self)` → `len(...)`, a parse
+  break the render register then scoped out of the user's stderr — the
+  fmt-rung-2 disease one projection over). render_predicate_tokens is
+  the formatter's own parse-inverse projection: operands are node
+  HANDLES read live through render_body_tokens, the cmp glyph is
+  binop_to_str (total — never show_cmp_op's `?` floor), precedence-
+  inverse grouping at the predicate altitude; and the VOICE's shadowing
+  `(...)` arm DELETED — show_pred_operand carried two CallExpr arms
+  since 10b79aa8, the compressor above shadowing the args-rendering arm
+  below, dead since birth. (2) THE LINE RIDES EVERY SCAN RETURN — the
+  string scanner's splice-termination and every chunk flush returned
+  (pos, col, buf, count) with NO line, so every token after a splice
+  spanning newlines carried spans stale by the splice's height: the
+  whole-weave address collapse (nodes lying about their lines resolve
+  to nothing but the module placeholder — the fan legs' red), the
+  register's silent mute (the P_ narration landed outside the user's
+  range), and warm-inc's span-keyed cone misattribution (the
+  incremental emission carrying the patch's OLD constant) were ONE
+  dropped tuple field, found by splice-bisecting the 51-file sweep to
+  one decl and that decl to one rendered spelling. Every scan return
+  widened to carry the live line; the chunk scan counts raw newlines
+  (Hβ.lexer.string-newline-refusal named for the single-line form's
+  refusal question). (3) A SPLICE KEEPS ITS OWN TYPE —
+  unify_string_fragments bound EVERY fragment to String (the
+  pre-structural-show era's rule, contradicting SYNTAX's own law);
+  deleted whole, and lower wraps each splice fragment in the structural
+  LShow (the implicit to_string, dispatched at emit from the operand's
+  live type — String rides the identity arm). Hβ.emit.int-splice-empty
+  CLOSED at both halves: "I{7}J" rendered empty in EVERY user program
+  ever (str_concat read the raw word as a null-page string) while the
+  wheel dodged by spelling int_to_str at every one of its own splices.
+  (4) THE UNMASKING — with fragments no longer forced String, a param
+  used ONLY in a splice generalizes, and the word-floor copy shows a
+  String operand as a pointer numeral: spec_mangle minted garbage twin
+  names and the redrive liveness probe (an HOF lambda the twin
+  machinery cannot serve) dropped the def while installs kept the
+  calls — m3 emitted 16 redrive references and no definition, the
+  march's BROKEN verdict catching internally-inconsistent output
+  (332 → 18 → 0 diff lines across the three pins of the dig).
+  spec_mangle and the new one-home arm_fn_name pin String (Intent
+  Boundaries, load-bearing); the show floor writes its census marker
+  (`;; show on unresolved operand` — 52 on the wheel;
+  Hβ.emit.show-free-floor carries the triage: a firing site is a
+  generic the twins did not serve). THE CANONICAL PAGE: 51/51 files
+  rendered canonical with prose conserved, TREE-IDEMPOTENT at two
+  consecutive whole-wheel sweeps; the refinements survive verbatim
+  modulo comparison canonicalization (authored `len(self) > 0` renders
+  `0 < len(self)`, stable on reparse). GATES seen RED on the prior
+  boot: mn-int-splice (15 → 42; the four splice faces incl. the
+  multi-line nested-string call) and mn-splice-line-carry (module
+  placeholder → the decl resolves). THE INTERMEDIATE PIN'S OWN GATES
+  then convicted the floor LIVE in the driver — driver_module_path's
+  floor'd splices minted pointer-numeral paths, fs_exists refused every
+  module, the warm manifest hashed ALL ZEROS (the WINCPROBE census:
+  cur=0 old=0 for every module — the incremental compile blind to every
+  edit, "image current" on a patched tree) — so the measured liars
+  pinned String (driver_module_path, contains_module,
+  ownership_suggestion, show_one_rejection's pair, and render_gradients'
+  element with its line mint hoisted to the pinned render_gradient_line
+  — the map lambda's splice judged datum-last while the element was
+  still free, so the pin had to anchor at a named call; Intent
+  Boundaries, comment-anchored), and
+  at_run's diag_errors() refusal DELETED: branch-judged errors never
+  reached the root count before the join carried them truthfully, so
+  the guard had never fired — armed by the truth, it refused exactly
+  the error-carrying files the address projection exists to serve
+  (productive-under-error IS the address contract; the README's own
+  voice.mn:9 answers OVER its unresolved mix). TRANSITION m3 == m4 at
+  331,182 lines through the interp crossing, then CLEAN m2 == m3 at
+  330,323 with the repair set; census 0; show-floor markers 52 → 44 as
+  the pins landed. The two banked fmt legs
+  (idempotence, the __dp re-sugar) green with this pin — 1d1f8945
+  landed source + gates but never re-pinned; this pin carries both.
+  Board whole at the pin: frontier 288/0; proof-exactness 9/9;
+  crown 5/5; comment-refs 0; doc-truth green.
 - 2026-07-28 · ▶ THE README RIDES THE GRADIENT — a door, then two lanes
   (no re-pin — docs + one tutorial comment; the readme-gradient research
   pass's design executed, its report in the session scratchpad). The

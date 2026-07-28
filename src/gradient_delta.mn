@@ -50,13 +50,18 @@
 //   Drift 9 (deferred):     All three delta paths bodied; refinement-
 //                           delta uses Predicate ADT structurally,
 //                           drift-9-safe under wheel-canonical reads.
-
 import types
+
 import graph
+
 import effects
+
 import infer
+
 import own
+
 import mentl
+
 import cursor
 
 // ─── The Delta effect ───────────────────────────────────────────────
@@ -65,18 +70,14 @@ import cursor
 // of this fn's signature?" Each op returns Option(AnnotationSuggestion).
 // The Cursor handler's CursorView.teach field reads through delta_pick
 // when the inverse-direction gradient should fire.
-
 effect Delta {
   /// The inverse-direction gradient at one fn handle. Returns the
   /// single highest-leverage tightening or None.
   delta_pick(Handle) -> Option(AnnotationSuggestion)
-
   /// Effect-row tightening only (body row narrower than declared).
   delta_effect_row(Handle) -> Option(AnnotationSuggestion)
-
   /// Ownership tightening only (Unmarked → Own/Ref classification).
   delta_ownership(Handle) -> Option(AnnotationSuggestion)
-
   /// Refinement tightening only (return-type sub-range opportunity).
   delta_refinement(Handle) -> Option(AnnotationSuggestion)
 }
@@ -89,9 +90,7 @@ effect Delta {
 //
 // `with !Mutate` — read-only over graph + env; same constraint as
 // cursor_default's projection per protocol_oracle_is_ic.md.
-
-handler delta_default with !Mutate {
-
+handler delta_default {
   delta_pick(handle) => {
     let row_delta = delta_effect_row(handle)
     match row_delta {
@@ -100,19 +99,17 @@ handler delta_default with !Mutate {
         let own_delta = delta_ownership(handle)
         match own_delta {
           Some(_) => resume(own_delta),
-          None => resume(delta_refinement(handle))
+          None => resume(delta_refinement(handle)),
         }
-      }
+      },
     }
   },
-
-  // ── Effect-row delta ──────────────────────────────────────────────
+  delta_effect_row(handle) => // ── Effect-row delta ──────────────────────────────────────────────
   // Per GR §2 effect-row delta site: when declared_effs is empty, the
   // body row is inferred but never compared. Gradient step: "declare
   // `with <inferred_row>` to make the contract explicit."
-  delta_effect_row(handle) => {
-    let GNode(kind, _) = graph_chase(handle)
-    match kind {
+  match graph_chase(handle) {
+    GNode(kind, _) => match kind {
       NBound(ty) => match ty {
         TFun(_, _, body_row) => {
           // The declared with-clause lives on the FnStmt node the same
@@ -120,58 +117,49 @@ handler delta_default with !Mutate {
           // phantom DeltaQuery effect re-deriving what parse already proved
           // (Carried-Truth). An empty effs list = no declaration.
           let declared_row = match graph_node_body(handle) {
-            NStmt(FnStmt(_, _, _, effs, _)) =>
-              if len(effs) > 0 { Some(build_declared_row(effs)) } else { None },
-            _ => None
+            NStmt(FnStmt(_, _, _, effs, _)) => if len(effs) > 0 { Some(build_declared_row(effs)) } else { None },
+            _ => None,
           }
           match declared_row {
-            None => {
-              // No declaration; suggest the inferred row.
-              if row_is_pure(body_row) {
-                resume(Some(row_suggestion(handle, "with Pure",
-                  ["CMemoize", "CCompileTimeEval", "CParallelize"])))
-              } else {
-                resume(Some(row_suggestion(handle,
-                  row_to_with_clause(body_row),
-                  capabilities_unlocked_by(body_row))))
-              }
+            None => // No declaration; suggest the inferred row.
+            if row_is_pure(body_row) {
+              resume(Some(row_suggestion(handle, "with Pure", ["CMemoize", "CCompileTimeEval", "CParallelize"])))
+            } else {
+              resume(Some(row_suggestion(handle, row_to_with_clause(body_row), capabilities_unlocked_by(body_row))))
             },
-            Some(decl) =>
-              if row_strictly_narrower(body_row, decl) {
-                // Body provably narrower than declaration; suggest
-                // tightening the declaration to match.
-                resume(Some(row_suggestion(handle,
-                  row_to_with_clause(body_row),
-                  capabilities_unlocked_by_tightening(decl, body_row))))
-              } else {
-                resume(None)
-              }
+            Some(decl) => if row_strictly_narrower(body_row, decl) {
+              // Body provably narrower than declaration; suggest
+              // tightening the declaration to match.
+              resume(Some(row_suggestion(
+                handle,
+                row_to_with_clause(body_row),
+                capabilities_unlocked_by_tightening(decl, body_row)
+              )))
+            } else {
+              resume(None)
+            },
           }
         },
-        _ => resume(None)
+        _ => resume(None),
       },
-      _ => resume(None)
-    }
+      _ => resume(None),
+    },
   },
-
-  // ── Ownership delta ───────────────────────────────────────────────
+  delta_ownership(handle) => // ── Ownership delta ───────────────────────────────────────────────
   // Per GR §2 ownership delta site: infer_ownership classifies
   // Unmarked params into Own/Ref/Unmarked. When a param classified
   // as Own at proof-time, the gradient suggests `own` to make the
   // consumption discipline explicit.
-  delta_ownership(handle) => {
-    let GNode(kind, _) = graph_chase(handle)
-    match kind {
+  match graph_chase(handle) {
+    GNode(kind, _) => match kind {
       NBound(ty) => match ty {
-        TFun(params, _, _) =>
-          resume(first_inferred_with_classification(params, handle)),
-        _ => resume(None)
+        TFun(params, _, _) => resume(first_inferred_with_classification(params, handle)),
+        _ => resume(None),
       },
-      _ => resume(None)
-    }
+      _ => resume(None),
+    },
   },
-
-  // ── Refinement delta ──────────────────────────────────────────────
+  delta_refinement(handle) => // ── Refinement delta ──────────────────────────────────────────────
   // The inverse-gradient's refinement axis reads the LIVE value-flow the
   // graph already proves: infer_refinement_narrowing wrote a path-predicate
   // at every program-point it could narrow (graph_narrow_set), and
@@ -182,111 +170,92 @@ handler delta_default with !Mutate {
   // it live, never re-present the Verify backlog (the DISSOLVED
   // verify_pending was that re-derivation). The predicate IS the Expr the narrowing
   // edge points at — read via graph_node_body, no PExpr re-walk.
-  delta_refinement(handle) => {
-    let GNode(kind, _) = graph_chase(handle)
-    match kind {
+  match graph_chase(handle) {
+    GNode(kind, _) => match kind {
       NBound(ty) => match ty {
         TFun(_, _, _) => {
           let body_handle = fn_body_handle(handle)
           let narrow_pred = graph_narrow_at(body_handle)
-          if narrow_pred == 0 { resume(None) }
-          else {
+          if narrow_pred == 0 {
+            resume(None)
+          } else {
             // The narrowing pointer is a bool-node handle: PBoolNode(h) is the
             // predicate that IS that Expr (show_predicate reads it live). Reuse
             // the one refinement_suggestion projection — no second walk.
             resume(Some(refinement_suggestion(handle, PBoolNode(narrow_pred))))
           }
         },
-        _ => resume(None)
+        _ => resume(None),
       },
-      _ => resume(None)
-    }
-  }
+      _ => resume(None),
+    },
+  },
 }
 
 // ─── Per-axis suggestion constructors ──────────────────────────────
+fn row_suggestion(handle, ann_text, capability_labels) with Pure = AnnotationSuggestion(
+  SuggestEffectRow,
+  ann_text,
+  capability_labels,
+  Located(span_zero(), Inferred("inferred-row tightening — body proves narrower than declaration"))
+)
 
-fn row_suggestion(handle, ann_text, capability_labels) with Pure = {
-  AnnotationSuggestion(
-    SuggestEffectRow,
-    ann_text,
-    capability_labels,
-    Located(span_zero(),
-      Inferred("inferred-row tightening — body proves narrower than declaration"))
-  )
-}
+fn ownership_suggestion(param_name: String, marker_text: String, capability_labels) with Memory + Alloc = AnnotationSuggestion(
+  SuggestOwnership,
+  "{marker_text} {param_name}",
+  capability_labels,
+  Located(span_zero(), Inferred("inferred-ownership classification — single-use proof"))
+)
 
-fn ownership_suggestion(param_name, marker_text, capability_labels) with Memory + Alloc = {
-  AnnotationSuggestion(
-    SuggestOwnership,
-    "{marker_text} {param_name}",
-    capability_labels,
-    Located(span_zero(),
-      Inferred("inferred-ownership classification — single-use proof"))
-  )
-}
-
-fn refinement_suggestion(handle, predicate) with Memory + Alloc + GraphRead = {
-  AnnotationSuggestion(
-    SuggestRefinement,
-    predicate_to_where_clause(predicate),
-    ["CEliminateBoundsCheck"],
-    Located(span_zero(),
-      Inferred("pending verify obligation — refinement could land at the type"))
-  )
-}
+fn refinement_suggestion(handle, predicate) with Memory + Alloc + GraphRead = AnnotationSuggestion(
+  SuggestRefinement,
+  predicate_to_where_clause(predicate),
+  ["CEliminateBoundsCheck"],
+  Located(span_zero(), Inferred("pending verify obligation — refinement could land at the type"))
+)
 
 // ─── Helpers — walking the graph for delta candidates ──────────────
-
+//
 // The fn's body Node handle, read LIVE from the FnStmt the handle names. The
 // narrowing weave (graph_narrow_at) is keyed by program-point handle, so the
 // refinement proven at the fn's return is read at its body handle. The fn
 // handle itself when no FnStmt body is registered (a non-fn or bare node).
-fn fn_body_handle(handle) with GraphRead + !Mutate = {
-  match graph_node_body(handle) {
-    NStmt(FnStmt(_, _, _, _, body)) => {
-      let N(_, _, bh) = body
-      bh
+fn fn_body_handle(handle) with GraphRead + !Mutate = match graph_node_body(handle) {
+  NStmt(FnStmt(_, _, _, _, body)) => match body {
+    N(_, _, bh) => bh,
+  },
+  _ => handle,
+}
+
+fn first_inferred_with_classification(params, fn_handle) with Memory + Alloc = if len(params) == 0 {
+  None
+} else {
+  let p = last(params)
+  let name = param_name(p)
+  match param_authored(p) {
+    Unmarked => match param_resolved(p) {
+      Own => Some(ownership_suggestion(name, "own", ["CDeterministicDrop", "CZeroCopy"])),
+      Ref => Some(ownership_suggestion(name, "ref", ["CZeroCopy"])),
+      Unmarked => first_inferred_with_classification(drop_last(params), fn_handle),
     },
-    _ => handle
+    _ => first_inferred_with_classification(drop_last(params), fn_handle),
   }
 }
 
-fn first_inferred_with_classification(params, fn_handle) with Memory + Alloc = {
-  if len(params) == 0 { None }
-  else {
-    let p = last(params)
-    let name = param_name(p)
-    match param_authored(p) {
-      Unmarked => match param_resolved(p) {
-        Own => Some(ownership_suggestion(name, "own",
-                                          ["CDeterministicDrop", "CZeroCopy"])),
-        Ref => Some(ownership_suggestion(name, "ref",
-                                          ["CZeroCopy"])),
-        Unmarked =>
-          first_inferred_with_classification(drop_last(params), fn_handle)
-      },
-      _ =>
-        first_inferred_with_classification(drop_last(params), fn_handle)
-    }
-  }
-}
-
-fn row_is_pure(row) with Memory = {
-  let EfRow(p, _, t) = row
-  match t {
+fn row_is_pure(row) with Memory = match row {
+  EfRow(p, _, t) => match t {
     EtClosed => len(p) == 0,
-    _        => false
-  }
+    _ => false,
+  },
 }
 
-fn row_strictly_narrower(body_row, decl_row) with Memory + GraphRead + Alloc = {
-  // Body strictly narrower iff body subsumes decl AND decl does NOT
-  // subsume body. row_subsumes is from src/effects.mn.
-  if row_subsumes(decl_row, body_row) {
-    if row_subsumes(body_row, decl_row) { false }   // equal
-    else { true }                                    // strictly narrower
-  } else { false }
+// Body strictly narrower iff body subsumes decl AND decl does NOT
+// subsume body. row_subsumes is from src/effects.mn.
+fn row_strictly_narrower(body_row, decl_row) with Memory + GraphRead + Alloc = if row_subsumes(decl_row, body_row) {
+  // equal
+  if row_subsumes(body_row, decl_row) { false } else { true }
+} else {
+  false
 }
 
 // ─── Surface formatters — declaration text from row + predicate ────
@@ -294,38 +263,41 @@ fn row_strictly_narrower(body_row, decl_row) with Memory + GraphRead + Alloc = {
 // Each formatter produces the literal source-text the developer would
 // type to apply the suggestion. Per GR §3.2 AnnotationSuggestion: the
 // `annotation` field IS the literal source residue.
-
-fn row_to_with_clause(row) with Intern + Memory = {
-  // The literal source residue: presents as `with A + B`, the absent
-  // set as `!X` terms, an empty closed row as Pure; an open tail keeps
-  // the honest ellipsis (surfacing the var is the named follow-up).
-  let EfRow(p, a, t) = row
-  let pos = if len(p) == 0 { "" } else { eff_names_to_str(p) }
-  let negs = neg_names_to_str(a)
-  let joiner = if len(p) > 0 && len(a) > 0 { " + " } else { "" }
-  match t {
-    EtClosed => if len(p) == 0 && len(a) == 0 { "with Pure" }
-                else { "with {pos}{joiner}{negs}" },
-    EtAll    => if len(a) == 0 { "with ..." } else { "with {pos}{joiner}{negs}" },
-    EtVar(_) => "with ..."
-  }
+//
+// The literal source residue: presents as `with A + B`, the absent
+// set as `!X` terms, an empty closed row as Pure; an open tail keeps
+// the honest ellipsis (surfacing the var is the named follow-up).
+fn row_to_with_clause(row) with Intern + Memory = match row {
+  EfRow(p, a, t) => {
+    let pos = if len(p) == 0 { "" } else { eff_names_to_str(p) }
+    let negs = neg_names_to_str(a)
+    let joiner = if len(p) > 0 && len(a) > 0 { " + " } else { "" }
+    match t {
+      EtClosed => if len(p) == 0 && len(a) == 0 { "with Pure" } else { "with {pos}{joiner}{negs}" },
+      EtAll => if len(a) == 0 { "with ..." } else { "with {pos}{joiner}{negs}" },
+      EtVar(_) => "with ...",
+    }
+  },
 }
 
 fn neg_names_to_str(ref names) with Intern + Memory + Alloc =
   show_list(names, (n) => "!{show_eff_name(n)}", " + ")
 
-fn eff_names_to_str(names) with Intern + Memory + Alloc = {
-  if len(names) == 0 { "Pure" }                   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
-  else if len(names) == 1 { eff_name_label(last(names)) }
-  else {
-    "{eff_name_label(last(names))} + {eff_names_to_str(drop_last(names))}"
-  }
+// drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
+fn eff_names_to_str(names) with Intern + Memory + Alloc = if len(names) == 0 {
+  "Pure"   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md ("Pure is the identity element of +"); not effect-name string-keying
+} else if len(names) == 1 {
+  eff_name_label(last(names))
+} else {
+  "{eff_name_label(last(names))} + {eff_names_to_str(drop_last(names))}"
 }
 
 fn eff_name_label(name) with Intern = match name {
   ENamed(h) => intern_name_of(h),
-  EParameterized(h, _) => intern_name_of(h),   // arg-aware rendering is named follow-up
-  EPure => "Pure"              // drift-audit: ignore — variant→surface-label render, not a name key
+  EParameterized(h, _) => // arg-aware rendering is named follow-up
+  intern_name_of(h),
+  EPure => // drift-audit: ignore — variant→surface-label render, not a name key
+  "Pure",
 }
 
 // The where-clause rendering IS the predicate's canonical display with a
@@ -340,35 +312,48 @@ fn predicate_to_where_clause(pred) = "where {show_predicate(pred)}"
 // Memory row is the list construction, nothing learned or tuned); the
 // capability strings round-trip with the
 // Capability ADT (mentl.mn) at the surface boundary.
-
-fn capabilities_unlocked_by(row) with Memory + Alloc = {
-  let EfRow(p, a, t) = row
-  match t {
-    EtClosed => if len(p) == 0 && len(a) == 0 { ["CMemoize", "CCompileTimeEval", "CParallelize"] }
-                else { negation_caps(a) },
-    EtAll    => negation_caps(a),
-    EtVar(_) => negation_caps(a)
-  }
+fn capabilities_unlocked_by(row) with Memory + Alloc = match row {
+  EfRow(p, a, t) => match t {
+    EtClosed => if len(p) == 0 && len(a) == 0 {
+      ["CMemoize", "CCompileTimeEval", "CParallelize"]
+    } else {
+      negation_caps(a)
+    },
+    EtAll => negation_caps(a),
+    EtVar(_) => negation_caps(a),
+  },
 }
 
 fn negation_caps(names) with Memory + Alloc = flatten(map(caps_for_negated_eff, names))
 
 fn caps_for_negated_eff(name) with Intern = match name {
-  ENamed(h) =>
-    if h == intern_str("Alloc") { ["CRealTime"] }                          // drift-audit: ignore — the literal NAMES the effect at this one severance table; identity is the intern handle (word ==)
-    else if h == intern_str("IO") { ["CCompileTimeEval", "CSandbox"] }     // drift-audit: ignore — same as above
-    else if h == intern_str("Network") { ["CSandbox"] }                    // drift-audit: ignore — same as above
-    else if h == intern_str("Mutate") { ["CParallelize"] }                 // drift-audit: ignore — same as above
-    else { [] },
+  ENamed(h) => // drift-audit: ignore — the literal NAMES the effect at this one severance table; identity is the intern handle (word ==)
+  if h == intern_str("Alloc") {
+    ["CRealTime"]
+  }
+  // drift-audit: ignore — same as above
+  else if h == intern_str("IO") {
+    ["CCompileTimeEval", "CSandbox"]
+  }
+  // drift-audit: ignore — same as above
+  else if h == intern_str("Network") {
+    ["CSandbox"]
+  }
+  // drift-audit: ignore — same as above
+  else if h == intern_str("Mutate") {
+    ["CParallelize"]
+  } else {
+    []
+  },
   EParameterized(_, _) => [],
-  EPure => []                  // the identity unlocks no negated-capability
+  EPure => // the identity unlocks no negated-capability
+  [],
 }
 
-fn capabilities_unlocked_by_tightening(declared, body) with Memory + Alloc = {
-  // Capabilities the developer gains by writing the tighter row in
-  // place of the declared one. The set IS the tighter-row's caps.
+// Capabilities the developer gains by writing the tighter row in
+// place of the declared one. The set IS the tighter-row's caps.
+fn capabilities_unlocked_by_tightening(declared, body) with Memory + Alloc =
   capabilities_unlocked_by(body)
-}
 
 // ─── Composition with cursor_default ───────────────────────────────
 //
@@ -385,3 +370,4 @@ fn capabilities_unlocked_by_tightening(declared, body) with Memory + Alloc = {
 // Per the bus-compressor metaphor: the gradient is bidirectional. Adding
 // annotations TIGHTENS one way; editing toward less-broad-rows tightens
 // the other way. Both moves belong in the same continuous response curve.
+

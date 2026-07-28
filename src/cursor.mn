@@ -40,14 +40,20 @@
 // Drift 9 (deferred): every read resolves to live substrate; peer
 //                     handles named (Hμ.cursor.transport, Hμ.synth-
 //                     proposer, Hμ.cursor.cache, Hμ.gradient-delta).
-
 import types
+
 import graph
+
 import effects
+
 import mentl
+
 import query
+
 import verify
+
 import own
+
 import infer
 
 // ─── The Cursor effect ──────────────────────────────────────────────
@@ -61,10 +67,10 @@ import infer
 // `with !Mutate` on cursor_default proves at compile time that the
 // projection cannot corrupt oracle state — exactly the constraint
 // `protocol_oracle_is_ic.md` locks for "surfaces query, never write."
-
 effect CursorRead {
   cursor_at(Span) -> CursorView
-  cursor_at_handle(Handle) -> CursorView   // the by-HANDLE projection — a caller that already resolved the node reads it directly; re-resolving a handle it holds is the re-derivation (the cursor-address transport resolves once, then projects)
+  // the by-HANDLE projection — a caller that already resolved the node reads it directly; re-resolving a handle it holds is the re-derivation (the cursor-address transport resolves once, then projects)
+  cursor_at_handle(Handle) -> CursorView
   cursor_argmax(Caret) -> Cursor
   cursor_pinned(Handle) -> Cursor
 }
@@ -80,10 +86,8 @@ effect CursorRead {
 // Both can coexist in the same `~>` chain — installing cursor_default
 // AFTER mentl_default lets cursor_default's perform calls bubble
 // `teach_gradient` / `teach_why` to mentl_default.
-
-handler cursor_default with !Mutate {
-
-  // The eight kernel-primitive aspects fan out via `<|` — one position
+handler cursor_default {
+  cursor_at(span) => // The eight kernel-primitive aspects fan out via `<|` — one position
   // borrowed (read-only) to eight branches, each branch projects one
   // tentacle's lens, output is the 8-tuple in primitive-order. The
   // shape on the page IS the cursor's read-tensor at this handle;
@@ -99,31 +103,24 @@ handler cursor_default with !Mutate {
   // teach why); `_` discards the unread half — explicit per H6
   // exhaustiveness, no `_ => fabricated` over the load-bearing pos
   // (CLAUDE.md red-flag table).
-  cursor_at(span) => resume(cursor_view_of(handle_at_span(span))),
-
-  // The by-handle entry — the same eight-arm fan, resolution already done
+  resume(cursor_view_of(handle_at_span(span))),
+  cursor_at_handle(handle) => // The by-handle entry — the same eight-arm fan, resolution already done
   // by the caller (the cursor-address transport resolves once via its
   // line rule; re-resolving here would be the re-derivation).
-  cursor_at_handle(handle) => resume(cursor_view_of(handle)),
-
-  cursor_argmax(caret) =>
-    resume(cursor_argmax_compute(caret)),
-
+  resume(cursor_view_of(handle)),
+  cursor_argmax(caret) => resume(cursor_argmax_compute(caret)),
   cursor_pinned(handle) => {
     let span = caret_span_of_handle(handle)
-    let GNode(_, _anchor) = graph_chase(handle)
-    // Pinned-ness is STRUCTURAL — the Reason IS Located(span, "user pinned"),
-    // read by case (reason_is_pinned), never a 1e308 float magnitude that
-    // argmax can't distinguish from "scored absurdly high." The pin is an
-    // override edge the cursor follows FIRST (argmax_or_default checks it
-    // before the auto-scored reduce); impact stays 0.0 because the pin does
-    // not compete on the gradient's score axis — it dominates by structure.
-    resume(Cursor(
-      handle,
-      Located(span, Inferred("user pinned via ??")),
-      0.0
-    ))
-  }
+    match graph_chase(handle) {
+      GNode(_, _anchor) => // Pinned-ness is STRUCTURAL — the Reason IS Located(span, "user pinned"),
+      // read by case (reason_is_pinned), never a 1e308 float magnitude that
+      // argmax can't distinguish from "scored absurdly high." The pin is an
+      // override edge the cursor follows FIRST (argmax_or_default checks it
+      // before the auto-scored reduce); impact stays 0.0 because the pin does
+      // not compete on the gradient's score axis — it dominates by structure.
+      resume(Cursor(handle, Located(span, Inferred("user pinned via ??")), 0.0)),
+    }
+  },
 }
 
 // ─── Multi-cursor projection — map over a span list ─────────────────
@@ -138,7 +135,7 @@ handler cursor_default with !Mutate {
 // `~> Thread` at the call site — the schedule is read at the fanout's
 // install, never across a call (Hβ.lower.schedule-specialized-callee).
 // Drift 6 erasure: small-arity special-case removed.
-
+//
 // ─── IC fixpoint — `<~` feedback closure on the cursor ────────────────
 //
 // Build IS the `<~` loop closing on stability per
@@ -165,7 +162,7 @@ handler cursor_default with !Mutate {
 //
 // This IS what mentl does. Not "compile" as a separate phase — the
 // edit IS the compile IS the projection IS the loop.
-
+//
 // `ic_fixpoint_handler` — the `<~` feedback closure's handler-attach
 // point. Installed via `~>` above. Each cycle reads the cursor argmax
 // LIVE off the graph and decides continue-vs-terminate by the GRAPH
@@ -177,10 +174,10 @@ handler cursor_default with !Mutate {
 // reason-compare. The handler carries `last_epoch` as state; on a stable
 // epoch it resumes the terminal cursor and STOPS re-projecting (the
 // argmax is idempotent over an unchanged graph, protocol_oracle_is_ic).
-
 handler ic_fixpoint_handler with last_epoch = 0 - 1 {
   cursor_argmax(caret) => {
-    let epoch = graph_epoch()   // drift-audit: ignore — epoch reused twice (compare + state carry); a `<|` reuse, not a `|>` chain
+    // drift-audit: ignore — epoch reused twice (compare + state carry); a `<|` reuse, not a `|>` chain
+    let epoch = graph_epoch()
     if epoch == last_epoch {
       // Epoch stable since the previous cycle ⇒ the fixpoint. Resume the
       // terminal cursor (re-projection would reproduce it) and stop.
@@ -190,7 +187,7 @@ handler ic_fixpoint_handler with last_epoch = 0 - 1 {
       // the new epoch into the next `<~` cycle.
       resume(cursor_argmax_compute(caret)) with last_epoch = epoch
     }
-  }
+  },
 }
 
 // ─── Argmax computation — pure transform on the live graph ──────────
@@ -205,26 +202,24 @@ handler ic_fixpoint_handler with last_epoch = 0 - 1 {
 // oracle queue as graph content persisted with the module image
 // (Hβ.persist.module-image-cache) — same semantics, better latency,
 // never a side-file.
-
 fn cursor_argmax_compute(caret) with GraphRead + Memory + !Mutate + Teach + Alloc = {
   // SYNTAX «THole»: `??` is the gradient's syntactic absence marker. An
   // unfilled hole blocks the executable itself (E_UnresolvedHole), so
   // absence categorically outranks every annotation tightening — holes
   // rank among themselves by caret proximity; the annotation lattice is
   // the no-hole gradient. A structural tier, never a magic weight.
-  let holes = enumerate_hole_positions()   // drift-audit: ignore — holes reused twice (tier test + the tier itself); a `<|` reuse, not a `|>` chain
+  //
+  // drift-audit: ignore — holes reused twice (tier test + the tier itself); a `<|` reuse, not a `|>` chain
+  let holes = enumerate_hole_positions()
   let positions = if len(holes) > 0 { holes } else { enumerate_gradient_positions() }
-  positions
-    |> (ps) => score_all_positions(ps, caret)
-    |> (scored) => argmax_or_default(scored, caret)
+  positions |> ((ps) => score_all_positions(ps, caret) |> ((scored) => argmax_or_default(scored, caret)))
 }
 
 // An AUTHORED hole: the parser mints NHole with a fresh nonzero id for
 // every `??` (and for each syntax-error recovery hole — an absence to fix
 // either way); the program weave's absent-default is NHole(0), never a
 // position.
-fn hole_gate(handle) with GraphRead + !Mutate =
-  if authored_hole(handle) { 1 } else { 0 }
+fn hole_gate(handle) with GraphRead + !Mutate = if authored_hole(handle) { 1 } else { 0 }
 
 // A hole is a POSITION only when it carries a source span: the parser's
 // `??` and recovery mints carry their token span; synthetic span-zero
@@ -244,50 +239,47 @@ fn hole_gate(handle) with GraphRead + !Mutate =
 // live parse generation (Hβ.cursor.session-weave-epoch-scope).
 fn authored_hole(handle) with GraphRead + !Mutate = match graph_node_body(handle) {
   NHole(id) => id != 0 && !span_eq(caret_span_of_handle(handle), span_zero()),
-  _         => false
+  _ => false,
 }
 
-fn enumerate_hole_positions() with GraphRead + Alloc + Memory + !Mutate = {
-  let Graph(next, _spans) = graph_snapshot()
-  filter(authored_hole, range(0, next))
+fn enumerate_hole_positions() with GraphRead + Alloc + Memory + !Mutate = match graph_snapshot() {
+  Graph(next, _spans) => filter(authored_hole, range(0, next)),
 }
 
-fn enumerate_gradient_positions() with GraphRead + Teach + Alloc + Memory + !Mutate = {
-  let Graph(next, _spans) = graph_snapshot()
-  filter((i) => match teach_gradient(i) {
-    None    => false,
-    Some(_) => true
-  }, range(0, next))
+fn enumerate_gradient_positions() with GraphRead + Teach + Alloc + Memory + !Mutate = match graph_snapshot() {
+  Graph(next, _spans) => filter(
+    (i) => match teach_gradient(i) {
+      None => false,
+      Some(_) => true,
+    },
+    range(0, next)
+  ),
 }
 
 // Per-position scoring is independent — each handle's score reads
 // gates × proximity from the graph + pure decay table; map's tail
 // loop walks them. Cargo-class fan-out is a `><` under its own
 // `~> Thread` at this site (Hβ.lower.schedule-specialized-callee).
-fn score_all_positions(handles, caret) with GraphRead + !Mutate + Teach + Memory + Alloc = {
-  handles
-    |> map((h) => score_one_position(h, caret))
-}
+fn score_all_positions(handles, caret) with GraphRead + !Mutate + Teach + Memory + Alloc =
+  handles |> map((h) => score_one_position(h, caret))
 
 fn score_one_position(handle, caret) with GraphRead + Memory + Teach + !Mutate + Alloc = {
   let suggestion_opt = teach_gradient(handle)
   let gates = match suggestion_opt {
-    // No annotation suggestion: an AUTHORED hole still gates — filling it
+    None => // No annotation suggestion: an AUTHORED hole still gates — filling it
     // unlocks the executable itself (E_UnresolvedHole is the refusal it
     // lifts), so within the hole tier proximity alone ranks. Any other
     // suggestion-less position stays gate-zero.
-    None => hole_gate(handle),
-    Some(suggestion) => {
-      let AnnotationSuggestion(_kind, _ann, unlocks, _reason) = suggestion
-      len(unlocks)
-    }
+    hole_gate(handle),
+    Some(suggestion) => match suggestion {
+      AnnotationSuggestion(_kind, _ann, unlocks, _reason) => len(unlocks),
+    },
   }
   let target_span = caret_span_of_handle(handle)
   let proximity = caret_proximity_weight(caret, target_span)
-  let GNode(_, reason) = graph_chase(handle)
-  Cursor(handle,
-         Located(target_span, reason),
-         float_of_int(gates) * proximity)
+  match graph_chase(handle) {
+    GNode(_, reason) => Cursor(handle, Located(target_span, reason), float_of_int(gates) * proximity),
+  }
 }
 
 // ─── Caret proximity weighting ──────────────────────────────────────
@@ -300,63 +292,67 @@ fn score_one_position(handle, caret) with GraphRead + Memory + Teach + !Mutate +
 // Pure. Reproducible. No learned weights. The decay table is
 // configurable via a weights handler (the Hμ.cursor.transport peer);
 // the defaults below are the project residue.
-
-fn caret_proximity_weight(caret, target_span) -> Float with GraphRead + !Mutate + Memory + Alloc = {
-  let Caret(_, caret_reason) = caret
-  let caret_span = caret_span_from_reason(caret_reason)
-  scope_distance_decay(caret_span, target_span)
+fn caret_proximity_weight(caret, target_span) -> Float with GraphRead + !Mutate + Memory + Alloc = match caret {
+  Caret(_, caret_reason) => {
+    let caret_span = caret_span_from_reason(caret_reason)
+    scope_distance_decay(caret_span, target_span)
+  },
 }
 
 fn caret_span_from_reason(reason) with Pure = match reason {
   Located(sp, _) => sp,
-  _              => span_zero()
+  _ => span_zero(),
 }
 
 // The decay reads the live module graph (same_module / transitive_dep walk
 // the import DAG in the weave), so it carries GraphRead — the spatial weight
 // is a projection of the graph's module structure, never a Pure constant.
-fn scope_distance_decay(caret_span, target_span) -> Float with GraphRead + !Mutate + Alloc + Memory = {
-  if span_eq(caret_span, target_span) { same_handle_weight() }
-  else if same_enclosing_decl(caret_span, target_span) { same_decl_weight() }
-  else if same_module(caret_span, target_span) { same_module_weight() }
-  else if transitive_dep(caret_span, target_span) { transitive_dep_weight() }
-  else { cross_module_weight() }
+fn scope_distance_decay(caret_span, target_span) -> Float with GraphRead + !Mutate + Alloc + Memory = if span_eq(caret_span, target_span) {
+  same_handle_weight()
+} else if same_enclosing_decl(caret_span, target_span) {
+  same_decl_weight()
+} else if same_module(caret_span, target_span) {
+  same_module_weight()
+} else if transitive_dep(caret_span, target_span) {
+  transitive_dep_weight()
+} else {
+  cross_module_weight()
 }
 
 // Proximity decay constants — literal floats, not learned. Per
 // Hμ-cursor.md §5.1 design assumption: cross-module weight floors at
 // 0.2 because cross-module impact still matters; same-handle weight
 // is 1.0 because the developer's attention IS at the position.
+fn same_handle_weight() -> Float with Pure = 1.0
 
-fn same_handle_weight()    -> Float with Pure = 1.0
-fn same_decl_weight()      -> Float with Pure = 0.85
-fn same_module_weight()    -> Float with Pure = 0.7
+fn same_decl_weight() -> Float with Pure = 0.85
+
+fn same_module_weight() -> Float with Pure = 0.7
+
 fn transitive_dep_weight() -> Float with Pure = 0.4
-fn cross_module_weight()   -> Float with Pure = 0.2
+
+fn cross_module_weight() -> Float with Pure = 0.2
 
 // same_enclosing_decl / same_module / transitive_dep — these read the
 // graph's existing scope structure. Inline residue; the eight-
 // interrogation discipline at Hμ-cursor.md §1 confirms each is a
 // pure read on substrate the graph already encodes (Graph + Env
 // primitive).
+//
+// Two spans share an enclosing decl iff their parent walks
+// intersect at a same-handle decl ancestor. Substrate read on the
+// graph's parent chain; today, span overlap is the proxy.
+fn same_enclosing_decl(caret_span, target_span) with Pure = span_overlaps(caret_span, target_span)
 
-fn same_enclosing_decl(caret_span, target_span) with Pure = {
-  // Two spans share an enclosing decl iff their parent walks
-  // intersect at a same-handle decl ancestor. Substrate read on the
-  // graph's parent chain; today, span overlap is the proxy.
-  span_overlaps(caret_span, target_span)
-}
-
-fn same_module(caret_span, target_span) with GraphRead + !Mutate = {
-  // Module membership is read LIVE from the AST-in-graph fabric: each span's
-  // enclosing module is the NModule weave entry whose span contains it. Two
-  // spans are same-module iff they resolve to the SAME module path — a
-  // projection of the import DAG the graph already holds, never an "assume
-  // single-file" constant. When neither span sits under a NModule (a bare
-  // single-unit weave with no module wrapper), both resolve to "" and are
-  // same-module — the honest single-unit reading, read not assumed.
+// Module membership is read LIVE from the AST-in-graph fabric: each span's
+// enclosing module is the NModule weave entry whose span contains it. Two
+// spans are same-module iff they resolve to the SAME module path — a
+// projection of the import DAG the graph already holds, never an "assume
+// single-file" constant. When neither span sits under a NModule (a bare
+// single-unit weave with no module wrapper), both resolve to "" and are
+// same-module — the honest single-unit reading, read not assumed.
+fn same_module(caret_span, target_span) with GraphRead + !Mutate =
   module_path_of_span(caret_span) == module_path_of_span(target_span)
-}
 
 fn transitive_dep(caret_span, target_span) with GraphRead + !Mutate + Memory + Alloc = {
   // Cross-module-but-reachable: the target's module is imported (transitively)
@@ -364,77 +360,72 @@ fn transitive_dep(caret_span, target_span) with GraphRead + !Mutate + Memory + A
   // ImportStmt decls in the weave — and walk them. The decay then ranks a
   // cross-module-but-depended-on impact (0.4) above an unrelated cross-module
   // one (0.2), truthfully, from the import DAG.
-  let caret_mod  = module_path_of_span(caret_span)
+  let caret_mod = module_path_of_span(caret_span)
   let target_mod = module_path_of_span(target_span)
-  if caret_mod == target_mod { false }
-  else { module_imports(caret_mod, target_mod, []) }
+  if caret_mod == target_mod { false } else { module_imports(caret_mod, target_mod, []) }
 }
 
 // module_path_of_span lives in graph.mn (DAG-homed beside parse_span_of:
 // oracle reads it too, and both import graph).
-
+//
 // Does module `from` import `target` (transitively)? Reads the live
 // ImportStmt edges in `from`'s NModule decls; the `seen` accumulator
 // breaks import cycles. The module graph IS graph content — no side-ledger.
-fn module_imports(from, target, seen) with GraphRead + Alloc + Memory + !Mutate = {
-  if from == "" || contains_path(seen, from) { false }
-  else {
-    let direct = module_import_paths(from)
-    if contains_path(direct, target) { true }
-    else { any_imports(direct, target, [from] ++ seen) }
-  }
+fn module_imports(from, target, seen) with GraphRead + Alloc + Memory + !Mutate = if from == "" || contains_path(seen, from) {
+  false
+} else {
+  let direct = module_import_paths(from)
+  if contains_path(direct, target) { true } else { any_imports(direct, target, [from] ++ seen) }
 }
 
-fn any_imports(paths, target, seen) with GraphRead + Alloc + Memory + !Mutate = {
-  if len(paths) == 0 { false }
-  else if module_imports(last(paths), target, seen) { true }
-  else { any_imports(drop_last(paths), target, seen) }
+fn any_imports(paths, target, seen) with GraphRead + Alloc + Memory + !Mutate = if len(paths) == 0 {
+  false
+} else if module_imports(last(paths), target, seen) {
+  true
+} else {
+  any_imports(drop_last(paths), target, seen)
 }
 
 // The direct import paths declared in module `path`'s NModule decls.
 fn module_import_paths(path) with GraphRead + !Mutate + Alloc + Memory = {
-  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(next, _spans) = snapshot
-  scan_module_imports(path, 0, next)
-}
-
-fn scan_module_imports(path, i, n) with GraphRead + !Mutate + Alloc + Memory = {
-  if i >= n { [] }
-  else {
-    match graph_node_body(i) {
-      NModule(m) =>
-        if m.path == path { import_paths_of_decls(m.decls) }
-        else { scan_module_imports(path, i + 1, n) },
-      _ => scan_module_imports(path, i + 1, n)
-    }
+  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let snapshot = graph_snapshot()
+  match snapshot {
+    Graph(next, _spans) => scan_module_imports(path, 0, next),
   }
 }
 
-fn import_paths_of_decls(decls) with Alloc + Memory = {
-  decls
-    |> filter_map_imports
-}
-
-fn filter_map_imports(decls) with Alloc + Memory = {
-  if len(decls) == 0 { [] }
-  else {
-    let head_imports = match node_body_of(last(decls)) {
-      NStmt(ImportStmt(p)) => [p],
-      _                    => []
-    }
-    head_imports ++ filter_map_imports(drop_last(decls))
+fn scan_module_imports(path, i, n) with GraphRead + !Mutate + Alloc + Memory = if i >= n {
+  []
+} else {
+  match graph_node_body(i) {
+    NModule(m) => if m.path == path { import_paths_of_decls(m.decls) } else { scan_module_imports(path, i + 1, n) },
+    _ => scan_module_imports(path, i + 1, n),
   }
 }
 
-fn node_body_of(node) with Pure = {
-  let N(body, _, _) = node
-  body
+fn import_paths_of_decls(decls) with Alloc + Memory = decls |> filter_map_imports
+
+fn filter_map_imports(decls) with Alloc + Memory = if len(decls) == 0 {
+  []
+} else {
+  let head_imports = match node_body_of(last(decls)) {
+    NStmt(ImportStmt(p)) => [p],
+    _ => [],
+  }
+  head_imports ++ filter_map_imports(drop_last(decls))
 }
 
-fn contains_path(paths, target) with Memory + Alloc = {
-  if len(paths) == 0 { false }
-  else if last(paths) == target { true }
-  else { contains_path(drop_last(paths), target) }
+fn node_body_of(node) with Pure = match node {
+  N(body, _, _) => body,
+}
+
+fn contains_path(paths, target) with Memory + Alloc = if len(paths) == 0 {
+  false
+} else if last(paths) == target {
+  true
+} else {
+  contains_path(drop_last(paths), target)
 }
 
 // ─── Argmax with default ────────────────────────────────────────────
@@ -443,24 +434,20 @@ fn contains_path(paths, target) with Memory + Alloc = {
 // returns a CursorRead with impact=0 co-located with the caret. Same
 // shape, same record, same code path — drift 6 closure (no
 // primitive-type-special-case).
-
-fn argmax_or_default(scored, caret) with Memory + Alloc = {
-  // The pin is an OVERRIDE edge, followed FIRST: if the caret's Reason marks
-  // a `??`-pinned position, that position dominates the argmax by STRUCTURE
-  // (reason_is_pinned), never by a float magnitude. Only when no pin is set
-  // does the auto-scored reduce run. No 1e308 sentinel — the override is a
-  // case, not a comparison.
-  let Caret(handle, reason) = caret
-  if reason_is_pinned(reason) {
+//
+// The pin is an OVERRIDE edge, followed FIRST: if the caret's Reason marks
+// a `??`-pinned position, that position dominates the argmax by STRUCTURE
+// (reason_is_pinned), never by a float magnitude. Only when no pin is set
+// does the auto-scored reduce run. No 1e308 sentinel — the override is a
+// case, not a comparison.
+fn argmax_or_default(scored, caret) with Memory + Alloc = match caret {
+  Caret(handle, reason) => if reason_is_pinned(reason) {
     Cursor(handle, reason, 0.0)
   } else if len(scored) == 0 {
-    Cursor(handle,
-           Located(caret_span_from_reason(reason),
-                   Inferred("fully annotated")),
-           0.0)
+    Cursor(handle, Located(caret_span_from_reason(reason), Inferred("fully annotated")), 0.0)
   } else {
     reduce_max_by_score(scored)
-  }
+  },
 }
 
 // The pin override is read by case from the Reason chain: a `??`-pinned
@@ -468,16 +455,17 @@ fn argmax_or_default(scored, caret) with Memory + Alloc = {
 // projection — no magic float.
 fn reason_is_pinned(reason) with Memory + Alloc = match reason {
   Located(_, Inferred(ctx)) => contains(ctx, "user pinned"),
-  _                         => false
+  _ => false,
 }
 
-fn reduce_max_by_score(scored) with Alloc + Memory = {
-  reduce(scored, (best, candidate) => {
-    let Cursor(_, _, c_impact) = candidate
-    let Cursor(_, _, b_impact) = best
-    if c_impact > b_impact { candidate } else { best }
-  })
-}
+fn reduce_max_by_score(scored) with Alloc + Memory = reduce(
+  scored,
+  (best, candidate) => match candidate {
+    Cursor(_, _, c_impact) => match best {
+      Cursor(_, _, b_impact) => if c_impact > b_impact { candidate } else { best },
+    },
+  }
+)
 
 // ─── Local pure helpers — one read each from the graph ──────────────
 //
@@ -485,27 +473,34 @@ fn reduce_max_by_score(scored) with Alloc + Memory = {
 // Pure transforms (per SUBSTRATE.md §V "Pure Transforms for
 // Structure, Effects for Context"). The structure is the GNode; the
 // extraction is reproducible.
-
+//
 // The eight-arm fan — ONE projection body serving both cursor_at (span,
 // resolved here) and cursor_at_handle (pre-resolved). The eight aspects of
 // the one read (PLAN §2), each arm a tentacle.
-fn cursor_view_of(handle) with GraphRead = {
-  let GNode(kind, _reason) = graph_chase(handle)
-  let pos = (handle, kind)
-  let (query, propose, topology, row, trace, verify, teach, why) =
-    pos
-      <| (
-        ((_, k)) => k,                                                       // 1. Graph + Env (Query)
-        ((h, k)) => propose_at(h, k),                                        // 2. Handlers (Propose) — Synth's MultiShot
-
-        ((h, _)) => pipe_context_of_handle(h),                               // 3. Five verbs (Topology)
-        ((_, k)) => row_of_kind(k),                                          // 4. Boolean row (Unlock)
-        ((_, k)) => ownership_of_kind(k),                                    // 5. Ownership-as-effect (Trace)
-        ((h, _)) => verify_pending_at(h),                                    // 6. Refinement (Verify)
-        ((h, _)) => teach_gradient(h),                               // 7. Continuous gradient (Teach)
-        ((h, _)) => teach_why(h)                                     // 8. HM live + Reasons (Why)
-      )
-  CursorView(query, propose, topology, row, trace, verify, teach, why)
+fn cursor_view_of(handle) with GraphRead = match graph_chase(handle) {
+  GNode(kind, _reason) => {
+    let pos = (handle, kind)
+    match pos <| (
+      // 1. Graph + Env (Query)
+      ((_, k)) => k,
+      // 2. Handlers (Propose) — Synth's MultiShot
+      ((h, k)) => propose_at(h, k),
+      // 3. Five verbs (Topology)
+      ((h, _)) => pipe_context_of_handle(h),
+      // 4. Boolean row (Unlock)
+      ((_, k)) => row_of_kind(k),
+      // 5. Ownership-as-effect (Trace)
+      ((_, k)) => ownership_of_kind(k),
+      // 6. Refinement (Verify)
+      ((h, _)) => verify_pending_at(h),
+      // 7. Continuous gradient (Teach)
+      ((h, _)) => teach_gradient(h),
+      // 8. HM live + Reasons (Why)
+      ((h, _)) => teach_why(h)
+    ) {
+      (query, propose, topology, row, trace, verify, teach, why) => CursorView(query, propose, topology, row, trace, verify, teach, why),
+    }
+  },
 }
 
 // The SESSION's resolver — exact match on the REASON span, deliberately.
@@ -520,18 +515,21 @@ fn cursor_view_of(handle) with GraphRead = {
 // cursor-address transport does not ride it — it resolves once over mint
 // spans (address_resolve, main.mn) and projects via cursor_at_handle.
 fn handle_at_span(span) with GraphRead + !Mutate = {
-  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(next, _spans) = snapshot
-  scan_for_span(span, 0, next)
+  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let snapshot = graph_snapshot()
+  match snapshot {
+    Graph(next, _spans) => scan_for_span(span, 0, next),
+  }
 }
 
-fn scan_for_span(target, i, n) with GraphRead + !Mutate = {
-  if i >= n { 0 }
-  else {
-    let GNode(_, reason) = graph_chase(i)
-    let candidate_span = caret_span_from_reason(reason)
-    if span_eq(target, candidate_span) { i }
-    else { scan_for_span(target, i + 1, n) }
+fn scan_for_span(target, i, n) with GraphRead + !Mutate = if i >= n {
+  0
+} else {
+  match graph_chase(i) {
+    GNode(_, reason) => {
+      let candidate_span = caret_span_from_reason(reason)
+      if span_eq(target, candidate_span) { i } else { scan_for_span(target, i + 1, n) }
+    },
   }
 }
 
@@ -539,31 +537,30 @@ fn scan_for_span(target, i, n) with GraphRead + !Mutate = {
 // Located-or-zero of query.mn's span_of_handle) — renamed apart from it:
 // two different truths shared one name and the seed silently picked one
 // (§9 dup-fn class); the wheel's own emit refused the collision (face 16).
-fn caret_span_of_handle(handle) with GraphRead + !Mutate = {
-  let GNode(_, reason) = graph_chase(handle)
-  caret_span_from_reason(reason)
+fn caret_span_of_handle(handle) with GraphRead + !Mutate = match graph_chase(handle) {
+  GNode(_, reason) => caret_span_from_reason(reason),
 }
 
 // An unbound node's type IS its own type variable — the chase
 // terminated at this handle, so TVar(handle) is what HM proves.
 fn ty_of_kind(handle, kind) with Pure = match kind {
-  NBound(ty)    => ty,
-  NFree(_)      => TVar(handle),
-  NRowBound(_)  => TVar(handle),
+  NBound(ty) => ty,
+  NFree(_) => TVar(handle),
+  NRowBound(_) => TVar(handle),
   NRecordRowBound(_) => TVar(handle),
-  NRowFree(_)   => TVar(handle),
-  NErrorHole(_) => TVar(handle)
+  NRowFree(_) => TVar(handle),
+  NErrorHole(_) => TVar(handle),
 }
 
 fn row_of_kind(kind) with Memory = match kind {
-  NBound(ty)    => extract_row_local(ty),
-  NRowBound(r)  => r,
-  _             => mk_ef_pure()
+  NBound(ty) => extract_row_local(ty),
+  NRowBound(r) => r,
+  _ => mk_ef_pure(),
 }
 
 fn extract_row_local(ty) with Memory = match ty {
   TFun(_, _, row) => row,
-  _               => mk_ef_pure()
+  _ => mk_ef_pure(),
 }
 
 // ownership_of_kind — derives Ownership from the graph's binding
@@ -572,17 +569,14 @@ fn extract_row_local(ty) with Memory = match ty {
 // resolved ownership of its first param (the substrate-honest
 // summary; full per-param ownership is in CursorView for handlers
 // that want it). For non-function nodes, default Unmarked.
-
 fn ownership_of_kind(kind) with Memory = match kind {
   NBound(ty) => ownership_of_ty(ty),
-  _          => Unmarked
+  _ => Unmarked,
 }
 
 fn ownership_of_ty(ty) with Memory = match ty {
-  TFun(params, _, _) =>
-    if len(params) == 0 { Unmarked }
-    else { param_resolved(list_index(params, 0)) },
-  _ => Unmarked
+  TFun(params, _, _) => if len(params) == 0 { Unmarked } else { param_resolved(list_index(params, 0)) },
+  _ => Unmarked,
 }
 
 // Pipe surroundings are read LIVE from the AST-in-graph fabric: every node
@@ -596,32 +590,31 @@ fn ownership_of_ty(ty) with Memory = match ty {
 // The verb tentacle then actually fires — "you are mid-|> chain" is a live
 // read, never the old constant NoPipe.
 fn pipe_context_of_handle(handle) with GraphRead + !Mutate = {
-  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(next, _spans) = snapshot
-  scan_for_pipe_parent(handle, 0, next)
+  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let snapshot = graph_snapshot()
+  match snapshot {
+    Graph(next, _spans) => scan_for_pipe_parent(handle, 0, next),
+  }
 }
 
-fn scan_for_pipe_parent(target, i, n) with GraphRead + !Mutate = {
-  if i >= n { NoPipe }
-  else {
-    match pipe_position_in(target, graph_node_body(i)) {
-      NoPipe => scan_for_pipe_parent(target, i + 1, n),
-      found  => found
-    }
+fn scan_for_pipe_parent(target, i, n) with GraphRead + !Mutate = if i >= n {
+  NoPipe
+} else {
+  match pipe_position_in(target, graph_node_body(i)) {
+    NoPipe => scan_for_pipe_parent(target, i + 1, n),
+    found => found,
   }
 }
 
 // Is `target` a stage of the PipeExpr at this weave entry? Project the
 // PipeKind verb and which side the target sits on. Non-pipe bodies → NoPipe.
 fn pipe_position_in(target, body) with Pure = match body {
-  NExpr(PipeExpr(verb, left, right)) => {
-    let N(_, _, lh) = left
-    let N(_, _, rh) = right
-    if lh == target { StartingPipe }
-    else if rh == target { InsidePipe(verb) }
-    else { NoPipe }
+  NExpr(PipeExpr(verb, left, right)) => match left {
+    N(_, _, lh) => match right {
+      N(_, _, rh) => if lh == target { StartingPipe } else if rh == target { InsidePipe(verb) } else { NoPipe },
+    },
   },
-  _ => NoPipe
+  _ => NoPipe,
 }
 
 // The Propose aspect: ONE read fills both the op's allowed row and the
@@ -650,32 +643,34 @@ fn pipe_position_in(target, body) with Pure = match body {
 // float-evidence call-convention gap (an f64-arg candidate ctor through an
 // all-i32 $ft — the named peer Hβ.emit.float-evidence-ft, first fired by
 // the first float-position projection ever taken).
-fn propose_at(h, k) with EnvRead + GraphRead + Memory + Alloc + Synth + !Mutate = {
-  if authored_hole(h) {
-    let ctx = mentl_context_at(h)
-    let Context(_, allowed, _, _) = ctx
-    synth_propose(ty_of_kind(h, k), allowed, ctx)
-  } else { Proposals([], []) }
+fn propose_at(h, k) with EnvRead + GraphRead + Memory + Alloc + Synth + !Mutate = if authored_hole(h) {
+  let ctx = mentl_context_at(h)
+  match ctx {
+    Context(_, allowed, _, _) => synth_propose(ty_of_kind(h, k), allowed, ctx),
+  }
+} else {
+  Proposals([], [])
 }
 
-fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + Alloc + !Mutate = {
-  // Synth's Context reads LIVE from the graph the cursor sits in — never
-  // fabricated: scope bindings ARE the env snapshot (the same bindings
-  // infer wrote); the row is the ENCLOSING declaration's authored signed
-  // set (build_declared_row over the FnStmt's own effs — the one home of
-  // `!E` at a decl); the enclosing NAME feeds the vocabulary's
-  // nontermination exclusion. At a top-level position with no enclosing
-  // fn, the node's own row stands and the name is "".
-  let Env(scope_bindings) = env_snapshot()
-  let GNode(kind, _) = graph_chase(handle)
-  let hole_span = parse_span_of(handle)
-  match enclosing_fn_decl_at(handle) {
-    Some(decl) => {
-      let (fname, effs) = decl
-      Context(scope_bindings, build_declared_row(effs), fname, hole_span)
+// Synth's Context reads LIVE from the graph the cursor sits in — never
+// fabricated: scope bindings ARE the env snapshot (the same bindings
+// infer wrote); the row is the ENCLOSING declaration's authored signed
+// set (build_declared_row over the FnStmt's own effs — the one home of
+// `!E` at a decl); the enclosing NAME feeds the vocabulary's
+// nontermination exclusion. At a top-level position with no enclosing
+// fn, the node's own row stands and the name is "".
+fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + Alloc + !Mutate = match env_snapshot() {
+  Env(scope_bindings) => match graph_chase(handle) {
+    GNode(kind, _) => {
+      let hole_span = parse_span_of(handle)
+      match enclosing_fn_decl_at(handle) {
+        Some(decl) => match decl {
+          (fname, effs) => Context(scope_bindings, build_declared_row(effs), fname, hole_span),
+        },
+        None => Context(scope_bindings, row_of_kind(kind), "", hole_span),
+      }
     },
-    None => Context(scope_bindings, row_of_kind(kind), "", hole_span)
-  }
+  },
 }
 
 // The enclosing fn DECLARATION at a handle — the tightest FnStmt whose
@@ -685,37 +680,37 @@ fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + Alloc + !Mutate 
 // (Hβ.cursor.enclosing-decl-edge).
 fn enclosing_fn_decl_at(handle) with GraphRead + Memory + Alloc + !Mutate = {
   let target = parse_span_of(handle)
-  let Graph(next, _spans) = graph_snapshot()
-  enclosing_fn_scan(target, 0, next, None, 999999999)
+  match graph_snapshot() {
+    Graph(next, _spans) => enclosing_fn_scan(target, 0, next, None, 999999999),
+  }
 }
 
-fn enclosing_fn_scan(target, i, n, best, best_area) with GraphRead + Memory + Alloc + !Mutate = {
-  if i >= n { best }
-  else {
-    match graph_node_body(i) {
-      NStmt(FnStmt(name, _params, _ret, effs, _body)) => {
-        // SPANS CANNOT RESOLVE CONTAINMENT (measured 2026-07-28): a
-        // decl's parse span is head-only (anchored at the binder name)
-        // AND the body node's own span is head-anchored too (a
-        // three-line fn's body span measured 5:32-5:33 — two columns),
-        // so this check fires only when head and hole share a line —
-        // single-line bodies. For multi-line bodies the enclosing
-        // resolves "" and the vocabulary's nontermination guard does
-        // not fire (a hole inside a fn can propose the fn itself).
-        // The true form is TREE containment — is the hole a descendant
-        // of the fn's body node — which needs the child-handle
-        // projection made total (oracle's expr_child_handles drops
-        // match arms and stmts today) or the O(1) decl-containment
-        // edge on the node: Hβ.cursor.enclosing-decl-edge, sharpened.
-        let dspan = parse_span_of(i)
-        if span_contains(dspan, target) && span_area(dspan) < best_area {
-          enclosing_fn_scan(target, i + 1, n, Some((name, effs)), span_area(dspan))
-        } else {
-          enclosing_fn_scan(target, i + 1, n, best, best_area)
-        }
-      },
-      _ => enclosing_fn_scan(target, i + 1, n, best, best_area)
-    }
+fn enclosing_fn_scan(target, i, n, best, best_area) with GraphRead + Memory + Alloc + !Mutate = if i >= n {
+  best
+} else {
+  match graph_node_body(i) {
+    NStmt(FnStmt(name, _params, _ret, effs, _body)) => {
+      // SPANS CANNOT RESOLVE CONTAINMENT (measured 2026-07-28): a
+      // decl's parse span is head-only (anchored at the binder name)
+      // AND the body node's own span is head-anchored too (a
+      // three-line fn's body span measured 5:32-5:33 — two columns),
+      // so this check fires only when head and hole share a line —
+      // single-line bodies. For multi-line bodies the enclosing
+      // resolves "" and the vocabulary's nontermination guard does
+      // not fire (a hole inside a fn can propose the fn itself).
+      // The true form is TREE containment — is the hole a descendant
+      // of the fn's body node — which needs the child-handle
+      // projection made total (oracle's expr_child_handles drops
+      // match arms and stmts today) or the O(1) decl-containment
+      // edge on the node: Hβ.cursor.enclosing-decl-edge, sharpened.
+      let dspan = parse_span_of(i)
+      if span_contains(dspan, target) && span_area(dspan) < best_area {
+        enclosing_fn_scan(target, i + 1, n, Some((name, effs)), span_area(dspan))
+      } else {
+        enclosing_fn_scan(target, i + 1, n, best, best_area)
+      }
+    },
+    _ => enclosing_fn_scan(target, i + 1, n, best, best_area),
   }
 }
 
@@ -726,7 +721,6 @@ fn enclosing_fn_scan(target, i, n, best, best_area) with GraphRead + Memory + Al
 // handle, WHOLE: the Reason is the Why-walk's edge and the Span the
 // render's anchor — the old map-to-Predicate discarded both (the
 // converged judge caught the slot mismatch it left).
-
 fn verify_pending_at(handle) with Verify + GraphRead + Memory + Alloc + !Mutate = {
   let target_span = caret_span_of_handle(handle)
   filter_by_span(target_span, verify_debt())
@@ -734,4 +728,3 @@ fn verify_pending_at(handle) with Verify + GraphRead + Memory + Alloc + !Mutate 
 
 fn filter_by_span(target, debt) with Memory + Alloc =
   filter(((debt_span, _, _)) => span_overlaps(target, debt_span), debt)
-

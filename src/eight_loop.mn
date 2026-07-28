@@ -56,15 +56,22 @@
 //                           InterrogationKind; never string-keyed.
 //   Drift 9 (deferred):     All eight bodied; no "later."
 //   Drift 11 (suffix-append): Buffer-counter substrate.
-
 import ml/autodiff
+
 import types
+
 import effects
+
 import graph
+
 import own
+
 import verify
+
 import mentl
+
 import cursor
+
 import runtime/math
 
 // ─── The eight interrogations as a tagged ADT ───────────────────────
@@ -74,16 +81,23 @@ import runtime/math
 // architecture). The numbering is canonical per CLAUDE.md ⌁ Mentl's
 // anchor — Graph(1) / Handler(2) / Verb(3) / Row(4) / Ownership(5)
 // / Refinement(6) / Gradient(7) / Reason(8).
-
 type InterrogationKind
-  = IntGraph                                     // 1: what handle/edge/Reason already encodes this?
-  | IntHandler                                   // 2: what handler projects this — with what inferred resume cardinality?
-  | IntVerb                                      // 3: which of |> <| >< ~> <~ draws this topology?
-  | IntRow                                       // 4: what + - & ! Pure already gates this?
-  | IntOwnership                                 // 5: what own/ref proves linearity?
-  | IntRefinement                                // 6: what predicate or Verify bounds this value?
-  | IntGradient                                  // 7: what annotation would unlock compile-time capability?
-  | IntReason                                    // 8: what Reason edge does this leave for Why?
+  // 1: what handle/edge/Reason already encodes this?
+  = IntGraph
+  // 2: what handler projects this — with what inferred resume cardinality?
+  | IntHandler
+  // 3: which of |> <| >< ~> <~ draws this topology?
+  | IntVerb
+  // 4: what + - & ! Pure already gates this?
+  | IntRow
+  // 5: what own/ref proves linearity?
+  | IntOwnership
+  // 6: what predicate or Verify bounds this value?
+  | IntRefinement
+  // 7: what annotation would unlock compile-time capability?
+  | IntGradient
+  // 8: what Reason edge does this leave for Why?
+  | IntReason
 
 // ─── Per-interrogation verdict at one position ─────────────────────
 //
@@ -91,43 +105,49 @@ type InterrogationKind
 // the answer; no authoring residue needed) or INVITES (the substrate
 // surface is empty here; the developer can answer with one
 // gradient step).
-
 type InterrogationVerdict
-  = VerdictClears(Reason)                        // substrate-honest: Reason walks back to the proof
-  | VerdictInvites(AnnotationSuggestion)         // gradient: the suggestion that fills this slot
+  // substrate-honest: Reason walks back to the proof
+  = VerdictClears(Reason)
+  // gradient: the suggestion that fills this slot
+  | VerdictInvites(AnnotationSuggestion)
 
 // ─── Per-position report — one record-shape (drift 7 closure) ──────
-
 type InterrogationReport
-  = InterrogationReport({
-      handle:     Int,                            // graph handle the report attaches to
-      span:       Span,                           // source span
-      graph_v:    InterrogationVerdict,           // 1
-      handler_v:  InterrogationVerdict,           // 2
-      verb_v:     InterrogationVerdict,           // 3
-      row_v:      InterrogationVerdict,           // 4
-      ownership_v: InterrogationVerdict,          // 5
-      refinement_v: InterrogationVerdict,         // 6
-      gradient_v: InterrogationVerdict,           // 7
-      reason_v:   InterrogationVerdict             // 8
-    })
+  = InterrogationReport({gradient_v: InterrogationVerdict, graph_v: InterrogationVerdict, handle: Int, handler_v: InterrogationVerdict, ownership_v: InterrogationVerdict, reason_v: InterrogationVerdict, refinement_v: InterrogationVerdict, row_v: InterrogationVerdict, span: Span, verb_v: InterrogationVerdict})
 
+// graph handle the report attaches to
+//
+// source span
+//
+// 1
+//
+// 2
+//
+// 3
+//
+// 4
+//
+// 5
+//
+// 6
+//
+// 7
+//
+// 8
+//
 // ─── The Interrogate effect ─────────────────────────────────────────
 //
 // Mentl's automated discipline. Each op runs the eight at one
 // position OR walks the whole graph emitting reports. Cursor's
 // CursorView IS the per-position read; this effect adds the
 // audit-style projection that surfaces gaps as structured reports.
-
 effect Interrogate {
   /// Run the eight at one handle. Returns the per-position report.
   interrogate_at(Int) -> InterrogationReport
-
   /// Walk the live graph; return reports for every binding-bearing
   /// node. The audit-style projection. Cursor reads the cached form
   /// per Hμ.cursor.cache; this op recomputes from scratch.
   interrogate_all() -> [InterrogationReport]
-
   /// Filter a report: was a specific interrogation kind unclear?
   /// Used by the IDE's "show me the residue" surface.
   interrogation_invites(InterrogationReport, InterrogationKind) -> Bool
@@ -143,10 +163,8 @@ effect Interrogate {
 // cursor_default's helpers for Topology + Row + Ownership + Refinement,
 // synth_default for Propose). The eight reads compose into one
 // InterrogationReport.
-
-handler interrogate_default with !Mutate {
-
-  // The eight interrogations fan out via `<|` — `(handle, kind, reason)`
+handler interrogate_default {
+  interrogate_at(handle) => // The eight interrogations fan out via `<|` — `(handle, kind, reason)`
   // borrowed to eight branches, each branch running one tentacle's
   // verdict, output is the 8-tuple of InterrogationVerdicts in
   // primitive-order. Same shape as cursor_at — Cursor's eight aspects
@@ -158,70 +176,66 @@ handler interrogate_default with !Mutate {
   // dispatch table); 6 (eight uniform branches; no primitive special
   // case); 7 (one record output, not parallel-arrays); 9 (all eight
   // bodied; no "later"); 11 (no acc-append in loop; <| outputs tuple).
-  interrogate_at(handle) => {
-    let GNode(kind, reason) = graph_chase(handle)
-    let span = span_of_handle(handle)
-    let pos = (handle, kind, reason)
-    let (graph_v, handler_v, verb_v, row_v, ownership_v, refinement_v, gradient_v, reason_v) =
-      pos
-        <| (
-          ((_, k, r)) => match k {                                                    // 1. Graph
-            NBound(_)     => VerdictClears(r),
-            NRowBound(_)  => VerdictClears(r),
-            NRecordRowBound(_) => VerdictClears(r),
-            NFree(_)      => VerdictInvites(graph_invite_for(0, r)),
-            NRowFree(_)   => VerdictInvites(graph_invite_for(0, r)),
-            NErrorHole(_) => VerdictInvites(graph_invite_for(0, r))
-          },
-          ((h, k, r)) => handler_verdict_for(h, k, r),                                // 2. Handler
-          ((h, k, r)) => verb_verdict_for(h, k, r),                                   // 3. Verb
-          ((h, k, r)) => row_verdict_for(h, k, r),                                    // 4. Row
-          ((h, k, r)) => ownership_verdict_for(h, k, r),                              // 5. Ownership
-          ((h, _, r)) => refinement_verdict_for(h, r),                                // 6. Refinement
-          ((h, _, r)) => match teach_gradient(h) {                            // 7. Gradient
-            None             => VerdictClears(r),
-            Some(suggestion) => VerdictInvites(suggestion)
-          },
-          ((_, _, r)) => match r {                                                    // 8. Reason
-            Inferred(_)   => VerdictClears(r),
-            Declared(_)   => VerdictClears(r),
-            Located(_, _) => VerdictClears(r),
-            _             => VerdictInvites(reason_invite_for(0, r))
-          }
-        )
-    resume(InterrogationReport({
-      handle:        handle,
-      span:          span,
-      graph_v:       graph_v,
-      handler_v:     handler_v,
-      verb_v:        verb_v,
-      row_v:         row_v,
-      ownership_v:   ownership_v,
-      refinement_v:  refinement_v,
-      gradient_v:    gradient_v,
-      reason_v:      reason_v
-    }))
+  match graph_chase(handle) {
+    GNode(kind, reason) => {
+      let span = span_of_handle(handle)
+      let pos = (handle, kind, reason)
+      match pos <| (
+        // 1. Graph
+        ((_, k, r)) => match k {
+          NBound(_) => VerdictClears(r),
+          NRowBound(_) => VerdictClears(r),
+          NRecordRowBound(_) => VerdictClears(r),
+          NFree(_) => VerdictInvites(graph_invite_for(0, r)),
+          NRowFree(_) => VerdictInvites(graph_invite_for(0, r)),
+          NErrorHole(_) => VerdictInvites(graph_invite_for(0, r)),
+        },
+        // 2. Handler
+        ((h, k, r)) => handler_verdict_for(h, k, r),
+        // 3. Verb
+        ((h, k, r)) => verb_verdict_for(h, k, r),
+        // 4. Row
+        ((h, k, r)) => row_verdict_for(h, k, r),
+        // 5. Ownership
+        ((h, k, r)) => ownership_verdict_for(h, k, r),
+        // 6. Refinement
+        ((h, _, r)) => refinement_verdict_for(h, r),
+        // 7. Gradient
+        ((h, _, r)) => match teach_gradient(h) {
+          None => VerdictClears(r),
+          Some(suggestion) => VerdictInvites(suggestion),
+        },
+        // 8. Reason
+        ((_, _, r)) => match r {
+          Inferred(_) => VerdictClears(r),
+          Declared(_) => VerdictClears(r),
+          Located(_, _) => VerdictClears(r),
+          _ => VerdictInvites(reason_invite_for(0, r)),
+        }
+      ) {
+        (graph_v, handler_v, verb_v, row_v, ownership_v, refinement_v, gradient_v, reason_v) => resume(InterrogationReport({gradient_v: gradient_v, graph_v: graph_v, handle: handle, handler_v: handler_v, ownership_v: ownership_v, reason_v: reason_v, refinement_v: refinement_v, row_v: row_v, span: span, verb_v: verb_v})),
+      }
+    },
   },
-
-  // interrogate_all walks every binding-bearing node — map's tail
+  interrogate_all() => // interrogate_all walks every binding-bearing node — map's tail
   // loop across positions, `<|` per-position eight-aspect fanout
   // inside interrogate_at: the project-wide audit IS the cursor
   // projection scaled to N handles. N-core interrogation is a `><`
   // fanout under its own `~> Thread` at this site (the schedule is
   // read at the fanout's install, never across a call —
   // Hβ.lower.schedule-specialized-callee).
-  interrogate_all() => {
-    let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-    let Graph(next, _spans) = snapshot
-    let positions = enumerate_handles(0, next)
-    let reports =
-      positions
-        |> map((h) => interrogate_at(h))
-    resume(reports)
+  {
+    // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+    let snapshot = graph_snapshot()
+    match snapshot {
+      Graph(next, _spans) => {
+        let positions = enumerate_handles(0, next)
+        let reports = positions |> map((h) => interrogate_at(h))
+        resume(reports)
+      },
+    }
   },
-
-  interrogation_invites(report, kind) =>
-    resume(verdict_is_invite(extract_verdict(report, kind)))
+  interrogation_invites(report, kind) => resume(verdict_is_invite(extract_verdict(report, kind))),
 }
 
 // ─── The IC fixpoint over the project audit ─────────────────────────
@@ -240,16 +254,12 @@ handler interrogate_default with !Mutate {
 //   <~  feedback closing on gradient density stability
 //
 // The Hμ.eight-interrogation-loop's ULTIMATE FORM realized by topology.
-
 fn empty_density() with Pure = []
 
-fn enumerate_handles(i, n) with Alloc + Memory = {
-  if i >= n { [] }
-  else { [i] ++ enumerate_handles(i + 1, n) }
-}
+fn enumerate_handles(i, n) with Alloc + Memory =
+  if i >= n { [] } else { [i] ++ enumerate_handles(i + 1, n) }
 
 // ─── Per-interrogation helpers ──────────────────────────────────────
-
 fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory = {
   // The handler stack IS graph content: an install draws a `~>` edge
   // (PipeExpr(PTee, body, handler)) and the body subtree it governs is
@@ -275,82 +285,74 @@ fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory =
 // some PTee body in the weave. Live read of the install edges — the handler
 // chain IS the graph (PLAN §2), never a transient stack copy.
 fn handle_under_tee_install(handle) with GraphRead + !Mutate = {
-  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(next, _spans) = snapshot
-  scan_for_tee_governing(handle, 0, next)
+  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let snapshot = graph_snapshot()
+  match snapshot {
+    Graph(next, _spans) => scan_for_tee_governing(handle, 0, next),
+  }
 }
 
-fn scan_for_tee_governing(target, i, n) with GraphRead + !Mutate = {
-  if i >= n { false }
-  else {
-    match graph_node_body(i) {
-      NExpr(PipeExpr(PTee, body, _handler)) => {
-        let N(_, _, bh) = body
-        if bh == target { true }
-        else { scan_for_tee_governing(target, i + 1, n) }
-      },
-      _ => scan_for_tee_governing(target, i + 1, n)
-    }
+fn scan_for_tee_governing(target, i, n) with GraphRead + !Mutate = if i >= n {
+  false
+} else {
+  match graph_node_body(i) {
+    NExpr(PipeExpr(PTee, body, _handler)) => match body {
+      N(_, _, bh) => if bh == target { true } else { scan_for_tee_governing(target, i + 1, n) },
+    },
+    _ => scan_for_tee_governing(target, i + 1, n),
   }
 }
 
 fn is_pure_row(row) with Pure = match row {
   EfRow([], [], EtClosed) => true,
-  EfRow([], _, EtClosed)  => true,
-  _               => false
+  EfRow([], _, EtClosed) => true,
+  _ => false,
 }
 
-fn handler_invite_for(handle, reason) with Pure = {
-  AnnotationSuggestion(
-    SuggestEffectRow,
-    "~> <handler>   // an effect is unhandled at this position",
-    [],
-    Located(span_zero(),
-      Inferred("eight-fold: Handler interrogation invites — non-Pure row, no enclosing ~> install"))
+fn handler_invite_for(handle, reason) with Pure = AnnotationSuggestion(
+  SuggestEffectRow,
+  "~> <handler>   // an effect is unhandled at this position",
+  [],
+  Located(
+    span_zero(),
+    Inferred("eight-fold: Handler interrogation invites — non-Pure row, no enclosing ~> install")
   )
+)
+
+// Verb clears when the position is inside a recognized pipe topology OR is
+// a leaf with no surrounding pipe. pipe_context_of_handle reads the live
+// parent chain from the AST-in-graph fabric (the enclosing PipeExpr is a
+// weave entry whose child handle IS this handle) — never the old constant.
+// The verb tentacle now genuinely fires: a pipe-stage clears (it carries
+// its topology); a bare leaf expression that is NOT in a pipe and whose
+// body IS a pipe-shaped flow but unclassified would invite — today every
+// node has a definite weave position, so the four PipeContext cases all
+// clear (the topology is READ, never absent).
+fn verb_verdict_for(handle, kind, reason) with GraphRead + !Mutate = match pipe_context_of_handle(handle) {
+  NoPipe => VerdictClears(reason),
+  InsidePipe(_) => VerdictClears(reason),
+  StartingPipe => VerdictClears(reason),
+  EndingPipe => VerdictClears(reason),
 }
 
-fn verb_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
-  // Verb clears when the position is inside a recognized pipe topology OR is
-  // a leaf with no surrounding pipe. pipe_context_of_handle reads the live
-  // parent chain from the AST-in-graph fabric (the enclosing PipeExpr is a
-  // weave entry whose child handle IS this handle) — never the old constant.
-  // The verb tentacle now genuinely fires: a pipe-stage clears (it carries
-  // its topology); a bare leaf expression that is NOT in a pipe and whose
-  // body IS a pipe-shaped flow but unclassified would invite — today every
-  // node has a definite weave position, so the four PipeContext cases all
-  // clear (the topology is READ, never absent).
-  match pipe_context_of_handle(handle) {
-    NoPipe => VerdictClears(reason),
-    InsidePipe(_) => VerdictClears(reason),
-    StartingPipe => VerdictClears(reason),
-    EndingPipe => VerdictClears(reason)
-  }
+// Row clears when the binding's row is bound (resolved at
+// inference). Free row variables surface as invites.
+fn row_verdict_for(handle, kind, reason) with Memory = match kind {
+  NBound(ty) => if row_is_ground(row_of_kind(kind)) {
+    VerdictClears(reason)
+  } else {
+    VerdictInvites(row_invite_for(handle, reason))
+  },
+  NRowBound(_) => VerdictClears(reason),
+  _ => VerdictInvites(row_invite_for(handle, reason)),
 }
 
-fn row_verdict_for(handle, kind, reason) with Memory = {
-  // Row clears when the binding's row is bound (resolved at
-  // inference). Free row variables surface as invites.
-  match kind {
-    NBound(ty) =>
-      if row_is_ground(row_of_kind(kind)) {
-        VerdictClears(reason)
-      } else {
-        VerdictInvites(row_invite_for(handle, reason))
-      },
-    NRowBound(_) => VerdictClears(reason),
-    _ => VerdictInvites(row_invite_for(handle, reason))
-  }
-}
-
-fn ownership_verdict_for(handle, kind, reason) with Memory = {
-  // Ownership clears when authored OR resolved is non-Unmarked.
-  // Otherwise the gradient could suggest one (see Hμ.gradient-delta
-  // delta_ownership).
-  match ownership_of_kind(kind) {
-    Unmarked => VerdictInvites(ownership_invite_for(handle, reason)),
-    _ => VerdictClears(reason)
-  }
+// Ownership clears when authored OR resolved is non-Unmarked.
+// Otherwise the gradient could suggest one (see Hμ.gradient-delta
+// delta_ownership).
+fn ownership_verdict_for(handle, kind, reason) with Memory = match ownership_of_kind(kind) {
+  Unmarked => VerdictInvites(ownership_invite_for(handle, reason)),
+  _ => VerdictClears(reason),
 }
 
 fn refinement_verdict_for(handle, reason) with Verify + GraphRead + Memory + Alloc + !Mutate = {
@@ -366,81 +368,69 @@ fn refinement_verdict_for(handle, reason) with Verify + GraphRead + Memory + All
 }
 
 // ─── Invite constructors — each builds an AnnotationSuggestion ─────
+fn graph_invite_for(handle, reason) with Pure = AnnotationSuggestion(
+  SuggestEffectRow,
+  "?? — graph hole; gradient proposes a candidate",
+  [],
+  Located(span_zero(), Inferred("eight-fold: Graph interrogation invites — NFree at this handle"))
+)
 
-fn graph_invite_for(handle, reason) with Pure = {
-  AnnotationSuggestion(
-    SuggestEffectRow,
-    "?? — graph hole; gradient proposes a candidate",
-    [],
-    Located(span_zero(),
-      Inferred("eight-fold: Graph interrogation invites — NFree at this handle"))
-  )
-}
+fn row_invite_for(handle, reason) with Pure = AnnotationSuggestion(
+  SuggestEffectRow,
+  "with <inferred-row>",
+  ["CMemoize", "CCompileTimeEval"],
+  Located(span_zero(), Inferred("eight-fold: Row interrogation invites — row-free at this binding"))
+)
 
-fn row_invite_for(handle, reason) with Pure = {
-  AnnotationSuggestion(
-    SuggestEffectRow,
-    "with <inferred-row>",
-    ["CMemoize", "CCompileTimeEval"],
-    Located(span_zero(),
-      Inferred("eight-fold: Row interrogation invites — row-free at this binding"))
+fn ownership_invite_for(handle, reason) with Pure = AnnotationSuggestion(
+  SuggestOwnership,
+  "own <param> | ref <param>",
+  ["CDeterministicDrop", "CZeroCopy"],
+  Located(
+    span_zero(),
+    Inferred("eight-fold: Ownership interrogation invites — Unmarked at this position")
   )
-}
+)
 
-fn ownership_invite_for(handle, reason) with Pure = {
-  AnnotationSuggestion(
-    SuggestOwnership,
-    "own <param> | ref <param>",
-    ["CDeterministicDrop", "CZeroCopy"],
-    Located(span_zero(),
-      Inferred("eight-fold: Ownership interrogation invites — Unmarked at this position"))
-  )
-}
+fn refinement_invite_for(handle, reason, predicate) with Pure = AnnotationSuggestion(
+  SuggestRefinement,
+  "where <predicate>",
+  ["CEliminateBoundsCheck"],
+  Located(span_zero(), Inferred("eight-fold: Refinement interrogation invites — Verify-pending"))
+)
 
-fn refinement_invite_for(handle, reason, predicate) with Pure = {
-  AnnotationSuggestion(
-    SuggestRefinement,
-    "where <predicate>",
-    ["CEliminateBoundsCheck"],
-    Located(span_zero(),
-      Inferred("eight-fold: Refinement interrogation invites — Verify-pending"))
+fn reason_invite_for(handle, reason) with Pure = AnnotationSuggestion(
+  SuggestEffectRow,
+  "<documented-edge>",
+  [],
+  Located(
+    span_zero(),
+    Inferred("eight-fold: Reason interrogation invites — chain unrooted at named source")
   )
-}
-
-fn reason_invite_for(handle, reason) with Pure = {
-  AnnotationSuggestion(
-    SuggestEffectRow,
-    "<documented-edge>",
-    [],
-    Located(span_zero(),
-      Inferred("eight-fold: Reason interrogation invites — chain unrooted at named source"))
-  )
-}
+)
 
 // ─── Verdict extraction — for queries against a specific axis ──────
-
-fn extract_verdict(report, kind) with Pure = {
-  let InterrogationReport(r) = report
-  match kind {
-    IntGraph      => r.graph_v,
-    IntHandler    => r.handler_v,
-    IntVerb       => r.verb_v,
-    IntRow        => r.row_v,
-    IntOwnership  => r.ownership_v,
+fn extract_verdict(report, kind) with Pure = match report {
+  InterrogationReport(r) => match kind {
+    IntGraph => r.graph_v,
+    IntHandler => r.handler_v,
+    IntVerb => r.verb_v,
+    IntRow => r.row_v,
+    IntOwnership => r.ownership_v,
     IntRefinement => r.refinement_v,
-    IntGradient   => r.gradient_v,
-    IntReason     => r.reason_v
-  }
+    IntGradient => r.gradient_v,
+    IntReason => r.reason_v,
+  },
 }
 
 fn verdict_is_invite(v) with Pure = match v {
   VerdictClears(_) => false,
-  VerdictInvites(_) => true
+  VerdictInvites(_) => true,
 }
 
 fn verdict_is_clear(v) with Pure = match v {
   VerdictClears(_) => true,
-  VerdictInvites(_) => false
+  VerdictInvites(_) => false,
 }
 
 // ─── Aggregate metrics — composed projections of reports ──────────
@@ -448,27 +438,15 @@ fn verdict_is_clear(v) with Pure = match v {
 // The audit's structured surface. Each metric is a pure transform
 // over a [InterrogationReport]. Cursor uses these to surface
 // project-wide gradient-density at various granularities.
-
-fn count_invites_by_kind(reports, kind) with Memory + Alloc = {
+fn count_invites_by_kind(reports, kind) with Memory + Alloc =
   count((report) => verdict_is_invite(extract_verdict(report, kind)), reports)
-}
 
 // Total-clear count: positions where ALL EIGHT clear. Reading
 // ULTIMATE FORM as the limit.
-fn total_clear_positions(reports) with Memory + Alloc = {
-  count(all_eight_clear, reports)
-}
+fn total_clear_positions(reports) with Memory + Alloc = count(all_eight_clear, reports)
 
-fn all_eight_clear(report) with Pure = {
-  let InterrogationReport(r) = report
-  verdict_is_clear(r.graph_v)
-    && verdict_is_clear(r.handler_v)
-    && verdict_is_clear(r.verb_v)
-    && verdict_is_clear(r.row_v)
-    && verdict_is_clear(r.ownership_v)
-    && verdict_is_clear(r.refinement_v)
-    && verdict_is_clear(r.gradient_v)
-    && verdict_is_clear(r.reason_v)
+fn all_eight_clear(report) with Pure = match report {
+  InterrogationReport(r) => verdict_is_clear(r.graph_v) && verdict_is_clear(r.handler_v) && verdict_is_clear(r.verb_v) && verdict_is_clear(r.row_v) && verdict_is_clear(r.ownership_v) && verdict_is_clear(r.refinement_v) && verdict_is_clear(r.gradient_v) && verdict_is_clear(r.reason_v),
 }
 
 // ─── Composition with cursor_default ────────────────────────────────
@@ -484,7 +462,7 @@ fn all_eight_clear(report) with Pure = {
 // "gradient density" as a single number per axis (the eight
 // numbers ARE the developer's distance from ULTIMATE FORM along
 // each kernel primitive).
-
+//
 // ─── The recursive realization ──────────────────────────────────────
 //
 // CLAUDE.md authoring discipline = humans run the eight before each
@@ -509,3 +487,4 @@ fn all_eight_clear(report) with Pure = {
 // medium teaches itself by being itself.
 //
 // The bus is on. The medium folds itself into its seed.
+

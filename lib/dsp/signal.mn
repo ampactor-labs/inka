@@ -34,41 +34,40 @@
 // form — per-instance resettable `<~` state so a sharp resonator BANK could draw
 // `<~` for every band — is the named peer Hβ.dsp.per-instance-feedback-state
 // (lib/dsp/feedback.mn's LF.M per-handler-state-slots migration).
-
 import dsp/processors
+
 import runtime/math
+
 import dsp/cfc
 
 // ── DSP Effects ─────────────────────────────────────────────
-
 effect DSP {
-    process(x: Float) -> Float
+  process(Float) -> Float
 }
 
 // Domain capability effects — exist primarily to be NEGATED. Allocation
 // uses the one substrate Alloc declaration in runtime/memory.mn.
-effect Network { fetch_param(url: String) -> String }
-effect Feedback { delay_tap(samples: Int, x: Float) -> Float }
+effect Network {
+  fetch_param(String) -> String
+}
+
+effect Feedback {
+  delay_tap(Int, Float) -> Float
+}
 
 // ── Pure Processors (pipeable, data-first) ───────────────────
+fn clip(x: Float, threshold: Float) -> Float with Pure = clamp(x, 0.0 - threshold, threshold)
 
-fn clip(x: Float, threshold: Float) -> Float with Pure =
-    clamp(x, 0.0 - threshold, threshold)
-
-fn gain(x: Float, factor: Float) -> Float with Pure =
-    x * factor
+fn gain(x: Float, factor: Float) -> Float with Pure = x * factor
 
 fn mix(wet: Float, dry: Float, amount: Float) -> Float with Pure =
-    dry * (1.0 - amount) + wet * amount
+  dry * (1.0 - amount) + wet * amount
 
-fn soft_clip(x: Float) -> Float with Pure =
-    if x >= 0.0 { x / (1.0 + x) } else { x / (1.0 - x) }
+fn soft_clip(x: Float) -> Float with Pure = if x >= 0.0 { x / (1.0 + x) } else { x / (1.0 - x) }
 
-fn db_to_linear(db: Float) -> Float with Pure =
-    exp(db * log(10.0) / 20.0)
+fn db_to_linear(db: Float) -> Float with Pure = exp(db * log(10.0) / 20.0)
 
-fn linear_to_db(x: Float) -> Float with Pure =
-    20.0 * log(x) / log(10.0)
+fn linear_to_db(x: Float) -> Float with Pure = 20.0 * log(x) / log(10.0)
 
 // ─── STFT — windowed, hopped, Hann magnitude spectrogram ────────────
 //
@@ -82,14 +81,14 @@ fn linear_to_db(x: Float) -> Float with Pure =
 // This is the direct-DFT STFT, O(frames x win x bins). A radix-2 FFT is the
 // named performance peer Hβ.dsp.stft-radix2-fft — it lowers the per-frame cost
 // from O(win x bins) to O(win log win), not needed for correctness here.
-
+//
 // The average magnitude at one frequency across every hop-spaced frame — the
 // frequency's mean spectral energy over the whole signal.
-fn stft_avg_loop(xs, freq: Int, sr: Int, win: Int, hop: Int, num_frames: Int, f: Int, acc: Float) with Memory = {
-  if f >= num_frames { acc / float_of_int(num_frames) }
-  else {
-    let (re, im) = dft_bin(xs, f * hop, win, freq, sr)
-    stft_avg_loop(xs, freq, sr, win, hop, num_frames, f + 1, acc + bin_mag(re, im))
+fn stft_avg_loop(xs, freq: Int, sr: Int, win: Int, hop: Int, num_frames: Int, f: Int, acc: Float) with Memory = if f >= num_frames {
+  acc / float_of_int(num_frames)
+} else {
+  match dft_bin(xs, f * hop, win, freq, sr) {
+    (re, im) => stft_avg_loop(xs, freq, sr, win, hop, num_frames, f + 1, acc + bin_mag(re, im)),
   }
 }
 
@@ -103,18 +102,28 @@ fn stft_avg_mag(xs, freq: Int, sr: Int, win: Int, hop: Int) with Memory = {
 // signal this names the carrier — the STFT's own verdict, independent of the
 // coupling grid. `best_v` threads the running peak as an annotated float
 // accumulator (the CFC representation discipline, below).
-fn stft_dominant_loop(xs, probes, sr: Int, win: Int, hop: Int, k: Int, np: Int, best_k: Int, best_v: Float) with Memory = {
-  if k >= np { best_k }
-  else {
-    let v = stft_avg_mag(xs, list_index(probes, k), sr, win, hop)
-    if v > best_v { stft_dominant_loop(xs, probes, sr, win, hop, k + 1, np, k, v) }
-    else { stft_dominant_loop(xs, probes, sr, win, hop, k + 1, np, best_k, best_v) }
+fn stft_dominant_loop(xs, probes, sr: Int, win: Int, hop: Int, k: Int, np: Int, best_k: Int, best_v: Float) with Memory = if k >= np {
+  best_k
+} else {
+  let v = stft_avg_mag(xs, list_index(probes, k), sr, win, hop)
+  if v > best_v {
+    stft_dominant_loop(xs, probes, sr, win, hop, k + 1, np, k, v)
+  } else {
+    stft_dominant_loop(xs, probes, sr, win, hop, k + 1, np, best_k, best_v)
   }
 }
 
-fn stft_dominant(xs, probes, sr: Int, win: Int, hop: Int) with Memory =
-  stft_dominant_loop(xs, probes, sr, win, hop, 1, len(probes), 0,
-                     stft_avg_mag(xs, list_index(probes, 0), sr, win, hop))
+fn stft_dominant(xs, probes, sr: Int, win: Int, hop: Int) with Memory = stft_dominant_loop(
+  xs,
+  probes,
+  sr,
+  win,
+  hop,
+  1,
+  len(probes),
+  0,
+  stft_avg_mag(xs, list_index(probes, 0), sr, win, hop)
+)
 
 // ─── Bandpass filter bank — cascaded single-pole `<~` sections ──────
 //
@@ -131,7 +140,6 @@ fn stft_dominant(xs, probes, sr: Int, win: Int, hop: Int) with Memory =
 // each section's f64 state live (the emit reads repr_of the feedback node — the
 // feedback-slot repr fix this run). This is the single-instance real-time face
 // of the recurrence; the comodulogram's demodulation below is the bank face.
-
 fn band_coeff(fc: Float, sr: Int) -> Float with Pure =
   1.0 - exp(0.0 - two_pi() * fc / float_of_int(sr))
 
@@ -144,9 +152,10 @@ fn bandpass_step(x: Float, a_hp: Float, a_lp: Float) -> Float = {
   ((prev) => a_lp * lp1 + (1.0 - a_lp) * prev) <~ delay(1)
 }
 
-fn bandpass_loop(xs, a_hp: Float, a_lp: Float, i: Int, n: Int, out) with Memory = {
-  if i >= n { out }
-  else { bandpass_loop(xs, a_hp, a_lp, i + 1, n, list_set(out, i, bandpass_step(xs[i], a_hp, a_lp))) }
+fn bandpass_loop(xs, a_hp: Float, a_lp: Float, i: Int, n: Int, out) with Memory = if i >= n {
+  out
+} else {
+  bandpass_loop(xs, a_hp, a_lp, i + 1, n, list_set(out, i, bandpass_step(xs[i], a_hp, a_lp)))
 }
 
 // Bandpass a signal through a passband [lo_hz, hi_hz]: two highpass sections at
@@ -162,12 +171,11 @@ fn bandpass(xs, lo_hz: Float, hi_hz: Float, sr: Int) with Memory + Alloc =
 
 // Single-bin DFT magnitude at `freq` over the whole signal — the plain
 // (unwindowed) energy at one frequency, for reading a filtered signal's spectrum.
-fn band_energy_loop(xs, freq: Int, sr: Int, i: Int, n: Int, re: Float, im: Float) with Memory = {
-  if i >= n { sqrt(re * re + im * im) }
-  else {
-    let ang = two_pi() * float_of_int(freq) * float_of_int(i) / float_of_int(sr)
-    band_energy_loop(xs, freq, sr, i + 1, n, re + xs[i] * cos(ang), im + xs[i] * sin(ang))
-  }
+fn band_energy_loop(xs, freq: Int, sr: Int, i: Int, n: Int, re: Float, im: Float) with Memory = if i >= n {
+  sqrt(re * re + im * im)
+} else {
+  let ang = two_pi() * float_of_int(freq) * float_of_int(i) / float_of_int(sr)
+  band_energy_loop(xs, freq, sr, i + 1, n, re + xs[i] * cos(ang), im + xs[i] * sin(ang))
 }
 
 fn band_energy(xs, freq: Int, sr: Int) with Memory =
@@ -200,7 +208,6 @@ fn band_energy(xs, freq: Int, sr: Int) with Memory =
 // resonators + per-band quadrature) that would let `<~` drive the whole
 // comodulogram — and sharpen the LOW-frequency resolution the windowed-DFT floor
 // limits — is the named peer Hβ.dsp.resonator-filter-bank.
-
 fn pac_comodulogram(xs, sr: Int, low_freqs, high_freqs, win: Int, hop: Int, band_lo: Float, band_hi: Float) with Memory + Alloc =
   comodulogram(bandpass(xs, band_lo, band_hi, sr), sr, low_freqs, high_freqs, win, hop)
 
@@ -209,14 +216,13 @@ fn pac_comodulogram(xs, sr: Int, low_freqs, high_freqs, win: Int, hop: Int, band
 // 9 cells (the count that puts the 9th-smallest at or below the threshold) sit
 // at or below peak/k. `cells_below` is that count — the coupling stands above
 // the noise floor when the bulk of the grid sits far below the peak.
-fn cells_below_loop(matrix, num_high: Int, thresh: Float, k: Int, total: Int, acc: Int) with Memory = {
-  if k >= total { acc }
-  else {
-    let li = k / num_high
-    let hi = k - li * num_high
-    let inc = if matrix_get(matrix, li, hi) <= thresh { 1 } else { 0 }
-    cells_below_loop(matrix, num_high, thresh, k + 1, total, acc + inc)
-  }
+fn cells_below_loop(matrix, num_high: Int, thresh: Float, k: Int, total: Int, acc: Int) with Memory = if k >= total {
+  acc
+} else {
+  let li = k / num_high
+  let hi = k - li * num_high
+  let inc = if matrix_get(matrix, li, hi) <= thresh { 1 } else { 0 }
+  cells_below_loop(matrix, num_high, thresh, k + 1, total, acc + inc)
 }
 
 fn cells_below(matrix, num_low: Int, num_high: Int, thresh: Float) with Memory =

@@ -17,15 +17,18 @@
 // each a ~> stage. The compiler verifies; proposers merely propose.
 // AI obsolescence is mechanism, not rhetoric: proposers are handlers
 // on an effect the compiler exposes.
-
 import types
+
 import graph
+
 import effects
+
 import infer
+
 import query
 
 // Mentl-owned ADTs
-
+//
 // Each variant carries an Option(Span) — Some when the candidate
 // originated from a user site (hovered hole, quick-fix request);
 // None for fully-internal speculation. narrow_row threads this into
@@ -40,10 +43,10 @@ type Annotation
   | AOwn(String, Option(Span))
   | ARef(String, Option(Span))
   | AWrapHandler(String, Int, Option(Span))
-                              // handler_name, the target fn's handle, span;
-                              // proposes wrapping the target's body in a
-                              // handler that absorbs an offending effect
 
+// handler_name, the target fn's handle, span;
+// proposes wrapping the target's body in a
+// handler that absorbs an offending effect
 type Capability
   = CMemoize
   | CParallelize
@@ -54,46 +57,50 @@ type Capability
   | CZeroCopy
   | CDeterministicDrop
 
-type Patch
-  = Patch(Span, String)     // span to replace, new text
+type Patch = Patch(Span, String)
 
-type Explanation
-  = Explanation(
-      String,     // code: E_MissingVariable, V_Pending, W_Suggestion, …
-      String,     // canonical_md: docs/errors/<code>.md
-      String,     // summary: one-line human-readable
-      Option(Patch),     // fix, present when MachineApplicable
-      Reason      // reason_chain: the Why chain
-    )
+// span to replace, new text
+type Explanation = Explanation(String, String, String, Option(Patch), Reason)
 
+// code: E_MissingVariable, V_Pending, W_Suggestion, …
+//
+// canonical_md: docs/errors/<code>.md
+//
+// summary: one-line human-readable
+//
+// fix, present when MachineApplicable
+//
+// reason_chain: the Why chain
+//
 // The propose projection: every PROVEN survivor as (Node, Reason), and every
 // vocabulary candidate the ALLOWED row refused as (name, Reason) — the
 // rejection keeps its Why (PLAN §5: retain the rejection reasons; the row
 // pruning IS the second moat, and a pruned candidate the developer cannot
 // see is a guess they cannot audit).
-type Proposals
-  = Proposals([(Node, Reason)], [(String, Reason)])   // survivors, rejected
+type Proposals = Proposals([(Node, Reason)], [(String, Reason)])
 
-type Context
-  = Context([(String, Scheme, Reason, SchemeKind)], EffRow, String, Span)   // scope bindings (the Env's own entries), the LIVE active-effect row, the enclosing decl's name ("" at top level — the vocabulary excludes candidates whose free-name closure reaches it: proposing the hole's own enclosing fn, or anything that transitively calls it, is nontermination by construction), and the HOLE'S OWN SPAN — the position the proposals are for, the ranker's nearness anchor (candidate_rank reads decl and use nearness against it).
-                            // The full Boolean row reaches synth — not a
-                            // flattened positive [EffName]. So `!E` (the
-                            // negative capability, PLAN §4⑥) is readable at
-                            // the synth gate: the row's ABSENT field IS the
-                            // forbidden set (`let EfRow(_, a, _) = row`),
-                            // carried on the one row the graph already
-                            // bound. The cursor carries the row handle,
-                            // never a lossy name-list re-derived from it
-                            // (Carried-Truth).
+// survivors, rejected
+type Context = Context([(String, Scheme, Reason, SchemeKind)], EffRow, String, Span)
 
-type Candidate
-  = Candidate(Node, Reason)  // AST fragment + why it was proposed
+// scope bindings (the Env's own entries), the LIVE active-effect row, the enclosing decl's name ("" at top level — the vocabulary excludes candidates whose free-name closure reaches it: proposing the hole's own enclosing fn, or anything that transitively calls it, is nontermination by construction), and the HOLE'S OWN SPAN — the position the proposals are for, the ranker's nearness anchor (candidate_rank reads decl and use nearness against it).
+// The full Boolean row reaches synth — not a
+// flattened positive [EffName]. So `!E` (the
+// negative capability, PLAN §4⑥) is readable at
+// the synth gate: the row's ABSENT field IS the
+// forbidden set (`let EfRow(_, a, _) = row`),
+// carried on the one row the graph already
+// bound. The cursor carries the row handle,
+// never a lossy name-list re-derived from it
+// (Carried-Truth).
+type Candidate = Candidate(Node, Reason)
 
+// AST fragment + why it was proposed
+//
 // Teach effect — the five tentacle entry points (DESIGN.md Ch 8). `mentl_default`
 // projects the substrate for the developer: hover, gradient, why-chain, error catalog,
 // unlock preview.
 effect Teach {
-  teach_here(String, Span, Ty) -> ()
+  teach_here(String, Span, Ty)
   teach_gradient(Int) -> Option(AnnotationSuggestion)
   teach_why(Int) -> Reason
   teach_error(String, Span, Reason) -> Explanation
@@ -104,9 +111,9 @@ effect Teach {
 // Three ops: propose (main), verify_candidate (Mentl-internal),
 // enumerate_inhabitants (multi-shot raw). Any proposer — enumerative,
 // SMT, LLM, user — plugs in as a handler. The compiler verifies.
-
 effect Synth {
-  synth_propose(Ty, EffRow, Context) -> Proposals   // proven survivors with their Whys + row-rejected vocabulary with theirs
+  // proven survivors with their Whys + row-rejected vocabulary with theirs
+  synth_propose(Ty, EffRow, Context) -> Proposals
   verify_candidate(Candidate, Ty) -> Bool
   enumerate_inhabitants(Ty, EffRow, Context) -> [Node]
 }
@@ -115,28 +122,11 @@ effect Synth {
 // GraphRead. Accumulates `teach_here` entries so the driver renders them as hover info.
 // Gradient and why use the speculative oracle and reason DAG respectively.
 handler mentl_default with annotations = [] {
-
-  teach_here(name, span, ty) =>
-    resume()
-      with annotations = [(name, span, ty)] ++ annotations,
-
-  teach_gradient(handle) =>
-    resume(gradient_next(handle)),
-
-  teach_why(handle) =>
-    resume(why_from_handle(handle)),
-
-  teach_error(code, span, reason) =>
-    resume(Explanation(
-      code,
-      "docs/errors/{code}.md",
-      catalog_summary(code),
-      None,
-      reason
-    )),
-
-  teach_unlock(annotation) =>
-    resume(unlock_capability(annotation))
+  teach_here(name, span, ty) => resume() with annotations = [(name, span, ty)] ++ annotations,
+  teach_gradient(handle) => resume(gradient_next(handle)),
+  teach_why(handle) => resume(why_from_handle(handle)),
+  teach_error(code, span, reason) => resume(Explanation(code, "docs/errors/{code}.md", catalog_summary(code), None, reason)),
+  teach_unlock(annotation) => resume(unlock_capability(annotation)),
 }
 
 // Speculative oracle: for each candidate annotation, checkpoint → tentative apply →
@@ -150,26 +140,27 @@ handler mentl_default with annotations = [] {
 // reads off CursorView.teach.
 fn gradient_next(handle) = {
   let node = graph_chase(handle)
-  let GNode(_, anchor_reason) = node
-  let GNode(kind, _) = node
-  match kind {
-    NBound(ty) => match ty {
-      TFun(params, _ret, _row) => {
-        let base_candidates = [APure(None), ANotAlloc(None), ANotIO(None), ANotNetwork(None)]
-        let param_candidates = ownership_candidates(params)
-        let all = base_candidates ++ param_candidates
-        let proven = try_each_annotation(handle, all, ty)
-        match pick_highest_leverage(proven) {
-          None => None,
-          Some(pair) => {
-            let (ann, _cap) = pair
-            Some(to_annotation_suggestion(ann, anchor_reason))
-          }
-        }
+  match node {
+    GNode(_, anchor_reason) => match node {
+      GNode(kind, _) => match kind {
+        NBound(ty) => match ty {
+          TFun(params, _ret, _row) => {
+            let base_candidates = [APure(None), ANotAlloc(None), ANotIO(None), ANotNetwork(None)]
+            let param_candidates = ownership_candidates(params)
+            let all = base_candidates ++ param_candidates
+            let proven = try_each_annotation(handle, all, ty)
+            match pick_highest_leverage(proven) {
+              None => None,
+              Some(pair) => match pair {
+                (ann, _cap) => Some(to_annotation_suggestion(ann, anchor_reason)),
+              },
+            }
+          },
+          _ => None,
+        },
+        _ => None,
       },
-      _ => None
     },
-    _ => None
   }
 }
 
@@ -180,27 +171,25 @@ fn gradient_next(handle) = {
 // `show_annotation`'s residue; unlocks is `capabilities_for_annotation`'s
 // list (multiple capabilities per annotation, not the lossy single
 // `unlock_capability`); reason wraps the anchor with Located.
-fn to_annotation_suggestion(ann, anchor_reason) = {
-  AnnotationSuggestion(
-    suggestion_kind_of(ann),
-    show_annotation(ann),
-    capability_labels(capabilities_for_annotation(ann)),
-    suggestion_reason(ann, anchor_reason)
-  )
-}
+fn to_annotation_suggestion(ann, anchor_reason) = AnnotationSuggestion(
+  suggestion_kind_of(ann),
+  show_annotation(ann),
+  capability_labels(capabilities_for_annotation(ann)),
+  suggestion_reason(ann, anchor_reason)
+)
 
 // Map an Annotation variant to its SuggestionKind axis. Drift 8
 // closure: SuggestionKind is the tagged dispatch surface; the
 // match below is the only place the mapping lives.
 fn suggestion_kind_of(ann) with Pure = match ann {
-  APure(_)              => SuggestEffectRow,
-  ANotAlloc(_)          => SuggestEffectRow,
-  ANotIO(_)             => SuggestEffectRow,
-  ANotNetwork(_)        => SuggestEffectRow,
-  ARefined(_, _, _)     => SuggestRefinement,
-  AOwn(_, _)            => SuggestOwnership,
-  ARef(_, _)            => SuggestOwnership,
-  AWrapHandler(_, _, _) => SuggestEffectRow
+  APure(_) => SuggestEffectRow,
+  ANotAlloc(_) => SuggestEffectRow,
+  ANotIO(_) => SuggestEffectRow,
+  ANotNetwork(_) => SuggestEffectRow,
+  ARefined(_, _, _) => SuggestRefinement,
+  AOwn(_, _) => SuggestOwnership,
+  ARef(_, _) => SuggestOwnership,
+  AWrapHandler(_, _, _) => SuggestEffectRow,
 }
 
 // Capability ADT to display label list. Used by AnnotationSuggestion.unlocks.
@@ -217,21 +206,21 @@ fn suggestion_reason(ann, anchor) = {
 }
 
 fn annotation_source_span(ann) with Pure = match ann {
-  APure(sp)             => sp,
-  ANotAlloc(sp)         => sp,
-  ANotIO(sp)            => sp,
-  ANotNetwork(sp)       => sp,
-  ARefined(_, _, sp)    => sp,
-  AOwn(_, sp)           => sp,
-  ARef(_, sp)           => sp,
-  AWrapHandler(_, _, sp) => sp
+  APure(sp) => sp,
+  ANotAlloc(sp) => sp,
+  ANotIO(sp) => sp,
+  ANotNetwork(sp) => sp,
+  ARefined(_, _, sp) => sp,
+  AOwn(_, sp) => sp,
+  ARef(_, sp) => sp,
+  AWrapHandler(_, _, sp) => sp,
 }
 
 fn suggestion_kind_label(k) with Pure = match k {
-  SuggestEffectRow   => "gradient: effect-row tightening",
-  SuggestOwnership   => "gradient: ownership marker",
-  SuggestRefinement  => "gradient: refinement predicate",
-  SuggestReturnType  => "gradient: result-type annotation"
+  SuggestEffectRow => "gradient: effect-row tightening",
+  SuggestOwnership => "gradient: ownership marker",
+  SuggestRefinement => "gradient: refinement predicate",
+  SuggestReturnType => "gradient: result-type annotation",
 }
 
 // Try each candidate: checkpoint → tentative apply → verify → rollback.
@@ -253,27 +242,36 @@ fn try_each_annotation(handle, candidates, base_ty) = {
   // (measured: the field leg trapped in intern_probe the moment this
   // site's heap leg landed — the image/scratch interleave's first live
   // case, the two-channel design's own witness).
-  intern_str("Alloc")     // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle (the apply arms' own convention)
-  intern_str("IO")        // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle
-  intern_str("Network")   // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle
-  candidates
-    |> map((ann) => {
-         // The FORK TRIPLE (R6): this site held only the graph leg — the
-         // recon's "half a fork pair" — so a candidate's allocations
-         // outlived it and its world isolation rode extent-balance alone.
-         // All three legs now, the synth fan's exact shape.
-         let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-         let mark = heap_mark()   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
-         let w = world_top()   // drift-audit: ignore — sequenced effectful read (the fork's world leg, consumed by world_restore), CLAUDE.md Anchor 6 exclusion
-         let proven = apply_annotation_tentatively(handle, ann, base_ty)
-         let ok = proven && verify_after_apply(handle)
-         graph_rollback(cp)
-         heap_reset(mark)
-         world_restore(w)
-         (ann, ok)
-       })
-    |> filter((pair) => { let (_, ok) = pair; ok })
-    |> map((pair) => { let (ann, _) = pair; (ann, unlock_capability(ann)) })
+  //
+  // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle (the apply arms' own convention)
+  intern_str("Alloc")
+  // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle
+  intern_str("IO")
+  // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle
+  intern_str("Network")
+  candidates |> map((ann) => {
+    // The FORK TRIPLE (R6): this site held only the graph leg — the
+    // recon's "half a fork pair" — so a candidate's allocations
+    // outlived it and its world isolation rode extent-balance alone.
+    // All three legs now, the synth fan's exact shape.
+    //
+    // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+    let cp = graph_push_checkpoint()
+    // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
+    let mark = heap_mark()
+    // drift-audit: ignore — sequenced effectful read (the fork's world leg, consumed by world_restore), CLAUDE.md Anchor 6 exclusion
+    let w = world_top()
+    let proven = apply_annotation_tentatively(handle, ann, base_ty)
+    let ok = proven && verify_after_apply(handle)
+    graph_rollback(cp)
+    heap_reset(mark)
+    world_restore(w)
+    (ann, ok)
+  }) |> filter((pair) => match pair {
+    (_, ok) => ok,
+  }) |> map((pair) => match pair {
+    (ann, _) => (ann, unlock_capability(ann)),
+  })
 }
 
 // Speculative apply: compute the narrowed type/row, graph_bind it, and
@@ -285,14 +283,18 @@ fn try_each_annotation(handle, candidates, base_ty) = {
 // read back proven (the boundness-only hole, seen RED on `++`-carrying
 // main before this returned the subsumption).
 fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
-  APure(sp)          => narrow_row_proven(handle, base_ty, mk_ef_pure(), sp),
-  // The literal names the effect the annotation severs — user-facing
+  APure(sp) => narrow_row_proven(handle, base_ty, mk_ef_pure(), sp),
+  ANotAlloc(sp) => // The literal names the effect the annotation severs — user-facing
   // vocabulary at the one mint; identity is the intern handle from here on
   // (EffName-is-a-handle LANDED; the old string-keyed-identity drift is
   // structurally gone — comparisons are word i32.eq by type).
-  ANotAlloc(sp)      => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Alloc"))]), sp),    // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
-  ANotIO(sp)         => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("IO"))]), sp),       // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
-  ANotNetwork(sp)    => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Network"))]), sp),  // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
+  //
+  // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
+  narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Alloc"))]), sp),
+  ANotIO(sp) => // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
+  narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("IO"))]), sp),
+  ANotNetwork(sp) => // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
+  narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Network"))]), sp),
   ARefined(_, pred, sp) => {
     // Narrowing the type via refinement — perform verify against the
     // narrowed predicate. Ledger captures; rollback removes. The ledger
@@ -302,9 +304,9 @@ fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
     verify(span, pred, Refinement(pred, PTrue))
     true
   },
-  AOwn(_, _) => true,    // parameter-level marker; type narrowing at call sites
+  AOwn(_, _) => // parameter-level marker; type narrowing at call sites
+  true,
   ARef(_, _) => true,
-
   AWrapHandler(handler_name, _target, sp) => {
     // H5: speculatively narrow the row by subtracting the named
     // handler's absorbed effects. The catalog lookup tells us what
@@ -312,8 +314,9 @@ fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
     // wrap (splice `handle ... with handler_name` around body) is
     // a TEXT patch — out of substrate, into the patcher's surface.
     let absorbed = catalog_handled_effects(handler_name)
-    if len(absorbed) == 0 { true }
-    else {
+    if len(absorbed) == 0 {
+      true
+    } else {
       let absorbed_row = mk_ef_closed(absorbed)
       // The narrowed row is base_row - absorbed_row. The wrap's row
       // arithmetic IS its proof: the proposed text patch installs the
@@ -325,10 +328,10 @@ fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
           narrow_row(handle, base_ty, narrowed, sp)
           true
         },
-        _ => true
+        _ => true,
       }
     }
-  }
+  },
 }
 
 // A row NARROWING's apply + proof, one home: bind the narrowed TFun
@@ -343,12 +346,12 @@ fn narrow_row_proven(handle, base_ty, narrow, source_span) = match base_ty {
     narrow_row(handle, base_ty, narrow, source_span)
     row_subsumes(resolve_row(base_row), narrow)
   },
-  _ => false
+  _ => false,
 }
 
 fn unwrap_source_span(opt) with Pure = match opt {
   Some(s) => s,
-  None    => span_zero()
+  None => span_zero(),
 }
 
 // H5: the effects a named handler absorbs — read LIVE from its env
@@ -360,45 +363,51 @@ fn unwrap_source_span(opt) with Pure = match opt {
 // live; the string table that re-derived this is dissolved. A name
 // that binds no handler (not found, or a non-handler kind) absorbs
 // nothing.
-fn catalog_handled_effects(handler_name) with Intern + Memory + EnvRead + !Mutate + Alloc = {
-  match env_lookup(handler_name) {
-    None => [],
-    Some(entry) => {
-      let (_scheme, _reason, kind) = entry
-      match kind {
-        // The handled effect is a live projection of the arms (§2), not a field.
-        HandlerKind(_, _, _, arms) => [ENamed(intern_str(derive_handler_ename(arms, handler_name)))],
-        _ => []
-      }
-    }
-  }
+fn catalog_handled_effects(handler_name) with Intern + Memory + EnvRead + !Mutate + Alloc = match env_lookup(handler_name) {
+  None => [],
+  Some(entry) => match entry {
+    (_scheme, _reason, kind) => match kind {
+      HandlerKind(_, _, _, arms) => // The handled effect is a live projection of the arms (§2), not a field.
+      [ENamed(intern_str(derive_handler_ename(arms, handler_name)))],
+      _ => [],
+    },
+  },
 }
 
 // H5: capability unlocks for an annotation. !Alloc unlocks
 // CRealTime; !IO + Pure unlock CCompileTimeEval; etc. The list is
 // returned by render_audit's severance section.
 fn capabilities_for_annotation(ann) with Pure = match ann {
-  APure(_)        => [CMemoize, CCompileTimeEval, CParallelize],
-  ANotAlloc(_)    => [CRealTime],
-  ANotIO(_)       => [CCompileTimeEval, CSandbox],
-  ANotNetwork(_)  => [CSandbox],
+  APure(_) => [CMemoize, CCompileTimeEval, CParallelize],
+  ANotAlloc(_) => [CRealTime],
+  ANotIO(_) => [CCompileTimeEval, CSandbox],
+  ANotNetwork(_) => [CSandbox],
   ARefined(_, _, _) => [],
-  AOwn(_, _)      => [CDeterministicDrop, CZeroCopy],
-  ARef(_, _)      => [],
-  AWrapHandler(_, _, _) => []     // unlocks depend on what's wrapped
+  AOwn(_, _) => [CDeterministicDrop, CZeroCopy],
+  ARef(_, _) => [],
+  AWrapHandler(_, _, _) => // unlocks depend on what's wrapped
+  [],
 }
 
 // H5: capability unlocks for a SEVERANCE — adding `!E` to an fn
 // that doesn't perform E. Mirrors capabilities_for_annotation but
 // keyed by EffName (severance candidate's name).
 fn capabilities_for_severance(name) = match name {
-  ENamed(h) =>
-    if h == intern_str("Alloc")   { [CRealTime] }              // drift-audit: ignore — the literal NAMES the effect at this one severance table; identity is the intern handle (word ==)
-    else if h == intern_str("IO") { [CCompileTimeEval, CSandbox] }  // drift-audit: ignore — same as above
-    else if h == intern_str("Network") { [CSandbox] }
-    else { [] },
+  ENamed(h) => // drift-audit: ignore — the literal NAMES the effect at this one severance table; identity is the intern handle (word ==)
+  if h == intern_str("Alloc") {
+    [CRealTime]
+  }
+  // drift-audit: ignore — same as above
+  else if h == intern_str("IO") {
+    [CCompileTimeEval, CSandbox]
+  } else if h == intern_str("Network") {
+    [CSandbox]
+  } else {
+    []
+  },
   EParameterized(_, _) => [],
-  EPure => []                  // the identity severs no capability
+  EPure => // the identity severs no capability
+  [],
 }
 
 fn narrow_row(handle, base_ty, narrow, source_span) = match base_ty {
@@ -409,11 +418,13 @@ fn narrow_row(handle, base_ty, narrow, source_span) = match base_ty {
     // quick-fix request); None for fully-internal speculation, in
     // which case we fall back to span_zero(). The Located wrapper
     // gives the Why Engine coordinates to render.
-    graph_bind(handle, narrowed,
-      Located(unwrap_source_span(source_span),
-              Inferred("mentl speculative narrow")))
+    graph_bind(
+      handle,
+      narrowed,
+      Located(unwrap_source_span(source_span), Inferred("mentl speculative narrow"))
+    )
   },
-  _ => ()
+  _ => (),
 }
 
 // The STRUCTURAL belt after a tentative apply: the post-apply handle
@@ -429,88 +440,112 @@ fn narrow_row(handle, base_ty, narrow, source_span) = match base_ty {
 //   row-kind  — handle was a row variable; not a narrow target.
 // The trail-based rollback restores whatever state the handle held
 // before the tentative apply, so this check is non-destructive.
-fn verify_after_apply(handle) = {
-  let GNode(kind, _) = graph_chase(handle)
-  match kind {
-    NBound(_)     => true,
+fn verify_after_apply(handle) = match graph_chase(handle) {
+  GNode(kind, _) => match kind {
+    NBound(_) => true,
     NErrorHole(_) => false,
-    NFree(_)      => false,
-    NRowBound(_)  => false,
+    NFree(_) => false,
+    NRowBound(_) => false,
     NRecordRowBound(_) => false,
-    NRowFree(_)   => false
-  }
+    NRowFree(_) => false,
+  },
 }
 
-fn ownership_candidates(params) = {
-  list_to_flat(params)
-    |> filter((p) => match param_resolved(p) { Unmarked => true, _ => false })
-    |> (inferred_params) => flatten(map((p) => {
-         let name = param_name(p)
-         [AOwn(name, None), ARef(name, None)]
-       }, inferred_params))
-}
+fn ownership_candidates(params) = list_to_flat(params) |> filter((p) => match param_resolved(p) {
+  Unmarked => true,
+  _ => false,
+}) |> ((inferred_params) => flatten(map(
+  (p) => {
+    let name = param_name(p)
+    [AOwn(name, None), ARef(name, None)]
+  },
+  inferred_params
+)))
 
-fn pick_highest_leverage(proven) = {
-  if len(proven) == 0 { None }
-  else {
-    let best = find_by_priority(proven,
-      [ANotAlloc(None), ANotIO(None), ANotNetwork(None), APure(None)])
-    match best {
-      Some(_) => best,
-      None    => Some(list_index(proven, 0))
-    }
+fn pick_highest_leverage(proven) = if len(proven) == 0 {
+  None
+} else {
+  let best = find_by_priority(proven, [ANotAlloc(None), ANotIO(None), ANotNetwork(None), APure(None)])
+  match best {
+    Some(_) => best,
+    None => Some(list_index(proven, 0)),
   }
 }
 
 fn find_by_priority(proven, priorities) = {
-  let matches = filter((target) => match find_annotation(proven, target) {
-    Some(_) => true,
-    None    => false
-  }, priorities)
-  if len(matches) == 0 { None }
-  else { find_annotation(proven, head(matches)) }
+  let matches = filter(
+    (target) => match find_annotation(proven, target) {
+      Some(_) => true,
+      None => false,
+    },
+    priorities
+  )
+  if len(matches) == 0 { None } else { find_annotation(proven, head(matches)) }
 }
 
 fn find_annotation(proven, target) = {
-  let hits = filter((pair) => {
-    let (ann, _) = pair
-    annotation_eq(ann, target)
-  }, proven)
+  let hits = filter(
+    (pair) => match pair {
+      (ann, _) => annotation_eq(ann, target),
+    },
+    proven
+  )
   if len(hits) == 0 { None } else { Some(head(hits)) }
 }
 
 // Span-insensitive: two APure(_) compare equal regardless of source
 // span. Priority comparison classifies by discriminator, not origin.
 fn annotation_eq(a, b) with Pure = match a {
-  APure(_)       => match b { APure(_)       => true, _ => false },
-  ANotAlloc(_)   => match b { ANotAlloc(_)   => true, _ => false },
-  ANotIO(_)      => match b { ANotIO(_)      => true, _ => false },
-  ANotNetwork(_) => match b { ANotNetwork(_) => true, _ => false },
-  ARefined(_, _, _) => match b { ARefined(_, _, _) => true, _ => false },
-  AOwn(_, _)     => match b { AOwn(_, _)     => true, _ => false },
-  ARef(_, _)     => match b { ARef(_, _)     => true, _ => false },
-  AWrapHandler(_, _, _) => match b { AWrapHandler(_, _, _) => true, _ => false }
+  APure(_) => match b {
+    APure(_) => true,
+    _ => false,
+  },
+  ANotAlloc(_) => match b {
+    ANotAlloc(_) => true,
+    _ => false,
+  },
+  ANotIO(_) => match b {
+    ANotIO(_) => true,
+    _ => false,
+  },
+  ANotNetwork(_) => match b {
+    ANotNetwork(_) => true,
+    _ => false,
+  },
+  ARefined(_, _, _) => match b {
+    ARefined(_, _, _) => true,
+    _ => false,
+  },
+  AOwn(_, _) => match b {
+    AOwn(_, _) => true,
+    _ => false,
+  },
+  ARef(_, _) => match b {
+    ARef(_, _) => true,
+    _ => false,
+  },
+  AWrapHandler(_, _, _) => match b {
+    AWrapHandler(_, _, _) => true,
+    _ => false,
+  },
 }
 
 // Walk the reason DAG from a graph handle. Every unification, instantiation, and
 // subsumption wrote a Reason edge into the graph; `why_expand` recurses through the chain
 // until leaf reasons (Declared, Unmarked, MissingVar) terminate. Depth-limited at 20.    // drift-audit: ignore — "cycles" referencing graph cycle detection, not deferred work
-fn why_from_handle(handle) = {
-  let GNode(_, reason) = graph_chase(handle)
-  why_expand(reason, 0)
+fn why_from_handle(handle) = match graph_chase(handle) {
+  GNode(_, reason) => why_expand(reason, 0),
 }
 
-fn teach_synthesize(hole_handle, context) = {
-  let GNode(kind, _) = graph_chase(hole_handle)
-  match kind {
-    NBound(ty) => {
-      let Context(_, allowed, _, _) = context
-      let Proposals(survivors, _rejected) = synth_propose(ty, allowed, context)
-      if len(survivors) == 1 { Some(head(survivors)) }
-      else { None }
+fn teach_synthesize(hole_handle, context) = match graph_chase(hole_handle) {
+  GNode(kind, _) => match kind {
+    NBound(ty) => match context {
+      Context(_, allowed, _, _) => match synth_propose(ty, allowed, context) {
+        Proposals(survivors, _rejected) => if len(survivors) == 1 { Some(head(survivors)) } else { None },
+      },
     },
-    _ => None
-  }
+    _ => None,
+  },
 }
 
 // H6: exhaustive Ty enumeration. Only TFun carries an explicit
@@ -518,83 +553,83 @@ fn teach_synthesize(hole_handle, context) = {
 // behavior by itself). Named explicitly so a future Ty whose row
 // semantics aren't pure surfaces as a compile error.
 fn extract_row(ty) with Memory = match ty {
-  TFun(_, _, row)   => row,
-  TInt              => mk_ef_pure(),
-  TFloat            => mk_ef_pure(),
-  TUnit             => mk_ef_pure(),
-  TByte             => mk_ef_pure(),
-  TList(_)          => mk_ef_pure(),
-  TTuple(_)         => mk_ef_pure(),
-  TVar(_)           => mk_ef_pure(),
-  TName(_, _)       => mk_ef_pure(),
-  TRecord(_)        => mk_ef_pure(),
+  TFun(_, _, row) => row,
+  TInt => mk_ef_pure(),
+  TFloat => mk_ef_pure(),
+  TUnit => mk_ef_pure(),
+  TByte => mk_ef_pure(),
+  TList(_) => mk_ef_pure(),
+  TTuple(_) => mk_ef_pure(),
+  TVar(_) => mk_ef_pure(),
+  TName(_, _) => mk_ef_pure(),
+  TRecord(_) => mk_ef_pure(),
   TRecordOpen(_, _) => mk_ef_pure(),
-  TRefined(_, _)    => mk_ef_pure(),
-  TCont(_, _, _, world) => world,   // resuming a continuation performs its frozen world (the TFun analog: extract_row(TFun) => row)
-  TAlias(_, inner)  => extract_row(inner)
+  TRefined(_, _) => mk_ef_pure(),
+  TCont(_, _, _, world) => // resuming a continuation performs its frozen world (the TFun analog: extract_row(TFun) => row)
+  world,
+  TAlias(_, inner) => extract_row(inner),
 }
 
 // Map an annotation to the capability it unlocks: add this annotation, get this capability.
 fn unlock_capability(annotation) with Pure = match annotation {
-  APure(_)          => CMemoize,
-  ANotAlloc(_)      => CRealTime,
-  ANotIO(_)         => CCompileTimeEval,
-  ANotNetwork(_)    => CSandbox,
+  APure(_) => CMemoize,
+  ANotAlloc(_) => CRealTime,
+  ANotIO(_) => CCompileTimeEval,
+  ANotNetwork(_) => CSandbox,
   ARefined(_, _, _) => CEliminateBoundsCheck,
-  AOwn(_, _)        => CDeterministicDrop,
-  ARef(_, _)        => CZeroCopy,
-  // Wrapping a body in an absorbing handler CONTAINS the offending effect —
+  AOwn(_, _) => CDeterministicDrop,
+  ARef(_, _) => CZeroCopy,
+  AWrapHandler(_, _, _) => // Wrapping a body in an absorbing handler CONTAINS the offending effect —
   // the sandbox capability, the same family ANotNetwork unlocks by proof.
-  AWrapHandler(_, _, _) => CSandbox
+  CSandbox,
 }
 
 // One-line summary for an error code. Every code has a full entry at
 // `docs/errors/<code>.md`; `teach_error` returns the full Explanation with that path.
 fn catalog_summary(code) = match code {
-  "E_MissingVariable"     => "Variable not found in scope",
-  "E_TypeMismatch"        => "Type mismatch",
+  "E_MissingVariable" => "Variable not found in scope",
+  "E_TypeMismatch" => "Type mismatch",
   "E_PatternInexhaustive" => "Match does not cover every variant",
-  "E_OwnershipViolation"  => "Double consume or ref escape",
-  "E_OccursCheck"         => "Circular type (infinite type)",
-  "E_UnresolvedType"      => "Type handle unresolved at codegen",
-  "E_RefinementRejected"  => "Refinement obligation rejected by solver",
-  "E_PurityViolated"      => "Function performs effects that violate declared purity",
-  "E_EffectMismatch"      => "Effect row mismatch",
+  "E_OwnershipViolation" => "Double consume or ref escape",
+  "E_OccursCheck" => "Circular type (infinite type)",
+  "E_UnresolvedType" => "Type handle unresolved at codegen",
+  "E_RefinementRejected" => "Refinement obligation rejected by solver",
+  "E_PurityViolated" => "Function performs effects that violate declared purity",
+  "E_EffectMismatch" => "Effect row mismatch",
   "E_HandlerUninstallable" => "Handler arms require effects not admitted by the enclosing declaration",
-  "E_FeedbackNoContext"   => "<~ requires an iterative context (install an Iterate-class handler)",
-  "E_ReplayExhausted"     => "Replay trace exhausted — recording too short or divergent run",
-  "P_ExpectedToken"       => "Parser expected a specific token",
-  "P_UnexpectedToken"     => "Parser hit a token that admits no production",
-  "V_Pending"             => "Verification obligation recorded, solver not yet installed",
-  "W_Suggestion"          => "Probable fix available (did-you-mean, synth)",
-  "T_Gradient"            => "Annotation would unlock a capability",
-  "T_OverDeclared"        => "Function declares a wider effect row than its body uses — tighten to unlock capabilities",
+  "E_FeedbackNoContext" => "<~ requires an iterative context (install an Iterate-class handler)",
+  "E_ReplayExhausted" => "Replay trace exhausted — recording too short or divergent run",
+  "P_ExpectedToken" => "Parser expected a specific token",
+  "P_UnexpectedToken" => "Parser hit a token that admits no production",
+  "V_Pending" => "Verification obligation recorded, solver not yet installed",
+  "W_Suggestion" => "Probable fix available (did-you-mean, synth)",
+  "T_Gradient" => "Annotation would unlock a capability",
+  "T_OverDeclared" => "Function declares a wider effect row than its body uses — tighten to unlock capabilities",
   "T_ContinuationEscapes" => "Multi-shot continuation captured inside arena",
-  _ => "Unknown error code: {code}"
+  _ => "Unknown error code: {code}",
 }
 
 // Display — for driver rendering
-
 fn show_annotation(ann) = match ann {
-  APure(_)             => "with Pure",
-  ANotAlloc(_)         => "with !Alloc",
-  ANotIO(_)            => "with !IO",
-  ANotNetwork(_)       => "with !Network",
+  APure(_) => "with Pure",
+  ANotAlloc(_) => "with !Alloc",
+  ANotIO(_) => "with !IO",
+  ANotNetwork(_) => "with !Network",
   ARefined(name, _, _) => "refined {name}",
-  AOwn(name, _)        => "own {name}",
-  ARef(name, _)        => "ref {name}",
-  AWrapHandler(name, _, _) => "wrap with {name}"
+  AOwn(name, _) => "own {name}",
+  ARef(name, _) => "ref {name}",
+  AWrapHandler(name, _, _) => "wrap with {name}",
 }
 
 fn show_capability(cap) with Pure = match cap {
-  CMemoize             => "Memoization (pure function caching)",
-  CParallelize         => "Automatic parallelization",
-  CCompileTimeEval     => "Compile-time evaluation",
-  CRealTime            => "Real-time safe (proven zero allocation)",
-  CSandbox             => "Sandbox (proven no network access)",
+  CMemoize => "Memoization (pure function caching)",
+  CParallelize => "Automatic parallelization",
+  CCompileTimeEval => "Compile-time evaluation",
+  CRealTime => "Real-time safe (proven zero allocation)",
+  CSandbox => "Sandbox (proven no network access)",
   CEliminateBoundsCheck => "Bounds check elimination",
-  CZeroCopy            => "Zero-copy (proven no ownership transfer)",
-  CDeterministicDrop   => "Deterministic drop (proven single use)"
+  CZeroCopy => "Zero-copy (proven no ownership transfer)",
+  CDeterministicDrop => "Deterministic drop (proven single use)",
 }
 
 // render_why — Located-aware Why Engine renderer (I18)
@@ -609,83 +644,52 @@ fn show_capability(cap) with Pure = match cap {
 // render_why chases them into readable coordinate trails. IDEs/LSP
 // consume this output as hover text; `mentl explain <handle>` dumps
 // it to stdout.
-
 fn indent_for(depth) = indent_for_loop(depth, "")
 
-fn indent_for_loop(n, acc) = {
-  if n <= 0 { acc }
-  else { indent_for_loop(n - 1, acc ++ "  ") }
-}
+fn indent_for_loop(n, acc) = if n <= 0 { acc } else { indent_for_loop(n - 1, acc ++ "  ") }
 
 fn render_why(reason) = render_why_at(reason, 0)
 
-fn render_why_at(reason, depth) = {
-  if depth > 20 { "{indent_for(depth)}[depth limit reached]\n" }
-  else match reason {
-    Located(span, inner) =>
-      "{indent_for(depth)}{show_span(span)}\n{render_why_at(inner, depth + 1)}",
-
-    Unified(a, b) =>
-      "{indent_for(depth)}unified:\n{render_why_at(a, depth + 1)}{indent_for(depth)}with:\n{render_why_at(b, depth + 1)}",
-
-    OpConstraint(op, l, r) =>
-      "{indent_for(depth)}op '{op}' constraint:\n{render_why_at(l, depth + 1)}{indent_for(depth)}versus:\n{render_why_at(r, depth + 1)}",
-
-    VarLookup(name, inner) =>
-      "{indent_for(depth)}var '{name}' lookup:\n{render_why_at(inner, depth + 1)}",
-
-    FnReturn(name, inner) =>
-      "{indent_for(depth)}return of '{name}':\n{render_why_at(inner, depth + 1)}",   // drift-audit: ignore — output literal
-
-    FnParam(name, idx, inner) =>
-      "{indent_for(depth)}param '{name}' (#{int_to_str(idx)}):\n{render_why_at(inner, depth + 1)}",
-
-    MatchBranch(a, b) =>
-      "{indent_for(depth)}match branches:\n{render_why_at(a, depth + 1)}{indent_for(depth)}& \n{render_why_at(b, depth + 1)}",
-
-    ListElement(inner) =>
-      "{indent_for(depth)}list element:\n{render_why_at(inner, depth + 1)}",
-
-    IfBranch(inner) =>
-      "{indent_for(depth)}if branch:\n{render_why_at(inner, depth + 1)}",
-
-    LetBinding(name, inner) =>
-      "{indent_for(depth)}let '{name}':\n{render_why_at(inner, depth + 1)}",
-
-    Instantiation(name, inner) =>
-      "{indent_for(depth)}instantiation of '{name}':\n{render_why_at(inner, depth + 1)}",
-
-    InferredCallReturn(callee, inner) =>
-      "{indent_for(depth)}call to '{callee}':\n{render_why_at(inner, depth + 1)}",
-
-    InferredPipeResult(verb, inner) =>
-      "{indent_for(depth)}{verb} pipe:\n{render_why_at(inner, depth + 1)}",
-
-    // Leaf variants — render via show_reason and terminate.
-    Declared(_)          => render_leaf(reason, depth),
-    Inferred(_)          => render_leaf(reason, depth),
-    Fresh(_)             => render_leaf(reason, depth),
-    MissingVar(_)        => render_leaf(reason, depth),
-    Placeholder(_)       => render_leaf(reason, depth),
-    BinOpPlaceholder(_)  => render_leaf(reason, depth),
-    Refinement(_, _)     => render_leaf(reason, depth),
-    UnifyFailed(_, _)    => render_leaf(reason, depth),
+fn render_why_at(reason, depth) = if depth > 20 {
+  "{indent_for(depth)}[depth limit reached]\n"
+} else {
+  match reason {
+    Located(span, inner) => "{indent_for(depth)}{show_span(span)}\n{render_why_at(inner, depth + 1)}",
+    Unified(a, b) => "{indent_for(depth)}unified:\n{render_why_at(a, depth + 1)}{indent_for(depth)}with:\n{render_why_at(b, depth + 1)}",
+    OpConstraint(op, l, r) => "{indent_for(depth)}op '{op}' constraint:\n{render_why_at(l, depth + 1)}{indent_for(depth)}versus:\n{render_why_at(r, depth + 1)}",
+    VarLookup(name, inner) => "{indent_for(depth)}var '{name}' lookup:\n{render_why_at(inner, depth + 1)}",
+    FnReturn(name, inner) => // drift-audit: ignore — output literal
+    "{indent_for(depth)}return of '{name}':\n{render_why_at(inner, depth + 1)}",
+    FnParam(name, idx, inner) => "{indent_for(depth)}param '{name}' (#{int_to_str(idx)}):\n{render_why_at(inner, depth + 1)}",
+    MatchBranch(a, b) => "{indent_for(depth)}match branches:\n{render_why_at(a, depth + 1)}{indent_for(depth)}& \n{render_why_at(b, depth + 1)}",
+    ListElement(inner) => "{indent_for(depth)}list element:\n{render_why_at(inner, depth + 1)}",
+    IfBranch(inner) => "{indent_for(depth)}if branch:\n{render_why_at(inner, depth + 1)}",
+    LetBinding(name, inner) => "{indent_for(depth)}let '{name}':\n{render_why_at(inner, depth + 1)}",
+    Instantiation(name, inner) => "{indent_for(depth)}instantiation of '{name}':\n{render_why_at(inner, depth + 1)}",
+    InferredCallReturn(callee, inner) => "{indent_for(depth)}call to '{callee}':\n{render_why_at(inner, depth + 1)}",
+    InferredPipeResult(verb, inner) => "{indent_for(depth)}{verb} pipe:\n{render_why_at(inner, depth + 1)}",
+    Declared(_) => // Leaf variants — render via show_reason and terminate.
+    render_leaf(reason, depth),
+    Inferred(_) => render_leaf(reason, depth),
+    Fresh(_) => render_leaf(reason, depth),
+    MissingVar(_) => render_leaf(reason, depth),
+    Placeholder(_) => render_leaf(reason, depth),
+    BinOpPlaceholder(_) => render_leaf(reason, depth),
+    Refinement(_, _) => render_leaf(reason, depth),
+    UnifyFailed(_, _) => render_leaf(reason, depth),
     FreshInContext(_, _) => render_leaf(reason, depth),
-    DefaultReason(_, _)  => render_leaf(reason, depth),
-    VerifyWitness(_)     => render_leaf(reason, depth)
+    DefaultReason(_, _) => render_leaf(reason, depth),
+    VerifyWitness(_) => render_leaf(reason, depth),
   }
 }
 
-fn render_leaf(reason, depth) = {
-  "{indent_for(depth)}{show_reason(reason)}\n"
-}
+fn render_leaf(reason, depth) = "{indent_for(depth)}{show_reason(reason)}\n"
 
 // teach_why_string ties the effect-returning teach_why to the pure
 // renderer. Callers (LSP hover, explain surface, Quick Fix surface)
 // invoke this directly.
-fn teach_why_string(handle) with GraphRead + Memory + Alloc + Intern = {
+fn teach_why_string(handle) with GraphRead + Memory + Alloc + Intern =
   render_why(why_from_handle(handle))
-}
 
 // ─── teach_session — `<|` fanout over the five Teach-cluster ops ──────
 //
@@ -699,47 +703,37 @@ fn teach_why_string(handle) with GraphRead + Memory + Alloc + Intern = {
 // Drift refused: 1 (no dispatch table); 6 (five uniform branches; no
 // primitive special case); 7 (output 5-tuple, not parallel-arrays);
 // 9 (all five bodied here; no "later").
-
-fn teach_session(handle) with Teach + GraphRead = {
-  let GNode(kind, _) = graph_chase(handle)
-  let span = caret_span_from_handle(handle)
-  let pos = (handle, kind, span)
-  let (_, gradient, why, _, _) =
-    pos
-      <| (
-        ((h, k, sp)) => match k {
-          NBound(ty) => teach_here("at handle", sp, ty),
-          _          => ()
-        },
-        ((h, _, _))  => teach_gradient(h),
-        ((h, _, _))  => teach_why(h),
-        ((h, _, sp)) => teach_error("E_Position", sp,
-                                Inferred("teach_session inquiry")),
-        ((_, k, _))  => match k {
-          NBound(ty) => match annotation_inferred_for(ty) {
-            Some(ann) => teach_unlock(ann),
-            None      => CMemoize
-          },
-          _          => CMemoize
-        }
-      )
-  TeachSession(gradient, why)
+fn teach_session(handle) with Teach + GraphRead = match graph_chase(handle) {
+  GNode(kind, _) => {
+    let span = caret_span_from_handle(handle)
+    let pos = (handle, kind, span)
+    match pos <| (((h, k, sp)) => match k {
+      NBound(ty) => teach_here("at handle", sp, ty),
+      _ => (),
+    }, ((h, _, _)) => teach_gradient(h), ((h, _, _)) => teach_why(h), ((h, _, sp)) => teach_error("E_Position", sp, Inferred("teach_session inquiry")), ((_, k, _)) => match k {
+      NBound(ty) => match annotation_inferred_for(ty) {
+        Some(ann) => teach_unlock(ann),
+        None => CMemoize,
+      },
+      _ => CMemoize,
+    }) {
+      (_, gradient, why, _, _) => TeachSession(gradient, why),
+    }
+  },
 }
 
-type TeachSession
-  = TeachSession(Option(AnnotationSuggestion), Reason)
+type TeachSession = TeachSession(Option(AnnotationSuggestion), Reason)
 
-fn caret_span_from_handle(handle) with GraphRead = {
-  let GNode(_, reason) = graph_chase(handle)
-  match reason {
+fn caret_span_from_handle(handle) with GraphRead = match graph_chase(handle) {
+  GNode(_, reason) => match reason {
     Located(sp, _) => sp,
-    _              => span_zero()
-  }
+    _ => span_zero(),
+  },
 }
 
 fn annotation_inferred_for(ty) with Pure = match ty {
   TFun(_, _, _) => Some(APure(None)),
-  _             => None
+  _ => None,
 }
 
 // ─── Multi-position teach — map over a handle list ───────────────────
@@ -750,7 +744,7 @@ fn annotation_inferred_for(ty) with Pure = match ty {
 // own core is a `><` fanout under its own `~> Thread` at the call site
 // (Hβ.lower.schedule-specialized-callee). Drift 6 erasure: small-arity
 // special-case removed.
-
+//
 // ─── teach_ic_loop — `<~` IC fixpoint on teach knowledge stability ────
 //
 // Teach loops until the project's knowledge base stops changing.
@@ -762,10 +756,5 @@ fn annotation_inferred_for(ty) with Pure = match ty {
 // `<~` requires iterative context — IC handler installed upstream.
 // accumulate(initial_handle) starts at the cursor's argmax and
 // IC-narrows toward proven-complete teach surface.
-
-fn teach_ic_loop(initial_handle) with Teach + IC + GraphRead = {
-  initial_handle
-    |> teach_session
-    ~> mentl_default
-      <~ accumulate(initial_handle)
-}
+fn teach_ic_loop(initial_handle) with Teach + IC + GraphRead =
+  initial_handle |> teach_session ~> mentl_default <~ accumulate(initial_handle)

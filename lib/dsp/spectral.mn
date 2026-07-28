@@ -11,46 +11,38 @@
 //
 // Pure waveshaping functions use data-FIRST signatures for pipe compat:
 //   x |> warm_shape(2.0) |> fold_shape(3.0)
-
 import dsp/signal
 
 // ── Distortion Effect ───────────────────────────────────────
 // The core abstraction: "distort this sample at this drive level"
 // HOW it distorts depends entirely on the handler.
-
 effect Distort {
-    distort(x: Float, drive: Float) -> Float
+  distort(Float, Float) -> Float
 }
 
 // ── Pure Waveshaping Functions ──────────────────────────────
 // Each is !Alloc-safe, pipeable, and implements a different
 // harmonic character. These are the building blocks handlers
 // choose from.
-
+//
 // Warm saturation — odd harmonics, asymptotically approaches ±1
 // Classic analog character. tanh(drive * x) normalized.
-fn warm_shape(x: Float, drive: Float) -> Float with Pure =
-    tanh(drive * x)
+fn warm_shape(x: Float, drive: Float) -> Float with Pure = tanh(drive * x)
 
 // Foldback distortion — signal folds back on itself past threshold.
 // Creates dense, inharmonic overtones at high drive. Gnarly.
 // Uses sin() to create the folding behavior.
-fn fold_shape(x: Float, drive: Float) -> Float with Pure =
-    sin(drive * x)
+fn fold_shape(x: Float, drive: Float) -> Float with Pure = sin(drive * x)
 
 // Asymmetric soft clip — different positive/negative response.
 // Even harmonics (tube character). Positive pushes harder.
 fn asym_shape(x: Float, drive: Float) -> Float with Pure =
-    if x >= 0.0 {
-        tanh(drive * 1.2 * x)
-    } else {
-        tanh(drive * 0.8 * x)
-    }
+  if x >= 0.0 { tanh(drive * 1.2 * x) } else { tanh(drive * 0.8 * x) }
 
 // Exponential wavefolder — cascaded folding with exponential decay.
 // The more drive, the more folds. Wild harmonics.
 fn exp_fold(x: Float, drive: Float) -> Float with Pure =
-    tanh(sin(drive * x) * exp(0.0 - abs(x) * 0.5))
+  tanh(sin(drive * x) * exp(0.0 - abs(x) * 0.5))
 
 // ── Spectral Flux Estimation ────────────────────────────────
 // Spectral flux = rate of change of spectral energy.
@@ -58,14 +50,12 @@ fn exp_fold(x: Float, drive: Float) -> Float with Pure =
 // High flux = transient (attack). Low flux = sustain.
 //
 // Returns a value in [0, 1] — normalized flux intensity.
-
-fn estimate_flux(fast_env: Float, slow_env: Float) -> Float with Pure =
-    if slow_env > 0.001 {
-        let raw = abs(fast_env - slow_env) / (slow_env + 0.001)
-        clamp(raw, 0.0, 1.0)
-    } else {
-        0.0
-    }
+fn estimate_flux(fast_env: Float, slow_env: Float) -> Float with Pure = if slow_env > 0.001 {
+  let raw = abs(fast_env - slow_env) / (slow_env + 0.001)
+  clamp(raw, 0.0, 1.0)
+} else {
+  0.0
+}
 
 // ── Adaptive Waveshaping ────────────────────────────────────
 // The heart of SFD: morphs between warm, asymmetric, and fold
@@ -73,21 +63,18 @@ fn estimate_flux(fast_env: Float, slow_env: Float) -> Float with Pure =
 // Mid flux = asymmetric (tube harmonics).
 //
 // The morph is continuous — no hard switching artifacts.
-
 fn adaptive_shape(x: Float, drive: Float, flux: Float) -> Float with Pure = {
-    let w = warm_shape(x, drive)
-    let a = asym_shape(x, drive)
-    let f = fold_shape(x, drive * 0.8)
-
-    // Three-way crossfade based on flux:
-    //   flux [0, 0.3]   → warm dominates
-    //   flux [0.3, 0.7] → asymmetric dominates
-    //   flux [0.7, 1.0] → fold dominates
-    let warm_amt = clamp(1.0 - flux * 3.0, 0.0, 1.0)
-    let fold_amt = clamp(flux * 3.0 - 2.0, 0.0, 1.0)
-    let asym_amt = 1.0 - warm_amt - fold_amt
-
-    w * warm_amt + a * asym_amt + f * fold_amt
+  let w = warm_shape(x, drive)
+  let a = asym_shape(x, drive)
+  let f = fold_shape(x, drive * 0.8)
+  // Three-way crossfade based on flux:
+  //   flux [0, 0.3]   → warm dominates
+  //   flux [0.3, 0.7] → asymmetric dominates
+  //   flux [0.7, 1.0] → fold dominates
+  let warm_amt = clamp(1.0 - flux * 3.0, 0.0, 1.0)
+  let fold_amt = clamp(flux * 3.0 - 2.0, 0.0, 1.0)
+  let asym_amt = 1.0 - warm_amt - fold_amt
+  w * warm_amt + a * asym_amt + f * fold_amt
 }
 
 // ── spectral_flux_distort — the forward handler ─────────────
@@ -103,15 +90,13 @@ fn adaptive_shape(x: Float, drive: Float, flux: Float) -> Float with Pure = {
 // coefficients (0.7 fast, 0.05 slow) — fast chases transients, the slow one
 // holds the sustained level; their ratio IS the flux. `with Pure` (no heap):
 // the envelopes are the handler's own state, mutated in place per resume.
-
 handler spectral_flux_distort with fast_env = 0.0, slow_env = 0.0 {
   distort(x, drive) => {
     let mag = if x >= 0.0 { x } else { 0.0 - x }
     let new_fast = fast_env + 0.7 * (mag - fast_env)
     let new_slow = slow_env + 0.05 * (mag - slow_env)
     let flux = estimate_flux(new_fast, new_slow)
-    resume(adaptive_shape(x, drive, flux))
-      with fast_env = new_fast, slow_env = new_slow
+    resume(adaptive_shape(x, drive, flux)) with fast_env = new_fast, slow_env = new_slow
   },
 }
 
@@ -119,7 +104,6 @@ handler spectral_flux_distort with fast_env = 0.0, slow_env = 0.0 {
 // Fixed-character handlers — same `~> distort` chain, hardcoded shape. The
 // preset IS the handler choice; swapping warm_distort for fold_distort
 // changes the entire character with no chain edit.
-
 handler warm_distort {
   distort(x, drive) => resume(warm_shape(x, drive)),
 }

@@ -84,19 +84,34 @@ while IFS=$'\t' read -r mode_num mode_name regex scope notes; do
     [[ ${#scan_files[@]} -eq 0 ]] && continue
 
     # GNU grep -E with line numbers. Suppressions: drop lines that carry
-    # `drift-audit: ignore` on the same line, OR whose PREVIOUS line is a
-    # marker-only comment (the leading position `mentl fmt` renders a
-    # trailing comment into — canonical layout moves prose above its
-    # statement, so the marker must suppress the line it now precedes).
+    # `drift-audit: ignore` on the same line, OR whose PREVIOUS line
+    # carries the marker anywhere (the canonical layout renders a
+    # trailing comment into leading position — either a marker-only line
+    # or an arm-arrow line `X => // drift-audit: ignore …` with the body
+    # on the next line — so the marker suppresses the line it precedes).
     matches=$(grep -nE --color=never "$regex" "${scan_files[@]}" 2>/dev/null || true)
     [[ -z "$matches" ]] && continue
 
     filtered=$(printf '%s\n' "$matches" | grep -vE 'drift-audit:\s*ignore' | while IFS=: read -r mf ml mrest; do
         [[ -z "$mf" || -z "$ml" ]] && continue
-        prev=$((ml - 1))
-        if [[ $prev -ge 1 ]] && sed -n "${prev}p" "$mf" 2>/dev/null | grep -qE '^[[:space:]]*(//|#).*drift-audit:[[:space:]]*ignore'; then
-            continue
-        fi
+        # Walk the contiguous attached-prose run above the flagged line
+        # (comment lines, arm-arrow prose heads, list-continuation lines —
+        # bounded at 15): the canonical layout merges a trailing marker
+        # into that run, so a marker ANYWHERE in it suppresses the
+        # statement the run precedes.
+        suppressed=0
+        prev=$((ml - 1)); steps=0
+        while [[ $prev -ge 1 && $steps -lt 15 ]]; do
+            pline=$(sed -n "${prev}p" "$mf" 2>/dev/null)
+            if printf '%s' "$pline" | grep -qE 'drift-audit:[[:space:]]*ignore'; then
+                suppressed=1; break
+            fi
+            if printf '%s' "$pline" | grep -qE '^[[:space:]]*(//|#)|(=>[[:space:]]*//)|(,[[:space:]]*$)|(\[[[:space:]]*$)|(\([[:space:]]*$)|(\{[[:space:]]*$)'; then
+                prev=$((prev - 1)); steps=$((steps + 1)); continue
+            fi
+            break
+        done
+        [[ $suppressed -eq 1 ]] && continue
         printf '%s:%s:%s\n' "$mf" "$ml" "$mrest"
     done || true)
     [[ -z "$filtered" ]] && continue

@@ -27,23 +27,38 @@
 //   query_default       → query.mn
 //   affine_ledger       → own.mn
 //   clock_real, tick_real, sample_real, deadline_real → clock.mn
-
 import graph
+
 import types
+
 import effects
+
 import infer
+
 import lower
+
 import backends/wasm
+
 import lexer
+
 import parser
+
 import own
+
 import verify
+
 import mentl
+
 import query
+
 import dsp/clock
+
 import driver
+
 import runtime/io
+
 import egraph
+
 import oracle
 
 // The spine — entry points as |> + ~> topology
@@ -101,42 +116,28 @@ import oracle
 // dependency order; within-run incrementality IS the epoch cursor
 // (§2 cached-cursor mode), and cross-run skip is the image-persist
 // peer (Hβ.persist.module-image-cache).
+fn infer_context(body) =
+  body() ~> affine_ledger ~> region_tracker ~> verify_ledger ~> lookup_ty_graph ~> env_handler(make_list(0), 0, env_index_new()) ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink ~> diagnostics_handler ~> intern_table
 
-fn infer_context(body) = {
-  body()
-    ~> affine_ledger
-    ~> region_tracker
-    ~> verify_ledger
-    ~> lookup_ty_graph
-    ~> env_handler(make_list(0), 0, env_index_new())
-    ~> graph_handler([], 0, 0, 0, [], 0, 0)
-    ~> mutate_sink
-    ~> diagnostics_handler
-    ~> intern_table
-}
-
-fn compile(entry_module) = {
-  infer_context(() =>
-    {
-      // driver_check_entry infers the deps DAG + the entry ONCE and returns
-      // the entry's already-typed AST — compile lowers that live graph, no
-      // second fs_read / frontend / infer_program (Carried-Truth: the entry
-      // is proven once and read live, never re-derived).
-      entry_module |> driver_compile_entry |> compile_remainder
-    }
-      ~> wat_stdout
-      ~> persist_to_disk       // the warm-start cache (driver_compile_entry)
-      ~> fail_exit             // image_resume's refusal policy (probe-guarded)
-      ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache
-      ~> string_table          // W5 — compile-time interned string offsets
-      ~> emit_memory_bump      // swap for emit_memory_arena to prove surface
-      ~> body_context          // H1 — per-fn-body emit metadata
-      ~> mentl_default
-      ~> lower_scope
-      ~> arm_state_ctx([], OneShot, "")
-      ~> spec_registry
-  )
-}
+fn compile(entry_module) = infer_context(() => {
+  // driver_check_entry infers the deps DAG + the entry ONCE and returns
+  // the entry's already-typed AST — compile lowers that live graph, no
+  // second fs_read / frontend / infer_program (Carried-Truth: the entry
+  // is proven once and read live, never re-derived).
+  entry_module |> driver_compile_entry |> compile_remainder
+} ~> wat_stdout ~>
+// the warm-start cache (driver_compile_entry)
+persist_to_disk ~>
+// image_resume's refusal policy (probe-guarded)
+fail_exit ~>
+// FS — per-file byte I/O for driver / cache
+wasi_filesystem ~>
+// W5 — compile-time interned string offsets
+string_table ~>
+// swap for emit_memory_arena to prove surface
+emit_memory_bump ~>
+// H1 — per-fn-body emit metadata
+body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 // Per Hβ.first-light.compile-stdin-substrate (2026-05-09): canonical
 // stdin-source compile path. Per Unix vocabulary `mentl compile -`
@@ -178,28 +179,32 @@ fn compile(entry_module) = {
 // reports land before the diag_refusals read — the teaching precedes the
 // tally it feeds.
 fn gate_reads(lowered) = {
-  report_verify_debt(verify_debt())   // drift-audit: ignore — sequenced effectful ledger read, projected before emit
-  report_unhandled_effects(lowered)   // drift-audit: ignore — sequenced effectful gate read (the verify_debt shape); reports must land before the diag_refusals read below
+  // drift-audit: ignore — sequenced effectful ledger read, projected before emit
+  report_verify_debt(verify_debt())
+  // drift-audit: ignore — sequenced effectful gate read (the verify_debt shape); reports must land before the diag_refusals read below
+  report_unhandled_effects(lowered)
   let holes = collect_value_holes_decls(lowered)
   // The ARMED classes, read LIVE off the ledger the diagnostics handler keeps
   // (diag_refuses names them; a class arms only when the wheel's own census of it
   // is zero, so this can never refuse the medium). The hole gate was this law
   // with one arm; these are its others. Productive at the walk, refusing at the
   // boundary — SYNTAX's "a hole is productive, never executable", generalized.
-  let refused = diag_refusals()   // drift-audit: ignore — sequenced effectful ledger read, guarding the emit (the verify_debt read above is the same shape)
+  //
+  // drift-audit: ignore — sequenced effectful ledger read, guarding the emit (the verify_debt read above is the same shape)
   // The verdict binds BEFORE the hole report so refusals never double-count
   // a hole (report_holes raises the armed E_UnresolvedHole; the tally read
   // above deliberately precedes it — len(holes) is the hole half).
+  let refused = diag_refusals()
   let nholes = len(holes)
   let verdict = (nholes, refused)
   if nholes > 0 { report_holes(holes, 0) }
   verdict
 }
 
-fn executable_gate(lowered) = {
-  let (nholes, refused) = gate_reads(lowered)
-  if nholes == 0 && refused == 0 { lowered }
-  else {
+fn executable_gate(lowered) = match gate_reads(lowered) {
+  (nholes, refused) => if nholes == 0 && refused == 0 {
+    lowered
+  } else {
     if refused > 0 {
       eprint_string("mentl: refusing to emit — {int_to_str(refused)} claim(s) the medium could not discharge\n")
     }
@@ -207,7 +212,7 @@ fn executable_gate(lowered) = {
     // proc_exit never returns (the emit appends unreachable after it);
     // the tail value only closes the type of the branch.
     lowered
-  }
+  },
 }
 
 // ─── The evidence hole — the gate's third read ──────────────────────
@@ -227,126 +232,124 @@ fn executable_gate(lowered) = {
 // evidence-dispatched family refuses. check/edit never route here — the
 // productive surfaces stay open (SYNTAX: a hole is productive, never
 // executable — this is the same law at the evidence altitude).
-fn report_unhandled_effects(lowered) = {
-  match env_lookup("main") {
-    Some(entry) => {
-      let (scheme, reason, _) = entry
-      let Forall(_, ty) = scheme
-      match ty {
-        TFun(_, _, row) => {
-          let EfRow(p, _, _) = resolve_row(row)
-          // The evidence census — the emit's OWN single-walk projection
-          // (the seventh: visit_effect_demand/install), run over the
-          // post-reach tree the gate already holds. The artifact is the
-          // truth source: dead-code performs never appear (reach pruned
-          // them from this tree), a resolved install's LPerform fires no
-          // demand, and the floor's LEvPerform carries its ename on the
-          // node. The full collector bracket rides along because the one
-          // walk fires every projection's ops.
-          let census = {
-            walk_lemit(lowered)
-            drain_effect_census()
-          }
-            ~> effect_census_collector
-            ~> fn_names_collector
-            ~> top_fn_names_collector
-            ~> string_literal_collector
-            ~> state_slots_collector
-            ~> yield_seen_collector
-            ~> wasi_ops_collector
-          let (demands, installed) = census
-          let performed = demands_to_enames(demands, 0, [])
-          report_unhandled_names(p, 0, len(p), performed, installed, reason_span_or_zero(reason))
+fn report_unhandled_effects(lowered) = match env_lookup("main") {
+  Some(entry) => match entry {
+    (scheme, reason, _) => match scheme {
+      Forall(_, ty) => match ty {
+        TFun(_, _, row) => match resolve_row(row) {
+          EfRow(p, _, _) => {
+            // The evidence census — the emit's OWN single-walk projection
+            // (the seventh: visit_effect_demand/install), run over the
+            // post-reach tree the gate already holds. The artifact is the
+            // truth source: dead-code performs never appear (reach pruned
+            // them from this tree), a resolved install's LPerform fires no
+            // demand, and the floor's LEvPerform carries its ename on the
+            // node. The full collector bracket rides along because the one
+            // walk fires every projection's ops.
+            let census = {
+              walk_lemit(lowered)
+              drain_effect_census()
+            } ~> effect_census_collector ~> fn_names_collector ~> top_fn_names_collector ~> string_literal_collector ~> state_slots_collector ~> yield_seen_collector ~> wasi_ops_collector
+            match census {
+              (demands, installed) => {
+                let performed = demands_to_enames(demands, 0, [])
+                report_unhandled_names(p, 0, len(p), performed, installed, reason_span_or_zero(reason))
+              },
+            }
+          },
         },
-        _ => ()
-      }
+        _ => (),
+      },
     },
-    None => ()
-  }
+  },
+  None => (),
 }
 
 // A drained demand is an ename already (the floor's ekey) or a yield's
 // OP name — resolve ops to their effect through the live scheme; a name
 // that is no op passes through as itself.
-fn demands_to_enames(ref demands, i, acc) = {
-  if i >= len(demands) { acc }
-  else {
-    let d = list_index(demands, i)
-    // A demand that resolves through an op WITH a default handler is the
-    // SINGLETON tier's direct call: the read of the handler's state global.
-    // A STATELESS arm never touches it — grounded; a STATEFUL one
-    // dereferences zero unless some install initialized it, so only the
-    // stateful case joins the refusal set (the installed conjunct then
-    // clears it when an install exists — sound because the singleton tier
-    // is unique-handler by definition, an install of the ename IS an
-    // install of that handler). The evidence floor's demand is the ename
-    // itself (no op entry) and always joins.
-    let verdict = match env_lookup(d) {
-      Some(entry) => {
-        let (_, _, kind) = entry
-        match kind {
-          EffectOpScheme(op_effect, default_handler, _, _) =>
-            if byte_len(default_handler) > 0 && !handler_stateful(default_handler) {
-              None
-            } else { Some(op_effect) },
-          _ => Some(d)
-        }
+fn demands_to_enames(ref demands, i, acc) = if i >= len(demands) {
+  acc
+} else {
+  let d = list_index(demands, i)
+  // A demand that resolves through an op WITH a default handler is the
+  // SINGLETON tier's direct call: the read of the handler's state global.
+  // A STATELESS arm never touches it — grounded; a STATEFUL one
+  // dereferences zero unless some install initialized it, so only the
+  // stateful case joins the refusal set (the installed conjunct then
+  // clears it when an install exists — sound because the singleton tier
+  // is unique-handler by definition, an install of the ename IS an
+  // install of that handler). The evidence floor's demand is the ename
+  // itself (no op entry) and always joins.
+  let verdict = match env_lookup(d) {
+    Some(entry) => match entry {
+      (_, _, kind) => match kind {
+        EffectOpScheme(op_effect, default_handler, _, _) => if byte_len(default_handler) > 0 && !handler_stateful(default_handler) {
+          None
+        } else {
+          Some(op_effect)
+        },
+        _ => Some(d),
       },
-      None => Some(d)
-    }
-    match verdict {
-      None => demands_to_enames(demands, i + 1, acc),
-      Some(en) => {
-        let seen = string_in_list(acc, en)
-        if seen { demands_to_enames(demands, i + 1, acc) }
-        else { demands_to_enames(demands, i + 1, push(acc, en)) }
+    },
+    None => Some(d),
+  }
+  match verdict {
+    None => demands_to_enames(demands, i + 1, acc),
+    Some(en) => {
+      let seen = string_in_list(acc, en)
+      if seen {
+        demands_to_enames(demands, i + 1, acc)
+      } else {
+        demands_to_enames(demands, i + 1, push(acc, en))
       }
-    }
+    },
   }
 }
 
-fn report_unhandled_names(ref names, i, n, ref performed, ref installed, ref span) = {
-  if i >= n { () }
-  else {
-    let ename = eff_name_str(list_index(names, i))
-    // The conjuncts: present at the root, NOT substrate-grounded, actually
-    // PERFORMED somewhere reachable (a `with Sample`-style declared
-    // contract with zero performs is the iterative-class canon, never an
-    // evidence hole — SYNTAX's own lowpass declares it), and NO install of
-    // it anywhere reachable (any install initializes the singleton state
-    // global, so a unique-handler perform grounds — the evidence-capture
-    // row edge over-approximates for those tiers; a name on main's row
-    // with an install SOMEWHERE is the creator-evidence conservatism, not
-    // a runtime hole).
-    if effect_ops_substrate_grounded(ename) { () }
-    else if !string_in_list(performed, ename) { () }
-    else if string_in_list(installed, ename) { () }
-    else {
-      // Sequenced effectful read BEFORE the construction (the record-
-      // construction exception): the proposal's env scan performs, and a
-      // ctor argument list is not the place for a perform.
-      let proposal = absorbing_proposal(ename)
-      report(EEffectUnhandled(ename, proposal, span))
-    }
-    report_unhandled_names(names, i + 1, n, performed, installed, span)
+fn report_unhandled_names(ref names, i, n, ref performed, ref installed, ref span) = if i >= n {
+  ()
+} else {
+  let ename = eff_name_str(list_index(names, i))
+  // The conjuncts: present at the root, NOT substrate-grounded, actually
+  // PERFORMED somewhere reachable (a `with Sample`-style declared
+  // contract with zero performs is the iterative-class canon, never an
+  // evidence hole — SYNTAX's own lowpass declares it), and NO install of
+  // it anywhere reachable (any install initializes the singleton state
+  // global, so a unique-handler perform grounds — the evidence-capture
+  // row edge over-approximates for those tiers; a name on main's row
+  // with an install SOMEWHERE is the creator-evidence conservatism, not
+  // a runtime hole).
+  if effect_ops_substrate_grounded(ename) {
+    ()
+  } else if !string_in_list(performed, ename) {
+    ()
+  } else if string_in_list(installed, ename) {
+    ()
+  } else {
+    // Sequenced effectful read BEFORE the construction (the record-
+    // construction exception): the proposal's env scan performs, and a
+    // ctor argument list is not the place for a perform.
+    let proposal = absorbing_proposal(ename)
+    report(EEffectUnhandled(ename, proposal, span))
   }
+  report_unhandled_names(names, i + 1, n, performed, installed, span)
 }
 
 // Every op of the effect projects to a substrate instruction (the
 // Memory/Alloc table, the WASI import set) — or the name owns no ops at
 // all (a compiler attribution: a row fact, never an evidence dispatch).
-fn effect_ops_substrate_grounded(ename: String) = {
-  let Env(bindings) = env_snapshot()
-  grounded_scan(bindings, 0, len(bindings), ename)
+fn effect_ops_substrate_grounded(ename: String) = match env_snapshot() {
+  Env(bindings) => grounded_scan(bindings, 0, len(bindings), ename),
 }
 
-fn grounded_scan(ref bindings, i, n, ename: String) = {
-  if i >= n { true }
-  else {
-    let (opname, _, _, kind) = list_index(bindings, i)
-    let ok = match kind {
-      EffectOpScheme(op_effect, _, _, _) =>
-        // Substrate projection or WASI import only. A DEFAULT HANDLER does
+fn grounded_scan(ref bindings, i, n, ename: String) = if i >= n {
+  true
+} else {
+  match list_index(bindings, i) {
+    (opname, _, _, kind) => {
+      let ok = match kind {
+        EffectOpScheme(op_effect, _, _, _) => // Substrate projection or WASI import only. A DEFAULT HANDLER does
         // NOT ground: the perform's singleton tier direct-calls it, but a
         // STATEFUL default with no live install reads its zero state
         // global — the silent-wrong the runtime guard refuses
@@ -355,12 +358,11 @@ fn grounded_scan(ref bindings, i, n, ename: String) = {
         // The intrinsic families (to_string/hash) never reach the perform
         // dispatch, so they ground through the not-performed conjunct,
         // never through a default field.
-        if op_effect == ename {
-          is_substrate_mem_op(opname) || is_wasi_import_op(opname)
-        } else { true },
-      _ => true
-    }
-    if ok { grounded_scan(bindings, i + 1, n, ename) } else { false }
+        if op_effect == ename { is_substrate_mem_op(opname) || is_wasi_import_op(opname) } else { true },
+        _ => true,
+      }
+      if ok { grounded_scan(bindings, i + 1, n, ename) } else { false }
+    },
   }
 }
 
@@ -380,58 +382,61 @@ fn absorbing_proposal(ename: String) = {
 
 fn render_install(ref hname) = "~> {hname}"
 
-fn handlers_absorbing(ename: String) = {
-  let Env(bindings) = env_snapshot()
-  absorb_scan(bindings, 0, len(bindings), ename, [])
+fn handlers_absorbing(ename: String) = match env_snapshot() {
+  Env(bindings) => absorb_scan(bindings, 0, len(bindings), ename, []),
 }
 
-fn absorb_scan(ref bindings, i, n, ename: String, own acc) = {
-  if i >= n { acc }
-  else {
-    let (hname, _, _, kind) = list_index(bindings, i)
-    let hit = match kind {
-      HandlerKind(_, _, _, arms) => handler_arms_touch(arms, 0, len(arms), ename),
-      _ => false
-    }
-    // The flat env carries a handler at several layers (pre_register + the
-    // main walk); the proposal names each handler once.
-    if hit && !string_in_list(acc, hname) {
-      absorb_scan(bindings, i + 1, n, ename, push(acc, hname))
-    }
-    else { absorb_scan(bindings, i + 1, n, ename, acc) }
+fn absorb_scan(ref bindings, i, n, ename: String, own acc) = if i >= n {
+  acc
+} else {
+  match list_index(bindings, i) {
+    (hname, _, _, kind) => {
+      let hit = match kind {
+        HandlerKind(_, _, _, arms) => handler_arms_touch(arms, 0, len(arms), ename),
+        _ => false,
+      }
+      // The flat env carries a handler at several layers (pre_register + the
+      // main walk); the proposal names each handler once.
+      if hit && !string_in_list(acc, hname) {
+        absorb_scan(bindings, i + 1, n, ename, push(acc, hname))
+      } else {
+        absorb_scan(bindings, i + 1, n, ename, acc)
+      }
+    },
   }
 }
 
-fn handler_arms_touch(ref arms, i, n, ename: String) = {
-  if i >= n { false }
-  else {
-    // CLOSED destructure — an open-receiver field read computes offsets
-    // over the partial field set (the trecordopen-wrong-field class); the
-    // full pattern pins the record's real layout.
-    let {args: _, body: _, op_name: opn} = list_index(arms, i)
-    let touches = match env_lookup(opn) {
-      Some(op_entry) => {
-        let (_, _, op_kind) = op_entry
-        match op_kind {
-          EffectOpScheme(op_effect, _, _, _) => op_effect == ename,
-          _ => false
-        }
-      },
-      None => false
-    }
-    if touches { true } else { handler_arms_touch(arms, i + 1, n, ename) }
+fn handler_arms_touch(ref arms, i, n, ename: String) = if i >= n {
+  false
+} else {
+  // CLOSED destructure — an open-receiver field read computes offsets
+  // over the partial field set (the trecordopen-wrong-field class); the
+  // full pattern pins the record's real layout.
+  match list_index(arms, i) {
+    {args: _, body: _, op_name: opn} => {
+      let touches = match env_lookup(opn) {
+        Some(op_entry) => match op_entry {
+          (_, _, op_kind) => match op_kind {
+            EffectOpScheme(op_effect, _, _, _) => op_effect == ename,
+            _ => false,
+          },
+        },
+        None => false,
+      }
+      if touches { true } else { handler_arms_touch(arms, i + 1, n, ename) }
+    },
   }
 }
 
-fn report_holes(holes, i) =
-  if i >= len(holes) { () }
-  else {
-    let h = list_index(holes, i)
-    // The weave span — the parse truth authored_hole itself proved; the
-    // reason-chain span is clobbered by the binder's unification.
-    report(EUnresolvedHole(h, parse_span_of(h)))
-    report_holes(holes, i + 1)
-  }
+fn report_holes(holes, i) = if i >= len(holes) {
+  ()
+} else {
+  let h = list_index(holes, i)
+  // The weave span — the parse truth authored_hole itself proved; the
+  // reason-chain span is clobbered by the binder's unification.
+  report(EUnresolvedHole(h, parse_span_of(h)))
+  report_holes(holes, i + 1)
+}
 
 // The compile's projection half — everything after the analyzed graph.
 // ONE home: the cold path, the warm path, and the resume verb all run
@@ -446,26 +451,11 @@ fn compile_remainder(ast) =
 // proof). The chain mirrors compile's: the pre-swap fs/fail ops resolve
 // through it, the executable gate's static demands ground in it, and
 // every post-swap dispatch walks the RESTORED world regardless.
-fn resume_image(img_path) = {
-  infer_context(() =>
-    {
-      eprint_string("warm: restoring the persisted image\n")
-      image_resume(img_path)
-      compile_remainder(warm_program())
-    }
-      ~> wat_stdout
-      ~> persist_to_disk
-      ~> fail_exit
-      ~> wasi_filesystem
-      ~> string_table
-      ~> emit_memory_bump
-      ~> body_context
-      ~> mentl_default
-      ~> lower_scope
-      ~> arm_state_ctx([], OneShot, "")
-      ~> spec_registry
-  )
-}
+fn resume_image(img_path) = infer_context(() => {
+  eprint_string("warm: restoring the persisted image\n")
+  image_resume(img_path)
+  compile_remainder(warm_program())
+} ~> wat_stdout ~> persist_to_disk ~> fail_exit ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 // The quiet trial's diagnostics policy: the trial pass exists only to
 // finalize schemes — every verdict re-derives sharper in the final pass,
@@ -492,23 +482,26 @@ handler diag_quiet {
 // LOUD (the names' judgments oscillate — an order-sensitivity the medium
 // names instead of laundering); the march's m3 == m4 stays the outer
 // oracle.
-fn infer_program_converged(src) = {
-  let (rows, trial_start) = { src |> frontend |> infer_program_trial } ~> diag_quiet
-  let flat_rows = list_to_flat(rows)
-  // THE LAYERS ARE PARSE TRUTH, read where it lives: each stmt's free
-  // names (collect_free_vars over its own subtree) are its reference
-  // edges — the DAG, total and judgment-independent. The retired
-  // range-scan re-derived dependency from reasons inside each stmt's
-  // INFERENCE-mint range, but VarLookup reasons land on the PARSE
-  // nodes — minted before the trial's watermark, outside every range —
-  // so the scan read zero edges (measured: every stmt layer 0, every
-  // frozen base the prepass env, payloadfn's residual chain severed at
-  // the pre-arms scheme). The frees collect ONCE and serve both the
-  // layers and the incremental cone below.
-  let frees_all = stmt_frees(frontend(src))
-  let layers = stmt_layers_ast(frees_all, flat_rows)
-  let prints = round_prints(flat_rows)
-  converge_rounds(src, flat_rows, layers, frees_all, prints, prints, 1)
+fn infer_program_converged(src) = match {
+  src |> frontend |> infer_program_trial
+} ~> diag_quiet {
+  (rows, trial_start) => {
+    let flat_rows = list_to_flat(rows)
+    // THE LAYERS ARE PARSE TRUTH, read where it lives: each stmt's free
+    // names (collect_free_vars over its own subtree) are its reference
+    // edges — the DAG, total and judgment-independent. The retired
+    // range-scan re-derived dependency from reasons inside each stmt's
+    // INFERENCE-mint range, but VarLookup reasons land on the PARSE
+    // nodes — minted before the trial's watermark, outside every range —
+    // so the scan read zero edges (measured: every stmt layer 0, every
+    // frozen base the prepass env, payloadfn's residual chain severed at
+    // the pre-arms scheme). The frees collect ONCE and serve both the
+    // layers and the incremental cone below.
+    let frees_all = stmt_frees(frontend(src))
+    let layers = stmt_layers_ast(frees_all, flat_rows)
+    let prints = round_prints(flat_rows)
+    converge_rounds(src, flat_rows, layers, frees_all, prints, prints, 1)
+  },
 }
 
 // THE INCREMENTAL ROUNDS — the changed cone (Mentl's own steering,
@@ -524,20 +517,28 @@ fn infer_program_converged(src) = {
 // last round's finals, so an env read here could only ever answer
 // "unmoved"; the delta lives in the pair. This is the incremental
 // cursor running inside the judgment itself.
-fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round) = {
-  if round >= 12 {
-    eprint_string("convergence: schemes still moving after {int_to_str(round)} rounds — judging with the last round's finals; the fixpoint oracle arbitrates\n")
-    eprint_string("convergence: movers:{movers_line(flat_rows, prev_prints, prints, 0, 0)}\n")
-    converge_finish(src, flat_rows, layers)
+fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round) = if round >= 12 {
+  eprint_string("convergence: schemes still moving after {int_to_str(round)} rounds — judging with the last round's finals; the fixpoint oracle arbitrates\n")
+  eprint_string("convergence: movers:{movers_line(flat_rows, prev_prints, prints, 0, 0)}\n")
+  converge_finish(src, flat_rows, layers)
+} else {
+  let mask = if round == 1 {
+    mask_all(len(flat_rows))
   } else {
-    let mask =
-      if round == 1 { mask_all(len(flat_rows)) }
-      else { cone_mask(flat_rows, prev_prints, prints, frees_all) }
-    let (rows2, _start2) = { src |> frontend |> infer_program_round(mask, flat_rows) } ~> diag_quiet
-    let flat2 = list_to_flat(rows2)
-    let prints2 = round_prints(flat2)
-    if prints_equal(prints, prints2) { converge_finish(src, flat2, layers) }
-    else { converge_rounds(src, flat2, layers, frees_all, prints, prints2, round + 1) }
+    cone_mask(flat_rows, prev_prints, prints, frees_all)
+  }
+  match {
+    src |> frontend |> infer_program_round(mask, flat_rows)
+  } ~> diag_quiet {
+    (rows2, _start2) => {
+      let flat2 = list_to_flat(rows2)
+      let prints2 = round_prints(flat2)
+      if prints_equal(prints, prints2) {
+        converge_finish(src, flat2, layers)
+      } else {
+        converge_rounds(src, flat2, layers, frees_all, prints, prints2, round + 1)
+      }
+    },
   }
 }
 
@@ -545,28 +546,29 @@ fn converge_finish(src, flat_rows, layers) = {
   // The final's parse START, captured before its own frontend: the crc
   // walk's lower bound, so the backtick judge reads only THIS pass's
   // comment cells — prior generations' parses left their text in place.
-  let pstart = graph_next()   // drift-audit: ignore — sequenced effectful read (the pre-frontend frontier, the comment walk's lower bound)
+  //
+  // drift-audit: ignore — sequenced effectful read (the pre-frontend frontier, the comment walk's lower bound)
+  let pstart = graph_next()
   src |> frontend |> infer_program_final(flat_rows, layers, pstart)
 }
 
 fn mask_all(n) = mask_all_walk(make_list(n), 0, n)
 
-fn mask_all_walk(own m, i, n) = {
-  if i >= n { m }
-  else { mask_all_walk(list_set(m, i, true), i + 1, n) }
-}
+fn mask_all_walk(own m, i, n) =
+  if i >= n { m } else { mask_all_walk(list_set(m, i, true), i + 1, n) }
 
 // The bound-hit report names its residue: which stmts' fingerprints were
 // still moving when the round bound cut the loop (first sixteen — the
 // class is what matters, not the tail).
-fn movers_line(ref rows, ref prev_prints, ref cur_prints, i, shown) = {
-  if i >= len(rows) || shown >= 16 { "" }
-  else {
-    let (name, _) = rows[i]
-    if name != "" && cur_prints[i] != prev_prints[i] {
+fn movers_line(ref rows, ref prev_prints, ref cur_prints, i, shown) = if i >= len(rows) || shown >= 16 {
+  ""
+} else {
+  match rows[i] {
+    (name, _) => if name != "" && cur_prints[i] != prev_prints[i] {
       " {name}{movers_line(rows, prev_prints, cur_prints, i + 1, shown + 1)}"
-    }
-    else { movers_line(rows, prev_prints, cur_prints, i + 1, shown) }
+    } else {
+      movers_line(rows, prev_prints, cur_prints, i + 1, shown)
+    },
   }
 }
 
@@ -577,43 +579,43 @@ fn cone_mask(ref rows, ref prev_prints, ref cur_prints, ref frees_all) = {
   cone_mask_walk(prev_prints, cur_prints, frees_all, moved, make_list(len(rows)), 0)
 }
 
-fn moved_names(ref rows, ref prev_prints, ref cur_prints, i, acc) = {
-  if i >= len(rows) { acc }
-  else {
-    let (name, _) = rows[i]
-    moved_names(rows, prev_prints, cur_prints, i + 1,
-      if name == "" || cur_prints[i] == prev_prints[i] { acc }
-      else { smap_add(acc, name, 1) })
+fn moved_names(ref rows, ref prev_prints, ref cur_prints, i, acc) = if i >= len(rows) {
+  acc
+} else {
+  match rows[i] {
+    (name, _) => moved_names(
+      rows,
+      prev_prints,
+      cur_prints,
+      i + 1,
+      if name == "" || cur_prints[i] == prev_prints[i] { acc } else { smap_add(acc, name, 1) }
+    ),
   }
 }
 
-fn cone_mask_walk(ref prev_prints, ref cur_prints, ref frees_all, ref moved, own m, i) = {
-  if i >= len(prev_prints) { m }
-  else {
-    let hit = cur_prints[i] != prev_prints[i] || frees_hit(frees_all[i], moved, 0)
-    cone_mask_walk(prev_prints, cur_prints, frees_all, moved, list_set(m, i, hit), i + 1)
-  }
+fn cone_mask_walk(ref prev_prints, ref cur_prints, ref frees_all, ref moved, own m, i) = if i >= len(prev_prints) {
+  m
+} else {
+  let hit = cur_prints[i] != prev_prints[i] || frees_hit(frees_all[i], moved, 0)
+  cone_mask_walk(prev_prints, cur_prints, frees_all, moved, list_set(m, i, hit), i + 1)
 }
 
-fn frees_hit(ref frees, ref moved, j) = {
-  if j >= len(frees) { false }
-  else {
-    match smap_get(moved, frees[j]) {
-      Some(_) => true,
-      None    => frees_hit(frees, moved, j + 1)
-    }
+fn frees_hit(ref frees, ref moved, j) = if j >= len(frees) {
+  false
+} else {
+  match smap_get(moved, frees[j]) {
+    Some(_) => true,
+    None => frees_hit(frees, moved, j + 1),
   }
 }
 
 // Every stmt's free-name list, collected once from the parse tree.
 fn stmt_frees(ref stmts) = stmt_frees_walk(stmts, make_list(len(stmts)), 0)
 
-fn stmt_frees_walk(ref stmts, own out, i) = {
-  if i >= len(stmts) { out }
-  else {
-    stmt_frees_walk(stmts,
-      list_set(out, i, list_to_flat(collect_free_vars(stmts[i], []))), i + 1)
-  }
+fn stmt_frees_walk(ref stmts, own out, i) = if i >= len(stmts) {
+  out
+} else {
+  stmt_frees_walk(stmts, list_set(out, i, list_to_flat(collect_free_vars(stmts[i], []))), i + 1)
 }
 
 // The stmt-layer projection over PARSE truth: a stmt's depth is one past
@@ -628,37 +630,23 @@ fn stmt_layers_ast(ref frees_all, ref rows) = {
   ast_layers_walk(frees_all, name_idx, make_list(len(frees_all)), 0)
 }
 
-fn ast_layers_walk(ref frees_all, ref name_idx, own depths, i) = {
-  if i >= len(frees_all) { depths }
-  else {
-    let d = frees_depth(frees_all[i], name_idx, depths, i, 0, 0)
-    ast_layers_walk(frees_all, name_idx, list_set(depths, i, d), i + 1)
-  }
+fn ast_layers_walk(ref frees_all, ref name_idx, own depths, i) = if i >= len(frees_all) {
+  depths
+} else {
+  let d = frees_depth(frees_all[i], name_idx, depths, i, 0, 0)
+  ast_layers_walk(frees_all, name_idx, list_set(depths, i, d), i + 1)
 }
 
-fn frees_depth(ref frees, ref name_idx, ref depths, i, j, best) = {
-  if j >= len(frees) { best }
-  else {
-    let d = backward_depth(name_idx, depths, frees[j], i)
-    frees_depth(frees, name_idx, depths, i, j + 1,
-      if d > best { d } else { best })
-  }
+fn frees_depth(ref frees, ref name_idx, ref depths, i, j, best) = if j >= len(frees) {
+  best
+} else {
+  let d = backward_depth(name_idx, depths, frees[j], i)
+  frees_depth(frees, name_idx, depths, i, j + 1, if d > best { d } else { best })
 }
 
-fn compile_stdin() = {
-  infer_context(() =>
-    { read_stdin() |> infer_program_converged |> compile_remainder }
-      ~> wat_stdout
-      ~> wasi_filesystem
-      ~> string_table
-      ~> emit_memory_bump
-      ~> body_context
-      ~> mentl_default
-      ~> lower_scope
-      ~> arm_state_ctx([], OneShot, "")
-      ~> spec_registry
-  )
-}
+fn compile_stdin() = infer_context(() => {
+  read_stdin() |> infer_program_converged |> compile_remainder
+} ~> wat_stdout ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 // pipeline_check returns its own ERROR COUNT, because it owns the handler that
 // does the counting (the diagnostics_handler at the foot of this chain).
@@ -669,77 +657,44 @@ fn compile_stdin() = {
 // this chain is caught by THIS handler, so the outer one never sees them and its
 // tally is honestly zero. The count and the counter are one handler; a reader
 // outside the install is reading a different ledger.
-fn pipeline_check(entry_module) = {
-  // Check runs the same analyses as compile — the region-op and null-page
-  // classes this chain paid for (the zero-state sentinel reads, the
-  // SingletonUninstalled catches) are why EVERY inference-reaching chain
-  // installs the whole core; infer_context is that law as one home.
-  infer_context(() =>
-    {
-      // Check reads the SAME one-namespace weave every other driver verb
-      // reads (compile / at / edit — driver_entry_with_ranges): whole-program
-      // truth, one span space. The old per-module walk (driver_check) inferred
-      // each module against only the layers already installed, so prelude's
-      // own body missed the substrate vocabulary its layer supplies —
-      // E_MissingVariable noise on a clean program. The per-module env
-      // overlay (Hβ.driver.per-module-env-overlay) is that walk's sequenced
-      // refinement; until it lands, the weave IS the check.
-      driver_entry_with_ranges(entry_module)
-      diag_errors()
-    }
-      ~> wasi_filesystem
-      ~> mentl_default
-  )
-}
+//
+// Check runs the same analyses as compile — the region-op and null-page
+// classes this chain paid for (the zero-state sentinel reads, the
+// SingletonUninstalled catches) are why EVERY inference-reaching chain
+// installs the whole core; infer_context is that law as one home.
+fn pipeline_check(entry_module) = infer_context(() => {
+  // Check reads the SAME one-namespace weave every other driver verb
+  // reads (compile / at / edit — driver_entry_with_ranges): whole-program
+  // truth, one span space. The old per-module walk (driver_check) inferred
+  // each module against only the layers already installed, so prelude's
+  // own body missed the substrate vocabulary its layer supplies —
+  // E_MissingVariable noise on a clean program. The per-module env
+  // overlay (Hβ.driver.per-module-env-overlay) is that walk's sequenced
+  // refinement; until it lands, the weave IS the check.
+  driver_entry_with_ranges(entry_module)
+  diag_errors()
+} ~> wasi_filesystem ~> mentl_default)
 
 // Legacy single-source entry — for tests that pass raw source
 // without filesystem layout. No caching; full re-infer each call.
-fn compile_source(source) = {
-  infer_context(() =>
-    source
-      |> frontend
-      |> infer_program
-      |> compile_remainder
-      ~> wat_stdout
-      ~> string_table
-      ~> emit_memory_bump
-      ~> body_context
-      ~> mentl_default
-      ~> lower_scope
-      ~> arm_state_ctx([], OneShot, "")
-      ~> spec_registry
-  )
-}
+fn compile_source(source) =
+  infer_context(() => source |> frontend |> infer_program |> compile_remainder ~> wat_stdout ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
-fn check_source(source) = {
-  infer_context(() =>
-    source
-      |> frontend
-      |> infer_program
-      ~> mentl_default
-  )
-}
+fn check_source(source) = infer_context(() => source |> frontend |> infer_program ~> mentl_default)
 
-fn query(entry_module, question) = {
-  infer_context(() =>
-    {
-      // driver_check_entry loads the module + its deps, infers ONCE, and
-      // hands back the entry's typed AST — the same load compile/check
-      // use. So `mentl query lib/foo "why bar"` reads the REAL graph, not
-      // the module NAME parsed as source (Carried-Truth: the driver
-      // already resolved+typed it; re-frontend-ing a name re-derived
-      // nothing and mis-parsed "tutorial/foo" as two variable refs).
-      let ast = driver_check_entry(entry_module)
-      let q = parse_query_string(question)
-      ask(q) |> render_query_result |> println
-    }
-      ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
-      ~> query_default
-      ~> mentl_default
-      ~> arm_state_ctx([], OneShot, "")
-      ~> spec_registry
-  )
-}
+fn query(entry_module, question) = infer_context(() => {
+  // driver_check_entry loads the module + its deps, infers ONCE, and
+  // hands back the entry's typed AST — the same load compile/check
+  // use. So `mentl query lib/foo "why bar"` reads the REAL graph, not
+  // the module NAME parsed as source (Carried-Truth: the driver
+  // already resolved+typed it; re-frontend-ing a name re-derived
+  // nothing and mis-parsed "tutorial/foo" as two variable refs).
+  let ast = driver_check_entry(entry_module)
+  let q = parse_query_string(question)
+  ask(q) |> render_query_result |> println
+} ~>
+// driver_check_entry's fs_read — handled in-chain, as compile/check do
+wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 // analyze_fns — the shared analysis-verb cursor: load+check the module,
 // project each fn decl with `project(name, handle)`, render, print. audit
@@ -747,28 +702,27 @@ fn query(entry_module, question) = {
 // load → map_fn_stmts → render → print skeleton lived twice, byte-identical
 // but for the project/render pair (Carried-Truth: one home now). query
 // stays separate: it ASKS a question, not a per-fn walk.
-fn analyze_fns(entry_module, project, render) = {
-  infer_context(() =>
-    {
-      // "-" is the stdin contract (self-contained source, the bare
-      // compile's own path); anything else resolves through the driver DAG.
-      let ast =
-        if entry_module == "-" { read_stdin() |> frontend |> infer_program }
-        else { driver_check_entry(entry_module) }
-      map_fn_stmts(ast, project) |> render |> print_string
-    }
-      ~> wasi_filesystem       // driver_check_entry's fs_read — handled in-chain, as compile/check do
-      ~> mentl_default
-      ~> arm_state_ctx([], OneShot, "")
-      ~> spec_registry
-  )
-}
+fn analyze_fns(entry_module, project, render) = infer_context(() => {
+  // "-" is the stdin contract (self-contained source, the bare
+  // compile's own path); anything else resolves through the driver DAG.
+  let ast = if entry_module == "-" {
+    read_stdin() |> frontend |> infer_program
+  } else {
+    driver_check_entry(entry_module)
+  }
+  map_fn_stmts(ast, project) |> render |> print_string
+} ~>
+// driver_check_entry's fs_read — handled in-chain, as compile/check do
+wasi_filesystem ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 fn teach(entry_module) =
   analyze_fns(entry_module, (name, handle) => (name, teach_gradient(handle)), render_gradients)
 
-fn audit(entry_module) =
-  analyze_fns(entry_module, (name, handle) => build_audit_report(name, handle, lookup_ty(handle)), render_audit)
+fn audit(entry_module) = analyze_fns(
+  entry_module,
+  (name, handle) => build_audit_report(name, handle, lookup_ty(handle)),
+  render_audit
+)
 
 // ─── Multi-module compilation — map over a module list ──────────────
 //
@@ -779,7 +733,7 @@ fn audit(entry_module) =
 // multi-core half is a `><` fanout under `~> Thread` at the layer
 // site (Hβ.lower.schedule-specialized-callee). Render targets attach
 // via `~>` to the per-module wat output. Drift 6 erasure.
-
+//
 // ─── ic_compile_loop — `<~` feedback closing on queue stability ───────
 //
 // Build IS the `<~` loop closing at fixpoint (PLAN §2). Every source
@@ -804,27 +758,17 @@ fn audit(entry_module) =
 //
 // `mentl edit` IS this loop running. There is no separate `compile`
 // — the edit IS the compile IS the projection IS the loop closing.
-
-fn ic_compile_loop(initial_entry) = {
-  initial_entry
-    |> driver_check
-    ~> project_queue_merger
-      <~ accumulate(empty_queue())
-}
+fn ic_compile_loop(initial_entry) =
+  initial_entry |> driver_check ~> project_queue_merger <~ accumulate(empty_queue())
 
 // frontend — lex |> parse
-
-fn frontend(source) = {
-  source
-    |> lex
-    |> parse_program
-}
+fn frontend(source) = source |> lex |> parse_program
 
 // env_handler — scoped binding stack (spec 04)
 // Peer of graph_handler. One writer (inference). Scoping via
 // mark-and-truncate: enter pushes len(entries); exit truncates to
 // that mark. Functional; no mutable pointers.
-
+//
 // FLAT-BUFFER env (the graph handler's own substrate pattern: "flat
 // buffer + length counter, not a linked list"). The snoc-chain form
 // scanned via last/drop_last — a 16-byte slice mint PER STEP over
@@ -858,16 +802,17 @@ fn env_index_add(idx, name: String, pos) with Memory + Alloc = {
 // it and continues to an older live pair. Complete by construction: every
 // env_extend adds its bucket pair and pairs are never removed, so no live
 // binding lacks one — which is why no linear-scan fallback exists.
-fn env_bucket_pos(ref buf, ref bucket, name: String, count, i, n) with Memory = {
-  if i >= n { -1 }
-  else {
-    let (bn, pos) = list_index(bucket, i)
-    if pos < count && bn == name {
-      let (en, _scheme, _reason, _kind) = list_index(buf, pos)
-      if en == name { pos }
-      else { env_bucket_pos(buf, bucket, name, count, i + 1, n) }
-    }
-    else { env_bucket_pos(buf, bucket, name, count, i + 1, n) }
+fn env_bucket_pos(ref buf, ref bucket, name: String, count, i, n) with Memory = if i >= n {
+  -1
+} else {
+  match list_index(bucket, i) {
+    (bn, pos) => if pos < count && bn == name {
+      match list_index(buf, pos) {
+        (en, _scheme, _reason, _kind) => if en == name { pos } else { env_bucket_pos(buf, bucket, name, count, i + 1, n) },
+      }
+    } else {
+      env_bucket_pos(buf, bucket, name, count, i + 1, n)
+    },
   }
 }
 
@@ -875,10 +820,12 @@ fn env_resolve(ref buf, count, ref idx, name: String) with Memory = {
   let b = i32_and(str_hash(name), 4095)
   let bucket = list_index(idx, b)
   let pos = env_bucket_pos(buf, bucket, name, count, 0, len(bucket))
-  if pos < 0 { None }
-  else {
-    let (_, scheme, reason, kind) = list_index(buf, pos)
-    Some((scheme, reason, kind))
+  if pos < 0 {
+    None
+  } else {
+    match list_index(buf, pos) {
+      (_, scheme, reason, kind) => Some((scheme, reason, kind)),
+    }
   }
 }
 
@@ -890,11 +837,13 @@ fn env_resolve(ref buf, count, ref idx, name: String) with Memory = {
 // nominal record's RecordSchemeKind. The plain lookup returns the newest entry
 // of ANY kind, so a later-registered effect decl shadows the alias and the
 // annotation bakes a bare nominal TName that never unifies with its base.
-fn env_entry_is_type(ref scheme, ref kind) with Pure =
-  match scheme {
-    Forall(_, TAlias(_, _)) => true,
-    _ => match kind { RecordSchemeKind(_) => true, _ => false }
-  }
+fn env_entry_is_type(ref scheme, ref kind) with Pure = match scheme {
+  Forall(_, TAlias(_, _)) => true,
+  _ => match kind {
+    RecordSchemeKind(_) => true,
+    _ => false,
+  },
+}
 
 // ONE predicated walk serves every kind-filtered read (type / ctor /
 // variants — the fourth copy was the eight-interrogations' catch): the
@@ -902,16 +851,21 @@ fn env_entry_is_type(ref scheme, ref kind) with Pure =
 // the parameterization allocates nothing. The PLAIN resolve keeps its
 // own predicate-free walk — it is the compiler's hottest path and its
 // shape genuinely differs (no filter slot at all).
-fn env_bucket_pos_where(ref buf, ref bucket, name: String, count, i, n, pred) with Memory = {
-  if i >= n { -1 }
-  else {
-    let (bn, pos) = list_index(bucket, i)
-    if pos < count && bn == name {
-      let (en, scheme, _, kind) = list_index(buf, pos)
-      if en == name && pred(scheme, kind) { pos }
-      else { env_bucket_pos_where(buf, bucket, name, count, i + 1, n, pred) }
-    }
-    else { env_bucket_pos_where(buf, bucket, name, count, i + 1, n, pred) }
+fn env_bucket_pos_where(ref buf, ref bucket, name: String, count, i, n, pred) with Memory = if i >= n {
+  -1
+} else {
+  match list_index(bucket, i) {
+    (bn, pos) => if pos < count && bn == name {
+      match list_index(buf, pos) {
+        (en, scheme, _, kind) => if en == name && pred(scheme, kind) {
+          pos
+        } else {
+          env_bucket_pos_where(buf, bucket, name, count, i + 1, n, pred)
+        },
+      }
+    } else {
+      env_bucket_pos_where(buf, bucket, name, count, i + 1, n, pred)
+    },
   }
 }
 
@@ -919,10 +873,12 @@ fn env_resolve_where(ref buf, count, ref idx, name: String, pred) with Memory = 
   let b = i32_and(str_hash(name), 4095)
   let bucket = list_index(idx, b)
   let pos = env_bucket_pos_where(buf, bucket, name, count, 0, len(bucket), pred)
-  if pos < 0 { None }
-  else {
-    let (_, scheme, reason, kind) = list_index(buf, pos)
-    Some((scheme, reason, kind))
+  if pos < 0 {
+    None
+  } else {
+    match list_index(buf, pos) {
+      (_, scheme, reason, kind) => Some((scheme, reason, kind)),
+    }
   }
 }
 
@@ -935,16 +891,20 @@ fn env_resolve_type(ref buf, count, ref idx, name: String) with Memory =
 // snapshot scan this index read replaces walked the whole env backward per
 // read (6.86% of the self-compile, perf 2026-07-24) — the edge the index
 // already draws, followed instead of re-derived.
-fn env_entry_is_ctor(ref _scheme, ref kind) with Pure =
-  match kind { ConstructorScheme(_, _) => true, _ => false }
+fn env_entry_is_ctor(ref _scheme, ref kind) with Pure = match kind {
+  ConstructorScheme(_, _) => true,
+  _ => false,
+}
 
 fn env_resolve_ctor(ref buf, count, ref idx, name: String) with Memory =
   env_resolve_where(buf, count, idx, name, env_entry_is_ctor)
 
 // A type's TypeVariants entry, reached past any same-named ctor shadow
 // (the single-variant `type Instant = Instant(_)` shape).
-fn env_entry_is_variants(ref _scheme, ref kind) with Pure =
-  match kind { TypeVariants(_) => true, _ => false }
+fn env_entry_is_variants(ref _scheme, ref kind) with Pure = match kind {
+  TypeVariants(_) => true,
+  _ => false,
+}
 
 fn env_resolve_variants(ref buf, count, ref idx, name: String) with Memory =
   env_resolve_where(buf, count, idx, name, env_entry_is_variants)
@@ -963,55 +923,45 @@ fn env_resolve_variants(ref buf, count, ref idx, name: String) with Memory =
 // intern_str still lexes correctly as a keyword on a later intern_span hit.
 // entries is the reverse read (handle → canonical) intern_name_of serves —
 // the render/emit projection; comparisons never read it.
-fn intern_probe(ref bucket, ref src, s, e, i, n) with Memory =
-  if i >= n { None }
-  else {
-    let row = list_index(bucket, i)
-    let (canonical, _h, _kw) = row
-    if str_eq_at(canonical, src, s, e) { Some(row) }
-    else { intern_probe(bucket, src, s, e, i + 1, n) }
+fn intern_probe(ref bucket, ref src, s, e, i, n) with Memory = if i >= n {
+  None
+} else {
+  let row = list_index(bucket, i)
+  match row {
+    (canonical, _h, _kw) => if str_eq_at(canonical, src, s, e) { Some(row) } else { intern_probe(bucket, src, s, e, i + 1, n) },
   }
+}
 
 handler intern_table with buckets = list_filled(4096, []), entries = make_list(1024), count = 1 {
   intern_span(src, s, e) => {
-    let b = i32_and(str_hash_loop(src, s, e, 2166136261), 4095)
+    let b = i32_and(str_hash_loop(src, s, e, -2128831035), 4095)
     let bucket = list_index(buckets, b)
     match intern_probe(bucket, src, s, e, 0, len(bucket)) {
       Some(row) => resume(row),
       None => {
         let canonical = list_to_flat(str_slice(src, s, e))
         let row = (canonical, count, keyword_kind(canonical))
-        resume(row)
-          with buckets = list_set(buckets, b, [row] ++ bucket),
-               entries = list_set(list_extend_to(entries, count + 1), count, canonical),
-               count = count + 1
-      }
+        resume(row) with buckets = list_set(buckets, b, [row] ++ bucket), entries = list_set(list_extend_to(entries, count + 1), count, canonical), count = count + 1
+      },
     }
   },
-
   intern_str(s) => {
     let e = byte_len(s)
-    let b = i32_and(str_hash_loop(s, 0, e, 2166136261), 4095)
+    let b = i32_and(str_hash_loop(s, 0, e, -2128831035), 4095)
     let bucket = list_index(buckets, b)
     match intern_probe(bucket, s, 0, e, 0, len(bucket)) {
-      Some(row) => {
-        let (_canonical, h, _kw) = row
-        resume(h)
+      Some(row) => match row {
+        (_canonical, h, _kw) => resume(h),
       },
       None => {
         let canonical = list_to_flat(s)
         let row = (canonical, count, keyword_kind(canonical))
-        resume(count)
-          with buckets = list_set(buckets, b, [row] ++ bucket),
-               entries = list_set(list_extend_to(entries, count + 1), count, canonical),
-               count = count + 1
-      }
+        resume(count) with buckets = list_set(buckets, b, [row] ++ bucket), entries = list_set(list_extend_to(entries, count + 1), count, canonical), count = count + 1
+      },
     }
   },
-
   intern_name_of(h) => resume(list_index(entries, h)),
-
-  intern_seed() => resume((buckets, entries, count))
+  intern_seed() => resume((buckets, entries, count)),
 }
 
 // The branch cursor's READ-ONLY intern view (the fan): serves probe
@@ -1023,31 +973,27 @@ handler intern_table with buckets = list_filled(4096, []), entries = make_list(1
 // root-side); its arm carries the same trap for totality.
 handler intern_view(buckets0, entries0, count0) {
   intern_span(src, s, e) => {
-    let b = i32_and(str_hash_loop(src, s, e, 2166136261), 4095)
+    let b = i32_and(str_hash_loop(src, s, e, -2128831035), 4095)
     match intern_probe(list_index(buckets0, b), src, s, e, 0, len(list_index(buckets0, b))) {
       Some(row) => resume(row),
       None => {
         load_i32(0 - 1)
         resume(("", 0, None))
-      }
+      },
     }
   },
-
   intern_str(s) => {
     let e = byte_len(s)
-    let b = i32_and(str_hash_loop(s, 0, e, 2166136261), 4095)
+    let b = i32_and(str_hash_loop(s, 0, e, -2128831035), 4095)
     match intern_probe(list_index(buckets0, b), s, 0, e, 0, len(list_index(buckets0, b))) {
-      Some(row) => {
-        let (_canonical, h, _kw) = row
-        resume(h)
+      Some(row) => match row {
+        (_canonical, h, _kw) => resume(h),
       },
-      None => resume(load_i32(0 - 1))
+      None => resume(load_i32(0 - 1)),
     }
   },
-
   intern_name_of(h) => resume(list_index(entries0, h)),
-
-  intern_seed() => resume((buckets0, entries0, count0))
+  intern_seed() => resume((buckets0, entries0, count0)),
 }
 
 // Config: a BRANCH CURSOR (the parallel fan's per-thread instance) installs
@@ -1056,73 +1002,52 @@ handler intern_view(buckets0, entries0, count0) {
 // through the root, in stmt order). The root installs pass the empty base,
 // so every resolve is one level exactly as before; a branch resolve tries
 // its private level first, then the base.
-handler env_handler(base_buf, base_count, base_index)
-  with entries_buf = make_list(1024), entries_count = 0, scopes = [], index = env_index_new() {
-
-  env_lookup(name) =>
-    resume(match env_resolve(entries_buf, entries_count, index, name) {
-      None  => env_resolve(base_buf, base_count, base_index, name),
-      found => found
-    }),
-
-  env_lookup_type(name) =>
-    resume(match env_resolve_type(entries_buf, entries_count, index, name) {
-      None  => env_resolve_type(base_buf, base_count, base_index, name),
-      found => found
-    }),
-
-  env_lookup_ctor(name) =>
-    resume(match env_resolve_ctor(entries_buf, entries_count, index, name) {
-      None  => env_resolve_ctor(base_buf, base_count, base_index, name),
-      found => found
-    }),
-
-  env_lookup_variants(name) =>
-    resume(match env_resolve_variants(entries_buf, entries_count, index, name) {
-      None  => env_resolve_variants(base_buf, base_count, base_index, name),
-      found => found
-    }),
-
-  env_snapshot() =>
-    // Snapshots copy the live prefix — rare (module boundaries), and a
-    // snapshot that aliased the mutable buffer would be the stale-read lie.
-    // A branch's snapshot is base-then-private in resolution order's
-    // reverse: the private prefix appended after the base view.
-    resume(Env(slice(base_buf, 0, base_count) ++ slice(entries_buf, 0, entries_count))),
-
-  // The branch join surface (BranchEnv), answering by instance position:
+handler env_handler(base_buf, base_count, base_index) with entries_buf = make_list(1024), entries_count = 0, scopes = [], index = env_index_new() {
+  env_lookup(name) => resume(match env_resolve(entries_buf, entries_count, index, name) {
+    None => env_resolve(base_buf, base_count, base_index, name),
+    found => found,
+  }),
+  env_lookup_type(name) => resume(match env_resolve_type(entries_buf, entries_count, index, name) {
+    None => env_resolve_type(base_buf, base_count, base_index, name),
+    found => found,
+  }),
+  env_lookup_ctor(name) => resume(match env_resolve_ctor(entries_buf, entries_count, index, name) {
+    None => env_resolve_ctor(base_buf, base_count, base_index, name),
+    found => found,
+  }),
+  env_lookup_variants(name) => resume(match env_resolve_variants(entries_buf, entries_count, index, name) {
+    None => env_resolve_variants(base_buf, base_count, base_index, name),
+    found => found,
+  }),
+  env_snapshot() => // Snapshots copy the live prefix — rare (module boundaries), and a
+  // snapshot that aliased the mutable buffer would be the stale-read lie.
+  // A branch's snapshot is base-then-private in resolution order's
+  // reverse: the private prefix appended after the base view.
+  resume(Env(slice(base_buf, 0, base_count) ++ slice(entries_buf, 0, entries_count))),
+  env_base_view() => // The branch join surface (BranchEnv), answering by instance position:
   // the ROOT instance's view is the layer-start base capture (the buffer
   // is append-only and the count freezes the extent, so the triple is a
   // true snapshot without a copy); a BRANCH instance's publishes are its
   // private entries in occurrence order — the log the join replays
   // through the root's env_extend, Reasons riding whole.
-  env_base_view() => resume((entries_buf, entries_count, index)),
-
+  resume((entries_buf, entries_count, index)),
   env_publishes() => resume(list_to_flat(slice(entries_buf, 0, entries_count))),
-
   env_extend(name, scheme, reason, kind) => {
-    let grown =
-      if entries_count >= len(entries_buf) {
-        list_copy_into(entries_buf, make_list(len(entries_buf) * 2), 0, entries_count)
-      } else { entries_buf }
-    resume()
-      with entries_buf = list_set(grown, entries_count, (name, scheme, reason, kind)),
-           entries_count = entries_count + 1,
-           index = env_index_add(index, name, entries_count)
-  },
-
-  env_scope_enter() =>
-    resume()
-      with scopes = scopes ++ [entries_count],   // drift-audit: ignore — O(1) mark push, one per scope enter, popped by scope exit
-
-  env_scope_exit() =>
-    if len(scopes) == 0 { resume() }
-    else {
-      let mark = last(scopes)
-      resume()
-        with entries_count = mark,
-             scopes = drop_last(scopes)
+    let grown = if entries_count >= len(entries_buf) {
+      list_copy_into(entries_buf, make_list(len(entries_buf) * 2), 0, entries_count)
+    } else {
+      entries_buf
     }
+    resume() with entries_buf = list_set(grown, entries_count, (name, scheme, reason, kind)), entries_count = entries_count + 1, index = env_index_add(index, name, entries_count)
+  },
+  env_scope_enter() => // drift-audit: ignore — O(1) mark push, one per scope enter, popped by scope exit
+  resume() with scopes = scopes ++ [entries_count],
+  env_scope_exit() => if len(scopes) == 0 {
+    resume()
+  } else {
+    let mark = last(scopes)
+    resume() with entries_count = mark, scopes = drop_last(scopes)
+  },
 }
 
 // body_context — H1 emit-time per-fn-body metadata
@@ -1130,12 +1055,11 @@ handler env_handler(base_buf, base_count, base_index)
 // (offset = 8 + 4*captures + 4*slot_idx within __state) and by any
 // future evidence-aware emit site. Each fn-body emission resets the
 // state via set_*; reads return the most recent set.
-
 handler body_context with captures = 0, evidence = [] {
-  current_body_captures()    => resume(captures),
-  set_body_captures(n)       => resume() with captures = n,
-  current_body_evidence()    => resume(evidence),
-  set_body_evidence(ev)      => resume() with evidence = ev
+  current_body_captures() => resume(captures),
+  set_body_captures(n) => resume() with captures = n,
+  current_body_evidence() => resume(evidence),
+  set_body_evidence(ev) => resume() with evidence = ev,
 }
 
 // wasi_filesystem — FS substrate (IC prerequisite)
@@ -1149,26 +1073,25 @@ handler body_context with captures = 0, evidence = [] {
 // `with !Filesystem`; audit-driven linker severance drops path_open
 // / fd_close / path_create_directory / path_filestat_get imports
 // from that binary. DESIGN.md 10.3 capability severance realized.
-
 handler wasi_filesystem {
-  fs_exists(path)                => resume(fs_exists_impl(path)),
-  fs_read_file(path)             => resume(fs_read_file_impl(path)),
-  fs_write_file(path, bytes)     => {
+  fs_exists(path) => resume(fs_exists_impl(path)),
+  fs_read_file(path) => resume(fs_read_file_impl(path)),
+  fs_write_file(path, bytes) => {
     fs_write_file_impl(path, bytes)
     resume()
   },
-  fs_mkdir(path)                 => {
+  fs_mkdir(path) => {
     fs_mkdir_impl(path)
     resume()
   },
-  // FX.A.basics arms (per FX walkthrough §2.2)
-  fs_open(path)                  => resume(fs_open_impl(path)),
-  fs_close(fd)                   => {
+  fs_open(path) => // FX.A.basics arms (per FX walkthrough §2.2)
+  resume(fs_open_impl(path)),
+  fs_close(fd) => {
     fs_close_impl(fd)
     resume()
   },
-  fs_unlink(path)                => resume(fs_unlink_impl(path)),
-  fs_rename(old_p, new_p)        => resume(fs_rename_impl(old_p, new_p))
+  fs_unlink(path) => resume(fs_unlink_impl(path)),
+  fs_rename(old_p, new_p) => resume(fs_rename_impl(old_p, new_p)),
 }
 
 // lookup_ty_graph — GraphRead → LookupTy bridge (spec 05)
@@ -1176,7 +1099,7 @@ handler wasi_filesystem {
 // (inherited from the outer graph_handler). Free and error-hole handles
 // resume TVar(h) — the honest word floor every consumer reads; a width a
 // site genuinely needs detonates at emit's loud floors, never here.
-
+//
 // The handler additionally carries the SPECIALIZATION state (spec_pairs): a
 // named-generic twin's emission brackets itself with spec_ctx_set/clear, and
 // while set, a free var answers through the site's EXACT instantiation pairs
@@ -1186,56 +1109,53 @@ handler wasi_filesystem {
 // singleton direct-dispatch tier — measured as ev-scan faults at infer sites
 // that never threaded evidence (they never needed to under the singleton).
 handler lookup_ty_graph with spec_pairs = [], spec_enc = "" {
-
   spec_ctx_set(prs, e) => resume() with spec_pairs = prs, spec_enc = e,
   spec_ctx_clear() => resume() with spec_pairs = [], spec_enc = "",
   spec_enc_active() => resume(spec_enc),
-
-  lookup_ty(h) => {
-    let GNode(kind, reason) = graph_chase(h)
-    if len(spec_pairs) > 0 {
+  lookup_ty(h) => match graph_chase(h) {
+    GNode(kind, reason) => if len(spec_pairs) > 0 {
       match kind {
-        NBound(t)          => resume(spec_subst_pairs(t, spec_pairs)),
-        NFree(_)           => resume(spec_pair_or_var(h, spec_pairs)),
-        NErrorHole(_)      => resume(spec_pair_or_var(h, spec_pairs)),
-        NRowBound(_)       => resume(TUnit),
+        NBound(t) => resume(spec_subst_pairs(t, spec_pairs)),
+        NFree(_) => resume(spec_pair_or_var(h, spec_pairs)),
+        NErrorHole(_) => resume(spec_pair_or_var(h, spec_pairs)),
+        NRowBound(_) => resume(TUnit),
         NRecordRowBound(_) => resume(TUnit),
-        NRowFree(_)        => resume(TUnit)
+        NRowFree(_) => resume(TUnit),
       }
     } else {
       match kind {
-      NBound(t)        => resume(t),
-      // An error hole / free var resumes TVar(h) — CARRY THE HANDLE. The
-      // prior TName("ERROR_HOLE")/TName("UNRESOLVED") sentinels fabricated
-      // a NOMINAL type for a node the graph proves is unresolved: every
-      // downstream type-directed read then trusted the lie — the eq
-      // dispatch minted a structural-sum helper $eq_nUNRESOLVED that read
-      // a raw Int operand as a variant pointer (memory at address 44100 as
-      // a tag word). TVar(h) is the truth: repr_of reads the word floor,
-      // fold_sig reads "i", eq reads word identity — the honest
-      // productive-under-error floor at every consumer, no second sentinel
-      // channel. (A quantified var's == at a GENERIC body is word identity
-      // by the same floor; the type-directed eq for a generic operand at
-      // its instantiated width is the evidence-passing band —
-      // Hβ.emit.generic-boundary-repr-coercion.)
-      NErrorHole(_)    => resume(TVar(h)),
-      // A free var read at lower is NOT an error — it is a legal quantified
-      // parameter of a reachable generic declaration (generalize's Forall is
-      // the graph's own proof; `fn ident(x) = x` called from main carries
-      // one), and repr_of floors it to the honest word by design. The per-read
-      // report here re-derived "free = error" against that proof — 182
-      // false diagnostics on a clean runtime-lib compile, the whole
-      // frontier-gate debt class. A GENUINELY stuck width still detonates
-      // at emit's loud comment-marked floors (field-offset-unprovable, the
-      // ft mismatch), at the site that actually needs the width — the
-      // consumer owns the refusal, never the read.
-      NFree(_)         => resume(TVar(h)),
-      NRowBound(_)     => resume(TUnit),
-      NRecordRowBound(_) => resume(TUnit),
-      NRowFree(_)      => resume(TUnit)
+        NBound(t) => resume(t),
+        NErrorHole(_) => // An error hole / free var resumes TVar(h) — CARRY THE HANDLE. The
+        // prior TName("ERROR_HOLE")/TName("UNRESOLVED") sentinels fabricated
+        // a NOMINAL type for a node the graph proves is unresolved: every
+        // downstream type-directed read then trusted the lie — the eq
+        // dispatch minted a structural-sum helper $eq_nUNRESOLVED that read
+        // a raw Int operand as a variant pointer (memory at address 44100 as
+        // a tag word). TVar(h) is the truth: repr_of reads the word floor,
+        // fold_sig reads "i", eq reads word identity — the honest
+        // productive-under-error floor at every consumer, no second sentinel
+        // channel. (A quantified var's == at a GENERIC body is word identity
+        // by the same floor; the type-directed eq for a generic operand at
+        // its instantiated width is the evidence-passing band —
+        // Hβ.emit.generic-boundary-repr-coercion.)
+        resume(TVar(h)),
+        NFree(_) => // A free var read at lower is NOT an error — it is a legal quantified
+        // parameter of a reachable generic declaration (generalize's Forall is
+        // the graph's own proof; `fn ident(x) = x` called from main carries
+        // one), and repr_of floors it to the honest word by design. The per-read
+        // report here re-derived "free = error" against that proof — 182
+        // false diagnostics on a clean runtime-lib compile, the whole
+        // frontier-gate debt class. A GENUINELY stuck width still detonates
+        // at emit's loud comment-marked floors (field-offset-unprovable, the
+        // ft mismatch), at the site that actually needs the width — the
+        // consumer owns the refusal, never the read.
+        resume(TVar(h)),
+        NRowBound(_) => resume(TUnit),
+        NRecordRowBound(_) => resume(TUnit),
+        NRowFree(_) => resume(TUnit),
       }
-    }
-  }
+    },
+  },
 }
 
 // diag_line — THE diagnostic render, one home. The root arm below, the
@@ -1260,9 +1180,7 @@ fn diag_line(diag) = {
 // The sandbox boundary. Outermost in every route. Declares
 // `with !Diagnostic` so its own arms cannot recursively perform
 // report — structural gate via spec 01's algebra.
-
 handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
-
   report(diag) => {
     // Every surface is a PROJECTION of the one DiagKind — source, code,
     // severity-class, message, span, applicability are read live, never
@@ -1289,42 +1207,40 @@ handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
       // about (types.mn DiagScope — substrate self-lint is the substrate's
       // census channel, and partly weave-relative besides).
       match scope {
-        ScopeAll  => eprint_string(line),
+        ScopeAll => eprint_string(line),
         ScopeNone => (),
-        ScopeAt(sstart, snlines) => {
-          let Span(sl, _, _, _) = diag_span(diag)
-          if sl >= sstart && sl < sstart + snlines { eprint_string(line) }
-        }
+        ScopeAt(sstart, snlines) => match diag_span(diag) {
+          Span(sl, _, _, _) => if sl >= sstart && sl < sstart + snlines { eprint_string(line) },
+        },
       }
       resume()
     }
-  }
-
-  diag_errors()   => resume(errors)
-  diag_refusals() => resume(refusals)
-
-  diag_scope(sc) => resume() with scope = sc
-
-  // The branch join (BranchDiag): re-print the branch's pre-rendered
+  },
+  diag_errors() => resume(errors),
+  diag_refusals() => resume(refusals),
+  diag_scope(sc) => resume() with scope = sc,
+  diag_absorb(dlines, derr, dref) => // The branch join (BranchDiag): re-print the branch's pre-rendered
   // facts in their occurrence order and fold its tally into this one —
   // the count and the counter stay one handler, and the root's scope
   // register applies here exactly as at the live arm (the branch is
   // scope-ignorant; errors always re-print).
-  diag_absorb(dlines, derr, dref) => {
-    each((f) => {
-      let (line, sl, iserr) = f
-      if iserr { eprint_string(line) }
-      else {
-        match scope {
-          ScopeAll  => eprint_string(line),
-          ScopeNone => (),
-          ScopeAt(sstart, snlines) =>
-            if sl >= sstart && sl < sstart + snlines { eprint_string(line) }
-        }
-      }
-    }, dlines)
+  {
+    each(
+      (f) => match f {
+        (line, sl, iserr) => if iserr {
+          eprint_string(line)
+        } else {
+          match scope {
+            ScopeAll => eprint_string(line),
+            ScopeNone => (),
+            ScopeAt(sstart, snlines) => if sl >= sstart && sl < sstart + snlines { eprint_string(line) },
+          }
+        },
+      },
+      dlines
+    )
     resume() with errors = errors + derr, refusals = refusals + dref
-  }
+  },
 }
 
 // diag_branch — the branch cursor's per-stmt collector (Phase C, C1c-2).
@@ -1333,32 +1249,31 @@ handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
 // any in-branch diag_errors/diag_refusals read with branch-local truth.
 // diag_lines_taken hands the whole fact set to the join.
 handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals = 0 {
-
   report(diag) => {
     let line = diag_line(diag)
     // The banked fact carries the span start-line and the error bit beside
     // the rendered line, so the root's diag_absorb can apply the scope
     // register (types.mn DiagScope) at the join — the branch itself stays
     // scope-ignorant; the register has one home.
-    let Span(sl, _, _, _) = diag_span(diag)
-    let iserr = diag_severity(diag) == SError
-    let grown = list_set(list_extend_to(lines, count + 1), count, (line, sl, iserr))
-    if iserr {
-      if diag_refuses(diag) {
-        resume() with lines = grown, count = count + 1,
-                      errors = errors + 1, refusals = refusals + 1
-      } else {
-        resume() with lines = grown, count = count + 1, errors = errors + 1
-      }
-    } else {
-      resume() with lines = grown, count = count + 1
+    match diag_span(diag) {
+      Span(sl, _, _, _) => {
+        let iserr = diag_severity(diag) == SError
+        let grown = list_set(list_extend_to(lines, count + 1), count, (line, sl, iserr))
+        if iserr {
+          if diag_refuses(diag) {
+            resume() with lines = grown, count = count + 1, errors = errors + 1, refusals = refusals + 1
+          } else {
+            resume() with lines = grown, count = count + 1, errors = errors + 1
+          }
+        } else {
+          resume() with lines = grown, count = count + 1
+        }
+      },
     }
-  }
-
-  diag_errors()   => resume(errors)
-  diag_refusals() => resume(refusals)
-
-  diag_lines_taken() => resume((list_to_flat(slice(lines, 0, count)), errors, refusals))
+  },
+  diag_errors() => resume(errors),
+  diag_refusals() => resume(refusals),
+  diag_lines_taken() => resume((list_to_flat(slice(lines, 0, count)), errors, refusals)),
 }
 
 // FreshHandle — two handlers, same function. Inference mints via
@@ -1367,18 +1282,13 @@ handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals 
 // `import infer` (the import-truth round: pipeline was an over-wide home
 // only its own chain could see). Query mints display ids (ephemeral, for
 // rendering); both satisfy FreshHandle.
-
 handler fresh_for_query with next_display = 0 {
-  mint(_reason) =>
-    resume(next_display)
-      with next_display = next_display + 1
-  mint_row(_reason) =>
-    resume(next_display)
-      with next_display = next_display + 1
+  mint(_reason) => resume(next_display) with next_display = next_display + 1,
+  mint_row(_reason) => resume(next_display) with next_display = next_display + 1,
 }
 
 // Collection helpers — consumed by teach / audit
-
+//
 // Per-fn gradient projection. Each FnStmt's teach_gradient is
 // independent of siblings (no shared state mutation among reads);
 // map's tail loop walks them. N-core gradients are a `><` under its
@@ -1387,46 +1297,45 @@ handler fresh_for_query with next_display = 0 {
 // dropping non-fn nodes. The ONE cursor walk over the module's fn decls;
 // audit and teach are two projections of it (Carried-Truth: the walk lived
 // twice, byte-identical but for the projection — one home now).
-fn map_fn_stmts(ast, project) = {
-  ast
-    |> map((node) => {
-         let N(body, _, handle) = node
-         match body {
-           NStmt(FnStmt(name, _, _, _, _)) => [project(name, handle)],
-           _                               => []
-         }
-       })
-    |> flatten
+fn map_fn_stmts(ast, project) = ast |> map((node) => match node {
+  N(body, _, handle) => match body {
+    NStmt(FnStmt(name, _, _, _, _)) => [project(name, handle)],
+    _ => [],
+  },
+}) |> flatten
+
+// The element pin is an Intent Boundary (spec_mangle's law): name's
+// only use is the splice, so unpinned the fn generalizes and the floor
+// renders every fn's teach line under a pointer numeral instead of its
+// name.
+fn render_gradients(gradients: [(String, Option(AnnotationSuggestion))]) = if len(gradients) == 0 {
+  "All functions are at maximum annotation density.\n"
+} else {
+  gradients |> map((entry) => match entry {
+    (name, result) => render_gradient_line(name, result),
+  }) |> str_concat_all
 }
 
-fn render_gradients(gradients) = {
-  if len(gradients) == 0 {
-    "All functions are at maximum annotation density.\n"
-  } else {
-    gradients
-      |> map((entry) => {
-           let (name, result) = entry
-           "{name}: {render_gradient_result(result)}\n"
-         })
-      |> str_concat_all
-  }
-}
+// The name pin is an Intent Boundary at the line's ONE mint (spec_mangle's
+// law): inside the map lambda the splice judged datum-last while the
+// element was still free, and the show floor read the word — every teach
+// line rendered under a pointer numeral. The named call anchors the
+// binder to String before the splice judges.
+fn render_gradient_line(name: String, result) = "{name}: {render_gradient_result(result)}\n"
 
 fn render_gradient_result(result) = match result {
   None => "(no next-step annotation suggested)",
-  Some(suggestion) => {
-    let AnnotationSuggestion(_kind, ann_text, unlocks, _reason) = suggestion
-    "→ add {ann_text} to unlock {join_unlock_labels(unlocks)}"
-  }
+  Some(suggestion) => match suggestion {
+    AnnotationSuggestion(_kind, ann_text, unlocks, _reason) => "→ add {ann_text} to unlock {join_unlock_labels(unlocks)}",
+  },
 }
 
-fn join_unlock_labels(labels) with Memory + Alloc = {
-  if len(labels) == 0 { "(no capabilities)" }
-  else {
-    let first = head(labels)
-    let rest = rest(labels)
-    fold(first, (acc, label) => acc ++ ", " ++ label, rest)
-  }
+fn join_unlock_labels(labels) with Memory + Alloc = if len(labels) == 0 {
+  "(no capabilities)"
+} else {
+  let first = head(labels)
+  let rest = rest(labels)
+  fold(first, (acc, label) => acc ++ ", " ++ label, rest)
 }
 
 // H5: AuditReport record per fn — the structured projection Mentl's
@@ -1458,9 +1367,10 @@ fn build_audit_report(fn_name, handle, ty) = {
   (fn_name, reached, show_effrow(body_row), severable, unlocks, referenced_by)
 }
 
-fn owner_names_of(ref owners, i, acc) = {
-  if i >= len(owners) { acc }
-  else { owner_names_of(owners, i + 1, acc ++ [comment_owner(list_index(owners, i))]) }
+fn owner_names_of(ref owners, i, acc) = if i >= len(owners) {
+  acc
+} else {
+  owner_names_of(owners, i + 1, acc ++ [comment_owner(list_index(owners, i))])
 }
 
 // Severance candidates: the canonical effects (Alloc / IO / Network)
@@ -1470,79 +1380,82 @@ fn severance_candidates(reached) = {
   // The audit's canonical severance set — literals name the user-facing
   // effects at this one mint; identity is the intern handle (EffName-is-a-
   // handle landed; comparisons are word-identity by type).
-  let canonical = [ENamed(intern_str("Alloc")), ENamed(intern_str("IO")), ENamed(intern_str("Network"))]   // drift-audit: ignore — the literals NAME the severance set at its one mint; identity is the intern handle (EffName-is-a-handle landed)
+  //
+  // drift-audit: ignore — the literals NAME the severance set at its one mint; identity is the intern handle (EffName-is-a-handle landed)
+  let canonical =
+    [ENamed(intern_str("Alloc")), ENamed(intern_str("IO")), ENamed(intern_str("Network"))]   // drift-audit: ignore — the literals NAME the severance set at its one mint; identity is the intern handle (EffName-is-a-handle landed)
   filter_not_in(canonical, reached, 0, len(canonical), [])
 }
 
-fn filter_not_in(candidates, present, i, n, acc) = {
-  if i >= n { acc }
-  else {
-    let c = list_index(candidates, i)
-    let next = if name_in_list(present, c) { acc }
-               else { acc ++ [c] }   // drift-audit: ignore — real drift 11 on small canonical-3-effect list; buffer-counter conversion requires adding Memory+Alloc to fn row rippling through audit walk; tracked by Hβ.perf.name-is-handle; buffer-counter sweep
-    filter_not_in(candidates, present, i + 1, n, next)
-  }
+fn filter_not_in(candidates, present, i, n, acc) = if i >= n {
+  acc
+} else {
+  let c = list_index(candidates, i)
+  let next = if name_in_list(present, c) { acc } else { acc ++ [c] }
+  filter_not_in(candidates, present, i + 1, n, next)
 }
 
-fn name_in_list(names, target) = {
-  name_in_list_loop(names, target, 0, len(names))
+fn name_in_list(names, target) = name_in_list_loop(names, target, 0, len(names))
+
+fn name_in_list_loop(names, target, i, n) = if i >= n {
+  false
+}
+// structural fold-eq, not the hand-rolled twin
+else if list_index(names, i) == target {
+  true
+} else {
+  name_in_list_loop(names, target, i + 1, n)
 }
 
-fn name_in_list_loop(names, target, i, n) = {
-  if i >= n { false }
-  else if list_index(names, i) == target { true }   // structural fold-eq, not the hand-rolled twin
-  else { name_in_list_loop(names, target, i + 1, n) }
-}
+fn severance_unlocks(severable) = severance_unlocks_loop(severable, 0, len(severable), [])
 
-fn severance_unlocks(severable) = {
-  severance_unlocks_loop(severable, 0, len(severable), [])
-}
-
-fn severance_unlocks_loop(severable, i, n, acc) = {
-  if i >= n { acc }
-  else {
-    let caps = capabilities_for_severance(list_index(severable, i))
-    severance_unlocks_loop(severable, i + 1, n, acc ++ caps)
-  }
+fn severance_unlocks_loop(severable, i, n, acc) = if i >= n {
+  acc
+} else {
+  let caps = capabilities_for_severance(list_index(severable, i))
+  severance_unlocks_loop(severable, i + 1, n, acc ++ caps)
 }
 
 // Terminal renderer over AuditReport records — reads fields by name.
 // JSON / IDE-projection renderers are peer functions on the same
 // record (one substrate, multiple projections per CLAUDE.md insight 8).
-fn render_audit(entries) = {
-  entries
-    |> map((report) => {
-         // Positional destructure — provable with no type flow, where a
-         // record field read floors in a map lambda (see build_audit_report).
-         let (fn_name, reached, row_str, severable, unlocks, referenced_by) = report
-         let header = "{fn_name} : {row_str}\n"
-         let severance_section =
-           if len(severable) == 0 { "" }
-           else {
-             "  severable: {show_list(severable, show_eff_name, " + ")} — unlocks {show_list(unlocks, show_capability, ", ")}\n"
-           }
-         let refs_section =
-           if len(referenced_by) == 0 { "" }
-           else { "  referenced in comments by: {show_list(referenced_by, (n) => n, ", ")}\n" }
-         "{header}{severance_section}{refs_section}"
-       })
-    |> str_concat_all
-}
+//
+// Positional destructure — provable with no type flow, where a
+// record field read floors in a map lambda (see build_audit_report).
+fn render_audit(entries) = entries |> map((report) => match report {
+  (fn_name, reached, row_str, severable, unlocks, referenced_by) => {
+    let header = "{fn_name} : {row_str}\n"
+    let severance_section = if len(severable) == 0 {
+      ""
+    } else {
+      "  severable: {show_list(severable, show_eff_name, " + ")} — unlocks {show_list(unlocks, show_capability, ", ")}\n"
+    }
+    let refs_section = if len(referenced_by) == 0 {
+      ""
+    } else {
+      "  referenced in comments by: {show_list(referenced_by, (n) => n, ", ")}\n"
+    }
+    "{header}{severance_section}{refs_section}"
+  },
+}) |> str_concat_all
 
 // Query rendering — delegates to query.mn for Question parsing
-
 fn render_ref_spans(ref spans, i) with Memory + Alloc =
-  if i >= len(spans) { "" }
-  else { "\n  at {show_span(spans[i])}{render_ref_spans(spans, i + 1)}" }
+  if i >= len(spans) { "" } else { "\n  at {show_span(spans[i])}{render_ref_spans(spans, i + 1)}" }
 
 fn render_query_result(result) = match result {
   QRType(ty, reason) => "→ {show_type(ty)}\n  Reason: {show_reason(reason)}",
   QRIntent(effs) => {
-    let terms = effs |> map((entry) => {
-      let (name, negated, conn) = entry
-      let sign = if negated { "!" } else { "" }
-      let symbol = match conn { EcUnion => "+", EcDiff => "-", EcInter => "&" }
-      "{symbol}{sign}{show_eff_name(name)}"
+    let terms = effs |> map((entry) => match entry {
+      (name, negated, conn) => {
+        let sign = if negated { "!" } else { "" }
+        let symbol = match conn {
+          EcUnion => "+",
+          EcDiff => "-",
+          EcInter => "&",
+        }
+        "{symbol}{sign}{show_eff_name(name)}"
+      },
     })
     "→ {str_concat_all(terms)}"
   },
@@ -1550,26 +1463,24 @@ fn render_query_result(result) = match result {
   QRChain(hops) => "→ {int_to_str(len(hops))} hops in chain",
   QREffects(row) => "→ {show_effrow(row)}",
   QROwnership(params) => "→ {int_to_str(len(params))} params",
-  QRWhy(reason) =>
-    show_reason(reason),
-  // The refs facet renders WHAT the graph computed, not just how much:
+  QRWhy(reason) => show_reason(reason),
+  QRRefs(spans) => // The refs facet renders WHAT the graph computed, not just how much:
   // one located line per inbound use-edge (the seam the propose-facet fix
   // convicted once already — the graph computed it, the terminal threw it
   // away). Every "who calls X" grep this replaces was a re-derivation of
   // edges the weave holds.
-  QRRefs(spans) => "→ {int_to_str(len(spans))} reference(s){render_ref_spans(spans, 0)}",
+  "→ {int_to_str(len(spans))} reference(s){render_ref_spans(spans, 0)}",
   QRVerifyDebt(obligations) => "→ {int_to_str(len(obligations))} verification obligations pending",
   QRHandlerProvider(provider) => match provider {
     Some(name) => "→ handled by {name}",
-    None       => "→ no handler installed"
+    None => "→ no handler installed",
   },
-  QRFlowLabel(label, reason) =>
-    "→ {show_flow_label(label)}\n  Reason: {show_reason(reason)}",
-  QRError(msg) => "error: {msg}"
+  QRFlowLabel(label, reason) => "→ {show_flow_label(label)}\n  Reason: {show_reason(reason)}",
+  QRError(msg) => "error: {msg}",
 }
 
 // show_flow_label — defined in types.mn alongside flow_label_join/flow_le.
-
+//
 // The query surface is a tiny grammar: <verb> [arg]. The query strings are
 // unavoidable external input (like LSP method strings, lsp.mn classify_method)
 // — projected to the QueryVerb ADT at ONE boundary (classify_query_verb),
@@ -1577,22 +1488,38 @@ fn render_query_result(result) = match result {
 // with its argument arity; no nested string-literal cascade scattered across
 // arities (drift 8). An ill-formed query is QUnknown(q) — the honest Silence,
 // never a fabricated Question.
-
 type QueryVerb
-  = QVType | QVEffects | QVOwnership | QVWhy | QVRefs | QVProvider
-  | QVUnresolved | QVVerification | QVFlow | QVUnknownVerb
+  = QVType
+  | QVEffects
+  | QVOwnership
+  | QVWhy
+  | QVRefs
+  | QVProvider
+  | QVUnresolved
+  | QVVerification
+  | QVFlow
+  | QVUnknownVerb
 
-fn classify_query_verb(w: String) with Pure = {
-  if      w == "type"         { QVType }
-  else if w == "effects"      { QVEffects }
-  else if w == "ownership"    { QVOwnership }
-  else if w == "why"          { QVWhy }
-  else if w == "refs"         { QVRefs }
-  else if w == "provider"     { QVProvider }
-  else if w == "unresolved"   { QVUnresolved }
-  else if w == "verification" { QVVerification }
-  else if w == "flow"         { QVFlow }
-  else                        { QVUnknownVerb }
+fn classify_query_verb(w: String) with Pure = if w == "type" {
+  QVType
+} else if w == "effects" {
+  QVEffects
+} else if w == "ownership" {
+  QVOwnership
+} else if w == "why" {
+  QVWhy
+} else if w == "refs" {
+  QVRefs
+} else if w == "provider" {
+  QVProvider
+} else if w == "unresolved" {
+  QVUnresolved
+} else if w == "verification" {
+  QVVerification
+} else if w == "flow" {
+  QVFlow
+} else {
+  QVUnknownVerb
 }
 
 fn parse_query_string(q) = {
@@ -1601,11 +1528,10 @@ fn parse_query_string(q) = {
   // — and read words ONCE, never re-split per arm (Carried-Truth).
   let words = list_to_flat(split(q, " "))
   match words {
-    []       => QUnknown(q),
-    [w0]     => build_question(classify_query_verb(w0), "", q),
+    [] => QUnknown(q),
+    [w0] => build_question(classify_query_verb(w0), "", q),
     [w0, w1] => build_question(classify_query_verb(w0), w1, q),
-    _        => build_question(classify_query_verb(query_head(words)),
-                               query_last(words), q)
+    _ => build_question(classify_query_verb(query_head(words)), query_last(words), q),
   }
 }
 
@@ -1613,16 +1539,16 @@ fn parse_query_string(q) = {
 // (unresolved/verification) ignore the arg; unary verbs carry it. A verb whose
 // arity its arg cannot satisfy projects to QUnknown(raw) — the honest unknown.
 fn build_question(verb, arg, raw) with Pure = match verb {
-  QVUnresolved   => QUnresolved,
+  QVUnresolved => QUnresolved,
   QVVerification => QVerifyDebt,
-  QVType         => QTypeOf(arg),
-  QVEffects      => QEffects(arg),
-  QVOwnership    => QOwnership(arg),
-  QVWhy          => QWhy(arg),
-  QVRefs         => QRefsOf(arg),
-  QVProvider     => QHandlerProvider(arg),
-  QVFlow         => QFlowOf(arg),
-  QVUnknownVerb  => QUnknown(raw)
+  QVType => QTypeOf(arg),
+  QVEffects => QEffects(arg),
+  QVOwnership => QOwnership(arg),
+  QVWhy => QWhy(arg),
+  QVRefs => QRefsOf(arg),
+  QVProvider => QHandlerProvider(arg),
+  QVFlow => QFlowOf(arg),
+  QVUnknownVerb => QUnknown(raw),
 }
 
 // The verb is the FIRST word (`<verb> [arg]` — the documented query
@@ -1630,5 +1556,4 @@ fn build_question(verb, arg, raw) with Pure = match verb {
 // and argument the SAME final word.
 fn query_head(ws) with Memory = if len(ws) == 0 { "" } else { head(ws) }
 
-fn query_last(ws) with Memory =
-  if len(ws) == 0 { "" } else { list_index(ws, len(ws) - 1) }
+fn query_last(ws) with Memory = if len(ws) == 0 { "" } else { list_index(ws, len(ws) - 1) }

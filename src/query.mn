@@ -9,46 +9,61 @@
 // Every LSP method (Arc F.2) is a Question variant over this same
 // effect. There is no separate LSP substrate. JSON-RPC is the
 // transport; tentacles are already here.
-
 import types
+
 import graph
+
 import effects
 
 // Sum type covering every forensic question `mentl query` can pose.
 // Each variant corresponds to one `ask(Q)` arm in `query_default`.
 type Question
-  = QTypeOf(String)          // "type of NAME"
-  | QTypeAt(Span)            // "type at L:C"
-  | QIntentOf(Int)           // "intent of handle N"
-  | QUnresolved              // every handle that chases to NFree
-  | QSubstChain(Int)         // "subst trace for handle N"
-  | QEffects(String)         // "effects of NAME"
-  | QOwnership(String)       // "ownership of NAME"
-  | QWhy(String)             // "why NAME" — walks reason DAG
-  | QRefsOf(String)          // "refs of NAME" — for rename
-  | QVerifyDebt              // "verification" — pending obligations
-  | QHandlerProvider(String) // "which handler provides OP"
+  // "type of NAME"
+  = QTypeOf(String)
+  // "type at L:C"
+  | QTypeAt(Span)
+  // "intent of handle N"
+  | QIntentOf(Int)
+  // every handle that chases to NFree
+  | QUnresolved
+  // "subst trace for handle N"
+  | QSubstChain(Int)
+  // "effects of NAME"
+  | QEffects(String)
+  // "ownership of NAME"
+  | QOwnership(String)
+  // "why NAME" — walks reason DAG
+  | QWhy(String)
+  // "refs of NAME" — for rename
+  | QRefsOf(String)
+  // "verification" — pending obligations
+  | QVerifyDebt
+  // "which handler provides OP"
   // QFlowOf — the IFC tentacle (§4⑥). Reads the existing graph — TRefined,
   // TName, and the row's absent set — to classify NAME's FlowLabel without any
   // new graph state. The security classification IS already in the type;
   // this is the projection that names it. Novel: no other language exposes
   // IFC as a read of its existing type system. `mentl query flow key` answers
   // "what does the graph already know about key's sensitivity?"
+  | QHandlerProvider(String)
   | QFlowOf(String)
   | QUnknown(String)
 
 type QueryResult
   = QRType(Ty, Reason)
   | QRIntent([(EffName, Bool, EConn)])
-  | QRUnresolved([(String, Ty, [Ty])]) // [(name, ty, free-tvars)]
-  | QRChain([(Int, GNode)]) // [(handle, GNode)]
+  // [(name, ty, free-tvars)]
+  | QRUnresolved([(String, Ty, [Ty])])
+  // [(handle, GNode)]
+  | QRChain([(Int, GNode)])
   | QREffects(EffRow)
   | QROwnership([TParam])
   | QRWhy(Reason)
   | QRRefs([Span])
   | QRVerifyDebt([(Span, Predicate, Reason)])
   | QRHandlerProvider(Option(String))
-  | QRFlowLabel(FlowLabel, Reason)  // IFC projection — the FlowLabel the type already proves
+  // IFC projection — the FlowLabel the type already proves
+  | QRFlowLabel(FlowLabel, Reason)
   | QRError(String)
 
 // The single-op effect that routes every forensic question through
@@ -63,267 +78,225 @@ effect Query {
 // observation — write attempts fail at handler install via the row
 // subsumption gate.
 handler query_default {
-
   ask(q) => match q {
-
-    QTypeOf(name) =>
-      match env_lookup(name) {
-        None => resume(QRError("not found: {name}")),
-        Some(entry) => {
-          let (scheme, reason, _kind) = entry
-          let Forall(_, ty) = scheme
-          resume(QRType(chase_type_deep(ty), reason))
-        }
+    QTypeOf(name) => match env_lookup(name) {
+      None => resume(QRError("not found: {name}")),
+      Some(entry) => match entry {
+        (scheme, reason, _kind) => match scheme {
+          Forall(_, ty) => resume(QRType(chase_type_deep(ty), reason)),
+        },
       },
-
-    QTypeAt(span) => {
-      // One live cursor read: tightest enclosing span → handle → the node's
-      // bound type, chased deep. No throwaway TName("Unknown") chase — the
-      // graph_chase below IS the live read; an unbound node's type IS its own
-      // TVar (the chase terminated there), so the projection is total over the
-      // NodeKind without a fabricated "Unresolved" name.
-      let Graph(_, span_index) = graph_snapshot()
-      match find_tightest(span_index, span, None, 999999999) {
+    },
+    QTypeAt(span) => // One live cursor read: tightest enclosing span → handle → the node's
+    // bound type, chased deep. No throwaway TName("Unknown") chase — the
+    // graph_chase below IS the live read; an unbound node's type IS its own
+    // TVar (the chase terminated there), so the projection is total over the
+    // NodeKind without a fabricated "Unresolved" name.
+    match graph_snapshot() {
+      Graph(_, span_index) => match find_tightest(span_index, span, None, 999999999) {
         None => resume(QRError("no enclosing span found in AST index")),
-        Some(handle) => {
-          let GNode(kind, reason) = graph_chase(handle)
-          match kind {
-            NBound(ty)    => resume(QRType(chase_type_deep(ty), reason)),
-            NFree(_)      => resume(QRType(TVar(handle), reason)),
-            NRowBound(_)  => resume(QRType(TVar(handle), reason)),
+        Some(handle) => match graph_chase(handle) {
+          GNode(kind, reason) => match kind {
+            NBound(ty) => resume(QRType(chase_type_deep(ty), reason)),
+            NFree(_) => resume(QRType(TVar(handle), reason)),
+            NRowBound(_) => resume(QRType(TVar(handle), reason)),
             NRecordRowBound(_) => resume(QRType(TVar(handle), reason)),
-            NRowFree(_)   => resume(QRType(TVar(handle), reason)),
-            NErrorHole(_) => resume(QRType(TVar(handle), reason))
-          }
-        }
-      }
-    },
-
-    QIntentOf(handle) =>
-      // The authored intent row is a field on the FnStmt node the handle
-      // names — read it LIVE (graph_node_body), never a parallel
-      // intent ledger re-found by scan (Carried-Truth). A non-fn node
-      // carries no authored intent.
-      match graph_node_body(handle) {
-        NStmt(FnStmt(_, _, _, effs, _)) => resume(QRIntent(effs)),
-        _ => resume(QRError("no authored intent at handle {int_to_str(handle)}")) // drift-audit: ignore
+            NRowFree(_) => resume(QRType(TVar(handle), reason)),
+            NErrorHole(_) => resume(QRType(TVar(handle), reason)),
+          },
+        },
       },
-
-    QUnresolved => {
-      let Env(entries) = env_snapshot()
-      resume(QRUnresolved(find_unresolved(entries)))
     },
-
-    QSubstChain(handle) =>
-      resume(QRChain(walk_chain(handle, 0))),
-
-    QEffects(name) =>
-      match env_lookup(name) {
-        None => resume(QRError("not found: {name}")),
-        Some(entry) => {
-          let (scheme, _, _) = entry
-          let Forall(_, ty) = scheme
-          match chase_type_deep(ty) {
+    QIntentOf(handle) => // The authored intent row is a field on the FnStmt node the handle
+    // names — read it LIVE (graph_node_body), never a parallel
+    // intent ledger re-found by scan (Carried-Truth). A non-fn node
+    // carries no authored intent.
+    match graph_node_body(handle) {
+      NStmt(FnStmt(_, _, _, effs, _)) => resume(QRIntent(effs)),
+      _ => // drift-audit: ignore
+      resume(QRError("no authored intent at handle {int_to_str(handle)}")),
+    },
+    QUnresolved => match env_snapshot() {
+      Env(entries) => resume(QRUnresolved(find_unresolved(entries))),
+    },
+    QSubstChain(handle) => resume(QRChain(walk_chain(handle, 0))),
+    QEffects(name) => match env_lookup(name) {
+      None => resume(QRError("not found: {name}")),
+      Some(entry) => match entry {
+        (scheme, _, _) => match scheme {
+          Forall(_, ty) => match chase_type_deep(ty) {
             TFun(_, _, row) => resume(QREffects(row)),
-            _ => resume(QRError("{name} is not a function"))
-          }
-        }
+            _ => resume(QRError("{name} is not a function")),
+          },
+        },
       },
-
-    QOwnership(name) =>
-      match env_lookup(name) {
-        None => resume(QRError("not found: {name}")),
-        Some(entry) => {
-          let (scheme, _, _) = entry
-          let Forall(_, ty) = scheme
-          match chase_type_deep(ty) {
+    },
+    QOwnership(name) => match env_lookup(name) {
+      None => resume(QRError("not found: {name}")),
+      Some(entry) => match entry {
+        (scheme, _, _) => match scheme {
+          Forall(_, ty) => match chase_type_deep(ty) {
             TFun(params, _, _) => resume(QROwnership(params)),
-            _ => resume(QRError("{name} is not a function"))
-          }
-        }
+            _ => resume(QRError("{name} is not a function")),
+          },
+        },
       },
-
-    QWhy(name) =>
-      match env_lookup(name) {
-        None => resume(QRError("not found: {name}")),
-        Some(entry) => {
-          let (_, reason, _) = entry
-          // Walk the reason to ROOT — why_expand chases each Fresh(id) through
-          // the graph to its resolved reason, so intent is walkable, not a chain
-          // ending in dangling unification vars. The engine existed (mentl.mn:437)
-          // and only why_from_handle called it; the CLI `why` now performs it too.
-          resume(QRWhy(why_expand(reason, 0)))
-        }
+    },
+    QWhy(name) => match env_lookup(name) {
+      None => resume(QRError("not found: {name}")),
+      Some(entry) => match entry {
+        (_, reason, _) => // Walk the reason to ROOT — why_expand chases each Fresh(id) through
+        // the graph to its resolved reason, so intent is walkable, not a chain
+        // ending in dangling unification vars. The engine existed (mentl.mn:437)
+        // and only why_from_handle called it; the CLI `why` now performs it too.
+        resume(QRWhy(why_expand(reason, 0))),
       },
-
-    QRefsOf(name) =>
-      // Every reference to NAME is a VarRef node in the one graph (the parser
-      // wrote each use into the program weave). refs-of is the projection of
-      // the inbound use-edges: scan the weave for NExpr(VarRef(name)) and
-      // collect each node's span — read live, never an "AST index required"
-      // surrender. This IS rename: the [Span] is exactly the edit set.
-      resume(QRRefs(refs_of_name(name))),
-
+    },
+    QRefsOf(name) => // Every reference to NAME is a VarRef node in the one graph (the parser
+    // wrote each use into the program weave). refs-of is the projection of
+    // the inbound use-edges: scan the weave for NExpr(VarRef(name)) and
+    // collect each node's span — read live, never an "AST index required"
+    // surrender. This IS rename: the [Span] is exactly the edit set.
+    resume(QRRefs(refs_of_name(name))),
     QVerifyDebt => {
-      let debt = verify_debt()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+      // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+      let debt = verify_debt()
       resume(QRVerifyDebt(debt))
     },
-
-    QHandlerProvider(op_name) =>
-      // The handler stack IS graph content (PLAN §2 — "the handler chain IS
-      // the capability stack"): each handler decl is a HandlerDeclStmt in the
-      // weave whose arms name the ops it provides. Which handler provides OP is
-      // the decl whose arms include an arm for OP — read live, never a
-      // "requires active inference context" surrender. None when no handler
-      // provides the op.
-      resume(QRHandlerProvider(handler_providing_op(op_name))),
-
-    QFlowOf(name) =>
-      // The IFC tentacle: read the FlowLabel the type system already proves
-      // for NAME, without any new graph state. The classification comes from:
-      //   - TRefined: a refinement predicate whose name contains secret / classified
-      //   - TName: a nominal type whose name signals sensitivity (SecretKey, Token, etc.)
-      //   - the absent set in the fn's row: `with !IO + !Network` proves the fn cannot
-      //     route its output to public-observable sinks — that IS the Secret label.
-      // This is a pure read over the existing graph. The graph IS the IFC mechanism.
-      match env_lookup(name) {
-        None =>
-          resume(QRError("not found: {name}")),
-        Some(entry) => {
-          let (scheme, reason, _kind) = entry
-          let Forall(_, ty) = scheme
-          let label = query_flow_label(chase_type_deep(ty))
-          resume(QRFlowLabel(label, reason))
-        }
+    QHandlerProvider(op_name) => // The handler stack IS graph content (PLAN §2 — "the handler chain IS
+    // the capability stack"): each handler decl is a HandlerDeclStmt in the
+    // weave whose arms name the ops it provides. Which handler provides OP is
+    // the decl whose arms include an arm for OP — read live, never a
+    // "requires active inference context" surrender. None when no handler
+    // provides the op.
+    resume(QRHandlerProvider(handler_providing_op(op_name))),
+    QFlowOf(name) => // The IFC tentacle: read the FlowLabel the type system already proves
+    // for NAME, without any new graph state. The classification comes from:
+    //   - TRefined: a refinement predicate whose name contains secret / classified
+    //   - TName: a nominal type whose name signals sensitivity (SecretKey, Token, etc.)
+    //   - the absent set in the fn's row: `with !IO + !Network` proves the fn cannot
+    //     route its output to public-observable sinks — that IS the Secret label.
+    // This is a pure read over the existing graph. The graph IS the IFC mechanism.
+    match env_lookup(name) {
+      None => resume(QRError("not found: {name}")),
+      Some(entry) => match entry {
+        (scheme, reason, _kind) => match scheme {
+          Forall(_, ty) => {
+            let label = query_flow_label(chase_type_deep(ty))
+            resume(QRFlowLabel(label, reason))
+          },
+        },
       },
-
-    QUnknown(q) =>
-      resume(QRError("unknown query: {q}"))
-  }
+    },
+    QUnknown(q) => resume(QRError("unknown query: {q}")),
+  },
 }
 
 fn chase_type_deep(ref ty) with !Mutate = match ty {
-  TVar(h) => {
-    let GNode(kind, _) = graph_chase(h)
-    match kind {
+  TVar(h) => match graph_chase(h) {
+    GNode(kind, _) => match kind {
       NBound(inner) => chase_type_deep(inner),
-      _             => ty
-    }
+      _ => ty,
+    },
   },
-  TList(elem)            => TList(chase_type_deep(elem)),
-  TTuple(elems)          => TTuple(chase_list_deep(elems)),
-  TFun(params, ret, eff) =>
-    TFun(chase_params_deep(params), chase_type_deep(ret), eff),
-  TName(name, args)      => TName(name, chase_list_deep(args)),
-  TRecord(fields)        => TRecord(chase_fields_deep(fields)),
+  TList(elem) => TList(chase_type_deep(elem)),
+  TTuple(elems) => TTuple(chase_list_deep(elems)),
+  TFun(params, ret, eff) => TFun(chase_params_deep(params), chase_type_deep(ret), eff),
+  TName(name, args) => TName(name, chase_list_deep(args)),
+  TRecord(fields) => TRecord(chase_fields_deep(fields)),
   TRecordOpen(fields, v) => mk_record_open(chase_fields_deep(fields), v),
-  TRefined(base, pred)   => TRefined(chase_type_deep(base), pred),
-  TCont(input, answer, disc, world) =>
-    TCont(chase_type_deep(input), chase_type_deep(answer), disc, world),
-  TAlias(name, inner)    => TAlias(name, chase_type_deep(inner)),
-  _                      => ty
+  TRefined(base, pred) => TRefined(chase_type_deep(base), pred),
+  TCont(input, answer, disc, world) => TCont(chase_type_deep(input), chase_type_deep(answer), disc, world),
+  TAlias(name, inner) => TAlias(name, chase_type_deep(inner)),
+  _ => ty,
 }
 
-fn chase_list_deep(ref tys) with !Mutate = {
-  if len(tys) == 0 { [] }
-  else {
-    [chase_type_deep(last(tys))]
-      ++ chase_list_deep(drop_last(tys))
-  }
+fn chase_list_deep(ref tys) with !Mutate =
+  if len(tys) == 0 { [] } else { [chase_type_deep(last(tys))] ++ chase_list_deep(drop_last(tys)) }
+
+fn chase_params_deep(ref params) with !Mutate = if len(params) == 0 {
+  []
+} else {
+  let p = last(params)
+  [param_with_ty(p, chase_type_deep(param_ty(p)))] ++ chase_params_deep(drop_last(params))
 }
 
-fn chase_params_deep(ref params) with !Mutate = {
-  if len(params) == 0 { [] }
-  else {
-    let p = last(params)
-    [param_with_ty(p, chase_type_deep(param_ty(p)))]
-      ++ chase_params_deep(drop_last(params))
-  }
-}
-
-fn chase_fields_deep(ref fields) with !Mutate = {
-  if len(fields) == 0 { [] }
-  else {
-    let (name, ty) = last(fields)
-    [(name, chase_type_deep(ty))]
-      ++ chase_fields_deep(drop_last(fields))
+fn chase_fields_deep(ref fields) with !Mutate = if len(fields) == 0 {
+  []
+} else {
+  match last(fields) {
+    (name, ty) => [(name, chase_type_deep(ty))] ++ chase_fields_deep(drop_last(fields)),
   }
 }
 
 // Collect all env entries whose type still chases to a free `TVar`.
 // Returned by `QUnresolved` — the set of names with incomplete types
 // after inference.
-fn find_unresolved(ref entries) with !Mutate = {
-  if len(entries) == 0 { [] }
-  else {
-    let (name, scheme, _reason, _kind) = last(entries)
-    let Forall(_, ty) = scheme
-    let rest = find_unresolved(drop_last(entries))
-    if has_free_tvar(ty) { [(name, ty, [])] ++ rest }
-    else { rest }
+fn find_unresolved(ref entries) with !Mutate = if len(entries) == 0 {
+  []
+} else {
+  match last(entries) {
+    (name, scheme, _reason, _kind) => match scheme {
+      Forall(_, ty) => {
+        let rest = find_unresolved(drop_last(entries))
+        if has_free_tvar(ty) { [(name, ty, [])] ++ rest } else { rest }
+      },
+    },
   }
 }
 
 fn has_free_tvar(ref ty) with !Mutate = match ty {
-  TVar(h) => {
-    let GNode(kind, _) = graph_chase(h)
-    match kind {
-      NFree(_)      => true,
+  TVar(h) => match graph_chase(h) {
+    GNode(kind, _) => match kind {
+      NFree(_) => true,
       NBound(inner) => has_free_tvar(inner),
-      _             => false
-    }
+      _ => false,
+    },
   },
-  TList(elem)            => has_free_tvar(elem),
-  TTuple(elems)          => has_free_tvar_list(elems),
-  TFun(params, ret, _)   =>
-    has_free_tvar(ret) || has_free_tvar_params(params),
-  TName(_, args)         => has_free_tvar_list(args),
-  TRecord(fields)        => has_free_tvar_fields(fields),
+  TList(elem) => has_free_tvar(elem),
+  TTuple(elems) => has_free_tvar_list(elems),
+  TFun(params, ret, _) => has_free_tvar(ret) || has_free_tvar_params(params),
+  TName(_, args) => has_free_tvar_list(args),
+  TRecord(fields) => has_free_tvar_fields(fields),
   TRecordOpen(fields, _) => has_free_tvar_fields(fields),
-  TRefined(base, _)      => has_free_tvar(base),
+  TRefined(base, _) => has_free_tvar(base),
   TCont(input, answer, _, _) => has_free_tvar(input) || has_free_tvar(answer),
-  TAlias(_, inner)       => has_free_tvar(inner),
-  _                      => false
+  TAlias(_, inner) => has_free_tvar(inner),
+  _ => false,
 }
 
-fn has_free_tvar_list(ref tys) with !Mutate = {
-  if len(tys) == 0 { false }
-  else {
-    has_free_tvar(last(tys))
-      || has_free_tvar_list(drop_last(tys))
-  }
+fn has_free_tvar_list(ref tys) with !Mutate =
+  if len(tys) == 0 { false } else { has_free_tvar(last(tys)) || has_free_tvar_list(drop_last(tys)) }
+
+fn has_free_tvar_params(ref params) with !Mutate = if len(params) == 0 {
+  false
+} else {
+  has_free_tvar(param_ty(last(params))) || has_free_tvar_params(drop_last(params))
 }
 
-fn has_free_tvar_params(ref params) with !Mutate = {
-  if len(params) == 0 { false }
-  else {
-    has_free_tvar(param_ty(last(params))) || has_free_tvar_params(drop_last(params))
-  }
-}
-
-fn has_free_tvar_fields(ref fields) with !Mutate = {
-  if len(fields) == 0 { false }
-  else {
-    let (_, ty) = last(fields)
-    has_free_tvar(ty) || has_free_tvar_fields(drop_last(fields))
+fn has_free_tvar_fields(ref fields) with !Mutate = if len(fields) == 0 {
+  false
+} else {
+  match last(fields) {
+    (_, ty) => has_free_tvar(ty) || has_free_tvar_fields(drop_last(fields)),
   }
 }
 
 // Walk every substitution hop from a starting handle to its terminal.
 // Returned by `QSubstChain` — useful for tracing cross-module `TVar`
 // resolution.
-fn walk_chain(handle, depth) with !Mutate = {
-  if depth > 50 || handle < 0 { [] }
-  else {
-    let node = graph_chase(handle)
-    let GNode(kind, _) = node
-    match kind {
+fn walk_chain(handle, depth) with !Mutate = if depth > 50 || handle < 0 {
+  []
+} else {
+  let node = graph_chase(handle)
+  match node {
+    GNode(kind, _) => match kind {
       NBound(ty) => match ty {
         TVar(next) => [(handle, node)] ++ walk_chain(next, depth + 1),
-        _          => [(handle, node)]
+        _ => [(handle, node)],
       },
-      _ => [(handle, node)]
-    }
+      _ => [(handle, node)],
+    },
   }
 }
 
@@ -332,44 +305,43 @@ fn walk_chain(handle, depth) with !Mutate = {
 // Every reference to NAME is a VarRef node the parser wrote into the program
 // weave. refs_of_name walks the weave and collects the span of each
 // NExpr(VarRef(name)) — the inbound use-edge set, read live. No AST side-index.
-
-fn refs_of_name(name) with GraphRead + !Mutate + Alloc + Memory = {
-  let Graph(next, _) = graph_snapshot()
-  collect_var_ref_spans(name, 0, next, make_list(0))
+fn refs_of_name(name) with GraphRead + !Mutate + Alloc + Memory = match graph_snapshot() {
+  Graph(next, _) => collect_var_ref_spans(name, 0, next, make_list(0)),
 }
 
 // Tail walk with an accumulator — the prior non-tail form's stack depth
 // was the whole handle space, so a DAG-scale graph exhausted the call
 // stack the first time the refs facet ran against a full compile.
-fn collect_var_ref_spans(name, i, n, acc) with GraphRead + Memory + Alloc + !Mutate = {
-  if i >= n { acc }
-  else {
-    match graph_node_body(i) {
-      NExpr(VarRef(ref_name)) =>
-        if ref_name == name {
-          // A zero span is a synthetic mint (a pre-registration ghost),
-          // not a source site — the located answer skips it.
-          let sp = span_of_handle(i)
-          if sp == span_zero() { collect_var_ref_spans(name, i + 1, n, acc) }
-          else { collect_var_ref_spans(name, i + 1, n, push(acc, sp)) }
-        }
-        else { collect_var_ref_spans(name, i + 1, n, acc) },
-      _ => collect_var_ref_spans(name, i + 1, n, acc)
-    }
+fn collect_var_ref_spans(name, i, n, acc) with GraphRead + Memory + Alloc + !Mutate = if i >= n {
+  acc
+} else {
+  match graph_node_body(i) {
+    NExpr(VarRef(ref_name)) => if ref_name == name {
+      // A zero span is a synthetic mint (a pre-registration ghost),
+      // not a source site — the located answer skips it.
+      let sp = span_of_handle(i)
+      if sp == span_zero() {
+        collect_var_ref_spans(name, i + 1, n, acc)
+      } else {
+        collect_var_ref_spans(name, i + 1, n, push(acc, sp))
+      }
+    } else {
+      collect_var_ref_spans(name, i + 1, n, acc)
+    },
+    _ => collect_var_ref_spans(name, i + 1, n, acc),
   }
 }
 
 // span_of_handle — the node's source span, read live from its Reason chain
 // (the parser/infer wrote Located(span, _) at the node). One graph_chase, the
 // span peeled from the located reason — no parallel span-index re-lookup.
-fn span_of_handle(handle) with GraphRead + !Mutate = {
-  let GNode(_, reason) = graph_chase(handle)
-  span_of_reason(reason)
+fn span_of_handle(handle) with GraphRead + !Mutate = match graph_chase(handle) {
+  GNode(_, reason) => span_of_reason(reason),
 }
 
 fn span_of_reason(reason) with Pure = match reason {
   Located(sp, _) => sp,
-  _              => span_zero()
+  _ => span_zero(),
 }
 
 // ─── Live install-edge projection — which handler provides OP ──────
@@ -377,31 +349,24 @@ fn span_of_reason(reason) with Pure = match reason {
 // Each handler decl is a HandlerDeclStmt in the weave whose arms name the ops
 // it provides (the handler chain IS the capability stack, PLAN §2). Scan the
 // weave for the decl whose arms include OP; project its handler name.
-
-fn handler_providing_op(op_name) with GraphRead + !Mutate + Memory + Alloc = {
-  let Graph(next, _) = graph_snapshot()
-  scan_handler_for_op(op_name, 0, next)
+fn handler_providing_op(op_name) with GraphRead + !Mutate + Memory + Alloc = match graph_snapshot() {
+  Graph(next, _) => scan_handler_for_op(op_name, 0, next),
 }
 
-fn scan_handler_for_op(op_name, i, n) with GraphRead + !Mutate + Memory + Alloc = {
-  if i >= n { None }
-  else {
-    match graph_node_body(i) {
-      NStmt(HandlerDeclStmt(hname, _eff, _cfg, _state, arms)) =>
-        if arms_include_op(arms, op_name) { Some(hname) }
-        else { scan_handler_for_op(op_name, i + 1, n) },
-      _ => scan_handler_for_op(op_name, i + 1, n)
-    }
+fn scan_handler_for_op(op_name, i, n) with GraphRead + !Mutate + Memory + Alloc = if i >= n {
+  None
+} else {
+  match graph_node_body(i) {
+    NStmt(HandlerDeclStmt(hname, _eff, _cfg, _state, arms)) => if arms_include_op(arms, op_name) { Some(hname) } else { scan_handler_for_op(op_name, i + 1, n) },
+    _ => scan_handler_for_op(op_name, i + 1, n),
   }
 }
 
-fn arms_include_op(arms, op_name) with Memory + Alloc = {
-  if len(arms) == 0 { false }
-  else {
-    let arm = last(arms)
-    if arm.op_name == op_name { true }
-    else { arms_include_op(drop_last(arms), op_name) }
-  }
+fn arms_include_op(arms, op_name) with Memory + Alloc = if len(arms) == 0 {
+  false
+} else {
+  let arm = last(arms)
+  if arm.op_name == op_name { true } else { arms_include_op(drop_last(arms), op_name) }
 }
 
 // ─── Span → name — the inverse use-edge read (goto/rename anchor) ──
@@ -411,49 +376,40 @@ fn arms_include_op(arms, op_name) with Memory + Alloc = {
 // inverse of refs_of_name. None when the span encloses no identifier. This is
 // the resolution goto-definition / find-references start from — read live, no
 // position→symbol side-index.
-
-fn name_at_span(span) with GraphRead + !Mutate + Memory + Alloc = {
-  let Graph(_, span_index) = graph_snapshot()
-  match find_tightest(span_index, span, None, 999999999) {
-    None         => None,
+fn name_at_span(span) with GraphRead + !Mutate + Memory + Alloc = match graph_snapshot() {
+  Graph(_, span_index) => match find_tightest(span_index, span, None, 999999999) {
+    None => None,
     Some(handle) => match graph_node_body(handle) {
       NExpr(VarRef(name)) => Some(name),
-      _                   => None
-    }
-  }
+      _ => None,
+    },
+  },
 }
 
 // defining_span_of — the span where NAME is bound, read from its env entry's
 // Reason (the parser/infer wrote Located(span,_) at the binding). The graph
 // already proved where each name lives; goto-definition follows that edge, it
 // does not re-scan. None when the name is unbound or its reason is unlocated.
-
-fn defining_span_of(name) with EnvRead + !Mutate = {
-  match env_lookup(name) {
-    None        => None,
-    Some(entry) => {
-      let (_, reason, _) = entry
-      match reason {
-        Located(sp, _) => Some(sp),
-        _              => None
-      }
-    }
-  }
+fn defining_span_of(name) with EnvRead + !Mutate = match env_lookup(name) {
+  None => None,
+  Some(entry) => match entry {
+    (_, reason, _) => match reason {
+      Located(sp, _) => Some(sp),
+      _ => None,
+    },
+  },
 }
 
 // ─── Span Index Search (Arc F.2) ───────────────────────────────────
-
-fn span_area(s: ValidSpan) with Pure = {
-  let Span(sl, sc, el, ec) = s
-  if sl == el { ec - sc }
-  else { ((el - sl) * 1000) + ec - sc }
+fn span_area(s: ValidSpan) with Pure = match s {
+  Span(sl, sc, el, ec) => if sl == el { ec - sc } else { (el - sl) * 1000 + ec - sc },
 }
 
-fn find_tightest(ref idx, target, best_h, best_area) with Memory + Alloc = {
-  if len(idx) == 0 { best_h }
-  else {
-    let (s, h) = last(idx)
-    if span_contains(s, target) {
+fn find_tightest(ref idx, target, best_h, best_area) with Memory + Alloc = if len(idx) == 0 {
+  best_h
+} else {
+  match last(idx) {
+    (s, h) => if span_contains(s, target) {
       let area = span_area(s)
       if area < best_area {
         find_tightest(drop_last(idx), target, Some(h), area)
@@ -462,47 +418,35 @@ fn find_tightest(ref idx, target, best_h, best_area) with Memory + Alloc = {
       }
     } else {
       find_tightest(drop_last(idx), target, best_h, best_area)
-    }
+    },
   }
 }
 
 // ── DAG-homed here (the import-truth sweep, 2026-07-23): each fn below
 // moved from a module DOWNSTREAM of its users so every user reaches it
 // through a forward import edge — the manifest tells the truth.
-
-fn why_expand(reason, depth) = {
-  if depth > 20 { reason }
-  else match reason {
-    Located(span, inner) =>
-      Located(span, why_expand(inner, depth + 1)),
-    Unified(a, b) =>
-      Unified(why_expand(a, depth + 1), why_expand(b, depth + 1)),
-    OpConstraint(op, l, r) =>
-      OpConstraint(op, why_expand(l, depth + 1), why_expand(r, depth + 1)),
-    VarLookup(name, inner) =>
-      VarLookup(name, why_expand(inner, depth + 1)),
-    FnReturn(name, inner) =>
-      FnReturn(name, why_expand(inner, depth + 1)),
-    FnParam(name, idx, inner) =>
-      FnParam(name, idx, why_expand(inner, depth + 1)),
-    MatchBranch(a, b) =>
-      MatchBranch(why_expand(a, depth + 1), why_expand(b, depth + 1)),
-    ListElement(inner) =>
-      ListElement(why_expand(inner, depth + 1)),
-    IfBranch(inner) =>
-      IfBranch(why_expand(inner, depth + 1)),
-    LetBinding(name, inner) =>
-      LetBinding(name, why_expand(inner, depth + 1)),
-    Instantiation(name, inner) =>
-      Instantiation(name, why_expand(inner, depth + 1)),
-    Fresh(id) => {
-      let GNode(_, resolved) = graph_chase(id)
-      match resolved {
+fn why_expand(reason, depth) = if depth > 20 {
+  reason
+} else {
+  match reason {
+    Located(span, inner) => Located(span, why_expand(inner, depth + 1)),
+    Unified(a, b) => Unified(why_expand(a, depth + 1), why_expand(b, depth + 1)),
+    OpConstraint(op, l, r) => OpConstraint(op, why_expand(l, depth + 1), why_expand(r, depth + 1)),
+    VarLookup(name, inner) => VarLookup(name, why_expand(inner, depth + 1)),
+    FnReturn(name, inner) => FnReturn(name, why_expand(inner, depth + 1)),
+    FnParam(name, idx, inner) => FnParam(name, idx, why_expand(inner, depth + 1)),
+    MatchBranch(a, b) => MatchBranch(why_expand(a, depth + 1), why_expand(b, depth + 1)),
+    ListElement(inner) => ListElement(why_expand(inner, depth + 1)),
+    IfBranch(inner) => IfBranch(why_expand(inner, depth + 1)),
+    LetBinding(name, inner) => LetBinding(name, why_expand(inner, depth + 1)),
+    Instantiation(name, inner) => Instantiation(name, why_expand(inner, depth + 1)),
+    Fresh(id) => match graph_chase(id) {
+      GNode(_, resolved) => match resolved {
         Fresh(_) => reason,
-        _        => why_expand(resolved, depth + 1)
-      }
+        _ => why_expand(resolved, depth + 1),
+      },
     },
-    _ => reason
+    _ => reason,
   }
 }
 

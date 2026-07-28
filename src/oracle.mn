@@ -33,18 +33,24 @@
 // src/egraph.mn (saturate / egraph_extract) · src/graph.mn (graph_handler:
 // epoch, span_index, graph_push_checkpoint/rollback,
 // graph_mutated at the outermost commit boundary).
-
 import types
+
 import mentl
+
 import infer
+
 import graph
+
 import egraph
+
 import runtime/combinators
+
 import verify
+
 import query
 
 // ─── IC — the iterative context the `<~` fixpoint reads ──────────────
-
+//
 // IC is the Iterate-class effect (SYNTAX.md §`<~`: `Iterate`-class is an
 // open class, not a name-allowlist) the build's `<~ accumulate(...)`
 // fixpoint runs under. It is a row MARKER: its presence in the enclosing
@@ -56,11 +62,12 @@ import query
 // cursor.mn / format.mn / mentl.mn / pipeline.mn run their fixpoints
 // under it (the row carries the context; no op is performed by hand —
 // the iteration IS the `<~` loop closing).
-
-effect IC { }
+effect IC {
+  
+}
 
 // ─── QueueItem — one proven candidate in the oracle's queue ──────────
-
+//
 // QueueItem — one proven candidate Mentl could surface. Each carries
 // the position the candidate applies to, the candidate itself (an
 // Annotation per src/mentl.mn), the capability it would unlock, an
@@ -71,16 +78,15 @@ effect IC { }
 //
 // Primitives: #2 (Propose — the candidate); #6 (Verify — the proof);
 // #7 (Teach — the gradient direction); #8 (Reason — the chain).
-
 type QueueItem
-  = QueueItem({
-      position:    Int,              // graph Handle where item applies
-      candidate:   Annotation,       // what to add (per src/mentl.mn Annotation)
-      capability:  Capability,       // what it unlocks (per src/mentl.mn Capability)
-      impact:      OraclePriority,
-      reason:      Reason
-    })
+  = QueueItem({candidate: Annotation, capability: Capability, impact: OraclePriority, position: Int, reason: Reason})
 
+// graph Handle where item applies
+//
+// what to add (per src/mentl.mn Annotation)
+//
+// what it unlocks (per src/mentl.mn Capability)
+//
 // OraclePriority — ranking dimension, every input READ LIVE from the
 // graph (Carried-Truth: no stored counts). The priority function
 // composes tier (compile-blocking first) + intent_weight (read live
@@ -90,15 +96,14 @@ type QueueItem
 // Total order via priority_lt: "compile-blocking always wins; among
 // same-tier, intent-weight wins; among same-intent, surface-area wins;
 // among same-surface, locality wins."
+type OraclePriority = OraclePriority({intent_weight: Int, locality_bias: Int, surface_area: Int, tier: PriorityTier})
 
-type OraclePriority
-  = OraclePriority({
-      tier:          PriorityTier,
-      intent_weight: Int,            // 0-100; higher = more weighted
-      surface_area:  Int,            // count of dependent positions (live edge walk)
-      locality_bias: Int             // byte distance from cursor (span_index); 0 = exact
-    })
-
+// 0-100; higher = more weighted
+//
+// count of dependent positions (live edge walk)
+//
+// byte distance from cursor (span_index); 0 = exact
+//
 // PriorityTier — five tiers in compile-impact order. TBlocking is the
 // fix-this-or-nothing-compiles tier (always wins). TViolation is
 // declared-row contradicted (E_PurityViolated, E_OwnershipViolation,
@@ -112,16 +117,10 @@ type OraclePriority
 // carries no severity/tier on its diagnostics, so PriorityTier is the
 // one home of the oracle's compile-impact order (the audit per the
 // adversarial verdict: no parallel enumeration exists to dissolve into).
-
-type PriorityTier
-  = TBlocking
-  | TViolation
-  | TPending
-  | TUnlock
-  | TStyle
+type PriorityTier = TBlocking | TViolation | TPending | TUnlock | TStyle
 
 // ─── OracleQuery effect — surfaces read the queue (read-only) ────────
-
+//
 // OracleQuery — read-only queries from surfaces. The queue is a live
 // projection of the graph, re-derived (memoized by epoch) on read;
 // surfaces never mutate it. Five surfaces subscribe:
@@ -130,16 +129,19 @@ type PriorityTier
 // - LSP hover — query_at_position(cursor_handle)
 // - teach CLI surface — query_at_position OR query_project_queue
 // - Web playground — same as LSP, push on queue change
-
 effect OracleQuery {
-  query_at_position(Int)            -> [QueueItem]   // at this Handle
-  query_project_queue()             -> [QueueItem]   // merged from all positions
-  query_module_queue(String)        -> [QueueItem]   // for one module
-  cursor_relevant(Int, Int)         -> [QueueItem]   // (cursor_handle, max_distance_bytes); locality-filtered
+  // at this Handle
+  query_at_position(Int) -> [QueueItem]
+  // merged from all positions
+  query_project_queue() -> [QueueItem]
+  // for one module
+  query_module_queue(String) -> [QueueItem]
+  // (cursor_handle, max_distance_bytes); locality-filtered
+  cursor_relevant(Int, Int) -> [QueueItem]
 }
 
 // ─── project_queue_merger — the queue projected live, memoized by epoch ─
-
+//
 // project_queue_merger handles every OracleQuery op the surfaces
 // perform (voice.mn performs query_project_queue / cursor_relevant).
 // The project-wide queue is a DERIVED PROJECTION of the graph — it is
@@ -150,45 +152,35 @@ effect OracleQuery {
 // the memoized projection is returned. This is the IC semantics — "read
 // live is the meaning, cached-by-epoch is the mechanism" (PLAN §2) —
 // with the graph's own epoch as the single truth, never a third cache.
-
-handler project_queue_merger
-  with last_epoch    = -1,
-       projected      = [] {
-
-  // query_project_queue — the live project queue, memoized by epoch.
+handler project_queue_merger with last_epoch = -1, projected = [] {
+  query_project_queue() => // query_project_queue — the live project queue, memoized by epoch.
   // Epoch unchanged -> the graph is unchanged -> return the projection.
   // Epoch changed -> re-project (run the proposer, rank survivors).
-  query_project_queue() => {
-    let epoch = graph_epoch()    // drift-audit: ignore — effectful read into control-flow compare
+  {
+    // drift-audit: ignore — effectful read into control-flow compare
+    let epoch = graph_epoch()
     if epoch == last_epoch {
       resume(projected)
     } else {
-      let queue = project_queue()    // drift-audit: ignore — effectful read used in both resume and with-state
-      resume(queue)
-        with last_epoch = epoch,
-             projected   = queue
+      // drift-audit: ignore — effectful read used in both resume and with-state
+      let queue = project_queue()
+      resume(queue) with last_epoch = epoch, projected = queue
     }
   },
-
-  // query_at_position — items in the queue that apply at this Handle.
+  query_at_position(handle) => // query_at_position — items in the queue that apply at this Handle.
   // Filters the project queue; cheap because items carry their position.
-  query_at_position(handle) =>
-    resume(filter_at_position(query_project_queue(), handle)),
-
-  // query_module_queue — items whose owning module matches.
-  query_module_queue(module_path) =>
-    resume(filter_by_module(query_project_queue(), module_path)),
-
-  // cursor_relevant — locality-filtered items. Surfaces bias toward the
+  resume(filter_at_position(query_project_queue(), handle)),
+  query_module_queue(module_path) => // query_module_queue — items whose owning module matches.
+  resume(filter_by_module(query_project_queue(), module_path)),
+  cursor_relevant(cursor_handle, max_distance_bytes) => // cursor_relevant — locality-filtered items. Surfaces bias toward the
   // cursor's region (LSP hover, inline hints) and fall back to project-
   // wide priority when the cursor's region is silent. The fallback
   // decision lives in the surface (voice), not here.
-  cursor_relevant(cursor_handle, max_distance_bytes) =>
-    resume(filter_by_locality(query_project_queue(), cursor_handle, max_distance_bytes))
+  resume(filter_by_locality(query_project_queue(), cursor_handle, max_distance_bytes)),
 }
 
 // ─── project_queue — the proposer's survivors, ranked ────────────────
-
+//
 // project_queue — re-derive the project-wide queue from the live graph.
 // Walk every position with dependents, run mentl.mn's existing proposer
 // (try_each_annotation, already checkpoint->apply->verify->rollback) at
@@ -196,13 +188,8 @@ handler project_queue_merger
 // No separate search, no separate cache: the proposer IS the search,
 // the graph epoch IS the cache. The e-graph supplies the TStyle-tier
 // equivalences (topology nudges) effect-awarely via egraph.mn.
-
-fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Alloc = {
-  positions_with_dependents()
-    |> map((pos) => candidates_at(pos))
-    |> flatten
-    |> sort_by_priority
-}
+fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Alloc =
+  positions_with_dependents() |> map((pos) => candidates_at(pos)) |> flatten |> sort_by_priority
 
 // candidates_at — every proven Annotation at one position becomes a
 // QueueItem. Reuses mentl.mn's try_each_annotation (the working
@@ -210,17 +197,16 @@ fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Allo
 // substrate. The candidate set is the gradient's own enumeration
 // (gradient_candidates_at); each survivor carries the e-graph-aware
 // priority and the Why-walkable Reason mentl.mn already minted.
-
 fn candidates_at(pos) with Verify + GraphRead + GraphWrite + Alloc + Memory + Intern = {
   let node = graph_chase(pos)
-  let GNode(kind, anchor) = node
-  match kind {
-    NBound(ty) => {
-      let candidates = gradient_candidates_at(ty)
-      try_each_annotation(pos, candidates, ty)
-        |> map((pair) => proven_to_item(pos, pair, anchor))
+  match node {
+    GNode(kind, anchor) => match kind {
+      NBound(ty) => {
+        let candidates = gradient_candidates_at(ty)
+        try_each_annotation(pos, candidates, ty) |> map((pair) => proven_to_item(pos, pair, anchor))
+      },
+      _ => [],
     },
-    _ => []
   }
 }
 
@@ -229,13 +215,12 @@ fn candidates_at(pos) with Verify + GraphRead + GraphWrite + Alloc + Memory + In
 // runs (mentl.mn): effect-row tightenings for every function, ownership
 // resolutions per parameter. One enumeration, two readers (the cursor's
 // single-step pick, the oracle's full ranked queue).
-
 fn gradient_candidates_at(ty) with Memory + Alloc = match ty {
   TFun(params, _ret, _row) => {
     let base = [APure(None), ANotAlloc(None), ANotIO(None), ANotNetwork(None)]
     base ++ ownership_candidates(params)
   },
-  _ => []
+  _ => [],
 }
 
 // proven_to_item — wrap one (Annotation, Capability) survivor as a
@@ -243,20 +228,12 @@ fn gradient_candidates_at(ty) with Memory + Alloc = match ty {
 // gradient suggestion's Located edge (the Why engine walks it via
 // why_from_handle, mentl.mn) — no fabricated OracleVerified constructor;
 // the proof chain mentl.mn already minted is carried.
-
-fn proven_to_item(pos, pair, anchor) with GraphRead + Memory + Alloc = {
-  let (ann, cap) = pair
-  QueueItem({
-    position:    pos,
-    candidate:   ann,
-    capability:  cap,
-    impact:      compute_priority(pos, ann),
-    reason:      suggestion_reason(ann, anchor)
-  })
+fn proven_to_item(pos, pair, anchor) with GraphRead + Memory + Alloc = match pair {
+  (ann, cap) => QueueItem({candidate: ann, capability: cap, impact: compute_priority(pos, ann), position: pos, reason: suggestion_reason(ann, anchor)}),
 }
 
 // ─── compute_priority — every input read LIVE from the graph ─────────
-
+//
 // compute_priority — rank a candidate by reading its inputs LIVE
 // (Carried-Truth: no stored counts, no snapshot). tier from the
 // annotation's gradient axis (the cursor's classification of what the
@@ -266,15 +243,8 @@ fn proven_to_item(pos, pair, anchor) with GraphRead + Memory + Alloc = {
 // that depend on this one (graph edges, not a count field); locality_bias
 // from the span_index byte position. Reads `graph_snapshot` once for the
 // span_index; the intent row is read per-handle from the node itself.
-
-fn compute_priority(pos, ann) with GraphRead + Memory + Alloc = {
-  let Graph(_next, span_index) = graph_snapshot()
-  OraclePriority({
-    tier:          tier_of_annotation(ann),
-    intent_weight: intent_weight_at(pos),
-    surface_area:  surface_area_at(pos),
-    locality_bias: locality_at(span_index, pos)
-  })
+fn compute_priority(pos, ann) with GraphRead + Memory + Alloc = match graph_snapshot() {
+  Graph(_next, span_index) => OraclePriority({intent_weight: intent_weight_at(pos), locality_bias: locality_at(span_index, pos), surface_area: surface_area_at(pos), tier: tier_of_annotation(ann)}),
 }
 
 // tier_of_annotation — the candidate's compile-impact tier, read from
@@ -282,12 +252,11 @@ fn compute_priority(pos, ann) with GraphRead + Memory + Alloc = {
 // that removes a declared-row contradiction is TUnlock; a refinement
 // obligation is TPending; an ownership marker is TUnlock. The gradient
 // kind IS the tier source — no parallel classification.
-
 fn tier_of_annotation(ann) with Pure = match suggestion_kind_of(ann) {
-  SuggestEffectRow   => TUnlock,
-  SuggestRefinement  => TPending,
-  SuggestOwnership   => TUnlock,
-  SuggestReturnType  => TStyle
+  SuggestEffectRow => TUnlock,
+  SuggestRefinement => TPending,
+  SuggestOwnership => TUnlock,
+  SuggestReturnType => TStyle,
 }
 
 // intent_weight_at — the position's authored intent row drives the
@@ -296,26 +265,22 @@ fn tier_of_annotation(ann) with Pure = match suggestion_kind_of(ann) {
 // off the FnStmt node the handle names (graph_node_body) — the effs
 // field IS the authored row; no parallel intent ledger to walk. A node
 // that is not a fn declaration carries no authored intent -> baseline 0.
-
 fn intent_weight_at(pos) with GraphRead + Memory = match graph_node_body(pos) {
-  NStmt(FnStmt(_, _, _, effs, _)) => 50 + (len(effs) * 10),
-  _                               => 0
+  NStmt(FnStmt(_, _, _, effs, _)) => 50 + len(effs) * 10,
+  _ => 0,   // drift-audit: ignore — the fn's own comment names it: a non-fn-decl node carries no authored intent, baseline 0
 }
 
 // surface_area_at — count of positions that depend on this one, walked
 // LIVE over the graph's program weave (graph_node_body resolves each
 // handle's body; a body referencing `pos` is a dependent). The count is
 // derived from the edges that already exist, never stored.
+fn surface_area_at(pos) with GraphRead + Memory + Alloc = count_dependents(pos, 0, graph_next(), 0)
 
-fn surface_area_at(pos) with GraphRead + Memory + Alloc =
-  count_dependents(pos, 0, graph_next(), 0)
-
-fn count_dependents(pos, h, bound, acc) with GraphRead + Alloc + Memory = {
-  if h >= bound { acc }
-  else {
-    let next_acc = if body_references(graph_node_body(h), pos) { acc + 1 } else { acc }
-    count_dependents(pos, h + 1, bound, next_acc)
-  }
+fn count_dependents(pos, h, bound, acc) with GraphRead + Alloc + Memory = if h >= bound {
+  acc
+} else {
+  let next_acc = if body_references(graph_node_body(h), pos) { acc + 1 } else { acc }
+  count_dependents(pos, h + 1, bound, next_acc)
 }
 
 // body_references — does a node body reference the target handle? Each
@@ -323,93 +288,90 @@ fn count_dependents(pos, h, bound, acc) with GraphRead + Alloc + Memory = {
 // whose direct children's type-handle IS `target` is a dependent edge.
 // The edges already exist in the program weave — this reads them live,
 // never a stored dependent count.
-
 fn body_references(body, target) with Memory + Alloc = match body {
   NExpr(e) => list_contains(expr_child_handles(e), target),
-  _        => false
+  _ => false,
 }
 
 // expr_child_handles — the type-handles of an Expr's direct child Nodes.
 // One arm per Expr variant that carries children (the row algebra over
 // the value space — H6 exhaustive); leaf literals carry none.
-
 fn expr_child_handles(e) with Alloc + Memory = match e {
-  BinOpExpr(_, l, r)       => [node_handle(l), node_handle(r)],
-  UnaryOpExpr(_, n)        => [node_handle(n)],
-  CallExpr(f, args)        => [node_handle(f)] ++ map(node_handle, args),
-  LambdaExpr(_, body)      => [node_handle(body)],
-  IfExpr(c, t, f)          => [node_handle(c), node_handle(t), node_handle(f)],
-  BlockExpr(stmts, fin)    => [node_handle(fin)] ++ map(node_handle, stmts),   // order-free: membership test only
-  MatchExpr(scrut, _arms)  => [node_handle(scrut)],
-  // A resume-with update is the parser's {name, init} record — the handle
+  BinOpExpr(_, l, r) => [node_handle(l), node_handle(r)],
+  UnaryOpExpr(_, n) => [node_handle(n)],
+  CallExpr(f, args) => [node_handle(f)] ++ map(node_handle, args),
+  LambdaExpr(_, body) => [node_handle(body)],
+  IfExpr(c, t, f) => [node_handle(c), node_handle(t), node_handle(f)],
+  BlockExpr(stmts, fin) => // order-free: membership test only
+  [node_handle(fin)] ++ map(node_handle, stmts),
+  MatchExpr(scrut, _arms) => [node_handle(scrut)],
+  ResumeExpr(v, updates) => // A resume-with update is the parser's {name, init} record — the handle
   // lives on its init edge (record_field_handle's exact sibling).
-  ResumeExpr(v, updates)   => [node_handle(v)] ++ map(record_field_handle, updates),
-  MakeListExpr(elems)      => map(node_handle, elems),
-  MakeTupleExpr(elems)     => map(node_handle, elems),
-  // Record LITERALS carry the parser's (name, value) tuples
+  [node_handle(v)] ++ map(record_field_handle, updates),
+  MakeListExpr(elems) => map(node_handle, elems),
+  MakeTupleExpr(elems) => map(node_handle, elems),
+  MakeRecordExpr(fields) => // Record LITERALS carry the parser's (name, value) tuples
   // (parse_record_fields); only resume updates are {name, init} records.
-  MakeRecordExpr(fields)   => map(tuple_field_handle, fields),
+  map(tuple_field_handle, fields),
   RecordUpdateExpr(base, flds) => [node_handle(base)] ++ map(tuple_field_handle, flds),
   NamedRecordExpr(_, flds) => map(tuple_field_handle, flds),
-  IndexExpr(recv, idx)     => [node_handle(recv), node_handle(idx)],
-  MakeStringExpr(frags)    => map(node_handle, frags),
-  FieldExpr(recv, _)       => [node_handle(recv)],
-  PipeExpr(_, l, r)        => [node_handle(l), node_handle(r)],
-  LabeledArg(_, v)         => [node_handle(v)],   // the labeled value is a child node
-  _                        => []   // LitInt/LitFloat/LitString/LitBool/LitUnit/VarRef/ExprPlaceholder — no child Nodes
+  IndexExpr(recv, idx) => [node_handle(recv), node_handle(idx)],
+  MakeStringExpr(frags) => map(node_handle, frags),
+  FieldExpr(recv, _) => [node_handle(recv)],
+  PipeExpr(_, l, r) => [node_handle(l), node_handle(r)],
+  LabeledArg(_, v) => // the labeled value is a child node
+  [node_handle(v)],
+  _ => // LitInt/LitFloat/LitString/LitBool/LitUnit/VarRef/ExprPlaceholder — no child Nodes
+  [],
 }
 
 // The field IS the parser's {name, init} record — read the init edge by
 // name (the tuple destructure read a record as positions and met Node).
 fn record_field_handle(field) with Pure = node_handle(field.init)
 
-fn tuple_field_handle(field) with Pure = {
-  let (_, v) = field
-  node_handle(v)
+fn tuple_field_handle(field) with Pure = match field {
+  (_, v) => node_handle(v),
 }
 
 // locality_at — byte distance from the cursor, read from the graph's
 // span_index ([(ValidSpan, Int)]). The position's span start IS the
 // locality coordinate; 0 = at the cursor. Read live; absent -> far.
-
 fn locality_at(span_index, pos) with Pure = match span_index {
-  []        => 1000000,
-  [(span, h), ...t] =>
-    if h == pos { span_start(span) }
-    else        { locality_at(t, pos) }
+  [] => 1000000,
+  [(span, h), ...t] => if h == pos { span_start(span) } else { locality_at(t, pos) },
 }
 
 // ─── positions_with_dependents — the live scope of exploration ───────
-
+//
 // positions_with_dependents — every NBound position the proposer should
 // explore, read live from the program weave. A position with at least
 // one dependent edge is worth a candidate (a change there ripples). The
 // scope is the graph's own structure (PLAN §2 Q-2 (B)), never a stored
 // position list.
-
-fn positions_with_dependents() with GraphRead + Alloc + Memory = {
+fn positions_with_dependents() with GraphRead + Alloc + Memory =
   collect_bound_positions(0, graph_next(), [])
-}
 
-fn collect_bound_positions(h, bound, acc) with GraphRead + Memory + Alloc = {
-  if h >= bound { acc }
-  else {
-    let GNode(kind, _) = graph_chase(h)
-    let next_acc = match kind {
-      NBound(_) => push(acc, h),
-      _         => acc
-    }
-    collect_bound_positions(h + 1, bound, next_acc)
+fn collect_bound_positions(h, bound, acc) with GraphRead + Memory + Alloc = if h >= bound {
+  acc
+} else {
+  match graph_chase(h) {
+    GNode(kind, _) => {
+      let next_acc = match kind {
+        NBound(_) => push(acc, h),
+        _ => acc,
+      }
+      collect_bound_positions(h + 1, bound, next_acc)
+    },
   }
 }
 
 fn list_contains(xs, target) with Pure = match xs {
-  []        => false,
-  [h, ...t] => if h == target { true } else { list_contains(t, target) }
+  [] => false,
+  [h, ...t] => if h == target { true } else { list_contains(t, target) },
 }
 
 // ─── oracle_ic_fixpoint — the `<~` build loop (Iterate-class IC) ─────
-
+//
 // oracle_ic_fixpoint — the `<~` feedback loop closing on queue
 // stability. PLAN §2: build IS the `<~` loop; the oracle re-projects
 // when the graph mutates (graph_mutated fires at the outermost commit),
@@ -426,116 +388,108 @@ fn list_contains(xs, target) with Pure = match xs {
 //
 // `mentl edit` IS this loop running. There is no separate `compile`:
 // the edit IS the projection IS the loop closing.
-
-fn oracle_ic_fixpoint() with OracleQuery + IC = {
-  query_project_queue()
-    ~> project_queue_merger
-      <~ accumulate(empty_queue())
-}
+fn oracle_ic_fixpoint() with OracleQuery + IC =
+  query_project_queue() ~> project_queue_merger <~ accumulate(empty_queue())
 
 fn empty_queue() with Pure = []
 
 // ─── silence_predicate — the strong gradient-top gate ────────────────
-
+//
 // silence_predicate_oracle — Mentl is silent ONLY when the project
 // queue is empty: the gradient's top, everything proven, nothing more
 // to add. Until then she surfaces the highest-priority next step. The
 // per-tentacle render-or-not decision lives in the surface (voice);
 // this predicate gates the STRONG silence — no proven next-steps
 // anywhere in the project.
-
-fn silence_predicate_oracle(situation) with OracleQuery = {
-  match query_project_queue() {
-    []        => true,    // gradient at top — full silence
-    [_, ..._] => false    // queue has items — Mentl surfaces something
-  }
+fn silence_predicate_oracle(situation) with OracleQuery = match query_project_queue() {
+  [] => // gradient at top — full silence
+  true,
+  [_, ..._] => // queue has items — Mentl surfaces something
+  false,
 }
 
 // ─── Priority — total order over OraclePriority ──────────────────────
-
+//
 // priority_lt — total order. Tier wins first; among same-tier,
 // intent_weight wins; among same-intent, surface_area wins; among
 // same-surface, locality wins (closer to cursor wins).
-
-fn priority_lt(a, b) with Pure = {
-  let OraclePriority(pa) = a
-  let OraclePriority(pb) = b
-  if !tier_eq(pa.tier, pb.tier)                 { tier_lt(pa.tier, pb.tier) }
-  else if pa.intent_weight != pb.intent_weight  { pa.intent_weight > pb.intent_weight }
-  else if pa.surface_area != pb.surface_area    { pa.surface_area > pb.surface_area }
-  else                                          { pa.locality_bias < pb.locality_bias }
+fn priority_lt(a, b) with Pure = match a {
+  OraclePriority(pa) => match b {
+    OraclePriority(pb) => if !tier_eq(pa.tier, pb.tier) {
+      tier_lt(pa.tier, pb.tier)
+    } else if pa.intent_weight != pb.intent_weight {
+      pa.intent_weight > pb.intent_weight
+    } else if pa.surface_area != pb.surface_area {
+      pa.surface_area > pb.surface_area
+    } else {
+      pa.locality_bias < pb.locality_bias
+    },
+  },
 }
 
 // priority_gt — descending order; just !priority_lt for non-equal.
-fn priority_gt(a, b) with Pure = {
-  !priority_lt(a, b) && !priority_eq(a, b)
-}
+fn priority_gt(a, b) with Pure = !priority_lt(a, b) && !priority_eq(a, b)
 
-fn priority_eq(a, b) with Pure = {
-  let OraclePriority(pa) = a
-  let OraclePriority(pb) = b
-  tier_eq(pa.tier, pb.tier)
-    && pa.intent_weight == pb.intent_weight
-    && pa.surface_area  == pb.surface_area
-    && pa.locality_bias == pb.locality_bias
+fn priority_eq(a, b) with Pure = match a {
+  OraclePriority(pa) => match b {
+    OraclePriority(pb) => tier_eq(pa.tier, pb.tier) && pa.intent_weight == pb.intent_weight && pa.surface_area == pb.surface_area && pa.locality_bias == pb.locality_bias,
+  },
 }
 
 // tier_lt — total order over PriorityTier (TBlocking < TViolation <
 // TPending < TUnlock < TStyle). H6 exhaustive 5-arm match via tier_rank.
+fn tier_lt(a, b) with Pure = tier_rank(a) < tier_rank(b)
 
-fn tier_lt(a, b) with Pure = {
-  tier_rank(a) < tier_rank(b)
-}
+fn tier_eq(a, b) with Pure = tier_rank(a) == tier_rank(b)
 
-fn tier_eq(a, b) with Pure = {
-  tier_rank(a) == tier_rank(b)
-}
-
-fn tier_rank(t) with Pure = {
-  match t {
-    TBlocking   => 0,
-    TViolation  => 1,
-    TPending    => 2,
-    TUnlock     => 3,
-    TStyle      => 4
-  }
+fn tier_rank(t) with Pure = match t {
+  TBlocking => 0,
+  TViolation => 1,
+  TPending => 2,
+  TUnlock => 3,
+  TStyle => 4,
 }
 
 // ─── Pure list combinators over the queue ────────────────────────────
+fn qitem_position(item) with Pure = match item {
+  QueueItem(r) => r.position,
+}
 
-fn qitem_position(item) with Pure = { let QueueItem(r) = item; r.position }
-fn qitem_impact(item) with Pure = { let QueueItem(r) = item; r.impact }
+fn qitem_impact(item) with Pure = match item {
+  QueueItem(r) => r.impact,
+}
 
 // sort_by_priority — order QueueItems by DESCENDING priority. Merge sort
 // (stable, O(N log N)); the comparator is priority_gt over each item's
 // impact. The flat survivor stream becomes the ranked queue.
 fn sort_by_priority(items) with Memory + Alloc = {
   let n = len(items)
-  if n <= 1 { items }
-  else {
+  if n <= 1 {
+    items
+  } else {
     let mid = n / 2
-    merge_by_impact(sort_by_priority(slice(items, 0, mid)),
-                    sort_by_priority(slice(items, mid, n)))
+    merge_by_impact(sort_by_priority(slice(items, 0, mid)), sort_by_priority(slice(items, mid, n)))
   }
 }
 
 fn merge_by_impact(a, b) with Memory + Alloc = match (a, b) {
-  ([], _)                    => b,
-  (_, [])                    => a,
-  ([ha, ...ta], [hb, ...tb]) =>
-    if priority_gt(qitem_impact(ha), qitem_impact(hb)) {
-      [ha] ++ merge_by_impact(ta, b)
-    } else {
-      [hb] ++ merge_by_impact(a, tb)
-    }
+  ([], _) => b,
+  (_, []) => a,
+  ([ha, ...ta], [hb, ...tb]) => if priority_gt(qitem_impact(ha), qitem_impact(hb)) {
+    [ha] ++ merge_by_impact(ta, b)
+  } else {
+    [hb] ++ merge_by_impact(a, tb)
+  },
 }
 
 // filter_at_position — items whose candidate applies at this Handle.
 fn filter_at_position(items, handle) with Memory + Alloc = match items {
-  []        => [],
-  [h, ...t] =>
-    if qitem_position(h) == handle { [h] ++ filter_at_position(t, handle) }
-    else { filter_at_position(t, handle) }
+  [] => [],
+  [h, ...t] => if qitem_position(h) == handle {
+    [h] ++ filter_at_position(t, handle)
+  } else {
+    filter_at_position(t, handle)
+  },
 }
 
 // filter_by_module — items owned by this module path, read LIVE at the
@@ -544,29 +498,30 @@ fn filter_at_position(items, handle) with Memory + Alloc = match items {
 // a field snapshotted at item construction (the Universal Audit — the
 // stored module_path was a copy of a live fact).
 fn filter_by_module(items, module_path) with Memory + Alloc + GraphRead = match items {
-  []        => [],
-  [h, ...t] =>
-    if module_path_of_span(parse_span_of(qitem_position(h))) == module_path {
-      [h] ++ filter_by_module(t, module_path)
-    }
-    else { filter_by_module(t, module_path) }
+  [] => [],
+  [h, ...t] => if module_path_of_span(parse_span_of(qitem_position(h))) == module_path {
+    [h] ++ filter_by_module(t, module_path)
+  } else {
+    filter_by_module(t, module_path)
+  },
 }
 
 // filter_by_locality — items within max_distance handles of the cursor.
 // Handle distance is the locality proxy: handle order is parse order, so
 // the delta tracks source proximity.
 fn filter_by_locality(items, cursor_handle, max_distance) with Memory + Alloc = match items {
-  []        => [],
-  [h, ...t] =>
-    if handle_distance(qitem_position(h), cursor_handle) <= max_distance {
-      [h] ++ filter_by_locality(t, cursor_handle, max_distance)
-    } else { filter_by_locality(t, cursor_handle, max_distance) }
+  [] => [],
+  [h, ...t] => if handle_distance(qitem_position(h), cursor_handle) <= max_distance {
+    [h] ++ filter_by_locality(t, cursor_handle, max_distance)
+  } else {
+    filter_by_locality(t, cursor_handle, max_distance)
+  },
 }
 
 fn handle_distance(a, b) with Pure = if a >= b { a - b } else { b - a }
 
 // ─── Connection to the kernel ─────────────────────────────────────────
-
+//
 // Primitive #1 (Graph + Env) — the oracle reads from the SAME graph
 // inference writes; the queue is a live projection (positions from the
 // program weave, priority inputs from intent_index/span_index/overlays),
@@ -607,9 +562,9 @@ fn handle_distance(a, b) with Pure = if a >= b { a - b } else { b - a }
 // TUnlock items; Trace surfaces TViolation items; Verify surfaces
 // TPending items; Teach surfaces the highest-priority TUnlock at the
 // cursor; Why walks the Reason chain. One queue, eight filtered views.
-
+//
 // ─── What this substrate refuses ──────────────────────────────────────
-
+//
 // - A separate cache. The queue is memoized by the graph EPOCH (one
 //   truth) — never a sorted-list side-ledger alongside the epoch and the
 //   e-graph union-find.
@@ -627,3 +582,4 @@ fn handle_distance(a, b) with Pure = if a >= b { a - b } else { b - a }
 // Mentl solves Mentl. The oracle is the IC cursor + the e-graph +
 // multi-shot — the kernel's two operations in three modes, ranked. No
 // new substrate; one projection, memoized by epoch.
+

@@ -22,17 +22,26 @@
 // outward, so an MCP client's log pane shows the same lines the verdict
 // carries. Spans are file-local by construction on this channel: the
 // judge reads the proposal alone (the stdin contract), no lib weave.
-
 import types
+
 import pipeline
+
 import lower
+
 import egraph
+
 import mentl
+
 import backends/wasm
+
 import runtime/json
+
 import runtime/io
+
 import runtime/strings
+
 import runtime/lists
+
 import runtime/memory
 
 // GateLedger — the mcp face's own ledger read: the collector's banked
@@ -60,15 +69,18 @@ handler mcp_diag_collector with lines = [] {
   },
   diag_absorb(dlines, derr, dref) => {
     diag_absorb(dlines, derr, dref)
-    let grown = fold(lines, (acc, f) => {
-      let (line, _sl, _iserr) = f
-      push(acc, line)
-    }, dlines)
+    let grown = fold(
+      lines,
+      (acc, f) => match f {
+        (line, _sl, _iserr) => push(acc, line),
+      },
+      dlines
+    )
     resume() with lines = grown
   },
-  diag_errors()   => resume(diag_errors()),
+  diag_errors() => resume(diag_errors()),
   diag_refusals() => resume(diag_refusals()),
-  gate_facts()    => resume(lines)
+  gate_facts() => resume(lines),
 }
 
 // mcp_judge — the canonical judgment over one proposal, batch-shaped at
@@ -77,73 +89,63 @@ handler mcp_diag_collector with lines = [] {
 // verdict). Emission streams through wat_to_file so stdout stays
 // protocol-only; a refused proposal never opens the artifact at all.
 // Returns (diagnostic lines, errors, refusals, emitted-bit).
-fn mcp_judge(source, wat_path) = {
-  infer_context(() =>
-    {
-      let lowered = source |> infer_program_converged |> saturate_pass |> lower_program |> reachable_from_main
-      let (nholes, refused) = gate_reads(lowered)
-      let emitted =
-        if nholes == 0 && refused == 0 {
-          let fd = fs_create_impl(wat_path)
-          if fd == 0 { 0 }
-          else {
-            { emit_module(lowered) } ~> wat_to_file(fd)
-            fs_close_impl(fd)
-            1
-          }
-        } else { 0 }
-      let lines = gate_facts()   // drift-audit: ignore — sequenced effectful ledger read (the tightenables precedent): the collector's bank is read once after the judge populates it
-      let nerr = diag_errors()   // drift-audit: ignore — sequenced effectful ledger read (the executable_gate precedent)
+fn mcp_judge(source, wat_path) = infer_context(() => {
+  let lowered =
+    source |> infer_program_converged |> saturate_pass |> lower_program |> reachable_from_main
+  match gate_reads(lowered) {
+    (nholes, refused) => {
+      let emitted = if nholes == 0 && refused == 0 {
+        let fd = fs_create_impl(wat_path)
+        if fd == 0 {
+          0
+        } else {
+          {
+            emit_module(lowered)
+          } ~> wat_to_file(fd)
+          fs_close_impl(fd)
+          1
+        }
+      } else {
+        0
+      }
+      // drift-audit: ignore — sequenced effectful ledger read (the tightenables precedent): the collector's bank is read once after the judge populates it
+      let lines = gate_facts()
+      // drift-audit: ignore — sequenced effectful ledger read (the executable_gate precedent)
+      let nerr = diag_errors()
       (lines, nerr, refused, emitted)
-    }
-      ~> mcp_diag_collector
-      ~> wasi_filesystem
-      ~> string_table
-      ~> emit_memory_bump
-      ~> body_context
-      ~> mentl_default
-      ~> lower_scope
-      ~> arm_state_ctx([], OneShot, "")
-      ~> spec_registry
-  )
-}
+    },
+  }
+} ~> mcp_diag_collector ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 // The verdict's head states exactly what the gate did — refused, emitted
 // with surfaced errors (unarmed classes; the sound-incomplete contract,
 // spoken), or proven whole. The diagnostic lines follow verbatim: the
 // refusal's teaching IS the payload.
 fn mcp_verdict_text(lines, nerr, nref, emitted, wat_path) = {
-  let head =
-    if nref > 0 {
-      "REFUSED — {int_to_str(nref)} claim(s) the medium could not discharge; nothing was emitted\n"
+  let head = if nref > 0 {
+    "REFUSED — {int_to_str(nref)} claim(s) the medium could not discharge; nothing was emitted\n"
+  } else {
+    if nerr > 0 {
+      "EMITTED with {int_to_str(nerr)} surfaced error(s) — classes not yet armed to refuse (the sound-incomplete contract); artifact: {wat_path}\n"
     } else {
-      if nerr > 0 {
-        "EMITTED with {int_to_str(nerr)} surfaced error(s) — classes not yet armed to refuse (the sound-incomplete contract); artifact: {wat_path}\n"
+      if emitted == 1 {
+        "PROVEN — every claim discharged; artifact: {wat_path}\n"
       } else {
-        if emitted == 1 { "PROVEN — every claim discharged; artifact: {wat_path}\n" }
-        else { "PROVEN — every claim discharged; the artifact write failed at {wat_path}\n" }
+        "PROVEN — every claim discharged; the artifact write failed at {wat_path}\n"
       }
     }
+  }
   head ++ str_concat_all(lines)
 }
 
 // ─── The protocol surface — JSON-RPC response builders ───────────────
-
 fn mcp_response(id, result) =
-  json_serialize(JObj([
-    ("jsonrpc", JStr("2.0")),
-    ("id",      id),
-    ("result",  result)
-  ])) ++ "\n"
+  json_serialize(JObj([("jsonrpc", JStr("2.0")), ("id", id), ("result", result)])) ++ "\n"
 
 // The code rides as the Int it is (JSON-RPC codes are integers); the one
 // float conversion sits at the JNum boundary.
 fn mcp_error(id, code, msg) =
-  json_serialize(JObj([
-    ("jsonrpc", JStr("2.0")),
-    ("id",      id),
-    ("error",   JObj([("code", JNum(float_of_int(code))), ("message", JStr(msg))]))
-  ])) ++ "\n"
+  json_serialize(JObj([("jsonrpc", JStr("2.0")), ("id", id), ("error", JObj([("code", JNum(float_of_int(code))), ("message", JStr(msg))]))])) ++ "\n"
 
 // The initialize result echoes the client's protocolVersion (the server's
 // behavior does not vary by version at this surface); capabilities name
@@ -151,30 +153,16 @@ fn mcp_error(id, code, msg) =
 fn mcp_initialize_result(params) = {
   let pv = match json_obj_get(params, "protocolVersion") {
     Some(JStr(s)) => s,
-    _             => "2025-06-18"
+    _ => "2025-06-18",
   }
-  JObj([
-    ("protocolVersion", JStr(pv)),
-    ("capabilities",    JObj([("tools", JObj([]))])),
-    ("serverInfo",      JObj([("name", JStr("mentl")), ("version", JStr("first-light"))]))
-  ])
+  JObj([("protocolVersion", JStr(pv)), ("capabilities", JObj([("tools", JObj([]))])), ("serverInfo", JObj([("name", JStr("mentl")), ("version", JStr("first-light"))]))])
 }
 
-fn mcp_tools_result() =
-  JObj([("tools", JArr([JObj([
-    ("name", JStr("propose")),
-    ("description", JStr("Submit Mentl source to the verification gate. The medium compiles it and PROVES every claim before emission: declared effect rows, absence severances (!E — the named effect provably never performed, transitively), refinement predicates. PROVEN: the artifact is emitted to .build/mcp/last.wat beside the server. REFUSED: each undischarged claim is named at its source span and the refusal teaches the fix. Nothing executes unproven.")),
-    ("inputSchema", JObj([
-      ("type", JStr("object")),
-      ("properties", JObj([
-        ("source", JObj([
-          ("type", JStr("string")),
-          ("description", JStr("Complete Mentl source for one self-contained module. Declare your own effects; fn main() makes it an executable."))   // drift-audit: ignore — prose inside a JSON string literal (the audit's string-literal blindness)
-        ]))
-      ])),
-      ("required", JArr([JStr("source")]))
-    ]))
-  ])]))])
+fn mcp_tools_result() = JObj([("tools", JArr([JObj([("name", JStr("propose")), ("description", JStr("Submit Mentl source to the verification gate. The medium compiles it and PROVES every claim before emission: declared effect rows, absence severances (!E — the named effect provably never performed, transitively), refinement predicates. PROVEN: the artifact is emitted to .build/mcp/last.wat beside the server. REFUSED: each undischarged claim is named at its source span and the refusal teaches the fix. Nothing executes unproven.")), ("inputSchema", JObj([("type", JStr("object")), ("properties", JObj([("source", JObj([
+  ("type", JStr("string")),
+  // drift-audit: ignore — prose inside a JSON string literal (the audit's string-literal blindness)
+  ("description", JStr("Complete Mentl source for one self-contained module. Declare your own effects; fn main() makes it an executable."))
+]))])), ("required", JArr([JStr("source")]))]))])]))])
 
 // tools/call — the propose tool is the whole surface. A verdict is a
 // SUCCESSFUL tool result whether the gate proved or refused (isError is
@@ -183,46 +171,46 @@ fn mcp_tools_result() =
 fn mcp_tool_call(id, params) = {
   let name = match json_obj_get(params, "name") {
     Some(JStr(s)) => s,
-    _             => ""   // drift-audit: ignore — the protocol-null sentinel: no real tool name is empty, and the match below refuses "" with -32602
+    _ => // drift-audit: ignore — the protocol-null sentinel: no real tool name is empty, and the match below refuses "" with -32602
+    "",
   }
   match name {
     "propose" => {
       let srco = match json_obj_get(params, "arguments") {
         Some(args) => json_obj_get(args, "source"),
-        None       => None
+        None => None,
       }
       match srco {
-        Some(JStr(source)) => {
-          let (lines, nerr, nref, emitted) = mcp_judge(source, ".build/mcp/last.wat")
-          let text = mcp_verdict_text(lines, nerr, nref, emitted, ".build/mcp/last.wat")
-          mcp_response(id, JObj([
-            ("content", JArr([JObj([("type", JStr("text")), ("text", JStr(text))])])),
-            ("isError", JBool(false))
-          ]))
+        Some(JStr(source)) => match mcp_judge(source, ".build/mcp/last.wat") {
+          (lines, nerr, nref, emitted) => {
+            let text = mcp_verdict_text(lines, nerr, nref, emitted, ".build/mcp/last.wat")
+            mcp_response(
+              id,
+              JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr(text))])])), ("isError", JBool(false))])
+            )
+          },
         },
-        _ => mcp_response(id, JObj([
-          ("content", JArr([JObj([("type", JStr("text")), ("text", JStr("propose needs arguments.source — a string of Mentl source\n"))])])),
-          ("isError", JBool(true))
-        ]))
+        _ => mcp_response(
+          id,
+          JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("propose needs arguments.source — a string of Mentl source\n"))])])), ("isError", JBool(true))])
+        ),
       }
     },
-    _ => mcp_error(id, -32602, "unknown tool: {name} — the gate serves one tool: propose")
+    _ => mcp_error(id, -32602, "unknown tool: {name} — the gate serves one tool: propose"),
   }
 }
 
 fn mcp_params_of(req) = match json_obj_get(req, "params") {
   Some(p) => p,
-  None    => JObj([])
+  None => JObj([]),
 }
 
-fn mcp_request(id, method, params) = {
-  match method {
-    "initialize" => mcp_response(id, mcp_initialize_result(params)),
-    "tools/list" => mcp_response(id, mcp_tools_result()),
-    "tools/call" => mcp_tool_call(id, params),
-    "ping"       => mcp_response(id, JObj([])),
-    _            => mcp_error(id, -32601, "method not found: {method}")
-  }
+fn mcp_request(id, method, params) = match method {
+  "initialize" => mcp_response(id, mcp_initialize_result(params)),
+  "tools/list" => mcp_response(id, mcp_tools_result()),
+  "tools/call" => mcp_tool_call(id, params),
+  "ping" => mcp_response(id, JObj([])),
+  _ => mcp_error(id, -32601, "method not found: {method}"),
 }
 
 // A message without an id is a notification (initialized, cancelled, …):
@@ -230,27 +218,25 @@ fn mcp_request(id, method, params) = {
 fn mcp_dispatch(req) = {
   let method = match json_obj_get(req, "method") {
     Some(JStr(s)) => s,
-    _             => ""   // drift-audit: ignore — the protocol-null sentinel: no real method is empty, and mcp_request refuses "" with -32601
+    _ => // drift-audit: ignore — the protocol-null sentinel: no real method is empty, and mcp_request refuses "" with -32601
+    "",
   }
   match json_obj_get(req, "id") {
-    None     => "",
-    Some(id) => mcp_request(id, method, mcp_params_of(req))
+    None => "",
+    Some(id) => mcp_request(id, method, mcp_params_of(req)),
   }
 }
 
-fn mcp_handle(line) = {
-  match json_parse(line) {
-    JOk(req, _)  => mcp_dispatch(req),
-    JErr(m, pos) => mcp_error(JNull, -32700, "parse error at byte {int_to_str(pos)}: {m}")
-  }
+fn mcp_handle(line) = match json_parse(line) {
+  JOk(req, _) => mcp_dispatch(req),
+  JErr(m, pos) => mcp_error(JNull, -32700, "parse error at byte {int_to_str(pos)}: {m}"),
 }
 
 // A client that frames with \r\n leaves the \r on the line after the
 // newline is consumed; strip it so json_parse sees the message alone.
 fn strip_cr(line) = {
   let n = byte_len(line)
-  if n > 0 && byte_at(line, n - 1) == 13 { str_slice(line, 0, n - 1) }
-  else { line }
+  if n > 0 && byte_at(line, n - 1) == 13 { str_slice(line, 0, n - 1) } else { line }
 }
 
 // The serve loop — a RAW recursion with zero cross-iteration state (the
@@ -263,10 +249,13 @@ fn strip_cr(line) = {
 // is outside the newline-delimited-JSON contract, so "" ends the session
 // on either reading.
 fn mcp_loop() = {
-  let mark = heap_mark()   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), the battery_loop shape
-  let line = read_stdin_line()   // drift-audit: ignore — sequenced effectful stream-read (the read_* exclusion): the line is tested for EOF then handled
-  if byte_len(line) == 0 { () }
-  else {
+  // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), the battery_loop shape
+  let mark = heap_mark()
+  // drift-audit: ignore — sequenced effectful stream-read (the read_* exclusion): the line is tested for EOF then handled
+  let line = read_stdin_line()
+  if byte_len(line) == 0 {
+    ()
+  } else {
     let out = mcp_handle(strip_cr(line))
     if byte_len(out) > 0 { print_string(out) }
     heap_reset(mark)

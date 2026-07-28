@@ -12,8 +12,8 @@
 // Modal Effect Types (POPL 2025 / 2026), Abstracting Effect Systems
 // (ICFP 2024). Decidable, sound, documented. None invented here.
 // The artifact is that one row_subsumes call services every gate.
-
 import types
+
 import runtime/strings
 
 // Smart constructors — sort invariant by construction
@@ -28,12 +28,12 @@ import runtime/strings
 // DESIGN Ch 4 substrate discipline: the row IS the sorted set. The
 // graph stores rows in the form they were constructed; constructors
 // enforce the invariant the algebra depends on.
-
+//
 // ─── the canonical triple's constructors ────────────────────────────
 // row = present ∪ (tail ∖ absent). Invariants enforced HERE, once, so
 // every flowing row is canonical at birth and no read ever normalizes:
 // present/absent deduped, present ∩ absent = ∅, EtClosed ⇒ absent = [].
-
+//
 // The absent set survives EVERY tail form: under EtClosed it is vacuous
 // for the row's READING (no tail to mask) but load-bearing as the
 // crown's PROOF-OF-ABSENCE record — `with A + !B` gates carry B here,
@@ -60,20 +60,18 @@ fn mk_ef_pure() with Pure = ef_pure_row
 // The crown's negative capability: !B = anything except B.
 fn mk_ef_neg(ref names) with !Mutate = ef_make([], names, EtAll)
 
-fn mk_record_open(ref fields, v) with !Mutate = {
-  TRecordOpen(field_canonicalize(fields), v)
-}
+fn mk_record_open(ref fields, v) with !Mutate = TRecordOpen(field_canonicalize(fields), v)
 
 fn field_canonicalize(ref fields) with !Mutate = {
   let n = len(fields)
   field_canonicalize_loop(fields, 0, n, [])
 }
 
-fn field_canonicalize_loop(ref fields, i, n, own acc) with !Mutate = {
-  if i >= n { acc }
-  else {
-    let (name, ty) = list_index(fields, i)
-    field_canonicalize_loop(fields, i + 1, n, field_insert(acc, name, ty))
+fn field_canonicalize_loop(ref fields, i, n, own acc) with !Mutate = if i >= n {
+  acc
+} else {
+  match list_index(fields, i) {
+    (name, ty) => field_canonicalize_loop(fields, i + 1, n, field_insert(acc, name, ty)),
   }
 }
 
@@ -83,18 +81,19 @@ fn field_insert(ref sorted, ref name: String, ref ty) with !Mutate = {
   let n = len(sorted)
   let pos = field_find_pos(sorted, name, 0, n)
   if pos < n {
-    let (existing_name, _) = list_index(sorted, pos)
-    if existing_name == name {
-      // Replace at pos.
-      let buf = make_list(n)
-      let copied = list_copy_into(sorted, buf, 0, n)
-      list_set(copied, pos, (name, ty))
-    } else {
-      // Insert at pos.
-      let buf = make_list(n + 1)
-      let prefix = list_copy_into(sorted, buf, 0, pos)
-      let with_ins = list_set(prefix, pos, (name, ty))
-      field_copy_suffix_shifted(sorted, with_ins, pos, pos, n)
+    match list_index(sorted, pos) {
+      (existing_name, _) => if existing_name == name {
+        // Replace at pos.
+        let buf = make_list(n)
+        let copied = list_copy_into(sorted, buf, 0, n)
+        list_set(copied, pos, (name, ty))
+      } else {
+        // Insert at pos.
+        let buf = make_list(n + 1)
+        let prefix = list_copy_into(sorted, buf, 0, pos)
+        let with_ins = list_set(prefix, pos, (name, ty))
+        field_copy_suffix_shifted(sorted, with_ins, pos, pos, n)
+      },
     }
   } else {
     // Append.
@@ -113,47 +112,44 @@ fn field_insert(ref sorted, ref name: String, ref ty) with !Mutate = {
 // Dissolves with band D (== reads the operand proof at the eq-fold).
 fn field_name_eq(a: String, b: String) with Pure = a == b
 
-fn field_find_pos(ref sorted, ref name, i, n) with !Mutate = {
-  if i >= n { n }
-  else {
-    let (existing_name, _) = list_index(sorted, i)
-    if str_lt(existing_name, name) {
-      field_find_pos(sorted, name, i + 1, n)
-    } else { i }
+fn field_find_pos(ref sorted, ref name, i, n) with !Mutate = if i >= n {
+  n
+} else {
+  match list_index(sorted, i) {
+    (existing_name, _) => if str_lt(existing_name, name) { field_find_pos(sorted, name, i + 1, n) } else { i },
   }
 }
 
-fn field_copy_suffix_shifted(ref src, own dst, src_idx, dst_idx, n) with !Mutate = {
-  if src_idx >= n { dst }
-  else {
-    field_copy_suffix_shifted(
-      src, list_set(dst, dst_idx + 1, list_index(src, src_idx)),
-      src_idx + 1, dst_idx + 1, n
-    )
-  }
+fn field_copy_suffix_shifted(ref src, own dst, src_idx, dst_idx, n) with !Mutate = if src_idx >= n {
+  dst
+} else {
+  field_copy_suffix_shifted(
+    src,
+    list_set(dst, dst_idx + 1, list_index(src, src_idx)),
+    src_idx + 1,
+    dst_idx + 1,
+    n
+  )
 }
 
 // ─── the triple algebra — fieldwise, canonical, no rewrite passes ──
-
+//
 // Identity until PROGRESS: resolution folds a bound tail into the head —
 // r = p ∪ (tail ∖ a); tail = cp ∪ (ct ∖ ca) gives ONE formula:
 //   p' = p ∪ (cp ∖ a),  a' = a ∪ ca,  t' = ct
 // An unbound tail returns the stored row untouched.
-fn resolve_row(row) with !Mutate = {
-  let EfRow(p, a, t) = row
-  match t {
-    EtVar(v) => {
-      let GNode(kind, _) = graph_chase(v)
-      match kind {
-        NRowBound(inner) => {
-          let EfRow(cp, ca, ct) = resolve_row(inner)
-          ef_make(name_set_union(p, name_set_diff(cp, a)), name_set_union(a, ca), ct)
+fn resolve_row(row) with !Mutate = match row {
+  EfRow(p, a, t) => match t {
+    EtVar(v) => match graph_chase(v) {
+      GNode(kind, _) => match kind {
+        NRowBound(inner) => match resolve_row(inner) {
+          EfRow(cp, ca, ct) => ef_make(name_set_union(p, name_set_diff(cp, a)), name_set_union(a, ca), ct),
         },
-        _ => row
-      }
+        _ => row,
+      },
     },
-    _ => row
-  }
+    _ => row,
+  },
 }
 
 // The compressing resolve — union-find's other half at the row sort:
@@ -165,23 +161,22 @@ fn resolve_row(row) with !Mutate = {
 // the OPTIMIZATION op, whose branch-cursor arm skips it (a branch
 // rebinding shared chain cells makes sibling chases schedule-dependent;
 // the root's sequential walks compress the web).
-fn resolve_row_compress(row) = {
-  let EfRow(p, a, t) = row
-  match t {
-    EtVar(v) => {
-      let GNode(kind, _) = graph_chase(v)
-      match kind {
+fn resolve_row_compress(row) = match row {
+  EfRow(p, a, t) => match t {
+    EtVar(v) => match graph_chase(v) {
+      GNode(kind, _) => match kind {
         NRowBound(inner) => {
           let ri = resolve_row_compress(inner)
           graph_compress_row(v, ri)
-          let EfRow(cp, ca, ct) = ri
-          ef_make(name_set_union(p, name_set_diff(cp, a)), name_set_union(a, ca), ct)
+          match ri {
+            EfRow(cp, ca, ct) => ef_make(name_set_union(p, name_set_diff(cp, a)), name_set_union(a, ca), ct),
+          }
         },
-        _ => row
-      }
+        _ => row,
+      },
     },
-    _ => row
-  }
+    _ => row,
+  },
 }
 
 // The LATTICE JOIN — the teaching write's algebra (graph_bind_row's
@@ -195,15 +190,23 @@ fn resolve_row_compress(row) = {
 // identity is the instance's own record — conservative: an unshared
 // equal fragment coexists as a copy, and coexistence is the safe side.
 // Bare names and absent sets are genuine name-sets; tails join as ever.
-fn row_join(ref a, ref b) with !Mutate = {
-  let EfRow(pa, aa, ta) = a
-  let EfRow(pb, ab, tb) = b
-  let p = frag_union(pa, pb)
-  let absent = match ta {
-    EtClosed => match tb { EtClosed => [], _ => ab },
-    _        => match tb { EtClosed => aa, _ => name_set_union(aa, ab) }
-  }
-  ef_make(p, absent, tail_join(ta, tb))
+fn row_join(ref a, ref b) with !Mutate = match a {
+  EfRow(pa, aa, ta) => match b {
+    EfRow(pb, ab, tb) => {
+      let p = frag_union(pa, pb)
+      let absent = match ta {
+        EtClosed => match tb {
+          EtClosed => [],
+          _ => ab,
+        },
+        _ => match tb {
+          EtClosed => aa,
+          _ => name_set_union(aa, ab),
+        },
+      }
+      ef_make(p, absent, tail_join(ta, tb))
+    },
+  },
 }
 
 // A join COLLISION: the two rows carry same-named parameterized
@@ -213,31 +216,31 @@ fn row_join(ref a, ref b) with !Mutate = {
 // share that escaped freshening, and the join's coexistence is the
 // confluence net that keeps it deterministic while the census drives
 // the leak class to zero.
-fn row_frag_collision(ref a, ref b) with Memory = {
-  let EfRow(pa, _, _) = a
-  let EfRow(pb, _, _) = b
-  frag_collision_walk(pa, pb, 0)
+fn row_frag_collision(ref a, ref b) with Memory = match a {
+  EfRow(pa, _, _) => match b {
+    EfRow(pb, _, _) => frag_collision_walk(pa, pb, 0),
+  },
 }
 
-fn frag_collision_walk(ref pa, ref pb, i) with Memory =
-  if i >= len(pb) { false }
-  else {
-    let hit = match list_index(pb, i) {
-      EParameterized(h2, args2) => frag_name_clash(pa, h2, args2, 0),
-      _ => false
-    }
-    if hit { true } else { frag_collision_walk(pa, pb, i + 1) }
+fn frag_collision_walk(ref pa, ref pb, i) with Memory = if i >= len(pb) {
+  false
+} else {
+  let hit = match list_index(pb, i) {
+    EParameterized(h2, args2) => frag_name_clash(pa, h2, args2, 0),
+    _ => false,
   }
+  if hit { true } else { frag_collision_walk(pa, pb, i + 1) }
+}
 
-fn frag_name_clash(ref pa, h2, args2, j) with Memory =
-  if j >= len(pa) { false }
-  else {
-    let hit = match list_index(pa, j) {
-      EParameterized(h1, args1) => h1 == h2 && !frag_args_same(args1, args2),
-      _ => false
-    }
-    if hit { true } else { frag_name_clash(pa, h2, args2, j + 1) }
+fn frag_name_clash(ref pa, h2, args2, j) with Memory = if j >= len(pa) {
+  false
+} else {
+  let hit = match list_index(pa, j) {
+    EParameterized(h1, args1) => h1 == h2 && !frag_args_same(args1, args2),
+    _ => false,
   }
+  if hit { true } else { frag_name_clash(pa, h2, args2, j + 1) }
+}
 
 // Fragment-identity union: b's entries append unless an identical entry
 // is already present. Bare ENamed dedups by handle (one instance per bare
@@ -246,17 +249,16 @@ fn frag_name_clash(ref pa, h2, args2, j) with Memory =
 fn frag_union(ref pa, ref pb) with Memory + Alloc =
   fold(pa, (acc, e) => if frag_present(acc, e, 0) { acc } else { acc ++ [e] }, pb)
 
-fn frag_present(ref acc, e, i) with Memory =
-  if i >= len(acc) { false }
-  else {
-    let hit = match (list_index(acc, i), e) {
-      (ENamed(h1), ENamed(h2)) => h1 == h2,
-      (EParameterized(h1, args1), EParameterized(h2, args2)) =>
-        h1 == h2 && frag_args_same(args1, args2),
-      _ => false
-    }
-    if hit { true } else { frag_present(acc, e, i + 1) }
+fn frag_present(ref acc, e, i) with Memory = if i >= len(acc) {
+  false
+} else {
+  let hit = match (list_index(acc, i), e) {
+    (ENamed(h1), ENamed(h2)) => h1 == h2,
+    (EParameterized(h1, args1), EParameterized(h2, args2)) => h1 == h2 && frag_args_same(args1, args2),
+    _ => false,
   }
+  if hit { true } else { frag_present(acc, e, i + 1) }
+}
 
 // Fragment identity is the instance's GRAPH identity — the arg handles the
 // perform minted, scalar payloads by value — never the args list's ADDRESS.
@@ -271,44 +273,54 @@ fn frag_present(ref acc, e, i) with Memory =
 // the reconciled instance IS the install's identity — the same channel the
 // crown's instance-precise negation keys on (install provenance, the
 // world-chain hkey: designed here once, consumed by the modal crown).
-fn frag_args_same(ref a1, ref a2) with Memory =
-  len(a1) == len(a2) && frag_args_same_walk(a1, a2, 0)
+fn frag_args_same(ref a1, ref a2) with Memory = len(a1) == len(a2) && frag_args_same_walk(a1, a2, 0)
 
-fn frag_args_same_walk(ref a1, ref a2, i) with Memory =
-  if i >= len(a1) { true }
-  else {
-    let same = match (list_index(a1, i), list_index(a2, i)) {
-      (EAInt(x), EAInt(y))       => x == y,
-      (EAFloat(x), EAFloat(y))   => x == y,
-      (EAString(x), EAString(y)) => x == y,
-      (EAType(tx), EAType(ty2))  => match (tx, ty2) {
-        (TVar(hx), TVar(hy)) => hx == hy,
-        _ => false
-      },
-      (EANode(nx), EANode(ny))   => nx == ny,
-      _ => false
-    }
-    if same { frag_args_same_walk(a1, a2, i + 1) } else { false }
+fn frag_args_same_walk(ref a1, ref a2, i) with Memory = if i >= len(a1) {
+  true
+} else {
+  let same = match (list_index(a1, i), list_index(a2, i)) {
+    (EAInt(x), EAInt(y)) => x == y,
+    (EAFloat(x), EAFloat(y)) => x == y,
+    (EAString(x), EAString(y)) => x == y,
+    (EAType(tx), EAType(ty2)) => match (tx, ty2) {
+      (TVar(hx), TVar(hy)) => hx == hy,
+      _ => false,
+    },
+    (EANode(nx), EANode(ny)) => nx == ny,
+    _ => false,
   }
+  if same { frag_args_same_walk(a1, a2, i + 1) } else { false }
+}
 
 // Union (`+` and the accumulation of performs): presents union; a name
 // present ANYWHERE escapes every mask, so the joint absent set drops it;
 // tails join Closed < Var < All, first var kept (unification constrains).
-fn union_row(ref a, ref b) with !Mutate = {
-  let EfRow(pa, aa, ta) = a
-  let EfRow(pb, ab, tb) = b
-  let p = name_set_union(pa, pb)
-  let absent = match ta {
-    EtClosed => match tb { EtClosed => [], _ => ab },
-    _        => match tb { EtClosed => aa, _ => name_set_union(aa, ab) }
-  }
-  ef_make(p, absent, tail_join(ta, tb))
+fn union_row(ref a, ref b) with !Mutate = match a {
+  EfRow(pa, aa, ta) => match b {
+    EfRow(pb, ab, tb) => {
+      let p = name_set_union(pa, pb)
+      let absent = match ta {
+        EtClosed => match tb {
+          EtClosed => [],
+          _ => ab,
+        },
+        _ => match tb {
+          EtClosed => aa,
+          _ => name_set_union(aa, ab),
+        },
+      }
+      ef_make(p, absent, tail_join(ta, tb))
+    },
+  },
 }
 
 fn tail_join(ta, tb) with Pure = match ta {
   EtClosed => tb,
-  EtVar(v) => match tb { EtAll => EtAll, _ => EtVar(v) },
-  EtAll    => EtAll
+  EtVar(v) => match tb {
+    EtAll => EtAll,
+    _ => EtVar(v),
+  },
+  EtAll => EtAll,
 }
 
 // Difference (`-` and the `~>` subtraction): an EAGER LITERAL DIFFERENCE
@@ -324,42 +336,44 @@ fn tail_join(ta, tb) with Pure = match ta {
 // Minting a fresh var BOUND to the masked triple over the original tail
 // makes the mask an EDGE resolve_row folds through — unions carry vars
 // untouched, so the subtraction survives every union by construction.
-fn diff_row(ref a, ref b) with GraphWrite + Memory + !Mutate + Alloc = {
-  let EfRow(pa, aa, ta) = a
-  let EfRow(pb, _, _) = b
-  match ta {
-    EtVar(orig) => {
-      let masked = graph_fresh_row(Inferred("~> subtraction mask"))
-      graph_bind_row(masked, EfRow([], name_set_union(aa, pb), EtVar(orig)),
-        Inferred("pending tail subtraction"))
-      ef_make(name_set_diff(pa, pb), [], EtVar(masked))
+fn diff_row(ref a, ref b) with GraphWrite + Memory + !Mutate + Alloc = match a {
+  EfRow(pa, aa, ta) => match b {
+    EfRow(pb, _, _) => match ta {
+      EtVar(orig) => {
+        let masked = graph_fresh_row(Inferred("~> subtraction mask"))
+        graph_bind_row(
+          masked,
+          EfRow([], name_set_union(aa, pb), EtVar(orig)),
+          Inferred("pending tail subtraction")
+        )
+        ef_make(name_set_diff(pa, pb), [], EtVar(masked))
+      },
+      _ => ef_make(name_set_diff(pa, pb), name_set_union(aa, pb), ta),
     },
-    _ => ef_make(name_set_diff(pa, pb), name_set_union(aa, pb), ta)
-  }
+  },
 }
 
 // Intersection (`&`): closed∩closed intersects presents; anything meeting
 // the pure-negation form (p=[], tail=All) is the difference; the
 // var-tailed general meet is the modal frontier — the LOUD refusal names
 // it instead of mushing (the crucible that reaches it is the witness).
-fn inter_row(ref a, ref b) with !Mutate = {
-  let EfRow(pa, aa, ta) = a
-  let EfRow(pb, ab, tb) = b
-  match ta {
-    EtAll => if len(pa) == 0 { diff_row(b, mk_ef_closed(aa)) } else { EfRow(pa, aa, ta) },
-    _ => match tb {
-      EtAll => if len(pb) == 0 { diff_row(a, mk_ef_closed(ab)) } else { EfRow(pa, aa, ta) },
-      _ => match ta {
-        EtClosed => match tb {
-          EtClosed => ef_make(name_set_intersect(pa, pb), [], EtClosed),
-          _        => ef_make(name_set_intersect(pa, pb), [], EtClosed)
+fn inter_row(ref a, ref b) with !Mutate = match a {
+  EfRow(pa, aa, ta) => match b {
+    EfRow(pb, ab, tb) => match ta {
+      EtAll => if len(pa) == 0 { diff_row(b, mk_ef_closed(aa)) } else { EfRow(pa, aa, ta) },
+      _ => match tb {
+        EtAll => if len(pb) == 0 { diff_row(a, mk_ef_closed(ab)) } else { EfRow(pa, aa, ta) },
+        _ => match ta {
+          EtClosed => match tb {
+            EtClosed => ef_make(name_set_intersect(pa, pb), [], EtClosed),
+            _ => ef_make(name_set_intersect(pa, pb), [], EtClosed),
+          },
+          _ => ef_make(name_set_intersect(pa, pb), [], EtClosed),
         },
-        _ => ef_make(name_set_intersect(pa, pb), [], EtClosed)
-      }
-    }
-  }
+      },
+    },
+  },
 }
-
 
 // Handler absorption: row(expr ~> h) = (body − handled) ⊕ residual.
 fn absorb_row(ref body_row, ref handled_row, ref extra_row) with !Mutate =
@@ -367,16 +381,15 @@ fn absorb_row(ref body_row, ref handled_row, ref extra_row) with !Mutate =
 
 // A recursive fn's row equation R = names ∪ R takes its LEAST solution:
 // a tail landing on the fn's OWN row handle cuts to the closed head.
-fn row_without_self(row, self_h) with !Mutate = {
-  let EfRow(p, a, t) = resolve_row(row)
-  match t {
+fn row_without_self(row, self_h) with !Mutate = match resolve_row(row) {
+  EfRow(p, a, t) => match t {
     EtVar(v) => if v == self_h { ef_make(p, a, EtClosed) } else { EfRow(p, a, t) },
-    _        => EfRow(p, a, t)
-  }
+    _ => EfRow(p, a, t),
+  },
 }
 
 // ─── the gates ──────────────────────────────────────────────────────
-
+//
 // Subsumption: body ⊆ gate, fieldwise and decidable.
 //   gate tail All    (the !B stance): body's reachable names must avoid
 //                    gate.absent — present ∩ B = ∅, and an open body tail
@@ -403,38 +416,41 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
   // gate — an unknown-beyond-mask body may perform outside it.
   let b = resolve_row(body_row)
   let g = resolve_row(gate_row)
-  let EfRow(pb, ab, tb) = b
-  let EfRow(pg, ag, tg) = g
-  match tg {
-    EtAll => {
-      // The `!B` gate: nothing present may touch the forbidden set. A
-      // closed or free-tailed body passes on disjointness alone (the free
-      // tail is vacuous; a var that LATER grows is caught at unify, where
-      // Open~All binds the var to the mask — bind_open_to_neg's move). An
-      // EtAll body must carry at least the gate's mask: ¬A ⊆ ¬B iff B ⊆ A.
-      if forbidden_names_disjoint(pb, ag) {
-        match tb {
-          EtClosed => true,
-          EtVar(_) => true,
-          EtAll    => name_set_subset(ag, ab)
-        }
-      } else { false }
-    },
-    EtClosed =>
-      // The closed gate's absent set is the declared `!B` proof: nothing
-      // present may touch it, transitively through every subsumption.
-      if forbidden_names_disjoint(pb, ag) {
-        match tb {
+  match b {
+    EfRow(pb, ab, tb) => match g {
+      EfRow(pg, ag, tg) => match tg {
+        EtAll => // The `!B` gate: nothing present may touch the forbidden set. A
+        // closed or free-tailed body passes on disjointness alone (the free
+        // tail is vacuous; a var that LATER grows is caught at unify, where
+        // Open~All binds the var to the mask — bind_open_to_neg's move). An
+        // EtAll body must carry at least the gate's mask: ¬A ⊆ ¬B iff B ⊆ A.
+        if forbidden_names_disjoint(pb, ag) {
+          match tb {
+            EtClosed => true,
+            EtVar(_) => true,
+            EtAll => name_set_subset(ag, ab),
+          }
+        } else {
+          false
+        },
+        EtClosed => // The closed gate's absent set is the declared `!B` proof: nothing
+        // present may touch it, transitively through every subsumption.
+        if forbidden_names_disjoint(pb, ag) {
+          match tb {
+            EtClosed => name_set_subset(pb, pg),
+            EtVar(_) => name_set_subset(pb, pg),
+            EtAll => false,
+          }
+        } else {
+          false
+        },
+        EtVar(_) => match tb {
           EtClosed => name_set_subset(pb, pg),
           EtVar(_) => name_set_subset(pb, pg),
-          EtAll    => false
-        }
-      } else { false },
-    EtVar(_) => match tb {
-      EtClosed => name_set_subset(pb, pg),
-      EtVar(_) => name_set_subset(pb, pg),
-      EtAll    => false
-    }
+          EtAll => false,
+        },
+      },
+    },
   }
 }
 
@@ -446,54 +462,59 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
 fn unify_row(ref a, ref b, ref span, ref reason) with !Mutate =
   unify_row_canonical(resolve_row_compress(a), resolve_row_compress(b), span, reason)
 
-fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
-  let EfRow(pa, aa, ta) = a
-  let EfRow(pb, ab, tb) = b
-  match ta {
-    EtClosed => match tb {
-      EtClosed =>
-        if name_set_eq(pa, pb) { () } else { report_effect_mismatch(a, b, span, reason) },
-      EtVar(vb) =>
-        // Closed(A) ~ (B + tail∖ab): tail := (A ∖ B) minus what b masks —
+fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = match a {
+  EfRow(pa, aa, ta) => match b {
+    EfRow(pb, ab, tb) => match ta {
+      EtClosed => match tb {
+        EtClosed => if name_set_eq(pa, pb) { () } else { report_effect_mismatch(a, b, span, reason) },
+        EtVar(vb) => // Closed(A) ~ (B + tail∖ab): tail := (A ∖ B) minus what b masks —
         // a masked name demanded by A is a genuine mismatch.
         if forbidden_names_disjoint(pa, ab) {
           graph_bind_row(vb, ef_make(name_set_diff(pa, pb), [], EtClosed), Located(span, reason))
-        } else { report_effect_mismatch(a, b, span, reason) },
-      EtAll =>
-        report_effect_mismatch(a, b, span, reason)
-    },
-    EtVar(va) => match tb {
-      EtClosed =>
-        if forbidden_names_disjoint(pb, aa) {
+        } else {
+          report_effect_mismatch(a, b, span, reason)
+        },
+        EtAll => report_effect_mismatch(a, b, span, reason),
+      },
+      EtVar(va) => match tb {
+        EtClosed => if forbidden_names_disjoint(pb, aa) {
           graph_bind_row(va, ef_make(name_set_diff(pb, pa), [], EtClosed), Located(span, reason))
-        } else { report_effect_mismatch(a, b, span, reason) },
-      EtVar(vb) =>
-        if va == vb {
+        } else {
+          report_effect_mismatch(a, b, span, reason)
+        },
+        EtVar(vb) => if va == vb {
           if name_set_eq(pa, pb) { () } else { report_effect_mismatch(a, b, span, reason) }
         } else {
-          graph_bind_row(va, ef_make(name_set_diff(pb, pa), name_set_diff(ab, pa), EtVar(vb)), Located(span, reason))
+          graph_bind_row(
+            va,
+            ef_make(name_set_diff(pb, pa), name_set_diff(ab, pa), EtVar(vb)),
+            Located(span, reason)
+          )
         },
-      EtAll =>
-        // Open ~ !B: the SOUND modal closure — the var carries the
+        EtAll => // Open ~ !B: the SOUND modal closure — the var carries the
         // negative capability forward; the knowns must avoid B.
         if forbidden_names_disjoint(pa, ab) {
           graph_bind_row(va, EfRow([], ab, EtAll), Located(span, reason))
-        } else { report_effect_mismatch(a, b, span, reason) }
-    },
-    EtAll => match tb {
-      EtAll =>
-        if name_set_eq(aa, ab) && name_set_eq(pa, pb) { () }
-        else { report_effect_mismatch(a, b, span, reason) },
-      EtVar(vb) =>
-        if forbidden_names_disjoint(pb, aa) {
+        } else {
+          report_effect_mismatch(a, b, span, reason)
+        },
+      },
+      EtAll => match tb {
+        EtAll => if name_set_eq(aa, ab) && name_set_eq(pa, pb) {
+          ()
+        } else {
+          report_effect_mismatch(a, b, span, reason)
+        },
+        EtVar(vb) => if forbidden_names_disjoint(pb, aa) {
           graph_bind_row(vb, EfRow([], aa, EtAll), Located(span, reason))
-        } else { report_effect_mismatch(a, b, span, reason) },
-      EtClosed =>
-        report_effect_mismatch(a, b, span, reason)
-    }
-  }
+        } else {
+          report_effect_mismatch(a, b, span, reason)
+        },
+        EtClosed => report_effect_mismatch(a, b, span, reason),
+      },
+    },
+  },
 }
-
 
 // The reason rides to the report site so the mismatch can NAME its
 // construction (it pinned the E_EffectMismatch quartet to one call form
@@ -504,12 +525,11 @@ fn report_effect_mismatch(ref a, ref b, ref span, ref reason) with !Mutate =
   report(EEffectMismatch(a, b, span))
 
 // Ground: no row variable anywhere the dispatch would need resolved.
-fn row_is_ground(ref row) with Pure = {
-  let EfRow(_, _, t) = row
-  match t {
+fn row_is_ground(ref row) with Pure = match row {
+  EfRow(_, _, t) => match t {
     EtVar(_) => false,
-    _        => true
-  }
+    _ => true,
+  },
 }
 
 fn sort_unique(ref names) with !Mutate = name_set_canonicalize(names)
@@ -525,18 +545,18 @@ fn sort_unique(ref names) with !Mutate = name_set_canonicalize(names)
 // follow-on, Hβ.effects.parameterized-negation-instance). EPure carries
 // the reserved absent handle 0 and never matches a named effect.
 fn eff_name_handle(name: EffName) -> Int with Pure = match name {
-  ENamed(h)            => h,
+  ENamed(h) => h,
   EParameterized(h, _) => h,
-  EPure                => 0
+  EPure => 0,
 }
 
 // The RENDER projection — handle → canonical spelling, read live from the
 // intern table. Comparisons never come here (eff_name_handle is the key);
 // diagnostics, show, and lower's ename extraction do.
 fn eff_name_str(name: EffName) -> String with Intern = match name {
-  ENamed(h)            => intern_name_of(h),
+  ENamed(h) => intern_name_of(h),
   EParameterized(h, _) => intern_name_of(h),
-  EPure                => ""
+  EPure => "",
 }
 
 // body ∩ forbidden = ∅ BY NAME — the crown's negation membership. A body effect
@@ -545,15 +565,21 @@ fn eff_name_str(name: EffName) -> String with Intern = match name {
 fn forbidden_names_disjoint(ref body, ref forbidden) with !Mutate =
   forbidden_names_disjoint_loop(body, forbidden, 0, len(body))
 
-fn forbidden_names_disjoint_loop(ref body, ref forbidden, i, n) with !Mutate =
-  if i >= n { true }
-  else if name_in_forbidden(forbidden, eff_name_handle(list_index(body, i)), 0, len(forbidden)) { false }
-  else { forbidden_names_disjoint_loop(body, forbidden, i + 1, n) }
+fn forbidden_names_disjoint_loop(ref body, ref forbidden, i, n) with !Mutate = if i >= n {
+  true
+} else if name_in_forbidden(forbidden, eff_name_handle(list_index(body, i)), 0, len(forbidden)) {
+  false
+} else {
+  forbidden_names_disjoint_loop(body, forbidden, i + 1, n)
+}
 
-fn name_in_forbidden(ref forbidden, h, i, n) with !Mutate =
-  if i >= n { false }
-  else if eff_name_handle(list_index(forbidden, i)) == h { true }
-  else { name_in_forbidden(forbidden, h, i + 1, n) }
+fn name_in_forbidden(ref forbidden, h, i, n) with !Mutate = if i >= n {
+  false
+} else if eff_name_handle(list_index(forbidden, i)) == h {
+  true
+} else {
+  name_in_forbidden(forbidden, h, i + 1, n)
+}
 
 // string_in_list — membership over a list of STRINGS (own.mn's ref-escape
 // names), NOT EffNames. It aliased name_set_contains, whose by-name leaf
@@ -563,10 +589,15 @@ fn name_in_forbidden(ref forbidden, h, i, n) with !Mutate =
 // (list_index erases the type), so str_eq explicitly — a bare `==` would
 // floor to the same pointer-eq name_set_contains just shed.
 fn string_in_list(ref lst, s: String) with !Mutate = string_in_list_loop(lst, s, 0, len(lst))
-fn string_in_list_loop(ref lst, s: String, i, n) with !Mutate = {
-  if i >= n { false }
-  else if str_eq(list_index(lst, i), s) { true }   // drift-audit: ignore — the String case of ==; nameable-sequence leaf, band D
-  else { string_in_list_loop(lst, s, i + 1, n) }
+
+fn string_in_list_loop(ref lst, s: String, i, n) with !Mutate = if i >= n {
+  false
+}
+// drift-audit: ignore — the String case of ==; nameable-sequence leaf, band D
+else if str_eq(list_index(lst, i), s) {
+  true
+} else {
+  string_in_list_loop(lst, s, i + 1, n)
 }
 
 // EffName equality is the ONE structural `==` (the value-layer fold's sum-eq
@@ -580,7 +611,7 @@ fn string_in_list_loop(ref lst, s: String, i, n) with !Mutate = {
 // never holds two different-var `Iterate` entries — `==` dedups them exactly as
 // the old EAType-always-equal boundary did. (peer Hβ.effects.parameterized-
 // effect-row-dedup verifies the shared-var invariant at the value gate.)
-
+//
 // Row-name set algebra
 // [EffName] SET ops — a row IS a set, so membership (name_set_contains, a
 // linear by-name scan) is the ONE operation: subset / subsumption /
@@ -592,7 +623,7 @@ fn string_in_list_loop(ref lst, s: String, i, n) with !Mutate = {
 // drift-7 twin of runtime/strings.mn's string-set collapses to one membership,
 // and the sort — a canonical order no reader consumes — is the re-derivation
 // the Carried-Truth Law deletes (§4①: one ordered-keyed-set operation).
-
+//
 // Set builds are BUFFER-COUNTER (§9): one make_list at the max size, a
 // write-cursor appends, one slice at the end. The insert-per-element form
 // copied the whole accumulator per step — at row sizes the asymptotics are
@@ -606,42 +637,47 @@ fn name_set_canonicalize(ref names) with !Mutate = {
   // duplicate actually exists. This is the churn fix for the 4GB bump image:
   // ef_make canonicalizes at every algebra op, and before this path each op
   // paid make_list + slice even for [] and singletons.
-  if n <= 1 { names }
-  else if name_set_is_dedup(names, 0, n) { names }
-  else { name_set_dedup_into(names, 0, n, make_list(n), 0) }
+  if n <= 1 {
+    names
+  } else if name_set_is_dedup(names, 0, n) {
+    names
+  } else {
+    name_set_dedup_into(names, 0, n, make_list(n), 0)
+  }
 }
 
 // Is the list already duplicate-free (by-name, the same leaf as dedup)?
-fn name_set_is_dedup(ref names, i, n) with !Mutate = {
-  if i >= n { true }
-  else if name_set_prefix_contains(names, i, list_index(names, i)) { false }
-  else { name_set_is_dedup(names, i + 1, n) }
+fn name_set_is_dedup(ref names, i, n) with !Mutate = if i >= n {
+  true
+} else if name_set_prefix_contains(names, i, list_index(names, i)) {
+  false
+} else {
+  name_set_is_dedup(names, i + 1, n)
 }
 
-fn name_set_dedup_into(ref names, i, n, own buf, count) with !Mutate = {
-  if i >= n { slice(buf, 0, count) }
-  else {
-    let x = list_index(names, i)
-    let at = name_set_prefix_index(buf, count, x)
-    if at >= 0 {
-      // A name collision UPGRADES bare -> parameterized in place: the
-      // instance carries the payload truth the bare name only gestures at
-      // (bare ∪ instance = instance). Keeping the first-arrived bare
-      // erased the instance args wherever a declared pre-row met the
-      // body's inferred instance (iterate_from's recursive self-call
-      // unioned its bare pre-scheme Iterate over the parameterized one —
-      // the fold-family element severance). Two parameterized instances
-      // keep the first (the instance-precision residue,
-      // parameterized-negation-instance).
-      let held = list_index(buf, at)
-      let upgraded = match (held, x) {
-        (ENamed(_), EParameterized(_, _)) => list_set(buf, at, x),
-        _                                 => buf
-      }
-      name_set_dedup_into(names, i + 1, n, upgraded, count)
-    } else {
-      name_set_dedup_into(names, i + 1, n, list_set(buf, count, x), count + 1)
+fn name_set_dedup_into(ref names, i, n, own buf, count) with !Mutate = if i >= n {
+  slice(buf, 0, count)
+} else {
+  let x = list_index(names, i)
+  let at = name_set_prefix_index(buf, count, x)
+  if at >= 0 {
+    // A name collision UPGRADES bare -> parameterized in place: the
+    // instance carries the payload truth the bare name only gestures at
+    // (bare ∪ instance = instance). Keeping the first-arrived bare
+    // erased the instance args wherever a declared pre-row met the
+    // body's inferred instance (iterate_from's recursive self-call
+    // unioned its bare pre-scheme Iterate over the parameterized one —
+    // the fold-family element severance). Two parameterized instances
+    // keep the first (the instance-precision residue,
+    // parameterized-negation-instance).
+    let held = list_index(buf, at)
+    let upgraded = match (held, x) {
+      (ENamed(_), EParameterized(_, _)) => list_set(buf, at, x),
+      _ => buf,
     }
+    name_set_dedup_into(names, i + 1, n, upgraded, count)
+  } else {
+    name_set_dedup_into(names, i + 1, n, list_set(buf, count, x), count + 1)
   }
 }
 
@@ -650,44 +686,50 @@ fn name_set_dedup_into(ref names, i, n, own buf, count) with !Mutate = {
 fn name_set_prefix_index(ref buf, count, ref name) with !Mutate =
   name_set_prefix_index_loop(buf, name, 0, count)
 
-fn name_set_prefix_index_loop(ref buf, ref name, i, n) with Memory = {
-  if i >= n { 0 - 1 }
-  else if eff_name_handle(list_index(buf, i)) == eff_name_handle(name) { i }
-  else { name_set_prefix_index_loop(buf, name, i + 1, n) }
+fn name_set_prefix_index_loop(ref buf, ref name, i, n) with Memory = if i >= n {
+  0 - 1
+} else if eff_name_handle(list_index(buf, i)) == eff_name_handle(name) {
+  i
+} else {
+  name_set_prefix_index_loop(buf, name, i + 1, n)
 }
 
 // Membership against the WRITTEN PREFIX of a buffer under construction.
-fn name_set_prefix_contains(ref buf, count, ref name) with !Mutate = {
+fn name_set_prefix_contains(ref buf, count, ref name) with !Mutate =
   name_set_prefix_contains_loop(buf, name, 0, count)
-}
 
-fn name_set_prefix_contains_loop(ref buf, ref name, i, n) with Memory = {
-  if i >= n { false }
-  // By NAME, like the membership leaf (name_set_contains_loop) and the
-  // negation gate — this is the DEDUP twin (name_set_dedup_into), and it
-  // was still `==` (pointer-eq) after cc487f8 fixed membership, so two
-  // byte-equal ENamed from distinct sites still failed to dedup HERE, and
-  // rows kept bloating past the membership fix. The two must agree.
-  else if eff_name_handle(list_index(buf, i)) == eff_name_handle(name) { true }
-  else { name_set_prefix_contains_loop(buf, name, i + 1, n) }
+fn name_set_prefix_contains_loop(ref buf, ref name, i, n) with Memory = if i >= n {
+  false
+}
+// By NAME, like the membership leaf (name_set_contains_loop) and the
+// negation gate — this is the DEDUP twin (name_set_dedup_into), and it
+// was still `==` (pointer-eq) after cc487f8 fixed membership, so two
+// byte-equal ENamed from distinct sites still failed to dedup HERE, and
+// rows kept bloating past the membership fix. The two must agree.
+else if eff_name_handle(list_index(buf, i)) == eff_name_handle(name) {
+  true
+} else {
+  name_set_prefix_contains_loop(buf, name, i + 1, n)
 }
 
 // Insert = dedup-then-append; the one remaining single-element write (the
 // bulk paths below build whole sets in one buffer).
-fn name_set_insert(ref sorted, ref name) with !Mutate =
-  if name_set_contains(sorted, name) { sorted }
-  else {
-    let n = len(sorted)
-    list_set(list_copy_into(sorted, make_list(n + 1), 0, n), n, name)
-  }
+fn name_set_insert(ref sorted, ref name) with !Mutate = if name_set_contains(sorted, name) {
+  sorted
+} else {
+  let n = len(sorted)
+  list_set(list_copy_into(sorted, make_list(n + 1), 0, n), n, name)
+}
 
 fn name_set_union(ref a, ref b) with !Mutate = {
   let na = len(a)
   let nb = len(b)
   // Identity fast paths: X ∪ ∅ = canonical X (zero-alloc when X already is).
-  if na == 0 { name_set_canonicalize(b) }
-  else if nb == 0 { name_set_canonicalize(a) }
-  else {
+  if na == 0 {
+    name_set_canonicalize(b)
+  } else if nb == 0 {
+    name_set_canonicalize(a)
+  } else {
     let buf = make_list(na + nb)
     let ca = name_set_dedup_count(a, 0, na, buf, 0)
     name_set_union_rest(b, 0, nb, buf, ca)
@@ -700,39 +742,37 @@ fn name_set_union(ref a, ref b) with !Mutate = {
 // UPGRADES a held bare to the parameterized instance (bare ∪ instance =
 // instance) — one law at every dedup twin, or the instance args die on
 // whichever accumulation path a bare reaches first.
-fn name_set_dedup_count(ref names, i, n, own buf, count) with !Mutate = {
-  if i >= n { count }
-  else {
-    let x = list_index(names, i)
-    let at = name_set_prefix_index(buf, count, x)
-    if at >= 0 {
-      let held = list_index(buf, at)
-      let upgraded = match (held, x) {
-        (ENamed(_), EParameterized(_, _)) => list_set(buf, at, x),
-        _                                 => buf
-      }
-      name_set_dedup_count(names, i + 1, n, upgraded, count)
-    } else {
-      name_set_dedup_count(names, i + 1, n, list_set(buf, count, x), count + 1)
+fn name_set_dedup_count(ref names, i, n, own buf, count) with !Mutate = if i >= n {
+  count
+} else {
+  let x = list_index(names, i)
+  let at = name_set_prefix_index(buf, count, x)
+  if at >= 0 {
+    let held = list_index(buf, at)
+    let upgraded = match (held, x) {
+      (ENamed(_), EParameterized(_, _)) => list_set(buf, at, x),
+      _ => buf,
     }
+    name_set_dedup_count(names, i + 1, n, upgraded, count)
+  } else {
+    name_set_dedup_count(names, i + 1, n, list_set(buf, count, x), count + 1)
   }
 }
 
-fn name_set_union_rest(ref b, i, n, own buf, count) with !Mutate = {
-  if i >= n { slice(buf, 0, count) }
-  else {
-    let x = list_index(b, i)
-    let at = name_set_prefix_index(buf, count, x)
-    if at >= 0 {
-      let held = list_index(buf, at)
-      let upgraded = match (held, x) {
-        (ENamed(_), EParameterized(_, _)) => list_set(buf, at, x),
-        _                                 => buf
-      }
-      name_set_union_rest(b, i + 1, n, upgraded, count)
-    } else {
-      name_set_union_rest(b, i + 1, n, list_set(buf, count, x), count + 1)
+fn name_set_union_rest(ref b, i, n, own buf, count) with !Mutate = if i >= n {
+  slice(buf, 0, count)
+} else {
+  let x = list_index(b, i)
+  let at = name_set_prefix_index(buf, count, x)
+  if at >= 0 {
+    let held = list_index(buf, at)
+    let upgraded = match (held, x) {
+      (ENamed(_), EParameterized(_, _)) => list_set(buf, at, x),
+      _ => buf,
     }
+    name_set_union_rest(b, i + 1, n, upgraded, count)
+  } else {
+    name_set_union_rest(b, i + 1, n, list_set(buf, count, x), count + 1)
   }
 }
 
@@ -741,15 +781,14 @@ fn name_set_intersect(ref a, ref b) with !Mutate = {
   name_set_intersect_into(a, b, 0, n, make_list(n), 0)
 }
 
-fn name_set_intersect_into(ref a, ref b, i, n, own buf, count) with !Mutate = {
-  if i >= n { slice(buf, 0, count) }
-  else {
-    let x = list_index(a, i)
-    if name_set_contains(b, x) {
-      name_set_intersect_into(a, b, i + 1, n, list_set(buf, count, x), count + 1)
-    } else {
-      name_set_intersect_into(a, b, i + 1, n, buf, count)
-    }
+fn name_set_intersect_into(ref a, ref b, i, n, own buf, count) with !Mutate = if i >= n {
+  slice(buf, 0, count)
+} else {
+  let x = list_index(a, i)
+  if name_set_contains(b, x) {
+    name_set_intersect_into(a, b, i + 1, n, list_set(buf, count, x), count + 1)
+  } else {
+    name_set_intersect_into(a, b, i + 1, n, buf, count)
   }
 }
 
@@ -757,61 +796,63 @@ fn name_set_diff(ref a, ref b) with !Mutate = {
   let n = len(a)
   // Identity fast paths: ∅ ∖ Y = ∅; X ∖ ∅ = canonical X (zero-alloc when
   // X already is — ef_make's absent-minus-present with empty present).
-  if n == 0 { a }
-  else if len(b) == 0 { name_set_canonicalize(a) }
-  else { name_set_diff_into(a, b, 0, n, make_list(n), 0) }
-}
-
-fn name_set_diff_into(ref a, ref b, i, n, own buf, count) with !Mutate = {
-  if i >= n { slice(buf, 0, count) }
-  else {
-    let x = list_index(a, i)
-    if name_set_contains(b, x) {
-      name_set_diff_into(a, b, i + 1, n, buf, count)
-    } else {
-      name_set_diff_into(a, b, i + 1, n, list_set(buf, count, x), count + 1)
-    }
+  if n == 0 {
+    a
+  } else if len(b) == 0 {
+    name_set_canonicalize(a)
+  } else {
+    name_set_diff_into(a, b, 0, n, make_list(n), 0)
   }
 }
 
-fn name_set_subset(ref sub, ref sup) with !Mutate = {
-  name_set_subset_loop(sub, sup, 0, len(sub))
+fn name_set_diff_into(ref a, ref b, i, n, own buf, count) with !Mutate = if i >= n {
+  slice(buf, 0, count)
+} else {
+  let x = list_index(a, i)
+  if name_set_contains(b, x) {
+    name_set_diff_into(a, b, i + 1, n, buf, count)
+  } else {
+    name_set_diff_into(a, b, i + 1, n, list_set(buf, count, x), count + 1)
+  }
 }
 
-fn name_set_subset_loop(ref sub, ref sup, i, n) with !Mutate = {
-  if i >= n { true }
-  else if name_set_contains(sup, list_index(sub, i)) {
-    name_set_subset_loop(sub, sup, i + 1, n)
-  } else { false }
+fn name_set_subset(ref sub, ref sup) with !Mutate = name_set_subset_loop(sub, sup, 0, len(sub))
+
+fn name_set_subset_loop(ref sub, ref sup, i, n) with !Mutate = if i >= n {
+  true
+} else if name_set_contains(sup, list_index(sub, i)) {
+  name_set_subset_loop(sub, sup, i + 1, n)
+} else {
+  false
 }
 
-fn name_set_eq(ref a, ref b) with !Mutate = {
-  if len(a) != len(b) { false }
-  else { name_set_subset(a, b) }
-}
+fn name_set_eq(ref a, ref b) with !Mutate =
+  if len(a) != len(b) { false } else { name_set_subset(a, b) }
 
-fn name_set_contains(ref set, ref name) with !Mutate = {
+fn name_set_contains(ref set, ref name) with !Mutate =
   name_set_contains_loop(set, name, 0, len(set))
-}
 
-fn name_set_contains_loop(ref set, ref name, i, n) with Memory = {
-  if i >= n { false }
-  // Match by NAME, exactly as the negation gate does (name_in_forbidden,
-  // forbidden_names_disjoint) — the value-layer `==` FLOORS to pointer-eq
-  // here because list_index erases the element to a word (the untyped list
-  // has no type to dispatch structural EffName equality on), and two
-  // byte-equal ENamed("Memory") minted at distinct source sites are
-  // distinct heap objects. The old `==` claimed pointer-eq was "adequate
-  // for dedup/subset where names are interned-identical" — MEASURED FALSE:
-  // it broke set-dedup, so ~422/598 self-compile rows carried duplicate
-  // names (Memory+Memory+Memory) whose open tail never closed and hit
-  // row_subsumes' `_ => false`. By-name identity across sites fixes dedup
-  // AND subset. (The ultimate form is EffName-is-a-handle — intern names to
-  // handles at the decl so this is i32.eq-on-identity and the whole by-name
-  // family dissolves; that closes the parameterized residue str_eq conflates
-  // — Hβ.effects.parameterized-negation-instance — and is §5.O layer 1.)
-  else if eff_name_handle(list_index(set, i)) == eff_name_handle(name) { true }
-  else { name_set_contains_loop(set, name, i + 1, n) }
+fn name_set_contains_loop(ref set, ref name, i, n) with Memory = if i >= n {
+  false
+}
+// Match by NAME, exactly as the negation gate does (name_in_forbidden,
+// forbidden_names_disjoint) — the value-layer `==` FLOORS to pointer-eq
+// here because list_index erases the element to a word (the untyped list
+// has no type to dispatch structural EffName equality on), and two
+// byte-equal ENamed("Memory") minted at distinct source sites are
+// distinct heap objects. The old `==` claimed pointer-eq was "adequate
+// for dedup/subset where names are interned-identical" — MEASURED FALSE:
+// it broke set-dedup, so ~422/598 self-compile rows carried duplicate
+// names (Memory+Memory+Memory) whose open tail never closed and hit
+// row_subsumes' `_ => false`. By-name identity across sites fixes dedup
+// AND subset. (The ultimate form is EffName-is-a-handle — intern names to
+// handles at the decl so this is i32.eq-on-identity and the whole by-name
+// family dissolves; that closes the parameterized residue str_eq conflates
+// — Hβ.effects.parameterized-negation-instance — and is §5.O layer 1.)
+else if eff_name_handle(list_index(set, i)) == eff_name_handle(name) {
+  true
+} else {
+  name_set_contains_loop(set, name, i + 1, n)
 }
 
 // Statically proves FV.1.γ (Lone Effect Negation). Declares `with !Mutate`; the

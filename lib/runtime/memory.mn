@@ -13,7 +13,7 @@
 //
 // This is the single source of truth for substrate operations.
 // If an operation isn't declared here, it doesn't exist.
-
+//
 // Memory — linear memory read/write. Operations on WASM's linear
 // memory. Each maps to one instruction. The developer writes the
 // intent; the substrate emits the opcode.
@@ -35,21 +35,25 @@ effect Cast {
 
 effect Memory {
   // 32-bit store/load — full i32 word at address
-  store_i32(Int, Int) -> ()   // (addr, value)
-  load_i32(Int) -> Int   // (addr) -> value
-
+  //
+  // (addr, value)
+  store_i32(Int, Int)
+  // (addr) -> value
+  load_i32(Int) -> Int
   // 8-bit store/load — single byte at address
-  store_i8(Int, Int) -> ()   // (addr, byte)
-  load_i8(Int) -> Int   // (addr) -> byte (0-255)
-
+  //
+  // (addr, byte)
+  store_i8(Int, Int)
+  // (addr) -> byte (0-255)
+  load_i8(Int) -> Int
   // Bulk memory copy — src to dst, n bytes
-  mem_copy(Int, Int, Int) -> ()   // (dst, src, n)
-
+  //
+  // (dst, src, n)
+  mem_copy(Int, Int, Int)
   // The live world — the top of the install chain ($world_g; emit projects
   // the global read, the heap_mark shape). 0 = the empty world. A Memory
   // read, not an Alloc verb: the perform path reads it on every dispatch.
   world_top() -> Int
-
   // The fork boundary's world reset — the fork pair's THIRD leg (graph
   // checkpoint + heap region + world). Writes $world_g back to a value
   // world_top() returned at the fork point. NOT a general setter: its one
@@ -58,14 +62,15 @@ effect Memory {
   // the region). Everywhere else the world's writers stay the emitted
   // pushes and bracket restores.
   world_restore(Int)
-
   // 64-bit float store/load — the WIDE-value boundary pair (§5.U): a wide
   // value crosses the word altitude BY REFERENCE (its address is a word, a
   // handle IS a word); these two ops are the deref/ref that cash the native
   // width at a typed site. Project 1:1 to f64.load / f64.store.
-  store_f64(Int, Float) -> ()   // (addr, value)
-  load_f64(Int) -> Float   // (addr) -> value
-
+  //
+  // (addr, value)
+  store_f64(Int, Float)
+  // (addr) -> value
+  load_f64(Int) -> Float
   // ─── The rooted-image persist substrate (§4④: persist = memcpy) ────
   // The image [0, heap-line) plus the mutable globals IS the whole program
   // state (wasm call frames live engine-side, outside linear memory), so a
@@ -85,26 +90,30 @@ effect Memory {
   // globals_save — write every mutable global to an 8-byte-slot record at
   // dst. Slot 0 is the heap line (the persist packer patches it to the
   // image extent so restore rewinds allocation to the persisted moment).
-  globals_save(Int) -> ()
+  globals_save(Int)
   // image_restore — the whole-image swap: stage the wire's globals+image
   // above both heaps, copy the image down over [0, size), restore the
   // globals, return the wire's named continuation address. Raw preamble
   // choreography (no allocation may interleave; the caller's heap values
   // die under it — read everything you need into locals first).
   image_restore(Int) -> Int
-
   // Integer XOR — two i32 values, returns i32
   // Lowers to WASM's i32.xor. Not a bitwise operator in the
   // language — a substrate primitive. Used by hash functions.
-  i32_xor(Int, Int) -> Int   // (a, b) -> a XOR b
-
+  //
+  // (a, b) -> a XOR b
+  i32_xor(Int, Int) -> Int
   // The XOR's siblings — i32.or / i32.and / i32.shl, the same substrate
   // projection. Bitwise verbs for hash mixing and flag projection; the
   // world rides continuation records as a HANDLE now (R4), so no tag
   // arithmetic is load-bearing here.
-  i32_or(Int, Int) -> Int    // (a, b) -> a OR b
-  i32_and(Int, Int) -> Int   // (a, b) -> a AND b
-  i32_shl(Int, Int) -> Int   // (a, n) -> a << (n mod 32)
+  //
+  // (a, b) -> a OR b
+  i32_or(Int, Int) -> Int
+  // (a, b) -> a AND b
+  i32_and(Int, Int) -> Int
+  // (a, n) -> a << (n mod 32)
+  i32_shl(Int, Int) -> Int
 }
 
 // Alloc — heap allocation. Bump allocator in WASM linear memory.
@@ -117,7 +126,7 @@ effect Memory {
 // this distinction is load-bearing for real-time audio paths where
 // allocation is forbidden.
 effect Alloc {
-  alloc(Int) -> Int   // (size) -> ptr
+  // (size) -> ptr
   // The REGION verbs — the arena's first grain (§5.O layer 3). A batch
   // boundary (one micro's compile inside `mentl test`, one decl inside the
   // future per-decl arena) marks the bump pointer, does its work, and resets:
@@ -126,12 +135,14 @@ effect Alloc {
   // regardless of its predecessors. Reset to a mark you did not take (or
   // with live handles above it) is the caller's ownership obligation — the
   // same contract every region system carries.
+  alloc(Int) -> Int
   heap_mark() -> Int
-  heap_reset(Int)   // rewinds AND zeroes [mark, bump): the post-reset world is
-                    // bit-identical to the never-allocated world, so every
-                    // zero-read (the Option-niche slot_present, unwritten
-                    // make_list slots) stays true under reuse — virginity is
-                    // the reset's CONTRACT, not monotonicity's accident
+  // rewinds AND zeroes [mark, bump): the post-reset world is
+  // bit-identical to the never-allocated world, so every
+  // zero-read (the Option-niche slot_present, unwritten
+  // make_list slots) stays true under reuse — virginity is
+  // the reset's CONTRACT, not monotonicity's accident
+  heap_reset(Int)
 }
 
 // Pure — the empty effect row. Pure is not an effect with operations
@@ -148,7 +159,7 @@ effect Alloc {
 // fn add(a, b) with Pure = a + b
 //   → performs nothing; row is the empty closed triple; type checker enforces
 //     that the body contains no perform statements.
-
+//
 // ─── The evidence read IS the world walk (the world-as-value arc) ────────
 // The live install chain — [key@0][entry@4][parent@8][install_world@12]
 // [hkey@16] nodes consed by every install's $world_push (hkey = the interned
@@ -167,10 +178,12 @@ effect Alloc {
 // hand: the sought key's interned offset goes to scratch word 0 (the
 // postmortem window), then a deterministic out-of-bounds load traps — the
 // backtrace names the perform site, the scratch word the effect.
-fn world_find_from(n, target) with Memory = {
-  if n == 0 { 0 }
-  else if load_i32(n) == target { n }
-  else { world_find_from(load_i32(n + 8), target) }
+fn world_find_from(n, target) with Memory = if n == 0 {
+  0
+} else if load_i32(n) == target {
+  n
+} else {
+  world_find_from(load_i32(n + 8), target)
 }
 
 // `top` arrives as an ARGUMENT — the perform site's emit passes
@@ -189,6 +202,7 @@ fn ev_perform_node(top, target) with Memory = {
     // is in bounds there, so a miss returned virgin 0 and the broken
     // promise cascaded to a garbage dispatch far from this site.
     load_i32(0 - 1)
+  } else {
+    node
   }
-  else { node }
 }

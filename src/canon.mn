@@ -5,7 +5,6 @@
 // pre-registered — the order-independence capability is the
 // Hβ.infer.order-independent-verdicts let-face; when it lands, the
 // placement constraint dissolves and this stays the semantic home).
-
 import types
 
 // THE ONE String — §4① made total: "String" IS this single canonical

@@ -9,7 +9,6 @@
 // (`<|` ref-borrows one shared input; `><` own-consumes independent
 // inputs), never serial-vs-parallel. Output tuple order is source order
 // regardless of completion order — determinism is the verb's.
-
 import types
 
 // ThreadHandle — the spawn's task record, banked whole. Under
@@ -19,7 +18,6 @@ import types
 // result through it. Under sequential_compose the payload is the index
 // into the handler's results state. Opaque to consumers; `own` to the
 // spawn site.
-
 type ThreadHandle = ThreadHandle(Int)
 
 // Thread — spawn/join/identity. Both spawn and join are OneShot: forking
@@ -27,10 +25,9 @@ type ThreadHandle = ThreadHandle(Int)
 // Thread. current_id answers 0 on the root instance and the host thread
 // id inside a spawned one — a per-instance fact ($tid_g, stamped by the
 // thread entry), which is what makes it answerable at all.
-
 effect Thread {
-  spawn(task: () -> a) -> ThreadHandle
-  thread_join(handle: ThreadHandle) -> a
+  spawn(() -> a) -> ThreadHandle
+  thread_join(ThreadHandle) -> a
   current_id() -> Int
 }
 
@@ -39,15 +36,14 @@ effect Thread {
 // handler arm exists or is needed — the name IS the op identity.
 // `!SharedMemory` proves no cross-instance synchronization; `Pure +
 // !SharedMemory` is the strictest parallelizable-no-sync contract.
-
 effect SharedMemory {
-  atomic_load_i32(addr: Int) -> Int
-  atomic_store_i32(addr: Int, val: Int) -> ()
-  atomic_rmw(addr: Int, op: RmwOp, val: Int) -> Int
-  atomic_cmpxchg(addr: Int, expected: Int, replacement: Int) -> Int
-  wait_i32(addr: Int, expected: Int, timeout_ns: Int) -> WaitResult
-  notify(addr: Int, count: Int) -> Int
-  fence() -> ()
+  atomic_load_i32(Int) -> Int
+  atomic_store_i32(Int, Int)
+  atomic_rmw(Int, RmwOp, Int) -> Int
+  atomic_cmpxchg(Int, Int, Int) -> Int
+  wait_i32(Int, Int, Int) -> WaitResult
+  notify(Int, Int) -> Int
+  fence()
 }
 
 // RmwOp — the single-operand read-modify-write opcodes, an ADT whose
@@ -55,24 +51,13 @@ effect SharedMemory {
 // the nullary-ctor tag: RmwAdd=0 … RmwXchg=5). cmpxchg is NOT here — it
 // takes two operands (expected, replacement), which the one-operand rmw
 // shape cannot express; it is its own op, atomic_cmpxchg.
-
-type RmwOp
-  = RmwAdd
-  | RmwSub
-  | RmwAnd
-  | RmwOr
-  | RmwXor
-  | RmwXchg
+type RmwOp = RmwAdd | RmwSub | RmwAnd | RmwOr | RmwXor | RmwXchg
 
 // WaitResult — wait_i32's outcome. The declaration order IS the
 // memory.atomic.wait32 ABI (0 = notified, 1 = expected mismatch at wait
 // time, 2 = timeout): a nullary ctor is its tag word, so the
 // instruction's result IS the value — reorder this and the surface lies.
-
-type WaitResult
-  = WOk
-  | WNotEqual
-  | WTimedOut
+type WaitResult = WOk | WNotEqual | WTimedOut
 
 // WasiThreads — the substrate crossing, three direct-instruction ops
 // (is_wasi_import_op; no handler exists). spawn_task allocates the task
@@ -85,10 +70,9 @@ type WaitResult
 // word face (a wide value crosses by reference into the shared image —
 // the spawning module's allocator is the shared cell, so every record a
 // task allocates is readable from every instance).
-
 effect WasiThreads {
-  spawn_task(task: () -> a) -> Int
-  join_task(record: Int) -> a
+  spawn_task(() -> a) -> Int
+  join_task(Int) -> a
   thread_id() -> Int
 }
 
@@ -97,36 +81,29 @@ effect WasiThreads {
 // spawn's whole state, banked in the ThreadHandle the caller owns (a
 // handler-side ledger of handles would be a write-only re-derivation of
 // what the caller already carries).
-
 handler parallel_compose {
   spawn(task) => resume(ThreadHandle(spawn_task(task))),
-
-  thread_join(handle) => {
-    let ThreadHandle(record) = handle
-    resume(join_task(record))
+  thread_join(handle) => match handle {
+    ThreadHandle(record) => resume(join_task(record)),
   },
-
-  current_id() => resume(thread_id())
+  current_id() => resume(thread_id()),
 }
 
 // sequential_compose — the same Thread surface at degree 1: spawn runs
 // the task inline and banks the result; join reads it back by index.
 // The results state is load-bearing here (spawn writes, join reads) —
 // the sequential twin of the task record.
-
 handler sequential_compose with results = [] {
   spawn(task) => {
-    let result = task()  // drift-audit: ignore — task() is effectful; result feeds the with-clause's push, not chain-position
+    // drift-audit: ignore — task() is effectful; result feeds the with-clause's push, not chain-position
+    let result = task()
     let handle = ThreadHandle(len(results))
     resume(handle) with results = push(results, result)
   },
-
-  thread_join(handle) => {
-    let ThreadHandle(idx) = handle
-    resume(list_index(results, idx))
+  thread_join(handle) => match handle {
+    ThreadHandle(idx) => resume(list_index(results, idx)),
   },
-
-  current_id() => resume(0)
+  current_id() => resume(0),
 }
 
 // ─── Connection to the kernel ─────────────────────────────────────────
@@ -151,3 +128,4 @@ handler sequential_compose with results = [] {
 // (SharedMemory is opt-in via the row; `!SharedMemory` is proof of its
 // absence); string-keyed rmw dispatch (RmwOp is the ADT and its decl
 // order the table).
+

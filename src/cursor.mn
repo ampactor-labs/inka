@@ -653,7 +653,7 @@ fn pipe_position_in(target, body) with Pure = match body {
 fn propose_at(h, k) with EnvRead + GraphRead + Memory + Alloc + Synth + !Mutate = {
   if authored_hole(h) {
     let ctx = mentl_context_at(h)
-    let Context(_, allowed, _) = ctx
+    let Context(_, allowed, _, _) = ctx
     synth_propose(ty_of_kind(h, k), allowed, ctx)
   } else { Proposals([], []) }
 }
@@ -668,12 +668,13 @@ fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + Alloc + !Mutate 
   // fn, the node's own row stands and the name is "".
   let Env(scope_bindings) = env_snapshot()
   let GNode(kind, _) = graph_chase(handle)
+  let hole_span = parse_span_of(handle)
   match enclosing_fn_decl_at(handle) {
     Some(decl) => {
       let (fname, effs) = decl
-      Context(scope_bindings, build_declared_row(effs), fname)
+      Context(scope_bindings, build_declared_row(effs), fname, hole_span)
     },
-    None => Context(scope_bindings, row_of_kind(kind), "")
+    None => Context(scope_bindings, row_of_kind(kind), "", hole_span)
   }
 }
 
@@ -693,6 +694,19 @@ fn enclosing_fn_scan(target, i, n, best, best_area) with GraphRead + Memory + Al
   else {
     match graph_node_body(i) {
       NStmt(FnStmt(name, _params, _ret, effs, _body)) => {
+        // SPANS CANNOT RESOLVE CONTAINMENT (measured 2026-07-28): a
+        // decl's parse span is head-only (anchored at the binder name)
+        // AND the body node's own span is head-anchored too (a
+        // three-line fn's body span measured 5:32-5:33 — two columns),
+        // so this check fires only when head and hole share a line —
+        // single-line bodies. For multi-line bodies the enclosing
+        // resolves "" and the vocabulary's nontermination guard does
+        // not fire (a hole inside a fn can propose the fn itself).
+        // The true form is TREE containment — is the hole a descendant
+        // of the fn's body node — which needs the child-handle
+        // projection made total (oracle's expr_child_handles drops
+        // match arms and stmts today) or the O(1) decl-containment
+        // edge on the node: Hβ.cursor.enclosing-decl-edge, sharpened.
         let dspan = parse_span_of(i)
         if span_contains(dspan, target) && span_area(dspan) < best_area {
           enclosing_fn_scan(target, i + 1, n, Some((name, effs)), span_area(dspan))

@@ -75,7 +75,7 @@ type Proposals
   = Proposals([(Node, Reason)], [(String, Reason)])   // survivors, rejected
 
 type Context
-  = Context([(String, Scheme, Reason, SchemeKind)], EffRow, String)   // scope bindings (the Env's own entries), the LIVE active-effect row, the enclosing decl's name ("" at top level — the vocabulary excludes candidates whose free-name closure reaches it: proposing the hole's own enclosing fn, or anything that transitively calls it, is nontermination by construction).
+  = Context([(String, Scheme, Reason, SchemeKind)], EffRow, String, Span)   // scope bindings (the Env's own entries), the LIVE active-effect row, the enclosing decl's name ("" at top level — the vocabulary excludes candidates whose free-name closure reaches it: proposing the hole's own enclosing fn, or anything that transitively calls it, is nontermination by construction), and the HOLE'S OWN SPAN — the position the proposals are for, the ranker's nearness anchor (candidate_rank reads decl and use nearness against it).
                             // The full Boolean row reaches synth — not a
                             // flattened positive [EffName]. So `!E` (the
                             // negative capability, PLAN §4⑥) is readable at
@@ -504,7 +504,7 @@ fn teach_synthesize(hole_handle, context) = {
   let GNode(kind, _) = graph_chase(hole_handle)
   match kind {
     NBound(ty) => {
-      let Context(_, allowed, _) = context
+      let Context(_, allowed, _, _) = context
       let Proposals(survivors, _rejected) = synth_propose(ty, allowed, context)
       if len(survivors) == 1 { Some(head(survivors)) }
       else { None }

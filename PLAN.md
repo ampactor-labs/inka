@@ -1092,6 +1092,36 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶ THE RANKER READS LOCAL INTENT — cost gets its first
+  reader; the Arc 4 pull-forward lands (· pin 3b69fb7d). Every
+  candidate carried `cost: Float // gradient-rank score` with fourteen
+  literal writers and ZERO readers — the resume_kinds pattern at the
+  fan: survivors surfaced in enumeration order while the field claimed
+  a gradient. candidate_rank replaces the vocabulary literal with a SUM
+  of graph reads (§5's felt endpoint, executed): the decl's nearness
+  read from the env entry's own Located reason, plus every existing USE
+  of the name weighted by its nearness to the hole (refs_of_name — the
+  refs facet's collector — through the ONE scope_distance_decay), both
+  against the hole's span, which Context now carries as its fourth
+  field (the intent carrier finally knows WHERE; five sites, the arity
+  census caught none missed). rank_sort is a stable insertion, highest
+  first, applied once before map_to_proposals; a constraint-tie still
+  teaches — rank orders, never guesses. THE DISCRIMINATING GATE
+  (mn-ranker-local-intent, frontier leg): kerning declared BEFORE width
+  so enumeration and rank disagree — the pre-ranker boot surfaces
+  kerning() first, this pin surfaces width() first (one use edge in the
+  enclosing body outranking both decl orders). THE WALK'S CONVICTION,
+  probe-graduated: the vocabulary's nontermination guard is DEAD for
+  multi-line bodies — a hole inside banner proposed banner() and
+  main() — because spans cannot resolve containment (decl parse spans
+  are head-only AND the body node's own span is head-anchored, measured
+  5:32-5:33 for a three-line body; the one-line-body fixtures were the
+  accident that hid it). The true form is TREE containment via a TOTAL
+  child-handle projection (oracle's expr_child_handles drops match arms
+  and has no stmt sibling — the consolidation is the next single;
+  Hβ.cursor.enclosing-decl-edge sharpened with the measurements).
+  CLEAN m2 == m3 at 324,035 lines; census 0; comment-refs 0; frontier
+  286/0; proof-exactness 9/9; crown 5/5.
 - 2026-07-28 · ▶ THE POSITIONING WRITEUP — Arc 2 closes (no re-pin —
   docs only). docs/POSITIONING.md states the category claim and both
   wedges with every claim's command inline, each re-run against the

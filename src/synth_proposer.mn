@@ -66,6 +66,8 @@ import parser
 import infer
 import lower
 import egraph
+import cursor
+import query
 
 // ─── ProposerKind — which proposer in the chain emitted a candidate ─
 
@@ -117,7 +119,7 @@ handler synth_default with !Mutate {
     let (vocab, rejected) = enumerate_vocabulary_calls(target_ty, allowed_effects, context)
     let enriched = concat_candidates(vocab, enumerate_typed(target_ty, allowed_effects, context))
     let verified = verify_each_enriched(enriched, target_ty)
-    resume(Proposals(verified |> map_to_proposals, rejected))
+    resume(Proposals(verified |> rank_sort |> map_to_proposals, rejected))
   },
 
   verify_candidate(candidate, target_ty) => {
@@ -229,10 +231,10 @@ fn concat_candidates(a: [EnrichedCandidate], b: [EnrichedCandidate]) -> [Enriche
 // call-edge index (Hβ.synth.vocabulary-reach-index).
 fn enumerate_vocabulary_calls(target_ty, allowed_row, context)
     with GraphRead + GraphWrite + Intern + Alloc + Memory + !Mutate = {
-  let Context(scope_bindings, _active, enclosing) = context
+  let Context(scope_bindings, _active, enclosing, hole_span) = context
   fold(([], []), (acc, entry) => {
     let (accepted, rejected) = acc
-    let (name, scheme, _reason, kind) = entry
+    let (name, scheme, reason, kind) = entry
     match kind {
       FnScheme => match scheme {
         Forall(_, TFun(params, ret, row)) =>
@@ -240,7 +242,7 @@ fn enumerate_vocabulary_calls(target_ty, allowed_row, context)
              && vocabulary_ret_matches(ret, target_ty)
              && !reaches_decl(name, enclosing, []) {
             if row_subsumes(row, allowed_row) {
-              (accepted ++ [vocabulary_call_candidate(name, row, allowed_row)], rejected)   // drift-audit: ignore — bounded by the in-scope zero-arg vocabulary, not a loop accumulator
+              (accepted ++ [vocabulary_call_candidate(name, row, allowed_row, reason, hole_span)], rejected)   // drift-audit: ignore — bounded by the in-scope zero-arg vocabulary, not a loop accumulator
             } else {
               (accepted,
                rejected ++ [(name, Inferred("performs {show_effrow(row)} — refused by the target row {show_effrow(allowed_row)}"))])   // drift-audit: ignore — bounded by the in-scope zero-arg vocabulary, not a loop accumulator
@@ -264,14 +266,50 @@ fn vocabulary_ret_matches(ret, target_ty) with Pure = match target_ty {
   _ => same_ground(ret, target_ty)
 }
 
-fn vocabulary_call_candidate(name, row, allowed_row)
+fn vocabulary_call_candidate(name, row, allowed_row, decl_reason, hole_span)
     with GraphRead + GraphWrite + Intern + !Mutate + Alloc + Memory = {
   EnrichedCandidate({
     node:    synth_node(CallExpr(synth_node(VarRef(name)), [])),
     reason:  Inferred("an in-scope call {name}() — row {show_effrow(row)} admitted by {show_effrow(allowed_row)}"),
     origin:  ProposerEnumerative,
-    cost:    0.2
+    cost:    candidate_rank(name, decl_reason, hole_span)
   })
+}
+
+// candidate_rank — the gradient reading LOCAL intent (PLAN §5's felt
+// endpoint: the Reason chains carrying upstream why, proximity, the
+// in-scope vocabulary). The rank is a SUM of graph reads, never a
+// learned weight: the decl's nearness to the hole, plus every existing
+// USE of the name weighted by its own nearness — vocabulary already
+// flowing near the hole is the strongest prior; an unused far name
+// sinks toward the base. The base 0.5 keeps ranked vocabulary level
+// with the shape enumerators' tiers until a real signal lifts it. This
+// is the field's FIRST reader — cost was a write-only literal before
+// (the resume_kinds pattern: a score claiming gradient-ness that read
+// nothing).
+fn candidate_rank(name, decl_reason, hole_span)
+    with GraphRead + !Mutate + Alloc + Memory = {
+  let decl_near = scope_distance_decay(hole_span, caret_span_from_reason(decl_reason))
+  let use_near = fold(0.0, (acc, s) => acc + scope_distance_decay(hole_span, s), refs_of_name(name))
+  0.5 + decl_near + use_near
+}
+
+// rank_sort — survivors ordered by cost, highest first: an insertion
+// build (the survivor set is small by construction — the in-scope
+// zero-arg vocabulary plus the shape enumerators). The ORDER is the
+// only thing rank decides; a constraint-tie still teaches (the render's
+// collapse line is unchanged — rank is a prior, never a guess).
+fn rank_sort(cands) with Memory + Alloc = fold([], (acc, c) => rank_insert(acc, c), cands)
+
+fn rank_insert(sorted, c) with Memory + Alloc = {
+  match sorted {
+    [] => [c],
+    [h, ...rest] => {
+      let EnrichedCandidate(cr) = c
+      let EnrichedCandidate(hr) = h
+      if cr.cost > hr.cost { [c] ++ sorted } else { [h] ++ rank_insert(rest, c) }   // drift-audit: ignore — insertion into the small survivor list, not a loop accumulator
+    }
+  }
 }
 
 // Does `name`'s free-name closure reach `target`? collect_free_vars

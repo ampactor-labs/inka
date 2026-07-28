@@ -1610,6 +1610,19 @@ for i in "${!compilers[@]}"; do
   else
     fail "mcp error contract (see $mcp_dir/out.jsonl)"
   fi
+  # ── the intent ranker — survivors ordered by local intent ──────────
+  # candidate_rank reads the graph (decl nearness + use-edge nearness
+  # against the hole's span, now carried on Context): a name already
+  # USED near the hole outranks earlier-declared unused siblings. Seen
+  # RED on the pre-ranker boot: kerning() surfaced first (enumeration
+  # order); the rank lifts width() (one use edge in the enclosing body).
+  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT::." "$compiler" tests/frontier/mn-ranker-local-intent.mn:10:15 >"$dir/ranker.out" 2>/dev/null
+  first_survivor=$(grep -A1 'Propose:' "$dir/ranker.out" | tail -1)
+  if printf '%s' "$first_survivor" | grep -q 'width()'; then
+    pass "ranker: local intent lifts the used name (width first)"
+  else
+    fail "ranker order (first survivor: $first_survivor)"
+  fi
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

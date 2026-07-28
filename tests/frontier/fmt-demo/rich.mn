@@ -14,12 +14,26 @@ fn describe(x, tag) = "{tag}: {x}"
 // class needs (the lambda-param field read is that class's repro shape).
 fn level_plus(a, b: {kind: String, level: Int}) = a + b.level
 
+// The destructure-param lambda: the render must re-sugar the desugared
+// machine form back to the authored pattern (a canonical page never
+// bakes minted names), and the prose-carrying tuple below must hold the
+// vertical layout so each label stays glued to its own element.
+fn spread(f, pair) = f(pair)
+
 fn main() = {
   let base = {kind: "b", level: 2}
   let lifted = {...base, level: 3}
   let g = (n) => n + 1
   let (lo, hi) = (1, pick(Bright(40)))
+  let both = spread(((a, b)) => a + b, (lo, hi))
+  let labeled = (
+    // the low end
+    lo,
+    // the high end
+    hi
+  )
+  let (l2, _) = labeled
   let sharp = g((lo + hi) * 2) - (hi - lo) - 1
   describe(level_plus(lo, lifted) + hi, "sum")
-  sharp + level_plus(lo, lifted) - 5
+  sharp + level_plus(lo, lifted) - 5 + both - hi - l2
 }

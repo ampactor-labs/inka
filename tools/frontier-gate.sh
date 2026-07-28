@@ -1409,6 +1409,15 @@ for i in "${!compilers[@]}"; do
   else
     fail "fmt idempotence"
   fi
+  # The re-sugar: the fixture's destructure-param lambda must render as
+  # its authored pattern, never the desugared __dp<handle> machine form
+  # (seen RED on the pre-resugar wheel: the fan's labeled branches baked
+  # minted names and the labels migrated one arm per pass).
+  if ! grep -q '__dp' "$fdemo2/rich.mn" && grep -q '((a, b)) =>' "$fdemo2/rich.mn"; then
+    pass "fmt re-sugars the destructure lambda (no __dp in the canonical page)"
+  else
+    fail "fmt destructure re-sugar (see $fdemo2/rich.mn)"
+  fi
   # The annotation carry expects the SURFACE-canonical spelling — the
   # authored `{kind: String, level: Int}` byte-for-byte (space-free,
   # parse-sorted). The earlier banked `{ level: Int, kind: String }` was

@@ -83,12 +83,22 @@ while IFS=$'\t' read -r mode_num mode_name regex scope notes; do
     esac
     [[ ${#scan_files[@]} -eq 0 ]] && continue
 
-    # GNU grep -E with line numbers. Suppressions: drop lines that contain
-    # `drift-audit: ignore` on the same line.
+    # GNU grep -E with line numbers. Suppressions: drop lines that carry
+    # `drift-audit: ignore` on the same line, OR whose PREVIOUS line is a
+    # marker-only comment (the leading position `mentl fmt` renders a
+    # trailing comment into — canonical layout moves prose above its
+    # statement, so the marker must suppress the line it now precedes).
     matches=$(grep -nE --color=never "$regex" "${scan_files[@]}" 2>/dev/null || true)
     [[ -z "$matches" ]] && continue
 
-    filtered=$(printf '%s\n' "$matches" | grep -vE 'drift-audit:\s*ignore' || true)
+    filtered=$(printf '%s\n' "$matches" | grep -vE 'drift-audit:\s*ignore' | while IFS=: read -r mf ml mrest; do
+        [[ -z "$mf" || -z "$ml" ]] && continue
+        prev=$((ml - 1))
+        if [[ $prev -ge 1 ]] && sed -n "${prev}p" "$mf" 2>/dev/null | grep -qE '^[[:space:]]*(//|#).*drift-audit:[[:space:]]*ignore'; then
+            continue
+        fi
+        printf '%s:%s:%s\n' "$mf" "$ml" "$mrest"
+    done || true)
     [[ -z "$filtered" ]] && continue
 
     count=$(printf '%s\n' "$filtered" | grep -c . || true)

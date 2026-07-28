@@ -1043,6 +1043,25 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · THE ABSENCE BENCHMARK PUBLISHES (the category ship's
+  first deliverable; no re-pin — benchmark artifact only, the wheel
+  untouched). benchmarks/absence: thirteen self-contained tasks whose
+  first line states the contract (`// expect: PROVE` | `REFUSE
+  E_Class`), judged by the pinned wheel itself over solo compiles —
+  eight severance shapes (direct, transitive, the higher-order leak,
+  stored closure, Pure-total, sibling past absorption, branch
+  reachability, the agentic tool-loop cage) against five controls cut
+  from the same shapes (empty body, pure-lambda HOF, five-deep chain,
+  absorbing install, composed !A+!B), so under- and over-refusal both
+  score. Baseline 13/13 with a teaching span on every refusal; the
+  runner is itself a gate (a violated expectation prints the miss and
+  exits nonzero — instrument-checked live). The README names the
+  nearest prior in print (Flix effect exclusion, ICFP'23/OOPSLA'25)
+  and the growth tiers in positive form (instance precision, TIME,
+  !Flow), and states the judge's provenance as verify-by-replay
+  (march to the byte-identical fixpoint). The podium this enters is
+  empty: no current verification benchmark measures proving the
+  negative.
 - 2026-07-28 · ▶▶▶ THE FAN RIDES THE SPAWN — every ?? candidate verifies
   as a REAL branch cursor over the shared image (Arc 1's core: the fused
   oracle's second workload · no re-pin — CLEAN m2 == m3, the wheel's

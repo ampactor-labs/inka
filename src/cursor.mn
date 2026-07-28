@@ -48,6 +48,8 @@ import effects
 
 import mentl
 
+import oracle
+
 import query
 
 import verify
@@ -673,44 +675,45 @@ fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + Alloc + !Mutate 
   },
 }
 
-// The enclosing fn DECLARATION at a handle — the tightest FnStmt whose
-// span contains the handle's MINT span (a reason-span is rebound by the
-// binder; the span weave is the position's truth). O(weave) at felt
+// The enclosing fn DECLARATION at a handle — the innermost FnStmt whose
+// body TREE contains the handle. Spans cannot resolve containment
+// (decl and body parse spans are head-anchored — measured 2026-07-28:
+// a three-line body's span was two columns wide), so the walk descends
+// the tree through the ONE total child projection
+// (body_child_handles). Nesting resolves structurally: a candidate
+// whose own stmt node sits inside the current best's body is the
+// tighter enclosure and replaces it. O(weave × subtree) at felt
 // cadence; the O(1) form is the decl-containment edge on the node
 // (Hβ.cursor.enclosing-decl-edge).
-fn enclosing_fn_decl_at(handle) with GraphRead + Memory + Alloc + !Mutate = {
-  let target = parse_span_of(handle)
-  match graph_snapshot() {
-    Graph(next, _spans) => enclosing_fn_scan(target, 0, next, None, 999999999),
-  }
+fn enclosing_fn_decl_at(handle) with GraphRead + Memory + Alloc + !Mutate = match graph_snapshot() {
+  Graph(next, _spans) => enclosing_fn_scan(handle, 0, next, None),
 }
 
-fn enclosing_fn_scan(target, i, n, best, best_area) with GraphRead + Memory + Alloc + !Mutate = if i >= n {
-  best
+fn enclosing_fn_scan(target, i, n, best) with GraphRead + Memory + Alloc + !Mutate = if i >= n {
+  match best {
+    Some((name, effs, _)) => Some((name, effs)),
+    None => None,
+  }
 } else {
   match graph_node_body(i) {
-    NStmt(FnStmt(name, _params, _ret, effs, _body)) => {
-      // SPANS CANNOT RESOLVE CONTAINMENT (measured 2026-07-28): a
-      // decl's parse span is head-only (anchored at the binder name)
-      // AND the body node's own span is head-anchored too (a
-      // three-line fn's body span measured 5:32-5:33 — two columns),
-      // so this check fires only when head and hole share a line —
-      // single-line bodies. For multi-line bodies the enclosing
-      // resolves "" and the vocabulary's nontermination guard does
-      // not fire (a hole inside a fn can propose the fn itself).
-      // The true form is TREE containment — is the hole a descendant
-      // of the fn's body node — which needs the child-handle
-      // projection made total (oracle's expr_child_handles drops
-      // match arms and stmts today) or the O(1) decl-containment
-      // edge on the node: Hβ.cursor.enclosing-decl-edge, sharpened.
-      let dspan = parse_span_of(i)
-      if span_contains(dspan, target) && span_area(dspan) < best_area {
-        enclosing_fn_scan(target, i + 1, n, Some((name, effs)), span_area(dspan))
+    NStmt(FnStmt(name, _params, _ret, effs, body)) =>
+      if node_contains_handle(node_handle(body), target) {
+        match best {
+          None => enclosing_fn_scan(target, i + 1, n, Some((name, effs, i))),
+          Some((bn, be, bi)) => // both contain the hole — the nested one wins: this decl's own
+          // stmt node inside the standing best's body means THIS is the
+          // inner declaration (a nested declaration is hoisted letrec
+          // sugar; its FnStmt node is a child of the outer body).
+          if node_contains_handle(bi, i) {
+            enclosing_fn_scan(target, i + 1, n, Some((name, effs, i)))
+          } else {
+            enclosing_fn_scan(target, i + 1, n, Some((bn, be, bi)))
+          },
+        }
       } else {
-        enclosing_fn_scan(target, i + 1, n, best, best_area)
-      }
-    },
-    _ => enclosing_fn_scan(target, i + 1, n, best, best_area),
+        enclosing_fn_scan(target, i + 1, n, best)
+      },
+    _ => enclosing_fn_scan(target, i + 1, n, best),
   }
 }
 

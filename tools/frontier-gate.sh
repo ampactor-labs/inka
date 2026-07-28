@@ -1632,6 +1632,15 @@ for i in "${!compilers[@]}"; do
   else
     fail "ranker order (first survivor: $first_survivor)"
   fi
+  # The enclosing-decl guard, tree-descended: a hole inside banner's
+  # multi-line body must not propose banner() (the enclosing fn) nor
+  # main() (whose free names reach banner). Seen RED on the span-blind
+  # boot: both appeared — head-anchored spans cannot resolve containment.
+  if ! grep -q 'banner()' "$dir/ranker.out" && ! grep -q 'main()' "$dir/ranker.out"; then
+    pass "ranker: enclosing-decl containment excludes banner()/main()"
+  else
+    fail "ranker containment (banner/main leaked into the fan; see $dir/ranker.out)"
+  fi
   # ── the splice line carry ──────────────────────────────────────────
   # A splice spanning newlines resumes the outer string scan at the TRUE
   # line, so nodes after it keep truthful spans and the address resolves

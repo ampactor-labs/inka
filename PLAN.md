@@ -1092,6 +1092,29 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶ THE ENCLOSING DECL DESCENDS THE TREE — containment
+  becomes a structural read (the ranker landing's named next single;
+  Hβ.cursor.enclosing-decl-edge's walk half · pin 93be5c52). Spans
+  cannot resolve containment (decl and body parse spans are
+  head-anchored — a three-line body's span measured two columns), so
+  the vocabulary's nontermination guard was DEAD for every multi-line
+  body: a hole inside banner proposed banner() and main(). The
+  child-handle projection is TOTAL now — expr_child_handles gains the
+  match-arm bodies it dropped, stmt_child_handles is its new Stmt
+  sibling (let values, fn bodies, expr stmts, handler state inits and
+  arm bodies; type-level carriers contribute none), and
+  body_child_handles is the ONE dispatch over NodeBody every tree walk
+  reads. enclosing_fn_decl_at descends the tree
+  (node_contains_handle — the hole a descendant of the decl's body
+  node), nesting resolved structurally (a candidate whose own stmt
+  node sits inside the standing best's body is the inner fn and wins);
+  cursor declares its oracle import (the manifest law — the blob
+  census is blind to a missing import the DAG path refuses). Measured
+  on the ranker fixture: 7 survivors → 5, banner() and main() both
+  excluded, width() still first; the frontier leg pins the exclusion
+  (RED on the span-blind boot — both leaked). The O(1) form (the
+  decl-containment edge minted at parse) remains the peer's edge half.
+  CLEAN m2 == m3; census 0.
 - 2026-07-28 · ▶▶ THE SHOW FLOOR CLOSES TO ZERO — the 44-marker census
   swept whole (the splice landing's own residue · pin 09bfedc2). The
   liveness triage ran mechanically on the artifact (floor calls vs twin

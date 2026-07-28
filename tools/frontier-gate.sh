@@ -814,7 +814,7 @@ run_positive_workflow() {
     fail "positive-hole candidate filter (missing exact one-survivor projection)"
   fi
 
-  if grep -Fq 'synth_proposer: integer literal seed' "$EDIT_OUT"; then
+  if grep -Fq "the type's integer inhabitants" "$EDIT_OUT"; then
     pass "positive-hole survivor Reason surfaced"
   else
     fail "positive-hole survivor Reason not surfaced"
@@ -1504,7 +1504,7 @@ for i in "${!compilers[@]}"; do
     fail "cursor-address field (got: $(printf '%s' "$fldout" | head -3); see $dir/field.err)"
   fi
   fout=$(cd "$fdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo" --dir /tmp "$compiler" bit.mn:8:30 2>"$dir/propose-fan.err")
-  if [ $? -eq 0 ] && printf '%s' "$fout" | grep -q '2 proven survivors' && printf '%s' "$fout" | grep -q 'integer literal seed'; then
+  if [ $? -eq 0 ] && printf '%s' "$fout" | grep -q '2 proven survivors' && printf '%s' "$fout" | grep -q "the type's integer inhabitants"; then
     pass "cursor-address fan (both survivors project with Reasons)"
   else
     fail "cursor-address fan (got: $fout; see $dir/propose-fan.err)"

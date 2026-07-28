@@ -1043,6 +1043,24 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · THE PROPOSER SPEAKS THE REGISTER — a synthesized
+  candidate's Reason is genuinely unlocated and speaks the medium's
+  voice (the demo transcript's last two blemishes · pin d6826c2e).
+  All thirteen candidate mints wrapped their Reasons in
+  Located(span_zero(), …) — fabricating a source site for a node the
+  medium synthesized (the ghost the refs facet already filters), while
+  reason_span_or_zero's own doc says unlocated falls back to zero: the
+  mint contradicted the projection it fed, and every survivor line
+  rendered "at 0:0-0:0:". The wrappers DELETE (span-neutral by the
+  fallback's own definition); the eleven "synth_proposer: …" strings —
+  an internal fn name in user-facing text, the substrate-vocabulary
+  rule — re-register as the medium's voice ("the type's integer
+  inhabitants", "the unit type's one inhabitant", "a nested ?? — the
+  shape narrows, the fill recurses"); the two gate assertions pinning
+  the old strings move with them. The survivor line is now
+  "0  — inferred from the type's integer inhabitants". CLEAN
+  m2 == m3 at 321,181 lines (130 smaller — the wrappers gone); census
+  0; comment-refs 0; frontier 281/0; proof-exactness 9/9; crown 5/5.
 - 2026-07-28 · ▶▶ THE RENDER REGISTER — narration scopes to the file
   the user asked about; errors always render (the banked user-path
   flood residue closes; the five-minute demo's DEP · pin 3f889ff5).

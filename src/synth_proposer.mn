@@ -268,8 +268,7 @@ fn vocabulary_call_candidate(name, row, allowed_row)
     with GraphRead + GraphWrite + Intern + !Mutate + Alloc + Memory = {
   EnrichedCandidate({
     node:    synth_node(CallExpr(synth_node(VarRef(name)), [])),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: in-scope call {name}() — row {show_effrow(row)} admitted by {show_effrow(allowed_row)}")),
+    reason:  Inferred("an in-scope call {name}() — row {show_effrow(row)} admitted by {show_effrow(allowed_row)}"),
     origin:  ProposerEnumerative,
     cost:    0.2
   })
@@ -374,8 +373,7 @@ fn ctor_to_enriched_candidate(name, scheme, reason)
     with GraphRead + GraphWrite + !Mutate + Memory + Alloc = {
   EnrichedCandidate({
     node:    synthesize_ctor_call_node(name, scheme),
-    reason:  Located(span_zero(),
-                     VarLookup(name, reason)),
+    reason:  VarLookup(name, reason),
     origin:  ProposerEnumerative,
     cost:    0.5
   })
@@ -388,8 +386,7 @@ fn enumerate_lambdas(params, ret, row, context) with GraphRead + GraphWrite + Me
   let buf = make_list(1)
   let candidate = EnrichedCandidate({
     node:    synthesize_lambda_node(params, ret),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: anonymous-fn shape candidate; body invites recursive synth")),
+    reason:  Inferred("an anonymous fn matching the hole's shape; its body is the next hole"),
     origin:  ProposerEnumerative,
     cost:    0.6
   })
@@ -410,8 +407,7 @@ fn enumerate_int_literals(context) with GraphRead + GraphWrite + Memory + Alloc 
 fn int_literal_candidate(n) with GraphRead + GraphWrite + !Mutate = {
   EnrichedCandidate({
     node:    synthesize_int_literal_node(n),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: integer literal seed")),
+    reason:  Inferred("the type's integer inhabitants"),
     origin:  ProposerEnumerative,
     cost:    0.3
   })
@@ -427,8 +423,7 @@ fn enumerate_float_literals(context) with GraphRead + GraphWrite + Memory + Allo
 fn float_literal_candidate(f) with GraphRead + GraphWrite + !Mutate = {
   EnrichedCandidate({
     node:    synthesize_float_literal_node(f),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: float literal seed")),
+    reason:  Inferred("the type's float inhabitants"),
     origin:  ProposerEnumerative,
     cost:    0.3
   })
@@ -438,8 +433,7 @@ fn enumerate_string_literals(context) with GraphRead + GraphWrite + Memory + All
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_string_literal_node(""),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: empty-string seed")),
+    reason:  Inferred("the type's string inhabitants"),
     origin:  ProposerEnumerative,
     cost:    0.2
   }))
@@ -450,8 +444,7 @@ fn one_unit_candidate(context) with GraphRead + GraphWrite + Memory + Alloc + !M
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_unit_literal_node(),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: unit candidate (TUnit)")),
+    reason:  Inferred("the unit type's one inhabitant"),
     origin:  ProposerEnumerative,
     cost:    0.1
   }))
@@ -464,8 +457,7 @@ fn one_hole_candidate(context) with GraphRead + GraphWrite + Memory + Alloc + !M
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_hole_node(),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: nested ?? candidate")),
+    reason:  Inferred("a nested ?? — the shape narrows, the fill recurses"),
     origin:  ProposerEnumerative,
     cost:    0.4
   }))
@@ -476,8 +468,7 @@ fn one_continuation_candidate(context) with GraphRead + GraphWrite + Memory + Al
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_resume_node(),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: TCont expects resume(...)")),
+    reason:  Inferred("the continuation's own resume(...)"),
     origin:  ProposerEnumerative,
     cost:    0.5
   }))
@@ -488,8 +479,7 @@ fn enumerate_records(fields, context) with GraphRead + GraphWrite + Memory + All
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_record_node(fields),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: record-construction candidate")),
+    reason:  Inferred("the type's record construction"),
     origin:  ProposerEnumerative,
     cost:    0.5
   }))
@@ -501,15 +491,13 @@ fn enumerate_list_candidates(elem, context) with GraphRead + GraphWrite + Memory
   let buf = make_list(2)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_empty_list_node(),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: empty list seed")),
+    reason:  Inferred("the type's list inhabitants — the empty list"),
     origin:  ProposerEnumerative,
     cost:    0.3
   }))
   list_set(buf, 1, EnrichedCandidate({
     node:    synthesize_singleton_list_node(elem),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: singleton list with hole-element")),
+    reason:  Inferred("the type's list inhabitants — one element, itself a hole"),
     origin:  ProposerEnumerative,
     cost:    0.4
   }))
@@ -520,8 +508,7 @@ fn enumerate_tuple_candidates(elems, context) with GraphRead + GraphWrite + Memo
   let buf = make_list(1)
   list_set(buf, 0, EnrichedCandidate({
     node:    synthesize_tuple_node(elems),
-    reason:  Located(span_zero(),
-                     Inferred("synth_proposer: tuple-construction with hole-elements")),
+    reason:  Inferred("the type's tuple construction — each element a hole"),
     origin:  ProposerEnumerative,
     cost:    0.5
   }))

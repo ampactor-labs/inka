@@ -62,6 +62,7 @@ import synth_proposer
 import eight_loop
 import oracle
 import test
+import mcp
 import runtime/io
 // The shipped surface — the stdlib the medium's binary carries whether or
 // not the compiler's own body reaches it: format's verb substrate, the DSP
@@ -106,6 +107,7 @@ type EntryVerb
   | VTeach(Option(String))
   | VRepl
   | VMarch                           // the medium judges its own generation
+  | VMcp                             // the gate on MCP stdio — agents propose, nothing executes unproven
   | VNew(String)                     // project name — required
   | VWith(String, Option(String))    // handler name, optional target
   | VWelcome                         // bare tty invocation / `mentl help` —
@@ -159,6 +161,7 @@ fn verb_specs() with Memory + Alloc = [
   VerbSpec("fmt",     "<path>",            (a) => if len(a) >= 3 { Invocation(VFmt(a[2])) } else { ParseError("fmt needs a target: mentl fmt <path>") }, "render the file canonical — layout is projection, never contract"),
   VerbSpec("repl",    "",                  (a) => Invocation(VRepl),                                                                  "line REPL"),
   VerbSpec("march",   "",                  (a) => Invocation(VMarch),                                                                 "judge the wheel: emit, compare against the last generation, verdict"),
+  VerbSpec("mcp",     "",                  (a) => Invocation(VMcp),                                                                   "the gate on MCP stdio — agents propose, nothing executes unproven"),
   VerbSpec("--with",  "<handler> [path]",  (a) => if len(a) >= 3 { Invocation(VWith(a[2], optional_target(a, 3))) } else { ParseError("--with needs a handler: mentl --with <handler> [path]") }, "install any handler over any verb"),
   VerbSpec("help",    "",                  (a) => Invocation(VWelcome),                                                               "this projection")
 ]
@@ -344,6 +347,7 @@ fn dispatch_invocation(verb) = {
       VTeach(target)       => teach_run(target),
       VRepl                => repl_run(),
       VMarch               => march_run(),
+      VMcp                 => mcp_run(),
       VNew(name)           => new_project(name),
       VWith(hname, target) => with_run(hname, target),
       VWelcome             => welcome_run()
@@ -1735,10 +1739,10 @@ fn battery_compile(src, wat_path) = {
     // ARMED classes only. Unarmed errors surface on stderr and the compile
     // proceeds — the sound-incomplete contract; the battery must not be
     // stricter than the medium (it FAILC'd ev2 for an unarmed row mismatch
-    // the check verb tolerates).
-    let holes = collect_value_holes_decls(lowered)
-    let refused = diag_refusals()   // drift-audit: ignore — sequenced effectful ledger read (the executable_gate precedent)
-    if len(holes) > 0 || refused > 0 { 1 }
+    // the check verb tolerates). gate_reads is the law's one home; this
+    // policy counts and continues where the CLI compile proc_exits.
+    let (nholes, refused) = gate_reads(lowered)
+    if nholes > 0 || refused > 0 { 1 }
     else {
       let fd = fs_create_impl(wat_path)
       if fd == 0 { 1 }

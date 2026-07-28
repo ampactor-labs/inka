@@ -1092,6 +1092,52 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶▶ THE GATE SERVES AGENTS — `mentl mcp`, the Synth-gate
+  on MCP stdio; Arc 2's agent-cage demo lands (· pin 347b0a41). Any MCP
+  client connects over newline-delimited JSON-RPC and PROPOSES source
+  through ONE tool — propose — because the category is one property:
+  nothing executes unproven. The judge is the canonical converged stdin
+  judgment (infer_program_converged; spans are the agent's OWN lines by
+  construction — the felt walk's opening find was that the DRIVER path
+  renders weave coordinates, "at 5315:4" for line 5 of a 10-line file,
+  which redirected the tool to the stdin channel where the problem
+  cannot exist). TWO one-home extractions landed with it, each ending a
+  three-copy family: gate_reads (the gate LAW's judge half —
+  executable_gate keeps refuse+proc_exit, battery_compile keeps
+  count-and-continue, the server keeps verdict-as-data; the server
+  outlives every refusal) and diag_line (THE diagnostic render — the
+  root arm, the branch bank, and the mcp collector all read it). The
+  collector is tighten's forwarder shape plus the load-bearing
+  diag_absorb arm: the converged judgment banks each stmt's diagnostics
+  in its branch cursor and replays them at the join through that op —
+  measured on the first walk, branch-judged lines reached stderr but
+  not the verdict until the arm landed. The serve loop is battery_loop's
+  region law at the server: raw recursion, zero cross-iteration state,
+  mark before the read, print before the reset — the server's heap
+  stays flat for its whole life, every request's full compile included.
+  Emission streams through wat_to_file to .build/mcp/last.wat: only
+  proven bytes ever land (a refusal never opens the file), and stdout
+  carries protocol lines only. RIDER, the ⟐ law live: the wheel's first
+  negative float literal in argument position (the JSON-RPC error
+  codes) hit emit_unaryop's word-floor — the i32 sink-and-subtract
+  dance on an f64, an assembly refusal — and the arm now reads the
+  node's repr live (emit_unaryop_for: f64.neg/f32.neg native, the word
+  dance at the floor); the fix crosses this generation per the crossing
+  law, so the codes ride as the Ints they are (float_of_int at the one
+  JNum boundary — the truer form regardless). GATES: four frontier legs
+  (handshake+tools/list · REFUSED with both teaching lines at
+  file-local spans · PROVEN with the artifact nonempty on disk ·
+  isError/-32601/ping), seen RED against the pre-verb boot (exit 2,
+  zero jsonrpc lines). The walk transcript IS the demo: REFUSED carries
+  E_EffectMismatch at 3:4 AND E_EffectUnhandled's full install-teaching;
+  PROVEN carries the tighten-teaching ("declares !E but body only uses
+  Pure") — the gate teaching even on success. CLEAN m2 == m3 at 323,725
+  lines; census 0; comment-refs 0; frontier 285/0; proof-exactness 9/9;
+  crown 5/5. Named residue: Hβ.diag.file-local-span-render — the
+  driver-path check still renders weave spans with a subsystem prefix;
+  the register (ScopeAt) already carries the entry's range so the
+  render should subtract, but diag_branch banks PRE-RENDERED lines, so
+  the banked tuple must carry the span structurally first.
 - 2026-07-28 · DOC-TRUTH — prose gets a mechanical floor (no re-pin —
   tools only; the docs-stay-true machinery's first rung, destiny named
   in its own header: docs-as-projection + `mentl audit`).
@@ -5514,9 +5560,11 @@ the ABSENCE BENCHMARK (benchmarks/absence — 13/13 baseline,
 runner-gated, prior art + growth tiers named; the podium was empty);
 the RENDER REGISTER and the proposer's register (the demo's DEPs);
 the README fan demo, every claim transcript-verified through the
-shim. Open: the MCP-facing Synth-gate demo (an agent proposes Mentl,
-the gate proves !Network/!Alloc BEFORE anything executes, refusals
-teach) · the positioning writeup, now with TWO wedges (cell-grain
+shim; the MCP-FACING SYNTH-GATE (`mentl mcp` — an agent proposes over
+stdio, the gate proves before anything executes, refusals teach at
+file-local spans, only proven bytes reach disk; the §7 entry THE GATE
+SERVES AGENTS carries the record — the OPAW/Cedar counter is now
+runnable). Open: the positioning writeup, now with TWO wedges (cell-grain
 deterministic inference with the LVars citation; the four-arm hole
 citing its four one-arm priors RbSyn/RusSOL/Synquid/Hazel;
 verify-by-replay as the release protocol; and THE SPEC THAT CANNOT BE

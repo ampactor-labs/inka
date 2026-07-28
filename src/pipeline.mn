@@ -171,7 +171,13 @@ fn compile(entry_module) = {
 //   per-entry projections stay query/edit surfaces.
 // `check` never routes here — the productive surfaces admit holes; only an
 // EXECUTABLE refuses to exist around one.
-fn executable_gate(lowered) = {
+// gate_reads — the gate LAW's judge half, one home for its three policies:
+// executable_gate (refuse + proc_exit — the CLI compile, one process one
+// verdict), battery_compile (batch: count and continue), and the mcp
+// judge (serve: verdict as data, the server outlives every refusal). The
+// reports land before the diag_refusals read — the teaching precedes the
+// tally it feeds.
+fn gate_reads(lowered) = {
   report_verify_debt(verify_debt())   // drift-audit: ignore — sequenced effectful ledger read, projected before emit
   report_unhandled_effects(lowered)   // drift-audit: ignore — sequenced effectful gate read (the verify_debt shape); reports must land before the diag_refusals read below
   let holes = collect_value_holes_decls(lowered)
@@ -181,9 +187,19 @@ fn executable_gate(lowered) = {
   // with one arm; these are its others. Productive at the walk, refusing at the
   // boundary — SYNTAX's "a hole is productive, never executable", generalized.
   let refused = diag_refusals()   // drift-audit: ignore — sequenced effectful ledger read, guarding the emit (the verify_debt read above is the same shape)
-  if len(holes) == 0 && refused == 0 { lowered }
+  // The verdict binds BEFORE the hole report so refusals never double-count
+  // a hole (report_holes raises the armed E_UnresolvedHole; the tally read
+  // above deliberately precedes it — len(holes) is the hole half).
+  let nholes = len(holes)
+  let verdict = (nholes, refused)
+  if nholes > 0 { report_holes(holes, 0) }
+  verdict
+}
+
+fn executable_gate(lowered) = {
+  let (nholes, refused) = gate_reads(lowered)
+  if nholes == 0 && refused == 0 { lowered }
   else {
-    report_holes(holes, 0)
     if refused > 0 {
       eprint_string("mentl: refusing to emit — {int_to_str(refused)} claim(s) the medium could not discharge\n")
     }
@@ -1222,6 +1238,24 @@ handler lookup_ty_graph with spec_pairs = [], spec_enc = "" {
   }
 }
 
+// diag_line — THE diagnostic render, one home. The root arm below, the
+// branch bank (diag_branch), and the mcp gate's collector all read this
+// projection; three hand-copies of the same five-projection splice
+// preceded it. Sequenced projections, then ONE splice-of-vars line: a
+// single 5-splice interpolation mis-rendered the LAST splice when an
+// earlier splice's evaluation allocated (witnessed: the unhandled-effect
+// diagnostic's span rendered a stale env record's span until a preceding
+// read shifted the staging — the shared-scratch clobber class, §9). A
+// splice list of pre-built values has nothing to clobber.
+fn diag_line(diag) = {
+  let src = diag_source(diag)
+  let code = diag_code(diag)
+  let kindw = diag_kind(diag)
+  let msg = diag_message(diag)
+  let sp = show_span(diag_span(diag))
+  "{src}: {code} {kindw}: {msg} at {sp}\n"
+}
+
 // diagnostics_handler — stderr routing (spec 06)
 // The sandbox boundary. Outermost in every route. Declares
 // `with !Diagnostic` so its own arms cannot recursively perform
@@ -1232,19 +1266,9 @@ handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
   report(diag) => {
     // Every surface is a PROJECTION of the one DiagKind — source, code,
     // severity-class, message, span, applicability are read live, never
-    // copied. The stderr line and the IDE hover are the same graph read.
-    // Sequenced projections, then ONE splice-of-vars line. The previous
-    // single 5-splice interpolation mis-rendered the LAST splice when an
-    // earlier splice's evaluation allocated (witnessed: the unhandled-effect
-    // diagnostic's span rendered a stale env record's span until a preceding
-    // read shifted the staging — the shared-scratch clobber class, §9). A
-    // splice list of pre-built values has nothing to clobber.
-    let src = diag_source(diag)
-    let code = diag_code(diag)
-    let kindw = diag_kind(diag)
-    let msg = diag_message(diag)
-    let sp = show_span(diag_span(diag))
-    let line = "{src}: {code} {kindw}: {msg} at {sp}\n"
+    // copied. The stderr line and the IDE hover are the same graph read,
+    // and the line itself has ONE render: diag_line.
+    let line = diag_line(diag)
     // The tally IS the projection continued. This arm saw every diagnostic and
     // dropped its severity on the floor, so `mentl check` on a missing module
     // printed the error and exited 0, and a program with a live E_TypeMismatch
@@ -1311,12 +1335,7 @@ handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
 handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals = 0 {
 
   report(diag) => {
-    let src = diag_source(diag)
-    let code = diag_code(diag)
-    let kindw = diag_kind(diag)
-    let msg = diag_message(diag)
-    let sp = show_span(diag_span(diag))
-    let line = "{src}: {code} {kindw}: {msg} at {sp}\n"
+    let line = diag_line(diag)
     // The banked fact carries the span start-line and the error bit beside
     // the rendered line, so the root's diag_absorb can apply the scope
     // register (types.mn DiagScope) at the join — the branch itself stays

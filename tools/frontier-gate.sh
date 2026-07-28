@@ -1569,6 +1569,47 @@ for i in "${!compilers[@]}"; do
   else
     fail "space live serve (status: $(printf '%s' "$space_hdr" | head -1); see $dir/space-serve.log)"
   fi
+  # ── mentl mcp — the gate served over MCP stdio ─────────────────────
+  # The Synth-gate as an agent-facing surface: newline-delimited JSON-RPC,
+  # one tool (propose). One scripted session exercises the whole contract:
+  # handshake, tools/list, a violating proposal REFUSED with teaching
+  # diagnostics at FILE-LOCAL spans (the stdin channel judges the proposal
+  # alone — no lib weave, so spans are the agent's own lines), the honest
+  # sibling PROVEN with the artifact landing on disk (only proven bytes
+  # ever do), a malformed call (isError:true, teaches), an unknown method
+  # (-32601), and ping. Seen RED on the pre-verb boot (unknown verb: the
+  # catalog on stdout, zero jsonrpc lines).
+  mcp_dir="$dir/mcp-session"
+  mkdir -p "$mcp_dir"
+  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$mcp_dir::." "$compiler" mcp \
+    < "$ROOT/tests/frontier/mcp-session.jsonl" >"$mcp_dir/out.jsonl" 2>"$mcp_dir/err.log"
+  if grep -q '"serverInfo":{"name":"mentl"' "$mcp_dir/out.jsonl" \
+     && grep -q '"tools":\[{"name":"propose"' "$mcp_dir/out.jsonl"; then
+    pass "mcp handshake + tools/list serve the propose tool"
+  else
+    fail "mcp handshake (see $mcp_dir/out.jsonl)"
+  fi
+  if grep -q 'REFUSED — 1 claim' "$mcp_dir/out.jsonl" \
+     && grep -q 'E_EffectMismatch' "$mcp_dir/out.jsonl" \
+     && grep -q 'at 3:4' "$mcp_dir/out.jsonl" \
+     && grep -q 'E_EffectUnhandled' "$mcp_dir/out.jsonl"; then
+    pass "mcp propose REFUSES with file-local teaching spans"
+  else
+    fail "mcp refusal verdict (see $mcp_dir/out.jsonl)"
+  fi
+  if grep -q 'PROVEN — every claim discharged' "$mcp_dir/out.jsonl" \
+     && [ -s "$mcp_dir/.build/mcp/last.wat" ]; then
+    pass "mcp propose PROVES and the artifact lands"
+  else
+    fail "mcp proven verdict + artifact (see $mcp_dir/out.jsonl)"
+  fi
+  if grep -q '"isError":true' "$mcp_dir/out.jsonl" \
+     && grep -q '"code":-32601' "$mcp_dir/out.jsonl" \
+     && grep -q '"id":7.0,"result":{}' "$mcp_dir/out.jsonl"; then
+    pass "mcp malformed call teaches; unknown method -32601; ping answers"
+  else
+    fail "mcp error contract (see $mcp_dir/out.jsonl)"
+  fi
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

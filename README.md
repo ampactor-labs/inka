@@ -170,6 +170,41 @@ mentl                                 # project the current directory — where 
 manager, no manifest, no version pin: the pinned boot *is* the release, and
 every re-pin is instantly the global command.
 
+## For agents — the gate over MCP
+
+Every agent framework fences its agents at runtime; the incident record
+shows those fences keep failing. Mentl doesn't fence — it proves. `mentl
+mcp` serves the verification gate as an MCP server (newline-delimited
+JSON-RPC on stdio) with one tool, because the category is one property:
+
+```json
+{"mcpServers": {"mentl-gate": {"command": "mentl", "args": ["mcp"]}}}
+```
+
+The agent calls `propose` with Mentl source. The medium compiles it and
+proves every claim — declared effect rows, absence severances (`!E`),
+refinement predicates — *before* anything is emitted. A violating
+proposal comes back `REFUSED` with each undischarged claim named at the
+agent's own source lines, and the refusal teaches the fix; a proven one
+lands its artifact at `.build/mcp/last.wat` — the only way bytes ever
+reach that path is through the proof. The same session, verbatim:
+
+```
+REFUSED — 1 claim(s) the medium could not discharge; nothing was emitted
+effects: E_EffectMismatch error: effect row mismatch: !E vs E at 3:4-3:24
+effects: E_EffectUnhandled error: effect E reaches the executable root with
+  no absorbing handler — ... declare one and install it with ~> over the
+  performing chain. at 4:4-4:18
+```
+
+```
+PROVEN — every claim discharged; artifact: .build/mcp/last.wat
+infer: T_OverDeclared Warning: function 'good' declares !E but body only
+  uses Pure — tighten the signature to unlock capabilities at 6:4-6:33
+```
+
+It teaches even when it accepts.
+
 ## The school
 
 The full course lives in `lib/tutorial/` — ten lessons, each a runnable

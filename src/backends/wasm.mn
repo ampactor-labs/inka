@@ -3489,12 +3489,12 @@ fn emit_expr(expr) = match expr {
   LShow(h, x) => emit_show(h, x),
   LHash(h, x) => emit_hash(h, x),
 
-  LUnaryOp(_h, op, inner) => {
-    // Hβ.first-light.unary-neg-stack-order — UNeg is `0 - x`, not `x - 0`.
-    // emit_unaryop's UNeg arm emits the full sink-and-subtract dance via
-    // $state_tmp (declared in every fn preamble at line 978).
+  LUnaryOp(h, op, inner) => {
+    // The node's handle carries the proven operand type; the neg
+    // instruction is its repr projection (emit_unaryop_for — the
+    // emit_binop_for shape one operand smaller).
     emit_expr(inner)
-    emit_unaryop(op)
+    emit_unaryop_for(h, op)
   },
 
   LDirectCall(h, fh, cname, tail, args) => {
@@ -6221,11 +6221,22 @@ fn emit_binop(op) = match op {
   }
 }
 
-fn emit_unaryop(op) = match op {
-  // UNeg: -x = 0 - x. Operand x is on top after emit_expr; sink it
-  // into $state_tmp (fn-preamble local), push 0 below, restore x above,
-  // i32.sub. Same scratch-local pattern as LCall (line 1214).
-  UNeg => wat_emit("    (local.set $state_tmp) (i32.const 0) (local.get $state_tmp) (i32.sub)\n"),
+fn emit_unaryop_for(h, op) = match op {
+  // UNeg reads the node's repr live — the handle proves the operand's
+  // width, and the word-floor dance on an f64 was an assembly refusal
+  // (caught 2026-07-28 by the wheel's first negative float literal in
+  // argument position, the mcp error codes). Floats negate natively;
+  // the word floor keeps the sink-and-subtract dance:
+  // Hβ.first-light.unary-neg-stack-order — UNeg is `0 - x`, not
+  // `x - 0`: sink x into $state_tmp (fn-preamble local), push 0 below,
+  // restore x above, i32.sub. An RI64/RV128 operand falls to the same
+  // word dance, whose i32 scratch local refuses at assembly — loud by
+  // construction until those producers exist (the wide-ref residue).
+  UNeg => match repr_of(lookup_ty(h)) {
+    RF64                => wat_emit("    (f64.neg)\n"),
+    RF32                => wat_emit("    (f32.neg)\n"),
+    RI32 | RI64 | RV128 => wat_emit("    (local.set $state_tmp) (i32.const 0) (local.get $state_tmp) (i32.sub)\n")
+  },
   UNot => wat_emit("    (i32.eqz)\n")
 }
 

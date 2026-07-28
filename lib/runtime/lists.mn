@@ -494,7 +494,7 @@ fn last(xs) with Memory = xs[len(xs) - 1]
 // Per Hazel productive-under-error: unknown tag returns make_list(0)
 // rather than trapping. Substrate gap surfaces upstream; runtime
 // degrades gracefully.
-fn drop_last(list) with Memory = {
+fn drop_last(list) with Memory + Alloc = {
   let list_len = load_i32(list)
   let tag      = seq_tag(list)
   match tag {

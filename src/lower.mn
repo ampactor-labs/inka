@@ -542,7 +542,7 @@ fn mark_tail_arms(arms) with Memory + Alloc = map((arm) => {
 // `EfRow([Iterate], [], EtClosed)` still needs evidence — the callee performs
 // effects whose handler comes from the caller. The row IS the
 // evidence contract: non-empty row → evidence threading required.
-fn monomorphic_at(h) with LookupTy = {
+fn monomorphic_at(h) with LookupTy + Memory = {
   match lookup_ty(h) {
     TFun(_, _, row) => row_is_ground(row) && row_is_effectless(row),
     _               => true
@@ -4349,6 +4349,15 @@ fn lower_param_handles(params) = map((p) => ty_handle_of(param_ty(p)), params)
 // Returns `List[String]` — names only, deduplicated. At emit time,
 // closure record slot N stores the value of `captures[N]` from the
 // enclosing scope; the lambda body reads them as `LUpval(h, N)`.
+// SAFE-FOR-SPACE is this walk's INVARIANT (Shao–Appel): a closure
+// record carries exactly the FREE variables of its body — flat
+// copies, never a link to the enclosing frame — so the space a
+// closure retains is bounded by what its body can reference, and no
+// dead environment survives through a captured frame pointer. Every
+// capture channel (this walk, the seeded __k/__hrec words, the
+// fanout branch thunks) preserves it; a future channel that captures
+// a FRAME instead of a free set violates the invariant, not a style
+// preference.
 // H6: exhaustive NodeBody enumeration. Patterns and holes
 // contribute no free variable references (they're terminal AST
 // forms). Named explicitly so new NodeBody variants decide

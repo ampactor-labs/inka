@@ -538,7 +538,29 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
       resume()
     } else {
       let old_node = graph_node_at(spine, next, handle)
-      spine_put_node(spine, handle, GNode(NRowBound(row), reason))
+      // THE TEACHING WRITE IS A JOIN. A row cell is a join-semilattice
+      // (present sets grow by union — the SET law above at the write): a
+      // bind on an already-bound cell takes union_row(stored, incoming),
+      // never a replace. Joins commute and idempote, so N caller branches
+      // teaching one shared cell converge to the SAME value in ANY order —
+      // the LVar/CALM law, and the death of the window-8 rebind race (the
+      // born-reason census caught one cell serially re-taught five deep,
+      // the surviving value whichever branch ran last; last-writer-wins
+      // was also QUIETLY LOSING earlier callers' contributions in the
+      // sequential walk, absorbed only by the rounds re-deriving). The
+      // decl-exit REPLACE is a different operation with its own op
+      // (graph_finalize_row below); the freeze that makes lattice reads
+      // sound is the infer→lower phase boundary, already structural.
+      let stored = match old_node {
+        GNode(NRowBound(prev), r0) => {
+          if row_frag_collision(prev, row) {
+            eprint_string("FRAGX {int_to_str(handle)} born={show_reason(r0)} why={show_reason(reason)}\n")
+          } else { () }
+          row_join(prev, row)
+        },
+        _                         => row
+      }
+      spine_put_node(spine, handle, GNode(NRowBound(stored), reason))
       let new_trail = trail_append(trail, trail_len, MSetRow(handle, old_node))
       let new_epoch = epoch + 1
       if len(checkpoint_stack) == 0 {
@@ -549,6 +571,26 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
              trail = new_trail,
              trail_len = trail_len + 1
     }
+  },
+
+  // The decl-exit REPLACE — inf_exit_fn publishing the frame's accumulated
+  // row as the fn's verdict. Not a join: the frame's accumulation is the
+  // decl's own total, already containing everything the body taught, and
+  // joining it with the placeholder's interim content would re-widen what
+  // row_without_self deliberately stripped. One writer per cell for this
+  // op (each decl finalizes its own row_handle, in its own branch).
+  graph_finalize_row(handle, row, reason) => {
+    let old_node = graph_node_at(spine, next, handle)
+    spine_put_node(spine, handle, GNode(NRowBound(row), reason))
+    let new_trail = trail_append(trail, trail_len, MSetRow(handle, old_node))
+    let new_epoch = epoch + 1
+    if len(checkpoint_stack) == 0 {
+      graph_mutated(new_epoch, MSetRow(handle, old_node))
+    }
+    resume()
+      with epoch = new_epoch,
+           trail = new_trail,
+           trail_len = trail_len + 1
   },
 
   // Path compression at the row sort — an OPTIMIZATION write, distinct

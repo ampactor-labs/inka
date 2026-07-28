@@ -78,7 +78,7 @@ fn driver_module_path(ref module_name) with Filesystem = {
 // emitted a module that could not assemble ($ev_lookup undefined —
 // Hβ.driver.wheel-imports-are-the-manifest, the fleet's measured
 // finding).
-fn driver_collect_dag(ref entry_module) with Memory + Alloc + Filesystem = {
+fn driver_collect_dag(ref entry_module) with Memory + Alloc + Filesystem + GraphRead + GraphWrite + Intern = {
   let buf = make_list(16)
   let visited = []
   // The seed is conditional on RESOLUTION: the prelude is pre-imported where
@@ -98,7 +98,7 @@ fn driver_collect_dag(ref entry_module) with Memory + Alloc + Filesystem = {
 // collected is a (buf, count) pair threaded through DAG traversal.
 // Post-order: append self AFTER visiting deps.
 fn driver_collect_visit(ref module_name, own collected, own visited)
-  with Memory + Alloc + Filesystem = {
+  with Memory + Alloc + Filesystem + GraphRead + GraphWrite + Intern = {
   if set_contains(visited, module_name) {
     (collected, visited)
   } else {
@@ -139,7 +139,7 @@ fn driver_collect_visit_list(ref modules, own collected, own visited)
 // only, no env work yet. The parser produces a top-level stmt list;
 // flatten + map projects each ImportStmt's path; non-import stmts
 // project [] and flatten collapses them out.
-fn driver_extract_imports(ref source) with Memory + Alloc + GraphRead + GraphWrite = {
+fn driver_extract_imports(ref source) with Memory + Alloc + GraphRead + GraphWrite + Intern = {
   source
     |> lex
     |> parse_program
@@ -163,7 +163,7 @@ fn driver_extract_imports_from_ast(ast) = {
 // graph image memcpy'd whole, keyed by source + transitive dep
 // hashes — never a second serializer.
 fn driver_check_module(ref module_name)
-  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
   let path = driver_module_path(module_name)
   if !fs_exists(path) {
     report(EMissingModule(module_name, path, span_zero()))
@@ -273,7 +273,7 @@ fn driver_insert_keyed(pair, sorted) with Memory + Alloc = {
 }
 
 fn driver_entry_with_ranges(ref entry_module)
-  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
   let modules = driver_canonical_order(driver_collect_dag(entry_module))
   let (source, _next_line, ranges) = fold(("", 1, []), (acc, m) => {
     let (src_acc, line_acc, r_acc) = acc
@@ -365,7 +365,7 @@ fn warm_program() with Memory + Alloc =
 // the downstream closure, and the reassembly order are all projections
 // of this single read (the pairs walk, the deps walk, and the order walk
 // were three passes over the same files — the eight-interrogations cut).
-fn driver_tree_scan(ref entry_module) with Memory + Alloc + Filesystem = {
+fn driver_tree_scan(ref entry_module) with Memory + Alloc + Filesystem + GraphRead + GraphWrite + Intern = {
   let modules = driver_canonical_order(driver_collect_dag(entry_module))
   map((m) => {
     let p = driver_module_path(m)
@@ -399,7 +399,7 @@ fn driver_warm_ready(path) with Memory + Alloc + Filesystem = {
 }
 
 fn driver_compile_entry(ref entry_module)
-  with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
   let path = driver_warm_path(entry_module)
   if driver_warm_ready(path) {
     eprint_string("warm: restoring the analyzed image\n")
@@ -458,7 +458,7 @@ fn assoc_stmts(ref pairs, name: String) with Memory + Alloc =
 // the downstream closure of any change reaches it). The re-judged state
 // re-persists, so the image tracks the tree edit by edit.
 fn driver_incremental()
-  with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
   let entry = list_index(warm_entry, 0)
   let scan = driver_tree_scan(entry)
   let cur_pairs = scan_pairs(scan)
@@ -550,7 +550,7 @@ fn rederive_cone(ref cone)
   }, cone)
 
 fn driver_check_entry(ref entry_module)
-  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
   // Check the deps DAG (every module the entry imports) — not the entry.
   entry_module
     |> driver_collect_dag_with_deps
@@ -568,7 +568,7 @@ fn driver_check_entry(ref entry_module)
 // out missing-module fallbacks that have no source). Returns
 // `[(module_name, [dep_name])]` in post-order.
 fn driver_collect_dag_with_deps(ref entry_module)
-  with Memory + Alloc + Filesystem + GraphWrite + GraphRead = {
+  with Memory + Alloc + Filesystem + GraphWrite + GraphRead + Intern = {
   let modules = driver_collect_dag(entry_module)
   map((m) => (m, driver_module_in_dag_deps(m, modules)), modules)
 }
@@ -577,7 +577,7 @@ fn driver_collect_dag_with_deps(ref entry_module)
 // Out-of-DAG names (missing modules, vocabulary aliases the driver doesn't
 // process) contribute nothing to the layer-partition's wait condition.
 fn driver_module_in_dag_deps(ref module_name, ref dag_modules)
-  with Memory + Alloc + Filesystem + GraphRead + GraphWrite = {
+  with Memory + Alloc + Filesystem + GraphRead + GraphWrite + Intern = {
   let path = driver_module_path(module_name)
   if !fs_exists(path) { [] }
   else {

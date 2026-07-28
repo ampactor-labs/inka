@@ -39,9 +39,14 @@ where:
    worthless. Proof has no ceiling; approximation asymptotes.
 2. **The negative is provable** — autonomous, *acting* software makes "can it
    prove it *won't* leak data / allocate unboundedly / reach the network" the
-   existential question. `!E` negation is the only system on Earth that proves
-   absence transitively. **This is Mentl's most underrated arm and the future's
-   deepest need.**
+   existential question. Name-keyed `!E` under polymorphism is shared ground
+   with the Flix line (ICFP'23 effect exclusion — a user-facing "no excluded
+   effect is ever performed" theorem, complete inference; OOPSLA'25 Boolean
+   qualifiers); Mentl's own seat is the CONJUNCTION nobody holds: absence
+   under handler/install IDENTITY, under modality, under TIME (a persisted
+   continuation's world), and per-INSTANCE (`!Sample(44100)`) — each measured
+   empty as of 2026-07. **This is Mentl's most underrated arm and the
+   future's deepest need.**
 3. **Intent is lossless** — code modified by non-authors (AI, future-selves) is
    archaeology instantly. The Reason chain carries the *why*, walkable to root.
 4. **Computation is durable** — long-running agents, cross-machine workflows,
@@ -363,8 +368,8 @@ constraints — so `!E` is Mentl-NATIVE, not inherited from Koka; the form *leak
 through higher-order functions, this session's L1 trap, the textbook failure mode
 not a bug); **capabilities** (Effekt — lexical/second-class, no effect variables,
 so the leak *cannot occur*, but negation isn't native AND effects can't escape —
-fatal to first-class continuations); **modal** (Tang–Lindley, *Modal Effect Types*,
-POPL 2025 — rows *and* capabilities unified by a modality that re-admits first-class
+fatal to first-class continuations); **modal** (*Modal Effect Types*, the Tang–Lindley
+line, OOPSLA 2025 — rows *and* capabilities unified by a modality that re-admits first-class
 escape *under proof*; the follow-up *Rows and Capabilities as Modal Effects* (POPL
 2026, arXiv 2507.10301) PROVES both macro-encode into the one modal frame, types
 and semantics preserved; cited live at `src/effects.mn:12`). **Decision: keep
@@ -873,7 +878,7 @@ spawn substrate, §7 ledger; real host threads over the shared image) · `Hβ.dr
 
 **G · Graph & e-graph (arm 1) — highest-leverage incompleteness first.** `Hβ.egraph.per-expr-effect-row` (egraph.mn:70 — reduces is_pure to effs_at alone, generalizing the effect-gate to every rewrite) · `Hβ.lower.egraph-saturation-deepen` · `.typed-rulecyclic` (the depth-1000 cap → a typed E_RuleSetCyclic via the Why chain, unreachable-by-construction) · `.rule-as-query` · `.extraction-cost-composes-repr` · `.const-fold-minted-node-full-edges`.
 
-**H · Ownership (arm 5, §4⑤).** `Hβ.ownership.fractional-uniqueness-ref-borrow` (Granule ICFP 2024) · `.quiet-empirical-gate` (the Hylo bar — a corpus test counting authored own/ref markers; a rising count IS inference failing §4⑤).
+**H · Ownership (arm 5, §4⑤).** `Hβ.ownership.fractional-uniqueness-ref-borrow` (Granule OOPSLA 2024) · `.quiet-empirical-gate` (the Hylo bar — a corpus test counting authored own/ref markers; a rising count IS inference failing §4⑤).
 
 **I · Dataflow & DSP (arm 3/6).** `Hβ.dataflow.causality-compile-error` (a zero-delay `<~` cycle is a compile error, Faust's causality rule; no code anchor yet — the peer is named here, not in a comment) · `.clock-calculus-sample-rate` · `.point-free-fusion-via-egraph`.
 
@@ -956,8 +961,8 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 **THE BOARD IS WHOLE.** Every gate the repo owns is green — frontier 71/0,
 proof-exactness 9/9, crown 5/5, micros (incl. oob-traps=134 — SYNTAX's index
 law executable), the march's fixed point, the phantom ratchet (287) — through
-the pinned boot (chain: boot/PROVENANCE.md, newest pin = the census-6
-diagnostic-address landing). **`mentl voice.mn:9` ANSWERS** (the
+the pinned boot (chain: boot/PROVENANCE.md, newest pin = the
+lattice-completes landing). **`mentl voice.mn:9` ANSWERS** (the
 cursor-address transport, tests/frontier/voice-demo the executable gate).
 **The census is ZERO** (2026-07-18 end-of-day; 2,266 three days prior) —
 the medium compiles its own source with NO error diagnostics, and the
@@ -1038,6 +1043,61 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶▶▶▶ THE LATTICE COMPLETES — the teaching write is a
+  JOIN, the scheme boundary is a VALUE boundary at every face, and
+  K=8 becomes the default judge, byte-equal to sequential (Arc 0 of
+  the finish-line campaign lands whole · pin 28c39633). THE ALGEBRA:
+  row cells are join-semilattice LVars — graph_bind_row's bound arm
+  JOINS (row_join: bare names union; parameterized instances COEXIST
+  as fragments; joins commute and idempote, so N caller branches
+  teaching one cell converge in ANY order — the LVars/CALM law), the
+  decl-exit REPLACE rides its own op (graph_finalize_row: two
+  algebras, two ops), and FRAGX stays armed as the standing collision
+  census. THE FROZEN READ: subst_ty_build/subst_row_build decide by
+  the MAPPING before any live chase (a quantified var free at the
+  freeze freshens even when since-bound — post-freeze teaching is
+  another caller's private constraint; only the deliberately-
+  unquantified miss chases: handler config↔payload two-phase, mono
+  self-entries, pre-freeze-bound structure) — census 86 through the
+  join judge (instance payloads meeting positionally across
+  coexisting fragments) fell to ZERO at the root, the install
+  reconciliation needing NO new machinery. FRAGMENT IDENTITY IS
+  GRAPH IDENTITY: the first march ruled BROKEN (m3 ≠ m4 by 13 lines
+  — ONE can_yield flip on driver_incremental) and convicted addr()
+  — dedup-by-address is deterministic within one binary and unstable
+  across two (region resets re-issue addresses); frag_args_same
+  compares arg HANDLES and scalar payloads, a pure function of the
+  source. THE DEEPEST CUT, forced by the terminal gate itself: the
+  six-battery split 5-1 and the window-1 judge byte-equaled the RARE
+  attractor — the dominant K=8 attractor was DIVERGING from
+  sequential semantics (a lost k2 yield wrap), and the march's
+  m3 == m4 had blessed it by two lucky coin-flips. The bind census
+  on the flip's own cell convicted the PUBLISH: a declared fn's
+  bound row cell rode EtVar through generalize's chase into its
+  published scheme — a live pointer into the decl's band that
+  concurrent callers folded mid-flight. chase_row_deep resolved
+  payloads but passed the TAIL untouched (chase_row_changes ignored
+  it entirely); both faces gained the bound-tail arm — the fold to
+  VALUE by recursion, subst_row_build's law at the chase face. A
+  published scheme is now a value or a quantified var, never a live
+  pointer. K-INVARIANCE PROVEN: the window-1 judge's bytes EQUAL the
+  K=8 judge's bytes, six identical shas on the battery — determinism
+  by algebra, sequential-equivalent, at the fused oracle's default
+  width. The sharper value-boundary judge then convicted 65 honest
+  under-declarations in the wheel (58 mostly missing Alloc — payload
+  ctors allocate; 7 `with Pure` reading Memory) — widened in ONE
+  round to census 0, the honest-attribution precedent at its third
+  scale. Riders: safe-for-space stated as collect_free_vars'
+  invariant (Shao–Appel); §0's absence claim made precise per the
+  fx2-crown sweep (the Flix line owns name-keyed !E under
+  polymorphism — ICFP'23 effect exclusion, OOPSLA'25 Boolean
+  qualifiers; Mentl's seat is the CONJUNCTION: absence under install
+  IDENTITY × modality × TIME × INSTANCE, each measured empty
+  2026-07); Modal Effect Types trued to OOPSLA 2025; Granule to
+  OOPSLA'24. Board whole at the pin: CLEAN m2 == m3 at 320,102
+  lines; census 0; comment-refs 0; frontier 279/0; proof-exactness
+  9/9; crown 5/5; judge_window = 8 IS THE DEFAULT — the fused
+  oracle's execution substrate is the everyday judge.
 - 2026-07-27 · ▶▶ THE BOUND TAIL FOLDS BY RECURSION — the trio law
   completes at the subst face, and the rebind chain gets its name
   (the K>1 dig's third arc · pin 2ef0964e). subst_row_build's merge

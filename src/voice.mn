@@ -557,7 +557,7 @@ fn pick_from_pool(tentacle, hash) with Memory = {
 // applicable subset via hash-mod-len. Same Situation + same Register
 // → same Modifier, every call. H6 discipline on Register match.
 
-fn select_modifier(situation, register) with Pure = {
+fn select_modifier(situation, register) with Memory = {
   let Situation(s) = situation
   match register {
     RTerse    => NoMod,
@@ -631,7 +631,7 @@ fn topic_span_or_zero(topic) with Pure = {
 // and the row itself. silence_predicate gated upstream — fires only
 // when reason_at_topic is Some (per MV §2.7.5 TentQuery arm).
 
-fn render_query_arm(situation) with Pure = {
+fn render_query_arm(situation) with Memory = {
   let Situation(s) = situation
   let name = topic_ident_or_empty(s.topic)
   let row_slot = match s.row_at_topic {
@@ -654,7 +654,7 @@ fn render_query_arm(situation) with Pure = {
 // `Type`"; TopicError (typo / missing) → "Did you mean ...?";
 // TopicAsk (explicit ask) → echoes ask. silence_predicate gated.
 
-fn render_propose_arm(situation) with Pure = {
+fn render_propose_arm(situation) with Memory = {
   let Situation(s) = situation
   let TopicFacts(f) = s.facts
   let body = match s.topic {
@@ -692,7 +692,7 @@ fn render_topology_arm(situation) with Memory + Alloc = {
 // gradient_next would unlock. silence_predicate gated on gradient_next
 // AND gradient_unlocks_capability(gradient_next).
 
-fn render_unlock_arm(situation) with Memory = {
+fn render_unlock_arm(situation) with Memory + Alloc = {
   let Situation(s) = situation
   let body = match s.gradient_next {
     None              => [SLit("")],
@@ -715,7 +715,7 @@ fn render_unlock_arm(situation) with Memory = {
 // the violation site. silence_predicate gated on ownership_at_topic
 // being Some OR row_subsumption_fails.
 
-fn render_trace_arm(situation) with Pure = {
+fn render_trace_arm(situation) with Memory = {
   let Situation(s) = situation
   let body = match s.ownership_at_topic {
     Some(_)  => [
@@ -736,7 +736,7 @@ fn render_trace_arm(situation) with Pure = {
 // obligations + discharges. silence_predicate gated on
 // list_non_empty(refinements).
 
-fn render_verify_arm(situation) with Memory = {
+fn render_verify_arm(situation) with Memory + Alloc = {
   let Situation(s) = situation
   VoiceLine(TentVerify, FRefinement, [
     SLit("Refinements at "),
@@ -753,7 +753,7 @@ fn render_verify_arm(situation) with Memory = {
 // annotation that unlocks one capability. silence_predicate gated on
 // gradient_next being Some.
 
-fn render_teach_arm(situation) with Pure = {
+fn render_teach_arm(situation) with Memory = {
   let Situation(s) = situation
   let body = match s.gradient_next {
     None              => [SLit("")],
@@ -775,7 +775,7 @@ fn render_teach_arm(situation) with Pure = {
 // explicitly asked a Why question. silence_predicate gated on
 // TopicAsk(QWhy(_)) — only fires for explicit asks per MV §2.7.5.
 
-fn render_why_arm(situation) with Pure = {
+fn render_why_arm(situation) with Memory = {
   let Situation(s) = situation
   let body = match s.reason_at_topic {
     None              => [SLit("")],
@@ -791,7 +791,7 @@ fn render_why_arm(situation) with Pure = {
 // arm. H6 exhaustive 8-arm match. Each arm produces a VoiceLine
 // (assumed silence_predicate has already passed for this tentacle).
 
-fn render_for_tentacle(situation) with Pure = {
+fn render_for_tentacle(situation) with Alloc + Memory = {
   let Situation(s) = situation
   match s.tentacle {
     TentQuery     => render_query_arm(situation),
@@ -941,7 +941,7 @@ fn unimplemented_arm(op_name) with Abort = {
 //
 // H6 exhaustive over CaretTarget — no `_` wildcard.
 
-fn resolve_cursor_target(target, current_handle) with GraphRead + Memory = {
+fn resolve_cursor_target(target, current_handle) with GraphRead + Memory + Alloc = {
   match target {
     TargetHandle(h)    => h,
     TargetSpan(s)      => {
@@ -1076,7 +1076,7 @@ fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure
 // unprovable question is a valid Silence (voice.mn:265). H6 exhaustive over
 // QueryResult's 12 variants — no wildcard.
 
-fn query_result_to_answer(result) with Memory = match result {
+fn query_result_to_answer(result) with Memory + Alloc = match result {
   QRType(ty, reason)      => AnsType(ty, reason),
   QRWhy(reason)           => AnsReason(reason),
   QRRefs(spans)           => AnsRefs(spans, Inferred("refs-of: {int_to_str(len(spans))} reference(s)")),
@@ -1489,7 +1489,7 @@ handler mentl_voice_default
 // String)>. Single-pass cons recursion; small N typical (handles
 // table holds open editor sessions, not arbitrary file enumerations).
 
-fn handles_table_lookup(table, target_handle) with Memory = {
+fn handles_table_lookup(table, target_handle) with Memory + Alloc = {
   if len(table) == 0 { None }
   else {
     let head = last(table)
@@ -1518,7 +1518,7 @@ fn file_handle_eq(a, b) with Pure = {
 // substrate produces lists of size ≤ 3 today, so a flat fold is
 // honest.
 
-fn join_capability_labels(labels) with Memory = {
+fn join_capability_labels(labels) with Memory + Alloc = {
   if len(labels) == 0 { "" }
   else {
     let head = last(labels)

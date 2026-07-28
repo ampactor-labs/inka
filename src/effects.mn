@@ -184,6 +184,113 @@ fn resolve_row_compress(row) = {
   }
 }
 
+// The LATTICE JOIN — the teaching write's algebra (graph_bind_row's
+// bound-cell arm). Differs from union_row in ONE move: parameterized
+// instances COEXIST as fragments (dedup by instance identity, never by
+// name), because instance payloads are unification variables, not lattice
+// points — a by-name union collapses different callers' instances
+// (Iterate(Float) eating Iterate(List(t)) — 85 measured E_TypeMismatch
+// the moment the join landed by-name) where the install is the one place
+// fragments reconcile (the same-name-fragments-coexist law). Fragment
+// identity is the instance's own record — conservative: an unshared
+// equal fragment coexists as a copy, and coexistence is the safe side.
+// Bare names and absent sets are genuine name-sets; tails join as ever.
+fn row_join(ref a, ref b) with !Mutate = {
+  let EfRow(pa, aa, ta) = a
+  let EfRow(pb, ab, tb) = b
+  let p = frag_union(pa, pb)
+  let absent = match ta {
+    EtClosed => match tb { EtClosed => [], _ => ab },
+    _        => match tb { EtClosed => aa, _ => name_set_union(aa, ab) }
+  }
+  ef_make(p, absent, tail_join(ta, tb))
+}
+
+// A join COLLISION: the two rows carry same-named parameterized
+// instances with DIFFERENT identities — the leak instrument. A shared
+// cell should never receive two independent callers' instance payloads
+// (each caller's instantiation owns fresh copies); a collision names a
+// share that escaped freshening, and the join's coexistence is the
+// confluence net that keeps it deterministic while the census drives
+// the leak class to zero.
+fn row_frag_collision(ref a, ref b) with Memory = {
+  let EfRow(pa, _, _) = a
+  let EfRow(pb, _, _) = b
+  frag_collision_walk(pa, pb, 0)
+}
+
+fn frag_collision_walk(ref pa, ref pb, i) with Memory =
+  if i >= len(pb) { false }
+  else {
+    let hit = match list_index(pb, i) {
+      EParameterized(h2, args2) => frag_name_clash(pa, h2, args2, 0),
+      _ => false
+    }
+    if hit { true } else { frag_collision_walk(pa, pb, i + 1) }
+  }
+
+fn frag_name_clash(ref pa, h2, args2, j) with Memory =
+  if j >= len(pa) { false }
+  else {
+    let hit = match list_index(pa, j) {
+      EParameterized(h1, args1) => h1 == h2 && !frag_args_same(args1, args2),
+      _ => false
+    }
+    if hit { true } else { frag_name_clash(pa, h2, args2, j + 1) }
+  }
+
+// Fragment-identity union: b's entries append unless an identical entry
+// is already present. Bare ENamed dedups by handle (one instance per bare
+// effect by construction); EParameterized dedups by the instance's GRAPH
+// identity (frag_args_same — the instance IS the fragment).
+fn frag_union(ref pa, ref pb) with Memory + Alloc =
+  fold(pa, (acc, e) => if frag_present(acc, e, 0) { acc } else { acc ++ [e] }, pb)
+
+fn frag_present(ref acc, e, i) with Memory =
+  if i >= len(acc) { false }
+  else {
+    let hit = match (list_index(acc, i), e) {
+      (ENamed(h1), ENamed(h2)) => h1 == h2,
+      (EParameterized(h1, args1), EParameterized(h2, args2)) =>
+        h1 == h2 && frag_args_same(args1, args2),
+      _ => false
+    }
+    if hit { true } else { frag_present(acc, e, i + 1) }
+  }
+
+// Fragment identity is the instance's GRAPH identity — the arg handles the
+// perform minted, scalar payloads by value — never the args list's ADDRESS.
+// addr-identity was deterministic within one binary and UNSTABLE across two
+// (region resets re-issue addresses, and each binary's allocation sequence
+// differs), and the march measured it: one dedup coincidence differing
+// between the m2 and m3 binaries flipped one can_yield verdict — the
+// 13-line m3 ≠ m4 k2-wrap divergence on driver_incremental. Handles are a
+// pure function of the source (the banded partition), so this dedup is
+// binary-invariant. A non-var type payload coexists conservatively (the
+// safe side); after an install reconciles fragments their args UNIFY, and
+// the reconciled instance IS the install's identity — the same channel the
+// crown's instance-precise negation keys on (install provenance, the
+// world-chain hkey: designed here once, consumed by the modal crown).
+fn frag_args_same(ref a1, ref a2) with Memory =
+  len(a1) == len(a2) && frag_args_same_walk(a1, a2, 0)
+
+fn frag_args_same_walk(ref a1, ref a2, i) with Memory =
+  if i >= len(a1) { true }
+  else {
+    let same = match (list_index(a1, i), list_index(a2, i)) {
+      (EAInt(x), EAInt(y))       => x == y,
+      (EAFloat(x), EAFloat(y))   => x == y,
+      (EAString(x), EAString(y)) => x == y,
+      (EAType(tx), EAType(ty2))  => match (tx, ty2) {
+        (TVar(hx), TVar(hy)) => hx == hy,
+        _ => false
+      },
+      (EANode(nx), EANode(ny))   => nx == ny,
+      _ => false
+    }
+    if same { frag_args_same_walk(a1, a2, i + 1) } else { false }
+  }
+
 // Union (`+` and the accumulation of performs): presents union; a name
 // present ANYWHERE escapes every mask, so the joint absent set drops it;
 // tails join Closed < Var < All, first var kept (unification constrains).
@@ -217,7 +324,7 @@ fn tail_join(ta, tb) with Pure = match ta {
 // Minting a fresh var BOUND to the masked triple over the original tail
 // makes the mask an EDGE resolve_row folds through — unions carry vars
 // untouched, so the subtraction survives every union by construction.
-fn diff_row(ref a, ref b) with GraphWrite + Memory + !Mutate = {
+fn diff_row(ref a, ref b) with GraphWrite + Memory + !Mutate + Alloc = {
   let EfRow(pa, aa, ta) = a
   let EfRow(pb, _, _) = b
   match ta {

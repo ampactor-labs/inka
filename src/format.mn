@@ -1119,13 +1119,13 @@ fn render_sibling_separator(ctx) with Pure = match ctx {
 // the chain/block/tuple depth is a live read of that edge chain (the parent IS
 // an edge, not a missing index). canonical_indent_depth / sibling_separator
 // project the 2-/4-space layout from this real position.
-fn render_context_at(handle) with GraphRead + !Mutate + Memory = {
+fn render_context_at(handle) with GraphRead + !Mutate + Memory + Alloc = {
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Graph(next, _spans) = snapshot
   scan_for_render_parent(handle, 0, next)
 }
 
-fn scan_for_render_parent(target, i, n) with GraphRead + !Mutate + Memory = {
+fn scan_for_render_parent(target, i, n) with GraphRead + !Mutate + Memory + Alloc = {
   if i >= n { RenderContextDefault }
   else {
     match render_context_from_parent(target, graph_node_body(i)) {
@@ -1139,7 +1139,7 @@ fn scan_for_render_parent(target, i, n) with GraphRead + !Mutate + Memory = {
 // puts the target in a chain; a BlockExpr in a block; a tuple/list literal in
 // a tuple. Depth is the parent's own enclosing depth + 1 (read by recursion at
 // render time; the first enclosing edge is sufficient for the indent step).
-fn render_context_from_parent(target, body) with Memory = match body {
+fn render_context_from_parent(target, body) with Memory + Alloc = match body {
   NExpr(PipeExpr(_, l, r)) =>
     if child_is(target, l) || child_is(target, r) {
       RenderContextChain(1)
@@ -1158,7 +1158,7 @@ fn child_is(target, node) with Pure = {
   h == target
 }
 
-fn any_child_is(target, nodes) with Memory = {
+fn any_child_is(target, nodes) with Memory + Alloc = {
   if len(nodes) == 0 { false }
   else if child_is(target, last(nodes)) { true }
   else { any_child_is(target, drop_last(nodes)) }

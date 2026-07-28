@@ -431,7 +431,7 @@ fn node_body_of(node) with Pure = {
   body
 }
 
-fn contains_path(paths, target) with Memory = {
+fn contains_path(paths, target) with Memory + Alloc = {
   if len(paths) == 0 { false }
   else if last(paths) == target { true }
   else { contains_path(drop_last(paths), target) }

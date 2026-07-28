@@ -91,7 +91,11 @@ handler infer_ctx with stack = [], arm_stack = [], install_marks = [] {
     if len(stack) == 0 { resume([]) }
     else {
       let frame = last(stack)
-      graph_bind_row(frame.row_handle,
+      // The finalize op, not the teaching bind: the frame's accumulation
+      // is the decl's own total, and a JOIN here would re-widen what
+      // row_without_self strips (the teaching bind joins by the lattice
+      // law; the exit REPLACES — two algebras, two ops).
+      graph_finalize_row(frame.row_handle,
         row_without_self(frame.accumulated_row, frame.row_handle),
         Located(frame.fn_span, Inferred("fn effect row")))
       // The popped frame's declaration comes back to the closer — the
@@ -1443,30 +1447,25 @@ fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
 // with its own re-teaching, so the surviving binding is whichever
 // branch ran last and lower's can_yield reads the schedule's pick
 // (the float-format trio's k2 wrap flip, two self-stable attractors,
-// census 0 in both). Rebinding a bound root is the union-find law
-// violated regardless of concurrency; the chain's ENTRY is a
-// residual subst share of a round-era cell (the collection gap the
-// recursive bound-tail fold did not close). The rebind census RAN
-// (9,676 per compile): rebinding is pervasive and partly DELIBERATE
-// — inf_exit_fn's "fn effect row" bind OVERWRITES the placeholder
-// binding as finalization — so the blanket never-rebind rule is
-// refuted as the fix shape. THE ULTIMATE FORM IS PROVEN on the
-// lattice-join branch (ed656d32), research-grounded in LVars/CALM,
-// Burckhardt's concurrent revisions, CRDT join-state, and semi-naive
-// datalog: the teaching write on a bound row cell JOINS (row_join —
-// bare names union, parameterized instances coexist as fragments;
-// joins commute, so all schedules converge), the decl-exit REPLACE
-// rides graph_finalize_row, and the infer→lower boundary is the LVar
-// freeze. MEASURED there: SIX IDENTICAL shas at window 8, twice,
-// under two join variants — determinism by algebra where every
-// scheduling discipline still flipped 4-2. The branch stays off main
-// on the census gate (86 E_TypeMismatch: instance payloads meeting
-// positionally across coexisting fragments at arm-resume sites and
-// effect-polymorphic folds) — the reconciliation is exactly the
-// banked same-name-fragments-coexist landing (unify_instances_to and
-// the install reconciliation learn fragments), and K>1 lands as its
-// dividend. The window holds at ONE on main.
-let judge_window = 1
+// census 0 in both). The rebind census RAN (9,676 per compile):
+// rebinding is pervasive and partly DELIBERATE — inf_exit_fn's
+// finalization overwrites the placeholder (1,982 as the rebinder,
+// 4,674 as the prior binding) — so the blanket never-rebind-a-bound-
+// root rule was REFUTED as the fix shape, and the lattice landed
+// instead: the teaching write on a bound row cell is a JOIN
+// (graph_bind_row's bound arm — row_join, fragments coexisting by
+// GRAPH identity; joins commute and idempote, so N caller branches
+// teaching one cell converge to the same value in ANY order — the
+// LVars/CALM law), the decl-exit REPLACE rides its own op
+// (graph_finalize_row: two algebras, two ops), and the foreign-share
+// ENTRY died at its root — the frozen-read instantiate
+// (subst_ty_build/subst_row_build: the mapping decides BEFORE any
+// live chase; the freeze exists so readers never read live; the one
+// scoped exception is the deliberately-unquantified miss — handler
+// config↔payload two-phase, mono self-entries). The join judge's
+// census on its own source is 0. The six-run variance diff stays the
+// standing instrument; FRAGX the standing collision census.
+let judge_window = 8
 
 // THE FAN: every layer branch runs as a REAL task — a spawned
 // instance of the whole module over the shared image, its world born
@@ -5008,8 +5007,21 @@ fn chase_fields_changes(fields, d, i, n) =
   }
 
 fn chase_row_changes(eff, d) = match eff {
-  EfRow(p, a, _) =>
-    chase_names_changes(p, d, 0, len(p)) || chase_names_changes(a, d, 0, len(a))
+  EfRow(p, a, t) => {
+    // A BOUND tail is ALWAYS a change: the build folds the binding to its
+    // VALUE (subst_row_changes' law at the chase face). Free tails stay —
+    // generalize's NRowFree arm quantifies them.
+    let tail_hit = match t {
+      EtVar(v) => match graph_chase(v) {
+        GNode(NRowBound(_), _) => true,
+        _ => false
+      },
+      _ => false
+    }
+    tail_hit
+      || chase_names_changes(p, d, 0, len(p))
+      || chase_names_changes(a, d, 0, len(a))
+  }
 }
 
 fn chase_names_changes(names, d, i, n) =
@@ -5090,7 +5102,29 @@ fn chase_deep_build(ty, d) = if d > 200 {
 fn chase_row_deep(eff, d) =
   if chase_row_changes(eff, d) {
     match eff {
-      EfRow(p, a, t) => ef_make(chase_eff_names(p, d), chase_eff_names(a, d), t)
+      EfRow(p, a, t) => {
+        let p2 = chase_eff_names(p, d)
+        let a2 = chase_eff_names(a, d)
+        // THE VALUE BOUNDARY AT THE CHASE FACE (the bind census's verdict:
+        // a declared fn's BOUND row cell rode EtVar through generalize's
+        // chase into its published scheme — a live pointer into the decl's
+        // band that concurrent callers folded mid-flight, the six-battery's
+        // 5-1 split on driver_extract_imports' cell). A bound tail folds to
+        // its VALUE by recursion, exactly as subst_row_build's arm —
+        // presents and absents union through the fold (the pending-
+        // subtraction mask rides), the inner tail survives. A published
+        // scheme is then a value or a quantified var, never a live pointer.
+        match t {
+          EtVar(v) => match graph_chase(v) {
+            GNode(NRowBound(inner), _) => {
+              let EfRow(ip, ia, it) = chase_row_deep(inner, d + 1)
+              ef_make(name_set_union(p2, ip), name_set_union(a2, ia), it)
+            },
+            _ => ef_make(p2, a2, t)
+          },
+          _ => ef_make(p2, a2, t)
+        }
+      }
     }
   } else { eff }
 
@@ -5287,11 +5321,10 @@ fn subst_changes(ty, mapping) = match ty {
   TName(_, args) => subst_list_changes(args, mapping, 0, len(args)),
   TRecord(fields) => subst_fields_changes(fields, mapping, 0, len(fields)),
   TRecordOpen(fields, v) => {
-    let tail_hit = match graph_chase(v) {
-      GNode(NRowFree(_), _) => find_mapping(mapping, graph_chase_handle(v)) >= 0,
-      _ => false
-    }
-    tail_hit || subst_fields_changes(fields, mapping, 0, len(fields))
+    // Mapping-first, matching the build: a quantified rest freshens even
+    // when since-bound, so any hit IS a change.
+    find_mapping(mapping, graph_chase_handle(v)) >= 0
+      || subst_fields_changes(fields, mapping, 0, len(fields))
   },
   TRefined(base, _) => subst_changes(base, mapping),
   TCont(input, answer, _, world) =>
@@ -5374,17 +5407,22 @@ fn subst_ty_build(ty, mapping) = match ty {
   TUnit   => ty,
   TByte   => ty,
   TVar(id) => {
-    // Read the LIVE node, not the raw captured TVar (union-find / Carried-Truth).
-    // A var free at generalize but BOUND after (a handler config-param the
-    // arm-walk linked to the payload) must substitute its RESOLVED type, so the
-    // payload freshens WITH it. A free var maps through its ROOT (the mapping is
-    // root-keyed) so an aliased qvar still freshens. Was: find_mapping on the raw
-    // id — left bound/aliased vars stale, breaking the config↔payload link.
-    match graph_chase(id) {
-      GNode(NBound(inner), _) => subst_ty(inner, mapping),
-      _ => {
-        let replacement = find_mapping(mapping, graph_chase_handle(id))
-        if replacement >= 0 { TVar(replacement) } else { ty }
+    // THE FROZEN READ — the mapping decides BEFORE any live chase. A var in
+    // the mapping was free at the freeze, so whatever bound it since is
+    // post-freeze teaching (another caller's private constraint under the
+    // parallel fan) — it freshens, never reads through (Carried-Truth at the
+    // scheme boundary: the freeze exists so readers never read live). Only a
+    // MISS chases: a var deliberately unquantified — the handler
+    // config↔payload two-phase case (config vars are not in the handler
+    // scheme's q, so the arm-walk's later binding legitimately resolves
+    // here), monomorphic self-entries, and pre-freeze-bound structure. The
+    // root-keyed lookup keeps aliased qvars freshening.
+    let replacement = find_mapping(mapping, graph_chase_handle(id))
+    if replacement >= 0 { TVar(replacement) }
+    else {
+      match graph_chase(id) {
+        GNode(NBound(inner), _) => subst_ty(inner, mapping),
+        _ => ty
       }
     }
   },
@@ -5405,13 +5443,11 @@ fn subst_ty_build(ty, mapping) = match ty {
     // asymmetry (generalize quantifies v; instantiate must not strand it).
     // Carried-Truth: the free_in_ty ↔ subst_ty symmetry was broken at this arm.
     let fields2 = subst_fields(fields, mapping)
-    match graph_chase(v) {
-      GNode(NRowFree(_), _) => {
-        let r = find_mapping(mapping, graph_chase_handle(v))
-        if r >= 0 { mk_record_open(fields2, r) } else { mk_record_open(fields2, v) }
-      },
-      _ => mk_record_open(fields2, v)
-    }
+    // The frozen read at the record-row sort: mapping first (a quantified
+    // rest freshens regardless of later binding), the miss shares (bound
+    // residuals are pre-freeze truth; unquantified frees are deliberate).
+    let r = find_mapping(mapping, graph_chase_handle(v))
+    if r >= 0 { mk_record_open(fields2, r) } else { mk_record_open(fields2, v) }
   },
   TRefined(base, pred) => TRefined(subst_ty(base, mapping), pred),
   TCont(input, answer, disc, world) => TCont(
@@ -5449,39 +5485,31 @@ fn subst_row_build(eff, mapping) = {
   let ns2 = subst_eff_names(ns, mapping)
   let ab2 = subst_eff_names(ab, mapping)
   match t {
-    EtVar(v) => match graph_chase(v) {
-      GNode(NRowBound(inner), _) => {
-        // A bound tail folds by RECURSION — the substitution descends the
-        // binding exactly as deep as free_in_row's collection does (the
-        // trio law at the subst face). The one-level form checked only the
-        // inner tail's mapping and SHARED the whole chain on a miss
-        // (ef_make(ns2, ab2, EtVar(v))) — but a chain bound two deep
-        // carries its free terminal in the OWNER's band, so every caller
-        // of a recursive fn's scheme read the owner's live cell and the
-        // FIRST caller bound it (the window-8 first-binder race: cell
-        // 1873202 bound at four handle_to_smt call sites across two
-        // branches, measured by the reason census). The recursion's own
-        // arms subsume both former branches: an inner free tail freshens
-        // through the mapping (the pending-subtraction mask's absent set
-        // rides — the absorb-poly fixture's law), a solved tail merges
-        // whole; nested frees freshen at ANY depth, and the chain is
-        // never shared.
-        let EfRow(c2, ia2, it2) = subst_row_build(inner, mapping)
-        ef_make(name_set_union(ns2, c2), name_set_union(ab2, ia2), it2)
-      },
-      GNode(NRowFree(_), _) => {
-        let r = find_mapping(mapping, graph_chase_handle(v))
-        if r >= 0 { ef_make(ns2, ab2, EtVar(r)) } else { ef_make(ns2, ab2, EtVar(v)) }
-      },
-      // A free TYPE-sort node in row position freshens exactly like a
-      // row var (row_var_is_free's tolerance, the subst face): the
-      // catch-all used to SHARE these — the T-handle row-var class
-      // leaking one live tail into every instantiation.
-      GNode(NFree(_), _) => {
-        let r = find_mapping(mapping, graph_chase_handle(v))
-        if r >= 0 { ef_make(ns2, ab2, EtVar(r)) } else { ef_make(ns2, ab2, EtVar(v)) }
-      },
-      _ => ef_make(ns2, ab2, EtVar(v))
+    EtVar(v) => {
+      // THE FROZEN READ at the row sort — the mapping decides BEFORE any
+      // live chase (the TVar arm's law, one sort over): a quantified tail
+      // was free at the freeze, so a later binding is another caller's
+      // post-freeze teaching and must freshen, never fold in. Only a MISS
+      // chases: pre-freeze-bound chains fold by RECURSION (descending
+      // exactly as deep as free_in_row's collection — the trio law; the
+      // one-level form shared two-deep chains, the measured window-8
+      // first-binder race on handle_to_smt's cell), and a genuinely
+      // unquantified free tail shares (the deliberate mono/two-phase
+      // cases).
+      let r0 = find_mapping(mapping, graph_chase_handle(v))
+      if r0 >= 0 { ef_make(ns2, ab2, EtVar(r0)) }
+      else {
+        match graph_chase(v) {
+          GNode(NRowBound(inner), _) => {
+            let EfRow(c2, ia2, it2) = subst_row_build(inner, mapping)
+            ef_make(name_set_union(ns2, c2), name_set_union(ab2, ia2), it2)
+          },
+          // A mapping-missed FREE tail (either sort — row_var_is_free's
+          // tolerance) is deliberately unquantified: the mono self-entry
+          // and the two-phase registration shapes. It shares.
+          _ => ef_make(ns2, ab2, EtVar(v))
+        }
+      }
     },
     _ => ef_make(ns2, ab2, t)
   }
@@ -6610,11 +6638,11 @@ fn grade_fields(fields) =
 // primitive-type-special-case for refinement); 8 (Predicate is the
 // ADT — no string-keyed pred-name flag); 9 (every NarrowingSite
 // NExpr arm enumerated; no wildcard fabricating ()).
-fn infer_refinement_narrowing(body) with GraphRead + GraphWrite + Memory = {
+fn infer_refinement_narrowing(body) with GraphRead + GraphWrite + Memory + Alloc = {
   walk_refinement(body, PTrue)
 }
 
-fn walk_refinement(node, path_pred) with GraphRead + GraphWrite + Memory = {
+fn walk_refinement(node, path_pred) with GraphRead + GraphWrite + Memory + Alloc = {
   let N(body, _, _) = node
   match body {
     NExpr(IfExpr(c, t, e)) => {
@@ -6719,7 +6747,7 @@ fn walk_refinement(node, path_pred) with GraphRead + GraphWrite + Memory = {
 // before walking the arm body. The narrowing is per-arm-scope; once
 // the arm body is walked, its refinement contributions don't leak
 // to other arms (they're branch-disjoint; map-per-arm semantics).
-fn walk_refinement_arms(scrut, arms, path_pred) with GraphRead + GraphWrite + Memory = {
+fn walk_refinement_arms(scrut, arms, path_pred) with GraphRead + GraphWrite + Memory + Alloc = {
   if len(arms) == 0 { () }
   else {
     // A match arm is a (pat, body) TUPLE (parser push_node (pat, body); the
@@ -6736,7 +6764,7 @@ fn walk_refinement_arms(scrut, arms, path_pred) with GraphRead + GraphWrite + Me
 // Block walking — stmts may include `assert(pred)` which narrows the
 // rest of the block. Threads path_pred through; each assert
 // strengthens the predicate for subsequent stmts + final expression.
-fn walk_refinement_block(stmts, final, path_pred) with GraphRead + GraphWrite + Memory = {
+fn walk_refinement_block(stmts, final, path_pred) with GraphRead + GraphWrite + Memory + Alloc = {
   if len(stmts) == 0 { walk_refinement(final, path_pred) }
   else {
     let stmt = last(stmts)
@@ -6768,11 +6796,11 @@ fn strengthen_path_pred(path_pred, stmt) with GraphRead + Memory = {
 // inference doesn't add the predicate to the caller's path_pred (the
 // callee's body is independently walked); the relationship surfaces
 // via signature unification at call site.
-fn walk_refinement_args_with_param_preds(f, args, path_pred) with GraphRead + GraphWrite + Memory = {
+fn walk_refinement_args_with_param_preds(f, args, path_pred) with GraphRead + GraphWrite + Memory + Alloc = {
   walk_refinement_list(args, path_pred)
 }
 
-fn walk_refinement_list(nodes, path_pred) with GraphRead + GraphWrite + Memory = {
+fn walk_refinement_list(nodes, path_pred) with GraphRead + GraphWrite + Memory + Alloc = {
   if len(nodes) == 0 { () }
   else {
     walk_refinement(last(nodes), path_pred)
@@ -6780,7 +6808,7 @@ fn walk_refinement_list(nodes, path_pred) with GraphRead + GraphWrite + Memory =
   }
 }
 
-fn walk_refinement_fields(fields, path_pred) with GraphRead + GraphWrite + Memory = {
+fn walk_refinement_fields(fields, path_pred) with GraphRead + GraphWrite + Memory + Alloc = {
   if len(fields) == 0 { () }
   else {
     // A record-literal field is a (name, value) TUPLE (types.mn

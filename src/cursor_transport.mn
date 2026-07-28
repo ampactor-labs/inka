@@ -429,7 +429,7 @@ fn show_verify_count(preds) with Alloc + Memory =
   if len(preds) == 0 { "no obligations" }
   else { "{int_to_str(len(preds))} pending" }
 
-fn show_suggestion(opt) with Memory = match opt {
+fn show_suggestion(opt) with Memory + Alloc = match opt {
   None => "(no next-step)",
   Some(suggestion) => {
     let AnnotationSuggestion(_, ann_text, unlocks, _) = suggestion

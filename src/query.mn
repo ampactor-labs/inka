@@ -378,12 +378,12 @@ fn span_of_reason(reason) with Pure = match reason {
 // it provides (the handler chain IS the capability stack, PLAN §2). Scan the
 // weave for the decl whose arms include OP; project its handler name.
 
-fn handler_providing_op(op_name) with GraphRead + !Mutate + Memory = {
+fn handler_providing_op(op_name) with GraphRead + !Mutate + Memory + Alloc = {
   let Graph(next, _) = graph_snapshot()
   scan_handler_for_op(op_name, 0, next)
 }
 
-fn scan_handler_for_op(op_name, i, n) with GraphRead + !Mutate + Memory = {
+fn scan_handler_for_op(op_name, i, n) with GraphRead + !Mutate + Memory + Alloc = {
   if i >= n { None }
   else {
     match graph_node_body(i) {
@@ -395,7 +395,7 @@ fn scan_handler_for_op(op_name, i, n) with GraphRead + !Mutate + Memory = {
   }
 }
 
-fn arms_include_op(arms, op_name) with Memory = {
+fn arms_include_op(arms, op_name) with Memory + Alloc = {
   if len(arms) == 0 { false }
   else {
     let arm = last(arms)
@@ -412,7 +412,7 @@ fn arms_include_op(arms, op_name) with Memory = {
 // the resolution goto-definition / find-references start from — read live, no
 // position→symbol side-index.
 
-fn name_at_span(span) with GraphRead + !Mutate + Memory = {
+fn name_at_span(span) with GraphRead + !Mutate + Memory + Alloc = {
   let Graph(_, span_index) = graph_snapshot()
   match find_tightest(span_index, span, None, 999999999) {
     None         => None,
@@ -449,7 +449,7 @@ fn span_area(s: ValidSpan) with Pure = {
   else { ((el - sl) * 1000) + ec - sc }
 }
 
-fn find_tightest(ref idx, target, best_h, best_area) with Memory = {
+fn find_tightest(ref idx, target, best_h, best_area) with Memory + Alloc = {
   if len(idx) == 0 { best_h }
   else {
     let (s, h) = last(idx)

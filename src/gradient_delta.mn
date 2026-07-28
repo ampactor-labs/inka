@@ -280,7 +280,7 @@ fn row_is_pure(row) with Memory = {
   }
 }
 
-fn row_strictly_narrower(body_row, decl_row) with Memory + GraphRead = {
+fn row_strictly_narrower(body_row, decl_row) with Memory + GraphRead + Alloc = {
   // Body strictly narrower iff body subsumes decl AND decl does NOT
   // subsume body. row_subsumes is from src/effects.mn.
   if row_subsumes(decl_row, body_row) {
@@ -311,10 +311,10 @@ fn row_to_with_clause(row) with Intern + Memory = {
   }
 }
 
-fn neg_names_to_str(ref names) with Intern + Memory =
+fn neg_names_to_str(ref names) with Intern + Memory + Alloc =
   show_list(names, (n) => "!{show_eff_name(n)}", " + ")
 
-fn eff_names_to_str(names) with Intern + Memory = {
+fn eff_names_to_str(names) with Intern + Memory + Alloc = {
   if len(names) == 0 { "Pure" }                   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
   else if len(names) == 1 { eff_name_label(last(names)) }
   else {

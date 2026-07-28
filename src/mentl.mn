@@ -360,7 +360,7 @@ fn unwrap_source_span(opt) with Pure = match opt {
 // live; the string table that re-derived this is dissolved. A name
 // that binds no handler (not found, or a non-handler kind) absorbs
 // nothing.
-fn catalog_handled_effects(handler_name) with Intern + Memory + EnvRead + !Mutate = {
+fn catalog_handled_effects(handler_name) with Intern + Memory + EnvRead + !Mutate + Alloc = {
   match env_lookup(handler_name) {
     None => [],
     Some(entry) => {
@@ -683,7 +683,7 @@ fn render_leaf(reason, depth) = {
 // teach_why_string ties the effect-returning teach_why to the pure
 // renderer. Callers (LSP hover, explain surface, Quick Fix surface)
 // invoke this directly.
-fn teach_why_string(handle) with GraphRead + Memory + Alloc = {
+fn teach_why_string(handle) with GraphRead + Memory + Alloc + Intern = {
   render_why(why_from_handle(handle))
 }
 

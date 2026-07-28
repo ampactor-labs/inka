@@ -108,6 +108,32 @@ Propose: 1
 Why: declaration-order param, at hole.mn:5
 ```
 
+When more than one candidate survives the proof, it does not guess. It shows
+you the whole proven space and names the move that collapses it:
+
+```
+type Bit = Int where 0 <= self && self <= 1
+
+fn pick() -> Bit with Pure = ??
+```
+```
+$ mentl bit.mn:3:30
+Query: ?? : Bit
+Propose: 2 proven survivors — a tie:
+  0  — inferred from the type's integer inhabitants
+  1  — inferred from the type's integer inhabitants
+  one more constraint (a refinement, a type, an example) collapses it
+Why: declared pick, at bit.mn:3
+```
+
+Every line of that answer is a live read of the graph — the type from your
+refinement, the survivors from a checkpoint-verify-rollback pass over each
+candidate, the Why from the declaration that constrained the hole. Tighten
+the refinement one notch and the tie collapses to the one proven fill. This
+is the difference between a tool that autocompletes and a medium that
+proves: nothing is offered that did not survive the gate, and a tie teaches
+instead of picking silently.
+
 Claim something false, and it refuses to build the program — at the exact
 line, in words:
 
@@ -205,6 +231,16 @@ zero errors from the medium on its own source; `!E` soundness gated by five
 crucibles; refusal classes armed one at a time as each reaches zero on the
 wheel itself; real host-thread parallelism over one shared image, gated by
 fixtures that answer the same number sequential and spawned.
+
+For the negative-capability claim specifically, there is a runnable receipt:
+`bash benchmarks/absence/run.sh` compiles thirteen small programs whose
+first line states what must prove or refuse — severance, transitivity, the
+higher-order leak, absence through stored closures, reachability on the
+quiet branch — and reads the verdict from the compiler's own diagnostic
+stream. `benchmarks/absence/README.md` states the scope, the controls, and
+the nearest prior art. No current verification benchmark measures proving
+the negative; this one is small enough to translate into any system that
+believes it can.
 
 ## The three documents
 

@@ -557,6 +557,30 @@ ultimate form?"; the disposable seed's weaker inference catches up afterward
    caught by a virtualizing handler), a correct answer to live programming's
    "don't run the dangerous candidate," contingent on the crown landing.
 
+   **THE OPTIMALITY HALF (Morgan's charge, 2026-07-28): the space between
+   a developer's intent-plus-constraints and the BEST implementation of it
+   as machine instruction is the medium's to EVAPORATE — a proposal is not
+   merely proven, it is extraction-OPTIMAL.** A survivor is an equality
+   CLASS, not one program: the e-graph saturates the proven fill under the
+   effect-aware rewrites, extraction picks the cost-minimal member, the
+   repr gradient pins its widths, and the native projection (band N) makes
+   "best machine instruction" literal — superoptimization as the default
+   authoring experience, never a pass you opt into. This is what obsoletes
+   the generative copilot at next-move scope, stated as channels: the
+   copilot's channel — intent → tokens → plausible text → human audit — is
+   lossy at every arrow and its enforcement is behavioral (the 2026
+   spec-driven wave concedes it in its own docs: intent captured in
+   markdown, "no automated validation that generated code matches
+   specifications"); the medium's channel — intent → CONSTRAINT (typed,
+   monotone, compounding) → guided search pruned by proof at every step →
+   survivors ranked by local intent → the tie TEACHES → the accepted move
+   proven AND optimal — has no unverified middle, because every
+   intermediate is a graph fact. What a generative assistant retains is
+   the underdetermined tail, and the medium converts that tail into a
+   sequence of proven next-moves; a learned proposer survives only as an
+   optional `Synth` handler behind the gate, never the seat (§1's
+   correction, now with its optimality face).
+
 ### §5.U · The value layer — four projections of one cursor on one heap record
 
 *Verified by a 21-agent adversarial workflow; the inevitable form, not a choice.*
@@ -1043,6 +1067,31 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · DOC-TRUTH — prose gets a mechanical floor (no re-pin —
+  tools only; the docs-stay-true machinery's first rung, destiny named
+  in its own header: docs-as-projection + `mentl audit`).
+  tools/doc-truth.sh runs inside verify (and so inside every
+  pre-commit): the PROVENANCE head sha must equal
+  sha256(boot/mentl.wasm) — the fabrication law mechanized; the §7
+  ledger's most recent pin must be the boot sha's prefix; and every
+  tools/ command the four reader-facing docs name in present-tense
+  position must exist (the §7 ledger excluded as history — its first
+  run correctly distinguished the comment-audit.sh deletion RECORD
+  from a broken promise). Zero-tolerance, not ratchets — these are
+  exactly true always. Instrument-checked RED both ways (a planted
+  bogus command refused; the true state passes). Rides with the same
+  arc: §5 gains THE OPTIMALITY HALF (Morgan's charge — proposals are
+  extraction-optimal, not merely proven; the copilot channel vs the
+  medium channel stated plainly), §11's Arc 2 window re-measured by
+  live fetch (MoonBit 0.9 shipped verification-as-feature April 2026
+  with its own agent — the contest is live before their 1.0; Scala CC
+  concedes no negation; spec-kit's 124k stars concede "no automated
+  validation" — intent captured in markdown, no gate), the positioning
+  writeup gains its second wedge (THE SPEC THAT CANNOT BE IGNORED),
+  the FELT-PATH-FIRST LAW banked (every arc opens by walking its felt
+  path through the shim — the register was the demo's true first
+  landing), and Arc 4's ranker increment marked pull-forward eligible
+  (no dep; the obsolescence thesis's nearest lever).
 - 2026-07-28 · THE PROPOSER SPEAKS THE REGISTER — a synthesized
   candidate's Reason is genuinely unlocated and speaks the medium's
   voice (the demo transcript's last two blemishes · pin d6826c2e).
@@ -5187,6 +5236,7 @@ bash tools/march-gate.sh --micros   # rungs + battery through boot's wheel-emitt
 bash tools/march.sh            # THE RATCHET: boot→m2→m3, ASSERTS m2 == m3; on m2 ≠ m3 runs m4 ITSELF and rules TRANSITION (re-pin from m3) vs BROKEN
 bash tools/frontier-gate.sh    # scheduled matrix + ?? authoring workflows (--compiler fresh for the current wheel)
 bash tools/proof-exactness-gate.sh  # hole refuses · debt surfaces · suspension runs
+bash tools/doc-truth.sh        # the docs' checkable claims vs the artifact: PROVENANCE sha == boot sha, ledger head pin, named commands exist (runs inside verify — prose gets a mechanical floor)
 mentl space                    # mentl edit in the browser (localhost:7378/ide/) — SERVED BY THE WHEEL (src/main.mn space_run; the shim owns the tcplisten seam)
 #   (the seed + --from-seed are deleted, 7401c4b; the cold ladder lives at tag first-light)
 python3 tools/emit-diff.py m2.wat m3.wat        # the divergence pinner — run FIRST on any m3 trap (CLAUDE.md ⟲)
@@ -5425,18 +5475,30 @@ judgment's own bracket; Strong Soundness/Completeness adopted at the
 decl; the shared64 probe answered. Residue:
 `Hβ.synth.annotation-fan-pure-proof` ·
 `Hβ.felt.tie-teach-behavioral-scenario`, gated on !E-speculation).
-**Arc 2 · THE CATEGORY SHIP — IN FLIGHT** (the window: MoonBit 1.0 /
-Scala CC stabilizing; packaging of LANDED capability only). Landed:
+**Arc 2 · THE CATEGORY SHIP — IN FLIGHT** (the window, MEASURED
+2026-07-28 by live fetch: MoonBit 0.9 shipped "first-class formal
+verification" as a core feature in April 2026 WITH its own code agent
+— the contest is live NOW, before their 1.0; Scala capture checking's
+own docs concede "highly experimental" and NO effect negation or
+absence proofs; and spec-kit — 124k stars, 30+ agent integrations, the
+industry's intent-capture wave — concedes in its own docs "no
+automated validation that generated code matches specifications,
+enforcement appears primarily behavioral": intent captured in
+markdown, no gate. Packaging of LANDED capability only). Landed:
 the ABSENCE BENCHMARK (benchmarks/absence — 13/13 baseline,
 runner-gated, prior art + growth tiers named; the podium was empty);
 the RENDER REGISTER and the proposer's register (the demo's DEPs);
 the README fan demo, every claim transcript-verified through the
 shim. Open: the MCP-facing Synth-gate demo (an agent proposes Mentl,
 the gate proves !Network/!Alloc BEFORE anything executes, refusals
-teach) · the positioning writeup (cell-grain deterministic inference
-with the LVars citation; the four-arm hole citing its four one-arm
-priors RbSyn/RusSOL/Synquid/Hazel; verify-by-replay as the release
-protocol).
+teach) · the positioning writeup, now with TWO wedges (cell-grain
+deterministic inference with the LVars citation; the four-arm hole
+citing its four one-arm priors RbSyn/RusSOL/Synquid/Hazel;
+verify-by-replay as the release protocol; and THE SPEC THAT CANNOT BE
+IGNORED — the same intent that spec-driven development captures in
+markdown and enforces behaviorally is, in Mentl, a row/refinement the
+gate discharges or refuses: the industry built intent-capture without
+a gate, and the writeup names the gap in their own docs' words).
 **Arc 3 · PROOFS** — the modal crown Metn-keyed (masks subtract
 INSTALL IDENTITY = the world-chain hkey; negation-under-modality
 published FIRST, contested by nobody); the
@@ -5449,7 +5511,13 @@ the integrity dual-lattice + PC-labels + robust declassification +
 finite maps + sequence lengths second; quantifiers never;
 per-obligation caching across the cone; SMT as a CHECK-ONLY
 certificate-keyed handler swap).
-**Arc 4 · THE FELT FLAGSHIP** — the incremental cone claiming PROVEN
+**Arc 4 · THE FELT FLAGSHIP** — and its RANKER increment is
+pull-forward eligible: the gradient reading LOCAL intent (Reason
+chains carrying upstream why + proximity + the in-scope vocabulary,
+replacing gates×proximity) carries NO dep and is the obsolescence
+thesis's nearest lever (§5's optimality half) — interleave it as early
+as Arc 3, every survivor's rank sharpening the daily fan. The rest:
+the incremental cone claiming PROVEN
 equivalence to full reanalysis (the fixpoint oracle proves it);
 session-as-a-value (persist mid-exploration, reopen anywhere, hand
 the image to an agent over MCP — gated on Arc 3's barrier); the
@@ -5479,6 +5547,15 @@ retiring in place.
 Excluded by hardware only: MI300X execution, hosted CI, wasmFX,
 shared-everything-threads. Every dispatched agent runs `fable`,
 passed explicitly; every landing re-derived on main; the board is the gate.
+**THE FELT-PATH-FIRST LAW (paid for 2026-07-28): every arc OPENS by
+walking its felt path** — the exact surface an outsider or the daily
+loop touches, through the installed shim, before any build starts. The
+walk surfaces the arc's REAL opening work: the five-minute demo's
+first walk found the 173-line diagnostic flood no gate had ever
+measured (the fixture legs dodged it by never weaving the lib), and
+the render register — not the README — turned out to be the demo's
+true first landing. A DEP found by walking is cheap; a DEP found by an
+outsider is a category loss.
 
 **CAMPAIGN STATE (2026-07-28).** Arcs 0 and 1 (core) LANDED; Arc 2 in
 flight (the arc list above carries the live split); the ledger's head

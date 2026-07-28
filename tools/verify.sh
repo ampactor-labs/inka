@@ -127,6 +127,18 @@ else
   say "✗ compiler TRAPPED compiling the wheel (tail $WT_M2CACHE/m2.err):"; tail -3 "$WT_M2CACHE/m2.err"; fail=1
 fi
 
+# 5. Doc-truth — the docs' claims that CAN be checked against the artifact
+#    ARE (pin shas, ledger pins, named commands). Prose drifts; this is the
+#    mechanical floor under it (tools/doc-truth.sh; dissolves into
+#    docs-as-projection + mentl audit).
+if ! bash tools/doc-truth.sh >/dev/null 2>&1; then
+  say "✗ doc-truth: a doc claims what the artifact refutes —"
+  bash tools/doc-truth.sh 2>&1 | sed 's/^/  /'
+  fail=1
+else
+  say "· doc-truth: pin shas, ledger pins, and named commands verify against the artifact"
+fi
+
 if [[ "$fail" -ne 0 ]]; then
   say ""
   say "verify: the gate failed — a micro regressed, the wheel did not compile, or the"

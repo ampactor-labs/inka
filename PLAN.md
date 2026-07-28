@@ -200,6 +200,29 @@ that could build a better medium is already a move *inside* this one.
   *monotone* constraints — three properties a token-sampler cannot have. The moat
   is the gate; the PROPOSER over the typed graph is the second moat the refuter
   missed, and the crown (`!E`-sound-under-poly) is what makes both trustworthy.
+  **THE CLOSED LOOP (Morgan, 2026-07-28 — the vision's terminal form): the
+  loop closes to the HUMAN and MENTL, and no LLM offers an advantage at ANY
+  scope — obsolete for coding.** Not a hedge softened, a target named: the
+  Synth port stays universal by construction (closure over proposers IS the
+  thesis — anything may propose, nothing executes unproven), and the design
+  target is that nothing ever needs to arrive through it. Three legs carry
+  the claim, each a build item this plan already sequences: (1) NEXT-MOVE
+  SUPREMACY — guided search over the live typed graph (rows, Reasons,
+  refinements, ownership, proximity), extraction-optimal per §5's optimality
+  half, beats any token prior at the move scale; (2) THE QUESTION BEATS THE
+  GUESS — where intent genuinely underdetermines, the medium asks the
+  minimal-entropy question (the teaching tie-break; Choose-Don't-Label /
+  OGIS selection math), so the human's one keystroke replaces the model's
+  whole sample, and the underdetermined tail dissolves into a conversation
+  of proven next-moves — intent is the one genuine Outside (§0) and the
+  HUMAN is its only source, so the machinery that turns intent into
+  constraint fastest wins by construction; (3) THE LOOP IS FELT — the
+  multithreaded multi-cursor multi-shot time-traveling oracle (the fused
+  judgment+fan substrate, landed) makes the propose-verify-teach cycle
+  instant enough to live in, and the five verbs used EXEMPLARY THROUGHOUT
+  make the surface state intent as topology directly, shrinking what needs
+  proposing at all. An LLM behind the gate is then not forbidden — it is
+  UNEMPLOYED.
 - **The proof, validated from six directions.** Every domain spent a decade
   building *one of Mentl's arms* in isolation and stopped where it lacked the
   others: Faust has the verbs and no effects; JAX has the handlers and no real
@@ -579,7 +602,9 @@ ultimate form?"; the disposable seed's weaker inference catches up afterward
    the underdetermined tail, and the medium converts that tail into a
    sequence of proven next-moves; a learned proposer survives only as an
    optional `Synth` handler behind the gate, never the seat (§1's
-   correction, now with its optimality face).
+   correction, now with its optimality face) — and the CLOSED-LOOP target
+   (§1, Morgan 2026-07-28) is that the port stays EMPTY: the loop closed to
+   the human and the medium, no LLM advantageous at any scope.
 
 ### §5.U · The value layer — four projections of one cursor on one heap record
 
@@ -5556,6 +5581,16 @@ measured (the fixture legs dodged it by never weaving the lib), and
 the render register — not the README — turned out to be the demo's
 true first landing. A DEP found by walking is cheap; a DEP found by an
 outsider is a category loss.
+**THE CAMPAIGN'S TERMINUS is §1's CLOSED LOOP** (Morgan 2026-07-28):
+human + Mentl only, no LLM advantageous at any scope — every arc's
+landings measured against the three legs (next-move supremacy · the
+question beats the guess · the loop is felt). Part of leg 3 is the
+FIVE-VERB EXEMPLARITY charge: the wheel's own source uses the verbs
+exemplary throughout (the self-exemplification pass banked the
+measurement — zero `><` as a fanout verb in the wheel today; the
+compile spine's spawn fan is substrate-level, not yet verb-form), and
+the census instrument is the medium's own lexer projected as a query
+facet, never a grep (a `><` in a comment is not a verb).
 
 **CAMPAIGN STATE (2026-07-28).** Arcs 0 and 1 (core) LANDED; Arc 2 in
 flight (the arc list above carries the live split); the ledger's head

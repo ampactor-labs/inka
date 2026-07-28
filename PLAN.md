@@ -1092,6 +1092,22 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶ THE POSITIONING WRITEUP — Arc 2 closes (no re-pin —
+  docs only). docs/POSITIONING.md states the category claim and both
+  wedges with every claim's command inline, each re-run against the
+  live pin before the doc landed: the absence suite (13/0), the MCP
+  handshake through the installed shim, the field projection on
+  tutorial/07, the march, doc-truth, and the sha/PROVENANCE reads. The
+  honest-boundary section carries what is NOT claimed
+  (spec-faithfulness above the crown; V_Pending 139 on the wheel's own
+  self-compile, spoken not hidden; classes arm one at a time; the
+  correctness oracle still external). Arc 2's terminal gate held on
+  all three legs — clean-clone repro (the clone's own boot judges,
+  runs the benchmark 13/0, serves MCP; the exec leg rides the shim per
+  the seam's design, verified through the installed shim on the
+  README's own path), benchmark published with baselines, writeup
+  artifact-backed. The campaign's cursor moves to Arc 3 (proofs) with
+  Arc 4's ranker increment pull-forward eligible.
 - 2026-07-28 · ▶▶▶ THE GATE SERVES AGENTS — `mentl mcp`, the Synth-gate
   on MCP stdio; Arc 2's agent-cage demo lands (· pin 347b0a41). Any MCP
   client connects over newline-delimited JSON-RPC and PROPOSES source
@@ -5564,14 +5580,14 @@ shim; the MCP-FACING SYNTH-GATE (`mentl mcp` — an agent proposes over
 stdio, the gate proves before anything executes, refusals teach at
 file-local spans, only proven bytes reach disk; the §7 entry THE GATE
 SERVES AGENTS carries the record — the OPAW/Cedar counter is now
-runnable). Open: the positioning writeup, now with TWO wedges (cell-grain
-deterministic inference with the LVars citation; the four-arm hole
-citing its four one-arm priors RbSyn/RusSOL/Synquid/Hazel;
-verify-by-replay as the release protocol; and THE SPEC THAT CANNOT BE
-IGNORED — the same intent that spec-driven development captures in
-markdown and enforces behaviorally is, in Mentl, a row/refinement the
-gate discharges or refuses: the industry built intent-capture without
-a gate, and the writeup names the gap in their own docs' words).
+runnable); the POSITIONING WRITEUP (docs/POSITIONING.md — both wedges,
+every claim carrying its command, each command re-run against the live
+pin before the doc landed; the honest-boundary section states what is
+NOT claimed). ARC 2 IS COMPLETE — the terminal gate held on all three
+legs: clean-clone repro (the clone's own boot judges, runs the absence
+suite 13/0, and serves the MCP handshake; the exec leg rides the
+installed shim per the seam's design), the benchmark published with
+baseline results, the writeup's claims each artifact-backed.
 **Arc 3 · PROOFS** — the modal crown Metn-keyed (masks subtract
 INSTALL IDENTITY = the world-chain hkey; negation-under-modality
 published FIRST, contested by nobody); the

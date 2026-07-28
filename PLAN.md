@@ -5397,34 +5397,96 @@ three-doc contract forbids, and the global read-path already declares
 `~/.claude/plans/*` out of it. Landed arcs live in the §7 ledger;
 unlanded designs live here or in the named-residue index; nothing lives
 only in the mirror.)**
-The whole laptop-reachable remainder, sequenced by a 3-agent-refuted
-dependency spine, generative (each landing cashes out in the fused
-gradient loop AND in self-build) rather than columnar:
-**A** identity (intern-at-lex; crown positive residual dies; indexed-map
-primitive; instantiate-sharing; TString→alias; seq-addr-downcast; synth
-vocabulary) — **LANDED whole 2026-07-24** (nine pins; the §7 ledger
-carries each: the perf strikes 15.56s→6.4s, the intern substrate,
-EffName-as-handle with the crown residual closed by construction,
-check-then-build sharing, the Cast vocabulary, and the TString
-dissolution completing phase A at pin 5673c47c) →
-**B-i** TIME (persist=cache=fork on the rooted image;
-module-image cache; IC + incremental march; session-as-value) ∥ **B-ii**
-the arena (then the two genuinely-gated un-reverts) → **C** SPACE (R6
-first; deterministic handle partition; parallel compile spine; THE FUSED
-ORACLE — hole-fan, fix-fan, in-image selftest generator; gradient
-work-stealing; Simd-on-this-ISA; runner endgame) → **D** THE GRADIENT
-(decidable fragment first; living session; the ranker with e-graph dedup +
-`!E`-gated speculation + the minimality engine; LSP; oversight face —
-dashboard, time-travel, collab; CFC as `><`+persist demonstration; fmt
-SUMMIT; `mentl audit`; refusal-law completion; SYNTAX lathe-lag) → **E**
-proofs (modal world-index consuming world-as-value; IFC with
-PC-label-on-world; Verify inward, e-graph-EUF before SMT) → **F** native
-(overlaps D/E; band G early items pulled forward; S0–S13; DDC closes
-trusting-trust). Excluded by hardware only: MI300X/GPU-device/hosted-CI/
-wasmFX/shared-everything-threads. Every dispatched agent runs `fable`,
+The whole remainder to the FULLY TRUE ULTIMATE FORM, re-sequenced
+2026-07-28 (Morgan-approved — the finish-line plan; supersedes the
+A→F spine IN PLACE per the alive-law, A / B-i / B-ii / C having
+LANDED whole with the §7 ledger carrying each) and grounded in the
+six-sweep frontier recon, whose decision-changers each arc absorbs:
+Metn hands the crown its instance semantics and none of its 62pp
+contests negation; FIDES/CaMeL fix the IFC product surface including
+the typed quarantine; TS7/rustc leave cell-grain deterministic
+parallel inference unclaimed; wasm 3.0 finalized (memory64 the
+OOM-escape — the shared64 probe confirmed 4GiB×N dissolves; native
+stack-switching dead weight, re-execution vindicated); the MI300X
+CPX×NPS4 partition ≅ the deterministic handle partition with
+HISA-style fixpoints, never SIMD offload; cvc5 CPC + Ethos-class
+checking makes SMT check-only and certificate-keyed from day one;
+TPDE/QBE budget the native emitter at ~10k lines with the e-graph
+capped to rewrites; Programming-by-Navigation + Choose-Don't-Label
+bar the fan; the gate-is-the-moat convergence (ARIA abandoned its own
+proposer; nobody owns a language-level gate); and Unison's
+post-mortem makes text-as-lossless-projection a hard constraint — the
+fmt fixpoint inviolable. THE ARCS:
+**Arc 0 · THE LATTICE COMPLETES — LANDED** (pin 28c39633: the join
+algebra, frozen reads, K=8 the default judge, six identical shas).
+**Arc 1 · THE FUSED ORACLE'S LIMITS — core LANDED** (the fan rides
+the spawn, 47904e5c: every ?? candidate a REAL branch cursor on the
+judgment's own bracket; Strong Soundness/Completeness adopted at the
+decl; the shared64 probe answered. Residue:
+`Hβ.synth.annotation-fan-pure-proof` ·
+`Hβ.felt.tie-teach-behavioral-scenario`, gated on !E-speculation).
+**Arc 2 · THE CATEGORY SHIP — IN FLIGHT** (the window: MoonBit 1.0 /
+Scala CC stabilizing; packaging of LANDED capability only). Landed:
+the ABSENCE BENCHMARK (benchmarks/absence — 13/13 baseline,
+runner-gated, prior art + growth tiers named; the podium was empty);
+the RENDER REGISTER and the proposer's register (the demo's DEPs);
+the README fan demo, every claim transcript-verified through the
+shim. Open: the MCP-facing Synth-gate demo (an agent proposes Mentl,
+the gate proves !Network/!Alloc BEFORE anything executes, refusals
+teach) · the positioning writeup (cell-grain deterministic inference
+with the LVars citation; the four-arm hole citing its four one-arm
+priors RbSyn/RusSOL/Synquid/Hazel; verify-by-replay as the release
+protocol).
+**Arc 3 · PROOFS** — the modal crown Metn-keyed (masks subtract
+INSTALL IDENTITY = the world-chain hkey; negation-under-modality
+published FIRST, contested by nobody); the
+parameterized-negation-instance; the TCont world value gate + the
+EXTERNAL-EFFECT RESUME BARRIER (external synchrony — a persisted k
+whose extent crossed IO/Network resumes only through a handler owning
+replay semantics — BEFORE the durability flagship); IFC `!Flow` on
+the integrity dual-lattice + PC-labels + robust declassification +
+`~> Quarantine`; Verify inward (the range fragment WITH inference;
+finite maps + sequence lengths second; quantifiers never;
+per-obligation caching across the cone; SMT as a CHECK-ONLY
+certificate-keyed handler swap).
+**Arc 4 · THE FELT FLAGSHIP** — the incremental cone claiming PROVEN
+equivalence to full reanalysis (the fixpoint oracle proves it);
+session-as-a-value (persist mid-exploration, reopen anywhere, hand
+the image to an agent over MCP — gated on Arc 3's barrier); the
+verification dashboard (per-node proof status + a human-attention
+frontier derived from Reason/refinement provenance); the .mn merge
+driver; row ergonomics; the CFC research loop entirely inside the
+medium (the founding workload).
+**Arc 5 · NATIVE + THE TRUST STACK** — the TPDE-shaped single fused
+projection (isel+RA+encode in one pass, ~10k-line budget);
+trail-reclaimed image frames; FP pinned SSE-only/no-FMA/RNE with an
+EXPLICIT NaN policy; the three-legged gate (native_m3==m4 + per-rule
+SMT specs grounded in authoritative ISA semantics + independent
+decode-back); Cranelift demoted to differential oracle; then DDC
+closing trusting-trust.
+**Arc 6 · GPU** — partitioned cursors over the column spine running
+HISA-style relational fixpoints ((arena_id, offset) ≅ (XCD, local
+offset)); never SIMD kernel offload; the thesis gate — the same
+source under `~> Seq` / `~> Thread` / `~> Gpu` with identical
+results; the CFC flagship raced against the JAX baseline.
+**Arc 7 · CLOSING THE CIRCLE** — correctness-oracle-internal
+(Alive2-shaped m2/m3 semantic pair validation as the intermediate);
+per-emission structural certificates off the Reason edges; PROVENANCE
+additionally as SLSA/in-toto attestation + a transparency log;
+docs-as-projection; `mentl audit` LIVE — a Carried-Truth violation
+refused by the medium before a line is written, the hand practices
+retiring in place.
+Excluded by hardware only: MI300X execution, hosted CI, wasmFX,
+shared-everything-threads. Every dispatched agent runs `fable`,
 passed explicitly; every landing re-derived on main; the board is the gate.
 
-**CAMPAIGN STATE (2026-07-26).**
+**CAMPAIGN STATE (2026-07-28).** Arcs 0 and 1 (core) LANDED; Arc 2 in
+flight (the arc list above carries the live split); the ledger's head
+entries are the ground truth. Everything below this sentence through
+"ONE machinery, two workloads" is the C1c ERA'S RECORD — how the
+converged judge, the branch bracket, and the fan landed, kept for its
+mechanism detail and superseded where it speculates (the outcomes live
+in the §7 ledger entries of 2026-07-26 → 2026-07-28).
 A, B-i, B-ii: LANDED whole (the §7 ledger). C rung 0 (the fork triple)
 and rung 1 through C1c-2's substrate: LANDED — the paged spine, the
 planned mint, the layer-ordered final, the cursor config, the env view,

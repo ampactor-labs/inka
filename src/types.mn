@@ -1577,6 +1577,40 @@ effect Diagnostic {
   diag_refusals() -> Int    // only the ARMED classes (diag_refuses). The emit gate.
 }
 
+// The render REGISTER (SYNTAX: how much surfaces is the gradient reading
+// relevance at the cursor — the same law at the diagnostic surface). A
+// user-target compile scopes NARRATION to the file the user asked about:
+// ScopeAt(start, nlines) is the target module's weave range, and a
+// warning whose span falls outside it is the substrate's own business —
+// partly weave-relative besides (a solo-weave judgment names
+// T_OverDeclared on wheel fns the wheel census holds clean, and comment
+// refs that resolve in the full wheel miss in a lib-only namespace), so
+// it is not even a truth about the shipped source. ERRORS ALWAYS RENDER
+// — a broken substrate changes the answer's validity and scoping never
+// silences it. The census paths (compile_stdin, the march) never perform
+// the op, so the wheel judging itself stays ScopeAll byte-for-byte.
+// ScopeNone: narration admits nowhere — the DISCOVERY phase, where the
+// DAG walk parses each module only to read its imports and the weave
+// parse re-reports every shape with weave spans (pre-register, each
+// warning printed TWICE: once per parse, the discovery copy in
+// file-local coordinates no range can place). Errors still render in
+// every scope, discovery included.
+type DiagScope
+  = ScopeAll
+  | ScopeNone
+  | ScopeAt(Int, Int)
+
+// Armed on the root diagnostics_handler only (the register lives where
+// the render lives); a separate effect so the quiet trial, the branch
+// collector, and tighten's forwarder keep their arm sets untouched (the
+// BranchDiag precedent). The DAG driver performs it once, after the
+// concatenation fold places the entry and before any parse — so every
+// user-target chain is scoped at one home and no narration predates the
+// range.
+effect DiagRegister {
+  diag_scope(DiagScope) -> ()
+}
+
 // The branch cursor's diagnostic join surface (Phase C, C1c-2). A branch
 // RENDERS at collect — the projections read live values at the perform,
 // so a banked line is safe where a banked DiagKind would render against
@@ -1585,9 +1619,14 @@ effect Diagnostic {
 // diag_branch (the per-stmt collector); diag_absorb on the root
 // diagnostics_handler. A separate effect so tighten_collector and
 // diag_quiet keep their arm sets untouched.
+// Each banked fact is (rendered line, span start-line, is-error): the
+// line renders AT THE PERFORM (live values), and the join re-applies the
+// root's scope register — an error re-prints always, narration only when
+// its span-line is admitted (the branch is scope-ignorant by design; the
+// register has one home).
 effect BranchDiag {
-  diag_lines_taken() -> ([String], Int, Int)
-  diag_absorb([String], Int, Int) -> ()
+  diag_lines_taken() -> ([(String, Int, Bool)], Int, Int)
+  diag_absorb([(String, Int, Bool)], Int, Int) -> ()
 }
 
 // ─── The catalog AS projections of the DiagKind constructors ───────────

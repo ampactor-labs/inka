@@ -272,8 +272,21 @@ fn driver_insert_keyed(pair, sorted) with Memory + Alloc = {
   }
 }
 
+// A module's weave range off the fold's own map — homed beside the fold
+// that mints it; at_run and the session read it through this same edge.
+fn range_of_module(ref ranges, ref target) with Memory + Alloc = {
+  find((r) => { let (m, _, _, _) = r m == target }, ranges)
+}
+
 fn driver_entry_with_ranges(ref entry_module)
-  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern = {
+  // Discovery is a STRUCTURE read: the DAG walk parses each module only
+  // for its imports, and the weave parse below re-reports every shape
+  // with weave spans — so discovery narration is a duplicate in
+  // coordinates no range can place (it was the pre-register doubling:
+  // every parse warning printed twice). ScopeNone silences exactly that
+  // copy; discovery ERRORS still render.
+  diag_scope(ScopeNone)
   let modules = driver_canonical_order(driver_collect_dag(entry_module))
   let (source, _next_line, ranges) = fold(("", 1, []), (acc, m) => {
     let (src_acc, line_acc, r_acc) = acc
@@ -292,6 +305,19 @@ fn driver_entry_with_ranges(ref entry_module)
       acc
     }
   }, modules)
+  // The render register set at its one home: the entry's weave range exists
+  // the moment the fold completes — BEFORE any parse or judgment can
+  // narrate — so every user-target chain scopes narration to the file the
+  // user named (types.mn DiagScope; errors always render). An entry the
+  // resolver could not place leaves ScopeAll: nothing is ever silently
+  // dropped when the question itself failed.
+  match range_of_module(ranges, entry_module) {
+    Some(r) => {
+      let (_em, _ep, rstart, rn) = r
+      diag_scope(ScopeAt(rstart, rn))
+    },
+    None => ()
+  }
   let ast = parse_program(lex(source))
   infer_program(ast)
   // The weave carries its own MODULE STRUCTURE: each range entry minted as
@@ -399,7 +425,7 @@ fn driver_warm_ready(path) with Memory + Alloc + Filesystem = {
 }
 
 fn driver_compile_entry(ref entry_module)
-  with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
+  with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern = {
   let path = driver_warm_path(entry_module)
   if driver_warm_ready(path) {
     eprint_string("warm: restoring the analyzed image\n")

@@ -1,0 +1,6 @@
+// The render register's own-narration control: this file's redundant
+// braces are the USER's warning — the register must render it (exactly
+// once), while the substrate's self-lint stays scoped out. Scoping is a
+// register, never a mute.
+fn braced() = { 41 + 1 }
+fn main() = braced()

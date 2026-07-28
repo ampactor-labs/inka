@@ -1227,7 +1227,7 @@ handler lookup_ty_graph with spec_pairs = [], spec_enc = "" {
 // `with !Diagnostic` so its own arms cannot recursively perform
 // report — structural gate via spec 01's algebra.
 
-handler diagnostics_handler with errors = 0, refusals = 0 {
+handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
 
   report(diag) => {
     // Every surface is a PROJECTION of the one DiagKind — source, code,
@@ -1244,19 +1244,34 @@ handler diagnostics_handler with errors = 0, refusals = 0 {
     let kindw = diag_kind(diag)
     let msg = diag_message(diag)
     let sp = show_span(diag_span(diag))
-    eprint_string("{src}: {code} {kindw}: {msg} at {sp}\n")
+    let line = "{src}: {code} {kindw}: {msg} at {sp}\n"
     // The tally IS the projection continued. This arm saw every diagnostic and
     // dropped its severity on the floor, so `mentl check` on a missing module
     // printed the error and exited 0, and a program with a live E_TypeMismatch
     // emitted 77 lines of WAT. The verdict was here the whole time; the exit
     // code re-derived it as success.
     if diag_severity(diag) == SError {
+      // An error renders in EVERY scope — a broken claim anywhere in the
+      // weave changes the answer's validity; the register never silences it.
+      eprint_string(line)
       if diag_refuses(diag) {
         resume() with errors = errors + 1, refusals = refusals + 1
       } else {
         resume() with errors = errors + 1
       }
     } else {
+      // Narration is the register's business: ScopeAll (the census paths)
+      // prints everything; ScopeAt renders only the file the user asked
+      // about (types.mn DiagScope — substrate self-lint is the substrate's
+      // census channel, and partly weave-relative besides).
+      match scope {
+        ScopeAll  => eprint_string(line),
+        ScopeNone => (),
+        ScopeAt(sstart, snlines) => {
+          let Span(sl, _, _, _) = diag_span(diag)
+          if sl >= sstart && sl < sstart + snlines { eprint_string(line) }
+        }
+      }
       resume()
     }
   }
@@ -1264,11 +1279,26 @@ handler diagnostics_handler with errors = 0, refusals = 0 {
   diag_errors()   => resume(errors)
   diag_refusals() => resume(refusals)
 
+  diag_scope(sc) => resume() with scope = sc
+
   // The branch join (BranchDiag): re-print the branch's pre-rendered
-  // lines in their occurrence order and fold its tally into this one —
-  // the count and the counter stay one handler.
+  // facts in their occurrence order and fold its tally into this one —
+  // the count and the counter stay one handler, and the root's scope
+  // register applies here exactly as at the live arm (the branch is
+  // scope-ignorant; errors always re-print).
   diag_absorb(dlines, derr, dref) => {
-    each(eprint_string, dlines)
+    each((f) => {
+      let (line, sl, iserr) = f
+      if iserr { eprint_string(line) }
+      else {
+        match scope {
+          ScopeAll  => eprint_string(line),
+          ScopeNone => (),
+          ScopeAt(sstart, snlines) =>
+            if sl >= sstart && sl < sstart + snlines { eprint_string(line) }
+        }
+      }
+    }, dlines)
     resume() with errors = errors + derr, refusals = refusals + dref
   }
 }
@@ -1287,8 +1317,14 @@ handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals 
     let msg = diag_message(diag)
     let sp = show_span(diag_span(diag))
     let line = "{src}: {code} {kindw}: {msg} at {sp}\n"
-    let grown = list_set(list_extend_to(lines, count + 1), count, line)
-    if diag_severity(diag) == SError {
+    // The banked fact carries the span start-line and the error bit beside
+    // the rendered line, so the root's diag_absorb can apply the scope
+    // register (types.mn DiagScope) at the join — the branch itself stays
+    // scope-ignorant; the register has one home.
+    let Span(sl, _, _, _) = diag_span(diag)
+    let iserr = diag_severity(diag) == SError
+    let grown = list_set(list_extend_to(lines, count + 1), count, (line, sl, iserr))
+    if iserr {
       if diag_refuses(diag) {
         resume() with lines = grown, count = count + 1,
                       errors = errors + 1, refusals = refusals + 1

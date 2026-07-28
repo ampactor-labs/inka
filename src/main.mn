@@ -1296,12 +1296,9 @@ fn span_index_of_snapshot() with GraphRead = {
   spans
 }
 
-fn range_of_module(ref ranges, ref target) with Memory + Alloc = {
-  find((r) => { let (m, _, _, _) = r m == target }, ranges)
-}
-
 // The span's file:line through the module-range map — the render-side
-// inverse of the concatenation fold.
+// inverse of the concatenation fold. (range_of_module lives in driver.mn,
+// beside the fold that mints the map.)
 fn file_line_of(ref ranges, ref span) with Memory + Alloc = {
   let Span(sl, _, _, _) = span
   match find((r) => { let (_, _, start, nlines) = r sl >= start && sl < start + nlines }, ranges) {

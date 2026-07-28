@@ -1043,6 +1043,42 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶ THE RENDER REGISTER — narration scopes to the file
+  the user asked about; errors always render (the banked user-path
+  flood residue closes; the five-minute demo's DEP · pin 3f889ff5).
+  Measured at the demo's own doorstep: `mentl bit.mn:8:30` printed 173
+  substrate-lint lines before the six-line answer. The dig named two
+  mechanisms, neither fixable by a source sweep: every parse warning
+  printed TWICE (the DAG discovery walk parses each module for its
+  imports and reports in FILE-LOCAL coordinates no range can place;
+  the weave parse re-reports with weave spans — the long-standing
+  doubling, explained), and a solo weave's T_OverDeclared/comment-ref
+  verdicts on wheel fns are weave-RELATIVE — the wheel census holds
+  the same fns clean, so the warnings are not truths about the shipped
+  source at all. THE REGISTER (SYNTAX's own law — how much surfaces is
+  relevance read at the cursor — at the diagnostic surface):
+  DiagScope = ScopeAll | ScopeNone | ScopeAt(start, nlines) rides the
+  root diagnostics_handler as state via the single-op DiagRegister
+  effect (armed on the root only, the BranchDiag precedent — quiet,
+  branch, and tighten's forwarder untouched); the DRIVER owns both
+  performs at one home (ScopeNone before discovery — a structure read
+  is not the reporting pass; ScopeAt(entry range) the moment the
+  concatenation fold completes, before any reporting parse exists);
+  the branch bank grows to (line, span-line, is-error) so the join
+  re-applies the same register; ERRORS RENDER IN EVERY SCOPE — the
+  register is never a mute — and the census paths (compile_stdin, the
+  march) never perform the op, ScopeAll byte-for-byte.
+  range_of_module moved to driver.mn beside the fold that mints the
+  map (the DAG direction forced what one-home wanted). Gates seen RED
+  on the prior boot: the full-weave address query (173 Warning lines →
+  0 with the fan intact) and the own-narration control (the user's own
+  E_RedundantBraces renders exactly once). One widen round
+  (driver_compile_entry +DiagRegister) → census 0. CLEAN m2 == m3 at
+  321,311 lines; frontier 281/0; proof-exactness 9/9; crown 5/5;
+  comment-refs 0. Named residue: the warm/incremental path
+  (driver_incremental) re-judges its cone without a scope perform —
+  cone diagnostics already carry file-local attribution; the scope
+  joins it when a probe shows substrate narration leaking there.
 - 2026-07-28 · THE ABSENCE BENCHMARK PUBLISHES (the category ship's
   first deliverable; no re-pin — benchmark artifact only, the wheel
   untouched). benchmarks/absence: thirteen self-contained tasks whose

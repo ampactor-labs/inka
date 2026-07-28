@@ -1516,6 +1516,28 @@ for i in "${!compilers[@]}"; do
   else
     fail "cursor-address propose (got: $pout; see $dir/propose-at.err)"
   fi
+  # ── the render register (DiagScope) ────────────────────────────────
+  # A user-target projection over the FULL weave (repo root mounted, so
+  # lib+src weave in) scopes narration to the user's file: the substrate's
+  # self-lint never reaches the user's stderr, and the projection is
+  # intact. RED on the pre-register boot: 173 Warning lines before the
+  # six-line answer.
+  sout=$(cd "$ROOT" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp "$compiler" tests/frontier/propose-fan-demo/bit.mn:8:30 2>"$dir/scope-register.err")
+  swarn=$(grep -c 'Warning' "$dir/scope-register.err" || true)
+  if [ "$swarn" -eq 0 ] && printf '%s' "$sout" | grep -q '2 proven survivors'; then
+    pass "render register (substrate narration scoped out; the fan intact)"
+  else
+    fail "render register (warnings=$swarn; see $dir/scope-register.err)"
+  fi
+  # The register's other face: the user's OWN narration still renders,
+  # exactly once, and never silently — scoping is a register, not a mute.
+  wout=$(cd "$fdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo" --dir /tmp "$compiler" check scope-own.mn 2>&1)
+  wcount=$(printf '%s' "$wout" | grep -c 'E_RedundantBraces' || true)
+  if [ "$wcount" -eq 1 ]; then
+    pass "render register (the user's own warning survives, once)"
+  else
+    fail "render register own-warning (want 1 E_RedundantBraces, got $wcount)"
+  fi
   # ── mentl space — the ide served by the wheel ──────────────────────
   # The verb absorbs ide/serve.mn whole: the accept loop lives in
   # src/main.mn, the listener is the shim's tcplisten preopen seam (WASI

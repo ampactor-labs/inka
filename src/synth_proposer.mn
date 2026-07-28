@@ -142,23 +142,18 @@ handler synth_default with !Mutate {
 
   enumerate_inhabitants(target_ty, allowed_effects, context) => {
     let enriched = enumerate_typed(target_ty, allowed_effects, context)
-    // The per-candidate resume fan lives IN the arm as a nested fn — the
-    // backtrack handler's own try_each shape (search.mn). resume is
-    // context-bound to arms (SYNTAX §resume); the top-level fn that held
-    // this loop was the census's E_ResumeOutsideArm pair, true by the law.
+    // THE FAN VERIFIES FIRST (fan_verify — candidates as spawned branch
+    // cursors; the arm's performs resolve OUTER, so the fan plan runs at
+    // the root exactly as intended), then the per-proven resume fan
+    // walks the precomputed verdicts: resume is context-bound to arms
+    // (SYNTAX §resume), so the yield stays here while the proof work
+    // rides the threads.
+    let verdicts = fan_verify(enriched, target_ty)
     fn yield_from(i) =
       if i >= len(enriched) { resume([]) }
       else {
         let EnrichedCandidate(c) = list_index(enriched, i)
-        let inner = Candidate(c.node, c.reason)
-        let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-        let mark = heap_mark()   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
-        let w = world_top()   // drift-audit: ignore — sequenced effectful read (the fork's world leg, consumed by world_restore), CLAUDE.md Anchor 6 exclusion
-        let proven = verify_candidate(inner, target_ty)
-        graph_rollback(cp)
-        heap_reset(mark)
-        world_restore(w)
-        if proven {
+        if verdicts[i] {
           resume([c.node])
           yield_from(i + 1)
         } else { yield_from(i + 1) }
@@ -533,51 +528,131 @@ fn enumerate_tuple_candidates(elems, context) with GraphRead + GraphWrite + Memo
   buf
 }
 
-// ─── Verification — checkpoint/apply/verify/rollback per candidate ─
+// ─── THE FAN (Arc 1) — candidates as spawned branch cursors ─────────
 //
-// The kernel's proof gate. Each candidate is tentatively applied;
-// the inference walk runs; verify checks; rollback restores. Only
-// candidates that survive all four reach the user. Per the trail-
-// based discipline (graph.mn + cont.wat per H7), this is O(M) per
-// candidate where M = mutations recorded.
-//
-// Same form as mentl.mn:146-166 try_each_annotation but with
-// EnrichedCandidate replacing (Annotation, Capability) pairs.
+// The fused oracle's second workload: every candidate verifies as a
+// REAL task over the shared image — the judgment's bracket, a candidate
+// body. THE ISOLATION LAW: the sequential form was bind→rollback, net
+// ZERO shared writes, so each task verifies against a FRESH
+// INSTANTIATION of the target in its own planned band (the
+// value-boundary law at the hole: the constraint is a published scheme;
+// candidates are its callers) — race-free by construction, numbering a
+// pure function of candidate order. The join replays each task's facts
+// record in candidate order (branch_join whole): the fork triple never
+// covered env/diag/verify state, so byte-identity with the sequential
+// walk means replaying its debris exactly, proven or not.
+// DONE-CRITERION (Programming by Navigation — Lubin, Ziegler & Chasins,
+// PLDI 2025, defs 3.5–3.6, under the 2025-10-09 errata's covering
+// reading): the fan offers ONLY candidates that lead to a valid
+// completion (Strong Soundness — the proof gate) and cuts off NO
+// reachable completion (Strong Completeness — a covering condition,
+// never step enumeration), SCOPED to the decidable fragment
+// (census-clean infer + ground-decidable Verify; V_Pending debt sits
+// outside the guarantee — for undecidable validity the pair is provably
+// impossible, op. cit. §8). An EMPTY fan is Fail-Fast's theorem: no
+// valid completion exists from here — a teachable refusal, never a
+// shrug.
 
-fn verify_each_enriched(candidates, target_ty) with Synth + GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
-  // Per-candidate proof-search is the divergent-fanout topology
-  // (checkpoint isolates each branch from siblings) — symmetric with
-  // oracle's per-candidate dispatch at src/oracle.mn:357 + mentl.mn's
-  // try_each_annotation. Spatial proof-search is a `><` fanout under
-  // its own `~> Thread` at this site (the schedule is read at the
-  // fanout's install — Hβ.lower.schedule-specialized-callee).
-  candidates
-    |> map((candidate) => {
-         let EnrichedCandidate(c) = candidate
-         let inner = Candidate(c.node, c.reason)
-         // The FORK TRIPLE (R6 complete): graph checkpoint + heap region
-         // + WORLD — a candidate's verify is a fork whose GRAPH binds roll
-         // back on the trail, whose MEMORY dies at the region reset (the
-         // virginity contract makes the reset a true fork boundary), and
-         // whose WORLD rewinds to the fork point. The world leg held by
-         // extent-balance alone before — an accident-invariant (a
-         // candidate extent that ever aborts mid-install, or a parallel
-         // cursor's fan, would leak its chain into the sibling); the
-         // explicit restore is the contract, and the region reset zeroing
-         // the extent's chain nodes is exactly why the restored value must
-         // predate them. O(1) fork: one trail mark + one bump word + one
-         // world word.
-         let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-         let mark = heap_mark()   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
-         let w = world_top()   // drift-audit: ignore — sequenced effectful read (the fork's world leg, consumed by world_restore), CLAUDE.md Anchor 6 exclusion
-         let proven = verify_candidate(inner, target_ty)
-         graph_rollback(cp)
-         heap_reset(mark)
-         world_restore(w)
-         (candidate, proven)
-       })
-    |> filter((pair) => { let (_, p) = pair; p })
-    |> map((pair) => { let (c, _) = pair; c })
+let candidate_band = 2048
+
+fn fan_verify(candidates, target_ty) = {
+  let n = len(candidates)
+  if n == 0 { [] }
+  else {
+    let top = graph_next()   // drift-audit: ignore — sequenced effectful read (the fan plan's frontier, consumed by the band assignment)
+    let fan_end = top + n * (candidate_band + mint_overflow_quota)
+    // Pre-open the fan's pages at the ROOT (a branch never opens a
+    // band), and seal past the whole fan after the join so no later
+    // root mint reuses a discarded band's stale cells (virginity).
+    graph_mint_plan(fan_end)
+    let base = env_base_view()   // drift-audit: ignore — sequenced effectful read (the fan-start env snapshot, every task's frozen base)
+    let seed = consume_base()   // drift-audit: ignore — sequenced effectful read (the root's consumed-set at fan start, the tasks' shared seed)
+    let gseed = graph_branch_seed()   // drift-audit: ignore — sequenced effectful read (the shared spine table + span index, stable for the fan)
+    let iseed = intern_seed()   // drift-audit: ignore — sequenced effectful read (the root's intern table — every name interns at parse)
+    let verdicts = fan_blocks(candidates, target_ty, base, seed, gseed, iseed, top, n, 0, [])
+    graph_mint_seal(fan_end)
+    verdicts
+  }
+}
+
+// Blocks of judge_window, joined in candidate order — completion order
+// never matters; the replay stream is byte-identical to the sequential
+// walk at any block size (judge_blocks' law, second workload).
+fn fan_blocks(ref candidates, target_ty, base, seed, gseed, iseed, top, n, b, own acc) = {
+  if b >= n { acc }
+  else {
+    let hi = if b + judge_window < n { b + judge_window } else { n }
+    let recs = fan_spawn(candidates, target_ty, base, seed, gseed, iseed, top, n, b, hi, [])
+    fan_blocks(candidates, target_ty, base, seed, gseed, iseed, top, n, hi,
+      fan_join(recs, 0, acc))
+  }
+}
+
+fn fan_spawn(ref candidates, target_ty, base, seed, gseed, iseed, top, n, j, hi, own recs) = {
+  if j >= hi { recs }
+  else {
+    let EnrichedCandidate(c) = candidates[j]
+    let node = c.node
+    let cb = top + j * candidate_band
+    let ch = top + n * candidate_band + j * mint_overflow_quota
+    let range = (cb, cb + candidate_band, ch)
+    // The task mirrors the root's OUTER shape (spawn_block's law): an
+    // arm's performs resolve outer to its install, so renders chase
+    // outside the bracket onto this empty dispatch-graph instance.
+    let rec = spawn_task(() =>
+      candidate_judge(node, target_ty, base, seed, gseed, iseed, range)
+        ~> graph_handler([], 0, 0, 0, [], 0, 0))
+    fan_spawn(candidates, target_ty, base, seed, gseed, iseed, top, n, j + 1, hi,
+      push(recs, rec))
+  }
+}
+
+fn fan_join(ref recs, j, own acc) = {
+  if j >= len(recs) { acc }
+  else {
+    let (proven, inner) = join_task(recs[j])
+    branch_join(inner)
+    fan_join(recs, j + 1, push(acc, proven))
+  }
+}
+
+// The candidate's task body under the judgment's own bracket
+// (branch_bracket — one chain, two workloads). The nested trio mirrors
+// the sequential verify_candidate arm exactly (its own fresh session);
+// the target instantiates FRESH into this band, so the proof never
+// binds the hole's live frontier.
+fn candidate_judge(node, target_ty, base, seed, gseed, iseed, range) = {
+  let body = () => {
+    consume_seed(seed)
+    let tcopy = instantiate(Forall(free_in_ty(target_ty), target_ty))
+    { infer_expr(node) } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
+    let N(_, _, h) = node
+    let proven = verify_after_apply(h) && refinement_admits(tcopy, h)
+    let vdebt = verify_debt()   // drift-audit: ignore — sequenced effectful read (the task's own accruals, collected inside its bracket)
+    let clog = consume_log()   // drift-audit: ignore — sequenced effectful read (the task's own first-consumes, collected inside its bracket)
+    let pubs = env_publishes()   // drift-audit: ignore — sequenced effectful read (the task's publish log, collected inside its own bracket)
+    let dfacts = diag_lines_taken()   // drift-audit: ignore — sequenced effectful read (the task's rendered lines + tally, collected inside its own bracket)
+    (proven, (pubs, dfacts, vdebt, clog))
+  }
+  branch_bracket(body, base, gseed, iseed, range)
+}
+
+fn keep_proven(ref cands, ref verdicts, i, own out) = {
+  if i >= len(cands) { out }
+  else {
+    keep_proven(cands, verdicts, i + 1,
+      if verdicts[i] { push(out, cands[i]) } else { out })
+  }
+}
+
+// ─── Verification — the fan gates every candidate ───────────────────
+//
+// The kernel's proof gate, fanned: candidates verify as spawned branch
+// cursors (fan_verify above); only proven survivors reach the user.
+
+fn verify_each_enriched(candidates, target_ty) with GraphRead + GraphWrite + Memory + Alloc + EnvRead + EnvWrite + Consume + Verify + Intern + WASI + WasiThreads + BranchEnv + BranchDiag + !Mutate = {
+  let verdicts = fan_verify(candidates, target_ty)
+  keep_proven(candidates, verdicts, 0, [])
 }
 
 // ─── map_to_proposals — project each survivor to its (node, reason) ──

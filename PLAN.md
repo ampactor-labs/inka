@@ -1043,6 +1043,50 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶▶ THE FAN RIDES THE SPAWN — every ?? candidate verifies
+  as a REAL branch cursor over the shared image (Arc 1's core: the fused
+  oracle's second workload · no re-pin — CLEAN m2 == m3, the wheel's
+  emission untouched). THE FACTOR: branch_bracket — the judgment's
+  eleven-handler chain extracted whole (one chain, two workloads;
+  branch_judge keeps its stmt body — the uniform pass beats the per-site
+  family). THE ISOLATION LAW that makes the fan race-free: the
+  sequential form was bind→rollback, net ZERO shared writes, so each
+  spawned candidate verifies against a FRESH INSTANTIATION of the target
+  in its own planned band — the value-boundary law at the hole (the
+  constraint is a published scheme; candidates are its callers;
+  instantiate(Forall(free_in_ty(target), target)) is the whole copy
+  machine). fan_verify plans bands off graph_next (2048 + the overflow
+  quota per candidate), pre-opens pages at the ROOT (a branch never
+  opens), spawns blocks of judge_window, joins in candidate order
+  replaying each task's facts record through branch_join WHOLE (the fork
+  triple never covered env/diag/verify state — byte-identity means
+  replaying sequential's debris exactly, proven or not), and seals past
+  the fan so no later mint reuses a stale band's cells.
+  enumerate_inhabitants fans FIRST; the arm's resume walk then reads
+  precomputed verdicts (resume stays arm-bound, SYNTAX's law). The judge
+  asked ONE widen: verify_each_enriched's row spelled to the fan's truth
+  (WasiThreads + BranchEnv + BranchDiag + Consume + Verify + Intern +
+  WASI; Synth dropped — no op performed anymore). THE DONE-CRITERION
+  adopted at the decl, scoped per the fx2-fan sweep: Programming by
+  Navigation's Strong Soundness + Strong Completeness
+  (Lubin–Ziegler–Chasins, PLDI 2025; the errata's covering reading) over
+  the DECIDABLE fragment only — V_Pending sits outside the guarantee
+  (unscoped, the pair is provably impossible); an empty fan is
+  Fail-Fast's THEOREM — no valid completion exists — rendered as the
+  teachable refusal. GATES: CLEAN m2 == m3 at 320,847 lines; census 0
+  (one widen round); frontier 279/0 — every ??-workflow leg through the
+  SPAWNED fan byte-matching its banked expectations; SIX identical shas
+  on each of three fan legs (the two.mn:0 field, the bit.mn:8:30 tie,
+  the hole.mn:9:37 socket). Named residue:
+  Hβ.synth.annotation-fan-pure-proof (try_each_annotation's fan needs
+  narrow-WITHOUT-bind — row_subsumes against the copy, no shared-cell
+  bind; the sequential form stays until then) ·
+  Hβ.felt.tie-teach-behavioral-scenario (the Choose-Don't-Label form —
+  one precondition + k≤4 mutually-exclusive covering options rendered as
+  TYPED FACTS, minimax selection DP(Q)=1−max|H_i|/|H|; gated on
+  !E-speculation; the landed k=2 named-constraint teach is its
+  degenerate case). Band E's work-stealing-via-gradient keeps its name —
+  the substrate it needs is now proven.
 - 2026-07-28 · ▶▶▶▶▶ THE LATTICE COMPLETES — the teaching write is a
   JOIN, the scheme boundary is a VALUE boundary at every face, and
   K=8 becomes the default judge, byte-equal to sequential (Arc 0 of

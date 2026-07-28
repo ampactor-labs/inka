@@ -1552,10 +1552,6 @@ fn layer_join_walk(ref facts, j) = {
 // (Hβ.lower.install-config-capture-read: a capture-referencing config
 // arg reads 0; params read true).
 fn branch_judge(stmt, base, seed, summ, gseed, iseed, range) = {
-  let (bb, bc, bi) = base
-  let (gspine, gopen, gspan) = gseed
-  let (ib, ie, ic) = iseed
-  let (mb, mc, bh) = range
   let body = () => {
     set_summaries(summ)
     consume_seed(seed)
@@ -1566,7 +1562,13 @@ fn branch_judge(stmt, base, seed, summ, gseed, iseed, range) = {
     let dfacts = diag_lines_taken()   // drift-audit: ignore — sequenced effectful read (the branch's rendered lines + tally, collected inside its own bracket)
     (pubs, dfacts, vdebt, clog)
   }
-  // The bracket mirrors the ambient chain's order whole (the final's
+  branch_bracket(body, base, gseed, iseed, range)
+}
+
+// ONE chain, two workloads (Arc 1's factor): the judgment's stmt branches
+// and the ??-fan's candidate branches run the SAME eleven-handler bracket —
+// only the body differs. The uniform pass beats the per-site family.
+// The bracket mirrors the ambient chain's order whole (the final's
   // trio innermost, then pipeline.mn's spine law — ledgers inside env
   // inside diagnostics): infer_ctx's frames and fresh_for_inference are
   // stmt-local, so fresh instances are exact; the summaries instance
@@ -1594,6 +1596,11 @@ fn branch_judge(stmt, base, seed, summ, gseed, iseed, range) = {
   // source and the plan, independent of execution order: the fan
   // reproduces these bytes at any K. Trail and checkpoints are
   // branch-local; binds land in shared cells the plan partitioned.
+fn branch_bracket(body, base, gseed, iseed, range) = {
+  let (bb, bc, bi) = base
+  let (gspine, gopen, gspan) = gseed
+  let (ib, ie, ic) = iseed
+  let (mb, mc, bh) = range
   body()
     ~> infer_ctx
     ~> fresh_for_inference

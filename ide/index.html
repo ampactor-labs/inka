@@ -225,14 +225,6 @@
     padding: 9px 18px; display: flex; align-items: center; gap: 26px; overflow-x: auto; }
   .wf-seg { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); white-space: nowrap; }
   .wf-seg .lbl { font: 600 9.5px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
-  .why-dag { display: flex; align-items: center; gap: 5px; }
-  .why-node { width: 8px; height: 8px; border-radius: 50%; background: var(--border-lift); transition: background .3s, box-shadow .3s; }
-  .why-node.on { background: var(--blue-b); box-shadow: 0 0 7px rgba(51,153,204,.7); }
-  .why-edge { width: 17px; height: 1px; background: var(--border-lift); }
-  .realities { display: flex; gap: 4px; align-items: center; }
-  .rbar { width: 7px; height: 17px; border-radius: 2px; background: var(--border-lift); }
-  .rbar.live { background: var(--gold); box-shadow: 0 0 6px rgba(230,159,0,.5); }
-  .rbar.ghost { background: rgba(230,159,0,.22); }
   .wf-gate { color: var(--faint); font-style: italic; font-family: var(--sans); font-size: 10.5px; }
   .wf-gate b { color: var(--sky); font-style: normal; }
 
@@ -935,7 +927,7 @@ function render(user, wat, diagText, ms, rtLines, exitCode, trapped){
   $("ndiag").textContent = ds.length;
   $("dot").className = trapped ? "bad" : ds.some(d => d.code.startsWith("E")) ? "diag" : "ok";
   octopus(trapped ? "offering" : ds.some(d => d.code.startsWith("E")) ? "offering" : "proven");
-  renderLens(ds); renderLedger(); renderWat(wat); renderWavefront(ds);
+  renderLens(ds); renderLedger(); renderWat(wat); renderWavefront();
   projectCursor();
 }
 
@@ -1040,19 +1032,24 @@ function renderWat(wat){
 }
 
 /* the Wavefront — Why-DAG (real, from the cursor's diagnostic) + band-B hooks */
-function renderWavefront(ds){
+// The Wavefront carries only what is TRUE: the holes count is a real
+// parse fact; everything else is the named remainder in prose. The old
+// why-DAG lit its dots from the DIAGNOSTIC COUNT dressed as a Reason
+// chain, and the reality bars were four hardcoded spans — decorative
+// fabrications, deleted (every pixel is a projection or it does not
+// render). The gate texts also named band B as unlanded; the multi-shot
+// producer and persist/mentl-resume are live — the SURFACE here is the
+// remainder, not the substrate.
+function renderWavefront(){
   const wf = $("wavefront");
-  const nWhy = Math.min(5, Math.max(1, ds.length));
-  const dag = Array.from({length:5}, (_,i)=>`<span class="why-node ${i<nWhy?"on":""}"></span>${i<4?'<span class="why-edge"></span>':""}`).join("");
   const holes = (PARSE?.holes||[]).length;
   wf.innerHTML =
-    `<div class="wf-seg"><span class="lbl">why</span><div class="why-dag">${dag}</div>
-       <span class="wf-gate">provenance ink — the Reason chain walks with <b>mentl why</b></span></div>` +
-    `<div class="wf-seg"><span class="lbl">realities</span><div class="realities">
-       <span class="rbar live"></span><span class="rbar ghost"></span><span class="rbar ghost"></span><span class="rbar ghost"></span></div>
-       <span class="wf-gate">${holes?`${holes} hole${holes>1?"s":""} — `:""}scrub proven futures when the <b>multi-shot producer</b> lands (band B)</span></div>` +
+    `<div class="wf-seg"><span class="lbl">why</span>
+       <span class="wf-gate">provenance ink — the Reason chain walks with <b>mentl why</b>; the thread surface is the named remainder</span></div>` +
+    `<div class="wf-seg"><span class="lbl">realities</span>
+       <span class="wf-gate">${holes?`${holes} hole${holes>1?"s":""} — `:""}the ??-fan's proven survivors land here; the substrate is live, the scrub surface is the named remainder</span></div>` +
     `<div class="wf-seg"><span class="lbl">trail</span>
-       <span class="wf-gate">session = image; scrub execution back &amp; forth — <b>persist = memcpy</b>, band B</span></div>`;
+       <span class="wf-gate">session = image — <b>persist</b> and <b>mentl resume</b> are live; the scrubber is the named remainder</span></div>`;
 }
 
 /* ── the cursor — the one reader; every surface re-projects around it ─────── */

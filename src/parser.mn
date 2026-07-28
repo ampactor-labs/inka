@@ -2526,7 +2526,7 @@ fn parse_pat_alt_branches(ref tokens, pos, own buf, count) = {
 // substrate-honest projection of "unexpected EOF inside <construct>",
 // with span at EOF and applicability MaybeIncorrect (the developer's
 // intent is unrecoverable without more input).
-fn unclosed_eof(ref tokens, p, construct, own buf, count) = {
+fn unclosed_eof(ref tokens, p, construct: String, own buf, count) = {
   report(PUnclosedConstruct(
     "unexpected end of input inside {construct}; the construct was never closed",
     span_at(tokens, p)

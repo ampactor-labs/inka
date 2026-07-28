@@ -1536,7 +1536,7 @@ fn resolve_target(r: {handle: Int, target: String}) -> String = r.target
 
 fn resolve_handle(r: {handle: Int, target: String}) -> Int = r.handle
 
-fn resolve_in_stack(op_name, ename, stack) = if ename == "" || len(stack) == 0 {
+fn resolve_in_stack(op_name: String, ename, stack) = if ename == "" || len(stack) == 0 {
   None
 } else {
   let e = last(stack)
@@ -1850,7 +1850,7 @@ fn lower_singleton_perform(handle, op_name, hname, lo_args) =
 // record is sound by construction and the block keeps the unguarded form
 // — the exact licence the gate's STATEFUL conjunct encodes; the two
 // altitudes cannot contradict on any shape.
-fn singleton_perform_block(handle, hname, op_name, stateful, lo_args) = {
+fn singleton_perform_block(handle, hname: String, op_name: String, stateful, lo_args) = {
   let rec_local = "_{int_to_str(handle)}"
   if stateful {
     // The guard condition is the record pointer's own truthiness (wasm `if`
@@ -2764,7 +2764,7 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
 // lowers user-written lambdas covers compiler-synthesized thunks.
 // Drift 6 closure: same closure substrate — no special-case for
 // "compiler-synthesized" thunks vs. user-written ones.
-fn synthesize_branch_thunk(parent_handle, side_label, branch_node, boundary) = match branch_node {
+fn synthesize_branch_thunk(parent_handle, side_label: String, branch_node, boundary) = match branch_node {
   N(_, _, branch_h) => match boundary {
     Ok(edge) => // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
     match edge {

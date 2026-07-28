@@ -1092,6 +1092,40 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶ THE SHOW FLOOR CLOSES TO ZERO — the 44-marker census
+  swept whole (the splice landing's own residue · pin 09bfedc2). The
+  liveness triage ran mechanically on the artifact (floor calls vs twin
+  calls vs self-recursion; nine floors externally live, the rest dead
+  twin-served copies), and every splice-only param in the wheel now
+  carries its true type as an Intent Boundary: seventeen decl pins
+  across nine files (driver_module_path had already paid the class's
+  loudest bill — the zero manifest), two element-shape pins
+  (render_effect_ops' op rows, render_state_updates' update records),
+  and three named-mint hoists where the datum-last lambda judgment
+  leaves the binder free past any list pin — render_gradient_line's
+  proven pattern applied at audit_report_lines (the audit verb's per-fn
+  header rendered fn names as pointer numerals), consume_twice_msg,
+  and parallel_collision_msg (the affine ledger's two diagnostics named
+  their consumed binding as a numeral). The last marker exposed a JUDGE
+  gap, named: Hβ.infer.arm-binder-op-param-type — a handler arm's
+  binder judges free despite the op scheme's declared param type
+  (effect Consume declares consume(String, …); the arm's name read
+  free at emit). The CLASS-KILLER stays banked on
+  Hβ.emit.show-free-floor in its constructive form: flow-directed
+  demand (Lutze–Schuster–Brachthäuser, "The Simple Essence of
+  Monomorphization", OOPSLA 2025 — instantiation flow tracked through
+  type variables, higher-rank included, cyclic flow the uniform
+  refusal); the union-find already holds the flow — the twin demand
+  analysis learns to read its CLOSURE instead of per-site reference
+  projections, which is exactly the HOF boundary where every damaged
+  site tonight lived. Frontier recon riders banked the same sweep: the
+  durable-execution industry's whole convergence (journal + replay +
+  refuse-on-divergence, Temporal/Restate, all runtime) is the untyped
+  form of Arc 3's resume barrier — the row proves what they diff; and
+  Dynamic Wind for Effect Handlers (OOPSLA 2025) is the formal
+  treatment to read the world save/restore brackets against before the
+  TCont value gate. CLEAN m2 == m3; census 0; show-floor markers
+  44 → 0.
 - 2026-07-28 · ▶▶▶▶ THE SPLICE TELLS THE TRUTH — four roots under one
   law, and the canonical page lands (the fmt summit closes ·
   pin a971601e). The whole-wheel sweep's red legs reduced to FOUR

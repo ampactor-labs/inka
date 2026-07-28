@@ -121,7 +121,7 @@ fn mcp_judge(source, wat_path) = infer_context(() => {
 // with surfaced errors (unarmed classes; the sound-incomplete contract,
 // spoken), or proven whole. The diagnostic lines follow verbatim: the
 // refusal's teaching IS the payload.
-fn mcp_verdict_text(lines, nerr, nref, emitted, wat_path) = {
+fn mcp_verdict_text(lines, nerr, nref, emitted, wat_path: String) = {
   let head = if nref > 0 {
     "REFUSED — {int_to_str(nref)} claim(s) the medium could not discharge; nothing was emitted\n"
   } else {

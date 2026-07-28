@@ -1202,7 +1202,7 @@ fn fp_params_walk(ref params, i, acc, map, n) with GraphRead + Memory + Alloc = 
 fn fp_fields(ref fields, map, n) with GraphRead + Memory + Alloc =
   fp_fields_walk(fields, 0, "", map, n)
 
-fn fp_fields_walk(ref fields, i, acc, map, n) with GraphRead + Memory + Alloc = if i >= len(fields) {
+fn fp_fields_walk(ref fields: [(String, Ty)], i, acc: String, map, n) with GraphRead + Memory + Alloc = if i >= len(fields) {
   (acc, map, n)
 } else {
   match fields[i] {
@@ -5097,7 +5097,7 @@ fn op_scheme_arity(sch) = match sch {
 
 // n fresh instance vars for a handler's `Handler(E(v1..vn))` — one per the
 // effect's payload position, exposed so generalize quantifies each.
-fn mint_instance_vars(ename, n, i) = if i >= n {
+fn mint_instance_vars(ename: String, n, i) = if i >= n {
   []
 } else {
   [mint(Inferred("effect '{ename}' instance {i}"))] ++ mint_instance_vars(ename, n, i + 1)

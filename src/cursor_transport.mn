@@ -422,7 +422,7 @@ handler patch_to_file with target_module = "" {
 
 // Replace the byte range a source span covers. Lines and columns are
 // 1-based (the lexer's token spans); the end column is exclusive.
-fn splice_span(ref source, ref span, ref text) with Memory + Alloc = {
+fn splice_span(ref source, ref span, ref text: String) with Memory + Alloc = {
   let n = byte_len(source)
   match span {
     Span(sl, sc, el, ec) => {
@@ -433,9 +433,9 @@ fn splice_span(ref source, ref span, ref text) with Memory + Alloc = {
   }
 }
 
-fn indent_annotation(ref text) with Pure = "  {text}\n"
+fn indent_annotation(ref text: String) with Pure = "  {text}\n"
 
-fn splice_before_line(ref source, target_line, ref insert) with Memory + Alloc = {
+fn splice_before_line(ref source, target_line, ref insert: String) with Memory + Alloc = {
   let n = byte_len(source)
   let pos = find_line_start(source, target_line, 1, 0, n)
   "{str_slice(source, 0, pos)}{insert}{str_slice(source, pos, n)}"

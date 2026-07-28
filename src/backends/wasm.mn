@@ -1117,7 +1117,7 @@ fn register_one_show_literals(ty) with EmitStringLiteralOp + EnvRead + Memory + 
   },
 }
 
-fn register_show_field_name_literals(fields, i, is_record) with EmitStringLiteralOp + Memory = if i >= len(fields) {
+fn register_show_field_name_literals(fields: [(String, Ty)], i, is_record) with EmitStringLiteralOp + Memory = if i >= len(fields) {
   ()
 } else {
   match list_index(fields, i) {
@@ -5740,7 +5740,7 @@ fn emit_show_product_fields(fields, i, off, is_record) with EmitMemory + StringT
 
 fn show_field_sep(i) with Pure = if i == 0 { "" } else { ", " }
 
-fn show_field_name(fname, is_record) with Pure = if is_record { "{fname}: " } else { "" }
+fn show_field_name(fname: String, is_record) with Pure = if is_record { "{fname}: " } else { "" }
 
 // Render one field value at `off`/width `r`: load the field, wrap it in its
 // leaf renderer. Word fields → int_to_str / float_to_str; string field → as-is;

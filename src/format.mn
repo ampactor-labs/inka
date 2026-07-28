@@ -298,7 +298,7 @@ fn empty_render() with Pure = ""
 // ─── Helper functions — pure transforms over String ────────────────
 fn spaces(n) with Pure = if n == 0 { "" } else { " {spaces(n - 1)}" }
 
-fn parenthesize(s) with Pure = "({s})"
+fn parenthesize(s: String) with Pure = "({s})"
 
 // Head-first join: parser lists are source-ordered (built `[x] ++ rest`),
 // so iteration walks index 0 upward — the last/drop_last form rendered
@@ -517,7 +517,7 @@ fn render_arg_lines(ref args, i) with GraphRead + Memory + Alloc + !Mutate + Int
 fn render_node_list(ref nodes, sep) with GraphRead + Memory + Alloc + !Mutate + Intern =
   render_node_list_from(nodes, 0, sep)
 
-fn render_node_list_from(ref nodes, i, sep) with GraphRead + Memory + Alloc + !Mutate + Intern = if i >= len(nodes) {
+fn render_node_list_from(ref nodes, i, sep: String) with GraphRead + Memory + Alloc + !Mutate + Intern = if i >= len(nodes) {
   ""
 } else if i == len(nodes) - 1 {
   render_tokens_for(nodes[i])
@@ -528,7 +528,7 @@ fn render_node_list_from(ref nodes, i, sep) with GraphRead + Memory + Alloc + !M
 fn render_pat_list(ref pats, sep) with GraphRead + Memory + Alloc + !Mutate =
   render_pat_list_from(pats, 0, sep)
 
-fn render_pat_list_from(ref pats, i, sep) with GraphRead + Memory + Alloc + !Mutate = if i >= len(pats) {
+fn render_pat_list_from(ref pats, i, sep: String) with GraphRead + Memory + Alloc + !Mutate = if i >= len(pats) {
   ""
 } else if i == len(pats) - 1 {
   render_pat_tokens(pats[i])
@@ -704,7 +704,7 @@ fn render_stmt_comment(n) with GraphRead + Memory + Alloc + !Mutate = {
   if c == "" { "" } else { "//{replace(c, "\n", "\n//")}\n" }
 }
 
-fn render_field_inits(ref fields, i) with GraphRead + Memory + Alloc + !Mutate + Intern = if i >= len(fields) {
+fn render_field_inits(ref fields: [(String, Node)], i) with GraphRead + Memory + Alloc + !Mutate + Intern = if i >= len(fields) {
   ""
 } else {
   match fields[i] {
@@ -838,7 +838,7 @@ fn render_resume_head(v) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   _ => "resume({render_tokens_for(v)})",
 }
 
-fn render_state_updates(ref updates, i) with GraphRead + Memory + Alloc + !Mutate + Intern = if i >= len(updates) {
+fn render_state_updates(ref updates: [{init: Node, name: String}], i) with GraphRead + Memory + Alloc + !Mutate + Intern = if i >= len(updates) {
   ""
 } else {
   let u = updates[i]
@@ -983,7 +983,7 @@ fn render_tparam_types(ref params, i) with GraphRead + Memory + Alloc + !Mutate 
   "{render_type_tokens(param_ty(params[i]))}, {render_tparam_types(params, i + 1)}"
 }
 
-fn render_type_fields(ref fields, i) with GraphRead + Memory + Alloc + !Mutate + Intern = if i >= len(fields) {
+fn render_type_fields(ref fields: [(String, Ty)], i) with GraphRead + Memory + Alloc + !Mutate + Intern = if i >= len(fields) {
   ""
 } else {
   match fields[i] {
@@ -1045,7 +1045,7 @@ fn render_ty_list(ref tys, i) with GraphRead + Memory + Alloc + !Mutate + Intern
   "{render_type_tokens(tys[i])}, {render_ty_list(tys, i + 1)}"
 }
 
-fn render_effect_ops(ref ops, i) with GraphRead + Memory + Alloc + !Mutate + Intern = if i >= len(ops) {
+fn render_effect_ops(ref ops: [(String, [Ty], Ty, Node)], i) with GraphRead + Memory + Alloc + !Mutate + Intern = if i >= len(ops) {
   ""
 } else {
   match ops[i] {
@@ -1112,7 +1112,7 @@ fn render_lit_value(lv) with Memory + Alloc = match lv {
   LVBool(b) => if b { "true" } else { "false" },
 }
 
-fn render_plist_inner(ref ps, rest) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_plist_inner(ref ps, rest: Option(String)) with GraphRead + Memory + Alloc + !Mutate = {
   let prefix = render_pat_list(ps, ", ")
   match rest {
     Some(rname) => if len(ps) == 0 { "...{rname}" } else { "{prefix}, ...{rname}" },

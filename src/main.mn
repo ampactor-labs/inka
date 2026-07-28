@@ -980,7 +980,7 @@ fn apply_tightenings(cands, ranges) = {
   tighten_fold(sort(located), 0, "", "", 0)
 }
 
-fn tighten_fold(items, i, cur_path, cur_text, applied) = if i >= len(items) {
+fn tighten_fold(items: [(String, Int, String, EffRow, EffRow)], i, cur_path, cur_text, applied) = if i >= len(items) {
   if byte_len(cur_path) > 0 { fs_write_file(cur_path, cur_text) }
   applied
 } else {
@@ -1246,7 +1246,7 @@ fn field_ranked(handles, caret0) -> [(Float, Int)] with GraphRead + Memory + Tea
   handles
 )))
 
-fn render_field_tier(ranked, target, ranges, fstart, i) = if i >= len(ranked) {
+fn render_field_tier(ranked, target: String, ranges, fstart, i) = if i >= len(ranked) {
   ()
 } else {
   match list_index(ranked, i) {
@@ -1276,7 +1276,7 @@ fn render_field_tier(ranked, target, ranges, fstart, i) = if i >= len(ranked) {
 // argmax is this list's head; the field is the argmax UNCOLLAPSED —
 // the multi-cursor read, sequential (the per-position `><` under
 // `~> Thread` rides Hβ.ops.wasmtime-runner-migration).
-fn render_field(target, ranges, fstart, nlines) = {
+fn render_field(target: String, ranges, fstart, nlines) = {
   let caret0 = Caret(0, Located(Span(fstart, 1, fstart, 1), Inferred("field read")))
   let holes = field_positions(enumerate_hole_positions(), fstart, nlines)
   let grads = field_positions(enumerate_gradient_positions(), fstart, nlines)
@@ -1350,7 +1350,7 @@ fn span_index_of_snapshot() with GraphRead = match graph_snapshot() {
 // The span's file:line through the module-range map — the render-side
 // inverse of the concatenation fold. (range_of_module lives in driver.mn,
 // beside the fold that mints the map.)
-fn file_line_of(ref ranges, ref span) with Memory + Alloc = match span {
+fn file_line_of(ref ranges, ref span) -> Option((String, Int)) with Memory + Alloc = match span {
   Span(sl, _, _, _) => match find(
     (r) => match r {
       (_, _, start, nlines) => sl >= start && sl < start + nlines,
@@ -1853,7 +1853,7 @@ fn battery_run(dir, names) = {
   battery_loop(dir, libs, micros, 0, 0)
 }
 
-fn battery_loop(dir, libs, micros, i, fails) = if i >= len(micros) {
+fn battery_loop(dir: String, libs, micros: [String], i, fails) = if i >= len(micros) {
   fails
 } else {
   // Each micro's compile is a REGION: mark before, reset after — the
@@ -2029,7 +2029,10 @@ fn new_project(name) = {
   0
 }
 
-fn scaffold_project(name) = {
+// String pins on this and the sibling verb/render fns below are Intent
+// Boundaries (spec_mangle's law): a param whose only use is a splice
+// generalizes, and the word-floor copy renders it as a pointer numeral.
+fn scaffold_project(name: String) = {
   let dest = "{name}.mn"
   if fs_exists(dest) {
     // Refusal teaches: the medium never overwrites what it did not write.

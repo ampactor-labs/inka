@@ -1437,7 +1437,7 @@ handler mentl_voice_filesystem with handles_table = [], next_handle_id = 1, proj
   },
 }
 
-fn replace_span_in_text(ref source, span, ref replacement) with Memory + Alloc = {
+fn replace_span_in_text(ref source, span, ref replacement: String) with Memory + Alloc = {
   let n = byte_len(source)
   match span {
     Span(sl, sc, el, ec) => {

@@ -278,7 +278,7 @@ fn fold_sig(ty) with Memory = match fold_strip(ty) {
 fn fold_sig_list(elems, i, n) with Memory =
   if i >= n { "" } else { "_{fold_sig(list_index(elems, i))}{fold_sig_list(elems, i + 1, n)}" }
 
-fn fold_sig_fields(fields, i, n) with Memory = if i >= n {
+fn fold_sig_fields(fields: [(String, Ty)], i, n) with Memory = if i >= n {
   ""
 } else {
   match list_index(fields, i) {
@@ -2526,7 +2526,7 @@ fn fill_arg_slots(params, args, cname) with EnvRead + GraphRead + Memory + Alloc
 // Pass 1 — place each LabeledArg at its named param slot; positional args are
 // skipped here. An unknown label is E_UnknownArgLabel (Located, productive:
 // the arg is dropped, the remaining args resolve). Returns the slot buffer.
-fn place_labeled(params, args, i, slots, cname) with GraphRead + Memory + Diagnostic = if i >= len(args) {
+fn place_labeled(params, args, i, slots, cname: String) with GraphRead + Memory + Diagnostic = if i >= len(args) {
   slots
 } else {
   let arg = list_index(args, i)
@@ -2640,7 +2640,7 @@ fn show_discipline(d) with Pure = match d {
   Abandon => "Abandon",
 }
 
-fn show_field(ref field) with GraphRead + !Mutate + Alloc + Memory + Intern = match field {
+fn show_field(ref field: (String, Ty)) with GraphRead + !Mutate + Alloc + Memory + Intern = match field {
   (name, ty) => "{name}: {show_type(ty)}",
 }
 

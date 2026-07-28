@@ -54,13 +54,18 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
       (u, us, br) => resume() with used = u, used_sites = us, branches = br, fn_saved = drop_last(fn_saved),
     }
   },
+  // The message mint is a named fn with a String pin (spec_mangle's
+  // law): the arm's name binder judged free despite the op scheme's
+  // declared String — the arm-binder-inherits-op-param gap, named
+  // Hβ.infer.arm-binder-op-param-type — and the word floor rendered
+  // the consumed name as a pointer numeral. The named call anchors it.
   consume(name, ownership, span) => match ownership {
     Own => // Inside a borrow scope the value is READ, not moved — record nothing.
     if borrow_depth > 0 {
       resume()
     } else if set_contains(used, name) {
       let first = find_first_span(used_sites, name)
-      report(EOwnershipViolation("'{name}' consumed twice (first at {show_span(first)})", span))
+      report(EOwnershipViolation(consume_twice_msg(name, first), span))
       resume()
     } else {
       // `used` maintains sort invariant via set_insert — every read
@@ -135,6 +140,10 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
   consume_base() => resume(used),
   consume_log() => resume(used_sites),
 }
+
+// The double-consume message's one mint, String-pinned (the comment at
+// the consume arm carries the why).
+fn consume_twice_msg(name: String, first) with GraphRead + Memory + Alloc = "'{name}' consumed twice (first at {show_span(first)})"
 
 // Flat-array union across all branch deltas. Every delta is already
 // a sorted set (maintained by set_insert during consume), so folding
@@ -356,9 +365,14 @@ fn join_field_regions(ref tags, ref fields, current) with !Mutate = fold(
 )
 
 fn report_each_collision(ref names, ref span) with Diagnostic + Memory + Alloc = each(
-  (name) => report(EOwnershipViolation("'{name}' consumed in two parallel branches", span)),
+  (name) => report(EOwnershipViolation(parallel_collision_msg(name), span)),
   names
 )
+
+// The collision message's one mint, String-pinned (spec_mangle's law —
+// the each-lambda judges datum-last while the set element is still
+// free, so the pin anchors at the named call, consume_twice_msg's twin).
+fn parallel_collision_msg(name: String) with Memory + Alloc = "'{name}' consumed in two parallel branches"
 
 fn find_first_span(ref sites, ref name: String) with Alloc + Memory = {
   let hits = filter(

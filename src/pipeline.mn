@@ -380,7 +380,7 @@ fn absorbing_proposal(ename: String) = {
   }
 }
 
-fn render_install(ref hname) = "~> {hname}"
+fn render_install(ref hname: String) = "~> {hname}"
 
 fn handlers_absorbing(ename: String) = match env_snapshot() {
   Env(bindings) => absorb_scan(bindings, 0, len(bindings), ename, []),
@@ -1423,21 +1423,28 @@ fn severance_unlocks_loop(severable, i, n, acc) = if i >= n {
 // Positional destructure — provable with no type flow, where a
 // record field read floors in a map lambda (see build_audit_report).
 fn render_audit(entries) = entries |> map((report) => match report {
-  (fn_name, reached, row_str, severable, unlocks, referenced_by) => {
-    let header = "{fn_name} : {row_str}\n"
-    let severance_section = if len(severable) == 0 {
-      ""
-    } else {
-      "  severable: {show_list(severable, show_eff_name, " + ")} — unlocks {show_list(unlocks, show_capability, ", ")}\n"
-    }
-    let refs_section = if len(referenced_by) == 0 {
-      ""
-    } else {
-      "  referenced in comments by: {show_list(referenced_by, (n) => n, ", ")}\n"
-    }
-    "{header}{severance_section}{refs_section}"
-  },
+  (fn_name, reached, row_str, severable, unlocks, referenced_by) =>
+    audit_report_lines(fn_name, row_str, severable, unlocks, referenced_by),
 }) |> str_concat_all
+
+// The String pins are Intent Boundaries (spec_mangle's law): inside the
+// map lambda the splices judged datum-last while the tuple elements were
+// still free, and the word floor rendered every audited fn's name and
+// row as pointer numerals. The named call anchors the binders.
+fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, referenced_by: [String]) = {
+  let header = "{fn_name} : {row_str}\n"
+  let severance_section = if len(severable) == 0 {
+    ""
+  } else {
+    "  severable: {show_list(severable, show_eff_name, " + ")} — unlocks {show_list(unlocks, show_capability, ", ")}\n"
+  }
+  let refs_section = if len(referenced_by) == 0 {
+    ""
+  } else {
+    "  referenced in comments by: {show_list(referenced_by, (n) => n, ", ")}\n"
+  }
+  "{header}{severance_section}{refs_section}"
+}
 
 // Query rendering — delegates to query.mn for Question parsing
 fn render_ref_spans(ref spans, i) with Memory + Alloc =

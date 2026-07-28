@@ -5787,12 +5787,28 @@ published FIRST, contested by nobody); the
 parameterized-negation-instance; the TCont world value gate + the
 EXTERNAL-EFFECT RESUME BARRIER (external synchrony — a persisted k
 whose extent crossed IO/Network resumes only through a handler owning
-replay semantics — BEFORE the durability flagship); IFC `!Flow` on
+replay semantics — BEFORE the durability flagship; the industry's own
+convergence — Temporal/Restate journal + replay + refuse-on-divergence
+— is this barrier enforced at runtime, untyped: the row proves what
+they diff); IFC `!Flow` on
 the integrity dual-lattice + PC-labels + robust declassification +
-`~> Quarantine`; Verify inward (the range fragment WITH inference;
-finite maps + sequence lengths second; quantifiers never;
+`~> Quarantine`; Verify inward (the range fragment WITH inference —
+corroborated in print, arXiv 2607.00824; finite maps + sequence
+lengths second; quantifiers never;
 per-obligation caching across the cone; SMT as a CHECK-ONLY
-certificate-keyed handler swap).
+certificate-keyed handler swap). THE FELT WALK RAN (2026-07-28, the
+felt-path-first law): (a) the parameterized effect DECLARATION head is
+parser lathe-lag — `effect Sample(rate: Int) {` refuses at the `(`,
+SYNTAX's own canonical form unparsed — the instance-negation landing's
+named DEP; (b) the with-clause instance surface parses and judges over
+a BARE effect decl (`with Sample(48000) + !Sample(44100)` + a bare
+tick() perform checked CLEAN), so the negation's instance boundary
+today is positive-name-admit with the precise semantics unbuilt — the
+landing defines it (a severed instance admits its siblings, the bare
+name severs all) with mn-effarg-node.mn the existing fixture to build
+from; (c) Dynamic Wind for Effect Handlers (OOPSLA 2025) is the formal
+treatment to read the world save/restore brackets against before the
+TCont value gate.
 **Arc 4 · THE FELT FLAGSHIP** — and its RANKER increment is
 pull-forward eligible: the gradient reading LOCAL intent (Reason
 chains carrying upstream why + proximity + the in-scope vocabulary,

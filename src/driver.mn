@@ -298,6 +298,55 @@ fn range_of_module(ref ranges, ref target) with Memory + Alloc = find(
   ranges
 )
 
+// The tree's identity as a value — the resident session's staleness
+// read: each WOVEN module's (path hash, byte length, content hash),
+// projected off the range map the derivation already minted. A PURE
+// READ by construction: no discovery, no parsing, no graph write —
+// the first form re-ran driver_collect_dag, whose per-module import
+// parse minted nodes and comment attaches into the LIVE graph on
+// every message, and a resettable message's region reclaim killed
+// that spine growth under later reads (the fork-spine class, measured
+// twice: spine_comment_at's list_index trap on the next check, and
+// address_case_a walking a reset span-index buffer). Word triples,
+// deliberately: a String element would meet == at the word floor as
+// pointer identity (the §9 class, also measured — every message
+// re-derived); a hash IS its own value. Coverage: an edited module,
+// a deleted module, and a NEWLY-imported module (the importer's text
+// changed) all move some banked triple. The one honest hole: a module
+// that was MISSING at derivation (reported, never woven) and then
+// created on disk moves nothing banked — banking reported-missing
+// paths is the named single. An mtime probe (once io carries
+// fd_filestat) is the cheaper read; content re-hash is the floor.
+fn driver_manifest(ref ranges) with Memory + Alloc + Filesystem = map(
+  (r) => match r {
+    (_m, p, _start, _nlines) => if fs_exists(p) {
+      let text = fs_read_file(p)
+      (str_hash(p), byte_len(text), str_hash(text))
+    } else {
+      (str_hash(p), -1, 0)
+    },
+  },
+  ranges
+)
+
+// Two manifests agree — an explicit elementwise word walk, NOT the
+// structural ==, because the eq fold's sequence arm floors a STRUCT
+// element to $list_eq (word compare per element = pointer identity;
+// measured live: byte-identical manifests answered unequal and the
+// session re-derived on every message). The class is named
+// Hβ.emit.seq-struct-eq-leaf with its banked fixture
+// (tests/frontier/mn-list-tuple-eq.mn); when the generated
+// sequence-of-struct leaf lands, this walk dissolves back into ==
+// (the census law: this is the class's FIRST named workaround — a
+// second is the stop that forces the leaf).
+fn manifest_same(ref a, ref b) with Memory + Alloc =
+  len(a) == len(b) && manifest_same_from(a, b, 0)
+
+fn manifest_same_from(ref a, ref b, i) with Memory + Alloc =
+  i >= len(a) || (match (a[i], b[i]) {
+    ((ph, bl, ch), (ph2, bl2, ch2)) => ph == ph2 && bl == bl2 && ch == ch2,
+  } && manifest_same_from(a, b, i + 1))
+
 // One module's top-level nodes cut from the weave ast by its range —
 // the resident session's scoping read (audit/teach over the entry
 // alone, matching the CLI's entry-parsed ast). The NModule mint below

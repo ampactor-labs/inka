@@ -1,0 +1,26 @@
+// expect: 42
+// Hβ.emit.seq-struct-eq-leaf's RED fixture (UNREGISTERED until the leaf
+// lands): structural == over a sequence whose element is a PRODUCT.
+// The eq fold's sequence arm dispatches on the element face — byte →
+// str_eq, float → list_eq_f64 — and floors every STRUCT element to
+// $list_eq, a word compare per element: two equal tuples at distinct
+// addresses answer unequal (pointer identity standing in for
+// structural equality, the exact silent fallback SYNTAX's eq law
+// forbids). Both altitudes carry the same arm: emit_eq_for_ty's TList
+// and emit_field_eq's TList (a list-of-tuple FIELD inside a record).
+// The fix is the generated sequence-of-struct leaf: $eq_<sig(TList e)>
+// = length compare + elementwise walk calling the element's own eq
+// family, demanded transitively by the fold collector wherever the
+// element face is structural — with the hash/compare/show siblings
+// audited for the same arm shape (the eq/hash agreement footgun).
+// Measured 2026-07-29 (the living-session manifest compare): exit 7
+// on both faces through the DAG judge.
+fn main() = {
+  let top = if [(1, 2, 3)] == [(1, 2, 3)] { 1 } else { 0 }
+  let field = {
+    let a = {pairs: [(4, 5)]}
+    let b = {pairs: [(4, 5)]}
+    if a == b { 1 } else { 0 }
+  }
+  if top == 1 && field == 1 { 42 } else { 7 }
+}

@@ -1092,6 +1092,54 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶▶ THE SESSION GRAPH GOES LIVING — the resident graph
+  tracks the tree, and the staleness check is a pure read (the
+  resident-session arc's fourth rung · pin 3973fd21). Before every
+  message the loop compares the tree's manifest against the banked one
+  and a moved tree re-derives INTO the resident world — never a
+  restore (the swap-crossing law's third constraint executed): the new
+  generation shadows by the env's latest edge (the B-i incremental
+  law), ranges and the scoped entry ast replace, and the message's
+  region stays unreclaimed (moved ⇒ no reset — the fresh generation
+  was minted after the mark; the fork-spine law at the serve loop).
+  driver_manifest is a PROJECTION off the range map the derivation
+  already minted: per woven path, (path hash, byte length, content
+  hash) word triples — no discovery, no parse, no graph write, and
+  coverage is complete over the banked set (an edit, a deletion, and
+  a new import all move some banked triple; the one hole — a
+  reported-missing module later created — is named at the decl). The
+  living check crosses into the loop AS A VALUE (the at_read
+  precedent: session_current on the resident path, the Pure identity
+  on the no-project path), after the gate refused the first form's
+  derivation row at the bare root — the loop is row-polymorphic.
+  MEASURED: exactly one re-derivation per edit; post-edit reads answer
+  the new truth — query resolves the new fn at its span, audit lists
+  it, and the at reaches a line that did not exist before the edit
+  (the range map replaced; the answer byte-matches the CLI at the
+  same address). The pinned-boot RED: moved=0, the new fn absent from
+  every face — the startup snapshot answering stale. TWO WHEEL FINDS
+  en route, each probe-convicted before fixed: (1) the first check
+  form re-ran collect_dag per message — the discovery parse MINTED
+  into the live graph, and a resettable message's region reclaim
+  killed that spine growth under later reads (the fork-spine class,
+  measured twice: spine_comment_at's list_index trap on the next
+  check; address_case_a walking a reset span-index buffer); the pure
+  read makes the class unconstructible. (2) Structural == over a
+  sequence of PRODUCTS floors to $list_eq's per-element word compare
+  — pointer identity as equality, the exact silent fallback the eq
+  law forbids, at BOTH altitudes (emit_eq_for_ty's and
+  emit_field_eq's TList arms; measured: byte-identical manifests
+  answered unequal, and [(1,2,3)] == [(1,2,3)] runs 7 through the DAG
+  judge). Named Hβ.emit.seq-struct-eq-leaf with its banked fixture
+  (tests/frontier/mn-list-tuple-eq.mn, both faces): the fix is the
+  generated sequence-of-struct leaf (length + elementwise walk
+  calling the element's own eq family, demanded transitively), with
+  the hash/compare/show siblings audited for the same arm;
+  manifest_same is the class's FIRST named workaround (a second is
+  the stop). CLEAN m2 == m3; frontier 305/0 (the living leg: fifo
+  coprocess, the file edited between messages); census 0. The session
+  is now the full loop an agent needs: propose + five living reads
+  over a graph that tracks the tree.
 - 2026-07-29 · ▶▶ AUDIT AND TEACH JOIN THE SESSION — the analysis verbs
   become resident reads, and the verb pair collapses to one composed
   projection (the resident-session arc's third rung · pin 1c2e53fa).

@@ -1663,6 +1663,48 @@ for i in "${!compilers[@]}"; do
   else
     fail "resident session (resident-lines=$(grep -c 'session: graph resident' "$ses_dir/err.log"); see $ses_dir/out.jsonl)"
   fi
+  # ── the LIVING SESSION (rung 4): the graph tracks the tree ─────────
+  # The file is edited BETWEEN messages (a fifo coprocess; responses are
+  # one line per request, so waiting on the response count synchronizes
+  # deterministically); the session's manifest check re-derives INTO the
+  # resident world exactly once, and the post-edit reads answer the NEW
+  # truth: query resolves the new fn, audit lists it, and the at reaches
+  # a line that did not exist before the edit (the range map replaced).
+  # Seen RED on the pre-living boot (measured 2026-07-29): moved=0,
+  # triple absent from every face — the startup snapshot answering
+  # stale. The staleness check is a PURE READ (driver_manifest over the
+  # banked range paths — no discovery, no parse, no graph write): its
+  # first form re-ran collect_dag per message and the discovery parse's
+  # spine growth died in a resettable message's region reclaim (the
+  # fork-spine class, measured as spine_comment_at's list_index trap).
+  liv_dir="$dir/mcp-living"
+  mkdir -p "$liv_dir"
+  printf 'fn double(x) = x * 2\n\nfn main() = double(21)\n' > "$liv_dir/main.mn"
+  mkfifo "$liv_dir/in"
+  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$liv_dir::." "$compiler" mcp \
+    < "$liv_dir/in" >"$liv_dir/out.jsonl" 2>"$liv_dir/err.log" &
+  liv_srv=$!
+  exec 9> "$liv_dir/in"
+  liv_wait() { for _i in $(seq 1 150); do [ "$(wc -l < "$liv_dir/out.jsonl")" -ge "$1" ] && return 0; sleep 0.2; done; return 1; }
+  printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' >&9
+  printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"query","arguments":{"question":"type double"}}}' >&9
+  liv_wait 2 || true
+  printf 'fn double(x) = x * 3\n\nfn triple(x) = x * 3\n\nfn main() = triple(14)\n' > "$liv_dir/main.mn"
+  printf '%s\n' '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query","arguments":{"question":"type triple"}}}' >&9
+  printf '%s\n' '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"audit","arguments":{}}}' >&9
+  printf '%s\n' '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"at","arguments":{"line":5,"col":4}}}' >&9
+  liv_wait 5 || true
+  exec 9>&-
+  wait $liv_srv 2>/dev/null
+  if [ "$(grep -c 'session: tree moved' "$liv_dir/err.log")" = "1" ] \
+     && grep -q 'declared as double' "$liv_dir/out.jsonl" \
+     && grep -q 'declared as triple' "$liv_dir/out.jsonl" \
+     && grep -q 'triple : Pure' "$liv_dir/out.jsonl" \
+     && grep -q 'Query: main(' "$liv_dir/out.jsonl"; then
+    pass "living session: the graph tracks the tree — one re-derivation, post-edit reads answer the new truth"
+  else
+    fail "living session (moved=$(grep -c 'session: tree moved' "$liv_dir/err.log"); see $liv_dir/out.jsonl)"
+  fi
   # ── the intent ranker — survivors ordered by local intent ──────────
   # candidate_rank reads the graph (decl nearness + use-edge nearness
   # against the hole's span, now carried on Context): a name already

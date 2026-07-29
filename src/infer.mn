@@ -2150,58 +2150,10 @@ fn instance_arg_scalar_ty(arg) = match arg {
   EANode(_) => None,
 }
 
-fn build_declared_row(effs) = match fold(
-  (mk_ef_pure(), [], false),
-  (acc, eff) => match acc {
-    (pos, negs, saw) => match eff {
-      (name, negated, conn) => if is_pure_eff_name(name) {
-        (pos, negs, true)
-      }
-      // drift-audit: ignore — bounded by the authored clause length, not a loop accumulator
-      else if negated {
-        (pos, negs ++ [name], saw)
-      } else {
-        (apply_connective(conn, pos, mk_ef_closed([name])), negs, saw)
-      },
-    },
-  },
-  effs
-) {
-  (pos, neg_names, saw_pure) => if saw_pure {
-    mk_ef_pure()
-  } else if len(neg_names) == 0 {
-    pos
-  } else {
-    // ONE triple: the positives present, the negations absent — a solo
-    // `with !N` is the negative capability (universal tail); positives
-    // pin the gate closed with the absence riding as the crown's proof.
-    match pos {
-      EfRow(pp, pa, pt) => if len(pp) == 0 {
-        mk_ef_neg(sort_unique(neg_names))
-      } else {
-        ef_make(pp, name_set_union(pa, sort_unique(neg_names)), pt)
-      },
-    }
-  },
-}
-
-fn is_pure_eff_name(name) = match name {
-  EPure => true,
-  _ => false,
-}
-
-fn apply_connective(conn, own acc, own term) = match conn {
-  EcUnion => union_row(acc, term),
-  EcDiff => diff_row(acc, term),
-  EcInter => inter_row(acc, term),
-}
-
-fn has_pure_declared(effs) = any(
-  (eff) => match eff {
-    (name, _, _) => is_pure_eff_name(name),
-  },
-  effs
-)
+// is_pure_eff_name / apply_connective / has_pure_declared /
+// build_declared_row live in effects.mn now — pure row algebra over the
+// parsed signed triples, ONE home serving this judge and the parser's
+// fn-type `with` rows alike.
 
 // Expression inference
 fn infer_expr(ref node) = match node {

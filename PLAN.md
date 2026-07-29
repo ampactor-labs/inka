@@ -1092,6 +1092,39 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶ THE FN TYPE SPEAKS ITS ROW — the resume barrier's
+  vocabulary parses, and the signed-clause fold finds one home
+  (pin 8471a255). The barrier design collapsed into VOCABULARY the
+  moment the persist surface was audited: persist takes a word
+  (addr(thunk)) so no per-op gate can type it — but a Persist op
+  declared `persist(k: () -> a with !WASI + !Network + !Filesystem,
+  path)` makes ORDINARY row checking at the argument edge the whole
+  barrier, zero new machinery (the row proves what Temporal diffs at
+  replay). The DEP was foundational lathe-lag: TFun's row was
+  render-only — `() -> Int with !WASI` parsed NOWHERE (a param
+  annotation split the decl; a type alias refused at the `with`).
+  Landed: parse_type_ty's arrow arm gains the optional `with <row>`
+  (greedy-inner in return position — parenthesize for the outer
+  clause), the row built by build_declared_row, which MOVED to
+  effects.mn with its kin (is_pure_eff_name / apply_connective /
+  has_pure_declared — pure algebra over the parsed triples, ONE home
+  for infer's declared rows and the parser's type rows; the parser's
+  silent mk_ef_open dependence became a declared import). MEASURED
+  LIVE (the b3 probe): `accept_thunk(f: () -> Int with !WASI)` REFUSES
+  a WASI-performing thunk argument — E_EffectMismatch "WASI + Alloc +
+  Memory vs !WASI" at the call — the barrier firing through the
+  existing crown. The named next single, its RED banked:
+  Hβ.effects.hof-row-subsumption-at-call — the arg edge runs UNIFY's
+  equality, so a rigid Pure arg falsely refuses against the neg param
+  ("Pure vs !WASI") while row_subsumes itself reads Pure ⊆ !WASI
+  correctly; the call's arg-to-param edge must run SUBSUMPTION for
+  fn-typed params (contravariant at the one directional edge — the
+  general unify stays symmetric). With it lands the Persist op's
+  declared row (the barrier proper) and its two crucibles: the
+  absorbed-thunk persist admitted, the raw-external persist teaching
+  the absorb-or-own-replay move. Dynamic Wind (OOPSLA 2025) stays the
+  bracket-semantics read for the resume side. CLEAN m2 == m3;
+  census 0.
 - 2026-07-28 · ▶▶ THE INSTANCE JUDGES ITS ARGS — the signature check
   lands, and the prior entry's parse claim corrects in place
   (pin 2eb7cee5). RETRACTION (the ⟲ law, the probe's own find): the

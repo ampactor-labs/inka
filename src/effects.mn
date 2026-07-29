@@ -89,6 +89,69 @@ fn mk_ef_pure() with Pure = ef_pure_row
 // The crown's negative capability: !B = anything except B.
 fn mk_ef_neg(ref names) with !Mutate = ef_make([], names, EtAll)
 
+// ─── The signed-clause fold — authored `with` terms to ONE row ───────
+// The parsed triples (EffName, negated, EConn) build the canonical
+// triple here, at their one home: infer's declared-row gate and the
+// parser's fn-TYPE `with` rows (a param typed `() -> a with !WASI`)
+// both read this fold. The with-clause is a SIGNED SET, not a running
+// union: positives name what may be performed (composed by the
+// authored connective); negations name what provably must NOT (one
+// forbidden set — complements compose by intersection). The row is
+// their meet; an authored Pure is absolute and dominates the clause.
+
+fn is_pure_eff_name(name) = match name {
+  EPure => true,
+  _ => false,
+}
+
+fn apply_connective(conn, own acc, own term) = match conn {
+  EcUnion => union_row(acc, term),
+  EcDiff => diff_row(acc, term),
+  EcInter => inter_row(acc, term),
+}
+
+fn has_pure_declared(effs) = any(
+  (eff) => match eff {
+    (name, _, _) => is_pure_eff_name(name),
+  },
+  effs
+)
+
+fn build_declared_row(effs) = match fold(
+  (mk_ef_pure(), [], false),
+  (acc, eff) => match acc {
+    (pos, negs, saw) => match eff {
+      (name, negated, conn) => if is_pure_eff_name(name) {
+        (pos, negs, true)
+      }
+      // drift-audit: ignore — bounded by the authored clause length, not a loop accumulator
+      else if negated {
+        (pos, negs ++ [name], saw)
+      } else {
+        (apply_connective(conn, pos, mk_ef_closed([name])), negs, saw)
+      },
+    },
+  },
+  effs
+) {
+  (pos, neg_names, saw_pure) => if saw_pure {
+    mk_ef_pure()
+  } else if len(neg_names) == 0 {
+    pos
+  } else {
+    // ONE triple: the positives present, the negations absent — a solo
+    // `with !N` is the negative capability (universal tail); positives
+    // pin the gate closed with the absence riding as the crown's proof.
+    match pos {
+      EfRow(pp, pa, pt) => if len(pp) == 0 {
+        mk_ef_neg(sort_unique(neg_names))
+      } else {
+        ef_make(pp, name_set_union(pa, sort_unique(neg_names)), pt)
+      },
+    }
+  },
+}
+
 fn mk_record_open(ref fields, v) with !Mutate = TRecordOpen(field_canonicalize(fields), v)
 
 fn field_canonicalize(ref fields) with !Mutate = {

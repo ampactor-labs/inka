@@ -11,6 +11,8 @@
 // an NHole; parsing continues. Ten syntax errors → ten holes.
 import types
 
+import effects
+
 import graph
 
 import lexer
@@ -2868,11 +2870,27 @@ fn parse_type_ty(ref tokens, pos) = match parse_type_atom(tokens, pos) {
             TUnit => [],
             _ => [base],
           }
-          (TFun(
-            map((t) => mk_param("_", t), param_tys),
-            ret,
-            mk_ef_open([], fresh_handle(span_at(tokens, pos)))
-          ), p2)
+          // Optional `with <row>` — the fn TYPE's authored effect row
+          // (TFun's third field, at last parseable: `() -> a with !WASI`
+          // is the resume barrier's whole vocabulary — a param demanding
+          // an external-free thunk by ordinary subsumption). The row
+          // builds through build_declared_row, the ONE signed-clause
+          // fold infer's declared rows ride. Greedy: in a return
+          // position the `with` binds the INNER fn type; parenthesize
+          // for the outer clause. Absent, the open var as before.
+          match if at(tokens, skip_ws(tokens, p2), TWith) {
+            match parse_effect_list(tokens, skip_ws(tokens, skip_ws(tokens, p2) + 1)) {
+              (row_effs, p3) => (build_declared_row(row_effs), p3),
+            }
+          } else {
+            (mk_ef_open([], fresh_handle(span_at(tokens, pos))), p2)
+          } {
+            (row, p_row) => (TFun(
+              map((t) => mk_param("_", t), param_tys),
+              ret,
+              row
+            ), p_row),
+          }
         },
       }
     } else {

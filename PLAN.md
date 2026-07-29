@@ -1092,6 +1092,43 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶▶ THE ARGUMENT EDGE RUNS SUBSUMPTION — and the persist
+  barrier lands on the op whose contract is re-execution (Arc 3's
+  external-effect resume barrier, first face · pin 7c91063c). The
+  banked next single executed: unify_row_canonical's two Closed~EtAll
+  arms judge by row_subsumes — pass, no bind, the negation row a GATE,
+  never an equand — where the old equality arm falsely refused EVERY
+  closed-row argument against a neg-row param (a Pure thunk "failed"
+  the universe-minus row it plainly satisfies; the b3 probe banked the
+  RED). ON that edge, the barrier: persist_branch's param row is
+  `() -> a with !WASI + !Filesystem + !Network` — a crashed branch
+  RE-RUNS its thunk (the SPACE=TIME fork, §4④), so the row severs what
+  a replay cannot un-send (the image restore rolls back Alloc/Memory;
+  it cannot un-send a packet), and ordinary row checking at the
+  argument edge is the WHOLE gate — the typed form of the invariant
+  the durable-execution field re-derives at runtime by journal-diffing.
+  THE AUDIT REDIRECTED THE BARRIER to its true home: persist(Int,
+  String) stays word-rooted — a DATA root (the warm compile's asts,
+  driver.mn) replays nothing, so it carries no gate; the op that
+  replays is the op that severs. GATES, the RED matrix measured on the
+  prior boot: persist-branch-clean healed 1 false mismatch → 0 AND
+  runs the whole checkpoint+run+join loop (42); hof-row-gate healed
+  2 → exactly 1 (the quiet thunk admits, the noisy edge alone
+  reports); persist-branch-external names the severed triple at the
+  lambda's own span ("WASI + Alloc + Memory + t… vs !Network +
+  !Filesystem + !WASI"). One dead label counted en route: the external
+  face's first zero-mismatch was a phantom `print` (E_MissingVariable
+  starves the row; the fixture's callee is println). CLEAN m2 == m3 at
+  327,391 lines — no wheel site ever depended on the false mismatches,
+  and the arm's EtAll-tailed thunk() row rides the wheel's own
+  persist_to_disk through census 0. Named residue:
+  Hβ.effects.directional-fn-row-edge (the meet is direction-blind —
+  both orientations subsume; the contravariant-precise call edge is
+  the sequel) · Hβ.lower.persist-schedule-branch-row-gate (the fanout
+  lowering's synthesized persist_branch dispatch is post-inference —
+  a persisted `><` branch's row rides the enclosing inference,
+  visible but not yet refused at the persist boundary; the refusal
+  lands when schedule resolution moves to infer).
 - 2026-07-28 · ▶▶ THE FN TYPE SPEAKS ITS ROW — the resume barrier's
   vocabulary parses, and the signed-clause fold finds one home
   (pin 8471a255). The barrier design collapsed into VOCABULARY the

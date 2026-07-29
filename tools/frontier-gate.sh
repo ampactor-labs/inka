@@ -1698,6 +1698,41 @@ for i in "${!compilers[@]}"; do
   else
     fail "splice line carry (see $dir/splice-carry.out)"
   fi
+  # ── the fn-type row is a GATE at the argument edge ─────────────────
+  # unify_row's Closed~EtAll meet is SUBSUMPTION — pass-no-bind, the
+  # negation row judging — where the old equality arm falsely refused
+  # every closed-row argument. Seen RED on the prior boot: the quiet
+  # thunk reported a second mismatch (hof 2, clean 1); here the quiet
+  # face admits and runs while the noisy edge alone reports.
+  cat "${RTLIBS[@]}" "$ROOT/lib/runtime/io.mn" "$ROOT/tests/frontier/mn-hof-row-gate.mn" | wt_run "$compiler" > "$dir/hof-gate.wat" 2> "$dir/hof-gate.err" \
+    && wt_asm "$dir/hof-gate.wat" "$dir/hof-gate.wasm" 2>/dev/null \
+    && "$WT" run "${WT_RUN_FLAGS[@]}" "$dir/hof-gate.wasm" > /dev/null
+  hof_rc=$?
+  if [ "$hof_rc" = "42" ] && [ "$(grep -c 'E_EffectMismatch' "$dir/hof-gate.err")" = "1" ]; then
+    pass "hof row gate (quiet admitted, runs 42; exactly the noisy edge reports)"
+  else
+    fail "hof row gate (rc=$hof_rc mismatches=$(grep -c 'E_EffectMismatch' "$dir/hof-gate.err"); see $dir/hof-gate.err)"
+  fi
+  # ── the persist_branch resume barrier ──────────────────────────────
+  # The op's param row severs image-external effects (a crashed branch
+  # RE-RUNS its thunk — §4④): the replay-exact branch is admitted by
+  # subsumption and the whole checkpoint+run+join loop runs; a printing
+  # branch reports the mismatch naming the severed row at its own edge.
+  cat "${PERSIST_RTLIBS[@]}" "$ROOT/tests/frontier/mn-persist-branch-clean.mn" | wt_run "$compiler" > "$dir/pb-clean.wat" 2> "$dir/pb-clean.err" \
+    && wt_asm "$dir/pb-clean.wat" "$dir/pb-clean.wasm" 2>/dev/null \
+    && "$WT" run "${WT_RUN_FLAGS[@]}" --dir /tmp "$dir/pb-clean.wasm" > /dev/null
+  pb_rc=$?
+  if [ "$pb_rc" = "42" ] && ! grep -q 'E_EffectMismatch' "$dir/pb-clean.err"; then
+    pass "persist branch barrier admits the replay-exact thunk (42, no mismatch)"
+  else
+    fail "persist branch clean (rc=$pb_rc; see $dir/pb-clean.err)"
+  fi
+  cat "${PERSIST_RTLIBS[@]}" "$ROOT/tests/frontier/mn-persist-branch-external.mn" | wt_run "$compiler" > /dev/null 2> "$dir/pb-ext.err"
+  if grep -q 'E_EffectMismatch' "$dir/pb-ext.err" && grep -q '!WASI' "$dir/pb-ext.err"; then
+    pass "persist branch barrier reports the replaying external (severed row named)"
+  else
+    fail "persist branch external (see $dir/pb-ext.err)"
+  fi
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"

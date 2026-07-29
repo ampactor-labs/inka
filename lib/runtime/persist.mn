@@ -51,9 +51,21 @@ type PersistHandle = PersistHandle(Int)
 // is the word-face belt beside it.
 effect Persist {
   persist(Int, String)
-  // Prototype fanout storage hooks. persist_branch checkpoints the whole
-  // image before invoking the branch; results join from live handler state.
-  persist_branch(() -> a) -> PersistHandle
+  // Fanout storage. persist_branch checkpoints the whole image before
+  // invoking the branch; results join from live handler state. THE
+  // RESUME BARRIER lives in the param's row: a crashed branch re-enters
+  // from its wire and RE-RUNS the thunk (the SPACE=TIME fork, §4④), so
+  // an external effect in the branch would fire AGAIN on replay — the
+  // row severs image-external effects (WASI/Filesystem/Network; the
+  // image restore rolls back Alloc/Memory but cannot un-send a packet),
+  // and ordinary row checking at the argument edge is the whole gate:
+  // absorb the effect before the boundary or own the replay in a
+  // handler. The durable-execution field enforces exactly this
+  // invariant at runtime by journal-diffing; the row proves it before
+  // the first run. persist(root, path) stays word-rooted — a DATA root
+  // (the warm compile's asts) replays nothing, so it carries no gate;
+  // a thunk root's re-entry call is gated at its own call site.
+  persist_branch(() -> a with !WASI + !Filesystem + !Network) -> PersistHandle
   join_persist(PersistHandle) -> a
 }
 

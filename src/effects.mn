@@ -566,7 +566,22 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = match 
         } else {
           report_effect_mismatch(a, b, span, reason)
         },
-        EtAll => report_effect_mismatch(a, b, span, reason),
+        EtAll => // Closed ~ ¬B: the negation row is a GATE by construction (§4③ —
+        // "the negation is the GATE"), so the meet is SUBSUMPTION, not
+        // equality: a concrete row satisfying the mask passes with NO
+        // bind — each side keeps its own row (the context reads its
+        // declared gate, the value its tighter truth; widening, sound).
+        // Equality here falsely refused every rigid arg against a
+        // neg-rowed fn-type param ("Pure vs !WASI", the b3 probe — the
+        // resume barrier's admit face). The unguarded direction (a
+        // ¬-rowed VALUE flowing into a closed context) stays refused by
+        // the reverse arm below; the fully direction-aware call edge is
+        // the named residual Hβ.effects.directional-fn-row-edge.
+        if row_subsumes(a, b) {
+          ()
+        } else {
+          report_effect_mismatch(a, b, span, reason)
+        },
       },
       EtVar(va) => match tb {
         EtClosed => if forbidden_names_disjoint(pb, aa) {
@@ -602,7 +617,13 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = match 
         } else {
           report_effect_mismatch(a, b, span, reason)
         },
-        EtClosed => report_effect_mismatch(a, b, span, reason),
+        EtClosed => // ¬A ~ Closed: the mirror of the gate meet above — the closed
+        // side satisfying the mask passes with no bind.
+        if row_subsumes(b, a) {
+          ()
+        } else {
+          report_effect_mismatch(a, b, span, reason)
+        },
       },
     },
   },

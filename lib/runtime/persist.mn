@@ -111,20 +111,29 @@ fn image_pack(k) with Memory + Alloc = {
   str_of_buf(wire)
 }
 
+// The disk policy's one home — both arms write the wire through it. An
+// arm's performs resolve OUTER of its own install (the world law), so an
+// arm re-performing `persist` as an OP would put Persist in this
+// handler's RESIDUAL — every install then honestly carried Persist to
+// the root and the row gate refused programs whose only Persist handler
+// was this very install. The policy is a direct write, never a re-entry.
+fn persist_write(k, ref path) with Memory + Alloc + Filesystem + WASI =
+  fs_write_file_impl(path, image_pack(k))
+
 // persist_to_disk — the default disk policy for the rooted-image wire.
 handler persist_to_disk with branch_results = [] {
   persist(k, path) => {
     // This handler IS the disk policy — it writes through the WASI substrate
     // layer directly (the swappable point is the Persist effect itself; a
     // bare fs_write_file resolves only inside the wheel's own compile).
-    fs_write_file_impl(path, image_pack(k))
+    persist_write(k, path)
     resume()
   },
   persist_branch(thunk) => // Checkpoint the whole image before running the branch, then retain the
   // result in this live handler activation; a crashed branch re-enters from
   // its wire (the SPACE=TIME fork, §4④).
   {
-    persist_checkpoint_thunk(thunk, len(branch_results))
+    persist_write(addr(thunk), "/tmp/mn-persist-branch-{int_to_str(len(branch_results))}.k")
     // drift-audit: ignore — thunk() is the effectful branch body; result feeds the with-clause accumulator, not chain position
     let result = thunk()
     resume(PersistHandle(len(branch_results))) with branch_results = push(branch_results, result)
@@ -133,6 +142,3 @@ handler persist_to_disk with branch_results = [] {
     PersistHandle(idx) => resume(list_index(branch_results, idx)),
   },
 }
-
-fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Cast + Filesystem + Persist =
-  persist(addr(thunk), "/tmp/mn-persist-branch-{int_to_str(idx)}.k")

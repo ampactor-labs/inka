@@ -267,7 +267,7 @@ fn row_strictly_narrower(body_row, decl_row) with Memory + GraphRead + Alloc = i
 // The literal source residue: presents as `with A + B`, the absent
 // set as `!X` terms, an empty closed row as Pure; an open tail keeps
 // the honest ellipsis (surfacing the var is the named follow-up).
-fn row_to_with_clause(row) with Intern + Memory = match row {
+fn row_to_with_clause(row) with Intern + Memory + Alloc = match row {
   EfRow(p, a, t) => {
     let pos = if len(p) == 0 { "" } else { eff_names_to_str(p) }
     let negs = neg_names_to_str(a)
@@ -285,7 +285,8 @@ fn neg_names_to_str(ref names) with Intern + Memory + Alloc =
 
 // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
 fn eff_names_to_str(names) with Intern + Memory + Alloc = if len(names) == 0 {
-  "Pure"   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md ("Pure is the identity element of +"); not effect-name string-keying
+  // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md ("Pure is the identity element of +"); not effect-name string-keying
+  "Pure"
 } else if len(names) == 1 {
   eff_name_label(last(names))
 } else {

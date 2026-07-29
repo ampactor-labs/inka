@@ -1067,7 +1067,7 @@ fn render_effect_ops(ref ops: [(String, [Ty], Ty, Node)], i) with GraphRead + Me
 fn render_config_params(ref config) with GraphRead + Intern + Memory + Alloc + !Mutate =
   if len(config) == 0 { "" } else { "({render_config_list(config, 0)})" }
 
-fn render_config_list(ref config, i) with GraphRead + Memory + Alloc + !Mutate = if i >= len(config) {
+fn render_config_list(ref config, i) with GraphRead + Memory + Alloc + Intern + !Mutate = if i >= len(config) {
   ""
 } else {
   let p = config[i]
@@ -1331,7 +1331,8 @@ fn ast_kind_of(node) with Pure = match node {
 fn canonical_indent_depth(kind, ctx) with Pure = match kind {
   NStmt(_) => 0,
   NExpr(_) => left_edge_indent(),
-  _ => 0,   // drift-audit: ignore — non-stmt/expr kinds sit at left edge; depth 0 IS their canonical indent, not a fabricated default
+  _ => // drift-audit: ignore — non-stmt/expr kinds sit at left edge; depth 0 IS their canonical indent, not a fabricated default
+  0,
 }
 
 type RenderContext

@@ -1215,7 +1215,15 @@ fn fp_fields_walk(ref fields: [(String, Ty)], i, acc: String, map, n) with Graph
 // Rows render by interned name handle — stable within one process, which
 // is the loop's whole lifetime. Present and absent sets are canonical
 // (sorted at birth); a var tail joins the alpha map.
-fn fp_row(row, map, n) with GraphRead + Memory + Alloc = match row {
+// The row fingerprints its RESOLUTION, never its raw face: a var tail's
+// BINDING is row content (the reading law folds it in), so a raw-face
+// walk was bound-content-blind — a stmt whose row tail got taught
+// between rounds fingerprinted stable, the final skipped its
+// re-judgment, and the stale publish carried the taught mess as its
+// face (measured: infer_context's maskless GraphRead/Intern face with a
+// prior round's tail). resolve_row applies the masks as it folds, so
+// the fingerprint moves exactly when the row's MEANING moves.
+fn fp_row(row, map, n) with GraphRead + Memory + Alloc = match resolve_row(row) {
   EfRow(present, absent, tail) => {
     let ps = fp_names(present, 0, "")
     let as_ = fp_names(absent, 0, "")
@@ -1717,7 +1725,18 @@ fn branch_replay_pubs(ref pubs, i) = if i >= len(pubs) {
 // whole float-format family).
 fn branch_replay_one(name, scheme, reason, kind) = match scheme {
   Forall(q, sty) => {
-    let frozen = Forall(q, chase_deep(sty))
+    let fty = chase_deep(sty)
+    // The quantifier RE-DERIVES from the frozen type: chase_deep folds
+    // bound structure to values and canonicalizes free leaves to their
+    // union-find ROOTS, so pre-fold qvars name surface aliases the
+    // frozen tree no longer holds — any frozen leaf outside the
+    // instantiation mapping is SHARED by every caller, and the callers'
+    // teachings union into that one live cell (measured: infer_context
+    // publishing a maskless GraphRead/Intern face it never performs —
+    // the union of all fourteen chains' contexts — with stale-band and
+    // duplicated qvars as the two-era tell). An EMPTY q is the
+    // deliberate mono/two-phase share and stays empty.
+    let frozen = if len(q) == 0 { Forall([], fty) } else { Forall(free_in_ty(fty), fty) }
     match kind {
       EffectOpScheme(ename, bd, ba, bdisc) => {
         let joined = match env_lookup(name) {
@@ -2132,11 +2151,7 @@ fn check_instance_args(effs, span: ValidSpan) = each(
 )
 
 fn check_one_instance_arg(arg, pty, span: ValidSpan) = match instance_arg_scalar_ty(arg) {
-  Some(aty) => if same_ground(aty, fold_strip(pty)) {
-    ()
-  } else {
-    report(ETypeMismatch(aty, pty, span))
-  },
+  Some(aty) => if same_ground(aty, fold_strip(pty)) { () } else { report(ETypeMismatch(aty, pty, span)) },
   None => (),
 }
 
@@ -2154,7 +2169,7 @@ fn instance_arg_scalar_ty(arg) = match arg {
 // build_declared_row live in effects.mn now — pure row algebra over the
 // parsed signed triples, ONE home serving this judge and the parser's
 // fn-type `with` rows alike.
-
+//
 // Expression inference
 fn infer_expr(ref node) = match node {
   N(body, span, handle) => match body {
@@ -3873,7 +3888,7 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
           let root = graph_chase_handle(ha)
           match graph_chase(root) {
             GNode(NBound(inner), _) => unify_types(inner, b, span, reason),
-            _ => if occurs_in(root, b) {
+            _ => if occurs_in_live(root, b) {
               report(EOccursCheck(root, b, span))
             } else {
               graph_bind(root, b, Located(span, reason))
@@ -5094,9 +5109,11 @@ fn effect_instance_arity(ename) = {
 fn op_scheme_arity(sch) = match sch {
   Forall(_, TFun(_, _, row)) => match op_instance_ty(row) {
     Some(TName(_, args)) => len(args),
-    _ => 0,   // drift-audit: ignore — a bare/non-instance row HAS arity 0; the read's honest answer, not a fabricated default
+    _ => // drift-audit: ignore — a bare/non-instance row HAS arity 0; the read's honest answer, not a fabricated default
+    0,
   },
-  _ => 0,   // drift-audit: ignore — a non-fn scheme has no op instance; arity 0 is the honest answer
+  _ => // drift-audit: ignore — a non-fn scheme has no op instance; arity 0 is the honest answer
+  0,
 }
 
 // n fresh instance vars for a handler's `Handler(E(v1..vn))` — one per the
@@ -5352,14 +5369,18 @@ fn chase_row_deep(eff, d) = if chase_row_changes(eff, d) {
       // chase into its published scheme — a live pointer into the decl's
       // band that concurrent callers folded mid-flight, the six-battery's
       // 5-1 split on driver_extract_imports' cell). A bound tail folds to
-      // its VALUE by recursion, exactly as subst_row_build's arm —
-      // presents and absents union through the fold (the pending-
-      // subtraction mask rides), the inner tail survives. A published
-      // scheme is then a value or a quantified var, never a live pointer.
+      // its VALUE by recursion, exactly as subst_row_build's arm, under
+      // resolve_row's read law: the inner present joins MINUS this
+      // face's absent — the pending `~>` subtraction filters what the
+      // tail delivers (an unfiltered union hands ef_make a present∩absent
+      // collision and canonicalization deletes the ABSENT: the mask
+      // INVERTS — measured as GraphRead/Intern surviving infer_context's
+      // bracket into every verb run's published row). A published scheme
+      // is then a value or a quantified var, never a live pointer.
       match t {
         EtVar(v) => match graph_chase(v) {
           GNode(NRowBound(inner), _) => match chase_row_deep(inner, d + 1) {
-            EfRow(ip, ia, it) => ef_make(name_set_union(p2, ip), name_set_union(a2, ia), it),
+            EfRow(ip, ia, it) => ef_make(name_set_union(p2, name_set_diff(ip, a2)), name_set_union(a2, ia), it),
           },
           _ => ef_make(p2, a2, t),
         },
@@ -5750,7 +5771,11 @@ fn subst_row_build(eff, mapping) = match eff {
         } else {
           match graph_chase(v) {
             GNode(NRowBound(inner), _) => match subst_row_build(inner, mapping) {
-              EfRow(c2, ia2, it2) => ef_make(name_set_union(ns2, c2), name_set_union(ab2, ia2), it2),
+              EfRow(c2, ia2, it2) => // The fold obeys resolve_row's read law: the inner present
+              // joins MINUS this face's absent (the pending mask filters
+              // what the tail delivers; unfiltered, ef_make's collision
+              // canonicalization deletes the absent and the mask inverts).
+              ef_make(name_set_union(ns2, name_set_diff(c2, ab2)), name_set_union(ab2, ia2), it2),
             },
             _ => // A mapping-missed FREE tail (either sort — row_var_is_free's
             // tolerance) is deliberately unquantified: the mono self-entry
@@ -6197,7 +6222,12 @@ fn register_effect_ops(effect_name, params, ops) = {
   // instance judges its args against; a bare effect publishes the
   // empty tuple. The formerly-empty tuple here was a placeholder.
   let op_names = map(((n, _, _, _)) => n, ops)
-  env_extend(effect_name, Forall([], TTuple(map(param_ty, params))), Declared(effect_name), EffectDeclKind(op_names))
+  env_extend(
+    effect_name,
+    Forall([], TTuple(map(param_ty, params))),
+    Declared(effect_name),
+    EffectDeclKind(op_names)
+  )
   // THE EFFECT'S COMPLETE TYPE-VAR STRUCTURE: the free type vars across ALL
   // its ops' signatures (params + returns), deduped — the effect's type
   // params. An effect whose ops are all CONCRETE has zero vars → bare

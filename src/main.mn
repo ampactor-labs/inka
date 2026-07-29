@@ -905,8 +905,10 @@ effect Tighten {
 // zero fn slots for the rest, and a perform through a zero slot is a
 // garbage dispatch.
 handler tighten_collector with found = [] {
-  report(diag) => {
-    report(diag)
+  diag_report(diag, line) => {
+    // Forward outward with the SAME rendered line — the forwarder never
+    // re-renders (the line was made once, at the report boundary).
+    diag_report(diag, line)
     match diag {
       TOverDeclared(declared, used, name, span) => resume() with found = push(found, (declared, used, name, span)),
       _ => resume(),
@@ -1298,14 +1300,14 @@ fn render_field(target: String, ranges, fstart, nlines) = {
 // carries (driver_entry_with_ranges — computed where the fold runs,
 // once, never a second ledger).
 fn at_run(target, line, col) = infer_context(() => match driver_entry_with_ranges(target) {
-  // Productive under error IS the address contract (the README's own
+  (_ast, ranges) => // Productive under error IS the address contract (the README's own
   // voice.mn:9 answers OVER its unresolved `mix` — an env miss binds
   // NErrorHole and the graph still projects). The old diag_errors()
   // refusal here was an era crutch: branch-judged errors never reached
   // the root count, so it never fired — the moment the join carried
   // them truthfully it refused exactly the files the projection exists
   // to serve. The diagnostics render on stderr beside the answer.
-  (_ast, ranges) => {
+  {
     match range_of_module(ranges, target) {
       None => {
         eprint_string("mentl: {target} did not load — nothing to project\n")

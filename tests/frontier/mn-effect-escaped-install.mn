@@ -1,0 +1,29 @@
+// The escaped install — TODAY'S semantics pinned as the modal frontier's
+// tripwire (the residual-absence leg's sibling). A thunk minted UNDER an
+// install, called with that install's extent long dead: the
+// stateless-singleton tier direct-calls the arm with an empty world
+// chain, and the call is VALUE-SOUND by construction (the arm ignores
+// __state — ponger answers its honest 7), so the compile gate GROUNDS
+// the demand by that measured licence. The row cannot split this live
+// dynamic-coverage-free escape from the backtrack family's legitimate
+// per-candidate installs; the split is install-identity — the modal
+// crown's seat (PLAN §4③, band A). When that form lands, this leg
+// forces the conscious choice: keep the value-sound licence for
+// stateless arms, or refuse the dead extent by identity.
+// Expected exit: 7.
+
+effect Ping { ping() -> Int }
+
+handler ponger {
+  ping() => resume(7),
+}
+
+fn make_pinger() = {
+  let t = () => ping()
+  t
+} ~> ponger
+
+fn main() = {
+  let escaped = make_pinger()   // drift-audit: ignore — the BINDING is the fixture: the thunk must outlive the install's extent before the call
+  escaped()
+}

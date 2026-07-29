@@ -1,0 +1,19 @@
+// The two absence theorems, told apart — this leg pins TODAY'S: !Ping is
+// RESIDUAL absence. An install of Ping inside a !Ping fn absorbs its own
+// performs; the residual row is clean; the declaration holds and the
+// program runs. The DEEP claim ("no Ping op ever executes, even
+// self-absorbed") is a DIFFERENT theorem, keyed by install identity — the
+// modal crown's seat (PLAN §4③). When that form lands, this leg forces the
+// conscious choice: keep residual as the bare !E reading, or flip it — the
+// tripwire against an accidental semantic change.
+// Expected exit: 42.
+
+effect Ping { ping() -> Int }
+
+handler ponger {
+  ping() => resume(7),
+}
+
+fn self_absorbed() -> Int with !Ping = { ping() } ~> ponger
+
+fn main() = self_absorbed() * 6

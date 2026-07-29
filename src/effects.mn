@@ -32,23 +32,24 @@ import runtime/strings
 // ─── the canonical triple's constructors ────────────────────────────
 // row = present ∪ (tail ∖ absent). Invariants enforced HERE, once, so
 // every flowing row is canonical at birth and no read ever normalizes:
-// present/absent deduped, present ∩ absent = ∅, EtClosed ⇒ absent = [].
+// present and absent each deduped. present ∩ absent is COHERENT under
+// the reading law — present ADDS a name now, absent FILTERS it from the
+// tail; both at once means "performs it here, and the tail's copy is
+// subtracted" (exactly what a caller's teaching join into a `~>` mask
+// cell produces). The former `absent ∖= present` canonicalization
+// conflated the AUTHORED contradiction (`with A + !A`, a decl-site
+// meet — build_declared_row's business) with a representation
+// invariant, and every join/fold that unioned a present into a masked
+// row silently DELETED the mask — the pending `~>` subtraction dying at
+// the collision, GraphRead/Intern surviving every bracket into the
+// wheel's own root row (the mask-inversion class, third face).
 //
 // The absent set survives EVERY tail form: under EtClosed it is vacuous
 // for the row's READING (no tail to mask) but load-bearing as the
 // crown's PROOF-OF-ABSENCE record — `with A + !B` gates carry B here,
 // and subsumption checks a body's presents against it transitively.
-fn ef_make(ref present, ref absent, tail) with !Mutate = {
-  let p = name_set_canonicalize(present)
-  let a = name_set_canonicalize(absent)
-  // ∅ absent (the dominant row) skips the disjointness diff outright.
-  // The subtraction is INSTANCE-AWARE (eff_forbids — the negation's one
-  // law): an absent entry drops only when a present entry actually
-  // contradicts it. The old by-name diff deleted `!Sample(44100)` the
-  // moment `Sample(48000)` was present — the declared severance
-  // silently vanishing at row construction.
-  EfRow(p, if len(a) == 0 { a } else { absent_minus_present(a, p) }, tail)
-}
+fn ef_make(ref present, ref absent, tail) with !Mutate =
+  EfRow(name_set_canonicalize(present), name_set_canonicalize(absent), tail)
 
 fn absent_minus_present(ref a, ref p) with !Mutate =
   filter((entry) => !any((pe) => absent_contradicted_by(entry, pe), p), a)
@@ -98,7 +99,6 @@ fn mk_ef_neg(ref names) with !Mutate = ef_make([], names, EtAll)
 // authored connective); negations name what provably must NOT (one
 // forbidden set — complements compose by intersection). The row is
 // their meet; an authored Pure is absolute and dominates the clause.
-
 fn is_pure_eff_name(name) = match name {
   EPure => true,
   _ => false,
@@ -142,11 +142,17 @@ fn build_declared_row(effs) = match fold(
     // ONE triple: the positives present, the negations absent — a solo
     // `with !N` is the negative capability (universal tail); positives
     // pin the gate closed with the absence riding as the crown's proof.
+    // THE AUTHORED MEET runs HERE, at the one place a human wrote both
+    // clauses: an absent entry a present entry genuinely contradicts
+    // (`with A + !A` — the pair law, instance-aware) drops from the
+    // declared row. This is a DECL-site rule, not a representation
+    // invariant — flowing rows keep coexisting present/absent (the
+    // reading law: present adds now, absent filters the tail).
     match pos {
       EfRow(pp, pa, pt) => if len(pp) == 0 {
         mk_ef_neg(sort_unique(neg_names))
       } else {
-        ef_make(pp, name_set_union(pa, sort_unique(neg_names)), pt)
+        ef_make(pp, absent_minus_present(name_set_union(pa, sort_unique(neg_names)), pp), pt)
       },
     }
   },
@@ -577,11 +583,7 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = match 
         // ¬-rowed VALUE flowing into a closed context) stays refused by
         // the reverse arm below; the fully direction-aware call edge is
         // the named residual Hβ.effects.directional-fn-row-edge.
-        if row_subsumes(a, b) {
-          ()
-        } else {
-          report_effect_mismatch(a, b, span, reason)
-        },
+        if row_subsumes(a, b) { () } else { report_effect_mismatch(a, b, span, reason) },
       },
       EtVar(va) => match tb {
         EtClosed => if forbidden_names_disjoint(pb, aa) {
@@ -619,11 +621,7 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = match 
         },
         EtClosed => // ¬A ~ Closed: the mirror of the gate meet above — the closed
         // side satisfying the mask passes with no bind.
-        if row_subsumes(b, a) {
-          ()
-        } else {
-          report_effect_mismatch(a, b, span, reason)
-        },
+        if row_subsumes(b, a) { () } else { report_effect_mismatch(a, b, span, reason) },
       },
     },
   },

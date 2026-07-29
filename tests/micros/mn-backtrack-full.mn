@@ -25,7 +25,7 @@ effect Choice {
 }
 
 effect Abort {
-  abort() -> Option
+  abort() -> Option(a)
 }
 
 handler my_catch {

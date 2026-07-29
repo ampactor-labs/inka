@@ -251,9 +251,8 @@ fn report_unhandled_effects(lowered) = match env_lookup("main") {
               drain_effect_census()
             } ~> effect_census_collector ~> fn_names_collector ~> top_fn_names_collector ~> string_literal_collector ~> state_slots_collector ~> yield_seen_collector ~> wasi_ops_collector
             match census {
-              (demands, installed) => {
-                let performed = demands_to_enames(demands, 0, [])
-                report_unhandled_names(p, 0, len(p), performed, installed, reason_span_or_zero(reason))
+              (demands, installed) => match demands_to_enames(demands, 0, [], []) {
+                (performed, strict) => report_unhandled_names(p, 0, len(p), performed, strict, installed, reason_span_or_zero(reason)),
               },
             }
           },
@@ -267,64 +266,69 @@ fn report_unhandled_effects(lowered) = match env_lookup("main") {
 
 // A drained demand is an ename already (the floor's ekey) or a yield's
 // OP name — resolve ops to their effect through the live scheme; a name
-// that is no op passes through as itself.
-fn demands_to_enames(ref demands, i, acc) = if i >= len(demands) {
-  acc
+// that is no op passes through as itself. Three tiers, each with its
+// own soundness story: a STATELESS singleton demand GROUNDS (the arm
+// ignores __state — a chainless direct call is value-sound by
+// construction, the measured licence: the escaped-install thunk runs
+// its arm and answers correctly); a STATEFUL singleton joins the
+// performed set and clears on an install anywhere (dynamic installs —
+// the backtrack family's per-candidate `~>` — cover it at runtime, and
+// the SingletonUninstalled guard is the loud belt when they don't); an
+// EVIDENCE-floor demand joins the STRICT set — no unique handler means
+// a dead-chain perform walks garbage evidence with NO belt, so an
+// install elsewhere clears nothing. The row alone cannot split a dead
+// extent from live dynamic coverage; that split is the modal
+// install-identity frontier (band A), and the tripwire fixtures
+// (escaped-install, residual-absence) pin today's semantics until it
+// lands.
+fn demands_to_enames(ref demands, i, acc, strict) = if i >= len(demands) {
+  (acc, strict)
 } else {
   let d = list_index(demands, i)
-  // A demand that resolves through an op WITH a default handler is the
-  // SINGLETON tier's direct call: the read of the handler's state global.
-  // A STATELESS arm never touches it — grounded; a STATEFUL one
-  // dereferences zero unless some install initialized it, so only the
-  // stateful case joins the refusal set (the installed conjunct then
-  // clears it when an install exists — sound because the singleton tier
-  // is unique-handler by definition, an install of the ename IS an
-  // install of that handler). The evidence floor's demand is the ename
-  // itself (no op entry) and always joins.
   let verdict = match env_lookup(d) {
     Some(entry) => match entry {
       (_, _, kind) => match kind {
-        EffectOpScheme(op_effect, default_handler, _, _) => if byte_len(default_handler) > 0 && !handler_stateful(default_handler) {
-          None
+        EffectOpScheme(op_effect, default_handler, _, _) => if byte_len(default_handler) > 0 {
+          if handler_stateful(default_handler) { Some((op_effect, false)) } else { None }
         } else {
-          Some(op_effect)
+          Some((op_effect, true))
         },
-        _ => Some(d),
+        _ => Some((d, true)),
       },
     },
-    None => Some(d),
+    None => Some((d, true)),
   }
   match verdict {
-    None => demands_to_enames(demands, i + 1, acc),
-    Some(en) => {
-      let seen = string_in_list(acc, en)
-      if seen {
-        demands_to_enames(demands, i + 1, acc)
-      } else {
-        demands_to_enames(demands, i + 1, push(acc, en))
-      }
-    },
+    None => demands_to_enames(demands, i + 1, acc, strict),
+    Some((en, is_strict)) => demands_to_enames(
+      demands,
+      i + 1,
+      if string_in_list(acc, en) { acc } else { push(acc, en) },
+      if is_strict && !string_in_list(strict, en) { push(strict, en) } else { strict }
+    ),
   }
 }
 
-fn report_unhandled_names(ref names, i, n, ref performed, ref installed, ref span) = if i >= n {
+fn report_unhandled_names(ref names, i, n, ref performed, ref strict, ref installed, ref span) = if i >= n {
   ()
 } else {
   let ename = eff_name_str(list_index(names, i))
   // The conjuncts: present at the root, NOT substrate-grounded, actually
   // PERFORMED somewhere reachable (a `with Sample`-style declared
   // contract with zero performs is the iterative-class canon, never an
-  // evidence hole — SYNTAX's own lowpass declares it), and NO install of
-  // it anywhere reachable (any install initializes the singleton state
-  // global, so a unique-handler perform grounds — the evidence-capture
-  // row edge over-approximates for those tiers; a name on main's row
-  // with an install SOMEWHERE is the creator-evidence conservatism, not
-  // a runtime hole).
+  // evidence hole — SYNTAX's own lowpass declares it), and either
+  // STRICT (an evidence floor or a stateless singleton — the escaped-
+  // install class, no runtime belt) or genuinely UNINSTALLED anywhere.
+  // A stateful-singleton demand with an install clears: dynamic
+  // installs cover it at runtime and the SingletonUninstalled guard is
+  // the loud belt beneath — the row alone cannot split a dead extent
+  // from live dynamic coverage (the modal install-identity frontier,
+  // band A, owns that split).
   if effect_ops_substrate_grounded(ename) {
     ()
   } else if !string_in_list(performed, ename) {
     ()
-  } else if string_in_list(installed, ename) {
+  } else if !string_in_list(strict, ename) && string_in_list(installed, ename) {
     ()
   } else {
     // Sequenced effectful read BEFORE the construction (the record-
@@ -333,7 +337,7 @@ fn report_unhandled_names(ref names, i, n, ref performed, ref installed, ref spa
     let proposal = absorbing_proposal(ename)
     report(EEffectUnhandled(ename, proposal, span))
   }
-  report_unhandled_names(names, i + 1, n, performed, installed, span)
+  report_unhandled_names(names, i + 1, n, performed, strict, installed, span)
 }
 
 // Every op of the effect projects to a substrate instruction (the
@@ -463,7 +467,7 @@ fn resume_image(img_path) = infer_context(() => {
 // ops carry arms (a partial-effect handler leaves zero fn slots; a perform
 // through one is a garbage dispatch — the tighten_collector constraint).
 handler diag_quiet {
-  report(d) => resume(),
+  diag_report(d, _line) => resume(),
   diag_errors() => resume(0),
   diag_refusals() => resume(0),
 }
@@ -1158,63 +1162,47 @@ handler lookup_ty_graph with spec_pairs = [], spec_enc = "" {
   },
 }
 
-// diag_line — THE diagnostic render, one home. The root arm below, the
-// branch bank (diag_branch), and the mcp gate's collector all read this
-// projection; three hand-copies of the same five-projection splice
-// preceded it. Sequenced projections, then ONE splice-of-vars line: a
-// single 5-splice interpolation mis-rendered the LAST splice when an
-// earlier splice's evaluation allocated (witnessed: the unhandled-effect
-// diagnostic's span rendered a stale env record's span until a preceding
-// read shifted the staging — the shared-scratch clobber class, §9). A
-// splice list of pre-built values has nothing to clobber.
-fn diag_line(diag) = {
-  let src = diag_source(diag)
-  let code = diag_code(diag)
-  let kindw = diag_kind(diag)
-  let msg = diag_message(diag)
-  let sp = show_span(diag_span(diag))
-  "{src}: {code} {kindw}: {msg} at {sp}\n"
-}
-
+// diag_line lives beside diag_message in types.mn now — the render moved
+// to the report BOUNDARY (the report fn), so the arms below receive the
+// finished line and never render.
+//
 // diagnostics_handler — stderr routing (spec 06)
 // The sandbox boundary. Outermost in every route. Declares
 // `with !Diagnostic` so its own arms cannot recursively perform
 // report — structural gate via spec 01's algebra.
 handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
-  report(diag) => {
-    // Every surface is a PROJECTION of the one DiagKind — source, code,
-    // severity-class, message, span, applicability are read live, never
-    // copied. The stderr line and the IDE hover are the same graph read,
-    // and the line itself has ONE render: diag_line.
-    let line = diag_line(diag)
-    // The tally IS the projection continued. This arm saw every diagnostic and
-    // dropped its severity on the floor, so `mentl check` on a missing module
-    // printed the error and exited 0, and a program with a live E_TypeMismatch
-    // emitted 77 lines of WAT. The verdict was here the whole time; the exit
-    // code re-derived it as success.
-    if diag_severity(diag) == SError {
-      // An error renders in EVERY scope — a broken claim anywhere in the
-      // weave changes the answer's validity; the register never silences it.
-      eprint_string(line)
-      if diag_refuses(diag) {
-        resume() with errors = errors + 1, refusals = refusals + 1
-      } else {
-        resume() with errors = errors + 1
-      }
+  diag_report(diag, line) => // The line arrives MADE (rendered at the report boundary, in the
+  // reporter's own world) — this arm's remaining projections
+  // (severity, refuses, span) are pure ctor reads, so the arm's row
+  // carries no graph or intern demand and its residual stays clean
+  // through every install.
+  // The tally IS the projection continued. This arm saw every diagnostic and
+  // dropped its severity on the floor, so `mentl check` on a missing module
+  // printed the error and exited 0, and a program with a live E_TypeMismatch
+  // emitted 77 lines of WAT. The verdict was here the whole time; the exit
+  // code re-derived it as success.
+  if diag_severity(diag) == SError {
+    // An error renders in EVERY scope — a broken claim anywhere in the
+    // weave changes the answer's validity; the register never silences it.
+    eprint_string(line)
+    if diag_refuses(diag) {
+      resume() with errors = errors + 1, refusals = refusals + 1
     } else {
-      // Narration is the register's business: ScopeAll (the census paths)
-      // prints everything; ScopeAt renders only the file the user asked
-      // about (types.mn DiagScope — substrate self-lint is the substrate's
-      // census channel, and partly weave-relative besides).
-      match scope {
-        ScopeAll => eprint_string(line),
-        ScopeNone => (),
-        ScopeAt(sstart, snlines) => match diag_span(diag) {
-          Span(sl, _, _, _) => if sl >= sstart && sl < sstart + snlines { eprint_string(line) },
-        },
-      }
-      resume()
+      resume() with errors = errors + 1
     }
+  } else {
+    // Narration is the register's business: ScopeAll (the census paths)
+    // prints everything; ScopeAt renders only the file the user asked
+    // about (types.mn DiagScope — substrate self-lint is the substrate's
+    // census channel, and partly weave-relative besides).
+    match scope {
+      ScopeAll => eprint_string(line),
+      ScopeNone => (),
+      ScopeAt(sstart, snlines) => match diag_span(diag) {
+        Span(sl, _, _, _) => if sl >= sstart && sl < sstart + snlines { eprint_string(line) },
+      },
+    }
+    resume()
   },
   diag_errors() => resume(errors),
   diag_refusals() => resume(refusals),
@@ -1249,27 +1237,24 @@ handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
 // any in-branch diag_errors/diag_refusals read with branch-local truth.
 // diag_lines_taken hands the whole fact set to the join.
 handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals = 0 {
-  report(diag) => {
-    let line = diag_line(diag)
-    // The banked fact carries the span start-line and the error bit beside
-    // the rendered line, so the root's diag_absorb can apply the scope
-    // register (types.mn DiagScope) at the join — the branch itself stays
-    // scope-ignorant; the register has one home.
-    match diag_span(diag) {
-      Span(sl, _, _, _) => {
-        let iserr = diag_severity(diag) == SError
-        let grown = list_set(list_extend_to(lines, count + 1), count, (line, sl, iserr))
-        if iserr {
-          if diag_refuses(diag) {
-            resume() with lines = grown, count = count + 1, errors = errors + 1, refusals = refusals + 1
-          } else {
-            resume() with lines = grown, count = count + 1, errors = errors + 1
-          }
+  diag_report(diag, line) => // The banked fact carries the span start-line and the error bit beside
+  // the rendered line, so the root's diag_absorb can apply the scope
+  // register (types.mn DiagScope) at the join — the branch itself stays
+  // scope-ignorant; the register has one home.
+  match diag_span(diag) {
+    Span(sl, _, _, _) => {
+      let iserr = diag_severity(diag) == SError
+      let grown = list_set(list_extend_to(lines, count + 1), count, (line, sl, iserr))
+      if iserr {
+        if diag_refuses(diag) {
+          resume() with lines = grown, count = count + 1, errors = errors + 1, refusals = refusals + 1
         } else {
-          resume() with lines = grown, count = count + 1
+          resume() with lines = grown, count = count + 1, errors = errors + 1
         }
-      },
-    }
+      } else {
+        resume() with lines = grown, count = count + 1
+      }
+    },
   },
   diag_errors() => resume(errors),
   diag_refusals() => resume(refusals),
@@ -1381,7 +1366,6 @@ fn severance_candidates(reached) = {
   // effects at this one mint; identity is the intern handle (EffName-is-a-
   // handle landed; comparisons are word-identity by type).
   //
-  // drift-audit: ignore — the literals NAME the severance set at its one mint; identity is the intern handle (EffName-is-a-handle landed)
   let canonical =
     [ENamed(intern_str("Alloc")), ENamed(intern_str("IO")), ENamed(intern_str("Network"))]   // drift-audit: ignore — the literals NAME the severance set at its one mint; identity is the intern handle (EffName-is-a-handle landed)
   filter_not_in(canonical, reached, 0, len(canonical), [])
@@ -1423,8 +1407,7 @@ fn severance_unlocks_loop(severable, i, n, acc) = if i >= n {
 // Positional destructure — provable with no type flow, where a
 // record field read floors in a map lambda (see build_audit_report).
 fn render_audit(entries) = entries |> map((report) => match report {
-  (fn_name, reached, row_str, severable, unlocks, referenced_by) =>
-    audit_report_lines(fn_name, row_str, severable, unlocks, referenced_by),
+  (fn_name, reached, row_str, severable, unlocks, referenced_by) => audit_report_lines(fn_name, row_str, severable, unlocks, referenced_by),
 }) |> str_concat_all
 
 // The String pins are Intent Boundaries (spec_mangle's law): inside the

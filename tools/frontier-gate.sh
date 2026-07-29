@@ -1240,6 +1240,19 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-effect-unhandled.mn" E_EffectUnhandled "$dir"
   run_refusal "$compiler" effect-stateful-uninstalled \
     "$ROOT/tests/frontier/mn-effect-stateful-uninstalled.mn" E_EffectUnhandled "$dir"
+  # The root-row governance gate's three tiers, each pinned: an
+  # EVIDENCE-floor demand refuses even with an install elsewhere (a
+  # dead-chain perform walks garbage evidence, no belt — the one strict
+  # sharpening); a STATEFUL singleton clears on an install (the
+  # SingletonUninstalled guard the loud belt — the preinstall micro
+  # holds that tier at 134); a STATELESS singleton grounds by the
+  # value-sound licence (the arm ignores state), pinned by the
+  # escaped-install tripwire below (exit 7 — the modal install-identity
+  # frontier owns the eventual split, like residual-absence beside it).
+  run_program "$compiler" effect-escaped-install \
+    "$ROOT/tests/frontier/mn-effect-escaped-install.mn" 7 no "$dir"
+  run_program "$compiler" effect-residual-absence \
+    "$ROOT/tests/frontier/mn-effect-residual-absence.mn" 42 no "$dir"
   run_program "$compiler" effect-absorbed \
     "$ROOT/tests/frontier/mn-effect-absorbed.mn" 42 no "$dir"
   run_program "$compiler" rope-list-pattern \

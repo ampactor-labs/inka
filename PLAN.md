@@ -1092,6 +1092,85 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶▶▶▶ THE MASKS RIDE THE CHASE — the wheel passes its own
+  root-row gate, and five Carried-Truth roots fall in one continuous
+  dig (· pin 0ab5d903). THE OPENING MOVE was the gate itself: the
+  escaped-install witness ran its arm with a dead chain (exit 7, clean
+  compile), and the criterion's conjuncts were interrogated to their
+  tiers. The experimentally-sharpened gate refused the WHEEL (GraphRead
+  + Intern at main's root), and nine theories died to probes before the
+  graph named its own writers: (1) THE CHASE KILLED EVERY MASK —
+  chase_node's NRowBound arm destructured `EfRow(names, _, EtVar)`,
+  DISCARDING each level's absent set at the one mechanism every row
+  read routes through; merge_chased_row/merge_row now fold under the
+  reading law (presents filter through accumulated masks; the EtAll
+  special case dissolves into the uniform arm) — measured RED→GREEN as
+  main's row carrying twenty-one riding masks for the first time.
+  (2) THE WRITE GUARDS PERFORMED OPS FROM THEIR ARMS — occurs_in
+  chased whatever instance the OUTER chain held (the wrong-instance
+  class at the guard itself) and charged GraphRead into
+  graph_handler's residual past every bracket; the occurs family is
+  STATE-PASSED now (mechanism layer, beside chase_node), with
+  occurs_in_live the one op-based face for bracketed pre-checks.
+  (3) THE FRAGX CENSUS SPOKE THE VOICE from the bind arm
+  (show_reason = GraphRead + Intern in the residual — the exact face
+  measured on infer_context); it speaks SPANS now, pure projections.
+  (4) THE RENDER MOVED TO THE REPORT BOUNDARY — report is a plain fn
+  rendering diag_line in the REPORTER's world and performing
+  diag_report(kind, line); every arm (root, quiet, branch, tighten,
+  mcp) receives the line made and never renders — the diagnostics/
+  graph arm-dependency cycle the install order could only half-satisfy
+  dissolves, and Hβ.diag.render-chases-wrong-instance is
+  unconstructible at those arms. (5) THE FREEZE RE-DERIVES ITS
+  QUANTIFIER — branch_replay_one folded the type (chase_deep) while
+  keeping PRE-fold qvars, so folded leaves fell outside the
+  instantiation mapping and every caller SHARED the terminal (the
+  union-pool: infer_context's two-era duplicated qvars, measured);
+  Forall(free_in_ty(fty), fty) for generalized schemes, empty-q mono
+  shares preserved. RIDERS, each its own truth: ef_make keeps
+  coexisting present/absent (the reading law makes the pair COHERENT —
+  present adds now, absent filters the tail; the authored `with A + !A`
+  meet moved to build_declared_row, its one decl-site home);
+  chase_row_deep + subst_row_build fold with the same filter;
+  fp_row fingerprints the RESOLUTION (bound-content blindness closed);
+  persist_to_disk's arm writes the wire DIRECTLY through persist_write
+  (an arm re-performing its own op resolves OUTER — the residual
+  honestly carried Persist and refused every fixture whose only
+  handler was that install: the R2 law catching the library's own
+  forwarder); fourteen honest row widens. THE GATE SETTLED AT THREE
+  TIERS, the backtrack acid pair arbitrating (both refuse under any
+  stricter form — their per-candidate dynamic installs are the
+  legitimate face the row cannot see): EVIDENCE-floor demands STRICT
+  (a dead-chain perform walks garbage evidence, NO belt — the one
+  sharpening that stands, install-anywhere clears nothing); STATEFUL
+  singletons clear on an install (SingletonUninstalled the loud belt —
+  mn-singleton-preinstall-call holds that tier at 134); STATELESS
+  singletons ground by the measured value-sound licence (the arm
+  ignores __state — the escaped arm answers its honest 7). TWO
+  TRIPWIRES pin today's semantics for the modal install-identity
+  frontier to consciously flip: mn-effect-escaped-install (exit 7 —
+  the dead-extent escape the licence admits) beside
+  mn-effect-residual-absence (42 — residual !E). One fixture arity
+  trued en route (backtrack-full's `abort() -> Option` — the
+  bare-parameterized class in the acid test's own decl, convicted by
+  the sharper judge). THE LADDER: TRANSITION m3 == m4 at the
+  occurs/chase crossing (96,106-line m2/m3 diff — the whole arc's
+  emit crossing one generation), then CLEAN m2 == m3 three times as
+  the persist policy, the fmt-canonical pass, and the three-tier gate
+  landed. Board whole at the pin: micros whole (the backtrack acid
+  pair healed); proof-exactness 9/9; crown 5/5; census 0; the touched
+  set fmt-canonical. Counted kills, each one probe: the
+  statement-position theory, the lambda-thunk and inner-tee theories,
+  the residual-wash theory, the chain-bisection triple (p1/p2/p3
+  identical — the conviction that moved the dig off infer_context),
+  the loose-prereg-alone theory, the fingerprint-alone theory, the
+  ef_make-alone theory, the shell's own `exit=$?` reading a grep.
+  Named residue: Hβ.infer.arm-op-residual-census (the uniform audit
+  this landing did by hand — every handler arm performing ops outside
+  its own state is a residual carrier; the census instrument is the
+  medium's own row read per arm) · the a=[Pure] absent-entry render
+  seen mid-dig (an EPure in an absent set — benign or a mint oddity,
+  one probe when next in the row layer).
 - 2026-07-28 · ▶▶▶ THE ARGUMENT EDGE RUNS SUBSUMPTION — and the persist
   barrier lands on the op whose contract is re-execution (Arc 3's
   external-effect resume barrier, first face · pin 7c91063c). The

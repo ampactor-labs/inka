@@ -209,7 +209,8 @@ fn stride_class(stride) with Pure = match stride {
   8 => 2,
   16 => 3,
   2 => 4,
-  _ => 0,   // drift-audit: ignore — the word class IS stride 4; any unlisted stride is word-classed by definition, not a fabricated default
+  _ => // drift-audit: ignore — the word class IS stride 4; any unlisted stride is word-classed by definition, not a fabricated default
+  0,
 }
 
 // repr_wat — the WAT value-type token for a representation class. STEP 1's
@@ -1782,7 +1783,16 @@ type DiagKind
 // every surface (source/code/kind/message/span/applicability) from it.
 // !Diagnostic gates the handler, not the effect.
 effect Diagnostic {
-  report(DiagKind)
+  // The op carries the RENDERED line beside the kind — the render runs at
+  // the PERFORM boundary (the `report` fn below), in the reporter's own
+  // world where graph and intern are live, never in an arm. An arm's
+  // performs resolve OUTER of its own install (the world law), so an
+  // arm-side diag_message chased a graph that was not in its world — the
+  // render-chases-wrong-instance class, and the row truth of it (the
+  // handler residual carrying GraphRead + Intern past every bracket to
+  // main's root) is what the root-row gate refused. Arms buffer, tally,
+  // and print; the line arrives made.
+  diag_report(DiagKind, String)
   // The two live reads of the ledger the handler already keeps. The exit code
   // and the emit gate were both RE-DERIVING this as 0 — the handler saw every
   // diagnostic, printed it, and threw the severity away, so `mentl check` on a
@@ -2428,6 +2438,30 @@ effect Filesystem {
   fs_rename(String, String) -> Bool
 }
 
+// diag_line — THE diagnostic render, one home (moved beside diag_message,
+// its whole substance). Sequenced projections, then ONE splice-of-vars
+// line: a single 5-splice interpolation mis-rendered the LAST splice when
+// an earlier splice's evaluation allocated (the shared-scratch clobber
+// class, §9); a splice list of pre-built values has nothing to clobber.
+fn diag_line(diag) with GraphRead + Memory + Alloc + !Mutate + Intern = {
+  let src = diag_source(diag)
+  let code = diag_code(diag)
+  let kindw = diag_kind(diag)
+  let msg = diag_message(diag)
+  let sp = show_span(diag_span(diag))
+  "{src}: {code} {kindw}: {msg} at {sp}\n"
+}
+
+// report — the ONE reporting boundary. The render runs HERE, in the
+// reporter's own world (graph and intern live under the analysis
+// brackets), and the finished line rides the op beside its kind; every
+// arm downstream buffers, tallies, or prints — never renders. This is
+// what dissolves the diagnostics/graph arm-dependency cycle the install
+// ORDER could only half-satisfy (diagnostics-outer-of-graph served the
+// occurs report and starved the render; the reverse starved the report).
+fn report(diag) with Diagnostic + GraphRead + Memory + Alloc + Intern =
+  diag_report(diag, diag_line(diag))
+
 // Every show_* that renders a Ty chases TVars through graph_chase.
 // A raw handle only appears when chase terminates on NFree/NRowFree —
 // the query layer reads that as "unresolved at epoch e." No cached
@@ -2500,7 +2534,7 @@ fn callee_params(name) with EnvRead + GraphRead = match env_lookup(name) {
 // no arg reaches is filled by the param's default node (the absent product
 // field's fallback construction). An unknown label is E_UnknownArgLabel —
 // Located, productive-under-error (the arg is dropped, parsing continues).
-fn resolve_call_args(cname, args) with EnvRead + GraphRead + Memory + Alloc + Diagnostic = {
+fn resolve_call_args(cname, args) with EnvRead + GraphRead + Memory + Alloc + Diagnostic + Intern = {
   let params = callee_params(cname)
   // No declared params (forward ref / fn-param callee / constructor): no labels
   // to resolve against. Strip any stray LabeledArg wrappers to their value so
@@ -2521,7 +2555,7 @@ fn unwrap_labeled_arg(arg) with Pure = match arg {
 // labeled args claim their named slot first (skip-over); positional args then
 // fill the remaining unfilled slots left-to-right. Then collect each slot to
 // its placed value or its param default.
-fn fill_arg_slots(params, args, cname) with EnvRead + GraphRead + Memory + Alloc + Diagnostic = {
+fn fill_arg_slots(params, args, cname) with EnvRead + GraphRead + Memory + Alloc + Diagnostic + Intern = {
   let n = len(params)
   let claimed = place_labeled(params, args, 0, make_list(n), cname)
   let filled = place_positional(args, 0, 0, claimed, n)
@@ -2531,7 +2565,7 @@ fn fill_arg_slots(params, args, cname) with EnvRead + GraphRead + Memory + Alloc
 // Pass 1 — place each LabeledArg at its named param slot; positional args are
 // skipped here. An unknown label is E_UnknownArgLabel (Located, productive:
 // the arg is dropped, the remaining args resolve). Returns the slot buffer.
-fn place_labeled(params, args, i, slots, cname: String) with GraphRead + Memory + Diagnostic = if i >= len(args) {
+fn place_labeled(params, args, i, slots, cname: String) with GraphRead + Memory + Alloc + Diagnostic + Intern = if i >= len(args) {
   slots
 } else {
   let arg = list_index(args, i)

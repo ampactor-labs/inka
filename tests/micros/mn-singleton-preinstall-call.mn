@@ -1,14 +1,17 @@
 // expect: 134
-// A STATEFUL singleton op called BEFORE its handler's install has executed.
-// The compile gate (E_EffectUnhandled) admits this program — an install of
-// `counting` exists, grounding the whole-program installed conjunct — but at
-// runtime `early()` runs while the state global is still 0, and the
-// SingletonUninstalled guard refuses the null-state call at the site
-// (exit 134). On the pre-guard wheel this ran SILENTLY WRONG: the arm read
-// its `n` field from the null page and wrote the state update back to it —
-// the address-12 corruption class this guard makes unsayable. The stateless
-// shape stays unguarded by the same licence (the arm ignores __state), so
-// the two altitudes agree on every program.
+// A STATEFUL singleton op called BEFORE its handler's install has
+// executed. The compile gate ADMITS this program by the belt-backed
+// tier: a stateful-singleton demand with an install anywhere clears,
+// because the row alone cannot split a dead extent from live dynamic
+// coverage (the backtrack family's per-candidate installs are the
+// legitimate face; the modal install-identity frontier, band A, owns
+// the split). The SingletonUninstalled guard is the LOUD belt: at
+// runtime early() finds the state global still 0 and refuses at the
+// site (exit 134). On the pre-guard wheel this ran SILENTLY WRONG —
+// the arm read its `n` field from the null page and wrote the state
+// update back (the address-12 corruption class). The STATELESS twin
+// has no belt, so its root-reaching escape refuses at compile instead
+// (tests/frontier/mn-effect-escaped-install.mn).
 
 effect Counter {
   bump() -> Int

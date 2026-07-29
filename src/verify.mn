@@ -424,10 +424,10 @@ fn verify_residual(ref debt, ref witnesses) with Memory + Alloc = debt ++ map(
   witnesses
 )
 
-fn predicate_to_smt_lib(ref pred) with Memory + Alloc + GraphRead + Diagnostic =
+fn predicate_to_smt_lib(ref pred) with Memory + Alloc + GraphRead + Diagnostic + Intern =
   "(assert {predicate_to_smt(pred)})\n(check-sat)"
 
-fn predicate_to_smt(ref pred) with GraphRead + Memory + Alloc + Diagnostic = match pred {
+fn predicate_to_smt(ref pred) with GraphRead + Memory + Alloc + Diagnostic + Intern = match pred {
   PTrue => "true",
   PCompare(op, l, r) => "({smt_cmp_op(op)} {handle_to_smt(l)} {handle_to_smt(r)})",
   PAnd(a, b) => smt_logop("and", a, b),
@@ -449,7 +449,7 @@ fn smt_cmp_op(ref op) with Pure = match op {
   _ => "=",
 }
 
-fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc + Diagnostic =
+fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc + Diagnostic + Intern =
   "({op} {predicate_to_smt(a)} {predicate_to_smt(b)})"
 
 // ONE SMT-render projection, keyed on HANDLES throughout (Carried-Truth: the
@@ -457,7 +457,7 @@ fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc + Diagnostic 
 // level and nested call arg — is resolved via graph_node_body and rendered
 // uniformly, never a second node-destructure path). Follow the edge, read the
 // live node — the AST-in-graph fabric makes every sub-node a resolvable handle.
-fn handle_to_smt(handle) with GraphRead + Memory + Alloc + Diagnostic =
+fn handle_to_smt(handle) with GraphRead + Memory + Alloc + Diagnostic + Intern =
   body_to_smt(graph_node_body(handle))
 
 // Render a NodeBody as an SMT term. Every node-kind that can appear in a
@@ -467,7 +467,7 @@ fn handle_to_smt(handle) with GraphRead + Memory + Alloc + Diagnostic =
 // proof of the unprovable — the most dangerous silent fallback in the compiler;
 // the no-silent-fallback law, deleted not wrapped). A call's args are HANDLES
 // (the AST-in-graph fabric), mapped through handle_to_smt — no i/n index loop.
-fn body_to_smt(body) with GraphRead + Memory + Alloc + Diagnostic = match body {
+fn body_to_smt(body) with GraphRead + Memory + Alloc + Diagnostic + Intern = match body {
   NExpr(LitInt(n)) => int_to_str(n),
   NExpr(LitFloat(f)) => float_to_str(f),
   NExpr(LitString(s)) => "\"{s}\"",
@@ -486,7 +486,7 @@ fn body_to_smt(body) with GraphRead + Memory + Alloc + Diagnostic = match body {
 // (the operand-Node channel PCompare already uses); the fname is the callee's
 // name read live from its node body, or the unencodable sentinel if it is not a
 // bare name reference.
-fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc + Diagnostic = match callee {
+fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc + Diagnostic + Intern = match callee {
   N(cbody, _, _) => {
     let fname = match cbody {
       NExpr(VarRef(n)) => n,
@@ -509,13 +509,13 @@ fn smt_arg_terms(ref args) with GraphRead + Memory + Alloc + Diagnostic = fold(
   args
 )
 
-fn smt_binop(ref op, ref l, ref r) with GraphRead + Memory + Alloc + Diagnostic = match l {
+fn smt_binop(ref op, ref l, ref r) with GraphRead + Memory + Alloc + Diagnostic + Intern = match l {
   N(_, _, lh) => match r {
     N(_, _, rh) => "({smt_binop_sym(op)} {handle_to_smt(lh)} {handle_to_smt(rh)})",
   },
 }
 
-fn smt_unop(ref op, ref x) with GraphRead + Memory + Alloc + Diagnostic = match x {
+fn smt_unop(ref op, ref x) with GraphRead + Memory + Alloc + Diagnostic + Intern = match x {
   N(_, _, xh) => match op {
     UNot => "(not {handle_to_smt(xh)})",
     UNeg => "(- {handle_to_smt(xh)})",

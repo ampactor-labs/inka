@@ -63,9 +63,10 @@ effect GateLedger {
 // the first walk: the E_EffectMismatch line reached stderr but not the
 // verdict).
 handler mcp_diag_collector with lines = [] {
-  report(diag) => {
-    report(diag)
-    resume() with lines = push(lines, diag_line(diag))
+  diag_report(diag, line) => {
+    // Forward outward with the SAME rendered line; the bank keeps it too.
+    diag_report(diag, line)
+    resume() with lines = push(lines, line)
   },
   diag_absorb(dlines, derr, dref) => {
     diag_absorb(dlines, derr, dref)

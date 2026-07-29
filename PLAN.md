@@ -1092,6 +1092,33 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶ THE ADDRESS JOINS THE SESSION — the eight-aspect
+  projection becomes a resident read, and the voice's transport becomes
+  an install (the resident-session arc's second rung · pin 4d1bf583).
+  The address render family (render_at, render_field, the field tier,
+  the Why hops — ~20 sites) spoke print_string DIRECTLY: the transport
+  baked into the narration, the violation io.mn's Console effect exists
+  to prevent. The family performs Console's `print` now — WHERE it
+  lands is the install: at_run adds stdout_console (the CLI unchanged
+  byte-for-byte at its legs), and the session's new `at` tool runs THE
+  SAME core under console_bank (the collecting console, drained per
+  call) and returns the banked lines as the tool text. TWO structural
+  moves rode along: address_project extracted as the ONE address home
+  (at_run's inline block, verbatim — CLI and session cannot drift),
+  and the transport crossed the import boundary AS A VALUE
+  (session_at_read builds in main.mn where the renders live, passes
+  into mcp_run as a stored fn carrying its row — the effect-poly ctor
+  capability exercised at the architecture layer; imports flow
+  main → mcp, never back). Measured: at {line:3, col:4} in the
+  resident conversation answers the byte-same projection the CLI
+  serves at main.mn:3:4 — Query, Why, the fan at a hole — beside query
+  and propose, one derivation. The session surface is now propose +
+  query + at; `why` rides query's own grammar. CLEAN m2 == m3;
+  frontier 304/0 (the session leg asserts the at face); proof-
+  exactness 9/9; crown 5/5; census 0. Next rungs named: audit as a
+  session read (analyze_fns speaks Console the same way) · the
+  oracle-as-search (the fan from ?? candidates to hypotheses over the
+  resident frontier) · work-stealing-via-gradient as the scheduler.
 - 2026-07-29 · ▶▶▶ THE SESSION GOES RESIDENT — the mcp serve loop holds
   the living graph and queries answer as reads (the resident-session
   arc's first rung · pin 65934277). The refutation's constraints

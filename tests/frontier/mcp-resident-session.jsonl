@@ -2,4 +2,5 @@
 {"jsonrpc":"2.0","id":2,"method":"tools/list"}
 {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query","arguments":{"question":"type double"}}}
 {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"query","arguments":{"question":"type main"}}}
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"propose","arguments":{"source":"fn main() = 42"}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"at","arguments":{"line":1,"col":4}}}
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"propose","arguments":{"source":"fn main() = 42"}}}

@@ -439,7 +439,7 @@ fn dispatch_invocation(verb) = {
     VTeach(target) => teach_run(target),
     VRepl => repl_run(),
     VMarch => march_run(),
-    VMcp => mcp_run(),
+    VMcp => mcp_run(session_at_read),
     VNew(name) => new_project(name),
     VWith(hname, target) => with_run(hname, target),
     VWelcome => welcome_run(),
@@ -1261,7 +1261,7 @@ fn render_field_tier(ranked, target: String, ranges, fstart, i) = if i >= len(ra
       let pspan = caret_span_of_handle(ph)
       match pspan {
         Span(sl, sc, _, _) => {
-          print_string("\n── {target}:{int_to_str(sl - fstart + 1)}:{int_to_str(sc)}\n")
+          print("\n── {target}:{int_to_str(sl - fstart + 1)}:{int_to_str(sc)}\n")
           render_at(cursor_at_handle(ph), ph, pspan, ranges)
           render_field_tier(ranked, target, ranges, fstart, i + 1)
         },
@@ -1287,7 +1287,7 @@ fn render_field(target: String, ranges, fstart, nlines) = {
   let caret0 = Caret(0, Located(Span(fstart, 1, fstart, 1), Inferred("field read")))
   let holes = field_positions(enumerate_hole_positions(), fstart, nlines)
   let grads = field_positions(enumerate_gradient_positions(), fstart, nlines)
-  print_string("Field: {int_to_str(len(holes))} hole(s), {int_to_str(len(grads))} gradient position(s) in {target}\n")
+  print("Field: {int_to_str(len(holes))} hole(s), {int_to_str(len(grads))} gradient position(s) in {target}\n")
   render_field_tier(field_ranked(holes, caret0), target, ranges, fstart, 0)
   render_field_tier(field_ranked(grads, caret0), target, ranges, fstart, 0)
   0
@@ -1305,49 +1305,64 @@ fn render_field(target: String, ranges, fstart, nlines) = {
 // carries (driver_entry_with_ranges — computed where the fold runs,
 // once, never a second ledger).
 fn at_run(target, line, col) = infer_context(() => match driver_entry_with_ranges(target) {
-  (_ast, ranges) => // Productive under error IS the address contract (the README's own
-  // voice.mn:9 answers OVER its unresolved `mix` — an env miss binds
-  // NErrorHole and the graph still projects). The old diag_errors()
-  // refusal here was an era crutch: branch-judged errors never reached
-  // the root count, so it never fired — the moment the join carried
-  // them truthfully it refused exactly the files the projection exists
-  // to serve. The diagnostics render on stderr beside the answer.
-  {
-    match range_of_module(ranges, target) {
-      None => {
-        eprint_string("mentl: {target} did not load — nothing to project\n")
+  (_ast, ranges) => address_project(ranges, target, line, col),
+} ~> patch_to_file ~> terminal_transport ~> cursor_default ~> delta_default ~> synth_default ~> interrogate_default ~> mentl_default ~> stdout_console ~> wasi_filesystem)
+
+// session_at_read — the resident session's at transport, built HERE
+// where the address renders live (imports flow main → mcp, never back)
+// and passed INTO mcp_run as a value (a stored fn carrying its row —
+// the transport-as-value the effect-poly ctor landing made a
+// capability). The same address core the CLI serves runs under mcp's
+// collecting console: the projection lines bank and return instead of
+// landing on fd 1.
+fn session_at_read(ranges, line, col) = {
+  address_project(ranges, "main", line, col)
+  console_taken()
+} ~> console_bank ~> cursor_default ~> delta_default ~> synth_default ~> interrogate_default ~> mentl_default
+
+// address_project — the ONE address core, shared by the CLI transport
+// (at_run above, the projection landing on stdout_console) and the
+// resident session's `at` tool (the same core under a collecting
+// console — the transport is the install, never the narration).
+// Productive under error IS the address contract (the README's own
+// voice.mn:9 answers OVER its unresolved `mix` — an env miss binds
+// NErrorHole and the graph still projects); the refusal paths speak on
+// stderr, the process log on every transport.
+fn address_project(ranges, target: String, line, col) = {
+  match range_of_module(ranges, target) {
+    None => {
+      eprint_string("mentl: {target} did not load — nothing to project\n")
+      1
+    },
+    Some(r) => match r {
+      (_m, _p, start, nlines) => if line == 0 {
+        render_field(target, ranges, start, nlines)
+      } else if line < 0 {
+        eprint_string("mentl: line {int_to_str(line)} — lines count from 1 (0 = the whole-file field)\n")
         1
-      },
-      Some(r) => match r {
-        (_m, _p, start, nlines) => if line == 0 {
-          render_field(target, ranges, start, nlines)
-        } else if line < 0 {
-          eprint_string("mentl: line {int_to_str(line)} — lines count from 1 (0 = the whole-file field)\n")
-          1
-        } else if line > nlines {
-          eprint_string("mentl: {target} has {int_to_str(nlines)} lines; {int_to_str(line)} is past the end\n")
-          1
-        } else {
-          let gline = start + line - 1
-          // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
-          let spans = span_index_of_snapshot()
-          match address_resolve(spans, gline, col) {
-            None => {
-              eprint_string("mentl: no node at {target}:{int_to_str(line)} (a blank or comment-only line)\n")
-              1
+      } else if line > nlines {
+        eprint_string("mentl: {target} has {int_to_str(nlines)} lines; {int_to_str(line)} is past the end\n")
+        1
+      } else {
+        let gline = start + line - 1
+        // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
+        let spans = span_index_of_snapshot()
+        match address_resolve(spans, gline, col) {
+          None => {
+            eprint_string("mentl: no node at {target}:{int_to_str(line)} (a blank or comment-only line)\n")
+            1
+          },
+          Some(pick) => match pick {
+            (pspan, ph) => {
+              render_at(cursor_at_handle(ph), ph, pspan, ranges)
+              0
             },
-            Some(pick) => match pick {
-              (pspan, ph) => {
-                render_at(cursor_at_handle(ph), ph, pspan, ranges)
-                0
-              },
-            },
-          }
-        },
+          },
+        }
       },
-    }
-  },
-} ~> patch_to_file ~> terminal_transport ~> cursor_default ~> delta_default ~> synth_default ~> interrogate_default ~> mentl_default ~> wasi_filesystem)
+    },
+  }
+}
 
 // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
 fn span_index_of_snapshot() with GraphRead = match graph_snapshot() {
@@ -1493,9 +1508,13 @@ fn render_at(view, h, pspan, ranges) = match view {
     // The register-gated lede — the read side of the comment weave the
     // parser fills: a node carrying authored prose speaks its first line
     // before the Query facet, the same edge the Why engine walks.
+    // The voice performs `print` — WHERE it lands is the installed
+    // Console handler's decision (io.mn's own law): stdout for the CLI,
+    // the session's collecting console for the mcp `at` tool. A direct
+    // print_string here was the transport baked into the narration.
     let prose = graph_comment_at(h)
-    if len(prose) > 0 { print_string("Lede: {comment_first_line(prose)}\n") } else { () }
-    print_string("Query: {source_slice(pspan, ranges)}{node_query_line(h, kind)}\n")
+    if len(prose) > 0 { print("Lede: {comment_first_line(prose)}\n") } else { () }
+    print("Query: {source_slice(pspan, ranges)}{node_query_line(h, kind)}\n")
     // The Propose facet — the socket's content at the address surface. The
     // graph already computed it (propose_at runs synth at an authored hole;
     // empty everywhere else, so silence needs no second hole check). Exactly
@@ -1506,41 +1525,41 @@ fn render_at(view, h, pspan, ranges) = match view {
     match propose {
       Proposals([], _) => (),
       Proposals([only], _) => match only {
-        (survivor, _r) => print_string("Propose: {render_candidate_source(survivor)}\n"),
+        (survivor, _r) => print("Propose: {render_candidate_source(survivor)}\n"),
       },
       Proposals(survivors, _) => {
         // The FAN projected: a tie TEACHES by showing the actual proven
         // space — every survivor rendered with its Reason — then names the
         // move that collapses it. Never a hidden first-wins pick.
-        print_string("Propose: {int_to_str(len(survivors))} proven survivors — a tie:\n")
+        print("Propose: {int_to_str(len(survivors))} proven survivors — a tie:\n")
         each(
           (pair) => match pair {
-            (node, reason) => print_string("  {render_candidate_source(node)}  — {show_reason(reason)}\n"),
+            (node, reason) => print("  {render_candidate_source(node)}  — {show_reason(reason)}\n"),
           },
           survivors
         )
-        print_string("  one more constraint (a refinement, a type, an example) collapses it\n")
+        print("  one more constraint (a refinement, a type, an example) collapses it\n")
       },
     }
     match row {
       EfRow([], [], EtClosed) => (),
-      _ => print_string("Effects: {show_effrow(row)}\n"),
+      _ => print("Effects: {show_effrow(row)}\n"),
     }
     match trace {
       Unmarked => (),
-      Own => print_string("Ownership: own\n"),
-      Ref => print_string("Ownership: ref\n"),
+      Own => print("Ownership: own\n"),
+      Ref => print("Ownership: ref\n"),
     }
     if len(verify) > 0 {
-      print_string("Verify: {int_to_str(len(verify))} obligation(s) at this node\n")
+      print("Verify: {int_to_str(len(verify))} obligation(s) at this node\n")
     } else {
       ()
     }
     match teach {
       None => (),
-      Some(_) => print_string("Teach: an annotation here would unlock a capability — `mentl teach` names it\n"),
+      Some(_) => print("Teach: an annotation here would unlock a capability — `mentl teach` names it\n"),
     }
-    print_string("Why: ")
+    print("Why: ")
     render_why_hops(why_expand(why, 0), ranges, 0)
   },
 }
@@ -1620,22 +1639,22 @@ fn line_end_from(ref text, i) with Memory = if i >= byte_len(text) {
 // author's attached `//` lede (graph_comment_at). The prose rides the
 // same rails as the types: nothing here is stored twice.
 fn render_why_hops(reason, ranges, depth) = if depth > 7 {
-  print_string("\n")
+  print("\n")
 } else {
   match reason {
     Located(span, inner) => {
-      if depth > 0 { print_string("     ") } else { () }
-      print_string("{reason_phrase(inner)}, at {file_line(ranges, span)}{binding_ledes(span, inner)}\n")
+      if depth > 0 { print("     ") } else { () }
+      print("{reason_phrase(inner)}, at {file_line(ranges, span)}{binding_ledes(span, inner)}\n")
       render_why_deeper(inner, ranges, depth)
     },
     VarLookup(name, br) => {
-      if depth > 0 { print_string("     ") } else { () }
-      print_string("{name} read here\n")
+      if depth > 0 { print("     ") } else { () }
+      print("{name} read here\n")
       render_why_hops(br, ranges, depth + 1)
     },
     _ => {
-      if depth > 0 { print_string("     ") } else { () }
-      print_string("{show_reason(reason)}\n")
+      if depth > 0 { print("     ") } else { () }
+      print("{show_reason(reason)}\n")
     },
   }
 }

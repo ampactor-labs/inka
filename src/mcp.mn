@@ -56,6 +56,21 @@ effect GateLedger {
   gate_facts() -> [String]
 }
 
+// The session's collecting console — the address projection's transport
+// at the MCP surface. The SAME core that narrates to stdout on the CLI
+// (address_project speaking Console's print) runs under this install
+// and the lines bank instead of landing on fd 1 (io.mn's own law: WHERE
+// print lands is the installed handler's decision). Drained once per
+// tool call.
+effect ConsoleBank {
+  console_taken() -> [String]
+}
+
+handler console_bank with lines = [] {
+  print(msg) => resume() with lines = push(lines, msg),
+  console_taken() => resume(lines),
+}
+
 // The collecting forwarder over Diag (tighten_collector's proven shape):
 // every diagnostic re-performs outward from the arm — an arm's own
 // performs resolve in the INSTALL's world, reaching the bracket's
@@ -171,7 +186,7 @@ fn mcp_tools_result() = JObj([("tools", JArr([JObj([("name", JStr("propose")), (
   ("type", JStr("string")),
   // drift-audit: ignore — prose inside a JSON string literal (the audit's string-literal blindness)
   ("description", JStr("The question, e.g. 'type main' or 'why double'."))
-]))])), ("required", JArr([JStr("question")]))]))])]))])
+]))])), ("required", JArr([JStr("question")]))]))]), JObj([("name", JStr("at")), ("description", JStr("Project the eight aspects at an address in the resident project's entry file — the same read `mentl main.mn:L:C` serves: the node's type at the span, its effect row, ownership, pending obligations, the proposal fan at a ??, and the Why chain. line counts from 1; col defaults to 1.")), ("inputSchema", JObj([("type", JStr("object")), ("properties", JObj([("line", JObj([("type", JStr("integer"))])), ("col", JObj([("type", JStr("integer"))]))])), ("required", JArr([JStr("line")]))]))])]))])
 
 // tools/call — the gate's propose plus the resident session's reads. A
 // verdict is a SUCCESSFUL tool result whether the gate proved or refused
@@ -182,7 +197,7 @@ fn mcp_tools_result() = JObj([("tools", JArr([JObj([("name", JStr("propose")), (
 // durable session growth, and a reset would orphan spine pages the
 // session's later reads still chase (the fork-spine class at the serve
 // loop). Everything else resets as before.
-fn mcp_tool_call(id, params, has_session) = {
+fn mcp_tool_call(id, params, ranges, at_read) = {
   let name = match json_obj_get(params, "name") {
     Some(JStr(s)) => s,
     _ => // drift-audit: ignore — the protocol-null sentinel: no real tool name is empty, and the match below refuses "" with -32602
@@ -210,7 +225,41 @@ fn mcp_tool_call(id, params, has_session) = {
         ), 1),
       }
     },
-    "query" => if has_session == 0 {
+    "at" => if len(ranges) == 0 {
+      (mcp_response(
+        id,
+        JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("no project graph resident — the server started outside a project (no resolvable main); at projects the living session\n"))])])), ("isError", JBool(true))])
+      ), 1)
+    } else {
+      let lineo = match json_obj_get(params, "arguments") {
+        Some(args) => json_obj_get(args, "line"),
+        None => None,
+      }
+      match lineo {
+        Some(JNum(lf)) => {
+          let col = match json_obj_get(params, "arguments") {
+            Some(args) => match json_obj_get(args, "col") {
+              Some(JNum(cf)) => float_to_int(cf),
+              _ => 1,
+            },
+            None => 1,
+          }
+          // The SAME address core the CLI serves, under the collecting
+          // console — the transport is the install (at_read is the
+          // closure main.mn built where the renders live).
+          let banked = at_read(ranges, float_to_int(lf), col)
+          ((mcp_response(
+            id,
+            JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr(str_concat_all(banked)))])])), ("isError", JBool(false))])
+          )), 0)
+        },
+        _ => (mcp_response(
+          id,
+          JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("at needs arguments.line (an integer, counting from 1)\n"))])])), ("isError", JBool(true))])
+        ), 1),
+      }
+    },
+    "query" => if len(ranges) == 0 {
       (mcp_response(
         id,
         JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("no project graph resident — the server started outside a project (no resolvable main); query reads the living session\n"))])])), ("isError", JBool(true))])
@@ -246,17 +295,17 @@ fn mcp_params_of(req) = match json_obj_get(req, "params") {
   None => JObj([]),
 }
 
-fn mcp_request(id, method, params, has_session) = match method {
+fn mcp_request(id, method, params, ranges, at_read) = match method {
   "initialize" => (mcp_response(id, mcp_initialize_result(params)), 1),
   "tools/list" => (mcp_response(id, mcp_tools_result()), 1),
-  "tools/call" => mcp_tool_call(id, params, has_session),
+  "tools/call" => mcp_tool_call(id, params, ranges, at_read),
   "ping" => (mcp_response(id, JObj([])), 1),
   _ => (mcp_error(id, -32601, "method not found: {method}"), 1),
 }
 
 // A message without an id is a notification (initialized, cancelled, …):
 // consumed, never answered — the empty response line is the no-response.
-fn mcp_dispatch(req, has_session) = {
+fn mcp_dispatch(req, ranges, at_read) = {
   let method = match json_obj_get(req, "method") {
     Some(JStr(s)) => s,
     _ => // drift-audit: ignore — the protocol-null sentinel: no real method is empty, and mcp_request refuses "" with -32601
@@ -264,12 +313,12 @@ fn mcp_dispatch(req, has_session) = {
   }
   match json_obj_get(req, "id") {
     None => ("", 1),
-    Some(id) => mcp_request(id, method, mcp_params_of(req), has_session),
+    Some(id) => mcp_request(id, method, mcp_params_of(req), ranges, at_read),
   }
 }
 
-fn mcp_handle(line, has_session) = match json_parse(line) {
-  JOk(req, _) => mcp_dispatch(req, has_session),
+fn mcp_handle(line, ranges, at_read) = match json_parse(line) {
+  JOk(req, _) => mcp_dispatch(req, ranges, at_read),
   JErr(m, pos) => (mcp_error(JNull, -32700, "parse error at byte {int_to_str(pos)}: {m}"), 1),
 }
 
@@ -290,7 +339,7 @@ fn strip_cr(line) = {
 // still chase. The response prints BEFORE any reset. read_stdin_line
 // answers "" at EOF; a blank line is outside the newline-delimited-JSON
 // contract, so "" ends the session on either reading.
-fn mcp_loop(has_session) = {
+fn mcp_loop(ranges, at_read) = {
   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), the battery_loop shape
   let mark = heap_mark()
   // drift-audit: ignore — sequenced effectful stream-read (the read_* exclusion): the line is tested for EOF then handled
@@ -298,11 +347,11 @@ fn mcp_loop(has_session) = {
   if byte_len(line) == 0 {
     ()
   } else {
-    match mcp_handle(strip_cr(line), has_session) {
+    match mcp_handle(strip_cr(line), ranges, at_read) {
       (out, resettable) => {
         if byte_len(out) > 0 { print_string(out) }
         if resettable == 1 { heap_reset(mark) } else { () }
-        mcp_loop(has_session)
+        mcp_loop(ranges, at_read)
       },
     }
   }
@@ -319,7 +368,7 @@ fn mcp_loop(has_session) = {
 // while the session's spine lives below every mark. The derivation is
 // resolution-conditional (the prelude-seed precedent): outside a
 // project, the gate serves propose alone and query answers honestly.
-fn mcp_run() = {
+fn mcp_run(at_read) = {
   fs_mkdir_impl(".build")
   fs_mkdir_impl(".build/mcp")
   eprint_string("mentl mcp: the gate on stdio — nothing executes unproven\n")
@@ -328,12 +377,12 @@ fn mcp_run() = {
       match driver_entry_with_ranges("main") {
         (_ast, ranges) => {
           eprint_string("session: graph resident — {int_to_str(len(ranges))} modules; queries answer live\n")
-          mcp_loop(1)
+          mcp_loop(ranges, at_read)
         },
       }
     } ~> wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
   } else {
-    mcp_loop(0)
+    mcp_loop([], at_read)
   }
   0
 }

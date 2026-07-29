@@ -381,10 +381,10 @@ fn session_current(ast, ranges, manifest) = if len(ranges) == 0 {
   (ast, ranges, manifest, 0)
 } else {
   let cand = driver_manifest(ranges)
-  // manifest_same, not == — the eq fold's struct-element floor
-  // (Hβ.emit.seq-struct-eq-leaf; the walk dissolves into == when the
-  // sequence-of-struct leaf lands).
-  if manifest_same(cand, manifest) {
+  // Structural == over the word-triple lists — the sequence-of-struct
+  // eq walker's first wheel-internal consumer (the manifest_same hand
+  // walk dissolved into it, its written destiny).
+  if cand == manifest {
     (ast, ranges, manifest, 0)
   } else {
     match driver_entry_with_ranges("main") {

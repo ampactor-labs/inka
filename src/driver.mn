@@ -329,24 +329,6 @@ fn driver_manifest(ref ranges) with Memory + Alloc + Filesystem = map(
   ranges
 )
 
-// Two manifests agree — an explicit elementwise word walk, NOT the
-// structural ==, because the eq fold's sequence arm floors a STRUCT
-// element to $list_eq (word compare per element = pointer identity;
-// measured live: byte-identical manifests answered unequal and the
-// session re-derived on every message). The class is named
-// Hβ.emit.seq-struct-eq-leaf with its banked fixture
-// (tests/frontier/mn-list-tuple-eq.mn); when the generated
-// sequence-of-struct leaf lands, this walk dissolves back into ==
-// (the census law: this is the class's FIRST named workaround — a
-// second is the stop that forces the leaf).
-fn manifest_same(ref a, ref b) with Memory + Alloc =
-  len(a) == len(b) && manifest_same_from(a, b, 0)
-
-fn manifest_same_from(ref a, ref b, i) with Memory + Alloc =
-  i >= len(a) || (match (a[i], b[i]) {
-    ((ph, bl, ch), (ph2, bl2, ch2)) => ph == ph2 && bl == bl2 && ch == ch2,
-  } && manifest_same_from(a, b, i + 1))
-
 // One module's top-level nodes cut from the weave ast by its range —
 // the resident session's scoping read (audit/teach over the entry
 // alone, matching the CLI's entry-parsed ast). The NModule mint below

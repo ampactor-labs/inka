@@ -1255,6 +1255,20 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-effect-residual-absence.mn" 42 no "$dir"
   run_program "$compiler" effect-absorbed \
     "$ROOT/tests/frontier/mn-effect-absorbed.mn" 42 no "$dir"
+  # The sequence-of-struct fold leaves (Hβ.emit.seq-struct-eq-leaf,
+  # RESOLVED): structural ==/hash/ordering over lists whose element is
+  # a product / nested list / computed string. RED on the pre-leaf
+  # boot three ways — [(1,2,3)] == [(1,2,3)] exit 7 (per-element word
+  # compare = pointer identity), top-level hash([1,2]) an undefined-
+  # $hash_li assembly break, list-of-struct ordering by pointer. The
+  # generated walkers key on the FOLD BOUNDARY (chase_deep at every
+  # entry), whose collision the paired-types program measured: two
+  # TList(TVar) sites with different bindings shared one raw-sig
+  # walker and the second site's elements walked the wrong protocol.
+  run_program "$compiler" list-tuple-eq \
+    "$ROOT/tests/frontier/mn-list-tuple-eq.mn" 42 yes "$dir"
+  run_program "$compiler" list-tuple-fold \
+    "$ROOT/tests/frontier/mn-list-tuple-fold.mn" 42 yes "$dir"
   run_program "$compiler" rope-list-pattern \
     "$ROOT/tests/frontier/mn-rope-list-pattern.mn" 42 yes "$dir"
   run_program "$compiler" seq-rep-license \

@@ -1092,6 +1092,55 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶▶▶ THE SEQUENCE-OF-STRUCT LEAVES AND THE FOLD
+  BOUNDARY — structural ==/hash/ordering become true over lists of
+  structs, and the fold family resolves its types once at entry
+  (Hβ.emit.seq-struct-eq-leaf RESOLVED · pin b214afba). THE CLASS,
+  measured three ways on the prior boot: [(1,2,3)] == [(1,2,3)]
+  answered FALSE — the eq/cmp/hash sequence arms floored every
+  STRUCTURAL element (product, sum, nested list, computed string —
+  literal interning masked the [String] face) to the word runtime
+  fns' per-element compare, pointer identity standing in for
+  structure at BOTH altitudes (top-level and field); top-level
+  hash of ANY list was an undefined-$hash_l<sig> ASSEMBLY BREAK
+  (emit_hash's unconditional agg routing demanded a leaf the
+  collector never contributed); list-of-struct ordering compared
+  pointers (garbage sort). THE WALKERS: $eq/$compare/$hash_l<sig>
+  generated when the element face is structural
+  (seq_face_structural) — the show family's recursive listbody
+  shape, elements through $list_index (representation-total), the
+  element leaf selected by face (seq_elem_leaf_callee — runtime
+  names as values, never a mode key); the eq walker mirrors
+  list_eq's identity+length protocol, the 3-way walker
+  list_compare_loop's elementwise-first-difference, the FNV walker
+  list_hash's exact seed with each element's OWN hash in the mix
+  (eq ⇒ hash, the agreement preserved). THE FOLD BOUNDARY (Morgan's
+  cut — "design the most elegant and powerful solution" — after a
+  45-site fold_sig wrapper sweep was built and REVERTED as the
+  N-reader patch): chase_deep runs ONCE where a type ENTERS the
+  family — the two binop dispatch entries, show_hash_ty, and the
+  three operand contribs — and sigs, dedup, generation, field
+  dispatch, and walker callees all read a var-free type BY
+  INVARIANT. The collision the boundary dissolves was MEASURED: two
+  TList(TVar) sites with different bindings fold_sig'd to one raw
+  "li", shared one walker, and the second site's elements walked
+  the wrong protocol (trapped in list_eq_loop); the boundary also
+  heals the show family's same latent collision for free.
+  hash_node_of's float-list route joins the field twin
+  (list_hash_f64 — the top-level/field hash route split closed).
+  manifest_same DISSOLVED back into == (the workaround's written
+  destiny, one landing later — the census law's clock never reached
+  two): the living session's manifest compare is the walkers' first
+  wheel-internal consumer, proven in production by the living leg.
+  TRANSITION m3 == m4 (the 476-line m2/m3 diff is the walkers
+  crossing one generation); frontier 311/0 (mn-list-tuple-eq +
+  mn-list-tuple-fold registered, RTLIBS-linked, both RED-measured
+  on the pre-leaf boot); census 0 after ONE honest widen round
+  (20 entry fns gain chase_deep's row); micros green through
+  verify. Named residue: the show family's sig discipline now
+  rides the same boundary but its list walker predates it — a
+  probe-pass over show's per-face renders under the boundary is
+  the audit single.
 - 2026-07-29 · ▶▶▶ THE SESSION GRAPH GOES LIVING — the resident graph
   tracks the tree, and the staleness check is a pure read (the
   resident-session arc's fourth rung · pin 3973fd21). Before every

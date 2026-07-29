@@ -1,0 +1,20 @@
+// expect: 42
+// The sequence-of-struct fold leaves' hash and ordering faces (the
+// Hβ.emit.seq-struct-eq-leaf landing's second gate). RED on the
+// pre-leaf boot twice over: top-level hash of ANY list was an
+// undefined-$hash_l<sig> assembly break (emit_hash's unconditional
+// agg routing demanded a leaf the collector never contributed), and
+// ordering on a list-of-struct compared element POINTERS — garbage
+// sort order. The walkers restore the agreements: eq-equal lists
+// hash equal (the FNV walker mixes each element's OWN hash over
+// list_hash's exact seed), and the 3-way walker mirrors
+// list_compare's elementwise-first-difference protocol.
+fn main() = {
+  let word_hash = if hash([1, 2]) == hash([1, 2]) { 1 } else { 0 }
+  let struct_hash = if hash([(1, 2)]) == hash([(1, 2)]) { 1 } else { 0 }
+  let hash_differs = if hash([(1, 2)]) == hash([(1, 9)]) { 0 } else { 1 }
+  let ord = if [(1, 2)] < [(1, 3)] { 1 } else { 0 }
+  let ord_len = if [(1, 2)] < [(1, 2), (0, 0)] { 1 } else { 0 }
+  let ord_refuses = if [(2, 1)] < [(1, 9)] { 0 } else { 1 }
+  if word_hash + struct_hash + hash_differs + ord + ord_len + ord_refuses == 6 { 42 } else { 7 }
+}

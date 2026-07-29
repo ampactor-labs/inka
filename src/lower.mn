@@ -5575,9 +5575,14 @@ fn hash_reach_names(x) with LookupTy + Memory + Alloc = {
     TList(e) => {
       // The seed mirrors hash_node_of's route exactly (the visitor-walk
       // projection law): a byte face calls $str_hash, everything else at
-      // word width calls $list_hash, wide elements the f64 family.
+      // word width calls $list_hash, wide elements the f64 family. A
+      // STRUCTURAL face calls its generated walker, whose interior may
+      // reach any of the runtime hashes depending on nesting — seed the
+      // family conservatively (a name absent from the input dissolves).
       let face = seq_elem_face(e)
-      if stride_of(face) >= 8 {
+      if seq_face_structural(face) {
+        ["list_hash", "str_hash", "list_hash_f64", "float_to_str"]
+      } else if stride_of(face) >= 8 {
         ["list_hash_f64", "float_to_str", "str_hash"]
       } else {
         match face {
@@ -6280,6 +6285,24 @@ fn seq_elem_face(e) = match fold_strip(e) {
     inner => seq_elem_face(inner),
   },
   stripped => stripped,
+}
+
+// A sequence element FACE that requires the generated sequence walker
+// ($eq/$compare/$hash_l<sig> — the sequence-of-struct fold leaves): a
+// product, sum, or nested list, where the word runtime fns would
+// compare/hash the element WORD — pointer identity standing in for
+// structure (the silent fallback the eq law forbids). Byte and float
+// faces stay with their runtime families (str_*/list_*_f64); word
+// scalars and the unresolved floor keep the word fns, which ARE
+// value-faithful for single-word elements. One predicate, three leaf
+// dispatches and the fold collector all read it.
+fn seq_face_structural(face) = match face {
+  TRecord(_) => true,
+  TRecordOpen(_, _) => true,
+  TTuple(_) => true,
+  TName(_, _) => true,
+  TList(_) => true,
+  _ => false,
 }
 
 // A handler is STATEFUL when its arm reads the state record — which happens

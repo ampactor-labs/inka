@@ -1321,7 +1321,11 @@ effect BodyContext {
 
 // ─── Stmt (spec 03) ────────────────────────────────────────────────
 type Stmt
-  // pat, value, annotation node (NTypeAnn(ty) present, LitUnit absent — mirrors FnStmt's ret_ann)
+  // pat, value, annotation node — NTypeAnn(ty) when present; ABSENT
+  // aliases the value node (the parser's no-fresh-mint sentinel at all
+  // three LetStmt mints, keeping handle numbering unshifted for every
+  // unannotated let). Readers include the channel only when it is
+  // NTypeAnn — infer's arm and stmt_child_handles both read it so.
   = LetStmt(Pat, Node, Node)
   | FnStmt(String, [TParam], Node, [(EffName, Bool, EConn)], Node)
   // name, params (TParam), retty, effects, body
@@ -2849,12 +2853,21 @@ fn show_pipe_kind(pk) with Pure = match pk {
   PFeedback => "<~",
 }
 
-fn show_list(ref items, ref render, ref sep) with !Mutate = if len(items) == 0 {
+// Renders FIRST-first: the last/drop_last walk (O(1) on snoc) rendered
+// every list REVERSED — function params, tuple elements, and record
+// fields in show_type all spoke backwards (measured live: map's
+// declared (f, xs) rendered as (xs, f...)). Declaration order is the
+// truth; the index walk pays O(depth) per element on snoc-built lists,
+// immaterial at render scale.
+fn show_list(ref items, ref render, ref sep) with !Mutate =
+  show_list_from(items, render, sep, 0, len(items))
+
+fn show_list_from(ref items, ref render, ref sep, i, n) with !Mutate = if i >= n {
   ""
-} else if len(items) == 1 {
-  render(last(items))
+} else if i + 1 >= n {
+  render(items[i])
 } else {
-  render(last(items)) ++ sep ++ show_list(drop_last(items), render, sep)
+  render(items[i]) ++ sep ++ show_list_from(items, render, sep, i + 1, n)
 }
 
 // ── DAG-homed here (the import-truth sweep, 2026-07-23): each fn below

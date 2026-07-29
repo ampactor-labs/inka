@@ -1373,6 +1373,34 @@ for i in "${!compilers[@]}"; do
     fail "teach-pure-control (the true proposal died with the fix)"
   fi
 
+  # Severance honesty (audit): a fn whose row carries Alloc is never
+  # offered "proven zero allocation"; a pure fn still earns the offer.
+  # The reached set reads the CHASED row (row_names was a top-link read
+  # and a chained row hid its deeper presents — measured on the wheel).
+  cat "${RTLIBS[@]}" "$ROOT/tests/frontier/mn-audit-severance-honest.mn" | wt_run "$compiler" audit - > "$dir/audit-sev.out" 2>/dev/null
+  if grep -A1 '^allocates :' "$dir/audit-sev.out" | grep -q 'severable:.*Alloc'; then
+    fail "audit-severance-honest (an allocating row was offered Alloc severance)"
+  elif grep -A1 '^quiet :' "$dir/audit-sev.out" | grep -q 'severable:.*Alloc'; then
+    pass "audit-severance-honest (Alloc never offered on an allocating row; the pure control keeps it)"
+  else
+    fail "audit-severance-honest (the pure control lost its true severance offer)"
+  fi
+
+  # The verb-shape tier (audit): a 2-step single-use let-chain invites the
+  # |> pipe; a twice-used name (`<|` territory) and a one-step let (the
+  # law's own exception) stay silent — both faces asserted.
+  cat "${RTLIBS[@]}" "$ROOT/tests/frontier/mn-audit-pipe-shape.mn" | wt_run "$compiler" audit - > "$dir/audit-pipe.out" 2>/dev/null
+  if grep -A4 '^chained :' "$dir/audit-pipe.out" | grep -q 'verb-shape: 2-step'; then
+    if grep -A4 '^forked :' "$dir/audit-pipe.out" | grep -q 'verb-shape' \
+       || grep -A4 '^single :' "$dir/audit-pipe.out" | grep -q 'verb-shape'; then
+      fail "audit-pipe-shape (a <|-shaped or single-step let earned a false pipe invite)"
+    else
+      pass "audit-pipe-shape (the 2-step chain invites |>; the controls stay silent)"
+    fi
+  else
+    fail "audit-pipe-shape (the let-chain's |> invite is missing)"
+  fi
+
   # ── mentl tighten — the medium authors its own row tightening ───────
   # T_OverDeclared is a MachineApplicable proposal carrying the proven
   # row; the tighten verb turns the first authorable one into the patch.

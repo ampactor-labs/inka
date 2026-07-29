@@ -1092,6 +1092,58 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶ THE VERB-SHAPE TIER — audit names the |> the bindings
+  draw, and the dig closes a latent double-visit class (no re-pin —
+  CLEAN m2 == m3, projection layer only). SYNTAX ⌖'s own law (|> is
+  NEVER optional on a chain) becomes a read the medium makes about ANY
+  source: pipe_shape_of (oracle.mn) walks a fn body's statement spine,
+  and a let-bound name consumed EXACTLY ONCE by exactly the FOLLOWING
+  statement is a |> stage written as a binding — runs of >= 2 report as
+  the audit's verb-shape line, with the step count. The verb is a
+  PROJECTION of use edges (the same fact own/ref grades from): a name
+  used twice is <| territory and never fires; a single step is the
+  law's own exception; the counting walks the ONE total child
+  projection, never a text scan. THE DIG'S CONVICTION, probe-second
+  (count_var_uses answered 2 for one occurrence): all three LetStmt
+  mints alias the ABSENT annotation to the VALUE node (the parser's
+  own no-fresh-mint sentinel — deliberate, handle-stability-motivated,
+  its comment confessing the banked name Hβ.parser.let-expr-annotation)
+  and stmt_child_handles listed BOTH channels — every COUNTING walk
+  through an unannotated let double-visited its value subtree, masked
+  until now because the existing walks (containment, the ranker) are
+  boolean. The channel contributes a child only when it IS an
+  annotation (the kind-read infer already makes); the Stmt decl's
+  comment — which claimed LitUnit absence — is TRUED to the artifact.
+  RIDES WITH IT: the fmt pre-commit rung (canonical form enters
+  history — staged src/ lib/ files render canonical and re-stage;
+  parse-refused files are restored, loudly; tests/ excluded because
+  fixtures bank exact spans; tracked at tools/hooks/pre-commit), which
+  fired on its own landing commit and immediately measured the
+  trailing-marker interaction (a width-broken let strands a trailing
+  drift-audit marker two lines from its literal — the severance
+  vocabulary moved to its own fn with the marker weave-adjacent).
+  THE TIER'S OWN FIRST RUNS then convicted two voice-truth roots, both
+  landed in the same arc: (1) show_list rendered LAST-FIRST — every
+  rendered list in the medium's voice was REVERSED, function params and
+  tuple elements in show_type included (measured live: map's declared
+  (f, xs) rendered (xs, f); the walk was last/drop_last for snoc-O(1),
+  the order an accident canonized) — first-first now, and the frontier
+  measured ZERO banked faces flipped; (2) severance claimed Alloc
+  severable on rows visibly carrying Alloc — "Real-time safe (proven
+  zero allocation)" offered on allocating fns — because row_names is a
+  TOP-LINK read and a chained row hides its deeper presents; the
+  reached set now reads the CHASED row, the same resolution the render
+  walks (one value, both consumers). GATES: mn-audit-pipe-shape (both
+  faces — the 2-step invite, the twice-used and single-step silences)
+  and mn-audit-severance-honest (the allocating row refused the offer,
+  the pure control keeps it), each RED on the pinned boot; frontier
+  315/0; census 0. Named residue: the audit verb's abs-path invocation
+  prints nothing at exit 0 (the range-cut misses; the relative form
+  scopes correctly). The tier's next rungs: the MachineApplicable
+  patch (tighten-style authorship of the |> rewrite — datum-position
+  read required), the frontier tier (verb-shape positions ranked in
+  the field), and fmt-canonical promotion once the wheel passes its
+  own judge clean.
 - 2026-07-29 · ▶▶▶ THE BROWSER RUNS THE SPAWNING BOOT — the Worker-spawn
   shim lands, and the page compiles through 252 real threads in 932ms
   (the runner pattern at the browser host — the browser leg of

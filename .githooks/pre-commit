@@ -37,6 +37,41 @@ mapfile -t staged_src < <(
       | grep -E '\.mn$' || true
 )
 
+# ─── Gate 0: the fmt rung — canonical form enters history ────────────
+# The fmt fixpoint is proven (one-pass idempotent, whole-wheel, prose
+# conserved — the canonical-page landing), which licenses applying it in
+# place at the commit boundary: every staged WHEEL file (src/ lib/) is
+# rendered canonical and re-staged BEFORE the drift and comment gates
+# judge it. Guards: a file the parser refuses is restored untouched (fmt
+# is productive-under-error — a broken file must not be "canonicalized");
+# a partially-staged file is skipped (fmt-in-place would mix staged and
+# unstaged hunks); tests/ are excluded deliberately (frontier fixtures
+# bank exact spans — canonicalizing them moves banked coordinates).
+if command -v mentl >/dev/null 2>&1 && [[ ${#staged_src[@]} -gt 0 ]]; then
+    unstaged=$(git diff --name-only 2>/dev/null)
+    for f in "${staged_src[@]}"; do
+        case "$f" in src/*|lib/*) ;; *) continue ;; esac
+        [[ -f "$REPO_ROOT/$f" ]] || continue
+        if printf '%s\n' "$unstaged" | grep -qx "$f"; then
+            echo "fmt: SKIP $f (partially staged — stage it whole to canonicalize)"
+            continue
+        fi
+        before=$(git hash-object "$REPO_ROOT/$f")
+        out=$(timeout 90 mentl fmt "$REPO_ROOT/$f" 2>&1 || true)
+        if printf '%s' "$out" | grep -qE '^parser: (P_|[A-Za-z_]+ error:)'; then
+            echo "fmt: REFUSED $f (parse breakage — fix before committing):"
+            printf '%s\n' "$out" | grep -E '^parser: (P_|[A-Za-z_]+ error:)' | head -3
+            git checkout -- "$f" 2>/dev/null || true
+            continue
+        fi
+        after=$(git hash-object "$REPO_ROOT/$f")
+        if [[ "$before" != "$after" ]]; then
+            git add "$f"
+            echo "fmt: canonicalized $f (re-staged)"
+        fi
+    done
+fi
+
 # ─── Gate 1: drift-audit ─────────────────────────────────────────────
 if [[ -x "$AUDIT" && ${#staged_src[@]} -gt 0 ]]; then
     abspaths=()

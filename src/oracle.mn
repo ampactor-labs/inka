@@ -267,7 +267,8 @@ fn tier_of_annotation(ann) with Pure = match suggestion_kind_of(ann) {
 // that is not a fn declaration carries no authored intent -> baseline 0.
 fn intent_weight_at(pos) with GraphRead + Memory = match graph_node_body(pos) {
   NStmt(FnStmt(_, _, _, effs, _)) => 50 + len(effs) * 10,
-  _ => 0,   // drift-audit: ignore — the fn's own comment names it: a non-fn-decl node carries no authored intent, baseline 0
+  _ => // drift-audit: ignore — the fn's own comment names it: a non-fn-decl node carries no authored intent, baseline 0
+  0,
 }
 
 // surface_area_at — count of positions that depend on this one, walked
@@ -307,9 +308,12 @@ fn expr_child_handles(e) with Alloc + Memory = match e {
   MatchExpr(scrut, arms) => // an arm's BODY is a child node — dropping the arms left the
   // projection partial and tree containment blind below any match
   // (the enclosing-decl guard's measured hole).
-  [node_handle(scrut)] ++ map((arm) => match arm {
-    (_, b) => node_handle(b),
-  }, arms),
+  [node_handle(scrut)] ++ map(
+    (arm) => match arm {
+      (_, b) => node_handle(b),
+    },
+    arms
+  ),
   ResumeExpr(v, updates) => // A resume-with update is the parser's {name, init} record — the handle
   // lives on its init edge (record_field_handle's exact sibling).
   [node_handle(v)] ++ map(record_field_handle, updates),
@@ -344,11 +348,19 @@ fn tuple_field_handle(field) with Pure = match field {
 // comment node, an import, a refinement's predicate) hold no value
 // holes and contribute none.
 fn stmt_child_handles(s) with Alloc + Memory = match s {
-  LetStmt(_pat, value, ann) => [node_handle(value), node_handle(ann)],
+  LetStmt(_pat, value, ann) => match ann {
+    N(NTypeAnn(_), _, _) => // the annotation channel is a child only when it IS one: the absent
+    // form ALIASES the value node (the parser's no-fresh-mint sentinel,
+    // all three LetStmt mints), so listing the alias double-visits every
+    // unannotated let's value subtree — measured as count_var_uses
+    // doubling through statement-position lets. Same read infer makes
+    // (its NTypeAnn arm skips a non-annotation node).
+    [node_handle(value), node_handle(ann)],
+    _ => [node_handle(value)],
+  },
   FnStmt(_name, _params, _ret, _effs, body) => [node_handle(body)],
   ExprStmt(e) => [node_handle(e)],
-  HandlerDeclStmt(_hname, _ename, _config, states, arms) =>
-    map(record_field_handle, states) ++ map(arm_body_handle, arms),
+  HandlerDeclStmt(_hname, _ename, _config, states, arms) => map(record_field_handle, states) ++ map(arm_body_handle, arms),
   TypeDefStmt(_, _) => [],
   EffectDeclStmt(_, _, _) => [],
   ImportStmt(_) => [],
@@ -378,6 +390,70 @@ fn node_contains_handle(h, target) with GraphRead + Alloc + Memory + !Mutate = i
   true
 } else {
   any((c) => node_contains_handle(c, target), body_child_handles(graph_node_body(h)))
+}
+
+// ── the verb-shape read — the topology the bindings already draw ─────
+//
+// SYNTAX ⌖: `|>` is NEVER optional on a chain — `y |> f |> g` over
+// `let x = f(y); g(x)`. The verb is a PROJECTION of use-count (the
+// same edge own/ref grades from): a let-bound name consumed EXACTLY
+// ONCE, by exactly the FOLLOWING statement, is a `|>` stage written as
+// a binding; a name used twice is `<|` territory and never fires; a
+// single step is the law's own exception (the pipe wins on CHAINS).
+// Counting walks the one total child projection — never a text scan.
+//
+// body_is_var — is this body exactly a VarRef of `name`? The counting
+// walk's leaf test as its own projection (a non-VarRef body is simply
+// not the name — the false arm is the predicate's definition).
+fn body_is_var(body, name: String) with Pure = match body {
+  NExpr(VarRef(n)) => n == name,
+  _ => false,
+}
+
+// count_var_uses — VarRef occurrences of `name` in the subtree at h.
+// An inner rebinding shadows and over-counts toward "more than one
+// use", which only SUPPRESSES an invite — conservative by construction.
+fn count_var_uses(h, name: String) with GraphRead + Alloc + Memory = {
+  let body = graph_node_body(h)
+  let here = if body_is_var(body, name) { 1 } else { 0 }
+  here + (body_child_handles(body) |> map((c) => count_var_uses(c, name)) |> fold(0, (a, x) => a + x))
+}
+
+// chain_scan — walk a block's statement spine (stmts ++ final): a
+// LetStmt(PVar) whose name has exactly one use, inside exactly the
+// next node, extends the current run; anything else flushes it. Runs
+// of length >= 2 are `|>` invites, reported as step counts.
+fn chain_scan(nodes, i, run, acc) with GraphRead + Alloc + Memory = if i + 1 >= len(nodes) {
+  if run >= 2 { acc ++ [run] } else { acc }
+} else {
+  let link = match graph_node_body(node_handle(nodes[i])) {
+    NStmt(LetStmt(PVar(name), _, _)) => let_feeds_next(name, nodes, i),
+    _ => false,
+  }
+  if link {
+    chain_scan(nodes, i + 1, run + 1, acc)
+  } else {
+    chain_scan(nodes, i + 1, 0, if run >= 2 { acc ++ [run] } else { acc })
+  }
+}
+
+fn let_feeds_next(name: String, nodes, i) with GraphRead + Alloc + Memory =
+  count_var_uses(node_handle(nodes[i + 1]), name) == 1 && rest_uses(name, nodes, i + 2) == 0
+
+fn rest_uses(name: String, nodes, j) with GraphRead + Alloc + Memory = if j >= len(nodes) {
+  0
+} else {
+  count_var_uses(node_handle(nodes[j]), name) + rest_uses(name, nodes, j + 1)
+}
+
+// pipe_shape_of — the verb-shape read over a fn's body spine, the
+// audit tier's entry (build_audit_report reads it per fn).
+fn pipe_shape_of(fn_handle) with GraphRead + Alloc + Memory = match graph_node_body(fn_handle) {
+  NStmt(FnStmt(_, _, _, _, body)) => match graph_node_body(node_handle(body)) {
+    NExpr(BlockExpr(stmts, fin)) => chain_scan(stmts ++ [fin], 0, 0, []),
+    _ => [],
+  },
+  _ => [],
 }
 
 // locality_at — byte distance from the cursor, read from the graph's

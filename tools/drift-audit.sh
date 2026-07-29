@@ -89,7 +89,10 @@ while IFS=$'\t' read -r mode_num mode_name regex scope notes; do
     # trailing comment into leading position — either a marker-only line
     # or an arm-arrow line `X => // drift-audit: ignore …` with the body
     # on the next line — so the marker suppresses the line it precedes).
-    matches=$(grep -nE --color=never "$regex" "${scan_files[@]}" 2>/dev/null || true)
+    # -H forces the filename prefix even for a SINGLE scanned file — without
+    # it the suppression walk reads source text as its line number (measured:
+    # a one-file scan fed the flagged line's own text into $((ml - 1))).
+    matches=$(grep -nHE --color=never "$regex" "${scan_files[@]}" 2>/dev/null || true)
     [[ -z "$matches" ]] && continue
 
     filtered=$(printf '%s\n' "$matches" | grep -vE 'drift-audit:\s*ignore' | while IFS=: read -r mf ml mrest; do
@@ -106,7 +109,10 @@ while IFS=$'\t' read -r mode_num mode_name regex scope notes; do
             if printf '%s' "$pline" | grep -qE 'drift-audit:[[:space:]]*ignore'; then
                 suppressed=1; break
             fi
-            if printf '%s' "$pline" | grep -qE '^[[:space:]]*(//|#)|(=>[[:space:]]*//)|(,[[:space:]]*$)|(\[[[:space:]]*$)|(\([[:space:]]*$)|(\{[[:space:]]*$)'; then
+            # A line ending in `=` is a statement HEAD (fn/let) whose body the
+            # canonical layout breaks onto the next line — the attached prose
+            # (and its marker) sits ABOVE the head, so the head is transparent.
+            if printf '%s' "$pline" | grep -qE '^[[:space:]]*(//|#)|(=>[[:space:]]*//)|(,[[:space:]]*$)|(\[[[:space:]]*$)|(\([[:space:]]*$)|(\{[[:space:]]*$)|(=[[:space:]]*$)'; then
                 prev=$((prev - 1)); steps=$((steps + 1)); continue
             fi
             break

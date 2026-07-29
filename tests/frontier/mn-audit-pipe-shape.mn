@@ -1,0 +1,21 @@
+// expect: audit names the |> shape the bindings draw — `chained` reports a
+// 2-step let-chain (each name consumed once, by exactly the next stmt);
+// `forked` stays silent (a is used twice — `<|` territory, never a pipe
+// invite); `single` stays silent (the one-step exception).
+fn chained(x) = {
+  let a = x + 1
+  let b = a * 2
+  b + 3
+}
+
+fn forked(x) = {
+  let a = x + 1
+  a + a
+}
+
+fn single(x) = {
+  let a = x + 1
+  a * 2
+}
+
+fn main() = chained(1) + forked(1) + single(1)

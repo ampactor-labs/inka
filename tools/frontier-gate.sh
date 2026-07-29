@@ -1669,6 +1669,23 @@ for i in "${!compilers[@]}"; do
   else
     fail "instance bare (no mismatch; see $dir/inst-bare.err)"
   fi
+  # Instance-arg TYPING against the registered signature (the TTuple
+  # scheme register_effect_ops publishes): a scalar-literal arg whose
+  # ground type disagrees reports the mismatch; wrong arity reports the
+  # constructor-arity class. Both RED on the prior boot (silent admits;
+  # the head itself only parse-recovered there).
+  cat "${RTLIBS[@]}" "$ROOT/tests/frontier/mn-effect-instance-argty.mn" | wt_run "$compiler" > /dev/null 2> "$dir/inst-argty.err"
+  if grep -q 'E_TypeMismatch' "$dir/inst-argty.err" && ! grep -q 'P_' "$dir/inst-argty.err"; then
+    pass "instance arg typing (wrong scalar type reports; the head parses clean)"
+  else
+    fail "instance argty (see $dir/inst-argty.err)"
+  fi
+  cat "${RTLIBS[@]}" "$ROOT/tests/frontier/mn-effect-instance-arity.mn" | wt_run "$compiler" > /dev/null 2> "$dir/inst-arity.err"
+  if grep -q 'E_ConstructorArity' "$dir/inst-arity.err"; then
+    pass "instance arg arity (wrong count reports)"
+  else
+    fail "instance arity (see $dir/inst-arity.err)"
+  fi
   # ── the splice line carry ──────────────────────────────────────────
   # A splice spanning newlines resumes the outer string scan at the TRUE
   # line, so nodes after it keep truthful spans and the address resolves

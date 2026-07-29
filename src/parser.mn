@@ -1433,21 +1433,35 @@ fn parse_config_params(ref tokens, pos) = {
   } else {
     let name = ident_at(tokens, p)
     let p2 = skip_ws(tokens, p + 1)
-    match if at(tokens, p2, TEq) {
-      match parse_expr(tokens, skip_ws(tokens, p2 + 1)) {
-        (default_expr, p_def) => (TParam(name, TVar(fresh_handle(span_at(tokens, p))), Unmarked, Unmarked, Some(default_expr)), p_def),
-      }
+    // Optional `: Ty` annotation — the same Intent-Boundary arm
+    // parse_one_param carries. The annotated config param
+    // (`scaler(f: Int)`, the 2026-07-24 measured lathe-lag) and the
+    // parameterized effect head (`effect Sample(rate: Int)`) both
+    // land here; absent, the fresh var as before.
+    match if at(tokens, p2, TColon) {
+      parse_type_ty(tokens, skip_ws(tokens, p2 + 1))
     } else {
-      (TParam(name, TVar(fresh_handle(span_at(tokens, p))), Unmarked, Unmarked, None), p2)
+      (TVar(fresh_handle(span_at(tokens, p))), p2)
     } {
-      (param, p_done) => {
-        let p_next = skip_ws(tokens, p_done)
-        if at(tokens, p_next, TComma) {
-          match parse_config_params(tokens, skip_ws(tokens, p_next + 1)) {
-            (rest, p_end) => ([param] ++ rest, p_end),
+      (pty, p_ty) => {
+        let p_after_ty = skip_ws(tokens, p_ty)
+        match if at(tokens, p_after_ty, TEq) {
+          match parse_expr(tokens, skip_ws(tokens, p_after_ty + 1)) {
+            (default_expr, p_def) => (TParam(name, pty, Unmarked, Unmarked, Some(default_expr)), p_def),
           }
         } else {
-          ([param], expect(tokens, p_next, TRParen))
+          (TParam(name, pty, Unmarked, Unmarked, None), p_after_ty)
+        } {
+          (param, p_done) => {
+            let p_next = skip_ws(tokens, p_done)
+            if at(tokens, p_next, TComma) {
+              match parse_config_params(tokens, skip_ws(tokens, p_next + 1)) {
+                (rest, p_end) => ([param] ++ rest, p_end),
+              }
+            } else {
+              ([param], expect(tokens, p_next, TRParen))
+            }
+          },
         }
       },
     }

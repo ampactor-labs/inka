@@ -1965,6 +1965,7 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
             // single warning surfaces them precisely in the contradiction
             // diagnostic).
             let has_pure = has_pure_declared(declared_effs)
+            check_instance_args(declared_effs, span)
             let declared_row = build_declared_row(declared_effs)
             let bound = graph_chase(row_handle)
             match bound {
@@ -2098,6 +2099,57 @@ fn call_is_alloc_returning(func) = match func {
 // that pre-check has_pure_declared. A name both admitted and forbidden
 // drops out of the meet, so the body's own perform fails the subsumption
 // gate LOUDLY (E_EffectMismatch) — never a silent contradiction.
+// ─── Instance-arg typing (SYNTAX §«Parameterized effect») ────────────
+// Each authored instance in a with-clause judges against the effect's
+// registered signature — the TTuple scheme register_effect_ops
+// publishes (the one home). Arity disagreement reports as the
+// constructor-arity class at the declaration; a scalar-literal arg
+// whose ground type disagrees with the declared param reports the
+// mismatch. Type- and node-shaped args carry the instance-unification
+// flow (the modal frontier's admit-through-instantiation face) and
+// pass this ground check.
+fn check_instance_args(effs, span: ValidSpan) = each(
+  (eff) => match eff {
+    (ename, _negated, _conn) => match ename {
+      EParameterized(h, args) => match env_lookup(intern_name_of(h)) {
+        Some(entry) => match entry {
+          (Forall(_, TTuple(ptys)), _, EffectDeclKind(_)) => if len(args) != len(ptys) {
+            report(EConstructorArity(intern_name_of(h), len(ptys), len(args), span))
+          } else {
+            each(
+              (i) => check_one_instance_arg(list_index(args, i), list_index(ptys, i), span),
+              range(0, len(args))
+            )
+          },
+          _ => (),
+        },
+        None => (),
+      },
+      _ => (),
+    },
+  },
+  effs
+)
+
+fn check_one_instance_arg(arg, pty, span: ValidSpan) = match instance_arg_scalar_ty(arg) {
+  Some(aty) => if same_ground(aty, fold_strip(pty)) {
+    ()
+  } else {
+    report(ETypeMismatch(aty, pty, span))
+  },
+  None => (),
+}
+
+// A scalar literal arg's ground type; type/node args answer None (their
+// typing is the instance-unification flow, not a ground compare).
+fn instance_arg_scalar_ty(arg) = match arg {
+  EAInt(_) => Some(TInt),
+  EAFloat(_) => Some(TFloat),
+  EAString(_) => Some(ty_string),
+  EAType(_) => None,
+  EANode(_) => None,
+}
+
 fn build_declared_row(effs) = match fold(
   (mk_ef_pure(), [], false),
   (acc, eff) => match acc {

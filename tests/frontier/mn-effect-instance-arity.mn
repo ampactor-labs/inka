@@ -1,0 +1,5 @@
+effect Sample(rate: Int) {
+  tick() -> Int
+}
+fn wrong_arity() -> Int with Sample(48000, 2) = tick()
+fn main() = 0

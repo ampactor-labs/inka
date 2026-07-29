@@ -1,0 +1,5 @@
+effect Sample(rate: Int) {
+  tick() -> Int
+}
+fn wrong_arg() -> Int with Sample("hi") = tick()
+fn main() = 0

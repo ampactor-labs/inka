@@ -1092,6 +1092,33 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶ THE INSTANCE JUDGES ITS ARGS — the signature check
+  lands, and the prior entry's parse claim corrects in place
+  (pin 2eb7cee5). RETRACTION (the ⟲ law, the probe's own find): the
+  previous entry's "the decl head parses" was RECOVERY — the
+  crucibles' stderr carried six P_ tokens each (`rate: Int` refused at
+  the colon: parse_config_params took bare names, the 2026-07-24
+  measured handler-config lathe-lag), the params never reached the
+  TParam list, and the E_EffectMismatch assertions passed because the
+  negation law needs no params; the frontier legs grepped mismatches
+  only, blind to the P_ narration. The head TRULY parses now:
+  parse_config_params gains parse_one_param's exact `: Ty` annotation
+  arm — ONE fix, BOTH lathe-lags (the annotated handler config
+  `scaler(f: Int)` heals with the effect head), zero P_ tokens on
+  every instance fixture. THE JUDGE: check_instance_args runs at the
+  declared-row site (the span in hand) — each authored instance
+  resolves the effect's registered TTuple scheme by kind
+  (EffectDeclKind, the effect_instance_arity read's own shape); arity
+  disagreement reports EConstructorArity, a scalar-literal arg whose
+  ground type disagrees reports ETypeMismatch (same_ground over
+  fold_strip — alias/refined params compare at their ground), and
+  type/node args pass to the instance-unification flow (the modal
+  frontier's face). Measured: Sample("hi") vs rate: Int = one
+  mismatch; Sample(48000, 2) = one arity; the sibling crucible stays
+  clean and runs 42. Two frontier legs pin it (argty asserts the head
+  parses P_-free too — the leg the retraction teaches: assert the
+  ABSENCE of narration, not only the presence of the report). CLEAN
+  m2 == m3; census 0.
 - 2026-07-28 · ▶▶▶ THE NEGATION HOLDS ITS INSTANCE — Arc 3's first
   landing: the parameterized decl parses and !E(instance) becomes
   precise (Hβ.effects.parameterized-negation-instance's core ·

@@ -1677,6 +1677,34 @@ for i in "${!compilers[@]}"; do
   else
     fail "resident session (resident-lines=$(grep -c 'session: graph resident' "$ses_dir/err.log"); see $ses_dir/out.jsonl)"
   fi
+  # ── the FRONTIER READ (rung 5): the oracle's field as a session tool ─
+  # The ranked absence field over the resident graph — the gradient's
+  # argmax uncollapsed, the same read `mentl main.mn:0` serves. Seen RED
+  # on the pre-rung boot three ways: the hole rendered at the WRONG
+  # address with the wrong Query slice (caret_span_of_handle read the
+  # chase TERMINAL's span — a hole unified with a call answered the
+  # call's site; the birth span index is the only never-rebound
+  # channel), and the gradient tier held 7 positions for a 3-fn file
+  # (the enumerator asked teach_gradient about every cell in
+  # range(0, next) — virgin cells included — and junk suggestions
+  # entered under garbage coordinates; the kind gate scopes it to real
+  # fn decls). Known residue asserted AS-IS: the last lib's tail
+  # comment attaches forward across the module seam to the entry's
+  # first decl (Hβ.parser.comment-attach-module-boundary).
+  fro_dir="$dir/mcp-frontier"
+  mkdir -p "$fro_dir"
+  printf 'fn width(x) = x * 2\n\nfn banner(n) = {\n  let w = width(n)\n  w + ??\n}\n\nfn main() = banner(21)\n' > "$fro_dir/main.mn"
+  printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"frontier","arguments":{}}}\n' \
+    | "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fro_dir::." "$compiler" mcp >"$fro_dir/out.jsonl" 2>"$fro_dir/err.log"
+  if grep -q '"name":"frontier"' "$fro_dir/out.jsonl" \
+     && grep -q 'Field: 1 hole(s), 3 gradient position(s)' "$fro_dir/out.jsonl" \
+     && grep -q 'main:5:7' "$fro_dir/out.jsonl" \
+     && grep -q 'Query: ?? : Int' "$fro_dir/out.jsonl" \
+     && grep -q 'Propose: 3 proven survivors' "$fro_dir/out.jsonl"; then
+    pass "frontier read: the ranked field answers live — the hole at its true address with its fan, the gradient tier decl-scoped"
+  else
+    fail "frontier read (see $fro_dir/out.jsonl)"
+  fi
   # ── the LIVING SESSION (rung 4): the graph tracks the tree ─────────
   # The file is edited BETWEEN messages (a fifo coprocess; responses are
   # one line per request, so waiting on the response count synchronizes

@@ -1092,6 +1092,55 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶▶ THE FRONTIER TELLS THE TRUTH — the ranked absence
+  field becomes a faithful session read, and the discovery parse gets
+  its throwaway instance (the resident-session arc's fifth rung ·
+  pin 29acd4c6). The `frontier` tool joins the session: the entry's whole
+  ranked field — every authored ?? first with its proven-survivor fan
+  and tie-teaching, then the annotation-gradient tier — the oracle's
+  frontier, the gradient's argmax uncollapsed, answered from the
+  living graph (`mentl main.mn:0`'s read; act on the head, ask again,
+  the session re-derives as the tree moves). THREE ROOTS made it
+  true, each measured before fixed: (1) THE CARET READ THE CHASE —
+  caret_span_of_handle followed the binding chain, so a hole unified
+  with a call's result rendered at the CALL's site with the call's
+  source as its Query (main:4:11/"width(n)" for the hole at 5:7); the
+  unchased reason cell ALSO rebinds when inference resolves the node
+  (the last-bind reason carried the enclosing binop's span), so the
+  read landed on the SPAN INDEX written at birth (parse_span_of — the
+  only never-rebound channel, the one address resolution already
+  trusts; its O(n) find is bounded by the position count, the
+  handle-keyed index the §5.O layer-2 form). (2) THE VIRGIN WALK —
+  enumerate_gradient_positions asked teach_gradient about every cell
+  in range(0, next), and junk suggestions entered the field under
+  garbage coordinates (prelude prose as the entry's own line 1 — the
+  C1c-era enumerator residue, closed by the chased-kind decl gate it
+  named). (3) THE DISCOVERY GENERATION — the birth-span read exposed
+  what the chased read had hidden by accident: driver_extract_imports
+  full-parses every module for its import heads, minting a SECOND
+  complete AST into the live graph, and wherever file-local
+  coordinates coincide with the weave range (every 1-module world)
+  the duplicate generation's holes entered the enumerators — each
+  authored ?? counted twice, once judged and once as a free ghost
+  (?? : t18@e0), and the ??-authoring edit workflows focused the
+  ghost (FIFTEEN frontier legs red at once: the field count, the
+  positive-hole and capability-hole sessions, the tie leg). The
+  discovery parse now runs in a THROWAWAY graph instance
+  (~> graph_handler with the empty config — the C1c branch-cursor
+  machinery as isolation; the import names flow out as heap strings,
+  only graph cells die), the accident named a contract at its writer.
+  Widen rounds: the discovery family's rows carry the parse's honest
+  Diagnostic + Mutate + Cast + WASI (the judge's Cast(GNode) payload
+  render taught the bare-name declaration spelling en route), plus
+  hole_gate/authored_hole to the span-index read. CLEAN m2 == m3;
+  frontier 312/0 (the frontier-read leg RED on the pre-rung boot:
+  wrong address, wrong Query, 7 ghost positions; the cursor-address
+  field leg healed to its banked faces); census 0. The session
+  surface: propose + query + at + frontier + audit + teach. Named
+  residue: Hβ.parser.comment-attach-module-boundary (the last lib's
+  tail comment attaches forward across the module seam to the entry's
+  first decl — width's Lede rendered kernel prose; the weave attach
+  should stop at NModule boundaries).
 - 2026-07-29 · ▶▶▶▶ THE SEQUENCE-OF-STRUCT LEAVES AND THE FOLD
   BOUNDARY — structural ==/hash/ordering become true over lists of
   structs, and the fold family resolves its types once at entry

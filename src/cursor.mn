@@ -221,7 +221,7 @@ fn cursor_argmax_compute(caret) with GraphRead + Memory + !Mutate + Teach + Allo
 // every `??` (and for each syntax-error recovery hole — an absence to fix
 // either way); the program weave's absent-default is NHole(0), never a
 // position.
-fn hole_gate(handle) with GraphRead + !Mutate = if authored_hole(handle) { 1 } else { 0 }
+fn hole_gate(handle) with GraphRead + Memory + Alloc + !Mutate = if authored_hole(handle) { 1 } else { 0 }
 
 // A hole is a POSITION only when it carries a source span: the parser's
 // `??` and recovery mints carry their token span; synthetic span-zero
@@ -239,7 +239,7 @@ fn hole_gate(handle) with GraphRead + !Mutate = if authored_hole(handle) { 1 } e
 // (executable_hole, lower.mn) — its tree walk is single-generation by
 // construction. The two reads re-unify when session reads scope to the
 // live parse generation (Hβ.cursor.session-weave-epoch-scope).
-fn authored_hole(handle) with GraphRead + !Mutate = match graph_node_body(handle) {
+fn authored_hole(handle) with GraphRead + Memory + Alloc + !Mutate = match graph_node_body(handle) {
   NHole(id) => id != 0 && !span_eq(caret_span_of_handle(handle), span_zero()),
   _ => false,
 }
@@ -248,14 +248,30 @@ fn enumerate_hole_positions() with GraphRead + Alloc + Memory + !Mutate = match 
   Graph(next, _spans) => filter(authored_hole, range(0, next)),
 }
 
+// A gradient position IS a fn declaration — the teach verb's own scope
+// (map_fn_stmts feeds FnStmt handles). The kind gate runs BEFORE the
+// teach read: the ungated walk asked teach_gradient about every cell in
+// range(0, next) — virgin cells and interior mints included — and a
+// junk handle's fabricated suggestion entered the field under whatever
+// coordinates its garbage span landed on (measured: prelude prose
+// rendered as the entry's own line 1 — the C1c-era virgin-walk residue,
+// closed here by the chased-kind filter it named).
 fn enumerate_gradient_positions() with GraphRead + Teach + Alloc + Memory + !Mutate = match graph_snapshot() {
   Graph(next, _spans) => filter(
-    (i) => match teach_gradient(i) {
+    (i) => gradient_position(i),
+    range(0, next)
+  ),
+}
+
+fn gradient_position(i) with GraphRead + Teach + Alloc + Memory + !Mutate = match graph_node_body(i) {
+  NStmt(s) => match s {
+    FnStmt(_, _, _, _, _) => match teach_gradient(i) {
       None => false,
       Some(_) => true,
     },
-    range(0, next)
-  ),
+    _ => false,
+  },
+  _ => false,
 }
 
 // Per-position scoring is independent — each handle's score reads
@@ -539,9 +555,17 @@ fn scan_for_span(target, i, n) with GraphRead + !Mutate = if i >= n {
 // Located-or-zero of query.mn's span_of_handle) — renamed apart from it:
 // two different truths shared one name and the seed silently picked one
 // (§9 dup-fn class); the wheel's own emit refused the collision (face 16).
-fn caret_span_of_handle(handle) with GraphRead + !Mutate = match graph_chase(handle) {
-  GNode(_, reason) => caret_span_from_reason(reason),
-}
+// The position's OWN site — the SPAN INDEX written at birth (the same
+// channel address resolution trusts), never a reason read. A span is a
+// MINT fact: graph_chase follows the binding chain (a hole unified with
+// a call's result answered the chase TERMINAL's span — the field
+// rendered the hole at width(n)'s position), and even the UNCHASED
+// reason cell rebinds when inference resolves the node (the hole's
+// last-bind reason carried the enclosing binop's span — both measured).
+// Only the birth index never moves. Miss answers span_zero — the
+// authored_hole guard's own sentinel.
+fn caret_span_of_handle(handle) with GraphRead + Memory + Alloc + !Mutate =
+  parse_span_of(handle)
 
 // An unbound node's type IS its own type variable — the chase
 // terminated at this handle, so TVar(handle) is what HM proves.

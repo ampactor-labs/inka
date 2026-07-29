@@ -102,7 +102,7 @@ fn spine_slot(h) = h % spine_slots
 // {nodes, ...} receiver computes field offsets over the partial demanded set
 // (the trecordopen-wrong-field class — measured here as `.nodes` reading
 // offset 0, the boundaries column, before the annotation).
-fn spine_page(ref spine, h) -> {boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody]} with Memory =
+fn spine_page(ref spine, h) -> {boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody], spans: [Span]} with Memory =
   list_index(spine, spine_band(h))
 
 // Open bands through band b — the MINT path only: every other write lands
@@ -120,7 +120,7 @@ fn spine_open_loop(own spine, opened, b) with Memory + Alloc = if opened > b {
   (spine, opened)
 } else {
   let page =
-    {boundaries: make_list(spine_slots), canon: make_list(spine_slots), comments: make_list(spine_slots), narrowing: make_list(spine_slots), nodes: make_list(spine_slots), program: make_list(spine_slots)}
+    {boundaries: make_list(spine_slots), canon: make_list(spine_slots), comments: make_list(spine_slots), narrowing: make_list(spine_slots), nodes: make_list(spine_slots), program: make_list(spine_slots), spans: make_list(spine_slots)}
   spine_open_loop(list_set(spine, opened, page), opened + 1, b)
 }
 
@@ -156,6 +156,11 @@ fn spine_put_boundary(ref spine, h, own boundary) with Memory = {
   ()
 }
 
+fn spine_put_span(ref spine, h, own span) with Memory = {
+  let _ = list_set(spine_page(spine, h).spans, spine_slot(h), span)
+  ()
+}
+
 // The sparse-column reads, each answering its absent-contract for a closed
 // band or a virgin cell.
 fn spine_body_at(ref spine, spine_open, h) with Memory + Cast = if spine_band(h) >= spine_open {
@@ -163,6 +168,16 @@ fn spine_body_at(ref spine, spine_open, h) with Memory + Cast = if spine_band(h)
 } else {
   let cell = list_index(spine_page(spine, h).program, spine_slot(h))
   if addr(cell) == 0 { NHole(0) } else { cell }
+}
+
+// The birth-span column read — a virgin cell (never parse-indexed) is
+// span_zero, the same absent-contract every position consumer already
+// treats as "no source site".
+fn spine_span_at(ref spine, spine_open, h) with Memory + Cast = if spine_band(h) >= spine_open {
+  span_zero()
+} else {
+  let cell = list_index(spine_page(spine, h).spans, spine_slot(h))
+  if addr(cell) == 0 { span_zero() } else { cell }
 }
 
 fn spine_comment_at(ref spine, spine_open, h) with Memory + Cast = if spine_band(h) >= spine_open {
@@ -238,6 +253,7 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   },
   graph_snapshot() => resume(Graph(next, span_index)),
   graph_node_body(handle) => resume(spine_body_at(spine, spine_open, handle)),
+  graph_span_of(handle) => resume(spine_span_at(spine, spine_open, handle)),
   graph_push_checkpoint() => // The checkpoint is the fork's STATE VALUE — but pages never move, so the
   // spine contributes two words (the band-table pointer, for the rare
   // in-fork table growth, and the open count) instead of six spine copies.
@@ -581,6 +597,11 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   // NOT rolled back — it stays monotonic so query observers keyed on
   // (handle, epoch) correctly see invalidation without reordering.
   {
+    // ONE write, TWO projections: the ordered (span, handle) log serves
+    // the containment scans (address resolution walks span -> handle);
+    // the spans spine column serves the by-handle O(1) read
+    // (graph_span_of). An in-place cell store rebinds no state.
+    spine_put_span(spine, handle, span)
     resume() with span_index = push(span_index, (span, handle))
   },
   graph_branch_seed() => resume((spine, spine_open, span_index)),
@@ -1030,16 +1051,13 @@ fn scan_for_enclosing_module(target, i, n) with GraphRead + !Mutate = if i >= n 
   }
 }
 
-fn parse_span_of(handle) with Memory + Alloc + GraphRead = match graph_snapshot() {
-  Graph(_, span_index) => match find(
-    (pair) => match pair {
-      (_, h) => h == handle,
-    },
-    span_index
-  ) {
-    Some(pair) => match pair {
-      (span, _) => span,
-    },
-    None => span_zero(),
-  },
-}
+// The birth-span read is O(1) BY HANDLE — the spans spine column
+// (§5.O layer 2 landed at this read). The scan it replaces rode the
+// generic find, whose iterate FLATTENS the whole (span, handle) log per
+// call: the field projection calls this once per position, and a
+// wheel-scale field exhausted the 4GB image inside alloc (measured:
+// alloc <- flat_raw <- iterate <- find <- parse_span_of); the
+// allocation-free scan then measured O(n^2) over the snoc-spined log
+// (a 600s timeout at the same scale). The column is the same one write
+// projected by handle — the log survives for containment scans.
+fn parse_span_of(handle) with GraphRead = graph_span_of(handle)

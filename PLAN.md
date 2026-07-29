@@ -1092,6 +1092,41 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶▶ THE FIELD REACHES THE WHEEL — the spans spine column
+  lands, and the whole-problem-space read becomes daily at wheel scale
+  (CLEAN m2 == m3 · pin ffa2734a). Morgan's charge ("daily should
+  include the multithreaded multi-cursor multi-shot behaviors")
+  measured first: the small-field baseline is 0.35s (the sequential
+  render walk is noise — the named ><-swap is refuted at daily scale
+  by its own measurement), but `mentl src/main.mn:0` TRAPPED at 90s+
+  — and the dig ran three shapes of ONE read to the representation:
+  (1) parse_span_of rode the generic find, whose iterate FLATTENS the
+  whole (span, handle) log per call — the field calls it per position,
+  and alloc's wraparound guard trapped inside the flatten (the
+  backtrace's own frames); (2) the allocation-free scan then measured
+  O(n^2) over the snoc-spined log (600s timeout, same scale); (3) the
+  resolution is the SPANS SPINE COLUMN — the paged spine's seventh
+  column, dual-written at the ONE writer (graph_index_span keeps the
+  ordered log for containment scans; graph_span_of is the by-handle
+  O(1) read — §5.O layer 2, exactly the form the frontier landing had
+  named as this read's destiny). WITH IT, the manifest law's exact
+  class: canon.mn was imported by NOBODY — ty_string reachable only
+  in the blob, every DAG-path judgment (check/at/field) starving for
+  it since the file's birth, the blob-fed march structurally blind;
+  parser.mn and infer.mn declare the import. MEASURED END STATE:
+  `mentl src/main.mn:0` answers in 8.5s at exit 0 — the medium ranks
+  its own main's whole problem space (0 holes, 6 pending proofs,
+  2 tightenings, 115 gradient positions, each pending rendered at its
+  span) in one daily command; multithreaded (the spawning judgment),
+  multi-shot (the per-hole fans), multi-cursor (the ranked field) in
+  one invocation. Frontier 315/0; census 0. Named residue: the field
+  header renders the entry's abs spelling (the dual-spelling module
+  key — one canonical key at one home is the fix) · the pending line
+  renders `span_valid(...)` through the voice's argument compression
+  (the fmt-summit predicate-render precedent applies) · the DAG-vs-
+  blob divergence class wants its own cheap census instrument (a
+  per-module manifest check the medium runs on itself; tonight's was
+  found by the felt walk, five days late).
 - 2026-07-29 · ▶▶ THE VERB-SHAPE TIER — audit names the |> the bindings
   draw, and the dig closes a latent double-visit class (CLEAN
   m2 == m3 · pin 0513aca1 — the pin also carries driver_check_entry's

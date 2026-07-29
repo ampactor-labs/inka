@@ -31,6 +31,8 @@ import effects
 
 import types
 
+import canon
+
 import own
 
 import runtime/imap

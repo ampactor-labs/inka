@@ -15,6 +15,8 @@ import effects
 
 import graph
 
+import canon
+
 import lexer
 
 // Handle minting and node wrapping
@@ -221,7 +223,8 @@ fn op_prec(k) with Pure = match k {
   TStar => 10,
   TSlash => 10,
   TPercent => 10,
-  _ => 0,   // drift-audit: ignore — prec 0 IS "not a binary operator"; the ladder's terminator, not a fabricated default
+  _ => // drift-audit: ignore — prec 0 IS "not a binary operator"; the ladder's terminator, not a fabricated default
+  0,
 }
 
 // Pipe-verb token → PipeKind. One token, one kind — `~>` is PTee
@@ -2885,11 +2888,7 @@ fn parse_type_ty(ref tokens, pos) = match parse_type_atom(tokens, pos) {
           } else {
             (mk_ef_open([], fresh_handle(span_at(tokens, pos))), p2)
           } {
-            (row, p_row) => (TFun(
-              map((t) => mk_param("_", t), param_tys),
-              ret,
-              row
-            ), p_row),
+            (row, p_row) => (TFun(map((t) => mk_param("_", t), param_tys), ret, row), p_row),
           }
         },
       }

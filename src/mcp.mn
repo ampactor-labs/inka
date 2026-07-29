@@ -402,6 +402,13 @@ fn session_current(ast, ranges, manifest) = if len(ranges) == 0 {
   if cand == manifest {
     (ast, ranges, manifest, 0)
   } else {
+    // The generation boundary's clears, BEFORE the re-derivation: the
+    // new judgment re-fires every still-true T_OverDeclared and
+    // re-accrues every still-pending obligation; stale generations'
+    // entries must not shadow the current truth (their spans belong to
+    // a tree that no longer exists).
+    tighten_reset()
+    verify_reset()
     match driver_entry_with_ranges("main") {
       (full, r2) => {
         eprint_string("session: tree moved — re-derived {int_to_str(len(r2))} modules; the graph is current\n")
@@ -483,7 +490,7 @@ fn mcp_run(at_read) = {
           mcp_loop(driver_module_ast(ast, ranges, "main"), ranges, driver_manifest(ranges), at_read, session_current)
         },
       }
-    } ~> wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
+    } ~> wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry ~> tighten_collector)
   } else {
     mcp_loop([], [], [], at_read, (a, r, m) => (a, r, m, 0))
   }

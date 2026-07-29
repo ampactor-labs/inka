@@ -897,33 +897,10 @@ fn count_comment_tokens(ref tokens, i, acc) with Memory + Alloc = if i >= len(to
 // declaration can only shrink what callers accumulate, so it can create
 // new T_OverDeclared warnings (the next ratchet turns) but never an
 // E_EffectMismatch.
-effect Tighten {
-  tightenables() -> [(EffRow, EffRow, String, Span)]
-}
-
-// The collecting forwarder over the Diag effect: TOverDeclared
-// accumulates in state AND every diagnostic re-performs outward from the
-// arm — sound because an arm's own performs resolve in the INSTALL's
-// world (the world arc's deep-handler law), reaching the bracket's
-// diagnostics_handler, never re-entering this collector. All three Diag
-// ops carry arms: a handler arming only SOME ops of an effect leaves
-// zero fn slots for the rest, and a perform through a zero slot is a
-// garbage dispatch.
-handler tighten_collector with found = [] {
-  diag_report(diag, line) => {
-    // Forward outward with the SAME rendered line — the forwarder never
-    // re-renders (the line was made once, at the report boundary).
-    diag_report(diag, line)
-    match diag {
-      TOverDeclared(declared, used, name, span) => resume() with found = push(found, (declared, used, name, span)),
-      _ => resume(),
-    }
-  },
-  diag_errors() => resume(diag_errors()),
-  diag_refusals() => resume(diag_refusals()),
-  tightenables() => resume(found),
-}
-
+// (effect Tighten + tighten_collector moved to pipeline.mn — the
+// analysis layer's own machinery, installable by the CLI chains here
+// AND the resident session's bracket in mcp.mn; imports flow
+// main → mcp → pipeline, so pipeline is the one visible home.)
 fn tighten_run(target_opt) = {
   let entry_module = match target_opt {
     Some(t) => t,
@@ -1227,12 +1204,37 @@ fn check_run(target) = if pipeline_check(target) > 0 { 1 } else { 0 }
 // The file's own positions: a graph handle joins the field iff its span
 // lies inside the target's weave range — the range map is the one
 // authority on which lines are this file's.
-fn field_positions(handles, fstart, nlines) with GraphRead + Memory + Alloc + !Mutate = filter(
+// Range-filter, then LATEST MINT WINS per span (address_better_a's tie
+// rule as the enumerator's law): the living session re-derives on a
+// moved tree, and the prior generation's node at the same source span
+// would double every position — the higher handle IS the current
+// generation. A stale-only span (a position the edit removed, whose
+// coordinates match nothing current) is the named residue the
+// generation floor retires (the session-epoch face).
+fn field_positions(handles, fstart, nlines) with GraphRead + Memory + Alloc + !Mutate = field_dedup_spans(filter(
   (h) => match caret_span_of_handle(h) {
     Span(sl, _, _, _) => sl >= fstart && sl < fstart + nlines,
   },
   handles
+))
+
+// Identity is the span's START (the head anchor): an edit that
+// reshapes a decl changes its extent but not its position, so full
+// span equality missed the generation pair (measured: the tightened
+// decl's shorter head left its ghost standing).
+fn field_dedup_spans(handles) with GraphRead + Memory + Alloc + !Mutate = filter(
+  (h) => !any(
+    (h2) => h2 > h && span_start_eq(caret_span_of_handle(h2), caret_span_of_handle(h)),
+    handles
+  ),
+  handles
 )
+
+fn span_start_eq(ref a, ref b) with Memory = match a {
+  Span(asl, asc, _, _) => match b {
+    Span(bsl, bsc, _, _) => asl == bsl && asc == bsc,
+  },
+}
 
 // Rank by the one scorer, descending: structural sort ascends by the
 // (score, handle) pair — the compare fold's f64 leaf orders the score,
@@ -1286,12 +1288,81 @@ fn render_field_tier(ranked, target: String, ranges, fstart, i) = if i >= len(ra
 fn render_field(target: String, ranges, fstart, nlines) = {
   let caret0 = Caret(0, Located(Span(fstart, 1, fstart, 1), Inferred("field read")))
   let holes = field_positions(enumerate_hole_positions(), fstart, nlines)
+  // THE PROBLEM IS THE SOLUTION — absence is ONE node-kind, and the
+  // field ranks ALL of it: the pending proof obligations (the verify
+  // ledger's live debt — each a position whose resolution is the
+  // missing constraint) and the over-declared rows (each carrying its
+  // proven row, the MachineApplicable patch `mentl tighten` applies)
+  // join the holes and the gradient tier. The error list IS the work
+  // queue.
+  let pending = field_pending(verify_debt(), fstart, nlines)
+  let tights = field_tightenables(tightenables(), fstart, nlines)
   let grads = field_positions(enumerate_gradient_positions(), fstart, nlines)
-  print("Field: {int_to_str(len(holes))} hole(s), {int_to_str(len(grads))} gradient position(s) in {target}\n")
+  print("Field: {int_to_str(len(holes))} hole(s), {int_to_str(len(pending))} pending proof(s), {int_to_str(len(tights))} tightening(s), {int_to_str(len(grads))} gradient position(s) in {target}\n")
   render_field_tier(field_ranked(holes, caret0), target, ranges, fstart, 0)
+  render_pending_tier(pending, target, fstart, 0)
+  render_tighten_tier(tights, target, fstart, 0)
   render_field_tier(field_ranked(grads, caret0), target, ranges, fstart, 0)
   0
 }
+
+// The pending tier — the verify ledger's debt rows inside the file's
+// range, each rendered at its own span with the obligation and its
+// Reason (the Why-walk's edge). Ledger order IS accrual order ≈ source
+// order.
+fn field_pending(debt, fstart, nlines) with Memory + Alloc = filter(
+  ((dspan, _, _)) => match dspan {
+    Span(sl, _, _, _) => sl >= fstart && sl < fstart + nlines,
+  },
+  debt
+)
+
+fn render_pending_tier(pending, target: String, fstart, i) = if i >= len(pending) {
+  ()
+} else {
+  match list_index(pending, i) {
+    (dspan, pred, reason) => match dspan {
+      Span(sl, sc, _, _) => {
+        print("\n── {target}:{int_to_str(sl - fstart + 1)}:{int_to_str(sc)}\n")
+        print("Pending: {show_predicate(pred)} — undischarged; a ground witness or a refinement collapses it\n")
+        print("Why: {show_reason(reason)}\n")
+        render_pending_tier(pending, target, fstart, i + 1)
+      },
+    },
+  }
+}
+
+// The tightening tier — every T_OverDeclared the judgment banked whose
+// decl sits in the file's range: the declared row, the proven row, and
+// the standing patch invitation (`mentl tighten` authors it).
+fn field_tightenables(cands, fstart, nlines) with Memory + Alloc = filter(
+  ((_, _, _, tspan)) => match tspan {
+    Span(sl, _, _, _) => sl >= fstart && sl < fstart + nlines,
+  },
+  cands
+)
+
+fn render_tighten_tier(tights, target: String, fstart, i) = if i >= len(tights) {
+  ()
+} else {
+  match list_index(tights, i) {
+    (declared, used, name, tspan) => match tspan {
+      Span(sl, sc, _, _) => {
+        print("\n── {target}:{int_to_str(sl - fstart + 1)}:{int_to_str(sc)}\n")
+        print(tighten_line(name, declared, used))
+        print("  the proven row is the patch (mentl tighten authors it)\n")
+        render_tighten_tier(tights, target, fstart, i + 1)
+      },
+    },
+  }
+}
+
+// The name pin is an Intent Boundary at the line's ONE mint
+// (spec_mangle's law): destructured from the candidate tuple the
+// element is free at the splice, and the show floor rendered the fn
+// name as a pointer numeral — the named call anchors the binder.
+fn tighten_line(name: String, declared, used) =
+  "Tighten: {name} declares {show_effrow(declared)} — the body proves {show_effrow(used)}\n"
 
 // ─── at_run — the cursor-address transport (`mentl <file>:L[:C]`)
 //
@@ -1306,7 +1377,7 @@ fn render_field(target: String, ranges, fstart, nlines) = {
 // once, never a second ledger).
 fn at_run(target, line, col) = infer_context(() => match driver_entry_with_ranges(target) {
   (_ast, ranges) => address_project(ranges, target, line, col),
-} ~> patch_to_file ~> terminal_transport ~> cursor_default ~> delta_default ~> synth_default ~> interrogate_default ~> mentl_default ~> stdout_console ~> wasi_filesystem)
+} ~> patch_to_file ~> terminal_transport ~> cursor_default ~> delta_default ~> synth_default ~> interrogate_default ~> mentl_default ~> stdout_console ~> wasi_filesystem ~> tighten_collector)
 
 // session_at_read — the resident session's at transport, built HERE
 // where the address renders live (imports flow main → mcp, never back)

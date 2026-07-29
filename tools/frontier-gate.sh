@@ -1532,7 +1532,7 @@ for i in "${!compilers[@]}"; do
   # rendered — both holes with their Propose facets (the tie teaching), the
   # gradient tier after. RED before the field arm ("lines count from 1").
   fldout=$(cd "$fdemo" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fdemo" --dir /tmp "$compiler" two.mn:0 2>"$dir/field.err")
-  if [ $? -eq 0 ] && printf '%s' "$fldout" | grep -q 'Field: 2 hole(s)' \
+  if [ $? -eq 0 ] && printf '%s' "$fldout" | grep -q 'Field: 2 hole(s), 0 pending proof(s), 0 tightening(s)' \
      && printf '%s' "$fldout" | grep -q '2 proven survivors' \
      && printf '%s' "$fldout" | grep -q 'Propose: 1'; then
     pass "cursor-address field (both holes project with their fans)"
@@ -1697,13 +1697,50 @@ for i in "${!compilers[@]}"; do
   printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"frontier","arguments":{}}}\n' \
     | "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$fro_dir::." "$compiler" mcp >"$fro_dir/out.jsonl" 2>"$fro_dir/err.log"
   if grep -q '"name":"frontier"' "$fro_dir/out.jsonl" \
-     && grep -q 'Field: 1 hole(s), 3 gradient position(s)' "$fro_dir/out.jsonl" \
+     && grep -q 'Field: 1 hole(s), 0 pending proof(s), 0 tightening(s), 3 gradient position(s)' "$fro_dir/out.jsonl" \
      && grep -q 'main:5:7' "$fro_dir/out.jsonl" \
      && grep -q 'Query: ?? : Int' "$fro_dir/out.jsonl" \
      && grep -q 'Propose: 3 proven survivors' "$fro_dir/out.jsonl"; then
     pass "frontier read: the ranked field answers live — the hole at its true address with its fan, the gradient tier decl-scoped"
   else
     fail "frontier read (see $fro_dir/out.jsonl)"
+  fi
+  # ── the WHOLE PROBLEM SPACE (rung 6): every absence is a position ──
+  # The field ranks all four absence kinds — holes, pending proof
+  # obligations (the verify ledger's live debt), over-declared rows
+  # (each carrying its proven-row patch), and the gradient tier — and
+  # the LIVING resolution: an edit that makes the row honest drops the
+  # tightening from the next frontier (the generation clears:
+  # tighten_reset + verify_reset before the re-derivation; the
+  # enumerators dedup by span START, latest mint wins). Seen RED on the
+  # pre-rung boot: the count line had two tiers, the debt and the
+  # tightenings were invisible to the field, and the second generation
+  # doubled every position.
+  prob_dir="$dir/mcp-problems"
+  mkdir -p "$prob_dir"
+  printf 'type Pos = Int where 0 < self\n\nfn scaled(x) -> Pos = x * 3\n\nfn noisy() with IO = 7\n\nfn main() = scaled(2) + noisy() + ??\n' > "$prob_dir/main.mn"
+  mkfifo "$prob_dir/in"
+  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$prob_dir::." "$compiler" mcp \
+    < "$prob_dir/in" >"$prob_dir/out.jsonl" 2>"$prob_dir/err.log" &
+  prob_srv=$!
+  exec 9> "$prob_dir/in"
+  prob_wait() { for _i in $(seq 1 150); do [ "$(wc -l < "$prob_dir/out.jsonl")" -ge "$1" ] && return 0; sleep 0.2; done; return 1; }
+  printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' >&9
+  printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"frontier","arguments":{}}}' >&9
+  prob_wait 2 || true
+  printf 'type Pos = Int where 0 < self\n\nfn scaled(x) -> Pos = x * 3\n\nfn noisy() = 7\n\nfn main() = scaled(2) + noisy() + ??\n' > "$prob_dir/main.mn"
+  printf '%s\n' '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"frontier","arguments":{}}}' >&9
+  prob_wait 3 || true
+  exec 9>&-
+  wait $prob_srv 2>/dev/null
+  if grep '"id":2' "$prob_dir/out.jsonl" | grep -q 'Field: 1 hole(s), 1 pending proof(s), 1 tightening(s), 3 gradient position(s)' \
+     && grep '"id":2' "$prob_dir/out.jsonl" | grep -q 'Pending: 0 < self' \
+     && grep '"id":2' "$prob_dir/out.jsonl" | grep -q 'Tighten: noisy declares IO — the body proves Pure' \
+     && grep '"id":3' "$prob_dir/out.jsonl" | grep -q 'Field: 1 hole(s), 1 pending proof(s), 0 tightening(s), 3 gradient position(s)' \
+     && [ "$(grep -c 'session: tree moved' "$prob_dir/err.log")" = "1" ]; then
+    pass "problem space: pending + tightening rank as positions; the honest edit clears its tightening from the living frontier"
+  else
+    fail "problem space (see $prob_dir/out.jsonl)"
   fi
   # ── the LIVING SESSION (rung 4): the graph tracks the tree ─────────
   # The file is edited BETWEEN messages (a fifo coprocess; responses are

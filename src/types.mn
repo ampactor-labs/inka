@@ -2349,6 +2349,11 @@ effect LowerScope {
 effect Verify {
   verify(Span, Predicate, Reason)
   verify_debt() -> [(Span, Predicate, Reason)]
+  // The generation boundary's clear: the living session re-derives on a
+  // moved tree and stale generations' obligations must not shadow the
+  // current judgment's re-accrual (the tighten_reset law at the proof
+  // ledger).
+  verify_reset()
 }
 
 // ifc non-interference: verify(span, PFlowLe(src, dst), reason)

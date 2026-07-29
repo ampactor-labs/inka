@@ -1092,6 +1092,45 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶▶ THE PROBLEM IS THE SOLUTION — every absence becomes
+  a ranked frontier position (the resident-session arc's sixth rung ·
+  pin 8981b63c). Morgan's principle executed at the field: absence is
+  ONE node-kind, and the frontier now ranks ALL of it — holes, PENDING
+  PROOF OBLIGATIONS (the verify ledger's live debt, each a position
+  rendered with its predicate and Reason), TIGHTENINGS (every
+  T_OverDeclared the judgment banked: the declared row, the proven
+  row, the standing `mentl tighten` patch invitation), then the
+  gradient tier. The error list IS the work queue. THE MOVES: the
+  tighten_collector + effect Tighten moved to pipeline.mn (the one
+  home main's CLI chains and mcp's session bracket both install —
+  imports flow main → mcp → pipeline; the collector sits INSIDE the
+  infer_context body chain, where the judgment's performs reach it —
+  the outside placement measured dead); effect Verify gains
+  verify_reset (both handler arms — the ledger clears debt, the SMT
+  arm keeps its SAT witnesses: a counterexample is a proof, not an
+  obligation); session_current performs both clears BEFORE
+  re-derivation (the generation boundary's law); and the enumerators
+  gained the LATEST-MINT-WINS dedup keyed on span START
+  (address_better_a's tie rule as the enumerator's law — the second
+  generation doubled every position, and full-span equality missed a
+  reshaped decl whose extent changed; the head anchor is the
+  identity). The splice floor caught once more en route: the
+  tightening line rendered the fn name as a pointer numeral until the
+  named-mint String pin (spec_mangle's law, tighten_line). MEASURED
+  LIVE on the session: pre-edit 1 hole / 1 pending / 1 tightening /
+  3 gradient; the honest edit (dropping the false `with IO`) clears
+  its tightening from the NEXT frontier — 1 / 1 / 0 / 3, exactly one
+  re-derivation. CLEAN m2 == m3; frontier 313/0 (the problem-space
+  coproc leg RED on the pre-rung boot; both prior Field assertions
+  re-banked to the four-tier line); census 0 at every step. Named
+  residue: the stale-only span (a position an edit REMOVED entirely
+  ghosts until the generation floor — the session-epoch face);
+  pending/tightening entries rank in accrual order (the
+  score_one_position rank generalizes to span-keyed entries when the
+  fan lands over them). The next depth IS the fan: each frontier
+  position carries its resolution — a hole its fills, a tightening
+  its one proven row, a pending its missing constraint — and the
+  oracle-as-search verifies candidates per position as branch cursors.
 - 2026-07-29 · ▶▶▶ THE FRONTIER TELLS THE TRUTH — the ranked absence
   field becomes a faithful session read, and the discovery parse gets
   its throwaway instance (the resident-session arc's fifth rung ·

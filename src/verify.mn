@@ -39,6 +39,7 @@ handler verify_ledger with debt = [] {
     None => resume() with debt = [(span, predicate, reason)] ++ debt,
   },
   verify_debt() => resume(debt),
+  verify_reset() => resume() with debt = [],
 }
 
 // Compile-time decidable discharge. Returns Some(true) when the predicate
@@ -409,6 +410,11 @@ handler verify_smt with witnesses = [], debt = [] {
   // SmtUnknown obligations are retained debt. Both flow back as the residual,
   // never dropped.
   resume(verify_residual(debt, witnesses)),
+  verify_reset() => // The generation clear drops the pending debt; the SAT witnesses stay —
+  // a counterexample is a PROOF (of violation), not an obligation, and a
+  // re-derivation that removed the violating claim simply never re-raises
+  // it.
+  resume() with debt = [],
 }
 
 // The SMT handler's residual: undischarged debt PLUS the SAT-witness ledger

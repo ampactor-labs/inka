@@ -123,6 +123,24 @@ if C=$(wt_m2_ensure); then
   elif [[ -n "$cmax" && "$crefs" -lt "$cmax" ]]; then
     say "  ↓ comment-refs FELL $cmax -> $crefs — lower comment_refs_max in $BASELINE to hold it."
   fi
+  # The manifest gate — the wheel's own DAG judgment, zero-tolerance. The
+  # blob census is structurally BLIND to a missing import edge (every name
+  # resolves in the concatenation), and the class sat silent five days
+  # until a felt walk found canon.mn imported by NOBODY — ty_string
+  # starving every check/at/field invocation while the march stayed green.
+  # One ~2.5s judgment of the entry's import closure holds it at zero:
+  # a name whose defining module is in nobody's closure surfaces here as
+  # E_MissingVariable. Per-module import PRECISION (a name used by M,
+  # defined in a module M never imports but another module's closure
+  # carries) needs env-entry module attribution — the named deeper
+  # instrument.
+  mmiss=$(wt_run --dir . "$C/m2.wasm" check src/main.mn 2>&1 >/dev/null | grep -cE 'E_MissingVariable' || true)
+  say "· manifest: $mmiss missing name(s) on the wheel's own DAG judgment"
+  if [[ "$mmiss" -gt 0 ]]; then
+    say "✗ MANIFEST: a name resolves in the blob but not the import DAG — a module"
+    say "  is missing an import edge (the canon.mn class). Probe: mentl check src/main.mn"
+    fail=1
+  fi
 else
   say "✗ compiler TRAPPED compiling the wheel (tail $WT_M2CACHE/m2.err):"; tail -3 "$WT_M2CACHE/m2.err"; fail=1
 fi

@@ -1649,11 +1649,17 @@ for i in "${!compilers[@]}"; do
      && grep -q '"tools":\[{"name":"propose"' "$ses_dir/out.jsonl" \
      && grep -q '"name":"query"' "$ses_dir/out.jsonl" \
      && grep -q '"name":"at"' "$ses_dir/out.jsonl" \
+     && grep -q '"name":"audit"' "$ses_dir/out.jsonl" \
+     && grep -q '"name":"teach"' "$ses_dir/out.jsonl" \
      && grep -q 'x: Int own' "$ses_dir/out.jsonl" \
      && grep -q 'declared as main' "$ses_dir/out.jsonl" \
      && grep -q 'Query: double' "$ses_dir/out.jsonl" \
+     && grep -q 'double : Pure' "$ses_dir/out.jsonl" \
+     && grep -q 'severable:' "$ses_dir/out.jsonl" \
+     && grep -qE 'annotation density|→ add' "$ses_dir/out.jsonl" \
+     && ! grep -q 'iterate : ' "$ses_dir/out.jsonl" \
      && grep -q 'PROVEN — every claim discharged' "$ses_dir/out.jsonl"; then
-    pass "resident session: one derivation, live query + at reads, propose coexists"
+    pass "resident session: one derivation, live query + at + audit + teach reads, propose coexists"
   else
     fail "resident session (resident-lines=$(grep -c 'session: graph resident' "$ses_dir/err.log"); see $ses_dir/out.jsonl)"
   fi

@@ -703,12 +703,12 @@ fn query(entry_module, question) = infer_context(() => {
 wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 // analyze_fns — the shared analysis-verb cursor: load+check the module,
-// project each fn decl with `project(name, handle)`, render, print. audit
-// and teach ARE this cursor at two projections — the check handler chain and the
-// load → map_fn_stmts → render → print skeleton lived twice, byte-identical
-// but for the project/render pair (Carried-Truth: one home now). query
-// stays separate: it ASKS a question, not a per-fn walk.
-fn analyze_fns(entry_module, project, render) = infer_context(() => {
+// run one composed `projection(ast) -> String`, print. audit and teach
+// ARE this cursor at two projections — the check handler chain and the
+// load → project → print skeleton lived twice, byte-identical but for
+// the projection (Carried-Truth: one home now). query stays separate:
+// it ASKS a question, not a per-fn walk.
+fn analyze_fns(entry_module, projection) = infer_context(() => {
   // "-" is the stdin contract (self-contained source, the bare
   // compile's own path); anything else resolves through the driver DAG.
   let ast = if entry_module == "-" {
@@ -716,19 +716,25 @@ fn analyze_fns(entry_module, project, render) = infer_context(() => {
   } else {
     driver_check_entry(entry_module)
   }
-  map_fn_stmts(ast, project) |> render |> print_string
+  projection(ast) |> print_string
 } ~>
 // driver_check_entry's fs_read — handled in-chain, as compile/check do
 wasi_filesystem ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
-fn teach(entry_module) =
-  analyze_fns(entry_module, (name, handle) => (name, teach_gradient(handle)), render_gradients)
+// The pure projection pair — audit and teach as `ast -> String`, the ONE
+// home the CLI verb and the resident session's tool both call (the
+// address_project law at the analysis verbs): the CLI derives an ast
+// then projects; the session projects the living ast it already holds.
+// Transport stays the caller's — analyze_fns prints, the session banks.
+fn teach_project(ast) =
+  map_fn_stmts(ast, (name, handle) => (name, teach_gradient(handle))) |> render_gradients
 
-fn audit(entry_module) = analyze_fns(
-  entry_module,
-  (name, handle) => build_audit_report(name, handle, lookup_ty(handle)),
-  render_audit
-)
+fn audit_project(ast) =
+  map_fn_stmts(ast, (name, handle) => build_audit_report(name, handle, lookup_ty(handle))) |> render_audit
+
+fn teach(entry_module) = analyze_fns(entry_module, teach_project)
+
+fn audit(entry_module) = analyze_fns(entry_module, audit_project)
 
 // ─── Multi-module compilation — map over a module list ──────────────
 //

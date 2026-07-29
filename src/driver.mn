@@ -298,6 +298,27 @@ fn range_of_module(ref ranges, ref target) with Memory + Alloc = find(
   ranges
 )
 
+// One module's top-level nodes cut from the weave ast by its range —
+// the resident session's scoping read (audit/teach over the entry
+// alone, matching the CLI's entry-parsed ast). The NModule mint below
+// computes this same filter and holds it in its decls field, but
+// discards the minted handle — reading the node instead of
+// re-filtering is the O(1) form once the mint keeps an edge to it.
+fn driver_module_ast(ref ast, ref ranges, ref target) with Memory + Alloc = match range_of_module(ranges, target) {
+  Some(r) => match r {
+    (_m, _p, rstart, rn) => {
+      let mspan = Span(rstart, 0, rstart + rn, 0)
+      filter(
+        (n) => match n {
+          N(_, dsp, _) => span_contains(mspan, dsp),
+        },
+        ast
+      )
+    },
+  },
+  None => ast,
+}
+
 fn driver_entry_with_ranges(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern = {
   // Discovery is a STRUCTURE read: the DAG walk parses each module only
   // for its imports, and the weave parse below re-reports every shape

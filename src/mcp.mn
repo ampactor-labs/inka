@@ -5,8 +5,7 @@
 // unproven. The transport is newline-delimited JSON-RPC on stdio (the MCP
 // stdio contract); the judge is the SAME canonical judgment the stdin
 // compile runs (infer_program_converged, then the gate law batch-shaped)
-// — a transport never grows its own judge. One tool, because the category
-// is one property:
+// — a transport never grows its own judge. The gate's one property:
 //
 //   propose {source} -> PROVEN   (artifact streamed to .build/mcp/last.wat
 //                                 — only proven bytes ever land there)
@@ -15,6 +14,11 @@
 //                                 contract, stated, never hidden)
 //                     | REFUSED  (each undischarged claim named at its
 //                                 file-local span; the refusal teaches)
+//
+// Beside it, the RESIDENT SESSION's reads (Hβ.session.resident-verbs):
+// query / at / audit / teach each answer from the graph the server
+// derived once at startup — the CLI verb's own projection fn, a
+// different transport. No tool re-derives what the session holds.
 //
 // stdout carries protocol lines ONLY: the WAT streams through wat_to_file
 // (the march's write-through sink) and diagnostics render on stderr
@@ -186,7 +190,7 @@ fn mcp_tools_result() = JObj([("tools", JArr([JObj([("name", JStr("propose")), (
   ("type", JStr("string")),
   // drift-audit: ignore — prose inside a JSON string literal (the audit's string-literal blindness)
   ("description", JStr("The question, e.g. 'type main' or 'why double'."))
-]))])), ("required", JArr([JStr("question")]))]))]), JObj([("name", JStr("at")), ("description", JStr("Project the eight aspects at an address in the resident project's entry file — the same read `mentl main.mn:L:C` serves: the node's type at the span, its effect row, ownership, pending obligations, the proposal fan at a ??, and the Why chain. line counts from 1; col defaults to 1.")), ("inputSchema", JObj([("type", JStr("object")), ("properties", JObj([("line", JObj([("type", JStr("integer"))])), ("col", JObj([("type", JStr("integer"))]))])), ("required", JArr([JStr("line")]))]))])]))])
+]))])), ("required", JArr([JStr("question")]))]))]), JObj([("name", JStr("at")), ("description", JStr("Project the eight aspects at an address in the resident project's entry file — the same read `mentl main.mn:L:C` serves: the node's type at the span, its effect row, ownership, pending obligations, the proposal fan at a ??, and the Why chain. line counts from 1; col defaults to 1.")), ("inputSchema", JObj([("type", JStr("object")), ("properties", JObj([("line", JObj([("type", JStr("integer"))])), ("col", JObj([("type", JStr("integer"))]))])), ("required", JArr([JStr("line")]))]))]), JObj([("name", JStr("audit")), ("description", JStr("Project every entry-file function's effect-row truth from the resident graph — the row each body reaches, which effects are severable (!E provable — the named effect provably never performed), and the capabilities each severance unlocks. The same read `mentl audit main` serves, answered live from the session's one derivation. No arguments.")), ("inputSchema", JObj([("type", JStr("object")), ("properties", JObj([]))]))]), JObj([("name", JStr("teach")), ("description", JStr("Project each entry-file function's next annotation from the gradient — the one input that would unlock capabilities (an effect severance, a refinement, a representation pin). The same read `mentl teach main` serves, answered live. No arguments.")), ("inputSchema", JObj([("type", JStr("object")), ("properties", JObj([]))]))])]))])
 
 // tools/call — the gate's propose plus the resident session's reads. A
 // verdict is a SUCCESSFUL tool result whether the gate proved or refused
@@ -197,7 +201,7 @@ fn mcp_tools_result() = JObj([("tools", JArr([JObj([("name", JStr("propose")), (
 // durable session growth, and a reset would orphan spine pages the
 // session's later reads still chase (the fork-spine class at the serve
 // loop). Everything else resets as before.
-fn mcp_tool_call(id, params, ranges, at_read) = {
+fn mcp_tool_call(id, params, ast, ranges, at_read) = {
   let name = match json_obj_get(params, "name") {
     Some(JStr(s)) => s,
     _ => // drift-audit: ignore — the protocol-null sentinel: no real tool name is empty, and the match below refuses "" with -32602
@@ -259,6 +263,35 @@ fn mcp_tool_call(id, params, ranges, at_read) = {
         ), 1),
       }
     },
+    "audit" => if len(ranges) == 0 {
+      (mcp_response(
+        id,
+        JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("no project graph resident — the server started outside a project (no resolvable main); audit projects the living session\n"))])])), ("isError", JBool(true))])
+      ), 1)
+    } else {
+      // The SAME projection the CLI's audit verb serves (audit_project,
+      // one home) over the RESIDENT entry ast — no derivation, a living
+      // read; a session read never resets its region.
+      let text = audit_project(ast)
+      ((mcp_response(
+        id,
+        JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr(text))])])), ("isError", JBool(false))])
+      )), 0)
+    },
+    "teach" => if len(ranges) == 0 {
+      (mcp_response(
+        id,
+        JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("no project graph resident — the server started outside a project (no resolvable main); teach reads the living session\n"))])])), ("isError", JBool(true))])
+      ), 1)
+    } else {
+      // teach_project — the gradient's next-annotation read, the CLI
+      // verb's own projection over the resident entry ast.
+      let text = teach_project(ast)
+      ((mcp_response(
+        id,
+        JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr(text))])])), ("isError", JBool(false))])
+      )), 0)
+    },
     "query" => if len(ranges) == 0 {
       (mcp_response(
         id,
@@ -286,7 +319,7 @@ fn mcp_tool_call(id, params, ranges, at_read) = {
         ), 1),
       }
     },
-    _ => (mcp_error(id, -32602, "unknown tool: {name} — the server serves propose and query"), 1),
+    _ => (mcp_error(id, -32602, "unknown tool: {name} — the server serves propose, query, at, audit, and teach"), 1),
   }
 }
 
@@ -295,17 +328,17 @@ fn mcp_params_of(req) = match json_obj_get(req, "params") {
   None => JObj([]),
 }
 
-fn mcp_request(id, method, params, ranges, at_read) = match method {
+fn mcp_request(id, method, params, ast, ranges, at_read) = match method {
   "initialize" => (mcp_response(id, mcp_initialize_result(params)), 1),
   "tools/list" => (mcp_response(id, mcp_tools_result()), 1),
-  "tools/call" => mcp_tool_call(id, params, ranges, at_read),
+  "tools/call" => mcp_tool_call(id, params, ast, ranges, at_read),
   "ping" => (mcp_response(id, JObj([])), 1),
   _ => (mcp_error(id, -32601, "method not found: {method}"), 1),
 }
 
 // A message without an id is a notification (initialized, cancelled, …):
 // consumed, never answered — the empty response line is the no-response.
-fn mcp_dispatch(req, ranges, at_read) = {
+fn mcp_dispatch(req, ast, ranges, at_read) = {
   let method = match json_obj_get(req, "method") {
     Some(JStr(s)) => s,
     _ => // drift-audit: ignore — the protocol-null sentinel: no real method is empty, and mcp_request refuses "" with -32601
@@ -313,12 +346,12 @@ fn mcp_dispatch(req, ranges, at_read) = {
   }
   match json_obj_get(req, "id") {
     None => ("", 1),
-    Some(id) => mcp_request(id, method, mcp_params_of(req), ranges, at_read),
+    Some(id) => mcp_request(id, method, mcp_params_of(req), ast, ranges, at_read),
   }
 }
 
-fn mcp_handle(line, ranges, at_read) = match json_parse(line) {
-  JOk(req, _) => mcp_dispatch(req, ranges, at_read),
+fn mcp_handle(line, ast, ranges, at_read) = match json_parse(line) {
+  JOk(req, _) => mcp_dispatch(req, ast, ranges, at_read),
   JErr(m, pos) => (mcp_error(JNull, -32700, "parse error at byte {int_to_str(pos)}: {m}"), 1),
 }
 
@@ -339,7 +372,7 @@ fn strip_cr(line) = {
 // still chase. The response prints BEFORE any reset. read_stdin_line
 // answers "" at EOF; a blank line is outside the newline-delimited-JSON
 // contract, so "" ends the session on either reading.
-fn mcp_loop(ranges, at_read) = {
+fn mcp_loop(ast, ranges, at_read) = {
   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), the battery_loop shape
   let mark = heap_mark()
   // drift-audit: ignore — sequenced effectful stream-read (the read_* exclusion): the line is tested for EOF then handled
@@ -347,11 +380,11 @@ fn mcp_loop(ranges, at_read) = {
   if byte_len(line) == 0 {
     ()
   } else {
-    match mcp_handle(strip_cr(line), ranges, at_read) {
+    match mcp_handle(strip_cr(line), ast, ranges, at_read) {
       (out, resettable) => {
         if byte_len(out) > 0 { print_string(out) }
         if resettable == 1 { heap_reset(mark) } else { () }
-        mcp_loop(ranges, at_read)
+        mcp_loop(ast, ranges, at_read)
       },
     }
   }
@@ -375,14 +408,17 @@ fn mcp_run(at_read) = {
   if fs_exists(driver_module_path("main")) {
     infer_context(() => {
       match driver_entry_with_ranges("main") {
-        (_ast, ranges) => {
+        (ast, ranges) => {
           eprint_string("session: graph resident — {int_to_str(len(ranges))} modules; queries answer live\n")
-          mcp_loop(ranges, at_read)
+          // The entry's own top-level nodes, cut once at session start —
+          // audit/teach project exactly these (the CLI's entry-parsed
+          // scope), never the whole weave's prelude/lib fns.
+          mcp_loop(driver_module_ast(ast, ranges, "main"), ranges, at_read)
         },
       }
     } ~> wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
   } else {
-    mcp_loop([], at_read)
+    mcp_loop([], [], at_read)
   }
   0
 }

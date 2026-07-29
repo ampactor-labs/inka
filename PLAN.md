@@ -1092,6 +1092,34 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶ AUDIT AND TEACH JOIN THE SESSION — the analysis verbs
+  become resident reads, and the verb pair collapses to one composed
+  projection (the resident-session arc's third rung · pin 1c2e53fa).
+  analyze_fns's (project, render) pair FUSED into one
+  `projection(ast) -> String` per verb — audit_project / teach_project,
+  the pure homes the CLI verb and the session tool BOTH call (the
+  address_project law at the analysis verbs; transport stays the
+  caller's: analyze_fns prints, the session returns the text as the
+  tool result — no Console sweep needed here because the projections
+  were already value-shaped, one transport site each). THE SCOPING READ:
+  the session holds the full weave ast while the CLI's audit parses the
+  entry alone — driver_module_ast cuts the entry's top-level nodes by
+  its weave range at session start (homed beside range_of_module; the
+  NModule mint computes this same filter and holds it as decls but
+  discards the minted handle — the handle-kept read is the named O(1)
+  form), so the session's audit/teach answer exactly the CLI's scope,
+  never the prelude/lib flood. The gate's tripwire asserts the ABSENCE
+  of a prelude fn in the audit face (the retraction law: assert
+  absence, not only presence). Measured: the session's audit answers
+  the CLI's byte-same four lines; teach speaks each fn's next
+  annotation ("add with !Alloc to unlock Real-time safe"); query still
+  answers afterward in one conversation. The session surface is
+  propose + query + at + audit + teach — five tools, one derivation.
+  CLEAN m2 == m3; frontier 304/0; census 0 on first compile (every row
+  inferred — the projection pair's rows flow through HM, zero widens).
+  Remaining rungs: the oracle-as-search (the fan from ?? candidates to
+  hypotheses over the resident frontier) · work-stealing-via-gradient
+  as the session's scheduler.
 - 2026-07-29 · ▶▶ THE ADDRESS JOINS THE SESSION — the eight-aspect
   projection becomes a resident read, and the voice's transport becomes
   an install (the resident-session arc's second rung · pin 4d1bf583).

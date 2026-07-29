@@ -172,8 +172,9 @@ fn driver_collect_visit_list(ref modules, own collected, own visited) with Memor
 // chased caret had hidden the class by accident, and the accident is
 // now this contract). The import names flow out as ordinary heap
 // strings; only graph cells die with the instance.
-fn driver_extract_imports(ref source) with Memory + Alloc + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI =
-  { source |> lex |> parse_program |> driver_extract_imports_from_ast } ~> graph_handler([], 0, 0, 0, [], 0, 0)
+fn driver_extract_imports(ref source) with Memory + Alloc + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI = {
+  source |> lex |> parse_program |> driver_extract_imports_from_ast
+} ~> graph_handler([], 0, 0, 0, [], 0, 0)
 
 fn driver_extract_imports_from_ast(ast) = flatten(map(
   (node) => match node {
@@ -710,9 +711,19 @@ fn driver_check_entry(ref entry_module) with Memory + Alloc + Filesystem + EnvRe
     (m, _) => m != entry_module,
   }) |> driver_partition_layers |> each((layer) => each(driver_check_module, layer))
   // Parse + infer the entry ONCE; its AST is what compile lowers live.
-  let ast = parse_program(lex(fs_read_file(driver_module_path(entry_module))))
-  infer_program(ast)
-  ast
+  // An unreadable entry REPORTS, never parses emptiness — the silent
+  // form answered zero fns at exit 0 on every analysis verb whenever
+  // the path had no mount route (measured: `mentl audit <abs-path>`
+  // from outside the repo printed nothing and exited clean).
+  let path = driver_module_path(entry_module)
+  if fs_exists(path) {
+    let ast = parse_program(lex(fs_read_file(path)))
+    infer_program(ast)
+    ast
+  } else {
+    report(EMissingModule(entry_module, path, span_zero()))
+    []
+  }
 }
 
 // Walk the post-order DAG and pair each module with its in-DAG deps.
@@ -737,7 +748,8 @@ fn driver_module_in_dag_deps(ref module_name, ref dag_modules) with Memory + All
   }
 }
 
-fn contains_module(ref modules: [String], ref target: String) with Memory + Alloc = any((m) => m == target, modules)
+fn contains_module(ref modules: [String], ref target: String) with Memory + Alloc =
+  any((m) => m == target, modules)
 
 // Partition modules-with-deps into topological layers. Each pass
 // peels off the "ready set" — modules whose deps are all processed.

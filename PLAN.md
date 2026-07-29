@@ -1093,8 +1093,11 @@ between the wheel and its ultimate form, held open on purpose.
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
 - 2026-07-29 · ▶▶ THE VERB-SHAPE TIER — audit names the |> the bindings
-  draw, and the dig closes a latent double-visit class (no re-pin —
-  CLEAN m2 == m3, projection layer only). SYNTAX ⌖'s own law (|> is
+  draw, and the dig closes a latent double-visit class (CLEAN
+  m2 == m3 · pin 0513aca1 — the pin also carries driver_check_entry's
+  loud entry refusal and puts the whole arc on the daily CLI, whose
+  shim now derives a mount from the path argument so every verb
+  reaches paths outside the standing mounts). SYNTAX ⌖'s own law (|> is
   NEVER optional on a chain) becomes a read the medium makes about ANY
   source: pipe_shape_of (oracle.mn) walks a fn body's statement spine,
   and a let-bound name consumed EXACTLY ONCE by exactly the FOLLOWING

@@ -26,9 +26,30 @@ cat > "$BIN_DIR/mentl" <<SHIM
 # this command with zero action — the shim never copies.
 MENTL_HOME="$MENTL_HOME"
 source "\$MENTL_HOME/tools/wt-env.sh"
+# A path argument OUTSIDE the standing mounts (cwd, /tmp, the repo at
+# /mentl-home) has no guest route — the read fails and, before the
+# driver's refusal landed, every verb answered EMPTY at exit 0. The shim
+# owns the mount seam, so it derives one more preopen from the first
+# path-shaped argument (address forms path:L and path:L:C included).
+mentl_arg_dir() {
+  local p="\$1"
+  [ -e "\$p" ] || p="\${p%:*}"
+  [ -e "\$p" ] || p="\${p%:*}"
+  [ -e "\$p" ] || return 1
+  ( cd "\$(dirname "\$p")" 2>/dev/null && pwd )
+}
 mentl_wasm() {
+  local extra=()
+  local a d
+  for a in "\$@"; do
+    case "\$a" in */*) ;; *) continue ;; esac
+    if d="\$(mentl_arg_dir "\$a")"; then
+      [ "\$d" != "\$PWD" ] && [ "\$d" != "/tmp" ] && extra=(--dir "\$d")
+      break
+    fi
+  done
   "\$WT" run "\${WT_RUN_FLAGS[@]}" \\
-    --dir "\$PWD" --dir /tmp --dir "\$MENTL_HOME::/mentl-home" \\
+    --dir "\$PWD" --dir /tmp --dir "\$MENTL_HOME::/mentl-home" "\${extra[@]}" \\
     "\$MENTL_HOME/boot/mentl.wasm" "\$@"
 }
 if [ "\${1:-}" = "run" ] && [ -n "\${2:-}" ]; then

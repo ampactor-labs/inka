@@ -5870,9 +5870,18 @@ tick() perform checked CLEAN), so the negation's instance boundary
 today is positive-name-admit with the precise semantics unbuilt — the
 landing defines it (a severed instance admits its siblings, the bare
 name severs all) with mn-effarg-node.mn the existing fixture to build
-from; (c) Dynamic Wind for Effect Handlers (OOPSLA 2025) is the formal
-treatment to read the world save/restore brackets against before the
-TCont value gate.
+from; (c) Dynamic Wind for Effect Handlers (OOPSLA 2025 — Voigt,
+Schuster, Brachthäuser) READ: the wind's pre/postlude carries
+well-defined semantics under arbitrary control effects — brackets fire
+correctly when a continuation resumes many times or is abandoned,
+expressing "backtracking of external state and finalization of
+external resources." That is the resume barrier's design vocabulary
+exactly: the world save/restore around installs, the fork triple's
+world_restore, and the multi-shot re-execution driver each hold an
+ad-hoc corner of one invariant (an enter/exit pair per crossing,
+replay included; the Abandon discipline's finalization is its
+abandonment face) — the barrier landing states it once and reads it
+at the persist/resume seam.
 **Arc 4 · THE FELT FLAGSHIP** — and its RANKER increment is
 pull-forward eligible: the gradient reading LOCAL intent (Reason
 chains carrying upstream why + proximity + the in-scope vocabulary,

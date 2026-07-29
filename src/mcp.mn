@@ -24,6 +24,10 @@
 // judge reads the proposal alone (the stdin contract), no lib weave.
 import types
 
+import driver
+
+import query
+
 import pipeline
 
 import lower
@@ -163,13 +167,22 @@ fn mcp_tools_result() = JObj([("tools", JArr([JObj([("name", JStr("propose")), (
   ("type", JStr("string")),
   // drift-audit: ignore — prose inside a JSON string literal (the audit's string-literal blindness)
   ("description", JStr("Complete Mentl source for one self-contained module. Declare your own effects; fn main() makes it an executable."))
-]))])), ("required", JArr([JStr("source")]))]))])]))])
+]))])), ("required", JArr([JStr("source")]))]))]), JObj([("name", JStr("query")), ("description", JStr("Ask the RESIDENT project graph a question — the session derived the project once at startup and every answer is a live read (schemes with effect rows, Why chains, references). Question forms: 'type NAME', 'why NAME', 'refs of NAME'.")), ("inputSchema", JObj([("type", JStr("object")), ("properties", JObj([("question", JObj([
+  ("type", JStr("string")),
+  // drift-audit: ignore — prose inside a JSON string literal (the audit's string-literal blindness)
+  ("description", JStr("The question, e.g. 'type main' or 'why double'."))
+]))])), ("required", JArr([JStr("question")]))]))])]))])
 
-// tools/call — the propose tool is the whole surface. A verdict is a
-// SUCCESSFUL tool result whether the gate proved or refused (isError is
-// reserved for a malformed call); the head line + the diagnostic lines
-// are the content.
-fn mcp_tool_call(id, params) = {
+// tools/call — the gate's propose plus the resident session's reads. A
+// verdict is a SUCCESSFUL tool result whether the gate proved or refused
+// (isError is reserved for a malformed call); the head line + the
+// diagnostic lines are the content. Returns (response, resettable):
+// a session READ answers from the living graph and must NOT reset the
+// request region — its small mints (a question's parse nodes) are
+// durable session growth, and a reset would orphan spine pages the
+// session's later reads still chase (the fork-spine class at the serve
+// loop). Everything else resets as before.
+fn mcp_tool_call(id, params, has_session) = {
   let name = match json_obj_get(params, "name") {
     Some(JStr(s)) => s,
     _ => // drift-audit: ignore — the protocol-null sentinel: no real tool name is empty, and the match below refuses "" with -32602
@@ -185,19 +198,46 @@ fn mcp_tool_call(id, params) = {
         Some(JStr(source)) => match mcp_judge(source, ".build/mcp/last.wat") {
           (lines, nerr, nref, emitted) => {
             let text = mcp_verdict_text(lines, nerr, nref, emitted, ".build/mcp/last.wat")
-            mcp_response(
+            (mcp_response(
               id,
               JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr(text))])])), ("isError", JBool(false))])
-            )
+            ), 1)
           },
         },
-        _ => mcp_response(
+        _ => (mcp_response(
           id,
           JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("propose needs arguments.source — a string of Mentl source\n"))])])), ("isError", JBool(true))])
-        ),
+        ), 1),
       }
     },
-    _ => mcp_error(id, -32602, "unknown tool: {name} — the gate serves one tool: propose"),
+    "query" => if has_session == 0 {
+      (mcp_response(
+        id,
+        JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("no project graph resident — the server started outside a project (no resolvable main); query reads the living session\n"))])])), ("isError", JBool(true))])
+      ), 1)
+    } else {
+      let qo = match json_obj_get(params, "arguments") {
+        Some(args) => json_obj_get(args, "question"),
+        None => None,
+      }
+      match qo {
+        Some(JStr(question)) => {
+          // The read of the LIVE graph — the session's instances answer;
+          // no derivation, no restore, no swap (the resident form the
+          // swap-crossing refutation named).
+          let text = ask(parse_query_string(question)) |> render_query_result
+          ((mcp_response(
+            id,
+            JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("{text}\n"))])])), ("isError", JBool(false))])
+          )), 0)
+        },
+        _ => (mcp_response(
+          id,
+          JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("query needs arguments.question — e.g. 'type main'\n"))])])), ("isError", JBool(true))])
+        ), 1),
+      }
+    },
+    _ => (mcp_error(id, -32602, "unknown tool: {name} — the server serves propose and query"), 1),
   }
 }
 
@@ -206,31 +246,31 @@ fn mcp_params_of(req) = match json_obj_get(req, "params") {
   None => JObj([]),
 }
 
-fn mcp_request(id, method, params) = match method {
-  "initialize" => mcp_response(id, mcp_initialize_result(params)),
-  "tools/list" => mcp_response(id, mcp_tools_result()),
-  "tools/call" => mcp_tool_call(id, params),
-  "ping" => mcp_response(id, JObj([])),
-  _ => mcp_error(id, -32601, "method not found: {method}"),
+fn mcp_request(id, method, params, has_session) = match method {
+  "initialize" => (mcp_response(id, mcp_initialize_result(params)), 1),
+  "tools/list" => (mcp_response(id, mcp_tools_result()), 1),
+  "tools/call" => mcp_tool_call(id, params, has_session),
+  "ping" => (mcp_response(id, JObj([])), 1),
+  _ => (mcp_error(id, -32601, "method not found: {method}"), 1),
 }
 
 // A message without an id is a notification (initialized, cancelled, …):
 // consumed, never answered — the empty response line is the no-response.
-fn mcp_dispatch(req) = {
+fn mcp_dispatch(req, has_session) = {
   let method = match json_obj_get(req, "method") {
     Some(JStr(s)) => s,
     _ => // drift-audit: ignore — the protocol-null sentinel: no real method is empty, and mcp_request refuses "" with -32601
     "",
   }
   match json_obj_get(req, "id") {
-    None => "",
-    Some(id) => mcp_request(id, method, mcp_params_of(req)),
+    None => ("", 1),
+    Some(id) => mcp_request(id, method, mcp_params_of(req), has_session),
   }
 }
 
-fn mcp_handle(line) = match json_parse(line) {
-  JOk(req, _) => mcp_dispatch(req),
-  JErr(m, pos) => mcp_error(JNull, -32700, "parse error at byte {int_to_str(pos)}: {m}"),
+fn mcp_handle(line, has_session) = match json_parse(line) {
+  JOk(req, _) => mcp_dispatch(req, has_session),
+  JErr(m, pos) => (mcp_error(JNull, -32700, "parse error at byte {int_to_str(pos)}: {m}"), 1),
 }
 
 // A client that frames with \r\n leaves the \r on the line after the
@@ -240,16 +280,17 @@ fn strip_cr(line) = {
   if n > 0 && byte_at(line, n - 1) == 13 { str_slice(line, 0, n - 1) } else { line }
 }
 
-// The serve loop — a RAW recursion with zero cross-iteration state (the
-// battery_loop law: a handler fold cannot host the region; word params
-// only, and this loop carries none). Each message is a REGION: mark
-// before the read, print the response, reset, recur — the server's heap
-// stays flat for its whole life, every request's compile included. The
-// response prints BEFORE the reset (bytes leave the process; the strings
-// die with the region). read_stdin_line answers "" at EOF; a blank line
-// is outside the newline-delimited-JSON contract, so "" ends the session
-// on either reading.
-fn mcp_loop() = {
+// The serve loop — a RAW recursion whose one cross-iteration param is a
+// WORD (has_session — the battery_loop law holds). Each message is a
+// REGION: mark before the read, print the response, reset, recur — the
+// server's heap stays flat, every propose's full compile included. The
+// EXCEPTION is a session READ (resettable = 0): its answer came from
+// the living graph and its small mints (the question's parse nodes) are
+// durable session growth — a reset would orphan spine pages later reads
+// still chase. The response prints BEFORE any reset. read_stdin_line
+// answers "" at EOF; a blank line is outside the newline-delimited-JSON
+// contract, so "" ends the session on either reading.
+fn mcp_loop(has_session) = {
   // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), the battery_loop shape
   let mark = heap_mark()
   // drift-audit: ignore — sequenced effectful stream-read (the read_* exclusion): the line is tested for EOF then handled
@@ -257,17 +298,42 @@ fn mcp_loop() = {
   if byte_len(line) == 0 {
     ()
   } else {
-    let out = mcp_handle(strip_cr(line))
-    if byte_len(out) > 0 { print_string(out) }
-    heap_reset(mark)
-    mcp_loop()
+    match mcp_handle(strip_cr(line), has_session) {
+      (out, resettable) => {
+        if byte_len(out) > 0 { print_string(out) }
+        if resettable == 1 { heap_reset(mark) } else { () }
+        mcp_loop(has_session)
+      },
+    }
   }
 }
 
+// The RESIDENT SESSION (Hβ.session.resident-verbs, first rung): the
+// server derives the project graph ONCE, in its OWN memory, before the
+// loop — the analysis instances live for the server's whole life and
+// every query answers as a read. All three measured constraints hold by
+// construction: no swap exists, per-request strings live in the same
+// process, the image IS the session's memory. A propose still judges in
+// its OWN nested infer_context — fresh innermost instances shadow the
+// session's (the world law), and its mints die with the request region
+// while the session's spine lives below every mark. The derivation is
+// resolution-conditional (the prelude-seed precedent): outside a
+// project, the gate serves propose alone and query answers honestly.
 fn mcp_run() = {
   fs_mkdir_impl(".build")
   fs_mkdir_impl(".build/mcp")
   eprint_string("mentl mcp: the gate on stdio — nothing executes unproven\n")
-  mcp_loop()
+  if fs_exists(driver_module_path("main")) {
+    infer_context(() => {
+      match driver_entry_with_ranges("main") {
+        (_ast, ranges) => {
+          eprint_string("session: graph resident — {int_to_str(len(ranges))} modules; queries answer live\n")
+          mcp_loop(1)
+        },
+      }
+    } ~> wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
+  } else {
+    mcp_loop(0)
+  }
   0
 }

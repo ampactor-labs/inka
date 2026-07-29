@@ -1092,6 +1092,38 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶▶ THE SESSION GOES RESIDENT — the mcp serve loop holds
+  the living graph and queries answer as reads (the resident-session
+  arc's first rung · pin 65934277). The refutation's constraints
+  cashed straight into the correct form: mcp_run derives the project
+  ONCE (resolution-conditional, the prelude-seed precedent) inside one
+  analysis bracket that ENCLOSES THE WHOLE SERVE LOOP — the session's
+  instances live for the server's life, no swap exists anywhere, the
+  image IS the session's memory (all three Hβ.session.resident-verbs
+  constraints hold by construction, not by discipline). THE NESTING IS
+  THE ISOLATION: a propose's own infer_context installs fresh
+  innermost instances that shadow the session's (the world law), and
+  its millions of judgment mints land in spine pages allocated inside
+  the request REGION — the reset kills them with the instance while
+  the session's spine lives below every mark. A session READ inverts
+  the region law deliberately (the resettable bit threads the
+  dispatch): its answer printed, its small mints (a question's parse
+  nodes) kept as durable session growth — a reset would orphan spine
+  pages later reads still chase (the fork-spine class held off at the
+  serve loop). The `query` tool joins `propose`: ask(parse_query_
+  string(q)) against the LIVE env/graph, schemes with Reasons as the
+  teaching payload. MEASURED: five messages — initialize, tools/list,
+  two queries, a propose — in 0.7s wall, the resident line printing
+  ONCE, both schemes answered live, PROVEN after the reads; the prior
+  cost was 3.8s for a SINGLE cold query. The frontier leg drives the
+  whole conversation and asserts each face (RED on the pre-session
+  boot: tools/list served propose alone). Named residue: query
+  Reasons render weave spans on this channel (the file-local-span
+  class's session face) · the at/audit/why tools (the session's next
+  reads) · the oracle-as-search over the resident frontier (the fan
+  generalizing from ?? candidates to hypotheses) · work-stealing-via-
+  gradient as the session's scheduler. CLEAN m2 == m3; frontier 304/0;
+  proof-exactness 9/9; crown 5/5; census 0.
 - 2026-07-29 · ▶▶ THE SWAP-CROSSING LAW CONVICTS THE WARM VERBS — a
   measured refutation banked whole, and the fmt string-atomicity
   defect caught by its one witness (· pin 6eb1b61c). Morgan's charge

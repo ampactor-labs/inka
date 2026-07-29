@@ -1632,6 +1632,29 @@ for i in "${!compilers[@]}"; do
   else
     fail "mcp error contract (see $mcp_dir/out.jsonl)"
   fi
+  # ── the RESIDENT SESSION (Hβ.session.resident-verbs, first rung) ───
+  # A project dir: the server derives the graph ONCE at startup (the
+  # resident line prints exactly once) and both queries answer as LIVE
+  # reads — schemes with Reasons, no re-derivation; a propose after the
+  # session reads still PROVES in its own nested instances. Seen RED on
+  # the pre-session boot: tools/list served propose alone and query was
+  # -32602. All three swap-crossing constraints hold by construction
+  # (no swap exists — the image IS the session's memory).
+  ses_dir="$dir/mcp-resident"
+  mkdir -p "$ses_dir"
+  printf 'fn double(x) = x * 2\n\nfn main() = double(21)\n' > "$ses_dir/main.mn"
+  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ses_dir::." "$compiler" mcp \
+    < "$ROOT/tests/frontier/mcp-resident-session.jsonl" >"$ses_dir/out.jsonl" 2>"$ses_dir/err.log"
+  if [ "$(grep -c 'session: graph resident' "$ses_dir/err.log")" = "1" ] \
+     && grep -q '"tools":\[{"name":"propose"' "$ses_dir/out.jsonl" \
+     && grep -q '"name":"query"' "$ses_dir/out.jsonl" \
+     && grep -q 'x: Int own' "$ses_dir/out.jsonl" \
+     && grep -q 'declared as main' "$ses_dir/out.jsonl" \
+     && grep -q 'PROVEN — every claim discharged' "$ses_dir/out.jsonl"; then
+    pass "resident session: one derivation, live query reads, propose coexists"
+  else
+    fail "resident session (resident-lines=$(grep -c 'session: graph resident' "$ses_dir/err.log"); see $ses_dir/out.jsonl)"
+  fi
   # ── the intent ranker — survivors ordered by local intent ──────────
   # candidate_rank reads the graph (decl nearness + use-edge nearness
   # against the hole's span, now carried on Context): a name already

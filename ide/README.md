@@ -1,25 +1,31 @@
 # mentl edit — the web IDE (band M's first artifact)
 
 The page runs THE FIXPOINT COMPILER ITSELF in your browser: mentl-ide.wasm
-is a pinned wheel with one derived change — the initial memory shrunk from
-4GB to 512MB (IDE programs are small; the 4GB line exists for wheel-scale
-self-compiles). Derivation, reproducible from a boot of its era:
+is the LIVE SPAWNING BOOT (shared-image import + `wasi.thread-spawn`; the
+converged judgment spawns a host thread per stmt) with one derived change —
+the memory import's declared minimum shrunk from 4GB to 512MB (the page
+provides 1GB; the 4GB line exists for wheel-scale self-compiles).
+Derivation, reproducible from the committed boot:
 
     wasm2wat --enable-threads --enable-tail-call boot/mentl.wasm -o mentl-ide.wat
-    sed -i 's/(memory (;0;) 65536 65536 shared)/(memory (;0;) 8192 65536 shared)/' mentl-ide.wat
+    sed -i 's/(import "env" "memory" (memory (;0;) 65536 65536 shared))/(import "env" "memory" (memory (;0;) 8192 65536 shared))/' mentl-ide.wat
     wat2wasm --debug-names --enable-threads --enable-tail-call mentl-ide.wat -o ide/mentl-ide.wasm
 
-THE PIN IS DELIBERATELY PRE-SPAWN. The live boot became a SPAWNING module
-(the real-spawn landing: it imports shared `env.memory` and
-`wasi.thread-spawn`, and the converged judgment spawns a host thread per
-stmt), so a stub shim cannot run it — a refused spawn is a loud trap by
-design. Refreshing this wasm to the live pin gates on the browser
-Worker-spawn shim (the runner pattern at the browser host —
-`Hβ.ops.wasmtime-runner-migration`'s named residue). Until then the page
-runs the last self-contained-memory wheel, and the shim twin's
-CursorView leg reads RED when the repo's live lib sources drift past
-what this era's wheel judges — the skew is the honest signal, never
-papered over.
+THE EXECUTION HOST IS ide/wheel-worker.js — the runner pattern at the
+browser host (`Hβ.ops.wasmtime-runner-migration`'s browser leg, landed
+2026-07-29). The page never instantiates the module: the join's
+memory.atomic.wait32 is forbidden on the browser main thread, so every
+run posts to a worker, and `thread-spawn` dispatches to a pool of workers
+spawned and ARMED (module + shared memory + vfs) before `_start` can
+block. Dispatch rides a SharedArrayBuffer ring + Atomics.notify, never
+postMessage — Chrome flushes a worker's outgoing messages only when the
+sender yields, and thread-spawn fires mid-wasm with the root then
+blocking in the join (measured: 16 spawns posted, zero delivered, pool
+provably loaded). Completion rides the wheel's own task-record protocol
+in wasm memory; the workers' messages carry stdio only, so a degraded
+message channel can never fabricate a result. Node drives the same
+worker file (it has neither hazard — the same blob ran there first),
+which is what makes the headless gate a true twin of the page.
 
 Run it:
 
@@ -106,6 +112,13 @@ The serving loop is an evidence-threading tail call — constant stack for
 the server's whole life, the first-light era's own tail form carrying its
 own IDE.
 
-The shim's Node twin (`node ide/test-shim.mjs`) is the harness — the same
-import surface the page provides, runnable headlessly. If the page ever
-misbehaves, the twin discriminates shim-vs-DOM in one command.
+The gate is `bash tools/ide-gate.sh`: the node twin (`node
+ide/test-shim.mjs`) drives ide/wheel-worker.js — the SAME execution host
+the page uses — through four faces (the stub-spawn RED control, which
+must REFUSE the spawning boot; compile-stdin through real spawned tasks;
+the address CursorView; the ?? Propose socket), then headless chrome
+loads the served page with `?smoke` and the page's own console wire
+reports the compile verdict. If the page ever misbehaves, the twin
+discriminates shim-vs-DOM in one command; `?smoke&dbg` opens the
+worker's debug channel (the probe that found the postMessage-flush
+hazard, kept as an instrument).

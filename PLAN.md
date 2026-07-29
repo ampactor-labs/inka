@@ -1092,6 +1092,50 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶▶ THE BROWSER RUNS THE SPAWNING BOOT — the Worker-spawn
+  shim lands, and the page compiles through 252 real threads in 932ms
+  (the runner pattern at the browser host — the browser leg of
+  Hβ.ops.wasmtime-runner-migration · no re-pin, ide/ + tools only, the
+  wheel untouched). Morgan's charge ("look at the thing that's blocking
+  you and design it better") executed on the README paragraph that had
+  dressed the blocker as a boundary: ide/mentl-ide.wasm re-derives from
+  the LIVE boot (the memory import's declared min sedded 65536 → 8192;
+  the host provides 16384), and ide/wheel-worker.js is the ONE execution
+  host — the page and the node twin drive the same file, so the gate and
+  the DOM cannot drift. TWO HOST FACTS forced the shape, each measured
+  against node (which has neither; the identical blob ran there first,
+  3.5s/252 tasks against a 90s browser hang): (1) all wheel execution
+  lives in workers — the join's memory.atomic.wait32 is forbidden on the
+  browser main thread, so the page never instantiates the module; (2)
+  the dispatch channel is SHARED MEMORY, never postMessage — Chrome
+  flushes a worker's outgoing messages only when the sender yields, and
+  thread-spawn fires mid-wasm with the root then blocking in the join
+  without ever yielding (probed through the worker's own debug channel:
+  16 spawns logged, zero task starts, pool provably loaded). The landed
+  form is the emscripten-pthread convergence: a pool of workers spawned
+  and ARMED (module + shared memory + vfs) before _start can block,
+  consuming (tid, arg) pairs from a SharedArrayBuffer ring via
+  Atomics.waitAsync — the producer's qPush is stores + notify, no event
+  loop anywhere on the path, and a nested fan qPushes into the same ring
+  by construction. Each task instantiates FRESH over the run's memory
+  (instance-per-thread, wasmtime's own convention; the constant-segment
+  rewrite over the live image is the same idempotent re-init wasmtime
+  performs per spawned thread). Completion rides the wheel's OWN
+  task-record protocol in wasm memory — the workers' messages carry
+  stdio only, so a degraded message channel can never fabricate a
+  result. GATES (tools/ide-gate.sh, both legs): the node twin's four
+  faces — the stub-spawn RED control (the pre-worker shim traps
+  `unreachable` against this wasm: the measured reason the page had
+  pinned an old wheel), compile-stdin through real tasks, the address
+  CursorView (the version-skew RED healed — live wheel, live libs), the
+  ?? Propose socket — and the browser leg (mentl space + headless
+  chrome reading the page's ?smoke console wire): exit=0 tasks=252
+  watlines=4403 ms=932, wat line-count identical to node. The pool cut
+  node's blob compile 3.5s → 0.97s (252 worker boots → 12). Named
+  residue: the pool BOUNDS a nested fan where wasmtime's OS threads are
+  unbounded — a deeper-than-pool nested join would starve loudly under
+  the run timeout, unreached by the judgment's stmt-ordered joins
+  (stated at the arm role).
 - 2026-07-29 · ▶▶▶ THE PROBLEM IS THE SOLUTION — every absence becomes
   a ranked frontier position (the resident-session arc's sixth rung ·
   pin 8981b63c). Morgan's principle executed at the field: absence is
@@ -5818,11 +5862,12 @@ float-carrier / identity) run 60 through BOTH engines. REMAINING
 scope, host-path only: (5) swap wt-env.sh/install.sh (+ hosted CI when
 it returns, §11 col 5) to the runner, drop `-S threads=y`; (6) retire
 the LTS pin. shared-everything-threads is the named eventual target,
-unimplemented in any host — name it, do not build toward it. One
-artifact-prose note survives the recon: ide/index.html's thread-spawn
-stub always returns -1 with no join fallback path (latent, nothing
-calls it — the browser-Worker spawn is the runner pattern at the other
-host).
+unimplemented in any host — name it, do not build toward it. The
+BROWSER LEG LANDED 2026-07-29 (the §7 ledger head carries the arc):
+ide/wheel-worker.js is the runner pattern at the browser host — a
+pre-armed worker pool consuming a SharedArrayBuffer task ring, the
+stub-spawn shim retired to the gate's RED control
+(tools/ide-gate.sh).
 
 `Hβ.query.comment-prose-search` (2026-07-24, the ⟳ self-build law's
 first named confession): the vocabulary sweep ran on grep while

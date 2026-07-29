@@ -1,14 +1,25 @@
 # mentl edit — the web IDE (band M's first artifact)
 
 The page runs THE FIXPOINT COMPILER ITSELF in your browser: mentl-ide.wasm
-is the pinned wheel (boot/mentl.wasm, boot/PROVENANCE.md) with one derived
-change — the initial memory shrunk from 4GB to 512MB (IDE programs are small;
-the 4GB line exists for wheel-scale self-compiles). Derivation, reproducible
-from the committed boot:
+is a pinned wheel with one derived change — the initial memory shrunk from
+4GB to 512MB (IDE programs are small; the 4GB line exists for wheel-scale
+self-compiles). Derivation, reproducible from a boot of its era:
 
     wasm2wat --enable-threads --enable-tail-call boot/mentl.wasm -o mentl-ide.wat
     sed -i 's/(memory (;0;) 65536 65536 shared)/(memory (;0;) 8192 65536 shared)/' mentl-ide.wat
     wat2wasm --debug-names --enable-threads --enable-tail-call mentl-ide.wat -o ide/mentl-ide.wasm
+
+THE PIN IS DELIBERATELY PRE-SPAWN. The live boot became a SPAWNING module
+(the real-spawn landing: it imports shared `env.memory` and
+`wasi.thread-spawn`, and the converged judgment spawns a host thread per
+stmt), so a stub shim cannot run it — a refused spawn is a loud trap by
+design. Refreshing this wasm to the live pin gates on the browser
+Worker-spawn shim (the runner pattern at the browser host —
+`Hβ.ops.wasmtime-runner-migration`'s named residue). Until then the page
+runs the last self-contained-memory wheel, and the shim twin's
+CursorView leg reads RED when the repo's live lib sources drift past
+what this era's wheel judges — the skew is the honest signal, never
+papered over.
 
 Run it:
 
@@ -52,9 +63,18 @@ modes, not features. Five surfaces:
   verbatim), or `socket` (a named-future gate — never a value it can't earn).
   The badge is `real` ONLY for a fact the compiler graph actually returned.
 - **The Lens** — the real `stderr` diagnostics, gradient-ranked to one teaching
-  step in Mentl's voice, click-to-jump, with a genuine text-fix for the two
-  canonicalizations the parser actually reports (`E_RedundantBraces`,
-  `E_RedundantPerform`).
+  step in Mentl's voice, click-to-jump, with genuine text-fixes for the
+  canonicalizations the parser reports (`E_RedundantBraces`,
+  `E_RedundantPerform`) and for `T_OverDeclared` (the tightening — the
+  message carries the proven row, the same patch `mentl tighten` authors).
+- **The Proposal strip** — the cursor line's standing MachineApplicable
+  patch as a ghost preview under the editor (was → now), accepted with
+  Tab (no proposal: Tab indents — the copilot convention). An
+  over-declared row proposes its tightening; a `??` whose Propose facet
+  returned ONE proven survivor proposes the fill (a tie never proposes —
+  the medium teaches the missing constraint instead of guessing). One
+  pure rewrite (`patchLine`) serves the click affordance, the preview,
+  and the accept.
 - **The Ledger** — the effect rows from the `with` clauses, and the proof
   surface: what a `!E` region is proven *incapable* of. Declared today; the
   transitive hop-by-hop proof is honestly gated on band A.

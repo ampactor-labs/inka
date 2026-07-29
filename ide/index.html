@@ -191,6 +191,18 @@
     border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px; }
   .diag .appl.fix { color: var(--green-b); border-color: var(--green); cursor: pointer; }
   .diag .appl.fix:hover { background: rgba(0,158,115,.12); }
+  /* the proposal strip — the cursor line's MachineApplicable patch as a
+     ghost preview; Tab accepts (else Tab indents, the copilot convention) */
+  .proposal { border-top: 1px solid var(--line); padding: 7px 15px; font-size: 12px;
+    font-family: var(--mono); display: flex; gap: 12px; align-items: baseline;
+    background: rgba(0,158,115,.05); }
+  .proposal .tag { font-family: var(--sans); font-size: 10px; color: var(--green-b);
+    border: 1px solid var(--green); border-radius: 3px; padding: 1px 6px; flex: none; }
+  .proposal .was { color: var(--ghost); text-decoration: line-through; }
+  .proposal .now { color: var(--green-b); }
+  .proposal .key { font-family: var(--sans); font-size: 10px; color: var(--whisper);
+    margin-left: auto; flex: none; }
+  .proposal .key b { border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
   .diag .msg { color: var(--muted); margin-top: 4px; font-size: 12px; line-height: 1.5; }
   .empty { padding: 52px 22px; text-align: center; color: var(--faint); }
   .empty .big { font-size: 34px; margin-bottom: 14px; filter: drop-shadow(0 0 12px rgba(0,158,115,.4)); }
@@ -280,6 +292,7 @@
       <pre id="hl" aria-hidden="true"></pre>
       <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
     </div>
+    <div id="proposal" class="proposal" hidden></div>
   </div>
   <div class="rail">
     <div class="aspect">
@@ -884,9 +897,12 @@ const APPL = {
   E_PatternInexhaustive:"HasPlaceholders", E_MissingVariable:"MaybeIncorrect",
   E_EffectMismatch:"MaybeIncorrect", E_ImportNameCollision:"MaybeIncorrect",
 };
-// Only these two arrive on today's wire AND rewrite soundly client-side. The
-// parser never emits E_StatementSemicolon (a phantom — cut the strip affordance).
-const FIXABLE = new Set(["E_RedundantBraces", "E_RedundantPerform"]);
+// The codes that arrive on today's wire AND rewrite soundly client-side.
+// T_OverDeclared's message carries the whole patch (the declared row, the
+// proven row) — the same fact `mentl tighten` authors; here it is the
+// cursor line's Tab-accept proposal. The parser never emits
+// E_StatementSemicolon (a phantom — cut the strip affordance).
+const FIXABLE = new Set(["E_RedundantBraces", "E_RedundantPerform", "T_OverDeclared"]);
 // Canonicalizations are NOT Reasons — they never light the Why facet (critic E).
 const FORMAT_LIFTABLE = new Set(["E_RedundantBraces","E_RedundantPerform","E_BlockNeedsBraces","E_StatementSemicolon"]);
 function parseDiags(text, rtLines){
@@ -965,16 +981,77 @@ function leadCopy(d){
   if (c[0]==="W") return `${esc(d.msg)}`;
   return `${esc(d.msg)} — here's where.`;
 }
-/* format-liftable fixes are real client-side text edits (the canon the parser projects) */
+/* format-liftable fixes are real client-side text edits (the canon the parser projects).
+   patchLine is the ONE pure rewrite — the click affordance, the proposal
+   strip's preview, and the Tab accept all read it (three surfaces, one edit). */
+function patchLine(code, L, diag){
+  if (code==="E_RedundantPerform") return L.replace(/\bperform\s+/,"");
+  if (code==="E_RedundantBraces") return L.replace(/^\s*\{\s*/,"").replace(/\s*\}\s*$/,"");
+  if (code==="T_OverDeclared"){
+    // "function 'noisy' declares IO but body only uses Pure — tighten ..."
+    const m = (diag?.msg||"").match(/declares (.+?) but body only uses (.+?)(?:\s+—|$)/);
+    if (!m) return null;
+    const proven = m[2].trim();
+    // Pure is the identity of + (SYNTAX): the honest form DELETES the clause.
+    if (proven === "Pure") return L.replace(/\s+with\s+[^=]+?(?==)/, " ");
+    return L.replace(/(\bwith\s+)[^=]+?(?==)/, `$1${proven} `);
+  }
+  return null;
+}
 function applyFix(code, line){
   const ta = $("src"); let lines = ta.value.split("\n");
   if (line < 1 || line > lines.length) return;
-  let L = lines[line-1];
-  if (code==="E_RedundantPerform") L = L.replace(/\bperform\s+/,"");
-  else if (code==="E_RedundantBraces") L = L.replace(/^\s*\{\s*/,"").replace(/\s*\}\s*$/,"");
-  else return;
-  lines[line-1] = L; ta.value = lines.join("\n");
+  const diag = (RESULT?.diags||[]).find(d => d.code===code && d.line===line);
+  const patched = patchLine(code, lines[line-1], diag);
+  if (patched === null || patched === lines[line-1]) return;
+  lines[line-1] = patched; ta.value = lines.join("\n");
   ta.dispatchEvent(new Event("input")); compile();
+}
+
+/* the proposal for the CURSOR LINE: the top fixable diag's patch, or a ??
+   hole's single proven survivor. Returns null when nothing accepts. */
+function proposalAt(off){
+  const line = CURSOR_LINE;
+  const d = (RESULT?.diags||[]).find(x => x.line === line && FIXABLE.has(x.code));
+  if (d){
+    const src = $("src").value.split("\n")[line-1] || "";
+    const after = patchLine(d.code, src, d);
+    if (after !== null && after !== src)
+      return { kind:"fix", code:d.code, line, was:src.trim(), now:after.trim() };
+  }
+  // the hole: the Propose facet's single survivor IS the appliable source
+  // (render_candidate_source — a tie renders "N proven survivors" and never
+  // accepts: the medium teaches the missing constraint instead of guessing).
+  if (REAL_AT === off && REAL.hand && !/proven survivors/.test(REAL.hand)){
+    const src = $("src").value;
+    // the ?? under or immediately beside the cursor
+    const back = src.lastIndexOf("??", off);
+    const h = (back >= 0 && off - back <= 2) ? back : (src.startsWith("??", off) ? off : -1);
+    if (h >= 0) return { kind:"hole", at:h, line, was:"??", now:REAL.hand.trim() };
+  }
+  return null;
+}
+
+function renderProposal(){
+  const el = $("proposal");
+  const p = PROPOSAL;
+  if (!p){ el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  el.innerHTML = `<span class="tag">${p.kind==="hole"?"fill the hole":"tighten"}</span>` +
+    `<span class="was">${esc(p.was)}</span><span>→</span><span class="now">${esc(p.now)}</span>` +
+    `<span class="key"><b>⇥ Tab</b> accepts</span>`;
+}
+
+function acceptProposal(){
+  const p = PROPOSAL; if (!p) return false;
+  const ta = $("src");
+  if (p.kind === "fix"){ applyFix(p.code, p.line); }
+  else {
+    ta.setRangeText(p.now, p.at, p.at + 2, "end");
+    ta.dispatchEvent(new Event("input")); compile();
+  }
+  PROPOSAL = null; renderProposal();
+  return true;
 }
 
 /* the Ledger — the effect rows + the proof surface (negative space) */
@@ -1058,7 +1135,7 @@ function getOffset(){ return $("src").selectionStart; }
 // the live CursorView, read from the compiler's own graph via the address
 // transport. REAL holds the facet content for REAL_AT (an offset); a facet the
 // projection covers flips its provenance from surface/declared to 'real'.
-let REAL = {}, REAL_AT = -1, realBusy = false, realDeb = null;
+let REAL = {}, REAL_AT = -1, realBusy = false, realDeb = null, PROPOSAL = null;
 function lineColAt(off){
   const before = $("src").value.slice(0, off);
   const nl = before.lastIndexOf("\n");
@@ -1122,6 +1199,8 @@ function projectCursor(){
   renderTopology();
   syncScroll();
   $("facets").querySelectorAll(".facet.door").forEach(el => el.onclick = () => openTab(el.dataset.door));
+  // the cursor line's standing proposal — the felt tab-accept loop
+  PROPOSAL = proposalAt(off); renderProposal();
   // read the live graph for this caret (debounced; a full compile, so not per keystroke)
   if (!haveReal){ clearTimeout(realDeb); realDeb = setTimeout(() => projectReal(off), 260); }
 }
@@ -1152,6 +1231,9 @@ $("src").addEventListener("input", () => {
 $("src").addEventListener("keydown", e => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter"){ e.preventDefault(); compile(); }
   if (e.key === "Tab"){ e.preventDefault();
+    // the copilot convention: a live proposal on the cursor line accepts;
+    // otherwise Tab is indent.
+    if (acceptProposal()) return;
     const ta = e.target, s = ta.selectionStart;
     ta.setRangeText("  ", s, ta.selectionEnd, "end");
     ta.dispatchEvent(new Event("input"));

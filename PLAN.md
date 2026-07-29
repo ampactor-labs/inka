@@ -1092,6 +1092,43 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-28 · ▶▶▶ THE NEGATION HOLDS ITS INSTANCE — Arc 3's first
+  landing: the parameterized decl parses and !E(instance) becomes
+  precise (Hβ.effects.parameterized-negation-instance's core ·
+  pin 9f4ebef2). The felt walk's DEP first: `effect Sample(rate: Int)`
+  parses (ten P_ tokens on the prior boot — SYNTAX's canonical form was
+  lathe-lag), the params riding the same [TParam] product fn params and
+  handler config ride (EffectDeclStmt widened, seventeen destructure
+  sites swept), and registering as the effect's env SCHEME — TTuple of
+  the params' types, the instance signature, where a placeholder empty
+  tuple had sat since the entry's birth. THE INSTANCE LAW is ONE
+  predicate (eff_forbids, SYNTAX's own equality: name AND argument
+  value): a bare !E severs every instance and the bare name;
+  !E(args) blocks the bare name (a bare occurrence could be any
+  instance — conservative) and any instance not PROVABLY distinct,
+  where provable distinctness is scalar literals (Int/Float/String)
+  with unequal values at a shared position — type and node args never
+  prove it. BOTH crown faces read it: subsumption's forbidden-
+  membership (name_in_forbidden carries whole EffName entries now, not
+  bare handles), and ef_make's absent-minus-present through its OWN
+  pair law (absent_contradicted_by): the probe caught the first form
+  over-eager — a BARE present beside an INSTANCE absent is a
+  REFINEMENT ("any Sample except 44100"), not a contradiction, so the
+  absent survives; only same-identity pairs and an instance-present
+  under a bare-absent contradict and drop. THE MEASURED BEFORE: the
+  by-name dedup DELETED a declared !Sample(44100) the moment
+  Sample(48000) was present — the severance silently vanishing at row
+  construction (the felt walk's inst2 checked clean for the wrong
+  reason). Three frontier crucibles, each corner: the provably-distinct
+  sibling ADMITTED and running 42 (a Sample(48000) callee under
+  Sample(48000) + !Sample(44100)); the same instance SEVERED
+  (E_EffectMismatch, one report); the bare perform BLOCKED
+  conservatively. CLEAN m2 == m3; census 0. The named remainder:
+  instance-arg TYPING against the registered signature (a
+  with-clause's Sample("hi") vs rate: Int — the scheme is registered,
+  the judge's check is the next single), and instance flow into op
+  rows (a body's bare tick() under a declared instance stays bare — the
+  admit-through-instantiation face, the modal frontier's dep).
 - 2026-07-28 · ▶▶ THE ENCLOSING DECL DESCENDS THE TREE — containment
   becomes a structural read (the ranker landing's named next single;
   Hβ.cursor.enclosing-decl-edge's walk half · pin 93be5c52). Spans

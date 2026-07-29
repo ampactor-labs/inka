@@ -1,0 +1,6 @@
+effect Sample(rate: Int) {
+  tick() -> Int
+}
+fn lo_rate() -> Int with Sample(44100) = tick()
+fn severed() -> Int with Sample(48000) + !Sample(44100) = lo_rate()
+fn main() = 0

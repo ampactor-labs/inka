@@ -1,0 +1,9 @@
+effect Sample(rate: Int) {
+  tick() -> Int
+}
+handler at_rate {
+  tick() => resume(48000),
+}
+fn hi_rate() -> Int with Sample(48000) = tick()
+fn other() -> Int with Sample(48000) + !Sample(44100) = hi_rate()
+fn main() = if (other() ~> at_rate) == 48000 { 42 } else { 1 }

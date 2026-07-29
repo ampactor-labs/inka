@@ -474,10 +474,12 @@ fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
     }
   },
   TypeDefStmt(name, variants) => "type {name}{render_variants(variants, 0)}",
-  EffectDeclStmt(name, ops) => // Op param NAMES are parse-consumed (the ADT stores types only), and
+  EffectDeclStmt(name, params, ops) => // Op param NAMES are parse-consumed (the ADT stores types only), and
   // bare types parse in op position — the render is the parse's inverse
-  // over what the graph carries.
-  "effect {name} \{\n{indent_block(strip_trailing_nl(render_effect_ops(ops, 0)))}\n\}",
+  // over what the graph carries. The instance params render through the
+  // same product projection the handler head uses (format∘parse
+  // identity over SYNTAX §«Parameterized effect»).
+  "effect {name}{render_config_params(params)} \{\n{indent_block(strip_trailing_nl(render_effect_ops(ops, 0)))}\n\}",
   HandlerDeclStmt(hname, _ename, config, states, arms) => "handler {hname}{render_config_params(config)}{render_state_inits(states, 0)} \{\n{indent_block(strip_trailing_nl(render_handler_arms(arms, 0)))}\n\}",
   RefineStmt(name, ty, pred) => "type {name} = {render_type_tokens(ty)} where {render_predicate_tokens(pred)}",
 }

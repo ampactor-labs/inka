@@ -342,7 +342,7 @@ fn comment_decl_index(ref stmts, i, idx) = if i >= len(stmts) {
       let idx2 = match body {
         NStmt(FnStmt(name, _, _, _, _)) => smap_add(idx, name, h),
         NStmt(TypeDefStmt(name, ctors)) => ctor_index_add(ctors, 0, smap_add(idx, name, h), h),
-        NStmt(EffectDeclStmt(name, ops)) => op_index_add(ops, 0, smap_add(idx, name, h), h),
+        NStmt(EffectDeclStmt(name, _, ops)) => op_index_add(ops, 0, smap_add(idx, name, h), h),
         NStmt(HandlerDeclStmt(name, _, _, _, _)) => smap_add(idx, name, h),
         _ => idx,
       }
@@ -549,7 +549,7 @@ fn in_owner_names(ref xs, ref name, i) = if i >= len(xs) {
 fn comment_owner(h) = match graph_node_body(h) {
   NStmt(FnStmt(name, _, _, _, _)) => name,
   NStmt(TypeDefStmt(name, _)) => name,
-  NStmt(EffectDeclStmt(name, _)) => name,
+  NStmt(EffectDeclStmt(name, _, _)) => name,
   NStmt(HandlerDeclStmt(name, _, _, _, _)) => name,
   _ => "node {int_to_str(h)}",
 }
@@ -560,7 +560,7 @@ fn comment_owner(h) = match graph_node_body(h) {
 fn comment_locals(h) = match graph_node_body(h) {
   NStmt(FnStmt(_, params, _, _, fbody)) => body_binders(fbody, cl_param_names(params, 0, [])),
   NStmt(HandlerDeclStmt(_, _, config, states, arms)) => cl_arm_names(arms, 0, cl_state_names(states, 0, cl_param_names(config, 0, []))),
-  NStmt(EffectDeclStmt(_, ops)) => cl_op_names(ops, 0, []),
+  NStmt(EffectDeclStmt(_, _, ops)) => cl_op_names(ops, 0, []),
   NStmt(LetStmt(pat, val, _)) => body_binders(val, pat_binders(pat)),
   NStmt(TypeDefStmt(_, ctors)) => cl_ctor_names(ctors, 0, []),
   NStmt(ExprStmt(e)) => body_binders(e, []),
@@ -791,8 +791,8 @@ fn pre_register_stmt(seen, ref node) = match node {
       register_type_constructors(name, variants)
       seen
     },
-    NStmt(EffectDeclStmt(name, ops)) => {
-      register_effect_ops(name, ops)
+    NStmt(EffectDeclStmt(name, params, ops)) => {
+      register_effect_ops(name, params, ops)
       seen
     },
     NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) => {
@@ -1028,7 +1028,7 @@ fn pre_register_masked(ref stmts, ref mask, i) = if i >= len(stmts) {
     match stmts[i] {
       N(body, _, _) => match body {
         NStmt(TypeDefStmt(name, variants)) => register_type_constructors(name, variants),
-        NStmt(EffectDeclStmt(name, ops)) => register_effect_ops(name, ops),
+        NStmt(EffectDeclStmt(name, params, ops)) => register_effect_ops(name, params, ops),
         NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) => pre_register_handler_sig(hname, config, state, arms),
         _ => (),
       },
@@ -1262,7 +1262,7 @@ fn stmt_decl_name(ref node) = match node {
   N(body, _, _) => match body {
     NStmt(FnStmt(name, _, _, _, _)) => name,
     NStmt(TypeDefStmt(name, _)) => name,
-    NStmt(EffectDeclStmt(name, _)) => name,
+    NStmt(EffectDeclStmt(name, _, _)) => name,
     NStmt(HandlerDeclStmt(name, _, _, _, _)) => name,
     NStmt(LetStmt(pat, _, _)) => match pat {
       PVar(name) => name,
@@ -1761,8 +1761,8 @@ fn pre_register_stmt_final(seen, ref node) = match node {
       register_type_constructors(name, variants)
       seen
     },
-    NStmt(EffectDeclStmt(name, ops)) => {
-      register_effect_ops(name, ops)
+    NStmt(EffectDeclStmt(name, params, ops)) => {
+      register_effect_ops(name, params, ops)
       seen
     },
     NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) => {
@@ -1806,7 +1806,7 @@ fn infer_stmt(ref node) = match node {
     },
     NStmt(FnStmt(name, params, ret_ann, effs, body_node)) => infer_fn(name, params, body_node, ret_ann, effs, handle, span),
     NStmt(TypeDefStmt(_, _)) => (),
-    NStmt(EffectDeclStmt(_, _)) => (),
+    NStmt(EffectDeclStmt(_, _, _)) => (),
     NStmt(HandlerDeclStmt(hname, ename, config, state, arms)) => register_handler(hname, ename, config, state, arms, span),
     NStmt(ExprStmt(expr)) => infer_expr(expr),
     NStmt(ImportStmt(_)) => (),
@@ -6182,13 +6182,18 @@ fn build_ctor_params(field_types, base_idx) = map(
   enumerate(field_types)
 )
 
-fn register_effect_ops(effect_name, ops) = {
+fn register_effect_ops(effect_name, params, ops) = {
   // Register the effect name itself with its op names.
   // EffectDeclKind is the graph's vocabulary for "this is an effect
   // declaration carrying these ops." The world-chain dispatch reads it;
   // the Cursor can project it at any position mentioning the effect.
+  // The SCHEME is the effect's INSTANCE SIGNATURE — the declared
+  // params' types as a tuple (`effect Sample(rate: Int)` publishes
+  // TTuple([Int])), the one home every authored `Sample(44100)`
+  // instance judges its args against; a bare effect publishes the
+  // empty tuple. The formerly-empty tuple here was a placeholder.
   let op_names = map(((n, _, _, _)) => n, ops)
-  env_extend(effect_name, Forall([], TTuple([])), Declared(effect_name), EffectDeclKind(op_names))
+  env_extend(effect_name, Forall([], TTuple(map(param_ty, params))), Declared(effect_name), EffectDeclKind(op_names))
   // THE EFFECT'S COMPLETE TYPE-VAR STRUCTURE: the free type vars across ALL
   // its ops' signatures (params + returns), deduped — the effect's type
   // params. An effect whose ops are all CONCRETE has zero vars → bare
@@ -6724,7 +6729,7 @@ fn collect_fn_decls(node, acc) = match node {
     NExpr(LabeledArg(_, v)) => collect_fn_decls(v, acc),
     NExpr(ResumeExpr(v, us)) => collect_fn_decls_updates(us, collect_fn_decls(v, acc)),
     NStmt(TypeDefStmt(_, _)) => acc,
-    NStmt(EffectDeclStmt(_, _)) => acc,
+    NStmt(EffectDeclStmt(_, _, _)) => acc,
     NStmt(ImportStmt(_)) => acc,
     NStmt(RefineStmt(_, _, _)) => acc,
     NStmt(AliasStmt(_, _)) => acc,
@@ -6880,7 +6885,7 @@ fn resume_grade(node) = match node {
     // carry no children. Both are the grade identity UZero (explicit, never a
     // wildcard fabricating a grade for an un-enumerated child-bearing variant).
     UZero,
-    NStmt(EffectDeclStmt(_, _)) => UZero,
+    NStmt(EffectDeclStmt(_, _, _)) => UZero,
     NStmt(HandlerDeclStmt(_, _, _, _, _)) => UZero,
     NStmt(ImportStmt(_)) => UZero,
     NStmt(RefineStmt(_, _, _)) => UZero,
@@ -7081,7 +7086,7 @@ fn walk_refinement(node, path_pred) with GraphRead + GraphWrite + Memory + Alloc
     // no narrowable runtime expression; a type annotation is a Ty, not an expr.
     walk_refinement(fbody, PTrue),
     NStmt(TypeDefStmt(_, _)) => (),
-    NStmt(EffectDeclStmt(_, _)) => (),
+    NStmt(EffectDeclStmt(_, _, _)) => (),
     NStmt(HandlerDeclStmt(_, _, _, _, _)) => (),
     NStmt(ImportStmt(_)) => (),
     NStmt(RefineStmt(_, _, _)) => (),

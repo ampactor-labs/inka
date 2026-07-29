@@ -350,7 +350,7 @@ fn stmt_child_handles(s) with Alloc + Memory = match s {
   HandlerDeclStmt(_hname, _ename, _config, states, arms) =>
     map(record_field_handle, states) ++ map(arm_body_handle, arms),
   TypeDefStmt(_, _) => [],
-  EffectDeclStmt(_, _) => [],
+  EffectDeclStmt(_, _, _) => [],
   ImportStmt(_) => [],
   RefineStmt(_, _, _) => [],
   AliasStmt(_, _) => [],

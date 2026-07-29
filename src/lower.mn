@@ -1070,7 +1070,7 @@ fn collect_free_vars_of_decl(decls, name: String) = {
 fn program_may_yield(stmts) = any(
   (node) => match node {
     N(body, _, _) => match body {
-      NStmt(EffectDeclStmt(ename, _)) => effect_has_multishot_op(ename),
+      NStmt(EffectDeclStmt(ename, _, _)) => effect_has_multishot_op(ename),
       _ => false,
     },
   },
@@ -1338,7 +1338,7 @@ fn flow_edges_stmt(s) = match s {
   FnStmt(_, _, _, _, body_node) => flow_edges(body_node),
   ExprStmt(expr) => flow_edges(expr),
   TypeDefStmt(_, _) => ([], []),
-  EffectDeclStmt(_, _) => ([], []),
+  EffectDeclStmt(_, _, _) => ([], []),
   HandlerDeclStmt(_, _, _, _, _) => ([], []),
   ImportStmt(_) => ([], []),
   RefineStmt(_, _, _) => ([], []),
@@ -3063,7 +3063,7 @@ fn lower_stmt_body(s, handle, span) = match s {
     }
   },
   TypeDefStmt(_name, _variants) => LConst(handle, LInt(0)),
-  EffectDeclStmt(_name, _ops) => LConst(handle, LInt(0)),
+  EffectDeclStmt(_name, _params, _ops) => LConst(handle, LInt(0)),
   HandlerDeclStmt(name, _ename, config, state, arms) => {
     // H1.4: each handler arm becomes a callable wasm function. With
     // the Hβ.first-light.handler-arm-fn-name-discriminator landing,
@@ -4555,7 +4555,7 @@ fn free_vars_stmt(s, bound) = match s {
   FnStmt(_, _, _, _, body_node) => collect_free_vars(body_node, bound),
   ExprStmt(expr) => collect_free_vars(expr, bound),
   TypeDefStmt(_, _) => [],
-  EffectDeclStmt(_, _) => [],
+  EffectDeclStmt(_, _, _) => [],
   HandlerDeclStmt(_, _, _, _, _) => [],
   ImportStmt(_) => [],
   RefineStmt(_, _, _) => [],

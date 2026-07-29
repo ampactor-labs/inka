@@ -42,7 +42,36 @@ fn ef_make(ref present, ref absent, tail) with !Mutate = {
   let p = name_set_canonicalize(present)
   let a = name_set_canonicalize(absent)
   // ∅ absent (the dominant row) skips the disjointness diff outright.
-  EfRow(p, if len(a) == 0 { a } else { name_set_diff(a, p) }, tail)
+  // The subtraction is INSTANCE-AWARE (eff_forbids — the negation's one
+  // law): an absent entry drops only when a present entry actually
+  // contradicts it. The old by-name diff deleted `!Sample(44100)` the
+  // moment `Sample(48000)` was present — the declared severance
+  // silently vanishing at row construction.
+  EfRow(p, if len(a) == 0 { a } else { absent_minus_present(a, p) }, tail)
+}
+
+fn absent_minus_present(ref a, ref p) with !Mutate =
+  filter((entry) => !any((pe) => absent_contradicted_by(entry, pe), p), a)
+
+// The SUBTRACTION's pair law — when does a present entry contradict an
+// absent one (dropping it from the declared meet)? Distinct from
+// eff_forbids: a BARE present beside an INSTANCE absent is a REFINEMENT
+// ("any Sample except 44100") — the absent survives; only same-identity
+// pairs (bare/bare, or instances not provably distinct) and an
+// instance-present under a bare-absent (the severance blocking its own
+// positive) are contradictions.
+fn absent_contradicted_by(absent, present) with !Mutate = if eff_name_handle(absent) != eff_name_handle(present) {
+  false
+} else {
+  match absent {
+    ENamed(_) => true,
+    EPure => false,
+    EParameterized(_, aargs) => match present {
+      ENamed(_) => false,
+      EPure => false,
+      EParameterized(_, pargs) => !eff_args_provably_distinct(aargs, pargs, 0),
+    },
+  }
 }
 
 fn mk_ef_closed(ref names) with !Mutate = ef_make(names, [], EtClosed)
@@ -567,18 +596,74 @@ fn forbidden_names_disjoint(ref body, ref forbidden) with !Mutate =
 
 fn forbidden_names_disjoint_loop(ref body, ref forbidden, i, n) with !Mutate = if i >= n {
   true
-} else if name_in_forbidden(forbidden, eff_name_handle(list_index(body, i)), 0, len(forbidden)) {
+} else if name_in_forbidden(forbidden, list_index(body, i), 0, len(forbidden)) {
   false
 } else {
   forbidden_names_disjoint_loop(body, forbidden, i + 1, n)
 }
 
-fn name_in_forbidden(ref forbidden, h, i, n) with !Mutate = if i >= n {
+fn name_in_forbidden(ref forbidden, present, i, n) with !Mutate = if i >= n {
   false
-} else if eff_name_handle(list_index(forbidden, i)) == h {
+} else if eff_forbids(list_index(forbidden, i), present) {
   true
 } else {
-  name_in_forbidden(forbidden, h, i + 1, n)
+  name_in_forbidden(forbidden, present, i + 1, n)
+}
+
+// The negation's INSTANCE LAW (SYNTAX §«Parameterized effect»: equality
+// is name AND argument value) — does a forbidden entry block a present
+// one? A bare `!E` severs every instance and the bare name; a forbidden
+// instance `!E(args)` blocks the bare name (a bare occurrence could be
+// any instance — conservative) and any instance not PROVABLY distinct.
+// Provable distinctness is the only admission: scalar literal args
+// (Int/Float/String) with unequal values at a shared position; type and
+// node args never prove it. Both directions of the crown read this one
+// predicate — subsumption's forbidden-membership and ef_make's
+// absent-minus-present — so `Sample(48000) + !Sample(44100)` holds the
+// severance it declares instead of the by-name dedup silently deleting
+// it at row construction.
+fn eff_forbids(forbidden: EffName, present: EffName) with !Mutate = if eff_name_handle(forbidden) != eff_name_handle(present) {
+  false
+} else {
+  match forbidden {
+    ENamed(_) => true,
+    EPure => false,
+    EParameterized(_, fargs) => match present {
+      ENamed(_) => true,
+      EPure => false,
+      EParameterized(_, pargs) => !eff_args_provably_distinct(fargs, pargs, 0),
+    },
+  }
+}
+
+fn eff_args_provably_distinct(ref a, ref b, i) with !Mutate = if len(a) != len(b) {
+  // Differing arity never proves distinctness — an effect has ONE
+  // declared signature, so the pair is ill-formed and the instance
+  // typing owns the refusal; the negation stays conservative.
+  false
+} else if i >= len(a) {
+  false
+} else if eff_arg_scalar_unequal(list_index(a, i), list_index(b, i)) {
+  true
+} else {
+  eff_args_provably_distinct(a, b, i + 1)
+}
+
+fn eff_arg_scalar_unequal(fa, pa) with !Mutate = match fa {
+  EAInt(x) => match pa {
+    EAInt(y) => x != y,
+    _ => false,
+  },
+  EAFloat(x) => match pa {
+    EAFloat(y) => x != y,
+    _ => false,
+  },
+  EAString(x) => match pa {
+    EAString(y) => x != y,
+    _ => false,
+  },
+  EAType(_) => false,
+  EANode(_) => false,
 }
 
 // string_in_list — membership over a list of STRINGS (own.mn's ref-escape

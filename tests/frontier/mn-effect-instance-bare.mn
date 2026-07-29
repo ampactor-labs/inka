@@ -1,0 +1,6 @@
+effect Sample(rate: Int) {
+  tick() -> Int
+}
+fn bare_perform() -> Int with Sample = tick()
+fn severed() -> Int with Sample + !Sample(44100) = bare_perform()
+fn main() = 0

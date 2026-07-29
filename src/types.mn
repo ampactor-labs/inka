@@ -1326,10 +1326,15 @@ type Stmt
   // name, params (TParam), retty, effects, body
   | TypeDefStmt(String, [(String, [Ty], Node)])
   // name, then per variant its name + field types
-  | EffectDeclStmt(String, [(String, [Ty], Ty, Node)])
-  // effect name, ops (each is (op_name, param_tys, ret_ty);
-  // ResumeDiscipline is inferred at handler-decl time
-  // from each arm body, not declared on the effect op)
+  | EffectDeclStmt(String, [TParam], [(String, [Ty], Ty, Node)])
+  // effect name, instance params, ops (each op is (op_name, param_tys,
+  // ret_ty, comment-carrier); ResumeDiscipline is inferred at
+  // handler-decl time from each arm body, not declared on the effect
+  // op). The instance params are the parameterized effect's signature
+  // (SYNTAX §«Parameterized effect»: `effect Sample(rate: Int)`) — the
+  // same [TParam] product fn params and handler config ride; they
+  // register as the effect's env scheme (the instance signature every
+  // authored `Sample(44100)` judges against).
   | HandlerDeclStmt(String, String, [TParam], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])
   // handler name, effect name, config-params, state-fields, arms
   // config: [TParam] — the fn-param carrier (SYNTAX §«Handler

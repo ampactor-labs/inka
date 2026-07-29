@@ -1641,6 +1641,34 @@ for i in "${!compilers[@]}"; do
   else
     fail "ranker containment (banner/main leaked into the fan; see $dir/ranker.out)"
   fi
+  # ── instance-precise negation (Arc 3's first landing) ──────────────
+  # The parameterized effect DECL head parses (RED on the prior boot:
+  # ten P_ tokens at `effect Sample(rate: Int)`), and the negation holds
+  # its instance: a declared !Sample(44100) beside Sample(48000) SURVIVES
+  # row construction (the by-name dedup used to delete it silently) and
+  # blocks conservatively — same instance and bare performs report,
+  # a provably-distinct sibling instance is admitted and runs.
+  cat "${RTLIBS[@]}" "$ROOT/tests/frontier/mn-effect-instance-sibling.mn" | wt_run "$compiler" > "$dir/inst-sib.wat" 2> "$dir/inst-sib.err" \
+    && wt_asm "$dir/inst-sib.wat" "$dir/inst-sib.wasm" 2>/dev/null \
+    && "$WT" run "${WT_RUN_FLAGS[@]}" "$dir/inst-sib.wasm"
+  sib_rc=$?
+  if [ "$sib_rc" = "42" ] && ! grep -q 'E_EffectMismatch' "$dir/inst-sib.err"; then
+    pass "instance negation admits the provably-distinct sibling (42, no mismatch)"
+  else
+    fail "instance sibling (rc=$sib_rc; see $dir/inst-sib.err)"
+  fi
+  cat "${RTLIBS[@]}" "$ROOT/tests/frontier/mn-effect-instance-severed.mn" | wt_run "$compiler" > /dev/null 2> "$dir/inst-sev.err"
+  if grep -q 'E_EffectMismatch' "$dir/inst-sev.err"; then
+    pass "instance negation severs the same instance (mismatch reported)"
+  else
+    fail "instance severed (no mismatch; see $dir/inst-sev.err)"
+  fi
+  cat "${RTLIBS[@]}" "$ROOT/tests/frontier/mn-effect-instance-bare.mn" | wt_run "$compiler" > /dev/null 2> "$dir/inst-bare.err"
+  if grep -q 'E_EffectMismatch' "$dir/inst-bare.err"; then
+    pass "instance negation blocks the bare perform (conservative)"
+  else
+    fail "instance bare (no mismatch; see $dir/inst-bare.err)"
+  fi
   # ── the splice line carry ──────────────────────────────────────────
   # A splice spanning newlines resumes the outer string scan at the TRUE
   # line, so nodes after it keep truthful spans and the address resolves

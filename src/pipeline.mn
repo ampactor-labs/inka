@@ -687,12 +687,14 @@ fn compile_source(source) =
 fn check_source(source) = infer_context(() => source |> frontend |> infer_program ~> mentl_default)
 
 fn query(entry_module, question) = infer_context(() => {
-  // driver_check_entry loads the module + its deps, infers ONCE, and
-  // hands back the entry's typed AST — the same load compile/check
-  // use. So `mentl query lib/foo "why bar"` reads the REAL graph, not
-  // the module NAME parsed as source (Carried-Truth: the driver
-  // already resolved+typed it; re-frontend-ing a name re-derived
-  // nothing and mis-parsed "tutorial/foo" as two variable refs).
+  // COLD by the swap-crossing law (Hβ.session.resident-verbs — the
+  // measured refutation is in the §7 ledger): a mid-verb image restore
+  // kills every pre-swap heap value — the caller's own argv strings,
+  // the chain's own handler records — and survives only by allocation
+  // coincidence. The warm form for the projection verbs is the
+  // RESIDENT SESSION (the image as the session's own memory, no swap —
+  // the named peer carries the measured constraints); fresh derivation
+  // here IS the sound form for a per-process verb.
   let ast = driver_check_entry(entry_module)
   let q = parse_query_string(question)
   ask(q) |> render_query_result |> println

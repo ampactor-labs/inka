@@ -1092,6 +1092,45 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶ THE SWAP-CROSSING LAW CONVICTS THE WARM VERBS — a
+  measured refutation banked whole, and the fmt string-atomicity
+  defect caught by its one witness (· pin 6eb1b61c). Morgan's charge
+  ("don't tell me you're inefficient and continue being inefficient")
+  opened the resident-session arc at its nearest rung: the B-i warm
+  image wired into the projection verbs (at/query/tighten/edit/check)
+  through one home (driver_entry_warm — probe by a key sidecar BEFORE
+  any restore, exact-tree only; the sidecar's own splice-pin bug found
+  by its bytes: module names rendered as per-run pointer numerals, a
+  key that never matched itself). The exact-tree face MEASURED TRUE:
+  cold == warm BYTE-IDENTICAL at the at-address projection, the
+  restore serving in the wasmtime-JIT-floor time (and the first 7.8×
+  claim died as the JIT-cache confound — counted). THEN THE FRONTIER
+  REFUTED THE FORM at the session faces (16 red): a mid-verb
+  image_resume kills EVERY pre-swap heap value — the caller's own argv
+  strings (at_run's target rendering EMPTY in its own error message),
+  the chain's own handler records (the edit legs' 134s) — and works
+  only where deterministic allocation makes two processes' worlds
+  coincide byte-for-byte: forensic law 5, the accident never
+  canonized. The machinery DELETED whole (drift-9 — the knowledge
+  lives here, not in dead code); the verbs derive fresh; the yield is
+  Hβ.session.resident-verbs with the resident session's MEASURED
+  constraints: (1) no mid-chain swap, ever; (2) per-invocation strings
+  cannot cross a swap; (3) the image must be the session's OWN memory
+  (one long-lived process — the mcp serve loop is the natural host —
+  holding the analyzed graph, every verb a read, no restore). The
+  march-practice ruling re-affirmed en route (229fda2f's own words):
+  the whole-world ladder is the AUDIT tier, not the inner loop.
+  RIDER, the fmt defect its one witness caught: the canonical pass had
+  reflowed space_respond's header string ACROSS RAW NEWLINES — the
+  serve answered a bare status line (raw newline + \n = end of
+  headers), invisible to the march (Law-7-invisible: the wheel never
+  calls its own serve), RED only at the frontier's serve leg. The
+  literal restored one-line; the renderer defect named
+  (Hβ.format.string-literal-atomic-layout — a string literal is
+  CONTENT; the width engine treats it as atomic, never reflowing
+  inside the quotes; the whole-tree census found exactly the one
+  site). CLEAN m2 == m3; frontier 303/0; proof-exactness 9/9; crown
+  5/5; census 0.
 - 2026-07-29 · ▶▶▶▶▶ THE MASKS RIDE THE CHASE — the wheel passes its own
   root-row gate, and five Carried-Truth roots fall in one continuous
   dig (· pin 0ab5d903). THE OPENING MOVE was the gate itself: the

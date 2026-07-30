@@ -901,7 +901,14 @@ type CursorView
 type Span = Span(Int, Int, Int, Int)
 
 // start_line, start_col, end_line, end_col
-fn span_join(a, b) with Pure = match a {
+//
+// The producers CARRY the proof (types.mn's own construction-site law):
+// a `-> ValidSpan` return proves span_valid ONCE at this decl — an
+// honest V_Pending here until the predicate-unfold fragment discharges
+// it — and every consumer boundary collapses by typed identity (the
+// weave carried ~85 re-demanded copies of this one obligation at call
+// sites before the return was declared, measured 2026-07-30).
+fn span_join(a, b) -> ValidSpan with Pure = match a {
   Span(sl, sc, _, _) => match b {
     Span(_, _, el, ec) => Span(sl, sc, el, ec),
   },
@@ -922,7 +929,10 @@ fn span_overlaps(a, b) with Pure = match a {
   },
 }
 
-fn span_zero() with Pure = Span(0, 0, 0, 0)
+// Ground construction — the R3 fragment discharges span_valid(0,0,0,0)
+// outright, so this producer's proof costs nothing and every consumer
+// reads ValidSpan by type.
+fn span_zero() -> ValidSpan with Pure = Span(0, 0, 0, 0)
 
 // The span a Reason edge carries, when it carries one — Located wraps the
 // site; anything else is genuinely unlocated. The occurs-check's coordinates

@@ -1092,6 +1092,43 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶▶ THE PRODUCERS CARRY THE PROOF AND THE VERBS READ ONE
+  WEAVE — Arc 3 opens with the span-debt collapse and a true-positive
+  gate find (pin d14fa41e). THE INVENTORY BY THE MEDIUM: the field
+  projection classified the wheel's 138 pending obligations to ONE
+  dominant class — span_valid at ~85 consumer boundaries, the proof
+  lost at every producer's bare Span return. THE COLLAPSE: span_join /
+  span_zero / span_at gain `-> ValidSpan` (the construction-site law
+  types.mn's own comment always promised; Intent Boundaries, three
+  lines) — whole-weave debt 138 → 58, ~80 consumer boundaries
+  collapsing by typed identity into two honest producer obligations;
+  CLEAN m2 == m3; census 0; proof-exactness 9/9. THE GATE THEN EARNED
+  ITS KEEP: the frontier's session leg went red as a TRUE POSITIVE —
+  the fixture's weave reaches src/types.mn (runtime/lists imports
+  types), and the COLD audit's "pending: 2" turned out to be JUNK
+  DEBT from the analysis verbs' own SECOND discovery path:
+  driver_check_entry runs per-module SOLO checks judged without their
+  layer's vocabulary (the per-module-env-overlay residue, live) —
+  measured flooding E_MissingVariable on True/len/list_index from any
+  out-of-tree directory, stderr discarded by the gate, junk obligations
+  accruing — while the RESIDENT session read the weave and told the
+  truth (the leg had passed only while the junk was zero: a gate that
+  could not fail until the annotations armed it, forensic law 5 live).
+  THE REWIRE: audit/teach (analyze_fns) and query derive through THE
+  ONE DISCOVERY HOME — driver_entry_with_ranges + driver_module_ast,
+  the same weave the check verb, the address, and the resident session
+  read; driver_check_entry's remaining callers are fmt (which wants
+  the entry's solo parse for file-local render spans — its dep-flood
+  is named residue) and the compile path's own walk. Frontier 321/0
+  from both sides. BANKED: teach's missing facet — debt-keyed
+  REFINED-RETURN proposals (walk the obligation's Reason to the
+  producing callee, propose the alias; tonight's 85-to-1 ratio is the
+  spec) — and the R3 unfold gap made exact: span_zero = Span(0,0,0,0)
+  under `where span_valid(self)` pends because the predicate is a FN
+  CALL; one-level unfolding of a Pure predicate fn on a ground
+  construction discharges it outright — the highest-yield Verify
+  increment next.
+
 - 2026-07-30 · ▶ THE PASS INVARIANTS STOP RE-DERIVING — classify-once
   + cone-proportional prints (pin 43f33c0a). Two carried-truth
   deletions the eight-interrogation audit surfaced on the convergence

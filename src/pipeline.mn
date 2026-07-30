@@ -508,11 +508,17 @@ fn query(entry_module, question) = infer_context(() => {
   // RESIDENT SESSION (the image as the session's own memory, no swap —
   // the named peer carries the measured constraints); fresh derivation
   // here IS the sound form for a per-process verb.
-  let ast = driver_check_entry(entry_module)
+  // The WEAVE judgment (driver_entry_with_ranges — the one discovery
+  // home): the former driver_check_entry route judged each dep module
+  // SOLO without its layer's vocabulary (the per-module-env-overlay
+  // residue), so every query ran over a partially-broken env.
+  match driver_entry_with_ranges(entry_module) {
+    (_ast, _ranges) => (),
+  }
   let q = parse_query_string(question)
   ask(q) |> render_query_result |> println
 } ~>
-// driver_check_entry's fs_read — handled in-chain, as compile/check do
+// the derivation's fs_read — handled in-chain, as compile/check do
 wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 // ─── The tightening bank — T_OverDeclared as a live frontier fact ────
@@ -561,11 +567,22 @@ handler tighten_collector with found = [] {
 // it ASKS a question, not a per-fn walk.
 fn analyze_fns(entry_module, projection) = infer_context(() => {
   // "-" is the stdin contract (self-contained source, the bare
-  // compile's own path); anything else resolves through the driver DAG.
+  // compile's own path); anything else derives THE WEAVE — the same
+  // driver_entry_with_ranges the check verb, the address, and the
+  // resident session read — and scopes to the entry's own decls
+  // (driver_module_ast, the session's scoping read). The former route
+  // (driver_check_entry) was a SECOND discovery: per-module solo
+  // checks judged without their layer's vocabulary (the
+  // per-module-env-overlay residue) — measured 2026-07-30 flooding
+  // E_MissingVariable on True/len/list_index from any out-of-tree
+  // directory and accruing junk debt the session leg's cold side then
+  // reported as the fixture's own.
   let ast = if entry_module == "-" {
     read_stdin() |> infer_program_converged
   } else {
-    driver_check_entry(entry_module)
+    match driver_entry_with_ranges(entry_module) {
+      (ast_all, ranges) => driver_module_ast(ast_all, ranges, entry_module),
+    }
   }
   projection(ast) |> print_string
 } ~>

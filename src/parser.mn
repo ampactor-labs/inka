@@ -51,8 +51,13 @@ fn nhole(id, span: ValidSpan) = mint_node(NHole(id), span)
 // kind_at returns the TokenKind variant at position pos (or TEof if past end).
 fn kind_at(ref tokens, pos) = if pos >= len(tokens) { TEof } else { token_kind(tokens[pos]) }
 
-// span_at returns the span of the token at position pos.
-fn span_at(ref tokens, pos) = if pos >= len(tokens) { span_zero() } else { token_span(tokens[pos]) }
+// span_at returns the span of the token at position pos. The producer
+// carries the proof (`-> ValidSpan`): ONE honest obligation here — the
+// token-stored span's validity, dischargeable when the lexer's mints
+// carry the refinement — replaces the re-demanded copy every consumer
+// boundary used to accrue.
+fn span_at(ref tokens, pos) -> ValidSpan =
+  if pos >= len(tokens) { span_zero() } else { token_span(tokens[pos]) }
 
 // kind_eq compares two TokenKind values for variant identity. Used
 // at the few sites where dispatch needs a passed-in kind value;

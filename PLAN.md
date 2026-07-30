@@ -1092,6 +1092,18 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ A CAPABILITY UNLOCKS ONCE + two stale items counted
+  (pin ec1d4664). The audit's severance line concatenated per-effect
+  unlock lists undeduped — IO and Network both unlock CSandbox, so
+  "Sandbox (proven no network access)" rendered twice per fn severing
+  both; severance_unlocks dedups by structural == over the nullary
+  ADT. AND the queue healed itself twice, measured before building:
+  `mentl <unknown-verb>` exits 2 (the exit-code sweep had already
+  landed the refusal the space-era note asked for), and the abs-path
+  audit answers identically to the relative form (the shim's
+  path-derived mount + the verb rewiring healed it) — both
+  observations retired as stale, zero code. CLEAN m2 == m3 at
+  349,509 lines; census 0; frontier 325/0.
 - 2026-07-30 · ▶▶ THE DIAGNOSTIC SPEAKS THE USER'S LINE —
   Hβ.diag.file-local-span-render RESOLVED at the register
   (pin 4aa1f090). scope_localize rebuilds diag_line's one `at <span>`

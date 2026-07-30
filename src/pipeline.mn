@@ -1281,12 +1281,27 @@ else if list_index(names, i) == target {
 
 fn severance_unlocks(severable) = severance_unlocks_loop(severable, 0, len(severable), [])
 
+// A capability enters ONCE across the whole severed set: IO and
+// Network both unlock CSandbox, and the undeduped concat rendered
+// "Sandbox (proven no network access)" twice on every audit line
+// whose fn severs both (measured). Structural == over the nullary
+// capability ADT is the membership.
 fn severance_unlocks_loop(severable, i, n, acc) = if i >= n {
   acc
 } else {
   let caps = capabilities_for_severance(list_index(severable, i))
-  severance_unlocks_loop(severable, i + 1, n, acc ++ caps)
+  severance_unlocks_loop(severable, i + 1, n, acc ++ caps_not_in(caps, acc, 0))
 }
+
+fn caps_not_in(ref caps, ref acc, i) = if i >= len(caps) {
+  []
+} else {
+  let c = list_index(caps, i)
+  if cap_in(acc, c, 0) { caps_not_in(caps, acc, i + 1) } else { [c] ++ caps_not_in(caps, acc, i + 1) }
+}
+
+fn cap_in(ref xs, ref c, i) =
+  if i >= len(xs) { false } else { if list_index(xs, i) == c { true } else { cap_in(xs, c, i + 1) } }
 
 // Terminal renderer over AuditReport records — reads fields by name.
 // JSON / IDE-projection renderers are peer functions on the same

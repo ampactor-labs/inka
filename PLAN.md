@@ -1092,6 +1092,27 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE FLIP IS THE INSTRUMENT'S — three probes convict
+  the print-carry, and the judgment stands CONVERGED (pin dd8a70f1).
+  The bound-hit channel gained two graduated probes — probe_entry_hist
+  (the mover's env index + row-tail letter; its first read exposed
+  env_snapshot's latest-per-name dedup: n=1 by construction, the
+  probe's own blindness named) and the same-round re-read of
+  row_print at the flip — and their verdict, run against the
+  deterministic bound-forcer (the banked unfold stack applied
+  purely as the forcer, then reverted): the mover's entry is the SAME
+  index with the SAME closed scheme in EVERY round, the fresh read is
+  closed every time, and every flip block reads A=open / B=closed —
+  impossible under a faithful prev/cur carry. THE INVERSION: the
+  "movement" that kept the cone hot and the bound firing is an
+  ARTIFACT of the convergence loop's own print bookkeeping
+  resurrecting the trial's open render; the JUDGMENT has been
+  converged since the cycle signatures landed — which is why emission
+  stayed byte-stable through every configuration probed tonight. The
+  carry bug (small, cold, three instruments aimed) is the next
+  opening single; the banked unfold re-lands behind it. Board at the
+  pin: CLEAN m2 == m3; census 0; frontier 321/0.
+
 - 2026-07-30 · ▶ THE DECLARED ROW PINS UNDER LAG — the gate's silent
   hole closes (pin 870d9fc9). The cached flip render convicted my own
   same-day revert (the stack-correct-fixes law live):

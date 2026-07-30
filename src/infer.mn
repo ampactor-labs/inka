@@ -1329,6 +1329,8 @@ fn movers_diff(ref rows, ref prev_prints, ref cur_prints, i, shown) = if i >= le
       {
         eprint_string("convergence: flip {name}\n  A: {prev_prints[i]}\n  B: {cur_prints[i]}\n")
         eprint_string(probe_tail_why(name))
+        probe_entry_hist(name)
+        eprint_string("  re-read: {row_print(name)}\n")
         movers_diff(rows, prev_prints, cur_prints, i + 1, shown + 1)
       }
     } else {
@@ -1355,6 +1357,41 @@ fn probe_tail_why(ref name) = match env_lookup(name) {
       },
       _ => "  scheme not TFun-rooted\n",
     },
+  },
+}
+
+// The flip's entry HISTORY — every env generation of the mover, index
+// + row-tail letter (o = open var, c = closed, a = all, ? = not
+// TFun-rooted): the A-vs-B histories discriminate a STALE entry
+// surfacing (an old index answering) from an OPEN publish appending
+// (a channel still unpinned). Bound-hit only; the walk is one env
+// snapshot.
+fn probe_entry_hist(ref name) = match env_snapshot() {
+  Env(entries) => eprint_string("  env-hist{entry_hist_line(entries, name, 0, 0, "")}\n"),
+}
+
+fn entry_hist_line(ref entries, ref name, i, count, acc) = if i >= len(entries) {
+  " n={int_to_str(count)}{acc}"
+} else {
+  match entries[i] {
+    (en, sch, _, _) => if en == name {
+      entry_hist_line(entries, name, i + 1, count + 1, "{acc} @{int_to_str(i)}:{tail_letter(sch)}")
+    } else {
+      entry_hist_line(entries, name, i + 1, count, acc)
+    },
+  }
+}
+
+fn tail_letter(ref sch) = match sch {
+  Forall(_, t) => match t {
+    TFun(_, _, row) => match row {
+      EfRow(_, _, tail) => match tail {
+        EtVar(_) => "o",
+        EtClosed => "c",
+        EtAll => "a",
+      },
+    },
+    _ => "?",
   },
 }
 

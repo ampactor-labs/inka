@@ -953,20 +953,23 @@ fn infer_program_trial(stmts) = {
   pre_register_decls(stmts)
   set_summaries(classify_fixpoint(stmts))
   // The DAG is PARSE truth, read before any judgment: free names +
-  // decl names give the call-DAG layers, so the trial itself walks
-  // CALLEE-FIRST — its finals are already dependency-ordered and the
-  // converged loop's first round VERIFIES instead of correcting (the
-  // source-order trial spent a whole judgment only to be re-derived;
-  // no judgment work is minted to be thrown away). The frees, layers,
-  // and stmts all ride out — computed once, serving the trial's walk,
-  // the rounds' cone, and the final's sweep (Carried-Truth: one
-  // collection, four readers; a re-parse in the converged arm also
-  // REPORTED its parse narration outside diag_quiet).
+  // decl names give the Tarjan BINDING GROUPS, so the trial itself
+  // walks callee-first with each cycle judged as one mono unit — its
+  // finals are the fixpoint on arrival and the converged loop's first
+  // round VERIFIES instead of correcting (the source-order trial spent
+  // a whole judgment only to be re-derived; no judgment work is minted
+  // to be thrown away). The frees, layers, and stmts all ride out —
+  // computed once, serving the trial's walk, the rounds' cone, and the
+  // final's sweep (Carried-Truth: one collection, four readers; a
+  // re-parse in the converged arm also REPORTED its parse narration
+  // outside diag_quiet).
   let frees_all = stmt_frees(stmts)
-  let layers = stmt_layers_ast(frees_all, map(stmt_decl_name, stmts))
+  let name_idx = layer_name_index(map(stmt_decl_name, stmts), 0, smap_new())
+  let layers = stmt_layers_ast(frees_all, name_idx)
+  let groups = scc_groups(frees_all, name_idx)
   // drift-audit: ignore — sequenced effectful read (the ranges' origin must precede the walk), CLAUDE.md Anchor 6 exclusion
   let start = graph_next()
-  let rows = trial_layer_sweep(stmts, layers, make_list(len(stmts)), 0, flat_max(layers, 0, 0))
+  let rows = trial_group_walk(stmts, groups, make_list(len(stmts)), 0)
   finalize_continuation_boundaries(0, graph_next())
   (rows, start, stmts, frees_all, layers)
 } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx ~>
@@ -1396,8 +1399,7 @@ fn stmt_frees_walk(ref stmts, own out, i) = if i >= len(stmts) {
 // on-stack callee contributes no edge, the SCC's members take depths
 // from their acyclic callees, and the rounds' iteration converges the
 // cycle's rows.
-fn stmt_layers_ast(ref frees_all, ref names) = {
-  let name_idx = layer_name_index(names, 0, smap_new())
+fn stmt_layers_ast(ref frees_all, ref name_idx) = {
   let n = len(frees_all)
   match layers_dfs_all(frees_all, name_idx, make_list(n), make_list(n), 0) {
     (depths, _) => depths,
@@ -1438,6 +1440,99 @@ fn layers_frees_max(ref frees_all, ref name_idx, own depths, own state, ref free
     },
   }
 }
+
+// ─── Binding groups — Tarjan SCCs over the same frees DAG ───────────────
+// The classic form the SOTA still runs on (GHC's binding groups; Salsa's
+// cycle recovery is the discover-at-runtime cousin — Mentl's DAG is parse
+// truth known up front, so it gets the stronger static form): groups pop
+// in callee-first topological order BY CONSTRUCTION (a sink SCC completes
+// first), each group judged ONCE with members sharing LIVE monomorphic
+// entries, generalized together at group exit — mutual recursion
+// constrains itself through shared cells within one judgment instead of
+// through published finals across rounds.
+// The walk state is one 7-tuple — (ctr, groups, idx, low, onstk, sp,
+// stk): next visit number · popped SCCs (callee-first) · visit number
+// per stmt (0 = unvisited) · Tarjan lowlink · stack-membership bit ·
+// stack cursor · stack buffer. Destructured whole at each step.
+fn scc_groups(ref frees_all, ref name_idx) = {
+  let n = len(frees_all)
+  match scc_sweep(
+    frees_all,
+    name_idx,
+    (1, [], make_list(n), make_list(n), make_list(n), 0, make_list(n)),
+    0
+  ) {
+    (_, groups, _, _, _, _, _) => groups,
+  }
+}
+
+fn scc_sweep(ref frees_all, ref name_idx, st, v) = if v >= len(frees_all) {
+  st
+} else {
+  let st2 = match st {
+    (ctr, groups, idx, low, onstk, sp, stk) => if idx[v] == 0 {
+      scc_visit(frees_all, name_idx, (ctr, groups, idx, low, onstk, sp, stk), v)
+    } else {
+      (ctr, groups, idx, low, onstk, sp, stk)
+    },
+  }
+  scc_sweep(frees_all, name_idx, st2, v + 1)
+}
+
+fn scc_visit(ref frees_all, ref name_idx, st, v) = match st {
+  (ctr, groups, idx, low, onstk, sp, stk) => {
+    let st1 =
+      (ctr + 1, groups, list_set(idx, v, ctr), list_set(low, v, ctr), list_set(onstk, v, 1), sp + 1, list_set(stk, sp, v))
+    match scc_edges(frees_all, name_idx, st1, v, frees_all[v], 0) {
+      (c2, g2, i2, l2, o2, s2, k2) => if l2[v] == i2[v] {
+        scc_pop((c2, g2, i2, l2, o2, s2, k2), v, [])
+      } else {
+        (c2, g2, i2, l2, o2, s2, k2)
+      },
+    }
+  },
+}
+
+fn scc_edges(ref frees_all, ref name_idx, st, v, ref frees, j) = if j >= len(frees) {
+  st
+} else {
+  let st2 = scc_edge_one(frees_all, name_idx, st, v, frees[j])
+  scc_edges(frees_all, name_idx, st2, v, frees, j + 1)
+}
+
+fn scc_edge_one(ref frees_all, ref name_idx, st, v, free) = match smap_get(name_idx, free) {
+  None => st,
+  Some(k) => match st {
+    (ctr, groups, idx, low, onstk, sp, stk) => if idx[k] == 0 {
+      match scc_visit(frees_all, name_idx, (ctr, groups, idx, low, onstk, sp, stk), k) {
+        (c2, g2, i2, l2, o2, s2, k2) => {
+          let lv = imin(l2[v], l2[k])
+          (c2, g2, i2, list_set(l2, v, lv), o2, s2, k2)
+        },
+      }
+    } else if onstk[k] == 1 {
+      let lv = imin(low[v], idx[k])
+      (ctr, groups, idx, list_set(low, v, lv), onstk, sp, stk)
+    } else {
+      (ctr, groups, idx, low, onstk, sp, stk)
+    },
+  },
+}
+
+fn scc_pop(st, v, own members) = match st {
+  (ctr, groups, idx, low, onstk, sp, stk) => {
+    let w = stk[sp - 1]
+    let members2 = push(members, w)
+    let onstk2 = list_set(onstk, w, 0)
+    if w == v {
+      (ctr, push(groups, members2), idx, low, onstk2, sp - 1, stk)
+    } else {
+      scc_pop((ctr, groups, idx, low, onstk2, sp - 1, stk), v, members2)
+    }
+  },
+}
+
+fn imin(a, b) = if a < b { a } else { b }
 
 // ─── ty_fingerprint — the alpha-normalized deterministic scheme render ──
 //
@@ -1627,24 +1722,32 @@ fn fp_names_next_idx(ref names, last, i, best) with Memory = if i >= len(names) 
 // graph already carries, read at the stmt boundary. The rows feed the
 // final pass's planned ranges (the deterministic handle partition,
 // types.mn's graph_mint_plan contract) and the stmt-layer projection.
-// The trial's walk — every stmt judged once, CALLEE-FIRST (the layer
-// sweep with no mask and no prior rows), rows written positionally.
-fn trial_layer_sweep(ref stmts, ref layers, own rows, l, maxl) = if l > maxl {
+// The trial's walk — binding groups in topological order, rows written
+// positionally. A singleton judges as today; a CYCLE judges as ONE unit.
+fn trial_group_walk(ref stmts, ref groups, own rows, g) = if g >= len(groups) {
   rows
 } else {
-  trial_layer_sweep(stmts, layers, trial_layer_stmts(stmts, layers, rows, l, 0), l + 1, maxl)
+  trial_group_walk(stmts, groups, trial_judge_group(stmts, sort(groups[g]), rows), g + 1)
 }
 
-fn trial_layer_stmts(ref stmts, ref layers, own rows, l, i) = if i >= len(stmts) {
+// A cycle's members judge in source order under the standard quantified
+// view. The MEASURED negative that shaped this (2026-07-30): the classic
+// binding-group MONO form — members sharing unquantified live cells,
+// generalized at group exit — was built here whole and REFUTED by the
+// wheel's own judgment: 29 E_TypeMismatch convictions (Int vs Float,
+// List(Byte) vs Int) where a cycle member is used at TWO instantiations
+// by its co-members. The rounds are a MYCROFT iteration (polymorphic
+// recursion by fixpoint) and the wheel genuinely uses that power inside
+// its cycles, so the weaker classic form cannot serve; the local form
+// that CAN is per-SCC Mycroft iteration (the residue index carries it).
+fn trial_judge_group(ref stmts, own members, own rows) =
+  group_judge_members(stmts, members, rows, 0)
+
+fn group_judge_members(ref stmts, ref members, own rows, j) = if j >= len(members) {
   rows
 } else {
-  trial_layer_stmts(
-    stmts,
-    layers,
-    if layers[i] == l { list_set(rows, i, stmt_measure_one(stmts[i])) } else { rows },
-    l,
-    i + 1
-  )
+  let i = members[j]
+  group_judge_members(stmts, members, list_set(rows, i, stmt_measure_one(stmts[i])), j + 1)
 }
 
 // The ONE measure home: judge the stmt, return its sizing row — the

@@ -1092,6 +1092,40 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ BINDING GROUPS FOR ORDER, MYCROFT FOR CYCLES — the
+  Tarjan substrate lands, and the classic mono-group form dies to the
+  wheel's own judgment (the SCC rung's first arc · pin 5db9b4c3). The
+  SOTA sweep ran first (Morgan's charge): the classic form (Heeren's
+  generalized-HM framing, GHC binding groups — SCCs judged once,
+  mono-within-group, generalize at exit, zero iteration) against the
+  bleeding edge (Salsa 2025-26 cycle recovery in rust-analyzer —
+  per-cycle FIXPOINT iteration with monotone join), and the decisive
+  difference named: Salsa iterates because a query system discovers
+  dependencies during execution; Mentl's frees DAG is parse truth
+  known up front. THE BUILD: scc_groups — Tarjan over the same frees
+  the layers read, 7-tuple state threaded whole (the record-threading
+  first form died to spread-update inference fragmenting the type;
+  the medium also taught that nominal record spread P{...a} is
+  unparsed — anonymous {...a} is the documented form), groups popped
+  callee-first BY CONSTRUCTION (a sink SCC completes first) — and the
+  trial walks groups in topo order, cycle members adjacent in source
+  order. THE COUNTED KILL, the arc's real yield: the classic MONO
+  semantics was built WHOLE (mono views over the prereg skeletons,
+  re-asserted per member, group-exit generalization — zero new
+  minting) and the wheel CONVICTED it with 29 E_TypeMismatch
+  (Int vs Float, List(Byte) vs Int — a cycle member used at TWO
+  instantiations by co-members): the rounds are a MYCROFT ITERATION
+  (polymorphic recursion by fixpoint) and the wheel genuinely uses
+  that power inside its cycles, so GHC's weaker classic form cannot
+  serve Mentl — the more-accepting semantics IS the ultimate form,
+  and the rung redirects to per-SCC LOCAL Mycroft iteration (Salsa's
+  own shape; fresh nodes per re-judgment via branch-cursor
+  instantiation — the fan as the iteration substrate). Board at the
+  pin: TRANSITION m3 == m4 at 343,707 lines; census 0; the SCC crawl
+  unchanged (14 convergence lines — order alone cannot fix
+  intra-cycle iteration, exactly as predicted). The residue index
+  carries the redirected spec.
+
 - 2026-07-30 · ▶▶▶ THE JUDGMENT CONVERGES CALLEE-FIRST — the rounds'
   resolution front dies at three roots, and the "oscillation" was
   never an oscillation (Hβ.infer.round-oscillation-movers' dig ·
@@ -6188,25 +6222,25 @@ internal diameter one round per link; the bound still cuts at ONE
 mover (parse_effect_list_from, 2026-07-30), and the daily-verb tax
 (~59s field read) is round-count × the per-round FIXED costs (full
 re-parse + classify_fixpoint + round_prints — cone-independent). THE
-FIX, one mechanism for both, and it has a forty-year name the SOTA
-still runs on: BINDING-GROUP INFERENCE (GHC / Typing-Haskell-in-
-Haskell — dependency analysis → SCC groups → each group judged ONCE
-with members sharing LIVE monomorphic entries, the mono-self-entry
-law extended to the whole group → generalize the group TOGETHER at
-group exit). Tarjan over the frees DAG the layers already read; a
-cycle's members constrain each other through shared live cells within
-one judgment instead of through published finals across rounds — so
-the acyclic part needs ZERO rounds and cycles need ZERO extra rounds:
-the trial-rounds-final trio may collapse toward trial(group-ordered)
-== final, retiring the rounds rather than shortening them. Where a
-group re-judgment is wanted (the verification pass), a fresh
-instantiation per re-judgment is exactly what the branch-cursor fan
-provides (Hβ.compile.fixpoint-is-larval-forked-cursor's first
-compile-spine cash-out). The bound retires to a convergence proof;
-the ~59s field read collapses with the round count; the
+FIX (re-specified 2026-07-30 after the classic form's measured
+refutation — the pin-5db9b4c3 ledger entry carries the kill): the
+Tarjan SCC substrate is LANDED (scc_groups; the trial walks groups
+callee-first), and classic GHC mono-binding-groups are REFUTED by 29
+wheel convictions — the rounds are a MYCROFT iteration and the
+wheel's cycles use polymorphic intra-group instantiation the mono
+form forbids. The remaining rung is PER-SCC LOCAL MYCROFT ITERATION
+(Salsa's own cycle-recovery shape, validated by the sweep): iterate
+ONLY a cycle group to its own fingerprint fixpoint — each re-judgment
+needs fresh parse nodes, which is exactly what the branch-cursor
+fan's fresh instantiation provides
+(Hβ.compile.fixpoint-is-larval-forked-cursor's first compile-spine
+cash-out) — and the whole-tree rounds retire to the verification
+pass. With it: the bound retires to a convergence proof, the ~59s
+field read collapses with the round count (the tax is round-count ×
+full re-parse + classify_fixpoint + round_prints), and the
 env.mn/lexer.mn owner relocations unblock. The position-sensitivity
-hazard is NARROWED to the one surviving chain, not closed, until the
-rung lands.
+hazard is NARROWED to the one surviving SCC chain, not closed, until
+the local iteration lands.
 
 `Hβ.emit.arm-closure-captures-record` RESOLVED: LANDED (2026-07-24, pin
 bb4b870e — the ledger head carries the arc). The capture form won over

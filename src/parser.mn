@@ -847,7 +847,17 @@ fn parse_one_param(ref tokens, pos) = match match kind_at(tokens, pos) {
 // — the parser names the topology, infer reads the algebra live.
 fn parse_effect_list(ref tokens, pos) = parse_effect_list_from(tokens, pos, EcUnion)
 
-fn parse_effect_list_from(ref tokens, pos, conn) = match parse_one_effect(tokens, pos) {
+// The AUTHORED row on this mutually-recursive pair is load-bearing
+// (the signature price at a cycle, the same one every HM judge
+// charges at polymorphic-recursion points): with no declaration the
+// pair's row tails oscillated open ↔ closed between judgment rounds —
+// the last surviving bound-hit mover — and WHICH attractor the bound
+// cut decided whether downstream install subtractions held or dropped
+// (the Intern this pair honestly performs then reached main's row as
+// the "phantom" that struck three times on 2026-07-30). The declared
+// row closes the tail deterministically; the attractors cease to
+// exist.
+fn parse_effect_list_from(ref tokens, pos, conn) with Memory + Alloc + GraphRead + GraphWrite + Diagnostic + Intern = match parse_one_effect(tokens, pos) {
   (name, negated, p) => {
     let entry = (name, negated, conn)
     let p2 = skip_ws(tokens, p)
@@ -873,7 +883,7 @@ fn parse_effect_list_from(ref tokens, pos, conn) = match parse_one_effect(tokens
 // parameterized `Sample(44100)`, or negated parameterized
 // `!Sample(44100)`. Args are scalar literals (int/float/string);
 // identifier / expression args land in a v2 walkthrough.
-fn parse_one_effect(ref tokens, pos) = match if at(tokens, pos, TBang) { (true, pos + 1) } else { (false, pos) } {
+fn parse_one_effect(ref tokens, pos) with Memory + Alloc + GraphRead + GraphWrite + Diagnostic + Intern = match if at(tokens, pos, TBang) { (true, pos + 1) } else { (false, pos) } {
   (negated, p) => // `Pure` lexes to TPure (a reserved word) — it IS the union identity, so the
   // parser emits the EPure EffName directly. build_declared_row maps it to
   // the pure row; the EPure variant replaces the old string-keyed Pure term (drift-3).   // drift-audit: ignore — describes the dissolution

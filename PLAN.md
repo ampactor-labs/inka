@@ -1092,6 +1092,35 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE SIGNATURE AT THE CYCLE — the last structural
+  oscillator dies, and the judgment CONVERGES for the first time (no
+  pin move — the authored rows are emission-neutral, boot fb265daa
+  stands). THE CONVICTION BY SOURCE: parse_one_effect performs
+  intern_str — the parser SCC's rows carry Intern HONESTLY — and the
+  undeclared pair's row tails oscillated open ↔ closed between rounds,
+  the last bound-hit mover; which attractor the bound cut decided
+  whether downstream install subtractions held, and the Intern this
+  pair genuinely performs reached main's row as the "phantom" that
+  struck three times (the relocations, the 2-cycle probe, the unfold's
+  widens — all three victims one carrier). THE KILL: the pair gains
+  its AUTHORED row (with Memory + Alloc + GraphRead + GraphWrite +
+  Diagnostic + Intern — the signature price every HM judge charges at
+  polymorphic-recursion points, SYNTAX's own form): the declared-row
+  gate closes the tails deterministically, the whole-tree bound-hit
+  goes from STRUCTURAL (every compile) to MARGINAL (run-variant at
+  the 11/12 boundary, emission stable — CLEAN m2 == m3 across runs).
+  TWO probes measured and reverted en route, each banked: the
+  declared-row gate's unbound arm PINNING the declaration when
+  resolution lags (principled — the `_ => ()` hole leaves a declared
+  row unenforced under mutual-recursion lag — but it re-perturbed
+  convergence; lands with the type-half understanding), and the
+  unfold stack re-measured (parse_effect_list_from's fingerprint
+  still flips under a fully-pinned ROW — the flip lives in the
+  scheme's TYPE half: the next dig's exact target, movers_diff
+  already renders it). Board: CLEAN m2 == m3; census 0; frontier
+  321/0; proof-exactness 9/9. The unfold patch stays banked; the
+  blocker demotes from structural to the marginal type-half residue.
+
 - 2026-07-30 · ▶ THE DEMAND LAW'S DUAL FACE — never demand a proof the
   body doesn't use (pin fb265daa). The whole-ledger projection's map
   put six of the ten surviving span_valid obligations at ONE pair of

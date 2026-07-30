@@ -2608,11 +2608,16 @@ between the wheel and its ultimate form, held open on purpose.
   proven pattern applied at audit_report_lines (the audit verb's per-fn
   header rendered fn names as pointer numerals), consume_twice_msg,
   and parallel_collision_msg (the affine ledger's two diagnostics named
-  their consumed binding as a numeral). The last marker exposed a JUDGE
-  gap, named: Hβ.infer.arm-binder-op-param-type — a handler arm's
-  binder judges free despite the op scheme's declared param type
-  (effect Consume declares consume(String, …); the arm's name read
-  free at emit). The CLASS-KILLER stays banked on
+  their consumed binding as a numeral). The last marker named a JUDGE
+  gap, Hβ.infer.arm-binder-op-param-type — NARROWED BY PROBE
+  (2026-07-30): an ordinary declared-param arm binder IS bound (a
+  `log(msg: String)` arm's `msg + 1` refuses E_TypeMismatch, measured
+  through the current judge — bind_arm_args reads the op's
+  instantiated params), so the general claim is retracted; the
+  residual is the `other =>` skip in infer_one_handler_arm (an op
+  whose scheme is not TFun-shaped skips bind_arm_args and its binders
+  judge free — the Consume-era witness's likely route, its one site
+  pinned). The CLASS-KILLER stays banked on
   Hβ.emit.show-free-floor in its constructive form: flow-directed
   demand (Lutze–Schuster–Brachthäuser, "The Simple Essence of
   Monomorphization", OOPSLA 2025 — instantiation flow tracked through

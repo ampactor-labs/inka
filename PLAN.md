@@ -6347,7 +6347,20 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.infer.round-oscillation-movers` (2026-07-29; DUG 2026-07-30 — the
+`Hβ.infer.round-oscillation-movers` — ESCALATED TO THE ACTIVE BLOCKER
+(2026-07-30, third victim): the Pure predicate-fn UNFOLD was built
+whole (332-line patch banked in the session scratchpad — the binder
+env absorbing the self special-case into node_const_env, the bool/
+match evaluator over litval, the body lookup through the env's
+Located reason + the span log, the Pure-row gate, the one-level
+PBoolNode hook) and its row widens flipped main's row to carry a
+phantom Intern no spine component performs — the same
+parts-don't-sum signature as the 2026-07-29 relocations and the
+2-cycle-cut probe. Row-perturbing engine work in verify/infer now
+GAMBLES the attractor every time; the oscillation root outranks every
+queued increment until fixed. The dig's standing instruments: the
+movers/flip channels, the Pure-pin row-printing bisection, the scc2
+trace. (2026-07-29; DUG 2026-07-30 — the
 pin-78b1736b landing carries the arc): the "oscillation" was a MONOTONE
 resolution front, and three of its four roots are CLOSED (the
 fingerprint's set-order fabrication; the backward-only layer walk; the

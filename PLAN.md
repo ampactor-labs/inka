@@ -1092,6 +1092,28 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE TIER'S OWN NEIGHBOURS — iteration-is-topology's
+  second family, at the audit's sharpest instance (pin b1b53025). The
+  selfhood audit found the file that HOSTS the verb-shape and
+  iteration-shape tiers carrying four convictions of its own, two of
+  them the tiers' own machinery — chain_scan (the scanner
+  pipe_shape_of calls) and rest_uses, four lines above pipe_shape_of
+  itself: the census landing had rewritten the tier's own body and left
+  its neighbours. Both migrate: the suffix use-count is a
+  `|> drop |> map |> sum` chain; the run-length scan splits into the
+  two stages it always was — per-position LINKS (does stmt i feed
+  stmt i+1 exactly once?) then a fold carrying the run, flushing at
+  >= 2 — with the one-step exception and the twice-used silence
+  preserved by construction. The tier's own gate fixtures answer
+  byte-identically (the migration cannot change what the tier says).
+  oracle.mn 4 → 2 convictions. THE SURVIVORS ARE NOT AN IDIOM
+  PROBLEM and are named as such: count_dependents and
+  collect_bound_positions walk HANDLE SPACE, and materializing a range
+  at graph scale is worse than the loop — their self-form is the graph
+  answering directly (a reverse-edge read, a bound-cell projection),
+  banked as Hβ.graph.reverse-edge-and-bound-projection, where the
+  payoff is complexity (count_dependents is O(graph) per position,
+  quadratic across the candidate set) rather than vocabulary.
 - 2026-07-30 · ▶▶ THE SEVERANCE VOCABULARY IS A GRAPH READ — the
   selfhood audit's F12, and the audit report's own headline executed
   (pin 1cb58126). Morgan's second dispatch ("audit all the ways Mentl
@@ -7103,6 +7125,19 @@ whose echo/interval/callee legs the engine honors — one-line
 annotations, march-measured each; the recursion-shaped ones
 (scan_for_span) wait on the IH. TagId's 0..255 and the float
 intervals stay the SMT tier's.
+
+`Hβ.graph.reverse-edge-and-bound-projection` — oracle.mn's two
+surviving iteration convictions, named at their true form (2026-07-30).
+`count_dependents` walks ALL handles asking "does this body reference
+pos?" — a REVERSE-EDGE query answered by scanning forward edges, O(graph)
+per position and quadratic across the candidate set; `collect_bound_positions`
+walks all handles collecting the NBound ones — a graph projection written
+as a range scan. Neither wants a materialized range (that is worse than
+the loop at graph scale): the self-form is the graph answering directly —
+the reverse edge read through the same use-edge channel `refs_of_name`
+already collects, and bound-cell enumeration as a projection over minted
+cells. Iteration-is-topology's tier-2/tier-4 case (a cycle or a read,
+never an index), and the payoff is complexity, not idiom.
 
 `Hβ.audit.capability-carries-its-evidence` — the severance teaching's
 remainder (named 2026-07-30 with the vocabulary's graph read). The

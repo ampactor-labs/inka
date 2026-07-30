@@ -423,34 +423,47 @@ fn count_var_uses(h, name: String) with GraphRead + Alloc + Memory = {
 // LetStmt(PVar) whose name has exactly one use, inside exactly the
 // next node, extends the current run; anything else flushes it. Runs
 // of length >= 2 are `|>` invites, reported as step counts.
-fn chain_scan(nodes, i, run, acc) with GraphRead + Alloc + Memory = if i + 1 >= len(nodes) {
-  if run >= 2 { acc ++ [run] } else { acc }
+// The spine's links, then the runs — two stages, neither threading an
+// index through a self-call. A LINK is per-position (does stmt i feed
+// stmt i+1 exactly once?); the runs are a fold over those links
+// carrying (run, acc), flushing a run of >= 2 as one `|>` invite.
+fn chain_scan(nodes) with GraphRead + Alloc + Memory = match chain_links(nodes) |> fold(
+  (0, []),
+  (state, link) => match state {
+    (run, acc) => if link { (run + 1, acc) } else { (0, keep_run(run, acc)) },
+  }
+) {
+  (run, acc) => keep_run(run, acc),
+}
+
+// A run of two or more bindings IS the chain the pipe draws; one step is
+// the law's own exception.
+fn keep_run(run, acc) with Alloc + Memory = if run >= 2 { acc ++ [run] } else { acc }
+
+fn chain_links(nodes) with GraphRead + Alloc + Memory = if len(nodes) < 2 {
+  []
 } else {
-  let link = match graph_node_body(node_handle(nodes[i])) {
+  range(0, len(nodes) - 1) |> map((i) => match graph_node_body(node_handle(nodes[i])) {
     NStmt(LetStmt(PVar(name), _, _)) => let_feeds_next(name, nodes, i),
     _ => false,
-  }
-  if link {
-    chain_scan(nodes, i + 1, run + 1, acc)
-  } else {
-    chain_scan(nodes, i + 1, 0, if run >= 2 { acc ++ [run] } else { acc })
-  }
+  })
 }
 
 fn let_feeds_next(name: String, nodes, i) with GraphRead + Alloc + Memory =
   count_var_uses(node_handle(nodes[i + 1]), name) == 1 && rest_uses(name, nodes, i + 2) == 0
 
-fn rest_uses(name: String, nodes, j) with GraphRead + Alloc + Memory = if j >= len(nodes) {
-  0
-} else {
-  count_var_uses(node_handle(nodes[j]), name) + rest_uses(name, nodes, j + 1)
-}
+// The suffix's total use-count — a `|>` chain over the tail, not an
+// index threaded through a self-call (iteration is topology; this is
+// the tier's own neighbour, convicted by the tier it sits four lines
+// above).
+fn rest_uses(name: String, nodes, j) with GraphRead + Alloc + Memory =
+  nodes |> drop(j) |> map((n) => count_var_uses(node_handle(n), name)) |> sum
 
 // pipe_shape_of — the verb-shape read over a fn's body spine, the
 // audit tier's entry (build_audit_report reads it per fn).
 fn pipe_shape_of(fn_handle) with GraphRead + Alloc + Memory = match graph_node_body(fn_handle) {
   NStmt(FnStmt(_, _, _, _, body)) => match graph_node_body(node_handle(body)) {
-    NExpr(BlockExpr(stmts, fin)) => chain_scan(stmts ++ [fin], 0, 0, []),
+    NExpr(BlockExpr(stmts, fin)) => chain_scan(stmts ++ [fin]),
     _ => [],
   },
   _ => [],

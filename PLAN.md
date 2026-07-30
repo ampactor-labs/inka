@@ -1092,6 +1092,61 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶▶ THE SESSION IS THE TRANSPORT — resident-first
+  becomes the CLI's default, and the dormant-to-canonical audit that
+  chose it is executed (Hβ.session.resident-verbs' CLI face ·
+  pin e09626cb). Morgan's question ("abilities that are dormant that
+  should become canonical default?") ranked five; the first lands
+  whole: `mentl session` derives the project ONCE (mcp_run's bracket,
+  the living check per connection) behind the shim's tcplisten seam
+  (the space verb's proven pattern, port 7377) and answers the READ
+  verbs — at/query/audit/teach, the field via at line 0 — over a
+  one-line wire speaking the CLI's OWN GRAMMAR: the shim tab-joins
+  argv, session_answer parses it with parse_cli_args (one grammar, two
+  transports, zero new protocol), and serves through the SAME
+  projections the cold verbs run. MEASURED: resident audit BYTE-EQUAL
+  to the cold verb's output; MISS fires for cold-only verbs and the
+  shim falls back to the cold exec; a bare teach serves the resident
+  entry. THE SHIM INTERROGATED (Morgan's unease was a correct
+  Carried-Truth read): its first forward form duplicated the routing
+  policy in a bash case — dispatch truth in TWO homes — and was cut
+  to a pure transport: EVERY verb is offered, the MEDIUM decides
+  (session_answer's match is the one policy home), MISS or a dead
+  port falls back. The shim's whole seam family (mounts, exec,
+  listeners) remains the WASI-p1 pressure gauge for the runner
+  migration (Hβ.ops.wasmtime-runner-migration), where it dissolves.
+  THE DIG'S TWO KILLS EN ROUTE: the resident at cost 131s PER CALL —
+  address resolution list_indexed the converged session's
+  multi-generation snoc span log (the iterate-flattens-once law's
+  FOURTH kill; flattened once before the walk: 131s → 0s, the cold
+  path faster too) — and the 1:4 "placeholder" projection was chased
+  through a refuted cell-filter theory (built, probed, REVERTED — the
+  winner carries a real body) to its true class: the HEAD-ANCHORED
+  decl span (the ranker landing's own named lathe-lag) leaves the
+  FnStmt uncontaining at name columns, so a tighter never-bound cell
+  wins and renders its free var; cold reproduces byte-identically —
+  a pre-existing address-face defect, NOT a session regression (the
+  transport faithful even to the bug), its fix the named
+  tree-containment form (Hβ.cursor.enclosing-decl-edge's address
+  face). AND THE MENTL-FIRST GATE (Morgan: "nothing else I've tried
+  has actually got you to stop using grep"): the repo's hook set gains
+  .claude/hooks/pre-bash-mentl-first.sh — a grep-family command
+  against .mn source is mechanically REFUSED with the verb menu that
+  answers better (query/refs/why/at/check/audit), artifact greps stay
+  legal, and the escape hatch (# mentl-skip: <reason>) is a ⟳(2)
+  confession naming the missing projection. Prose could not enforce
+  the medium-first order; the hook makes the wrong move unsayable —
+  the larval mentl audit at the toolchain boundary. GATES: two
+  frontier legs (session resident audit byte-equal · the MISS
+  sentinel), RED against any pre-session boot by construction; CLEAN
+  m2 == m3 at 339,257 lines; census 0. Remaining dormant-to-canonical
+  queue, ranked at the audit: the ambient frontier (bare `mentl` in a
+  project answers the ranked field), tighten joining fmt's canonical
+  pass, `mentl march` as the practiced default over the bash script,
+  session-image persistence on exit; the felt payoff of resident-first
+  stays capped until Hβ.infer.round-oscillation-movers lands (the
+  12-round tax on every re-derivation).
+
 - 2026-07-29 · ▶▶▶▶ THE ONE JUDGE — every judgment site runs the
   converged walk, and the single-pass infer_program DELETES
   (Hβ.infer.order-independent-verdicts' daily-verb face closes ·

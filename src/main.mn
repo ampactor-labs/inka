@@ -138,6 +138,7 @@ type EntryVerb
   | VMarch
   // the gate on MCP stdio — agents propose, nothing executes unproven
   | VMcp
+  | VSession
   // project name — required
   | VNew(String)
   // handler name, optional target
@@ -231,6 +232,11 @@ fn verb_specs() with Memory + Alloc = [VerbSpec(
   "<name>",
   (a) => if len(a) >= 3 { Invocation(VNew(a[2])) } else { ParseError("new needs a name: mentl new <name>") },
   "write <name>.mn here (one file; the imports are the manifest)"
+), VerbSpec(
+  "session",
+  "",
+  (a) => Invocation(VSession),
+  "the resident graph — read verbs answer live; run it in a project"
 ), VerbSpec("serve", "", (a) => Invocation(VServe), "the transport server"), VerbSpec(
   "space",
   "",
@@ -440,6 +446,7 @@ fn dispatch_invocation(verb) = {
     VRepl => repl_run(),
     VMarch => march_run(),
     VMcp => mcp_run(session_at_read),
+    VSession => session_run(session_at_read),
     VNew(name) => new_project(name),
     VWith(hname, target) => with_run(hname, target),
     VWelcome => welcome_run(),
@@ -1414,7 +1421,12 @@ fn address_project(ranges, target: String, line, col) = match range_of_module(ra
     } else {
       let gline = start + line - 1
       // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
-      let spans = span_index_of_snapshot()
+      // Flattened ONCE before the walk (the iterate-flattens-once law,
+      // fourth sighting): the log is push-built, so a raw list_index
+      // walk pays O(depth) per probe — tolerable for the cold verb's
+      // single generation, a measured 131s PER CALL on the resident
+      // session whose log carries every converged generation's parses.
+      let spans = list_to_flat(span_index_of_snapshot())
       match address_resolve(spans, gline, col) {
         None => {
           eprint_string("mentl: no node at {target}:{int_to_str(line)} (a blank or comment-only line)\n")
@@ -1435,6 +1447,7 @@ fn address_project(ranges, target: String, line, col) = match range_of_module(ra
 fn span_index_of_snapshot() with GraphRead = match graph_snapshot() {
   Graph(_x, spans) => spans,
 }
+
 
 // The span's file:line through the module-range map — the render-side
 // inverse of the concatenation fold. (range_of_module lives in driver.mn,

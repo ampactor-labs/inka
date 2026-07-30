@@ -69,6 +69,37 @@ if [ "\${1:-}" = "run" ] && [ -n "\${2:-}" ]; then
   rm -rf "\$tmp"
   exit "\$rc"
 fi
+if [ "\${1:-}" = "session" ]; then
+  # session = the resident graph. The listener is a HOST resource (the
+  # space seam's twin); the wheel derives once and answers read verbs
+  # over one-line connections speaking the CLI's own grammar. Port
+  # override: MENTL_SESSION_PORT.
+  exec "\$WT" run "\${WT_RUN_FLAGS[@]}" \\
+    --dir "\$PWD" --dir /tmp --dir "\$MENTL_HOME::/mentl-home" \\
+    -S "tcplisten=127.0.0.1:\${MENTL_SESSION_PORT:-7377}" \\
+    "\$MENTL_HOME/boot/mentl.wasm" session
+fi
+# Resident-first: when a session lives, EVERY verb is offered to it —
+# a tab-joined argv line over /dev/tcp, the answer streamed back. The
+# shim is a TRANSPORT, never a policy: WHICH verbs the session serves
+# is the medium's own dispatch (session_answer, mcp.mn — the one
+# home); anything it declines answers the MISS sentinel, and MISS or
+# a dead port falls through to the cold exec below. Resident and cold
+# run the same projections, so the answers agree byte-for-byte.
+mentl_session_try() {
+  local port="\${MENTL_SESSION_PORT:-7377}" out
+  { exec 3<>"/dev/tcp/127.0.0.1/\$port"; } 2>/dev/null || return 1
+  printf '%s\t' "\$@" >&3
+  printf '\n' >&3
+  out="\$(cat <&3)"
+  exec 3<&- 3>&-
+  case "\$out" in MENTL-SESSION-MISS*) return 1 ;; esac
+  printf '%s' "\$out"
+  return 0
+}
+if [ -n "\${1:-}" ]; then
+  if mentl_session_try "\$@"; then exit 0; fi
+fi
 if [ "\${1:-}" = "space" ]; then
   # space = the ide, served by the wheel. A listener is a HOST resource
   # (WASI p1 has no bind/listen — the wheel's find_listener only reads the

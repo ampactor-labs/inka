@@ -33,6 +33,8 @@ import driver
 
 import infer
 
+import runtime/net
+
 import query
 
 import pipeline
@@ -471,6 +473,115 @@ fn mcp_loop(ast, ranges, manifest, at_read, current) = {
 // below every mark. The derivation is resolution-conditional (the
 // prelude-seed precedent): outside a project, the gate serves propose
 // alone and query answers honestly.
+// ─── mentl session — the resident graph as the CLI's default transport ──
+//
+// The living session (the mcp serve loop's twin) behind the shim's
+// tcplisten seam: the graph derives ONCE, tracks the tree per
+// connection (session_current — the same living check the mcp loop
+// runs per message), and answers the READ verbs over a one-line wire
+// speaking the CLI's OWN grammar — the shim tab-joins argv, the
+// session parses it with parse_cli_args, one grammar two transports.
+// A verb the session does not serve (writers, process-level verbs, a
+// target that is not the resident entry) answers the MISS sentinel and
+// the shim falls back to the cold exec — resident-first, cold as the
+// fallback, byte-equal answers by construction (both routes run the
+// same projections over the same derivation law).
+fn session_run(at_read) = {
+  // drift-audit: ignore — sequenced effectful read consumed at TWO sites (the guard and the loop): the reuse exclusion, not a pipe stage
+  let lfd = find_listener()
+  if lfd < 0 {
+    // drift-audit: ignore — the flagged keyword is inside the teaching string (a quoted shell invocation), not control flow
+    eprint_string("mentl session: no listener preopened — the install shim adds -S tcplisten=127.0.0.1:7377 for this verb; by hand: wasmtime run <flags> --dir . -S tcplisten=127.0.0.1:7377 <boot> session\n")
+    1
+  } else if !fs_exists(driver_module_path("main")) {
+    eprint_string("mentl session: no resolvable main here — the session holds a project's living graph; run it in a project directory\n")
+    1
+  } else {
+    infer_context(() => match driver_entry_with_ranges("main") {
+      (ast, ranges) => {
+        eprint_string("mentl session: graph resident on 127.0.0.1:7377 — read verbs answer live; every other verb falls back cold through the shim\n")
+        session_sock_loop(
+          lfd,
+          driver_module_ast(ast, ranges, "main"),
+          ranges,
+          driver_manifest(ranges),
+          at_read,
+          session_current
+        )
+      },
+    } ~> wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry ~> tighten_collector)
+    0
+  }
+}
+
+// One connection = one verb line = one answer; the living check runs
+// per connection exactly as the mcp loop runs it per message, so an
+// edited tree re-derives into the resident world before the answer.
+// The accept loop is space_loop's shape — constant stack for the
+// session's life, the graph threading through as values.
+fn session_sock_loop(lfd, ast, ranges, manifest, at_read, current) = {
+  // drift-audit: ignore — sequenced effectful accept consumed by the read + reply below, the space_loop shape
+  let conn = sock_accept_blocking(lfd)
+  let line = strip_cr(session_read_line(conn))
+  match current(ast, ranges, manifest) {
+    (a2, r2, m2, _moved) => {
+      sock_write_str(conn, session_answer(line, a2, r2, at_read))
+      fd_close(conn)
+      session_sock_loop(lfd, a2, r2, m2, at_read, current)
+    },
+  }
+}
+
+// One read is enough for a verb line (the shim writes it whole and
+// shuts down its side); cut at the first newline.
+fn session_read_line(conn) = {
+  let cap = 65536
+  let buf = alloc(cap)
+  // drift-audit: ignore — sequenced effectful stream-read (the read_* exclusion): the byte count feeds the copy below
+  let n = sock_read(conn, buf, cap)
+  let got = if n < 0 { 0 } else { n }
+  let str = bytes_buf(got)
+  mem_copy(str + 8, buf, got)
+  let s = str_of_buf(str)
+  let nl = find_char(s, byte_len(s), 0, 10)
+  if nl < 0 { s } else { str_slice(s, 0, nl) }
+}
+
+// The wire is tab-joined argv (quoting survives the shell boundary);
+// a trailing tab leaves one empty tail element, dropped here.
+fn session_argv(line) = {
+  let parts = split(line, "\t")
+  let n = len(parts)
+  let trimmed = if n > 0 && byte_len(parts[n - 1]) == 0 { slice(parts, 0, n - 1) } else { parts }
+  ["mentl"] ++ trimmed
+}
+
+// The session serves the READS over the resident entry — at (the
+// eight-aspect address and the line-0 field), query, audit, teach —
+// through the SAME projections the cold verbs run. Everything else is
+// the MISS sentinel: writers and process-level verbs are cold by
+// design, and a target other than the resident entry re-derives cold
+// rather than answering about the wrong graph.
+fn session_answer(line, ast, ranges, at_read) = match parse_cli_args(session_argv(line)) {
+  ParseError(msg) => "session: {msg}\n",
+  Invocation(verb) => match verb {
+    VAt(target, l, c) => if target == "main" { str_concat_all(at_read(ranges, l, c)) } else { "MENTL-SESSION-MISS\n" },
+    VQuery(target, q) => if target == "main" {
+      "{render_query_result(ask(parse_query_string(q)))}\n"
+    } else {
+      "MENTL-SESSION-MISS\n"
+    },
+    VAudit(target) => if target == "main" { audit_project(ast) } else { "MENTL-SESSION-MISS\n" },
+    VTeach(target) => // A bare `teach` means "teach HERE" — the resident entry is here.
+    match target {
+      Some(m) => if m == "main" { teach_project(ast) } else { "MENTL-SESSION-MISS\n" },
+      None => teach_project(ast),
+    },
+    _ => // drift-audit: ignore — the wildcard IS the policy (cold-only verbs answer MISS by design; a new verb defaults to the cold path, never to a wrong resident answer)
+    "MENTL-SESSION-MISS\n",
+  },
+}
+
 fn mcp_run(at_read) = {
   fs_mkdir_impl(".build")
   fs_mkdir_impl(".build/mcp")

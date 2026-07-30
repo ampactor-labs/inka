@@ -1626,6 +1626,53 @@ for i in "${!compilers[@]}"; do
   else
     fail "check-forward-order (exit=$fwd_rc mismatches=$fwd_count — the forward-ref seam is open)"
   fi
+  # ── mentl session — the resident graph as the CLI's default transport ──
+  # The living session behind the shim's tcplisten seam answers read
+  # verbs over a one-line wire speaking the CLI's own grammar; anything
+  # it does not serve answers the MISS sentinel and the shim falls back
+  # cold. RED on any pre-session boot: the verb is unrecognized, nothing
+  # listens, both probes fail. The oracle is the strongest available:
+  # the resident answer must BYTE-EQUAL the cold verb's.
+  sessdir="$dir/session-proj"
+  mkdir -p "$sessdir"
+  printf 'fn width(n) = n + 2\n\nfn main() = width(40)\n' > "$sessdir/main.mn"
+  sess_port=7391
+  # An orphan from a prior run holds the port and answers with ITS stale
+  # graph (measured: a leftover session served the REPO main's audit —
+  # the fresh session could never bind). Clear by the port's own
+  # fingerprint, and mount the project as guest "." so the wheel's
+  # relative "main.mn" probe resolves the FIXTURE, never falling through
+  # to /mentl-home (the space verb's own mount convention).
+  pkill -f "tcplisten=127.0.0.1:${sess_port}" 2>/dev/null
+  sleep 1
+  (cd "$sessdir" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$sessdir::." --dir /tmp --dir "$ROOT::/mentl-home" -S "tcplisten=127.0.0.1:${sess_port}" "$compiler" session >"$dir/session.log" 2>&1) &
+  sess_pid=$!
+  : > "$dir/session-resident.txt"
+  for _ in $(seq 1 60); do
+    # Direct redirect, never command substitution — $(...) strips the
+    # trailing newline and a one-byte "divergence" fails the byte oracle.
+    bash -c "exec 3<>/dev/tcp/127.0.0.1/${sess_port} 2>/dev/null && printf 'audit\tmain\t\n' >&3 && cat <&3" > "$dir/session-resident.txt" 2>/dev/null
+    [ -s "$dir/session-resident.txt" ] && break
+    sleep 1
+  done
+  (cd "$sessdir" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$sessdir::." --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" audit main 2>/dev/null) > "$dir/session-cold.txt"
+  if [ -s "$dir/session-resident.txt" ] && cmp -s "$dir/session-resident.txt" "$dir/session-cold.txt"; then
+    pass "session resident audit (byte-equal to the cold verb)"
+  else
+    fail "session resident audit (empty or diverged; see $dir/session-resident.txt vs session-cold.txt)"
+  fi
+  sess_miss=$(bash -c "exec 3<>/dev/tcp/127.0.0.1/${sess_port} 2>/dev/null && printf 'compile\tmain\t\n' >&3 && cat <&3" 2>/dev/null)
+  if printf '%s' "$sess_miss" | grep -q 'MENTL-SESSION-MISS'; then
+    pass "session MISS sentinel (cold-only verbs decline; the shim falls back)"
+  else
+    fail "session MISS sentinel (got: $sess_miss)"
+  fi
+  # Kill by the port fingerprint — the subshell pid is the wrapper, and
+  # killing it orphans the wasmtime grandchild (the stale-graph server
+  # this leg's first red was).
+  pkill -f "tcplisten=127.0.0.1:${sess_port}" 2>/dev/null
+  kill "$sess_pid" 2>/dev/null
+  wait "$sess_pid" 2>/dev/null
   # ── mentl space — the ide served by the wheel ──────────────────────
   # The verb absorbs ide/serve.mn whole: the accept loop lives in
   # src/main.mn, the listener is the shim's tcplisten preopen seam (WASI

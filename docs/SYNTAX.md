@@ -802,9 +802,11 @@ let {name, ...rest} = morgan   // bind name; rest is a record of remaining field
 let {name: n, age: a} = morgan // bind to renamed locals
 ```
 
-*Lathe-lag:* the record-pattern REST (`...rest`) is spec — `PRecord` carries no
-rest slot yet (list-pattern rest and record-literal spread both work); the
-parser catches up (§Authority).
+The record-pattern REST is real (2026-07-30): `{name, ...rest}` binds `rest`
+to a fresh record of the remaining fields — the residual resolved through the
+receiver's type at lower, built by copying the residual slots at emit, and
+`rest`'s own field accesses read the residual's layout. `..._` keeps the
+open-acceptance without a bind, exactly as in list patterns.
 
 ### Field access
 

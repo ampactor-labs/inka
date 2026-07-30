@@ -2062,6 +2062,22 @@ for i in "${!compilers[@]}"; do
   else
     fail "diagnostics localize (reports: $lc_n; $(printf '%s' "$lc_out" | grep -m1 'E_TypeMismatch'))"
   fi
+
+  # ─── The record-pattern rest (SYNTAX's documented form, made real) ──
+  # `{age, ...rest}` binds the named field AND a fresh record of the
+  # remaining fields; rest's own field access reads the residual layout.
+  # Did not PARSE through any pin before 7932c192.
+  rr_wat=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-record-pattern-rest.mn" 2>/dev/null)
+  if [ -n "$rr_wat" ]; then
+    printf '%s' "$rr_wat" > "$dir/recrest.wat"
+    if wt_asm "$dir/recrest.wat" "$dir/recrest.wasm" 2>/dev/null && [ "$(wt_run "$dir/recrest.wasm" > /dev/null 2>&1; echo $?)" = "30" ]; then
+      pass "record-pattern rest: the residual record builds and reads (runs 30)"
+    else
+      fail "record-pattern rest (assemble/run)"
+    fi
+  else
+    fail "record-pattern rest (compile refused)"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

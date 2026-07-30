@@ -491,7 +491,10 @@ fn render_pat_tokens(p) with GraphRead + Memory + Alloc + !Mutate = match p {
   PLit(lv) => render_lit_value(lv),
   PTuple(ps) => "({render_pat_list(ps, ", ")})",
   PList(ps, rest) => "[{render_plist_inner(ps, rest)}]",
-  PRecord(fields) => "\{{render_pat_fields(fields, 0)}\}",
+  PRecord(fields, rest) => match rest {
+    None => "\{{render_pat_fields(fields, 0)}\}",
+    Some(rn) => if len(fields) == 0 { "\{...{rn}\}" } else { "\{{render_pat_fields(fields, 0)}, ...{rn}\}" },
+  },
   PAlt(ps) => render_pat_list(ps, " | "),
 }
 

@@ -5405,7 +5405,7 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
   },
   PTuple(pats) => infer_pat_tuple(pats, handle, span),
   PList(pats, rest) => infer_pat_list(pats, rest, handle, span),
-  PRecord(flds) => {
+  PRecord(flds, rest) => {
     // Bind scrutinee to TRecordOpen of the named fields with a
     // fresh row variable — the pattern accepts any record with AT
     // LEAST these fields. Each sub-pattern infers against a fresh
@@ -5416,6 +5416,26 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
     let pat_ty = mk_record_open(field_specs, row_h)
     constrain_scrutinee(handle, pat_ty, span, Inferred("record pattern"))
     infer_pat_record_subs(flds, field_specs, span)
+    match rest {
+      Some(rn) => if rn == "_" {
+        ()
+      } else {
+        // The rest binds the record of the REMAINING fields — the
+        // SAME residual row the open pattern carries, as a record
+        // with no named fields of its own: when the scrutinee
+        // resolves, the row does, and the rest's type IS that
+        // record (SYNTAX §"Pattern syntax for records").
+        let rest_h = mint(Located(span, LetBinding(rn, Inferred("record pattern rest"))))
+        graph_bind(rest_h, mk_record_open([], row_h), Located(span, Inferred("record pattern rest")))
+        env_extend(
+          rn,
+          Forall([], TVar(rest_h)),
+          Located(span, LetBinding(rn, Inferred("record pattern rest"))),
+          FnScheme
+        )
+      },
+      None => (),
+    }
   },
   PAlt(branches) => {
     // Every branch constrains the SAME scrutinee handle — branch
@@ -5503,12 +5523,12 @@ fn pat_binders(ref pat) = match pat {
   PCon(_, subs) => flat_map(pat_binders, subs),
   PTuple(subs) => flat_map(pat_binders, subs),
   PList(subs, rest) => flatten([flat_map(pat_binders, subs), plist_rest_binders(rest)]),
-  PRecord(flds) => flat_map(
+  PRecord(flds, rest) => flatten([flat_map(
     (fld) => match fld {
       (_, sub) => pat_binders(sub),
     },
     flds
-  ),
+  ), plist_rest_binders(rest)]),
   PAlt(branches) => // Branch 0 carries the whole alternation's binder set (infer's law).
   // Read through len/list_index — total over every representation — so
   // this walk runs identically under a boot whose list-pattern emit

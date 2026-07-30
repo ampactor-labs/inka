@@ -1376,7 +1376,7 @@ fn walk_lemit_pat(pat) = match pat {
     elems
   ),
   LPList(prefix, _, _) => each(walk_lemit_pat, prefix),
-  LPRecord(fs) => each(
+  LPRecord(fs, _) => each(
     (f) => match f {
       (_, _, sp) => walk_lemit_pat(sp),
     },
@@ -3044,7 +3044,13 @@ fn walk_locals_pat(pat, r, acc) = match pat {
   fold(acc, (a, p) => walk_locals_pat(p, RI32, a), sub_pats),
   LPTuple(elem_binds) => walk_locals_pat_tuple(elem_binds, acc),
   LPList(sub_pats, rest, _) => walk_locals_pat_rest(rest, walk_locals_pat_list(sub_pats, acc)),
-  LPRecord(field_binds) => walk_locals_pat_record(field_binds, acc),
+  LPRecord(field_binds, rest) => walk_locals_pat_rest(
+    match rest {
+      None => None,
+      Some((rn, _)) => Some(rn),
+    },
+    walk_locals_pat_record(field_binds, acc)
+  ),
   LPWild => acc,
   LPLit(_) => acc,
   LPAlt(branches) => // Branches bind the same names (infer's alternation law) — branch 0's
@@ -6796,7 +6802,7 @@ fn pat_always_matches(pat) = match pat {
   LPUnresolvedCon(_, _) => false,
   LPList(_, _, _) => false,
   LPTuple(ebs) => tuple_pats_always_match(ebs),
-  LPRecord(fbs) => record_pats_always_match(fbs),
+  LPRecord(fbs, _) => record_pats_always_match(fbs),
   LPAlt(branches) => alt_any_always_matches(branches),
 }
 
@@ -6932,7 +6938,7 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
     wat_emit("    (i32.const 1)\n")
     emit_pat_tuple_subs_predicate(ebs, path, path_len)
   },
-  LPRecord(fbs) => {
+  LPRecord(fbs, _) => {
     wat_emit("    (i32.const 1)\n")
     emit_pat_record_subs_predicate(fbs, path, path_len)
   },
@@ -7059,7 +7065,10 @@ fn emit_pat_binds_at(pat, path, path_len, val_repr) = match pat {
   // floor: never executes, always assembles.
   each((p) => emit_pat_binds_at(p, path, path_len, RI32), sub_pats),
   LPTuple(ebs) => emit_pat_tuple_binds(ebs, path, path_len),
-  LPRecord(fbs) => emit_pat_record_binds(fbs, path, path_len),
+  LPRecord(fbs, rest) => {
+    emit_pat_record_binds(fbs, path, path_len)
+    emit_pat_record_rest_bind(rest, path, path_len)
+  },
   LPList(sub_pats, rest, srep) => {
     match srep {
       SRFlat => emit_pat_subs_binds_flat(sub_pats, 0, path, path_len),
@@ -7200,6 +7209,50 @@ fn emit_pat_list_rest_bind(n_prefix, rest, path, path_len) = match rest {
   },
 }
 
+// The record rest: BUILD the remaining-fields record — alloc the
+// residual size, copy each residual slot from the receiver at its
+// full-set offset into the residual's own sorted layout, and bind the
+// declared rest local (the local doubles as the build accumulator, so
+// no scratch is spent). Word-width copies — the record-pattern floor
+// (the f64-aggregate-pattern-width residue owns the widening). Empty
+// specs = the receiver never resolved at lower: the loud floor, the
+// field-offset class's own census-marked refusal.
+fn emit_pat_record_rest_bind(rest, path, path_len) = match rest {
+  None => (),
+  Some((name, specs)) => if field_name_eq(name, "_") {
+    ()
+  } else if len(specs) == 0 {
+    wat_emit("    (unreachable) ;; record rest on unresolved receiver\n")
+  } else {
+    wat_emit("    (local.set $")
+    wat_emit(name)
+    wat_emit(" (call $alloc (i32.const ")
+    wat_emit(int_to_str(len(specs) * 4))
+    wat_emit(")))\n")
+    emit_rest_copies(specs, 0, name, path, path_len)
+  },
+}
+
+fn emit_rest_copies(ref specs, i, ref name, ref path, path_len) = if i >= len(specs) {
+  ()
+} else {
+  match list_index(specs, i) {
+    (_fname, src_idx) => {
+      wat_emit("    (local.get $")
+      wat_emit(name)
+      wat_emit(")\n")
+      emit_scrut_at(path, path_len)
+      wat_emit("    (i32.load offset=")
+      wat_emit(int_to_str(src_idx * 4))
+      wat_emit(")\n")
+      wat_emit("    (i32.store offset=")
+      wat_emit(int_to_str(i * 4))
+      wat_emit(")\n")
+    },
+  }
+  emit_rest_copies(specs, i + 1, name, path, path_len)
+}
+
 // Alternation binds: branches bind the same names (infer's law), but
 // each branch extracts along ITS OWN paths — re-dispatch on the branch
 // that matched. Binder-free alternation (the common tag-union case)
@@ -7222,7 +7275,14 @@ fn lowpat_has_binders(pat) = match pat {
   LPCon(_, _, sub_pats) => lowpats_have_binders(sub_pats),
   LPUnresolvedCon(_, sub_pats) => lowpats_have_binders(sub_pats),
   LPTuple(ebs) => tuple_pats_have_binders(ebs),
-  LPRecord(fbs) => record_pats_have_binders(fbs),
+  LPRecord(fbs, rest) => if record_pats_have_binders(fbs) {
+    true
+  } else {
+    match rest {
+      None => false,
+      Some(_) => true,
+    }
+  },
   LPList(sub_pats, rest, _) => if lowpats_have_binders(sub_pats) {
     true
   } else {

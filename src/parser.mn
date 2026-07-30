@@ -1929,7 +1929,7 @@ fn fresh_param_name(span: ValidSpan) = "__dp{int_to_str(fresh_handle(span))}"
 fn expr_to_pat(e) = match e {
   N(eb, _, _) => match eb {
     NExpr(VarRef(nm)) => if nm == "_" { PWild } else { PVar(nm) },
-    NExpr(MakeRecordExpr(flds)) => PRecord(sort_pat_fields(record_fields_to_pat(flds))),
+    NExpr(MakeRecordExpr(flds)) => PRecord(sort_pat_fields(record_fields_to_pat(flds)), None),
     NExpr(MakeTupleExpr(elems)) => PTuple(map(expr_to_pat, elems)),
     NExpr(MakeListExpr(elems)) => PList(map(expr_to_pat, elems), None),
     _ => PWild,
@@ -2461,7 +2461,7 @@ fn is_destructure_pat(pat) = match pat {
   PTuple(_) => true,
   PCon(_, _) => true,
   PList(_, _) => true,
-  PRecord(_) => true,
+  PRecord(_, _) => true,
   PAlt(branches) => // An alternation destructures iff its branches do; by the same-binders
   // law the first branch decides (a PAlt of bare PVars would be
   // nonsensical — but the read stays total, not assumed).
@@ -2770,7 +2770,7 @@ fn parse_pat(ref tokens, pos) = match kind_at(tokens, pos) {
     (sub, rest, p) => (PList(sub, rest), p),
   },
   TLBrace => match parse_pat_record_fields(tokens, skip_ws(tokens, pos + 1)) {
-    (flds, p) => (PRecord(sort_pat_fields(flds)), p),
+    (flds, rest, p) => (PRecord(sort_pat_fields(flds), rest), p),
   },
   _ => {
     report(PUnexpectedToken("unexpected token in pattern position", span_at(tokens, pos)))
@@ -2778,12 +2778,20 @@ fn parse_pat(ref tokens, pos) = match kind_at(tokens, pos) {
   },
 }
 
-// Parse `{name, age}` or `{name: sub_pat, age: sub_pat}`. Field
+// Parse `{name, age}`, `{name: sub_pat}`, or the rest form
+// `{name, ...rest}` (SYNTAX §"Pattern syntax for records" — the
+// list-pattern rest's exact shape: `..._` keeps PRESENCE without a
+// bind, per at_ellipsis' sibling at parse_pat_list_args). Field
 // puning is the default — `{name}` ≡ `{name: PVar("name")}`.
 fn parse_pat_record_fields(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) {
-    ([], p + 1)
+    ([], None, p + 1)
+  } else if at_ellipsis(tokens, p) {
+    let name_pos = skip_ws(tokens, p + 3)
+    let rest_name = ident_at(tokens, name_pos)
+    let p_after_name = skip_ws(tokens, name_pos + 1)
+    ([], Some(rest_name), expect(tokens, p_after_name, TRBrace))
   } else {
     let name = ident_at(tokens, p)
     let p1 = p + 1
@@ -2793,10 +2801,10 @@ fn parse_pat_record_fields(ref tokens, pos) = {
         let p4 = skip_ws(tokens, p3)
         if at(tokens, p4, TComma) {
           match parse_pat_record_fields(tokens, skip_ws(tokens, p4 + 1)) {
-            (rest, p5) => ([(name, sub_pat)] ++ rest, p5),
+            (rest, rest_name, p5) => ([(name, sub_pat)] ++ rest, rest_name, p5),
           }
         } else {
-          ([(name, sub_pat)], expect(tokens, p4, TRBrace))
+          ([(name, sub_pat)], None, expect(tokens, p4, TRBrace))
         }
       },
     }
@@ -3364,7 +3372,7 @@ fn free_vars_pat_binds(pat) = match pat {
   PCon(_, sub_pats) => free_vars_pat_binds_list(sub_pats),
   PTuple(sub_pats) => free_vars_pat_binds_list(sub_pats),
   PList(sub_pats, rest) => free_vars_merge(free_vars_pat_binds_list(sub_pats), free_vars_pat_rest_binds(rest)),
-  PRecord(flds) => free_vars_pat_binds_fields(flds),
+  PRecord(flds, rest) => free_vars_merge(free_vars_pat_binds_fields(flds), free_vars_pat_rest_binds(rest)),
   PAlt(branches) => // Alternation branches bind the SAME name set by law (SYNTAX
   // §"Pattern alternation" — E_PatternAlternationBindingMismatch
   // enforces it), so the first branch's binders ARE the arm's.

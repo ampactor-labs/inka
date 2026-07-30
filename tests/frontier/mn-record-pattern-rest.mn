@@ -1,0 +1,14 @@
+// expect: 30
+// SYNTAX §"Pattern syntax for records" made real: `{age, ...rest}`
+// binds the named field AND a record of the remaining fields — the
+// rest is a fresh record built from the receiver's residual slots
+// (resolved through the type at lower), and its own field access
+// reads the residual layout. Before the landing this form did not
+// parse (the documented lathe-lag).
+type Person = {age: Int, name: String}
+
+fn main() = {
+  let p = Person{age: 30, name: "Morgan"}
+  let {age, ...rest} = p
+  age + byte_len(rest.name) - 6
+}

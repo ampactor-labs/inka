@@ -1392,8 +1392,10 @@ type Pat
   | PTuple([Pat])
   // prefix pats, optional rest name (`...rest`)
   | PList([Pat], Option(String))
-  // [(fieldname, Pat)]
-  | PRecord([(String, Pat)])
+  // [(fieldname, Pat)], optional rest name (`...rest` — SYNTAX
+  // §"Pattern syntax for records": the rest binds a record of the
+  // remaining fields, the list-pattern rest's sibling)
+  | PRecord([(String, Pat)], Option(String))
   // pat_1 | pat_2 | ... — any branch matches; branches
   // bind the same names with unifiable types (SYNTAX.md
   // §"Pattern alternation — rule")

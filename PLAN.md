@@ -1092,6 +1092,29 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶▶ THE REST COMES TO RECORDS — SYNTAX's documented
+  `{name, ...rest}` pattern is real end to end, and the sweep fixes a
+  latent wrong-slot class as its rider (pin 7932c192). The parse
+  mirrors the list rest's at_ellipsis arm; infer binds the rest to a
+  record carrying the SAME residual row the open pattern constrains
+  (mk_record_open([], row_h) — resolution flows by construction);
+  lower_pat_typed resolves the receiver's full sorted field set
+  (structural TRecord, or nominal through nominal_record_fields — the
+  judge convicted the first TName three-field guess: arity 2, the env
+  channel is the truth) into residual (field, src_index) specs; emit
+  BUILDS the residual record (alloc + word-slot copies, the declared
+  rest local doubling as the build accumulator — no scratch spent)
+  and the rest's own field access reads the residual's layout. THE
+  RIDER: the named fields' offsets now read their TRUE full-set
+  indices where the receiver resolves — the pattern-subset index bake
+  (`4 × pattern-index`) was the wrong-slot class at the pattern
+  layer, pre-existing. An unresolved receiver floors loudly
+  (resolved-or-loud); nested rests ride the same floor until the
+  receiver threading deepens; word-width copies inherit the named
+  f64-aggregate-pattern-width residue. SYNTAX's lathe-lag note trued
+  in place. Fixture runs 30 (mn-record-pattern-rest, the frontier
+  leg registered); CLEAN m2 == m3 at 351,099 lines; census 0;
+  frontier 326/0; proof-exactness 9/9.
 - 2026-07-30 · ▶ A CAPABILITY UNLOCKS ONCE + two stale items counted
   (pin ec1d4664). The audit's severance line concatenated per-effect
   unlock lists undeduped — IO and Network both unlock CSandbox, so

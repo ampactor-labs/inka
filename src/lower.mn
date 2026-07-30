@@ -472,8 +472,13 @@ type LowPat
   // the scrutinee's PROVEN representation
   // (SRFlat licenses raw element loads)
   | LPList([LowPat], Option(String), SeqRep)
-  // [(field_name: String, offset_bytes: Int, sub_pat: LowPat)]
-  | LPRecord([(String, Int, LowPat)])
+  // [(field_name: String, offset_bytes: Int, sub_pat: LowPat)], optional
+  // rest binder (name, [(residual_field, src_index)]) — resolved at
+  // lower through the receiver's type (lower_pat_typed); emit BUILDS
+  // the remaining-fields record by copying each residual slot. An
+  // empty spec list = the receiver never resolved: emit's loud floor
+  // (resolved-or-loud, the field-offset class's own law).
+  | LPRecord([(String, Int, LowPat)], Option((String, [(String, Int)])))
   // alternation branches; arm matches if ANY
   // branch matches (predicate = OR); branches
   // bind the same names (infer's law)
@@ -3151,7 +3156,10 @@ fn bind_pat_locals(pat, ty) = match pat {
     bind_pat_locals_floor(sub_pats)
     bind_pat_rest(rest)
   },
-  PRecord(flds) => bind_pat_locals_fields(flds),
+  PRecord(flds, rest) => {
+    bind_pat_locals_fields(flds)
+    bind_pat_rest(rest)
+  },
   PAlt(branches) => // Alternation branches bind the same names (the alternation law);
   // the first branch's binds are the arm's. Face 10 — the inner
   // PTuple-match's wildcard fooled the flat census; this outer match
@@ -3319,7 +3327,94 @@ fn lower_pat_typed(pat, ty, srep) = match pat {
   // nested sequences are reached through elements (rep unknown) and stay
   // on the total reader.
   LPList(lower_pats(sub), rest, srep),
+  PRecord(flds, rest) => // The typed receiver resolves the FULL sorted field set (structural
+  // or nominal), so the rest's residual specs — and each NAMED field's
+  // true full-set offset — read from the type, never from the pattern's
+  // own subset (the subset-index bake was the wrong-slot class at the
+  // pattern layer). An unresolved receiver falls to the bare form:
+  // pattern-index offsets, the rest carried with empty specs for
+  // emit's loud floor.
+  match record_pat_full_fields(ty) {
+    Some(full_names) => LPRecord(lower_pat_record_fields_full(flds, full_names), lower_rest_specs(rest, flds, full_names)),
+    None => LPRecord(lower_pat_record_fields(flds, 0), lower_rest_unresolved(rest)),
+  },
   _ => lower_pat(pat),
+}
+
+// The receiver's full sorted field NAME list, when its type resolves to a
+// record — structural TRecord directly, or a nominal TName through the env's
+// RecordSchemeKind (nominal_record_fields — the one channel's fourth
+// reader). None = genuinely unresolved (the floor's honest input).
+fn record_pat_full_fields(ty) with GraphRead + EnvRead + Memory + Alloc = match tuple_pat_strip(ty) {
+  TRecord(full) => Some(map(
+    (f) => match f {
+      (n, _) => n,
+    },
+    full
+  )),
+  TName(nm, _) => match nominal_record_fields(nm) {
+    Some(declared) => Some(map(
+      (f) => match f {
+        (n, _) => n,
+      },
+      declared
+    )),
+    None => None,
+  },
+  _ => None,
+}
+
+// Named fields at their TRUE full-set offsets (4 × the field's index in
+// the receiver's sorted set — the same layout construction wrote); a
+// name the receiver lacks keeps the pattern-index fallback (infer
+// already reported it).
+fn lower_pat_record_fields_full(flds, full_names) = map(
+  (indexed) => match indexed {
+    (i, fld) => match fld {
+      (name, sub_pat) => {
+        let fi = name_index_in(full_names, name, 0)
+        (name, if fi < 0 { i } else { fi } * 4, lower_pat(sub_pat))
+      },
+    },
+  },
+  enumerate(flds)
+)
+
+fn name_index_in(ref names, target, i) with Memory = if i >= len(names) {
+  0 - 1
+} else {
+  if field_name_eq(list_index(names, i), target) { i } else { name_index_in(names, target, i + 1) }
+}
+
+// The residual specs: every receiver field the pattern does not name,
+// carried as (field, src_index) — the copy plan for emit's build.
+fn lower_rest_specs(rest, flds, full_names) with Memory + Alloc = match rest {
+  None => None,
+  Some(rn) => Some((rn, residual_specs(full_names, flds, 0))),
+}
+
+fn residual_specs(ref full_names, ref flds, i) with Memory + Alloc = if i >= len(full_names) {
+  []
+} else {
+  let fname = list_index(full_names, i)
+  if pat_names_field(flds, fname, 0) {
+    residual_specs(full_names, flds, i + 1)
+  } else {
+    [(fname, i)] ++ residual_specs(full_names, flds, i + 1)
+  }
+}
+
+fn pat_names_field(ref flds, fname, i) with Memory = if i >= len(flds) {
+  false
+} else {
+  match list_index(flds, i) {
+    (n, _) => if field_name_eq(n, fname) { true } else { pat_names_field(flds, fname, i + 1) },
+  }
+}
+
+fn lower_rest_unresolved(rest) = match rest {
+  None => None,
+  Some(rn) => Some((rn, [])),
 }
 
 // Strip alias/refinement and chase a top-level TVar to its bound type so a
@@ -3378,7 +3473,7 @@ fn lower_pat(pat) = match pat {
   },
   PTuple(sub) => LPTuple(lower_pat_tuple_uniform(sub, 0)),
   PList(sub, rest) => LPList(lower_pats(sub), rest, SRUnknown),
-  PRecord(flds) => LPRecord(lower_pat_record_fields(flds, 0)),
+  PRecord(flds, rest) => LPRecord(lower_pat_record_fields(flds, 0), lower_rest_unresolved(rest)),
   PAlt(branches) => LPAlt(lower_pats(branches)),
 }
 
@@ -5778,7 +5873,7 @@ fn lowpat_has_tuple(pat) with Memory + Alloc = match pat {
   LPTuple(_) => true,
   LPCon(_, _, subs) => any(lowpat_has_tuple, subs),
   LPUnresolvedCon(_, subs) => any(lowpat_has_tuple, subs),
-  LPRecord(fbs) => any(
+  LPRecord(fbs, _) => any(
     (f) => match f {
       (_, _, sp) => lowpat_has_tuple(sp),
     },

@@ -1778,6 +1778,14 @@ type TokenKind
   // The gradient teaches the substrate at the friction-point: when a user
   // types `for x in xs`, `E_NotAKeyword` surfaces a Quick Fix to the
   // verb form `xs |> each((x) => ...)`.
+  // ITERATION IS TOPOLOGY, stated whole (2026-07-30): structural walks
+  // are derived folds/`each`/`map` over the data's shape, cycles are
+  // `<~`, search is handler resumption. Named recursion stays LEGAL —
+  // but an index-threaded self-call (`f(xs, i + 1, n)`) is the
+  // imperative loop in recursion's costume (`mentl audit`'s
+  // iteration-shape tier names it), and polymorphic recursion prices a
+  // signature (the with-clause/annotated form — inference there is
+  // undecidable, the price is real math).
 
   // ─── Identifiers and literals (carry payload) ─────────────────────
   // Constructors share ONE namespace (env entries). The literal-token

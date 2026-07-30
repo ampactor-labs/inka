@@ -543,9 +543,16 @@ subsystem is the cursor in a different traversal mode.
 Graph + Env. A feature that can't be a handler means the graph is incomplete.
 
 **6. Write Mentl like Mentl.** The shape on the page IS the computation graph.
-**File-wide audit on touch:** let→pipe chains, recursion-with-`++`→map/fold,
-nested handle→`~>` chain, binary pair-forms→N-ary, imperative loops→handler,
-`str_eq`→`==`. Hold all three docs to the same standard.
+**ITERATION IS TOPOLOGY** (Morgan's interrogation, 2026-07-30 — the convergence
+tower is name-keyed recursion's invoice): structural walks are derived
+folds/`each`/`map` over the data's own shape, cycles are `<~`, search is
+handler resumption; an index-threaded self-call (`f(xs, i + 1, n)`) is the
+imperative loop in recursion's costume — the audit's iteration-shape tier
+convicts it, and named recursion that survives is the sig-priced residual.
+**File-wide audit on touch:** let→pipe chains, index-recursion→fold/each,
+recursion-with-`++`→map/fold, nested handle→`~>` chain, binary
+pair-forms→N-ary, imperative loops→handler, `str_eq`→`==`. Hold all three
+docs to the same standard.
 
 **7. Cascade discipline — walkthrough first, audit always.** (1) walkthrough
 density calibrated to handle complexity; (2) riffle-back audit before a new

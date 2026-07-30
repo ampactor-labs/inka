@@ -1225,7 +1225,7 @@ fn build_audit_report(fn_name, handle, ty, pending, tightens) = {
   let severable = severance_candidates(reached)
   let unlocks = severance_unlocks(severable)
   // The comment-reference edges' reverse read: which comments point here.
-  let referenced_by = owner_names_of(graph_comment_refs_of(handle), 0, [])
+  let referenced_by = graph_comment_refs_of(handle) |> map(comment_owner)
   // The verb-shape read (oracle's pipe_shape_of): single-use let-chains
   // that already draw a `|>` — the topology tier of the audit. Beside it
   // the iteration-shape read (recursion_shape_of): a self-call threading
@@ -1233,12 +1233,6 @@ fn build_audit_report(fn_name, handle, ty, pending, tightens) = {
   // is topology (|> stages, <~ cycles, derived folds), and the audit
   // names the costume where it stands.
   (fn_name, reached, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle), recursion_shape_of(handle), pending, tightens)
-}
-
-fn owner_names_of(ref owners, i, acc) = if i >= len(owners) {
-  acc
-} else {
-  owner_names_of(owners, i + 1, acc ++ [comment_owner(list_index(owners, i))])
 }
 
 // Severance candidates: the canonical effects (Alloc / IO / Network)
@@ -1258,54 +1252,33 @@ fn severance_vocabulary() =
 
 fn severance_candidates(reached) = severance_vocabulary() |> absent_from(reached)
 
-// absent_from — the candidates not present in `present`, candidates
-// datum-last per the Stage Law (the len param the old loop carried was
-// a cached fact — read live).
-fn absent_from(present, candidates) = absent_from_loop(present, candidates, 0, [])
+// absent_from — the candidates not present in `present` (a filter over
+// the vocabulary; structural == is the membership — the fold-eq, never
+// the hand-rolled twin). Iteration-is-topology's first migrated family:
+// five index-threaded loops in this section dissolved into
+// filter/any/fold, the audit's own tier the ratchet.
+fn absent_from(present, candidates) = candidates |> filter((c) => !name_in_list(present, c))
 
-fn absent_from_loop(present, candidates, i, acc) = if i >= len(candidates) {
-  acc
-} else {
-  let c = list_index(candidates, i)
-  let next = if name_in_list(present, c) { acc } else { acc ++ [c] }
-  absent_from_loop(present, candidates, i + 1, next)
-}
-
-fn name_in_list(names, target) = name_in_list_loop(names, target, 0, len(names))
-
-fn name_in_list_loop(names, target, i, n) = if i >= n {
-  false
-}
-// structural fold-eq, not the hand-rolled twin
-else if list_index(names, i) == target {
-  true
-} else {
-  name_in_list_loop(names, target, i + 1, n)
-}
-
-fn severance_unlocks(severable) = severance_unlocks_loop(severable, 0, len(severable), [])
+// The pin is load-bearing (the migration's own first red): under the
+// Stage Law the datum infers LAST, so the lambda's `x` is free when it
+// compiles and a bare `==` word-floors to pointer-eq — EffName records
+// mint per call, membership read always-false, and Alloc was offered
+// severable on allocating rows (the severance-honest leg caught it).
+// One typed operand restores the structural dispatch (either-operand
+// law). The migration recipe carries this: a datum-last lambda doing
+// ==/arith on the element states the element's type.
+fn name_in_list(names, target: EffName) = names |> any((x) => x == target)
 
 // A capability enters ONCE across the whole severed set: IO and
 // Network both unlock CSandbox, and the undeduped concat rendered
 // "Sandbox (proven no network access)" twice on every audit line
 // whose fn severs both (measured). Structural == over the nullary
-// capability ADT is the membership.
-fn severance_unlocks_loop(severable, i, n, acc) = if i >= n {
-  acc
-} else {
-  let caps = capabilities_for_severance(list_index(severable, i))
-  severance_unlocks_loop(severable, i + 1, n, acc ++ caps_not_in(caps, acc, 0))
-}
-
-fn caps_not_in(ref caps, ref acc, i) = if i >= len(caps) {
-  []
-} else {
-  let c = list_index(caps, i)
-  if cap_in(acc, c, 0) { caps_not_in(caps, acc, i + 1) } else { [c] ++ caps_not_in(caps, acc, i + 1) }
-}
-
-fn cap_in(ref xs, ref c, i) =
-  if i >= len(xs) { false } else { if list_index(xs, i) == c { true } else { cap_in(xs, c, i + 1) } }
+// capability ADT is the membership; the fold reads its own
+// accumulator for the dedup — genuinely a fold, never a map.
+fn severance_unlocks(severable) = severable |> fold(
+  [],
+  (acc, s) => acc ++ (capabilities_for_severance(s) |> filter((c) => !(acc |> any((x) => x == c))))
+)
 
 // Terminal renderer over AuditReport records — reads fields by name.
 // JSON / IDE-projection renderers are peer functions on the same
@@ -1377,13 +1350,9 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, refe
 // Ref lines speak the developer's coordinates through the module
 // seams (the one seam projection the debt lines read too); the seams
 // read once per render, never per line.
-fn render_ref_spans(ref spans, i) with GraphRead + Memory + Alloc =
-  ref_span_lines(spans, module_seams(), i)
-
-fn ref_span_lines(ref spans, ref seams, i) with Memory + Alloc = if i >= len(spans) {
-  ""
-} else {
-  "\n  at {span_render_local(seams, spans[i])}{ref_span_lines(spans, seams, i + 1)}"
+fn render_ref_spans(ref spans) with GraphRead + Memory + Alloc = {
+  let seams = module_seams()
+  spans |> map((s) => "\n  at {span_render_local(seams, s)}") |> str_concat_all
 }
 
 fn render_query_result(result) = match result {
@@ -1412,7 +1381,7 @@ fn render_query_result(result) = match result {
   // convicted once already — the graph computed it, the terminal threw it
   // away). Every "who calls X" grep this replaces was a re-derivation of
   // edges the weave holds.
-  "→ {int_to_str(len(spans))} reference(s){render_ref_spans(spans, 0)}",
+  "→ {int_to_str(len(spans))} reference(s){render_ref_spans(spans)}",
   QRVerifyDebt(obligations) => "→ {int_to_str(len(obligations))} verification obligations pending",
   QRHandlerProvider(provider) => match provider {
     Some(name) => "→ handled by {name}",

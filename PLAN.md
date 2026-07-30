@@ -1092,6 +1092,36 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE FIRST FAMILY MIGRATES — iteration-is-topology
+  executes its first family, and the migration's own red teaches the
+  recipe's pin (pin feccc8a9). The law now lives in all three docs
+  (CLAUDE Anchor 6's method statement, SYNTAX's token-note surface
+  clause, PLAN's ledger + peer — one home per projection). THE FAMILY:
+  pipeline's cold render/set walks — six index-threaded loop fns
+  (owner_names_of · absent_from_loop · name_in_list_loop ·
+  severance_unlocks_loop · caps_not_in · cap_in · ref_span_lines)
+  DELETED whole into map/filter/any/fold; the tier's file count
+  18 → 11; the wheel 55 lines smaller (the law smiling). THE RECIPE'S
+  LOAD-BEARING PIN, paid for in one measured red: under the Stage Law
+  the datum infers LAST, so a datum-last lambda's bare `==` word-floors
+  to pointer-eq while its element is still free — EffName membership
+  went always-false, everything read "absent," and Alloc was offered
+  severable on allocating rows; the severance-honest frontier leg
+  (its own prior landing's gate) caught it in ONE run — the gate
+  catching the migrator, the two-oracle law live. One typed operand
+  (`target: EffName`) restores the structural dispatch (the
+  either-operand law); the recipe states it permanently: a datum-last
+  lambda doing ==/arith on the element states the element's type
+  (the annotated-helper discipline, until monomorphization covers
+  datum-last free lambdas). Hot-path convicts (env_bucket_pos, the
+  gate scans) stay deliberately unmigrated — their families move
+  only under their own perf measurement. Morgan's two dispatches ride
+  this arc: the Fable practice scout (dev-practice research toward
+  the closed-loop terminus) and the Opus selfhood auditor ("all the
+  ways Mentl can be more ITSELF") run in the background, reports to
+  .build/research/. Board whole: frontier 329/0; micros 121/0;
+  proof-exactness 9/9; crown 5/5; census 0; CLEAN m2 == m3 at
+  354,506 lines.
 - 2026-07-30 · ▶▶ ITERATION IS TOPOLOGY — Morgan's interrogation of
   recursion itself becomes a law, a measurement, and the audit's next
   tier (pin d949fa7a). THE QUESTION ("was recursion even the correct

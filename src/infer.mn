@@ -952,15 +952,23 @@ fn infer_program_trial(stmts) = {
   register_primitives()
   pre_register_decls(stmts)
   set_summaries(classify_fixpoint(stmts))
+  // The DAG is PARSE truth, read before any judgment: free names +
+  // decl names give the call-DAG layers, so the trial itself walks
+  // CALLEE-FIRST — its finals are already dependency-ordered and the
+  // converged loop's first round VERIFIES instead of correcting (the
+  // source-order trial spent a whole judgment only to be re-derived;
+  // no judgment work is minted to be thrown away). The frees, layers,
+  // and stmts all ride out — computed once, serving the trial's walk,
+  // the rounds' cone, and the final's sweep (Carried-Truth: one
+  // collection, four readers; a re-parse in the converged arm also
+  // REPORTED its parse narration outside diag_quiet).
+  let frees_all = stmt_frees(stmts)
+  let layers = stmt_layers_ast(frees_all, map(stmt_decl_name, stmts))
   // drift-audit: ignore — sequenced effectful read (the ranges' origin must precede the walk), CLAUDE.md Anchor 6 exclusion
   let start = graph_next()
-  let rows = infer_stmt_list_measured(stmts)
+  let rows = trial_layer_sweep(stmts, layers, make_list(len(stmts)), 0, flat_max(layers, 0, 0))
   finalize_continuation_boundaries(0, graph_next())
-  // The stmts ride out with the rows: the converged loop's frees walk
-  // reads THIS parse instead of minting another (Carried-Truth — the
-  // arm-position re-parse also REPORTED its parse narration outside
-  // diag_quiet, doubling every check's format-lift lines).
-  (rows, start, stmts)
+  (rows, start, stmts, frees_all, layers)
 } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx ~>
 // The trial is a WORLD of its own: fresh analysis ledgers absorb its
 // verify obligations and ownership/region facts, dying with the
@@ -1003,7 +1011,7 @@ affine_ledger ~> region_tracker ~> verify_ledger
 // and summaries still run whole (deterministic per source, cheap; the
 // grades read arm STRUCTURE, which no round changes). Runs under
 // diag_quiet at the call site.
-fn infer_program_round(ref mask, ref prev_rows, stmts) = {
+fn infer_program_round(ref mask, ref prev_rows, ref layers, stmts) = {
   register_primitives()
   each(pre_register_alias, stmts)
   each(pre_register_effect, stmts)
@@ -1011,7 +1019,7 @@ fn infer_program_round(ref mask, ref prev_rows, stmts) = {
   set_summaries(classify_fixpoint(stmts))
   // drift-audit: ignore — sequenced effectful read (the ranges' origin must precede the walk), CLAUDE.md Anchor 6 exclusion
   let start = graph_next()
-  let rows = infer_stmt_list_masked(stmts, mask, prev_rows)
+  let rows = infer_stmt_list_masked(stmts, mask, prev_rows, layers)
   finalize_continuation_boundaries(0, graph_next())
   (rows, start)
 } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx ~> affine_ledger ~> region_tracker ~> verify_ledger
@@ -1043,17 +1051,47 @@ fn pre_register_masked(ref stmts, ref mask, i) = if i >= len(stmts) {
   pre_register_masked(stmts, mask, i + 1)
 }
 
-fn infer_stmt_list_masked(ref stmts, ref mask, ref prev_rows) =
-  masked_measure_walk(stmts, mask, prev_rows, [], 0)
+// The round walks CALLEE-FIRST — the final's own layer sweep, quiet
+// (no plan, no brackets), rows written positionally. The source-order
+// walk made closure propagate ONE CALLER-LAYER PER ROUND (measured
+// 2026-07-30, the flip trace: round 9 closed columns, round 10 its
+// caller comodulogram, round 11 pac_comodulogram — a caller judged
+// before its callee reads the PREVIOUS round's final, so convergence
+// cost O(call-depth) rounds and the 12-round bound cut the front
+// mid-climb). The layers were already computed at the loop's entry;
+// walking them makes a whole chain close in ONE round, and aligns the
+// rounds with the ORDER the reporting final actually judges in.
+fn infer_stmt_list_masked(ref stmts, ref mask, ref prev_rows, ref layers) =
+  masked_layer_sweep(stmts, mask, prev_rows, layers, make_list(len(stmts)), 0, flat_max(layers, 0, 0))
 
-fn masked_measure_walk(ref stmts, ref mask, ref prev_rows, own rows, i) = if i >= len(stmts) {
+fn masked_layer_sweep(ref stmts, ref mask, ref prev_rows, ref layers, own rows, l, maxl) = if l > maxl {
   rows
 } else {
-  masked_measure_walk(
+  masked_layer_sweep(
     stmts,
     mask,
     prev_rows,
-    if mask[i] { stmt_measure_step(rows, stmts[i]) } else { push(rows, prev_rows[i]) },
+    layers,
+    masked_layer_stmts(stmts, mask, prev_rows, layers, rows, l, 0),
+    l + 1,
+    maxl
+  )
+}
+
+fn masked_layer_stmts(ref stmts, ref mask, ref prev_rows, ref layers, own rows, l, i) = if i >= len(stmts) {
+  rows
+} else {
+  masked_layer_stmts(
+    stmts,
+    mask,
+    prev_rows,
+    layers,
+    if layers[i] == l {
+      list_set(rows, i, if mask[i] { stmt_measure_one(stmts[i]) } else { prev_rows[i] })
+    } else {
+      rows
+    },
+    l,
     i + 1
   )
 }
@@ -1163,22 +1201,8 @@ handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals 
 fn infer_program_converged(src) = match {
   src |> frontend |> infer_program_trial
 } ~> diag_quiet {
-  (rows, trial_start, tstmts) => {
+  (rows, _trial_start, _tstmts, frees_all, layers) => {
     let flat_rows = list_to_flat(rows)
-    // THE LAYERS ARE PARSE TRUTH, read where it lives: each stmt's free
-    // names (collect_free_vars over its own subtree) are its reference
-    // edges — the DAG, total and judgment-independent. The retired
-    // range-scan re-derived dependency from reasons inside each stmt's
-    // INFERENCE-mint range, but VarLookup reasons land on the PARSE
-    // nodes — minted before the trial's watermark, outside every range —
-    // so the scan read zero edges (measured: every stmt layer 0, every
-    // frozen base the prepass env, payloadfn's residual chain severed at
-    // the pre-arms scheme). The frees collect ONCE — off the TRIAL's own
-    // stmts (a re-parse here would run in the arm, OUTSIDE diag_quiet,
-    // and report its parse narration a second time) — and serve both
-    // the layers and the incremental cone below.
-    let frees_all = stmt_frees(tstmts)
-    let layers = stmt_layers_ast(frees_all, flat_rows)
     let prints = round_prints(flat_rows)
     converge_rounds(src, flat_rows, layers, frees_all, prints, prints, 1)
   },
@@ -1200,6 +1224,11 @@ fn infer_program_converged(src) = match {
 fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round) = if round >= 12 {
   eprint_string("convergence: schemes still moving after {int_to_str(round)} rounds — judging with the last round's finals; the fixpoint oracle arbitrates\n")
   eprint_string("convergence: movers:{movers_line(flat_rows, prev_prints, prints, 0, 0)}\n")
+  // The attractor instrument (Hβ.infer.round-oscillation-movers): the
+  // first movers' TWO round-fingerprints, verbatim — the diff between
+  // the A and B renders NAMES the flipping component (a row tail, an
+  // enc digit, a payload), which names the carrier to fix at its mint.
+  movers_diff(flat_rows, prev_prints, prints, 0, 0)
   converge_finish(src, flat_rows, layers)
 } else {
   let mask = if round == 1 {
@@ -1208,7 +1237,7 @@ fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round
     cone_mask(flat_rows, prev_prints, prints, frees_all)
   }
   match {
-    src |> frontend |> infer_program_round(mask, flat_rows)
+    src |> frontend |> infer_program_round(mask, flat_rows, layers)
   } ~> diag_quiet {
     (rows2, _start2) => {
       let flat2 = list_to_flat(rows2)
@@ -1216,6 +1245,14 @@ fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round
       if prints_equal(prints, prints2) {
         converge_finish(src, flat2, layers)
       } else {
+        // Graduated probe (⟳(3)): the tail rounds' flips per round — its
+        // first firing measured the front's one-layer-per-round climb
+        // (the three-root landing); it stands as the late-round trace
+        // whenever a future front appears.
+        if round >= 9 {
+          eprint_string("convergence: round {int_to_str(round)} flips:\n")
+          movers_diff(flat2, prints, prints2, 0, 0)
+        }
         converge_rounds(src, flat2, layers, frees_all, prints, prints2, round + 1)
       }
     },
@@ -1250,6 +1287,47 @@ fn movers_line(ref rows, ref prev_prints, ref cur_prints, i, shown) = if i >= le
       movers_line(rows, prev_prints, cur_prints, i + 1, shown)
     },
   }
+}
+
+// The flip render — the first movers' two round-fingerprints verbatim.
+// The fingerprints are alpha-normalized total renders (ty_fingerprint),
+// so the A/B byte-diff IS the flipping component; four movers bound the
+// stderr budget (one flipping component repeats across the family).
+fn movers_diff(ref rows, ref prev_prints, ref cur_prints, i, shown) = if i >= len(rows) || shown >= 4 {
+  ()
+} else {
+  match rows[i] {
+    (name, _) => if name != "" && cur_prints[i] != prev_prints[i] {
+      {
+        eprint_string("convergence: flip {name}\n  A: {prev_prints[i]}\n  B: {cur_prints[i]}\n")
+        eprint_string(probe_tail_why(name))
+        movers_diff(rows, prev_prints, cur_prints, i + 1, shown + 1)
+      }
+    } else {
+      movers_diff(rows, prev_prints, cur_prints, i + 1, shown)
+    },
+  }
+}
+
+// Graduated probe (⟳(3) — the bound-hit's standing diagnosis channel):
+// the mover's published row-tail cell and the REASON on it — the Why
+// engine naming whoever bound a published cell between two round
+// fingerprints. Its first firing killed the attractor theory (the
+// flips were a monotone front) and named the SCC-chain remainder.
+fn probe_tail_why(ref name) = match env_lookup(name) {
+  None => "  why: no env entry\n",
+  Some((sch, _, _)) => match sch {
+    Forall(_, t) => match t {
+      TFun(_, _, row) => match row {
+        EfRow(_, _, tail) => match tail {
+          EtVar(v) => "  tail v{int_to_str(v)}: {show_reason(graph_reason_at(v))}\n",
+          EtClosed => "  tail closed on the scheme face\n",
+          EtAll => "  tail all on the scheme face\n",
+        },
+      },
+      _ => "  scheme not TFun-rooted\n",
+    },
+  },
 }
 
 // The cone: a stmt re-judges when its own print moved between the last
@@ -1305,23 +1383,60 @@ fn stmt_frees_walk(ref stmts, own out, i) = if i >= len(stmts) {
 // depth 0 through the index miss. This is the DAG the fan's frozen
 // bases require complete: every reference IS an edge here, because
 // collect_free_vars walks the source itself.
-fn stmt_layers_ast(ref frees_all, ref rows) = {
-  let name_idx = layer_name_index(rows, 0, smap_new())
-  ast_layers_walk(frees_all, name_idx, make_list(len(frees_all)), 0)
+// The frees ARE the call DAG, WHOLE — depth = 1 + max over every
+// referenced decl's depth, both directions, by memoized descent over
+// the same frees the cone reads. The former backward-only single pass
+// dropped forward edges (a caller declared before its callee read
+// depth 0 for the edge), and the rounds paid it as the resolution
+// FRONT: closure climbed one forward-caller layer per round (measured
+// 2026-07-30 — round 9 closed columns, round 10 its caller
+// comodulogram, round 11 pac_comodulogram), so convergence cost
+// O(call-depth) rounds and the 12-round bound cut it mid-climb. A
+// cycle (mutual recursion) is exactly what the rounds iterate: an
+// on-stack callee contributes no edge, the SCC's members take depths
+// from their acyclic callees, and the rounds' iteration converges the
+// cycle's rows.
+fn stmt_layers_ast(ref frees_all, ref names) = {
+  let name_idx = layer_name_index(names, 0, smap_new())
+  let n = len(frees_all)
+  match layers_dfs_all(frees_all, name_idx, make_list(n), make_list(n), 0) {
+    (depths, _) => depths,
+  }
 }
 
-fn ast_layers_walk(ref frees_all, ref name_idx, own depths, i) = if i >= len(frees_all) {
-  depths
+// state[i]: 0 unvisited · 1 on the walk stack · 2 done (depths[i] final).
+fn layers_dfs_all(ref frees_all, ref name_idx, own depths, own state, i) = if i >= len(frees_all) {
+  (depths, state)
 } else {
-  let d = frees_depth(frees_all[i], name_idx, depths, i, 0, 0)
-  ast_layers_walk(frees_all, name_idx, list_set(depths, i, d), i + 1)
+  match layers_dfs(frees_all, name_idx, depths, state, i) {
+    (d2, s2) => layers_dfs_all(frees_all, name_idx, d2, s2, i + 1),
+  }
 }
 
-fn frees_depth(ref frees, ref name_idx, ref depths, i, j, best) = if j >= len(frees) {
-  best
+fn layers_dfs(ref frees_all, ref name_idx, own depths, own state, i) = if state[i] != 0 {
+  (depths, state)
 } else {
-  let d = backward_depth(name_idx, depths, frees[j], i)
-  frees_depth(frees, name_idx, depths, i, j + 1, if d > best { d } else { best })
+  match layers_frees_max(frees_all, name_idx, depths, list_set(state, i, 1), frees_all[i], 0, 0) {
+    (d2, s2, best) => (list_set(d2, i, best), list_set(s2, i, 2)),
+  }
+}
+
+fn layers_frees_max(ref frees_all, ref name_idx, own depths, own state, ref frees, j, best) = if j >= len(frees) {
+  (depths, state, best)
+} else {
+  match smap_get(name_idx, frees[j]) {
+    None => layers_frees_max(frees_all, name_idx, depths, state, frees, j + 1, best),
+    Some(k) => if state[k] == 1 {
+      layers_frees_max(frees_all, name_idx, depths, state, frees, j + 1, best)
+    } else {
+      match layers_dfs(frees_all, name_idx, depths, state, k) {
+        (d2, s2) => {
+          let cand = d2[k] + 1
+          layers_frees_max(frees_all, name_idx, d2, s2, frees, j + 1, if cand > best { cand } else { best })
+        },
+      }
+    },
+  }
 }
 
 // ─── ty_fingerprint — the alpha-normalized deterministic scheme render ──
@@ -1450,8 +1565,14 @@ fn fp_fields_walk(ref fields: [(String, Ty)], i, acc: String, map, n) with Graph
 }
 
 // Rows render by interned name handle — stable within one process, which
-// is the loop's whole lifetime. Present and absent sets are canonical
-// (sorted at birth); a var tail joins the alpha map.
+// is the loop's whole lifetime. A row's name sets are DEDUPED at birth
+// and deliberately ORDERLESS (effects.mn's own law: no algebra consumer
+// reads an order, so ef_make imposes none) — but a fingerprint is an
+// EQUALITY WITNESS, so this render is the one consumer that needs
+// determinism, and it pays for it here, per render, exactly as fp_var
+// alpha-numbers vars: names render in ascending handle order (measured
+// 2026-07-30: walk_lemit/walk_lemit_top fingerprinted one SET in two
+// storage orders and oscillated the cone to the round bound forever).
 // The row fingerprints its RESOLUTION, never its raw face: a var tail's
 // BINDING is row content (the reading law folds it in), so a raw-face
 // walk was bound-content-blind — a stmt whose row tail got taught
@@ -1462,8 +1583,8 @@ fn fp_fields_walk(ref fields: [(String, Ty)], i, acc: String, map, n) with Graph
 // the fingerprint moves exactly when the row's MEANING moves.
 fn fp_row(row, map, n) with GraphRead + Memory + Alloc = match resolve_row(row) {
   EfRow(present, absent, tail) => {
-    let ps = fp_names(present, 0, "")
-    let as_ = fp_names(absent, 0, "")
+    let ps = fp_names(present)
+    let as_ = fp_names(absent)
     match tail {
       EtClosed => ("{ps}-{as_}.", map, n),
       EtAll => ("{ps}-{as_}!", map, n),
@@ -1474,15 +1595,31 @@ fn fp_row(row, map, n) with GraphRead + Memory + Alloc = match resolve_row(row) 
   },
 }
 
-fn fp_names(ref names, i, acc) with Memory + Alloc = if i >= len(names) {
-  acc
-} else {
-  let s = match names[i] {
-    ENamed(h) => int_to_str(h),
-    EParameterized(h, _) => "{int_to_str(h)}(_)",
-    EPure => "",
+// Selection by ascending handle — handles are unique after the dedup
+// (one entry per handle; bare/instance collisions upgraded in place),
+// sets are ≤16 names, zero allocation.
+fn fp_names(ref names) with Memory + Alloc = fp_names_from(names, 0 - 1)
+
+fn fp_names_from(ref names, last) with Memory + Alloc = {
+  let idx = fp_names_next_idx(names, last, 0, 0 - 1)
+  if idx < 0 {
+    ""
+  } else {
+    let s = match names[idx] {
+      ENamed(h) => int_to_str(h),
+      EParameterized(h, _) => "{int_to_str(h)}(_)",
+      EPure => "",
+    }
+    "{s}+{fp_names_from(names, eff_name_handle(names[idx]))}"
   }
-  fp_names(names, i + 1, "{acc}{s}+")
+}
+
+fn fp_names_next_idx(ref names, last, i, best) with Memory = if i >= len(names) {
+  best
+} else {
+  let h = eff_name_handle(names[i])
+  let better = h > last && (best < 0 || h < eff_name_handle(names[best]))
+  fp_names_next_idx(names, last, i + 1, if better { i } else { best })
 }
 
 // The trial IS the sizing oracle: each stmt's row is its declared name and
@@ -1490,13 +1627,33 @@ fn fp_names(ref names, i, acc) with Memory + Alloc = if i >= len(names) {
 // graph already carries, read at the stmt boundary. The rows feed the
 // final pass's planned ranges (the deterministic handle partition,
 // types.mn's graph_mint_plan contract) and the stmt-layer projection.
-fn infer_stmt_list_measured(stmts) = fold([], stmt_measure_step, stmts)
+// The trial's walk — every stmt judged once, CALLEE-FIRST (the layer
+// sweep with no mask and no prior rows), rows written positionally.
+fn trial_layer_sweep(ref stmts, ref layers, own rows, l, maxl) = if l > maxl {
+  rows
+} else {
+  trial_layer_sweep(stmts, layers, trial_layer_stmts(stmts, layers, rows, l, 0), l + 1, maxl)
+}
 
-fn stmt_measure_step(rows, ref node) = {
+fn trial_layer_stmts(ref stmts, ref layers, own rows, l, i) = if i >= len(stmts) {
+  rows
+} else {
+  trial_layer_stmts(
+    stmts,
+    layers,
+    if layers[i] == l { list_set(rows, i, stmt_measure_one(stmts[i])) } else { rows },
+    l,
+    i + 1
+  )
+}
+
+// The ONE measure home: judge the stmt, return its sizing row — the
+// trial's and the rounds' sweeps both write it at the stmt's position.
+fn stmt_measure_one(ref node) = {
   // drift-audit: ignore — sequenced effectful read (the boundary sample must precede the inference), CLAUDE.md Anchor 6 exclusion
   let before = graph_next()
   infer_stmt(node)
-  push(rows, (stmt_decl_name(node), graph_next() - before))
+  (stmt_decl_name(node), graph_next() - before)
 }
 
 // The stmt's declared name — the layer projection's index key. A stmt with
@@ -1519,34 +1676,21 @@ fn stmt_decl_name(ref node) = match node {
   },
 }
 
-// ─── The stmt-layer projection — the trial's reasons ARE the DAG ────────
-// Every reference the trial resolved drew a VarLookup Reason at its own
-// handle, so a stmt's outgoing edges are the VarLookup names over its
-// trial range — read from the graph, never re-walked from the AST. Only
-// BACKWARD edges order the walk: a forward fn reference resolves to the
-// trial's published final scheme (never a same-pass publish), and the
-// genuinely order-coupled stmts — top-level lets — precede their
-// dependents in source. Depths therefore compute in one ascending pass
-// (layer = 1 + max over backward refs' layers), the layer graph is
-// acyclic by construction, and any missing edge leaves equal depths whose
-// within-layer source order preserves today's behavior exactly.
-fn layer_name_index(ref rows, i, idx) = if i >= len(rows) {
+// ─── The stmt-layer index — decl name → stmt position ───────────────────
+// The layer descent's edge resolver (stmt_layers_ast): a free name that
+// names a top-level decl is a call-DAG edge; anything else (a local, a
+// prelude primitive with no stmt) resolves to no edge. A stmt with no
+// key (destructured let, expression stmt) contributes no entry; missing
+// edges leave equal depths, and within-layer source order preserves the
+// dependency-safe walk.
+fn layer_name_index(ref names, i, idx) = if i >= len(names) {
   idx
 } else {
-  match rows[i] {
-    (name, _) => layer_name_index(rows, i + 1, if byte_len(name) > 0 { smap_add(idx, name, i) } else { idx }),
-  }
-}
-
-// The range-reason scan is RETIRED (2026-07-26): it read reasons inside
-// each stmt's inference-mint range, but VarLookup reasons land on PARSE
-// nodes — outside every range — so it saw zero edges (measured). The
-// layer projection reads parse truth now: pipeline.mn's stmt_layers_ast
-// over collect_free_vars. layer_name_index and backward_depth stay as
-// its readers.
-fn backward_depth(ref name_idx, ref depths, name, i) = match smap_get(name_idx, name) {
-  Some(j) => if j < i { depths[j] + 1 } else { 0 },
-  None => 0,
+  layer_name_index(
+    names,
+    i + 1,
+    if byte_len(names[i]) > 0 { smap_add(idx, names[i], i) } else { idx }
+  )
 }
 
 fn infer_program_final(rows, layers, pstart, stmts) = {

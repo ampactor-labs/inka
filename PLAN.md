@@ -1092,6 +1092,61 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶▶ THE JUDGMENT CONVERGES CALLEE-FIRST — the rounds'
+  resolution front dies at three roots, and the "oscillation" was
+  never an oscillation (Hβ.infer.round-oscillation-movers' dig ·
+  pin 78b1736b). THE INSTRUMENT FIRST (banked last session, landed as
+  the opening move): movers_diff renders each bound-hit mover's TWO
+  round-fingerprints verbatim — the A/B byte-diff IS the flipping
+  component — and probe_tail_why reads the mover's published row-tail
+  cell through graph_reason_at, the Why engine naming the binder. Its
+  first firing killed the attractor theory outright: every flip was
+  MONOTONE open→closed, one call-DAG layer per round (round 9 closed
+  columns, round 10 its caller comodulogram, round 11
+  pac_comodulogram — a resolution FRONT the 12-round bound cut
+  mid-climb; the 12-round tax was the wheel's call depth). THE THREE
+  ROOTS, each measured before fixed: (1) ty_fingerprint rendered a
+  row's name SET in storage order — walk_lemit/walk_lemit_top
+  fingerprinted one set in two orders and cone-thrashed forever; the
+  render now imposes ascending-handle order (fp_names' selection
+  walk), the equality witness's own contract, exactly as fp_var
+  alpha-numbers vars — while the ROW layer stays deliberately
+  orderless (its own law: no algebra consumer reads an order; the
+  fingerprint is the one consumer that needs determinism and pays at
+  the render, never on the ef_make hot path; fp_row's false
+  "sorted at birth" prose trued). (2) stmt_layers_ast counted only
+  BACKWARD edges — backward_depth's restriction was spelled in its
+  own name; deleted into a memoized descent over the WHOLE frees DAG
+  (cycles flatten via the on-stack guard), so forward-reference
+  chains close in one round. (3) the trial judged in SOURCE order
+  only to be re-derived by round 1 — the trial now walks its own
+  layers (frees + decl names are PARSE truth, computed once before
+  any judgment, riding out to serve trial walk + rounds' cone +
+  final's sweep; infer_stmt_list_measured deleted). MEASURED: movers
+  at the bound 16 → 1; the survivor is the unify/parser SCC chain —
+  an SCC's closure still crawls its internal diameter one round per
+  link (member B reads co-member A's previous-round final across the
+  cycle's stale link), so the bound still cuts and the field read
+  holds at ~59s (the tax is round-count × the per-round FIXED costs:
+  full re-parse + classify_fixpoint + round_prints, cone-independent).
+  Two honest widens rode (row_to_with_clause / neg_names_to_str
+  + GraphRead — the converged judge resolves deeper than the
+  bound-cut attractor ever did). TRANSITION m3 == m4 (twice en route,
+  once at the pin); census 0 at every generation. THE NAMED NEXT
+  RUNG, spec'd by tonight's trace: the SCC-LOCAL FIXPOINT — judge a
+  cycle as ONE unit iterated to its own fixpoint, whose true form is
+  the branch-cursor fan (fresh instantiations per re-judgment are
+  exactly what branch cursors provide) — the rounds absorbing into
+  the fused oracle, killing the remaining bound-hit AND the ~59s
+  daily-verb tax in one mechanism (rounds 12 → ~3). Banked with it
+  (Morgan's charges, 2026-07-30): the drift-audit ignore MARKERS and
+  the "drift" vocabulary itself are Claude-weakness bookkeeping with
+  no place in the medium's body — their eradication rides
+  Hβ.audit.drift-modes-read-the-row (the audit reads the ROW and the
+  graph's edge order; all ~223 markers delete with it); and the
+  perimeter hook gained wrapper-tolerant lead detection (timeout/nice/
+  env-prefixed mentl is still the verb).
+
 - 2026-07-29 · ▶▶ THE FIXTURE STATES ITS OWN CONTRACT — the refuse
   grammar lands and the frontier bash's dissolution channel opens
   (the self-exemplification pass's banked opening move executed ·
@@ -6120,28 +6175,38 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.infer.round-oscillation-movers` (2026-07-29, the one-judge landing's
-conviction): the converged judgment hits its 12-round bound on the wheel
-in EVERY tree variant probed — the movers (the walk_lemit family,
-driver_incremental, infer_program_trial/round/final,
-infer_stmt_list_planned, resume_bindings, resolve_field_offset,
-mentl_edit_session, session_current, verify_each_enriched, float_to_str,
-Sample, pac_comodulogram) oscillate between at least two self-stable
-attractors, and WHICH attractor the bound lands on is
-stmt-position-sensitive: relocating env_handler/intern_table between
-modules flipped main's row to carry a present Intern that no spine
-component carries (seven bisect blobs; every local mechanism killed by a
-Pure-pin row probe — the row-printing bisection instrument this dig
-minted: declare the suspect `with Pure`/`with !E` and the mismatch
-prints its true row). The oscillation predates 2026-07-29 (the pinned
-tree bound-hits identically) and was silent until the one-judge landing
-put the movers eprint on every daily verb's stderr. The dig: per-mover
-fingerprint diffing across rounds (ty_fingerprint already renders the
-alpha-normal form; print the two attractors' schemes for one mover and
-the flip names its carrier), then the rebind/union carrier fixed at its
-mint — the K>1 dig's banked kill plan is the recipe. Its cash-out
-unblocks the env.mn/lexer.mn owner relocations (the sweep's blocked
-half) and retires the 12-round bound to a convergence proof.
+`Hβ.infer.round-oscillation-movers` (2026-07-29; DUG 2026-07-30 — the
+pin-78b1736b landing carries the arc): the "oscillation" was a MONOTONE
+resolution front, and three of its four roots are CLOSED (the
+fingerprint's set-order fabrication; the backward-only layer walk; the
+source-order trial). The REMAINDER, measured by the graduated flip
+instrument (movers_diff + probe_tail_why, now the bound-hit's standing
+diagnosis channel): the unify/parser SCC chain — within a
+mutual-recursion cycle, member B reads co-member A's PREVIOUS-round
+final across the cycle's stale link, so an SCC's closure crawls its
+internal diameter one round per link; the bound still cuts at ONE
+mover (parse_effect_list_from, 2026-07-30), and the daily-verb tax
+(~59s field read) is round-count × the per-round FIXED costs (full
+re-parse + classify_fixpoint + round_prints — cone-independent). THE
+FIX, one mechanism for both, and it has a forty-year name the SOTA
+still runs on: BINDING-GROUP INFERENCE (GHC / Typing-Haskell-in-
+Haskell — dependency analysis → SCC groups → each group judged ONCE
+with members sharing LIVE monomorphic entries, the mono-self-entry
+law extended to the whole group → generalize the group TOGETHER at
+group exit). Tarjan over the frees DAG the layers already read; a
+cycle's members constrain each other through shared live cells within
+one judgment instead of through published finals across rounds — so
+the acyclic part needs ZERO rounds and cycles need ZERO extra rounds:
+the trial-rounds-final trio may collapse toward trial(group-ordered)
+== final, retiring the rounds rather than shortening them. Where a
+group re-judgment is wanted (the verification pass), a fresh
+instantiation per re-judgment is exactly what the branch-cursor fan
+provides (Hβ.compile.fixpoint-is-larval-forked-cursor's first
+compile-spine cash-out). The bound retires to a convergence proof;
+the ~59s field read collapses with the round count; the
+env.mn/lexer.mn owner relocations unblock. The position-sensitivity
+hazard is NARROWED to the one surviving chain, not closed, until the
+rung lands.
 
 `Hβ.emit.arm-closure-captures-record` RESOLVED: LANDED (2026-07-24, pin
 bb4b870e — the ledger head carries the arc). The capture form won over

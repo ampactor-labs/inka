@@ -1203,6 +1203,14 @@ for i in "${!compilers[@]}"; do
   # false E_TypeMismatch (Person vs {age: t | r}) on the canonical SYNTAX
   # form, and a row-polymorphic `{age: Int, ...}` parameter refused a
   # Person outright.
+  # SYNTAX §Indexing's tuple form judges and runs: a receiver chased to a
+  # tuple, indexed by a literal, types as that position's element (the
+  # judge's half of the dispatch lower always carried). RED on the
+  # pre-route boot: `p[1]` on a let-bound tuple raised E_TypeMismatch
+  # (the index sugar forced every receiver to List — the census's own
+  # conviction at audit_walk).
+  run_program "$compiler" tuple-index \
+    "$ROOT/tests/frontier/mn-tuple-index.mn" 42 yes "$dir"
   run_program "$compiler" nominal-field-access \
     "$ROOT/tests/frontier/mn-nominal-field-access.mn" 42 yes "$dir"
   run_program "$compiler" rowpoly-accepts-nominal \

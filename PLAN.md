@@ -1092,6 +1092,26 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶ THE TUPLE INDEXES — SYNTAX §Indexing's documented
+  form judges (CLEAN m2 == m3 · pin 33a60e05). The index sugar forced
+  EVERY receiver to List — the census's own conviction at audit_walk
+  one pin earlier — while lower always carried the tuple dispatch (its
+  LFieldLoad prefix-sum). The judge's half runs now: a receiver whose
+  SHALLOW root binding is a tuple (graph_chase + fold_strip — the
+  first form's chase_deep_at tripped its own depth belt on the wheel's
+  unconverged chains, measured at the m3 leg: a mid-judgment probe is
+  never the value-boundary fold), indexed by a LITERAL, types as that
+  position's element; an out-of-range literal reports EConstructorArity
+  at the judgment; a runtime-variable index on a product, or a free
+  receiver, takes the generic force and its honest mismatch. Named
+  remainder of Hβ.infer.index-expr-dispatch: the open POSITIONAL
+  demand (TRecordOpen's tuple sibling) for generic-body receivers — a
+  literal-indexed tuple in a generic body destructures until it lands.
+  Named seam: the judge's Cast(GNode) row render exceeds the parser's
+  declared-row grammar (bare Cast is the authored spelling) — a
+  proven-row report you cannot paste as a declaration. Fixture
+  mn-tuple-index (the let-bound receiver, the literal form, a Float
+  element) runs 42, RED on the prior boot. Frontier 318/0; census 0.
 - 2026-07-29 · ▶▶ THE AUDIT READS THE BANKS — pending proofs and
   tightenings speak per fn, and the session's bare path joins the
   bracket (CLEAN m2 == m3 · pin c453d7a0). The up-to-dateness gap

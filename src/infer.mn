@@ -2355,19 +2355,43 @@ fn infer_expr(ref node) = match node {
       infer_expr(index)
       match receiver {
         N(_, _, rh) => match index {
-          N(_, _, ih) => {
+          N(ibody, _, ih) => {
             let exp_i = mint(Inferred("index value"))
             graph_bind(exp_i, TInt, Located(span, Inferred("index value")))
             unify(ih, exp_i, span, Inferred("index value"))
-            // The generic path is total: a String receiver peels through its
-            // alias to the byte list, so the element binds TByte and the
-            // subscript result is the byte — the receiver probe this replaces
-            // special-cased the retired nullary sentinel.
-            let elem_h = mint(Inferred("subscript element"))
-            let exp_r = mint(Inferred("subscript receiver"))
-            graph_bind(exp_r, TList(TVar(elem_h)), Located(span, Inferred("subscript receiver")))
-            unify(rh, exp_r, span, Inferred("subscript receiver"))
-            graph_bind(handle, TVar(elem_h), Located(span, Inferred("subscript result")))
+            // Tuple-const-index — the judge's half of the dispatch lower
+            // already performs (its LFieldLoad prefix-sum): a receiver
+            // CHASED to a tuple, indexed by a literal, types as that
+            // position's element (SYNTAX §Indexing's compile-time
+            // extraction, H6 bounds at the judgment). The read is the
+            // SHALLOW root binding (graph_chase — one union-find walk,
+            // no deep fold: chase_deep_at mid-inference tripped its own
+            // depth belt on the wheel's unconverged chains, measured at
+            // the m3 leg). A FREE receiver (a generic body's param)
+            // still takes the list force — the open POSITIONAL demand
+            // (TRecordOpen's tuple sibling) is the named remainder of
+            // Hβ.infer.index-expr-dispatch; a literal-indexed tuple in
+            // a generic body destructures until it lands.
+            match index_receiver_shallow(rh) {
+              TTuple(elems) => match ibody {
+                NExpr(LitInt(k)) => if k >= 0 && k < len(elems) {
+                  graph_bind(handle, list_index(elems, k), Located(span, Inferred("tuple element")))
+                } else {
+                  // H6 at the judgment: the literal names a position the
+                  // product does not have — expected arity vs the index.
+                  report(EConstructorArity("tuple index", len(elems), k, span))
+                  graph_bind(
+                    handle,
+                    TVar(mint(Inferred("tuple index out of range"))),
+                    Located(span, Inferred("tuple index out of range"))
+                  )
+                },
+                _ => // a runtime-variable index cannot type a heterogeneous
+                // product — the list force below reports the honest mismatch
+                infer_index_force(rh, handle, span),
+              },
+              _ => infer_index_force(rh, handle, span),
+            }
           },
         },
       }
@@ -4487,6 +4511,30 @@ fn param_types_loop(params, i, n, own acc) = if i >= n {
 }
 
 fn arity_mismatch(la, lb, span: ValidSpan) = report(EFnArityMismatch(la, lb, span))
+
+// The subscript's generic path — total over sequences: the receiver
+// forces to a list of the fresh element (a String receiver peels
+// through its alias to the byte list, so the element binds TByte).
+// The tuple-const route in the IndexExpr arm runs FIRST; this force is
+// what a free or sequence receiver takes, and what reports the honest
+// mismatch when a runtime-variable index meets a heterogeneous product.
+// The subscript receiver's SHALLOW read: the root's own binding,
+// alias-peeled — never the deep fold (chase_deep_at's depth belt is
+// for value-boundary folds, not a mid-judgment probe). An unbound or
+// non-tuple root answers TUnit here, which no tuple arm matches — the
+// caller falls to the generic force.
+fn index_receiver_shallow(rh) with GraphRead + Memory = match graph_chase(rh) {
+  GNode(NBound(rty), _) => fold_strip(rty),
+  _ => TUnit,
+}
+
+fn infer_index_force(rh, handle, span: ValidSpan) with FreshHandle + GraphWrite + GraphRead + Memory + Alloc + Cast + Diagnostic + Intern + EnvRead = {
+  let elem_h = mint(Inferred("subscript element"))
+  let exp_r = mint(Inferred("subscript receiver"))
+  graph_bind(exp_r, TList(TVar(elem_h)), Located(span, Inferred("subscript receiver")))
+  unify(rh, exp_r, span, Inferred("subscript receiver"))
+  graph_bind(handle, TVar(elem_h), Located(span, Inferred("subscript result")))
+}
 
 fn type_mismatch(ref a, ref b, span: ValidSpan, reason) = report(ETypeMismatch(a, b, span))
 

@@ -1,0 +1,11 @@
+// expect: 42 — SYNTAX §Indexing's tuple form judges and runs: a receiver
+// chased to a tuple, indexed by a literal, types as that position's
+// element (the judge's half of the dispatch lower always carried — its
+// LFieldLoad prefix-sum). Both receiver shapes: the literal and the
+// let-bound var (the census-convicted case). A Float element proves the
+// width rides the position (the wide-tuple class's judged twin).
+fn main() = {
+  let p = (40, 2.5, 1)
+  let direct = (1, 2, 3)[0]
+  p[0] + p[2] + direct
+}

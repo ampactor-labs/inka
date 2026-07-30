@@ -1,0 +1,24 @@
+// expect: 7
+// BANKED RED (Hβ.effects.directional-fn-row-edge — unregistered until
+// the landing): the call edge's fn-arg row meet runs EQUALITY for
+// closed-closed pairs, so a PURE fn is refused where a Tick-expecting
+// param plainly admits it (measured 2026-07-30: "E_EffectMismatch:
+// Pure vs Tick" at the run_ticky call — the over-refusal face; the
+// barrier landing's subsumption covers only the EtAll-tailed arms).
+// The landing makes the call's arg-to-param edge one-directional
+// (arg row SUBSUMES INTO param row) for fn-typed params: this file
+// then compiles clean and runs 7, while the noisy-into-Pure control
+// (mn-hof-row-gate's face) keeps refusing.
+effect Tick {
+  tick()
+}
+
+handler ticker {
+  tick() => resume(),
+}
+
+fn run_ticky(f: () -> Int with Tick) -> Int = f()
+
+fn quiet() -> Int = 7
+
+fn main() = run_ticky(quiet) ~> ticker

@@ -6670,6 +6670,24 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.effects.directional-fn-row-edge` — SHARPENED BY PROBE (2026-07-30;
+named at the 7c91063c barrier landing): the call edge's fn-arg row
+meet runs EQUALITY for closed-closed pairs — an inferred-Pure fn is
+REFUSED where a `with Tick` param plainly admits it ("E_EffectMismatch:
+Pure vs Tick", measured; the banked RED is
+tests/frontier/mn-fn-arg-row-directional.mn, unregistered until the
+landing) — while the barrier landing's subsumption covers only the
+EtAll-tailed arms of unify_row_canonical. The landing: the call's
+arg-to-param edge runs ONE-directional subsumption (arg row ⊆ param
+row) for fn-typed params, scoped to the fn's TOP row (nested variance
+stays out); it cannot live in unify_types' symmetric TFun recursion
+(the unpatchability theorem — the direction exists only at the call),
+so the shape is a positional pre-meet at infer_call_saturated for
+declared-TFun params, masking those rows from the wholesale
+unify(fh, expected). The noisy-into-narrow control (mn-hof-row-gate's
+face + the Tick-vs-Pure refusal measured the same day) must keep
+refusing.
+
 `Hβ.verify.interval-fragment` — ENGINE HALF LANDED (2026-07-30, pin
 a71ebbcb — the §7 entry THE INTERVAL FRAGMENT AND THE FLOW LICENCE
 carries the record: the two-face lower-bound read in verify.mn, the

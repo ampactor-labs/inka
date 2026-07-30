@@ -247,6 +247,8 @@ fn ty_lo_at(handle) with GraphRead = match graph_chase(handle) {
 fn ty_lo(ty) with GraphRead = match ty {
   TAlias(_, inner) => ty_lo(inner),
   TRefined(base, pred) => lo_best(ty_lo(base), pred_lo(pred)),
+  TReprPin(_, base) => // A width pin narrows representation, never value bounds.
+  ty_lo(base),
   _ => None,
 }
 

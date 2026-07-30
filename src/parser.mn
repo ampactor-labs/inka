@@ -1030,29 +1030,71 @@ fn parse_type_decl(ref tokens, pos) = {
     //   a constructor payload    → single-variant ADT (`type Token = Tok(...)`)
     //   nothing                  → transparent alias (`type Port = Int`)
     match parse_type_ty(tokens, p2) {
-      (alias_ty, p_alias) => {
-        let term = skip_ws(tokens, p_alias)
-        if at(tokens, term, TWhere) {
-          match parse_predicate(tokens, skip_ws(tokens, term + 1)) {
-            (pred, p4) => (nstmt(RefineStmt(name, alias_ty, pred), start), p4),
+      (alias_ty0, p_alias0) => match parse_repr_pin(tokens, alias_ty0, p_alias0) {
+        (alias_ty, p_alias) => {
+          let term = skip_ws(tokens, p_alias)
+          if at(tokens, term, TWhere) {
+            match parse_predicate(tokens, skip_ws(tokens, term + 1)) {
+              (pred, p4) => (nstmt(RefineStmt(name, alias_ty, pred), start), p4),
+            }
+          } else if at(tokens, term, TPipe) || at(tokens, term, TPlus) || at(tokens, term, TMinus) || at(tokens, term, TAmp) {
+            match parse_variants(tokens, p2) {
+              (variants, p3) => (nstmt(TypeDefStmt(name, variants), start), p3),
+            }
+          } else {
+            match alias_ty {
+              TName(vname, fields) => if len(fields) > 0 {
+                (nstmt(TypeDefStmt(name, [(vname, fields, mint_node(NTypeAnn(TTuple(fields)), start))]), start), p_alias)
+              } else {
+                (nstmt(AliasStmt(name, alias_ty), start), p_alias)
+              },
+              _ => (nstmt(AliasStmt(name, alias_ty), start), p_alias),
+            }
           }
-        } else if at(tokens, term, TPipe) || at(tokens, term, TPlus) || at(tokens, term, TMinus) || at(tokens, term, TAmp) {
-          match parse_variants(tokens, p2) {
-            (variants, p3) => (nstmt(TypeDefStmt(name, variants), start), p3),
-          }
-        } else {
-          match alias_ty {
-            TName(vname, fields) => if len(fields) > 0 {
-              (nstmt(TypeDefStmt(name, [(vname, fields, mint_node(NTypeAnn(TTuple(fields)), start))]), start), p_alias)
-            } else {
-              (nstmt(AliasStmt(name, alias_ty), start), p_alias)
-            },
-            _ => (nstmt(AliasStmt(name, alias_ty), start), p_alias),
-          }
-        }
+        },
       },
     }
   }
+}
+
+// The repr pin's parse (SYNTAX §"Representation-pinned alias"): after the
+// whole base type, `repr <width>` wraps it in TReprPin — before any
+// `where` (the pin then rides the refined alias's base). `repr` is the
+// medium's own noun, never a keyword (the `handle` precedent): the peek
+// is an ident match. An unknown width reports and keeps the base.
+fn parse_repr_pin(ref tokens, base_ty, pos) = {
+  let term = skip_ws(tokens, pos)
+  if at_ident_word(tokens, term, "repr") {
+    let wpos = skip_ws(tokens, term + 1)
+    match repr_of_width_name(ident_at(tokens, wpos)) {
+      Some(r) => (TReprPin(r, base_ty), wpos + 1),
+      None => {
+        report(PUnexpectedToken("unknown repr width — one of i32, i64, f64, f32, v128", span_at(tokens, wpos)))
+        (base_ty, wpos + 1)
+      },
+    }
+  } else {
+    (base_ty, pos)
+  }
+}
+
+fn at_ident_word(ref tokens, pos, w: String) = match kind_at(tokens, pos) {
+  TIdent(v) => v == w,
+  _ => false,
+}
+
+fn repr_of_width_name(w: String) with Pure = if w == "i32" {
+  Some(RI32)
+} else if w == "i64" {
+  Some(RI64)
+} else if w == "f64" {
+  Some(RF64)
+} else if w == "f32" {
+  Some(RF32)
+} else if w == "v128" {
+  Some(RV128)
+} else {
+  None
 }
 
 fn parse_variants(ref tokens, pos) = {
@@ -2941,6 +2983,17 @@ fn parse_type_atom(ref tokens, pos) = match kind_at(tokens, pos) {
       TInt
     } else if str_eq(v, "Float") {
       TFloat
+    } else if str_eq(v, "f64") {
+      // The bare-width pin (SYNTAX §"The Intent Boundary Rule" pt 3):
+      // `s: f32` ≡ `s: Float repr f32` — the width names are the
+      // pinned spellings of their value types.
+      TReprPin(RF64, TFloat)
+    } else if str_eq(v, "f32") {
+      TReprPin(RF32, TFloat)
+    } else if str_eq(v, "i64") {
+      TReprPin(RI64, TInt)
+    } else if str_eq(v, "v128") {
+      TReprPin(RV128, TInt)
     } else if str_eq(v, "String") {
       ty_string
     } else if str_eq(v, "Bool") {

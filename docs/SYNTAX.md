@@ -938,10 +938,13 @@ type LaneGain  = Float repr f32
 type Pixels    = Int repr v128            // four packed lanes
 ```
 
-*Lathe-lag:* the authored `repr <width>` suffix (and the bare-width parameter
-pin `s: f32`) is spec — `parse_type_atom` carries no repr arm yet; the gradient
-itself (`repr_of`, the internal width projection) is live. The parser catches
-up (§Authority).
+*Real (2026-07-30):* the authored `repr <width>` suffix parses (`parse_repr_pin`
+after any type-decl base) and the bare-width parameter pin (`s: f64`, `s: f32`,
+`i64`, `v128`) mints the same `TReprPin` in type-atom position. The pin types
+transparently — identity is the base's; `repr_of`'s own arm is the one width
+reader — and the formatter renders the bare atom back bare, the alias form with
+its suffix. The i64/f32/v128 pins carry full vocabulary; their emission
+cash-outs ride the named wide-producer residue (the RF64 path is fully live).
 
 `repr <width>` is a **gradient INPUT — a PIN, not a constructor** (the peer of
 `own`/`ref` at the representation altitude; it surfaces primitive #7). The gradient

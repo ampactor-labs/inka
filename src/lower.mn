@@ -3143,6 +3143,7 @@ fn ty_handle_of(ty) = match ty {
   TRefined(_, _) => 0,
   TCont(_, _, _, _) => 0,
   TAlias(_, _) => 0,
+  TReprPin(_, _) => 0,
 }
 
 fn bind_pat_locals(pat, ty) = match pat {

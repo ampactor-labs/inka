@@ -1,0 +1,16 @@
+// expect: 42
+// The repr-pin surface (SYNTAX §"Representation-pinned alias" — lathe-lag
+// closed): `type X = Y repr <width>` parses, the pin types transparently
+// (identity is the base's; only emission reads the width), and the
+// bare-width parameter form (`k: f64`) is the same pin at the parameter
+// altitude. RF64-on-Float is the live pin; the value math must survive
+// the wrapper untouched.
+type Coeff = Float repr f64
+
+fn scale(x: Coeff, k: f64) -> Float = x * k
+
+fn main() = {
+  let c: Coeff = 10.5
+  let r = scale(c, 4.0)
+  if r == 42.0 { 42 } else { 1 }
+}

@@ -2093,6 +2093,23 @@ for i in "${!compilers[@]}"; do
   else
     fail "as-pattern (compile refused)"
   fi
+
+  # ─── The repr pin (SYNTAX §Representation-pinned alias, made real) ──
+  # `type Coeff = Float repr f64` + the bare-width param `k: f64`: the pin
+  # types transparently (identity is the base's), emission reads the width
+  # via repr_of's own arm. Did not PARSE through any prior pin (`repr` and
+  # `f64` refused as unknown names).
+  rp_wat=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-repr-pin.mn" 2>/dev/null)
+  if [ -n "$rp_wat" ]; then
+    printf '%s' "$rp_wat" > "$dir/reprpin.wat"
+    if wt_asm "$dir/reprpin.wat" "$dir/reprpin.wasm" 2>/dev/null && [ "$(wt_run "$dir/reprpin.wasm" > /dev/null 2>&1; echo $?)" = "42" ]; then
+      pass "repr-pin: the width pin parses, types transparently, runs (42)"
+    else
+      fail "repr-pin (assemble/run)"
+    fi
+  else
+    fail "repr-pin (compile refused)"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

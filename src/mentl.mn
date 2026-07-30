@@ -556,6 +556,7 @@ fn extract_row(ty) with Memory = match ty {
   TCont(_, _, _, world) => // resuming a continuation performs its frozen world (the TFun analog: extract_row(TFun) => row)
   world,
   TAlias(_, inner) => extract_row(inner),
+  TReprPin(_, base) => extract_row(base),
 }
 
 // Map an annotation to the capability it unlocks: add this annotation, get this capability.

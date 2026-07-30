@@ -59,6 +59,13 @@ type Ty
   | TRecordOpen([(String, Ty)], Int)
   // refinement type (Verify discharges)
   | TRefined(Ty, Predicate)
+  // the representation PIN (SYNTAX §"Representation-pinned alias" +
+  // the bare-width param `s: f32`): a gradient INPUT wrapping the
+  // value type — `type Cents = Int repr i64` widens the word floor,
+  // `f32` narrows the float default. Transparent to unification
+  // (representation is never identity); repr_of reads it as the
+  // authored width.
+  | TReprPin(Repr, Ty)
   // handler continuation R -> S: resume input, answer, cardinality, and the effect-WORLD it was frozen under (the modal-effect lexical-capability set — !E lifted to the TIME axis; a persisted resume under a changed handler-set is a row unification -> E_ResumeWorldMismatch, never a silent memcpy'd miscompile)
   | TCont(Ty, Ty, ResumeDiscipline, EffRow)
   // RN.1 — authored alias name (e.g. "Port") wrapping resolved type
@@ -123,6 +130,9 @@ type Repr
 fn repr_of(ty) with Pure = match ty {
   TAlias(_, inner) => repr_of(inner),
   TRefined(base, _) => repr_of(base),
+  TReprPin(r, _) => // the authored width IS the answer — the pin is the STEP-1
+  // gradient input this projection's own comment always named
+  r,
   TFloat => // inferred default; STEP 1's `repr f32` pin yields RF32
   RF64,
   TInt => // STEP 1's `repr i64` pin / fixed-point / i64-literal yields RI64
@@ -166,6 +176,7 @@ fn repr_of_resolved(ty) with GraphRead = match ty {
   },
   TAlias(_, inner) => repr_of_resolved(inner),
   TRefined(base, _) => repr_of_resolved(base),
+  TReprPin(r, _) => r,
   _ => repr_of(ty),
 }
 
@@ -240,6 +251,12 @@ fn repr_wat(r) with Pure = match r {
 fn fold_strip(ty) with Pure = match ty {
   TAlias(_, inner) => fold_strip(inner),
   TRefined(base, _) => fold_strip(base),
+  TReprPin(_, base) => // Identity is the base's; the WIDTH rides repr_of's own TReprPin arm
+  // (annotation, not type — §4①). When a wide-int producer lands, band D's
+  // fold_sig-reads-repr decision reopens here (a pinned-i64 field must not
+  // share the i32 "i" helpers) — today RF64-on-Float is the one live pin
+  // and its sig equals the base's.
+  fold_strip(base),
   _ => // §4①: a String folds AS its byte-sequence, so fold_sig on it derives "lb" ==
   // fold_sig(TList(TByte)) and a String field and a [byte] field share the one
   // generated `$eq_<sig>`/`$hash_<sig>`/`$show_<sig>` helpers at sig "lb" —
@@ -274,6 +291,7 @@ fn fold_sig(ty) with Memory = match fold_strip(ty) {
   "k",
   TAlias(_, inner) => fold_sig(inner),
   TRefined(base, _) => fold_sig(base),
+  TReprPin(_, base) => fold_sig(base),
 }
 
 fn fold_sig_list(elems, i, n) with Memory =
@@ -2513,6 +2531,7 @@ fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory + Intern = match 
   TCont(input, answer, disc, world) => "Cont({show_type(input)} {show_discipline(disc)} {show_type(answer)}{show_row_suffix(world)})",
   TAlias(name, _) => // RN.1 — show the alias name (intent), not the resolved type
   name,
+  TReprPin(r, base) => "{show_type(base)} repr {repr_wat(r)}",
 }
 
 // show_handle — the live-chase projection. Resolved handles show the
@@ -2949,7 +2968,7 @@ fn show_list_from(ref items, ref render, ref sep, i, n) with !Mutate = if i >= n
 //   TRecord   — fields |> map |> fold(Public, flow_label_join)
 //   _         — Public (open-world default; unannotated = observable)
 //
-// H6: exhaustive over all 14 Ty constructors.
+// H6: exhaustive over all 15 Ty constructors.
 // GraphRead + EnvRead: predicate_flow_label follows PBoolNode handles into graph;
 // TName arm follows the type's env entry to read its predicate.
 fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty {
@@ -2974,6 +2993,7 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty
   },
   TFun(_, _, row) => row |> row_flow_label,
   TAlias(_, inner) => inner |> query_flow_label,
+  TReprPin(_, base) => base |> query_flow_label,
   TList(elem) => elem |> query_flow_label,
   TTuple(elems) => elems |> map((e) => query_flow_label(e)) |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
   TRecord(fields) => fields |> map((f) => match f {

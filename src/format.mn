@@ -925,6 +925,16 @@ fn render_type_tokens(ref ty) with GraphRead + Memory + Alloc + !Mutate + Intern
   TRefined(base, pred) => "{render_type_tokens(base)} where {render_predicate_tokens(pred)}",
   TCont(input, answer, disc, world) => show_type(TCont(input, answer, disc, world)),
   TAlias(name, _) => name,
+  TReprPin(r, base) => // Parse-inverse: a pin whose base is the width's own bare atom
+  // renders bare (`f32` — the atom mints exactly this pair); any other
+  // pairing renders the authored `repr` suffix.
+  match (r, base) {
+    (RF64, TFloat) => "f64",
+    (RF32, TFloat) => "f32",
+    (RI64, TInt) => "i64",
+    (RV128, TInt) => "v128",
+    _ => "{render_type_tokens(base)} repr {repr_wat(r)}",
+  },
 }
 
 // The formatter's OWN predicate projection — the parse's inverse, never

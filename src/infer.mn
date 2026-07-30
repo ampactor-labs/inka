@@ -1679,6 +1679,10 @@ fn fp_ty(ty, map, n) with GraphRead + Memory + Alloc = match ty {
   TAlias(name, inner) => match fp_ty(inner, map, n) {
     (s, m2, n2) => ("A{name}={s}", m2, n2),
   },
+  TReprPin(r, base) => // The pin is emission-load-bearing (repr dispatch) — render it.
+  match fp_ty(base, map, n) {
+    (s, m2, n2) => ("p{repr_wat(r)}={s}", m2, n2),
+  },
 }
 
 fn fp_var(h, map, n) with Memory + Alloc = {
@@ -4543,17 +4547,22 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
   let right_is_wrapper = match b {
     TAlias(_, _) => true,
     TRefined(_, _) => true,
+    TReprPin(_, _) => true,
     _ => false,
   }
   let left_is_wrapper_or_var = match a {
     TVar(_) => true,
     TAlias(_, _) => true,
     TRefined(_, _) => true,
+    TReprPin(_, _) => true,
     _ => false,
   }
   if right_is_wrapper && !left_is_wrapper_or_var {
     match b {
       TAlias(_, inner_b) => unify_types(a, inner_b, span, reason),
+      TReprPin(_, base_b) => // The pin is a gradient INPUT (§4① — an annotation, not a type):
+      // identity unifies at the base; only emission reads the width.
+      unify_types(a, base_b, span, reason),
       TRefined(base_b, _) => // A concrete type meets the refined wrapper: unify against the BASE
       // only. The refinement OBLIGATION is never accrued here — this arm
       // has no value node, so its old verify pended the raw predicate with
@@ -4708,10 +4717,17 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
         TAlias(_, inner_b) => unify_types(inner_a, inner_b, span, reason),
         _ => unify_types(inner_a, b, span, reason),
       },
+      TReprPin(_, base_a) => // The pin peels like the alias (RN.2's shape): a var binds the
+      // PINNED type (repr_of chases to the pin); anything else meets the base.
+      match b {
+        TVar(_) => unify_types(b, a, span, reason),
+        _ => unify_types(base_a, b, span, reason),
+      },
       _ => match b {
         TVar(_) => unify_types(b, a, span, reason),
         TAlias(_, inner_b) => unify_types(a, inner_b, span, reason),
         TRefined(base_b, _) => unify_types(a, base_b, span, reason),
+        TReprPin(_, base_b) => unify_types(a, base_b, span, reason),
         _ => type_mismatch(a, b, span, reason),
       },
     }
@@ -4780,6 +4796,9 @@ fn same_ground(ref a, ref b) with Pure = match a {
   TRefined(_, _) => false,
   TCont(_, _, _, _) => false,
   TAlias(_, inner) => same_ground(inner, b),
+  TReprPin(_, base) => // The pin is a gradient INPUT (an annotation, not a type — §4①):
+  // identity is the base's; only emission reads the width.
+  same_ground(base, b),
 }
 
 // Two resume cardinalities unify iff they pick the SAME representation, OR
@@ -5951,6 +5970,7 @@ fn chase_probe_tag(ty) with Memory + Alloc = match ty {
   TFloat => "TFloat",
   TUnit => "TUnit",
   TByte => "TByte",
+  TReprPin(_, _) => "TReprPin",
 }
 
 // The canonical snapshot SHARES every unchanged subtree (A.3 — the second
@@ -6000,6 +6020,7 @@ fn chase_changes(ty, d) = if d > 200 {
     TRefined(base, _) => chase_changes(base, d + 1),
     TCont(input, answer, _, world) => chase_changes(input, d + 1) || chase_changes(answer, d + 1) || chase_row_changes(world, d + 1),
     TAlias(_, inner) => chase_changes(inner, d + 1),
+    TReprPin(_, base) => chase_changes(base, d + 1),
   }
 }
 
@@ -6116,6 +6137,7 @@ fn chase_deep_build(ty, d) = if d > 200 {
     TRefined(base, pred) => TRefined(chase_deep_at(base, d + 1), pred),
     TCont(input, answer, disc, world) => TCont(chase_deep_at(input, d + 1), chase_deep_at(answer, d + 1), disc, chase_row_deep(world, d + 1)),
     TAlias(name, inner) => TAlias(name, chase_deep_at(inner, d + 1)),
+    TReprPin(r, base) => TReprPin(r, chase_deep_at(base, d + 1)),
   }
 }
 
@@ -6201,6 +6223,7 @@ fn free_in_ty(ty) = match ty {
   TRefined(base, _) => free_in_ty(base),
   TCont(input, answer, _, world) => free_in_ty(input) ++ free_in_ty(answer) ++ free_in_row(world),
   TAlias(_, inner) => free_in_ty(inner),
+  TReprPin(_, base) => free_in_ty(base),
 }
 
 fn free_in_list(tys) = tys |> map(free_in_ty) |> flatten
@@ -6355,6 +6378,7 @@ fn subst_changes(ty, mapping) = match ty {
   TRefined(base, _) => subst_changes(base, mapping),
   TCont(input, answer, _, world) => subst_changes(input, mapping) || subst_changes(answer, mapping) || subst_row_changes(world, mapping),
   TAlias(_, inner) => subst_changes(inner, mapping),
+  TReprPin(_, base) => subst_changes(base, mapping),
 }
 
 fn subst_list_changes(tys, mapping, i, n) = if i >= n {
@@ -6483,6 +6507,7 @@ fn subst_ty_build(ty, mapping) = match ty {
     subst_row(world, mapping)
   ),
   TAlias(name, inner) => TAlias(name, subst_ty(inner, mapping)),
+  TReprPin(r, base) => TReprPin(r, subst_ty(base, mapping)),
 }
 
 fn subst_list(tys, mapping) = map((t) => subst_ty(t, mapping), tys)

@@ -211,6 +211,7 @@ fn enumerate_typed(target_ty, allowed_effects, context) with EnvRead + GraphRead
   TRecordOpen(fields, rest) => enumerate_records(fields, context),
   TRefined(base, _pred) => enumerate_typed(base, allowed_effects, context),
   TAlias(_, inner) => enumerate_typed(inner, allowed_effects, context),
+  TReprPin(_, base) => enumerate_typed(base, allowed_effects, context),
   TCont(_, _, _, _) => one_continuation_candidate(context),
   TList(elem) => // A byte-element list IS String (the canonical alias's inner) — a
   // String-typed hole proposes string literals, never list literals.

@@ -820,6 +820,7 @@ fn occurs_in(spine, mint_bound, handle, ref ty) with !Mutate = match ty {
   TRefined(base, _) => occurs_in(spine, mint_bound, handle, base),
   TCont(input, answer, _, world) => occurs_in(spine, mint_bound, handle, input) || occurs_in(spine, mint_bound, handle, answer) || occurs_in_row(spine, mint_bound, handle, world),
   TAlias(_, inner) => occurs_in(spine, mint_bound, handle, inner),
+  TReprPin(_, base) => occurs_in(spine, mint_bound, handle, base),
 }
 
 fn occurs_in_params(spine, mint_bound, handle, ref params) with !Mutate = {

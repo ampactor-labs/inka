@@ -1092,6 +1092,35 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE WIDTH IS AN INPUT — SYNTAX's representation pin
+  is real, and the census named every walk in one march
+  (pin f09e54a3). `type Coeff = Float repr f64` parses
+  (parse_repr_pin probes the `repr` ident after ANY type-decl base —
+  the medium's noun stays a word, the handle/turbofish precedent) and
+  the bare-width atom (`k: f64` / `f32` / `i64` / `v128`) mints the
+  SAME TReprPin(Repr, Ty) — the fifteenth Ty constructor, arm 7's
+  authored INPUT as a graph fact. The law at every layer: identity is
+  the BASE's (unify peels the pin in RN.2's exact shape, a var
+  binding the PINNED type so repr_of chases to the width; fold_strip
+  strips it so every dispatch sees the base; same_ground recurses),
+  and repr_of's own arm is the ONE width reader — annotation, never a
+  type. H6 did the sweep's work: the first march's census convicted
+  all SIXTEEN exhaustive Ty walks by weave line (occurs_in · fp_ty ·
+  same_ground · chase_probe_tag/chase_changes/chase_deep_build ·
+  free_in_ty · subst_changes/subst_ty_build · ty_handle_of ·
+  extract_row · enumerate_typed · fold_sig · show_type ·
+  query_flow_label · render_type_tokens, plus ty_lo's unflagged
+  straggler), each gaining its transparent arm — the
+  census-names-the-walks feedback at full width. The formatter is the
+  parse's inverse both ways: a bare atom renders bare, an alias pin
+  renders its suffix. RF64-on-Float is the fully-live pin; i64/f32/
+  v128 carry whole vocabulary with their emission cash-outs riding
+  the named wide-producer residue, and fold_strip's arm banks band
+  D's fold_sig-reads-repr reopening for the first wide-int producer.
+  Fixture mn-repr-pin runs 42 (RED on the prior boot: `repr`/`f64`
+  refused as unknown names); SYNTAX's lathe-lag note trued. CLEAN
+  m2 == m3 at 353,220 lines; census 0; frontier 328/0;
+  proof-exactness 9/9; crown 5/5.
 - 2026-07-30 · ▶▶ THE WHOLE VALUE AND ITS PIECES — SYNTAX's as-pattern
   is real end to end (pin 010fc317). `name @ pat` parses (the TAt peek
   after a lowercase pattern ident), types (the binder's cell IS the

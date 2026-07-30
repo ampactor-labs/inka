@@ -34,6 +34,8 @@ import graph
 
 import effects
 
+import runtime/io
+
 // Follow the equivalence edge to the canonical (cheapest) node — the union-find
 // `find`, now a single live graph read. Depth-bounded so a malformed rule set
 // that draws a cycle stays total; the cap is the fixpoint guard (a cycle is a

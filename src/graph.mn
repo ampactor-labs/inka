@@ -45,6 +45,8 @@ import effects
 
 import runtime/strings
 
+import runtime/io
+
 // graph_handler — the substrate handler
 // State:
 //   spine               — band table: SpinePage records, one per open band

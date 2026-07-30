@@ -1092,6 +1092,38 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE CHECK VERB WAS TELLING THE TRUTH — the audit's F6
+  probed instead of believed, and its "false diagnostics" were real
+  (pin ec04f745). Morgan's cut ("make the engine meet the surface")
+  aimed at F6: `mentl check <file>` reportedly emits false diagnostics
+  on a weave-clean file, which is why a 103-row regex catalog stands in
+  as the write-time discipline and 136 ignore-markers live in the
+  source. FIRST FINDING, and it inverts the premise: the diagnostics
+  are NOT false. graph.mn and egraph.mn both call eprint_string and
+  neither imports runtime/io — genuine manifest violations ("the
+  imports ARE the manifest", §11 col 2) that ONLY the concatenated
+  wheel blob masks, because concatenation resolves every name whether
+  the module declared its dep or not. The verb named them precisely;
+  the source was wrong. Both imports land, the per-file verdict on
+  those files falls 2 → 1, and the medium's per-module honesty becomes
+  measurable: graph 1 · egraph 1 · types 0 · effects 0 · lower 4 ·
+  parser 1 — a ratchet the check verb can drive to zero, which is
+  exactly what F6's whole chain (drift-modes-read-the-row → the 136
+  markers delete → the hook becomes one verb) is gated behind. SECOND
+  FINDING, measured not assumed: the shared residue is ONE row gap —
+  occurs_in_live declares `Cast + !Mutate` and proves `Cast(GNode) +
+  !Mutate`, which by-name membership should admit (eff_name_handle
+  shares the handle between ENamed and EParameterized). Two theories
+  died to probes: bare-vs-instance alone passes (a minimal `with Cast`
+  over `addr` checks clean), and so does bare-with-negation (`with
+  Cast + !Mutate`). The surviving reading is row_subsumes' own written
+  law — a body whose tail went EtAll (the negative stance) is never
+  subsumed by a gate that resolved EtClosed — so a MIXED declaration
+  (positives + `!E`) that closes meets a body row that widened, and
+  the asymmetry refuses a fn that satisfies its own declaration. Named
+  Hβ.effects.negative-stance-under-mixed-gate with the repro recipe
+  and both dead theories, because the fix is in the gate's tail
+  algebra and deserves its own landing rather than a rider.
 - 2026-07-30 · ▶ THE TIER'S OWN NEIGHBOURS — iteration-is-topology's
   second family, at the audit's sharpest instance (pin b1b53025). The
   selfhood audit found the file that HOSTS the verb-shape and
@@ -7139,6 +7171,29 @@ whose echo/interval/callee legs the engine honors — one-line
 annotations, march-measured each; the recursion-shaped ones
 (scan_for_span) wait on the IH. TagId's 0..255 and the float
 intervals stay the SMT tier's.
+
+`Hβ.effects.negative-stance-under-mixed-gate` — the declared-row gate's
+tail asymmetry (measured 2026-07-30, the check-verb landing). A fn
+declaring a MIXED row (positives + `!E`) whose body row widened to the
+negative stance is REFUSED by its own declaration: row_subsumes' closed
+gate arm answers `EtAll => false` by its own written law ("an
+unknown-beyond-mask body may perform outside it"), while the mixed
+declaration resolves EtClosed — so `with Cast + !Mutate` over a body
+proving `Cast(GNode) + !Mutate` mismatches. Measured at
+graph.mn's occurs_in_live and inherited by every module weaving it
+(egraph). TWO THEORIES DEAD to probes, banked so the fix is not
+re-chased: bare-vs-instance is NOT the trigger (a minimal `with Cast`
+over `addr(x)` checks clean — eff_name_handle shares the handle
+between ENamed and EParameterized, so by-name membership already
+admits an instance under a bare declaration), and neither is
+negation-beside-positives (`with Cast + !Mutate` on the same minimal
+body checks clean). The remaining variable is the BODY's tail: a call
+chain that carries a negative stance widens the body row to EtAll,
+which the closed mixed gate then refuses. The self-form is the tail
+algebra: a body EtAll whose absent set COVERS the gate's mask is
+subsumed (the EtAll-gate arm already reasons exactly this way —
+`name_set_subset(ag, ab)`); the closed arm simply never learned it.
+Cheap, and it makes the per-file check honest for two more modules.
 
 `Hβ.graph.reverse-edge-and-bound-projection` — oracle.mn's two
 surviving iteration convictions, named at their true form (2026-07-30).

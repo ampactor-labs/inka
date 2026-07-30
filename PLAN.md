@@ -1092,6 +1092,16 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE SUMMIT WAS ALREADY PROMOTED — the fmt-canonical
+  page closes as a measurement, not a ceremony (no pin move; boot
+  a62b1299 stands). The whole-wheel fmt sweep (every src + non-tutorial
+  lib file through the verb) found the tree at the fixpoint except
+  own.mn's 8 reflowed lines — the pre-commit fmt rung has been
+  promoting the canonical form file-by-file since it landed, so the
+  queued "summit promotion" dissolved into practice already in
+  motion. The last file lands; the march is byte-identical; the fmt
+  summit's swap-gate ledger item is CLOSED by the artifact's own
+  state.
 - 2026-07-30 · ▶ TWO ROWS SHARPEN TO THEIR INTENT — the third marker
   wave (no pin move — comment/tools only; boot a62b1299 stands). Mode
   7's naming-tell anchors to the let-tuple destructure (a CTOR's

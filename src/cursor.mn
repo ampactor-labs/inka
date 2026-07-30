@@ -221,7 +221,8 @@ fn cursor_argmax_compute(caret) with GraphRead + Memory + !Mutate + Teach + Allo
 // every `??` (and for each syntax-error recovery hole — an absence to fix
 // either way); the program weave's absent-default is NHole(0), never a
 // position.
-fn hole_gate(handle) with GraphRead + Memory + Alloc + !Mutate = if authored_hole(handle) { 1 } else { 0 }
+fn hole_gate(handle) with GraphRead + Memory + Alloc + !Mutate =
+  if authored_hole(handle) { 1 } else { 0 }
 
 // A hole is a POSITION only when it carries a source span: the parser's
 // `??` and recovery mints carry their token span; synthetic span-zero
@@ -257,10 +258,7 @@ fn enumerate_hole_positions() with GraphRead + Alloc + Memory + !Mutate = match 
 // rendered as the entry's own line 1 — the C1c-era virgin-walk residue,
 // closed here by the chased-kind filter it named).
 fn enumerate_gradient_positions() with GraphRead + Teach + Alloc + Memory + !Mutate = match graph_snapshot() {
-  Graph(next, _spans) => filter(
-    (i) => gradient_position(i),
-    range(0, next)
-  ),
+  Graph(next, _spans) => filter((i) => gradient_position(i), range(0, next)),
 }
 
 fn gradient_position(i) with GraphRead + Teach + Alloc + Memory + !Mutate = match graph_node_body(i) {
@@ -532,7 +530,12 @@ fn cursor_view_of(handle) with GraphRead = match graph_chase(handle) {
 // session `<~` loop deletes the re-parse and with it the generations); the
 // cursor-address transport does not ride it — it resolves once over mint
 // spans (address_resolve, main.mn) and projects via cursor_at_handle.
-fn handle_at_span(span) with GraphRead + !Mutate = {
+// The producers carry the proof (`-> Handle`): the scan's miss default
+// is the ground 0 and its hit is the walk counter — one honest
+// obligation at scan_for_span replaces the three re-demanded copies at
+// the transport's Caret/pin boundaries; handle_at_span discharges by
+// typed identity through it.
+fn handle_at_span(span) -> Handle with GraphRead + !Mutate = {
   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let snapshot = graph_snapshot()
   match snapshot {
@@ -540,7 +543,7 @@ fn handle_at_span(span) with GraphRead + !Mutate = {
   }
 }
 
-fn scan_for_span(target, i, n) with GraphRead + !Mutate = if i >= n {
+fn scan_for_span(target, i, n) -> Handle with GraphRead + !Mutate = if i >= n {
   0
 } else {
   match graph_chase(i) {
@@ -564,8 +567,7 @@ fn scan_for_span(target, i, n) with GraphRead + !Mutate = if i >= n {
 // last-bind reason carried the enclosing binop's span — both measured).
 // Only the birth index never moves. Miss answers span_zero — the
 // authored_hole guard's own sentinel.
-fn caret_span_of_handle(handle) with GraphRead + Memory + Alloc + !Mutate =
-  parse_span_of(handle)
+fn caret_span_of_handle(handle) with GraphRead + Memory + Alloc + !Mutate = parse_span_of(handle)
 
 // An unbound node's type IS its own type variable — the chase
 // terminated at this handle, so TVar(handle) is what HM proves.
@@ -720,23 +722,22 @@ fn enclosing_fn_scan(target, i, n, best) with GraphRead + Memory + Alloc + !Muta
   }
 } else {
   match graph_node_body(i) {
-    NStmt(FnStmt(name, _params, _ret, effs, body)) =>
-      if node_contains_handle(node_handle(body), target) {
-        match best {
-          None => enclosing_fn_scan(target, i + 1, n, Some((name, effs, i))),
-          Some((bn, be, bi)) => // both contain the hole — the nested one wins: this decl's own
-          // stmt node inside the standing best's body means THIS is the
-          // inner declaration (a nested declaration is hoisted letrec
-          // sugar; its FnStmt node is a child of the outer body).
-          if node_contains_handle(bi, i) {
-            enclosing_fn_scan(target, i + 1, n, Some((name, effs, i)))
-          } else {
-            enclosing_fn_scan(target, i + 1, n, Some((bn, be, bi)))
-          },
-        }
-      } else {
-        enclosing_fn_scan(target, i + 1, n, best)
-      },
+    NStmt(FnStmt(name, _params, _ret, effs, body)) => if node_contains_handle(node_handle(body), target) {
+      match best {
+        None => enclosing_fn_scan(target, i + 1, n, Some((name, effs, i))),
+        Some((bn, be, bi)) => // both contain the hole — the nested one wins: this decl's own
+        // stmt node inside the standing best's body means THIS is the
+        // inner declaration (a nested declaration is hoisted letrec
+        // sugar; its FnStmt node is a child of the outer body).
+        if node_contains_handle(bi, i) {
+          enclosing_fn_scan(target, i + 1, n, Some((name, effs, i)))
+        } else {
+          enclosing_fn_scan(target, i + 1, n, Some((bn, be, bi)))
+        },
+      }
+    } else {
+      enclosing_fn_scan(target, i + 1, n, best)
+    },
     _ => enclosing_fn_scan(target, i + 1, n, best),
   }
 }

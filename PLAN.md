@@ -1092,6 +1092,21 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE HANDLE PRODUCERS OPEN — the 0 <= self sweep's
+  first pair (no pin move — emission-neutral; boot dd8a70f1 stands).
+  handle_at_span / scan_for_span gain `-> Handle` (the scan's miss
+  default is the ground 0, its hit the walk counter): the transport's
+  three re-demanded Caret/pin boundaries collapse to ONE honest
+  producer pend, handle_at_span discharging by typed identity through
+  its callee. Whole-weave debt 14 → 12; the day's Arc 3 arc
+  138 → 12 (91%). The remaining twelve, classified at their sites:
+  six 0 <= self (the Cursor-field chain, make_list's capacity,
+  resolve_cursor_target, the render_at family — each its own short
+  producer walk), three span_valid producer/construction pends
+  (span_join, span_zero — the banked unfold's fixtures — and the
+  module-mint), TagId ×2, Sample ×1. CLEAN m2 == m3; census 0;
+  frontier 321/0; proof-exactness 9/9.
+
 - 2026-07-30 · ▶▶ THE PROBES GRADUATE AND THE VERDICT CORRECTS ITSELF
   (pin dd8a70f1; this entry RETRACTS its own first conclusion in
   place, per ⟲ — the pin's commit message carries the era's wrong

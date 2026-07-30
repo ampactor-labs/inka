@@ -1400,6 +1400,9 @@ type Pat
   // bind the same names with unifiable types (SYNTAX.md
   // §"Pattern alternation — rule")
   | PAlt([Pat])
+  // name @ pat — binds the WHOLE value AND destructures it
+  // (SYNTAX.md §"As-patterns — rule")
+  | PAs(String, Pat)
 
 type LitValue = LVInt(Int) | LVFloat(Float) | LVString(String) | LVBool(Bool)
 

@@ -1092,6 +1092,21 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE WHOLE VALUE AND ITS PIECES — SYNTAX's as-pattern
+  is real end to end (pin 010fc317). `name @ pat` parses (the TAt peek
+  after a lowercase pattern ident), types (the binder's cell IS the
+  scrutinee's — one unify edge, so the name carries exactly the
+  matched value's type — then the inner walks the same handle),
+  lowers (LPAs, the inner keeping the scrutinee's type through
+  lower_pat_typed), and emits (the predicate is the inner's alone —
+  the binder never affects matching; the bind stores the whole value
+  at the pattern's path before the inner's binders; the local at the
+  pattern-binder word floor). The whole walk family gained its arms
+  in one sweep with the census catching the single wrong guess
+  (render_pat → render_pat_tokens). SYNTAX's lathe-lag note trued.
+  Fixture runs 47 (mn-as-pattern — `e @ Click(x)` feeding both
+  altitudes to one arm; the frontier leg registered). CLEAN m2 == m3
+  at 351,914 lines; census 0; frontier 327/0; proof-exactness 9/9.
 - 2026-07-30 · ▶▶▶ THE REST COMES TO RECORDS — SYNTAX's documented
   `{name, ...rest}` pattern is real end to end, and the sweep fixes a
   latent wrong-slot class as its rider (pin 7932c192). The parse

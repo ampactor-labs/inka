@@ -2078,6 +2078,21 @@ for i in "${!compilers[@]}"; do
   else
     fail "record-pattern rest (compile refused)"
   fi
+
+  # ─── The as-pattern (SYNTAX §As-patterns, made real) ───────────────
+  # `e @ Click(x)` binds the whole value AND the payload in one arm.
+  # Did not PARSE through any pin before 010fc317.
+  as_wat=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-as-pattern.mn" 2>/dev/null)
+  if [ -n "$as_wat" ]; then
+    printf '%s' "$as_wat" > "$dir/aspat.wat"
+    if wt_asm "$dir/aspat.wat" "$dir/aspat.wasm" 2>/dev/null && [ "$(wt_run "$dir/aspat.wasm" > /dev/null 2>&1; echo $?)" = "47" ]; then
+      pass "as-pattern: the whole value and the payload bind in one arm (runs 47)"
+    else
+      fail "as-pattern (assemble/run)"
+    fi
+  else
+    fail "as-pattern (compile refused)"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

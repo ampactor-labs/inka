@@ -496,6 +496,7 @@ fn render_pat_tokens(p) with GraphRead + Memory + Alloc + !Mutate = match p {
     Some(rn) => if len(fields) == 0 { "\{...{rn}\}" } else { "\{{render_pat_fields(fields, 0)}, ...{rn}\}" },
   },
   PAlt(ps) => render_pat_list(ps, " | "),
+  PAs(name, inner) => "{name} @ {render_pat_tokens(inner)}",
 }
 
 // Every list renderer walks HEAD-FIRST (index 0 upward): parser lists are

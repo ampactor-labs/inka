@@ -5448,6 +5448,21 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
     let branch_binds = map((b) => infer_pat_alt_branch(b, handle, span), branches)
     enforce_alt_binding_law(branch_binds, span)
   },
+  PAs(name, inner) => {
+    // The as-pattern binds the WHOLE value: the name's cell IS the
+    // scrutinee's (one unify edge — the binder sees exactly the
+    // matched value's type), then the inner pattern destructures the
+    // same handle.
+    let as_h = mint(Located(span, LetBinding(name, Inferred("as-pattern binds the whole value"))))
+    graph_bind(as_h, TVar(handle), Located(span, LetBinding(name, Inferred("as-pattern"))))
+    env_extend(
+      name,
+      Forall([], TVar(as_h)),
+      Located(span, LetBinding(name, Inferred("as-pattern"))),
+      FnScheme
+    )
+    infer_pat(inner, handle, span)
+  },
 }
 
 // Walk one alternation branch, then snapshot its (name, type) binds
@@ -5534,6 +5549,7 @@ fn pat_binders(ref pat) = match pat {
   // this walk runs identically under a boot whose list-pattern emit
   // predates the PIdx step (the ladder's one exposed rung).
   if len(branches) == 0 { [] } else { pat_binders(list_index(branches, 0)) },
+  PAs(name, inner) => [name] ++ pat_binders(inner),
 }
 
 fn plist_rest_binders(rest) = match rest {

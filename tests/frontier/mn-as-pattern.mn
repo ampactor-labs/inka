@@ -1,0 +1,18 @@
+// expect: 47
+// SYNTAX §"As-patterns — rule" made real: `e @ Click(x)` binds `e` to
+// the WHOLE matched value and `x` to the payload — one arm, both
+// altitudes. Before the landing the Pat ADT carried no PAs ctor (the
+// documented lathe-lag).
+type Event = Click(Int) | Resize
+
+fn weight(ev) = match ev {
+  Click(_) => 5,
+  Resize => 1,
+}
+
+fn classify(ev) = match ev {
+  e @ Click(x) => x + weight(e),
+  Resize => 0,
+}
+
+fn main() = classify(Click(42))

@@ -479,6 +479,9 @@ type LowPat
   // empty spec list = the receiver never resolved: emit's loud floor
   // (resolved-or-loud, the field-offset class's own law).
   | LPRecord([(String, Int, LowPat)], Option((String, [(String, Int)])))
+  // name @ pat — binds the whole value at the pattern's own path,
+  // then the inner pattern destructures the same slot
+  | LPAs(String, LowPat)
   // alternation branches; arm matches if ANY
   // branch matches (predicate = OR); branches
   // bind the same names (infer's law)
@@ -3147,6 +3150,12 @@ fn bind_pat_locals(pat, ty) = match pat {
     ls_bind_local(name, ty_handle_of(ty))
     ()
   },
+  PAs(name, inner) => {
+    // The as-binder carries the WHOLE scrutinee's type; the inner
+    // pattern binds its own pieces against the same type.
+    ls_bind_local(name, ty_handle_of(ty))
+    bind_pat_locals(inner, ty)
+  },
   PCon(_, sub_pats) => bind_pat_locals_floor(sub_pats),
   PTuple(sub_pats) => match tuple_pat_strip(ty) {
     TTuple(elems) => bind_pat_locals_zip(sub_pats, elems, 0),
@@ -3327,6 +3336,9 @@ fn lower_pat_typed(pat, ty, srep) = match pat {
   // nested sequences are reached through elements (rep unknown) and stay
   // on the total reader.
   LPList(lower_pats(sub), rest, srep),
+  PAs(name, inner) => // The binder rides the pattern's own path; the inner keeps the
+  // scrutinee's type (the whole point — the name IS the value).
+  LPAs(name, lower_pat_typed(inner, ty, srep)),
   PRecord(flds, rest) => // The typed receiver resolves the FULL sorted field set (structural
   // or nominal), so the rest's residual specs — and each NAMED field's
   // true full-set offset — read from the type, never from the pattern's
@@ -3475,6 +3487,7 @@ fn lower_pat(pat) = match pat {
   PList(sub, rest) => LPList(lower_pats(sub), rest, SRUnknown),
   PRecord(flds, rest) => LPRecord(lower_pat_record_fields(flds, 0), lower_rest_unresolved(rest)),
   PAlt(branches) => LPAlt(lower_pats(branches)),
+  PAs(name, inner) => LPAs(name, lower_pat(inner)),
 }
 
 // Pattern fields are sorted-by-name (parser invariant); position
@@ -5871,6 +5884,7 @@ fn spec_scan_list(exprs, acc) with Memory + Alloc = fold(acc, (a, e) => spec_sca
 // and its OWN element offsets are the same instantiation-sensitive read.
 fn lowpat_has_tuple(pat) with Memory + Alloc = match pat {
   LPTuple(_) => true,
+  LPAs(_, inner) => lowpat_has_tuple(inner),
   LPCon(_, _, subs) => any(lowpat_has_tuple, subs),
   LPUnresolvedCon(_, subs) => any(lowpat_has_tuple, subs),
   LPRecord(fbs, _) => any(

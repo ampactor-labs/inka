@@ -1426,7 +1426,9 @@ When branches bind different names: `E_PatternAlternationBindingMismatch` with t
 
 ### As-patterns — rule
 
-*Lathe-lag:* the `Pat` ADT carries no `PAs` constructor yet — the form below is spec, the parser catches up (§Authority).
+The as-pattern is real (2026-07-30): `name @ pat` binds the whole value and
+destructures it in one arm; the binder carries the scrutinee's own type, and
+the match predicate is the inner pattern's alone.
 
 `name @ pat => body`: binds `name` to the entire matched value; `pat` destructures it further. `name` and any bindings inside `pat` are all available in the arm body. Common for "need the whole value AND some pieces" cases — event forwarding, logging, pass-through.
 

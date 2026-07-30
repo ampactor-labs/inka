@@ -1383,6 +1383,7 @@ fn walk_lemit_pat(pat) = match pat {
     fs
   ),
   LPAlt(branches) => each(walk_lemit_pat, branches),
+  LPAs(_, inner) => walk_lemit_pat(inner),
   _ => (),
 }
 
@@ -3059,6 +3060,11 @@ fn walk_locals_pat(pat, r, acc) = match pat {
     [] => acc,
     [b0, ..._] => walk_locals_pat(b0, r, acc),
   },
+  LPAs(name, inner) => // The as-binder is the whole matched VALUE — a heap word (records,
+  // lists, sums are pointers; the word slot is the pattern-binder
+  // floor the rest/record binders share). The inner pattern's
+  // binders follow at the same repr.
+  walk_locals_pat(inner, r, [name ++ " i32"] ++ acc),
 }
 
 // Each con-payload sub declares at its payload's PROVEN repr — sub i pairs
@@ -6804,6 +6810,7 @@ fn pat_always_matches(pat) = match pat {
   LPTuple(ebs) => tuple_pats_always_match(ebs),
   LPRecord(fbs, _) => record_pats_always_match(fbs),
   LPAlt(branches) => alt_any_always_matches(branches),
+  LPAs(_, inner) => pat_always_matches(inner),
 }
 
 // A tuple pattern's elements are (elem_ty, sub_pat); the tuple always matches
@@ -6964,6 +6971,8 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
     }
   },
   LPAlt(branches) => emit_pat_alt_predicate(branches, path, path_len),
+  LPAs(_, inner) => // The binder never affects MATCHING — the predicate is the inner's.
+  emit_pat_predicate_at(inner, path, path_len),
 }
 
 // AND-composition over sibling sub-patterns at base + 4*i. A bool is
@@ -7077,6 +7086,14 @@ fn emit_pat_binds_at(pat, path, path_len, val_repr) = match pat {
     emit_pat_list_rest_bind(len(sub_pats), rest, path, path_len)
   },
   LPAlt(branches) => emit_pat_alt_binds(branches, path, path_len),
+  LPAs(name, inner) => {
+    // Bind the WHOLE value at this path, then the inner's binders.
+    emit_scrut_at(path, path_len)
+    wat_emit("    (local.set $")
+    wat_emit(name)
+    wat_emit(")\n")
+    emit_pat_binds_at(inner, path, path_len, RI32)
+  },
 }
 
 // List-element binders use uniform i32 slots (list elems are word-slotted; an
@@ -7292,6 +7309,7 @@ fn lowpat_has_binders(pat) = match pat {
     }
   },
   LPAlt(branches) => alt_has_binders(branches),
+  LPAs(_, _) => true,
 }
 
 fn lowpats_have_binders(subs) = if len(subs) == 0 {

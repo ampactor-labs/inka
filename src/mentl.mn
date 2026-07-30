@@ -243,11 +243,8 @@ fn try_each_annotation(handle, candidates, base_ty) = {
   // site's heap leg landed — the image/scratch interleave's first live
   // case, the two-channel design's own witness).
   //
-  // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle (the apply arms' own convention)
   intern_str("Alloc")
-  // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle
   intern_str("IO")
-  // drift-audit: ignore — the pre-warm names the effect at the mint-warming site; identity is the intern handle
   intern_str("Network")
   candidates |> map((ann) => {
     // The FORK TRIPLE (R6): this site held only the graph leg — the
@@ -286,12 +283,9 @@ fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
   // (EffName-is-a-handle LANDED; the old string-keyed-identity drift is
   // structurally gone — comparisons are word i32.eq by type).
   //
-  // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
   narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Alloc"))]), sp),
-  ANotIO(sp) => // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
-  narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("IO"))]), sp),
-  ANotNetwork(sp) => // drift-audit: ignore — the literal NAMES the severed effect at its one mint; identity is the intern handle (EffName-is-a-handle landed)
-  narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Network"))]), sp),
+  ANotIO(sp) => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("IO"))]), sp),
+  ANotNetwork(sp) => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Network"))]), sp),
   ARefined(_, pred, sp) => {
     // Narrowing the type via refinement — perform verify against the
     // narrowed predicate. Ledger captures; rollback removes. The ledger
@@ -390,12 +384,9 @@ fn capabilities_for_annotation(ann) with Pure = match ann {
 // that doesn't perform E. Mirrors capabilities_for_annotation but
 // keyed by EffName (severance candidate's name).
 fn capabilities_for_severance(name) = match name {
-  ENamed(h) => // drift-audit: ignore — the literal NAMES the effect at this one severance table; identity is the intern handle (word ==)
-  if h == intern_str("Alloc") {
+  ENamed(h) => if h == intern_str("Alloc") {
     [CRealTime]
-  }
-  // drift-audit: ignore — same as above
-  else if h == intern_str("IO") {
+  } else if h == intern_str("IO") {
     [CCompileTimeEval, CSandbox]
   } else if h == intern_str("Network") {
     [CSandbox]

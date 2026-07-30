@@ -2554,8 +2554,7 @@ fn executable_boundary_row(thunk_h) = match lookup_ty(thunk_h) {
 // carrier back to the semantic result representation. The scheduler only ever
 // transports the carrier pointer; f64/f32/v128 remain unboxed in field 0.
 fn invoke_scheduled_boundary(branch) = match branch {
-  ScheduledBoundary(thunk, result_h, carrier_h, _, _) => // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
-  LFieldLoad(result_h, LCall(carrier_h, thunk, []), FByIndex(0)),
+  ScheduledBoundary(thunk, result_h, carrier_h, _, _) => LFieldLoad(result_h, LCall(carrier_h, thunk, []), FByIndex(0)),
   InvalidScheduledBoundary(handle, invariant) => LInvariantFailure(handle, invariant),
 }
 
@@ -2599,8 +2598,7 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
     let joins = map(
       (indexed) => match indexed {
         (i, branch) => match branch {
-          ScheduledBoundary(_, result_h, carrier_h, thread_ticket_h, _) => // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
-          {
+          ScheduledBoundary(_, result_h, carrier_h, thread_ticket_h, _) => {
             let joined = lower_perform_dispatch(
               carrier_h,
               "thread_join",
@@ -2665,8 +2663,7 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
     let joins = map(
       (indexed) => match indexed {
         (i, branch) => match branch {
-          ScheduledBoundary(_, result_h, carrier_h, _, persist_ticket_h) => // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
-          {
+          ScheduledBoundary(_, result_h, carrier_h, _, persist_ticket_h) => {
             let joined = lower_perform_dispatch(
               carrier_h,
               "join_persist",
@@ -2695,8 +2692,7 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   (indexed) => match indexed {
     (i, branch_node) => match branch_node {
       N(_, _, branch_h) => match fanout_boundary_at(boundaries, base_idx + i, branch_h) {
-        Ok(boundary) => // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
-        match boundary {
+        Ok(boundary) => match boundary {
           BoundaryEdge(result_h, thunk_h, carrier_h, thread_ticket_h, persist_ticket_h) => {
             let thunk_name = "diverge_{int_to_str(base_idx + i)}_{int_to_str(parent_handle)}"
             // A diverge thunk is a closure exactly like a branch thunk (`><`,
@@ -2732,7 +2728,6 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
                     // chain exactly as a real lambda does — no thunk-local evidence.
                     ScheduledBoundary(
                       LMakeClosure(thunk_h, fn_ir, captures_exprs),
-                      // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
                       result_h,
                       carrier_h,
                       thread_ticket_h,
@@ -2764,8 +2759,7 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
 // "compiler-synthesized" thunks vs. user-written ones.
 fn synthesize_branch_thunk(parent_handle, side_label: String, branch_node, boundary) = match branch_node {
   N(_, _, branch_h) => match boundary {
-    Ok(edge) => // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
-    match edge {
+    Ok(edge) => match edge {
       BoundaryEdge(result_h, thunk_h, carrier_h, thread_ticket_h, persist_ticket_h) => {
         let thunk_name = "compose_{side_label}_{int_to_str(parent_handle)}"
         let free_names = collect_free_vars(branch_node, [])
@@ -2791,7 +2785,6 @@ fn synthesize_branch_thunk(parent_handle, side_label: String, branch_node, bound
                 )
                 ScheduledBoundary(
                   LMakeClosure(thunk_h, fn_ir, captures_exprs),
-                  // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
                   result_h,
                   carrier_h,
                   thread_ticket_h,
@@ -4022,7 +4015,6 @@ fn reify_frame_k(body_node, ph, outer_holes) = match continuation_boundary_at(ph
   Err(invariant) => LInvariantFailure(ph, invariant),
 }
 
-// drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
 fn reify_frame_k_at(body_node, ph, outer_holes, edge) = match edge {
   ContinuationEdge(resume_input_h, answer_h, continuation_h, disc, world) => {
     let hole = k_hole_name(ph)

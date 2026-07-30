@@ -362,20 +362,13 @@ fn capabilities_unlocked_by(row) with Memory + Alloc = match row {
 fn negation_caps(names) with Memory + Alloc = flatten(map(caps_for_negated_eff, names))
 
 fn caps_for_negated_eff(name) with Intern = match name {
-  ENamed(h) => // drift-audit: ignore — the literal NAMES the effect at this one severance table; identity is the intern handle (word ==)
-  if h == intern_str("Alloc") {
+  ENamed(h) => if h == intern_str("Alloc") {
     ["CRealTime"]
-  }
-  // drift-audit: ignore — same as above
-  else if h == intern_str("IO") {
+  } else if h == intern_str("IO") {
     ["CCompileTimeEval", "CSandbox"]
-  }
-  // drift-audit: ignore — same as above
-  else if h == intern_str("Network") {
+  } else if h == intern_str("Network") {
     ["CSandbox"]
-  }
-  // drift-audit: ignore — same as above
-  else if h == intern_str("Mutate") {
+  } else if h == intern_str("Mutate") {
     ["CParallelize"]
   } else {
     []

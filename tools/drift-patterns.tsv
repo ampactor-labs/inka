@@ -16,12 +16,12 @@
 1	Rust vtable (closure-as-vtable)	\{\s*(fn|handler)_\w+\s*:\s*(fn|\|)	ka	A record of functions named like a vtable is Mentl drawn as Rust. Use graph + handler.
 2	Scheme env frame (scope-as-frame-stack)	\b(parent_env|env_stack|push_frame|pop_frame|env_chain)\b	ka	Env lookup is an effect op — the bare call `env_lookup(name)` — no parent-pointer frame walk.
 3	Python dict (effect-name-set-as-strings)	perform\s+"[A-Z]	ka	Effect names are EffName ADTs. Raw strings flatten parameterization.	raw
-3	Python dict (string-keyed effect match)	"Pure"|"Alloc"|"IO"|"State"|"Console"	ka	Flat effect names. Post-H3.1, EffName is parameterized ADT. These strings signal the old shape.	raw
+3	Python dict (string-keyed effect match)	==\s*"(Pure|Alloc|IO|State|Console)"|"(Pure|Alloc|IO|State|Console)"\s*=>	ka	Flat effect-name COMPARES and match arms are the old string-keyed shape. The bare literal inside `intern_str("IO")` is the NEW shape — the canonical name entering the intern once — so the row anchors on the compare/arm adjacency, never mere presence.	raw
 4	Haskell monad transformer (nested handle chain)	handle\s*\(\s*handle\s*\(\s*handle	ka	Compose with ~> chains, not stacked handle(handle(handle(...))).
 5	C calling convention (__closure/__ev separate)	__closure\b.*__ev\b|__ev\b.*__closure\b	ka	Unified __state per H1 substrate. Separate __closure and __ev is the pre-H1 shape.
 6	Primitive-type-special-case (Bool carveout)	\b(if|match).*\b(is_bool|bool_special|Bool_ty\b)	ka	Nullary ADTs share compilation discipline. Bool special-casing is drift.
 7	Parallel-arrays-instead-of-record (locals/captures pairs)	\b(locals|captures|frames|handlers)\s*,\s*\1_h\b	ka	Frame consolidation (Ω.5): one record + sorted-set, not parallel arrays.
-7	Parallel-arrays-instead-of-record (naming tell)	\b\w+_h\b\s*,\s*\w+_h\b	ka	Paired _h arrays surface a record-shape begging to exist.
+7	Parallel-arrays-instead-of-record (naming tell)	\blet\s*\(\s*[a-z_]\w*_h\s*,\s*[a-z_]\w*_h\b	ka	A let-tuple of paired _h bindings surfaces a record-shape begging to exist. Anchored to the let-destructure: a CTOR's payload binders legitimately carry the _h handle convention (the BoundaryEdge/ContinuationEdge record's own fields demanded 17 markers under the bare-pair form).
 8	String-keyed-when-structured (int-coded mode)	\bmode\s*==\s*\d	ka	Flag-as-int is an ADT begging to exist. H6 will catch it anyway.
 8	String-keyed-when-structured (token kind as int)	\btoken_kind\s*==\s*\d	ka	Tokens are ADTs post-Ω.4.
 8	String-keyed-when-structured (SchemeKind as int)	\bscheme_kind\s*==\s*\d	ka	SchemeKind is ADT post-H3.

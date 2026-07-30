@@ -3743,13 +3743,7 @@ fn stage_continuation_boundary(cname: String, resume_input_h) = {
   let answer_h = if current_answer_h < 0 { resume_input_h } else { current_answer_h }
   graph_boundary_set(
     resume_input_h,
-    PendingContinuationBoundary(
-      // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
-      resume_input_h,
-      answer_h,
-      continuation_h,
-      inf_current_world()
-    )
+    PendingContinuationBoundary(resume_input_h, answer_h, continuation_h, inf_current_world())
   )
 }
 
@@ -3761,8 +3755,7 @@ fn finalize_continuation_boundaries(i, n) = if i >= n {
   ()
 } else {
   match graph_boundary_at(i) {
-    PendingContinuationBoundary(resume_input_h, answer_h, continuation_h, world) => // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
-    {
+    PendingContinuationBoundary(resume_input_h, answer_h, continuation_h, world) => {
       let disc = continuation_discipline_at(i)
       graph_bind(
         continuation_h,
@@ -3771,14 +3764,7 @@ fn finalize_continuation_boundaries(i, n) = if i >= n {
       )
       graph_boundary_set(
         i,
-        ContinuationBoundary(ContinuationEdge(
-          // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
-          resume_input_h,
-          answer_h,
-          continuation_h,
-          disc,
-          world
-        ))
+        ContinuationBoundary(ContinuationEdge(resume_input_h, answer_h, continuation_h, disc, world))
       )
     },
     _ => (),
@@ -4235,7 +4221,6 @@ fn infer_fanout_value_boundary(branch, span: ValidSpan, label: String) = match b
       Located(span, InferredPipeResult("><", Inferred("{label} persist schedule ticket")))
     )
     inf_add_row(thunk_row)
-    // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
     BoundaryEdge(result_h, thunk_h, carrier_h, thread_ticket_h, persist_ticket_h)
   },
 }
@@ -4400,7 +4385,6 @@ fn infer_fanout_apply_one(branch, input_h, span: ValidSpan) = match branch {
       Located(span, InferredPipeResult("<|", Inferred("persist schedule ticket")))
     )
     inf_add_row(thunk_row)
-    // drift-audit: ignore — positional destructure/construction of the ONE BoundaryEdge/ContinuationEdge record — the record exists; these are its named fields, not parallel arrays
     BoundaryEdge(ret_h, thunk_h, carrier_h, thread_ticket_h, persist_ticket_h)
   },
 }

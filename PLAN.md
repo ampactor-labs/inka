@@ -1092,6 +1092,20 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ TWO ROWS SHARPEN TO THEIR INTENT — the third marker
+  wave (no pin move — comment/tools only; boot a62b1299 stands). Mode
+  7's naming-tell anchors to the let-tuple destructure (a CTOR's
+  payload binders legitimately carry the _h handle convention — the
+  BoundaryEdge record's own fields had demanded 17 markers under the
+  bare-pair form), and mode 3's string-keyed row anchors to the
+  COMPARE/arm adjacency (`== "IO"` / `"IO" =>`) — the bare literal
+  inside `intern_str("IO")` is the NEW shape, the canonical name
+  entering the intern once, and the old row fired on the cure. Four
+  families strip (positional-destructure, same-as-above,
+  literal-NAMES-the-effect, pre-warm-names): markers 161 → 136; day
+  total 269 → 136 (49% of the eradication charge executed through
+  precision, never through suppression). Full-wheel audit CLEAN; the
+  march byte-identical.
 - 2026-07-30 · ▶ THE AUDIT GAINS THE CODE CHANNEL — the string-literal
   blindness dies structurally, and the second marker wave strips (no
   pin move — comment/tools only; boot a62b1299 stands). Code-channel

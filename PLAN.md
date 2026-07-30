@@ -1092,6 +1092,18 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶ THE AUTHORED ROW SPEAKS INSTANCES — eff_name_label
+  closes its own banked follow-up (CLEAN m2 == m3 · pin 04ba90a3). The
+  label that lands IN SOURCE (the tighten patch, the with-clause
+  invitation) stripped every parameterized instance to its bare name —
+  a proven Sample(44100) authored as Sample, a semantically WIDENED
+  row that dropped the instance the proof carried. Literal-arg
+  instances render in place now (SYNTAX's own canonical spelling); a
+  type or node arg keeps the bare name — the sound wider-or-equal
+  declaration, never an unparseable Cast(GNode) pasted into a
+  signature (the render-vs-authorable seam, closed at its authoring
+  face; the diagnostic voice keeps show_eff_arg's full truth).
+  Frontier 318/0; census 0.
 - 2026-07-29 · ▶▶ THE TUPLE INDEXES — SYNTAX §Indexing's documented
   form judges (CLEAN m2 == m3 · pin 33a60e05). The index sugar forced
   EVERY receiver to List — the census's own conviction at audit_walk

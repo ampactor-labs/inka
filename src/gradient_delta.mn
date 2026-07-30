@@ -283,6 +283,28 @@ fn row_to_with_clause(row) with Intern + Memory + Alloc = match row {
 fn neg_names_to_str(ref names) with Intern + Memory + Alloc =
   show_list(names, (n) => "!{show_eff_name(n)}", " + ")
 
+fn eff_args_all_literal(args) with Pure = all(
+  (a) => match a {
+    EAInt(_) => true,
+    EAFloat(_) => true,
+    EAString(_) => true,
+    EAType(_) => false,
+    EANode(_) => false,
+  },
+  args
+)
+
+// The literal arms only — callers guard with eff_args_all_literal, so
+// the type/node arms are unreachable here by construction; they render
+// the bare name a line above, never through this projection.
+fn show_eff_arg_literal(arg) with Memory + Alloc = match arg {
+  EAInt(n) => int_to_str(n),
+  EAFloat(f) => float_to_str(f),
+  EAString(s) => "\"{s}\"",
+  EAType(_) => "",
+  EANode(_) => "",
+}
+
 // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
 fn eff_names_to_str(names) with Intern + Memory + Alloc = if len(names) == 0 {
   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md ("Pure is the identity element of +"); not effect-name string-keying
@@ -293,10 +315,22 @@ fn eff_names_to_str(names) with Intern + Memory + Alloc = if len(names) == 0 {
   "{eff_name_label(last(names))} + {eff_names_to_str(drop_last(names))}"
 }
 
-fn eff_name_label(name) with Intern = match name {
+fn eff_name_label(name) with Intern + Memory + Alloc = match name {
   ENamed(h) => intern_name_of(h),
-  EParameterized(h, _) => // arg-aware rendering is named follow-up
-  intern_name_of(h),
+  EParameterized(h, args) => // AUTHORABLE arg rendering — this label lands in
+  // source (the tighten patch, the with-clause invitation), so it
+  // speaks only what the declared-row grammar parses: LITERAL args
+  // render in place (`Sample(44100)` is SYNTAX's own canonical form —
+  // the bare-stripped render authored a semantically WIDENED row and
+  // dropped the instance the proof carried); a type or node arg has no
+  // authored spelling, so the BARE name renders — the sound
+  // wider-or-equal declaration (a bare name admits every instance),
+  // never an unparseable Cast(GNode) pasted into a signature.
+  if eff_args_all_literal(args) {
+    "{intern_name_of(h)}({show_list(args, show_eff_arg_literal, ", ")})"
+  } else {
+    intern_name_of(h)
+  },
   EPure => // drift-audit: ignore — variant→surface-label render, not a name key
   "Pure",
 }

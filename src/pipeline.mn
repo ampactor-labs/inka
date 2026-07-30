@@ -1326,9 +1326,18 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, refe
   "{header}{severance_section}{refs_section}{verb_section}{pending_section}{tighten_section}"
 }
 
-// Query rendering — delegates to query.mn for Question parsing
-fn render_ref_spans(ref spans, i) with Memory + Alloc =
-  if i >= len(spans) { "" } else { "\n  at {show_span(spans[i])}{render_ref_spans(spans, i + 1)}" }
+// Query rendering — delegates to query.mn for Question parsing.
+// Ref lines speak the developer's coordinates through the module
+// seams (the one seam projection the debt lines read too); the seams
+// read once per render, never per line.
+fn render_ref_spans(ref spans, i) with GraphRead + Memory + Alloc =
+  ref_span_lines(spans, module_seams(), i)
+
+fn ref_span_lines(ref spans, ref seams, i) with Memory + Alloc = if i >= len(spans) {
+  ""
+} else {
+  "\n  at {span_render_local(seams, spans[i])}{ref_span_lines(spans, seams, i + 1)}"
+}
 
 fn render_query_result(result) = match result {
   QRType(ty, reason) => "→ {show_type(ty)}\n  Reason: {show_reason(reason)}",

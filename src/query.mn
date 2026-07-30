@@ -318,9 +318,13 @@ fn collect_var_ref_spans(name, i, n, acc) with GraphRead + Memory + Alloc + !Mut
   match graph_node_body(i) {
     NExpr(VarRef(ref_name)) => if ref_name == name {
       // A zero span is a synthetic mint (a pre-registration ghost),
-      // not a source site — the located answer skips it.
+      // not a source site — the located answer skips it. A span already
+      // collected is the SAME source site re-minted by a later judgment
+      // generation (the converged rounds re-parse; one reference
+      // rendered four times before this dedup) — the reference's
+      // identity is its source location, so it enters once.
       let sp = span_of_handle(i)
-      if sp == span_zero() {
+      if sp == span_zero() || span_in(acc, sp, 0) {
         collect_var_ref_spans(name, i + 1, n, acc)
       } else {
         collect_var_ref_spans(name, i + 1, n, push(acc, sp))
@@ -331,6 +335,9 @@ fn collect_var_ref_spans(name, i, n, acc) with GraphRead + Memory + Alloc + !Mut
     _ => collect_var_ref_spans(name, i + 1, n, acc),
   }
 }
+
+fn span_in(ref acc, ref sp, i) with Memory =
+  if i >= len(acc) { false } else { if acc[i] == sp { true } else { span_in(acc, sp, i + 1) } }
 
 // span_of_handle — the node's source span, read live from its Reason chain
 // (the parser/infer wrote Located(span, _) at the node). One graph_chase, the

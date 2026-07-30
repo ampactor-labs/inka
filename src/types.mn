@@ -2862,6 +2862,48 @@ fn show_span(ref span) with Memory + Alloc = match span {
   Span(sl, sc, el, ec) => "{int_to_str(sl)}:{int_to_str(sc)}-{int_to_str(el)}:{int_to_str(ec)}",
 }
 
+// ─── The seam render — weave spans as the developer's coordinates ───
+//
+// The module seams read once from the graph: the driver minted one
+// NModule per woven file at discovery (the same seam truth the comment
+// re-homing pass reads), so any weave span resolves to `path:local_line`
+// live — no side table, no hand map. A seam-free blob weave (stdin, the
+// march) yields an empty seam list and every span renders raw — the
+// census's own coordinates, by construction. One home; the verify debt
+// lines and the query refs facet both project through it.
+fn module_seams() with GraphRead + Memory + Alloc = match graph_snapshot() {
+  Graph(_, sp) => seams_walk(list_to_flat(sp), 0, []),
+}
+
+fn seams_walk(ref spans, i, acc) with GraphRead + Memory + Alloc = if i >= len(spans) {
+  acc
+} else {
+  match spans[i] {
+    (_, h) => match graph_node_body(h) {
+      NModule(m) => match m.span {
+        Span(ls, _, le, _) => seams_walk(spans, i + 1, push(acc, (ls, le, m.path))),
+      },
+      _ => seams_walk(spans, i + 1, acc),
+    },
+  }
+}
+
+fn span_render_local(ref seams, ref dspan) with Memory + Alloc = match dspan {
+  Span(sl, _, _, _) => seam_of_line(seams, sl, 0, dspan),
+}
+
+fn seam_of_line(ref seams, line, i, ref dspan) with Memory + Alloc = if i >= len(seams) {
+  show_span(dspan)
+} else {
+  match seams[i] {
+    (ls, le, path) => if line >= ls && line < le {
+      "{path}:{int_to_str(line - ls + 1)}"
+    } else {
+      seam_of_line(seams, line, i + 1, dspan)
+    },
+  }
+}
+
 fn show_pipe_kind(pk) with Pure = match pk {
   PForward => "|>",
   PFanout(FanShare) => "<|",

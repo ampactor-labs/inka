@@ -1092,6 +1092,16 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE REFERENCE ENTERS ONCE AND SPEAKS LOCALLY — the
+  refs facet's generation dedup + the seam projection's one home
+  (pin a62b1299). The collector dedups by SPAN (a reference's
+  identity is its source location; the converged rounds' re-minted
+  generations rendered one reference FOUR times, measured), and the
+  seam family moves to types.mn (module_seams / span_render_local
+  beside show_span) where the verify debt lines and the refs render
+  both read it: `refs of bump` answers one located line in the
+  developer's own coordinates. CLEAN m2 == m3 at 348,397 lines;
+  census 0; frontier 323/0; proof-exactness 9/9.
 - 2026-07-30 · ▶ THE DEBT SPEAKS THE DEVELOPER'S COORDINATES — the
   four-times-paid hand map becomes a projection (pin 852c34dc). The
   pending ledger's spans render as `path:local_line` through the

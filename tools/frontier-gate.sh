@@ -2029,6 +2029,23 @@ for i in "${!compilers[@]}"; do
   else
     fail "interval fragment (pending comparisons: $iv_err, want 2)"
   fi
+
+  # ─── The directional fn-arg edge (quiet-under-cap admits) ──────────
+  # A Pure fn passed where a `with Tick` fn is expected ADMITS and runs
+  # (RED through every pin before cd43c23c: "E_EffectMismatch: Pure vs
+  # Tick" — the closed-closed equality at the symmetric TFun meet); the
+  # noisy-into-narrow refusal stays the hof-row-gate leg's contract.
+  dir_wat=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-fn-arg-row-directional.mn" 2>/dev/null)
+  if [ -n "$dir_wat" ]; then
+    printf '%s' "$dir_wat" > "$dir/dirfn.wat"
+    if wt_asm "$dir/dirfn.wat" "$dir/dirfn.wasm" 2>/dev/null && [ "$(wt_run "$dir/dirfn.wasm" > /dev/null 2>&1; echo $?)" = "7" ]; then
+      pass "directional fn-arg edge: the quiet fn admits under the declared cap (runs 7)"
+    else
+      fail "directional fn-arg edge (assemble/run)"
+    fi
+  else
+    fail "directional fn-arg edge (compile refused the quiet fn)"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

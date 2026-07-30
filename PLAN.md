@@ -1092,6 +1092,25 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE QUIET FN FITS UNDER THE CAP —
+  Hβ.effects.directional-fn-row-edge RESOLVED at its measured scope
+  (pin cd43c23c). The call edge's fn-arg row meet goes DIRECTIONAL
+  where the param's declared row is a CONCRETE cap (closed or the
+  !-stance EtAll): fn_arg_directional_positions meets non-row
+  components symmetrically, the TOP rows by row_subsumes(arg, param),
+  and masks the position from the wholesale unify (a fresh slot — the
+  symmetric equality never re-runs). A Pure fn now admits where a
+  `with Tick` fn is expected — the banked RED runs 7 — while the
+  noisy-into-narrow refusals stand (hof-row-gate's leg + the
+  Tick-vs-Pure face, both measured same-day). THE SCOPE WAS PAID FOR:
+  the first form masked VAR-tailed param rows too, and the wheel's own
+  census convicted 297 sites in ONE march — the effect-polymorphic
+  channel (map's f) is a FLOW the arg's row must unify into, never a
+  cap to subsume under; row_cap_form is that boundary, written where
+  the 297 taught it. TRANSITION m3 == m4 at 349,013 lines; census 0;
+  frontier 324/0 (the admit leg registered); proof-exactness 9/9;
+  crown 5/5. The nested-variance tail (a fn-arg's OWN fn-params flip
+  direction again) stays out of scope by the peer's own sequencing.
 - 2026-07-30 · ▶ THE SUMMIT WAS ALREADY PROMOTED — the fmt-canonical
   page closes as a measurement, not a ceremony (no pin move; boot
   a62b1299 stands). The whole-wheel fmt sweep (every src + non-tutorial
@@ -6670,23 +6689,14 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.effects.directional-fn-row-edge` — SHARPENED BY PROBE (2026-07-30;
-named at the 7c91063c barrier landing): the call edge's fn-arg row
-meet runs EQUALITY for closed-closed pairs — an inferred-Pure fn is
-REFUSED where a `with Tick` param plainly admits it ("E_EffectMismatch:
-Pure vs Tick", measured; the banked RED is
-tests/frontier/mn-fn-arg-row-directional.mn, unregistered until the
-landing) — while the barrier landing's subsumption covers only the
-EtAll-tailed arms of unify_row_canonical. The landing: the call's
-arg-to-param edge runs ONE-directional subsumption (arg row ⊆ param
-row) for fn-typed params, scoped to the fn's TOP row (nested variance
-stays out); it cannot live in unify_types' symmetric TFun recursion
-(the unpatchability theorem — the direction exists only at the call),
-so the shape is a positional pre-meet at infer_call_saturated for
-declared-TFun params, masking those rows from the wholesale
-unify(fh, expected). The noisy-into-narrow control (mn-hof-row-gate's
-face + the Tick-vs-Pure refusal measured the same day) must keep
-refusing.
+`Hβ.effects.directional-fn-row-edge` — RESOLVED at its measured scope
+(2026-07-30, pin cd43c23c — the §7 entry THE QUIET FN FITS UNDER THE
+CAP carries the record: the positional pre-meet at
+infer_call_saturated, row_cap_form as the cap/flow boundary the
+297-site census taught, the admit leg registered at frontier 324).
+The remaining tail is nested variance (a fn-arg's own fn-params flip
+direction again) — out of scope by the original sequencing, the
+symmetric meet standing there.
 
 `Hβ.verify.interval-fragment` — ENGINE HALF LANDED (2026-07-30, pin
 a71ebbcb — the §7 entry THE INTERVAL FRAGMENT AND THE FLOW LICENCE

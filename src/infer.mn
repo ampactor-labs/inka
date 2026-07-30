@@ -3653,12 +3653,118 @@ fn hole_params(args, params, i) = if i >= len(args) {
   }
 }
 
+// ─── The directional fn-arg edge (Hβ.effects.directional-fn-row-edge) ──
+//
+// A position masks when BOTH sides are bound TFuns of equal arity: the
+// non-row components meet symmetrically here (nested params, the
+// return), the TOP rows meet by row_subsumes(arg, param) — the param's
+// declared row is the CAP, and a quieter argument always fits under it.
+// An arg not yet TFun-bound keeps the symmetric path whole (a lambda
+// learns its shape FROM the param); an arity mismatch keeps it too (the
+// wholesale unify owns that refusal). Returns the masked positions.
+fn fn_arg_directional_positions(dps, arg_handles, span: ValidSpan, i) = if i >= len(dps) || i >= len(arg_handles) {
+  []
+} else {
+  let rest = fn_arg_directional_positions(dps, arg_handles, span, i + 1)
+  match fold_strip(chase_deep(param_ty(list_index(dps, i)))) {
+    TFun(pps, pret, prow) => // The directional meet fires only when the param's declared row is a
+    // CONCRETE cap (closed or the !-stance EtAll) — a VAR-tailed param
+    // row is the effect-polymorphic FLOW channel (map's f: the arg's
+    // row must UNIFY into the var so the caller carries it; masking it
+    // severed the flow and the wheel's census convicted 297 sites in
+    // one march), never a cap to subsume under.
+    if row_cap_form(prow) {
+      match graph_chase(list_index(arg_handles, i)) {
+        GNode(NBound(aty), _) => match fold_strip(chase_deep(aty)) {
+          TFun(aps, aret, arow) => if len(aps) == len(pps) {
+            fn_arg_component_meet(aps, pps, aret, pret, span)
+            if row_subsumes(arow, prow) {
+              ()
+            } else {
+              report_effect_mismatch(
+                arow,
+                prow,
+                span,
+                Inferred("a fn argument's row exceeds its param's declared cap")
+              )
+            }
+            [i] ++ rest
+          } else {
+            rest
+          },
+          _ => rest,
+        },
+        _ => rest,
+      }
+    } else {
+      rest
+    },
+    _ => rest,
+  }
+}
+
+// A declared param row is a CAP exactly when its tail is concrete —
+// EtClosed (`with Tick`) or EtAll (`with !WASI`); an EtVar tail is the
+// polymorphic flow channel. Bound tails resolve through the chase.
+fn row_cap_form(row) with GraphRead + Memory + Alloc = match chase_row_deep(row, 0) {
+  EfRow(_, _, EtClosed) => true,
+  EfRow(_, _, EtAll) => true,
+  _ => false,
+}
+
+fn fn_arg_component_meet(aps, pps, aret, pret, span: ValidSpan) = {
+  each(
+    ((ap, pp)) => unify_types(
+      param_ty(ap),
+      param_ty(pp),
+      span,
+      Inferred("a fn argument's param meets the declared param")
+    ),
+    zip(aps, pps)
+  )
+  unify_types(aret, pret, span, Inferred("a fn argument's return meets the declared return"))
+}
+
+// The wholesale-unify slots: a masked position takes a fresh
+// unconstrained var (its meet already ran directionally above); every
+// other position carries its argument's own handle as before.
+fn build_inferred_params_masked(handles, masked) = masked_params_walk(handles, masked, 0)
+
+fn masked_params_walk(ref handles, ref masked, i) = if i >= len(handles) {
+  []
+} else {
+  let slot = if int_in(masked, i, 0) {
+    mk_param("_", TVar(mint(Inferred("directionally-met fn-arg slot"))))
+  } else {
+    mk_param("_", TVar(list_index(handles, i)))
+  }
+  [slot] ++ masked_params_walk(handles, masked, i + 1)
+}
+
+fn int_in(ref xs, target, i) with Memory = if i >= len(xs) {
+  false
+} else {
+  if list_index(xs, i) == target { true } else { int_in(xs, target, i + 1) }
+}
+
 fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
   let arg_handles = collect_handles(args)
   // drift-audit: ignore — "return" is a Reason string, not an imperative keyword
   let ret_h = mint(InferredCallReturn(cname, Inferred("return")))
   let row_h = graph_fresh_row(InferredCallReturn(cname, Inferred("effects")))
-  let expected = TFun(build_inferred_params(arg_handles), TVar(ret_h), mk_ef_open([], row_h))
+  // The directional fn-arg edge: a fn-typed argument's TOP row meets its
+  // declared fn-typed param by SUBSUMPTION (arg ⊆ the param's declared
+  // cap), never by the wholesale unify's symmetric equality — a Pure fn
+  // is admitted wherever a `with Tick` fn is expected (the equality
+  // refused it, measured). The direction exists only HERE, at the call;
+  // the masked positions get fresh slots below so the symmetric row
+  // meet never re-runs.
+  let masked = match graph_chase(fh) {
+    GNode(NBound(TFun(dps0, _, _)), _) => fn_arg_directional_positions(dps0, arg_handles, span, 0),
+    _ => [],
+  }
+  let expected =
+    TFun(build_inferred_params_masked(arg_handles, masked), TVar(ret_h), mk_ef_open([], row_h))
   let expected_h = mint(InferredCallReturn(cname, Inferred("expected function type")))
   graph_bind(expected_h, expected, Located(span, InferredCallReturn(cname, Inferred("expected"))))
   unify(fh, expected_h, span, InferredCallReturn(cname, Inferred("unification")))

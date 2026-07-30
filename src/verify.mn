@@ -141,14 +141,9 @@ fn resolve_self_operand(name: String, self_h) with GraphRead =
 //   · an if / match / block joins its branches (min — every path bounds)
 //   · len / byte_len are >= 0 by the sequence representation itself
 //   · Add sums its operands' bounds
-//   · a node whose CHASED TYPE carries an `n <= self` refinement has
-//     bound n — the graph's own proof read live, sound modulo the
-//     ledger: a refined class's values are boundary-enforced (call-arg,
-//     let, and return sites each accrue at entry) or their producer's
-//     obligation is itself visible debt, so reading the class here
-//     hides nothing; a recursive call reading its own fn's refined
-//     return is the assume-the-signature induction (vacuous on the
-//     non-returning path, grounded by the base returns).
+//   · type reads only ACROSS a class boundary (the two-face law below —
+//     a first draft read the obligation target's own chased type and
+//     proved the annotation from itself, measured re-laundering `v - 1`)
 // TWO FACES, one contamination law: the obligation's target node and
 // every type-TRANSPARENT position under it (if/match/block joins — their
 // cells unify with the target's) sit in the SAME union-find class the

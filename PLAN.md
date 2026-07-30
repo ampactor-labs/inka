@@ -1092,6 +1092,36 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶ THE FIXTURE STATES ITS OWN CONTRACT — the refuse
+  grammar lands and the frontier bash's dissolution channel opens
+  (the self-exemplification pass's banked opening move executed ·
+  pin 2fb58e9a). `// expect: refuse E_Class` joins `// expect: N` as
+  the Expect ADT (ExpectRun | ExpectRefuse); battery_compile carries
+  mcp_diag_collector (the forwarder — every line still reaches
+  stderr) and returns the banked diagnostics beside the gate verdict;
+  a refuse fixture passes iff the named class REPORTS as an error —
+  the battery judges the JUDGMENT, never stricter than the medium
+  (armed classes withhold the artifact, unarmed ones surface-and-emit:
+  both are the law, and the contract asserts exactly what the medium
+  asserts). First two contracts live and REFUSE-passing through
+  `mentl test tests/micros` (117 run + 2 refuse): the forward-order
+  seam and the hole gate as self-stated fixtures. RIDES WITH IT:
+  the mentl-first perimeter — the repo's own PreToolUse hook refuses
+  grep-family reads AND Edit-bypassing writes against .mn source AND
+  the hand-assembled invocation family (`source wt-env && wt_run …` —
+  ⟳(2)'s own 2026-07-26 catch, re-caught tonight and made unsayable;
+  the installed verb IS the invocation; scripts and /tmp/.build stay
+  free; `# mentl-skip: <reason>` is the confession channel naming the
+  missing projection). AND THE SINGLE SOURCE OF TRUTH (Morgan): every
+  `~/.claude/plans/*` file verified against the artifact — five are
+  other projects; the two Mentl files (the eight-arc finish line +
+  its execution sidecar) are integrated here (§11's arcs +
+  definition-of-done + risk tripwires) and retired to archaeology.
+  CLEAN m2 == m3 at 339,714 lines; census 0. The dissolution
+  continues per-family: each frontier refusal leg converts to a
+  contract fixture as it is touched, and the bash mass falls with
+  every conversion.
+
 - 2026-07-29 · ▶▶▶ THE SESSION IS THE TRANSPORT — resident-first
   becomes the CLI's default, and the dormant-to-canonical audit that
   chose it is executed (Hβ.session.resident-verbs' CLI face ·
@@ -6648,13 +6678,45 @@ table idx 0, so "prints WAT mid-inference" can mean "the parser ate my arm").
 ## §11 · THE PRODUCTION BAR — everything before Mentl is production-ready
 
 **THE CAMPAIGN ORDER (2026-07-24, Morgan-approved; consolidated
-2026-07-25 — THIS section is the ONE home. The former working mirror at
-`~/.claude/plans/wait-i-thought-mentl-lively-wren.md` is RETIRED to
-archaeology: two homes for one campaign was the side-ledger pattern the
-three-doc contract forbids, and the global read-path already declares
-`~/.claude/plans/*` out of it. Landed arcs live in the §7 ledger;
-unlanded designs live here or in the named-residue index; nothing lives
-only in the mirror.)**
+2026-07-25 — THIS section is the ONE home. PLAN.md IS THE SINGLE SOURCE
+OF TRUTH (Morgan, 2026-07-29): every `~/.claude/plans/*` file — the
+retired campaign mirror `wait-i-thought-mentl-lively-wren.md`, the
+finish-line plan `buzzing-wobbling-pie.md` and its execution sidecar
+`please-let-s-get-through-mutable-nebula.md` — is archaeology, verified
+integrated here (the eight arcs below ARE the pie's arcs; its
+definition-of-done and risk tripwires land below this note). Landed
+arcs live in the §7 ledger; unlanded designs live here or in the
+named-residue index; nothing lives only outside this file.)**
+
+**THE DEFINITION OF DONE — one statement per §0 property; each is an
+arc's terminal gate:** (1) proof beats review — the crown lands (`!E`
+sound under polymorphism, the modal world-index through world-as-value;
+Verify on a decidable fragment with honest V_Pending; SMT a
+certificate-checked handler swap; every armed class refusing). (2) the
+negative is provable — IFC `!Flow` on the integrity dual-lattice,
+PC-labels, robust declassification. (3) intent is lossless — the Why
+engine total; comments/Reasons/provenance projected at every surface;
+the fmt summit canonical. (4) computation is durable — persist=memcpy
+generalized to cross-machine cursor migration; the session a value; the
+oracle's forks durable. (5) systems explain themselves — `mentl audit`
+live; docs-as-projection; the ??-fan with the teaching tie-break as the
+daily loop. (6) the oracle at its limits — the multithreaded
+multi-cursor multi-shot fused oracle as DEFAULT (N-wide judgment +
+synth fan on one machinery, gradient work-stealing,
+hypothesis-derivation rounds, K past the 4GB ceiling). (7) `!Outside`
+closed — the native backend, diverse double compilation, and
+correctness-oracle-internal (the micro battery absorbed into the
+wheel's own Verify).
+
+**THE RISK TRIPWIRES (named assumptions, each with its fallback):**
+(1) the frozen-read instantiate holds without judgment regressions —
+tripwire: census classes shifting instead of falling; fallback the
+install-reconciliation-only route. (2) the lattice join's confluence
+survives every future workload — tripwire: any six-battery split at a
+new workload; FRAGX stays armed as the standing collision census.
+(3) the category window stays open for Arc 2 — tripwire: MoonBit 1.0
+or stabilized Scala CC shipping an absence-shaped claim first; response
+is pulling the benchmark + writeup forward on LANDED capability.
 The whole remainder to the FULLY TRUE ULTIMATE FORM, re-sequenced
 2026-07-28 (Morgan-approved — the finish-line plan; supersedes the
 A→F spine IN PLACE per the alive-law, A / B-i / B-ii / C having

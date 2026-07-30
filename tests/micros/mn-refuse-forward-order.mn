@@ -1,0 +1,13 @@
+// expect: refuse E_TypeMismatch
+// The one-judge seam's fixture as a SELF-STATED contract (the frontier
+// bash leg family's dissolution channel): a fn declared AFTER its
+// caller must still refuse a [tuple] return meeting a [String]
+// parameter — the converged judgment resolves the forward reference to
+// the callee's FINAL scheme.
+fn use_it() = eat(mk2())
+
+fn mk2() = [(1, "a")]
+
+fn eat(xs: [String]) -> Int = 42
+
+fn main() = use_it()

@@ -1890,8 +1890,22 @@ fn test_check_run(entry_module) =
 fn battery_libs() -> String with Memory + Alloc + WASI =
   fs_read_file_impl("lib/runtime/memory.mn") ++ fs_read_file_impl("lib/runtime/strings.mn") ++ fs_read_file_impl("lib/runtime/lists.mn") ++ fs_read_file_impl("lib/prelude.mn")
 
-// The micro's own expectation: first line `// expect: N`. None = not a
-// battery member (skipped loudly by the manifest consumer).
+// The fixture's own contract, first line — the expectation lives ON the
+// artifact (SYNTAX §Comments), and the grammar mirrors the medium's own
+// two verdicts: `// expect: N` (the program compiles and its run answers
+// N) and `// expect: refuse E_Class` (the judgment REPORTS the named
+// class as an error — armed classes also withhold the artifact, unarmed
+// ones surface-and-emit per the sound-incomplete contract; the battery
+// judges the JUDGMENT, never stricter than the medium). This contract
+// is the frontier bash's dissolution channel: a refusal leg becomes a
+// fixture the medium reads itself.
+type Expect
+  = ExpectRun(Int)
+  | ExpectRefuse(String)
+
+// The micro's own expectation: first line `// expect: N` or
+// `// expect: refuse E_Class`. None = not a battery member (skipped
+// loudly by the manifest consumer).
 fn battery_expect(src) with Memory + Alloc = {
   let prefix = "// expect: "
   if byte_len(src) < 12 {
@@ -1899,8 +1913,20 @@ fn battery_expect(src) with Memory + Alloc = {
   } else if !str_eq(str_slice(src, 0, 11), prefix) {
     None
   } else {
-    Some(battery_expect_digits(src, 11, 0))
+    if byte_len(src) >= 18 && str_eq(str_slice(src, 11, 18), "refuse ") {
+      Some(ExpectRefuse(battery_expect_word(src, 18, 18)))
+    } else {
+      Some(ExpectRun(battery_expect_digits(src, 11, 0)))
+    }
   }
+}
+
+// The class name: bytes from `start` to the first whitespace/newline.
+fn battery_expect_word(src, start, i) with Memory + Alloc = if i >= byte_len(src) {
+  str_slice(src, start, i)
+} else {
+  let b = byte_at(src, i)
+  if b == 10 || b == 13 || b == 32 { str_slice(src, start, i) } else { battery_expect_word(src, start, i + 1) }
 }
 
 fn battery_expect_digits(src, i, acc) with Memory = if i >= byte_len(src) {
@@ -1925,23 +1951,33 @@ fn battery_compile(src, wat_path) = infer_context(() => {
   // stricter than the medium (it FAILC'd ev2 for an unarmed row mismatch
   // the check verb tolerates). gate_reads is the law's one home; this
   // policy counts and continues where the CLI compile proc_exits.
+  // Returns (gate-failed, error-count, banked diagnostic lines) — the
+  // refuse contract judges the JUDGMENT through the collector's bank
+  // (mcp_diag_collector, the forwarder: every line still reaches stderr).
   match gate_reads(lowered) {
-    (nholes, refused) => if nholes > 0 || refused > 0 {
-      1
-    } else {
-      let fd = fs_create_impl(wat_path)
-      if fd == 0 {
+    (nholes, refused) => {
+      let failed = if nholes > 0 || refused > 0 {
         1
       } else {
-        {
-          emit_module(lowered)
-        } ~> wat_to_file(fd)
-        fs_close_impl(fd)
-        0
+        let fd = fs_create_impl(wat_path)
+        if fd == 0 {
+          1
+        } else {
+          {
+            emit_module(lowered)
+          } ~> wat_to_file(fd)
+          fs_close_impl(fd)
+          0
+        }
       }
+      // drift-audit: ignore — sequenced effectful ledger read (the mcp_judge precedent): the collector's bank, read once after the judge populates it
+      let lines = gate_facts()
+      // drift-audit: ignore — sequenced effectful ledger read (the executable_gate precedent)
+      let nerr = diag_errors()
+      (failed, nerr, lines)
     },
   }
-} ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
+} ~> mcp_diag_collector ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 fn battery_run(dir, names) = {
   fs_mkdir(".build")
@@ -1993,15 +2029,27 @@ fn battery_loop(dir: String, libs, micros: [String], i, fails) = if i >= len(mic
       print_string("NOEXPECT {stem}\n")
       1
     },
-    Some(want) => {
-      let failed = battery_compile(libs ++ src, ".build/test/{stem}.wat")
-      if failed > 0 {
-        print_string("FAILC {stem}\n")
-        1
-      } else {
-        print_string("MICRO {stem} .build/test/{stem}.wat {int_to_str(want)}\n")
-        0
-      }
+    Some(contract) => match battery_compile(libs ++ src, ".build/test/{stem}.wat") {
+      (failed, nerr, lines) => match contract {
+        ExpectRun(want) => if failed > 0 {
+          print_string("FAILC {stem}\n")
+          1
+        } else {
+          print_string("MICRO {stem} .build/test/{stem}.wat {int_to_str(want)}\n")
+          0
+        },
+        ExpectRefuse(cls) => // The contract judges the JUDGMENT: the named class reported as an
+        // error. Armed classes also withhold the artifact; unarmed ones
+        // surface-and-emit — both are the medium's own law, and the
+        // battery asserts exactly what the medium asserts.
+        if nerr > 0 && any((l) => str_contains(l, cls), lines) {
+          print_string("REFUSE {stem} {cls}\n")
+          0
+        } else {
+          print_string("FAILR {stem} wanted {cls} (errors={int_to_str(nerr)})\n")
+          1
+        },
+      },
     },
   }
   heap_reset(mark)

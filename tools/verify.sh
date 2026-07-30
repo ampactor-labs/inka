@@ -65,11 +65,35 @@ say "✓ compiler: $BOOT"
 #    loudly (a gate that cannot fail is no gate).
 for mf in tests/micros/mn-*.mn; do
   m=$(basename "$mf" .mn); m=${m#mn-}
+  # A refuse contract (`// expect: refuse E_Class`) is the MEDIUM's to
+  # judge — `mentl test tests/micros` asserts it in-process (the Expect
+  # ADT); this bash loop keeps only the run-value executions, and its
+  # responsibility SHRINKS as contracts absorb (the dissolution ratchet).
+  if sed -n '1p' "$mf" | grep -q '^// expect: refuse '; then
+    say "· micro $m: refuse contract — judged by mentl test"
+    continue
+  fi
   want=$(sed -n '1s|^// expect: \([0-9]\+\)$|\1|p' "$mf")
   if [[ -z "$want" ]]; then say "✗ micro $m: no '// expect: N' header"; fail=1; continue; fi
   out=$(tools/run-micro.sh "$mf" "$want" "${RTLIBS[@]}" 2>/dev/null | tail -1)
   if [[ "$out" == PASS* ]]; then say "✓ micro $m=$want"; else say "✗ micro $m: ${out:-no output}"; fail=1; fi
 done
+
+# 2b. The contract battery — the medium enforcing every fixture's own
+#     contract (run AND refuse grammars) in one process. A FAILC / FAILR /
+#     NOEXPECT line is a broken contract; the run-values above stay the
+#     exec-side check until the exec seam itself absorbs.
+if command -v mentl >/dev/null 2>&1; then
+  bat=$(cd "$ROOT" && mentl test tests/micros 2>/dev/null | grep -cE '^(FAILC|FAILR|NOEXPECT) ' || true)
+  if [[ "$bat" -eq 0 ]]; then
+    say "✓ contract battery: every fixture's own contract holds (mentl test)"
+  else
+    say "✗ contract battery: $bat broken contract(s) — run: mentl test tests/micros"
+    fail=1
+  fi
+else
+  say "· contract battery skipped (no installed mentl — tools/install.sh)"
+fi
 
 # 3. The census — the medium's own verdict on its own source, RATCHETED.
 #

@@ -1,0 +1,6 @@
+// expect: refuse E_UnresolvedHole
+// The armed-class face of the refuse contract: an authored value hole
+// in an executable's reachable tree refuses at the gate (nonzero
+// verdict, zero WAT) — SYNTAX's "a hole is productive, never
+// executable", asserted by the fixture itself.
+fn main() = ??

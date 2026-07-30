@@ -1092,6 +1092,31 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE LET ANNOTATION BECOMES A CONSTRAINT — a measured
+  judgment hole closes, and the interval arc takes its first wheel
+  debt (Hβ.infer.let-annotation-base-unify RESOLVED · pin 30194578).
+  THE HOLE, probe-first: `let x: Int = "hi"` compiled CLEAN —
+  apply_let_annotation only verified the refinement; the value cell
+  never met the annotation, so the base-type half of "the `: T`
+  annotation is a CONSTRAINT" (the code's own promise) was decorative,
+  and an annotated alias could never reach a consumer edge (the lexer
+  annotation's arg echo starved on exactly this — measured as a
+  12 → 12 wash before the edge landed). THE LANDING, three moves in
+  the licence's order: constraint FIRST (the uncontaminated read),
+  the base unify (the mismatch refuses — mn-let-ann-pins banks the
+  refuse contract), then the REPRESENTATIVE REBIND (the decl pin's
+  most-refined-member law at the let: a concrete-bound value cell
+  cannot adopt through concrete-meets-refined, so the refined form
+  re-binds as the class representative — the third measured face of
+  the one peel root, after the rec-callee publish and the param
+  census). THE CHAIN'S YIELD: lex's `let n: ValidOffset =
+  byte_len(source)` discharges its own obligation through the len leg
+  (the first wheel-internal interval discharge) and the lex_from arg
+  edge echo-stops through the adopted alias — wheel debt 12 → 11.
+  Census 0 at every step (zero wheel lets lied); CLEAN m2 == m3 at
+  347,287 lines; frontier 323/0; proof-exactness 9/9; the battery
+  carries the new refuse contract. The remaining five `0 <= self`
+  survivors keep their named routes in the residue index.
 - 2026-07-30 · ▶▶ THE AUTHORED RETURN RIDES AS A VALUE — the interval
   fragment's callee leg goes live cross-fn (pin 5e34f710). An authored
   `-> RetTy` rides the pre-registered TFun as the resolved Ty VALUE

@@ -6552,15 +6552,36 @@ fn build_param_types_loop(params, handles, qmap, i) = if i >= len(params) {
 // through its alias edge (quantify_ctor_ty — the same resolution build_param_types
 // uses), then discharge the refinement.
 fn apply_let_annotation(ann_ty, value_handle, span: ValidSpan) = match quantify_ctor_ty(ann_ty, []) {
-  (resolved, _q) => apply_refinement_constraint(resolved, value_handle, span),
+  (resolved, _q) => {
+    // Constraint FIRST — the refinement reads the value's class before the
+    // adopting unify below enters the annotation into it (the flow licence's
+    // uncontaminated-read order, the return site's landed twin).
+    apply_refinement_constraint(resolved, value_handle, span)
+    // THEN the base unify: the annotation is a real CONSTRAINT, not
+    // decoration — `let x: Int = "hi"` refused here (measured passing clean
+    // before this edge existed).
+    unify_types(TVar(value_handle), resolved, span, Inferred("let annotation pins the value"))
+    // THE CLASS EXPOSES ITS MOST-REFINED MEMBER (the decl pin's rebind, at
+    // the let): a CONCRETE-bound value cell cannot adopt through the unify
+    // (concrete-meets-refined checks the base and binds nothing), so an
+    // annotated alias never reached any consumer edge — the lexer's
+    // ValidOffset arg starved on exactly this absence. Rebind the refined
+    // form as the representative; plain annotations skip (nothing refined
+    // to expose).
+    match resolved {
+      TAlias(_, _) => graph_bind(value_handle, resolved, Located(span, Inferred("let annotation pins the value"))),
+      TRefined(_, _) => graph_bind(value_handle, resolved, Located(span, Inferred("let annotation pins the value"))),
+      _ => (),
+    }
+  },
 }
 
 // Peel the resolved annotation to its refinement. A transparent alias recurses
 // to its inner type; a TRefined discharges its (self-substituted) predicate
 // against the value node; any other resolved type carries no refinement
-// obligation here (base-type unification of the value against the annotation is
-// the named follow-up Hβ.infer.let-annotation-base-unify — this increment
-// discharges only the refinement, keeping the change purely additive).
+// obligation here (base-type unification lives at the CALLERS — the let's
+// adopting unify in apply_let_annotation, the return's ann pin — so this
+// projection stays purely the refinement's discharge).
 fn apply_refinement_constraint(ty, value_handle, span: ValidSpan) = match ty {
   TAlias(aname, inner) => // TYPED IDENTITY (refinement_admits' layering, at the accrual): a value
   // whose inferred type IS the same refined alias carries that alias's

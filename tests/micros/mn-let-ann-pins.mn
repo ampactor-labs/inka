@@ -1,0 +1,9 @@
+// expect: refuse E_TypeMismatch
+// The let annotation is a real constraint, not decoration: before the
+// base-unify edge landed (2026-07-30) this file compiled CLEAN — the
+// annotation was never checked against the value. The judge must
+// report the mismatch at the binding.
+fn main() = {
+  let x: Int = "hi"
+  len(x)
+}

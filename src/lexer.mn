@@ -223,7 +223,10 @@ else if b == 64 {
 // 1-char strings is allocated; all per-byte dispatch is `Int`-eq, not
 // string-eq (drift mode 12 cure).
 fn lex(ref source) = {
-  let n = byte_len(source)
+  // ValidOffset by the len leg: byte_len is >= 0 by the sequence
+  // representation, so the annotation's own obligation discharges at
+  // this construction and the lex_from arg edge reads the proof.
+  let n: ValidOffset = byte_len(source)
   let initial_capacity = if n < 16 { 16 } else { n }
   let buf = make_list(initial_capacity)
   match lex_from(source, n, 0, 1, 1, buf, 0, 0, 0) {

@@ -1,4 +1,4 @@
-// expect: 21
+// expect: 28
 // The interval fragment's acceptance face: the lower-bound read
 // discharges what the ground fold alone cannot — `cap` through the
 // if-join + the len floor, `bump` through Add over the opaque-face type
@@ -6,20 +6,28 @@
 // the value_flows_class licence its `v - 1` was laundered through the
 // arith class (a runtime -1 escaped a `0 <= self` return, measured);
 // now it pends visibly and still runs (debt surfaces, never blocks).
-// `seek` is the named peel-window residue: its return constraint runs
-// inside the ann-unify's peel, before the most-refined rebind, so the
-// rec-call's published bound is not yet readable there — it pends
-// honestly. The frontier leg asserts exactly TWO pending comparisons
-// survive this file (seek + wild), no more (the engine discharges), no
-// fewer (the licence never launders).
+// `wrap` proves the CALLEE leg: an authored return rides the
+// pre-registered TFun as a Ty VALUE, so a call's bound reads the
+// callee's own annotation verbatim — uncontaminatable by class
+// merging. `seek` is the named self-call residue: the recursion's IH
+// needs the decl-class discriminator (a self-call's callee cell shares
+// the decl's union-find class; a tail-called OTHER fn must never be
+// granted the IH — the g-launder), so it pends honestly until
+// graph_root_of lands. The frontier leg asserts exactly TWO pending
+// comparisons survive this file (seek + wild), no more (the engine
+// discharges), no fewer (the licence never launders).
 type Nat = Int where 0 <= self
 
 fn cap(xs) -> Nat = if len(xs) < 16 { 16 } else { len(xs) }
 
 fn bump(v: Nat) -> Nat = v + 1
 
+fn base() -> Nat = 7
+
+fn wrap() -> Nat = base()
+
 fn seek(xs, i: Nat) -> Nat = if i >= len(xs) { 0 } else { seek(xs, i + 1) }
 
 fn wild(v: Nat) -> Nat = v - 1
 
-fn main() = bump(cap([1, 2, 3])) + seek([1, 2, 3], 0) + wild(5)
+fn main() = bump(cap([1, 2, 3])) + seek([1, 2, 3], 0) + wild(5) + wrap()

@@ -1092,6 +1092,31 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE AUTHORED RETURN RIDES AS A VALUE — the interval
+  fragment's callee leg goes live cross-fn (pin 5e34f710). An authored
+  `-> RetTy` rides the pre-registered TFun as the resolved Ty VALUE
+  instead of the bound cell (pre_register_fn_sig's ret_component): a
+  value inside the record cannot be class-contaminated, so
+  callee_ret_lo reads the callee's own annotation verbatim at every
+  call — `fn wrap() -> Nat = base()` discharges through base's
+  declared Nat, the assume-the-signature induction with nothing to
+  launder. The discriminating probe that drove it: wrap DISCHARGES
+  while the self-call (seek) still pends — so the failure was never a
+  peel window (the prior entry's theory, corrected in place) but the
+  callee read hitting a TVar ret, and ty_lo keeps NO TVar arm BY
+  DESIGN: a chased ret var reaches the obligation's own class through
+  tail-call merging, and an unannotated tail callee granted that read
+  would launder (the g-case — `fn f() -> Nat = g()` with g free must
+  pend at f, and does). The SELF-CALL IH is the named remainder with
+  its exact sound discriminator banked (callee-class == DECL-class —
+  class-vs-TARGET is the launder, class-vs-DECL is exact; needs
+  graph_root_of + a Predicate carrier). The cell still binds for
+  forward-ref grounding; infer_fn's unify against the pre-scheme
+  keeps semantics — TRANSITION m3 == m4 at 347,173 lines (the
+  105k-line m2/m3 diff is the representation crossing one
+  generation); census 0 at every generation; frontier 323/0
+  (the fixture grows the wrap/base faces, runs 28, still exactly two
+  honest pendings); proof-exactness 9/9.
 - 2026-07-30 · ▶▶▶ THE INTERVAL FRAGMENT AND THE FLOW LICENCE — Verify
   grows its first inference leg, and the dig kills a measured
   refinement launder (Hβ.verify.interval-fragment's engine half lands ·
@@ -6532,20 +6557,27 @@ a71ebbcb — the §7 entry THE INTERVAL FRAGMENT AND THE FLOW LICENCE
 carries the record: the two-face lower-bound read in verify.mn, the
 value_flows_class licence closing the measured arith-class launder,
 the mn-verify-interval fixture + frontier leg, arm row unchanged).
-THE REMAINING HALF is the wheel sweep: the six standing `0 <= self`
-pendings (cursor:297 score_one_position's handle param · cursor:546
+THE CALLEE LEG LANDED same day (pin 5e34f710 — an authored return
+rides the pre-registered TFun as a Ty VALUE, so a call's bound reads
+the callee's annotation verbatim, uncontaminatable by class merging;
+the wrap/base fixture faces prove it; TRANSITION m3 == m4). THE
+REMAINING HALF: (1) the SELF-CALL IH — a recursive fn's own call
+must be granted the annotation-under-proof as its bound (seek's
+measured pend), and the sound discriminator is CLASS IDENTITY
+(a self-call's callee cell shares the DECL's union-find class; a
+tail-called OTHER fn's freshened ret also lands in the obligation
+target's class, so class-vs-TARGET is the launder — the g-case —
+while class-vs-DECL is exact); needs `graph_root_of` (the find step
+exposed as a GraphRead projection — a canonical read the union-find
+computes internally and never surfaces) + the decl handle threaded
+into the obligation (a Predicate carrier beside PWithSelf, ~8 arm
+sites). (2) The wheel's six standing `0 <= self` pendings
+(cursor:297 score_one_position's handle param · cursor:546
 scan_for_span's return · lexer:229's lex_from arg · main:1272/1437's
 ph flows · voice:1097's resolve_cursor_target) discharge via
-authored refined annotations whose echo/interval the engine now
-honors — each a one-line annotation plus a march to measure the
-moved obligations. The SHARPEST single first: the PEEL-WINDOW fix —
-apply_refinement_constraint at the return site runs inside the
-ann-unify's peel (before the most-refined rebind), so a recursive
-call's published bound is unreadable at its own decl's constraint
-(seek's measured pend); running the rebind's re-refinement before
-the constraint OR reading the callee's pre-registered sig closes the
-recursion shape wholesale. TagId's 0..255 and the float intervals
-stay the SMT tier's.
+authored refined annotations whose echo/interval/callee legs the
+engine now honors — one-line annotations, march-measured each.
+TagId's 0..255 and the float intervals stay the SMT tier's.
 
 `Hβ.infer.schemes-are-edges` — THE MENTL WAY for the judgment (named
 2026-07-30, Morgan's question "is there a better way — a more Mentl

@@ -897,21 +897,36 @@ fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: Vali
   let ret_handle = mint(FnReturn(name, Inferred("return of '{name}'")))
   match ret_ann {
     N(ret_ann_body, _, _) => {
-      match ret_ann_body {
+      // An AUTHORED return rides the TFun as the resolved Ty VALUE, not the
+      // cell: a value inside the record cannot be class-contaminated, so the
+      // interval fragment's callee read (callee_ret_lo) sees the authored
+      // refinement verbatim at every call — the assume-the-signature
+      // induction with nothing to launder (a chased ret VAR reaches the
+      // obligation's own class through tail-call merging; the value never
+      // does). The cell still binds (forward-ref grounding + quantification).
+      let ret_component = match ret_ann_body {
         NTypeAnn(ann_ty) => // Resolve through the alias edge FIRST (quantify_ctor_ty — the same
         // resolution build_param_types and apply_let_annotation use): binding
         // the raw syntactic TName made a refined alias look NOMINAL, so the
         // proposer enumerated constructors of Positive (zero) instead of
         // integer seeds under its refinement.
         match quantify_ctor_ty(ann_ty, []) {
-          (resolved_ret, _q) => graph_bind(ret_handle, resolved_ret, Located(span, Declared(name))),
+          (resolved_ret, _q) => {
+            graph_bind(ret_handle, resolved_ret, Located(span, Declared(name)))
+            resolved_ret
+          },
         },
-        _ => (),
+        _ => // The absent-annotation marker (the parser mints LitUnit when no
+        // `->` is authored): the return stays the fn's own minted cell —
+        // the inferred form, not a fabricated absorber.
+        //
+        // drift-audit: ignore
+        TVar(ret_handle),
       }
       let row_handle = graph_fresh_row(Inferred("effects of '{name}'"))
       let fn_ty = TFun(
         build_param_types(params, param_handles),
-        TVar(ret_handle),
+        ret_component,
         mk_ef_open(declared_names, row_handle)
       )
       graph_bind(handle, fn_ty, Located(span, Declared(name)))

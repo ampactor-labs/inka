@@ -253,10 +253,10 @@ fn mcp_tool_call(id, params, ast, ranges, at_read) = {
           // console — the transport is the install (at_read is the
           // closure main.mn built where the renders live).
           let banked = at_read(ranges, float_to_int(lf), col)
-          ((mcp_response(
+          (mcp_response(
             id,
             JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr(str_concat_all(banked)))])])), ("isError", JBool(false))])
-          )), 0)
+          ), 0)
         },
         _ => (mcp_response(
           id,
@@ -274,10 +274,10 @@ fn mcp_tool_call(id, params, ast, ranges, at_read) = {
       // field) through the same at transport; a session read never
       // resets its region.
       let banked = at_read(ranges, 0, 1)
-      ((mcp_response(
+      (mcp_response(
         id,
         JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr(str_concat_all(banked)))])])), ("isError", JBool(false))])
-      )), 0)
+      ), 0)
     },
     "audit" => if len(ranges) == 0 {
       (mcp_response(
@@ -289,10 +289,10 @@ fn mcp_tool_call(id, params, ast, ranges, at_read) = {
       // one home) over the RESIDENT entry ast — no derivation, a living
       // read; a session read never resets its region.
       let text = audit_project(ast)
-      ((mcp_response(
+      (mcp_response(
         id,
         JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr(text))])])), ("isError", JBool(false))])
-      )), 0)
+      ), 0)
     },
     "teach" => if len(ranges) == 0 {
       (mcp_response(
@@ -303,10 +303,10 @@ fn mcp_tool_call(id, params, ast, ranges, at_read) = {
       // teach_project — the gradient's next-annotation read, the CLI
       // verb's own projection over the resident entry ast.
       let text = teach_project(ast)
-      ((mcp_response(
+      (mcp_response(
         id,
         JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr(text))])])), ("isError", JBool(false))])
-      )), 0)
+      ), 0)
     },
     "query" => if len(ranges) == 0 {
       (mcp_response(
@@ -324,10 +324,10 @@ fn mcp_tool_call(id, params, ast, ranges, at_read) = {
           // no derivation, no restore, no swap (the resident form the
           // swap-crossing refutation named).
           let text = ask(parse_query_string(question)) |> render_query_result
-          ((mcp_response(
+          (mcp_response(
             id,
             JObj([("content", JArr([JObj([("type", JStr("text")), ("text", JStr("{text}\n"))])])), ("isError", JBool(false))])
-          )), 0)
+          ), 0)
         },
         _ => (mcp_response(
           id,
@@ -335,7 +335,11 @@ fn mcp_tool_call(id, params, ast, ranges, at_read) = {
         ), 1),
       }
     },
-    _ => (mcp_error(id, -32602, "unknown tool: {name} — the server serves propose, query, at, frontier, audit, and teach"), 1),
+    _ => (mcp_error(
+      id,
+      -32602,
+      "unknown tool: {name} — the server serves propose, query, at, frontier, audit, and teach"
+    ), 1),
   }
 }
 
@@ -477,8 +481,15 @@ fn mcp_run(at_read) = {
   fs_mkdir_impl(".build")
   fs_mkdir_impl(".build/mcp")
   eprint_string("mentl mcp: the gate on stdio — nothing executes unproven\n")
-  if fs_exists(driver_module_path("main")) {
-    infer_context(() => {
+  // ONE bracket, BOTH paths: the no-project session's tool arms carry
+  // the same static rows (audit's Verify + Tighten, query's ask) even
+  // though their guards answer "no project graph resident" at runtime —
+  // a bare mcp_loop leaked those rows to main and the executable gate
+  // refused (verify_ledger is stateful, so no default grounds it). The
+  // conditional lives inside the bracket; the installs cost nothing on
+  // the empty path.
+  infer_context(() => {
+    if fs_exists(driver_module_path("main")) {
       match driver_entry_with_ranges("main") {
         (ast, ranges) => {
           eprint_string("session: graph resident — {int_to_str(len(ranges))} modules; queries answer live\n")
@@ -487,12 +498,18 @@ fn mcp_run(at_read) = {
           // scope), never the whole weave's prelude/lib fns. The banked
           // manifest is the tree identity this derivation answered;
           // session_current compares against it per message.
-          mcp_loop(driver_module_ast(ast, ranges, "main"), ranges, driver_manifest(ranges), at_read, session_current)
+          mcp_loop(
+            driver_module_ast(ast, ranges, "main"),
+            ranges,
+            driver_manifest(ranges),
+            at_read,
+            session_current
+          )
         },
       }
-    } ~> wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry ~> tighten_collector)
-  } else {
-    mcp_loop([], [], [], at_read, (a, r, m) => (a, r, m, 0))
-  }
+    } else {
+      mcp_loop([], [], [], at_read, (a, r, m) => (a, r, m, 0))
+    }
+  } ~> wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry ~> tighten_collector)
   0
 }

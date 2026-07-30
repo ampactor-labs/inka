@@ -1092,6 +1092,32 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶ THE AUDIT READS THE BANKS — pending proofs and
+  tightenings speak per fn, and the session's bare path joins the
+  bracket (CLEAN m2 == m3 · pin c453d7a0). The up-to-dateness gap
+  Morgan named made real: audit_project reads the two banks the
+  judgment already holds — verify_debt() attributed by decl EXTENT
+  (span start to the next decl's; parse_span_of is the O(1)
+  spans-column read) and tightenables() by the banked fn name — so
+  the per-fn audit and the frontier are two projections of one truth
+  (`noisy : IO` carries its tighten line with the proven row).
+  analyze_fns' chain gains tighten_collector (inside infer_context's
+  thunk, where the judgment's performs reach it). THE GATE'S REFUSAL
+  EN ROUTE WAS REAL: mcp_run's no-project path ran mcp_loop BARE —
+  the tool arms' static rows (audit's new Verify + Tighten; query's
+  ask) flowed to main, and Query had survived only through its
+  stateless default while verify_ledger, stateful, refused. One
+  bracket holds both paths now (the conditional moved inside; installs
+  cost nothing on the empty path). The probe also caught audit_walk
+  piped into str_concat_all without render_audit — report tuples eaten
+  as strings, a flat_fill trap surfaced by the fixture before any
+  bless (and a silent-typing seam worth naming: the tuple list met
+  the String-consuming concat without a judgment refusal). Named
+  residue: the kin-naming teach stays gated on its true dep — the
+  reverse-bind index (naming WHICH operands share a free hole's var
+  needs class members; the Why chain doesn't carry them, and a
+  per-render cell scan is the span disease reborn). Frontier 315/0;
+  census 0.
 - 2026-07-29 · ▶ THE OPEN HOLE ASKS — an undetermined ?? renders the
   collapsing question, never the raw var (CLEAN m2 == m3 ·
   pin 69334101 — the first wording tripped the drift grep on its own

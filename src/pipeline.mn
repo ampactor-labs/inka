@@ -756,8 +756,11 @@ fn analyze_fns(entry_module, projection) = infer_context(() => {
   }
   projection(ast) |> print_string
 } ~>
-// driver_check_entry's fs_read — handled in-chain, as compile/check do
-wasi_filesystem ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
+// driver_check_entry's fs_read — handled in-chain, as compile/check do.
+// tighten_collector banks the judgment's T_OverDeclared rows so the
+// audit projection can speak them per decl — the collector sits INSIDE
+// the infer_context body chain, where the judgment's performs reach it.
+wasi_filesystem ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry ~> tighten_collector)
 
 // The pure projection pair — audit and teach as `ast -> String`, the ONE
 // home the CLI verb and the resident session's tool both call (the
@@ -767,8 +770,41 @@ wasi_filesystem ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_regis
 fn teach_project(ast) =
   map_fn_stmts(ast, (name, handle) => (name, teach_gradient(handle))) |> render_gradients
 
+// The banks the judgment already holds, read ONCE and attributed per
+// fn: pending proof obligations by decl EXTENT — this decl's span start
+// to the next decl's, parse_span_of being the O(1) spans-column read —
+// and tightenings by the name the collector banked. The audit and the
+// frontier are two projections of the same banks; this read keeps the
+// per-fn surface current with the medium's growth.
 fn audit_project(ast) =
-  map_fn_stmts(ast, (name, handle) => build_audit_report(name, handle, lookup_ty(handle))) |> render_audit
+  map_fn_stmts(ast, (name, handle) => (name, handle)) |> audit_walk(verify_debt(), tightenables(), 0) |> render_audit
+
+fn decl_start_line(handle) with GraphRead = match parse_span_of(handle) {
+  Span(sl, _, _, _) => sl,
+}
+
+fn audit_walk(debt, tights, i, fns) with GraphRead + EnvRead + LookupTy + Memory + Alloc + Intern = if i >= len(fns) {
+  []
+} else {
+  match fns[i] {
+    (name, handle) => {
+      // The next decl's handle by destructure — the index sugar forces
+      // its receiver to List, so tuple[k] on a var receiver mis-judges
+      // (SYNTAX's tuple-index claim vs the judge: a named lathe-lag).
+      let extent_end = if i + 1 >= len(fns) {
+        1000000000
+      } else {
+        match fns[i + 1] {
+          (_, nh) => decl_start_line(nh),
+        }
+      }
+      let extent = Span(decl_start_line(handle), 0, extent_end, 0)
+      let pending = filter(((dspan, _, _)) => span_overlaps(extent, dspan), debt)
+      let mine = filter(((_, _, tname, _)) => tname == name, tights)
+      [build_audit_report(name, handle, lookup_ty(handle), pending, mine)] ++ audit_walk(debt, tights, i + 1, fns)
+    },
+  }
+}
 
 fn teach(entry_module) = analyze_fns(entry_module, teach_project)
 
@@ -1388,7 +1424,7 @@ fn join_unlock_labels(labels) with Memory + Alloc = if len(labels) == 0 {
 // type, and the wheel lowers no nominal record PATTERN to prove it — §7
 // field-offset class). Positional destructure is provable with no type
 // flow, exactly as teach's [(name, result)] tuples are.
-fn build_audit_report(fn_name, handle, ty) = {
+fn build_audit_report(fn_name, handle, ty, pending, tightens) = {
   // The row resolves BEFORE any read: row_names is a top-link read, and
   // an unchased chain hides its deeper presents — Alloc rendered in the
   // row while severance claimed it absent (measured on the wheel's own
@@ -1401,7 +1437,7 @@ fn build_audit_report(fn_name, handle, ty) = {
   let referenced_by = owner_names_of(graph_comment_refs_of(handle), 0, [])
   // The verb-shape read (oracle's pipe_shape_of): single-use let-chains
   // that already draw a `|>` — the topology tier of the audit.
-  (fn_name, reached, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle))
+  (fn_name, reached, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle), pending, tightens)
 }
 
 fn owner_names_of(ref owners, i, acc) = if i >= len(owners) {
@@ -1468,14 +1504,23 @@ fn severance_unlocks_loop(severable, i, n, acc) = if i >= n {
 // Positional destructure — provable with no type flow, where a
 // record field read floors in a map lambda (see build_audit_report).
 fn render_audit(entries) = entries |> map((report) => match report {
-  (fn_name, reached, row_str, severable, unlocks, referenced_by, pipe_chains) => audit_report_lines(fn_name, row_str, severable, unlocks, referenced_by, pipe_chains),
+  (fn_name, reached, row_str, severable, unlocks, referenced_by, pipe_chains, pending, tightens) => audit_report_lines(
+    fn_name,
+    row_str,
+    severable,
+    unlocks,
+    referenced_by,
+    pipe_chains,
+    pending,
+    tightens
+  ),
 }) |> str_concat_all
 
 // The String pins are Intent Boundaries (spec_mangle's law): inside the
 // map lambda the splices judged datum-last while the tuple elements were
 // still free, and the word floor rendered every audited fn's name and
 // row as pointer numerals. The named call anchors the binders.
-fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, referenced_by: [String], pipe_chains) = {
+fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, referenced_by: [String], pipe_chains, pending, tightens) = {
   let header = "{fn_name} : {row_str}\n"
   let severance_section = if len(severable) == 0 {
     ""
@@ -1494,7 +1539,18 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, refe
   } else {
     "  verb-shape: {show_list(pipe_chains, int_to_str, ", ")}-step let-chain reads as a |> pipe\n"
   }
-  "{header}{severance_section}{refs_section}{verb_section}"
+  // The banks' tiers — the same facts the frontier ranks, spoken per fn:
+  // undischarged proof obligations in this decl's extent, and the
+  // judgment's banked tightening with its proven row (the patch mentl
+  // tighten authors).
+  let pending_section = if len(pending) == 0 {
+    ""
+  } else {
+    "  pending: {int_to_str(len(pending))} undischarged proof obligation(s) — the field ranks them\n"
+  }
+  let tighten_section =
+    tightens |> map(((declared, proven, _, _)) => "  tighten: with {show_effrow(declared)} — body proves {show_effrow(proven)} (mentl tighten authors the patch)\n") |> str_concat_all
+  "{header}{severance_section}{refs_section}{verb_section}{pending_section}{tighten_section}"
 }
 
 // Query rendering — delegates to query.mn for Question parsing

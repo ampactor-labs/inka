@@ -1092,6 +1092,33 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE COMMENT COMES HOME AT THE SEAM — the weave's one
+  cross-module attach class closes at the layer that owns the seams
+  (Hβ.parser.comment-attach-module-boundary RESOLVED · pin 997684f1).
+  The parser attaches prose over ONE seamless weave — correct
+  single-file semantics, structurally blind to module boundaries — so
+  a lib file's tail comment attached forward to the NEXT module's
+  first decl, and the entry's own fns rendered kernel prose as their
+  Lede (the felt face the ghost-addr dig surfaced). The seam truth
+  arrives with the driver's ranges, so the re-homing lives THERE, not
+  as a parser patch: the NModule fold collects (line_start, nlines,
+  handle) triples, and rehome_seam_comments walks the parse span log
+  re-homing any comment whose OWN span's module differs from its
+  attached node's module — target the comment's own module's NModule
+  cell (a module has at most one file tail; the cell never collides).
+  THE DIG'S TWO OP-LAYER FINDS, each a Carried-Truth violation at the
+  column: (1) the comment column STORES (text, span) — the attach
+  writes both — but the read projected text only, so the comment's
+  own address was unreachable; graph_comment_span_at is the sibling
+  projection (one op per fact, the parse_span_of idiom — never a
+  pair-widening that taxes format.mn's fifteen text-only readers).
+  (2) attach MERGES behind existing text (the blank-separated-blocks
+  rule), so "clear by empty attach" PREPENDS an empty paragraph and
+  keeps the prose — graph_clear_comment is the honest take-side,
+  restoring the column's own absent form. Felt face measured healed:
+  the fixture entry's 1:4 projection carries no lib Lede. CLEAN
+  m2 == m3 at 345,371 lines; census 0; frontier 322/0;
+  proof-exactness 9/9; lede-demo green (own-prose attach untouched).
 - 2026-07-30 · ▶▶ BOUND BEATS GHOST AT THE ADDRESS — the head-anchored
   decl-span defect's felt face closes (pin 4f477b1f). The measured
   face, RED-banked live through the prior pin: `mentl main.mn:1:4` (a

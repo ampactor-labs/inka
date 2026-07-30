@@ -1643,6 +1643,8 @@ effect GraphWrite {
   graph_register_node(Int, NodeBody)
   // attach parse-collected comment prose + its span to a node's handle (the comment column of the handle's page); resolves via graph_comment_at — a comment is graph content
   graph_attach_comment(Int, String, Span)
+  // restore a comment cell to the column's absent form ("", zero span) — the seam re-homing's take-side; attach cannot clear because its arm MERGES behind existing text
+  graph_clear_comment(Int)
   // draw the e-graph equivalence edge from ≡ to — point the from-side's canonical pointer at the cheaper target. The union-find union step over the equivalence weave; saturation reads it back via graph_canon_at (find). Idempotent: re-pointing an already-rooted source overwrites in place (one cell), never grows a ledger.
   graph_canon_set(Int, Int)
   // draw the refinement-narrowing edge — point the program point's narrowing pointer at the path-predicate's bool-node proven to hold there (§4⑥). One co-indexed weave like the canon column; idempotent (one cell per handle), read back via graph_narrow_at by lower's check-elision.

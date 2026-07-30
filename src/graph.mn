@@ -382,6 +382,14 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   graph_comment_span_at(handle) => match spine_comment_at(spine, spine_open, handle) {
     (_, span) => resume(span),
   },
+  graph_clear_comment(handle) => // The take-side of a re-home: restore the cell to the column's own
+  // absent form. A separate op because attach MERGES behind existing
+  // text (the blank-separated-blocks rule above) — an empty attach
+  // would prepend an empty paragraph, never clear.
+  {
+    spine_put_comment(spine, handle, ("", span_zero()))
+    resume()
+  },
   graph_attach_comment_ref(owner, referent) => // The comment-REFERENCE edges: a resolved backticked reference is a
   // real edge (owner comment's node -> referent decl's node), drawn at
   // the infer tail once the env is whole. Comments heal under rename

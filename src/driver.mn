@@ -416,11 +416,11 @@ fn driver_entry_with_ranges(ref entry_module) with Memory + Alloc + Filesystem +
       // (the edit session focusing a prelude recovery hole instead of the
       // entry's own `??`). The range map held the same fact out-of-band; the
       // graph is its one home.
-      each(
+      let mods = map(
         (r) => match r {
           (m, _p, line_start, nlines) => {
             let mspan = Span(line_start, 0, line_start + nlines, 0)
-            mint_node(
+            match mint_node(
               NModule({decls: filter(
                 (n) => match n {
                   N(_, dsp, _) => span_contains(mspan, dsp),
@@ -428,13 +428,77 @@ fn driver_entry_with_ranges(ref entry_module) with Memory + Alloc + Filesystem +
                 ast
               ), path: m, span: mspan}),
               mspan
-            )
+            ) {
+              N(_, _, nmh) => (line_start, nlines, nmh),
+            }
           },
         },
         ranges
       )
+      rehome_seam_comments(mods)
       (ast, ranges)
     },
+  }
+}
+
+// A comment attached ACROSS a module seam re-homes to its own module's
+// NModule node. The parser attaches over ONE weave — forward attach is
+// correct single-file semantics, and the parser cannot see seams — so
+// the seam truth arrives HERE with the ranges and the re-homing lives
+// here (the layering, never a parser patch). The measured face: a lib
+// file's tail comment attached to the NEXT module's first decl, and
+// the entry's own fns rendered kernel prose as their Lede
+// (Hβ.parser.comment-attach-module-boundary resolves at this pass).
+// The walk covers exactly the parse nodes (the span log is
+// parse-only); a module has at most one file tail, so an NModule cell
+// never collides.
+fn rehome_seam_comments(ref mods) with GraphRead + GraphWrite + Memory + Alloc = match graph_snapshot() {
+  Graph(_x, sp) => rehome_walk(list_to_flat(sp), mods, 0),
+}
+
+fn rehome_walk(ref spans, ref mods, i) with GraphRead + GraphWrite + Memory + Alloc = if i >= len(spans) {
+  ()
+} else {
+  match spans[i] {
+    (s, h) => {
+      rehome_one(s, h, mods)
+      rehome_walk(spans, mods, i + 1)
+    },
+  }
+}
+
+fn rehome_one(ref s, h, ref mods) with GraphRead + GraphWrite + Memory + Alloc = {
+  let text = graph_comment_at(h)
+  if byte_len(text) > 0 {
+    let cspan = graph_comment_span_at(h)
+    let cl = match cspan {
+      Span(l, _, _, _) => l,
+    }
+    let nl2 = match s {
+      Span(l2, _, _, _) => l2,
+    }
+    let cm = module_slot_of(mods, cl, 0)
+    let nm = module_slot_of(mods, nl2, 0)
+    if cm != nm && cm >= 0 {
+      match mods[cm] {
+        (_ls, _nl, nmh) => {
+          graph_attach_comment(nmh, text, cspan)
+          graph_clear_comment(h)
+        },
+      }
+    } else {
+      ()
+    }
+  } else {
+    ()
+  }
+}
+
+fn module_slot_of(ref mods, line, i) with Memory = if i >= len(mods) {
+  0 - 1
+} else {
+  match mods[i] {
+    (ls, nl, _) => if line >= ls && line < ls + nl { i } else { module_slot_of(mods, line, i + 1) },
   }
 }
 

@@ -606,6 +606,45 @@ ultimate form?"; the disposable seed's weaker inference catches up afterward
    (§1, Morgan 2026-07-28) is that the port stays EMPTY: the loop closed to
    the human and the medium, no LLM advantageous at any scope.
 
+   **THE FORK/MERGE DUALITY — why the two halves compose, and where the
+   human is irreducible (crystallized 2026-07-30, the words Morgan had
+   been reaching for).** The fan and the e-graph are not one mechanism
+   and not two features: they are DUALS over two different spaces, and
+   the composition's direction is forced.
+   - **MEANING-space is explored by FORKING; FORM-space by MERGING.** The
+     fan's candidates MEAN different things (`0` and `sum(abs(xs))` are
+     rivals), so each needs isolation — checkpoint, per-branch world,
+     rollback — because candidates CONFLICT. The e-graph's members mean
+     the SAME thing by construction, so merging needs no isolation at
+     all: equals compose, saturation is monotone, nothing is ever undone.
+     That asymmetry IS why one required the whole trail-and-spawn
+     substrate and the other runs free inside lower — not an
+     implementation accident.
+   - **Proof is a FILTER over meaning (binary: admit / refuse); cost is
+     an ORDER over form (total: take the minimum).**
+   - **A TIE IN FORM-SPACE IS FREE; A TIE IN MEANING-SPACE IS A
+     QUESTION.** Two cost-minimal members are EQUAL — pick either, it
+     cannot matter. Two proven survivors MEAN different things and the
+     graph does not contain the answer, so the medium cannot pick and
+     must ASK. This is where the human is irreplaceable, and it is
+     DERIVED here rather than asserted: §1's teaching tie-break is not a
+     nicety bolted onto the fan — it is what the fork side IS when it
+     terminates with more than one survivor, and §0's "intent is the one
+     genuine Outside" is the same fact read at the thesis altitude.
+   - **The order is FORCED.** Extract-then-prove would optimize a
+     program that may be inadmissible; prove-then-extract is the only
+     composition that holds. "Proven AND optimal" is therefore one
+     pipeline with a mandatory direction, never two features stapled.
+   - **The effect row plays BOTH halves, differently:** it gates which
+     REWRITES are legal (a dropping rewrite fires only when the dropped
+     operand's row subsumes pure) and which CANDIDATES are legal (no
+     survivor violates its `!E`). Form-legality and meaning-legality,
+     one algebra at two altitudes — the crown paying for both.
+   STATE, honestly: the fan rides real spawned branch cursors and the
+   e-graph is live and effect-aware in lower, and they are NOT yet
+   fused — the composition above is designed, not built. Building it is
+   what makes a proposal extraction-optimal rather than merely proven.
+
 ### §5.U · The value layer — four projections of one cursor on one heap record
 
 *Verified by a 21-agent adversarial workflow; the inevitable form, not a choice.*

@@ -6395,6 +6395,29 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.infer.schemes-are-edges` — THE MENTL WAY for the judgment (named
+2026-07-30, Morgan's question "is there a better way — a more Mentl
+way?" answered at the root): the entire convergence tower — trial /
+rounds / cone / fingerprints / the bound / the freeze law / the
+declared-row pins / the attractor dances — is ONE compensation for
+published schemes being SNAPSHOTS read by name while everything else
+in the medium is an EDGE read live. The rounds manually iterate what
+the union-find propagates transitively for free; the freeze exists
+because live cells raced under the fan; the races were SOLVED for
+rows by making the write a commutative JOIN (the lattice landing,
+order-free at K=8). The form: publishes as live graph cells whose
+teaching is a join, polymorphism as instantiation FLOW-EDGES read
+through the union-find (the banked polymorphism-as-flow-edges design
+— generalize/instantiate/subst dissolve; the unpatchability theorem's
+own prescription: swap the representation behind the projections).
+Convergence stops being iterated and becomes what the graph
+structurally IS; the tower deletes. Tonight's symptom catalog is the
+requirements list, measured: the parity-selected attractors, the
+prereg-vs-final entry races, the open-tail subtraction carriers, the
+type-half flip surviving a fully-pinned row, the marginal
+schedule-variance at the 11/12 boundary. A full-context session's
+arc — the biggest single deletion on the board.
+
 `Hβ.infer.round-oscillation-movers` — ESCALATED TO THE ACTIVE BLOCKER
 (2026-07-30, third victim): the Pure predicate-fn UNFOLD was built
 whole (332-line patch banked in the session scratchpad — the binder

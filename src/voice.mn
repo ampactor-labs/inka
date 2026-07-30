@@ -830,7 +830,7 @@ fn unimplemented_arm(op_name) with Abort = abort()
 // The MV.2.e.Q.ident peer sub-handle wires env→handle resolution.
 //
 // H6 exhaustive over CaretTarget — no `_` wildcard.
-fn resolve_cursor_target(target, current_handle) with GraphRead + Memory + Alloc = match target {
+fn resolve_cursor_target(target, current_handle: Handle) -> Handle with GraphRead + Memory + Alloc = match target {
   TargetHandle(h) => h,
   TargetSpan(s) => {
     // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion

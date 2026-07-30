@@ -1092,6 +1092,16 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE DEBT NAMES ITS PRODUCER — the voice annotation's
+  placement trade (pin 44877c73). resolve_cursor_target gains
+  `current_handle: Handle` + `-> Handle`: the Caret ctor's
+  consumer-edge pend discharges through the adopted return alias and
+  the producer's own return pends at its decl — count holds 11, but
+  the ledger now attributes the missing proof to the fn that MINTS
+  handles (its match leaves are transparent-position VarRefs the
+  two-face law correctly refuses to type-read; the honest cure is the
+  authored-payload read, the same family as the self-call IH). CLEAN
+  m2 == m3; census 0; frontier 323/0.
 - 2026-07-30 · ▶▶ THE LET ANNOTATION BECOMES A CONSTRAINT — a measured
   judgment hole closes, and the interval arc takes its first wheel
   debt (Hβ.infer.let-annotation-base-unify RESOLVED · pin 30194578).

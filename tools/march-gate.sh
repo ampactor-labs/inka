@@ -207,14 +207,28 @@ if [ "$DO_MICROS" = 1 ]; then
   pass_m=0; fail_m=0
   for mf in tests/micros/mn-*.mn; do
     m=$(basename "$mf" .mn); m=${m#mn-}
+    # The fixture's first line is the ONE expectation home (the Expect ADT the
+    # in-process battery reads): `// expect: N` runs to exit N; `// expect:
+    # refuse E_Class` passes iff the compile REPORTS the named class as an
+    # error. This reader honors the full grammar — a second reader knowing
+    # only half the contract failed four refuse fixtures as headerless.
     want=$(sed -n '1s|^// expect: \([0-9]\+\)$|\1|p' "$mf")
-    if [ -z "$want" ]; then
-      echo "✗ micro $m: no '// expect: N' header"; fail_m=$((fail_m+1)); continue
+    refuse=$(sed -n '1s|^// expect: refuse \([A-Za-z_]\+\)$|\1|p' "$mf")
+    if [ -z "$want" ] && [ -z "$refuse" ]; then
+      echo "✗ micro $m: no '// expect: N' or '// expect: refuse E_*' header"; fail_m=$((fail_m+1)); continue
     fi
     src="$G/micro-$m.mn"
     { cat $RT; cat "$mf"; } > "$src"
     "$WT" run "${WT_RUN_FLAGS[@]}" "$GATE_WASM" < "$src" > "$G/micro-$m.wat" 2> "$G/micro-$m.err"
     rc=$?
+    if [ -n "$refuse" ]; then
+      if grep -q "$refuse.*error:" "$G/micro-$m.err"; then
+        echo "✓ micro $m refuses $refuse"; pass_m=$((pass_m+1))
+      else
+        echo "✗ micro $m: expected $refuse to report (rc=$rc)"; fail_m=$((fail_m+1))
+      fi
+      continue
+    fi
     if [ $rc -ne 0 ]; then
       echo "✗ micro $m: m2 COMPILE trap=$(grep -m1 -oE '!\S+' "$G/micro-$m.err" | head -1)"
       fail_m=$((fail_m+1)); continue

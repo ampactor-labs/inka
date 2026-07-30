@@ -1092,6 +1092,44 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE VET — Morgan's charge ("re-judge? re-infer?
+  re-derive?") audits the 24-hour window against Carried-Truth + the
+  eight interrogations; the tower brick reverts and the gate learns
+  the whole grammar (no pin move — boot stands at f09e54a3). THE HEAD
+  CONVICTION: the SCC generality-join iteration — built whole this
+  session, marched to a self-stable TRANSITION (355,307 lines, census
+  0) — REVERTED uncommitted: the one bound-hit mover survived it and
+  the attractor moved 107k lines unarbitrated, and the deeper verdict
+  is the direction itself (probes that re-judge, freezes that
+  snapshot, joins over re-derivations are the tower the residue index
+  already sentences to deletion; the third counted kill is banked in
+  the movers entry, and the arc redirects terminally to
+  Hβ.infer.schemes-are-edges). THE SECOND CONVICTION, named with its
+  fix: scope_localize (the diagnostic-localization landing) reads the
+  structural span honestly but then performs STRING SURGERY on the
+  rendered line — re-rendering show_span to measure the tail it
+  slices, an accident-invariant (every line must end with exactly
+  that tail) and two renders of one fact; the fix is structural and
+  small: diag_report already carries the DIAG to the terminal arms,
+  so the span tail renders AT the terminal arm from the structure in
+  hand (diag_line drops its tail; root + mcp collectors append
+  through one shared projection) — named
+  Hβ.diag.span-tail-at-terminal-arm. Counted as tower compensation
+  (dissolves with schemes-are-edges): the refs facet's span dedup and
+  the enumerators' latest-mint-wins dedup both exist because rounds
+  re-mint generations. THE CLEAN SLATE, verified commit by commit:
+  repr-pin (width stated once, read live via repr_of's one arm),
+  as-pattern (the binder's cell IS the scrutinee's — one unify edge),
+  record-rest (DELETED the pattern-subset index bake), the interval
+  legs (authored constraints stored as values are source truth, not
+  cached derivations), the authored rows at the parser SCC (signature
+  prices, true on their own merits). THE GATE FIX riding the vet:
+  march-gate's micro reader knew half the fixture-contract grammar
+  and failed four refuse fixtures as headerless — it reads
+  `// expect: refuse E_Class` now (pass iff the class reports), and
+  the tier runs 121/0. The law's own demonstration: the census caught
+  the fabricated Fresh(0) reason in the reverted build's freeze skip
+  before any commit; Morgan caught the architecture.
 - 2026-07-30 · ▶▶ THE WIDTH IS AN INPUT — SYNTAX's representation pin
   is real, and the census named every walk in one march
   (pin f09e54a3). `type Coeff = Float repr f64` parses
@@ -6916,17 +6954,31 @@ instantiation); and bare per-SCC re-derivation iteration is REFUTED
 (rollback-as-fresh-nodes works — simple pairs converge in two probes
 — but generic/concrete-tension families ALTERNATE with period 2
 forever: re-derivation-from-scratch is not monotone, exactly Salsa's
-cycle-recovery contract). The remaining rung is the iteration WITH
-THE GENERALITY JOIN: freeze_k := join(freeze_{k-1}, result_k) — rows
-through row_join (their lattice exists), type schemes through a
-widening keeping the more-informative of consistent shapes (concrete
-element over generic where the probe proved it; Salsa's
-last_provisional contract) — after which the iteration converges
-monotone, the whole-tree rounds retire to one verification pass, the
-bound becomes a convergence proof, the ~59s field read collapses
-with the round count, and the env.mn/lexer.mn owner relocations
-unblock. The position-sensitivity hazard stays NARROWED to the SCC
-chains until the join lands.
+cycle-recovery contract). THE THIRD COUNTED KILL (2026-07-30,
+Morgan's vet — "re-judge? re-infer? re-derive?" — the build reverted
+uncommitted): the iteration WITH the generality join was built whole
+(ty_join — concrete-over-free pointwise widening preserving cur's
+linkage, rows through row_join; closed freezes
+Forall(free_in_ty(chase_deep(t)), t) inert across rollback; the join
+operating on instantiate(prev) vs instantiate(cur) so no
+cross-generation handle ever mixes; all-fn groups only) and the
+artifact refuted it on its own terms: TRANSITION m3 == m4 at 355,307
+lines with census 0 — a self-stable attractor — but the ONE bound-hit
+mover (parse_effect_list_from) SURVIVED untouched (its flip lives in
+the rounds' own re-derivation, outside the trial's groups) while the
+attractor moved 107,432 emission lines with nothing arbitrating the
+move as better. Cost without cure — and the deeper conviction is the
+DIRECTION: probes that re-judge, freezes that snapshot, joins over
+re-derivations are the tower growing, the exact compensation
+machinery `Hβ.infer.schemes-are-edges` already names as the thing to
+DELETE. Carried-Truth at architecture scale: the fix for
+schemes-read-stale is never a better re-derivation cadence — it is
+schemes as live join-written cells the union-find propagates through.
+THE ARC REDIRECTS THERE, terminally: this peer's remaining content is
+absorbed into `Hβ.infer.schemes-are-edges` (the tower deletion), and
+no further tower machinery lands. Until that arc: the bound cuts at
+one mover, emission stable (measured across runs), and the
+position-sensitivity hazard stays narrowed to the SCC chains.
 
 `Hβ.emit.arm-closure-captures-record` RESOLVED: LANDED (2026-07-24, pin
 bb4b870e — the ledger head carries the arc). The capture form won over

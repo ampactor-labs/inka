@@ -655,8 +655,7 @@ fn render_why_at(reason, depth) = if depth > 20 {
     Unified(a, b) => "{indent_for(depth)}unified:\n{render_why_at(a, depth + 1)}{indent_for(depth)}with:\n{render_why_at(b, depth + 1)}",
     OpConstraint(op, l, r) => "{indent_for(depth)}op '{op}' constraint:\n{render_why_at(l, depth + 1)}{indent_for(depth)}versus:\n{render_why_at(r, depth + 1)}",
     VarLookup(name, inner) => "{indent_for(depth)}var '{name}' lookup:\n{render_why_at(inner, depth + 1)}",
-    FnReturn(name, inner) => // drift-audit: ignore — output literal
-    "{indent_for(depth)}return of '{name}':\n{render_why_at(inner, depth + 1)}",
+    FnReturn(name, inner) => "{indent_for(depth)}return of '{name}':\n{render_why_at(inner, depth + 1)}",
     FnParam(name, idx, inner) => "{indent_for(depth)}param '{name}' (#{int_to_str(idx)}):\n{render_why_at(inner, depth + 1)}",
     MatchBranch(a, b) => "{indent_for(depth)}match branches:\n{render_why_at(a, depth + 1)}{indent_for(depth)}& \n{render_why_at(b, depth + 1)}",
     ListElement(inner) => "{indent_for(depth)}list element:\n{render_why_at(inner, depth + 1)}",

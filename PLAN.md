@@ -1092,6 +1092,22 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE AUDIT GAINS THE CODE CHANNEL — the string-literal
+  blindness dies structurally, and the second marker wave strips (no
+  pin move — comment/tools only; boot a62b1299 stands). Code-channel
+  patterns scan a STRIPPED TWIN (string contents → "", // tails
+  removed, line count preserved; reports and the suppression walk
+  cite the original), so a keyword grep can never fire inside an
+  emitted WAT string or a prose sentence again; content-targeting
+  rows (modes 3/9/10-strings/14/37) declare `raw` and scan the
+  original — the twin itself taught the split when the strip
+  COLLAPSED every string to the empty-string tell and mode 10 fired
+  22 false hits (the string-CONTENT patterns are raw by nature).
+  Same-line suppression reads the original (the twin's stripped
+  marker was invisible to the text filter — measured, fixed).
+  Markers 180 → 161 (WAT-instruction-text, output-literal, and
+  Reason-string families); day total 269 → 161. Full-wheel audit
+  CLEAN; the march byte-identical.
 - 2026-07-30 · ▶ THE FIRST MARKER FAMILY DIES INTO THE MEDIUM — mode
   33 retires and its 89 suppression markers strip (no pin move —
   comment-only, the march byte-identical; boot a62b1299 stands). The

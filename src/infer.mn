@@ -885,7 +885,6 @@ fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: Vali
   // duplicate the moment the incremental cursor re-registered a module
   // into the restored world).
   let param_handles = mint_param_placeholders(params, name)
-  // drift-audit: ignore — Reason string, not a control keyword
   // An authored `-> RetTy` is a CONSTRAINT the pre-scheme must CARRY, not
   // discard (the parse_let-annotation twin at the return position). Binding
   // it here grounds every FORWARD callsite: an unannotated forward ref
@@ -2436,7 +2435,6 @@ fn infer_stmt(ref node) = match node {
 fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   env_scope_enter()
   let param_handles = mint_params(params, name)
-  // drift-audit: ignore — Reason string, not a control keyword
   let ret_handle = mint(FnReturn(name, Inferred("return of '{name}'")))
   let row_handle = graph_fresh_row(Inferred("effects of '{name}'"))
   // Resolve params to shared identities ONCE (binds the handles); reused below

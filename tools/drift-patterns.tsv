@@ -15,8 +15,8 @@
 #
 1	Rust vtable (closure-as-vtable)	\{\s*(fn|handler)_\w+\s*:\s*(fn|\|)	ka	A record of functions named like a vtable is Mentl drawn as Rust. Use graph + handler.
 2	Scheme env frame (scope-as-frame-stack)	\b(parent_env|env_stack|push_frame|pop_frame|env_chain)\b	ka	Env lookup is an effect op — the bare call `env_lookup(name)` — no parent-pointer frame walk.
-3	Python dict (effect-name-set-as-strings)	perform\s+"[A-Z]	ka	Effect names are EffName ADTs. Raw strings flatten parameterization.
-3	Python dict (string-keyed effect match)	"Pure"|"Alloc"|"IO"|"State"|"Console"	ka	Flat effect names. Post-H3.1, EffName is parameterized ADT. These strings signal the old shape.
+3	Python dict (effect-name-set-as-strings)	perform\s+"[A-Z]	ka	Effect names are EffName ADTs. Raw strings flatten parameterization.	raw
+3	Python dict (string-keyed effect match)	"Pure"|"Alloc"|"IO"|"State"|"Console"	ka	Flat effect names. Post-H3.1, EffName is parameterized ADT. These strings signal the old shape.	raw
 4	Haskell monad transformer (nested handle chain)	handle\s*\(\s*handle\s*\(\s*handle	ka	Compose with ~> chains, not stacked handle(handle(handle(...))).
 5	C calling convention (__closure/__ev separate)	__closure\b.*__ev\b|__ev\b.*__closure\b	ka	Unified __state per H1 substrate. Separate __closure and __ev is the pre-H1 shape.
 6	Primitive-type-special-case (Bool carveout)	\b(if|match).*\b(is_bool|bool_special|Bool_ty\b)	ka	Nullary ADTs share compilation discipline. Bool special-casing is drift.
@@ -25,15 +25,15 @@
 8	String-keyed-when-structured (int-coded mode)	\bmode\s*==\s*\d	ka	Flag-as-int is an ADT begging to exist. H6 will catch it anyway.
 8	String-keyed-when-structured (token kind as int)	\btoken_kind\s*==\s*\d	ka	Tokens are ADTs post-Ω.4.
 8	String-keyed-when-structured (SchemeKind as int)	\bscheme_kind\s*==\s*\d	ka	SchemeKind is ADT post-H3.
-9	Deferred-by-omission (TODO / for now / later)	//\s*(TODO|FIXME|XXX|for now|until\b|deferred|later\b|short[- ]term)	ka	Land whole or surface as named peer handle. No deferred-in-committed-code.
-9	Deferred-by-omission (stub/placeholder tell)	//\s*(placeholder|stub|not\s+implemented)	ka	Same as above — surface as peer handle in ROADMAP.md.
+9	Deferred-by-omission (TODO / for now / later)	//\s*(TODO|FIXME|XXX|for now|until\b|deferred|later\b|short[- ]term)	ka	Land whole or surface as named peer handle. No deferred-in-committed-code.	raw
+9	Deferred-by-omission (stub/placeholder tell)	//\s*(placeholder|stub|not\s+implemented)	ka	Same as above — surface as peer handle in ROADMAP.md.	raw
 #
 # --- Bug classes from CLAUDE.md that have cost hours ---
 10	Wildcard-fabricates (_ arm returning Forall)	_\s*=>\s*Forall\s*\(	ka	Wildcard fabricates a Scheme. Enumerate variants explicitly.
 10	Wildcard-fabricates (_ arm returning TVar)	_\s*=>\s*TVar\s*\(	ka	Fabricated TVar silently absorbs a new variant.
-10	Wildcard-fabricates (_ arm returning "Pure")	_\s*=>\s*"Pure"	ka	String-Pure default. Use EffRow algebra.
+10	Wildcard-fabricates (_ arm returning "Pure")	_\s*=>\s*"Pure"	ka	String-Pure default. Use EffRow algebra.	raw
 13	Failure-mask (|| true)	\|\|\s*true	ka	A bug is zero or blocking. No `|| true` to hide a gate.
-14	Decorated-removal (removed-for comments)	//\s*removed\s+(for|because)	ka	Delete, don't decorate. No removal comments.
+14	Decorated-removal (removed-for comments)	//\s*removed\s+(for|because)	ka	Delete, don't decorate. No removal comments.	raw
 15	Unused-decoration (leading underscore retain)	\blet\s+_[a-z]\w+\s*=	ka	Unused variables are deleted, not renamed with underscore.
 16	println-in-report (corrupts WAT stdout)	report\s*\([^)]*println	ka	println inside report(...) handler arms corrupts WAT stdout.
 #
@@ -69,12 +69,12 @@
 36	ΣU regression (pub/priv visibility drift)	^\s*(pub|priv)\s+(fn|type|effect|handler|let)\b	ka	Amendment Q. Visibility via capability effects, not modifier keywords.
 #
 # --- Σ-/// drift (doc-comment doctrine; SYNTAX.md §Comments §Doc comments) ---
-37	Σ-/// drift (JSDoc/JavaDoc tag inside ///)	^///.*@(param|returns?|throws?|since|deprecated|author|see|link|inheritdoc)\b	ka	Σ-///. JSDoc/JavaDoc tags forbidden inside ///. Effect row + refinement substrate already carries that information.
-37	Σ-/// drift (Sphinx directive inside ///)	^///.*:(func|type|class|param|returns|raises):	ka	Σ-///. Sphinx directives forbidden inside ///. Mentl has no Sphinx; substrate carries the structure.
-37	Σ-/// drift (=== header inside ///)	^///.*={3,}	ka	Σ-///. No internal headers inside ///. Declaration name IS the heading.
-37	Σ-/// drift (lifecycle vocabulary)	^///.*\b(deprecated|legacy|previously|no longer|migration|backward[- ]compat|removed in)\b	ka	Σ-///. Positive-form discipline (CLAUDE.md global). Doc shows what IS, not what was.
-37	Σ-/// drift (subjective-gating prose)	^///.*\b(non-trivial|nontrivial|non-obvious|nonobvious|noteworthy|interesting|advanced|important|may want to|might consider)\b	ka	Σ-///. Subjective-gating language shouldn't appear in substrate-derived voice. Either the tentacle's silence_predicate fires or it doesn't.
-37	Σ-/// drift (// ═══ decoration on file)	^//\s*═	ka	Σ-///. // ═══ decorations are flat-file scaffolding. Pattern A: delete. Pattern B: consolidate to /// lede. Pattern C: strip ═══, keep plain // text.
+37	Σ-/// drift (JSDoc/JavaDoc tag inside ///)	^///.*@(param|returns?|throws?|since|deprecated|author|see|link|inheritdoc)\b	ka	Σ-///. JSDoc/JavaDoc tags forbidden inside ///. Effect row + refinement substrate already carries that information.	raw
+37	Σ-/// drift (Sphinx directive inside ///)	^///.*:(func|type|class|param|returns|raises):	ka	Σ-///. Sphinx directives forbidden inside ///. Mentl has no Sphinx; substrate carries the structure.	raw
+37	Σ-/// drift (=== header inside ///)	^///.*={3,}	ka	Σ-///. No internal headers inside ///. Declaration name IS the heading.	raw
+37	Σ-/// drift (lifecycle vocabulary)	^///.*\b(deprecated|legacy|previously|no longer|migration|backward[- ]compat|removed in)\b	ka	Σ-///. Positive-form discipline (CLAUDE.md global). Doc shows what IS, not what was.	raw
+37	Σ-/// drift (subjective-gating prose)	^///.*\b(non-trivial|nontrivial|non-obvious|nonobvious|noteworthy|interesting|advanced|important|may want to|might consider)\b	ka	Σ-///. Subjective-gating language shouldn't appear in substrate-derived voice. Either the tentacle's silence_predicate fires or it doesn't.	raw
+37	Σ-/// drift (// ═══ decoration on file)	^//\s*═	ka	Σ-///. // ═══ decorations are flat-file scaffolding. Pattern A: delete. Pattern B: consolidate to /// lede. Pattern C: strip ═══, keep plain // text.	raw
 #
 # --- Disintermediation drift (mascot-as-command-prefix; F.1) ---
 38	Mascot-as-tentacle-prefix (mentl <tentacle> shadowing at-cursor)	\bmentl\s+(trace|why|propose|unlock|verify|topology)\b	all	Per CLAUDE.md sharpened drift 38 + CLI-canonical-vocabulary.md §3.3 (2026-05-07). Project-action verbs (mentl edit/doc/run/test/audit/serve/teach/query/repl/new/compile/check) are CANONICAL — the binary IS named Mentl; subcommand prefix is structural like `git commit` / `cargo build`. Drift fires only on tentacle-named verbs that shadow at-cursor projections (Trace/Why/Propose/Unlock/Verify/Topology). Note: `mentl teach` and `mentl query` are project-action peer transports for terminal users (per EH alias table), NOT drift.
@@ -99,5 +99,5 @@
 # null sentinel is either enumerated per-variant (ty_handle_of) or documented +
 # suppressed inline (`// drift-audit: ignore — <why>`); an undocumented one is a
 # surrender-fallback to delete/restructure, never wrap.
-10	Wildcard-fabricates (_ arm returning "")	^[^/]*_\s*=>\s*""	ka	Empty-string surrender-fallback. Document + suppress a genuine String-null sentinel inline; otherwise delete/restructure — never wrap.
+10	Wildcard-fabricates (_ arm returning "")	^[^/]*_\s*=>\s*""	ka	Empty-string surrender-fallback. Document + suppress a genuine String-null sentinel inline; otherwise delete/restructure — never wrap.	raw
 10	Wildcard-fabricates (_ arm returning 0)	^[^/]*_\s*=>\s*0\s*[,}]	ka	Zero-handle surrender-fallback. Enumerate the ADT (ty_handle_of reads the handle live per-variant, 0 only for ground types) — a wildcard 0 masks a missing case.

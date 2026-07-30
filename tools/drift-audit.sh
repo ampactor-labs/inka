@@ -58,8 +58,36 @@ total_hits=0
 declare -A mode_hits
 declare -A mode_names
 
-# Read patterns: columns (tab-separated) = mode_num, mode_name, regex, scope, notes
-while IFS=$'\t' read -r mode_num mode_name regex scope notes; do
+# ── The code channel: string-literal and comment blindness, structural ──
+# A code-channel pattern scans a STRIPPED twin of each file — string
+# contents replaced by "" and // tails removed, line count preserved —
+# so a keyword grep can never fire inside an emitted WAT string or a
+# prose sentence again (the class that demanded ~17 hand markers).
+# Comment-targeting rows (modes 9/14/37) declare channel `raw` and scan
+# the original. Reports and the suppression walk always cite the
+# ORIGINAL file; the twin is scan-substrate only.
+STRIP_DIR=$(mktemp -d)
+trap 'rm -rf "$STRIP_DIR"' EXIT
+declare -A STRIPPED_OF
+declare -A ORIG_OF
+# Populates the two maps in the PARENT shell (a $() call would fork the
+# writes away — measured as ORIG_OF unbound at the report map-back) and
+# leaves the twin path in STRIPPED_LAST.
+stripped_twin() {
+    local orig="$1"
+    if [[ -z "${STRIPPED_OF[$orig]:-}" ]]; then
+        local flat="${orig//\//__}"
+        local out="$STRIP_DIR/$flat"
+        sed -E 's/"([^"\\]|\\.)*"/""/g; s|//.*$||' "$orig" > "$out"
+        STRIPPED_OF[$orig]="$out"
+        ORIG_OF[$out]="$orig"
+    fi
+    STRIPPED_LAST="${STRIPPED_OF[$orig]}"
+}
+
+# Read patterns: columns (tab-separated) = mode_num, mode_name, regex, scope, notes, channel
+# (channel: empty/`code` = scan the stripped twin; `raw` = scan the original)
+while IFS=$'\t' read -r mode_num mode_name regex scope notes channel; do
     [[ -z "${mode_num:-}" || "${mode_num:0:1}" == "#" ]] && continue
     [[ -z "${regex:-}" ]] && continue
     mode_names[$mode_num]="$mode_name"
@@ -92,11 +120,27 @@ while IFS=$'\t' read -r mode_num mode_name regex scope notes; do
     # -H forces the filename prefix even for a SINGLE scanned file — without
     # it the suppression walk reads source text as its line number (measured:
     # a one-file scan fed the flagged line's own text into $((ml - 1))).
-    matches=$(grep -nHE --color=never "$regex" "${scan_files[@]}" 2>/dev/null || true)
+    # Code-channel rows scan the stripped twins; the match paths map back
+    # to the originals so the report and the suppression walk read source.
+    if [[ "${channel:-code}" != "raw" ]]; then
+        twin_files=()
+        for f in "${scan_files[@]}"; do stripped_twin "$f"; twin_files+=("$STRIPPED_LAST"); done
+        matches=$(grep -nHE --color=never "$regex" "${twin_files[@]}" 2>/dev/null | while IFS=: read -r tf tl trest; do
+            printf '%s:%s:%s\n' "${ORIG_OF[$tf]}" "$tl" "$trest"
+        done || true)
+    else
+        matches=$(grep -nHE --color=never "$regex" "${scan_files[@]}" 2>/dev/null || true)
+    fi
     [[ -z "$matches" ]] && continue
 
     filtered=$(printf '%s\n' "$matches" | grep -vE 'drift-audit:\s*ignore' | while IFS=: read -r mf ml mrest; do
         [[ -z "$mf" || -z "$ml" ]] && continue
+        # Same-line suppression reads the ORIGINAL: a code-channel match
+        # carries the stripped twin's text, where a trailing marker no
+        # longer exists to be seen by the text filter above.
+        if sed -n "${ml}p" "$mf" 2>/dev/null | grep -qE 'drift-audit:[[:space:]]*ignore'; then
+            continue
+        fi
         # Walk the contiguous attached-prose run above the flagged line
         # (comment lines, arm-arrow prose heads, list-continuation lines —
         # bounded at 15): the canonical layout merges a trailing marker

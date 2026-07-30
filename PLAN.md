@@ -1092,6 +1092,24 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶ THE OPEN HOLE ASKS — an undetermined ?? renders the
+  collapsing question, never the raw var (CLEAN m2 == m3 ·
+  pin 69334101 — the first wording tripped the drift grep on its own
+  prose, "fn (" and "return" inside the teaching string: the
+  string-literal blindness firing on user-facing text, the absorption
+  argument's second live demonstration). The field probe measured `?? : t10417@e19089` at `n + ??`
+  — substrate vocabulary at the exact moment §1's law says the
+  question beats the guess (the fan cannot enumerate an open type, so
+  the missing constraint IS the answer). node_query_line gains the
+  NHole arm: a still-free chased type renders the annotate-to-collapse
+  invitation; a typed hole renders exactly as before, and the Why hop
+  rides beneath. WITH IT (the same loop day's instrument): verify's
+  MANIFEST GATE — the wheel's own ~2.5s DAG judgment of src/main.mn,
+  zero-tolerance on missing names (the canon.mn class self-polices;
+  detector proven both faces). Frontier 315/0; census 0. Named next
+  at this render: the kin-naming teach (the free var's unification
+  class knows WHICH operands share it — "tied to n through +" — the
+  reason-chain read one hop deeper).
 - 2026-07-29 · ▶▶▶ THE FIELD REACHES THE WHEEL — the spans spine column
   lands, and the whole-problem-space read becomes daily at wheel scale
   (CLEAN m2 == m3 · pin ffa2734a). Morgan's charge ("daily should

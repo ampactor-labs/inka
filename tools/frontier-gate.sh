@@ -2046,6 +2046,22 @@ for i in "${!compilers[@]}"; do
   else
     fail "directional fn-arg edge (compile refused the quiet fn)"
   fi
+
+  # ─── Diagnostics speak the developer's coordinates ─────────────────
+  # A check-path diagnostic renders ONCE (the discovery parse absorbs
+  # under diag_quiet — every parse warning printed twice since the DAG
+  # path was born) and at the FILE-LOCAL span (the register's own range
+  # is the subtraction — a line-2 error had rendered at weave 5730).
+  lcdir="$dir/local-span"
+  mkdir -p "$lcdir"
+  printf 'fn main() = {\n  let x: Int = "hi"\n  len(x)\n}\n' > "$lcdir/main.mn"
+  lc_out=$(cd "$lcdir" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$lcdir::." --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check main.mn 2>&1)
+  lc_n=$(printf '%s' "$lc_out" | grep -c 'E_TypeMismatch')
+  if [ "$lc_n" = "1" ] && printf '%s' "$lc_out" | grep -q 'at 2:'; then
+    pass "diagnostics localize: one report, the user's own line (at 2:)"
+  else
+    fail "diagnostics localize (reports: $lc_n; $(printf '%s' "$lc_out" | grep -m1 'E_TypeMismatch'))"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

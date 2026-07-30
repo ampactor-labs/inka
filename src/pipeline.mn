@@ -1073,9 +1073,9 @@ handler wasi_filesystem {
 handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
   diag_report(diag, line) => // The line arrives MADE (rendered at the report boundary, in the
   // reporter's own world) — this arm's remaining projections
-  // (severity, refuses, span) are pure ctor reads, so the arm's row
-  // carries no graph or intern demand and its residual stays clean
-  // through every install.
+  // (severity, refuses, span, the register's file-local rewrite) are
+  // pure ctor/string reads, so the arm's row carries no graph or
+  // intern demand and its residual stays clean through every install.
   // The tally IS the projection continued. This arm saw every diagnostic and
   // dropped its severity on the floor, so `mentl check` on a missing module
   // printed the error and exited 0, and a program with a live E_TypeMismatch
@@ -1084,7 +1084,7 @@ handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
   if diag_severity(diag) == SError {
     // An error renders in EVERY scope — a broken claim anywhere in the
     // weave changes the answer's validity; the register never silences it.
-    eprint_string(line)
+    eprint_string(scope_localize(line, diag, scope))
     if diag_refuses(diag) {
       resume() with errors = errors + 1, refusals = refusals + 1
     } else {
@@ -1099,7 +1099,7 @@ handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
       ScopeAll => eprint_string(line),
       ScopeNone => (),
       ScopeAt(sstart, snlines) => match diag_span(diag) {
-        Span(sl, _, _, _) => if sl >= sstart && sl < sstart + snlines { eprint_string(line) },
+        Span(sl, _, _, _) => if sl >= sstart && sl < sstart + snlines { eprint_string(scope_localize(line, diag, scope)) },
       },
     }
     resume()
@@ -1107,6 +1107,27 @@ handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
   diag_errors() => resume(errors),
   diag_refusals() => resume(refusals),
   diag_scope(sc) => resume() with scope = sc,
+}
+
+// The register's own range IS the file:line subtraction: a diagnostic
+// whose span falls inside ScopeAt renders in the USER'S coordinates,
+// rebuilt by replacing diag_line's one `at <span>` tail (both renders
+// share show_span, so the tail length is exact); everything else keeps
+// the weave form — the census channels are weave-native, and the seam
+// walk stays OUT of this path by design (a per-line seam read at
+// census scale is the crc-class cost the debt renderer measured).
+fn scope_localize(line, diag, scope) with Memory + Alloc = match scope {
+  ScopeAt(sstart, snlines) => match diag_span(diag) {
+    Span(sl, sc, el, ec) => if sl >= sstart && sl < sstart + snlines {
+      let old_tail = "at {show_span(diag_span(diag))}\n"
+      let new_tail =
+        "at {int_to_str(sl - sstart + 1)}:{int_to_str(sc)}-{int_to_str(el - sstart + 1)}:{int_to_str(ec)}\n"
+      "{str_slice(line, 0, byte_len(line) - byte_len(old_tail))}{new_tail}"
+    } else {
+      line
+    },
+  },
+  _ => line,
 }
 
 // diag_branch (the branch cursor's per-stmt collector) lives in

@@ -1092,6 +1092,21 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE DIAGNOSTIC SPEAKS THE USER'S LINE —
+  Hβ.diag.file-local-span-render RESOLVED at the register
+  (pin 4aa1f090). scope_localize rebuilds diag_line's one `at <span>`
+  tail in the user's coordinates whenever the span falls inside
+  ScopeAt's range — a pure string/ctor read in the root arm (the span
+  needs no graph world; the register's range IS the subtraction, so
+  the per-line seam walk the debt renderer measured as crc-class cost
+  never enters this path). With the quiet-discovery landing beneath
+  it, the whole check-path chain is: the discovery parse absorbs →
+  the weave parse reports once → the register localizes — a line-2
+  type error renders ONCE at 2:19 where the DAG path had printed
+  twice at weave 5730 (the localize frontier leg banks both faces;
+  325/0). ScopeAll (the census channels) stays weave-native by
+  construction. CLEAN m2 == m3 at 349,406 lines; census 0;
+  proof-exactness 9/9.
 - 2026-07-30 · ▶ THE DISCOVERY PARSE GOES QUIET — the report doubling
   dies at its source (pin 0b3d9348). driver_extract_imports' throwaway
   bracket gains ~> diag_quiet (the trial's own absorption policy): a

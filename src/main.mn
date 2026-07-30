@@ -1448,7 +1448,6 @@ fn span_index_of_snapshot() with GraphRead = match graph_snapshot() {
   Graph(_x, spans) => spans,
 }
 
-
 // The span's file:line through the module-range map — the render-side
 // inverse of the concatenation fold. (range_of_module lives in driver.mn,
 // beside the fold that mints the map.)
@@ -1482,7 +1481,7 @@ fn file_line(ref ranges, ref span) with Memory + Alloc = match file_line_of(rang
 //  (b) else the tightest node COVERING the point (a continuation line);
 //  (c) else the nearest node by start line (the no-Module-root top-level
 //      gap — blank lines between decls are ordinary addresses, not errors).
-fn address_resolve(ref spans, gline, col) with Memory + Alloc = match address_case_a(spans, gline, col, 0, len(spans), None) {
+fn address_resolve(ref spans, gline, col) with Memory + Alloc + GraphRead = match address_case_a(spans, gline, col, 0, len(spans), None) {
   Some(pick) => Some(pick),
   None => {
     let point = Span(gline, if col > 0 { col } else { 1 }, gline, if col > 0 { col } else { 1 })
@@ -1493,7 +1492,7 @@ fn address_resolve(ref spans, gline, col) with Memory + Alloc = match address_ca
   },
 }
 
-fn address_case_a(ref spans, gline, col, i, n, best) with Memory = if i >= n {
+fn address_case_a(ref spans, gline, col, i, n, best) with Memory + GraphRead = if i >= n {
   best
 } else {
   match list_index(spans, i) {
@@ -1518,32 +1517,51 @@ fn address_case_a(ref spans, gline, col, i, n, best) with Memory = if i >= n {
 // the TIGHTEST node containing the point, so pointing at a `??` reaches
 // the hole node itself (and its Propose facet), never the enclosing decl
 // that also contains the column. Ties break leftward in both modes.
-fn address_better_a(col, best, cand) with Memory = match best {
+fn address_better_a(col, best, cand) with Memory + GraphRead = match best {
   None => Some(cand),
   Some(b) => match b {
-    (bs, _) => match cand {
-      (cs, _) => match bs {
+    (bs, bh) => match cand {
+      (cs, ch) => match bs {
         Span(_, bsc, _, _) => match cs {
           Span(_, csc, _, _) => {
-            let narrower = if col > 0 { span_area(cs) < span_area(bs) } else { span_area(cs) > span_area(bs) }
-            if narrower {
-              Some(cand)
-            } else if span_area(cs) == span_area(bs) {
-              // Identical spans: the LATEST mint wins — mint order builds
-              // constituents before composites, so the later node is the more
-              // derived reading of the same position (a `??` mints its id cell
-              // first, then the NHole node over the same span; the address must
-              // reach the NHole, whose Propose facet speaks). Distinct starts
-              // keep the leftward tie-break.
-              if csc == bsc { Some(cand) } else if csc < bsc { Some(cand) } else { best }
+            // A BOUND cell beats a ghost, above the area rule (column
+            // mode): a decl's head-anchored span loses tightness to a
+            // never-judged parse cell over its own NAME, and the
+            // projection then renders the ghost's free var (`t…@e0` at
+            // 1:4 — the measured placeholder face). Boundness is the
+            // graph's own "was anything proven here" read; a `??`
+            // node is typed, hence bound, so the hole's reach is
+            // untouched.
+            let cb = address_bound(ch)
+            let bb = address_bound(bh)
+            if col > 0 && cb != bb {
+              if cb { Some(cand) } else { best }
             } else {
-              best
+              let narrower = if col > 0 { span_area(cs) < span_area(bs) } else { span_area(cs) > span_area(bs) }
+              if narrower {
+                Some(cand)
+              } else if span_area(cs) == span_area(bs) {
+                // Identical spans: the LATEST mint wins — mint order builds
+                // constituents before composites, so the later node is the more
+                // derived reading of the same position (a `??` mints its id cell
+                // first, then the NHole node over the same span; the address must
+                // reach the NHole, whose Propose facet speaks). Distinct starts
+                // keep the leftward tie-break.
+                if csc == bsc { Some(cand) } else if csc < bsc { Some(cand) } else { best }
+              } else {
+                best
+              }
             }
           },
         },
       },
     },
   },
+}
+
+fn address_bound(h) with GraphRead = match graph_chase(h) {
+  GNode(NBound(_), _) => true,
+  _ => false,
 }
 
 fn span_pick_of(ref spans, h) with Memory + Alloc = match find(
@@ -1899,9 +1917,7 @@ fn battery_libs() -> String with Memory + Alloc + WASI =
 // judges the JUDGMENT, never stricter than the medium). This contract
 // is the frontier bash's dissolution channel: a refusal leg becomes a
 // fixture the medium reads itself.
-type Expect
-  = ExpectRun(Int)
-  | ExpectRefuse(String)
+type Expect = ExpectRun(Int) | ExpectRefuse(String)
 
 // The micro's own expectation: first line `// expect: N` or
 // `// expect: refuse E_Class`. None = not a battery member (skipped
@@ -1926,7 +1942,11 @@ fn battery_expect_word(src, start, i) with Memory + Alloc = if i >= byte_len(src
   str_slice(src, start, i)
 } else {
   let b = byte_at(src, i)
-  if b == 10 || b == 13 || b == 32 { str_slice(src, start, i) } else { battery_expect_word(src, start, i + 1) }
+  if b == 10 || b == 13 || b == 32 {
+    str_slice(src, start, i)
+  } else {
+    battery_expect_word(src, start, i + 1)
+  }
 }
 
 fn battery_expect_digits(src, i, acc) with Memory = if i >= byte_len(src) {

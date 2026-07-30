@@ -2000,6 +2000,21 @@ for i in "${!compilers[@]}"; do
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"
   run_capability_tie_workflow "$compiler" "$dir"
+
+  # ─── The decl-name address face (bound beats ghost) ────────────────
+  # A column inside a decl's NAME must project the decl, never a
+  # never-judged parse cell's free var (the measured 1:4 placeholder
+  # face: `width( : t…@e…` / `Why: placeholder` through every pin
+  # before 4f477b1f — RED-banked live before the fix).
+  ghdir="$dir/ghost-addr"
+  mkdir -p "$ghdir"
+  printf 'fn width(n) = n + 2\n\nfn main() = width(40)\n' > "$ghdir/main.mn"
+  gh_out=$(cd "$ghdir" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ghdir::." --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" main.mn:1:4 2>/dev/null)
+  if printf '%s' "$gh_out" | grep -q 'width(n)' && ! printf '%s' "$gh_out" | grep -qE ': t[0-9]+@e[0-9]+'; then
+    pass "decl-name address projects the decl (bound beats ghost at 1:4)"
+  else
+    fail "decl-name address (got: $(printf '%s' "$gh_out" | grep -m1 'Query:'))"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

@@ -1092,6 +1092,25 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ BOUND BEATS GHOST AT THE ADDRESS — the head-anchored
+  decl-span defect's felt face closes (pin 4f477b1f). The measured
+  face, RED-banked live through the prior pin: `mentl main.mn:1:4` (a
+  column inside the decl's NAME) rendered `width( : t76439@e54117 /
+  Why: placeholder` — the tightest-containing rule let a never-judged
+  parse cell over the name beat the decl itself. ONE ordering axiom
+  above the area rule, column mode only: a BOUND cell beats a ghost
+  (address_bound — the graph's own "was anything proven here" read,
+  one chase); a `??` node is typed, hence bound, so the hole's reach
+  is untouched, and every prior address behavior survives where no
+  ghost competes. The healed face projects the decl's full eight
+  aspects with the Why at its own line. The frontier gains the
+  decl-name address leg (both faces seen — 322 legs); the perimeter
+  hook's lead-strip learns cd-prefixed compounds (its third
+  over-block class closed). CLEAN m2 == m3; census 0; frontier
+  322/0; proof-exactness 9/9. The named cousin stays open:
+  Hβ.parser.comment-attach-module-boundary (the healed Lede shows a
+  lib tail-comment attaching across the module seam).
+
 - 2026-07-30 · ▶ THE HANDLE PRODUCERS OPEN — the 0 <= self sweep's
   first pair (no pin move — emission-neutral; boot dd8a70f1 stands).
   handle_at_span / scan_for_span gain `-> Handle` (the scan's miss

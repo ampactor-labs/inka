@@ -676,3 +676,19 @@ fn scan_ident(ref source, n: ValidOffset, pos: ValidOffset, col) = if pos >= n {
 } else {
   (pos, col)
 }
+
+// ── The lex-name intern — intern_table (§5.O layer 1) ───────────────────────
+// One row per unique name: (canonical String, handle, keyword kind). The
+// canonical instance is materialized FLAT once at first sight and every
+// repeat occurrence returns the SAME pointer through a hash probe — zero
+// allocation, zero keyword compares (the row carries the classification the
+// old per-occurrence keyword chain re-derived ~1e5 times). str_hash_loop over
+// the source range IS the hash (no slice minted to hash); str_eq_at is the
+// range compare. Handle 0 reserved = absent; count starts at 1. TWO entry
+// paths, one table: intern_span (lex — a source range) and intern_str (a
+// whole String — the EffName mints and any name born outside a token).
+// Both classify through keyword_kind at insert, so a name first seen via
+// intern_str still lexes correctly as a keyword on a later intern_span hit.
+// entries is the reverse read (handle → canonical) intern_name_of serves —
+// the render/emit projection; comparisons never read it.
+

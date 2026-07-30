@@ -31,6 +31,8 @@ import types
 
 import driver
 
+import infer
+
 import query
 
 import pipeline
@@ -89,19 +91,11 @@ handler console_bank with lines = [] {
 handler mcp_diag_collector with lines = [] {
   diag_report(diag, line) => {
     // Forward outward with the SAME rendered line; the bank keeps it too.
+    // Branch-fired reports arrive HERE as live re-performs (the join
+    // replays each banked diag through the root chain), so no separate
+    // absorb arm exists to fold them.
     diag_report(diag, line)
     resume() with lines = push(lines, line)
-  },
-  diag_absorb(dlines, derr, dref) => {
-    diag_absorb(dlines, derr, dref)
-    let grown = fold(
-      lines,
-      (acc, f) => match f {
-        (line, _sl, _iserr) => push(acc, line),
-      },
-      dlines
-    )
-    resume() with lines = grown
   },
   diag_errors() => resume(diag_errors()),
   diag_refusals() => resume(diag_refusals()),

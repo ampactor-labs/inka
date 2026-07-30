@@ -1061,3 +1061,155 @@ fn scan_for_enclosing_module(target, i, n) with GraphRead + !Mutate = if i >= n 
 // (a 600s timeout at the same scale). The column is the same one write
 // projected by handle — the log survives for containment scans.
 fn parse_span_of(handle) with GraphRead = graph_span_of(handle)
+
+// The ONLY route from a TypeHandle to a resolved Ty. Delegates to
+// graph_chase. No cache. No staleness. Every observer reads live.
+// The effect decl beside its ONE handler (the order-independence law).
+effect LookupTy {
+  lookup_ty(Int) -> Ty
+  // The specialization bracket (named-generic twins): while set, the handler
+  // answers a free var through the site's EXACT instantiation pairs (root
+  // handle -> concrete type; sound since the subscript fracture fix made a
+  // generic body's element classes one union-find root), and the
+  // active enc lets the closure-mint arm redirect a nested lambda to its
+  // twin record. State on the ONE LookupTy handler — never a second handler
+  // (singleton tier).
+  spec_ctx_set([(Int, Ty)], String)
+  spec_ctx_clear()
+  spec_enc_active() -> String
+}
+
+// ─── the specialization projection — lookup_ty under a twin's pairs ──
+//
+// The key is the repr digit vector over the scheme's quantified vars, sorted
+// by root handle — tiny, and maximally shared: every word instantiation IS
+// the floor emission ([Int], String, records — byte-identical, Law 7); only
+// a genuinely wide var mints a twin ($min$sp2 = min with its one var at f64).
+fn spec_pairs_find(pairs, root) with Memory + Alloc = match find(
+  (p) => match p {
+    (v, _) => v == root,
+  },
+  pairs
+) {
+  Some(p) => match p {
+    (_, t) => Some(t),
+  },
+  None => None,
+}
+
+// Exact root-keyed substitution — the twin's one rule. Sound since the
+// subscript fracture fix (Force = UNIFY at IndexExpr): a generic body's
+// element classes and the scheme's quantified vars are ONE union-find root,
+// so a free leaf answers its OWN root's binding in the site's instantiation
+// pairs — and a free var whose root is NOT in the pairs stays the honest
+// floor TVar. This is the precision the interim free-leaf rule (every free =
+// the one wide type) could not have, and it lifts the one-wide-type demand
+// guard: multi-type generics (a := Float, b := Int) twin correctly.
+fn spec_pair_or_var(u, pairs) with GraphRead + Memory + Alloc = match spec_pairs_find(pairs, graph_chase_handle(u)) {
+  Some(c) => c,
+  None => TVar(u),
+}
+
+fn spec_subst_pairs(t, pairs) with GraphRead + Memory + Alloc = match t {
+  TVar(u) => match graph_chase(u) {
+    GNode(kind, _r) => match kind {
+      NBound(t2) => spec_subst_pairs(t2, pairs),
+      NFree(_) => spec_pair_or_var(u, pairs),
+      NErrorHole(_) => spec_pair_or_var(u, pairs),
+      NRowBound(_) => t,
+      NRecordRowBound(_) => t,
+      NRowFree(_) => t,
+    },
+  },
+  TList(e) => TList(spec_subst_pairs(e, pairs)),
+  TTuple(es) => TTuple(map((x) => spec_subst_pairs(x, pairs), es)),
+  TFun(ps, r, eff) => TFun(
+    map((p) => param_with_ty(p, spec_subst_pairs(param_ty(p), pairs)), ps),
+    spec_subst_pairs(r, pairs),
+    eff
+  ),
+  TName(n, args) => TName(n, map((x) => spec_subst_pairs(x, pairs), args)),
+  TRecord(fs) => TRecord(map(
+    (f) => match f {
+      (n, ft) => (n, spec_subst_pairs(ft, pairs)),
+    },
+    fs
+  )),
+  TRecordOpen(fs, v) => mk_record_open(
+    map(
+      (f) => match f {
+        (n, ft) => (n, spec_subst_pairs(ft, pairs)),
+      },
+      fs
+    ),
+    v
+  ),
+  TRefined(b, p) => TRefined(spec_subst_pairs(b, pairs), p),
+  TAlias(n, i) => TAlias(n, spec_subst_pairs(i, pairs)),
+  TCont(i, a, d, w) => TCont(spec_subst_pairs(i, pairs), spec_subst_pairs(a, pairs), d, w),
+  _ => t,
+}
+
+// lookup_ty_graph — GraphRead → LookupTy bridge (spec 05)
+// The ONLY LookupTy handler in Phase 1. Declares GraphRead
+// (inherited from the outer graph_handler). Free and error-hole handles
+// resume TVar(h) — the honest word floor every consumer reads; a width a
+// site genuinely needs detonates at emit's loud floors, never here.
+//
+// The handler additionally carries the SPECIALIZATION state (spec_pairs): a
+// named-generic twin's emission brackets itself with spec_ctx_set/clear, and
+// while set, a free var answers through the site's EXACT instantiation pairs
+// (spec_subst_pairs above — root-keyed; a free var whose root is not in
+// the pairs stays the honest floor TVar). State-swap, NOT handler-swap:
+// a second LookupTy handler would demote every lookup_ty perform out of the
+// singleton direct-dispatch tier — measured as ev-scan faults at infer sites
+// that never threaded evidence (they never needed to under the singleton).
+handler lookup_ty_graph with spec_pairs = [], spec_enc = "" {
+  spec_ctx_set(prs, e) => resume() with spec_pairs = prs, spec_enc = e,
+  spec_ctx_clear() => resume() with spec_pairs = [], spec_enc = "",
+  spec_enc_active() => resume(spec_enc),
+  lookup_ty(h) => match graph_chase(h) {
+    GNode(kind, reason) => if len(spec_pairs) > 0 {
+      match kind {
+        NBound(t) => resume(spec_subst_pairs(t, spec_pairs)),
+        NFree(_) => resume(spec_pair_or_var(h, spec_pairs)),
+        NErrorHole(_) => resume(spec_pair_or_var(h, spec_pairs)),
+        NRowBound(_) => resume(TUnit),
+        NRecordRowBound(_) => resume(TUnit),
+        NRowFree(_) => resume(TUnit),
+      }
+    } else {
+      match kind {
+        NBound(t) => resume(t),
+        NErrorHole(_) => // An error hole / free var resumes TVar(h) — CARRY THE HANDLE. The
+        // prior TName("ERROR_HOLE")/TName("UNRESOLVED") sentinels fabricated
+        // a NOMINAL type for a node the graph proves is unresolved: every
+        // downstream type-directed read then trusted the lie — the eq
+        // dispatch minted a structural-sum helper $eq_nUNRESOLVED that read
+        // a raw Int operand as a variant pointer (memory at address 44100 as
+        // a tag word). TVar(h) is the truth: repr_of reads the word floor,
+        // fold_sig reads "i", eq reads word identity — the honest
+        // productive-under-error floor at every consumer, no second sentinel
+        // channel. (A quantified var's == at a GENERIC body is word identity
+        // by the same floor; the type-directed eq for a generic operand at
+        // its instantiated width is the evidence-passing band —
+        // Hβ.emit.generic-boundary-repr-coercion.)
+        resume(TVar(h)),
+        NFree(_) => // A free var read at lower is NOT an error — it is a legal quantified
+        // parameter of a reachable generic declaration (generalize's Forall is
+        // the graph's own proof; `fn ident(x) = x` called from main carries
+        // one), and repr_of floors it to the honest word by design. The per-read
+        // report here re-derived "free = error" against that proof — 182
+        // false diagnostics on a clean runtime-lib compile, the whole
+        // frontier-gate debt class. A GENUINELY stuck width still detonates
+        // at emit's loud comment-marked floors (field-offset-unprovable, the
+        // ft mismatch), at the site that actually needs the width — the
+        // consumer owns the refusal, never the read.
+        resume(TVar(h)),
+        NRowBound(_) => resume(TUnit),
+        NRecordRowBound(_) => resume(TUnit),
+        NRowFree(_) => resume(TUnit),
+      }
+    },
+  },
+}

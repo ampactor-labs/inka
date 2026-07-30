@@ -1507,6 +1507,14 @@ fn show_flow_label(label) with Pure = match label {
 // Every read performs env_lookup; every write performs env_extend.
 // Entries are 4-tuples (name, Scheme, Reason, SchemeKind) — SchemeKind
 // carries construction-origin metadata that lower dispatches on.
+// Scoped bindings via push/pop mark. Env is never passed as argument.
+// Every read performs env_lookup; every write performs env_extend.
+// Entries are 4-tuples (name, Scheme, Reason, SchemeKind) — SchemeKind
+// carries construction-origin metadata that lower dispatches on.
+// The OP VOCABULARY declares HERE — the lowest module every performer
+// imports — while the handlers live at their subsystem (pipeline.mn);
+// the effects prepass phase (pre_register_effect) makes the pair
+// order-independent regardless of the split.
 type Env = Env([(String, Scheme, Reason, SchemeKind)])
 
 // [(name, Scheme, Reason, SchemeKind)]
@@ -1548,7 +1556,8 @@ effect BranchEnv {
 // Handle 0 is reserved = absent; handles are per-install and never cross
 // an analysis bracket (a nested infer_context minting its own table is the
 // isolation the session-weave contract demands at the name layer). Handled
-// by intern_table (pipeline.mn), innermost in the analysis core.
+// by intern_table (pipeline.mn), innermost in the analysis core; the op
+// vocabulary declares here, the lowest module every performer imports.
 effect Intern {
   intern_span(String, Int, Int) -> (String, Int, Option(TokenKind))
   intern_str(String) -> Int
@@ -1848,18 +1857,17 @@ effect DiagRegister {
 // RENDERS at collect — the projections read live values at the perform,
 // so a banked line is safe where a banked DiagKind would render against
 // post-join state — and the join re-prints the lines in stmt order, folding
-// the counts into the root tally. diag_lines_taken is armed on
-// diag_branch (the per-stmt collector); diag_absorb on the root
-// diagnostics_handler. A separate effect so tighten_collector and
-// diag_quiet keep their arm sets untouched.
-// Each banked fact is (rendered line, span start-line, is-error): the
-// line renders AT THE PERFORM (live values), and the join re-applies the
-// root's scope register — an error re-prints always, narration only when
-// its span-line is admitted (the branch is scope-ignorant by design; the
-// register has one home).
+// diag_lines_taken is armed on diag_branch (the per-stmt collector).
+// A separate effect so tighten_collector and diag_quiet keep their arm
+// sets untouched. Each banked fact is (diag, rendered line): the line
+// renders AT THE PERFORM (live values), and the join RE-PERFORMS
+// diag_report per fact into the root chain — the root arm counts and
+// scope-registers off the diag itself, and every Diagnostic forwarder
+// sees the structure (the old absorb-fold reached only the one handler
+// carrying its arm, so a branch-fired T_OverDeclared bypassed the
+// tighten bank).
 effect BranchDiag {
-  diag_lines_taken() -> ([(String, Int, Bool)], Int, Int)
-  diag_absorb([(String, Int, Bool)], Int, Int)
+  diag_lines_taken() -> [(DiagKind, String)]
 }
 
 // ─── The catalog AS projections of the DiagKind constructors ───────────
@@ -2268,22 +2276,9 @@ effect Mutate {
   graph_mutated(Int, Mutation)
 }
 
-// The ONLY route from a TypeHandle to a resolved Ty. Delegates to
-// graph_chase. No cache. No staleness. Every observer reads live.
-effect LookupTy {
-  lookup_ty(Int) -> Ty
-  // The specialization bracket (named-generic twins): while set, the handler
-  // answers a free var through the site's EXACT instantiation pairs (root
-  // handle -> concrete type; sound since the subscript fracture fix made a
-  // generic body's element classes one union-find root), and the
-  // active enc lets the closure-mint arm redirect a nested lambda to its
-  // twin record. State on the ONE LookupTy handler — never a second handler
-  // (singleton tier).
-  spec_ctx_set([(Int, Ty)], String)
-  spec_ctx_clear()
-  spec_enc_active() -> String
-}
-
+// effect LookupTy lives in graph.mn beside lookup_ty_graph — the
+// effect-beside-handler law at the projection's own home.
+//
 // Inference mints via graph_fresh_ty; query mints display ids. One
 // function, two handlers, different semantics for the same op.
 effect FreshHandle {

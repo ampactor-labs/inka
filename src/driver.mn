@@ -186,23 +186,23 @@ fn driver_extract_imports_from_ast(ast) = flatten(map(
   ast
 ))
 
-// Infer one module: its exports install into env_handler as
-// infer_program walks (the graph IS the record of what this module
+// Infer one module: its exports install into env_handler as the
+// converged judgment walks (the graph IS the record of what this module
 // publishes — no snapshot, no side-file). Cross-run module skip is
 // the §4④ image-persist peer (Hβ.persist.module-image-cache): the
 // graph image memcpy'd whole, keyed by source + transitive dep
 // hashes — never a second serializer.
-fn driver_check_module(ref module_name) with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
+fn driver_check_module(ref module_name) with Memory + Alloc + Filesystem + WASI + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
   let path = driver_module_path(module_name)
   if !fs_exists(path) {
     report(EMissingModule(module_name, path, span_zero()))
   } else {
-    fs_read_file(path) |> lex |> parse_program |> infer_program
+    fs_read_file(path) |> infer_program_converged
     ()
   }
 }
 
-// A module's exports live in env_handler because infer_program put
+// A module's exports live in env_handler because the judgment put
 // them there — the graph carries them; there is no install step and
 // no exported-entries snapshot. A qualified `module.name` reference
 // resolves by following the import edge to the module env node
@@ -238,7 +238,7 @@ fn driver_check(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + E
 // ITSELF exactly ONCE and hand its inferred AST back so compile lowers
 // the SAME graph it proved. The entry is never re-read or re-inferred
 // downstream (Carried-Truth: compile's old second fs_read + frontend +
-// infer_program was the canonical re-derivation this deletes — the entry
+// re-judgment was the canonical re-derivation this deletes — the entry
 // is parsed+typed here, once, and lowered live).
 // The COMPILE form of the entry read: an executable IS the one-namespace
 // concatenation of its dep DAG — deps first, post-order, entry last — the
@@ -406,8 +406,7 @@ fn driver_entry_with_ranges(ref entry_module) with Memory + Alloc + Filesystem +
         },
         None => (),
       }
-      let ast = parse_program(lex(source))
-      infer_program(ast)
+      let ast = infer_program_converged(source)
       // The weave carries its own MODULE STRUCTURE: each range entry minted as
       // an NModule node — the module's NAME, its weave span, and the top-level
       // decls the span contains. The fabric's NModule readers (same_module's
@@ -698,14 +697,13 @@ fn names_join(ref xs) with Memory + Alloc =
 // keeps its statement bucket for the reassembly.
 fn rederive_cone(ref cone) with Memory + Alloc + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = map(
   (m) => {
-    let ast = parse_program(lex(fs_read_file(driver_module_path(m))))
-    infer_program(ast)
+    let ast = infer_program_converged(fs_read_file(driver_module_path(m)))
     (m, ast)
   },
   cone
 )
 
-fn driver_check_entry(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
+fn driver_check_entry(ref entry_module) with Memory + Alloc + Filesystem + WASI + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
   // Check the deps DAG (every module the entry imports) — not the entry.
   entry_module |> driver_collect_dag_with_deps |> filter((m_with_deps) => match m_with_deps {
     (m, _) => m != entry_module,
@@ -717,9 +715,7 @@ fn driver_check_entry(ref entry_module) with Memory + Alloc + Filesystem + EnvRe
   // from outside the repo printed nothing and exited clean).
   let path = driver_module_path(entry_module)
   if fs_exists(path) {
-    let ast = parse_program(lex(fs_read_file(path)))
-    infer_program(ast)
-    ast
+    infer_program_converged(fs_read_file(path))
   } else {
     report(EMissingModule(entry_module, path, span_zero()))
     []

@@ -1610,6 +1610,22 @@ for i in "${!compilers[@]}"; do
   else
     fail "render register own-warning (want 1 E_RedundantBraces, got $wcount)"
   fi
+  # ── the one judge — order-independent verdicts on the DAG path ─────
+  # The check/audit/at/field verbs judge through infer_program_converged
+  # now (the single-pass walk is deleted). RED on the pre-judge boot: a
+  # fn declared AFTER its caller read a loose pre-registration, so its
+  # [tuple] return bound SILENTLY against a [String] parameter (the
+  # audit_walk incident's minimal form — zero diagnostics, a runtime
+  # flat_fill trap). Through the one judge the forward reference
+  # resolves the callee's FINAL scheme and the check REFUSES.
+  fwd_out=$(cd "$ROOT" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp "$compiler" check tests/frontier/mn-check-forward-order.mn 2>&1)
+  fwd_rc=$?
+  fwd_count=$(printf '%s' "$fwd_out" | grep -Fc 'E_TypeMismatch error: (Int, String) vs List(Byte)' || true)
+  if [ "$fwd_rc" -ne 0 ] && [ "$fwd_count" -ge 1 ]; then
+    pass "check-forward-order (the DAG path judges converged: forward tuple-into-[String] refuses)"
+  else
+    fail "check-forward-order (exit=$fwd_rc mismatches=$fwd_count — the forward-ref seam is open)"
+  fi
   # ── mentl space — the ide served by the wheel ──────────────────────
   # The verb absorbs ide/serve.mn whole: the accept loop lives in
   # src/main.mn, the listener is the shim's tcplisten preopen seam (WASI

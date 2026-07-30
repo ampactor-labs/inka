@@ -4418,16 +4418,6 @@ fn resolve_state_slot_offset(name: String, fields) = {
   }
 }
 
-// Walk free vars through a `resume() with` updates list. Each update's
-// init expression may reference outer-scope names (e.g., a freshly-built
-// [frame] ++ frames where frame is a let-bound local in the arm
-// body). cfv reports those that aren't in `bound`.
-fn free_vars_state_updates(updates, bound) = fold(
-  [],
-  (acc, upd) => free_vars_merge(acc, collect_free_vars(state_field_init(upd), bound)),
-  updates
-)
-
 // Parameter name lowering (for LFn metadata)
 fn lower_param_names(params) = map(param_name, params)
 
@@ -4452,224 +4442,6 @@ fn tparam_handle(tp) = ty_handle_of(param_ty(tp))
 // type through the one ty_handle_of projection (TVar → handle; ground → 0).
 // param_handles_of reads the inferred TFun instead.
 fn lower_param_handles(params) = map((p) => ty_handle_of(param_ty(p)), params)
-
-// W7 phase 1 — walks a lambda body collecting every `VarRef` whose
-// name is not in the lambda's local scope. Nested lambdas augment
-// `bound` with their own params during the walk, so references
-// resolved inside the nested frame are excluded from the OUTER
-// lambda's free set.
-//
-// Returns `List[String]` — names only, deduplicated. At emit time,
-// closure record slot N stores the value of `captures[N]` from the
-// enclosing scope; the lambda body reads them as `LUpval(h, N)`.
-// SAFE-FOR-SPACE is this walk's INVARIANT (Shao–Appel): a closure
-// record carries exactly the FREE variables of its body — flat
-// copies, never a link to the enclosing frame — so the space a
-// closure retains is bounded by what its body can reference, and no
-// dead environment survives through a captured frame pointer. Every
-// capture channel (this walk, the seeded __k/__hrec words, the
-// fanout branch thunks) preserves it; a future channel that captures
-// a FRAME instead of a free set violates the invariant, not a style
-// preference.
-// H6: exhaustive NodeBody enumeration. Patterns and holes
-// contribute no free variable references (they're terminal AST
-// forms). Named explicitly so new NodeBody variants decide
-// whether they can contain VarRefs.
-fn collect_free_vars(node, bound) = match node {
-  N(body, _, _) => match body {
-    NExpr(e) => free_vars_expr(e, bound),
-    NStmt(s) => free_vars_stmt(s, bound),
-    NPat(_) => [],
-    NHole(_) => [],
-    NModule(_) => // a module entity contains no VarRef of its own
-    [],
-    NTypeAnn(_) => // an authored type annotation contains no VarRef
-    [],
-  },
-}
-
-fn free_vars_expr(e, bound) = match e {
-  LitInt(_) => [],
-  LitFloat(_) => [],
-  LitString(_) => [],
-  LitBool(_) => [],
-  LitUnit => [],
-  VarRef(name) => if free_vars_contains(bound, name) { [] } else { [name] },
-  BinOpExpr(_, l, r) => free_vars_merge(collect_free_vars(l, bound), collect_free_vars(r, bound)),
-  UnaryOpExpr(_, inner) => collect_free_vars(inner, bound),
-  CallExpr(f, args) => free_vars_merge(collect_free_vars(f, bound), free_vars_list(args, bound)),
-  IfExpr(c, t, e) => free_vars_merge(
-    collect_free_vars(c, bound),
-    free_vars_merge(collect_free_vars(t, bound), collect_free_vars(e, bound))
-  ),
-  BlockExpr(stmts, final_e) => match free_vars_stmts(stmts, bound, []) {
-    (frees, bound_after) => free_vars_merge(frees, collect_free_vars(final_e, bound_after)),
-  },
-  MatchExpr(scrut, arms) => free_vars_merge(collect_free_vars(scrut, bound), free_vars_match_arms(arms, bound)),
-  MakeListExpr(elems) => free_vars_list(elems, bound),
-  MakeTupleExpr(elems) => free_vars_list(elems, bound),
-  MakeStringExpr(fragments) => free_vars_list(fragments, bound),
-  IndexExpr(receiver, index) => free_vars_merge(collect_free_vars(receiver, bound), collect_free_vars(index, bound)),
-  MakeRecordExpr(flds) => free_vars_record_fields(flds, bound),
-  RecordUpdateExpr(base, flds) => free_vars_merge(collect_free_vars(base, bound), free_vars_record_fields(flds, bound)),
-  NamedRecordExpr(_, flds) => free_vars_record_fields(flds, bound),
-  LambdaExpr(params, body) => {
-    let inner_bound = free_vars_merge(bound, free_vars_param_names(params))
-    collect_free_vars(body, inner_bound)
-  },
-  ResumeExpr(val, state_updates) => // band B M1.6 (bank Ruling 2/A3): a resume USES the enclosing arm's k,
-  // so "__k" is one of its free names. A lambda inside a MultiShot arm
-  // thereby CAPTURES the k record like any local — the capture tier of
-  // the resume-resolution ladder (lower_resume_callk walks it). Anywhere
-  // __k is NOT an arm-frame local — a OneShot arm's lambda, a k-fn build,
-  // an ordinary fn — "__k" resolves RGlobal and the phantom-capture fence
-  // DROPS it: zero captures added, bytes identical (Law 7 holds on the
-  // wheel's own backtrack, whose resume-in-lambda sits under the
-  // OneShot-misclassified choose until the cut).
-  free_vars_merge(
-    ["__k"],
-    free_vars_merge(collect_free_vars(val, bound), free_vars_state_updates(state_updates, bound))
-  ),
-  FieldExpr(rec, _) => collect_free_vars(rec, bound),
-  PipeExpr(_, l, r) => free_vars_merge(collect_free_vars(l, bound), collect_free_vars(r, bound)),
-  ExprPlaceholder => [],
-  LabeledArg(_, v) => // A labeled arg's value can reference free vars (closure capture must see
-  // them); the label is a param name, not a value-position var.
-  collect_free_vars(v, bound),
-  LitInt(_) => // H6: exhaustive Expr enumeration. Literals contribute no
-  // free vars. Named explicitly so new Expr variants must decide
-  // their free-var contribution (critical for closure capture).
-  [],
-  LitFloat(_) => [],
-  LitString(_) => [],
-  LitBool(_) => [],
-  LitUnit => [],
-}
-
-// H6: exhaustive Stmt enumeration. Type/effect/handler
-// declarations and imports contribute no value-level free vars
-// to closure capture. Refinement stmts similarly. Named
-// explicitly so new Stmt variants decide their cfv behavior.
-fn free_vars_stmt(s, bound) = match s {
-  LetStmt(_, expr, _) => collect_free_vars(expr, bound),
-  FnStmt(_, _, _, _, body_node) => collect_free_vars(body_node, bound),
-  ExprStmt(expr) => collect_free_vars(expr, bound),
-  TypeDefStmt(_, _) => [],
-  EffectDeclStmt(_, _, _) => [],
-  HandlerDeclStmt(_, _, _, _, _) => [],
-  ImportStmt(_) => [],
-  RefineStmt(_, _, _) => [],
-  AliasStmt(_, _) => [],
-}
-
-fn free_vars_list(nodes, bound) =
-  fold([], (acc, node) => free_vars_merge(acc, collect_free_vars(node, bound)), nodes)
-
-// Free variables in a record-literal expression: union of frees in
-// each field's value. Field names are not value-position references
-// (the parser already desugared pun-syntax to `VarRef` nodes).
-fn free_vars_record_fields(flds, bound) = fold(
-  [],
-  (acc, fld) => match fld {
-    (_, value) => free_vars_merge(acc, collect_free_vars(value, bound)),
-  },
-  flds
-)
-
-// Walk a statement list, threading `bound` through `LetStmt`s so
-// subsequent statements see the new bindings. Returns
-// `(accumulated_frees, final_bound)`.
-fn free_vars_stmts(stmts, bound, acc_frees) = if len(stmts) == 0 {
-  (acc_frees, bound)
-} else {
-  let stmt = last(stmts)
-  match stmt {
-    N(stmt_body, _, _) => match stmt_body {
-      NStmt(LetStmt(pat, expr, _)) => {
-        let frees = collect_free_vars(expr, bound)
-        let new_bound = free_vars_merge(bound, free_vars_pat_binds(pat))
-        free_vars_stmts(drop_last(stmts), new_bound, free_vars_merge(acc_frees, frees))
-      },
-      NStmt(FnStmt(name, _, _, _, body_node)) => {
-        // Nested named fn — its name is in scope for siblings and the
-        // final expression (recursive / mutual references resolve via env).
-        let frees = collect_free_vars(body_node, bound)
-        let new_bound = free_vars_merge(bound, [name])
-        free_vars_stmts(drop_last(stmts), new_bound, free_vars_merge(acc_frees, frees))
-      },
-      _ => {
-        let frees = collect_free_vars(stmt, bound)
-        free_vars_stmts(drop_last(stmts), bound, free_vars_merge(acc_frees, frees))
-      },
-    },
-  }
-}
-
-fn free_vars_match_arms(arms, bound) = fold(
-  [],
-  (acc, arm) => match arm {
-    (pat, body) => {
-      let arm_bound = free_vars_merge(bound, free_vars_pat_binds(pat))
-      free_vars_merge(acc, collect_free_vars(body, arm_bound))
-    },
-  },
-  arms
-)
-
-fn free_vars_param_names(params) = map(param_name, params)
-
-// H6: exhaustive Pat enumeration. PVar is the only leaf that
-// binds a name; compound patterns recurse into sub-patterns.
-// PWild / PLit bind nothing. New Pat variants must decide their
-// binder-name contribution explicitly.
-fn free_vars_pat_binds(pat) = match pat {
-  PVar(name) => [name],
-  PCon(_, sub_pats) => free_vars_pat_binds_list(sub_pats),
-  PTuple(sub_pats) => free_vars_pat_binds_list(sub_pats),
-  PList(sub_pats, rest) => free_vars_merge(free_vars_pat_binds_list(sub_pats), free_vars_pat_rest_binds(rest)),
-  PRecord(flds) => free_vars_pat_binds_fields(flds),
-  PAlt(branches) => // Alternation branches bind the SAME name set by law (SYNTAX
-  // §"Pattern alternation" — E_PatternAlternationBindingMismatch
-  // enforces it), so the first branch's binders ARE the arm's.
-  // Face 9: this was the one Pat walker missing the arm; the testing
-  // lib's alternation matches hit the floor at the input's tail.
-  free_vars_pat_binds(list_index(branches, 0)),
-  PWild => [],
-  PLit(_) => [],
-}
-
-fn free_vars_pat_rest_binds(rest) = match rest {
-  None => [],
-  Some(name) => if field_name_eq(name, "_") { [] } else { [name] },
-}
-
-// Extract binder names from record-pattern fields `[(name, Pat)]`.
-// Each field contributes its sub-pat's binders.
-fn free_vars_pat_binds_fields(flds) = fold(
-  [],
-  (acc, fld) => match fld {
-    (_, sub_pat) => free_vars_merge(acc, free_vars_pat_binds(sub_pat)),
-  },
-  flds
-)
-
-fn free_vars_pat_binds_list(pats) =
-  fold([], (acc, p) => free_vars_merge(acc, free_vars_pat_binds(p)), pats)
-
-fn free_vars_merge(a, b) = if len(b) == 0 {
-  a
-} else {
-  let x = last(b)
-  let rest = drop_last(b)
-  if free_vars_contains(a, x) {
-    free_vars_merge(a, rest)
-  } else // drift-audit: ignore — real drift 11 in free_vars_* set-union family; buffer-counter rewrite adds Memory+Alloc to row rippling through callers; tracked by Hβ.perf.name-is-handle; buffer-counter sweep. Explicit list_concat (was `a ++ [x]`) — BConcat's emit dispatches via lookup_ty which returned NFree at infer-time, falling to str_concat and trapping in mentl2's runtime when list arms walked the bytes as elements. Direct call avoids the dispatch.
-  {
-    free_vars_merge(list_concat(a, [x]), rest)
-  }
-}
-
-fn free_vars_contains(lst, s) = any((x) => x == s, lst)
 
 // Stage 4a: WASI import-name predicate. Recognized op names bridge
 // to the WASM-level import via LWasiCall instead of LPerform's
@@ -5635,18 +5407,9 @@ fn hash_agg_reach(ty) with Memory + Alloc = {
 // by root handle — tiny, and maximally shared: every word instantiation IS
 // the floor emission ([Int], String, records — byte-identical, Law 7); only
 // a genuinely wide var mints a twin ($min$sp2 = min with its one var at f64).
-fn spec_pairs_find(pairs, root) with Memory + Alloc = match find(
-  (p) => match p {
-    (v, _) => v == root,
-  },
-  pairs
-) {
-  Some(p) => match p {
-    (_, t) => Some(t),
-  },
-  None => None,
-}
-
+// spec_pairs_find lives in graph.mn with its consumers (spec_pair_or_var /
+// spec_subst_pairs / lookup_ty_graph) — the specialization projection reads
+// the graph, and both this module and the bracket (infer.mn) reach it there.
 fn spec_pairs_add(pairs, root, t) with Memory + Alloc = match spec_pairs_find(pairs, root) {
   Some(_) => // first binding wins; the unifier proved consistency
   pairs,
@@ -5931,59 +5694,10 @@ fn spec_global_name(h, name: String) with EnvRead + LookupTy + GraphRead + Memor
   }
 }
 
-// Exact root-keyed substitution — the twin's one rule. Sound since the
-// subscript fracture fix (Force = UNIFY at IndexExpr): a generic body's
-// element classes and the scheme's quantified vars are ONE union-find root,
-// so a free leaf answers its OWN root's binding in the site's instantiation
-// pairs — and a free var whose root is NOT in the pairs stays the honest
-// floor TVar. This is the precision the interim free-leaf rule (every free =
-// the one wide type) could not have, and it lifts the one-wide-type demand
-// guard: multi-type generics (a := Float, b := Int) twin correctly.
-fn spec_pair_or_var(u, pairs) with GraphRead + Memory + Alloc = match spec_pairs_find(pairs, graph_chase_handle(u)) {
-  Some(c) => c,
-  None => TVar(u),
-}
-
-fn spec_subst_pairs(t, pairs) with GraphRead + Memory + Alloc = match t {
-  TVar(u) => match graph_chase(u) {
-    GNode(kind, _r) => match kind {
-      NBound(t2) => spec_subst_pairs(t2, pairs),
-      NFree(_) => spec_pair_or_var(u, pairs),
-      NErrorHole(_) => spec_pair_or_var(u, pairs),
-      NRowBound(_) => t,
-      NRecordRowBound(_) => t,
-      NRowFree(_) => t,
-    },
-  },
-  TList(e) => TList(spec_subst_pairs(e, pairs)),
-  TTuple(es) => TTuple(map((x) => spec_subst_pairs(x, pairs), es)),
-  TFun(ps, r, eff) => TFun(
-    map((p) => param_with_ty(p, spec_subst_pairs(param_ty(p), pairs)), ps),
-    spec_subst_pairs(r, pairs),
-    eff
-  ),
-  TName(n, args) => TName(n, map((x) => spec_subst_pairs(x, pairs), args)),
-  TRecord(fs) => TRecord(map(
-    (f) => match f {
-      (n, ft) => (n, spec_subst_pairs(ft, pairs)),
-    },
-    fs
-  )),
-  TRecordOpen(fs, v) => mk_record_open(
-    map(
-      (f) => match f {
-        (n, ft) => (n, spec_subst_pairs(ft, pairs)),
-      },
-      fs
-    ),
-    v
-  ),
-  TRefined(b, p) => TRefined(spec_subst_pairs(b, pairs), p),
-  TAlias(n, i) => TAlias(n, spec_subst_pairs(i, pairs)),
-  TCont(i, a, d, w) => TCont(spec_subst_pairs(i, pairs), spec_subst_pairs(a, pairs), d, w),
-  _ => t,
-}
-
+// spec_pair_or_var / spec_subst_pairs live in graph.mn beside
+// spec_pairs_find and lookup_ty_graph (the one home of the
+// specialization projection).
+//
 // ONE scan, two projections: the named-reference sites (LGlobal /
 // LDirectCall, with their handles — the key-projection inputs) and the repr-sensitive
 // operand handles (arith / comparison / equality operands — the floor-is-

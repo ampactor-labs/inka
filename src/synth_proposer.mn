@@ -145,7 +145,7 @@ handler synth_default {
   match candidate {
     Candidate(node, _) => {
       // The re-infer runs under its OWN inference session (the same chain
-      // infer_program installs): a CALL candidate's inference stages
+      // the judgment passes install): a CALL candidate's inference stages
       // continuation boundaries and reads the InferCtx frame — ops that need
       // their handlers live. The scoped-singleton brackets make the nested
       // session safe; the caller's checkpoint still isolates the binds.
@@ -668,7 +668,7 @@ fn keep_proven(ref cands, ref verdicts, i, own out) = if i >= len(cands) {
 //
 // The kernel's proof gate, fanned: candidates verify as spawned branch
 // cursors (fan_verify above); only proven survivors reach the user.
-fn verify_each_enriched(candidates, target_ty) with GraphRead + GraphWrite + Memory + Alloc + EnvRead + EnvWrite + Consume + Verify + Intern + WASI + WasiThreads + BranchEnv + BranchDiag + !Mutate = {
+fn verify_each_enriched(candidates, target_ty) with GraphRead + GraphWrite + Memory + Alloc + EnvRead + EnvWrite + Consume + Verify + Intern + WASI + WasiThreads + BranchEnv + BranchDiag + Diagnostic + !Mutate = {
   let verdicts = fan_verify(candidates, target_ty)
   keep_proven(candidates, verdicts, 0, [])
 }

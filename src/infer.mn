@@ -25,6 +25,8 @@
 // holes, not one-and-halt.
 import graph
 
+import verify
+
 import lexer
 
 import effects
@@ -36,6 +38,8 @@ import canon
 import own
 
 import runtime/imap
+
+import runtime/io
 
 import parser
 
@@ -219,30 +223,6 @@ fn inf_add_row_unified(row) = {
     ()
   }
   inf_add_row(row)
-}
-
-fn infer_program(stmts) = {
-  {
-    // drift-audit: ignore — sequenced effectful read (the parse watermark, the comment walk's exact bound)
-    let parse_end = graph_next()
-    register_primitives()
-    pre_register_decls(stmts)
-    // THE CUT: the resume-summary classifier runs between registration and
-    // the walk — draw_op_edges' resume_grade reads the summaries through
-    // the standing ctx, so arm grades see resumes in CALLED fns.
-    set_summaries(classify_fixpoint(stmts))
-    infer_stmt_list(stmts)
-    // Handler declarations may follow their effect-call sites. Finalize only
-    // after the whole inference walk, when every op's cardinality join is live
-    // in its EffectOpScheme. The pending edge already holds the exact row frame.
-    finalize_continuation_boundaries(0, graph_next())
-    // The backtick contract (SYNTAX §Comments: "the author writes the
-    // reference, the handler resolves it"): after the walk the env holds
-    // every decl, so each comment's backticked references resolve here —
-    // every compile keeps the weave honest, never a separate audit pass.
-    comment_refs_check(stmts, 0, parse_end)
-  } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
-  stmts
 }
 
 // ─── comment references — the backtick contract ─────────────────────
@@ -719,6 +699,7 @@ fn register_primitives() = {
 fn pre_register_decls(stmts) = {
   refuse_duplicate_type_decls(stmts, 0, len(stmts), smap_new())
   each(pre_register_alias, stmts)
+  each(pre_register_effect, stmts)
   // The duplicate-fn refusal is keyed by THIS WALK's own seen-set, never
   // by the env: an existing FnScheme entry may be a PRIOR JUDGMENT of the
   // same tree (the incremental cursor re-registers a changed module into
@@ -777,6 +758,22 @@ fn pre_register_alias(ref node) = match node {
   },
 }
 
+// The effect decls — registration's OWN phase, before any handler sig
+// (pre_register_alias's precedent one namespace over): a handler's
+// identity derives its effect from the arms' op names THROUGH the effect
+// env, so a HandlerDeclStmt that precedes its EffectDeclStmt in source
+// order read an incomplete env and registered with a broken effect
+// binding — the install then absorbed NOTHING and the executable gate
+// refused a fully-handled program (measured 2026-07-29: intern_table
+// moved to lexer.mn, which sorts before types.mn's `effect Intern`, and
+// the whole wheel refused with "no install anywhere").
+fn pre_register_effect(ref node) = match node {
+  N(body, _, _) => match body {
+    NStmt(EffectDeclStmt(name, params, ops)) => register_effect_ops(name, params, ops),
+    _ => (),
+  },
+}
+
 fn pre_register_stmt(seen, ref node) = match node {
   N(body, span, handle) => match body {
     NStmt(FnStmt(name, params, ret_ann, effs, _body_node)) => match smap_get(seen, name) {
@@ -793,15 +790,13 @@ fn pre_register_stmt(seen, ref node) = match node {
       register_type_constructors(name, variants)
       seen
     },
-    NStmt(EffectDeclStmt(name, params, ops)) => {
-      register_effect_ops(name, params, ops)
-      seen
-    },
     NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) => {
       pre_register_handler_sig(hname, config, state, arms)
       seen
     },
-    _ => seen,
+    _ => // EffectDeclStmt registered in the pre_register_effect phase above —
+    // every handler sig in THIS fold reads a complete effect env.
+    seen,
   },
 }
 
@@ -961,7 +956,11 @@ fn infer_program_trial(stmts) = {
   let start = graph_next()
   let rows = infer_stmt_list_measured(stmts)
   finalize_continuation_boundaries(0, graph_next())
-  (rows, start)
+  // The stmts ride out with the rows: the converged loop's frees walk
+  // reads THIS parse instead of minting another (Carried-Truth — the
+  // arm-position re-parse also REPORTED its parse narration outside
+  // diag_quiet, doubling every check's format-lift lines).
+  (rows, start, stmts)
 } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx ~>
 // The trial is a WORLD of its own: fresh analysis ledgers absorb its
 // verify obligations and ownership/region facts, dying with the
@@ -1007,6 +1006,7 @@ affine_ledger ~> region_tracker ~> verify_ledger
 fn infer_program_round(ref mask, ref prev_rows, stmts) = {
   register_primitives()
   each(pre_register_alias, stmts)
+  each(pre_register_effect, stmts)
   pre_register_masked(stmts, mask, 0)
   set_summaries(classify_fixpoint(stmts))
   // drift-audit: ignore — sequenced effectful read (the ranges' origin must precede the walk), CLAUDE.md Anchor 6 exclusion
@@ -1030,9 +1030,11 @@ fn pre_register_masked(ref stmts, ref mask, i) = if i >= len(stmts) {
     match stmts[i] {
       N(body, _, _) => match body {
         NStmt(TypeDefStmt(name, variants)) => register_type_constructors(name, variants),
-        NStmt(EffectDeclStmt(name, params, ops)) => register_effect_ops(name, params, ops),
         NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) => pre_register_handler_sig(hname, config, state, arms),
-        _ => (),
+        _ => // EffectDeclStmt registered in the round's own
+        // pre_register_effect phase (whole, never masked) — handler
+        // sigs here read a complete effect env.
+        (),
       },
     }
   } else {
@@ -1088,6 +1090,239 @@ fn prints_equal(ref a, ref b) = if len(a) != len(b) { false } else { prints_equa
 
 fn prints_equal_walk(ref a, ref b, i) =
   if i >= len(a) { true } else if a[i] == b[i] { prints_equal_walk(a, b, i + 1) } else { false }
+
+// frontend — lex |> parse, the judgment's input boundary
+fn frontend(source) = source |> lex |> parse_program
+
+// The quiet trial's diagnostics policy: the trial pass exists only to
+// finalize schemes — every verdict re-derives sharper in the final pass,
+// so reports drop and the ledger reads answer empty. All three Diagnostic
+// ops carry arms (a partial-effect handler leaves zero fn slots; a perform
+// through one is a garbage dispatch — the tighten_collector constraint).
+handler diag_quiet {
+  diag_report(d, _line) => resume(),
+  diag_errors() => resume(0),
+  diag_refusals() => resume(0),
+}
+
+// diag_branch — the branch cursor's per-stmt collector (Phase C, C1c-2).
+// Same projections as the root arm, rendered AT THE PERFORM (live
+// values), banked as lines instead of printed; the local tally answers
+// any in-branch diag_errors/diag_refusals read with branch-local truth.
+// diag_lines_taken hands the whole fact set to the join.
+handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals = 0 {
+  diag_report(diag, line) => // The banked fact carries the DIAG STRUCTURALLY beside the rendered
+  // line — the join re-performs diag_report(diag, line) into the root
+  // chain, so every Diagnostic forwarder (tighten_collector, the mcp
+  // bank) sees a branch report exactly as a live one, and the root's
+  // scope register / tally read the diag itself. The old bank kept only
+  // (line, span-line, is-error): a branch-fired T_OverDeclared reached
+  // the collectors structure-less and the tighten bank read empty —
+  // measured the day the daily verbs went converged (every check now
+  // judges through the branch bracket).
+  {
+    let iserr = diag_severity(diag) == SError
+    let grown = list_set(list_extend_to(lines, count + 1), count, (diag, line))
+    if iserr {
+      if diag_refuses(diag) {
+        resume() with lines = grown, count = count + 1, errors = errors + 1, refusals = refusals + 1
+      } else {
+        resume() with lines = grown, count = count + 1, errors = errors + 1
+      }
+    } else {
+      resume() with lines = grown, count = count + 1
+    }
+  },
+  diag_errors() => resume(errors),
+  diag_refusals() => resume(refusals),
+  diag_lines_taken() => resume(list_to_flat(slice(lines, 0, count))),
+}
+
+// The converged judgment (Hβ.infer.order-independent-verdicts): one
+// source, quiet rounds of the one walk until the published schemes'
+// fingerprints STABILIZE, then the reporting final. The trial's finals
+// are hypotheses (its source-order walk reads loose pre-registrations at
+// forward references — the measured lb↔i divergence on the classify /
+// escape / crc family); each quiet round re-judges fresh nodes against
+// the prior round's finals through the latest-wins env, and the stop
+// condition — round K's fingerprints == round K-1's — is the convergence
+// contract made mechanical. The reporting final then publishes schemes
+// EQUAL to the converged set, so the branch bracket's frozen layer bases
+// read the same truth the live walk would. A bounded non-convergence is
+// LOUD (the names' judgments oscillate — an order-sensitivity the medium
+// names instead of laundering); the march's m3 == m4 stays the outer
+// oracle.
+//
+// THE ONE JUDGE: every judgment site runs this — the stdin compile, the
+// driver DAG (check/audit/teach/at/field/session), the warm cone, the
+// battery, the repl line. The single-pass walk it replaced read loose
+// pre-registrations at every intra-module forward reference, so a
+// forward-referenced fn's callers bound silently against a free scheme
+// (measured: a [tuple]-returning fn declared after its caller flowed
+// into a [String] consumer with no refusal — the b1 probe).
+fn infer_program_converged(src) = match {
+  src |> frontend |> infer_program_trial
+} ~> diag_quiet {
+  (rows, trial_start, tstmts) => {
+    let flat_rows = list_to_flat(rows)
+    // THE LAYERS ARE PARSE TRUTH, read where it lives: each stmt's free
+    // names (collect_free_vars over its own subtree) are its reference
+    // edges — the DAG, total and judgment-independent. The retired
+    // range-scan re-derived dependency from reasons inside each stmt's
+    // INFERENCE-mint range, but VarLookup reasons land on the PARSE
+    // nodes — minted before the trial's watermark, outside every range —
+    // so the scan read zero edges (measured: every stmt layer 0, every
+    // frozen base the prepass env, payloadfn's residual chain severed at
+    // the pre-arms scheme). The frees collect ONCE — off the TRIAL's own
+    // stmts (a re-parse here would run in the arm, OUTSIDE diag_quiet,
+    // and report its parse narration a second time) — and serve both
+    // the layers and the incremental cone below.
+    let frees_all = stmt_frees(tstmts)
+    let layers = stmt_layers_ast(frees_all, flat_rows)
+    let prints = round_prints(flat_rows)
+    converge_rounds(src, flat_rows, layers, frees_all, prints, prints, 1)
+  },
+}
+
+// THE INCREMENTAL ROUNDS — the changed cone (Mentl's own steering,
+// 2026-07-26: "the unchanged names are a warm cone he re-judges
+// anyway"). Round 1 re-judges everything (every input moved
+// loose → final); round K+1 re-judges ONLY stmts whose own fingerprint
+// moved between the last two rounds or whose free names' fingerprints
+// moved — the one-hop cone, which the iteration closes transitively. A
+// skipped stmt's final persists in the env by latest-wins, so its
+// fingerprint CARRIES through round_prints with zero special-casing,
+// and the stop condition is unchanged. The cone is a pure comparison
+// of the two carried print lists — the live env at cone time IS the
+// last round's finals, so an env read here could only ever answer
+// "unmoved"; the delta lives in the pair. This is the incremental
+// cursor running inside the judgment itself.
+fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round) = if round >= 12 {
+  eprint_string("convergence: schemes still moving after {int_to_str(round)} rounds — judging with the last round's finals; the fixpoint oracle arbitrates\n")
+  eprint_string("convergence: movers:{movers_line(flat_rows, prev_prints, prints, 0, 0)}\n")
+  converge_finish(src, flat_rows, layers)
+} else {
+  let mask = if round == 1 {
+    mask_all(len(flat_rows))
+  } else {
+    cone_mask(flat_rows, prev_prints, prints, frees_all)
+  }
+  match {
+    src |> frontend |> infer_program_round(mask, flat_rows)
+  } ~> diag_quiet {
+    (rows2, _start2) => {
+      let flat2 = list_to_flat(rows2)
+      let prints2 = round_prints(flat2)
+      if prints_equal(prints, prints2) {
+        converge_finish(src, flat2, layers)
+      } else {
+        converge_rounds(src, flat2, layers, frees_all, prints, prints2, round + 1)
+      }
+    },
+  }
+}
+
+fn converge_finish(src, flat_rows, layers) = {
+  // The final's parse START, captured before its own frontend: the crc
+  // walk's lower bound, so the backtick judge reads only THIS pass's
+  // comment cells — prior generations' parses left their text in place.
+  //
+  // drift-audit: ignore — sequenced effectful read (the pre-frontend frontier, the comment walk's lower bound)
+  let pstart = graph_next()
+  src |> frontend |> infer_program_final(flat_rows, layers, pstart)
+}
+
+fn mask_all(n) = mask_all_walk(make_list(n), 0, n)
+
+fn mask_all_walk(own m, i, n) =
+  if i >= n { m } else { mask_all_walk(list_set(m, i, true), i + 1, n) }
+
+// The bound-hit report names its residue: which stmts' fingerprints were
+// still moving when the round bound cut the loop (first sixteen — the
+// class is what matters, not the tail).
+fn movers_line(ref rows, ref prev_prints, ref cur_prints, i, shown) = if i >= len(rows) || shown >= 16 {
+  ""
+} else {
+  match rows[i] {
+    (name, _) => if name != "" && cur_prints[i] != prev_prints[i] {
+      " {name}{movers_line(rows, prev_prints, cur_prints, i + 1, shown + 1)}"
+    } else {
+      movers_line(rows, prev_prints, cur_prints, i + 1, shown)
+    },
+  }
+}
+
+// The cone: a stmt re-judges when its own print moved between the last
+// two rounds, or any free name it references moved in that window.
+fn cone_mask(ref rows, ref prev_prints, ref cur_prints, ref frees_all) = {
+  let moved = moved_names(rows, prev_prints, cur_prints, 0, smap_new())
+  cone_mask_walk(prev_prints, cur_prints, frees_all, moved, make_list(len(rows)), 0)
+}
+
+fn moved_names(ref rows, ref prev_prints, ref cur_prints, i, acc) = if i >= len(rows) {
+  acc
+} else {
+  match rows[i] {
+    (name, _) => moved_names(
+      rows,
+      prev_prints,
+      cur_prints,
+      i + 1,
+      if name == "" || cur_prints[i] == prev_prints[i] { acc } else { smap_add(acc, name, 1) }
+    ),
+  }
+}
+
+fn cone_mask_walk(ref prev_prints, ref cur_prints, ref frees_all, ref moved, own m, i) = if i >= len(prev_prints) {
+  m
+} else {
+  let hit = cur_prints[i] != prev_prints[i] || frees_hit(frees_all[i], moved, 0)
+  cone_mask_walk(prev_prints, cur_prints, frees_all, moved, list_set(m, i, hit), i + 1)
+}
+
+fn frees_hit(ref frees, ref moved, j) = if j >= len(frees) {
+  false
+} else {
+  match smap_get(moved, frees[j]) {
+    Some(_) => true,
+    None => frees_hit(frees, moved, j + 1),
+  }
+}
+
+// Every stmt's free-name list, collected once from the parse tree.
+fn stmt_frees(ref stmts) = stmt_frees_walk(stmts, make_list(len(stmts)), 0)
+
+fn stmt_frees_walk(ref stmts, own out, i) = if i >= len(stmts) {
+  out
+} else {
+  stmt_frees_walk(stmts, list_set(out, i, list_to_flat(collect_free_vars(stmts[i], []))), i + 1)
+}
+
+// The stmt-layer projection over PARSE truth: a stmt's depth is one past
+// the deepest earlier stmt its free names reference (backward edges
+// only — a forward name resolves the published final and orders
+// nothing). Free names that key no decl (lib vocabulary, locals) answer
+// depth 0 through the index miss. This is the DAG the fan's frozen
+// bases require complete: every reference IS an edge here, because
+// collect_free_vars walks the source itself.
+fn stmt_layers_ast(ref frees_all, ref rows) = {
+  let name_idx = layer_name_index(rows, 0, smap_new())
+  ast_layers_walk(frees_all, name_idx, make_list(len(frees_all)), 0)
+}
+
+fn ast_layers_walk(ref frees_all, ref name_idx, own depths, i) = if i >= len(frees_all) {
+  depths
+} else {
+  let d = frees_depth(frees_all[i], name_idx, depths, i, 0, 0)
+  ast_layers_walk(frees_all, name_idx, list_set(depths, i, d), i + 1)
+}
+
+fn frees_depth(ref frees, ref name_idx, ref depths, i, j, best) = if j >= len(frees) {
+  best
+} else {
+  let d = backward_depth(name_idx, depths, frees[j], i)
+  frees_depth(frees, name_idx, depths, i, j + 1, if d > best { d } else { best })
+}
 
 // ─── ty_fingerprint — the alpha-normalized deterministic scheme render ──
 //
@@ -1321,6 +1556,7 @@ fn infer_program_final(rows, layers, pstart, stmts) = {
     register_primitives()
     refuse_duplicate_type_decls(stmts, 0, len(stmts), smap_new())
     each(pre_register_alias, stmts)
+    each(pre_register_effect, stmts)
     fold(smap_new(), pre_register_stmt_final, stmts)
     // The summaries value is captured ONCE and threaded to every branch
     // bracket — each branch installs its own resume_summaries_ctx over
@@ -1657,20 +1893,35 @@ fn branch_bracket(body, base, gseed, iseed, range) = match base {
 // rendered lines re-print, the tally folds. Runs AFTER the bracket
 // closes, so every perform here resolves to the root instances.
 fn branch_join(facts) = match facts {
-  (pubs, dfacts, vdebt, clog) => match dfacts {
-    (dlines, derr, dref) => {
-      branch_replay_pubs(pubs, 0)
-      // Both ledgers' logs are PREPEND-ordered; the replay walks from the
-      // tail so the root re-performs in occurrence order. Consumes re-check
-      // against the root's live set — a same-layer double-consume refuses
-      // HERE, deterministically, exactly as the join protocol demands. Only
-      // Own consumes ever enter the sites log (the arm's else branch), so
-      // the replay's ownership arg is Own by construction.
-      branch_replay_consumes(clog, len(clog) - 1)
-      branch_replay_verify(vdebt, len(vdebt) - 1)
-      diag_absorb(dlines, derr, dref)
-    },
+  (pubs, dfacts, vdebt, clog) => {
+    branch_replay_pubs(pubs, 0)
+    // Both ledgers' logs are PREPEND-ordered; the replay walks from the
+    // tail so the root re-performs in occurrence order. Consumes re-check
+    // against the root's live set — a same-layer double-consume refuses
+    // HERE, deterministically, exactly as the join protocol demands. Only
+    // Own consumes ever enter the sites log (the arm's else branch), so
+    // the replay's ownership arg is Own by construction.
+    branch_replay_consumes(clog, len(clog) - 1)
+    branch_replay_verify(vdebt, len(vdebt) - 1)
+    // The diag replay is a RE-PERFORM, never a fold: each banked
+    // (diag, line) re-enters the root chain as a live report, so the
+    // root arm counts and scope-registers it and every forwarder
+    // (tighten_collector, the mcp bank) sees the structure — the old
+    // diag_absorb fold reached only the one handler that carried its
+    // arm, and a branch-fired report bypassed every collector.
+    branch_replay_diags(dfacts, 0)
   },
+}
+
+fn branch_replay_diags(ref dl, i) = if i >= len(dl) {
+  ()
+} else {
+  match dl[i] {
+    (d, l) => {
+      diag_report(d, l)
+      branch_replay_diags(dl, i + 1)
+    },
+  }
 }
 
 fn branch_replay_consumes(ref clog, i) = if i < 0 {
@@ -1782,15 +2033,14 @@ fn pre_register_stmt_final(seen, ref node) = match node {
       register_type_constructors(name, variants)
       seen
     },
-    NStmt(EffectDeclStmt(name, params, ops)) => {
-      register_effect_ops(name, params, ops)
-      seen
-    },
     NStmt(HandlerDeclStmt(hname, _ename, config, state, arms)) => {
       pre_register_handler_sig(hname, config, state, arms)
       seen
     },
-    _ => seen,
+    _ => // EffectDeclStmt registered in the pre_register_effect phase — the
+    // final's handler sigs read a complete effect env regardless of
+    // source order.
+    seen,
   },
 }
 
@@ -3167,7 +3417,7 @@ fn stage_continuation_boundary(cname: String, resume_input_h) = {
   )
 }
 
-// The heal fixpoint (see infer_program's call site): heal the recorded
+// The heal fixpoint (see the judgment passes' call sites): heal the recorded
 // sites, re-snapshot every decl's scheme over the healed graph, and stop
 // at the round that binds nothing. The trail position is the progress
 // meter (a round that asserts no new constraint leaves it unmoved).
@@ -6665,8 +6915,8 @@ fn bind_handler_state_names(state_binds, hname, span: ValidSpan) = each(
 // Per-fn summaries g(f) = the fn body's resume grade WITH call-substitution,
 // run as a monotone fixpoint over the 3-point Usage lattice: recursion
 // saturates to UMany by round 2 (try_each's self-call through its catch
-// lambda), no cycle detection needed. Runs at infer_program between
-// pre_register_decls and infer_stmt_list; builds its own name→body map from
+// lambda), no cycle detection needed. Runs in every judgment pass between
+// registration and the walk; builds its own name→body map from
 // the stmts directly (top-level AND nested fn decls — a nested name
 // colliding across scopes JOINS, the sound over-approximation direction).
 // draw_op_edges reads the summaries through resume_grade's substitution, so
@@ -6677,7 +6927,7 @@ effect ResumeSummaries {
   set_summaries([(String, Usage)])
 }
 
-// The standing ctx — infer_program installs it; the fixpoint's result lives
+// The standing ctx — every judgment pass installs it; the fixpoint's result lives
 // here for every later resume_grade call (draw_op_edges at each handler).
 handler resume_summaries_ctx with entries = [] {
   summary_of(name) => resume(usage_summary_lookup(entries, name, 0)),

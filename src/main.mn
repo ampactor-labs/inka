@@ -1044,7 +1044,7 @@ fn line_end_offset(ref text, ls) = {
 fn serve_run() = {
   // The transport reads a LIVE graph: handle_did_open runs driver_check, whose
   // inference performs Consume / Region / Verify / LookupTy (the analysis ops
-  // infer_program leaks past its own infer_ctx install). The core installs
+  // the judgment leaks past its own infer_ctx install). The core installs
   // HERE, at the session boundary via infer_context (pipeline.mn — this
   // chain's env-before-graph comment is that bracket's written law), so the
   // graph the frontend populates persists across every hover / definition /
@@ -1905,7 +1905,7 @@ fn battery_expect_digits(src, i, acc) with Memory = if i >= byte_len(src) {
 // unopenable destination.
 fn battery_compile(src, wat_path) = infer_context(() => {
   let lowered =
-    src |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main
+    src |> infer_program_converged |> saturate_pass |> lower_program |> reachable_from_main
   // THE SAME law executable_gate applies, batch-shaped: refusal = holes +
   // ARMED classes only. Unarmed errors surface on stderr and the compile
   // proceeds — the sound-incomplete contract; the battery must not be
@@ -2095,8 +2095,7 @@ fn repl_run() = {
 fn repl_eval_line(line) = if byte_len(line) == 0 {
   ""
 } else {
-  let ast = line |> frontend
-  infer_program(ast)
+  infer_program_converged(line)
   render_query_result(ask(parse_query_string("type main")))
 }
 

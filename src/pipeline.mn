@@ -122,7 +122,7 @@ fn infer_context(body) =
 fn compile(entry_module) = infer_context(() => {
   // driver_check_entry infers the deps DAG + the entry ONCE and returns
   // the entry's already-typed AST — compile lowers that live graph, no
-  // second fs_read / frontend / infer_program (Carried-Truth: the entry
+  // second fs_read / re-judgment (Carried-Truth: the entry
   // is proven once and read live, never re-derived).
   entry_module |> driver_compile_entry |> compile_remainder
 } ~> wat_stdout ~>
@@ -461,193 +461,6 @@ fn resume_image(img_path) = infer_context(() => {
   compile_remainder(warm_program())
 } ~> wat_stdout ~> persist_to_disk ~> fail_exit ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
-// The quiet trial's diagnostics policy: the trial pass exists only to
-// finalize schemes — every verdict re-derives sharper in the final pass,
-// so reports drop and the ledger reads answer empty. All three Diagnostic
-// ops carry arms (a partial-effect handler leaves zero fn slots; a perform
-// through one is a garbage dispatch — the tighten_collector constraint).
-handler diag_quiet {
-  diag_report(d, _line) => resume(),
-  diag_errors() => resume(0),
-  diag_refusals() => resume(0),
-}
-
-// The converged judgment (Hβ.infer.order-independent-verdicts): one
-// source, quiet rounds of the one walk until the published schemes'
-// fingerprints STABILIZE, then the reporting final. The trial's finals
-// are hypotheses (its source-order walk reads loose pre-registrations at
-// forward references — the measured lb↔i divergence on the classify /
-// escape / crc family); each quiet round re-judges fresh nodes against
-// the prior round's finals through the latest-wins env, and the stop
-// condition — round K's fingerprints == round K-1's — is the convergence
-// contract made mechanical. The reporting final then publishes schemes
-// EQUAL to the converged set, so the branch bracket's frozen layer bases
-// read the same truth the live walk would. A bounded non-convergence is
-// LOUD (the names' judgments oscillate — an order-sensitivity the medium
-// names instead of laundering); the march's m3 == m4 stays the outer
-// oracle.
-fn infer_program_converged(src) = match {
-  src |> frontend |> infer_program_trial
-} ~> diag_quiet {
-  (rows, trial_start) => {
-    let flat_rows = list_to_flat(rows)
-    // THE LAYERS ARE PARSE TRUTH, read where it lives: each stmt's free
-    // names (collect_free_vars over its own subtree) are its reference
-    // edges — the DAG, total and judgment-independent. The retired
-    // range-scan re-derived dependency from reasons inside each stmt's
-    // INFERENCE-mint range, but VarLookup reasons land on the PARSE
-    // nodes — minted before the trial's watermark, outside every range —
-    // so the scan read zero edges (measured: every stmt layer 0, every
-    // frozen base the prepass env, payloadfn's residual chain severed at
-    // the pre-arms scheme). The frees collect ONCE and serve both the
-    // layers and the incremental cone below.
-    let frees_all = stmt_frees(frontend(src))
-    let layers = stmt_layers_ast(frees_all, flat_rows)
-    let prints = round_prints(flat_rows)
-    converge_rounds(src, flat_rows, layers, frees_all, prints, prints, 1)
-  },
-}
-
-// THE INCREMENTAL ROUNDS — the changed cone (Mentl's own steering,
-// 2026-07-26: "the unchanged names are a warm cone he re-judges
-// anyway"). Round 1 re-judges everything (every input moved
-// loose → final); round K+1 re-judges ONLY stmts whose own fingerprint
-// moved between the last two rounds or whose free names' fingerprints
-// moved — the one-hop cone, which the iteration closes transitively. A
-// skipped stmt's final persists in the env by latest-wins, so its
-// fingerprint CARRIES through round_prints with zero special-casing,
-// and the stop condition is unchanged. The cone is a pure comparison
-// of the two carried print lists — the live env at cone time IS the
-// last round's finals, so an env read here could only ever answer
-// "unmoved"; the delta lives in the pair. This is the incremental
-// cursor running inside the judgment itself.
-fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round) = if round >= 12 {
-  eprint_string("convergence: schemes still moving after {int_to_str(round)} rounds — judging with the last round's finals; the fixpoint oracle arbitrates\n")
-  eprint_string("convergence: movers:{movers_line(flat_rows, prev_prints, prints, 0, 0)}\n")
-  converge_finish(src, flat_rows, layers)
-} else {
-  let mask = if round == 1 {
-    mask_all(len(flat_rows))
-  } else {
-    cone_mask(flat_rows, prev_prints, prints, frees_all)
-  }
-  match {
-    src |> frontend |> infer_program_round(mask, flat_rows)
-  } ~> diag_quiet {
-    (rows2, _start2) => {
-      let flat2 = list_to_flat(rows2)
-      let prints2 = round_prints(flat2)
-      if prints_equal(prints, prints2) {
-        converge_finish(src, flat2, layers)
-      } else {
-        converge_rounds(src, flat2, layers, frees_all, prints, prints2, round + 1)
-      }
-    },
-  }
-}
-
-fn converge_finish(src, flat_rows, layers) = {
-  // The final's parse START, captured before its own frontend: the crc
-  // walk's lower bound, so the backtick judge reads only THIS pass's
-  // comment cells — prior generations' parses left their text in place.
-  //
-  // drift-audit: ignore — sequenced effectful read (the pre-frontend frontier, the comment walk's lower bound)
-  let pstart = graph_next()
-  src |> frontend |> infer_program_final(flat_rows, layers, pstart)
-}
-
-fn mask_all(n) = mask_all_walk(make_list(n), 0, n)
-
-fn mask_all_walk(own m, i, n) =
-  if i >= n { m } else { mask_all_walk(list_set(m, i, true), i + 1, n) }
-
-// The bound-hit report names its residue: which stmts' fingerprints were
-// still moving when the round bound cut the loop (first sixteen — the
-// class is what matters, not the tail).
-fn movers_line(ref rows, ref prev_prints, ref cur_prints, i, shown) = if i >= len(rows) || shown >= 16 {
-  ""
-} else {
-  match rows[i] {
-    (name, _) => if name != "" && cur_prints[i] != prev_prints[i] {
-      " {name}{movers_line(rows, prev_prints, cur_prints, i + 1, shown + 1)}"
-    } else {
-      movers_line(rows, prev_prints, cur_prints, i + 1, shown)
-    },
-  }
-}
-
-// The cone: a stmt re-judges when its own print moved between the last
-// two rounds, or any free name it references moved in that window.
-fn cone_mask(ref rows, ref prev_prints, ref cur_prints, ref frees_all) = {
-  let moved = moved_names(rows, prev_prints, cur_prints, 0, smap_new())
-  cone_mask_walk(prev_prints, cur_prints, frees_all, moved, make_list(len(rows)), 0)
-}
-
-fn moved_names(ref rows, ref prev_prints, ref cur_prints, i, acc) = if i >= len(rows) {
-  acc
-} else {
-  match rows[i] {
-    (name, _) => moved_names(
-      rows,
-      prev_prints,
-      cur_prints,
-      i + 1,
-      if name == "" || cur_prints[i] == prev_prints[i] { acc } else { smap_add(acc, name, 1) }
-    ),
-  }
-}
-
-fn cone_mask_walk(ref prev_prints, ref cur_prints, ref frees_all, ref moved, own m, i) = if i >= len(prev_prints) {
-  m
-} else {
-  let hit = cur_prints[i] != prev_prints[i] || frees_hit(frees_all[i], moved, 0)
-  cone_mask_walk(prev_prints, cur_prints, frees_all, moved, list_set(m, i, hit), i + 1)
-}
-
-fn frees_hit(ref frees, ref moved, j) = if j >= len(frees) {
-  false
-} else {
-  match smap_get(moved, frees[j]) {
-    Some(_) => true,
-    None => frees_hit(frees, moved, j + 1),
-  }
-}
-
-// Every stmt's free-name list, collected once from the parse tree.
-fn stmt_frees(ref stmts) = stmt_frees_walk(stmts, make_list(len(stmts)), 0)
-
-fn stmt_frees_walk(ref stmts, own out, i) = if i >= len(stmts) {
-  out
-} else {
-  stmt_frees_walk(stmts, list_set(out, i, list_to_flat(collect_free_vars(stmts[i], []))), i + 1)
-}
-
-// The stmt-layer projection over PARSE truth: a stmt's depth is one past
-// the deepest earlier stmt its free names reference (backward edges
-// only — a forward name resolves the published final and orders
-// nothing). Free names that key no decl (lib vocabulary, locals) answer
-// depth 0 through the index miss. This is the DAG the fan's frozen
-// bases require complete: every reference IS an edge here, because
-// collect_free_vars walks the source itself.
-fn stmt_layers_ast(ref frees_all, ref rows) = {
-  let name_idx = layer_name_index(rows, 0, smap_new())
-  ast_layers_walk(frees_all, name_idx, make_list(len(frees_all)), 0)
-}
-
-fn ast_layers_walk(ref frees_all, ref name_idx, own depths, i) = if i >= len(frees_all) {
-  depths
-} else {
-  let d = frees_depth(frees_all[i], name_idx, depths, i, 0, 0)
-  ast_layers_walk(frees_all, name_idx, list_set(depths, i, d), i + 1)
-}
-
-fn frees_depth(ref frees, ref name_idx, ref depths, i, j, best) = if j >= len(frees) {
-  best
-} else {
-  let d = backward_depth(name_idx, depths, frees[j], i)
-  frees_depth(frees, name_idx, depths, i, j + 1, if d > best { d } else { best })
-}
-
 fn compile_stdin() = infer_context(() => {
   read_stdin() |> infer_program_converged |> compile_remainder
 } ~> wat_stdout ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
@@ -682,9 +495,9 @@ fn pipeline_check(entry_module) = infer_context(() => {
 // Legacy single-source entry — for tests that pass raw source
 // without filesystem layout. No caching; full re-infer each call.
 fn compile_source(source) =
-  infer_context(() => source |> frontend |> infer_program |> compile_remainder ~> wat_stdout ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
+  infer_context(() => source |> infer_program_converged |> compile_remainder ~> wat_stdout ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
-fn check_source(source) = infer_context(() => source |> frontend |> infer_program ~> mentl_default)
+fn check_source(source) = infer_context(() => source |> infer_program_converged ~> mentl_default)
 
 fn query(entry_module, question) = infer_context(() => {
   // COLD by the swap-crossing law (Hβ.session.resident-verbs — the
@@ -750,7 +563,7 @@ fn analyze_fns(entry_module, projection) = infer_context(() => {
   // "-" is the stdin contract (self-contained source, the bare
   // compile's own path); anything else resolves through the driver DAG.
   let ast = if entry_module == "-" {
-    read_stdin() |> frontend |> infer_program
+    read_stdin() |> infer_program_converged
   } else {
     driver_check_entry(entry_module)
   }
@@ -835,7 +648,7 @@ fn audit(entry_module) = analyze_fns(entry_module, audit_project)
 // queue_merger handles the OracleQuery ops the surfaces (voice) perform.
 //
 // This composition exhibits ALL FIVE verbs at the project level:
-//   |>  source through frontend |> infer_program |> ... |> emit
+//   |>  source through infer_program_converged |> ... |> emit
 //   <|  source borrowed to four surface projections (cursor_session)
 //   ><  multi-module parallel composition
 //   ~>  handler stack — diagnostics outermost, project_queue_merger
@@ -846,9 +659,6 @@ fn audit(entry_module) = analyze_fns(entry_module, audit_project)
 // — the edit IS the compile IS the projection IS the loop closing.
 fn ic_compile_loop(initial_entry) =
   initial_entry |> driver_check ~> project_queue_merger <~ accumulate(empty_queue())
-
-// frontend — lex |> parse
-fn frontend(source) = source |> lex |> parse_program
 
 // env_handler — scoped binding stack (spec 04)
 // Peer of graph_handler. One writer (inference). Scoping via
@@ -864,6 +674,11 @@ fn frontend(source) = source |> lex |> parse_program
 // bump (amortized-doubling growth); scope-exit resets count to mark, O(1),
 // no truncation walk; lookup = a backward index-walk over the flat
 // buffer, ZERO allocation. Shadowing is position, exactly as before.
+// type Env + effect EnvRead/EnvWrite/BranchEnv declare in types.mn —
+// the op vocabulary's home is the LOWEST module every performer
+// imports (infer/lower/driver/cursor/query all perform env reads;
+// none can import this module). The handlers stay here.
+//
 // ── O(1) env resolution — the str_hash-bucket index (§5.O layer 2) ──────────
 // A binding is an edge env_extend DREW; the index reads the edge in O(1): a
 // 4096-bucket str_hash array over the flat buffer, each bucket a prepended
@@ -871,7 +686,7 @@ fn frontend(source) = source |> lex |> parse_program
 // (position < count) binding validated against the buffer — latest-wins,
 // O(1) amortized. Carried-Truth: read the handle, never re-scan. (The
 // linear-scan form this replaced was the §5.O convergent hot path; its
-// fallback survived here until 2026-07-24, when the profile showed the
+// fallback survived until 2026-07-24, when the profile showed the
 // stale-bucket case was HOT, not rare — every scope re-entry reuses
 // positions — and the validated walk made it unreachable.)
 fn env_index_new() with Memory + Alloc = list_filled(4096, [])
@@ -995,20 +810,122 @@ fn env_entry_is_variants(ref _scheme, ref kind) with Pure = match kind {
 fn env_resolve_variants(ref buf, count, ref idx, name: String) with Memory =
   env_resolve_where(buf, count, idx, name, env_entry_is_variants)
 
-// ── The lex-name intern — intern_table (§5.O layer 1) ───────────────────────
-// One row per unique name: (canonical String, handle, keyword kind). The
-// canonical instance is materialized FLAT once at first sight and every
-// repeat occurrence returns the SAME pointer through a hash probe — zero
-// allocation, zero keyword compares (the row carries the classification the
-// old per-occurrence keyword chain re-derived ~1e5 times). str_hash_loop over
-// the source range IS the hash (no slice minted to hash); str_eq_at is the
-// range compare. Handle 0 reserved = absent; count starts at 1. TWO entry
-// paths, one table: intern_span (lex — a source range) and intern_str (a
-// whole String — the EffName mints and any name born outside a token).
-// Both classify through keyword_kind at insert, so a name first seen via
-// intern_str still lexes correctly as a keyword on a later intern_span hit.
-// entries is the reverse read (handle → canonical) intern_name_of serves —
-// the render/emit projection; comparisons never read it.
+// The snapshot's dedup — resolution semantics as a list, read from the
+// EDGE THE INDEX ALREADY DRAWS (Carried-Truth at the snapshot): an
+// entry survives iff its position IS its name's latest live position,
+// answered by the same O(1) bucket probe every lookup makes. One
+// forward walk over the FLAT buffer, keepers written flat
+// (buffer-counter, sliced) so consumers keep index-cheap access. The
+// first form here was a seen-list scan over the raw buffer returning
+// a cons spine — three snapshot calls per self-compile (the gate's two
+// + the redrive census) cost ~20 minutes at wheel scale (O(n²) string
+// probes over the round-multiplied entries) and every consumer's
+// list_index went O(depth); the march stayed CLEAN through it, so the
+// slowness was the only defect — this is the same fix at the same law
+// as env_resolve's own bucket walk.
+fn env_dedup_latest(ref buf, count, ref idx, shadow_buf, shadow_count, shadow_idx) with Memory + Alloc =
+  env_dedup_walk(buf, count, idx, shadow_buf, shadow_count, shadow_idx, make_list(count), 0, 0)
+
+fn env_dedup_walk(ref buf, count, ref idx, ref sbuf, scount, ref sidx, own out, i, kept) with Memory + Alloc = if i >= count {
+  slice(out, 0, kept)
+} else {
+  match list_index(buf, i) {
+    (name, scheme, reason, kind) => {
+      let b = i32_and(str_hash(name), 4095)
+      let latest = env_bucket_pos(buf, list_index(idx, b), name, count, 0, len(list_index(idx, b)))
+      // Survive iff this IS the name's latest position here AND no
+      // shadowing level holds the name (the branch's private entries
+      // shadow the base; the root passes the empty shadow).
+      let shadowed = if scount > 0 {
+        env_bucket_pos(sbuf, list_index(sidx, b), name, scount, 0, len(list_index(sidx, b))) >= 0
+      } else {
+        false
+      }
+      if latest == i && !shadowed {
+        env_dedup_walk(
+          buf,
+          count,
+          idx,
+          sbuf,
+          scount,
+          sidx,
+          list_set(out, kept, (name, scheme, reason, kind)),
+          i + 1,
+          kept + 1
+        )
+      } else {
+        env_dedup_walk(buf, count, idx, sbuf, scount, sidx, out, i + 1, kept)
+      }
+    },
+  }
+}
+
+// Config: a BRANCH CURSOR (the parallel fan's per-thread instance) installs
+// over the root's SHARED entries as a read-only BASE — its own extends land
+// in a fresh private buffer that dies at the join (publishes re-apply
+// through the root, in stmt order). The root installs pass the empty base,
+// so every resolve is one level exactly as before; a branch resolve tries
+// its private level first, then the base.
+handler env_handler(base_buf, base_count, base_index) with entries_buf = make_list(1024), entries_count = 0, scopes = [], index = env_index_new() {
+  env_lookup(name) => resume(match env_resolve(entries_buf, entries_count, index, name) {
+    None => env_resolve(base_buf, base_count, base_index, name),
+    found => found,
+  }),
+  env_lookup_type(name) => resume(match env_resolve_type(entries_buf, entries_count, index, name) {
+    None => env_resolve_type(base_buf, base_count, base_index, name),
+    found => found,
+  }),
+  env_lookup_ctor(name) => resume(match env_resolve_ctor(entries_buf, entries_count, index, name) {
+    None => env_resolve_ctor(base_buf, base_count, base_index, name),
+    found => found,
+  }),
+  env_lookup_variants(name) => resume(match env_resolve_variants(entries_buf, entries_count, index, name) {
+    None => env_resolve_variants(base_buf, base_count, base_index, name),
+    found => found,
+  }),
+  env_snapshot() => // Snapshots project the RESOLUTION SEMANTICS — each name's LATEST
+  // live entry, exactly what env_lookup answers — never the raw
+  // append-only buffer. The converged judge re-registers every decl
+  // per pass (trial + rounds + final), so the raw buffer holds one
+  // entry PER GENERATION per name: the ??-fan's vocabulary walked it
+  // and proposed the same fn three times (the sole-pure-survivor and
+  // two-survivor-tie legs both red, and the accept path refused the
+  // "tie" its own duplicates minted). A snapshot that aliased the
+  // mutable buffer would be the stale-read lie; the dedup walk copies.
+  // Composition mirrors resolution order: base entries survive unless
+  // the private level shadows their name; private entries dedup among
+  // themselves (the root passes the empty base, so its snapshot is one
+  // walk).
+  resume(Env(env_dedup_latest(base_buf, base_count, base_index, entries_buf, entries_count, index) ++ env_dedup_latest(entries_buf, entries_count, index, make_list(0), 0, env_index_new()))),
+  env_base_view() => // The branch join surface (BranchEnv), answering by instance position:
+  // the ROOT instance's view is the layer-start base capture (the buffer
+  // is append-only and the count freezes the extent, so the triple is a
+  // true snapshot without a copy); a BRANCH instance's publishes are its
+  // private entries in occurrence order — the log the join replays
+  // through the root's env_extend, Reasons riding whole.
+  resume((entries_buf, entries_count, index)),
+  env_publishes() => resume(list_to_flat(slice(entries_buf, 0, entries_count))),
+  env_extend(name, scheme, reason, kind) => {
+    let grown = if entries_count >= len(entries_buf) {
+      list_copy_into(entries_buf, make_list(len(entries_buf) * 2), 0, entries_count)
+    } else {
+      entries_buf
+    }
+    resume() with entries_buf = list_set(grown, entries_count, (name, scheme, reason, kind)), entries_count = entries_count + 1, index = env_index_add(index, name, entries_count)
+  },
+  env_scope_enter() => // drift-audit: ignore — O(1) mark push, one per scope enter, popped by scope exit
+  resume() with scopes = scopes ++ [entries_count],
+  env_scope_exit() => if len(scopes) == 0 {
+    resume()
+  } else {
+    let mark = last(scopes)
+    resume() with entries_count = mark, scopes = drop_last(scopes)
+  },
+}
+
+// effect Intern declares in types.mn — the vocabulary home every
+// performer imports (lex and the EffName mints live below this
+// module). The handlers stay here.
 fn intern_probe(ref bucket, ref src, s, e, i, n) with Memory = if i >= n {
   None
 } else {
@@ -1082,60 +999,6 @@ handler intern_view(buckets0, entries0, count0) {
   intern_seed() => resume((buckets0, entries0, count0)),
 }
 
-// Config: a BRANCH CURSOR (the parallel fan's per-thread instance) installs
-// over the root's SHARED entries as a read-only BASE — its own extends land
-// in a fresh private buffer that dies at the join (publishes re-apply
-// through the root, in stmt order). The root installs pass the empty base,
-// so every resolve is one level exactly as before; a branch resolve tries
-// its private level first, then the base.
-handler env_handler(base_buf, base_count, base_index) with entries_buf = make_list(1024), entries_count = 0, scopes = [], index = env_index_new() {
-  env_lookup(name) => resume(match env_resolve(entries_buf, entries_count, index, name) {
-    None => env_resolve(base_buf, base_count, base_index, name),
-    found => found,
-  }),
-  env_lookup_type(name) => resume(match env_resolve_type(entries_buf, entries_count, index, name) {
-    None => env_resolve_type(base_buf, base_count, base_index, name),
-    found => found,
-  }),
-  env_lookup_ctor(name) => resume(match env_resolve_ctor(entries_buf, entries_count, index, name) {
-    None => env_resolve_ctor(base_buf, base_count, base_index, name),
-    found => found,
-  }),
-  env_lookup_variants(name) => resume(match env_resolve_variants(entries_buf, entries_count, index, name) {
-    None => env_resolve_variants(base_buf, base_count, base_index, name),
-    found => found,
-  }),
-  env_snapshot() => // Snapshots copy the live prefix — rare (module boundaries), and a
-  // snapshot that aliased the mutable buffer would be the stale-read lie.
-  // A branch's snapshot is base-then-private in resolution order's
-  // reverse: the private prefix appended after the base view.
-  resume(Env(slice(base_buf, 0, base_count) ++ slice(entries_buf, 0, entries_count))),
-  env_base_view() => // The branch join surface (BranchEnv), answering by instance position:
-  // the ROOT instance's view is the layer-start base capture (the buffer
-  // is append-only and the count freezes the extent, so the triple is a
-  // true snapshot without a copy); a BRANCH instance's publishes are its
-  // private entries in occurrence order — the log the join replays
-  // through the root's env_extend, Reasons riding whole.
-  resume((entries_buf, entries_count, index)),
-  env_publishes() => resume(list_to_flat(slice(entries_buf, 0, entries_count))),
-  env_extend(name, scheme, reason, kind) => {
-    let grown = if entries_count >= len(entries_buf) {
-      list_copy_into(entries_buf, make_list(len(entries_buf) * 2), 0, entries_count)
-    } else {
-      entries_buf
-    }
-    resume() with entries_buf = list_set(grown, entries_count, (name, scheme, reason, kind)), entries_count = entries_count + 1, index = env_index_add(index, name, entries_count)
-  },
-  env_scope_enter() => // drift-audit: ignore — O(1) mark push, one per scope enter, popped by scope exit
-  resume() with scopes = scopes ++ [entries_count],
-  env_scope_exit() => if len(scopes) == 0 {
-    resume()
-  } else {
-    let mark = last(scopes)
-    resume() with entries_count = mark, scopes = drop_last(scopes)
-  },
-}
-
 // body_context — H1 emit-time per-fn-body metadata
 // Set at emit_fn_body entry; read by LEvPerform's offset arithmetic
 // (offset = 8 + 4*captures + 4*slot_idx within __state) and by any
@@ -1180,70 +1043,11 @@ handler wasi_filesystem {
   fs_rename(old_p, new_p) => resume(fs_rename_impl(old_p, new_p)),
 }
 
-// lookup_ty_graph — GraphRead → LookupTy bridge (spec 05)
-// The ONLY LookupTy handler in Phase 1. Declares GraphRead
-// (inherited from the outer graph_handler). Free and error-hole handles
-// resume TVar(h) — the honest word floor every consumer reads; a width a
-// site genuinely needs detonates at emit's loud floors, never here.
+// lookup_ty_graph (the GraphRead → LookupTy bridge, with the
+// specialization state) lives in graph.mn — the projection reads
+// graph_chase, and the branch bracket (infer.mn) installs it, so the
+// graph is the one home both import.
 //
-// The handler additionally carries the SPECIALIZATION state (spec_pairs): a
-// named-generic twin's emission brackets itself with spec_ctx_set/clear, and
-// while set, a free var answers through the site's EXACT instantiation pairs
-// (spec_subst_pairs, lower.mn — root-keyed; a free var whose root is not in
-// the pairs stays the honest floor TVar). State-swap, NOT handler-swap:
-// a second LookupTy handler would demote every lookup_ty perform out of the
-// singleton direct-dispatch tier — measured as ev-scan faults at infer sites
-// that never threaded evidence (they never needed to under the singleton).
-handler lookup_ty_graph with spec_pairs = [], spec_enc = "" {
-  spec_ctx_set(prs, e) => resume() with spec_pairs = prs, spec_enc = e,
-  spec_ctx_clear() => resume() with spec_pairs = [], spec_enc = "",
-  spec_enc_active() => resume(spec_enc),
-  lookup_ty(h) => match graph_chase(h) {
-    GNode(kind, reason) => if len(spec_pairs) > 0 {
-      match kind {
-        NBound(t) => resume(spec_subst_pairs(t, spec_pairs)),
-        NFree(_) => resume(spec_pair_or_var(h, spec_pairs)),
-        NErrorHole(_) => resume(spec_pair_or_var(h, spec_pairs)),
-        NRowBound(_) => resume(TUnit),
-        NRecordRowBound(_) => resume(TUnit),
-        NRowFree(_) => resume(TUnit),
-      }
-    } else {
-      match kind {
-        NBound(t) => resume(t),
-        NErrorHole(_) => // An error hole / free var resumes TVar(h) — CARRY THE HANDLE. The
-        // prior TName("ERROR_HOLE")/TName("UNRESOLVED") sentinels fabricated
-        // a NOMINAL type for a node the graph proves is unresolved: every
-        // downstream type-directed read then trusted the lie — the eq
-        // dispatch minted a structural-sum helper $eq_nUNRESOLVED that read
-        // a raw Int operand as a variant pointer (memory at address 44100 as
-        // a tag word). TVar(h) is the truth: repr_of reads the word floor,
-        // fold_sig reads "i", eq reads word identity — the honest
-        // productive-under-error floor at every consumer, no second sentinel
-        // channel. (A quantified var's == at a GENERIC body is word identity
-        // by the same floor; the type-directed eq for a generic operand at
-        // its instantiated width is the evidence-passing band —
-        // Hβ.emit.generic-boundary-repr-coercion.)
-        resume(TVar(h)),
-        NFree(_) => // A free var read at lower is NOT an error — it is a legal quantified
-        // parameter of a reachable generic declaration (generalize's Forall is
-        // the graph's own proof; `fn ident(x) = x` called from main carries
-        // one), and repr_of floors it to the honest word by design. The per-read
-        // report here re-derived "free = error" against that proof — 182
-        // false diagnostics on a clean runtime-lib compile, the whole
-        // frontier-gate debt class. A GENUINELY stuck width still detonates
-        // at emit's loud comment-marked floors (field-offset-unprovable, the
-        // ft mismatch), at the site that actually needs the width — the
-        // consumer owns the refusal, never the read.
-        resume(TVar(h)),
-        NRowBound(_) => resume(TUnit),
-        NRecordRowBound(_) => resume(TUnit),
-        NRowFree(_) => resume(TUnit),
-      }
-    },
-  },
-}
-
 // diag_line lives beside diag_message in types.mn now — the render moved
 // to the report BOUNDARY (the report fn), so the arms below receive the
 // finished line and never render.
@@ -1289,60 +1093,12 @@ handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
   diag_errors() => resume(errors),
   diag_refusals() => resume(refusals),
   diag_scope(sc) => resume() with scope = sc,
-  diag_absorb(dlines, derr, dref) => // The branch join (BranchDiag): re-print the branch's pre-rendered
-  // facts in their occurrence order and fold its tally into this one —
-  // the count and the counter stay one handler, and the root's scope
-  // register applies here exactly as at the live arm (the branch is
-  // scope-ignorant; errors always re-print).
-  {
-    each(
-      (f) => match f {
-        (line, sl, iserr) => if iserr {
-          eprint_string(line)
-        } else {
-          match scope {
-            ScopeAll => eprint_string(line),
-            ScopeNone => (),
-            ScopeAt(sstart, snlines) => if sl >= sstart && sl < sstart + snlines { eprint_string(line) },
-          }
-        },
-      },
-      dlines
-    )
-    resume() with errors = errors + derr, refusals = refusals + dref
-  },
 }
 
-// diag_branch — the branch cursor's per-stmt collector (Phase C, C1c-2).
-// Same projections as the root arm, rendered AT THE PERFORM (live
-// values), banked as lines instead of printed; the local tally answers
-// any in-branch diag_errors/diag_refusals read with branch-local truth.
-// diag_lines_taken hands the whole fact set to the join.
-handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals = 0 {
-  diag_report(diag, line) => // The banked fact carries the span start-line and the error bit beside
-  // the rendered line, so the root's diag_absorb can apply the scope
-  // register (types.mn DiagScope) at the join — the branch itself stays
-  // scope-ignorant; the register has one home.
-  match diag_span(diag) {
-    Span(sl, _, _, _) => {
-      let iserr = diag_severity(diag) == SError
-      let grown = list_set(list_extend_to(lines, count + 1), count, (line, sl, iserr))
-      if iserr {
-        if diag_refuses(diag) {
-          resume() with lines = grown, count = count + 1, errors = errors + 1, refusals = refusals + 1
-        } else {
-          resume() with lines = grown, count = count + 1, errors = errors + 1
-        }
-      } else {
-        resume() with lines = grown, count = count + 1
-      }
-    },
-  },
-  diag_errors() => resume(errors),
-  diag_refusals() => resume(refusals),
-  diag_lines_taken() => resume((list_to_flat(slice(lines, 0, count)), errors, refusals)),
-}
-
+// diag_branch (the branch cursor's per-stmt collector) lives in
+// infer.mn beside diag_quiet — the branch bracket and the join are its
+// only consumers.
+//
 // FreshHandle — two handlers, same function. Inference mints via
 // graph_fresh_ty (stored in graph) — that handler lives in infer.mn, its
 // op's own layer, so synth's re-inference chain reaches it through

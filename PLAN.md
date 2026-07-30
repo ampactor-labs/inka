@@ -1092,6 +1092,121 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-29 · ▶▶▶▶ THE ONE JUDGE — every judgment site runs the
+  converged walk, and the single-pass infer_program DELETES
+  (Hβ.infer.order-independent-verdicts' daily-verb face closes ·
+  pin 223452c1, superseding the session's three intermediates —
+  9d346047 the one-judge TRANSITION, 4d50895d effects-home +
+  structured bank, afff6ade the O(n²) snapshot dedup — as the frontier
+  and the march clock convicted each; the arc's facts below). THE SEAM,
+  probe-first: the audit-banks landing had
+  named a tuple list meeting str_concat_all's [String] with no refusal;
+  the b1 probe minimized it — a fn declared AFTER its caller judged
+  through the DAG path read the LOOSE pre-registration, so its [tuple]
+  return bound silently against [String] (zero diagnostics, the
+  runtime flat_fill trap), while the backward-declared twin refused
+  cleanly. The consumer census then named the split: the converged
+  judge served stdin/compile/mcp only; check/audit/teach/at/field/
+  session/repl/battery/warm-cone ran single-pass at driver.mn's three
+  sites, driver_check_module, analyze_fns' stdin arm,
+  compile_source/check_source, battery_compile, and repl_eval_line.
+  ALL NINE now run infer_program_converged; infer_program deleted with
+  its prose trued. THE OWNER SWEEP rode along where provable: the
+  free-vars family (collect_free_vars + fourteen kin) → parser.mn
+  (parse truth — lower's captures and the judgment's layers both read
+  it, and infer←lower was the cycle that had stranded the cluster);
+  the convergence cluster + frontend + diag_quiet + diag_branch →
+  infer.mn beside the trial/round/final walks; the spec trio
+  (spec_pairs_find/pair_or_var/subst_pairs) + lookup_ty_graph +
+  effect LookupTy → graph.mn; effect EnvRead/EnvWrite/BranchEnv/
+  Intern moved BESIDE their handlers (the effect-beside-handler law:
+  a handler judged before its effect declares registers a broken
+  identity — its install then absorbs NOTHING and a fully-handled
+  program refuses at the gate, measured live when env_handler moved
+  ahead of types.mn). THE EFFECTS PREPASS PHASE lands with it
+  (pre_register_effect — the pre_register_alias precedent one
+  namespace over): effects register whole before ANY handler sig, in
+  the trial, every round, and the final. And the trial RETURNS ITS
+  STMTS: the converged arm's frees walk read them instead of
+  re-parsing — the arm-position frontend ran OUTSIDE diag_quiet (R2)
+  and double-reported every check's parse narration; the re-parse is
+  deleted (Carried-Truth). THE BLOCKED HALF, named with its conviction:
+  relocating env_handler/intern_table OUT of pipeline.mn flips main's
+  row to carry a present Intern no spine component explains — seven
+  bisect blobs (order hoists, import strips, phase/frees reverts)
+  isolated the PLACEMENT itself as the trigger while every local
+  mechanism died to a probe (rows measured via Pure-pin printing:
+  every verb arm, dispatch, the chain handlers, print_error_and_help
+  all Intern-free; the parts don't sum to the whole). That is the
+  12-round oscillation's attractor selection biting as semantics —
+  BOTH trees bound-hit (movers: the walk_lemit family,
+  driver_incremental, the judgment fns, resume_bindings,
+  resolve_field_offset, mentl_edit_session, float_to_str, the dsp
+  Sample/pac pair), silently until today; the movers eprint now rides
+  every daily verb's stderr, loud. Hβ.infer.round-oscillation-movers
+  names the dig (the residue index carries it); env.mn stays the named
+  destination. GATES: mn-check-forward-order REFUSES through this
+  pin's check (E_TypeMismatch at its file-local call span) and was
+  measured SILENT through the prior boot — the frontier leg banks both
+  faces; TRANSITION m3 == m4 at 338,467 lines (the 102,124-line m2/m3
+  diff is the emit changes crossing one generation); census 0 (two
+  honest widens: driver_check_module/check_entry +WASI — the
+  convergence movers eprint). Known inherited finds now visible on the
+  daily path, each real before today: ONE E_PurityViolated on the main
+  DAG (weave 12995 — a with-Pure fn whose body allocates; solo-module
+  checks stay clean, the entry-conditional class), the infer.mn:1826
+  bracket's E_MissingVariable pair on lower/infer/driver entries
+  (healed for the handlers this sweep homed; verify_ledger's import
+  landed), and the weave-coordinate span render on DAG diagnostics
+  (the named file-local-span class, now with a calibration: main.mn
+  renders at +29,251 in its own check). THE SECOND WAVE, same session
+  (the intermediate pin's frontier ran 303/10 and convicted both):
+  (1) THE OP-VOCABULARY HOME LAW — moving effect EnvRead/EnvWrite/
+  BranchEnv/Intern beside their handlers broke the DAG manifest
+  (warm-start/warm-inc cold compiles refused E_MissingVariable on
+  env_lookup/intern_name_of: performers across infer/lower/driver/
+  cursor cannot import pipeline). An effect declares in the LOWEST
+  module every performer imports — types.mn for these; the
+  effect-beside-handler form holds exactly where the handler's module
+  IS that floor (graph.mn for LookupTy — every performer imports
+  graph, verified by census). (2) THE STRUCTURED DIAG BANK —
+  diag_branch banked (line, span-line, is-error), so on the converged
+  daily path (where every stmt judges through the branch bracket) a
+  branch-fired T_OverDeclared reached the collectors STRUCTURE-LESS:
+  `mentl tighten` printed the warning and authored nothing (the bank
+  read empty), and the mcp problem-space/edit legs starved the same
+  way. The bank carries (diag, line) now and the join RE-PERFORMS
+  diag_report per fact into the root chain — every Diagnostic
+  forwarder sees a branch report exactly as a live one, the root arm
+  counts and scope-registers off the diag itself, and diag_absorb
+  DELETES with both its arms (the fold reached only the one handler
+  carrying the arm — the partial-forwarder disease its own comment
+  had named). This also lands the file-local-span residue's banked
+  prerequisite ("the banked tuple must carry the span structurally"):
+  the span now rides the diag whole. (3) THE SNAPSHOT PROJECTS
+  RESOLUTION — the converged passes append one env entry PER
+  GENERATION per name, and env_snapshot returned the raw buffer: the
+  ??-fan's vocabulary proposed the same fn THREE times (the
+  sole-pure-survivor and two-survivor-tie legs red; the accept path
+  refused the "tie" its own duplicates minted). env_snapshot now
+  answers each name's LATEST live entry by probing the env's own O(1)
+  bucket index (an entry survives iff it IS its name's latest position
+  — the same edge every lookup reads), composed base-then-private for
+  branch instances. The first form — a seen-list scan returning a cons
+  spine — was itself convicted by the march clock (~20 minutes per
+  compile leg at wheel scale: O(n²) string probes over the multiplied
+  buffer at the gate's two reads + the redrive census, with every
+  consumer's list_index gone O(depth)) and superseded within the
+  session; the probed fan then answered `Propose: pure_seven()`, one
+  survivor. The re-measure, per its own law:
+  fixture-scale checks stay sub-second; the wheel-scale field read
+  (`mentl src/main.mn:0`) costs 58s against the single-pass 8.5s —
+  and the tax IS the oscillation (the movers keep the incremental
+  cone hot through all 12 bound rounds), so the movers dig is the
+  correctness root and the daily-verb perf root in one; the warm
+  image and the resident session are the standing absorbers
+  meanwhile. CLEAN m2 == m3 at 338,163 lines at the final pin.
+
 - 2026-07-29 · ▶ THE AUTHORED ROW SPEAKS INSTANCES — eff_name_label
   closes its own banked follow-up (CLEAN m2 == m3 · pin 04ba90a3). The
   label that lands IN SOURCE (the tighten patch, the with-clause
@@ -5919,6 +6034,29 @@ between the wheel and its ultimate form, held open on purpose.
 - 2026-06-18→23 · the reframe + the three-doc consolidation; the crown's EfOpen~EfNeg unify (b4b1989); the handler registry dissolved into the live read
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
+
+`Hβ.infer.round-oscillation-movers` (2026-07-29, the one-judge landing's
+conviction): the converged judgment hits its 12-round bound on the wheel
+in EVERY tree variant probed — the movers (the walk_lemit family,
+driver_incremental, infer_program_trial/round/final,
+infer_stmt_list_planned, resume_bindings, resolve_field_offset,
+mentl_edit_session, session_current, verify_each_enriched, float_to_str,
+Sample, pac_comodulogram) oscillate between at least two self-stable
+attractors, and WHICH attractor the bound lands on is
+stmt-position-sensitive: relocating env_handler/intern_table between
+modules flipped main's row to carry a present Intern that no spine
+component carries (seven bisect blobs; every local mechanism killed by a
+Pure-pin row probe — the row-printing bisection instrument this dig
+minted: declare the suspect `with Pure`/`with !E` and the mismatch
+prints its true row). The oscillation predates 2026-07-29 (the pinned
+tree bound-hits identically) and was silent until the one-judge landing
+put the movers eprint on every daily verb's stderr. The dig: per-mover
+fingerprint diffing across rounds (ty_fingerprint already renders the
+alpha-normal form; print the two attractors' schemes for one mover and
+the flip names its carrier), then the rebind/union carrier fixed at its
+mint — the K>1 dig's banked kill plan is the recipe. Its cash-out
+unblocks the env.mn/lexer.mn owner relocations (the sweep's blocked
+half) and retires the 12-round bound to a convergence proof.
 
 `Hβ.emit.arm-closure-captures-record` RESOLVED: LANDED (2026-07-24, pin
 bb4b870e — the ledger head carries the arc). The capture form won over

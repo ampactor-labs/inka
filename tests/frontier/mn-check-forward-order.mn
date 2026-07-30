@@ -1,0 +1,15 @@
+// The order-independent judge on the DAG path (the daily verbs' seam,
+// closed 2026-07-29): a fn declared AFTER its caller met the caller as a
+// loose pre-registration under the single-pass walk, so its [tuple]
+// return bound SILENTLY against the [String] parameter — zero
+// diagnostics, a runtime flat_fill trap (the audit_walk incident's
+// minimal form, the b1 probe). Through the converged judge every
+// forward reference resolves the callee's FINAL scheme, and this file
+// REFUSES with E_TypeMismatch at the call.
+fn use_it() = eat(mk2())
+
+fn mk2() = [(1, "a")]
+
+fn eat(xs: [String]) -> Int = 42
+
+fn main() = use_it()

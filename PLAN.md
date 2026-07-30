@@ -1092,6 +1092,18 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE DEBT SPEAKS THE DEVELOPER'S COORDINATES — the
+  four-times-paid hand map becomes a projection (pin 852c34dc). The
+  pending ledger's spans render as `path:local_line` through the
+  graph's own NModule seams (debt_module_seams reads the span log
+  once; the driver minted one NModule per woven file at discovery —
+  the same seam truth the comment re-homing pass reads); a seam-free
+  blob weave (stdin, the march) renders the raw span by construction.
+  The DAG face measured: `tests/frontier/mn-verify-interval:29`
+  where the weave's 5709 stood. Retires the session's named
+  weave-span→file:line confession (⟳(2) — the fourth hand-pay was
+  this landing's own trigger). CLEAN m2 == m3 at 348,178 lines;
+  census 0; frontier 323/0; proof-exactness 9/9.
 - 2026-07-30 · ▶ THE DEBT NAMES ITS PRODUCER — the voice annotation's
   placement trade (pin 44877c73). resolve_cursor_target gains
   `current_handle: Handle` + `-> Handle`: the Caret ctor's

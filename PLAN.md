@@ -6561,23 +6561,33 @@ THE CALLEE LEG LANDED same day (pin 5e34f710 — an authored return
 rides the pre-registered TFun as a Ty VALUE, so a call's bound reads
 the callee's annotation verbatim, uncontaminatable by class merging;
 the wrap/base fixture faces prove it; TRANSITION m3 == m4). THE
-REMAINING HALF: (1) the SELF-CALL IH — a recursive fn's own call
-must be granted the annotation-under-proof as its bound (seek's
-measured pend), and the sound discriminator is CLASS IDENTITY
-(a self-call's callee cell shares the DECL's union-find class; a
-tail-called OTHER fn's freshened ret also lands in the obligation
-target's class, so class-vs-TARGET is the launder — the g-case —
-while class-vs-DECL is exact); needs `graph_root_of` (the find step
-exposed as a GraphRead projection — a canonical read the union-find
-computes internally and never surfaces) + the decl handle threaded
-into the obligation (a Predicate carrier beside PWithSelf, ~8 arm
-sites). (2) The wheel's six standing `0 <= self` pendings
-(cursor:297 score_one_position's handle param · cursor:546
-scan_for_span's return · lexer:229's lex_from arg · main:1272/1437's
-ph flows · voice:1097's resolve_cursor_target) discharge via
-authored refined annotations whose echo/interval/callee legs the
-engine now honors — one-line annotations, march-measured each.
-TagId's 0..255 and the float intervals stay the SMT tier's.
+SELF-CALL IH IS BLOCKED BY THE PEEL, measured (2026-07-30 probe
+census, disposable build): at decide time the rec-callee's chased
+TFun ret is the PEELED TInt or a TVar (8 tint + 4 tvar across the
+fixture's callee/operand reads; the 5 callee reads all reach the
+TFun arm) — the value-ret survives the pre-registration but the
+class the rec-call actually resolves carries the peeled base, and
+the peel reaches PARAM classes too (a comparison's ground unify
+re-peels `i: Nat` to TInt), so any class-based IH read fights
+nondeterministic representative choice. Two prior discriminator
+specs REFUTED in the same dig: class-vs-DECL identity (a top-level
+rec-call instantiates a copy — never the decl's class) and the
+peel-window reorder (the rebind-first form re-opens the flow-echo
+launder). The arc REDIRECTS: the IH lands either on the peel's own
+fix (the most-refined representative surviving comparison unifies
+and the publish fold — the rebind law completed at every unify, not
+just the decl pin) or on Hβ.infer.schemes-are-edges (whose deletion
+of the publish/peel/rebind tower dissolves the question). Until
+then seek-shaped recursion pends honestly — visible debt, the
+system's contract. THE OTHER HALF stays live: the wheel's six
+standing `0 <= self` pendings (cursor:297 score_one_position's
+handle param · cursor:546 scan_for_span's return · lexer:229's
+lex_from arg · main:1272/1437's ph flows · voice:1097's
+resolve_cursor_target) discharge via authored refined annotations
+whose echo/interval/callee legs the engine honors — one-line
+annotations, march-measured each; the recursion-shaped ones
+(scan_for_span) wait on the IH. TagId's 0..255 and the float
+intervals stay the SMT tier's.
 
 `Hβ.infer.schemes-are-edges` — THE MENTL WAY for the judgment (named
 2026-07-30, Morgan's question "is there a better way — a more Mentl

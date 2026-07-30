@@ -1147,12 +1147,26 @@ between the wheel and its ultimate form, held open on purpose.
   CORRECTNESS GAIN, measured: in a scope where IO and Network are not
   declared at all, the old line still offered "Sandbox (proven no
   network access)" — a proof claimed about an effect that does not
-  exist there, and an unsayable `with !E` taught; a module declaring
-  nothing now has nothing severable, by construction. The
-  resident-session gate's `severable:` assertion had ENCODED that
-  fabricated vocabulary (the banked-expectation-is-a-hypothesis law,
-  fifth catch) — its fixture gains a declared effect so the leg tests
-  the tier honestly. THE PIN MACHINERY'S OWN FIRST LESSON rode along:
+  exist there. RETRACTED SAME DAY, and the retraction is the more
+  useful finding (Morgan's cut: "don't regress that — make the engine
+  meet the surface"): the resident-session leg's red was first read as
+  "a bare module has nothing severable, by construction," and THE
+  FIXTURE WAS EDITED to suit that reading — the regression, the
+  fixture bent to a weaker world instead of the world fixed. In the
+  SHIPPED world a bare module carries the substrate vocabulary (the
+  shim mounts MENTL_HOME, the prelude seeds the DAG): `with !Alloc` is
+  sayable and provable in any file with no imports, verified through
+  the installed verb. What the red actually reported: THE GATE'S OWN
+  mcp INVOCATION mounted only the project dir, so the agent-facing
+  session — the surface §0 says makes any proposer trustworthy —
+  derived with NO substrate vocabulary at all, and every propose
+  through it compiled against an empty world. The hardcoded three
+  literals had masked that for the leg's whole life (a literal needs
+  no env). Fixture bare again; the invocation gains the mount every
+  other leg and the shim itself carry. THE LAW, at the gate layer: a
+  gate must exercise the SHIPPED configuration — one that tests a
+  world no user inhabits cannot fail for the right reason, and it
+  taught a false lesson the moment it finally failed. THE PIN MACHINERY'S OWN FIRST LESSON rode along:
   this landing marched twice, and the march stacked a second
   placeholder block on the unnarrated first — an UNNARRATED head is a
   working step, not history, so emit_provenance now SUPERSEDES a

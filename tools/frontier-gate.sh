@@ -1755,16 +1755,18 @@ for i in "${!compilers[@]}"; do
   # (no swap exists — the image IS the session's memory).
   ses_dir="$dir/mcp-resident"
   mkdir -p "$ses_dir"
-  # The fixture DECLARES an effect: the severance tier reads the declared
-  # vocabulary live (2026-07-30 — the audit's F12), so a module declaring
-  # nothing has nothing severable, correctly and by construction (you
-  # cannot write `with !E` for a name that is not in scope). The declared
-  # Log gives the tier a real fact to speak.
-  # The declaration rides LAST: this leg banks exact coordinates (the `at`
-  # probe reads line 1), and a leading decl shifts every one of them —
-  # the same reason the pre-commit fmt rung excludes tests/.
-  printf 'fn double(x) = x * 2\n\nfn main() = double(21)\n\neffect Log { note(msg: String) }\n' > "$ses_dir/main.mn"
-  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ses_dir::." "$compiler" mcp \
+  # A BARE module — no imports, no declarations. The severance assertion
+  # below is the leg TEACHING what must be there: every Mentl program
+  # runs on the substrate, so `with !Alloc` is sayable and provable in
+  # any file without importing anything. When this went red under the
+  # severance tier's graph read, the fixture was briefly edited to suit
+  # the weaker world — the regression. The truth the red was reporting:
+  # the SESSION was deriving without the substrate vocabulary at all,
+  # because this invocation mounted only the project dir. The agent-
+  # facing gate must see the same world the CLI does (the shim's own
+  # mount, every other leg's mount) — the engine meets the surface.
+  printf 'fn double(x) = x * 2\n\nfn main() = double(21)\n' > "$ses_dir/main.mn"
+  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ses_dir::." --dir "$ROOT::/mentl-home" "$compiler" mcp \
     < "$ROOT/tests/frontier/mcp-resident-session.jsonl" >"$ses_dir/out.jsonl" 2>"$ses_dir/err.log"
   if [ "$(grep -c 'session: graph resident' "$ses_dir/err.log")" = "1" ] \
      && grep -q '"tools":\[{"name":"propose"' "$ses_dir/out.jsonl" \

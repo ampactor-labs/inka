@@ -1755,7 +1755,15 @@ for i in "${!compilers[@]}"; do
   # (no swap exists — the image IS the session's memory).
   ses_dir="$dir/mcp-resident"
   mkdir -p "$ses_dir"
-  printf 'fn double(x) = x * 2\n\nfn main() = double(21)\n' > "$ses_dir/main.mn"
+  # The fixture DECLARES an effect: the severance tier reads the declared
+  # vocabulary live (2026-07-30 — the audit's F12), so a module declaring
+  # nothing has nothing severable, correctly and by construction (you
+  # cannot write `with !E` for a name that is not in scope). The declared
+  # Log gives the tier a real fact to speak.
+  # The declaration rides LAST: this leg banks exact coordinates (the `at`
+  # probe reads line 1), and a leading decl shifts every one of them —
+  # the same reason the pre-commit fmt rung excludes tests/.
+  printf 'fn double(x) = x * 2\n\nfn main() = double(21)\n\neffect Log { note(msg: String) }\n' > "$ses_dir/main.mn"
   "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ses_dir::." "$compiler" mcp \
     < "$ROOT/tests/frontier/mcp-resident-session.jsonl" >"$ses_dir/out.jsonl" 2>"$ses_dir/err.log"
   if [ "$(grep -c 'session: graph resident' "$ses_dir/err.log")" = "1" ] \

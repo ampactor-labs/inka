@@ -1092,6 +1092,54 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE SEVERANCE VOCABULARY IS A GRAPH READ — the
+  selfhood audit's F12, and the audit report's own headline executed
+  (pin 1cb58126). Morgan's second dispatch ("audit all the ways Mentl
+  can be more ITSELF") returned fifteen findings ranked by
+  identity-leverage (.build/research/selfhood-audit-2026-07-30.md);
+  its closing paragraph is the sharpest statement of the project's
+  state yet written: THE MEDIUM STILL KEEPS A COPY OF WHAT IT KNOWS,
+  AND THEN READS THE COPY — a scheme published as a snapshot and
+  re-read by name (F4, the tower), a binding stored in a buffer with a
+  string-keyed index beside it instead of drawn as an edge (F5), 390
+  index-threaded loops each a copy of the position the structure
+  already holds (F1), the roadmap a copy of the absences the comment
+  weave carries and the frontier ranks (F7), 11,239 lines of prose a
+  copy of measurements the artifact holds (F8), the drift catalog a
+  regex copy of what a row states (F6) — and the five verbs' near-
+  absence is the SURFACE SYMPTOM of that, not a separate problem
+  ("a medium that reads copies has nothing to fan out over and no
+  cycle to close — the topology is only visible once the truth is
+  live"). Its cheapest item lands now: three interned literals named
+  the audit's severance vocabulary while the env held every effect
+  declaration in scope, so the audit could never tell a fn it could
+  prove !Mutate / !WASI / !Thread, and every fn got the identical
+  three-name constant where §5's felt endpoint asks for a gradient.
+  severance_vocabulary FOLDS EffectDeclKind out of env_snapshot — the
+  env's own "this name is an effect" edge — so a newly-declared
+  effect enters the audit by construction; the literal list and its
+  drift marker delete. The teaching tier leads with severances whose
+  absence unlocks a NAMED capability and counts the rest (28 in the
+  wheel's DAG scope), and a body with provable severances but no
+  capability named still speaks rather than going silent. THE
+  CORRECTNESS GAIN, measured: in a scope where IO and Network are not
+  declared at all, the old line still offered "Sandbox (proven no
+  network access)" — a proof claimed about an effect that does not
+  exist there, and an unsayable `with !E` taught; a module declaring
+  nothing now has nothing severable, by construction. The
+  resident-session gate's `severable:` assertion had ENCODED that
+  fabricated vocabulary (the banked-expectation-is-a-hypothesis law,
+  fifth catch) — its fixture gains a declared effect so the leg tests
+  the tier honestly. THE PIN MACHINERY'S OWN FIRST LESSON rode along:
+  this landing marched twice, and the march stacked a second
+  placeholder block on the unnarrated first — an UNNARRATED head is a
+  working step, not history, so emit_provenance now SUPERSEDES a
+  placeholder head instead of stacking (the chain records blessed
+  pins, and blessing is exactly what the narrative is). NAMED
+  REMAINDER: the capability map still knows three effects — extending
+  it needs each capability's render to name WHICH severance proved it
+  (CSandbox renders "proven no network access", so mapping WASI to it
+  would misspeak), which is Hβ.audit.capability-carries-its-evidence.
 - 2026-07-30 · ▶ THE MARCH WRITES ITS OWN PIN — the scout's move 2, the
   fabrication class deleted at its source (no pin move — tools only;
   boot stands at feccc8a9). The march HOLDS the sha, the verdict, the
@@ -7055,6 +7103,19 @@ whose echo/interval/callee legs the engine honors — one-line
 annotations, march-measured each; the recursion-shaped ones
 (scan_for_span) wait on the IH. TagId's 0..255 and the float
 intervals stay the SMT tier's.
+
+`Hβ.audit.capability-carries-its-evidence` — the severance teaching's
+remainder (named 2026-07-30 with the vocabulary's graph read). The
+vocabulary is live now; the capability MAP still names three effects,
+and it cannot simply grow because a Capability is a nullary tag whose
+render bakes its evidence: CSandbox renders "proven no network access",
+so mapping WASI or Filesystem to it would misspeak the proof. The
+self-form is the capability carrying WHICH severance discharged it —
+`CSandbox(ename)` or a (capability, evidence) pair read from the row —
+after which the map extends by construction over every declared effect
+(a real-time consumer wants !Mutate and !Thread named; a sandboxed one
+wants !WASI and !Filesystem). Cheap once the evidence rides; the
+render is the whole design question.
 
 `Hβ.wheel.iteration-is-topology` — the recursion eradication (named
 2026-07-30, Morgan's interrogation; the ledger entry ITERATION IS

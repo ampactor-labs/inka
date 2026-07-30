@@ -1222,8 +1222,16 @@ fn build_audit_report(fn_name, handle, ty, pending, tightens) = {
   // audit). One chased value serves the render and the membership.
   let body_row = chase_row_deep(extract_row(ty), 0)
   let reached = row_names(body_row)
-  let severable = severance_candidates(reached)
+  // THE GRADIENT, not the flood: every declared-but-unreached effect is
+  // provably severable, but the ones that TEACH are those whose absence
+  // unlocks a named capability — those lead the line; the rest ride as a
+  // count (true, and honest about carrying no teaching yet). A constant
+  // three-name line was what the hardcoded vocabulary could say; this is
+  // the read ranked by what it buys.
+  let severable_all = severance_candidates(reached)
+  let severable = severable_all |> filter((e) => len(capabilities_for_severance(e)) > 0)
   let unlocks = severance_unlocks(severable)
+  let more_severable = len(severable_all) - len(severable)
   // The comment-reference edges' reverse read: which comments point here.
   let referenced_by = graph_comment_refs_of(handle) |> map(comment_owner)
   // The verb-shape read (oracle's pipe_shape_of): single-use let-chains
@@ -1232,23 +1240,35 @@ fn build_audit_report(fn_name, handle, ty, pending, tightens) = {
   // an incremented index is the loop in recursion's costume — iteration
   // is topology (|> stages, <~ cycles, derived folds), and the audit
   // names the costume where it stands.
-  (fn_name, reached, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle), recursion_shape_of(handle), pending, tightens)
+  (fn_name, more_severable, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle), recursion_shape_of(handle), pending, tightens)
 }
 
-// Severance candidates: the canonical effects (Alloc / IO / Network)
-// that the body does NOT perform. Adding `!E` for each unlocks a
-// capability without breaking the row.
-// The audit's canonical severance vocabulary — the literals NAME the
-// user-facing effects at this ONE mint; identity is the intern handle
-// (EffName-is-a-handle landed; comparisons are word-identity by type).
-// The marker sits directly above the mint so the canonical layout
-// keeps it adjacent (a trailing marker on a width-broken let strands
-// two lines from the flagged literal — measured on the fmt rung's
-// first live commit).
-//
-// drift-audit: ignore — the vocabulary's one mint; identity is the intern handle
-fn severance_vocabulary() =
-  [ENamed(intern_str("Alloc")), ENamed(intern_str("IO")), ENamed(intern_str("Network"))]
+// Severance candidates: every effect DECLARED in scope that the body
+// does not reach — adding `!E` for each is provable and unlocks what
+// its capability mapping names. THE VOCABULARY IS A GRAPH READ (the
+// selfhood audit's F12, 2026-07-30): three interned literals stood
+// here while the env held 76 effect declarations, so the audit could
+// never tell a fn it could prove `!Mutate` / `!WASI` / `!Thread` — the
+// severances a real-time or sandboxed consumer actually wants — and
+// every pure fn got the identical three-name line, a constant where
+// §5's felt endpoint asks for a gradient. EffectDeclKind IS the env's
+// own "this name is an effect" edge (register_effect_ops draws it);
+// reading it live means a newly-declared effect enters the audit by
+// construction, and the literal list (with its drift marker) deletes.
+fn severance_vocabulary() with EnvRead + Intern + Memory + Alloc = match env_snapshot() {
+  Env(bindings) => bindings |> fold(
+    [],
+    (acc, b) => match b {
+      (name, _, _, EffectDeclKind(_)) => {
+        // The flat env carries a decl at several layers (pre_register +
+        // the main walk); each effect names itself once.
+        let e = ENamed(intern_str(name))
+        if name_in_list(acc, e) { acc } else { acc ++ [e] }
+      },
+      _ => acc,
+    }
+  ),
+}
 
 fn severance_candidates(reached) = severance_vocabulary() |> absent_from(reached)
 
@@ -1287,11 +1307,12 @@ fn severance_unlocks(severable) = severable |> fold(
 // Positional destructure — provable with no type flow, where a
 // record field read floors in a map lambda (see build_audit_report).
 fn render_audit(entries) = entries |> map((report) => match report {
-  (fn_name, reached, row_str, severable, unlocks, referenced_by, pipe_chains, loop_costume, pending, tightens) => audit_report_lines(
+  (fn_name, more_severable, row_str, severable, unlocks, referenced_by, pipe_chains, loop_costume, pending, tightens) => audit_report_lines(
     fn_name,
     row_str,
     severable,
     unlocks,
+    more_severable,
     referenced_by,
     pipe_chains,
     loop_costume,
@@ -1304,12 +1325,25 @@ fn render_audit(entries) = entries |> map((report) => match report {
 // map lambda the splices judged datum-last while the tuple elements were
 // still free, and the word floor rendered every audited fn's name and
 // row as pointer numerals. The named call anchors the binders.
-fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, referenced_by: [String], pipe_chains, loop_costume, pending, tightens) = {
+fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more_severable, referenced_by: [String], pipe_chains, loop_costume, pending, tightens) = {
   let header = "{fn_name} : {row_str}\n"
-  let severance_section = if len(severable) == 0 {
+  // The teaching tier leads; the remainder is counted, never listed —
+  // a fn that reaches nothing can prove the absence of every effect in
+  // scope, and enumerating seventy is noise where the ranked few teach.
+  let more_note = if more_severable == 0 {
     ""
   } else {
-    "  severable: {show_list(severable, show_eff_name, " + ")} — unlocks {show_list(unlocks, show_capability, ", ")}\n"
+    " (+{int_to_str(more_severable)} more provable, no capability named yet)"
+  }
+  let severance_section = if len(severable) > 0 {
+    "  severable: {show_list(severable, show_eff_name, " + ")} — unlocks {show_list(unlocks, show_capability, ", ")}{more_note}\n"
+  } else if more_severable > 0 {
+    // Provable, but nothing in the capability map names what it buys —
+    // still the developer's fact, so the tier says it rather than going
+    // silent (the capability map's growth is the named remainder).
+    "  severable: {int_to_str(more_severable)} declared effect(s) this body never reaches — provable as !E, no capability named yet\n"
+  } else {
+    ""
   }
   let refs_section = if len(referenced_by) == 0 {
     ""

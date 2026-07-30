@@ -76,7 +76,15 @@ emit_provenance() {  # emit_provenance <gen> <verdict> <lines> <census>
 EOF
 )
   tmp=$(mktemp)
+  # An UNNARRATED head is a working step, not history: one landing may
+  # march several times before it is right, so a repin SUPERSEDES a head
+  # block whose narrative is still the placeholder instead of stacking a
+  # second one (the machinery's own first lesson, 2026-07-30 — the chain
+  # records blessed pins, and blessing is exactly what the narrative is).
   awk -v blk="$block" '
+    /^- source: ‹NARRATIVE UNWRITTEN/ { drop=1 }
+    drop && /^---$/ { drop=0; next }
+    drop { next }
     { print }
     !done && /^Provenance, self-confirmed at pin time:$/ { print ""; print blk; done=1 }
   ' boot/PROVENANCE.md > "$tmp" && mv "$tmp" boot/PROVENANCE.md

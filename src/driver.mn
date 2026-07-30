@@ -171,10 +171,15 @@ fn driver_collect_visit_list(ref modules, own collected, own visited) with Memor
 // ghost, and the edit workflows focused the ghost (measured; the old
 // chased caret had hidden the class by accident, and the accident is
 // now this contract). The import names flow out as ordinary heap
-// strings; only graph cells die with the instance.
-fn driver_extract_imports(ref source) with Memory + Alloc + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI = {
+// strings; only graph cells die with the instance. Its DIAGNOSTICS
+// absorb under diag_quiet the same way (the trial's own policy): a
+// structure read is not the reporting pass — its file-local spans are
+// unplaceable and the weave parse re-reports every one of them
+// placeably, so the unabsorbed form printed each parse diagnostic
+// TWICE (measured all day as the 2:24 + 5730:24 pairs).
+fn driver_extract_imports(ref source) with Memory + Alloc + GraphRead + GraphWrite + Intern + Mutate + Cast + WASI = {
   source |> lex |> parse_program |> driver_extract_imports_from_ast
-} ~> graph_handler([], 0, 0, 0, [], 0, 0)
+} ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> diag_quiet
 
 fn driver_extract_imports_from_ast(ast) = flatten(map(
   (node) => match node {

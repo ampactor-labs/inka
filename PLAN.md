@@ -1092,6 +1092,21 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE DISCOVERY PARSE GOES QUIET — the report doubling
+  dies at its source (pin 0b3d9348). driver_extract_imports' throwaway
+  bracket gains ~> diag_quiet (the trial's own absorption policy): a
+  structure read is not the reporting pass, its file-local spans are
+  unplaceable, and the weave parse re-reports every diagnostic
+  placeably — every parse diagnostic had printed TWICE since the DAG
+  path was born (measured all day as the 2:24 + 5730:24 pairs; ONE
+  now). The fn's declared row drops the Diagnostic it no longer
+  carries. The surviving coordinate is the WEAVE span — the
+  Hβ.diag.file-local-span-render residue rises in priority with its
+  design sharpened: the seam render exists (span_render_local) but a
+  per-line seam walk at census scale is the crc-class cost, so the
+  render-side subtraction reads the REGISTER's own range, never a
+  per-diagnostic seam walk. CLEAN m2 == m3 at 349,099 lines; census
+  0; frontier 324/0; proof-exactness 9/9.
 - 2026-07-30 · ▶ THE STRING NAMES ITS OWN LINE —
   Hβ.lexer.string-newline-refusal RESOLVED (pin ec3bc868). A raw
   newline in a SINGLE-line string literal reports P_UnclosedConstruct

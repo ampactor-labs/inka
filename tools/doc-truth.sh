@@ -40,7 +40,13 @@ if [ -n "$headpin" ] && [ "${have:0:8}" != "$headpin" ]; then
 fi
 
 plan_present=$(awk '/^### The landing ledger/{skip=1} /^### Named-residue index/{skip=0} !skip' PLAN.md)
-for f in $( { printf '%s' "$plan_present"; cat README.md CLAUDE.md docs/SYNTAX.md 2>/dev/null; } | grep -hoE '(bash )?tools/[a-z0-9_-]+\.(sh|py)' | sed 's/^bash //' | sort -u); do
+# The third party's own instruction surfaces are reader-facing docs too:
+# hook prose grounded a week of sessions on superseded law and a pre-commit
+# gate no-opped against a deleted script behind its -x check (the practice
+# scout's 2026-07-30 catch) — so the hooks and git-side gates join the
+# named-command sweep. Law and state stay OUT of hooks (the one-home rule);
+# this check keeps their command citations real.
+for f in $( { printf '%s' "$plan_present"; cat README.md CLAUDE.md docs/SYNTAX.md .claude/hooks/*.sh .githooks/pre-commit 2>/dev/null; } | grep -hoE '(bash )?tools/[a-z0-9_-]+\.(sh|py)' | sed 's/^bash //' | sort -u); do
   if [ ! -f "$f" ]; then
     echo "doc-truth: docs name $f but it does not exist"
     fail=1

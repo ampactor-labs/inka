@@ -1092,6 +1092,40 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE HARNESS SPEAKS ONLY MECHANICS — the practice
+  scout's first move executed (no pin move — hooks/tools only; boot
+  stands at feccc8a9). Morgan's dispatch ("research improving dev
+  best practices, tailored to the Claude Code workflow, until Mentl
+  cuts everything that isn't Human or Mentl out of the loop") came
+  back with the framing fact: THE GATE IS ALREADY ON CLAUDE'S WIRE
+  (.mcp.json serves mentl-gate) AND CLAUDE'S OWN WRITE CHANNEL
+  BYPASSES IT — most of the ranked moves close that gap (the full
+  memo: .build/research/practice-scout-2026-07-30.md). Executed now,
+  move 1 — the harness truth sweep: session-start.sh had been a
+  drifted SECOND HOME for law, grounding every session on "INLINE
+  ONLY" (superseded 2026-06-21) and "census is a SHADOW, enforces
+  nothing" (a zero-tolerance ratchet since 2026-07-22) — stripped to
+  mechanics + pointers (law lives in CLAUDE.md alone; nothing dated
+  remains in the hook, so it can no longer drift); the pre-commit's
+  Gate 2 silently no-opped for a week against comment-ratchet.sh
+  (deleted 2026-07-22) behind its -x check — the gate-that-cannot-
+  fail vacuity, deleted with its absorption recorded in place, and
+  the phantom determinism-gate.sh cite trued to the march;
+  doc-truth's named-command sweep now covers .claude/hooks/*.sh +
+  .githooks/pre-commit (the third party's instruction surfaces are
+  reader-facing docs). BANKED from the scout's ranking: move 2 — the
+  march writes its own PROVENANCE block at repin (sha/verdict/lines/
+  census machine-emitted, the narrative human; deletes the
+  twice-caught sha-fabrication class — ledger-as-projection's first
+  executed rung); move 3 — widen the MCP/session verb surface
+  (check/test/fmt/march/frontier) and rewire post-edit-mn.sh to
+  session-backed whole-weave judgment (the every-proposer-through-
+  the-gate channel; rides the convergence tax until
+  schemes-are-edges). Outward finds banked: vericoding benchmarks
+  arriving (VeriBench, Dafny-2026) — the absence benchmark's
+  empty-podium claim re-verifies before the next positioning pass;
+  none measures proving the NEGATIVE. The Opus selfhood audit
+  ("all the ways Mentl can be more ITSELF") is still running.
 - 2026-07-30 · ▶▶ THE FIRST FAMILY MIGRATES — iteration-is-topology
   executes its first family, and the migration's own red teaches the
   recipe's pin (pin feccc8a9). The law now lives in all three docs

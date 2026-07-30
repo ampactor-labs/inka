@@ -1092,6 +1092,41 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE ITERATION MEETS ITS MONOTONICITY — the second
+  counted kill of the SCC rung, and the join named as the true
+  remainder (no pin move — the reverted tree reproduces 5db9b4c3
+  CLEAN). Per-SCC local Mycroft iteration was BUILT WHOLE on landed
+  machinery: probe passes over rollback-refreshed parse nodes
+  (graph_push_checkpoint/graph_rollback as the FRESH-NODE SUPPLY — the
+  same parse nodes re-judge with virgin cells, zero re-parse, the
+  whole-tree rounds' re-parse dissolved for the group's scope), finals
+  frozen to values between probes, fingerprint-stable → a bare keep
+  pass. Its own instruments then drove three rounds of truth: (1) the
+  handle-reuse freeze lesson — a carried quantifier set left
+  probe-minted leaves unquantified and the restored mint counter made
+  the next probe REUSE their handles; the fix is
+  Forall(free_in_ty(chase_deep(t)), ·), full re-quantification of the
+  folded value (quantified vars are mapping-first at instantiate, so
+  reuse is inert); (2) the scc2 sequence probe measured SIMPLE pairs
+  CONVERGING in two probes (scan_string_loop/handle_escape,
+  spec_resolve, module_imports — the mechanism works); (3) the
+  scc-flip render convicted every generic/concrete-tension family of
+  PERIOD-2 ALTERNATION (chase_*_changes, serialize_*, emit_pat_*:
+  params flipping rl%0 ↔ rlNTy() probe over probe, rows gaining and
+  losing Memory+Alloc) — re-derivation-from-scratch is NOT MONOTONE:
+  concreteness learned in probe k evaporates in k+1, and a 45-member
+  group burned 47 probes to no fixpoint. The literature's own contract
+  (Salsa cycle recovery: participants must be monotone; join against
+  last_provisional_value) is confirmed by the artifact. The iteration
+  DELETED whole (drift-9 — the knowledge lives here); the Tarjan
+  substrate, the group-ordered trial, and both flip instruments stay.
+  THE TRUE REMAINDER, now fully specified: the GENERALITY JOIN —
+  freeze_k := join(freeze_{k-1}, result_k), rows through row_join
+  (their lattice exists), type schemes through a widening that keeps
+  the more-informative of consistent shapes — and with it the
+  iteration converges monotone and the rounds retire. Board: CLEAN
+  m2 == m3 at 343,707 lines; census 0; the standing pin holds.
+
 - 2026-07-30 · ▶▶ BINDING GROUPS FOR ORDER, MYCROFT FOR CYCLES — the
   Tarjan substrate lands, and the classic mono-group form dies to the
   wheel's own judgment (the SCC rung's first arc · pin 5db9b4c3). The
@@ -6222,25 +6257,26 @@ internal diameter one round per link; the bound still cuts at ONE
 mover (parse_effect_list_from, 2026-07-30), and the daily-verb tax
 (~59s field read) is round-count × the per-round FIXED costs (full
 re-parse + classify_fixpoint + round_prints — cone-independent). THE
-FIX (re-specified 2026-07-30 after the classic form's measured
-refutation — the pin-5db9b4c3 ledger entry carries the kill): the
-Tarjan SCC substrate is LANDED (scc_groups; the trial walks groups
-callee-first), and classic GHC mono-binding-groups are REFUTED by 29
-wheel convictions — the rounds are a MYCROFT iteration and the
-wheel's cycles use polymorphic intra-group instantiation the mono
-form forbids. The remaining rung is PER-SCC LOCAL MYCROFT ITERATION
-(Salsa's own cycle-recovery shape, validated by the sweep): iterate
-ONLY a cycle group to its own fingerprint fixpoint — each re-judgment
-needs fresh parse nodes, which is exactly what the branch-cursor
-fan's fresh instantiation provides
-(Hβ.compile.fixpoint-is-larval-forked-cursor's first compile-spine
-cash-out) — and the whole-tree rounds retire to the verification
-pass. With it: the bound retires to a convergence proof, the ~59s
-field read collapses with the round count (the tax is round-count ×
-full re-parse + classify_fixpoint + round_prints), and the
-env.mn/lexer.mn owner relocations unblock. The position-sensitivity
-hazard is NARROWED to the one surviving SCC chain, not closed, until
-the local iteration lands.
+FIX (re-specified twice on 2026-07-30, each by a measured kill — the
+pin-5db9b4c3 and no-pin ledger entries carry both): the Tarjan SCC
+substrate is LANDED (scc_groups; the trial walks groups
+callee-first); classic GHC mono-binding-groups are REFUTED (29 wheel
+convictions — the wheel's cycles use polymorphic intra-group
+instantiation); and bare per-SCC re-derivation iteration is REFUTED
+(rollback-as-fresh-nodes works — simple pairs converge in two probes
+— but generic/concrete-tension families ALTERNATE with period 2
+forever: re-derivation-from-scratch is not monotone, exactly Salsa's
+cycle-recovery contract). The remaining rung is the iteration WITH
+THE GENERALITY JOIN: freeze_k := join(freeze_{k-1}, result_k) — rows
+through row_join (their lattice exists), type schemes through a
+widening keeping the more-informative of consistent shapes (concrete
+element over generic where the probe proved it; Salsa's
+last_provisional contract) — after which the iteration converges
+monotone, the whole-tree rounds retire to one verification pass, the
+bound becomes a convergence proof, the ~59s field read collapses
+with the round count, and the env.mn/lexer.mn owner relocations
+unblock. The position-sensitivity hazard stays NARROWED to the SCC
+chains until the join lands.
 
 `Hβ.emit.arm-closure-captures-record` RESOLVED: LANDED (2026-07-24, pin
 bb4b870e — the ledger head carries the arc). The capture form won over

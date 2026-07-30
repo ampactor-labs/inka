@@ -1730,8 +1730,8 @@ fn trial_group_walk(ref stmts, ref groups, own rows, g) = if g >= len(groups) {
   trial_group_walk(stmts, groups, trial_judge_group(stmts, sort(groups[g]), rows), g + 1)
 }
 
-// A cycle's members judge in source order under the standard quantified
-// view. The MEASURED negative that shaped this (2026-07-30): the classic
+// A singleton judges once; a CYCLE iterates locally to its own fixpoint.
+// The MEASURED negative that shaped this (2026-07-30): the classic
 // binding-group MONO form — members sharing unquantified live cells,
 // generalized at group exit — was built here whole and REFUTED by the
 // wheel's own judgment: 29 E_TypeMismatch convictions (Int vs Float,
@@ -1739,7 +1739,28 @@ fn trial_group_walk(ref stmts, ref groups, own rows, g) = if g >= len(groups) {
 // by its co-members. The rounds are a MYCROFT iteration (polymorphic
 // recursion by fixpoint) and the wheel genuinely uses that power inside
 // its cycles, so the weaker classic form cannot serve; the local form
-// that CAN is per-SCC Mycroft iteration (the residue index carries it).
+// that CAN — and does, below — is per-SCC Mycroft iteration.
+// A cycle's members judge once, adjacent, in source order — and the
+// SECOND counted kill of the rung stands recorded here (2026-07-30,
+// same day as the mono-group kill): per-SCC LOCAL MYCROFT ITERATION —
+// probe passes over rollback-refreshed parse nodes (rollback as the
+// fresh-node supply), finals frozen to fully-quantified values
+// (Forall(free_in_ty(chase_deep(t)), ·) — the rollback-safe form,
+// itself paid for: a carried quantifier set left probe-minted leaves
+// unquantified, and the restored mint counter made the next probe
+// REUSE their handle numbers) — was built whole and REFUTED by its own
+// instrument: simple pairs converge in 2 probes (scan_string_loop /
+// handle_escape, spec_resolve, module_imports all measured stable),
+// but every generic/concrete-tension family ALTERNATES with period 2
+// forever (chase_*_changes, the serialize family, emit_pat_*: params
+// flip rl%0 ↔ rlNTy() probe over probe) — re-derivation-from-scratch
+// is NOT MONOTONE, concreteness learned in probe k evaporates in k+1,
+// and Salsa's own cycle-recovery contract names the cure: a JOIN
+// against the last provisional value. Rows have their join
+// (graph_bind_row's lattice); TYPE-scheme generality does not yet —
+// the widening join is the rung's true remainder (the residue index
+// carries the spec), and iterating without it taxed a 45-member group
+// forty-seven probes to no fixpoint.
 fn trial_judge_group(ref stmts, own members, own rows) =
   group_judge_members(stmts, members, rows, 0)
 

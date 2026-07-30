@@ -1086,7 +1086,13 @@ fn token_span(t) with Pure = match t {
 // populated during inference. No null handle. No sentinel zero.
 // Type resolution is always a live chase via LookupTy — never a
 // cached Ty field.
-type Node = N(NodeBody, Span, Int)
+//
+// The span FIELD carries the refinement (the producer-carries-proof
+// law at the ctor decl): every destructured node span reads ValidSpan
+// by type, so the 31 infer-side call boundaries that each re-demanded
+// span_valid collapse by typed identity; the obligation lives at
+// N-construction, where span_at/span_join already supply ValidSpan.
+type Node = N(NodeBody, ValidSpan, Int)
 
 // body, span, TypeHandle
 fn span_of_node(node) = match node {

@@ -1092,6 +1092,33 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE LEDGER SPEAKS WHOLE AND THE CTOR FIELD CARRIES
+  THE PROOF — Arc 3's second landing: debt 58 → 21, the day's arc
+  138 → 21 (pin 862f66fd). THE VERB GREW FIRST (⟳(3) — the count line
+  hid the composition; the per-entry projections had classified 138
+  one file at a time): report_verify_debt renders the COMPLETE ledger,
+  one line per obligation (span · classify_predicate class ·
+  predicate), and its first firing answered in one read — 47
+  span_valid boundaries, 31 of them infer-side consumers of
+  node-destructured spans. THE PRODUCER AT THAT SCALE IS THE
+  CONSTRUCTOR FIELD: Node = N(NodeBody, ValidSpan, Int) — every
+  destructure reads ValidSpan by type, the obligation moves to
+  N-construction, and the parser's mints discharge by identity
+  through the already-annotated span_at/span_join (the chain closing
+  exactly as the producer-carries-proof law predicts). 85% of the
+  wheel's proof debt discharged by construction-site TYPING alone —
+  zero engine changes, three producer annotations and one ctor
+  field. CLEAN m2 == m3; census 0; frontier 321/0; proof-exactness
+  9/9. THE RESIDUE, exact from the whole-ledger read: 10 span_valid
+  at unfed construction sites (the lexer's counter-built mints — the
+  Pure predicate-fn unfold's own fixtures), 8 bare 0 <= self
+  (Handle/ValidOffset producers), 2 TagId, 1 Sample. NAMED with the
+  session's third recurrence: the weave-span → file:line projection
+  is missing from the verbs (three hand-mapping loops tonight; the
+  debt listing renders weave coordinates — the file-local-span
+  class's inventory face; one projection at the range map retires the
+  hand loop).
+
 - 2026-07-30 · ▶▶▶ THE PRODUCERS CARRY THE PROOF AND THE VERBS READ ONE
   WEAVE — Arc 3 opens with the span-debt collapse and a true-positive
   gate find (pin d14fa41e). THE INVENTORY BY THE MEDIUM: the field

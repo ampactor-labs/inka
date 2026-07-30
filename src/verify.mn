@@ -350,10 +350,26 @@ fn not_decide(ref e) with Pure = match e {
 fn report_refinement_rejected(ref pred, ref span, ref reason) with !Mutate =
   report(ERefinementRejected(pred, span))
 
-// Emit a single diagnostic summarising pending verification debt.
-// Called at compile end by the driver. Zero debt → no diagnostic.
-fn report_verify_debt(debt) =
-  if len(debt) == 0 { () } else { report(VPending(len(debt), span_zero())) }
+// The pending ledger speaks WHOLE — one line per obligation (span,
+// class, predicate) before the summary count. The count alone hid the
+// debt's composition: the 2026-07-30 sweep classified 138 obligations
+// only by growing per-entry projections one file at a time; this is
+// the complete projection at the one place the whole ledger is read.
+fn report_verify_debt(debt) = if len(debt) == 0 {
+  ()
+} else {
+  debt_lines(debt, 0)
+  report(VPending(len(debt), span_zero()))
+}
+
+fn debt_lines(ref debt, i) = if i >= len(debt) {
+  ()
+} else {
+  match debt[i] {
+    (dspan, pred, _) => eprint_string("verify: pending {classify_predicate(pred)} {show_predicate(pred)} at {show_span(dspan)}\n"),
+  }
+  debt_lines(debt, i + 1)
+}
 
 fn classify_predicate(pred) with Pure = match pred {
   PTrue => "trivial",

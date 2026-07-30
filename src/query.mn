@@ -401,7 +401,13 @@ fn defining_span_of(name) with EnvRead + !Mutate = match env_lookup(name) {
 }
 
 // ─── Span Index Search (Arc F.2) ───────────────────────────────────
-fn span_area(s: ValidSpan) with Pure = match s {
+// The param is BARE Span — the demand law's dual face (never demand a
+// proof the body doesn't use): the area fold is total arithmetic over
+// the four fields, and the former ValidSpan param converted every
+// bare-span caller into ceremony debt (seven obligations at the
+// address tie-break alone, measured 2026-07-30) while the proof was
+// never read.
+fn span_area(s) with Pure = match s {
   Span(sl, sc, el, ec) => if sl == el { ec - sc } else { (el - sl) * 1000 + ec - sc },
 }
 

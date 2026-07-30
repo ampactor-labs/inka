@@ -1092,6 +1092,23 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE DEMAND LAW'S DUAL FACE — never demand a proof the
+  body doesn't use (pin fb265daa). The whole-ledger projection's map
+  put six of the ten surviving span_valid obligations at ONE pair of
+  lines (the address tie-break's span_area calls), and the site read
+  inverted the fix's direction: span_area's ValidSpan param was
+  CEREMONY — the area fold is total arithmetic over the four fields,
+  the proof never read, the demand converting every bare-span caller
+  into debt. Widened to bare Span (with find_tightest's call riding):
+  debt 21 → 14, the day's arc 138 → 14 (90%) — and the remaining
+  fourteen are ALL genuine: three span_valid producer/construction
+  pends (span_join, span_zero — the Pure predicate-fn unfold's ground
+  fixture — and the module-mint), eight 0 <= self producer
+  boundaries, TagId ×2, Sample ×1. Zero ceremony left in the span
+  class; the refinement discipline now has BOTH faces stated —
+  producers carry proofs, consumers demand only what they read.
+  CLEAN m2 == m3; census 0; frontier 321/0; proof-exactness 9/9.
+
 - 2026-07-30 · ▶▶ THE LEDGER SPEAKS WHOLE AND THE CTOR FIELD CARRIES
   THE PROOF — Arc 3's second landing: debt 58 → 21, the day's arc
   138 → 21 (pin 862f66fd). THE VERB GREW FIRST (⟳(3) — the count line

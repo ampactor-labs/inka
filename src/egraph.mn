@@ -262,6 +262,29 @@ fn mint_fold(handle, v) with GraphWrite = {
 fn saturate(bound) with GraphRead + GraphWrite + LookupTy + Memory + Alloc =
   saturate_until(bound, 0)
 
+// ─── The FORM half of the fork/merge composition (PLAN §5) ───────────
+//
+// Saturation confined to a handle RANGE — the ?? fan's freshly-minted
+// candidate space, never the whole program. The fan has just proved
+// WHICH MEANINGS are admissible (fork: candidates conflict, so each
+// verifies in its own rolled-back world); this saturates the survivors'
+// own nodes so extraction can pick the cheapest FORM of each (merge:
+// members are equal by construction, so nothing is ever undone). The
+// order is forced — extract-then-prove would optimize an inadmissible
+// program — and the range is what keeps the form half cheap: a fan at
+// one cursor position must not re-saturate a session's whole graph.
+// apply_rules_from already takes its start, so the range costs one
+// parameter and no new machinery.
+fn saturate_range(start, bound) with GraphRead + GraphWrite + LookupTy + Memory + Alloc =
+  saturate_range_until(start, bound, 0)
+
+fn saturate_range_until(start, bound, pass) with GraphRead + GraphWrite + LookupTy + Memory + Alloc = if pass > bound - start {
+  ()
+} else {
+  let fired = apply_rules_from(start, bound, 0)
+  if fired == 0 { () } else { saturate_range_until(start, bound, pass + 1) }
+}
+
 // The saturation pass: populate the e-graph over the whole node space
 // (graph_next bounds it at entry), then pass the program through unchanged — the
 // equivalence edges are the side effect lower reads via egraph_extract. A `|>`

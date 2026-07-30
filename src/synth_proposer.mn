@@ -127,11 +127,17 @@ handler synth_default {
   // search over what is already in scope, pruned by the row at every
   // step), then the shape enumerators; every candidate through the ONE
   // proof gate. Row-rejected vocabulary keeps its Reasons.
-  match enumerate_vocabulary_calls(target_ty, allowed_effects, context) {
-    (vocab, rejected) => {
-      let enriched = concat_candidates(vocab, enumerate_typed(target_ty, allowed_effects, context))
-      let verified = verify_each_enriched(enriched, target_ty)
-      resume(Proposals(verified |> rank_sort |> map_to_proposals, rejected))
+  // The candidate space's own frontier, read BEFORE any enumeration
+  // mints into it: the form half saturates exactly what the fan made
+  // (PLAN §5's fork/merge duality — the range is what keeps merging
+  // cheap at a cursor position).
+  match graph_next() {
+    cand_start => match enumerate_vocabulary_calls(target_ty, allowed_effects, context) {
+      (vocab, rejected) => {
+        let enriched = concat_candidates(vocab, enumerate_typed(target_ty, allowed_effects, context))
+        let verified = verify_each_enriched(enriched, target_ty, cand_start)
+        resume(Proposals(verified |> rank_sort |> map_to_proposals, rejected))
+      },
     },
   },
   verify_candidate(candidate, target_ty) => // The real proof gate (PLAN.md §1: checkpoint -> INFER -> Verify ->
@@ -659,9 +665,63 @@ fn keep_proven(ref cands, ref verdicts, i, own out) = if i >= len(cands) {
 //
 // The kernel's proof gate, fanned: candidates verify as spawned branch
 // cursors (fan_verify above); only proven survivors reach the user.
-fn verify_each_enriched(candidates, target_ty) with GraphRead + GraphWrite + Memory + Alloc + EnvRead + EnvWrite + Consume + Verify + Intern + WASI + WasiThreads + BranchEnv + BranchDiag + Diagnostic + !Mutate = {
+// THE FORK/MERGE COMPOSITION, at its one seam (PLAN §5's optimality
+// half + the duality): the fan has just explored MEANING-space by
+// FORKING — candidates conflict, so each proved in its own rolled-back
+// world, and proof is a FILTER (admit / refuse). Every survivor is then
+// an equality CLASS, not one program, so the second half explores
+// FORM-space by MERGING — saturation over the candidates' own range
+// draws the equivalence edges, extraction picks the cost-minimal member,
+// and nothing is ever undone because equals compose. The order is
+// FORCED: extract-then-prove would optimize a program that may be
+// inadmissible. What reaches the user is therefore proven AND
+// extraction-optimal, never merely proven.
+fn verify_each_enriched(candidates, target_ty, cand_start) with GraphRead + GraphWrite + LookupTy + Memory + Alloc + EnvRead + EnvWrite + Consume + Verify + Intern + WASI + WasiThreads + BranchEnv + BranchDiag + Diagnostic + !Mutate = {
   let verdicts = fan_verify(candidates, target_ty)
-  keep_proven(candidates, verdicts, 0, [])
+  let survivors = keep_proven(candidates, verdicts, 0, [])
+  // The form half — only over what the fan minted (the range keeps a
+  // cursor-position fan from re-saturating the whole session graph).
+  saturate_range(cand_start, graph_next())
+  survivors |> map(extract_optimal) |> collapse_equivalent
+}
+
+// THE FALSE TIE DISSOLVES (the duality's sharpest immediate
+// consequence). §1's law is that two proven survivors cannot be picked
+// between — they MEAN different things and only the author knows which,
+// so the medium asks. But two survivors that extract to the SAME
+// e-class do NOT mean different things: they are one meaning in two
+// forms, and the tie between them is a question with no content. After
+// extraction they collapse to one proposal, so the teaching tie-break
+// fires only on a REAL disagreement of meaning. Keyed on the extracted
+// handle — the e-class root the canon weave already carries, never a
+// re-derived structural compare.
+fn collapse_equivalent(cands) with GraphRead + Memory + Alloc = cands |> fold(
+  [],
+  (acc, c) => if acc |> any((k) => node_handle(candidate_node(k)) == node_handle(candidate_node(c))) {
+    acc
+  } else {
+    acc ++ [c]
+  }
+)
+
+fn candidate_node(candidate) with Pure = match candidate {
+  EnrichedCandidate(c) => c.node,
+}
+
+// A survivor's node, replaced by the cost-minimal member of its own
+// e-class. The extraction is a live chase of the canon weave (the same
+// union-find the type layer uses); an unmoved handle keeps the node it
+// already had, so a candidate with no cheaper equivalent pays nothing.
+fn extract_optimal(candidate) with GraphRead + Memory + Alloc = match candidate {
+  EnrichedCandidate(c) => {
+    let h = node_handle(c.node)
+    let cheapest = egraph_extract(h)
+    if cheapest == h {
+      candidate
+    } else {
+      EnrichedCandidate({cost: c.cost, node: N(graph_node_body(cheapest), parse_span_of(cheapest), cheapest), origin: c.origin, reason: c.reason})
+    }
+  },
 }
 
 // ─── map_to_proposals — project each survivor to its (node, reason) ──

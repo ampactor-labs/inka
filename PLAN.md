@@ -1131,6 +1131,41 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶▶ THE FORK AND THE MERGE COMPOSE — §5's optimality
+  half stops being a design and becomes the fan's own path
+  (pin 296d7f99). Morgan's charge, exactly: don't describe the
+  composition, build it. THE SEAM is verify_each_enriched — where the fork side
+  finishes: fan_verify explores MEANING-space by FORKING (candidates
+  conflict, each proves in its own rolled-back branch cursor, proof is
+  a FILTER), and every survivor is then an equality CLASS rather than
+  one program, so saturate_range draws the equivalence edges over the
+  candidates' OWN handle range and egraph_extract picks the
+  cost-minimal member (FORM-space by MERGING — equals compose, nothing
+  is ever undone). THE ORDER IS NOW ENFORCED IN CODE: extract-then-
+  prove would optimize a program that may be inadmissible, so
+  prove-then-extract is the only composition and it is the one the
+  artifact runs. The RANGE is what keeps the merge half cheap — a fan
+  at one cursor position saturates what it minted, never a session's
+  whole graph (apply_rules_from already carried its start, so the range
+  cost one parameter and no new machinery). THE DUALITY'S SHARPEST
+  CONSEQUENCE lands with it: survivors extracting to the SAME e-class
+  are ONE MEANING IN TWO FORMS, so they collapse to a single proposal
+  and §1's teaching tie-break fires only on a real disagreement of
+  meaning — the medium stops being able to ask a question with no
+  content. PROVEN NON-DESTRUCTIVE at the case that matters: the Bit
+  hole's 0 and 1 are different e-classes, survive as two, and still
+  teach. HONEST STATE, stated rather than implied: on today's candidate
+  space (literals, vocabulary calls) and today's rule set (const-fold +
+  the arithmetic identities) the extraction rarely has a cheaper member
+  to find — the composition is correct, ordered, and inert-until-fed,
+  and what feeds it is a richer candidate space or a richer rule set
+  (band G's saturation-deepen), not more plumbing. The medium's own
+  judge convicted two first drafts en route: a Stage-Law arg order that
+  let the pipe fill the wrong hole (Int vs List(EnrichedCandidate)),
+  and an accumulator read twice (E_OwnershipViolation) — both rewritten
+  in the fold vocabulary iteration-is-topology prescribes. CLEAN
+  m2 == m3 at 355,179 lines; census 0; frontier 329/0; micros 121/0;
+  proof-exactness 9/9; crown 5/5.
 - 2026-07-30 · ▶ THE MUTUAL CYCLE'S ROW NEVER CLOSES — four probes,
   eight lines, one named root (no pin move — the measurement and its
   banked RED; boot stands at ec04f745). The prior landing named

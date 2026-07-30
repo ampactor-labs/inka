@@ -1,0 +1,36 @@
+// expect: 42
+// BANKED RED (unregistered — Hβ.effects.negative-stance-under-mixed-gate).
+// A fn whose callee is a MUTUALLY-RECURSIVE `!E`-declaring fn cannot
+// declare a closed positive row: `outer` here declares `Cast + !Mutate`
+// and proves `Cast(Int) + !Mutate`, and the gate refuses it —
+// E_EffectMismatch at outer's own decl span, on every path (check,
+// compile, and the concatenated blob alike).
+//
+// The trigger was isolated by probe, three theories dead first:
+//   · bare-declared vs instance-proven ALONE passes (`with Cast` over
+//     `addr(x)` — eff_name_handle shares the handle between ENamed and
+//     EParameterized, so by-name membership already admits an instance);
+//   · negation-beside-positives alone passes (`with Cast + !Mutate`);
+//   · a NON-recursive `!Mutate` callee passes.
+// Mutual recursion is the discriminator, and the root is named:
+// row_without_self (effects.mn) takes the least solution of a recursive
+// row equation — "a tail landing on the fn's OWN row handle cuts to the
+// closed head" — and that cut is SELF-only. Here the tail lands on a
+// CO-MEMBER's handle, so R_ping = names ∪ R_pong and R_pong = names ∪
+// R_ping never cut, the row never closes, and the widened tail flows
+// into every caller until a closed gate refuses it.
+//
+// The fix is the same least-solution argument one scope up: the cut
+// belongs to the whole BINDING GROUP — a tail landing on any member of
+// the SCC being judged cuts to the closed head — which needs the
+// group's row handles at the publish site. This fixture is the artifact
+// that starts that landing and the gate that keeps it fixed.
+import runtime/memory
+
+fn ping(n) with !Mutate = if n <= 0 { 0 } else { pong(n - 1) }
+
+fn pong(n) with !Mutate = if n <= 0 { 1 } else { ping(n - 1) }
+
+fn outer(x) with Cast + !Mutate = addr(ping(x))
+
+fn main() = if outer(3) > 0 { 42 } else { 1 }

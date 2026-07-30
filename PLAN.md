@@ -1092,6 +1092,39 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE MUTUAL CYCLE'S ROW NEVER CLOSES — four probes,
+  eight lines, one named root (no pin move — the measurement and its
+  banked RED; boot stands at ec04f745). The prior landing named
+  Hβ.effects.negative-stance-under-mixed-gate from the wheel's own
+  check verdicts; this iteration DUG it to the root instead of
+  guessing at the crown's algebra. THE MINIMAL REPRO
+  (tests/frontier/mn-mutual-negation-gate.mn, unregistered — it fails
+  today by construction): a fn declaring `Cast + !Mutate` over a
+  MUTUALLY-RECURSIVE `!Mutate` callee is refused by its own
+  declaration, E_EffectMismatch at its decl span, on check AND compile
+  AND the concatenated blob alike (so it was never a check-path
+  artifact). FOUR THEORIES KILLED IN ORDER, each banked so none is
+  re-chased: bare-declared-vs-instance-proven passes alone
+  (eff_name_handle shares the handle between ENamed and
+  EParameterized, so by-name membership already admits an instance
+  under a bare declaration); negation-beside-positives passes; a
+  NON-recursive `!E` callee passes; mutual recursion is the
+  discriminator. THE ROOT, named at a specific fn: `row_without_self`
+  (effects.mn) takes the least solution of a recursive row equation —
+  its own comment says "a tail landing on the fn's OWN row handle cuts
+  to the closed head" — and that cut is SELF-only, so under mutual
+  recursion the tail lands on a CO-MEMBER's handle, `R_ping = names ∪
+  R_pong` and `R_pong = names ∪ R_ping` never cut, the row never
+  closes, and the widened tail flows into every caller until a closed
+  gate refuses it. THE FIX IS THE SAME ARGUMENT ONE SCOPE UP — the cut
+  belongs to the whole BINDING GROUP — and its scope is measured, not
+  assumed: the cut fires at inf_exit_fn, where infer_ctx's stack holds
+  only the NESTING frames (a co-member is a sibling top-level fn, never
+  on it), so the group's row handles must reach that handler, AND the
+  rounds re-judge in LAYER order without group context, so a
+  trial-only fix would be undone next round. That is a focused landing
+  across the cycle discipline and the convergence walk — banked whole
+  rather than ridden, with the artifact that starts it.
 - 2026-07-30 · ▶▶ THE CHECK VERB WAS TELLING THE TRUTH — the audit's F6
   probed instead of believed, and its "false diagnostics" were real
   (pin ec04f745). Morgan's cut ("make the engine meet the surface")
@@ -7187,13 +7220,24 @@ over `addr(x)` checks clean — eff_name_handle shares the handle
 between ENamed and EParameterized, so by-name membership already
 admits an instance under a bare declaration), and neither is
 negation-beside-positives (`with Cast + !Mutate` on the same minimal
-body checks clean). The remaining variable is the BODY's tail: a call
-chain that carries a negative stance widens the body row to EtAll,
-which the closed mixed gate then refuses. The self-form is the tail
-algebra: a body EtAll whose absent set COVERS the gate's mask is
-subsumed (the EtAll-gate arm already reasons exactly this way —
-`name_set_subset(ag, ab)`); the closed arm simply never learned it.
-Cheap, and it makes the per-file check honest for two more modules.
+body checks clean). MUTUAL RECURSION is the discriminator (probe four, the minimal RED
+banked at tests/frontier/mn-mutual-negation-gate.mn — unregistered,
+eight lines, failing on check AND compile AND the concatenated blob
+alike): a NON-recursive `!Mutate` callee passes; make the callee a
+mutually-recursive pair and the caller's own declaration is refused.
+THE ROOT, traced to a named fn: `row_without_self` (effects.mn) takes
+the least solution of a recursive row equation — "a tail landing on
+the fn's OWN row handle cuts to the closed head" — and that cut is
+SELF-only. Under mutual recursion the tail lands on a CO-MEMBER's
+handle, so `R_ping = names ∪ R_pong, R_pong = names ∪ R_ping` never
+cuts, the row never closes, and the widened tail flows into every
+caller until a closed gate refuses it. THE FIX IS THE SAME ARGUMENT
+ONE SCOPE UP: the least-solution cut belongs to the whole BINDING
+GROUP — a tail landing on ANY member of the SCC currently being
+judged cuts to the closed head — and the group is already in hand
+(scc_groups, and the cycle discipline threads membership at judge
+time). It needs the group's row handles at the publish site, which is
+a focused landing, not a rider.
 
 `Hβ.graph.reverse-edge-and-bound-projection` — oracle.mn's two
 surviving iteration convictions, named at their true form (2026-07-30).

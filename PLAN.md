@@ -1092,6 +1092,39 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶▶ THE CYCLE DISCIPLINE — the schemes-are-edges arc
+  opens at its foundation: monomorphic recursion by default, the
+  signature price for polymorphic recursion (pin 4e8eb504). At group
+  entry an unsig'd Tarjan-cycle member's env view re-registers with
+  its TYPE cells SHARED — Forall over only the row-sort quantifiers of
+  the same pre-registered skeleton — so an intra-cycle forward use
+  TEACHES the callee's actual param/ret cells instead of discarding
+  its demand into a fresh copy (the disconnected-vars class): this is
+  NOT tower machinery — no probes, no freezes, no joins — it is
+  union-find propagation as the cycle's constraint channel, the edges
+  model's own form for cycles, and it SURVIVES the tower's deletion
+  as the cycle judgment. The full-mono first form was convicted by
+  the wheel in one march (five E_EffectMismatch — application-site
+  row unifies contaminating callee rows through the shared row cell;
+  the directional-edge law's class), so ROW handles stay quantified,
+  freshening per use. A fully-annotated member (every param + return
+  authored — lowercase params being the DECLARED polymorphism) keeps
+  its quantified pre-registration: polymorphic recursion by intent.
+  The group-exit sweep re-generalizes every member over the group's
+  resolved cells (an early member's final carries a late member's
+  resolution instead of quantifying a then-free var the frozen-read
+  law would forever freshen). MEASURED HONESTLY: census 0 at every
+  generation (zero wheel cycles pay a type-side mono price);
+  TRANSITION m3 == m4 at 353,904 lines; the board whole (micros
+  121/0, frontier 328/0, proof-exactness 9/9, crown 5/5) — and the
+  bound-hit mover (parse_effect_list_from) is UNMOVED: its flip is
+  ROUNDS-resident (each round's re-parse + re-judgment regenerates
+  it; no trial-side seed can clear a rounds-side oscillator). The
+  measurement sharpens the arc: the rounds' DELETION is the cure —
+  trial-as-the-judgment + one verification pass + the reporting
+  final — and this discipline is its prerequisite (the rounds can
+  only delete when the trial's cycle finals are trustworthy, which
+  is exactly what landed here).
 - 2026-07-30 · ▶▶ THE VET — Morgan's charge ("re-judge? re-infer?
   re-derive?") audits the 24-hour window against Carried-Truth + the
   eight interrogations; the tower brick reverts and the gate learns

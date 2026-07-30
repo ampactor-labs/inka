@@ -1838,8 +1838,102 @@ fn trial_group_walk(ref stmts, ref groups, own rows, g) = if g >= len(groups) {
 // the widening join is the rung's true remainder (the residue index
 // carries the spec), and iterating without it taxed a 45-member group
 // forty-seven probes to no fixpoint.
-fn trial_judge_group(ref stmts, own members, own rows) =
+fn trial_judge_group(ref stmts, own members, own rows) = if len(members) > 1 {
+  // THE CYCLE DISCIPLINE (the schemes-are-edges arc's first rung, replacing
+  // the refuted iteration direction whole — the vet's redirect executed):
+  // monomorphic recursion by default, the signature price for polymorphic
+  // recursion. At group entry an UNSIG'D member's env view goes MONO —
+  // Forall([], fn_ty) over the SAME pre-registered skeleton — so an
+  // intra-cycle forward use TEACHES the callee's actual param/ret cells
+  // (instantiate of an empty-q scheme returns the live record) instead of
+  // discarding its demand into a fresh copy (the disconnected-vars class:
+  // the crawl's root, one stale link per round). A FULLY-ANNOTATED member
+  // keeps its quantified pre-registration: its sig IS its declared
+  // polymorphism, instantiated per use — polymorphic recursion by intent,
+  // the price every HM judge charges (inference there is undecidable).
+  // After the walk, EVERY member re-generalizes: the group-exit sweep
+  // publishes finals over the group's fully-resolved cells, so an early
+  // member's scheme carries a late member's resolution instead of
+  // quantifying a then-free var the frozen-read law would forever freshen.
+  {
+    group_mono_views(stmts, members, 0)
+    let rows2 = group_judge_members(stmts, members, rows, 0)
+    group_final_publish(stmts, members, 0)
+    rows2
+  }
+} else {
   group_judge_members(stmts, members, rows, 0)
+}
+
+fn group_mono_views(ref stmts, ref members, j) = if j >= len(members) {
+  ()
+} else {
+  match stmts[members[j]] {
+    N(sbody, _, _) => match sbody {
+      NStmt(FnStmt(name, params, ret_ann, _, _)) => if fn_fully_sigd(params, ret_ann) {
+        ()
+      } else {
+        match env_lookup(name) {
+          Some((sch, reason, FnScheme)) => match sch {
+            Forall(q, fn_ty) => // TYPE cells share (mono — the intra-cycle demand teaches the
+            // callee's actual param/ret cells); ROW handles stay QUANTIFIED,
+            // freshening per use — a shared row cell would let every
+            // application site's symmetric row unify contaminate the callee's
+            // own row (measured: five declared-row mismatches the moment the
+            // full-mono view landed — the directional-edge law's class, the
+            // row channel is a FLOW, never a shared cap).
+            env_extend(name, Forall(row_handles_only(q, 0), fn_ty), reason, FnScheme),
+          },
+          _ => (),
+        }
+      },
+      _ => (),
+    },
+  }
+  group_mono_views(stmts, members, j + 1)
+}
+
+// A member is SIG'D when every param carries an authored type (the parser
+// mints TVar placeholders for unannotated params — the discriminator
+// build_param_types dispatches on) and the return is authored. Lowercase
+// type params in the annotations are the DECLARED polymorphism (the case
+// rule), quantified by the pre-registration — exactly the generality the
+// sig prices.
+fn fn_fully_sigd(ref params, ref ret_ann) = match ret_ann {
+  N(rbody, _, _) => match rbody {
+    NTypeAnn(_) => params_all_annotated(params, 0),
+    _ => false,
+  },
+}
+
+fn params_all_annotated(ref params, i) = if i >= len(params) {
+  true
+} else {
+  match param_ty(params[i]) {
+    TVar(_) => false,
+    _ => params_all_annotated(params, i + 1),
+  }
+}
+
+fn row_handles_only(ref q, i) = if i >= len(q) {
+  []
+} else if is_row_handle(graph_chase_handle(q[i])) {
+  [q[i]] ++ row_handles_only(q, i + 1)
+} else {
+  row_handles_only(q, i + 1)
+}
+
+fn group_final_publish(ref stmts, ref members, j) = if j >= len(members) {
+  ()
+} else {
+  match stmts[members[j]] {
+    N(sbody, span, handle) => match sbody {
+      NStmt(FnStmt(name, _, _, _, _)) => env_extend(name, generalize(handle), Located(span, Declared(name)), FnScheme),
+      _ => (),
+    },
+  }
+  group_final_publish(stmts, members, j + 1)
+}
 
 fn group_judge_members(ref stmts, ref members, own rows, j) = if j >= len(members) {
   rows

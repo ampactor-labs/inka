@@ -2566,7 +2566,16 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
                   report(EEffectMismatch(declared_row, body_row, span))
                 }
               },
-              _ => (),
+              _ => // The declaration PINS even when the body row's resolution
+              // lags at decl exit (mutual recursion mid-convergence): the
+              // silent `()` here left a declared row unenforced whenever
+              // parity out-raced resolution — parse_effect_list_from's
+              // published tail flipped open ↔ closed WITH its authored row
+              // (the cached flip render convicted the hole, 2026-07-30).
+              // The contract stands regardless of parity; teaching beyond
+              // it meets the bound row and mismatches loudly on the next
+              // unify.
+              graph_bind_row(row_handle, declared_row, Located(span, Declared(name))),
             }
           }
           env_scope_exit()

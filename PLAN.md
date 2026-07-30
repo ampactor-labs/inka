@@ -1092,6 +1092,25 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE DECLARED ROW PINS UNDER LAG — the gate's silent
+  hole closes (pin 870d9fc9). The cached flip render convicted my own
+  same-day revert (the stack-correct-fixes law live):
+  parse_effect_list_from's published tail flipped open ↔ closed WITH
+  its authored row, because the declared-effs gate's unbound arm was
+  `_ => ()` — when mutual recursion left the body row unresolved at
+  decl exit, enforcement silently skipped and generalize published an
+  open-tailed final. The arm BINDS the declaration now: the contract
+  stands regardless of round parity, and teaching beyond it
+  mismatches loudly on the next unify. TRANSITION m3 == m4; census 0;
+  frontier 321/0; proof-exactness 9/9. The residue is bounded to a
+  point: the marginal run-variant flip persists with ALL decl-exit
+  channels closed — the A-phase's open-tailed carrier must be a
+  skipped-round env read surfacing the trial's loose prereg entry
+  (the render matches its exact shape: six declared names + open
+  tail); the banked next probe prints the flipping entry's env
+  POSITION and GENERATION at the bound, which names the read path in
+  one firing. The unfold patch stays banked behind it.
+
 - 2026-07-30 · ▶▶ THE SIGNATURE AT THE CYCLE — the last structural
   oscillator dies, and the judgment CONVERGES for the first time (no
   pin move — the authored rows are emission-neutral, boot fb265daa

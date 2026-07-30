@@ -1092,6 +1092,52 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶▶ THE INTERVAL FRAGMENT AND THE FLOW LICENCE — Verify
+  grows its first inference leg, and the dig kills a measured
+  refinement launder (Hβ.verify.interval-fragment's engine half lands ·
+  pin a71ebbcb). THE SOUNDNESS KILL first, witnessed at runtime: the
+  typed-identity echo-stop read CLASS membership as proof, and the
+  arith unify puts a computation's result in its operand's refined
+  class — `fn wild(v: Nat) -> Nat = v - 1` accrued NOTHING and
+  `wild(0)` ran to -1 through a `0 <= self` return (wasmtime's own
+  "invalid exit status" the witness). value_flows_class is the
+  licence: typed identity holds for value-FLOW nodes (a var, a call
+  result, a join — the value IS a class member's value, covered by
+  that member's own boundary obligation) and NEVER for a computation
+  (BinOp/UnaryOp mint a NEW value whose membership is a theorem) —
+  computations raise, at both readers (the accrual echo-stop and the
+  synth-gate admit). THE ENGINE: a lower-bound read over node
+  structure slotted into compare_decide_at's None path (verify.mn
+  wholly; the arm row unchanged — the decide family already carries
+  the superset). TWO FACES under one contamination law, the build's
+  own second kill: the single-face walk's type-identity leg
+  re-laundered `v - 1` by reading the obligation TARGET's class — the
+  annotation's unify had just entered it — so the transparent face
+  (the target + if/match/block joins, whose cells unify with the
+  target's) reads STRUCTURE only (literals, joins, the len/byte_len
+  floor), and type reads live where the class boundary is crossed: a
+  BinOp's operands (cells merged with the arith ground, never the
+  target's) and a call's bound off the CALLEE's published TFun return
+  (the assume-the-signature induction). MEASURED on the fixture
+  (mn-verify-interval, 21): cap discharges (if-join + len), bump
+  discharges (Add + opaque type read of the refined param), wild
+  pends visibly and still runs, seek pends as the named peel-window
+  residue (its return constraint runs inside the ann-unify's peel,
+  before the most-refined rebind — the rec-call's published bound not
+  yet readable there). The frontier leg asserts EXACTLY TWO pendings
+  — fewer is a re-launder, more is a lost discharge. RIDES WITH IT,
+  the session's third find: image_pack's transient doubling crosses
+  the allocator's SIGNED-2GB boundary (807MB packed clean, 1017MB
+  trapped in alloc — the banked "wire doubles the image" residue
+  firing as a hard 134 that killed the compile), and a best-effort
+  cache must never kill the compile: driver_warm_persist skips loudly
+  past 960MB (the capacity dissolves with the per-decl arena's
+  image/scratch split). Wheel debt holds 12 with ZERO new accruals
+  under the licence (the wheel launders nothing); the six `0 <= self`
+  survivors are the annotation sweep's targets (the peer's remaining
+  half, with the peel-window fix its sharpest single). CLEAN
+  m2 == m3 at 347,171 lines; census 0; frontier 323/0;
+  proof-exactness 9/9.
 - 2026-07-30 · ▶▶ THE COMMENT COMES HOME AT THE SEAM — the weave's one
   cross-module attach class closes at the layer that owns the seams
   (Hβ.parser.comment-attach-module-boundary RESOLVED · pin 997684f1).
@@ -6481,22 +6527,25 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.verify.interval-fragment` (2026-07-30, the annotation sweep's
-plateau names the engine increment — Arc 3's "range fragment WITH
-inference" scoped to its fixtures): the producer-carries-proof sweep
-took the wheel's debt 138 → 12, and the survivors ARE the acceptance
-tests. The fragment: an INTERVAL read over the graph — a literal is
-its point; a walk counter whose init is ground ≥0 and whose only
-step is +1 stays ≥0 (the recursion-parameter monotone case:
-scan_for_span's i, the enumerators' range(0, next) yields); a length
-(byte_len, len) is ≥0 by construction; an if joins its branches'
-intervals (make_list's `if n < 16 { 16 } else { n }` capacity). Six
-0 <= self sites + scan_for_span's producer pend discharge in one
-mechanism; TagId's 0..255 and Sample's [-1,1] stay the SMT tier's.
-BUILD CONSTRAINT from tonight's blood: Verify-side READS only — no
-row changes (row perturbations gamble the marginal front until the
-SCC cure lands); the interval walk is GraphRead over node structure,
-row-neutral by construction.
+`Hβ.verify.interval-fragment` — ENGINE HALF LANDED (2026-07-30, pin
+a71ebbcb — the §7 entry THE INTERVAL FRAGMENT AND THE FLOW LICENCE
+carries the record: the two-face lower-bound read in verify.mn, the
+value_flows_class licence closing the measured arith-class launder,
+the mn-verify-interval fixture + frontier leg, arm row unchanged).
+THE REMAINING HALF is the wheel sweep: the six standing `0 <= self`
+pendings (cursor:297 score_one_position's handle param · cursor:546
+scan_for_span's return · lexer:229's lex_from arg · main:1272/1437's
+ph flows · voice:1097's resolve_cursor_target) discharge via
+authored refined annotations whose echo/interval the engine now
+honors — each a one-line annotation plus a march to measure the
+moved obligations. The SHARPEST single first: the PEEL-WINDOW fix —
+apply_refinement_constraint at the return site runs inside the
+ann-unify's peel (before the most-refined rebind), so a recursive
+call's published bound is unreadable at its own decl's constraint
+(seek's measured pend); running the rebind's re-refinement before
+the constraint OR reading the callee's pre-registered sig closes the
+recursion shape wholesale. TagId's 0..255 and the float intervals
+stay the SMT tier's.
 
 `Hβ.infer.schemes-are-edges` — THE MENTL WAY for the judgment (named
 2026-07-30, Morgan's question "is there a better way — a more Mentl

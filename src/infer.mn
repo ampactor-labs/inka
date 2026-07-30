@@ -6553,8 +6553,10 @@ fn apply_refinement_constraint(ty, value_handle, span: ValidSpan) = match ty {
   // minted it) — discharged, pending, or refuted THERE. Accruing again
   // per consumer echoes one claim N times up the chain (a fixture with
   // one honest claim surfaced five pendings); the ledger owns each proof
-  // question at one home, so the echo accrues nothing.
-  if inferred_alias_name(value_handle) == aname {
+  // question at one home, so the echo accrues nothing. The licence is
+  // value_flows_class: a COMPUTATION node's class membership is a
+  // theorem, never a flow — it raises (the laundered `v - 1` runtime -1).
+  if value_flows_class(value_handle) && inferred_alias_name(value_handle) == aname {
     ()
   } else {
     apply_refinement_constraint(inner, value_handle, span)

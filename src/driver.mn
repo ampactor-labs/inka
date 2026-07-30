@@ -615,13 +615,24 @@ fn driver_compile_entry(ref entry_module) with Memory + Alloc + Cast + Persist +
 
 // Persist the analyzed state whole — the ast root, the manifest, the
 // entry name — one image, only when the analysis is CLEAN (the
-// diagnostics ledger rides the image as counts, not replayable prints).
+// diagnostics ledger rides the image as counts, not replayable prints)
+// AND the image fits its own wire: image_pack allocates a second
+// image-sized buffer above the line, and the allocator's bound
+// arithmetic crosses at the signed 2GB boundary — measured 2026-07-30,
+// a 1017MB line trapped where 807MB packed clean. The warm cache is
+// best-effort POLICY, so past the capacity it skips loudly and the
+// next run derives cold; the capacity itself dissolves with the
+// per-decl arena's image/scratch split (§5.O layer 3).
 fn driver_warm_persist(ref entry_module, ref asts, ref pairs) with Memory + Alloc + Cast + Persist + WASI + Filesystem + Diagnostic = if diag_errors() == 0 {
-  fs_mkdir_impl(".build")
-  list_set(warm_asts, 0, asts)
-  list_set(warm_manifest, 0, pairs)
-  list_set(warm_entry, 0, entry_module)
-  persist(addr(asts), driver_warm_path(entry_module))
+  if heap_mark() < 960 * 1048576 {
+    fs_mkdir_impl(".build")
+    list_set(warm_asts, 0, asts)
+    list_set(warm_manifest, 0, pairs)
+    list_set(warm_entry, 0, entry_module)
+    persist(addr(asts), driver_warm_path(entry_module))
+  } else {
+    eprint_string("warm: image past the wire capacity — skipping the persist (cold next run)\n")
+  }
 } else {
   ()
 }

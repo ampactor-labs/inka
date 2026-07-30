@@ -2015,6 +2015,20 @@ for i in "${!compilers[@]}"; do
   else
     fail "decl-name address (got: $(printf '%s' "$gh_out" | grep -m1 'Query:'))"
   fi
+
+  # ─── The interval fragment's proof-and-honesty face ────────────────
+  # mn-verify-interval runs to 21 through the contract battery; HERE the
+  # stderr ledger is the assertion: exactly TWO pending comparisons —
+  # seek (the peel-window residue) and wild (honest Sub debt). Fewer =
+  # the licence laundered a computation again (the runtime -1 class);
+  # more = an interval leg (if-join / len / Add / opaque type read)
+  # stopped discharging.
+  iv_err=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-verify-interval.mn" 2>&1 >/dev/null | grep -c 'pending comparison')
+  if [ "$iv_err" = "2" ]; then
+    pass "interval fragment: discharges hold and the licence never launders (2 honest pendings)"
+  else
+    fail "interval fragment (pending comparisons: $iv_err, want 2)"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

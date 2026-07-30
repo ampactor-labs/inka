@@ -53,11 +53,11 @@ handler verify_ledger with debt = [] {
 // (node_const_at). litval_compare folds the comparison; cross-kind equality is
 // Some(false), cross-kind ordering is None. PAnd/POr/PNot recurse with
 // three-valued short-circuit; PWithSelf rebinds `self` over its inner predicate.
-fn predicate_decide(ref pred) with GraphRead = predicate_decide_at(pred, 0)
+fn predicate_decide(ref pred) with GraphRead + Memory = predicate_decide_at(pred, 0)
 
 // self_h is the value-node handle `self` resolves to (0 = no `self` in scope,
 // so `self` is undecidable). PWithSelf(sh, inner) rebinds it over inner.
-fn predicate_decide_at(ref pred, self_h) with GraphRead = match pred {
+fn predicate_decide_at(ref pred, self_h) with GraphRead + Memory = match pred {
   PTrue => Some(true),
   PCompare(op, l, r) => compare_decide_at(op, l, r, self_h),
   PAnd(a, b) => and_decide(predicate_decide_at(a, self_h), predicate_decide_at(b, self_h)),
@@ -74,13 +74,29 @@ fn predicate_decide_at(ref pred, self_h) with GraphRead = match pred {
 }
 
 // A comparison decides iff BOTH operands reduce to ground constants under the
-// current `self` binding; otherwise None (defer to the solver).
-fn compare_decide_at(op, lh, rh, self_h) with GraphRead = match node_const_at(lh, self_h) {
+// current `self` binding — or, with a ground LEFT and a structural right, the
+// interval fragment proves `n <= X` from X's lower bound; otherwise None.
+fn compare_decide_at(op, lh, rh, self_h) with GraphRead + Memory = match node_const_at(lh, self_h) {
   Some(lv) => match node_const_at(rh, self_h) {
     Some(rv) => litval_compare(op, lv, rv),
-    None => None,
+    None => interval_ge_decide(op, lv, rh, self_h),
   },
   None => None,
+}
+
+// `n <= X` / `n < X` with ground left: proves when X's structural LOWER BOUND
+// reaches n. PROVES only, never refutes — a bound that fails to reach n says
+// nothing about X's values (None keeps the obligation live and honest).
+fn interval_ge_decide(ref op, ref lv, rh, self_h) with GraphRead + Memory = match lv {
+  LVInt(n) => match node_lo_tr(rh, self_h) {
+    Some(lo) => match op {
+      BLe => if n <= lo { Some(true) } else { None },
+      BLt => if n < lo { Some(true) } else { None },
+      _ => None,
+    },
+    None => None,
+  },
+  _ => None,
 }
 
 // Resolve an operand HANDLE to a ground constant, reading the Expr LIVE from the
@@ -115,6 +131,163 @@ fn node_const_at(handle, self_h) with GraphRead = match graph_node_body(handle) 
 fn resolve_self_operand(name: String, self_h) with GraphRead =
   if name == "self" { if self_h == 0 { None } else { node_const_at(self_h, 0) } } else { None }
 
+// ─── The interval fragment — a lower-bound read over node structure ──
+//
+// The range fragment WITH inference (PLAN §11 Arc 3), scoped to LOWER
+// bounds: every integer refinement the wheel carries is `0 <= self`-
+// shaped (TagId's upper half and the float intervals stay the SMT
+// tier's). Each leg is a graph READ, minting nothing:
+//   · a literal is its point
+//   · an if / match / block joins its branches (min — every path bounds)
+//   · len / byte_len are >= 0 by the sequence representation itself
+//   · Add sums its operands' bounds
+//   · a node whose CHASED TYPE carries an `n <= self` refinement has
+//     bound n — the graph's own proof read live, sound modulo the
+//     ledger: a refined class's values are boundary-enforced (call-arg,
+//     let, and return sites each accrue at entry) or their producer's
+//     obligation is itself visible debt, so reading the class here
+//     hides nothing; a recursive call reading its own fn's refined
+//     return is the assume-the-signature induction (vacuous on the
+//     non-returning path, grounded by the base returns).
+// TWO FACES, one contamination law: the obligation's target node and
+// every type-TRANSPARENT position under it (if/match/block joins — their
+// cells unify with the target's) sit in the SAME union-find class the
+// annotation just entered, so a type read there proves the annotation
+// FROM the annotation (measured: `v - 1` laundered through its own
+// `0 <= self` this way). The transparent face therefore reads STRUCTURE
+// only; type reads live where the class boundary is crossed — a BinOp's
+// operands (their cells merge with the arith ground, never the
+// target's), and a call's bound is read off the CALLEE's own published
+// TFun return (the assume-the-signature induction — the callee's fact,
+// not the site's class).
+fn node_lo_tr(handle, self_h) with GraphRead + Memory = match graph_node_body(handle) {
+  NExpr(LitInt(n)) => Some(n),
+  NExpr(VarRef(name)) => if name == "self" { if self_h == 0 { None } else { node_lo_tr(self_h, 0) } } else { None },
+  NExpr(IfExpr(_, t, e)) => lo_join(node_lo_tr(node_handle(t), self_h), node_lo_tr(node_handle(e), self_h)),
+  NExpr(MatchExpr(_, arms)) => arms_lo(arms, self_h, 0, None),
+  NExpr(BlockExpr(_, final_expr)) => node_lo_tr(node_handle(final_expr), self_h),
+  NExpr(BinOpExpr(op, l, r)) => match op {
+    BAdd => lo_add(node_lo_op(node_handle(l), self_h), node_lo_op(node_handle(r), self_h)),
+    _ => None,
+  },
+  NExpr(CallExpr(callee, _)) => call_lo(callee),
+  _ => None,
+}
+
+// The opaque face — the node's cell is outside the target's class, so
+// its chased type is its OWN producer's fact and reads soundly.
+fn node_lo_op(handle, self_h) with GraphRead + Memory = match graph_node_body(handle) {
+  NExpr(LitInt(n)) => Some(n),
+  NExpr(BinOpExpr(op, l, r)) => match op {
+    BAdd => lo_add(node_lo_op(node_handle(l), self_h), node_lo_op(node_handle(r), self_h)),
+    _ => ty_lo_at(handle),
+  },
+  NExpr(CallExpr(callee, _)) => call_lo(callee),
+  _ => ty_lo_at(handle),
+}
+
+// A call's bound comes from the CALLEE's published function type — its
+// declared return read through the callee node's chase, never the call
+// site's class. len/byte_len bound by the sequence representation.
+fn call_lo(ref callee) with GraphRead = match graph_node_body(node_handle(callee)) {
+  NExpr(VarRef(cname)) => if cname == "len" || cname == "byte_len" { Some(0) } else { callee_ret_lo(node_handle(callee)) },
+  _ => callee_ret_lo(node_handle(callee)),
+}
+
+fn callee_ret_lo(ch) with GraphRead = match graph_chase(ch) {
+  GNode(kind, _) => match kind {
+    NBound(TFun(_, ret, _)) => ty_lo(ret),
+    _ => None,
+  },
+}
+
+// The join of two branch bounds — min, both must answer.
+fn lo_join(ea, eb) with Pure = match ea {
+  Some(a) => match eb {
+    Some(b) => if a < b { Some(a) } else { Some(b) },
+    None => None,
+  },
+  None => None,
+}
+
+// The sum of two operand bounds — both must answer.
+fn lo_add(ea, eb) with Pure = match ea {
+  Some(a) => match eb {
+    Some(b) => Some(a + b),
+    None => None,
+  },
+  None => None,
+}
+
+// Min over every match arm's bound; None until the first arm answers,
+// None the moment any arm cannot.
+fn arms_lo(ref arms, self_h, i, acc) with GraphRead + Memory = if i >= len(arms) {
+  acc
+} else {
+  match arms[i] {
+    (_, body) => match node_lo_tr(node_handle(body), self_h) {
+      Some(lo) => arms_lo(
+        arms,
+        self_h,
+        i + 1,
+        match acc {
+          Some(best) => if best < lo { Some(best) } else { Some(lo) },
+          None => Some(lo),
+        }
+      ),
+      None => None,
+    },
+  }
+}
+
+// The type-identity leg: the node's chased type already carries the
+// bound as its own refinement — read it, never re-derive it.
+fn ty_lo_at(handle) with GraphRead = match graph_chase(handle) {
+  GNode(kind, _) => match kind {
+    NBound(ty) => ty_lo(ty),
+    _ => None,
+  },
+}
+
+fn ty_lo(ty) with GraphRead = match ty {
+  TAlias(_, inner) => ty_lo(inner),
+  TRefined(base, pred) => lo_best(ty_lo(base), pred_lo(pred)),
+  _ => None,
+}
+
+// Either source may carry the bound; the tighter (larger) lower bound wins.
+fn lo_best(ea, eb) with Pure = match ea {
+  Some(a) => match eb {
+    Some(b) => if a < b { Some(b) } else { Some(a) },
+    None => Some(a),
+  },
+  None => eb,
+}
+
+// The lower bound a type-level predicate states about `self`:
+// `n <= self` / `n < self` with a ground left operand. Operands are
+// node handles (the refinement's own parse nodes).
+fn pred_lo(pred) with GraphRead = match pred {
+  PCompare(op, lh, rh) => match graph_node_body(rh) {
+    NExpr(VarRef(rname)) => if rname == "self" {
+      match node_const(lh) {
+        Some(LVInt(n)) => match op {
+          BLe => Some(n),
+          BLt => Some(n + 1),
+          _ => None,
+        },
+        _ => None,
+      }
+    } else {
+      None
+    },
+    _ => None,
+  },
+  PAnd(a, b) => lo_best(pred_lo(a), pred_lo(b)),
+  PWithSelf(_, inner) => pred_lo(inner),
+  _ => None,
+}
+
 // Bind the refinement's `self` to the value node being refined. A predicate's
 // operands are node HANDLES (types.mn Predicate) and `self` may sit NESTED inside
 // an arithmetic operand (`self + 1`, `self % 2`), so a physical operand swap
@@ -130,7 +303,7 @@ fn subst_self(pred, value_handle) with Pure = PWithSelf(value_handle, pred)
 // proof, and assume-true is the Dafny {:axiom} cautionary the ledger
 // exists to refuse. Transparent aliases recurse; an unrefined target
 // admits by type alone.
-fn refinement_admits(ty, value_handle) with GraphRead = match ty {
+fn refinement_admits(ty, value_handle) with GraphRead + Memory = match ty {
   TAlias(aname, inner) => // A candidate whose INFERRED type is the SAME refined alias is admitted
   // by TYPED IDENTITY — which proves the callee's DECLARATION, never its
   // discharge. The layering is deliberate, each proof question at its one
@@ -141,7 +314,7 @@ fn refinement_admits(ty, value_handle) with GraphRead = match ty {
   // refusal on remaining debt is R5's gate at the emit boundary. The synth
   // gate answers only "does this filling fit the target type" — it never
   // re-decides a proof another site owns.
-  if inferred_alias_name(value_handle) == aname {
+  if value_flows_class(value_handle) && inferred_alias_name(value_handle) == aname {
     true
   } else {
     refinement_admits(inner, value_handle)
@@ -150,6 +323,20 @@ fn refinement_admits(ty, value_handle) with GraphRead = match ty {
     Some(decided) => decided,
     None => false,
   },
+  _ => true,
+}
+
+// The typed-identity echo-stop's licence: it holds for value-FLOW nodes
+// (a var, a call result, a join — the value IS a class member's value,
+// so the member's own boundary obligation covers it) and NEVER for a
+// COMPUTATION (BinOp/UnaryOp mint a NEW value whose class membership is
+// a theorem, not a flow — the arith unify puts `v - 1` in v's refined
+// class, and reading that as proof laundered a runtime -1 through a
+// `0 <= self` return, measured 2026-07-30). A computation raises; the
+// ground fold and the interval fragment prove the provable.
+fn value_flows_class(value_handle) with GraphRead = match graph_node_body(value_handle) {
+  NExpr(BinOpExpr(_, _, _)) => false,
+  NExpr(UnaryOpExpr(_, _)) => false,
   _ => true,
 }
 

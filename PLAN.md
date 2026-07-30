@@ -1092,6 +1092,46 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ ITERATION IS TOPOLOGY — Morgan's interrogation of
+  recursion itself becomes a law, a measurement, and the audit's next
+  tier (pin d949fa7a). THE QUESTION ("was recursion even the correct
+  thing for Mentl? has it tainted us?") and THE HONEST ANSWER: the
+  recursion idiom was Claude's ML/Scheme import, never a decision the
+  medium made — SYNTAX declared the true model at birth (no loop
+  keywords; iteration is |> stages, <~ cycles, Iterate handlers) and
+  the wheel's body speaks Scheme with a Mentl accent (census: 373
+  vocabulary call sites against hundreds of hand-rolled index loops;
+  28 <~ uses, almost all in the DSP lib). THE DEEP BILL: the entire
+  convergence tower is recursion's invoice — name-keyed mutual
+  recursion is what makes the judgment cyclic and schemes into
+  snapshots needing iteration; Faust (the verbs' own validator) has no
+  recursion, one <~-typed-locally cycle form, and single-pass
+  compilation. THE ULTIMATE MEDIUM'S ITERATION STACK, read off the
+  kernel: (1) structural iteration = DERIVED folds over the five
+  node-kinds — total, terminating, generated never authored; (2)
+  cyclic dataflow = <~, the cycle drawn once as an edge, typed by the
+  local recurrence rule; (3) unbounded search = handlers + multi-shot
+  (iteration as resumption — the oracle's own form); (4) named general
+  recursion = the priced residual (the signature-price law
+  generalizes: it is the price of name-keyed recursion, period). THE
+  TIER: recursion_shape_of (oracle.mn, beside pipe_shape_of) convicts
+  a self-call threading an incremented index over the fn's own param —
+  structural over the one total child projection; derived-fold-shaped
+  recursion (recursing on children, never counters) stays silent. Its
+  first wheel census: 390 convictions — the migration queue, measured
+  by the medium itself (the name grep guessed 78). Two live catches
+  during the build: the tier's own first form convicted itself
+  (args_thread_index was index-threaded — rewritten in the vocabulary
+  it preaches), and the first probe's verdict was the PROBER's error
+  (a grep window too narrow to reach the tier's line — forensic law 2,
+  counted; the tier was correct from its first march). THE ARC
+  REFRAMED: schemes-are-edges lands into a wheel being drained of
+  name-cycles — "shrink recursion until the judgment has nothing
+  cyclic left to iterate"; the migration (costume families → folds /
+  each / iterate / <~ / drivers, march-arbitrated per family) is the
+  named peer Hβ.wheel.iteration-is-topology. Two-face frontier leg
+  registered; frontier 329/0; micros 121/0; proof-exactness 9/9;
+  crown 5/5; census 0; CLEAN m2 == m3 at 354,538 lines.
 - 2026-07-30 · ▶▶▶ THE CYCLE DISCIPLINE — the schemes-are-edges arc
   opens at its foundation: monomorphic recursion by default, the
   signature price for polymorphic recursion (pin 4e8eb504). At group
@@ -6928,6 +6968,22 @@ whose echo/interval/callee legs the engine honors — one-line
 annotations, march-measured each; the recursion-shaped ones
 (scan_for_span) wait on the IH. TagId's 0..255 and the float
 intervals stay the SMT tier's.
+
+`Hβ.wheel.iteration-is-topology` — the recursion eradication (named
+2026-07-30, Morgan's interrogation; the ledger entry ITERATION IS
+TOPOLOGY carries the law and the census). The wheel's 390
+index-threaded self-calls (the audit's iteration-shape tier is the
+standing census instrument) migrate per family toward the medium's own
+iteration stack — derived folds / each / iterate for structural walks,
+<~ for genuine cycles, driver-resumption for search — each family
+march-arbitrated, the tier's count the ratchet. Sequenced WITH
+`Hβ.infer.schemes-are-edges` (below): every name-cycle drained is
+tower the deletion no longer needs; the wheel's own SCCs (unify, the
+parser) are structural folds over Ty/Token written as mutual
+recursion, and their migration is the deletion's steepest lever. The
+named residual: recursion that survives is sig-priced (the
+signature-price law generalized — the price of name-keyed recursion,
+period).
 
 `Hβ.infer.schemes-are-edges` — THE MENTL WAY for the judgment (named
 2026-07-30, Morgan's question "is there a better way — a more Mentl

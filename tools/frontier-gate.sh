@@ -2110,6 +2110,19 @@ for i in "${!compilers[@]}"; do
   else
     fail "repr-pin (compile refused)"
   fi
+
+  # ─── The iteration-shape tier (iteration is topology) ───────────────
+  # The audit convicts a self-call threading an incremented index (the
+  # loop in recursion's costume) and stays SILENT on the vocabulary form
+  # — both faces asserted, plus the fixture still runs.
+  it_audit=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" audit "$ROOT/tests/frontier/mn-audit-iteration-shape.mn" 2>/dev/null)
+  it_fire=$(printf '%s' "$it_audit" | sed -n '/^walk_costume/,/^stage_clean/p' | grep -c 'iteration-shape')
+  it_quiet=$(printf '%s' "$it_audit" | sed -n '/^stage_clean/,/^main/p' | grep -c 'iteration-shape')
+  if [ "$it_fire" = "1" ] && [ "$it_quiet" = "0" ]; then
+    pass "audit iteration-shape: the costume convicts, the vocabulary stays silent"
+  else
+    fail "audit iteration-shape (fire=$it_fire quiet=$it_quiet)"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

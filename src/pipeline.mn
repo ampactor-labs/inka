@@ -1227,8 +1227,12 @@ fn build_audit_report(fn_name, handle, ty, pending, tightens) = {
   // The comment-reference edges' reverse read: which comments point here.
   let referenced_by = owner_names_of(graph_comment_refs_of(handle), 0, [])
   // The verb-shape read (oracle's pipe_shape_of): single-use let-chains
-  // that already draw a `|>` — the topology tier of the audit.
-  (fn_name, reached, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle), pending, tightens)
+  // that already draw a `|>` — the topology tier of the audit. Beside it
+  // the iteration-shape read (recursion_shape_of): a self-call threading
+  // an incremented index is the loop in recursion's costume — iteration
+  // is topology (|> stages, <~ cycles, derived folds), and the audit
+  // names the costume where it stands.
+  (fn_name, reached, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle), recursion_shape_of(handle), pending, tightens)
 }
 
 fn owner_names_of(ref owners, i, acc) = if i >= len(owners) {
@@ -1310,13 +1314,14 @@ fn cap_in(ref xs, ref c, i) =
 // Positional destructure — provable with no type flow, where a
 // record field read floors in a map lambda (see build_audit_report).
 fn render_audit(entries) = entries |> map((report) => match report {
-  (fn_name, reached, row_str, severable, unlocks, referenced_by, pipe_chains, pending, tightens) => audit_report_lines(
+  (fn_name, reached, row_str, severable, unlocks, referenced_by, pipe_chains, loop_costume, pending, tightens) => audit_report_lines(
     fn_name,
     row_str,
     severable,
     unlocks,
     referenced_by,
     pipe_chains,
+    loop_costume,
     pending,
     tightens
   ),
@@ -1326,7 +1331,7 @@ fn render_audit(entries) = entries |> map((report) => match report {
 // map lambda the splices judged datum-last while the tuple elements were
 // still free, and the word floor rendered every audited fn's name and
 // row as pointer numerals. The named call anchors the binders.
-fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, referenced_by: [String], pipe_chains, pending, tightens) = {
+fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, referenced_by: [String], pipe_chains, loop_costume, pending, tightens) = {
   let header = "{fn_name} : {row_str}\n"
   let severance_section = if len(severable) == 0 {
     ""
@@ -1345,6 +1350,15 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, refe
   } else {
     "  verb-shape: {show_list(pipe_chains, int_to_str, ", ")}-step let-chain reads as a |> pipe\n"
   }
+  // The iteration-shape tier: iteration is TOPOLOGY (SYNTAX's own law —
+  // no loop keywords; |> stages, <~ cycles, Iterate handlers, derived
+  // folds); a self-call threading an incremented index is the loop in
+  // recursion's costume, and a fold/each/iterate stage serves.
+  let iter_section = if loop_costume {
+    "  iteration-shape: a self-call threads an incremented index — the loop in recursion's costume; a fold/each/iterate stage serves\n"
+  } else {
+    ""
+  }
   // The banks' tiers — the same facts the frontier ranks, spoken per fn:
   // undischarged proof obligations in this decl's extent, and the
   // judgment's banked tightening with its proven row (the patch mentl
@@ -1356,7 +1370,7 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, refe
   }
   let tighten_section =
     tightens |> map(((declared, proven, _, _)) => "  tighten: with {show_effrow(declared)} — body proves {show_effrow(proven)} (mentl tighten authors the patch)\n") |> str_concat_all
-  "{header}{severance_section}{refs_section}{verb_section}{pending_section}{tighten_section}"
+  "{header}{severance_section}{refs_section}{verb_section}{iter_section}{pending_section}{tighten_section}"
 }
 
 // Query rendering — delegates to query.mn for Question parsing.

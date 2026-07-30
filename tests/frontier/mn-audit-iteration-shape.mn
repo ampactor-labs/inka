@@ -1,0 +1,11 @@
+// expect: 12
+// The iteration-shape tier's two faces (iteration is TOPOLOGY — SYNTAX's
+// own law: no loop keywords; |> stages, <~ cycles, derived folds).
+// walk_costume: a self-call threading `i + 1` over its own param — the
+// loop in recursion's costume; the audit names it. stage_clean: the
+// vocabulary form — silent. The gate asserts BOTH faces.
+fn walk_costume(xs, i, n) = if i >= n { 0 } else { walk_costume(xs, i + 1, n) }
+
+fn stage_clean(xs) = xs |> map((x) => x * 2) |> fold(0, (a, x) => a + x)
+
+fn main() = stage_clean([1, 2, 3]) + walk_costume([1], 0, 1)

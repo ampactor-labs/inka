@@ -33,6 +33,21 @@ if [ "$have" != "$claimed" ]; then
   fail=1
 fi
 
+# The march writes the pin's mechanical facts itself (sha/verdict/lines/
+# census read from the artifact) and leaves the NARRATIVE as a literal
+# placeholder — so "the pin is not blessed until the entry is written"
+# stops being a printed reminder and becomes a refusal. An unwritten
+# narrative fails here, at every verify.
+# Anchored to the ENTRY form (`- source: ‹…`), never the bare phrase: the
+# file's own recipe names the placeholder in prose, and an unanchored
+# grep convicted it on this check's first run — the string-literal
+# blindness class the drift audit already paid for, one layer up.
+if grep -q '^- source: ‹NARRATIVE UNWRITTEN' boot/PROVENANCE.md; then
+  echo "doc-truth: the head PROVENANCE entry's narrative is unwritten (the march's placeholder stands)"
+  echo "  the pin is not blessed until it says what landed and why — replace the ‹…› line"
+  fail=1
+fi
+
 headpin=$(awk '/^### The landing ledger/{f=1} f && match($0, /pin [0-9a-f]{8}/){print substr($0, RSTART+4, 8); exit}' PLAN.md)
 if [ -n "$headpin" ] && [ "${have:0:8}" != "$headpin" ]; then
   echo "doc-truth: the ledger's most recent pin ($headpin) is not the boot sha prefix (${have:0:8})"

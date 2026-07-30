@@ -1092,6 +1092,29 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE MARCH WRITES ITS OWN PIN — the scout's move 2, the
+  fabrication class deleted at its source (no pin move — tools only;
+  boot stands at feccc8a9). The march HOLDS the sha, the verdict, the
+  generation, the line count and the census at the moment it repins,
+  and a human retyping any of them later is the class caught live TWICE
+  (a sha tail completed from memory — CLAUDE.md ⊕). So emit_provenance
+  writes the mechanical block itself, sha256 read from the artifact it
+  just copied, and the author writes exactly ONE line: the narrative,
+  replacing the march's `‹NARRATIVE UNWRITTEN›` placeholder. THE
+  REMINDER BECOMES A REFUSAL: doc-truth fails while a placeholder entry
+  stands, so "the pin is not blessed until the entry is written" — a
+  printed sentence since the boot era — is now mechanical, and an
+  unblessed pin cannot pass verify. Both legs instrument-checked (the
+  insertion on a scratch copy: chain 191 → 192 entries, exact position;
+  the refusal RED with a planted placeholder, GREEN restored), and the
+  check's OWN first run convicted itself — an unanchored grep fired on
+  the recipe prose that names the placeholder (the string-literal
+  blindness class, one layer up), anchored to the entry form. The
+  PROVENANCE recipe rewritten to the new ritual. Ledger-as-projection's
+  first executed rung (PLAN §7's own destiny: state as projection,
+  never a hand-kept prose ledger) — the remaining hand-written half is
+  the narrative, which is the human judgment the projection can never
+  hold.
 - 2026-07-30 · ▶ THE HARNESS SPEAKS ONLY MECHANICS — the practice
   scout's first move executed (no pin move — hooks/tools only; boot
   stands at feccc8a9). Morgan's dispatch ("research improving dev

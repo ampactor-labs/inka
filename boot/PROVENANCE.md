@@ -12,6 +12,16 @@ Because boot is itself wheel-emitted, m2 == m3 IS the fixed point — the
 seed-era rule "NOT m2 == m3" (PLAN §6) compared a SEED-emitted m2 against a
 wheel-emitted m3 and retired with the seed.
 
+HOW AN ENTRY IS WRITTEN (2026-07-30 — the ritual's mechanical half
+absorbed): `MARCH_REPIN=1 bash tools/march.sh` writes the block itself at
+the moment it repins — the sha256 read from the artifact it just copied,
+the verdict it just arbitrated, the line count and census it just
+measured. Nobody retypes a measurement (the fabrication class, caught
+live twice). The AUTHOR writes exactly one thing: the narrative line,
+replacing the march's `‹NARRATIVE UNWRITTEN›` placeholder — and until
+that is written, `tools/doc-truth.sh` REFUSES at every verify, so an
+unblessed pin is mechanically visible instead of remembered.
+
 Provenance, self-confirmed at pin time:
 
 - source: THE FIRST FAMILY MIGRATES (2026-07-30; the §7 ledger entry of

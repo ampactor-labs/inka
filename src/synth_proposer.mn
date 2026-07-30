@@ -719,9 +719,21 @@ fn extract_optimal(candidate) with GraphRead + Memory + Alloc = match candidate 
     if cheapest == h {
       candidate
     } else {
-      EnrichedCandidate({cost: c.cost, node: N(graph_node_body(cheapest), parse_span_of(cheapest), cheapest), origin: c.origin, reason: c.reason})
+      // The CHEAPER BODY at the CANDIDATE'S OWN SPAN: a proposal is
+      // about the position the developer is filling, so taking the
+      // rewritten node's span would answer a `why` with the coordinates
+      // of a node they never wrote (caught in review of this fn's first
+      // form). The rewrite's own justification belongs on the canon
+      // EDGE — the one kernel write that carries no Reason today
+      // (Hβ.egraph.canon-edge-carries-reason); until it does, the
+      // candidate's seed Reason is the honest chain.
+      EnrichedCandidate({cost: c.cost, node: N(graph_node_body(cheapest), node_span(c.node), cheapest), origin: c.origin, reason: c.reason})
     }
   },
+}
+
+fn node_span(node) with Pure = match node {
+  N(_, span, _) => span,
 }
 
 // ─── map_to_proposals — project each survivor to its (node, reason) ──

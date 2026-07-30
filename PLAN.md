@@ -1131,6 +1131,33 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE PROPOSAL KEEPS THE DEVELOPER'S COORDINATES — the
+  fork/merge landing's own review defect, caught by an independent
+  auditor within the hour (pin 2132e1ce). extract_optimal's first form
+  rebuilt a swapped candidate with `parse_span_of(cheapest)` — the span
+  of the node the rewrite moved TO — so a `why` at an
+  extraction-optimized proposal would have answered with the
+  coordinates of a node the developer never wrote. A proposal is about
+  the position they are FILLING; the cheaper body now lands at the
+  candidate's own span. BANKED WITH IT, from the same audit (the report
+  is .build/research/novelty-opus-2026-07-30.md; three designs, each
+  artifact-grounded, each with an honest calibration of its own
+  novelty): Hβ.egraph.canon-edge-carries-reason (the ONE kernel write
+  with no Reason — and the belt that turns "an assumed edge must not
+  escape its scope" from a rule someone remembers into a refusal the
+  gate can make), Hβ.verify.congruence-is-the-egraph (Verify keeps a
+  PRIVATE constant folder and a hand-written interval interpreter and
+  decides before the first canon edge exists — the proposal points the
+  fan's own fork-and-scoped-saturate machinery at the equality relation,
+  deletes the second folder, and moves the EUF core of the SMT residual
+  from Outside to inside), and Hβ.types.traversal-is-a-handler
+  (nineteen Ty descents, and the Mentl-native twist: the four walk
+  shapes ARE the four resume cardinalities, so the discipline the medium
+  already infers from arm bodies classifies the traversal it is used
+  in). Plus Hβ.query.refs-reads-edges-not-occurrences — the refs facet
+  is DAG-scoped (answering 0 confidently for a foundational name) and
+  pattern-blind (an ADT's match arms, the exhaustiveness surface, are
+  invisible because a pattern binds through PCon, not VarRef).
 - 2026-07-30 · ▶▶▶ THE FORK AND THE MERGE COMPOSE — §5's optimality
   half stops being a design and becomes the fan's own path
   (pin 296d7f99). Morgan's charge, exactly: don't describe the
@@ -7302,6 +7329,99 @@ whose echo/interval/callee legs the engine honors — one-line
 annotations, march-measured each; the recursion-shaped ones
 (scan_for_span) wait on the IH. TagId's 0..255 and the float
 intervals stay the SMT tier's.
+
+`Hβ.egraph.canon-edge-carries-reason` — the one unreasoned write in the
+kernel (2026-07-30, the Opus novelty audit's third proposal; the report
+is .build/research/novelty-opus-2026-07-30.md). Every graph write
+carries a Reason except `graph_canon_set(Int, Int)` (types.mn:1672):
+`rewrite_to` (egraph.mn:115) draws an equivalence with no justification
+at all, and `mint_fold` (:243) gives the minted NODE a Reason while the
+EQUALITY that legitimizes it gets none. Give the edge its Reason and the
+relation gains a distinction it cannot express today — PROVEN (a rule
+fired) versus ASSUMED (a path condition holds in this scope) — which is
+what turns scoped assumption from a discipline into a structure the
+executable gate can refuse (an assumed edge reachable from main outside
+its drawing scope). Shape: the `canon: [Int]` spine column becomes a
+pair cell carrying (target, Reason) — the comments column's own
+precedent, no eighth column — plus a `graph_canon_reason_at` projection
+(one op per fact, the graph_comment_span_at precedent). It also makes
+band F's `Hβ.verify.reason-edge-pcc-certificate` constructible: an
+emission whose optimizations have no derivation cannot be certified.
+Small and mechanical; its value is as the belt under
+`Hβ.verify.congruence-is-the-egraph` below.
+
+`Hβ.verify.congruence-is-the-egraph` — the second decision procedure
+already in the tree (2026-07-30, the Opus novelty audit's first
+proposal). Mentl runs TWO engines over the same relation and orders them
+so they can never meet: egraph.mn maintains a value-equality union-find
+with congruence closure and constant folding, while verify.mn keeps a
+PRIVATE constant folder (`node_const_at`, verify.mn:111 — its own
+comment admits the duplication) and a hand-written interval interpreter
+(`node_lo_tr`, :158), and decides every obligation during inference,
+before the first canon edge exists (`compile_remainder`'s
+saturate_pass runs after, pipeline.mn:447). No path in verify.mn
+reaches `egraph_extract`; `graph_canon_at` has exactly two readers, both
+inside egraph.mn. THE PROPOSAL: Verify's discharge becomes a READ of the
+canon weave, and a path condition becomes a set of ASSUMED canon edges
+drawn inside a graph checkpoint and rolled back at the join — the
+`??` fan's own machinery (fork, saturate a range, roll back) pointed at
+a different relation. What it buys: path-sensitive proof with no new
+engine (`if x == 0` makes `x ≡ 0` readable, so `x * 2` folds and a
+proven index elides its check —
+`Hβ.infer.narrowing-write-requires-discharge` gains a real discharge
+source), the second folder deletes, the interval fragment's
+contamination law gains an UNCONTAMINATED relation to read instead of a
+workaround to maintain, and a genuine piece of the SMT residual moves
+from Outside to inside (congruence closure over ground terms IS the EUF
+core). DEP: `Hβ.types.predicate-is-expr` (a predicate must be an
+ordinary expression node before it can be saturated) and the canon-edge
+Reason above (an assumed edge that survives its scope is a miscompile,
+not a missed optimization). Re-measure wall time in its own entry — per-
+branch scoped saturation multiplies passes, and the crc/classifier
+history is explicit that such a landing must.
+
+`Hβ.types.traversal-is-a-handler` — one descent over `Ty`, consumers as
+arms (2026-07-30, the Opus novelty audit's second proposal). Nineteen
+functions traverse the Ty ADT re-deriving the same descent and differing
+only at the leaves (format.mn:913 · graph.mn:772 · synth_proposer.mn:208
+· mentl.mn:543 · types.mn:130/251/272/2518/2974 · lower.mn:3131 ·
+infer.mn:1626/4849/6052/6090/6184/6305/6455/6550 · verify.mn:247), and
+two of those pairs are one algebra twice (the check-then-build twins
+from the A.3 allocation landing). THE MENTL-NATIVE TWIST that makes this
+more than a visitor pattern: the four walk SHAPES are exactly the four
+RESUME CARDINALITIES — zero-resume/Abandon is `occurs_in` stopping at
+the first hit; one-resume-accumulating is free_in_ty / fold_sig / ty_lo
+/ extract_row / query_flow_label / repr_of; one-resume-rebuilding is
+subst_ty_build / chase_deep_build / fold_strip / ty_handle_of;
+multi-resume is `enumerate_typed` enumerating a type's inhabitants. The
+discipline the medium already INFERS from arm bodies classifies the
+traversal it is used in — the kernel explaining a compiler-internal
+pattern rather than a pattern imported to explain the kernel. The tax
+being paid: TReprPin (the newest constructor) appears at 26 sites across
+9 files; TAlias at 49. BOUNDARIES, stated: binary walks do not fit
+(`same_ground` and unify descend two types in lockstep — a zip, not a
+fold, and they stay); the hot instantiate-path walks must be measured
+into the tail-resumptive tier before landing, not after; and the two
+render walks stay distinct registers per §5.U's voice/format boundary —
+one descent, never one leaf.
+
+`Hβ.query.refs-reads-edges-not-occurrences` — two measured holes in the
+refs facet (2026-07-30, found by the Opus novelty audit while working,
+offered as findings rather than proposals; one root — `refs of` walks
+VarRef OCCURRENCES instead of reading the edges the graph already drew,
+Anchor 1 at the query layer). (1) DAG-SCOPED: `refs of graph_canon_at`
+answers 0 from graph.mn and 2 from egraph.mn — the more foundational the
+name, the emptier and more CONFIDENT the wrong answer, because a base
+module's DAG contains only its dependencies, which by definition cannot
+reference it. (2) PATTERN-BLIND: `refs of TReprPin` returns 7, all
+construction sites; the 26 match arms that destructure it are invisible
+because a pattern binds through PCon, not VarRef — and for an ADT
+constructor the arms are the MORE important half, they are the
+exhaustiveness surface. Both are why an ADT-walk census still needs a
+grep confession. Smaller sibling: `mentl query "type NAME"` on an ADT
+answers "declared as NAME" without projecting its variants, and nothing
+projects the module import graph though the driver holds it as NModule
+nodes with ranges.
 
 `Hβ.synth.rank-is-a-projection-not-a-field` — the ranker's two
 vocabularies (found 2026-07-30 completing the fork/merge landing). The

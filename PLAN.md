@@ -6435,6 +6435,23 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.verify.interval-fragment` (2026-07-30, the annotation sweep's
+plateau names the engine increment — Arc 3's "range fragment WITH
+inference" scoped to its fixtures): the producer-carries-proof sweep
+took the wheel's debt 138 → 12, and the survivors ARE the acceptance
+tests. The fragment: an INTERVAL read over the graph — a literal is
+its point; a walk counter whose init is ground ≥0 and whose only
+step is +1 stays ≥0 (the recursion-parameter monotone case:
+scan_for_span's i, the enumerators' range(0, next) yields); a length
+(byte_len, len) is ≥0 by construction; an if joins its branches'
+intervals (make_list's `if n < 16 { 16 } else { n }` capacity). Six
+0 <= self sites + scan_for_span's producer pend discharge in one
+mechanism; TagId's 0..255 and Sample's [-1,1] stay the SMT tier's.
+BUILD CONSTRAINT from tonight's blood: Verify-side READS only — no
+row changes (row perturbations gamble the marginal front until the
+SCC cure lands); the interval walk is GraphRead over node structure,
+row-neutral by construction.
+
 `Hβ.infer.schemes-are-edges` — THE MENTL WAY for the judgment (named
 2026-07-30, Morgan's question "is there a better way — a more Mentl
 way?" answered at the root): the entire convergence tower — trial /

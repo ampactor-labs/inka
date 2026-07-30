@@ -1,0 +1,30 @@
+// expect: 42
+// BANKED RED (unregistered — Hβ.synth.fan-extraction-needs-a-feeder).
+// The fork/merge composition's FIRING case, written before it can fire.
+//
+// verify_each_enriched runs both halves in the forced order today: the
+// fan proves meaning by forking, then saturate_range + egraph_extract
+// pick the cheapest FORM of each survivor, and survivors sharing an
+// e-class collapse to one proposal. That path is live and
+// non-destructive. What it cannot yet DO is move anything, and the
+// reason is structural, not a bug: the e-graph's rules all match
+// BinOpExpr shapes (rw_add_identity / rw_mul_identity / rw_mul_absorb /
+// rw_sub_identity / rw_div_identity / rw_const_fold, egraph.mn:123-224)
+// while every fan enumerator mints an ATOM — an int/float/string
+// literal, a unit, a ctor call, a lambda, a record, a list, a tuple
+// (synth_proposer.mn:684-693 and kin). The two sets do not intersect,
+// so extraction always chases a handle to itself.
+//
+// This fixture is what firing looks like: a hole whose proven candidate
+// has a strictly cheaper equivalent, so extraction moves it and the
+// proposal the developer sees is the reduced form. It runs green the
+// day a FEEDER exists — either a candidate space that mints composite
+// expressions, or a rule set that rewrites the shapes the fan already
+// mints (band G's saturation-deepen). Until then it stands as the
+// artifact that says what "fed" means.
+fn scale(x) = x * 1
+
+fn main() = {
+  let v = scale(42)
+  if v == 42 { 42 } else { 1 }
+}

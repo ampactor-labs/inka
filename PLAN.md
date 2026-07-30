@@ -1166,6 +1166,30 @@ between the wheel and its ultimate form, held open on purpose.
   in the fold vocabulary iteration-is-topology prescribes. CLEAN
   m2 == m3 at 355,179 lines; census 0; frontier 329/0; micros 121/0;
   proof-exactness 9/9; crown 5/5.
+  THE COMPLETENESS PASS, run immediately after (Morgan: "how do we
+  ensure clean and complete foundations and bank every possible win") —
+  three findings, each named rather than implied, so nothing here rests
+  on a claim the artifact does not carry. (1) THE DORMANCY IS
+  STRUCTURAL AND NOW HAS ITS ARTIFACT: every e-graph rule matches a
+  BinOpExpr while every fan enumerator mints an atom, so the sets do
+  not intersect and extraction always chases a handle to itself —
+  `Hβ.synth.fan-extraction-needs-a-feeder`, with the RED fixture
+  (mn-fan-extraction-fires) that says what "fed" means and runs green
+  the day a feeder lands. Stated so no reader mistakes today's green
+  board for a proven mechanism — the exact gate-that-cannot-fail class
+  caught twice already today. (2) THE RANKER SPEAKS TWO VOCABULARIES:
+  `cost` is read by rank_insert but written as a LIVE gradient read for
+  vocabulary calls and as HARDCODED literals for every shape
+  enumerator, so the sort compares a measurement against invented
+  constants — and extraction made it worse by carrying a stale number
+  onto a swapped node. Both faces dissolve in one DELETION
+  (`Hβ.synth.rank-is-a-projection-not-a-field`): rank computed at sort
+  time from the candidate, the field gone, nothing stale left to carry.
+  (3) WHAT IS ACTUALLY PROVEN, precisely: the order is enforced in
+  code; the path compiles to the byte-identical fixpoint; the fan's own
+  legs stay green with the composition inserted (non-destruction on the
+  real-tie case, 0 and 1 for a Bit hole). What is NOT proven is any
+  firing — and that is finding (1), not an omission.
 - 2026-07-30 · ▶ THE MUTUAL CYCLE'S ROW NEVER CLOSES — four probes,
   eight lines, one named root (no pin move — the measurement and its
   banked RED; boot stands at ec04f745). The prior landing named
@@ -7278,6 +7302,45 @@ whose echo/interval/callee legs the engine honors — one-line
 annotations, march-measured each; the recursion-shaped ones
 (scan_for_span) wait on the IH. TagId's 0..255 and the float
 intervals stay the SMT tier's.
+
+`Hβ.synth.rank-is-a-projection-not-a-field` — the ranker's two
+vocabularies (found 2026-07-30 completing the fork/merge landing). The
+`cost: Float` field on EnrichedCandidate is genuinely READ — rank_insert
+compares it (synth_proposer.mn:327) — but it is WRITTEN two different
+ways: a LIVE gradient read for vocabulary calls (`candidate_rank(name,
+decl_reason, hole_span)`, :296 — decl proximity plus use-edge proximity,
+the §5 local-intent ranker) and a HARDCODED literal for every shape
+enumerator (0.5 ctor :430, 0.6 lambda :438, 0.3 int :454, 0.3 float
+:464, 0.2 string :471). So the sort compares a measurement against
+invented constants, and a vocabulary call that genuinely ranks 0.25
+loses to a literal's made-up 0.3 — the ordering is arbitrary across
+origins, in the exact place §5 says the gradient reads local intent.
+Extraction sharpened it: when a survivor's node is swapped for a cheaper
+e-class member, the stored cost rides along stale. BOTH FACES DISSOLVE
+IN ONE MOVE, and it is a DELETION: rank is a PROJECTION of the
+candidate computed at sort time (the name read from the node, the reason
+and hole span already in hand), never a stored field — after which
+`cost` leaves the record, the literals leave the enumerators, and a
+swapped node cannot carry a stale number because there is no number to
+carry. The shape enumerators then need a real rank source rather than a
+constant, which is the design half: structural distance to the hole's
+type, or the same proximity read keyed on the ctor/type name.
+
+`Hβ.synth.fan-extraction-needs-a-feeder` — the composition's dormancy,
+named with its own artifact (2026-07-30, banked RED at
+tests/frontier/mn-fan-extraction-fires.mn, unregistered). The fork/merge
+path is live, ordered, and non-destructive, and it CANNOT MOVE ANYTHING
+yet for a structural reason: every e-graph rule matches a BinOpExpr
+shape (egraph.mn:123-224) while every fan enumerator mints an ATOM
+(synth_proposer.mn:684-693 and kin) — the two sets do not intersect, so
+extraction always chases a handle to itself and the false-tie collapse
+never has two survivors in one class. This is dormant BY CONSTRUCTION,
+not broken, and it is stated here rather than implied so no future
+reader mistakes a passing gate for a proven mechanism. The FEEDER is
+either half: a candidate space that mints composite expressions, or a
+rule set that rewrites the shapes the fan already mints (band G's
+`Hβ.lower.egraph-saturation-deepen`). The banked fixture is what "fed"
+means, and it runs green the day one lands.
 
 `Hβ.effects.negative-stance-under-mixed-gate` — the declared-row gate's
 tail asymmetry (measured 2026-07-30, the check-verb landing). A fn

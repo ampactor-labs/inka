@@ -1092,6 +1092,20 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE STRING NAMES ITS OWN LINE —
+  Hβ.lexer.string-newline-refusal RESOLVED (pin ec3bc868). A raw
+  newline in a SINGLE-line string literal reports P_UnclosedConstruct
+  at the string's own line with the `"""` teaching, terminates the
+  literal, and leaves the newline unconsumed — productive-under-error
+  at the lexical layer — where the swallow had run to the next quote
+  or EOF and surfaced as a brace complaint lines away (measured: a
+  line-2 error reported at 6:1; the fmt hook itself then witnessed
+  the new diagnostic firing on the banked fixture's own line). The
+  triple scanner is its own chunk walk, untouched; the wheel carries
+  ZERO of the narration (the fmt string-atomicity law had kept
+  content newlines out). CLEAN m2 == m3 at 349,088 lines; census 0;
+  frontier 324/0; proof-exactness 9/9; mn-string-newline banks the
+  refuse contract.
 - 2026-07-30 · ▶▶ THE QUIET FN FITS UNDER THE CAP —
   Hβ.effects.directional-fn-row-edge RESOLVED at its measured scope
   (pin cd43c23c). The call edge's fn-arg row meet goes DIRECTIONAL

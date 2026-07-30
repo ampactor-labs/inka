@@ -1,0 +1,12 @@
+// expect: refuse P_UnclosedConstruct
+// A raw newline in a single-line string is the unterminated-quote
+// author error: before the lexical refusal (2026-07-30) the swallow
+// ran to the next quote or EOF and surfaced as a brace complaint
+// lines away; now the diagnostic names the string's own line and
+// teaches the multi-line """ form, and the lex recovers at the
+// newline so the rest of the file parses true.
+fn main() = {
+  let s = "unterminated
+  let x = 42
+  x
+}

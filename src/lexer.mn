@@ -458,12 +458,21 @@ fn scan_string_chunk(ref source, n: ValidOffset, chunk_start: ValidOffset, pos: 
       (b1, c1) => (pos + 1, line, col + 1, b1, c1),
     }
   } else if b == 10 {
-    // A raw newline inside the chunk advances the LINE counter (the
-    // chunk itself continues — content is untouched). Refusing the
-    // newline in the single-line form is the named peer
-    // Hβ.lexer.string-newline-refusal; counting it truly is this
-    // scanner's obligation either way.
-    scan_string_chunk(source, n, chunk_start, pos + 1, line + 1, 1, buf, count)
+    // A raw newline in the SINGLE-line form is the unterminated-quote
+    // author error (the swallow ran to the next quote or EOF and the
+    // diagnostic surfaced as a brace complaint lines away — measured);
+    // the multi-line form is `"""` (scan_triple_string). Report at the
+    // string's own line, TERMINATE the literal here, and leave the
+    // newline unconsumed so the rest of the file lexes true —
+    // productive-under-error at the lexical layer.
+    report(PUnclosedConstruct(
+      "string literal spans a raw newline — close the quote on its line, or use the multi-line \"\"\" form",
+      Span(line, col, line, col)
+    ))
+    let part = str_unescape(str_slice(source, chunk_start, pos))
+    match push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col)) {
+      (b1, c1) => (pos, line, col, b1, c1),
+    }
   } else if b == 123 && pos + 1 < n && is_splice_start_byte(byte_at(source, pos + 1)) {
     // { — start of interpolation splice (amendment C). Only when the
     // next byte is an expression-start (ident, digit, paren, etc.);

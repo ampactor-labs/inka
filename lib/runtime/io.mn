@@ -276,7 +276,6 @@ fn read_line_loop(buf, offset, capacity) with Memory + Alloc + WASI = match if o
   (buf, capacity)
 } {
   (cur_buf, cur_cap) => {
-    // drift-audit: ignore — sequenced effectful stream-read; b consumed by 3 sites (EOF/newline/store)
     let b = read_one_byte()
     if b < 0 {
       (cur_buf, offset)

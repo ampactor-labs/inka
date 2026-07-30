@@ -404,7 +404,6 @@ fn any_imports(paths, target, seen) with GraphRead + Alloc + Memory + !Mutate = 
 
 // The direct import paths declared in module `path`'s NModule decls.
 fn module_import_paths(path) with GraphRead + !Mutate + Alloc + Memory = {
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let snapshot = graph_snapshot()
   match snapshot {
     Graph(next, _spans) => scan_module_imports(path, 0, next),
@@ -536,7 +535,6 @@ fn cursor_view_of(handle) with GraphRead = match graph_chase(handle) {
 // the transport's Caret/pin boundaries; handle_at_span discharges by
 // typed identity through it.
 fn handle_at_span(span) -> Handle with GraphRead + !Mutate = {
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let snapshot = graph_snapshot()
   match snapshot {
     Graph(next, _spans) => scan_for_span(span, 0, next),
@@ -618,7 +616,6 @@ fn ownership_of_ty(ty) with Memory = match ty {
 // The verb tentacle then actually fires — "you are mid-|> chain" is a live
 // read, never the old constant NoPipe.
 fn pipe_context_of_handle(handle) with GraphRead + !Mutate = {
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let snapshot = graph_snapshot()
   match snapshot {
     Graph(next, _spans) => scan_for_pipe_parent(handle, 0, next),

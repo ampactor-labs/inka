@@ -988,7 +988,6 @@ fn infer_program_trial(stmts) = {
   let name_idx = layer_name_index(map(stmt_decl_name, stmts), 0, smap_new())
   let layers = stmt_layers_ast(frees_all, name_idx)
   let groups = scc_groups(frees_all, name_idx)
-  // drift-audit: ignore — sequenced effectful read (the ranges' origin must precede the walk), CLAUDE.md Anchor 6 exclusion
   let start = graph_next()
   let rows = trial_group_walk(stmts, groups, make_list(len(stmts)), 0)
   finalize_continuation_boundaries(0, graph_next())
@@ -1041,7 +1040,6 @@ fn infer_program_round(ref mask, ref prev_rows, ref layers, summ, stmts) = {
   each(pre_register_effect, stmts)
   pre_register_masked(stmts, mask, 0)
   set_summaries(summ)
-  // drift-audit: ignore — sequenced effectful read (the ranges' origin must precede the walk), CLAUDE.md Anchor 6 exclusion
   let start = graph_next()
   let rows = infer_stmt_list_masked(stmts, mask, prev_rows, layers)
   finalize_continuation_boundaries(0, graph_next())
@@ -1307,7 +1305,6 @@ fn converge_finish(src, flat_rows, layers, summ) = {
   // walk's lower bound, so the backtick judge reads only THIS pass's
   // comment cells — prior generations' parses left their text in place.
   //
-  // drift-audit: ignore — sequenced effectful read (the pre-frontend frontier, the comment walk's lower bound)
   let pstart = graph_next()
   src |> frontend |> infer_program_final(flat_rows, layers, pstart, summ)
 }
@@ -1851,7 +1848,6 @@ fn group_judge_members(ref stmts, ref members, own rows, j) = if j >= len(member
 // The ONE measure home: judge the stmt, return its sizing row — the
 // trial's and the rounds' sweeps both write it at the stmt's position.
 fn stmt_measure_one(ref node) = {
-  // drift-audit: ignore — sequenced effectful read (the boundary sample must precede the inference), CLAUDE.md Anchor 6 exclusion
   let before = graph_next()
   infer_stmt(node)
   (stmt_decl_name(node), graph_next() - before)
@@ -1896,7 +1892,6 @@ fn layer_name_index(ref names, i, idx) = if i >= len(names) {
 
 fn infer_program_final(rows, layers, pstart, summ, stmts) = {
   {
-    // drift-audit: ignore — sequenced effectful read (the parse watermark, the comment walk's exact bound)
     let parse_end = graph_next()
     register_primitives()
     refuse_duplicate_type_decls(stmts, 0, len(stmts), smap_new())
@@ -1944,7 +1939,6 @@ let mint_overflow_quota = 64
 
 fn infer_stmt_list_planned(rows, layers, stmts, summ) = {
   let flat = list_to_flat(rows)
-  // drift-audit: ignore — sequenced effectful read (the plan's frontier must precede the walk), CLAUDE.md Anchor 6 exclusion
   // The plan covers the ranges AND the overflow bands — one region,
   // pre-opened whole, so no branch ever opens a page.
   let start = graph_next()
@@ -1955,9 +1949,7 @@ fn infer_stmt_list_planned(rows, layers, stmts, summ) = {
   // the spine table is stable for the whole walk, and the span index
   // is complete (graph_index_span is parse-only).
   //
-  // drift-audit: ignore — sequenced effectful read (the post-plan spine snapshot, every branch's config)
   let gseed = graph_branch_seed()
-  // drift-audit: ignore — sequenced effectful read (the root's intern table, stable for the walk — every name interns at parse)
   let iseed = intern_seed()
   let bases = rows_bases(flat, start)
   planned_layer_sweep(flat, layers, bases, stmts, summ, gseed, iseed, top0, 0, flat_max(layers, 0, 0))
@@ -1995,9 +1987,7 @@ fn planned_layer_sweep(ref rows, ref layers, ref bases, ref stmts, summ, gseed, 
   // branches will have. Per-stmt replay keeps the sequential stderr and
   // env byte-identical; the fan defers the same replay to this barrier.
   //
-  // drift-audit: ignore — sequenced effectful read (the layer-start snapshot, consumed by every branch of the layer)
   let base = env_base_view()
-  // drift-audit: ignore — sequenced effectful read (the root's consumed-set at layer start, the branch ledgers' shared seed)
   let seed = consume_base()
   planned_layer_stmts(rows, layers, bases, stmts, summ, gseed, iseed, l, 0, base, seed, top0)
   planned_layer_sweep(rows, layers, bases, stmts, summ, gseed, iseed, top0, l + 1, maxl)
@@ -2179,13 +2169,9 @@ fn branch_judge(stmt, base, seed, summ, gseed, iseed, range) = {
     set_summaries(summ)
     consume_seed(seed)
     infer_stmt(stmt)
-    // drift-audit: ignore — sequenced effectful read (the branch's own accruals, collected inside its bracket)
     let vdebt = verify_debt()
-    // drift-audit: ignore — sequenced effectful read (the branch's own first-consumes, collected inside its bracket)
     let clog = consume_log()
-    // drift-audit: ignore — sequenced effectful read (the branch's publish log, collected inside its own bracket)
     let pubs = env_publishes()
-    // drift-audit: ignore — sequenced effectful read (the branch's rendered lines + tally, collected inside its own bracket)
     let dfacts = diag_lines_taken()
     (pubs, dfacts, vdebt, clog)
   }
@@ -2482,7 +2468,6 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   consume_enter_fn()
   infer_expr(body_node)
   consume_exit_fn()
-  // drift-audit: ignore — sequenced effectful handler-state read (the popped frame's declaration, consumed at the enforcement below)
   let declared_effs = inf_exit_fn()
   // Unify body's type with the declared return.
   match body_node {
@@ -3756,7 +3741,6 @@ fn discharge_arg_refinements(dps, arg_handles, i, span: ValidSpan) = if i >= len
 // onto the op scheme (finalize).
 fn stage_continuation_boundary(cname: String, resume_input_h) = {
   let continuation_h = mint(InferredCallReturn(cname, Inferred("continuation boundary")))
-  // drift-audit: ignore — sequenced effectful handler-state read (the InferCtx frame's answer handle), consumed by the ternary below
   let current_answer_h = inf_current_answer()
   let answer_h = if current_answer_h < 0 { resume_input_h } else { current_answer_h }
   graph_boundary_set(
@@ -7566,8 +7550,7 @@ fn resume_grade(node) = match node {
     match f {
       N(fb, _, _) => {
         let callee_g = match fb {
-          NExpr(VarRef(cn)) => // drift-audit: ignore — sequenced effectful summaries read
-          summary_of(cn),
+          NExpr(VarRef(cn)) => summary_of(cn),
           _ => UZero,
         }
         usage_seq(callee_g, usage_seq(resume_grade(f), grade_nodes(args)))

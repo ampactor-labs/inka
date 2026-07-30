@@ -144,7 +144,6 @@ handler deadline_test {
 // the replay so callers can re-replay or inspect post hoc.
 handler clock_record with trace = [], trace_len = 0 {
   clock_now() => {
-    // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let now = host_clock_ns()
     let new_trace = list_set(list_extend_to(trace, trace_len + 1), trace_len, now)
     resume(Instant(now)) with trace = new_trace, trace_len = trace_len + 1

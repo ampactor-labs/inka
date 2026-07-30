@@ -396,7 +396,6 @@ effect Interact {
 // OracleQuery's query_project_queue and returns true (silence) iff the
 // queue is empty.
 fn silence_predicate(situation) with OracleQuery = {
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let queue = query_project_queue()
   match queue {
     [] => // gradient at top — full silence
@@ -833,7 +832,6 @@ fn unimplemented_arm(op_name) with Abort = abort()
 fn resolve_cursor_target(target, current_handle: Handle) -> Handle with GraphRead + Memory + Alloc = match target {
   TargetHandle(h) => h,
   TargetSpan(s) => {
-    // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let g = graph_snapshot()
     match g {
       Graph(_, span_index) => match find_tightest(span_index, s, None, 999999999) {
@@ -1171,7 +1169,6 @@ handler mentl_voice_default with caret_now = Caret(0, Inferred("session start"))
   {
     let text = file_text(fh)
     compile_source(text)
-    // drift-audit: ignore — sequenced effectful read (verify-ledger stream-consumer), reused by match + diagnostics (a <| reuse), CLAUDE.md Anchor 6 exclusion
     let debt = verify_debt()
     match debt {
       [] => resume(CompileOk(emitted_artifact_path(fh))),
@@ -1181,7 +1178,6 @@ handler mentl_voice_default with caret_now = Caret(0, Inferred("session start"))
   run_check(fh) => {
     let text = file_text(fh)
     check_source(text)
-    // drift-audit: ignore — sequenced effectful read (verify-ledger stream-consumer), reused as diagnostics + obligations (a <| reuse), CLAUDE.md Anchor 6 exclusion
     let debt = verify_debt()
     resume(CheckOutcome(diagnostics_from_debt(debt), debt))
   },

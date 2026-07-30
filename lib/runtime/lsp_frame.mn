@@ -56,7 +56,6 @@ fn read_lsp_frame() with Memory + Alloc + WASI = {
 // success; None on EOF mid-header. Header string carries the bytes
 // up to (not including) the terminating \r\n\r\n.
 fn read_headers_until_blank(buf, written, cap) with Memory + Alloc + WASI = {
-  // drift-audit: ignore — sequenced effectful stream-read; b consumed by 2 sites (EOF/store)
   let b = read_one_byte()
   if b < 0 {
     None

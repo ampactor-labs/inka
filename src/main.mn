@@ -648,7 +648,6 @@ fn space_loop(lfd) with Memory + Alloc + WASI = {
 }
 
 fn space_run() with Memory + Alloc + WASI = {
-  // drift-audit: ignore — sequenced effectful read consumed at TWO sites (the guard and the loop): the reuse exclusion, not a pipe stage
   let lfd = find_listener()
   if lfd < 0 {
     // drift-audit: ignore — the flagged keyword is inside the teaching string (a quoted shell invocation), not control flow
@@ -675,7 +674,6 @@ fn space_run() with Memory + Alloc + WASI = {
 // generation reproducing itself, m3 == m4) needs the exec seam and
 // stays at tools/march.sh — the whole-world bash march's audit role.
 fn march_run() = {
-  // drift-audit: ignore — sequenced effectful read (the fs walk, consumed by the read+concat below)
   let files = march_wheel_files()
   if len(files) == 0 {
     print_string("march: no wheel source found — run beside the repo (lib/ + src/) or through the installed shim\n")
@@ -916,7 +914,6 @@ fn tighten_run(target_opt) = {
   }
   infer_context(() => match driver_entry_with_ranges(entry_module) {
     (_ast, ranges) => {
-      // drift-audit: ignore — sequenced effectful ledger read (the diag_refusals precedent): the collector's state is read once after the check populates it
       let cands = tightenables()
       let authorable = filter(
         (c) => match c {
@@ -1420,7 +1417,6 @@ fn address_project(ranges, target: String, line, col) = match range_of_module(ra
       1
     } else {
       let gline = start + line - 1
-      // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
       // Flattened ONCE before the walk (the iterate-flattens-once law,
       // fourth sighting): the log is push-built, so a raw list_index
       // walk pays O(depth) per probe — tolerable for the cold verb's
@@ -1443,7 +1439,6 @@ fn address_project(ranges, target: String, line, col) = match range_of_module(ra
   },
 }
 
-// drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
 fn span_index_of_snapshot() with GraphRead = match graph_snapshot() {
   Graph(_x, spans) => spans,
 }
@@ -1806,7 +1801,6 @@ fn reason_phrase(inner) with Memory + GraphRead + Alloc + Intern = match inner {
 // the comment weave). Empty strings when the graph carries neither.
 fn binding_ledes(span, inner) with GraphRead + Memory + Alloc = match inner {
   LetBinding(_, _) => {
-    // drift-audit: ignore — sequenced effectful snapshot read (stream-consumer), CLAUDE.md Anchor 6 exclusion
     let spans = span_index_of_snapshot()
     match address_case_a(spans, span_line_of(span), 0, 0, len(spans), None) {
       None => "",
@@ -1990,9 +1984,7 @@ fn battery_compile(src, wat_path) = infer_context(() => {
           0
         }
       }
-      // drift-audit: ignore — sequenced effectful ledger read (the mcp_judge precedent): the collector's bank, read once after the judge populates it
       let lines = gate_facts()
-      // drift-audit: ignore — sequenced effectful ledger read (the executable_gate precedent)
       let nerr = diag_errors()
       (failed, nerr, lines)
     },
@@ -2039,7 +2031,6 @@ fn battery_loop(dir: String, libs, micros: [String], i, fails) = if i >= len(mic
   // by the project_emit_state install + the SingletonUninstalled guard,
   // and the full battery runs region-bracketed 112/112.
   //
-  // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
   let mark = heap_mark()
   let name = micros[i]
   let stem = str_slice(name, 0, byte_len(name) - 3)

@@ -225,7 +225,6 @@ handler interrogate_default {
   // read at the fanout's install, never across a call —
   // Hβ.lower.schedule-specialized-callee).
   {
-    // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let snapshot = graph_snapshot()
     match snapshot {
       Graph(next, _spans) => {
@@ -285,7 +284,6 @@ fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory =
 // some PTee body in the weave. Live read of the install edges — the handler
 // chain IS the graph (PLAN §2), never a transient stack copy.
 fn handle_under_tee_install(handle) with GraphRead + !Mutate = {
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let snapshot = graph_snapshot()
   match snapshot {
     Graph(next, _spans) => scan_for_tee_governing(handle, 0, next),

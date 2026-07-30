@@ -255,11 +255,8 @@ fn try_each_annotation(handle, candidates, base_ty) = {
     // outlived it and its world isolation rode extent-balance alone.
     // All three legs now, the synth fan's exact shape.
     //
-    // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let cp = graph_push_checkpoint()
-    // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), CLAUDE.md Anchor 6 exclusion
     let mark = heap_mark()
-    // drift-audit: ignore — sequenced effectful read (the fork's world leg, consumed by world_restore), CLAUDE.md Anchor 6 exclusion
     let w = world_top()
     let proven = apply_annotation_tentatively(handle, ann, base_ty)
     let ok = proven && verify_after_apply(handle)

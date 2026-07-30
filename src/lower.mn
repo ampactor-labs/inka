@@ -2054,7 +2054,6 @@ fn lower_expr_body(e, handle, span) = match e {
   },
   IfExpr(cond, then_e, else_e) => LIf(handle, lower_expr(cond), [lower_expr(then_e)], [lower_expr(else_e)]),
   BlockExpr(stmts, final_e) => {
-    // drift-audit: ignore — sequenced effectful scope checkpoint (LowerScope)
     // M4 — an Abandon perform DIVERGES (it always yields, unwinding to its
     // install's driver), so any statement/expression after it is DEAD. The
     // block's value IS the diverging statement's yield; the remainder deadens
@@ -2177,7 +2176,6 @@ fn lower_expr_body(e, handle, span) = match e {
   // continuation is the unified heap record's fifth role: minted ONLY when
   // the body actually resumes more than once.
   //
-  // drift-audit: ignore — sequenced effectful arm-context read (LowerScope)
   // OneShot (~85%): the zero-cost stack return — BYTE-IDENTICAL to the
   // pre-producer floor. Hβ.first-light.resume-with-state-mutation
   // (SUBSTRATE.md L660-694): the resume value AND every `with field = NEW`
@@ -2982,7 +2980,6 @@ fn lower_stmt_body(s, handle, span) = match s {
     // by every MultiShot-context call site (lower_call_default), so the
     // body's resumes resolve it as an ordinary local — never evidence.
     //
-    // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
     let bind_h = ls_resume_bind_of(name)
     let base_param_names = lower_param_names(params)
     let param_names_list =
@@ -3010,7 +3007,6 @@ fn lower_stmt_body(s, handle, span) = match s {
         // peer — symmetric with handler-arm-fn-name-discriminator's
         // third-instance abstraction-earned shape).
         //
-        // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
         let outer = ls_outer_fn_name()
         let fn_name = if outer == "" { name } else { "{outer}_{name}" }
         ls_enter_frame(
@@ -3107,7 +3103,6 @@ fn lower_match_arms(scrut_h, arms) = {
   map(
     (arm) => match arm {
       (pat, body) => {
-        // drift-audit: ignore — sequenced effectful scope checkpoint (LowerScope)
         let cp = ls_push_scope()
         bind_pat_locals(pat, lookup_ty(scrut_h))
         let lo_body = lower_expr(body)
@@ -3567,7 +3562,6 @@ fn bind_names_as_locals(names) = each((name) => ls_bind_local(name, 0), names)
 fn lower_resume_oneshot(handle, val, state_updates) = if len(state_updates) == 0 {
   LReturn(handle, lower_expr(val))
 } else {
-  // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
   let fields = current_state_fields()
   lower_resume_snapshot(handle, val, state_updates, fields)
 }
@@ -3606,12 +3600,10 @@ fn lower_resume_oneshot(handle, val, state_updates) = if len(state_updates) == 0
 fn lower_resume_callk(handle, val, state_updates) = {
   let kr = "__kr_{int_to_str(handle)}"
   let kr2 = "__kr2_{int_to_str(handle)}"
-  // drift-audit: ignore — sequenced effectful arm-context read (LowerScope)
   let hname = current_arm_handler()
   match if len(state_updates) == 0 {
     ([], "")
   } else {
-    // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
     // The commit's record is a value the frame was BORN holding — the
     // __hrec ladder resolves it (arm: the LLet alias of $__state;
     // lambda: the seeded capture; bound fn: the trailing param), the

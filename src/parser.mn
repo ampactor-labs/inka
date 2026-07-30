@@ -512,7 +512,6 @@ fn cw_attach_all(ref runs: [CwRun], ref leads, ref trails, k, next_target) with 
 }
 
 fn parse_program(ref tokens) = {
-  // drift-audit: ignore — sequenced effectful read (the handle watermark bracketing this parse, consumed by the weave pass)
   let h0 = graph_next()
   let buf = make_list(16)
   match parse_stmt_list(tokens, 0, buf, 0) {

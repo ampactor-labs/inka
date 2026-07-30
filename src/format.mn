@@ -1254,7 +1254,6 @@ fn render_sibling_separator(ctx) with Pure = match ctx {
 // an edge, not a missing index). canonical_indent_depth / sibling_separator
 // project the 2-/4-space layout from this real position.
 fn render_context_at(handle) with GraphRead + !Mutate + Memory + Alloc = {
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let snapshot = graph_snapshot()
   match snapshot {
     Graph(next, _spans) => scan_for_render_parent(handle, 0, next),

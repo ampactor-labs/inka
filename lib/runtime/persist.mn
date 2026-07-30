@@ -95,9 +95,7 @@ fn image_resume(path) with Memory + Alloc + WASI + Fail = {
 // The size reads FIRST — everything the persisting program built lies below
 // it; the wire itself allocates above and stays out of its own copy.
 fn image_pack(k) with Memory + Alloc = {
-  // drift-audit: ignore — sequenced effectful read; MUST precede the wire's own allocation
   let size = heap_mark()
-  // drift-audit: ignore — sequenced substrate read; sizes the wire and offsets the copy
   let gsz = globals_area()
   let wire = bytes_buf(16 + gsz + size)
   let p = wire + 8

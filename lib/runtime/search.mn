@@ -131,7 +131,6 @@ handler backtrack {
     fn try_each(i) = if i >= len(options) {
       abort()
     } else {
-      // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
       let checkpoint = graph_push_checkpoint()
       try_with_abort_catch(
         () => resume(list_index(options, i)),

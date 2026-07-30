@@ -98,10 +98,8 @@ fn first_verified_wins(survivors, cursor) with GraphRead + Memory + Alloc =
 // shared checkpoint at install is the substrate's anchor for
 // rollback discipline.
 fn race_internal(handlers) with GraphRead + GraphWrite + Memory + Alloc = {
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let race_checkpoint = graph_push_checkpoint()
   let survivors = collect_verified_survivors(handlers, race_checkpoint)
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let cursor = graph_cursor()
   let winner = first_verified_wins(survivors, cursor)
   // Roll back ALL forks' trails to shared checkpoint; replay

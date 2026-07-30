@@ -129,9 +129,7 @@ fn mcp_judge(source, wat_path) = infer_context(() => {
       } else {
         0
       }
-      // drift-audit: ignore — sequenced effectful ledger read (the tightenables precedent): the collector's bank is read once after the judge populates it
       let lines = gate_facts()
-      // drift-audit: ignore — sequenced effectful ledger read (the executable_gate precedent)
       let nerr = diag_errors()
       (lines, nerr, refused, emitted)
     },
@@ -434,9 +432,7 @@ fn session_current(ast, ranges, manifest) = if len(ranges) == 0 {
 // EOF; a blank line is outside the newline-delimited-JSON contract,
 // so "" ends the session on either reading.
 fn mcp_loop(ast, ranges, manifest, at_read, current) = {
-  // drift-audit: ignore — sequenced effectful read (allocator checkpoint consumed by heap_reset), the battery_loop shape
   let mark = heap_mark()
-  // drift-audit: ignore — sequenced effectful stream-read (the read_* exclusion): the line is tested for EOF then handled
   let line = read_stdin_line()
   if byte_len(line) == 0 {
     ()
@@ -487,7 +483,6 @@ fn mcp_loop(ast, ranges, manifest, at_read, current) = {
 // fallback, byte-equal answers by construction (both routes run the
 // same projections over the same derivation law).
 fn session_run(at_read) = {
-  // drift-audit: ignore — sequenced effectful read consumed at TWO sites (the guard and the loop): the reuse exclusion, not a pipe stage
   let lfd = find_listener()
   if lfd < 0 {
     // drift-audit: ignore — the flagged keyword is inside the teaching string (a quoted shell invocation), not control flow
@@ -520,7 +515,6 @@ fn session_run(at_read) = {
 // The accept loop is space_loop's shape — constant stack for the
 // session's life, the graph threading through as values.
 fn session_sock_loop(lfd, ast, ranges, manifest, at_read, current) = {
-  // drift-audit: ignore — sequenced effectful accept consumed by the read + reply below, the space_loop shape
   let conn = sock_accept_blocking(lfd)
   let line = strip_cr(session_read_line(conn))
   match current(ast, ranges, manifest) {
@@ -537,7 +531,6 @@ fn session_sock_loop(lfd, ast, ranges, manifest, at_read, current) = {
 fn session_read_line(conn) = {
   let cap = 65536
   let buf = alloc(cap)
-  // drift-audit: ignore — sequenced effectful stream-read (the read_* exclusion): the byte count feeds the copy below
   let n = sock_read(conn, buf, cap)
   let got = if n < 0 { 0 } else { n }
   let str = bytes_buf(got)

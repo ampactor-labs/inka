@@ -227,7 +227,8 @@ handler spec_registry with twins = [] {
 // The fold boundary for show/hash (the eq entry's law): chase_deep
 // resolves every interior bound var once, so the family's sigs, dedup,
 // and dispatch agree on one resolution.
-fn show_hash_ty(x) with LookupTy + Memory + Alloc + WASI + GraphRead = fold_strip(chase_deep(lookup_ty(lexpr_handle(x))))
+fn show_hash_ty(x) with LookupTy + Memory + Alloc + WASI + GraphRead =
+  fold_strip(chase_deep(lookup_ty(lexpr_handle(x))))
 
 fn spec_is_agg(ty) with Pure = match ty {
   TList(TByte) => false,
@@ -332,7 +333,6 @@ fn emit_hash(h, x) = {
 fn spec_closure_name(name: String) with SpecTwins + LookupTy + Memory + Alloc = if !spec_twins_exist() {
   name
 } else {
-  // drift-audit: ignore — sequenced effectful read, used twice (Anchor 6 exclusion)
   let e = spec_enc_active()
   if byte_len(e) == 0 {
     name
@@ -834,7 +834,6 @@ fn emit_module(lowered) = {
             // mark (allocated with spec_recs above), the registry commit stores
             // pre-mark pointers, and both strings stream before the reset.
             spec_ctx_set(pairs, enc)
-            // drift-audit: ignore — sequenced effectful read; the region bracket's own mark
             let m = heap_mark()
             wat_emit(emit_one_fn_to_string(rec2))
             wat_emit(if fn_record_is_wide(rec2) { emit_one_wrapper_to_string(rec2) } else { "" })
@@ -1071,17 +1070,11 @@ fn project_emit_state(lowered, closures: {cmp: [Ty], eq: [Ty], hash: [Ty], show:
   // The set of literals is a projection of the collected show types (the graph
   // IS the index — the same type closure the unified fold walk collects).
   register_show_literals(closures.show)
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let names = drain_fn_names() |> dedup_names
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let tops = drain_top_fn_names()
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let strs = drain_string_literals()
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let slots = drain_state_slots()
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let wasi = drain_wasi_ops()
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let yseen = drain_yield_seen()
   (names, tops, strs, slots, wasi, yseen)
 } ~> fn_names_collector ~> top_fn_names_collector ~> string_literal_collector ~> state_slots_collector ~> wasi_ops_collector ~> yield_seen_collector ~> effect_census_collector
@@ -2508,7 +2501,9 @@ fn emit_memory_decl(threaded, wants_rmw) = {
   // synchronization protocol owns its own initialization rather than
   // leaning on the allocator's virginity contract. Emitted only for a
   // spawning module (Law 7 — thread-free modules are byte-identical).
-  wat_emit("  (func $world_find (param $hkey i32) (result i32) (local $n i32)(local.set $n (global.get $world_g))(block $done (loop $walk (br_if $done (i32.eqz (local.get $n)))(if (i32.eq (i32.load offset=16 (local.get $n)) (local.get $hkey))(then (return (i32.load offset=0 (i32.load offset=4 (local.get $n))))))(local.set $n (i32.load offset=8 (local.get $n)))(br $walk)))(i32.const 0))\n")   // drift-audit: ignore — WAT instruction text
+  //
+  // drift-audit: ignore — WAT instruction text
+  wat_emit("  (func $world_find (param $hkey i32) (result i32) (local $n i32)(local.set $n (global.get $world_g))(block $done (loop $walk (br_if $done (i32.eqz (local.get $n)))(if (i32.eq (i32.load offset=16 (local.get $n)) (local.get $hkey))(then (return (i32.load offset=0 (i32.load offset=4 (local.get $n))))))(local.set $n (i32.load offset=8 (local.get $n)))(br $walk)))(i32.const 0))\n")
   if threaded {
     wat_emit("  (func $spawn_task_impl (param $clo i32) (result i32)(local $t i32)(local.set $t (call $alloc (i32.const 12)))(i32.store offset=0 (local.get $t)(local.get $clo))(i32.store offset=4 (local.get $t)(i32.const 0))(if (i32.lt_s (call $wasi_thread_spawn (local.get $t))(i32.const 0))(then (unreachable)))(local.get $t))\n")
     // drift-audit: ignore — WAT instruction text
@@ -2553,7 +2548,6 @@ fn emit_memory_decl(threaded, wants_rmw) = {
 // whole module's emission materialized before one byte was written.
 fn emit_functions(fn_records) = each(
   (r) => {
-    // drift-audit: ignore — sequenced effectful read; the region bracket's own mark
     let m = heap_mark()
     wat_emit(emit_one_fn_to_string(r))
     heap_reset(m)
@@ -2574,7 +2568,6 @@ fn fn_record_is_wide(r) = match r {
 
 fn emit_wide_wrappers(fn_records) = each(
   (r) => {
-    // drift-audit: ignore — sequenced effectful read; the region bracket's own mark
     let m = heap_mark()
     wat_emit(emit_one_wrapper_to_string(r))
     heap_reset(m)
@@ -5039,7 +5032,6 @@ fn emit_fold_leaf_helpers(closures: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]
   // One region over the four leaf families: the closures record lives
   // outside the mark; every generated helper streams as it is built.
   //
-  // drift-audit: ignore — sequenced effectful read; the region bracket's own mark
   let m = heap_mark()
   emit_distinct_fold_leaves(FoldEq, closures.eq, [])
   emit_distinct_fold_leaves(FoldCompare, closures.cmp, [])
@@ -5133,7 +5125,13 @@ fn emit_cmp_leaf_seq(sig, elem) with Memory + Alloc + WasmOut + LookupTy = {
 }
 
 fn emit_cmp_seq_body(sig, elem) with Memory + Alloc + WasmOut + LookupTy = {
-  let callee = seq_elem_leaf_callee("compare", "str_compare", "list_compare_f64", "list_compare", seq_elem_face(elem))
+  let callee = seq_elem_leaf_callee(
+    "compare",
+    "str_compare",
+    "list_compare_f64",
+    "list_compare",
+    seq_elem_face(elem)
+  )
   wat_emit("  (func $compare_listbody_")
   wat_emit(sig)
   wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (param $i i32) (result i32)")
@@ -5174,7 +5172,8 @@ fn emit_hash_leaf_seq(sig, elem) with Memory + Alloc + WasmOut + LookupTy = {
 }
 
 fn emit_hash_seq_body(sig, elem) with Memory + Alloc + WasmOut + LookupTy = {
-  let callee = seq_elem_leaf_callee("hash", "str_hash", "list_hash_f64", "list_hash", seq_elem_face(elem))
+  let callee =
+    seq_elem_leaf_callee("hash", "str_hash", "list_hash_f64", "list_hash", seq_elem_face(elem))
   wat_emit("  (func $hash_listbody_")
   wat_emit(sig)
   wat_emit(" (param $__state i32) (param $a i32) (param $i i32) (param $h i32) (result i32)")
@@ -5784,9 +5783,10 @@ fn field_tys_of(fields, i, n) = if i >= n {
 // helper is generated. The seen-set of TName names terminates the descent on
 // recursive ADTs (Tree's payload reaches Tree — collected ONCE, the runtime
 // helper recurses the value).
+//
+// the fold boundary at the COLLECTOR — the same chase_deep the dispatch
+// entry runs, so collection and emission bank/name identical types
 fn eq_operand_contrib(left_h, acc) =
-  // the fold boundary at the COLLECTOR — the same chase_deep the dispatch
-  // entry runs, so collection and emission bank/name identical types
   if left_h == 0 { acc } else { eq_subtys(fold_strip(chase_deep(lookup_ty(left_h))), [], acc) }
 
 // The aggregate types reachable from a type (itself if product/sum, plus the
@@ -7447,7 +7447,8 @@ fn emit_list_literal(h, elems) = {
 // An unresolved/non-list shape is the word floor (sc 0).
 fn literal_stride_class(h) = match fold_strip(lookup_ty(h)) {
   TList(e) => stride_class(stride_of(seq_elem_face(e))),
-  _ => 0,   // drift-audit: ignore — the fn's own comment names it: an unresolved/non-list shape IS the word floor (sc 0)
+  _ => // drift-audit: ignore — the fn's own comment names it: an unresolved/non-list shape IS the word floor (sc 0)
+  0,
 }
 
 fn emit_list_stores(elems, base_idx) = each(

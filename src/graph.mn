@@ -1043,7 +1043,6 @@ fn node_handle(node) = match node {
 // per-mint side-ledger. The O(next) scan's O(1) destiny is the
 // handle-indexed span weave (the §5.O name-is-handle sibling).
 fn module_path_of_span(span) with GraphRead + !Mutate = {
-  // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let snapshot = graph_snapshot()
   match snapshot {
     Graph(next, _spans) => scan_for_enclosing_module(span, 0, next),

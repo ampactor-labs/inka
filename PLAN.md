@@ -1092,6 +1092,22 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE FIRST MARKER FAMILY DIES INTO THE MEDIUM — mode
+  33 retires and its 89 suppression markers strip (no pin move —
+  comment-only, the march byte-identical; boot a62b1299 stands). The
+  let-where-pipe grep could pattern-match one line and demanded ~80
+  hand markers ("sequenced effectful read") to suppress its blindness;
+  its successor is the audit verb's verb-shape tier (pipe_shape_of,
+  landed 2026-07-29), which counts USE EDGES through the total child
+  projection and honors the sequenced-effectful and reuse exceptions
+  STRUCTURALLY. The grep row deletes from drift-patterns.tsv with its
+  retirement recorded in place; the full-wheel audit runs CLEAN with
+  zero coincidental shielding (no other mode fired on the
+  now-unsuppressed lines). Markers 269 → 180; the remaining families
+  (WAT-instruction-text ×14, the BoundaryEdge positional destructures
+  ×13, the tail) each retire when their medium-side successor exists —
+  Hβ.audit.drift-modes-read-the-row's per-family ratchet, first
+  family executed.
 - 2026-07-30 · ▶ THE REFERENCE ENTERS ONCE AND SPEAKS LOCALLY — the
   refs facet's generation dedup + the seam projection's one home
   (pin a62b1299). The collector dedups by SPAN (a reference's

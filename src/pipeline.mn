@@ -179,9 +179,7 @@ body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~
 // reports land before the diag_refusals read — the teaching precedes the
 // tally it feeds.
 fn gate_reads(lowered) = {
-  // drift-audit: ignore — sequenced effectful ledger read, projected before emit
   report_verify_debt(verify_debt())
-  // drift-audit: ignore — sequenced effectful gate read (the verify_debt shape); reports must land before the diag_refusals read below
   report_unhandled_effects(lowered)
   let holes = collect_value_holes_decls(lowered)
   // The ARMED classes, read LIVE off the ledger the diagnostics handler keeps
@@ -190,7 +188,6 @@ fn gate_reads(lowered) = {
   // with one arm; these are its others. Productive at the walk, refusing at the
   // boundary — SYNTAX's "a hole is productive, never executable", generalized.
   //
-  // drift-audit: ignore — sequenced effectful ledger read, guarding the emit (the verify_debt read above is the same shape)
   // The verdict binds BEFORE the hole report so refusals never double-count
   // a hole (report_holes raises the armed E_UnresolvedHole; the tally read
   // above deliberately precedes it — len(holes) is the hole half).

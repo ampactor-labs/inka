@@ -159,7 +159,6 @@ handler query_default {
     // surrender. This IS rename: the [Span] is exactly the edit set.
     resume(QRRefs(refs_of_name(name))),
     QVerifyDebt => {
-      // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
       let debt = verify_debt()
       resume(QRVerifyDebt(debt))
     },

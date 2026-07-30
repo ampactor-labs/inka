@@ -1131,6 +1131,37 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ NINE DESIGNS FROM TWO INDEPENDENT AUDITS — the
+  novelty head-to-head, banked whole (no pin move — PLAN only; boot
+  stands at 2132e1ce). Morgan dispatched Fable 5 and Opus 5 against an
+  IDENTICAL brief — find what nobody has named, expressible in Mentl's
+  own primitives, artifact-grounded as absent, with a mandatory
+  calibration section — explicitly to learn which model serves THIS
+  project better. Both delivered; every proposal is now a named peer in
+  the residue index above, attributed. THE ARCHITECTURAL LEAP came from
+  Fable: LowIR is the SECOND GRAPH (39 handle-first constructors
+  re-materializing what the handle already addresses) while the graph
+  already carries a lowering fact as a spine column — and the
+  lower-time-bake class regenerating three times is the cost of the tree
+  existing. THE MOST ELEGANT OBSERVATION came from Opus: the four Ty
+  walk SHAPES are exactly the four RESUME CARDINALITIES, so the
+  discipline the medium already infers from arm bodies classifies the
+  traversal it is used in — the kernel explaining a compiler-internal
+  pattern rather than a pattern imported to explain the kernel. THE
+  SHARPEST THESIS FINDING was Fable's: no verb can project a past
+  generation, so GIT IS STILL THE OUTSIDE TIME ORACLE for the medium's
+  own history — an !Outside the docs never named, found by the auditor
+  hitting it while trying to ground on a commit. THE ONLY LIVE-DEFECT
+  CATCH was Opus's: extract_optimal, written an hour earlier, took the
+  span of the node a rewrite moved TO (fixed at the pin above). Both
+  calibrated honestly — Fable dropped a candidate for colliding with
+  hours-old work and reproduced this session's own row_without_self dig
+  without claiming it; Opus dropped three as overlapping and counted a
+  killed hypothesis. Side findings from their paths, real: the refs
+  facet is DAG-scoped and pattern-blind
+  (Hβ.query.refs-reads-edges-not-occurrences), the perimeter hook
+  refuses a pinned-commit read with no verb to offer, and `time` is
+  missing from its wrapper-tolerant lead list.
 - 2026-07-30 · ▶ THE PROPOSAL KEEPS THE DEVELOPER'S COORDINATES — the
   fork/merge landing's own review defect, caught by an independent
   auditor within the hour (pin 2132e1ce). extract_optimal's first form
@@ -7329,6 +7360,105 @@ whose echo/interval/callee legs the engine honors — one-line
 annotations, march-measured each; the recursion-shaped ones
 (scan_for_span) wait on the IH. TagId's 0..255 and the float
 intervals stay the SMT tier's.
+
+`Hβ.lower.lowering-is-a-column` — LowIR is the second graph (2026-07-30,
+the Fable novelty audit's first proposal; report at
+.build/research/novelty-fable-2026-07-30.md). LowExpr (lower.mn:240) is
+39 constructors, EVERY ONE handle-first, re-materializing structure that
+handle already addresses — a third thing beside the graph's two
+operations, with its own writer, while lower.mn's own header and PLAN
+§6's file map both call lowering "the projected read". The receiving
+mechanism EXISTS: spine_page (graph.mn:107) holds seven per-handle
+columns and `boundaries` is ALREADY a lowering fact written into the
+graph. The design is "more columns, no tree": lowering writes per-handle
+columns (yield boundaries, captures, direct-call resolution, twin encs,
+state-slot homes), emit walks program plus columns, and the LowExpr/LowFn
+trees and their ten walkers delete together. WHAT IT KILLS: the
+lower-time-bake class, which the ledger declared dead THREE separate
+times (LShow/LHash, field offsets, LPTuple) and which regenerates
+because a tree invites baking — with no tree there is nothing to bake
+into. It also makes per-decl incremental EMISSION fall out of the same
+cone machinery that re-judges, and makes band N's native_m3==m4 a
+statement about graph columns (this and the deterministic-handle
+partition are one invariant said twice). COST, honestly: the largest
+refactor on the board after schemes-are-edges (lower.mn 6,194 lines,
+wasm.mn 7,591), and genuinely synthesized shapes — twins, wide wrappers,
+k-records, redrive drivers — either mint graph nodes (precedent:
+desugar, NModule, synth candidates all mint) or stay emit-era records.
+Sequenced after schemes-are-edges by the same method: swap the
+representation behind the projections, never patch the walkers.
+
+`Hβ.eval.evaluating-cursor` — the subsystem table's missing row
+(2026-07-30, the Fable novelty audit's second proposal). §2's table maps
+every subsystem to a cursor-read mode and has NO evaluating mode, while
+the artifact carries four hand-rolled evaluator fragments (verify.mn's
+node_const_at and the compare/decide family, egraph.mn's const_int /
+fold_int, the float parse oracle) plus the 332-line predicate-unfold
+that was built and reverted. One `~> Evaluate` handler over the five
+node-kinds is the medium's own answer, and it doubles as arc 7's missing
+INTERNAL reference semantics (the correctness oracle is external today —
+§0's own standing !Outside). Overlaps the banked unfold as its larval
+form, stated plainly by the auditor.
+
+`Hβ.own.linear-tier-and-persist-value-barrier` — the ownership ledger is
+affine-only, and the resume barrier is effects-only (2026-07-30, the
+Fable novelty audit's third proposal, and the one it would build first).
+TWO HALVES OF ONE GAP. (a) `Consume` (types.mn:2424) reports
+double-consume and says nothing about NEVER-consumed: at-most-once
+without exactly-once, so a file/lock/socket that is opened and dropped
+on some path is silent. The relevant tier is the SAME arm reporting an
+`own` binding whose consume never happened — consume_enter_fn /
+consume_exit_fn already bracket every body and already union per-path
+consumption across alternative branches. (b) The landed persist barrier
+(persist.mn:52-72) severs `!WASI + !Filesystem + !Network` at the
+argument edge and its own comment calls that "the whole gate" — for
+EFFECTS; `image_pack` (:97) memcpys the frame with no scan for owned
+resources, so a continuation capturing an open fd persists silently,
+resumes where the descriptor is dead, and the origin's close obligation
+is simply lost. One more conjunct at the gate the barrier already proved
+sufficient closes the VALUE half. Why it is the safe next leap: the
+ledger already carries Diagnostic, so the exit-check is row-neutral to
+the judgment spine — the one class of engine work that does not gamble
+the oscillation attractor. Land narration-tier first per the census
+arming law; the wheel's own unconsumed owns, if any, are findings.
+
+`Hβ.egraph.install-algebra` — the `~>` edge enters the e-graph
+(2026-07-30, the Fable novelty audit's fourth proposal). The e-graph
+rewrites VALUES and nothing rewrites INSTALLS, while every install pays
+an unconditional world push/save/restore (wasm.mn:2463-2472, whose R1
+comment calls it "the invariant, not an optimization"). Three
+row-licensed moves as canon rewrites: ELISION (an install whose extent
+provably performs none of its ops is inert), HOIST, and FUSION. The row
+is the licence in each case — the same effect-awareness that already
+gates the dropping rewrites, one altitude up. Sequence after the modal
+world-index: install identity is what the modal crown is about, and
+rewriting installs before that lands would optimize against a semantics
+still moving.
+
+`Hβ.query.generation-operand` — every projection takes a WHEN
+(2026-07-30, the Fable novelty audit's fifth proposal, and its most
+thesis-shaped). `mentl why` and `mentl at` answer about NOW; nothing
+projects a past generation, so the medium cannot answer a question about
+its own history and GIT REMAINS THE OUTSIDE TIME ORACLE — an !Outside
+the docs never named, found by the auditor hitting it: no verb could
+project the source of the very commit it was told to ground on. The
+substrate exists on all three axes: checkpoints fork the graph,
+ty_fingerprint compares generations, the warm image persists them, and
+movers_diff (infer.mn:1335) is the larval two-generation renderer,
+stderr-only. A why/at that takes a generation operand diffs two worlds
+through the machinery already landed — the TIME axis of §2's own cursor,
+pointed at the medium's own past.
+
+`Hβ.types.authorship-is-a-reason` — the one authorship fact is a
+substring probe (2026-07-30, the Fable novelty audit's sixth, ranked
+last by its own author for arc-7 adjacency). Reason (types.mn:811-846)
+has no authorship constructor, so the medium's only record of "a human
+chose this" is `reason_is_pinned` testing whether a rendered string
+CONTAINS "user pinned" (cursor.mn:471) — prose parsed as data, the
+Carried-Truth law at the provenance layer. One wrapper ctor applied at
+the three authorship boundaries (accept, tighten, MCP propose) makes
+human intent a graph fact the Why chain walks, which is what §0's
+lossless-intent property actually requires.
 
 `Hβ.egraph.canon-edge-carries-reason` — the one unreasoned write in the
 kernel (2026-07-30, the Opus novelty audit's third proposal; the report

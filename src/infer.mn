@@ -951,7 +951,13 @@ fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: Vali
 fn infer_program_trial(stmts) = {
   register_primitives()
   pre_register_decls(stmts)
-  set_summaries(classify_fixpoint(stmts))
+  // The summaries classify ONCE, here — the grades read arm STRUCTURE,
+  // which no round changes, and the value is name-keyed (parse-
+  // independent), so the rounds and the final REUSE this value instead
+  // of re-walking the whole tree per pass (twelve re-derivations of an
+  // invariant deleted; Carried-Truth at the pass boundary).
+  let summ = classify_fixpoint(stmts)
+  set_summaries(summ)
   // The DAG is PARSE truth, read before any judgment: free names +
   // decl names give the Tarjan BINDING GROUPS, so the trial itself
   // walks callee-first with each cycle judged as one mono unit — its
@@ -971,7 +977,7 @@ fn infer_program_trial(stmts) = {
   let start = graph_next()
   let rows = trial_group_walk(stmts, groups, make_list(len(stmts)), 0)
   finalize_continuation_boundaries(0, graph_next())
-  (rows, start, stmts, frees_all, layers)
+  (rows, start, stmts, frees_all, layers, summ)
 } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx ~>
 // The trial is a WORLD of its own: fresh analysis ledgers absorb its
 // verify obligations and ownership/region facts, dying with the
@@ -1014,12 +1020,12 @@ affine_ledger ~> region_tracker ~> verify_ledger
 // and summaries still run whole (deterministic per source, cheap; the
 // grades read arm STRUCTURE, which no round changes). Runs under
 // diag_quiet at the call site.
-fn infer_program_round(ref mask, ref prev_rows, ref layers, stmts) = {
+fn infer_program_round(ref mask, ref prev_rows, ref layers, summ, stmts) = {
   register_primitives()
   each(pre_register_alias, stmts)
   each(pre_register_effect, stmts)
   pre_register_masked(stmts, mask, 0)
-  set_summaries(classify_fixpoint(stmts))
+  set_summaries(summ)
   // drift-audit: ignore — sequenced effectful read (the ranges' origin must precede the walk), CLAUDE.md Anchor 6 exclusion
   let start = graph_next()
   let rows = infer_stmt_list_masked(stmts, mask, prev_rows, layers)
@@ -1127,6 +1133,21 @@ fn round_prints_walk(ref rows, i, own out) = if i >= len(rows) {
   }
 }
 
+// The cone-proportional render: masked-out finals are values, their
+// prints carry; only re-judged stmts re-fingerprint.
+fn round_prints_masked(ref rows, ref mask, ref prev_prints, i, own out) = if i >= len(rows) {
+  out
+} else {
+  let p = if mask[i] {
+    match rows[i] {
+      (name, _) => row_print(name),
+    }
+  } else {
+    prev_prints[i]
+  }
+  round_prints_masked(rows, mask, prev_prints, i + 1, list_set(out, i, p))
+}
+
 fn prints_equal(ref a, ref b) = if len(a) != len(b) { false } else { prints_equal_walk(a, b, 0) }
 
 fn prints_equal_walk(ref a, ref b, i) =
@@ -1204,10 +1225,10 @@ handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals 
 fn infer_program_converged(src) = match {
   src |> frontend |> infer_program_trial
 } ~> diag_quiet {
-  (rows, _trial_start, _tstmts, frees_all, layers) => {
+  (rows, _trial_start, _tstmts, frees_all, layers, summ) => {
     let flat_rows = list_to_flat(rows)
     let prints = round_prints(flat_rows)
-    converge_rounds(src, flat_rows, layers, frees_all, prints, prints, 1)
+    converge_rounds(src, flat_rows, layers, frees_all, summ, prints, prints, 1)
   },
 }
 
@@ -1224,7 +1245,7 @@ fn infer_program_converged(src) = match {
 // last round's finals, so an env read here could only ever answer
 // "unmoved"; the delta lives in the pair. This is the incremental
 // cursor running inside the judgment itself.
-fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round) = if round >= 12 {
+fn converge_rounds(src, flat_rows, layers, frees_all, summ, prev_prints, prints, round) = if round >= 12 {
   eprint_string("convergence: schemes still moving after {int_to_str(round)} rounds — judging with the last round's finals; the fixpoint oracle arbitrates\n")
   eprint_string("convergence: movers:{movers_line(flat_rows, prev_prints, prints, 0, 0)}\n")
   // The attractor instrument (Hβ.infer.round-oscillation-movers): the
@@ -1232,7 +1253,7 @@ fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round
   // the A and B renders NAMES the flipping component (a row tail, an
   // enc digit, a payload), which names the carrier to fix at its mint.
   movers_diff(flat_rows, prev_prints, prints, 0, 0)
-  converge_finish(src, flat_rows, layers)
+  converge_finish(src, flat_rows, layers, summ)
 } else {
   let mask = if round == 1 {
     mask_all(len(flat_rows))
@@ -1240,13 +1261,17 @@ fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round
     cone_mask(flat_rows, prev_prints, prints, frees_all)
   }
   match {
-    src |> frontend |> infer_program_round(mask, flat_rows, layers)
+    src |> frontend |> infer_program_round(mask, flat_rows, layers, summ)
   } ~> diag_quiet {
     (rows2, _start2) => {
       let flat2 = list_to_flat(rows2)
-      let prints2 = round_prints(flat2)
+      // Only the cone's fingerprints can move: a masked-out stmt's final
+      // is a VALUE (the value-boundary law — published schemes leak no
+      // live vars), so its print is invariant and re-rendering it
+      // re-derives a constant; the m3 == m4 oracle backstops the law.
+      let prints2 = round_prints_masked(flat2, mask, prints, 0, make_list(len(flat2)))
       if prints_equal(prints, prints2) {
-        converge_finish(src, flat2, layers)
+        converge_finish(src, flat2, layers, summ)
       } else {
         // Graduated probe (⟳(3)): the tail rounds' flips per round — its
         // first firing measured the front's one-layer-per-round climb
@@ -1256,20 +1281,20 @@ fn converge_rounds(src, flat_rows, layers, frees_all, prev_prints, prints, round
           eprint_string("convergence: round {int_to_str(round)} flips:\n")
           movers_diff(flat2, prints, prints2, 0, 0)
         }
-        converge_rounds(src, flat2, layers, frees_all, prints, prints2, round + 1)
+        converge_rounds(src, flat2, layers, frees_all, summ, prints, prints2, round + 1)
       }
     },
   }
 }
 
-fn converge_finish(src, flat_rows, layers) = {
+fn converge_finish(src, flat_rows, layers, summ) = {
   // The final's parse START, captured before its own frontend: the crc
   // walk's lower bound, so the backtick judge reads only THIS pass's
   // comment cells — prior generations' parses left their text in place.
   //
   // drift-audit: ignore — sequenced effectful read (the pre-frontend frontier, the comment walk's lower bound)
   let pstart = graph_next()
-  src |> frontend |> infer_program_final(flat_rows, layers, pstart)
+  src |> frontend |> infer_program_final(flat_rows, layers, pstart, summ)
 }
 
 fn mask_all(n) = mask_all_walk(make_list(n), 0, n)
@@ -1817,7 +1842,7 @@ fn layer_name_index(ref names, i, idx) = if i >= len(names) {
   )
 }
 
-fn infer_program_final(rows, layers, pstart, stmts) = {
+fn infer_program_final(rows, layers, pstart, summ, stmts) = {
   {
     // drift-audit: ignore — sequenced effectful read (the parse watermark, the comment walk's exact bound)
     let parse_end = graph_next()
@@ -1826,12 +1851,12 @@ fn infer_program_final(rows, layers, pstart, stmts) = {
     each(pre_register_alias, stmts)
     each(pre_register_effect, stmts)
     fold(smap_new(), pre_register_stmt_final, stmts)
-    // The summaries value is captured ONCE and threaded to every branch
-    // bracket — each branch installs its own resume_summaries_ctx over
-    // the same value (a fresh ctx would answer UZero for every grade
-    // and mis-tier dispatch), so a spawned cursor reads grades without
-    // reaching this ambient instance.
-    let summ = classify_fixpoint(stmts)
+    // The summaries value arrives from the TRIAL's one classify (grades
+    // read arm structure — no pass changes them) and threads to every
+    // branch bracket — each branch installs its own resume_summaries_ctx
+    // over the same value (a fresh ctx would answer UZero for every
+    // grade and mis-tier dispatch), so a spawned cursor reads grades
+    // without reaching this ambient instance.
     set_summaries(summ)
     infer_stmt_list_planned(rows, layers, stmts, summ)
     finalize_continuation_boundaries(0, graph_next())

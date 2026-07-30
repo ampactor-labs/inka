@@ -1092,6 +1092,28 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶ THE PASS INVARIANTS STOP RE-DERIVING — classify-once
+  + cone-proportional prints (pin 43f33c0a). Two carried-truth
+  deletions the eight-interrogation audit surfaced on the convergence
+  machinery: classify_fixpoint ran per PASS (thirteen whole-tree walks
+  per judgment) while its own comment admitted the grades read arm
+  STRUCTURE no pass changes — it classifies ONCE in the trial and the
+  name-keyed value threads to every round and the final; and
+  round_prints fingerprinted EVERY name every round while the
+  value-boundary law makes a masked-out final a VALUE nobody can
+  teach — its print carries, only the cone re-renders
+  (round_prints_masked; the m3 == m4 oracle backstops the law). Both
+  CLEAN. Measured honestly: the field read holds its ~60-69s band —
+  the alternating SCC families keep the cone LARGE (they and their
+  dependents re-judge every round) and the per-round re-parse
+  dominates, so the collapse waits on the generality join; with it
+  the two named per-round re-derivations left are the parse (the
+  checkpoint+frozen-finals form dissolves it — proven mechanically by
+  the iteration arc, gated on the join's freeze semantics) and the
+  prepass. RIDER: the pin ritual's mandatory re-read caught a sha
+  tail completed from memory (the ⊕ fabrication class, second live
+  catch) before it reached the blessed line.
+
 - 2026-07-30 · ▶▶ THE ITERATION MEETS ITS MONOTONICITY — the second
   counted kill of the SCC rung, and the join named as the true
   remainder (no pin move — the reverted tree reproduces 5db9b4c3

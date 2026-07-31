@@ -1131,6 +1131,35 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ THE VOICE CANNOT MISORDER — the comment-voice audit
+  opens by convicting the voice's own truth, and the comment law gains
+  its destiny statement (pin 61f8150f). Morgan's charge: comments
+  should be designed into the voice so completely that `//` becomes the
+  developer's scratchpad — the fun-place — with everything load-bearing
+  spoken by the medium. THE OPENING CONVICTION, forced by the prior
+  landing's own cost: `type of pair` answered `(beta, alpha)` for a
+  declared (alpha, beta) — query.mn's private deep-chase family
+  (chase_params_deep / chase_list_deep / chase_fields_deep /
+  find_unresolved) walked last/drop_last and PREPENDED, reversing every
+  list it rebuilt; the show_list disease alive in a query-side copy,
+  and it had already cost two swapped calls convicted by the census.
+  The walks are the map / filter|>map vocabulary forms now
+  (iteration-is-topology executing on the voice's own organs), the
+  frontier pins declaration order, and both witnesses answer true
+  (pair alpha-first; collect_free_vars node-first). THE AUDIT'S
+  MEASUREMENT: the wheel is ~38% prose (17,762 comment-carrying lines
+  of 47,101), nearly all MECHANISM the voice cannot yet speak — the ⟳
+  confession at the prose layer, now law at all three docs: SYNTAX
+  §«What a comment TRENDS TO» (the deletion test — delete the comment;
+  lost unprojectable content names the missing verb; `//`'s endpoint is
+  authored intent alone), CLAUDE.md ⟳ (a mechanism-comment is the hand
+  tool's confession one layer up), and the absorption arc per family on
+  the new peer (measured-whys → Reason edges; invariants → refinements
+  and armed diagnostics; pointers → the residue index live;
+  layout-rationale → deleted by fmt-canonical). The naming ruling
+  sharpened in place: a name needing a decoder-ring comment violates
+  vocabulary-as-intent at the source. CLEAN m2 == m3 at 356,449 lines;
+  census 0; the query-order frontier leg green.
 - 2026-07-30 · ▶▶▶ THE OWN CANNOT CROSS THE WIRE — the persist value
   barrier lands, and the relevant tier sweeps its own eight findings to
   zero (pin 16da60bd). THE VALUE HALF: consume_declared projects the
@@ -7630,23 +7659,45 @@ answers "declared as NAME" without projecting its variants, and nothing
 projects the module import graph though the driver holds it as NModule
 nodes with ranges.
 
-`Hβ.query.param-render-reversed` — the ask projection reverses the
-param product (measured 2026-07-30, twice at cost then once minimal:
-`fn pair(alpha: Int, beta: String)` answers
-`(beta: String, alpha: Int own — inferred)` through `type of`). The
-render chain is innocent — show_list walks FIRST-first (2026-07-29) and
-show_type's TFun arm feeds it the params it is handed — and unify
-aligns parse order (the probe's own main() call judged clean), so the
-reversal lives in the QUERY PATH's product: either the scheme the ask
-projection resolves holds a snoc-prepend-rebuilt list, or a query-side
-walk re-collects the params backward — a Carried-Truth violation at the
-voice (rebuilding what the TFun already carries in order). COST,
-measured: two swapped calls in one hour from TRUSTING the projection
-(collect_free_vars, string_in_list — each convicted by the census in
-one march), the exact inversion of "the medium's projection answers
-better." The ownership suffix rides only the last-rendered param —
-same rebuilt-product fingerprint. The comment-voice audit's opening
-conviction: a voice that must replace comments cannot lie about order.
+`Hβ.query.param-render-reversed` — RESOLVED (2026-07-30, the
+comment-voice audit's opening conviction; the §7 entry THE VOICE
+CANNOT MISORDER carries the arc). The root was query.mn's private
+deep-chase family — chase_params_deep / chase_list_deep /
+chase_fields_deep / find_unresolved all walked last/drop_last and
+PREPENDED, rebuilding every list REVERSED (params, tuple elems, type
+args, record fields, the unresolved set): the show_list disease alive
+in a query-side copy, measured at cost first (two swapped calls in one
+hour from TRUSTING the projection — collect_free_vars, string_in_list —
+each convicted by the census in one march). The walks are the map /
+filter|>map vocabulary forms now — order-preserving BY CONSTRUCTION,
+iteration-is-topology's own tier — and the frontier pins declaration
+order (`type of pair` answers alpha-first). The family remains one of
+the nineteen Ty descents; its one home arrives with
+`Hβ.types.traversal-is-a-handler`.
+
+`Hβ.voice.comment-mass-absorbs-into-projections` — the wheel is 38%
+prose, and almost none of it is the endpoint (Morgan's charge,
+2026-07-30: comments belong to the developer — the scratchpad, the
+fun-place — because the medium's voice speaks everything load-bearing).
+Measured: ~17,762 comment-carrying lines of 47,101 in src/**, nearly
+all MECHANISM prose — constraints, measured whys, layout laws — written
+by the builder because the voice cannot yet carry them: each line is
+larval `mentl why` / `mentl audit` content, the ⟳ confession at the
+prose layer (SYNTAX §«What a comment TRENDS TO» now states the surface
+law; CLAUDE.md ⟳ the method half). THE ABSORPTION ARC, per family:
+measured-why comments → Reason edges a `why` hop renders (the largest
+class — "measured 2026-07-XX, N sites" prose is a graph fact with a
+date); law/invariant comments → refinements, rows, and armed
+diagnostics (a stated invariant the medium could refuse on is a
+diagnostic not yet born); pointer comments (`the X precedent`, peer
+names) → the residue index read live; layout-rationale comments →
+deleted by fmt-canonical (the renderer IS the rationale). The census
+instrument is `Hβ.query.comment-prose-search`'s verb reading the weave
+— classify by whether the deletion test loses unprojectable content;
+the RATCHET: comment mass falls as verbs land, never by suppression
+(the drift-marker eradication's exact shape one layer up). The residue
+at the limit is authored intent — the one genuine Outside, carried
+losslessly, never required.
 
 `Hβ.synth.rank-is-a-projection-not-a-field` — the ranker's two
 vocabularies (found 2026-07-30 completing the fork/merge landing). The

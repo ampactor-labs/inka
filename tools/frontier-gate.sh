@@ -2041,6 +2041,23 @@ for i in "${!compilers[@]}"; do
     fail "decl-name address (got: $(printf '%s' "$gh_out" | grep -m1 'Query:'))"
   fi
 
+  # ─── The query speaks declaration order ────────────────────────────
+  # `type of` on (alpha, beta) must answer alpha-first — the ask
+  # projection's last/drop_last-prepend rebuilds reversed every list it
+  # walked (params, tuple elems, type args, record fields, the
+  # unresolved set) until the map forms landed; a voice that replaces
+  # reading the source cannot misorder a signature (it cost two swapped
+  # calls in one hour, each convicted by the census).
+  qodir="$dir/qorder"
+  mkdir -p "$qodir"
+  printf 'fn pair(alpha: Int, beta: String) = alpha\n\nfn main() = pair(1, "x")\n' > "$qodir/main.mn"
+  qo_out=$(cd "$qodir" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$qodir::." --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query main.mn "type of pair" 2>/dev/null)
+  if printf '%s' "$qo_out" | grep -q 'alpha: Int.*beta: String'; then
+    pass "query speaks declaration order (alpha before beta)"
+  else
+    fail "query param order (got: $(printf '%s' "$qo_out" | grep -m1 'alpha\|beta\|→'))"
+  fi
+
   # ─── The interval fragment's proof-and-honesty face ────────────────
   # mn-verify-interval runs to 21 through the contract battery; HERE the
   # stderr ledger is the assertion: exactly TWO pending comparisons —

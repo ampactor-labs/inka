@@ -210,39 +210,38 @@ fn chase_type_deep(ref ty) with !Mutate = match ty {
   _ => ty,
 }
 
-fn chase_list_deep(ref tys) with !Mutate =
-  if len(tys) == 0 { [] } else { [chase_type_deep(last(tys))] ++ chase_list_deep(drop_last(tys)) }
+// Order-preserving BY the vocabulary form (Hβ.query.param-render-reversed's
+// root): the last/drop_last-prepend walks rebuilt every list REVERSED, so
+// `type of pair` answered `(beta, alpha)` for a declared (alpha, beta) —
+// the voice lying about order at the exact projection that must replace
+// reading the source. map preserves; declaration order is the truth. This
+// private deep-chase family is one of the nineteen Ty descents the
+// traversal-is-a-handler peer consolidates; its one home arrives there.
+fn chase_list_deep(ref tys) with !Mutate = map(chase_type_deep, tys)
 
-fn chase_params_deep(ref params) with !Mutate = if len(params) == 0 {
-  []
-} else {
-  let p = last(params)
-  [param_with_ty(p, chase_type_deep(param_ty(p)))] ++ chase_params_deep(drop_last(params))
-}
+fn chase_params_deep(ref params) with !Mutate =
+  map((p) => param_with_ty(p, chase_type_deep(param_ty(p))), params)
 
-fn chase_fields_deep(ref fields) with !Mutate = if len(fields) == 0 {
-  []
-} else {
-  match last(fields) {
-    (name, ty) => [(name, chase_type_deep(ty))] ++ chase_fields_deep(drop_last(fields)),
-  }
-}
+fn chase_fields_deep(ref fields) with !Mutate = map(
+  (field) => match field {
+    (name, ty) => (name, chase_type_deep(ty)),
+  },
+  fields
+)
 
 // Collect all env entries whose type still chases to a free `TVar`.
 // Returned by `QUnresolved` — the set of names with incomplete types
-// after inference.
-fn find_unresolved(ref entries) with !Mutate = if len(entries) == 0 {
-  []
-} else {
-  match last(entries) {
-    (name, scheme, _reason, _kind) => match scheme {
-      Forall(_, ty) => {
-        let rest = find_unresolved(drop_last(entries))
-        if has_free_tvar(ty) { [(name, ty, [])] ++ rest } else { rest }
-      },
-    },
-  }
-}
+// after inference, in env order (the reversing walk was the
+// param-render-reversed class's fourth face).
+fn find_unresolved(ref entries) with !Mutate = entries |> filter((entry) => match entry {
+  (_, scheme, _, _) => match scheme {
+    Forall(_, ty) => has_free_tvar(ty),
+  },
+}) |> map((entry) => match entry {
+  (name, scheme, _, _) => match scheme {
+    Forall(_, ty) => (name, ty, []),
+  },
+})
 
 fn has_free_tvar(ref ty) with !Mutate = match ty {
   TVar(h) => match graph_chase(h) {

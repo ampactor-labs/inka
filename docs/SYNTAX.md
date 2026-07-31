@@ -315,7 +315,10 @@ it: `map(f, xs)` · `filter(p, xs)` · `each(f, xs)` · `fold(init, f, xs)` ·
 ### Vocabulary — names are read as intent, never as ceremony
 
 The developer writes what they mean, not what a computer wants to see; a
-name that adds machinery-gloss over the topology is drift. Three rulings:
+name that adds machinery-gloss over the topology is drift — and a name that
+needs a decoder-ring comment to read is this ruling violated at the source
+(the comment is then a confession twice over: of the name, and of the
+projection; see §«What a comment TRENDS TO»). Three rulings:
 
 - **A banished keyword never returns as a name.** Mentl removed `for`; a fn
   named `for_each` carried the loop back into the reader's mouth — worse,
@@ -1499,6 +1502,26 @@ fn lowpass_filter(samples: [Sample]) -> [Sample] with !Alloc =
 - **Register is a projection, not a delimiter.** How much surfaces — the one-line lede in `RTerse`, the full body in `RExplain` — is the gradient reading the comment's relevance at the cursor (the same gradient that drives every projection), NOT an author-chosen `//`-vs-`///` audience split. The author writes prose; the cursor decides what shows. First sentence = lede.
 - **Surfaces verbatim, rendered per target.** The substrate stores the raw String; render handlers interpret presentation — HTML `<code>` for `` `backticks` ``, terminal ANSI, markdown fence. `` `backticks` `` cross-reference identifiers; the author writes the reference, the handler resolves it.
 - **Code blocks compile via the same pipeline.** A comment containing Mentl source IS Mentl source — the compile verifies it; there is no separate doc-test category.
+
+### What a comment TRENDS TO
+
+The design pressure, stated so the trend is never mistaken for an accident:
+**a comment that states a mechanism is a CONFESSION that a projection is
+missing.** The medium carries types, rows, ownership, refinements, resume
+cardinality, spans, and Reasons, and the voice projects them at every
+position — so a comment restating a projectable fact is the graph's truth
+hand-copied into prose, where it can rot (the Carried-Truth Law at the prose
+layer). The deletion test: delete the comment; if information is lost that no
+projection can answer, the MISSING PROJECTION is the finding — name the peer,
+grow the verb, and the comment's load-bearing half ABSORBS into the medium,
+exactly as the bash scaffolds absorb into verbs (`CLAUDE.md ⟳`). What `//`
+trends toward as the voice completes is the developer's OWN prose — intent,
+taste, the scratchpad, the reminder, the fun — the one genuine Outside
+(`PLAN.md §0`: intent), which the medium carries losslessly and never
+requires. The wheel measures the distance today: ~38% of its lines carry
+prose, nearly all of it mechanism the voice cannot yet speak — each line
+larval `mentl why` content queued for absorption, never the endpoint
+(`Hβ.voice.comment-mass-absorbs-into-projections`).
 
 ### What a comment is NOT
 

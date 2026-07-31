@@ -395,7 +395,11 @@
 > eight-aspect projection), `check`, `teach`, `tighten`, `fmt`, `query`, the
 > census, the in-scratch postmortem. A hand tool is a CONFESSION that a
 > projection is missing; the confession gets NAMED (a peer, or the capability
-> built in the same arc), never absorbed silently into habit.
+> built in the same arc), never absorbed silently into habit. A
+> MECHANISM-COMMENT is the same confession at the prose layer — prose stating
+> what a projection should speak is queued for absorption, and `//`'s endpoint
+> is the developer's own intent-prose alone (SYNTAX §«What a comment TRENDS
+> TO» carries the surface law; the deletion test names the missing verb).
 >
 > **The self-build audit runs at every landing:** which step of THIS landing
 > did Claude or Morgan perform that the medium could have performed? What is

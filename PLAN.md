@@ -8354,6 +8354,46 @@ openness, the defect. Rung 3's acceptance tests are therefore three
 banked REDs (this one, mn-scc-false-negation, mn-two-tail-accumulation)
 plus the wheel's mover count reaching zero — and the count is now
 printed on every ScopeAll compile, so the ratchet has its number.
+RUNG 3 IS NOW A MEASURED BUILD, NOT A SKETCH (2026-07-31 — attempted
+first, measured, and reverted to green with the spec it produced;
+Morgan's cut: the expensive one first is what makes the cheap ones
+cheap or unnecessary). THREE FORMS WERE BUILT AND MARCHED:
+(a) THE FULL REPRESENTATION SWAP — `EffTail = EtClosed | EtOpen([Int])
+| EtAll`, the tail as a SET OF EDGES so `tail_join` becomes set union
+(no first-var drop), with `ef_make` canonicalizing and `EtOpen([]) ⇒
+EtClosed`. Surface MEASURED: 52 sites across seven files (infer 20,
+effects 16, graph 6, types 5, lower 2, gradient_delta 2, main 1), and
+H6 names every one — the census answers `constructor: EtVar` at each
+missed site, so the sweep is compiler-driven. Not landed: several
+sites are unify BINDING decisions that need their own judgment, and a
+half-swept tree does not compile.
+(b) DELETING THE CUT OUTRIGHT, with a cycle guard added to
+`resolve_row` (carry the cells being resolved; skip a revisit — R ∪ R
+= R, so the least solution is the fold's own idempotence). MEASURED:
+it terminates and self-reproduces (TRANSITION m3 == m4) and it is
+WORSE — 40 E_EffectMismatch, movers 930 → 1476, the wheel +47k lines.
+THE READING, and it is the finding: the cut was doing TWO jobs, and
+only one of them is the defect. Closing the SELF cycle is right and
+necessary (callers and the declared-row gate read a value there, and a
+self-referential loop is not one); cutting a CO-MEMBER's edge is the
+defect.
+(c) THE SEPARATION — `row_without_self` becomes the same resolution
+guard SEEDED with the fn's own cell: the self-edge reads closed by
+idempotence, every co-member edge stays LIVE. One line replaces the
+old handle-compare. MEASURED: the source fixture goes 2 movers → 1 and
+`self_first` — the member that LOST its co-member's effect — is FIXED,
+which is the defect this whole arc named. The wheel then shows 40
+E_EffectMismatch, and those are HONEST: with co-member effects finally
+arriving, forty of the wheel's own declarations are under-declared.
+SO THE LANDING IS (c) PLUS A FORTY-DECLARATION WIDEN LOOP — the same
+loop three prior landings ran (19 → 3 → 2 → 0), one pass, mechanical,
+the census naming each site. The mover count is a SEPARATE question
+from correctness (the trial still resolves less than the final; that
+is what (a) finishes), and the honest sequence is: land (c) + the
+widen loop to census 0, then (a) as its own arc with the 52-site
+sweep. Both fixtures stay RED until (a): mn-two-tail-accumulation
+needs the set, mn-cycle-charge-freeze's `co_first` needs it too.
+
 THE BUILD SKELETON (2026-07-31, banked with the re-measured RED —
 pingpong's ping answers `with r41564@e11` through the live boot while
 solo answers Pure): (1) the publish becomes the fn's LIVE type handle

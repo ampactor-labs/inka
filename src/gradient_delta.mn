@@ -283,7 +283,7 @@ fn row_to_with_clause(row) with Intern + Memory + Alloc + GraphRead = match row 
 fn neg_names_to_str(ref names) with Intern + Memory + Alloc + GraphRead =
   show_list(names, (n) => "!{show_eff_name(n)}", " + ")
 
-fn eff_args_all_literal(args) with Pure = all(
+fn eff_args_all_literal(args) with Memory + Alloc = all(
   (a) => match a {
     EAInt(_) => true,
     EAFloat(_) => true,

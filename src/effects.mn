@@ -481,10 +481,22 @@ fn absorb_row(ref body_row, ref handled_row, ref extra_row) with !Mutate =
   union_row(diff_row(body_row, handled_row), extra_row)
 
 // A recursive fn's row equation R = names ∪ R takes its LEAST solution:
-// a tail landing on the fn's OWN row handle cuts to the closed head.
+// a tail landing on the fn's OWN row handle cuts to the closed head. The
+// compare runs on CHASED ROOTS (find-before-compare — unify IS union-find,
+// and the frame's fresh row cell aliases its pre-registration root through
+// the decl's entry unify, so a raw handle compare misses the self-loop
+// that arrives through the alias). This one cut closes a whole mutual
+// cycle: each member's charge lands on its callee's LIVE root, so the
+// LAST member's resolved tail chases the entire loop back to its own
+// cell — the least solution for the SCC, with the storage acyclic
+// (every earlier member finalized before its tail's target was bound).
 fn row_without_self(row, self_h) with !Mutate = match resolve_row(row) {
   EfRow(p, a, t) => match t {
-    EtVar(v) => if v == self_h { ef_make(p, a, EtClosed) } else { EfRow(p, a, t) },
+    EtVar(v) => if graph_chase_handle(v) == graph_chase_handle(self_h) {
+      ef_make(p, a, EtClosed)
+    } else {
+      EfRow(p, a, t)
+    },
     _ => EfRow(p, a, t),
   },
 }

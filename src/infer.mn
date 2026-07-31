@@ -71,9 +71,27 @@ effect InferCtx {
   // the wheel — the 286-error m3 census).
   inf_mark_install_frame()
   inf_frame_is_install() -> Bool
+  // The declared-row gate's deferral channel: a gate whose body tail is
+  // still an open chain at decl exit (a cycle's non-last member — the
+  // callee roots it charged resolve only when the cycle's last member
+  // cuts) parks here and drains at the pass tail, where every chain has
+  // closed. Per-pass by construction: each pass installs its own
+  // infer_ctx, so a trial's parked gates die with the trial's bracket.
+  defer_row_gate((String, EffRow, Bool, Int, Span))
+  drain_row_gates() -> [(String, EffRow, Bool, Int, Span)]
+  // The binding group in judgment — PARSE truth (scc_groups), set by the
+  // trial around each cycle's walk. The live-charge re-aim reads it: a
+  // co-member's free row is the severed-recursion channel (re-aim at the
+  // live root); any other free-rowed FnScheme is the effect-polymorphism
+  // channel, where freshening is the semantics (re-aiming a genuinely
+  // polymorphic row chained every caller onto ONE shared quantified var —
+  // the whole diagnostics-voice SCC entangled through show_list's row
+  // the hour the ungated form ran).
+  set_group_members([String])
+  group_member(String) -> Bool
 }
 
-handler infer_ctx with stack = [], arm_stack = [], install_marks = [] {
+handler infer_ctx with stack = [], arm_stack = [], install_marks = [], pending_gates = [], group_names = [] {
   inf_enter_fn(h, answer_h, fn_span, effs) => // stack = [InferFrame, ...] where each InferFrame is a record:
   //   {accumulated_row: EffRow, answer_handle: Int, declared: List,
   //    fn_span: Span, row_handle: Int}
@@ -158,6 +176,11 @@ handler infer_ctx with stack = [], arm_stack = [], install_marks = [] {
   resume() with arm_stack = arm_stack ++ [continuation_h],
   inf_exit_arm() => if len(arm_stack) == 0 { resume() } else { resume() with arm_stack = drop_last(arm_stack) },
   inf_arm_tys() => if len(arm_stack) == 0 { resume(None) } else { resume(Some(last(arm_stack))) },
+  defer_row_gate(g) => // drift-audit: ignore — judgment-scoped gate PARK drained once at the pass tail (§9 push-at-END), not a loop accumulator
+  resume() with pending_gates = push(pending_gates, g),
+  drain_row_gates() => resume(pending_gates) with pending_gates = [],
+  set_group_members(ns) => resume() with group_names = ns,
+  group_member(n) => resume(string_in_list(group_names, n)),
 }
 
 // fresh_for_inference — the FreshHandle install inference runs under:
@@ -983,6 +1006,7 @@ fn infer_program_trial(stmts) = {
   let groups = scc_groups(frees_all, name_idx)
   let rows = trial_group_walk(stmts, groups, make_list(len(stmts)), 0)
   finalize_continuation_boundaries(0, graph_next())
+  drain_deferred_row_gates()
   (rows, layers, summ)
 } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx ~>
 // The trial is a WORLD of its own: fresh analysis ledgers absorb its
@@ -1624,7 +1648,12 @@ fn trial_judge_group(ref stmts, members, own rows) = if len(members) > 1 {
   // quantifying a then-free var the frozen-read law would forever freshen.
   {
     group_mono_views(stmts, members, 0)
+    // The group's member names ride the judgment as PARSE truth — the
+    // live-charge re-aim (callee_own_row) reads membership to tell the
+    // severed-recursion channel from the effect-polymorphism channel.
+    set_group_members(map((j) => stmt_decl_name(stmts[j]), members))
     let rows2 = group_judge_members(stmts, members, rows, 0)
+    set_group_members([])
     group_final_publish(stmts, members, 0)
     rows2
   }
@@ -1772,6 +1801,7 @@ fn infer_program_final(rows, layers, pstart, summ, stmts) = {
     set_summaries(summ)
     infer_stmt_list_planned(rows, layers, stmts, summ)
     finalize_continuation_boundaries(0, graph_next())
+    drain_deferred_row_gates()
     comment_refs_check(stmts, pstart, parse_end)
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
   stmts
@@ -2443,51 +2473,18 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
             let has_pure = has_pure_declared(declared_effs)
             check_instance_args(declared_effs, span)
             let declared_row = build_declared_row(declared_effs)
-            let bound = graph_chase(row_handle)
-            match bound {
-              GNode(NRowBound(body_row), _) => if row_subsumes(body_row, declared_row) {
-                // D2 — when body_row is STRICTLY narrower than declared_row
-                // (body ⊆ declared and declared ⊄ body), the fn is
-                // over-declared — it reserves more capabilities than it
-                // uses. Emit T_OverDeclared as a teaching warning so the
-                // author can tighten the signature and unlock the tighter
-                // row's capabilities (memoization for the pure row, real-time
-                // for !Alloc, etc.).
-                if row_subsumes(declared_row, body_row) {
-                  ()
-                } else {
-                  report(TOverDeclared(declared_row, body_row, name, span))
-                }
-                // Publish: a positive declared row IS the API contract callers
-                // read (evidence threads from its names). A negation-bearing row
-                // (solo `with !N`) is a GATE, not a callee row — publishing ¬N
-                // would union near-universe into every caller's accumulation.
-                // The published truth is the meet the gate just proved:
-                // body ∩ ¬N (= the body row with N provably absent).
-                let published = match declared_row {
-                  EfRow(_, da, dt) => match dt {
-                    EtAll => inter_row(body_row, declared_row),
-                    _ => publish_with_instances(declared_row, body_row),
-                  },
-                }
-                graph_bind_row(row_handle, published, Located(span, Declared(name)))
-              } else {
-                if has_pure {
-                  report(EPurityViolated(body_row, span))
-                } else {
-                  report(EEffectMismatch(declared_row, body_row, span))
-                }
-              },
-              _ => // The declaration PINS even when the body row's resolution
-              // lags at decl exit (mutual recursion mid-convergence): the
-              // silent `()` here left a declared row unenforced whenever
-              // parity out-raced resolution — parse_effect_list_from's
-              // published tail flipped open ↔ closed WITH its authored row
-              // (the cached flip render convicted the hole, 2026-07-30).
-              // The contract stands regardless of parity; teaching beyond
-              // it meets the bound row and mismatches loudly on the next
-              // unify.
-              graph_bind_row(row_handle, declared_row, Located(span, Declared(name))),
+            // THE GATE RUNS ON THE RESOLVED ROW. A body tail that is still
+            // an open CHAIN at decl exit — a cycle's non-last member, whose
+            // charged callee roots resolve only when the cycle's last
+            // member cuts — parks the gate at the pass tail instead of
+            // refusing a truth that has not arrived (81 early misfires the
+            // moment the live charge landed: every !-carrying gate
+            // downstream of a still-open co-member conservative-rejected a
+            // body whose names already fit its declaration).
+            if row_gate_unresolved(row_handle) {
+              defer_row_gate((name, declared_row, has_pure, row_handle, span))
+            } else {
+              enforce_row_gate(name, declared_row, has_pure, row_handle, span)
             }
           }
           env_scope_exit()
@@ -2502,6 +2499,85 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
     },
   }
 }
+
+// Deferral discriminator: the gate parks only when the body row is BOUND
+// to a chain whose resolved tail still chases to a free cell — the
+// mid-cycle shape. An unbound row keeps the member-exit PIN (the
+// declared-row contract stands regardless of resolution lag — the
+// parse_effect_list_from flip's law), and a resolved row gates now.
+fn row_gate_unresolved(row_handle) = match graph_chase(row_handle) {
+  GNode(NRowBound(body_row), _) => match resolve_row(body_row) {
+    EfRow(_, _, EtVar(v)) => match graph_chase(v) {
+      GNode(NRowFree(_), _) => true,
+      _ => false,
+    },
+    _ => false,
+  },
+  _ => false,
+}
+
+// The declared-row gate, one home for both firing sites (decl exit when
+// resolved; the pass-tail drain for parked mid-cycle gates). The row is
+// re-read LIVE at fire time — never carried as a value — so the drain
+// judges the closed truth the cycle's cut produced.
+fn enforce_row_gate(name: String, declared_row, has_pure, row_handle, span: ValidSpan) = {
+  let bound = graph_chase(row_handle)
+  match bound {
+    GNode(NRowBound(body_row), _) => if row_subsumes(body_row, declared_row) {
+      // D2 — when body_row is STRICTLY narrower than declared_row
+      // (body ⊆ declared and declared ⊄ body), the fn is
+      // over-declared — it reserves more capabilities than it
+      // uses. Emit T_OverDeclared as a teaching warning so the
+      // author can tighten the signature and unlock the tighter
+      // row's capabilities (memoization for the pure row, real-time
+      // for !Alloc, etc.).
+      if row_subsumes(declared_row, body_row) {
+        ()
+      } else {
+        report(TOverDeclared(declared_row, body_row, name, span))
+      }
+      // Publish: a positive declared row IS the API contract callers
+      // read (evidence threads from its names). A negation-bearing row
+      // (solo `with !N`) is a GATE, not a callee row — publishing ¬N
+      // would union near-universe into every caller's accumulation.
+      // The published truth is the meet the gate just proved:
+      // body ∩ ¬N (= the body row with N provably absent).
+      let published = match declared_row {
+        EfRow(_, da, dt) => match dt {
+          EtAll => inter_row(body_row, declared_row),
+          _ => publish_with_instances(declared_row, body_row),
+        },
+      }
+      graph_bind_row(row_handle, published, Located(span, Declared(name)))
+    } else {
+      if has_pure {
+        report(EPurityViolated(body_row, span))
+      } else {
+        report(EEffectMismatch(declared_row, body_row, span))
+      }
+    },
+    _ => // The declaration PINS even when the body row's resolution
+    // lags at decl exit (mutual recursion mid-convergence): the
+    // silent `()` here left a declared row unenforced whenever
+    // parity out-raced resolution — parse_effect_list_from's
+    // published tail flipped open ↔ closed WITH its authored row
+    // (the cached flip render convicted the hole, 2026-07-30).
+    // The contract stands regardless of parity; teaching beyond
+    // it meets the bound row and mismatches loudly on the next
+    // unify.
+    graph_bind_row(row_handle, declared_row, Located(span, Declared(name))),
+  }
+}
+
+// The pass-tail drain: every parked gate fires over the pass's fully
+// resolved graph. Runs inside the pass's own infer_ctx bracket (the
+// state is per-pass), after the group walks have closed every cycle.
+fn drain_deferred_row_gates() = each(
+  (g) => match g {
+    (name, declared_row, has_pure, row_handle, span) => enforce_row_gate(name, declared_row, has_pure, row_handle, span),
+  },
+  drain_row_gates()
+)
 
 // The publish carries the body's INSTANCE for each name the declaration
 // spells bare: `with Iterate` declares the NAME (a constraint, SYNTAX's
@@ -3706,6 +3782,68 @@ fn report_owns_across(ref owns, ref frees, span: ValidSpan) = each(
 fn across_replay_msg(name: String) with Memory + Alloc =
   "'{name}' is an open own captured across a replay boundary — a resumed run consumes it again; finish it before the persist, or move its whole lifetime inside the thunk"
 
+// The callee's OWN row, read live from its scheme body — the charge's
+// re-aim target when instantiation's freshening severed the identity.
+// The scheme's fn_ty references the LIVE pre-registration cells (the
+// mono view and the pre-registration both store the skeleton;
+// quantification is metadata on top), so the row component's tail names
+// the callee's real accumulator root. THE CHARGE IS A BARE EDGE, never a
+// folded snapshot: content charged eagerly is a copy that rots AND a
+// hazard — the first form charged the resolve's names, and its live
+// parameterized fragments reached inf_add_row_unified's install-frame
+// join, unifying different callers' element payloads onto one decl cell
+// (52 Int-vs-List(Float) across the dsp chain, the 286-class
+// resurrected). The bare tail keeps the chain INTACT (no rooting — a
+// root would skip the intermediate members' name cells), and every read
+// folds the chain fresh, where reads are pure. A closed resolve is a
+// value and charges as one. None when the scheme is not fn-shaped.
+fn scheme_own_row(sch) = match sch {
+  Forall(_, fty) => match fty {
+    TFun(_, _, drow) => {
+      let rd = resolve_row(drow)
+      match rd {
+        EfRow(_, _, EtVar(dv)) => Some(ef_make([], [], EtVar(dv))),
+        _ => Some(rd),
+      }
+    },
+    _ => None,
+  },
+}
+
+// The charge honors the site's own law — read the CALLEE's OWN row, never
+// the call's fresh copy — at the one place freshening violated it: an
+// instance row still FREE after resolution is a quantified copy severed
+// from the decl's live cell (the movers' dig's kill #1 — a mutual pair's
+// rows never closed because every charge landed on a disconnected fresh
+// var). Re-aim at the callee's own row via the env, FOR CO-MEMBERS OF THE
+// BINDING GROUP IN JUDGMENT ONLY (group_member — parse truth from
+// scc_groups): a co-member's free row is the severed-recursion channel;
+// any other free-rowed callee is the effect-polymorphism channel, where
+// freshening IS the semantics. One-way by construction: union_row is a
+// pure value op, the charge never binds the callee's cell, and the SCC's
+// last member's tail then chases the whole loop back to its own root
+// where row_without_self's least-solution cut closes the cycle.
+fn callee_own_row(crow, cname: String) = {
+  let rc = resolve_row(crow)
+  match rc {
+    EfRow(_, _, EtVar(v)) => match graph_chase(v) {
+      GNode(NRowFree(_), _) => if group_member(cname) {
+        match env_lookup(cname) {
+          Some((sch, _, FnScheme)) => match scheme_own_row(sch) {
+            Some(r) => r,
+            _ => rc,
+          },
+          _ => rc,
+        }
+      } else {
+        rc
+      },
+      _ => rc,
+    },
+    _ => rc,
+  }
+}
+
 fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
   let arg_handles = collect_handles(args)
   // drift-audit: ignore — "return" is a Reason string, not an imperative keyword
@@ -3746,29 +3884,36 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
   // var free with the inline names on the far side of the union edge (the
   // recursive-callee case), and the var-only chase then dropped the names —
   // the caller's row accumulated empty and every call INTO the caller went
-  // bare (t-rec's 134; hof-map's shape). The fallback keeps the
+  // bare (t-rec's 134; hof-map's shape). callee_own_row completes the law:
+  // an instance row still free after resolution re-aims at the callee's
+  // live cell (the freshening severed it), which is what lets a mutual
+  // cycle close at the last member's self-cut. The fallback keeps the
   // effect-polymorphic param case (an f whose type is still a TVar).
   match graph_chase(fh) {
-    GNode(NBound(TFun(_, _, crow)), _) => inf_add_row_unified(crow),
+    GNode(NBound(TFun(_, _, crow)), _) => inf_add_row_unified(callee_own_row(crow, cname)),
     _ => match graph_chase(row_h) {
       GNode(NRowBound(row), _) => inf_add_row_unified(row),
       GNode(NRowFree(_), _) => // Share a live row VAR only when it is this judgment's own —
       // an effect-polymorphic param or local closure (map's f: the
       // var is fn-local, generalize quantifies it, call sites
       // instantiate it fresh). A top-level FnScheme callee whose
-      // row is still free is a pre-registration loose scheme (the
-      // trial's forward reference): sharing ITS handle leaks
-      // another decl's live row identity into this frame, and the
-      // next judgment's bind then reads through every holder
-      // (measured: infer_context's four callers chained one shared
+      // row is still free charges the callee's OWN row read live
+      // from its scheme (never this call's row_h: sharing the
+      // call's var leaked one decl's live row identity across
+      // frames — infer_context's four callers chained one shared
       // row; the first binder won and the other three raised the
-      // E_EffectMismatch trio). The rounds carry forward-ref truth
-      // by ITERATION — the quiet trial under-attributes here by
-      // design and round 1 re-judges with the published final. A
-      // recursive self-call loses nothing: its contribution was
-      // the fn's own row, vacuous by row-set idempotence.
+      // E_EffectMismatch trio). The old drop here leaned on the
+      // rounds re-judging with published finals; the rounds are
+      // deleted, so the live read is the whole carry now.
       match env_lookup(cname) {
-        Some((_, _, FnScheme)) => (),
+        Some((sch, _, FnScheme)) => if group_member(cname) {
+          match scheme_own_row(sch) {
+            Some(r) => inf_add_row(r),
+            _ => (),
+          }
+        } else {
+          ()
+        },
         _ => inf_add_row(mk_ef_open([], row_h)),
       },
       _ => (),

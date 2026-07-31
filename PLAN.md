@@ -1131,6 +1131,59 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-31 · ▶▶▶▶ THE CHARGE LANDS ON THE LIVE CELL — schemes-are-edges
+  rung two: recursion rows CLOSE, and a pure mutual pair answers Pure for
+  the first time in the project's history (pin 56fa21b9). THE ROOT, fixed
+  at its site (the movers' dig's kill #1): a co-member call's row charge
+  landed on the instantiation's FRESHENED copy — severed forever from the
+  callee's accumulator — so the row equation R_ping = N₁ ∪ R_pong never
+  closed (re-measured RED through the prior boot the hour before:
+  `with r41564@e11` on the pair, Pure on solo). THE FORM, three moves,
+  each convicted into shape by the board: (1) callee_own_row re-aims an
+  unresolved instance row at the callee's OWN row read live from the
+  env's scheme body — and THE CHARGE IS A BARE EDGE
+  (EfRow([],[],EtVar(root)), unrooted so the chain stays intact): the
+  first form charged the resolve's folded content, and its live
+  parameterized fragments reached the install-frame join, unifying
+  different callers' payloads onto one decl cell — 52 Int-vs-List(Float)
+  across the dsp chain, the 286 class resurrected and killed by the bare
+  edge (content rides the chain and arrives at READ time, where reads
+  are pure). (2) The re-aim is GROUP-GATED (group_member — scc_groups'
+  parse truth carried on the per-pass infer_ctx to the one consumer):
+  ungated, every free-rowed FnScheme re-aimed, and genuinely
+  effect-polymorphic HOFs (show_list) chained every caller onto ONE
+  shared quantified var — the whole diagnostics-voice SCC entangled, 81
+  mismatches; a co-member's free row is the severed-recursion channel,
+  any other is the polymorphism channel where freshening IS the
+  semantics. (3) row_without_self compares CHASED ROOTS
+  (find-before-compare — the union-find law at the row sort: the frame's
+  fresh cell aliases its prereg root through the entry unify, so the raw
+  compare missed the self-loop arriving through the alias). WITH IT THE
+  GATE LEARNS TIMING: a declared-row gate whose body tail is still an
+  open chain at decl exit (a cycle's non-last member — its charged roots
+  resolve only when the last member cuts) PARKS (defer_row_gate) and
+  drains at the pass tail where every chain has closed; enforce_row_gate
+  is the one home both firing sites share, re-reading the row LIVE at
+  fire time. One honest widen (eff_args_all_literal `with Pure` →
+  Memory + Alloc — its body rides `all`, which allocates). MEASURED:
+  ping/pong/solo all Pure; a bare entry's user-path mismatches 14 → 0;
+  mn-mutual-negation-gate's original disease (the never-closing widened
+  tail) is DEAD — its one residual line is the OTHER named class
+  (bare-Cast declared vs Cast(Int) proven at the EtAll–EtAll strict
+  compare, Hβ.effects.parameterized-negation-instance's admission);
+  census 82 → 1 → 0; TRANSITION m3 == m4 twice en route, then CLEAN
+  m2 == m3 at 349,442 lines; micros 121/0; proof-exactness 9/9; crown
+  5/5; frontier green. THE ARC'S READING: the edges representation
+  arrived at the recursion channel — the row equation solved by the
+  graph's own least-fixpoint reading instead of iteration. Named
+  residuals, each measured: the movers narration persists (the trial's
+  prereg-vs-final divergence for the solo/self class — the next rung);
+  the MULTI-TAIL WALL stands (tail_join keeps the first var, so a
+  second co-member tail in one body still drops — the pending-tails
+  frame fold or the SCC-condensed row cell is the design fork); and the
+  solo-DAG address renders still show vacuous open tails on some
+  mixed-declared fns (the weave-dependent openness class, gates
+  passing).
 - 2026-07-31 · ▶ THE DOOR LEADS WITH THE DEVELOPER — Morgan's standing
   correction executed at the description surfaces (no pin move —
   README / POSITIONING / PLAN prose only; the wheel untouched). The

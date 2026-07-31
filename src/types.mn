@@ -1801,6 +1801,11 @@ type DiagKind
   // affine's exactly-once half. Narration until the wheel's own count
   // reaches 0 (the census arming law).
   | TOwnUnconsumed(String, Span)
+  // The persist value gate: a replay-boundary thunk captures an own
+  // whose finish obligation is still open — the image memcpy carries
+  // the bytes but not the duty, so the resumed world holds a resource
+  // nobody will ever finish. The effects barrier's value half.
+  | TOwnAcrossReplay(String, Span)
   // declared vs inferred
   | EEffectMismatch(EffRow, EffRow, Span)
   // the offending row
@@ -1957,6 +1962,7 @@ fn diag_span(d) with Pure = match d {
   EIfMissingElse(s) => s,
   TOverDeclared(_, _, _, s) => s,
   TOwnUnconsumed(_, s) => s,
+  TOwnAcrossReplay(_, s) => s,
   EEffectMismatch(_, _, s) => s,
   EPurityViolated(_, s) => s,
   ERefinementRejected(_, s) => s,
@@ -2013,6 +2019,7 @@ fn diag_source(d) with Pure = match d {
   EIfMissingElse(_) => "infer",
   TOverDeclared(_, _, _, _) => "infer",
   TOwnUnconsumed(_, _) => "ownership",
+  TOwnAcrossReplay(_, _) => "ownership",
   EEffectMismatch(_, _, _) => "effects",
   EPurityViolated(_, _) => "effects",
   ERefinementRejected(_, _) => "verify",
@@ -2069,6 +2076,7 @@ fn diag_code(d) with Pure = match d {
   EIfMissingElse(_) => "E_IfMissingElse",
   TOverDeclared(_, _, _, _) => "T_OverDeclared",
   TOwnUnconsumed(_, _) => "T_OwnUnconsumed",
+  TOwnAcrossReplay(_, _) => "T_OwnAcrossReplay",
   EEffectMismatch(_, _, _) => "E_EffectMismatch",
   EPurityViolated(_, _) => "E_PurityViolated",
   ERefinementRejected(_, _) => "E_RefinementRejected",
@@ -2102,6 +2110,7 @@ fn diag_severity(d) with Pure = match d {
   PUnexpectedToken(_, _) => SWarning,
   TOverDeclared(_, _, _, _) => SWarning,
   TOwnUnconsumed(_, _) => SWarning,
+  TOwnAcrossReplay(_, _) => SWarning,
   VPending(_, _) => SVerificationPending,
   EVerifyUnencodable(_) => SVerificationPending,
   _ => SError,
@@ -2212,6 +2221,7 @@ fn diag_applicability(d) with Pure = match d {
   TOwnUnconsumed(_, _) => // Not mechanically applicable: the fix is a consume the developer
   // must place (or an honest widening to `ref`), never a patch.
   Unspecified,
+  TOwnAcrossReplay(_, _) => Unspecified,
   EPatternInexhaustive(_, _, _) => HasPlaceholders,
   EEffectUnhandled(_, _, _) => MaybeIncorrect,
   EUnresolvedHole(_, _) => HasPlaceholders,
@@ -2276,6 +2286,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EIfMissingElse(_) => "`if` without `else` requires a unit body",
   TOverDeclared(declared, used, name, _) => "function '{name}' declares {show_effrow(declared)} but body only uses {show_effrow(used)} — tighten the signature to unlock capabilities",
   TOwnUnconsumed(msg, _) => msg,
+  TOwnAcrossReplay(msg, _) => msg,
   EEffectMismatch(declared, inferred, _) => "effect row mismatch: {show_effrow(declared)} vs {show_effrow(inferred)}",
   EPurityViolated(row, _) => "expected Pure but found effects: {show_effrow(row)}",
   ERefinementRejected(pred, _) => "refinement predicate proven false at compile time: {show_predicate(pred)}",
@@ -2457,6 +2468,13 @@ effect Consume {
   // fact is what the developer WROTE — and an authored `own` is exactly
   // the claim "this is mine to finish."
   consume_declare(String, Span)
+  // This frame's authored-own names, projected whole. The persist value
+  // gate reads it at a replay-boundary argument edge: a frame-declared
+  // own FREE in the thunk crosses the wire, and the image memcpy carries
+  // bytes, never the duty to finish them — each resumed run re-consumes.
+  // Declared, not declared-minus-used: capturing the own IS its consume,
+  // so a used-subtraction would blind the gate to the exact target.
+  consume_declared() -> [String]
   // A BORROW scope — an `if` condition / `match` scrutinee is READ to
   // decide control, never moved, so a use inside it is a borrow, not a
   // consume. Between enter/exit the ledger drops consumes (a value read

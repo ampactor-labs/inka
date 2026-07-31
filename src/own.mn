@@ -153,7 +153,23 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
   resume() with used = names,
   consume_base() => resume(used),
   consume_log() => resume(used_sites),
+  consume_declared() => // The persist value barrier's read: this frame's authored-own names,
+  // whole. A frame-declared own FREE in a replay-boundary thunk is
+  // re-consumed per resumed run (the affine law on the TIME axis); the
+  // call-edge gate intersects this projection with the thunk's free
+  // names and says so at the capture site. Never declared-minus-used:
+  // the capture IS the consume, so a subtraction blinds the gate.
+  resume(declared_own_names(declared)),
 }
+
+// The declared-own projection: names only (the gate reports at the
+// CAPTURE site's span; the name carries the teaching).
+fn declared_own_names(ref declared) with Memory + Alloc = map(
+  (entry) => match entry {
+    (name, _) => name,
+  },
+  declared
+)
 
 // The double-consume message's one mint, String-pinned (the comment at
 // the consume arm carries the why).

@@ -1838,7 +1838,7 @@ fn trial_group_walk(ref stmts, ref groups, own rows, g) = if g >= len(groups) {
 // the widening join is the rung's true remainder (the residue index
 // carries the spec), and iterating without it taxed a 45-member group
 // forty-seven probes to no fixpoint.
-fn trial_judge_group(ref stmts, own members, own rows) = if len(members) > 1 {
+fn trial_judge_group(ref stmts, members, own rows) = if len(members) > 1 {
   // THE CYCLE DISCIPLINE (the schemes-are-edges arc's first rung, replacing
   // the refuted iteration direction whole — the vet's redirect executed):
   // monomorphic recursion by default, the signature price for polymorphic
@@ -2923,12 +2923,11 @@ fn infer_expr(ref node) = match node {
       if call_is_alloc_returning(func) { tag_alloc_join(handle, collect_handles(pos_args)) }
     },
     NExpr(IfExpr(cond, then_e, else_e)) => {
-      // The condition is READ to decide the branch — an `own` value used
-      // in it (`if set_contains(buf, x)`) is borrowed, not moved, so it
-      // stays available in the arms.
-      borrow_enter()
-      infer_expr(cond)
-      borrow_exit()
+      // The condition is READ to decide the branch — a read-SHAPE
+      // condition borrows; a call condition infers normally (its args
+      // move; ref-param borrows already come from the callee-product
+      // read). The shared shape gate, all four surfaces.
+      infer_borrowed_read(cond)
       // then / else are ALTERNATIVE arms — exactly one runs — so an `own`
       // value consumed in both is one consume on the taken path, never a
       // double. The affine ledger unions the arms' deltas without a
@@ -2994,12 +2993,12 @@ fn infer_expr(ref node) = match node {
       }
     },
     NExpr(MatchExpr(scrutinee, arms)) => {
-      // The scrutinee is READ to dispatch — an `own` value matched on
-      // (`match kind { ... }`) is borrowed, not moved, so it stays
-      // available inside the arms.
-      borrow_enter()
-      infer_expr(scrutinee)
-      borrow_exit()
+      // The scrutinee is READ to dispatch — a read-shape scrutinee
+      // (`match kind { ... }`) borrows and stays available in the arms;
+      // a CALL scrutinee (`match lex_from(..., buf, ...)`) infers
+      // normally so its own-param moves record (the splice scanners'
+      // false unconsumed, healed by the shared shape gate).
+      infer_borrowed_read(scrutinee)
       match scrutinee {
         N(_, _, sh) => infer_match_arms(arms, sh, handle, span),
       }
@@ -3045,9 +3044,7 @@ fn infer_expr(ref node) = match node {
       // (measured: the fan's join arm read recs[jn] before threading
       // recs, and the ledger demanded restructuring provably-safe code —
       // the Hylo-quiet bar naming the inference gap).
-      borrow_enter()
-      infer_expr(receiver)
-      borrow_exit()
+      infer_borrowed_read(receiver)
       infer_expr(index)
       match receiver {
         N(_, _, rh) => match index {
@@ -3306,21 +3303,53 @@ fn infer_expr(ref node) = match node {
 // duplication. The record-open unification is unchanged from its
 // original arm form.
 //
-// Reading `.field` borrows the receiver — it never moves the record. Borrow
-// only a value chain (a VarRef or a nested field access); a call receiver
-// (a value-chain receiver f(x).field) keeps its normal inference so the arg's move still
-// consumes. buf.data and buf.count are then two borrows of one value, not
-// two consumes.
+// THE READ-SHAPE PROJECTION — the read-is-a-borrow law's ONE shape test,
+// shared by all four borrow surfaces (if condition, match scrutinee,
+// index receiver, field receiver). A READ SHAPE is decision arithmetic —
+// a VarRef, field/index access rooted in one, a literal, or unary/binop
+// composition of those (`buf != 0`, `a.n < b.n`): reading it decides or
+// projects without moving anything. A CALL is NOT a read shape — its
+// arguments follow the CALLEE'S param product (a declared/inferred ref
+// borrows via the call-arg-borrow law; an own param genuinely moves), so
+// bracketing a call here suppressed real consumes into own params AND
+// would silence a real double-move (`if take(buf) > 0 { take(buf) }` —
+// the old blanket condition-borrow was unsound, not merely noisy; the
+// relevant tier made the suppressed consume REPORTABLE and two
+// splice-scanner owns fired falsely through exactly this hole). The
+// field site carried the call narrowing from its birth; the other three
+// surfaces now read the same projection — the uniform pass replacing
+// the per-site family.
+fn is_read_shape(node) with Pure = match node {
+  N(body, _, _) => match body {
+    NExpr(VarRef(_)) => true,
+    NExpr(FieldExpr(recv, _)) => is_read_shape(recv),
+    NExpr(IndexExpr(recv, _)) => is_read_shape(recv),
+    NExpr(LitInt(_)) => true,
+    NExpr(LitFloat(_)) => true,
+    NExpr(LitString(_)) => true,
+    NExpr(LitBool(_)) => true,
+    NExpr(LitUnit) => true,
+    NExpr(UnaryOpExpr(_, inner)) => is_read_shape(inner),
+    NExpr(BinOpExpr(_, l, r)) => is_read_shape(l) && is_read_shape(r),
+    _ => false,
+  },
+}
+
+// The borrow bracket, shape-gated: a read shape infers borrowed; any
+// other expression infers normally (its own moves record).
+fn infer_borrowed_read(node) = if is_read_shape(node) {
+  borrow_enter()
+  infer_expr(node)
+  borrow_exit()
+} else {
+  infer_expr(node)
+}
+
+// Reading `.field` borrows the receiver — it never moves the record;
+// the shared read-shape projection gates the bracket.
 fn infer_field_access_record(rec, field, handle, span: ValidSpan) = match rec {
   N(rec_body, _, _) => {
-    match rec_body {
-      NExpr(VarRef(_)) | NExpr(FieldExpr(_, _)) => {
-        borrow_enter()
-        infer_expr(rec)
-        borrow_exit()
-      },
-      _ => infer_expr(rec),
-    }
+    infer_borrowed_read(rec)
     match rec {
       N(_, _, rh) => {
         let field_h = mint(Inferred("field type"))
@@ -3864,6 +3893,51 @@ fn int_in(ref xs, target, i) with Memory = if i >= len(xs) {
   if list_index(xs, i) == target { true } else { int_in(xs, target, i + 1) }
 }
 
+// ─── The replay value barrier (Hβ.own.linear-tier-and-persist-value-barrier) ──
+//
+// The ROW half landed first: a fn-typed param whose declared row severs
+// the whole external triple under the !-stance (!WASI + !Filesystem +
+// !Network, EtAll tail — persist_branch's own contract) IS a replay
+// boundary: the callee re-runs the thunk, and the row severs what a
+// replay cannot un-send. This is the VALUE half: a frame-declared
+// authored `own` FREE in that thunk crosses the wire as bytes while its
+// duty-to-finish stays behind — each resumed run re-consumes it. Replay
+// is the parallel fan on the TIME axis, so BParallel's collision law
+// applies across runs exactly as across `><` arms: one ledger, both
+// axes. Narration tier per the census arming law; the message teaches
+// the two honest moves.
+fn replay_barrier_gate(dps, args, span: ValidSpan, i) = if i >= len(dps) || i >= len(args) {
+  ()
+} else {
+  match fold_strip(chase_deep(param_ty(list_index(dps, i)))) {
+    TFun(_, _, prow) => if row_severs_replay(prow) {
+      report_owns_across(consume_declared(), collect_free_vars(list_index(args, i), []), span)
+    },
+    _ => (),
+  }
+  replay_barrier_gate(dps, args, span, i + 1)
+}
+
+// A row severs replay when its !-stance forbids the whole external
+// triple — the exact contract persist_branch's declared row states.
+fn row_severs_replay(row) = match chase_row_deep(row, 0) {
+  EfRow(_, absent, EtAll) => absent_forbids(absent, "WASI") && absent_forbids(absent, "Filesystem") && absent_forbids(absent, "Network"),
+  _ => false,
+}
+
+fn absent_forbids(ref absent, target: String) = any((e) => eff_name_str(e) == target, absent)
+
+fn report_owns_across(ref owns, ref frees, span: ValidSpan) = each(
+  (name) => if string_in_list(frees, name) { report(TOwnAcrossReplay(across_replay_msg(name), span)) },
+  owns
+)
+
+// The message's one mint, String-pinned (spec_mangle's law — the each
+// lambda judges datum-last while the name is still free; the pin
+// anchors at the named call, unconsumed_msg's twin).
+fn across_replay_msg(name: String) with Memory + Alloc =
+  "'{name}' is an open own captured across a replay boundary — a resumed run consumes it again; finish it before the persist, or move its whole lifetime inside the thunk"
+
 fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
   let arg_handles = collect_handles(args)
   // drift-audit: ignore — "return" is a Reason string, not an imperative keyword
@@ -3877,7 +3951,10 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
   // the masked positions get fresh slots below so the symmetric row
   // meet never re-runs.
   let masked = match graph_chase(fh) {
-    GNode(NBound(TFun(dps0, _, _)), _) => fn_arg_directional_positions(dps0, arg_handles, span, 0),
+    GNode(NBound(TFun(dps0, _, _)), _) => {
+      replay_barrier_gate(dps0, args, span, 0)
+      fn_arg_directional_positions(dps0, arg_handles, span, 0)
+    },
     _ => [],
   }
   let expected =

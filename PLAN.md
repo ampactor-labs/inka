@@ -1131,6 +1131,55 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶▶ THE OWN CANNOT CROSS THE WIRE — the persist value
+  barrier lands, and the relevant tier sweeps its own eight findings to
+  zero (pin 16da60bd). THE VALUE HALF: consume_declared projects the
+  frame's authored-own names whole, and the call-edge gate
+  (replay_barrier_gate, riding infer_call_saturated's one param-product
+  read) intersects them with a thunk argument's free names wherever the
+  param's declared row severs the external triple under the !-stance —
+  the row IS the replay contract (7c91063c's own barrier), so the same
+  structural fact gates effects AND values, one edge. T_OwnAcrossReplay
+  teaches at the capture site: finish the own before the persist, or
+  move its whole lifetime inside the thunk. THE SEMANTIC CATCH, worth
+  the entry alone: the first op was declared-minus-used, and the probe
+  killed it before it shipped — CAPTURING the own IS its consume, so
+  the subtraction blinds the gate to the exact target; the projection
+  is DECLARED, freeness in the thunk discriminates, and a prior use
+  plus the capture is the SPACE law's double, reported separately.
+  Replay is BParallel on the TIME axis — the ledger that catches
+  `take(x) + take(x)` across `><` arms catches
+  `persist_branch(() => take(x))` across resumed runs, one algebra, two
+  axes. THE SWEEP (8 → 0): push_tok / push_node / trail_append /
+  apply_connective / trial_judge_group de-owned (pass-through and
+  borrow-only params — the marker lied about finalization the bodies
+  never owed), and the blanket condition-borrow REPLACED by the
+  read-shape projection (is_read_shape / infer_borrowed_read — the one
+  shape test all four borrow surfaces share): decision ARITHMETIC over
+  a value borrows (`buf != 0`, literals, unary, binop-of-reads); a CALL
+  follows its callee's product. The blanket was UNSOUND, not merely
+  noisy — it silenced a genuine `if take(buf) { take(buf) }` double —
+  and its narrowing is what let the splice-scanner's real consumes
+  count (the two false owns healed). The four-face ownership fixture
+  gains the honest forms (the guard helper declares the `ref` its body
+  proves — the len precedent; the direct face exercises decision
+  arithmetic; runs 42). THREE FINDS RODE: (1) THE QUERY RENDERS PARAMS
+  REVERSED — `pair(alpha, beta)` answers `(beta, alpha)` through `type
+  of` (minimal repro banked; show_list is first-first and unify aligns
+  parse-order, so the lie is confined to the ask projection's own param
+  walk) — measured at cost: TWO swapped calls in one hour from trusting
+  the projection, each convicted by the census in one march
+  (collect_free_vars, string_in_list); named
+  Hβ.query.param-render-reversed, the comment-voice audit's opening
+  conviction. (2) The frontier's brace-accretion face was a
+  gate-that-cannot-fail since birth: `grep '\{ \{'` is an invalid BRE
+  interval, exit 2, and the NEGATED check read the error as pass —
+  fixed-string now. (3) The march's supersede-not-stack law carried
+  three unnarrated repins through one landing correctly — the placeholder
+  head never stacked. CLEAN m2 == m3 at 356,439 lines; census 0;
+  T_OwnUnconsumed 0; frontier 331/0 (the persist value leg: the
+  captured open own narrates, the self-contained thunk silent, the
+  loop runs); micros green; proof-exactness 9/9; crown 5/5.
 - 2026-07-30 · ▶▶ AFFINE GAINS EXACTLY-ONCE — the relevant tier lands,
   the novelty head-to-head's first build (pin b77f345b). The Fable
   audit's build-first pick, chosen for the reason it gave: the ledger
@@ -7432,27 +7481,23 @@ INTERNAL reference semantics (the correctness oracle is external today —
 §0's own standing !Outside). Overlaps the banked unfold as its larval
 form, stated plainly by the auditor.
 
-`Hβ.own.linear-tier-and-persist-value-barrier` — the ownership ledger is
-affine-only, and the resume barrier is effects-only (2026-07-30, the
-Fable novelty audit's third proposal, and the one it would build first).
-TWO HALVES OF ONE GAP. (a) `Consume` (types.mn:2424) reports
-double-consume and says nothing about NEVER-consumed: at-most-once
-without exactly-once, so a file/lock/socket that is opened and dropped
-on some path is silent. The relevant tier is the SAME arm reporting an
-`own` binding whose consume never happened — consume_enter_fn /
-consume_exit_fn already bracket every body and already union per-path
-consumption across alternative branches. (b) The landed persist barrier
-(persist.mn:52-72) severs `!WASI + !Filesystem + !Network` at the
-argument edge and its own comment calls that "the whole gate" — for
-EFFECTS; `image_pack` (:97) memcpys the frame with no scan for owned
-resources, so a continuation capturing an open fd persists silently,
-resumes where the descriptor is dead, and the origin's close obligation
-is simply lost. One more conjunct at the gate the barrier already proved
-sufficient closes the VALUE half. Why it is the safe next leap: the
-ledger already carries Diagnostic, so the exit-check is row-neutral to
-the judgment spine — the one class of engine work that does not gamble
-the oscillation attractor. Land narration-tier first per the census
-arming law; the wheel's own unconsumed owns, if any, are findings.
+`Hβ.own.linear-tier-and-persist-value-barrier` — RESOLVED at both halves
+(2026-07-30; the Fable novelty audit's third proposal, built first
+exactly as it argued — row-neutral to the judgment spine, and it was).
+Half (a) the relevant tier: pin b77f345b (§7 AFFINE GAINS EXACTLY-ONCE —
+consume_declare / consume_exit_fn's T_OwnUnconsumed narration), its
+eight wheel findings swept to ZERO the next landing. Half (b) the
+persist VALUE barrier: pin 16da60bd (§7 THE OWN CANNOT CROSS THE WIRE —
+consume_declared + replay_barrier_gate at the argument edge whose
+declared row severs the external triple; T_OwnAcrossReplay at the
+capture site; the declared-not-open semantics the probe forced). The
+named RESIDUAL, one face: a continuation reified by the MULTI-SHOT
+producer and persisted through the word-rooted `persist(k, path)` op
+never crosses this argument edge — an open own frozen inside a reified
+k's frame rides band B's TCont value gate
+(`Hβ.types.resume-world-mismatch-value-gate`), where the world's
+capability check and this owns check are the same read at the same
+boundary.
 
 `Hβ.egraph.install-algebra` — the `~>` edge enters the e-graph
 (2026-07-30, the Fable novelty audit's fourth proposal). The e-graph
@@ -7584,6 +7629,24 @@ grep confession. Smaller sibling: `mentl query "type NAME"` on an ADT
 answers "declared as NAME" without projecting its variants, and nothing
 projects the module import graph though the driver holds it as NModule
 nodes with ranges.
+
+`Hβ.query.param-render-reversed` — the ask projection reverses the
+param product (measured 2026-07-30, twice at cost then once minimal:
+`fn pair(alpha: Int, beta: String)` answers
+`(beta: String, alpha: Int own — inferred)` through `type of`). The
+render chain is innocent — show_list walks FIRST-first (2026-07-29) and
+show_type's TFun arm feeds it the params it is handed — and unify
+aligns parse order (the probe's own main() call judged clean), so the
+reversal lives in the QUERY PATH's product: either the scheme the ask
+projection resolves holds a snoc-prepend-rebuilt list, or a query-side
+walk re-collects the params backward — a Carried-Truth violation at the
+voice (rebuilding what the TFun already carries in order). COST,
+measured: two swapped calls in one hour from TRUSTING the projection
+(collect_free_vars, string_in_list — each convicted by the census in
+one march), the exact inversion of "the medium's projection answers
+better." The ownership suffix rides only the last-rendered param —
+same rebuilt-product fingerprint. The comment-voice audit's opening
+conviction: a voice that must replace comments cannot lie about order.
 
 `Hβ.synth.rank-is-a-projection-not-a-field` — the ranker's two
 vocabularies (found 2026-07-30 completing the fork/merge landing). The

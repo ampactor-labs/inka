@@ -104,7 +104,10 @@ fn is_pure_eff_name(name) = match name {
   _ => false,
 }
 
-fn apply_connective(conn, own acc, own term) = match conn {
+// Neither operand is `own`: the row algebra's three verbs all BORROW
+// (union/diff/inter read and mint), so an own here was a claim this fn
+// never finishes (the relevant tier's first sweep).
+fn apply_connective(conn, acc, term) = match conn {
   EcUnion => union_row(acc, term),
   EcDiff => diff_row(acc, term),
   EcInter => inter_row(acc, term),

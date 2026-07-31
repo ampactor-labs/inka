@@ -283,7 +283,11 @@ fn op_to_binop(k) with Pure = match k {
 // allocates an initial buffer, threads `(buf, count)` through tail-
 // recursion, and slices at the end. O(N) total allocation per loop
 // regardless of element count.
-fn push_node(own buf, count, node) = {
+fn push_node(buf, count, node) = {
+  // Not `own`: buf is only ever lent to list_extend_to — the buffer's
+  // ownership rides the extend/set RETURNS (the pass-through), so an
+  // authored own here is a finalization claim this body never makes
+  // (the relevant tier convicted it — push_tok's exact sibling).
   let extended = list_extend_to(buf, count + 1)
   let written = list_set(extended, count, node)
   (written, count + 1)

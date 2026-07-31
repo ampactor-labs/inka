@@ -1096,7 +1096,7 @@ for i in "${!compilers[@]}"; do
   run_program "$compiler" refined-alias-forward-ref \
     "$ROOT/tests/frontier/mn-refined-alias-forward-ref.mn" 42 no "$dir"
   run_program "$compiler" own-alternative-branches \
-    "$ROOT/tests/frontier/mn-own-alternative-branches.mn" 33 no "$dir"
+    "$ROOT/tests/frontier/mn-own-alternative-branches.mn" 42 no "$dir"
   run_program "$compiler" own-call-arg-borrow \
     "$ROOT/tests/frontier/mn-own-call-arg-borrow.mn" 42 no "$dir"
   run_program "$compiler" own-forward-ref-seq \
@@ -1511,7 +1511,7 @@ for i in "${!compilers[@]}"; do
   else
     fail "fmt row/retty/handler behavioral (rc=$vfmt_rc pre=$vfmt_pre post=$vfmt_post; see $dir/vfmt.out)"
   fi
-  if grep -q 'with Ping + !Pong' "$fdemo2/voicey.mn" && grep -q -- '-> Int' "$fdemo2/voicey.mn" && grep -q 'ping() => resume' "$fdemo2/voicey.mn" && ! grep -q '\{ \{' "$fdemo2/voicey.mn"; then
+  if grep -q 'with Ping + !Pong' "$fdemo2/voicey.mn" && grep -q -- '-> Int' "$fdemo2/voicey.mn" && grep -q 'ping() => resume' "$fdemo2/voicey.mn" && ! grep -qF '{ {' "$fdemo2/voicey.mn"; then
     pass "fmt carries the signed row, the retty, the handler arm; braces never accrete"
   else
     fail "fmt row/retty/handler/brace carry (see $fdemo2/voicey.mn)"
@@ -2006,6 +2006,21 @@ for i in "${!compilers[@]}"; do
     pass "persist branch barrier reports the replaying external (severed row named)"
   else
     fail "persist branch external (see $dir/pb-ext.err)"
+  fi
+  # ── the persist VALUE barrier (owns across replay) ─────────────────
+  # A frame-declared authored `own` free in a persist_branch thunk is
+  # re-consumed per resumed run — T_OwnAcrossReplay names it at the call
+  # edge (narration: the loop still runs 42); the self-contained sibling
+  # thunk stays silent (exactly one line).
+  cat "${PERSIST_RTLIBS[@]}" "$ROOT/tests/frontier/mn-own-across-replay.mn" | wt_run "$compiler" > "$dir/pb-own.wat" 2> "$dir/pb-own.err" \
+    && wt_asm "$dir/pb-own.wat" "$dir/pb-own.wasm" 2>/dev/null \
+    && "$WT" run "${WT_RUN_FLAGS[@]}" --dir /tmp "$dir/pb-own.wasm" > /dev/null
+  pbo_rc=$?
+  pbo_n=$(grep -c 'T_OwnAcrossReplay' "$dir/pb-own.err")
+  if [ "$pbo_rc" = "42" ] && [ "$pbo_n" = "1" ] && grep -q "'buf'" "$dir/pb-own.err"; then
+    pass "persist value barrier: the captured open own narrates, the self-contained thunk is silent, the loop runs"
+  else
+    fail "persist value barrier (rc=$pbo_rc fired=$pbo_n; see $dir/pb-own.err)"
   fi
   run_positive_workflow "$compiler" "$dir"
   run_capability_workflow "$compiler" "$dir"

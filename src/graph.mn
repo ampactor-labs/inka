@@ -1015,7 +1015,10 @@ fn revert_trail(ref spine, spine_open, ref trail, current, target, next_handle) 
   }
 }
 
-fn trail_append(own trail, trail_len, own mutation) =
+// The trail buffer is not `own`: list_extend_to borrows it and the
+// (possibly fresh) owner returns — this fn finishes nothing (the
+// relevant tier's first sweep).
+fn trail_append(trail, trail_len, own mutation) =
   list_set(list_extend_to(trail, trail_len + 1), trail_len, mutation)
 
 // Effect-name set ops (H3.1)

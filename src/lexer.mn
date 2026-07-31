@@ -234,8 +234,12 @@ fn lex(ref source) = {
   }
 }
 
-// Append one token to the buffer. Returns `(buf, count + 1)`.
-fn push_tok(own buf, count, own t) = {
+// Append one token to the buffer. Returns `(buf, count + 1)`. The buffer
+// is not `own` here: list_extend_to BORROWS it and the (possibly fresh)
+// owner comes back through the return — ownership passes through the
+// chain, this fn finishes nothing (the relevant tier's first sweep; an
+// own that is only handed forward is the caller's to finish).
+fn push_tok(buf, count, own t) = {
   let extended = list_extend_to(buf, count + 1)
   let written = list_set(extended, count, t)
   (written, count + 1)

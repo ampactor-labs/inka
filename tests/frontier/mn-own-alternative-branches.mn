@@ -1,13 +1,18 @@
-// Ownership, three ways the affine ledger must NOT flag safe code, no
+// Ownership, four ways the affine ledger must NOT flag safe code, no
 // runtime linked so the gate tests only the ledger:
 //  - tally: an `own` value read in BOTH arms of an `if` is ONE consume on
 //    the taken path (the arms are ALTERNATIVES — exactly one runs).
 //  - total: an `own` param in one function is unrelated to the same-named
 //    param in the next (the ledger scopes per function body).
-//  - guard: an `own` value read in an `if` CONDITION is a borrow, not a
-//    move, so it stays available in the arms.
+//  - guard: a CALL in an `if` condition follows its callee's product — a
+//    declared `ref` borrows, so the value stays available in the arms
+//    (a blanket condition-borrow would also silence a genuine
+//    `if take(buf) { take(buf) }` double-move; the callee's product is
+//    the sound law).
+//  - direct: decision ARITHMETIC over the value (`buf != 0`) is a read
+//    shape — it decides without moving.
 fn keep(x) with Pure = x
-fn nonzero(x) with Pure = x != 0
+fn nonzero(ref x) with Pure = x != 0
 
 fn tally(own buf, i) with Pure =
   if i < 0 { keep(buf) }
@@ -19,4 +24,8 @@ fn guard(own buf) with Pure =
   if nonzero(buf) { keep(buf) }
   else { 0 }
 
-fn main() = tally(10, -1) + total(20) + guard(3)
+fn direct(own buf) with Pure =
+  if buf != 0 { keep(buf) }
+  else { 0 }
+
+fn main() = tally(10, -1) + total(20) + guard(3) + direct(9)

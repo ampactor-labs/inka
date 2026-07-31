@@ -1,0 +1,17 @@
+// expect: refuse P_UnclosedConstruct
+// BANKED RED (unregistered — the parser audit's finding 1, 2026-07-31:
+// the silent program deletion). parse_effect_ops treats end-of-input
+// exactly like a closing brace and its stray-token recovery skips one
+// token and retries, so once the `}` is missing the loop walks forward
+// consuming the rest of the file as operations: `main` below is eaten
+// as a zero-arg effect op, `= 0` is skipped token by token, and the
+// medium reports SUCCESS on a file with no program in it (measured:
+// zero diagnostics, exit 0, an empty audit). Data-dependent silence —
+// the more idiomatic the following code, the more completely it
+// vanishes. Greens when the TEof arm reports the unclosed opener (the
+// unclosed_eof projection exists with one call site; this loop never
+// took it).
+effect Log {
+  say(msg: String)
+
+fn main() = 0

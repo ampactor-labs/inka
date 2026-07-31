@@ -1,0 +1,26 @@
+// expect: refuse E_EffectMismatch
+// BANKED RED (unregistered — the infer audit's F1, 2026-07-31; the
+// schemes-are-edges rung-3 forcing measurement). In a 3-member binding
+// group where one member calls TWO co-members, the second co-member's
+// row charge is LOST (tail_join keeps the first var; the triple has one
+// tail slot), so `y`'s declared `!TZ` passes while y transitively
+// performs TZ (y → x → z → tz). Measured through the pinned boot:
+// exit 0, zero diagnostics, movers SILENT (trial and final agree on the
+// wrong row), crown crucibles exercise no cycles, m3 == m4 is
+// emission-consistent — nothing on the board sees the false absence
+// proof. Greens when the row publish becomes a live join-cell and
+// charges draw EDGES (N edges where one tail slot was not).
+effect TY { ty() -> Int }
+
+effect TZ { tz() -> Int }
+
+fn x(n) = if n > 1 { y(n - 1) + z(n - 1) } else { 0 }
+
+fn y(n) with !TZ = if n > 0 { x(n - 1) } else { ty() }
+
+fn z(n) = if n > 0 { x(n - 1) } else { tz() }
+
+// main stays inert: the decl-exit gate judges y's declared row
+// regardless of reach, and an executing x would only add the unhandled-
+// effect refusal on top of the class this fixture banks.
+fn main() = 0

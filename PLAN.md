@@ -1135,17 +1135,26 @@ between the wheel and its ultimate form, held open on purpose.
   fleet convicts the day's own landing within hours, and both fixes land
   marched (pin 3c0ee1a1). Morgan dispatched twelve auditors (six Fable,
   six Opus, one per subsystem — reports in .build/research/audit-*).
-  CORRECTIVE ONE (the effects auditor's p13, measured with an in-file
-  control): the deferred row gate SWALLOWED the `!E` crown for
-  effect-polymorphic tails — a `!WASI` declaration over a
-  println-performing body with one row-polymorphic call parked forever,
-  never enforced (part of the "81 misfires" the deferral silenced were
-  REAL conservative refusals). The deferral is now GROUP-GATED
-  (group_member — the same parse-truth fact the live charge reads): a
-  cycle member's open tail parks for the drain; a non-member's free
-  tail is the polymorphism channel that never grounds, so its gate
-  enforces eagerly, free tail and all. p13 refuses at BOTH lines;
-  pingpong holds Pure ×3; TRANSITION m3 == m4. CORRECTIVE TWO (the
+  CORRECTIVE ONE — and its premise RETRACTED by the fleet's own
+  cross-audit the same session (the ⟲ law at fleet scale, kept in
+  place as the era's record): the effects auditor reported the
+  deferred row gate swallowing the `!E` crown for effect-polymorphic
+  tails; the infer auditor then refuted the claim WITH THE EFFECTS
+  AUDITOR'S OWN CAPTURE (p13.err's second line contains the refusal
+  reported missing) and re-measured the gate refusing on three
+  surfaces on BOTH boots — the drain enforced all along; the observed
+  silence was the QUERY surface (schemes render without verdicts by
+  design) read through the movers stderr flood, and the effects
+  auditor retracted. The corrective STAYS as a hardening: the deferral
+  is GROUP-GATED (group_member — the same parse-truth fact the live
+  charge reads), so a non-member's free tail enforces eagerly at decl
+  exit instead of round-tripping through the drain, and the final's
+  gates all fire eagerly (the one real lifecycle exposure, closed
+  structurally). p13 refuses at both lines; pingpong holds Pure ×3;
+  TRANSITION m3 == m4. The process lesson, paid three ways in one
+  hour: an unstamped probe under a mid-session repin misled two
+  auditors and this orchestrator — probe results carry their boot sha
+  from now on. CORRECTIVE TWO (the
   frontier's four red legs, traced through the pre-corrective boot to
   prove they predated corrective one): the warm persist's capacity
   guard reads the heap line SIGNED, so past 2GB it reads NEGATIVE and

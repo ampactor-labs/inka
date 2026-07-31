@@ -6,6 +6,8 @@ compiler *proves* what your program does — and what it can never do — and
 teaches you, in words, as you write. Any intelligence may propose; nothing
 executes unproven; intent is never lost; capability is always bounded.
 
+**Status: working, API unstable.** The verifier is sound and deliberately incomplete; what it cannot decide accrues as visible pending debt rather than a silent pass. No license is chosen yet.
+
 This page is a door with two ways through. If you have never written code:
 install below, then walk [Five minutes with the teacher](#five-minutes-with-the-teacher)
 — the compiler does the teaching, and the school inside assumes nothing. If

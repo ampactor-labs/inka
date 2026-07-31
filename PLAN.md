@@ -7937,13 +7937,33 @@ pin 574bc20d — the §7 entry THE ROUNDS ARE DELETED): the rounds, the
 bound, the cone, and the mask are GONE; the judgment is trial →
 final-as-verification, the bound-hit class dissolved with its
 substrate, and the movers instrument graduated to the trial-vs-final
-divergence report. The peer's live residue is now exactly that
-report's first firing: the dsp float family (16 movers, hann →
-comodulogram) where the trial under-resolves relative to the final —
-emission self-stable across it, named on every compile's stderr, the
-next dig's worklist. The terminal cure stays schemes-as-edges (live
-join-written cells; the remaining tower is the trial/final pair
-itself).
+divergence report. THE MOVERS' DIG RAN THE SAME DAY and its five
+kills are the peer's sharpest evidence yet, each one probe: (1) the
+mechanism, confirmed at 8 lines — a recursion edge resolving through
+a QUANTIFIED scheme freshens the row var (the frozen-read law), so
+row_without_self's tail-lands-on-own-handle premise breaks: `solo`
+(self-loop) flips trial-open/final-closed (the trial's
+pre-registration vs the final's mono self-registration), and `ping`
+publishes `with r…@e…` in BOTH passes — a mutual pair's rows NEVER
+close (the mutual-negation-gate root, now measured by the medium's
+own query). (2) The join-identity trap: binding a bound terminal to
+pure hits the teaching JOIN, and joining pure is the identity —
+3,131 measured no-op "closes." (3) The per-member finalize froze
+group rows MID-LEARNING — 19 refusals naming the exact dropped
+names. (4) Group-exit scoping healed 19 → 2, but the survivors are
+the tell: the banked phantom-Intern-at-root attractor class
+resurfaced, and a THIRD mover family appeared (the collectors/ml) —
+any row-resolution perturbation re-selects the attractor, the
+tower's signature. (5) THE RULING, the vet's law applied to the
+digger: a third cut site is compensation regrowing the tower —
+REVERTED whole; in the edges representation the problem DISSOLVES
+(a join-cell taught by its own recursion joins idempotently, R ∪ R
+= R — the least solution IS the lattice fixpoint, no cut, no
+publish-freshening, no severance). The movers stay the standing
+narration (trial correct-but-open, final closed, emission
+self-stable); the 8-line probes (solo/pingpong) and the three mover
+families are schemes-are-edges' acceptance tests, banked in the
+session scratchpad's mover-probe.mn / pingpong.mn shapes.
 
 `Hβ.emit.arm-closure-captures-record` RESOLVED: LANDED (2026-07-24, pin
 bb4b870e — the ledger head carries the arc). The capture form won over

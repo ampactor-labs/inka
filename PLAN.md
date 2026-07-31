@@ -1131,6 +1131,38 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶ AFFINE GAINS EXACTLY-ONCE — the relevant tier lands,
+  the novelty head-to-head's first build (pin b77f345b). The Fable
+  audit's build-first pick, chosen for the reason it gave: the ledger
+  already carries Diagnostic, so the exit-check is row-neutral to the
+  judgment spine — the one class of engine work that does not gamble
+  the oscillation attractor. THE GAP: the ownership ledger reported
+  consumed-twice and said NOTHING about never-consumed, so an authored
+  `own` a body drops — or only ever borrows — was silent, and a
+  persisted continuation capturing such a value loses the close
+  obligation entirely. THE LANDING: consume_declare (the Consume
+  effect's seventh op) records each authored `own` param INSIDE the
+  body's consume frame; consume_exit_fn narrates whichever were never
+  consumed (T_OwnUnconsumed, narration tier per the census arming law;
+  Unspecified applicability — the fix is a consume the developer must
+  place, or an honest widening to `ref`, never a patch). THE SEMANTICS
+  the probes settled: a transfer-out IS the consume (the
+  return-transfer law's own reading — hands_back stays silent), and an
+  own that is only BORROWED fires, because at-most-once-and-only-read
+  is `ref`'s claim, not `own`'s — the diagnostic teaches the honest
+  marker. THREE CATCHES en route, each counted: the first form
+  declared at mint_params and was WIPED by consume_enter_fn's fresh
+  frame before the walk (a report that never fired — measured, moved
+  inside the bracket); the armed E_DuplicateFnName class caught this
+  landing's own interrupted double-edit before any probe ran; and the
+  leg's first span assertion assumed line 1 while the fixture's own
+  comment block puts drops at 10:4 (file-local render confirmed
+  correct). THE WHEEL'S FIRST CENSUS: 8 findings, all real (trail,
+  buf ×7 — owns only ever borrowed or dropped); they are the sweep
+  queue, and the class arms when they reach 0. The persist half —
+  image_pack scanning captured frames for undischarged owns — stays on
+  the peer. CLEAN m2 == m3 at 355,257 lines; census 0; frontier 330/0;
+  micros 121/0; proof-exactness 9/9; crown 5/5.
 - 2026-07-30 · ▶ NINE DESIGNS FROM TWO INDEPENDENT AUDITS — the
   novelty head-to-head, banked whole (no pin move — PLAN only; boot
   stands at 2132e1ce). Morgan dispatched Fable 5 and Opus 5 against an

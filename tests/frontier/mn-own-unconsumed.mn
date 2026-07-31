@@ -1,0 +1,14 @@
+// expect: 45
+// The relevant tier's two faces (Hβ.own.linear-tier-and-persist-value-
+// barrier, first half): affine gains exactly-once. `drops` declares an
+// authored `own` and finishes nothing — T_OwnUnconsumed narrates the
+// unfinished obligation (an own that is only borrowed fires too: the
+// teaching is "declare ref"). `hands_back` TRANSFERS its own out (the
+// return is the consume — the region-transfer law's own reading), and
+// stays silent. Narration tier until the wheel's own count reaches 0
+// (the census arming law); the wheel's first census found 8.
+fn drops(own buf) = 42
+
+fn hands_back(own buf) = buf
+
+fn main() = drops([1, 2]) + len(hands_back([1, 2, 3]))

@@ -2562,6 +2562,17 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   // collides in the NEXT function that names the same `own` param — the
   // cross-function buf/acc false positives.
   consume_enter_fn()
+  // The linear obligations this body accepts, declared INSIDE the
+  // bracket: an authored `own` param is the claim "this is mine to
+  // finish", and consume_exit_fn reports whichever the body never
+  // consumed — affine's exactly-once half
+  // (Hβ.own.linear-tier-and-persist-value-barrier). Inside, not before:
+  // consume_enter_fn opens a fresh frame and clears the list, so a
+  // declaration made at mint_params is wiped before the walk (measured
+  // — the first form reported nothing on a fn that plainly drops its
+  // own param). Authored only: infer_ownership runs AFTER the body, so
+  // the honest fact here is what the developer wrote.
+  declare_authored_owns(params, span)
   infer_expr(body_node)
   consume_exit_fn()
   let declared_effs = inf_exit_fn()
@@ -3363,6 +3374,14 @@ fn callee_missing_in_env(ref func, cname: String) = match func {
     _ => false,
   },
 }
+
+// The authored-own declarations of one signature, in the body's own
+// consume frame. A `ref` or unmarked param declares nothing: only an
+// authored `own` is a promise to finish.
+fn declare_authored_owns(ref params, span: ValidSpan) = params |> each((p) => match param_authored(p) {
+  Own => consume_declare(param_name(p), span),
+  _ => (),
+})
 
 fn check_consume_at_use(name, kind, span: ValidSpan) = match kind {
   ParamScheme(authored) => consume(name, authored, span),

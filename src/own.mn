@@ -31,7 +31,7 @@ handler catch_abort {
   abort() => None,
 }
 
-handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved = [], borrow_depth = 0 {
+handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved = [], borrow_depth = 0, declared = [] {
   borrow_enter() => // A borrow scope reads without moving — inside it consume is a no-op, so
   // an `own` value used in an `if` condition / `match` scrutinee stays
   // available in the arms. A depth counter, not a flag: nested borrows
@@ -46,12 +46,26 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
   // loop.
   //
   // drift-audit: ignore — bounded by lexical fn-nesting depth, not a data loop
-  resume() with fn_saved = fn_saved ++ [(used, used_sites, branches)], used = [], used_sites = [], branches = [],
-  consume_exit_fn() => if len(fn_saved) == 0 {
-    resume()
-  } else {
-    match last(fn_saved) {
-      (u, us, br) => resume() with used = u, used_sites = us, branches = br, fn_saved = drop_last(fn_saved),
+  resume() with fn_saved = fn_saved ++ [(used, used_sites, branches, declared)], used = [], used_sites = [], branches = [], declared = [],
+  consume_declare(name, span) => // The relevant tier's one write: an authored `own` binding entering
+  // scope. The frame's own list — saved and restored with the rest of
+  // the triple, so a nested fn decl's owns never leak outward.
+  //
+  // drift-audit: ignore — bounded by a fn's own authored-own params, not a data loop
+  resume() with declared = declared ++ [(name, span)],
+  consume_exit_fn() => {
+    // EXACTLY-ONCE, reported before the frame closes: every authored
+    // `own` this body declared and never consumed. Affine says "not
+    // twice"; this says "not never" — the finalization half, and the
+    // reason a persisted continuation can lose a close obligation
+    // today (Hβ.own.linear-tier-and-persist-value-barrier).
+    report_unconsumed(declared, used, 0)
+    if len(fn_saved) == 0 {
+      resume()
+    } else {
+      match last(fn_saved) {
+        (u, us, br, dc) => resume() with used = u, used_sites = us, branches = br, declared = dc, fn_saved = drop_last(fn_saved),
+      }
     }
   },
   consume(name, ownership, span) => // The message mint is a named fn with a String pin (spec_mangle's
@@ -145,6 +159,25 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
 // the consume arm carries the why).
 fn consume_twice_msg(name: String, first) with GraphRead + Memory + Alloc =
   "'{name}' consumed twice (first at {show_span(first)})"
+
+// THE RELEVANT TIER'S REPORT — every authored `own` the body declared
+// and never consumed. Narration first per the census arming law (a
+// class arms only at wheel-zero); the wheel's own unconsumed owns are
+// findings, not failures, until the count is 0. The message states the
+// obligation rather than the rule: what the developer promised to
+// finish, and did not.
+fn report_unconsumed(ref declared, ref used, i) with Diagnostic + GraphRead + Memory + Alloc + Intern = if i >= len(declared) {
+  ()
+} else {
+  match declared[i] {
+    (name, span) => if set_contains(used, name) { () } else { report(TOwnUnconsumed(unconsumed_msg(name), span)) },
+  }
+  report_unconsumed(declared, used, i + 1)
+}
+
+// The message's one mint, String-pinned like its double-consume sibling.
+fn unconsumed_msg(name: String) with Memory + Alloc =
+  "'{name}' is declared own but never consumed on this path — an owned resource with no finalization"
 
 // Flat-array union across all branch deltas. Every delta is already
 // a sorted set (maintained by set_insert during consume), so folding

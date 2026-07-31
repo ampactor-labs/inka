@@ -2121,6 +2121,18 @@ for i in "${!compilers[@]}"; do
     fail "repr-pin (compile refused)"
   fi
 
+  # ─── The relevant tier (affine gains exactly-once) ──────────────────
+  # T_OwnUnconsumed fires on an authored `own` the body never consumes
+  # (drops) and stays SILENT on a transfer-out (hands_back — the return
+  # is the consume). Both faces + the fixture still runs.
+  ou_chk=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-own-unconsumed.mn" 2>&1)
+  ou_n=$(printf '%s' "$ou_chk" | grep -c 'T_OwnUnconsumed')
+  if [ "$ou_n" = "1" ] && printf '%s' "$ou_chk" | grep -q "at 10:4"; then
+    pass "own-unconsumed: the dropped own narrates, the transferred own stays silent"
+  else
+    fail "own-unconsumed (fired=$ou_n, want exactly 1 at drops' decl)"
+  fi
+
   # ─── The iteration-shape tier (iteration is topology) ───────────────
   # The audit convicts a self-call threading an incremented index (the
   # loop in recursion's costume) and stays SILENT on the vocabulary form

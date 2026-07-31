@@ -7894,6 +7894,32 @@ prereg-vs-final entry races, the open-tail subtraction carriers, the
 type-half flip surviving a fully-pinned row, the marginal
 schedule-variance at the 11/12 boundary. A full-context session's
 arc — the biggest single deletion on the board.
+THE BUILD SKELETON (2026-07-31, banked with the re-measured RED —
+pingpong's ping answers `with r41564@e11` through the live boot while
+solo answers Pure): (1) the publish becomes the fn's LIVE type handle
+in the env entry; "generalization" becomes a PROJECTION at the read
+(which cells are still free = the polymorphic degrees), never a
+stored Forall snapshot. (2) A call site keeps its per-site fresh
+cells but ADDS the persistent site→decl correspondence edge; a later
+teaching of a decl cell REPLAYS through the edge as the monotone join
+— iteration becomes union-find propagation, not scheduled rounds.
+THE DIRECTIONALITY CRUX, the one constraint the K=8 value-boundary
+landing already paid for (a caller folding a decl's live cell
+mid-flight was the measured race): decl-side teaching flows OUT
+through the edge; site-side constraints stay PRIVATE to the instance
+— the edge is one-way, which is exactly what instantiate's freshening
+achieves today MINUS the propagation. (3) Recursion needs no cut: a
+self or co-member call during judgment reads the live cell (no
+quantified copy exists mid-judgment), so R = names ∪ R is a cell
+joined with itself — idempotent, closed by construction;
+row_without_self's cut, the frozen-read special cases, and the
+movers' divergence all subsume. An AUTHORED signature stays the
+signature-price law: a constraint cell seeded before the body.
+(4) Gates, all banked RED or green today: ping/pong answer Pure
+(scratchpad pingpong.mn), solo stays Pure, mn-mutual-negation-gate
+compiles, the 16-mover narration falls to zero, census 0, frontier
+whole, the march. Swap behind the projections — env_lookup and the
+read surfaces keep their signatures; the storage changes.
 
 `Hβ.infer.round-oscillation-movers` — ESCALATED TO THE ACTIVE BLOCKER
 (2026-07-30, third victim): the Pure predicate-fn UNFOLD was built

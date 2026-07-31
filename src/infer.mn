@@ -1151,7 +1151,7 @@ fn infer_program_converged(src) = match {
       // diag_report, never through this channel.
       match diag_scope_of() {
         ScopeAll => {
-          eprint_string("judgment: a scheme moved between the trial and the final — movers:{movers_line(flat_rows, prints, prints2, 0, 0)}\n")
+          eprint_string("judgment: {int_to_str(movers_count(flat_rows, prints, prints2, 0))} scheme(s) moved between the trial and the final — movers:{movers_line(flat_rows, prints, prints2, 0, 0)}\n")
           movers_diff(flat_rows, prints, prints2, 0, 0)
         },
         _ => (),
@@ -1159,6 +1159,24 @@ fn infer_program_converged(src) = match {
     }
     out
   },
+}
+
+// The TOTAL, beside the capped display: the sixteen-slot line names the
+// CLASS, and its cap hid the magnitude — a family that saturates the
+// slots reads the same as one that fills them exactly (measured: the
+// solo self-recursive family filled all sixteen on every weave, so a
+// new mover in user code was invisible behind known lib movers). The
+// count is what the ratchet reads when this channel goes zero-tolerance.
+fn movers_count(ref rows, ref prev_prints, ref cur_prints, i) = if i >= len(rows) {
+  0
+} else {
+  match rows[i] {
+    (name, _) => if name != "" && cur_prints[i] != prev_prints[i] {
+      1 + movers_count(rows, prev_prints, cur_prints, i + 1)
+    } else {
+      movers_count(rows, prev_prints, cur_prints, i + 1)
+    },
+  }
 }
 
 // The bound-hit report names its residue: which stmts' fingerprints were
@@ -1642,7 +1660,15 @@ fn trial_group_walk(ref stmts, ref groups, own rows, g) = if g >= len(groups) {
 // the widening join is the rung's true remainder (the residue index
 // carries the spec), and iterating without it taxed a 45-member group
 // forty-seven probes to no fixpoint.
-fn trial_judge_group(ref stmts, members, own rows) = if len(members) > 1 {
+// A SINGLETON SCC WITH A SELF-EDGE IS A CYCLE, and `len(members) > 1`
+// said it was not — the discipline's own entry test was a wrong proxy
+// for cyclicity (the audit's measurement: every self-recursive fn on
+// every weave flips trial-open → final-closed, and that family
+// SATURATES the movers display's sixteen slots, so a NEW mover in user
+// code hid behind known lib movers — a gate that always fires). The
+// two pieces that fix it apply to every group; only the exit sweep is
+// genuinely multi-member work.
+fn trial_judge_group(ref stmts, members, own rows) = {
   // THE CYCLE DISCIPLINE (the schemes-are-edges arc's first rung, replacing
   // the refuted iteration direction whole — the vet's redirect executed):
   // monomorphic recursion by default, the signature price for polymorphic
@@ -1659,19 +1685,26 @@ fn trial_judge_group(ref stmts, members, own rows) = if len(members) > 1 {
   // publishes finals over the group's fully-resolved cells, so an early
   // member's scheme carries a late member's resolution instead of
   // quantifying a then-free var the frozen-read law would forever freshen.
-  {
-    group_mono_views(stmts, members, 0)
-    // The group's member names ride the judgment as PARSE truth — the
-    // live-charge re-aim (callee_own_row) reads membership to tell the
-    // severed-recursion channel from the effect-polymorphism channel.
-    set_group_members(map((j) => stmt_decl_name(stmts[j]), members))
-    let rows2 = group_judge_members(stmts, members, rows, 0)
-    set_group_members([])
-    group_final_publish(stmts, members, 0)
-    rows2
-  }
-} else {
-  group_judge_members(stmts, members, rows, 0)
+  group_mono_views(stmts, members, 0)
+  // The group's member names ride the judgment as PARSE truth — the
+  // live-charge re-aim (callee_own_row) reads membership to tell the
+  // severed-recursion channel from the effect-polymorphism channel. A
+  // SOLO's self-charge re-aims at its own root, where the cut fires;
+  // idempotence (R ∪ R = R) makes that the only thing it changes.
+  // MEASURED, both forms marched: the gate cost 1,764 movers against
+  // 930 without it — 47% of every weave's trial/final divergence was
+  // the excluded self-recursive singleton, and the wheel emits ~3,700
+  // lines smaller with the sharper trial.
+  set_group_members(map((j) => stmt_decl_name(stmts[j]), members))
+  let rows2 = group_judge_members(stmts, members, rows, 0)
+  set_group_members([])
+  // The exit sweep is the one genuinely multi-member piece: it exists so
+  // an EARLY member's scheme carries a LATE member's resolution. A
+  // singleton has no late member — its own infer_fn publish IS the
+  // final state, and re-publishing it would only append an identical
+  // env entry per decl.
+  if len(members) > 1 { group_final_publish(stmts, members, 0) } else { () }
+  rows2
 }
 
 fn group_mono_views(ref stmts, ref members, j) = if j >= len(members) {

@@ -1,0 +1,46 @@
+// expect: 4
+// BANKED RED (unregistered — THE SOURCE of the trial/final divergence,
+// minimized 2026-07-31 from 930 wheel movers to fifteen lines). A cycle
+// member's row is PUBLISHED AS A VALUE at its own decl exit — a moment
+// when its co-members have not been judged — so the effects they later
+// prove never reach it. Measured through the stdin judge on boot
+// 74d63b7c:
+//
+//   self_first  trial !E1        final !E1+E2   ← LOSES the co-member's effect
+//   other_b     trial !E2        final !E1+E2   ← same, mirrored
+//   co_first    (no flip)                        ← accidentally correct
+//   other_a     (no flip)                        ← judged second; reads a publish
+//
+// THE ASYMMETRY IS THE PROOF, and it inverts the obvious reading: the
+// member that charges its OWN row first is the one that goes WRONG.
+// Three mechanisms compose to it, each individually deliberate:
+//   1. scheme_own_row charges a BARE edge (names stripped — the fix for
+//      the fragment-join hazard that cost 52 Int-vs-List(Float));
+//   2. tail_join keeps the FIRST var, so a second co-member's edge is
+//      dropped entirely (the triple has ONE tail slot);
+//   3. row_without_self CUTS a self-rooted tail to closed — freezing
+//      the row at that instant and severing the surviving edge.
+// When the accumulated tail happens to be a CO-MEMBER's var (co_first),
+// no cut fires, the published row keeps a LIVE EDGE, and it resolves
+// correctly later — the open tail is the honest form and the cut is
+// what breaks it.
+//
+// The contract: every member of a cycle reports the WHOLE cycle's
+// effects. `mentl check` on this file must show zero movers and all
+// four fns carrying E1 + E2. Greens when a charge DRAWS AN EDGE into
+// the callee's live row cell (N edges per cell, not one tail slot) and
+// the least solution is the join's own idempotence — R ∪ R = R, no cut
+// (Hβ.infer.schemes-are-edges rung 3).
+effect E1 { e1() -> Int }
+
+effect E2 { e2() -> Int }
+
+fn self_first(n) = if n > 0 { self_first(n - 1) + other_a(n) } else { e1() }
+
+fn other_a(n) = if n > 0 { self_first(n - 1) } else { e2() }
+
+fn co_first(n) = if n > 0 { other_b(n) + co_first(n - 1) } else { e1() }
+
+fn other_b(n) = if n > 0 { co_first(n - 1) } else { e2() }
+
+fn main() = 4

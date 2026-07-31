@@ -1131,6 +1131,50 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-31 · ▶▶▶ THE SOLO IS A CYCLE, AND THE COUNT NAMES THE SOURCE —
+  Morgan's cut ("explore the very source of issues") turns a symptom
+  sweep into the arc's forcing artifact (pin 74d63b7c). THE FIX FIRST:
+  the cycle discipline's entry test `len(members) > 1` was a WRONG
+  PROXY for cyclicity — a self-recursive singleton IS a cycle, and the
+  discipline's two live pieces (the mono view, the group membership the
+  charge reads) apply to every group; only the exit sweep is genuinely
+  multi-member work (a singleton has no late member to carry, and
+  re-publishing appends an identical env entry per decl). MEASURED, both
+  forms marched: 1,764 movers with the gate against 930 without it —
+  47% of every weave's trial/final divergence was the excluded solo —
+  and the wheel emits ~3,700 lines SMALLER under the sharper trial.
+  THE INSTRUMENT: movers_line gains its TOTAL (the sixteen-slot display
+  named the class and hid the magnitude — a family that saturates reads
+  identically to one that fills it exactly, which is why a new mover in
+  user code hid behind known lib movers for a week). THEN THE DIG, and
+  it is the session's finding: 930 minimized to FIFTEEN LINES
+  (tests/frontier/mn-cycle-charge-freeze.mn, banked RED) by reproducing
+  the flip on the lib weave alone (83 movers, a one-second loop instead
+  of a ten-minute march — the instrument choice that made bisection
+  cheap). THE SOURCE, stated exactly: A CYCLE MEMBER'S ROW IS PUBLISHED
+  AS A VALUE AT ITS OWN DECL EXIT — a moment when its co-members have
+  not been judged — so the effects they later prove never reach it.
+  Three deliberate mechanisms compose to it: scheme_own_row charges a
+  BARE edge (names stripped, the fix for the fragment-join hazard that
+  cost 52 Int-vs-List(Float)); tail_join keeps the FIRST var, so a
+  second co-member's edge is dropped entirely (one tail slot); and
+  row_without_self CUTS a self-rooted tail to closed, freezing the row
+  at that instant and severing the surviving edge. THE ASYMMETRY IS THE
+  PROOF and it inverts the obvious reading: the member charging its OWN
+  row first goes WRONG (self_first: trial !E1, final !E1+E2), while the
+  member whose accumulated tail happens to be a CO-MEMBER's var keeps a
+  LIVE EDGE, never cuts, and resolves correctly later (co_first: no
+  flip at all) — the open tail is the honest form and THE CUT IS WHAT
+  BREAKS IT. This is the Carried-Truth Law at the judgment's own
+  publish: a row published as a value is a COPY of what the graph knew
+  at decl exit, where an edge read live is correct. It unifies three
+  fleet findings under one root (the multi-callee false !E, the
+  tail_join first-var drop, the 930 movers) and gives rung 3 its
+  acceptance test: a charge DRAWS AN EDGE into the callee's live row
+  cell — N edges per cell, not one tail slot — and the least solution
+  is the join's own idempotence, R ∪ R = R, no cut. CLEAN m2 == m3 at
+  346,221 lines; census 0; frontier 332/0; micros 121/0;
+  proof-exactness 9/9; crown 5/5.
 - 2026-07-31 · ▶▶ THE INSTRUMENTS JOIN THE REGISTER — the fleet's top
   convergence executed: six of twelve reports named the ungoverned
   narration channel, and it closes at the register's own law
@@ -8024,6 +8068,17 @@ prereg-vs-final entry races, the open-tail subtraction carriers, the
 type-half flip surviving a fully-pinned row, the marginal
 schedule-variance at the 11/12 boundary. A full-context session's
 arc — the biggest single deletion on the board.
+THE SOURCE HAS ITS ARTIFACT (2026-07-31, minimized from 930 wheel
+movers to fifteen lines — tests/frontier/mn-cycle-charge-freeze.mn,
+the §7 entry THE SOLO IS A CYCLE carries the arc): a cycle member's
+row is PUBLISHED AS A VALUE at its own decl exit, before its
+co-members are judged, so their effects never reach it — and the
+member whose accumulated tail accidentally keeps a live CO-MEMBER
+edge is the one that stays correct, which makes the cut, not the
+openness, the defect. Rung 3's acceptance tests are therefore three
+banked REDs (this one, mn-scc-false-negation, mn-two-tail-accumulation)
+plus the wheel's mover count reaching zero — and the count is now
+printed on every ScopeAll compile, so the ratchet has its number.
 THE BUILD SKELETON (2026-07-31, banked with the re-measured RED —
 pingpong's ping answers `with r41564@e11` through the live boot while
 solo answers Pure): (1) the publish becomes the fn's LIVE type handle

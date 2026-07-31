@@ -1,0 +1,47 @@
+// expect: refuse E_EffectMismatch
+// BANKED RED (unregistered — the effects audit's tail_join face,
+// 2026-07-31). The SIBLING of mn-scc-false-negation with NO recursion
+// anywhere: `both` calls two effect-polymorphic callees, so their two
+// instantiated row vars meet in one frame and tail_join (effects.mn:418-425)
+// keeps the FIRST, dropping the second with no constraint recorded.
+// `quiet_first` declares `!TZ` and transitively performs TZ through its
+// SECOND argument — passes, and the medium teaches "tighten further".
+//
+// The discriminator is ORDER, not position: `both_rl` accumulates the
+// same two callees in the opposite order and refuses correctly, with the
+// noisy callee in the identical parameter slot. Measured on boot
+// 3c0ee1a1 (e2042bdd).
+//
+// LEG-CONTRACT NOTE for graduation: the control (`noisy_first`) already
+// refuses, so a naive class-reports read is GREEN today — the leg must
+// assert BOTH declarations refuse (two E_EffectMismatch lines; today's
+// RED is exactly one, plus the false tighten-invitation on the silent
+// twin). Greening condition: tail_join records the union of two var
+// tails as an EDGE (mint v3, bind both into it) instead of returning
+// the first — the rung-3 landing stated over accumulation.
+//
+// Distinct from mn-scc-false-negation: no binding group is involved, so
+// a fix that makes a GROUP's charges draw edges leaves this reachable.
+// Greens when tail_join records the union of two tails as an edge — mint
+// v3, bind both into it — instead of returning the first.
+effect TZ {
+  tz() -> Int
+}
+
+fn apply1(f) = f()
+
+fn apply2(g) = g()
+
+fn both_lr(f, g) = apply1(f) + apply2(g)
+
+fn both_rl(f, g) = apply2(g) + apply1(f)
+
+fn quiet_one() = 1
+
+fn noisy() = tz()
+
+fn quiet_first() with !TZ = both_lr(quiet_one, noisy)
+
+fn noisy_first() with !TZ = both_rl(quiet_one, noisy)
+
+fn main() = 0

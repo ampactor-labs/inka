@@ -543,7 +543,7 @@ fn session_read_line(conn) = {
 // The wire is tab-joined argv (quoting survives the shell boundary);
 // a trailing tab leaves one empty tail element, dropped here.
 fn session_argv(line) = {
-  let parts = split(line, "\t")
+  let parts = split("\t", line)
   let n = len(parts)
   let trimmed = if n > 0 && byte_len(parts[n - 1]) == 0 { slice(parts, 0, n - 1) } else { parts }
   ["mentl"] ++ trimmed

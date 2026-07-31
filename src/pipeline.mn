@@ -1473,7 +1473,7 @@ fn parse_query_string(q) = {
   // split returns a slice VIEW; the list-pattern match assumes the flat
   // [len][elems] contract, so flatten once before matching (§7 face 13)
   // — and read words ONCE, never re-split per arm (Carried-Truth).
-  let words = list_to_flat(split(q, " "))
+  let words = list_to_flat(split(" ", q))
   match words {
     [] => QUnknown(q),
     [w0] => build_question(classify_query_verb(w0), "", q),

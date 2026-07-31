@@ -223,7 +223,15 @@ fn str_repack_loop(flat, dest, stride, i, n) with Memory + Alloc = if i >= n {
 // counter substrate per CLAUDE.md (list_extend_to + list_set +
 // slice — no ++ in the loop). Adjacent separators yield empty
 // tokens; empty input yields [""]; empty sep yields [s].
-fn split(s, sep) with Memory + Alloc = {
+//
+// SEPARATOR FIRST, DATUM LAST — the Stage Law (SYNTAX), and its absence
+// here was a SILENT WRONG ANSWER, not an ergonomic complaint:
+// `"a,b,c" |> split(",")` bound `s = ","` and left `sep` as the hole, so
+// the pipe split the SEPARATOR by the data and returned one part, at
+// exit 0, with no diagnostic (measured 2026-07-31). Both arguments are
+// String, so nothing in the type system could catch it — the signature
+// order IS the contract.
+fn split(sep: String, s: String) with Memory + Alloc = {
   let n = byte_len(s)
   let seplen = byte_len(sep)
   if seplen == 0 { [s] } else { split_walk(s, sep, n, seplen, 0, 0, make_list(0), 0) }

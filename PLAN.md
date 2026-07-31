@@ -1178,6 +1178,29 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-31 · ▶▶ THE STAGE LAW REACHES THE STRINGS — the fleet's
+  user-path findings land where a beginner actually stands
+  (pin 69d6c0b0). Two silent-wrongs on the plainest lines in the
+  language, each measured on the prior boot: `"a,b,c" |> split(",")`
+  answered ONE part at exit 0 — datum-first bound `s = ","`, so the
+  pipe filled `sep` with the data and the call split the SEPARATOR by
+  the list, and because both parameters are String nothing in the type
+  system could catch it (the signature ORDER is the contract) — and
+  `join(["ab","cd"], "-")` TRAPPED at exit 134 with zero diagnostics,
+  because join_loop's unannotated params left the element type free and
+  `++` reached its no-guess floor INSIDE SHIPPED LIBRARY CODE. The
+  refusal was right; its form was an `unreachable`. Both are now
+  config-first / datum-last with their Intent Boundaries pinned, four
+  call sites moved (words, lines, unwords, unlines, the query grammar,
+  the session wire), and the comment that claimed a `str_concat` repair
+  never present in the body is trued to the pins that are. The contract
+  is EXECUTABLE (tests/frontier/mn-stage-law-strings — split, join,
+  round-trip, and words through the pipe, 42), so the class cannot
+  regress silently. CLEAN m2 == m3 at 346,221 lines; census 0; frontier
+  332/0; micros 121/0; proof-exactness 9/9; crown 5/5. The eight
+  remaining Stage-Law violations and the audit's stage-shape tier (the
+  verb-shape tier's sibling, which makes the class self-policing) ride
+  `Hβ.prelude.stage-law-and-reachability`.
 - 2026-07-31 · ▶▶▶ THE SOLO IS A CYCLE, AND THE COUNT NAMES THE SOURCE —
   Morgan's cut ("explore the very source of issues") turns a symptom
   sweep into the arc's forcing artifact (pin 74d63b7c). THE FIX FIRST:

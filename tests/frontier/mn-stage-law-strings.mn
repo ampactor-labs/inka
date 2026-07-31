@@ -1,0 +1,27 @@
+// expect: 42
+// The Stage Law at the string vocabulary, executable (2026-07-31). Both
+// halves were measured broken on the pinned boot before this landed:
+//
+//   "a,b,c" |> split(",")   returned ONE part at exit 0 — datum-first
+//                           bound s = "," and the pipe filled `sep` with
+//                           the data, so it split the SEPARATOR. Both
+//                           params are String, so no type could catch it.
+//   join(["ab","cd"], "-")  TRAPPED (exit 134, zero diagnostics) —
+//                           join_loop's unannotated params left the
+//                           element free and `++` reached its no-guess
+//                           floor inside shipped library code.
+//
+// Config first, datum last: the pipe fills the LAST hole, so the chain
+// below reads as the graph and answers 42 only if every stage is
+// Stage-Law shaped.
+fn main() = {
+  let parts = "a,b,c" |> split(",")
+  let joined = parts |> join("-")
+  let back = joined |> split("-")
+  let ws = "x y z" |> words
+  if len(parts) == 3 && byte_len(joined) == 5 && len(back) == 3 && len(ws) == 3 {
+    42
+  } else {
+    len(parts)
+  }
+}

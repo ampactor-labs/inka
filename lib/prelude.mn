@@ -348,22 +348,33 @@ fn sort(xs) = if len(xs) <= 1 {
 
 // ─── String operations (pure Mentl) ───────────────────────────
 //
-// Explicit recursive loop — avoids fold's polymorphic-lambda issue where
-// the concat inside `|acc, x| acc ++ sep ++ x` gets committed to list_concat // drift-audit: ignore
-// via prelude-first-use type inference. Explicit str_concat threads the
-// String type directly through the loop, no polymorphism, no ambiguity.
-fn join_loop(xs, sep, i, acc) =
+// THE PINS ARE LOAD-BEARING, and their absence shipped a RUNTIME TRAP on
+// the plainest line a beginner writes: unannotated params leave the
+// element type free, so `acc ++ sep ++ xs[i]` reaches `++`'s no-guess
+// floor — the refusal is RIGHT (a representation cannot be guessed) and
+// its FORM was an `unreachable` in shipped library code. `join(["ab",
+// "cd"], "-")` exited 134 with zero diagnostics until 2026-07-31. The
+// comment that stood here claimed "explicit str_concat threads the String
+// type directly through the loop" — a repair that was never in the body;
+// the Intent Boundaries below are that repair, made real.
+//
+// The order is the STAGE LAW's (SYNTAX §"The Stage Law"): configuration
+// first, the flowing datum LAST, so `names |> join(", ")` fills `xs` and
+// reads as the graph. Datum-first, the pipe filled `sep` with the datum
+// and joined the SEPARATOR by the list — silently, at exit 0.
+fn join_loop(ref xs: [String], sep: String, i, acc: String) =
   if i >= len(xs) { acc } else { join_loop(xs, sep, i + 1, acc ++ sep ++ xs[i]) }
 
-fn join(xs, sep) = if len(xs) == 0 { "" } else { join_loop(xs, sep, 1, xs[0]) }
+fn join(sep: String, ref xs: [String]) =
+  if len(xs) == 0 { "" } else { join_loop(xs, sep, 1, xs[0]) }
 
-fn words(s) = split(s, " ")
+fn words(s) = split(" ", s)
 
-fn unwords(ws) = join(ws, " ")
+fn unwords(ws) = join(" ", ws)
 
-fn lines(s) = split(s, "\n")
+fn lines(s) = split("\n", s)
 
-fn unlines(ls) = join(ls, "\n")
+fn unlines(ls) = join("\n", ls)
 
 // String functions use str_slice (byte-level) not slice (list-level).
 // This separation is load-bearing for WASM: the HM checker doesn't

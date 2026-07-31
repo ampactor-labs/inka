@@ -1107,6 +1107,7 @@ handler diagnostics_handler with errors = 0, refusals = 0, scope = ScopeAll {
   diag_errors() => resume(errors),
   diag_refusals() => resume(refusals),
   diag_scope(sc) => resume() with scope = sc,
+  diag_scope_of() => resume(scope),
 }
 
 // The register's own range IS the file:line subtraction: a diagnostic

@@ -1131,6 +1131,37 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-31 · ▶▶ THE INSTRUMENTS JOIN THE REGISTER — the fleet's top
+  convergence executed: six of twelve reports named the ungoverned
+  narration channel, and it closes at the register's own law
+  (pin 24d9f96f). The compiler's instruments were raw stderr on every
+  user verb — ~28 lines (the 16-name movers block, four convergence
+  flips with raw fingerprints, the wheel's OWN verify obligations at
+  types.mn spans) before a hello-world's first output; the syntax
+  auditor graded it the single highest teachability-per-line fix and
+  the lib auditor measured it opening lesson 00. THE FORM: DiagRegister
+  gains the scope READ (diag_scope_of — the register's live value, one
+  arm on the root diagnostics_handler), and each instrument applies the
+  register's law to its own lines: the movers/convergence block prints
+  only under ScopeAll (it is never about the user's file — the march,
+  census, and battery never perform diag_scope, so the maintainer
+  channel keeps every line byte-for-byte); a debt line carries a SPAN,
+  so it renders exactly when that span is in scope (diag_report's own
+  test at the instrument) — the first blanket form was convicted by the
+  frontier's interval leg in one run (a user's OWN pending is their
+  teaching surface, "this claim was not checked", and must render;
+  only the wheel's obligations quiet). One honest widen
+  (driver_check_entry +DiagRegister). FRAGX stays unguarded BY ITS OWN
+  SITE'S LAW (an arm-perform rides the handler's residual past every
+  bracket — the face-pollution class the root-row gate once refused;
+  it appears only on wheel-scale checks besides) — named residue with
+  the census-to-zero route: the collision class closing deletes the
+  line. MEASURED: a user's `mentl run` stderr 28 → 0 with stdout
+  untouched; the march's m3 leg keeps the movers narration and all 12
+  debt lines; CLEAN m2 == m3 at 349,657 lines; census 0; frontier
+  332/0; micros 121/0; proof-exactness 9/9; crown 5/5. The fleet's
+  ranked program continues: the solo-inclusion one-liner, the
+  echo-stop leaf coverage, the TEof recovery, run-refuses-on-error.
 - 2026-07-31 · ▶▶ THE FLEET'S FIRST TWO CORRECTIVES — the twelve-auditor
   fleet convicts the day's own landing within hours, and both fixes land
   marched (pin 3c0ee1a1). Morgan dispatched twelve auditors (six Fable,

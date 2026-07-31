@@ -1141,8 +1141,21 @@ fn infer_program_converged(src) = match {
     if prints_equal(prints, prints2) {
       ()
     } else {
-      eprint_string("judgment: a scheme moved between the trial and the final — movers:{movers_line(flat_rows, prints, prints2, 0, 0)}\n")
-      movers_diff(flat_rows, prints, prints2, 0, 0)
+      // The movers report is the MAINTAINER'S instrument — it rides the
+      // register's scope read, so the march / census / battery (never
+      // scoped) keep every line, and a user-target verb's ScopeAt
+      // quiets the ~21-line block that opened every hello-world's
+      // stderr (six audit reports converged on the channel). The block
+      // is never about the user's file, so it has no per-span case; a
+      // divergence a user must see surfaces as a diagnostic through
+      // diag_report, never through this channel.
+      match diag_scope_of() {
+        ScopeAll => {
+          eprint_string("judgment: a scheme moved between the trial and the final — movers:{movers_line(flat_rows, prints, prints2, 0, 0)}\n")
+          movers_diff(flat_rows, prints, prints2, 0, 0)
+        },
+        _ => (),
+      }
     }
     out
   },

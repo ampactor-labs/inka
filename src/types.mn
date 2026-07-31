@@ -1901,6 +1901,22 @@ type DiagScope = ScopeAll | ScopeNone | ScopeAt(Int, Int)
 // range.
 effect DiagRegister {
   diag_scope(DiagScope)
+  // The scope read — the register's live value, for the compiler's own
+  // INSTRUMENTS (the movers report, the per-obligation debt lines): raw
+  // eprint channels that predate the register and carried the
+  // maintainer's whole diagnosis onto every user's first run (~28
+  // stderr lines on a hello-world, six audit reports converging on it).
+  // Each instrument applies the register's own law to its lines: the
+  // movers block is never about the user's file, so it prints only
+  // under ScopeAll; a debt line carries a span, so it renders exactly
+  // when that span is in scope — a user's OWN pending obligation is
+  // their teaching surface and still renders, while the wheel's
+  // (types.mn spans on a hello-world) stays the census channel's. The
+  // march, the census, and the battery never perform diag_scope, so
+  // the maintainer keeps every line. Errors and warnings never route
+  // here — they ride diag_report, where the register's own arms scope
+  // them with errors always rendering.
+  diag_scope_of() -> DiagScope
 }
 
 // The branch cursor's diagnostic join surface (Phase C, C1c-2). A branch

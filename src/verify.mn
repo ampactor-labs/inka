@@ -545,17 +545,36 @@ fn report_refinement_rejected(ref pred, ref span, ref reason) with !Mutate =
 fn report_verify_debt(debt) = if len(debt) == 0 {
   ()
 } else {
-  debt_lines(debt, module_seams(), 0)
+  // The per-obligation lines apply the register's own law PER SPAN
+  // (the diag_report arm's exact test): a user's OWN pending renders —
+  // it is their teaching surface ("this claim was not checked") — while
+  // the wheel's obligations (types.mn spans printed on every
+  // hello-world, the audit's measured flood) stay the census
+  // channel's. ScopeAll keeps every line; the SUMMARY count still
+  // reports through diag_report in every scope.
+  debt_lines(debt, module_seams(), diag_scope_of(), 0)
   report(VPending(len(debt), span_zero()))
 }
 
-fn debt_lines(ref debt, ref seams, i) = if i >= len(debt) {
+fn debt_lines(ref debt, ref seams, ref scope, i) = if i >= len(debt) {
   ()
 } else {
   match debt[i] {
-    (dspan, pred, _) => eprint_string("verify: pending {classify_predicate(pred)} {show_predicate(pred)} at {span_render_local(seams, dspan)}\n"),
+    (dspan, pred, _) => if debt_span_in_scope(dspan, scope) {
+      eprint_string("verify: pending {classify_predicate(pred)} {show_predicate(pred)} at {span_render_local(seams, dspan)}\n")
+    } else {
+      ()
+    },
   }
-  debt_lines(debt, seams, i + 1)
+  debt_lines(debt, seams, scope, i + 1)
+}
+
+fn debt_span_in_scope(ref dspan, ref scope) with Pure = match scope {
+  ScopeAll => true,
+  ScopeNone => false,
+  ScopeAt(sstart, snlines) => match dspan {
+    Span(sl, _, _, _) => sl >= sstart && sl < sstart + snlines,
+  },
 }
 
 fn classify_predicate(pred) with Pure = match pred {

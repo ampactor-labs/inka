@@ -790,7 +790,7 @@ fn rederive_cone(ref cone) with Memory + Alloc + WASI + Filesystem + EnvRead + E
   cone
 )
 
-fn driver_check_entry(ref entry_module) with Memory + Alloc + Filesystem + WASI + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
+fn driver_check_entry(ref entry_module) with Memory + Alloc + Filesystem + WASI + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern = {
   // Check the deps DAG (every module the entry imports) — not the entry.
   entry_module |> driver_collect_dag_with_deps |> filter((m_with_deps) => match m_with_deps {
     (m, _) => m != entry_module,

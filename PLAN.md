@@ -1135,26 +1135,32 @@ between the wheel and its ultimate form, held open on purpose.
   fleet convicts the day's own landing within hours, and both fixes land
   marched (pin 3c0ee1a1). Morgan dispatched twelve auditors (six Fable,
   six Opus, one per subsystem — reports in .build/research/audit-*).
-  CORRECTIVE ONE — and its premise RETRACTED by the fleet's own
-  cross-audit the same session (the ⟲ law at fleet scale, kept in
-  place as the era's record): the effects auditor reported the
-  deferred row gate swallowing the `!E` crown for effect-polymorphic
-  tails; the infer auditor then refuted the claim WITH THE EFFECTS
-  AUDITOR'S OWN CAPTURE (p13.err's second line contains the refusal
-  reported missing) and re-measured the gate refusing on three
-  surfaces on BOTH boots — the drain enforced all along; the observed
-  silence was the QUERY surface (schemes render without verdicts by
-  design) read through the movers stderr flood, and the effects
-  auditor retracted. The corrective STAYS as a hardening: the deferral
-  is GROUP-GATED (group_member — the same parse-truth fact the live
-  charge reads), so a non-member's free tail enforces eagerly at decl
-  exit instead of round-tripping through the drain, and the final's
-  gates all fire eagerly (the one real lifecycle exposure, closed
-  structurally). p13 refuses at both lines; pingpong holds Pure ×3;
-  TRANSITION m3 == m4. The process lesson, paid three ways in one
-  hour: an unstamped probe under a mid-session repin misled two
-  auditors and this orchestrator — probe results carry their boot sha
-  from now on. CORRECTIVE TWO (the
+  CORRECTIVE ONE — reported, refuted, retracted, and finally PROVEN
+  TRUE by the decisive instrument, all in one session (the ⟲ law at
+  fleet scale; this entry superseded its own first two forms in
+  place): the effects auditor measured the deferred row gate
+  swallowing the `!E` crown for effect-polymorphic tails; the
+  cross-audit refuted the claim off capture files and both auditors
+  retracted; the infer auditor then re-executed the GIT-EXTRACTED
+  historical boot twelve times — 12/12 deterministic silence — proving
+  the original finding real and the refutation the measurement error
+  (the MTIME FALLACY: the boot file's mtime records only its last
+  write, an intermediate fixed boot had already repinned, and an
+  unstamped post-fix capture compounded the misread). The delivery
+  mechanism, attributed at the site: a non-member's deferred gate
+  parked in a BRANCH instance's infer_ctx (branch_judge's facts tuple
+  carries no gates channel), and the branch bracket's death took the
+  parked gate with it — the pass-tail drain never held it. The
+  corrective moots the whole channel: the deferral is GROUP-GATED
+  (group_member — the same parse-truth fact the live charge reads), a
+  non-member's free tail enforces eagerly at decl exit, and the
+  final's gates all fire eagerly (group_names is trial-scoped). p13
+  refuses at both lines; pingpong holds Pure ×3; TRANSITION m3 == m4.
+  The process law, paid FOUR wrong resolutions across two auditors
+  and this orchestrator before one command ended it: every exchanged
+  probe result carries its boot sha, and any cross-time comparison
+  RE-RUNS the git-extracted binary — never trusts mtimes or commit
+  adjacency. CORRECTIVE TWO (the
   frontier's four red legs, traced through the pre-corrective boot to
   prove they predated corrective one): the warm persist's capacity
   guard reads the heap line SIGNED, so past 2GB it reads NEGATIVE and

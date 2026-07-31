@@ -629,7 +629,14 @@ fn driver_compile_entry(ref entry_module) with Memory + Alloc + Cast + Persist +
 // next run derives cold; the capacity itself dissolves with the
 // per-decl arena's image/scratch split (§5.O layer 3).
 fn driver_warm_persist(ref entry_module, ref asts, ref pairs) with Memory + Alloc + Cast + Persist + WASI + Filesystem + Diagnostic = if diag_errors() == 0 {
-  if heap_mark() < 960 * 1048576 {
+  // The capacity read is SIGNED, so a heap line past 2GB reads NEGATIVE
+  // and `negative < 960MB` waved it through — the guard inverting at
+  // exactly the loads it exists to refuse (measured 2026-07-31: four
+  // frontier fixtures whose judgment crossed 2GB walked the persist into
+  // alloc's 4GB wraparound trap under the gate's invocation). The
+  // non-negative conjunct is the signed word's own honest bound.
+  let line = heap_mark()
+  if line >= 0 && line < 960 * 1048576 {
     fs_mkdir_impl(".build")
     list_set(warm_asts, 0, asts)
     list_set(warm_manifest, 0, pairs)

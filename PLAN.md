@@ -1131,6 +1131,37 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-31 · ▶▶ THE FLEET'S FIRST TWO CORRECTIVES — the twelve-auditor
+  fleet convicts the day's own landing within hours, and both fixes land
+  marched (pin 3c0ee1a1). Morgan dispatched twelve auditors (six Fable,
+  six Opus, one per subsystem — reports in .build/research/audit-*).
+  CORRECTIVE ONE (the effects auditor's p13, measured with an in-file
+  control): the deferred row gate SWALLOWED the `!E` crown for
+  effect-polymorphic tails — a `!WASI` declaration over a
+  println-performing body with one row-polymorphic call parked forever,
+  never enforced (part of the "81 misfires" the deferral silenced were
+  REAL conservative refusals). The deferral is now GROUP-GATED
+  (group_member — the same parse-truth fact the live charge reads): a
+  cycle member's open tail parks for the drain; a non-member's free
+  tail is the polymorphism channel that never grounds, so its gate
+  enforces eagerly, free tail and all. p13 refuses at BOTH lines;
+  pingpong holds Pure ×3; TRANSITION m3 == m4. CORRECTIVE TWO (the
+  frontier's four red legs, traced through the pre-corrective boot to
+  prove they predated corrective one): the warm persist's capacity
+  guard reads the heap line SIGNED, so past 2GB it reads NEGATIVE and
+  `negative < 960MB` waved exactly the loads it exists to refuse into
+  alloc's 4GB wraparound trap (image_pack under driver_warm_persist —
+  the banked signed-2GB class firing at its own guard). The
+  non-negative conjunct restores the best-effort law: the cache never
+  kills the compile; the four legs (interval, directional-edge,
+  record-rest, repr-pin) healed. CLEAN m2 == m3 at 349,471 lines;
+  census 0; frontier 332/0; micros 121/0; proof-exactness 9/9; crown
+  5/5. Counted kills en route: the doubling-buffer theory (image_pack
+  already pre-sizes exactly), the load-flake theory (deterministic
+  reproduction), and my own first read that the reds were corrective
+  one's regression (the committed boot trapped identically). The
+  fleet's remaining findings are the synthesis's charge — the rolling
+  bank is in the session scratchpad.
 - 2026-07-31 · ▶▶▶▶ THE CHARGE LANDS ON THE LIVE CELL — schemes-are-edges
   rung two: recursion rows CLOSE, and a pure mutual pair answers Pure for
   the first time in the project's history (pin 56fa21b9). THE ROOT, fixed

@@ -2473,15 +2473,18 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
             let has_pure = has_pure_declared(declared_effs)
             check_instance_args(declared_effs, span)
             let declared_row = build_declared_row(declared_effs)
-            // THE GATE RUNS ON THE RESOLVED ROW. A body tail that is still
-            // an open CHAIN at decl exit — a cycle's non-last member, whose
-            // charged callee roots resolve only when the cycle's last
-            // member cuts — parks the gate at the pass tail instead of
-            // refusing a truth that has not arrived (81 early misfires the
-            // moment the live charge landed: every !-carrying gate
-            // downstream of a still-open co-member conservative-rejected a
-            // body whose names already fit its declaration).
-            if row_gate_unresolved(row_handle) {
+            // THE GATE RUNS ON THE RESOLVED ROW — and the deferral is
+            // GROUP-GATED, the same parse-truth fact the charge reads. A
+            // cycle member's open tail resolves when the cycle's last
+            // member cuts, so its gate parks for the pass tail (81 early
+            // misfires the moment the live charge landed). A NON-member's
+            // free tail is the effect-polymorphism channel and will never
+            // ground — parking that gate is never enforcing it (measured:
+            // a !WASI declaration over a println-performing body with one
+            // row-polymorphic call parked forever, the crown silently off
+            // for exactly the shape the conservative reject exists for).
+            // Non-members enforce eagerly, free tail and all.
+            if row_gate_unresolved(row_handle) && group_member(name) {
               defer_row_gate((name, declared_row, has_pure, row_handle, span))
             } else {
               enforce_row_gate(name, declared_row, has_pure, row_handle, span)

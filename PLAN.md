@@ -1131,6 +1131,44 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-30 · ▶▶▶▶ THE ROUNDS ARE DELETED — the convergence tower's
+  first big rung comes down by deletion, and the judgment becomes
+  trial → final-as-verification (pin 574bc20d; Morgan's cut: "big
+  rungs first"). THE FORM: the trial's callee-first layer walk over
+  parse-truth groups + the cycle discipline make its finals the
+  fixpoint ON ARRIVAL (the trial's own header had said so for a day);
+  the final already re-judges everything against those finals —
+  planned, bracketed, reporting — so the final IS the verification:
+  round_prints renders after the trial and after the final, and a
+  disagreement is a LOUD named divergence (movers_line + movers_diff,
+  the graduated instruments) for the trial to be fixed at, never an
+  iteration to hide in. DELETED WHOLE: converge_rounds, the 12-round
+  bound, infer_program_round, pre_register_masked, the masked layer
+  sweep (three fns), round_prints_masked, mask_all, and the cone
+  family (cone_mask / moved_names / cone_mask_walk / frees_hit) — the
+  rounds' own per-round re-parse was the substrate of the one
+  oscillator they existed to settle (the bound-hit mover was
+  rounds-resident, measured; no trial-side fix could clear a
+  rounds-side artifact, so the cure was always the machinery's
+  deletion, exactly as the schemes-are-edges peer sentenced). THE
+  PAYOFF, measured: the daily field read (`mentl src/main.mn:0`)
+  fell 59s → 22.5s — two passes where up to thirteen ran, every
+  daily verb inheriting it. THE VERIFICATION'S FIRST FIRING did its
+  job on arrival: 16 movers named on the wheel (the dsp float chain,
+  hann → dft → mvl → comodulogram — the same family the rounds-era
+  front climbed), emission SELF-STABLE across them (TRANSITION
+  m3 == m4 at 360,735 lines, the 113,320-line m2/m3 diff the
+  representation crossing one generation), census 0, frontier 332/0
+  through the new judge, micros green. The movers are the next dig's
+  exact worklist, printed on every compile's stderr — the trial's one
+  under-resolution, now impossible to forget. RODE ALONG: the
+  perimeter hook's wrapper-tolerant leads gain `time` (the novelty
+  audit's side-finding, closed at its own measurement's doorstep).
+  Attractor honesty: the trial-fed wheel is 4,286 lines larger than
+  the rounds-fed one — the resolution attractor moved, arbitrated by
+  the fixpoint, the census, and the whole board, and the field's
+  tightening count rose 2 → 12 (the sharper/different rows are
+  T_OverDeclared invitations, `mentl tighten`'s queue).
 - 2026-07-30 · ▶▶ THE VOICE CANNOT MISORDER — the comment-voice audit
   opens by convicting the voice's own truth, and the comment law gains
   its destiny statement (pin 61f8150f). Morgan's charge: comments
@@ -7894,9 +7932,18 @@ schemes-read-stale is never a better re-derivation cadence — it is
 schemes as live join-written cells the union-find propagates through.
 THE ARC REDIRECTS THERE, terminally: this peer's remaining content is
 absorbed into `Hβ.infer.schemes-are-edges` (the tower deletion), and
-no further tower machinery lands. Until that arc: the bound cuts at
-one mover, emission stable (measured across runs), and the
-position-sensitivity hazard stays narrowed to the SCC chains.
+no further tower machinery lands. FIRST RUNG EXECUTED (2026-07-30,
+pin 574bc20d — the §7 entry THE ROUNDS ARE DELETED): the rounds, the
+bound, the cone, and the mask are GONE; the judgment is trial →
+final-as-verification, the bound-hit class dissolved with its
+substrate, and the movers instrument graduated to the trial-vs-final
+divergence report. The peer's live residue is now exactly that
+report's first firing: the dsp float family (16 movers, hann →
+comodulogram) where the trial under-resolves relative to the final —
+emission self-stable across it, named on every compile's stderr, the
+next dig's worklist. The terminal cure stays schemes-as-edges (live
+join-written cells; the remaining tower is the trial/final pair
+itself).
 
 `Hβ.emit.arm-closure-captures-record` RESOLVED: LANDED (2026-07-24, pin
 bb4b870e — the ledger head carries the arc). The capture form won over

@@ -1131,6 +1131,26 @@ between the wheel and its ultimate form, held open on purpose.
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-07-31 · ▶ THE DOOR LEADS WITH THE DEVELOPER — Morgan's standing
+  correction executed at the description surfaces (no pin move —
+  README / POSITIONING / PLAN prose only; the wheel untouched). The
+  README's lead had latched onto the machine-code-age category
+  ("verification substrate") as the IDENTITY — the exact inflation §0's
+  own guardrail forbids ("keep the machine-age framing tethered to the
+  actual developer at the keyboard") — while the identity is the telos
+  §0 already resolved: the medium as the best teacher and pair of hands
+  a developer gets, learnable from the compiler's own answers, with
+  LLM-obsolescence its consequence (§1's closed loop). README re-led
+  (the bet; the LLM paragraph — nobody uses a model for the idea, and
+  behind this gate one is not worth invoking; "Why not point an LLM at
+  it?" after the school; "Where this sits" carrying the civilizational
+  argument as consequence-not-point, the four properties intact);
+  POSITIONING gains the category-is-the-wedge-not-the-point paragraph
+  under its category claim; §11's terminus gains leg 3's TEACHABILITY
+  face (SYNTAX evolved until picking up Mentl teaches programming
+  itself). The ruling, so it never regresses: every reader-facing page
+  leads with the person at the keyboard; proof is the mechanism and
+  the receipts, never the pitch.
 - 2026-07-30 · ▶▶▶▶ THE ROUNDS ARE DELETED — the convergence tower's
   first big rung comes down by deletion, and the judgment becomes
   trial → final-as-verification (pin 574bc20d; Morgan's cut: "big
@@ -8678,7 +8698,15 @@ outsider is a category loss.
 **THE CAMPAIGN'S TERMINUS is §1's CLOSED LOOP** (Morgan 2026-07-28):
 human + Mentl only, no LLM advantageous at any scope — every arc's
 landings measured against the three legs (next-move supremacy · the
-question beats the guess · the loop is felt). Part of leg 3 is the
+question beats the guess · the loop is felt). Leg 3 carries
+TEACHABILITY as a named face (Morgan 2026-07-31): the surface IS the
+course — SYNTAX evolved until picking up Mentl teaches a newcomer
+programming itself, so the LLM is unemployed at the learning scope
+too — and every description surface LEADS with that identity: the door
+leads with the developer; verification is the mechanism and the
+receipts, never the identity (§0's telos guardrail, enforced at the
+reader-facing pages 2026-07-31 after the README's lead was caught
+latching onto the category). Part of leg 3 is the
 FIVE-VERB EXEMPLARITY charge: the wheel's own source uses the verbs
 exemplary throughout (the self-exemplification pass banked the
 measurement — zero `><` as a fanout verb in the wheel today; the

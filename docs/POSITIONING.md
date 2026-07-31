@@ -10,6 +10,14 @@ a medium where any intelligence may propose code and nothing executes
 unproven — at the language level, where the industry's agent fences are
 all at runtime and its intent specs are all behavioral.**
 
+And one sentence more, so the category is never mistaken for the
+identity: the category is the wedge, not the point. Mentl is built for
+the person at the keyboard — a medium intuitive enough that picking it up
+teaches programming itself, with proof as what makes every answer
+trustworthy and every proposal worth taking; the machine-code-age
+argument below is that design meeting this decade (`PLAN.md §0`, arche
+and telos — the developer is what the medium is *for*).
+
 ## Wedge 1 — the spec that cannot be ignored
 
 The industry spent 2025–26 converging on "the spec is the artifact."

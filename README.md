@@ -1,10 +1,24 @@
 # Mentl
 
-Machines now write most new code, and nobody can read it all. Trust has to
-come from somewhere other than review. Mentl is a programming language whose
-compiler *proves* what your program does — and what it can never do — and
-teaches you, in words, as you write. Any intelligence may propose; nothing
-executes unproven; intent is never lost; capability is always bounded.
+Mentl is a programming language built on one bet: the medium itself — not
+a model, not a course, not a review queue — should be the best teacher and
+the best pair of hands a developer ever gets. You write what you mean; the
+compiler proves it, runs it, and answers *what is true here, and why* at
+any line of any file. Five verbs of flow draw the program's shape on the
+page. Types carry your real constraints — effects, bounds, ownership — and
+a refusal names the claim it could not discharge, at its own span. There
+is no separate curriculum: picking the language up is learning to program,
+because the compiler's answers are the course.
+
+That has a sharp consequence for how code gets written now. Nobody uses an
+LLM for the idea — that is always yours. People use one to guess plausible
+text in languages that cannot check intent, then spend the day reviewing
+the guesses. Here the medium proposes only code that survived the proof,
+shows the whole surviving space, and when your intent genuinely
+underdetermines the answer it asks the one question that decides instead
+of guessing. Anything may propose — a person, a script, a model — and
+nothing executes unproven. The design target is plain: a model behind this
+gate is not forbidden, it is not worth invoking.
 
 **Status: working, API unstable.** The verifier is sound and deliberately incomplete; what it cannot decide accrues as visible pending debt rather than a silent pass. No license is chosen yet.
 
@@ -51,7 +65,8 @@ $ echo $?
 ```
 
 No warning you can ignore, no runtime crash later: a false claim produces no
-executable at all. That is the whole thesis in one exit code.
+executable at all. That is the trust half of the thesis in one exit code;
+the teaching half is the school below.
 
 ## Try it
 
@@ -165,6 +180,18 @@ capabilities) · `05-ownership` (who holds a value) · `06-refinement` (types
 that carry bounds) · `07-gradient` (the medium proposes) · `08-reasons`
 (ask *why*) · `09-all` (everything at once).
 
+## Why not point an LLM at it?
+
+Because the loop above is the thing the LLM was hired to fake. An
+assistant samples plausible text and hands you the review; it cannot prune
+with a proof, so you become the error-correction layer. The medium
+searches the typed graph it already holds — every name in scope, every
+constraint you have stated, every reason upstream — pruned by the proof at
+each step, and surfaces only survivors. When two survived, you watched it
+refuse to guess: it asked for the one missing constraint instead. The idea
+was never the model's job; now the typing isn't either. Proposals here are
+not reviewed for plausibility — they arrive proven, or they do not arrive.
+
 ## The receipts
 
 For the skeptical: each claim with its command, and nothing that asks to be
@@ -230,7 +257,22 @@ infer: T_OverDeclared Warning: function 'good' declares !E but body only
   uses Pure — tighten the signature to unlock capabilities at 6:4-6:33
 ```
 
-It teaches even when it accepts.
+It teaches even when it accepts. The gate stays universal — that is the
+point of a gate — and the end state is on the tin: the medium's own
+proposals, searched from the live graph and pruned by proof, are the ones
+worth taking. A model behind this gate is not forbidden; it is unemployed.
+
+## Where this sits
+
+There is also a civilizational argument. Machines now write most new code;
+nobody can read it all; trust has to come from somewhere other than
+review, and proof is the only thing that scales past attention. The full
+statement — the category, the prior art, the honest boundary — is
+[docs/POSITIONING.md](docs/POSITIONING.md), and the four properties it
+rests on hold here by construction: any intelligence may propose, nothing
+executes unproven, intent is never lost, capability is always bounded. But
+that argument is the consequence, not the point. The point is the person
+at the keyboard, and the developer they become.
 
 ## The surface
 

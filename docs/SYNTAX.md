@@ -1528,6 +1528,7 @@ larval `mentl why` content queued for absorption, never the endpoint
 - **Not a markup language.** No `=== headers ===` decorations; the declaration's name IS the heading. Render handlers add presentation chrome.
 - **Not JSDoc / Sphinx tags.** No `@param`/`@returns`/`@throws`/`@since`/`@deprecated`: the effect row + refinement substrate already carries parameter/return/capability information. Lifecycle vocabulary ("previously", "no longer", "legacy", `@deprecated`) is forbidden by the positive-form discipline — a comment shows what IS, not what was.
 - **Not a gate.** A comment adds, never silences: a declaration with no comment still surfaces Mentl's substrate-derived tentacles (the silence predicate).
+- **Not a blessing.** Prose cannot canonize a compensation: a residue's comment names its RETIREMENT CONDITION (the peer, the count that drives to zero), never its permanence. "Deliberate" written by the builder over a standing cost is the costume, not a fact — "the final IS the verification" (superseded 2026-07-31) is the recorded instance.
 - **Not the only voice.** Mentl's substrate voice (per-tentacle, derived from the graph) is the second voice. Two speakers per declaration; no editorial third.
 
 **Dissolved:** the `//`-vs-`///` split. `//` was "the medium deliberately does NOT read this" — a category of prose the self-explaining, unsilenceable medium blinded itself to, contradicting `PLAN.md §0`. One form, all graph content, register projected.
@@ -2052,6 +2053,27 @@ un-normalized source the formatter has not yet touched).
 - NOT an aspirational wishlist. Every form here is required to land in the parser — closing the gap between this spec and the parser is a standing obligation, not a someday (the parser is the lathe turned to SYNTAX.md; where they disagree, the parser is wrong).
 
 ---
+
+## Verbs this document declares that the CLI has not yet grown
+
+SYNTAX is the authority and the CLI is a lathe turned to it, so this file may
+name a projection before `mentl help` serves it. That licence is real and it is
+also exactly how a promise rots unnoticed, so the lag is a LIST, in one home,
+checked mechanically: `tools/doc-truth.sh` reads the names below and fails on
+any *other* verb the docs name. The list shrinks as verbs land; it never grows
+silently.
+
+- **`mentl where`** — the derived-badge projection: a value's chosen
+  representation width, an op's resume cardinality, a `><`'s resolved schedule
+  (`>< [Thread ×4]`). Output, never input. Named four times above; it is also
+  what returns a fanout's intent to the site after the schedule correctly
+  became a `~> Schedule` handler fact. `PLAN.md §11` Phase 3.2.
+- **`mentl why`** — the Reason-chain walk. Served today as a facet of `mentl
+  query <path> "why NAME"`; the bare verb is the surface form.
+- **`mentl diagnostics`** — the live catalog projected from the `DiagKind`
+  constructors, so the tables in this file stop being a hand-kept second home.
+- **`mentl verify`** — the wheel's own Verify as a verb, absorbing
+  `tools/verify.sh` (`CLAUDE.md ⟳`: scaffolds dissolve into verbs).
 
 ## Authority
 

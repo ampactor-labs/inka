@@ -11,7 +11,13 @@
 > for substance and `SYNTAX.md` for surface, never re-asserting them. All three
 > are **self-contained** — the 56k lines under `docs/`, the `~/.claude/plans/*`
 > variations, and the 85 memory protocols are git archaeology, **out of the
-> read-path**. "Read the three docs" is sufficient, forever. **Context cost is
+> read-path**. Two files are REFERENCE you may consult and must never read
+> whole: **`LEDGER.md`** (the mechanics of every landing — what happened at pin
+> X and why) and **`RESIDUE.md`** (the full named-peer catalog). They left
+> `PLAN.md` on 2026-08-05, when the ledger alone was 78% of the substance
+> document — a hand-written prose copy of 448 commits, the Carried-Truth Law
+> violated at the doc layer. Nothing was deleted; PLAN went 10,809 → 1,676
+> lines and now carries only what is TRUE plus the program §11 runs. "Read the three docs" is sufficient, forever. **Context cost is
 > NOT a constraint (Morgan 2026-06-18): completeness wins** — hold the ENTIRETY,
 > not a recollection. Hold all three to the source standard (Anchor 6): every
 > touch consolidates toward the tightest *complete* form.
@@ -34,8 +40,12 @@
 > the docs the way Morgan made Claude read them on 2026-06-18: critically, from
 > first principles, cross-checked against "what does the ultimate medium do here."
 > Never absorb a doc as gospel; never distill from memory and call it
-> understanding — read the source, then interrogate it. This is the law that means
-> the deep re-grounding session never has to happen again.
+> understanding — read the source, then interrogate it. And interrogate the
+> AUTHOR: these docs are the builder's own prose, so a residue can arrive
+> dressed as design — "the final IS the verification" (2026-07-31) blessed a
+> standing second judgment as an arrival; when prose calls a permanent cost
+> "deliberate," ask who wrote the sentence and what work it spared them. This
+> is the law that means the deep re-grounding session never has to happen again.
 >
 > **And these docs are the SPEC, not the guarantee.** Discipline written down
 > cannot enforce itself — this session is the proof: Claude drifted with the most
@@ -251,15 +261,20 @@
 > transplanting anything. (3) Worktrees are pruned at absorption — a
 > leftover worktree is a stale base waiting to be inherited (four strays
 > from prior sessions were found and pruned the day the contract was
-> written). **EVERY DISPATCHED AGENT RUNS `fable`,
-> PASSED EXPLICITLY (Morgan 2026-07-24, Fable-only — supersedes the 2026-07-02
-> sonnet/opus tiering).** Unlimited Fable capacity dissolved the scarcity that
-> priced the deepest model out of breadth, so recon sweeps, builders, judges,
-> and adversarial verifiers all run Fable now. Still PASS the model on every
-> dispatch — an omitted param falls back to an agent definition's own model
-> frontmatter and silently downgrades the run (the same silent-default class
-> the 2026-07-16 no-model-params workflow paid for). The eight interrogations +
-> Carried-Truth still govern every agent.
+> written). (4) A brief that can run a wheel-scale process carries the
+> RESOURCE PAIR — the machine-wide heavy-run lock (one wheel-scale
+> process at a time) and a MemAvailable floor checked before each run
+> (measured 2026-07-31: a 2.4GB gate leg beside foreign builds on a
+> full zram swap; the kernel killed the session's own leg and systemd
+> took the whole tab). **EVERY DISPATCHED AGENT RUNS OPUS 5 OR FABLE 5 —
+> WHICHEVER IS MOST EFFECTIVE FOR THAT JOB — PASSED EXPLICITLY (Morgan
+> 2026-08-05, superseding the 2026-07-24 Fable-only rule and the 2026-07-02
+> sonnet/opus tiering).** Both are unlimited, so the pick is FIT, never
+> scarcity: choose by what the job actually needs and name the reason in the
+> brief. Still PASS the model on every dispatch — an omitted param falls back
+> to an agent definition's own model frontmatter and silently downgrades the
+> run (the same silent-default class the 2026-07-16 no-model-params workflow
+> paid for). The eight interrogations + Carried-Truth still govern every agent.
 >
 > Skills are tools, not ceremony — apply the discipline silently; never invoke a
 > skill as a reflexive preamble. (`mentl-implementer`/`mentl-planner` are deleted;
@@ -514,6 +529,8 @@ rewrite in residue form inline.)
 | "Look up X by name" (ledger / index / map) | If a `~>` edge or the env already connects it → re-derivation (Anchor 1); follow the edge, read the live node |
 | Presenting "Option A (ultimate) vs Option B (safer/lower-risk)" — to me OR to the user | The fork IS the drift; the thesis already answers it. Ultimate form wins; DECIDE it, don't outsource a thesis-answered call; never hedge the wheel against the seed |
 | "It's a big change, so later" / "today was good" | Forbidden. Keep going; report result + next move |
+| "I'll improve/tune/ratchet the condemned meanwhile" — hygiene, caching, a better cadence on machinery a named peer sentences to deletion | Patching the CONDEMNED (Anchor 2's roadmap face, 2026-07-31). The deletion IS the work; only the oracles that arbitrate the replacement — the march, the ratchets, the divergence count — may touch it |
+| A standing per-run re-derivation wearing "verification"'s name (a second pass that narrates divergence and proceeds with its own answer) | An OVERRIDE, not a verification — a verifier refuses or the divergence is impossible. Verification happens ONCE: structurally per compile, whole-program at the march per landing (the trial/final lesson, 2026-07-31) |
 | "AI"/"agent"/"completion" in user-facing text | Substrate vocabulary: "medium proposes" / "cursor argmax" |
 
 ---
@@ -534,7 +551,11 @@ cached X instead of reading live. **Carry the handle, read live. Fix = LESS code
 
 **2. Don't patch. Restructure or stop.** If a fix fits in a patch, the
 architecture is wrong. A silent failure / surrender fallback is *deleted*, not
-renamed or wrapped. No known bugs sit. No bolts onto non-ultimate forms.
+renamed or wrapped. No known bugs sit. No bolts onto non-ultimate forms. And
+no bolts onto CONDEMNED forms: a structure a named peer already sentences to
+deletion takes no improvements, no hygiene, no better cadence — only the
+oracles that ARBITRATE its replacement touch it (Morgan 2026-07-31, the
+trial/final lesson: stop patching what will fundamentally change).
 
 **3. Mentl solves Mentl.** Effects, handlers, gradient, refinement, ADTs, pipes
 dissolve every problem. Reaching for a framework = a missing primitive. Every

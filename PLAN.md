@@ -1191,6 +1191,23 @@ not misled:
 Everything else on the board above is measured green; this list is the seam
 between the wheel and its ultimate form, held open on purpose.
 
+**THE BOARD IS RED ON THE WORKING TREE (2026-08-05) AND THE STANDING CLAIM
+ABOVE DOES NOT HOLD THERE.** The last commit (`6dcb9a9d`, docs and tools) is
+green; the uncommitted 2026-08-01 `.mn` arc is not. Era bracket over fixed
+crucibles: boot `69d6c0b0` (HEAD) answers crown 5/5 and frontier 332/0; boot
+`4a822b299c` (the tree's pin) answers **crown 4/1 and frontier 322/8**. Census
+is 0 and the fixpoint holds at both. The failing crucible is the higher-order
+`!E` leak — §11 Phase 1, with the proof in `RESIDUE.md`. The arc is
+deliberately uncommitted: the pre-commit gate refuses it on a real drift-mode-10
+finding in the same organ, and overriding a gate that is telling the truth is
+the disease this whole board exists to prevent.
+
+**How it rode undetected:** eleven consecutive ledger entries report no crown
+verdict at all. Nothing written was false — the gate had simply stopped being
+mentioned. That is closed mechanically now (§11 Phase 0.1: the march captures
+every gate it owns, `NOT RUN` is a visible blank, and a red board stamps
+`‹BOARD RED›` which doc-truth refuses).
+
 ### The landing record → `LEDGER.md`
 
 Every landing since first light, newest first, with its mechanics and its
@@ -1512,25 +1529,36 @@ hypothesis. This phase exists because both of the last two tripwires fired.
 
 ### Phase 1 · The row crosses the function boundary
 
-One root, three faces, and a live soundness hole. `fn run(f) = f()` publishes
-`run : Pure` while `f` performs `E`: the parameter's row variable sits in the
-parameter type and is never joined into the enclosing row. Measured 2026-08-05
-by era bracket — HEAD refuses the crucible, the live pin emits it *and* offers
-to delete the `!E` that would have caught it.
+**IN FLIGHT — root partly proven, first fix REFUTED, next probe named.** The
+live soundness hole: `fn run(f) = f()` publishes `run : Pure` while `f`
+performs `E`, so `fn bad() with !E = run(() => op())` compiles and emits, and
+the medium additionally offers to delete the `!E` that would have caught it.
+`tests/crown/leak-higher-order` is the gate; it is RED on the working tree's
+boot and GREEN on HEAD's.
 
-- **1.1 · The parameter's effect variable propagates into the enclosing row.**
-  The mechanism is published and sound-and-complete: *Deciding not to Decide —
-  Sound and Complete Effect Inference in the Presence of Higher-Rank
-  Polymorphism* (arXiv 2510.20532, October 2025). A fresh effect variable per
-  function-typed parameter; constraints accumulated at every call in the body;
-  unified at the call site; **propagated upward into the enclosing row.** Read
-  the paper directly before it becomes law — a fetched summary is a claim.
-- **1.2 · The same fix closes the class.**
+The full proof record — era bracket, the four discriminating variants, the
+two-stage wat probe that shows the edge dying at the completion prune's
+`root < ceiling` compare, and the refuted first fix — is
+`Hβ.infer.hof-param-row-never-reaches-enclosing` in `RESIDUE.md`. Read it
+before touching this; it also carries a citation correction that cost a
+session's assumption.
+
+- **1.1 · Run the named next probe first.** It decides in one run whether the
+  loss is the prune's classification or something downstream, and the answer
+  changes what gets built. Do not build before it.
+- **1.2 · The same root is three faces.**
   `Hβ.infer.handler-residual-outside-the-scheme` (which makes `each` and `fold`
   falsely pass `!WASI` — the vocabulary every user touches) and
-  `Hβ.effects.config-fn-row-in-residual` are the same root at two altitudes.
-- **1.3 · Terminal gate:** crown 5/5, frontier 332/0, re-pin with the board
-  captured by 0.1.
+  `Hβ.effects.config-fn-row-in-residual` are the same hole at two more
+  altitudes. A fix that closes only the crucible has not closed the class.
+- **1.3 · The drift-mode-10 wildcard rides this arc**, not a separate one: the
+  quantification floor's `_ => Forall(free_in_ty(body_ty), body_ty)` is a
+  fabricating catch-all over a load-bearing ADT — `TCont` carries an `EffRow`,
+  so a continuation-typed body takes it and quantifies exactly the row frees
+  the `TFun` arm protects. It BLOCKS the arc's commit today (the pre-commit
+  gate refuses it), and it is the same organ.
+- **1.4 · Terminal gate:** crown 5/5, frontier 332/0, census 0, then the arc
+  commits and re-pins with the board captured by 0.1.
 
 ### Phase 2 · Every judgment reads the graph, never a proxy
 

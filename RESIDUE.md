@@ -26,6 +26,67 @@
 > proofs, and tightenings from the live graph. A peer catalog kept by hand is
 > the same prose shadow the ledger is, one namespace over.
 
+---
+
+`Hβ.infer.hof-param-row-never-reaches-enclosing` — THE CROWN'S HIGHER-ORDER
+LEAK, root partly proven, first fix REFUTED (2026-08-05). `fn run(f) = f()`
+publishes `run : Pure` while `f` performs `E`, so `fn bad() with !E =
+run(() => op())` compiles, emits, and is additionally told
+`T_OverDeclared: body only uses Pure` — the medium teaching the developer to
+delete the declaration that would have caught the leak. `tests/crown/leak-
+higher-order` is the standing gate.
+
+WHAT IS PROVEN, each by its own measurement:
+- **The regression is in the uncommitted 2026-08-01 arc.** Era bracket over
+  fixed crucibles: git-extracted boot `69d6c0b0` answers crown 5/5 and
+  frontier 332/0; boot `4a822b299c` answers 4/1 and 322/8.
+- **It is not about annotation or param mint position.** The crucial
+  experiment (`c04_annot`: `fn run(f: () -> Int) = f()`) leaks IDENTICALLY to
+  the unannotated form, and an annotated fn-type's row var is minted at
+  pre-registration. Three further variants: a NAMED fn argument leaks the same
+  (not a lambda bug); a lambda called in place is still caught (row inference
+  is fine); with no `!E` at all `E_EffectUnhandled` also stops firing (the row
+  is genuinely absent from `run`, so this is not the negation algebra).
+- **The edge dies at the completion prune's ceiling compare.** A two-stage
+  binary-patch wat probe on the emitted m2 (`edges_without_self`, then
+  `edges_keep_completion`'s free arm) shows `run`'s parameter row edge reaching
+  the prune and DROPPING at `root < ceiling` — root 29 vs ceiling 26
+  unannotated, 69 vs 66 annotated. The first probe cleared `row_without_self`:
+  the self-cut is not involved (its compares were root≠self at every visit).
+- **`run`'s published scheme carries the row var in the PARAMETER and Pure in
+  its own row:** `run : (f: () -> t with r33155@e2) -> t`, `audit ▸ run : Pure`.
+
+WHAT IS REFUTED — do not re-attempt as written: adding a THIRD category to
+`row_keep_completion` (keep a free edge whose root is reachable from the decl's
+signature, computed as deep chased frees of params + return) was built, marched
+CENSUS 0, and measured **completely inert** — `run` still published Pure,
+byte-for-byte identical diagnostics. Reverted rather than left as dead
+machinery. So either the dropped edge is not signature-reachable at exit time
+(the likely half — `param_ty` may read the TParam's declared slot rather than
+the cell the body's own call bound), or the row is re-dropped downstream of the
+prune. THE NEXT PROBE decides it in one run: print `sig_keep_roots`' computed
+set beside the dropped root at the same wat anchor — if the set is empty or
+lacks the root, it is the collection; if it contains the root and the row is
+still Pure, the loss is downstream and the prune is exonerated.
+
+CITATION HYGIENE — corrected in place, and the correction matters: this peer
+was opened on a small-model SUMMARY of arXiv 2510.20532 whose "§5" claimed the
+mechanism is *propagate the parameter's effect variable upward into the
+enclosing row*. **The paper says something materially different.** Balik,
+Jędras and Polesiuk (*Deciding not to Decide: Sound and Complete Effect
+Inference in the Presence of Higher-Rank Polymorphism*, 23 Oct 2025, read
+directly, pages 1–9) DELAY the decision: effect *guards* postpone whether a
+locally-bound variable appears in a given effect, and constraints leaving a
+quantifier's scope are transformed into formulae of propositional logic to be
+solved later — hence the title. Their setting is rank-N polymorphism with
+*subeffecting constraints* carried in algebraic type schemes (`∀Δ.[Ω] τ`),
+which Mentl's schemes do not have; their effects are set-like with a join
+monoid, which Mentl's row triple does match. So the paper is a real and close
+neighbour, not a drop-in: adopting it means adopting constraint-carrying
+schemes, which is a design decision for `Hβ.infer.schemes-are-edges` to weigh,
+not a patch. The carry-don't-drop INSTINCT it supports is sound; any specific
+rule attributed to it must be read out of the paper first.
+
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
 `Hβ.effects.directional-fn-row-edge` — RESOLVED at its measured scope

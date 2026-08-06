@@ -430,6 +430,43 @@ census_errors_max: 0
 # the projection they are larval forms of.
 comment_refs_max: 0
 
+# 2026-07-31: the MOVERS ratchet — the condemned second pass's vital sign
+# (PLAN, THE RESOLVED DESIGN D5/D8): the count of schemes the final judges
+# differently than the trial published. Overrides, not verification — so this
+# number is DIRECTION, ratcheted monotone DOWN: rung 3 ends at 0 with the
+# final pass DELETED, at which point this key dies with the channel it
+# watches. A rise is the tower regrowing (Anchor 2's condemned clause) and
+# blocks the commit. Seeded 1446 at the guard half-step's working tree;
+# ratcheted to the restored pin's measured 930 when the half-step
+# reverted (2026-07-31, the HALF-STEP REVERTS ledger entry). Raised to
+# A1's measured 956 (2026-08-01, fixed-input-probe-justified: 48 movers
+# byte-identical under both judges). Re-baselined to 1197 at pin
+# 1efe083a (THE PROOF IS THE INTERFACE): the publish law changes
+# published rows wholesale, so the trial/final comparison surface
+# moved with the semantics — the fixed-input probe answers 49 vs 48
+# (same families, one shifted with the publish), so the wheel-scale
+# rise is the re-baseline, not regression. RATCHETED DOWN 1197 → 415
+# at pin 13631390 (the one-way-edge arc: verbatim-edge charges, the
+# union, signature quantification, the completion prune — read from
+# the m3 leg's own movers total, the metric's largest single fall).
+# The next legal move stays DOWN (A4 + rung 3 drive toward 0, where
+# this key dies). Fell 415 → 414 at the index-sugar row charge (the
+# judgment charging what the lowering performs moved one mover), then
+# 414 → 406 at the constructor-row charge (pin 4a822b299c — eight
+# trial/final divergences were constructor-attribution asymmetries;
+# the surviving 406 are the fill/float trial-only channel).
+# Re-baselined 406 → 424 at the signature keep (the crown's higher-order
+# fix): kept sig-reachable row edges change what the HOF family PUBLISHES
+# (the flip census names map_list / filter_list / flat_fill_* / the
+# float-digit fns — the exact fns whose param row vars now ride their
+# rows), so the trial/final comparison surface moved with the semantics —
+# the 1197 publish-law re-baseline's own precedent, the same channel one
+# fix over. Not machinery regrowth: the final's verdict is what
+# publishes, and the +18 are pre-existing freeze-root divergences (the
+# schemes-are-values root, PLAN §7) newly VISIBLE on rows the prune used
+# to close. The next legal move stays DOWN.
+movers_max: 424
+
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
 # header; no registry here (a `micro:NAME=EXIT` list once documented below

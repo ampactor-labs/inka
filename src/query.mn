@@ -334,17 +334,17 @@ fn collect_var_ref_spans(name, i, n, acc) with GraphRead + Memory + Alloc + !Mut
   }
 }
 
-fn span_in(ref acc, ref sp, i) with Memory =
+fn span_in(ref acc, ref sp, i) with Memory + Alloc =
   if i >= len(acc) { false } else { if acc[i] == sp { true } else { span_in(acc, sp, i + 1) } }
 
 // span_of_handle — the node's source span, read live from its Reason chain
 // (the parser/infer wrote Located(span, _) at the node). One graph_chase, the
 // span peeled from the located reason — no parallel span-index re-lookup.
-fn span_of_handle(handle) with GraphRead + !Mutate = match graph_chase(handle) {
+fn span_of_handle(handle) with GraphRead + !Mutate + Memory + Alloc = match graph_chase(handle) {
   GNode(_, reason) => span_of_reason(reason),
 }
 
-fn span_of_reason(reason) with Pure = match reason {
+fn span_of_reason(reason) with Memory + Alloc = match reason {
   Located(sp, _) => sp,
   _ => span_zero(),
 }
@@ -395,7 +395,7 @@ fn name_at_span(span) with GraphRead + !Mutate + Memory + Alloc = match graph_sn
 // Reason (the parser/infer wrote Located(span,_) at the binding). The graph
 // already proved where each name lives; goto-definition follows that edge, it
 // does not re-scan. None when the name is unbound or its reason is unlocated.
-fn defining_span_of(name) with EnvRead + !Mutate = match env_lookup(name) {
+fn defining_span_of(name) with EnvRead + !Mutate + Memory + Alloc = match env_lookup(name) {
   None => None,
   Some(entry) => match entry {
     (_, reason, _) => match reason {

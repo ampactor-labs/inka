@@ -340,7 +340,7 @@ fn narrow_row_proven(handle, base_ty, narrow, source_span) = match base_ty {
   _ => false,
 }
 
-fn unwrap_source_span(opt) with Pure = match opt {
+fn unwrap_source_span(opt) with Memory + Alloc = match opt {
   Some(s) => s,
   None => span_zero(),
 }
@@ -368,7 +368,7 @@ fn catalog_handled_effects(handler_name) with Intern + Memory + EnvRead + !Mutat
 // H5: capability unlocks for an annotation. !Alloc unlocks
 // CRealTime; !IO + Pure unlock CCompileTimeEval; etc. The list is
 // returned by render_audit's severance section.
-fn capabilities_for_annotation(ann) with Pure = match ann {
+fn capabilities_for_annotation(ann) with Memory + Alloc = match ann {
   APure(_) => [CMemoize, CCompileTimeEval, CParallelize],
   ANotAlloc(_) => [CRealTime],
   ANotIO(_) => [CCompileTimeEval, CSandbox],
@@ -691,7 +691,7 @@ fn teach_why_string(handle) with GraphRead + Memory + Alloc + Intern =
 // Drift refused: 1 (no dispatch table); 6 (five uniform branches; no
 // primitive special case); 7 (output 5-tuple, not parallel-arrays);
 // 9 (all five bodied here; no "later").
-fn teach_session(handle) with Teach + GraphRead = match graph_chase(handle) {
+fn teach_session(handle) with Teach + GraphRead + Memory + Alloc = match graph_chase(handle) {
   GNode(kind, _) => {
     let span = caret_span_from_handle(handle)
     let pos = (handle, kind, span)
@@ -712,14 +712,14 @@ fn teach_session(handle) with Teach + GraphRead = match graph_chase(handle) {
 
 type TeachSession = TeachSession(Option(AnnotationSuggestion), Reason)
 
-fn caret_span_from_handle(handle) with GraphRead = match graph_chase(handle) {
+fn caret_span_from_handle(handle) with GraphRead + Memory + Alloc = match graph_chase(handle) {
   GNode(_, reason) => match reason {
     Located(sp, _) => sp,
     _ => span_zero(),
   },
 }
 
-fn annotation_inferred_for(ty) with Pure = match ty {
+fn annotation_inferred_for(ty) with Memory + Alloc = match ty {
   TFun(_, _, _) => Some(APure(None)),
   _ => None,
 }
@@ -744,5 +744,5 @@ fn annotation_inferred_for(ty) with Pure = match ty {
 // `<~` requires iterative context — IC handler installed upstream.
 // accumulate(initial_handle) starts at the cursor's argmax and
 // IC-narrows toward proven-complete teach surface.
-fn teach_ic_loop(initial_handle) with Teach + IC + GraphRead =
+fn teach_ic_loop(initial_handle) with Teach + IC + GraphRead + Memory + Alloc =
   initial_handle |> teach_session ~> mentl_default <~ accumulate(initial_handle)

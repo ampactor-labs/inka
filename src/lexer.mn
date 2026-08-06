@@ -37,13 +37,13 @@ fn is_hex_digit(b) with Pure = is_digit(b) || b >= 65 && b <= 70 || b >= 97 && b
 fn is_bin_digit(b) with Pure = b == 48 || b == 49
 
 // 0 or 1
-fn is_oct_digit(b) with Pure = b >= 48 && b <= 55
+fn is_oct_digit(b) with Memory + Alloc = b >= 48 && b <= 55
 
 // 0-7
 //
 // Keyword classification — returns `Some(TokenKind)` if `word` is a
 // reserved keyword; `None` otherwise (caller emits `TIdent(word)`).
-fn keyword_kind(ref word) with Pure = if word == "fn" {
+fn keyword_kind(ref word) with Memory + Alloc = if word == "fn" {
   Some(TFn)
 } else if word == "let" {
   Some(TLet)
@@ -90,7 +90,7 @@ else if word == "Pure" {
 // no string comparison.
 //
 // ==
-fn two_char_kind(a, b) with Pure = if a == 61 && b == 61 {
+fn two_char_kind(a, b) with Memory + Alloc = if a == 61 && b == 61 {
   Some(TEqEq)
 }
 // !=
@@ -154,7 +154,7 @@ else if a == 63 && b == 63 {
 
 // Returns `Some(TokenKind)` if `b` is a recognized punctuation byte,
 // `None` otherwise (caller skips the character).
-fn single_char_kind(b) with Pure = if b == 40 {
+fn single_char_kind(b) with Memory + Alloc = if b == 40 {
   Some(TLParen)
 } else if b == 41 {
   Some(TRParen)

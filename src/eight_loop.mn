@@ -253,13 +253,13 @@ handler interrogate_default {
 //   <~  feedback closing on gradient density stability
 //
 // The Hμ.eight-interrogation-loop's ULTIMATE FORM realized by topology.
-fn empty_density() with Pure = []
+fn empty_density() with Memory + Alloc = []
 
 fn enumerate_handles(i, n) with Alloc + Memory =
   if i >= n { [] } else { [i] ++ enumerate_handles(i + 1, n) }
 
 // ─── Per-interrogation helpers ──────────────────────────────────────
-fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory = {
+fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory + Alloc = {
   // The handler stack IS graph content: an install draws a `~>` edge
   // (PipeExpr(PTee, body, handler)) and the body subtree it governs is
   // exactly the capability stack (PLAN §2 — "the handler chain IS the
@@ -301,13 +301,13 @@ fn scan_for_tee_governing(target, i, n) with GraphRead + !Mutate = if i >= n {
   }
 }
 
-fn is_pure_row(row) with Pure = match row {
+fn is_pure_row(row) with Memory + Alloc = match row {
   EfRow([], [], EtClosed) => true,
   EfRow([], _, EtClosed) => true,
   _ => false,
 }
 
-fn handler_invite_for(handle, reason) with Pure = AnnotationSuggestion(
+fn handler_invite_for(handle, reason) with Memory + Alloc = AnnotationSuggestion(
   SuggestEffectRow,
   "~> <handler>   // an effect is unhandled at this position",
   [],
@@ -326,7 +326,7 @@ fn handler_invite_for(handle, reason) with Pure = AnnotationSuggestion(
 // body IS a pipe-shaped flow but unclassified would invite — today every
 // node has a definite weave position, so the four PipeContext cases all
 // clear (the topology is READ, never absent).
-fn verb_verdict_for(handle, kind, reason) with GraphRead + !Mutate = match pipe_context_of_handle(handle) {
+fn verb_verdict_for(handle, kind, reason) with GraphRead + !Mutate + Memory + Alloc = match pipe_context_of_handle(handle) {
   NoPipe => VerdictClears(reason),
   InsidePipe(_) => VerdictClears(reason),
   StartingPipe => VerdictClears(reason),
@@ -335,7 +335,7 @@ fn verb_verdict_for(handle, kind, reason) with GraphRead + !Mutate = match pipe_
 
 // Row clears when the binding's row is bound (resolved at
 // inference). Free row variables surface as invites.
-fn row_verdict_for(handle, kind, reason) with Memory = match kind {
+fn row_verdict_for(handle, kind, reason) with Memory + Alloc = match kind {
   NBound(ty) => if row_is_ground(row_of_kind(kind)) {
     VerdictClears(reason)
   } else {
@@ -348,7 +348,7 @@ fn row_verdict_for(handle, kind, reason) with Memory = match kind {
 // Ownership clears when authored OR resolved is non-Unmarked.
 // Otherwise the gradient could suggest one (see Hμ.gradient-delta
 // delta_ownership).
-fn ownership_verdict_for(handle, kind, reason) with Memory = match ownership_of_kind(kind) {
+fn ownership_verdict_for(handle, kind, reason) with Memory + Alloc = match ownership_of_kind(kind) {
   Unmarked => VerdictInvites(ownership_invite_for(handle, reason)),
   _ => VerdictClears(reason),
 }
@@ -366,21 +366,21 @@ fn refinement_verdict_for(handle, reason) with Verify + GraphRead + Memory + All
 }
 
 // ─── Invite constructors — each builds an AnnotationSuggestion ─────
-fn graph_invite_for(handle, reason) with Pure = AnnotationSuggestion(
+fn graph_invite_for(handle, reason) with Memory + Alloc = AnnotationSuggestion(
   SuggestEffectRow,
   "?? — graph hole; gradient proposes a candidate",
   [],
   Located(span_zero(), Inferred("eight-fold: Graph interrogation invites — NFree at this handle"))
 )
 
-fn row_invite_for(handle, reason) with Pure = AnnotationSuggestion(
+fn row_invite_for(handle, reason) with Memory + Alloc = AnnotationSuggestion(
   SuggestEffectRow,
   "with <inferred-row>",
   ["CMemoize", "CCompileTimeEval"],
   Located(span_zero(), Inferred("eight-fold: Row interrogation invites — row-free at this binding"))
 )
 
-fn ownership_invite_for(handle, reason) with Pure = AnnotationSuggestion(
+fn ownership_invite_for(handle, reason) with Memory + Alloc = AnnotationSuggestion(
   SuggestOwnership,
   "own <param> | ref <param>",
   ["CDeterministicDrop", "CZeroCopy"],
@@ -390,14 +390,14 @@ fn ownership_invite_for(handle, reason) with Pure = AnnotationSuggestion(
   )
 )
 
-fn refinement_invite_for(handle, reason, predicate) with Pure = AnnotationSuggestion(
+fn refinement_invite_for(handle, reason, predicate) with Memory + Alloc = AnnotationSuggestion(
   SuggestRefinement,
   "where <predicate>",
   ["CEliminateBoundsCheck"],
   Located(span_zero(), Inferred("eight-fold: Refinement interrogation invites — Verify-pending"))
 )
 
-fn reason_invite_for(handle, reason) with Pure = AnnotationSuggestion(
+fn reason_invite_for(handle, reason) with Memory + Alloc = AnnotationSuggestion(
   SuggestEffectRow,
   "<documented-edge>",
   [],

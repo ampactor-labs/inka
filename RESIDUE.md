@@ -28,46 +28,40 @@
 
 ---
 
-`Hβ.infer.hof-param-row-never-reaches-enclosing` — THE CROWN'S HIGHER-ORDER
-LEAK, root partly proven, first fix REFUTED (2026-08-05). `fn run(f) = f()`
-publishes `run : Pure` while `f` performs `E`, so `fn bad() with !E =
-run(() => op())` compiles, emits, and is additionally told
-`T_OverDeclared: body only uses Pure` — the medium teaching the developer to
-delete the declaration that would have caught the leak. `tests/crown/leak-
-higher-order` is the standing gate.
+`Hβ.infer.hof-param-row-never-reaches-enclosing` — RESOLVED (2026-08-06): the
+crown's higher-order leak, closed by the completion prune's SIGNATURE KEEP-SET
+(the third keep category, `effects.mn row_keep_completion`). The prune's "no
+constraint can arrive" reading is false for a free judgment-era row root the
+decl's signature reaches — it escapes through instantiate at every call site,
+and generalize's signature collection quantifies exactly it — so the
+two-category form dropped `run(f) = f()`'s param row edge (root 29 vs ceiling
+26 by binary-patch wat probe) and published `run : Pure` while the row var
+rode the scheme disconnected. The fix: `signature_free_roots(param_handles ++
+[ret_handle])` at each fn-shaped `inf_exit_fn` site (named decl + lambda;
+scope exits pass `[]`), computed THROUGH the live cells at exit —
+`free_in_ty(chase_deep(TVar(cell)))`, deep-chased — and threaded to the
+prune, whose free arm keeps any root the set contains.
 
-WHAT IS PROVEN, each by its own measurement:
-- **The regression is in the uncommitted 2026-08-01 arc.** Era bracket over
-  fixed crucibles: git-extracted boot `69d6c0b0` answers crown 5/5 and
-  frontier 332/0; boot `4a822b299c` answers 4/1 and 322/8.
-- **It is not about annotation or param mint position.** The crucial
-  experiment (`c04_annot`: `fn run(f: () -> Int) = f()`) leaks IDENTICALLY to
-  the unannotated form, and an annotated fn-type's row var is minted at
-  pre-registration. Three further variants: a NAMED fn argument leaks the same
-  (not a lambda bug); a lambda called in place is still caught (row inference
-  is fine); with no `!E` at all `E_EffectUnhandled` also stops firing (the row
-  is genuinely absent from `run`, so this is not the negation algebra).
-- **The edge dies at the completion prune's ceiling compare.** A two-stage
-  binary-patch wat probe on the emitted m2 (`edges_without_self`, then
-  `edges_keep_completion`'s free arm) shows `run`'s parameter row edge reaching
-  the prune and DROPPING at `root < ceiling` — root 29 vs ceiling 26
-  unannotated, 69 vs 66 annotated. The first probe cleared `row_without_self`:
-  the self-cut is not involved (its compares were root≠self at every visit).
-- **`run`'s published scheme carries the row var in the PARAMETER and Pure in
-  its own row:** `run : (f: () -> t with r33155@e2) -> t`, `audit ▸ run : Pure`.
+MEASURED, one run deciding both banked hypotheses: the keep census showed
+`[SIGROOTS run]` containing the exact severed root and `[PRUNE keep-sig]`
+firing on it (29/25 unannotated, 69/66 annotated — both judged passes);
+crown flipped 4/1 → 5/5 (leak-higher-order rejects, both sound controls
+accept); the wheel self-compile census stayed 0 under the honest rows. The
+keep adds NO quantification (its roots are already the signature
+collection's), so the qvars(f) = Σ refs × qvars(callee) blowup bound the
+prune exists for is untouched.
 
-WHAT IS REFUTED — do not re-attempt as written: adding a THIRD category to
-`row_keep_completion` (keep a free edge whose root is reachable from the decl's
-signature, computed as deep chased frees of params + return) was built, marched
-CENSUS 0, and measured **completely inert** — `run` still published Pure,
-byte-for-byte identical diagnostics. Reverted rather than left as dead
-machinery. So either the dropped edge is not signature-reachable at exit time
-(the likely half — `param_ty` may read the TParam's declared slot rather than
-the cell the body's own call bound), or the row is re-dropped downstream of the
-prune. THE NEXT PROBE decides it in one run: print `sig_keep_roots`' computed
-set beside the dropped root at the same wat anchor — if the set is empty or
-lacks the root, it is the collection; if it contains the root and the row is
-still Pure, the loss is downstream and the prune is exonerated.
+WHY THE 2026-08-05 ATTEMPT WAS INERT — hypothesis (a), the collection: it
+never contained the root, because the live root is reachable only THROUGH
+the cells the body bound, and the entry unify's union direction does not
+track mint age (c04's annotated row var, minted at pre-registration, still
+chases to a judgment-era root — the measurement that killed the
+classify-by-mint-position hypothesis). Hypothesis (b) — a downstream
+re-drop — was eliminated by the same run: set contains the root ∧ the row
+publishes. Graduated crucibles: `tests/crown/leak-hof-named-arg.mn` (the
+named-argument face) and `leak-hof-annotated.mn` (the annotated face);
+`c03_no_neg` stays a research fixture (its refusal class is
+`E_EffectUnhandled`, outside the crown gate's `E_EffectMismatch` grep).
 
 CITATION HYGIENE — corrected in place, and the correction matters: this peer
 was opened on a small-model SUMMARY of arXiv 2510.20532 whose "§5" claimed the
@@ -604,6 +598,15 @@ three faces, because every HOF in the prelude has the shape. The row
 face of band N's `Hβ.lower.config-fn-evidence-in-arm` (whose runtime-
 evidence half the world-as-value arc closed); the type face is this.
 Dissolves under rung 3 with the other two.
+RE-MEASURED 2026-08-06, post the completion-prune signature keep: the
+fixture STILL passes (zero effect diagnostics over the lib baseline —
+`.build/research/crown-2026-08-05/c05_each_wasi.mn`), which PROVES the
+seam split: this face's loss is upstream of the prune — the callback's
+row never ARRIVES in each's accumulated row (the residual read
+bypasses the scheme instance), so a keep category has nothing to keep.
+`Hβ.infer.hof-param-row-never-reaches-enclosing`'s prune fix and this
+peer are two distinct seams; §11 Phase 1.2's "same root, three faces"
+was the pre-measurement conflation.
 
 `Hβ.effects.config-fn-row-in-residual` — the same seam stated from the
 absorb side: a handler's residual is `absorb_row(body, handled, extra)`

@@ -354,14 +354,14 @@ fn contains_name(names, target: String) with Memory + Alloc = any((n) => n == ta
 // weave does not always carry — main() leaked past the reach exclusion
 // because its body was unreachable through it; the weave is the one
 // truth both walks read.)
-fn fn_body_by_name(name: String) with GraphRead + !Mutate = {
+fn fn_body_by_name(name: String) with GraphRead + !Mutate + Memory + Alloc = {
   let snapshot = graph_snapshot()
   match snapshot {
     Graph(next, _spans) => fn_body_scan(name, 0, next),
   }
 }
 
-fn fn_body_scan(name: String, i, n) with GraphRead + !Mutate = if i >= n {
+fn fn_body_scan(name: String, i, n) with GraphRead + !Mutate + Memory + Alloc = if i >= n {
   None
 } else {
   match graph_node_body(i) {
@@ -450,7 +450,7 @@ fn enumerate_int_literals(context) with GraphRead + GraphWrite + Memory + Alloc 
   buf
 }
 
-fn int_literal_candidate(n) with GraphRead + GraphWrite + !Mutate =
+fn int_literal_candidate(n) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
   EnrichedCandidate({cost: 0.3, node: synthesize_int_literal_node(n), origin: ProposerEnumerative, reason: Inferred("the type's integer inhabitants")})
 
 fn enumerate_float_literals(context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
@@ -460,7 +460,7 @@ fn enumerate_float_literals(context) with GraphRead + GraphWrite + Memory + Allo
   buf
 }
 
-fn float_literal_candidate(f) with GraphRead + GraphWrite + !Mutate =
+fn float_literal_candidate(f) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
   EnrichedCandidate({cost: 0.3, node: synthesize_float_literal_node(f), origin: ProposerEnumerative, reason: Inferred("the type's float inhabitants")})
 
 fn enumerate_string_literals(context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
@@ -753,23 +753,27 @@ fn map_to_proposals(enriched) with Alloc + Memory = map(
 // Each helper produces a Node value the verify gate can apply to the
 // graph. The actual construction reuses parser_infra's nexpr/nstmt
 // constructors via the wheel's existing Node ADT (types.mn:376-379).
-fn synthesize_int_literal_node(n) with GraphRead + GraphWrite + !Mutate = synth_node(LitInt(n))
+fn synthesize_int_literal_node(n) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
+  synth_node(LitInt(n))
 
-fn synthesize_float_literal_node(f) with GraphRead + GraphWrite + !Mutate = synth_node(LitFloat(f))
+fn synthesize_float_literal_node(f) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
+  synth_node(LitFloat(f))
 
-fn synthesize_string_literal_node(s) with GraphRead + GraphWrite + !Mutate =
+fn synthesize_string_literal_node(s) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
   synth_node(LitString(s))
 
-fn synthesize_unit_literal_node() with GraphRead + GraphWrite + !Mutate = synth_node(LitUnit)
+fn synthesize_unit_literal_node() with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
+  synth_node(LitUnit)
 
-fn synthesize_hole_node() with GraphRead + GraphWrite + !Mutate = synth_hole_node()
+fn synthesize_hole_node() with GraphRead + GraphWrite + !Mutate + Memory + Alloc = synth_hole_node()
 
-fn synthesize_resume_node() with GraphRead + GraphWrite + !Mutate =
+fn synthesize_resume_node() with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
   synth_node(ResumeExpr(synth_unit_node(), []))
 
-fn synthesize_empty_list_node() with GraphRead + GraphWrite + !Mutate = synth_node(MakeListExpr([]))
+fn synthesize_empty_list_node() with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
+  synth_node(MakeListExpr([]))
 
-fn synthesize_singleton_list_node(elem) with GraphRead + GraphWrite + !Mutate =
+fn synthesize_singleton_list_node(elem) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
   synth_node(MakeListExpr([synth_hole_node()]))
 
 fn synthesize_tuple_node(elems) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
@@ -784,7 +788,7 @@ fn synthesize_ctor_call_node(name, scheme) with GraphRead + GraphWrite + !Mutate
 // params arrive as the scheme's own [TParam] — LambdaExpr's exact
 // carrier; rebuilding name lists from them was the mismatch the
 // converged judge caught (the param-product law reaching synth).
-fn synthesize_lambda_node(params, ret) with GraphRead + GraphWrite + !Mutate + Memory =
+fn synthesize_lambda_node(params, ret) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
   synth_node(LambdaExpr(params, synth_hole_node()))
 
 // ─── Synthesis primitives — structured Node construction ───────────
@@ -797,12 +801,13 @@ fn synthesize_lambda_node(params, ret) with GraphRead + GraphWrite + !Mutate + M
 // edge-links the body into the graph weave so verify_candidate's
 // infer_expr walk binds the candidate's own handle (Carried-Truth: the
 // graph holds the node; the gate reads it live).
-fn synth_node(expr_body) with GraphRead + GraphWrite + !Mutate =
+fn synth_node(expr_body) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
   mint_node(NExpr(expr_body), span_zero())
 
-fn synth_unit_node() with GraphRead + GraphWrite + !Mutate = synth_node(LitUnit)
+fn synth_unit_node() with GraphRead + GraphWrite + !Mutate + Memory + Alloc = synth_node(LitUnit)
 
-fn synth_hole_node() with GraphRead + GraphWrite + !Mutate = mint_node(NHole(0), span_zero())
+fn synth_hole_node() with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
+  mint_node(NHole(0), span_zero())
 
 fn synth_holes_for(elems) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = if len(elems) == 0 {
   []

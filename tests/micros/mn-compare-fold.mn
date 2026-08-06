@@ -17,7 +17,9 @@
 //      order; on a tie recurse to the next field. A nested aggregate field
 //      re-enters the leaf (the same $compare_<sig>, finite on the value).
 //
-// The DIRECT `a < b` on an ADT cannot round-trip the SEED yet (its compare leaf
+// SEED-ERA NOTE (superseded — the seed was deleted 2026-07-10; the DIRECT
+// `a < b` upgrade is available verification work): the era's block was the
+// seed (its compare leaf
 // lags the wheel — it would pointer-compare two distinct heap addresses). So
 // the micro proves the helper's control shape in seed-supported constructs
 // (match-destructure + the 3-way sign), the same proxy discipline

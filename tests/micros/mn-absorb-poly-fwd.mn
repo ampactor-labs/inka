@@ -1,9 +1,10 @@
 // expect: 42
 // The forward-referenced face of the effect-polymorphic absorption: the
 // caller precedes the bracket in source, so the trial reads the loose
-// pre-registration and only the convergence rounds see the masked final.
-// The rounds exist for exactly this — round 1's re-judgment reads
-// bracket's published subtraction and the caller's Pure proof lands.
+// pre-registration; the FINAL's re-judgment reads bracket's published
+// subtraction and the caller's Pure proof lands (the rounds that once
+// did this are deleted, and the re-judgment cadence is itself condemned
+// — rung 3's decl→site edge delivers the proof without a second pass).
 effect Ping { ping() -> Int }
 
 handler pong {

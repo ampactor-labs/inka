@@ -38,7 +38,9 @@
 #   run-wrong-exit → a silent miscompile — the worst class; bisect the rung's
 #     source, then WABT-diff the emitted fn (wasm-objdump -d, wt_func).
 #
-# Dissolves at first-light (m3 == m4 makes this script the fixpoint's tail).
+# First-light PASSED (2026-07-10, m3 == m4); the destiny is absorption into
+# `mentl march` (the ⟳ absorption queue) — the script stays as the battery's
+# bash tail meanwhile.
 set -u
 cd "$(dirname "$0")/.." || exit 2
 source "$(dirname "$0")/wt-env.sh"
@@ -100,6 +102,13 @@ fi
 # under-linked dependency surfaces as an undefined global at assemble.
 RT="lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn lib/prelude.mn"
 pass=0; fail=0
+# fail_m is the MICRO tier's counter and must exist outside the micros
+# block (set -u) because the exit sums BOTH tiers — the 2026-07-31 leash
+# proof caught the old `exit $fail` reading every all-rungs-green run as
+# battery green while three micros sat red (the gate-that-cannot-fail
+# class, fourth catch; the battery-gated repin trusted it and falsely
+# blessed).
+fail_m=0
 gate_wasm_stamp
 
 # rung <name> <expected-exit> <<'EOF' ... source ... EOF
@@ -245,4 +254,4 @@ if [ "$DO_MICROS" = 1 ]; then
   echo "── micros-through-m2: $pass_m pass / $fail_m fail ──"
 fi
 
-exit $fail
+exit $((fail + fail_m))

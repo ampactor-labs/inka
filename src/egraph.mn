@@ -192,7 +192,7 @@ fn is_zero(handle) with GraphRead = match graph_node_body(handle) {
   _ => false,
 }
 
-fn is_one(handle) with GraphRead = match graph_node_body(handle) {
+fn is_one(handle) with GraphRead + Memory + Alloc = match graph_node_body(handle) {
   NExpr(LitInt(n)) => n == 1,
   _ => false,
 }
@@ -207,12 +207,12 @@ fn is_one(handle) with GraphRead = match graph_node_body(handle) {
 // payoff for fold). Div/mod by zero does NOT fold: the trap is the program's
 // meaning, not a constant. The edge is drawn idempotently (rewrite_to), so a
 // re-fold pass mints nothing new and converges.
-fn const_int(handle) with GraphRead = match graph_node_body(handle) {
+fn const_int(handle) with GraphRead + Memory + Alloc = match graph_node_body(handle) {
   NExpr(LitInt(n)) => Some(n),
   _ => None,
 }
 
-fn fold_int(op, a, b) with Pure = match op {
+fn fold_int(op, a, b) with Memory + Alloc = match op {
   BAdd => Some(a + b),
   BSub => Some(a - b),
   BMul => Some(a * b),
@@ -221,7 +221,7 @@ fn fold_int(op, a, b) with Pure = match op {
   _ => None,
 }
 
-fn rw_const_fold(handle) with GraphRead + GraphWrite = match graph_node_body(handle) {
+fn rw_const_fold(handle) with GraphRead + GraphWrite + Memory + Alloc = match graph_node_body(handle) {
   NExpr(BinOpExpr(op, l, r)) => match const_int(egraph_extract(node_handle(l))) {
     Some(a) => match const_int(egraph_extract(node_handle(r))) {
       Some(b) => match fold_int(op, a, b) {
@@ -240,7 +240,7 @@ fn rw_const_fold(handle) with GraphRead + GraphWrite = match graph_node_body(han
   _ => false,
 }
 
-fn mint_fold(handle, v) with GraphWrite = {
+fn mint_fold(handle, v) with GraphWrite + Memory + Alloc = {
   let h = graph_fresh_ty(Inferred("const-fold"))
   graph_register_node(h, NExpr(LitInt(v)))
   graph_bind(h, TInt, Inferred("const-fold result : Int"))

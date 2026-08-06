@@ -18,7 +18,9 @@
 // ONE traversal over the same five node-kinds (lower_to_string_dispatch reads the
 // proven type once; fold_sig names the helper; the graph IS the index).
 //
-// This cannot yet round-trip the SEED on a DIRECT to_string(record): the
+// SEED-ERA NOTE (superseded — the seed was deleted 2026-07-10; the DIRECT
+// to_string(record) upgrade is available verification work): this could not
+// round-trip the seed on the direct form — the
 // disposable seed's to_string still hits the untyped runtime fall-through (it lags
 // the wheel's show generator), AND the verify harness compiles micros WITHOUT the
 // string runtime (str_concat / int_to_str are not linked), so a direct

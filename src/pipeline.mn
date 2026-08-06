@@ -109,9 +109,11 @@ import oracle
 // consult's compile_source brackets fresh instances inside a session's
 // bracket (handler state is per-install).
 //
-// IC.4: compile / check now route through driver_check when invoked
-// with an entry-MODULE name. The single-source entry compile/
-// check_source remain for tests that pass a raw source string. The
+// IC.4: compile / check route through driver_compile_entry /
+// driver_entry_with_ranges when invoked with an entry-MODULE name
+// (driver_check survives on the ic_compile_loop path alone). The
+// single-source entry compile/check_source remain for tests that
+// pass a raw source string. The
 // driver path reads module sources via FS and infers each in
 // dependency order; within-run incrementality IS the epoch cursor
 // (§2 cached-cursor mode), and cross-run skip is the image-persist
@@ -703,6 +705,12 @@ fn ic_compile_loop(initial_entry) =
 // fallback survived until 2026-07-24, when the profile showed the
 // stale-bucket case was HOT, not rare — every scope re-entry reuses
 // positions — and the validated walk made it unreachable.)
+// CONDEMNED FAMILY (the resolved design D6): buffer, bucket index, and
+// per-generation dedup are all downstream of the scheme being a
+// name-keyed snapshot. When a name resolves ONCE at the scope walk to
+// its decl's cell, nothing in the judgment is name-keyed and the
+// family deletes; name-keyed reads survive only at human boundaries
+// (query, REPL, diagnostics) as projections.
 fn env_index_new() with Memory + Alloc = list_filled(4096, [])
 
 fn env_index_add(idx, name: String, pos) with Memory + Alloc = {
@@ -717,7 +725,7 @@ fn env_index_add(idx, name: String, pos) with Memory + Alloc = {
 // it and continues to an older live pair. Complete by construction: every
 // env_extend adds its bucket pair and pairs are never removed, so no live
 // binding lacks one — which is why no linear-scan fallback exists.
-fn env_bucket_pos(ref buf, ref bucket, name: String, count, i, n) with Memory = if i >= n {
+fn env_bucket_pos(ref buf, ref bucket, name: String, count, i, n) with Memory + Alloc = if i >= n {
   -1
 } else {
   match list_index(bucket, i) {
@@ -731,7 +739,7 @@ fn env_bucket_pos(ref buf, ref bucket, name: String, count, i, n) with Memory = 
   }
 }
 
-fn env_resolve(ref buf, count, ref idx, name: String) with Memory = {
+fn env_resolve(ref buf, count, ref idx, name: String) with Memory + Alloc = {
   let b = i32_and(str_hash(name), 4095)
   let bucket = list_index(idx, b)
   let pos = env_bucket_pos(buf, bucket, name, count, 0, len(bucket))
@@ -766,7 +774,7 @@ fn env_entry_is_type(ref scheme, ref kind) with Pure = match scheme {
 // the parameterization allocates nothing. The PLAIN resolve keeps its
 // own predicate-free walk — it is the compiler's hottest path and its
 // shape genuinely differs (no filter slot at all).
-fn env_bucket_pos_where(ref buf, ref bucket, name: String, count, i, n, pred) with Memory = if i >= n {
+fn env_bucket_pos_where(ref buf, ref bucket, name: String, count, i, n, pred) with Memory + Alloc = if i >= n {
   -1
 } else {
   match list_index(bucket, i) {
@@ -784,7 +792,7 @@ fn env_bucket_pos_where(ref buf, ref bucket, name: String, count, i, n, pred) wi
   }
 }
 
-fn env_resolve_where(ref buf, count, ref idx, name: String, pred) with Memory = {
+fn env_resolve_where(ref buf, count, ref idx, name: String, pred) with Memory + Alloc = {
   let b = i32_and(str_hash(name), 4095)
   let bucket = list_index(idx, b)
   let pos = env_bucket_pos_where(buf, bucket, name, count, 0, len(bucket), pred)
@@ -797,7 +805,7 @@ fn env_resolve_where(ref buf, count, ref idx, name: String, pred) with Memory = 
   }
 }
 
-fn env_resolve_type(ref buf, count, ref idx, name: String) with Memory =
+fn env_resolve_type(ref buf, count, ref idx, name: String) with Memory + Alloc =
   env_resolve_where(buf, count, idx, name, env_entry_is_type)
 
 // The CTOR-position read — env_resolve_type's sibling at the third kind
@@ -806,22 +814,22 @@ fn env_resolve_type(ref buf, count, ref idx, name: String) with Memory =
 // snapshot scan this index read replaces walked the whole env backward per
 // read (6.86% of the self-compile, perf 2026-07-24) — the edge the index
 // already draws, followed instead of re-derived.
-fn env_entry_is_ctor(ref _scheme, ref kind) with Pure = match kind {
+fn env_entry_is_ctor(ref _scheme, ref kind) with Memory + Alloc = match kind {
   ConstructorScheme(_, _) => true,
   _ => false,
 }
 
-fn env_resolve_ctor(ref buf, count, ref idx, name: String) with Memory =
+fn env_resolve_ctor(ref buf, count, ref idx, name: String) with Memory + Alloc =
   env_resolve_where(buf, count, idx, name, env_entry_is_ctor)
 
 // A type's TypeVariants entry, reached past any same-named ctor shadow
 // (the single-variant `type Instant = Instant(_)` shape).
-fn env_entry_is_variants(ref _scheme, ref kind) with Pure = match kind {
+fn env_entry_is_variants(ref _scheme, ref kind) with Memory + Alloc = match kind {
   TypeVariants(_) => true,
   _ => false,
 }
 
-fn env_resolve_variants(ref buf, count, ref idx, name: String) with Memory =
+fn env_resolve_variants(ref buf, count, ref idx, name: String) with Memory + Alloc =
   env_resolve_where(buf, count, idx, name, env_entry_is_variants)
 
 // The snapshot's dedup — resolution semantics as a list, read from the
@@ -900,7 +908,7 @@ handler env_handler(base_buf, base_count, base_index) with entries_buf = make_li
   env_snapshot() => // Snapshots project the RESOLUTION SEMANTICS — each name's LATEST
   // live entry, exactly what env_lookup answers — never the raw
   // append-only buffer. The converged judge re-registers every decl
-  // per pass (trial + rounds + final), so the raw buffer holds one
+  // per pass (the trial and the final), so the raw buffer holds one
   // entry PER GENERATION per name: the ??-fan's vocabulary walked it
   // and proposed the same fn three times (the sole-pure-survivor and
   // two-survivor-tie legs both red, and the accept path refused the
@@ -940,7 +948,7 @@ handler env_handler(base_buf, base_count, base_index) with entries_buf = make_li
 // effect Intern declares in types.mn — the vocabulary home every
 // performer imports (lex and the EffName mints live below this
 // module). The handlers stay here.
-fn intern_probe(ref bucket, ref src, s, e, i, n) with Memory = if i >= n {
+fn intern_probe(ref bucket, ref src, s, e, i, n) with Memory + Alloc = if i >= n {
   None
 } else {
   let row = list_index(bucket, i)
@@ -1485,7 +1493,7 @@ fn parse_query_string(q) = {
 // build_question — pair the classified verb with its argument. Nullary verbs
 // (unresolved/verification) ignore the arg; unary verbs carry it. A verb whose
 // arity its arg cannot satisfy projects to QUnknown(raw) — the honest unknown.
-fn build_question(verb, arg, raw) with Pure = match verb {
+fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
   QVUnresolved => QUnresolved,
   QVVerification => QVerifyDebt,
   QVType => QTypeOf(arg),

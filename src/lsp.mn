@@ -109,7 +109,7 @@ type Location = Location(String, Int, Int, Int, Int)
 // Per drift mode 6: explicit shape detection (request has id+method;
 // notification has method no id; response has id+result no method).
 // Anything else is an LspUnknown notification with empty params.
-fn parse_lsp_message(v) with Memory = {
+fn parse_lsp_message(v) with Memory + Alloc = {
   let method_opt = json_obj_get(v, "method")
   let id_opt = json_obj_get(v, "id")
   let params = match json_obj_get(v, "params") {
@@ -147,7 +147,7 @@ fn parse_lsp_message(v) with Memory = {
 // ADT. The ONE place where strings cross into the dispatch substrate;
 // downstream is ADT-only. Per drift mode 8: input strings are
 // projected, not stored.
-fn classify_method(method) with Pure = if method == "initialize" {
+fn classify_method(method) with Memory + Alloc = if method == "initialize" {
   LspInitialize
 } else if method == "initialized" {
   LspInitialized
@@ -227,7 +227,7 @@ fn dispatch_notification(kind, params) = match kind {
 //
 // lsp_extract_uri — pull `params.textDocument.uri` String. Default
 // empty when missing.
-fn lsp_extract_uri(params) with Memory = match json_obj_get(params, "textDocument") {
+fn lsp_extract_uri(params) with Memory + Alloc = match json_obj_get(params, "textDocument") {
   None => "",
   Some(td) => match json_obj_get(td, "uri") {
     None => "",
@@ -237,7 +237,7 @@ fn lsp_extract_uri(params) with Memory = match json_obj_get(params, "textDocumen
 
 // lsp_extract_position — pull `params.position.{line, character}`.
 // Returns (line, character) Ints. Default (0, 0) on missing.
-fn lsp_extract_position(params) with Memory = match json_obj_get(params, "position") {
+fn lsp_extract_position(params) with Memory + Alloc = match json_obj_get(params, "position") {
   None => (0, 0),
   Some(p) => {
     let line = json_int_or_default(json_obj_get_unwrap(p, "line"), 0)
@@ -246,7 +246,7 @@ fn lsp_extract_position(params) with Memory = match json_obj_get(params, "positi
   },
 }
 
-fn json_obj_get_unwrap(v, key) with Memory = match json_obj_get(v, key) {
+fn json_obj_get_unwrap(v, key) with Memory + Alloc = match json_obj_get(v, key) {
   None => JNull,
   Some(x) => x,
 }
@@ -255,7 +255,7 @@ fn json_obj_get_unwrap(v, key) with Memory = match json_obj_get(v, key) {
 // are 0-indexed; Mentl spans 1-indexed. v1 produces a zero-width span
 // at (line+1, char+1); refined ranges (selection-aware) land as
 // MV-LSP.range peer sub-handle.
-fn position_to_span(pos) with Pure = match pos {
+fn position_to_span(pos) with Memory + Alloc = match pos {
   (line, ch) => Span(line + 1, ch + 1, line + 1, ch + 1),
 }
 
@@ -265,7 +265,7 @@ fn position_to_span(pos) with Pure = match pos {
 // capabilities (text-sync = full; hover; completion; codeAction;
 // diagnostic; definition; references). Project root extracted from
 // rootUri or workspaceFolders.
-fn handle_initialize(_params) with Interact = {
+fn handle_initialize(_params) with Interact + Memory + Alloc = {
   project_root()
   let caps = JObj([
     // 1 = Full
@@ -392,7 +392,7 @@ fn handle_references(params) with Memory + Alloc + Interact + GraphRead + !Mutat
 }
 
 // span_to_location — project a Mentl Span to an LSP Location at the doc URI.
-fn span_to_location(uri, span) with Pure = match span {
+fn span_to_location(uri, span) with Memory + Alloc = match span {
   Span(sl, sc, el, ec) => Location(uri, sl, sc, el, ec),
 }
 
@@ -584,7 +584,7 @@ fn response_to_json(body) with Memory + Alloc = match body {
   LspInitializeResp(result) => result,
 }
 
-fn hover_content_to_json(content) with Pure = match content {
+fn hover_content_to_json(content) with Memory + Alloc = match content {
   HoverContent(md) => JObj([("contents", JObj([("kind", JStr("markdown")), ("value", JStr(md))]))]),
 }
 
@@ -637,7 +637,7 @@ fn location_to_json(loc) with Memory + Alloc = match loc {
   Location(uri, sl, sc, el, ec) => JObj([("uri", JStr(uri)), ("range", range_to_json(sl, sc, el, ec))]),
 }
 
-fn range_to_json(sl, sc, el, ec) with Pure =
+fn range_to_json(sl, sc, el, ec) with Memory + Alloc =
   JObj([("start", JObj([("line", JNum(float_of_int(sl - 1))), ("character", JNum(float_of_int(sc - 1)))])), ("end", JObj([("line", JNum(float_of_int(el - 1))), ("character", JNum(float_of_int(ec - 1)))]))])
 
 // ─── lsp_adapter handler + session loop ───────────────────────────────

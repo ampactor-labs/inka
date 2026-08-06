@@ -35,6 +35,78 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-06 · ▶▶▶ THE SIGNATURE KEEPS ITS ROW — the crown's higher-order
+  leak closed at the completion prune, and the banked probe decided the
+  build (final pin e606a650 — CLEAN m2 == m3 at 333,048 lines, census 0,
+  crown/proof-exactness/effect-identity captured green at pin time; the
+  session's intermediate pin 806c7df4 carried the sig-keep alone,
+  TRANSITION m3 == m4 at 332,110 lines).
+  The 2026-08-05 dig had proven the drop site (`edges_keep_completion`'s
+  `root < ceiling` compare) and refuted a signature keep-set as inert;
+  the named next probe — print the collected set beside the dropped
+  root — answered both hypotheses in ONE run: collected THROUGH the live
+  cells at exit (`signature_free_roots` = unique ∘ flatten ∘ map
+  (free_in_ty ∘ chase_deep ∘ TVar) over param cells + return, threaded
+  as `inf_exit_fn`'s argument from the named-decl and lambda exit sites;
+  scope exits pass []), the set CONTAINS the exact severed root
+  ([SIGROOTS run] 29 · [PRUNE keep-sig] root 29 ceiling 25 unannotated,
+  69/66 annotated — the banked pair) and the row publishes, so the
+  refuted attempt's failure was the COLLECTION (declared slots — the
+  live root is reachable only through the cells the body bound; the
+  entry unify's union direction does not track mint age, which is why
+  even the annotated form's prereg-minted row var chases to a
+  judgment-era root) and no downstream re-drop exists. Mechanism: the
+  prune's "no constraint can arrive" reading is false for a
+  signature-reachable root — it escapes through instantiate at every
+  call site, and generalize's signature collection already quantifies
+  exactly it, so the keep adds NO quantification and the qvars(f) =
+  Σ refs × qvars(callee) blowup bound is untouched. Crown 4/1 → 5/5
+  through the probe m2 and green through the pinned boot with the two
+  graduated crucibles (tests/crown/leak-hof-named-arg — the
+  named-argument face; leak-hof-annotated — the kill test that buried
+  classify-by-mint-position). SAME ARC: generalize's quantification
+  floor (`_ => Forall(free_in_ty(...))`, the drift-mode-10 commit
+  blocker) is exhaustive Ty arms, TCont's world receiving the TFun
+  arm's row-sort split (a continuation's world is a row position at the
+  TIME altitude); drift-audit CLEAN on both organs. MEASURED STILL
+  OPEN, banked with its mechanism split: `fn f(xs) with !WASI =
+  each((x) => println(...), xs)` passes with zero effect diagnostics
+  over the lib baseline (c05) — the handler-residual face loses the row
+  UPSTREAM of the prune (the residual read bypasses the scheme
+  instance), so §11 Phase 1.2's "same root, three faces" was
+  pre-measurement conflation; the seam is
+  `Hβ.infer.handler-residual-outside-the-scheme` +
+  `Hβ.effects.config-fn-row-in-residual`, pre-existing at every green
+  pin since birth. THE SECOND DIG OF THE SAME SESSION — the arc's one
+  remaining frontier red (instance sibling: `hi_rate` publishing bare
+  `Sample`, its declared 48000 erased) root-caused to register_effect_ops
+  deriving the instance from op TYPE vars alone: `effect Sample(rate:
+  Int)` with concrete ops minted a bare ENamed, so every charge erased
+  the identity the row algebra distinguishes — an ANCIENT blindness the
+  HEAD-era gate masked by publishing the declared row verbatim
+  (publish_with_instances), unmasked when the publish law deleted that
+  write. Fix, three coordinated parts: (1) declared params become opaque
+  EANode value dims on the op row, FIRST so authored scalar positions
+  align — eparam_arg_tys skips them, so the type-space install flow
+  never meets a value dim, and free_in_eff_arg answers [], so they ride
+  instantiation verbatim; (2) the declared gate pins authored scalars
+  into matching not-provably-distinct charges BEFORE the subsumes read —
+  via graph_finalize_row, because the teaching JOIN dedups the pinned
+  entry against the stored one by name (the first pin attempt measured
+  exactly that); (3) subsumption's present legs read eff_admits, the
+  instance law's positive dual of eff_forbids (bare declaration admits
+  every instance of its name; instanced declaration refuses a bare
+  charge, frag_args_same on instanced pairs). `hi_rate : Sample(48000)`
+  publishes precise; the severance fixtures' refusals hold; the movers
+  baseline re-based 406 → 424 (the publish-law re-baseline's own
+  precedent — kept sig-edges change what the HOF family publishes, the
+  flip census naming map_list/filter_list/flat_fill_*/the float-digit
+  fns). The three crucible reds (dsp/ml/adaptive) were the arc's own
+  constructor-charge truth unswept in fixtures — six declarations
+  widened to their measured rows (tuple returns charge Alloc; delay's
+  state element charges Memory + Alloc). Probe instruments preserved at
+  .build/research/crown-2026-08-05/ (both wat patch scripts, the c01-c05
+  crucibles, every gate log of the landing).
 - 2026-08-01 · ▶▶▶ THE CONSTRUCTORS CHARGE — the stamp executes whole,
   and the largest widen loop since the effect-truth sweep runs to zero
   (pin 4a822b299c — CLEAN m2 == m3 at 331,325 lines, census 0, battery

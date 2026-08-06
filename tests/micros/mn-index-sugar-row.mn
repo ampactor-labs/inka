@@ -1,0 +1,19 @@
+// expect: refuse E_PurityViolated
+//
+// The index sugar charges what its lowering performs (the four-face
+// probe, 2026-08-01): `xs[i]` emits the list_index call, so the
+// judgment charges list_index's declared row — before the charge, a
+// `with Pure` over a subscripting body was a FALSE PROOF (the sugar
+// published Pure while the spelled call published Memory on the same
+// file). This fixture is the refusal face: the declared Pure gate must
+// report against the sugar's proven Memory. The green control
+// (tuple-const indexing, genuinely compile-time) stays pure.
+
+fn reads_by_sugar(xs) with Pure = xs[0]
+
+// The control's receiver is ANNOTATED so the shallow read reaches the
+// tuple-const route (an unannotated param judges free at the decl and
+// falls to the generic force — measured: the bare form convicted too).
+fn tuple_stays_pure(p: (Int, Int)) with Pure = p[0]
+
+fn main() = reads_by_sugar([7]) + tuple_stays_pure((35, 0))

@@ -147,6 +147,23 @@ if C=$(wt_m2_ensure); then
   elif [[ -n "$cmax" && "$crefs" -lt "$cmax" ]]; then
     say "  ↓ comment-refs FELL $cmax -> $crefs — lower comment_refs_max in $BASELINE to hold it."
   fi
+  # The MOVERS ratchet — the same stderr, the condemned pass's vital sign:
+  # the count of schemes the final judges DIFFERENTLY than the trial
+  # published (overrides, never verification verdicts — PLAN's resolved
+  # design D5). Monotone DOWN by law: rung 3 ends at 0 with the second pass
+  # DELETED, and a RISE is the tower regrowing (Anchor 2's condemned
+  # clause). Direction itself, ratcheted — the board could not see a circle
+  # before this line.
+  movers=$(grep -oE 'judgment: [0-9]+ scheme' "$C/m2.err" | grep -oE '[0-9]+' | head -1); movers=${movers:-0}
+  mmax=$(grep -E '^movers_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  say "· movers: $movers trial→final override(s) — the condemned pass's vital sign (0 deletes it)"
+  if [[ -n "$mmax" && "$movers" -gt "$mmax" ]]; then
+    say "✗ movers RATCHET: rose $mmax -> $movers — the tower is regrowing. No improvement"
+    say "  to condemned machinery is legal (Anchor 2); land the rung-3 form or revert."
+    fail=1
+  elif [[ -n "$mmax" && "$movers" -lt "$mmax" ]]; then
+    say "  ↓ movers FELL $mmax -> $movers — lower movers_max in $BASELINE to hold it."
+  fi
   # The manifest gate — the wheel's own DAG judgment, zero-tolerance. The
   # blob census is structurally BLIND to a missing import edge (every name
   # resolves in the concatenation), and the class sat silent five days

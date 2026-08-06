@@ -93,13 +93,17 @@ fn compute_alpha(cutoff: Hz, sr: Int) -> Float with Pure + !Alloc = {
 //
 // The canonical one-pole recurrence: y[n] = α·x[n] + (1-α)·y[n-1].
 // `(prev)` binds the prior output y[n-1] (LF.B); the body reads it
-// live. The `with Sample + Pure + !Alloc` row proves it real-time-safe
-// (no per-tick heap), and the prior carries the Sample refinement.
+// live, and the prior carries the Sample refinement. The row carries
+// Memory + Alloc: the constructor-row law reads the `<~` RHS `delay(1)`
+// as a construction, so the judgment cannot yet prove the real-time
+// !Alloc this filter's emission earns (the spec is a lower-time
+// constant, constructed once per feedback site, never per tick). The
+// claim returns when that install-once fact is a judgment read —
+// Hβ.dsp.state-element-install-once.
 //
-// Primitive #3 (`<~`) drawn; primitive #4 (`with Sample(rate) +
-// Pure + !Alloc`) proven; primitive #5 (own input consumed); primitive
-// #6 (Sample / Hz refinements discharged at boundaries).
-fn lowpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Pure + !Alloc = {
+// Primitive #3 (`<~`) drawn; primitive #5 (own input consumed);
+// primitive #6 (Sample / Hz refinements discharged at boundaries).
+fn lowpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Memory + Alloc = {
   let alpha = compute_alpha(cutoff, sr)
   ((prev) => input * alpha + (1.0 - alpha) * prev) <~ delay(1)
 }
@@ -107,7 +111,7 @@ fn lowpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Pure 
 // One-pole high-pass IIR filter — HP = signal - LP. The prior output
 // y[n-1] is the smoothed (low-pass) component; subtracting it from the
 // input leaves the high-frequency residue. Same `<~ delay(1)` substrate.
-fn highpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Pure + !Alloc = {
+fn highpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Memory + Alloc = {
   let alpha = compute_alpha(cutoff, sr)
   ((prev) => input - (alpha * input + (1.0 - alpha) * prev)) <~ delay(1)
 }
@@ -116,14 +120,14 @@ fn highpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Pure
 // pole R near unity. Removes DC bias at the signal-chain entry. Here
 // prev is the prior OUTPUT y[n-1]; the standard form folds the input
 // difference into the recurrence with R = 0.995.
-fn dc_blocker(input: Sample) -> Sample with Sample + Pure + !Alloc =
+fn dc_blocker(input: Sample) -> Sample with Sample + Memory + Alloc =
   ((prev) => input + 0.995 * prev) <~ delay(1)
 
 // Envelope follower — tracks signal magnitude. The envelope persists
 // across ticks via `<~ delay(1)`; each sample relaxes the prior
 // envelope toward the current magnitude: env[n] = α·|x[n]| + (1-α)·env[n-1].
 // Refinement keeps attack + release as positive Hz values.
-fn envelope_follower(input: Sample, attack: Hz, release: Hz, sr: Int) -> Sample with Sample + Pure + !Alloc = {
+fn envelope_follower(input: Sample, attack: Hz, release: Hz, sr: Int) -> Sample with Sample + Memory + Alloc = {
   let abs_input = if input >= 0.0 { input } else { 0.0 - input }
   let alpha = compute_alpha(attack, sr)
   ((prev) => abs_input * alpha + (1.0 - alpha) * prev) <~ delay(1)
@@ -131,12 +135,12 @@ fn envelope_follower(input: Sample, attack: Hz, release: Hz, sr: Int) -> Sample 
 
 // ─── Composition example: real-time audio chain ──────────────────────
 //
-// Per DM §1.7 audio_callback: every primitive in this file composes
-// in a single `with Sample(rate) + Pure + !Alloc + !SharedMemory`
-// row. The chain below — DC blocker → low-pass → soft-clip — is
-// real-time-safe by row proof, allocation-free by !Alloc proof, and
-// feedback-stable by `<~ delay(1)`'s state-machine emission.
-fn audio_chain(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Pure + !Alloc =
+// The chain below — DC blocker → low-pass → soft-clip — composes the
+// file's primitives in one row and is feedback-stable by
+// `<~ delay(1)`'s state-machine emission. The row carries the
+// constructor charge through its callees; the allocation-free claim
+// rides Hβ.dsp.state-element-install-once with theirs.
+fn audio_chain(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Memory + Alloc =
   input |> dc_blocker |> ((x) => lowpass_iir(x, cutoff, sr)) |> soft_clip
 
 // ─── Parallel topology: a stereo chain (the §5.U PARALLEL DSP demo) ───
@@ -148,13 +152,15 @@ fn audio_chain(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Pure 
 // is a `~> Thread` (Schedule) handler choice in the enclosing chain, read LIVE
 // at lower (PLAN §4④ — independence is the verb, concurrency is the handler).
 // So `stereo_chain` is the SAME source whether it runs one-core-sequential or
-// N-core-threaded — the schedule never touches the branch bodies. The whole
-// fanout stays `with Sample + Pure + !Alloc`: each channel is real-time-safe,
-// and `!Alloc` proves the stereo region never heap-allocates per sample —
-// surpassing Faust (global precision, no row proof) and JAX (schedule baked at
-// trace time, here it is a live `~>` edge). Install `~> parallel_compose`
-// (lib/runtime/threading.mn) at the call site for true-parallel stereo.
-fn stereo_chain(left: Sample, right: Sample, cutoff: Hz, sr: Int) -> (Sample, Sample) with Sample + Pure + !Alloc =
+// N-core-threaded — the schedule never touches the branch bodies. The row
+// carries Memory + Alloc honestly: the fanout's result TUPLE is a real
+// per-call construction (the constructor-row law charges it), so a per-sample
+// allocation-free stereo region needs the caller to hold the pair unboxed —
+// the topology argument (schedule as a live `~>` edge, vs Faust's global
+// precision and JAX's trace-baked schedule) stands unchanged. Install
+// `~> parallel_compose` (lib/runtime/threading.mn) at the call site for
+// true-parallel stereo.
+fn stereo_chain(left: Sample, right: Sample, cutoff: Hz, sr: Int) -> (Sample, Sample) with Sample + Memory + Alloc =
   left |> dc_blocker |> ((x) => audio_chain(x, cutoff, sr)) >< right |> dc_blocker |> ((x) => audio_chain(x, cutoff, sr))
 
 // ─── Peer sub-handles (named per drift mode 9 — deferred-by-omission) ─

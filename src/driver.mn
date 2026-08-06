@@ -197,7 +197,7 @@ fn driver_extract_imports_from_ast(ast) = flatten(map(
 // the §4④ image-persist peer (Hβ.persist.module-image-cache): the
 // graph image memcpy'd whole, keyed by source + transitive dep
 // hashes — never a second serializer.
-fn driver_check_module(ref module_name) with Memory + Alloc + Filesystem + WASI + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern = {
+fn driver_check_module(ref module_name) with Memory + Alloc + Filesystem + WASI + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern + Cast + Mutate + BranchEnv + Consume + WasiThreads = {
   let path = driver_module_path(module_name)
   if !fs_exists(path) {
     report(EMissingModule(module_name, path, span_zero()))
@@ -235,7 +235,7 @@ fn driver_check_module(ref module_name) with Memory + Alloc + Filesystem + WASI 
 // Each module either loads from cache or re-infers; envs install in
 // dependency order so every imported name is in `env_handler` before
 // the entry module's inference runs.
-fn driver_check(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx =
+fn driver_check(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern + Cast + Mutate + WASI =
   entry_module |> driver_collect_dag_with_deps |> driver_partition_layers |> each((layer) => each(driver_check_module, layer))
 
 // driver_check_entry — the compile path's check: infer every DEP of the
@@ -368,7 +368,7 @@ fn driver_module_ast(ref ast, ref ranges, ref target) with Memory + Alloc = matc
   None => ast,
 }
 
-fn driver_entry_with_ranges(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern + Mutate + Cast + WASI = {
+fn driver_entry_with_ranges(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern + Mutate + Cast + WASI + BranchEnv + Consume + WasiThreads = {
   // Discovery is a STRUCTURE read: the DAG walk parses each module only
   // for its imports, and the weave parse below re-reports every shape
   // with weave spans — so discovery narration is a duplicate in
@@ -582,7 +582,13 @@ fn scan_pairs(ref scan) with Memory + Alloc = map(
 // The cache path is keyed by ENTRY alone — the weave's state lives in
 // the manifest INSIDE the image, so a changed tree still finds its old
 // image and re-derives only the changed cone (a weave-keyed filename
-// could never be found again after any edit).
+// could never be found again after any edit). The path is CWD-RELATIVE
+// (the shim mounts the project at "."), so a compile whose cwd sits on
+// tmpfs mints this cache into RAM — measured 2026-07-31: one fleet
+// morning parked 4.3GB of images on /tmp and fed the OOM that killed a
+// session; probe runs work under .build/probe, never /tmp. Nothing
+// prunes sibling images yet (19 entries held 7.2GB) — keep-newest-N
+// retention is this writer's own named follow-up.
 fn driver_warm_path(ref entry_module) with Memory + Alloc =
   ".build/warm-compile-e{int_to_str(str_hash(entry_module))}.img"
 
@@ -598,7 +604,7 @@ fn driver_warm_ready(path) with Memory + Alloc + Filesystem = if fs_exists(path)
   false
 }
 
-fn driver_compile_entry(ref entry_module) with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern + Mutate + Cast = {
+fn driver_compile_entry(ref entry_module) with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern + Mutate + BranchEnv + Consume + WasiThreads = {
   let path = driver_warm_path(entry_module)
   if driver_warm_ready(path) {
     eprint_string("warm: restoring the analyzed image\n")
@@ -790,7 +796,7 @@ fn rederive_cone(ref cone) with Memory + Alloc + WASI + Filesystem + EnvRead + E
   cone
 )
 
-fn driver_check_entry(ref entry_module) with Memory + Alloc + Filesystem + WASI + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern = {
+fn driver_check_entry(ref entry_module) with Memory + Alloc + Filesystem + WASI + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern + Cast + Mutate + BranchEnv + Consume + WasiThreads = {
   // Check the deps DAG (every module the entry imports) — not the entry.
   entry_module |> driver_collect_dag_with_deps |> filter((m_with_deps) => match m_with_deps {
     (m, _) => m != entry_module,

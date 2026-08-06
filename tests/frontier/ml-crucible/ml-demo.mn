@@ -45,7 +45,7 @@ fn gen_y(out, i: Int, n: Int) with Memory = {
 // One batch pass: accumulate Σ e_i·x_i and Σ e_i across every point, where
 // e_i = (w·x_i + b) − y_i is the current residual. Both accumulators pin
 // `: Float`; the caller scales the returned sums by 2/N to form the gradient.
-fn grad_loop(xs, ys, w: Float, b: Float, i: Int, n: Int, gw: Float, gb: Float) with Memory = {
+fn grad_loop(xs, ys, w: Float, b: Float, i: Int, n: Int, gw: Float, gb: Float) with Memory + Alloc = {
   if i >= n { (gw, gb) }
   else {
     let e = w * xs[i] + b - ys[i]
@@ -55,7 +55,7 @@ fn grad_loop(xs, ys, w: Float, b: Float, i: Int, n: Int, gw: Float, gb: Float) w
 
 // One descent step: form the batch gradient, take a fixed-rate step, return
 // the new (w, b) as a float pair (the record path stores its f64 fields exactly).
-fn gd_step(xs, ys, w: Float, b: Float, n: Int, lr: Float) with Memory = {
+fn gd_step(xs, ys, w: Float, b: Float, n: Int, lr: Float) with Memory + Alloc = {
   let (sw, se) = grad_loop(xs, ys, w, b, 0, n, 0.0, 0.0)
   let gw = 2.0 * sw / float_of_int(n)
   let gb = 2.0 * se / float_of_int(n)
@@ -64,7 +64,7 @@ fn gd_step(xs, ys, w: Float, b: Float, n: Int, lr: Float) with Memory = {
 
 // The outer descent: a fixed iteration count via tail recursion, threading the
 // coefficients (w, b) as annotated float accumulators.
-fn gd_run(xs, ys, w: Float, b: Float, iter: Int, iters: Int, n: Int, lr: Float) with Memory = {
+fn gd_run(xs, ys, w: Float, b: Float, iter: Int, iters: Int, n: Int, lr: Float) with Memory + Alloc = {
   if iter >= iters { (w, b) }
   else {
     let (w2, b2) = gd_step(xs, ys, w, b, n, lr)

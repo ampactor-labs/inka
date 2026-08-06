@@ -416,7 +416,7 @@ fn silence_predicate(situation) with OracleQuery = {
 // Topology→FOffering, Unlock→FCapability, Trace→FRefutation,
 // Verify→FRefinement, Teach→FGradient, Why→FTrace. H6 discipline:
 // no wildcard arm; every Tentacle variant's mapping is named.
-fn tentacle_to_form_kind(tentacle) with Pure = match tentacle {
+fn tentacle_to_form_kind(tentacle) with Memory + Alloc = match tentacle {
   TentQuery => FFactual,
   TentPropose => FOffering,
   TentTopology => FOffering,
@@ -433,7 +433,7 @@ fn tentacle_to_form_kind(tentacle) with Pure = match tentacle {
 // ParenQualifier instances with their canonical phrase strings.
 // Keyed on Tentacle (not FormKind — three tentacles share FOffering
 // but have distinct subsets per §2.7.4 lines 559-567). H6 discipline.
-fn applicable_modifiers_for_tentacle(tentacle) with Pure = match tentacle {
+fn applicable_modifiers_for_tentacle(tentacle) with Memory + Alloc = match tentacle {
   TentQuery => [ParenQualifier(" (L{N})"), ParenQualifier(" (graph-direct)")],
   TentPropose => [EmphasisClose(" fits here."), EmphasisClose(" — try it?")],
   TentTopology => [EmphasisClose(" draws it better."), EmphasisClose(" — try it?")],
@@ -479,7 +479,7 @@ fn topic_discriminant(topic) with Pure = match topic {
 // primitive needed at this scale (modulo'd by applicable-subset
 // length, which is at most 6 per §2.7.4). Prime multipliers
 // minimize collision over the small index space we modulo into.
-fn situation_hash(situation) with Pure = match situation {
+fn situation_hash(situation) with Memory + Alloc = match situation {
   Situation(s) => tentacle_tag(s.tentacle) * 31 + topic_discriminant(s.topic) * 17,
 }
 
@@ -487,7 +487,7 @@ fn situation_hash(situation) with Pure = match situation {
 // via hash mod pool length. Empty pool returns NoMod (defensive — no
 // pool is empty per §2.7.4, but the substrate refuses to fabricate
 // when the invariant ever shifts).
-fn pick_from_pool(tentacle, hash) with Memory = {
+fn pick_from_pool(tentacle, hash) with Memory + Alloc = {
   let pool = applicable_modifiers_for_tentacle(tentacle)
   let n = len(pool)
   if n == 0 { NoMod } else { list_index(pool, hash % n) }
@@ -498,7 +498,7 @@ fn pick_from_pool(tentacle, hash) with Memory = {
 // §2.7.4 line 532). RPlayful and RExplain pick from the per-tentacle
 // applicable subset via hash-mod-len. Same Situation + same Register
 // → same Modifier, every call. H6 discipline on Register match.
-fn select_modifier(situation, register) with Memory = match situation {
+fn select_modifier(situation, register) with Memory + Alloc = match situation {
   Situation(s) => match register {
     RTerse => NoMod,
     RPlayful => pick_from_pool(s.tentacle, situation_hash(situation)),
@@ -512,7 +512,7 @@ fn select_modifier(situation, register) with Memory = match situation {
 // (topic, handle, env_snapshot, reasons, rows, ownership, refinements,
 // gradient_next, handlers_installed, prior_turn_topic, facts,
 // register) survive unchanged — only the tentacle perspective shifts.
-fn with_tentacle(situation, tentacle) with Pure = match situation {
+fn with_tentacle(situation, tentacle) with Memory + Alloc = match situation {
   Situation(s) => Situation({env_snapshot: s.env_snapshot, facts: s.facts, gradient_next: s.gradient_next, handle: s.handle, handlers_installed: s.handlers_installed, ownership_at_topic: s.ownership_at_topic, prior_turn_tentacle: s.prior_turn_tentacle, prior_turn_topic: s.prior_turn_topic, reason_at_topic: s.reason_at_topic, refinements: s.refinements, register: s.register, row_at_topic: s.row_at_topic, row_declared: s.row_declared, tentacle: tentacle, topic: s.topic}),
 }
 
@@ -521,7 +521,7 @@ fn with_tentacle(situation, tentacle) with Pure = match situation {
 // yields the code; other variants yield empty string. Used by render
 // arms to populate SIdent slots without re-routing through graph.
 // H6 exhaustive over Topic.
-fn topic_ident_or_empty(topic) with Pure = match topic {
+fn topic_ident_or_empty(topic) with Memory + Alloc = match topic {
   TopicIdent(name) => name,
   TopicHandle(_) => "",
   TopicSpan(_) => "",
@@ -533,7 +533,7 @@ fn topic_ident_or_empty(topic) with Pure = match topic {
 // without a natural span (TopicIdent / TopicHandle / TopicAsk) yield
 // the zero-Span sentinel. Used for SSpan slot construction at render
 // time. H6 exhaustive over Topic.
-fn topic_span_or_zero(topic) with Pure = match topic {
+fn topic_span_or_zero(topic) with Memory + Alloc = match topic {
   TopicIdent(_) => Span(0, 0, 0, 0),
   TopicHandle(_) => Span(0, 0, 0, 0),
   TopicSpan(span) => span,
@@ -546,7 +546,7 @@ fn topic_span_or_zero(topic) with Pure = match topic {
 // identifier from topic, the inferred type from row_at_topic context,
 // and the row itself. silence_predicate gated upstream — fires only
 // when reason_at_topic is Some (per MV §2.7.5 TentQuery arm).
-fn render_query_arm(situation) with Memory = match situation {
+fn render_query_arm(situation) with Memory + Alloc = match situation {
   Situation(s) => {
     let name = topic_ident_or_empty(s.topic)
     let row_slot = match s.row_at_topic {
@@ -567,7 +567,7 @@ fn render_query_arm(situation) with Memory = match situation {
 // Topic discriminates: TopicHandle (hole at handle) → "Hole expects
 // `Type`"; TopicError (typo / missing) → "Did you mean ...?";
 // TopicAsk (explicit ask) → echoes ask. silence_predicate gated.
-fn render_propose_arm(situation) with Memory = match situation {
+fn render_propose_arm(situation) with Memory + Alloc = match situation {
   Situation(s) => match s.facts {
     TopicFacts(f) => {
       let body = match s.topic {
@@ -629,7 +629,7 @@ fn render_unlock_arm(situation) with Memory + Alloc = match situation {
 // violation / dropped capability / missing import — Trace surfaces
 // the violation site. silence_predicate gated on ownership_at_topic
 // being Some OR row_subsumption_fails.
-fn render_trace_arm(situation) with Memory = match situation {
+fn render_trace_arm(situation) with Memory + Alloc = match situation {
   Situation(s) => {
     let body = match s.ownership_at_topic {
       Some(_) => [SLit("Ownership at "), SSpan(topic_span_or_zero(s.topic)), SLit(" — consumed; can't have it both ways")],
@@ -657,7 +657,7 @@ fn render_verify_arm(situation) with Memory + Alloc = match situation {
 // canonical "next step" voice — surface gradient_next as one
 // annotation that unlocks one capability. silence_predicate gated on
 // gradient_next being Some.
-fn render_teach_arm(situation) with Memory = match situation {
+fn render_teach_arm(situation) with Memory + Alloc = match situation {
   Situation(s) => {
     let body = match s.gradient_next {
       None => [SLit("")],
@@ -673,7 +673,7 @@ fn render_teach_arm(situation) with Memory = match situation {
 // REFLECTIVE stance. Per AT6: walks the Reason chain when the user
 // explicitly asked a Why question. silence_predicate gated on
 // TopicAsk(QWhy(_)) — only fires for explicit asks per MV §2.7.5.
-fn render_why_arm(situation) with Memory = match situation {
+fn render_why_arm(situation) with Memory + Alloc = match situation {
   Situation(s) => {
     let body = match s.reason_at_topic {
       None => [SLit("")],
@@ -847,7 +847,7 @@ fn resolve_cursor_target(target, current_handle: Handle) -> Handle with GraphRea
 // gesture. Per MV §2 Q5 + primitive #8: every cursor write threads a
 // Reason so the Why tentacle can later answer "why this cursor?". H6
 // exhaustive over CaretTarget.
-fn focus_reason(target) with Pure = match target {
+fn focus_reason(target) with Memory + Alloc = match target {
   TargetHandle(_) => Inferred("explicit handle focus"),
   TargetSpan(s) => Located(s, Inferred("span focus gesture")),
   TargetIdent(name) => Inferred("identifier focus: {name}"),
@@ -859,7 +859,7 @@ fn focus_reason(target) with Pure = match target {
 // QOwnership is Trace-tentacle (ownership trail); QVerifyDebt is
 // Verify-tentacle (refinement obligations). H6 exhaustive over
 // Question's 13 variants via pattern alternation per SYNTAX.md L956.
-fn tentacle_for_question(question) with Pure = match question {
+fn tentacle_for_question(question) with Memory + Alloc = match question {
   QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_) | QUnknown(_) => TentQuery,
   QOwnership(_) => TentTrace,
   QWhy(_) | QSubstChain(_) => TentWhy,
@@ -870,7 +870,7 @@ fn tentacle_for_question(question) with Pure = match question {
 // natural Span; other variants project to span_zero. The TurnRecord's
 // span_at field captures this for next-turn observation deltas. H6
 // exhaustive over Question via pattern alternation.
-fn question_span(question) with Pure = match question {
+fn question_span(question) with Memory + Alloc = match question {
   QTypeAt(s) => s,
   QTypeOf(_) | QIntentOf(_) | QUnresolved | QSubstChain(_) | QEffects(_) | QOwnership(_) | QWhy(_) | QRefsOf(_) | QVerifyDebt | QHandlerProvider(_) | QFlowOf(_) | QUnknown(_) => span_zero(),
 }
@@ -892,7 +892,7 @@ fn question_span(question) with Pure = match question {
 // second instance of sparse Situation composition; one more (likely
 // run_query for batch path) earns the abstraction. Until then,
 // parallel forms honest about not-yet-generic.
-fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure = match match prior_turn {
+fn compose_propose_situation(target_handle, target_reason, prior_turn) with Memory + Alloc = match match prior_turn {
   None => (None, None),
   Some(rec) => match rec {
     TurnRecord(r) => (Some(r.topic), Some(r.tentacle)),
@@ -1310,7 +1310,7 @@ fn join_capability_labels(labels) with Memory + Alloc = if len(labels) == 0 {
 // so the span is one peel away. Falls back to span_zero on
 // non-Located reasons (theoretical; suggestion_reason always
 // produces Located).
-fn suggestion_site_from_reason(reason) with Pure = match reason {
+fn suggestion_site_from_reason(reason) with Memory + Alloc = match reason {
   Located(sp, _) => sp,
   _ => span_zero(),
 }

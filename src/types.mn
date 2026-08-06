@@ -433,6 +433,12 @@ type Usage = UZero | UOne | UMany
 // ─── Scheme (spec 04) — let-generalization ─────────────────────────
 // Forall(the quantified handles, the body type). A monomorphic binding is
 // Forall([], ty). env_lookup returns Option<(Scheme, Reason)>.
+// CONDEMNED CARRIER (the resolved design D1/D2): the stored Forall IS the
+// scheme snapshot the judgment tower compensates for — the terminal form
+// has NO scheme object (a decl's live cell + the completion-bit column;
+// quantification is a projection). Dies at rung 3 with generalize and
+// instantiate-as-clone; survives until then as the boundary FORM the
+// query/display handlers read.
 type Scheme = Forall([Int], Ty)
 
 // SchemeKind discriminates env entries by their CONSTRUCTION ORIGIN.
@@ -522,9 +528,9 @@ type SchemeKind
 // is a point in this space:
 //   Pure        = ([], [], EtClosed)
 //   Closed(A)   = (A,  [], EtClosed)
-//   Open(A, v)  = (A,  [], EtVar(v))
+//   Open(A, v)  = (A,  [], EtOpen([v]))
 //   !B          = ([], B,  EtAll)          — the negative capability
-//   (A+tail)−B  = (A∖B, B, EtVar(v))       — the subtraction, UNDROPPABLE:
+//   (A+tail)−B  = (A∖B, B, EtOpen([v]))    — the subtraction, UNDROPPABLE:
 //                                            the absent set masks the tail
 //                                            at every read, forever.
 // Subtraction is an EAGER LITERAL DIFFERENCE into the absent field (the
@@ -540,9 +546,23 @@ type EffRow = EfRow([EffName], [EffName], EffTail)
 type EffTail
   // nothing beyond the present set
   = EtClosed
-  // a row variable: more may arrive (masked by the absent set)
-  | EtVar(Int)
-  // the universe: anything EXCEPT the absent set (the !B form)
+  // the OPEN tail is a SET OF EDGES — row-cell handles whose live content
+  // joins into the reading (row = present ∪ each edge's content ∖ absent).
+  // The sorted-handle-set is §4①'s one set representation; EtOpen([]) is
+  // EtClosed and ef_make canonicalizes it away, so readers never meet the
+  // empty set. Mints are singletons [v]; MULTI-edge sets are born at ONE
+  // writer — tail_join's union (two open tails meeting in a frame keep
+  // both sets; the A2 rung, landed with the judged bind sites: reads
+  // fold every edge, unify binds per-edge, and find treats a multi-edge
+  // cell as its own terminal). Sortedness is the writers' invariant
+  // (tail_set_insert/union — effects.mn), so structural == over two
+  // tails is set equality.
+  | EtOpen([Int])
+  // the universe: anything EXCEPT the absent set — DEMAND-side only (an
+  // authored anything-but constraint, the gate's transient universe-minus;
+  // THE ETALL LAW, PLAN's settled laws): no publish, bind, or join may
+  // store EtAll into an INFERRED row. A stored supply-side EtAll is a
+  // census item at zero.
   | EtAll
 
 // Effect names carry optional install-time arguments. The `with IO`
@@ -788,7 +808,7 @@ fn binop_kind(op) with Pure = match op {
   BConcat => BKConcat,
 }
 
-fn binop_to_str(op) with Pure = match op {
+fn binop_to_str(op) with Memory + Alloc = match op {
   BAdd => "+",
   BSub => "-",
   BMul => "*",
@@ -926,7 +946,7 @@ type Span = Span(Int, Int, Int, Int)
 // it — and every consumer boundary collapses by typed identity (the
 // weave carried ~85 re-demanded copies of this one obligation at call
 // sites before the return was declared, measured 2026-07-30).
-fn span_join(a, b) -> ValidSpan with Pure = match a {
+fn span_join(a, b) -> ValidSpan with Memory + Alloc = match a {
   Span(sl, sc, _, _) => match b {
     Span(_, _, el, ec) => Span(sl, sc, el, ec),
   },
@@ -941,7 +961,7 @@ fn span_eq(a, b) with Pure = match a {
 // Closed-interval overlap on line numbers. Sufficient for the
 // proximity-tier classification; column-precise comparison is
 // peer-handle territory.
-fn span_overlaps(a, b) with Pure = match a {
+fn span_overlaps(a, b) with Memory + Alloc = match a {
   Span(asl, _asc, ael, _aec) => match b {
     Span(bsl, _bsc, bel, _bec) => ael >= bsl && bel >= asl,
   },
@@ -950,12 +970,12 @@ fn span_overlaps(a, b) with Pure = match a {
 // Ground construction — the R3 fragment discharges span_valid(0,0,0,0)
 // outright, so this producer's proof costs nothing and every consumer
 // reads ValidSpan by type.
-fn span_zero() -> ValidSpan with Pure = Span(0, 0, 0, 0)
+fn span_zero() -> ValidSpan with Memory + Alloc = Span(0, 0, 0, 0)
 
 // The span a Reason edge carries, when it carries one — Located wraps the
 // site; anything else is genuinely unlocated. The occurs-check's coordinates
 // read THIS instead of flooring to 0:0 (SYNTAX principle 5).
-fn reason_span_or_zero(ref reason) with Pure = match reason {
+fn reason_span_or_zero(ref reason) with Memory + Alloc = match reason {
   Located(span, _) => span,
   _ => span_zero(),
 }
@@ -999,7 +1019,7 @@ fn span_contains(outer, inner) with Pure = match outer {
 type Token = Tok(TokenKind, Span)
 
 type TokenKind
-  // ─── Keywords (19) ───────────────────────────────────────────────
+  // ─── Keywords (18) ───────────────────────────────────────────────
   = TFn
   | TLet
   | TIf
@@ -1054,7 +1074,7 @@ type TokenKind
   // logical
   | TAndAnd
   | TOrOr
-  // ─── Single-character operators and punctuation (22) ─────────────
+  // ─── Single-character operators and punctuation (23) ─────────────
   | TLParen
   | TRParen
   | TLBrace
@@ -1280,7 +1300,7 @@ type Region = Region(Int, Span)
 // the current-top region onto an alloc return; check_escape
 // compares a returned value's region against the ambient region
 // on fn return.
-fn mk_tok(kind, sl, sc, el, ec) with Pure = Tok(kind, Span(sl, sc, el, ec))
+fn mk_tok(kind, sl, sc, el, ec) with Memory + Alloc = Tok(kind, Span(sl, sc, el, ec))
 
 effect RegionTrack {
   region_enter(Span) -> Int
@@ -2621,7 +2641,7 @@ fn show_handle(h) with GraphRead + Memory + Alloc + !Mutate + Intern = {
 // no copy, no cache). [] when the callee's scheme isn't a ground function
 // (an unbound forward ref, a param-position fn) — then there are no labels to
 // resolve and the args pass through positionally.
-fn callee_params(name) with EnvRead + GraphRead = match env_lookup(name) {
+fn callee_params(name) with EnvRead + GraphRead + Memory + Alloc = match env_lookup(name) {
   Some(entry) => match entry {
     (scheme, _, _) => match scheme {
       Forall(_, TVar(h)) => match graph_chase(h) {
@@ -2809,8 +2829,20 @@ fn show_effrow(ref row) with GraphRead + Memory + !Mutate + Alloc + Intern = mat
     match t {
       EtClosed => // drift-audit: ignore — the renderer WRITES the surface word for the empty row (SYNTAX: Pure is the identity's spelling); no dispatch reads it
       if len(p) == 0 && len(a) == 0 { "Pure" } else { head },
-      EtAll => if len(p) == 0 && len(a) == 0 { "Any" } else { head },
-      EtVar(v) => if len(p) == 0 && len(a) == 0 { show_handle(v) } else { "{head} + {show_handle(v)}" },
+      EtAll => // A named EtAll row must render distinguishably from a closed one:
+      // reading = p ∪ (ALL ∖ a), so the tail carries "everything else" — the
+      // 2026-07-31 census read forty EtAll-vs-EtClosed refusals as phantom
+      // positives mismatches because this arm rendered `head` bare.
+      if len(p) == 0 && len(a) == 0 { "Any" } else { "{head} + Any" },
+      EtOpen(vs) => // every edge renders (the set is the tail); the empty set
+      // reads as closed — ef_make canonicalizes it away, and the voice
+      // stays total over it regardless (display-totality).
+      if len(vs) == 0 {
+        if len(p) == 0 && len(a) == 0 { "Pure" } else { head }
+      } else {
+        let tails = show_list(vs, show_handle, " + ")
+        if len(p) == 0 && len(a) == 0 { tails } else { "{head} + {tails}" }
+      },
     }
   },
 }
@@ -3108,14 +3140,14 @@ fn predicate_flow_label(ref pred) with GraphRead + Memory + Alloc = match pred {
 // row_flow_label — the absent set in a function's row IS the non-interference
 // proof. `with !IO + !Network` proves the function cannot route output to
 // public sinks. On the canonical triple the stance is the TAIL: EtAll is the
-// proved-absence form (masked universe); EtClosed/EtVar rows are observably
+// proved-absence form (masked universe); EtClosed/EtOpen rows are observably
 // Public (their absent set records proofs but the row itself flows). H6:
 // exhaustive over the three tails.
-fn row_flow_label(ref row) with Pure = match row {
+fn row_flow_label(ref row) with Memory + Alloc = match row {
   EfRow(_, _, EtAll) => // A universal tail is the proved-absence stance (!E) — Secret; every
   // other form is observably Public (subtraction/openness conservative).
   Secret,
-  EfRow(_, _, EtVar(_)) => Public,
+  EfRow(_, _, EtOpen(_)) => Public,
   EfRow(_, _, EtClosed) => Public,
 }
 

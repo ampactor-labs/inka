@@ -315,7 +315,7 @@ fn caret_proximity_weight(caret, target_span) -> Float with GraphRead + !Mutate 
   },
 }
 
-fn caret_span_from_reason(reason) with Pure = match reason {
+fn caret_span_from_reason(reason) with Memory + Alloc = match reason {
   Located(sp, _) => sp,
   _ => span_zero(),
 }
@@ -492,7 +492,7 @@ fn reduce_max_by_score(scored) with Alloc + Memory = reduce(
 // The eight-arm fan — ONE projection body serving both cursor_at (span,
 // resolved here) and cursor_at_handle (pre-resolved). The eight aspects of
 // the one read (PLAN §2), each arm a tentacle.
-fn cursor_view_of(handle) with GraphRead = match graph_chase(handle) {
+fn cursor_view_of(handle) with GraphRead + EnvRead + Memory + Alloc + Synth + Verify + Teach = match graph_chase(handle) {
   GNode(kind, _reason) => {
     let pos = (handle, kind)
     match pos <| (
@@ -534,14 +534,14 @@ fn cursor_view_of(handle) with GraphRead = match graph_chase(handle) {
 // obligation at scan_for_span replaces the three re-demanded copies at
 // the transport's Caret/pin boundaries; handle_at_span discharges by
 // typed identity through it.
-fn handle_at_span(span) -> Handle with GraphRead + !Mutate = {
+fn handle_at_span(span) -> Handle with GraphRead + !Mutate + Memory + Alloc = {
   let snapshot = graph_snapshot()
   match snapshot {
     Graph(next, _spans) => scan_for_span(span, 0, next),
   }
 }
 
-fn scan_for_span(target, i, n) -> Handle with GraphRead + !Mutate = if i >= n {
+fn scan_for_span(target, i, n) -> Handle with GraphRead + !Mutate + Memory + Alloc = if i >= n {
   0
 } else {
   match graph_chase(i) {
@@ -569,7 +569,7 @@ fn caret_span_of_handle(handle) with GraphRead + Memory + Alloc + !Mutate = pars
 
 // An unbound node's type IS its own type variable — the chase
 // terminated at this handle, so TVar(handle) is what HM proves.
-fn ty_of_kind(handle, kind) with Pure = match kind {
+fn ty_of_kind(handle, kind) with Memory + Alloc = match kind {
   NBound(ty) => ty,
   NFree(_) => TVar(handle),
   NRowBound(_) => TVar(handle),
@@ -600,7 +600,7 @@ fn ownership_of_kind(kind) with Memory = match kind {
   _ => Unmarked,
 }
 
-fn ownership_of_ty(ty) with Memory = match ty {
+fn ownership_of_ty(ty) with Memory + Alloc = match ty {
   TFun(params, _, _) => if len(params) == 0 { Unmarked } else { param_resolved(list_index(params, 0)) },
   _ => Unmarked,
 }
@@ -615,14 +615,14 @@ fn ownership_of_ty(ty) with Memory = match ty {
 //   no parent pipe → NoPipe (a leaf, or the chain's outermost result)
 // The verb tentacle then actually fires — "you are mid-|> chain" is a live
 // read, never the old constant NoPipe.
-fn pipe_context_of_handle(handle) with GraphRead + !Mutate = {
+fn pipe_context_of_handle(handle) with GraphRead + !Mutate + Memory + Alloc = {
   let snapshot = graph_snapshot()
   match snapshot {
     Graph(next, _spans) => scan_for_pipe_parent(handle, 0, next),
   }
 }
 
-fn scan_for_pipe_parent(target, i, n) with GraphRead + !Mutate = if i >= n {
+fn scan_for_pipe_parent(target, i, n) with GraphRead + !Mutate + Memory + Alloc = if i >= n {
   NoPipe
 } else {
   match pipe_position_in(target, graph_node_body(i)) {
@@ -633,7 +633,7 @@ fn scan_for_pipe_parent(target, i, n) with GraphRead + !Mutate = if i >= n {
 
 // Is `target` a stage of the PipeExpr at this weave entry? Project the
 // PipeKind verb and which side the target sits on. Non-pipe bodies → NoPipe.
-fn pipe_position_in(target, body) with Pure = match body {
+fn pipe_position_in(target, body) with Memory + Alloc = match body {
   NExpr(PipeExpr(verb, left, right)) => match left {
     N(_, _, lh) => match right {
       N(_, _, rh) => if lh == target { StartingPipe } else if rh == target { InsidePipe(verb) } else { NoPipe },

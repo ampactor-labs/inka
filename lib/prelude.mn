@@ -62,7 +62,7 @@ effect Iterate {
 // the Iterate instance args died exactly there, orphaning every
 // fold-family element. Source order kills this instance; the class
 // (order-independent verdicts) is the named peer in PLAN.
-fn iterate_from(xs, i, n) with Iterate = if i < n {
+fn iterate_from(xs, i, n) with Memory + Iterate = if i < n {
   yield(xs[i])
   iterate_from(xs, i + 1, n)
 } else {

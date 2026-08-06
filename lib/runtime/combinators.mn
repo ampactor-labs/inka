@@ -69,10 +69,10 @@ fn race(handlers) with GraphRead + GraphWrite + Memory + Alloc = race_internal(h
 // 4. Source span — earlier source position wins (closer to top of
 //    file)
 // 5. Lexical name — alphabetic tiebreak; guarantees singleton
-fn tiebreak_row_minimality(survivors) with Memory =
+fn tiebreak_row_minimality(survivors) with Memory + Alloc =
   min_by_key(survivors, (s) => effect_count(handler_row(s)))
 
-fn tiebreak_reason_depth(survivors) with Memory =
+fn tiebreak_reason_depth(survivors) with Memory + Alloc =
   min_by_key(survivors, (s) => reason_chain_length(handler_reason(s)))
 
 fn tiebreak_declared_intent(survivors, cursor) with GraphRead + Memory + Alloc = {
@@ -80,10 +80,10 @@ fn tiebreak_declared_intent(survivors, cursor) with GraphRead + Memory + Alloc =
   if len(aligned) > 0 { aligned } else { survivors }
 }
 
-fn tiebreak_source_span(survivors) with Memory =
+fn tiebreak_source_span(survivors) with Memory + Alloc =
   min_by_key(survivors, (s) => span_start(handler_span(s)))
 
-fn tiebreak_lex(survivors) with Memory = min_by_key(survivors, (s) => handler_name(s))
+fn tiebreak_lex(survivors) with Memory + Alloc = min_by_key(survivors, (s) => handler_name(s))
 
 // first_verified_wins — applies the five tiebreak steps in order;
 // each step narrows. Returns the unique winner.
@@ -128,10 +128,10 @@ fn collect_verified_survivors(handlers, checkpoint) with GraphRead + GraphWrite 
 fn handler_row(_handler) with Pure = mk_ef_pure()
 
 // conservative default; full body reads handler's install Reason (HC2.h)
-fn handler_reason(_handler) with Pure = Inferred("race-survivor")
+fn handler_reason(_handler) with Memory + Alloc = Inferred("race-survivor")
 
 // conservative default; full body reads handler's declaration span (HC2.h)
-fn handler_span(_handler) with Pure = Span(0, 0, 0, 0)
+fn handler_span(_handler) with Memory + Alloc = Span(0, 0, 0, 0)
 
 // conservative default; full body reads handler's name from declaration (HC2.h)
 fn handler_name(_handler) with Pure = ""
@@ -171,7 +171,7 @@ fn list_head_or_default(lst) with Memory = if len(lst) == 0 { 0 } else { list_in
 
 // min_by_key — find the element with smallest key. O(N). Used by
 // tiebreak steps.
-fn min_by_key(lst, key_fn) with Memory = {
+fn min_by_key(lst, key_fn) with Memory + Alloc = {
   let n = len(lst)
   if n == 0 {
     []

@@ -193,7 +193,7 @@ handler delta_default {
 }
 
 // ─── Per-axis suggestion constructors ──────────────────────────────
-fn row_suggestion(handle, ann_text, capability_labels) with Pure = AnnotationSuggestion(
+fn row_suggestion(handle, ann_text, capability_labels) with Memory + Alloc = AnnotationSuggestion(
   SuggestEffectRow,
   ann_text,
   capability_labels,
@@ -275,7 +275,7 @@ fn row_to_with_clause(row) with Intern + Memory + Alloc + GraphRead = match row 
     match t {
       EtClosed => if len(p) == 0 && len(a) == 0 { "with Pure" } else { "with {pos}{joiner}{negs}" },
       EtAll => if len(a) == 0 { "with ..." } else { "with {pos}{joiner}{negs}" },
-      EtVar(_) => "with ...",
+      EtOpen(_) => "with ...",
     }
   },
 }
@@ -355,13 +355,13 @@ fn capabilities_unlocked_by(row) with Memory + Alloc = match row {
       negation_caps(a)
     },
     EtAll => negation_caps(a),
-    EtVar(_) => negation_caps(a),
+    EtOpen(_) => negation_caps(a),
   },
 }
 
 fn negation_caps(names) with Memory + Alloc = flatten(map(caps_for_negated_eff, names))
 
-fn caps_for_negated_eff(name) with Intern = match name {
+fn caps_for_negated_eff(name) with Intern + Memory + Alloc = match name {
   ENamed(h) => if h == intern_str("Alloc") {
     ["CRealTime"]
   } else if h == intern_str("IO") {

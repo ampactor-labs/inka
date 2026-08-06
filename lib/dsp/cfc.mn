@@ -53,7 +53,7 @@ fn bin_mag(re: Float, im: Float) -> Float with Pure = sqrt(re * re + im * im)
 //
 // The loop is the tail-recursive accumulator the whole file uses; no
 // list grows inside it (the samples are read, never appended).
-fn dft_bin_loop(xs, start: Int, n: Int, freq: Int, sr: Int, j: Int, re: Float, im: Float) with Memory = if j >= n {
+fn dft_bin_loop(xs, start: Int, n: Int, freq: Int, sr: Int, j: Int, re: Float, im: Float) with Memory + Alloc = if j >= n {
   (re / float_of_int(n), 0.0 - im / float_of_int(n))
 } else {
   let sample = list_index(xs, start + j)
@@ -63,7 +63,7 @@ fn dft_bin_loop(xs, start: Int, n: Int, freq: Int, sr: Int, j: Int, re: Float, i
   dft_bin_loop(xs, start, n, freq, sr, j + 1, re + wx * cos(angle), im + wx * sin(angle))
 }
 
-fn dft_bin(xs, start: Int, n: Int, freq: Int, sr: Int) with Memory =
+fn dft_bin(xs, start: Int, n: Int, freq: Int, sr: Int) with Memory + Alloc =
   dft_bin_loop(xs, start, n, freq, sr, 0, 0.0, 0.0)
 
 // ─── Mean vector length — the coupling measure ──────────────────────
@@ -99,7 +99,7 @@ fn mvl(phases, amps) -> Float with Memory = mvl_loop(phases, amps, 0, len(phases
 // amplitude column for every high bin visits each (frame, bin) once:
 // O(num_frames × win × (num_low + num_high)). The comodulogram then reads
 // columns, never recomputing a DFT per (low, high) pair.
-fn fill_phase_column(xs, sr: Int, freq: Int, win: Int, hop: Int, num_frames: Int, out, f: Int) with Memory = if f >= num_frames {
+fn fill_phase_column(xs, sr: Int, freq: Int, win: Int, hop: Int, num_frames: Int, out, f: Int) with Memory + Alloc = if f >= num_frames {
   out
 } else {
   match dft_bin(xs, f * hop, win, freq, sr) {
@@ -113,7 +113,7 @@ fn fill_phase_column(xs, sr: Int, freq: Int, win: Int, hop: Int, num_frames: Int
 fn phase_column(xs, sr: Int, freq: Int, win: Int, hop: Int, num_frames: Int) with Memory + Alloc =
   fill_phase_column(xs, sr, freq, win, hop, num_frames, make_list(num_frames), 0)
 
-fn fill_amp_column(xs, sr: Int, freq: Int, win: Int, hop: Int, num_frames: Int, out, f: Int) with Memory = if f >= num_frames {
+fn fill_amp_column(xs, sr: Int, freq: Int, win: Int, hop: Int, num_frames: Int, out, f: Int) with Memory + Alloc = if f >= num_frames {
   out
 } else {
   match dft_bin(xs, f * hop, win, freq, sr) {

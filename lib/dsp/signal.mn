@@ -84,7 +84,7 @@ fn linear_to_db(x: Float) -> Float with Pure = 20.0 * log(x) / log(10.0)
 //
 // The average magnitude at one frequency across every hop-spaced frame — the
 // frequency's mean spectral energy over the whole signal.
-fn stft_avg_loop(xs, freq: Int, sr: Int, win: Int, hop: Int, num_frames: Int, f: Int, acc: Float) with Memory = if f >= num_frames {
+fn stft_avg_loop(xs, freq: Int, sr: Int, win: Int, hop: Int, num_frames: Int, f: Int, acc: Float) with Memory + Alloc = if f >= num_frames {
   acc / float_of_int(num_frames)
 } else {
   match dft_bin(xs, f * hop, win, freq, sr) {
@@ -92,7 +92,7 @@ fn stft_avg_loop(xs, freq: Int, sr: Int, win: Int, hop: Int, num_frames: Int, f:
   }
 }
 
-fn stft_avg_mag(xs, freq: Int, sr: Int, win: Int, hop: Int) with Memory = {
+fn stft_avg_mag(xs, freq: Int, sr: Int, win: Int, hop: Int) with Memory + Alloc = {
   let num_frames = (len(xs) - win) / hop + 1
   stft_avg_loop(xs, freq, sr, win, hop, num_frames, 0, 0.0)
 }
@@ -102,7 +102,7 @@ fn stft_avg_mag(xs, freq: Int, sr: Int, win: Int, hop: Int) with Memory = {
 // signal this names the carrier — the STFT's own verdict, independent of the
 // coupling grid. `best_v` threads the running peak as an annotated float
 // accumulator (the CFC representation discipline, below).
-fn stft_dominant_loop(xs, probes, sr: Int, win: Int, hop: Int, k: Int, np: Int, best_k: Int, best_v: Float) with Memory = if k >= np {
+fn stft_dominant_loop(xs, probes, sr: Int, win: Int, hop: Int, k: Int, np: Int, best_k: Int, best_v: Float) with Memory + Alloc = if k >= np {
   best_k
 } else {
   let v = stft_avg_mag(xs, list_index(probes, k), sr, win, hop)
@@ -113,7 +113,7 @@ fn stft_dominant_loop(xs, probes, sr: Int, win: Int, hop: Int, k: Int, np: Int, 
   }
 }
 
-fn stft_dominant(xs, probes, sr: Int, win: Int, hop: Int) with Memory = stft_dominant_loop(
+fn stft_dominant(xs, probes, sr: Int, win: Int, hop: Int) with Memory + Alloc = stft_dominant_loop(
   xs,
   probes,
   sr,
@@ -152,7 +152,7 @@ fn bandpass_step(x: Float, a_hp: Float, a_lp: Float) -> Float = {
   ((prev) => a_lp * lp1 + (1.0 - a_lp) * prev) <~ delay(1)
 }
 
-fn bandpass_loop(xs, a_hp: Float, a_lp: Float, i: Int, n: Int, out) with Memory = if i >= n {
+fn bandpass_loop(xs, a_hp: Float, a_lp: Float, i: Int, n: Int, out) with Memory + Alloc = if i >= n {
   out
 } else {
   bandpass_loop(xs, a_hp, a_lp, i + 1, n, list_set(out, i, bandpass_step(xs[i], a_hp, a_lp)))

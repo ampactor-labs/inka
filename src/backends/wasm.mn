@@ -3108,7 +3108,7 @@ fn walk_locals_pat_list(pats, acc) = if len(pats) == 0 {
 // bind floored while the compare read wide). TVar(0) is lower's explicit
 // no-proof floor (the null handle — never chased); a var lookup_ty returns
 // unchanged is genuinely free — the honest word floor.
-fn pat_elem_repr(ty) with LookupTy = match ty {
+fn pat_elem_repr(ty) with LookupTy + Memory + Alloc = match ty {
   TVar(h) => if h == 0 {
     RI32
   } else {
@@ -3128,7 +3128,7 @@ fn pat_elem_repr(ty) with LookupTy = match ty {
 // ebs' element types resolved through pat_elem_repr, so bind, decl, and
 // test agree with the stored layout under any bracket. -1 past the end
 // (unprovable, never a silent 0), mirroring tuple_elem_offset.
-fn pat_tuple_off(ebs, target, i, off) with LookupTy + Memory = if i >= len(ebs) {
+fn pat_tuple_off(ebs, target, i, off) with LookupTy + Memory + Alloc = if i >= len(ebs) {
   -1
 } else {
   match list_index(ebs, i) {
@@ -4918,7 +4918,7 @@ fn ctor_payload_tys_of(ctor_name) with EnvRead + Memory + Alloc = match env_look
 // operation fact.
 type FoldOp = FoldCompare | FoldEq | FoldHash | FoldShow
 
-fn fold_closures_empty() with Pure = ({cmp: [], eq: [], hash: [], show: []})
+fn fold_closures_empty() with Memory + Alloc = ({cmp: [], eq: [], hash: [], show: []})
 
 // The closed-record pins are load-bearing (Intent Boundary): an unannotated
 // acc infers a partial OPEN record per accessor, and an open receiver's field

@@ -156,7 +156,7 @@ fn parse_number(src, pos) with Memory + Alloc = match json_scan_number(src, pos,
 
 // json_scan_number — advance past digits, optional decimal point, optional
 // exponent. Returns (end_pos, is_float). Tail-recursive.
-fn json_scan_number(src, start, pos, is_float) with Memory = if pos >= byte_len(src) {
+fn json_scan_number(src, start, pos, is_float) with Memory + Alloc = if pos >= byte_len(src) {
   (pos, is_float)
 } else {
   let b = byte_at(src, pos)
@@ -296,7 +296,7 @@ fn handle_escape(src, pos, buf, written, cap) with Memory + Alloc = if pos >= by
 // JSON.unicode peer.
 //
 // \"
-fn decode_escape(e) with Pure = if e == 34 {
+fn decode_escape(e) with Memory + Alloc = if e == 34 {
   (34, true)
 }
 // \\
@@ -529,7 +529,7 @@ fn serialize_object_inner(fields, i, n, acc) with Memory + Alloc = if i >= n {
 // json_obj_get — find a field by key in a JObj. Returns Option(JsonValue).
 // Linear scan; LSP messages are small. H6 over JsonValue (JObj only;
 // other variants return None as type-safety).
-fn json_obj_get(v, key) with Memory = match v {
+fn json_obj_get(v, key) with Memory + Alloc = match v {
   JObj(fields) => json_obj_get_loop(fields, key, 0, len(fields)),
   JNull => None,
   JBool(_) => None,
@@ -538,7 +538,7 @@ fn json_obj_get(v, key) with Memory = match v {
   JArr(_) => None,
 }
 
-fn json_obj_get_loop(fields, key, i, n) with Memory = if i >= n {
+fn json_obj_get_loop(fields, key, i, n) with Memory + Alloc = if i >= n {
   None
 } else {
   let pair = list_index(fields, i)

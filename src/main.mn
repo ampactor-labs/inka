@@ -395,10 +395,19 @@ fn path_to_module(arg) with Alloc + Memory = {
 // (handler chain IS capability stack): each entry-handler's chain
 // places the surface adapter (terminal_transport / lsp_adapter /
 // wat_stdout) OUTERMOST = least trusted = sandbox boundary.
+// The PROCESS intern table — the root absorb for the stray Intern
+// extents (discovery parses, solo renders, session wire reads) that run
+// outside any infer_context bracket. Inner brackets install their own
+// tables and SHADOW this one for their whole extent, so a judgment's
+// intern identity never mixes with a stray's (a stray's handles stay
+// inside its own extent by construction). Intern is evidence-tier (two
+// handlers), so the executable gate's strict conjunct clears only
+// row-wise — this install IS the row cure and the live chain node the
+// stray performs dispatch through.
 fn main(argv) = match parse_cli_args(argv) {
   ParseError(msg) => print_error_and_help(msg),
   Invocation(verb) => dispatch_invocation(verb),
-}
+} ~> intern_table
 
 // dispatch_invocation — the substrate handlers (env/graph/diagnostics)
 // install ONCE at this outermost dispatch boundary: the program boundary
@@ -938,12 +947,12 @@ fn tighten_run(target_opt) = {
   } ~> tighten_collector ~> wasi_filesystem ~> mentl_default)
 }
 
-// Authorable = the proven row renders as source: a closed tail. A var
-// tail renders as a handle name — never authored into a signature.
+// Authorable = the proven row renders as source: a closed tail. An open
+// tail renders as edge handles — never authored into a signature.
 fn row_is_authorable(ref used) = match used {
   EfRow(_, _, t) => match t {
     EtClosed => true,
-    EtVar(_) => false,
+    EtOpen(_) => false,
     EtAll => false,
   },
 }
@@ -1487,7 +1496,7 @@ fn address_resolve(ref spans, gline, col) with Memory + Alloc + GraphRead = matc
   },
 }
 
-fn address_case_a(ref spans, gline, col, i, n, best) with Memory + GraphRead = if i >= n {
+fn address_case_a(ref spans, gline, col, i, n, best) with Memory + GraphRead + Alloc = if i >= n {
   best
 } else {
   match list_index(spans, i) {
@@ -1512,7 +1521,7 @@ fn address_case_a(ref spans, gline, col, i, n, best) with Memory + GraphRead = i
 // the TIGHTEST node containing the point, so pointing at a `??` reaches
 // the hole node itself (and its Propose facet), never the enclosing decl
 // that also contains the column. Ties break leftward in both modes.
-fn address_better_a(col, best, cand) with Memory + GraphRead = match best {
+fn address_better_a(col, best, cand) with Memory + Alloc + GraphRead = match best {
   None => Some(cand),
   Some(b) => match b {
     (bs, bh) => match cand {
@@ -1571,7 +1580,7 @@ fn span_pick_of(ref spans, h) with Memory + Alloc = match find(
   None => None,
 }
 
-fn address_case_c(ref spans, gline, i, n, best) with Memory = if i >= n {
+fn address_case_c(ref spans, gline, i, n, best) with Memory + Alloc = if i >= n {
   best
 } else {
   match list_index(spans, i) {

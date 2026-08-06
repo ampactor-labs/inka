@@ -18,7 +18,9 @@
 //     eq_true + eq_false + ne_ok                    // = 20
 //   }
 //
-// This cannot yet round-trip the SEED: the disposable seed's eq still hits the
+// SEED-ERA NOTE (superseded — the seed was deleted 2026-07-10, boot IS the
+// wheel, and §5.U's eq leaves landed; the DIRECT-form upgrade is available
+// verification work): this could not round-trip the seed — its eq still hit the
 // product floor (it lags the wheel's fold), AND mentl2 (the wheel compiled by
 // the seed) traps upstream on a bare record literal — the higher-order-effect
 // ev-slot seam (PLAN §7), unrelated to the fold. So this micro proves the

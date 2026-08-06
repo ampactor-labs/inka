@@ -29,12 +29,12 @@ fn smap_add(idx, name: String, val) with Memory + Alloc = {
   list_set(idx, b, [(name, val)] ++ list_index(idx, b))
 }
 
-fn smap_get(ref idx, name: String) with Memory = {
+fn smap_get(ref idx, name: String) with Memory + Alloc = {
   let b = i32_and(str_hash(name), 4095)
   smap_bucket_scan(list_index(idx, b), name, 0)
 }
 
-fn smap_bucket_scan(ref bucket, name: String, i) with Memory = if i >= len(bucket) {
+fn smap_bucket_scan(ref bucket, name: String, i) with Memory + Alloc = if i >= len(bucket) {
   None
 } else {
   match list_index(bucket, i) {

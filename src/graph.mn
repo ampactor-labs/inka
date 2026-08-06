@@ -158,14 +158,14 @@ fn spine_put_boundary(ref spine, h, own boundary) with Memory = {
   ()
 }
 
-fn spine_put_span(ref spine, h, own span) with Memory = {
+fn spine_put_span(ref spine, h, own span) with Memory + Alloc = {
   let _ = list_set(spine_page(spine, h).spans, spine_slot(h), span)
   ()
 }
 
 // The sparse-column reads, each answering its absent-contract for a closed
 // band or a virgin cell.
-fn spine_body_at(ref spine, spine_open, h) with Memory + Cast = if spine_band(h) >= spine_open {
+fn spine_body_at(ref spine, spine_open, h) with Memory + Cast + Alloc = if spine_band(h) >= spine_open {
   NHole(0)
 } else {
   let cell = list_index(spine_page(spine, h).program, spine_slot(h))
@@ -175,14 +175,14 @@ fn spine_body_at(ref spine, spine_open, h) with Memory + Cast = if spine_band(h)
 // The birth-span column read — a virgin cell (never parse-indexed) is
 // span_zero, the same absent-contract every position consumer already
 // treats as "no source site".
-fn spine_span_at(ref spine, spine_open, h) with Memory + Cast = if spine_band(h) >= spine_open {
+fn spine_span_at(ref spine, spine_open, h) with Memory + Cast + Alloc = if spine_band(h) >= spine_open {
   span_zero()
 } else {
   let cell = list_index(spine_page(spine, h).spans, spine_slot(h))
   if addr(cell) == 0 { span_zero() } else { cell }
 }
 
-fn spine_comment_at(ref spine, spine_open, h) with Memory + Cast = if spine_band(h) >= spine_open {
+fn spine_comment_at(ref spine, spine_open, h) with Memory + Alloc + Cast = if spine_band(h) >= spine_open {
   ("", span_zero())
 } else {
   let cell = list_index(spine_page(spine, h).comments, spine_slot(h))
@@ -536,7 +536,10 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
       },
       _ => row,
     }
-    spine_put_node(spine, handle, GNode(NRowBound(stored), reason))
+    // THE FLAT-CELL LAW at the teaching write: the joined value folds
+    // before it stores, so the cell holds depth-1 truth and every
+    // read is a flat lookup (flatten_row_stored's own header).
+    spine_put_node(spine, handle, GNode(NRowBound(flatten_row_stored(spine, next, stored)), reason))
     let new_trail = trail_append(trail, trail_len, MSetRow(handle, old_node))
     let new_epoch = epoch + 1
     if len(checkpoint_stack) == 0 { graph_mutated(new_epoch, MSetRow(handle, old_node)) }
@@ -550,7 +553,9 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   // op (each decl finalizes its own row_handle, in its own branch).
   {
     let old_node = graph_node_at(spine, next, handle)
-    spine_put_node(spine, handle, GNode(NRowBound(row), reason))
+    // The finalize stores flat too (THE FLAT-CELL LAW — the published
+    // verdict is a depth-1 value every caller reads without recursion).
+    spine_put_node(spine, handle, GNode(NRowBound(flatten_row_stored(spine, next, row)), reason))
     let new_trail = trail_append(trail, trail_len, MSetRow(handle, old_node))
     let new_epoch = epoch + 1
     if len(checkpoint_stack) == 0 { graph_mutated(new_epoch, MSetRow(handle, old_node)) }
@@ -673,14 +678,22 @@ fn chase_node(ref spine, mint_bound, handle, depth) with !Mutate = if depth > 10
         _ => GNode(kind, reason),
       },
       NRowBound(row) => match row {
-        EfRow(names, absents, EtVar(next)) => // The chase folds the chain under the READING LAW: each level's
+        EfRow(names, absents, EtOpen(edges)) => // The chase folds the chain under the READING LAW: each level's
         // present rides forward MINUS the levels above it masked, and the
         // absents ACCUMULATE — the discarded-absent destructure here was
         // the mask-killer at the one mechanism every row read routes
         // through (a `~>` subtraction bound mid-chain vanished from every
         // graph_chase, so published faces carried the unmasked union and
-        // the root-row gate refused the wheel's own main).
-        chase_node(spine, mint_bound, next, depth + 1) |> merge_chased_row(??, names, absents, next),
+        // the root-row gate refused the wheel's own main). A SINGLE edge
+        // is a chain link and the chase follows it; a MULTI-edge tail is
+        // not a chain — the cell is its own terminal, and every content
+        // read rides resolve's fold (which walks each edge).
+        if len(edges) == 1 {
+          let next = last(edges)
+          chase_node(spine, mint_bound, next, depth + 1) |> merge_chased_row(??, names, absents, next)
+        } else {
+          GNode(kind, reason)
+        },
         _ => GNode(kind, reason),
       },
       _ => GNode(kind, reason),
@@ -701,12 +714,14 @@ fn chase_handle(ref spine, mint_bound, handle, depth) with !Mutate = if depth > 
         TVar(next) => chase_handle(spine, mint_bound, next, depth + 1),
         _ => handle,
       },
-      NRowBound(row) => // Row aliases: unify_row links open row vars as `va → EfRow(_, _, EtVar(vb))`.
-      // find follows them to the canonical root var, exactly as it follows
-      // TVar — so generalize/instantiate quantify a buried row tail (the row
-      // mirror of the type-var find). Type handles never reach this arm.
+      NRowBound(row) => // Row aliases: unify_row links open row cells as `va → EfRow(_, _, EtOpen([vb]))`.
+      // find follows a SINGLE edge to the canonical root, exactly as it
+      // follows TVar — so generalize/instantiate quantify a buried row
+      // tail (the row mirror of the type-var find). Type handles never
+      // reach this arm; a MULTI-edge tail has no single root, so the
+      // cell is its own canonical handle (content reads ride resolve).
       match row {
-        EfRow(_, _, EtVar(next)) => chase_handle(spine, mint_bound, next, depth + 1),
+        EfRow(_, _, EtOpen(edges)) => if len(edges) == 1 { chase_handle(spine, mint_bound, last(edges), depth + 1) } else { handle },
         _ => handle,
       },
       _ => handle,
@@ -721,12 +736,12 @@ fn chase_handle(ref spine, mint_bound, handle, depth) with !Mutate = if depth > 
 fn merge_chased_row(ref chased, ref names, ref absents, free_handle) with !Mutate = match chased {
   GNode(ck, cr) => match ck {
     NRowFree(_) => // Preserve the accumulated names AND masks with the free
-    // variable — EfRow([Memory, IO], [W], EtVar(v)) where v → NRowFree
+    // edge — EfRow([Memory, IO], [W], EtOpen([v])) where v → NRowFree
     // keeps both fields riding the free tail.
     if len(names) == 0 && len(absents) == 0 {
       chased
     } else {
-      GNode(NRowBound(ef_make(names, absents, EtVar(free_handle))), cr)
+      GNode(NRowBound(ef_make(names, absents, EtOpen([free_handle]))), cr)
     },
     NRowBound(inner) => GNode(NRowBound(merge_row(names, absents, inner)), cr),
     _ => chased,
@@ -742,12 +757,54 @@ fn merge_row(ref names, ref absents, ref row) with !Mutate = match row {
   EfRow(p, a, t) => ef_make(name_set_union(names, name_set_diff(p, absents)), name_set_union(absents, a), t),
 }
 
+// THE FLAT-CELL LAW's WRITE half (PLAN's settled laws): a stored row
+// never carries depth — every bound edge folds to its value HERE, at
+// the two write ops, so reads are depth-1 by invariant and no read
+// path ever recurses stored chains (the hub-cell wall's cure: the
+// fold's cost is paid once per write, never per read). Free edges
+// survive into the residual; EtAll absorbs; masks filter under the
+// reading law — the same arithmetic merge_row states one level up.
+// Mechanism-layer: state-passed, structural, zero ops.
+fn flatten_row_stored(ref spine, mint_bound, row) with !Mutate = match row {
+  EfRow(p, a, t) => match t {
+    EtOpen(vs) => match flatten_row_edges(spine, mint_bound, vs, (p, a, [], false)) {
+      (rp, ra, res, saw_all) => if saw_all { ef_make(rp, ra, EtAll) } else { ef_make(rp, ra, EtOpen(res)) },
+    },
+    _ => row,
+  },
+}
+
+fn flatten_row_edges(ref spine, mint_bound, ref vs: [Int], acc) with !Mutate + Memory + Alloc + Cast = match vs {
+  [] => acc,
+  [v, ...rest] => match acc {
+    (p, a, res, saw_all) => {
+      let next = match chase_node(spine, mint_bound, v, 0) {
+        GNode(kind, _) => match kind {
+          NRowBound(inner) => match flatten_row_stored(spine, mint_bound, inner) {
+            EfRow(cp, ca, ct) => {
+              let p2 = name_set_union(p, name_set_diff(cp, a))
+              let a2 = name_set_union(a, ca)
+              match ct {
+                EtClosed => (p2, a2, res, saw_all),
+                EtAll => (p2, a2, res, true),
+                EtOpen(ws) => (p2, a2, tail_set_union(res, ws), saw_all),
+              }
+            },
+          },
+          _ => (p, a, tail_set_insert(res, v), saw_all),
+        },
+      }
+      flatten_row_edges(spine, mint_bound, rest, next)
+    },
+  },
+}
+
 // The one nodes read. Every minted handle's cell was written at its own
 // mint, so below the bound only PLAN GAPS are unwritten (a planned range's
 // final mints running under its trial measure — the cell stays virgin);
 // the word-face guard answers those and any never-minted defensive read
 // with the synthesized NFree, and a live handle reads its cell directly.
-fn graph_node_at(ref spine, mint_bound, idx) with Memory + Cast = if idx >= mint_bound {
+fn graph_node_at(ref spine, mint_bound, idx) with Memory + Alloc + Cast = if idx >= mint_bound {
   GNode(NFree(0), Fresh(idx))
 } else {
   let cell = list_index(spine_page(spine, idx).nodes, spine_slot(idx))
@@ -891,23 +948,31 @@ fn occurs_in_row(spine, mint_bound, handle, ref eff) with !Mutate = match eff {
       true
     } else {
       match t {
-        EtVar(v) => // A BOUND tail hides structure the write would embed: subst_row's
+        EtOpen(vs) => // A BOUND edge hides structure the write would embed: subst_row's
         // merge arm traverses into the binding, so the cycle guard must
-        // reach the same leaves (the trio law over rows, through the tail).
-        {
-          let r = chase_handle(spine, mint_bound, v, 0)
-          if v == handle || r == handle {
-            true
-          } else {
-            match chase_node(spine, mint_bound, r, 0) {
-              GNode(NRowBound(inner), _) => occurs_in_row(spine, mint_bound, handle, inner),
-              _ => false,
-            }
-          }
-        },
+        // reach the same leaves through EVERY edge (the trio law over
+        // rows — any edge occurring is the row occurring). Structural
+        // walk — the mechanism layer's own discipline.
+        occurs_in_edges(spine, mint_bound, handle, vs),
         _ => false,
       }
     }
+  },
+}
+
+fn occurs_in_edges(spine, mint_bound, handle, ref vs: [Int]) with !Mutate = match vs {
+  [] => false,
+  [v, ...rest] => {
+    let r = chase_handle(spine, mint_bound, v, 0)
+    let here = if v == handle || r == handle {
+      true
+    } else {
+      match chase_node(spine, mint_bound, r, 0) {
+        GNode(NRowBound(inner), _) => occurs_in_row(spine, mint_bound, handle, inner),
+        _ => false,
+      }
+    }
+    if here { true } else { occurs_in_edges(spine, mint_bound, handle, rest) }
   },
 }
 

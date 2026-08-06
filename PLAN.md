@@ -1191,23 +1191,6 @@ not misled:
 Everything else on the board above is measured green; this list is the seam
 between the wheel and its ultimate form, held open on purpose.
 
-**THE BOARD IS RED ON THE WORKING TREE (2026-08-05) AND THE STANDING CLAIM
-ABOVE DOES NOT HOLD THERE.** The last commit (`6dcb9a9d`, docs and tools) is
-green; the uncommitted 2026-08-01 `.mn` arc is not. Era bracket over fixed
-crucibles: boot `69d6c0b0` (HEAD) answers crown 5/5 and frontier 332/0; boot
-`4a822b299c` (the tree's pin) answers **crown 4/1 and frontier 322/8**. Census
-is 0 and the fixpoint holds at both. The failing crucible is the higher-order
-`!E` leak — §11 Phase 1, with the proof in `RESIDUE.md`. The arc is
-deliberately uncommitted: the pre-commit gate refuses it on a real drift-mode-10
-finding in the same organ, and overriding a gate that is telling the truth is
-the disease this whole board exists to prevent.
-
-**How it rode undetected:** eleven consecutive ledger entries report no crown
-verdict at all. Nothing written was false — the gate had simply stopped being
-mentioned. That is closed mechanically now (§11 Phase 0.1: the march captures
-every gate it owns, `NOT RUN` is a visible blank, and a red board stamps
-`‹BOARD RED›` which doc-truth refuses).
-
 ### The landing record → `LEDGER.md`
 
 Every landing since first light, newest first, with its mechanics and its
@@ -1529,36 +1512,41 @@ hypothesis. This phase exists because both of the last two tripwires fired.
 
 ### Phase 1 · The row crosses the function boundary
 
-**IN FLIGHT — root partly proven, first fix REFUTED, next probe named.** The
-live soundness hole: `fn run(f) = f()` publishes `run : Pure` while `f`
-performs `E`, so `fn bad() with !E = run(() => op())` compiles and emits, and
-the medium additionally offers to delete the `!E` that would have caught it.
-`tests/crown/leak-higher-order` is the gate; it is RED on the working tree's
-boot and GREEN on HEAD's.
+**LANDED 2026-08-06 (pin e606a650) — the banked probe decided the build in
+one run.** The completion prune gained its SIGNATURE KEEP-SET: a free
+judgment-era row root the decl's params/return reach at exit escapes through
+instantiate at every call site (generalize's signature collection quantifies
+exactly it), so `signature_free_roots` — read THROUGH the live cells,
+deep-chased; the refuted 2026-08-05 attempt read declared slots and never
+contained the root — threads from each fn-shaped `inf_exit_fn` site to the
+prune, which keeps it. `run(f) = f()` publishes its param's row var in row
+and scheme coherently; the keep adds no quantification, so the prune's 4GB
+blowup bound is untouched. Same arc: the 1.3 wildcard became exhaustive Ty
+arms (TCont's world receiving the TFun arm's row split), and a SECOND root
+fell — `register_effect_ops` derived an effect's instance from op type vars
+alone, so `effect Sample(rate: Int)` charged a bare name (ancient, masked by
+the deleted declared-publish): declared params are now EANode value dims on
+the charge, the gate pins authored scalars into them (graph_finalize_row —
+the teaching JOIN dedups a pin away), and subsumption's present legs read
+`eff_admits`, the instance law's positive dual. Terminal gate MET: crown 7/7
+(two graduated crucibles), frontier 332/0, census 0, fixpoint CLEAN, board
+captured at pin time. Full records:
+`Hβ.infer.hof-param-row-never-reaches-enclosing` (RESIDUE.md, with the
+standing citation correction) and the LEDGER's THE SIGNATURE KEEPS ITS ROW.
 
-The full proof record — era bracket, the four discriminating variants, the
-two-stage wat probe that shows the edge dying at the completion prune's
-`root < ceiling` compare, and the refuted first fix — is
-`Hβ.infer.hof-param-row-never-reaches-enclosing` in `RESIDUE.md`. Read it
-before touching this; it also carries a citation correction that cost a
-session's assumption.
-
-- **1.1 · Run the named next probe first.** It decides in one run whether the
-  loss is the prune's classification or something downstream, and the answer
-  changes what gets built. Do not build before it.
-- **1.2 · The same root is three faces.**
-  `Hβ.infer.handler-residual-outside-the-scheme` (which makes `each` and `fold`
-  falsely pass `!WASI` — the vocabulary every user touches) and
-  `Hβ.effects.config-fn-row-in-residual` are the same hole at two more
-  altitudes. A fix that closes only the crucible has not closed the class.
-- **1.3 · The drift-mode-10 wildcard rides this arc**, not a separate one: the
-  quantification floor's `_ => Forall(free_in_ty(body_ty), body_ty)` is a
-  fabricating catch-all over a load-bearing ADT — `TCont` carries an `EffRow`,
-  so a continuation-typed body takes it and quantifies exactly the row frees
-  the `TFun` arm protects. It BLOCKS the arc's commit today (the pre-commit
-  gate refuses it), and it is the same organ.
-- **1.4 · Terminal gate:** crown 5/5, frontier 332/0, census 0, then the arc
-  commits and re-pins with the board captured by 0.1.
+**The named remainder — 1.2's conflation, split by measurement.** "The same
+root is three faces" was pre-measurement prose: post-fix, `fn f(xs) with
+!WASI = each((x) => println(...), xs)` STILL falsely passes (c05 — zero
+effect diagnostics over the lib baseline), because the handler-residual face
+loses the row UPSTREAM of the prune: the callback's row never arrives in
+`each`'s accumulated row — the residual read bypasses the scheme instance.
+Two seams, not one: the prune (closed) and
+`Hβ.infer.handler-residual-outside-the-scheme` +
+`Hβ.effects.config-fn-row-in-residual` (one seam, pre-existing at every
+green pin since birth, the most-hit face because every prelude HOF has the
+shape). That seam is the phase's open work: read the residual through the
+instantiated scheme, or let rung 3 dissolve the tower that makes the bypass
+possible.
 
 ### Phase 2 · Every judgment reads the graph, never a proxy
 

@@ -18,7 +18,9 @@
 //      helper, finite on the value). The eq/hash-divergence footgun is unsayable:
 //      one traversal reaches the bottom of every ADT.
 //
-// This cannot yet round-trip the SEED on the DIRECT `a == b` form: the disposable
+// SEED-ERA NOTE (superseded — the seed was deleted 2026-07-10 and §5.U's sum
+// eq leaf landed; the DIRECT `a == b` upgrade is available verification
+// work): this could not round-trip the seed on the direct form — the disposable
 // seed's eq still pointer-compares two distinct Wrap(7) heap addresses (probed:
 // the seed returns false for Wrap(7) == Wrap(7) — it lags the wheel's sum fold).
 // So the micro proves the helper's CONTROL SHAPE in seed-supported constructs

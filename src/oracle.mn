@@ -551,7 +551,7 @@ fn collect_bound_positions(h, bound, acc) with GraphRead + Memory + Alloc = if h
   }
 }
 
-fn list_contains(xs, target) with Pure = match xs {
+fn list_contains(xs, target) with Memory + Alloc = match xs {
   [] => false,
   [h, ...t] => if h == target { true } else { list_contains(t, target) },
 }
@@ -574,10 +574,10 @@ fn list_contains(xs, target) with Pure = match xs {
 //
 // `mentl edit` IS this loop running. There is no separate `compile`:
 // the edit IS the projection IS the loop closing.
-fn oracle_ic_fixpoint() with OracleQuery + IC =
+fn oracle_ic_fixpoint() with OracleQuery + IC + Memory + Alloc =
   query_project_queue() ~> project_queue_merger <~ accumulate(empty_queue())
 
-fn empty_queue() with Pure = []
+fn empty_queue() with Memory + Alloc = []
 
 // ─── silence_predicate — the strong gradient-top gate ────────────────
 //

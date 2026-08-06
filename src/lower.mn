@@ -6,8 +6,9 @@
 // failure, not a fallback.
 //
 // Declares: with GraphRead + EnvRead + LookupTy + Diagnostic.
-// NO GraphWrite — structural isolation via effect row. A stray
-// perform graph_bind would fail at handler install.
+// (The old "NO GraphWrite" claim here was refuted by the medium's own
+// audit — lowering performs GraphWrite; the second-tree restructure
+// is Hβ.lower.lowering-is-a-column.)
 //
 // Handler elimination (the dispatch gradient, PLAN §6):
 //   TailResumptive (~85%)  → direct call to the arm's own fn
@@ -862,7 +863,9 @@ fn lower_call_partial(handle, fbody, fh, r_args, n_ps) = match partial_callee_fo
 // gate (can_yield) both project through THIS ONE truth. The live form reads
 // the flow-closure (escaping_row — walk the body/call-edges, subtract
 // installs), recovering forward-ref-dropped
-// effects the frozen TFun row lost (docs/specs/simulations/polymorphism-as-flow-edges.md §8).
+// effects the frozen TFun row lost (the flow-edges reading — now PLAN's
+// resolved design; this second engine deletes at rung 3 when rows are
+// live, the subsumed Hβ.infer.order-free-live-row).
 fn effects_of(fn_ty) = match fn_ty {
   TFun(_, _, row) => effects_of_row(row),
   TCont(_, _, _, world) => effects_of_row(world),
@@ -877,14 +880,24 @@ fn effects_of_row(row) = match row {
   EfRow(names, ab, t) => {
     let inline = row_dispatched_names(eff_names_of(names))
     match t {
-      EtVar(v) => match graph_chase(v) {
-        GNode(kind, _) => match kind {
-          NRowBound(inner) => set_canonicalize(names_concat(inline, names_diff_strs(effects_of_row(inner), eff_names_of(ab)))),
-          _ => inline,
-        },
-      },
+      EtOpen(vs) => effects_of_edges(vs, inline, ab),
       _ => inline,
     }
+  },
+}
+
+// The edge walk, structural (the row walks' discipline): each bound
+// edge's dispatched names fold in through the absent mask.
+fn effects_of_edges(ref vs: [Int], acc, ref ab) = match vs {
+  [] => acc,
+  [v, ...rest] => {
+    let next = match graph_chase(v) {
+      GNode(kind, _) => match kind {
+        NRowBound(inner) => set_canonicalize(names_concat(acc, names_diff_strs(effects_of_row(inner), eff_names_of(ab)))),
+        _ => acc,
+      },
+    }
+    effects_of_edges(rest, next, ab)
   },
 }
 
@@ -926,9 +939,9 @@ fn can_yield(callee_handle) = if !ls_program_may_yield() {
   }
 }
 
-// A row MAY carry a MultiShot-graded effect: its known names say so, or its
-// tail is unproven. Total over the six row forms — the unproven forms answer
-// true (check), never a fabricated "safe".
+// A row MAY carry a MultiShot-graded effect: its known names say so, or
+// any tail edge is unproven. Total over the three tails — the unproven
+// forms answer true (check), never a fabricated "safe".
 fn row_may_multishot(row) = match row {
   EfRow(names, _, t) => if names_have_multishot(eff_names_of(names)) {
     true
@@ -936,13 +949,21 @@ fn row_may_multishot(row) = match row {
     match t {
       EtClosed => false,
       EtAll => true,
-      EtVar(v) => match graph_chase(v) {
-        GNode(kind, _) => match kind {
-          NRowBound(inner) => row_may_multishot(inner),
-          _ => true,
-        },
+      EtOpen(vs) => edges_may_multishot(vs),
+    }
+  },
+}
+
+fn edges_may_multishot(ref vs: [Int]) = match vs {
+  [] => false,
+  [v, ...rest] => {
+    let here = match graph_chase(v) {
+      GNode(kind, _) => match kind {
+        NRowBound(inner) => row_may_multishot(inner),
+        _ => true,
       },
     }
+    if here { true } else { edges_may_multishot(rest) }
   },
 }
 
@@ -3503,7 +3524,7 @@ fn lower_pat_record_fields(flds, base) = map(
   enumerate(flds)
 )
 
-fn lower_lit_value(v) with Pure = match v {
+fn lower_lit_value(v) with Memory + Alloc = match v {
   LVInt(n) => LInt(n),
   LVFloat(f) => LFloat(f),
   LVString(s) => LString(s),
@@ -5914,7 +5935,7 @@ fn spec_scan_arms(arms, acc) with Memory + Alloc = fold(
 // sites). Seeded whenever ANY site projects a wide key — a cheap, precise-
 // enough over-approximation in the emit_runtime_contract tradition; a
 // program with no wide instantiation adds nothing.
-fn spec_wide_family() with Pure =
+fn spec_wide_family() with Memory + Alloc =
   ["float_to_str", "list_compare_f64", "list_eq_f64", "list_hash_f64"]
 
 fn spec_site_is_wide(site) with EnvRead + LookupTy + GraphRead + Memory + Alloc = match site {

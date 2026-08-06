@@ -208,7 +208,7 @@ fn ident_at(ref tokens, pos) = match kind_at(tokens, pos) {
 // at the foot of a chain governs everything to its left; parenthesize
 // `(stage ~> h)` to narrow. Layout is NEVER semantics — block vs
 // inline on the page is the formatter's projection.
-fn op_prec(k) with Pure = match k {
+fn op_prec(k) with Memory + Alloc = match k {
   TTildeGt => 1,
   TLtPipe => 2,
   TGtLt => 2,
@@ -234,7 +234,7 @@ fn op_prec(k) with Pure = match k {
 
 // Pipe-verb token → PipeKind. One token, one kind — `~>` is PTee
 // always; scope is precedence's job, layout is the formatter's.
-fn op_to_pipe_kind(k) with Pure = match k {
+fn op_to_pipe_kind(k) with Memory + Alloc = match k {
   TTildeGt => Some(PTee),
   TPipeGt => Some(PForward),
   TLtPipe => // `<|` and `><` are ONE PFanout topology; the glyph authors the
@@ -259,7 +259,7 @@ fn op_to_pipe_kind(k) with Pure = match k {
 // Future form (named peer 11.B.1.R): refinement-typed parameter
 //   `fn op_to_binop(k) -> BinOp where binop(k)`
 // exercises primitive #6 and eliminates the `Option` entirely.
-fn op_to_binop(k) with Pure = match k {
+fn op_to_binop(k) with Memory + Alloc = match k {
   TPlus => Some(BAdd),
   TMinus => Some(BSub),
   TStar => Some(BMul),
@@ -1087,7 +1087,7 @@ fn at_ident_word(ref tokens, pos, w: String) = match kind_at(tokens, pos) {
   _ => false,
 }
 
-fn repr_of_width_name(w: String) with Pure = if w == "i32" {
+fn repr_of_width_name(w: String) with Memory + Alloc = if w == "i32" {
   Some(RI32)
 } else if w == "i64" {
   Some(RI64)

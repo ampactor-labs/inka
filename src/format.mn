@@ -269,7 +269,7 @@ fn render_tee(body, handler_expr) with Format + GraphRead + Memory + Alloc + !Mu
 // <~ at indented center (4-space) with the FeedbackSpec on the same
 // line. Requires iterative context (Sample / Tick / Clock / IC handler
 // installed upstream); without it, parser rejects with E_FeedbackNoContext.
-fn render_feedback_chain(input, spec) with Format + Memory + GraphRead + !Mutate = {
+fn render_feedback_chain(input, spec) with Format + Memory + GraphRead + !Mutate + Alloc = {
   let input_str = render_chain_pos(input)
   let spec_str = render_chain_pos(spec)
   "{input_str}\n{spaces(indented_center())}<~ {spec_str}"
@@ -290,7 +290,7 @@ fn render_feedback_chain(input, spec) with Format + Memory + GraphRead + !Mutate
 // initial — canonical IS the fixpoint). Per protocol_oracle_is_ic.md:
 // build IS the <~ loop. Composing format with IC means save-time
 // auto-formatting is just one iteration of this loop.
-fn format_ic_loop(initial_ast) with Format + IC + !Mutate =
+fn format_ic_loop(initial_ast) with Format + IC + !Mutate + Memory + Alloc =
   initial_ast |> ((ast) => format_program(ast) ~> format_default <~ accumulate(empty_render()))
 
 fn empty_render() with Pure = ""
@@ -1358,7 +1358,7 @@ type RenderContext
   | RenderContextTuple(Int)
 
 // The unary operator glyph per SYNTAX.md — `-` negate, `!` logical-not.
-fn unary_op_glyph(op) with Pure = match op {
+fn unary_op_glyph(op) with Memory + Alloc = match op {
   UNeg => "-",
   UNot => "!",
 }

@@ -66,10 +66,10 @@ fn build_signal(out, i: Int, n: Int) with Memory = {
 // (1-a)·y[n-1]. `(prev)` binds y[n-1], the per-site state global threads it
 // across the sample-by-sample calls. Float feedback: the state slots take the
 // node's f64 repr, read live.
-fn lp_step(x: Float, a: Float) -> Float with Sample =
+fn lp_step(x: Float, a: Float) -> Float with Sample + Memory + Alloc =
   ((prev) => a * x + (1.0 - a) * prev) <~ delay(1)
 
-fn filter_loop(xs, a: Float, i: Int, n: Int, out) with Sample + Memory = {
+fn filter_loop(xs, a: Float, i: Int, n: Int, out) with Sample + Memory + Alloc = {
   if i >= n { out }
   else { filter_loop(xs, a, i + 1, n, list_set(out, i, lp_step(xs[i], a))) }
 }

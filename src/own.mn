@@ -376,12 +376,12 @@ fn region_index_add(idx, handle, tag) with Memory + Alloc = {
   list_set(idx, b, [(handle, tag)] ++ list_index(idx, b))
 }
 
-fn region_index_get(ref idx, handle) with Memory = {
+fn region_index_get(ref idx, handle) with Memory + Alloc = {
   let b = i32_and(handle, 65535)
   region_bucket_scan(list_index(idx, b), handle, 0)
 }
 
-fn region_bucket_scan(ref bucket, handle, i) with Memory = if i >= len(bucket) {
+fn region_bucket_scan(ref bucket, handle, i) with Memory + Alloc = if i >= len(bucket) {
   None
 } else {
   match list_index(bucket, i) {

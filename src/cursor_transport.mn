@@ -119,7 +119,7 @@ type Cadence
   | CadOnAsk
 
 // Default cadence per Hμ-cursor.md §10.4: ~250ms idle-debounced.
-fn default_cadence() with Pure = CadDebounced(250)
+fn default_cadence() with Memory + Alloc = CadDebounced(250)
 
 // ─── TransportState — one record-shape carried by all handlers ──────
 //
@@ -137,7 +137,7 @@ type TransportState
 // monotonically incrementing
 //
 // why-chain of last surfaced view
-fn transport_state_init(initial_caret) with Pure =
+fn transport_state_init(initial_caret) with Memory + Alloc =
   TransportState({cadence: default_cadence(), caret: initial_caret, cursor: Cursor(0, Inferred("session-init"), 0.0), last_render: Inferred("none"), session_id: 0})
 
 // ─── terminal_transport — text-mode rendering ───────────────────────
@@ -241,23 +241,23 @@ fn cursor_step(state) with Surface + GraphRead + CursorRead + !Mutate + Memory +
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
-fn state_advance(state, latest_cursor) with Pure = match state {
+fn state_advance(state, latest_cursor) with Memory + Alloc = match state {
   TransportState(s) => match latest_cursor {
     Cursor(_, reason, _) => TransportState({cadence: s.cadence, caret: s.caret, cursor: latest_cursor, last_render: reason, session_id: s.session_id + 1}),
   },
 }
 
-fn state_with_render(state, cursor) with Pure = match state {
+fn state_with_render(state, cursor) with Memory + Alloc = match state {
   TransportState(s) => match cursor {
     Cursor(_, reason, _) => TransportState({cadence: s.cadence, caret: s.caret, cursor: cursor, last_render: reason, session_id: s.session_id}),
   },
 }
 
-fn state_with_caret(state, new_caret) with Pure = match state {
+fn state_with_caret(state, new_caret) with Memory + Alloc = match state {
   TransportState(s) => TransportState({cadence: s.cadence, caret: new_caret, cursor: s.cursor, last_render: s.last_render, session_id: s.session_id + 1}),
 }
 
-fn span_of_cursor(cursor) with GraphRead = match cursor {
+fn span_of_cursor(cursor) with GraphRead + Memory + Alloc = match cursor {
   Cursor(handle, _, _) => span_of_handle(handle),
 }
 

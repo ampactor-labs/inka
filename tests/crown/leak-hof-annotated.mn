@@ -1,0 +1,13 @@
+// CROWN crucible — the higher-order leak with a bare fn-type ANNOTATION on
+// run's param. The annotation's row var is minted at pre-registration, below
+// the mint ceiling, yet the live root at finalize is judgment-era (the entry
+// unify's union direction does not track mint age) — so a prune classifying
+// by root-vs-ceiling alone drops this edge identically to the unannotated
+// form. Born as the c04 crucial experiment of the 2026-08-05 dig (it killed
+// the classify-by-mint-position hypothesis: measured root 69 vs ceiling 66,
+// judgment-era both ways); graduated when the signature keep-set closed the
+// class (Hβ.infer.hof-param-row-never-reaches-enclosing).
+effect E { op() -> Int }
+fn run(f: () -> Int) = f()
+fn bad() with !E = run(() => op())
+fn main() = bad()

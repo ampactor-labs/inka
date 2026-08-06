@@ -49,7 +49,51 @@ import runtime/strings
 // crown's PROOF-OF-ABSENCE record — `with A + !B` gates carry B here,
 // and subsumption checks a body's presents against it transitively.
 fn ef_make(ref present, ref absent, tail) with !Mutate =
-  EfRow(name_set_canonicalize(present), name_set_canonicalize(absent), tail)
+  EfRow(name_set_canonicalize(present), name_set_canonicalize(absent), tail_canonical(tail))
+
+// EtOpen([]) IS EtClosed — a union of zero edges contributes nothing
+// beyond the present set, so the empty open form never survives its
+// constructor; readers meet a canonical tail (their own empty-set arms
+// are the belt, per display-totality). SORTEDNESS is the WRITERS'
+// invariant, not a per-construction tax: mints are singletons
+// (trivially sorted), the union and the fold accumulators insert in
+// order (tail_set_insert), so ef_make never re-sorts — structural ==
+// over two canonical sets is set equality by construction.
+fn tail_canonical(tail) = match tail {
+  EtOpen(vs) => if len(vs) == 0 { EtClosed } else { EtOpen(vs) },
+  EtClosed => EtClosed,
+  EtAll => EtAll,
+}
+
+// ─── the edge set — §4①'s sorted-handle-set at the tail ─────────────
+// Ascending, deduped; sets are small (a frame accumulates a handful of
+// open callees). STRUCTURAL RECURSION, deliberately not the fold/filter
+// vocabulary: the row algebra is MECHANISM (graph.mn's chase discipline)
+// and runs inside unify inside every judgment — the vocabulary form put
+// the resolver ON the Iterate handler machinery, and its first real
+// multi-edge walk floored the k2 yield boundary from inside a fold's
+// own yield arm (measured at m3's first trial unify, 2026-08-01: a
+// row-polymorphic call inside a yield arm's dynamic extent reads the
+// in-flight flag). The [Int] pins are the ++ floor's Intent Boundaries.
+fn tail_set_insert(ref vs: [Int], v: Int) with Memory + Alloc = match vs {
+  [] => [v],
+  [h, ...rest] => if v < h { [v] ++ vs } else if v == h { vs } else { [h] ++ tail_set_insert(rest, v) },
+}
+
+fn tail_set_union(ref vs: [Int], ref ws: [Int]) with Memory + Alloc = match ws {
+  [] => vs,
+  [h, ...rest] => tail_set_union(tail_set_insert(vs, h), rest),
+}
+
+fn tail_set_has(ref vs: [Int], v: Int) with Memory = match vs {
+  [] => false,
+  [h, ...rest] => if h == v { true } else { tail_set_has(rest, v) },
+}
+
+fn tail_set_diff(ref vs: [Int], ref ws: [Int]) with Memory + Alloc = match vs {
+  [] => [],
+  [h, ...rest] => if tail_set_has(ws, h) { tail_set_diff(rest, ws) } else { [h] ++ tail_set_diff(rest, ws) },
+}
 
 fn absent_minus_present(ref a, ref p) with !Mutate =
   filter((entry) => !any((pe) => absent_contradicted_by(entry, pe), p), a)
@@ -77,7 +121,7 @@ fn absent_contradicted_by(absent, present) with !Mutate = if eff_name_handle(abs
 
 fn mk_ef_closed(ref names) with !Mutate = ef_make(names, [], EtClosed)
 
-fn mk_ef_open(ref names, v) with !Mutate = ef_make(names, [], EtVar(v))
+fn mk_ef_open(ref names, v) with !Mutate = ef_make(names, [], EtOpen([v]))
 
 // ONE pure row for the whole image — the identity element as a module
 // value, every read a global load, zero allocation. This is the wheel's
@@ -235,21 +279,60 @@ fn field_copy_suffix_shifted(ref src, own dst, src_idx, dst_idx, n) with !Mutate
 
 // ─── the triple algebra — fieldwise, canonical, no rewrite passes ──
 //
-// Identity until PROGRESS: resolution folds a bound tail into the head —
-// r = p ∪ (tail ∖ a); tail = cp ∪ (ct ∖ ca) gives ONE formula:
-//   p' = p ∪ (cp ∖ a),  a' = a ∪ ca,  t' = ct
-// An unbound tail returns the stored row untouched.
+// Identity until PROGRESS: resolution folds every tail EDGE into the
+// head (THE ABSENT-MASK LAW, PLAN's settled laws) —
+// r = p ∪ (each edge's content ∖ a); a bound edge contributes
+//   p' = p ∪ (cp ∖ a),  a' = a ∪ ca,  and its residual tail merges on
+// (Closed adds nothing, an open set unions into the residual, EtAll
+// absorbs — the mask rides the absent field even at the universe). A
+// free edge survives into the residual set; a row with no bound edge
+// returns UNTOUCHED (identity until progress, preserved exactly).
 fn resolve_row(row) with !Mutate = match row {
   EfRow(p, a, t) => match t {
-    EtVar(v) => match graph_chase(v) {
-      GNode(kind, _) => match kind {
-        NRowBound(inner) => match resolve_row(inner) {
-          EfRow(cp, ca, ct) => ef_make(name_set_union(p, name_set_diff(cp, a)), name_set_union(a, ca), ct),
-        },
-        _ => row,
+    EtOpen(vs) => match resolve_edges(vs, (p, a, [], false, false)) {
+      (rp, ra, res, saw_all, progressed) => if progressed {
+        if saw_all { ef_make(rp, ra, EtAll) } else { ef_make(rp, ra, EtOpen(res)) }
+      } else {
+        row
       },
     },
     _ => row,
+  },
+}
+
+// The edge walk, STRUCTURAL — mechanism-layer recursion, never the
+// fold/Iterate vocabulary (the resolver runs inside unify inside every
+// judgment; the handler form floored the k2 yield boundary from inside
+// its own dispatch — the 2026-08-01 m3 trap).
+fn resolve_edges(ref vs: [Int], acc) with !Mutate = match vs {
+  [] => acc,
+  [v, ...rest] => resolve_edges(rest, resolve_edge(acc, v)),
+}
+
+// One edge of the reading fold: acc = (p, a, residual, saw_all,
+// progressed). Progress means at least one edge was bound — the
+// no-progress row returns by identity above.
+fn resolve_edge(acc, v) with !Mutate = match acc {
+  (p, a, res, saw_all, progressed) => match graph_chase(v) {
+    GNode(kind, _) => match kind {
+      NRowBound(inner) => edge_content_into(p, a, res, saw_all, resolve_row(inner)),
+      _ => (p, a, tail_set_insert(res, v), saw_all, progressed),
+    },
+  },
+}
+
+// A resolved edge's content enters the accumulator — the one assembly
+// every edge fold shares (resolve, compress, chase-face, subst). The
+// residual set unions in order (the sorted-set invariant).
+fn edge_content_into(ref p, ref a, ref res, saw_all, ri) with !Mutate = match ri {
+  EfRow(cp, ca, ct) => {
+    let p2 = name_set_union(p, name_set_diff(cp, a))
+    let a2 = name_set_union(a, ca)
+    match ct {
+      EtClosed => (p2, a2, res, saw_all, true),
+      EtAll => (p2, a2, res, true, true),
+      EtOpen(ws) => (p2, a2, tail_set_union(res, ws), saw_all, true),
+    }
   },
 }
 
@@ -264,19 +347,34 @@ fn resolve_row(row) with !Mutate = match row {
 // the root's sequential walks compress the web).
 fn resolve_row_compress(row) = match row {
   EfRow(p, a, t) => match t {
-    EtVar(v) => match graph_chase(v) {
-      GNode(kind, _) => match kind {
-        NRowBound(inner) => {
-          let ri = resolve_row_compress(inner)
-          graph_compress_row(v, ri)
-          match ri {
-            EfRow(cp, ca, ct) => ef_make(name_set_union(p, name_set_diff(cp, a)), name_set_union(a, ca), ct),
-          }
-        },
-        _ => row,
+    EtOpen(vs) => match resolve_edges_compress(vs, (p, a, [], false, false)) {
+      (rp, ra, res, saw_all, progressed) => if progressed {
+        if saw_all { ef_make(rp, ra, EtAll) } else { ef_make(rp, ra, EtOpen(res)) }
+      } else {
+        row
       },
     },
     _ => row,
+  },
+}
+
+fn resolve_edges_compress(ref vs: [Int], acc) = match vs {
+  [] => acc,
+  [v, ...rest] => resolve_edges_compress(rest, resolve_edge_compress(acc, v)),
+}
+
+// The compressing fold's edge: resolve, REBIND the edge to its terminal
+// (the one-hop web later reads ride), then fold the content in.
+fn resolve_edge_compress(acc, v) = match acc {
+  (p, a, res, saw_all, progressed) => match graph_chase(v) {
+    GNode(kind, _) => match kind {
+      NRowBound(inner) => {
+        let ri = resolve_row_compress(inner)
+        graph_compress_row(v, ri)
+        edge_content_into(p, a, res, saw_all, ri)
+      },
+      _ => (p, a, tail_set_insert(res, v), saw_all, progressed),
+    },
   },
 }
 
@@ -291,7 +389,7 @@ fn resolve_row_compress(row) = match row {
 // identity is the instance's own record — conservative: an unshared
 // equal fragment coexists as a copy, and coexistence is the safe side.
 // Bare names and absent sets are genuine name-sets; tails join as ever.
-fn row_join(ref a, ref b) with !Mutate = match a {
+fn row_join(ref a, ref b) with !Mutate + Memory + Alloc = match a {
   EfRow(pa, aa, ta) => match b {
     EfRow(pb, ab, tb) => {
       let p = frag_union(pa, pb)
@@ -317,13 +415,13 @@ fn row_join(ref a, ref b) with !Mutate = match a {
 // share that escaped freshening, and the join's coexistence is the
 // confluence net that keeps it deterministic while the census drives
 // the leak class to zero.
-fn row_frag_collision(ref a, ref b) with Memory = match a {
+fn row_frag_collision(ref a, ref b) with Memory + Alloc = match a {
   EfRow(pa, _, _) => match b {
     EfRow(pb, _, _) => frag_collision_walk(pa, pb, 0),
   },
 }
 
-fn frag_collision_walk(ref pa, ref pb, i) with Memory = if i >= len(pb) {
+fn frag_collision_walk(ref pa, ref pb, i) with Memory + Alloc = if i >= len(pb) {
   false
 } else {
   let hit = match list_index(pb, i) {
@@ -333,7 +431,7 @@ fn frag_collision_walk(ref pa, ref pb, i) with Memory = if i >= len(pb) {
   if hit { true } else { frag_collision_walk(pa, pb, i + 1) }
 }
 
-fn frag_name_clash(ref pa, h2, args2, j) with Memory = if j >= len(pa) {
+fn frag_name_clash(ref pa, h2, args2, j) with Memory + Alloc = if j >= len(pa) {
   false
 } else {
   let hit = match list_index(pa, j) {
@@ -350,7 +448,7 @@ fn frag_name_clash(ref pa, h2, args2, j) with Memory = if j >= len(pa) {
 fn frag_union(ref pa, ref pb) with Memory + Alloc =
   fold(pa, (acc, e) => if frag_present(acc, e, 0) { acc } else { acc ++ [e] }, pb)
 
-fn frag_present(ref acc, e, i) with Memory = if i >= len(acc) {
+fn frag_present(ref acc, e, i) with Memory + Alloc = if i >= len(acc) {
   false
 } else {
   let hit = match (list_index(acc, i), e) {
@@ -374,9 +472,10 @@ fn frag_present(ref acc, e, i) with Memory = if i >= len(acc) {
 // the reconciled instance IS the install's identity — the same channel the
 // crown's instance-precise negation keys on (install provenance, the
 // world-chain hkey: designed here once, consumed by the modal crown).
-fn frag_args_same(ref a1, ref a2) with Memory = len(a1) == len(a2) && frag_args_same_walk(a1, a2, 0)
+fn frag_args_same(ref a1, ref a2) with Memory + Alloc =
+  len(a1) == len(a2) && frag_args_same_walk(a1, a2, 0)
 
-fn frag_args_same_walk(ref a1, ref a2, i) with Memory = if i >= len(a1) {
+fn frag_args_same_walk(ref a1, ref a2, i) with Memory + Alloc = if i >= len(a1) {
   true
 } else {
   let same = match (list_index(a1, i), list_index(a2, i)) {
@@ -415,11 +514,25 @@ fn union_row(ref a, ref b) with !Mutate = match a {
   },
 }
 
-fn tail_join(ta, tb) with Pure = match ta {
+// THE UNION IS LIVE (the B1+B3+charge-as-edge arc — D9 rung 1). Its two
+// prior convictions (2026-08-01: deep-set reads, then thousands-element
+// sets at SHARED LOOSE-PREREG CELLS — one fresh edge per forward
+// caller's teach, O(n²) insert allocation to the 4GB guard) were the
+// HUB's bill, and the hub's writer is deleted at the one-way call and
+// pipe edges (infer_call_saturated / infer_pipe: the expectation's row
+// IS the callee's own row, so unify_row meets identical rows and
+// no-ops — no caller ever teaches a callee's cell). A cell's edge set
+// is now bounded by its own body's distinct callees plus value-position
+// merges (the writer census's Class B), so the set union is the join
+// the lattice always wanted: a second callee's edge SURVIVES where the
+// first-var drop discarded it. mn-two-tail-accumulation is the
+// acceptance.
+fn tail_join(ta, tb) with Memory + Alloc + !Mutate = match ta {
   EtClosed => tb,
-  EtVar(v) => match tb {
+  EtOpen(vs) => match tb {
     EtAll => EtAll,
-    _ => EtVar(v),
+    EtOpen(ws) => EtOpen(tail_set_union(vs, ws)),
+    EtClosed => EtOpen(vs),
   },
   EtAll => EtAll,
 }
@@ -440,14 +553,17 @@ fn tail_join(ta, tb) with Pure = match ta {
 fn diff_row(ref a, ref b) with GraphWrite + Memory + !Mutate + Alloc = match a {
   EfRow(pa, aa, ta) => match b {
     EfRow(pb, _, _) => match ta {
-      EtVar(orig) => {
+      EtOpen(vs) => {
+        // The mask edge wraps the WHOLE original edge set — one fresh
+        // cell bound to the masked triple over every surviving edge, so
+        // the subtraction rides any union as a single opaque edge.
         let masked = graph_fresh_row(Inferred("~> subtraction mask"))
         graph_bind_row(
           masked,
-          EfRow([], name_set_union(aa, pb), EtVar(orig)),
+          EfRow([], name_set_union(aa, pb), EtOpen(vs)),
           Inferred("pending tail subtraction")
         )
-        ef_make(name_set_diff(pa, pb), [], EtVar(masked))
+        ef_make(name_set_diff(pa, pb), [], EtOpen([masked]))
       },
       _ => ef_make(name_set_diff(pa, pb), name_set_union(aa, pb), ta),
     },
@@ -490,14 +606,99 @@ fn absorb_row(ref body_row, ref handled_row, ref extra_row) with !Mutate =
 // LAST member's resolved tail chases the entire loop back to its own
 // cell — the least solution for the SCC, with the storage acyclic
 // (every earlier member finalized before its tail's target was bound).
+// CONDEMNED CUT, whole-or-nothing (the resolved design D3/D4): this
+// publish-time freeze is the severed-co-member-effects root
+// (mn-cycle-charge-freeze), and its HALF-STEP replacement was built and
+// REVERTED 2026-07-31 (the bb8b93a2 guard: a visiting-set resolve with
+// the cut moved to the read). Measured against it: live tails escaped
+// into published rows with no completion event to drain them, so
+// fragment/payload joins behind those tails never fired — the element
+// instance never taught a HOF lambda's param (findtag/mapelem/mapfield
+// exit 134, field offset unprovable) and parked masks surfaced as
+// !Iterate-carrying body rows (forty gate refusals). The cut deletes
+// ONLY with the row half landed whole: edge-set tails (D3) + gates and
+// drains at the group's completion event (D4). Until then this freeze
+// is the sound form.
 fn row_without_self(row, self_h) with !Mutate = match resolve_row(row) {
   EfRow(p, a, t) => match t {
-    EtVar(v) => if graph_chase_handle(v) == graph_chase_handle(self_h) {
-      ef_make(p, a, EtClosed)
-    } else {
-      EfRow(p, a, t)
+    EtOpen(vs) => {
+      // The cut drops every edge chasing to the fn's OWN cell; the
+      // surviving edges keep the tail open (chased-root compare — the
+      // find-before-compare law). Structural walk, mechanism layer.
+      let others = edges_without_self(vs, graph_chase_handle(self_h))
+      if len(others) == 0 { ef_make(p, a, EtClosed) } else { ef_make(p, a, EtOpen(others)) }
     },
     _ => EfRow(p, a, t),
+  },
+}
+
+fn edges_without_self(ref vs: [Int], self_root: Int) with !Mutate = match vs {
+  [] => [],
+  [v, ...rest] => if graph_chase_handle(v) == self_root {
+    edges_without_self(rest, self_root)
+  } else {
+    [v] ++ edges_without_self(rest, self_root)
+  },
+}
+
+// THE COMPLETION PRUNE — the one-way-edge arc's pressure valve: the fold
+// that makes a published row SMALL. At a decl's finalize, a still-FREE
+// edge minted DURING the judgment (chased root >= the pass's prereg
+// ceiling) is an unconstrained instantiated copy — no constraint ever
+// reached it, and none can arrive (its only escape was this row) — so it
+// reads as the pure body (the publish law's own unbound reading) and
+// DROPS. A free edge BELOW the ceiling is a prereg cell: a co-member's
+// or forward decl's live accumulator, the shared link the one-way reads
+// flow through — KEPT. A bound edge is a content link — KEPT (reads fold
+// it). Without this prune the raw accumulated set publishes whole and
+// multiplies through generalize∘instantiate — qvars(f) = Σ refs ×
+// qvars(callee) — measured to the 4GB guard three ways (tail_set churn,
+// the mint_row storm, the payload-var collection) on a 6,458-line lib
+// blob. Ceiling 0 = pass-through (a chain that never set it prunes
+// nothing). Structural walk — row walks are mechanism, the paid law.
+//
+// The THIRD keep category — the signature keep-set — is what makes the
+// drop reading TRUE where it fires: a free judgment-era root the decl's
+// params/return reach at exit escapes through instantiate at every call
+// site (generalize's signature collection quantifies exactly these), so
+// "none can arrive" is false for it. The two-category form dropped that
+// edge and published `run(f) = f()` as Pure while f's row var rode the
+// scheme disconnected — the crown's higher-order leak (root 29 vs
+// ceiling 26 by binary-patch wat probe; the keep census showed the
+// collected root IS the severed edge, and the crown flipped 4/1 → 5/5
+// with the wheel census still 0). The 2026-08-05 refuted attempt at this
+// same category collected from declared slots and never contained the
+// root: signature_free_roots reads THROUGH the live cells at exit,
+// deep-chased — that read is load-bearing. Record:
+// `Hβ.infer.hof-param-row-never-reaches-enclosing` in RESIDUE.md.
+fn row_keep_completion(row, ceiling: Int, sig_keep: [Int]) with !Mutate = if ceiling == 0 {
+  row
+} else {
+  match row {
+    EfRow(p, a, t) => match t {
+      EtOpen(vs) => {
+        let kept = edges_keep_completion(vs, ceiling, sig_keep)
+        if len(kept) == 0 { ef_make(p, a, EtClosed) } else { ef_make(p, a, EtOpen(kept)) }
+      },
+      _ => row,
+    },
+  }
+}
+
+fn edges_keep_completion(ref vs: [Int], ceiling: Int, sig_keep: [Int]) with !Mutate = match vs {
+  [] => [],
+  [v, ...rest] => match graph_chase(v) {
+    GNode(NRowBound(_), _) => [v] ++ edges_keep_completion(rest, ceiling, sig_keep),
+    _ => {
+      let r = graph_chase_handle(v)
+      if r < ceiling {
+        [v] ++ edges_keep_completion(rest, ceiling, sig_keep)
+      } else if any((k) => k == r, sig_keep) {
+        [v] ++ edges_keep_completion(rest, ceiling, sig_keep)
+      } else {
+        edges_keep_completion(rest, ceiling, sig_keep)
+      }
+    },
   },
 }
 
@@ -509,7 +710,7 @@ fn row_without_self(row, self_h) with !Mutate = match resolve_row(row) {
 //                    must itself be masked (body.absent ⊇ B) or free-to-
 //                    constrain (conservative reject when it is not).
 //   gate tail Closed: body must be closed with present ⊆ gate.present.
-//   gate tail Var:    the gate is polymorphic — body's knowns must fit
+//   gate tail Open:   the gate is polymorphic — body's knowns must fit
 //                    the gate's knowns; the tails unify later.
 fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
   // Subsumption is a READ — resolve without compressing. The graph has ONE
@@ -518,7 +719,7 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
   // rebinds row vars would make every projection a writer. Compression
   // (resolve_row_compress) lives at unify_row alone, where inference
   // already owns the bind.
-  // A body tail STILL EtVar after resolve is GENUINELY free (NRowFree) —
+  // A body tail STILL EtOpen after resolve is GENUINELY free (NRowFree) —
   // empty after full inference: a monomorphic fn accumulated no further
   // effect, so the body performs exactly its present names and the free
   // tail is vacuous at the gate (the rebind at the gate closes it to the
@@ -540,7 +741,7 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
         if forbidden_names_disjoint(pb, ag) {
           match tb {
             EtClosed => true,
-            EtVar(_) => true,
+            EtOpen(_) => true,
             EtAll => name_set_subset(ag, ab),
           }
         } else {
@@ -548,18 +749,21 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
         },
         EtClosed => // The closed gate's absent set is the declared `!B` proof: nothing
         // present may touch it, transitively through every subsumption.
+        // Present membership is the ADMISSION read (eff_admits — the
+        // instance law's positive side), not bare structural equality: a
+        // bare declared name admits every instance of its name.
         if forbidden_names_disjoint(pb, ag) {
           match tb {
-            EtClosed => name_set_subset(pb, pg),
-            EtVar(_) => name_set_subset(pb, pg),
+            EtClosed => present_admitted(pb, pg),
+            EtOpen(_) => present_admitted(pb, pg),
             EtAll => false,
           }
         } else {
           false
         },
-        EtVar(_) => match tb {
-          EtClosed => name_set_subset(pb, pg),
-          EtVar(_) => name_set_subset(pb, pg),
+        EtOpen(_) => match tb {
+          EtClosed => present_admitted(pb, pg),
+          EtOpen(_) => present_admitted(pb, pg),
           EtAll => false,
         },
       },
@@ -575,15 +779,32 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
 fn unify_row(ref a, ref b, ref span, ref reason) with !Mutate =
   unify_row_canonical(resolve_row_compress(a), resolve_row_compress(b), span, reason)
 
+// Bind one row into EVERY edge of a set — the multi-edge bind the five
+// unify arms share. Structural walk (mechanism layer, the resolver's
+// own discipline).
+fn bind_edges_to(ref ws: [Int], row, ref span, ref reason) with !Mutate = match ws {
+  [] => (),
+  [w, ...rest] => {
+    graph_bind_row(w, row, Located(span, reason))
+    bind_edges_to(rest, row, span, reason)
+  },
+}
+
 fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = match a {
   EfRow(pa, aa, ta) => match b {
     EfRow(pb, ab, tb) => match ta {
       EtClosed => match tb {
         EtClosed => if name_set_eq(pa, pb) { () } else { report_effect_mismatch(a, b, span, reason) },
-        EtVar(vb) => // Closed(A) ~ (B + tail∖ab): tail := (A ∖ B) minus what b masks —
-        // a masked name demanded by A is a genuine mismatch.
+        EtOpen(wbs) => // Closed(A) ~ (B + edges∖ab): the residual (A ∖ B) binds EVERY
+        // edge (A2's judged form) — the equation demands each edge's
+        // contribution fit within the residual and the union read
+        // exactly A; binding each to the residual-closed row is the
+        // maximal solution, and each cell's OTHER referents learn the
+        // same closed bound (the singleton case is today's unique
+        // solution verbatim). A masked name demanded by A is a genuine
+        // mismatch.
         if forbidden_names_disjoint(pa, ab) {
-          graph_bind_row(vb, ef_make(name_set_diff(pa, pb), [], EtClosed), Located(span, reason))
+          bind_edges_to(wbs, ef_make(name_set_diff(pa, pb), [], EtClosed), span, reason)
         } else {
           report_effect_mismatch(a, b, span, reason)
         },
@@ -600,25 +821,41 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = match 
         // the named residual Hβ.effects.directional-fn-row-edge.
         if row_subsumes(a, b) { () } else { report_effect_mismatch(a, b, span, reason) },
       },
-      EtVar(va) => match tb {
+      EtOpen(was) => match tb {
         EtClosed => if forbidden_names_disjoint(pb, aa) {
-          graph_bind_row(va, ef_make(name_set_diff(pb, pa), [], EtClosed), Located(span, reason))
+          bind_edges_to(was, ef_make(name_set_diff(pb, pa), [], EtClosed), span, reason)
         } else {
           report_effect_mismatch(a, b, span, reason)
         },
-        EtVar(vb) => if va == vb {
+        EtOpen(wbs) => // Identical edge sets are ONE tail (structural == over the
+        // canonical sorted sets — singletons reduce to the old handle
+        // compare). Otherwise every edge PRIVATE to a binds the
+        // residual whose tail keeps b's WHOLE edge set: shared edges
+        // stay free on both sides (contributing equally to both
+        // readings), a-only edges learn b's knowns and chain to b's
+        // set — no bound edge appears in its own binding's tail
+        // (a-only ∉ wbs), so the occurs guard has nothing to cut.
+        // a ⊆ b degenerates to the identical case's name check (the
+        // one-way teach — D5's decl→site direction — as today).
+        if was == wbs {
           if name_set_eq(pa, pb) { () } else { report_effect_mismatch(a, b, span, reason) }
         } else {
-          graph_bind_row(
-            va,
-            ef_make(name_set_diff(pb, pa), name_set_diff(ab, pa), EtVar(vb)),
-            Located(span, reason)
-          )
+          let only_a = tail_set_diff(was, wbs)
+          if len(only_a) == 0 {
+            if name_set_eq(pa, pb) { () } else { report_effect_mismatch(a, b, span, reason) }
+          } else {
+            bind_edges_to(
+              only_a,
+              ef_make(name_set_diff(pb, pa), name_set_diff(ab, pa), EtOpen(wbs)),
+              span,
+              reason
+            )
+          }
         },
-        EtAll => // Open ~ !B: the SOUND modal closure — the var carries the
+        EtAll => // Open ~ !B: the SOUND modal closure — every edge carries the
         // negative capability forward; the knowns must avoid B.
         if forbidden_names_disjoint(pa, ab) {
-          graph_bind_row(va, EfRow([], ab, EtAll), Located(span, reason))
+          bind_edges_to(was, EfRow([], ab, EtAll), span, reason)
         } else {
           report_effect_mismatch(a, b, span, reason)
         },
@@ -629,8 +866,8 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = match 
         } else {
           report_effect_mismatch(a, b, span, reason)
         },
-        EtVar(vb) => if forbidden_names_disjoint(pb, aa) {
-          graph_bind_row(vb, EfRow([], aa, EtAll), Located(span, reason))
+        EtOpen(wbs) => if forbidden_names_disjoint(pb, aa) {
+          bind_edges_to(wbs, EfRow([], aa, EtAll), span, reason)
         } else {
           report_effect_mismatch(a, b, span, reason)
         },
@@ -650,10 +887,10 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = match 
 fn report_effect_mismatch(ref a, ref b, ref span, ref reason) with !Mutate =
   report(EEffectMismatch(a, b, span))
 
-// Ground: no row variable anywhere the dispatch would need resolved.
+// Ground: no open edge anywhere the dispatch would need resolved.
 fn row_is_ground(ref row) with Pure = match row {
   EfRow(_, _, t) => match t {
-    EtVar(_) => false,
+    EtOpen(_) => false,
     _ => true,
   },
 }
@@ -732,6 +969,32 @@ fn eff_forbids(forbidden: EffName, present: EffName) with !Mutate = if eff_name_
     },
   }
 }
+
+// The admission's INSTANCE LAW — eff_forbids' positive dual, read at the
+// subsumption's present legs: does a gate's present entry admit a body
+// charge? A bare declared name admits every instance of its name
+// (declaring `with Sample` constrains the NAME; the instance stays the
+// body's own). An instanced declaration admits exactly the structurally
+// same instance — the declared gate's pin (pin_declared_instances) has
+// already written its scalar literals into the charge's unknowable value
+// dims, so a surviving argument difference IS a different instance — and
+// refuses a bare charge (it could be any instance; conservative, the
+// same frame eff_forbids holds on the negation side).
+fn eff_admits(gate_name: EffName, body_name: EffName) with !Mutate = if eff_name_handle(gate_name) != eff_name_handle(body_name) {
+  false
+} else {
+  match gate_name {
+    ENamed(_) => true,
+    EPure => false,
+    EParameterized(_, gargs) => match body_name {
+      ENamed(_) => false,
+      EPure => false,
+      EParameterized(_, bargs) => frag_args_same(gargs, bargs),
+    },
+  }
+}
+
+fn present_admitted(ref bp, ref gp) with !Mutate = all((b) => any((g) => eff_admits(g, b), gp), bp)
 
 fn eff_args_provably_distinct(ref a, ref b, i) with !Mutate = if len(a) != len(b) {
   // Differing arity never proves distinctness — an effect has ONE
@@ -1027,10 +1290,10 @@ fn name_set_contains_loop(ref set, ref name, i, n) with Memory = if i >= n {
 // it broke set-dedup, so ~422/598 self-compile rows carried duplicate
 // names (Memory+Memory+Memory) whose open tail never closed and hit
 // row_subsumes' `_ => false`. By-name identity across sites fixes dedup
-// AND subset. (The ultimate form is EffName-is-a-handle — intern names to
-// handles at the decl so this is i32.eq-on-identity and the whole by-name
-// family dissolves; that closes the parameterized residue str_eq conflates
-// — Hβ.effects.parameterized-negation-instance — and is §5.O layer 1.)
+// AND subset. (EffName-is-a-handle LANDED 2026-07-24 — the compare below
+// IS i32.eq on eff_name_handle; this parenthetical's old future tense
+// described its own present. The parameterized-instance residue rides
+// Hβ.effects.parameterized-negation-instance.)
 else if eff_name_handle(list_index(set, i)) == eff_name_handle(name) {
   true
 } else {

@@ -55,7 +55,7 @@ fn ref_at(refs, i: Int) with Memory = if i < 0 { 0.0 } else { refs[i] }
 // step by mu·e·x each sample. `ip` accumulates the residual power over the first
 // K samples (early adaptation), `fp` over the last K (converged) — both threaded
 // float accumulators, compared at the end for the power-drop fact.
-fn lms_loop(refs, w0: Float, w1: Float, i: Int, n: Int, k: Int, ip: Float, fp: Float, mu: Float) with Memory = {
+fn lms_loop(refs, w0: Float, w1: Float, i: Int, n: Int, k: Int, ip: Float, fp: Float, mu: Float) with Memory + Alloc = {
   if i >= n { (w0, w1, ip, fp) }
   else {
     let x0 = ref_at(refs, i)

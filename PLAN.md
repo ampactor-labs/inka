@@ -1512,8 +1512,9 @@ hypothesis. This phase exists because both of the last two tripwires fired.
 
 ### Phase 1 · The row crosses the function boundary
 
-**LANDED 2026-08-06 (pin e606a650) — the banked probe decided the build in
-one run.** The completion prune gained its SIGNATURE KEEP-SET: a free
+**LANDED 2026-08-06 (final pin 04e20d2482fc; the session's intermediate pins
+806c7df4 and e606a650 carried the first two of its three landings) — the
+banked probe decided the build in one run.** The completion prune gained its SIGNATURE KEEP-SET: a free
 judgment-era row root the decl's params/return reach at exit escapes through
 instantiate at every call site (generalize's signature collection quantifies
 exactly it), so `signature_free_roots` — read THROUGH the live cells,
@@ -1528,9 +1529,9 @@ alone, so `effect Sample(rate: Int)` charged a bare name (ancient, masked by
 the deleted declared-publish): declared params are now EANode value dims on
 the charge, the gate pins authored scalars into them (graph_finalize_row —
 the teaching JOIN dedups a pin away), and subsumption's present legs read
-`eff_admits`, the instance law's positive dual. Terminal gate MET: crown 7/7
-(two graduated crucibles), frontier 332/0, census 0, fixpoint CLEAN, board
-captured at pin time. Full records:
+`eff_admits`, the instance law's positive dual. Terminal gate MET: crown 8/8
+(three crucibles graduated from the session's digs), frontier 332/0, census
+0, fixpoint reproduced at every pin, board captured at pin time. Full records:
 `Hβ.infer.hof-param-row-never-reaches-enclosing` (RESIDUE.md, with the
 standing citation correction) and the LEDGER's THE SIGNATURE KEEPS ITS ROW.
 

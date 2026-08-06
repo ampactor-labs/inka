@@ -83,6 +83,17 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.query.decl-site-file-coordinates` — a query's Reason span answers in
+the linked blob's coordinates and names no file, so "where is NAME
+declared, as file:line I can open" has no projection: `query src/infer.mn
+"type edges_keep_completion"` answered span 704:4 while the fn lived in
+src/effects.mn, and the 2026-08-06 session fell back to confessed greps
+twice for exactly this. The span substrate carries the truth; the facet
+is the missing rendering (per-module offsets exist the moment
+`Hβ.driver.per-module-env-overlay` gives solo queries their real link
+set). Named per the ⟳ law: the hand tool is a confession, and this is
+its peer.
+
 `Hβ.effects.directional-fn-row-edge` — RESOLVED at its measured scope
 (2026-07-30, pin cd43c23c — the §7 entry THE QUIET FN FITS UNDER THE
 CAP carries the record: the positional pre-meet at

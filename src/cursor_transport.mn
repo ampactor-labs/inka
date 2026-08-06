@@ -330,7 +330,7 @@ fn show_node_kind(kind) with Pure = match kind {
   NErrorHole(_) => "error-hole",
 }
 
-fn show_proposals(props) with GraphRead + Alloc + Memory + !Mutate = match props {
+fn show_proposals(props) with GraphRead + Alloc + Memory + Intern + !Mutate = match props {
   Proposals(survivors, rejected) => {
     let survivors_block = if len(survivors) == 0 {
       "(none)"

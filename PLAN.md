@@ -1534,19 +1534,22 @@ captured at pin time. Full records:
 `Hβ.infer.hof-param-row-never-reaches-enclosing` (RESIDUE.md, with the
 standing citation correction) and the LEDGER's THE SIGNATURE KEEPS ITS ROW.
 
-**The named remainder — 1.2's conflation, split by measurement.** "The same
-root is three faces" was pre-measurement prose: post-fix, `fn f(xs) with
-!WASI = each((x) => println(...), xs)` STILL falsely passes (c05 — zero
-effect diagnostics over the lib baseline), because the handler-residual face
-loses the row UPSTREAM of the prune: the callback's row never arrives in
-`each`'s accumulated row — the residual read bypasses the scheme instance.
-Two seams, not one: the prune (closed) and
-`Hβ.infer.handler-residual-outside-the-scheme` +
-`Hβ.effects.config-fn-row-in-residual` (one seam, pre-existing at every
-green pin since birth, the most-hit face because every prelude HOF has the
-shape). That seam is the phase's open work: read the residual through the
-instantiated scheme, or let rung 3 dissolve the tower that makes the bypass
-possible.
+**The second seam closed the same day — the residual reads the install.**
+"The same root is three faces" was pre-measurement conflation: the
+handler-residual face loses the row UPSTREAM of the prune, and the dig found
+three stacked losses (HandlerKind carrying parse-placeholder tparams; the
+arm scope's exit pruning with an empty keep — its signature IS the config
+cells; an edge-only residual finalizing as an alias a bound-row read answers
+pure on). The fix reads the residual as the cell-as-an-edge and joins each
+CALLED config arg's row at the install
+(`Hβ.infer.handler-residual-outside-the-scheme` +
+`Hβ.effects.config-fn-row-in-residual`, both RESOLVED — the record and the
+five probe-kills are in RESIDUE.md). `fn f(xs) with !WASI = each(...)` now
+refuses — the vocabulary face every user touches. The honest harvest: 19
+falsely-passing wheel sites (18 widens + main's root stack gaining
+`~> verify_ledger ~> diagnostics_handler`), census back to 0 in two rounds,
+TRANSITION m3 == m4. Rung 3's dissolution of the publish tower remains the
+deeper form; the soundness hole is closed on the standing representation.
 
 ### Phase 2 · Every judgment reads the graph, never a proxy
 

@@ -36,11 +36,43 @@
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
 - 2026-08-06 · ▶▶▶ THE SIGNATURE KEEPS ITS ROW — the crown's higher-order
-  leak closed at the completion prune, and the banked probe decided the
-  build (final pin e606a650 — CLEAN m2 == m3 at 333,048 lines, census 0,
-  crown/proof-exactness/effect-identity captured green at pin time; the
-  session's intermediate pin 806c7df4 carried the sig-keep alone,
-  TRANSITION m3 == m4 at 332,110 lines).
+  leak closed at the completion prune, the instance-erasure root closed
+  at effect registration, and the handler-residual seam closed at the
+  install read: one session, three landings, the banked probe deciding
+  the first build (final pin 04e20d2482fc — TRANSITION m3 == m4 at
+  333,715 lines, census 0, crown 8/8; the session's intermediate pins:
+  806c7df4 the sig-keep alone, e606a650 adding the instance work).
+  THE THIRD LANDING — THE RESIDUAL READS THE INSTALL
+  (Hβ.infer.handler-residual-outside-the-scheme +
+  Hβ.effects.config-fn-row-in-residual, both RESOLVED): the c05
+  re-measurement proved the seam distinct, and the dig found three
+  stacked losses — HandlerKind carrying parse-placeholder config tparams
+  at all three registration writes (the install read chased cell 4, a
+  parse-era handle); the handler-arm scope exiting with an empty
+  signature keep (its signature IS the config cells + the handle
+  result, so the arms' config-fn edges dropped at the prune this same
+  session built); and the edge-only residual finalizing as an ALIAS of
+  the free config cell, which read_bound_row reads as pure (the
+  root-FREE census line — the finalize's flat store canonicalizes a
+  bare single-edge row to the edge's own cell, correct for scheme
+  readers who chase THROUGH an edge, wrong for a bound-row read).
+  The fix: store the minted tparams in HandlerKind; pass
+  signature_free_roots(tparam_cells ++ [s_h]) at the arm exit; read
+  the residual as resolve_row(mk_ef_open([], resid_h)) — the shape a
+  scheme's row rides; and join each CALLED config arg's row at the
+  install (residual_with_config_args — root-membership in the
+  residual's edge set is the graph's own record of which config fns
+  the arms call; labeled/arity-short installs fall back verbatim).
+  Measured: tests/crown/leak-handler-residual refuses (RED-first);
+  the each/!WASI vocabulary fixture refuses; the wheel's own census
+  surfaced 19 falsely-passing sites — 18 declaration widens
+  (Intern/StringTable/GraphWrite/EnvRead/the judge's
+  BranchEnv+Consume+WasiThreads+DiagRegister rows — the new bare-
+  admits-instanced membership is what makes the bare widens legal)
+  plus main's root stack gaining ~> verify_ledger ~>
+  diagnostics_handler (Verify, then the ledger's own Diagnostic,
+  reaching the root unabsorbed) — converging census 19 → 0 in two
+  rounds, TRANSITION m3 == m4, crown 8/8, frontier 332/0.
   The 2026-08-05 dig had proven the drop site (`edges_keep_completion`'s
   `root < ceiling` compare) and refuted a signature keep-set as inert;
   the named next probe — print the collected set beside the dropped

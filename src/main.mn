@@ -407,7 +407,7 @@ fn path_to_module(arg) with Alloc + Memory = {
 fn main(argv) = match parse_cli_args(argv) {
   ParseError(msg) => print_error_and_help(msg),
   Invocation(verb) => dispatch_invocation(verb),
-} ~> intern_table
+} ~> verify_ledger ~> diagnostics_handler ~> intern_table
 
 // dispatch_invocation — the substrate handlers (env/graph/diagnostics)
 // install ONCE at this outermost dispatch boundary: the program boundary

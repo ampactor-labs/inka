@@ -347,7 +347,7 @@ fn predicate_to_where_clause(pred) = "where {show_predicate(pred)}"
 // Memory row is the list construction, nothing learned or tuned); the
 // capability strings round-trip with the
 // Capability ADT (mentl.mn) at the surface boundary.
-fn capabilities_unlocked_by(row) with Memory + Alloc = match row {
+fn capabilities_unlocked_by(row) with Memory + Alloc + Intern = match row {
   EfRow(p, a, t) => match t {
     EtClosed => if len(p) == 0 && len(a) == 0 {
       ["CMemoize", "CCompileTimeEval", "CParallelize"]
@@ -359,7 +359,7 @@ fn capabilities_unlocked_by(row) with Memory + Alloc = match row {
   },
 }
 
-fn negation_caps(names) with Memory + Alloc = flatten(map(caps_for_negated_eff, names))
+fn negation_caps(names) with Memory + Alloc + Intern = flatten(map(caps_for_negated_eff, names))
 
 fn caps_for_negated_eff(name) with Intern + Memory + Alloc = match name {
   ENamed(h) => if h == intern_str("Alloc") {
@@ -380,7 +380,7 @@ fn caps_for_negated_eff(name) with Intern + Memory + Alloc = match name {
 
 // Capabilities the developer gains by writing the tighter row in
 // place of the declared one. The set IS the tighter-row's caps.
-fn capabilities_unlocked_by_tightening(declared, body) with Memory + Alloc =
+fn capabilities_unlocked_by_tightening(declared, body) with Memory + Alloc + Intern =
   capabilities_unlocked_by(body)
 
 // ─── Composition with cursor_default ───────────────────────────────

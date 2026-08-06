@@ -891,11 +891,14 @@ fn pre_register_handler_sig(hname, config, state, arms) = {
   let scheme_body_h = mint(Inferred("handler scheme of '{hname}'"))
   graph_bind(scheme_body_h, scheme_body, Inferred("handler scheme of '{hname}'"))
   let r_handle = graph_fresh_row(Inferred("residual of handler '{hname}'"))
+  // The KIND carries the MINTED tparams, never the parse placeholders:
+  // the residual's install read (residual_with_config_args) chases these
+  // cells to the config fns' row roots, and a placeholder chases nowhere.
   env_extend(
     hname,
     Forall(inst_vars, scheme_body),
     Declared(hname),
-    HandlerKind(r_handle, config, state, arms)
+    HandlerKind(r_handle, config_tparams, state, arms)
   )
 }
 
@@ -4255,7 +4258,7 @@ fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
       let body_row = read_bound_row(body_row_h)
       match handler_e_r(right) {
         Some(er) => match er {
-          (handled, resid_h) => {
+          (handled, resid_h, hconfig) => {
             // THE INSTALL CONNECTION: flow the op payload performer→handler.
             // The body performs E(a); the handler is Handler(E(P)); unify a = P,
             // so the handler's arm param (elem : P) becomes the performed value
@@ -4270,7 +4273,11 @@ fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
               Some(arms) => derive_handler_enames(arms, 0, []),
               None => [ENamed(intern_str(handled))],
             }
-            inf_add_row(absorb_row(body_row, mk_ef_closed(handled_names), read_bound_row(resid_h)))
+            inf_add_row(absorb_row(
+              body_row,
+              mk_ef_closed(handled_names),
+              residual_with_config_args(resid_h, hconfig, right)
+            ))
           },
         },
         None => // Handler value not resolvable to a HandlerKind decl (e.g. a let-bound
@@ -4311,13 +4318,102 @@ fn handler_e_r(right) = match callee_name(right) {
   name => match env_lookup(name) {
     Some(entry) => match entry {
       (_, _, kind) => match kind {
-        HandlerKind(r, _, _, arms) => // The handled effect is a live projection of the arms (§2 follow-the-
+        HandlerKind(r, config, _, arms) => // The handled effect is a live projection of the arms (§2 follow-the-
         // edge), never a stored field — arms→op→EffectOpScheme carries it.
-        Some((derive_handler_ename(arms, name), r)),
+        // The config TParams ride along for the residual's install read.
+        Some((derive_handler_ename(arms, name), r, config)),
         _ => None,
       },
     },
     None => None,
+  },
+}
+
+// The residual READ at the install — the instantiation the raw handle
+// bypasses, done live at the one seam it matters
+// (Hβ.infer.handler-residual-outside-the-scheme): an arm's call into a
+// config fn charged the DECL param's row cell (a one-way edge), while
+// the install's CallExpr unified the actual arg into the SCHEME's
+// freshened copy — so the decl cell stays free forever and the residual
+// folds nothing for it. The graph holds both ends: the residual's edge
+// set names WHICH config params the arms call (their row roots), and
+// the install's own arg nodes carry the actual rows. Join each CALLED
+// config arg's row into the residual — carry the handles, read live; an
+// uncalled config fn's arg contributes nothing (its root is not in the
+// edge set), so the charge stays exact. A labeled or arity-short
+// install falls back to the raw residual (positions are the pairing;
+// resolve_call_args' full label resolution is the refinement).
+fn residual_with_config_args(resid_h, config, right) = match right {
+  N(rbody, _, _) => match rbody {
+    NExpr(CallExpr(_, args)) => {
+      // The residual rides the CELL AS AN EDGE — the shape a scheme's row
+      // rides (mk_ef_open on the handle), never read_bound_row: a residual
+      // that is exactly one config-var edge finalizes as an ALIAS of that
+      // free cell (the flat store's canonical form), and a bound-row read
+      // of a free root answers pure — the measured root-FREE loss.
+      // resolve_row folds bound content and keeps free tails, so both
+      // shapes read true.
+      let resid = resolve_row(mk_ef_open([], resid_h))
+      if len(args) != len(config) || any_arg_labeled(args) {
+        resid
+      } else {
+        fold(
+          resid,
+          (acc, pair) => match pair {
+            (i, p) => if any((r) => residual_has_root(acc, r), config_row_roots(p)) {
+              match arg_fn_row(args, i) {
+                Some(arow) => union_row(acc, arow),
+                None => acc,
+              }
+            } else {
+              acc
+            },
+          },
+          enumerate(config)
+        )
+      }
+    },
+    _ => resolve_row(mk_ef_open([], resid_h)),
+  },
+}
+
+fn any_arg_labeled(ref args) = any(
+  (a) => match a {
+    N(abody, _, _) => match abody {
+      NExpr(LabeledArg(_, _)) => true,
+      _ => false,
+    },
+  },
+  args
+)
+
+// The config param's row-sort roots, read through its live cell — after
+// arm inference the cell is bound to the config fn's type, and its row's
+// free roots are exactly what the arms' call edges chase to. The SAME
+// collection the keep-set uses (signature_free_roots — one walk, the
+// trio discipline), filtered to the row sort the membership compares.
+fn config_row_roots(p) = match param_ty(p) {
+  TVar(h) => filter((r) => is_row_handle(r), signature_free_roots([h])),
+  _ => [],
+}
+
+fn tparam_cells(tparams) = flatten(map(
+  (p) => match param_ty(p) {
+    TVar(h) => [h],
+    _ => [],
+  },
+  tparams
+))
+
+fn residual_has_root(resid, root) = match resid {
+  EfRow(_, _, EtOpen(vs)) => any((v) => graph_chase_handle(v) == root, vs),
+  _ => false,
+}
+
+fn arg_fn_row(ref args, i) = match list_index(args, i) {
+  N(_, _, ah) => match chase_deep(lookup_ty(ah)) {
+    TFun(_, _, arow) => Some(arow),
+    _ => None,
   },
 }
 
@@ -7692,7 +7788,7 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
     hname,
     Forall(inst_vars, scheme_body),
     Declared(hname),
-    HandlerKind(r_handle, config, state, arms)
+    HandlerKind(r_handle, config_tparams, state, arms)
   )
   // Resume cardinality IS written here, on the op's EffectOpScheme (draw_op_edges
   // below joins each arm's resume_grade). The body IS the contract, so the
@@ -7759,7 +7855,14 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
     },
     arms
   )
-  inf_exit_fn([])
+  // The arm scope's SIGNATURE is the handler's config cells + its result:
+  // an arm's call into a config fn charges a judgment-era row edge that
+  // escapes through the scheme at every install (the config tparam rides
+  // the published TFun), so the completion prune's signature keep applies
+  // here exactly as at a named decl's exit — with an empty keep the
+  // residual dropped the config-fn edge and folded nothing (measured:
+  // zero residual edges on the leak-handler-residual crucible).
+  inf_exit_fn(signature_free_roots(tparam_cells(config_tparams) ++ [s_h]))
   env_scope_exit()
   // Re-store the handler's scheme now that the arms have unified the instance's
   // result position with the state and config (r_h ~ acc ~ init). generalize
@@ -7773,7 +7876,7 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
     hname,
     generalize(scheme_body_h),
     Declared(hname),
-    HandlerKind(r_handle, config, state, arms)
+    HandlerKind(r_handle, config_tparams, state, arms)
   )
   // Draw the op→handler edge onto each op's EffectOpScheme HERE — in the body,
   // OUTSIDE the arm `each` and inf_enter_fn's InferCtx install. An env_extend

@@ -188,7 +188,7 @@ handler project_queue_merger with last_epoch = -1, projected = [] {
 // No separate search, no separate cache: the proposer IS the search,
 // the graph epoch IS the cache. The e-graph supplies the TStyle-tier
 // equivalences (topology nudges) effect-awarely via egraph.mn.
-fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Alloc =
+fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Alloc + EnvRead =
   positions_with_dependents() |> map((pos) => candidates_at(pos)) |> flatten |> sort_by_priority
 
 // candidates_at — every proven Annotation at one position becomes a
@@ -197,7 +197,7 @@ fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Allo
 // substrate. The candidate set is the gradient's own enumeration
 // (gradient_candidates_at); each survivor carries the e-graph-aware
 // priority and the Why-walkable Reason mentl.mn already minted.
-fn candidates_at(pos) with Verify + GraphRead + GraphWrite + Alloc + Memory + Intern = {
+fn candidates_at(pos) with Verify + GraphRead + GraphWrite + Alloc + Memory + Intern + EnvRead = {
   let node = graph_chase(pos)
   match node {
     GNode(kind, anchor) => match kind {

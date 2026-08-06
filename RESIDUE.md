@@ -591,42 +591,43 @@ verbatim — and `executable_boundary_row` exists solely to compute the
 dead row, its refusal half worth keeping under an honest name).
 Law-7-inert by construction.
 
-`Hβ.infer.handler-residual-outside-the-scheme` — THE THIRD CROWN
-BLINDNESS FACE, measured and mechanism-attributed by two auditors
-independently (2026-07-31, sha-stamped): a handler's residual row is
-carried on HandlerKind's RAW r_handle, OUTSIDE the scheme, so an
-install INSTANTIATES the scheme (freshening the config row var the
-actual callback unifies with) while `handler_e_r` / `read_bound_row`
-read the UN-freshened decl handle — the residual bypasses
-generalize/instantiate entirely. Consequence, measured at the
-vocabulary: `each` and `fold` publish CLOSED result rows with the
-callback's row var orphaned in the parameter, so
-`fn f(xs) with !WASI = each((x) => println("y"), xs)` FALSELY PASSES
-and the medium then teaches "tighten further" — while a direct
-`println` under `!WASI` refuses in the same run. PRE-EXISTING (predates
-the 2026-07-31 charge landing). This is the most commonly HIT of the
-three faces, because every HOF in the prelude has the shape. The row
-face of band N's `Hβ.lower.config-fn-evidence-in-arm` (whose runtime-
-evidence half the world-as-value arc closed); the type face is this.
-Dissolves under rung 3 with the other two.
-RE-MEASURED 2026-08-06, post the completion-prune signature keep: the
-fixture STILL passes (zero effect diagnostics over the lib baseline —
-`.build/research/crown-2026-08-05/c05_each_wasi.mn`), which PROVES the
-seam split: this face's loss is upstream of the prune — the callback's
-row never ARRIVES in each's accumulated row (the residual read
-bypasses the scheme instance), so a keep category has nothing to keep.
-`Hβ.infer.hof-param-row-never-reaches-enclosing`'s prune fix and this
-peer are two distinct seams; §11 Phase 1.2's "same root, three faces"
-was the pre-measurement conflation.
+`Hβ.infer.handler-residual-outside-the-scheme` — RESOLVED (2026-08-06,
+the same session as the prune fix, five probe-kills deep): the residual
+now READS THE INSTALL. The attributed mechanism held — HandlerKind's
+raw r_handle bypasses generalize/instantiate — but the dig found THREE
+stacked losses, each measured before believed: (1) HandlerKind stored
+the PARSE-placeholder config TParams at all three registration writes,
+so any install-time read chased dead cells (the census showed cell 4 —
+a parse-era handle); it now stores the MINTED tparams the arms bind.
+(2) The handler-arm scope's exit ran the completion prune with an empty
+keep-set, dropping the arms' config-fn edges — the arm scope's
+SIGNATURE is the config cells + the handle-result, so its exit now
+passes signature_free_roots(tparam_cells ++ [s_h]) exactly as a named
+decl does. (3) A residual that is exactly one config-var edge finalizes
+as an ALIAS of that free cell (the flat store's canonical form), and
+read_bound_row answers pure on a free root — the measured root-FREE
+loss; the residual is now read as the CELL AS AN EDGE
+(resolve_row(mk_ef_open([], resid_h))), the same shape a scheme's row
+rides. The install completes it: residual_with_config_args joins each
+CALLED config arg's row (root-membership in the residual's edge set is
+the graph's own record of which config fns the arms call; labeled or
+arity-short installs fall back verbatim, the resolve_call_args-shared
+pairing named as the refinement). MEASURED: leak-handler-residual
+refuses (the crown's leak- contract, seen RED first); the c05 each
+fixture (`fn f(xs) with !WASI = each(...)` — the vocabulary face)
+refuses; the wheel's own census surfaced 19 falsely-passing sites (18
+declaration widens + main's root stack gaining ~> verify_ledger ~>
+diagnostics_handler), converging to census 0 with TRANSITION m3 == m4
+in two rounds. `Hβ.effects.config-fn-row-in-residual` resolves with it
+(one seam, the absorb side — union at the install IS "read the config
+row where it already lives"). Rung 3's dissolution of the tower stands
+as the deeper form; this closes the soundness hole on the standing
+representation.
 
-`Hβ.effects.config-fn-row-in-residual` — the same seam stated from the
-absorb side: a handler's residual is `absorb_row(body, handled, extra)`
-and `extra` must be the union of the arms' rows, where an arm's row
-must include the rows of any function REACHABLE from it — the config
-record's fields included. The config parameter's row is already a fact
-of the handler's own scheme (it is visible in `each`'s parameter type);
-the residual re-derives the arm's effects without reading it. Carry the
-handle, read live — the same fix as its sibling above, one layer over.
+`Hβ.effects.config-fn-row-in-residual` — RESOLVED (2026-08-06) with its
+sibling above: the tee's `extra` is residual_with_config_args — the
+residual joined with each called config arg's row, read live off the
+install's own arg nodes. One seam, closed at the one absorb site.
 
 `Hβ.lower.*` and kin — TEN PEERS THAT LIVED ONLY IN COMMENTS, banked at
 their one home 2026-07-31 (the lower audit's finding 12: each was

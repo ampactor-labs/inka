@@ -5945,7 +5945,7 @@ fn spec_site_is_wide(site) with EnvRead + LookupTy + GraphRead + Memory + Alloc 
   },
 }
 
-fn spec_reach_seed(lowered) with Alloc + Memory = match fold(([], []), (a, d) => spec_scan_expr(d, a), lowered) {
+fn spec_reach_seed(lowered) with Alloc + Memory + LookupTy + EnvRead + GraphRead = match fold(([], []), (a, d) => spec_scan_expr(d, a), lowered) {
   (sites, _ophs) => if any(spec_site_is_wide, sites) { spec_wide_family() } else { [] },
 }
 

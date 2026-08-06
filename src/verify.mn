@@ -729,7 +729,7 @@ fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc + Diagnostic +
 
 // Each arg is a handle — map through handle_to_smt and join (map/fold, never an
 // imperative i/n counter; Anchor 6).
-fn smt_arg_terms(ref args) with GraphRead + Memory + Alloc + Diagnostic = fold(
+fn smt_arg_terms(ref args) with GraphRead + Memory + Alloc + Diagnostic + Intern = fold(
   "",
   (acc, arg) => match arg {
     N(_, _, h) => "{acc} {handle_to_smt(h)}",

@@ -1,0 +1,16 @@
+// CROWN crucible — the handler-residual face of the higher-order leak
+// (Hβ.infer.handler-residual-outside-the-scheme): a handler-based HOF's
+// residual must carry its CONFIG fn's row. run_each installs consume over
+// the body; the arm calls f(x), so the residual is f's row — the install
+// instantiates the handler's scheme, but a residual read off the raw decl
+// handle bypasses that freshening and the callback's row never reaches
+// run_each's published row. bad() then declares !E over a body that
+// performs E through the config fn, and must REFUSE.
+effect E { op() -> Int }
+effect Feed { yield(x: Int) -> Int }
+handler consume(f) {
+  yield(x) => resume(f(x)),
+}
+fn run_each(f) = (yield(1)) ~> consume(f)
+fn bad() with !E = run_each((x) => x + op())
+fn main() = bad()

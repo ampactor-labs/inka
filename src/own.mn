@@ -414,7 +414,7 @@ fn join_field_regions(ref tags, ref fields, current) with !Mutate = fold(
   fields
 )
 
-fn report_each_collision(ref names, ref span) with Diagnostic + Memory + Alloc =
+fn report_each_collision(ref names, ref span) with Diagnostic + Memory + Alloc + GraphRead + Intern =
   each((name) => report(EOwnershipViolation(parallel_collision_msg(name), span)), names)
 
 // The collision message's one mint, String-pinned (spec_mangle's law —

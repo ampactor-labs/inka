@@ -650,7 +650,7 @@ fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory +
 // The declared [String] is the Intent Boundary the ++ sites read — without it
 // the filter-with-handler-block chain left the element open and the concat
 // emitted its unresolved-element floor (the 00c0b6 trap that caught this).
-fn spec_fold_collect(spec_recs, acc0) with LookupTy + EnvRead + Memory + Alloc = fold(
+fn spec_fold_collect(spec_recs, acc0) with LookupTy + EnvRead + Memory + Alloc + GraphRead + WASI = fold(
   acc0,
   (acc, rp) => match rp {
     (rec2, pairs, enc) => match rec2 {
@@ -1464,7 +1464,7 @@ fn emit_driver_arg_loads(n, i) = if i >= n {
 // handler with a MultiShot-graded arm, under the yield gate; an
 // UNINSTALLED handler's op keys intern nowhere and compare against offset
 // 0 — dead code, assembles clean.
-fn emit_redrive_fns(emitted_names) with WasmOut + EnvRead + Memory + Alloc = {
+fn emit_redrive_fns(emitted_names) with WasmOut + EnvRead + Memory + Alloc + StringTable = {
   let hnames = match env_snapshot() {
     Env(entries) => ms_handler_names(entries, []),
   }

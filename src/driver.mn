@@ -147,7 +147,7 @@ fn driver_collect_visit(ref module_name, own collected, own visited) with Memory
   }
 }
 
-fn driver_collect_visit_list(ref modules, own collected, own visited) with Memory + Alloc + Filesystem + GraphWrite + GraphRead + Diagnostic + Mutate + Cast + WASI = fold(
+fn driver_collect_visit_list(ref modules, own collected, own visited) with Memory + Alloc + Filesystem + GraphWrite + GraphRead + Diagnostic + Mutate + Cast + WASI + Intern = fold(
   (collected, visited),
   (acc, m) => match acc {
     (c, v) => driver_collect_visit(m, c, v),
@@ -235,7 +235,7 @@ fn driver_check_module(ref module_name) with Memory + Alloc + Filesystem + WASI 
 // Each module either loads from cache or re-infers; envs install in
 // dependency order so every imported name is in `env_handler` before
 // the entry module's inference runs.
-fn driver_check(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern + Cast + Mutate + WASI =
+fn driver_check(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern + Cast + Mutate + WASI + BranchEnv + Consume + WasiThreads + DiagRegister =
   entry_module |> driver_collect_dag_with_deps |> driver_partition_layers |> each((layer) => each(driver_check_module, layer))
 
 // driver_check_entry — the compile path's check: infer every DEP of the
@@ -693,7 +693,7 @@ fn assoc_stmts(ref pairs, name: String) with Memory + Alloc = match find(
 // a nonempty cone (every DAG module is one of its transitive deps, so
 // the downstream closure of any change reaches it). The re-judged state
 // re-persists, so the image tracks the tree edit by edit.
-fn driver_incremental() with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern + Mutate + Cast = {
+fn driver_incremental() with Memory + Alloc + Cast + Persist + Fail + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern + Mutate + BranchEnv + Consume + WasiThreads + DiagRegister = {
   let entry = list_index(warm_entry, 0)
   let scan = driver_tree_scan(entry)
   let cur_pairs = scan_pairs(scan)
@@ -788,7 +788,7 @@ fn names_join(ref xs) with Memory + Alloc =
 // closure's own projection): each module parses fresh and infers into
 // the restored world — re-registration shadows its stale entries — and
 // keeps its statement bucket for the reassembly.
-fn rederive_cone(ref cone) with Memory + Alloc + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = map(
+fn rederive_cone(ref cone) with Memory + Alloc + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern + Cast + BranchEnv + Consume + WasiThreads + DiagRegister = map(
   (m) => {
     let ast = infer_program_converged(fs_read_file(driver_module_path(m)))
     (m, ast)

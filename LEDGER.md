@@ -35,6 +35,28 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE BRACKET'S COUNTING PAIR — arena 2a-i, and the
+  step-2 correction the artifact forced
+  (pin e524668b29f3 — CLEAN m2 == m3, census 0; micro mn-image-region
+  RED→42). Before a line landed, the stamped step-2 mechanism was
+  REFUTED by one row read: spine_open_loop allocates its pages through
+  the emitted constructors (Memory + Alloc, no wheel-source alloc()
+  call), so "swap the growth fns onto ialloc" has no seam, and
+  row-only decoration is false prose the medium itself narrates
+  against (T_OverDeclared). The classification is the EXTENT BRACKET —
+  the gate peer's own form: image_enter/image_exit, depth-counted
+  (borrow_enter's shape, heap_mark/heap_reset's pairing idiom),
+  landed in this pin as counting emissions only ($image_depth
+  demand-gated on the pair's performs, the spawn-cell precedent;
+  allocator untouched). Zero wheel performs keep the pin CLEAN — the
+  generation-lag ladder walked deliberately: the ops taught first,
+  the six family brackets next pin under the taught boot, then 2b's
+  one TRANSITION (the $alloc depth-fork, the boundary fixed from the
+  census the brackets make possible, the per-decl mark/reset, the
+  reachability audit leg). RESIDUE's corrected order carries the
+  design; the CLEAN-vs-TRANSITION pricing of each remaining sub-step
+  is recorded there.
+
 - 2026-08-07 · ▶▶▶ THE IMAGE GETS ITS VERB — arena step 1 lands the
   ImageAlloc vocabulary (pin b5730e6110ac — CLEAN m2 == m3, census 0;
   micro mn-image-alloc RED→42). The classification layer the six image

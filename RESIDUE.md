@@ -573,11 +573,37 @@ b5730e6110ac: the effect + ialloc in memory.mn, one name in
 is_substrate_mem_op grounding it at the root gate by derivation, the
 emit arm riding $alloc with the step-3 fork named; micro
 mn-image-alloc RED→42; the cost loop's first pin measured a ~4%
-cross-invocation RSS spread, named in the pin);
-(2) the six families classified, each a marched step; (3) the
-per-decl bracket + the audit leg, landed together as the TRANSITION
-re-pin; (4) the dormant emit_memory_arena resolves — its real body or
-its deletion, one strategy read from the module's own proof.
+cross-invocation RSS spread, named in the pin).
+STEP-2 CORRECTED 2026-08-07 (the build refuted the stamp's mechanism
+before a line landed): "classify the growth fns onto ialloc" has NO
+SEAM for constructor-built structures — spine_open_loop's pages, the
+env buckets, the intern table all allocate through the emitted
+constructors ($make_list, record mk → $alloc), not through a
+wheel-source alloc() call, and row-only decoration is FALSE prose the
+medium itself narrates against (a declared-but-unperformed ImageAlloc
+is T_OverDeclared). The classification is therefore an EXTENT
+BRACKET — exactly the gate peer's own form (a region install
+absorbing Alloc): paired substrate ops `image_enter()`/`image_exit()`
+on ImageAlloc (depth-counted, borrow_depth's shape and
+heap_mark/heap_reset's pairing idiom), bracketing each family's
+growth extent so the rows come out TRUE via real performs; the `~>`
+tee spelling stays the peer's absorbing refinement once handler
+installs can reach the substrate allocator. THE CORRECTED ORDER: (2a-i)
+the pair's vocabulary — ✅ LANDED 2026-08-07 (pin e524668b29f3:
+image_enter/image_exit declared, recognized, emitted as $image_depth
+bumps with the global demand-gated on the pair's performs; zero wheel
+performs keep the pin CLEAN; micro mn-image-region RED→42); (2a-ii)
+the six family brackets + the eprint census measuring image-vs-scratch
+bytes on a real self-compile (the boundary constant must be MEASURED,
+not guessed) — a TRANSITION, because the wheel's own performs change
+its emitted WAT one generation later (the earlier "allocator untouched
+→ CLEAN" claim was wrong-in-detail: ANY emission-reaching change
+crosses a generation); (2b) the fork — $alloc reads the depth (image →
+$image_ptr, else $heap_ptr), the layout boundary fixed from 2a-ii's
+measurement, the per-decl mark/reset bracket, and the reachability
+audit leg, ONE TRANSITION re-pin; (3) the dormant emit_memory_arena
+resolves — its real body or its deletion, one strategy read from the
+module's own proof.
 
 `Hβ.own.use-after-move` — BUILT (2026-08-07, pin 8ba768c810c4, before
 the arena exactly as prescribed). The mechanism was one leg's ORDER:

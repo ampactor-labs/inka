@@ -568,14 +568,31 @@ hybrid: the worthy set was leaf-compute fns by construction
 SELF-RECURSIVE CLOSURE-CARRYING HOFs was never exercised and
 miscompiles (zip_with's twinned recursion never terminates). The
 deletion REVERTED whole. NEW PEER, the real blocker:
-`Hβ.emit.plumbing-twin-selfcall` — NAMED NEXT PROBE: force ONE
-plumbing twin in a fixture (a wide zip_with/map call under the gate
-deleted locally), emit-diff the twin body against the floor body,
-and pin whether the self-call redirect, the closure protocol, or the
-list stride breaks the recursion. 5.1a re-sequences AFTER that peer
-closes; the worthiness gate STANDS until then as the named guard of
-an unfixed emission class (a comment at spec_demands_of naming this
-is the next docs touch).
+`Hβ.emit.plumbing-twin-selfcall` — PROBED 2026-08-07, three kills
+banked and the hypothesis SHARPENED: (1) the minimal plumbing twin is
+CORRECT — a wide zip_with fixture through the probe m2 (worthiness
+forced true, uncommitted) twins (nine zip_with$ references) and runs
+exit 10; (2) a sensitive self-recursive closure-carrying HOF twin
+(sum_with, float acc) runs correct through the CURRENT boot — the
+live twin set is fine; (3) the compiler NEVER calls zip_with at
+runtime (all ten link refs are lib/ml + prelude), yet the reproduced
+trap (same probe tree, march) shows m2 executing 20+ zip_with frames
+ALL AT ONE PC (0xcf6e) from a caller the truncated backtrace never
+prints. A fn executing that provably has no caller is the
+corrupted-dispatch shape: a call_indirect whose computed table index
+lands on zip_with's slot (the bad-table-index class — "prints WAT
+mid-inference means the parser ate an arm"'s runtime sibling),
+pointing at a PINNED-BOOT miscompile of the probe SOURCE (the boot
+emits m2; the probe source's demand-fn shapes may tickle a boot
+emission bug — closure record layout, table-index global, or
+evidence slot). NAMED NEXT PROBE, instruments ready: the march's
+m3.coredump (fresh, 50KB) autopsied for the TRUE caller frames
+(wasm-tools/coredump spec), and the 0xcf6e disasm read against
+m2.dis to see WHICH call inside zip_with self-loops; then bisect the
+probe source (spec fns only vs full deletion) to pin the boot-emit
+divergence with emit-diff. The worthiness gate STANDS until this
+closes — named at spec_demands_of as the guard of an unfixed
+emission class.
 
 `Hβ.perf.per-decl-arena` — STAMPED whole 2026-08-07 (§11 4.3; the gate
 peer `Hβ.infer.region-on-tee-alloc-absorb` folds in below). WHAT EXISTS,

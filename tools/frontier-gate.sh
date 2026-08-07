@@ -2280,6 +2280,24 @@ for i in "${!compilers[@]}"; do
   else
     fail "named effect rows (diagnostics: $nr_diags; see $nr_err)"
   fi
+
+  # ─── The bare-mention seq-op stage (PLAN §11 Phase 3.3) ─────────────
+  # `[1, 2, 3] |> len` compiles SILENT and runs 3 — the false
+  # E_TypeMismatch (the raw-body scheme leaking into the pipe's
+  # unification) is dead; seq_face_ty types every mention as the face.
+  pil_err="$dir/pipe-into-len.err"
+  pil_wat=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-pipe-into-len.mn" 2> "$pil_err")
+  pil_diags=$(grep -c 'E_' "$pil_err" 2>/dev/null || true)
+  if [ -n "$pil_wat" ] && [ "$pil_diags" = "0" ]; then
+    printf '%s' "$pil_wat" > "$dir/pipe-into-len.wat"
+    if wt_asm "$dir/pipe-into-len.wat" "$dir/pipe-into-len.wasm" 2>/dev/null && [ "$(wt_run "$dir/pipe-into-len.wasm" > /dev/null 2>&1; echo $?)" = "3" ]; then
+      pass "pipe into len: the bare-mention seq-op stage compiles silent and runs (3)"
+    else
+      fail "pipe into len (assemble/run)"
+    fi
+  else
+    fail "pipe into len (diagnostics on a correct stage: $pil_diags; see $pil_err)"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

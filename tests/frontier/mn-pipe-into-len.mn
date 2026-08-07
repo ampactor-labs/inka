@@ -1,0 +1,10 @@
+// expect: 3
+// mn-pipe-into-len — the bare-mention seq-op stage (PLAN §11 Phase
+// 3.3's false-diagnostic drift): piping a list into `len` unified the
+// piped List against the raw-body param (the substrate boundary types
+// the body's own parameter Int) while emitting correct code — the
+// saturated and holed CALL paths already forced the face, and the bare
+// VarRef mention was the last raw-scheme leak. seq_face_ty closes it
+// at the mention, so pipes, HOF args, and stored seq-ops all type as
+// the face. The leg asserts zero diagnostics and exit 3.
+fn main(q) = [1, 2, 3] |> len

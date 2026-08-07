@@ -35,6 +35,31 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE SEQ-OP MENTION TYPES AS THE FACE — the arc
+  loop's sixteenth iteration lands Phase 3.3's false-diagnostic drift
+  (pin 7d8e91e499a1 — the loop's FIRST TRANSITION: m2 ≠ m3 with
+  m3 == m4 at 341,131 lines, repinned from m3 per the arbitration;
+  census 0). The root was one projection short: `len`'s env scheme is
+  the RAW body's (`(xs: Int) -> Int` — the substrate boundary types
+  the body's own parameter as the address word), the saturated and
+  holed CALL paths already forced the face (seq_op_sig), and the bare
+  VarRef MENTION was the last raw-scheme leak — `xs |> len` unified
+  List(Int) against Int and reported a false E_TypeMismatch while
+  lower emitted the seq-op dispatch correctly (the felt walk's
+  measured diagnose-wrong-emit-right split). seq_face_ty closes it at
+  infer_var_ref: a seq-op mention binds TFun(face params, face ret,
+  the callee's own declared row) — so pipes, HOF arguments
+  (`map(len, xss)` was the same leak), and stored seq-ops all type as
+  the face, one read. The TRANSITION verdict is the fix measured: the
+  wheel's own seq-op mentions judge differently under the face, the
+  emit crossed one generation, and the march ran m4 itself and
+  repinned from m3 — blessing m2 would have been the trusting-trust
+  mistake the arbitration exists to prevent. The fixture
+  (mn-pipe-into-len, exit 3, zero diagnostics through the manifest
+  path) and its frontier leg gate both faces; one harness lesson
+  recorded: run-micro's stdin path links no prelude, so
+  prelude-consuming fixtures gate through compile-path legs.
+
 - 2026-08-07 · ▶▶▶ NAMED EFFECT ROWS ARE REAL — the arc loop's
   fifteenth iteration builds Phase 3.3's named-row drift against its
   stamp (pin 6768ffac9dfa — CLEAN m2 == m3, census 0). SYNTAX

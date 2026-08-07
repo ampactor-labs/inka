@@ -1664,9 +1664,13 @@ new DEP found; the map below is accurate at that pin.)*
   alias's row whole (the fixture's `Both - B` alias-of-alias grouping
   case runs 3), cycles and the negation shorthand refusing loudly, the
   +EnvRead cascade through the parser's fn-type rows widening eleven
-  declared clauses. STILL OPEN: `xs |> len` reporting a false
-  `E_TypeMismatch` while emitting correct code; `<~` contributing no
-  iterative effect (3.6's); the fmt scope register (3.5's overlay).
+  declared clauses. The `xs |> len` false diagnostic ✅ LANDED 2026-08-07
+  (pin 7d8e91e499a1, the loop's first TRANSITION — seq_face_ty binds
+  every seq-op MENTION to its face, closing the last raw-scheme leak;
+  pipes, HOF args, and stored seq-ops type honestly; the wheel's own
+  mentions judging differently under the face is exactly why the emit
+  crossed one generation). 3.3 IS WHOLE — the remaining names were
+  always 3.6's (`<~`) and 3.5's (the fmt scope register).
 - **3.4 · SYNTAX's own defects.** The precedence table contradicts the
   layout canon on its own worked example (`(a) >< (b)` then a left-edge `|> mix`
   cannot mean `(a >< b) |> mix` when `|>` binds tighter — and the artifact

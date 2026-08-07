@@ -3547,13 +3547,35 @@ fn infer_var_ref(name, handle, span: ValidSpan) = match env_lookup(name) {
   },
   Some(entry) => match entry {
     (scheme, reason, kind) => {
-      let ty = instantiate(scheme)
+      // A seq-op MENTION types as its FACE, never the raw body's scheme
+      // (the substrate boundary: list_set's `l + 8` types l Int, and
+      // only the op's own body may read that; the saturated and holed
+      // CALL paths already force the face — the bare mention was the
+      // last raw-scheme leak, measured as `xs |> len` unifying List
+      // against Int while emitting correctly, the 3.3 false-diagnostic
+      // drift). The row stays the callee's own declared row.
+      let ty = if is_seq_op(name) { seq_face_ty(name, scheme) } else { instantiate(scheme) }
       graph_bind(handle, ty, Located(span, VarLookup(name, reason)))
       // Carry parameter ownership from the env edge into Consume. No recovery
       // lookup: SchemeKind names the binding's construction origin.
       check_consume_at_use(name, kind, span)
     },
   },
+}
+
+fn seq_face_ty(name: String, scheme) = {
+  let elem = TVar(mint(Inferred("sequence element")))
+  match seq_op_sig(name, elem) {
+    Some(sig) => match sig {
+      (ptys, ret) => match instantiate(scheme) {
+        TFun(_, _, crow) => TFun(build_ctor_params(ptys, 0), ret, crow),
+        other => // a seq-op whose scheme is not fn-shaped keeps its own read
+        other,
+      },
+    },
+    None => // the two tables enumerate the same names; productive if they diverge
+    instantiate(scheme),
+  }
 }
 
 // A NAMED callee that misses env — the shape whose parameter product the

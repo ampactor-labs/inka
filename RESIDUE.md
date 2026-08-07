@@ -1769,14 +1769,13 @@ never written; the 297-site flow survives as a read. B3 THE UNION FLIPS
 — tail_join's Open×Open → EtOpen(tail_set_union(vs, ws)), sound
 because B1+B2 bound every shared cell's writers to its own decl's
 accumulation plus Class B merges; mn-two-tail-accumulation GREENS
-here. B4 THE COMPLETION DRAINS (D4) — trial_judge_group, after
-group_judge_members, folds every member's row (resolve — the
-visiting-set guard closes self/co-member loops by R ∪ R = R — then
-finalize through the landed flatten) and fires the group's deferred
-gates THERE (the drain moves from the pass tail to the group's own
-completion event; the pass-tail drain demotes to an assert-empty);
-the absent-join stays at decl exit (a write), gates fire at
-completion (a read of folded rows). B5 THE MONO VIEW SHARES ROWS —
+here. B4 THE COMPLETION DRAINS (D4) — ✅ LANDED 2026-08-07 (pin
+c2becbaef475, CLEAN at census 0; movers steady at 686; the belt
+silent). The drain fires at each group's own completion event after
+the fold; both pass tails demote to assert_row_gates_drained
+(EInternalInvariant + enforce on any survivor — report, never drop);
+the final pass's drain was measured already-no-op (membership set
+only in trial_judge_group) and the assert makes that checked. B5 THE MONO VIEW SHARES ROWS —
 row_handles_only DELETES: the cycle discipline's row-quantification
 exception existed ONLY because application-site symmetric row
 unifies contaminated shared cells (the measured five mismatches),

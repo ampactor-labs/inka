@@ -35,6 +35,26 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE GATES FIRE AT COMPLETION — rung 3's B4 lands
+  (pin c2becbaef475 — CLEAN m2 == m3, census 0; movers steady at 686;
+  the pass-tail belt silent). The deferred declared-row gates now
+  drain at each group's own completion event — trial_judge_group
+  calls the drain after the completion fold, when the cycle's chains
+  are closed; solos drain at their own exits; sequential groups make
+  the parked-set-at-exit exactly the group's — and both pass tails
+  demote to assert_row_gates_drained: a survivor reports
+  EInternalInvariant (census-visible) and still enforces, the
+  report-never-drop belt. The final pass's old drain was already a
+  no-op by mechanism (group membership is set only inside
+  trial_judge_group, so final-pass gates always enforced eagerly);
+  the assert makes that fact checked instead of incidental. D4's
+  timing problem is now closed at the event where the design said it
+  belongs; the park/drain machinery's full deletion waits for the
+  construction that makes parks impossible. Next: B6 — the cut
+  deletes and mn-cycle-charge-freeze greens.
+
+
+
 - 2026-08-07 · ▶▶▶ THE ARG EDGE GOES TOTAL-DIRECTIONAL — rung 3's B2
   lands (pin 2a09f3c22a4f — TRANSITION m3 == m4 at 99,476 m2/m3 diff
   lines, census 0 on both legs; movers 691 → 686; the B2-mixed-open

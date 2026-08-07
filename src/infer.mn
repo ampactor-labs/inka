@@ -1046,7 +1046,7 @@ fn infer_program_trial(stmts) = {
   let groups = scc_groups(frees_all, name_idx)
   let rows = trial_group_walk(stmts, groups, make_list(len(stmts)), 0)
   finalize_continuation_boundaries(0, graph_next())
-  drain_deferred_row_gates()
+  assert_row_gates_drained()
   (rows, layers, summ)
 } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx ~>
 // The trial is a WORLD of its own: fresh analysis ledgers absorb its
@@ -1783,6 +1783,12 @@ fn trial_judge_group(ref stmts, members, own rows) = {
   } else {
     ()
   }
+  // B4 (rung 3): the deferred gates fire HERE — the group's own
+  // completion event, with every member's chains closed by the fold
+  // above (a solo's park drains at its own exit the same way; groups
+  // run sequentially, so the parked set at exit IS this group's). The
+  // pass tail demotes to the assert-empty belt.
+  drain_deferred_row_gates()
   rows2
 }
 
@@ -1985,7 +1991,7 @@ fn infer_program_final(rows, layers, pstart, summ, stmts) = {
     set_summaries(summ)
     infer_stmt_list_planned(rows, layers, stmts, summ)
     finalize_continuation_boundaries(0, graph_next())
-    drain_deferred_row_gates()
+    assert_row_gates_drained()
     comment_refs_check(stmts, pstart, parse_end)
   } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
   stmts
@@ -2878,18 +2884,40 @@ fn enforce_row_gate(name: String, declared_row, has_pure, row_handle, span: Vali
   }
 }
 
-// The pass-tail drain: every parked gate fires over the pass's fully
-// resolved graph. Runs inside the pass's own infer_ctx bracket (the
-// state is per-pass), after the group walks have closed every cycle.
-// CONDEMNED FORM (the resolved design D4): gates fire at the GROUP's
-// completion event by construction — the park/drain machinery deletes
-// with the timing problem it patched.
+// The group-event drain (B4, rung 3): every parked gate fires at its
+// OWN group's completion — trial_judge_group calls this after the
+// completion fold, when the cycle's chains are closed. Groups run
+// sequentially, so the parked set at a group's exit is that group's.
+// CONDEMNED FORM (the resolved design D4): when completion makes parks
+// impossible by construction, the park/drain machinery deletes whole.
 fn drain_deferred_row_gates() = each(
   (g) => match g {
     (name, declared_row, has_pure, row_handle, span) => enforce_row_gate(name, declared_row, has_pure, row_handle, span),
   },
   drain_row_gates()
 )
+
+// B4's belt at the pass tail: with every gate draining at its group's
+// completion event, the tail must read EMPTY — a survivor names a
+// missed channel (loud, census-visible via EInternalInvariant) and
+// still enforces (the belt reports, never drops). A named walk, not a
+// fold lambda (the report's row would deny the lambda a decl home).
+fn assert_row_gates_drained() = assert_gates_walk(drain_row_gates())
+
+fn assert_gates_walk(gs) = if len(gs) == 0 {
+  ()
+} else {
+  match last(gs) {
+    (name, declared_row, has_pure, row_handle, span) => {
+      report(EInternalInvariant(
+        "a parked row gate for '{name}' survived to the pass tail — the group drain missed a channel",
+        span
+      ))
+      enforce_row_gate(name, declared_row, has_pure, row_handle, span)
+    },
+  }
+  assert_gates_walk(drop_last(gs))
+}
 
 // The publish carries the body's INSTANCE for each name the declaration
 // spells bare: `with Iterate` declares the NAME (a constraint, SYNTAX's

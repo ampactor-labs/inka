@@ -606,11 +606,11 @@ parser enforces nothing about whitespace or parenthesization.
 - Any branch multi-line OR total exceeds width → vertical layout: each branch on its own line; `><` ALONE on its own line at INDENTED CENTER (4-space indent).
 - Mixed shapes normalize to vertical at save.
 
-The construct reads top-to-bottom (vertical) or left-to-right (inline). After `><` the chain returns to LEFT EDGE for whatever consumes the tupled result:
+The construct reads top-to-bottom (vertical) or left-to-right (inline). After `><` the chain returns to LEFT EDGE for whatever consumes the tupled result — the fanout parenthesized, because `|>` binds tighter than `><` (§Precedence) and an unparenthesized foot-pipe enters the last branch:
 ```
-(audio_left  |> compress |> limit)
+((audio_left  |> compress |> limit)
     ><
-(audio_right |> compress |> limit)
+(audio_right |> compress |> limit))
 |> stereo_mix
 ```
 
@@ -1099,10 +1099,8 @@ Both forms are accepted; absence is the idiomatic short form. Non-unit returns M
 **Never-returning ops** declare `-> !`: the op's handler arm never resumes
 (`abort() -> !` — the control cut the Abandon discipline reads; a bare type
 variable `fail(msg: String) -> a` is the bottom-producing sibling whose return
-unifies with any consumer). *Lathe-lag:* the parser currently has no `TBang`
-arm in the type position, so `-> !` rides unexpected-token recovery (typed as
-unit, with a spurious `P_UnexpectedToken`) — the form is canonical; the parser
-catches up (§Authority).
+unifies with any consumer). The form parses and checks clean (probed at pin
+62542a59, the Phase 3 felt walk — zero diagnostics).
 
 ### Calling resume with unit
 
@@ -1713,13 +1711,19 @@ input
 
 ### Return to LEFT EDGE for continuing chain
 
-After a convergent construct, the chain returns to the left edge:
+After a convergent construct, the chain returns to the left edge — and
+the fanout that feeds it is PARENTHESIZED, because the precedence table
+demands it: `|>` (3) binds tighter than `><` (2), so an unparenthesized
+`a >< b |> mix` pipes into the LAST BRANCH (`a >< (b |> mix)` — probed
+with a value at the Phase 3.4 truing: `(1) >< (2) |> inc` runs as
+`(1, inc(2))`, never `inc((1, 2))`). The parens are the source's own
+requirement; the formatter renders them:
 
 ```
-(audio |> compress)
+((audio |> compress)
     ><
-(ctrl  |> scale)
-|> mix          // returns to left edge
+(ctrl  |> scale))
+|> mix          // returns to left edge — consuming the WHOLE fanout
 ~> sink
 ```
 
@@ -2004,6 +2008,12 @@ graph-present artifact — a `TokenKind` the lexer actually emitted**. Whitespac
 re-flow emits no token, so it carries no code — which is exactly why
 `E_IndentMismatch` does **not** exist (there is no ill-indented program, only
 un-normalized source the formatter has not yet touched).
+
+*The silent lift is the DESIGN; the artifact's state, probed 2026-08-07:
+`E_StatementSemicolon` is silent as designed, while `E_RedundantBraces` and
+`E_RedundantPerform` still surface as warnings — they retire when the
+formatter's canonical projection becomes the save path (the fmt sweep's
+payoff ratchet, `RESIDUE.md`'s fmt entry), never by muting the reporter.*
 
 | Code                  | Trigger (an emitted token, removed/transformed)         | Canonicalization                                 |
 |-----------------------|---------------------------------------------------------|--------------------------------------------------|

@@ -1671,12 +1671,15 @@ new DEP found; the map below is accurate at that pin.)*
   mentions judging differently under the face is exactly why the emit
   crossed one generation). 3.3 IS WHOLE — the remaining names were
   always 3.6's (`<~`) and 3.5's (the fmt scope register).
-- **3.4 · SYNTAX's own defects.** The precedence table contradicts the
-  layout canon on its own worked example (`(a) >< (b)` then a left-edge `|> mix`
-  cannot mean `(a >< b) |> mix` when `|>` binds tighter — and the artifact
-  correctly follows the table); the `-> !` lathe-lag note is stale (it parses
-  and works); "format-liftable ⇒ user sees no diagnostic" is false for two of
-  three codes.
+- **3.4 · SYNTAX's own defects** — ✅ TRUED 2026-08-07 (docs-only, each
+  claim probed before edit). The canon's two fanout-foot-pipe examples now
+  parenthesize with the precedence stated (`(1) >< (2) |> inc` probed to
+  run as `(1, inc(2))` — exit 4, the pipe entering the last branch); the
+  `-> !` lathe-lag note deleted (zero diagnostics at the felt walk); the
+  format-liftable section carries the honest state (StatementSemicolon
+  silent as designed, RedundantBraces and RedundantPerform surfacing as
+  warnings until the fmt canonical projection retires them — measured,
+  never asserted).
 - **3.5 · The per-module half of the manifest** —
   `Hβ.driver.per-module-env-overlay` on the daily path. The 29 solo-check
   violations across 18 src modules go to zero and the per-module check

@@ -2199,7 +2199,47 @@ grade class is the latter, by the two builds' measurements); the
 unclassified remainder is the TYPE-SORT set (~90-176) and the 26
 residual row movers — the type-half fresh design pass (the
 scheme-object rule, now FIRED) owns both, and its stamp carries
-this re-derived acceptance. (2) Decl cells + correspondence edges;
+this re-derived acceptance.
+THE TYPE-HALF PASS RAN AND THE FRAME REVERSED (2026-08-07, on the
+banked probe53 artifact — no new compile). (1) THE TYPE-SORT CLASS
+CLASSIFIES BENIGN-BY-CHECKING: the trial's concrete-in-group types
+(flat_fill's n:Int) are HM's group-monomorphic conservatism; the
+final's per-decl generalization (n:%0) is a PROPOSED polymorphic-
+recursive typing that its own total re-judgment against the
+published ∀-schemes then CHECKS (inference of poly-recursion is
+undecidable; checking is decidable — the pair cadence accidentally
+implements propose-and-check, and census 0 is the stability
+verdict). The class dies with the pass; benign, proven by the
+checking argument. (2) THE 26 ROW RESIDUALS ARE NOT BENIGN — they
+contain a REAL FINAL-PASS UNDER-PUBLISH CLASS, and the frame
+reverses: the movers' surviving row signal points at the SHIPPING
+judgment, not the condemned trial. The specimen:
+neg_names_to_str (gradient_delta.mn:283) is DECLARED `with Intern
++ Memory + Alloc + GraphRead`, its body is show_list with an
+interpolating lambda (allocation provable); the TRIAL publishes
+exactly the declared set; the FINAL publishes PURE (`!-.`), and
+the SOLO oracle (import-DAG, per-decl reads) AGREES WITH THE
+FINAL — the under-publish reproduces in every value-read walk.
+filter_list/map_list show the same shape (trial `!Memory+Alloc+
+-%t` vs final `!-%t'` — the concrete charges lost, only the HOF
+tail kept). MECHANISM HYPOTHESIS, one candidate for the dig: the
+HOF call's charges ride the callee row's quantified TAIL; the
+frozen-read instantiate freshens the tail from the VALUE scheme,
+the arg-lambda's row binds the freshened copy, and the caller's
+accumulated row captured the union BEFORE the bind — the
+severance class, alive in the FINAL's value-instantiation path
+(the row-half landing closed it for the trial's cell path only).
+THE CONSEQUENCE IS CROWN-ADJACENT: a pure-published allocator
+upstream of a declared `!Alloc` makes the absence gate pass
+against a false row — a live false-absence channel in the
+shipping judgment. THE NEXT ITEM, outranking all movers
+bookkeeping: dig the HOF-charge-loss mechanism on the
+neg_names_to_str specimen (trace the final's judgment of the
+show_list call — where the lambda's Memory+Alloc detaches), fix
+at the root, and grow a crucible (a declared-!Alloc caller over a
+HOF-allocating callee, seen RED). D8's gate inherits: the row
+residuals classify only after this class closes.
+(2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

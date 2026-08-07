@@ -1191,7 +1191,20 @@ not misled:
   it (930 measured trial/final divergences on the wheel; fifteen-line
   reproduction at tests/frontier/mn-cycle-charge-freeze.mn). Three measured
   `!E` blindness faces inherit it. `Hβ.infer.schemes-are-edges` rung 3 is the
-  dissolution, and it is a SOUNDNESS closure, not a perf arc.
+  dissolution, and it is a SOUNDNESS closure, not a perf arc. THE ROW HALF
+  LANDED 2026-08-07 (§11 5.2 carries the arc; movers 678 → 453 with the
+  remaining classes measured and named); the OPEN soundness seam is
+  `Hβ.infer.forward-hof-row-underpublish` — the shipping pass publishes
+  PURE for some HOF-chained rows (neg_names_to_str: declared Memory +
+  Alloc + Intern + GraphRead, final publishes pure), a live false-absence
+  channel until its root-trace arc closes.
+- **The planned layer sweep runs SERIALIZED (judge_window 1)** since
+  2026-08-07: the K=8 parallel final's correctness rested on published
+  schemes being live-var-free — exactly the property rung 3 deletes — and
+  live cells raced its branches (the trap-on-spawn conviction). The
+  parallel form returns at Phase 9.2 with the deterministic handle
+  partition and ATOMIC join writes; until then the ~3s wall delta is the
+  serialization's honest price.
 
 Everything else on the board above is measured green; this list is the seam
 between the wheel and its ultimate form, held open on purpose.
@@ -1808,10 +1821,27 @@ new DEP found; the map below is accurate at that pin.)*
   break); 5.1a re-sequences after it closes; type-total still arrives as the
   Repr ADT grows (5.1b — no separate landing).
 - **5.2 · `Hβ.infer.schemes-are-edges` rung 3**, the row half, per the settled
-  laws in `RESIDUE.md`. With 5.5's column arc this also UN-GATES the arena's
-  2b (4.3's correction): published facts in columns make the image set =
-  pages + flat buffers by construction, which is what a per-decl reset needs
-  to be sound.
+  laws in `RESIDUE.md`. THE ROW HALF LANDED 2026-08-07 (pin a13918ee5784 —
+  the prereg publish is generalize's own floor, the group drain re-parks
+  cross-group gates, two honest +WASI widenings; movers 678 → 453 and
+  false T_OverDeclared teachings dead; the parallel final SERIALIZED as
+  its precondition — judge_window 1, the K=8 fan's value-boundary law
+  dissolved by live cells, the parallel form returning at 9.2 with atomic
+  join writes). The movers arc then CLOSED its classes by measurement:
+  the grade class (250) is the condemned cadence's own artifact (two
+  builds refuted one-sided patching — the divergence relocates; it dies
+  with the pass), the type-sort class is benign-by-checking (the pair
+  accidentally implements propose-and-check polymorphic recursion; the
+  final's clean total re-judgment is the decidable check), and the 26 row
+  residuals exposed a REAL under-publish in the shipping pass — the named
+  peer `Hβ.infer.forward-hof-row-underpublish` (crown-adjacent: a
+  pure-published allocator under a declared `!Alloc` is a false absence
+  proof; the ten-iteration dossier and the root-trace instrument live in
+  RESIDUE). D8's gate re-derived: every mover class driven to zero or
+  proven benign; the peer owns the remainder. With 5.5's column arc this
+  also UN-GATES the arena's 2b (4.3's correction): published facts in
+  columns make the image set = pages + flat buffers by construction,
+  which is what a per-decl reset needs to be sound.
 - **5.3 · The decidable fragment plus the proposed-signature teach.** Type
   inference for polymorphic recursion is undecidable (Henglein 1993,
   semi-unification) and that is a theorem, not a design choice — **but Mentl

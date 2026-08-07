@@ -688,7 +688,27 @@ generation lag proved the probe order: m2 green is not the
 verdict — the break lives one generation deep). The probe that
 pins the exact fn: emit-diff the m3 region around 340004 against
 m2's emission of the same fn, or grep m3.wat for the hstate
-number's owner. One iteration of today also re-learned kill (1)
+number's owner.
+PINNED WHOLE (2026-08-07, the saved refused-march artifact): the
+owner is `$fold$sp2nSpan` — fold twinned with an f64 init — and
+the break is the HANDLER-STATE record store:
+`(local.get $init.f64) (i32.store offset=12)` writes the twin's
+repr-true wide param into the uniform word-wide hstate record
+(fold's `with acc = init` accumulator slot), and
+`op_fold_handler_result`'s i32 return meets the twin's f64 result
+at the exit — the same blindness at read. THE FIX SHAPE, §5.U at
+the handler-state record: the hstate layout reads repr_of per
+STATE FIELD (width-summed offsets exactly as record fields
+already do), the state store/read pair emits repr-true
+(f64.store/f64.load at computed offsets), and each
+op_*_handler_result's return width projects from the op's answer
+repr — the unified record's state face joining the repr gradient
+(band D's variant-payload sibling at the handler layer). Until it
+lands, the worthiness gate stands as the guard of BOTH named
+classes (the non-tail blowup census and this width blindness);
+5.1a's cost measurement (emit +17%, RSS inside ceiling, cliff
+crossed) is banked and re-attemptable the day the state face is
+repr-true. One iteration of today also re-learned kill (1)
 the hard way: a worthiness-SEED probe twins nothing (candidacy
 gates upstream at the site collection) — the closed peer's own
 record already said the working force was the gate, not the seed.

@@ -728,7 +728,26 @@ store — the class splits on how the wide value REACHES the slot
 a word cell), so the build's first probe diffs the two twins'
 state-store emissions to pin which arrival path is width-honest
 and which is blind. The fix stays §5.U's per-field repr layout;
-the pair tells the build where the seam already half-exists. One iteration of today also re-learned kill (1)
+the pair tells the build where the seam already half-exists.
+THE CENSUS REFINEMENT (2026-08-07, within the refused m3 itself):
+the total-twin emission holds 39 fold twins and EXACTLY ONE
+carries a wide init — sp2nSpan (the mangle decodes as the
+repr-vector: 2 = RF64 init, nSpan the element nominal) — and
+wat2wasm reported exactly one broken site: the width class has a
+SINGLE INSTANCE in the whole wheel at total candidacy. The
+emitter is already HALF repr-true: the twin's param signature
+reads the repr (`(param $init.f64 f64)`); only
+emit_state_init_writes and the slot arithmetic are width-fixed —
+the seam exists at the signature and stops one instruction short.
+sum_with's twin is ABSENT from this era's emission (its fixture
+lived in a probe tree; the pair-diff needs the fixture re-run if
+wanted — the single-instance census makes it optional). The
+boxed-slot alternative (word pointer in the slot, wide value
+behind it) preserves offsets but contradicts §5.U's repr-true
+fields direction; the width-summed per-field layout stays the
+stamped form, now sized: one emitting family, six offset sites,
+one live instance to prove against, mn-zip-deep-class fixtures to
+grow for the f64-state shape. One iteration of today also re-learned kill (1)
 the hard way: a worthiness-SEED probe twins nothing (candidacy
 gates upstream at the site collection) — the closed peer's own
 record already said the working force was the gate, not the seed.

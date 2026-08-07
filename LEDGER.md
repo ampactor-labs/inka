@@ -35,6 +35,27 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ TOTAL BY CANDIDACY — 5.1a lands, the worthiness gate
+  deletes (pin 6fb09a99fb1e — TRANSITION m3 == m4, census 0; emit
+  343,679 → 403,741 lines, the banked +17%; RSS 2,201,332/2,216,724 KB
+  inside the 2,250,000 ceiling; battery green with the f64-state guard
+  at 42 through the TOTAL twin set). Every candidate twins now — the
+  selective hybrid whose uniform seam housed every measured
+  silent-wrong (sort comparing addresses, the float accumulator
+  summing to zero, describe printing a pointer) is gone, and the
+  erasure boundary tells the truth. The gate's two guarded classes
+  closed first, each by its own landing: the ambient stack cliff by
+  zip_with's buffer-counter tail form (mn-zip-deep), the hstate width
+  blindness by the twin-edge conversions (THE TWIN EDGES CONVERT, one
+  pin earlier — args word-faced, results deref'd, inits boxed, floor
+  no-op byte-for-byte). The re-attempt was measurement-first end to
+  end: the first drop BROKE (assembly), the break pinned to one
+  instruction, the class censused to one instance, the ABI read
+  inverted the fix's whole design, and the acceptance probe proved
+  assembly before any march. NEXT: prune the dead worthiness family
+  (spec_worthy_closure, spec_any_name_in, the facts thread's unused
+  half) — named, not yet swept.
+
 - 2026-08-07 · ▶▶▶ THE TWIN EDGES CONVERT — Hβ.emit.twin-state-width
   closes (pin ef8083b05fe2 — CLEAN m2 == m3, census 0, cost 14.35s /
   2,188,540 KB inside the ceiling; the f64-state guard holds 42). The

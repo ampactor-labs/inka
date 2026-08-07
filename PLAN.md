@@ -1816,10 +1816,18 @@ new DEP found; the map below is accurate at that pin.)*
   CORRECTNESS, not a perf hybrid: the worthy set was leaf-compute by
   construction, so the twin emission for self-recursive closure-carrying
   HOFs was never exercised and miscompiles. Reverted whole. The real blocker
-  is the new peer `Hβ.emit.plumbing-twin-selfcall` (RESIDUE carries the named
-  next probe: force one plumbing twin, emit-diff against the floor, pin the
-  break); 5.1a re-sequences after it closes; type-total still arrives as the
-  Repr ADT grows (5.1b — no separate landing).
+  was the new peer `Hβ.emit.plumbing-twin-selfcall` (CLOSED — no twin ever
+  miscompiled; the trap was the ambient stack cliff, fixed at zip_with's
+  tail form) and then `Hβ.emit.twin-state-width` (CLOSED — the twin-edge
+  conversions: args word-faced, results deref'd, inits boxed; the hstate
+  slot ABI is floor-owned words because the shared arm fns read it).
+  **5.1a LANDED 2026-08-07** (pin 6fb09a99fb1e — TRANSITION, census 0,
+  emit +17% as banked, RSS inside the raised ceiling, the f64-state
+  guard green through the total twin set): the worthiness gate is
+  DELETED, every candidate twins, and the uniform seam where every
+  measured silent-wrong lived is gone. The dead worthiness family
+  prunes as its own sweep; type-total still arrives as the Repr ADT
+  grows (5.1b — no separate landing).
 - **5.2 · `Hβ.infer.schemes-are-edges` rung 3**, the row half, per the settled
   laws in `RESIDUE.md`. THE ROW HALF LANDED 2026-08-07 (pin a13918ee5784 —
   the prereg publish is generalize's own floor, the group drain re-parks

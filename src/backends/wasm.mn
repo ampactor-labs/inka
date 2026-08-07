@@ -633,15 +633,18 @@ fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory +
     // mangled name PER ROUND (measured 2026-07-25: +274MB of the
     // self-compile image — the demand analysis' true monster).
     match spec_candidates_fix(seed, [], [], recs) {
-      (cands, facts) => {
-        let worthy = spec_worthy_closure(facts, [])
-        filter(
-          (d) => match d {
-            (m, _b, _p, _e) => spec_name_in(worthy, m),
-          },
-          cands
-        )
-      },
+      (cands, _facts) => // TOTAL BY CANDIDACY (5.1a lands): every candidate twins. The
+      // worthiness gate guarded two named classes and both are CLOSED —
+      // the ambient stack cliff died with zip_with's buffer-counter tail
+      // form (mn-zip-deep pins 200,000 elements), and the width blindness
+      // died at the twin edges (Hβ.emit.twin-state-width: args word-faced,
+      // results deref'd, inits boxed — the total-twin m3 assembles, the
+      // acceptance probe's own verdict). The uniform-representation seam
+      // the gate preserved is where every measured silent-wrong lived;
+      // deleting it is the erasure boundary telling the truth. Cost is
+      // the march's to arbitrate (the ratchets; the banked expectation:
+      // emit +17%, RSS inside the raised ceiling).
+      cands,
     }
   },
 }

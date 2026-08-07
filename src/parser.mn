@@ -1662,7 +1662,19 @@ fn binop_loop(ref tokens, left, pos, min_prec, slot) = {
         N(_, left_span, _) => {
           let combined_span = span_join(left_span, op_span)
           let node = match op_to_pipe_kind(k) {
-            Some(pk) => nexpr(PipeExpr(pk, left, right), combined_span),
+            Some(pk) => match pk {
+              PFanout(FanDistribute) => // The N-ary law (SYNTAX §><): a `><` chain's branches are
+              // peers in ONE FanoutExpr, accreted by the left-assoc loop —
+              // never nested pairs (the fold was the binary shape's
+              // artifact, not the verb's semantics). An authored
+              // tuple-valued branch stays a branch: only the chain
+              // accretes, so `(1, 2) >< (3, 4)` is two branches of two.
+              match left {
+                N(NExpr(FanoutExpr(branches)), _, _) => nexpr(FanoutExpr(branches ++ [right]), combined_span),
+                _ => nexpr(FanoutExpr([left, right]), combined_span),
+              },
+              _ => nexpr(PipeExpr(pk, left, right), combined_span),
+            },
             None => match op_to_binop(k) {
               Some(bo) => nexpr(BinOpExpr(bo, left, right), combined_span),
               None => {
@@ -3335,6 +3347,7 @@ fn free_vars_expr(e, bound) = match e {
   ),
   FieldExpr(rec, _) => collect_free_vars(rec, bound),
   PipeExpr(_, l, r) => free_vars_merge(collect_free_vars(l, bound), collect_free_vars(r, bound)),
+  FanoutExpr(branches) => collect_free_vars_branches(branches, bound),
   ExprPlaceholder => [],
   LabeledArg(_, v) => // A labeled arg's value can reference free vars (closure capture must see
   // them); the label is a param name, not a value-position var.
@@ -3347,6 +3360,11 @@ fn free_vars_expr(e, bound) = match e {
   LitString(_) => [],
   LitBool(_) => [],
   LitUnit => [],
+}
+
+fn collect_free_vars_branches(branches, bound) = match branches {
+  [] => [],
+  [h, ...t] => free_vars_merge(collect_free_vars(h, bound), collect_free_vars_branches(t, bound)),
 }
 
 // Walk free vars through a `resume() with` updates list. Each update's

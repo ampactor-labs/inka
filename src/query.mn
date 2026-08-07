@@ -414,6 +414,9 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
   },
   CsVerb(k) => match body {
     NExpr(PipeExpr(pk, _, _)) => pk == k,
+    NExpr(FanoutExpr(_)) => // the N-ary carrier IS the `><` site; the kind
+    // stays the census key (Hβ.parser.pcompose-nary)
+    k == PFanout(FanDistribute),
     _ => false,
   },
   CsEta => match body {
@@ -466,6 +469,7 @@ fn expr_child_handles(e) with Alloc + Memory = match e {
   MakeStringExpr(frags) => map(node_handle, frags),
   FieldExpr(recv, _) => [node_handle(recv)],
   PipeExpr(_, l, r) => [node_handle(l), node_handle(r)],
+  FanoutExpr(branches) => map(node_handle, branches),
   LabeledArg(_, v) => // the labeled value is a child node
   [node_handle(v)],
   _ => // LitInt/LitFloat/LitString/LitBool/LitUnit/VarRef/ExprPlaceholder — no child Nodes

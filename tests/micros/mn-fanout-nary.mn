@@ -1,0 +1,15 @@
+// expect: 9
+// mn-fanout-nary — the N-ary law (PLAN §11 Phase 3.1,
+// Hβ.parser.pcompose-nary): a `><` chain parses as ONE fanout whose
+// branches are a list, so a three-way destructure meets a three-tuple.
+// Before the FanoutExpr carrier the chain folded left into nested pairs
+// — ((Int, Int), Int) against (a, b, c), the felt walk's measured
+// refusal — because the fold was the binary PipeExpr shape, not the
+// verb's semantics: `><` builds a PRODUCT, and product arity is
+// semantic (the N-ary law's own words).
+fn inc(x) = x + 1
+
+fn main(q) = {
+  let (a, b, c) = (inc(1)) >< (inc(2)) >< (inc(3))
+  a + b + c
+}

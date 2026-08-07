@@ -1226,8 +1226,18 @@ type Expr
   // string-substrate discipline.
   | MakeStringExpr([Node])
   | FieldExpr(Node, String)
-  // |> <| >< ~> <~
+  // |> <| ~> <~ (binary by nature; `<|` is input × branch-tuple)
   | PipeExpr(PipeKind, Node, Node)
+  // `><` — the N-ary fanout carrier (the N-ary law, PLAN §11 3.1 /
+  // Hβ.parser.pcompose-nary): a `><` chain's branches are PEERS in a
+  // LIST, never nested pairs, because the verb's result is a PRODUCT
+  // and product arity is semantic. The parser accretes a chain into
+  // one FanoutExpr; PipeExpr(PFanout(FanDistribute), _, _) is not
+  // constructed (the kind survives as the census/glyph key and the
+  // FanShare discriminant). One PFanout node at lower carries both
+  // aspects — the surface carriers differ because the operand
+  // structure differs by nature.
+  | FanoutExpr([Node])
   // ? — parser spawns NHole
   | ExprPlaceholder
 

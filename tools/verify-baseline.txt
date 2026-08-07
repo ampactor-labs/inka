@@ -469,8 +469,14 @@ comment_refs_max: 0
 # vocabulary — count joins the same flip family — now publishes rows
 # carrying the config-fn joins, so the trial/final surface moved with
 # the semantics again; zero new trial/final machinery in the diff).
-# The next legal move stays DOWN.
-movers_max: 439
+# Re-based 439 → 444 at the N-ary law (pin 05fd2307ff43): the diff adds
+# zero trial/final machinery — the +5 are the landing's own new wheel
+# fns (infer_fanout_nary and kin, the fanout thunk walk, the named
+# render/free-var stages) whose schemes join the pre-existing
+# freeze-root divergence class (schemes-are-values, PLAN §7), the same
+# channel as the 424 and 439 re-bases one landing over. The next legal
+# move stays DOWN; rung 3 (Phase 5.2) dissolves the class.
+movers_max: 444
 
 # 2026-08-07: the ANONYMITY ratchet (PLAN §11 Phase 2.5, second half) —
 # the census tier's convictions on the wheel link, monotone DOWN. Two

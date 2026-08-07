@@ -1627,21 +1627,22 @@ measured at the destructure site, one 3.4 claim confirmed in the right
 direction: `-> !` checks clean, the lathe-lag note is the stale half. No
 new DEP found; the map below is accurate at that pin.)*
 
-- **3.1 · The N-ary law, written** — STAMPED 2026-08-07, unbuilt; the
-  design's one home is `Hβ.parser.pcompose-nary` in `RESIDUE.md` (three
-  encodings traced, two refuted — the MakeTupleExpr convention collides
-  with tuple-valued branches, the judgment-side flatten fails the law's
-  own words; the chosen form is a dedicated N-ary `FanoutExpr([Node])`
-  carrier for `><` alone, `<|` keeping its input × branch-tuple shape —
-  different operand structure BY NATURE, one PFanout node at lower). *An
-  operator whose result is a PRODUCT has semantic arity and must parse
-  N-ary. An operator whose result is a COMPOSITION or a SET may fold,
-  because folding is meaning-preserving there.* `><` is the sole
-  violator: `a >< b >< c` folds into nested pairs, so a three-way
-  destructure cannot meet it. Faust is the instructive non-precedent —
-  its parallel composition *is* associative, and it can afford that
-  because `,` builds a signal bus that flattens, not a first-class value.
-  Mentl's `><` builds a tuple, and tuple nesting is observable.
+- **3.1 · The N-ary law** — ✅ LANDED 2026-08-07 (pin 05fd2307ff43,
+  built against `Hβ.parser.pcompose-nary`). *An operator whose result is
+  a PRODUCT has semantic arity and must parse N-ary; a COMPOSITION or
+  SET operator may fold, because folding is meaning-preserving there.*
+  `><` now parses through the dedicated FanoutExpr carrier — the binop
+  loop accretes a chain into one node whose branches are a LIST, so
+  `(a) >< (b) >< (c)` meets a three-way destructure and runs
+  (mn-fanout-nary, seen RED as a garbage exit on the prior pin). Infer
+  walks N value boundaries into TTuple(N); lower enumerates N thunks
+  into the arity-carrying record (STEP 4 meant zero emit change); fmt
+  renders the N-ary canon. The m3 trap was the census instrument:
+  nested full enumerations hide from the exhaustiveness checker, and
+  the ExprPlaceholder tell found all five walkers in one measurement
+  (the LEDGER entry carries the mechanics). `<|` keeps input ×
+  branch-tuple — different operand structure by nature, one PFanout
+  node at lower.
 - **3.2 · `mentl where`** — the derived-badge projection (schedule, repr width,
   resume cardinality), named six times across SYNTAX and PLAN and absent from
   the verb table. It is also the cure for what the two-verb reframe cost: the

@@ -35,6 +35,40 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE N-ARY LAW LANDS — the arc loop's tenth iteration
+  builds Phase 3.1 against its stamp
+  (pin 05fd2307ff43 — CLEAN m2 == m3 at 336,495 lines, census 0; the
+  iteration's first leg pinned a21b4cdc4c81, then the anonymity ratchet
+  convicted three lambdas the build itself wrote and the stages were
+  named — the tier's own teaching applied to its author). `><`
+  parses through the dedicated FanoutExpr carrier: the left-assoc binop
+  loop ACCRETES a `><` run into one node whose branches are a list
+  (`a >< b` mints FanoutExpr([a, b]); `>< c` extends it), so
+  PipeExpr(PFanout(FanDistribute)) is no longer constructed — the kind
+  survives as the census/glyph key and FanShare's discriminant, exactly
+  as the stamp chose. Infer walks N value boundaries into TTuple(N)
+  (the binary arm delegates); lower enumerates N thunks tagged by
+  position into the arity-carrying runtime record (STEP 4's collapse
+  meant zero emit change); fmt renders the N-ary vertical/inline canon.
+  THE TRAP WAS THE CENSUS INSTRUMENT: the first march's m3 leg died in
+  collect_fn_decls — a nested full enumeration (NExpr(...) inside the
+  NodeBody match) that the exhaustiveness checker cannot convict across
+  pattern depth, so the missing arm emitted the benign else-unreachable
+  and trapped at runtime. The ExprPlaceholder tell (`grep
+  "NExpr(ExprPlaceholder)"`) censused all five full-enumeration
+  walkers in one measurement: infer_expr (had the arm), collect_fn_decls,
+  resume_grade, walk_refinement, own's count_uses — each gained its
+  branch-list arm in its own recursion idiom. The verdict came out
+  CLEAN, not TRANSITION, because the wheel itself never writes a
+  reachable `><` — the board's oracles are blind to what the wheel
+  never does (tripwire 3), which is exactly why the gate is a MICRO:
+  mn-fanout-nary (expect 9) was seen RED as a garbage exit on the prior
+  pin (the three-way destructure misreading nested pairs) and runs 9
+  with zero diagnostics on this one. One allocation lesson banked in
+  place: PFanout(FanDistribute) constructed per render call breached
+  two declared rows; the fix is the top-level binding
+  fanout_distribute_kind — constructed once, rows intact.
+
 - 2026-08-07 · THE ANONYMITY RATCHET ARMS — the arc loop's eighth
   iteration lands Phase 2.5's second half (tools-only, no repin; the
   wheel is untouched). verify.sh runs the two census queries per gate

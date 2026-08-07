@@ -692,9 +692,13 @@ its own comment says "now LIVE" — and is recorded here only so the
 stale prose is struck; that distinction between an open gap and a
 resolved one is exactly what an index carries and a comment cannot.
 
-`Hβ.parser.pcompose-nary` — the design stamp for PLAN §11 Phase 3.1
-(banked 2026-08-07 at the Phase 3 felt walk; UNBUILT — this entry is
-what gets built). MEASURED at pin 62542a59bf94: `(inc(1)) >< (inc(2))
+`Hβ.parser.pcompose-nary` — BUILT 2026-08-07 against this stamp (pin
+05fd2307ff43; the mn-fanout-nary micro runs 9 where the prior pin
+exited garbage; the m3 trap censused five hidden full-enumeration
+walkers by the ExprPlaceholder tell — nested-pattern exhaustiveness
+cannot convict across depth, a checker limitation the trap reported;
+the anonymity ratchet then convicted the build's own three lambdas
+and the stages were named). The stamp as banked: MEASURED at pin 62542a59bf94: `(inc(1)) >< (inc(2))
 >< (inc(3))` folds left into `((Int, Int), Int)`, so `let (a, b, c) =`
 refuses with "type list arity mismatch: 0 vs 1" + "(Int, Int) vs Int"
 — the violation exactly as §11 3.1 states it. TRACED — three encodings,

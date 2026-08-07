@@ -503,6 +503,7 @@ fn count_uses(ref name: String, ref node) with !Mutate = match node {
     NExpr(BlockExpr(stmts, final_e)) => count_uses_list(name, stmts) + count_uses(name, final_e),
     NExpr(LambdaExpr(_, lb)) => count_uses(name, lb),
     NExpr(PipeExpr(_, l, r)) => count_uses(name, l) + count_uses(name, r),
+    NExpr(FanoutExpr(branches)) => count_uses_list(name, branches),
     NExpr(MatchExpr(s, arms)) => count_uses(name, s) + count_match_arms(name, arms),
     NExpr(MakeListExpr(elems)) => count_uses_list(name, elems),
     NExpr(MakeTupleExpr(elems)) => count_uses_list(name, elems),

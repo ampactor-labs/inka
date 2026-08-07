@@ -1331,6 +1331,7 @@ fn flow_edges_expr(e) = match e {
   MatchExpr(scrut, arms) => flow_join(flow_edges(scrut), flow_edges_match_arms(arms)),
   MakeListExpr(elems) => flow_edges_list(elems),
   MakeTupleExpr(elems) => flow_edges_list(elems),
+  FanoutExpr(branches) => flow_edges_list(branches),
   MakeStringExpr(frags) => flow_edges_list(frags),
   IndexExpr(r, i) => flow_join(flow_edges(r), flow_edges(i)),
   MakeRecordExpr(flds) => flow_edges_fields(flds),
@@ -2232,6 +2233,7 @@ fn lower_expr_body(e, handle, span) = match e {
   // the receiver's live type under the bracket.
   LFieldLoad(handle, lower_expr(rec), FByName(field)),
   PipeExpr(kind, left, right) => lower_pipe(kind, left, right, handle),
+  FanoutExpr(branches) => lower_fanout_nary(handle, branches),
   ExprPlaceholder => // ? — emit lowers to unreachable via NHole check
   LConst(handle, LInt(0)),
   LabeledArg(_, v) => // A labeled arg is resolved to positional by resolve_call_args before
@@ -2512,17 +2514,9 @@ fn extract_handler_config_args(node) = match node {
 // directly; tuple types prove the result shape but are not an identity index.
 fn lower_fanout(handle, fan_own, left, right) = match fanout_boundaries(handle) {
   Ok(boundaries) => match fan_own {
-    FanDistribute => match left {
-      N(_, _, lh) => match right {
-        N(_, _, rh) => {
-          let l_boundary = fanout_boundary_at(boundaries, 0, lh)
-          let r_boundary = fanout_boundary_at(boundaries, 1, rh)
-          let branches =
-            [synthesize_branch_thunk(handle, "l", left, l_boundary), synthesize_branch_thunk(handle, "r", right, r_boundary)]
-          run_fanout_thunks(handle, branches)
-        },
-      },
-    },
+    FanDistribute => // The N-ary carrier owns `><` (Hβ.parser.pcompose-nary); the
+    // PipeKind arm delegates so the kind stays a key, not a shape.
+    fanout_thunks_from(handle, [left, right], boundaries),
     FanShare => {
       let lo_input = lower_expr(left)
       let input_local_name = "__fanout_input_{int_to_str(handle)}"
@@ -2543,6 +2537,30 @@ fn lower_fanout(handle, fan_own, left, right) = match fanout_boundaries(handle) 
     },
   },
   Err(invariant) => LInvariantFailure(handle, invariant),
+}
+
+// The N-ary fanout (FanoutExpr — the `><` carrier): each branch its own
+// boundary and thunk, tagged by position; the runtime record already
+// carries arity (the STEP 4 collapse), so the thunk list generalizes
+// with no emit change.
+fn lower_fanout_nary(handle, branches) = match fanout_boundaries(handle) {
+  Ok(boundaries) => fanout_thunks_from(handle, branches, boundaries),
+  Err(invariant) => LInvariantFailure(handle, invariant),
+}
+
+fn fanout_thunks_from(handle, branch_nodes, boundaries) = {
+  let thunks = fanout_thunk_walk(handle, branch_nodes, boundaries, 0, len(branch_nodes))
+  run_fanout_thunks(handle, thunks)
+}
+
+fn fanout_thunk_walk(handle, branch_nodes, boundaries, i, n) = if i >= n {
+  []
+} else {
+  let branch = list_index(branch_nodes, i)
+  let thunk = match branch {
+    N(_, _, bh) => synthesize_branch_thunk(handle, int_to_str(i), branch, fanout_boundary_at(boundaries, i, bh)),
+  }
+  [thunk] ++ fanout_thunk_walk(handle, branch_nodes, boundaries, i + 1, n)
 }
 
 // Inference is the sole writer of executable boundaries. Missing here means

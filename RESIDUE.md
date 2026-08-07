@@ -692,6 +692,48 @@ its own comment says "now LIVE" — and is recorded here only so the
 stale prose is struck; that distinction between an open gap and a
 resolved one is exactly what an index carries and a comment cannot.
 
+`Hβ.cli.where-verb` — the design stamp for PLAN §11 Phase 3.2 (banked
+2026-08-07; UNBUILT — this entry is what gets built). `mentl where` is
+the derived-badge projection SYNTAX names six times and the lag list
+carries: output, never input — the medium narrating facts the graph
+already proves. TRACED — three badges, each an existing read wired to
+the surface: (1) REPR — a value name's representation width via the
+env scheme → chase → `repr_of_resolved` (types.mn:172, GraphRead),
+rendered `name : Float @ f64 (pinned|inferred)` — pinned iff a
+TReprPin sits in the chased chain (a small discriminator walk to
+write), inferred otherwise; (2) RESUME CARDINALITY — an op name's
+`TCont(R, S, discipline, world)` read from its EffectOpScheme's TFun,
+rendered `R ->1 S` (OneShot) / `R ->* S` (MultiShot) / `->? `
+(Either) per SYNTAX §«Resume discipline»; the channel is the op
+scheme — the build verifies where the discipline lands after
+handler-decl inference and reads THAT, never a re-derivation; (3)
+SCHEDULE — a `><` site's resolved strategy as a STATIC walk up the
+site's enclosing `~>` chain in the weave matching Schedule-class
+handlers, rendered `>< [Thread]` / `>< [Seq]` (none installed = the
+invisible default). The static walk is EXACT, not approximate: the
+schedule is read at the fanout's own install site and never crosses a
+call boundary (the parallel_map dissolution's law,
+`Hβ.prelude.parallel-map-dissolves-into-schedule`), so the enclosing
+chain IS the whole truth — lower's ambient-stack read
+(lower_fanout_schedule, lower.mn:1620) and the weave walk answer
+identically by that law. SURFACE: `mentl where <file> <name>` riding
+the query spine exactly as the census did — a QWhere Question
+variant, the arm in query_default, the CLI verb mapping through the
+query invocation; a `><`-site's badge addresses by name of the
+enclosing fn (the fn's fanout sites listed with their schedules).
+PRICED (§5.O): each badge O(1) per name (one env lookup + one chase);
+the schedule walk O(enclosing-chain depth); a pure READ verb, no
+writer. WRITERS enumerated when it builds: main.mn (VerbSpec + the
+V* variant + dispatch), pipeline.mn (verb parse → QWhere), query.mn
+(the Question variant, the arm, the three badge projections + the
+TReprPin discriminator), docs/SYNTAX.md (the lag list SHRINKS —
+`mentl where` leaves it, the list's own contract), tools/doc-truth.sh
+(verifies the verb serves via `mentl help` — the lag-list check
+inverts for this name), the frontier leg + fixture (three badges
+asserted: a pinned repr, an op cardinality, a scheduled and an
+unscheduled fanout). The gate seen RED first: the fixture's `where`
+queries answer unknown-verb through the prior pin.
+
 `Hβ.parser.pcompose-nary` — BUILT 2026-08-07 against this stamp (pin
 05fd2307ff43; the mn-fanout-nary micro runs 9 where the prior pin
 exited garbage; the m3 trap censused five hidden full-enumeration

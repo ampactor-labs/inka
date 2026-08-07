@@ -747,7 +747,30 @@ behind it) preserves offsets but contradicts §5.U's repr-true
 fields direction; the width-summed per-field layout stays the
 stamped form, now sized: one emitting family, six offset sites,
 one live instance to prove against, mn-zip-deep-class fixtures to
-grow for the f64-state shape. One iteration of today also re-learned kill (1)
+grow for the f64-state shape.
+THE FENCE FINDING (2026-08-07 — the stamp's last structural
+clause, banked before the build opens): the hstate record's FENCE
+at offset 4 carries NSTATE (the count), and dispatch locates arms
+FENCE-RELATIVE by emitted arithmetic that loads the fence and
+multiplies by 4 at RUNTIME — so width-summed state slots change
+the fence's SEMANTIC: it must carry the state region's BYTE SIZE
+(or the arm base directly), and every dynamic fence reader's
+emitted sequence adapts (`8 + fence` replacing `8 + 4*nstate`).
+The build therefore lands as a TRANSITION even with zero wide
+slots in the current wheel (the dispatch arithmetic bytes change),
+and the writer census gains the LOWER-side offset producers:
+LStateSlotStore's slot_offset is precomputed upstream (the
+resume-with-state lowering) and the POff(8+i*4) path entries
+likewise — the width summing must happen at ONE projection both
+sides read (a state_field_offset(fields, i) beside
+tuple_elem_offset's width-summed precedent) or the two layers
+disagree. Build shape, final: (1) the one offset projection;
+(2) emit_state_init_writes + LStateSlotStore + the arm-body read
++ op_*_handler_result go repr-true through it; (3) the fence
+stores bytes; (4) the six-plus-lower sites re-read through the
+projection; (5) the f64-state fixture RED first; (6) march as
+TRANSITION; then 5.1a's gate-drop re-attempt rides the next
+iteration with the banked cost expectations. One iteration of today also re-learned kill (1)
 the hard way: a worthiness-SEED probe twins nothing (candidacy
 gates upstream at the site collection) — the closed peer's own
 record already said the working force was the gate, not the seed.

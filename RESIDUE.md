@@ -1869,12 +1869,31 @@ residue AFTER the row half lands whole, and 678 row-sort movers
 remain — the row half is incomplete, and its remaining mechanism is
 the published-scheme SNAPSHOT itself (trial publishes at its own
 completion moments, the final re-generalizes with no completion
-events; two publish disciplines over one graph). NEXT PROBE:
-movers_diff on the 678 set — read the flavor histogram (row-content
-flips vs ownership-grade flips vs type-sort), and the histogram
-picks the branch: row-dominant ⇒ continue the B-arc into the
-publish-discipline unification; type-sort ⇒ the rule's fresh design
-pass; grade-dominant ⇒ 4.2's forward-callee order-dependence first. (2) Decl cells + correspondence edges;
+events; two publish disciplines over one graph). THE HISTOGRAM RAN
+(2026-08-07, cap lifted probe-only, all 678 A/B fingerprints
+classified — tools/movers-hist.py, dies with the channel): row-only
+337, grade-only 177, row+grade 90, type-only 61, row+type 13. THE
+FRONT IS MONOTONE: of the row-involved 440, the paired diffs are 421
+ADD-ONLY vs 18 rem-only, 0 mixed — the final's rows are SUPERSETS of
+the trial's (28=Alloc the top added name at 119, then a spread of
+module effects), and the grades run 287 r→o vs 15 o→r, the same
+root at the ownership altitude. MECHANISM, read off the shape: the
+trial publishes a CLOSED row at its completion moment while a
+forward callee is still unjudged — the live edge contributes
+nothing yet, the snapshot closes without it, and the callee's later
+judgment fills a cell no published VALUE re-reads; the final,
+re-judging over complete trial-published schemes, folds the full
+row (and param_borrows resolves the callee product, so ref hardens
+to own). THE BRANCH: row-dominant ⇒ the B-arc continues into THE
+ROW-HALF SWAP — the published scheme keeps the LIVE row cell (the
+settled 2026-08-01 laws; the swap is unblocked), so there is no
+snapshot to under-publish; B5's deletions ride with it. THE
+TYPE-SORT RESIDUE IS MATERIAL: 74 movers flip concrete-in-trial to
+var-in-final (flat_fill's `n:i` → `n:%0` — trial cells call-site
+contaminated where the final generalizes fresh); after the row half
+lands, the scheme-object rule fires against THIS set — the type-half
+join question takes its fresh design pass (frozen-read extended, or
+polymorphism-as-flow-edges), never the refuted architecture. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

@@ -505,7 +505,12 @@ comment_refs_max: 0
 # Lowered 691 → 686 at rung 3's B2 (pin 2a09f3c22a4f): the one-way arg
 # edge deletes a per-call-site teach-back channel — the arc's
 # monotone-down acceptance moving.
-movers_max: 686
+# Lowered 686 → 678 at the prereg-row deletion (pin bb3c10c17e3b): the
+# skeleton row went bare — the declared-names supply channel closed,
+# killing the prereg-mediated eight (self-call/forward-ref charges).
+# The remainder is the published-scheme snapshot itself; rung 3
+# continues against it.
+movers_max: 678
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.
@@ -542,8 +547,12 @@ solo_violations_max: 0
 # total — the convictions are 423 of them; the graph's exact read,
 # correcting the stamp's ~136 text-shape eta estimate). Each key dies
 # if its class reaches 0 and stays.
+# Lowered 394 → 383 at the prereg-row deletion (pin bb3c10c17e3b): the
+# declared-names carry died and the new pin's judgment re-classes the
+# prereg-fed lambdas' rows — eleven convictions gone with no lambda
+# authored or renamed, the census reading the graph, not the text.
 eta_max: 29
-effectful_lambda_max: 394
+effectful_lambda_max: 383
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own

@@ -825,13 +825,13 @@ fn pre_register_effect(ref node) = match node {
 
 fn pre_register_stmt(seen, ref node) = match node {
   N(body, span, handle) => match body {
-    NStmt(FnStmt(name, params, ret_ann, effs, _body_node)) => match smap_get(seen, name) {
+    NStmt(FnStmt(name, params, ret_ann, _effs, _body_node)) => match smap_get(seen, name) {
       Some(_) => {
         report(EDuplicateFnName(name, span))
         seen
       },
       None => {
-        pre_register_fn_sig(name, params, declared_names_of(effs), ret_ann, handle, span)
+        pre_register_fn_sig(name, params, ret_ann, handle, span)
         smap_add(seen, name, 1)
       },
     },
@@ -912,26 +912,7 @@ fn pre_register_handler_sig(hname, config, state, arms) = {
   )
 }
 
-// The POSITIVE, non-Pure declared effect names — the inline-known half of a
-// forward-ref's row, carried into pre_register so a fn used before its body is
-// inferred (iterate → iterate_from; src/ inferred before lib/prelude) instantiates
-// a scheme ALREADY carrying its declared effects, order-independently. Negated
-// names (`!Alloc`) assert ABSENCE — never present-names; EPure is the union
-// identity and never enters a name-set. The tail row-var stays free (still
-// quantified by free_in_ty), so the KNOWN names are carried without closing the
-// row — the declared contract read live at pre-register, not re-derived.
-fn declared_names_of(effs) = fold(
-  [],
-  (acc, eff) => match eff {
-    (name, negated, _conn) => match name {
-      EPure => acc,
-      _ => if negated { acc } else { name_set_insert(acc, name) },
-    },
-  },
-  effs
-)
-
-fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: ValidSpan) = {
+fn pre_register_fn_sig(name, params, ret_ann, handle, span: ValidSpan) = {
   // The duplicate-fn refusal lives in pre_register_stmt's walk-local
   // seen-set (an env-based check misread a prior judgment's entry as a
   // duplicate the moment the incremental cursor re-registered a module
@@ -975,11 +956,20 @@ fn pre_register_fn_sig(name, params, declared_names, ret_ann, handle, span: Vali
         TVar(ret_handle),
       }
       let row_handle = graph_fresh_row(Inferred("effects of '{name}'"))
-      let fn_ty = TFun(
-        build_param_types(params, param_handles),
-        ret_component,
-        mk_ef_open(declared_names, row_handle)
-      )
+      // THE PREREG ROW IS BARE (the movers' root, deleted 2026-08-07): it
+      // carried the declared names as presents ("the inline-known half of
+      // a forward-ref's row"), which was a DECLARATION entering the supply
+      // side — the trial's self and intra-group charges folded the
+      // declared flavor into published rows while the final (which skips
+      // fn prereg) published the proof, and every over-declared fn became
+      // a mover (fill_row's Memory+Alloc vs Memory, cornered by body
+      // ablation). The forward-ref channel the carry served is the LIVE
+      // EDGE now: a charge chains this prereg cell, the completion prune
+      // keeps prereg cells as the cycle channel, and the callee's own
+      // judgment fills it with PROVEN content the caller reads live. The
+      // declaration lives in the GATE alone (ruling (1)).
+      let fn_ty =
+        TFun(build_param_types(params, param_handles), ret_component, mk_ef_open([], row_handle))
       graph_bind(handle, fn_ty, Located(span, Declared(name)))
       // Quantify the fresh param/return/row vars so a FORWARD reference — a fn used
       // before its own body is inferred (e.g. src/ inferred before lib/prelude, so

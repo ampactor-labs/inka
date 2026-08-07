@@ -35,6 +35,32 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE PREREG ROW GOES BARE — the movers' declared channel
+  closes (pin bb3c10c17e3b — TRANSITION m3 == m4, 26-line emit delta
+  crossing one generation; census 0; movers 686 → 678; cost 9.12s wall /
+  1,814,108 KB peak, inside the ratchet). The root iteration 44's
+  body-ablation cornered: pre_register_fn_sig's skeleton TFun row was
+  `mk_ef_open(declared_names, row_handle)` — the authored effect names
+  entering the SUPPLY side as presents. Only the trial reads prereg rows
+  (the final skips fn pre-registration), so every self or intra-group
+  charge through a prereg cell folded the DECLARED flavor into the trial's
+  published row while the final published the proof: fill_row emptied to
+  its bare self-call still published Memory + Alloc in the trial vs Pure
+  in the final. The fix is a deletion twice over: the row goes bare
+  (`mk_ef_open([], row_handle)` — a forward ref chains the live cell the
+  completion prune keeps as the cycle channel, and the callee's own
+  judgment fills it with PROVEN content read live), and declared_names_of
+  + the declared_names parameter prune whole — the declaration lives in
+  the GATE alone (ruling (1) of the rung-3 laws). THE HONEST MEASUREMENT:
+  the channel killed 8 movers, not the predicted 291-family — the
+  T_OverDeclared family (374 sites) survives untouched because its
+  members' PUBLISHED rows never carried the declared flavor except
+  through prereg-mediated charges (self-calls and forward refs), a small
+  minority. The 678 remainder is the scheme-value root itself — published
+  schemes are VALUES snapshotted at decl exit, rung 3's actual target —
+  so the movers instrument now points at exactly one mechanism. Baseline
+  movers_max 686 → 678.
+
 - 2026-08-07 · ▶▶▶ THE GATES FIRE AT COMPLETION — rung 3's B4 lands
   (pin c2becbaef475 — CLEAN m2 == m3, census 0; movers steady at 686;
   the pass-tail belt silent). The deferred declared-row gates now

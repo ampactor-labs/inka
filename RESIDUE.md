@@ -1850,18 +1850,31 @@ declaration flowing into the supply side through the prereg bind,
 precisely what ruling (1) forbids ("a declaration can never widen,
 close, or EtAll a published row"); the final's normal instantiation
 freshens the quantified row instead, and the completion prune answers
-Pure. THE FIX IS ONE WRITER: the prereg skeleton's row cell stays
-FREE (the declaration lives in the GATE machinery alone); forward and
-intra-group charges then chain live edges the completion resolves to
-PROVEN content — the machinery the whole B-arc built. Expected blast,
-measured at the landing: the 291-family's trial-side declared-flavor
-dies, movers fall hard; forward-ref callers' rows during the walk
-read fresh edges instead of declared caps, so the declared-row GATE
-deferral set may widen (more unresolved-at-decl-exit gates parking
-to their group events — B4's drains already catch them). Find the
-prereg row-bind writer (pre_register_stmt/pre_register_decls' TFun
-skeleton build), delete the row bind, march, read movers. Then the movers measurement fires the pre-committed
-scheme-object rule. (2) Decl cells + correspondence edges;
+Pure. THE FIX LANDED (2026-08-07, pin
+bb3c10c17e3b — TRANSITION m3 == m4, census 0): the one writer was
+pre_register_fn_sig's TFun build; its row went bare
+(`mk_ef_open([], row_handle)`), and declared_names_of + the
+declared_names parameter pruned whole — the declaration lives in the
+GATE alone. B4's drains stayed SILENT (no deferral widening); the
+forward-ref channel rides the live cell the completion prune keeps.
+THE HONEST MEASUREMENT REFUTES THE BLAST PREDICTION: movers 686 →
+678 — eight killed, not the 291-family. The T_OverDeclared family
+(374 narrations at the new pin) survives untouched because a
+declared flavor reached a PUBLISHED row only through prereg-MEDIATED
+charges (self-calls and forward refs — fill_row's ablated self-call
+was exactly that shape), a small minority of the over-declared set;
+the family's other members' published rows never read prereg cells.
+THE SCHEME-OBJECT RULE DOES NOT FIRE YET: the rule keys on the
+residue AFTER the row half lands whole, and 678 row-sort movers
+remain — the row half is incomplete, and its remaining mechanism is
+the published-scheme SNAPSHOT itself (trial publishes at its own
+completion moments, the final re-generalizes with no completion
+events; two publish disciplines over one graph). NEXT PROBE:
+movers_diff on the 678 set — read the flavor histogram (row-content
+flips vs ownership-grade flips vs type-sort), and the histogram
+picks the branch: row-dominant ⇒ continue the B-arc into the
+publish-discipline unification; type-sort ⇒ the rule's fresh design
+pass; grade-dominant ⇒ 4.2's forward-callee order-dependence first. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

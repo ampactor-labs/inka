@@ -2141,7 +2141,28 @@ PASS at rung 3's endpoint (its comment names the retirement).
 PREDICTION: the 250 grade movers fall to near 0; type-sort
 (~90-176) remains as the scheme-object rule's set. WRITERS for the
 build: infer_ownership (unchanged), the sweep hook at the trial
-tail beside assert_row_gates_drained, env_extend (the re-publish). (2) Decl cells + correspondence edges;
+tail beside assert_row_gates_drained, env_extend (the re-publish).
+THE SWEEP AS-BUILT WAS REFUTED BY ITS OWN INSTRUMENT (2026-08-07
+— built, marched CLEAN at census 0 inside the ceiling, and MOVERS
+ROSE 453 → 529; reverted whole, the repin restored to a13918ee).
+The kill's mechanism, banked: the sweep re-published via
+generalize(handle) AFTER full resolution, and a re-generalization
+over the resolved graph quantifies a DIFFERENT var set than the
+decl-exit publish did (fewer frees, different alpha order), so
+fingerprints moved on fns whose grades were never wrong — and the
+FINAL reads trial-published schemes, so the sweep's re-publishes
+shifted the final's own downstream answers too: +76 net movers,
+the monotone-down acceptance violated. WHAT SURVIVES: the stamp's
+mechanism trace and reader enumeration stand; the refined form for
+the next attempt is SURGICAL MODE PATCHING — the sweep updates
+ONLY the param modes inside the EXISTING published Forall
+(param_with_resolved on the scheme's own TFun params; same
+quantifiers, same ret, same row, NO generalize call, NO graph
+rebind), so the one changed dimension is the one the grade class
+diverges on. If the surgical form also rises, the grade class
+waits for the pass deletion itself (rung 3's endpoint dissolves
+the second judgment) and the movers ratchet holds at 453 with the
+grade class named as the condemned cadence's own artifact. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

@@ -718,6 +718,48 @@ after which the map extends by construction over every declared effect
 wants !WASI and !Filesystem). Cheap once the evidence rides; the
 render is the whole design question.
 
+`Hβ.audit.anonymity-tier` — the design stamp for PLAN §11 Phase 2.3
+(banked 2026-08-07; the tier is UNBUILT — this entry is what gets built
+and what was measured). MEASURED BASES, both true, name the base when
+citing either: the weave census counts 555 anonymous fns on the wheel
+link (`mentl query src/main.mn "census anonymous"`, read this day);
+§11's 490-of-3,469 counted EMITTED fns (2026-08-05 harvest) — the two
+differ because emitted fns dedup and prune. Text-shape approximation:
+~136 of the 555 are ETA-WRAPPERS (108 unary `(x) => f(x)`, 17 binary,
+11 nullary) — the one class with a MachineApplicable fix. TRACED — four
+conviction classes, each a live graph read on the site's OWN raw facts
+(the census's span_of_node_raw discipline; no chase for identity):
+(1) ETA-WRAPPER — LambdaExpr body is CallExpr(VarRef(g), args) with
+args ≡ the param list in order; convict, MachineApplicable (pass `g`).
+(2) NON-PURE — the lambda's TFun row ≠ Pure (one chase + row read);
+convict as a named-stage-in-hiding: teaching verdict, the name is
+intent and stays the human's. (3) QUANTIFIED-ROW-PARAM LANDING — the
+lambda lands on a callee param whose row var sits in the callee
+scheme's quantified set (the Phase 1 sig-keep boundary read at the
+application edge); convict — a published row boundary deserves a named
+carrier. (4) ESCAPE — DEP `Hβ.infer.use-profile` (band N S2, the
+escape-bit); NAMED, not built — until it lands the tier reads classes
+1–3 only, and the tier's report says so. Silent on the pure-local
+immediately-consumed lambda — the vocabulary the surface wants
+(`map((x) => x + 1, xs)` never narrates). PRICED (§5.O): one weave
+walk O(nodes) — census_walk's class, no new asymptotics; per lambda
+class-1 is O(arity) on raw body shape, class-2 one amortized chase,
+class-3 one edge read into the scheme; all reads live at audit time,
+no snapshot, no writer — a pure READ tier. ENUMERATED writers when it
+builds: the audit tier arm beside iteration-shape, the frontier leg +
+fixture (one convicting eta, one convicting non-Pure, one silent
+pure-local — seen RED first), and NOTHING else: the verify-baseline
+ceiling and the CensusShape migration are §11 2.5's, not 2.3's.
+BANKED NEXT PROBE: the built tier's first whole-link run reports the
+class split (eta / non-Pure / quantified-param / multi-class) — that
+split decides whether 2.5 banks per-class ceilings or one total.
+Correction to §11 2.3's prose carried here: "four named soundness
+peers live at that boundary" is not groundable as a counted four in
+this catalog — the boundary's actual kin are Phase 1's sig-keep
+publish, `Hβ.lower.multishot-anonymous-install`,
+`Hβ.lower.partial-via-lambda-recipe`, and the fmt lambda render arm;
+kin, not a counted four.
+
 `Hβ.wheel.iteration-is-topology` — the recursion eradication (named
 2026-07-30, Morgan's interrogation; the ledger entry ITERATION IS
 TOPOLOGY carries the law and the census). The wheel's 390

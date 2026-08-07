@@ -1577,12 +1577,16 @@ re-read syntactic form to decide what the graph already answers.*
   were confirmed history (fixed 2026-07-25), and `ast_kind_of`'s sixteen
   remaining consumers all live in the formatter, whose *output* is shape —
   the one legitimate shape-reader outside the parser.
-- **2.3 · The anonymity tier.** A lambda that escapes its lexical site, carries
-  a non-Pure row, or lands on a parameter whose row var is quantified is a named
-  stage in hiding. 490 of 3,469 emitted wheel functions are anonymous, and four
-  named soundness peers live at that boundary. The argument is the same one that
-  justified the iteration-shape tier: an anonymous function is intent
-  discarded, in a medium whose thesis is that intent is lossless.
+- **2.3 · The anonymity tier** — STAMPED 2026-08-07, unbuilt; the design's
+  one home is `Hβ.audit.anonymity-tier` in `RESIDUE.md` (traced conviction
+  classes, priced walk, enumerated writers, the escape half DEP-named on
+  `Hβ.infer.use-profile`). A lambda that is an eta-wrapper, carries a
+  non-Pure row, or lands on a parameter whose row var is quantified is a
+  named stage in hiding; silent on the pure-local vocabulary. Measured this
+  day: 555 anonymous fns on the weave census (the 490-of-3,469 figure
+  counted emitted fns — different base), ~136 eta-wrappers by text shape.
+  The argument is the iteration-shape tier's: an anonymous function is
+  intent discarded, in a medium whose thesis is that intent is lossless.
 - **2.4 · Recover `Hβ.infer.diverge-shared-memory-row`** into `RESIDUE.md`. Named
   2026-05-05, gone from the index by 2026-08-05 — drift-9 at the roadmap layer,
   and it is the substantive half of the two-parallel-verbs reframe: `<|` needs

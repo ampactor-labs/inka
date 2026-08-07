@@ -1657,12 +1657,15 @@ new DEP found; the map below is accurate at that pin.)*
   LANDED 2026-08-07 (pin 8031eaf123ec — the cover-grammar RestExpr;
   `([h, ...t]) =>` checks clean, the parse-half leg gates it, and the
   unmasked rest-binding runtime gap is banked as
-  `Hβ.lower.list-rest-binding-runtime` with its fix direction). STILL
-  OPEN: named effect rows (`type X = A + B` and `A & B` refuse, `A - B`
-  resolves to a nominal non-row, so the section that *retired the
-  `capability` keyword* has no working spelling); `xs |> len` reporting a
-  false `E_TypeMismatch` while emitting correct code; `<~` contributing
-  no iterative effect (3.6's); the fmt scope register (3.5's overlay).
+  `Hβ.lower.list-rest-binding-runtime` with its fix direction). Named
+  effect rows STAMPED 2026-08-07 — `Hβ.types.named-effect-rows` in
+  `RESIDUE.md` carries the design (one representation: the alias stores
+  the with-clause's own signed triples; expansion recurses inside the
+  signed fold so grouping holds by construction — the inline-splice trap
+  killed at trace time; a RowAliasKind env fact, never a Ty). STILL
+  OPEN: the named-row build; `xs |> len` reporting a false
+  `E_TypeMismatch` while emitting correct code; `<~` contributing no
+  iterative effect (3.6's); the fmt scope register (3.5's overlay).
 - **3.4 · SYNTAX's own defects.** The precedence table contradicts the
   layout canon on its own worked example (`(a) >< (b)` then a left-edge `|> mix`
   cannot mean `(a >< b) |> mix` when `|>` binds tighter — and the artifact

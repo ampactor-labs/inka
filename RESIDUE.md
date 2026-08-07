@@ -692,6 +692,45 @@ its own comment says "now LIVE" — and is recorded here only so the
 stale prose is struck; that distinction between an open gap and a
 resolved one is exactly what an index carries and a comment cannot.
 
+`Hβ.types.named-effect-rows` — the design stamp for PLAN §11 Phase 3.3's
+named-row drift (banked 2026-08-07; UNBUILT — this entry is what gets
+built). MEASURED at the felt walk and re-grounded at pin 8031eaf1:
+`type Both = A + B` refuses `P_UnexpectedToken: +` at the type-decl
+RHS, `A & B` likewise, `A - B` mis-resolves to a nominal non-row — so
+SYNTAX §«Named effect rows», the section that RETIRED the `capability`
+keyword, has no working spelling. TRACED — the one-representation
+law decides the design: the with-clause already parses to signed
+triples `[(EffName, Bool, EConn)]` and `build_declared_row`
+(effects.mn:167, the signed-clause fold) is their ONE home, so a row
+alias STORES THE SAME TRIPLES and expansion happens where rows are
+built. THE GROUPING TRAP, killed at trace time: splicing an alias's
+triples inline into the outer clause breaks grouping — with X = B,
+`X + (A - B)` is B + A while inline `X + A - B` folds to A — so
+expansion is NOT triple-inlining; the fold, on meeting a name whose
+env kind is the row alias, recursively builds THAT alias's row whole
+and applies the outer connective to the RESULT (parenthesization by
+construction). Needs: (1) parser — the type-decl RHS row grammar
+(ident joined by + - & with ! negation prefixes), producing the decl
+that stores the triples — the SAME shape the with-clause mints, one
+representation; (2) env — a RowAliasKind([(EffName, Bool, EConn)])
+SchemeKind registered at the type name (a row alias is an ENV fact;
+it never enters Ty unification — used in TYPE position it is a
+refusal, not a TName); (3) the declared-row build resolves each
+name through env: leaf effect vs row alias (recursive build + a
+cycle guard refusing self-referential aliases loudly); the row
+ALGEBRA (union/diff/inter/subsume) never sees alias names —
+expansion completes at build time; (4) `W_EmptyRow` (SYNTAX names
+it: a named row resolving to Pure narrates); (5) gates — the felt
+walk's namedrow probe graduates to a fixture (`type Both = A + B`
++ `with Both` running through handlers), plus a `-` case proving
+the grouping law and a `&` case, RED-first. PRICED (§5.O): the
+alias expansion is O(alias tree) per declared row, built once per
+decl at the existing fold; zero new graph state beyond the env
+kind. WRITERS when it builds: parser.mn (the RHS grammar +
+decl registration path), types.mn (the SchemeKind variant),
+effects.mn or its caller boundary (the env-reading expansion +
+guard), the W narration, fixtures + a frontier leg.
+
 `Hβ.lower.list-rest-binding-runtime` — the list-rest BINDING's runtime
 gap, measured 2026-08-07 at pin 8031eaf1 while landing the lambda
 list-pattern parse fix (Phase 3.3's first drift). Two faces, one

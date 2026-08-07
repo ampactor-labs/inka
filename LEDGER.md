@@ -35,6 +35,36 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE STACK HOLDS FLAT — the zip cliff closed, the
+  plumbing-twin mystery dissolved into ten kills and one prelude fix
+  (pin dedfec69264a — CLEAN m2 == m3, census 0; mn-zip-deep RED at
+  exit 134 → 42 through the battery). The forensic chain, counted:
+  the total-twinning trap was hypothesized as a twin miscompile, a
+  corrupted dispatch, a boot miscompile, an enumerate blowup, a
+  list_eq_f64 route, a slice/rest non-progression, and a root-word
+  corruption — every one killed by a measurement (binary entry traps,
+  emit-diff, coredump-globals forensics with probe values stored in
+  added globals, parent-chain capture, five source-site guards, and
+  finally threshold-2000 guards naming ENUM len=4696). The truth was
+  simple and structural: cons-recursive zip_with spends one NON-TAIL
+  frame per element; the emit's enumerate over the fn-name table runs
+  under thousands of compile frames; the twin-inflated table (~4,696
+  names vs the clean ~3,590) crossed the ambient cliff — and the
+  PINNED build sat ~1,000 fns from the same death on its own table.
+  The fix is the prelude's own canonical shape: zip_with_fill, the
+  buffer-counter tail form range_fill already models, callee-first
+  per iterate_from's law; enumerate and zip inherit it. Two residues
+  banked: `mentl test <file>` silently exits 0 without judging (the
+  battery form is the directory — a verb gap), and 5.1a's blocker is
+  RE-SCOPED — with the cliff gone the worthiness deletion crashes
+  nothing, so its blowup becomes a ratchet-measured cost question
+  (twin count, m2 bytes, peak RSS), re-attemptable on its own
+  schedule. The forensic instruments graduated: the globals-store +
+  coredump-read scheme is now a named, reusable postmortem channel
+  (wasmtime coredumps carry globals, never memory).
+
+
+
 - 2026-08-07 · THE VALUE GRAPH REFUTES THE SPLIT — 4.3's core corrected,
   the arena re-sequenced behind the column arc (docs-only; the pin
   stands at 2f5ef189a823). Before family 2 landed a line, one

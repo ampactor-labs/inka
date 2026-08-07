@@ -260,8 +260,22 @@ fn concat(xss) = flatten(xss)
 
 fn reduce(xs, f) = fold(head(xs), f, rest(xs))
 
-fn zip_with(f, xs, ys) =
-  if len(xs) == 0 || len(ys) == 0 { [] } else { [f(xs[0], ys[0])] ++ zip_with(f, rest(xs), rest(ys)) }
+// The buffer-counter tail form (range_fill's own shape): one exact-size
+// flat buffer, one tail-recursive fill — O(min(n)) work, O(1) stack. The
+// old cons-recursive form spent a non-tail frame per element and died at
+// the ambient stack cliff: the wheel's own emit enumerates its fn table
+// under thousands of compile frames and sat ~1,000 fns from that death
+// (found 2026-08-07 by the total-twinning forensics; mn-zip-deep pins
+// 200,000 on a fresh stack). Declared callee-first (iterate_from's law).
+fn zip_with_fill(f, xs, ys, buf, i, n) with Memory =
+  if i < n { zip_with_fill(f, xs, ys, list_set(buf, i, f(xs[i], ys[i])), i + 1, n) } else { buf }
+
+fn zip_with(f, xs, ys) = {
+  let nx = len(xs)
+  let ny = len(ys)
+  let n = if nx < ny { nx } else { ny }
+  zip_with_fill(f, list_to_flat(xs), list_to_flat(ys), make_list(n), 0, n)
+}
 
 fn zip(xs, ys) = zip_with((a, b) => (a, b), xs, ys)
 

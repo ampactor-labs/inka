@@ -647,10 +647,24 @@ at ALL FIVE direct zip sites (infer 4051/6038/6096/6279, lower 1538)
 stayed SILENT through a reproduced trap — five more site kills — so
 the entry is the SIXTH zip: enumerate's (prelude:268), whose earlier
 binary guard was MISWIRED (passed __state in the arg slot; its
-silence proves nothing). NEXT INSTRUMENT, one cycle: source-level
-guards inside enumerate (len(xs) at entry), inside rest (the len it
-passes to slice), and inside zip (both args), each printing the
-measured len — the three reads triangulate the first misread word. The worthiness gate STANDS until
+silence proves nothing). RESOLVED 2026-08-07 (pin dedfec69264a — the LEDGER's THE STACK HOLDS
+FLAT carries the ten-kill chain): NO corruption existed anywhere. The
+counter was global (87,311 = all calls, not depth), the death depth
+was the AMBIENT stack budget (a few thousand frames under the emit's
+own compile depth), and the entry list was ENUM len=4696 — the
+twin-inflated fn-name table (clean ~3,590) crossing a cliff the
+pinned build sat ~1,000 fns from on its own. zip_with is now the
+buffer-counter tail form (zip_with_fill, range_fill's shape,
+callee-first); mn-zip-deep pins 200,000 fresh-stack elements, seen
+RED at exit 134. CONSEQUENCES: `Hβ.emit.plumbing-twin-selfcall` is
+CLOSED (no twin ever miscompiled); 5.1a RE-SCOPES to a
+ratchet-measured cost question (twin count, m2 bytes, peak RSS —
+re-attemptable, no crash); two small residues named —
+`Hβ.cli.test-single-file-judges` (`mentl test <file>` silently exits
+0 without judging; the battery form is the directory) and the
+non-tail prelude-builder CENSUS (the `[x] ++ self(rest)` shape
+class — zip_with was the proven killer; the class enumeration is one
+audit-tier query away). The worthiness gate STANDS until
 this closes — named at spec_demands_of as the guard of an unfixed
 blowup class (the demand-set explosion is real either way: the gated
 twin set is tiny by construction, the total set is not, and the

@@ -495,7 +495,14 @@ comment_refs_max: 0
 # fifth application. The next legal move stays DOWN; rung 3 (Phase 5.2)
 # dissolves the class and this order-dependence with it (class-based
 # reads are decl-order-free by construction).
-movers_max: 662
+# Re-based 662 → 691 at the zip-cliff fix (pin dedfec69264a): zip_with
+# rebuilt in the buffer-counter tail form adds zip_with_fill and
+# reshapes zip_with/zip/enumerate's bodies — the new and reshaped
+# prelude schemes join the freeze-root divergence class (the same
+# publish-surface channel, sixth application; zero trial/final
+# machinery in the diff). The next legal move stays DOWN; rung 3
+# dissolves the class.
+movers_max: 691
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

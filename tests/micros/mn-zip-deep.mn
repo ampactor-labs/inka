@@ -1,0 +1,19 @@
+// expect: 42
+// The zip depth cliff (found 2026-08-07 by the total-twinning forensics):
+// the old cons-recursive zip_with spent one non-tail frame per element,
+// so a deep-ambient zip of a few thousand elements exhausted the wasm
+// stack — the wheel's own emit enumerates its fn table under thousands
+// of compile frames and sat ~1,000 fns from that death. The
+// buffer-counter tail form (range_fill's own shape) holds the stack
+// flat; this micro pins it at 200,000 elements on a fresh stack (RED
+// before the fix: call stack exhausted).
+fn main(q) = {
+  let n = 200000
+  let xs = range(0, n)
+  let ys = range(0, n)
+  let zs = zip_with((a, b) => a + b, xs, ys)
+  let pairs = enumerate(range(0, n))
+  match pairs[21] {
+    (i, v) => zs[0] + zs[n - 1] - (2 * n - 2) + i + v
+  }
+}

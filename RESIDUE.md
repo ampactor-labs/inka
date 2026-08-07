@@ -1824,10 +1824,28 @@ fill_row trial `!27+28+-` vs final `!27+-` — the trial's row carries
 interned effect 28 the final drops (the fill/float channel), and
 process_lowpass flips an OWNERSHIP GRADE (buffer: ref→own — the
 4.2-landed grade's forward-callee order-dependence, trial vs final
-resolution states). NAMED NEXT PROBE: name interned effects 27/28,
-then trace fill_row's charge sites for where the trial gains 28 and
-the final loses it — the flip's mechanism decides whether the fix is
-a charge-freshness read or the grade's cross-pass determinism. Then the movers measurement fires the pre-committed
+resolution states). THE TRACE'S FOUR FACTS (2026-08-07): (1) 27 = Memory, 28 = Alloc;
+fill_row's link answer is `with Memory` — the PROVEN row — while its
+declaration says Memory + Alloc, and every body callee (list_index,
+mvl, list_set) judges Memory-only: the declaration over-states. (2)
+The wheel carries 291 T_OverDeclared narrations — the medium already
+names the family, fill_row among them ("declares Memory + Alloc but
+body only uses Memory") — so the movers ≈ the over-declared set plus
+the grade flips (process_lowpass's ref→own buffer). (3)
+publish_with_instances is DEAD CODE (zero references — the
+declared-flavored publish already died; both passes publish via
+generalize reading the graph). (4) THE PINPOINT: movers_diff's own
+re-read line shows the trial's cell answering Memory at pass end
+while the trial's FINGERPRINT captured Memory + Alloc — the
+divergence lives BETWEEN the trial's print moment and the cell's
+final state (either a rebind after the print, or the print reading
+the env SCHEME while the re-read reads the graph ROW — two surfaces,
+one of them stale). NAMED NEXT INSTRUMENT, one wheel-probe edit:
+movers_diff prints the trial-time env-scheme row AND the graph row
+side by side at the flip, pinning which surface the A-fingerprint
+read and who rebound it; the fix then lands at that one writer
+(candidates: the print's read surface unified onto the graph row, or
+the late rebinder's freshness). Then the movers measurement fires the pre-committed
 scheme-object rule. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

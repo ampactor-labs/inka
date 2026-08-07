@@ -615,11 +615,32 @@ scratch words 0-2), run to exhaustion, then read the coredump's DATA
 SEGMENT at those addresses (the coredump carries the whole memory
 image; frames cap but memory does not) — the stored words name the
 runaway's input list handles, and lookup of their headers in the
-same image answers huge-vs-corrupt in one read. The worthiness gate
-STANDS until this closes — named at spec_demands_of as the guard of
-an unfixed blowup class (the demand-set explosion is real either
-way: the gated twin set is tiny by construction, the total set is
-not, and the emit's own prelude consumers are non-tail).
+same image answers huge-vs-corrupt in one read. THIRD SESSION (2026-08-07, the globals-forensics round — wasmtime
+coredumps carry GLOBALS, not memory; the probe values live in added
+globals and read out of the dump): THE RUNAWAY IS PINNED TO NUMBERS.
+zip_with dies 87,311 calls deep (deterministic across runs), on a
+list whose len() answers 26 FOREVER: the deepest node decodes as a
+slice [len=26][tag4][parent][start=1] (slice_raw's exact layout,
+lists.mn:493-498), a fresh 16-byte-class node per level at ~1.8GB
+(late compile). rest(xs) = slice(xs, 1, len(xs)) allocates but never
+progresses. THE ARITHMETIC CONTRADICTION that names the next read: a
+level storing len=26 with start=1 requires its parent's total ≥ 27
+(new_len = cend − cstart with cend clamped to total), yet every
+probed level shows 26 — so the PARENT pointer (w2, captured) does
+not chain to the previous slice node (56 bytes back, not 16 — other
+allocations interleave), and the parent's OWN header is the missing
+read. SUSPECT ON THE BOARD: slice_raw's `let total =
+load_i32(list)` — a representation-BLIND raw read of word 0 as "the
+total" (the prober-must-honor-protocols law at the runtime's own
+source); if any non-slice representation reaches it whose word 0 is
+not a length, total is garbage and the chain follows. NEXT
+INSTRUMENT, one cycle: capture the PARENT chain (w2's words 0-4, two
+levels up) plus f's closure fn-index (names the zipping consumer via
+the table), same globals scheme. The worthiness gate STANDS until
+this closes — named at spec_demands_of as the guard of an unfixed
+blowup class (the demand-set explosion is real either way: the gated
+twin set is tiny by construction, the total set is not, and the
+emit's own prelude consumers are non-tail).
 
 `Hβ.perf.per-decl-arena` — STAMPED whole 2026-08-07 (§11 4.3; the gate
 peer `Hβ.infer.region-on-tee-alloc-absorb` folds in below). WHAT EXISTS,

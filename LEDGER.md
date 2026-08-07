@@ -35,6 +35,26 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · THE ANONYMITY RATCHET ARMS — the arc loop's eighth
+  iteration lands Phase 2.5's second half (tools-only, no repin; the
+  wheel is untouched). verify.sh runs the two census queries per gate
+  pass — `census eta` and `census effectful-lambda` on the wheel link
+  through the just-compiled m2 — and refuses a rise against the banked
+  ceilings eta_max: 29 / effectful_lambda_max: 394 (measured at pin
+  62542a59bf94; 423 convictions of 555 anonymous, the graph's exact
+  read correcting the stamp's ~136 text-shape eta estimate). Two keys
+  because the classes fall differently: an eta dies by passing the
+  name that exists, an effectful lambda by a named stage gaining the
+  row's decl home. Raw CsAnonymous is NOT ratcheted — the tier's own
+  silence law protects the pure-local vocabulary. Both arms were seen
+  RED at under-set ceilings before the true ones were banked, and an
+  empty census answer refuses loudly rather than reading as zero (the
+  silent-fallback class, refused at the gate's own construction).
+  With this, Phase 2 — every judgment reads the graph, never a
+  proxy — is WHOLE: 2.0 the raw-reason law, 2.1 rank-as-projection,
+  2.2 the shape-keyed deletion, 2.3 the anonymity tier, 2.4 the
+  shared-memory-row recovery, 2.5 the census shapes + this ratchet.
+
 - 2026-08-07 · ▶▶▶ THE CENSUS GROWS ITS JUDGMENT SHAPES — the arc loop's
   seventh iteration lands Phase 2.5's first half
   (pin 62542a59bf94 — CLEAN m2 == m3 at 335,550 lines, census 0). Three

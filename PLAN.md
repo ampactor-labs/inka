@@ -1606,14 +1606,18 @@ re-read syntactic form to decide what the graph already answers.*
   total child projection moved oracle→query (the census is the detectors'
   home; the audit reads through the import), census_matches carrying the
   handle so judgment shapes read the graph at the site; fixture + roster
-  pin each shape counting its own line, seen RED first. THE REMAINING
-  HALF: the conviction-count RATCHET — the eta + effectful-lambda
-  whole-link counts become banked ceilings in `tools/verify-baseline.txt`
-  that only fall, exactly as movers did (the tier's CONVICTIONS, not raw
-  CsAnonymous, whose pure-local majority the tier itself declares silent
-  vocabulary). The whole-link/per-file cut and the decl-site
-  file-coordinates facet (`Hβ.query.decl-site-file-coordinates`) land
-  together when 3.5's overlay gives solo queries their real link sets.
+  pin each shape counting its own line, seen RED first. The RATCHET ✅
+  LANDED 2026-08-07 (same day, the second half): verify runs the two
+  census queries per gate pass and refuses a rise against
+  `eta_max: 29` / `effectful_lambda_max: 394` in
+  `tools/verify-baseline.txt` (the tier's CONVICTIONS on the wheel link —
+  423 of 555 anonymous; raw CsAnonymous is not ratcheted, its pure-local
+  majority being vocabulary the tier declares silent). Both arms seen RED
+  at under-set ceilings; an empty census answer refuses loudly rather
+  than reading as zero. Phase 2 is WHOLE. The whole-link/per-file cut and
+  the decl-site file-coordinates facet
+  (`Hβ.query.decl-site-file-coordinates`) land together when 3.5's
+  overlay gives solo queries their real link sets.
 
 ### Phase 3 · The surface IS SYNTAX
 

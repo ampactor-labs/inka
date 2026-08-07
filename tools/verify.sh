@@ -164,6 +164,38 @@ if C=$(wt_m2_ensure); then
   elif [[ -n "$mmax" && "$movers" -lt "$mmax" ]]; then
     say "  ↓ movers FELL $mmax -> $movers — lower movers_max in $BASELINE to hold it."
   fi
+  # The ANONYMITY ratchet — the census tier's convictions (PLAN §11 Phase
+  # 2.5): the whole-link counts of CsEta (an anonymous fn whose name
+  # already exists) and CsEffectfulLambda (a row without a decl home).
+  # NOT raw CsAnonymous — the pure-local majority is vocabulary the tier
+  # itself declares silent. Two link judgments per run (the census is a
+  # query, not a compile diagnostic — the cost is the floor's, priced and
+  # accepted). Monotone DOWN: each conviction named away is a stage
+  # gaining its name; a rise is intent newly discarded. An EMPTY census
+  # answer refuses loudly — a broken query reading as zero would green a
+  # real rise (the silent-fallback class).
+  ceta=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census eta" 2>/dev/null | grep -oE '[0-9]+ eta-wrapper' | grep -oE '[0-9]+' | head -1)
+  crow=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census effectful-lambda" 2>/dev/null | grep -oE '[0-9]+ effectful' | grep -oE '[0-9]+' | head -1)
+  emax=$(grep -E '^eta_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  rmax=$(grep -E '^effectful_lambda_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  if [[ -z "$ceta" || -z "$crow" ]]; then
+    say "✗ anonymity RATCHET: the census query answered nothing (eta='$ceta' effectful='$crow') — the projection is broken, not clean."
+    fail=1
+  else
+    say "· anonymity: $ceta eta-wrapper(s), $crow effectful lambda(s) — the tier's convictions on the wheel link"
+    if [[ -n "$emax" && "$ceta" -gt "$emax" ]]; then
+      say "✗ anonymity RATCHET: eta rose $emax -> $ceta — a named fn newly hidden behind a lambda."
+      fail=1
+    elif [[ -n "$emax" && "$ceta" -lt "$emax" ]]; then
+      say "  ↓ eta FELL $emax -> $ceta — lower eta_max in $BASELINE to hold it."
+    fi
+    if [[ -n "$rmax" && "$crow" -gt "$rmax" ]]; then
+      say "✗ anonymity RATCHET: effectful lambdas rose $rmax -> $crow — a row newly denied its decl home."
+      fail=1
+    elif [[ -n "$rmax" && "$crow" -lt "$rmax" ]]; then
+      say "  ↓ effectful-lambda FELL $rmax -> $crow — lower effectful_lambda_max in $BASELINE to hold it."
+    fi
+  fi
   # The manifest gate — the wheel's own DAG judgment, zero-tolerance. The
   # blob census is structurally BLIND to a missing import edge (every name
   # resolves in the concatenation), and the class sat silent five days

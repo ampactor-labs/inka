@@ -472,6 +472,20 @@ comment_refs_max: 0
 # The next legal move stays DOWN.
 movers_max: 439
 
+# 2026-08-07: the ANONYMITY ratchet (PLAN §11 Phase 2.5, second half) —
+# the census tier's convictions on the wheel link, monotone DOWN. Two
+# keys, not one, because the classes fall differently: an eta-wrapper
+# dies by passing the name that already exists (MachineApplicable); an
+# effectful lambda dies by a named stage gaining the row's decl home.
+# Raw CsAnonymous is NOT ratcheted — its pure-local majority is the
+# vocabulary the tier itself declares silent. Seeded at the pin
+# 62542a59bf94 measurement: eta 29, effectful 394 (of 555 anonymous
+# total — the convictions are 423 of them; the graph's exact read,
+# correcting the stamp's ~136 text-shape eta estimate). Each key dies
+# if its class reaches 0 and stays.
+eta_max: 29
+effectful_lambda_max: 394
+
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
 # header; no registry here (a `micro:NAME=EXIT` list once documented below

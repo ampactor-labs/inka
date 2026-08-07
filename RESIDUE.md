@@ -2078,7 +2078,31 @@ mover flavor) and the TYPE-SORT set (in-group call-site
 contamination of shared cells — the scheme-object rule fires here
 with its fresh design pass). Next probe: movers-hist on the 453 to
 confirm the flavor split before choosing between the mode-edge
-design and the type-half pass. (2) Decl cells + correspondence edges;
+design and the type-half pass.
+THE HISTOGRAM RAN ON THE 453 (2026-08-07, cap lifted probe-only
+through the a13918ee pin): grade-only 250, type-only 90, row+type
+86, row-only 26, row+grade 1 — THE ROW CHANNEL IS DEAD (337 → 26,
+and the surviving row diffs have no monotone direction: 14 add vs
+20 rem), and THE GRADE CLASS DOMINATES at 55% with the monotone
+front intact (271 r→o vs 12 o→r: the trial reads unresolved
+forward-callee param modes as borrow-safe, the final reads
+resolved products as own). Classifier caveat, banked honestly: 77
+of the row+type bin carry an empty-tail parse in movers-hist.py's
+row regex (a render-vs-parse ambiguity on inner fn-type rows), so
+type-involved is 90–176 and the exact cut waits for the type-half
+pass; the grade verdict is unambiguous regardless. THE BRANCH: the
+GRADE HALF first (the banked rule's grade-dominant arm — 4.2's
+forward-callee order-dependence). The next iteration's output is
+its STAMP: trace usage_of's write path (where the computed grade is
+stored into the published scheme's param modes and when), enumerate
+every reader of param_resolved/param_borrows, and price the two
+candidate forms — (a) DEFERRED GRADES: the grade computation moves
+to a completion/pass-tail event where callee products are resolved
+(the drain-refinement's shape at the ownership altitude); (b)
+DERIVED MODES: the published mode stops being a stored value and
+becomes a projection of the live graph at read time (D1's "the
+scheme is a projection" applied to the ownership aspect) — never
+build ahead of the stamp. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

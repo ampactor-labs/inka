@@ -2297,6 +2297,32 @@ forward-ref arm end to end for the sl shape, and probe sl's
 published scheme's row cell state at walk end (bound or free; to
 what). The crucible stands: sl+sl_from as a fixture, RED on the
 bare row.
+THE FIXTURE'S OWN MOVERS PRINT CLOSED THE MECHANISM TO ONE HOP
+(2026-08-07, the 50-line fixture compiled unscoped through the
+pin): sl is the fixture's ONE mover — A (trial)
+`->AString!-%2` (the result row OPEN, the tail the kept live edge
+to sl_from's prereg cell: the row-half machinery working), B
+(final) `->AString!-.` (CLOSED EMPTY — the final drops the edge
+and closes). And the REORDER HEALS: sl2 with the worker declared
+first judges honest — same code, order flips the shipping answer,
+the order-dependence rung 3 exists to kill, alive at the row sort
+in the FINAL. THE MECHANISM, one hop from closed: the final SKIPS
+fn pre-registration, so a caller-before-callee call has NO
+below-ceiling cell to chain — instantiation freshens the published
+scheme's quantified row var into an ABOVE-CEILING copy; the
+caller's fn-arg is a param, so the copy stays FREE at its exit;
+row_keep_completion drops above-ceiling free edges → the tail
+closes pure. THE REMAINING QUESTION: why the SIGNATURE KEEP
+misses the copy — sl's render param carries the freshened TFun
+whose row var IS the copy, and signature_free_roots should reach
+it (the Phase-1 higher-order fix covered run(f)=f()'s shape);
+either the final's param cells are re-minted after the keep is
+built, the keep's walk stops shallow of an instantiated TFun
+binding, or the unify order leaves the param's binding invisible
+at exit. READ signature_free_roots and infer_fn's final-pass
+param minting; the fix follows at whichever site lies. Note: the
+fixture's compile exits 1 (unclassified — read its stderr tail at
+the fix landing).
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

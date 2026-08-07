@@ -770,7 +770,23 @@ disagree. Build shape, final: (1) the one offset projection;
 stores bytes; (4) the six-plus-lower sites re-read through the
 projection; (5) the f64-state fixture RED first; (6) march as
 TRANSITION; then 5.1a's gate-drop re-attempt rides the next
-iteration with the banked cost expectations. One iteration of today also re-learned kill (1)
+iteration with the banked cost expectations.
+THE FENCE HAS NO RUNTIME READERS (2026-08-07, the enumeration's
+close): the offset=4 loads in the emitted dispatch are WORLD-CHAIN
+node reads (the [key][entry][parent] node's entry field;
+world_find's walk), not the hstate record's fence — the ARM BASE
+is precomputed into the per-effect [record, base] evidence entry
+at install emit (emit_handler_effect_entries), so every
+state-offset computation is an EMIT-TIME CONSTANT. The build
+therefore shrinks: no runtime dispatch arithmetic changes — the
+one offset projection (state_field_offset beside
+tuple_elem_offset), the emit-constant sites re-read through it
+(LHandleWith's size + init writes + the evidence-entry base +
+LStateSlotStore's upstream slot_offset producer + the POff paths
++ op-result widths), the fence field stays or re-encodes freely
+(nothing reads it live — a vestigial-write candidate the build
+may delete), and the f64-state guard (landed, exit 42) holds
+green. The gate-drop re-attempt follows the march. One iteration of today also re-learned kill (1)
 the hard way: a worthiness-SEED probe twins nothing (candidacy
 gates upstream at the site collection) — the closed peer's own
 record already said the working force was the gate, not the seed.

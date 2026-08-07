@@ -2102,7 +2102,46 @@ to a completion/pass-tail event where callee products are resolved
 DERIVED MODES: the published mode stops being a stored value and
 becomes a projection of the live graph at read time (D1's "the
 scheme is a projection" applied to the ownership aspect) — never
-build ahead of the stamp. (2) Decl cells + correspondence edges;
+build ahead of the stamp.
+THE GRADE-HALF STAMP (2026-08-07 — traced, priced, writers
+enumerated in the artifact). THE WRITE: infer_ownership (own.mn)
+runs at the fn's own judgment, classify_usage over the body's
+(consume, read) pair, param_with_resolved into the param records
+the publish carries. THE EARLY READ: usage_of's call arms take
+arg_slot_mode → callee_borrow_params → env_lookup(callee) →
+param_borrows on the CALLEE's params — for a forward callee the
+prereg scheme's params are authored-only (resolved Unmarked), so
+param_borrows answers the read-safe default (borrow) and the
+caller classifies Ref where the final, reading the trial-published
+RESOLVED product, classifies Own — the 250-mover monotone front,
+mechanism confirmed. READERS OF THE GRADE, enumerated: the usage
+walk itself (own:697 arg_slot_mode, own:717 labeled), the affine
+ledger's borrow bracket (infer:3974 — MID-PASS, semantic verdicts,
+conservative-safe on the default), the ctor-scheme projection
+(infer:7603, pass-through), param_borrows' own read (types:398).
+THE FORMS PRICED: (b-ultimate) ownership-as-effect riding the row
+substrate — `own` performs Consume, charges as joins on live
+cells, the classification a projection — is band A's own item,
+DEP-rooted on the crown (the spine's ownership-as-effect
+dependent), NOT this arc's build; (b-now) mode CELLS on params
+re-create the temporal gap unless reads defer — no win alone;
+(a-scoped) THE TRIAL-TAIL GRADE SWEEP is the minimal honest form:
+after the trial's walk completes (every scheme published,
+callee products resolved), one sweep re-runs infer_ownership per
+fn against the RESOLVED env and re-extends the scheme with the
+updated params — the trial's PUBLISHED grades then match the
+final's (which already read trial-resolved products), and the
+fingerprint (printed after the sweep) agrees. Mid-pass ledger
+reads keep the conservative default — semantically safe, verdicts
+unchanged. PRICE: one extra usage walk per fn per trial (the
+judgment's own usage cost, once more, zero new stores — env
+re-extend is the existing shadow mechanism); the sweep is
+condemned-cadence machinery by construction and DELETES WITH THE
+PASS at rung 3's endpoint (its comment names the retirement).
+PREDICTION: the 250 grade movers fall to near 0; type-sort
+(~90-176) remains as the scheme-object rule's set. WRITERS for the
+build: infer_ownership (unchanged), the sweep hook at the trial
+tail beside assert_row_gates_drained, env_extend (the re-publish). (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

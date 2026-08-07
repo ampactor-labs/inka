@@ -786,7 +786,27 @@ LStateSlotStore's upstream slot_offset producer + the POff paths
 + op-result widths), the fence field stays or re-encodes freely
 (nothing reads it live — a vestigial-write candidate the build
 may delete), and the f64-state guard (landed, exit 42) holds
-green. The gate-drop re-attempt follows the march. One iteration of today also re-learned kill (1)
+green. The gate-drop re-attempt follows the march.
+THE LOWER PRODUCER PINNED (2026-08-07, the map's last piece):
+lower's offset comes from resolve_state_slot_offset (lower.mn:4544)
+— `8 + idx*4` over the slot-order NAME list (config ++ state), fed
+by resume_commit_prefix's stores — and that site has NO repr
+access (names only). The shared projection therefore needs the
+TYPED state field records threaded to both layers — they already
+ride the env's HandlerKind (config_tparams + state with init
+nodes), so the one projection takes the typed field list + a
+name-or-index and width-sums via repr_of(lookup_ty(init-handle));
+resume_commit_prefix's caller threads the typed list where it now
+threads names, and emit's install reads the same list it already
+holds. THE AGREEMENT CONTRACT: one fn, one home (beside
+tuple_elem_offset in the emit's field machinery or types.mn if
+lower may not import backends), both layers' offsets equal by
+construction — a census assert (emit offset == lower offset per
+field) is the build's belt. THE MAP IS WHOLE; the build is a
+self-contained arc: the projection fn, the two threading edits,
+the five emit-site re-reads, the POff paths, op-result widths,
+the march (CLEAN expected on the all-word wheel — every width is
+4 today), then the wide store arms and the gate-drop re-attempt. One iteration of today also re-learned kill (1)
 the hard way: a worthiness-SEED probe twins nothing (candidacy
 gates upstream at the site collection) — the closed peer's own
 record already said the working force was the gate, not the seed.

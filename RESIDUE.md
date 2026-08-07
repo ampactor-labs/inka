@@ -550,9 +550,32 @@ and its verdict decides whether 5.1c leads or follows 5.1a). PRICED
 (§5.O): no new scans — pass 2's deletion REMOVES a walk; the twin
 blowup is the one cost, measured not guessed, and the 1,830,000 KB
 peak ceiling arbitrates (a justified bump names the arena's later
-reclaim). March contract: TRANSITION (twin names/bodies enter the
-emit). ORDER: 5.1c's probe first (a hang risk outranks a perf
-hybrid), then 5.1a, then the census reads.
+reclaim). MEASURED 2026-08-07, both legs run: (5.1c) KILLED TWICE —
+the mangle space per base is finite by construction (a wide component
+is a scalar repr, containers are words, so ≤5^K vectors per base and
+the fix terminates with no guard), AND polymorphic recursion cannot
+reach the emit at all: the probe (`depth(x: a, n) = ... depth([x],
+n-1)`, authored signature) refuses E_OccursCheck — the checker uses
+the mono assumption for self-calls even under a signature, so
+SYNTAX's "polymorphic recursion prices a signature" is today
+refuse-both-ways (a measured 5.3 baseline: below Haskell/OCaml's
+crude route). (5.1a) BUILT AND REFUTED BY THE MARCH: the worthiness
+web deleted whole (nine fns), m2 compiled, and m3 TRAPPED — call
+stack exhausted in zip_with — the wheel's own compile diverging under
+a plumbing twin. THE GATE IS LOAD-BEARING CORRECTNESS, not a perf
+hybrid: the worthy set was leaf-compute fns by construction
+(spec_registry's own comment), so the twin emission for
+SELF-RECURSIVE CLOSURE-CARRYING HOFs was never exercised and
+miscompiles (zip_with's twinned recursion never terminates). The
+deletion REVERTED whole. NEW PEER, the real blocker:
+`Hβ.emit.plumbing-twin-selfcall` — NAMED NEXT PROBE: force ONE
+plumbing twin in a fixture (a wide zip_with/map call under the gate
+deleted locally), emit-diff the twin body against the floor body,
+and pin whether the self-call redirect, the closure protocol, or the
+list stride breaks the recursion. 5.1a re-sequences AFTER that peer
+closes; the worthiness gate STANDS until then as the named guard of
+an unfixed emission class (a comment at spec_demands_of naming this
+is the next docs touch).
 
 `Hβ.perf.per-decl-arena` — STAMPED whole 2026-08-07 (§11 4.3; the gate
 peer `Hβ.infer.region-on-tee-alloc-absorb` folds in below). WHAT EXISTS,

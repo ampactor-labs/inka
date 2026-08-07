@@ -1793,11 +1793,20 @@ new DEP found; the map below is accurate at that pin.)*
   (`Hβ.emit.total-monomorphization`, RESIDUE): the artifact read reframes the
   target — the machinery is already total-by-REPR (the all-word vector IS the
   floor class, correct at the wasm altitude), so the hybrid is exactly ONE
-  filter, and the plan is three legs: delete the worthiness gate (5.1a),
-  type-total arrives as the Repr ADT grows (5.1b — no separate landing), and
-  the CYCLE GUARD for polymorphic recursion (5.1c — today a user program the
-  wheel never writes can HANG the demand fix; the guard floors at the word
-  protocol with a narration, probe-first under timeout).
+  filter, and the plan was three legs — and the
+  same day MEASURED them: 5.1c is KILLED TWICE (the mangle space is finite by
+  construction — a wide component is a scalar repr, containers are words —
+  and polymorphic recursion cannot reach the emit at all: the signature'd
+  probe refuses E_OccursCheck, a measured 5.3 baseline); 5.1a was BUILT AND
+  REFUTED BY THE MARCH — the worthiness web deleted whole, m2 compiled, and
+  m3 trapped with call stack exhausted in zip_with. THE GATE IS LOAD-BEARING
+  CORRECTNESS, not a perf hybrid: the worthy set was leaf-compute by
+  construction, so the twin emission for self-recursive closure-carrying
+  HOFs was never exercised and miscompiles. Reverted whole. The real blocker
+  is the new peer `Hβ.emit.plumbing-twin-selfcall` (RESIDUE carries the named
+  next probe: force one plumbing twin, emit-diff against the floor, pin the
+  break); 5.1a re-sequences after it closes; type-total still arrives as the
+  Repr ADT grows (5.1b — no separate landing).
 - **5.2 · `Hβ.infer.schemes-are-edges` rung 3**, the row half, per the settled
   laws in `RESIDUE.md`. With 5.5's column arc this also UN-GATES the arena's
   2b (4.3's correction): published facts in columns make the image set =

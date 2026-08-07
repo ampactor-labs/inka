@@ -669,6 +669,29 @@ this closes — named at spec_demands_of as the guard of an unfixed
 blowup class (the demand-set explosion is real either way: the gated
 twin set is tiny by construction, the total set is not, and the
 emit's own prelude consumers are non-tail).
+THE RE-ATTEMPT RAN AND PINNED A REAL BREAK (2026-08-07 — the
+worthiness filter dropped, marched; reverted whole, pin untouched
+at a13918ee): m2 assembles and runs (census 0, RSS 2,209,292 KB —
+inside the raised ceiling, the stack cliff crossed safely by the
+tail-form zip), and the emit inflates 343,379 → 403,710 lines
+(+17%); but M3 FAILS ASSEMBLY — the new wheel's own emit of the
+total twin set is WIDTH-BROKEN at a handler-state store:
+m3.wat:340004 `(i32.store offset=12)` fed [i32, f64], and :340019
+an implicit return expecting f64 got i32, both in a
+`$__hstate_237970_wprev` world-save region. THE NEW NAMED PEER:
+`Hβ.emit.twin-state-width` — the twin emission of a
+handler-state-carrying fn (or a state slot whose repr is wide) is
+width-blind at the state store/world-save path; the floor's
+uniform i32 state slots and the twin's repr-true locals disagree
+at offset 12. 5.1a re-sequences behind THIS peer now (the
+generation lag proved the probe order: m2 green is not the
+verdict — the break lives one generation deep). The probe that
+pins the exact fn: emit-diff the m3 region around 340004 against
+m2's emission of the same fn, or grep m3.wat for the hstate
+number's owner. One iteration of today also re-learned kill (1)
+the hard way: a worthiness-SEED probe twins nothing (candidacy
+gates upstream at the site collection) — the closed peer's own
+record already said the working force was the gate, not the seed.
 
 `Hβ.perf.per-decl-arena` — STAMPED whole 2026-08-07 (§11 4.3; the gate
 peer `Hβ.infer.region-on-tee-alloc-absorb` folds in below). WHAT EXISTS,

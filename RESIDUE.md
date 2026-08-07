@@ -568,7 +568,12 @@ LANDED 2026-08-07 (gen under GNU time, the pin's cost line, the peak
 ratchet seen RED at ceiling 1 then banked at 1,830,000 KB over three
 ~1,742,900 KB reads; the self-compile's honest footprint is ~1.70GB /
 ~8.4s, correcting the era-stale ~694MB); (1)
-ImageAlloc vocabulary + $ialloc emit (zero-reader, Law-7-additive);
+ImageAlloc vocabulary + $ialloc emit — ✅ LANDED 2026-08-07 (pin
+b5730e6110ac: the effect + ialloc in memory.mn, one name in
+is_substrate_mem_op grounding it at the root gate by derivation, the
+emit arm riding $alloc with the step-3 fork named; micro
+mn-image-alloc RED→42; the cost loop's first pin measured a ~4%
+cross-invocation RSS spread, named in the pin);
 (2) the six families classified, each a marched step; (3) the
 per-decl bracket + the audit leg, landed together as the TRANSITION
 re-pin; (4) the dormant emit_memory_arena resolves — its real body or

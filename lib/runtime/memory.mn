@@ -145,6 +145,23 @@ effect Alloc {
   heap_reset(Int)
 }
 
+// ImageAlloc — the IMAGE space's allocator (the arena's classification
+// layer, Hβ.perf.per-decl-arena §11 4.3). A record that OUTLIVES the
+// per-decl mark/reset — a spine page, an env or intern growth, a
+// published scheme, an output buffer, a banked diagnostic — allocates
+// through ialloc, and the writer's own row says so: `with ImageAlloc`
+// IS the classification (never a runtime tag), and `!ImageAlloc` proves
+// a path never publishes. The image [0, image-line) is band B's persist
+// set — scratch excluded from snapshots by construction. Emission in
+// the step-1..2 form rides the one bump (a call to $alloc; with no
+// reset live the spaces are indistinguishable); step 3 forks the
+// pointer when the image-map fold draws the image/scratch boundary,
+// and the per-decl reset lands with it.
+effect ImageAlloc {
+  // (size) -> ptr
+  ialloc(Int) -> Int
+}
+
 // Pure — the empty effect row. Pure is not an effect with operations
 // — it IS the absence of effects. `with Pure` means "this function
 // performs no effects."

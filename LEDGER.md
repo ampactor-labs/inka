@@ -35,6 +35,25 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE IMAGE GETS ITS VERB — arena step 1 lands the
+  ImageAlloc vocabulary (pin b5730e6110ac — CLEAN m2 == m3, census 0;
+  micro mn-image-alloc RED→42). The classification layer the six image
+  families will declare: `effect ImageAlloc { ialloc(Int) -> Int }` in
+  memory.mn with the design note; one name added to
+  is_substrate_mem_op — which grounds the effect at the root gate BY
+  DERIVATION (effect_ops_substrate_grounded scans the op table; no
+  second list to maintain); the emit arm in the step-1..2 form (a
+  $alloc call — with no per-decl reset live the spaces are
+  indistinguishable, so the row carries the truth and the pointer
+  forks at step 3's TRANSITION, named at the arm). Step 0's machinery
+  closed its first full loop on this pin: the mechanical block carries
+  the machine-written cost line, and it immediately taught something —
+  two same-source m3 runs measured 1,817,356 vs 1,743,620 KB, a ~4%
+  cross-invocation spread against the ±0.03% same-session band the
+  ceiling was derived from. The ceiling stands; the spread is named in
+  the pin. Next: step 2, the six families classified onto ialloc, each
+  a marched step.
+
 - 2026-08-07 · ▶▶▶ THE GRADE READS THE LATTICE — Phase 4.2 deletes the
   additive count into the mode-paired Usage walk
   (pin 6cd6281a971f — CLEAN m2 == m3, census 0; BOTH ownership

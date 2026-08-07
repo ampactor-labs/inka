@@ -4295,6 +4295,14 @@ fn emit_expr(expr) = match expr {
       wat_emit("    (i32.shl)\n")
     } else if import_name == "alloc" {
       wat_emit("    (call $alloc)\n")
+    } else if import_name == "ialloc" {
+      // The IMAGE allocator (arena step 1-2 form, memory.mn's own note):
+      // rides the one bump — with no per-decl reset live the spaces are
+      // indistinguishable, so the classification lands at the ROW while
+      // the emission stays $alloc. Step 3 forks this to $ialloc over its
+      // own pointer when the image-map fold draws the boundary, in the
+      // same TRANSITION that lands the reset bracket.
+      wat_emit("    (call $alloc)\n")
     } else if import_name == "heap_mark" {
       // The heap line's HOME is the strategy's (per-instance global vs the
       // shared cell) — the impl fn beside $alloc owns it; the call site is

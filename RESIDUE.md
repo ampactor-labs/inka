@@ -1799,14 +1799,35 @@ extension changing nothing. The arc's own acceptance instrument
 +25% rise unexplained is blessing around the instrument, so the whole
 build reverted per the discipline. WHAT SURVIVES: the guard is sound
 and re-lands with the deletion; the fixture battery proves the
-correctness face. NAMED NEXT PROBE: movers_diff on the raw-publish
-tree (rebuild uncommitted) — trace ONE mover's trial-vs-final rows at
-its charge sites and name the +172's mechanism (candidates: the
-trial's exit rows now carry live edges the final's fingerprints
-render as open where the old cut said closed — a comparison-SURFACE
-shift, re-baseable with justification; or a REAL under/over-resolve
-divergence — a defect). The deletion re-lands with the answer, never
-on momentum. Then the movers measurement fires the pre-committed
+correctness face. THE TRACE RAN AND CLOSED THE RUNG (2026-08-07, the movers-line cap
+lifted probe-only for full name sets): the +172 are exactly 172 new
+movers and they are RECURSIVE FNS ACROSS EVERY SUBSYSTEM (binop_loop,
+diag_message, dispatch_request, the gate machinery's own walks) — the
+mechanism is the TRIAL-FOLDS/FINAL-DOESN'T ASYMMETRY: the trial has
+completion events (trial_judge_group's fold), the final has NONE, so
+under the raw publish the trial's recursive rows fold closed while
+the final's keep raw self-edges, and every recursive fn's fingerprint
+diverges. THE DEEPER CLARIFICATION, read off the artifact: the
+current cut ALREADY IS the (c)-separation — row_without_self drops
+ONLY edges chasing to the fn's OWN cell; co-member edges survive
+live. The defect the whole arc named (co-member cutting) is already
+fixed; B6-as-written predates that landing. The self-drop is
+LOAD-BEARING while the second pass exists (the final has no
+completion event to close what the exit leaves open), and R ∪ R = R
+makes dropping the self edge at the OWN cell lossless. B6 therefore
+CLOSES as already-satisfied-in-substance; the literal
+row_without_self deletion re-opens only when the final pass itself
+deletes (the rung's endpoint), at which point no second judgment
+exists to disagree. THE MOVERS PATH FORWARD is the 686's actual
+content, and its first flip is IN HAND (movers_diff's own output):
+fill_row trial `!27+28+-` vs final `!27+-` — the trial's row carries
+interned effect 28 the final drops (the fill/float channel), and
+process_lowpass flips an OWNERSHIP GRADE (buffer: ref→own — the
+4.2-landed grade's forward-callee order-dependence, trial vs final
+resolution states). NAMED NEXT PROBE: name interned effects 27/28,
+then trace fill_row's charge sites for where the trial gains 28 and
+the final loses it — the flip's mechanism decides whether the fix is
+a charge-freshness read or the grade's cross-pass determinism. Then the movers measurement fires the pre-committed
 scheme-object rule. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

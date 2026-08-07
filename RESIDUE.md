@@ -2267,6 +2267,36 @@ which of the three differences selects the t-sort path; the fix
 re-mints or sorts correctly at birth (the quantify_ctor_row
 precedent), and the crucible is show_list's own shape as a
 fixture, seen RED.
+THE DISCRIMINATOR SUITE RAN (2026-08-07, scratch fixture, six
+shapes solo-queried): sl (entry calling its FORWARD worker, bare
+call) is LOSSY — bare t-sort row, no presents at all; sb (single
+index-recursive), sc (fn-arg first), sd (non-recursive), se (bare
+forwarder to a BACKWARD callee), and sf (forwarder to THE SAME
+forward worker plus one sibling `++ "!"` charge) are ALL HONEST —
+Memory + Alloc + r-sort connected rows. The worker sl_from itself
+publishes honest. THE SELECTOR: textual CALLER-BEFORE-CALLEE, and
+the sf result kills both simpler stories (not forward-ness alone —
+sf is forward too and honest because it is judged AFTER the worker
+in this walk; not the bare-call shape — se is bare and honest).
+The walk that loses is the one that reads the callee's PREREG
+scheme: its params are bare t-placeholders (no fn shape exists at
+registration), quantified TYPE-sort by the floor and freshened
+into ORPHAN copies at the caller's instantiation — copies the
+callee's later judgment never fills (its own cells bind, not the
+copies), so the caller's charge chains nothing that ever grounds,
+and the presents of the instantiated row vanish with it. THE OPEN
+MECHANISM QUESTIONS for the trace: (1) where exactly the
+instantiated row's PRESENTS get lost (the prereg row is bare-open
+— it HAS no presents; the caller's row = the kept live cell edge —
+resolved by walk end it should fold honest; the query still shows
+bare — so either the publish snapshot captured pre-resolution, the
+edge was dropped, or the resolution's render lies); (2) where sl's
+param's TFun render (with its t-sort row) comes from when sl's
+body never applies render. THE TRACE: read infer_call's
+forward-ref arm end to end for the sl shape, and probe sl's
+published scheme's row cell state at walk end (bound or free; to
+what). The crucible stands: sl+sl_from as a fixture, RED on the
+bare row.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

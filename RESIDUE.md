@@ -2239,6 +2239,34 @@ show_list call — where the lambda's Memory+Alloc detaches), fix
 at the root, and grow a crucible (a declared-!Alloc caller over a
 HOF-allocating callee, seen RED). D8's gate inherits: the row
 residuals classify only after this class closes.
+THE DIG'S FIRST CUT NAMED THE SORT (2026-08-07): the 5-line repro
+does NOT reproduce — `fn shout(xs) = map((x) => "{x}!", xs)`
+solo-judges HONEST (`with Memory + Alloc`), and the contrast
+between the honest and the lossy is visible in the projected VAR
+SORTS: map's published row is `Memory + Alloc + r33878` with the
+SAME r-sort var as its f param's row — connected, grounded; 
+show_list's published row is a bare `t33279` with its render
+param's row a DIFFERENT bare `t33282` — TYPE-sort cells,
+disconnected, no content. The quantify_ctor_ty comment names this
+exact disease for AUTHORED fn-typed fields ("parse_type_ty mints
+the tail as a TYPE handle, which free_in_row never collects and
+instantiate can't freshen, so the tail stayed a single free var
+that finalize closed to Pure" — fixed there by re-minting), but
+show_list carries NO annotations: an UNANNOTATED path also mints
+fn-shape row positions as type-sort cells. A t-sort row cell is
+invisible to free_in_row (no quantification), unfreshenable by
+instantiate, uncollected by the signature keep — its charges drop
+at the prune and the published row reads bare. show_list vs map
+differ in: module (types.mn vs prelude), recursion shape
+(index-recursive self-call vs the prelude loop), and param
+position of the fn-arg (2nd vs 1st). THE NAMED NEXT PROBE: find
+the minting site — where a TFun shape built by UNIFICATION for an
+unannotated param mints its row position (walk_expr's apply path /
+unify's fn-shape builder; graph_fresh_ty vs graph_fresh_row), and
+which of the three differences selects the t-sort path; the fix
+re-mints or sorts correctly at birth (the quantify_ctor_row
+precedent), and the crucible is show_list's own shape as a
+fixture, seen RED.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

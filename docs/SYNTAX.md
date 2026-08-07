@@ -616,13 +616,23 @@ The construct reads top-to-bottom (vertical) or left-to-right (inline). After `>
 
 ### `><` branch typing
 
-Branch validity is a TYPE fact, not a layout fact. A `><` branch
-must be stage-typed (a pipeline / function of the composed input);
-a value tuple where stages belong surfaces at infer time with a
-Reason chain back to the `><` site (peer handle
-`Hβ.infer.pcompose-branch-stage-type`). The parser never inspects
-branch shape — parse-time form classification is the
-eager-form-commitment drift (`protocol_parse_is_eager_graph_projection.md`).
+A `><` branch is a VALUE computation — "each branch has its own
+input" means the branch IS the applied pipeline, a complete
+expression whose result the fanout tuples (every render example
+above is one: `audio_left |> compress |> limit` is the limited
+signal, not a function awaiting it). So branch validity is the
+branch expression's ordinary typing: the value boundary evaluates
+it, the tuple carries its result, and a genuinely ill-typed branch
+surfaces as the unification failure it is, with a Reason back to
+its own site. There is no branch-shape judgment — four spellings
+of the same fanout (calls, literals, pipes, bare vars) are one
+type and one verdict (the quartet gate,
+`tests/frontier/mn-pcompose-value-branches.mn`). The stage
+requirement belongs to `<|` alone, where each branch is APPLIED to
+the borrowed input and a non-function branch fails that
+application's unification. The parser never inspects branch shape —
+parse-time form classification is the eager-form-commitment drift
+(`protocol_parse_is_eager_graph_projection.md`).
 
 ### `~>` — tee (handler-attach)
 
@@ -2021,7 +2031,6 @@ un-normalized source the formatter has not yet touched).
 | `E_OrphanHandlerAttach` | `~>` with no preceding chain                | `Unspecified`        | delete `~>` or supply body                     |
 | `E_PipeIntoComplete`  | `x \|> f(…)` where `f(…)` has no hole (already a complete value, not a `A -> B`) | `MaybeIncorrect` | leave a hole for the piped value (drop an arg or mark it `??`) |
 | `E_PipeHoleAmbiguous` | `x \|> f(…)` where `f(…)` has more than one hole and none is marked `??` | `MaybeIncorrect` | mark the pipe's target field with `??` (`x \|> clamp(0, ??, 255)`) |
-| `E_BranchNotStage`    | `><` branch is a value, not a stage (infer-time; peer `Hβ.infer.pcompose-branch-stage-type`) | `MaybeIncorrect` | rewrite branch as a pipeline |
 | `E_NotAKeyword`       | user typed `for`/`while`/`loop`/`break`/`continue`/`return` | `MaybeIncorrect` | rewrite as verb form per substrate             |
 | `E_PatternAlternationBindingMismatch` | branches in `\|` bind different names or types | `MaybeIncorrect` | adjust patterns to bind same names with unifiable types |
 | `E_ResumeOutsideArm`  | `resume` outside a handler-arm body           | `Unspecified`        | move the resume into an arm; the continuation only exists there |

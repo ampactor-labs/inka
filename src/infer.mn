@@ -4684,13 +4684,6 @@ fn infer_fanout(fan_own, left, right, handle, span: ValidSpan) = match fan_own {
     branch_divider(span)
     let r_edge = infer_fanout_value_boundary(right, span, "right")
     branch_exit(span)
-    // Branch validity is a TYPE fact (SYNTAX.md §«>< branch typing»): each
-    // branch must be stage-shaped — a pipeline / function of the composed
-    // input — never a bare value where a stage belongs. Read the branch
-    // shape live and surface E_BranchNotStage with a Reason back to the
-    // `><` site (peer Hβ.infer.pcompose-branch-stage-type).
-    check_branch_is_stage(left, span)
-    check_branch_is_stage(right, span)
     let edges = [l_edge, r_edge]
     graph_boundary_set(handle, FanoutBoundary(edges))
     graph_bind(
@@ -4756,36 +4749,6 @@ fn infer_fanout_value_boundary(branch, span: ValidSpan, label: String) = match b
 
 fn boundary_result_ty(edge) = match edge {
   BoundaryEdge(result_h, _, _, _, _) => TVar(result_h),
-}
-
-// A `><` branch is stage-shaped iff it is a pipeline (PipeExpr — a
-// chain of stages) or a function value (TFun — a stage applied to the
-// composed input). A bare value (literal / non-function var / record)
-// where a stage belongs is E_BranchNotStage, with a Reason back to the
-// `><` site (SYNTAX.md §«>< branch typing»). The check reads the branch
-// node shape AND its inferred type live — never a parse-time form
-// commitment (the parser never inspects branch shape).
-fn check_branch_is_stage(branch, span: ValidSpan) = match branch {
-  N(body, _, bh) => {
-    let is_pipe = match body {
-      NExpr(PipeExpr(_, _, _)) => true,
-      _ => false,
-    }
-    if is_pipe {
-      ()
-    } else {
-      let bnode = graph_chase(bh)
-      let is_fn = match bnode {
-        GNode(NBound(TFun(_, _, _)), _) => true,
-        GNode(NBound(TVar(_)), _) => // not-yet-resolved — productive
-        true,
-        GNode(NFree(_), _) => // open — productive-under-error
-        true,
-        _ => false,
-      }
-      if is_fn { () } else { report(EBranchNotStage(span)) }
-    }
-  },
 }
 
 // The `FanShare` (`<|`) shape of fanout inference — one input

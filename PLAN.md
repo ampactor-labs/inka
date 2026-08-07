@@ -1562,14 +1562,21 @@ re-read syntactic form to decide what the graph already answers.*
   `Hβ.egraph.extraction-cost-composes-repr`: a future non-shrinking rule's
   "cheaper" composes repr/rows/use-counts as a projection, never a
   term-shape fn — gated where band G's rules grow (5.5).
-- **2.2 · The shape-keyed judgment tier.** A *partial* match on `ast_kind_of`
-  outside the parser convicts; a *total* structural fold does not, because
-  exhaustiveness makes a missed case a compile refusal. `E_BranchNotStage`
-  becomes type-keyed as a consequence rather than a special case — today it
-  fires on `(inc(a)) >< (inc(b))` and `(1) >< (2)`, stays silent on
-  `(a |> inc) >< (b |> inc)` and `(a) >< (b)`, all four the same type, all four
-  emitting correct values. The formatter's five chain arms were the same class,
-  dead since birth.
+- **2.2 · The shape-keyed judgment tier** — ✅ LANDED 2026-08-07 (pin
+  e1ef0bd41417, 334 lines lighter). The law: a *partial* match on
+  `ast_kind_of` outside the parser convicts; a *total* structural fold does
+  not, because exhaustiveness makes a missed case a compile refusal. The
+  tier's census found one live member: `check_branch_is_stage`, judging `><`
+  branches by spelling against its own organ's semantics (the value boundary
+  evaluates every branch as a value; `<|`'s stage requirement is the
+  application unification and never needed a special case). Deleted whole
+  with the `EBranchNotStage` class; the quartet gate
+  (`tests/frontier/mn-pcompose-value-branches.mn`, seen RED at four
+  diagnostics) asserts one verdict for four spellings; SYNTAX §«`><` branch
+  typing» rewritten to the value-branch law. The formatter's five chain arms
+  were confirmed history (fixed 2026-07-25), and `ast_kind_of`'s sixteen
+  remaining consumers all live in the formatter, whose *output* is shape —
+  the one legitimate shape-reader outside the parser.
 - **2.3 · The anonymity tier.** A lambda that escapes its lexical site, carries
   a non-Pure row, or lands on a parameter whose row var is quantified is a named
   stage in hiding. 490 of 3,469 emitted wheel functions are anonymous, and four

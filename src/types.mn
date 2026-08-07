@@ -1805,7 +1805,6 @@ type DiagKind
   // the label-resolution detail
   | EUnknownArgLabel(String, Span)
   | EFeedbackNoContext(Span)
-  | EBranchNotStage(Span)
   // field, type_name
   | ERecordFieldExtra(String, String, Span)
   // field, type_name
@@ -1990,7 +1989,6 @@ fn diag_span(d) with Pure = match d {
   EResumeWorldMismatch(_, _, s) => s,
   EUnknownArgLabel(_, s) => s,
   EFeedbackNoContext(s) => s,
-  EBranchNotStage(s) => s,
   ERecordFieldExtra(_, _, s) => s,
   ERecordFieldMissing(_, _, s) => s,
   EPatternInexhaustive(_, _, s) => s,
@@ -2047,7 +2045,6 @@ fn diag_source(d) with Pure = match d {
   EResumeWorldMismatch(_, _, _) => "infer",
   EUnknownArgLabel(_, _) => "infer",
   EFeedbackNoContext(_) => "infer",
-  EBranchNotStage(_) => "infer",
   ERecordFieldExtra(_, _, _) => "infer",
   ERecordFieldMissing(_, _, _) => "infer",
   EPatternInexhaustive(_, _, _) => "infer",
@@ -2104,7 +2101,6 @@ fn diag_code(d) with Pure = match d {
   EResumeWorldMismatch(_, _, _) => "E_ResumeWorldMismatch",
   EUnknownArgLabel(_, _) => "E_UnknownArgLabel",
   EFeedbackNoContext(_) => "E_FeedbackNoContext",
-  EBranchNotStage(_) => "E_BranchNotStage",
   ERecordFieldExtra(_, _, _) => "E_RecordFieldExtra",
   ERecordFieldMissing(_, _, _) => "E_RecordFieldMissing",
   EPatternInexhaustive(_, _, _) => "E_PatternInexhaustive",
@@ -2312,7 +2308,6 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EResumeWorldMismatch(da, db, _) => "resume cardinality mismatch: {show_discipline(da)} vs {show_discipline(db)}",
   EUnknownArgLabel(detail, _) => detail,
   EFeedbackNoContext(_) => "`<~` used outside an iterative context",
-  EBranchNotStage(_) => "`><` branch is a value, not a stage",
   ERecordFieldExtra(field, tn, _) => // drift-audit: ignore — diagnostic message string, not a control keyword
   "record literal has unknown field '{field}' for type {tn}",
   ERecordFieldMissing(field, tn, _) => // drift-audit: ignore — diagnostic message string, not a control keyword

@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE SHAPE-KEYED BRANCH JUDGMENT DELETED — the arc
+  loop's third iteration lands Phase 2.2 (pin e1ef0bd41417 — CLEAN
+  m2 == m3 at 334,510 lines, census 0; 334 lines lighter than the prior
+  pin, the deletion measured). The tier's census found one member left:
+  check_branch_is_stage, a partial shape match judging `><` branches by
+  spelling — PipeExpr passed, TFun/TVar/NFree chased types passed,
+  everything else drew E_BranchNotStage. The quartet fixture
+  (tests/frontier/mn-pcompose-value-branches.mn) saw the gate RED on the
+  prior pin exactly as §11 measured: `(inc(a)) >< (inc(b))` and
+  `(1) >< (2)` convicted twice each (both branches), `(a |> inc) >< (b
+  |> inc)` and `(a) >< (b)` silent, all four : Int, the run already
+  answering 96. The type-keyed truth was in the artifact all along —
+  infer_fanout_value_boundary evaluates each `><` branch as a value and
+  the tuple carries the results, so the check contradicted its own
+  organ's semantics; `<|`'s stage requirement is
+  infer_fanout_apply_one's ordinary application unification and never
+  needed the special case. Deleted whole: the check fn, its two call
+  sites, and the EBranchNotStage variant with its four projection arms
+  (exhaustiveness confirming completeness). SYNTAX §«>< branch typing»
+  rewritten to the value-branch law (its old paragraph mis-transplanted
+  `<|`'s requirement onto `><`, against its own render examples); the
+  diagnostic-table row deleted. The formatter's five chain arms — §11
+  2.2's cited evidence — were confirmed history (fixed 2026-07-25 by
+  the order-independent judge, the comment at format.mn:142 carrying
+  the record), not an obligation. Hβ.infer.pcompose-branch-stage-type
+  never reached RESIDUE — it lived in the check's comment and SYNTAX's
+  paragraph, and dissolved with them (its design premise refuted by the
+  artifact's own measurement). The frontier grows the quartet leg:
+  compile silent (zero E_ lines) + run 96, one verdict for four
+  spellings.
+
 - 2026-08-07 · ▶▶▶ RANK IS A PROJECTION — the arc loop's second
   iteration lands Phase 2.1 (pin 4e7cfc88 — CLEAN m2 == m3 at 334,844
   lines, census 0). The runner's stamp check paid for itself before a

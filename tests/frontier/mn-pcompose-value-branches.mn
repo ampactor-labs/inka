@@ -1,0 +1,25 @@
+// The `><` value-branch quartet (PLAN §11 Phase 2.2): four spellings of
+// the same fanout, every branch : Int, every form emitting correct
+// values. The gate asserts the compile carries ZERO diagnostics and the
+// run answers 96 — a `><` branch is a VALUE computation (the value
+// boundary evaluates it, the tuple carries the results), so no shape of
+// a correct branch may draw a report. The shape-keyed E_BranchNotStage
+// convicted the first two forms and passed the last two on spelling
+// alone; the type-keyed law has one verdict for all four.
+fn inc(x) = x + 1
+
+fn quartet_calls(a, b) = (inc(a)) >< (inc(b))
+
+fn quartet_lits() = (1) >< (2)
+
+fn quartet_pipes(a, b) = (a |> inc) >< (b |> inc)
+
+fn quartet_vars(a, b) = (a) >< (b)
+
+fn main(q) = {
+  let (c1, c2) = quartet_calls(10, 20)
+  let (l1, l2) = quartet_lits()
+  let (p1, p2) = quartet_pipes(3, 6)
+  let (v1, v2) = quartet_vars(20, 30)
+  c1 + c2 + l1 + l2 + p1 + p2 + v1 + v2
+}

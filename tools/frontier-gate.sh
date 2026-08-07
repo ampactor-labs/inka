@@ -2175,6 +2175,26 @@ for i in "${!compilers[@]}"; do
     fail "repr-pin (compile refused)"
   fi
 
+  # ─── The `><` value-branch quartet (PLAN §11 Phase 2.2) ─────────────
+  # Four spellings of one fanout — calls, literals, pipes, vars — every
+  # branch : Int. A `><` branch is a VALUE computation, so the compile
+  # carries ZERO diagnostics and the run answers 96. The shape-keyed
+  # E_BranchNotStage convicted two spellings and passed two; the
+  # type-keyed law has one verdict for all four.
+  pq_err="$dir/pcompose-quartet.err"
+  pq_wat=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-pcompose-value-branches.mn" 2> "$pq_err")
+  pq_diags=$(grep -c 'E_' "$pq_err" 2>/dev/null || true)
+  if [ -n "$pq_wat" ] && [ "$pq_diags" = "0" ]; then
+    printf '%s' "$pq_wat" > "$dir/pcompose-quartet.wat"
+    if wt_asm "$dir/pcompose-quartet.wat" "$dir/pcompose-quartet.wasm" 2>/dev/null && [ "$(wt_run "$dir/pcompose-quartet.wasm" > /dev/null 2>&1; echo $?)" = "96" ]; then
+      pass "pcompose quartet: all four value-branch spellings compile silent and run (96)"
+    else
+      fail "pcompose quartet (assemble/run)"
+    fi
+  else
+    fail "pcompose quartet (diagnostics on a correct fanout: $pq_diags; see $pq_err)"
+  fi
+
   # ─── The relevant tier (affine gains exactly-once) ──────────────────
   # T_OwnUnconsumed fires on an authored `own` the body never consumes
   # (drops) and stays SILENT on a transfer-out (hands_back — the return

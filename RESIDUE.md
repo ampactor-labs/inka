@@ -2483,6 +2483,34 @@ declared set in the combined probe's own print; show_list's final
 publish shows content + shared tail; the 26 row movers fall; the
 crucible's stdin caveat stands (re-cut later; the wheel IS the
 fixture here).
+THE SPLIT BUILT AND THE GUARD FIRED (2026-08-07 — the
+quantification-floor split + the prereg reuse, solo-clean, probed
+against the acceptance and REFUSED: show_list's final publish
+still `raw=t448953@e1 res=t448953@e1`, neg still Pure; reverted
+whole, pin untouched at a13918ee). The refusal DEEPENED the
+forensics one more level: the final's TFun row VALUE holds an edge
+whose ROOT is the free t-cell — the trial's finalize BOUND that
+root (the trial publishes honest), so between the trial's publish
+and the final's, the root is FREE AGAIN: the final's own
+unifications re-root the union (a fresh pass-2 cell winning root
+above the bound one) or an unbind/replace lands elsewhere, and
+the final's finalize writes a root the publish never reads. The
+class is a UNION-ROOT ORDERING dance across passes — deeper than
+any single writer this arc can name without a root-trace. THE
+PEER IS NAMED: Hβ.infer.forward-hof-row-underpublish — a
+final-pass (and solo-link) under-publish of HOF-chained rows,
+crown-adjacent (a pure-published allocator under a declared
+!Alloc is a false absence proof), with the full dossier in this
+entry's chain (iterations 58–68: the histogram, the discriminator
+suite, tests/frontier/mn-hof-forward-row.mn and its stdin caveat,
+the exit/charge/publish probes, the t-sort root, the two refuted
+fixes with their kills). THE NEXT INSTRUMENT, banked for the
+peer's own arc: a graph-write ROOT TRACE — binary-patch
+graph_finalize_row and the row-union writes to eprint (target
+handle, chased root) for the two specimen cells across both
+passes; the ordering dance becomes a printed sequence and the one
+writer falls out. The loop RETURNS TO §11's PHASE ORDER per the
+scope guard; this peer proceeds as its own item.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

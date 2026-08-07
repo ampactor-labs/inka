@@ -1893,7 +1893,56 @@ var-in-final (flat_fill's `n:i` → `n:%0` — trial cells call-site
 contaminated where the final generalizes fresh); after the row half
 lands, the scheme-object rule fires against THIS set — the type-half
 join question takes its fresh design pass (frozen-read extended, or
-polymorphism-as-flow-edges), never the refuted architecture. (2) Decl cells + correspondence edges;
+polymorphism-as-flow-edges), never the refuted architecture.
+THE ROW-CHANNEL STAMP (2026-08-07, the swap's next landing —
+traced, priced, writers enumerated; the artifact verified each
+clause this session). SEMANTICS TRACED: the severing writer is
+pre_register_fn_sig's hand-rolled quantifier —
+`Forall(free_in_ty(fn_ty), fn_ty)` — because free_in_ty(TFun)
+collects the TOP row's free cell (free_in_row's tail collection)
+while generalize's TFun arm FILTERS row-sort handles out of the
+quantifier ("live links — instantiation must SHARE, not freshen",
+infer.mn:6445). Every forward call site therefore instantiates a
+FRESHENED row copy above the mint ceiling; the charge chains the
+copy; row_keep_completion drops it as an unconstrained judgment
+copy; the caller's trial tail CLOSES without the callee's effects.
+Specimen: join_loop (lib/prelude) calls `++` → str_concat
+(lib/runtime/strings, `with Memory + Alloc`); prelude sorts before
+runtime in the weave, so the trial publishes `!Memory+-.` and the
+final `!Memory+Alloc+-.` — the probe's exact fingerprints. THE FIX
+IS A DELETION: publish `generalize(handle)` at pre_register_fn_sig
+(the handle is graph_bound to fn_ty one line above) — the one
+quantification floor, one home; the top-row cell stays
+unquantified-and-shared, every forward charge chains the
+below-ceiling prereg cell the completion prune is DESIGNED to keep,
+and the callee's own judgment fills it (the machinery the bare-row
+landing already routed). THE GATE CONSEQUENCE (writer 3, traced):
+drain_deferred_row_gates calls enforce_row_gate directly at the
+group event, so a cross-group edge still free at the caller's group
+completion is enforced EARLY — today this same early fire on
+severed copies manufactures false T_OverDeclared teachings
+(join_loop's "missing" Alloc IS the severed charge; the 374-count
+family is partly this artifact). The refinement: the group drain
+RE-PARKS gates still row_gate_unresolved; the pass-tail belt
+becomes the tail drain — enforce every survivor against closed
+truth, EInternalInvariant reserved for gates STILL unresolved at
+the tail (B4 refined, not reverted: group-drain what resolved,
+tail-drain the cross-group residue, assert the genuinely missed).
+PRICED (§5.O): the publish fix deletes a drifted second copy of the
+floor (instantiate freshens strictly fewer cells); kept edges
+resolve by compress-on-read, amortized O(1); the drain refinement
+reuses the pending_gates queue (re-defer O(parked), no new store).
+WRITERS ENUMERATED: pre_register_fn_sig's env_extend (the fix) ·
+row_keep_completion (unchanged, now exercised on kept edges) ·
+drain_deferred_row_gates + assert_row_gates_drained (the
+refinement) · instantiate (unchanged — unquantified cells share by
+identity) · enforce_row_gate (unchanged verdicts, now fed closed
+truth) · round_prints/ty_fingerprint (unchanged — A/B equality is
+the metric). PREDICTIONS BANKED AS ACCEPTANCE: movers fall by
+roughly the row-only class (337 of 678); T_OverDeclared falls below
+374 as the false teachings die; census holds 0; the march crosses
+as a TRANSITION. The grade class (267) and type-sort (74) stay,
+each named to its own mechanism. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

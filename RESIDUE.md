@@ -2181,7 +2181,25 @@ arc's remaining drivable classes are the type-sort set (~90-176,
 the scheme-object rule's territory) and the 26 residual row
 movers. The movers arc RESTS here — the instrument keeps its
 zero-tolerance monotone-down law, and rung 3's endpoint (the
-one-pass judge) is the closure for what remains. (2) Decl cells + correspondence edges;
+one-pass judge) is the closure for what remains.
+B5 CLOSES BY MEASUREMENT (2026-08-07): callee_own_row and
+scheme_own_row exist NOWHERE in the tree — already deleted along
+the B-arc's landings (the refs query answers 0 for absent names
+without erroring, a soft facet quirk noted); row_handles_only is
+LIVE (3 refs in the completion machinery) and group_member/
+set_group_members are LIVE (the deferral discriminator reads
+them). Nothing to delete; the ladder's build steps are spent.
+THE ACCEPTANCE RE-DERIVES (forced by the double-kill verdict):
+"movers → 0, then the pass deletes" went circular the moment the
+grade class proved to be the pass's OWN artifact — 250 movers
+exist BECAUSE two judgments exist, so zero is unreachable while
+the second pass lives. The honest D8 gate becomes: every mover
+class either DRIVEN TO ZERO or PROVEN BENIGN-AND-STRUCTURAL (the
+grade class is the latter, by the two builds' measurements); the
+unclassified remainder is the TYPE-SORT set (~90-176) and the 26
+residual row movers — the type-half fresh design pass (the
+scheme-object rule, now FIRED) owns both, and its stamp carries
+this re-derived acceptance. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

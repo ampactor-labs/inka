@@ -585,14 +585,41 @@ mid-inference means the parser ate an arm"'s runtime sibling),
 pointing at a PINNED-BOOT miscompile of the probe SOURCE (the boot
 emits m2; the probe source's demand-fn shapes may tickle a boot
 emission bug — closure record layout, table-index global, or
-evidence slot). NAMED NEXT PROBE, instruments ready: the march's
-m3.coredump (fresh, 50KB) autopsied for the TRUE caller frames
-(wasm-tools/coredump spec), and the 0xcf6e disasm read against
-m2.dis to see WHICH call inside zip_with self-loops; then bisect the
-probe source (spec fns only vs full deletion) to pin the boot-emit
-divergence with emit-diff. The worthiness gate STANDS until this
-closes — named at spec_demands_of as the guard of an unfixed
-emission class.
+evidence slot). SECOND PROBE SESSION (2026-08-07, five more kills — the forensic law:
+count them): (4) the dispatch-corruption hypothesis DIED — 0xcf6e
+disassembles to `call 68 <zip_with>`, the floor's DIRECT self-call
+(no call_indirect anywhere in the loop); (5) "the compiler never
+calls zip_with" DIED — it calls ZIP (enumerate = zip∘range; the
+original refs query asked the wrong name); the depth-1 entry trap
+named the FIRST caller as register_one_op → build_ctor_params →
+enumerate — benign, ≤5 deep; (6) the boot-miscompile hypothesis
+DIED — the clean-vs-probe emit-diff's 1,379 "differing" fns are all
+lambda-NUMBER drift from the probe's own comment lines (zip's one
+diff line is a lambda_idx global rename; emit-diff does not
+normalize lambda-name references inside named fns — a tool
+limitation now known); (7) the enumerate-blowup hypothesis DIED — an
+entry trap on any enumerate list >10k never fired; (8) the
+list_eq_f64 route DIED — all four binary `call 69 <zip>` sites live
+in the generated list_eq_f64, and its depth-1 trap never fired. WHAT
+SURVIVES: the runaway enters zip_with through the CLOSURE-VALUE path
+(the `global.get $zip_with` record passed first-class into a HOF and
+invoked by call_indirect — the one entry the direct-call census
+cannot see), with either a huge legitimate list or a list whose
+len/rest disagree (rest never shrinking what len reports small). The
+coredump and backtrace both cap at 20 frames, so the caller is
+invisible to frames. NAMED NEXT INSTRUMENT, fully specified: the
+CALLER-ID + COREDUMP-MEMORY scheme — patch each call_indirect site
+that can carry the zip_with record (or cheaper: patch zip_with's
+entry to store its ARG-list handles and a per-call counter into
+scratch words 0-2), run to exhaustion, then read the coredump's DATA
+SEGMENT at those addresses (the coredump carries the whole memory
+image; frames cap but memory does not) — the stored words name the
+runaway's input list handles, and lookup of their headers in the
+same image answers huge-vs-corrupt in one read. The worthiness gate
+STANDS until this closes — named at spec_demands_of as the guard of
+an unfixed blowup class (the demand-set explosion is real either
+way: the gated twin set is tiny by construction, the total set is
+not, and the emit's own prelude consumers are non-tail).
 
 `Hβ.perf.per-decl-arena` — STAMPED whole 2026-08-07 (§11 4.3; the gate
 peer `Hβ.infer.region-on-tee-alloc-absorb` folds in below). WHAT EXISTS,

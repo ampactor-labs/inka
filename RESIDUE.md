@@ -692,6 +692,49 @@ its own comment says "now LIVE" — and is recorded here only so the
 stale prose is struck; that distinction between an open gap and a
 resolved one is exactly what an index carries and a comment cannot.
 
+`Hβ.parser.pcompose-nary` — the design stamp for PLAN §11 Phase 3.1
+(banked 2026-08-07 at the Phase 3 felt walk; UNBUILT — this entry is
+what gets built). MEASURED at pin 62542a59bf94: `(inc(1)) >< (inc(2))
+>< (inc(3))` folds left into `((Int, Int), Int)`, so `let (a, b, c) =`
+refuses with "type list arity mismatch: 0 vs 1" + "(Int, Int) vs Int"
+— the violation exactly as §11 3.1 states it. TRACED — three encodings,
+two REFUTED: (A-min) parse the chain into FanShare's
+branches-as-MakeTupleExpr convention — REFUTED by collision: a
+tuple-VALUED branch (`(1, 2) >< (3, 4)`) is indistinguishable from the
+chain encoding, a silent-wrong class; (C) judgment-side flatten of
+left-nested spines with no parser change — REFUTED by the law's own
+words ("must parse N-ary") and by parens-intent conflation (grouping
+does not survive to the AST, so authored nesting and precedence
+folding cannot be told apart); (B) first-branch-left + rest-in-tuple —
+REFUTED: the branches are peers and the shape would lie. THE CHOSEN
+FORM: `><` alone grows a dedicated N-ary carrier — `FanoutExpr([Node])`
+(an Expr variant whose branches are a LIST) — while `<|` KEEPS
+`PipeExpr(PFanout(FanShare), input, branches_tuple)`: the two verbs
+have different operand structure BY NATURE (`<|` is input × branch-set,
+binary; `><` is N peer branches, genuinely N-ary), and the kernel's
+"one PFanout node carrying an arity" is already true at LOWER (the
+STEP 4 collapse); the surface carriers differ, the lowered node is
+one. PRICED (§5.O — each touch a mechanical arm, no new asymptotics):
+parser.mn (the prec-2 chain collect builds FanoutExpr from a `><`
+run), types.mn (the Expr variant; PipeKind/FanOwn untouched — the
+census's CsVerb(PFanout(FanDistribute)) stays keyed on the fanout
+kind), query.mn (expr_child_handles gains the arm; census_matches'
+CsVerb arm matches FanoutExpr as a `><` site), infer.mn (infer_fanout's
+FanDistribute arm walks the list — N value boundaries, TTuple(N)),
+lower.mn (the fanout lowering enumerates the list into the
+arity-carrying runtime record), format.mn (render_compose_chain reads
+the list; the render shapes are unchanged — SYNTAX's vertical/inline
+canon is already N-ary). WRITERS enumerated: those six plus the gates —
+the nary probe graduates to a micro (expect 9), the census fixture's
+`><` roster line keeps counting through the new carrier, and the
+three-way destructure fixture is the RED gate. The felt walk that
+banked this also re-confirmed 3.3's drifts live (lambda list-pattern
+param refuses with six parser warnings; `type X = A + B` refuses
+P_UnexpectedToken; `xs |> len` diagnoses a false E_TypeMismatch while
+emitting 96,768 bytes of correct WAT) and refuted one 3.4 claim in the
+right direction: `-> !` checks CLEAN — SYNTAX's lathe-lag note is
+stale and dies at 3.4.
+
 `Hβ.infer.diverge-shared-memory-row` — RECOVERED 2026-08-07 (PLAN §11
 Phase 2.4; named 2026-05-05 in b139622b as peer G.1, gone from every
 index by 2026-08-05 — drift-9 at the roadmap layer). The original form

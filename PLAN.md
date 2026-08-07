@@ -1621,16 +1621,27 @@ re-read syntactic form to decide what the graph already answers.*
 
 ### Phase 3 · The surface IS SYNTAX
 
-- **3.1 · The N-ary law, written.** *An operator whose result is a PRODUCT has
-  semantic arity and must parse N-ary. An operator whose result is a
-  COMPOSITION or a SET may fold, because folding is meaning-preserving there.*
-  `><` is the sole violator: `a >< b >< c` folds into nested pairs, so a
-  three-way destructure cannot meet it. Faust is the instructive
-  non-precedent — its parallel composition *is* associative, and it can afford
-  that because `,` builds a signal bus that flattens, not a first-class value.
-  Mentl's `><` builds a tuple, and tuple nesting is observable. Two surfaces of
-  one topology (§`><`) cannot have different arities while `<|` takes an
-  explicit N-branch tuple.
+*(The phase's felt walk ran 2026-08-07 at pin 62542a59bf94 — five probes
+through the installed shim; every 3.3 drift confirmed live, the N-ary fold
+measured at the destructure site, one 3.4 claim confirmed in the right
+direction: `-> !` checks clean, the lathe-lag note is the stale half. No
+new DEP found; the map below is accurate at that pin.)*
+
+- **3.1 · The N-ary law, written** — STAMPED 2026-08-07, unbuilt; the
+  design's one home is `Hβ.parser.pcompose-nary` in `RESIDUE.md` (three
+  encodings traced, two refuted — the MakeTupleExpr convention collides
+  with tuple-valued branches, the judgment-side flatten fails the law's
+  own words; the chosen form is a dedicated N-ary `FanoutExpr([Node])`
+  carrier for `><` alone, `<|` keeping its input × branch-tuple shape —
+  different operand structure BY NATURE, one PFanout node at lower). *An
+  operator whose result is a PRODUCT has semantic arity and must parse
+  N-ary. An operator whose result is a COMPOSITION or a SET may fold,
+  because folding is meaning-preserving there.* `><` is the sole
+  violator: `a >< b >< c` folds into nested pairs, so a three-way
+  destructure cannot meet it. Faust is the instructive non-precedent —
+  its parallel composition *is* associative, and it can afford that
+  because `,` builds a signal bus that flattens, not a first-class value.
+  Mentl's `><` builds a tuple, and tuple nesting is observable.
 - **3.2 · `mentl where`** — the derived-badge projection (schedule, repr width,
   resume cardinality), named six times across SYNTAX and PLAN and absent from
   the verb table. It is also the cure for what the two-verb reframe cost: the

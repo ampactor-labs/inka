@@ -504,8 +504,13 @@ movers_max: 474
 # RATCHETED DOWN 36 → 16 at the handler relocation (env_handler + the
 # env machinery → src/env.mn; intern_table/intern_view + intern_probe →
 # src/intern.mn; infer imports both, healing all nine closures at once).
-# The residual 16 is the mcp→main verb-grammar seam alone.
-solo_violations_max: 16
+# RATCHETED DOWN 16 → 0 at the verb-grammar relocation (EntryVerb, the
+# VerbSpec table, parse_cli_args + address/target helpers → src/cli.mn;
+# main and mcp both import it — one grammar, two transports, one home).
+# ZERO IS THE FLOOR AND THE CONTRACT: every module's solo check resolves
+# every name through its own declared imports. Per §11 3.5 this gates
+# the drift-catalog retirement.
+solo_violations_max: 0
 
 # 2026-08-07: the ANONYMITY ratchet (PLAN §11 Phase 2.5, second half) —
 # the census tier's convictions on the wheel link, monotone DOWN. Two

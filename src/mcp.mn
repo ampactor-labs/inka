@@ -29,6 +29,8 @@
 // judge reads the proposal alone (the stdin contract), no lib weave.
 import types
 
+import cli
+
 import driver
 
 import infer

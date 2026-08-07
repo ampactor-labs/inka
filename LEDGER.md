@@ -35,6 +35,27 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE SWEEP REACHES ZERO — the arc loop's twentieth
+  iteration closes the last per-module seam
+  (pin c46691d75a57 — CLEAN m2 == m3, census 0; the sweep 16 → 0).
+  src/cli.mn is born carrying the verb grammar whole: the EntryVerb
+  ADT, EntryHandlerInvocation, the VerbSpec table, parse_cli_args, the
+  cursor-address parse family, and the target helpers — ~300 lines out
+  of main.mn, which keeps only the DISPATCH (running the proven verb
+  is the entry's own job). main and mcp both import cli — one grammar,
+  two transports, one home, exactly as mcp's own comment ("one grammar
+  two transports") had described without the import to make it true.
+  mcp's 16 cascade violations (the ParseError/Invocation/VAt
+  constructors missing, their binders degrading) died with the one
+  import. solo_violations_max ratcheted 16 → 0: THE FLOOR AND THE
+  CONTRACT — every module's solo check resolves every name through
+  its own declared imports, enforced per landing by the frontier's
+  sweep leg. §11 3.5's first half is WHOLE (53 → 17-killed → two
+  seams → 0 across four iterations); the overlay proper (scoped
+  diagnostics, per-file census, file-true spans) remains the stamped
+  second half, and the drift-catalog retirement this zero gates is
+  its own named step.
+
 - 2026-08-07 · ▶▶▶ THE HANDLER SEAM CLOSES — the arc loop's nineteenth
   iteration relocates the env and intern substrates
   (pin 2730fa8557df — CLEAN m2 == m3, census 0; the sweep 36 → 16).

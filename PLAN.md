@@ -1685,12 +1685,13 @@ new DEP found; the map below is accurate at that pin.)*
   `RESIDUE.md` carries both). The sweep re-measured 53 violations across
   13 modules (the 29/18 figure had aged); two one-line imports killed 17
   (verify→graph+io, format→parser), and `solo_violations_max: 36` is the
-  banked ceiling the frontier's sweep leg enforces. The HANDLER SEAM
-  CLOSED 2026-08-07 (pin 2730fa8557df): src/env.mn and src/intern.mn are
-  the state's own modules below infer, one import pair healed all nine
-  closures, and the ceiling ratcheted 36 → 16 — the residual is the
-  mcp→main verb grammar alone (one grammar, two transports, relocating
-  to a home both import).
+  banked ceiling the frontier's sweep leg enforces. THE SWEEP REACHED
+  ZERO 2026-08-07 (pin c46691d75a57, four iterations: 53 measured → 17
+  killed by two import lines → the handler seam closed at src/env.mn +
+  src/intern.mn → the verb grammar relocated to src/cli.mn) —
+  `solo_violations_max: 0` is the floor and the contract, every module
+  resolving every name through its own declared imports, enforced per
+  landing. The zero gates the drift-catalog retirement (its own step).
   The OVERLAY proper (per-module env views: tagged entries, closure
   bitmasks, O(1) lookup filters — real link sets without re-judging,
   scoped diagnostics healing the fmt register, the per-file census cut,

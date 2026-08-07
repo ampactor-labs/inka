@@ -1732,8 +1732,11 @@ new DEP found; the map below is accurate at that pin.)*
   `T_OwnUnconsumed` inside an arming-track class. Scope trued by 4.1's felt
   walk: the LEDGER handles branches and condition-borrows correctly
   (branch_enter/divider/exit, borrow scopes) — this item lives entirely in
-  `count_uses`' grade for UNMARKED params (own.mn's additive IfExpr sum),
-  and its fix stays the prescribed DELETION into `resume_grade`'s ⊗/⊔ fold.
+  `count_uses`' grade for UNMARKED params. STAMPED whole 2026-08-07 (probe
+  grade.mn, both channels measured; `RESIDUE.md` carries the design — the
+  mode-paired `(consume, read)` Usage walk, the two-walks-one-lattice
+  ruling, the writer/reader sets, the no-fixpoint pricing, and the
+  T_UseAfterMove blast contract the march arbitrates).
 - **4.3 · The per-decl arena** (`Hβ.perf.per-decl-arena`, gated on
   `Hβ.infer.region-on-tee-alloc-absorb`). It is a hub, and more rides on it than
   was ever written down: the String=`[Byte]` value-ontology dissolution names it

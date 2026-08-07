@@ -1942,7 +1942,39 @@ the metric). PREDICTIONS BANKED AS ACCEPTANCE: movers fall by
 roughly the row-only class (337 of 678); T_OverDeclared falls below
 374 as the false teachings die; census holds 0; the march crosses
 as a TRANSITION. The grade class (267) and type-sort (74) stay,
-each named to its own mechanism. (2) Decl cells + correspondence edges;
+each named to its own mechanism.
+THE BUILD MARCHED AND THE MARCH REFUSED (2026-08-07, BROKEN —
+reverted whole per the discipline; the kills and the refusals both
+banked). THE FIX WORKS ON ITS CHANNEL, measured: movers 678 → 453
+(225 died — under the 337 prediction because row+grade movers keep
+their grade half), T_OverDeclared 374 → 310 (64 false teachings
+died), and census 2 — two HONEST under-declarations surfaced (weave
+26211: declared GraphRead+Memory+Alloc, body proves +WASI; weave
+47580: the same shape richer), the widenings that ride the re-land.
+THREE REFUSALS: (1) m3 ≠ m4 by 13 lines — ONE function,
+free_in_fields, m4 adding a $__kf local + the multishot yield-floor
+block m3 lacks; both generations' DIAGNOSTIC streams are identical
+(same 453 movers, same census), so the divergence is an EMIT-TIME
+read — the call's suspension classification (cardinality / yieldy
+row) flipping between the m2-run and the m3-run. (2) Peak RSS
+2,176,760 KB against the 1,830,000 ceiling (+19%) — the kept edges
+grow the resolution walks; the flat-cell law's compress-on-read
+(resolve_row_compress generalized to edge sets) is the stamped cost
+answer and was NOT built — the refusal prices its absence. (3) The
+two census errors above (pending widenings, not defects). THE
+DISCRIMINATING PROBE, next: rebuild the fix and run the M5 LEG
+(m4 compiling the wheel) — m4 == m5 means the m3/m4 toggle was the
+OLD BOOT miscompiling a shape the edits newly exercise (the
+generation-lag class one rung deeper; the march's arbitration then
+needs the m5 rung for inference-reaching-emit changes); m4 ≠ m5
+means the fix introduced a genuine nondeterminism — trace the
+free_in_fields call-site classification (which row/cardinality read
+feeds the yield floor) with a binary-patch probe on both
+generations. THE RE-LAND SET, in order: compress-on-read (the cost
+half, priced by refusal 2) · the two +WASI widenings (refusal 3) ·
+the m5 arbitration (refusal 1) · then the same two edits
+(generalize-at-prereg + the drain refinement) unchanged — the
+channel fix itself was never refuted. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

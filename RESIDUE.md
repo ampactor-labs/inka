@@ -2323,6 +2323,27 @@ at exit. READ signature_free_roots and infer_fn's final-pass
 param minting; the fix follows at whichever site lies. Note: the
 fixture's compile exits 1 (unclassified — read its stderr tail at
 the fix landing).
+THE READ RAN AND ONE DEDUCTION IS HARD (2026-08-07): the keep
+machinery is CLEAN — signature_free_roots deep-chases through live
+cells and row_var_is_free tolerates the t-sort mint (its own
+comment documents the parser residue), build_inst_mapping mints
+copies by root sort — and the charge arm
+(infer_call_saturated:4272) unions THE CALLEE ROW VALUE
+(inf_add_row_unified(crow)): presents ride the VALUE and survive
+any prune, so sl's final losing even Memory + Alloc proves THE
+CHARGE NEVER FIRED — the arm's `_ => ()` silent no-charge fallback
+took it, meaning graph_chase(fh) was NOT NBound(TFun) at charge
+time in the final, AFTER the unify at 4255 supposedly bound fh to
+the expected TFun. The charge arm's own `_ => ()` is the
+drift-catalog's silent-fallback shape sitting on a load-bearing
+dispatch — whatever the mechanism, the fix hardens this arm (a
+non-TFun fh at charge time is a refusal or a report, never a
+silent pure). THE DECISIVE PROBE, next: binary-patch the pinned
+boot's judgment of the 50-line fixture — eprint graph_chase(fh)'s
+node kind at the charge arm for sl's call in both passes (one
+binary, seconds per cycle, the forensic-laws method) — and read
+which kind the final sees; the fix follows at the site that
+produced it.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

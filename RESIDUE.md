@@ -2162,7 +2162,26 @@ rebind), so the one changed dimension is the one the grade class
 diverges on. If the surgical form also rises, the grade class
 waits for the pass deletion itself (rung 3's endpoint dissolves
 the second judgment) and the movers ratchet holds at 453 with the
-grade class named as the condemned cadence's own artifact. (2) Decl cells + correspondence edges;
+grade class named as the condemned cadence's own artifact.
+THE SURGICAL FORM ALSO ROSE (2026-08-07 — built, marched CLEAN at
+census 0, movers 453 → 517; reverted whole, pin restored to
+a13918ee). The double kill closes the grade arc with a STRUCTURAL
+verdict: patching the trial's published modes changes what the
+FINAL reads, so the final's own grades shift downstream and the
+divergence RELOCATES up the call chains instead of dying — the
+two-pass cadence cannot converge grades by patching one side; the
+only closures are an iterated shared fixpoint (the rounds
+machinery REGROWN, exactly what rung 3 deleted) or the second
+judgment's deletion. THE GRADE CLASS (250) IS THEREFORE NAMED THE
+CONDEMNED CADENCE'S OWN ARTIFACT — semantically benign (the
+final's resolved-product verdicts ship; the trial's early Ref is
+the conservative direction), measured by the instrument, and it
+dies when the pass dies. The movers ratchet HOLDS AT 453; the
+arc's remaining drivable classes are the type-sort set (~90-176,
+the scheme-object rule's territory) and the 26 residual row
+movers. The movers arc RESTS here — the instrument keeps its
+zero-tolerance monotone-down law, and rung 3's endpoint (the
+one-pass judge) is the closure for what remains. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

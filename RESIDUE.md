@@ -2426,6 +2426,32 @@ the presents-loss reproduces in the stdin link; then the A/B
 re-reads and the layer question (where presents vanish) is asked
 against an oracle that actually carries them. The solo-link
 specimen (neg_names_to_str) remains the ground truth throughout.
+THE REVERT VINDICATED, THE SUSPICION RETIRED (2026-08-07): the
+fix-era wheel binary (march64's m2, still in .build) was queried
+DIRECTLY on both specimens — neg_names_to_str still renders with
+NO row at all (closed pure, no edge to hide behind: the loss is
+REAL under prereg-cell reuse) and show_list still the bare t-var.
+Iteration 64's revert was correct; the render-artifact worry is
+dead. THE SURVIVING CONTRADICTION, exact: with reuse landed, neg's
+trial charge should chain show_list's prereg r-sort cell (shared
+by the floor, below the ceiling, KEPT by edges_keep_completion) —
+neg's published row should be open-with-edge, resolving honest
+once show_list's judgment fills the cell; measured: CLOSED pure.
+Either the charge chained an above-ceiling instantiated copy
+(meaning the prereg publish DID quantify the row cell — check
+generalize's floor against the prereg TFun in the artifact), or
+the prune's below-ceiling keep did not fire (ceiling state at
+neg's exit), or the charge never ran for this call shape. THE ONE
+COMBINED PROBE, next iteration: reuse + movers-cap-lift + the
+exit-row eprint in ONE probe compiler, the WHEEL as input,
+grep neg_names_to_str's exit line and its A/B — every layer
+visible in one run. THE SCOPE GUARD, banked per the stall
+discipline: if the combined probe does not name the lying layer,
+the dossier (fixtures, probes, the four banked truths, this
+contradiction) becomes the named peer
+Hβ.infer.forward-hof-row-underpublish and the loop returns to
+§11's phase order — the dig continues as its own item, not as the
+loop's consumer.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

@@ -2002,7 +2002,50 @@ classifier's input (the callee-row read at call_301588's decision)
 across two draws — the forensic-laws method, one binary, two runs.
 The re-land order STANDS with its reason sharpened: compress-on-
 read first is now load-bearing twice (cost ratchet AND the
-2-GiB-boundary suspect). (2) Decl cells + correspondence edges;
+2-GiB-boundary suspect).
+THE ROOT IS CONVICTED (2026-08-07, five probes in one sitting —
+the dig's terminal form): (1) the 400MB-pad probe EXONERATED the
+2 GiB boundary — the padded clean compiler's output is
+byte-identical to the unpadded (address-shift invariant across
+2^31; the pad reserved untouched pages, RSS 1,826,108 KB, and the
+bump still crossed). (2) The trap-on-spawn probe (the first ran
+VACUOUS — the sed missed the folded call form; the forensic laws'
+honor-the-representation clause bites tools too) re-ran correct
+and CONVICTED: replacing wasi_thread_spawn's one call site with
+unreachable TRAPS the fixed-tree compile — THE COMPILE SPAWNS REAL
+THREADS. (3) The backtrace names the chain whole:
+infer_program_final → infer_stmt_list_planned →
+planned_layer_sweep → judge_blocks → spawn_block →
+spawn_task_impl — the FINAL pass's planned layer sweep runs
+branch judgments on host threads, judge_window = 8 concurrent
+(infer.mn:2145), on every compile, today. (4) The sweep's own
+comment states the precondition my fix broke: "same-layer branches
+share only frozen or partitioned state: THE VALUE-BOUNDARY LAW
+KEEPS PUBLISHED SCHEMES FREE OF LIVE VARS" — the parallel final's
+correctness contract IS the snapshot property rung 3 exists to
+delete. (5) The race site is precise: pre-fix, instantiate's
+freshening gave every caller a PRIVATE row copy, so B2's
+bind_edges_to taught private cells — THE SEVERANCE WAS THE
+ACCIDENTAL RACE-GUARD; the fix un-freshens, so same-layer SIBLING
+callers of one shared forward callee write ONE cell concurrently,
+and the garbled edge list is the flipping k2 read. Every earlier
+symptom closes: run-to-run variance (thread scheduling), the
+judgment streams agreeing while emit differs (the race garbles a
+cell lower reads, coarse counts unaffected), the clean tree's
+stability (disjoint writes under the value-boundary law). THE
+RE-LAND ORDER, corrected by the conviction: (1) judge_window 8 → 1
+— serialize the planned sweep (spawn-join one block at a time =
+no overlap = race-free even over live cells; the condemned pass
+keeps its shape, and the parallel form returns at Phase 9.2 where
+the deterministic handle partition and ATOMIC JOIN WRITES — the
+lattice law's implementation half, a named peer for band E — are
+designed in). Lands FIRST and alone; expect CLEAN (the joins'
+replay is byte-identical to sequential by construction), then
+re-run the same-binary flip probe to CONFIRM determinism. (2)
+compress-on-read (the RSS ceiling). (3) The fix pair + the two
++WASI widenings, marched as TRANSITION with a two-draw
+determinism check in the verdict. The trial's sweep shares the
+constant, so window=1 covers both passes. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

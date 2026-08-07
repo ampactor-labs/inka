@@ -828,7 +828,27 @@ rejection was wrong for THIS record class: §5.U's repr-true
 fields bind records whose readers are repr-aware; shared floor
 arms are not. Acceptance unchanged: the gate-drop march
 assembles, f64-state stays 42, the +17% emit and in-ceiling RSS
-ride the re-attempt. One iteration of today also re-learned kill (1)
+ride the re-attempt.
+THE TWO ARMS AT FINAL PRECISION (2026-08-07): the conversion pair
+already exists as emit_wide_ref/emit_wide_deref (wasm.mn:4696 —
+the arg-boundary box/unbox emit_args_word uses: spill f64 to an
+8-byte cell, word address on the stack; f64.load back). BOTH arms
+key on the typed repr at the site, so floor contexts read RI32
+and no-op byte-identically (Law 7) while twins convert: (ARM 1,
+ready) emit_state_init_writes' value arm appends
+emit_wide_ref(tail_expr_repr(init)) after emit_expr(init) — the
+boxed word enters the floor-owned slot; the LUpval config arm
+stays untouched (already a word). (ARM 2, one region left) the
+install's RESULT READ — the `(call $op_*_handler_result)` the
+fold twin's body carries is LOWER-BUILT body LIR (the direct
+tier), so the unbox hooks where lower constructs that read (wrap
+in the wide-deref when repr_of(lookup_ty(install-node)) is wide)
+or at its emit — the named next read is lower's handler-lowering
+result-read construction site. With both arms the twin's f64
+result typing is satisfied at the source, the header/body agree,
+and the shared arms never change. Then: solo checks, the
+gate-drop probe (the fold twin must assemble), the march, and the
+5.1a re-attempt. One iteration of today also re-learned kill (1)
 the hard way: a worthiness-SEED probe twins nothing (candidacy
 gates upstream at the site collection) — the closed peer's own
 record already said the working force was the gate, not the seed.

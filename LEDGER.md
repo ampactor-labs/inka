@@ -35,6 +35,36 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-06 · ▶▶▶ THE MEDIUM COUNTS ITS OWN SHAPES — Phase 0.3's
+  structural census lands as a query facet (pin 43cc582afdf7 — CLEAN
+  m2 == m3 at 334,486 lines, census 0, crown 8/8, frontier 333/0 with
+  the new leg green). `mentl query <file> "census <shape>"`:
+  CensusShape = CsAnonymous | CsVerb(PipeKind), classified at the
+  grammar's one boundary through show_pipe_kind (the glyph roster
+  appears exactly where the external string enters), the walk mirroring
+  refs_of_name (span-deduped weave scan), the result QRCensus(label,
+  sites) riding render_ref_spans and projecting to AnsRefs at the voice
+  (a proven list never drops to Silence). H6 harvested three voice arms
+  (tentacle_for_question, question_span, query_result_to_answer) the
+  moment the variants landed — the march's census=3 was exactly those.
+  THE FACET'S FIRST RUN was its own instrument: census_matches' `pk ==
+  k` compiled to raw pointer i32.eq until Intent-Boundary annotations
+  (shape: CensusShape, body: NodeBody) routed it to $eq_nPipeKind — the
+  documented pointer-eq class, on an ADT, caught by disassembly. And
+  the felt walk measured the facet's one blind shape: `census <~`
+  answers 0 on files full of `<~` while both sides of the instrumented
+  compare RENDER PFeedback — an eq/match divergence banked with five
+  kills (lexer/prec/kind-table sound; the pointer floor real but not
+  the root; the mixed sentinel/boxed-nullary guard hypothesis REFUTED —
+  its emit_eq_leaf_sum experiment made the march rule BROKEN, m4
+  refusing 18 claims because the one structural == serves the wheel's
+  own row membership, and was reverted whole). The named next probe:
+  binary-patch $eq_nPipeKind's entry, read the raw (a, b) words for the
+  pair that renders identically and compares unequal
+  (Hβ.eq.pipekind-match-eq-divergence, RESIDUE.md). Whole-link counts
+  stand as the wheel-ratchet semantics; the per-file cut rides the
+  per-module overlay peer.
+
 - 2026-08-06 · ▶▶▶ THE SIGNATURE KEEPS ITS ROW — the crown's higher-order
   leak closed at the completion prune, the instance-erasure root closed
   at effect registration, and the handler-residual seam closed at the

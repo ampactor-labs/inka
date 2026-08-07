@@ -858,9 +858,9 @@ fn focus_reason(target) with Memory + Alloc = match target {
 // state); QWhy / QSubstChain are Why-tentacle (walk reason chain);
 // QOwnership is Trace-tentacle (ownership trail); QVerifyDebt is
 // Verify-tentacle (refinement obligations). H6 exhaustive over
-// Question's 13 variants via pattern alternation per SYNTAX.md L956.
+// Question's 14 variants via pattern alternation per SYNTAX.md L956.
 fn tentacle_for_question(question) with Memory + Alloc = match question {
-  QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_) | QUnknown(_) => TentQuery,
+  QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QUnknown(_) => TentQuery,
   QOwnership(_) => TentTrace,
   QWhy(_) | QSubstChain(_) => TentWhy,
   QVerifyDebt => TentVerify,
@@ -872,7 +872,7 @@ fn tentacle_for_question(question) with Memory + Alloc = match question {
 // exhaustive over Question via pattern alternation.
 fn question_span(question) with Memory + Alloc = match question {
   QTypeAt(s) => s,
-  QTypeOf(_) | QIntentOf(_) | QUnresolved | QSubstChain(_) | QEffects(_) | QOwnership(_) | QWhy(_) | QRefsOf(_) | QVerifyDebt | QHandlerProvider(_) | QFlowOf(_) | QUnknown(_) => span_zero(),
+  QTypeOf(_) | QIntentOf(_) | QUnresolved | QSubstChain(_) | QEffects(_) | QOwnership(_) | QWhy(_) | QRefsOf(_) | QVerifyDebt | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QUnknown(_) => span_zero(),
 }
 
 // compose_propose_situation — sparse Situation for a propose gesture.
@@ -922,12 +922,16 @@ fn compose_propose_situation(target_handle, target_reason, prior_turn) with Memo
 // payload, so they project to AnsSilence — the honest "no provable hover here"
 // rather than a fabricated Reason. QRError → AnsSilence: an ill-posed or
 // unprovable question is a valid Silence (voice.mn:265). H6 exhaustive over
-// QueryResult's 12 variants — no wildcard.
+// QueryResult's 13 variants — no wildcard.
 fn query_result_to_answer(result) with Memory + Alloc = match result {
   QRType(ty, reason) => AnsType(ty, reason),
   QRWhy(reason) => AnsReason(reason),
   QRRefs(spans) => AnsRefs(spans, Inferred("refs-of: {int_to_str(len(spans))} reference(s)")),
   QRVerifyDebt(debt) => AnsDebt(debt, Inferred("verify-debt: {int_to_str(len(debt))} obligation(s)")),
+  QRCensus(label, spans) => // The census result is a forensic LIST the graph proved — the same
+  // shape refs-of carries, so it rides AnsRefs (the §7 registry-trap
+  // rule: computed, never dropped to Silence).
+  AnsRefs(spans, Inferred("census: {int_to_str(len(spans))} {label}")),
   QREffects(_) => AnsSilence,
   QRUnresolved(_) => AnsSilence,
   QRChain(_) => AnsSilence,

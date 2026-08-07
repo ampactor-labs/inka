@@ -1,0 +1,22 @@
+// The structural census's gate fixture (Hβ.query.structural-census —
+// PLAN §11 Phase 0.3): one site per countable shape at a KNOWN line, so
+// the frontier leg asserts each census answer contains this file's own
+// located site (link-robust — the census walks the whole judged weave,
+// so absolute counts ride the link set; the fixture's line is the
+// invariant). The `<~` shape is deliberately absent: its census is the
+// banked RED (Hβ.eq.pipekind-match-eq-divergence) until the eq/match
+// divergence on PFeedback closes.
+fn inc(x) = x + 1
+fn fwd(x) = x |> inc
+fn dup(x) = (x) <| (inc, inc)
+fn par(a, b) = (a |> inc) >< (b |> inc)
+fn tee(x) = inc(x) ~> ticker
+fn lam(x) = pick((a) => a + 1, x)
+fn pick(f, x) = f(x)
+effect Tick {
+  tick() -> Int
+}
+handler ticker {
+  tick() => resume(1),
+}
+fn main() = 0

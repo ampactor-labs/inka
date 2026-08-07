@@ -901,6 +901,27 @@ lsp_frame() {
 # on the cleared blocker. The remaining gap is the hover-RESPONSE emission
 # (serve exits 0 having consumed the frames but does not yet write a result);
 # that is Hβ.lsp.transport-runs-frontend's next rung, not a float trap.
+# run_census — the structural-census facet's contract
+# (Hβ.query.structural-census, PLAN §11 Phase 0.3): each countable shape's
+# census answer contains the fixture's OWN located site — link-robust, since
+# absolute counts ride the solo link set and the fixture's line is the
+# invariant. `<~` stays out of the roster: its census is the banked RED
+# (Hβ.eq.pipekind-match-eq-divergence in RESIDUE.md) until the eq/match
+# divergence on PFeedback closes.
+run_census() {
+  local compiler="$1" dir="$2"
+  local doc="$ROOT/tests/frontier/mn-census-verbs.mn"
+  local ok=1 spec q line
+  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14'; do
+    q="${spec%%:*}"; line="${spec##*:}"
+    wt_run --dir "$ROOT" "$compiler" query "$doc" "census $q" > "$dir/census-$line.out" 2>/dev/null
+    if ! grep -q "mn-census-verbs:$line" "$dir/census-$line.out"; then
+      ok=0; fail "census '$q' misses its own site (line $line; see $dir/census-$line.out)"
+    fi
+  done
+  [ "$ok" = 1 ] && pass "structural census: |> <| >< ~> and anonymous each count their own site"
+}
+
 run_lsp_hover() {
   local compiler="$1" dir="$2" label="$3"
   local doc="$ROOT/tests/frontier/mn-lsp-hover-doc.mn"
@@ -1327,6 +1348,7 @@ for i in "${!compilers[@]}"; do
   run_refusal "$compiler" refuse-occurs-check \
     "$ROOT/tests/frontier/mn-refuse-occurs-check.mn" E_OccursCheck "$dir"
   run_lsp_hover "$compiler" "$dir" lsp
+  run_census "$compiler" "$dir"
   run_program "$compiler" handler-forward-ref \
     "$ROOT/tests/frontier/mn-handler-forward-ref.mn" 42 no "$dir"
   # Handler-config defaults — the parameter product at the handler decl

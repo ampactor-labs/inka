@@ -1431,6 +1431,7 @@ fn render_query_result(result) = match result {
     None => "→ no handler installed",
   },
   QRFlowLabel(label, reason) => "→ {show_flow_label(label)}\n  Reason: {show_reason(reason)}",
+  QRCensus(label, spans) => "→ {int_to_str(len(spans))} {label}{render_ref_spans(spans)}",
   QRError(msg) => "error: {msg}",
 }
 
@@ -1453,6 +1454,7 @@ type QueryVerb
   | QVUnresolved
   | QVVerification
   | QVFlow
+  | QVCensus
   | QVUnknownVerb
 
 fn classify_query_verb(w: String) with Pure = if w == "type" {
@@ -1473,6 +1475,8 @@ fn classify_query_verb(w: String) with Pure = if w == "type" {
   QVVerification
 } else if w == "flow" {
   QVFlow
+} else if w == "census" {
+  QVCensus
 } else {
   QVUnknownVerb
 }
@@ -1503,7 +1507,27 @@ fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
   QVRefs => QRefsOf(arg),
   QVProvider => QHandlerProvider(arg),
   QVFlow => QFlowOf(arg),
+  QVCensus => match census_shape_of(arg) {
+    Some(shape) => QCensus(shape),
+    None => QUnknown(raw),
+  },
   QVUnknownVerb => QUnknown(raw),
+}
+
+// The shape classifier at the grammar's one boundary: "anonymous" or one
+// of the five glyphs, matched THROUGH show_pipe_kind (the one glyph
+// projection — the constructor roster appears exactly here, where the
+// external string enters). An unrecognized shape is the honest QUnknown.
+fn census_shape_of(arg) with Memory + Alloc = if arg == "anonymous" {
+  Some(CsAnonymous)
+} else {
+  match find(
+    (k) => show_pipe_kind(k) == arg,
+    [PForward, PFanout(FanShare), PFanout(FanDistribute), PTee, PFeedback]
+  ) {
+    Some(k) => Some(CsVerb(k)),
+    None => None,
+  }
 }
 
 // The verb is the FIRST word (`<verb> [arg]` — the documented query

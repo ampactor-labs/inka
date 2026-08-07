@@ -1497,13 +1497,22 @@ hypothesis. This phase exists because both of the last two tripwires fired.
   docs could promise a verb the CLI does not serve. The verb list is read from
   `mentl help` — the one home, so no second roster can drift. First run: five
   true findings (`where`, `why`, `diagnostics`, `verify`, `at`).
-- **0.3 · The census facet** — `Hβ.query.structural-census`. One projection
-  taking a structural predicate; four consumers (anonymity, shape-keyed
-  judgment, verb-shape, iteration-shape). Today the medium cannot answer *"how
-  much of my own source is `><`?"* or *"how many of my functions have no
-  name?"*, and a 2026-08-05 audit fell back to grep on emitted WAT three times,
-  each a filed `# mentl-skip`. Grep cannot tell code from prose. This is the
-  keystone: Phase 2's tiers have nothing to ratchet against without it.
+- **0.3 · The census facet** — `Hβ.query.structural-census`. ✅ LANDED
+  2026-08-06: `mentl query <file> "census <shape>"` — one projection over the
+  judged weave answering count + located sites, shapes `anonymous` and the
+  verb glyphs classified at the grammar boundary through `show_pipe_kind`
+  (`CsVerb` carries the PipeKind itself), rendered through the refs channel
+  and riding `AnsRefs` at the voice (a proven list is never dropped to
+  Silence). The frontier leg pins each shape counting its own site on
+  `tests/frontier/mn-census-verbs.mn`. TWO measured residues, named: the
+  `<~` shape answers 0 — an eq/match divergence on PFeedback that survived
+  five probe-kills including a reverted emit experiment the march ruled
+  BROKEN (`Hβ.eq.pipekind-match-eq-divergence`, RESIDUE.md, with the named
+  next probe); and counts are whole-link (the per-file cut rides
+  `Hβ.driver.per-module-env-overlay`). The landing's own harvest: the
+  facet's first compare floored to pointer-eq until Intent-Boundary
+  annotations carried the proof — the documented class, caught by the
+  facet's own first run. Phase 2's tiers now have their ratchet surface.
 - **0.4 · The SYNTAX conformance battery** — `tests/syntax/`, one fixture per
   declared form, green-or-named. SYNTAX is the authority and *nothing
   mechanically tests it*; `doc-truth` already applies this exact discipline to

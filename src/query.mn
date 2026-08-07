@@ -15,6 +15,19 @@ import graph
 
 import effects
 
+// The structural census (Hβ.query.structural-census — PLAN §11 Phase 0.3):
+// ONE projection taking a structural shape, answering count + located
+// sites over the program weave — the question the medium could not ask of
+// its own source ("how many of my functions are anonymous?", "how much of
+// this file is ><?") without grep on emitted WAT (three filed mentl-skips
+// in one audit). The first shapes serve the named consumers: anonymity
+// (Phase 2.3's tier ratchets on CsAnonymous) and verb-shape (CsVerb
+// carries the PipeKind itself, classified at the grammar boundary through
+// show_pipe_kind — the one glyph projection, never a second table). The
+// iteration-shape and shape-keyed-judgment consumers ride the same
+// QCensus spine as their detectors move from the audit tiers into shapes.
+type CensusShape = CsAnonymous | CsVerb(PipeKind)
+
 // Sum type covering every forensic question `mentl query` can pose.
 // Each variant corresponds to one `ask(Q)` arm in `query_default`.
 type Question
@@ -47,6 +60,8 @@ type Question
   // "what does the graph already know about key's sensitivity?"
   | QHandlerProvider(String)
   | QFlowOf(String)
+  // "census <shape>" — count + sites of a structural shape in the weave
+  | QCensus(CensusShape)
   | QUnknown(String)
 
 type QueryResult
@@ -64,6 +79,8 @@ type QueryResult
   | QRHandlerProvider(Option(String))
   // IFC projection — the FlowLabel the type already proves
   | QRFlowLabel(FlowLabel, Reason)
+  // census label + the located sites (count = len)
+  | QRCensus(String, [Span])
   | QRError(String)
 
 // The single-op effect that routes every forensic question through
@@ -187,6 +204,7 @@ handler query_default {
         },
       },
     },
+    QCensus(shape) => resume(QRCensus(census_label(shape), census_sites(shape))),
     QUnknown(q) => resume(QRError("unknown query: {q}")),
   },
 }
@@ -336,6 +354,52 @@ fn collect_var_ref_spans(name, i, n, acc) with GraphRead + Memory + Alloc + !Mut
 
 fn span_in(ref acc, ref sp, i) with Memory + Alloc =
   if i >= len(acc) { false } else { if acc[i] == sp { true } else { span_in(acc, sp, i + 1) } }
+
+// ─── The structural census — count + sites of a shape in the weave ──
+//
+// The same walk refs_of_name runs (every node once, span-deduped —
+// re-parsed judgment generations mint one source site many times), with
+// the membership read from the shape. A membership predicate's false arm
+// is the read's honest complement over NodeBody, not a fabricated value.
+fn census_label(shape) with Pure = match shape {
+  CsAnonymous => "anonymous fn(s)",
+  CsVerb(k) => "{show_pipe_kind(k)} site(s)",
+}
+
+fn census_sites(shape) with GraphRead + !Mutate + Alloc + Memory = match graph_snapshot() {
+  Graph(next, _) => census_walk(shape, 0, next, make_list(0)),
+}
+
+fn census_walk(shape, i, n, acc) with GraphRead + Memory + Alloc + !Mutate = if i >= n {
+  acc
+} else {
+  if census_matches(shape, graph_node_body(i)) {
+    let sp = span_of_handle(i)
+    if sp == span_zero() || span_in(acc, sp, 0) {
+      census_walk(shape, i + 1, n, acc)
+    } else {
+      census_walk(shape, i + 1, n, push(acc, sp))
+    }
+  } else {
+    census_walk(shape, i + 1, n, acc)
+  }
+}
+
+// The annotations are Intent Boundaries carrying the eq proof: without
+// them the kinds' `==` floored to pointer i32.eq (the documented
+// pointer-eq-on-names class, here on an ADT — PFeedback's two
+// construction sites compared unequal while a match on either side
+// dispatched PFeedback true; measured [CW] `<~ vs <~` → false).
+fn census_matches(shape: CensusShape, body: NodeBody) with Pure = match shape {
+  CsAnonymous => match body {
+    NExpr(LambdaExpr(_, _)) => true,
+    _ => false,
+  },
+  CsVerb(k) => match body {
+    NExpr(PipeExpr(pk, _, _)) => pk == k,
+    _ => false,
+  },
+}
 
 // span_of_handle — the node's source span, read live from its Reason chain
 // (the parser/infer wrote Located(span, _) at the node). One graph_chase, the

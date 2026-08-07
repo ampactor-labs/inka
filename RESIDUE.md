@@ -83,6 +83,34 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.eq.pipekind-match-eq-divergence` — THE CENSUS'S ONE BLIND SHAPE,
+measured 2026-08-06 and banked with five kills: `mentl query <file>
+"census <~"` answers 0 on files full of `<~` while the other four verbs
+and the anonymity shape count correctly. The instrumented walk printed
+`[CW] <~ vs <~` — BOTH sides of the comparison render PFeedback through
+show_pipe_kind's match — while `pk == k` answers FALSE, an eq/match
+divergence on the same pair, surviving even the structural
+`$eq_nPipeKind` once the Intent-Boundary annotations routed `==` off the
+pointer floor. KILLED IN ORDER: (1) the lexer's `<~` arm sound (60,126 →
+TLtTilde); (2) op_prec(TLtTilde)=2 sound; (3) op_to_pipe_kind →
+PFeedback sound, the binop builder minting PipeExpr uniformly; (4) the
+pointer-eq floor — real (census_matches compiled to raw i32.eq until the
+`shape: CensusShape, body: NodeBody` annotations; the documented
+pointer-eq-on-names class, on an ADT) — fixed, verdict unchanged; (5)
+the mixed sentinel/boxed-nullary hypothesis — a sentinel-vs-record-tag
+arm added to emit_eq_leaf_sum's guard was REVERTED after the march ruled
+BROKEN (m3 ≠ m4, m4 refusing with 18 undischarged claims — the one
+structural `==` serves the wheel's own row membership and dedup, so a
+guard change moves inference wheel-wide; and the census still answered 0
+through m3, refuting the hypothesis independently). THE NAMED NEXT
+PROBE: binary-patch `$eq_nPipeKind`'s entry in the emitted m2 to print
+the raw (a, b) words for the `<~` pair — the two values that render
+identically and compare unequal, read as integers, decide the
+representation question in one run. Instruments preserved at
+.build/research/crown-2026-08-05/ (the verbs-all fixture, the [CW]
+census transcripts). The facet ships with this one shape's blind spot
+named; the frontier leg pins the four sound verbs + anonymity.
+
 `Hβ.query.decl-site-file-coordinates` — a query's Reason span answers in
 the linked blob's coordinates and names no file, so "where is NAME
 declared, as file:line I can open" has no projection: `query src/infer.mn

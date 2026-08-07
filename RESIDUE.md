@@ -633,10 +633,24 @@ read. SUSPECT ON THE BOARD: slice_raw's `let total =
 load_i32(list)` — a representation-BLIND raw read of word 0 as "the
 total" (the prober-must-honor-protocols law at the runtime's own
 source); if any non-slice representation reaches it whose word 0 is
-not a length, total is garbage and the chain follows. NEXT
-INSTRUMENT, one cycle: capture the PARENT chain (w2's words 0-4, two
-levels up) plus f's closure fn-index (names the zipping consumer via
-the table), same globals scheme. The worthiness gate STANDS until
+not a length, total is garbage and the chain follows. FOURTH SESSION (2026-08-07): the parent-chain capture ANSWERED the
+contradiction — lens run 26 ← 27 ← 28 up the chain, so the recursion
+PROGRESSES correctly one element per level; 87,311 deep with 26 left
+means the chain's ORIGIN was ~87,337 long — a number in the range of
+the compile's HANDLE count, sharpening the blind-total suspicion to
+the chain ROOT: word 0 of the original (non-slice) node misread as a
+length (slice_raw's `load_i32(list)` total, or a len() fallback arm)
+mints an 87k-len slice over a small list, and every level below is
+arithmetically consistent. f's closure index = 41 = floor zip's OWN
+pairing lambda ⇒ entry through floor `zip`. Source-level >10k guards
+at ALL FIVE direct zip sites (infer 4051/6038/6096/6279, lower 1538)
+stayed SILENT through a reproduced trap — five more site kills — so
+the entry is the SIXTH zip: enumerate's (prelude:268), whose earlier
+binary guard was MISWIRED (passed __state in the arg slot; its
+silence proves nothing). NEXT INSTRUMENT, one cycle: source-level
+guards inside enumerate (len(xs) at entry), inside rest (the len it
+passes to slice), and inside zip (both args), each printing the
+measured len — the three reads triangulate the first misread word. The worthiness gate STANDS until
 this closes — named at spec_demands_of as the guard of an unfixed
 blowup class (the demand-set explosion is real either way: the gated
 twin set is tiny by construction, the total set is not, and the

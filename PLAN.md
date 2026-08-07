@@ -1765,10 +1765,14 @@ new DEP found; the map below is accurate at that pin.)*
   DEP-GATES on that arc (the DEP-gate is the next thing to build, not a
   stop: the arc is §11's own next phase). 4.3 and 9.1 still converge on one
   boundary; the fleet's 2026-07-17 "output-invariant" refutation stands.
-- **4.4 · Ownership's frontier faces.**
-  `Hβ.ownership.fractional-uniqueness-ref-borrow` (Granule OOPSLA 2024 —
-  the ref/own lattice gains fractional grades where the inference needs
-  them) and `Hβ.ownership.quiet-empirical-gate` — the Hylo bar as a BANKED
+- **4.4 · Ownership's frontier faces.** The quiet gate ✅ LANDED 2026-08-07
+  (verify's quiet-gate ratchet: 83 authored own / 817 authored ref in src/,
+  param-position text count seen RED at ceiling 1, monotone DOWN — each
+  marker the honest grade retires lowers it; the census-shape count is the
+  named refinement). `Hβ.ownership.fractional-uniqueness-ref-borrow`
+  (Granule OOPSLA 2024 — fractional grades where the inference needs them)
+  stays BANKED until a real consumer needs a fraction: the original text of
+  the Hylo bar as a BANKED
   CEILING: the corpus count of authored own/ref markers enters
   verify-baseline and only falls; a rising count IS §4⑤'s inference
   failing, measured instead of felt.

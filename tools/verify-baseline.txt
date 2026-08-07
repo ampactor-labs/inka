@@ -546,6 +546,17 @@ effectful_lambda_max: 394
 # layer 3's arena makes Consume reclaim.
 use_after_move_max: 0
 
+# 2026-08-07: the QUIET gate (§4⑤'s Hylo bar as a banked ceiling, PLAN
+# §11 4.4 — Hβ.ownership.quiet-empirical-gate). Authored own/ref markers
+# in src/, param-position-anchored text count, monotone DOWN — a rising
+# count IS the inference failing, measured instead of felt. Seeded from
+# this turn's read: 83 own (the 4.2 landing's collect_arm_tags drop
+# already banked), 817 ref. Mostly compensation for the pre-4.2 grade;
+# each marker the honest grade retires lowers these. The census-shape
+# count (a graph fact, not a text pattern) is the named refinement.
+authored_own_max: 83
+authored_ref_max: 817
+
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
 # header; no registry here (a `micro:NAME=EXIT` list once documented below

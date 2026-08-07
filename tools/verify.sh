@@ -177,6 +177,25 @@ if C=$(wt_m2_ensure); then
     say "  restructure the site (the arena makes this a use-after-free)."
     fail=1
   fi
+  # The QUIET gate (§4⑤'s Hylo bar, PLAN §11 4.4 — Hβ.ownership.quiet-
+  # empirical-gate): authored own/ref markers in src/, monotone DOWN. The
+  # measured invariant is "if the developer has to think about it, the
+  # inference failed" — a RISING count IS the inference failing, measured
+  # instead of felt. Text-pattern tier (param-position anchored); the
+  # census-shape absorption is the named refinement.
+  cown=$(grep -roE '[(,] *own [a-z_]' src/ | wc -l)
+  cref=$(grep -roE '[(,] *ref [a-z_]' src/ | wc -l)
+  omax=$(grep -E '^authored_own_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  refmax=$(grep -E '^authored_ref_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  say "· quiet gate: $cown authored own, $cref authored ref in src/ — the Hylo bar's counts"
+  if [[ -n "$omax" && "$cown" -gt "$omax" ]]; then
+    say "✗ quiet-gate RATCHET: authored own rose $omax -> $cown — the inference failed somewhere; teach it, do not annotate around it."
+    fail=1
+  fi
+  if [[ -n "$refmax" && "$cref" -gt "$refmax" ]]; then
+    say "✗ quiet-gate RATCHET: authored ref rose $refmax -> $cref — the inference failed somewhere; teach it, do not annotate around it."
+    fail=1
+  fi
   # The ANONYMITY ratchet — the census tier's convictions (PLAN §11 Phase
   # 2.5): the whole-link counts of CsEta (an anonymous fn whose name
   # already exists) and CsEffectfulLambda (a row without a decl home).

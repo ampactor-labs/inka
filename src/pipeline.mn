@@ -617,7 +617,7 @@ fn decl_start_line(handle) with GraphRead = match parse_span_of(handle) {
   Span(sl, _, _, _) => sl,
 }
 
-fn audit_walk(debt, tights, i, fns) with GraphRead + EnvRead + LookupTy + Memory + Alloc + Intern = if i >= len(fns) {
+fn audit_walk(debt, tights, i, fns) with GraphRead + EnvRead + LookupTy + Memory + Alloc + Intern + WASI = if i >= len(fns) {
   []
 } else {
   match fns[i] {

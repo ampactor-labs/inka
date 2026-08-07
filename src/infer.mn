@@ -982,9 +982,19 @@ fn pre_register_fn_sig(name, params, ret_ann, handle, span: ValidSpan) = {
       // freshens per call site. Recursion stays monomorphic — infer_fn binds the
       // handle (graph_bind above + the unify branch) so the vars are bound by the
       // time the body's self-calls instantiate this scheme.
+      // The quantifier is generalize's own floor, ONE home: a hand-rolled
+      // Forall(free_in_ty(fn_ty), ...) here quantified the TOP-row cell —
+      // free_in_ty(TFun) collects the row's free tail — so every forward
+      // call site freshened its row copy above the mint ceiling, the
+      // charge chained the copy, the completion prune dropped it as pure,
+      // and the caller's trial row closed WITHOUT the callee's effects
+      // (join_loop missing str_concat's Alloc — the movers' row channel).
+      // generalize keeps row-sort cells unquantified-and-shared, so a
+      // forward charge chains THIS prereg cell — the live link the prune
+      // is designed to keep — and the callee's own judgment fills it.
       // Located so every reader of this entry's reason (the Why chain, the
       // executable gate's unhandled-effect diagnostic) projects the DECL's span.
-      env_extend(name, Forall(free_in_ty(fn_ty), fn_ty), Located(span, Declared(name)), FnScheme)
+      env_extend(name, generalize(handle), Located(span, Declared(name)), FnScheme)
     },
   }
 }
@@ -2725,7 +2735,13 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
 // parse_effect_list_from flip's law; the pin itself is condemned at
 // the gate, its record there), and a resolved row gates now.
 fn row_gate_unresolved(row_handle) = match graph_chase(row_handle) {
-  GNode(NRowBound(body_row), _) => match resolve_row(body_row) {
+  GNode(NRowBound(body_row), _) => // The COMPRESSING resolve: the re-park re-checks this predicate at
+  // every later group event (the cross-group deferral), so each check
+  // folding the same chain raw re-allocated the fold per event —
+  // compression rebinds the chain to its terminal and the re-checks
+  // ride the one-hop web (the flat-cell law's read half; safe under
+  // the serialized sweep, branch-guarded inside graph_compress_row).
+  match resolve_row_compress(body_row) {
     EfRow(_, _, EtOpen(vs)) => edges_any_free(vs),
     _ => false,
   },
@@ -2848,7 +2864,7 @@ fn enforce_row_gate(name: String, declared_row, has_pure, row_handle, span: Vali
         // bind_open_to_neg's mechanism as the one authored write.
         match declared_row {
           EfRow(_, da, _) => if len(da) > 0 {
-            match resolve_row(body_row) {
+            match resolve_row_compress(body_row) {
               EfRow(_, _, EtOpen(vs)) => graph_bind_row(row_handle, ef_make([], da, EtOpen(vs)), Located(span, Declared(name))),
               _ => (),
             }
@@ -2891,20 +2907,36 @@ fn enforce_row_gate(name: String, declared_row, has_pure, row_handle, span: Vali
 // OWN group's completion — trial_judge_group calls this after the
 // completion fold, when the cycle's chains are closed. Groups run
 // sequentially, so the parked set at a group's exit is that group's.
+// A gate whose row still carries a FREE edge here is a CROSS-GROUP
+// forward ref — the caller's group completion is not that edge's
+// resolution event (join_loop's edge fills at str_concat's group, a
+// file deeper in the weave) — so it RE-PARKS instead of enforcing
+// early: the early fire judged a half-row and manufactured false
+// T_OverDeclared. Each subsequent group event re-checks it, and it
+// enforces the moment its chains close; the pass tail drains whatever
+// outlives every group.
 // CONDEMNED FORM (the resolved design D4): when completion makes parks
 // impossible by construction, the park/drain machinery deletes whole.
 fn drain_deferred_row_gates() = each(
   (g) => match g {
-    (name, declared_row, has_pure, row_handle, span) => enforce_row_gate(name, declared_row, has_pure, row_handle, span),
+    (name, declared_row, has_pure, row_handle, span) => if row_gate_unresolved(row_handle) {
+      defer_row_gate(g)
+    } else {
+      enforce_row_gate(name, declared_row, has_pure, row_handle, span)
+    },
   },
   drain_row_gates()
 )
 
-// B4's belt at the pass tail: with every gate draining at its group's
-// completion event, the tail must read EMPTY — a survivor names a
-// missed channel (loud, census-visible via EInternalInvariant) and
-// still enforces (the belt reports, never drops). A named walk, not a
-// fold lambda (the report's row would deny the lambda a decl home).
+// B4's belt at the pass tail, refined by the row-channel stamp: gates
+// re-parked for CROSS-GROUP edges legitimately outlive every group
+// event and drain HERE, where the whole pass's chains have closed —
+// they enforce silently against closed truth. EInternalInvariant is
+// reserved for a gate STILL unresolved at the tail: a chain that
+// survived the entire pass names a genuinely missed channel (loud,
+// census-visible) and still enforces (the belt reports, never drops).
+// A named walk, not a fold lambda (the report's row would deny the
+// lambda a decl home).
 fn assert_row_gates_drained() = assert_gates_walk(drain_row_gates())
 
 fn assert_gates_walk(gs) = if len(gs) == 0 {
@@ -2912,10 +2944,14 @@ fn assert_gates_walk(gs) = if len(gs) == 0 {
 } else {
   match last(gs) {
     (name, declared_row, has_pure, row_handle, span) => {
-      report(EInternalInvariant(
-        "a parked row gate for '{name}' survived to the pass tail — the group drain missed a channel",
-        span
-      ))
+      if row_gate_unresolved(row_handle) {
+        report(EInternalInvariant(
+          "a row gate for '{name}' is still unresolved at the pass tail — a chain survived the whole pass",
+          span
+        ))
+      } else {
+        ()
+      }
       enforce_row_gate(name, declared_row, has_pure, row_handle, span)
     },
   }
@@ -4096,7 +4132,7 @@ fn fn_arg_directional_positions(dps, arg_handles, span: ValidSpan, i) = if i >= 
 // A declared param row is a CAP exactly when its tail is concrete —
 // EtClosed (`with Tick`) or EtAll (`with !WASI`); an open tail is the
 // polymorphic flow channel. Bound edges resolve through the chase.
-fn row_cap_form(row) with GraphRead + Memory + Alloc = match chase_row_deep(row, 0) {
+fn row_cap_form(row) with GraphRead + Memory + Alloc + WASI = match chase_row_deep(row, 0) {
   EfRow(_, _, EtClosed) => true,
   EfRow(_, _, EtAll) => true,
   _ => false,

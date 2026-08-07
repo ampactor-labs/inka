@@ -35,6 +35,36 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE ROW HALF LANDS — the snapshot's row channel closes
+  (pin a13918ee5784 — TRANSITION m3 == m4, census 0; movers 678 → 453,
+  T_OverDeclared 374 → 310; cost 13.68s / 2,105,980 KB inside the raised
+  ceiling). The stamped pair, landed exactly as stamped: (1) the prereg
+  publish is generalize(handle) — the hand-rolled Forall quantified the
+  top-row cell (free_in_ty(TFun) collects the tail) where generalize's
+  floor keeps row-sort cells unquantified-and-shared, so forward charges
+  now chain the live prereg cell the completion prune keeps, and the
+  callee's judgment fills it; (2) the group drain re-parks gates still
+  unresolved (cross-group edges) instead of enforcing half-rows early,
+  and the pass-tail belt enforces closed truth, reserving
+  EInternalInvariant for the genuinely missed. With them: the two +WASI
+  widenings the honest rows exposed (row_cap_form, audit_walk — the
+  census's own findings), and the gate-path resolves swapped to the
+  compressing form (measured VACUOUS for the parked set — unresolved
+  chains fold nothing — kept as the correct read for the resolved
+  majority). THE MEASUREMENTS AGAINST THE STAMP: movers fell 225 (the
+  prediction said ~337 — the row+grade mixed class keeps its grade
+  half); 64 false teachings died; determinism held through the full
+  ladder (m3 == m4 byte-exact, the two-draw probe identical). THE PRICE,
+  attributed by variant runs: +265 MB is the kept-edge substrate itself
+  (variant without re-parks: 2,080,964 KB), +106 MB the re-park
+  re-checks — representation weight, not re-walk waste; the ceiling rose
+  to 2,250,000 with the reclaimers named (the arena's columns-first
+  form; rung 3's endpoint where the second pass deletes). What remains
+  of the movers: the grade class (param modes read as callee-product
+  VALUES — order-dependent until modes ride edges or completion
+  propagation) and the 74-ish type-sort set (in-group call-site
+  contamination — the scheme-object rule's territory).
+
 - 2026-08-07 · ▶▶▶ THE SWEEP SERIALIZES — the parallel final convicted and
   stood down (pin 737147469c02 — CLEAN m2 == m3, census 0; cost 12.02s /
   1,816,340 KB, the ~3s wall delta the serialization's honest price).

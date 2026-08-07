@@ -2059,7 +2059,26 @@ re-land march MEASURES first and builds compression only if the
 ratchet refuses (never a pre-emptive tune of condemned-adjacent
 machinery); (3) the two +WASI widenings (the census-2 sites), then
 the fix pair, marched as TRANSITION with the two-draw determinism
-check inside the verdict. (2) Decl cells + correspondence edges;
+check inside the verdict.
+THE WHOLE SET LANDED (2026-08-07, pin a13918ee5784 — TRANSITION
+m3 == m4, census 0, movers 678 → 453, T_OverDeclared 374 → 310;
+the LEDGER's THE ROW HALF LANDS carries the arc). The stamp's
+mechanism held exactly; its magnitude prediction was high (225
+died, not ~337 — mixed row+grade movers keep their grade half);
+the compression swap measured VACUOUS for the parked set
+(unresolved chains fold nothing) and stays as the correct read for
+the resolved majority; the peak ceiling rose to 2,250,000 with the
+cost component-attributed by variant runs (kept edges +265 MB,
+re-parks +106 MB) and the reclaimers named. THE MOVERS PATH
+FORWARD from 453: the GRADE class (param modes are read as
+callee-product VALUES during usage_of — order-dependent for
+forward callees until the mode rides an edge or completion
+propagation; 4.2's banked order-dependence, now the dominant
+mover flavor) and the TYPE-SORT set (in-group call-site
+contamination of shared cells — the scheme-object rule fires here
+with its fresh design pass). Next probe: movers-hist on the 453 to
+confirm the flavor split before choosing between the mode-edge
+design and the type-half pass. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

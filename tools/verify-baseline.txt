@@ -510,7 +510,13 @@ comment_refs_max: 0
 # killing the prereg-mediated eight (self-call/forward-ref charges).
 # The remainder is the published-scheme snapshot itself; rung 3
 # continues against it.
-movers_max: 678
+# Lowered 678 → 453 at the row-half landing: the prereg publish is
+# generalize's own floor (the top-row cell unquantified-and-shared), so
+# a forward charge chains the live prereg cell and the callee's judgment
+# fills it — 225 movers died with the severance. The remainder is the
+# grade class (param modes read as values) and the type-sort set (the
+# scheme-object rule's territory).
+movers_max: 453
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.
@@ -825,4 +831,15 @@ authored_ref_max: 817
 # number FALLING — the working set collapsing to one decl's live set —
 # and the §5.O prose's stale "~694MB peak" is corrected by this read:
 # the self-compile peaks at ~1.7GB today.
-selfcompile_peak_kb_max: 1830000
+# Raised 1,830,000 → 2,250,000 at the row-half landing (fixed input, the
+# wheel; the ratchet refused twice and the raise is the measured verdict,
+# component-attributed): published schemes now carry LIVE row edges (the
+# snapshot root closing — movers 678 → 453, false T_OverDeclared dead),
+# and the substrate weighs +265 MB (kept edges + generalize-at-prereg;
+# variant run 2,080,964 KB) plus +106 MB for the cross-group gate
+# re-parks (full fix 2,187,468 KB m3 / 2,178,968 m4). The two-site
+# compression swap measured VACUOUS (unresolved chains have nothing to
+# fold), so this is representation weight, not re-walk waste. The
+# reclaimers are named: the per-decl arena (4.3, columns-first) and rung
+# 3's endpoint (the second pass deletes). The next legal move stays DOWN.
+selfcompile_peak_kb_max: 2250000

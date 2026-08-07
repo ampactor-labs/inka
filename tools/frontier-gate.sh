@@ -2262,6 +2262,24 @@ for i in "${!compilers[@]}"; do
   else
     fail "lambda list-pattern param ($lp_n diagnostics; the six-warning refusal is back)"
   fi
+
+  # ─── Named effect rows (PLAN §11 Phase 3.3, Hβ.types.named-effect-rows) ─
+  # `type Both = A + B` + `type JustA = Both - B` (the alias-of-alias
+  # GROUPING case — the alias's row builds whole before the outer
+  # connective applies) compile silent and run 3.
+  nr_err="$dir/named-rows.err"
+  nr_wat=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-named-effect-rows.mn" 2> "$nr_err")
+  nr_diags=$(grep -c 'E_' "$nr_err" 2>/dev/null || true)
+  if [ -n "$nr_wat" ] && [ "$nr_diags" = "0" ]; then
+    printf '%s' "$nr_wat" > "$dir/named-rows.wat"
+    if wt_asm "$dir/named-rows.wat" "$dir/named-rows.wasm" 2>/dev/null && [ "$(wt_run "$dir/named-rows.wasm" > /dev/null 2>&1; echo $?)" = "3" ]; then
+      pass "named effect rows: the alias and the alias-of-alias grouping compile silent and run (3)"
+    else
+      fail "named effect rows (assemble/run)"
+    fi
+  else
+    fail "named effect rows (diagnostics: $nr_diags; see $nr_err)"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

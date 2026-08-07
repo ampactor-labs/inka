@@ -516,6 +516,7 @@ fn stmt_child_handles(s) with Alloc + Memory = match s {
   ImportStmt(_) => [],
   RefineStmt(_, _, _) => [],
   AliasStmt(_, _) => [],
+  RowAliasStmt(_, _) => [],
 }
 
 fn arm_body_handle(arm) with Pure = node_handle(arm.body)

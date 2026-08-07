@@ -495,6 +495,14 @@ type SchemeKind
   | HandlerKind(Int, [TParam], [{init: Node, name: String}], [{args: [String], body: Node, op_name: String}])
   // tag 7 — parameter binding carries authored ownership at the env edge
   | ParamScheme(Ownership)
+  // tag 8 — a named effect row (`type X = A + B`, SYNTAX §«Named effect
+  // rows»): stores the with-clause's OWN signed triples — one grammar,
+  // one representation (Hβ.types.named-effect-rows). An ENV fact only:
+  // expansion happens where rows are built (build_declared_row's fold
+  // recursively builds the alias's row WHOLE, so grouping holds by
+  // construction); the row algebra never sees the name, and Ty never
+  // carries it.
+  | RowAliasKind([(EffName, Bool, EConn)])
   // tag 8 — the TYPE's own entry: (tag, ctor name, payload tys) per variant, minted at registration where the list is in hand — the variant_specs whole-env scan family's cure
   // HandlerKind (tag 6) is the full handler-effect type AND the handler's
   // identity: a handler is
@@ -1431,6 +1439,11 @@ type Stmt
   | RefineStmt(String, Ty, Predicate)
   // type X = T where P — nominal refinement
   | AliasStmt(String, Ty)
+  // type X = A + B — a named effect row (SYNTAX §«Named effect rows»):
+  // the RHS is the with-clause's own signed-triple grammar, stored
+  // verbatim (Hβ.types.named-effect-rows — one grammar, one
+  // representation; expansion at build_declared_row, never in Ty)
+  | RowAliasStmt(String, [(EffName, Bool, EConn)])
 
 // type X = T — transparent alias (no `where`, RHS a
 // single type-expression, not a record literal, not a
@@ -1824,6 +1837,10 @@ type DiagKind
   | EFeedbackNoContext(Span)
   // a `...name` rest element outside a destructuring parameter slot
   | ERestOutsideDestructure(Span)
+  // a row alias referencing itself through its own expansion (name)
+  | ERowAliasCycle(String, Span)
+  // `!Alias` where the alias's row is not positive-closed (name)
+  | ERowAliasNegation(String, Span)
   // field, type_name
   | ERecordFieldExtra(String, String, Span)
   // field, type_name
@@ -2009,6 +2026,8 @@ fn diag_span(d) with Pure = match d {
   EUnknownArgLabel(_, s) => s,
   EFeedbackNoContext(s) => s,
   ERestOutsideDestructure(s) => s,
+  ERowAliasCycle(_, s) => s,
+  ERowAliasNegation(_, s) => s,
   ERecordFieldExtra(_, _, s) => s,
   ERecordFieldMissing(_, _, s) => s,
   EPatternInexhaustive(_, _, s) => s,
@@ -2066,6 +2085,8 @@ fn diag_source(d) with Pure = match d {
   EUnknownArgLabel(_, _) => "infer",
   EFeedbackNoContext(_) => "infer",
   ERestOutsideDestructure(_) => "infer",
+  ERowAliasCycle(_, _) => "effects",
+  ERowAliasNegation(_, _) => "effects",
   ERecordFieldExtra(_, _, _) => "infer",
   ERecordFieldMissing(_, _, _) => "infer",
   EPatternInexhaustive(_, _, _) => "infer",
@@ -2123,6 +2144,8 @@ fn diag_code(d) with Pure = match d {
   EUnknownArgLabel(_, _) => "E_UnknownArgLabel",
   EFeedbackNoContext(_) => "E_FeedbackNoContext",
   ERestOutsideDestructure(_) => "E_RestOutsideDestructure",
+  ERowAliasCycle(_, _) => "E_RowAliasCycle",
+  ERowAliasNegation(_, _) => "E_RowAliasNegation",
   ERecordFieldExtra(_, _, _) => "E_RecordFieldExtra",
   ERecordFieldMissing(_, _, _) => "E_RecordFieldMissing",
   EPatternInexhaustive(_, _, _) => "E_PatternInexhaustive",
@@ -2331,6 +2354,8 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EUnknownArgLabel(detail, _) => detail,
   EFeedbackNoContext(_) => "`<~` used outside an iterative context",
   ERestOutsideDestructure(_) => "`...` rest element outside a destructuring parameter — rest lives in patterns (`([h, ...t]) =>`, `let [h, ...t] =`), and `++` joins lists in expressions",
+  ERowAliasCycle(nm, _) => "row alias `{nm}` expands through itself — a row is a finite signed set; name the effects directly",
+  ERowAliasNegation(nm, _) => "`!{nm}` negates a row alias whose row is not positive-closed — the shorthand is sound only over plain unions; name the forbidden effects directly",
   ERecordFieldExtra(field, tn, _) => // drift-audit: ignore — diagnostic message string, not a control keyword
   "record literal has unknown field '{field}' for type {tn}",
   ERecordFieldMissing(field, tn, _) => // drift-audit: ignore — diagnostic message string, not a control keyword

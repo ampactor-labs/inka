@@ -94,7 +94,7 @@ fn driver_module_path(ref module_name: String) with Filesystem = {
 // emitted a module that could not assemble ($ev_lookup undefined —
 // Hβ.driver.wheel-imports-are-the-manifest, the fleet's measured
 // finding).
-fn driver_collect_dag(ref entry_module) with Memory + Alloc + Filesystem + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI = {
+fn driver_collect_dag(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI = {
   let buf = make_list(16)
   let visited = []
   // The seed is conditional on RESOLUTION: the prelude is pre-imported where
@@ -115,7 +115,7 @@ fn driver_collect_dag(ref entry_module) with Memory + Alloc + Filesystem + Graph
 
 // collected is a (buf, count) pair threaded through DAG traversal.
 // Post-order: append self AFTER visiting deps.
-fn driver_collect_visit(ref module_name, own collected, own visited) with Memory + Alloc + Filesystem + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI = if set_contains(visited, module_name) {
+fn driver_collect_visit(ref module_name, own collected, own visited) with Memory + Alloc + Filesystem + EnvRead + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI = if set_contains(visited, module_name) {
   (collected, visited)
 } else {
   let visited2 = set_insert(visited, module_name)
@@ -147,7 +147,7 @@ fn driver_collect_visit(ref module_name, own collected, own visited) with Memory
   }
 }
 
-fn driver_collect_visit_list(ref modules, own collected, own visited) with Memory + Alloc + Filesystem + GraphWrite + GraphRead + Diagnostic + Mutate + Cast + WASI + Intern = fold(
+fn driver_collect_visit_list(ref modules, own collected, own visited) with Memory + Alloc + Filesystem + EnvRead + GraphWrite + GraphRead + Diagnostic + Mutate + Cast + WASI + Intern = fold(
   (collected, visited),
   (acc, m) => match acc {
     (c, v) => driver_collect_visit(m, c, v),
@@ -177,7 +177,7 @@ fn driver_collect_visit_list(ref modules, own collected, own visited) with Memor
 // unplaceable and the weave parse re-reports every one of them
 // placeably, so the unabsorbed form printed each parse diagnostic
 // TWICE (measured all day as the 2:24 + 5730:24 pairs).
-fn driver_extract_imports(ref source) with Memory + Alloc + GraphRead + GraphWrite + Intern + Mutate + Cast + WASI = {
+fn driver_extract_imports(ref source) with Memory + Alloc + EnvRead + GraphRead + GraphWrite + Intern + Mutate + Cast + WASI = {
   source |> lex |> parse_program |> driver_extract_imports_from_ast
 } ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> diag_quiet
 
@@ -556,7 +556,7 @@ fn warm_program() with Memory + Alloc = list_index(warm_asts, 0) |> map((pr) => 
 // the downstream closure, and the reassembly order are all projections
 // of this single read (the pairs walk, the deps walk, and the order walk
 // were three passes over the same files — the eight-interrogations cut).
-fn driver_tree_scan(ref entry_module) with Memory + Alloc + Filesystem + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI = {
+fn driver_tree_scan(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI = {
   let modules = driver_canonical_order(driver_collect_dag(entry_module))
   map(
     (m) => {
@@ -819,7 +819,7 @@ fn driver_check_entry(ref entry_module) with Memory + Alloc + Filesystem + WASI 
 // In-DAG: dep names that appear among the collected modules (filters
 // out missing-module fallbacks that have no source). Returns
 // `[(module_name, [dep_name])]` in post-order.
-fn driver_collect_dag_with_deps(ref entry_module) with Memory + Alloc + Filesystem + GraphWrite + GraphRead + Intern + Diagnostic + Mutate + Cast + WASI = {
+fn driver_collect_dag_with_deps(ref entry_module) with Memory + Alloc + Filesystem + EnvRead + GraphWrite + GraphRead + Intern + Diagnostic + Mutate + Cast + WASI = {
   let modules = driver_collect_dag(entry_module)
   map((m) => (m, driver_module_in_dag_deps(m, modules)), modules)
 }
@@ -827,7 +827,7 @@ fn driver_collect_dag_with_deps(ref entry_module) with Memory + Alloc + Filesyst
 // Extract the imports of one module, then filter to the in-DAG set.
 // Out-of-DAG names (missing modules, vocabulary aliases the driver doesn't
 // process) contribute nothing to the layer-partition's wait condition.
-fn driver_module_in_dag_deps(ref module_name, ref dag_modules) with Memory + Alloc + Filesystem + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI = {
+fn driver_module_in_dag_deps(ref module_name, ref dag_modules) with Memory + Alloc + Filesystem + EnvRead + GraphRead + GraphWrite + Intern + Diagnostic + Mutate + Cast + WASI = {
   let path = driver_module_path(module_name)
   if !fs_exists(path) {
     []

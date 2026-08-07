@@ -772,6 +772,7 @@ fn refuse_duplicate_type_decls(stmts, i, n, seen) = if i >= n {
         NStmt(AliasStmt(name, _)) => type_decl_claim(seen, name, span),
         NStmt(RefineStmt(name, _, _)) => type_decl_claim(seen, name, span),
         NStmt(TypeDefStmt(name, _)) => type_decl_claim(seen, name, span),
+        NStmt(RowAliasStmt(name, _)) => type_decl_claim(seen, name, span),
         _ => seen,
       }
       refuse_duplicate_type_decls(stmts, i + 1, n, claimed)
@@ -793,6 +794,11 @@ fn pre_register_alias(ref node) = match node {
   N(body, _, _) => match body {
     NStmt(RefineStmt(name, base_ty, pred)) => env_extend(name, Forall([], TAlias(name, TRefined(base_ty, pred))), Declared(name), FnScheme),
     NStmt(AliasStmt(name, ty)) => env_extend(name, Forall([], TAlias(name, ty)), Declared(name), FnScheme),
+    NStmt(RowAliasStmt(name, effs)) => // A named effect row is an ENV fact: the triples stored verbatim,
+    // expansion at build_declared_row (Hβ.types.named-effect-rows).
+    // The scheme's Ty is nominal only so the entry has a shape; the
+    // row alias never participates in type unification.
+    env_extend(name, Forall([], TName(name, [])), Declared(name), RowAliasKind(effs)),
     _ => (),
   },
 }
@@ -2513,6 +2519,9 @@ fn infer_stmt(ref node) = match node {
     NStmt(AliasStmt(_, _)) => // Transparent alias `type X = T`: registered at pre_register_stmt.
     // No predicate, no Verify — the difference from RefineStmt is exactly
     // the absent `where` (SYNTAX.md §«Type aliases»).
+    (),
+    NStmt(RowAliasStmt(_, _)) => // Named effect row: registered at pre_register_alias; expansion
+    // at build_declared_row (Hβ.types.named-effect-rows).
     (),
     _ => (),
   },
@@ -8152,6 +8161,7 @@ fn collect_fn_decls(node, acc) = match node {
     NStmt(ImportStmt(_)) => acc,
     NStmt(RefineStmt(_, _, _)) => acc,
     NStmt(AliasStmt(_, _)) => acc,
+    NStmt(RowAliasStmt(_, _)) => acc,
     NExpr(LitInt(_)) => acc,
     NExpr(LitFloat(_)) => acc,
     NExpr(LitString(_)) => acc,
@@ -8310,6 +8320,7 @@ fn resume_grade(node) = match node {
     NStmt(ImportStmt(_)) => UZero,
     NStmt(RefineStmt(_, _, _)) => UZero,
     NStmt(AliasStmt(_, _)) => UZero,
+    NStmt(RowAliasStmt(_, _)) => UZero,
     NExpr(LitInt(_)) => UZero,
     NExpr(LitFloat(_)) => UZero,
     NExpr(LitString(_)) => UZero,
@@ -8513,6 +8524,7 @@ fn walk_refinement(node, path_pred) with GraphRead + GraphWrite + Memory + Alloc
     NStmt(ImportStmt(_)) => (),
     NStmt(RefineStmt(_, _, _)) => (),
     NStmt(AliasStmt(_, _)) => (),
+    NStmt(RowAliasStmt(_, _)) => (),
     NTypeAnn(_) => (),
   },
 }

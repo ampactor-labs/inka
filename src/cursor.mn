@@ -492,7 +492,7 @@ fn reduce_max_by_score(scored) with Alloc + Memory = reduce(
 // The eight-arm fan — ONE projection body serving both cursor_at (span,
 // resolved here) and cursor_at_handle (pre-resolved). The eight aspects of
 // the one read (PLAN §2), each arm a tentacle.
-fn cursor_view_of(handle) with GraphRead + EnvRead + Memory + Alloc + GraphWrite + Synth + Verify + Teach = match graph_chase(handle) {
+fn cursor_view_of(handle) with GraphRead + EnvRead + Memory + Alloc + Intern + Diagnostic + GraphWrite + Synth + Verify + Teach = match graph_chase(handle) {
   GNode(kind, _reason) => {
     let pos = (handle, kind)
     match pos <| (
@@ -668,7 +668,7 @@ fn pipe_position_in(target, body) with Memory + Alloc = match body {
 // float-evidence call-convention gap (an f64-arg candidate ctor through an
 // all-i32 $ft — the named peer Hβ.emit.float-evidence-ft, first fired by
 // the first float-position projection ever taken).
-fn propose_at(h, k) with EnvRead + GraphRead + Memory + Alloc + GraphWrite + Synth + !Mutate = if authored_hole(h) {
+fn propose_at(h, k) with EnvRead + GraphRead + Memory + Alloc + Intern + Diagnostic + GraphWrite + Synth + !Mutate = if authored_hole(h) {
   let ctx = mentl_context_at(h)
   match ctx {
     Context(_, allowed, _, _) => synth_propose(ty_of_kind(h, k), allowed, ctx),
@@ -684,7 +684,7 @@ fn propose_at(h, k) with EnvRead + GraphRead + Memory + Alloc + GraphWrite + Syn
 // `!E` at a decl); the enclosing NAME feeds the vocabulary's
 // nontermination exclusion. At a top-level position with no enclosing
 // fn, the node's own row stands and the name is "".
-fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + Alloc + GraphWrite + !Mutate = match env_snapshot() {
+fn mentl_context_at(handle) with EnvRead + GraphRead + Memory + Alloc + Intern + Diagnostic + GraphWrite + !Mutate = match env_snapshot() {
   Env(scope_bindings) => match graph_chase(handle) {
     GNode(kind, _) => {
       let hole_span = parse_span_of(handle)

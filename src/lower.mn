@@ -1374,6 +1374,7 @@ fn flow_edges_stmt(s) = match s {
   ImportStmt(_) => ([], []),
   RefineStmt(_, _, _) => ([], []),
   AliasStmt(_, _) => ([], []),
+  RowAliasStmt(_, _) => ([], []),
 }
 
 fn flow_edges_match_arms(arms) = fold(
@@ -3133,6 +3134,8 @@ fn lower_stmt_body(s, handle, span) = match s {
   RefineStmt(_name, _ty, _pred) => LConst(handle, LInt(0)),
   AliasStmt(_name, _ty) => // Transparent alias: type-level only, no runtime presence — the alias
   // and its underlying type unify at infer; emit erases (like RefineStmt).
+  LConst(handle, LInt(0)),
+  RowAliasStmt(_name, _effs) => // A named row is an env fact — no runtime presence.
   LConst(handle, LInt(0)),
   ExprStmt(expr) => lower_expr(expr),
 }

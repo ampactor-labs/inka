@@ -35,6 +35,34 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ NAMED EFFECT ROWS ARE REAL — the arc loop's
+  fifteenth iteration builds Phase 3.3's named-row drift against its
+  stamp (pin 6768ffac9dfa — CLEAN m2 == m3, census 0). SYNTAX
+  §«Named effect rows», the section that retired the `capability`
+  keyword, has its working spelling: `type Both = A + B` routes the
+  type-decl RHS through the with-clause's OWN parse_effect_list (the
+  dispatch at parse_type_decl split `|` from `+ - &`; a leading `!`
+  routes before the type parse), stores the signed triples verbatim
+  on RowAliasStmt, and registers RowAliasKind at pre_register_alias —
+  an env fact whose scheme Ty is nominal only for shape, never
+  unified. Expansion lives at the ONE home the stamp chose:
+  build_declared_row became build_row_seen, whose fold, on a name
+  resolving to RowAliasKind, builds THAT alias's row WHOLE and
+  applies the outer connective to the result — so the fixture's
+  `type JustA = Both - B` (an alias referencing an alias under
+  subtraction, the grouping case) runs correctly by construction.
+  Cycles refuse (E_RowAliasCycle, then pure — loud then productive);
+  `!Alias` is sound only over a positive-closed row
+  (E_RowAliasNegation names the boundary). THE CASCADE, paid and
+  recorded: eff_name_str/report/env_lookup inside the fold grew its
+  row (+Intern +Diagnostic +EnvRead), and because the PARSER's
+  fn-type with-rows read the same fold, the parse path itself gained
+  EnvRead — eleven declared clauses widened (three cursor, seven
+  driver, one effects), each enumerated by the whole-link check, the
+  row discipline doing exactly its job. The fixture + frontier leg
+  gate both faces (compile silent, run 3); seen RED at
+  P_UnexpectedToken on the prior pin.
+
 - 2026-08-07 · ▶▶▶ THE LAMBDA LIST-PATTERN PARAMETER PARSES — the arc
   loop's thirteenth iteration lands Phase 3.3's first measured drift
   (pin 8031eaf123ec — CLEAN m2 == m3, census 0). The root was named in

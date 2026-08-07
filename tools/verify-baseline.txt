@@ -479,7 +479,14 @@ comment_refs_max: 0
 # Re-based 444 → 451 at mentl where (pin follows the 3.2 landing): the
 # +7 are the verb's own new fns (where_badges and kin) joining the same
 # freeze-root divergence class; zero trial/final machinery in the diff.
-movers_max: 451
+# Re-based 451 → 474 at named effect rows (pin 6768ffac9dfa): eleven
+# declared clauses widened (+EnvRead +Intern +Diagnostic — the
+# build_declared_row cascade through the parser's fn-type rows), so the
+# trial/final comparison surface moved with the semantics — the
+# publish-surface channel, fourth application; plus the expansion's own
+# new effects fns. Zero trial/final machinery in the diff. The next
+# legal move stays DOWN; rung 3 (Phase 5.2) dissolves the class.
+movers_max: 474
 
 # 2026-08-07: the ANONYMITY ratchet (PLAN §11 Phase 2.5, second half) —
 # the census tier's convictions on the wheel link, monotone DOWN. Two

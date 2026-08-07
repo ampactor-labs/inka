@@ -164,7 +164,19 @@ fn has_pure_declared(effs) = any(
   effs
 )
 
-fn build_declared_row(effs) = match fold(
+fn build_declared_row(effs) = build_row_seen(effs, [])
+
+// A name whose env kind is RowAliasKind builds ITS row WHOLE through
+// this same fold and the outer connective applies to the RESULT —
+// grouping by construction (the inline-splice trap: with X = B,
+// `X + (A - B)` is B + A, which splicing X's triples inline folds to
+// A). `seen` guards cycles (E_RowAliasCycle, then pure — loud, then
+// productive). A NEGATED alias reference (`with !File`) is sound only
+// over a positive-closed alias row: its present names join the
+// forbidden set; anything richer refuses the shorthand
+// (E_RowAliasNegation) — de Morgan over the full algebra is not a
+// shorthand's job.
+fn build_row_seen(effs, seen) = match fold(
   (mk_ef_pure(), [], false),
   (acc, eff) => match acc {
     (pos, negs, saw) => match eff {
@@ -173,9 +185,9 @@ fn build_declared_row(effs) = match fold(
       }
       // drift-audit: ignore — bounded by the authored clause length, not a loop accumulator
       else if negated {
-        (pos, negs ++ [name], saw)
+        (pos, negs ++ neg_names_of(name, seen), saw)
       } else {
-        (apply_connective(conn, pos, mk_ef_closed([name])), negs, saw)
+        (apply_connective(conn, pos, leaf_row_of(name, seen)), negs, saw)
       },
     },
   },
@@ -203,6 +215,57 @@ fn build_declared_row(effs) = match fold(
       },
     }
   },
+}
+
+// The row-alias read: two env facts, read live at build time — the row
+// algebra downstream never sees the name (Hβ.types.named-effect-rows).
+fn row_alias_triples(name) = match env_lookup(eff_name_str(name)) {
+  Some(entry) => match entry {
+    (_, _, RowAliasKind(triples)) => Some(triples),
+    _ => None,
+  },
+  None => None,
+}
+
+fn leaf_row_of(name, seen) = match row_alias_triples(name) {
+  Some(triples) => if row_name_seen(seen, name) {
+    report(ERowAliasCycle(eff_name_str(name), span_zero()))
+    mk_ef_pure()
+  } else {
+    build_row_seen(triples, seen ++ [eff_name_str(name)])
+  },
+  None => mk_ef_closed([name]),
+}
+
+fn neg_names_of(name, seen) = match row_alias_triples(name) {
+  Some(triples) => if row_name_seen(seen, name) {
+    report(ERowAliasCycle(eff_name_str(name), span_zero()))
+    []
+  } else {
+    match build_row_seen(triples, seen ++ [eff_name_str(name)]) {
+      EfRow(pp, pa, pt) => if len(pa) == 0 && row_tail_closed(pt) {
+        pp
+      } else {
+        report(ERowAliasNegation(eff_name_str(name), span_zero()))
+        []
+      },
+    }
+  },
+  None => [name],
+}
+
+fn row_name_seen(seen, name) with Memory + Alloc + Intern =
+  row_name_seen_at(seen, eff_name_str(name), 0, len(seen))
+
+fn row_name_seen_at(seen, target: String, i, n) with Memory + Alloc = if i >= n {
+  false
+} else {
+  if list_index(seen, i) == target { true } else { row_name_seen_at(seen, target, i + 1, n) }
+}
+
+fn row_tail_closed(t) with Pure = match t {
+  EtClosed => true,
+  _ => false,
 }
 
 fn mk_record_open(ref fields, v) with !Mutate = TRecordOpen(field_canonicalize(fields), v)

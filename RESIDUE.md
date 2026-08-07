@@ -692,9 +692,12 @@ its own comment says "now LIVE" — and is recorded here only so the
 stale prose is struck; that distinction between an open gap and a
 resolved one is exactly what an index carries and a comment cannot.
 
-`Hβ.types.named-effect-rows` — the design stamp for PLAN §11 Phase 3.3's
-named-row drift (banked 2026-08-07; UNBUILT — this entry is what gets
-built). MEASURED at the felt walk and re-grounded at pin 8031eaf1:
+`Hβ.types.named-effect-rows` — BUILT 2026-08-07 against this stamp (pin
+6768ffac9dfa; the fixture's alias-of-alias `Both - B` grouping case
+runs 3 with zero diagnostics; the named residual: a row alias used in
+TYPE position today resolves as the nominal shape scheme rather than
+refusing — the type-position refusal lands with the diag catalog's
+projection, Phase 8.4). The stamp as banked: MEASURED at the felt walk and re-grounded at pin 8031eaf1:
 `type Both = A + B` refuses `P_UnexpectedToken: +` at the type-decl
 RHS, `A & B` likewise, `A - B` mis-resolves to a nominal non-row — so
 SYNTAX §«Named effect rows», the section that RETIRED the `capability`

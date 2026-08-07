@@ -1658,12 +1658,13 @@ new DEP found; the map below is accurate at that pin.)*
   `([h, ...t]) =>` checks clean, the parse-half leg gates it, and the
   unmasked rest-binding runtime gap is banked as
   `Hβ.lower.list-rest-binding-runtime` with its fix direction). Named
-  effect rows STAMPED 2026-08-07 — `Hβ.types.named-effect-rows` in
-  `RESIDUE.md` carries the design (one representation: the alias stores
-  the with-clause's own signed triples; expansion recurses inside the
-  signed fold so grouping holds by construction — the inline-splice trap
-  killed at trace time; a RowAliasKind env fact, never a Ty). STILL
-  OPEN: the named-row build; `xs |> len` reporting a false
+  effect rows ✅ LANDED 2026-08-07 (pin 6768ffac9dfa, built against
+  `Hβ.types.named-effect-rows`): `type Both = A + B` through the
+  with-clause's own grammar, expansion at the signed fold building each
+  alias's row whole (the fixture's `Both - B` alias-of-alias grouping
+  case runs 3), cycles and the negation shorthand refusing loudly, the
+  +EnvRead cascade through the parser's fn-type rows widening eleven
+  declared clauses. STILL OPEN: `xs |> len` reporting a false
   `E_TypeMismatch` while emitting correct code; `<~` contributing no
   iterative effect (3.6's); the fmt scope register (3.5's overlay).
 - **3.4 · SYNTAX's own defects.** The precedence table contradicts the

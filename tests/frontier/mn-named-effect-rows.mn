@@ -1,0 +1,29 @@
+// expect: 3
+// mn-named-effect-rows — SYNTAX §«Named effect rows» made real
+// (Hβ.types.named-effect-rows, PLAN §11 Phase 3.3): `type Name =
+// <row-expr>` stores the with-clause's own signed triples and the
+// declared-row build expands the name where rows are built — grouping
+// by construction (an alias's row builds WHOLE before the outer
+// connective applies). Both fns run through their handlers; the leg
+// asserts zero diagnostics and exit 3.
+effect A {
+  opa() -> Int
+}
+effect B {
+  opb() -> Int
+}
+type Both = A + B
+
+type JustA = Both - B
+
+fn uses_both() with Both = opa() + opb()
+
+fn uses_a() with JustA = opa()
+
+handler ha {
+  opa() => resume(1),
+}
+handler hb {
+  opb() => resume(1),
+}
+fn main(q) = (uses_both() ~> ha ~> hb) + (uses_a() ~> ha)

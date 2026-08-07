@@ -3537,7 +3537,15 @@ fn emit_state_init_writes(state_local, inits, base_idx) = each(
           wat_emit(int_to_str(8 + slot * 4))
           wat_emit(")")
         },
-        _ => emit_expr(init),
+        _ => {
+          emit_expr(init)
+          // The slot ABI is floor words (the SHARED arm fns read it), so
+          // a twin's repr-true wide init crosses BY REFERENCE — the same
+          // box the arg boundary uses. The floor's word inits no-op here
+          // byte-for-byte (Law 7); the fold twin's raw f64 init fed
+          // i32.store and failed assembly (Hβ.emit.twin-state-width).
+          emit_wide_ref(tail_expr_repr(init))
+        },
       }
       wat_emit("(i32.store offset=")
       wat_emit(int_to_str(8 + (base_idx + i) * 4))
@@ -4242,7 +4250,7 @@ fn emit_expr(expr) = match expr {
     wat_emit(")\n")
   },
   LDirectPerform(h, hn, op, st, args) => emit_expr(singleton_perform_block(h, hn, op, st, args)),
-  LPerform(_h, op_name, args, state_local) => {
+  LPerform(h, op_name, args, state_local) => {
     // Tier-1 perform: a direct `(call $op_<handler>_<op>)` against the
     // lexically-installed handler's OWN state record. state_local carries
     // the install-LOCAL "__hstate_<h>" (the record the arm was installed
@@ -4257,10 +4265,19 @@ fn emit_expr(expr) = match expr {
       wat_emit(state_local)
       wat_emit(")\n")
     }
-    emit_expr_list(args)
+    // The arm fn is SHARED between the floor and every twin, so its ABI
+    // is floor words: a twin's repr-true wide arg crosses BY REFERENCE
+    // (emit_args_word — the same box the arg boundary uses) and a wide
+    // result crosses BACK by dereference, keyed on the perform node's
+    // own typed repr. The floor's word nodes make both adapters no-ops
+    // byte-for-byte (Law 7); the fold twin's raw f64 fed the word call
+    // unboxed and its result left i32 where f64 was declared
+    // (Hβ.emit.twin-state-width — the two assembly refusals).
+    emit_args_word(args)
     wat_emit("    (call $op_")
     wat_emit(op_name)
     wat_emit(")\n")
+    emit_wide_deref(repr_of(lookup_ty(h)))
   },
   LWasiCall(_h, import_name, args) => {
     // Stage 4a: direct substrate dispatch. Memory/Alloc ops project to

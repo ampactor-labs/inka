@@ -35,6 +35,31 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE TWIN EDGES CONVERT — Hβ.emit.twin-state-width
+  closes (pin ef8083b05fe2 — CLEAN m2 == m3, census 0, cost 14.35s /
+  2,188,540 KB inside the ceiling; the f64-state guard holds 42). The
+  arc ran measurement-first end to end: the 5.1a gate-drop re-attempt
+  pinned the break (fold$sp2nSpan writing its repr-true f64 init into
+  the word-wide hstate record with i32.store; the op-result i32 meeting
+  the twin's declared f64), the census sized the class to ONE instance
+  in 39 fold twins, and the decisive ABI read — the floor's fold takes
+  `(param $init i32)`, generic floats riding boxed words end to end —
+  INVERTED the mapped width-summed-layout build: the hstate slot ABI is
+  floor-owned words because the SHARED arm fns read it, so repr-true
+  slots would break the arms, and the fix is conversion at the twin's
+  own edges. Two arms, both keyed on the site's typed repr so floor
+  contexts no-op byte-for-byte: LPerform's args emit word-faced
+  (emit_args_word — the existing arg-boundary box) and its result
+  derefs via repr_of(lookup_ty(h)); emit_state_init_writes boxes a
+  wide init (emit_wide_ref) before the word store. The acceptance probe
+  proved it whole before the march: with the worthiness gate dropped,
+  the total-twin m3 ASSEMBLES where it failed. The superseded
+  projection/threading/fence map stays banked as the repr-true-arms
+  future; 5.1a's re-attempt (cost banked: emit +17%, RSS in-ceiling)
+  is unblocked. One process confession: a probe edit reached the tree
+  through sed once (the perimeter's Edit-only law violated; the edit
+  was probe-scoped and reverted through Edit).
+
 - 2026-08-07 · ▶▶▶ THE ROW HALF LANDS — the snapshot's row channel closes
   (pin a13918ee5784 — TRANSITION m3 == m4, census 0; movers 678 → 453,
   T_OverDeclared 374 → 310; cost 13.68s / 2,105,980 KB inside the raised

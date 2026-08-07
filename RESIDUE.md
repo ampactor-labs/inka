@@ -1840,12 +1840,27 @@ while the trial's FINGERPRINT captured Memory + Alloc — the
 divergence lives BETWEEN the trial's print moment and the cell's
 final state (either a rebind after the print, or the print reading
 the env SCHEME while the re-read reads the graph ROW — two surfaces,
-one of them stale). NAMED NEXT INSTRUMENT, one wheel-probe edit:
-movers_diff prints the trial-time env-scheme row AND the graph row
-side by side at the flip, pinning which surface the A-fingerprint
-read and who rebound it; the fix then lands at that one writer
-(candidates: the print's read surface unified onto the graph row, or
-the late rebinder's freshness). Then the movers measurement fires the pre-committed
+one of them stale). THE ROOT NAMED BY BISECTION (2026-08-07, three body-ablation marches
++ a publish-moment probe): with fill_row's body emptied to NOTHING
+BUT THE SELF-CALL, the trial still publishes Memory + Alloc — the
+DECLARED row — while the final publishes Pure, the proof. The trial's
+self/intra-group charge reads the callee's PREREG SKELETON cell,
+whose row was BOUND WITH THE DECLARED ROW at pre-registration — a
+declaration flowing into the supply side through the prereg bind,
+precisely what ruling (1) forbids ("a declaration can never widen,
+close, or EtAll a published row"); the final's normal instantiation
+freshens the quantified row instead, and the completion prune answers
+Pure. THE FIX IS ONE WRITER: the prereg skeleton's row cell stays
+FREE (the declaration lives in the GATE machinery alone); forward and
+intra-group charges then chain live edges the completion resolves to
+PROVEN content — the machinery the whole B-arc built. Expected blast,
+measured at the landing: the 291-family's trial-side declared-flavor
+dies, movers fall hard; forward-ref callers' rows during the walk
+read fresh edges instead of declared caps, so the declared-row GATE
+deferral set may widen (more unresolved-at-decl-exit gates parking
+to their group events — B4's drains already catch them). Find the
+prereg row-bind writer (pre_register_stmt/pre_register_decls' TFun
+skeleton build), delete the row bind, march, read movers. Then the movers measurement fires the pre-committed
 scheme-object rule. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

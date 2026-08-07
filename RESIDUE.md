@@ -2045,7 +2045,21 @@ re-run the same-binary flip probe to CONFIRM determinism. (2)
 compress-on-read (the RSS ceiling). (3) The fix pair + the two
 +WASI widenings, marched as TRANSITION with a two-draw
 determinism check in the verdict. The trial's sweep shares the
-constant, so window=1 covers both passes. (2) Decl cells + correspondence edges;
+constant, so window=1 covers both passes.
+STEP (1) LANDED AND THE CONFIRMATION RAN (2026-08-07, pin
+737147469c02 — CLEAN, census 0, cost 12.02s / 1,816,340 KB): the
+sweep is serialized, and the fix pair applied over it compiles
+BYTE-IDENTICALLY across two draws at movers 453 — the
+nondeterminism is closed at its root, not routed around. Remaining
+before the fix pair lands for keeps: (2) compress-on-read — the
+BROKEN run's 2,176,760 KB peak was measured with the racing
+threads' duplicated resolution; the serialized+fixed compile's
+peak is unmeasured and may already sit nearer the ceiling — the
+re-land march MEASURES first and builds compression only if the
+ratchet refuses (never a pre-emptive tune of condemned-adjacent
+machinery); (3) the two +WASI widenings (the census-2 sites), then
+the fix pair, marched as TRANSITION with the two-draw determinism
+check inside the verdict. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

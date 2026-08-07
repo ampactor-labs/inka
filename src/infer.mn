@@ -2142,7 +2142,20 @@ fn planned_layer_stmts(ref rows, ref layers, ref bases, ref stmts, summ, ceil, g
 // config↔payload two-phase, mono self-entries). The join judge's
 // census on its own source is 0. The six-run variance diff stays the
 // standing instrument; FRAGX the standing collision census.
-let judge_window = 8
+// SERIALIZED AT 1 (2026-08-07, the row-half's precondition): the
+// window's K=8 safety rested on the two laws the schemes-are-edges
+// landing dissolves — the value-boundary law (published schemes free
+// of live vars) and the frozen-read instantiate (readers never read
+// live). With live row cells in published schemes, same-layer sibling
+// callers of one shared forward callee JOIN one cell concurrently and
+// the un-CAS'd read-modify-write garbles the edge list (measured: the
+// free_in_fields k2 staging flipping run-to-run; the trap-on-spawn
+// probe convicting the sweep). Window 1 keeps the machinery whole and
+// the branches non-overlapping — race-free over live cells. The
+// parallel form returns at Phase 9.2, where the deterministic handle
+// partition and ATOMIC join writes (the lattice law's implementation
+// half) are designed in.
+let judge_window = 1
 
 // THE FAN: every layer branch runs as a REAL task — a spawned
 // instance of the whole module over the shared image, its world born
@@ -2152,12 +2165,12 @@ let judge_window = 8
 // completion order never matters (join_task's atomic wait delivers
 // each branch's facts whole), so the replay stream is byte-identical
 // to the sequential walk by construction. Same-layer branches share
-// only frozen or partitioned state: the value-boundary law keeps
-// published schemes free of live vars, mint ranges and overflow bands
-// are disjoint, ledgers are branch-local, and the intern is a
-// read-only view. The task closure's captures reach branch_judge as
-// ordinary call arguments (the install-config-capture class never
-// fires on params).
+// only frozen or partitioned state (the serialization note above
+// carries what happens when they stop being frozen): mint ranges and
+// overflow bands are disjoint, ledgers are branch-local, and the
+// intern is a read-only view. The task closure's captures reach
+// branch_judge as ordinary call arguments (the install-config-capture
+// class never fires on params).
 fn layer_judge_walk(ref rows, ref layers, ref bases, ref stmts, summ, ceil, gseed, iseed, l, i, base, seed, top0, own acc) = {
   let idxs = layer_indices(layers, l, 0, [])
   judge_blocks(rows, bases, stmts, summ, ceil, gseed, iseed, base, seed, top0, idxs, 0, acc)

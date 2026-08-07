@@ -35,6 +35,36 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE SWEEP SERIALIZES — the parallel final convicted and
+  stood down (pin 737147469c02 — CLEAN m2 == m3, census 0; cost 12.02s /
+  1,816,340 KB, the ~3s wall delta the serialization's honest price).
+  The arc that led here is the session's deepest forensic dig: the
+  row-half build (generalize-at-prereg + the drain refinement) marched
+  BROKEN with a one-bit m3/m4 divergence (free_in_fields' k2 yield-floor
+  staging), and five probes ran it to the root — the m5 leg killed the
+  wash-out story, a same-binary re-run killed the parity story (genuine
+  run-to-run nondeterminism), the import census killed clock/random, a
+  400MB pad probe killed the 2^31 signed-boundary lead (the padded clean
+  compiler's output is byte-identical — address-shift invariant), and
+  the corrected trap-on-spawn probe CONVICTED: replacing
+  wasi_thread_spawn's one call site with unreachable traps the compile,
+  backtrace infer_program_final → planned_layer_sweep → judge_blocks →
+  spawn_block. The final pass judges branches on real threads,
+  judge_window = 8, and its own comment names the precondition the row
+  fix breaks: "published schemes free of live vars." The race is
+  precise: instantiate's freshening had given every caller a PRIVATE row
+  copy, so bind_edges_to taught private cells — the severance was the
+  accidental race-guard; un-freshening it lets same-layer sibling
+  callers join ONE shared callee cell concurrently, and the garbled edge
+  list is the flipping classification. The landing: judge_window 1 — the
+  branches stop overlapping, the machinery keeps its shape, the parallel
+  form returns at Phase 9.2 with atomic join writes (banked band-E
+  peer). CONFIRMED on this pin: the fix pair applied over the serialized
+  sweep compiles byte-identically across two draws, movers 453. One
+  process lesson banked: a git stash of the probe edits swept the
+  landing edit with them — re-applied and sha-verified against the
+  marched wheel input before the bless.
+
 - 2026-08-07 · ▶▶▶ THE PREREG ROW GOES BARE — the movers' declared channel
   closes (pin bb3c10c17e3b — TRANSITION m3 == m4, 26-line emit delta
   crossing one generation; census 0; movers 686 → 678; cost 9.12s wall /

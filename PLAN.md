@@ -1789,9 +1789,15 @@ new DEP found; the map below is accurate at that pin.)*
   the one place where the proof deliberately does NOT become the dispatch, and
   every measured silent-wrong lives at that seam — `sort` returning input order
   because `<=` compared addresses, the unannotated float accumulator summing to
-  ~0, `describe(2.5)` printing a pointer. Total, with cyclic flow as the
-  theorem-backed uniform floor; extraction (a projection by then) reclaims the
-  duplication.
+  ~0, `describe(2.5)` printing a pointer. STAMPED whole 2026-08-07
+  (`Hβ.emit.total-monomorphization`, RESIDUE): the artifact read reframes the
+  target — the machinery is already total-by-REPR (the all-word vector IS the
+  floor class, correct at the wasm altitude), so the hybrid is exactly ONE
+  filter, and the plan is three legs: delete the worthiness gate (5.1a),
+  type-total arrives as the Repr ADT grows (5.1b — no separate landing), and
+  the CYCLE GUARD for polymorphic recursion (5.1c — today a user program the
+  wheel never writes can HANG the demand fix; the guard floors at the word
+  protocol with a narration, probe-first under timeout).
 - **5.2 · `Hβ.infer.schemes-are-edges` rung 3**, the row half, per the settled
   laws in `RESIDUE.md`. With 5.5's column arc this also UN-GATES the arena's
   2b (4.3's correction): published facts in columns make the image set =

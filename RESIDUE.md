@@ -512,6 +512,48 @@ E_RefinementRejected at the branch), computation → raise. Deletes the
 duplicated licence pair (verify.mn:314 ≡ infer.mn:6832). RED banked:
 tests/frontier/mn-refine-join-launder.mn.
 
+`Hβ.emit.total-monomorphization` — STAMPED whole 2026-08-07 (§11 5.1;
+built on the artifact read of the spec-twin machinery, wasm.mn's
+demand analysis). WHAT EXISTS, traced: three passes over projections
+the graph holds — CANDIDATES (every reference site whose key projects
+wide, closed transitively under substitution via spec_candidates_fix),
+WORTHINESS (twin only when the body performs arith/compare/eq on a
+wide-bound pair var — the address-comparison witness; plumbing shells
+like fold/map stay at the floor), twins seeded into spec_registry and
+redirected at every reference-emitting arm. THE REFRAME the read
+forces: the machinery is ALREADY total-by-REPR — a candidate keys on
+its repr vector (spec_enc), and the all-word vector IS the floor
+CLASS, correct at the wasm altitude because a word is a word; the
+measured silent-wrongs (address-compare sort, the ~0 float
+accumulator, describe printing a pointer) all live at the WIDE seam
+the candidates already cover. What §11 calls the perf-hybrid is
+exactly ONE filter: the worthiness gate. THE PLAN, three legs: (5.1a)
+DELETE WORTHINESS — every wide-keyed candidate twins, plumbing
+included (pass 2 dies; pass 1's transitive closure is the whole
+analysis); measured by the twin count, the m2 line delta, and the
+peak ratchet — the blowup is BOUNDED by the demand set the union-find
+already enumerates, and extraction reclaims duplication when band G's
+projection matures. (5.1b) type-total IS repr-total plus the Repr ADT
+growing (RI8 at 5.4, regclasses at band N) — arriving arms widen the
+key BY CONSTRUCTION; no separate landing exists. (5.1c) THE CYCLE
+GUARD, a real missing safety: spec_candidates_fix dedups by mangled
+name, so polymorphic recursion demanding a NEW vector of its own base
+per round would grow the work list unboundedly — the compiler HANGS
+on a user program the wheel never writes (the productive-under-error
+law's own shape: a hang is an error path recovering by looping). The
+guard: a per-base vector-count cap along one demand chain; at the
+cap the candidate floors at the uniform word protocol with a
+narration (the Henglein price surfaced as teaching, never a hang) —
+RED-first via a polymorphic-recursion fixture that today must be
+probed (it may hang the current emit; the probe runs under timeout
+and its verdict decides whether 5.1c leads or follows 5.1a). PRICED
+(§5.O): no new scans — pass 2's deletion REMOVES a walk; the twin
+blowup is the one cost, measured not guessed, and the 1,830,000 KB
+peak ceiling arbitrates (a justified bump names the arena's later
+reclaim). March contract: TRANSITION (twin names/bodies enter the
+emit). ORDER: 5.1c's probe first (a hang risk outranks a perf
+hybrid), then 5.1a, then the census reads.
+
 `Hβ.perf.per-decl-arena` — STAMPED whole 2026-08-07 (§11 4.3; the gate
 peer `Hβ.infer.region-on-tee-alloc-absorb` folds in below). WHAT EXISTS,
 traced: heap_mark/heap_reset with the virginity contract

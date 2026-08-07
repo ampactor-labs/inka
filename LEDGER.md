@@ -35,6 +35,30 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE ANONYMITY TIER — the arc loop's fifth iteration
+  builds Phase 2.3 against the stamp its fourth iteration banked
+  (pin eb827fae186d — CLEAN m2 == m3 at 335,287 lines, census 0). The tier
+  is a READ beside its siblings (oracle.mn: anonymity_shape_of joins
+  pipe_shape_of and recursion_shape_of; pipeline.mn renders the
+  section): the eta-wrapper convicts on the body's own raw shape
+  (CallExpr(VarRef(g), args) with g outside the params and args ≡ the
+  params in order — MachineApplicable, pass g), the effectful lambda
+  convicts on its judged TFun row read through resolve_row (the fixture
+  proved the read's necessity: ticks' fn row shows Tick absorbed by the
+  ~> foot, while the lambda's own row still carries it), and the
+  pure-local vocabulary stays silent. The gate
+  (tests/frontier/mn-anonymity-tier.mn) was seen RED at zero narration
+  on the prior pin; all three faces assert on this one. ONE STAMP
+  CORRECTION, found at build time and folded into the stamp in place:
+  the quantified-row-param class is NOT an independent conviction — a
+  pure lambda landing on a quantified row var is exactly
+  `map((x) => x + 1, xs)`, SYNTAX's own vocabulary, and its honest half
+  (the published row) is already the row class; the tier reads two
+  classes, with escape DEP-named on the use-profile. The solo check
+  caught one row omission before the march (lambda_carries_row needed
+  Alloc — resolve_row builds rows). 777 lines heavier: the tier's own
+  weight, priced by the stamp as one census-class walk.
+
 - 2026-08-07 · ▶▶▶ THE SHAPE-KEYED BRANCH JUDGMENT DELETED — the arc
   loop's third iteration lands Phase 2.2 (pin e1ef0bd41417 — CLEAN
   m2 == m3 at 334,510 lines, census 0; 334 lines lighter than the prior

@@ -2219,6 +2219,20 @@ for i in "${!compilers[@]}"; do
   else
     fail "audit iteration-shape (fire=$it_fire quiet=$it_quiet)"
   fi
+
+  # ─── The anonymity tier (a named stage in hiding) ───────────────────
+  # The audit convicts the eta-wrapper (the named fn already exists) and
+  # the effectful lambda (the row deserves a decl home), and stays
+  # SILENT on the pure-local vocabulary — all three faces asserted.
+  an_audit=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" audit "$ROOT/tests/frontier/mn-anonymity-tier.mn" 2>/dev/null)
+  an_eta=$(printf '%s' "$an_audit" | sed -n '/^wraps/,/^ticks/p' | grep -c 'eta-wrapper')
+  an_rowed=$(printf '%s' "$an_audit" | sed -n '/^ticks/,/^pure_vocab/p' | grep -c 'effectful lambda')
+  an_quiet=$(printf '%s' "$an_audit" | sed -n '/^pure_vocab/,/^main/p' | grep -c 'anonymity:')
+  if [ "$an_eta" = "1" ] && [ "$an_rowed" = "1" ] && [ "$an_quiet" = "0" ]; then
+    pass "audit anonymity: the eta and the row convict, the vocabulary stays silent"
+  else
+    fail "audit anonymity (eta=$an_eta rowed=$an_rowed quiet=$an_quiet)"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

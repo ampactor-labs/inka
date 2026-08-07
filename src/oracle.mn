@@ -35,6 +35,8 @@
 // graph_mutated at the outermost commit boundary).
 import types
 
+import effects
+
 import mentl
 
 import infer
@@ -517,6 +519,76 @@ fn param_plus_one(a, b, pnames) with GraphRead + Alloc + Memory = match graph_no
 fn list_contains_str(xs, target: String) with Memory = match xs {
   [] => false,
   [h, ...t] => if h == target { true } else { list_contains_str(t, target) },
+}
+
+// ── the anonymity read — the named stage in hiding ───────────────────
+//
+// INTENT IS LOSSLESS (PLAN §0; the stamp Hβ.audit.anonymity-tier): an
+// anonymous fn that already HAS a name (the eta-wrapper — its body is
+// exactly a named call over its own params, so the name exists and the
+// lambda hides it) or that CARRIES a row (a non-Pure lambda — the
+// effects deserve a decl home with a `with` clause) is intent
+// discarded at the site that knew it. The pure-local
+// immediately-consumed lambda is the vocabulary and stays silent —
+// `map((x) => x + 1, xs)` never narrates, whatever param it lands on.
+// The escape class is DEP `Hβ.infer.use-profile` (band N): until the
+// escape-bit lands, the read speaks the two classes it can prove.
+fn anonymity_shape_of(fn_handle) with GraphRead + !Mutate + Alloc + Memory = match graph_node_body(fn_handle) {
+  NStmt(FnStmt(_, _, _, _, body)) => lambda_shapes(node_handle(body), (0, 0)),
+  _ => (0, 0),
+}
+
+fn lambda_shapes(h, acc) with GraphRead + !Mutate + Alloc + Memory = {
+  let body = graph_node_body(h)
+  let here = match body {
+    NExpr(LambdaExpr(params, lbody)) => classify_lambda(h, params, lbody, acc),
+    _ => acc,
+  }
+  body_child_handles(body) |> fold(here, (a, c) => lambda_shapes(c, a))
+}
+
+fn classify_lambda(h, params, lbody, acc) with GraphRead + !Mutate + Alloc + Memory = match acc {
+  (eta, rowed) => if lambda_is_eta(params, lbody) {
+    (eta + 1, rowed)
+  } else if lambda_carries_row(h) {
+    (eta, rowed + 1)
+  } else {
+    acc
+  },
+}
+
+// The eta test reads the body's OWN shape: exactly CallExpr(VarRef(g),
+// args) with g resolving OUTSIDE the params (a param-named callee has
+// no site-independent name to pass) and args ≡ the params in order.
+fn lambda_is_eta(params, lbody) with GraphRead + Alloc + Memory = match graph_node_body(node_handle(lbody)) {
+  NExpr(CallExpr(callee, args)) => match graph_node_body(node_handle(callee)) {
+    NExpr(VarRef(g)) => {
+      let pnames = params |> map(param_name)
+      !list_contains_str(pnames, g) && args_mirror_params(args, pnames)
+    },
+    _ => false,
+  },
+  _ => false,
+}
+
+fn args_mirror_params(args, pnames) with GraphRead + Alloc + Memory =
+  len(args) == len(pnames) && (range(0, len(args)) |> all((i) => arg_is_var(args[i], pnames[i])))
+
+fn arg_is_var(a, n: String) with GraphRead = match graph_node_body(node_handle(a)) {
+  NExpr(VarRef(v)) => v == n,
+  _ => false,
+}
+
+// A lambda that PERFORMS: its judged TFun row resolves to present
+// names (resolve_row follows bound row edges, so effects living behind
+// an EtOpen var are read, not missed). Nothing present — including an
+// open polymorphic tail at a HOF boundary — stays silent: pure
+// vocabulary never narrates.
+fn lambda_carries_row(h) with GraphRead + !Mutate + Alloc + Memory = match graph_chase(h) {
+  GNode(NBound(TFun(_, _, row)), _) => match resolve_row(row) {
+    EfRow(present, _, _) => len(present) > 0,
+  },
+  _ => false,
 }
 
 // locality_at — byte distance from the cursor, read from the graph's

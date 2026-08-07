@@ -718,9 +718,13 @@ after which the map extends by construction over every declared effect
 wants !WASI and !Filesystem). Cheap once the evidence rides; the
 render is the whole design question.
 
-`Hβ.audit.anonymity-tier` — the design stamp for PLAN §11 Phase 2.3
-(banked 2026-08-07; the tier is UNBUILT — this entry is what gets built
-and what was measured). MEASURED BASES, both true, name the base when
+`Hβ.audit.anonymity-tier` — BUILT 2026-08-07 against this stamp (pin
+eb827fae186d; the tier reads TWO classes — the build corrected the
+stamp's class 3 in place: a pure lambda on a quantified row var is
+exactly `map((x) => x + 1, xs)`, the vocabulary itself, so the
+quantified-param landing is not an independent conviction and its
+honest half — the published row — is the row class already; escape
+stays the DEP below). The stamp as banked, correction folded in: MEASURED BASES, both true, name the base when
 citing either: the weave census counts 555 anonymous fns on the wheel
 link (`mentl query src/main.mn "census anonymous"`, read this day);
 §11's 490-of-3,469 counted EMITTED fns (2026-08-05 harvest) — the two

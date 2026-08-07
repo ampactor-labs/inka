@@ -1,0 +1,21 @@
+// The anonymity tier's gate fixture (Hβ.audit.anonymity-tier, PLAN §11
+// Phase 2.3): one convicting eta-wrapper, one convicting effectful
+// lambda, one silent pure-local lambda. The leg asserts the audit
+// narrates each conviction on its own fn and stays silent on the
+// vocabulary fn — intent is lossless, and a lambda that already has a
+// name (eta) or already carries a row (effectful) is intent discarded.
+fn inc(x) = x + 1
+
+fn wraps(xs) = map((x) => inc(x), xs)
+
+fn ticks(xs) = map((x) => x + tick(), xs) ~> ticker
+
+fn pure_vocab(xs) = map((x) => x + 1, xs)
+
+effect Tick {
+  tick() -> Int
+}
+handler ticker {
+  tick() => resume(1),
+}
+fn main() = 0

@@ -1249,7 +1249,7 @@ fn build_audit_report(fn_name, handle, ty, pending, tightens) = {
   // an incremented index is the loop in recursion's costume — iteration
   // is topology (|> stages, <~ cycles, derived folds), and the audit
   // names the costume where it stands.
-  (fn_name, more_severable, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle), recursion_shape_of(handle), pending, tightens)
+  (fn_name, more_severable, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle), recursion_shape_of(handle), anonymity_shape_of(handle), pending, tightens)
 }
 
 // Severance candidates: every effect DECLARED in scope that the body
@@ -1316,7 +1316,7 @@ fn severance_unlocks(severable) = severable |> fold(
 // Positional destructure — provable with no type flow, where a
 // record field read floors in a map lambda (see build_audit_report).
 fn render_audit(entries) = entries |> map((report) => match report {
-  (fn_name, more_severable, row_str, severable, unlocks, referenced_by, pipe_chains, loop_costume, pending, tightens) => audit_report_lines(
+  (fn_name, more_severable, row_str, severable, unlocks, referenced_by, pipe_chains, loop_costume, anon_shapes, pending, tightens) => audit_report_lines(
     fn_name,
     row_str,
     severable,
@@ -1325,6 +1325,7 @@ fn render_audit(entries) = entries |> map((report) => match report {
     referenced_by,
     pipe_chains,
     loop_costume,
+    anon_shapes,
     pending,
     tightens
   ),
@@ -1334,7 +1335,7 @@ fn render_audit(entries) = entries |> map((report) => match report {
 // map lambda the splices judged datum-last while the tuple elements were
 // still free, and the word floor rendered every audited fn's name and
 // row as pointer numerals. The named call anchors the binders.
-fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more_severable, referenced_by: [String], pipe_chains, loop_costume, pending, tightens) = {
+fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more_severable, referenced_by: [String], pipe_chains, loop_costume, anon_shapes, pending, tightens) = {
   let header = "{fn_name} : {row_str}\n"
   // The teaching tier leads; the remainder is counted, never listed —
   // a fn that reaches nothing can prove the absence of every effect in
@@ -1375,6 +1376,25 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more
   } else {
     ""
   }
+  // The anonymity tier (Hβ.audit.anonymity-tier): an eta-wrapper hides
+  // a name that exists; an effectful lambda hides a row that deserves a
+  // decl home. The pure-local lambda is vocabulary and stays silent.
+  let anon_section = match anon_shapes {
+    (eta_n, rowed_n) => {
+      let eta_note =
+        if eta_n == 0 { "" } else { "{int_to_str(eta_n)} eta-wrapper(s) — the named fn serves; " }
+      let rowed_note = if rowed_n == 0 {
+        ""
+      } else {
+        "{int_to_str(rowed_n)} effectful lambda(s) — a named stage carries the row; "
+      }
+      if eta_n + rowed_n == 0 {
+        ""
+      } else {
+        "  anonymity: {eta_note}{rowed_note}intent is lossless, name the stage\n"
+      }
+    },
+  }
   // The banks' tiers — the same facts the frontier ranks, spoken per fn:
   // undischarged proof obligations in this decl's extent, and the
   // judgment's banked tightening with its proven row (the patch mentl
@@ -1386,7 +1406,7 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more
   }
   let tighten_section =
     tightens |> map(((declared, proven, _, _)) => "  tighten: with {show_effrow(declared)} — body proves {show_effrow(proven)} (mentl tighten authors the patch)\n") |> str_concat_all
-  "{header}{severance_section}{refs_section}{verb_section}{iter_section}{pending_section}{tighten_section}"
+  "{header}{severance_section}{refs_section}{verb_section}{iter_section}{anon_section}{pending_section}{tighten_section}"
 }
 
 // Query rendering — delegates to query.mn for Question parsing.

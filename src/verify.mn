@@ -22,6 +22,10 @@
 // path stays identical.
 import types
 
+import graph
+
+import runtime/io
+
 // Discharges the decidable subset compile-time; defers the rest to
 // the ledger. The simplest demonstration that the handler-swap
 // thesis works on the compiler's own core: the gap between "ledger

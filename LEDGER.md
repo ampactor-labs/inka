@@ -35,6 +35,31 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE PER-MODULE SWEEP ARMS — the arc loop's
+  eighteenth iteration lands Phase 3.5's first half
+  (pin f826a9cb1668 — CLEAN m2 == m3, census 0). The solo census
+  re-measured: 53 E_MissingVariable across 13 modules (the 2026-07-31
+  29/18 figure had aged — mcp joined at 16 and the counts drifted).
+  Two one-line imports killed 17: verify→graph+runtime/io (node_handle
+  ×11 + eprint_string — verify.mn had imported only types) and
+  format→parser (the five handler-arm/state-field accessors the where
+  verb's dig already used through query's own import).
+  solo_violations_max: 36 banks the ceiling; the frontier's sweep leg
+  (one solo judgment per module) enforces it, reaching 0 when the two
+  RESIDUAL SEAMS close — and the diagnosis is the landing's real
+  yield: the 36 are NOT under-imports. The infer→pipeline handler
+  seam (~20 across nine closures): infer.mn:2310's install chain
+  names env_handler/intern_view, DECLARED in pipeline.mn a layer the
+  DAG places above infer — the declarations relocate DOWN to their
+  substrate homes, which is §5.5's env-column move meeting the
+  manifest. The mcp→main verb-grammar seam (16): parse_cli_args and
+  the VerbSpec roster serve two transports from the entry module —
+  the grammar relocates to a home both import. Both fix directions
+  banked in the overlay stamp (Hβ.driver.per-module-env-overlay),
+  whose second half — tagged env entries, per-module closure
+  bitmasks, O(1) lookup filters, scoped diagnostics, the per-file
+  census cut, file-true spans — is the priced design.
+
 - 2026-08-07 · ▶▶▶ THE SEQ-OP MENTION TYPES AS THE FACE — the arc
   loop's sixteenth iteration lands Phase 3.3's false-diagnostic drift
   (pin 7d8e91e499a1 — the loop's FIRST TRANSITION: m2 ≠ m3 with

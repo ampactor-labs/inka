@@ -41,6 +41,8 @@ import effects
 
 import graph
 
+import parser
+
 // ─── The Format effect ──────────────────────────────────────────────
 //
 // Three ops:

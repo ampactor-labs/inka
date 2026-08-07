@@ -692,6 +692,42 @@ its own comment says "now LIVE" — and is recorded here only so the
 stale prose is struck; that distinction between an open gap and a
 resolved one is exactly what an index carries and a comment cannot.
 
+`Hβ.driver.per-module-env-overlay` — the design stamp for PLAN §11
+Phase 3.5 (banked 2026-08-07 with the first half LANDED: the solo
+sweep measured 53 violations across 13 modules at pin 7d8e91e499a1,
+two one-line imports killed 17 — verify→graph+runtime/io,
+format→parser — and solo_violations_max: 36 is the banked ceiling the
+frontier's sweep leg enforces). THE RESIDUAL 36 IS TWO ARCHITECTURAL
+SEAMS, measured and directioned, not under-imports: (1) THE
+INFER→PIPELINE HANDLER SEAM (~20 across nine closures) —
+infer.mn:2310's install chain (`~> env_handler(bb, bc, bi) ~> … ~>
+intern_view(ib, ie, ic)`) installs handlers DECLARED in pipeline.mn, a
+layer the import DAG places ABOVE infer (pipeline imports infer; the
+reverse edge would cycle); the fix relocates the handler DECLARATIONS
+down to their substrate homes (the env buffer's and intern table's own
+modules — which is also §5.5's env-column move meeting the manifest:
+the declarations land where the state they manage lives, and infer
+imports that); (2) THE MCP→MAIN VERB-GRAMMAR SEAM (16) — mcp.mn:558
+parses sessions with parse_cli_args, declared in main.mn beside
+VerbSpec/verb_specs ("one grammar two transports", mcp's own comment),
+and main imports mcp so the reverse edge cycles; the fix relocates the
+verb grammar to a home both transports import. THE OVERLAY PROPER (the
+second half, unbuilt): per-module env views on the ONE graph — each
+env entry tagged by its defining module at env_extend, each lookup
+filtered by the ASKING module's import-closure membership (a
+per-module closure bitmask makes the filter O(1)), so solo checks and
+queries get their REAL link sets without re-judging; diagnostics scope
+to the queried file (healing the fmt scope register's 416 foreign
+lines), the census gains its per-file cut, and query spans gain
+file-true coordinates (`Hβ.query.decl-site-file-coordinates` lands
+here). PRICED: the tag is one word per env entry written at the one
+writer; the closure bitmask is per-module, built once from the
+manifest DAG; the lookup filter is one mask test. WRITERS when the
+second half builds: env_extend (the tag), the driver (the closure
+masks from the DAG it already walks), env_lookup (the filter,
+context-threaded), the check/query/fmt verbs (the asking-module
+context), and the sweep leg's ceiling falling to 0.
+
 `Hβ.types.named-effect-rows` — BUILT 2026-08-07 against this stamp (pin
 6768ffac9dfa; the fixture's alias-of-alias `Both - B` grouping case
 runs 3 with zero diagnostics; the named residual: a row alias used in

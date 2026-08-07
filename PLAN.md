@@ -1680,16 +1680,22 @@ new DEP found; the map below is accurate at that pin.)*
   silent as designed, RedundantBraces and RedundantPerform surfacing as
   warnings until the fmt canonical projection retires them — measured,
   never asserted).
-- **3.5 · The per-module half of the manifest** —
-  `Hβ.driver.per-module-env-overlay` on the daily path. The 29 solo-check
-  violations across 18 src modules go to zero and the per-module check
-  becomes a ratchet (it gates the drift-catalog retirement); solo queries
-  and checks get their REAL link sets, which heals the fmt scope register
-  (416 foreign diagnostic lines on an 18-line file — the worst noise on the
-  best instrument), gives the census its per-file cut, and gives query
-  spans file-true coordinates (2.5's paired facet). The overlay is band O's
-  design: per-module env overlays on the one graph, entries shadowing by
-  import edge, never a re-derived flat blob.
+- **3.5 · The per-module half of the manifest** — first half ✅ LANDED
+  2026-08-07, second half STAMPED (`Hβ.driver.per-module-env-overlay` in
+  `RESIDUE.md` carries both). The sweep re-measured 53 violations across
+  13 modules (the 29/18 figure had aged); two one-line imports killed 17
+  (verify→graph+io, format→parser), and `solo_violations_max: 36` is the
+  banked ceiling the frontier's sweep leg enforces — the residual 36 IS
+  two architectural seams with fix directions banked: the infer→pipeline
+  handler relocation (the install chain's declarations move DOWN to their
+  substrate homes, meeting §5.5's env-column move) and the mcp→main verb
+  grammar (one grammar, two transports, relocated to a home both import).
+  The OVERLAY proper (per-module env views: tagged entries, closure
+  bitmasks, O(1) lookup filters — real link sets without re-judging,
+  scoped diagnostics healing the fmt register, the per-file census cut,
+  file-true query spans) is the stamped second half; the ceiling reaches
+  0 when the seams close, and the per-module check then gates the
+  drift-catalog retirement.
 - **3.6 · `<~` becomes whole.** The measured gap (Phase 3.3's "`<~`
   contributes no iterative effect") closes together with
   `Hβ.dataflow.causality-compile-error` — a zero-delay `<~` cycle is a

@@ -2298,6 +2298,22 @@ for i in "${!compilers[@]}"; do
   else
     fail "pipe into len (diagnostics on a correct stage: $pil_diags; see $pil_err)"
   fi
+
+  # ─── The per-module solo sweep (PLAN §11 Phase 3.5, ratcheted) ──────
+  # E_MissingVariable across every src module's SOLO check, ceiling in
+  # verify-baseline (solo_violations_max — monotone DOWN; 0 retires the
+  # drift catalog per §11). One judgment per module.
+  sv_max=$(grep -E '^solo_violations_max:' "$ROOT/tools/verify-baseline.txt" | head -1 | cut -d: -f2 | tr -d ' ')
+  sv_total=0
+  for svf in "$ROOT"/src/*.mn "$ROOT"/src/backends/*.mn; do
+    sv_n=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$svf" 2>&1 | grep -cE 'E_MissingVariable')
+    sv_total=$((sv_total + sv_n))
+  done
+  if [ -n "$sv_max" ] && [ "$sv_total" -le "$sv_max" ]; then
+    pass "per-module solo sweep: $sv_total violation(s) within the $sv_max ceiling (0 retires the drift catalog)"
+  else
+    fail "per-module solo sweep: rose to $sv_total against ceiling $sv_max — a module newly under-imports its names"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

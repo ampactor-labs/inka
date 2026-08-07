@@ -488,6 +488,21 @@ comment_refs_max: 0
 # legal move stays DOWN; rung 3 (Phase 5.2) dissolves the class.
 movers_max: 474
 
+# 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
+# E_MissingVariable across every src module's SOLO check, monotone DOWN.
+# Seeded 36 after the two one-line import fixes (verify→graph+io killed
+# 12+1, format→parser killed 5; the sweep measured 53 before them). The
+# residual 36 IS two architectural seams, not under-imports: the
+# infer→pipeline handler pair (env_handler/intern_view installed in
+# infer.mn:2310 but declared a layer up — the declarations relocate DOWN,
+# ~20 violations across nine closures) and the mcp→main verb grammar
+# (parse_cli_args + VerbSpec shared across two transports but declared
+# at the entry — the grammar relocates to a home both import, 16
+# violations). The frontier's solo-sweep leg enforces this ceiling; it
+# reaches 0 when the seams close and the per-module check becomes the
+# drift-catalog retirement gate.
+solo_violations_max: 36
+
 # 2026-08-07: the ANONYMITY ratchet (PLAN §11 Phase 2.5, second half) —
 # the census tier's convictions on the wheel link, monotone DOWN. Two
 # keys, not one, because the classes fall differently: an eta-wrapper

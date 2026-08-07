@@ -2399,6 +2399,33 @@ holds before the prune; the layer that lied is named by whichever
 row appears. The reuse form itself is banked as judgment-correct
 (marched clean) and re-lands WITH the real fix once the lying
 layer is found — never alone again.
+THE EXIT PROBE RAN AND CAUGHT THE ORACLE ITSELF (2026-08-07,
+eighteen exit lines on the fixture compile — four truths banked):
+(1) the probe works and the accumulators are EDGE-ONLY by design —
+presents enter only from closed-value rows (construction_row,
+closed substrate schemes); main's exits show Memory + Alloc from
+its literals while every fn exit is bare edges. (2) THE REUSE FIX
+VERIFIED WORKING in the trial: sl_from exits with rh=208 and sl
+with rh=201 — their PREREG cells, reused exactly as designed, the
+self-edge visible in the acc. (3) THE FIXTURE-STDIN ORACLE IS
+CONTAMINATED: the stdin compile links NO lib — `++` charges a bare
+seq-op FACE var (r278-class), not str_concat's Memory + Alloc —
+so the fixture cannot lose presents it never had; its A-open/
+B-closed mover is face-var machinery, NOT the specimen's
+mechanism. The solo query (import-DAG, lib linked) and the stdin
+compile are DIFFERENT ORACLES and the dig conflated them from
+iteration 61 on. (4) sl's FINAL exit acc is a single edge to
+t572@e1 — a PREREG-ERA t-sort cell (mint_param_placeholders'
+render placeholder by epoch), meaning the final's charge unified
+into a cross-pass param-cell union whose root is the prereg
+placeholder — the t-sort-in-row-position class again, now visible
+as the union root. THE RE-CUT, next: the fixture gains an IN-FILE
+allocating worker (a record/list construction inside the string
+path — construction_row's closed presents exist without lib), so
+the presents-loss reproduces in the stdin link; then the A/B
+re-reads and the layer question (where presents vanish) is asked
+against an oracle that actually carries them. The solo-link
+specimen (neg_names_to_str) remains the ground truth throughout.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

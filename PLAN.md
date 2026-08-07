@@ -1600,15 +1600,20 @@ re-read syntactic form to decide what the graph already answers.*
   crown (Phase 6) and lands with band E's verification tier (Phase 9.2);
   the G.2 sibling survives as `mentl where`'s schedule badge facet (3.2),
   G.3 dissolved at STEP 4's PFanout collapse.
-- **2.5 · The census grows its judgment shapes.** The iteration-shape and
-  shape-keyed detectors move from the audit tiers into `CensusShape` (the
-  0.3 spine's named growth), and the anonymity shape's RATCHET begins: the
-  measured 490-of-3,469 anonymous count becomes a banked ceiling in
-  `tools/verify-baseline.txt` that only falls, exactly as movers did — 2.3's
-  tier is then a number the board watches, not an audit essay. The
-  whole-link/per-file cut and the decl-site file-coordinates facet
-  (`Hβ.query.decl-site-file-coordinates`) land together when 3.5's overlay
-  gives solo queries their real link sets.
+- **2.5 · The census grows its judgment shapes** — shapes ✅ LANDED
+  2026-08-07 (pin 62542a59bf94): CsEta / CsEffectfulLambda /
+  CsIterationCostume in `CensusShape`, the detector families and the one
+  total child projection moved oracle→query (the census is the detectors'
+  home; the audit reads through the import), census_matches carrying the
+  handle so judgment shapes read the graph at the site; fixture + roster
+  pin each shape counting its own line, seen RED first. THE REMAINING
+  HALF: the conviction-count RATCHET — the eta + effectful-lambda
+  whole-link counts become banked ceilings in `tools/verify-baseline.txt`
+  that only fall, exactly as movers did (the tier's CONVICTIONS, not raw
+  CsAnonymous, whose pure-local majority the tier itself declares silent
+  vocabulary). The whole-link/per-file cut and the decl-site
+  file-coordinates facet (`Hβ.query.decl-site-file-coordinates`) land
+  together when 3.5's overlay gives solo queries their real link sets.
 
 ### Phase 3 · The surface IS SYNTAX
 

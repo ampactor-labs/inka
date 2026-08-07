@@ -20,13 +20,14 @@ import effects
 // sites over the program weave — the question the medium could not ask of
 // its own source ("how many of my functions are anonymous?", "how much of
 // this file is ><?") without grep on emitted WAT (three filed mentl-skips
-// in one audit). The first shapes serve the named consumers: anonymity
-// (Phase 2.3's tier ratchets on CsAnonymous) and verb-shape (CsVerb
-// carries the PipeKind itself, classified at the grammar boundary through
-// show_pipe_kind — the one glyph projection, never a second table). The
-// iteration-shape and shape-keyed-judgment consumers ride the same
-// QCensus spine as their detectors move from the audit tiers into shapes.
-type CensusShape = CsAnonymous | CsVerb(PipeKind)
+// in one audit). The shapes serve the named consumers: anonymity (raw
+// CsAnonymous, plus the tier's two conviction shapes CsEta and
+// CsEffectfulLambda — Phase 2.5 ratchets on the convictions), verb-shape
+// (CsVerb carries the PipeKind itself, classified at the grammar boundary
+// through show_pipe_kind — the one glyph projection, never a second
+// table), and iteration-shape (CsIterationCostume — the audit tier's
+// detector living HERE, the census its home, the audit a reader).
+type CensusShape = CsAnonymous | CsVerb(PipeKind) | CsEta | CsEffectfulLambda | CsIterationCostume
 
 // Sum type covering every forensic question `mentl query` can pose.
 // Each variant corresponds to one `ask(Q)` arm in `query_default`.
@@ -364,6 +365,9 @@ fn span_in(ref acc, ref sp, i) with Memory + Alloc =
 fn census_label(shape) with Pure = match shape {
   CsAnonymous => "anonymous fn(s)",
   CsVerb(k) => "{show_pipe_kind(k)} site(s)",
+  CsEta => "eta-wrapper(s)",
+  CsEffectfulLambda => "effectful lambda(s)",
+  CsIterationCostume => "iteration-costume fn(s)",
 }
 
 fn census_sites(shape) with GraphRead + !Mutate + Alloc + Memory = match graph_snapshot() {
@@ -383,7 +387,7 @@ fn span_of_node_raw(handle) with GraphRead + !Mutate + Memory + Alloc =
 fn census_walk(shape, i, n, acc) with GraphRead + Memory + Alloc + !Mutate = if i >= n {
   acc
 } else {
-  if census_matches(shape, graph_node_body(i)) {
+  if census_matches(shape, i, graph_node_body(i)) {
     let sp = span_of_node_raw(i)
     if sp == span_zero() || span_in(acc, sp, 0) {
       census_walk(shape, i + 1, n, acc)
@@ -399,8 +403,11 @@ fn census_walk(shape, i, n, acc) with GraphRead + Memory + Alloc + !Mutate = if 
 // them the kinds' `==` floored to pointer i32.eq (the documented
 // pointer-eq-on-names class, here on an ADT — PFeedback's two
 // construction sites compared unequal while a match on either side
-// dispatched PFeedback true; measured [CW] `<~ vs <~` → false).
-fn census_matches(shape: CensusShape, body: NodeBody) with Pure = match shape {
+// dispatched PFeedback true; measured [CW] `<~ vs <~` → false). The
+// handle rides beside the body: the judgment shapes read the graph at
+// the site (the lambda's judged row, the fn's own self-calls), where
+// the syntactic shapes read the body alone.
+fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutate + Alloc + Memory = match shape {
   CsAnonymous => match body {
     NExpr(LambdaExpr(_, _)) => true,
     _ => false,
@@ -409,6 +416,196 @@ fn census_matches(shape: CensusShape, body: NodeBody) with Pure = match shape {
     NExpr(PipeExpr(pk, _, _)) => pk == k,
     _ => false,
   },
+  CsEta => match body {
+    NExpr(LambdaExpr(params, lbody)) => lambda_is_eta(params, lbody),
+    _ => false,
+  },
+  CsEffectfulLambda => match body {
+    NExpr(LambdaExpr(params, lbody)) => !lambda_is_eta(params, lbody) && lambda_carries_row(h),
+    _ => false,
+  },
+  CsIterationCostume => match body {
+    NStmt(FnStmt(_, _, _, _, _)) => recursion_shape_of(h),
+    _ => false,
+  },
+}
+
+// ── the one total child projection — the weave's tree edge ──────────
+//
+// expr_child_handles — the type-handles of an Expr's direct child Nodes.
+// One arm per Expr variant that carries children (the row algebra over
+// the value space — H6 exhaustive); leaf literals carry none.
+fn expr_child_handles(e) with Alloc + Memory = match e {
+  BinOpExpr(_, l, r) => [node_handle(l), node_handle(r)],
+  UnaryOpExpr(_, n) => [node_handle(n)],
+  CallExpr(f, args) => [node_handle(f)] ++ map(node_handle, args),
+  LambdaExpr(_, body) => [node_handle(body)],
+  IfExpr(c, t, f) => [node_handle(c), node_handle(t), node_handle(f)],
+  BlockExpr(stmts, fin) => // order-free: membership test only
+  [node_handle(fin)] ++ map(node_handle, stmts),
+  MatchExpr(scrut, arms) => // an arm's BODY is a child node — dropping the arms left the
+  // projection partial and tree containment blind below any match
+  // (the enclosing-decl guard's measured hole).
+  [node_handle(scrut)] ++ map(
+    (arm) => match arm {
+      (_, b) => node_handle(b),
+    },
+    arms
+  ),
+  ResumeExpr(v, updates) => // A resume-with update is the parser's {name, init} record — the handle
+  // lives on its init edge (record_field_handle's exact sibling).
+  [node_handle(v)] ++ map(record_field_handle, updates),
+  MakeListExpr(elems) => map(node_handle, elems),
+  MakeTupleExpr(elems) => map(node_handle, elems),
+  MakeRecordExpr(fields) => // Record LITERALS carry the parser's (name, value) tuples
+  // (parse_record_fields); only resume updates are {name, init} records.
+  map(tuple_field_handle, fields),
+  RecordUpdateExpr(base, flds) => [node_handle(base)] ++ map(tuple_field_handle, flds),
+  NamedRecordExpr(_, flds) => map(tuple_field_handle, flds),
+  IndexExpr(recv, idx) => [node_handle(recv), node_handle(idx)],
+  MakeStringExpr(frags) => map(node_handle, frags),
+  FieldExpr(recv, _) => [node_handle(recv)],
+  PipeExpr(_, l, r) => [node_handle(l), node_handle(r)],
+  LabeledArg(_, v) => // the labeled value is a child node
+  [node_handle(v)],
+  _ => // LitInt/LitFloat/LitString/LitBool/LitUnit/VarRef/ExprPlaceholder — no child Nodes
+  [],
+}
+
+// The field IS the parser's {name, init} record — read the init edge by
+// name (the tuple destructure read a record as positions and met Node).
+fn record_field_handle(field) with Pure = node_handle(field.init)
+
+fn tuple_field_handle(field) with Pure = match field {
+  (_, v) => node_handle(v),
+}
+
+// stmt_child_handles — expr_child_handles' Stmt sibling (the projection
+// made TOTAL, Hβ.cursor.enclosing-decl-edge's dep): the VALUE-position
+// child nodes of a statement. Type-level carriers (a variant's or op's
+// comment node, an import, a refinement's predicate) hold no value
+// holes and contribute none.
+fn stmt_child_handles(s) with Alloc + Memory = match s {
+  LetStmt(_pat, value, ann) => match ann {
+    N(NTypeAnn(_), _, _) => // the annotation channel is a child only when it IS one: the absent
+    // form ALIASES the value node (the parser's no-fresh-mint sentinel,
+    // all three LetStmt mints), so listing the alias double-visits every
+    // unannotated let's value subtree — measured as count_var_uses
+    // doubling through statement-position lets. Same read infer makes
+    // (its NTypeAnn arm skips a non-annotation node).
+    [node_handle(value), node_handle(ann)],
+    _ => [node_handle(value)],
+  },
+  FnStmt(_name, _params, _ret, _effs, body) => [node_handle(body)],
+  ExprStmt(e) => [node_handle(e)],
+  HandlerDeclStmt(_hname, _ename, _config, states, arms) => map(record_field_handle, states) ++ map(arm_body_handle, arms),
+  TypeDefStmt(_, _) => [],
+  EffectDeclStmt(_, _, _) => [],
+  ImportStmt(_) => [],
+  RefineStmt(_, _, _) => [],
+  AliasStmt(_, _) => [],
+}
+
+fn arm_body_handle(arm) with Pure = node_handle(arm.body)
+
+// body_child_handles — the ONE total child projection over NodeBody:
+// tree walks (containment, the enclosing-decl descent) read this,
+// never a per-altitude copy.
+fn body_child_handles(body) with Alloc + Memory = match body {
+  NExpr(e) => expr_child_handles(e),
+  NStmt(s) => stmt_child_handles(s),
+  NPat(_) => [],
+  NHole(_) => [],
+  NModule(_) => [],
+  NTypeAnn(_) => [],
+}
+
+// ── the tier detectors — the census IS their home ────────────────────
+//
+// The audit tiers (oracle.mn: anonymity_shape_of per fn; pipeline.mn's
+// renderer) READ these; the census counts them over the whole weave.
+// One detector, two projections — the per-fn narration and the
+// count+sites answer — never two classifiers (PLAN §11 Phase 2.5).
+//
+// ITERATION IS TOPOLOGY (Morgan's interrogation, 2026-07-30 — the law
+// SYNTAX declared at birth: no loop keywords; iteration is |> stages,
+// <~ cycles, Iterate handlers). A self-call that threads an
+// INCREMENTED INDEX over the fn's own parameter is the imperative loop
+// written in recursion's costume — name-keyed re-entry where a derived
+// fold/each/iterate serves. The read is structural over the one total
+// child projection: a CallExpr of the fn's OWN name with any argument
+// `p + 1` / `1 + p` over a parameter — the index-threading signature
+// (a structural fold's self-call recurses on CHILDREN, never on an
+// incremented counter, so derived-fold-shaped recursion never fires).
+fn recursion_shape_of(fn_handle) with GraphRead + Alloc + Memory = match graph_node_body(fn_handle) {
+  NStmt(FnStmt(name, params, _, _, body)) => self_call_increments(node_handle(body), name, params |> map(param_name)),
+  _ => false,
+}
+
+fn self_call_increments(h, name: String, pnames) with GraphRead + Alloc + Memory = {
+  let body = graph_node_body(h)
+  let here = match body {
+    NExpr(CallExpr(callee, args)) => callee_names(callee, name) && (args |> any((a) => arg_is_increment(a, pnames))),
+    _ => false,
+  }
+  here || (body_child_handles(body) |> any((c) => self_call_increments(c, name, pnames)))
+}
+
+fn callee_names(callee, name: String) with GraphRead = match graph_node_body(node_handle(callee)) {
+  NExpr(VarRef(n)) => n == name,
+  _ => false,
+}
+
+fn arg_is_increment(arg, pnames) with GraphRead + Alloc + Memory = match graph_node_body(node_handle(arg)) {
+  NExpr(BinOpExpr(BAdd, l, r)) => param_plus_one(l, r, pnames) || param_plus_one(r, l, pnames),
+  _ => false,
+}
+
+fn param_plus_one(a, b, pnames) with GraphRead + Alloc + Memory = match graph_node_body(node_handle(a)) {
+  NExpr(VarRef(n)) => list_contains_str(pnames, n) && match graph_node_body(node_handle(b)) {
+    NExpr(LitInt(1)) => true,
+    _ => false,
+  },
+  _ => false,
+}
+
+fn list_contains_str(xs, target: String) with Memory = match xs {
+  [] => false,
+  [h, ...t] => if h == target { true } else { list_contains_str(t, target) },
+}
+
+// The eta test reads the body's OWN shape: exactly CallExpr(VarRef(g),
+// args) with g resolving OUTSIDE the params (a param-named callee has
+// no site-independent name to pass) and args ≡ the params in order.
+fn lambda_is_eta(params, lbody) with GraphRead + Alloc + Memory = match graph_node_body(node_handle(lbody)) {
+  NExpr(CallExpr(callee, args)) => match graph_node_body(node_handle(callee)) {
+    NExpr(VarRef(g)) => {
+      let pnames = params |> map(param_name)
+      !list_contains_str(pnames, g) && args_mirror_params(args, pnames)
+    },
+    _ => false,
+  },
+  _ => false,
+}
+
+fn args_mirror_params(args, pnames) with GraphRead + Alloc + Memory =
+  len(args) == len(pnames) && (range(0, len(args)) |> all((i) => arg_is_var(args[i], pnames[i])))
+
+fn arg_is_var(a, n: String) with GraphRead = match graph_node_body(node_handle(a)) {
+  NExpr(VarRef(v)) => v == n,
+  _ => false,
+}
+
+// A lambda that PERFORMS: its judged TFun row resolves to present
+// names (resolve_row follows bound row edges, so effects living behind
+// an EtOpen var are read, not missed). Nothing present — including an
+// open polymorphic tail at a HOF boundary — stays silent: pure
+// vocabulary never narrates.
+fn lambda_carries_row(h) with GraphRead + !Mutate + Alloc + Memory = match graph_chase(h) {
+  GNode(NBound(TFun(_, _, row)), _) => match resolve_row(row) {
+    EfRow(present, _, _) => len(present) > 0,
+  },
+  _ => false,
 }
 
 // span_of_handle — the node's source span, read live from its Reason chain

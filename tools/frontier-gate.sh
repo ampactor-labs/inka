@@ -912,14 +912,14 @@ run_census() {
   local compiler="$1" dir="$2"
   local doc="$ROOT/tests/frontier/mn-census-verbs.mn"
   local ok=1 spec q line
-  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15'; do
+  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26'; do
     q="${spec%%:*}"; line="${spec##*:}"
     wt_run --dir "$ROOT" "$compiler" query "$doc" "census $q" > "$dir/census-$line.out" 2>/dev/null
     if ! grep -q "mn-census-verbs:$line" "$dir/census-$line.out"; then
       ok=0; fail "census '$q' misses its own site (line $line; see $dir/census-$line.out)"
     fi
   done
-  [ "$ok" = 1 ] && pass "structural census: all six shapes count their own site (|> <| >< ~> <~ anonymous)"
+  [ "$ok" = 1 ] && pass "structural census: all nine shapes count their own site (|> <| >< ~> <~ anonymous eta effectful-lambda iteration)"
 }
 
 run_lsp_hover() {

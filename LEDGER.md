@@ -35,6 +35,31 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE CENSUS GROWS ITS JUDGMENT SHAPES — the arc loop's
+  seventh iteration lands Phase 2.5's first half
+  (pin 62542a59bf94 — CLEAN m2 == m3 at 335,550 lines, census 0). Three
+  shapes join CensusShape: CsEta, CsEffectfulLambda (disjoint by
+  construction — the effectful arm excludes eta, matching the audit
+  tier's precedence), CsIterationCostume (a FnStmt whose body carries
+  the index-threading self-call). The MOVE is the migration §11 named:
+  the detector families (lambda_is_eta / lambda_carries_row /
+  recursion_shape_of and kin) and the one total child projection
+  (expr/stmt/body_child_handles) leave oracle.mn for query.mn — the
+  census is the detectors' home, and oracle's audit aggregates read
+  them through its existing import (the import direction forced the
+  move: query cannot import oracle). census_matches gains the handle
+  beside the body and widens to GraphRead — judgment shapes read the
+  graph at the site (the lambda's judged row, the fn's own self-calls)
+  where syntactic shapes read the body alone. The fixture grew three
+  sites at pinned lines (eta 24, effectful-lambda 25, iteration 26)
+  and the census roster grew their entries, seen RED as "unknown
+  query" through the prior pin; all three count their own sites
+  through this one. THE REMAINING HALF, named: the conviction-count
+  ratchet in verify-baseline (the eta + effectful-lambda whole-link
+  counts as banked ceilings that only fall — the tier's convictions,
+  NOT raw CsAnonymous, whose pure-local majority is vocabulary the
+  tier itself declares silent).
+
 - 2026-08-07 · ▶▶▶ THE ANONYMITY TIER — the arc loop's fifth iteration
   builds Phase 2.3 against the stamp its fourth iteration banked
   (pin eb827fae186d — CLEAN m2 == m3 at 335,287 lines, census 0). The tier

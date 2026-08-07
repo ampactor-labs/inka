@@ -1534,12 +1534,19 @@ fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
   QVUnknownVerb => QUnknown(raw),
 }
 
-// The shape classifier at the grammar's one boundary: "anonymous" or one
-// of the five glyphs, matched THROUGH show_pipe_kind (the one glyph
-// projection — the constructor roster appears exactly here, where the
-// external string enters). An unrecognized shape is the honest QUnknown.
+// The shape classifier at the grammar's one boundary: a named judgment
+// shape, "anonymous", or one of the five glyphs matched THROUGH
+// show_pipe_kind (the one glyph projection — the constructor roster
+// appears exactly here, where the external string enters). An
+// unrecognized shape is the honest QUnknown.
 fn census_shape_of(arg) with Memory + Alloc = if arg == "anonymous" {
   Some(CsAnonymous)
+} else if arg == "eta" {
+  Some(CsEta)
+} else if arg == "effectful-lambda" {
+  Some(CsEffectfulLambda)
+} else if arg == "iteration" {
+  Some(CsIterationCostume)
 } else {
   match find(
     (k) => show_pipe_kind(k) == arg,

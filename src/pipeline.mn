@@ -1452,7 +1452,25 @@ fn render_query_result(result) = match result {
   },
   QRFlowLabel(label, reason) => "→ {show_flow_label(label)}\n  Reason: {show_reason(reason)}",
   QRCensus(label, spans) => "→ {int_to_str(len(spans))} {label}{render_ref_spans(spans)}",
+  QRWhere(lines, sites) => "→ {str_join_lines(lines)}{render_where_sites(sites)}",
   QRError(msg) => "error: {msg}",
+}
+
+fn str_join_lines(lines) with Memory + Alloc = match lines {
+  [] => "",
+  [one] => one,
+  [h, ...t] => "{h}\n  {str_join_lines(t)}",
+}
+
+// The site badges: the schedule word at the fanout's own line —
+// `>< [Thread] at file:line` — the exact fact lower reads ambiently,
+// projected statically (the where stamp's exactness law).
+fn render_where_sites(sites) with GraphRead + Memory + Alloc =
+  render_where_sites_from(sites, module_seams())
+
+fn render_where_sites_from(sites, seams) with GraphRead + Memory + Alloc = match sites {
+  [] => "",
+  [(word, s), ...t] => "\n  >< [{word}] at {span_render_local(seams, s)}{render_where_sites_from(t, seams)}",
 }
 
 // show_flow_label — defined in types.mn alongside flow_label_join/flow_le.
@@ -1475,6 +1493,7 @@ type QueryVerb
   | QVVerification
   | QVFlow
   | QVCensus
+  | QVWhere
   | QVUnknownVerb
 
 fn classify_query_verb(w: String) with Pure = if w == "type" {
@@ -1497,6 +1516,8 @@ fn classify_query_verb(w: String) with Pure = if w == "type" {
   QVFlow
 } else if w == "census" {
   QVCensus
+} else if w == "where" {
+  QVWhere
 } else {
   QVUnknownVerb
 }
@@ -1531,6 +1552,7 @@ fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
     Some(shape) => QCensus(shape),
     None => QUnknown(raw),
   },
+  QVWhere => QWhere(arg),
   QVUnknownVerb => QUnknown(raw),
 }
 

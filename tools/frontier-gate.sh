@@ -2233,6 +2233,22 @@ for i in "${!compilers[@]}"; do
   else
     fail "audit anonymity (eta=$an_eta rowed=$an_rowed quiet=$an_quiet)"
   fi
+
+  # ─── The where verb (PLAN §11 Phase 3.2, Hβ.cli.where-verb) ─────────
+  # Four derived badges: an inferred repr, an op's resume cardinality,
+  # a Thread-scheduled fanout, and the bare Seq default — each a line
+  # the medium narrates from facts the graph already proves.
+  wdoc="$ROOT/tests/frontier/mn-where-badges.mn"
+  w_ok=1
+  w_repr=$(wt_run --dir "$ROOT" "$compiler" where "$wdoc" gain 2>/dev/null)
+  printf '%s' "$w_repr" | grep -q 'gain : Float @ f64 (inferred)' || { w_ok=0; fail "where repr badge (got: $w_repr)"; }
+  w_card=$(wt_run --dir "$ROOT" "$compiler" where "$wdoc" tick 2>/dev/null)
+  printf '%s' "$w_card" | grep -q 'resume Int ->1 answer' || { w_ok=0; fail "where cardinality badge (got: $w_card)"; }
+  w_sched=$(wt_run --dir "$ROOT" "$compiler" where "$wdoc" fanned 2>/dev/null)
+  printf '%s' "$w_sched" | grep -q '>< \[Thread\] at' || { w_ok=0; fail "where schedule badge (got: $w_sched)"; }
+  w_seq=$(wt_run --dir "$ROOT" "$compiler" where "$wdoc" bare 2>/dev/null)
+  printf '%s' "$w_seq" | grep -q '>< \[Seq\] at' || { w_ok=0; fail "where seq-default badge (got: $w_seq)"; }
+  [ "$w_ok" = 1 ] && pass "where: repr, cardinality, and both schedule badges narrate (output, never input)"
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

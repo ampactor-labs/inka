@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ MENTL WHERE LANDS — the arc loop's twelfth iteration
+  builds Phase 3.2 against its stamp
+  (pin 0d3a196299d1 — CLEAN m2 == m3 at 339,110 lines, census 0; four
+  marches in one iteration, each CLEAN — the unnarrated intermediates
+  collapsed by the march, and the last leg named the verb's own parse
+  stage after the anonymity ratchet convicted it). The verb rides the query spine as the
+  census did: QWhere through query_default, the badges pure reads —
+  `gain : Float @ f64 (inferred)` (repr via repr_of + the TReprPin
+  pinned/inferred walk), `tick : Tick op — resume Int ->1 answer` (the
+  discipline read off EffectOpScheme's own fourth field),
+  `>< [Thread] at :12` / `>< [Seq] at :14` (the static enclosing-tee
+  walk, exact by the never-crosses-a-call-boundary law; a lambda or
+  nested fn resets the chain — the frame fence's static mirror; the
+  handler-covers read is two env lookups, the handler's arms against
+  the effect's op roster). TWO DIG LESSONS: the first trap was a list
+  PATTERN over env-stored lists (HandlerKind arms, EffectDeclKind ops
+  — snoc/slice representations; the parse_query_string flat-protocol
+  lesson, §7 face 13, now paid a second time: index walks, never list
+  patterns, on any stored list); the second was the field-offset floor
+  (`a.op_name` on a list_index element whose type stayed open at emit)
+  healed by the wheel's own typed accessor handler_arm_op_name — the
+  medium's existing projection over a hand re-read, exactly the
+  mentl-first law at the source layer. One fixture correction the
+  badge itself taught: the original `threaded` handler covered Tick,
+  not Thread, and the badge said [Seq] — the projection read the
+  artifact, not the name; parallel_compose (the real Thread coverer)
+  yields [Thread]. SYNTAX's lag list shrank by its first name; the
+  frontier grew the four-badge leg. query.mn gained `import parser`
+  (the accessor's home; no cycle — parser's closure is
+  types/effects/graph/canon/lexer).
+
 - 2026-08-07 · ▶▶▶ THE N-ARY LAW LANDS — the arc loop's tenth iteration
   builds Phase 3.1 against its stamp
   (pin 05fd2307ff43 — CLEAN m2 == m3 at 336,495 lines, census 0; the

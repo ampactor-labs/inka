@@ -174,6 +174,12 @@ fn req_target(argv, mk, msg) with Memory + Alloc =
 // The verbs, in help-presentation order (the parser matches by name, so order
 // here is the human's reading order, never the dispatch order). A `""` hint is
 // a no-argument verb.
+fn where_verb_args(a) with Memory + Alloc = if len(a) >= 4 {
+  Invocation(VQuery(path_to_module(a[2]), "where {a[3]}"))
+} else {
+  ParseError("where needs a target and a name: mentl where <path> <name>")
+}
+
 fn verb_specs() with Memory + Alloc = [VerbSpec(
   "run",
   "<path>",
@@ -217,6 +223,11 @@ fn verb_specs() with Memory + Alloc = [VerbSpec(
     ParseError("query needs a target and a question: mentl query <path> <question>")
   },
   "why / type / effects / ownership, walked to your words"
+), VerbSpec(
+  "where",
+  "<path> <name>",
+  where_verb_args,
+  "derived badges — repr width, resume cardinality, fanout schedules"
 ), VerbSpec(
   "teach",
   "[path]",

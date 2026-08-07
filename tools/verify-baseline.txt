@@ -476,7 +476,10 @@ comment_refs_max: 0
 # freeze-root divergence class (schemes-are-values, PLAN §7), the same
 # channel as the 424 and 439 re-bases one landing over. The next legal
 # move stays DOWN; rung 3 (Phase 5.2) dissolves the class.
-movers_max: 444
+# Re-based 444 → 451 at mentl where (pin follows the 3.2 landing): the
+# +7 are the verb's own new fns (where_badges and kin) joining the same
+# freeze-root divergence class; zero trial/final machinery in the diff.
+movers_max: 451
 
 # 2026-08-07: the ANONYMITY ratchet (PLAN §11 Phase 2.5, second half) —
 # the census tier's convictions on the wheel link, monotone DOWN. Two

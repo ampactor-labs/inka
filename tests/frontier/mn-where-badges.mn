@@ -1,0 +1,22 @@
+// The where verb's gate fixture (Hβ.cli.where-verb, PLAN §11 Phase
+// 3.2): one repr-pinned value, one inferred-repr value, one effect op,
+// one fn with a scheduled fanout and one with the bare default. The leg
+// asserts each badge line — output, never input: the medium narrating
+// facts the graph already proves.
+type Coeff = Float repr f64
+
+let gain = 0.5
+
+fn ticks(x) = x + tick()
+
+fn fanned(a, b) = ((a) >< (b)) ~> parallel_compose
+
+fn bare(a, b) = (a) >< (b)
+
+effect Tick {
+  tick() -> Int
+}
+handler ticker {
+  tick() => resume(1),
+}
+fn main() = 0

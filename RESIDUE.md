@@ -692,8 +692,13 @@ its own comment says "now LIVE" — and is recorded here only so the
 stale prose is struck; that distinction between an open gap and a
 resolved one is exactly what an index carries and a comment cannot.
 
-`Hβ.cli.where-verb` — the design stamp for PLAN §11 Phase 3.2 (banked
-2026-08-07; UNBUILT — this entry is what gets built). `mentl where` is
+`Hβ.cli.where-verb` — BUILT 2026-08-07 against this stamp (pin
+0d3a196299d1; four badges live and gated; two dig lessons in the
+LEDGER entry MENTL WHERE LANDS — index walks over env-stored lists,
+the typed accessor over the raw field read; the fixture's own badge
+corrected the fixture: a handler named threaded that covered Tick
+read [Seq], because the projection reads the artifact, not the name).
+The stamp as banked: `mentl where` is
 the derived-badge projection SYNTAX names six times and the lag list
 carries: output, never input — the medium narrating facts the graph
 already proves. TRACED — three badges, each an existing read wired to

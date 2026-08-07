@@ -15,6 +15,8 @@ import graph
 
 import effects
 
+import parser
+
 // The structural census (Hβ.query.structural-census — PLAN §11 Phase 0.3):
 // ONE projection taking a structural shape, answering count + located
 // sites over the program weave — the question the medium could not ask of
@@ -63,6 +65,9 @@ type Question
   | QFlowOf(String)
   // "census <shape>" — count + sites of a structural shape in the weave
   | QCensus(CensusShape)
+  // "where NAME" — the derived-badge projection (Hβ.cli.where-verb):
+  // repr width, resume cardinality, fanout schedules. Output, never input.
+  | QWhere(String)
   | QUnknown(String)
 
 type QueryResult
@@ -82,6 +87,8 @@ type QueryResult
   | QRFlowLabel(FlowLabel, Reason)
   // census label + the located sites (count = len)
   | QRCensus(String, [Span])
+  // the derived badges (plain lines) + fanout sites as (schedule, span)
+  | QRWhere([String], [(String, Span)])
   | QRError(String)
 
 // The single-op effect that routes every forensic question through
@@ -206,6 +213,7 @@ handler query_default {
       },
     },
     QCensus(shape) => resume(QRCensus(census_label(shape), census_sites(shape))),
+    QWhere(name) => resume(where_badges(name)),
     QUnknown(q) => resume(QRError("unknown query: {q}")),
   },
 }
@@ -610,6 +618,177 @@ fn lambda_carries_row(h) with GraphRead + !Mutate + Alloc + Memory = match graph
     EfRow(present, _, _) => len(present) > 0,
   },
   _ => false,
+}
+
+// ── the where projection — derived badges (Hβ.cli.where-verb) ────────
+//
+// Output, never input: repr width for a value, resume cardinality for
+// an op, the resolved schedule for a fn's fanout sites. Each badge is
+// a live read of a fact the graph already proves — the pinned/inferred
+// split reads the authored TReprPin in the scheme's own type, the
+// discipline rides the op's EffectOpScheme, and the schedule walk up
+// the enclosing `~>` chain is EXACT because a schedule never crosses a
+// call boundary (the parallel_map dissolution's law): lower's
+// ambient-stack read and this static walk answer identically by
+// construction — a lambda or nested fn resets the chain, the frame
+// fence's static mirror.
+fn where_badges(name: String) with GraphRead + EnvRead + Intern + !Mutate + Alloc + Memory = match env_lookup(name) {
+  None => QRError("not found: {name}"),
+  Some(entry) => match entry {
+    (scheme, _, kind) => match kind {
+      EffectOpScheme(ename, _, _, disc) => QRWhere(["{name} : {ename} op — resume {op_resume_ty(scheme)} {disc_glyph(disc)} answer"], []),
+      _ => match scheme {
+        Forall(_, ty) => match chase_type_deep(ty) {
+          TFun(_, _, _) => QRWhere([], fn_fanout_sites(name)),
+          chased => QRWhere(
+            ["{name} : {show_type(chased)} @ {repr_name(repr_of(chased))} ({pin_word(ty_has_repr_pin(ty))})"],
+            []
+          ),
+        },
+      },
+    },
+  },
+}
+
+fn op_resume_ty(scheme) with GraphRead + Intern + !Mutate + Memory + Alloc = match scheme {
+  Forall(_, ty) => match chase_type_deep(ty) {
+    TFun(_, ret, _) => show_type(ret),
+    other => show_type(other),
+  },
+}
+
+// SYNTAX §«Resume discipline»: ->1 one-shot, ->* multi-shot, ->? either;
+// ->0 is Abandon — the arm never resumes, the continuation deadens.
+fn disc_glyph(disc) with Pure = match disc {
+  OneShot => "->1",
+  MultiShot => "->*",
+  Either => "->?",
+  Abandon => "->0",
+}
+
+fn repr_name(r) with Pure = match r {
+  RI32 => "i32",
+  RI64 => "i64",
+  RF64 => "f64",
+  RF32 => "f32",
+  RV128 => "v128",
+}
+
+fn pin_word(pinned) with Pure = if pinned { "pinned" } else { "inferred" }
+
+// The pin sits in the scheme's OWN type chain — an authored TReprPin
+// survives inside the alias/refinement wrappers; the chased projection
+// answers the WIDTH, this walk answers WHO chose it.
+fn ty_has_repr_pin(ty) with Memory = match ty {
+  TReprPin(_, _) => true,
+  TAlias(_, base) => ty_has_repr_pin(base),
+  TRefined(base, _) => ty_has_repr_pin(base),
+  _ => false,
+}
+
+// The fn's fanout sites with their resolved schedules: find the decl,
+// walk its body tracking the enclosing `~>` chain nearest-first.
+fn fn_fanout_sites(name: String) with GraphRead + EnvRead + !Mutate + Alloc + Memory = match graph_snapshot() {
+  Graph(next, _) => find_fn_fanouts(name, 0, next),
+}
+
+fn find_fn_fanouts(name: String, i, n) with GraphRead + EnvRead + !Mutate + Alloc + Memory = if i >= n {
+  []
+} else {
+  match graph_node_body(i) {
+    NStmt(FnStmt(fname, _, _, _, body)) => if fname == name { fanout_sites(node_handle(body), []) } else { find_fn_fanouts(name, i + 1, n) },
+    _ => find_fn_fanouts(name, i + 1, n),
+  }
+}
+
+fn fanout_sites(h, tees) with GraphRead + EnvRead + !Mutate + Alloc + Memory = {
+  let body = graph_node_body(h)
+  match body {
+    NExpr(PipeExpr(PTee, l, r)) => fanout_sites(node_handle(l), [tee_handler_name(r)] ++ tees),
+    NExpr(FanoutExpr(branches)) => [(schedule_word(tees), span_of_node_raw(h))] ++ fanout_sites_list(branches, tees),
+    NExpr(LambdaExpr(_, lb)) => // the frame fence, statically mirrored
+    fanout_sites(node_handle(lb), []),
+    NStmt(FnStmt(_, _, _, _, fb)) => fanout_sites(node_handle(fb), []),
+    _ => fanout_sites_children(body_child_handles(body), tees),
+  }
+}
+
+fn fanout_sites_list(nodes, tees) with GraphRead + EnvRead + !Mutate + Alloc + Memory = match nodes {
+  [] => [],
+  [nh, ...rest] => fanout_sites(node_handle(nh), tees) ++ fanout_sites_list(rest, tees),
+}
+
+fn fanout_sites_children(hs, tees) with GraphRead + EnvRead + !Mutate + Alloc + Memory = match hs {
+  [] => [],
+  [ch, ...rest] => fanout_sites(ch, tees) ++ fanout_sites_children(rest, tees),
+}
+
+// A tee whose handler expression is not a named reference has no name
+// to classify — "" is the frame-fence sentinel schedule_in_stack itself
+// reads (lower.mn: a "" stack entry answers Seq), not a fabrication:
+// schedule_word env-lookups it to None and walks past, exactly as the
+// lower-side twin fences the unnameable frame.
+fn tee_handler_name(r) with GraphRead + Memory = match graph_node_body(node_handle(r)) {
+  NExpr(VarRef(n)) => n,
+  NExpr(CallExpr(callee, _)) => match graph_node_body(node_handle(callee)) {
+    NExpr(VarRef(n)) => n,
+    _ => // drift-audit: ignore — the frame-fence sentinel, documented above
+    "",
+  },
+  _ => // drift-audit: ignore — the frame-fence sentinel, documented above
+  "",
+}
+
+// Nearest install first, exactly schedule_in_stack's order: the first
+// handler covering a schedule effect names the strategy; none → Seq.
+fn schedule_word(tees) with EnvRead + Memory + Alloc = match tees {
+  [] => "Seq",
+  [h, ...rest] => if handler_covers(h, "Thread") {
+    "Thread"
+  } else if handler_covers(h, "Simd") {
+    "Simd"
+  } else if handler_covers(h, "Gpu") {
+    "Gpu"
+  } else if handler_covers(h, "Persist") {
+    "Persisted"
+  } else {
+    schedule_word(rest)
+  },
+}
+
+// Does handler hname have an arm for any op the effect ename declares?
+// Two env reads — the handler's arms and the effect's op roster. Both
+// lists are env-stored (snoc/slice representations), so the walks are
+// index-based — a list PATTERN on a non-flat list is the flat-protocol
+// trap (the parse_query_string lesson, §7 face 13).
+fn handler_covers(hname: String, ename: String) with EnvRead + Memory + Alloc = match env_lookup(hname) {
+  Some(entry) => match entry {
+    (_, _, HandlerKind(_, _, _, arms)) => match env_lookup(ename) {
+      Some(eentry) => match eentry {
+        (_, _, EffectDeclKind(ops)) => arms_cover_ops(arms, ops, 0, len(arms)),
+        _ => false,
+      },
+      None => false,
+    },
+    _ => false,
+  },
+  None => false,
+}
+
+fn arms_cover_ops(arms, ops, i, n) with Memory + Alloc = if i >= n {
+  false
+} else {
+  if ops_contain(ops, handler_arm_op_name(list_index(arms, i)), 0, len(ops)) {
+    true
+  } else {
+    arms_cover_ops(arms, ops, i + 1, n)
+  }
+}
+
+fn ops_contain(ops, target: String, i, n) with Memory + Alloc = if i >= n {
+  false
+} else {
+  if list_index(ops, i) == target { true } else { ops_contain(ops, target, i + 1, n) }
 }
 
 // span_of_handle — the node's source span, read live from its Reason chain

@@ -2072,11 +2072,6 @@ checked mechanically: `tools/doc-truth.sh` reads the names below and fails on
 any *other* verb the docs name. The list shrinks as verbs land; it never grows
 silently.
 
-- **`mentl where`** — the derived-badge projection: a value's chosen
-  representation width, an op's resume cardinality, a `><`'s resolved schedule
-  (`>< [Thread ×4]`). Output, never input. Named four times above; it is also
-  what returns a fanout's intent to the site after the schedule correctly
-  became a `~> Schedule` handler fact. `PLAN.md §11` Phase 3.2.
 - **`mentl why`** — the Reason-chain walk. Served today as a facet of `mentl
   query <path> "why NAME"`; the bare verb is the surface form.
 - **`mentl diagnostics`** — the live catalog projected from the `DiagKind`

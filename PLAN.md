@@ -1643,17 +1643,16 @@ new DEP found; the map below is accurate at that pin.)*
   (the LEDGER entry carries the mechanics). `<|` keeps input ×
   branch-tuple — different operand structure by nature, one PFanout
   node at lower.
-- **3.2 · `mentl where`** — STAMPED 2026-08-07, unbuilt; the design's one
-  home is `Hβ.cli.where-verb` in `RESIDUE.md` (three badges, each an
-  existing read wired to the surface: repr via `repr_of_resolved` with the
-  TReprPin pinned/inferred discriminator; resume cardinality from the op
-  scheme's TCont; the schedule as a STATIC enclosing-tee walk — exact by
-  the parallel_map dissolution's own law, since a schedule never crosses a
-  call boundary). The derived-badge projection, named six times across
-  SYNTAX and PLAN and absent from the verb table — the cure for what the
-  two-verb reframe cost: the original `><` said *parallel HERE*, at the
-  site; the reframe correctly moved execution strategy to a `~> Schedule`
-  handler and gave nothing back. Output, never input — `>< [Thread]`.
+- **3.2 · `mentl where`** — ✅ LANDED 2026-08-07 (pin 0d3a196299d1, built
+  against `Hβ.cli.where-verb`). The derived-badge projection is live on
+  the query spine: `gain : Float @ f64 (inferred)`, `tick : Tick op —
+  resume Int ->1 answer`, `>< [Thread]` / `>< [Seq]` — each a pure read
+  of a fact the graph proves, the schedule badge's static enclosing-tee
+  walk exact by the never-crosses-a-call-boundary law. SYNTAX's lag list
+  shrank by its first name; the frontier grew the four-badge leg; two
+  dig lessons banked in the LEDGER (index walks over env-stored lists,
+  the typed accessor over the raw field read). The cure for what the
+  two-verb reframe cost — the fact returned to the site as OUTPUT.
 - **3.3 · The remaining measured drifts.** The lambda parameter path (`fn
   f([h, ...t])` parses; `([h, ...t]) =>` does not — a second, weaker copy of the
   parameter parser); named effect rows (`type X = A + B` and `A & B` refuse,

@@ -842,12 +842,15 @@ dissolves env / dedup / find_mapping / esc into the graph's O(1) chase — LESS
 code (delete every scanner) — and the byte-sequence survives only as a display
 projection (arm 7's gradient cash-out: a name's ultimate representation is a word).
 
-**COST IS ON THE BOARD (Morgan 2026-07-31, the OOM's law).** The march runs
-each leg measured (wall + peak RSS), the blessed pin's PROVENANCE block
-carries the cost line, verify-baseline ratchets the self-compile's peak, and
-state.sh shows the footprint (warm images, .build, Mentl-owned /tmp, any
-resident gate) — raising a ceiling is an explicit in-commit act, the census
-pattern applied to cost. Paid for by measurement: the judgment's peak moved
+**COST IS ON THE BOARD (Morgan 2026-07-31, the OOM's law) — currently
+UNINSTRUMENTED (trued 2026-08-07 against the artifact: today's march.sh
+measures neither wall nor RSS, no PROVENANCE cost line, no peak key in
+verify-baseline; the machinery this paragraph described was real in its
+era and did not survive the march rewrite).** Re-instrumentation is the
+arena's build step 0 (`Hβ.perf.per-decl-arena`, RESIDUE) — measure
+before the split lands, so the win is a diff of two reads. state.sh
+still shows the footprint; raising any ceiling stays an explicit
+in-commit act, the census pattern applied to cost. Paid for by measurement: the judgment's peak moved
 563MB → 3,044MB (07-25 → 07-29) across unmeasured landings and fell 823MB at
 the rounds deletion, also unmeasured; a frontier edit-leg holding generations
 in the never-free image reached 2,366MB and was the process the kernel killed
@@ -1746,11 +1749,15 @@ new DEP found; the map below is accurate at that pin.)*
   THE keystone dep; `persist = memcpy`'s image/scratch split; the 4GB ceiling
   that killed a frontier leg and has shadowed the whole constructors arc; the
   allocation payoff of `instantiate-shares-never-clones`; and total
-  monomorphization, which needs the headroom its duplication costs. The drop
-  IS the region exit (O(1)); `emit_memory_arena`'s dormant swap activates;
-  heap_reset's virginity contract extends to the reclaim. Marched as a
-  TRANSITION (any real arena shifts handle order — the fleet's 2026-07-17
-  refutation of "output-invariant" stands; plan the re-pin, never a no-op).
+  monomorphization, which needs the headroom its duplication costs. STAMPED
+  whole 2026-08-07 (`RESIDUE.md` carries the design): the image/scratch split
+  as TWO bump spaces, classification by structure root carried on the writer's
+  own row (ImageAlloc — six traced image families), the per-decl mark/reset in
+  the user-facing `~>` absorb form (the gate peer's content), copy-out
+  REJECTED as the .kai serializer's shape, 4.3 and 9.1 converging on one
+  boundary as the truth signal, cost instrumentation as build step 0, and the
+  four-step marched build order ending in the TRANSITION re-pin (the fleet's
+  2026-07-17 "output-invariant" refutation stands).
 - **4.4 · Ownership's frontier faces.**
   `Hβ.ownership.fractional-uniqueness-ref-borrow` (Granule OOPSLA 2024 —
   the ref/own lattice gains fractional grades where the inference needs

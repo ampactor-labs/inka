@@ -512,6 +512,64 @@ E_RefinementRejected at the branch), computation → raise. Deletes the
 duplicated licence pair (verify.mn:314 ≡ infer.mn:6832). RED banked:
 tests/frontier/mn-refine-join-launder.mn.
 
+`Hβ.perf.per-decl-arena` — STAMPED whole 2026-08-07 (§11 4.3; the gate
+peer `Hβ.infer.region-on-tee-alloc-absorb` folds in below). WHAT EXISTS,
+traced: heap_mark/heap_reset with the virginity contract
+(memory.mn:139-145), battle-tested at the BATCH boundary (per-micro
+inside `mentl test` — the arena's first real workload); the paged spine
+SIZED for per-decl banding by its own comment (graph.mn:91-93 — max
+2,305 mints/decl measured, p99 331, 7× headroom); the region proof
+(own.mn's region_tracker — every fn body a region, return = transfer);
+4.1/4.2 landed as the ordered escape police (T_UseAfterMove + the honest
+grade); emit_memory_arena DORMANT (wasm.mn:159-182 — the region
+semantics belong to the $alloc body, the seam-gated
+Hβ.emit.memory-strategy-body-swap); persist reading [0, heap-line) as
+the image (memory.mn:74-99). THE DESIGN — the image/scratch split,
+row-classified, no copy-out: two bump spaces in the one linear memory
+(image low/monotonic via $ialloc; scratch high, mark/reset per decl;
+Hβ.emit.image-map-fold draws the boundary as one fold). Classification
+by STRUCTURE ROOT, carried by the writer's own row (an ImageAlloc
+effect on the growth fns — the medium's vocabulary, never a runtime
+tag). The IMAGE writers, traced set of SIX families: (1) spine
+band-open pages (spine_ensure/list_extend_to), (2) the env flat buffer
++ index-bucket conses (src/env.mn growth paths), (3) the intern table
+(src/intern.mn — largely parse-phase, pre-mark by construction), (4)
+published schemes + their type trees at env_extend (SHRINKS to
+near-zero at rung 3 — the families' one transitional member, deleted
+by 5.2's own diff), (5) the WAT output buffers (wat_emit
+accumulation), (6) the diagnostic bank + oracle-queue roots.
+Everything else is scratch and dies at the decl reset. The decl
+boundary is the driver's per-decl walk bracketing mark/reset in the
+USER-FACING form — a `~>` region install absorbing Alloc — so the
+absorb license IS the reset license (the gate peer's whole content;
+Mentl solves Mentl). REJECTED BRANCH, priced: copy-out at the boundary
+(the return-transfer materialized as a deep copy below the mark) — the
+walker is the deleted .kai serializer's shape, and the split buys what
+copy-out cannot: the image IS band B's persist set (persist = memcpy
+of [0, image-line), scratch excluded by construction). 4.3 and 9.1
+converging on ONE boundary is the design's truth signal. PRICED
+(§5.O): zero new scans (static per-site classification; O(1) reset;
+band-open unchanged); the working set collapses to one decl's live
+set. COST INSTRUMENTATION IS BUILD STEP 0 — a doc-truth finding rides
+this stamp: §5.O's "march measures wall+RSS / PROVENANCE carries the
+cost line / verify-baseline ratchets peak" is STALE prose (none true
+of today's march.sh); the instrumentation returns first and the win
+lands as a diff of two measured reads, never a claim. MARCH CONTRACT:
+TRANSITION by construction (the two-pointer layout shifts heap
+addresses → interned offsets → WAT bytes; the 2026-07-17
+"output-invariant" refutation governs; re-pin from m3). GATES,
+RED-first: (a) the per-decl reset fires on the wheel compile (a
+counter ≈ decl count); (b) a post-reset image-reachability audit leg —
+the mis-classification tripwire, because virgin-zero reads are SILENT
+and the audit is the loud face; (c) the peak-RSS diff recorded
+in-baseline; (d) the per-micro batch boundary keeps its green. BUILD
+ORDER, marched: (0) cost instrumentation + measured baseline; (1)
+ImageAlloc vocabulary + $ialloc emit (zero-reader, Law-7-additive);
+(2) the six families classified, each a marched step; (3) the
+per-decl bracket + the audit leg, landed together as the TRANSITION
+re-pin; (4) the dormant emit_memory_arena resolves — its real body or
+its deletion, one strategy read from the module's own proof.
+
 `Hβ.own.use-after-move` — BUILT (2026-08-07, pin 8ba768c810c4, before
 the arena exactly as prescribed). The mechanism was one leg's ORDER:
 the ledger's consume arm checked `borrow_depth > 0` before the

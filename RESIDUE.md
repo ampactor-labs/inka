@@ -593,23 +593,42 @@ the pair's vocabulary — ✅ LANDED 2026-08-07 (pin e524668b29f3:
 image_enter/image_exit declared, recognized, emitted as $image_depth
 bumps with the global demand-gated on the pair's performs; zero wheel
 performs keep the pin CLEAN; micro mn-image-region RED→42); (2a-ii)
-the six family brackets + the census measuring image-vs-scratch bytes
-on a real self-compile (the boundary constant must be MEASURED, not
-guessed) — IN PROGRESS: the delta-accounting form + image_bytes
-(taught) + FAMILY (1), spine_ensure's growth extent, ✅ LANDED
-2026-08-07 (pin 2f5ef189a823, the priced TRANSITION at 6 diff lines;
-the census rides the extent delta — outermost enter marks, matching
-exit accumulates — so measurement costs two branches per bracket,
-never per allocation). REMAINING: families (2) env buffer/buckets,
-(3) intern, (4) schemes at env_extend, (5) WAT output buffers, (6)
-diagnostic bank + oracle queue; then the driver's census print
-(performs image_bytes under the taught boot) reads the number 2b's
-boundary is fixed from; (2b) the fork — $alloc reads the depth (image →
-$image_ptr, else $heap_ptr), the layout boundary fixed from 2a-ii's
-measurement, the per-decl mark/reset bracket, and the reachability
-audit leg, ONE TRANSITION re-pin; (3) the dormant emit_memory_arena
-resolves — its real body or its deletion, one strategy read from the
-module's own proof.
+the family brackets + the census — FAMILY (1), spine_ensure's growth
+extent, ✅ LANDED 2026-08-07 (pin 2f5ef189a823, the priced TRANSITION
+at 6 diff lines; the census rides the extent delta — outermost enter
+marks, matching exit accumulates — two branches per bracket, never
+per allocation; the row cascade measured at twelve driver-spine
+widens, caught by verify's census ratchet after the march, which does
+not gate census).
+THE CORE REFUTATION (2026-08-07, before family 2 landed a line):
+SITE-CLASSIFICATION IS UNSOUND FOR THE VALUE GRAPH. A spine cell is a
+WORD pointing to a heap record (the substrate's own definition —
+every value a handle-addressed record); the Ty/GNode/scheme values
+those cells and the env's entries point at are allocated DURING
+inference, interleaved with scratch, and published later by
+POINTER-WRITE — so no extent bracket at the publish site classifies
+their allocation, and a per-decl reset would zero live
+image-reachable values under every column written that decl. Extent
+brackets are sound exactly where the extent IS the publish (band-open
+pages — family 1 stands; flat-buffer growth shares the property for
+the BUFFER cells, not their pointees). The sound forms, priced: (i)
+per-decl EVACUATION of live-out values (a generational nursery copy —
+structure-copy, not wire-format, so the .kai objection weakens, but
+the walker cost and shared-identity questions remain); (ii) COLUMNS
+FIRST — rung 3 (schemes-are-edges, §11 5.2) plus the 5.5 column arc
+move published facts INTO spine columns and flat buffers, making the
+image set = pages + buffers BY CONSTRUCTION, extent-bracketed exactly
+as family 1 already is, with no per-value classification anywhere;
+(iii) no reset (the arena dies — refused, the hub's riders stand).
+CHOSEN: (ii), the Mentl-native form — the graph IS the image.
+RE-SEQUENCED: 4.3 PAUSES at 2a (family 1 + the census print next pin
+measure the banded fraction honestly); 2b's fork/reset DEP-GATES on
+the column arc (5.2 + 5.5); families 2-6's brackets land in the
+column era where each family's storage is a page or flat buffer by
+construction. §11 4.3's entry carries the same correction; the
+reachability audit leg survives as 2b's tripwire unchanged; (3) the
+dormant emit_memory_arena resolves at 2b — its real body or its
+deletion, one strategy read from the module's own proof.
 
 `Hβ.own.use-after-move` — BUILT (2026-08-07, pin 8ba768c810c4, before
 the arena exactly as prescribed). The mechanism was one leg's ORDER:

@@ -1752,14 +1752,19 @@ new DEP found; the map below is accurate at that pin.)*
   that killed a frontier leg and has shadowed the whole constructors arc; the
   allocation payoff of `instantiate-shares-never-clones`; and total
   monomorphization, which needs the headroom its duplication costs. STAMPED
-  whole 2026-08-07 (`RESIDUE.md` carries the design): the image/scratch split
-  as TWO bump spaces, classification by structure root carried on the writer's
-  own row (ImageAlloc — six traced image families), the per-decl mark/reset in
-  the user-facing `~>` absorb form (the gate peer's content), copy-out
-  REJECTED as the .kai serializer's shape, 4.3 and 9.1 converging on one
-  boundary as the truth signal, cost instrumentation as build step 0, and the
-  four-step marched build order ending in the TRANSITION re-pin (the fleet's
-  2026-07-17 "output-invariant" refutation stands).
+  2026-08-07 and then CORRECTED BY ITS OWN BUILD (`RESIDUE.md` carries the
+  full record): steps 0 (cost instrumentation), 1 (the ImageAlloc
+  vocabulary), and 2a (the extent-delta census + family 1, the spine's
+  band-open bracket) are LANDED — and before family 2, the build refuted the
+  design's core: site-classification is UNSOUND for the value graph, because
+  published values (Ty/GNode/schemes) are allocated during inference and
+  published by pointer-write, so no bracket at the publish site classifies
+  them and a per-decl reset would zero live column pointees. The sound form
+  is COLUMNS FIRST — the 5.2/5.5 column arc makes the image set = pages +
+  flat buffers by construction — so 4.3 PAUSES at 2a and 2b's fork/reset
+  DEP-GATES on that arc (the DEP-gate is the next thing to build, not a
+  stop: the arc is §11's own next phase). 4.3 and 9.1 still converge on one
+  boundary; the fleet's 2026-07-17 "output-invariant" refutation stands.
 - **4.4 · Ownership's frontier faces.**
   `Hβ.ownership.fractional-uniqueness-ref-borrow` (Granule OOPSLA 2024 —
   the ref/own lattice gains fractional grades where the inference needs
@@ -1784,7 +1789,10 @@ new DEP found; the map below is accurate at that pin.)*
   theorem-backed uniform floor; extraction (a projection by then) reclaims the
   duplication.
 - **5.2 · `Hβ.infer.schemes-are-edges` rung 3**, the row half, per the settled
-  laws in `RESIDUE.md`.
+  laws in `RESIDUE.md`. With 5.5's column arc this also UN-GATES the arena's
+  2b (4.3's correction): published facts in columns make the image set =
+  pages + flat buffers by construction, which is what a per-decl reset needs
+  to be sound.
 - **5.3 · The decidable fragment plus the proposed-signature teach.** Type
   inference for polymorphic recursion is undecidable (Henglein 1993,
   semi-unification) and that is a theorem, not a design choice — **but Mentl

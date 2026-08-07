@@ -35,6 +35,25 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · THE VALUE GRAPH REFUTES THE SPLIT — 4.3's core corrected,
+  the arena re-sequenced behind the column arc (docs-only; the pin
+  stands at 2f5ef189a823). Before family 2 landed a line, one
+  substrate fact killed site-classification for the value graph: a
+  spine cell is a WORD pointing to a heap record, and the
+  Ty/GNode/scheme values the columns and env point at are allocated
+  during inference, interleaved with scratch, published later by
+  POINTER-WRITE — no extent bracket at the publish site classifies
+  them, and a per-decl reset would zero live pointees under every
+  column written that decl. Three sound forms priced (nursery
+  evacuation; columns-first; no reset); COLUMNS FIRST chosen — the
+  5.2/5.5 arc moves published facts into pages and flat buffers, so
+  the image set exists BY CONSTRUCTION and family 1's bracket form
+  covers it whole. 4.3 pauses at 2a (family 1 + the census print);
+  2b's fork/reset DEP-gates on the column arc; families 2-6 land in
+  the column era. The refutation is the instrument working: the audit
+  leg that would have caught this at runtime was priced into the
+  stamp, and the design read caught it first.
+
 - 2026-08-07 · ▶▶▶ THE CENSUS RIDES THE EXTENT — arena 2a-ii opens with
   the delta accounting and the first image family
   (pin 2f5ef189a823 — TRANSITION m3 == m4 at 6 m2/m3 diff lines,

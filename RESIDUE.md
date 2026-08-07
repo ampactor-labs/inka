@@ -2373,6 +2373,32 @@ enumerate at the build: the ownership rebind (2671), pre-register
 crucible stands (mn-hof-forward-row: sl's row must equal sf's);
 acceptance adds: neg_names_to_str's solo row returns to its
 declared set, and the 26 row movers fall.
+THE FIX BUILT, MARCHED, AND FAILED ITS ACCEPTANCE ON EVERY AXIS
+(2026-08-07 — TRANSITION m3 == m4 at census 0, cost inside the
+ceiling, so the reuse is judgment-correct; reverted anyway and the
+pin restored to a13918ee because NOTHING observable improved): sl
+still prints the bare t-row and stays the fixture's one mover with
+the identical A-open/B-closed shape; neg_names_to_str still
+publishes pure; movers 453 → 460. THE DEEPENED MYSTERY, banked
+with the row_keep_completion read that sharpened it: the prune
+KEEPS bound edges unconditionally (its first arm) and passes
+through whole at ceiling 0, and with the reuse landed the chained
+cell IS filled by the callee's finalize — every model path now
+says sl's final exit should keep the bound edge or fold its
+content, and the B fingerprint should show the open edge or the
+presents; the measurement says CLOSED EMPTY. One of the assumed
+layers lies: the final's sl accumulated row may never contain the
+charge edge at exit (the charge lands in a frame the exit doesn't
+read, or a nested-frame boundary eats it), or the published-value
+instantiation inlines bindings so value readers never touch the
+cell and the fingerprint renders yet another surface. THE NEXT
+PROBE, mechanical: eprint at inf_exit_fn — the frame's
+accumulated_row raw, per exit, on the fixture compile (sixteen
+lines, order-identifiable) — read what sl's final exit ACTUALLY
+holds before the prune; the layer that lied is named by whichever
+row appears. The reuse form itself is banked as judgment-correct
+(marched clean) and re-lands WITH the real fix once the lying
+layer is found — never alone again.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

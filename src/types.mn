@@ -1861,6 +1861,12 @@ type DiagKind
   // the bytes but not the duty, so the resumed world holds a resource
   // nobody will ever finish. The effects barrier's value half.
   | TOwnAcrossReplay(String, Span)
+  // The affine tier's read half: a borrow of a name the ledger already
+  // moved. Silent before this class existed — sound only because the
+  // heap never frees, the accident-invariant §5.O layer 3's arena
+  // deletes. Narration until the wheel's own count reaches 0 (the
+  // census arming law).
+  | TUseAfterMove(String, Span)
   // declared vs inferred
   | EEffectMismatch(EffRow, EffRow, Span)
   // the offending row
@@ -2036,6 +2042,7 @@ fn diag_span(d) with Pure = match d {
   TOverDeclared(_, _, _, s) => s,
   TOwnUnconsumed(_, s) => s,
   TOwnAcrossReplay(_, s) => s,
+  TUseAfterMove(_, s) => s,
   EEffectMismatch(_, _, s) => s,
   EPurityViolated(_, s) => s,
   ERefinementRejected(_, s) => s,
@@ -2095,6 +2102,7 @@ fn diag_source(d) with Pure = match d {
   TOverDeclared(_, _, _, _) => "infer",
   TOwnUnconsumed(_, _) => "ownership",
   TOwnAcrossReplay(_, _) => "ownership",
+  TUseAfterMove(_, _) => "ownership",
   EEffectMismatch(_, _, _) => "effects",
   EPurityViolated(_, _) => "effects",
   ERefinementRejected(_, _) => "verify",
@@ -2154,6 +2162,7 @@ fn diag_code(d) with Pure = match d {
   TOverDeclared(_, _, _, _) => "T_OverDeclared",
   TOwnUnconsumed(_, _) => "T_OwnUnconsumed",
   TOwnAcrossReplay(_, _) => "T_OwnAcrossReplay",
+  TUseAfterMove(_, _) => "T_UseAfterMove",
   EEffectMismatch(_, _, _) => "E_EffectMismatch",
   EPurityViolated(_, _) => "E_PurityViolated",
   ERefinementRejected(_, _) => "E_RefinementRejected",
@@ -2188,6 +2197,7 @@ fn diag_severity(d) with Pure = match d {
   TOverDeclared(_, _, _, _) => SWarning,
   TOwnUnconsumed(_, _) => SWarning,
   TOwnAcrossReplay(_, _) => SWarning,
+  TUseAfterMove(_, _) => SWarning,
   VPending(_, _) => SVerificationPending,
   EVerifyUnencodable(_) => SVerificationPending,
   _ => SError,
@@ -2299,6 +2309,9 @@ fn diag_applicability(d) with Pure = match d {
   // must place (or an honest widening to `ref`), never a patch.
   Unspecified,
   TOwnAcrossReplay(_, _) => Unspecified,
+  TUseAfterMove(_, _) => // The fix is structural — drop the read or restructure so the
+  // move happens after it — never a patch.
+  Unspecified,
   EPatternInexhaustive(_, _, _) => HasPlaceholders,
   EEffectUnhandled(_, _, _) => MaybeIncorrect,
   EUnresolvedHole(_, _) => HasPlaceholders,
@@ -2366,6 +2379,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   TOverDeclared(declared, used, name, _) => "function '{name}' declares {show_effrow(declared)} but body only uses {show_effrow(used)} — tighten the signature to unlock capabilities",
   TOwnUnconsumed(msg, _) => msg,
   TOwnAcrossReplay(msg, _) => msg,
+  TUseAfterMove(msg, _) => msg,
   EEffectMismatch(declared, inferred, _) => "effect row mismatch: {show_effrow(declared)} vs {show_effrow(inferred)}",
   EPurityViolated(row, _) => "expected Pure but found effects: {show_effrow(row)}",
   ERefinementRejected(pred, _) => "refinement predicate proven false at compile time: {show_predicate(pred)}",

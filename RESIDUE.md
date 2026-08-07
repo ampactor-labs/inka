@@ -512,12 +512,20 @@ E_RefinementRejected at the branch), computation → raise. Deletes the
 duplicated licence pair (verify.mn:314 ≡ infer.mn:6832). RED banked:
 tests/frontier/mn-refine-join-launder.mn.
 
-`Hβ.own.use-after-move` — borrow-after-consume is SILENT (probed:
-`grab(buf)` then `len(buf)`, zero diagnostics), correct today only by
-the never-free heap — an accident-invariant that becomes a real
-use-after-free the moment §5.O layer 3's arena makes Consume reclaim.
-One `set_contains(used, name)` read in the ledger's borrow arms closes
-it (T_UseAfterMove, census arming law). LAND BEFORE THE ARENA.
+`Hβ.own.use-after-move` — BUILT (2026-08-07, pin 8ba768c810c4, before
+the arena exactly as prescribed). The mechanism was one leg's ORDER:
+the ledger's consume arm checked `borrow_depth > 0` before the
+used-set, so every borrow surface (conditions, scrutinees, ref-param
+args, every seq-op arg — len's resolved Ref param walks its arg
+borrowed) read moved owns silently. Now `set_contains(used, name)`
+reads first: consuming second use stays armed E_OwnershipViolation;
+borrow-read of a moved name is T_UseAfterMove (narration; wheel census
+ZERO at birth, use_after_move_max: 0 ratchet). Gate:
+tests/frontier/mn-use-after-move.mn via run_narration, seen RED.
+RESIDUAL — the ARMING: joins diag_refuses at held wheel-zero after an
+E_OwnershipViolation-precedent falsification pass (the unresolved-
+callee borrow default reports true reads-after-move beside the miss —
+verify no false channel on resolved programs first).
 
 `Hβ.infer.grade-is-join-and-mode` — the ownership grade is JOIN-BLIND
 (if-branches summed additively, so once-per-alternative counts 2 → Ref

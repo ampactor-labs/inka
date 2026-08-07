@@ -35,6 +35,39 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE READ HALF OF AFFINE — Phase 4.1 lands
+  use-after-move before the arena can make it memory-unsafe
+  (pin 8ba768c810c4 — CLEAN m2 == m3, census 0, wheel T_UseAfterMove
+  census ZERO at birth on both march legs). The felt walk's probes
+  (grab/peek, twice/seq_after) convicted the exact leg: the affine
+  ledger's consume arm checked `borrow_depth > 0` BEFORE the used-set,
+  so every borrow-read of a moved own — an if-condition, a match
+  scrutinee, a ref-param arg, every seq-op arg (len's resolved Ref
+  param walks its arg borrowed) — resumed silently. `sink(xs) +
+  sink(xs)` refused (two moves, the armed class); `sink(xs) + len(xs)`
+  ran silent (move then read). The dig's false trail is recorded
+  because the ROW killed it: infer_seq_op was suspected of skipping
+  the mention hook entirely, and its declared row — no Consume, where
+  infer_call_saturated carries it — redirected the trace to the arg
+  pre-walk (infer.mn:3070) and from there to the ledger's leg order.
+  The fix is ONE reorder: `set_contains(used, name)` first; a
+  consuming second use stays E_OwnershipViolation (armed, message
+  unchanged), a borrow-read of a moved name reports the new
+  T_UseAfterMove narration (types.mn: the variant + its six
+  projection arms; own.mn: the reorder + read_after_move_msg). Gates:
+  run_narration (frontier-gate's Warning-tier sibling of
+  run_diagnostic) + tests/frontier/mn-use-after-move.mn, seen RED
+  (exit=0, zero narrations, the silent-wrong exact) against the
+  unfixed boot; use_after_move_max: 0 ratchets the wheel census where
+  it was born. ARMING CONDITION banked in the baseline block: the
+  class joins diag_refuses only at held wheel-zero after an
+  E_OwnershipViolation-precedent falsification pass (adversarial
+  probes on resolved programs). §11 4.2's text stands as written —
+  the walk's probes measured the LEDGER handling branches correctly
+  (branch_enter/divider/exit) while 4.2's subject is count_uses' Grade
+  (own.mn:502 sums if-branches additively; the ⊔-join deletion into
+  resume_grade's Usage fold is untouched, next in order).
+
 - 2026-08-07 · ▶▶▶ THE SWEEP REACHES ZERO — the arc loop's twentieth
   iteration closes the last per-module seam
   (pin c46691d75a57 — CLEAN m2 == m3, census 0; the sweep 16 → 0).

@@ -1,0 +1,17 @@
+// Phase 4.1 (Hβ.own.use-after-move): a borrow-read of a name the affine
+// ledger already moved is T_UseAfterMove — the read half of affine,
+// narration until the wheel's own census reaches 0 (the arming law).
+// Pre-fix this program compiled with ZERO diagnostics and ran: the
+// ledger's borrow leg resumed without consulting the used-set, sound
+// only because the heap never frees — the accident-invariant §5.O
+// layer 3's arena deletes.
+fn grab(own xs) = xs
+
+fn peek(ref xs) = 2
+
+fn use_after_move(own xs) = {
+  let moved = grab(xs)
+  peek(xs)
+}
+
+fn main(q) = use_after_move(5)

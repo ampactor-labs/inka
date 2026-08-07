@@ -526,6 +526,17 @@ solo_violations_max: 0
 eta_max: 29
 effectful_lambda_max: 394
 
+# 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
+# Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own
+# compile. BORN AT ZERO (measured at the landing on both march legs: the
+# ledger's borrow leg now consults the used-set, and the wheel never
+# reads a moved own). Zero is the floor and the arming licence: the
+# class arms (joins diag_refuses) only while the wheel's census holds 0,
+# after the E_OwnershipViolation-precedent falsification pass. A rise is
+# the wheel reading a moved own — a real use-after-free the moment §5.O
+# layer 3's arena makes Consume reclaim.
+use_after_move_max: 0
+
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
 # header; no registry here (a `micro:NAME=EXIT` list once documented below

@@ -74,12 +74,24 @@ handler affine_ledger with used = [], used_sites = [], branches = [], fn_saved =
   // Hβ.infer.arm-binder-op-param-type — and the word floor rendered
   // the consumed name as a pointer numeral. The named call anchors it.
   match ownership {
-    Own => // Inside a borrow scope the value is READ, not moved — record nothing.
-    if borrow_depth > 0 {
-      resume()
-    } else if set_contains(used, name) {
+    Own => // A name the ledger already moved admits NO further use. The used-set
+    // read comes FIRST: a consuming second use is the affine violation
+    // (armed), and a borrow-read of a moved name is use-after-move —
+    // narration until the wheel's census reaches 0 (the arming law). The
+    // old borrow-first order resumed silently on every read of a moved
+    // value, sound only because the heap never frees — the
+    // accident-invariant §5.O layer 3's arena deletes. A borrow BEFORE
+    // any move stays a recordless read.
+    if set_contains(used, name) {
       let first = find_first_span(used_sites, name)
-      report(EOwnershipViolation(consume_twice_msg(name, first), span))
+      if borrow_depth > 0 {
+        report(TUseAfterMove(read_after_move_msg(name, first), span))
+      } else {
+        report(EOwnershipViolation(consume_twice_msg(name, first), span))
+      }
+      resume()
+    } else if borrow_depth > 0 {
+      // Inside a borrow scope the value is READ, not moved — record nothing.
       resume()
     } else {
       // `used` maintains sort invariant via set_insert — every read
@@ -175,6 +187,10 @@ fn declared_own_names(ref declared) with Memory + Alloc = map(
 // the consume arm carries the why).
 fn consume_twice_msg(name: String, first) with GraphRead + Memory + Alloc =
   "'{name}' consumed twice (first at {show_span(first)})"
+
+// The read-after-move message's mint, String-pinned like its sibling.
+fn read_after_move_msg(name: String, first) with GraphRead + Memory + Alloc =
+  "'{name}' read after move (moved at {show_span(first)}) — the value this name owned has been consumed"
 
 // THE RELEVANT TIER'S REPORT — every authored `own` the body declared
 // and never consumed. Narration first per the census arming law (a

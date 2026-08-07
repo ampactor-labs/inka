@@ -164,6 +164,19 @@ if C=$(wt_m2_ensure); then
   elif [[ -n "$mmax" && "$movers" -lt "$mmax" ]]; then
     say "  ↓ movers FELL $mmax -> $movers — lower movers_max in $BASELINE to hold it."
   fi
+  # The USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1, Hβ.own.use-after-move):
+  # T_UseAfterMove narrations on the wheel's own compile stderr — born at
+  # ZERO, held there so the arming licence (diag_refuses' wheel-zero law)
+  # stays mechanical. A rise is the wheel reading a moved own — a real
+  # use-after-free the moment the arena makes Consume reclaim.
+  cuam=$(grep -c "T_UseAfterMove" "$C/m2.err" || true)
+  umax=$(grep -E '^use_after_move_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  say "· use-after-move: $cuam narration(s) on the wheel compile"
+  if [[ -n "$umax" && "$cuam" -gt "$umax" ]]; then
+    say "✗ use-after-move RATCHET: rose $umax -> $cuam — the wheel reads a moved own;"
+    say "  restructure the site (the arena makes this a use-after-free)."
+    fail=1
+  fi
   # The ANONYMITY ratchet — the census tier's convictions (PLAN §11 Phase
   # 2.5): the whole-link counts of CsEta (an anonymous fn whose name
   # already exists) and CsEffectfulLambda (a row without a decl home).

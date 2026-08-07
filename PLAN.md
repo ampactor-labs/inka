@@ -1716,15 +1716,24 @@ new DEP found; the map below is accurate at that pin.)*
 
 **The order here is mandatory, not preference.**
 
-- **4.1 · `Hβ.own.use-after-move` — BEFORE the arena.** Borrow-after-consume is
-  silent today and correct *only because the heap never frees*. That is an
-  accident-invariant, and the moment the arena makes `Consume` reclaim it
-  becomes a real use-after-free. Ship these in the wrong order and the arena
-  ships a memory-safety hole.
+- **4.1 · `Hβ.own.use-after-move`** — ✅ LANDED 2026-08-07 (pin 8ba768c810c4,
+  before the arena exactly as ordered). The gap was one leg's ORDER: the
+  affine ledger's consume arm checked `borrow_depth` before the used-set, so
+  every borrow surface read moved owns silently. `set_contains(used, name)`
+  now reads first — consuming second use stays armed `E_OwnershipViolation`;
+  borrow-read of a moved name is `T_UseAfterMove`, born at wheel-ZERO and
+  ratcheted there (`use_after_move_max: 0`). Gate seen RED:
+  `tests/frontier/mn-use-after-move.mn` via `run_narration`. The ARMING
+  (diag_refuses at held zero, post-falsification) is the banked residual in
+  `RESIDUE.md`.
 - **4.2 · `Hβ.infer.grade-is-join-and-mode`** — the grade is join-blind
   (if-branches summed additively where the affine truth is a ⊔-join) and
   mode-blind (a condition read counted as a consume), producing false
-  `T_OwnUnconsumed` inside an arming-track class.
+  `T_OwnUnconsumed` inside an arming-track class. Scope trued by 4.1's felt
+  walk: the LEDGER handles branches and condition-borrows correctly
+  (branch_enter/divider/exit, borrow scopes) — this item lives entirely in
+  `count_uses`' grade for UNMARKED params (own.mn's additive IfExpr sum),
+  and its fix stays the prescribed DELETION into `resume_grade`'s ⊗/⊔ fold.
 - **4.3 · The per-decl arena** (`Hβ.perf.per-decl-arena`, gated on
   `Hβ.infer.region-on-tee-alloc-absorb`). It is a hub, and more rides on it than
   was ever written down: the String=`[Byte]` value-ontology dissolution names it

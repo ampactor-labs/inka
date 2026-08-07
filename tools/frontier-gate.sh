@@ -522,6 +522,25 @@ run_diagnostic() {
   fi
 }
 
+# The narration contract — run_diagnostic's Warning-tier sibling: the program
+# COMPILES (exit 0, narration is a finding not a failure) and the expected
+# T_/W_ class surfaces on stderr with no error-class noise beside it.
+run_narration() {
+  local compiler="$1" label="$2" source="$3" expected_code="$4" dir="$5"
+  local wat="$dir/$label.wat" err="$dir/$label.compile.err"
+  local rc count other
+
+  wt_run "$compiler" < "$source" > "$wat" 2> "$err"
+  rc=$?
+  count=$(grep -c "$expected_code Warning:" "$err" 2>/dev/null || true)
+  other=$(grep -cE 'E_[A-Za-z0-9_]+ error:' "$err" 2>/dev/null || true)
+  if [ "$rc" -eq 0 ] && [ "$count" -gt 0 ] && [ "$other" -eq 0 ]; then
+    pass "$label narration ($expected_code=$count)"
+  else
+    fail "$label narration (exit=$rc $expected_code=$count other-errors=$other; see $err)"
+  fi
+}
+
 # Same differential accounting for the persist lib set: pin boot's shadow,
 # per-compiler shadows may only shrink it.
 capture_persist_shadow() {
@@ -1306,6 +1325,13 @@ for i in "${!compilers[@]}"; do
   # run_diagnostic (productive exit 0) to the armed-class refusal contract.
   run_refusal "$compiler" own-call-arg-move \
     "$ROOT/tests/frontier/mn-own-call-arg-move.mn" E_OwnershipViolation "$dir"
+  # T_UseAfterMove (Phase 4.1, Hβ.own.use-after-move) — the ledger's borrow
+  # leg consults the used-set: a borrow-read of a moved own narrates (armed
+  # at wheel-zero per the census law). Pre-fix the fixture compiled with
+  # zero diagnostics and ran — the silent read of a moved value this class
+  # deletes before the arena makes it a use-after-free.
+  run_narration "$compiler" use-after-move \
+    "$ROOT/tests/frontier/mn-use-after-move.mn" T_UseAfterMove "$dir"
   run_refusal "$compiler" refuse-refinement \
     "$ROOT/tests/frontier/mn-refuse-refinement.mn" E_RefinementRejected "$dir"
   # R3 · the decidable arithmetic Verify fragment. The true cases DISCHARGE at

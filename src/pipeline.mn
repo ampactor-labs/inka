@@ -15,10 +15,11 @@
 // diagnostics, lookup_ty_graph — and adds route-specific ones.
 // Source is never re-inferred across routes; the graph is one.
 //
-// This file declares two handlers it OWNS:
-//   env_handler         — scoped binding stack (spec 04)
+// This file declares the handlers it OWNS:
 //   lookup_ty_graph     — bridge GraphRead → LookupTy (spec 05)
 //   diagnostics_handler — stderr diagnostic routing (spec 06)
+// (env_handler lives at src/env.mn, the intern handlers at
+//  src/intern.mn — the state's own modules, below infer.)
 //
 // Every other handler is imported from its owner module:
 //   graph_handler       → graph.mn

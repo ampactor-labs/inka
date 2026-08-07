@@ -2452,6 +2452,37 @@ contradiction) becomes the named peer
 Hβ.infer.forward-hof-row-underpublish and the loop returns to
 §11's phase order — the dig continues as its own item, not as the
 loop's consumer.
+THE COMBINED PROBE NAMED THE WHOLE CHAIN (2026-08-07 — the wheel
+through the reuse+cap+publish-print compiler; the guard does not
+fire): neg's TRIAL publish is HONEST (raw=Memory + Alloc + Intern
++ GraphRead at the publish itself) and its FINAL publish reads
+PURE off the graph; walking the chain, show_list's trial publish
+is honest (Memory + Alloc + r163613) and its FINAL publish is
+`raw=t448575@e1` — a T-SORT EPOCH-1 ROOT. THE MECHANISM, closed:
+a t-sort cell (a prereg param placeholder) UNIONS into the
+row-position chain during the passes' unifications and becomes
+the union-find ROOT; is_row_handle on that root answers false, so
+generalize's quantification floor stops recognizing the row var
+and QUANTIFIES it — the severance returns at the publish: every
+reader instantiates a fresh copy, the prune drops it, and the
+caller publishes pure (neg's final; the 26 movers' final side).
+The floor CANNOT be widened by sort alone — free_in_row's output
+mixes genuine payload TYPE vars (EAType — must freshen) with TAIL
+roots (must stay shared), distinguishable only by POSITION. THE
+STAMPED FIX: free_in_row splits its collection — payload frees
+and tail roots returned separately (or a tail-only collector
+beside it); generalize's TFun and TCont arms quantify params +
+ret + PAYLOAD frees and share ALL tail roots regardless of mint
+sort (row_var_is_free's own tolerance, finally mirrored at the
+floor); instantiation never sees a shared tail (not quantified),
+so the sort-blind mint question dissolves. WRITERS: free_in_row
+(the split), generalize's two arms (the filter swap), and any
+other filter caller enumerated at build (query refs of
+free_in_row). ACCEPTANCE: neg's final publish returns to its
+declared set in the combined probe's own print; show_list's final
+publish shows content + shared tail; the 26 row movers fall; the
+crucible's stdin caveat stands (re-cut later; the wheel IS the
+fixture here).
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

@@ -801,11 +801,13 @@ fn emit_module(lowered) = {
       // The `<|`/`><` ownership discrimination at the module-image altitude.
       let threaded = ls_find_str_local(wasi_ops, "spawn_task", 0) >= 0
       emit_memory_decl(threaded, ls_find_str_local(wasi_ops, "atomic_rmw", 0) >= 0)
-      // The image bracket's depth (arena 2a) — demand-gated on the pair's
-      // own performs, the spawn-cell precedent: a module that never
-      // brackets carries no global.
+      // The image bracket's globals (arena 2a) — demand-gated on the
+      // pair's own performs, the spawn-cell precedent: a module that
+      // never brackets carries none. Depth (nesting), mark (the
+      // outermost enter's bump watermark), bytes (the accumulated
+      // extent deltas — the census image_bytes reads).
       if ls_find_str_local(wasi_ops, "image_enter", 0) >= 0 {
-        wat_emit("  (global $image_depth (mut i32) (i32.const 0))\n")
+        wat_emit("  (global $image_depth (mut i32) (i32.const 0))\n  (global $image_mark (mut i32) (i32.const 0))\n  (global $image_bytes (mut i32) (i32.const 0))\n")
       }
       emit_state_globals(state_slots)
       // band B k1: the yield triple exists only in a module that yields —
@@ -4310,14 +4312,18 @@ fn emit_expr(expr) = match expr {
       // same TRANSITION that lands the reset bracket.
       wat_emit("    (call $alloc)\n")
     } else if import_name == "image_enter" {
-      // The bracket pair's counting form (arena 2a — memory.mn's decl
-      // carries the design): depth up/down only; the allocator reads the
-      // depth at 2b's fork. The trailing const closes the unit result
-      // slot (the heap_reset idiom). $image_depth emits demand-gated
-      // beside the memory decl.
-      wat_emit("    (global.get $image_depth)(i32.const 1)(i32.add)(global.set $image_depth)(i32.const 0)\n")
+      // The bracket pair (arena 2a — memory.mn's decl carries the
+      // design): the census rides the EXTENT DELTA, never the
+      // allocator's hot path — the outermost enter saves the bump mark,
+      // the matching exit accumulates (bump - mark) into $image_bytes.
+      // The trailing const closes the unit result slot (the heap_reset
+      // idiom). The three globals emit demand-gated beside the memory
+      // decl.
+      wat_emit("    (if (i32.eqz (global.get $image_depth))(then (global.set $image_mark (global.get $heap_ptr))))(global.get $image_depth)(i32.const 1)(i32.add)(global.set $image_depth)(i32.const 0)\n")
     } else if import_name == "image_exit" {
-      wat_emit("    (global.get $image_depth)(i32.const 1)(i32.sub)(global.set $image_depth)(i32.const 0)\n")
+      wat_emit("    (global.get $image_depth)(i32.const 1)(i32.sub)(global.set $image_depth)(if (i32.eqz (global.get $image_depth))(then (global.set $image_bytes (i32.add (global.get $image_bytes)(i32.sub (global.get $heap_ptr)(global.get $image_mark))))))(i32.const 0)\n")
+    } else if import_name == "image_bytes" {
+      wat_emit("    (global.get $image_bytes)\n")
     } else if import_name == "heap_mark" {
       // The heap line's HOME is the strategy's (per-instance global vs the
       // shared cell) — the impl fn beside $alloc owns it; the call site is

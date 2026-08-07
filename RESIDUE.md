@@ -593,12 +593,18 @@ the pair's vocabulary — ✅ LANDED 2026-08-07 (pin e524668b29f3:
 image_enter/image_exit declared, recognized, emitted as $image_depth
 bumps with the global demand-gated on the pair's performs; zero wheel
 performs keep the pin CLEAN; micro mn-image-region RED→42); (2a-ii)
-the six family brackets + the eprint census measuring image-vs-scratch
-bytes on a real self-compile (the boundary constant must be MEASURED,
-not guessed) — a TRANSITION, because the wheel's own performs change
-its emitted WAT one generation later (the earlier "allocator untouched
-→ CLEAN" claim was wrong-in-detail: ANY emission-reaching change
-crosses a generation); (2b) the fork — $alloc reads the depth (image →
+the six family brackets + the census measuring image-vs-scratch bytes
+on a real self-compile (the boundary constant must be MEASURED, not
+guessed) — IN PROGRESS: the delta-accounting form + image_bytes
+(taught) + FAMILY (1), spine_ensure's growth extent, ✅ LANDED
+2026-08-07 (pin 2f5ef189a823, the priced TRANSITION at 6 diff lines;
+the census rides the extent delta — outermost enter marks, matching
+exit accumulates — so measurement costs two branches per bracket,
+never per allocation). REMAINING: families (2) env buffer/buckets,
+(3) intern, (4) schemes at env_extend, (5) WAT output buffers, (6)
+diagnostic bank + oracle queue; then the driver's census print
+(performs image_bytes under the taught boot) reads the number 2b's
+boundary is fixed from; (2b) the fork — $alloc reads the depth (image →
 $image_ptr, else $heap_ptr), the layout boundary fixed from 2a-ii's
 measurement, the per-decl mark/reset bracket, and the reachability
 audit leg, ONE TRANSITION re-pin; (3) the dormant emit_memory_arena

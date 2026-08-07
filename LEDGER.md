@@ -35,6 +35,33 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE CENSUS RIDES THE EXTENT — arena 2a-ii opens with
+  the delta accounting and the first image family
+  (pin 2f5ef189a823 — TRANSITION m3 == m4 at 6 m2/m3 diff lines,
+  census 0, battery green through the candidate). The counting form
+  matured before any family landed: instead of touching the
+  allocator's hot path, the census rides the EXTENT DELTA — the
+  outermost image_enter saves the bump watermark into $image_mark, the
+  matching image_exit adds (bump − mark) to $image_bytes — so
+  measurement costs two branches per BRACKET, not three instructions
+  per ALLOCATION. image_bytes() -> Int lands taught-not-performed
+  (the generation-lag ladder walked again); the driver's census print
+  performs it next pin. FAMILY (1) BRACKETS: spine_ensure's growth
+  extent (the table grow + the page loop — pages that outlive every
+  per-decl reset), the wheel's first real performs of the pair; its
+  declared row widened Memory + Alloc → + ImageAlloc and the solo
+  check confirmed the cascade contained. Both march legs ran measured
+  (the m4 read_cost path's first live use: 9.31s/9.32s wall,
+  1,810,488/1,810,408 KB — the same-session tightness holding across
+  generations). The landing's second half was a census catch: the
+  march does not gate census, and the bracket's row cascade rode the
+  first repin as 12 E_EffectMismatch — the whole driver compile spine
+  reaches spine_ensure, so twelve declared clauses were missing
+  + ImageAlloc. verify's ratchet refused (0 → 12); the twelve widened
+  in place, census back to 0, the pin re-blessed byte-identical.
+  Five families remain: env, intern, schemes, the WAT buffers, the
+  diagnostic bank.
+
 - 2026-08-07 · ▶▶▶ THE BRACKET'S COUNTING PAIR — arena 2a-i, and the
   step-2 correction the artifact forced
   (pin e524668b29f3 — CLEAN m2 == m3, census 0; micro mn-image-region

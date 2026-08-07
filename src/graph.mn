@@ -112,10 +112,16 @@ fn spine_page(ref spine, h) -> {boundaries: [ExecutableBoundary], canon: [Int], 
 // the (possibly grown) table and the new open count; the table grows by
 // list_extend_to (rare — once per 16384 mints), the pages themselves never
 // move.
-fn spine_ensure(own spine, spine_open, b) with Memory + Alloc = if b < spine_open {
+fn spine_ensure(own spine, spine_open, b) with Memory + Alloc + ImageAlloc = if b < spine_open {
   (spine, spine_open)
 } else {
-  spine_open_loop(list_extend_to(spine, b + 1), spine_open, b)
+  // IMAGE family (1) of six (arena 2a-ii, Hβ.perf.per-decl-arena): the
+  // spine's pages OUTLIVE every per-decl reset — the bracket classifies
+  // the whole growth extent (table + pages) and feeds the census delta.
+  image_enter()
+  let grown = spine_open_loop(list_extend_to(spine, b + 1), spine_open, b)
+  image_exit()
+  grown
 }
 
 fn spine_open_loop(own spine, opened, b) with Memory + Alloc = if opened > b {

@@ -692,6 +692,52 @@ its own comment says "now LIVE" — and is recorded here only so the
 stale prose is struck; that distinction between an open gap and a
 resolved one is exactly what an index carries and a comment cannot.
 
+`Hβ.dataflow.feedback-becomes-whole` — the design stamp for PLAN §11
+Phase 3.6 (banked 2026-08-07; UNBUILT — this entry is what gets built,
+and it carries ONE FORK FOR MORGAN, below). FOUR MEASURED FACES at pin
+c46691d75a57: (1) `<~` contributes NO iterative effect — the census
+fixture's fb types Pure, and lib/dsp's lowpass_iir (declared
+`with Sample + Memory + Alloc`) publishes only Memory + Alloc, the
+authored Sample vanishing because nothing in the body performs it;
+(2) the FeedbackSpec constructors (prelude.mn:519 — delay/accumulate/
+filter_spec) are PURE wrappers, so SYNTAX's "a state-element — a value
+that performs the iterative effect" is design the artifact never
+realized; (3) E_FeedbackNoContext exists in the DiagKind catalog with
+ZERO construction sites — the context requirement is entirely
+unenforced (the fixture's `x <~ inc(1)` draws only the FeedbackSpec
+type mismatch); (4) the zero-delay causality refusal
+(`Hβ.dataflow.causality-compile-error`, Faust's rule) is absent —
+Delay(0) types like Delay(1). THE DESIGN, traced: infer's PFeedback
+arm gains the verb's own typing rule — (a) resolve the ITERATIVE
+CONTEXT: an Iterate-class effect present in the enclosing fn's
+declared row or installed by an enclosing `~>` (the static
+enclosing-tee walk the where verb's schedule badge already built —
+reuse it); absent → E_FeedbackNoContext finally fires; (b) CHARGE the
+context's effect into the body row (inf_add_row at the arm — the
+recurrence performs the tick-advance each iteration, so fb stops
+typing Pure and lowpass_iir's authored Sample matches its body);
+(c) the CAUSALITY refusal: a literal Delay(0) RHS refuses at the arm
+(the decidable case; a computed delay rides Phase 8's refinement
+tier); (d) `Hβ.dsp.state-element-install-once` (the !Alloc reclaim)
+rides the arena (Phase 4.3) — named, not this build. GATES: the fb
+census-fixture site TRUED to a real spec (`x <~ delay(1)` under a
+declared context; the census's `<~` pin moves with it), a DSP row
+fixture asserting lowpass_iir publishes Sample, a Delay(0) refusal
+fixture RED-first, and E_FeedbackNoContext's first firing gated.
+THE FORK (Morgan's, both branches priced): HOW does an effect join
+the Iterate class? SYNTAX says "Sample/Tick/Clock are *instances* of
+that class, not a hardcoded name-allowlist" — but declares NO surface
+for the membership. (A) STRUCTURAL: no honest structural signature
+exists (any op shape can be coincidental); every candidate read is
+name-keyed drift in costume — REFUTED at trace. (B) DECLARED: the
+effect decl carries the class (`effect Sample(rate: Int) iterates
+{ … }` or an equivalent marker) — one keyword-adjacent surface
+addition, the class fact then an env read at the arm; honest,
+teaches at the decl, and the SYNTAX section that promised
+no-allowlist gets its mechanism. The build blocks on (B)-or-better;
+until chosen, the arm cannot name its class membership without the
+allowlist SYNTAX forbids.
+
 `Hβ.driver.per-module-env-overlay` — the design stamp for PLAN §11
 Phase 3.5 (banked 2026-08-07 with the first half LANDED: the solo
 sweep measured 53 violations across 13 modules at pin 7d8e91e499a1,

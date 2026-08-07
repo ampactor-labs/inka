@@ -1698,14 +1698,19 @@ new DEP found; the map below is accurate at that pin.)*
   file-true query spans) is the stamped second half; the ceiling reaches
   0 when the seams close, and the per-module check then gates the
   drift-catalog retirement.
-- **3.6 · `<~` becomes whole.** The measured gap (Phase 3.3's "`<~`
-  contributes no iterative effect") closes together with
-  `Hβ.dataflow.causality-compile-error` — a zero-delay `<~` cycle is a
-  compile refusal (Faust's causality rule) — and the recurrence's row story
-  (the state element's install-once `!Alloc` reclaim,
-  `Hβ.dsp.state-element-install-once`). The census's `<~` shape (2.0) is
-  this item's standing gate; `Hβ.dataflow.clock-calculus-sample-rate` rides
-  Phase 8's DSP verify tier.
+- **3.6 · `<~` becomes whole** — STAMPED 2026-08-07 with ONE FORK FOR
+  MORGAN (`Hβ.dataflow.feedback-becomes-whole` in `RESIDUE.md` carries
+  four measured faces: fb types Pure, lowpass_iir's authored Sample
+  vanishes, E_FeedbackNoContext has zero construction sites, Delay(0)
+  types like Delay(1) — plus the traced design: the PFeedback arm
+  resolves the context via the enclosing-tee walk, charges the effect,
+  refuses the zero delay). THE FORK: how an effect joins the Iterate
+  class — SYNTAX promises no-allowlist but declares no membership
+  surface; the structural read refuted at trace (name-keyed drift in
+  costume), the declared marker (B) priced as one surface addition. The
+  build blocks on the choice. `Hβ.dsp.state-element-install-once` rides
+  the arena (4.3); `Hβ.dataflow.clock-calculus-sample-rate` rides Phase
+  8's DSP verify tier.
 
 ### Phase 4 · Ownership has a real lifetime
 

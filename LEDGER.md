@@ -35,6 +35,28 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE HANDLER SEAM CLOSES — the arc loop's nineteenth
+  iteration relocates the env and intern substrates
+  (pin 2730fa8557df — CLEAN m2 == m3, census 0; the sweep 36 → 16).
+  src/env.mn is born carrying env_handler WITH its whole substrate —
+  the flat buffer machinery, the 4096-bucket index, the resolve
+  family, the dedup walk — and src/intern.mn carries
+  intern_table/intern_view/intern_probe; pipeline's 300-line cluster
+  deleted, both modules imported by pipeline AND infer (env imports
+  types+strings; intern imports types+lexer+strings — no cycles). The
+  seam's diagnosis held exactly: the install chain at infer.mn:2310
+  names the handlers, so the declarations belong BELOW infer at the
+  state's own modules — and one import pair in infer healed all NINE
+  affected closures transitively (cursor, oracle, eight_loop,
+  gradient_delta, mentl, synth_proposer, lower, wasm rode infer's
+  closure). The old pipeline header's claim — "none can import this
+  module. The handlers stay here." — was the seam's own alibi,
+  refuted by relocating the handlers to a module everyone CAN import.
+  solo_violations_max ratcheted 36 → 16 in-baseline; the residual 16
+  is the mcp→main verb-grammar seam alone. This is also §5.5's
+  env-column move meeting the manifest early: the env substrate now
+  has one module home for the column migration to land in.
+
 - 2026-08-07 · ▶▶▶ THE PER-MODULE SWEEP ARMS — the arc loop's
   eighteenth iteration lands Phase 3.5's first half
   (pin f826a9cb1668 — CLEAN m2 == m3, census 0). The solo census

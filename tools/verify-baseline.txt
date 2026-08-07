@@ -501,7 +501,11 @@ movers_max: 474
 # violations). The frontier's solo-sweep leg enforces this ceiling; it
 # reaches 0 when the seams close and the per-module check becomes the
 # drift-catalog retirement gate.
-solo_violations_max: 36
+# RATCHETED DOWN 36 → 16 at the handler relocation (env_handler + the
+# env machinery → src/env.mn; intern_table/intern_view + intern_probe →
+# src/intern.mn; infer imports both, healing all nine closures at once).
+# The residual 16 is the mcp→main verb-grammar seam alone.
+solo_violations_max: 16
 
 # 2026-08-07: the ANONYMITY ratchet (PLAN §11 Phase 2.5, second half) —
 # the census tier's convictions on the wheel link, monotone DOWN. Two

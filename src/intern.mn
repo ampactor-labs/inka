@@ -1,0 +1,85 @@
+// intern.mn — the intern table's handlers (spec 03's string identity).
+// Relocated from pipeline.mn (PLAN §11 Phase 3.5, the infer→pipeline
+// handler seam): the branch cursor's install chain in infer names
+// intern_view, so the declarations live BELOW infer — the table's own
+// module. effect Intern declares in types.mn — the vocabulary home
+// every performer imports (lex and the EffName mints live below this
+// module); the handlers live with the table they manage.
+import types
+
+import lexer
+
+import runtime/strings
+
+fn intern_probe(ref bucket, ref src, s, e, i, n) with Memory + Alloc = if i >= n {
+  None
+} else {
+  let row = list_index(bucket, i)
+  match row {
+    (canonical, _h, _kw) => if str_eq_at(canonical, src, s, e) { Some(row) } else { intern_probe(bucket, src, s, e, i + 1, n) },
+  }
+}
+
+handler intern_table with buckets = list_filled(4096, []), entries = make_list(1024), count = 1 {
+  intern_span(src, s, e) => {
+    let b = i32_and(str_hash_loop(src, s, e, -2128831035), 4095)
+    let bucket = list_index(buckets, b)
+    match intern_probe(bucket, src, s, e, 0, len(bucket)) {
+      Some(row) => resume(row),
+      None => {
+        let canonical = list_to_flat(str_slice(src, s, e))
+        let row = (canonical, count, keyword_kind(canonical))
+        resume(row) with buckets = list_set(buckets, b, [row] ++ bucket), entries = list_set(list_extend_to(entries, count + 1), count, canonical), count = count + 1
+      },
+    }
+  },
+  intern_str(s) => {
+    let e = byte_len(s)
+    let b = i32_and(str_hash_loop(s, 0, e, -2128831035), 4095)
+    let bucket = list_index(buckets, b)
+    match intern_probe(bucket, s, 0, e, 0, len(bucket)) {
+      Some(row) => match row {
+        (_canonical, h, _kw) => resume(h),
+      },
+      None => {
+        let canonical = list_to_flat(s)
+        let row = (canonical, count, keyword_kind(canonical))
+        resume(count) with buckets = list_set(buckets, b, [row] ++ bucket), entries = list_set(list_extend_to(entries, count + 1), count, canonical), count = count + 1
+      },
+    }
+  },
+  intern_name_of(h) => resume(list_index(entries, h)),
+  intern_seed() => resume((buckets, entries, count)),
+}
+
+// The branch cursor's READ-ONLY intern view (the fan): serves probe
+// hits and name_of over the root's live table; a MISS traps loudly —
+// a view-minted handle would fork identity (its entry absent from the
+// root's table, rendering garbage wherever it escaped), and the walk
+// is pre-warmed by parse, so a miss IS a counterexample worth the
+// loud stop. intern_span is unreachable in a branch (lex is
+// root-side); its arm carries the same trap for totality.
+handler intern_view(buckets0, entries0, count0) {
+  intern_span(src, s, e) => {
+    let b = i32_and(str_hash_loop(src, s, e, -2128831035), 4095)
+    match intern_probe(list_index(buckets0, b), src, s, e, 0, len(list_index(buckets0, b))) {
+      Some(row) => resume(row),
+      None => {
+        load_i32(0 - 1)
+        resume(("", 0, None))
+      },
+    }
+  },
+  intern_str(s) => {
+    let e = byte_len(s)
+    let b = i32_and(str_hash_loop(s, 0, e, -2128831035), 4095)
+    match intern_probe(list_index(buckets0, b), s, 0, e, 0, len(list_index(buckets0, b))) {
+      Some(row) => match row {
+        (_canonical, h, _kw) => resume(h),
+      },
+      None => resume(load_i32(0 - 1)),
+    }
+  },
+  intern_name_of(h) => resume(list_index(entries0, h)),
+  intern_seed() => resume((buckets0, entries0, count0)),
+}

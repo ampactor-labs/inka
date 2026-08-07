@@ -1,0 +1,15 @@
+// expect: 42
+// mn-f64-state — the generic-fold f64 accumulator guard (the
+// twin-state-width arc's regression fixture). fold's init and the
+// lambda's accumulator are f64 through the GENERIC fold — the shape
+// whose handler-state slot is the width seam: the total-twin probe's
+// fold$sp2nSpan wrote its repr-true f64 init into the uniform
+// word-wide hstate record with i32.store and failed assembly
+// (Hβ.emit.twin-state-width, RESIDUE). Through the pinned gated wheel
+// this computes 4.0 correctly (measured 2026-08-07, exit 42); the
+// width build must keep it green while making the total-twin world
+// assemble.
+fn main() = {
+  let s = fold(0.5, (a, x) => a + x, [1.5, 2.0])
+  if s > 3.9 && s < 4.1 { 42 } else { 7 }
+}

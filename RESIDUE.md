@@ -1785,10 +1785,28 @@ scheme_own_row, the group_member/set_group_members ops, and the
 group_names state ALL DELETE as dead code — net-negative, the
 design's signature (a Class B merge teaching live group cells is a
 genuine constraint — a list of co-members demands equal rows —
-deliberate, marched). B6 THE CUT DELETES — row_without_self +
-edges_without_self go: frame exit publishes the raw accumulated row,
-the completion fold closes every cycle; mn-cycle-charge-freeze
-GREENS. Then the movers measurement fires the pre-committed
+deliberate, marched). B6 THE CUT DELETES — BUILT WHOLE AND REVERTED ON ITS OWN INSTRUMENT
+(2026-08-07): the visiting guard threaded through BOTH resolve
+families (resolve_row_v / resolve_edge and the compress twins — a
+visited edge stays residual, never unfolds, never rebinds:
+R ∪ R = R), the decl-exit cut deleted (raw accumulated row publishes,
+self and co-member edges included), and the completion fold extended
+to solos (a group of one). MEASURED: TRANSITION m3 == m4 at census 0,
+the pass-tail belt silent, NO exit-134 recurrence (the class fixtures
+held) — and MOVERS ROSE 686 → 858 (+172), with the solo-fold
+extension changing nothing. The arc's own acceptance instrument
+("movers monotone down") refutes the landing as-built; blessing a
++25% rise unexplained is blessing around the instrument, so the whole
+build reverted per the discipline. WHAT SURVIVES: the guard is sound
+and re-lands with the deletion; the fixture battery proves the
+correctness face. NAMED NEXT PROBE: movers_diff on the raw-publish
+tree (rebuild uncommitted) — trace ONE mover's trial-vs-final rows at
+its charge sites and name the +172's mechanism (candidates: the
+trial's exit rows now carry live edges the final's fingerprints
+render as open where the old cut said closed — a comparison-SURFACE
+shift, re-baseable with justification; or a REAL under/over-resolve
+divergence — a defect). The deletion re-lands with the answer, never
+on momentum. Then the movers measurement fires the pre-committed
 scheme-object rule. (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

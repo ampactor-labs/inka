@@ -1974,7 +1974,35 @@ generations. THE RE-LAND SET, in order: compress-on-read (the cost
 half, priced by refusal 2) · the two +WASI widenings (refusal 3) ·
 the m5 arbitration (refusal 1) · then the same two edits
 (generalize-at-prereg + the drain refinement) unchanged — the
-channel fix itself was never refuted. (2) Decl cells + correspondence edges;
+channel fix itself was never refuted.
+THE M5 PROBE RAN AND THE STORY DEEPENED (2026-08-07, four kills in
+one sitting): (1) m4 ≠ m5 — the toggle is not a wash-out; (2) the
+parity story is DEAD — probe A ran the SAME binary on the SAME
+input twice and the outputs DIFFER: genuine run-to-run
+nondeterminism, exactly ONE BIT (free_in_fields' call_301588 k2
+yield-floor staging present/absent, all else byte-identical);
+(3) the import census closes the obvious channels — the module
+imports NO clock and NO random (fd/sock/thread-spawn only, the
+serve paths inert in a compile); (4) the judgment streams of
+differing draws are IDENTICAL (same movers, same census) — the
+varying read lives in LOWER's classification, after judgment,
+invisible to diagnostics. THE STRONGEST BANKED LEAD, measured: the
+pinned tree compiles at 1,814,108 KB peak (1.73 GiB, BELOW 2^31)
+and is stable across two draws; the fixed tree compiles at
+2,176,760 KB (2.08 GiB, ABOVE 2^31) and flips — the signed-i32
+boundary sits exactly between the stable and the flipping
+configurations, and every byte address above it reads NEGATIVE to
+a signed compare. THE DISCRIMINATING PROBE, next: compile a
+TRIMMED input under the fix holding peak below 2 GiB — flip gone
+⇒ the sign boundary is the channel (and compress-on-read, which
+cuts the peak, is the fix's own prerequisite for a second reason;
+address-compare hygiene the deeper closure); flip persists ⇒ the
+boundary is exonerated and the binary-patch probe prints the k2
+classifier's input (the callee-row read at call_301588's decision)
+across two draws — the forensic-laws method, one binary, two runs.
+The re-land order STANDS with its reason sharpened: compress-on-
+read first is now load-bearing twice (cost ratchet AND the
+2-GiB-boundary suspect). (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE
 DELETION: one-pass judge, D8 swept, measured against the 563MB-class

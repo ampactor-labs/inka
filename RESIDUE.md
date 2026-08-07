@@ -2344,6 +2344,35 @@ node kind at the charge arm for sl's call in both passes (one
 binary, seconds per cycle, the forensic-laws method) — and read
 which kind the final sees; the fix follows at the site that
 produced it.
+THE PROBE RAN THREE CYCLES AND NAMED THE ROOT (2026-08-07, the
+eprint-armed compiler on the fixture): (kill 1) the silent
+no-charge arm NEVER fires — the charge always executes; (kill 2)
+every sl_from charge is a BARE EDGE both raw and RESOLVED at
+charge time — correct per the charge-verbatim design; (THE ROOT)
+one charge chains `t580@e1` — an EPOCH-1, PRE-REGISTRATION-ERA
+cell — and it is STILL FREE at the final's read, AFTER the trial
+fully judged sl_from: THE CALLEE'S JUDGMENT NEVER FILLS THE PREREG
+ROW CELL. The ownership-resolve rebind (infer.mn:2671,
+graph_bind(handle, TFun(inferred_params, TVar(ret_handle),
+mk_ef_open([], row_handle)))) and the judgment path REPLACE the
+prereg TFun wholesale — new param cells, new return, NEW row cell
+— orphaning every prereg cell that forward charges chained. The
+row-half landing wired callers to the prereg cell believing "the
+callee's own judgment fills it"; the artifact says the judgment
+ABANDONS it. The trial's A-fingerprint was never honest for the
+sl shape either — it renders the raw open tail whose resolution
+is bare; A vs B differ only in whether the prune closed it. THE
+FIX FORM (one writer): infer_fn's row accumulator must BE the
+prereg row cell — when the fn handle is already TFun-bound at
+judgment entry, read ITS row cell and pass it as the frame's
+row_handle (and unify/reuse the prereg param and ret cells or
+bind them across), instead of minting a parallel set — carry the
+handle, read live, the fix is less minting. The rebind sites to
+enumerate at the build: the ownership rebind (2671), pre-register
+(the TFun birth), and infer_fn's enter/exit row plumbing. The
+crucible stands (mn-hof-forward-row: sl's row must equal sf's);
+acceptance adds: neg_names_to_str's solo row returns to its
+declared set, and the 26 row movers fall.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

@@ -692,6 +692,38 @@ its own comment says "now LIVE" — and is recorded here only so the
 stale prose is struck; that distinction between an open gap and a
 resolved one is exactly what an index carries and a comment cannot.
 
+`Hβ.infer.diverge-shared-memory-row` — RECOVERED 2026-08-07 (PLAN §11
+Phase 2.4; named 2026-05-05 in b139622b as peer G.1, gone from every
+index by 2026-08-05 — drift-9 at the roadmap layer). The original form
+spoke the Thread-effect-era substrate (a hardwired `+ Thread` on the
+verbs); the RESTATED form speaks today's: the fanout is ONE PFanout
+whose ownership aspect discriminates `<|` (FanShare — one input
+ref-borrowed across N branches) from `><` (FanDistribute — N owned
+inputs, nothing shared), and execution is a `~> Schedule` handler read
+live at the install edge. Under `~> Thread`, that ownership aspect IS
+a row fact the infer arm must charge: a FanShare fanout's borrow is
+VISIBLE across cores — cross-core visibility of a shared referent
+requires atomic ordering, so the fanout's row needs `+ SharedMemory`
+(or each branch proving it never reads the borrow after spawn); a
+FanDistribute fanout shares nothing, so the same arm can prove
+`+ !SharedMemory` — parallelizable-no-sync, stated as a negative
+capability. This is the substantive half of the two-parallel-verbs
+reframe: the ownership discrimination becomes a thing the CROWN
+PROVES (a `!SharedMemory` the row algebra discharges) rather than a
+thing the docs assert. Sequencing: the charge site is the same infer
+fanout arm Phase 2.2 just cleaned; the PROOF verdict inherits
+`Hβ.effects.sound-neg-under-poly` (band A / Phase 6), so it lands
+with band E's verification tier (Phase 9.2's safety verdicts) —
+beside `Hβ.parallel.thread-alloc-transitive-proof` and
+`.race-freedom-ownership-proof`, and prior to it `>< ~> Thread`'s
+race-freedom claim rests on the ownership read alone. Two sibling
+names from the same archaeology, recorded so the recovery is whole:
+`Reason.branch-spawned-verb-tagged` (G.2 — spawn provenance
+verb-tagged for the Why engine) survives in today's vocabulary as a
+facet of `mentl where`'s schedule badge (PLAN §11 3.2); G.3's
+thunk-abstraction trigger dissolved when STEP 4 collapsed the two
+lower paths into one PFanout.
+
 `Hβ.graph.reverse-edge-and-bound-projection` — oracle.mn's two
 surviving iteration convictions, named at their true form (2026-07-30).
 `count_dependents` walks ALL handles asking "does this body reference

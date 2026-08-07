@@ -1591,12 +1591,15 @@ re-read syntactic form to decide what the graph already answers.*
   ~136 eta-wrappers by text shape; the ratchet that watches those numbers
   is 2.5's. Gate: tests/frontier/mn-anonymity-tier.mn, three faces, seen
   RED first.
-- **2.4 · Recover `Hβ.infer.diverge-shared-memory-row`** into `RESIDUE.md`. Named
-  2026-05-05, gone from the index by 2026-08-05 — drift-9 at the roadmap layer,
-  and it is the substantive half of the two-parallel-verbs reframe: `<|` needs
-  `+ SharedMemory` (borrow visibility across cores requires atomics) while `><`
-  can prove `+ !SharedMemory`. It is what makes the ownership discrimination a
-  thing the crown proves rather than a thing the docs assert.
+- **2.4 · Recover `Hβ.infer.diverge-shared-memory-row`** — ✅ RECOVERED
+  2026-08-07 into `RESIDUE.md`, restated from the 2026-05-05 archaeology
+  (b139622b, peer G.1) into today's substrate: one PFanout, schedule read
+  live at the `~>` edge; under `~> Thread` the ownership aspect IS the row
+  fact — FanShare's cross-core borrow charges `+ SharedMemory`,
+  FanDistribute proves `+ !SharedMemory`. The proof verdict inherits the
+  crown (Phase 6) and lands with band E's verification tier (Phase 9.2);
+  the G.2 sibling survives as `mentl where`'s schedule badge facet (3.2),
+  G.3 dissolved at STEP 4's PFanout collapse.
 - **2.5 · The census grows its judgment shapes.** The iteration-shape and
   shape-keyed detectors move from the audit tiers into `CensusShape` (the
   0.3 spine's named growth), and the anonymity shape's RATCHET begins: the

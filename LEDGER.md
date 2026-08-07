@@ -35,6 +35,29 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE WEAVE READS ITS OWN REASON — the arc loop's first
+  iteration lands Phase 2.0 by running its banked probe, which refuted
+  the phase's own framing (pin ddcf27c7 — CLEAN m2 == m3 at 334,506
+  lines, census 0). The marker-delimited raw-word probe at
+  $eq_nPipeKind's entry read the full comparison stream of the `<~`
+  census: 28× (0 vs 3), 20× (2 vs 3), four heap pointers vs 3 that
+  decoded to tag-1 PFanout records (correctly boxed payload variants,
+  correctly unequal — the "boxed nullary" of the prior hypothesis was
+  the fixture's own `<|`/`><` nodes), and 2× (3 vs 3) — the feedback
+  pair, identical sentinels, the eq answering TRUE. The census's zero
+  was the walk's NEXT read: span_of_handle chases to the union-find
+  root, a `<~` node's chase lands on the continuation-boundary cell
+  (bound bare-Inferred at finalize_continuation_boundaries), the span
+  answers zero, and the site is skipped as a synthetic mint. Fix:
+  span_of_node_raw (graph_reason_at, no chase) — the weave walk reads
+  the node's OWN parse site; chasing is for type resolution, and
+  conflating the two is the law this landing names. All six shapes
+  count their own sites; mn-census-verbs gained its `<~` line and the
+  frontier leg's roster grew to six. Hβ.eq.pipekind-match-eq-divergence
+  RESOLVED with six kills, the sixth its own hypothesis;
+  refs_of_name's shared chased-span read banked as the
+  accident-invariant sibling.
+
 - 2026-08-06 · ▶▶▶ THE MEDIUM COUNTS ITS OWN SHAPES — Phase 0.3's
   structural census lands as a query facet (pin 43cc582afdf7 — CLEAN
   m2 == m3 at 334,486 lines, census 0, crown 8/8, frontier 333/0 with

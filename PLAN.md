@@ -1529,21 +1529,23 @@ Rides Phase 0.3. Three instances of one law: *parsing is necessarily shape;
 every judgment must be type-keyed; nothing downstream of the parser may
 re-read syntactic form to decide what the graph already answers.*
 
-- **2.0 · The one `==` is coherent with match — FIRST, because everything
-  below leans on it.** `Hβ.eq.pipekind-match-eq-divergence` (RESIDUE.md): two
-  values that both render PFeedback through match compare unequal through
-  the structural `$eq_nPipeKind`, surviving five probe-kills; the named next
-  probe (binary-patch the eq's entry, read the raw words) decides the
-  representation question in one run. Whatever it names — a boxed nullary's
-  illegal birth, a second sentinel encoding, a leaf-guard case — the fix
-  lands WITH its contract gate (the "nullary stays sentinel" invariant
-  becomes enforced at its one writer, per the accident-invariant law), the
-  census `<~` shape flips green and joins the frontier leg's roster, and the
-  reverted 2026-08-06 guard experiment's lesson stands: the one structural
-  `==` serves the wheel's own row membership, so eq semantics change only
-  with the march arbitrating. Rung 3 (5.2), monomorphization's `fold_sig`
-  (5.1), and the IFC label lattice (Phase 7) all compare through this leaf —
-  none proceeds on an eq that disagrees with match.
+- **2.0 · The one `==` is coherent with match** — ✅ LANDED 2026-08-07, and
+  the banked probe's one run REFUTED the phase head's own framing: there
+  was no divergence. The raw-word census showed the `<~` pair as `a=3 b=3`,
+  the eq TRUE; the census's zero came from `span_of_handle` CHASING to the
+  union-find root, where a `<~` node lands on the continuation-boundary
+  cell's bare `Inferred` — span zero, site skipped as synthetic. The landed
+  law: a weave walk reads a node's OWN raw facts (`span_of_node_raw` —
+  graph_reason_at, no chase), because chasing conflates identity with the
+  type-class representative. All six shapes count their own sites; the
+  frontier roster gained `<~`; six kills banked
+  (`Hβ.eq.pipekind-match-eq-divergence`, RESOLVED — the sixth kill is the
+  divergence hypothesis itself). What SURVIVES for downstream phases: the
+  eq is measured coherent (rung 3, `fold_sig`, the IFC lattice proceed),
+  the pointer-eq floor's Intent-Boundary fix stands, the reverted guard
+  experiment's record stands (load-bearing eq semantics change only under
+  march arbitration), and one sibling residue is named — `refs_of_name`
+  shares the chased-span read and is green by accident-invariant.
 - **2.1 · `Hβ.egraph.extraction-is-the-emit-cursor`.** "Extraction" is borrowed
   from egg, and it carries egg's architecture — saturate, then pick — into a
   medium whose architecture is *one graph, project*. An e-class is the truth; a

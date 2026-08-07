@@ -83,33 +83,34 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.eq.pipekind-match-eq-divergence` — THE CENSUS'S ONE BLIND SHAPE,
-measured 2026-08-06 and banked with five kills: `mentl query <file>
-"census <~"` answers 0 on files full of `<~` while the other four verbs
-and the anonymity shape count correctly. The instrumented walk printed
-`[CW] <~ vs <~` — BOTH sides of the comparison render PFeedback through
-show_pipe_kind's match — while `pk == k` answers FALSE, an eq/match
-divergence on the same pair, surviving even the structural
-`$eq_nPipeKind` once the Intent-Boundary annotations routed `==` off the
-pointer floor. KILLED IN ORDER: (1) the lexer's `<~` arm sound (60,126 →
-TLtTilde); (2) op_prec(TLtTilde)=2 sound; (3) op_to_pipe_kind →
-PFeedback sound, the binop builder minting PipeExpr uniformly; (4) the
-pointer-eq floor — real (census_matches compiled to raw i32.eq until the
-`shape: CensusShape, body: NodeBody` annotations; the documented
-pointer-eq-on-names class, on an ADT) — fixed, verdict unchanged; (5)
-the mixed sentinel/boxed-nullary hypothesis — a sentinel-vs-record-tag
-arm added to emit_eq_leaf_sum's guard was REVERTED after the march ruled
-BROKEN (m3 ≠ m4, m4 refusing with 18 undischarged claims — the one
-structural `==` serves the wheel's own row membership and dedup, so a
-guard change moves inference wheel-wide; and the census still answered 0
-through m3, refuting the hypothesis independently). THE NAMED NEXT
-PROBE: binary-patch `$eq_nPipeKind`'s entry in the emitted m2 to print
-the raw (a, b) words for the `<~` pair — the two values that render
-identically and compare unequal, read as integers, decide the
-representation question in one run. Instruments preserved at
-.build/research/crown-2026-08-05/ (the verbs-all fixture, the [CW]
-census transcripts). The facet ships with this one shape's blind spot
-named; the frontier leg pins the four sound verbs + anonymity.
+`Hβ.eq.pipekind-match-eq-divergence` — RESOLVED (2026-08-07, the arc
+loop's first iteration): the banked probe ran and the divergence was a
+MISATTRIBUTION — there never was one. The raw-word census at
+`$eq_nPipeKind`'s entry showed the `<~` pair as `a=3 b=3`, identical
+sentinels, the eq answering TRUE; the count was 0 because of the walk's
+NEXT read: `span_of_handle` CHASES to the union-find root, and a `<~`
+node's chase lands on the continuation-boundary cell (bound with a bare
+`Inferred` at `finalize_continuation_boundaries`), so the span answered
+zero and the census skipped every feedback site as a synthetic mint. THE
+LAW THE ROOT TEACHES: a weave walk reads a node's OWN raw facts — body
+AND reason — because chasing conflates a node's identity with its
+type-class representative; `span_of_node_raw` (graph_reason_at, no
+chase) is the census's read now, and all six shapes count their own
+sites (the frontier leg's roster gained `<~`). SIX KILLS BANKED, the
+sixth being the entry's own former hypothesis: (1) lexer sound; (2)
+op_prec sound; (3) kind table + builder sound; (4) the pointer-eq floor
+— real and fixed via the Intent-Boundary annotations, but not this
+root; (5) the mixed sentinel/boxed-nullary guard — refuted (the probe's
+four heap pointers were the fixture's PFanout records, tag 1, CORRECTLY
+boxed payload variants and correctly unequal; the reverted
+emit_eq_leaf_sum experiment's BROKEN verdict stands as the record that
+load-bearing eq semantics change only under march arbitration); (6) the
+eq/match divergence itself — the eq was true, the span read was the
+thief. STANDING RESIDUE, one face: `refs_of_name` shares the
+chased-span read (span_of_handle) and measures green only because
+VarRef roots happen to retain Located reasons — an accident-invariant;
+migrating refs to the raw read is the same one-line law applied at its
+sibling, sequenced with the census's per-file cut.
 
 `Hβ.query.decl-site-file-coordinates` — a query's Reason span answers in
 the linked blob's coordinates and names no file, so "where is NAME

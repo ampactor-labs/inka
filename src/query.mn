@@ -370,11 +370,21 @@ fn census_sites(shape) with GraphRead + !Mutate + Alloc + Memory = match graph_s
   Graph(next, _) => census_walk(shape, 0, next, make_list(0)),
 }
 
+// The weave walk's span is the node's OWN (raw) reason — the parse site.
+// span_of_handle CHASES to the union-find root, which conflates a node's
+// identity with its type-class representative: a `<~` node's chase lands
+// on the continuation-boundary cell (bound with a bare Inferred), answers
+// span_zero, and the census skipped every feedback site as synthetic —
+// the 2.0 dig's true root, found after the eq itself measured TRUE
+// (3 vs 3) on the pair the divergence hypothesis had accused.
+fn span_of_node_raw(handle) with GraphRead + !Mutate + Memory + Alloc =
+  span_of_reason(graph_reason_at(handle))
+
 fn census_walk(shape, i, n, acc) with GraphRead + Memory + Alloc + !Mutate = if i >= n {
   acc
 } else {
   if census_matches(shape, graph_node_body(i)) {
-    let sp = span_of_handle(i)
+    let sp = span_of_node_raw(i)
     if sp == span_zero() || span_in(acc, sp, 0) {
       census_walk(shape, i + 1, n, acc)
     } else {

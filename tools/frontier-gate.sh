@@ -905,21 +905,21 @@ lsp_frame() {
 # (Hβ.query.structural-census, PLAN §11 Phase 0.3): each countable shape's
 # census answer contains the fixture's OWN located site — link-robust, since
 # absolute counts ride the solo link set and the fixture's line is the
-# invariant. `<~` stays out of the roster: its census is the banked RED
-# (Hβ.eq.pipekind-match-eq-divergence in RESIDUE.md) until the eq/match
-# divergence on PFeedback closes.
+# invariant. All five verbs in the roster, `<~` included since the
+# raw-reason span read (the census reads the node's own parse site, never
+# the chased root's reason).
 run_census() {
   local compiler="$1" dir="$2"
   local doc="$ROOT/tests/frontier/mn-census-verbs.mn"
   local ok=1 spec q line
-  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14'; do
+  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15'; do
     q="${spec%%:*}"; line="${spec##*:}"
     wt_run --dir "$ROOT" "$compiler" query "$doc" "census $q" > "$dir/census-$line.out" 2>/dev/null
     if ! grep -q "mn-census-verbs:$line" "$dir/census-$line.out"; then
       ok=0; fail "census '$q' misses its own site (line $line; see $dir/census-$line.out)"
     fi
   done
-  [ "$ok" = 1 ] && pass "structural census: |> <| >< ~> and anonymous each count their own site"
+  [ "$ok" = 1 ] && pass "structural census: all six shapes count their own site (|> <| >< ~> <~ anonymous)"
 }
 
 run_lsp_hover() {

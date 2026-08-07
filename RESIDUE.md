@@ -1759,14 +1759,13 @@ a row-unify walk), and the pricing rule's own third payment is that
 "priced" must cover the read's FRESHNESS as well as its cost — this
 stamp traced the semantics and the cost and never asked when the row
 it reads is true. B2 THE ARG
-EDGE GOES TOTAL-DIRECTIONAL — cap-form params keep landed
-subsumption; a bound-TFun arg meeting a param row resolving to
-EfRow([], [], EtOpen(vs)) with vs all free masks the position and
-binds ONE-WAY: bind_edges_to(vs, arow) — the instantiated
-(caller-private) param cells learn the arg's row, the arg's shared
-cell never written, the 297-site flow preserved as a READ; mixed
-shapes (presents + var tail) keep symmetric with a named census
-counter (unmeasured; expected zero in the wheel). B3 THE UNION FLIPS
+EDGE GOES TOTAL-DIRECTIONAL — ✅ LANDED 2026-08-07 (pin 2a09f3c22a4f,
+TRANSITION at census 0; movers 691 → 686; the mixed-shape census
+marker measured ZERO on both legs exactly as stamped; the armed
+duplicate-name class caught the build shadowing effects.mn's real
+bind_edges_to live). Cap-form params keep landed subsumption; the
+pure-flow shape masks and binds one-way; the arg's shared cell is
+never written; the 297-site flow survives as a read. B3 THE UNION FLIPS
 — tail_join's Open×Open → EtOpen(tail_set_union(vs, ws)), sound
 because B1+B2 bound every shared cell's writers to its own decl's
 accumulation plus Class B merges; mn-two-tail-accumulation GREENS

@@ -35,6 +35,29 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE ARG EDGE GOES TOTAL-DIRECTIONAL — rung 3's B2
+  lands (pin 2a09f3c22a4f — TRANSITION m3 == m4 at 99,476 m2/m3 diff
+  lines, census 0 on both legs; movers 691 → 686; the B2-mixed-open
+  census marker ZERO on both legs exactly as the stamp predicted).
+  The build followed the settled stamp: fn_arg_directional_positions'
+  else-arm gains the pure-flow case — a param row chasing to
+  EfRow([], [], EtOpen(vs)) with empty presents and absents masks the
+  position, runs the same component meet as the cap arm, and binds
+  ONE-WAY through effects.mn's existing bind_edges_to (the armed
+  E_DuplicateFnName class caught the build's own shadow of that name
+  live — the stamp's bind_edges_to was already real machinery, and
+  the duplicate died in one edit). The caller-private instantiated
+  param cells learn the arg's row; the arg's shared decl cell is
+  never written; the 297-site flow the original mask severance
+  convicted survives as a READ. Mixed open shapes keep the symmetric
+  path with the eprint census marker. Remaining rungs in the designed
+  ladder: B4 (the completion drains at trial_judge_group), B6 (the
+  cut deletes; mn-cycle-charge-freeze greens), B5's dead-code
+  deletions, then the movers measurement fires the pre-committed
+  scheme-object rule.
+
+
+
 - 2026-08-07 · ▶▶▶ THE STACK HOLDS FLAT — the zip cliff closed, the
   plumbing-twin mystery dissolved into ten kills and one prelude fix
   (pin dedfec69264a — CLEAN m2 == m3, census 0; mn-zip-deep RED at

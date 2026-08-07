@@ -502,7 +502,10 @@ comment_refs_max: 0
 # publish-surface channel, sixth application; zero trial/final
 # machinery in the diff). The next legal move stays DOWN; rung 3
 # dissolves the class.
-movers_max: 691
+# Lowered 691 → 686 at rung 3's B2 (pin 2a09f3c22a4f): the one-way arg
+# edge deletes a per-call-site teach-back channel — the arc's
+# monotone-down acceptance moving.
+movers_max: 686
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

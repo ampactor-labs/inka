@@ -4025,7 +4025,38 @@ fn fn_arg_directional_positions(dps, arg_handles, span: ValidSpan, i) = if i >= 
         _ => rest,
       }
     } else {
-      rest
+      // B2 (rung 3, the arg edge goes TOTAL-directional): the pure-flow
+      // shape — the param's row resolving to EfRow([], [], EtOpen(vs)),
+      // every surviving edge free by the chase's own construction — masks
+      // the position and binds ONE-WAY: the instantiated caller-private
+      // param cells learn the arg's row (bind_edges_to), the arg's SHARED
+      // cell is never written, so a named fn passed to map's f stops
+      // teaching its own decl cell one edge per call site while the
+      // 297-site flow survives as a read. A MIXED open shape (presents or
+      // absents beside the var tail) keeps the symmetric path with the
+      // named census marker — expected zero on the wheel; a nonzero grep
+      // is the counter.
+      match chase_row_deep(prow, 0) {
+        EfRow(pres2, abs2, EtOpen(vs)) => if len(pres2) == 0 && len(abs2) == 0 {
+          match graph_chase(list_index(arg_handles, i)) {
+            GNode(NBound(aty), _) => match fold_strip(chase_deep(aty)) {
+              TFun(aps, aret, arow) => if len(aps) == len(pps) {
+                fn_arg_component_meet(aps, pps, aret, pret, span)
+                bind_edges_to(vs, arow, span, Inferred("the arg edge teaches the param's flow row"))
+                [i] ++ rest
+              } else {
+                rest
+              },
+              _ => rest,
+            },
+            _ => rest,
+          }
+        } else {
+          eprint_string("B2-mixed-open arg-edge\n")
+          rest
+        },
+        _ => rest,
+      }
     },
     _ => rest,
   }

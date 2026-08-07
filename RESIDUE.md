@@ -708,7 +708,27 @@ lands, the worthiness gate stands as the guard of BOTH named
 classes (the non-tail blowup census and this width blindness);
 5.1a's cost measurement (emit +17%, RSS inside ceiling, cliff
 crossed) is banked and re-attemptable the day the state face is
-repr-true. One iteration of today also re-learned kill (1)
+repr-true.
+THE WRITER ENUMERATION (2026-08-07, the stamp's census — every
+site where the hstate layout's uniform 4-byte slot assumption is
+baked): (1) wasm.mn:4115 LHandleWith's record size
+`8 + 4*(nstate+total_arms)`; (2) :3522 emit_state_init_writes —
+the init store walk, the pinned break's own site; (3) :3606 the
+arm-entry offset `8 + 4*nstate + 4*(base+k)`; (4) :4501
+LStateSlotStore's emitter (resume-with-state commits through the
+__hrec ladder); (5) :4419 the dispatch's `arm_const = 8 +
+4*op_slot`; (6) :7142/:7152 the POff(8 + i*4) path offsets (the
+persist/fold path readers). The arm-body state READ path and the
+op_*_handler_result generators complete the family at the build
+(one grep each). THE DISCRIMINATING PAIR, from the closed peer's
+own record: sum_with's float-acc twin RUNS CORRECT through the
+live twin set while fold's f64-init twin breaks at the init
+store — the class splits on how the wide value REACHES the slot
+(a direct repr-true param store vs a path that boxes/goes through
+a word cell), so the build's first probe diffs the two twins'
+state-store emissions to pin which arrival path is width-honest
+and which is blind. The fix stays §5.U's per-field repr layout;
+the pair tells the build where the seam already half-exists. One iteration of today also re-learned kill (1)
 the hard way: a worthiness-SEED probe twins nothing (candidacy
 gates upstream at the site collection) — the closed peer's own
 record already said the working force was the gate, not the seed.

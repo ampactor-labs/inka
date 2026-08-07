@@ -1,0 +1,21 @@
+// Phase 4.2 (Hβ.infer.grade-is-join-and-mode): the ownership grade reads
+// a (consume, read) Usage pair — ⊗ across sequence, ⊔ across
+// alternatives, mode deciding which component a mention feeds. Pre-fix
+// the additive count graded `finish`'s xs Ref (once-per-alternative
+// counted 2) and `moderead`'s xs Ref (a condition read counted as a
+// consume), so both clean own-callers were convicted with a false
+// T_OwnUnconsumed — and `c`, a pure condition read, graded Own.
+fn finish(xs, c) = if c { xs } else { xs }
+
+fn clean_caller(own xs) = finish(xs, true)
+
+fn moderead(xs) = if xs > 0 { xs } else { 0 }
+
+fn mode_caller(own xs) = moderead(xs)
+
+fn stmt_use(xs) = {
+  let kept = finish(xs, false)
+  kept
+}
+
+fn main(q) = clean_caller(5) + mode_caller(3) + stmt_use(7)

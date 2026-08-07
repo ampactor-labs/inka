@@ -1726,17 +1726,20 @@ new DEP found; the map below is accurate at that pin.)*
   `tests/frontier/mn-use-after-move.mn` via `run_narration`. The ARMING
   (diag_refuses at held zero, post-falsification) is the banked residual in
   `RESIDUE.md`.
-- **4.2 · `Hβ.infer.grade-is-join-and-mode`** — the grade is join-blind
-  (if-branches summed additively where the affine truth is a ⊔-join) and
-  mode-blind (a condition read counted as a consume), producing false
-  `T_OwnUnconsumed` inside an arming-track class. Scope trued by 4.1's felt
-  walk: the LEDGER handles branches and condition-borrows correctly
-  (branch_enter/divider/exit, borrow scopes) — this item lives entirely in
-  `count_uses`' grade for UNMARKED params. STAMPED whole 2026-08-07 (probe
-  grade.mn, both channels measured; `RESIDUE.md` carries the design — the
-  mode-paired `(consume, read)` Usage walk, the two-walks-one-lattice
-  ruling, the writer/reader sets, the no-fixpoint pricing, and the
-  T_UseAfterMove blast contract the march arbitrates).
+- **4.2 · `Hβ.infer.grade-is-join-and-mode`** — ✅ LANDED 2026-08-07 (pin
+  6cd6281a971f, built against the stamp). count_uses' additive sum deleted
+  whole into `usage_of` — the mode-paired `(consume, read)` Usage walk (⊔
+  across alternatives; mode from the callee product via `param_borrows`,
+  the classification's one home in types.mn that the arg bracket's inline
+  test also deleted into; lattice ops home with their ADT). The refused
+  first march was the instrument: the consume default on a not-yet-graded
+  forward callee made decl order load-bearing (set_contains graded Own,
+  every caller moved its set); the read-safe default closed it. BOTH
+  ownership narration classes now at wheel-ZERO; the walk's trial/final
+  order-dependence measured at +188 moved schemes (movers 474 → 662,
+  in-baseline justification; rung 3 dissolves the class and the
+  order-dependence with it). Gate: tests/frontier/mn-usage-grade.mn, three
+  asserts seen RED.
 - **4.3 · The per-decl arena** (`Hβ.perf.per-decl-arena`, gated on
   `Hβ.infer.region-on-tee-alloc-absorb`). It is a hub, and more rides on it than
   was ever written down: the String=`[Byte]` value-ontology dissolution names it

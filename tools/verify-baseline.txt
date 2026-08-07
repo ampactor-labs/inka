@@ -486,7 +486,16 @@ comment_refs_max: 0
 # publish-surface channel, fourth application; plus the expansion's own
 # new effects fns. Zero trial/final machinery in the diff. The next
 # legal move stays DOWN; rung 3 (Phase 5.2) dissolves the class.
-movers_max: 474
+# Re-based 474 → 662 at the usage grade (§11 4.2): resolved ownership is
+# part of the published scheme, and the mode-paired walk reads CALLEE
+# products — so a forward-referenced callee resolves between trial and
+# final and the param's grade moves with it (the stamp's named
+# order-dependence, now MEASURED at +188 moved schemes on fixed input).
+# Zero trial/final machinery in the diff; the publish-surface channel,
+# fifth application. The next legal move stays DOWN; rung 3 (Phase 5.2)
+# dissolves the class and this order-dependence with it (class-based
+# reads are decl-order-free by construction).
+movers_max: 662
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

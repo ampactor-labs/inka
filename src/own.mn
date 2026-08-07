@@ -485,10 +485,11 @@ fn find_first_span(ref sites, ref name: String) with Alloc + Memory = {
 // usage_seq/usage_join lattice. Worth doing as a Usage-lattice dedup, but NOT
 // this deletion, and it would not have cleared the compare-then-return subclass.
 //
-// Deduce `Own` vs `Ref` for `Unmarked`-marked parameters by counting
-// uses in the function body: 0 uses → `Unmarked` (mark stays),
-// 1 use → `Own` (consumed once — affine), ≥ 2 uses → `Ref`
-// (borrowed multiple times).
+// Deduce `Own` vs `Ref` for `Unmarked`-marked parameters from the body's
+// (consume, read) Usage pair (§11 4.2, Hβ.infer.grade-is-join-and-mode —
+// the Usage lattice unification the types.mn ADT comment names): never
+// consumed and never read → `Unmarked`; never consumed but read → `Ref`;
+// consumed exactly once on every path → `Own`; consumed more → `Ref`.
 fn infer_ownership(ref params, ref body) with !Mutate = map(
   (p) => {
     let inferred = match param_authored(p) {
@@ -504,71 +505,214 @@ fn infer_ownership(ref params, ref body) with !Mutate = map(
   list_to_flat(params)
 )
 
-fn classify_usage(ref name, ref body) with !Mutate = {
-  let count = count_uses(name, body)
-  if count == 0 { Unmarked } else if count == 1 { Own } else { Ref }
+fn classify_usage(ref name, ref body) with !Mutate = match usage_of(name, body, MConsume) {
+  (consume, read) => match consume {
+    UZero => match read {
+      UZero => Unmarked,
+      _ => Ref,
+    },
+    UOne => Own,
+    UMany => Ref,
+  },
 }
 
-fn count_uses(ref name: String, ref node) with !Mutate = match node {
+// The walk's position mode: which component of the pair a mention feeds.
+type UseMode = MConsume | MRead
+
+fn use_leaf(mode) = match mode {
+  MConsume => (UOne, UZero),
+  MRead => (UZero, UOne),
+}
+
+fn pair_zero() = (UZero, UZero)
+
+// Componentwise ⊗ (one path runs both) and ⊔ (exactly one alternative
+// runs) over the (consume, read) pair — the lattice ops live in types.mn
+// beside the Usage ADT (one home; infer.mn's resume classifier folds the
+// same two).
+fn pair_seq(a, b) = match a {
+  (ac, ar) => match b {
+    (bc, br) => (usage_seq(ac, bc), usage_seq(ar, br)),
+  },
+}
+
+fn pair_join(a, b) = match a {
+  (ac, ar) => match b {
+    (bc, br) => (usage_join(ac, bc), usage_join(ar, br)),
+  },
+}
+
+// usage_of — ONE walk of the body per param name, mode threading down.
+// Positional resets: an if-condition and a match scrutinee are READ to
+// pick the path; a call's args take the CALLEE's own param product's mode
+// (param_borrows — the same one test the arg walk's borrow bracket reads
+// one phase later); the callee position and every seq-op-shaped access
+// (index receiver, field base, record-update base) are reads. resume_grade
+// (infer.mn) is this walk's sibling over the same lattice — they stay two
+// walks because resume carries call-substitution this walk must not, and
+// this walk carries mode resume must not (the stamped two-walks ruling).
+fn usage_of(ref name: String, ref node, mode) with !Mutate = match node {
   N(body, _, _) => match body {
-    NExpr(VarRef(n)) => if n == name { 1 } else { 0 },
-    NExpr(CallExpr(f, args)) => count_uses(name, f) + count_uses_list(name, args),
-    NExpr(BinOpExpr(_, l, r)) => count_uses(name, l) + count_uses(name, r),
-    NExpr(UnaryOpExpr(_, inner)) => count_uses(name, inner),
-    NExpr(IfExpr(c, t, e)) => count_uses(name, c) + count_uses(name, t) + count_uses(name, e),
-    NExpr(BlockExpr(stmts, final_e)) => count_uses_list(name, stmts) + count_uses(name, final_e),
-    NExpr(LambdaExpr(_, lb)) => count_uses(name, lb),
-    NExpr(PipeExpr(_, l, r)) => count_uses(name, l) + count_uses(name, r),
-    NExpr(FanoutExpr(branches)) => count_uses_list(name, branches),
-    NExpr(RestExpr(_)) => 0,
-    NExpr(MatchExpr(s, arms)) => count_uses(name, s) + count_match_arms(name, arms),
-    NExpr(MakeListExpr(elems)) => count_uses_list(name, elems),
-    NExpr(MakeTupleExpr(elems)) => count_uses_list(name, elems),
-    NExpr(MakeStringExpr(fragments)) => count_uses_list(name, fragments),
-    NExpr(IndexExpr(receiver, index)) => count_uses(name, receiver) + count_uses(name, index),
-    NExpr(MakeRecordExpr(flds)) => count_uses_record_fields(name, flds),
-    NExpr(RecordUpdateExpr(base, flds)) => count_uses(name, base) + count_uses_record_fields(name, flds),
-    NExpr(NamedRecordExpr(_, flds)) => count_uses_record_fields(name, flds),
-    NExpr(FieldExpr(rec, _)) => count_uses(name, rec),
-    NExpr(LitInt(_)) => // H6: exhaustive. Remaining Expr variants hold no sub-exprs
-    // containing VarRefs that would count against this name
-    // (literals, ResumeExpr is stubby, ExprPlaceholder is a hole).
-    // NStmt / NPat / NHole contribute no variable references.
-    0,
-    NExpr(LitFloat(_)) => 0,
-    NExpr(LitString(_)) => 0,
-    NExpr(LitBool(_)) => 0,
-    NExpr(LitUnit) => 0,
-    NExpr(ResumeExpr(v, _)) => count_uses(name, v),
-    NExpr(LabeledArg(_, v)) => // the labeled value may ref name
-    count_uses(name, v),
-    NExpr(ExprPlaceholder) => 0,
-    NStmt(_) => 0,
-    NPat(_) => 0,
-    NHole(_) => 0,
-    NModule(_) => // NModule's decls are top-level (never a sub-node inside a scanned fn
-    // body) and NTypeAnn wraps a Ty, not an Expr — neither carries an
-    // expr-level VarRef to count.
-    0,
-    NTypeAnn(_) => 0,
+    NExpr(VarRef(n)) => if n == name { use_leaf(mode) } else { pair_zero() },
+    NExpr(CallExpr(f, args)) => pair_seq(usage_of(name, f, MRead), usage_args(name, args, callee_borrow_params(f), 0)),
+    NExpr(BinOpExpr(_, l, r)) => pair_seq(usage_of(name, l, mode), usage_of(name, r, mode)),
+    NExpr(UnaryOpExpr(_, inner)) => usage_of(name, inner, mode),
+    NExpr(IfExpr(c, t, e)) => // The condition is read to PICK the branch (⊗ before), and exactly
+    // one branch runs (⊔ across) — the two laws the additive sum broke.
+    pair_seq(usage_of(name, c, MRead), pair_join(usage_of(name, t, mode), usage_of(name, e, mode))),
+    NExpr(BlockExpr(stmts, final_e)) => pair_seq(usage_elems(name, stmts, mode), usage_of(name, final_e, mode)),
+    NExpr(LambdaExpr(_, lb)) => // A closure runs 0..N times: a consume inside widens to UMany (the
+    // borrow-safe Ref direction); reads stay reads. The body opens in
+    // consume mode — its own positions re-derive from there.
+    match usage_of(name, lb, MConsume) {
+      (c, r) => match c {
+        UZero => (UZero, r),
+        _ => (UMany, r),
+      },
+    },
+    NExpr(PipeExpr(_, l, r)) => // The datum's true slot mode is the completed call's own param; the
+    // enclosing mode threads both sides (the ledger's borrow bracket at
+    // the completed call is the runtime truth, and a divergence here
+    // surfaces as a T_UseAfterMove hit the zero ratchet arbitrates).
+    pair_seq(usage_of(name, l, mode), usage_of(name, r, mode)),
+    NExpr(FanoutExpr(branches)) => // Parallel branches ALL run — ⊗, exactly the ledger's BParallel
+    // collision semantics (consumed in two branches is consumed twice).
+    usage_elems(name, branches, mode),
+    NExpr(RestExpr(_)) => pair_zero(),
+    NExpr(MatchExpr(s, arms)) => pair_seq(usage_of(name, s, MRead), usage_arms(name, arms, mode)),
+    NExpr(MakeListExpr(elems)) => usage_elems(name, elems, mode),
+    NExpr(MakeTupleExpr(elems)) => usage_elems(name, elems, mode),
+    NExpr(MakeStringExpr(fragments)) => usage_elems(name, fragments, mode),
+    NExpr(IndexExpr(receiver, index)) => // xs[i] is the seq-op borrow: receiver and index are reads.
+    pair_seq(usage_of(name, receiver, MRead), usage_of(name, index, MRead)),
+    NExpr(MakeRecordExpr(flds)) => usage_flds(name, flds, mode),
+    NExpr(RecordUpdateExpr(base, flds)) => // {...base, f: v} copies non-destructively — the base is READ.
+    pair_seq(usage_of(name, base, MRead), usage_flds(name, flds, mode)),
+    NExpr(NamedRecordExpr(_, flds)) => usage_flds(name, flds, mode),
+    NExpr(FieldExpr(rec, _)) => // A field access reads the record; what the enclosing mode consumes
+    // is the value read OUT, never the record itself.
+    usage_of(name, rec, MRead),
+    NExpr(LitInt(_)) => pair_zero(),
+    NExpr(LitFloat(_)) => pair_zero(),
+    NExpr(LitString(_)) => pair_zero(),
+    NExpr(LitBool(_)) => pair_zero(),
+    NExpr(LitUnit) => pair_zero(),
+    NExpr(ResumeExpr(v, _)) => usage_of(name, v, mode),
+    NExpr(LabeledArg(_, v)) => usage_of(name, v, mode),
+    NExpr(ExprPlaceholder) => pair_zero(),
+    NStmt(LetStmt(_, v, _)) => // The binding's value embeds under the binder — a consume-shape use.
+    // The deleted additive count's `NStmt(_) => 0` blanket missed EVERY
+    // statement-level use; the walk descends.
+    usage_of(name, v, MConsume),
+    NStmt(ExprStmt(e)) => usage_of(name, e, mode),
+    NStmt(FnStmt(_, _, _, _, _)) => // A nested fn declaration is not an execution (resume_grade's own
+    // ruling); its capture-and-call usage stays uncounted — parity with
+    // the deleted count, Ref-safe when it under-counts.
+    pair_zero(),
+    NStmt(TypeDefStmt(_, _)) => pair_zero(),
+    NStmt(EffectDeclStmt(_, _, _)) => pair_zero(),
+    NStmt(HandlerDeclStmt(_, _, _, _, _)) => pair_zero(),
+    NStmt(ImportStmt(_)) => pair_zero(),
+    NStmt(RefineStmt(_, _, _)) => pair_zero(),
+    NStmt(AliasStmt(_, _)) => pair_zero(),
+    NStmt(RowAliasStmt(_, _)) => pair_zero(),
+    NPat(_) => pair_zero(),
+    NHole(_) => pair_zero(),
+    NModule(_) => pair_zero(),
+    NTypeAnn(_) => pair_zero(),
   },
 }
 
-fn count_uses_list(ref name, ref nodes) with !Mutate =
-  fold(0, (acc, node) => acc + count_uses(name, node), nodes)
+// ⊗ over a node list (block stmts, list/tuple/string elems, parallel
+// branches): all evaluate on one path. last/drop_last are the O(1)
+// snoc-end reads and both pair ops are order-insensitive — the exact
+// shape of resume_grade's grade_nodes (a named walk, not a fold lambda:
+// usage_of performs EnvRead, and an effectful lambda is the anonymity
+// tier's own conviction).
+fn usage_elems(ref name, ref nodes, mode) with !Mutate = if len(nodes) == 0 {
+  pair_zero()
+} else {
+  pair_seq(usage_of(name, last(nodes), mode), usage_elems(name, drop_last(nodes), mode))
+}
 
-fn count_uses_record_fields(ref name, ref flds) with !Mutate = fold(
-  0,
-  (acc, fld) => match fld {
-    (_, value) => acc + count_uses(name, value),
-  },
-  flds
-)
+// ⊔ over match arms ((pat, body) tuples): exactly one arm runs.
+fn usage_arms(ref name, ref arms, mode) with !Mutate = if len(arms) == 0 {
+  pair_zero()
+} else {
+  match last(arms) {
+    (_, b) => pair_join(usage_of(name, b, mode), usage_arms(name, drop_last(arms), mode)),
+  }
+}
 
-fn count_match_arms(ref name, ref arms) with !Mutate = fold(
-  0,
-  (acc, arm) => match arm {
-    (_, body) => acc + count_uses(name, body),
+// ⊗ over record fields ((name, value) tuples).
+fn usage_flds(ref name, ref flds, mode) with !Mutate = if len(flds) == 0 {
+  pair_zero()
+} else {
+  match last(flds) {
+    (_, v) => pair_seq(usage_of(name, v, mode), usage_flds(name, drop_last(flds), mode)),
+  }
+}
+
+// The callee's param product, when readable: a VarRef callee resolved in
+// env to an arrow scheme. None (a lambda/expr callee, an env miss, a
+// non-arrow) mirrors the arg walk's callee-miss borrow guard: every bare
+// arg reads.
+fn callee_borrow_params(ref f) with !Mutate = match f {
+  N(fb, _, _) => match fb {
+    NExpr(VarRef(cn)) => match env_lookup(cn) {
+      Some(entry) => match entry {
+        (scheme, _, _) => match scheme {
+          Forall(_, TFun(ps, _, _)) => Some(ps),
+          _ => None,
+        },
+      },
+      None => None,
+    },
+    _ => None,
   },
-  arms
-)
+}
+
+// Per-arg walk with the callee's slot modes. An index walk because the
+// slot pairing is positional (infer_call_arg_list's own idiom); a labeled
+// arg resolves its param by NAME, exactly as resolve_call_args does one
+// phase earlier.
+fn usage_args(ref name, ref args, borrow_slots, i) with !Mutate = if i >= len(args) {
+  pair_zero()
+} else {
+  let arg = list_index(args, i)
+  pair_seq(
+    usage_of(name, arg, arg_slot_mode(arg, borrow_slots, i)),
+    usage_args(name, args, borrow_slots, i + 1)
+  )
+}
+
+// The mode of one arg slot: only a bare mention (VarRef, or a labeled
+// VarRef) takes the callee param's borrow test — a compound arg opens in
+// consume mode and its inner positions re-derive (the borrow bracket's
+// own VarRef-only rule). Beyond-product args consume (the arg walk's
+// plain infer_expr fall-through).
+fn arg_slot_mode(ref arg, ref borrow_slots, i) = match arg {
+  N(ab, _, _) => match ab {
+    NExpr(VarRef(_)) => match borrow_slots {
+      Some(ps) => if i < len(ps) { if param_borrows(list_index(ps, i)) { MRead } else { MConsume } } else { MConsume },
+      None => MRead,
+    },
+    NExpr(LabeledArg(label, v)) => match v {
+      N(vb, _, _) => match vb {
+        NExpr(VarRef(_)) => match borrow_slots {
+          Some(ps) => if labeled_param_borrows(ps, label, 0) { MRead } else { MConsume },
+          None => MRead,
+        },
+        _ => MConsume,
+      },
+    },
+    _ => MConsume,
+  },
+}
+
+fn labeled_param_borrows(ref ps, ref label: String, i) = if i >= len(ps) {
+  false
+} else {
+  let p = list_index(ps, i)
+  if param_name(p) == label { param_borrows(p) } else { labeled_param_borrows(ps, label, i + 1) }
+}

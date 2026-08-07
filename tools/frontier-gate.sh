@@ -1332,6 +1332,24 @@ for i in "${!compilers[@]}"; do
   # deletes before the arena makes it a use-after-free.
   run_narration "$compiler" use-after-move \
     "$ROOT/tests/frontier/mn-use-after-move.mn" T_UseAfterMove "$dir"
+  # The usage grade (Phase 4.2, Hβ.infer.grade-is-join-and-mode) — the
+  # (consume, read) pair walk: once-per-alternative grades Own (⊔ not +),
+  # a condition read grades Ref (mode, not a consume), a statement-level
+  # use counts (the NStmt blanket blindness), and neither clean own-caller
+  # is falsely convicted. Pre-fix: 2 false T_OwnUnconsumed and the three
+  # badges inverted.
+  ug_chk=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-usage-grade.mn" 2>&1)
+  ug_false=$(printf '%s' "$ug_chk" | grep -c 'T_OwnUnconsumed')
+  ug_fin=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-usage-grade.mn" "type finish" 2>/dev/null)
+  ug_stmt=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-usage-grade.mn" "type stmt_use" 2>/dev/null)
+  if [ "$ug_false" = "0" ] \
+    && printf '%s' "$ug_fin" | grep -q 'xs: [^,]* own — inferred' \
+    && printf '%s' "$ug_fin" | grep -q 'c: [^)]* ref — inferred' \
+    && printf '%s' "$ug_stmt" | grep -q 'xs: [^,]* own — inferred'; then
+    pass "usage grade: join and mode hold (no false narration; Own/Ref badges true)"
+  else
+    fail "usage grade (false-narrations=$ug_false; finish='$(printf '%s' "$ug_fin" | head -1)' stmt='$(printf '%s' "$ug_stmt" | head -1)')"
+  fi
   run_refusal "$compiler" refuse-refinement \
     "$ROOT/tests/frontier/mn-refuse-refinement.mn" E_RefinementRejected "$dir"
   # R3 · the decidable arithmetic Verify fragment. The true cases DISCHARGE at

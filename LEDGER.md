@@ -35,6 +35,44 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE GRADE READS THE LATTICE — Phase 4.2 deletes the
+  additive count into the mode-paired Usage walk
+  (pin 6cd6281a971f — CLEAN m2 == m3, census 0; BOTH ownership
+  narration classes at wheel-ZERO; movers re-based 474 → 662; the
+  landing crossed two pins — 4115ed285d39 carried the walk, then the
+  anonymity ratchet convicted its own three fold lambdas (usage_of
+  performs EnvRead → rows without decl homes, 394 → 397 refused) and
+  the named last/drop_last walks repinned at the head). The
+  build followed the stamp exactly: usage_seq/usage_join relocated to
+  types.mn beside the Usage ADT (one lattice home — own cannot import
+  infer); own.mn's count_uses family (the NStmt(_) => 0 blanket that
+  never counted a statement-level use included) deleted whole into
+  usage_of — the (consume, read) pair walk with ⊔ across if/match
+  alternatives and mode deciding which component a mention feeds
+  (conditions, scrutinees, index receivers, field bases,
+  record-update bases read; call args take the callee's own product
+  through param_borrows, the classification's new one home that
+  infer_call_arg's inline test also deleted into). The fixture's
+  three asserts flipped RED→GREEN: no false T_OwnUnconsumed on the
+  clean own-callers, finish/stmt_use badge Own, the condition-read
+  param badges Ref. THE REFUSED FIRST MARCH WAS THE INSTRUMENT: m3
+  refused with exactly one census error — driver_collect_visit's
+  `visited` "consumed twice" — because set_contains calls its
+  textually-later helper, the not-yet-graded slot defaulted to
+  consume, set_contains graded Own, and every caller moved its set.
+  The root was param_borrows' unresolved-slot default; the read-safe
+  default (a still-Unmarked resolved grade borrows) cleared it and is
+  the honest reading — passing to an ungraded or unused product must
+  not burn the caller's own. One wheel true-up rode along:
+  collect_arm_tags' authored `own init` dropped (fold's f is a param
+  callee whose product the grade cannot read; the seed's transfer is
+  structural, and band H's bar is fewer authored markers). Residue
+  measured, not guessed: the walk's trial-vs-final order-dependence
+  surfaced as +188 moved schemes (forward callees resolve between
+  passes), banked in the movers re-base with rung 3 named as the
+  dissolution; T_UseAfterMove held 0 throughout; T_OwnUnconsumed fell
+  to 0 when the one narration's site trued.
+
 - 2026-08-07 · ▶▶▶ THE READ HALF OF AFFINE — Phase 4.1 lands
   use-after-move before the arena can make it memory-unsafe
   (pin 8ba768c810c4 — CLEAN m2 == m3, census 0, wheel T_UseAfterMove

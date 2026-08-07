@@ -527,53 +527,35 @@ E_OwnershipViolation-precedent falsification pass (the unresolved-
 callee borrow default reports true reads-after-move beside the miss —
 verify no false channel on resolved programs first).
 
-`Hβ.infer.grade-is-join-and-mode` — STAMPED whole 2026-08-07 (probe
-grade.mn, both channels measured live at pin 8ba768c810c4). SEMANTICS
-TRACED: `count_uses` (own.mn, additive Int sum — IfExpr counts
-c + t + e) mis-grades two shapes: once-per-alternative
-(`finish(xs, c) = if c { xs } else { xs }` grades xs `ref`, and its
-clean own-caller gets a FALSE T_OwnUnconsumed) and condition-read
-(`moderead` same; and `c` — a pure condition read — grades `own`, a
-read crowned the consuming use). FIX: classify_usage reads a PAIR
-`(consume: Usage, read: Usage)` from ONE walk with ⊗ = usage_seq
-across sequence, ⊔ = usage_join across if/match alternatives (the arm
-shapes resume_grade already implements), and MODE deciding which
-component a `VarRef(name)` leaf feeds: read-shape positions
-(if-conditions, match scrutinees — is_read_shape's set; args to
-ref/unmarked callee params, read from the callee product exactly as
-infer_call_arg_list reads it one phase later) feed `read`, all else
-feeds `consume`; lambda bodies grade conservative (a closure runs
-0..N times → consume-in-lambda is UMany → Ref, the borrow-safe
-direction). classify: (UZero, UZero) → Unmarked · (UZero, _) → Ref ·
-(UOne, _) → Own · (UMany, _) → Ref. THE UNIFORM-PASS RULING (⟳(5)
-applied, not skipped): resume_grade and this walk share the LATTICE
-and the arm shapes but diverge at two structural points — resume
-carries call-substitution (summary_of) the name walk must not; the
-name walk carries mode the resume walk must not. Two walks, one
-lattice home: usage_seq/usage_join relocate to types.mn beside the
-Usage ADT they fold (both infer and own import types; own cannot
-import infer). Re-visit fusion only if a THIRD Usage walk appears.
-WRITERS: the resolved grade's one writer stays infer_ownership
-(own.mn) via param_with_resolved, called once from infer's decl walk;
-the count_uses family (count_uses / count_uses_list /
-count_match_arms / count_uses_record_fields / classify_usage's Int
-read) is DELETED whole. READERS unchanged: infer_call_arg_list's
-move-vs-borrow, the where badge, lower's param product. PRICED
-(§5.O): the same single O(body) walk per fn decl count_uses already
-runs — NO fixpoint (the classifier's round-cost precedent prices it
-out; grade precision on forward-ref/cyclic callees keeps the
-single-pass authored-marker read — an order-dependence that exists
-today, NAMED not widened). Freshness: the walk's callee-product read
-is never fresher than the arg walk's own later read of the same
-scheme. BLAST, measured-not-guessed at build: every unmarked wheel
-param re-grades, so caller-side move-vs-borrow flips sites and the
-T_UseAfterMove zero can RISE (a param newly Own moves an arg whose
-later read becomes a hit) — the march + use_after_move_max arbitrate;
-land only at held zero or with the named site fixes in the same
-landing. GATE: grade.mn graduates to tests/frontier — finish/moderead
-xs badge Own, c badges Ref, both callers lose the false narration,
-seen RED against the unfixed boot. Band-H baseline rides: 84 authored
-`own` + 763 authored `ref` in src/ — mostly compensation for this.
+`Hβ.infer.grade-is-join-and-mode` — BUILT 2026-08-07 (pin 4115ed285d39,
+against the stamp; the LEDGER entry of the same name carries the arc).
+The walk landed exactly as stamped — usage_of's (consume, read) pair, ⊔
+across alternatives, mode from the callee product, lattice ops at
+types.mn, count_uses family deleted whole (its NStmt(_) => 0 blanket had
+never counted a statement-level use — a third measured blindness, closed
+by the walk's explicit LetStmt/ExprStmt arms). TWO STAMP CORRECTIONS the
+build measured: (1) the "order-dependence exists today, NAMED not
+widened" pricing was wrong-in-degree — the walk's callee-product read
+AMPLIFIED it (set_contains calls its textually-later helper; the
+consume-default slot graded it Own; every caller moved; the wheel
+refused on driver_collect_visit's `visited`). Closed structurally in
+param_borrows' one home: a still-Unmarked resolved slot BORROWS (the
+read-safe default — passing to an ungraded or unused product must not
+burn the caller's own). (2) The blast landed in the MOVERS channel, not
+T_UseAfterMove: +188 moved schemes (474 → 662, in-baseline
+justification) — forward callees resolve between trial and final, so
+grades move with them; rung 3's class-based reads dissolve the class
+and this order-dependence together. T_UseAfterMove held 0 throughout;
+T_OwnUnconsumed reached wheel-ZERO (collect_arm_tags' authored `own
+init` dropped — fold's f is a param callee whose product the grade
+cannot read; the seed's transfer is structural). RESIDUAL, banked: the
+param-callee blind spot (calling through a fn param reads its args —
+the grade cannot see the param's eventual consumption; surfaced only
+as under-consume → Ref, the borrow-safe direction) and the
+T_OwnUnconsumed arming licence now open at wheel-zero (same
+falsification bar as use-after-move's). Band-H baseline rides: 84
+authored `own` + 763 authored `ref` in src/ — now honest counts to
+drive DOWN, no longer compensation.
 
 `Hβ.parser.unclosed-construct-reports` — an unclosed `effect` or
 `handler` brace SILENTLY DELETES THE PROGRAM: both arm loops treat

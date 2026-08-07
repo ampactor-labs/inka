@@ -3901,27 +3901,17 @@ fn infer_call_arg_list(args, params, i) = if i >= len(args) {
 }
 
 fn infer_call_arg(arg, param) = match arg {
-  N(body, _, _) => match param {
-    TParam(_, _, authored, resolved, _) => {
-      let borrows = match authored {
-        Ref => true,
-        Own => false,
-        Unmarked => match resolved {
-          Ref => true,
-          _ => false,
-        },
-      }
-      match body {
-        NExpr(VarRef(_)) => if borrows {
-          borrow_enter()
-          infer_expr(arg)
-          borrow_exit()
-        } else {
-          infer_expr(arg)
-        },
-        _ => infer_expr(arg),
-      }
+  N(body, _, _) => match body {
+    NExpr(VarRef(_)) => // param_borrows (types.mn, the classification's one home — the
+    // ownership grade's mode walk reads the same test at decl time).
+    if param_borrows(param) {
+      borrow_enter()
+      infer_expr(arg)
+      borrow_exit()
+    } else {
+      infer_expr(arg)
     },
+    _ => infer_expr(arg),
   },
 }
 
@@ -6145,8 +6135,13 @@ fn infer_match_arm_iter(arms, scrut, result_h, span: ValidSpan, i, n) = if i >= 
 }
 
 // Walk arms, gathering each PCon's tag_id (deduped via set_insert).
-// Non-PCon arms (wildcards, vars, lits) contribute no tag.
-fn collect_arm_tags(arms, own init) = fold(
+// Non-PCon arms (wildcards, vars, lits) contribute no tag. The seed's
+// transfer is structural (the fold chain absorbs it) — an authored `own`
+// here claimed a consume the callee's param product cannot see (fold's
+// `f` is a param callee, product unreadable → the seed reads), and the
+// grade now says so (§11 4.2's one wheel narration; band H's bar is
+// fewer authored markers, not more).
+fn collect_arm_tags(arms, init) = fold(
   init,
   (acc, arm) => match arm {
     (pat, _body) => collect_pat_tags(pat, acc),
@@ -8230,24 +8225,10 @@ fn collect_fn_decls_updates(updates, acc) = if len(updates) == 0 {
   collect_fn_decls_updates(drop_last(updates), collect_fn_decls(state_field_init(last(updates)), acc))
 }
 
-fn usage_seq(a, b) = match a {
-  UZero => b,
-  UMany => UMany,
-  UOne => match b {
-    UZero => UOne,
-    _ => UMany,
-  },
-}
-
-fn usage_join(a, b) = match a {
-  UZero => b,
-  UMany => UMany,
-  UOne => match b {
-    UMany => UMany,
-    _ => UOne,
-  },
-}
-
+// usage_seq (⊗) and usage_join (⊔) live in types.mn beside the Usage ADT
+// they fold — one lattice home for this walk and own.mn's mode-paired
+// ownership grade (§11 4.2; own cannot import infer).
+//
 // M4 — the resume grade JOINED with the op's return type. UMany always
 // drives a real k (MultiShot); UOne is the tail-resumptive fast path
 // (OneShot, byte-identical). UZero — the arm NEVER resumes — is the

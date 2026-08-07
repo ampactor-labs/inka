@@ -382,6 +382,26 @@ fn param_default(p) = match p {
   TParam(_, _, _, _, d) => d,
 }
 
+// The one move-vs-borrow read of a param product: TRUE where a call site
+// borrows its arg. Authored Ref borrows; authored Own moves; an Unmarked
+// param goes by its resolved grade — Ref borrows, Own moves, and a
+// still-Unmarked slot (a not-yet-graded forward/self reference, or a
+// genuinely unused param) BORROWS: the read-safe default. The consume
+// default here made decl ORDER load-bearing — set_contains calls its
+// textually-later helper, so its own param graded Own and every caller
+// moved its set (the wheel's visited conviction, 2026-08-07). Both the
+// arg walk's borrow bracket (infer_call_arg) and the ownership grade's
+// mode walk (own.mn's usage_of) read this one test — one home.
+fn param_borrows(p) = match param_authored(p) {
+  Ref => true,
+  Own => false,
+  Unmarked => match param_resolved(p) {
+    Ref => true,
+    Own => false,
+    Unmarked => true,
+  },
+}
+
 // Structure-preserving updaters for PROPAGATORS — carry the other four.
 fn param_with_ty(p, t) = match p {
   TParam(n, _, a, r, d) => TParam(n, t, a, r, d),
@@ -425,10 +445,32 @@ type ResumeDiscipline
 // sequentially — two uses on one path is UMany; `usage_join` (⊔)
 // alternates — disjoint branches join, not add (only one branch runs),
 // so a branch-and-resume-once arm keeps the OneShot fast path.
-// (Ownership's own.mn classifier is the syntactic-count shadow of this
-// grade; unifying them onto one `count_uses(predicate, body)` is the named
-// peer Hβ.infer.usage-grade-unifies-cardinality-ownership.)
+// (Ownership's own.mn grade reads the SAME lattice through usage_of's
+// mode-paired walk — Hβ.infer.usage-grade-unifies-cardinality-ownership
+// realized at §11 4.2: one lattice, two walks, this ADT their one home.)
 type Usage = UZero | UOne | UMany
+
+// The lattice's two composition ops, at the ADT's own home (both the
+// resume classifier's walk in infer.mn and the ownership grade's walk in
+// own.mn fold them; own cannot import infer, so the ops live beside the
+// ADT they fold).
+fn usage_seq(a, b) = match a {
+  UZero => b,
+  UMany => UMany,
+  UOne => match b {
+    UZero => UOne,
+    _ => UMany,
+  },
+}
+
+fn usage_join(a, b) = match a {
+  UZero => b,
+  UMany => UMany,
+  UOne => match b {
+    UMany => UMany,
+    _ => UOne,
+  },
+}
 
 // ─── Scheme (spec 04) — let-generalization ─────────────────────────
 // Forall(the quantified handles, the body type). A monomorphic binding is

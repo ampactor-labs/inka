@@ -35,6 +35,35 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ RANK IS A PROJECTION — the arc loop's second
+  iteration lands Phase 2.1 (pin 4e7cfc88 — CLEAN m2 == m3 at 334,844
+  lines, census 0). The runner's stamp check paid for itself before a
+  line was written: the item's "delete the extraction pass" half had NO
+  REFERENT — egraph.mn was born in the prescribed form (canon edges in
+  the one graph, extraction = the union-find chase, congruence by live
+  operand re-reads, the fan/e-graph range composition already landed
+  with its forced prove-then-extract order; the deleted (from,to)
+  side-ledger's epitaph is the file header), and today's rewrite set
+  shrinks by construction, so no cost model existed to delete either.
+  The LIVE half was synth's stored rank, and its RESIDUE entry's own
+  prescription executed exactly: `cost: Float` left EnrichedCandidate,
+  thirteen enumerator constants (0.1–0.6) left their construction
+  sites, and rank_of projects the live candidate ONCE per candidate at
+  sort entry — pair-keyed insertion, the callee name read from the
+  node, the decl reason from env_lookup, so a constructor call ranks
+  through the same one arm (a ctor call IS a CallExpr(VarRef) — the
+  entry's design half fell out free) and a nameless candidate carries
+  the bare 0.5 base with no invented differentiation. Both measured
+  faces die: the sort no longer compares a measured proximity against
+  made-up constants, and the extraction-swap site rebuilds without a
+  number to ride stale. Cost-neutral by construction — the same
+  refs_of_name walk the stored form paid at enrichment, moved to the
+  read point. Banked: Hβ.egraph.extraction-cost-composes-repr as the
+  RULE-GROWTH CONTRACT (a future non-shrinking rule's "cheaper" is a
+  projection composing repr_of/effs_at/use-counts, never a term-shape
+  fn; the canon edge carrying the cost's Reason is the named sibling
+  Hβ.egraph.canon-edge-carries-reason), gating band G at Phase 5.5.
+
 - 2026-08-07 · ▶▶▶ THE WEAVE READS ITS OWN REASON — the arc loop's first
   iteration lands Phase 2.0 by running its banked probe, which refuted
   the phase's own framing (pin ddcf27c7 — CLEAN m2 == m3 at 334,506

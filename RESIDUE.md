@@ -397,28 +397,32 @@ the RATCHET: comment mass falls as verbs land, never by suppression
 at the limit is authored intent — the one genuine Outside, carried
 losslessly, never required.
 
-`Hβ.synth.rank-is-a-projection-not-a-field` — the ranker's two
-vocabularies (found 2026-07-30 completing the fork/merge landing). The
-`cost: Float` field on EnrichedCandidate is genuinely READ — rank_insert
-compares it (synth_proposer.mn:327) — but it is WRITTEN two different
-ways: a LIVE gradient read for vocabulary calls (`candidate_rank(name,
-decl_reason, hole_span)`, :296 — decl proximity plus use-edge proximity,
-the §5 local-intent ranker) and a HARDCODED literal for every shape
-enumerator (0.5 ctor :430, 0.6 lambda :438, 0.3 int :454, 0.3 float
-:464, 0.2 string :471). So the sort compares a measurement against
-invented constants, and a vocabulary call that genuinely ranks 0.25
-loses to a literal's made-up 0.3 — the ordering is arbitrary across
-origins, in the exact place §5 says the gradient reads local intent.
-Extraction sharpened it: when a survivor's node is swapped for a cheaper
-e-class member, the stored cost rides along stale. BOTH FACES DISSOLVE
-IN ONE MOVE, and it is a DELETION: rank is a PROJECTION of the
-candidate computed at sort time (the name read from the node, the reason
-and hole span already in hand), never a stored field — after which
-`cost` leaves the record, the literals leave the enumerators, and a
-swapped node cannot carry a stale number because there is no number to
-carry. The shape enumerators then need a real rank source rather than a
-constant, which is the design half: structural distance to the hole's
-type, or the same proximity read keyed on the ctor/type name.
+`Hβ.synth.rank-is-a-projection-not-a-field` — RESOLVED (2026-08-07, the
+arc loop's second iteration, exactly by its own prescription): `cost`
+left the record, the thirteen enumerator constants left their
+construction sites, and rank is `rank_of` — a PROJECTION of the LIVE
+candidate computed once per candidate at sort entry (the pair-keyed
+insertion build), reading the callee name from the node and the decl
+reason from the env. A ctor call IS a CallExpr(VarRef), so the design
+half's "proximity keyed on the ctor name" fell out as the same one arm;
+a nameless candidate (lambda, literal) carries the bare base with no
+invented differentiation. The extraction-swap site
+(canonicalize-survivor) now rebuilds without a number to carry, so the
+stale-ride face dies textually. Cost-neutral: the same refs walk the
+stored form paid at enrichment, moved to the read point.
+
+`Hβ.egraph.extraction-cost-composes-repr` — the RULE-GROWTH CONTRACT,
+banked 2026-08-07 while truing Phase 2.1 to the artifact: today's
+rewrite set shrinks by construction (identity/absorb/fold point at
+existing subnodes), so NO cost model exists and none may be hand-grown.
+When band G's saturation-deepen adds the first NON-shrinking rule
+(strength reduction, fusion, reassociation), "cheaper" must be a
+PROJECTION composed from what the graph already proves — repr_of's
+widths, effs_at's rows, the use-profile's counts — never a term-shape
+function; and the canon edge it justifies should carry the cost's
+Reason (the sibling gap `Hβ.egraph.canon-edge-carries-reason`, named in
+the extraction-swap comment). The contract gates rule growth in Phase
+5.5; violating it re-creates the disease 2.1 measured out of synth.
 
 `Hβ.synth.fan-extraction-needs-a-feeder` — the composition's dormancy,
 named with its own artifact (2026-07-30, banked RED at

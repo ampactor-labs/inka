@@ -1546,15 +1546,22 @@ re-read syntactic form to decide what the graph already answers.*
   experiment's record stands (load-bearing eq semantics change only under
   march arbitration), and one sibling residue is named — `refs_of_name`
   shares the chased-span read and is green by accident-invariant.
-- **2.1 · `Hβ.egraph.extraction-is-the-emit-cursor`.** "Extraction" is borrowed
-  from egg, and it carries egg's architecture — saturate, then pick — into a
-  medium whose architecture is *one graph, project*. An e-class is the truth; a
-  chosen member is the emit cursor's read, and §2's own table already has the
-  row for it. Its cost model is the same disease: a hand-written function
-  re-deriving expense from term shape while the graph carries repr widths,
-  rows, ownership grades and use counts. `Hβ.egraph.extraction-cost-composes-repr`
-  and `Hβ.synth.rank-is-a-projection-not-a-field` are two sightings of it —
-  and two is the census signal. Delete the pass, delete the field, read live.
+- **2.1 · `Hβ.egraph.extraction-is-the-emit-cursor`** — ✅ LANDED 2026-08-07,
+  half by discovering it already true: the stamp check against the artifact
+  showed the engine BORN in the prescribed form (canon edges in the graph,
+  extraction = the chase, congruence by live re-read, the fan/e-graph range
+  composition with its forced order — the deleted side-ledger's epitaph is
+  in the file header), so "delete the pass" had no referent. The live half
+  was synth's stored rank: `cost` left EnrichedCandidate, thirteen
+  enumerator constants left their sites, and rank is `rank_of` — a
+  projection of the live candidate at sort entry (proximity via the env's
+  decl reason + the refs walk; a ctor call ranks by the same one arm; a
+  nameless candidate carries the bare base) — killing both measured faces
+  (measurement-vs-invented-constant ordering; the extraction-swap stale
+  ride). The rule-growth contract is banked at
+  `Hβ.egraph.extraction-cost-composes-repr`: a future non-shrinking rule's
+  "cheaper" composes repr/rows/use-counts as a projection, never a
+  term-shape fn — gated where band G's rules grow (5.5).
 - **2.2 · The shape-keyed judgment tier.** A *partial* match on `ast_kind_of`
   outside the parser convicts; a *total* structural fold does not, because
   exhaustiveness makes a missed case a compile refusal. `E_BranchNotStage`

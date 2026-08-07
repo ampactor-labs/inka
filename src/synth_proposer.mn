@@ -90,21 +90,24 @@ type ProposerKind
   // user-supplied seeds via teach_synthesize
   | ProposerUser
 
-// ─── EnrichedCandidate — Candidate + provenance + cost score ───────
+// ─── EnrichedCandidate — Candidate + provenance ────────────────────
 //
 // The Synth effect's `propose` returns [Node]; this file's chain
-// wraps each Node with its proposer of origin + a cost score so the
-// gradient can rank. Drift 7 closure: ONE record-shape, never
-// parallel arrays.
-type EnrichedCandidate = EnrichedCandidate({cost: Float, node: Node, origin: ProposerKind, reason: Reason})
+// wraps each Node with its proposer of origin. Drift 7 closure: ONE
+// record-shape, never parallel arrays. RANK IS A PROJECTION, NOT A
+// FIELD (Hβ.synth.rank-is-a-projection-not-a-field, resolved): the
+// stored cost field compared a measured proximity against invented
+// enumerator constants (a vocabulary call genuinely ranking 0.25 lost
+// to a literal's made-up 0.3) and rode stale when extraction swapped
+// the node — `rank_of` now reads the LIVE node at sort time, once per
+// candidate, through the same env/refs reads the gradient owns.
+type EnrichedCandidate = EnrichedCandidate({node: Node, origin: ProposerKind, reason: Reason})
 
 // AST fragment
 //
 // why this was proposed
 //
 // which proposer emitted
-//
-// gradient-rank score
 //
 // ─── synth_default — the canonical proposer chain entry point ──────
 //
@@ -136,7 +139,7 @@ handler synth_default {
       (vocab, rejected) => {
         let enriched = concat_candidates(vocab, enumerate_typed(target_ty, allowed_effects, context))
         let verified = verify_each_enriched(enriched, target_ty, cand_start)
-        resume(Proposals(verified |> rank_sort |> map_to_proposals, rejected))
+        resume(Proposals(verified |> rank_sort(context_hole_span(context)) |> map_to_proposals, rejected))
       },
     },
   },
@@ -260,7 +263,7 @@ fn enumerate_vocabulary_calls(target_ty, allowed_row, context) with GraphRead + 
             Forall(_, TFun(params, ret, row)) => if len(params) == 0 && vocabulary_ret_matches(ret, target_ty) && !reaches_decl(name, enclosing, []) {
               if row_subsumes(row, allowed_row) {
                 // drift-audit: ignore — bounded by the in-scope zero-arg vocabulary, not a loop accumulator
-                (accepted ++ [vocabulary_call_candidate(name, row, allowed_row, reason, hole_span)], rejected)
+                (accepted ++ [vocabulary_call_candidate(name, row, allowed_row)], rejected)
               } else {
                 (
                   accepted,
@@ -292,8 +295,8 @@ fn vocabulary_ret_matches(ret, target_ty) with Pure = match target_ty {
   _ => same_ground(ret, target_ty),
 }
 
-fn vocabulary_call_candidate(name, row, allowed_row, decl_reason, hole_span) with GraphRead + GraphWrite + Intern + !Mutate + Alloc + Memory =
-  EnrichedCandidate({cost: candidate_rank(name, decl_reason, hole_span), node: synth_node(CallExpr(synth_node(VarRef(name)), [])), origin: ProposerEnumerative, reason: Inferred("an in-scope call {name}() — row {show_effrow(row)} admitted by {show_effrow(allowed_row)}")})
+fn vocabulary_call_candidate(name, row, allowed_row) with GraphRead + GraphWrite + Intern + !Mutate + Alloc + Memory =
+  EnrichedCandidate({node: synth_node(CallExpr(synth_node(VarRef(name)), [])), origin: ProposerEnumerative, reason: Inferred("an in-scope call {name}() — row {show_effrow(row)} admitted by {show_effrow(allowed_row)}")})
 
 // candidate_rank — the gradient reading LOCAL intent (PLAN §5's felt
 // endpoint: the Reason chains carrying upstream why, proximity, the
@@ -312,19 +315,55 @@ fn candidate_rank(name, decl_reason, hole_span) with GraphRead + !Mutate + Alloc
   0.5 + decl_near + use_near
 }
 
-// rank_sort — survivors ordered by cost, highest first: an insertion
-// build (the survivor set is small by construction — the in-scope
-// zero-arg vocabulary plus the shape enumerators). The ORDER is the
-// only thing rank decides; a constraint-tie still teaches (the render's
-// collapse line is unchanged — rank is a prior, never a guess).
-fn rank_sort(cands) with Memory + Alloc = fold([], (acc, c) => rank_insert(acc, c), cands)
+// rank_of — RANK IS A PROJECTION of the LIVE candidate (the resolved
+// peer Hβ.synth.rank-is-a-projection-not-a-field): a named callee — a
+// vocabulary or constructor call, one arm because a ctor call IS a
+// CallExpr(VarRef) — ranks by the gradient's proximity read, its decl
+// reason read live from the env; a nameless candidate (a lambda, a
+// literal) carries the bare base with no invented differentiation (the
+// stored form compared a measured proximity against enumerator
+// constants, and a swapped e-class member rode a stale number).
+// Computed ONCE per candidate at sort entry — the same refs walk the
+// stored form paid at enrichment, moved to the read point.
+fn rank_of(c, hole_span) with GraphRead + EnvRead + !Mutate + Alloc + Memory = match c {
+  EnrichedCandidate(cr) => match cr.node {
+    N(body, _, _) => match body {
+      NExpr(CallExpr(callee, _)) => match callee {
+        N(cb, _, _) => match cb {
+          NExpr(VarRef(name)) => match env_lookup(name) {
+            Some(entry) => match entry {
+              (_, decl_reason, _) => candidate_rank(name, decl_reason, hole_span),
+            },
+            None => 0.5,
+          },
+          _ => 0.5,
+        },
+      },
+      _ => 0.5,
+    },
+  },
+}
 
-fn rank_insert(sorted, c) with Memory + Alloc = match sorted {
-  [] => [c],
-  [h, ...rest] => match c {
-    EnrichedCandidate(cr) => match h {
-      EnrichedCandidate(hr) => // drift-audit: ignore — insertion into the small survivor list, not a loop accumulator
-      if cr.cost > hr.cost { [c] ++ sorted } else { [h] ++ rank_insert(rest, c) },
+fn context_hole_span(context) with Pure = match context {
+  Context(_, _, _, hole_span) => hole_span,
+}
+
+// rank_sort — survivors ordered by rank, highest first: each candidate's
+// rank projected once at entry, the insertion build keyed on the pair
+// (the survivor set is small by construction — the in-scope zero-arg
+// vocabulary plus the shape enumerators). The ORDER is the only thing
+// rank decides; a constraint-tie still teaches (the render's collapse
+// line is unchanged — rank is a prior, never a guess).
+fn rank_sort(hole_span, cands) with GraphRead + EnvRead + !Mutate + Memory + Alloc = cands |> map((c) => (rank_of(c, hole_span), c)) |> fold([], (acc, rc) => rank_insert(acc, rc)) |> map((rc) => match rc {
+  (_, c) => c,
+})
+
+fn rank_insert(sorted, rc) with Memory + Alloc = match sorted {
+  [] => [rc],
+  [h, ...rest] => match rc {
+    (r, _) => match h {
+      (hr, _) => // drift-audit: ignore — insertion into the small survivor list, not a loop accumulator
+      if r > hr { [rc] ++ sorted } else { [h] ++ rank_insert(rest, rc) },
     },
   },
 }
@@ -427,7 +466,7 @@ fn scheme_result_is(ty, type_name) with Pure = match ty {
 }
 
 fn ctor_to_enriched_candidate(name, scheme, reason) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
-  EnrichedCandidate({cost: 0.5, node: synthesize_ctor_call_node(name, scheme), origin: ProposerEnumerative, reason: VarLookup(name, reason)})
+  EnrichedCandidate({node: synthesize_ctor_call_node(name, scheme), origin: ProposerEnumerative, reason: VarLookup(name, reason)})
 
 fn enumerate_lambdas(params, ret, row, context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   // Single anonymous-fn candidate: (param_names) => ?? body. The
@@ -435,7 +474,7 @@ fn enumerate_lambdas(params, ret, row, context) with GraphRead + GraphWrite + Me
   // recursively at parse-time when the user accepts.
   let buf = make_list(1)
   let candidate =
-    EnrichedCandidate({cost: 0.6, node: synthesize_lambda_node(params, ret), origin: ProposerEnumerative, reason: Inferred("an anonymous fn matching the hole's shape; its body is the next hole")})
+    EnrichedCandidate({node: synthesize_lambda_node(params, ret), origin: ProposerEnumerative, reason: Inferred("an anonymous fn matching the hole's shape; its body is the next hole")})
   list_set(buf, 0, candidate)
   buf
 }
@@ -451,7 +490,7 @@ fn enumerate_int_literals(context) with GraphRead + GraphWrite + Memory + Alloc 
 }
 
 fn int_literal_candidate(n) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
-  EnrichedCandidate({cost: 0.3, node: synthesize_int_literal_node(n), origin: ProposerEnumerative, reason: Inferred("the type's integer inhabitants")})
+  EnrichedCandidate({node: synthesize_int_literal_node(n), origin: ProposerEnumerative, reason: Inferred("the type's integer inhabitants")})
 
 fn enumerate_float_literals(context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let buf = make_list(2)
@@ -461,14 +500,14 @@ fn enumerate_float_literals(context) with GraphRead + GraphWrite + Memory + Allo
 }
 
 fn float_literal_candidate(f) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
-  EnrichedCandidate({cost: 0.3, node: synthesize_float_literal_node(f), origin: ProposerEnumerative, reason: Inferred("the type's float inhabitants")})
+  EnrichedCandidate({node: synthesize_float_literal_node(f), origin: ProposerEnumerative, reason: Inferred("the type's float inhabitants")})
 
 fn enumerate_string_literals(context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
   let buf = make_list(1)
   list_set(
     buf,
     0,
-    EnrichedCandidate({cost: 0.2, node: synthesize_string_literal_node(""), origin: ProposerEnumerative, reason: Inferred("the type's string inhabitants")})
+    EnrichedCandidate({node: synthesize_string_literal_node(""), origin: ProposerEnumerative, reason: Inferred("the type's string inhabitants")})
   )
   buf
 }
@@ -478,7 +517,7 @@ fn one_unit_candidate(context) with GraphRead + GraphWrite + Memory + Alloc + !M
   list_set(
     buf,
     0,
-    EnrichedCandidate({cost: 0.1, node: synthesize_unit_literal_node(), origin: ProposerEnumerative, reason: Inferred("the unit type's one inhabitant")})
+    EnrichedCandidate({node: synthesize_unit_literal_node(), origin: ProposerEnumerative, reason: Inferred("the unit type's one inhabitant")})
   )
   buf
 }
@@ -490,7 +529,7 @@ fn one_hole_candidate(context) with GraphRead + GraphWrite + Memory + Alloc + !M
   list_set(
     buf,
     0,
-    EnrichedCandidate({cost: 0.4, node: synthesize_hole_node(), origin: ProposerEnumerative, reason: Inferred("a nested ?? — the shape narrows, the fill recurses")})
+    EnrichedCandidate({node: synthesize_hole_node(), origin: ProposerEnumerative, reason: Inferred("a nested ?? — the shape narrows, the fill recurses")})
   )
   buf
 }
@@ -500,7 +539,7 @@ fn one_continuation_candidate(context) with GraphRead + GraphWrite + Memory + Al
   list_set(
     buf,
     0,
-    EnrichedCandidate({cost: 0.5, node: synthesize_resume_node(), origin: ProposerEnumerative, reason: Inferred("the continuation's own resume(...)")})
+    EnrichedCandidate({node: synthesize_resume_node(), origin: ProposerEnumerative, reason: Inferred("the continuation's own resume(...)")})
   )
   buf
 }
@@ -510,7 +549,7 @@ fn enumerate_records(fields, context) with GraphRead + GraphWrite + Memory + All
   list_set(
     buf,
     0,
-    EnrichedCandidate({cost: 0.5, node: synthesize_record_node(fields), origin: ProposerEnumerative, reason: Inferred("the type's record construction")})
+    EnrichedCandidate({node: synthesize_record_node(fields), origin: ProposerEnumerative, reason: Inferred("the type's record construction")})
   )
   buf
 }
@@ -521,12 +560,12 @@ fn enumerate_list_candidates(elem, context) with GraphRead + GraphWrite + Memory
   list_set(
     buf,
     0,
-    EnrichedCandidate({cost: 0.3, node: synthesize_empty_list_node(), origin: ProposerEnumerative, reason: Inferred("the type's list inhabitants — the empty list")})
+    EnrichedCandidate({node: synthesize_empty_list_node(), origin: ProposerEnumerative, reason: Inferred("the type's list inhabitants — the empty list")})
   )
   list_set(
     buf,
     1,
-    EnrichedCandidate({cost: 0.4, node: synthesize_singleton_list_node(elem), origin: ProposerEnumerative, reason: Inferred("the type's list inhabitants — one element, itself a hole")})
+    EnrichedCandidate({node: synthesize_singleton_list_node(elem), origin: ProposerEnumerative, reason: Inferred("the type's list inhabitants — one element, itself a hole")})
   )
   buf
 }
@@ -536,7 +575,7 @@ fn enumerate_tuple_candidates(elems, context) with GraphRead + GraphWrite + Memo
   list_set(
     buf,
     0,
-    EnrichedCandidate({cost: 0.5, node: synthesize_tuple_node(elems), origin: ProposerEnumerative, reason: Inferred("the type's tuple construction — each element a hole")})
+    EnrichedCandidate({node: synthesize_tuple_node(elems), origin: ProposerEnumerative, reason: Inferred("the type's tuple construction — each element a hole")})
   )
   buf
 }
@@ -727,7 +766,7 @@ fn extract_optimal(candidate) with GraphRead + Memory + Alloc = match candidate 
       // EDGE — the one kernel write that carries no Reason today
       // (Hβ.egraph.canon-edge-carries-reason); until it does, the
       // candidate's seed Reason is the honest chain.
-      EnrichedCandidate({cost: c.cost, node: N(graph_node_body(cheapest), node_span(c.node), cheapest), origin: c.origin, reason: c.reason})
+      EnrichedCandidate({node: N(graph_node_body(cheapest), node_span(c.node), cheapest), origin: c.origin, reason: c.reason})
     }
   },
 }

@@ -806,7 +806,29 @@ field) is the build's belt. THE MAP IS WHOLE; the build is a
 self-contained arc: the projection fn, the two threading edits,
 the five emit-site re-reads, the POff paths, op-result widths,
 the march (CLEAN expected on the all-word wheel — every width is
-4 today), then the wide store arms and the gate-drop re-attempt. One iteration of today also re-learned kill (1)
+4 today), then the wide store arms and the gate-drop re-attempt.
+THE ABI MEASUREMENT INVERTS THE DESIGN (2026-08-07 — one
+artifact read replaced the whole mapped build): the FLOOR's fold
+takes `(param $init i32)` — a generic float rides a BOXED WORD
+end to end (the f64-state micro passes at 42 through word slots),
+and the hstate record's READERS are the SHARED arm fns
+(op_fold_handler_yield/result — one global pair for floor and
+twins alike), so the slot ABI is FLOOR-OWNED WORDS by
+construction. One layout already exists; repr-true slots would
+break the shared arms. THE CORRECTED FIX, two twin-local emit
+arms and nothing else: at a twin's state-init/store where the
+value's repr is wide, BOX (alloc an 8-byte cell, f64.store,
+i32.store the pointer — the floor's own convention); at a twin's
+handler-result read where the result repr is wide, UNBOX
+(f64.load through the returned word). Zero layout change, zero
+lower change, the fence untouched, the projection/threading/fence
+map SUPERSEDED (banked above as the repr-true-arms future — slots
+go wide only when the ARM fns twin too). The earlier boxed-slot
+rejection was wrong for THIS record class: §5.U's repr-true
+fields bind records whose readers are repr-aware; shared floor
+arms are not. Acceptance unchanged: the gate-drop march
+assembles, f64-state stays 42, the +17% emit and in-ceiling RSS
+ride the re-attempt. One iteration of today also re-learned kill (1)
 the hard way: a worthiness-SEED probe twins nothing (candidacy
 gates upstream at the site collection) — the closed peer's own
 record already said the working force was the gate, not the seed.

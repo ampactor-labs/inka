@@ -1360,6 +1360,7 @@ fn flow_edges_expr(e) = match e {
     }
   },
   ExprPlaceholder => ([], []),
+  RestExpr(_) => ([], []),
   LabeledArg(_, v) => flow_edges(v),
 }
 
@@ -2234,6 +2235,9 @@ fn lower_expr_body(e, handle, span) = match e {
   LFieldLoad(handle, lower_expr(rec), FByName(field)),
   PipeExpr(kind, left, right) => lower_pipe(kind, left, right, handle),
   FanoutExpr(branches) => lower_fanout_nary(handle, branches),
+  RestExpr(_) => // infer already reported ERestOutsideDestructure at this node;
+  // productive-under-error, same as the hole.
+  LConst(handle, LInt(0)),
   ExprPlaceholder => // ? — emit lowers to unreachable via NHole check
   LConst(handle, LInt(0)),
   LabeledArg(_, v) => // A labeled arg is resolved to positional by resolve_call_args before

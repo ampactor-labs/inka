@@ -3422,6 +3422,10 @@ fn infer_expr(ref node) = match node {
       },
     },
     NExpr(FanoutExpr(branches)) => infer_fanout_nary(branches, handle, span),
+    NExpr(RestExpr(_)) => // the cover-grammar rest outside its one legal home (a
+    // destructuring lambda parameter, where expr_to_pat consumed it):
+    // loud refusal, handle left free — productive-under-error.
+    report(ERestOutsideDestructure(span)),
     NExpr(ExprPlaceholder) => // ? — handle already NFree at parse
     (),
     NExpr(LabeledArg(label, _)) => // A labeled call arg is resolved to positional by resolve_call_args
@@ -8139,6 +8143,7 @@ fn collect_fn_decls(node, acc) = match node {
     NExpr(IndexExpr(receiver, index)) => collect_fn_decls(index, collect_fn_decls(receiver, acc)),
     NExpr(PipeExpr(_, l, r)) => collect_fn_decls(r, collect_fn_decls(l, acc)),
     NExpr(FanoutExpr(branches)) => collect_fn_decls_list(branches, acc),
+    NExpr(RestExpr(_)) => acc,
     NExpr(MakeStringExpr(frags)) => collect_fn_decls_list(frags, acc),
     NExpr(LabeledArg(_, v)) => collect_fn_decls(v, acc),
     NExpr(ResumeExpr(v, us)) => collect_fn_decls_updates(us, collect_fn_decls(v, acc)),
@@ -8287,6 +8292,7 @@ fn resume_grade(node) = match node {
     NExpr(IndexExpr(receiver, index)) => usage_seq(resume_grade(receiver), resume_grade(index)),
     NExpr(PipeExpr(_, l, r)) => usage_seq(resume_grade(l), resume_grade(r)),
     NExpr(FanoutExpr(branches)) => grade_nodes(branches),
+    NExpr(RestExpr(_)) => UZero,
     NExpr(MakeStringExpr(frags)) => grade_nodes(frags),
     NExpr(LabeledArg(_, v)) => resume_grade(v),
     NStmt(LetStmt(_, v, _)) => resume_grade(v),
@@ -8481,6 +8487,7 @@ fn walk_refinement(node, path_pred) with GraphRead + GraphWrite + Memory + Alloc
       walk_refinement(r, path_pred)
     },
     NExpr(FanoutExpr(branches)) => walk_refinement_branches(branches, path_pred),
+    NExpr(RestExpr(_)) => (),
     NStmt(LetStmt(_, v, _)) => walk_refinement(v, path_pred),
     NStmt(ExprStmt(e)) => walk_refinement(e, path_pred),
     NExpr(LitInt(_)) => (),

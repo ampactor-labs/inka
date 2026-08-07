@@ -404,6 +404,7 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   },
   FanoutExpr(branches) => // >< inline: each branch an operand at the fanout's prec
   render_fanout_inline(branches),
+  RestExpr(nm) => "...{nm}",
   IfExpr(c, t, el) => {
     let inline = "if {render_tokens_for(c)} {render_if_branch(t)}{render_else(el)}"
     if fits_inline(inline) {

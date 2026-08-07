@@ -35,6 +35,34 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE LAMBDA LIST-PATTERN PARAMETER PARSES — the arc
+  loop's thirteenth iteration lands Phase 3.3's first measured drift
+  (pin 8031eaf123ec — CLEAN m2 == m3, census 0). The root was named in
+  §11's own text: the paren-lambda path parses its content as an
+  EXPRESSION before the `=>` is seen, and `...` was not expression
+  grammar — the "second, weaker copy of the parameter parser" was
+  expr_to_pat's reinterpretation ceiling, not a separate parser. The
+  fix is the COVER GRAMMAR (the same resolution arrow-function
+  grammars use): the list parser mints RestExpr("t") at `...t` (rest
+  closes the list — it is the tail), expr_to_pat consumes a trailing
+  RestExpr into PList's Some(rest), and anywhere else the marker
+  reaches infer it refuses loudly — ERestOutsideDestructure, a new
+  DiagKind teaching that rest lives in patterns and `++` joins lists
+  in expressions. The Expr variant swept the same total-match roster
+  FanoutExpr mapped two iterations ago (collect_fn_decls,
+  resume_grade, walk_refinement, count_uses, collect_free_vars,
+  flow_edges, lower_expr, render_tokens_for — each a one-line leaf
+  arm). THE UNMASKED SECOND ROOT, banked not chased: with the parse
+  clean, the fixture's RUN dangles at assembly — the rest BINDING
+  emits a hand-baked $make_list call the graph has no edge for, so
+  reachability prunes the definition while the call survives; the
+  fn-param path refuses solo with one undischarged claim — both faces
+  banked as Hβ.lower.list-rest-binding-runtime with the fix direction
+  (a graph-visible CallExpr at desugar, the record-rest precedent).
+  The fixture graduated to tests/frontier with the parse-half leg
+  live and the run-half expected value in its own header for the day
+  the peer closes.
+
 - 2026-08-07 · ▶▶▶ MENTL WHERE LANDS — the arc loop's twelfth iteration
   builds Phase 3.2 against its stamp
   (pin 0d3a196299d1 — CLEAN m2 == m3 at 339,110 lines, census 0; four

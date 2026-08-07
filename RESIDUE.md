@@ -692,6 +692,30 @@ its own comment says "now LIVE" — and is recorded here only so the
 stale prose is struck; that distinction between an open gap and a
 resolved one is exactly what an index carries and a comment cannot.
 
+`Hβ.lower.list-rest-binding-runtime` — the list-rest BINDING's runtime
+gap, measured 2026-08-07 at pin 8031eaf1 while landing the lambda
+list-pattern parse fix (Phase 3.3's first drift). Two faces, one
+family: (1) the lambda path (`([h, ...t]) => h`) parses and checks
+clean now but solo EMISSION dangles — the rest binding emits a
+hand-baked `$make_list` call the graph has no edge for, so
+reachability (edge-following from main) prunes the definition while
+the call survives: `undefined function variable "$make_list"` at
+assembly — the Carried-Truth class at the emit layer (a call the
+graph cannot see); (2) the fn-param path (`fn take_first([h, ...t])
+= h`) REFUSES solo with one undischarged claim before emission — a
+different symptom, same never-exercised family. The wheel's own
+list-rest matches run because the full link always carries make_list
+and its claims discharge there — tripwire 3 verbatim (the board's
+oracles are blind to what the wheel never does solo). THE GATE:
+tests/frontier/mn-lambda-list-param.mn runs 7 the day this closes
+(its header carries the expected value); the frontier's parse-half
+leg holds the parse victory meanwhile. The fix direction the
+measurement names: the rest binding's list construction must be a
+GRAPH-VISIBLE call (a real CallExpr edge to make_list minted at
+desugar, exactly as the record-rest residual builds through typed
+edges — mn-record-pattern-rest runs 30 through the same gate shape),
+never an emit-baked name.
+
 `Hβ.cli.where-verb` — BUILT 2026-08-07 against this stamp (pin
 0d3a196299d1; four badges live and gated; two dig lessons in the
 LEDGER entry MENTL WHERE LANDS — index walks over env-stored lists,

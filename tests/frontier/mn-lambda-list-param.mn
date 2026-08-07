@@ -1,0 +1,16 @@
+// expect: 7 (the run half waits on Hβ.lower.list-rest-binding-runtime)
+// mn-lambda-list-param — the lambda list-pattern parameter (PLAN §11
+// Phase 3.3's first measured drift): `([h, ...t]) => h` is SYNTAX's own
+// documented form («Destructuring patterns in param position»), and
+// `fn f([h, ...t])` already parses — the lambda path failed because the
+// paren content parses as an EXPRESSION first and `...` was not
+// expression grammar. The cover-grammar rest (RestExpr, minted by the
+// list parser, consumed by expr_to_pat, loud anywhere else) closes the
+// second-weaker-copy gap without a second parameter parser. The
+// frontier leg gates the PARSE half (zero diagnostics at check); the
+// RUN half is the named peer's gate — the rest BINDING emits a
+// hand-baked $make_list call reachability cannot see, so solo emission
+// dangles (measured at pin 8031eaf1).
+fn pick(f, xs) = f(xs)
+
+fn main(q) = pick(([h, ...t]) => h, [7, 8, 9])

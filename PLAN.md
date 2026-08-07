@@ -1653,15 +1653,16 @@ new DEP found; the map below is accurate at that pin.)*
   dig lessons banked in the LEDGER (index walks over env-stored lists,
   the typed accessor over the raw field read). The cure for what the
   two-verb reframe cost — the fact returned to the site as OUTPUT.
-- **3.3 · The remaining measured drifts.** The lambda parameter path (`fn
-  f([h, ...t])` parses; `([h, ...t]) =>` does not — a second, weaker copy of the
-  parameter parser); named effect rows (`type X = A + B` and `A & B` refuse,
-  `A - B` resolves to a nominal non-row, so the section that *retired the
-  `capability` keyword* has no working spelling); `xs |> len` reporting a false
-  `E_TypeMismatch` while emitting correct code; `<~` contributing no iterative
-  effect; the fmt scope register (416 diagnostic lines for an 18-line file, none
-  about that file — `Hβ.driver.per-module-env-overlay` on the daily path of the
-  best instrument in the repo).
+- **3.3 · The remaining measured drifts.** The lambda parameter path ✅
+  LANDED 2026-08-07 (pin 8031eaf123ec — the cover-grammar RestExpr;
+  `([h, ...t]) =>` checks clean, the parse-half leg gates it, and the
+  unmasked rest-binding runtime gap is banked as
+  `Hβ.lower.list-rest-binding-runtime` with its fix direction). STILL
+  OPEN: named effect rows (`type X = A + B` and `A & B` refuse, `A - B`
+  resolves to a nominal non-row, so the section that *retired the
+  `capability` keyword* has no working spelling); `xs |> len` reporting a
+  false `E_TypeMismatch` while emitting correct code; `<~` contributing
+  no iterative effect (3.6's); the fmt scope register (3.5's overlay).
 - **3.4 · SYNTAX's own defects.** The precedence table contradicts the
   layout canon on its own worked example (`(a) >< (b)` then a left-edge `|> mix`
   cannot mean `(a >< b) |> mix` when `|>` binds tighter — and the artifact

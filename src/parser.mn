@@ -1989,7 +1989,19 @@ fn expr_to_pat(e) = match e {
     NExpr(VarRef(nm)) => if nm == "_" { PWild } else { PVar(nm) },
     NExpr(MakeRecordExpr(flds)) => PRecord(sort_pat_fields(record_fields_to_pat(flds)), None),
     NExpr(MakeTupleExpr(elems)) => PTuple(map(expr_to_pat, elems)),
-    NExpr(MakeListExpr(elems)) => PList(map(expr_to_pat, elems), None),
+    NExpr(MakeListExpr(elems)) => // a trailing RestExpr (the cover-grammar rest the list parser
+    // minted for `([h, ...t]) =>`) becomes PList's rest — consumed
+    // HERE, so it never reaches infer on the lambda path.
+    if len(elems) > 0 {
+      match last(elems) {
+        N(lb, _, _) => match lb {
+          NExpr(RestExpr(rest_nm)) => PList(map(expr_to_pat, drop_last(elems)), Some(rest_nm)),
+          _ => PList(map(expr_to_pat, elems), None),
+        },
+      }
+    } else {
+      PList([], None)
+    },
     _ => PWild,
   },
 }
@@ -2231,6 +2243,16 @@ fn parse_list_elems(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBracket) {
     (buf, count, p + 1)
+  } else if at_ellipsis(tokens, p) {
+    // `...name` — the cover-grammar rest (the paren-lambda parameter
+    // path parses its content as an expression before `=>` is seen;
+    // expr_to_pat consumes this into PList's rest, and infer refuses
+    // it loudly anywhere else). Rest closes the list — it is the tail.
+    let rest_name = ident_at(tokens, p + 3)
+    let elem = nexpr(RestExpr(rest_name), span_at(tokens, p))
+    match push_node(buf, count, elem) {
+      (b1, c1) => (b1, c1, expect(tokens, skip_ws(tokens, p + 4), TRBracket)),
+    }
   } else {
     match parse_expr(tokens, p) {
       (elem, p2) => match push_node(buf, count, elem) {
@@ -3348,6 +3370,8 @@ fn free_vars_expr(e, bound) = match e {
   FieldExpr(rec, _) => collect_free_vars(rec, bound),
   PipeExpr(_, l, r) => free_vars_merge(collect_free_vars(l, bound), collect_free_vars(r, bound)),
   FanoutExpr(branches) => collect_free_vars_branches(branches, bound),
+  RestExpr(_) => // the rest NAME binds in the lambda path; it is never a free ref
+  [],
   ExprPlaceholder => [],
   LabeledArg(_, v) => // A labeled arg's value can reference free vars (closure capture must see
   // them); the label is a param name, not a value-position var.

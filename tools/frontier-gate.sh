@@ -2249,6 +2249,19 @@ for i in "${!compilers[@]}"; do
   w_seq=$(wt_run --dir "$ROOT" "$compiler" where "$wdoc" bare 2>/dev/null)
   printf '%s' "$w_seq" | grep -q '>< \[Seq\] at' || { w_ok=0; fail "where seq-default badge (got: $w_seq)"; }
   [ "$w_ok" = 1 ] && pass "where: repr, cardinality, and both schedule badges narrate (output, never input)"
+
+  # ─── The lambda list-pattern parameter (PLAN §11 Phase 3.3) ─────────
+  # `([h, ...t]) => h` parses and checks clean — the cover-grammar rest
+  # closed the second-weaker-copy gap. The RUN half is the banked peer
+  # Hβ.lower.list-rest-binding-runtime's gate (the fixture's own header
+  # carries the expected value for that day).
+  lp_chk=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-lambda-list-param.mn" 2>&1)
+  lp_n=$(printf '%s' "$lp_chk" | grep -cE 'P_(Unexpected|Expected)Token|E_.* error')
+  if [ "$lp_n" = "0" ]; then
+    pass "lambda list-pattern param: ([h, ...t]) => parses and checks clean"
+  else
+    fail "lambda list-pattern param ($lp_n diagnostics; the six-warning refusal is back)"
+  fi
 done
 
 echo "frontier: $total_pass pass / $total_fail red"

@@ -563,7 +563,11 @@ counter ≈ decl count); (b) a post-reset image-reachability audit leg —
 the mis-classification tripwire, because virgin-zero reads are SILENT
 and the audit is the loud face; (c) the peak-RSS diff recorded
 in-baseline; (d) the per-micro batch boundary keeps its green. BUILD
-ORDER, marched: (0) cost instrumentation + measured baseline; (1)
+ORDER, marched: (0) cost instrumentation + measured baseline — ✅
+LANDED 2026-08-07 (gen under GNU time, the pin's cost line, the peak
+ratchet seen RED at ceiling 1 then banked at 1,830,000 KB over three
+~1,742,900 KB reads; the self-compile's honest footprint is ~1.70GB /
+~8.4s, correcting the era-stale ~694MB); (1)
 ImageAlloc vocabulary + $ialloc emit (zero-reader, Law-7-additive);
 (2) the six families classified, each a marched step; (3) the
 per-decl bracket + the audit leg, landed together as the TRANSITION

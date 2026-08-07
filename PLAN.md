@@ -842,13 +842,15 @@ dissolves env / dedup / find_mapping / esc into the graph's O(1) chase — LESS
 code (delete every scanner) — and the byte-sequence survives only as a display
 projection (arm 7's gradient cash-out: a name's ultimate representation is a word).
 
-**COST IS ON THE BOARD (Morgan 2026-07-31, the OOM's law) — currently
-UNINSTRUMENTED (trued 2026-08-07 against the artifact: today's march.sh
-measures neither wall nor RSS, no PROVENANCE cost line, no peak key in
-verify-baseline; the machinery this paragraph described was real in its
-era and did not survive the march rewrite).** Re-instrumentation is the
-arena's build step 0 (`Hβ.perf.per-decl-arena`, RESIDUE) — measure
-before the split lands, so the win is a diff of two reads. state.sh
+**COST IS ON THE BOARD (Morgan 2026-07-31, the OOM's law) —
+RE-INSTRUMENTED 2026-08-07 (the arena's build step 0,
+`Hβ.perf.per-decl-arena`).** The march's m3 leg — the self-compile —
+runs under GNU time: the cost line prints per run, the pin's mechanical
+block carries it, and `selfcompile_peak_kb_max` in verify-baseline
+ratchets the peak (a breach refuses the repin, seen RED at ceiling 1).
+Measured at the landing: ~8.4s wall, ~1.70GB peak RSS (three reads
+within ±0.03% — the earlier "~694MB" claim was an era-stale number this
+read corrects). The arena's win lands as that ceiling FALLING. state.sh
 still shows the footprint; raising any ceiling stays an explicit
 in-commit act, the census pattern applied to cost. Paid for by measurement: the judgment's peak moved
 563MB → 3,044MB (07-25 → 07-29) across unmeasured landings and fell 823MB at

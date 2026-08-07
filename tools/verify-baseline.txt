@@ -785,3 +785,14 @@ use_after_move_max: 0
 # 2026-07-18; the checked entry + short-circuit && landed together (the
 # eager i32.and ran every guarded read — set_insert / cache_filter_loop /
 # register_one_variant all read one-past under their own guards).
+# 2026-08-07: the PEAK ratchet (§5.O cost-on-the-board; the arena's build
+# step 0, Hβ.perf.per-decl-arena). The march's m3 leg — the wheel
+# compiling the wheel — runs under GNU time; the peak RSS checks here and
+# a breach refuses the REPIN (seen RED at ceiling 1: exit 1, boot
+# restored). Measured at the instrumentation landing, two runs on fixed
+# input (pin 6cd6281a971f): 1,743,320 KB and 1,742,764 KB (±0.03%);
+# ceiling = measured + ~5% noise headroom. The arena's win lands as this
+# number FALLING — the working set collapsing to one decl's live set —
+# and the §5.O prose's stale "~694MB peak" is corrected by this read:
+# the self-compile peaks at ~1.7GB today.
+selfcompile_peak_kb_max: 1830000

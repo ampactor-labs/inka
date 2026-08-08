@@ -1,0 +1,9 @@
+// CROWN modal (§11 6.3's walk): MASKING satisfies negation — the body
+// performs E, the install absorbs it at evaluation, and the declared
+// !E holds (row(expr ~> h) = row(expr) - handled(h)). Expect NO
+// E_EffectMismatch.
+effect E { op() -> Int }
+handler h { op() => resume(1) }
+fn work() = op() + op()
+fn f() with !E = (work()) ~> h
+fn main() = f()

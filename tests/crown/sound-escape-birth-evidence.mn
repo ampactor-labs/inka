@@ -1,9 +1,13 @@
-// CROWN modal (§11 6.3's opening walk, measured 2026-08-08): a closure
-// performing E, ESCAPING its install, called outside — the shape
-// capabilities forbid and the modal calculus re-admits under proof.
-// Mentl ADMITS it (evidence birth-capture; runs 1) and the row carries
-// E on the closure honestly. No negation in scope: expect NO
-// E_EffectMismatch.
+// CROWN modal (§11 6.3's opening walk, measured 2026-08-08; the
+// mechanism narration corrected same day): a closure performing E,
+// ESCAPING its install, called outside — the shape capabilities forbid
+// and the modal calculus re-admits under proof. Mentl ADMITS it: with
+// one E-handler in the program the op dispatches by the STATIC
+// SINGLETON tier (a direct call — the escaped call runs the handler's
+// value); under multiple handlers the dynamic innermost install wins
+// (mn-escape-innermost pins 20); with NO handler reaching the root the
+// executable REFUSES (E_EffectUnhandled, armed — nothing executes
+// unproven). No negation in scope here: expect NO E_EffectMismatch.
 effect E { op() -> Int }
 handler h { op() => resume(1) }
 fn make() = () => op()

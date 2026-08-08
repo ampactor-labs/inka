@@ -1,0 +1,9 @@
+// CROWN modal (§11 6.3's walk): the install absorbs THROUGH an
+// effect-polymorphic HOF — run_it's row var carries the lambda's E to
+// the call site, and the enclosing install subtracts it, so the
+// declared !E holds. Expect NO E_EffectMismatch.
+effect E { op() -> Int }
+handler h { op() => resume(7) }
+fn run_it(g) = g()
+fn f() with !E = (run_it(() => op())) ~> h
+fn main() = f()

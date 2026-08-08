@@ -1,0 +1,13 @@
+// expect: 20
+// The handler-identity semantics under first-class escape (§11 6.3's
+// walk, measured 2026-08-08): a closure born under h1's install,
+// called under h2's — the DYNAMIC INNERMOST install resolves (h2's
+// 20), never the birth install. With a single program handler the
+// dispatch collapses to the static singleton tier (a direct call);
+// this micro forces the multi-handler world path.
+effect E { op() -> Int }
+handler h1 { op() => resume(10) }
+handler h2 { op() => resume(20) }
+fn make() = () => op()
+fn born1() = (make()) ~> h1
+fn main() = (born1()()) ~> h2

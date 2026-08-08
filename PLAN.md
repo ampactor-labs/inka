@@ -1985,22 +1985,28 @@ The spine root finishes. Order inside the phase is the dependency order.
   external check on the design and the NEGATION half carried by the
   flow-edge substrate the crucibles already police. The burden stays on
   the build: the crown battery grows a crucible per modal rule, RED-first.
-  THE FELT WALK RAN 2026-08-08, and its measurement REFRAMES the phase:
-  on the defining first-class-escape shape (a closure performing E,
-  escaping its `~>` install, called outside), today's medium ALREADY
-  holds the conjunction — the escape is ADMITTED (evidence
-  birth-capture; runs 1, the capability calculi forbid this and the
-  modal calculus re-admits it under proof) AND the negation stays
-  SOUND across it (an outer `!E` refuses the escaped performance: the
-  install's subtraction applied at evaluation, the closure's row kept
-  E riding the value). Two crown crucibles pin it
-  (sound-escape-birth-evidence, leak-escape-negation — crown 15/0).
-  The REMAINDER, sharpened by the walk: the TIME half (a persisted k
-  under a changed handler set — rides 9.1 with 6.4's value gates), the
-  per-modal-rule crucible sweep against the POPL-2026 encoding (each
-  rule a fixture, RED-first where today's behavior diverges), and the
-  capability-at-tee PROJECTION (the modality as a cursor-projected
-  graph fact — the felt face).
+  THE FELT WALK RAN 2026-08-08 (six probes; one same-day narration
+  correction per the retraction law), and its measurements REFRAME the
+  phase — today's medium already holds the conjunction on every walked
+  shape: (1) the ESCAPE (a closure performing E, escaping its `~>`
+  install, called outside — the shape capability calculi forbid) is
+  ADMITTED, dispatched by tier — the static singleton tier direct-calls
+  the one handler; under MULTIPLE handlers the dynamic innermost
+  install resolves (mn-escape-innermost pins 20, refuting the walk's
+  first "birth-capture" decode); with NO handler reaching the root the
+  executable REFUSES (E_EffectUnhandled, armed — "nothing executes
+  unproven" in the diagnostic's own words). (2) The NEGATION stays
+  sound across the escape (leak-escape-negation: an outer `!E` refuses
+  the escaped performance — the closure's row kept E riding the
+  value). (3) MASKING satisfies negation (`with !E = (work) ~> h`
+  accepts — the install's subtraction at evaluation). (4) POLYMORPHIC
+  THREADING absorbs through the HOF (`run_it(() => op()) ~> h` under
+  `!E` accepts). Crown crucibles pin all of it. The REMAINDER: the
+  TIME half (a persisted k under a changed handler set — rides 9.1
+  with 6.4's value gates), the per-modal-rule crucible sweep against
+  the POPL-2026 encoding (each rule a fixture, RED-first where
+  behavior diverges), and the capability-at-tee PROJECTION (the
+  modality as a cursor-projected graph fact — the felt face).
 - **6.4 · TIME's world enforced** — the `TCont` world stops being inert.
   THE CAPTURE IS LANDED, verified at the 2026-08-08 phase walk:
   `Hβ.infer.tcont-world-capture-at-reify` is real —

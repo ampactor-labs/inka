@@ -2907,6 +2907,22 @@ four; movers fall or re-base with justification; march green.
 KILLED along the way: the position-only floor cut (vacuous —
 the quantification was never the bug), the ordering dance, the
 sort-pollution-at-the-writer frame (the writer is correct).
+LAYER ONE LANDED (2026-08-07, pin 7343ed3f4aeb — THE ROW READERS
+CROSS THE SORT): edge_row_of + the nine-site uniform dispatch,
+marched CLEAN, kept per stack-correct-fixes (the readers' gap is
+measured true; gate reads meet fn-typed edges mid-judgment). The
+acceptance still refuses — and the remaining layer is now exact:
+row_keep_completion PRUNES bound above-ceiling edges (the
+caller's freshened-then-bound param cell) before
+graph_finalize_row's fold — now capable of reading fn-typed
+content — ever sees them. The trial's honesty was always the
+below-ceiling prereg cells the prune KEEPS. THE NEXT BUILD,
+layer two: the completion prune folds BOUND edge content into
+presents before dropping still-free transients (resolve first,
+prune the residue) — one site, inf_exit_fn's
+row_keep_completion input; acceptance unchanged and now expected
+to bite: neg's solo four, the sl-caller shapes healing, movers
+moving with justification.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

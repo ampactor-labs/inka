@@ -6796,11 +6796,11 @@ fn chase_edges_deep(ref vs: [Int], acc, d) = match vs {
   [v, ...rest] => match acc {
     (p, a, res, saw_all) => {
       let next = match graph_chase(v) {
-        GNode(kind, _) => match kind {
-          NRowBound(inner) => match edge_content_into(p, a, res, saw_all, chase_row_deep(inner, d + 1)) {
+        GNode(kind, _) => match edge_row_of(kind) {
+          Some(inner) => match edge_content_into(p, a, res, saw_all, chase_row_deep(inner, d + 1)) {
             (p2, a2, r2, s2, _) => (p2, a2, r2, s2),
           },
-          _ => (p, a, tail_set_insert(res, v), saw_all),
+          None => (p, a, tail_set_insert(res, v), saw_all),
         },
       }
       chase_edges_deep(rest, next, d)
@@ -6902,8 +6902,10 @@ fn free_in_edges(ref vs: [Int]) = match vs {
       [r]
     } else {
       match graph_chase(r) {
-        GNode(NRowBound(inner), _) => free_in_row(inner),
-        _ => [],
+        GNode(kind, _) => match edge_row_of(kind) {
+          Some(inner) => free_in_row(inner),
+          None => [],
+        },
       }
     }
     here ++ free_in_edges(rest)
@@ -7237,11 +7239,11 @@ fn subst_edge_build_into(acc, v, mapping) = match acc {
       (p, a, push(res, r0), saw_all)
     } else {
       match graph_chase(v) {
-        GNode(kind, _) => match kind {
-          NRowBound(inner) => match edge_content_into(p, a, res, saw_all, subst_row_build(inner, mapping)) {
+        GNode(kind, _) => match edge_row_of(kind) {
+          Some(inner) => match edge_content_into(p, a, res, saw_all, subst_row_build(inner, mapping)) {
             (p2, a2, r2, s2, _) => (p2, a2, r2, s2),
           },
-          _ => (p, a, tail_set_insert(res, v), saw_all),
+          None => (p, a, tail_set_insert(res, v), saw_all),
         },
       }
     }

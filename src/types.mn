@@ -615,6 +615,28 @@ type EffTail
   // census item at zero.
   | EtAll
 
+// The ONE row-edge content read — every edge walk (resolve, flatten,
+// compress, occurs, free, subst, the lower readers) dispatches an
+// edge's chased cell through this projection, so the set of
+// row-bearing bindings has exactly one home. Two shapes carry a row:
+// a row cell (NRowBound), and a cell bound to a FUNCTION type — the
+// crown's HOF residual draws a row edge to an untyped fn param's own
+// cell (the edge means "that fn's row joins here"), and when the
+// caller binds the param to a real fn the row lives INSIDE the TFun.
+// Before this projection the readers traversed NRowBound only, so a
+// bound fn-typed edge contributed NOTHING — the measured silent drop
+// behind Hβ.infer.forward-hof-row-underpublish (a declared allocator
+// publishing Pure). An alias-wrapped fn binding (TAlias over TFun) is
+// named residue here, not silently absorbed: extend when measured.
+fn edge_row_of(kind) with Memory + Alloc = match kind {
+  NRowBound(inner) => Some(inner),
+  NBound(ty) => match ty {
+    TFun(_, _, frow) => Some(frow),
+    _ => None,
+  },
+  _ => None,
+}
+
 // Effect names carry optional install-time arguments. The `with IO`
 // declaration is an ENamed wrapping the name IO; `with Sample(44100)`
 // is EParameterized wrapping Sample plus [EAInt(44100)]. Two

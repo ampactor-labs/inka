@@ -35,6 +35,27 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE ROW READERS CROSS THE SORT (pin 7343ed3f4aeb —
+  CLEAN m2 == m3, census 0, micros green): layer one of the
+  under-publish peer's forced fix. edge_row_of (types.mn) is the one
+  row-edge content projection — a row cell reads its row, a cell
+  bound to a FUNCTION type reads the fn's row — and the complete
+  edge-walk census (nine sites: resolve, compress, flatten, occurs,
+  free, subst, chase-deep, lower's effects_of and multishot readers)
+  dispatches through it, the trio law satisfied by construction. The
+  compress site folds but never rebinds a fn-typed edge (that write
+  would overwrite the TFun). Acceptance NOT yet: neg still Pure,
+  movers still 451 — the fixture shows why, cleanly: sl's own row is
+  legitimately its param's free var (effect polymorphism); the loss
+  is at CALLERS, where row_keep_completion prunes the bound
+  above-ceiling fresh edge before finalize's fold — now capable of
+  reading it — ever runs. The trial passed on below-ceiling prereg
+  cells; the final/solo die on pruned fresh ones. The named next
+  layer: the completion prune FOLDS bound edges before dropping
+  transients. Kept per stack-correct-fixes: the layer's own claim
+  (readers must traverse fn-typed edges) is measured true and
+  mid-judgment gate reads meet such edges today.
+
 - 2026-08-07 · ▶▶▶ THE DECLS COLUMN SEEDS THE QUEUE (pin 2403d0f8f32c —
   CLEAN m2 == m3, census 0, peak 2,340,996 KB inside ceiling; the
   landing's first form breached the eta and quiet ratchets and was

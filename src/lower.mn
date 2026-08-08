@@ -892,9 +892,9 @@ fn effects_of_edges(ref vs: [Int], acc, ref ab) = match vs {
   [] => acc,
   [v, ...rest] => {
     let next = match graph_chase(v) {
-      GNode(kind, _) => match kind {
-        NRowBound(inner) => set_canonicalize(names_concat(acc, names_diff_strs(effects_of_row(inner), eff_names_of(ab)))),
-        _ => acc,
+      GNode(kind, _) => match edge_row_of(kind) {
+        Some(inner) => set_canonicalize(names_concat(acc, names_diff_strs(effects_of_row(inner), eff_names_of(ab)))),
+        None => acc,
       },
     }
     effects_of_edges(rest, next, ab)
@@ -958,9 +958,9 @@ fn edges_may_multishot(ref vs: [Int]) = match vs {
   [] => false,
   [v, ...rest] => {
     let here = match graph_chase(v) {
-      GNode(kind, _) => match kind {
-        NRowBound(inner) => row_may_multishot(inner),
-        _ => true,
+      GNode(kind, _) => match edge_row_of(kind) {
+        Some(inner) => row_may_multishot(inner),
+        None => true,
       },
     }
     if here { true } else { edges_may_multishot(rest) }

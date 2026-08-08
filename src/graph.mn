@@ -801,8 +801,8 @@ fn flatten_row_edges(ref spine, mint_bound, ref vs: [Int], acc) with !Mutate + M
   [v, ...rest] => match acc {
     (p, a, res, saw_all) => {
       let next = match chase_node(spine, mint_bound, v, 0) {
-        GNode(kind, _) => match kind {
-          NRowBound(inner) => match flatten_row_stored(spine, mint_bound, inner) {
+        GNode(kind, _) => match edge_row_of(kind) {
+          Some(inner) => match flatten_row_stored(spine, mint_bound, inner) {
             EfRow(cp, ca, ct) => {
               let p2 = name_set_union(p, name_set_diff(cp, a))
               let a2 = name_set_union(a, ca)
@@ -813,7 +813,7 @@ fn flatten_row_edges(ref spine, mint_bound, ref vs: [Int], acc) with !Mutate + M
               }
             },
           },
-          _ => (p, a, tail_set_insert(res, v), saw_all),
+          None => (p, a, tail_set_insert(res, v), saw_all),
         },
       }
       flatten_row_edges(spine, mint_bound, rest, next)
@@ -990,8 +990,10 @@ fn occurs_in_edges(spine, mint_bound, handle, ref vs: [Int]) with !Mutate = matc
       true
     } else {
       match chase_node(spine, mint_bound, r, 0) {
-        GNode(NRowBound(inner), _) => occurs_in_row(spine, mint_bound, handle, inner),
-        _ => false,
+        GNode(kind, _) => match edge_row_of(kind) {
+          Some(inner) => occurs_in_row(spine, mint_bound, handle, inner),
+          None => false,
+        },
       }
     }
     if here { true } else { occurs_in_edges(spine, mint_bound, handle, rest) }

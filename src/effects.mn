@@ -377,9 +377,9 @@ fn resolve_edges(ref vs: [Int], acc) with !Mutate = match vs {
 // no-progress row returns by identity above.
 fn resolve_edge(acc, v) with !Mutate = match acc {
   (p, a, res, saw_all, progressed) => match graph_chase(v) {
-    GNode(kind, _) => match kind {
-      NRowBound(inner) => edge_content_into(p, a, res, saw_all, resolve_row(inner)),
-      _ => (p, a, tail_set_insert(res, v), saw_all, progressed),
+    GNode(kind, _) => match edge_row_of(kind) {
+      Some(inner) => edge_content_into(p, a, res, saw_all, resolve_row(inner)),
+      None => (p, a, tail_set_insert(res, v), saw_all, progressed),
     },
   },
 }
@@ -436,7 +436,13 @@ fn resolve_edge_compress(acc, v) = match acc {
         graph_compress_row(v, ri)
         edge_content_into(p, a, res, saw_all, ri)
       },
-      _ => (p, a, tail_set_insert(res, v), saw_all, progressed),
+      k => // A fn-typed edge FOLDS its row but is NEVER compressed: the cell's
+      // binding IS the function type, and a compress write here would
+      // overwrite the TFun with a row (the cell serves the type reads too).
+      match edge_row_of(k) {
+        Some(inner) => edge_content_into(p, a, res, saw_all, resolve_row_compress(inner)),
+        None => (p, a, tail_set_insert(res, v), saw_all, progressed),
+      },
     },
   },
 }

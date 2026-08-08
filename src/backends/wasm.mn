@@ -586,41 +586,6 @@ fn sum_has_payload(ref specs, i) with Memory = if i >= len(specs) {
   }
 }
 
-fn spec_name_in(names, m: String) with Memory + Alloc = any((x) => x == m, names)
-
-// The worthiness closure over the fix's precomputed facts — a candidate
-// joins when its own body is sensitive or any interior redirect edge
-// already leads to a worthy twin; iterate to the fixpoint. Pure name-set
-// work per round: zero scans, zero mints (the incremental cursor's
-// closure_fix, one subsystem over).
-fn spec_worthy_closure(facts, worthy) with Memory + Alloc = match fold(
-  (worthy, false),
-  (acc, f) => match acc {
-    (w, ch) => match f {
-      (m, sens, interior) => if spec_name_in(w, m) {
-        (w, ch)
-      } else if sens {
-        ([m] ++ w, true)
-      } else if spec_any_name_in(interior, w, 0) {
-        ([m] ++ w, true)
-      } else {
-        (w, ch)
-      },
-    },
-  },
-  facts
-) {
-  (w2, changed) => if changed { spec_worthy_closure(facts, w2) } else { w2 },
-}
-
-fn spec_any_name_in(ref names, ref w, i) with Memory + Alloc = if i >= len(names) {
-  false
-} else if spec_name_in(w, names[i]) {
-  true
-} else {
-  spec_any_name_in(names, w, i + 1)
-}
-
 fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = match spec_scan_list(lowered, ([], [])) {
   (sites, _o) => {
     let seed = spec_candidates_from_sites(sites, [])

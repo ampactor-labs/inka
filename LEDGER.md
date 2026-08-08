@@ -35,6 +35,14 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE WORTHINESS FAMILY PRUNES (pin 2d3b3ca384a9 —
+  CLEAN m2 == m3, census 0, emissions identical at 403,741 lines):
+  spec_worthy_closure, spec_any_name_in, and spec_name_in delete whole
+  — the ref census showed only self- and intra-family references — and
+  the sweep's knock-ons ratchet down (movers 453 → 451, effectful
+  lambdas 383 → 381). The facts thread rides the candidates scan and
+  its unused half prunes when spec_candidates_fix is next restructured.
+
 - 2026-08-07 · ▶▶▶ TOTAL BY CANDIDACY — 5.1a lands, the worthiness gate
   deletes (pin 6fb09a99fb1e — TRANSITION m3 == m4, census 0; emit
   343,679 → 403,741 lines, the banked +17%; RSS 2,201,332/2,216,724 KB
@@ -52,9 +60,12 @@
   end: the first drop BROKE (assembly), the break pinned to one
   instruction, the class censused to one instance, the ABI read
   inverted the fix's whole design, and the acceptance probe proved
-  assembly before any march. NEXT: prune the dead worthiness family
-  (spec_worthy_closure, spec_any_name_in, the facts thread's unused
-  half) — named, not yet swept.
+  assembly before any march. THE SWEEP LANDED same day (pin
+  2d3b3ca384a9 — CLEAN, emissions identical): spec_worthy_closure,
+  spec_any_name_in, and spec_name_in deleted whole, the ref census
+  showing only self- and intra-family references. The facts thread
+  rides the candidates scan (same walk, marginal assembly) and its
+  unused half prunes when spec_candidates_fix is next restructured.
 
 - 2026-08-07 · ▶▶▶ THE TWIN EDGES CONVERT — Hβ.emit.twin-state-width
   closes (pin ef8083b05fe2 — CLEAN m2 == m3, census 0, cost 14.35s /

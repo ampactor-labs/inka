@@ -516,7 +516,9 @@ comment_refs_max: 0
 # fills it — 225 movers died with the severance. The remainder is the
 # grade class (param modes read as values) and the type-sort set (the
 # scheme-object rule's territory).
-movers_max: 453
+# Lowered 453 → 451 at the worthiness prune (pin 2d3b3ca384a9): two
+# family schemes left the mover set with the deleted fns.
+movers_max: 451
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.
@@ -557,8 +559,10 @@ solo_violations_max: 0
 # declared-names carry died and the new pin's judgment re-classes the
 # prereg-fed lambdas' rows — eleven convictions gone with no lambda
 # authored or renamed, the census reading the graph, not the text.
+# Lowered 383 → 381 at the worthiness prune (pin 2d3b3ca384a9): the
+# deleted family carried two convicted lambdas.
 eta_max: 29
-effectful_lambda_max: 383
+effectful_lambda_max: 381
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own

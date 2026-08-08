@@ -232,6 +232,13 @@ elif [ "$m3rc" = 0 ]; then
       cp boot/mentl.wasm "$OUT/boot.prev.wasm"
       cp "$OUT/m2.wasm" boot/mentl.wasm
       if [ "$costok" = 1 ] && bash tools/march-gate.sh --micros > "$OUT/repin-battery.log" 2>&1; then
+        # A repin is a new build: the warm-compile images were written by
+        # the old one, and their $build_key (table+strings+globals) does
+        # NOT move on a body-only change — a key-matching stale image
+        # trapped the board twice (2026-08-07/08). Clearing at the bless
+        # is the scaffold-tier fix; the key gaining the build identity is
+        # the peer (Hβ.persist.image-key-compiler-build).
+        rm -f .build/warm-compile-*.img
         echo "· REPIN (clean): boot ← m2  sha256 $(sha256sum boot/mentl.wasm | cut -c1-16)…  (battery green)"
         emit_provenance m2 "CLEAN m2 == m3" \
           "$(wc -l < "$OUT/m2.wat" 2>/dev/null)" \
@@ -264,6 +271,7 @@ elif [ "$m3rc" = 0 ]; then
           cp boot/mentl.wasm "$OUT/boot.prev.wasm"
           cp "$OUT/m3.wasm" boot/mentl.wasm
           if [ "$costok" = 1 ] && bash tools/march-gate.sh --micros > "$OUT/repin-battery.log" 2>&1; then
+            rm -f .build/warm-compile-*.img
             echo "· REPIN (transition): boot ← m3  sha256 $(sha256sum boot/mentl.wasm | cut -c1-16)…  (battery green; blessing m2 here is the trusting-trust mistake this arbitration exists to prevent)"
             emit_provenance m3 "TRANSITION m3 == m4" \
               "$(wc -l < "$OUT/m3.wat" 2>/dev/null)" \

@@ -1985,13 +1985,21 @@ The spine root finishes. Order inside the phase is the dependency order.
   external check on the design and the NEGATION half carried by the
   flow-edge substrate the crucibles already police. The burden stays on
   the build: the crown battery grows a crucible per modal rule, RED-first.
-- **6.4 · TIME's world enforced** — the `TCont` world stops being inert:
-  `Hβ.infer.tcont-world-capture-at-reify` (the world frozen at the
-  multi-shot producer's reify), `Hβ.types.resume-world-mismatch-value-gate`
-  (`E_ResumeWorldMismatchWorld` wired — a persisted k resumed under a
-  changed handler set refuses at the value gate),
-  `Hβ.continuations.world-widening-resume` (the typed superset-resume),
-  `Hβ.persist.branch-world-tag`. One edge, two arms, both live.
+- **6.4 · TIME's world enforced** — the `TCont` world stops being inert.
+  THE CAPTURE IS LANDED, verified at the 2026-08-08 phase walk:
+  `Hβ.infer.tcont-world-capture-at-reify` is real —
+  inf_current_world() (the current frame's LIVE row var, infer.mn:187)
+  rides every PendingContinuationBoundary and
+  finalize_continuation_boundaries threads it into the TCont's world
+  field; and the declared-but-unwired `E_ResumeWorldMismatchWorld`
+  ctor no longer exists (zero construction sites) — the runtime
+  refusal is persist's rehydrate REFUSING via Fail, band B's own
+  record. REMAINING here: the value gate's TYPED form (the Fail
+  refusal graduating to a located diagnostic when the persist surface
+  matures), `Hβ.continuations.world-widening-resume` (the typed
+  superset-resume), `Hβ.persist.branch-world-tag` — all riding band
+  B's persist runtime, sequenced with Phase 9.1 where that substrate
+  ships.
 - **6.5 · The gated verdicts unlock.** Everything band A held: ownership-
   as-effect VERIFIED, `!Thread`/`!Alloc` transitivity
   (`Hβ.parallel.thread-alloc-transitive-proof`), race-freedom-by-ownership

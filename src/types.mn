@@ -782,6 +782,19 @@ type ExecutableBoundary
   | PendingContinuationBoundary(Int, Int, Int, EffRow)
   | ContinuationBoundary(ContinuationEdge)
 
+// The bind-home column cell (Hβ.lower.lowering-is-a-column, marched
+// step i): lower's ls_resolve decision at a VarRef use site, written
+// once at the resolution arm, keyed by the USE node's handle — the
+// identity the LowExpr tree DISCARDS at mint (LLocal replaces it with
+// the binding-time handle). Payloads carry only what no live read
+// answers: the binding-time type-bearing handle and the capture slot;
+// the RGlobal sub-split (ctor / fn / missing) stays a live env read.
+// First constructor nullary — an unwritten spine cell (0) reads as it.
+// READERS ARRIVE AT STEP iii (the emit walk re-rooted on
+// program+columns); until then the column is the dual-write
+// migration's priced write-only interval, retired by that landing.
+type BindHome = BindUnwritten | BindLocal(Int) | BindUpval(Int, Int) | BindPrior(Int) | BindGlobal
+
 // The snapshot carries exactly what its consumers read: the mint bound
 // and the span index. The node cells are NOT here — they live in the
 // handler's paged spine and are read through graph_chase/graph_node_body
@@ -1769,7 +1782,7 @@ effect GraphRead {
   // no branch ever appends). A branch graph_handler installs over
   // these with its stmt's planned range as (next0, limit0).
   graph_boundary_at(Int) -> ExecutableBoundary
-  graph_branch_seed() -> ([{boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody], spans: [Span]}], Int, [(ValidSpan, Int)])
+  graph_branch_seed() -> ([{bind: [BindHome], boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody], spans: [Span]}], Int, [(ValidSpan, Int)])
   // The REVERSE-EDGE column's read: every reference handle noted under
   // NAME (newest first — the column prepends). refs_of_name's whole-
   // graph VarRef scan and the oracle's quadratic count_dependents both
@@ -1822,6 +1835,13 @@ effect GraphWrite {
   // graph_decls_at (the oracle queue's seed). Judgment rounds re-note,
   // so readers dedup by handle.
   graph_decl_note(Int)
+  // The bind-home column's write (Hβ.lower.lowering-is-a-column step i):
+  // lower's VarRef resolution arm — the ONE decision site — notes its
+  // ls_resolve verdict at the use node's handle, an in-place spine cell
+  // store. Non-trailed by the ref-note contract: lowering runs after
+  // judgment, a re-lower overwrites with the same verdict. The read
+  // face lands with step iii's re-rooted emit walk.
+  graph_bind_note(Int, BindHome)
   // The deterministic handle partition (the planned mint): the final pass
   // pre-assigns each stmt a dense range of handles sized by the trial's
   // measured mint counts, so numbering is a pure function of the source —

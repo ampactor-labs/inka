@@ -245,12 +245,23 @@ collect_fold_tys_expr:5021 (wasm.mn). Each keeps its SIGNATURE and
 its body becomes a column read (swap behind the projection), then the
 tree and the bodies that only re-walked it delete together.
 — THE MARCHED SEQUENCE: (i) column vocabulary lands beside the tree,
-dual-written, zero readers (Law-7 no-op); (ii) the projection bodies
+dual-written, zero readers (Law-7 no-op) — ✅ OPENED 2026-08-08, pin
+d4d552904d8c: the BIND-HOME column (BindHome, the spine's eighth
+column, graph_bind_note, the one dual-write at lower's VarRef arm,
+keyed by the USE handle the tree discards). The remaining (i)
+columns land by the same pattern as their swaps demand them;
+(ii) the projection bodies
 swap to column reads one landing at a time (collect_* family first),
 each marched; (iii) emit_expr's dispatch swaps to program+columns
 under march arbitration (CLEAN expected — same facts, same bytes);
 (iv) the trees + tree-only walkers delete whole; (v) k2-floor and
-twins re-key. Two verb confessions from the stamp's own dig, named
+twins re-key. A measured correction from (i)'s first landing: the
+walkers take LowExpr VALUES while columns key by HANDLE, so the
+step-(ii) collect_* swaps are NOT body-swaps — they re-root on
+program+columns walks (the tree-only walkers die at (iv), not (ii));
+and reach_names CANNOT re-root on source program alone (lower MINTS
+references — fold helpers, twins — the source never wrote), so
+reachability's swap waits for the synthesized-shapes mint. Two verb confessions from the stamp's own dig, named
 per ⟳: the `type NAME` query facet answers the name, not the
 variant/field ROSTER (the ADT-roster facet); the address form lacks
 an enclosing-DECL facet (node → its decl — the walker census needed

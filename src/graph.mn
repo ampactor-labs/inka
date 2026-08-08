@@ -106,7 +106,7 @@ fn spine_slot(h) = h % spine_slots
 // {nodes, ...} receiver computes field offsets over the partial demanded set
 // (the trecordopen-wrong-field class — measured here as `.nodes` reading
 // offset 0, the boundaries column, before the annotation).
-fn spine_page(ref spine, h) -> {boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody], spans: [Span]} with Memory =
+fn spine_page(ref spine, h) -> {bind: [BindHome], boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody], spans: [Span]} with Memory =
   list_index(spine, spine_band(h))
 
 // Open bands through band b — the MINT path only: every other write lands
@@ -130,7 +130,7 @@ fn spine_open_loop(own spine, opened, b) with Memory + Alloc = if opened > b {
   (spine, opened)
 } else {
   let page =
-    {boundaries: make_list(spine_slots), canon: make_list(spine_slots), comments: make_list(spine_slots), narrowing: make_list(spine_slots), nodes: make_list(spine_slots), program: make_list(spine_slots), spans: make_list(spine_slots)}
+    {bind: make_list(spine_slots), boundaries: make_list(spine_slots), canon: make_list(spine_slots), comments: make_list(spine_slots), narrowing: make_list(spine_slots), nodes: make_list(spine_slots), program: make_list(spine_slots), spans: make_list(spine_slots)}
   spine_open_loop(list_set(spine, opened, page), opened + 1, b)
 }
 
@@ -163,6 +163,11 @@ fn spine_put_narrowing(ref spine, h, pred) with Memory = {
 
 fn spine_put_boundary(ref spine, h, own boundary) with Memory = {
   let _ = list_set(spine_page(spine, h).boundaries, spine_slot(h), boundary)
+  ()
+}
+
+fn spine_put_bind(ref spine, h, bh) with Memory = {
+  let _ = list_set(spine_page(spine, h).bind, spine_slot(h), bh)
   ()
 }
 
@@ -665,6 +670,14 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   // same handle, readers dedup by handle).
   resume() with decls_col = push(decls_col, decl_handle),
   graph_decls_at() => resume(decls_col),
+  graph_bind_note(use_handle, bh) => // The bind-home column (lowering-is-a-column
+  // step i): an in-place spine cell store at the USE node's handle — no
+  // state rebind, non-trailed (lowering runs post-judgment; a re-lower
+  // overwrites with the same verdict).
+  {
+    spine_put_bind(spine, use_handle, bh)
+    resume()
+  },
   graph_branch_seed() => resume((spine, spine_open, span_index)),
   graph_rollback(target_idx) => {
     let n = len(checkpoint_stack)

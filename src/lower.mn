@@ -2005,31 +2005,45 @@ fn lower_expr_body(e, handle, span) = match e {
     // reference (`None`, `True`, `False`). Lower it as
     // LMakeVariant(handle, tag, []) — emit emits the sentinel
     // i32.const form for nullary tags.
-    match res {
-      RLocal => LLocal(if local_h == 0 { handle } else { local_h }, name),
-      RUpval(slot) => LUpval(if local_h == 0 { handle } else { local_h }, slot),
-      RFbPrior(fb_h) => // (LF.B) a `<~` lambda param resolves to the feedback site's prior local,
-      // read LIVE — the recurrence's y[n-1] term IS this node.
-      LFeedbackPrior(fb_h),
-      RGlobal => match env_kind_of(name) {
-        Some(ConstructorScheme(tag_id, _)) => LMakeVariant(handle, tag_id, []),
-        Some(FnScheme) => // A named-fn VALUE reference (FnScheme tag-0 — excludes HandlerKind,
-        // the PTee guard). ALWAYS the bare LGlobal — emit resolves it to the
-        // fn's static closure record; the fn's performs dispatch through the
-        // live world chain when the consumer (`each(f, xs)`) calls it.
-        LGlobal(handle, name),
-        Some(_) => // Found, some other kind (a value binding, an op, a record) — the
-        // global read is the right projection.
-        LGlobal(handle, name),
-        None => // NOT FOUND. `_ => LGlobal(handle, name)` stood here and conflated
-        // these two: it guessed an unbound name into `(global.get $name)`,
-        // fabricating the one fact infer had just proved false. The guess is
-        // never reachable code — it is WAT no assembler accepts — so it did
-        // not "keep going"; it moved the medium's own precise, spanned
-        // E_MissingVariable to a wat2wasm error hundreds of thousands of
-        // lines away, about a symbol the developer never wrote.
-        LInvariantFailure(handle, MissingName(name)),
-      },
+    {
+      // The bind-home column's dual-write (lowering-is-a-column step i):
+      // the verdict noted at the USE handle — the identity the tree mint
+      // below discards in favor of the binding-time handle.
+      graph_bind_note(
+        handle,
+        match res {
+          RLocal => BindLocal(local_h),
+          RUpval(slot) => BindUpval(local_h, slot),
+          RFbPrior(fb_h) => BindPrior(fb_h),
+          RGlobal => BindGlobal,
+        }
+      )
+      match res {
+        RLocal => LLocal(if local_h == 0 { handle } else { local_h }, name),
+        RUpval(slot) => LUpval(if local_h == 0 { handle } else { local_h }, slot),
+        RFbPrior(fb_h) => // (LF.B) a `<~` lambda param resolves to the feedback site's prior local,
+        // read LIVE — the recurrence's y[n-1] term IS this node.
+        LFeedbackPrior(fb_h),
+        RGlobal => match env_kind_of(name) {
+          Some(ConstructorScheme(tag_id, _)) => LMakeVariant(handle, tag_id, []),
+          Some(FnScheme) => // A named-fn VALUE reference (FnScheme tag-0 — excludes HandlerKind,
+          // the PTee guard). ALWAYS the bare LGlobal — emit resolves it to the
+          // fn's static closure record; the fn's performs dispatch through the
+          // live world chain when the consumer (`each(f, xs)`) calls it.
+          LGlobal(handle, name),
+          Some(_) => // Found, some other kind (a value binding, an op, a record) — the
+          // global read is the right projection.
+          LGlobal(handle, name),
+          None => // NOT FOUND. `_ => LGlobal(handle, name)` stood here and conflated
+          // these two: it guessed an unbound name into `(global.get $name)`,
+          // fabricating the one fact infer had just proved false. The guess is
+          // never reachable code — it is WAT no assembler accepts — so it did
+          // not "keep going"; it moved the medium's own precise, spanned
+          // E_MissingVariable to a wat2wasm error hundreds of thousands of
+          // lines away, about a symbol the developer never wrote.
+          LInvariantFailure(handle, MissingName(name)),
+        },
+      }
     },
   },
   BinOpExpr(op, left, right) => // The boolean verbs are CONTROL, not arithmetic: `a && b` IS

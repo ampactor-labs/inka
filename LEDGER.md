@@ -35,6 +35,27 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE BIND-HOME COLUMN OPENS THE LOWERING ARC (pin d4d552904d8c —
+  CLEAN m2 == m3, census 0, peak 2,369,792 KB inside the ceiling):
+  step (i) of the lowering-is-a-column stamp, the smallest marched
+  slice — ONE column, ONE writer, zero swapped readers. BindHome
+  (nullary-first per the zero-cell law) beside ExecutableBoundary;
+  the spine page grows its eighth column with spine_put_bind;
+  graph_bind_note lands beside graph_decl_note under the same
+  non-trailed contract (lowering runs post-judgment, re-lower
+  overwrites with the same verdict); the dual-write sits at lower's
+  VarRef resolution arm — the ONE decision site — keyed by the USE
+  node's handle, the identity the LowExpr mint discards when it
+  replaces it with the binding-time handle (the column already
+  carries MORE than the tree). The RGlobal sub-split (ctor/fn/
+  missing) deliberately stays a live env read — storing it would
+  copy what env_kind_of answers. Found on the way: spine_page:109's
+  "the shape's one home" comment was false by measurement — the page
+  record's shape is ALSO annotated at graph_branch_seed's op decl
+  (types.mn:1790); both homes now carry bind. Readers arrive at step
+  (iii)'s re-rooted emit walk; the write-only interval is the
+  stamp's own priced transition, named in the column's comment.
+
 - 2026-08-08 · ▶▶▶ THE SOURCE CARRIES ITS RETURN'S LABEL (pin a3ffc8c3e223 —
   CLEAN m2 == m3, census 0, frontier 348/0): Phase 7's felt walk (the
   phase opener, per the felt-path-first law) probed the flow facet at

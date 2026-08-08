@@ -28,7 +28,25 @@
 
 ---
 
-`Hβ.query.unreadable-source-refusal` — RESOLVED 2026-08-08, same day as
+`Hβ.syntax.effarg-node-in-with-clause` — RESOLVED 2026-08-08 by
+measurement (the peer was PLAN-named at 6.2 but never banked here; this
+entry is its one home, written at resolution). 6.2's "unconstructible
+from the surface" ruling generalized from the wrong probe shape: a
+BARE-IDENT effect arg (`fn stage() with Sample(the_rate)`) parses as
+EANode(handle) at the with-clause (parser's eff-arg atom), resolves
+live, checks clean, and RUNS through an installed handler (probed
+end-to-end at pin 0bbfe0e58e1cb6f3); the conservative-arm crucible
+(tests/crown/leak-instance-node.mn — EANode not provably distinct from
+the forbidden 44100 refuses) stands in the battery and holds. What a
+with-clause cannot carry is a COMPOUND arg (`Sample(base + 100)`) —
+the grammar's arg atom is one token, so the `+` breaks the parse
+(P_ExpectedToken, before any E_EffArgNotLiteral). The named remaining
+reach: W23's "constant-folded projection of its operand node" widened
+to compound CONSTANT expressions — a parse change (the arg atom
+becomes a bracketed expression) plus the fold at registration, priced
+small and sequenced with band-A instance work; a general runtime
+expression as an instance stays out (the row algebra compares
+instances at the decl).
 named (pin 76e85e00696e), and the fix's RED sharpened the decode twice:
 the diagnostic was never missing (E_MissingModule fires at the DAG walk;
 the naming probe's 2>/dev/null ate it), and the confident answer was

@@ -2007,13 +2007,17 @@ The spine root finishes. Order inside the phase is the dependency order.
   positive dual from Phase 1); THE GATE LANDED 2026-08-08: four
   instance crucibles in tests/crown/ (leak-instance-same,
   leak-instance-bare, sound-instance-distinct,
-  sound-instance-bare-admits), crown 12/0. The fifth stamped fixture
-  (the EANode conservative arm) is UNCONSTRUCTIBLE from the surface:
-  the with-clause parser refuses non-literal effect args
-  (E_EffArgNotLiteral, live at parse) — a measured tension with the
-  W23-era claim of that class's deletion; the EANode-in-with-clause
-  surface is `Hβ.syntax.effarg-node-in-with-clause`, named here, and
-  the conservative arm's crucible lands with it.
+  sound-instance-bare-admits), crown 12/0 — and 6.2 is WHOLE: the
+  fifth fixture (leak-instance-node, the EANode conservative arm)
+  stands in the battery and holds, because the "unconstructible"
+  ruling was measured on the wrong shape — a BARE-IDENT arg
+  (`Sample(the_rate)`) parses as EANode and runs end-to-end through
+  the handler (re-probed 2026-08-08: check clean, the install serves
+  it); only a COMPOUND arg (`Sample(base + 100)`) refuses, at the
+  grammar itself (the arg atom is one token). The peer's record is
+  `Hβ.syntax.effarg-node-in-with-clause` in RESIDUE — resolved, with
+  the compound-constant fold named as the W23 design's remaining
+  reach.
 - **6.3 · The modal world-index** — `Hβ.effects.modal-world-index` +
   `Hβ.infer.modal-capability-at-tee`: rows + capabilities + negation sound
   SIMULTANEOUSLY as a graph fact. The route is the graph, not the calculus:

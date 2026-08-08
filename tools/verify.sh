@@ -240,16 +240,18 @@ if C=$(wt_m2_ensure); then
   cpir=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census print-in-report" 2>/dev/null | grep -oE '[0-9]+ print-in-report' | grep -oE '[0-9]+' | head -1)
   cwf=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census wildcard-fabricates" 2>/dev/null | grep -oE '[0-9]+ wildcard-fabricates' | grep -oE '[0-9]+' | head -1)
   cur=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census underscore-retain" 2>/dev/null | grep -oE '[0-9]+ underscore-retain' | grep -oE '[0-9]+' | head -1)
+  cfi=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census flag-as-int" 2>/dev/null | grep -oE '[0-9]+ flag-as-int' | grep -oE '[0-9]+' | head -1)
   wzmax=$(grep -E '^wildcard_zero_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
   fmmax=$(grep -E '^failure_mask_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
   pirmax=$(grep -E '^print_in_report_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
   wfmax=$(grep -E '^wildcard_fabricates_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
   urmax=$(grep -E '^underscore_retain_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
-  if [[ -z "$cwz" || -z "$cfm" || -z "$cpir" || -z "$cwf" || -z "$cur" ]]; then
-    say "✗ drift-shape RATCHET: a census query answered nothing (wz='$cwz' fm='$cfm' pir='$cpir' wf='$cwf' ur='$cur') — the projection is broken, not clean."
+  fimax=$(grep -E '^flag_as_int_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  if [[ -z "$cwz" || -z "$cfm" || -z "$cpir" || -z "$cwf" || -z "$cur" || -z "$cfi" ]]; then
+    say "✗ drift-shape RATCHET: a census query answered nothing (wz='$cwz' fm='$cfm' pir='$cpir' wf='$cwf' ur='$cur' fi='$cfi') — the projection is broken, not clean."
     fail=1
   else
-    say "· drift shapes: $cwz wildcard-zero, $cfm failure-mask, $cpir print-in-report, $cwf wildcard-fabricates, $cur underscore-retain — the absorbed modes on the wheel link"
+    say "· drift shapes: $cwz wildcard-zero, $cfm failure-mask, $cpir print-in-report, $cwf wildcard-fabricates, $cur underscore-retain, $cfi flag-as-int — the absorbed modes on the wheel link"
     if [[ -n "$wzmax" && "$cwz" -gt "$wzmax" ]]; then
       say "✗ drift-shape RATCHET: wildcard-zero rose $wzmax -> $cwz — a new masked case; enumerate the variant or document the sentinel."
       fail=1
@@ -272,6 +274,10 @@ if C=$(wt_m2_ensure); then
     fi
     if [[ -n "$urmax" && "$cur" -gt "$urmax" ]]; then
       say "✗ drift-shape RATCHET: underscore-retain rose $urmax -> $cur — an unused value renamed instead of deleted."
+      fail=1
+    fi
+    if [[ -n "$fimax" && "$cfi" -gt "$fimax" ]]; then
+      say "✗ drift-shape RATCHET: flag-as-int rose $fimax -> $cfi — an int-coded flag; the ADT is begging to exist."
       fail=1
     fi
   fi

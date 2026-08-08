@@ -646,6 +646,13 @@ wildcard_fabricates_max: 21
 # application).
 underscore_retain_max: 0
 
+# 2026-08-08 (the sixth shape): flag-as-int — a BEq compare of
+# mode/token_kind/scheme_kind against an int literal, either operand
+# order — BORN AT ZERO on the wheel link (pin c7cf09a15a00's fresh m2).
+# Seen RED at -1 before this floor. The three mode-8 bash rows retire in
+# the same commit (the mode-33 precedent, sixth application).
+flag_as_int_max: 0
+
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
 # header; no registry here (a `micro:NAME=EXIT` list once documented below

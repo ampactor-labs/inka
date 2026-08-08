@@ -1968,10 +1968,12 @@ new DEP found; the map below is accurate at that pin.)*
   RED at 20) with the four typed rows retired — mode 10 is WHOLE in the
   medium. Mode 15 (underscore-retain) followed as the FIFTH shape (pin
   54bf749eab9f — roster fourteen, tier a quint), BORN AT ZERO on the
-  wheel link, its row retired. The remaining bash rows are naming/prose
-  modes (the raw channel's own domain) plus the structural stragglers
-  (mode 8's flag-as-int compares, mode 1/2/7's shape rows), absorbed as
-  their shapes prove out. Its unsayability face
+  wheel link, its row retired; mode 8 (flag-as-int, three rows one
+  shape) as the SIXTH (pin c7cf09a15a00 — roster fifteen, tier a sext),
+  also born at zero, either operand order where the regexes saw one.
+  The remaining bash rows are naming/prose modes (the raw channel's own
+  domain) plus the structural stragglers (modes 1/2/7's shape rows),
+  absorbed as their shapes prove out. Its unsayability face
   matures through Phase 8's diagnostics; its arrival is when a wrong move
   in the wheel's own source is a REFUSAL, not a review finding.
 

@@ -35,6 +35,18 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE SIXTH DRIFT SHAPE (pin c7cf09a15a00 — CLEAN
+  m2 == m3, census 0): mode 8's flag-as-int absorbs as CsFlagAsInt —
+  a BEq whose one operand is VarRef mode/token_kind/scheme_kind and
+  whose other is an int literal, either order (the int-coded state an
+  ADT is begging to replace; the three TSV rows were one shape).
+  Census roster fifteen, audit tier a sext, fi_site specimen at
+  mn-census-verbs:34. RED banked pre-march (unknown query on the old
+  generation). The wheel link measures ZERO flag compares —
+  flag_as_int_max born at the floor, the three mode-8 rows retired in
+  the same landing (the mode-33 precedent, sixth application). Cost:
+  16.90s wall, 2327MB peak.
+
 - 2026-08-08 · ▶▶▶ THE FIFTH DRIFT SHAPE (pin 54bf749eab9f — CLEAN
   m2 == m3, census 0): mode 15's underscore-retain absorbs as
   CsUnderscoreRetain — a LetStmt whose binder is a PVar opening with

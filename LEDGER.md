@@ -35,6 +35,20 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE PRUNE KEEPS FN-TYPED LINKS (pin 26490a437a55 —
+  CLEAN m2 == m3, census 0): layer two of the
+  under-publish peer. edges_keep_completion dispatches through
+  edge_row_of; the prune's own comment ("a bound edge is a content
+  link — KEPT") now holds for both row-bearing shapes. The
+  acceptance STILL refuses (neg solo Pure, movers 451) — the
+  conjunction has a layer the trace reconstruction did not reach,
+  and the SCOPE GUARD fires: the dig returns to
+  Hβ.infer.forward-hof-row-underpublish's own arc with the
+  finalize-input print banked as its next probe; the loop returns
+  to §11 phase order. Three verdicts stand from this dig: the floor
+  cut refuted-and-reverted, the readers landed on live-path merit,
+  the prune keep landed on comment-truth merit.
+
 - 2026-08-07 · ▶▶▶ THE ROW READERS CROSS THE SORT (pin 7343ed3f4aeb —
   CLEAN m2 == m3, census 0, micros green): layer one of the
   under-publish peer's forced fix. edge_row_of (types.mn) is the one

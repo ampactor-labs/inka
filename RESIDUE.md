@@ -2923,6 +2923,26 @@ prune the residue) — one site, inf_exit_fn's
 row_keep_completion input; acceptance unchanged and now expected
 to bite: neg's solo four, the sl-caller shapes healing, movers
 moving with justification.
+LAYER TWO LANDED, ACCEPTANCE STILL REFUSED, SCOPE GUARD FIRED
+(2026-08-07, pin 26490a437a55): edges_keep_completion now
+dispatches through edge_row_of (the prune's own comment made
+true for the fn-typed shape), marched CLEAN — and neg's solo
+query STILL answers Pure with movers still 451. The conjunction
+has a layer the write-trace reconstruction did not reach:
+readers fold fn-typed edges (layer 1), the prune keeps them
+(layer 2), yet the finalize still stores empty — so either the
+frame's row never HOLDS the fn-typed edge on the solo path (the
+charge writes something else than the reconstruction assumed),
+or the fold's content is empty at fold time (the param cell
+bound AFTER neg's finalize?), or the query's render path reads a
+different surface than the finalize wrote. THE NEXT PROBE,
+banked for this peer's own arc: the finalize-INPUT print on the
+CURRENT wheel — eprint at inf_exit_fn (pre-prune frame row: its
+presents and each edge with its chased kind) for the specimen,
+one probe compiler, one run; the layer that lies is then read
+directly. Per the stall discipline the loop RETURNS TO §11 PHASE
+ORDER; this peer proceeds as its own item with the probe recipe
+standing.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

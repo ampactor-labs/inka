@@ -757,16 +757,25 @@ fn row_keep_completion(row, ceiling: Int, sig_keep: [Int]) with !Mutate = if cei
 fn edges_keep_completion(ref vs: [Int], ceiling: Int, sig_keep: [Int]) with !Mutate = match vs {
   [] => [],
   [v, ...rest] => match graph_chase(v) {
-    GNode(NRowBound(_), _) => [v] ++ edges_keep_completion(rest, ceiling, sig_keep),
-    _ => {
-      let r = graph_chase_handle(v)
-      if r < ceiling {
-        [v] ++ edges_keep_completion(rest, ceiling, sig_keep)
-      } else if any((k) => k == r, sig_keep) {
-        [v] ++ edges_keep_completion(rest, ceiling, sig_keep)
-      } else {
-        edges_keep_completion(rest, ceiling, sig_keep)
-      }
+    GNode(kind, _) => // "A bound edge is a content link — KEPT (reads fold it)" holds for
+    // BOTH row-bearing bindings (edge_row_of, the one projection): a row
+    // cell, and a cell bound to a FUNCTION type — the caller's freshened
+    // HOF param, bound by the argument, whose row the finalize fold now
+    // reads. The NRowBound-only keep dropped the fn-typed link as an
+    // above-ceiling transient, and the callee's effects died with it
+    // (the under-publish peer's layer two).
+    match edge_row_of(kind) {
+      Some(_) => [v] ++ edges_keep_completion(rest, ceiling, sig_keep),
+      None => {
+        let r = graph_chase_handle(v)
+        if r < ceiling {
+          [v] ++ edges_keep_completion(rest, ceiling, sig_keep)
+        } else if any((k) => k == r, sig_keep) {
+          [v] ++ edges_keep_completion(rest, ceiling, sig_keep)
+        } else {
+          edges_keep_completion(rest, ceiling, sig_keep)
+        }
+      },
     },
   },
 }

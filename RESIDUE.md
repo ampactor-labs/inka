@@ -355,10 +355,13 @@ arm's inline body-lowering deleted into project_lambda_fn) AND
 THE NESTED KIND (same day, pin ae471c6b7fc1 — project_nested_fn
 takes the FnStmt construction whole; fn_name/bind_h explicit
 arguments, bind_h's column home the stamped dispatch-tier
-column). The remaining kinds (thunk, arm, k, partial) swap by
-the same move, each marched; (γ)'s ShowExpr half is its own
-follow-up; the march census-gap fix rides the next
-board-hardening landing. The
+column). THE THUNK PAIR (pin eae3f3559a0e): project_thunk_fn, ONE
+construction for both fanout shapes, share-vs-distribute an
+Option — the per-site family deleted, the boundary-row read
+hoisted ahead of body lowering. The remaining kinds (arm, k,
+partial) swap by the same move, each marched; (γ)'s ShowExpr
+half is its own follow-up; the march census-gap fix rides the
+next board-hardening landing. The
 remaining (i)
 columns land by the same pattern as their swaps demand them;
 (ii) the projection bodies

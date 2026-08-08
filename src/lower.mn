@@ -922,6 +922,29 @@ fn project_nested_fn(origin, fn_name, bind_h, cap_pairs) = match graph_node_body
   _ => None,
 }
 
+// The thunk body projector (landing shape α, third move — and the
+// uniform pass over the fanout pair): ONE construction for both thunk
+// shapes, the share-vs-distribute discriminator an Option —
+// Some(input_h) is the `<|` diverge (the branch APPLIED to the shared
+// input riding capture slot 0), None the `><` branch (the branch
+// evaluated as its own value). The per-site family collapses; the
+// sites keep the boundary destructure and the capture machinery that
+// feed the columns.
+fn project_thunk_fn(thunk_name, thunk_row, cap_pairs, branch_node, result_h, carrier_h, shared_input) = {
+  let cap_names = map(((n, _)) => n, cap_pairs)
+  let cap_handles = map(((_, h)) => h, cap_pairs)
+  ls_enter_frame("", [], [], cap_names, cap_handles, -1)
+  lower_frame_fence_push()
+  let inner = match shared_input {
+    Some(input_h) => lower_call_default(result_h, branch_node, node_handle(branch_node), [LUpval(input_h, 0)]),
+    None => lower_expr(branch_node),
+  }
+  let lo_body = k2_guard(LMakeTuple(carrier_h, [inner]))
+  lower_frame_fence_pop()
+  ls_exit_frame()
+  LFn(thunk_name, 0, [], [lo_body], thunk_row, len(cap_pairs))
+}
+
 fn lower_call_partial(handle, fbody, fh, r_args, n_ps) = match partial_callee_form(handle, fbody, fh) {
   None => LInvariantFailure(handle, PartialCalleeShape(fh)),
   Some(form) => {
@@ -2863,15 +2886,6 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
                 let captures_names = [input_local_name] ++ b_names
                 let captures_exprs = [LLocal(input_h, input_local_name)] ++ b_exprs
                 let captures_handles = [input_h] ++ b_handles
-                ls_enter_frame("", [], [], captures_names, captures_handles, -1)
-                lower_frame_fence_push()
-                // This is an ordinary call projected from an implicit application edge.
-                // Reuse the normal call lowering so every stage takes the bare-call
-                // path; result_h is the application output infer minted.
-                let branch_value = lower_call_default(result_h, branch_node, branch_h, [LUpval(input_h, 0)])
-                let thunk_body = k2_guard(LMakeTuple(carrier_h, [branch_value]))
-                lower_frame_fence_pop()
-                ls_exit_frame()
                 match executable_boundary_row(thunk_h) {
                   Ok(thunk_row) => {
                     graph_emitfn_note(
@@ -2881,10 +2895,21 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
                       len(captures_exprs),
                       zip(captures_names, captures_handles)
                     )
-                    let fn_ir = LFn(thunk_name, 0, [], [thunk_body], thunk_row, len(captures_exprs))
-                    // A `<|` branch that performs a STATEFUL effect (verify_pending_at →
-                    // Verify, teach_gradient → Teach) dispatches through the live world
-                    // chain exactly as a real lambda does — no thunk-local evidence.
+                    // THE DIRECT SWAP (α, the fanout pair's one projector):
+                    // Some(input_h) = the `<|` share — the branch applied to
+                    // the input riding capture slot 0 through the normal call
+                    // lowering. A `<|` branch that performs a STATEFUL effect
+                    // dispatches through the live world chain exactly as a
+                    // real lambda does — no thunk-local evidence.
+                    let fn_ir = project_thunk_fn(
+                      thunk_name,
+                      thunk_row,
+                      zip(captures_names, captures_handles),
+                      branch_node,
+                      result_h,
+                      carrier_h,
+                      Some(input_h)
+                    )
                     ScheduledBoundary(
                       LMakeClosure(thunk_h, fn_ir, captures_exprs),
                       result_h,
@@ -2923,42 +2948,38 @@ fn synthesize_branch_thunk(parent_handle, side_label: String, branch_node, bound
         let thunk_name = "compose_{side_label}_{int_to_str(parent_handle)}"
         let free_names = collect_free_vars(branch_node, [])
         match resolve_captures_outer(free_names, parent_handle) {
-          (captures_names, captures_exprs, captures_handles) => {
-            // Synthetic parallel-thunk: empty fn_name; not a named fn declaration; not a
-            // lambda (lambda_h = -1 → ev READ falls through to the named-fn/block path).
-            ls_enter_frame("", [], [], captures_names, captures_handles, -1)
-            lower_frame_fence_push()
-            let lo_body = k2_guard(LMakeTuple(carrier_h, [lower_expr(branch_node)]))
-            lower_frame_fence_pop()
-            ls_exit_frame()
-            match executable_boundary_row(thunk_h) {
-              Ok(thunk_row) => {
-                graph_emitfn_note(
-                  EfkThunk,
-                  thunk_h,
-                  thunk_name,
-                  len(captures_exprs),
-                  zip(captures_names, captures_handles)
-                )
-                let fn_ir = LFn(
-                  thunk_name,
-                  0,
-                  [],
-                  [lo_body],
-                  thunk_row,
-                  // closure fence = capture count
-                  len(captures_exprs)
-                )
-                ScheduledBoundary(
-                  LMakeClosure(thunk_h, fn_ir, captures_exprs),
-                  result_h,
-                  carrier_h,
-                  thread_ticket_h,
-                  persist_ticket_h
-                )
-              },
-              Err(invariant) => InvalidScheduledBoundary(thunk_h, invariant),
-            }
+          (captures_names, captures_exprs, captures_handles) => match executable_boundary_row(thunk_h) {
+            Ok(thunk_row) => {
+              graph_emitfn_note(
+                EfkThunk,
+                thunk_h,
+                thunk_name,
+                len(captures_exprs),
+                zip(captures_names, captures_handles)
+              )
+              // THE DIRECT SWAP (α, the fanout pair's one projector):
+              // None = the `><` distribute — the branch evaluated as its
+              // own value. Synthetic parallel-thunk: empty fn_name, not a
+              // lambda (frame -1 → ev READ falls through to the
+              // named-fn/block path).
+              let fn_ir = project_thunk_fn(
+                thunk_name,
+                thunk_row,
+                zip(captures_names, captures_handles),
+                branch_node,
+                result_h,
+                carrier_h,
+                None
+              )
+              ScheduledBoundary(
+                LMakeClosure(thunk_h, fn_ir, captures_exprs),
+                result_h,
+                carrier_h,
+                thread_ticket_h,
+                persist_ticket_h
+              )
+            },
+            Err(invariant) => InvalidScheduledBoundary(thunk_h, invariant),
           },
         }
       },

@@ -35,6 +35,19 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE FANOUT PAIR SHARES ONE PROJECTOR (pin eae3f3559a0e —
+  CLEAN m2 == m3, census 0): α's third move doubles as the uniform
+  pass — project_thunk_fn is the one thunk construction for both
+  fanout shapes, the share-vs-distribute discriminator an Option
+  (Some(input_h) applies the branch to the `<|` shared input riding
+  capture slot 0; None evaluates the `><` branch as its own value).
+  The per-site family (synthesize_diverge_thunks' inline body +
+  synthesize_branch_thunk's) deletes into it; the boundary-row read
+  moves ahead of body lowering, so the Err path no longer lowers a
+  body it discards (fewer side-effect notes on refusal, Ok-path mint
+  sequence unchanged). CLEAN one generation apart is the
+  output-preservation proof.
+
 - 2026-08-08 · ▶▶▶ THE NESTED FN BUILDS FROM THE COLUMNS (pin ae471c6b7fc1 —
   CLEAN m2 == m3, census 0): α's second kind, the FnStmt construction
   deleted into project_nested_fn — the resume-binding context (bank

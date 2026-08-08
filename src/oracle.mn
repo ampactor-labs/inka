@@ -191,7 +191,7 @@ handler project_queue_merger with last_epoch = -1, projected = [] {
 // the graph epoch IS the cache. The e-graph supplies the TStyle-tier
 // equivalences (topology nudges) effect-awarely via egraph.mn.
 fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Alloc + EnvRead =
-  positions_with_dependents() |> map((pos) => candidates_at(pos)) |> flatten |> sort_by_priority
+  decl_handles() |> map((pos) => candidates_at(pos)) |> flatten |> sort_by_priority
 
 // candidates_at — every proven Annotation at one position becomes a
 // QueueItem. Reuses mentl.mn's try_each_annotation (the working
@@ -417,30 +417,15 @@ fn locality_at(span_index, pos) with Pure = match span_index {
   [(span, h), ...t] => if h == pos { span_start(span) } else { locality_at(t, pos) },
 }
 
-// ─── positions_with_dependents — the live scope of exploration ───────
+// The proposer's scope is the decls column's projection (decl_handles,
+// query.mn — one home, two readers: this seed and the "decls" facet).
+// The candidate enumeration is decl-shaped by construction
+// (gradient_candidates_at's TFun arm over the decl's
+// with-clause/ownership surface); the former whole-handle NBound walk
+// also seeded every fn-typed MENTION — each re-enumerating its decl's
+// own candidate set, N copies interleaved in the queue — and lambdas,
+// which have no annotation surface.
 //
-// positions_with_dependents — every NBound position the proposer should
-// explore, read live from the program weave. A position with at least
-// one dependent edge is worth a candidate (a change there ripples). The
-// scope is the graph's own structure (PLAN §2 Q-2 (B)), never a stored
-// position list.
-fn positions_with_dependents() with GraphRead + Alloc + Memory =
-  collect_bound_positions(0, graph_next(), [])
-
-fn collect_bound_positions(h, bound, acc) with GraphRead + Memory + Alloc = if h >= bound {
-  acc
-} else {
-  match graph_chase(h) {
-    GNode(kind, _) => {
-      let next_acc = match kind {
-        NBound(_) => push(acc, h),
-        _ => acc,
-      }
-      collect_bound_positions(h + 1, bound, next_acc)
-    },
-  }
-}
-
 // ─── oracle_ic_fixpoint — the `<~` build loop (Iterate-class IC) ─────
 //
 // oracle_ic_fixpoint — the `<~` feedback loop closing on queue

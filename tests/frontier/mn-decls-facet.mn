@@ -1,0 +1,11 @@
+// The decls-column facet's fixture (the bound-projection stamp's gate):
+// three fn decls, with `twice` and `main` MENTIONING `inc` — under the
+// retired whole-handle NBound walk every fn-typed mention seeded the
+// queue alongside its decl (N copies of one decl's candidates); the
+// decls column seeds exactly the judged decls. The frontier leg queries
+// "decls" and asserts each decl line is listed and no mention line is.
+fn inc(x) = x + 1
+
+fn twice(x) = inc(inc(x))
+
+fn main() = twice(20)

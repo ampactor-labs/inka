@@ -860,7 +860,7 @@ fn focus_reason(target) with Memory + Alloc = match target {
 // Verify-tentacle (refinement obligations). H6 exhaustive over
 // Question's 15 variants via pattern alternation per SYNTAX.md L956.
 fn tentacle_for_question(question) with Memory + Alloc = match question {
-  QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QWhere(_) | QUnknown(_) => TentQuery,
+  QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QDecls | QWhere(_) | QUnknown(_) => TentQuery,
   QOwnership(_) => TentTrace,
   QWhy(_) | QSubstChain(_) => TentWhy,
   QVerifyDebt => TentVerify,
@@ -872,7 +872,7 @@ fn tentacle_for_question(question) with Memory + Alloc = match question {
 // exhaustive over Question via pattern alternation.
 fn question_span(question) with Memory + Alloc = match question {
   QTypeAt(s) => s,
-  QTypeOf(_) | QIntentOf(_) | QUnresolved | QSubstChain(_) | QEffects(_) | QOwnership(_) | QWhy(_) | QRefsOf(_) | QVerifyDebt | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QWhere(_) | QUnknown(_) => span_zero(),
+  QTypeOf(_) | QIntentOf(_) | QUnresolved | QSubstChain(_) | QEffects(_) | QOwnership(_) | QWhy(_) | QRefsOf(_) | QVerifyDebt | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QDecls | QWhere(_) | QUnknown(_) => span_zero(),
 }
 
 // compose_propose_situation — sparse Situation for a propose gesture.
@@ -922,7 +922,7 @@ fn compose_propose_situation(target_handle, target_reason, prior_turn) with Memo
 // payload, so they project to AnsSilence — the honest "no provable hover here"
 // rather than a fabricated Reason. QRError → AnsSilence: an ill-posed or
 // unprovable question is a valid Silence (voice.mn:265). H6 exhaustive over
-// QueryResult's 14 variants — no wildcard.
+// QueryResult's 15 variants — no wildcard.
 fn query_result_to_answer(result) with Memory + Alloc = match result {
   QRType(ty, reason) => AnsType(ty, reason),
   QRWhy(reason) => AnsReason(reason),
@@ -932,6 +932,8 @@ fn query_result_to_answer(result) with Memory + Alloc = match result {
   // shape refs-of carries, so it rides AnsRefs (the §7 registry-trap
   // rule: computed, never dropped to Silence).
   AnsRefs(spans, Inferred("census: {int_to_str(len(spans))} {label}")),
+  QRDecls(spans) => // The decls column's sites ride AnsRefs like the census.
+  AnsRefs(spans, Inferred("decls: {int_to_str(len(spans))} judged decl(s)")),
   QRWhere(_, sites) => // The where badges' site list rides AnsRefs like the census; the
   // badge lines render at the CLI (the terminal projection's home).
   AnsRefs(site_spans(sites), Inferred("where: {int_to_str(len(sites))} fanout site(s)")),

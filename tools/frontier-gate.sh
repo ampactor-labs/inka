@@ -2343,6 +2343,19 @@ for i in "${!compilers[@]}"; do
     fail "pipe into len (diagnostics on a correct stage: $pil_diags; see $pil_err)"
   fi
 
+  # ─── The decls facet (the bound-projection landing's gate) ──────────
+  # `query <fixture> "decls"` projects the decls COLUMN — the oracle
+  # queue's own seed set. Born RED 2026-08-07: the incumbent boot
+  # answered "error: unknown query: decls". The fixture's three decls
+  # (lines 7/9/11) must be listed located; the retired whole-handle
+  # NBound walk seeded every fn-typed MENTION alongside its decl.
+  df_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-decls-facet.mn" "decls" 2>/dev/null)
+  if printf '%s' "$df_out" | grep -q "judged decl" && printf '%s' "$df_out" | grep -q "mn-decls-facet:7" && printf '%s' "$df_out" | grep -q "mn-decls-facet:9" && printf '%s' "$df_out" | grep -q "mn-decls-facet:11"; then
+    pass "decls facet: the column lists the fixture's three decls (7/9/11)"
+  else
+    fail "decls facet (column projection; got: $(printf '%s' "$df_out" | tail -1))"
+  fi
+
   # ─── The per-module solo sweep (PLAN §11 Phase 3.5, ratcheted) ──────
   # E_MissingVariable across every src module's SOLO check, ceiling in
   # verify-baseline (solo_violations_max — monotone DOWN; 0 retires the

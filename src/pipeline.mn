@@ -1120,6 +1120,9 @@ fn render_query_result(result) = match result {
   },
   QRFlowLabel(label, reason) => "→ {show_flow_label(label)}\n  Reason: {show_reason(reason)}",
   QRCensus(label, spans) => "→ {int_to_str(len(spans))} {label}{render_ref_spans(spans)}",
+  QRDecls(spans) => // The decls column's projection — the oracle queue's own seed set,
+  // rendered located so the seed is inspectable at the CLI.
+  "→ {int_to_str(len(spans))} judged decl(s){render_ref_spans(spans)}",
   QRWhere(lines, sites) => "→ {str_join_lines(lines)}{render_where_sites(sites)}",
   QRError(msg) => "error: {msg}",
 }
@@ -1162,6 +1165,7 @@ type QueryVerb
   | QVFlow
   | QVCensus
   | QVWhere
+  | QVDecls
   | QVUnknownVerb
 
 fn classify_query_verb(w: String) with Pure = if w == "type" {
@@ -1186,6 +1190,8 @@ fn classify_query_verb(w: String) with Pure = if w == "type" {
   QVCensus
 } else if w == "where" {
   QVWhere
+} else if w == "decls" {
+  QVDecls
 } else {
   QVUnknownVerb
 }
@@ -1221,6 +1227,7 @@ fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
     None => QUnknown(raw),
   },
   QVWhere => QWhere(arg),
+  QVDecls => QDecls,
   QVUnknownVerb => QUnknown(raw),
 }
 

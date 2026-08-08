@@ -1754,6 +1754,7 @@ effect GraphRead {
   // graph VarRef scan and the oracle's quadratic count_dependents both
   // retire onto this O(bucket) read.
   graph_refs_at(String) -> [Int]
+  graph_decls_at() -> [Int]
 }
 
 effect GraphWrite {
@@ -1788,6 +1789,11 @@ effect GraphWrite {
   // handle) into the smap column, O(1) prepend per reference. The read
   // face is graph_refs_at; three whole-graph scans retire onto the pair.
   graph_ref_note(String, Int)
+  // The decls column — the refs column's sibling at decl granularity:
+  // the FnStmt judgment notes its own node handle; the read face is
+  // graph_decls_at (the oracle queue's seed). Judgment rounds re-note,
+  // so readers dedup by handle.
+  graph_decl_note(Int)
   // The deterministic handle partition (the planned mint): the final pass
   // pre-assigns each stmt a dense range of handles sized by the trial's
   // measured mint counts, so numbering is a pure function of the source —

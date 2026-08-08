@@ -1545,6 +1545,19 @@ landing's leg observes the queue through voice's projection
 seed count == decl count, seen RED against the incumbent boot
 (mention-inflated count). Then positions_with_dependents' lying
 name dies with the walk and this peer closes.
+BUILT AND CLOSED (2026-08-07, pin 3f727449e9d5 — the LEDGER's THE
+DECLS COLUMN SEEDS THE QUEUE): the column landed per the stamp with
+one gate substitution, recorded honestly — voice's queue projection
+has no CLI reach (teach reads per-fn gradients, the queue lives in
+the space/eight-loop narration), so the observable became the
+"decls" QUERY FACET reading the same decl_handles projection the
+queue seeds from (one home, two readers — a strictly closer read
+than narration would have been). Born RED on the incumbent
+("error: unknown query: decls"); the frontier leg pins the
+fixture's three decls at 7/9/11. THIS PEER IS CLOSED — its three
+re-derivers are gone (refs scan, dependents walk, bound-cell walk),
+its columns live (refs, decls), its readers migrated
+(refs_of_name, surface_area_at, project_queue's seed).
 
 `Hβ.audit.capability-carries-its-evidence` — the severance teaching's
 remainder (named 2026-07-30 with the vocabulary's graph read). The

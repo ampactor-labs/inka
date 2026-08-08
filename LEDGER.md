@@ -35,6 +35,29 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE DECLS COLUMN SEEDS THE QUEUE (pin 2403d0f8f32c —
+  CLEAN m2 == m3, census 0, peak 2,340,996 KB inside ceiling; the
+  landing's first form breached the eta and quiet ratchets and was
+  taught by them — the facet's map lambda became the bare name, the
+  projection fns' authored refs dropped for the inferred grade, and
+  the intermediate uncommitted pin collapsed into this one): the
+  bound-projection stamp built whole, and the reverse-edge peer
+  CLOSES. The column: graph_decl_note / graph_decls_at over decls_col
+  (the refs column's sibling — append-only, not trail-backed), the
+  one writer infer_fn's entry, ~one note per decl per judgment round.
+  The projection decl_handles lives in query.mn (one home, two
+  readers: the oracle queue's seed and the new "decls" facet), and
+  the whole-handle NBound walk (collect_bound_positions) deletes. The
+  queue repair, named: the old walk seeded every fn-typed MENTION —
+  each re-enumerating its decl's own candidate set, N copies
+  interleaved — and lambdas, which have no annotation surface; the
+  column seeds judged decls only. The GATE: the "decls" facet born
+  RED on the incumbent boot ("error: unknown query: decls"), green
+  through this pin (tests/frontier/mn-decls-facet.mn's three decls
+  listed at lines 7/9/11), pinned by the new frontier leg. The
+  self-build ratchet counts one verb facet grown (decls), one scan
+  deleted, one lying name retired (positions_with_dependents).
+
 - 2026-08-07 · ▶▶▶ THE ORACLE READS THE COLUMN (pin 00a91c85efcd —
   CLEAN m2 == m3, census 0, wheel −15 lines, emit −101): the
   reverse-edge peer's second reader. The probe-first law earned its

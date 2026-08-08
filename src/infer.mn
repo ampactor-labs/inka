@@ -2554,6 +2554,9 @@ fn infer_stmt(ref node) = match node {
 // bind them in env, enter `InferCtx` for row accumulation, infer body,
 // exit (which binds the row), generalize, re-extend env with scheme.
 fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
+  // The decls column's one writer: the FnStmt node handle, noted per
+  // judgment (rounds re-note; readers dedup by handle).
+  graph_decl_note(handle)
   env_scope_enter()
   let param_handles = mint_params(params, name)
   let ret_handle = mint(FnReturn(name, Inferred("return of '{name}'")))

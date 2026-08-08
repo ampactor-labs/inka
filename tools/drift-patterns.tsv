@@ -48,7 +48,11 @@
 25	OOP drift (new/self/this/super)	\b(new\s+\w+\s*\(|self\.\w|this\.\w|super\.\w)	ka	Mentl has no classes. `new`/`self`/`this` are OOP drift. Anchored to `\w` after the dot to avoid false positives on prose "this."/"self." with sentence breaks.
 #
 # --- Mentl-native shape violations (residue discipline) ---
-30	Imperative-loop-where-verb-exists (for/while)	^\s*(for|while)\s	ka	Loops are rarely the Mentl shape. Use |> transforms or <~ feedback. If truly needed, justify in a comment and suppress.
+# --- Mode 30: RETIRED (2026-08-08) — the compiler refuses the shape ---
+# for/while/loop/break/continue/return meet E_NotAKeyword at parse (probed
+# live: `for x in xs` and `return x` both refuse with the teaching Quick
+# Fix). A bash row policing a compiler-refused shape is a second, weaker
+# copy of an armed diagnostic.
 31	Tuple-return-where-record-fits (multi-arg with _h suffix)	->\s*\([^)]*_h[^)]*,	ka	Anchor 6 + H1.3: if components carry _h suffix, reach for a record.
 32	Handler-as-function-argument (plain env param)	\(\s*env\s*:\s*\w+|\bctx\.env\.	ka	Env is effect-mediated — the bare op call `env_lookup(name)` — not a function parameter.
 # --- Mode 33: RETIRED (2026-07-30) — absorbed into `mentl audit` ---
@@ -61,10 +65,11 @@
 # is the check.
 #
 # --- ΣU drift patterns (amendments A-R; SYNTAX.md) ---
-36	ΣU drift (lambda fence)	\|[a-z_][a-z_0-9]*\s*\|	ka	Amendment A. Canonical: (params) => body. `|x|` pipe-fence is not Mentl syntax.
-36	ΣU drift (lambda fence multi-param)	\|[a-z_][a-z_0-9]*\s*,	ka	Amendment A. `|a, b|` form is drift. Use (a, b) => body.
-36	ΣU drift (imperative control keyword)	^[^/]*\b(for|while|loop|break|continue|return)\b	ka	Amendment J. Iteration: |> / <~ / Iterate. Early-exit: Abort effect. (Fires on code lines; comment-only lines excluded by ^[^/]* prefix.)
-36	ΣU drift (redundant fn on lambda)	\bfn\s+\(	ka	Amendment R. `fn (x) =>` drift. Canonical: (x) => — `fn` keyword reserved for named declarations only.
+# --- Mode 36's fence/keyword/fn-lambda rows: RETIRED (2026-08-08) ---
+# Each policed a shape the compiler now refuses with an armed teaching
+# diagnostic, probed live: `|x|` → E_LambdaFence, imperative keywords →
+# E_NotAKeyword, `fn (x) =>` → E_RedundantFnOnLambda. The rows below
+# survive because their shapes still PARSE (style, not refusal).
 36	ΣU drift (resume(()) residue)	\bresume\s*\(\s*\(\s*\)\s*\)	ka	Amendment I. Canonical: resume() — Parameters-ARE-Tuples + No-Redundant-Form.
 36	ΣU regression (pub/priv visibility drift)	^\s*(pub|priv)\s+(fn|type|effect|handler|let)\b	ka	Amendment Q. Visibility via capability effects, not modifier keywords.
 #

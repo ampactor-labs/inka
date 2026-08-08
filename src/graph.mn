@@ -678,11 +678,11 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
     spine_put_bind(spine, use_handle, bh)
     resume()
   },
-  graph_emitfn_note(kind, origin, fn_name, fence) => // The emittable-fn
+  graph_emitfn_note(kind, origin, fn_name, fence, caps) => // The emittable-fn
   // enumeration (the no-mint resolution): one append per synthesized-fn
   // construction, in lower's deterministic walk order. Non-trailed by
   // the decls contract; the step-iii reader filters by the reach set.
-  resume() with emitfns_col = push(emitfns_col, (kind, origin, fn_name, fence)),
+  resume() with emitfns_col = push(emitfns_col, (kind, origin, fn_name, fence, caps)),
   graph_branch_seed() => resume((spine, spine_open, span_index)),
   graph_rollback(target_idx) => {
     let n = len(checkpoint_stack)

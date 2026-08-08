@@ -1856,12 +1856,18 @@ effect GraphWrite {
   graph_bind_note(Int, BindHome)
   // The emittable-fn enumeration's write (the no-mint resolution):
   // each of lower's seven LFn construction sites notes (kind, origin
-  // handle, deterministic name, fence) at the moment those facts are
-  // final. Append-only, non-trailed (the decls contract). The read
-  // face lands with step iii's enumeration-walking emit; its read-side
-  // contract filters by the reach set — lower runs on every decl, emit
-  // does not.
-  graph_emitfn_note(EmitFnKind, Int, String, Int)
+  // handle, deterministic name, fence, captures) at the moment those
+  // facts are final. Captures are (name, binding-time handle) pairs —
+  // the outer-frame reads a body projection re-derives through the
+  // enclosing entry's own layout; the PARTIAL and ARM kinds pass []
+  // because their capture sets are program-live (the partial's are
+  // the call node's own args; the arm's are the handler record's
+  // state/config fields, read via __state by the fence contract).
+  // Append-only, non-trailed (the decls contract). The read face
+  // lands with step iii's enumeration-walking emit; its read-side
+  // contract filters by the reach set — lower runs on every decl,
+  // emit does not.
+  graph_emitfn_note(EmitFnKind, Int, String, Int, [(String, Int)])
   // The deterministic handle partition (the planned mint): the final pass
   // pre-assigns each stmt a dense range of handles sized by the trial's
   // measured mint counts, so numbering is a pure function of the source —

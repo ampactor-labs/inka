@@ -35,6 +35,21 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE ENTRY CARRIES ITS CAPTURES (pin ccaacb70b5d4 —
+  CLEAN m2 == m3, census 0): the enumeration entry's fifth field —
+  (name, binding-time handle) pairs zipped from
+  resolve_captures_outer's parallel triple at the five lexical sites
+  (lambda, diverge thunk, branch thunk, nested fn, k); the partial
+  and arm pass [] with the reason banked in the op decl (their
+  capture sets are program-live — the call node's args, the handler
+  record's fields). This closes body projection's last frame-state
+  dependency: a projection re-derives each capture's read through
+  the ENCLOSING entry's own layout, so the lexical-frame stack —
+  lower's walk state, never a column — stops being needed at emit.
+  The de-parallelized pair form is deliberate: the triple's
+  parallel-arrays shape (drift 7, named in its own return comment)
+  does not propagate into the column.
+
 - 2026-08-08 · ▶▶▶ THE EMITTABLE-FN ENUMERATION LANDS (pin 1055e8e5093b —
   CLEAN m2 == m3, census 0, peak 2,375,716 KB inside the ceiling): the
   no-mint resolution's vocabulary, dual-written. EmitFnKind's six

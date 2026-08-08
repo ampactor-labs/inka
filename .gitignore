@@ -42,3 +42,4 @@ art/
 # Local Codex artifact
 .codex
 __pycache__/
+.heavy-lock

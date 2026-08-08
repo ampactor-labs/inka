@@ -1,0 +1,11 @@
+// CROWN modal (§11 6.3's crucible sweep): MASK COMPOSITION — nested
+// installs of the SAME effect. The inner absorbs, the outer decl's !E
+// holds, and dispatch picks the INNERMOST (measured: runs 1, h1's
+// answer — the mn-escape-innermost law at the static-nesting shape).
+// Expect NO E_EffectMismatch.
+effect E { op() -> Int }
+handler h1 { op() => resume(1) }
+handler h2 { op() => resume(2) }
+fn work() = op()
+fn f() with !E = ((work()) ~> h1) ~> h2
+fn main() = f()

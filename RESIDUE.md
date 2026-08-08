@@ -408,7 +408,15 @@ lower.mn:145) — so per-decl lower_stmt calls are independent
 given the pre-passes; (2) reachable_from_main becomes the
 worklist driver keyed by the enumeration — construct main's
 decl, collect references from the CONSTRUCTED body, construct
-those, iterate; (3) executable_gate re-roots on per-entry
+those, iterate — SIZED 2026-08-08 as a DEDICATED-ARC build, not
+a loop-lease slice: the BFS construction order reshuffles every
+mint (a whole-wheel TRANSITION), three tree-reading seeds need
+re-rooting (main_param_count, spec_reach_seed, the always-run
+value-let set), and the emitted-fn ORDER decision (source-order
+collection vs demand-order emission) must be taken at the top;
+half-building the spine leaves the tree unmarchable, so the
+landing opens a session with the full design in hand, not a
+timed iteration; (3) executable_gate re-roots on per-entry
 constructed bodies; (4) emit_module's collect_* family becomes
 accumulation at construction; (5) the LowFn/LowExpr handoff
 tree deletes (step iv arrives here). Risk tripwire: the

@@ -1,0 +1,9 @@
+// CROWN modal (§11 6.3's crucible sweep): DOUBLE-HOF threading — the
+// effect crosses two lambda layers (the op inside a lambda, wrapped by
+// wrap's returned thunk) and the enclosing install still absorbs it,
+// so the declared !E holds. Expect NO E_EffectMismatch.
+effect E { op() -> Int }
+handler h { op() => resume(9) }
+fn wrap(g) = () => g()
+fn f() with !E = ((wrap(() => op()))()) ~> h
+fn main() = f()

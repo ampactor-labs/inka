@@ -1,0 +1,9 @@
+// CROWN modal (§11 6.3's crucible sweep): the LATENT/PERFORMED
+// distinction — mk constructs and RETURNS the closure without calling
+// it, so mk's own row is pure and E rides the returned VALUE's row
+// (the crown's flow-edge law). The !E on mk accepts; the escape's
+// refusal lives at the CALL site (leak-escape-negation's shape).
+// Expect NO E_EffectMismatch.
+effect E { op() -> Int }
+fn mk() with !E = () => op()
+fn main() = 0

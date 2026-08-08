@@ -35,6 +35,16 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE PRINT-IN-REPORT SHAPE (pin ba1a7e4ea694 —
+  CLEAN m2 == m3, census 0): the third drift-catalog absorption, and
+  the first CONTEXT-SENSITIVE census shape — mode 16 (a report call
+  whose argument subtree calls print/println/print_string, the
+  WAT-stdout corruption class) becomes CsPrintInReport via a
+  fuel-bounded subtree search over body_child_handles, the weave's
+  own tree edge — reusable machinery for every future context mode.
+  The roster leg grows to twelve; the specimen resolves report/
+  println locally so the shared fixture stays diagnostic-free.
+
 - 2026-08-08 · ▶▶▶ THE FAILURE-MASK SHAPE (pin 0094b2176c8a — CLEAN
   m2 == m3, census 0): the second drift-catalog absorption — mode 13
   (`expr || true`) becomes CsFailureMask, the BOr-with-LitBool(true)

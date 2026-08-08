@@ -37,6 +37,7 @@ type CensusShape
   | CsIterationCostume
   | CsWildcardZero
   | CsFailureMask
+  | CsPrintInReport
 
 // Sum type covering every forensic question `mentl query` can pose.
 // Each variant corresponds to one `ask(Q)` arm in `query_default`.
@@ -418,6 +419,7 @@ fn census_label(shape) with Pure = match shape {
   CsIterationCostume => "iteration-costume fn(s)",
   CsWildcardZero => "wildcard-zero arm(s)",
   CsFailureMask => "failure-mask site(s)",
+  CsPrintInReport => "print-in-report site(s)",
 }
 
 fn census_sites(shape) with GraphRead + !Mutate + Alloc + Memory = match graph_snapshot() {
@@ -508,6 +510,47 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
     },
     _ => false,
   },
+  CsPrintInReport => // Drift mode 16's shape (the third absorption): a `report(...)`
+  // call whose argument subtree calls the print family — the class
+  // that corrupts WAT stdout when diagnostics render mid-emit (§9's
+  // bug list). The subtree search walks the weave's own tree edge
+  // (body_child_handles), fuel-bounded by the arg tree's real depth.
+  match body {
+    NExpr(CallExpr(callee, args)) => match graph_node_body(node_handle(callee)) {
+      NExpr(VarRef(cn)) => if cn == "report" { any_subtree_prints(args, 0, len(args)) } else { false },
+      _ => false,
+    },
+    _ => false,
+  },
+}
+
+fn any_subtree_prints(nodes, i, n) with GraphRead + !Mutate + Alloc + Memory = if i >= n {
+  false
+} else {
+  if subtree_prints(node_handle(list_index(nodes, i)), 64) {
+    true
+  } else {
+    any_subtree_prints(nodes, i + 1, n)
+  }
+}
+
+fn subtree_prints(h, fuel) with GraphRead + !Mutate + Alloc + Memory = if fuel <= 0 {
+  false
+} else {
+  let body = graph_node_body(h)
+  let here = match body {
+    NExpr(CallExpr(callee, _)) => match graph_node_body(node_handle(callee)) {
+      NExpr(VarRef(cn)) => cn == "println" || cn == "print" || cn == "print_string",
+      _ => false,
+    },
+    _ => false,
+  }
+  if here { true } else { subtree_prints_children(body_child_handles(body), fuel - 1) }
+}
+
+fn subtree_prints_children(hs, fuel) with GraphRead + !Mutate + Alloc + Memory = match hs {
+  [] => false,
+  [ch, ...rest] => if subtree_prints(ch, fuel) { true } else { subtree_prints_children(rest, fuel) },
 }
 
 fn any_wildcard_zero(arms, i, n) with Memory + Alloc = if i >= n {

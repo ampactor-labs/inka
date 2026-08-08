@@ -1970,10 +1970,16 @@ new DEP found; the map below is accurate at that pin.)*
   54bf749eab9f — roster fourteen, tier a quint), BORN AT ZERO on the
   wheel link, its row retired; mode 8 (flag-as-int, three rows one
   shape) as the SIXTH (pin c7cf09a15a00 — roster fifteen, tier a sext),
-  also born at zero, either operand order where the regexes saw one.
+  also born at zero, either operand order where the regexes saw one;
+  mode 7's let-tuple as the SEVENTH (pin 74b43c43e00d — roster sixteen,
+  tier a sept), whose dig corrected the anchor to the WEAVE shape (the
+  one-arm match — desugar_block makes LetStmt PVar-only at parse, so
+  the graph shape covers both spellings) and banked
+  `Hβ.query.unreadable-source-refusal` (the census answers a confident
+  zero on an unreadable file — the silent-fallback class at the verb).
   The remaining bash rows are naming/prose modes (the raw channel's own
-  domain) plus the structural stragglers (modes 1/2/7's shape rows),
-  absorbed as their shapes prove out. Its unsayability face
+  domain) plus modes 1/2 and 7's param-adjacency row, absorbed as
+  their shapes prove out. Its unsayability face
   matures through Phase 8's diagnostics; its arrival is when a wrong move
   in the wheel's own source is a REFUSAL, not a review finding.
 

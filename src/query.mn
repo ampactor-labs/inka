@@ -41,6 +41,7 @@ type CensusShape
   | CsWildcardFabricates
   | CsUnderscoreRetain
   | CsFlagAsInt
+  | CsParallelArrays
 
 // Sum type covering every forensic question `mentl query` can pose.
 // Each variant corresponds to one `ask(Q)` arm in `query_default`.
@@ -426,6 +427,7 @@ fn census_label(shape) with Pure = match shape {
   CsWildcardFabricates => "wildcard-fabricates arm(s)",
   CsUnderscoreRetain => "underscore-retain let(s)",
   CsFlagAsInt => "flag-as-int compare(s)",
+  CsParallelArrays => "parallel-arrays let(s)",
 }
 
 fn census_sites(shape) with GraphRead + !Mutate + Alloc + Memory = match graph_snapshot() {
@@ -564,6 +566,37 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
     },
     _ => false,
   },
+  CsParallelArrays => // Drift mode 7's shape (the seventh absorption): a
+  // destructuring bind of a tuple whose FIRST TWO binders both carry
+  // the _h suffix — parallel arrays where one record was native. The
+  // surface let desugars at parse into the one-arm match
+  // (desugar_block), so the WEAVE shape is the one-arm MatchExpr —
+  // the census counts the graph's one meaning, both spellings. The
+  // pair anchor is the mode's own settled note: ctor payloads
+  // legitimately carry the handle convention; the paired tuple bind
+  // convicts.
+  match body {
+    NExpr(MatchExpr(_, arms)) => if len(arms) == 1 {
+      match list_index(arms, 0) {
+        (p, _) => match p {
+          PTuple(elems) => paired_handle_binders(elems),
+          _ => false,
+        },
+      }
+    } else {
+      false
+    },
+    _ => false,
+  },
+}
+
+fn paired_handle_binders(elems) with Memory + Alloc = if len(elems) < 2 {
+  false
+} else {
+  match (list_index(elems, 0), list_index(elems, 1)) {
+    (PVar(a), PVar(b)) => ends_with(a, "_h") && ends_with(b, "_h"),
+    _ => false,
+  }
 }
 
 fn flag_int_compare(a, b) with GraphRead + !Mutate + Alloc + Memory = match graph_node_body(node_handle(a)) {
@@ -613,8 +646,8 @@ fn subtree_prints_children(hs, fuel) with GraphRead + !Mutate + Alloc + Memory =
 // the audit names the costume where it stands and the census answers
 // the corpus question.
 fn drift_shapes_of(fn_handle) with GraphRead + !Mutate + Alloc + Memory = match graph_node_body(fn_handle) {
-  NStmt(FnStmt(_, _, _, _, body)) => subtree_drift_counts(node_handle(body), (0, 0, 0, 0, 0, 0), 128),
-  _ => (0, 0, 0, 0, 0, 0),
+  NStmt(FnStmt(_, _, _, _, body)) => subtree_drift_counts(node_handle(body), (0, 0, 0, 0, 0, 0, 0), 128),
+  _ => (0, 0, 0, 0, 0, 0, 0),
 }
 
 fn subtree_drift_counts(h, acc, fuel) with GraphRead + !Mutate + Alloc + Memory = if fuel <= 0 {
@@ -622,7 +655,7 @@ fn subtree_drift_counts(h, acc, fuel) with GraphRead + !Mutate + Alloc + Memory 
 } else {
   let body = graph_node_body(h)
   let acc2 = match acc {
-    (wz, fm, pir, wf, ur, fi) => (if census_matches(CsWildcardZero, h, body) { wz + 1 } else { wz }, if census_matches(CsFailureMask, h, body) { fm + 1 } else { fm }, if census_matches(CsPrintInReport, h, body) { pir + 1 } else { pir }, if census_matches(CsWildcardFabricates, h, body) { wf + 1 } else { wf }, if census_matches(CsUnderscoreRetain, h, body) { ur + 1 } else { ur }, if census_matches(CsFlagAsInt, h, body) { fi + 1 } else { fi }),
+    (wz, fm, pir, wf, ur, fi, pa) => (if census_matches(CsWildcardZero, h, body) { wz + 1 } else { wz }, if census_matches(CsFailureMask, h, body) { fm + 1 } else { fm }, if census_matches(CsPrintInReport, h, body) { pir + 1 } else { pir }, if census_matches(CsWildcardFabricates, h, body) { wf + 1 } else { wf }, if census_matches(CsUnderscoreRetain, h, body) { ur + 1 } else { ur }, if census_matches(CsFlagAsInt, h, body) { fi + 1 } else { fi }, if census_matches(CsParallelArrays, h, body) { pa + 1 } else { pa }),
   }
   subtree_drift_children(body_child_handles(body), acc2, fuel - 1)
 }

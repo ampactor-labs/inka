@@ -1069,17 +1069,18 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more
   // audit names the costume where it stands; a deliberate specimen's
   // judgment stays the reader's, as the suppression convention set.
   let drift_section = match drift_shapes {
-    (wz, fm, pir, wf, ur, fi) => {
+    (wz, fm, pir, wf, ur, fi, pa) => {
       let wz_note = if wz == 0 { "" } else { "{int_to_str(wz)} wildcard-zero arm(s); " }
       let fm_note = if fm == 0 { "" } else { "{int_to_str(fm)} failure-mask site(s); " }
       let pir_note = if pir == 0 { "" } else { "{int_to_str(pir)} print-in-report site(s); " }
       let wf_note = if wf == 0 { "" } else { "{int_to_str(wf)} wildcard-fabricates arm(s); " }
       let ur_note = if ur == 0 { "" } else { "{int_to_str(ur)} underscore-retain let(s); " }
       let fi_note = if fi == 0 { "" } else { "{int_to_str(fi)} flag-as-int compare(s); " }
-      if wz + fm + pir + wf + ur + fi == 0 {
+      let pa_note = if pa == 0 { "" } else { "{int_to_str(pa)} parallel-arrays let(s); " }
+      if wz + fm + pir + wf + ur + fi + pa == 0 {
         ""
       } else {
-        "  drift-shape: {wz_note}{fm_note}{pir_note}{wf_note}{ur_note}{fi_note}the census locates each\n"
+        "  drift-shape: {wz_note}{fm_note}{pir_note}{wf_note}{ur_note}{fi_note}{pa_note}the census locates each\n"
       }
     },
   }
@@ -1280,6 +1281,8 @@ fn census_shape_of(arg) with Memory + Alloc = if arg == "anonymous" {
   Some(CsUnderscoreRetain)
 } else if arg == "flag-as-int" {
   Some(CsFlagAsInt)
+} else if arg == "parallel-arrays" {
+  Some(CsParallelArrays)
 } else {
   match find(
     (k) => show_pipe_kind(k) == arg,

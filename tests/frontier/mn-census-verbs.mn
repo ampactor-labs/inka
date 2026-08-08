@@ -32,3 +32,4 @@ fn pir_site(x: String) = report(println(x)) // drift-audit: ignore — the censu
 fn wf_site(v) = match v { 1 => "one", _ => "Pure" } // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts
 fn ur_site(x) = { let _kept = inc(x); 0 } // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts
 fn fi_site(mode) = mode == 2 // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts
+fn pa_site(pair) = { let (a_h, b_h) = pair; a_h + b_h } // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts

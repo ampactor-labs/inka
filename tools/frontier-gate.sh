@@ -931,21 +931,21 @@ run_census() {
   local compiler="$1" dir="$2"
   local doc="$ROOT/tests/frontier/mn-census-verbs.mn"
   local ok=1 spec q line
-  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26' 'wildcard-zero:27' 'failure-mask:28' 'print-in-report:31' 'wildcard-fabricates:32' 'underscore-retain:33' 'flag-as-int:34'; do
+  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26' 'wildcard-zero:27' 'failure-mask:28' 'print-in-report:31' 'wildcard-fabricates:32' 'underscore-retain:33' 'flag-as-int:34' 'parallel-arrays:35'; do
     q="${spec%%:*}"; line="${spec##*:}"
     wt_run --dir "$ROOT" "$compiler" query "$doc" "census $q" > "$dir/census-$line.out" 2>/dev/null
     if ! grep -q "mn-census-verbs:$line" "$dir/census-$line.out"; then
       ok=0; fail "census '$q' misses its own site (line $line; see $dir/census-$line.out)"
     fi
   done
-  [ "$ok" = 1 ] && pass "structural census: all fifteen shapes count their own site (|> <| >< ~> <~ anonymous eta effectful-lambda iteration wildcard-zero failure-mask print-in-report wildcard-fabricates underscore-retain flag-as-int)"
-  # The audit's drift tier (5.6's absorbed modes read per fn): the six
+  [ "$ok" = 1 ] && pass "structural census: all sixteen shapes count their own site (|> <| >< ~> <~ anonymous eta effectful-lambda iteration wildcard-zero failure-mask print-in-report wildcard-fabricates underscore-retain flag-as-int parallel-arrays)"
+  # The audit's drift tier (5.6's absorbed modes read per fn): the seven
   # specimen fns each carry their shape line. Born with the tier.
   ad_n=$(wt_run --dir "$ROOT" "$compiler" audit "$doc" 2>/dev/null | grep -c "drift-shape:")
-  if [ "$ad_n" = "6" ]; then
-    pass "audit drift tier: the six specimen fns each carry their shape line"
+  if [ "$ad_n" = "7" ]; then
+    pass "audit drift tier: the seven specimen fns each carry their shape line"
   else
-    fail "audit drift tier (drift-shape lines: $ad_n, want 6)"
+    fail "audit drift tier (drift-shape lines: $ad_n, want 7)"
   fi
 }
 

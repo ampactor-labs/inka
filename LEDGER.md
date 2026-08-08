@@ -35,6 +35,31 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE SEVENTH DRIFT SHAPE (pin 74b43c43e00d — CLEAN
+  m2 == m3, census 0; supersedes the same-day 6b1400a3404908 whose
+  detector the dig corrected): mode 7's parallel-arrays absorbs as
+  CsParallelArrays — and the honest weave shape is the ONE-ARM MATCH
+  destructuring a tuple into first-two _h binders, because
+  desugar_block turns every destructuring let into exactly that at
+  parse (lower.mn:3157's own law: LetStmt is PVar-only by
+  construction), so the first-cut LetStmt(PTuple) anchor was
+  UNCONSTRUCTIBLE and its census read zero everywhere. Both spellings,
+  one graph, one count. THE DIG'S KILLS, per the forensic law: (1)
+  "tuple destructure computes zero" — retracted, a $?-after-pipe
+  artifact of the prober, every runtime path measured correct (3/33);
+  (2) "multi-line blocks desugar differently" — refuted, the variable
+  was the MOUNT: the probe files lived under /tmp and the census
+  answered a confident ZERO on the unreadable file — the real find,
+  banked as Hβ.query.unreadable-source-refusal (a query on a source
+  the judge cannot read must refuse loudly, never walk an empty weave
+  to zero — the silent-fallback class at the verb layer). Census
+  roster sixteen, audit tier a sept, pa_site at mn-census-verbs:35
+  counting under the fixed detector. Wheel link at ZERO —
+  parallel_arrays_max born at the floor, the let-tuple row retired
+  (the mode-33 precedent, seventh application); mode 7's
+  param-adjacency row stays, a distinct shape. Cost: 16.22s wall,
+  2238MB peak.
+
 - 2026-08-08 · ▶▶▶ THE SIXTH DRIFT SHAPE (pin c7cf09a15a00 — CLEAN
   m2 == m3, census 0): mode 8's flag-as-int absorbs as CsFlagAsInt —
   a BEq whose one operand is VarRef mode/token_kind/scheme_kind and

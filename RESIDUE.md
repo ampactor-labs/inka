@@ -28,6 +28,19 @@
 
 ---
 
+`Hβ.query.unreadable-source-refusal` — named 2026-08-08 (the seventh drift
+shape's dig): a `mentl query` whose source file the judge cannot READ (an
+unmounted path, a permissions failure) walks an empty weave and answers a
+confident ZERO — `census parallel-arrays` printed `→ 0 ... let(s)` for a
+file wasmtime could not open, and the zero read as a clean measurement
+until a mounted re-run answered 2. The silent-fallback class at the verb
+layer: verify's ratchet already refuses an EMPTY census answer, but the
+verb itself fabricates a well-formed zero over a failed read. The fix
+direction: the read failure surfaces as its own loud refusal (nonzero
+exit, the path named) BEFORE any walk — a query is a projection of a
+judged weave, and "no weave" is not "zero sites." Gate when built: a
+census query on a nonexistent path refuses, seen RED first.
+
 `Hβ.infer.hof-param-row-never-reaches-enclosing` — RESOLVED (2026-08-06): the
 crown's higher-order leak, closed by the completion prune's SIGNATURE KEEP-SET
 (the third keep category, `effects.mn row_keep_completion`). The prune's "no

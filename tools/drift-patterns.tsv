@@ -21,7 +21,16 @@
 5	C calling convention (__closure/__ev separate)	__closure\b.*__ev\b|__ev\b.*__closure\b	ka	Unified __state per H1 substrate. Separate __closure and __ev is the pre-H1 shape.
 6	Primitive-type-special-case (Bool carveout)	\b(if|match).*\b(is_bool|bool_special|Bool_ty\b)	ka	Nullary ADTs share compilation discipline. Bool special-casing is drift.
 7	Parallel-arrays-instead-of-record (locals/captures pairs)	\b(locals|captures|frames|handlers)\s*,\s*\1_h\b	ka	Frame consolidation (Ω.5): one record + sorted-set, not parallel arrays.
-7	Parallel-arrays-instead-of-record (naming tell)	\blet\s*\(\s*[a-z_]\w*_h\s*,\s*[a-z_]\w*_h\b	ka	A let-tuple of paired _h bindings surfaces a record-shape begging to exist. Anchored to the let-destructure: a CTOR's payload binders legitimately carry the _h handle convention (the BoundaryEdge/ContinuationEdge record's own fields demanded 17 markers under the bare-pair form).
+# --- Mode 7's let-tuple row: RETIRED (2026-08-08) — absorbed into the
+# census + ratchet, the mode-33 precedent's seventh application.
+# CsParallelArrays reads the WEAVE shape: the one-arm match destructuring
+# a tuple into first-two _h binders — desugar_block turns every
+# destructuring let into exactly that at parse (LetStmt is PVar-only by
+# construction), so the graph shape covers both spellings where this
+# regex saw one. verify's drift-shape ratchet holds the wheel link at
+# ZERO (parallel_arrays_max, seen RED at -1). The param-adjacency row
+# above stays — a distinct shape. The grep dies; the projection + ratchet
+# is the check.
 # --- Mode 8's three rows: RETIRED (2026-08-08) — absorbed into the
 # census + ratchet, the mode-33 precedent's sixth application.
 # CsFlagAsInt reads the shape from the weave (a BEq whose one operand is

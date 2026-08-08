@@ -275,7 +275,40 @@ LMakeClosure arm carrying an entry key instead of an inline LFn),
 which is the tree's actual death shape at step (iv). SEQUENCE:
 leaf-first (assert coherence on bodies with no nested
 construction — the wheel's majority), then the entry-reference
-shape closes nesting. The remaining (i)
+shape closes nesting.
+THE FIRST BUILD REVERTED WHOLE (2026-08-08 — the gate WORKED and
+the experiment failed it): the leaf projector + census-entering
+E_EmitFnProjectionDivergence + the enumeration high-water leaf
+test ran on the wheel and fired 25 TIMES — twenty-five
+leaf-classified lambdas whose column projection diverges from the
+tree build. The march REPINNED ANYWAY (m3 == m4 TRANSITION held —
+the divergent projections are deterministic) and verify's census
+ratchet caught it post-pin: TWO BOARD FINDINGS BANKED — (1) the
+march's transition path does not gate the census (its m3-leg
+census read printed nothing and refused nothing; the verify
+ratchet was the only net — close the gap when the projector
+relands); (2) the gate fires only from generation 2 (the old boot
+has no projector: m2.err 0, m3.err 25), so a projector-bearing
+landing's first march leg under-reports. SPECIMENS (from the
+march m3.err, banked before the revert): lambda_259726 260516
+261363 274662 275516 285110 306551 306602 307521 307593 309548
+316971 317015 317090 317134 317308 328122 330083 331728 348617
+348659 348709 351644 355490 357850. THE DIAGNOSIS FRONTIER, in
+suspicion order: (a) the projector lowers
+graph_node_body(origin)'s NExpr payload while the live walk
+lowers the expr VALUE handed down by the parent's destructure —
+any post-parse rewrite that updates the walked tree without
+spine_put_body (or vice versa: pipe-hole completion, string
+interpolation desugars) makes the two bodies structurally
+different at exactly those origins; (b) frame-external mutable
+state consumed by the first lowering and absent for the second
+(boundary/k-spine reads); (c) a leaf-test false positive (a
+construction path that does not note). NAMED NEXT PROBE: rerun
+with the divergence report carrying BOTH rendered LowFns (or
+their first differing constructor path) for one specimen —
+lambda_259726 — and read which of (a)/(b)/(c) it is. The
+diagnostic's span_zero also wants the origin's real span. The
+remaining (i)
 columns land by the same pattern as their swaps demand them;
 (ii) the projection bodies
 swap to column reads one landing at a time (collect_* family first),

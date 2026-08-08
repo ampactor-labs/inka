@@ -1926,8 +1926,14 @@ new DEP found; the map below is accurate at that pin.)*
   frames, per-fn save/restore — that dies at scope exit; handler state
   IS its correct form, and the durable half it produces, the resolved
   ownership grade, already lands on the fn's TFun at 4.2's one writer).
-  Band G rides along: `Hβ.egraph.per-expr-effect-row` (is_pure
-  reduces to effs_at), `.typed-rulecyclic`, `.rule-as-query`,
+  Band G rides along — SEQUENCED WITH THIS ARC BY MEASUREMENT
+  (2026-08-08): `Hβ.egraph.per-expr-effect-row` is DEP-gated by its own
+  site comment (is_pure reduces to effs_at only when infer grows a
+  per-expr row binding — a spine column, this arc's own move), and
+  `.typed-rulecyclic`'s RED case is unreachable-by-construction until
+  the rule set grows (graph_canon_set's strictly-cheaper invariant
+  makes the chain monotone; the typed refusal lands WITH the first
+  grown rule, where a cycle becomes constructible). `.rule-as-query`,
   `.const-fold-minted-node-full-edges`, saturation deepened; and
   `Hβ.egraph.install-algebra` — the `~>` edge enters the e-graph (elision
   when the extent proves it, the row licensing both rewrite-legality and

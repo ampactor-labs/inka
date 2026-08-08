@@ -2848,6 +2848,31 @@ row_var_is_free finally mirrored at generalize's share rule.
 ACCEPTANCE unchanged: neg's final publish returns to its
 declared four, show_list's final shows p2 + shared tail, the 26
 row movers fall, march green.
+THE RE-CUT BUILT AND MEASURED VACUOUS (2026-08-07 — the
+position-only floor: free_in_row_payload replacing the
+is_row_handle filter at generalize's TFun/TCont row terms; solo
+0, marched TRANSITION m3==m4, self-reproducing). Both acceptance
+faces REFUSED UNCHANGED: neg's solo query still `→ Pure`, movers
+still 451 (the only delta: two effectful-lambda convictions
+re-classed, 381 → 379). Reverted whole — a marched-clean change
+that moves neither observable is dead-weight machinery, not a
+stack layer. THE KILL'S MEANING: the specimen's quantification
+does NOT bite at the floor's top-row term — either the t-cell
+quantifies via the params/ret signature terms (unique() merges
+all three; my exclusion of the row term is then a no-op for any
+signature-reachable cell), or the sharing lands and the charge
+path still fails to heal (the scheme's row structure unread at
+the charge). THE NEXT PROBE, banked: QVAR PROVENANCE — the probe
+compiler prints, at generalize for the specimen decls, the
+Forall's qvar list AND each of the three collection terms
+(params / ret / row) separately, so the term that carries the
+kept-edge cell is named by the artifact. If params/ret carry it,
+the t-cell is signature-reachable and the frame shifts: the
+quantification is LEGITIMATE (the cell is the decl's own
+polymorphism) and the bug is the row's EDGE to a signature var —
+the writer that inserted a signature type var into a row tail
+edge set (the charge/tail_join layer) is the root, and the fix
+is upstream of the floor entirely.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

@@ -1482,6 +1482,25 @@ span-dedup-vs-remint complexity becomes the column's identity
 discipline (append in the reporting pass only, or span-keyed).
 The build rides the 5.5 column arc's opening — the first column
 whose writer is already singular.
+THE WRITER SURVEY (2026-08-07, the stamp's close): the one writer
+is infer_var_ref (infer.mn:3104 — the VarRef judgment arm), and it
+already carries everything the column entry needs (name, the ref's
+handle, the span). The column's shape follows graph_index_span's
+one→many index precedent (span→handle), not graph_narrow_set's
+per-handle page slot: two graph ops — a note (name-key → ref
+handle appended) and a read (name-key → the list) — with the key
+STRING-keyed on the smap primitive until §5.O layer 1 makes names
+handles (the upgrade path named, not blocking). The three readers
+then migrate: refs_of_name becomes the read + its span projection
+(the dedup discipline moves to the write: note in the reporting
+pass only, so judgment re-mints never double-enter);
+count_dependents becomes a per-candidate read; and
+collect_bound_positions stays a separate projection (bound cells,
+not references — it rides the same arc as a sibling, its own op).
+Build order: the two ops + handler state, the one write, the
+refs_of_name migration with the query's answers proven equal
+(old-scan == column per name on the wheel link — the belt), then
+the oracle reader, then the scan deletions.
 
 `Hβ.audit.capability-carries-its-evidence` — the severance teaching's
 remainder (named 2026-07-30 with the vocabulary's graph read). The

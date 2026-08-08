@@ -1864,6 +1864,15 @@ new DEP found; the map below is accurate at that pin.)*
   judged. Deepest of all, iteration-is-topology shrinks the region to near-zero,
   because derived folds are generated and their signatures are known by
   construction. Do not fight the theorem; make it apply to almost nothing.
+  STEP ONE LANDED 2026-08-07 (pin d8142b3b — THE SIGNATURE BUYS THE POLY
+  SELF-CALL): the signature'd form ACCEPTS — a fully-sig'd decl's
+  self-call instantiates the prereg quantified scheme (Haskell/OCaml
+  parity), and the emit divergence the gate opened closed with the
+  per-base demand cap + the spec self-reference floor
+  (Hβ.infer.sigd-polymorphic-recursion carries the arc; the frontier's
+  sigd-poly leg runs depth(7,3)=3). Remaining here: the Henglein
+  fragment inferred, the row side, the proposed-signature TEACH (the
+  cap's floor narration lands with it), iteration-is-topology's shrink.
 - **5.4 · The value ontology dissolves, in its PROVEN sequence** (band D —
   the 13-agent-refuted design, arena-gated, order inverted from every naive
   form: representation FIRST, type-merge LAST). (0) `fold_sig`

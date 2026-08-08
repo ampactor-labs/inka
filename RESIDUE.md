@@ -3435,6 +3435,29 @@ fixture runs 3; the frontier leg pins it. RESIDUE of the arc,
 named: (1) the cap's floor is SILENT-but-correct — the teaching
 narration ("this base floored at N specializations; a signature
 pins the width") lands with the proposed-signature teach step;
+THE TEACH, STAMPED 2026-08-07 (build next): at the occurs
+refusal on an UNSIG'D poly self-call, the refusal STAYS (mono
+inference is HM's floor) and gains the teaching narration —
+"polymorphic recursion: the signature buys the poly self-call;
+annotate NAME's params and return" — HasPlaceholders, per §1's
+question-beats-guess. SEMANTICS TRACED: ONE in-wheel report site
+(unify's occurs pre-check, infer.mn:5152; graph.mn's bind guard
+is the non-unify belt and stays plain), and the detection is a
+FRAME-MEMBERSHIP read — the occurs-refused root chases into the
+current judge frame's param/ret cells while the frame's decl is
+not fn_fully_sigd (the frame stack already carries the decl; an
+inf op projects the current frame's name + cells — one new
+read-only op if none serves it). The CONCRETE signature proposal
+(deriving the annotation text from the mono-side ground types
+with holes at the polymorphized positions) is the fragment
+work's own output and SEQUENCES WITH IT — the v1 teach names the
+shape and the fix direction, never guesses the types. WRITERS:
+the one report site + a T_PolyRecursionSignature narration ctor
+(DiagKind + report arms + SYNTAX's narration table). PRICED:
+zero steady-state cost — the detection runs only on the occurs
+error path. GATE, RED-first: the unsig'd depth fixture — today
+plain E_OccursCheck; with the teach, the narration names depth
+beside the refusal.
 (2) `Hβ.persist.image-key-compiler-build` — NEW: the warm-compile
 image (.build/warm-compile-*.img) is keyed by source hash only,
 and a NEWER boot restoring an OLDER boot's image traps in alloc

@@ -3605,33 +3605,38 @@ fn infer_field_access_record(rec, field, handle, span: ValidSpan) = match rec {
 // if the binding is an `own` parameter. The affine-ledger handler
 // in `own.mn` decides which names are own-marked; `check_consume_at_use`
 // performs unconditionally and lets the handler decide.
-fn infer_var_ref(name, handle, span: ValidSpan) = match env_lookup(name) {
-  None => {
-    report(EMissingVariable(name, span))
-    // The miss IS the fact — poison, never a normal-looking var. The old
-    // TVar(handle) self-bind tripped graph_bind's own occurs check (a
-    // spurious 0:0 E_OccursCheck per missing name) and read downstream as
-    // an unconstrained var (the ownership move-default false positives).
-    // A hole no-ops in unify, preserves the handle through generalize, and
-    // keeps every consumer silent: one miss, one diagnostic.
-    graph_bind_hole(handle, Located(span, MissingVar(name)))
-  },
-  Some(entry) => match entry {
-    (scheme, reason, kind) => {
-      // A seq-op MENTION types as its FACE, never the raw body's scheme
-      // (the substrate boundary: list_set's `l + 8` types l Int, and
-      // only the op's own body may read that; the saturated and holed
-      // CALL paths already force the face — the bare mention was the
-      // last raw-scheme leak, measured as `xs |> len` unifying List
-      // against Int while emitting correctly, the 3.3 false-diagnostic
-      // drift). The row stays the callee's own declared row.
-      let ty = if is_seq_op(name) { seq_face_ty(name, scheme) } else { instantiate(scheme) }
-      graph_bind(handle, ty, Located(span, VarLookup(name, reason)))
-      // Carry parameter ownership from the env edge into Consume. No recovery
-      // lookup: SchemeKind names the binding's construction origin.
-      check_consume_at_use(name, kind, span)
+fn infer_var_ref(name, handle, span: ValidSpan) = {
+  // The note fires ABOVE the env match: a missing name is still a
+  // reference (the whole-weave scan counted it; the column must too).
+  graph_ref_note(name, handle)
+  match env_lookup(name) {
+    None => {
+      report(EMissingVariable(name, span))
+      // The miss IS the fact — poison, never a normal-looking var. The old
+      // TVar(handle) self-bind tripped graph_bind's own occurs check (a
+      // spurious 0:0 E_OccursCheck per missing name) and read downstream as
+      // an unconstrained var (the ownership move-default false positives).
+      // A hole no-ops in unify, preserves the handle through generalize, and
+      // keeps every consumer silent: one miss, one diagnostic.
+      graph_bind_hole(handle, Located(span, MissingVar(name)))
     },
-  },
+    Some(entry) => match entry {
+      (scheme, reason, kind) => {
+        // A seq-op MENTION types as its FACE, never the raw body's scheme
+        // (the substrate boundary: list_set's `l + 8` types l Int, and
+        // only the op's own body may read that; the saturated and holed
+        // CALL paths already force the face — the bare mention was the
+        // last raw-scheme leak, measured as `xs |> len` unifying List
+        // against Int while emitting correctly, the 3.3 false-diagnostic
+        // drift). The row stays the callee's own declared row.
+        let ty = if is_seq_op(name) { seq_face_ty(name, scheme) } else { instantiate(scheme) }
+        graph_bind(handle, ty, Located(span, VarLookup(name, reason)))
+        // Carry parameter ownership from the env edge into Consume. No recovery
+        // lookup: SchemeKind names the binding's construction origin.
+        check_consume_at_use(name, kind, span)
+      },
+    },
+  }
 }
 
 fn seq_face_ty(name: String, scheme) = {

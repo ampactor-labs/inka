@@ -41,3 +41,20 @@ fn smap_bucket_scan(ref bucket, name: String, i) with Memory + Alloc = if i >= l
     (bn, val) => if bn == name { Some(val) } else { smap_bucket_scan(bucket, name, i + 1) },
   }
 }
+
+// The MULTI-map read — every value entered under NAME, newest first
+// (add prepends). The reverse-edge column's read face: N smap_add calls
+// per name are N bucket entries, and this collects them all in one
+// bucket scan — O(bucket), never O(map).
+fn smap_get_all(ref idx, name: String) with Memory + Alloc = {
+  let b = i32_and(str_hash(name), 4095)
+  smap_bucket_collect(list_index(idx, b), name, 0, [])
+}
+
+fn smap_bucket_collect(ref bucket, name: String, i, acc) with Memory + Alloc = if i >= len(bucket) {
+  acc
+} else {
+  match list_index(bucket, i) {
+    (bn, val) => smap_bucket_collect(bucket, name, i + 1, if bn == name { push(acc, val) } else { acc }),
+  }
+}

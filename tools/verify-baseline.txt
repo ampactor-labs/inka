@@ -584,7 +584,7 @@ use_after_move_max: 0
 # each marker the honest grade retires lowers these. The census-shape
 # count (a graph fact, not a text pattern) is the named refinement.
 authored_own_max: 83
-authored_ref_max: 817
+authored_ref_max: 816
 
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
@@ -846,4 +846,13 @@ authored_ref_max: 817
 # fold), so this is representation weight, not re-walk waste. The
 # reclaimers are named: the per-decl arena (4.3, columns-first) and rung
 # 3's endpoint (the second pass deletes). The next legal move stays DOWN.
-selfcompile_peak_kb_max: 2250000
+# Raised 2,250,000 → 2,400,000 at the reverse-edge column (§11 5.5's
+# first column; fixed input, the wheel — measured 2,337,908 KB, the
+# ratchet seen RED refusing the repin at the old ceiling): every judged
+# VarRef notes name → handle into the graph's refs column (tuple +
+# singleton + concat cell per note, ~36 B × ~2.4e6 notes across
+# judgment rounds — linear, wall flat at 17.1s). The column is what
+# retires the O(graph) refs scan and the O(graph²) dependents walk;
+# its reclaimer is the same per-decl arena / rung-3 pair as above
+# (one judgment round = one note set). The next legal move stays DOWN.
+selfcompile_peak_kb_max: 2400000

@@ -1749,6 +1749,11 @@ effect GraphRead {
   // these with its stmt's planned range as (next0, limit0).
   graph_boundary_at(Int) -> ExecutableBoundary
   graph_branch_seed() -> ([{boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody], spans: [Span]}], Int, [(ValidSpan, Int)])
+  // The REVERSE-EDGE column's read: every reference handle noted under
+  // NAME (newest first — the column prepends). refs_of_name's whole-
+  // graph VarRef scan and the oracle's quadratic count_dependents both
+  // retire onto this O(bucket) read.
+  graph_refs_at(String) -> [Int]
 }
 
 effect GraphWrite {
@@ -1777,6 +1782,12 @@ effect GraphWrite {
   graph_bind_record_row(Int, [(String, Ty)], Reason)
   graph_rollback(Int)
   graph_index_span(ValidSpan, Int)
+  // The REVERSE-EDGE column's write (Hβ.graph.reverse-edge-and-bound-
+  // projection, the 5.5 column arc's opener): infer_var_ref — the ONE
+  // writer, where the use edge is drawn — notes (name → the reference's
+  // handle) into the smap column, O(1) prepend per reference. The read
+  // face is graph_refs_at; three whole-graph scans retire onto the pair.
+  graph_ref_note(String, Int)
   // The deterministic handle partition (the planned mint): the final pass
   // pre-assigns each stmt a dense range of handles sized by the trial's
   // measured mint counts, so numbering is a pure function of the source —

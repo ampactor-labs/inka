@@ -35,6 +35,29 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE REVERSE EDGE IS A COLUMN (pin a37869cbfd9d —
+  CLEAN m2 == m3, census 0, micros 128/0): §11 5.5's first column
+  lands per the banked stamp. Two graph ops (graph_ref_note /
+  graph_refs_at, GraphWrite/GraphRead) over a refs column in the
+  graph handler's state (smap multi-map — smap_get_all collects the
+  bucket, O(bucket) never O(map)); the ONE writer is infer_var_ref,
+  noting name → handle ABOVE the env match so a missing name still
+  counts (the scan counted it); refs_of_name reads the column
+  tail-first (the column prepends; oldest-first preserves the
+  scan-era answer order and first-seen dedup) and the O(graph)
+  whole-weave VarRef scan (collect_var_ref_spans) DELETES. The BELT
+  held byte-identical on untouched files (singleton_perform_block →
+  lower:5119,5853; push → types:3107, prelude:284, threading:101).
+  The column is append-only telemetry, NOT trail-backed: rolled-back
+  branches' notes are dead handles the read side's zero-span skip
+  and span dedup drop. COST: peak ratchet seen RED at 2,250,000
+  (measured 2,337,908 first run; 2,240,820 on the repin run —
+  ~4% run variance) and raised to 2,400,000, component-attributed
+  (~36 B/note × ~2.4e6 notes across judgment rounds; wall flat
+  15–17s). Next per the stamp: count_dependents reads the column
+  per candidate; collect_bound_positions' sibling projection; then
+  the remaining scan deletions.
+
 - 2026-08-07 · ▶▶▶ THE WORTHINESS FAMILY PRUNES (pin 2d3b3ca384a9 —
   CLEAN m2 == m3, census 0, emissions identical at 403,741 lines):
   spec_worthy_closure, spec_any_name_in, and spec_name_in delete whole

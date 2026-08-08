@@ -1501,6 +1501,21 @@ Build order: the two ops + handler state, the one write, the
 refs_of_name migration with the query's answers proven equal
 (old-scan == column per name on the wheel link — the belt), then
 the oracle reader, then the scan deletions.
+THE COLUMN LANDED (2026-08-07, pin a37869cbfd9d — the LEDGER entry
+of the same name): ops + state + the one write + the refs_of_name
+migration, belt byte-identical, collect_var_ref_spans deleted,
+peak ratchet raised 2,250,000 → 2,400,000 component-attributed.
+The write notes above the env match (a missing name is still a
+reference); the column is append-only telemetry, not trail-backed
+(rolled-back branches' notes are dead handles the read-side
+zero-span skip + span dedup drop). REMAINING here:
+count_dependents (oracle.mn:282) becomes a per-candidate
+graph_refs_at read — its question is "how many references does
+the name AT pos have", so the migration reads the name from the
+node at pos and counts the column's live spans;
+collect_bound_positions (oracle.mn:440) is the bound-cell
+PROJECTION sibling — not a reference query, its own op if the
+scan is to die; then this peer closes.
 
 `Hβ.audit.capability-carries-its-evidence` — the severance teaching's
 remainder (named 2026-07-30 with the vocabulary's graph read). The

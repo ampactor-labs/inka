@@ -327,37 +327,30 @@ fn walk_chain(handle, depth) with !Mutate = if depth > 50 || handle < 0 {
 
 // ─── Live use-edge projection — refs-of (rename) ───────────────────
 //
-// Every reference to NAME is a VarRef node the parser wrote into the program
-// weave. refs_of_name walks the weave and collects the span of each
-// NExpr(VarRef(name)) — the inbound use-edge set, read live. No AST side-index.
-fn refs_of_name(name) with GraphRead + !Mutate + Alloc + Memory = match graph_snapshot() {
-  Graph(next, _) => collect_var_ref_spans(name, 0, next, make_list(0)),
+// Every judged reference to NAME is noted name → handle in the graph's
+// refs column at the one writer (infer_var_ref). The projection reads
+// that column — O(refs), never O(graph) — and walks it from the TAIL
+// because the column prepends (newest first): oldest-first preserves
+// the scan-era answer order and its first-seen span dedup.
+fn refs_of_name(name) with GraphRead + !Mutate + Alloc + Memory = {
+  let hs = graph_refs_at(name)
+  collect_ref_spans(hs, len(hs) - 1, make_list(0))
 }
 
-// Tail walk with an accumulator — the prior non-tail form's stack depth
-// was the whole handle space, so a DAG-scale graph exhausted the call
-// stack the first time the refs facet ran against a full compile.
-fn collect_var_ref_spans(name, i, n, acc) with GraphRead + Memory + Alloc + !Mutate = if i >= n {
+fn collect_ref_spans(ref hs, i, acc) with GraphRead + Memory + Alloc + !Mutate = if i < 0 {
   acc
 } else {
-  match graph_node_body(i) {
-    NExpr(VarRef(ref_name)) => if ref_name == name {
-      // A zero span is a synthetic mint (a pre-registration ghost),
-      // not a source site — the located answer skips it. A span already
-      // collected is the SAME source site re-minted by a later judgment
-      // generation (the converged rounds re-parse; one reference
-      // rendered four times before this dedup) — the reference's
-      // identity is its source location, so it enters once.
-      let sp = span_of_handle(i)
-      if sp == span_zero() || span_in(acc, sp, 0) {
-        collect_var_ref_spans(name, i + 1, n, acc)
-      } else {
-        collect_var_ref_spans(name, i + 1, n, push(acc, sp))
-      }
-    } else {
-      collect_var_ref_spans(name, i + 1, n, acc)
-    },
-    _ => collect_var_ref_spans(name, i + 1, n, acc),
+  // A zero span is a synthetic mint (a pre-registration ghost),
+  // not a source site — the located answer skips it. A span already
+  // collected is the SAME source site re-minted by a later judgment
+  // generation (the converged rounds re-parse; one reference
+  // rendered four times before this dedup) — the reference's
+  // identity is its source location, so it enters once.
+  let sp = span_of_handle(hs[i])
+  if sp == span_zero() || span_in(acc, sp, 0) {
+    collect_ref_spans(hs, i - 1, acc)
+  } else {
+    collect_ref_spans(hs, i - 1, push(acc, sp))
   }
 }
 

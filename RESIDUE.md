@@ -2789,6 +2789,44 @@ handle, chased root) for the two specimen cells across both
 passes; the ordering dance becomes a printed sequence and the one
 writer falls out. The loop RETURNS TO §11's PHASE ORDER per the
 scope guard; this peer proceeds as its own item.
+THE ROOT TRACE RAN (2026-08-07 — a probe compiler printing every
+TB/RB/FZ/CP write plus per-decl DECL name/handle/row lines; boot
+compiled the print-patched source, the probe m2 compiled the REAL
+wheel, 548,830 trace lines, both specimens both passes). FOUR
+KILLS, the ordering-dance hypothesis REFUTED by measurement: (1)
+no write ever follows a specimen row cell's finalize — FZ is the
+LAST touch, there is no post-finalize re-root; (2) the kept edge
+cell is NEVER BOUND anywhere in the whole compile (show_list
+trial keeps edge 164556, final keeps 454133 — each appears
+exactly once, in its own FZ; "bound then freed between passes"
+is dead); (3) zero graph_compress_row writes touch any specimen;
+(4) zero t-sort binds (TB) target any specimen cell. THE
+MEASURED LIE, relocated upstream: neg_names_to_str's TRIAL
+finalize stores p4 c (four presents, closed — honest); its FINAL
+finalize stores p0 c — the final frame accumulated NOTHING
+before finalize, so the loss happens in the FINAL PASS's CHARGE
+PATH, not at publish-read time and not in any union dance. The
+consistent chain: show_list's final publish quantifies its kept
+free edge (the severance at the floor) → neg's final-pass
+charges instantiate FRESH row cells instead of chaining the
+callee's live below-ceiling cell (454130 existed, minted before
+neg's final judgment, never chained) → row_keep_completion
+correctly prunes the fresh cells as above-ceiling decl-transients
+→ the frame collapses to empty → FZ p0 c → pure published. The
+honest prune eating dishonest input; the root is the PUBLISH
+QUANTIFYING THE KEPT EDGE plus the charge path reading the
+scheme copy instead of the live cell. ONE UNKNOWN remains: the
+kept edge's SORT (both passes' kept edges sit at row_handle+2/+3,
+minted at body-judgment start; the dossier's render tagged the
+root `t…@e1` = t-sort). THE NEXT PROBE, banked: the same probe
+compiler shape printing MINT lines (handle + sort + reason tag)
+for the specimen decls' first mints — if the kept edge is t-sort,
+the sig_keep collector pollutes the row edge set cross-sort and
+THAT collector is the one writer to fix; if row-sort, the floor
+must share kept edges and the fix is generalize's keep-aware
+share. Probe recipe reproducible: patch graph.mn's four write
+arms + infer_fn's DECL print, boot-emit, restore, run on the
+real wheel blob.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

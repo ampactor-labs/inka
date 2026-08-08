@@ -1,0 +1,12 @@
+// CROWN modal (§11 6.3's crucible sweep): INSTALL-EXTENT EXACTNESS —
+// the `~>` absorbs only its own expression; an op performed AFTER the
+// install closed is unabsorbed and the declared !E refuses it.
+// Expect E_EffectMismatch.
+effect E { op() -> Int }
+handler h { op() => resume(1) }
+fn work() = op()
+fn f() with !E = {
+  let x = (work()) ~> h
+  x + op()
+}
+fn main() = f()

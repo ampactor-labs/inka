@@ -1,0 +1,9 @@
+// CROWN modal (§11 6.3's crucible sweep): the MIXED ROW's sound face —
+// F + !E licenses F and forbids E; a body performing only F accepts.
+// Expect NO E_EffectMismatch.
+effect F { fop() -> Int }
+effect E { op() -> Int }
+fn f() with F + !E = fop()
+fn main() = (f()) ~> hf
+
+handler hf { fop() => resume(3) }

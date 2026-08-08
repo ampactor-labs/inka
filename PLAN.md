@@ -2004,12 +2004,15 @@ The spine root finishes. Order inside the phase is the dependency order.
   `!E` accepts). Crown crucibles pin all of it. The REMAINDER: the
   TIME half (a persisted k under a changed handler set — rides 9.1
   with 6.4's value gates), the per-modal-rule crucible sweep against
-  the POPL-2026 encoding (OPENED 2026-08-08 — three rules pinned
-  accepting at crown 20/0: mask composition with innermost dispatch
-  measured at runtime, the latent/performed distinction — E riding a
+  the POPL-2026 encoding (OPENED 2026-08-08, six rules pinned at
+  crown 23/0 — accepts: mask composition with innermost dispatch
+  measured at runtime, the latent/performed distinction (E riding a
   RETURNED closure's value row while the constructor's own row stays
-  pure under !E — and double-HOF threading through two lambda
-  layers; the sweep continues rule-by-rule), and the
+  pure under !E), double-HOF threading, the mixed row's licensed
+  half (F + !E performing only F); refusals: install-extent
+  exactness (an op AFTER the install closed is unabsorbed) and the
+  mixed row's negation half (the F license never launders E); the
+  sweep continues rule-by-rule), and the
   capability-at-tee PROJECTION (the modality as a cursor-projected
   graph fact — the felt face).
 - **6.4 · TIME's world enforced** — the `TCont` world stops being inert.

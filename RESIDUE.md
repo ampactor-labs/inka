@@ -364,9 +364,15 @@ standalone constructions fed by program/env/boundary facts, no
 swap to make; the notes trued to parent-before-child so the
 enumeration is tree-ordered across all six kinds. What remains
 of the arc is step (ii)-onward proper: the enumeration READER
-(emit walking entries + reach filter), then the tree deletion —
-plus (γ)'s ShowExpr follow-up and the march census-gap fix on
-the next board-hardening landing. The
+(emit walking entries + reach filter — a phase-boundary stamp
+first: emit calling lower-per-entry dissolves the lower/emit
+spine boundary, the per-decl incremental-emission machinery),
+then the tree deletion — plus (γ)'s ShowExpr follow-up. THE
+MARCH CENSUS GAP IS CLOSED (2026-08-08): censusok reads the
+m3-leg count against census_errors_max beside costok, refuses
+both repin branches and the march's own exit on a rise; logic
+seen RED against a synthetic err at ceiling 0, then the live
+march green at census 0. The
 remaining (i)
 columns land by the same pattern as their swaps demand them;
 (ii) the projection bodies

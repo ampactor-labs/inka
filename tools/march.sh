@@ -200,6 +200,20 @@ read_cost() {  # read_cost <leg> — sets MARCH_COST from $OUT/<leg>.time, ratch
   fi
 }
 read_cost m3
+# ── the CENSUS gate (the 25-divergence lesson, 2026-08-08): a repin with a
+# rising census rode the TRANSITION path — verify's ratchet caught it only
+# post-pin, after the boot was already blessed. The march reads the same
+# count verify ratchets (the m3 leg IS the self-compile) and refuses the
+# blessing on a rise; the reproduction verdict (CLEAN/TRANSITION) stays a
+# separate fact. Missing baseline key = not yet enforced (the -n guard).
+censusok=1
+m3census=$(grep -cE 'E_[A-Za-z]+ error' "$OUT/m3.err" 2>/dev/null)
+census_max=$(grep -E '^census_errors_max:' "$BASELINE" 2>/dev/null | head -1 | cut -d: -f2 | tr -d ' ')
+if [ -n "${census_max:-}" ] && [ "${m3census:-0}" -gt "$census_max" ]; then
+  echo "✗ CENSUS GATE: m3-leg census ${m3census} > ${census_max} baseline — the wheel makes"
+  echo "  claims about its own source it does not believe; the repin is refused."
+  censusok=0
+fi
 TRAP=$(trap_lines "$OUT/m3.err")
 if [ -n "$TRAP" ]; then
   echo "✗ GATE: m3 TRAPPED —"; echo "$TRAP" | head -4
@@ -231,7 +245,7 @@ elif [ "$m3rc" = 0 ]; then
       # red restores the prior boot and refuses.
       cp boot/mentl.wasm "$OUT/boot.prev.wasm"
       cp "$OUT/m2.wasm" boot/mentl.wasm
-      if [ "$costok" = 1 ] && bash tools/march-gate.sh --micros > "$OUT/repin-battery.log" 2>&1; then
+      if [ "$costok" = 1 ] && [ "$censusok" = 1 ] && bash tools/march-gate.sh --micros > "$OUT/repin-battery.log" 2>&1; then
         # A repin is a new build: the warm-compile images were written by
         # the old one, and their $build_key (table+strings+globals) does
         # NOT move on a body-only change — a key-matching stale image
@@ -270,7 +284,7 @@ elif [ "$m3rc" = 0 ]; then
           # arm's comment) — through the candidate, restore-and-refuse on red.
           cp boot/mentl.wasm "$OUT/boot.prev.wasm"
           cp "$OUT/m3.wasm" boot/mentl.wasm
-          if [ "$costok" = 1 ] && bash tools/march-gate.sh --micros > "$OUT/repin-battery.log" 2>&1; then
+          if [ "$costok" = 1 ] && [ "$censusok" = 1 ] && bash tools/march-gate.sh --micros > "$OUT/repin-battery.log" 2>&1; then
             rm -f .build/warm-compile-*.img
             echo "· REPIN (transition): boot ← m3  sha256 $(sha256sum boot/mentl.wasm | cut -c1-16)…  (battery green; blessing m2 here is the trusting-trust mistake this arbitration exists to prevent)"
             emit_provenance m3 "TRANSITION m3 == m4" \
@@ -305,4 +319,4 @@ if [ "$FIXPOINT" = 1 ] && [ "$m3rc" = 0 ] && [ "$m4done" = 0 ]; then
     fi
   fi
 fi
-[ -z "$TRAP" ] && [ "$m3rc" = 0 ] && [ "$fixok" = 1 ] && [ "$costok" = 1 ]
+[ -z "$TRAP" ] && [ "$m3rc" = 0 ] && [ "$fixok" = 1 ] && [ "$costok" = 1 ] && [ "$censusok" = 1 ]

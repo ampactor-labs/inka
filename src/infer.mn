@@ -5148,8 +5148,18 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
           let root = graph_chase_handle(ha)
           match graph_chase(root) {
             GNode(NBound(inner), _) => unify_types(inner, b, span, reason),
-            _ => if occurs_in_live(root, b) {
+            GNode(_, mint_reason) => if occurs_in_live(root, b) {
               report(EOccursCheck(root, b, span))
+              // The poly-recursion teach rides the refusal: an infinite
+              // type running through a fn's OWN param/return mint is the
+              // self-call-at-a-different-type shape's fingerprint — name
+              // the fn and the signature route (the refusal stands; the
+              // narration is the question that beats the guess).
+              match mint_reason {
+                FnParam(owner, _, _) => report(TPolyRecursionSignature(owner, span)),
+                FnReturn(owner, _) => report(TPolyRecursionSignature(owner, span)),
+                _ => (),
+              }
             } else {
               graph_bind(root, b, Located(span, reason))
             },

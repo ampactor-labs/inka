@@ -2364,6 +2364,18 @@ for i in "${!compilers[@]}"; do
     fail "sigd poly recursion (diagnostics: $sp_diags; see $sp_err)"
   fi
 
+  # ─── The poly-recursion teach (§11 5.3, the question beats the guess) ─
+  # The UNSIG'D poly self-call still refuses (HM's mono floor) and the
+  # refusal carries T_PolyRecursionSignature naming the fn and the
+  # signature route. Born RED 2026-08-07: the incumbent emitted the bare
+  # E_OccursCheck with no narration.
+  pt_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-poly-teach.mn" 2>&1)
+  if printf '%s' "$pt_out" | grep -q "E_OccursCheck" && printf '%s' "$pt_out" | grep -q "T_PolyRecursionSignature.*'depth'"; then
+    pass "poly teach: the occurs refusal carries the signature narration naming depth"
+  else
+    fail "poly teach (refusal or narration missing)"
+  fi
+
   # ─── The decls facet (the bound-projection landing's gate) ──────────
   # `query <fixture> "decls"` projects the decls COLUMN — the oracle
   # queue's own seed set. Born RED 2026-08-07: the incumbent boot

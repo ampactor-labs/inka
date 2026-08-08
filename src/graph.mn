@@ -231,6 +231,11 @@ fn occurs_in_live(handle, ref ty) with GraphRead + Memory + Alloc + Cast + !Muta
 fn occurs_guard_line(handle, reason) with Memory + Alloc =
   "infer: E_OccursCheck error: infinite type at t{handle} (the graph write guard) at {show_span(reason_span_or_zero(reason))}\n"
 
+// The teach's line beside the refusal — coordinates + name only, the
+// guard's own render discipline (no graph ops from the arm).
+fn poly_teach_line(owner: String, reason) with Memory + Alloc =
+  "infer: T_PolyRecursionSignature Warning: the infinite type runs through '{owner}''s own parameter or return — if '{owner}' calls itself at a different type (polymorphic recursion), a FULL signature on '{owner}' buys the poly self-call at {show_span(reason_span_or_zero(reason))}\n"
+
 // Config: a BRANCH CURSOR (the parallel fan's per-thread instance) installs
 // over the SHARED spine with a private planned range — the root install is
 // bare and the defaults are the empty graph. Handler state records live in
@@ -479,6 +484,25 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
       EOccursCheck(handle, ty, reason_span_or_zero(reason)),
       occurs_guard_line(handle, reason)
     )
+    // The poly-recursion teach rides the refusal (coordinates-only
+    // discipline as above — the mint reason is read from THIS
+    // instance's state, no outer-resolving render): an infinite type
+    // through a fn's OWN param/return mint is the
+    // self-call-at-a-different-type fingerprint; name the fn and the
+    // signature route.
+    match graph_node_at(spine, next, handle) {
+      GNode(_, mint_r) => match mint_r {
+        FnParam(owner, _, _) => diag_report(
+          TPolyRecursionSignature(owner, reason_span_or_zero(reason)),
+          poly_teach_line(owner, reason)
+        ),
+        FnReturn(owner, _) => diag_report(
+          TPolyRecursionSignature(owner, reason_span_or_zero(reason)),
+          poly_teach_line(owner, reason)
+        ),
+        _ => (),
+      },
+    }
     resume()
   } else {
     let old_node = graph_node_at(spine, next, handle)

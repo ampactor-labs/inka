@@ -1933,6 +1933,11 @@ type DiagKind
   | EIfMissingElse(Span)
   // declared, used, fn name
   | TOverDeclared(EffRow, EffRow, String, Span)
+  // The poly-recursion teach (§11 5.3): rides the occurs REFUSAL when
+  // the infinite type runs through a named fn's own param/return mint —
+  // the question beats the guess; the concrete signature derivation
+  // sequences with the Henglein fragment work.
+  | TPolyRecursionSignature(String, Span)
   // The relevant tier: an authored `own` never consumed on this path —
   // affine's exactly-once half. Narration until the wheel's own count
   // reaches 0 (the census arming law).
@@ -2121,6 +2126,7 @@ fn diag_span(d) with Pure = match d {
   EPatternAlternationBindingMismatch(_, s) => s,
   EIfMissingElse(s) => s,
   TOverDeclared(_, _, _, s) => s,
+  TPolyRecursionSignature(_, s) => s,
   TOwnUnconsumed(_, s) => s,
   TOwnAcrossReplay(_, s) => s,
   TUseAfterMove(_, s) => s,
@@ -2181,6 +2187,7 @@ fn diag_source(d) with Pure = match d {
   EPatternAlternationBindingMismatch(_, _) => "infer",
   EIfMissingElse(_) => "infer",
   TOverDeclared(_, _, _, _) => "infer",
+  TPolyRecursionSignature(_, _) => "infer",
   TOwnUnconsumed(_, _) => "ownership",
   TOwnAcrossReplay(_, _) => "ownership",
   TUseAfterMove(_, _) => "ownership",
@@ -2241,6 +2248,7 @@ fn diag_code(d) with Pure = match d {
   EPatternAlternationBindingMismatch(_, _) => "E_PatternAlternationBindingMismatch",
   EIfMissingElse(_) => "E_IfMissingElse",
   TOverDeclared(_, _, _, _) => "T_OverDeclared",
+  TPolyRecursionSignature(_, _) => "T_PolyRecursionSignature",
   TOwnUnconsumed(_, _) => "T_OwnUnconsumed",
   TOwnAcrossReplay(_, _) => "T_OwnAcrossReplay",
   TUseAfterMove(_, _) => "T_UseAfterMove",
@@ -2276,6 +2284,7 @@ fn diag_severity(d) with Pure = match d {
   PExpectedToken(_, _) => SWarning,
   PUnexpectedToken(_, _) => SWarning,
   TOverDeclared(_, _, _, _) => SWarning,
+  TPolyRecursionSignature(_, _) => SWarning,
   TOwnUnconsumed(_, _) => SWarning,
   TOwnAcrossReplay(_, _) => SWarning,
   TUseAfterMove(_, _) => SWarning,
@@ -2386,6 +2395,7 @@ fn diag_applicability(d) with Pure = match d {
   WRedundantWhere(_) => MachineApplicable,
   WCommentRefUnresolved(_, _, _) => MaybeIncorrect,
   TOverDeclared(_, _, _, _) => MachineApplicable,
+  TPolyRecursionSignature(_, _) => HasPlaceholders,
   TOwnUnconsumed(_, _) => // Not mechanically applicable: the fix is a consume the developer
   // must place (or an honest widening to `ref`), never a patch.
   Unspecified,
@@ -2458,6 +2468,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EPatternAlternationBindingMismatch(detail, _) => detail,
   EIfMissingElse(_) => "`if` without `else` requires a unit body",
   TOverDeclared(declared, used, name, _) => "function '{name}' declares {show_effrow(declared)} but body only uses {show_effrow(used)} — tighten the signature to unlock capabilities",
+  TPolyRecursionSignature(name, _) => "the infinite type runs through '{name}''s own parameter or return — if '{name}' calls itself at a different type (polymorphic recursion), a FULL signature on '{name}' (every parameter and the return annotated) buys the poly self-call",
   TOwnUnconsumed(msg, _) => msg,
   TOwnAcrossReplay(msg, _) => msg,
   TUseAfterMove(msg, _) => msg,

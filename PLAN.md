@@ -2122,16 +2122,25 @@ collides with the label vocabulary — the namespacing question rides the
 inference landing.)*
 
 The C chain in its banked order, DEP-rooted on Phase 6:
-`Hβ.ifc.dcc-noninterference-gate` → `.flowlabel-inference-in-hm` (the
-label lattice joins riding the same union-find; 2.0's eq coherence is why
-label compares are trustworthy) → `.pc-label-implicit-flow` →
+`Hβ.ifc.dcc-noninterference-gate` (FIRST FACE LANDED 2026-08-08, pin
+a025c3523a84 — and its first probe caught the ShowExpr desugar
+silently defeating the splice check: the wrapper bound every fragment
+to String, the label read classified Public, and a classified splice
+passed check with no fixture to see it; fixed by reading through the
+wrap, the leak/sound pair born RED. The check is CONSTRUCTION-site —
+sink-blind, conservatively sound; sink-sensitivity is the next step's
+buy, the RESIDUE entry carries the full remainder) →
+`.flowlabel-inference-in-hm` (the label lattice joins riding the same
+union-find; 2.0's eq coherence is why label compares are trustworthy;
+retires the predicate-name classifier and moves the constraint from
+the splice to the sink edge) → `.pc-label-implicit-flow` →
 `.integrity-dual-lattice` (the agentic regime's forcing function — the
 integrity spec that makes the mechanism honest) → `.declassify-robust` →
 `.flow-world-on-tcont` (labels survive TIME) → `.agentic-fides-target`.
-The string-splice IFC check is the landed seed; the honest disclaimer
-stands (the lattice proves where OUTPUT may go, never what a model does
-inside its window). Terminal gate: `!Flow(Untrusted -> Sink)` discharged
-like `!Alloc`, both regimes first-class — DONE statement (2) whole.
+The honest disclaimer stands (the lattice proves where OUTPUT may go,
+never what a model does inside its window). Terminal gate:
+`!Flow(Untrusted -> Sink)` discharged like `!Alloc`, both regimes
+first-class — DONE statement (2) whole.
 
 ### Phase 8 · Verification whole — proof beats review, measured
 

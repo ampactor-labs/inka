@@ -28,7 +28,27 @@
 
 ---
 
-`Hβ.syntax.effarg-node-in-with-clause` — RESOLVED 2026-08-08 by
+`Hβ.ifc.dcc-noninterference-gate` — FIRST FACE LANDED 2026-08-08 (pin
+a025c3523a84; the C chain's head, banked here at its stamp). TRACED: the
+lattice (Public ⊑ Tainted ⊑ Secret, total join), the classifier
+(query_flow_label — predicate-name seed), and the splice enforcement
+(check_splice_flow_labels → verify(PFlowLe(label, Public)) → always
+decidable → E_RefinementRejected) are all real — and the first probe
+caught the ShowExpr desugar defeating the whole check (the wrapper binds
+String; the label read saw Public; a classified splice passed check).
+Fixed by reading through the wrap; the leak/sound fixture pair pins both
+faces, born RED. THE NAMED REMAINDER, in chain order: (1) today's check
+is CONSTRUCTION-site — every splice must be ⊑ Public, sink-blind; DCC's
+own property is sink-sensitive (a Secret splice bound for a
+Secret-labeled sink is legal and today over-refuses) — that sensitivity
+is `.flowlabel-inference-in-hm`'s buy (labels riding the union-find,
+the constraint moving from the splice to the sink edge), NOT a patch
+here. (2) The classifier stays a predicate-NAME heuristic until that
+same landing. (3) PC-labels (implicit flow through branching), the
+integrity dual, robust declassification, and the TCont flow-world
+follow in the banked band-C order. PRICED: the first face was one
+infer read-through + two fixtures + one leg; each following chain step
+is its own stamped landing.
 measurement (the peer was PLAN-named at 6.2 but never banked here; this
 entry is its one home, written at resolution). 6.2's "unconstructible
 from the surface" ruling generalized from the wrong probe shape: a

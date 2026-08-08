@@ -35,6 +35,28 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE DCC GATE'S FIRST FACE (pin a025c3523a84 — CLEAN
+  m2 == m3, census 0): Phase 7's chain head opens by catching a LIVE
+  silent regression on its first probe. The splice IFC check
+  (check_splice_flow_labels → verify(PFlowLe(label, Public)), always
+  decidable) was real and CALLED — but the ShowExpr desugar had bound
+  every splice fragment to String, so query_flow_label read the
+  WRAPPER's type, classified Public, and the obligation discharged
+  clean: a classified value spliced into any string passed check. No
+  gate could see it — no refusal fixture existed (rung 3 of the
+  board-blindness tripwire, again). The fix reads THROUGH the wrap
+  (splice_flow_check on the inner node; the unwrapped arm kept for
+  pre-ShowExpr shapes). The gate: mn-ifc-splice-leak (classified
+  splice → E_RefinementRejected "Secret ⊑ Public" at the splice span)
+  and mn-ifc-splice-sound (Public splice → clean), the pair differing
+  only in the source's classification — born RED (the leak checked
+  CLEAN on the pre-fix pin). The DCC gate's named remainder in
+  RESIDUE: today's check is CONSTRUCTION-site (every splice ⊑ Public,
+  sink-blind — conservatively sound, over-refuses a Secret splice
+  bound for a Secret sink); sink-sensitivity is what
+  .flowlabel-inference-in-hm buys when labels ride the union-find.
+  Cost: 17.53s wall, 2333MB peak.
+
 - 2026-08-08 · ▶▶▶ THE EIGHTH DRIFT SHAPE, AND THE TIER BECOMES A
   ROSTER (pin 0bbfe0e58e1cb6f3, superseding the same-arc aa581cb8839b
   after the landing's own ratchets bit — CLEAN m2 == m3, census 0; the

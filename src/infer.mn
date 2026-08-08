@@ -9265,19 +9265,27 @@ fn check_splice_flow_labels(fragments, span: ValidSpan) = each(
     N(body, fspan, fh) => match body {
       NExpr(LitString(_)) => // literal part: always Public, no IFC check
       (),
-      _ => // splice: read the bound type from the graph, classify its label
-      match graph_chase(fh) {
-        GNode(NBound(ty), _) => {
-          let label = query_flow_label(ty)
-          verify(fspan, PFlowLe(label, Public), Located(fspan, Inferred("ifc: string splice flow label")))
-        },
-        _ => // unresolved: open-world default = Public, no check needed
-        (),
-      },
+      NExpr(ShowExpr(inner)) => // the parser wraps every splice in ShowExpr, and the WRAPPER
+      // binds to String — reading the wrapper's type classified every
+      // splice Public and silently discharged the flow obligation (the
+      // regression the DCC gate's first probe caught, 2026-08-08). The
+      // label lives on the INNER node; read through the wrap.
+      splice_flow_check(node_handle(inner), fspan),
+      _ => // an unwrapped splice (pre-ShowExpr shapes): classify its own node
+      splice_flow_check(fh, fspan),
     },
   },
   fragments
 )
+
+fn splice_flow_check(h, fspan: ValidSpan) = match graph_chase(h) {
+  GNode(NBound(ty), _) => {
+    let label = query_flow_label(ty)
+    verify(fspan, PFlowLe(label, Public), Located(fspan, Inferred("ifc: string splice flow label")))
+  },
+  _ => // unresolved: open-world default = Public, no check needed
+  (),
+}
 
 // Effect-name projection of a row — the handled-name set read live from
 // a row's NRowBound. Used by pipeline.mn's reached-effect report.

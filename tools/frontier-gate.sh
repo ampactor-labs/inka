@@ -2472,6 +2472,22 @@ for i in "${!compilers[@]}"; do
     fail "flow facet (value: $(printf '%s' "$fl_val" | head -1) · fn: $(printf '%s' "$fl_fn" | head -1))"
   fi
 
+  # ─── The DCC noninterference gate, first face (§11 Phase 7,
+  # Hβ.ifc.dcc-noninterference-gate): a classified splice REFUSES
+  # (E_RefinementRejected via PFlowLe(Secret, Public), decidable-false)
+  # and the Public dual accepts — the pair differs only in the source's
+  # classification. Born RED 2026-08-08: the ShowExpr wrap bound every
+  # splice fragment to String, so the label read classified Public and
+  # the obligation silently discharged — the leak checked CLEAN on the
+  # pre-fix pin; the fix reads through the wrapper to the inner node.
+  ifc_leak=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-ifc-splice-leak.mn" 2>&1 >/dev/null | grep -c "E_RefinementRejected" || true)
+  ifc_sound=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-ifc-splice-sound.mn" 2>&1 >/dev/null | grep -c "E_RefinementRejected" || true)
+  if [ "$ifc_leak" -ge 1 ] && [ "$ifc_sound" -eq 0 ]; then
+    pass "dcc gate: classified splice refuses ($ifc_leak), public splice accepts"
+  else
+    fail "dcc gate (leak rejections: $ifc_leak, want >=1; sound rejections: $ifc_sound, want 0)"
+  fi
+
   # ─── !Thread transitivity on the REAL vocabulary (§11 6.5's first
   # verdict): a fn declared !Thread reaching lib/threading's spawn
   # through a call refuses transitively — the crown's own machinery

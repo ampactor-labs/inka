@@ -2397,6 +2397,24 @@ for i in "${!compilers[@]}"; do
     fail "poly fragment (diagnostics: $pf_diags; see $pf_err)"
   fi
 
+  # ─── The multi-call fragment boundary (§11 5.3 named-next (b)) ──────
+  # TWO self-calls at different shapes ([x] and (x,x)) — outside
+  # Henglein's single-call fragment — still infer: both fit the
+  # converged scheme, the recheck verifies, the belt confirms. Runs 4.
+  mc_err="$dir/poly-multicall.err"
+  mc_wat=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-poly-multicall.mn" 2> "$mc_err")
+  mc_diags=$(grep -c 'E_' "$mc_err" 2>/dev/null || true)
+  if [ -n "$mc_wat" ] && [ "$mc_diags" = "0" ]; then
+    printf '%s' "$mc_wat" > "$dir/poly-multicall.wat"
+    if wt_asm "$dir/poly-multicall.wat" "$dir/poly-multicall.wasm" 2>/dev/null && [ "$(wt_run "$dir/poly-multicall.wasm" > /dev/null 2>&1; echo $?)" = "4" ]; then
+      pass "poly multicall: two self-calls at different shapes inferred; runs (4)"
+    else
+      fail "poly multicall (assemble/run)"
+    fi
+  else
+    fail "poly multicall (diagnostics: $mc_diags; see $mc_err)"
+  fi
+
   # ─── The decls facet (the bound-projection landing's gate) ──────────
   # `query <fixture> "decls"` projects the decls COLUMN — the oracle
   # queue's own seed set. Born RED 2026-08-07: the incumbent boot

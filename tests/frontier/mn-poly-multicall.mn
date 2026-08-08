@@ -1,0 +1,8 @@
+// The multi-call fragment boundary (§11 5.3 named-next (b)): TWO
+// self-calls at DIFFERENT shapes — [x] and (x, x) — outside Henglein's
+// single-call fragment, still inferred: both instantiations fit the
+// converged ∀a. (a, Int) -> Int, the recheck round verifies them
+// against it, and the belt confirms stability. tw(5, 2) = 4.
+fn tw(x, n) = if n <= 0 { 1 } else { tw([x], n - 1) + tw((x, x), n - 1) }
+
+fn main() = tw(5, 2)

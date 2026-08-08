@@ -2034,11 +2034,20 @@ The spine root finishes. Order inside the phase is the dependency order.
   ships.
 - **6.5 · The gated verdicts unlock.** Everything band A held: ownership-
   as-effect VERIFIED, `!Thread`/`!Alloc` transitivity
-  (`Hβ.parallel.thread-alloc-transitive-proof`), race-freedom-by-ownership
+  (`Hβ.parallel.thread-alloc-transitive-proof` — the `!Thread` HALF
+  VERIFIED 2026-08-08 by crucible: the transitive spawn on the REAL
+  lib/threading vocabulary refuses under a declared `!Thread`
+  (tests/frontier/mn-thread-negation.mn, the frontier leg — the crown's
+  stdin harness cannot link lib, so the real-vocabulary crucible lives
+  there), the thread-free region accepts, and the REAL-TIME CLAIM
+  measured: a bare `><` inside `with !Thread` accepts because the verb
+  is pure topology — SYNTAX's provably-race-free sentence now has its
+  gate; the `!Alloc` half rides the arena's honest-row attribution),
+  race-freedom-by-ownership
   (`.race-freedom-ownership-proof`), and `Hβ.syntax.perform-dissolution`
-  closing the surface's last ceremony. Terminal gate: the crown battery
-  whole (leaks reject, sounds accept, instances precise, worlds enforced)
-  — DONE statement (2)'s first half.
+  closing the surface's last ceremony — ✅ EXECUTED. Terminal gate: the
+  crown battery whole (leaks reject, sounds accept, instances precise,
+  worlds enforced) — DONE statement (2)'s first half.
 
 ### Phase 7 · `!Flow` — the crown applied to data flow
 

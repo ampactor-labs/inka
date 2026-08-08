@@ -1,0 +1,7 @@
+// The real-time claim (SYNTAX ><): a bare fanout inside a !Thread
+// region ACCEPTS — the verb is pure topology contributing zero
+// effects; with no Schedule installed the branches run Seq.
+fn f() with !Thread = match (1 + 1) >< (2 + 2) {
+  (a, b) => a + b,
+}
+fn main() = f()

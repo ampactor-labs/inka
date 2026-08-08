@@ -1,0 +1,5 @@
+// The thread-free accept: a !Thread region doing plain compute
+// through a helper chain — no spawn anywhere, the negation holds.
+fn helper(x) = x * 2
+fn f() with !Thread = helper(3) + helper(4)
+fn main() = f()

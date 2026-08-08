@@ -2448,6 +2448,20 @@ for i in "${!compilers[@]}"; do
     fail "flow facet (value: $(printf '%s' "$fl_val" | head -1) · fn: $(printf '%s' "$fl_fn" | head -1))"
   fi
 
+  # ─── !Thread transitivity on the REAL vocabulary (§11 6.5's first
+  # verdict): a fn declared !Thread reaching lib/threading's spawn
+  # through a call refuses transitively — the crown's own machinery
+  # verified against the real effect (the crown gate's stdin harness
+  # cannot link lib, so the real-vocabulary crucible lives here; the
+  # self-contained sounds live in tests/crown/). Probed 1 mismatch
+  # against the boot before the leg was written.
+  tn_n=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-thread-negation.mn" 2>&1 | grep -cE 'E_EffectMismatch')
+  if [ "$tn_n" -ge 1 ]; then
+    pass "thread negation: !Thread refuses the transitive spawn on the real vocabulary"
+  else
+    fail "thread negation (mismatch=$tn_n — the transitive spawn passed a !Thread gate)"
+  fi
+
   # ─── The per-module solo sweep (PLAN §11 Phase 3.5, ratcheted) ──────
   # E_MissingVariable across every src module's SOLO check, ceiling in
   # verify-baseline (solo_violations_max — monotone DOWN; 0 retires the

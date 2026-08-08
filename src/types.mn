@@ -795,6 +795,18 @@ type ExecutableBoundary
 // migration's priced write-only interval, retired by that landing.
 type BindHome = BindUnwritten | BindLocal(Int) | BindUpval(Int, Int) | BindPrior(Int) | BindGlobal
 
+// The emittable-fn enumeration's entry kind (lowering-is-a-column, the
+// no-mint resolution): each synthesized fn shape is a PROJECTION of
+// structure the graph holds at its origin handle — the lambda its own
+// node, the thunk its boundary's branch, the arm its handler decl, the
+// k its continuation edge's substitution walk, the partial its call
+// node's hole shape, the nested fn its FnStmt. The enumeration entry
+// (kind, origin handle, deterministic name, fence) is what lower's
+// seven LFn writers know at construction and k2_floor never rewrites
+// (the pass carries LowFn interiors through untouched — each body is
+// floored at its own construction).
+type EmitFnKind = EfkPartial | EfkLambda | EfkThunk | EfkNested | EfkArm | EfkK
+
 // The snapshot carries exactly what its consumers read: the mint bound
 // and the span index. The node cells are NOT here — they live in the
 // handler's paged spine and are read through graph_chase/graph_node_body
@@ -1842,6 +1854,14 @@ effect GraphWrite {
   // judgment, a re-lower overwrites with the same verdict. The read
   // face lands with step iii's re-rooted emit walk.
   graph_bind_note(Int, BindHome)
+  // The emittable-fn enumeration's write (the no-mint resolution):
+  // each of lower's seven LFn construction sites notes (kind, origin
+  // handle, deterministic name, fence) at the moment those facts are
+  // final. Append-only, non-trailed (the decls contract). The read
+  // face lands with step iii's enumeration-walking emit; its read-side
+  // contract filters by the reach set — lower runs on every decl, emit
+  // does not.
+  graph_emitfn_note(EmitFnKind, Int, String, Int)
   // The deterministic handle partition (the planned mint): the final pass
   // pre-assigns each stmt a dense range of handles sized by the trial's
   // measured mint counts, so numbering is a pure function of the source —

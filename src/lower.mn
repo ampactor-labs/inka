@@ -843,6 +843,7 @@ fn lower_call_partial(handle, fbody, fh, r_args, n_ps) = match partial_callee_fo
     let flat_args = list_to_flat(r_args)
     match partial_split(flat_args, len(flat_args), n_ps, handle, 0, 0) {
       (captures, param_names, body_args) => {
+        graph_emitfn_note(EfkPartial, handle, "partial_{int_to_str(handle)}", len(captures))
         let fn_ir = LFn(
           "partial_{int_to_str(handle)}",
           len(param_names),
@@ -2197,6 +2198,7 @@ fn lower_expr_body(e, handle, span) = match e {
         let lo_body = k2_guard(mark_tail(lower_body_reified(body_node)))
         lower_frame_fence_pop()
         ls_exit_frame()
+        graph_emitfn_note(EfkLambda, handle, lambda_name, len(captures_exprs))
         let fn_ir = LFn(
           lambda_name,
           len(params),
@@ -2788,6 +2790,7 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
                 ls_exit_frame()
                 match executable_boundary_row(thunk_h) {
                   Ok(thunk_row) => {
+                    graph_emitfn_note(EfkThunk, thunk_h, thunk_name, len(captures_exprs))
                     let fn_ir = LFn(thunk_name, 0, [], [thunk_body], thunk_row, len(captures_exprs))
                     // A `<|` branch that performs a STATEFUL effect (verify_pending_at →
                     // Verify, teach_gradient → Teach) dispatches through the live world
@@ -2840,6 +2843,7 @@ fn synthesize_branch_thunk(parent_handle, side_label: String, branch_node, bound
             ls_exit_frame()
             match executable_boundary_row(thunk_h) {
               Ok(thunk_row) => {
+                graph_emitfn_note(EfkThunk, thunk_h, thunk_name, len(captures_exprs))
                 let fn_ir = LFn(
                   thunk_name,
                   0,
@@ -3102,6 +3106,7 @@ fn lower_stmt_body(s, handle, span) = match s {
         } ~> arm_state_ctx(bind_fields, bind_disc, bind_h)))
         lower_frame_fence_pop()
         ls_exit_frame()
+        graph_emitfn_note(EfkNested, handle, fn_name, len(captures_exprs))
         let fn_ir = LFn(
           fn_name,
           // includes the appended __k when resume-bound
@@ -3659,6 +3664,7 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
   // record's captured-ev region (past state AND arms).
   let body_list =
     if stateful { [LLet(0, "__hrec", LLocal(0, "__state")), lo_body] } else { [lo_body] }
+  graph_emitfn_note(EfkArm, node_handle(arm.body), fn_name, fence)
   let fn_ir = LFn(fn_name, len(arm_params), arm_params, body_list, mk_ef_pure(), fence)
   LDeclareFn(fn_ir)
 }
@@ -4218,6 +4224,7 @@ fn reify_frame_k_at(body_node, ph, outer_holes, edge) = match edge {
         let k_body = k2_floor_guard(mark_tail(k_remainder(body_node, subs2)), false)
         lower_frame_fence_pop()
         ls_exit_frame()
+        graph_emitfn_note(EfkK, ph, "__k_{int_to_str(ph)}", len(captures_exprs))
         let k_fn = LFn("__k_{int_to_str(ph)}", 1, [hole], [k_body], world, len(captures_exprs))
         if disc == MultiShot {
           LMakeContinuation(continuation_h, k_fn, captures_exprs, ph, resume_input_h)

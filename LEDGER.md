@@ -35,6 +35,26 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE EMITTABLE-FN ENUMERATION LANDS (pin 1055e8e5093b —
+  CLEAN m2 == m3, census 0, peak 2,375,716 KB inside the ceiling): the
+  no-mint resolution's vocabulary, dual-written. EmitFnKind's six
+  kinds (Partial/Lambda/Thunk/Nested/Arm/K) beside BindHome;
+  graph_emitfn_note appends (kind, origin handle, deterministic name,
+  fence) to emitfns_col in lower's walk order — the decls contract,
+  non-trailed; SEVEN notes at the seven LFn construction sites
+  (lower_call_partial:846, lower_expr_body's lambda, the two fanout
+  thunks keyed by thunk_h, lower_stmt_body's nested fn,
+  lower_one_arm_decl's arm keyed by the arm body's node,
+  reify_frame_k_at's k keyed by ph). The finality measurement that
+  licensed construction-time notes: k2_floor's
+  LMakeClosure/LMakeContinuation/LDeclareFn arms pass LowFn interiors
+  through UNTOUCHED — each body is floored at its own construction,
+  so (kind, origin, name, fence) is final where the note fires. The
+  read-side contract banked in the op decl: the step-iii
+  enumeration-walking emit filters by the reach set, because lower
+  runs on every decl and emit does not — the entry list is a superset
+  of the emitted set by construction.
+
 - 2026-08-08 · ▶▶▶ THE BIND-HOME COLUMN OPENS THE LOWERING ARC (pin d4d552904d8c —
   CLEAN m2 == m3, census 0, peak 2,369,792 KB inside the ceiling):
   step (i) of the lowering-is-a-column stamp, the smallest marched

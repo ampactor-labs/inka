@@ -245,7 +245,7 @@ fn poly_teach_line(owner: String, reason) with Memory + Alloc =
 // over the SHARED spine with a private planned range — the root install is
 // bare and the defaults are the empty graph. Handler state records live in
 // shared heap; the install chain stays per-instance, correctly private.
-handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, high_limit0) with spine = spine0, spine_open = spine_open0, trail = [], trail_len = 0, epoch = 0, next = next0, mint_limit = limit0, mint_high = high0, high_limit = high_limit0, span_index = span_index0, checkpoint_stack = [], comment_refs = [], refs_col = smap_new(), decls_col = [] {
+handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, high_limit0) with spine = spine0, spine_open = spine_open0, trail = [], trail_len = 0, epoch = 0, next = next0, mint_limit = limit0, mint_high = high0, high_limit = high_limit0, span_index = span_index0, checkpoint_stack = [], comment_refs = [], refs_col = smap_new(), decls_col = [], emitfns_col = [] {
   graph_chase(handle) => // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
   // graph_rollback pops. When the stack is empty, writes are at the
@@ -678,6 +678,11 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
     spine_put_bind(spine, use_handle, bh)
     resume()
   },
+  graph_emitfn_note(kind, origin, fn_name, fence) => // The emittable-fn
+  // enumeration (the no-mint resolution): one append per synthesized-fn
+  // construction, in lower's deterministic walk order. Non-trailed by
+  // the decls contract; the step-iii reader filters by the reach set.
+  resume() with emitfns_col = push(emitfns_col, (kind, origin, fn_name, fence)),
   graph_branch_seed() => resume((spine, spine_open, span_index)),
   graph_rollback(target_idx) => {
     let n = len(checkpoint_stack)

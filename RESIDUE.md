@@ -195,6 +195,66 @@ k-records, redrive drivers — either mint graph nodes (precedent:
 desugar, NModule, synth candidates all mint) or stay emit-era records.
 Sequenced after schemes-are-edges by the same method: swap the
 representation behind the projections, never patch the walkers.
+STAMPED 2026-08-08 (traced / priced / enumerated — the build's
+contract; 5.2's row half landed, so the sequencing gate is open):
+— TRACED. The 39 constructors split into ~24 STRUCTURE
+re-materializations (LConst/LLocal/LGlobal/LLet/LUpval/LBinOp/
+LUnaryOp/LCall/LTailCall/LReturn/LIf/LBlock/LMakeList/LMakeTuple/
+LMakeRecord/LMakeVariant/LMatch/LFieldLoad/LShow/LHash/LConvert/
+LFeedback/LFeedbackPrior/LInvariantFailure — the graph node plus its
+type already address everything; the emit walk reads program+columns
+directly) and ~15 DECISION carriers, the genuine lowering facts, each
+a per-handle COLUMN: binding resolution (Local/Global/Upval + capture
+index), call resolution (direct-callee bit, tail bit, callee-ref
+handle for twin demand), dispatch tier (LPerform/LDirectPerform/
+LEvPerform/LWasiCall + stateful bit, effect key, op_slot,
+state_local), yield boundary (state_index, ret_slot, frame-tail
+handle, k-shape — extends the LIVE `boundaries` column family),
+install shape (handler_name, state-init handles, arm_names groups),
+state-slot home (slot_offset + record-ladder resolution), schedule
+(the `~> Schedule` read), and the synthesized-fn set. THE
+SYNTHESIZED-SHAPES FORK RESOLVES MINT (precedent: desugar, NModule,
+synth candidates all mint; price: minted nodes REPLACE the LowFn tree
+allocation in the same image, while emit-era records keep a second
+tree — the entry's own kill-list logic convicts them). The k2-floor
+rewrite (today a tree→tree pass) becomes a column fact written at the
+one writer; LowFn's fence becomes a per-fn column field.
+— PRICED (§5.O). Write: one lower pass over the judged cone, O(1)
+list_set per decision through spine_page (the mechanism is live at 7
+columns; this adds ~7 more — each page grows by that many words per
+slot). Read: emit's spine_slot chase, O(1), the identical read canon/
+narrowing/boundaries use. Freshness: columns written after judgment,
+read only downstream by emit — no stale window, boundaries'
+discipline. Deletes the per-compile LowExpr/LowFn tree allocation
+(lower's dominant transient) — the arena's 2b image-set precondition
+this arc exists to serve.
+— ENUMERATED. Writers today, THREE (the census): the lower pass
+proper (the mint), the k2-floor rewrite (k2_floor_guard/_list,
+lower.mn:4409 region), the twin specialization (spec_candidates/
+spec_resolve_build, wasm.mn). Target ONE: the lower pass writing
+columns; k2-floor a column fact; twins emit-bracket reads keyed
+(handle, repr-vector), no LowFn copy. Walkers, TWELVE families
+(measured by the LYield total-match census — H6 totality makes the
+rare arm the enumerator; §7's "sixteen" counted list-leg siblings):
+lexpr_handle:510, k2_floor_guard:4409, reach_names_expr:5130,
+collect_value_holes_expr:5352, spec_scan_expr:5871 (lower.mn);
+walk_lemit_expr:1219, collect_call_vectors_expr:2146,
+collect_fn_emit_records_expr:2690, walk_locals_expr:2893,
+find_local_handle_expr:3297, emit_expr:3929,
+collect_fold_tys_expr:5021 (wasm.mn). Each keeps its SIGNATURE and
+its body becomes a column read (swap behind the projection), then the
+tree and the bodies that only re-walked it delete together.
+— THE MARCHED SEQUENCE: (i) column vocabulary lands beside the tree,
+dual-written, zero readers (Law-7 no-op); (ii) the projection bodies
+swap to column reads one landing at a time (collect_* family first),
+each marched; (iii) emit_expr's dispatch swaps to program+columns
+under march arbitration (CLEAN expected — same facts, same bytes);
+(iv) the trees + tree-only walkers delete whole; (v) k2-floor and
+twins re-key. Two verb confessions from the stamp's own dig, named
+per ⟳: the `type NAME` query facet answers the name, not the
+variant/field ROSTER (the ADT-roster facet); the address form lacks
+an enclosing-DECL facet (node → its decl — the walker census needed
+an awk scan for it).
 
 `Hβ.eval.evaluating-cursor` — the subsystem table's missing row
 (2026-07-30, the Fable novelty audit's second proposal). §2's table maps

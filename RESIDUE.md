@@ -351,10 +351,14 @@ the traced shape for the splice half; the interior-concat half
 has no clean parse home yet). α LANDED FOR THE LAMBDA KIND (2026-08-08, pin a3342552c850, CLEAN
 byte-identity — the column path builds exactly what the walk
 built, whole-wheel, interpolating specimens included; the lambda
-arm's inline body-lowering deleted into project_lambda_fn). The
-remaining kinds (thunk, nested, arm, k, partial) swap by the same
-move, each marched; (γ)'s ShowExpr half is its own follow-up; the
-march census-gap fix rides the next board-hardening landing. The
+arm's inline body-lowering deleted into project_lambda_fn) AND
+THE NESTED KIND (same day, pin ae471c6b7fc1 — project_nested_fn
+takes the FnStmt construction whole; fn_name/bind_h explicit
+arguments, bind_h's column home the stamped dispatch-tier
+column). The remaining kinds (thunk, arm, k, partial) swap by
+the same move, each marched; (γ)'s ShowExpr half is its own
+follow-up; the march census-gap fix rides the next
+board-hardening landing. The
 remaining (i)
 columns land by the same pattern as their swaps demand them;
 (ii) the projection bodies

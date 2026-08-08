@@ -35,6 +35,18 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE NESTED FN BUILDS FROM THE COLUMNS (pin ae471c6b7fc1 —
+  CLEAN m2 == m3, census 0): α's second kind, the FnStmt construction
+  deleted into project_nested_fn — the resume-binding context (bank
+  A3's CUT: the arm_state_ctx install, appended __k/__hrec params)
+  moves whole; fn_name and bind_h are explicit arguments with their
+  column homes named (the entry carries the name already; bind_h
+  waits on the dispatch-tier column). The m2 == m3 CLEAN verdict is
+  the output-preservation gate one generation apart: the old boot
+  has no swap, so a projector diverging from the walk would have
+  surfaced as TRANSITION. Two kinds down (lambda, nested); thunk /
+  arm / k / partial remain, each the same move.
+
 - 2026-08-08 · ▶▶▶ THE LAMBDA BUILDS FROM THE COLUMNS (pin a3342552c850 —
   CLEAN m2 == m3, census 0): landing shape α executed for the lambda
   kind. project_lambda_fn — column-seeded, one run — replaces the

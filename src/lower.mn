@@ -883,6 +883,45 @@ fn project_lambda_fn(origin, cap_pairs) = match graph_node_body(origin) {
   _ => None,
 }
 
+// The nested-fn body projector (landing shape α, second kind): the ONE
+// construction of a nested FnStmt's LowFn — params re-derived from the
+// origin's program-column node plus the resume-binding appendage, the
+// frame from the entry's capture pairs. fn_name and bind_h arrive as
+// arguments: the composed name already rides the enumeration entry,
+// and the resume-binding fact's column home is the dispatch-tier
+// column (named in the stamp), so the seam is explicit until it lands.
+fn project_nested_fn(origin, fn_name, bind_h, cap_pairs) = match graph_node_body(origin) {
+  NStmt(FnStmt(_name, params, _ret_ann, _effs, body_node)) => {
+    let cap_names = map(((n, _)) => n, cap_pairs)
+    let cap_handles = map(((_, h)) => h, cap_pairs)
+    let base_param_names = lower_param_names(params)
+    let param_names_list =
+      if bind_h == "" { base_param_names } else { base_param_names ++ ["__k", "__hrec"] }
+    let base_param_handles = param_handles_of(origin, params)
+    let param_handles_list =
+      if bind_h == "" { base_param_handles } else { base_param_handles ++ [0, 0] }
+    ls_enter_frame(fn_name, param_names_list, param_handles_list, cap_names, cap_handles, -1)
+    lower_frame_fence_push()
+    let bind_fields = if bind_h == "" {
+      []
+    } else {
+      match handler_decl_of(bind_h) {
+        Some((config, state, _)) => // drift-audit: ignore — one-shot name-list build
+        lower_param_names(config) ++ state_field_names_of(state),
+        None => [],
+      }
+    }
+    let bind_disc = if bind_h == "" { OneShot } else { MultiShot }
+    let lo_body = k2_guard(mark_tail({
+      lower_body_reified(body_node)
+    } ~> arm_state_ctx(bind_fields, bind_disc, bind_h)))
+    lower_frame_fence_pop()
+    ls_exit_frame()
+    Some(LFn(fn_name, len(param_names_list), param_names_list, [lo_body], mk_ef_pure(), len(cap_pairs)))
+  },
+  _ => None,
+}
+
 fn lower_call_partial(handle, fbody, fh, r_args, n_ps) = match partial_callee_form(handle, fbody, fh) {
   None => LInvariantFailure(handle, PartialCalleeShape(fh)),
   Some(form) => {
@@ -3129,40 +3168,6 @@ fn lower_stmt_body(s, handle, span) = match s {
         //
         let outer = ls_outer_fn_name()
         let fn_name = if outer == "" { name } else { "{outer}_{name}" }
-        ls_enter_frame(
-          fn_name,
-          param_names_list,
-          param_handles_list,
-          captures_names,
-          captures_handles,
-          // named fn — not a lambda; the ev READ uses escaping_row(fn_name)
-          -1
-        )
-        lower_frame_fence_push()
-        // THE CUT (bank A3, re-cut by the world arc): a resume-BOUND body
-        // lowers under its handler's arm context — resumes inside it take the
-        // MultiShot discipline (lower_resume_callk), resolve their k as the
-        // appended "__k" param (RLocal — the argument ladder), commit state
-        // through the bracket-scoped singleton (S1), and re-dispatch owned
-        // re-yields through $op___redrive_<hname> (M2b). The install is
-        // UNCONDITIONAL — an unbound body carries the boundary install's
-        // exact answers ([], OneShot, "").
-        let bind_fields = if bind_h == "" {
-          []
-        } else {
-          match handler_decl_of(bind_h) {
-            Some((config, state, _)) => // drift-audit: ignore — one-shot name-list build
-            lower_param_names(config) ++ state_field_names_of(state),
-            None => [],
-          }
-        }
-        let bind_disc = if bind_h == "" { OneShot } else { MultiShot }
-        // Hβ.lower.tail-call-mark-pass — fn body is in tail; MultiShot spine → the k1 yield; k2_guard floors off-spine boundaries (M1.3)
-        let lo_body = k2_guard(mark_tail({
-          lower_body_reified(body_node)
-        } ~> arm_state_ctx(bind_fields, bind_disc, bind_h)))
-        lower_frame_fence_pop()
-        ls_exit_frame()
         graph_emitfn_note(
           EfkNested,
           handle,
@@ -3170,18 +3175,15 @@ fn lower_stmt_body(s, handle, span) = match s {
           len(captures_exprs),
           zip(captures_names, captures_handles)
         )
-        let fn_ir = LFn(
-          fn_name,
-          // includes the appended __k when resume-bound
-          len(param_names_list),
-          param_names_list,
-          [lo_body],
-          // row resolved live via lookup_ty(handle)
-          mk_ef_pure(),
-          // closure fence = capture count
-          len(captures_exprs)
-        )
-        LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs))
+        // THE DIRECT SWAP (landing shape α, second kind): the LowFn is
+        // built by the column-seeded projector. The resume-binding
+        // context (THE CUT, bank A3 — the arm_state_ctx install, the
+        // appended __k/__hrec params) lives in project_nested_fn; the
+        // site keeps what feeds the columns.
+        match project_nested_fn(handle, fn_name, bind_h, zip(captures_names, captures_handles)) {
+          Some(fn_ir) => LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs)),
+          None => LInvariantFailure(handle, ProjectionOriginShape(handle)),
+        }
       },
     }
   },

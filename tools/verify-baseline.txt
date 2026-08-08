@@ -536,7 +536,14 @@ comment_refs_max: 0
 # Re-based 479 → 480 at the stability belt (pin 58197fecea01): the
 # belt's own new fns (the ty_alpha_eq family) join the freeze-root
 # class — the new-fn channel; zero trial/final machinery in the diff.
-movers_max: 480
+# Re-based 480 → 481 at the nested-fn column swap (pin ae471c6b7fc1):
+# neither new projector fn moves (measured — absent from the movers
+# line); an EXISTING scheme's trial/final divergence RELOCATED under
+# the source restructure, the condemned pass's documented artifact
+# (two builds proved the divergence relocates rather than resolves;
+# it dies with the one-pass judge). Zero trial/final machinery in
+# the diff; the next legal move stays DOWN.
+movers_max: 481
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

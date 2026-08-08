@@ -583,6 +583,7 @@ fn usage_of(ref name: String, ref node, mode) with !Mutate = match node {
     NExpr(MakeListExpr(elems)) => usage_elems(name, elems, mode),
     NExpr(MakeTupleExpr(elems)) => usage_elems(name, elems, mode),
     NExpr(MakeStringExpr(fragments)) => usage_elems(name, fragments, mode),
+    NExpr(ShowExpr(inner)) => usage_of(name, inner, mode),
     NExpr(IndexExpr(receiver, index)) => // xs[i] is the seq-op borrow: receiver and index are reads.
     pair_seq(usage_of(name, receiver, MRead), usage_of(name, index, MRead)),
     NExpr(MakeRecordExpr(flds)) => usage_flds(name, flds, mode),

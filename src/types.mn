@@ -1321,6 +1321,14 @@ type Expr
   // (foldable at compile time) per Mentl-ultimate
   // string-substrate discipline.
   | MakeStringExpr([Node])
+  // The splice's SHOW as a program node (γ's splice half,
+  // Hβ.parser.interp-desugars-to-program): the parser wraps every
+  // splice fragment at MakeStringExpr's own mint, so the structural
+  // to_string is a JUDGED node with a real handle — lower's LShow
+  // reads it instead of minting a fresh placeholder cell per run (the
+  // 4818 mint, the projector divergence dossier's smaller root).
+  // Parser-minted only, inside MakeStringExpr fragments.
+  | ShowExpr(Node)
   | FieldExpr(Node, String)
   // |> <| ~> <~ (binary by nature; `<|` is input × branch-tuple)
   | PipeExpr(PipeKind, Node, Node)

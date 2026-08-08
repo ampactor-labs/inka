@@ -502,6 +502,7 @@ fn expr_child_handles(e) with Alloc + Memory = match e {
   NamedRecordExpr(_, flds) => map(tuple_field_handle, flds),
   IndexExpr(recv, idx) => [node_handle(recv), node_handle(idx)],
   MakeStringExpr(frags) => map(node_handle, frags),
+  ShowExpr(inner) => [node_handle(inner)],
   FieldExpr(recv, _) => [node_handle(recv)],
   PipeExpr(_, l, r) => [node_handle(l), node_handle(r)],
   FanoutExpr(branches) => map(node_handle, branches),

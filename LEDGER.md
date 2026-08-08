@@ -35,6 +35,31 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE SPLICE SHOW IS A JUDGED NODE (pin 058bf710e66d —
+  TRANSITION m3 == m4, census 0): γ's splice half
+  (Hβ.parser.interp-desugars-to-program). The parser mints ShowExpr
+  around every splice at MakeStringExpr's construction; infer judges
+  it (the inner keeps its own type — the show accepts ANY type by
+  construction, the dispatch stays emit's structural read; the node
+  itself is String); lower's arm is LShow(handle, ...) on the JUDGED
+  program handle, and interp_fragment_shown — the per-run
+  graph_fresh_ty placeholder mint, the projector divergence
+  dossier's smaller root — DELETES with its map call. The sweep:
+  eight walkers named by exhaustiveness refusals, three more found
+  by the ExprPlaceholder-tell census (full enumerations behind
+  NodeBody dispatch), and the twelfth — usage_of, own.mn — found
+  only by the m3 TRAP: its double-nested match (N(body) → NodeBody →
+  NExpr(Expr)) passed the checker at 27 of 28 Expr variants, so the
+  compile-time law fell through to the runtime unreachable. THAT
+  CHECKER GAP IS THE LANDING'S SECOND FINDING, banked as
+  Hβ.infer.nested-pattern-exhaustiveness: totality over a nested
+  payload's constructor space must decompose through the wrapping
+  pattern, or a grown ADT walks silently into old matches' floors.
+  fmt renders the wrap invisibly (braces render the INNER — the
+  render∘parse fixpoint holds). TRANSITION: the parse shape crossed
+  one generation. The mint class's remaining half is the
+  interior-concat handle (lower.mn:4817).
+
 - 2026-08-08 · ▶▶▶ THE TEE SPEAKS ITS MODALITY (pin 2dcd736eb4e6 —
   CLEAN m2 == m3, census 0): §11 6.3's capability-at-tee projection
   as a `mentl where` badge — fn_tee_lines walks the queried fn's body

@@ -851,7 +851,8 @@ fn partial_callee_form(handle, fbody, fh) = match fbody {
 // LambdaExpr (probe-proven equal to the walked value at every lambda,
 // whole-wheel), the frame from the capture pairs the caller just noted
 // into the enumeration. One run, no dual-lowering: the mint census
-// (interpolation's two graph_fresh_ty sites) makes lowering
+// (interpolation's interior-concat graph_fresh_ty — the splice-show
+// mint died into the parse-minted ShowExpr) makes lowering
 // non-reproducible, so coherence is gated behaviorally — march,
 // micros, battery — exactly as every emit-path change is.
 fn project_lambda_fn(origin, cap_pairs) = match graph_node_body(origin) {
@@ -1442,6 +1443,7 @@ fn flow_edges_expr(e) = match e {
   MakeTupleExpr(elems) => flow_edges_list(elems),
   FanoutExpr(branches) => flow_edges_list(branches),
   MakeStringExpr(frags) => flow_edges_list(frags),
+  ShowExpr(inner) => flow_edges(inner),
   IndexExpr(r, i) => flow_join(flow_edges(r), flow_edges(i)),
   MakeRecordExpr(flds) => flow_edges_fields(flds),
   RecordUpdateExpr(base, flds) => flow_join(flow_edges(base), flow_edges_fields(flds)),
@@ -2249,6 +2251,10 @@ fn lower_expr_body(e, handle, span) = match e {
   // concat node; the view-substrate ensures zero byte-copy through
   // each splice's lex-produced view operand.
   lower_string_interpolation(handle, lower_expr_list(fragments)),
+  ShowExpr(inner) => // γ's splice half: the structural show reads THIS judged node's
+  // handle — the 4818 placeholder mint is dead; emit's show dispatch
+  // reads the OPERAND's type exactly as before.
+  LShow(handle, lower_expr(inner)),
   IndexExpr(receiver, index) => // Subscript dispatch at lower-time — the proof becomes the dispatch.
   // A tuple IS a positional product (L1); indexing it at a CONSTANT is a
   // field load read live from the proven Ty: lower emits LFieldLoad at the
@@ -3389,6 +3395,7 @@ fn seq_rep_of_fuel(h, fuel) = if fuel <= 0 {
     NExpr(MakeListExpr(_)) => SRFlat,
     NExpr(LitString(_)) => SRFlat,
     NExpr(MakeStringExpr(_)) => SRFlat,
+    NExpr(ShowExpr(_)) => SRFlat,
     NExpr(BinOpExpr(op, _, _)) => match op {
       BConcat => SRRope,
       _ => SRUnknown,
@@ -4774,17 +4781,15 @@ fn lower_string_interpolation(handle, lowered_fragments) = {
   // alternation invariant) elide before the fold — the canonical form
   // is also the efficient form (no str_concat with "" at runtime).
   // The seed's $lower_make_string elides IDENTICALLY (fixpoint parity).
-  let elided = filter((f) => !is_empty_lconst_string(f), lowered_fragments)
-  // A splice fragment renders through the structural show — the implicit
-  // to_string the SYNTAX Strings law names ("splice rendering dispatches
-  // to_string structurally at lower from the spliced node's inferred
-  // type"). Without the wrap an Int splice reached str_concat as a raw
-  // word — the null-page read rendered EVERY bare-int splice as the
-  // empty string (Hβ.emit.int-splice-empty, closed here; the wheel had
-  // dodged it by spelling int_to_str at every one of its own splices).
-  // A literal chunk is already text; a String-typed splice rides emit's
-  // identity arm — the wrap is uniform, the dispatch lives at emit.
-  let fragments = map(interp_fragment_shown, elided)
+  // The structural show arrives PRE-WRAPPED (γ's splice half): the
+  // parser mints ShowExpr around every splice at MakeStringExpr's own
+  // construction, so each fragment here is a literal LConst or an
+  // LShow keyed by its JUDGED program handle — the per-run placeholder
+  // mint died with the wrap fn (the projector divergence dossier's
+  // smaller root). Emit's dispatch is unchanged (String → identity,
+  // Float → float_to_str, word → int_to_str — show_node_of's arms;
+  // the int-splice-empty class stays closed by the wrap's new home).
+  let fragments = filter((f) => !is_empty_lconst_string(f), lowered_fragments)
   if len(fragments) == 0 {
     LConst(handle, LString(""))
   } else if len(fragments) == 1 {
@@ -4825,15 +4830,6 @@ fn lower_string_interpolation(handle, lowered_fragments) = {
 fn is_empty_lconst_string(frag) = match frag {
   LConst(_, LString(s)) => byte_len(s) == 0,
   _ => false,
-}
-
-// The splice's implicit to_string: a literal chunk passes through; any
-// other fragment is a splice and wraps in the structural LShow, whose
-// emit dispatch reads the operand's LIVE type (String → identity,
-// Float → float_to_str, word → int_to_str — show_node_of's own arms).
-fn interp_fragment_shown(frag) = match frag {
-  LConst(ch, LString(s)) => LConst(ch, LString(s)),
-  other => LShow(graph_fresh_ty(Inferred("interp splice show")), other),
 }
 
 // Expression list

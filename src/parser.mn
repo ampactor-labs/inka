@@ -2224,7 +2224,10 @@ fn parse_string_interpolation_loop(ref tokens, pos, own buf, count, start_span) 
       match consume_string_parts(tokens, p2b, "") {
         (next_chunk, p3) => {
           let next_chunk_node = nexpr(LitString(next_chunk), start_span)
-          match push_node(buf, count, splice_expr) {
+          // γ's splice half: the structural show minted HERE as a
+          // program node, so lower reads a judged handle instead of
+          // minting a placeholder cell per run.
+          match push_node(buf, count, nexpr(ShowExpr(splice_expr), start_span)) {
             (b1, c1) => match push_node(b1, c1, next_chunk_node) {
               (b2, c2) => parse_string_interpolation_loop(tokens, p3, b2, c2, start_span),
             },
@@ -3341,6 +3344,7 @@ fn free_vars_expr(e, bound) = match e {
   MakeListExpr(elems) => free_vars_list(elems, bound),
   MakeTupleExpr(elems) => free_vars_list(elems, bound),
   MakeStringExpr(fragments) => free_vars_list(fragments, bound),
+  ShowExpr(inner) => collect_free_vars(inner, bound),
   IndexExpr(receiver, index) => free_vars_merge(collect_free_vars(receiver, bound), collect_free_vars(index, bound)),
   MakeRecordExpr(flds) => free_vars_record_fields(flds, bound),
   RecordUpdateExpr(base, flds) => free_vars_merge(collect_free_vars(base, bound), free_vars_record_fields(flds, bound)),

@@ -639,6 +639,7 @@ fn body_binders(ref node, acc) = match node {
     NExpr(MakeListExpr(es)) => bb_list(es, 0, acc),
     NExpr(MakeTupleExpr(es)) => bb_list(es, 0, acc),
     NExpr(MakeStringExpr(fs)) => bb_list(fs, 0, acc),
+    NExpr(ShowExpr(inner)) => body_binders(inner, acc),
     NExpr(IndexExpr(rc, ix)) => body_binders(ix, body_binders(rc, acc)),
     NExpr(FieldExpr(rc, _)) => body_binders(rc, acc),
     NExpr(ResumeExpr(v, _)) => body_binders(v, acc),
@@ -3722,6 +3723,15 @@ fn infer_expr(ref node) = match node {
       infer_expr_list(fragments)
       check_splice_flow_labels(fragments, span)
       graph_bind(handle, ty_string, Located(span, Inferred("string interpolation")))
+    },
+    NExpr(ShowExpr(inner)) => {
+      // The splice's structural show as a judged node (γ's splice
+      // half): the inner keeps its own inferred type — the show
+      // accepts ANY type by construction (the dispatch is emit's
+      // structural read) — and the node itself IS a String, the
+      // handle lower's LShow reads instead of minting a cell.
+      infer_expr(inner)
+      graph_bind(handle, ty_string, Located(span, Inferred("splice show")))
     },
     NExpr(MakeRecordExpr(fields)) => {
       // Each field's value is inferred; the record's type is
@@ -8682,6 +8692,7 @@ fn collect_fn_decls(node, acc) = match node {
     NExpr(FanoutExpr(branches)) => collect_fn_decls_list(branches, acc),
     NExpr(RestExpr(_)) => acc,
     NExpr(MakeStringExpr(frags)) => collect_fn_decls_list(frags, acc),
+    NExpr(ShowExpr(inner)) => collect_fn_decls(inner, acc),
     NExpr(LabeledArg(_, v)) => collect_fn_decls(v, acc),
     NExpr(ResumeExpr(v, us)) => collect_fn_decls_updates(us, collect_fn_decls(v, acc)),
     NStmt(TypeDefStmt(_, _)) => acc,
@@ -8818,6 +8829,7 @@ fn resume_grade(node) = match node {
     NExpr(FanoutExpr(branches)) => grade_nodes(branches),
     NExpr(RestExpr(_)) => UZero,
     NExpr(MakeStringExpr(frags)) => grade_nodes(frags),
+    NExpr(ShowExpr(inner)) => resume_grade(inner),
     NExpr(LabeledArg(_, v)) => resume_grade(v),
     NStmt(LetStmt(_, v, _)) => resume_grade(v),
     NStmt(ExprStmt(e)) => resume_grade(e),
@@ -8979,6 +8991,7 @@ fn walk_refinement(node, path_pred) with GraphRead + GraphWrite + Memory + Alloc
     NExpr(MakeListExpr(elems)) => walk_refinement_list(elems, path_pred),
     NExpr(MakeTupleExpr(elems)) => walk_refinement_list(elems, path_pred),
     NExpr(MakeStringExpr(frags)) => walk_refinement_list(frags, path_pred),
+    NExpr(ShowExpr(inner)) => walk_refinement(inner, path_pred),
     NExpr(IndexExpr(receiver, index)) => // An index site under a non-trivial path: record the path-predicate proven
     // to hold at the index node (graph_narrow_set), so lower's bounds-check read
     // (graph_narrow_at) elides the check the path already discharged (§4⑥:

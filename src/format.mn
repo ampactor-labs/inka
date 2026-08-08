@@ -472,6 +472,9 @@ fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   MakeStringExpr(parts) => // Interpolation is the parse's inverse: literal chunks re-escape,
   // every other fragment renders as a live splice.
   "\"{render_string_parts(parts, 0)}\"",
+  ShowExpr(inner) => // Outside a string context the wrap is invisible surface — the
+  // inner renders bare (parser-minted only inside fragments).
+  render_tokens_for(inner),
   MatchExpr(scrut, arms) => "match {render_tokens_for(scrut)} \{\n{indent_block(strip_trailing_nl(render_match_arms(arms, 0)))}\n\}",
   ResumeExpr(v, updates) => "{render_resume_head(v)}{render_state_updates(updates, 0)}",
 }
@@ -767,6 +770,9 @@ fn render_string_parts(ref parts, i) with GraphRead + Memory + Alloc + !Mutate +
 } else {
   let one = match ast_kind_of(parts[i]) {
     NExpr(LitString(s)) => escape_string_content(s),
+    NExpr(ShowExpr(inner)) => // The splice's ShowExpr wrap is invisible surface — the braces
+    // render the INNER (render∘parse fixpoint over the wrap).
+    "\{{render_tokens_for(inner)}\}",
     _ => "\{{render_tokens_for(parts[i])}\}",
   }
   "{one}{render_string_parts(parts, i + 1)}"

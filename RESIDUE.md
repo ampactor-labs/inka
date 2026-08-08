@@ -362,7 +362,24 @@ hoisted ahead of body lowering. THE SWEEP CLOSED (pin
 3adb331719ef): arm, k, and partial measured ALREADY α-shaped —
 standalone constructions fed by program/env/boundary facts, no
 swap to make; the notes trued to parent-before-child so the
-enumeration is tree-ordered across all six kinds. What remains
+enumeration is tree-ordered across all six kinds. (γ)'S SPLICE
+HALF LANDED (pin 058bf710e66d, TRANSITION): ShowExpr parse-minted
+around every splice, judged by infer, LShow reading the judged
+handle — interp_fragment_shown's per-run mint DELETED; the mint
+class's remaining half is the interior-concat handle
+(lower.mn:4817), still blocking dual-run lowering of
+multi-fragment interpolations only. TWO FINDINGS BANKED FROM THE
+SWEEP: `Hβ.infer.nested-pattern-exhaustiveness` — usage_of's
+double-nested match (N(body) → NodeBody → NExpr(Expr)) passed the
+checker at 27 of 28 Expr variants and trapped at runtime on the
+new ctor; totality must decompose through wrapping patterns, or
+every grown ADT walks old matches into their compiled floors (the
+placeholder-tell census — grep NExpr(ExprPlaceholder) — is the
+hand instrument until the checker closes). And the IFC
+read-through: check_splice_flow_labels now sees ShowExpr-wrapped
+fragments — its label read must reach the INNER node (verified
+green by the flow frontier leg this landing; named here so the
+wrap never silently launders a splice's label). What remains
 of the arc is step (ii)-onward proper: the enumeration READER,
 then the tree deletion — plus (γ)'s ShowExpr follow-up.
 THE PHASE-BOUNDARY STAMP (2026-08-08, traced against

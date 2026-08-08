@@ -35,6 +35,18 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE DECLARED NODE PINS ITS DIM (pin 7cc5ab7f544e —
+  CLEAN m2 == m3, census 0, crown 13/0): the effarg peer's identity
+  half, one arm — pin_scalar_or_keep's EANode case takes the declared
+  operand node exactly as the scalar arms take their literals. The
+  false same-name mismatch dies (`with Sample(rate)` no longer
+  refuses its own body's tick()); the honest conservative gate
+  remains as the fixture's ONE mismatch, both sides rendered by
+  name. Hβ.syntax.effarg-node-in-with-clause CLOSES across three
+  landings: the parse arm was always there (the fmt render's debug
+  form was the masquerade), the render speaks the operand, the
+  identity pins.
+
 - 2026-08-08 · ▶▶▶ THE ROW RENDER SPEAKS THE OPERAND (pin 7f3cc86a70fe —
   CLEAN m2 == m3, census 0, crown 13/0): show_eff_arg's EANode arm
   reads the operand node's source spelling live, keeping the debug

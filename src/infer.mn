@@ -3203,7 +3203,15 @@ fn pin_scalar_or_keep(barg, darg) = match darg {
   EAFloat(_) => darg,
   EAString(_) => darg,
   EAType(_) => barg,
-  EANode(_) => barg,
+  EANode(_) => // The declared NON-LITERAL instance pins exactly as a scalar does:
+  // the charge's value dim is the entry's unknowable placeholder, and
+  // the declared operand NODE is the decl's own instance truth — same
+  // handle, so same-name instances compare equal and the false
+  // declared-vs-charged mismatch dies (measured 2026-08-08:
+  // `with Sample(rate)` refused its own body's tick()). The
+  // conservative gate against a forbidden literal is untouched — an
+  // EANode is still never provably distinct from it.
+  darg,
 }
 
 fn enforce_row_gate(name: String, declared_row, has_pure, row_handle, span: ValidSpan) = {

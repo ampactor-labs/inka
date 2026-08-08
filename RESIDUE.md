@@ -28,6 +28,50 @@
 
 ---
 
+`Hβ.types.predicate-is-expr` — TRACED 2026-08-08 (Phase 8.1's stamp
+check; the peer had lived only as a DEP line in the verify-reads-canon
+entry): the CORE IS ALREADY DONE — PExpr is DELETED (types.mn's own
+record beside the Predicate ADT: its leaves were a lossy copy of the
+expression the AST node already holds, with a `_ => PEVar("?")`
+surrender; the predicate now carries live operand HANDLES — PCompare
+over two node handles, PBoolNode, PWithSelf threading the self
+binder). What REMAINS of 8.1's sentence is the comparison-chain
+teaching: `-1.0 <= self <= 1.0` still parses left-assoc into the
+ill-sorted `(Bool) <= Float`, the predicate walk accepts it opaquely,
+and the debt SURFACES honestly at the executable ("verify: pending
+comparison -1.0 <= self <= 1.0" — probed live) but never rejects
+loudly at the decl. The loud rejection = judging the where-clause
+expression through ordinary inference (the chain's Bool <= Float is
+then E_TypeMismatch with a Reason at the decl) — sequenced with the
+verify-reads-canon proposal it DEP-feeds, since a judged predicate
+node is exactly what canon saturation needs. The probe's side-find is
+its own entry: `Hβ.emit.unused-wide-param-floor`.
+
+`Hβ.emit.unused-wide-param-floor` — TRAP PINNED 2026-08-08 (found by
+Phase 8.1's opening probe, en route to the predicate trace): a fn whose
+WIDE-typed parameter is UNUSED in its body emits an i32-floor
+signature while every caller pushes the real width — INVALID WAT, loud
+at assemble (`return_call expected [i32, i32] got [i32, f64]`). Minimal
+pair, both probed on pin a025c3523a84: `fn accept_g(s: Gain) = 1`
+(Gain = Float where 0.0 <= self; s unused) REFUSES at wat2wasm;
+`fn accept_u(s: Gain) = if s <= 1.0 { 1 } else { 0 }` (s used) runs
+clean. ROOT: `param_repr_from_body` (backends/wasm.mn) derives a
+param's repr by SCANNING THE BODY for its LLocal and falls to
+`if h == 0 { RI32 }` when the scan finds nothing — the graph already
+holds the param's type on the fn's own TFun product, and the
+usage-scan re-derivation fabricates the floor exactly when usage is
+absent (Carried-Truth, textbook; the wildcard-zero shape in repr
+costume). FIX DIRECTION: the param repr reads the fn's type product
+(position-keyed through param_names), and the body scan DIES — its
+callers (the wide-fn classifier, the deref sites, the signature
+render) all take the same read; check what type source the emit
+context carries for lambdas before assuming the decl scheme is
+reachable at all four sites. GATE WHEN FIXED: the unused-param pair
+as a frontier leg (refuses today — RED is already banked by the
+probe). The wheel itself never hits the class (march green — the
+wheel's wide params are used), so the oracle was blind by the
+familiar rung-3 shape: a class the wheel never exercises.
+
 `Hβ.ifc.flowlabel-inference-in-hm` — STAMPED 2026-08-08 (the C chain's
 second step; build-ready design, not yet built). TRACED, against the
 artifact: today's FlowLabel is COMPUTED per query (query_flow_label

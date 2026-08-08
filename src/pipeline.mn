@@ -1250,6 +1250,8 @@ fn census_shape_of(arg) with Memory + Alloc = if arg == "anonymous" {
   Some(CsIterationCostume)
 } else if arg == "wildcard-zero" {
   Some(CsWildcardZero)
+} else if arg == "failure-mask" {
+  Some(CsFailureMask)
 } else {
   match find(
     (k) => show_pipe_kind(k) == arg,

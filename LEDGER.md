@@ -35,6 +35,15 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE FAILURE-MASK SHAPE (pin 0094b2176c8a — CLEAN
+  m2 == m3, census 0): the second drift-catalog absorption — mode 13
+  (`expr || true`) becomes CsFailureMask, the BOr-with-LitBool(true)
+  silhouette read structurally from the weave. The roster leg grows
+  to eleven; the wheel's own query.mn measures ZERO mask sites. The
+  absorption cadence is now established machinery: shape ctor +
+  label + detector + grammar word + specimen + roster line, one
+  marched landing per mode.
+
 - 2026-08-08 · ▶▶▶ THE WILDCARD-ZERO SHAPE (pin 448c51080635 — CLEAN
   m2 == m3, census 0): 5.6's first drift-catalog absorption — mode 10
   (the `_ => 0` surrender-fallback silhouette) becomes CsWildcardZero

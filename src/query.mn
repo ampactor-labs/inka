@@ -29,7 +29,14 @@ import parser
 // through show_pipe_kind — the one glyph projection, never a second
 // table), and iteration-shape (CsIterationCostume — the audit tier's
 // detector living HERE, the census its home, the audit a reader).
-type CensusShape = CsAnonymous | CsVerb(PipeKind) | CsEta | CsEffectfulLambda | CsIterationCostume | CsWildcardZero
+type CensusShape
+  = CsAnonymous
+  | CsVerb(PipeKind)
+  | CsEta
+  | CsEffectfulLambda
+  | CsIterationCostume
+  | CsWildcardZero
+  | CsFailureMask
 
 // Sum type covering every forensic question `mentl query` can pose.
 // Each variant corresponds to one `ask(Q)` arm in `query_default`.
@@ -410,6 +417,7 @@ fn census_label(shape) with Pure = match shape {
   CsEffectfulLambda => "effectful lambda(s)",
   CsIterationCostume => "iteration-costume fn(s)",
   CsWildcardZero => "wildcard-zero arm(s)",
+  CsFailureMask => "failure-mask site(s)",
 }
 
 fn census_sites(shape) with GraphRead + !Mutate + Alloc + Memory = match graph_snapshot() {
@@ -482,6 +490,22 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
   // exactly as the bash mode's suppression comment encoded it.
   match body {
     NExpr(MatchExpr(_, arms)) => any_wildcard_zero(arms, 0, len(arms)),
+    _ => false,
+  },
+  CsFailureMask => // Drift mode 13's shape (the second absorption): `expr || true`
+  // — a failure masked into unconditional success. The census counts
+  // the silhouette; a deliberate specimen carries its reader-facing
+  // reason exactly as the wildcard-zero convention set.
+  match body {
+    NExpr(BinOpExpr(op, _, r)) => match op {
+      BOr => match r {
+        N(rb, _, _) => match rb {
+          NExpr(LitBool(v)) => v,
+          _ => false,
+        },
+      },
+      _ => false,
+    },
     _ => false,
   },
 }

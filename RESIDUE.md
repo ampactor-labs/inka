@@ -3383,3 +3383,41 @@ typed) ·
 `Hβ.emit.int-splice-empty` · `Hβ.emit.f64-closure-capture-box` ·
 `Hβ.m2.callsite-result-width` (the loud width family) ·
 `Hβ.felt.ide-run-in-page` (in-browser assembler).
+
+`Hβ.infer.sigd-polymorphic-recursion` — §11 5.3's first step,
+STAMPED 2026-08-07 (build next). BASELINE, measured at the 5.1c
+kill: `fn depth(x: a, n) -> Int = ... depth([x], n - 1)` with a
+FULL authored signature refuses E_OccursCheck — the self-call uses
+the mono assumption even under the signature, so SYNTAX's
+"polymorphic recursion prices a signature" is refuse-both-ways,
+below Haskell/OCaml's crude accept-with-annotation route.
+SEMANTICS TRACED to one writer: infer_fn's bind-before-body
+(infer.mn:2568–2576) — when the decl handle is unbound at
+judgment, `env_extend(name, Forall([], fn_ty))` SHADOWS the
+prereg's quantified scheme with a mono view, and every self-call
+chains the mono cells (unify of [a] against a → the occurs
+refusal). The poly route half-exists already:
+pre_register_fn_sig publishes generalize(handle) of the
+signature-built TFun (quantified for a fully-sig'd decl), and
+group_mono_views (infer.mn:1800) EXEMPTS fully-sig'd cycle
+members from the mono downgrade — the intra-decl shadow is the
+one remaining mono writer. THE BUILD: the `_` arm's env_extend
+goes conditional on fn_fully_sigd (the existing discriminator,
+infer.mn:1823) — sig'd: skip the shadow, the prereg quantified
+scheme stays in scope and self-calls instantiate it fresh per
+use (propose-and-check: the body still judges against fn_ty via
+graph_bind + the authored param/ret pins, so a body violating
+its signature still refuses E_TypeMismatch at the pin sites);
+unsig'd: the mono bind stands (HM's mono recursion, soundness).
+PRICED (§5.O): zero new machinery — one conditional on an
+existing predicate, no scans, no state. WRITERS: one
+(infer_fn's env_extend arm). GATE, RED-first: the depth fixture
+as a frontier leg — E_OccursCheck through the incumbent boot,
+compiles-and-runs through the fix. RISKS, arbitrated by the
+board: sig'd self-recursive wheel fns re-judge (census + march);
+published schemes may shift (the movers ratchet; a re-base needs
+the publish-surface justification). SEQUENCED NEXT after this
+step: the Henglein single-call fragment inferred (annotation-free
+for the decidable shape), the row side per arXiv 2510.20532, and
+the proposed-signature TEACH (the medium proposes the signature
+from the call sites it judged — the question beats the guess).

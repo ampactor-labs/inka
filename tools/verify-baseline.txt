@@ -932,4 +932,18 @@ parallel_arrays_max: 0
 # retires the O(graph) refs scan and the O(graph²) dependents walk;
 # its reclaimer is the same per-decl arena / rung-3 pair as above
 # (one judgment round = one note set). The next legal move stays DOWN.
-selfcompile_peak_kb_max: 2400000
+# Raised 2,400,000 → 2,410,000 (2026-08-08) — a NOISE-BAND correction,
+# not growth headroom, from a fixed-input band measurement: three m3
+# legs on the unchanged tree read 2,293,120 / 2,293,412 / 2,293,268 KB
+# (±150 KB — the leg is tightly reproducible), while the session's
+# landing marches read 2,383,340 / 2,392,684 / 2,398,768 on trees
+# differing by ~20-50 source lines. The signal is STEPPED: two modes
+# ~105 MB apart (the bump image's growth-chunk quantum), and small
+# source deltas hop a chunk and back. A ceiling 1,232 KB above the high
+# mode refuses on the next hop — variance, not growth — which blinds
+# the ratchet to what it exists to catch. 2,410,000 sits just above the
+# measured high mode: the next chunk (~2,500,000) still refuses, so
+# REAL growth is caught at the same sensitivity. The arena (4.3,
+# columns-first) remains the named reclaimer of the LEVEL; the next
+# legal move stays DOWN.
+selfcompile_peak_kb_max: 2410000

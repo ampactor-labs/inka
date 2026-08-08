@@ -2130,10 +2130,13 @@ passed check with no fixture to see it; fixed by reading through the
 wrap, the leak/sound pair born RED. The check is CONSTRUCTION-site —
 sink-blind, conservatively sound; sink-sensitivity is the next step's
 buy, the RESIDUE entry carries the full remainder) →
-`.flowlabel-inference-in-hm` (the label lattice joins riding the same
-union-find; 2.0's eq coherence is why label compares are trustworthy;
-retires the predicate-name classifier and moves the constraint from
-the splice to the sink edge) → `.pc-label-implicit-flow` →
+`.flowlabel-inference-in-hm` (STAMPED 2026-08-08, RESIDUE the home:
+the flow fact is a ROW element — Flow(Src, Sink) charged at
+observation edges, `!Flow(Secret, Log)` proving absence as !Alloc
+does, the §4⑥ absorption executed on the existing algebra; labels
+never ride the type union-find — one tainted Int would label every
+Int; the sink-edge move retires the construction-site over-refusal) →
+`.pc-label-implicit-flow` →
 `.integrity-dual-lattice` (the agentic regime's forcing function — the
 integrity spec that makes the mechanism honest) → `.declassify-robust` →
 `.flow-world-on-tcont` (labels survive TIME) → `.agentic-fides-target`.

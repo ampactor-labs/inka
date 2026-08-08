@@ -28,6 +28,48 @@
 
 ---
 
+`Hβ.ifc.flowlabel-inference-in-hm` — STAMPED 2026-08-08 (the C chain's
+second step; build-ready design, not yet built). TRACED, against the
+artifact: today's FlowLabel is COMPUTED per query (query_flow_label
+reads a Ty's refinement-predicate NAMES — secret/classified/sensitive),
+and the one enforcement is construction-site (every splice ⊑ Public).
+The inference form must answer two structurally different needs the
+trace separates: (1) SOURCE classification — which values are Secret —
+and (2) FLOW obligation — which sinks a value may reach. The trap the
+trace rules out: labels CANNOT ride the type union-find naively (every
+Int unifies through shared cells — one tainted Int would label them
+all); label flow follows VALUE-flow edges, not type-identity edges.
+THE DIRECTION THE DOCS ALREADY ANSWER (§4⑥ verbatim: "Mentl absorbs
+information-flow control into the same Boolean algebra"): the FLOW
+fact is a ROW element — a parameterized pseudo-effect Flow(Src, Sink)
+charged where a labeled value crosses an observation edge (a splice
+whose string reaches a handler, a call into a sink-rowed fn), with
+`!Flow(Secret, Log)` proving absence exactly as !Alloc does,
+discharged by the same subsumption gate, inheriting the crown's
+instance machinery (eff_forbids' EANode conservative arm covers the
+unknown-label case for free). SOURCE classification stays per-value:
+the refined-alias read today, a declared label surface later — the
+classifier's predicate-name heuristic retires when labels become
+declared facts, not when the row work lands. PRICED: (a) the row
+element needs multi-arg parameterized effects (Sample(rate) is
+one-arg; the decl grammar's N-arg reach is a checked-at-build item);
+(b) charging sites are the splice check (already isolated in
+splice_flow_check) and the install read (the handler-residual seam's
+own machinery); (c) no new traversal — the charges ride judgment
+where rows already accrue, O(charge sites). ENUMERATED writers:
+types.mn (the Flow effect vocabulary), infer.mn (splice_flow_check
+charges the row instead of verifying against Public; the sink-edge
+charge at install), effects.mn (nothing — the algebra is closed over
+parameterized names already), crucibles (the leak pair re-lands as
+row-negation crucibles; the over-refusal case — Secret splice bound
+for a Secret sink — becomes the sound fixture that PROVES
+sink-sensitivity). The REFUTATION TARGET priced against it: a fourth
+graph sort of label cells (row-var precedent) — heavier (a new sort
+in unify/generalize/instantiate) and unnecessary if the row carries
+the flow; it wins only if per-value label POLYMORPHISM (a fn generic
+over its argument's label) is needed before declared labels exist —
+measure at build, burden on the challenger.
+
 `Hβ.ifc.dcc-noninterference-gate` — FIRST FACE LANDED 2026-08-08 (pin
 a025c3523a84; the C chain's head, banked here at its stamp). TRACED: the
 lattice (Public ⊑ Tainted ⊑ Secret, total join), the classifier

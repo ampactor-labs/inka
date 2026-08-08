@@ -1516,10 +1516,35 @@ expression's child, so surface_area_at(decl) answered a constant 0.
 The repair is the migration: surface_area_at reads
 len(refs_of_name(name)) off the column; count_dependents,
 body_references, and the orphaned list_contains deleted whole.
-REMAINING here: collect_bound_positions (oracle.mn) is the
-bound-cell PROJECTION sibling — not a reference query (bound cells,
-not names), so its form is its own graph op or a spine-column read,
-stamped before built; then this peer closes.
+REMAINING here: collect_bound_positions (oracle.mn) — STAMPED
+2026-08-07, build next. SEMANTICS TRACED: one consumer
+(project_queue, oracle.mn:194); candidates_at yields non-empty ONLY
+at NBound(TFun) positions (gradient_candidates_at's TFun arm is the
+sole producer), so the whole-handle chase-walk seeds (a) fn decls —
+the productive set — and (b) every fn-typed MENTION and lambda,
+each of which re-enumerates the decl's own candidate set per
+mention (a Carried-Truth violation inside the incumbent: N copies
+of one decl's candidates interleaved in the queue) or applies
+decl-surface annotations at positions that have no with-clause.
+The name and comment claim a "dependents" filter no code
+implements. THE FORM (priced, two rejected): a DECLS COLUMN — the
+refs column's exact sibling, graph handler state noting the FnStmt
+handle at the decl judgment's one writer, read by a graph_decls_at
+op; O(1) note × ~1.6e3 decls at wheel scale (three orders below
+the refs column's 2.4e6), O(decls) read. REJECTED: a program-root
+stmts op (the stmt LIST is a judgment-time value in driver hands,
+not a graph node — inventing a root node to avoid a column is more
+machinery, not less); the status quo (O(graph) chases per queue
+derivation). SEMANTIC DELTA, named: the new seed EXCLUDES
+mentions/lambdas — the repair, not a loss (mentions duplicated;
+lambdas have no annotation surface — the anonymity tier is their
+channel). WRITERS ENUMERATED: one (the FnStmt judgment arm).
+GATE: no test reaches project_queue today (grep-verified); the
+landing's leg observes the queue through voice's projection
+(query_project_queue behind the teach/at surface) on a fixture:
+seed count == decl count, seen RED against the incumbent boot
+(mention-inflated count). Then positions_with_dependents' lying
+name dies with the walk and this peer closes.
 
 `Hβ.audit.capability-carries-its-evidence` — the severance teaching's
 remainder (named 2026-07-30 with the vocabulary's graph read). The

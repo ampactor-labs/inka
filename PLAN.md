@@ -2028,14 +2028,18 @@ The spine root finishes. Order inside the phase is the dependency order.
   `!E` accepts). Crown crucibles pin all of it. The REMAINDER: the
   TIME half (a persisted k under a changed handler set — rides 9.1
   with 6.4's value gates), the per-modal-rule crucible sweep against
-  the POPL-2026 encoding (OPENED 2026-08-08, six rules pinned at
-  crown 23/0 — accepts: mask composition with innermost dispatch
+  the POPL-2026 encoding (OPENED 2026-08-08, seven rules pinned at
+  crown 27/0 — accepts: mask composition with innermost dispatch
   measured at runtime, the latent/performed distinction (E riding a
   RETURNED closure's value row while the constructor's own row stays
   pure under !E), double-HOF threading, the mixed row's licensed
   half (F + !E performing only F); refusals: install-extent
-  exactness (an op AFTER the install closed is unabsorbed) and the
-  mixed row's negation half (the F license never launders E); the
+  exactness (an op AFTER the install closed is unabsorbed), the
+  mixed row's negation half (the F license never launders E), and
+  the tee's ADD half under negation (an arm-performed F meets an
+  outer !F — row(expr ~> h) carries + row(h), so absorbing E never
+  launders the arm's own F; the sound dual declares F + !E and the
+  pair differs only in the declared row, its own control); the
   sweep continues rule-by-rule), and the
   capability-at-tee PROJECTION — ✅ LANDED 2026-08-08 (pin
   2dcd736eb4e6): `mentl where` renders every install as

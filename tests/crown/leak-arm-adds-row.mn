@@ -1,0 +1,11 @@
+// CROWN modal (§11 6.3's crucible sweep): the TEE'S ADD HALF under
+// negation — row(expr ~> h) = row(expr) - handled(h) + row(h). h's arm
+// performs F while absorbing E, so the install CARRIES F, and the
+// enclosing !F refuses: absorbing one effect never launders what the
+// arms themselves do. Expect E_EffectMismatch.
+effect E { op() -> Int }
+effect F { fop() -> Int }
+handler h { op() => resume(fop()) }
+fn work() = op()
+fn f() with !F = (work()) ~> h
+fn main() = 0

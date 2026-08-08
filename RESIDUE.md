@@ -293,21 +293,40 @@ landing's first march leg under-reports. SPECIMENS (from the
 march m3.err, banked before the revert): lambda_259726 260516
 261363 274662 275516 285110 306551 306602 307521 307593 309548
 316971 317015 317090 317134 317308 328122 330083 331728 348617
-348659 348709 351644 355490 357850. THE DIAGNOSIS FRONTIER, in
-suspicion order: (a) the projector lowers
-graph_node_body(origin)'s NExpr payload while the live walk
-lowers the expr VALUE handed down by the parent's destructure —
-any post-parse rewrite that updates the walked tree without
-spine_put_body (or vice versa: pipe-hole completion, string
-interpolation desugars) makes the two bodies structurally
-different at exactly those origins; (b) frame-external mutable
-state consumed by the first lowering and absent for the second
-(boundary/k-spine reads); (c) a leaf-test false positive (a
-construction path that does not note). NAMED NEXT PROBE: rerun
-with the divergence report carrying BOTH rendered LowFns (or
-their first differing constructor path) for one specimen —
-lambda_259726 — and read which of (a)/(b)/(c) it is. The
-diagnostic's span_zero also wants the origin's real span. The
+348659 348709 351644 355490 357850. THE ROOT IS DECODED (2026-08-08, four probe marches — kills
+counted): (a) DEAD — a whole-wheel eq probe found ZERO
+column-vs-walked body mismatches (the program column holds
+exactly what the walk lowers, every lambda); (c) not implicated.
+(b) CONFIRMED with the exact mechanism: LOWER-TIME FRESH MINTING.
+The component probe showed all 25 diverging at BODY only (arity/
+params/fence/root-handle equal, neither k2-wrapped); the span
+probe placed every specimen at a lambda containing STRING
+INTERPOLATION; and the mint census found the whole class — TWO
+sites, both in lower_string_interpolation's machinery:
+graph_fresh_ty per interior concat (lower.mn:4795, the
+staging-clobber fix's per-concat handle) and graph_fresh_ty per
+splice show (interp_fragment_shown, lower.mn:4818). A re-lowering
+mints NEW cells, so the structural == honestly reports
+handle-divergent trees. THE LAW THIS NAMES: body projection
+requires lowering to be a PURE PROJECTION — same graph in, same
+tree out — and lower-time fresh minting is the one thing in the
+wheel that breaks it (the no-mint stamp's claim survives for fn
+SHAPES; the intra-body mint class is what it missed). TWO
+RESOLUTION DIRECTIONS, the first ruled the next build: (1)
+DERIVED IDENTITY — the two mints become reads of a deterministic
+key (origin handle × fragment index): mint once at the FIRST
+lowering and read thereafter, or key into planned-mint space; the
+open mechanics question is what the minted cell's handle is FOR —
+the interior concat's ch is read at emit (the ++ dispatch and the
+$call_<handle> staging local), so the derived cell must carry the
+String type and module-wide uniqueness; (2) THE ULTIMATE FORM —
+interpolation desugars AT PARSE into program nodes (the
+show/concat structure judged by infer, real types instead of
+Inferred placeholder cells), making lower a pure projection by
+construction — the desugar-mints precedent applied to the last
+lower-time minting in the wheel; named
+`Hβ.parser.interp-desugars-to-program`. The projector relands
+after (1) or (2); the march census-gap fix rides that landing. The
 remaining (i)
 columns land by the same pattern as their swaps demand them;
 (ii) the projection bodies

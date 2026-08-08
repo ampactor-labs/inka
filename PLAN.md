@@ -1954,15 +1954,28 @@ new DEP found; the map below is accurate at that pin.)*
 
 The spine root finishes. Order inside the phase is the dependency order.
 
-- **6.1 · R1: `EffName`-is-a-handle** — the positive gate's remaining 146
-  self-compile false-mismatches → 0 (`Hβ.effects.positive-row-pointer-eq`
-  dissolves; §5.O layer 1 applied to correctness — the convergent
-  non-negotiable root the destiny audit named).
-- **6.2 · Instance-precise negation** —
-  `Hβ.effects.parameterized-negation-instance`: `!Sample(44100)` admits
-  `Sample(48000)` and refuses `44100` by VALUE, not conservatively by name;
-  Phase 1's `eff_admits`/`eff_forbids` + the EANode value dims are the
-  landed substrate, and the five instance fixtures are the gate.
+- **6.1 · R1: `EffName`-is-a-handle** — ✅ LANDED 2026-07-24 (pin
+  91e35f1e, commit f695480d "identity is a contract"), found already
+  whole at the 2026-08-08 phase walk: ENamed/EParameterized carry the
+  intern handle, eff_name_handle is the Pure i32 comparison key, the six
+  by-name str_eq leaves became word compares, and the landing's own
+  record closes the residual — "the crown's positive-path residual
+  closes by construction: byte-equal-but-pointer-distinct names are
+  untypeable, and a missed mint is a loud type error."
+  `Hβ.effects.positive-row-pointer-eq` dissolved there.
+- **6.2 · Instance-precise negation** — ✅ MECHANISM WHOLE at the same
+  walk (`eff_forbids`' instance arm refuses same-instance and
+  not-provably-distinct, admits provably distinct; `eff_admits` the
+  positive dual from Phase 1); THE GATE LANDED 2026-08-08: four
+  instance crucibles in tests/crown/ (leak-instance-same,
+  leak-instance-bare, sound-instance-distinct,
+  sound-instance-bare-admits), crown 12/0. The fifth stamped fixture
+  (the EANode conservative arm) is UNCONSTRUCTIBLE from the surface:
+  the with-clause parser refuses non-literal effect args
+  (E_EffArgNotLiteral, live at parse) — a measured tension with the
+  W23-era claim of that class's deletion; the EANode-in-with-clause
+  surface is `Hβ.syntax.effarg-node-in-with-clause`, named here, and
+  the conservative arm's crucible lands with it.
 - **6.3 · The modal world-index** — `Hβ.effects.modal-world-index` +
   `Hβ.infer.modal-capability-at-tee`: rows + capabilities + negation sound
   SIMULTANEOUSLY as a graph fact. The route is the graph, not the calculus:

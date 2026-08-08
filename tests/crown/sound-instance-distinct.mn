@@ -1,0 +1,7 @@
+// CROWN instance (§11 6.2) — !Sample(44100) ADMITS a provably distinct
+// instance: the body reaches Sample(48000) only. Expect NO
+// E_EffectMismatch.
+effect Sample(rate: Int) { tick() -> Int }
+fn inner() with Sample(48000) = tick()
+fn ok() with !Sample(44100) = inner()
+fn main() = ok()

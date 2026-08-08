@@ -1,0 +1,6 @@
+// CROWN instance (§11 6.2) — !Sample(44100) must REJECT a body reaching
+// the SAME instance transitively. Expect E_EffectMismatch.
+effect Sample(rate: Int) { tick() -> Int }
+fn inner() with Sample(44100) = tick()
+fn bad() with !Sample(44100) = inner()
+fn main() = bad()

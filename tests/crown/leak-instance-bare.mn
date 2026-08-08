@@ -1,0 +1,7 @@
+// CROWN instance (§11 6.2) — a BARE !Sample forbids EVERY instance:
+// the body reaches Sample(44100) and must be rejected. Expect
+// E_EffectMismatch.
+effect Sample(rate: Int) { tick() -> Int }
+fn inner() with Sample(44100) = tick()
+fn bad() with !Sample = inner()
+fn main() = bad()

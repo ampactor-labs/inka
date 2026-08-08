@@ -363,11 +363,49 @@ hoisted ahead of body lowering. THE SWEEP CLOSED (pin
 standalone constructions fed by program/env/boundary facts, no
 swap to make; the notes trued to parent-before-child so the
 enumeration is tree-ordered across all six kinds. What remains
-of the arc is step (ii)-onward proper: the enumeration READER
-(emit walking entries + reach filter — a phase-boundary stamp
-first: emit calling lower-per-entry dissolves the lower/emit
-spine boundary, the per-decl incremental-emission machinery),
-then the tree deletion — plus (γ)'s ShowExpr follow-up. THE
+of the arc is step (ii)-onward proper: the enumeration READER,
+then the tree deletion — plus (γ)'s ShowExpr follow-up.
+THE PHASE-BOUNDARY STAMP (2026-08-08, traced against
+pipeline.mn's spine — the reader's build contract):
+— TRACED. compile_remainder (pipeline.mn:454) is `saturate_pass
+|> lower_program |> reachable_from_main |> executable_gate |>
+emit_module`, and the WHOLE remainder runs under ONE install
+chain (:466 — wat_stdout … lower_scope ~> arm_state_ctx ~>
+spec_registry), so the projectors are callable from emit BY
+CONSTRUCTION — the ls world is live there; the boundary to
+dissolve is the DATA handoff (the full [LowExpr] tree), not a
+handler seam. The end form: construction RELOCATES from
+lower-time to emit-time, ONE run still — lower_program shrinks
+to its pre-passes (resume_bindings, escaping rows, decl
+registration), and per-fn construction runs on demand per
+REACHABLE entry. Reachability becomes the WORKLIST: construct
+main's entry, collect its references from the constructed body,
+construct those, iterate — demand-driven, replacing
+lower-all-then-filter, and dissolving the dossier's chicken-egg
+(lower-minted references exist exactly when their parent
+constructs). The executable gate reads constructed bodies as
+entries complete, before module assembly. The module
+aggregations (call vectors, fold tys, strings, spec demands)
+become per-entry ACCUMULATIONS at construction — the collect_*
+walker family deletes here, not at a separate step.
+— PRICED (§5.O). Construction becomes O(reachable) — unreachable
+decls never lower (today they lower and are filtered). One run
+per entry, so the interp mint class never dual-runs. Intern and
+data ordering shift with the demand order → the landing is a
+TRANSITION by construction; determinism holds (the worklist
+order is a pure function of the program — first-reference order
+from main). Memory: the full-tree residency window shrinks to
+per-entry (the arena's 2b friend).
+— ENUMERATED. The moving parts, each a marched landing: (1)
+lower_program's per-decl construction relocates behind a
+per-entry entry point (the projectors + lower_stmt for
+top-level decls); (2) reachable_from_main becomes the worklist
+driver keyed by the enumeration; (3) executable_gate re-roots on
+per-entry constructed bodies; (4) emit_module's collect_* family
+becomes accumulation at construction; (5) the LowFn/LowExpr
+handoff tree deletes (step iv arrives here). Risk tripwire: the
+worklist's first-reference order must be deterministic across
+generations — the m3 == m4 assertion is the instrument. THE
 MARCH CENSUS GAP IS CLOSED (2026-08-08): censusok reads the
 m3-leg count against census_errors_max beside costok, refuses
 both repin branches and the march's own exit on a rise; logic

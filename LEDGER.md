@@ -35,6 +35,16 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE WILDCARD-ZERO SHAPE (pin 448c51080635 — CLEAN
+  m2 == m3, census 0): 5.6's first drift-catalog absorption — mode 10
+  (the `_ => 0` surrender-fallback silhouette) becomes CsWildcardZero
+  in the weave census, and the medium's detector out-measures the
+  bash scaffold on its first run: three wheel sites located
+  (parser:210, query:742, types:217) where the grep pattern saw one.
+  The census counts the SHAPE; the masked-case-vs-true-zero judgment
+  stays the reader's. The roster leg grows to ten shapes, the fixture
+  gains wz_site at line 27.
+
 - 2026-08-08 · ▶▶▶ THE BARE WHY VERB (pin bd96e9334f5e — CLEAN
   m2 == m3, census 0): SYNTAX's verb-lag list retires its first name.
   `mentl why <path> <name>` is why_verb_args routing to the query

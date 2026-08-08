@@ -1248,6 +1248,8 @@ fn census_shape_of(arg) with Memory + Alloc = if arg == "anonymous" {
   Some(CsEffectfulLambda)
 } else if arg == "iteration" {
   Some(CsIterationCostume)
+} else if arg == "wildcard-zero" {
+  Some(CsWildcardZero)
 } else {
   match find(
     (k) => show_pipe_kind(k) == arg,

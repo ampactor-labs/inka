@@ -24,3 +24,4 @@ fn main() = 0
 fn eta_site(xs) = map((x) => inc(x), xs)
 fn rowed_site(xs) = map((x) => x + tick(), xs) ~> ticker
 fn walk_site(xs, i, n) = if i >= n { 0 } else { walk_site(xs, i + 1, n) }
+fn wz_site(v) = match v { 1 => 5, _ => 0 } // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts

@@ -32,10 +32,12 @@ Provenance, self-confirmed at pin time:
   derivation sequences with the Henglein fragment). Two report sites
   enriched: the graph write guard (where this shape actually fires —
   measured; the line renders coordinates + name only, the guard's own
-  discipline) and unify's occurs pre-check (the unify-path belt). One
-  measured observation banked: occurs_in_live answered FALSE where the
-  guard's occurs_in answered TRUE on the same bind — the belt working,
-  and a trio divergence named. The frontier leg pins the fixture's
+  discipline) and unify's occurs pre-check (the unify-path belt). The
+  same-day retraction: occurs_in_live IS the guard's occurs_in (one
+  walk), so the "trio divergence" first banked here was a wrong
+  decode — the two reports come from two different BINDS (the unify
+  pre-check arm never sees the var-var union path's bind); the belt
+  architecture works as designed. The frontier leg pins the fixture's
   refusal + narration, born RED.
 - boot/mentl.wasm  sha256 7f4bf082992ec1f4983cbef41fbf88bb2a04953ee2f35f70c8d951be8601caf8
   (CLEAN m2 == m3; re-pinned from m2 per march.sh — 395951 lines, census 0)

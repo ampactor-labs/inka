@@ -46,11 +46,14 @@
   is conditional and honest, HasPlaceholders. The DiagKind ctor
   T_PolyRecursionSignature rides all seven projection arms. Fixture
   tests/frontier/mn-poly-teach.mn: E_OccursCheck + the narration
-  naming depth, leg born RED. MEASURED ASIDE, banked: occurs_in_live
-  (unify's walk) answered FALSE where the guard's occurs_in answered
-  TRUE on the same bind — the belt caught what the pre-check missed;
-  the walks' disagreement on this shape is a named trio-law
-  observation for the occurs family's next audit.
+  naming depth, leg born RED. MEASURED ASIDE — RETRACTED same
+  day (the forensic retraction law): occurs_in_live IS the guard's own
+  occurs_in over the same spine (one walk, graph.mn), so no
+  disagreement is possible on equal inputs; the two reports come from
+  two DIFFERENT binds — the unsig'd shape's occurs arises on a bind
+  the unify pre-check arm never sees (the var-var union path), and
+  the guard is simply the site that meets it. No trio observation
+  stands; the belt architecture is working as designed.
 
 - 2026-08-07 · ▶▶▶ THE SIGNATURE BUYS THE POLY SELF-CALL (pin d8142b3b1d98 —
   CLEAN at the final leg, census 0, micros green; the arc crossed one

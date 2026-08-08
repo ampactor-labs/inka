@@ -35,6 +35,24 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE ORACLE READS THE COLUMN (pin 00a91c85efcd —
+  CLEAN m2 == m3, census 0, wheel −15 lines, emit −101): the
+  reverse-edge peer's second reader. The probe-first law earned its
+  keep: the banked stamp said "read the name at pos and count the
+  column", and the site trace showed the incumbent answered NOTHING —
+  count_dependents asked "which nodes carry pos as a direct child
+  handle", but expr_child_handles returns child TYPE handles and a
+  FnStmt handle is no expression's child, so surface_area_at(decl)
+  was a constant 0 and the oracle's surface-area rank input was dead
+  weight from birth. The repair IS the migration: surface_area_at
+  matches the decl, answers len(refs_of_name(name)) — the column
+  read through the one span-deduped projection — and count_dependents,
+  body_references, and the orphaned list_contains delete whole.
+  Peak 2,329,624 KB inside the 2,400,000 ceiling. Remaining on
+  Hβ.graph.reverse-edge-and-bound-projection:
+  collect_bound_positions' bound-cell projection (bound cells are not
+  references — its own op), then the peer closes.
+
 - 2026-08-07 · ▶▶▶ THE REVERSE EDGE IS A COLUMN (pin a37869cbfd9d —
   CLEAN m2 == m3, census 0, micros 128/0): §11 5.5's first column
   lands per the banked stamp. Two graph ops (graph_ref_note /

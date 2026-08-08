@@ -1508,14 +1508,18 @@ peak ratchet raised 2,250,000 → 2,400,000 component-attributed.
 The write notes above the env match (a missing name is still a
 reference); the column is append-only telemetry, not trail-backed
 (rolled-back branches' notes are dead handles the read-side
-zero-span skip + span dedup drop). REMAINING here:
-count_dependents (oracle.mn:282) becomes a per-candidate
-graph_refs_at read — its question is "how many references does
-the name AT pos have", so the migration reads the name from the
-node at pos and counts the column's live spans;
-collect_bound_positions (oracle.mn:440) is the bound-cell
-PROJECTION sibling — not a reference query, its own op if the
-scan is to die; then this peer closes.
+zero-span skip + span dedup drop). THE ORACLE READER LANDED
+(2026-08-07, pin 00a91c85efcd — the LEDGER entry of the same name):
+the probe traced the incumbent DEAD — count_dependents matched pos
+against direct child TYPE handles, and a FnStmt handle is no
+expression's child, so surface_area_at(decl) answered a constant 0.
+The repair is the migration: surface_area_at reads
+len(refs_of_name(name)) off the column; count_dependents,
+body_references, and the orphaned list_contains deleted whole.
+REMAINING here: collect_bound_positions (oracle.mn) is the
+bound-cell PROJECTION sibling — not a reference query (bound cells,
+not names), so its form is its own graph op or a spine-column read,
+stamped before built; then this peer closes.
 
 `Hβ.audit.capability-carries-its-evidence` — the severance teaching's
 remainder (named 2026-07-30 with the vocabulary's graph read). The

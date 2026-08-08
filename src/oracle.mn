@@ -273,27 +273,17 @@ fn intent_weight_at(pos) with GraphRead + Memory = match graph_node_body(pos) {
   0,
 }
 
-// surface_area_at — count of positions that depend on this one, walked
-// LIVE over the graph's program weave (graph_node_body resolves each
-// handle's body; a body referencing `pos` is a dependent). The count is
-// derived from the edges that already exist, never stored.
-fn surface_area_at(pos) with GraphRead + Memory + Alloc = count_dependents(pos, 0, graph_next(), 0)
-
-fn count_dependents(pos, h, bound, acc) with GraphRead + Alloc + Memory = if h >= bound {
-  acc
-} else {
-  let next_acc = if body_references(graph_node_body(h), pos) { acc + 1 } else { acc }
-  count_dependents(pos, h + 1, bound, next_acc)
-}
-
-// body_references — does a node body reference the target handle? Each
-// Expr carries its child Nodes (N(_, _, h)); a body one of
-// whose direct children's type-handle IS `target` is a dependent edge.
-// The edges already exist in the program weave — this reads them live,
-// never a stored dependent count.
-fn body_references(body, target) with Memory + Alloc = match body {
-  NExpr(e) => list_contains(expr_child_handles(e), target),
-  _ => false,
+// surface_area_at — count of positions that depend on this one. For a
+// named decl the dependents ARE the name's references, read from the
+// graph's refs column (refs_of_name — the live projection whose
+// zero-span skip and re-mint dedup make len the honest count). The
+// former child-handle walk counted structural PARENTS — a FnStmt
+// handle is no expression's child, so it answered a constant 0 and
+// the rank input was dead.
+fn surface_area_at(pos) with GraphRead + Memory + Alloc = match graph_node_body(pos) {
+  NStmt(FnStmt(name, _, _, _, _)) => len(refs_of_name(name)),
+  _ => // drift-audit: ignore — a position declaring no name has no name-keyed dependents, baseline 0
+  0,
 }
 
 // node_contains_handle — TREE containment: is `target` the node at
@@ -449,11 +439,6 @@ fn collect_bound_positions(h, bound, acc) with GraphRead + Memory + Alloc = if h
       collect_bound_positions(h + 1, bound, next_acc)
     },
   }
-}
-
-fn list_contains(xs, target) with Memory + Alloc = match xs {
-  [] => false,
-  [h, ...t] => if h == target { true } else { list_contains(t, target) },
 }
 
 // ─── oracle_ic_fixpoint — the `<~` build loop (Iterate-class IC) ─────

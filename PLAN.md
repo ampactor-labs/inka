@@ -2013,8 +2013,10 @@ The spine root finishes. Order inside the phase is the dependency order.
   exactness (an op AFTER the install closed is unabsorbed) and the
   mixed row's negation half (the F license never launders E); the
   sweep continues rule-by-rule), and the
-  capability-at-tee PROJECTION (the modality as a cursor-projected
-  graph fact — the felt face).
+  capability-at-tee PROJECTION — ✅ LANDED 2026-08-08 (pin
+  2dcd736eb4e6): `mentl where` renders every install as
+  `~> h absorbs E at <span>`, the effect set from the handler's own
+  arms — the modality as a derived badge, the felt face real.
 - **6.4 · TIME's world enforced** — the `TCont` world stops being inert.
   THE CAPTURE IS LANDED, verified at the 2026-08-08 phase walk:
   `Hβ.infer.tcont-world-capture-at-reify` is real —

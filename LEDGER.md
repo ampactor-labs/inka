@@ -35,6 +35,18 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE TEE SPEAKS ITS MODALITY (pin 2dcd736eb4e6 —
+  CLEAN m2 == m3, census 0): §11 6.3's capability-at-tee projection
+  as a `mentl where` badge — fn_tee_lines walks the queried fn's body
+  mirroring the fanout walk's traversal, and every `~>` install
+  renders `~> h absorbs E at <span>`, the effect set read from the
+  handler's arms (each op's EffectOpScheme ename, distinct names
+  joined " + "). Probed live before the leg: sound-masking-negation's
+  f answers `~> h absorbs E`. The where leg's fifth assert born RED
+  (the prior boot lacked the facet); mn-where-badges gains the
+  installed fn. The modal walk's remaining 6.3 items after this:
+  the crucible sweep continues rule-by-rule; the TIME half rides 9.1.
+
 - 2026-08-08 · ▶▶▶ THE α SWEEP COMPLETES (pin 3adb331719ef — CLEAN
   m2 == m3, census 0): the closing measurement — arm, k, and partial
   need NO swap, because their constructions are already α-shaped:

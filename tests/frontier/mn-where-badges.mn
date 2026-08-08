@@ -9,6 +9,8 @@ let gain = 0.5
 
 fn ticks(x) = x + tick()
 
+fn handled(x) with !Tick = (ticks(x)) ~> ticker
+
 fn fanned(a, b) = ((a) >< (b)) ~> parallel_compose
 
 fn bare(a, b) = (a) >< (b)

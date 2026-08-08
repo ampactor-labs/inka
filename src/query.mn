@@ -667,7 +667,7 @@ fn where_badges(name: String) with GraphRead + EnvRead + Intern + !Mutate + Allo
       EffectOpScheme(ename, _, _, disc) => QRWhere(["{name} : {ename} op — resume {op_resume_ty(scheme)} {disc_glyph(disc)} answer"], []),
       _ => match scheme {
         Forall(_, ty) => match chase_type_deep(ty) {
-          TFun(_, _, _) => QRWhere([], fn_fanout_sites(name)),
+          TFun(_, _, _) => QRWhere(fn_tee_lines(name), fn_fanout_sites(name)),
           chased => QRWhere(
             ["{name} : {show_type(chased)} @ {repr_name(repr_of(chased))} ({pin_word(ty_has_repr_pin(ty))})"],
             []
@@ -749,6 +749,84 @@ fn fanout_sites_list(nodes, tees) with GraphRead + EnvRead + !Mutate + Alloc + M
 fn fanout_sites_children(hs, tees) with GraphRead + EnvRead + !Mutate + Alloc + Memory = match hs {
   [] => [],
   [ch, ...rest] => fanout_sites(ch, tees) ++ fanout_sites_children(rest, tees),
+}
+
+// The capability-at-tee projection (§11 6.3's felt face): every `~>`
+// install in the fn's body rendered with the effect set its handler
+// absorbs — the modality as a DERIVED badge (output, never input),
+// read from the graph's own facts: the install node, the handler's
+// arms, each arm op's EffectOpScheme ename.
+fn fn_tee_lines(name: String) with GraphRead + EnvRead + !Mutate + Alloc + Memory = match graph_snapshot() {
+  Graph(next, _) => find_fn_tees(name, 0, next),
+}
+
+fn find_fn_tees(name: String, i, n) with GraphRead + EnvRead + !Mutate + Alloc + Memory = if i >= n {
+  []
+} else {
+  match graph_node_body(i) {
+    NStmt(FnStmt(fname, _, _, _, body)) => if fname == name { tee_lines(node_handle(body)) } else { find_fn_tees(name, i + 1, n) },
+    _ => find_fn_tees(name, i + 1, n),
+  }
+}
+
+fn tee_lines(h) with GraphRead + EnvRead + !Mutate + Alloc + Memory = {
+  let body = graph_node_body(h)
+  match body {
+    NExpr(PipeExpr(PTee, l, r)) => {
+      let hn = tee_handler_name(r)
+      let line = if hn == "" {
+        []
+      } else {
+        ["~> {hn} absorbs {handler_absorbs_str(hn)} at {show_span(span_of_node_raw(h))}"]
+      }
+      line ++ tee_lines(node_handle(l))
+    },
+    NExpr(LambdaExpr(_, lb)) => tee_lines(node_handle(lb)),
+    NStmt(FnStmt(_, _, _, _, fb)) => tee_lines(node_handle(fb)),
+    _ => tee_lines_children(body_child_handles(body)),
+  }
+}
+
+fn tee_lines_children(hs) with GraphRead + EnvRead + !Mutate + Alloc + Memory = match hs {
+  [] => [],
+  [ch, ...rest] => tee_lines(ch) ++ tee_lines_children(rest),
+}
+
+// The handler's absorbed effect set: each arm's op resolves to its
+// EffectOpScheme's ename; distinct names join with " + ".
+fn handler_absorbs_str(hname: String) with EnvRead + Memory + Alloc = match env_lookup(hname) {
+  Some(entry) => match entry {
+    (_, _, HandlerKind(_, _, _, arms)) => absorbs_join(arms, 0, len(arms), []),
+    _ => "?",
+  },
+  None => "?",
+}
+
+fn absorbs_join(arms, i, n, seen) with EnvRead + Memory + Alloc = if i >= n {
+  join_names(seen, 0, len(seen), "")
+} else {
+  match env_lookup(handler_arm_op_name(list_index(arms, i))) {
+    Some((_, _, EffectOpScheme(ename, _, _, _))) => if name_in(seen, ename, 0, len(seen)) {
+      absorbs_join(arms, i + 1, n, seen)
+    } else {
+      absorbs_join(arms, i + 1, n, seen ++ [ename])
+    },
+    _ => absorbs_join(arms, i + 1, n, seen),
+  }
+}
+
+fn name_in(xs, x: String, i, n) with Memory =
+  if i >= n { false } else { if list_index(xs, i) == x { true } else { name_in(xs, x, i + 1, n) } }
+
+fn join_names(xs, i, n, acc: String) with Memory + Alloc = if i >= n {
+  acc
+} else {
+  join_names(
+    xs,
+    i + 1,
+    n,
+    if byte_len(acc) == 0 { list_index(xs, i) } else { "{acc} + {list_index(xs, i)}" }
+  )
 }
 
 // A tee whose handler expression is not a named reference has no name

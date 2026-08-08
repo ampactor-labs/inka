@@ -2292,7 +2292,12 @@ for i in "${!compilers[@]}"; do
   printf '%s' "$w_sched" | grep -q '>< \[Thread\] at' || { w_ok=0; fail "where schedule badge (got: $w_sched)"; }
   w_seq=$(wt_run --dir "$ROOT" "$compiler" where "$wdoc" bare 2>/dev/null)
   printf '%s' "$w_seq" | grep -q '>< \[Seq\] at' || { w_ok=0; fail "where seq-default badge (got: $w_seq)"; }
-  [ "$w_ok" = 1 ] && pass "where: repr, cardinality, and both schedule badges narrate (output, never input)"
+  # The capability-at-tee badge (§11 6.3's felt face): the install line
+  # names the handler and the effect set its arms absorb, from the
+  # graph's own facts. Born RED 2026-08-08 (the boot lacked the facet).
+  w_tee=$(wt_run --dir "$ROOT" "$compiler" where "$wdoc" handled 2>/dev/null)
+  printf '%s' "$w_tee" | grep -q '~> ticker absorbs Tick at' || { w_ok=0; fail "where tee badge (got: $w_tee)"; }
+  [ "$w_ok" = 1 ] && pass "where: repr, cardinality, schedule, and tee badges narrate (output, never input)"
 
   # ─── The lambda list-pattern parameter (PLAN §11 Phase 3.3) ─────────
   # `([h, ...t]) => h` parses and checks clean — the cover-grammar rest

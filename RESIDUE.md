@@ -3454,6 +3454,24 @@ stays green). RISKS: rollback discipline across the decl's env
 writes (env_scope_enter/exit must pair through the retry — the
 re-entrancy the affine bracket already handles per body);
 movers/census arbitration as always.
+BUILT WHOLE (2026-08-07, pin 94fd07add038 — the LEDGER's THE
+FRAGMENT INFERS): as stamped plus the round-3 soundness recheck
+the stamp had named as "or stability" — the result scheme
+detached via chase_deep BEFORE the rollback (heap values survive;
+graph cells do not), qvars re-minted and subst_ty'd, the row
+rebuilt fresh-open (the top row cell is unquantified and would
+dangle). mn-poly-fragment runs 3 unannotated; mn-poly-teach
+retargeted to the K-exhausted floor (bad — ret ~ [ret] at the
+recheck). NAMED NEXT on this peer: (a) alpha-stability detection
+(accept early when S_{n+1} ≡α S_n instead of always running the
+recheck round); (b) the multi-call fragment boundary (two
+self-calls at different shapes — currently both check against
+the same assumption, sound via the recheck, but the boundary
+deserves its own fixtures); (c) the concrete-signature derivation
+in the teach (the narration proposes the actual inferred
+signature text — the fragment's own round-2 result rendered); (d)
+the row side (arXiv 2510.20532 — decidable row inference may
+delete the row half of the price entirely).
 BUILT WHOLE (2026-08-07, pin d8142b3b1d98 — the LEDGER's THE
 SIGNATURE BUYS THE POLY SELF-CALL): the judgment conditional as
 stamped, PLUS the emit half the stamp's risk table missed —

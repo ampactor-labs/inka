@@ -1864,15 +1864,22 @@ new DEP found; the map below is accurate at that pin.)*
   judged. Deepest of all, iteration-is-topology shrinks the region to near-zero,
   because derived folds are generated and their signatures are known by
   construction. Do not fight the theorem; make it apply to almost nothing.
-  STEP ONE LANDED 2026-08-07 (pin d8142b3b — THE SIGNATURE BUYS THE POLY
-  SELF-CALL): the signature'd form ACCEPTS — a fully-sig'd decl's
-  self-call instantiates the prereg quantified scheme (Haskell/OCaml
-  parity), and the emit divergence the gate opened closed with the
-  per-base demand cap + the spec self-reference floor
-  (Hβ.infer.sigd-polymorphic-recursion carries the arc; the frontier's
-  sigd-poly leg runs depth(7,3)=3). Remaining here: the Henglein
-  fragment inferred, the row side, the proposed-signature TEACH (the
-  cap's floor narration lands with it), iteration-is-topology's shrink.
+  THE ARC LANDED 2026-08-07, three steps in one day
+  (Hβ.infer.sigd-polymorphic-recursion carries all three): (1) pin
+  d8142b3b — the signature'd form ACCEPTS (Haskell/OCaml parity; the
+  emit divergence the gate opened closed with the per-base demand cap +
+  the spec self-reference floor). (2) pin 7f4bf082 — the TEACH: the
+  refusal carries T_PolyRecursionSignature naming the fn from the
+  refused cell's own mint reason. (3) pin 94fd07add038 — THE FRAGMENT
+  INFERS: unsig'd poly recursion judged by three-round Mycroft
+  iteration on the checkpoint substrate (plain-under-capture → general
+  assumption → recheck under the result scheme;
+  graph_commit_checkpoint born as speculation's accept half) — depth
+  unannotated runs 3, BEYOND Haskell/OCaml's annotate-or-refuse; the
+  K-exhausted floor refuses honestly with the narration. Remaining
+  here: the row side (arXiv 2510.20532), the alpha-stability detection
+  + the multi-call fragment boundary, the concrete-signature
+  derivation in the teach, iteration-is-topology's shrink.
 - **5.4 · The value ontology dissolves, in its PROVEN sequence** (band D —
   the 13-agent-refuted design, arena-gated, order inverted from every naive
   form: representation FIRST, type-merge LAST). (0) `fold_sig`

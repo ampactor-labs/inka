@@ -459,31 +459,54 @@ fn spec_candidates_fix(work, done, facts, recs) with EnvRead + LookupTy + GraphR
     } else {
       match spec_find_rec(recs, base) {
         None => spec_candidates_fix(w2, [d] ++ done, [(m, false, [])] ++ facts, recs),
-        Some(rec) => match rec {
-          (_n, _ps, body, _f) => {
-            // ONE structural scan; TWO lookup contexts. Interior keys and
-            // inner candidates project UNDER the instantiation (a twin's
-            // interior site keys against the specialized truth); the
-            // sensitivity witness reads CTX-CLEAR — "at the floor, no
-            // substitution: the var-ness is exactly what the floor emission
-            // sees" (spec_oph_wide_pair's own law). Running it under ctx
-            // masked every var, under-emitted 17k lines of twins, and
-            // re-opened the address-comparison class — caught by the float
-            // frontier leg (exit 1) before the pin was blessed.
-            spec_ctx_set(pairs, enc)
-            match spec_scan_list(body, ([], [])) {
-              (sites, ophs) => {
-                let inner = spec_candidates_from_sites(sites, [])
-                let interior = spec_interior_names(sites, 0, [])
-                spec_ctx_clear()
-                let fact = (m, spec_ophs_sensitive(ophs, pairs, 0), interior)
-                spec_candidates_fix(inner ++ w2, [d] ++ done, [fact] ++ facts, recs)
-              },
-            }
-          },
+        Some(rec) => // THE POLYMORPHIC-RECURSION CAP (the 5.1c guard, resurrected the
+        // day sig'd poly recursion reached the emit): a self-instantiating
+        // demand chain mints a fresh mangle per nesting level
+        // (depth@[w], depth@[[w]], …), so one base's demand count is the
+        // divergence meter. At the cap the candidate registers
+        // unspecialized — its sites emit the uniform word-protocol floor,
+        // which is CORRECT for every vector (containers are words); the
+        // deep tail pays indirection, never divergence. The teaching
+        // narration for this floor rides the 5.3 proposed-signature step.
+        if spec_base_count(done, base, 0, 0) >= 8 {
+          spec_candidates_fix(w2, [d] ++ done, [(m, false, [])] ++ facts, recs)
+        } else {
+          match rec {
+            (_n, _ps, body, _f) => {
+              // ONE structural scan; TWO lookup contexts. Interior keys and
+              // inner candidates project UNDER the instantiation (a twin's
+              // interior site keys against the specialized truth); the
+              // sensitivity witness reads CTX-CLEAR — "at the floor, no
+              // substitution: the var-ness is exactly what the floor emission
+              // sees" (spec_oph_wide_pair's own law). Running it under ctx
+              // masked every var, under-emitted 17k lines of twins, and
+              // re-opened the address-comparison class — caught by the float
+              // frontier leg (exit 1) before the pin was blessed.
+              spec_ctx_set(pairs, enc)
+              match spec_scan_list(body, ([], [])) {
+                (sites, ophs) => {
+                  let inner = spec_candidates_from_sites(sites, [])
+                  let interior = spec_interior_names(sites, 0, [])
+                  spec_ctx_clear()
+                  let fact = (m, spec_ophs_sensitive(ophs, pairs, 0), interior)
+                  spec_candidates_fix(inner ++ w2, [d] ++ done, [fact] ++ facts, recs)
+                },
+              }
+            },
+          }
         },
       }
     },
+  }
+}
+
+// The cap's meter: how many of BASE's specializations the fix has
+// already accepted (done entries share the (m, base, pairs, enc) shape).
+fn spec_base_count(done, base: String, i, acc) with Memory + Alloc = if i >= len(done) {
+  acc
+} else {
+  match done[i] {
+    (_, b, _, _) => spec_base_count(done, base, i + 1, if b == base { acc + 1 } else { acc }),
   }
 }
 

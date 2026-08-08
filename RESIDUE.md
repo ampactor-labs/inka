@@ -3421,3 +3421,23 @@ step: the Henglein single-call fragment inferred (annotation-free
 for the decidable shape), the row side per arXiv 2510.20532, and
 the proposed-signature TEACH (the medium proposes the signature
 from the call sites it judged — the question beats the guess).
+BUILT WHOLE (2026-08-07, pin d8142b3b1d98 — the LEDGER's THE
+SIGNATURE BUYS THE POLY SELF-CALL): the judgment conditional as
+stamped, PLUS the emit half the stamp's risk table missed —
+opening the judgment gate resurrected 5.1c's divergence (the
+kill's "cannot reach the emit" premise died with the occurs
+refusal): the per-base demand cap (spec_base_count >= 8, the
+tail flooring at the uniform word protocol) and the
+self-reference floor at spec_resolve_build's TVar arm (a binding
+containing its own var answers the word terminal — the ctx
+re-application exhaustion measured at 13 stacked frames). The
+fixture runs 3; the frontier leg pins it. RESIDUE of the arc,
+named: (1) the cap's floor is SILENT-but-correct — the teaching
+narration ("this base floored at N specializations; a signature
+pins the width") lands with the proposed-signature teach step;
+(2) `Hβ.persist.image-key-compiler-build` — NEW: the warm-compile
+image (.build/warm-compile-*.img) is keyed by source hash only,
+and a NEWER boot restoring an OLDER boot's image traps in alloc
+(measured during this dig; images cleared by hand). The key must
+include the compiler build (the boot sha) so a repin invalidates
+the warm set by construction.

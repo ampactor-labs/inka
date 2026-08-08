@@ -35,6 +35,30 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE SIGNATURE BUYS THE POLY SELF-CALL (pin d8142b3b1d98 —
+  CLEAN at the final leg, census 0, micros green; the arc crossed one
+  TRANSITION mid-landing): §11 5.3's first step lands whole. The
+  judgment half is ONE conditional — infer_fn's bind-before-body keeps
+  the prereg quantified scheme for a fn_fully_sigd decl (the mono
+  shadow was the one remaining mono writer; group_mono_views already
+  exempted sig'd cycle members) — with the belt arm binding mono when
+  prereg never registered the name. The emit half is the resurrected
+  5.1c guard, needed the hour the judgment gate opened: the demand
+  chain mints a fresh mangle per nesting level (depth@[w],
+  depth@[[w]], …), so spec_base_count caps a base at 8 specializations
+  (the tail floors at the uniform word protocol — correct for every
+  vector, containers are words); and the spec ctx's self-referential
+  pair (a := [a]) made spec_resolve_build re-apply ctx to its own
+  output to stack exhaustion — its TVar arm now floors a binding that
+  contains its own var at the word terminal. free_in_ty's reuse
+  widened two spec rows +GraphRead honestly. The fixture
+  (tests/frontier/mn-sigd-poly-recursion.mn) runs depth(7,3) = 3 end
+  to end; the frontier leg pins it, born RED at E_OccursCheck. Emit
+  −9,219 lines: the cap floors the wheel's own >8-deep demand chains.
+  A stale warm image traps surfaced during the dig —
+  .build/warm-compile-*.img restored by a NEWER boot traps in alloc;
+  the image key lacks the compiler build (banked below).
+
 - 2026-08-07 · ▶▶▶ THE PRUNE KEEPS FN-TYPED LINKS (pin 26490a437a55 —
   CLEAN m2 == m3, census 0): layer two of the
   under-publish peer. edges_keep_completion dispatches through

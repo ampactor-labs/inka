@@ -2570,7 +2570,24 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   match existing {
     GNode(NBound(existing_ty), _) => unify_types(existing_ty, fn_ty, span, Declared(name)),
     _ => {
-      env_extend(name, Forall([], fn_ty), Located(span, Declared(name)), FnScheme)
+      // A FULLY-signature'd decl keeps the prereg's QUANTIFIED scheme in
+      // scope — self-calls instantiate it fresh per use, so signature'd
+      // polymorphic recursion checks (Hβ.infer.sigd-polymorphic-recursion;
+      // group_mono_views already exempts sig'd cycle members — this is
+      // the same exemption at the intra-decl shadow, the one remaining
+      // mono writer). The body still judges against fn_ty through the
+      // graph_bind and the authored param/ret pins, so a body violating
+      // its signature refuses at the pins. An unsig'd decl binds the
+      // mono view — HM's mono recursion, the inference-soundness floor —
+      // and a decl the prereg never registered keeps it too (the belt).
+      match env_lookup(name) {
+        Some(_) => if fn_fully_sigd(params, ret_ann) {
+          ()
+        } else {
+          env_extend(name, Forall([], fn_ty), Located(span, Declared(name)), FnScheme)
+        },
+        None => env_extend(name, Forall([], fn_ty), Located(span, Declared(name)), FnScheme),
+      }
       graph_bind(handle, fn_ty, Located(span, Declared(name)))
     },
   }

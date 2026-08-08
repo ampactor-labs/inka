@@ -5568,7 +5568,7 @@ fn spec_pairs_add(pairs, root, t) with Memory + Alloc = match spec_pairs_find(pa
 // that can be wrong wrote). The Bool change-walk returns words — zero
 // allocation on the unchanged path — and the build recurses through the
 // sharing face so unchanged subtrees re-share at every level.
-fn spec_resolve(t) with LookupTy + Memory + Alloc =
+fn spec_resolve(t) with LookupTy + Memory + Alloc + GraphRead =
   if spec_resolve_changes(t) { spec_resolve_build(t) } else { t }
 
 fn spec_resolve_changes(t) with LookupTy + Memory = match t {
@@ -5616,11 +5616,23 @@ fn spec_resolve_changes_fields(ref fs, i) with LookupTy + Memory = if i >= len(f
   }
 }
 
-fn spec_resolve_build(t) with LookupTy + Memory + Alloc = match t {
+fn spec_resolve_build(t) with LookupTy + Memory + Alloc + GraphRead = match t {
   TVar(h) => match lookup_ty(h) {
     TVar(h2) => // genuinely free — the floor terminal
     TVar(h2),
-    other => spec_resolve(other),
+    other => if any((fv) => fv == h, free_in_ty(other)) {
+      // The polymorphic-recursion self-reference: a sig'd self-call's
+      // demand ctx maps the base's own var to a type CONTAINING it
+      // (a := [a]), and resolving would re-apply the ctx to its own
+      // output forever (the measured spec_resolve_build exhaustion the
+      // day sig'd poly recursion reached the emit). The var floors at
+      // its word terminal — the uniform protocol every vector shares —
+      // and the Henglein price surfaces as the unspecialized floor,
+      // never a hang.
+      TVar(h)
+    } else {
+      spec_resolve(other)
+    },
   },
   TList(e) => TList(spec_resolve(e)),
   TTuple(es) => TTuple(map((x) => spec_resolve(x), es)),

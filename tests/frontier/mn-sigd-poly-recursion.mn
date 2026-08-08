@@ -1,0 +1,9 @@
+// Sig'd polymorphic recursion — Haskell/OCaml parity (§11 5.3 step one,
+// Hβ.infer.sigd-polymorphic-recursion). A FULLY-signature'd decl's
+// self-call instantiates the declared scheme fresh per use instead of
+// chaining the mono cells, so `depth([x], ...)` deepens the element
+// type per recursion level and still checks. Born RED: the incumbent
+// boot refuses E_OccursCheck at the self-call ([a] against a).
+fn depth(x: a, n: Int) -> Int = if n <= 0 { 0 } else { 1 + depth([x], n - 1) }
+
+fn main() = depth(7, 3)

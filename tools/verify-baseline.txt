@@ -518,7 +518,14 @@ comment_refs_max: 0
 # scheme-object rule's territory).
 # Lowered 453 → 451 at the worthiness prune (pin 2d3b3ca384a9): two
 # family schemes left the mover set with the deleted fns.
-movers_max: 451
+# Re-based 451 → 458 at the sig'd poly-recursion landing (pin
+# d8142b3b1d98): a fully-sig'd decl's self-call now instantiates the
+# prereg quantified scheme instead of chaining the mono cells, so
+# sig'd self-recursive fns' judgment — and their published schemes —
+# moved with the semantics (the publish-surface channel, seventh
+# application; zero trial/final machinery in the diff). The next
+# legal move stays DOWN; rung 3 dissolves the class.
+movers_max: 458
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

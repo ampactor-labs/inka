@@ -2343,6 +2343,27 @@ for i in "${!compilers[@]}"; do
     fail "pipe into len (diagnostics on a correct stage: $pil_diags; see $pil_err)"
   fi
 
+  # ─── Sig'd polymorphic recursion (§11 5.3 step one) ─────────────────
+  # `fn depth(x: a, n: Int) -> Int = ... depth([x], n-1)` with a full
+  # authored signature checks (the prereg quantified scheme stays in
+  # scope; self-calls instantiate fresh), compiles (the spec ctx
+  # self-reference floors at the word terminal instead of exhausting
+  # spec_resolve_build), and runs 3. Born RED: E_OccursCheck through
+  # the incumbent boot (2026-08-07).
+  sp_err="$dir/sigd-poly.err"
+  sp_wat=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-sigd-poly-recursion.mn" 2> "$sp_err")
+  sp_diags=$(grep -c 'E_' "$sp_err" 2>/dev/null || true)
+  if [ -n "$sp_wat" ] && [ "$sp_diags" = "0" ]; then
+    printf '%s' "$sp_wat" > "$dir/sigd-poly.wat"
+    if wt_asm "$dir/sigd-poly.wat" "$dir/sigd-poly.wasm" 2>/dev/null && [ "$(wt_run "$dir/sigd-poly.wasm" > /dev/null 2>&1; echo $?)" = "3" ]; then
+      pass "sigd poly recursion: the signature buys the poly self-call; compiles and runs (3)"
+    else
+      fail "sigd poly recursion (assemble/run)"
+    fi
+  else
+    fail "sigd poly recursion (diagnostics: $sp_diags; see $sp_err)"
+  fi
+
   # ─── The decls facet (the bound-projection landing's gate) ──────────
   # `query <fixture> "decls"` projects the decls COLUMN — the oracle
   # queue's own seed set. Born RED 2026-08-07: the incumbent boot

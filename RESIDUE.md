@@ -51,12 +51,22 @@ unknown-label case for free). SOURCE classification stays per-value:
 the refined-alias read today, a declared label surface later — the
 classifier's predicate-name heuristic retires when labels become
 declared facts, not when the row work lands. PRICED: (a) the row
-element needs multi-arg parameterized effects (Sample(rate) is
-one-arg; the decl grammar's N-arg reach is a checked-at-build item);
-(b) charging sites are the splice check (already isolated in
-splice_flow_check) and the install read (the handler-residual seam's
-own machinery); (c) no new traversal — the charges ride judgment
-where rows already accrue, O(charge sites). ENUMERATED writers:
+element's substrate CLEARS AT ZERO — probed 2026-08-08 on the pinned
+boot: `effect Flow(src: Int, dst: Int)` declares, installs
+(`with Flow(2, 1)`), negates (`!Flow(2, 1)`, rendered correctly in
+the T_OverDeclared narration), and RUNS; ADT-ctor arguments clear too
+(`effect Flow(src: Level, dst: Level)` with `Flow(Sec, Pub)` checks
+clean and runs) — no grammar or algebra work precedes the build; (b)
+THE CARRY IS ALREADY BUILT: a value's label rides its TYPE (a
+Vault-typed value carries its classification wherever inference
+threads the type — query_flow_label reads it at any position), so the
+sink edge needs NO label-carrying machinery — it is a type read at
+the boundary plus a row charge, the same two moves the splice check
+already makes; (c) charging sites are the splice check (isolated in
+splice_flow_check) and the general argument-position edge where the
+callee's row performs the observation class — the splice is one
+instance of that general edge; (d) no new traversal — charges ride
+judgment where rows already accrue, O(charge sites). ENUMERATED writers:
 types.mn (the Flow effect vocabulary), infer.mn (splice_flow_check
 charges the row instead of verifying against Public; the sink-edge
 charge at install), effects.mn (nothing — the algebra is closed over

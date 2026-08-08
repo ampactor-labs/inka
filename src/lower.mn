@@ -850,11 +850,12 @@ fn partial_callee_form(handle, fbody, fh) = match fbody {
 // from program+columns — params from the origin's own program-column
 // LambdaExpr (probe-proven equal to the walked value at every lambda,
 // whole-wheel), the frame from the capture pairs the caller just noted
-// into the enumeration. One run, no dual-lowering: the mint census
-// (interpolation's interior-concat graph_fresh_ty — the splice-show
-// mint died into the parse-minted ShowExpr) makes lowering
-// non-reproducible, so coherence is gated behaviorally — march,
-// micros, battery — exactly as every emit-path change is.
+// into the enumeration. LOWERING IS A PURE PROJECTION (the mint
+// census reached zero: the splice-show mint died into the
+// parse-minted ShowExpr; the interior-concat mint into the
+// judge-minted InterpBoundary) — same graph in, same tree out, so
+// dual-run coherence is available again wherever a gate wants it;
+// this construction stays single-run and behaviorally gated.
 fn project_lambda_fn(origin, cap_pairs) = match graph_node_body(origin) {
   NExpr(LambdaExpr(params, body_node)) => {
     let cap_names = map(((n, _)) => n, cap_pairs)
@@ -2710,6 +2711,10 @@ fn fanout_boundaries(handle) = match graph_boundary_at(handle) {
     report(EUnresolvedType(handle, graph_epoch(), parse_span_of(handle)))
     Err(WrongFanoutBoundaryKind)
   },
+  InterpBoundary(_) => {
+    report(EUnresolvedType(handle, graph_epoch(), parse_span_of(handle)))
+    Err(WrongFanoutBoundaryKind)
+  },
   NoBoundary => {
     report(EUnresolvedType(handle, graph_epoch(), parse_span_of(handle)))
     Err(MissingFanoutBoundary)
@@ -4352,6 +4357,10 @@ fn continuation_boundary_at(site_h) = match graph_boundary_at(site_h) {
     report(EUnresolvedType(site_h, graph_epoch(), parse_span_of(site_h)))
     Err(WrongContinuationBoundaryKind)
   },
+  InterpBoundary(_) => {
+    report(EUnresolvedType(site_h, graph_epoch(), parse_span_of(site_h)))
+    Err(WrongContinuationBoundaryKind)
+  },
   NoBoundary => {
     report(EUnresolvedType(site_h, graph_epoch(), parse_span_of(site_h)))
     Err(MissingContinuationBoundary)
@@ -4804,25 +4813,37 @@ fn lower_string_interpolation(handle, lowered_fragments) = {
     // wheel's copy was never order-gated (mn-interp-order now gates it).
     let head = list_index(fragments, 0)
     let rest = slice(fragments, 1, len(fragments))
-    // Every interior concat mints its OWN handle. The fold once stamped the
-    // MakeString node's one handle on all N−1 concat calls, and emit's
-    // per-handle staging local ($call_<handle>) folded them into ONE cell —
-    // re-set per segment while later splice reads still loaded through it
-    // (the effectful-arg staging clobber, pinned in the diagnostics arm's
-    // wat: nine re-sets of one local, then reads expecting earlier values).
-    // The outermost call keeps the node's handle: the expression's type and
-    // span reads key on it.
-    let chained = fold(
-      head,
-      (acc, frag) => {
-        let ch = graph_fresh_ty(Inferred("interp segment concat"))
-        LCall(ch, LGlobal(ch, "str_concat"), [acc, frag])
-      },
-      rest
-    )
-    match chained {
-      LCall(_, g, args) => LCall(handle, g, args),
-      other => other,
+    // Every interior concat keys on a JUDGE-MINTED cell read from the
+    // boundary column (InterpBoundary — the concat-key dossier's
+    // settled design): distinct per concat by mint, never colliding
+    // with a call-keyed handle in the subtree (the fragment-handle
+    // keying trapped on exactly that — its own show's $call_<h>), and
+    // minted ONCE at the judge, so lowering is a pure projection. The
+    // one-handle-for-all form this replaced twice over was the
+    // effectful-arg staging clobber. The outermost call keeps the
+    // node's handle: the expression's type and span reads key on it.
+    let cells = match graph_boundary_at(handle) {
+      InterpBoundary(cs) => cs,
+      _ => [],
+    }
+    // A count mismatch would let zip TRUNCATE — fragments silently
+    // dropped from the string. The judge's elision mirror and this
+    // filter must agree; a divergence is the loud typed terminal,
+    // never a shorter string.
+    if len(cells) == len(rest) {
+      let chained = fold(
+        head,
+        (acc, pair) => match pair {
+          (frag, ch) => LCall(ch, LGlobal(ch, "str_concat"), [acc, frag]),
+        },
+        zip(rest, cells)
+      )
+      match chained {
+        LCall(_, g, args) => LCall(handle, g, args),
+        other => other,
+      }
+    } else {
+      LInvariantFailure(handle, ProjectionOriginShape(handle))
     }
   }
 }

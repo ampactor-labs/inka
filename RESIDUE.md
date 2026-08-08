@@ -390,7 +390,12 @@ and continuation families (the stamped yield-boundary channel is
 exactly this per-node lowering-facts home); lower reads
 graph_boundary_at(handle) instead of minting. That makes
 lowering a pure projection with judged, trailed, once-minted
-cells. TWO FINDINGS BANKED FROM THE
+cells. ✅ BUILT (pin dddf5dc5d6bb, TRANSITION, both interp micros
+green): InterpBoundary in ExecutableBoundary, interp_concat_cells
+at the judge mirroring the elision, lower zipping the cells with
+the count-mismatch guard refusing loud. THE MINT CENSUS IS ZERO —
+lowering is same-graph-in-same-tree-out; the dual-run coherence
+gate is available again wherever the arc wants it. TWO FINDINGS BANKED FROM THE
 SWEEP: `Hβ.infer.nested-pattern-exhaustiveness` — usage_of's
 double-nested match (N(body) → NodeBody → NExpr(Expr)) passed the
 checker at 27 of 28 Expr variants and trapped at runtime on the

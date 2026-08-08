@@ -35,6 +35,28 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ LOWERING IS A PURE PROJECTION (pin dddf5dc5d6bb —
+  TRANSITION m3 == m4, census 0): the last lower-time mint dies.
+  infer's MakeStringExpr arm mints the N−1 interior-concat cells
+  once (interp_concat_cells — the judge-side mirror of lower's
+  empty-literal elision) and stores them as InterpBoundary in the
+  boundary column, the trailed per-node lowering-facts channel
+  beside the fanout and continuation families; lower's fold zips
+  the judged cells instead of minting, and a count mismatch refuses
+  through the typed terminal rather than letting zip TRUNCATE a
+  string (the silent-drop hazard named before it could exist). The
+  path here was a three-reading forensic dig in one day: the
+  fragment-handle keying refused by the battery, the staging-clobber
+  diagnosis retracted by the backtrace probe (`indirect call type
+  mismatch`), the second reading corrected by the wat artifact
+  ($call_31135 set twice — the splice's own synthesized show parks
+  on the same key), and the settled law: an interior concat's key
+  must be distinct from every call-keyed handle in its own subtree,
+  which only a mint satisfies — so the mint moved to the judge where
+  it is trailed and once. With the census at zero, lowering is
+  same-graph-in-same-tree-out for the first time; dual-run
+  coherence is available again wherever a gate wants it.
+
 - 2026-08-08 · ▶▶▶ THE SPLICE SHOW IS A JUDGED NODE (pin 058bf710e66d —
   TRANSITION m3 == m4, census 0): γ's splice half
   (Hβ.parser.interp-desugars-to-program). The parser mints ShowExpr

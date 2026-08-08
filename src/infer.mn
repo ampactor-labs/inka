@@ -3722,6 +3722,13 @@ fn infer_expr(ref node) = match node {
       // refuse "{3}" outright if unify were strict. Deleted whole.
       infer_expr_list(fragments)
       check_splice_flow_labels(fragments, span)
+      // The interior-concat cells, minted ONCE here (the concat-key
+      // dossier's settled design): lower's fold reads them from the
+      // boundary column instead of minting per run — every
+      // program-derived key collides with a call-keyed handle in its
+      // own subtree, and a judge mint is trailed and reproducible.
+      // The count mirrors lower's elision (empty literals drop).
+      graph_boundary_set(handle, InterpBoundary(interp_concat_cells(fragments, span)))
       graph_bind(handle, ty_string, Located(span, Inferred("string interpolation")))
     },
     NExpr(ShowExpr(inner)) => {
@@ -9223,6 +9230,36 @@ fn unify_list_elems(elems, target_h, span: ValidSpan) = each(
 // finite lattice makes this ALWAYS compile-time decidable. A Secret or Tainted
 // splice surfaces as ERefinementRejected("Secret ⊑ Public") at compile time.
 // Literal parts (LitString nodes) are always Public — no check needed.
+// The judge-side mirror of lower's empty-literal elision: a fragment
+// elides iff it is the "" literal the parser keeps for the alternation
+// invariant. M surviving fragments need M−1 interior concat cells; the
+// last concat re-keys to the interp node itself at lower, so the cells
+// cover the interior joins only.
+fn interp_concat_cells(fragments, span: ValidSpan) = {
+  let m = count_nonempty_fragments(fragments, 0, 0)
+  mint_concat_cells(if m > 1 { m - 1 } else { 0 }, span, [])
+}
+
+fn count_nonempty_fragments(fragments, i, acc) = if i >= len(fragments) {
+  acc
+} else {
+  match graph_node_body(node_handle(list_index(fragments, i))) {
+    NExpr(LitString(s)) => count_nonempty_fragments(fragments, i + 1, if byte_len(s) == 0 { acc } else { acc + 1 }),
+    _ => count_nonempty_fragments(fragments, i + 1, acc + 1),
+  }
+}
+
+fn mint_concat_cells(n, span: ValidSpan, acc) = if n <= 0 {
+  acc
+} else {
+  // drift-audit: ignore — bounded by a string's fragment count, not a hot loop
+  mint_concat_cells(
+    n - 1,
+    span,
+    acc ++ [graph_fresh_ty(Located(span, Inferred("interp segment concat")))]
+  )
+}
+
 fn check_splice_flow_labels(fragments, span: ValidSpan) = each(
   (frag) => match frag {
     N(body, fspan, fh) => match body {

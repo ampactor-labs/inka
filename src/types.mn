@@ -781,6 +781,14 @@ type ExecutableBoundary
   // resume input, answer, continuation, world
   | PendingContinuationBoundary(Int, Int, Int, EffRow)
   | ContinuationBoundary(ContinuationEdge)
+  // The interpolation's N−1 interior-concat cells, minted ONCE at the
+  // judge (the concat-key dossier's settled design): a lower-time
+  // fresh mint made lowering non-reproducible, and every
+  // program-derived key collides with a call-keyed handle in its own
+  // subtree (the fragment's synthesized show parks on the same
+  // $call_<h>). Judged, trailed, read by lower's fold — the last
+  // lower-time mint dies here.
+  | InterpBoundary([Int])
 
 // The bind-home column cell (Hβ.lower.lowering-is-a-column, marched
 // step i): lower's ls_resolve decision at a VarRef use site, written

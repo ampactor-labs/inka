@@ -2802,6 +2802,25 @@ fn report(diag) with Diagnostic + GraphRead + Memory + Alloc + Intern =
 // A raw handle only appears when chase terminates on NFree/NRowFree —
 // the query layer reads that as "unresolved at epoch e." No cached
 // display. Same discipline as lowering: live observer, never mirror.
+// The ctor-membership predicates (scheme vocabulary — moved here from
+// synth so query's variants facet reads them without importing the
+// proposer): an env entry is a constructor of `type_name` when its
+// kind is ConstructorScheme and its scheme's RESULT is
+// TName(type_name, _) — nullary ctors carry TName directly, fielded
+// ctors carry TFun(_, TName, _).
+fn is_ctor_of(kind, scheme, type_name) with Pure = match kind {
+  ConstructorScheme(_, _) => match scheme {
+    Forall(_, ty) => scheme_result_is(ty, type_name),
+  },
+  _ => false,
+}
+
+fn scheme_result_is(ty, type_name) with Pure = match ty {
+  TName(n, _) => n == type_name,
+  TFun(_, ret, _) => scheme_result_is(ret, type_name),
+  _ => false,
+}
+
 fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory + Intern = match ty {
   TInt => "Int",
   TFloat => "Float",

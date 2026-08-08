@@ -1166,6 +1166,7 @@ type QueryVerb
   | QVCensus
   | QVWhere
   | QVDecls
+  | QVVariants
   | QVUnknownVerb
 
 fn classify_query_verb(w: String) with Pure = if w == "type" {
@@ -1192,6 +1193,8 @@ fn classify_query_verb(w: String) with Pure = if w == "type" {
   QVWhere
 } else if w == "decls" {
   QVDecls
+} else if w == "variants" {
+  QVVariants
 } else {
   QVUnknownVerb
 }
@@ -1228,6 +1231,7 @@ fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
   },
   QVWhere => QWhere(arg),
   QVDecls => QDecls,
+  QVVariants => QVariants(arg),
   QVUnknownVerb => QUnknown(raw),
 }
 

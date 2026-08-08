@@ -35,6 +35,21 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE ADT ROSTER PROJECTS (pin c0510e2f5441 — CLEAN
+  m2 == m3, census 0): `variants NAME` joins the query grammar — the
+  type's constructors with arities from the env's ConstructorScheme
+  registry, the confessed missing facet (named twice: the lowering
+  stamp's walker census needed an awk scan for it; the
+  `mentl diagnostics` verb needs it to walk DiagKind). The
+  is_ctor_of/scheme_result_is predicates relocated synth → types
+  (scheme vocabulary's one home; query never imports the proposer).
+  THE CENSUS GATE'S FIRST LIVE CATCH rode this landing: the Question
+  ADT's two voice-side walkers missed the new ctor, the m3-leg
+  census rose to 2, and the march REFUSED THE REPIN — exactly the
+  gap the 25-divergence incident closed. The arms landed; the leg
+  (variants Option → None/0, Some/1) born RED against the facet-less
+  boot; frontier 350/0.
+
 - 2026-08-08 · ▶▶▶ LOWERING IS A PURE PROJECTION (pin dddf5dc5d6bb —
   TRANSITION m3 == m4, census 0): the last lower-time mint dies.
   infer's MakeStringExpr arm mints the N−1 interior-concat cells

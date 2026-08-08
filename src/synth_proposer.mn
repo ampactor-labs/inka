@@ -452,19 +452,6 @@ fn ctors_of_type_from(entries, type_name, i, n, own buf, count) with GraphRead +
   }
 }
 
-fn is_ctor_of(kind, scheme, type_name) with Pure = match kind {
-  ConstructorScheme(_, _) => match scheme {
-    Forall(_, ty) => scheme_result_is(ty, type_name),
-  },
-  _ => false,
-}
-
-fn scheme_result_is(ty, type_name) with Pure = match ty {
-  TName(n, _) => n == type_name,
-  TFun(_, ret, _) => scheme_result_is(ret, type_name),
-  _ => false,
-}
-
 fn ctor_to_enriched_candidate(name, scheme, reason) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
   EnrichedCandidate({node: synthesize_ctor_call_node(name, scheme), origin: ProposerEnumerative, reason: VarLookup(name, reason)})
 

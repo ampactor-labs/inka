@@ -2462,6 +2462,17 @@ for i in "${!compilers[@]}"; do
     fail "thread negation (mismatch=$tn_n — the transitive spawn passed a !Thread gate)"
   fi
 
+  # ─── The ADT-roster facet (`variants NAME` — the confessed missing
+  # projection, retired): the type's constructors with arities, read
+  # from the env's ConstructorScheme registry. Born RED 2026-08-08
+  # (the prior boot answered unknown-query).
+  vr_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-usage-grade.mn" "variants Option" 2>/dev/null)
+  if printf '%s' "$vr_out" | grep -q "None/0" && printf '%s' "$vr_out" | grep -q "Some/1"; then
+    pass "variants facet: the ADT roster projects (None/0, Some/1)"
+  else
+    fail "variants facet (got: $(printf '%s' "$vr_out" | head -1))"
+  fi
+
   # ─── The per-module solo sweep (PLAN §11 Phase 3.5, ratcheted) ──────
   # E_MissingVariable across every src module's SOLO check, ceiling in
   # verify-baseline (solo_violations_max — monotone DOWN; 0 retires the

@@ -71,6 +71,11 @@ type Question
   // "where NAME" — the derived-badge projection (Hβ.cli.where-verb):
   // repr width, resume cardinality, fanout schedules. Output, never input.
   | QWhere(String)
+  // "variants NAME" — the ADT-roster facet (the lowering stamp's
+  // confessed missing projection): the type's constructors with their
+  // arities, read from the env's ConstructorScheme registry — the same
+  // channel synth's enumeration and the eq sum-leaf read.
+  | QVariants(String)
   | QUnknown(String)
 
 type QueryResult
@@ -220,6 +225,7 @@ handler query_default {
     },
     QCensus(shape) => resume(QRCensus(census_label(shape), census_sites(shape))),
     QWhere(name) => resume(where_badges(name)),
+    QVariants(tname) => resume(variants_of(tname)),
     QUnknown(q) => resume(QRError("unknown query: {q}")),
   },
 }
@@ -676,6 +682,39 @@ fn where_badges(name: String) with GraphRead + EnvRead + Intern + !Mutate + Allo
         },
       },
     },
+  },
+}
+
+// The ADT-roster projection (the confessed missing facet): every
+// constructor whose scheme's RESULT is the named type, with its arity
+// — the env-read the synth enumeration and the eq sum-leaf already
+// trust, projected as lines through the where channel (a roster IS a
+// badge list). An empty roster is the honest not-found.
+fn variants_of(tname: String) = match env_snapshot() {
+  Env(entries) => {
+    let lines = variant_lines(entries, tname, 0, len(entries), [])
+    if len(lines) == 0 { QRError("no constructors found for: {tname}") } else { QRWhere(lines, []) }
+  },
+}
+
+fn variant_lines(entries, tname: String, i, n, acc) = if i >= n {
+  acc
+} else {
+  match list_index(entries, i) {
+    (name, scheme, _, kind) => if is_ctor_of(kind, scheme, tname) {
+      // drift-audit: ignore — bounded by the type's ctor count, not a hot loop
+      variant_lines(entries, tname, i + 1, n, acc ++ ["{name}/{int_to_str(ctor_arity(scheme))}"])
+    } else {
+      variant_lines(entries, tname, i + 1, n, acc)
+    },
+  }
+}
+
+fn ctor_arity(scheme) = match scheme {
+  Forall(_, ty) => match ty {
+    TFun(params, _, _) => len(params),
+    _ => // drift-audit: ignore — the arity of any non-TFun scheme IS zero (a value takes no params); a true total answer, not a masked case
+    0,
   },
 }
 

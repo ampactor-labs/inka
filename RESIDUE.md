@@ -369,15 +369,28 @@ handle — interp_fragment_shown's per-run mint DELETED; the mint
 class's remaining half is the interior-concat handle
 (lower.mn:4817), still blocking dual-run lowering of
 multi-fragment interpolations only. ONE KEYING REFUTED
-(2026-08-08, battery-refused repin — the gate worked): keying
-each interior concat on its RIGHT FRAGMENT's handle traps both
-interpolation micros at 134 — the concat LCall's staging cell
-shares its own argument's key (the LShow fragment rides the same
-handle), the exact effectful-arg clobber class the site's own
-comment warned about. The surviving resolutions: infer mints the
-N-1 concat cells ONCE at the judge (stored per interp node — a
-column or the boundary family), or the planned-mint space keys
-them deterministically; either makes lowering a pure projection. TWO FINDINGS BANKED FROM THE
+(2026-08-08, battery-refused repin — the gate worked), the first
+diagnosis retracted by the backtrace probe, and the SECOND
+reading corrected by the wat artifact the same hour (the
+forensic law, twice in one dig): the emitted main shows
+$call_31135 SET TWICE — the outer concat parks str_concat there,
+then the splice's own SYNTHESIZED SHOW CALL (int_to_str, keyed by
+the LShow's handle = the fragment's handle) re-parks over it —
+so the concat's fn_ptr load reads int_to_str's record and the
+$ft3 concat through a $ft2 record traps `indirect call type
+mismatch`. Both halves were real: it IS the staging-clobber
+class (the fragment handle is already CALL-KEYED by its own
+show), surfacing as the type mismatch. The law: an interior
+concat's key must be distinct from every call-keyed handle in
+its own subtree — fragment handles never qualify. THE SETTLED
+DESIGN: the judge mints the N−1 concat cells ONCE (infer's
+MakeStringExpr arm) and stores them in the BOUNDARY column —
+ExecutableBoundary gains InterpBoundary([Int]) beside the fanout
+and continuation families (the stamped yield-boundary channel is
+exactly this per-node lowering-facts home); lower reads
+graph_boundary_at(handle) instead of minting. That makes
+lowering a pure projection with judged, trailed, once-minted
+cells. TWO FINDINGS BANKED FROM THE
 SWEEP: `Hβ.infer.nested-pattern-exhaustiveness` — usage_of's
 double-nested match (N(body) → NodeBody → NExpr(Expr)) passed the
 checker at 27 of 28 Expr variants and trapped at runtime on the

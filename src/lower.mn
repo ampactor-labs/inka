@@ -219,6 +219,13 @@ type BoundaryInvariant
   | MissingName(String)
   // the handler name
   | SingletonUninstalled(String)
+  // The column-projection invariant (the lowering-column arc): a
+  // projector was asked to build a fn body from an origin whose
+  // program-column node is not the expected shape. Probe-proven
+  // unreachable for lambdas (the column equals the walked value at
+  // every lambda, whole-wheel); the typed terminal keeps the refusal
+  // loud if the invariant ever breaks.
+  | ProjectionOriginShape(Int)
 
 fn show_boundary_invariant(invariant) with Memory + Alloc = match invariant {
   MissingFanoutBoundary => "missing fanout boundary",
@@ -233,6 +240,7 @@ fn show_boundary_invariant(invariant) with Memory + Alloc = match invariant {
   PartialCalleeShape(h) => "partial over non-global callee shape {int_to_str(h)}",
   MissingName(name) => "unbound name {name} — infer proved it missing; the lowering will not guess it into a global",
   SingletonUninstalled(hname) => "singleton op call with no live install: {hname} — the state global is 0 in this extent; install the handler (~> {hname}) around the calling walk",
+  ProjectionOriginShape(h) => "column projection at {int_to_str(h)}: the program-column node is not the projector's shape",
 }
 
 // Every value-bearing variant carries a source TypeHandle (Int), never a cached Ty.
@@ -837,6 +845,44 @@ fn partial_callee_form(handle, fbody, fh) = match fbody {
 // evidence in the synthesized frame — its performs dispatch through the
 // live world chain at call time (the world-as-value arc dissolved
 // Hβ.lower.partial-effectful-callee's typed floor).
+// The lambda body PROJECTOR (the lowering-column arc, landing shape α
+// — the direct swap): the ONE construction of a lambda's LowFn, seeded
+// from program+columns — params from the origin's own program-column
+// LambdaExpr (probe-proven equal to the walked value at every lambda,
+// whole-wheel), the frame from the capture pairs the caller just noted
+// into the enumeration. One run, no dual-lowering: the mint census
+// (interpolation's two graph_fresh_ty sites) makes lowering
+// non-reproducible, so coherence is gated behaviorally — march,
+// micros, battery — exactly as every emit-path change is.
+fn project_lambda_fn(origin, cap_pairs) = match graph_node_body(origin) {
+  NExpr(LambdaExpr(params, body_node)) => {
+    let cap_names = map(((n, _)) => n, cap_pairs)
+    let cap_handles = map(((_, h)) => h, cap_pairs)
+    let param_names_list = lower_param_names(params)
+    ls_enter_frame(
+      "",
+      param_names_list,
+      param_handles_of(origin, params),
+      cap_names,
+      cap_handles,
+      origin
+    )
+    lower_frame_fence_push()
+    let lo_body = k2_guard(mark_tail(lower_body_reified(body_node)))
+    lower_frame_fence_pop()
+    ls_exit_frame()
+    Some(LFn(
+      "lambda_{int_to_str(origin)}",
+      len(params),
+      param_names_list,
+      [lo_body],
+      mk_ef_pure(),
+      len(cap_pairs)
+    ))
+  },
+  _ => None,
+}
+
 fn lower_call_partial(handle, fbody, fh, r_args, n_ps) = match partial_callee_form(handle, fbody, fh) {
   None => LInvariantFailure(handle, PartialCalleeShape(fh)),
   Some(form) => {
@@ -2192,12 +2238,6 @@ fn lower_expr_body(e, handle, span) = match e {
         // Lambda is anonymous — empty fn_name; ls_outer_fn_name skips it.
         // lambda_h = THIS lambda's own handle (the handle LMakeClosure uses
         // below).
-        ls_enter_frame("", param_names_list, param_handles_list, captures_names, captures_handles, handle)
-        lower_frame_fence_push()
-        // Hβ.lower.tail-call-mark-pass — lambda body is in tail; MultiShot spine → the k1 yield; k2_guard floors off-spine boundaries (M1.3)
-        let lo_body = k2_guard(mark_tail(lower_body_reified(body_node)))
-        lower_frame_fence_pop()
-        ls_exit_frame()
         graph_emitfn_note(
           EfkLambda,
           handle,
@@ -2205,21 +2245,20 @@ fn lower_expr_body(e, handle, span) = match e {
           len(captures_exprs),
           zip(captures_names, captures_handles)
         )
-        let fn_ir = LFn(
-          lambda_name,
-          len(params),
-          param_names_list,
-          [lo_body],
-          mk_ef_pure(),
-          // closure fence = capture count
-          len(captures_exprs)
-        )
-        // The record is [fn_ptr@0][nc@4][captures@8..] — captures only. The
-        // body's performs dispatch through the LIVE world chain at call time
-        // (a computation performs in the world where it is CALLED — R2's law),
-        // and a resume inside a MultiShot arm's lambda rides the captures as
-        // the ordinary __k free var (collect_free_vars' ResumeExpr arm).
-        LMakeClosure(handle, fn_ir, captures_exprs)
+        // THE DIRECT SWAP (landing shape α): the LowFn is built by the
+        // COLUMN-SEEDED projector — the one construction, program+
+        // columns in, LowFn out. The site keeps what FEEDS the columns
+        // (free-var collection, capture resolution, the note); the
+        // body-lowering lives in project_lambda_fn.
+        match project_lambda_fn(handle, zip(captures_names, captures_handles)) {
+          Some(fn_ir) => // The record is [fn_ptr@0][nc@4][captures@8..] — captures only. The
+          // body's performs dispatch through the LIVE world chain at call time
+          // (a computation performs in the world where it is CALLED — R2's law),
+          // and a resume inside a MultiShot arm's lambda rides the captures as
+          // the ordinary __k free var (collect_free_vars' ResumeExpr arm).
+          LMakeClosure(handle, fn_ir, captures_exprs),
+          None => LInvariantFailure(handle, ProjectionOriginShape(handle)),
+        }
       },
     }
   },

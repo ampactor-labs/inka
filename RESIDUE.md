@@ -325,8 +325,36 @@ show/concat structure judged by infer, real types instead of
 Inferred placeholder cells), making lower a pure projection by
 construction — the desugar-mints precedent applied to the last
 lower-time minting in the wheel; named
-`Hβ.parser.interp-desugars-to-program`. The projector relands
-after (1) or (2); the march census-gap fix rides that landing. The
+`Hβ.parser.interp-desugars-to-program`. THE GATE REFRAME (2026-08-08, the decode's second reading — it
+corrects the landing shape): in the DESTINATION architecture the
+divergence cannot occur, because lowering runs ONCE per emit entry
+(the projection IS the construction) and the sequential mint
+counter is deterministic per compile — m3 == m4 already proves
+it. The mint class poisons only the DUAL-RUN migration
+instrument: any body that mints cannot be lowered twice and
+compared with the handle-carrying ==. So the projector's landing
+shape is one of three, in preference order: (α) the DIRECT SWAP —
+the construction site builds VIA the projector (columns-seeded,
+one run, no comparison), gated behaviorally by march + micros +
+battery exactly as every emit change is; the dual-run coherence
+gate remains valid for the NON-minting majority and retires per
+kind as each swaps; (β) a handle-insensitive structural compare
+(costs a 39-arm masked eq walker — machinery with no
+post-migration life, weakest); (γ) direction (2)'s parse-desugar
+first (kills the mint class outright, and independently worth it:
+splice shows become judged program nodes with real types, and the
+IFC fragment walk rides judged structure — but the FORMATTER
+carries the fork: MakeStringExpr is the render carrier, so the
+desugar must keep the surface form renderable without structure
+sniffing — ShowExpr wraps inside the retained MakeStringExpr is
+the traced shape for the splice half; the interior-concat half
+has no clean parse home yet). α LANDED FOR THE LAMBDA KIND (2026-08-08, pin a3342552c850, CLEAN
+byte-identity — the column path builds exactly what the walk
+built, whole-wheel, interpolating specimens included; the lambda
+arm's inline body-lowering deleted into project_lambda_fn). The
+remaining kinds (thunk, nested, arm, k, partial) swap by the same
+move, each marched; (γ)'s ShowExpr half is its own follow-up; the
+march census-gap fix rides the next board-hardening landing. The
 remaining (i)
 columns land by the same pattern as their swaps demand them;
 (ii) the projection bodies

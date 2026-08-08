@@ -35,6 +35,33 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE LAMBDA BUILDS FROM THE COLUMNS (pin a3342552c850 —
+  CLEAN m2 == m3, census 0): landing shape α executed for the lambda
+  kind. project_lambda_fn — column-seeded, one run — replaces the
+  lambda arm's inline body-lowering whole; the site keeps exactly
+  what FEEDS the columns (free-var collection, capture resolution,
+  the enumeration note) and the construction reads them back. CLEAN
+  byte-identity is the proof: the column path builds exactly what
+  the walk built, across every wheel lambda including the 25
+  interpolating specimens the dual-run gate could not compare.
+  Between the captures pin and this one sits a full
+  revert-and-decode arc (RESIDUE's projector-stamp block): the
+  dual-run coherence experiment fired 25 census divergences, was
+  reverted whole with its kills banked, and four probe marches
+  decoded the root — hypothesis (a) dead by a zero-mismatch
+  whole-wheel eq probe (the program column holds exactly what the
+  walk lowers); the real mechanism lower-time fresh minting,
+  exactly two graph_fresh_ty sites, both in string interpolation
+  (the per-interior-concat handle and the per-splice show cell).
+  The law it named: body projection requires lowering to be a pure
+  projection; the mint class poisons only dual-running, so α (one
+  run, behavioral gates) is the landing shape, with the ShowExpr
+  parse-desugar (Hβ.parser.interp-desugars-to-program) banked as
+  the mint class's own dissolution. Two board findings ride the
+  dossier: the march's transition path never gated the census, and
+  a projector-bearing landing's first leg under-reports (the old
+  boot has no projector).
+
 - 2026-08-08 · ▶▶▶ THE ENTRY CARRIES ITS CAPTURES (pin ccaacb70b5d4 —
   CLEAN m2 == m3, census 0): the enumeration entry's fifth field —
   (name, binding-time handle) pairs zipped from

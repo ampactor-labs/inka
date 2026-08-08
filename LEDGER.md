@@ -35,6 +35,23 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE ROW RENDER SPEAKS THE OPERAND (pin 7f3cc86a70fe —
+  CLEAN m2 == m3, census 0, crown 13/0): show_eff_arg's EANode arm
+  reads the operand node's source spelling live, keeping the debug
+  placeholder only for bodyless nodes (the value-dim mints). Found by
+  the fifth instance crucible's own write: the debug form broke fmt's
+  render→re-parse fixpoint (`Sample(<operand #N>)` refused by the
+  canonical render's re-parse), which had masqueraded as
+  E_EffArgNotLiteral being live — parse_one_eff_arg's TIdent→EANode
+  arm was fine all along, correcting the previous landing's tension
+  claim. The conservative-arm crucible (leak-instance-node) lands:
+  §11 6.2's five fixtures are whole. BANKED at
+  Hβ.syntax.effarg-node-in-with-clause (re-scoped to the identity
+  half): the declared Sample(rate) and the charged instance mint
+  pointer-distinct EANodes — the same-name mismatch is conservative
+  and sound but teaches wrongly; the fix is the charge carrying the
+  declared clause's own operand node.
+
 - 2026-08-07 · ▶▶▶ THE ACCEPT GAINS ITS BELT (pin 58197fecea01 —
   CLEAN m2 == m3, census 0): 5.3's named-next (a), the Mycroft
   stability check.

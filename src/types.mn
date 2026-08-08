@@ -3030,7 +3030,16 @@ fn show_eff_arg(ref arg) with GraphRead + !Mutate + Alloc + Memory + Intern = ma
   // old opaque marker hid the exact instance the diagnostic exists to
   // teach (!Cast vs Cast(<type>) named the class live, 2026-07-24).
   show_type(t),
-  EANode(h) => "<operand #{int_to_str(h)}>",
+  EANode(h) => // The operand node's own source spelling — the row render is the
+  // developer's surface, and the debug form broke fmt's render→re-parse
+  // fixpoint the day an EANode instance reached a with-clause (measured
+  // 2026-08-08: `Sample(rate)` rendered `Sample(<operand #N>)`, which
+  // the canonical render's own re-parse refused). A shape beyond a bare
+  // name keeps the honest placeholder (display totality).
+  match graph_node_body(h) {
+    NExpr(VarRef(name)) => name,
+    _ => "<operand #{int_to_str(h)}>",
+  },
 }
 
 fn show_predicate(ref pred) with GraphRead + Memory + Alloc = match pred {

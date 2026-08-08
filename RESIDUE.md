@@ -57,16 +57,27 @@ boot: `effect Flow(src: Int, dst: Int)` declares, installs
 the T_OverDeclared narration), and RUNS; ADT-ctor arguments clear too
 (`effect Flow(src: Level, dst: Level)` with `Flow(Sec, Pub)` checks
 clean and runs) — no grammar or algebra work precedes the build; (b)
-THE CARRY IS ALREADY BUILT: a value's label rides its TYPE (a
-Vault-typed value carries its classification wherever inference
-threads the type — query_flow_label reads it at any position), so the
-sink edge needs NO label-carrying machinery — it is a type read at
-the boundary plus a row charge, the same two moves the splice check
-already makes; (c) charging sites are the splice check (isolated in
-splice_flow_check) and the general argument-position edge where the
-callee's row performs the observation class — the splice is one
-instance of that general edge; (d) no new traversal — charges ride
-judgment where rows already accrue, O(charge sites). ENUMERATED writers:
+THE CARRY HOLDS FOR SOURCES AND DIES AT DERIVATION — the same-day
+re-derivation corrected the first bank (retraction law): a SOURCE
+value's label rides its type (Vault-typed pw is classified wherever
+inference threads it), but the SPLICE RESULT binds plain ty_string
+(infer.mn's MakeStringExpr arm — graph_bind(handle, ty_string)), so
+the derived string loses the label at the bind — which is exactly WHY
+the sound check sits at the splice today (the last point the label is
+visible). Sink-sensitivity therefore requires the PROPAGATION half:
+the interpolation's bound type carries the joined fragment label
+(TRefined(String, the classification) when any fragment classifies
+above Public), so the built string IS classified downstream; (c) the
+sink edge then needs its own judgment — an argument position whose
+callee performs the observation class, refusing when arg-label ⊑
+sink-clearance fails — and SINK CLEARANCE is the open sub-question
+(what marks a callee as an observation, at what level, declared how);
+refinement subtyping alone cannot refuse there (TRefined(String) ⊑
+String unifies — refinements narrow, never block). With the
+propagation half + the clearance question, the build is
+DEDICATED-ARC, not loop-lease; the substrate probes (a) stand; (d) no
+new traversal — charges ride judgment where rows already accrue,
+O(charge sites). ENUMERATED writers:
 types.mn (the Flow effect vocabulary), infer.mn (splice_flow_check
 charges the row instead of verifying against Public; the sink-edge
 charge at install), effects.mn (nothing — the algebra is closed over

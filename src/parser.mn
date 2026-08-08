@@ -106,7 +106,6 @@ fn show_token_kind(k) with Pure = match k {
   THandler => "handler",
   TWith => "with",
   TResume => "resume",
-  TPerform => "perform",
   TImport => "import",
   TWhere => "where",
   TOwn => // drift-audit: ignore — human-facing token-display rendering, not effect keying; tracked by Hβ.perf.name-is-handle; token-rendering normalization
@@ -1920,7 +1919,6 @@ fn parse_primary(ref tokens, pos, slot) = {
     // (`return handler`, `handler` as param name). Same treatment as
     // TOwn/TRef — seed $ident_at_p maps THandler→"handler".
     (nexpr(VarRef("handler"), span), pos + 1),
-    TPerform => parse_perform(tokens, pos + 1, span),
     TResume => parse_resume(tokens, pos + 1, span),
     TPipe => {
       // SYNTAX.md:307-315 — E_LambdaFence: pipe-fenced params syntax is // drift-audit: ignore
@@ -2674,25 +2672,6 @@ fn unclosed_eof(ref tokens, p, construct: String, own buf, count) = {
     span_at(tokens, p)
   ))
   (buf, count, p)
-}
-
-fn parse_perform(ref tokens, pos, span: ValidSpan) = {
-  // SYNTAX.md §«Invoking effect operations»: an effect op is a BARE CALL;
-  // `perform` is format-lifted (E_RedundantPerform, MachineApplicable). The
-  // env binding proves op-ness (EffectOpScheme) and the op's TFun row carries
-  // Closed[eff] definitionally, so the CallExpr path infers and lowers the op
-  // exactly as `op(args)` does — the bare call is the one form that survives.
-  // PerformExpr is dissolved: `perform op(args)` produces the SAME CallExpr
-  // node a bare `op(args)` does, never a parallel AST node (Carried-Truth).
-  let op_span = span_at(tokens, pos)
-  let op_name = ident_at(tokens, pos)
-  let p = expect(tokens, skip_ws(tokens, pos + 1), TLParen)
-  match parse_call_args(tokens, skip_ws(tokens, p)) {
-    (args, p2) => {
-      report(ERedundantPerform(span_join(span, span_at(tokens, p2 - 1))))
-      (nexpr(CallExpr(nexpr(VarRef(op_name), op_span), args), span_join(span, span_at(tokens, p2 - 1))), p2)
-    },
-  }
 }
 
 fn parse_resume(ref tokens, pos, span: ValidSpan) = {

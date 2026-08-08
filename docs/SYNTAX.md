@@ -43,7 +43,7 @@ Every form below exists to make one primitive of the kernel (`PLAN.md §2`) reac
 | # | Kernel primitive                                    | Tentacle   | Surface form                                                    |
 |---|-----------------------------------------------------|------------|-----------------------------------------------------------------|
 | 1 | Graph + Env                                    | Query      | AST nodes implicit; `import` brings module envs together         |
-| 2 | Handlers with typed resume discipline               | Propose    | `effect`, `handler`, `~>` (the one install verb), `resume`. Ops are invoked as BARE CALLS — effect-ness lives in the op's row (`Closed[eff]` at decl), never in a call-site keyword (`perform` is format-liftable ceremony; see §«Invoking effect operations»). Resume cardinality is INFERRED from arm body structure (count of resume sites under control-flow ancestry); never authored as annotation. |
+| 2 | Handlers with typed resume discipline               | Propose    | `effect`, `handler`, `~>` (the one install verb), `resume`. Ops are invoked as BARE CALLS — effect-ness lives in the op's row (`Closed[eff]` at decl), never in a call-site keyword (`perform` is NOT a keyword — dissolved; see §«Invoking effect operations»). Resume cardinality is INFERRED from arm body structure (count of resume sites under control-flow ancestry); never authored as annotation. |
 | 3 | Five verbs                                          | Topology   | `\|>`  `<\|`  `><`  `~>`  `<~` with canonical layout             |
 | 4 | Full Boolean effect algebra (`+ - & ! Pure`)        | Unlock     | `with E1 + !E2 + Pure` in fn sigs, handler sigs, types — declared row is a CONSTRAINT verified against the row inferred from the body's op-call sites, never a contract |
 | 5 | Ownership as an effect                              | Trace      | `own` / `ref` parameter markers; inferred from usage count by default (0/1/2+ → Inferred/Own/Ref) |
@@ -1073,17 +1073,16 @@ sites. The reader who needs suspension points reads the row in the
 signature or the cursor's projection — the medium narrates what a
 keyword would only whisper.
 
-```
-// FORMAT-LIFTED:
-perform check(value, "expected true")
-```
-
-Diagnostic: **`E_RedundantPerform`** (MachineApplicable) — the formatter
-strips the keyword silently; both forms produce the same graph, and per
-governing principle 2 the bare call is the one that survives. `resume`
-keeps its keyword: it is context-bound to handler arms, typed by the
-typed-resume law (`resume : R -> S`), and names the continuation — a
-value the call site cannot otherwise reach.
+**`perform` is not a keyword** (dissolved 2026-08-08, the
+`Hβ.syntax.perform-dissolution` peer executed — the turbofish/`handle`
+precedent, third application): the word lexes as an ordinary
+identifier, so a stale-fluency `perform check(...)` parses as ordinary
+expressions and the general unresolved-name diagnostic teaches the
+bare call in context. No bespoke recognizer, no format-lift class —
+`E_RedundantPerform` and the `TPerform` token are deleted with it.
+`resume` keeps its keyword: it is context-bound to handler arms, typed
+by the typed-resume law (`resume : R -> S`), and names the
+continuation — a value the call site cannot otherwise reach.
 
 ### Unit return omission
 
@@ -1805,7 +1804,7 @@ type TokenKind
   // ─── Keywords ─────────────────────────────────────────────────────
   = TFn | TLet | TIf | TElse | TMatch | TType
   | TEffect | THandler | TWith
-  | TResume | TPerform
+  | TResume
   | TImport | TWhere
   | TOwn | TRef | TPure
   | TTrue | TFalse
@@ -1868,7 +1867,7 @@ type TokenKind
 
 | Variant         | Lexical form     | Payload   | Where parser expects it                       |
 |-----------------|------------------|-----------|------------------------------------------------|
-| **Keywords (18)** |                |           |                                                |
+| **Keywords (17)** |                |           |                                                |
 | `TFn`           | `fn`             | —         | start of function declaration / lambda         |
 | `TLet`          | `let`            | —         | start of let-binding                           |
 | `TIf`           | `if`             | —         | start of if-expression                         |
@@ -1879,8 +1878,7 @@ type TokenKind
 | `THandler`      | `handler`        | —         | start of handler declaration                   |
 | `TWith`         | `with`           | —         | effect clauses, handler state, handle-with     |
 | `TResume`       | `resume`         | —         | inside handler arm body                        |
-| `TPerform`      | `perform`        | —         | format-liftable ceremony — ops are invoked as bare calls (§«Invoking effect operations»); lexed so the formatter can strip it (`E_RedundantPerform`); dissolves with peer `Hβ.syntax.perform-dissolution` |
-| *(removed)*     | —                | —         | `for`, `in`, `loop`, `break`, `continue`, `return` were previously reserved but are NOT Mentl keywords. Iteration uses pipe verbs + Iterate effect; early-exit uses Abort effect. |
+| *(removed)*     | —                | —         | `for`, `in`, `loop`, `break`, `continue`, `return`, and `perform` were previously reserved but are NOT Mentl keywords. Iteration uses pipe verbs + Iterate effect; early-exit uses Abort effect; ops are bare calls (`perform` dissolved 2026-08-08 — the peer executed). |
 | `TImport`       | `import`         | —         | top-level import statement                     |
 | `TWhere`        | `where`          | —         | refinement type clause                         |
 | `TOwn`          | `own`            | —         | parameter ownership marker                     |
@@ -1939,7 +1937,7 @@ type TokenKind
 | `TNewline`      | `\n`             | —         | statement separator; transparent around binops (layout is never semantics) |
 | `TEof`          | (end of input)   | —         | always last token; parser uses to terminate    |
 
-**Checksum: 64 variants** (18 keywords + 7 identifiers/literals + 14 two-char operators + 23 single-char operators/punctuation + 2 layout) — a reviewer cross-check that the `TokenKind` declaration and this catalog enumerate the SAME set; the hand-maintained stand-in for `mentl audit` until the cursor projects it from the graph. Exhaustiveness over the ADT (§Lexer/Parser obligations) IS the cardinality guarantee — the number is its shadow, not its source. (`TColonColon`, `TCapability`, `TTilde`, and `THandle` are absent: a token with no kernel correspondence is speculative inventory — and `handle` is the medium's own domain noun, not a keyword (§«Installation»). `TStringPart`/`TStringSplice` carry the interpolation substrate.)
+**Checksum: 63 variants** (17 keywords + 7 identifiers/literals + 14 two-char operators + 23 single-char operators/punctuation + 2 layout) — a reviewer cross-check that the `TokenKind` declaration and this catalog enumerate the SAME set; the hand-maintained stand-in for `mentl audit` until the cursor projects it from the graph. Exhaustiveness over the ADT (§Lexer/Parser obligations) IS the cardinality guarantee — the number is its shadow, not its source. (`TColonColon`, `TCapability`, `TTilde`, and `THandle` are absent: a token with no kernel correspondence is speculative inventory — and `handle` is the medium's own domain noun, not a keyword (§«Installation»). `TStringPart`/`TStringSplice` carry the interpolation substrate.)
 
 ### Lexer obligations
 
@@ -1960,7 +1958,7 @@ type TokenKind
 An `if cond { body }` without `else` is legal when `body`'s type is unit `()`. The compiler inserts an implicit `else { () }`. Used for side-effect conditionals:
 
 ```
-if should_log { perform log("message") }     // unit body — OK
+if should_log { log("message") }             // unit body — OK
 if x > 0 { x * 2 }                            // non-unit body — E_IfMissingElse
 ```
 
@@ -2010,16 +2008,17 @@ re-flow emits no token, so it carries no code — which is exactly why
 un-normalized source the formatter has not yet touched).
 
 *The silent lift is the DESIGN; the artifact's state, probed 2026-08-07:
-`E_StatementSemicolon` is silent as designed, while `E_RedundantBraces` and
-`E_RedundantPerform` still surface as warnings — they retire when the
-formatter's canonical projection becomes the save path (the fmt sweep's
-payoff ratchet, `RESIDUE.md`'s fmt entry), never by muting the reporter.*
+`E_StatementSemicolon` is silent as designed, while `E_RedundantBraces`
+still surfaces as a warning — it retires when the formatter's canonical
+projection becomes the save path (the fmt sweep's payoff ratchet,
+`RESIDUE.md`'s fmt entry), never by muting the reporter.
+`E_RedundantPerform` is DELETED (2026-08-08): `perform` is no longer a
+token, so there is nothing to lift.*
 
 | Code                  | Trigger (an emitted token, removed/transformed)         | Canonicalization                                 |
 |-----------------------|---------------------------------------------------------|--------------------------------------------------|
 | `E_RedundantBraces`   | braces wrapping a non-`BlockExpr` (no statements)       | drop the braces; user sees no diagnostic         |
 | `E_BlockNeedsBraces`  | statements (a `BlockExpr`) written without braces       | wrap the statements in `{ }`; user sees no diagnostic |
-| `E_RedundantPerform`  | `perform` before an op call                             | strip the keyword; ops are bare calls            |
 | `E_StatementSemicolon`| `;` between statements                                  | lift to newline layout; canonical text has no `;` |
 
 ### Hard errors (substrate violations)

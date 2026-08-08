@@ -63,8 +63,6 @@ fn keyword_kind(ref word) with Memory + Alloc = if word == "fn" {
   Some(TWith)
 } else if word == "resume" {
   Some(TResume)
-} else if word == "perform" {
-  Some(TPerform)
 } else if word == "import" {
   Some(TImport)
 } else if word == "where" {

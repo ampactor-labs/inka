@@ -35,6 +35,18 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ PERFORM DISSOLVES (pin 1e808f7f4514 — CLEAN
+  m2 == m3, census 0): §11 6.5's surface item executed against a
+  zero-live-use corpus measurement. TPerform leaves the lexer,
+  parser dispatch, render, and TokenKind (64 → 63 variants);
+  parse_perform deletes whole; E_RedundantPerform's ctor and seven
+  projection arms delete. The stale-fluency spelling parses as
+  ordinary expressions and the general diagnostic teaches — the
+  turbofish/`handle` precedent's third application, and the
+  format-liftable table loses its one keyword-stripping row. SYNTAX
+  moves in the same landing (kernel table, token table, checksum,
+  the if-example).
+
 - 2026-08-08 · ▶▶▶ THE DECLARED NODE PINS ITS DIM (pin 7cc5ab7f544e —
   CLEAN m2 == m3, census 0, crown 13/0): the effarg peer's identity
   half, one arm — pin_scalar_or_keep's EANode case takes the declared

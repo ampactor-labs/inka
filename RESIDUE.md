@@ -398,12 +398,20 @@ from main). Memory: the full-tree residency window shrinks to
 per-entry (the arena's 2b friend).
 — ENUMERATED. The moving parts, each a marched landing: (1)
 lower_program's per-decl construction relocates behind a
-per-entry entry point (the projectors + lower_stmt for
-top-level decls); (2) reachable_from_main becomes the worklist
-driver keyed by the enumeration; (3) executable_gate re-roots on
-per-entry constructed bodies; (4) emit_module's collect_* family
-becomes accumulation at construction; (5) the LowFn/LowExpr
-handoff tree deletes (step iv arrives here). Risk tripwire: the
+per-entry entry point — ✅ MEASURED ALREADY-SHAPED 2026-08-08:
+lower_stmt IS the per-decl entry (lower_stmt_list is a plain map
+of it), and the cross-decl state is exactly the four ls_register
+pre-passes (globals, escaping rows, may-yield, resume binds) plus
+lower_handler_stack_ctx, whose stack is per-install push/pop
+balanced within bodies and EMPTY at decl boundaries (read at
+lower.mn:145) — so per-decl lower_stmt calls are independent
+given the pre-passes; (2) reachable_from_main becomes the
+worklist driver keyed by the enumeration — construct main's
+decl, collect references from the CONSTRUCTED body, construct
+those, iterate; (3) executable_gate re-roots on per-entry
+constructed bodies; (4) emit_module's collect_* family becomes
+accumulation at construction; (5) the LowFn/LowExpr handoff
+tree deletes (step iv arrives here). Risk tripwire: the
 worklist's first-reference order must be deterministic across
 generations — the m3 == m4 assertion is the instrument. THE
 MARCH CENSUS GAP IS CLOSED (2026-08-08): censusok reads the

@@ -228,6 +228,39 @@ if C=$(wt_m2_ensure); then
       say "  ↓ effectful-lambda FELL $rmax -> $crow — lower effectful_lambda_max in $BASELINE to hold it."
     fi
   fi
+  # The DRIFT-SHAPE ratchet — the 5.6 absorption's enforcement half (PLAN
+  # §11): the whole-link counts of the three absorbed drift modes, read
+  # from the weave by the census shapes that replaced their bash rows.
+  # wildcard-zero holds the wheel's DOCUMENTED sentinels (each carries its
+  # inline reason at the site — a rise is a NEW masked case, not a style
+  # slip); failure-mask and print-in-report hold at ZERO. Same contract as
+  # the anonymity tier: monotone DOWN, empty answer refuses loudly.
+  cwz=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census wildcard-zero" 2>/dev/null | grep -oE '[0-9]+ wildcard-zero' | grep -oE '[0-9]+' | head -1)
+  cfm=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census failure-mask" 2>/dev/null | grep -oE '[0-9]+ failure-mask' | grep -oE '[0-9]+' | head -1)
+  cpir=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census print-in-report" 2>/dev/null | grep -oE '[0-9]+ print-in-report' | grep -oE '[0-9]+' | head -1)
+  wzmax=$(grep -E '^wildcard_zero_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  fmmax=$(grep -E '^failure_mask_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  pirmax=$(grep -E '^print_in_report_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  if [[ -z "$cwz" || -z "$cfm" || -z "$cpir" ]]; then
+    say "✗ drift-shape RATCHET: a census query answered nothing (wz='$cwz' fm='$cfm' pir='$cpir') — the projection is broken, not clean."
+    fail=1
+  else
+    say "· drift shapes: $cwz wildcard-zero, $cfm failure-mask, $cpir print-in-report — the absorbed modes on the wheel link"
+    if [[ -n "$wzmax" && "$cwz" -gt "$wzmax" ]]; then
+      say "✗ drift-shape RATCHET: wildcard-zero rose $wzmax -> $cwz — a new masked case; enumerate the variant or document the sentinel."
+      fail=1
+    elif [[ -n "$wzmax" && "$cwz" -lt "$wzmax" ]]; then
+      say "  ↓ wildcard-zero FELL $wzmax -> $cwz — lower wildcard_zero_max in $BASELINE to hold it."
+    fi
+    if [[ -n "$fmmax" && "$cfm" -gt "$fmmax" ]]; then
+      say "✗ drift-shape RATCHET: failure-mask rose $fmmax -> $cfm — a bug is zero or blocking; no || true."
+      fail=1
+    fi
+    if [[ -n "$pirmax" && "$cpir" -gt "$pirmax" ]]; then
+      say "✗ drift-shape RATCHET: print-in-report rose $pirmax -> $cpir — a print inside report(...) corrupts WAT stdout."
+      fail=1
+    fi
+  fi
   # The manifest gate — the wheel's own DAG judgment, zero-tolerance. The
   # blob census is structurally BLIND to a missing import edge (every name
   # resolves in the concatenation), and the class sat silent five days

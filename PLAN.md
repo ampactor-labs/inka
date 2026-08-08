@@ -1955,9 +1955,17 @@ new DEP found; the map below is accurate at that pin.)*
   bash rows deleted (modes 30 + 36's fence/keyword/fn-lambda), each
   shape probed COMPILER-REFUSED first (E_NotAKeyword, E_LambdaFence,
   E_RedundantFnOnLambda) — a bash row policing a refused shape is a
-  weaker second copy of an armed diagnostic. The remaining bash rows are
+  weaker second copy of an armed diagnostic. The three absorbed shapes
+  are RATCHETED (2026-08-08, the enforcement half): verify's drift-shape
+  tier counts them on the wheel link per gate pass — wildcard-zero held
+  at its 9 documented sentinels, failure-mask and print-in-report at
+  ZERO — each arm seen RED at an under-set ceiling, and their bash rows
+  retired in the same commit (the mode-33 precedent: the grep dies, the
+  projection + ratchet is the check). The remaining bash rows are
   naming/prose modes (the raw channel's own domain) plus the structural
-  stragglers, absorbed as their shapes prove out. Its unsayability face
+  stragglers, absorbed as their shapes prove out — mode 10's typed
+  fabrications (Forall/TVar/"Pure"/"") are the named next shapes. Its
+  unsayability face
   matures through Phase 8's diagnostics; its arrival is when a wrong move
   in the wheel's own source is a REFUSAL, not a review finding.
 

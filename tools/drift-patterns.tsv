@@ -32,10 +32,20 @@
 10	Wildcard-fabricates (_ arm returning Forall)	_\s*=>\s*Forall\s*\(	ka	Wildcard fabricates a Scheme. Enumerate variants explicitly.
 10	Wildcard-fabricates (_ arm returning TVar)	_\s*=>\s*TVar\s*\(	ka	Fabricated TVar silently absorbs a new variant.
 10	Wildcard-fabricates (_ arm returning "Pure")	_\s*=>\s*"Pure"	ka	String-Pure default. Use EffRow algebra.	raw
-13	Failure-mask (|| true)	\|\|\s*true	ka	A bug is zero or blocking. No `|| true` to hide a gate.
+# --- Mode 13: RETIRED (2026-08-08) — absorbed into the census + ratchet ---
+# CsFailureMask reads the shape from the weave (BinOpExpr(BOr, _, LitBool
+# true)) and verify's drift-shape ratchet holds the wheel link at ZERO
+# (failure_mask_max, seen RED at -1). The grep dies; the projection +
+# ratchet is the check (the mode-33 precedent).
 14	Decorated-removal (removed-for comments)	//\s*removed\s+(for|because)	ka	Delete, don't decorate. No removal comments.	raw
 15	Unused-decoration (leading underscore retain)	\blet\s+_[a-z]\w+\s*=	ka	Unused variables are deleted, not renamed with underscore.
-16	println-in-report (corrupts WAT stdout)	report\s*\([^)]*println	ka	println inside report(...) handler arms corrupts WAT stdout.
+# --- Mode 16: RETIRED (2026-08-08) — absorbed into the census + ratchet ---
+# CsPrintInReport walks the report(...) call's ARG SUBTREE for the whole
+# print family (println/print/print_string) through body_child_handles —
+# the one-line regex saw only a println on the same line; the structural
+# detector out-measured it 3 sites to 1 on its first run. verify's
+# drift-shape ratchet holds the wheel link at ZERO (print_in_report_max,
+# seen RED at -1). The grep dies; the projection + ratchet is the check.
 #
 # --- Foreign-language keyword drift (the fluency trap surface) ---
 20	Rust keyword drift (impl)	^\s*impl\b|\bimpl\s+\w+\s+for\b	ka	`impl` is Rust. Mentl has handlers on the graph.
@@ -105,4 +115,11 @@
 # suppressed inline (`// drift-audit: ignore — <why>`); an undocumented one is a
 # surrender-fallback to delete/restructure, never wrap.
 10	Wildcard-fabricates (_ arm returning "")	^[^/]*_\s*=>\s*""	ka	Empty-string surrender-fallback. Document + suppress a genuine String-null sentinel inline; otherwise delete/restructure — never wrap.	raw
-10	Wildcard-fabricates (_ arm returning 0)	^[^/]*_\s*=>\s*0\s*[,}]	ka	Zero-handle surrender-fallback. Enumerate the ADT (ty_handle_of reads the handle live per-variant, 0 only for ground types) — a wildcard 0 masks a missing case.
+# --- Mode 10's zero row: RETIRED (2026-08-08) — absorbed into the census
+# + ratchet. CsWildcardZero reads the shape from the weave (a PWild arm
+# whose body is LitInt(0)) — it sees through the line formatting this
+# regex anchored on — and verify's drift-shape ratchet holds the wheel
+# link at its 9 documented sentinels (wildcard_zero_max, seen RED at 8);
+# a rise is a NEW masked case. The other mode-10 rows above survive:
+# their fabricated values (Forall/TVar/"Pure"/"") are not yet census
+# shapes. The grep dies; the projection + ratchet is the check.

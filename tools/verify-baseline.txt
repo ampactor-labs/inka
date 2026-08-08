@@ -611,6 +611,23 @@ use_after_move_max: 0
 authored_own_max: 83
 authored_ref_max: 816
 
+# 2026-08-08: the DRIFT-SHAPE ratchet (PLAN §11 5.6's absorption,
+# enforcement half) — the three absorbed drift modes counted by the
+# census shapes on the wheel link, replacing their bash rows (which
+# retire in the same commit: the grep dies; the projection + ratchet is
+# the check, the mode-33 precedent). RED-seen at wildcard_zero_max: 8 /
+# failure_mask_max: -1 / print_in_report_max: -1 before these ceilings.
+# wildcard-zero seeds at the measured 9 — the wheel's DOCUMENTED
+# sentinels, each carrying its inline reason at the site (ty_handle_of's
+# ground-type zero and kin); a rise is a NEW masked case. The structural
+# detector sees through formatting the line-anchored regex could not.
+# failure-mask and print-in-report seed at their measured ZERO — a bug
+# is zero or blocking, and a print inside report(...) corrupts WAT
+# stdout (§9's bug list); zero is the floor and the contract.
+wildcard_zero_max: 9
+failure_mask_max: 0
+print_in_report_max: 0
+
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
 # header; no registry here (a `micro:NAME=EXIT` list once documented below

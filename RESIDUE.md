@@ -368,7 +368,16 @@ around every splice, judged by infer, LShow reading the judged
 handle — interp_fragment_shown's per-run mint DELETED; the mint
 class's remaining half is the interior-concat handle
 (lower.mn:4817), still blocking dual-run lowering of
-multi-fragment interpolations only. TWO FINDINGS BANKED FROM THE
+multi-fragment interpolations only. ONE KEYING REFUTED
+(2026-08-08, battery-refused repin — the gate worked): keying
+each interior concat on its RIGHT FRAGMENT's handle traps both
+interpolation micros at 134 — the concat LCall's staging cell
+shares its own argument's key (the LShow fragment rides the same
+handle), the exact effectful-arg clobber class the site's own
+comment warned about. The surviving resolutions: infer mints the
+N-1 concat cells ONCE at the judge (stored per interp node — a
+column or the boundary family), or the planned-mint space keys
+them deterministically; either makes lowering a pure projection. TWO FINDINGS BANKED FROM THE
 SWEEP: `Hβ.infer.nested-pattern-exhaustiveness` — usage_of's
 double-nested match (N(body) → NodeBody → NExpr(Expr)) passed the
 checker at 27 of 28 Expr variants and trapped at runtime on the

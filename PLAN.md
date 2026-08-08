@@ -1944,7 +1944,20 @@ new DEP found; the map below is accurate at that pin.)*
   (`Hβ.audit.carried-truth-projection`) flags a re-derivation/snapshot/
   fabrication BEFORE a line lands — the census shapes, the iteration tier,
   the drift catalog, and the working-discipline hooks absorb into it, and
-  the human stops being `mentl audit` by hand. Its unsayability face
+  the human stops being `mentl audit` by hand. THE ABSORPTION RUNS BOTH
+  MOTIONS (opened 2026-08-08, the cadence established at one marched
+  landing per mode): INTO the medium — three drift modes are census
+  shapes with per-fn audit tiers (mode 10 wildcard-zero, mode 13
+  failure-mask, mode 16 print-in-report — the last the first
+  CONTEXT-SENSITIVE shape, a fuel-bounded subtree walk every future
+  context mode reuses; the medium's detector out-measured the bash grep
+  on its first run, 3 wheel sites vs 1) — and OUT of the scaffold: five
+  bash rows deleted (modes 30 + 36's fence/keyword/fn-lambda), each
+  shape probed COMPILER-REFUSED first (E_NotAKeyword, E_LambdaFence,
+  E_RedundantFnOnLambda) — a bash row policing a refused shape is a
+  weaker second copy of an armed diagnostic. The remaining bash rows are
+  naming/prose modes (the raw channel's own domain) plus the structural
+  stragglers, absorbed as their shapes prove out. Its unsayability face
   matures through Phase 8's diagnostics; its arrival is when a wrong move
   in the wheel's own source is a REFUSAL, not a review finding.
 

@@ -248,7 +248,34 @@ tree and the bodies that only re-walked it delete together.
 dual-written, zero readers (Law-7 no-op) — ✅ OPENED 2026-08-08, pin
 d4d552904d8c: the BIND-HOME column (BindHome, the spine's eighth
 column, graph_bind_note, the one dual-write at lower's VarRef arm,
-keyed by the USE handle the tree discards). The remaining (i)
+keyed by the USE handle the tree discards); ✅ EXTENDED same day,
+pins 1055e8e5093b + ccaacb70b5d4: the emittable-fn enumeration
+(EmitFnKind × origin × name × fence × captures) at all seven LFn
+construction sites, capture pairs at the five lexical sites, the
+partial/arm program-live reasons in the op decl. THE PROJECTOR
+STAMP (2026-08-08, traced to its first DEP — build gated on this
+block): the body projection for an entry re-runs lower's own
+construction seeded from columns instead of walk state — for a
+lambda: params from the origin's LambdaExpr node, frame entered
+with the column's (name, handle) capture pairs in note order, body
+lowered by the same lower_body_reified — under an ABSORBING
+handler catching graph_emitfn_note + graph_bind_note (the re-run's
+notes must not duplicate the enumeration; two handlers covering
+one effect's disjoint op sets is the LDirectPerform-documented
+form). The coherence gate: projected fn_ir compared to the
+tree-built fn_ir by the one structural ==; divergence raises a
+census-entering diagnostic, so verify's census-0 ratchet IS the
+gate. THE NAMED DEP — NESTING: a nested lambda inside a projected
+body re-runs resolve_captures_outer against the OUTER frame
+stack, which the live walk holds and the column re-entry does not;
+its reconstruction is the ENCLOSING relation + each enclosing
+entry's own capture pairs (derivable, recursive), OR the deeper
+form — the projected body references nested fns BY ENTRY (the
+LMakeClosure arm carrying an entry key instead of an inline LFn),
+which is the tree's actual death shape at step (iv). SEQUENCE:
+leaf-first (assert coherence on bodies with no nested
+construction — the wheel's majority), then the entry-reference
+shape closes nesting. The remaining (i)
 columns land by the same pattern as their swaps demand them;
 (ii) the projection bodies
 swap to column reads one landing at a time (collect_* family first),

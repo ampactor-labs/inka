@@ -3237,7 +3237,12 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty
       },
     },
   },
-  TFun(_, _, row) => row |> row_flow_label,
+  TFun(_, ret, row) => // A fn's flow character joins its RETURN's label with its row
+  // confinement — a source returning Secret is a Secret channel
+  // whatever its capabilities (the 2026-08-08 Phase-7 walk: `flow
+  // getpw` on a `-> Secret where classified(self)` source answered
+  // Public because this arm read the row alone).
+  flow_label_join(query_flow_label(ret), row_flow_label(row)),
   TAlias(_, inner) => inner |> query_flow_label,
   TReprPin(_, base) => base |> query_flow_label,
   TList(elem) => elem |> query_flow_label,

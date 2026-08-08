@@ -35,6 +35,26 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE SOURCE CARRIES ITS RETURN'S LABEL (pin a3ffc8c3e223 —
+  CLEAN m2 == m3, census 0, frontier 348/0): Phase 7's felt walk (the
+  phase opener, per the felt-path-first law) probed the flow facet at
+  three shapes and found the TFun arm reading the row alone — a
+  `-> Vault` source over `Vault = String where classified(self)`
+  answered Public while `flow pw` on the value answered Secret. The
+  arm now joins query_flow_label(ret) with row_flow_label(row)
+  (types.mn): a fn's flow character is its return's sensitivity JOINED
+  with its capability confinement. Gate born RED against the prior
+  boot at exactly the value-Secret/fn-Public split
+  (tests/frontier/mn-flow-refined-source.mn + the flow-facet leg).
+  Dig lesson re-learned: a shim probe tests the PINNED boot, never the
+  just-marched m2 — the fix "not working" was the old wheel answering.
+  Two walk truths banked in PLAN Phase 7: predicate_flow_label's
+  vocabulary (str_contains secret/classified/sensitive) is a seed
+  heuristic `.flowlabel-inference-in-hm` replaces with labels as graph
+  facts; and FlowLabel's constructors occupy the user namespace, so a
+  program's own `type Secret` collides (the walk's first fixture hit
+  it — `type Secret` resolved to FlowLabel).
+
 - 2026-08-08 · ▶▶▶ PERFORM DISSOLVES (pin 1e808f7f4514 — CLEAN
   m2 == m3, census 0): §11 6.5's surface item executed against a
   zero-live-use corpus measurement. TPerform leaves the lexer,

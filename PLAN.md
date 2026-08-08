@@ -2032,6 +2032,22 @@ The spine root finishes. Order inside the phase is the dependency order.
 
 ### Phase 7 · `!Flow` — the crown applied to data flow
 
+*(The phase's felt walk ran 2026-08-08 through the shim + fresh m2. The
+projection layer is real end-to-end — `mentl query <f> "flow NAME"` →
+QFlowOf → query_flow_label → predicate_flow_label — and the walk's one
+find landed: the TFun arm read the ROW alone, so a `-> Vault` source
+(`Vault = String where classified(self)`) answered Public while the
+value's own scheme answered Secret; the return-label join closes it
+(tests/frontier/mn-flow-refined-source.mn, seen RED against the boot at
+exactly that split). Two named truths from the walk: the classifier's
+vocabulary is a predicate-NAME heuristic (str_contains
+secret/classified/sensitive in predicate_flow_label) — a seed the
+`.flowlabel-inference-in-hm` chain replaces with labels as graph facts,
+never the shipped form; and FlowLabel's constructors (`Secret`,
+`Public`) occupy the user namespace, so a program's own `type Secret`
+collides with the label vocabulary — the namespacing question rides the
+inference landing.)*
+
 The C chain in its banked order, DEP-rooted on Phase 6:
 `Hβ.ifc.dcc-noninterference-gate` → `.flowlabel-inference-in-hm` (the
 label lattice joins riding the same union-find; 2.0's eq coherence is why

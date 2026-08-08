@@ -2428,6 +2428,21 @@ for i in "${!compilers[@]}"; do
     fail "decls facet (column projection; got: $(printf '%s' "$df_out" | tail -1))"
   fi
 
+  # ─── The flow facet on a refined source (PLAN §11 Phase 7 walk) ─────
+  # `query <fixture> "flow NAME"` projects the flow label. Two altitudes
+  # over one refined alias (Vault = String where classified(self)): the
+  # VALUE's own scheme, and a source FN's flow character. Born RED
+  # 2026-08-08: the boot's TFun arm read the row alone, so `flow getpw`
+  # on a `-> Vault` source answered Public while `flow pw` answered
+  # Secret; the return-label join closes it.
+  fl_val=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-flow-refined-source.mn" "flow pw" 2>/dev/null)
+  fl_fn=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-flow-refined-source.mn" "flow getpw" 2>/dev/null)
+  if printf '%s' "$fl_val" | grep -q "Secret" && printf '%s' "$fl_fn" | grep -q "Secret"; then
+    pass "flow facet: refined source labels Secret at value AND fn altitude"
+  else
+    fail "flow facet (value: $(printf '%s' "$fl_val" | head -1) · fn: $(printf '%s' "$fl_fn" | head -1))"
+  fi
+
   # ─── The per-module solo sweep (PLAN §11 Phase 3.5, ratcheted) ──────
   # E_MissingVariable across every src module's SOLO check, ceiling in
   # verify-baseline (solo_violations_max — monotone DOWN; 0 retires the

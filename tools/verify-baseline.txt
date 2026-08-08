@@ -533,7 +533,10 @@ comment_refs_max: 0
 # surface moved with the semantics (the publish-surface channel,
 # eighth application; zero trial/final machinery in the diff). The
 # next legal move stays DOWN; rung 3 dissolves the class.
-movers_max: 479
+# Re-based 479 → 480 at the stability belt (pin 58197fecea01): the
+# belt's own new fns (the ty_alpha_eq family) join the freeze-root
+# class — the new-fn channel; zero trial/final machinery in the diff.
+movers_max: 480
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

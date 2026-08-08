@@ -2622,6 +2622,181 @@ fn mycroft_prebind(name: String, params, span: ValidSpan) = {
   env_extend(name, Forall(free_in_ty(fn_ty), fn_ty), Located(span, Declared(name)), FnScheme)
 }
 
+// Alpha-equality over detached Ty values — the Mycroft accept's
+// STABILITY BELT: the recheck round's published scheme must equal the
+// assumed one up to a bijective renaming of quantified cells, or the
+// acceptance is the unsound window (self-calls checked against a
+// scheme that is not the one published). Pure structural walk; the
+// mapping list carries the bijection. Rows compare by their SETS
+// (presents/absents structural ==) with tails equal when both closed,
+// both all, or both open — edge-set identity is cell-numbering and
+// never survives a re-judgment, so the row half's stability rides the
+// row machinery (the v1 boundary, named at the peer).
+fn alpha_pairs_ok(m, x, y) = match m {
+  [] => (true, [(x, y)]),
+  [(a, b), ...rest] => if a == x {
+    (b == y, m)
+  } else if b == y {
+    (false, m)
+  } else {
+    match alpha_pairs_ok(rest, x, y) {
+      (ok, rest2) => (ok, if ok { [(a, b)] ++ rest2 } else { m }),
+    }
+  },
+}
+
+fn ty_alpha_eq(t1, t2, m) = match t1 {
+  TVar(x) => match t2 {
+    TVar(y) => alpha_pairs_ok(m, x, y),
+    _ => (false, m),
+  },
+  TInt => (match t2 {
+    TInt => true,
+    _ => false,
+  }, m),
+  TFloat => (match t2 {
+    TFloat => true,
+    _ => false,
+  }, m),
+  TUnit => (match t2 {
+    TUnit => true,
+    _ => false,
+  }, m),
+  TByte => (match t2 {
+    TByte => true,
+    _ => false,
+  }, m),
+  TList(e1) => match t2 {
+    TList(e2) => ty_alpha_eq(e1, e2, m),
+    _ => (false, m),
+  },
+  TTuple(es1) => match t2 {
+    TTuple(es2) => ty_list_alpha_eq(es1, es2, m, 0),
+    _ => (false, m),
+  },
+  TFun(ps1, r1, row1) => match t2 {
+    TFun(ps2, r2, row2) => if len(ps1) != len(ps2) {
+      (false, m)
+    } else {
+      match param_list_alpha_eq(ps1, ps2, m, 0) {
+        (ok1, m1) => if ok1 {
+          match ty_alpha_eq(r1, r2, m1) {
+            (ok2, m2) => if ok2 { (row_alpha_shallow(row1, row2), m2) } else { (false, m2) },
+          }
+        } else {
+          (false, m1)
+        },
+      }
+    },
+    _ => (false, m),
+  },
+  TName(n1, args1) => match t2 {
+    TName(n2, args2) => if n1 == n2 { ty_list_alpha_eq(args1, args2, m, 0) } else { (false, m) },
+    _ => (false, m),
+  },
+  TRecord(fs1) => match t2 {
+    TRecord(fs2) => field_list_alpha_eq(fs1, fs2, m, 0),
+    _ => (false, m),
+  },
+  TRecordOpen(fs1, v1) => match t2 {
+    TRecordOpen(fs2, v2) => match alpha_pairs_ok(m, v1, v2) {
+      (ok, m1) => if ok { field_list_alpha_eq(fs1, fs2, m1, 0) } else { (false, m1) },
+    },
+    _ => (false, m),
+  },
+  TRefined(b1, _) => match t2 {
+    TRefined(b2, _) => ty_alpha_eq(b1, b2, m),
+    _ => (false, m),
+  },
+  TAlias(n1, i1) => match t2 {
+    TAlias(n2, i2) => if n1 == n2 { ty_alpha_eq(i1, i2, m) } else { (false, m) },
+    _ => (false, m),
+  },
+  TReprPin(r1, b1) => match t2 {
+    TReprPin(r2, b2) => if r1 == r2 { ty_alpha_eq(b1, b2, m) } else { (false, m) },
+    _ => (false, m),
+  },
+  TCont(i1, a1, d1, w1) => match t2 {
+    TCont(i2, a2, d2, w2) => if d1 == d2 {
+      match ty_alpha_eq(i1, i2, m) {
+        (ok1, m1) => if ok1 {
+          match ty_alpha_eq(a1, a2, m1) {
+            (ok2, m2) => if ok2 { (row_alpha_shallow(w1, w2), m2) } else { (false, m2) },
+          }
+        } else {
+          (false, m1)
+        },
+      }
+    } else {
+      (false, m)
+    },
+    _ => (false, m),
+  },
+}
+
+fn ty_list_alpha_eq(xs, ys, m, i) = if len(xs) != len(ys) {
+  (false, m)
+} else if i >= len(xs) {
+  (true, m)
+} else {
+  match ty_alpha_eq(list_index(xs, i), list_index(ys, i), m) {
+    (ok, m2) => if ok { ty_list_alpha_eq(xs, ys, m2, i + 1) } else { (false, m2) },
+  }
+}
+
+fn param_list_alpha_eq(ps1, ps2, m, i) = if i >= len(ps1) {
+  (true, m)
+} else {
+  match ty_alpha_eq(param_ty(list_index(ps1, i)), param_ty(list_index(ps2, i)), m) {
+    (ok, m2) => if ok { param_list_alpha_eq(ps1, ps2, m2, i + 1) } else { (false, m2) },
+  }
+}
+
+fn field_list_alpha_eq(fs1, fs2, m, i) = if len(fs1) != len(fs2) {
+  (false, m)
+} else if i >= len(fs1) {
+  (true, m)
+} else {
+  match list_index(fs1, i) {
+    (n1, t1) => match list_index(fs2, i) {
+      (n2, t2) => if n1 == n2 {
+        match ty_alpha_eq(t1, t2, m) {
+          (ok, m2) => if ok { field_list_alpha_eq(fs1, fs2, m2, i + 1) } else { (false, m2) },
+        }
+      } else {
+        (false, m)
+      },
+    },
+  }
+}
+
+fn row_alpha_shallow(r1, r2) = match r1 {
+  EfRow(p1, a1, t1) => match r2 {
+    EfRow(p2, a2, t2) => if p1 == p2 {
+      if a1 == a2 {
+        match t1 {
+          EtClosed => match t2 {
+            EtClosed => true,
+            _ => false,
+          },
+          EtAll => match t2 {
+            EtAll => true,
+            _ => false,
+          },
+          EtOpen(_) => match t2 {
+            EtOpen(_) => true,
+            _ => false,
+          },
+        }
+      } else {
+        false
+      }
+    } else {
+      false
+    },
+  },
+}
+
 // The round-3 RECHECK's assumption — the round-2 RESULT scheme, detached
 // from its rolled-back cells: the published Ty chased deep BEFORE the
 // rollback (a heap value, rollback-proof), its quantified cells re-minted
@@ -2696,8 +2871,30 @@ fn infer_fn_speculative(name, params, body_node, ret_ann, effs, handle, span: Va
                 graph_rollback(cp3)
                 infer_fn(name, params, body_node, ret_ann, effs, handle, span, false)
               } else {
-                graph_commit_checkpoint(cp3)
-                replay_held(held3)
+                // THE STABILITY BELT: the recheck's PUBLISHED scheme must
+                // be alpha-equal to the ASSUMED one, or the self-calls were
+                // checked against a scheme that is not the one published —
+                // the unsound window Mycroft's fixpoint exists to close.
+                // Both sides are detached value trees (round 2's pre-
+                // rollback, round 3's live), so the bijective TVar pairing
+                // is what makes the comparison rollback-safe.
+                let stable = match env_lookup(name) {
+                  Some(e3) => match e3 {
+                    (sch3, _, _) => match sch3 {
+                      Forall(_, ty3) => match ty_alpha_eq(chase_deep(ty3), detached, []) {
+                        (ok, _) => ok,
+                      },
+                    },
+                  },
+                  None => false,
+                }
+                if stable {
+                  graph_commit_checkpoint(cp3)
+                  replay_held(held3)
+                } else {
+                  graph_rollback(cp3)
+                  infer_fn(name, params, body_node, ret_ann, effs, handle, span, false)
+                }
               }
             },
           },

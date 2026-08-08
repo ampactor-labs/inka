@@ -35,6 +35,20 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE ACCEPT GAINS ITS BELT (pin 58197fecea01 —
+  CLEAN m2 == m3, census 0): 5.3's named-next (a), the Mycroft
+  stability check.
+  ty_alpha_eq — a bijective-TVar paired walk over detached Ty values,
+  exhaustive over the fourteen arms, rollback-safe because cell
+  numbers never compare (only the correspondence pattern; rows
+  compare shallowly by sets + tail form, the named v1 boundary) —
+  gates the speculative accept: the recheck round's PUBLISHED scheme
+  must be alpha-equal to the ASSUMED one, else the plain re-run.
+  Closes the unsound window where self-calls were checked against a
+  scheme that is not the one published. The fragment fixture still
+  runs 3; the K-exhausted teach still narrates; the sig'd path
+  untouched.
+
 - 2026-08-07 · ▶▶▶ THE FRAGMENT INFERS (pin 94fd07add038 — CLEAN
   m2 == m3, census 0, micros green; the first form breached the
   anonymity + movers ratchets and was taught — three helper lambdas

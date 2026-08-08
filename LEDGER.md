@@ -35,6 +35,22 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE α SWEEP COMPLETES (pin 3adb331719ef — CLEAN
+  m2 == m3, census 0): the closing measurement — arm, k, and partial
+  need NO swap, because their constructions are already α-shaped:
+  lower_one_arm_decl takes only handler-decl facts (config/state
+  field names, the projected cardinality, the fence), reify_frame_k_at
+  is argument-fed off the continuation boundary edge, and
+  lower_call_partial derives everything from the call node (its
+  captures ARE the supplied args). The seam vocabulary for the
+  future enumeration reader is therefore: the swapped kinds read
+  cap pairs from entries; the already-α kinds' argument seams are
+  the stamped columns (the arm's decl facts, the k's frame-tail
+  handle in the yield-boundary column, the partial's call shape).
+  The one true-up: the arm's and k's notes move to
+  PARENT-BEFORE-CHILD, so the whole enumeration is tree-ordered —
+  parents precede their nested mints across all six kinds.
+
 - 2026-08-08 · ▶▶▶ THE FANOUT PAIR SHARES ONE PROJECTOR (pin eae3f3559a0e —
   CLEAN m2 == m3, census 0): α's third move doubles as the uniform
   pass — project_thunk_fn is the one thunk construction for both

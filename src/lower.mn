@@ -3712,6 +3712,10 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
     _ => arm.args,
   }
   let locals_handles = zeros_of_len(len(arm_params))
+  // The enumeration note fires PARENT-BEFORE-CHILD (nested mints note
+  // during body lowering below) — the tree order every projected kind
+  // shares, so the future enumeration reader walks parents first.
+  graph_emitfn_note(EfkArm, node_handle(arm.body), fn_name, fence, [])
   ls_enter_frame(
     fn_name,
     arm_params,
@@ -3750,7 +3754,6 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
   // record's captured-ev region (past state AND arms).
   let body_list =
     if stateful { [LLet(0, "__hrec", LLocal(0, "__state")), lo_body] } else { [lo_body] }
-  graph_emitfn_note(EfkArm, node_handle(arm.body), fn_name, fence, [])
   let fn_ir = LFn(fn_name, len(arm_params), arm_params, body_list, mk_ef_pure(), fence)
   LDeclareFn(fn_ir)
 }
@@ -4283,6 +4286,16 @@ fn reify_frame_k_at(body_node, ph, outer_holes, edge) = match edge {
       free_vars_merge(map(((_, n)) => n, outer_holes), collect_free_vars(body_node, [hole]))
     match resolve_captures_outer(free_names, ph) {
       (captures_names, captures_exprs, captures_handles) => {
+        // Parent-before-child note order — the tree order every
+        // projected kind shares (nested k reifications note during the
+        // spine walk below).
+        graph_emitfn_note(
+          EfkK,
+          ph,
+          "__k_{int_to_str(ph)}",
+          len(captures_exprs),
+          zip(captures_names, captures_handles)
+        )
         ls_enter_frame("", [hole], [resume_input_h], captures_names, captures_handles, continuation_h)
         lower_frame_fence_push()
         let subs = map(((p, n)) => (p, k_hole_read(p, n)), outer_holes) ++
@@ -4310,13 +4323,6 @@ fn reify_frame_k_at(body_node, ph, outer_holes, edge) = match edge {
         let k_body = k2_floor_guard(mark_tail(k_remainder(body_node, subs2)), false)
         lower_frame_fence_pop()
         ls_exit_frame()
-        graph_emitfn_note(
-          EfkK,
-          ph,
-          "__k_{int_to_str(ph)}",
-          len(captures_exprs),
-          zip(captures_names, captures_handles)
-        )
         let k_fn = LFn("__k_{int_to_str(ph)}", 1, [hole], [k_body], world, len(captures_exprs))
         if disc == MultiShot {
           LMakeContinuation(continuation_h, k_fn, captures_exprs, ph, resume_input_h)

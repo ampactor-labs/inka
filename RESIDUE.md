@@ -358,10 +358,15 @@ arguments, bind_h's column home the stamped dispatch-tier
 column). THE THUNK PAIR (pin eae3f3559a0e): project_thunk_fn, ONE
 construction for both fanout shapes, share-vs-distribute an
 Option — the per-site family deleted, the boundary-row read
-hoisted ahead of body lowering. The remaining kinds (arm, k,
-partial) swap by the same move, each marched; (γ)'s ShowExpr
-half is its own follow-up; the march census-gap fix rides the
-next board-hardening landing. The
+hoisted ahead of body lowering. THE SWEEP CLOSED (pin
+3adb331719ef): arm, k, and partial measured ALREADY α-shaped —
+standalone constructions fed by program/env/boundary facts, no
+swap to make; the notes trued to parent-before-child so the
+enumeration is tree-ordered across all six kinds. What remains
+of the arc is step (ii)-onward proper: the enumeration READER
+(emit walking entries + reach filter), then the tree deletion —
+plus (γ)'s ShowExpr follow-up and the march census-gap fix on
+the next board-hardening landing. The
 remaining (i)
 columns land by the same pattern as their swaps demand them;
 (ii) the projection bodies

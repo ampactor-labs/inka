@@ -1,0 +1,10 @@
+// The Mycroft fragment (§11 5.3): UNSIG'D polymorphic recursion,
+// INFERRED — no annotation anywhere. Round 1 refuses with the poly
+// fingerprint, round 2 judges under the general assumption, round 3
+// rechecks under the result scheme (the stability round), and the
+// published scheme is ∀a. (a, Int) -> Int. Inference where Haskell
+// and OCaml demand the annotation. Born as the flip of the teach
+// fixture the day the fragment landed.
+fn depth(x, n) = if n <= 0 { 0 } else { 1 + depth([x], n - 1) }
+
+fn main() = depth(7, 3)

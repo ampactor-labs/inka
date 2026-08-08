@@ -2365,15 +2365,36 @@ for i in "${!compilers[@]}"; do
   fi
 
   # ─── The poly-recursion teach (§11 5.3, the question beats the guess) ─
-  # The UNSIG'D poly self-call still refuses (HM's mono floor) and the
-  # refusal carries T_PolyRecursionSignature naming the fn and the
-  # signature route. Born RED 2026-08-07: the incumbent emitted the bare
-  # E_OccursCheck with no narration.
+  # A shape the Mycroft rounds cannot stabilize (bad returns x while
+  # self-calling at [x]) refuses honestly at the recheck round, and the
+  # refusal carries T_PolyRecursionSignature naming the fn. Born RED
+  # 2026-08-07 (bare E_OccursCheck, no narration); retargeted to the
+  # K-exhausted floor the day the fragment landed.
   pt_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-poly-teach.mn" 2>&1)
-  if printf '%s' "$pt_out" | grep -q "E_OccursCheck" && printf '%s' "$pt_out" | grep -q "T_PolyRecursionSignature.*'depth'"; then
-    pass "poly teach: the occurs refusal carries the signature narration naming depth"
+  if printf '%s' "$pt_out" | grep -q "E_OccursCheck" && printf '%s' "$pt_out" | grep -q "T_PolyRecursionSignature.*'bad'"; then
+    pass "poly teach: the K-exhausted refusal carries the signature narration naming bad"
   else
     fail "poly teach (refusal or narration missing)"
+  fi
+
+  # ─── The Mycroft fragment (§11 5.3): unsig'd poly recursion INFERS ──
+  # depth(x, n) = ... depth([x], n-1), no annotation anywhere, checks
+  # clean and runs 3 — inference where Haskell/OCaml demand the
+  # annotation. Born as the teach fixture's flip the day the fragment
+  # landed (rounds: fingerprinted refusal → general assumption →
+  # recheck under the result scheme).
+  pf_err="$dir/poly-fragment.err"
+  pf_wat=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-poly-fragment.mn" 2> "$pf_err")
+  pf_diags=$(grep -c 'E_' "$pf_err" 2>/dev/null || true)
+  if [ -n "$pf_wat" ] && [ "$pf_diags" = "0" ]; then
+    printf '%s' "$pf_wat" > "$dir/poly-fragment.wat"
+    if wt_asm "$dir/poly-fragment.wat" "$dir/poly-fragment.wasm" 2>/dev/null && [ "$(wt_run "$dir/poly-fragment.wasm" > /dev/null 2>&1; echo $?)" = "3" ]; then
+      pass "poly fragment: unsig'd poly recursion inferred; compiles and runs (3)"
+    else
+      fail "poly fragment (assemble/run)"
+    fi
+  else
+    fail "poly fragment (diagnostics: $pf_diags; see $pf_err)"
   fi
 
   # ─── The decls facet (the bound-projection landing's gate) ──────────

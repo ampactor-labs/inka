@@ -1804,6 +1804,13 @@ effect GraphWrite {
   graph_compress_row(Int, EffRow)
   graph_bind_record_row(Int, [(String, Ty)], Reason)
   graph_rollback(Int)
+  // The speculation's ACCEPT: pop the newest checkpoint WITHOUT
+  // restoring — every write since it stands, and mutation events
+  // resume when the stack empties. graph_rollback is the reject half;
+  // a speculative judgment that SUCCEEDS (the Mycroft retry, §11 5.3)
+  // commits through this op — leaving the record on the stack forever
+  // would suppress graph_mutated for the rest of the compile.
+  graph_commit_checkpoint(Int)
   graph_index_span(ValidSpan, Int)
   // The REVERSE-EDGE column's write (Hβ.graph.reverse-edge-and-bound-
   // projection, the 5.5 column arc's opener): infer_var_ref — the ONE

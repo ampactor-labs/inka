@@ -525,7 +525,15 @@ comment_refs_max: 0
 # moved with the semantics (the publish-surface channel, seventh
 # application; zero trial/final machinery in the diff). The next
 # legal move stays DOWN; rung 3 dissolves the class.
-movers_max: 458
+# Re-based 458 → 479 at the Mycroft fragment (pin e4f4c2fcaf87): the
+# landing's own new wheel fns (poly_capture's arms,
+# infer_fn_speculative, the prebind/recheck/replay helpers) join the
+# freeze-root divergence class, and every unsig'd decl's judgment now
+# runs inside the speculative bracket — the trial/final comparison
+# surface moved with the semantics (the publish-surface channel,
+# eighth application; zero trial/final machinery in the diff). The
+# next legal move stays DOWN; rung 3 dissolves the class.
+movers_max: 479
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

@@ -695,6 +695,16 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
       resume() with spine = cp.spine, spine_open = cp.spine_open, next = cp.next, trail = cp.trail, trail_len = target_idx, span_index = cp.span_index, comment_refs = cp.comment_refs, checkpoint_stack = drop_last(checkpoint_stack)
     }
   },
+  graph_commit_checkpoint(_target_idx) => // The ACCEPT half of speculation: drop the newest checkpoint record
+  // WITHOUT restoring — every write since the push stands as truth, the
+  // trail keeps its entries (an enclosing checkpoint's rollback still
+  // walks them), and mutation events resume when the stack empties. An
+  // empty stack is a benign no-op (the push/commit pair's belt).
+  if len(checkpoint_stack) == 0 {
+    resume()
+  } else {
+    resume() with checkpoint_stack = drop_last(checkpoint_stack)
+  },
 }
 
 // The Mutate effect's no-subscriber floor. graph_handler's write arms

@@ -1142,6 +1142,27 @@ handler diag_branch with lines = make_list(16), count = 0, errors = 0, refusals 
   diag_lines_taken() => resume(list_to_flat(slice(lines, 0, count))),
 }
 
+// The Mycroft speculation's release read (§11 5.3, the fragment) — the
+// capture handler hands the driver its held list through this op, the
+// diag_lines_taken precedent one bracket over.
+effect PolyCapture {
+  poly_captured() -> [(DiagKind, String)]
+}
+
+// The speculative judgment's diag CAPTURE: an attempt runs under it so
+// a retried-and-succeeded judgment leaves no stain — reports HOLD in
+// state, structurally beside their rendered lines (the diag_branch
+// precedent); the ledger reads forward live (a mid-attempt reader sees
+// the enclosing counts — the v1 boundary, noted at the stamp); the
+// driver replays the held list outward on accept or drops it for the
+// honest re-run.
+handler poly_capture with held = [] {
+  diag_report(diag, line) => resume() with held = push(held, (diag, line)),
+  diag_errors() => resume(diag_errors()),
+  diag_refusals() => resume(diag_refusals()),
+  poly_captured() => resume(held),
+}
+
 // THE ONE JUDGE (Hβ.infer.order-independent-verdicts): every judgment
 // site runs this — the stdin compile, the driver DAG (check/audit/
 // teach/at/field/session), the warm path, the battery, the repl line.
@@ -2523,7 +2544,14 @@ fn infer_stmt(ref node) = match node {
         },
       }
     },
-    NStmt(FnStmt(name, params, ret_ann, effs, body_node)) => infer_fn(name, params, body_node, ret_ann, effs, handle, span),
+    NStmt(FnStmt(name, params, ret_ann, effs, body_node)) => if fn_fully_sigd(params, ret_ann) {
+      infer_fn(name, params, body_node, ret_ann, effs, handle, span, false)
+    } else {
+      // Every unsig'd decl judges SPECULATIVELY (§11 5.3's fragment):
+      // the common mono case pays one checkpoint + one held list and
+      // commits round 1; only a poly-fingerprinted refusal retries.
+      infer_fn_speculative(name, params, body_node, ret_ann, effs, handle, span)
+    },
     NStmt(TypeDefStmt(_, _)) => (),
     NStmt(EffectDeclStmt(_, _, _)) => (),
     NStmt(HandlerDeclStmt(hname, ename, config, state, arms)) => register_handler(hname, ename, config, state, arms, span),
@@ -2553,7 +2581,140 @@ fn infer_stmt(ref node) = match node {
 // Classic let-generalization: allocate fresh handles for params,
 // bind them in env, enter `InferCtx` for row accumulation, infer body,
 // exit (which binds the row), generalize, re-extend env with scheme.
-fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
+fn held_has_poly(held, name: String) = any(
+  (p) => match p {
+    (d, _) => match d {
+      TPolyRecursionSignature(owner, _) => owner == name,
+      _ => false,
+    },
+  },
+  held
+)
+
+fn held_has_error(held) = any(
+  (p) => match p {
+    (d, _) => diag_severity(d) == SError,
+  },
+  held
+)
+
+fn replay_one(p) = match p {
+  (d, line) => diag_report(d, line),
+}
+
+fn replay_held(held) = each(replay_one, held)
+
+// The Mycroft ASSUMPTION at round 2 — the name pre-bound poly over its
+// own FRESH cells (the sig'd path's shape with fresh vars standing for
+// the unauthored types): self-calls instantiate per use instead of
+// chaining the mono cells. The row is assumed fresh-open; a self-call's
+// row ⊆ the body's own row by the fixpoint argument, so dropping the
+// self-charge under-attributes nothing the body does not already carry.
+fn mycroft_fresh_param(p) = param_with_ty(p, TVar(mint(Inferred("mycroft assumed param"))))
+
+fn mycroft_prebind(name: String, params, span: ValidSpan) = {
+  let fresh_params = map(mycroft_fresh_param, params)
+  let fn_ty = TFun(
+    fresh_params,
+    TVar(mint(FnReturn(name, Inferred("mycroft assumed return")))),
+    mk_ef_open([], graph_fresh_row(Inferred("mycroft assumed row of '{name}'")))
+  )
+  env_extend(name, Forall(free_in_ty(fn_ty), fn_ty), Located(span, Declared(name)), FnScheme)
+}
+
+// The round-3 RECHECK's assumption — the round-2 RESULT scheme, detached
+// from its rolled-back cells: the published Ty chased deep BEFORE the
+// rollback (a heap value, rollback-proof), its quantified cells re-minted
+// fresh and substituted, its row rebuilt fresh-open (the top row cell is
+// unquantified and would dangle).
+fn mycroft_recheck_pair(c) = (c, mint(Inferred("mycroft recheck var")))
+
+fn rebind_recheck(name: String, q, ty0, span: ValidSpan) = {
+  let mapping = map(mycroft_recheck_pair, q)
+  let ty1 = subst_ty(ty0, mapping)
+  let ty2 = match ty1 {
+    TFun(ps, r, _) => TFun(ps, r, mk_ef_open([], graph_fresh_row(Inferred("mycroft recheck row of '{name}'")))),
+    other => other,
+  }
+  env_extend(
+    name,
+    Forall(
+      map(
+        (pr) => match pr {
+          (_, fresh) => fresh,
+        },
+        mapping
+      ),
+      ty2
+    ),
+    Located(span, Declared(name)),
+    FnScheme
+  )
+}
+
+// The speculative decl judgment (§11 5.3's fragment — Mycroft iteration
+// on the medium's own checkpoint substrate). Round 1 is the plain
+// judgment under diag capture; a refusal carrying the poly teach's own
+// fingerprint rolls back and retries under the general assumption
+// (round 2); a clean round 2 is RECHECKED under its own result scheme
+// (round 3 — the stability round that makes the acceptance sound: the
+// self-call is checked against the scheme that will be published, per
+// Mycroft; Henglein's single-call fragment is the termination
+// argument). Any round's failure falls back to the plain re-run — the
+// honest refusal, never worse than today. K = 3 rounds.
+fn infer_fn_speculative(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
+  let cp = graph_push_checkpoint()
+  let held = {
+    infer_fn(name, params, body_node, ret_ann, effs, handle, span, false)
+    poly_captured()
+  } ~> poly_capture
+  if held_has_poly(held, name) {
+    graph_rollback(cp)
+    let cp2 = graph_push_checkpoint()
+    let held2 = {
+      mycroft_prebind(name, params, span)
+      infer_fn(name, params, body_node, ret_ann, effs, handle, span, true)
+      poly_captured()
+    } ~> poly_capture
+    if held_has_error(held2) {
+      graph_rollback(cp2)
+      infer_fn(name, params, body_node, ret_ann, effs, handle, span, false)
+    } else {
+      match env_lookup(name) {
+        Some(entry) => match entry {
+          (sch, _, _) => match sch {
+            Forall(q, ty) => {
+              let detached = chase_deep(ty)
+              graph_rollback(cp2)
+              let cp3 = graph_push_checkpoint()
+              let held3 = {
+                rebind_recheck(name, q, detached, span)
+                infer_fn(name, params, body_node, ret_ann, effs, handle, span, true)
+                poly_captured()
+              } ~> poly_capture
+              if held_has_error(held3) {
+                graph_rollback(cp3)
+                infer_fn(name, params, body_node, ret_ann, effs, handle, span, false)
+              } else {
+                graph_commit_checkpoint(cp3)
+                replay_held(held3)
+              }
+            },
+          },
+        },
+        None => {
+          graph_rollback(cp2)
+          infer_fn(name, params, body_node, ret_ann, effs, handle, span, false)
+        },
+      }
+    }
+  } else {
+    graph_commit_checkpoint(cp)
+    replay_held(held)
+  }
+}
+
+fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan, poly_hint) = {
   // The decls column's one writer: the FnStmt node handle, noted per
   // judgment (rounds re-note; readers dedup by handle).
   graph_decl_note(handle)
@@ -2581,7 +2742,13 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
       // mono view — HM's mono recursion, the inference-soundness floor —
       // and a decl the prereg never registered keeps it too (the belt).
       match env_lookup(name) {
-        Some(_) => if fn_fully_sigd(params, ret_ann) {
+        Some(_) => if poly_hint {
+          // The Mycroft rounds pre-bind the assumed poly scheme — the
+          // mono shadow would erase the assumption (the driver's whole
+          // point). The sig'd exemption below is the same skip for the
+          // prereg quantified scheme.
+          ()
+        } else if fn_fully_sigd(params, ret_ann) {
           ()
         } else {
           env_extend(name, Forall([], fn_ty), Located(span, Declared(name)), FnScheme)

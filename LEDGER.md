@@ -35,6 +35,36 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-07 · ▶▶▶ THE FRAGMENT INFERS (pin 94fd07add038 — CLEAN
+  m2 == m3, census 0, micros green; the first form breached the
+  anonymity + movers ratchets and was taught — three helper lambdas
+  named, movers re-based 458 → 479 on the publish-surface channel,
+  the intermediate pin collapsed): §11 5.3's Mycroft iteration,
+  built whole against its stamp on the medium's own substrate. Every
+  unsig'd decl judges speculatively: round 1 plain under the
+  poly_capture diag bracket (multi-effect handler — the three
+  Diagnostic ops held in state + its own PolyCapture release op, the
+  diag_branch precedent); the common mono case commits
+  (graph_commit_checkpoint, the NEW accept half of speculation — pop
+  without restore; synth only ever rolled back) and replays its held
+  narrations. A poly-fingerprinted refusal rolls back and retries
+  under the general assumption (mycroft_prebind — the name poly over
+  fresh cells, the sig'd path's shape with fresh vars); a clean round
+  2 RECHECKS under its own result scheme (round 3 — the soundness
+  round: the result detached via chase_deep BEFORE the rollback so
+  the heap value survives, its qvars re-minted and subst_ty'd, the
+  row rebuilt fresh-open because the top row cell is unquantified and
+  would dangle). Any failure falls back to the plain re-run — never
+  worse than the pre-fragment refusal. ACCEPTANCE: unsig'd
+  depth(x,n) = …depth([x],n−1) checks CLEAN and runs 3
+  (mn-poly-fragment — inference where Haskell and OCaml demand the
+  annotation); the teach retargets to the K-exhausted floor (bad
+  returns x while self-calling at [x] — round 3's recheck refuses
+  honestly, the narration names bad); the sig'd fixture stays green.
+  The self-call's row-drop soundness rides the fixpoint argument
+  (self ⊆ body); the full alpha-stability detection and the
+  multi-call fragment boundary are the peer's named next.
+
 - 2026-08-07 · ▶▶▶ THE REFUSAL TEACHES THE SIGNATURE (pin 7f4bf082992e —
   CLEAN m2 == m3, census 0): §11 5.3's teach, v1, built against its
   stamp with one measured correction — the unsig'd shape's occurs

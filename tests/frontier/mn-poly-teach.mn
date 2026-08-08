@@ -1,8 +1,10 @@
 // The poly-recursion TEACH (§11 5.3, the question beats the guess):
-// an UNSIG'D poly self-call still refuses (HM's mono floor), and the
-// refusal now carries T_PolyRecursionSignature naming the fn and the
-// signature route. Born RED: the incumbent boot emits the bare
-// E_OccursCheck with no teaching narration.
-fn depth(x, n) = if n <= 0 { 0 } else { 1 + depth([x], n - 1) }
+// a shape the Mycroft rounds cannot stabilize — `bad` RETURNS x while
+// self-calling at [x], so the recheck round meets ret ~ [ret] and the
+// occurs refusal stands honestly (round 3's soundness working) — and
+// the refusal carries T_PolyRecursionSignature naming the fn. The
+// single-call fragment (see mn-poly-fragment) infers instead; this
+// fixture pins the graceful K-exhausted floor.
+fn bad(x, n) = if n <= 0 { x } else { bad([x], n - 1) }
 
-fn main() = depth(7, 3)
+fn main() = 0

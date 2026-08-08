@@ -3421,6 +3421,39 @@ step: the Henglein single-call fragment inferred (annotation-free
 for the decidable shape), the row side per arXiv 2510.20532, and
 the proposed-signature TEACH (the medium proposes the signature
 from the call sites it judged — the question beats the guess).
+THE FRAGMENT, STAMPED 2026-08-07 (the annotation-free step —
+inference where Haskell/OCaml demand the annotation; build after
+the teach settles). FORM: Mycroft iteration on the medium's own
+speculative substrate — the propose-and-check the trial/final
+pair performs by accident, made deliberate per decl. DETECTION
+(cheap, syntactic, pre-judgment): the decl is unsig'd AND its
+body contains a self-call — those decls judge SPECULATIVELY:
+graph_push_checkpoint → judge under a diag-CAPTURE bracket (the
+tighten_collector shape with the outward forward held) → on
+success, release diags and commit (mono recursion, the common
+case — near-zero overhead: one checkpoint + one held list); on
+an occurs refusal carrying the teach's FnParam/FnReturn
+fingerprint → graph_rollback and RETRY under the Mycroft step:
+the name pre-bound to Forall(frees(fn_ty), fn_ty) — the fn poly
+over its own fresh cells, exactly the sig'd path's shape with
+fresh vars standing for the unauthored types — re-judge, up to
+K = 3 rounds or scheme stability; success publishes the INFERRED
+poly scheme (the emit's cap + self-ref floor, already landed,
+absorb the specialization tail); at K the held refusal + teach
+forward unchanged (graceful — never worse than today). Henglein's
+fragment (single self-call, non-nested) is the termination
+argument for the shapes that converge; K is the totality belt
+for everything else. WRITERS: the per-decl judgment driver (the
+group walk's decl arm — one speculative bracket), zero new graph
+state. PRICED: cost only on unsig'd-recursive decls (one
+checkpoint each; retries only after a fingerprinted refusal).
+GATE, RED-first: the mn-poly-teach fixture FLIPS — today
+refusal + narration; with the fragment, checks and runs 3
+unannotated (the leg's assertion inverts; the sig'd fixture
+stays green). RISKS: rollback discipline across the decl's env
+writes (env_scope_enter/exit must pair through the retry — the
+re-entrancy the affine bracket already handles per body);
+movers/census arbitration as always.
 BUILT WHOLE (2026-08-07, pin d8142b3b1d98 — the LEDGER's THE
 SIGNATURE BUYS THE POLY SELF-CALL): the judgment conditional as
 stamped, PLUS the emit half the stamp's risk table missed —

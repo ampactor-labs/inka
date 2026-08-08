@@ -61,14 +61,27 @@ param's repr by SCANNING THE BODY for its LLocal and falls to
 holds the param's type on the fn's own TFun product, and the
 usage-scan re-derivation fabricates the floor exactly when usage is
 absent (Carried-Truth, textbook; the wildcard-zero shape in repr
-costume). FIX DIRECTION: the param repr reads the fn's type product
-(position-keyed through param_names), and the body scan DIES — its
-callers (the wide-fn classifier, the deref sites, the signature
-render) all take the same read; check what type source the emit
-context carries for lambdas before assuming the decl scheme is
-reachable at all four sites. GATE WHEN FIXED: the unused-param pair
-as a frontier leg (refuses today — RED is already banked by the
-probe). The wheel itself never hits the class (march green — the
+costume). FIX DIRECTION, enriched by the same-day channel trace: NOT
+a LowFn field — LFn(String, Int, [String], [LowExpr], EffRow, Int)
+is condemned machinery (the 5.5 lowering-column arc sentences the
+whole record; 36 sites would widen a structure sentenced to
+deletion) — the param handle is read from the GRAPH's own columns:
+for the SYNTHESIZED family (EfkLambda/Thunk/Nested/Arm/K/Partial)
+the emitfns_col already carries (kind, ORIGIN, name, fence, caps) —
+origin → graph_node_body → LambdaExpr/FnStmt params → the param's
+handle → repr_of(lookup_ty(h)); for PLAIN DECLS (the probed class —
+no EfkDecl exists in the column) the decls_col holds the judged
+FnStmt handles, matched by name through graph_node_body. BOTH need
+the one missing piece: a by-name READ op on the columns
+(graph_emitfn_note is write-only; decls_col projects only through
+QDecls) — the column is the home, the read op is its projection.
+Then param_repr_from_body and the find_local_handle family (~60
+lines of body-usage scanning) DELETE whole — all four callers (the
+wide-fn classifier at 2558, the deref at 2598, the signature renders
+at 3015/3242) take the same graph read, lambdas included, and the
+`if h == 0 { RI32 }` fabrication has no site left to live in. Sized
+one fresh lease. GATE WHEN FIXED: the unused-param pair as a
+frontier leg (refuses today — RED is already banked by the probe). The wheel itself never hits the class (march green — the
 wheel's wide params are used), so the oracle was blind by the
 familiar rung-3 shape: a class the wheel never exercises.
 

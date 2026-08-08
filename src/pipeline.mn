@@ -1065,18 +1065,19 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more
     },
   }
   // The drift-shape tier (5.6's absorbed modes, read per fn): the
-  // three census shapes counted within THIS body's subtree — the
+  // four census shapes counted within THIS body's subtree — the
   // audit names the costume where it stands; a deliberate specimen's
   // judgment stays the reader's, as the suppression convention set.
   let drift_section = match drift_shapes {
-    (wz, fm, pir) => {
+    (wz, fm, pir, wf) => {
       let wz_note = if wz == 0 { "" } else { "{int_to_str(wz)} wildcard-zero arm(s); " }
       let fm_note = if fm == 0 { "" } else { "{int_to_str(fm)} failure-mask site(s); " }
       let pir_note = if pir == 0 { "" } else { "{int_to_str(pir)} print-in-report site(s); " }
-      if wz + fm + pir == 0 {
+      let wf_note = if wf == 0 { "" } else { "{int_to_str(wf)} wildcard-fabricates arm(s); " }
+      if wz + fm + pir + wf == 0 {
         ""
       } else {
-        "  drift-shape: {wz_note}{fm_note}{pir_note}the census locates each\n"
+        "  drift-shape: {wz_note}{fm_note}{pir_note}{wf_note}the census locates each\n"
       }
     },
   }
@@ -1271,6 +1272,8 @@ fn census_shape_of(arg) with Memory + Alloc = if arg == "anonymous" {
   Some(CsFailureMask)
 } else if arg == "print-in-report" {
   Some(CsPrintInReport)
+} else if arg == "wildcard-fabricates" {
+  Some(CsWildcardFabricates)
 } else {
   match find(
     (k) => show_pipe_kind(k) == arg,

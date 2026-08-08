@@ -38,6 +38,7 @@ type CensusShape
   | CsWildcardZero
   | CsFailureMask
   | CsPrintInReport
+  | CsWildcardFabricates
 
 // Sum type covering every forensic question `mentl query` can pose.
 // Each variant corresponds to one `ask(Q)` arm in `query_default`.
@@ -420,6 +421,7 @@ fn census_label(shape) with Pure = match shape {
   CsWildcardZero => "wildcard-zero arm(s)",
   CsFailureMask => "failure-mask site(s)",
   CsPrintInReport => "print-in-report site(s)",
+  CsWildcardFabricates => "wildcard-fabricates arm(s)",
 }
 
 fn census_sites(shape) with GraphRead + !Mutate + Alloc + Memory = match graph_snapshot() {
@@ -522,6 +524,17 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
     },
     _ => false,
   },
+  CsWildcardFabricates => // Drift mode 10's TYPED fabrications (the fourth absorption):
+  // a wildcard arm whose body mints a Scheme (Forall), a fresh type
+  // var (TVar), the string "Pure", or the empty string — the four
+  // values a missing case silently absorbs a new variant into. The
+  // zero literal is CsWildcardZero's own shape; these are its typed
+  // siblings, name-keyed on the minting ctor exactly as
+  // CsPrintInReport keys on the print family.
+  match body {
+    NExpr(MatchExpr(_, arms)) => any_wildcard_fabricates(arms, 0, len(arms)),
+    _ => false,
+  },
 }
 
 fn any_subtree_prints(nodes, i, n) with GraphRead + !Mutate + Alloc + Memory = if i >= n {
@@ -559,8 +572,8 @@ fn subtree_prints_children(hs, fuel) with GraphRead + !Mutate + Alloc + Memory =
 // the audit names the costume where it stands and the census answers
 // the corpus question.
 fn drift_shapes_of(fn_handle) with GraphRead + !Mutate + Alloc + Memory = match graph_node_body(fn_handle) {
-  NStmt(FnStmt(_, _, _, _, body)) => subtree_drift_counts(node_handle(body), (0, 0, 0), 128),
-  _ => (0, 0, 0),
+  NStmt(FnStmt(_, _, _, _, body)) => subtree_drift_counts(node_handle(body), (0, 0, 0, 0), 128),
+  _ => (0, 0, 0, 0),
 }
 
 fn subtree_drift_counts(h, acc, fuel) with GraphRead + !Mutate + Alloc + Memory = if fuel <= 0 {
@@ -568,7 +581,7 @@ fn subtree_drift_counts(h, acc, fuel) with GraphRead + !Mutate + Alloc + Memory 
 } else {
   let body = graph_node_body(h)
   let acc2 = match acc {
-    (wz, fm, pir) => (if census_matches(CsWildcardZero, h, body) { wz + 1 } else { wz }, if census_matches(CsFailureMask, h, body) { fm + 1 } else { fm }, if census_matches(CsPrintInReport, h, body) { pir + 1 } else { pir }),
+    (wz, fm, pir, wf) => (if census_matches(CsWildcardZero, h, body) { wz + 1 } else { wz }, if census_matches(CsFailureMask, h, body) { fm + 1 } else { fm }, if census_matches(CsPrintInReport, h, body) { pir + 1 } else { pir }, if census_matches(CsWildcardFabricates, h, body) { wf + 1 } else { wf }),
   }
   subtree_drift_children(body_child_handles(body), acc2, fuel - 1)
 }
@@ -592,6 +605,29 @@ fn any_wildcard_zero(arms, i, n) with Memory + Alloc = if i >= n {
       _ => any_wildcard_zero(arms, i + 1, n),
     },
   }
+}
+
+fn any_wildcard_fabricates(arms, i, n) with GraphRead + !Mutate + Alloc + Memory = if i >= n {
+  false
+} else {
+  match list_index(arms, i) {
+    (p, b) => match p {
+      PWild => if wildcard_body_fabricates(b) { true } else { any_wildcard_fabricates(arms, i + 1, n) },
+      _ => any_wildcard_fabricates(arms, i + 1, n),
+    },
+  }
+}
+
+fn wildcard_body_fabricates(b) with GraphRead + !Mutate + Alloc + Memory = match b {
+  N(nb, _, _) => match nb {
+    NExpr(LitString(s)) => // drift-audit: ignore — the census DETECTOR reading the drifted literal from the weave, not an effect-name dispatch
+    s == "" || s == "Pure",
+    NExpr(CallExpr(callee, _)) => match graph_node_body(node_handle(callee)) {
+      NExpr(VarRef(cn)) => cn == "Forall" || cn == "TVar",
+      _ => false,
+    },
+    _ => false,
+  },
 }
 
 // ── the one total child projection — the weave's tree edge ──────────

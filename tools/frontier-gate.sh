@@ -931,21 +931,21 @@ run_census() {
   local compiler="$1" dir="$2"
   local doc="$ROOT/tests/frontier/mn-census-verbs.mn"
   local ok=1 spec q line
-  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26' 'wildcard-zero:27' 'failure-mask:28' 'print-in-report:31'; do
+  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26' 'wildcard-zero:27' 'failure-mask:28' 'print-in-report:31' 'wildcard-fabricates:32'; do
     q="${spec%%:*}"; line="${spec##*:}"
     wt_run --dir "$ROOT" "$compiler" query "$doc" "census $q" > "$dir/census-$line.out" 2>/dev/null
     if ! grep -q "mn-census-verbs:$line" "$dir/census-$line.out"; then
       ok=0; fail "census '$q' misses its own site (line $line; see $dir/census-$line.out)"
     fi
   done
-  [ "$ok" = 1 ] && pass "structural census: all twelve shapes count their own site (|> <| >< ~> <~ anonymous eta effectful-lambda iteration wildcard-zero failure-mask print-in-report)"
-  # The audit's drift tier (5.6's absorbed modes read per fn): the three
+  [ "$ok" = 1 ] && pass "structural census: all thirteen shapes count their own site (|> <| >< ~> <~ anonymous eta effectful-lambda iteration wildcard-zero failure-mask print-in-report wildcard-fabricates)"
+  # The audit's drift tier (5.6's absorbed modes read per fn): the four
   # specimen fns each carry their shape line. Born with the tier.
   ad_n=$(wt_run --dir "$ROOT" "$compiler" audit "$doc" 2>/dev/null | grep -c "drift-shape:")
-  if [ "$ad_n" = "3" ]; then
-    pass "audit drift tier: the three specimen fns each carry their shape line"
+  if [ "$ad_n" = "4" ]; then
+    pass "audit drift tier: the four specimen fns each carry their shape line"
   else
-    fail "audit drift tier (drift-shape lines: $ad_n, want 3)"
+    fail "audit drift tier (drift-shape lines: $ad_n, want 4)"
   fi
 }
 

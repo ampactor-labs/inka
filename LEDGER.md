@@ -35,6 +35,24 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE FOURTH DRIFT SHAPE (pin 8f11d81b61d4 — CLEAN
+  m2 == m3, census 0): mode 10's typed fabrications absorb as
+  CsWildcardFabricates — a wildcard arm whose body is LitString("") /
+  LitString("Pure") or a call whose callee names Forall / TVar, the four
+  values a missing case silently absorbs a new variant into (the zero
+  literal stays CsWildcardZero's own shape). The detector is the
+  established template: an arm-list walk beside any_wildcard_zero, the
+  minting-ctor read name-keyed through the weave exactly as
+  CsPrintInReport keys on the print family. The audit's drift tier grows
+  to the quad (wz, fm, pir, wf); the census roster to THIRTEEN shapes
+  with wf_site's specimen at mn-census-verbs:32; the frontier's tier
+  assert to four drift-shape lines. RED banked pre-march: the old
+  generation answers "unknown query: census wildcard-fabricates".
+  Enforcement (ratchet + the four bash rows' retirement) follows the
+  cadence next — the ratchet seeds from the fresh wheel's measured
+  count, never assumed zero. Cost line: 16.58s wall, 2326MB peak — both
+  inside their ceilings.
+
 - 2026-08-08 · ▶▶▶ THE AUDIT SPEAKS THE DRIFT SHAPES (pin 9d959f5900 —
   CLEAN m2 == m3, census 0): the absorbed modes gain their per-fn
   reader. drift_shapes_of counts the three census shapes within one

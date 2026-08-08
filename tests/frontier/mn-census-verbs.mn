@@ -29,3 +29,4 @@ fn fm_site(b) = b || true // drift-audit: ignore — the census gate's own delib
 fn println(s: String) = 0
 fn report(d) = d
 fn pir_site(x: String) = report(println(x)) // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts
+fn wf_site(v) = match v { 1 => "one", _ => "Pure" } // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts

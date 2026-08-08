@@ -1961,11 +1961,13 @@ new DEP found; the map below is accurate at that pin.)*
   at its 9 documented sentinels, failure-mask and print-in-report at
   ZERO — each arm seen RED at an under-set ceiling, and their bash rows
   retired in the same commit (the mode-33 precedent: the grep dies, the
-  projection + ratchet is the check). The remaining bash rows are
-  naming/prose modes (the raw channel's own domain) plus the structural
-  stragglers, absorbed as their shapes prove out — mode 10's typed
-  fabrications (Forall/TVar/"Pure"/"") are the named next shapes. Its
-  unsayability face
+  projection + ratchet is the check). Mode 10's typed fabrications
+  (Forall/TVar/"Pure"/"") landed as the FOURTH shape
+  (CsWildcardFabricates, pin 8f11d81b61d4 — the census roster at
+  thirteen, the audit tier a quad); its ratchet + row retirement follow
+  the cadence. The remaining bash rows are naming/prose modes (the raw
+  channel's own domain) plus the structural stragglers, absorbed as
+  their shapes prove out. Its unsayability face
   matures through Phase 8's diagnostics; its arrival is when a wrong move
   in the wheel's own source is a REFUSAL, not a review finding.
 

@@ -2993,6 +2993,29 @@ neg's call gate parks in the final pass and drains after its
 finalize; the fix is then ORDERING (drain a decl's own gates
 before its finalize) or the charge carrying the resolved row
 VALUE instead of the unbound var edge.
+THE TUNNEL-MAPPING HYPOTHESIS BUILT AND REFUTED (2026-08-07):
+the source chain read subst_edge_build_into consulting
+find_mapping on the CHASED root first, with chase_handle's
+row-sort arm tunneling through a bound cell's single-edge tail
+to the quantified var beyond — the presents at the mid-chain
+bound cell discarded by the freshening short-circuit. The
+bound-content-first reorder marched CLEAN and moved NEITHER
+observable (neg solo still Pure, movers still 479) — reverted
+whole, the floor-cut verdict class. FOUR marched layers now
+stand as this dig's record (floor cut reverted, readers kept on
+live-path merit, prune keep kept on comment-truth merit,
+bound-first fold reverted), and the FZIN facts remain the
+hardest measurements: final RAW p0 + one free edge whose
+identity matches the freshened HOF-row var. THE HONEST STATE:
+the charge loss's one writer is still unnamed; source derivation
+has been refuted three times where only instrumented A/B
+measurement discriminates — the charge VALUE at
+inf_add_row_unified per call, printed beside the pass tag, on
+the specimen and on a healthy sibling; the differential names
+the writer. THIS PEER NEEDS A DEDICATED SESSION with the
+movers_diff + charge-print apparatus as one combined instrument
+— beyond loop-iteration scale. The loop returns to §11 phase
+order.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

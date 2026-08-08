@@ -29,9 +29,14 @@
 9	Deferred-by-omission (stub/placeholder tell)	//\s*(placeholder|stub|not\s+implemented)	ka	Same as above — surface as peer handle in ROADMAP.md.	raw
 #
 # --- Bug classes from CLAUDE.md that have cost hours ---
-10	Wildcard-fabricates (_ arm returning Forall)	_\s*=>\s*Forall\s*\(	ka	Wildcard fabricates a Scheme. Enumerate variants explicitly.
-10	Wildcard-fabricates (_ arm returning TVar)	_\s*=>\s*TVar\s*\(	ka	Fabricated TVar silently absorbs a new variant.
-10	Wildcard-fabricates (_ arm returning "Pure")	_\s*=>\s*"Pure"	ka	String-Pure default. Use EffRow algebra.	raw
+# --- Mode 10's typed rows (Forall / TVar / "Pure" / ""): RETIRED
+# (2026-08-08) — absorbed into the census + ratchet, the mode-33
+# precedent's fourth application. CsWildcardFabricates reads the shape
+# from the weave (a PWild arm whose body mints Forall/TVar or the
+# strings "Pure"/"") and verify's drift-shape ratchet holds the wheel
+# link at its measured 21 (wildcard_fabricates_max, seen RED at 20);
+# a rise is a new silent absorber. The grep dies; the projection +
+# ratchet is the check.
 # --- Mode 13: RETIRED (2026-08-08) — absorbed into the census + ratchet ---
 # CsFailureMask reads the shape from the weave (BinOpExpr(BOr, _, LitBool
 # true)) and verify's drift-shape ratchet holds the wheel link at ZERO
@@ -114,7 +119,9 @@
 # null sentinel is either enumerated per-variant (ty_handle_of) or documented +
 # suppressed inline (`// drift-audit: ignore — <why>`); an undocumented one is a
 # surrender-fallback to delete/restructure, never wrap.
-10	Wildcard-fabricates (_ arm returning "")	^[^/]*_\s*=>\s*""	ka	Empty-string surrender-fallback. Document + suppress a genuine String-null sentinel inline; otherwise delete/restructure — never wrap.	raw
+# --- Mode 10's empty-string row: RETIRED (2026-08-08) with its three
+# typed siblings above — CsWildcardFabricates carries the shape; the
+# ratchet is the enforcement.
 # --- Mode 10's zero row: RETIRED (2026-08-08) — absorbed into the census
 # + ratchet. CsWildcardZero reads the shape from the weave (a PWild arm
 # whose body is LitInt(0)) — it sees through the line formatting this

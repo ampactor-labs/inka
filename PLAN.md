@@ -1964,8 +1964,9 @@ new DEP found; the map below is accurate at that pin.)*
   projection + ratchet is the check). Mode 10's typed fabrications
   (Forall/TVar/"Pure"/"") landed as the FOURTH shape
   (CsWildcardFabricates, pin 8f11d81b61d4 — the census roster at
-  thirteen, the audit tier a quad); its ratchet + row retirement follow
-  the cadence. The remaining bash rows are naming/prose modes (the raw
+  thirteen, the audit tier a quad), ratcheted at its measured 21 (seen
+  RED at 20) with the four typed rows retired — mode 10 is WHOLE in the
+  medium. The remaining bash rows are naming/prose modes (the raw
   channel's own domain) plus the structural stragglers, absorbed as
   their shapes prove out. Its unsayability face
   matures through Phase 8's diagnostics; its arrival is when a wrong move

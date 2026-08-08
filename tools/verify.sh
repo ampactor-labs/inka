@@ -238,14 +238,16 @@ if C=$(wt_m2_ensure); then
   cwz=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census wildcard-zero" 2>/dev/null | grep -oE '[0-9]+ wildcard-zero' | grep -oE '[0-9]+' | head -1)
   cfm=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census failure-mask" 2>/dev/null | grep -oE '[0-9]+ failure-mask' | grep -oE '[0-9]+' | head -1)
   cpir=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census print-in-report" 2>/dev/null | grep -oE '[0-9]+ print-in-report' | grep -oE '[0-9]+' | head -1)
+  cwf=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census wildcard-fabricates" 2>/dev/null | grep -oE '[0-9]+ wildcard-fabricates' | grep -oE '[0-9]+' | head -1)
   wzmax=$(grep -E '^wildcard_zero_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
   fmmax=$(grep -E '^failure_mask_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
   pirmax=$(grep -E '^print_in_report_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
-  if [[ -z "$cwz" || -z "$cfm" || -z "$cpir" ]]; then
-    say "✗ drift-shape RATCHET: a census query answered nothing (wz='$cwz' fm='$cfm' pir='$cpir') — the projection is broken, not clean."
+  wfmax=$(grep -E '^wildcard_fabricates_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  if [[ -z "$cwz" || -z "$cfm" || -z "$cpir" || -z "$cwf" ]]; then
+    say "✗ drift-shape RATCHET: a census query answered nothing (wz='$cwz' fm='$cfm' pir='$cpir' wf='$cwf') — the projection is broken, not clean."
     fail=1
   else
-    say "· drift shapes: $cwz wildcard-zero, $cfm failure-mask, $cpir print-in-report — the absorbed modes on the wheel link"
+    say "· drift shapes: $cwz wildcard-zero, $cfm failure-mask, $cpir print-in-report, $cwf wildcard-fabricates — the absorbed modes on the wheel link"
     if [[ -n "$wzmax" && "$cwz" -gt "$wzmax" ]]; then
       say "✗ drift-shape RATCHET: wildcard-zero rose $wzmax -> $cwz — a new masked case; enumerate the variant or document the sentinel."
       fail=1
@@ -259,6 +261,12 @@ if C=$(wt_m2_ensure); then
     if [[ -n "$pirmax" && "$cpir" -gt "$pirmax" ]]; then
       say "✗ drift-shape RATCHET: print-in-report rose $pirmax -> $cpir — a print inside report(...) corrupts WAT stdout."
       fail=1
+    fi
+    if [[ -n "$wfmax" && "$cwf" -gt "$wfmax" ]]; then
+      say "✗ drift-shape RATCHET: wildcard-fabricates rose $wfmax -> $cwf — a wildcard newly mints Forall/TVar/Pure/empty; enumerate the variant."
+      fail=1
+    elif [[ -n "$wfmax" && "$cwf" -lt "$wfmax" ]]; then
+      say "  ↓ wildcard-fabricates FELL $wfmax -> $cwf — lower wildcard_fabricates_max in $BASELINE to hold it."
     fi
   fi
   # The manifest gate — the wheel's own DAG judgment, zero-tolerance. The

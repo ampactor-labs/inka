@@ -628,6 +628,16 @@ wildcard_zero_max: 9
 failure_mask_max: 0
 print_in_report_max: 0
 
+# 2026-08-08 (same day, the fourth shape's enforcement): wildcard-
+# fabricates — a wildcard arm minting Forall / TVar / "Pure" / "" —
+# seeds at the measured 21 on the wheel link (pin 8f11d81b61d4's fresh
+# m2), the typed siblings of the zero row. Seen RED at 20 before this
+# ceiling. Monotone DOWN: each site named away is a variant enumerated
+# or a sentinel documented; a rise is a new silent absorber. The four
+# mode-10 typed bash rows retire in the same commit (the mode-33
+# precedent, fourth application).
+wildcard_fabricates_max: 21
+
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
 # header; no registry here (a `micro:NAME=EXIT` list once documented below

@@ -2873,6 +2873,40 @@ polymorphism) and the bug is the row's EDGE to a signature var —
 the writer that inserted a signature type var into a row tail
 edge set (the charge/tail_join layer) is the root, and the fix
 is upstream of the floor entirely.
+THE PROVENANCE PROBE ANSWERED — THE MECHANISM IS WHOLE
+(2026-08-07, the p3 decl-exit print; the p1/p2 sites measured
+prereg-only/cold, the live publish is the decl-exit
+generalize at the group walk, infer.mn ~2726). show_list p3:
+`P,454131,454131,454133 R W,454133` — the kept cell sits in
+BOTH the params term and the top row's edge set; neg p3: P/R/W
+all EMPTY. With the source (`fn show_list(ref items, ref
+render, ref sep)` — types.mn:3150, an untyped HOF param), every
+layer closes: 454133 is RENDER'S PARAM CELL — t-sort by
+mint_params, FREE at publish — and the body's application
+charged "render's row" as an edge to the param cell itself (the
+crown's HOF residual design: the edge means "whatever render's
+row turns out to be joins here"). The quantification is
+LEGITIMATE (the param's own polymorphism, freshened per call,
+bound by the caller's argument). THE ONE GAP IS THE READERS:
+free_in_edges' bound arm — and its flatten/resolve siblings —
+traverse `GNode(NRowBound(inner))` ONLY; a row edge whose cell
+is bound `NBound(TFun(_, _, row))` falls to the catch-all and
+contributes NOTHING. So a caller binding render to a real fn
+(its row Memory+Alloc+…) has the edge SILENTLY DROPPED at every
+row read: neg's charges fold empty, FZ p0 c, Pure published —
+the measured chain end to end, with no wrong writer anywhere:
+the edge is right, the quantification is right, the READ is
+incomplete. THE FORCED FIX, build-ready: row-edge readers
+traverse THROUGH a fn-typed binding — an edge to a cell bound
+NBound(TFun(_,_,row)) reads that fn's row (what the edge always
+meant); the trio law binds the build (free_in_row/occurs_in_row/
+subst_row must gain the same arm together, plus
+flatten_row_stored at the store and resolve_row at reads).
+ACCEPTANCE unchanged: neg's solo query answers its declared
+four; movers fall or re-base with justification; march green.
+KILLED along the way: the position-only floor cut (vacuous —
+the quantification was never the bug), the ordering dance, the
+sort-pollution-at-the-writer frame (the writer is correct).
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

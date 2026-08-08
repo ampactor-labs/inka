@@ -35,6 +35,14 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE BARE WHY VERB (pin bd96e9334f5e — CLEAN
+  m2 == m3, census 0): SYNTAX's verb-lag list retires its first name.
+  `mentl why <path> <name>` is why_verb_args routing to the query
+  facet's Reason-chain walk — three lines mirroring where's shape;
+  the lag list shrinks to diagnostics + verify (10.3's remaining
+  absorptions), and the where leg's conjunction gains the why assert,
+  born RED against the verb-less prior boot.
+
 - 2026-08-08 · ▶▶▶ THE ADT ROSTER PROJECTS (pin c0510e2f5441 — CLEAN
   m2 == m3, census 0): `variants NAME` joins the query grammar — the
   type's constructors with arities from the env's ConstructorScheme

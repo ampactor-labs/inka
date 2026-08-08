@@ -85,6 +85,14 @@ fn where_verb_args(a) with Memory + Alloc = if len(a) >= 4 {
   ParseError("where needs a target and a name: mentl where <path> <name>")
 }
 
+// The bare why verb (SYNTAX's lag list, first name retired): the same
+// Reason-chain walk the query facet serves, surfaced as its own verb.
+fn why_verb_args(a) with Memory + Alloc = if len(a) >= 4 {
+  Invocation(VQuery(path_to_module(a[2]), "why {a[3]}"))
+} else {
+  ParseError("why needs a target and a name: mentl why <path> <name>")
+}
+
 fn verb_specs() with Memory + Alloc = [VerbSpec(
   "run",
   "<path>",
@@ -133,7 +141,7 @@ fn verb_specs() with Memory + Alloc = [VerbSpec(
   "<path> <name>",
   where_verb_args,
   "derived badges — repr width, resume cardinality, fanout schedules"
-), VerbSpec(
+), VerbSpec("why", "<path> <name>", why_verb_args, "the Reason chain walked to root"), VerbSpec(
   "teach",
   "[path]",
   (a) => Invocation(VTeach(optional_target(a, 2))),

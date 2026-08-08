@@ -2081,8 +2081,6 @@ checked mechanically: `tools/doc-truth.sh` reads the names below and fails on
 any *other* verb the docs name. The list shrinks as verbs land; it never grows
 silently.
 
-- **`mentl why`** — the Reason-chain walk. Served today as a facet of `mentl
-  query <path> "why NAME"`; the bare verb is the surface form.
 - **`mentl diagnostics`** — the live catalog projected from the `DiagKind`
   constructors, so the tables in this file stop being a hand-kept second home.
 - **`mentl verify`** — the wheel's own Verify as a verb, absorbing

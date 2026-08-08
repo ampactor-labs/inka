@@ -35,6 +35,25 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE QUERY REFUSES THE EMPTY WEAVE (pin 76e85e00696e
+  — CLEAN m2 == m3, census 0): Hβ.query.unreadable-source-refusal
+  RESOLVED, with the dig's decode sharpened by the fix's own RED — the
+  diagnostic was never missing (E_MissingModule fired at the DAG walk;
+  the probes' 2>/dev/null ate it); the gap was the VERB proceeding to
+  answer at exit 0, and the answer was worse than the banked zero: on
+  a nonexistent entry the query attributed the PRELUDE'S OWN 23
+  anonymous fns to the missing file (the substrate layers join the
+  weave regardless of the entry). The fix reads the fact the walk
+  already produced: query destructures the ranges it had discarded,
+  and range_of_module(entry) == None refuses (stderr names it, exit
+  1) while Some proceeds — productive-under-error for JUDGED files,
+  refusal only when the question's own file has no weave. query_run
+  passes the code through (the hardwired 0 deleted). Frontier leg:
+  the missing-entry census refuses AND the good path still answers,
+  RED-proven against the old pin (23 sites, exit 0). Cost: 17.25s
+  wall, 2342MB peak — 2398768 KB, 1232 KB under the ceiling; the
+  arena (4.3, column-gated) is the named answer, never a raise.
+
 - 2026-08-08 · ▶▶▶ THE SEVENTH DRIFT SHAPE (pin 74b43c43e00d — CLEAN
   m2 == m3, census 0; supersedes the same-day 6b1400a3404908 whose
   detector the dig corrected): mode 7's parallel-arrays absorbs as

@@ -1825,10 +1825,8 @@ fn audit_run(target) = {
 //
 // `mentl query <module> "<question>"` — read-only query against
 // the substrate. Per traces/a-day §0800 + DESIGN §8 mentl query.
-fn query_run(target, question) = {
+fn query_run(target, question) =
   query(target, question) ~> stdout_console ~> wasi_filesystem ~> mentl_default ~> diagnostics_handler ~> graph_handler([], 0, 0, 0, [], 0, 0) ~> mutate_sink
-  0
-}
 
 // ─── with_run — the universal escape hatch (env_lookup resolution)
 //

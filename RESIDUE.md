@@ -28,18 +28,21 @@
 
 ---
 
-`Hβ.query.unreadable-source-refusal` — named 2026-08-08 (the seventh drift
-shape's dig): a `mentl query` whose source file the judge cannot READ (an
-unmounted path, a permissions failure) walks an empty weave and answers a
-confident ZERO — `census parallel-arrays` printed `→ 0 ... let(s)` for a
-file wasmtime could not open, and the zero read as a clean measurement
-until a mounted re-run answered 2. The silent-fallback class at the verb
-layer: verify's ratchet already refuses an EMPTY census answer, but the
-verb itself fabricates a well-formed zero over a failed read. The fix
-direction: the read failure surfaces as its own loud refusal (nonzero
-exit, the path named) BEFORE any walk — a query is a projection of a
-judged weave, and "no weave" is not "zero sites." Gate when built: a
-census query on a nonexistent path refuses, seen RED first.
+`Hβ.query.unreadable-source-refusal` — RESOLVED 2026-08-08, same day as
+named (pin 76e85e00696e), and the fix's RED sharpened the decode twice:
+the diagnostic was never missing (E_MissingModule fires at the DAG walk;
+the naming probe's 2>/dev/null ate it), and the confident answer was
+worse than the banked zero — on a nonexistent entry the query attributed
+the PRELUDE'S OWN 23 anonymous fns to the missing file at exit 0 (the
+substrate layers join the weave regardless of the entry). The fix reads
+the fact the walk already produced: query destructures the ranges it had
+discarded; `range_of_module(entry) == None` refuses (stderr names it,
+exit 1), Some proceeds. Productive-under-error stays for JUDGED files —
+the refusal is only for a question whose own file has no weave. The
+frontier's unreadable-entry leg holds both halves (refusal fires, good
+path answers), RED-proven against the pre-fix pin. The sibling verbs
+(at/audit/teach ride their own entries) inherit the law as their reads
+converge on the one discovery home.
 
 `Hβ.infer.hof-param-row-never-reaches-enclosing` — RESOLVED (2026-08-06): the
 crown's higher-order leak, closed by the completion prune's SIGNATURE KEEP-SET

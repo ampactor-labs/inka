@@ -947,6 +947,17 @@ run_census() {
   else
     fail "audit drift tier (drift-shape lines: $ad_n, want 7)"
   fi
+  # The unreadable-entry refusal (Hβ.query.unreadable-source-refusal): an
+  # entry that never joined the weave refuses the question — nonzero
+  # exit, NO confident answer over the empty weave (the census printed
+  # "0 sites" for an unmounted file until this leg's law landed).
+  wt_run --dir "$ROOT" "$compiler" query no-such-source-anywhere.mn "census anonymous" > "$dir/census-missing.out" 2>/dev/null
+  mrc=$?
+  if [ "$mrc" -ne 0 ] && ! grep -q "anonymous fn" "$dir/census-missing.out"; then
+    pass "unreadable-entry refusal: the query refuses (exit=$mrc), no answer over the empty weave"
+  else
+    fail "unreadable-entry refusal (exit=$mrc; see $dir/census-missing.out)"
+  fi
 }
 
 run_lsp_hover() {

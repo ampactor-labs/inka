@@ -517,10 +517,25 @@ fn query(entry_module, question) = infer_context(() => {
   // SOLO without its layer's vocabulary (the per-module-env-overlay
   // residue), so every query ran over a partially-broken env.
   match driver_entry_with_ranges(entry_module) {
-    (_ast, _ranges) => (),
+    (_ast, ranges) => match range_of_module(ranges, entry_module) {
+      None => {
+        // The ENTRY never joined the weave (E_MissingModule already
+        // reported at the walk): there is no judged source to project,
+        // and a confident answer over the empty weave is the
+        // silent-fallback class (Hβ.query.unreadable-source-refusal —
+        // the census printed "0 sites" for a file the judge could not
+        // read). Productive-under-error stays for JUDGED files; a
+        // missing entry refuses the question itself.
+        eprint_string("mentl query: no source to project — {entry_module} never joined the weave\n")
+        1
+      },
+      Some(_) => {
+        let q = parse_query_string(question)
+        ask(q) |> render_query_result |> println
+        0
+      },
+    },
   }
-  let q = parse_query_string(question)
-  ask(q) |> render_query_result |> println
 } ~>
 // the derivation's fs_read — handled in-chain, as compile/check do
 wasi_filesystem ~> query_default ~> mentl_default ~> arm_state_ctx([], OneShot, "") ~> spec_registry)

@@ -35,6 +35,20 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE FIFTH DRIFT SHAPE (pin 54bf749eab9f — CLEAN
+  m2 == m3, census 0): mode 15's underscore-retain absorbs as
+  CsUnderscoreRetain — a LetStmt whose binder is a PVar opening with
+  the underscore (a bare `_` is PWild at parse, so every underscore
+  PVar is the retained costume; deletion, not decoration, is the fix
+  the mode always named). Census roster fourteen, audit tier a quint,
+  ur_site specimen at mn-census-verbs:33. RED banked pre-march
+  (unknown query on the old generation). The wheel link measures ZERO
+  retained underscores — underscore_retain_max is born at the floor,
+  and mode 15's bash row retires in the same landing (the mode-33
+  precedent, fifth application). Cost line: 17.38s wall, 2336MB peak
+  (2392684 KB — 7.3MB under the 2400000 ceiling; the next RSS growth
+  breaches, and the arena is the named answer, not a raise).
+
 - 2026-08-08 · ▶▶▶ THE FOURTH DRIFT SHAPE (pin 8f11d81b61d4 — CLEAN
   m2 == m3, census 0): mode 10's typed fabrications absorb as
   CsWildcardFabricates — a wildcard arm whose body is LitString("") /

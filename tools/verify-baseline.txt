@@ -638,6 +638,14 @@ print_in_report_max: 0
 # precedent, fourth application).
 wildcard_fabricates_max: 21
 
+# 2026-08-08 (the fifth shape): underscore-retain — a let binder keeping
+# a leading underscore, an unused value renamed instead of deleted —
+# BORN AT ZERO on the wheel link (pin 54bf749eab9f's fresh m2). Seen RED
+# at -1 before this floor. Zero is the floor and the contract; mode 15's
+# bash row retires in the same commit (the mode-33 precedent, fifth
+# application).
+underscore_retain_max: 0
+
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
 # header; no registry here (a `micro:NAME=EXIT` list once documented below

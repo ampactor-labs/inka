@@ -1966,8 +1966,11 @@ new DEP found; the map below is accurate at that pin.)*
   (CsWildcardFabricates, pin 8f11d81b61d4 — the census roster at
   thirteen, the audit tier a quad), ratcheted at its measured 21 (seen
   RED at 20) with the four typed rows retired — mode 10 is WHOLE in the
-  medium. The remaining bash rows are naming/prose modes (the raw
-  channel's own domain) plus the structural stragglers, absorbed as
+  medium. Mode 15 (underscore-retain) followed as the FIFTH shape (pin
+  54bf749eab9f — roster fourteen, tier a quint), BORN AT ZERO on the
+  wheel link, its row retired. The remaining bash rows are naming/prose
+  modes (the raw channel's own domain) plus the structural stragglers
+  (mode 8's flag-as-int compares, mode 1/2/7's shape rows), absorbed as
   their shapes prove out. Its unsayability face
   matures through Phase 8's diagnostics; its arrival is when a wrong move
   in the wheel's own source is a REFUSAL, not a review finding.

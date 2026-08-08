@@ -43,7 +43,13 @@
 # (failure_mask_max, seen RED at -1). The grep dies; the projection +
 # ratchet is the check (the mode-33 precedent).
 14	Decorated-removal (removed-for comments)	//\s*removed\s+(for|because)	ka	Delete, don't decorate. No removal comments.	raw
-15	Unused-decoration (leading underscore retain)	\blet\s+_[a-z]\w+\s*=	ka	Unused variables are deleted, not renamed with underscore.
+# --- Mode 15: RETIRED (2026-08-08) — absorbed into the census + ratchet,
+# the mode-33 precedent's fifth application. CsUnderscoreRetain reads the
+# shape from the weave (a LetStmt whose PVar binder opens with the
+# underscore — a bare `_` is PWild at parse, so every underscore PVar is
+# the retained costume) and verify's drift-shape ratchet holds the wheel
+# link at ZERO (underscore_retain_max, seen RED at -1). The grep dies;
+# the projection + ratchet is the check.
 # --- Mode 16: RETIRED (2026-08-08) — absorbed into the census + ratchet ---
 # CsPrintInReport walks the report(...) call's ARG SUBTREE for the whole
 # print family (println/print/print_string) through body_child_handles —

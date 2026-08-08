@@ -1985,6 +1985,22 @@ The spine root finishes. Order inside the phase is the dependency order.
   external check on the design and the NEGATION half carried by the
   flow-edge substrate the crucibles already police. The burden stays on
   the build: the crown battery grows a crucible per modal rule, RED-first.
+  THE FELT WALK RAN 2026-08-08, and its measurement REFRAMES the phase:
+  on the defining first-class-escape shape (a closure performing E,
+  escaping its `~>` install, called outside), today's medium ALREADY
+  holds the conjunction — the escape is ADMITTED (evidence
+  birth-capture; runs 1, the capability calculi forbid this and the
+  modal calculus re-admits it under proof) AND the negation stays
+  SOUND across it (an outer `!E` refuses the escaped performance: the
+  install's subtraction applied at evaluation, the closure's row kept
+  E riding the value). Two crown crucibles pin it
+  (sound-escape-birth-evidence, leak-escape-negation — crown 15/0).
+  The REMAINDER, sharpened by the walk: the TIME half (a persisted k
+  under a changed handler set — rides 9.1 with 6.4's value gates), the
+  per-modal-rule crucible sweep against the POPL-2026 encoding (each
+  rule a fixture, RED-first where today's behavior diverges), and the
+  capability-at-tee PROJECTION (the modality as a cursor-projected
+  graph fact — the felt face).
 - **6.4 · TIME's world enforced** — the `TCont` world stops being inert.
   THE CAPTURE IS LANDED, verified at the 2026-08-08 phase walk:
   `Hβ.infer.tcont-world-capture-at-reify` is real —

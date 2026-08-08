@@ -1,0 +1,11 @@
+// CROWN modal (§11 6.3's opening walk, measured 2026-08-08): a closure
+// performing E, ESCAPING its install, called outside — the shape
+// capabilities forbid and the modal calculus re-admits under proof.
+// Mentl ADMITS it (evidence birth-capture; runs 1) and the row carries
+// E on the closure honestly. No negation in scope: expect NO
+// E_EffectMismatch.
+effect E { op() -> Int }
+handler h { op() => resume(1) }
+fn make() = () => op()
+fn escaped() = (make()) ~> h
+fn main() = escaped()()

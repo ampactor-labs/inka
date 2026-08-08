@@ -1,0 +1,11 @@
+// CROWN modal (§11 6.3's opening walk, measured 2026-08-08): the
+// conjunction's other half — the SAME escaped closure performed under
+// an outer !E must REFUSE: the install's subtraction applied at
+// evaluation, the closure's row kept E riding the value, and the
+// negation catches the escaped performance. Expect E_EffectMismatch.
+effect E { op() -> Int }
+handler h { op() => resume(1) }
+fn make() = () => op()
+fn escaped() = (make()) ~> h
+fn outer() with !E = escaped()()
+fn main() = outer()

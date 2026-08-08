@@ -2943,6 +2943,32 @@ one probe compiler, one run; the layer that lies is then read
 directly. Per the stall discipline the loop RETURNS TO §11 PHASE
 ORDER; this peer proceeds as its own item with the probe recipe
 standing.
+THE FINALIZE-INPUT PROBE RAN (2026-08-07 — FZIN prints RAW |
+after-self | after-prune with per-edge chased kinds, both passes,
+both specimens). THE LAYER IS THE CHARGE VALUES, and the
+callee-publish-severance frame BREAKS on it: neg TRIAL RAW = p2 +
+edge→BOUND-row-cell → WOS folds → p4 honest; neg FINAL RAW = p0 +
+ONE edge→free-t-cell (neg's own body-start mint) — the final
+pass's charges deposited NOTHING: no presents, no callee-cell
+edges. A CLOSED-row callee (++'s Memory + Alloc has no vars to
+sever) still contributed zero, so quantification/severance cannot
+be the whole mechanism. show_list final RAW = p2 + edge→free
+render-cell, SIG-KEPT through the prune (layers 1 + 2 behaving
+exactly as landed). THE NAMED SUSPECT: the seq-op FACE
+(seq_face_ty, the 3.3 landing) — neg's body is seq-op work, and
+the dossier's own stdin caveat measured "++ charges a bare
+seq-op face var"; if the face's row is a fresh var per mention
+that nothing ever binds to the op's DECLARED row, every face
+charge is a free edge and the frame accumulates exactly what
+FZIN shows. The trial's honesty would then be a different
+resolution path (prereg skeleton cells, below-ceiling, bound by
+the op's own judgment). THE PINNING PROBE, banked: print
+seq_face_ty's produced row (tail kind) per mention +
+inf_add_row's inputs for the specimen's body across both passes —
+one run answers whether the face row binds in trial and dangles
+in final; the fix is then seq_face_ty keeping the op's DECLARED
+row (concrete, closed) under the element-polymorphic face — the
+row was never the polymorphic half.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

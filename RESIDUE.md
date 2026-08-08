@@ -2827,6 +2827,27 @@ must share kept edges and the fix is generalize's keep-aware
 share. Probe recipe reproducible: patch graph.mn's four write
 arms + infer_fn's DECL print, boot-emit, restore, run on the
 real wheel blob.
+THE SORT IS SETTLED (2026-08-07, the mint-print probe — MT/MR
+tags on graph_fresh_ty/graph_fresh_row, same recipe): the kept
+edge is `MT 454133` — T-SORT, minted by graph_fresh_ty at
+show_list's final body-judgment start. A t-cell inside EtOpen's
+edge set is the confirmed root: the representation contract says
+edge sets hold ROW-cell handles, readers chasing the t-cell find
+NFree and contribute nothing (silent), and generalize's
+is_row_handle answers false so the floor QUANTIFIES it — the
+severance, and the whole downstream chain the write trace
+measured (fresh instantiated copies → prune → p0 → pure). This
+also explains the refused split (iteration ~68): its
+payload-vs-tail collector classified by CELL SORT, and a t-sort
+cell in tail position classified as payload — quantified again.
+THE BUILD-READY RE-CUT: classification by POSITION ONLY — any
+handle inside a row's tail edge set is a TAIL ROOT (shared at
+the floor, never quantified, never freshened), whatever its mint
+sort; the t-tolerance the 2026-07-26 raised-lane landing gave
+row_var_is_free finally mirrored at generalize's share rule.
+ACCEPTANCE unchanged: neg's final publish returns to its
+declared four, show_list's final shows p2 + shared tail, the 26
+row movers fall, march green.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

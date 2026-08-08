@@ -35,6 +35,18 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE AUDIT SPEAKS THE DRIFT SHAPES (pin 9d959f5900 —
+  CLEAN m2 == m3, census 0): the absorbed modes gain their per-fn
+  reader. drift_shapes_of counts the three census shapes within one
+  body's subtree — the same census_matches membership, scoped by
+  body_child_handles — and `mentl audit` renders the drift-shape
+  tier beside iteration and anonymity: the audit names the costume
+  where it stands, the census locates the corpus. Between this and
+  the row retirement (9e65da5d: five bash rows deleted, each shape
+  probed compiler-refused first), 5.6's absorption has both of its
+  motions running — shapes INTO the medium, redundant scaffold OUT.
+  Frontier 351/0 with the tier's leg.
+
 - 2026-08-08 · ▶▶▶ THE PRINT-IN-REPORT SHAPE (pin ba1a7e4ea694 —
   CLEAN m2 == m3, census 0): the third drift-catalog absorption, and
   the first CONTEXT-SENSITIVE census shape — mode 16 (a report call

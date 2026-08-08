@@ -917,7 +917,7 @@ fn build_audit_report(fn_name, handle, ty, pending, tightens) = {
   // an incremented index is the loop in recursion's costume — iteration
   // is topology (|> stages, <~ cycles, derived folds), and the audit
   // names the costume where it stands.
-  (fn_name, more_severable, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle), recursion_shape_of(handle), anonymity_shape_of(handle), pending, tightens)
+  (fn_name, more_severable, show_effrow(body_row), severable, unlocks, referenced_by, pipe_shape_of(handle), recursion_shape_of(handle), anonymity_shape_of(handle), drift_shapes_of(handle), pending, tightens)
 }
 
 // Severance candidates: every effect DECLARED in scope that the body
@@ -984,7 +984,7 @@ fn severance_unlocks(severable) = severable |> fold(
 // Positional destructure — provable with no type flow, where a
 // record field read floors in a map lambda (see build_audit_report).
 fn render_audit(entries) = entries |> map((report) => match report {
-  (fn_name, more_severable, row_str, severable, unlocks, referenced_by, pipe_chains, loop_costume, anon_shapes, pending, tightens) => audit_report_lines(
+  (fn_name, more_severable, row_str, severable, unlocks, referenced_by, pipe_chains, loop_costume, anon_shapes, drift_shapes, pending, tightens) => audit_report_lines(
     fn_name,
     row_str,
     severable,
@@ -994,6 +994,7 @@ fn render_audit(entries) = entries |> map((report) => match report {
     pipe_chains,
     loop_costume,
     anon_shapes,
+    drift_shapes,
     pending,
     tightens
   ),
@@ -1003,7 +1004,7 @@ fn render_audit(entries) = entries |> map((report) => match report {
 // map lambda the splices judged datum-last while the tuple elements were
 // still free, and the word floor rendered every audited fn's name and
 // row as pointer numerals. The named call anchors the binders.
-fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more_severable, referenced_by: [String], pipe_chains, loop_costume, anon_shapes, pending, tightens) = {
+fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more_severable, referenced_by: [String], pipe_chains, loop_costume, anon_shapes, drift_shapes, pending, tightens) = {
   let header = "{fn_name} : {row_str}\n"
   // The teaching tier leads; the remainder is counted, never listed —
   // a fn that reaches nothing can prove the absence of every effect in
@@ -1063,6 +1064,22 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more
       }
     },
   }
+  // The drift-shape tier (5.6's absorbed modes, read per fn): the
+  // three census shapes counted within THIS body's subtree — the
+  // audit names the costume where it stands; a deliberate specimen's
+  // judgment stays the reader's, as the suppression convention set.
+  let drift_section = match drift_shapes {
+    (wz, fm, pir) => {
+      let wz_note = if wz == 0 { "" } else { "{int_to_str(wz)} wildcard-zero arm(s); " }
+      let fm_note = if fm == 0 { "" } else { "{int_to_str(fm)} failure-mask site(s); " }
+      let pir_note = if pir == 0 { "" } else { "{int_to_str(pir)} print-in-report site(s); " }
+      if wz + fm + pir == 0 {
+        ""
+      } else {
+        "  drift-shape: {wz_note}{fm_note}{pir_note}the census locates each\n"
+      }
+    },
+  }
   // The banks' tiers — the same facts the frontier ranks, spoken per fn:
   // undischarged proof obligations in this decl's extent, and the
   // judgment's banked tightening with its proven row (the patch mentl
@@ -1074,7 +1091,7 @@ fn audit_report_lines(fn_name: String, row_str: String, severable, unlocks, more
   }
   let tighten_section =
     tightens |> map(((declared, proven, _, _)) => "  tighten: with {show_effrow(declared)} — body proves {show_effrow(proven)} (mentl tighten authors the patch)\n") |> str_concat_all
-  "{header}{severance_section}{refs_section}{verb_section}{iter_section}{anon_section}{pending_section}{tighten_section}"
+  "{header}{severance_section}{refs_section}{verb_section}{iter_section}{anon_section}{drift_section}{pending_section}{tighten_section}"
 }
 
 // Query rendering — delegates to query.mn for Question parsing.

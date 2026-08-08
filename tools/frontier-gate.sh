@@ -939,6 +939,14 @@ run_census() {
     fi
   done
   [ "$ok" = 1 ] && pass "structural census: all twelve shapes count their own site (|> <| >< ~> <~ anonymous eta effectful-lambda iteration wildcard-zero failure-mask print-in-report)"
+  # The audit's drift tier (5.6's absorbed modes read per fn): the three
+  # specimen fns each carry their shape line. Born with the tier.
+  ad_n=$(wt_run --dir "$ROOT" "$compiler" audit "$doc" 2>/dev/null | grep -c "drift-shape:")
+  if [ "$ad_n" = "3" ]; then
+    pass "audit drift tier: the three specimen fns each carry their shape line"
+  else
+    fail "audit drift tier (drift-shape lines: $ad_n, want 3)"
+  fi
 }
 
 run_lsp_hover() {

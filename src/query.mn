@@ -553,6 +553,31 @@ fn subtree_prints_children(hs, fuel) with GraphRead + !Mutate + Alloc + Memory =
   [ch, ...rest] => if subtree_prints(ch, fuel) { true } else { subtree_prints_children(rest, fuel) },
 }
 
+// The per-fn drift read (the audit's absorbed-mode tier): the three
+// drift shapes counted within ONE fn's body subtree — the same
+// membership the whole-weave census runs, scoped by the tree edge, so
+// the audit names the costume where it stands and the census answers
+// the corpus question.
+fn drift_shapes_of(fn_handle) with GraphRead + !Mutate + Alloc + Memory = match graph_node_body(fn_handle) {
+  NStmt(FnStmt(_, _, _, _, body)) => subtree_drift_counts(node_handle(body), (0, 0, 0), 128),
+  _ => (0, 0, 0),
+}
+
+fn subtree_drift_counts(h, acc, fuel) with GraphRead + !Mutate + Alloc + Memory = if fuel <= 0 {
+  acc
+} else {
+  let body = graph_node_body(h)
+  let acc2 = match acc {
+    (wz, fm, pir) => (if census_matches(CsWildcardZero, h, body) { wz + 1 } else { wz }, if census_matches(CsFailureMask, h, body) { fm + 1 } else { fm }, if census_matches(CsPrintInReport, h, body) { pir + 1 } else { pir }),
+  }
+  subtree_drift_children(body_child_handles(body), acc2, fuel - 1)
+}
+
+fn subtree_drift_children(hs, acc, fuel) with GraphRead + !Mutate + Alloc + Memory = match hs {
+  [] => acc,
+  [ch, ...rest] => subtree_drift_children(rest, subtree_drift_counts(ch, acc, fuel), fuel),
+}
+
 fn any_wildcard_zero(arms, i, n) with Memory + Alloc = if i >= n {
   false
 } else {

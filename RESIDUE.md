@@ -2969,6 +2969,30 @@ one run answers whether the face row binds in trial and dangles
 in final; the fix is then seq_face_ty keeping the op's DECLARED
 row (concrete, closed) under the element-polymorphic face — the
 row was never the polymorphic half.
+THE FACE HYPOTHESIS KILLED BY SOURCE (2026-08-07, the cheapest
+probe first): seq_face_ty's row is `crow` from
+instantiate(scheme) — the callee's own instantiated row, exactly
+as its comment says — and neg's body holds NO direct seq-ops
+anyway: it is ONE HOF call, show_list(names, lambda, " + ") (the
+++ lives inside the lambda, whose effects belong to the lambda's
+own TFun row until called — correct). THE SHARPEST SURVIVING
+FRAME, consistent with every measurement including the p2-present
+scheme contributing nothing: the call's row charge is the
+one-way-edge design's pair — the frame gains an EDGE to a
+call-site row var (f395303, neg's body-start mint — the FZIN
+edge), and that var's unify against the callee's row runs
+SEPARATELY; if that unify PARKS as a deferred row gate
+(drain_deferred_row_gates re-parks cross-group gates to the pass
+tail), it drains AFTER inf_exit_fn's finalize already read the
+frame — the var binds too late, the published row froze p0. The
+trial's honesty = different park conditions (group membership,
+gate-resolution state differ between passes). THE PINNING PROBE,
+re-cut: print the defer/enforce/drain events (name, row_handle,
+gate cell) beside the DECL/FZIN prints — one run shows whether
+neg's call gate parks in the final pass and drains after its
+finalize; the fix is then ORDERING (drain a decl's own gates
+before its finalize) or the charge carrying the resolved row
+VALUE instead of the unbound var edge.
 (2) Decl cells + correspondence edges;
 the final pass demoted to a pure ASSERT whose override count must
 read zero. (3) The completion-bit column; generalize deletes. (4) THE

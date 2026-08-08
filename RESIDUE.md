@@ -1463,6 +1463,25 @@ the reverse edge read through the same use-edge channel `refs_of_name`
 already collects, and bound-cell enumeration as a projection over minted
 cells. Iteration-is-topology's tier-2/tier-4 case (a cycle or a read,
 never an index), and the payoff is complexity, not idiom.
+SUPERSEDED IN PART by PLAN §11 5.5's column framing, reconciled
+2026-08-07 (the alive-law: this entry's "read through refs_of_name"
+routed one full scan through another — refs_of_name (query.mn:333)
+is ITSELF an O(graph) whole-handle walk with span-dedup against
+judgment re-mints, so the payoff argument collapsed). THE COLUMN
+STAMP OPENS: the three re-derivers enumerated — (1) refs_of_name's
+whole-graph VarRef scan, O(graph) per question; (2)
+count_dependents' quadratic forward-scan; (3)
+collect_bound_positions' range scan (the bound-projection sibling
+riding the same fix pattern). THE ONE WRITER: the VarRef
+resolution at judgment (infer's VarRef arm — where the use edge is
+DRAWN) dual-writes a spine-column entry (decl-root → ref span/
+handle), exactly the 5.5 pattern (column at the writer, readers
+migrate, side-walks delete). PRICE: O(1) append per reference,
+O(k) reads for all three consumers; the current walk's
+span-dedup-vs-remint complexity becomes the column's identity
+discipline (append in the reporting pass only, or span-keyed).
+The build rides the 5.5 column arc's opening — the first column
+whose writer is already singular.
 
 `Hβ.audit.capability-carries-its-evidence` — the severance teaching's
 remainder (named 2026-07-30 with the vocabulary's graph read). The

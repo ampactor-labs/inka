@@ -1914,9 +1914,19 @@ new DEP found; the map below is accurate at that pin.)*
   (dissolves with 5.2's schemes-are-edges; the two hand-rolled indexes
   re-key by handle onto the one smap primitive —
   `Hβ.runtime.indexed-map-primitive`); the REVERSE EDGE (a spine column,
-  written at the one writer, replacing three subsystems' re-derivations);
-  the affine/verify/tighten LEDGERS (columns, dual-written, side-structures
-  deleted). Band G rides along: `Hβ.egraph.per-expr-effect-row` (is_pure
+  written at the one writer, replacing three subsystems' re-derivations —
+  LANDED 2026-08-07, the refs + decls columns, the peer closed);
+  the verify/tighten BANKS (per-SITE durable facts — span-keyed
+  obligations and tightenables — that become spine columns WITH their
+  per-handle readers: the 11.2 dashboard's "V_Pending at this position"
+  and 5.6's per-position audit read; sequenced there, not before — a
+  column nobody reads per-handle is machinery. The AFFINE ledger is
+  struck from this list by measurement, 2026-08-07: its state is
+  transient bracketed judgment memory — used-set, borrow depth, branch
+  frames, per-fn save/restore — that dies at scope exit; handler state
+  IS its correct form, and the durable half it produces, the resolved
+  ownership grade, already lands on the fn's TFun at 4.2's one writer).
+  Band G rides along: `Hβ.egraph.per-expr-effect-row` (is_pure
   reduces to effs_at), `.typed-rulecyclic`, `.rule-as-query`,
   `.const-fold-minted-node-full-edges`, saturation deepened; and
   `Hβ.egraph.install-algebra` — the `~>` edge enters the e-graph (elision

@@ -261,7 +261,45 @@ step-(ii) collect_* swaps are NOT body-swaps — they re-root on
 program+columns walks (the tree-only walkers die at (iv), not (ii));
 and reach_names CANNOT re-root on source program alone (lower MINTS
 references — fold helpers, twins — the source never wrote), so
-reachability's swap waits for the synthesized-shapes mint. Two verb confessions from the stamp's own dig, named
+reachability's swap waits for the synthesized-shapes mint.
+THE MINT RESOLUTION INVERTS (2026-08-08, stamped against the
+artifact before any mint was built — the alive-law on the stamp's
+own author): the "synthesized shapes mint graph nodes" clause
+answered the TREE's question, not the column form's. LowFn has
+SEVEN construction sites, all in lower.mn (lower_call_partial:846
+the partial wrapper, lower_expr_body:2200 the lambda,
+synthesize_diverge_thunks:2791 + synthesize_branch_thunk:2843 the
+fanout thunks, lower_stmt_body:3105 the nested fn,
+lower_one_arm_decl:3662 the handler arm, reify_frame_k_at:4221 the
+continuation k; wasm.mn constructs NONE — its synthesis lives at
+the emit-record and raw-WAT altitudes). Every class WRAPS structure
+the graph already holds: the lambda IS its program node; the nested
+fn IS its FnStmt; the arm body IS the handler decl's arm; the
+thunk's body IS the branch handle the boundaries column already
+lists; the partial wrapper IS the call node's hole shape; and the k
+remainder — the one genuinely-new structure — is k_remainder(
+body_node, subs), a SUBSTITUTION-WALK over the frame's own program
+node whose every parameter is a graph fact (the ContinuationEdge
+column, the perform sites, the deterministic hole name). The trees
+carry self-contained bodies because a TREE needs them; columns
+dissolve the need. NOTHING MINTS. The replacement design: an
+EMITTABLE-FN ENUMERATION — source decls (the decls column), one
+entry per lambda / thunk / arm / k / partial (each derived from
+program+columns at its origin handle), carrying (kind, origin
+handle, deterministic name, fence) — with emit walking the
+enumeration and projecting each body from program+columns
+(the k entry re-running the substitution walk from the boundary
+edge). Twins key (entry, repr-vector) on the same origin handles.
+Fold helpers stay band D/5.4's own arc (raw WAT from Ty — below
+this altitude, unchanged here). Reachability re-roots on the
+enumeration + refs, not on source program alone — the earlier
+"waits for the mint" gate dissolves WITH the mint itself; the
+enumeration is what it waits for. PRICED: the enumeration is
+lower's existing walk WRITING entries instead of trees (no second
+walk, no new allocation class — it replaces the LowFn allocation);
+emit's per-entry body projection is the same walk emit does today
+rooted at a handle instead of a tree. ENUMERATED: the seven
+LowFn writers above are the exact sites that become entry writes. Two verb confessions from the stamp's own dig, named
 per ⟳: the `type NAME` query facet answers the name, not the
 variant/field ROSTER (the ADT-roster facet); the address form lacks
 an enclosing-DECL facet (node → its decl — the walker census needed

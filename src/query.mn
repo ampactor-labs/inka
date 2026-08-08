@@ -42,6 +42,7 @@ type CensusShape
   | CsUnderscoreRetain
   | CsFlagAsInt
   | CsParallelArrays
+  | CsVtableRecord
 
 // Sum type covering every forensic question `mentl query` can pose.
 // Each variant corresponds to one `ask(Q)` arm in `query_default`.
@@ -428,6 +429,7 @@ fn census_label(shape) with Pure = match shape {
   CsUnderscoreRetain => "underscore-retain let(s)",
   CsFlagAsInt => "flag-as-int compare(s)",
   CsParallelArrays => "parallel-arrays let(s)",
+  CsVtableRecord => "vtable-record literal(s)",
 }
 
 fn census_sites(shape) with GraphRead + !Mutate + Alloc + Memory = match graph_snapshot() {
@@ -588,6 +590,34 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
     },
     _ => false,
   },
+  CsVtableRecord => // Drift mode 1's shape (the eighth absorption): a record
+  // literal with a field NAMED like a dispatch slot (fn_* / handler_*)
+  // holding a lambda — Mentl drawn as Rust. The name key is the
+  // mode's own anchor: a record of closures with HONEST field names
+  // (the unified each's leaf record) is a deliberate design, so only
+  // the machinery-named slot convicts. Structural where the regex saw
+  // only the retired lambda spellings; the nominal-record costume
+  // counts too.
+  match body {
+    NExpr(MakeRecordExpr(flds)) => any_vtable_field(flds, 0, len(flds)),
+    NExpr(NamedRecordExpr(_, flds)) => any_vtable_field(flds, 0, len(flds)),
+    _ => false,
+  },
+}
+
+fn any_vtable_field(flds, i, n) with GraphRead + !Mutate + Alloc + Memory = if i >= n {
+  false
+} else {
+  match list_index(flds, i) {
+    (fname, fval) => if starts_with(fname, "fn_") || starts_with(fname, "handler_") {
+      match graph_node_body(node_handle(fval)) {
+        NExpr(LambdaExpr(_, _)) => true,
+        _ => any_vtable_field(flds, i + 1, n),
+      }
+    } else {
+      any_vtable_field(flds, i + 1, n)
+    },
+  }
 }
 
 fn paired_handle_binders(elems) with Memory + Alloc = if len(elems) < 2 {
@@ -640,29 +670,48 @@ fn subtree_prints_children(hs, fuel) with GraphRead + !Mutate + Alloc + Memory =
   [ch, ...rest] => if subtree_prints(ch, fuel) { true } else { subtree_prints_children(rest, fuel) },
 }
 
-// The per-fn drift read (the audit's absorbed-mode tier): the three
+// The per-fn drift read (the audit's absorbed-mode tier): the absorbed
 // drift shapes counted within ONE fn's body subtree — the same
 // membership the whole-weave census runs, scoped by the tree edge, so
 // the audit names the costume where it stands and the census answers
-// the corpus question.
-fn drift_shapes_of(fn_handle) with GraphRead + !Mutate + Alloc + Memory = match graph_node_body(fn_handle) {
-  NStmt(FnStmt(_, _, _, _, body)) => subtree_drift_counts(node_handle(body), (0, 0, 0, 0, 0, 0, 0), 128),
-  _ => (0, 0, 0, 0, 0, 0, 0),
+// the corpus question. The ROSTER is the one home for membership: a
+// newly absorbed mode joins by one entry here (the widening
+// count-tuple this replaced was the per-site family at seven arms —
+// the uniform pass, applied to the tier's own construction).
+fn drift_roster() with Memory + Alloc =
+  [CsWildcardZero, CsFailureMask, CsPrintInReport, CsWildcardFabricates, CsUnderscoreRetain, CsFlagAsInt, CsParallelArrays, CsVtableRecord]
+
+fn drift_shapes_of(fn_handle) with GraphRead + !Mutate + Alloc + Memory = {
+  let roster = drift_roster()
+  let counts = match graph_node_body(fn_handle) {
+    NStmt(FnStmt(_, _, _, _, body)) => subtree_drift_counts(node_handle(body), roster, map((_) => 0, roster), 128),
+    _ => map((_) => 0, roster),
+  }
+  zip(roster, counts)
 }
 
-fn subtree_drift_counts(h, acc, fuel) with GraphRead + !Mutate + Alloc + Memory = if fuel <= 0 {
-  acc
+fn subtree_drift_counts(h, roster, counts, fuel) with GraphRead + !Mutate + Alloc + Memory = if fuel <= 0 {
+  counts
 } else {
   let body = graph_node_body(h)
-  let acc2 = match acc {
-    (wz, fm, pir, wf, ur, fi, pa) => (if census_matches(CsWildcardZero, h, body) { wz + 1 } else { wz }, if census_matches(CsFailureMask, h, body) { fm + 1 } else { fm }, if census_matches(CsPrintInReport, h, body) { pir + 1 } else { pir }, if census_matches(CsWildcardFabricates, h, body) { wf + 1 } else { wf }, if census_matches(CsUnderscoreRetain, h, body) { ur + 1 } else { ur }, if census_matches(CsFlagAsInt, h, body) { fi + 1 } else { fi }, if census_matches(CsParallelArrays, h, body) { pa + 1 } else { pa }),
-  }
-  subtree_drift_children(body_child_handles(body), acc2, fuel - 1)
+  let counts2 = roster_bump(roster, counts, 0, len(roster), h, body)
+  subtree_drift_children(body_child_handles(body), roster, counts2, fuel - 1)
 }
 
-fn subtree_drift_children(hs, acc, fuel) with GraphRead + !Mutate + Alloc + Memory = match hs {
-  [] => acc,
-  [ch, ...rest] => subtree_drift_children(rest, subtree_drift_counts(ch, acc, fuel), fuel),
+fn roster_bump(roster, counts, i, n, h, body) with GraphRead + !Mutate + Alloc + Memory = if i >= n {
+  counts
+} else {
+  let c2 = if census_matches(list_index(roster, i), h, body) {
+    list_set(counts, i, list_index(counts, i) + 1)
+  } else {
+    counts
+  }
+  roster_bump(roster, c2, i + 1, n, h, body)
+}
+
+fn subtree_drift_children(hs, roster, counts, fuel) with GraphRead + !Mutate + Alloc + Memory = match hs {
+  [] => counts,
+  [ch, ...rest] => subtree_drift_children(rest, roster, subtree_drift_counts(ch, roster, counts, fuel), fuel),
 }
 
 fn any_wildcard_zero(arms, i, n) with Memory + Alloc = if i >= n {

@@ -13,7 +13,14 @@
 # This file is the proto-`mentl audit` — the medium's drift detector, inside
 # the medium. Post-L1 the patterns become predicates over graph shapes.
 #
-1	Rust vtable (closure-as-vtable)	\{\s*(fn|handler)_\w+\s*:\s*(fn|\|)	ka	A record of functions named like a vtable is Mentl drawn as Rust. Use graph + handler.
+# --- Mode 1: RETIRED (2026-08-08) — absorbed into the census + ratchet,
+# the mode-33 precedent's eighth application. CsVtableRecord reads the
+# shape from the weave: a record field named fn_*/handler_* holding a
+# LambdaExpr, literal or nominal costume — this regex could only match
+# the retired lambda spellings (`: fn` / `: |`), which no longer parse
+# at all. verify's drift-shape ratchet holds the wheel link at ZERO
+# (vtable_record_max, seen RED at -1). The grep dies; the projection +
+# ratchet is the check.
 2	Scheme env frame (scope-as-frame-stack)	\b(parent_env|env_stack|push_frame|pop_frame|env_chain)\b	ka	Env lookup is an effect op — the bare call `env_lookup(name)` — no parent-pointer frame walk.
 3	Python dict (effect-name-set-as-strings)	perform\s+"[A-Z]	ka	Effect names are EffName ADTs. Raw strings flatten parameterization.	raw
 3	Python dict (string-keyed effect match)	==\s*"(Pure|Alloc|IO|State|Console)"|"(Pure|Alloc|IO|State|Console)"\s*=>	ka	Flat effect-name COMPARES and match arms are the old string-keyed shape. The bare literal inside `intern_str("IO")` is the NEW shape — the canonical name entering the intern once — so the row anchors on the compare/arm adjacency, never mere presence.	raw

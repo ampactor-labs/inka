@@ -663,6 +663,15 @@ flag_as_int_max: 0
 # mode 7's param-adjacency row stays (distinct shape).
 parallel_arrays_max: 0
 
+# 2026-08-08 (the eighth shape): vtable-record — a record field named
+# fn_*/handler_* holding a lambda, in literal or nominal costume (the
+# honest anchor: a closure record with honest field names is the unified
+# each's own design and stays silent) — BORN AT ZERO on the wheel link
+# (pin aa581cb8839b's fresh m2). Seen RED at -1 before this floor. Mode
+# 1's bash row retires in the same commit (the mode-33 precedent,
+# eighth application).
+vtable_record_max: 0
+
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
 # header; no registry here (a `micro:NAME=EXIT` list once documented below

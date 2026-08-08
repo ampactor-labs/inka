@@ -35,6 +35,32 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE EIGHTH DRIFT SHAPE, AND THE TIER BECOMES A
+  ROSTER (pin 0bbfe0e58e1cb6f3, superseding the same-arc aa581cb8839b
+  after the landing's own ratchets bit — CLEAN m2 == m3, census 0; the
+  quiet gate refused SEVEN reflexive ownership markers on the roster
+  walk (dropped, inference grades — §4⑤ enforced against this
+  session's own hands) and the anonymity ratchet convicted the render
+  fold's nameless Alloc row (named drift_note_fold); peak 2404368 KB,
+  a reading the pre-correction 2400000 ceiling would have refused —
+  the noise-band ruling earned its keep on its second march): mode 1's
+  vtable absorbs as CsVtableRecord — a MakeRecordExpr or
+  NamedRecordExpr field named fn_*/handler_* holding a LambdaExpr,
+  the name-keyed anchor that leaves the unified each's honest-named
+  closure record silent (the retired regex could only see the
+  pre-dissolution lambda spellings, which no longer parse). The
+  specimen taught its own lesson: a bare `= {fn_go: ...}` body parses
+  as a BLOCK — the record literal parenthesizes (the brace-header
+  law). AND the uniform pass hits the tier's own construction: the
+  widening count-tuple (seven arms of one shape) dissolves into ONE
+  fold over drift_roster() — counts as a list bumped per node,
+  render folding census_label over the pairs — so the ninth mode
+  joins by one roster entry and one label. Census roster seventeen,
+  tier 8 specimen lines, wheel at ZERO, mode 1's row retired (the
+  mode-33 precedent, eighth application). Peak 2393576 KB — the
+  HIGH mode, inside the noise-band-corrected ceiling on its first
+  post-correction march.
+
 - 2026-08-08 · ▶▶▶ THE QUERY REFUSES THE EMPTY WEAVE (pin 76e85e00696e
   — CLEAN m2 == m3, census 0): Hβ.query.unreadable-source-refusal
   RESOLVED, with the dig's decode sharpened by the fix's own RED — the

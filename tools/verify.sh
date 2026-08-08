@@ -242,6 +242,7 @@ if C=$(wt_m2_ensure); then
   cur=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census underscore-retain" 2>/dev/null | grep -oE '[0-9]+ underscore-retain' | grep -oE '[0-9]+' | head -1)
   cfi=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census flag-as-int" 2>/dev/null | grep -oE '[0-9]+ flag-as-int' | grep -oE '[0-9]+' | head -1)
   cpa=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census parallel-arrays" 2>/dev/null | grep -oE '[0-9]+ parallel-arrays' | grep -oE '[0-9]+' | head -1)
+  cvt=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census vtable-record" 2>/dev/null | grep -oE '[0-9]+ vtable-record' | grep -oE '[0-9]+' | head -1)
   wzmax=$(grep -E '^wildcard_zero_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
   fmmax=$(grep -E '^failure_mask_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
   pirmax=$(grep -E '^print_in_report_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
@@ -249,11 +250,12 @@ if C=$(wt_m2_ensure); then
   urmax=$(grep -E '^underscore_retain_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
   fimax=$(grep -E '^flag_as_int_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
   pamax=$(grep -E '^parallel_arrays_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
-  if [[ -z "$cwz" || -z "$cfm" || -z "$cpir" || -z "$cwf" || -z "$cur" || -z "$cfi" || -z "$cpa" ]]; then
-    say "✗ drift-shape RATCHET: a census query answered nothing (wz='$cwz' fm='$cfm' pir='$cpir' wf='$cwf' ur='$cur' fi='$cfi' pa='$cpa') — the projection is broken, not clean."
+  vtmax=$(grep -E '^vtable_record_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  if [[ -z "$cwz" || -z "$cfm" || -z "$cpir" || -z "$cwf" || -z "$cur" || -z "$cfi" || -z "$cpa" || -z "$cvt" ]]; then
+    say "✗ drift-shape RATCHET: a census query answered nothing (wz='$cwz' fm='$cfm' pir='$cpir' wf='$cwf' ur='$cur' fi='$cfi' pa='$cpa' vt='$cvt') — the projection is broken, not clean."
     fail=1
   else
-    say "· drift shapes: $cwz wildcard-zero, $cfm failure-mask, $cpir print-in-report, $cwf wildcard-fabricates, $cur underscore-retain, $cfi flag-as-int, $cpa parallel-arrays — the absorbed modes on the wheel link"
+    say "· drift shapes: $cwz wildcard-zero, $cfm failure-mask, $cpir print-in-report, $cwf wildcard-fabricates, $cur underscore-retain, $cfi flag-as-int, $cpa parallel-arrays, $cvt vtable-record — the absorbed modes on the wheel link"
     if [[ -n "$wzmax" && "$cwz" -gt "$wzmax" ]]; then
       say "✗ drift-shape RATCHET: wildcard-zero rose $wzmax -> $cwz — a new masked case; enumerate the variant or document the sentinel."
       fail=1
@@ -284,6 +286,10 @@ if C=$(wt_m2_ensure); then
     fi
     if [[ -n "$pamax" && "$cpa" -gt "$pamax" ]]; then
       say "✗ drift-shape RATCHET: parallel-arrays rose $pamax -> $cpa — paired _h binders; one record was native."
+      fail=1
+    fi
+    if [[ -n "$vtmax" && "$cvt" -gt "$vtmax" ]]; then
+      say "✗ drift-shape RATCHET: vtable-record rose $vtmax -> $cvt — a dispatch-slot record; the graph + handler is the form."
       fail=1
     fi
   fi

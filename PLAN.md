@@ -1975,10 +1975,13 @@ new DEP found; the map below is accurate at that pin.)*
   tier a sept), whose dig corrected the anchor to the WEAVE shape (the
   one-arm match — desugar_block makes LetStmt PVar-only at parse, so
   the graph shape covers both spellings) and banked
-  `Hβ.query.unreadable-source-refusal` (the census answers a confident
-  zero on an unreadable file — the silent-fallback class at the verb).
-  The remaining bash rows are naming/prose modes (the raw channel's own
-  domain) plus modes 1/2 and 7's param-adjacency row, absorbed as
+  `Hβ.query.unreadable-source-refusal` (RESOLVED same day: the verb
+  refused the empty weave, pin 76e85e00696e); mode 1's vtable as the
+  EIGHTH (pin aa581cb8839b — roster seventeen), where the tier's
+  widening count-tuple dissolved into ONE fold over drift_roster() —
+  a future mode joins by one roster entry and one label. The
+  remaining bash rows are naming/prose modes (the raw channel's own
+  domain) plus mode 2 and mode 7's param-adjacency row, absorbed as
   their shapes prove out. Its unsayability face
   matures through Phase 8's diagnostics; its arrival is when a wrong move
   in the wheel's own source is a REFUSAL, not a review finding.

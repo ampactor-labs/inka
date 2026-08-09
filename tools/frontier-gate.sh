@@ -2567,4 +2567,17 @@ for i in "${!compilers[@]}"; do
 done
 
 echo "frontier: $total_pass pass / $total_fail red"
+
+# The GREEN STAMP, keyed by the boot it tested (the d51661f1 lesson —
+# 2026-08-09): a fully-green run records the boot's sha256 so the
+# pre-commit thesis gate can DEMAND that the frontier ran, green,
+# against exactly the wheel being committed. A red run stamps nothing
+# (and clears any stale stamp — a stamp must never outlive a red).
+# Scope, stated honestly: the stamp binds gate↔boot; boot↔staged-source
+# is the march's own per-landing contract (m2 == m3), not this file's.
+if [ "$total_fail" -eq 0 ]; then
+  sha256sum "$ROOT/boot/mentl.wasm" | cut -d' ' -f1 > "$ROOT/.build/frontier-stamp"
+else
+  rm -f "$ROOT/.build/frontier-stamp"
+fi
 [ "$total_fail" -eq 0 ]

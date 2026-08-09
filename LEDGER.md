@@ -35,6 +35,52 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-09 · ▶▶▶ THE TRIO DIES INTO THE GENERAL SEVERANCE
+  (pin 54c97b0f7220 — CLEAN m2 == m3, census 0): the general severance's own
+  landing left the board RED at teach-pure-control — the ONE leg the
+  pre-commit verify does not run — because pick_highest_leverage's
+  priority ladder still named the retired fixed ctors (ANotAlloc/
+  ANotIO/ANotNetwork), rungs no ANotEffect candidate can match, so
+  APure outranked the proven !Alloc on the pure control. The fix is
+  the census law, not a patch: the trio's ONE remaining reference WAS
+  the ladder (query counted 1 ref each), so the three ctors are
+  deleted from Annotation whole — seven match families shrink
+  (kind/span/apply/caps/eq/unlock/show) — and the ladder speaks the
+  general vocabulary (annotation_eq's ANotEffect arm is
+  name-sensitive, so each rung matches its proven namesake; the
+  literal ladder's replacement by measured leverage stays the banked
+  tie-ranking refinement). Two more homes fell in the same sweep:
+  oracle.mn's gradient_candidates_at — a frozen second copy of the
+  enumeration whose own comment claimed "the SAME enumeration
+  gradient_next runs" — collapses into mentl.mn's gradient_candidates
+  (ONE enumeration, two readers; project_queue reads
+  performed_names_of_link once and threads it), and
+  try_each_annotation's fork pre-warm generalizes from three fixed
+  intern literals to an each-walk over the candidates' own names (the
+  fixed warm could never protect a general name; the walk protects
+  any caller). Measured: teach-pure-control regains `main: → add with
+  !Alloc to unlock Real-time safe`; teach-alloc-honest's winner is
+  now the honest `!ImageAlloc` general severance (no false !Alloc);
+  frontier 359/0, the board whole again. The lesson lands MECHANICAL,
+  not procedural: the violation walked through the board's one
+  non-refusing state (`frontier: NOT RUN` is a visible blank, and the
+  pre-commit hook ran verify only), so the same commit adds the
+  FULL-GREEN PERIMETER — frontier-gate writes .build/frontier-stamp
+  (the boot sha256) on a 0-red run and clears it on any red, and the
+  hook's new Gate 4 refuses any wheel/boot commit whose staged boot
+  lacks a matching green stamp (seen RED first: the stampless commit
+  attempt refused, then frontier stamped, then the commit passed).
+  Boot↔source coherence stays the march's own contract (m2 == m3);
+  this perimeter binds gate↔boot, exactly the d51661f1 class. Second find,
+  banked as Hβ.emit.under-application-suspension: bare
+  under-application (`map(candidates_at(performed))`, no `??`) EMITS
+  INVALID WAT — a 1-arg return_call_indirect against the 2-arg $ft2 —
+  instead of constructing the suspension SYNTAX promises or refusing;
+  wat2wasm catches it loudly, but the lathe's answer must be the
+  suspension record or a diagnostic, never malformed output. The
+  `??`-marked product (`candidates_at(performed, ??)`) is the proven
+  emit path (mn-partial-hole-executable) and is the landed form.
+
 - 2026-08-08 · ▶▶▶ THE GENERAL SEVERANCE (pin 811c5d423bf7 — CLEAN
   m2 == m3, census 0): ANotEffect(name, span) joins Annotation
   (appended last, tags unshifted) and CProvenAbsence(name) joins

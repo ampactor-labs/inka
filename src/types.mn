@@ -1035,7 +1035,7 @@ type PipeContext = NoPipe | InsidePipe(PipeKind) | StartingPipe | EndingPipe
 //   teach    — primitive #7 (Gradient)         — one next-step (or None)
 //   why      — primitive #8 (HM + Reasons)     — walkable Reason chain
 //
-// Annotation is mentl.mn's existing ADT (8 variants APure/ANotAlloc/...).
+// Annotation is mentl.mn's existing ADT (APure/ANotEffect/AOwn/...).
 // Predicate is at types.mn:568.
 type CursorView
   = CursorView(NodeKind, Proposals, PipeContext, EffRow, Ownership, [(Span, Predicate, Reason)], Option(AnnotationSuggestion), Reason)

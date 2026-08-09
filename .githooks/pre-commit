@@ -115,4 +115,28 @@ if [[ "$has_compiler_change" == "true" && -x "$VERIFY" ]]; then
     fi
 fi
 
+# ─── Gate 4: the FULL-GREEN perimeter (frontier stamped at this boot) ─
+# Paid for at d51661f1 (2026-08-09): the general-severance commit landed
+# with frontier 358/1 RED because this hook ran verify only — the board
+# stamped `frontier: NOT RUN`, a visible blank that refuses nothing. The
+# full-green law says a wheel commit lands only when the frontier ran,
+# green, against the exact boot being committed. Mechanically: the gate
+# writes .build/frontier-stamp (the boot sha256) on a 0-red run and
+# clears it on any red; this gate demands the stamp match the staged
+# boot. Boot↔source coherence stays the march's contract (m2 == m3).
+staged_boot=$(git diff --cached --name-only --diff-filter=ACMR | grep -cx 'boot/mentl.wasm' || true)
+if [[ "$has_compiler_change" == "true" || "$staged_boot" -gt 0 ]]; then
+    STAMP="$REPO_ROOT/.build/frontier-stamp"
+    boot_sha=$(sha256sum "$REPO_ROOT/boot/mentl.wasm" | cut -d' ' -f1)
+    if [[ ! -f "$STAMP" ]] || [[ "$(cat "$STAMP")" != "$boot_sha" ]]; then
+        echo ""
+        echo "pre-commit: THE FULL-GREEN PERIMETER REFUSES — the frontier has not"
+        echo "run green against this boot ($(echo "$boot_sha" | cut -c1-12)…). Run:"
+        echo "    bash tools/frontier-gate.sh"
+        echo "and commit only on 0 red. (A red run clears the stamp by design.)"
+        exit 1
+    fi
+    echo "pre-commit: full-green perimeter — frontier stamped green at this boot."
+fi
+
 exit 0

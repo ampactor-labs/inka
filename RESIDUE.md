@@ -309,6 +309,26 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.emit.under-application-suspension` — NAMED 2026-08-09 (found live
+by the trio-deletion landing). SYNTAX §«Partial application» promises
+that under-application IS the hole-product ("when exactly one field is
+a hole, it is unambiguous" — `filter(.age > 18)` is the spec's own
+example, no `??`), but the lathe's emit for a bare under-applied named
+call (`map(candidates_at(performed))`, one arg against a 2-param fn)
+produces INVALID WAT — a 1-arg `return_call_indirect` against the
+2-arg `$ft2` — instead of constructing the suspension record or
+refusing with a diagnostic. wat2wasm catches it loudly at assemble
+(measured: the trio landing's first march), so the class is
+loud-wrong, not silent-wrong — but malformed output is never the
+lathe's answer. The `??`-marked product (`candidates_at(performed,
+??)`) is the PROVEN emit path (tests/frontier/
+mn-partial-hole-executable.mn; the trio landing ships this form at
+project_queue). The fix direction: the apply walk treats an
+under-supplied product exactly as a `??`-marked one (the parse/infer
+side already types suspensions; the gap is the arity-mismatch call
+falling through to the direct-call emit), with the RED gate being the
+bare form compiling and running mn-partial-hole-executable's shape.
+
 `Hβ.eq.pipekind-match-eq-divergence` — RESOLVED (2026-08-07, the arc
 loop's first iteration): the banked probe ran and the divergence was a
 MISATTRIBUTION — there never was one. The raw-word census at

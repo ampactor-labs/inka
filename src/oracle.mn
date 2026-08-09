@@ -190,39 +190,31 @@ handler project_queue_merger with last_epoch = -1, projected = [] {
 // No separate search, no separate cache: the proposer IS the search,
 // the graph epoch IS the cache. The e-graph supplies the TStyle-tier
 // equivalences (topology nudges) effect-awarely via egraph.mn.
-fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Alloc + EnvRead =
-  decl_handles() |> map((pos) => candidates_at(pos)) |> flatten |> sort_by_priority
+fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Alloc + EnvRead = {
+  // The performed-name union is a LINK fact — read once here, threaded
+  // to every position (the same vocabulary the Teach install memoizes).
+  let performed = performed_names_of_link()
+  decl_handles() |> map(candidates_at(performed, ??)) |> flatten |> sort_by_priority
+}
 
 // candidates_at — every proven Annotation at one position becomes a
 // QueueItem. Reuses mentl.mn's try_each_annotation (the working
 // checkpoint/verify/rollback proposer) — Carried-Truth: one search
-// substrate. The candidate set is the gradient's own enumeration
-// (gradient_candidates_at); each survivor carries the e-graph-aware
+// substrate. The candidate set is mentl.mn's gradient_candidates (ONE
+// enumeration, two readers — the cursor's single-step pick and this
+// full ranked queue); each survivor carries the e-graph-aware
 // priority and the Why-walkable Reason mentl.mn already minted.
-fn candidates_at(pos) with Verify + GraphRead + GraphWrite + Alloc + Memory + Intern + EnvRead = {
+// Stage-shaped (the Stage Law): the link vocabulary is CONFIG, the
+// position is the flowing DATUM — project_queue's map completes the
+// hole per position.
+fn candidates_at(performed, pos) with Verify + GraphRead + GraphWrite + Alloc + Memory + Intern + EnvRead = {
   let node = graph_chase(pos)
   match node {
     GNode(kind, anchor) => match kind {
-      NBound(ty) => {
-        let candidates = gradient_candidates_at(ty)
-        try_each_annotation(pos, candidates, ty) |> map((pair) => proven_to_item(pos, pair, anchor))
-      },
+      NBound(ty) => try_each_annotation(pos, gradient_candidates(ty, performed), ty) |> map((pair) => proven_to_item(pos, pair, anchor)),
       _ => [],
     },
   }
-}
-
-// gradient_candidates_at — the candidate Annotations the gradient
-// enumerates for a position's type. The SAME enumeration gradient_next
-// runs (mentl.mn): effect-row tightenings for every function, ownership
-// resolutions per parameter. One enumeration, two readers (the cursor's
-// single-step pick, the oracle's full ranked queue).
-fn gradient_candidates_at(ty) with Memory + Alloc = match ty {
-  TFun(params, _ret, _row) => {
-    let base = [APure(None), ANotAlloc(None), ANotIO(None), ANotNetwork(None)]
-    base ++ ownership_candidates(params)
-  },
-  _ => [],
 }
 
 // proven_to_item — wrap one (Annotation, Capability) survivor as a

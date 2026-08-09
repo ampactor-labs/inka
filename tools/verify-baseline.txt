@@ -604,7 +604,10 @@ solo_violations_max: 0
 # report_row_contradictions — the byte-identical shape of
 # absent_minus_present's own filter lambda in the baseline (both close
 # over the pair law's !Mutate row); the pair retires together.
-eta_max: 29
+# Ratcheted 29 → 28 at the trio deletion (pin 54c97b0f7220): oracle's
+# `(pos) => candidates_at(pos)` eta-wrapper became the ??-suspension
+# `candidates_at(performed, ??)` — the Stage-Law form, no wrapper at all.
+eta_max: 28
 effectful_lambda_max: 383
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,

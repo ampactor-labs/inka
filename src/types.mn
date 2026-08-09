@@ -2447,6 +2447,13 @@ fn diag_refuses(d) with Pure = match d {
   // total, and the fixture reports E_OccursCheck and refuses. Wheel census 0
   // throughout; the phantom cascade stayed dead (one miss, one diagnostic).
   True,
+  EDeclaredRowContradiction(_, _) => // ARMED at birth (2026-08-08), the decl-site licence: a fact read from
+  // the authored clause's own signed fold — no resolution dependency.
+  // Census on the wheel at arming: 0 (the birth landing's march measured
+  // the whole wheel contradiction-free). The pre-diagnostic meet let a
+  // performing body check CLEAN under a declared !E; an unsatisfiable
+  // clause must never reach an executable.
+  True,
   _ => False,
 }
 

@@ -35,6 +35,18 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE CONTRADICTION ARMS (pin bfc68f441f996e — CLEAN
+  m2 == m3, census 0): E_DeclaredRowContradiction joins diag_refuses,
+  the TENTH armed class — the decl-site licence (a fact read from the
+  authored clause's own signed fold, no resolution dependency), census
+  0 at birth measured by the diagnostic's own landing march. The
+  armed-class contract proven both ways: pre-arm the contradiction
+  fixture compiled to 2,394 WAT bytes at exit 0 WITH the diagnostic on
+  stderr (the exact silent-wrong arming deletes); post-arm exit 1,
+  zero bytes. The frontier grows the run_refusal leg. Universal
+  executable refusal's remaining census classes stay the
+  name-dependent E_TypeMismatch kin (§7's own sentence).
+
 - 2026-08-08 · ▶▶▶ THE CONTRADICTION REFUSES AT THE DECL (pin d06486727bbb
   — CLEAN m2 == m3, census 0; the first cut's each-lambda convicted at
   the anonymity tier and rewrote as named recursion, superseding the

@@ -1307,6 +1307,11 @@ for i in "${!compilers[@]}"; do
     "$ROOT/tests/frontier/mn-effect-unhandled.mn" E_EffectUnhandled "$dir"
   run_refusal "$compiler" effect-stateful-uninstalled \
     "$ROOT/tests/frontier/mn-effect-stateful-uninstalled.mn" E_EffectUnhandled "$dir"
+  # ARMED 2026-08-08 (the decl-site licence, wheel census 0 at birth): an
+  # unsatisfiable `with E + !E` clause never reaches an executable — born
+  # RED against the pre-arm pin (diagnostic on stderr, WAT still emitted).
+  run_refusal "$compiler" row-contradiction \
+    "$ROOT/tests/frontier/mn-row-contradiction.mn" E_DeclaredRowContradiction "$dir"
   # The root-row governance gate's three tiers, each pinned: an
   # EVIDENCE-floor demand refuses even with an install elsewhere (a
   # dead-chain perform walks garbage evidence, no belt — the one strict

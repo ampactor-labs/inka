@@ -35,6 +35,19 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE FIRST DISCHARGE (pin 4fa7e36b386c — CLEAN
+  m2 == m3, census 0, wall 17.85s): Phase 8.2's discharge arc opens
+  with the debt facet's own instrument — cursor:297's `0 <= self`
+  pending (score_one_position's plain-Int handle flowing into
+  Cursor's refined Handle field) clears by ONE authored Intent
+  Boundary, `handle: Handle`, because handles are BORN refined
+  (graph_fresh_ty -> Handle) and the annotation reconnects the chain.
+  Debt 13 → 12, no relocation (the facet's site list proves the
+  absence — the count fell and no new site appeared). The remaining
+  bare `0 <= self` set: main:1163, main:999, voice:832, cursor:544 —
+  each the same one-annotation shape, march-measured each per 8.2's
+  own prescription.
+
 - 2026-08-08 · ▶▶▶ THE DEBT SPEAKS ITS SITES (pin a90453e3e444 — CLEAN
   m2 == m3, census 0; the first cut's own ratchets bit once more — the
   reflexive `ref` dropped, the render lambda named render_debt_line —

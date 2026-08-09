@@ -279,7 +279,7 @@ fn gradient_position(i) with GraphRead + Teach + Alloc + Memory + !Mutate = matc
 fn score_all_positions(handles, caret) with GraphRead + !Mutate + Teach + Memory + Alloc =
   handles |> map((h) => score_one_position(h, caret))
 
-fn score_one_position(handle, caret) with GraphRead + Memory + Teach + !Mutate + Alloc = {
+fn score_one_position(handle: Handle, caret) with GraphRead + Memory + Teach + !Mutate + Alloc = {
   let suggestion_opt = teach_gradient(handle)
   let gates = match suggestion_opt {
     None => // No annotation suggestion: an AUTHORED hole still gates — filling it

@@ -44,9 +44,18 @@
   (graph_fresh_ty -> Handle) and the annotation reconnects the chain.
   Debt 13 → 12, no relocation (the facet's site list proves the
   absence — the count fell and no new site appeared). The remaining
-  bare `0 <= self` set: main:1163, main:999, voice:832, cursor:544 —
-  each the same one-annotation shape, march-measured each per 8.2's
-  own prescription.
+  bare `0 <= self` set: main:1163, main:999, voice:832, cursor:544.
+  SAME-DAY REFUTATION at the second site: cursor:544 is NOT the
+  one-annotation shape — annotating scan_for_span's counter `i:
+  Handle` measured debt 12 → 13 (the self-call's `i + 1` needs the
+  interval induction 0<=i ⊢ 0<=i+1, exactly the self-call IH class
+  8.2 already banks on rung 3's dissolution, AND the caller's
+  literal-0 arg minted a NEW obligation at cursor:540 instead of
+  discharging — the call-arg position does not run the literal
+  discharge the construction site runs, a fragment gap worth its own
+  look when 8.2's engine work opens). Reverted whole; the pin
+  returned byte-identical. The prescription's measure-each clause is
+  the whole point: two sites, two verdicts, one annotation kept.
 
 - 2026-08-08 · ▶▶▶ THE DEBT SPEAKS ITS SITES (pin a90453e3e444 — CLEAN
   m2 == m3, census 0; the first cut's own ratchets bit once more — the

@@ -35,6 +35,22 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE VOCABULARY GATE, HALF THE LAW (pin 367c2d44425c
+  — CLEAN m2 == m3, census 0): gradient_next's name-keyed negation
+  candidates (ANotIO / ANotNetwork) enter only when
+  effect_in_vocabulary resolves their names through the env's O(1)
+  bucket — an undeclared name's negation is unspeakable (a row naming
+  it would E_MissingVariable), so it is never a candidate. MEASURED:
+  `!IO` died on the wheel link (the vacuous first-move suggestion the
+  stamp recorded on every fn including the TCP loop), and `!Network`
+  SURVIVED — declared in lib, never performed in the wheel, teach
+  still uniform on it — the live example that the declared-set gate
+  is HALF the stamped law; the PERFORMED-set intersection (the
+  handler-state form: the link's row-name union computed once and
+  held as Teach state) is the peer's remaining build, now with a
+  measured target (uniform !Network must die the same death !IO
+  did).
+
 - 2026-08-08 · ▶▶▶ THE REFS READ RAW (pin a37aedbadfbaf1d1 — CLEAN
   m2 == m3, census 0): the 2.0 walk law lands at its named sibling —
   collect_ref_spans reads span_of_node_raw instead of the chased

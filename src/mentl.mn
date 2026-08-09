@@ -145,7 +145,15 @@ fn gradient_next(handle) = {
       GNode(kind, _) => match kind {
         NBound(ty) => match ty {
           TFun(params, _ret, _row) => {
-            let base_candidates = [APure(None), ANotAlloc(None), ANotIO(None), ANotNetwork(None)]
+            // The name-keyed negation candidates enter only when their
+            // names live in the PROGRAM'S OWN vocabulary (the env
+            // resolves them) — `!IO` on a link that never declares IO
+            // is vacuously provable and taught the same first move on
+            // every fn including the TCP loop (measured 2026-08-08;
+            // Hβ.teach.severance-vocabulary-from-link carries the full
+            // performed-set law this declared-set gate opens).
+            let base_candidates =
+              [APure(None), ANotAlloc(None)] ++ if effect_in_vocabulary("IO") { [ANotIO(None)] } else { [] } ++ if effect_in_vocabulary("Network") { [ANotNetwork(None)] } else { [] }
             let param_candidates = ownership_candidates(params)
             let all = base_candidates ++ param_candidates
             let proven = try_each_annotation(handle, all, ty)
@@ -162,6 +170,16 @@ fn gradient_next(handle) = {
       },
     },
   }
+}
+
+// A name is in the program's vocabulary when the env resolves it —
+// the O(1) bucket read; an undeclared effect name's negation is
+// unspeakable (a row naming it would E_MissingVariable), so it is
+// never a candidate. The stamped refinement (the PERFORMED set, not
+// merely the declared one) lives in the teach-vocabulary peer.
+fn effect_in_vocabulary(name: String) = match env_lookup(name) {
+  Some(_) => true,
+  None => false,
 }
 
 // Boundary wrap — (Annotation, Capability) inside the speculative

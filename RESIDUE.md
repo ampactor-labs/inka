@@ -48,10 +48,22 @@ one read of the channel the reached-effect report already projects
 suggestion then intersects performed-minus-own-row, ranked by the
 existing gates × proximity. ENUMERATED writers: mentl.mn (the
 annotation enumeration + unlock_capability's name-keyed arms), the
-teach render, and the audit's severable line (pipeline's own comment
-names the doubled Sandbox line — shared vocabulary, one fix). The
-ownership/refinement/purity families (own/ref/Pure/refined) stay
-catalog-form — they are not name-keyed. Sized one fresh lease.
+teach render, and the audit's severable line (a SEPARATE mechanism,
+corrected at build — the audit severs the fn's own row members and is
+already name-general; the doubled-Sandbox render is its own small
+fix). The ownership/refinement/purity families (own/ref/Pure/refined)
+stay catalog-form — they are not name-keyed. FIRST HALF LANDED
+2026-08-08 (pin 367c2d44425c): the DECLARED-set gate —
+effect_in_vocabulary (one env bucket read) conditions the two
+name-keyed candidates; `!IO` died on the wheel (undeclared), and
+`!Network` survived as the measured example of the remaining half —
+declared in lib, never performed, teach still uniform on it. THE
+REMAINING BUILD: the PERFORMED-set intersection in the Mentl-native
+form — the link's row-name union computed once and held as Teach
+HANDLER STATE (handler = state; lazily filled at the first
+teach_gradient, updated by resume-with-state), so per-fn asks stay
+O(1). The measured target: uniform `!Network` dies the death `!IO`
+did. Sized one fresh lease.
 
 `Hβ.types.predicate-is-expr` — TRACED 2026-08-08 (Phase 8.1's stamp
 check; the peer had lived only as a DEP line in the verify-reads-canon

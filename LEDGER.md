@@ -35,6 +35,24 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE DEBT TAXONOMY COMPLETES (pin 104f21891c89
+  unchanged; the TagId probe reverted byte-identical): the ten
+  remaining pendings are now EACH classified with an owning arc, and
+  the classification closed on the engine's own header rather than a
+  guess — probing lower:2098's two-literal if-join with a `let tag:
+  TagId` annotation moved the obligation one line and discharged
+  nothing, because verify.mn's interval fragment is LOWER-BOUNDS-ONLY
+  BY DESIGN ("TagId's upper half and the float intervals stay the SMT
+  tier's" — the fragment's own scoping sentence; the lo side already
+  joins if-branches). The full map: 5 span_valid = structurally
+  undecidable honest pending; 2 TagId upper-halves (lower:2098,
+  infer:7893) + 1 DSP float interval (dsp/feedback:143) = band F's
+  SMT tier (8.3); 1 span-index cascade (main:1163) = the substrate
+  element-typing / proof-incrementality arcs; 1 self-call IH
+  (cursor:544) = rung 3. Annotation work on this debt is DONE — three
+  discharged, everything else owned by a named engine arc. 13 → 10
+  across the day's three discharges.
+
 - 2026-08-08 · ▶▶▶ THE THIRD DISCHARGE (pin 104f21891c89 unchanged —
   byte-identical, judgment-only truth): voice:832 clears by refining
   the ADT PAYLOAD — CaretTarget's TargetHandle(Int) becomes

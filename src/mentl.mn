@@ -121,9 +121,20 @@ effect Synth {
 // Default Teach handler — the substrate's self-projection. Reads the graph through
 // GraphRead. Accumulates `teach_here` entries so the driver renders them as hover info.
 // Gradient and why use the speculative oracle and reason DAG respectively.
-handler mentl_default with annotations = [] {
+handler mentl_default with annotations = [], performed = [] {
   teach_here(name, span, ty) => resume() with annotations = [(name, span, ty)] ++ annotations,
-  teach_gradient(handle) => resume(gradient_next(handle)),
+  teach_gradient(handle) => // The link's PERFORMED-name union, computed once and held as
+  // handler state (handler = state — the Mentl-native memo): the
+  // severance vocabulary is what the program actually performs, so
+  // per-fn asks stay O(1) after the first. An empty union (a link
+  // performing nothing) recomputes per ask — bounded by its own
+  // emptiness.
+  if len(performed) == 0 {
+    let ps = performed_names_of_link()
+    resume(gradient_next(handle, ps)) with performed = ps
+  } else {
+    resume(gradient_next(handle, performed))
+  },
   teach_why(handle) => resume(why_from_handle(handle)),
   teach_error(code, span, reason) => resume(Explanation(code, "docs/errors/{code}.md", catalog_summary(code), None, reason)),
   teach_unlock(annotation) => resume(unlock_capability(annotation)),
@@ -138,7 +149,7 @@ handler mentl_default with annotations = [] {
 // `to_annotation_suggestion` wraps at the boundary with kind / annotation
 // text / unlocked-capability labels / Reason — the public shape Cursor
 // reads off CursorView.teach.
-fn gradient_next(handle) = {
+fn gradient_next(handle, performed) = {
   let node = graph_chase(handle)
   match node {
     GNode(_, anchor_reason) => match node {
@@ -146,14 +157,14 @@ fn gradient_next(handle) = {
         NBound(ty) => match ty {
           TFun(params, _ret, _row) => {
             // The name-keyed negation candidates enter only when their
-            // names live in the PROGRAM'S OWN vocabulary (the env
-            // resolves them) — `!IO` on a link that never declares IO
-            // is vacuously provable and taught the same first move on
-            // every fn including the TCP loop (measured 2026-08-08;
-            // Hβ.teach.severance-vocabulary-from-link carries the full
-            // performed-set law this declared-set gate opens).
+            // names are PERFORMED somewhere in the link (the severance
+            // law whole): `!E` is informative exactly when E happens in
+            // this program and is absent from THIS fn's row. The
+            // declared-set gate was the first half (`!IO` died —
+            // undeclared); `!Network` survived it (declared in lib,
+            // never performed) and dies here, the measured target.
             let base_candidates =
-              [APure(None), ANotAlloc(None)] ++ if effect_in_vocabulary("IO") { [ANotIO(None)] } else { [] } ++ if effect_in_vocabulary("Network") { [ANotNetwork(None)] } else { [] }
+              [APure(None), ANotAlloc(None)] ++ if effect_performed("IO", performed) { [ANotIO(None)] } else { [] } ++ if effect_performed("Network", performed) { [ANotNetwork(None)] } else { [] }
             let param_candidates = ownership_candidates(params)
             let all = base_candidates ++ param_candidates
             let proven = try_each_annotation(handle, all, ty)
@@ -172,14 +183,38 @@ fn gradient_next(handle) = {
   }
 }
 
-// A name is in the program's vocabulary when the env resolves it —
-// the O(1) bucket read; an undeclared effect name's negation is
-// unspeakable (a row naming it would E_MissingVariable), so it is
-// never a candidate. The stamped refinement (the PERFORMED set, not
-// merely the declared one) lives in the teach-vocabulary peer.
-fn effect_in_vocabulary(name: String) = match env_lookup(name) {
-  Some(_) => true,
-  None => false,
+// The link's performed-name union: every judged decl's TFun row,
+// row_names'd and deduped by the name handle (identity is a contract
+// — one interned word per name). One walk over the decls column,
+// run once per Teach install and held as handler state.
+fn performed_names_of_link() = decls_row_names(graph_decls_at(), [])
+
+fn decls_row_names(decls, acc) = match decls {
+  [] => acc,
+  [h, ...rest] => decls_row_names(rest, names_union_into(acc, decl_row_names(h))),
+}
+
+fn decl_row_names(h) = match lookup_ty(h) {
+  TFun(_, _, row) => row_names(row),
+  _ => [],
+}
+
+fn names_union_into(acc, names) = match names {
+  [] => acc,
+  [n, ...rest] => names_union_into(if name_handle_in(acc, n) { acc } else { push(acc, n) }, rest),
+}
+
+fn name_handle_in(acc, n) = match acc {
+  [] => false,
+  [m, ...rest] => if eff_name_handle(m) == eff_name_handle(n) { true } else { name_handle_in(rest, n) },
+}
+
+// A candidate negation's name against the performed set — the by-name
+// membership (the candidate arrives as authored text; the set carries
+// EffNames).
+fn effect_performed(name: String, performed) = match performed {
+  [] => false,
+  [m, ...rest] => if field_name_eq(eff_name_str(m), name) { true } else { effect_performed(name, rest) },
 }
 
 // Boundary wrap — (Annotation, Capability) inside the speculative

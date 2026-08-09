@@ -35,6 +35,25 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE SEVERANCE LAW WHOLE (pin f544489b21e6 — CLEAN
+  m2 == m3, census 0): the performed-set half lands in the
+  Mentl-native form — the link's row-name union (graph_decls_at →
+  lookup_ty → row_names, deduped by the name handle's i32 identity)
+  computed ONCE and held as mentl_default's handler state (handler =
+  state, the lazy memo: resume-with-state fills it at the first
+  teach_gradient; per-fn asks read O(1)). The negation candidates
+  require membership. MEASURED both directions: uniform `!Network`
+  DIED (declared-but-never-performed — the target the half-law
+  landing named), and `!Alloc` SURVIVES exactly where informative
+  (Alloc is performed across the wheel; severing it on
+  allocation-free fns is the Real-time unlock — march_sort_insert,
+  tail_set_has, the pure algebra leaves). The gradient's first move
+  per fn is now a fact about THIS program, not the catalog's. The
+  general vocabulary (an ANotEffect(name) variant proposing ANY
+  performed name's severance, retiring the fixed ctor pair) stays
+  the peer's named growth. All new fns named recursion — zero
+  lambda convictions this landing.
+
 - 2026-08-08 · ▶▶▶ THE VOCABULARY GATE, HALF THE LAW (pin 367c2d44425c
   — CLEAN m2 == m3, census 0): gradient_next's name-keyed negation
   candidates (ANotIO / ANotNetwork) enter only when

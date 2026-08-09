@@ -253,7 +253,7 @@ type TreeEntry
 // CaretTarget is the input to `focus` — the various ways a surface
 // can name what to attend to. Maps to a Caret by resolving through
 // the graph (span → handle lookup via span_index).
-type CaretTarget = TargetHandle(Int) | TargetSpan(Span) | TargetIdent(String)
+type CaretTarget = TargetHandle(Handle) | TargetSpan(Span) | TargetIdent(String)
 
 // Question (declared in query.mn) is structured: QTypeAt, QWhy,
 // QRefsOf, etc. Answer is the response — always carries the Reason

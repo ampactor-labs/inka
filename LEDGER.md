@@ -35,6 +35,22 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE THIRD DISCHARGE (pin 104f21891c89 unchanged —
+  byte-identical, judgment-only truth): voice:832 clears by refining
+  the ADT PAYLOAD — CaretTarget's TargetHandle(Int) becomes
+  TargetHandle(Handle) at the decl, so the refinement rides every
+  construction site and resolve_cursor_target's arm returns proven.
+  Debt 11 → 10, no relocation. THE BARE 0<=self ONE-ANNOTATION SET IS
+  EXHAUSTED: three discharged (cursor:297 the param, main:999 the
+  mint-site param, voice:832 the ADT payload — three different
+  annotation altitudes, one law each time: put the refinement where
+  the value is BORN or where the obligation MINTS), two banked to
+  their owning arcs (main:1163 the span-index cascade; cursor:544 the
+  self-call IH on rung 3). The remaining debt classes: five
+  span_valid (the structurally-undecidable honest pending), two TagId
+  byte-ranges (lower:2098, infer:7893 — a shape read owed), one DSP
+  sample bound (Phase 8's DSP tier).
+
 - 2026-08-08 · ▶▶▶ THE SECOND DISCHARGE (pin 104f21891c89 — CLEAN
   m2 == m3, census 0): main:999 clears, debt 12 → 11 — and the site
   taught WHERE an annotation works: the producer-side return

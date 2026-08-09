@@ -21,7 +21,13 @@
 # at all. verify's drift-shape ratchet holds the wheel link at ZERO
 # (vtable_record_max, seen RED at -1). The grep dies; the projection +
 # ratchet is the check.
-2	Scheme env frame (scope-as-frame-stack)	\b(parent_env|env_stack|push_frame|pop_frame|env_chain)\b	ka	Env lookup is an effect op — the bare call `env_lookup(name)` — no parent-pointer frame walk.
+# --- Mode 2: RETIRED (2026-08-09) — absorbed into the census + ratchet,
+# the tenth absorption. CsEnvFrame reads the family from the weave (the
+# five frame-stack names declared as an fn, referenced as a value, or
+# bound by a let — the same members this regex policed, now counted
+# through the graph with the audit's per-fn tier convicting in place).
+# verify's drift-shape ratchet holds the wheel link at ZERO
+# (env_frame_max). The grep dies; the projection + ratchet is the check.
 3	Python dict (effect-name-set-as-strings)	perform\s+"[A-Z]	ka	Effect names are EffName ADTs. Raw strings flatten parameterization.	raw
 3	Python dict (string-keyed effect match)	==\s*"(Pure|Alloc|IO|State|Console)"|"(Pure|Alloc|IO|State|Console)"\s*=>	ka	Flat effect-name COMPARES and match arms are the old string-keyed shape. The bare literal inside `intern_str("IO")` is the NEW shape — the canonical name entering the intern once — so the row anchors on the compare/arm adjacency, never mere presence.	raw
 4	Haskell monad transformer (nested handle chain)	handle\s*\(\s*handle\s*\(\s*handle	ka	Compose with ~> chains, not stacked handle(handle(handle(...))).

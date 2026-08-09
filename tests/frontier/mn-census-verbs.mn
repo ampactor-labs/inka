@@ -35,3 +35,4 @@ fn fi_site(mode) = mode == 2 // drift-audit: ignore — the census gate's own de
 fn pa_site(pair) = { let (a_h, b_h) = pair; a_h + b_h } // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts
 fn vt_site() = ({fn_go: (x) => x + 1, tag: 0}) // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts
 fn pp_site(locals, locals_h) = locals + locals_h // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts
+fn push_frame(x) = x // drift-audit: ignore — the census gate's own deliberate specimen of the shape it counts (mode 2's env-frame family)

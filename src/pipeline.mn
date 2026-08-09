@@ -1314,6 +1314,8 @@ fn census_shape_of(arg) with Memory + Alloc = if arg == "anonymous" {
   Some(CsParallelArrays)
 } else if arg == "vtable-record" {
   Some(CsVtableRecord)
+} else if arg == "env-frame" {
+  Some(CsEnvFrame)
 } else {
   match find(
     (k) => show_pipe_kind(k) == arg,

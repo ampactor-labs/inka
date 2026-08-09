@@ -693,6 +693,13 @@ parallel_arrays_max: 0
 # eighth application).
 vtable_record_max: 0
 
+# 2026-08-09: mode 2 (env-frame) absorbed as CsEnvFrame — the tenth
+# shape. The five frame-stack family names (parent_env/env_stack/
+# push_frame/pop_frame/env_chain) declared, called, or bound, read from
+# the weave. Born at ZERO on the wheel link (text preview + first
+# census run both 0); env lookup is an effect op, never a parent walk.
+env_frame_max: 0
+
 # The battery's expectations live ON the micros themselves (`// expect: N`,
 # each file's first line) — verify.sh and march-gate --micros both read that
 # header; no registry here (a `micro:NAME=EXIT` list once documented below

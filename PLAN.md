@@ -1987,9 +1987,13 @@ new DEP found; the map below is accurate at that pin.)*
   regex saw four literals — mode 7 fully absorbed), and its dig made
   the audit's per-fn walk UNIFORM: the walk starts at the fn node
   itself, so a shape living on the FnStmt (not in its body subtree)
-  convicts — the body-only carve-out deleted. The remaining bash rows
-  are naming/prose modes (the raw channel's own domain) plus mode 2,
-  absorbed as their shapes prove out. Its unsayability face
+  convicts — the body-only carve-out deleted. Mode 2 followed the same
+  day as CsEnvFrame (the frame-stack family declared/referenced/bound,
+  the tenth shape, born at zero) — THE STRUCTURAL CATALOG IS FULLY
+  ABSORBED: every remaining drift-patterns row is naming/prose
+  (foreign keywords, comment decoration, prose vocabulary), the raw
+  text channel's own domain, which the weave census does not read by
+  design. Its unsayability face
   matures through Phase 8's diagnostics; its arrival is when a wrong move
   in the wheel's own source is a REFUSAL, not a review finding.
 

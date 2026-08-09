@@ -35,7 +35,22 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
-- 2026-08-09 · ▶▶▶ MODE 7 FULLY ABSORBED — THE PARAM FACE + THE UNIFORM
+- 2026-08-09 · ▶▶▶ MODE 2 ABSORBED — THE STRUCTURAL CATALOG COMPLETE
+  (pin 07e6a8a25758 — CLEAN m2 == m3, census 0): CsEnvFrame joins as
+  the TENTH census shape — the scope-as-frame-stack family (parent_env
+  / env_stack / push_frame / pop_frame / env_chain) declared as an fn,
+  referenced as a value, or let-bound, the same members the bash regex
+  policed, now counted from the weave (roster ten, audit tier 9 → 10,
+  fixture push_frame at line 38, all seen RED against the prior boot).
+  Born at ZERO on the wheel link and ratcheted there (env_frame_max);
+  the mode-2 bash row dies. With it the drift catalog's STRUCTURAL
+  modes are fully absorbed into the medium — every remaining
+  drift-patterns row is naming/prose (foreign keywords, comment
+  decoration, prose vocabulary), the raw text channel's own domain,
+  which the weave census does not read by design. The uniform per-fn
+  walk (the mode-7 landing's find) carried this one with zero new
+  walker code: one roster entry, one label, one detector arm, one
+  family fn.
   WALK (pin 8683232e5ae1 — CLEAN m2 == m3, census 0): CsParallelArrays
   grows its second face — an FnStmt whose parameter list carries any
   adjacent `x, x_h` pair (adjacent_handle_params, a rest-slice pairwise

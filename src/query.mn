@@ -43,6 +43,7 @@ type CensusShape
   | CsFlagAsInt
   | CsParallelArrays
   | CsVtableRecord
+  | CsEnvFrame
 
 // Sum type covering every forensic question `mentl query` can pose.
 // Each variant corresponds to one `ask(Q)` arm in `query_default`.
@@ -433,6 +434,7 @@ fn census_label(shape) with Pure = match shape {
   CsUnderscoreRetain => "underscore-retain let(s)",
   CsFlagAsInt => "flag-as-int compare(s)",
   CsParallelArrays => "parallel-arrays site(s)",
+  CsEnvFrame => "env-frame site(s)",
   CsVtableRecord => "vtable-record literal(s)",
 }
 
@@ -610,7 +612,28 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
     NExpr(NamedRecordExpr(_, flds)) => any_vtable_field(flds, 0, len(flds)),
     _ => false,
   },
+  CsEnvFrame => // Drift mode 2's shape (the tenth absorption): the
+  // scope-as-frame-stack family — parent_env / env_stack / push_frame /
+  // pop_frame / env_chain — declared, called, or bound. Env lookup is
+  // an effect op (the bare `env_lookup(name)` call); a parent-pointer
+  // frame walk re-derives what the env edge already connects. The name
+  // key is the mode's own anchor, exactly as CsFlagAsInt and
+  // CsPrintInReport key on their families.
+  match body {
+    NStmt(FnStmt(name, _, _, _, _)) => env_frame_name(name),
+    NExpr(VarRef(name)) => env_frame_name(name),
+    NStmt(LetStmt(p, _, _)) => match p {
+      PVar(name) => env_frame_name(name),
+      _ => false,
+    },
+    _ => false,
+  },
 }
+
+// Mode 2's family membership — the five frame-stack names the bash
+// regex policed, now read from the weave.
+fn env_frame_name(name) with Pure =
+  name == "parent_env" || name == "env_stack" || name == "push_frame" || name == "pop_frame" || name == "env_chain"
 
 fn any_vtable_field(flds, i, n) with GraphRead + !Mutate + Alloc + Memory = if i >= n {
   false
@@ -695,7 +718,7 @@ fn subtree_prints_children(hs, fuel) with GraphRead + !Mutate + Alloc + Memory =
 // count-tuple this replaced was the per-site family at seven arms —
 // the uniform pass, applied to the tier's own construction).
 fn drift_roster() with Memory + Alloc =
-  [CsWildcardZero, CsFailureMask, CsPrintInReport, CsWildcardFabricates, CsUnderscoreRetain, CsFlagAsInt, CsParallelArrays, CsVtableRecord]
+  [CsWildcardZero, CsFailureMask, CsPrintInReport, CsWildcardFabricates, CsUnderscoreRetain, CsFlagAsInt, CsParallelArrays, CsVtableRecord, CsEnvFrame]
 
 fn drift_shapes_of(fn_handle) with GraphRead + !Mutate + Alloc + Memory = {
   // The walk starts at the FN NODE, not its body: a shape can live ON

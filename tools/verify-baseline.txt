@@ -543,7 +543,12 @@ comment_refs_max: 0
 # (two builds proved the divergence relocates rather than resolves;
 # it dies with the one-pass judge). Zero trial/final machinery in
 # the diff; the next legal move stays DOWN.
-movers_max: 481
+# Re-based 481 → 482 (2026-08-08, the unused-param-width landing): the
+# honest +EnvRead widening on spec_wide_twin_names' declared row (the
+# emit's env-bucket param read) relocated one divergence — the same
+# condemned-pass artifact class as the 481 re-base above; no
+# trial/final machinery in the diff. The next legal move stays DOWN.
+movers_max: 482
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

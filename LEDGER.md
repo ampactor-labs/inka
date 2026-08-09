@@ -35,6 +35,29 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE UNUSED PARAM SIGNS AT ITS WIDTH (pin cfa58fdd5479
+  — CLEAN m2 == m3, census 0, wall 19.22s): the
+  unused-wide-param miscompile healed for the proven class. When the
+  body-usage scan misses, param_repr_of now reads the fn's own type
+  product through the ENV BUCKET (O(1) — Forall's body, one TVar hop
+  via resolved_fn_ty, the TParam matched by field_name_eq) instead of
+  fabricating the i32 floor; wildcard params short-circuit (they bind
+  nothing — the floor is their truth). The probed pair runs to 11
+  through the frontier's compile-assemble-run harness. THE DIG'S OWN
+  MEASUREMENTS: (1) the first form walked emitfns_col + decls_col per
+  miss and cost 106s of m3 leg (snoc-list indexing is O(i) — the scan
+  quadratic); env-first halved it, and narrowing the synthesized
+  family back to its floor restored 19s — that family's call protocol
+  is the indirect/wrapper machinery, never probed incoherent, and its
+  column read returns as an smap when the O(1) form lands (the peer's
+  residue). (2) The census gate refused mid-arc (the env read widened
+  spec_wide_twin_names' declared row — +EnvRead, the honest widening).
+  (3) The run-verb leg taught the harness law: a gate leg cannot
+  `wt_run <compiler> run FILE` (WASI has no exec) — run_program's
+  compile-assemble-run harness is the one road. Peer:
+  Hβ.emit.unused-wide-param-floor RESOLVED for decls, the synthesized
+  family's floor named inside it.
+
 - 2026-08-08 · ▶▶▶ THE DCC GATE'S FIRST FACE (pin a025c3523a84 — CLEAN
   m2 == m3, census 0): Phase 7's chain head opens by catching a LIVE
   silent regression on its first probe. The splice IFC check

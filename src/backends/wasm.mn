@@ -688,7 +688,7 @@ fn spec_rec_names(spec_recs) -> [String] with Memory + Alloc = map(
   spec_recs
 )
 
-fn spec_wide_twin_names(spec_recs) -> [String] with LookupTy + GraphRead + Memory + Alloc = fold(
+fn spec_wide_twin_names(spec_recs) -> [String] with LookupTy + GraphRead + EnvRead + Memory + Alloc = fold(
   [],
   (acc, rp) => match rp {
     (rec2, pairs, enc) => {
@@ -2552,10 +2552,10 @@ fn emit_functions(fn_records) = each(
 // as itself — every call_indirect speaks the word-arity face. Its $wf$
 // twin derefs each wide argument's reference, direct-calls the native body
 // (full native speed inside), and spills a wide result back to a cell. The
-// record's own projections (param_repr_from_body / body_result_repr) are
+// record's own projections (param_repr_of / body_result_repr) are
 // the SAME reads emit_fn_body's signature makes — one truth, two readers.
 fn fn_record_is_wide(r) = match r {
-  (name, param_names, body, _) => repr_is_wide(body_result_repr(body)) || any((p) => repr_is_wide(param_repr_from_body(p, body)), param_names),
+  (name, param_names, body, _) => repr_is_wide(body_result_repr(body)) || any((p) => repr_is_wide(param_repr_of(name, p, body)), param_names),
 }
 
 fn emit_wide_wrappers(fn_records) = each(
@@ -2595,7 +2595,7 @@ fn emit_wide_wrapper(record) = match record {
           wat_emit("    (local.get $wp")
           wat_emit(int_to_str(i))
           wat_emit(")\n")
-          emit_wide_deref(param_repr_from_body(p, body))
+          emit_wide_deref(param_repr_of(name, p, body))
         },
       },
       enumerate(param_names)
@@ -2752,7 +2752,7 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   wat_emit("  (func $")
   wat_emit(name)
   wat_emit(" (param $__state i32)")
-  emit_params(param_names, body)
+  emit_params(name, param_names, body)
   // The result WIDTH is the body's tail-expression repr (read live), the
   // value the fn actually returns — i32 byte-identical for the floor (Law 7),
   // f64 when the body computes a float. The result is part of the function's
@@ -2770,7 +2770,7 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   wat_emit(" (local $callee_closure i32)")
   wat_emit(" (local $alloc_size i32)")
   wat_emit(" (local $loop_i i32)")
-  emit_named_locals(walk_locals_list(body, []), param_local_entries(param_names, body, []))
+  emit_named_locals(walk_locals_list(body, []), param_local_entries(name, param_names, body, []))
   wat_emit("\n")
   emit_body(body)
   wat_emit("  )\n")
@@ -3006,13 +3006,14 @@ fn emit_named_locals(entries, seen: [String]) = if len(entries) == 0 {
 // The fn's param entries in the same "name width" spelling the walk
 // collects — the seed set for emit_named_locals, widths read from the
 // same live projection emit_params renders.
-fn param_local_entries(names, body, acc) = if len(names) == 0 {
+fn param_local_entries(fn_name: String, names, body, acc) = if len(names) == 0 {
   acc
 } else {
   param_local_entries(
+    fn_name,
     drop_last(names),
     body,
-    [last(names) ++ " " ++ repr_wat(param_repr_from_body(last(names), body))] ++ acc
+    [last(names) ++ " " ++ repr_wat(param_repr_of(fn_name, last(names), body))] ++ acc
   )
 }
 
@@ -3222,10 +3223,11 @@ fn tail_expr_repr(expr) = match expr {
 // A parameter's WAT width is the repr of its PROVEN type — read live from a
 // body use-site `LLocal(h, name)`, the same edge the graph already drew when
 // it typed the reference. No LowFn shape change: the param's type is recovered
-// from the graph through its use, never re-derived from arity. A param with no
-// body use-site (genuinely unread) projects RI32 — the word floor, correct for
-// an unconstrained slot. For an all-i32 fn this is byte-identical (Law 7).
-fn emit_params(names, body) = each(
+// from the graph through its use, or — when the body never reads it — through
+// the fn's OWN TYPE PRODUCT via the columns (an unread param is NOT an
+// unconstrained slot: the unused-f64 probe pair proved an i32-floor signature
+// under an f64-pushing caller is invalid WAT). All-i32 fns stay byte-identical.
+fn emit_params(fn_name: String, names, body) = each(
   (indexed) => match indexed {
     (i, name) => {
       // `_` is not a name — it is the absence of one. A wildcard param binds
@@ -3239,7 +3241,7 @@ fn emit_params(names, body) = each(
       // the interned literal never match), so the rename would silently never
       // fire and the collision would stand.
       let wat_name = if field_name_eq(name, "_") { "_{int_to_str(i)}" } else { name }
-      let r = param_repr_from_body(name, body)
+      let r = param_repr_of(fn_name, name, body)
       wat_emit(" (param $")
       wat_emit(local_wat_name(wat_name, r))
       wat_emit(" ")
@@ -3250,11 +3252,62 @@ fn emit_params(names, body) = each(
   enumerate(names)
 )
 
-// Find the repr of `name` by locating its first `LLocal(h, name)` read in the
-// body and projecting repr_of(lookup_ty(h)). The floor RI32 when unread.
-fn param_repr_from_body(name, body) = {
+// The repr of param `name`: the body's first `LLocal(h, name)` read when the
+// body uses it, else the fn's OWN TYPE PRODUCT through the graph columns —
+// an UNUSED wide param must still sign at its real width (the unused-f64
+// probe pair: an i32-floor signature under an f64-pushing caller is invalid
+// WAT). The columns are the road back: emitfns_col carries the synthesized
+// family's origin; decls_col the judged FnStmt handles. A fn in neither
+// column (a machine-made helper with no graph origin) floors honestly —
+// its params never carried a judged type to begin with.
+fn param_repr_of(fn_name: String, name, body) = {
   let h = find_local_handle_list(name, body)
-  if h == 0 { RI32 } else { repr_of(lookup_ty(h)) }
+  if h == 0 {
+    // A wildcard param IS unconstrained (it binds nothing, no reader can
+    // exist) — the floor is its truth, and skipping the column walk for
+    // the `_` legion is what keeps the emit's wall flat (measured: the
+    // un-skipped walk cost 91s of m3 leg on the wheel's lambda wildcards).
+    if field_name_eq(name, "_") { RI32 } else { param_ty_repr(fn_name, name) }
+  } else {
+    repr_of(lookup_ty(h))
+  }
+}
+
+fn param_ty_repr(fn_name: String, name: String) = match env_lookup(fn_name) {
+  Some(entry) => match entry {
+    (scheme, _, _) => match scheme {
+      Forall(_, ty) => match resolved_fn_ty(ty) {
+        TFun(tparams, _, _) => tparam_repr_by_name(tparams, name),
+        _ => RI32,
+      },
+    },
+  },
+  None => // Not env-registered — the synthesized family (lambda_N, thunks,
+  // arms). Its unused params keep the word floor they always had: the
+  // family's call protocol is the indirect/wrapper machinery, and no
+  // probe has shown the floor incoherent there. The column walk that
+  // WOULD answer it (emitfns_col's origin) measured 3x the whole m3
+  // leg on snoc-list indexing — the O(1) form is the column as an smap,
+  // named in Hβ.emit.unused-wide-param-floor's residue. The PROVEN
+  // class (decl fns, direct calls) is healed by the env bucket above.
+  RI32,
+}
+
+fn tparam_repr_by_name(tparams, name: String) = match find((tp) => field_name_eq(param_name(tp), name), tparams) {
+  Some(tp) => repr_of_resolved(param_ty(tp)),
+  None => RI32,
+}
+
+// A scheme's body straight, or chased one TVar hop to its bound TFun —
+// the emitter's own minimal read (query's deep chase is the forensic
+// layer's; the scheme body of a generalized decl is structural, and one
+// hop covers the var-bodied residue).
+fn resolved_fn_ty(ty) = match ty {
+  TVar(h) => match graph_chase(h) {
+    GNode(NBound(inner), _) => inner,
+    _ => ty,
+  },
+  _ => ty,
 }
 
 fn find_local_handle_list(name, stmts) = if len(stmts) == 0 {

@@ -2488,6 +2488,13 @@ for i in "${!compilers[@]}"; do
     fail "dcc gate (leak rejections: $ifc_leak, want >=1; sound rejections: $ifc_sound, want 0)"
   fi
 
+  # ─── The unused-wide-param gate (Hβ.emit.unused-wide-param-floor): an
+  # unused f64 param signs at its real width. Born RED 2026-08-08: the
+  # body-usage scan floored the signature to i32 while the caller pushed
+  # f64 — invalid WAT, refused at assemble. The pair (unused + used)
+  # runs to exit 11 through the compile-assemble-run harness.
+  run_program "$compiler" unused-wide-param "$ROOT/tests/frontier/mn-unused-wide-param.mn" 11 no "$dir"
+
   # ─── !Thread transitivity on the REAL vocabulary (§11 6.5's first
   # verdict): a fn declared !Thread reaching lib/threading's spawn
   # through a call refuses transitively — the crown's own machinery

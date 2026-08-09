@@ -1,0 +1,10 @@
+// The unused-wide-param gate (Hβ.emit.unused-wide-param-floor): a fn
+// whose wide-typed param is UNUSED must still sign at its real width —
+// the body-usage scan once floored it to i32 while the caller pushed
+// f64, and the module refused at assemble. The pair: s unused (the
+// probed trap) and s used (the always-worked control); both must run.
+// Expect exit 11 (10 + 1).
+type Gain = Float where 0.0 <= self
+fn accept_g(s: Gain) = 1
+fn accept_u(s: Gain) = if s <= 1.0 { 1 } else { 0 }
+fn main() = accept_g(0.5) * 10 + accept_u(0.5)

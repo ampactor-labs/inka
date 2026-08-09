@@ -47,6 +47,18 @@ verify-reads-canon proposal it DEP-feeds, since a judged predicate
 node is exactly what canon saturation needs. The probe's side-find is
 its own entry: `Hβ.emit.unused-wide-param-floor`.
 
+`Hβ.emit.unused-wide-param-floor` — RESOLVED FOR THE PROVEN CLASS
+2026-08-08 (pin cfa58fdd5479, same day as pinned): decl fns read their
+param widths from the env bucket (O(1)) when the body scan misses;
+wildcards short-circuit; the probed pair runs to 11 under the
+frontier's harness. THE NAMED REMAINDER inside this entry: the
+synthesized family (lambda_N/thunks/arms) keeps its historical floor —
+its call protocol is the indirect/wrapper machinery, never probed
+incoherent — because the column walk that would answer it measured
+106s of m3 leg (snoc-list indexing; the scan quadratic); the O(1) form
+is emitfns_col re-keyed as an smap by name, landing with the columns
+arc. The entry below is the original pin, kept as the dig's record.
+
 `Hβ.emit.unused-wide-param-floor` — TRAP PINNED 2026-08-08 (found by
 Phase 8.1's opening probe, en route to the predicate trace): a fn whose
 WIDE-typed parameter is UNUSED in its body emits an i32-floor

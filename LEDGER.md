@@ -35,6 +35,22 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE DEBT SPEAKS ITS SITES (pin a90453e3e444 — CLEAN
+  m2 == m3, census 0; the first cut's own ratchets bit once more — the
+  reflexive `ref` dropped, the render lambda named render_debt_line —
+  and the re-march superseded a187ffeb1b83): QRVerifyDebt's render grows the
+  site list — one line per pending obligation, the predicate the graph
+  holds at the developer's coordinates through the module seams (the
+  refs facet's own lesson: render WHAT was computed, not how much).
+  The wheel link's 13 obligations enumerate for the first time at the
+  CLI: five span_valid (the structurally-undecidable class), six
+  0 <= self (main:1163, main:999, cursor:297, cursor:544, voice:832 —
+  PLAN 8.2's named discharge set, now addressable), two byte-range
+  conjunctions (lower:2098, infer:7893), one DSP sample bound
+  (dsp/feedback:143). Gate: mn-debt-facet (the chained-comparison
+  pending renders located) in the frontier. Phase 8.2's discharge
+  work opens with its instrument in hand.
+
 - 2026-08-08 · ▶▶▶ THE UNUSED PARAM SIGNS AT ITS WIDTH (pin cfa58fdd5479
   — CLEAN m2 == m3, census 0, wall 19.22s): the
   unused-wide-param miscompile healed for the proven class. When the

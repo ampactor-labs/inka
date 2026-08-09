@@ -1122,6 +1122,17 @@ fn render_ref_spans(ref spans) with GraphRead + Memory + Alloc = {
   spans |> map((s) => "\n  at {span_render_local(seams, s)}") |> str_concat_all
 }
 
+// One line per undischarged obligation: the predicate the graph holds,
+// at the developer's own coordinates — the debt facet's site list.
+fn render_debt_lines(obligations) with GraphRead + Memory + Alloc = {
+  let seams = module_seams()
+  obligations |> map((ob) => render_debt_line(seams, ob)) |> str_concat_all
+}
+
+fn render_debt_line(seams, ob) = match ob {
+  (s, pred, _) => "\n  {show_predicate(pred)} at {span_render_local(seams, s)}",
+}
+
 fn render_query_result(result) = match result {
   QRType(ty, reason) => "→ {show_type(ty)}\n  Reason: {show_reason(reason)}",
   QRIntent(effs) => {
@@ -1149,7 +1160,10 @@ fn render_query_result(result) = match result {
   // away). Every "who calls X" grep this replaces was a re-derivation of
   // edges the weave holds.
   "→ {int_to_str(len(spans))} reference(s){render_ref_spans(spans)}",
-  QRVerifyDebt(obligations) => "→ {int_to_str(len(obligations))} verification obligations pending",
+  QRVerifyDebt(obligations) => // The debt renders WHAT is owed, not just how much (the refs facet's
+  // own lesson): each obligation located with its predicate, so the
+  // discharge work has an instrument instead of a count.
+  "→ {int_to_str(len(obligations))} verification obligations pending{render_debt_lines(obligations)}",
   QRHandlerProvider(provider) => match provider {
     Some(name) => "→ handled by {name}",
     None => "→ no handler installed",

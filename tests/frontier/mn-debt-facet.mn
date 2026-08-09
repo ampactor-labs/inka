@@ -1,0 +1,7 @@
+// The debt facet's gate (the verification query renders WHAT is owed):
+// the chained comparison degrades to an opaque pending (SYNTAX's own
+// documented shape), and the query lists it LOCATED with its predicate
+// — a count alone is not an instrument.
+type Chained = Float where -1.0 <= self <= 1.0
+fn accept_ch(s: Chained) = 1
+fn main() = accept_ch(0.5)

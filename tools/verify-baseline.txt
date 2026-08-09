@@ -591,8 +591,12 @@ solo_violations_max: 0
 # authored or renamed, the census reading the graph, not the text.
 # Lowered 383 → 381 at the worthiness prune (pin 2d3b3ca384a9): the
 # deleted family carried two convicted lambdas.
+# Re-based 381 → 382 at the debt facet (pin a90453e3e444): the site-list
+# map lambda over the hoisted seams — the byte-identical shape of its
+# sibling render_ref_spans in the baseline above it; the pair retires
+# together when the seam-threading render gains its named stage.
 eta_max: 29
-effectful_lambda_max: 381
+effectful_lambda_max: 382
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own

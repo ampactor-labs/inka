@@ -2495,6 +2495,17 @@ for i in "${!compilers[@]}"; do
   # runs to exit 11 through the compile-assemble-run harness.
   run_program "$compiler" unused-wide-param "$ROOT/tests/frontier/mn-unused-wide-param.mn" 11 no "$dir"
 
+  # ─── The debt facet (Phase 8.2's instrument): the verification query
+  # renders each pending obligation LOCATED with its predicate — a count
+  # alone is not an instrument. Born with the facet 2026-08-08 (the
+  # pre-facet render was the bare count line).
+  dbt=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-debt-facet.mn" "verification" 2>/dev/null)
+  if printf '%s' "$dbt" | grep -q "obligations pending" && printf '%s' "$dbt" | grep -q "mn-debt-facet:"; then
+    pass "debt facet: pending obligations render located with their predicates"
+  else
+    fail "debt facet (got: $(printf '%s' "$dbt" | head -2 | tr '\n' ' '))"
+  fi
+
   # ─── !Thread transitivity on the REAL vocabulary (§11 6.5's first
   # verdict): a fn declared !Thread reaching lib/threading's spawn
   # through a call refuses transitively — the crown's own machinery

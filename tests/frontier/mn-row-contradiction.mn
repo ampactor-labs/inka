@@ -1,0 +1,12 @@
+// The decl-site row contradiction (band L's
+// Hβ.diag.declared-row-contradiction): `with E + !E` asserts one name
+// present AND absent — unsatisfiable as written, and the pre-diagnostic
+// meet resolved it by silently dropping the negation (the performing
+// body checked CLEAN under a declared !E). Both decls refuse at the
+// clause, pure body and performing body alike.
+effect E {
+  op() -> Int
+}
+fn contradicts() with E + !E = 1
+fn quiet_contradicts() with E + !E = op()
+fn main() = 0

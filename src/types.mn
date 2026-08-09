@@ -1987,6 +1987,11 @@ type DiagKind
   | ERestOutsideDestructure(Span)
   // a row alias referencing itself through its own expansion (name)
   | ERowAliasCycle(String, Span)
+  // `with A + !A` — the same name asserted present AND absent in one
+  // authored clause: an unsatisfiable row the fold must never resolve
+  // by silently dropping a side (the pre-diagnostic meet licensed a
+  // perform under a declared negation, measured 2026-08-08).
+  | EDeclaredRowContradiction(String, Span)
   // `!Alias` where the alias's row is not positive-closed (name)
   | ERowAliasNegation(String, Span)
   // field, type_name
@@ -2185,6 +2190,7 @@ fn diag_span(d) with Pure = match d {
   EFeedbackNoContext(s) => s,
   ERestOutsideDestructure(s) => s,
   ERowAliasCycle(_, s) => s,
+  EDeclaredRowContradiction(_, s) => s,
   ERowAliasNegation(_, s) => s,
   ERecordFieldExtra(_, _, s) => s,
   ERecordFieldMissing(_, _, s) => s,
@@ -2245,6 +2251,7 @@ fn diag_source(d) with Pure = match d {
   EFeedbackNoContext(_) => "infer",
   ERestOutsideDestructure(_) => "infer",
   ERowAliasCycle(_, _) => "effects",
+  EDeclaredRowContradiction(_, _) => "effects",
   ERowAliasNegation(_, _) => "effects",
   ERecordFieldExtra(_, _, _) => "infer",
   ERecordFieldMissing(_, _, _) => "infer",
@@ -2305,6 +2312,7 @@ fn diag_code(d) with Pure = match d {
   EFeedbackNoContext(_) => "E_FeedbackNoContext",
   ERestOutsideDestructure(_) => "E_RestOutsideDestructure",
   ERowAliasCycle(_, _) => "E_RowAliasCycle",
+  EDeclaredRowContradiction(_, _) => "E_DeclaredRowContradiction",
   ERowAliasNegation(_, _) => "E_RowAliasNegation",
   ERecordFieldExtra(_, _, _) => "E_RecordFieldExtra",
   ERecordFieldMissing(_, _, _) => "E_RecordFieldMissing",
@@ -2520,6 +2528,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EFeedbackNoContext(_) => "`<~` used outside an iterative context",
   ERestOutsideDestructure(_) => "`...` rest element outside a destructuring parameter — rest lives in patterns (`([h, ...t]) =>`, `let [h, ...t] =`), and `++` joins lists in expressions",
   ERowAliasCycle(nm, _) => "row alias `{nm}` expands through itself — a row is a finite signed set; name the effects directly",
+  EDeclaredRowContradiction(nm, _) => "the clause asserts `{nm}` AND `!{nm}` — one row cannot both permit and forbid a name; drop one side",
   ERowAliasNegation(nm, _) => "`!{nm}` negates a row alias whose row is not positive-closed — the shorthand is sound only over plain unions; name the forbidden effects directly",
   ERecordFieldExtra(field, tn, _) => // drift-audit: ignore — diagnostic message string, not a control keyword
   "record literal has unknown field '{field}' for type {tn}",

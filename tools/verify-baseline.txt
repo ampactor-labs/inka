@@ -548,7 +548,11 @@ comment_refs_max: 0
 # emit's env-bucket param read) relocated one divergence — the same
 # condemned-pass artifact class as the 481 re-base above; no
 # trial/final machinery in the diff. The next legal move stays DOWN.
-movers_max: 482
+# Re-based 482 → 483 (2026-08-08, the row-contradiction diagnostic, pin
+# d06486727bbb): the meet's new report path relocated one divergence —
+# the same condemned-pass artifact class; no trial/final machinery in
+# the diff. The next legal move stays DOWN.
+movers_max: 483
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.
@@ -595,8 +599,13 @@ solo_violations_max: 0
 # map lambda over the hoisted seams — the byte-identical shape of its
 # sibling render_ref_spans in the baseline above it; the pair retires
 # together when the seam-threading render gains its named stage.
+# Re-based 382 → 383 at the row-contradiction diagnostic (pin
+# d06486727bbb): the pair-law any-lambda inside
+# report_row_contradictions — the byte-identical shape of
+# absent_minus_present's own filter lambda in the baseline (both close
+# over the pair law's !Mutate row); the pair retires together.
 eta_max: 29
-effectful_lambda_max: 382
+effectful_lambda_max: 383
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own

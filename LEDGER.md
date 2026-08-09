@@ -35,6 +35,30 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE CONTRADICTION REFUSES AT THE DECL (pin d06486727bbb
+  — CLEAN m2 == m3, census 0; the first cut's each-lambda convicted at
+  the anonymity tier and rewrote as named recursion, superseding the
+  same-arc 0544ec77b558):
+  Hβ.diag.declared-row-contradiction (band L, named 2026-07-05) lands,
+  and the opening probe SHARPENED the peer's own claim: PLAN's text
+  said the contradiction "surfaces only downstream when the body
+  performs the dropped effect (the subsumption gate, loud)" — the
+  probe measured the performing body checking CLEAN, because the
+  fold's meet (effects.mn's "authored meet", its own comment blessing
+  the drop) resolved `with E + !E` by discarding the negation and the
+  kept E then LICENSED the perform. A declared negation silently
+  ignored is a false-absence surface — worse than a missing teaching.
+  The fix: report_row_contradictions runs the same pair law the
+  subtraction filters by (instance-aware — a bare-present beside an
+  instance-absent stays a refinement, unreported) and reports
+  E_DeclaredRowContradiction per contradicted name BEFORE the drop,
+  at the decl (span_zero, the ERowAliasCycle precedent; the located
+  span is the standing refinement). The march's census gate measured
+  the WHEEL contradiction-free — the class is born at zero. Gate:
+  mn-row-contradiction (both decls refuse, pure and performing
+  bodies), born RED against the pre-fix pin. Cost: 17.05s wall,
+  2339MB peak.
+
 - 2026-08-08 · ▶▶▶ THE DEBT TAXONOMY COMPLETES (pin 104f21891c89
   unchanged; the TagId probe reverted byte-identical): the ten
   remaining pendings are now EACH classified with an owning arc, and

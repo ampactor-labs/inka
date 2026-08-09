@@ -98,6 +98,22 @@ fn tail_set_diff(ref vs: [Int], ref ws: [Int]) with Memory + Alloc = match vs {
 fn absent_minus_present(ref a, ref p) with !Mutate =
   filter((entry) => !any((pe) => absent_contradicted_by(entry, pe), p), a)
 
+// The meet's teaching half: each absent entry a present entry contradicts
+// is REPORTED at the decl (the same pair law the subtraction filters by),
+// so the fold never resolves an authored contradiction silently. Named
+// recursion, not an each-lambda — the report row wants its decl home.
+fn report_row_contradictions(absent, present) = match absent {
+  [] => (),
+  [entry, ...rest] => {
+    if any((pe) => absent_contradicted_by(entry, pe), present) {
+      report(EDeclaredRowContradiction(eff_name_str(entry), span_zero()))
+    } else {
+      ()
+    }
+    report_row_contradictions(rest, present)
+  },
+}
+
 // The SUBTRACTION's pair law — when does a present entry contradict an
 // absent one (dropping it from the declared meet)? Distinct from
 // eff_forbids: a BARE present beside an INSTANCE absent is a REFINEMENT
@@ -211,7 +227,15 @@ fn build_row_seen(effs, seen) = match fold(
       EfRow(pp, pa, pt) => if len(pp) == 0 {
         mk_ef_neg(sort_unique(neg_names))
       } else {
-        ef_make(pp, absent_minus_present(name_set_union(pa, sort_unique(neg_names)), pp), pt)
+        let full_absent = name_set_union(pa, sort_unique(neg_names))
+        // The pair law REPORTS before it drops (E_DeclaredRowContradiction,
+        // band L's decl-site teaching): the pre-diagnostic meet resolved
+        // `with A + !A` by silently discarding the negation, and the body's
+        // perform of A then checked CLEAN under a clause that declared !A —
+        // a false-absence surface measured 2026-08-08. One row cannot both
+        // permit and forbid a name; the developer drops a side, never the fold.
+        report_row_contradictions(full_absent, pp)
+        ef_make(pp, absent_minus_present(full_absent, pp), pt)
       },
     }
   },

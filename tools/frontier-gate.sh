@@ -2495,6 +2495,19 @@ for i in "${!compilers[@]}"; do
   # runs to exit 11 through the compile-assemble-run harness.
   run_program "$compiler" unused-wide-param "$ROOT/tests/frontier/mn-unused-wide-param.mn" 11 no "$dir"
 
+  # ─── The row contradiction refuses at the decl (band L's
+  # Hβ.diag.declared-row-contradiction): `with E + !E` reports
+  # E_DeclaredRowContradiction for BOTH decls — pure body and performing
+  # body — where the pre-diagnostic meet silently dropped the negation
+  # and licensed the perform (born RED 2026-08-08: the performing body
+  # checked CLEAN on the pre-fix pin).
+  rc_n=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-row-contradiction.mn" 2>&1 >/dev/null | grep -c "E_DeclaredRowContradiction" || true)
+  if [ "$rc_n" -ge 2 ]; then
+    pass "row contradiction: both decls refuse at the clause ($rc_n reports)"
+  else
+    fail "row contradiction (reports: $rc_n, want >=2)"
+  fi
+
   # ─── The debt facet (Phase 8.2's instrument): the verification query
   # renders each pending obligation LOCATED with its predicate — a count
   # alone is not an instrument. Born with the facet 2026-08-08 (the

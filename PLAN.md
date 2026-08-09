@@ -994,7 +994,7 @@ spawn substrate, `LEDGER.md`; real host threads over the shared image) · `Hβ.d
 
 **K · AI-proposer / Synth (arm 2, §0/§1).** `Hβ.proposer.constraint-not-token-worked-example` (Lahiri 2026 — answer the spec-oracle problem with a worked example, not a claim) · `.synth-handler-error-fed-back` (the lossless constraint, not the lossy token).
 
-**L · The Why-engine & `mentl audit` (arm 8/1, §0 — the medium enforcing its own discipline).** `Hβ.audit.carried-truth-projection` *(new — the §0 keystone: project a Carried-Truth violation BEFORE a line is written, making the wrong move unsayable)* · `Hβ.diag.minimal-inconsistent-core` (= `.why.minimal-cause-set`) · `Hβ.infer.marked-lambda-totality-invariant` (POPL 2024) · `Hβ.diag.catalog-as-projection` (report takes a DiagKind ADT) · `Hβ.diag.duplicate-type-name` *(new — two `type X` decls in one namespace shadow silently today (the Handle collision, 2026-07-05); the decl site deserves the refusal, per the E_ImportNameCollision precedent)* · `Hβ.diag.declared-row-contradiction` *(new — `with IO + !IO` today surfaces only downstream when the body performs the dropped effect (the subsumption gate, loud); the ultimate teaching surface is a decl-site diagnostic at the signed-set build, MachineApplicable. Named 2026-07-05 so the gate doesn't silently stand in for it)* · `Hβ.query.graph-projection-surface` *(new)* · `Hβ.emit.trap-as-exception-postmortem` *(new 2026-07-05 — wasm exception-handling (exnref, standardized) lets a BUG-trap unwind with a payload instead of `unreachable`+stderr: the payload is the graph state at death, projected — the coredump autopsy face 7 needed, as a structured projection instead of a heap read; zero steady-state cost, diagnostics-tier only)*.
+**L · The Why-engine & `mentl audit` (arm 8/1, §0 — the medium enforcing its own discipline).** `Hβ.audit.carried-truth-projection` *(new — the §0 keystone: project a Carried-Truth violation BEFORE a line is written, making the wrong move unsayable)* · `Hβ.diag.minimal-inconsistent-core` (= `.why.minimal-cause-set`) · `Hβ.infer.marked-lambda-totality-invariant` (POPL 2024) · `Hβ.diag.catalog-as-projection` (report takes a DiagKind ADT) · `Hβ.diag.duplicate-type-name` *(new — two `type X` decls in one namespace shadow silently today (the Handle collision, 2026-07-05); the decl site deserves the refusal, per the E_ImportNameCollision precedent)* · `Hβ.diag.declared-row-contradiction` *(LANDED + ARMED 2026-08-08, pins d06486727bbb/bfc68f441f996e — and the landing probe REFUTED this entry's own claim: the performing body checked CLEAN, not loud, because the fold's meet dropped the negation and the kept positive licensed the perform; E_DeclaredRowContradiction now reports at the signed fold and refuses the executable, the tenth armed class)* · `Hβ.query.graph-projection-surface` *(new)* · `Hβ.emit.trap-as-exception-postmortem` *(new 2026-07-05 — wasm exception-handling (exnref, standardized) lets a BUG-trap unwind with a payload instead of `unreachable`+stderr: the payload is the graph state at death, projected — the coredump autopsy face 7 needed, as a structured projection instead of a heap read; zero steady-state cost, diagnostics-tier only)*.
 
 **M · The felt surface / `mentl edit` (L6, §4⑦, §0 pt 5 — oversight is survival, NOT garnish; the thinnest-swept band, most at risk of erasure).** `Hβ.felt.mentl-edit-runtime` *(new — the canonical IDE as a running keystroke→parse→format→render loop)* · `.reactivity-typed-demand-driven` · `.lsp-transport-projection` *(new)* · `.collab-grove-cmrdt-semantic` (Grove POPL 2025, over the TYPED graph) · `.legibility-derived-not-molded` · `.verification-dashboard` *(new — live V_Pending / transitive-!E / Why-chain for oversight)* · `.hole-is-dormant-continuation` (Hazel fill-and-resume = the multishot record).
 
@@ -1142,10 +1142,12 @@ not misled:
 - **Universal executable refusal** (§11 col 2) is PARTIAL, and this bullet
   said "only `E_MissingModule` is armed" while the paragraph above it listed
   six — a contradiction inside one section, both wrong against the artifact
-  (trued 2026-07-31 by reading `diag_refuses`' own arms): NINE classes refuse
+  (trued 2026-07-31 by reading `diag_refuses`' own arms; the tenth armed
+  2026-08-08): TEN classes refuse
   — EMissingModule, EHandlerStateShadowsOp, EDuplicateFnName,
   EDuplicateTypeName, EEffectUnhandled, ERefinementRejected,
-  EOwnershipViolation, EMissingVariable, EOccursCheck — plus the hole gate,
+  EOwnershipViolation, EMissingVariable, EOccursCheck,
+  EDeclaredRowContradiction — plus the hole gate,
   which is the executable gate's own read rather than a `diag_refuses` arm.
   The remaining census classes (E_TypeMismatch and kin, name-dependent on
   partial-link paths) are the ratcheting work toward universal. Read the arms,
@@ -2171,8 +2173,9 @@ first-class — DONE statement (2) whole.
 - **8.4 · Diagnostics' final form.** `Hβ.diag.catalog-as-projection`
   (report takes DiagKind; SYNTAX's three tables become projections of
   types.mn — the hand-kept second home dies),
-  `.minimal-inconsistent-core`, `.declared-row-contradiction` at the decl
-  site, `Hβ.emit.trap-as-exception-postmortem` (a BUG-trap unwinds with
+  `.minimal-inconsistent-core` (`.declared-row-contradiction` LANDED +
+  ARMED 2026-08-08 — the tenth refusing class, band L's entry carries
+  the arc), `Hβ.emit.trap-as-exception-postmortem` (a BUG-trap unwinds with
   the graph state as payload), `Hβ.infer.marked-lambda-totality-invariant`
   — and UNIVERSAL executable refusal: the remaining name-dependent census
   classes become armed, so every diagnostic class refuses the executable.

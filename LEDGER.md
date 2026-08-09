@@ -35,6 +35,24 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE SECOND DISCHARGE (pin 104f21891c89 — CLEAN
+  m2 == m3, census 0): main:999 clears, debt 12 → 11 — and the site
+  taught WHERE an annotation works: the producer-side return
+  annotation (field_ranked -> [(Float, Handle)]) measured INERT
+  first (byte-identical pin, debt unchanged), because an obligation
+  minted against a POLYMORPHIC param at judge-time never re-visits
+  under the caller's refined instantiation — the discharge landed
+  only when the annotation moved to the MINT site itself
+  (render_field_tier's ranked param). The mint-site law now guides
+  the remaining set: main:1163 measured CASCADE-class (ph flows from
+  address_resolve, whose three sub-resolvers all read the
+  span-index's plain (Span, Int) elements — the discharge belongs to
+  the span-index typing its handles at the substrate, or to band F's
+  proof-incrementality re-visiting under instantiation), joining
+  cursor:544's self-call-IH class as measured-not-annotatable.
+  Remaining one-annotation candidates: voice:832. Both producer
+  annotations kept — true documentation at zero cost.
+
 - 2026-08-08 · ▶▶▶ THE FIRST DISCHARGE (pin 4fa7e36b386c — CLEAN
   m2 == m3, census 0, wall 17.85s): Phase 8.2's discharge arc opens
   with the debt facet's own instrument — cursor:297's `0 <= self`

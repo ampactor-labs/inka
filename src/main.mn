@@ -980,14 +980,14 @@ fn span_start_eq(ref a, ref b) with Memory = match a {
 // the representation Intent Boundary at the polymorphic boundary (the
 // CFC precedent) until instantiation carries bound structure across
 // the converged rounds.
-fn field_ranked(handles, caret0) -> [(Float, Int)] with GraphRead + Memory + Teach + Alloc + !Mutate = reverse(sort(map(
+fn field_ranked(handles, caret0) -> [(Float, Handle)] with GraphRead + Memory + Teach + Alloc + !Mutate = reverse(sort(map(
   (h) => match score_one_position(h, caret0) {
     Cursor(_, _, sc) => (sc, h),
   },
   handles
 )))
 
-fn render_field_tier(ranked, target: String, ranges, fstart, i) = if i >= len(ranked) {
+fn render_field_tier(ranked: [(Float, Handle)], target: String, ranges, fstart, i) = if i >= len(ranked) {
   ()
 } else {
   match list_index(ranked, i) {

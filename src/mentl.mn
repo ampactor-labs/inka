@@ -43,6 +43,11 @@ type Annotation
   | AOwn(String, Option(Span))
   | ARef(String, Option(Span))
   | AWrapHandler(String, Int, Option(Span))
+  // The general severance: !<name> for ANY name the link performs —
+  // the fixed ANotIO/ANotNetwork pair's open-vocabulary successor
+  // (Hβ.teach.severance-vocabulary-from-link's named growth).
+  // Appended LAST so existing variant tags are unshifted.
+  | ANotEffect(String, Option(Span))
 
 // handler_name, the target fn's handle, span;
 // proposes wrapping the target's body in a
@@ -56,6 +61,10 @@ type Capability
   | CEliminateBoundsCheck
   | CZeroCopy
   | CDeterministicDrop
+  // The general severance's unlock: the proven absence of a NAMED
+  // effect (the crown's own vocabulary as a capability label).
+  // Appended LAST so existing variant tags are unshifted.
+  | CProvenAbsence(String)
 
 type Patch = Patch(Span, String)
 
@@ -156,15 +165,15 @@ fn gradient_next(handle, performed) = {
       GNode(kind, _) => match kind {
         NBound(ty) => match ty {
           TFun(params, _ret, _row) => {
-            // The name-keyed negation candidates enter only when their
-            // names are PERFORMED somewhere in the link (the severance
-            // law whole): `!E` is informative exactly when E happens in
-            // this program and is absent from THIS fn's row. The
-            // declared-set gate was the first half (`!IO` died —
-            // undeclared); `!Network` survived it (declared in lib,
-            // never performed) and dies here, the measured target.
-            let base_candidates =
-              [APure(None), ANotAlloc(None)] ++ if effect_performed("IO", performed) { [ANotIO(None)] } else { [] } ++ if effect_performed("Network", performed) { [ANotNetwork(None)] } else { [] }
+            // The severance vocabulary IS the link's performed set: one
+            // ANotEffect candidate per performed name (the general form
+            // subsuming the fixed ANotIO/ANotNetwork pair — known names
+            // keep their rich capability labels through
+            // capabilities_for_severance), each proven by the same
+            // negation-narrowing row read. `!E` is informative exactly
+            // when E happens in this program and is absent from THIS
+            // fn's row — the proof loop filters the present ones.
+            let base_candidates = [APure(None)] ++ severance_negations(performed)
             let param_candidates = ownership_candidates(params)
             let all = base_candidates ++ param_candidates
             let proven = try_each_annotation(handle, all, ty)
@@ -183,20 +192,30 @@ fn gradient_next(handle, performed) = {
   }
 }
 
-// The link's performed-name union: every judged decl's TFun row,
+// The link's performed-name union: every env scheme's TFun row,
 // row_names'd and deduped by the name handle (identity is a contract
-// — one interned word per name). One walk over the decls column,
-// run once per Teach install and held as handler state.
-fn performed_names_of_link() = decls_row_names(graph_decls_at(), [])
-
-fn decls_row_names(decls, acc) = match decls {
-  [] => acc,
-  [h, ...rest] => decls_row_names(rest, names_union_into(acc, decl_row_names(h))),
+// — one interned word per name). The env is the one home the QEffects
+// facet already reads per name; this is the same read, link-wide,
+// run once per Teach install and held as handler state. (The first
+// cut walked decls-column HANDLES through lookup_ty and measured an
+// EMPTY union — a decl node's bound type is not its fn's TFun; the
+// scheme is.)
+fn performed_names_of_link() = match env_snapshot() {
+  Env(entries) => entries_row_names(entries, []),
 }
 
-fn decl_row_names(h) = match lookup_ty(h) {
-  TFun(_, _, row) => row_names(row),
-  _ => [],
+fn entries_row_names(entries, acc) = match entries {
+  [] => acc,
+  [e, ...rest] => entries_row_names(rest, names_union_into(acc, entry_row_names(e))),
+}
+
+fn entry_row_names(e) = match e {
+  (_, scheme, _, _) => match scheme {
+    Forall(_, ty) => match ty {
+      TFun(_, _, row) => row_names(row),
+      _ => [],
+    },
+  },
 }
 
 fn names_union_into(acc, names) = match names {
@@ -209,12 +228,16 @@ fn name_handle_in(acc, n) = match acc {
   [m, ...rest] => if eff_name_handle(m) == eff_name_handle(n) { true } else { name_handle_in(rest, n) },
 }
 
-// A candidate negation's name against the performed set — the by-name
-// membership (the candidate arrives as authored text; the set carries
-// EffNames).
-fn effect_performed(name: String, performed) = match performed {
-  [] => false,
-  [m, ...rest] => if field_name_eq(eff_name_str(m), name) { true } else { effect_performed(name, rest) },
+// One general-severance candidate per performed BARE name — the
+// parameterized and Pure entries stay out (an instance severance is
+// band A's precision work; Pure severs nothing).
+fn severance_negations(performed) = match performed {
+  [] => [],
+  [n, ...rest] => match n {
+    ENamed(_) => [ANotEffect(eff_name_str(n), None)] ++ severance_negations(rest),
+    EParameterized(_, _) => severance_negations(rest),
+    EPure => severance_negations(rest),
+  },
 }
 
 // Boundary wrap — (Annotation, Capability) inside the speculative
@@ -243,6 +266,7 @@ fn suggestion_kind_of(ann) with Pure = match ann {
   AOwn(_, _) => SuggestOwnership,
   ARef(_, _) => SuggestOwnership,
   AWrapHandler(_, _, _) => SuggestEffectRow,
+  ANotEffect(_, _) => SuggestEffectRow,
 }
 
 // Capability ADT to display label list. Used by AnnotationSuggestion.unlocks.
@@ -267,6 +291,7 @@ fn annotation_source_span(ann) with Pure = match ann {
   AOwn(_, sp) => sp,
   ARef(_, sp) => sp,
   AWrapHandler(_, _, sp) => sp,
+  ANotEffect(_, sp) => sp,
 }
 
 fn suggestion_kind_label(k) with Pure = match k {
@@ -339,6 +364,9 @@ fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
   narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Alloc"))]), sp),
   ANotIO(sp) => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("IO"))]), sp),
   ANotNetwork(sp) => narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str("Network"))]), sp),
+  ANotEffect(name, sp) => // The general severance: the same negation-narrowing proof as the
+  // fixed pair, the name arriving from the link's performed set.
+  narrow_row_proven(handle, base_ty, mk_ef_neg([ENamed(intern_str(name))]), sp),
   ARefined(_, pred, sp) => {
     // Narrowing the type via refinement — perform verify against the
     // narrowed predicate. Ledger captures; rollback removes. The ledger
@@ -421,7 +449,7 @@ fn catalog_handled_effects(handler_name) with Intern + Memory + EnvRead + !Mutat
 // H5: capability unlocks for an annotation. !Alloc unlocks
 // CRealTime; !IO + Pure unlock CCompileTimeEval; etc. The list is
 // returned by render_audit's severance section.
-fn capabilities_for_annotation(ann) with Memory + Alloc = match ann {
+fn capabilities_for_annotation(ann) with Memory + Alloc + Intern = match ann {
   APure(_) => [CMemoize, CCompileTimeEval, CParallelize],
   ANotAlloc(_) => [CRealTime],
   ANotIO(_) => [CCompileTimeEval, CSandbox],
@@ -431,6 +459,15 @@ fn capabilities_for_annotation(ann) with Memory + Alloc = match ann {
   ARef(_, _) => [],
   AWrapHandler(_, _, _) => // unlocks depend on what's wrapped
   [],
+  ANotEffect(name, _) => // the general severance's unlock: the known names keep their rich
+  // labels (Alloc → RealTime, IO → CompileTimeEval+Sandbox, Network →
+  // Sandbox — capabilities_for_severance's own mapping); an unmapped
+  // name unlocks its proven absence itself, the crown's vocabulary as
+  // the capability.
+  match capabilities_for_severance(ENamed(intern_str(name))) {
+    [] => [CProvenAbsence(name)],
+    known => known,
+  },
 }
 
 // H5: capability unlocks for a SEVERANCE — adding `!E` to an fn
@@ -569,6 +606,12 @@ fn annotation_eq(a, b) with Pure = match a {
     AWrapHandler(_, _, _) => true,
     _ => false,
   },
+  ANotEffect(an, _) => match b {
+    ANotEffect(bn, _) => // Name-sensitive where the others are shape-only: two general
+    // severances are the SAME candidate only for the same name.
+    field_name_eq(an, bn),
+    _ => false,
+  },
 }
 
 // Walk the reason DAG from a graph handle. Every unification, instantiation, and
@@ -613,7 +656,7 @@ fn extract_row(ty) with Memory = match ty {
 }
 
 // Map an annotation to the capability it unlocks: add this annotation, get this capability.
-fn unlock_capability(annotation) with Pure = match annotation {
+fn unlock_capability(annotation) = match annotation {
   APure(_) => CMemoize,
   ANotAlloc(_) => CRealTime,
   ANotIO(_) => CCompileTimeEval,
@@ -624,6 +667,7 @@ fn unlock_capability(annotation) with Pure = match annotation {
   AWrapHandler(_, _, _) => // Wrapping a body in an absorbing handler CONTAINS the offending effect —
   // the sandbox capability, the same family ANotNetwork unlocks by proof.
   CSandbox,
+  ANotEffect(name, _) => CProvenAbsence(name),
 }
 
 // One-line summary for an error code. Every code has a full entry at
@@ -661,9 +705,10 @@ fn show_annotation(ann) = match ann {
   AOwn(name, _) => "own {name}",
   ARef(name, _) => "ref {name}",
   AWrapHandler(name, _, _) => "wrap with {name}",
+  ANotEffect(name, _) => "with !{name}",
 }
 
-fn show_capability(cap) with Pure = match cap {
+fn show_capability(cap) = match cap {
   CMemoize => "Memoization (pure function caching)",
   CParallelize => "Automatic parallelization",
   CCompileTimeEval => "Compile-time evaluation",
@@ -672,6 +717,7 @@ fn show_capability(cap) with Pure = match cap {
   CEliminateBoundsCheck => "Bounds check elimination",
   CZeroCopy => "Zero-copy (proven no ownership transfer)",
   CDeterministicDrop => "Deterministic drop (proven single use)",
+  CProvenAbsence(name) => "Proven absence of {name} (the transitive !{name})",
 }
 
 // render_why — Located-aware Why Engine renderer (I18)

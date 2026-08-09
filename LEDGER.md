@@ -35,6 +35,29 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE GENERAL SEVERANCE (pin 811c5d423bf7 — CLEAN
+  m2 == m3, census 0): ANotEffect(name, span) joins Annotation
+  (appended last, tags unshifted) and CProvenAbsence(name) joins
+  Capability — one severance candidate per performed BARE name,
+  proven by the same negation-narrowing row read as the fixed pair
+  it subsumes; known names route through capabilities_for_severance
+  and keep their rich labels. THE DIG'S THREE CORRECTIONS: (1)
+  fn-name collision — severance_candidates already lived in the
+  audit machinery; E_DuplicateFnName (armed) REFUSED the m2 emit,
+  the tenth-class contract catching the session's own hands; (2)
+  two honest row breaks (ctor construction allocates under a
+  declared Pure — the with-Pure dropped; intern_str widened a
+  declared row +Intern); (3) the union's first cut walked
+  decls-column HANDLES through lookup_ty and measured EMPTY — a
+  decl node's bound type is not its fn's TFun; the env SCHEMES are
+  the channel (the QEffects read, link-wide). MEASURED END STATE:
+  teach speaks true crown facts — `!SmtSolver` suggested where
+  provable IS performed in the link and absent from the fn — but
+  ties in leverage rank by enumeration order (uniform !SmtSolver
+  across non-Pure fns): the TIE-RANKING among equal-leverage
+  severances (rich-label first; then per-fn informativeness) is the
+  peer's named refinement.
+
 - 2026-08-08 · ▶▶▶ THE SEVERANCE LAW WHOLE (pin f544489b21e6 — CLEAN
   m2 == m3, census 0): the performed-set half lands in the
   Mentl-native form — the link's row-name union (graph_decls_at →

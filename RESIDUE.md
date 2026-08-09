@@ -58,11 +58,15 @@ gate first (`!IO` died — undeclared), then the PERFORMED-set as
 mentl_default handler state (the lazy memo via resume-with-state;
 per-fn asks O(1)) — uniform `!Network` died the same death, and
 `!Alloc` survives exactly where informative (performed across the
-wheel; the Real-time unlock on allocation-free fns). THE NAMED
-GROWTH remaining in this peer: an ANotEffect(name) Annotation
-variant proposing ANY performed name's severance — the fixed
-ANotIO/ANotNetwork ctor pair retires into it, and the audit's
-doubled-Sandbox render fixes as its own small sibling.
+wheel; the Real-time unlock on allocation-free fns). THE GROWTH
+LANDED same day (pin 811c5d423bf7): ANotEffect(name)/CProvenAbsence
+propose any performed name's severance, subsuming the fixed pair
+operationally (the ctors stay as zero-construction legacy until a
+tag-shifting cleanup). REMAINING in this peer: (a) TIE-RANKING —
+equal-leverage severances rank by enumeration order today (uniform
+!SmtSolver measured across non-Pure fns); the refinement is
+rich-label-first, then a per-fn informativeness read; (b) the
+audit's doubled-Sandbox render, its own small sibling.
 
 `Hβ.types.predicate-is-expr` — TRACED 2026-08-08 (Phase 8.1's stamp
 check; the peer had lived only as a DEP line in the verify-reads-canon

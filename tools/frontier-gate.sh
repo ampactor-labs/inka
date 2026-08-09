@@ -931,21 +931,21 @@ run_census() {
   local compiler="$1" dir="$2"
   local doc="$ROOT/tests/frontier/mn-census-verbs.mn"
   local ok=1 spec q line
-  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26' 'wildcard-zero:27' 'failure-mask:28' 'print-in-report:31' 'wildcard-fabricates:32' 'underscore-retain:33' 'flag-as-int:34' 'parallel-arrays:35' 'vtable-record:36'; do
+  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26' 'wildcard-zero:27' 'failure-mask:28' 'print-in-report:31' 'wildcard-fabricates:32' 'underscore-retain:33' 'flag-as-int:34' 'parallel-arrays:35' 'parallel-arrays:37' 'vtable-record:36'; do
     q="${spec%%:*}"; line="${spec##*:}"
     wt_run --dir "$ROOT" "$compiler" query "$doc" "census $q" > "$dir/census-$line.out" 2>/dev/null
     if ! grep -q "mn-census-verbs:$line" "$dir/census-$line.out"; then
       ok=0; fail "census '$q' misses its own site (line $line; see $dir/census-$line.out)"
     fi
   done
-  [ "$ok" = 1 ] && pass "structural census: all seventeen shapes count their own site (|> <| >< ~> <~ anonymous eta effectful-lambda iteration wildcard-zero failure-mask print-in-report wildcard-fabricates underscore-retain flag-as-int parallel-arrays vtable-record)"
+  [ "$ok" = 1 ] && pass "structural census: all seventeen shapes count their own site (|> <| >< ~> <~ anonymous eta effectful-lambda iteration wildcard-zero failure-mask print-in-report wildcard-fabricates underscore-retain flag-as-int parallel-arrays-both-faces vtable-record)"
   # The audit's drift tier (5.6's absorbed modes read per fn): the eight
   # specimen fns each carry their shape line. Born with the tier.
   ad_n=$(wt_run --dir "$ROOT" "$compiler" audit "$doc" 2>/dev/null | grep -c "drift-shape:")
-  if [ "$ad_n" = "8" ]; then
-    pass "audit drift tier: the eight specimen fns each carry their shape line"
+  if [ "$ad_n" = "9" ]; then
+    pass "audit drift tier: the nine specimen fns each carry their shape line (parallel-arrays both faces)"
   else
-    fail "audit drift tier (drift-shape lines: $ad_n, want 8)"
+    fail "audit drift tier (drift-shape lines: $ad_n, want 9)"
   fi
   # The unreadable-entry refusal (Hβ.query.unreadable-source-refusal): an
   # entry that never joined the weave refuses the question — nonzero
@@ -1469,6 +1469,28 @@ for i in "${!compilers[@]}"; do
     pass "teach-pure-control (a non-allocating body still unlocks !Alloc)"
   else
     fail "teach-pure-control (the true proposal died with the fix)"
+  fi
+
+  # Hβ.emit.under-application-suspension's standing crucible (2026-08-09):
+  # bare under-application must be LOUD-OR-CORRECT, never silent-wrong.
+  # Green today (invalid WAT refuses at assemble), green when the fix
+  # lands (the suspension runs, exit 42), RED only if the emit ever
+  # produces a runnable executable with any other value — the
+  # silent-wrong transition this leg exists to catch. Tighten to
+  # demand-42-only when the peer's fix lands.
+  ua_dir="$dir/under-app"
+  mkdir -p "$ua_dir"
+  wt_run "$compiler" < "$ROOT/tests/frontier/mn-under-application-loud.mn" > "$ua_dir/ua.wat" 2> "$ua_dir/ua.compile.err"
+  if wt_asm "$ua_dir/ua.wat" "$ua_dir/ua.wasm" 2> "$ua_dir/ua.assemble.err"; then
+    "$WT" run "${WT_RUN_FLAGS[@]}" "$ua_dir/ua.wasm" > "$ua_dir/ua.run.out" 2> "$ua_dir/ua.run.err"
+    ua_rc=$?
+    if [ "$ua_rc" = "42" ]; then
+      pass "under-application crucible: the suspension RUNS (the peer's fix is live — tighten this leg to 42-only)"
+    else
+      fail "under-application crucible: a bare under-application RAN with exit $ua_rc — the silent-wrong transition (see $ua_dir)"
+    fi
+  else
+    pass "under-application crucible: loud at assemble (invalid WAT refused; the banked peer names the suspension fix)"
   fi
 
   # Severance honesty (audit): a fn whose row carries Alloc is never

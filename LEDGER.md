@@ -35,7 +35,23 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
-- 2026-08-09 · ▶▶▶ THE TRIO DIES INTO THE GENERAL SEVERANCE
+- 2026-08-09 · ▶▶▶ MODE 7 FULLY ABSORBED — THE PARAM FACE + THE UNIFORM
+  WALK (pin 8683232e5ae1 — CLEAN m2 == m3, census 0): CsParallelArrays
+  grows its second face — an FnStmt whose parameter list carries any
+  adjacent `x, x_h` pair (adjacent_handle_params, a rest-slice pairwise
+  walk), structural where the bash regex saw exactly four literal names
+  (locals/captures/frames/handlers). The dig's real find: the audit's
+  per-fn drift tier NEVER VISITED THE FN NODE — drift_shapes_of walked
+  the body subtree only, so a shape living on the FnStmt itself was
+  census-visible but audit-invisible (probed: census counted fixture
+  line 37, audit stayed at 8). The fix deleted code: the walk starts at
+  the fn handle and body_child_handles descends, one uniform walk, the
+  per-kind carve-out gone. Fixture pp_site(locals, locals_h) at line 37,
+  roster leg grew the second parallel-arrays spec, audit tier 8 → 9 —
+  both seen RED against the prior boot first. Wheel measures ZERO on
+  the param face (parallel_arrays_max stays 0); the census label trues
+  to "site(s)". The last mode-7 bash row dies (the ninth absorption's
+  completion); remaining bash rows: naming/prose modes + mode 2.
   (pin 54c97b0f7220 — CLEAN m2 == m3, census 0): the general severance's own
   landing left the board RED at teach-pure-control — the ONE leg the
   pre-commit verify does not run — because pick_highest_leverage's

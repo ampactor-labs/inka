@@ -432,7 +432,7 @@ fn census_label(shape) with Pure = match shape {
   CsWildcardFabricates => "wildcard-fabricates arm(s)",
   CsUnderscoreRetain => "underscore-retain let(s)",
   CsFlagAsInt => "flag-as-int compare(s)",
-  CsParallelArrays => "parallel-arrays let(s)",
+  CsParallelArrays => "parallel-arrays site(s)",
   CsVtableRecord => "vtable-record literal(s)",
 }
 
@@ -572,15 +572,17 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
     },
     _ => false,
   },
-  CsParallelArrays => // Drift mode 7's shape (the seventh absorption): a
-  // destructuring bind of a tuple whose FIRST TWO binders both carry
-  // the _h suffix — parallel arrays where one record was native. The
-  // surface let desugars at parse into the one-arm match
-  // (desugar_block), so the WEAVE shape is the one-arm MatchExpr —
-  // the census counts the graph's one meaning, both spellings. The
-  // pair anchor is the mode's own settled note: ctor payloads
-  // legitimately carry the handle convention; the paired tuple bind
-  // convicts.
+  CsParallelArrays => // Drift mode 7's shape (the seventh absorption): parallel
+  // arrays where one record was native, in its TWO faces. The let-tuple
+  // face: a destructuring bind of a tuple whose FIRST TWO binders both
+  // carry the _h suffix (the surface let desugars at parse into the
+  // one-arm match — desugar_block — so the weave shape covers both
+  // spellings). The PARAM-ADJACENCY face (the mode's second bash row,
+  // absorbed): a fn whose parameter list carries an adjacent `x, x_h`
+  // pair — the paired arrays threaded as paired arguments; structural
+  // over ANY name where the regex saw four literals. The pair anchor
+  // is the mode's own settled note: ctor payloads legitimately carry
+  // the handle convention; the paired bind/params convict.
   match body {
     NExpr(MatchExpr(_, arms)) => if len(arms) == 1 {
       match list_index(arms, 0) {
@@ -592,6 +594,7 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
     } else {
       false
     },
+    NStmt(FnStmt(_, params, _, _, _)) => adjacent_handle_params(params |> map(param_name)),
     _ => false,
   },
   CsVtableRecord => // Drift mode 1's shape (the eighth absorption): a record
@@ -631,6 +634,15 @@ fn paired_handle_binders(elems) with Memory + Alloc = if len(elems) < 2 {
     (PVar(a), PVar(b)) => ends_with(a, "_h") && ends_with(b, "_h"),
     _ => false,
   }
+}
+
+// The param face's pairwise walk: any adjacent (a, b) where b is
+// exactly a ++ "_h" — the paired-array threading the bash regex saw
+// only for four literal names. Structural recursion over the list's
+// own shape; `rest` keeps the slice O(1) per step.
+fn adjacent_handle_params(names) with Memory + Alloc = match names {
+  [a, b, ..._] => if b == a ++ "_h" { true } else { adjacent_handle_params(rest(names)) },
+  _ => false,
 }
 
 fn flag_int_compare(a, b) with GraphRead + !Mutate + Alloc + Memory = match graph_node_body(node_handle(a)) {
@@ -686,12 +698,12 @@ fn drift_roster() with Memory + Alloc =
   [CsWildcardZero, CsFailureMask, CsPrintInReport, CsWildcardFabricates, CsUnderscoreRetain, CsFlagAsInt, CsParallelArrays, CsVtableRecord]
 
 fn drift_shapes_of(fn_handle) with GraphRead + !Mutate + Alloc + Memory = {
+  // The walk starts at the FN NODE, not its body: a shape can live ON
+  // the FnStmt itself (the param-adjacency face), and
+  // body_child_handles already descends into the body — one uniform
+  // walk, no per-kind carve-out.
   let roster = drift_roster()
-  let counts = match graph_node_body(fn_handle) {
-    NStmt(FnStmt(_, _, _, _, body)) => subtree_drift_counts(node_handle(body), roster, map((_) => 0, roster), 128),
-    _ => map((_) => 0, roster),
-  }
-  zip(roster, counts)
+  zip(roster, subtree_drift_counts(fn_handle, roster, map((_) => 0, roster), 128))
 }
 
 fn subtree_drift_counts(h, roster, counts, fuel) with GraphRead + !Mutate + Alloc + Memory = if fuel <= 0 {

@@ -1981,10 +1981,15 @@ new DEP found; the map below is accurate at that pin.)*
   refused the empty weave, pin 76e85e00696e); mode 1's vtable as the
   EIGHTH (pin aa581cb8839b — roster seventeen), where the tier's
   widening count-tuple dissolved into ONE fold over drift_roster() —
-  a future mode joins by one roster entry and one label. The
-  remaining bash rows are naming/prose modes (the raw channel's own
-  domain) plus mode 2 and mode 7's param-adjacency row, absorbed as
-  their shapes prove out. Its unsayability face
+  a future mode joins by one roster entry and one label; mode 7's
+  param-adjacency row followed 2026-08-09 as CsParallelArrays' SECOND
+  face (any adjacent `x, x_h` parameter pair, structural where the
+  regex saw four literals — mode 7 fully absorbed), and its dig made
+  the audit's per-fn walk UNIFORM: the walk starts at the fn node
+  itself, so a shape living on the FnStmt (not in its body subtree)
+  convicts — the body-only carve-out deleted. The remaining bash rows
+  are naming/prose modes (the raw channel's own domain) plus mode 2,
+  absorbed as their shapes prove out. Its unsayability face
   matures through Phase 8's diagnostics; its arrival is when a wrong move
   in the wheel's own source is a REFUSAL, not a review finding.
 

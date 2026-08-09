@@ -326,8 +326,13 @@ mn-partial-hole-executable.mn; the trio landing ships this form at
 project_queue). The fix direction: the apply walk treats an
 under-supplied product exactly as a `??`-marked one (the parse/infer
 side already types suspensions; the gap is the arity-mismatch call
-falling through to the direct-call emit), with the RED gate being the
-bare form compiling and running mn-partial-hole-executable's shape.
+falling through to the direct-call emit). THE STANDING CRUCIBLE is
+LIVE (2026-08-09, per Morgan's along-the-way-finds-become-crucibles
+rule): tests/frontier/mn-under-application-loud.mn + its frontier leg
+— green while the gap stays loud (assemble refuses), green when the
+fix lands (the suspension runs, exit 42), RED only on the
+silent-wrong transition (a run with any other value); tighten the leg
+to 42-only when the fix lands.
 
 `Hβ.eq.pipekind-match-eq-divergence` — RESOLVED (2026-08-07, the arc
 loop's first iteration): the banked probe ran and the divergence was a

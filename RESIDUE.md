@@ -61,12 +61,24 @@ per-fn asks O(1)) — uniform `!Network` died the same death, and
 wheel; the Real-time unlock on allocation-free fns). THE GROWTH
 LANDED same day (pin 811c5d423bf7): ANotEffect(name)/CProvenAbsence
 propose any performed name's severance, subsuming the fixed pair
-operationally (the ctors stay as zero-construction legacy until a
-tag-shifting cleanup). REMAINING in this peer: (a) TIE-RANKING —
-equal-leverage severances rank by enumeration order today (uniform
-!SmtSolver measured across non-Pure fns); the refinement is
-rich-label-first, then a per-fn informativeness read; (b) the
-audit's doubled-Sandbox render, its own small sibling.
+operationally. The fixed trio's ctors are DELETED WHOLE (2026-08-09,
+pin 54c97b0f7220 — their one live ref was pick_highest_leverage's own
+stale ladder, the red-board fix; the ladder speaks ANotEffect now).
+THE PEER IS RESOLVED WHOLE (2026-08-09, pin 84fc4aaac0f6): (a)
+TIE-RANKING landed — the performed union carries PREVALENCE counts
+((EffName, Int) pairs, sorted most-performed-first at the one memo),
+so equal-leverage generics resolve by how much of the link performs
+the name, never by env enumeration order; the rich-label ladder stays
+on top (probed: the prevalence fixture's !Common beats
+first-declared !Rare on the bare link, while the RTLIBS pure control
+still leads with !Alloc/Real-time). Gate:
+tests/frontier/mn-teach-prevalence.mn, seen RED (!Rare) first. (b)
+the doubled-Sandbox render was ALREADY FIXED — severance_unlocks
+dedupes by structural == with the measured double recorded in its own
+comment; the bank had outlived the fix. The named growth beyond this
+peer: per-fn PROXIMITY (does this fn's call neighborhood perform E)
+as a second informativeness axis — synth's rank_of owns that read;
+it joins if a real teach consumer measures prevalence insufficient.
 
 `Hβ.types.predicate-is-expr` — TRACED 2026-08-08 (Phase 8.1's stamp
 check; the peer had lived only as a DEP line in the verify-reads-canon

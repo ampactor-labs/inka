@@ -1471,6 +1471,21 @@ for i in "${!compilers[@]}"; do
     fail "teach-pure-control (the true proposal died with the fix)"
   fi
 
+  # The tie-ranking law (Hβ.teach.severance-vocabulary-from-link's last
+  # half, 2026-08-09): equal-leverage generic severances rank by link
+  # PREVALENCE. The fixture performs Rare once (declared first — pure
+  # enumeration order would propose !Rare, the seen-RED state) and
+  # Common three times; main performs only Noise, so both are provable
+  # and the winner exposes the ranking. Bare link on purpose — the
+  # prelude's Alloc prevalence would hand the rich-label ladder the win
+  # before generics are consulted.
+  wt_run "$compiler" teach - < "$ROOT/tests/frontier/mn-teach-prevalence.mn" > "$dir/teach-prev.out" 2>/dev/null
+  if grep '^main:' "$dir/teach-prev.out" | grep -q '!Common'; then
+    pass "teach tie-ranking: prevalence beats enumeration order (!Common over !Rare)"
+  else
+    fail "teach tie-ranking (got: $(grep '^main:' "$dir/teach-prev.out" | head -1))"
+  fi
+
   # Hβ.emit.under-application-suspension's standing crucible (2026-08-09):
   # bare under-application must be LOUD-OR-CORRECT, never silent-wrong.
   # Green today (invalid WAT refuses at assemble), green when the fix

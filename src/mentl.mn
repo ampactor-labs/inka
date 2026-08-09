@@ -178,16 +178,22 @@ fn gradient_next(handle, performed) = {
   }
 }
 
-// The link's performed-name union: every env scheme's TFun row,
-// row_names'd and deduped by the name handle (identity is a contract
-// — one interned word per name). The env is the one home the QEffects
-// facet already reads per name; this is the same read, link-wide,
-// run once per Teach install and held as handler state. (The first
-// cut walked decls-column HANDLES through lookup_ty and measured an
-// EMPTY union — a decl node's bound type is not its fn's TFun; the
-// scheme is.)
+// The link's performed-name union WITH PREVALENCE: every env scheme's
+// TFun row, row_names'd and counted by the name handle (identity is a
+// contract — one interned word per name), sorted most-performed-first
+// at the one memo point. The count grades the law's "E happens in this
+// program" — a name half the link performs makes a stronger severance
+// than one fn's plumbing effect — and the sort IS the tie-ranking:
+// pick_highest_leverage's fallback takes the first proven candidate,
+// so equal-leverage generics resolve by prevalence, never by env
+// enumeration order (the uniform-!SmtSolver symptom). The env is the
+// one home the QEffects facet already reads per name; this is the
+// same read, link-wide, run once per Teach install and held as
+// handler state. (The first cut walked decls-column HANDLES through
+// lookup_ty and measured an EMPTY union — a decl node's bound type is
+// not its fn's TFun; the scheme is.)
 fn performed_names_of_link() = match env_snapshot() {
-  Env(entries) => entries_row_names(entries, []),
+  Env(entries) => sort_by_count_desc(entries_row_names(entries, [])),
 }
 
 fn entries_row_names(entries, acc) = match entries {
@@ -206,23 +212,44 @@ fn entry_row_names(e) = match e {
 
 fn names_union_into(acc, names) = match names {
   [] => acc,
-  [n, ...rest] => names_union_into(if name_handle_in(acc, n) { acc } else { push(acc, n) }, rest),
+  [n, ...rest] => names_union_into(name_count_bump(acc, n), rest),
 }
 
-fn name_handle_in(acc, n) = match acc {
-  [] => false,
-  [m, ...rest] => if eff_name_handle(m) == eff_name_handle(n) { true } else { name_handle_in(rest, n) },
+fn name_count_bump(acc, n) = match acc {
+  [] => [(n, 1)],
+  [p, ...rest] => match p {
+    (m, c) => if eff_name_handle(m) == eff_name_handle(n) {
+      [(m, c + 1)] ++ rest
+    } else {
+      [p] ++ name_count_bump(rest, n)
+    },
+  },
 }
 
-// One general-severance candidate per performed BARE name — the
-// parameterized and Pure entries stay out (an instance severance is
-// band A's precision work; Pure severs nothing).
+fn sort_by_count_desc(pairs) = match pairs {
+  [] => [],
+  [p, ...rest] => insert_by_count(p, sort_by_count_desc(rest)),
+}
+
+fn insert_by_count(p, sorted) = match sorted {
+  [] => [p],
+  [q, ...rest] => match (p, q) {
+    ((_, pc), (_, qc)) => if pc >= qc { [p] ++ sorted } else { [q] ++ insert_by_count(p, rest) },
+  },
+}
+
+// One general-severance candidate per performed BARE name, in the
+// union's prevalence order (most-performed first — the tie-ranking) —
+// the parameterized and Pure entries stay out (an instance severance
+// is band A's precision work; Pure severs nothing).
 fn severance_negations(performed) = match performed {
   [] => [],
-  [n, ...rest] => match n {
-    ENamed(_) => [ANotEffect(eff_name_str(n), None)] ++ severance_negations(rest),
-    EParameterized(_, _) => severance_negations(rest),
-    EPure => severance_negations(rest),
+  [p, ...rest] => match p {
+    (n, _count) => match n {
+      ENamed(_) => [ANotEffect(eff_name_str(n), None)] ++ severance_negations(rest),
+      EParameterized(_, _) => severance_negations(rest),
+      EPure => severance_negations(rest),
+    },
   },
 }
 

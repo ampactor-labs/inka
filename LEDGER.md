@@ -35,7 +35,27 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
-- 2026-08-09 · ▶▶▶ MODE 2 ABSORBED — THE STRUCTURAL CATALOG COMPLETE
+- 2026-08-09 · ▶▶▶ THE TIE-RANKING — PREVALENCE, AND THE SEVERANCE PEER
+  RESOLVES WHOLE (pin 84fc4aaac0f6 — CLEAN m2 == m3, census 0): the
+  performed-name union grows its PREVALENCE half — name_count_bump
+  counts per-scheme occurrences into (EffName, Int) pairs and the one
+  memo point sorts most-performed-first — so severance_negations emits
+  candidates in prevalence order and pick_highest_leverage's
+  first-proven fallback resolves equal-leverage generics by how much
+  of the link performs the name, never by env enumeration order (the
+  uniform-!SmtSolver symptom's root). The rich-label ladder stays on
+  top. Gate: mn-teach-prevalence.mn on the BARE stdin link (the
+  prelude's Alloc prevalence would hand the ladder the win) — Rare
+  declared and performed first, Common performed by three fns, main
+  performing only Noise; seen RED (!Rare, enumeration order) against
+  the prior boot, GREEN (!Common) after, with the RTLIBS pure control
+  re-probed intact (!Alloc/Real-time). The doubled-Sandbox sibling was
+  found ALREADY FIXED (severance_unlocks dedupes by structural ==,
+  the measured double in its own comment) — the bank had outlived the
+  fix, retracted per the entry. Hβ.teach.severance-vocabulary-from-link
+  is RESOLVED WHOLE; the named growth beyond it (per-fn proximity as a
+  second informativeness axis) joins only if a real consumer measures
+  prevalence insufficient.
   (pin 07e6a8a25758 — CLEAN m2 == m3, census 0): CsEnvFrame joins as
   the TENTH census shape — the scope-as-frame-stack family (parent_env
   / env_stack / push_frame / pop_frame / env_chain) declared as an fn,

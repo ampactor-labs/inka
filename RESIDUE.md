@@ -28,6 +28,31 @@
 
 ---
 
+`Hβ.teach.severance-vocabulary-from-link` — STAMPED 2026-08-08 (found
+by asking the medium its own next move: `mentl teach src/main.mn`
+narrated the IDENTICAL suggestion — "add with !IO" — for every fn
+including the TCP server loop). TRACED: teach's severance candidates
+come from the FIXED Annotation ADT (mentl.mn's eight variants;
+ANotIO/ANotNetwork carry hardwired names), and the wheel performs
+WASI/Filesystem/Memory/Alloc — never anything NAMED "IO" — so `!IO`
+is VACUOUSLY provable on every fn and the gradient ranks it first
+everywhere: provability without informativeness (the same shape as
+the audit's "+29 more provable" tail — severing a name the program
+never performs is the negation of Zebra). THE LAW: the severance
+vocabulary is the LINK'S OWN performed-name set — a `!E` suggestion
+is informative exactly when E is performed SOMEWHERE in the program
+and absent from THIS fn's row; the name-keyed fixed catalog is
+drift-8's cousin at the teaching layer. PRICED: the performed set is
+one read of the channel the reached-effect report already projects
+(row_names over the judged decls — no new walk); teach's per-fn
+suggestion then intersects performed-minus-own-row, ranked by the
+existing gates × proximity. ENUMERATED writers: mentl.mn (the
+annotation enumeration + unlock_capability's name-keyed arms), the
+teach render, and the audit's severable line (pipeline's own comment
+names the doubled Sandbox line — shared vocabulary, one fix). The
+ownership/refinement/purity families (own/ref/Pure/refined) stay
+catalog-form — they are not name-keyed. Sized one fresh lease.
+
 `Hβ.types.predicate-is-expr` — TRACED 2026-08-08 (Phase 8.1's stamp
 check; the peer had lived only as a DEP line in the verify-reads-canon
 entry): the CORE IS ALREADY DONE — PExpr is DELETED (types.mn's own

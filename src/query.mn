@@ -370,8 +370,12 @@ fn collect_ref_spans(ref hs, i, acc) with GraphRead + Memory + Alloc + !Mutate =
   // collected is the SAME source site re-minted by a later judgment
   // generation (the converged rounds re-parse; one reference
   // rendered four times before this dedup) — the reference's
-  // identity is its source location, so it enters once.
-  let sp = span_of_handle(hs[i])
+  // identity is its source location, so it enters once. The RAW read
+  // (the 2.0 walk law at its sibling): a noted ref's span is its OWN
+  // parse site, never the union-find root's reason — the chased read
+  // greened only because VarRef roots happened to retain Located
+  // reasons, an accident-invariant this swap retires.
+  let sp = span_of_node_raw(hs[i])
   if sp == span_zero() || span_in(acc, sp, 0) {
     collect_ref_spans(hs, i - 1, acc)
   } else {

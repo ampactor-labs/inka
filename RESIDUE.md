@@ -292,11 +292,9 @@ boxed payload variants and correctly unequal; the reverted
 emit_eq_leaf_sum experiment's BROKEN verdict stands as the record that
 load-bearing eq semantics change only under march arbitration); (6) the
 eq/match divergence itself — the eq was true, the span read was the
-thief. STANDING RESIDUE, one face: `refs_of_name` shares the
-chased-span read (span_of_handle) and measures green only because
-VarRef roots happen to retain Located reasons — an accident-invariant;
-migrating refs to the raw read is the same one-line law applied at its
-sibling, sequenced with the census's per-file cut.
+thief. The standing-residue face RESOLVED 2026-08-08 (pin
+a37aedbadfbaf1d1): collect_ref_spans reads span_of_node_raw — the
+accident-invariant retired, the facet's answers identical by law.
 
 `Hβ.query.decl-site-file-coordinates` — a query's Reason span answers in
 the linked blob's coordinates and names no file, so "where is NAME

@@ -35,6 +35,16 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-08 · ▶▶▶ THE REFS READ RAW (pin a37aedbadfbaf1d1 — CLEAN
+  m2 == m3, census 0): the 2.0 walk law lands at its named sibling —
+  collect_ref_spans reads span_of_node_raw instead of the chased
+  span_of_handle, so a noted reference's span is its OWN parse site,
+  never the union-find root's reason. The chased read greened only
+  because VarRef roots happened to retain Located reasons (the
+  accident-invariant 2.0's record named); the facet's answers measure
+  identical post-swap — by law now, not luck. The standing-residue
+  face in the eq-divergence dossier closes.
+
 - 2026-08-08 · ▶▶▶ THE CONTRADICTION ARMS (pin bfc68f441f996e — CLEAN
   m2 == m3, census 0): E_DeclaredRowContradiction joins diag_refuses,
   the TENTH armed class — the decl-site licence (a fact read from the

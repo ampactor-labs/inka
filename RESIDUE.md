@@ -3658,14 +3658,33 @@ show_list_from all flip. THE CASCADE HAS ONE ROOT: show_list's
 PUBLISHED row instantiates as p0 + free tail for every final-pass
 caller, though its exit frame carries p2 + sig-kept edge (FZIN,
 layers 1+2 green) — the concrete presents vanish between the
-after-prune frame and the instantiated read. Four hops, two
-unmeasured. THE NEXT PROBE, banked: the PUB print — at finalize, one
-line per decl per pass with the STORED row fp; at generalize exit,
-the published SCHEME row fp (same probe shape; DECL/CHG channels
-stand). The first hop whose output disagrees with its input names
-the one writer: finalize's fold (FZ stores p0), the publish
-quantification (PUB p0 v against FZ p2), or instantiate's freshening
-short-circuit (PUB p2 + shared tail against the measured p0 v read).
+after-prune frame and the instantiated read. THE PUB PROBE NAMED THE HOP (2026-08-11, P1 iteration 2 — fzs/pub
+prints at the decl-exit and group-final publishes, per decl per
+pass): the STORED row term is p0 v in BOTH passes (a bare tail var —
+content lives behind the tail cell), and generalize's scheme
+DIVERGES on the tail cell's state: show_list trial DXP scheme p2 v
+(tail chased to BOUND content), final DXP scheme p0 v (tail FREE —
+chase folds nothing); neg trial p4 c → final p0 c (the Pure the solo
+query answers); show_eff_name trial p3 v → GFP p4 c (the GROUP
+publish is HONEST) → final DXP p1 c, and env reads newest-first, so
+the degraded final decl-exit OVERWRITES the honest group publish —
+the lie wins by publish order. Cross-pass feedback proven in-run:
+show_list's final exit (stderr line 8197) precedes neg's final
+judgment (12011), so neg's final charge instantiates the p0 v final
+publish — the iteration-1 CHG differential end-to-end. instantiate
+is EXONERATED (it copies what the scheme holds). ONE hop remains:
+why the FINAL pass's finalize leaves the fn-ty row term's tail cell
+UNBOUND where the trial's is bound — infer_fn mints a FRESH
+row_handle per pass and rebinds fn_ty per invocation, so the
+candidates are the cell-identity split (finalize writes a different
+cell than the term's tail references in the final pass) or
+finalize's fold dropping the frame's kept content (FZIN showed the
+final frame carries p2 + sig-kept edge INTO finalize). THE NEXT
+PROBE, banked: the finalize-identity print — at inf_exit_fn's
+graph_finalize_row, print the written-to row_handle + written fp;
+at DXP, print the stored term's tail cell handle; per pass, per
+specimen. Handle equality names the split; handle equality with
+dropped content names the fold.
 ACCEPTANCE (the chain's, unchanged): neg's solo query answers its
 declared four; movers fall or re-base with justification; march
 green. On CLOSE: retract the superseded frames in place, true PLAN
@@ -3688,7 +3707,7 @@ three consecutive STALL lines or p1_iterations = 12, whichever first:
 write PARKED on the counter line, surface it as the report's last
 line, and the cursor advances — reopened only by a new measured fact
 or Morgan's word.
-p1_iterations: 1
+p1_iterations: 2
 
 `Hβ.infer.round-oscillation-movers` — ROOT FOUND 2026-07-31, and the
 peer's own framing is superseded in place: this was never an

@@ -1508,19 +1508,25 @@ eleven consecutive ledger entries while the leak rode the whole arc; nothing
 written was false, the gate had merely gone quiet. Closed mechanically by Phase
 0.1: a gate not run is a visible blank, and a red one refuses the pin.
 
-**THE STANDING CURSOR (Morgan 2026-08-11) — the work selector reads this
-block FIRST, then the phase order.** The dig
-(`Hβ.infer.forward-hof-row-underpublish`) CLOSED 2026-08-11 at pin
-c6eb188e1d37 — three loop iterations, the LEDGER entry carries the arc.
-The front is now: (1) The column arc (5.5,
-`Hβ.lower.lowering-is-a-column` — the BindHome column is live; the
-stamped entry is the design; one column per landing). (2) The arena's 2b
-(4.3) as the columns un-gate it per its own DEP note. (3) The value
-ontology (5.4) in its proven sequence. Then the phase order's first
-unlanded item resumes as the selector. "It will surely land" is never a
-selection reason — the completion-gradient (the absorbable landing
-preferred over the front) is a named drift; the iteration's report opens
-by naming the priority served.
+**THE STANDING CURSOR (Morgan 2026-08-11; trued end-of-day against the
+measured board) — the work selector reads this block FIRST, then the
+phase order.** The dig (`Hβ.infer.forward-hof-row-underpublish`) CLOSED
+at pin c6eb188e1d37 — three loop iterations, the LEDGER entry carries
+the arc. THE DEDICATED-ARC QUEUE, each sized by its own entry and
+awaiting a fresh session, in order: (1) the enumeration-reader
+RELOCATION (the column arc's heart — step (i)'s five columns are ALL
+LANDED and zero-read; the phase-boundary stamp is the build contract);
+(2) the arena's 2b (4.3) as the relocation completes the image-set
+precondition; (3) the value ontology (5.4); beside them the flowlabel
+build (Phase 7, its own stamp's sizing), the synthesized-family repr
+floor deletion (its O(1) read landed at fe4b88b2), and the peel/rung-3
+root that holds the last two `0 <= self` pendings. THE LOOP-SIZED
+RESIDUE the selector serves between dedicated sessions: the 6.3 modal
+sweep rule-by-rule (eleven pinned, crown 33/0), doc-truth true-ups,
+and gates for oracle-blind classes as digs surface them. "It will
+surely land" is never a selection reason — the completion-gradient is
+a named drift; the iteration's report opens by naming the priority
+served.
 
 ---
 

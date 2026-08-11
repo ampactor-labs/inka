@@ -243,7 +243,7 @@ fn render_compose_chain(branches) with Format + !Mutate = match branches {
 // A named row renders as its authored signed triples: the first term
 // bare, each subsequent led by its connective glyph, negation as `!` —
 // the with-clause's own grammar, round-trippable by construction.
-fn render_row_triples(effs, i) with Memory + Alloc + Intern = if i >= len(effs) {
+fn render_row_triples(effs, i) with Memory + Alloc + Intern + GraphRead = if i >= len(effs) {
   ""
 } else {
   match list_index(effs, i) {

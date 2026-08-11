@@ -809,16 +809,20 @@ fn chase_handle(ref spine, mint_bound, handle, depth) with !Mutate = if depth > 
 // when the chain terminates at NRowFree (the free variable).
 fn merge_chased_row(ref chased, ref names, ref absents, free_handle) with !Mutate = match chased {
   GNode(ck, cr) => match ck {
-    NRowFree(_) => // Preserve the accumulated names AND masks with the free
-    // edge — EfRow([Memory, IO], [W], EtOpen([v])) where v → NRowFree
-    // keeps both fields riding the free tail.
+    NRowBound(inner) => GNode(NRowBound(merge_row(names, absents, inner)), cr),
+    _ => // EVERY non-bound terminal preserves the accumulated reading — the
+    // names AND masks ride an edge to the terminal. NRowFree always did;
+    // the former catch-all returned the bare terminal for every OTHER
+    // ending — above all the cross-sort free t-cell a fn-typed param
+    // chain ends at — so the mid-chain presents vanished from the read
+    // and a final-pass publish whose chain ends at a free param cell
+    // published Pure under a declared row (the forward-hof
+    // false-absence root; the CELT-vs-CELB differential measured it).
     if len(names) == 0 && len(absents) == 0 {
       chased
     } else {
       GNode(NRowBound(ef_make(names, absents, EtOpen([free_handle]))), cr)
     },
-    NRowBound(inner) => GNode(NRowBound(merge_row(names, absents, inner)), cr),
-    _ => chased,
   },
 }
 

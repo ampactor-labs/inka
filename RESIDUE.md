@@ -3621,12 +3621,26 @@ and mn-two-tail-accumulation go green, the mover narration deletes
 with its channel, census 0, frontier whole, the march. Swap behind
 the projections — the read surfaces keep their signatures.
 
-`Hβ.infer.forward-hof-row-underpublish` — THE DEDICATED ARC, its own
-entry (2026-08-11; born buried in `Hβ.infer.schemes-are-edges`'
-2026-08-06/07 tail — that chain stays the forensic record to CONSULT,
-never re-read whole per iteration; THIS entry's tail is the live
-state, and on any divergence it outranks every restatement of itself,
-the loop selector included). The measured false-absence channel: a
+`Hβ.infer.forward-hof-row-underpublish` — RESOLVED 2026-08-11 (pin
+c6eb188e1d37, TRANSITION, the LEDGER entry of the same name carries
+the three-probe arc). The writer was merge_chased_row's catch-all
+(graph.mn): the chase's reading law tunneled through a bound row
+cell's single-edge tail and DISCARDED the accumulated presents when
+the chain terminated at a cross-sort free t-cell (a fn-typed param's
+cell) — trial chains end at NRowFree (preserved), final chains end at
+the param t-cell (discarded), which is the entire trial/final
+asymmetry. The fix collapsed the NRowFree special case and the
+catch-all into one uniform preservation arm. Acceptance met on all
+three legs: neg solo answers its declared four, show_list publishes
+p2 + shared tail, movers re-based to 474 (honest reads change the
+trial/final comparison itself). The class's standing wheel-link gate
+is the census's zero-tolerance E_EffectMismatch (it refused the first
+repin at census 1 — seen RED — until render_row_triples' honest
++GraphRead widening); the stdin fixture's contamination note stands
+in the parent chain. THE DEDICATED ARC's record follows — the entry
+was born 2026-08-11 (the forensic chain lives in
+`Hβ.infer.schemes-are-edges`' 2026-08-06/07 tail; consult, never
+re-read whole). The measured false-absence channel: a
 final/solo published Pure under a declared row — specimen
 neg_names_to_str (src/gradient_delta.mn:283, declared Intern + Memory
 + Alloc + GraphRead; solo query answers Pure) — crown-adjacent: every
@@ -3707,7 +3721,7 @@ three consecutive STALL lines or p1_iterations = 12, whichever first:
 write PARKED on the counter line, surface it as the report's last
 line, and the cursor advances — reopened only by a new measured fact
 or Morgan's word.
-p1_iterations: 2
+p1_iterations: 3 — CLOSED (the peer resolved; the counter retires with it)
 
 `Hβ.infer.round-oscillation-movers` — ROOT FOUND 2026-07-31, and the
 peer's own framing is superseded in place: this was never an

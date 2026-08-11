@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-11 · ▶▶▶ THE READING LAW KEEPS EVERY TERMINAL — THE FORWARD-HOF
+  FALSE-ABSENCE CHANNEL CLOSES (pin c6eb188e1d37 — TRANSITION m3 == m4,
+  census 0, battery 129/0, peak RSS fell 2336 → 2250MB): the P1 dig's
+  three-probe arc, run by the loop in one session, named the one writer
+  the dossier's 68 iterations circled. Probe 1 (both-arm charge prints)
+  exonerated the charge path (0 NCH / 30,928 CHG) and measured the
+  degradation cascade (neg reads show_list p2 v trial → p0 v final).
+  Probe 2 (fzs/pub at both publish sites) pinned the hop: the stored term
+  is p0 v both passes; trial's generalize resolves the tail cell, the
+  final's reads it unresolved — and the degraded final decl-exit
+  OVERWRITES the honest group publish (env newest-first). Probe 3 (FIN
+  write + FINQ read-back + CEL cell-chase) caught the contradiction on
+  one screen: the finalize's write lands (p2 v + edge) and the chase of
+  the same cell answers ty-free — the chain tunnels through the bound
+  cell into the fn-typed param's free t-cell, and merge_chased_row's
+  catch-all returned the bare terminal, DISCARDING the accumulated
+  presents (graph.mn:821, the silent surrender-fallback at the one
+  mechanism every row read routes through; trial survived only because
+  its chain ends at NRowFree, whose arm preserved). THE FIX DELETES: the
+  NRowFree special case and the catch-all collapse into one uniform
+  preservation arm — every non-bound terminal keeps the reading riding
+  an edge to it. ACCEPTANCE, all three legs: neg_names_to_str solo
+  answers Memory + Alloc + Intern + GraphRead + !Mutate (was Pure — the
+  crown-adjacent false absence dead); show_list publishes Memory + Alloc
+  + !Mutate + t-tail (p2 + shared tail, the banked target verbatim);
+  movers re-base to 474 with the justification that honest reads change
+  the trial/final comparison itself. The honest read surfaced ONE census
+  claim (render_row_triples missing its GraphRead — widened, the census
+  gate seen RED refusing the first repin and green after). The peer
+  Hβ.infer.forward-hof-row-underpublish is RESOLVED; its dossier stands
+  as the kill record; p1_iterations closed at 3.
 - 2026-08-09 · ▶▶▶ THE TIE-RANKING — PREVALENCE, AND THE SEVERANCE PEER
   RESOLVES WHOLE (pin 84fc4aaac0f6 — CLEAN m2 == m3, census 0): the
   performed-name union grows its PREVALENCE half — name_count_bump

@@ -1195,11 +1195,11 @@ not misled:
   `!E` blindness faces inherit it. `Hβ.infer.schemes-are-edges` rung 3 is the
   dissolution, and it is a SOUNDNESS closure, not a perf arc. THE ROW HALF
   LANDED 2026-08-07 (§11 5.2 carries the arc; movers 678 → 453 with the
-  remaining classes measured and named); the OPEN soundness seam is
-  `Hβ.infer.forward-hof-row-underpublish` — the shipping pass publishes
-  PURE for some HOF-chained rows (neg_names_to_str: declared Memory +
-  Alloc + Intern + GraphRead, final publishes pure), a live false-absence
-  channel until its root-trace arc closes.
+  remaining classes measured and named); the forward-HOF under-publish
+  seam CLOSED 2026-08-11 (`Hβ.infer.forward-hof-row-underpublish`
+  RESOLVED, pin c6eb188e1d37 — merge_chased_row's catch-all discarded
+  the reading at cross-sort terminals; the uniform preservation arm
+  ends the false-absence channel; the LEDGER entry carries the arc).
 - **The planned layer sweep runs SERIALIZED (judge_window 1)** since
   2026-08-07: the K=8 parallel final's correctness rested on published
   schemes being live-var-free — exactly the property rung 3 deletes — and
@@ -1509,18 +1509,18 @@ written was false, the gate had merely gone quiet. Closed mechanically by Phase
 0.1: a gate not run is a visible blank, and a red one refuses the pin.
 
 **THE STANDING CURSOR (Morgan 2026-08-11) — the work selector reads this
-block FIRST, then the phase order.** (1) THE DIG:
-`Hβ.infer.forward-hof-row-underpublish` — its own RESIDUE entry carries
-the supersession, the combined instrument, the P1 protocol, and the live
-CLOSED/PARKED state; that entry's tail is the truth, this line only
-points. (2) The column arc (5.5, `Hβ.lower.lowering-is-a-column` — the
-BindHome column is live; the stamped entry is the design; one column per
-landing). (3) The arena's 2b (4.3) as the columns un-gate it per its own
-DEP note. (4) The value ontology (5.4) in its proven sequence. Then the
-phase order's first unlanded item resumes as the selector. "It will
-surely land" is never a selection reason — the completion-gradient (the
-absorbable landing preferred over the front) is a named drift; the
-iteration's report opens by naming the priority served.
+block FIRST, then the phase order.** The dig
+(`Hβ.infer.forward-hof-row-underpublish`) CLOSED 2026-08-11 at pin
+c6eb188e1d37 — three loop iterations, the LEDGER entry carries the arc.
+The front is now: (1) The column arc (5.5,
+`Hβ.lower.lowering-is-a-column` — the BindHome column is live; the
+stamped entry is the design; one column per landing). (2) The arena's 2b
+(4.3) as the columns un-gate it per its own DEP note. (3) The value
+ontology (5.4) in its proven sequence. Then the phase order's first
+unlanded item resumes as the selector. "It will surely land" is never a
+selection reason — the completion-gradient (the absorbable landing
+preferred over the front) is a named drift; the iteration's report opens
+by naming the priority served.
 
 ---
 

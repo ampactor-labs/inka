@@ -1842,6 +1842,11 @@ effect GraphRead {
   // executable gate's whole input (lowering-is-a-column (ii), the first
   // walker swap; the four-fn LowExpr walk retired onto this read).
   graph_holes_at() -> [(Int, String)]
+  // The emittable-fn enumeration's by-name read: every entry noted under
+  // NAME (the identity projection beside the ordered column). The
+  // synthesized-family repr read and the enumeration reader take this
+  // instead of scanning the column.
+  graph_emitfn_at(String) -> [(EmitFnKind, Int, String, Int, [(String, Int)])]
 }
 
 effect GraphWrite {

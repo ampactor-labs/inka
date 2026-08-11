@@ -35,6 +35,22 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-11 · ▶▶▶ THE EMITFN BY-NAME READ — THE INDEX MATERIALIZES AT
+  DEMAND (pin fe4b88b2f1be — CLEAN m2 == m3, census 0, battery green,
+  peak 2451136KB inside the ceiling): graph_emitfn_at lands as the
+  enumeration's identity projection beside the ordered column — one
+  O(N) fold of the column into an smap at the FIRST read, O(1) after,
+  the note path one push exactly as before. THE MEASURED LAW, paid
+  twice in one landing: the peak ratchet refused the hot-arm
+  piggyback (+94MB — two state-field rebinds per note) and then the
+  state-init smap_new (+118MB — HANDLER STATE INITS RUN PER INSTALL,
+  thousands of branch brackets each paying the 4096-slot allocation;
+  the hoeffect dig's state-init lesson at the MEMORY face). The init
+  is the empty-list sentinel; the built flag gates the read's three
+  arms. Un-gates: the synthesized-family repr floor deletion
+  (Hβ.emit.unused-wide-param-floor's named remainder — the 106s
+  quadratic column scan dies onto this read) and the enumeration
+  reader's by-name access.
 - 2026-08-11 · ▶▶▶ THE INSTALL-SHAPE COLUMN — STEP (i) COMPLETES
   (pin 06a0d62b070d — CLEAN m2 == m3, census 0, battery green, peak
   2441448KB inside the justified 2470000 ceiling): InstallOf(hname,

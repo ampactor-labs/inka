@@ -260,7 +260,7 @@ fn poly_teach_line(owner: String, reason) with Memory + Alloc =
 // over the SHARED spine with a private planned range — the root install is
 // bare and the defaults are the empty graph. Handler state records live in
 // shared heap; the install chain stays per-instance, correctly private.
-handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, high_limit0) with spine = spine0, spine_open = spine_open0, trail = [], trail_len = 0, epoch = 0, next = next0, mint_limit = limit0, mint_high = high0, high_limit = high_limit0, span_index = span_index0, checkpoint_stack = [], comment_refs = [], refs_col = smap_new(), decls_col = [], emitfns_col = [], holes_pend = [], holes_col = [] {
+handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, high_limit0) with spine = spine0, spine_open = spine_open0, trail = [], trail_len = 0, epoch = 0, next = next0, mint_limit = limit0, mint_high = high0, high_limit = high_limit0, span_index = span_index0, checkpoint_stack = [], comment_refs = [], refs_col = smap_new(), decls_col = [], emitfns_col = [], emitfns_idx = [], emitfns_idx_built = false, holes_pend = [], holes_col = [] {
   graph_chase(handle) => // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
   // graph_rollback pops. When the stack is empty, writes are at the
@@ -726,6 +726,21 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   // construction, in lower's deterministic walk order. Non-trailed by
   // the decls contract; the step-iii reader filters by the reach set.
   resume() with emitfns_col = push(emitfns_col, (kind, origin, fn_name, fence, caps)),
+  graph_emitfn_at(fn_name) => // The enumeration's by-name O(1) read — the identity projection of the
+  // ordered column, MATERIALIZED AT FIRST DEMAND (the note path stays
+  // one push; piggybacking the index there measured +94MB of hot-arm
+  // state rebinds). One O(N) build at the first read, O(1) after; the
+  // synthesized-family repr read and the enumeration reader resolve
+  // entries without the quadratic column scan (the 106s m3 leg the
+  // floor dig measured).
+  if emitfns_idx_built {
+    resume(smap_get_all(emitfns_idx, fn_name))
+  } else if len(emitfns_col) > 0 {
+    let built = emitfns_index_build(emitfns_col, smap_new(), 0)
+    resume(smap_get_all(built, fn_name)) with emitfns_idx = built, emitfns_idx_built = true
+  } else {
+    resume([])
+  },
   graph_branch_seed() => resume((spine, spine_open, span_index)),
   graph_rollback(target_idx) => {
     let n = len(checkpoint_stack)
@@ -825,6 +840,16 @@ fn chase_node(ref spine, mint_bound, handle, depth) with !Mutate = if depth > 10
 // The value-holes drain's pairing fold: every pending hole pairs with the
 // draining entry's name, appended onto the column.
 fn hole_pairs_into(hs, name: String, acc) = fold(acc, (a, h) => push(a, (h, name)), hs)
+
+// The emitfn index's one-time build — the ordered column folded into the
+// by-name smap at the first graph_emitfn_at read.
+fn emitfns_index_build(col, idx, i) = if i >= len(col) {
+  idx
+} else {
+  match list_index(col, i) {
+    (k, o, nm, f, c) => emitfns_index_build(col, smap_add(idx, nm, (k, o, nm, f, c)), i + 1),
+  }
+}
 
 // The unnote's filter — the pipe-consumed hole leaves the pending buffer.
 fn holes_pend_without(hs, h) = fold([], (a, x) => if x == h { a } else { push(a, x) }, hs)

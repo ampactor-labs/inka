@@ -4690,6 +4690,10 @@ fn resume_commit_prefix(handle, val, updates, fields, record) = {
     (upd) => LLet(handle, resume_upd_local(upd, handle), lower_expr(state_field_init(upd))),
     updates
   )
+  // The state-slot-home column (lowering-is-a-column step i): the resolved
+  // (field, offset) pairs note at the resume node — the same one-home
+  // resolver the stores read, so column and tree cannot drift apart.
+  graph_state_slots_note(handle, SlotPairs(map(resume_upd_pair(??, fields), updates)))
   let stores = map(
     (upd) => LStateSlotStore(
       handle,
@@ -4710,6 +4714,11 @@ fn resume_commit_prefix(handle, val, updates, fields, record) = {
 // LLocal read can never drift apart.
 fn resume_upd_local(upd: {init: Node, name: String}, handle) =
   "__resume_upd_{upd.name}_{int_to_str(handle)}"
+
+// The slot-home pair — the column's per-update value, through the one
+// resolver the stores read.
+fn resume_upd_pair(upd, fields) =
+  (state_field_name(upd), resolve_state_slot_offset(state_field_name(upd), fields))
 
 // Resolve a field name to its byte offset in the handler state
 // record. `fields` is the slot-order NAME list — config ++ state in

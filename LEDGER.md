@@ -35,6 +35,19 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-11 · ▶▶▶ THE STATE-SLOT-HOME COLUMN — STEP (i)'S THIRD
+  DECISION CARRIER (pin 38569e600884 — CLEAN m2 == m3, census 0,
+  the pin advancing twice through in-landing teachings: the anonymity
+  tier convicted the note's map lambda and the product-with-hole
+  `map(resume_upd_pair(??, fields), updates)` replaced it — the
+  canonical suspension, no lambda, the row at its decl home;
+  battery green, peak 2429068KB inside the ceiling): StateSlotHome =
+  SlotPairs([(field, offset)]), the spine's TENTH column, noted at
+  resume_commit_prefix through the SAME one-home resolver the
+  LStateSlotStore constructions read — column and tree cannot drift
+  apart by construction. Zero readers until the enumeration-reader
+  arc; the remaining step-(i) vocabulary is the install-shape column,
+  then the arc's next work is the dedicated-arc relocation.
 - 2026-08-11 · ▶▶▶ THE DISPATCH-TIER COLUMN — STEP (i)'S SECOND
   DECISION CARRIER (pin d96a258b5685 — CLEAN m2 == m3, census 0,
   battery green, peak 2327532KB inside the justified 2440000 ceiling):

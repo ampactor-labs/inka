@@ -554,7 +554,9 @@ comment_refs_max: 0
 # the diff. The next legal move stays DOWN.
 # 2026-08-11 holes-column landing: +1 — the new column fns' schemes move
 # once between trial and final (the standing channel; dies at rung 3/D8).
-movers_max: 475
+# +1 at the slot-home column: resume_upd_pair's scheme moves once (the
+# standing trial/final channel; dies at rung 3/D8).
+movers_max: 476
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

@@ -810,6 +810,13 @@ type BindHome = BindUnwritten | BindLocal(Int) | BindUpval(Int, Int) | BindPrior
 // cell, so no nullary tag may alias it.
 type DispatchTier = DtLexical(String, String) | DtSingleton(String, Bool) | DtEvidence(String, Int) | DtWasi(String)
 
+// The state-slot-home column's value (lowering-is-a-column step i): a
+// resume site's `with field = NEW` updates, each field name paired with
+// its resolved byte-slot offset in the handler state record. One
+// all-payload constructor — the sparse column's absent contract is the
+// addr-0 virgin cell.
+type StateSlotHome = SlotPairs([(String, Int)])
+
 // The emittable-fn enumeration's entry kind (lowering-is-a-column, the
 // no-mint resolution): each synthesized fn shape is a PROJECTION of
 // structure the graph holds at its origin handle — the lambda its own
@@ -1817,7 +1824,7 @@ effect GraphRead {
   // no branch ever appends). A branch graph_handler installs over
   // these with its stmt's planned range as (next0, limit0).
   graph_boundary_at(Int) -> ExecutableBoundary
-  graph_branch_seed() -> ([{bind: [BindHome], boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], dispatch: [DispatchTier], narrowing: [Int], nodes: [GNode], program: [NodeBody], spans: [Span]}], Int, [(ValidSpan, Int)])
+  graph_branch_seed() -> ([{bind: [BindHome], boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], dispatch: [DispatchTier], narrowing: [Int], nodes: [GNode], program: [NodeBody], slots: [StateSlotHome], spans: [Span]}], Int, [(ValidSpan, Int)])
   // The REVERSE-EDGE column's read: every reference handle noted under
   // NAME (newest first — the column prepends). refs_of_name's whole-
   // graph VarRef scan and the oracle's quadratic count_dependents both
@@ -1899,6 +1906,10 @@ effect GraphWrite {
   // perform/wasi fork's arms note the chosen tier at the node's handle —
   // an in-place spine cell store, non-trailed by the bind-note contract.
   graph_dispatch_note(Int, DispatchTier)
+  // The state-slot-home column's write: the resume-commit construction
+  // notes its update pairs (field name, slot offset) at the resume
+  // node's handle — same in-place, non-trailed contract.
+  graph_state_slots_note(Int, StateSlotHome)
   // The emittable-fn enumeration's write (the no-mint resolution):
   // each of lower's seven LFn construction sites notes (kind, origin
   // handle, deterministic name, fence, captures) at the moment those

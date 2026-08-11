@@ -3638,15 +3638,34 @@ order" and "beyond loop-iteration scale / needs a dedicated session"
 session, context accumulating across iterations, this entry the spine
 that survives compaction). PLAN §11's standing cursor holds this peer
 at the front until CLOSED, or PARKED per the protocol below.
-THE INSTRUMENT (the chain's bank, WHOLE — not the charge-print
-alone): movers_diff + the charge-value print at inf_add_row_unified
-as ONE COMBINED apparatus — per-call charge VALUE beside the pass
-tag, on the specimen AND a healthy sibling (map/shout: map's
-published row is r-sort-connected, judged honest at the chain's first
-cut; never the stdin fixture — banked CONTAMINATED). Recipe SHAPE per
-the chain's root-trace/mint probes (Edit-patch → boot-emit → restore
-→ run on the real wheel blob); the charge-print itself is unbuilt.
-The differential names the writer; fix the writer, never the symptom.
+THE COMBINED INSTRUMENT'S FIRST FIRING (2026-08-11, P1 iteration 1 —
+DECL windows at infer_fn + both-arm charge prints at the saturated
+charge site + movers cap lifted to 500, one run on the wheel; recipe
+proven: Edit-patch → boot-emit → git-restore → run, probe artifacts
+in .build/probe-fhof). TWO KILLS and the cascade measured whole.
+Kill 1: the charge path's `_ => ()` no-charge arm NEVER fires — 0
+NCH / 30,928 CHG across the whole compile; absence-of-charge is dead
+as a mechanism. Kill 2: the charge path is exonerated entirely — the
+VALUE it reads is already degraded when it arrives: neg's charge of
+show_list reads p2 v (trial) → p0 v (final); show_eff_name's own
+window reads show_list p2 v → p0 v identically; the lambda-frame
+read of show_eff_name itself degrades p4 c → p1 c (Intern alone —
+its standing T_OverDeclared names the same survivor); while
+show_list-INDEPENDENT callees are byte-stable across passes
+(intern_name_of p1 c, eff_name_str p1 c). The cap-lifted movers dump
+(483 flips) holds the family: neg, show_eff_name, show_list,
+show_list_from all flip. THE CASCADE HAS ONE ROOT: show_list's
+PUBLISHED row instantiates as p0 + free tail for every final-pass
+caller, though its exit frame carries p2 + sig-kept edge (FZIN,
+layers 1+2 green) — the concrete presents vanish between the
+after-prune frame and the instantiated read. Four hops, two
+unmeasured. THE NEXT PROBE, banked: the PUB print — at finalize, one
+line per decl per pass with the STORED row fp; at generalize exit,
+the published SCHEME row fp (same probe shape; DECL/CHG channels
+stand). The first hop whose output disagrees with its input names
+the one writer: finalize's fold (FZ stores p0), the publish
+quantification (PUB p0 v against FZ p2), or instantiate's freshening
+short-circuit (PUB p2 + shared tail against the measured p0 v read).
 ACCEPTANCE (the chain's, unchanged): neg's solo query answers its
 declared four; movers fall or re-base with justification; march
 green. On CLOSE: retract the superseded frames in place, true PLAN
@@ -3669,7 +3688,7 @@ three consecutive STALL lines or p1_iterations = 12, whichever first:
 write PARKED on the counter line, surface it as the report's last
 line, and the cursor advances — reopened only by a new measured fact
 or Morgan's word.
-p1_iterations: 0
+p1_iterations: 1
 
 `Hβ.infer.round-oscillation-movers` — ROOT FOUND 2026-07-31, and the
 peer's own framing is superseded in place: this was never an

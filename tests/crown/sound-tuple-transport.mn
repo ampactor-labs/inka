@@ -1,0 +1,10 @@
+// CROWN — the sound dual at the tuple carrier: a tuple CARRYING an
+// effectful closure transports under `with !E`; only the call
+// performs. Must accept.
+effect E { op() -> Int }
+fn make() = (1, () => op())
+fn good() with !E = {
+  let pair = make()
+  pair[0]
+}
+fn main() = good()

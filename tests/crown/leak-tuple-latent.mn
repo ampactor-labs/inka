@@ -1,0 +1,10 @@
+// CROWN — latency rides the TUPLE carrier: a closure performing E,
+// carried as a tuple element, extracted and CALLED under `with !E` —
+// the row must ride the position to the call. Expect E_EffectMismatch.
+effect E { op() -> Int }
+fn make() = (1, () => op())
+fn bad() with !E = {
+  let pair = make()
+  pair[1]()
+}
+fn main() = bad()

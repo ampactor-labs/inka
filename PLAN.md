@@ -2091,6 +2091,10 @@ The spine root finishes. Order inside the phase is the dependency order.
   outer !F — row(expr ~> h) carries + row(h), so absorbing E never
   launders the arm's own F; the sound dual declares F + !E and the
   pair differs only in the declared row, its own control); the
+  TENTH rule 2026-08-11: latency rides STORAGE — a record-field
+  closure's row rides the field load to the call
+  (leak-field-latent refuses; sound-field-transport carries the
+  record without calling and accepts, crown 31/0); the
   sweep continues rule-by-rule), and the
   capability-at-tee PROJECTION — ✅ LANDED 2026-08-08 (pin
   2dcd736eb4e6): `mentl where` renders every install as

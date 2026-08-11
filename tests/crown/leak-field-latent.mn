@@ -1,0 +1,10 @@
+// CROWN — latency rides STORAGE: a closure performing E, stored in a
+// record field, extracted and CALLED under `with !E` — the row must ride
+// the field load to the call. Expect E_EffectMismatch.
+effect E { op() -> Int }
+fn make() = ({run: () => op()})
+fn bad() with !E = {
+  let r = make()
+  r.run()
+}
+fn main() = bad()

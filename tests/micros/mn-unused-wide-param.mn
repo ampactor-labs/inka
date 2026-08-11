@@ -1,0 +1,9 @@
+// expect: 12
+// The unused-wide-param class pinned (Hβ.emit.unused-wide-param-floor,
+// fixed pin cfa58fdd5479): a decl fn whose wide-typed param is UNUSED
+// must still sign at the real width — the env bucket read, never the
+// body-scan's i32 floor. accept_g was RED at wat2wasm before the fix.
+type Gain = Float where 0.0 <= self
+fn accept_g(s: Gain) = 1
+fn accept_u(s: Gain) = if s <= 1.0 { 11 } else { 0 }
+fn main() = accept_g(0.5) + accept_u(0.5)

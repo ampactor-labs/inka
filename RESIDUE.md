@@ -144,10 +144,15 @@ lines of body-usage scanning) DELETE whole — all four callers (the
 wide-fn classifier at 2558, the deref at 2598, the signature renders
 at 3015/3242) take the same graph read, lambdas included, and the
 `if h == 0 { RI32 }` fabrication has no site left to live in. Sized
-one fresh lease. GATE WHEN FIXED: the unused-param pair as a
-frontier leg (refuses today — RED is already banked by the probe). The wheel itself never hits the class (march green — the
-wheel's wide params are used), so the oracle was blind by the
-familiar rung-3 shape: a class the wheel never exercises.
+one fresh lease. THE GATE LANDED 2026-08-11 for the PROVEN class:
+tests/micros/mn-unused-wide-param.mn pins the fixed pair in the
+battery (exit 12, diags 0 — accept_g was RED at wat2wasm before pin
+cfa58fdd5479; the entry's own record is the RED bank). The wheel
+itself never hits the class (march green — the wheel's wide params
+are used), so the oracle was blind by the familiar rung-3 shape: a
+class the wheel never exercises — the micro is now the eye. The
+synthesized-family deletion stands sized one fresh lease, its O(1)
+read (graph_emitfn_at) landed at pin fe4b88b2f1be.
 
 `Hβ.ifc.flowlabel-inference-in-hm` — STAMPED 2026-08-08 (the C chain's
 second step; build-ready design, not yet built). TRACED, against the

@@ -106,7 +106,7 @@ fn spine_slot(h) = h % spine_slots
 // {nodes, ...} receiver computes field offsets over the partial demanded set
 // (the trecordopen-wrong-field class — measured here as `.nodes` reading
 // offset 0, the boundaries column, before the annotation).
-fn spine_page(ref spine, h) -> {bind: [BindHome], boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], narrowing: [Int], nodes: [GNode], program: [NodeBody], spans: [Span]} with Memory =
+fn spine_page(ref spine, h) -> {bind: [BindHome], boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], dispatch: [DispatchTier], narrowing: [Int], nodes: [GNode], program: [NodeBody], spans: [Span]} with Memory =
   list_index(spine, spine_band(h))
 
 // Open bands through band b — the MINT path only: every other write lands
@@ -130,7 +130,7 @@ fn spine_open_loop(own spine, opened, b) with Memory + Alloc = if opened > b {
   (spine, opened)
 } else {
   let page =
-    {bind: make_list(spine_slots), boundaries: make_list(spine_slots), canon: make_list(spine_slots), comments: make_list(spine_slots), narrowing: make_list(spine_slots), nodes: make_list(spine_slots), program: make_list(spine_slots), spans: make_list(spine_slots)}
+    {bind: make_list(spine_slots), boundaries: make_list(spine_slots), canon: make_list(spine_slots), comments: make_list(spine_slots), dispatch: make_list(spine_slots), narrowing: make_list(spine_slots), nodes: make_list(spine_slots), program: make_list(spine_slots), spans: make_list(spine_slots)}
   spine_open_loop(list_set(spine, opened, page), opened + 1, b)
 }
 
@@ -168,6 +168,11 @@ fn spine_put_boundary(ref spine, h, own boundary) with Memory = {
 
 fn spine_put_bind(ref spine, h, bh) with Memory = {
   let _ = list_set(spine_page(spine, h).bind, spine_slot(h), bh)
+  ()
+}
+
+fn spine_put_dispatch(spine, h, dt) with Memory = {
+  let _ = list_set(spine_page(spine, h).dispatch, spine_slot(h), dt)
   ()
 }
 
@@ -689,6 +694,13 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   // overwrites with the same verdict).
   {
     spine_put_bind(spine, use_handle, bh)
+    resume()
+  },
+  graph_dispatch_note(h, dt) => // The dispatch-tier column (lowering-is-a-column step i): the
+  // perform/wasi fork's arms note the chosen tier — same in-place,
+  // non-trailed contract as the bind note (lowering runs post-judgment).
+  {
+    spine_put_dispatch(spine, h, dt)
     resume()
   },
   graph_emitfn_note(kind, origin, fn_name, fence, caps) => // The emittable-fn

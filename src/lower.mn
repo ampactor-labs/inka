@@ -709,7 +709,10 @@ fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
       // walk (the scan recursing into itself — the handler rung's
       // runtime stack overflow). LWasiCall is the direct-substrate
       // node; emit dispatches the name to its instruction.
-      LWasiCall(handle, name, lo_args)
+      {
+        graph_dispatch_note(handle, DtWasi(name))
+        LWasiCall(handle, name, lo_args)
+      }
     } else {
       match env_kind_of(name) {
         Some(ConstructorScheme(tag_id, _)) => LMakeVariant(handle, tag_id, lo_args),
@@ -737,6 +740,7 @@ fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
         if is_cast_erased_op(name) {
           list_index(lo_args, 0)
         } else if is_wasi_import_op(name) {
+          graph_dispatch_note(handle, DtWasi(name))
           LWasiCall(handle, name, lo_args)
         } else {
           lower_perform_dispatch(handle, name, lo_args)
@@ -1928,7 +1932,12 @@ fn lower_perform_dispatch(handle, op_name, lo_args) = match op_resume_discipline
 }
 
 fn lower_perform_tiers(handle, op_name, lo_args) = match lower_resolve_handler_for_op(op_name) {
-  Some(r) => LPerform(handle, resolve_target(r), lo_args, "__hstate_{int_to_str(resolve_handle(r))}"),
+  Some(r) => {
+    let target = resolve_target(r)
+    let state_local = "__hstate_{int_to_str(resolve_handle(r))}"
+    graph_dispatch_note(handle, DtLexical(target, state_local))
+    LPerform(handle, target, lo_args, state_local)
+  },
   None => // Tier 1-SINGLETON — no lexical install covers the op, but a UNIQUE
   // handler declares it (the op→handler edge drawn at register_handler).
   // Resolve that singleton's record LIVE from the world chain (the fn
@@ -1942,7 +1951,9 @@ fn lower_perform_tiers(handle, op_name, lo_args) = match lower_resolve_handler_f
     Some(hname) => lower_singleton_perform(handle, op_name, hname, lo_args),
     None => {
       let ename = lower_effect_name_of_op(op_name)
-      LEvPerform(handle, op_name, ename, lower_compute_ev_slot_for_op(op_name), lo_args)
+      let slot = lower_compute_ev_slot_for_op(op_name)
+      graph_dispatch_note(handle, DtEvidence(ename, slot))
+      LEvPerform(handle, op_name, ename, slot, lo_args)
     },
   },
 }
@@ -1969,8 +1980,11 @@ fn lower_op_default_handler(op_name) = match env_lookup(op_name) {
 // edge is per-op — hname is already in hand); emit interns it and compares the
 // interned pointer against the chain nodes' hkey@16. Reuses LPerform's Tier-1
 // emit with the chain find standing in for the lexical __hstate local.
-fn lower_singleton_perform(handle, op_name, hname, lo_args) =
-  LDirectPerform(handle, hname, op_name, handler_stateful(hname), lo_args)
+fn lower_singleton_perform(handle, op_name, hname, lo_args) = {
+  let stateful = handler_stateful(hname)
+  graph_dispatch_note(handle, DtSingleton(hname, stateful))
+  LDirectPerform(handle, hname, op_name, stateful, lo_args)
+}
 
 // The singleton perform's emission SHAPE — the block every walk and the
 // emit delegate through, so LDirectPerform's semantics equal the old

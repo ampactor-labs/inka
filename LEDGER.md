@@ -35,6 +35,21 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-11 · ▶▶▶ THE DISPATCH-TIER COLUMN — STEP (i)'S SECOND
+  DECISION CARRIER (pin d96a258b5685 — CLEAN m2 == m3, census 0,
+  battery green, peak 2327532KB inside the justified 2440000 ceiling):
+  the BindHome pattern applied whole — DispatchTier
+  (DtLexical(target, state_local) / DtSingleton(hname, stateful) /
+  DtEvidence(ename, ev_slot) / DtWasi(name), all-payload constructors
+  by design so no nullary tag aliases the addr-0 virgin cell), the
+  spine's NINTH column, written at the four decision arms (the lexical
+  tier, the singleton construction, the evidence floor, both wasi
+  forks), non-trailed by the bind-note contract, zero readers until
+  the enumeration-reader arc reads dispatch off the column instead of
+  re-deriving it from LowExpr constructors. The peak ceiling's raise
+  carries its fixed-input justification in the baseline: one word per
+  spine slot — the column arc's own §5.O price, stated in the stamp
+  before the build measured it.
 - 2026-08-11 · ▶▶▶ THE VALUE-HOLES COLUMN — THE FIRST WALKER SWAP LANDS
   (pin 8aefbe91feb0 — CLEAN m2 == m3, census 0, battery 132/0 with the
   three dead-hole contracts promoted, peak 2318716KB under the

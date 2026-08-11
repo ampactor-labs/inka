@@ -987,4 +987,7 @@ env_frame_max: 0
 # REAL growth is caught at the same sensitivity. The arena (4.3,
 # columns-first) remains the named reclaimer of the LEVEL; the next
 # legal move stays DOWN.
-selfcompile_peak_kb_max: 2410000
+# 2026-08-11 dispatch-tier column: the spine's ninth column costs one word
+# per slot (+~106MB on the wheel compile — the arc's own §5.O price, "each
+# page grows by that many words per slot"); measured 2424804KB at landing.
+selfcompile_peak_kb_max: 2440000

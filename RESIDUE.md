@@ -177,7 +177,15 @@ boot: `effect Flow(src: Int, dst: Int)` declares, installs
 (`with Flow(2, 1)`), negates (`!Flow(2, 1)`, rendered correctly in
 the T_OverDeclared narration), and RUNS; ADT-ctor arguments clear too
 (`effect Flow(src: Level, dst: Level)` with `Flow(Sec, Pub)` checks
-clean and runs) — no grammar or algebra work precedes the build; (b)
+clean and runs) — no grammar or algebra work precedes the build; and
+the ENFORCEMENT half fires (re-probed 2026-08-11 at pin 93825f3d): a
+transitive performer under `with !Flow(1, 2)` REFUSES with the
+instance-precise mismatch (`!Flow(1, 2) + Any vs
+Flow(<operand>, <operand>)` — 6.2's conservative EANode arm), and the
+unhandled Flow at the root refuses the executable independently
+(E_EffectUnhandled, armed) — `!Flow` proving absence as `!Alloc` does
+is MEASURED live for op-performed flows; the build's whole remainder
+is the op-less observation-edge charge and the label surface; (b)
 THE CARRY HOLDS FOR SOURCES AND DIES AT DERIVATION — the same-day
 re-derivation corrected the first bank (retraction law): a SOURCE
 value's label rides its type (Vault-typed pw is classified wherever

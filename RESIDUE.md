@@ -788,6 +788,39 @@ per ⟳: the `type NAME` query facet answers the name, not the
 variant/field ROSTER (the ADT-roster facet); the address form lacks
 an enclosing-DECL facet (node → its decl — the walker census needed
 an awk scan for it).
+THE FIRST (ii) SWAP STAMPED — THE HOLE GATE READS THE PROGRAM
+(2026-08-11, the loop's sizing pass; build next). collect_value_holes
+(lower.mn, the 60-line four-fn family matching all 39 constructors to
+test ONE graph fact per carried handle) is the upside-down read:
+authored `??` holes are PARSE facts, and the gate scans the lowered
+tree for them. TRACED, the three-route joint that forced the stamp:
+the gate needs reachable-filtered authored holes, and the
+reachable→program mapping has no single home — the decls column notes
+FnStmt handles ONLY (top-level lets escape it), the emitfn
+enumeration is fn-shaped only, and env schemes carry decl reasons not
+subtree roots. The stamped form inverts the scan: (1) a HOLES column
+— the parser is the one writer, noting each authored NHole handle at
+mint (the executable_hole classifier's two tests, id != 0 and a real
+parse span, become the note condition — the classifier's graph read
+survives, the tree coupling dies); (2) the ENCLOSING-DECL projection
+(the confessed facet, node → its top-level decl) — built from the
+weave's own parent chain at note time (the parser knows the enclosing
+top-level stmt as it mints; noting (hole, decl-stmt handle) pairs
+costs the joint nothing and retires the facet confession for this
+consumer); (3) gate_reads = the holes column filtered by
+reachable-decl membership — the reach set's names meet the pair's
+decl handle through reach_decl_name's own vocabulary — spans from the
+weave, refusal unchanged; (4) the four-fn walker family DELETES with
+executable_hole's caller coupling. PRICED (§5.O): O(authored holes)
+per gate — a handful of pairs — replacing a full lowered-tree walk;
+zero new allocation class (the note rides the existing column
+mechanism). WRITERS: the parser's hole mint (the one note), gate_reads
+(the one read). COVERAGE: value-position holes in nested
+lambdas/arms/inits ride their enclosing top-level stmt's pair by
+construction; a hole in pruned dead code carries an unreachable decl
+handle and never refuses — the same law the tree walk enforced by
+input. The dual gate stays RED-first: refuse-hole's contract fixture
+is the standing gate and must stay red-then-green across the swap.
 
 `Hβ.eval.evaluating-cursor` — the subsystem table's missing row
 (2026-07-30, the Fable novelty audit's second proposal). §2's table maps

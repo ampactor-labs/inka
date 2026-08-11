@@ -433,14 +433,19 @@ and the publish fold — the rebind law completed at every unify, not
 just the decl pin) or on Hβ.infer.schemes-are-edges (whose deletion
 of the publish/peel/rebind tower dissolves the question). Until
 then seek-shaped recursion pends honestly — visible debt, the
-system's contract. THE OTHER HALF stays live: the wheel's six
-standing `0 <= self` pendings (cursor:297 score_one_position's
-handle param · cursor:546 scan_for_span's return · lexer:229's
-lex_from arg · main:1272/1437's ph flows · voice:1097's
-resolve_cursor_target) discharge via authored refined annotations
-whose echo/interval/callee legs the engine honors — one-line
-annotations, march-measured each; the recursion-shaped ones
-(scan_for_span) wait on the IH. TagId's 0..255 and the float
+system's contract. THE OTHER HALF is down to TWO (re-measured 2026-08-11 off the
+march's own stderr — the 08-08 discharge trio retired cursor:297,
+one main ph flow, and voice:1097): scan_for_span's return
+(cursor:544 — the recursion-shaped one, honestly waiting on the IH)
+and the render_at ph flow (main:1163). THE MINT-SITE ROUTE KILLED
+for the second (2026-08-11, march-measured vacuous and reverted
+whole): re-typing the span-index chain — Graph's payload,
+graph_index_span, the branch seed — to Handle marched CLEAN and
+byte-identical with BOTH pendings unmoved; the refinement peels in
+the flow before the obligation (the IH dig's own peel, met from the
+other side). The discharge waits on the peel fix or rung 3's
+dissolution, exactly like its recursion sibling — both pendings are
+honest debt with one shared root. TagId's 0..255 and the float
 intervals stay the SMT tier's.
 
 `Hβ.lower.lowering-is-a-column` — LowIR is the second graph (2026-07-30,

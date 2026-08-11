@@ -798,29 +798,42 @@ the gate needs reachable-filtered authored holes, and the
 reachable→program mapping has no single home — the decls column notes
 FnStmt handles ONLY (top-level lets escape it), the emitfn
 enumeration is fn-shaped only, and env schemes carry decl reasons not
-subtree roots. The stamped form inverts the scan: (1) a HOLES column
-— the parser is the one writer, noting each authored NHole handle at
-mint (the executable_hole classifier's two tests, id != 0 and a real
-parse span, become the note condition — the classifier's graph read
-survives, the tree coupling dies); (2) the ENCLOSING-DECL projection
-(the confessed facet, node → its top-level decl) — built from the
-weave's own parent chain at note time (the parser knows the enclosing
-top-level stmt as it mints; noting (hole, decl-stmt handle) pairs
-costs the joint nothing and retires the facet confession for this
-consumer); (3) gate_reads = the holes column filtered by
-reachable-decl membership — the reach set's names meet the pair's
-decl handle through reach_decl_name's own vocabulary — spans from the
-weave, refusal unchanged; (4) the four-fn walker family DELETES with
-executable_hole's caller coupling. PRICED (§5.O): O(authored holes)
-per gate — a handful of pairs — replacing a full lowered-tree walk;
-zero new allocation class (the note rides the existing column
-mechanism). WRITERS: the parser's hole mint (the one note), gate_reads
-(the one read). COVERAGE: value-position holes in nested
-lambdas/arms/inits ride their enclosing top-level stmt's pair by
-construction; a hole in pruned dead code carries an unreachable decl
-handle and never refuses — the same law the tree walk enforced by
-input. The dual gate stays RED-first: refuse-hole's contract fixture
-is the standing gate and must stay red-then-green across the swap.
+subtree roots. THE STAMP CORRECTED BY ITS OWN BUILD PASS (2026-08-11, same day —
+the parse-time writer was wrong twice, banked before a line landed):
+(1) the parser CANNOT be the writer — nhole has three call sites
+(authored THole, the orphan-tee recovery, the unexpected-token
+recovery, all minting nonzero ids with real spans), and above all a
+call-arg/pipe `??` is a SUSPENSION that must never refuse — the tree
+walk's real semantic content was VALUE-POSITION detection, encoded by
+what survived to lower's LConst arm. Value-position is a LOWERING
+decision, so the column's one writer is lower_expr's authored-hole
+arm (lower.mn:2069, `NHole(_) => LConst(handle, ...)` — the arm that
+already guards authored identity against canonicalization): it notes
+the hole into a pending list. (2) THE DRAIN RIDES THE α-SWAPPED
+CONSTRUCTIONS: each constructed entry (project_lambda_fn /
+project_nested_fn / project_thunk_fn / the arm, k, and partial
+constructions / lower_stmt for top decls) drains pending holes
+against ITS OWN entry name — every hole pairs with its nearest
+enclosing constructed entry, named exactly as reachability names
+them, handler arms included; a top-level value let drains at "" and
+"" is always-reachable (__init_lets runs every module value let —
+reach_decl_name's own vocabulary). (3) gate_reads = the column
+filtered by the reach set on entry NAMES ("" always kept); spans from
+the weave; refusal unchanged; a hole in pruned dead code carries an
+unreachable entry name and never over-refuses (SYNTAX's law held).
+(4) the four-fn walker family DELETES; executable_hole survives as
+the note condition. PRICED: O(authored holes) per gate; the pending
+list is bounded by holes-per-entry (drained per construction); no new
+allocation class. WRITERS: lower's hole arm (note), the seven
+construction drains (pair), gate_reads (read). When the worklist
+relocation lands, construction is per-reachable-entry and the
+name-filter DELETES — the design converges with the arc's
+destination instead of building (β)-class machinery. Gates: the
+refuse-hole contract and proof-exactness' three legs stay
+red-then-green across the swap; a new dead-code-hole fixture
+(executable with an unreachable holed fn → runs) pins the
+never-over-refuse law. Build next iteration; the drain-site sweep is
+the one mechanical risk (seven sites, one shape).
 
 `Hβ.eval.evaluating-cursor` — the subsystem table's missing row
 (2026-07-30, the Fable novelty audit's second proposal). §2's table maps

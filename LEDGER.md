@@ -35,6 +35,19 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-11 · ▶▶▶ THE INSTALL-SHAPE COLUMN — STEP (i) COMPLETES
+  (pin 06a0d62b070d — CLEAN m2 == m3, census 0, battery green, peak
+  2441448KB inside the justified 2470000 ceiling): InstallOf(hname,
+  config-arg program handles, arm-name groups), the spine's ELEVENTH
+  column, noted at the PTee install lowering with the arm-groups
+  lookup deduped through the let the LHandleWith construction shares.
+  THE STEP-(i) VOCABULARY IS COMPLETE — bind-home, the emittable-fn
+  enumeration, dispatch-tier, state-slot-home, install-shape — every
+  decision-carrier column the enumeration-reader relocation was
+  stamped to read now exists, dual-written and zero-read. The column
+  arc's loop-frontier is exhausted; the next arc work is the
+  dedicated-arc relocation (the phase-boundary stamp's build), and
+  the standing cursor's next loop item falls to the phase order.
 - 2026-08-11 · ▶▶▶ THE STATE-SLOT-HOME COLUMN — STEP (i)'S THIRD
   DECISION CARRIER (pin 38569e600884 — CLEAN m2 == m3, census 0,
   the pin advancing twice through in-landing teachings: the anonymity

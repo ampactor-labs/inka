@@ -2520,9 +2520,16 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     // lexical-tier arm call the driver could never intercept.
     let lo_l = lower_body_reified(left)
     lower_handler_pop()
-    let config_inits = extract_handler_config_args(right) |> map(lower_expr)
+    let config_args = extract_handler_config_args(right)
+    let arm_groups = lookup_handler_arm_names_of(hname)
+    // The install-shape column (lowering-is-a-column step i): the install's
+    // decision facts — handler name, config-arg program handles, arm-name
+    // groups — note at the install node; the decl-side state inits stay
+    // readable at the handler decl through the name.
+    graph_install_note(handle, InstallOf(hname, map(node_handle, config_args), arm_groups))
+    let config_inits = config_args |> map(lower_expr)
     let all_inits = config_inits ++ lookup_handler_state_inits_of(hname)
-    LHandleWith(handle, lo_l, lo_r, hname, all_inits, lookup_handler_arm_names_of(hname))
+    LHandleWith(handle, lo_l, lo_r, hname, all_inits, arm_groups)
   },
   PFeedback => {
     // <~ feedback — requires iterative context. The LFeedback emit declares

@@ -817,6 +817,13 @@ type DispatchTier = DtLexical(String, String) | DtSingleton(String, Bool) | DtEv
 // addr-0 virgin cell.
 type StateSlotHome = SlotPairs([(String, Int)])
 
+// The install-shape column's value (lowering-is-a-column step i): a `~>`
+// install site's handler name, its config-arg PROGRAM handles, and the
+// per-effect arm-name groups — the decl-side state inits stay readable
+// at the handler decl through the name. One all-payload constructor —
+// the sparse column's absent contract is the addr-0 virgin cell.
+type InstallShape = InstallOf(String, [Int], [{arms: [String], ename: String}])
+
 // The emittable-fn enumeration's entry kind (lowering-is-a-column, the
 // no-mint resolution): each synthesized fn shape is a PROJECTION of
 // structure the graph holds at its origin handle — the lambda its own
@@ -1824,7 +1831,7 @@ effect GraphRead {
   // no branch ever appends). A branch graph_handler installs over
   // these with its stmt's planned range as (next0, limit0).
   graph_boundary_at(Int) -> ExecutableBoundary
-  graph_branch_seed() -> ([{bind: [BindHome], boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], dispatch: [DispatchTier], narrowing: [Int], nodes: [GNode], program: [NodeBody], slots: [StateSlotHome], spans: [Span]}], Int, [(ValidSpan, Int)])
+  graph_branch_seed() -> ([{bind: [BindHome], boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], dispatch: [DispatchTier], installs: [InstallShape], narrowing: [Int], nodes: [GNode], program: [NodeBody], slots: [StateSlotHome], spans: [Span]}], Int, [(ValidSpan, Int)])
   // The REVERSE-EDGE column's read: every reference handle noted under
   // NAME (newest first — the column prepends). refs_of_name's whole-
   // graph VarRef scan and the oracle's quadratic count_dependents both
@@ -1910,6 +1917,10 @@ effect GraphWrite {
   // notes its update pairs (field name, slot offset) at the resume
   // node's handle — same in-place, non-trailed contract.
   graph_state_slots_note(Int, StateSlotHome)
+  // The install-shape column's write: the ~> install's lowering notes
+  // the shape at the install node's handle — same in-place, non-trailed
+  // contract.
+  graph_install_note(Int, InstallShape)
   // The emittable-fn enumeration's write (the no-mint resolution):
   // each of lower's seven LFn construction sites notes (kind, origin
   // handle, deterministic name, fence, captures) at the moment those

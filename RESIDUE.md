@@ -3621,6 +3621,56 @@ and mn-two-tail-accumulation go green, the mover narration deletes
 with its channel, census 0, frontier whole, the march. Swap behind
 the projections — the read surfaces keep their signatures.
 
+`Hβ.infer.forward-hof-row-underpublish` — THE DEDICATED ARC, its own
+entry (2026-08-11; born buried in `Hβ.infer.schemes-are-edges`'
+2026-08-06/07 tail — that chain stays the forensic record to CONSULT,
+never re-read whole per iteration; THIS entry's tail is the live
+state, and on any divergence it outranks every restatement of itself,
+the loop selector included). The measured false-absence channel: a
+final/solo published Pure under a declared row — specimen
+neg_names_to_str (src/gradient_delta.mn:283, declared Intern + Memory
++ Alloc + GraphRead; solo query answers Pure) — crown-adjacent: every
+`!E` verdict on a HOF-chained row inherits it.
+THE SUPERSESSION (Morgan 2026-08-11, via the loop's standing cursor):
+the chain's two closing rulings — "the loop returns to §11 phase
+order" and "beyond loop-iteration scale / needs a dedicated session"
+— are superseded TOGETHER: the loop session IS the dedicated arc (one
+session, context accumulating across iterations, this entry the spine
+that survives compaction). PLAN §11's standing cursor holds this peer
+at the front until CLOSED, or PARKED per the protocol below.
+THE INSTRUMENT (the chain's bank, WHOLE — not the charge-print
+alone): movers_diff + the charge-value print at inf_add_row_unified
+as ONE COMBINED apparatus — per-call charge VALUE beside the pass
+tag, on the specimen AND a healthy sibling (map/shout: map's
+published row is r-sort-connected, judged honest at the chain's first
+cut; never the stdin fixture — banked CONTAMINATED). Recipe SHAPE per
+the chain's root-trace/mint probes (Edit-patch → boot-emit → restore
+→ run on the real wheel blob); the charge-print itself is unbuilt.
+The differential names the writer; fix the writer, never the symptom.
+ACCEPTANCE (the chain's, unchanged): neg's solo query answers its
+declared four; movers fall or re-base with justification; march
+green. On CLOSE: retract the superseded frames in place, true PLAN
+§7's seam line, re-cut the stdin-caveat crucible
+(tests/frontier/mn-hof-forward-row.mn), and the cursor advances.
+THE PROTOCOL (the loop's P1 discipline — one home, here): probe
+cycles open and close on a CLEAN tree (`git status --porcelain` empty
+before any commit that is not itself the landing); a dirty tree at
+iteration open is disposition-FIRST — diff it, restore probe prints
+before any other action; a probe compiler is never marched and never
+pinned. A banked fact must DISCRIMINATE — kill or confirm a standing
+hypothesis, or name a writer; a probe that answers no banked question
+is churn, not a fact. Each banked fact REPLACES this entry's prior
+next-probe paragraph (frame + kills + the one banked probe — never
+append-only accretion), and a frame the artifact later refutes is
+retracted in place. Each P1 iteration increments the counter below in
+the same commit as its banking; an iteration banking no
+discriminating fact appends a dated STALL line instead. PARKED at
+three consecutive STALL lines or p1_iterations = 12, whichever first:
+write PARKED on the counter line, surface it as the report's last
+line, and the cursor advances — reopened only by a new measured fact
+or Morgan's word.
+p1_iterations: 0
+
 `Hβ.infer.round-oscillation-movers` — ROOT FOUND 2026-07-31, and the
 peer's own framing is superseded in place: this was never an
 "oscillation" and the rounds' deletion did not end it. The movers are

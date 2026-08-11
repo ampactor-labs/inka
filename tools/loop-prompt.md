@@ -16,16 +16,18 @@ one-line report "light iteration — lock held/low-mem; nothing banked." Renew
 the lease (`touch`) before any march; `release` before ending, always.
 
 **1 · GROUND.** `bash tools/state.sh --quick` and `git status`. doc-truth must
-hold (boot sha == PROVENANCE head). THE WORK SELECTOR IS PLAN §11 — the arc,
-phase order, first unlanded item. §7's head and RESIDUE's banked entries for
-that item are its context. Nothing else is in scope; an item excluded by
+hold (boot sha == PROVENANCE head). THE WORK SELECTOR IS PLAN §11 — its
+STANDING CURSOR block first, then the phase order's first unlanded item.
+§7's head and RESIDUE's banked entries for the chosen item are its context. Nothing else is in scope; an item excluded by
 hardware (§11's exclusion list) is skipped, not attempted.
 
 **2 · TRIAGE BEFORE PROGRESS.** If any gate is red, the tree is mid-landing,
 or the previous iteration ended dirty: forward-fix under the
 stack-correct-fixes law, or restore the last blessed pin when the artifact
 refutes the work — an era bracket (git-extracted boots × fixed inputs)
-arbitrates, never memory or adjacency. A red board admits NO new work; fixing
+arbitrates, never memory or adjacency. An OLD gate red after a correct fix
+may be a banked expectation that canonized the bug — re-derive the truth by
+hand before re-banking (§9.11). A red board admits NO new work; fixing
 the board IS the iteration if it is red.
 
 **3 · THE NEXT STEP IS ALREADY NAMED.** Take the smallest next marched step of
@@ -66,8 +68,8 @@ PROVENANCE narrative and the LEDGER head entry are written — doc-truth
 refuses the placeholder, by design, so write them before verify.
 
 **6 · LAND.** One marched step per iteration. At a FULL-GREEN board — verify,
-march, crown, frontier, census, doc-truth, every ratchet within its
-baseline — COMMIT, with the docs' true-up (§7 / §11 / RESIDUE / LEDGER /
+march, crown, frontier (--compiler fresh when the wheel changed), census,
+doc-truth, every ratchet within its baseline — COMMIT, with the docs' true-up (§7 / §11 / RESIDUE / LEDGER /
 PROVENANCE) in the same commit or an immediately following docs commit; the
 pre-commit gate is the second arbiter and its refusal is final. Anything
 short of full green lands nothing: bank the state, leave the tree marchable,

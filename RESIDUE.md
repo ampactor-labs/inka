@@ -828,12 +828,17 @@ allocation class. WRITERS: lower's hole arm (note), the seven
 construction drains (pair), gate_reads (read). When the worklist
 relocation lands, construction is per-reachable-entry and the
 name-filter DELETES — the design converges with the arc's
-destination instead of building (β)-class machinery. Gates: the
-refuse-hole contract and proof-exactness' three legs stay
-red-then-green across the swap; a new dead-code-hole fixture
-(executable with an unreachable holed fn → runs) pins the
-never-over-refuse law. Build next iteration; the drain-site sweep is
-the one mechanical risk (seven sites, one shape).
+destination instead of building (β)-class machinery. ✅ LANDED (pin 8aefbe91feb0 — CLEAN, census 0, battery 132/0 with
+the three dead-hole contracts promoted; the LEDGER entry THE
+VALUE-HOLES COLUMN carries the mechanics): the walker family is
+deleted (twelve families → eleven), the drain needed TWO sites not
+seven (the arm construction + the top-stmt boundary — container
+reachability-classes cover the rest), and the gates steered twice:
+the census gate caught visit-vs-survival on the wheel's two
+pipe-target `??` (closed by graph_hole_unnote at the splice), the
+peak ratchet caught the per-stmt state rebind (closed by the
+empty-pending fast path). The never-over-refuse law is pinned in the
+battery (mn-hole-dead-fn/-handler/-init).
 
 `Hβ.eval.evaluating-cursor` — the subsystem table's missing row
 (2026-07-30, the Fable novelty audit's second proposal). §2's table maps

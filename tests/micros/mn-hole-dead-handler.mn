@@ -1,0 +1,6 @@
+// expect: 42
+effect Ping { ping() -> Int }
+handler dead_h {
+  ping() => resume(??),
+}
+fn main() = 42

@@ -1,0 +1,6 @@
+// expect: 42
+effect Pong { pong() -> Int }
+handler dead_init_h with s = ?? {
+  pong() => resume(1),
+}
+fn main() = 42

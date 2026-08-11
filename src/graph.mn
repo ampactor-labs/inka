@@ -245,7 +245,7 @@ fn poly_teach_line(owner: String, reason) with Memory + Alloc =
 // over the SHARED spine with a private planned range — the root install is
 // bare and the defaults are the empty graph. Handler state records live in
 // shared heap; the install chain stays per-instance, correctly private.
-handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, high_limit0) with spine = spine0, spine_open = spine_open0, trail = [], trail_len = 0, epoch = 0, next = next0, mint_limit = limit0, mint_high = high0, high_limit = high_limit0, span_index = span_index0, checkpoint_stack = [], comment_refs = [], refs_col = smap_new(), decls_col = [], emitfns_col = [] {
+handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, high_limit0) with spine = spine0, spine_open = spine_open0, trail = [], trail_len = 0, epoch = 0, next = next0, mint_limit = limit0, mint_high = high0, high_limit = high_limit0, span_index = span_index0, checkpoint_stack = [], comment_refs = [], refs_col = smap_new(), decls_col = [], emitfns_col = [], holes_pend = [], holes_col = [] {
   graph_chase(handle) => // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
   // graph_rollback pops. When the stack is empty, writes are at the
@@ -670,6 +670,19 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   // same handle, readers dedup by handle).
   resume() with decls_col = push(decls_col, decl_handle),
   graph_decls_at() => resume(decls_col),
+  graph_hole_note(h) => // The value-holes column's pending half: lower's authored-hole arm is
+  // the one writer (value-position is a lowering decision); the pair
+  // lands at the next entry drain.
+  resume() with holes_pend = push(holes_pend, h),
+  graph_hole_drain(entry_name) => // Empty pending — the overwhelming case — resumes without a state
+  // rebind, so the per-stmt drain costs nothing when no hole is waiting.
+  if len(holes_pend) == 0 {
+    resume()
+  } else {
+    resume() with holes_col = hole_pairs_into(holes_pend, entry_name, holes_col), holes_pend = []
+  },
+  graph_hole_unnote(h) => resume() with holes_pend = holes_pend_without(holes_pend, h),
+  graph_holes_at() => resume(holes_col),
   graph_bind_note(use_handle, bh) => // The bind-home column (lowering-is-a-column
   // step i): an in-place spine cell store at the USE node's handle — no
   // state rebind, non-trailed (lowering runs post-judgment; a re-lower
@@ -779,6 +792,13 @@ fn chase_node(ref spine, mint_bound, handle, depth) with !Mutate = if depth > 10
 // canonical ROOT handle (the integer), not the node. unify unions the
 // roots; binding a surface alias instead strands the canonical var
 // free. Mirror of chase_node's NBound(TVar) arm, returning the handle.
+// The value-holes drain's pairing fold: every pending hole pairs with the
+// draining entry's name, appended onto the column.
+fn hole_pairs_into(hs, name: String, acc) = fold(acc, (a, h) => push(a, (h, name)), hs)
+
+// The unnote's filter — the pipe-consumed hole leaves the pending buffer.
+fn holes_pend_without(hs, h) = fold([], (a, x) => if x == h { a } else { push(a, x) }, hs)
+
 fn chase_handle(ref spine, mint_bound, handle, depth) with !Mutate = if depth > 100 {
   handle
 } else {

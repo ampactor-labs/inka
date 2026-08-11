@@ -1817,6 +1817,10 @@ effect GraphRead {
   // retire onto this O(bucket) read.
   graph_refs_at(String) -> [Int]
   graph_decls_at() -> [Int]
+  // The value-holes column's read: (hole handle, entry name) pairs — the
+  // executable gate's whole input (lowering-is-a-column (ii), the first
+  // walker swap; the four-fn LowExpr walk retired onto this read).
+  graph_holes_at() -> [(Int, String)]
 }
 
 effect GraphWrite {
@@ -1863,6 +1867,20 @@ effect GraphWrite {
   // graph_decls_at (the oracle queue's seed). Judgment rounds re-note,
   // so readers dedup by handle.
   graph_decl_note(Int)
+  // The value-holes column's writes: lower's authored-hole arm NOTES the
+  // surviving hole (value-position is a lowering decision — a consumed
+  // call-arg/pipe hole never reaches that arm), and each constructed
+  // entry DRAINS pending holes against its own name, so a hole pairs
+  // with the name reachability speaks ("" = a module value let, always
+  // live via __init_lets). Append-only telemetry, the decls-column
+  // contract.
+  graph_hole_note(Int)
+  graph_hole_drain(String)
+  // The pipe completion's retraction: a stage's `??` slot lowers (the
+  // note fires at the visit) and is then spliced over by the piped
+  // value — consumed, not surviving. The unnote removes it from the
+  // PENDING half only; a drained pair is a survival by construction.
+  graph_hole_unnote(Int)
   // The bind-home column's write (Hβ.lower.lowering-is-a-column step i):
   // lower's VarRef resolution arm — the ONE decision site — notes its
   // ls_resolve verdict at the use node's handle, an in-place spine cell

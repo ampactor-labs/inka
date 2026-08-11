@@ -188,7 +188,7 @@ body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~
 fn gate_reads(lowered) = {
   report_verify_debt(verify_debt())
   report_unhandled_effects(lowered)
-  let holes = collect_value_holes_decls(lowered)
+  let holes = column_value_holes(lowered)
   // The ARMED classes, read LIVE off the ledger the diagnostics handler keeps
   // (diag_refuses names them; a class arms only when the wheel's own census of it
   // is zero, so this can never refuse the medium). The hole gate was this law

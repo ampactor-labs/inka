@@ -35,6 +35,35 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-11 · ▶▶▶ THE VALUE-HOLES COLUMN — THE FIRST WALKER SWAP LANDS
+  (pin 8aefbe91feb0 — CLEAN m2 == m3, census 0, battery 132/0 with the
+  three dead-hole contracts promoted, peak 2318716KB under the
+  2410000KB ceiling): lowering-is-a-column step (ii) opens with the
+  hole gate reading the PROGRAM's own column instead of re-walking the
+  lowered tree. The one writer is lower_expr's authored-hole arm
+  (value-position is a lowering decision — a consumed call-arg hole
+  never reaches it, "the mint precedes lo_args"); entries drain
+  pending holes against their own names at TWO sites (the handler-arm
+  construction and the top-stmt boundary — a nested lambda shares its
+  container's reachability class, "" rides __init_lets always-live);
+  the executable gate filters the pairs by the reach vocabulary; the
+  four-fn collect_value_holes family DELETES (twelve walker families
+  → eleven). THE GATES DID THE STEERING, twice: the census gate
+  refused the first repin at TWO E_UnresolvedHole on the wheel's own
+  pipe-target `??` (io.mn fs_readdir_loop, graph.mn merge_chased_row)
+  — the note measured VISITS where the contract is SURVIVAL, closed
+  by graph_hole_unnote at the pipe completion's splice (the pipe owns
+  its hole); the peak ratchet then refused +108MB of per-stmt handler
+  state rebinds, closed by the empty-pending fast path (the
+  overwhelming case resumes without rebinding). Contracts measured
+  BEFORE the swap and held after: dead-fn, dead-arm, dead-init holes
+  all run (exit 42, diags 0) — the never-over-refuse law
+  (SYNTAX §«Partial application») pinned in the battery. Ratchets
+  re-based in the same commit with their justifications: movers 474 →
+  475 (the new column fns' schemes move once between passes, the
+  standing trial/final channel), effectful lambdas 383 → 385 (the two
+  pairing folds' lambdas perform Alloc — real vocabulary, the tier's
+  conviction correct).
 - 2026-08-11 · ▶▶▶ THE READING LAW KEEPS EVERY TERMINAL — THE FORWARD-HOF
   FALSE-ABSENCE CHANNEL CLOSES (pin c6eb188e1d37 — TRANSITION m3 == m4,
   census 0, battery 129/0, peak RSS fell 2336 → 2250MB): the P1 dig's

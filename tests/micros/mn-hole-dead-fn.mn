@@ -1,0 +1,3 @@
+// expect: 42
+fn dead_helper(x) = ??
+fn main() = 42

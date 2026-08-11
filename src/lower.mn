@@ -2066,7 +2066,15 @@ fn lower_expr(node) = match node {
   // reads canonically as before (same class ⇒ same lookup_ty chase ⇒
   // same repr — byte-identical).
   match obody {
-    NHole(_) => LConst(handle, LInt(0)),
+    NHole(_) => {
+      // The value-holes column's note (the one writer): a hole that
+      // reaches this arm SURVIVED to value position — consumed
+      // call-arg/pipe holes never do. executable_hole is the note
+      // condition (authored id + real span), exactly the old walk's
+      // collect test.
+      if executable_hole(handle) { graph_hole_note(handle) } else { () }
+      LConst(handle, LInt(0))
+    },
     _ => {
       let canon = egraph_extract(handle)
       let body = if canon == handle { obody } else { graph_node_body(canon) }
@@ -2402,6 +2410,19 @@ fn lower_pipe_complete(lo_l, right, handle) = match right {
     let hole_at = match rbody {
       NExpr(CallExpr(_, cargs)) => pipe_hole_index(cargs, 0),
       _ => -1,
+    }
+    // The pipe owns its hole: the slot lowered above (the column note
+    // fired at the visit) and the splice below consumes it — retract the
+    // pending note so a consumed hole never reads as a survival.
+    match rbody {
+      NExpr(CallExpr(_, cargs2)) => if hole_at >= 0 {
+        match list_index(cargs2, hole_at) {
+          N(_, _, hh) => graph_hole_unnote(hh),
+        }
+      } else {
+        ()
+      },
+      _ => (),
     }
     let is_partial = match rbody {
       NExpr(CallExpr(f, cargs)) => len(cargs) < callee_arity_of(f),
@@ -3115,6 +3136,11 @@ fn lower_stmt_list_loop(stmts, i, n, buf, count) = if i >= n {
   (buf, count)
 } else {
   let lo = lower_stmt(list_index(stmts, i))
+  // The value-holes drain at the top-level boundary: any hole not drained
+  // by an inner arm construction pairs with this stmt's reach name — a
+  // nested lambda/thunk/partial hole shares its container's reachability
+  // class, and "" (a module value let) is always live via __init_lets.
+  graph_hole_drain(reach_decl_name(lo))
   let extended = list_extend_to(buf, count + 1)
   let written = list_set(extended, count, lo)
   lower_stmt_list_loop(stmts, i + 1, n, written, count + 1)
@@ -3760,6 +3786,11 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
   let lo_body = k2_guard(mark_tail({
     lower_expr(arm.body)
   } ~> arm_state_ctx(captures_names, disc, discriminator)))
+  // The value-holes drain at the arm's own name — an arm hole pairs with
+  // the entry reachability names (its container lowers to ""), so a
+  // never-installed handler's arm hole never over-refuses (measured on
+  // the dead-arm fixture before the swap).
+  graph_hole_drain(fn_name)
   lower_frame_fence_pop()
   ls_exit_frame()
   // fence = nstate + total_arms; the arm's LEvPerform reads land on the
@@ -5469,63 +5500,46 @@ fn executable_hole(handle) with GraphRead + Memory + Alloc + !Mutate = match gra
   _ => false,
 }
 
-fn collect_value_holes_list(stmts, acc) = if len(stmts) == 0 {
-  acc
-} else {
-  collect_value_holes_list(drop_last(stmts), collect_value_holes_expr(last(stmts), acc))
+// The value-holes read (lowering-is-a-column (ii), the first walker
+// swap): the gate's holes are the COLUMN's (hole, entry-name) pairs
+// filtered by the reachable name universe — "" (a module value let) is
+// always live via __init_lets, and an unreachable entry's hole never
+// over-refuses (SYNTAX §«Partial application»; the dead-fn/arm/init
+// fixtures measured the law before the swap). Replaces the four-fn
+// LowExpr walk that re-enumerated the whole tree to test one graph fact
+// per carried handle.
+fn column_value_holes(lowered) = {
+  let uni = lowered_name_universe(lowered, smap_new(), 0)
+  holes_filter(graph_holes_at(), uni, [], 0)
 }
 
-fn collect_value_holes_expr(expr, acc) = match expr {
-  LWorldResolve(_, _) => acc,
-  LConst(h, _) => if executable_hole(h) { [h] ++ acc } else { acc },
-  LShow(_h, x) => collect_value_holes_expr(x, acc),
-  LHash(_h, x) => collect_value_holes_expr(x, acc),
-  LHandleWith(_h, b, hn, _hname, inits, _an) => collect_value_holes_list(inits, collect_value_holes_expr(hn, collect_value_holes_expr(b, acc))),
-  LLet(_h, _n, inner) => collect_value_holes_expr(inner, acc),
-  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps) => collect_value_holes_list(caps, collect_value_holes_list(body, acc)),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, _, _) => collect_value_holes_list(caps, collect_value_holes_list(body, acc)),
-  LResumeK(_h, k, v) => collect_value_holes_expr(v, collect_value_holes_expr(k, acc)),
-  LYield(_h, _op, args, k) => collect_value_holes_expr(k, collect_value_holes_list(args, acc)),
-  LKExtend(_h, k) => collect_value_holes_expr(k, acc),
-  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_value_holes_list(body, acc),
-  LBlock(_h, stmts) => collect_value_holes_list(stmts, acc),
-  LIf(_h, c, t, e) => collect_value_holes_list(e, collect_value_holes_list(t, collect_value_holes_expr(c, acc))),
-  LBinOp(_h, _op, lx, r) => collect_value_holes_expr(r, collect_value_holes_expr(lx, acc)),
-  LUnaryOp(_h, _op, x) => collect_value_holes_expr(x, acc),
-  LCall(_h, f, args) => collect_value_holes_list(args, collect_value_holes_expr(f, acc)),
-  LTailCall(_h, f, args) => collect_value_holes_list(args, collect_value_holes_expr(f, acc)),
-  LDirectCall(_h, _fh, _n, _t, args) => collect_value_holes_list(args, acc),
-  LReturn(_h, x) => collect_value_holes_expr(x, acc),
-  LMakeList(_h, elems) => collect_value_holes_list(elems, acc),
-  LMakeTuple(_h, elems) => collect_value_holes_list(elems, acc),
-  LSimdLanes(_h, lanes) => collect_value_holes_list(lanes, acc),
-  LMakeRecord(_h, fs) => collect_value_holes_list(fs, acc),
-  LMakeVariant(_h, _t, fs) => collect_value_holes_list(fs, acc),
-  LMatch(_h, s, arms) => collect_value_holes_arms(arms, collect_value_holes_expr(s, acc)),
-  LFeedback(_h, b, s) => collect_value_holes_expr(s, collect_value_holes_expr(b, acc)),
-  LPerform(_h, _n, args, _) => collect_value_holes_list(args, acc),
-  LDirectPerform(_h, _hn, _op, _st, args) => collect_value_holes_list(args, acc),
-  LWasiCall(_h, _n, args) => collect_value_holes_list(args, acc),
-  LEvPerform(_h, _n, _e, _s, a) => collect_value_holes_list(a, acc),
-  LInvariantFailure(_, _) => acc,
-  LFieldLoad(_h, rec, _off) => collect_value_holes_expr(rec, acc),
-  LConvert(_h, _, operand) => collect_value_holes_expr(operand, acc),
-  LStateSlotStore(_h, _o, v, _) => collect_value_holes_expr(v, acc),
-  LLocal(_, _) => acc,
-  LFeedbackPrior(_) => acc,
-  LGlobal(_, _) => acc,
-  LUpval(_, _) => acc,
+fn lowered_name_universe(lowered, idx, i) = if i >= len(lowered) {
+  idx
+} else {
+  let d = list_index(lowered, i)
+  let nm = reach_decl_name(d)
+  let idx1 = if nm == "" { idx } else { smap_add(idx, nm, 0) }
+  lowered_name_universe(lowered, universe_add_names(reach_nested_names(d, []), idx1, 0), i + 1)
 }
 
-fn collect_value_holes_arms(arms, acc) = if len(arms) == 0 {
+fn universe_add_names(names, idx, i) = if i >= len(names) {
+  idx
+} else {
+  universe_add_names(names, smap_add(idx, list_index(names, i), 0), i + 1)
+}
+
+fn holes_filter(pairs, uni, acc, i) = if i >= len(pairs) {
   acc
 } else {
-  match last(arms) {
-    (_, body) => collect_value_holes_arms(drop_last(arms), collect_value_holes_expr(body, acc)),
+  match list_index(pairs, i) {
+    (h, nm) => holes_filter(
+      pairs,
+      uni,
+      if nm == "" || len(smap_get_all(uni, nm)) > 0 { push(acc, h) } else { acc },
+      i + 1
+    ),
   }
 }
-
-fn collect_value_holes_decls(lowered) = collect_value_holes_list(lowered, [])
 
 // A type NAMES a wide-element sequence — directly or nested — when some
 // reachable sub-shape is a sequence whose element face (chased through any

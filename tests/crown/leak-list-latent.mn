@@ -1,0 +1,11 @@
+// CROWN — latency rides the SEQUENCE kind: a closure performing E,
+// carried as a list element, indexed out and CALLED under `with !E` —
+// the row must ride the element type to the call. Expect
+// E_EffectMismatch.
+effect E { op() -> Int }
+fn make() = [() => op()]
+fn bad() with !E = {
+  let fs = make()
+  fs[0]()
+}
+fn main() = bad()

@@ -839,6 +839,22 @@ pipe-target `??` (closed by graph_hole_unnote at the splice), the
 peak ratchet caught the per-stmt state rebind (closed by the
 empty-pending fast path). The never-over-refuse law is pinned in the
 battery (mn-hole-dead-fn/-handler/-init).
+THE (ii) LOOP-FRONTIER RULING (2026-08-11, the sizing pass after the
+holes landing): the holes swap was the ONE collect walker re-rootable
+at loop scale, because it tested a graph fact per carried handle. The
+remaining collect family CARRIES TREE CONTENT — collect_fn_emit_records'
+records are (name, params, BODY, fence), and call-vectors/fold-tys are
+the module aggregations the phase-boundary stamp's own step (4) says
+"become per-entry ACCUMULATIONS at construction — the collect_* walker
+family deletes here, not at a separate step." Their re-root IS the
+enumeration-reader/worklist relocation, sized by the stamp as a
+DEDICATED-ARC build. The loop-sized continuation of this arc is step
+(i)'s next decision-carrier column — the DISPATCH-TIER column
+(LPerform/LDirectPerform/LEvPerform/LWasiCall + stateful bit, effect
+key, op_slot, state_local, noted at lower's one dispatch-decision
+site; the BindHome pattern: dual-written, zero readers, Law-7 no-op,
+marched) — then the state-slot-home and install-shape columns by the
+same pattern, each one landing. The dedicated arc then reads them.
 
 `Hβ.eval.evaluating-cursor` — the subsystem table's missing row
 (2026-07-30, the Fable novelty audit's second proposal). §2's table maps

@@ -552,7 +552,7 @@ comment_refs_max: 0
 # d06486727bbb): the meet's new report path relocated one divergence —
 # the same condemned-pass artifact class; no trial/final machinery in
 # the diff. The next legal move stays DOWN.
-movers_max: 483
+movers_max: 474
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

@@ -35,6 +35,18 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-12 · ▶▶▶ op_resume_discipline MOVES TO THE ENV ALTITUDE — Phase
+  3.6's first prerequisite (pin 7260286fcd68 — CLEAN m2 == m3, 407922
+  lines, census 0, frontier 361/0, peak 2357356KB inside the ceiling).
+  The projection of an env entry belongs beside the entry: the fn read
+  `env_lookup(op_name)` and pulled the discipline off EffectOpScheme's
+  fourth field while living in lower.mn, so any other reader had to
+  import the whole backend to ask a question about a name. It lands in
+  src/env.mn with the resolve family; lower keeps its seven call sites
+  through a new `import env`. Byte-identical by construction — a
+  relocation moves no judgment — which is why the march ruled CLEAN
+  rather than TRANSITION.
+
 - 2026-08-11 · ▶▶▶ THE EMITFN BY-NAME READ — THE INDEX MATERIALIZES AT
   DEMAND (pin fe4b88b2f1be — CLEAN m2 == m3, census 0, battery green,
   peak 2451136KB inside the ceiling): graph_emitfn_at lands as the

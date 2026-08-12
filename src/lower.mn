@@ -40,6 +40,8 @@ import parser
 
 import infer
 
+import env
+
 import egraph
 
 // Hβ.first-light.resume-with-state-mutation — handler-arm-state context.
@@ -2045,22 +2047,11 @@ fn lookup_parent_effect(op_name) = match env_lookup(op_name) {
   None => None,
 }
 
-// The op's resume cardinality, PROJECTED off its EffectOpScheme — inference
-// wrote it (draw_op_edges joined every handler arm's Usage grade); lower reads
-// it live here, the TIME-axis twin of resume_world_of reading the world off the
-// arm fn's row. An op with no scheme (should not happen for a real perform)
-// floors to OneShot — the direct-return fast path, sound because a genuine
-// multi-shot arm always carries a MultiShot scheme by the monotone join.
-fn op_resume_discipline(op_name) = match env_lookup(op_name) {
-  Some(entry) => match entry {
-    (_, _, kind) => match kind {
-      EffectOpScheme(_, _, _, disc) => disc,
-      _ => OneShot,
-    },
-  },
-  None => OneShot,
-}
-
+// op_resume_discipline — the op's resume cardinality — lives at the env
+// altitude now (src/env.mn), where the EffectOpScheme it projects lives.
+// Lower reads it through the import as one of two readers; infer's `<~`
+// arm is the other.
+//
 // Lower walk — exhaustive, live
 //
 // lower reads the fabric: before lowering, resolve the node's CANONICAL

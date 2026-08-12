@@ -1076,7 +1076,18 @@ hole shapes never reach lower_expr's note arm), not via reachability
 semantics seam the RELOCATION dissolves (dead entries never
 construct, so never note — emission and reachability finally agree).
 The seam is named here, not patched. PRE-LANDINGS, each marchable
-while the tree stands: the emitfns_idx staleness decision (the
+while the tree stands: ✅ the handler-stack chain installs (pin
+db7d3d360883, CLEAN — SIX chains not four, because `lower_program`
+has three call sites of its own: pipeline:455 plus battery_compile
+(main) and mcp_judge (mcp); balance verified pair by pair before the
+move — the PTee push/pop and five frame-fence pairs, all
+straight-line, so the stack is empty at every decl boundary;
+placement beside `lower_scope` measured FREE, since all six op
+references live in lower.mn and none sits in a chain handler's arm,
+and the arms perform only substrate Memory/Alloc, which
+`emit_memory_bump` — an `EmitMemory` handler — never catches. The
+predicted row cascade measured ZERO: nothing between the install and
+the performs declares a row); the emitfns_idx staleness decision (the
 demand-built index latches at first read; the worklist interleaves
 note/read — insert-on-note-when-built or rebuild-on-miss, re-measured
 against the peak); decls_col grows HandlerDeclStmt + LetStmt notes

@@ -97,6 +97,40 @@
   (`Hβ.emit.partial-application-arity`). Either landing retires both
   convictions without renaming a lambda. The third callback took the
   tier's own remedy: the shift step is the named `emit_shift_pair`.
+- 2026-08-12 · ▶▶▶ THE LOWER-HANDLER STACK MOVES TO THE COMPILE
+  CHAIN (pin db7d3d360883 — CLEAN m2 == m3, 408373 lines, census 0, peak
+  2446768KB inside the 2470000 ceiling; every ratchet unmoved, movers 476). The first
+  pre-landing of the enumeration-reader relocation, and it exists because the
+  relocation stamp's "the projectors are callable from emit BY CONSTRUCTION"
+  was false: `lower_handler_stack_ctx` installed around `lower_stmt_list`
+  INSIDE `lower_program` (lower.mn:5033), so its capability ended where
+  lowering ended. When construction relocates to emit time, a body projected
+  from columns performs the frame fence with no handler in reach.
+  **THE CENSUS FIRST — six chains, not four.** `compile_remainder` has four
+  callers (pipeline's `compile`, `resume_image`, `compile_stdin`,
+  `compile_source`), but `lower_program` has THREE call sites — pipeline:455
+  plus main:1691 (`battery_compile`) and mcp:117 (`mcp_judge`), each its own
+  full chain. Six installs, one deletion.
+  **THE BALANCE, VERIFIED BEFORE THE MOVE** (the claim the widened extent
+  rests on): six push references and six pop references, every pair
+  straight-line — the PTee arm (2508/2513) and the five frame-fence sites
+  (878/880, 912/926, 945/951, 3785/3813, 4362/4386). Nothing branches
+  between a push and its pop, and `lower_handler_pop` on an empty stack is
+  already a no-op, so the stack is empty at every decl boundary and a chain
+  install sees exactly what the inner one saw.
+  **PLACEMENT IS FREE, AND MEASURED SO.** All six references to the three
+  ops live in lower.mn; none sits in a chain handler's arm, so no ordering
+  constraint arises from the arm-performs-resolve-outward law. The handler's
+  own arms perform only substrate Memory/Alloc, which no chain handler
+  catches (`emit_memory_bump` handles `EmitMemory`, not `Memory` — checked,
+  not assumed). It lands beside `lower_scope`, with the lower-phase cluster,
+  where `arm_state_ctx` already sets the precedent of a chain install
+  alongside nested ones.
+  **NO ROW CASCADE.** The prediction was a widening sweep through the lower
+  call graph; the measurement was zero — `lower_program`, `compile_remainder`
+  and the walk beneath them declare no rows, so the effect crossed the whole
+  remainder without a single authored clause to widen. Law-7 byte-identical,
+  as a pure extent change should be.
 
 - 2026-08-12 · ▶▶▶ THE CAUSALITY REFUSAL LANDS AND PHASE 3.6's MEMBERSHIP
   DESIGN DIES TO ITS OWN CONTROL (pin fc93f1957fb9 — CLEAN m2 == m3,

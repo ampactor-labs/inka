@@ -136,7 +136,7 @@ fn mcp_judge(source, wat_path) = infer_context(() => {
       (lines, nerr, refused, emitted)
     },
   }
-} ~> mcp_diag_collector ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
+} ~> mcp_diag_collector ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> lower_handler_stack_ctx ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 // The verdict's head states exactly what the gate did — refused, emitted
 // with surfaced errors (unarmed classes; the sound-incomplete contract,

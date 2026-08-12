@@ -1719,7 +1719,7 @@ fn battery_compile(src, wat_path) = infer_context(() => {
       (failed, nerr, lines)
     },
   }
-} ~> mcp_diag_collector ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
+} ~> mcp_diag_collector ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> lower_handler_stack_ctx ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
 
 fn battery_run(dir, names) = {
   fs_mkdir(".build")

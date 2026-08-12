@@ -138,6 +138,16 @@ fn lookup_handler_arm_names_of(hname) = match handler_decl_of(hname) {
 // the caller's __state misread as state. The handler stack IS a Mentl
 // effect (handler IS state); the install handle is
 // graph-carried, never re-derived (Anchor 1).
+//
+// `lower_handler_stack_ctx` installs in the COMPILE CHAIN beside
+// `lower_scope`, not around `lower_stmt_list` — the extent is the whole
+// remainder because construction relocates to emit time
+// (Hβ.lower.lowering-is-a-column): a body projected from columns at
+// emit performs the frame fence, and a capability scoped to
+// `lower_program` would leave that perform with no handler. Every push
+// is straight-line paired with its pop (the PTee arm and the five
+// frame-fence sites), so the stack is empty at every decl boundary and
+// the widened extent is behaviour-identical.
 effect LowerHandlerStack {
   lower_handler_push(String, Int) -> Int
   lower_handler_pop() -> Int
@@ -5046,8 +5056,9 @@ fn lower_program(stmts) = {
   // No pre-register pass: every handler decl's (config, state, arms) is
   // already in the env's HandlerKind (register_handler), so an install
   // resolves its handler's decl live (handler_decl_of) regardless of source
-  // order. The lower-handler-stack tracks lexical installs.
-  lower_stmt_list(stmts) ~> lower_handler_stack_ctx
+  // order. The lower-handler-stack is installed by the compile chain, not
+  // here — its extent is the whole remainder (see the effect's own decl).
+  lower_stmt_list(stmts)
 }
 
 // Ω.3 — top-level name collection uses the buffer substrate. The number

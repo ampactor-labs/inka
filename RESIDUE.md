@@ -111,6 +111,65 @@ incoherent — because the column walk that would answer it measured
 is emitfns_col re-keyed as an smap by name, landing with the columns
 arc. The entry below is the original pin, kept as the dig's record.
 
+THE REMAINDER IS RE-CUT BY MEASUREMENT (2026-08-12, probes at pin
+c10ad6ef; the O(1) read landed at fe4b88b2 and the deletion was sized
+against it, so the sizing was the thing to test first). Three findings,
+each artifact-backed, and the first two REFUTE this entry's own
+framing:
+
+(1) THE SYNTHESIZED FLOOR IS NOT A FABRICATION — IT IS THE WORD FACE.
+Probed: a lambda with an unused `Gain` param (`apply_it((s) => 7, 0.5)`)
+runs 7; a nested fn with one (`inner(g)` inside `outer(g: Gain)`) runs 7.
+The emitted WAT says why: the caller BOXES the f64 into `$wide_cell` and
+pushes the cell pointer, and `$inner` signs `(param $s i32)` — the two
+agree because both speak the word face. When the param IS used the scan
+reads RF64, `fn_record_is_wide` fires, the `$wf$` twin is emitted, the
+table slot holds the twin (`emit_fn_refs`), and the twin derefs. So the
+floor is coherent BY CONTRACT for every indirect-dispatched kind, not
+merely "never probed incoherent". Reading the declaration instead would
+be harmless there (one extra twin) — and fatal at the arm, per (2).
+
+(2) THE BRIEFED BUILD, EXECUTED AS WRITTEN, REGRESSES THE ARM CLASS.
+An arm's floored param is what keeps it assembling today: the perform
+emits `emit_args_word(args)` — boxing every wide arg — then
+`(call $op_<hname>_<op>)` against the arm's repr-projected signature.
+Floor the param and the boxed word matches; give the param its real
+width and the same call refuses. Measured both directions
+(tests/frontier/mn-arm-wide-op-arg.mn, NOT wired to the board because
+it is RED): an arm that IGNORES a `Gain` arg runs; an arm that READS one
+refuses at assemble with `expected [i32, f64] but got [i32, i32]` at
+`(call $op_mixer_gain_read)`, zero diagnostics. That is a live
+capability hole — a handler arm cannot use a wide op argument — and it
+gets its own entry, `Hβ.emit.arm-wide-arg-face`.
+
+(3) THE DELETION IS THEREFORE DEP-GATED, and the DEP is a
+REPRESENTATION change, not an edit. Both readers must read ONE fact —
+the op's DECLARED arg types — so that the arm's signature and the
+perform's arg emission agree by construction instead of by the accident
+of non-use. The emit cannot reach that fact today: an arm fn is named
+`op_<hname>_<opname>` and is not env-registered, and splitting that
+composed name to recover the op is by-name re-derivation (both halves
+may contain underscores — genuinely ambiguous). The column is the road,
+and the briefed path does not reach it: `graph_emitfn_at`'s origin is
+param-bearing for only TWO of the six kinds — EfkLambda and EfkNested
+carry a LambdaExpr/FnStmt at the origin, while EfkArm notes
+`node_handle(arm.body)` (the body, not the arm), EfkK notes the perform
+handle `ph`, EfkThunk notes a boundary handle and has no params at all,
+and EfkPartial's params come from `partial_split`. Nor does lower hold
+the handles to note: the arm site sets `locals_handles =
+zeros_of_len(len(arm_params))` by the bind_names_as_locals convention.
+SO THE BUILD IS: the emitfn note carries the fn's PARAMS the way it
+already carries its CAPTURES — one more `[(String, Int)]` field written
+at the one writer (7 sites: the effect decl in types.mn, the handler arm
+in graph.mn, five note sites in lower.mn), with the arm's pairs sourced
+from the op's `EffectOpScheme` — then `param_repr_of` reads that column,
+the body scan (`find_local_handle_list`/`_arms`/`_expr`, 104 lines)
+deletes whole, `body` drops from all four caller signatures, and the
+perform's direct call targets the face it prepared. All of it lands
+TOGETHER or the module breaks, and its verdict lives ONE GENERATION
+DEEP — `Hβ.emit.twin-state-width`'s own lesson: m2 green is not the
+verdict.
+
 `Hβ.emit.unused-wide-param-floor` — TRAP PINNED 2026-08-08 (found by
 Phase 8.1's opening probe, en route to the predicate trace): a fn whose
 WIDE-typed parameter is UNUSED in its body emits an i32-floor
@@ -152,7 +211,53 @@ itself never hits the class (march green — the wheel's wide params
 are used), so the oracle was blind by the familiar rung-3 shape: a
 class the wheel never exercises — the micro is now the eye. The
 synthesized-family deletion stands sized one fresh lease, its O(1)
-read (graph_emitfn_at) landed at pin fe4b88b2f1be.
+read (graph_emitfn_at) landed at pin fe4b88b2f1be. THAT SIZING IS
+SUPERSEDED by the 2026-08-12 re-cut in the entry above: the origin is
+param-bearing for two of six kinds, and the deletion DEP-gates on the
+arm's call face.
+
+`Hβ.emit.arm-wide-arg-face` — TRAP PINNED 2026-08-12 (found by probing
+the sibling entry's sizing rather than trusting it). A HANDLER ARM
+CANNOT READ A WIDE OP ARGUMENT. `perform`'s Tier-1 emission pushes
+`emit_args_word(args)` — every wide arg boxed into a cell, the arm fn's
+ABI declared floor-words in its own comment ("the arm fn is SHARED
+between the floor and every twin, so its ABI is floor words",
+backends/wasm.mn LPerform arm) — and then direct-calls
+`$op_<hname>_<opname>`, whose signature is projected from the arm's
+PARAM REPR. The two readers disagree exactly when the arm uses the arg:
+the param repr reads RF64 off the use site, the signature renders
+`(param $g.f64 f64)`, and the pushed cell pointer meets it as
+`expected [i32, f64] but got [i32, i32]`. Measured at pin c10ad6ef,
+zero diagnostics, one assembly refusal at `(call $op_mixer_gain_read)`.
+The class HID because the unused direction is coherent by accident (a
+floored param matches the boxed word), and the wheel's own arms never
+read a wide arg — the same oracle blindness the sibling entry names:
+green board, absent capability. THE REPRO IS BANKED:
+tests/frontier/mn-arm-wide-op-arg.mn (the pair — `gain_read` reads its
+`Gain` arg, `gain_ignored` drops one; expect 11). It is deliberately
+NOT wired into frontier-gate.sh: a RED leg refuses every pin, and the
+fix is DEP-gated below. Wire it in the same commit as the fix, which is
+what makes it a seen-RED gate rather than a claim.
+
+THE MACHINERY IS ALREADY 90% RIGHT, which is what makes the fix small
+once its DEP lands: the `$wf$` word-face twin for a wide arm IS emitted
+(`fn_record_is_wide` fires on the used arm), and the table slot already
+holds it (`emit_fn_refs` substitutes `$wf$` at the arm's own index, so
+the INDIRECT dispatch path is correct today). Only the direct call
+names the native symbol while pushing the word face. THE FIX IS ONE
+CHOICE AT ONE SITE — the perform calls the face it prepared — and it is
+DEP-GATED on `Hβ.emit.unused-wide-param-floor`'s column build, because
+keying that choice on the callee's wideness requires the arm's params to
+carry their DECLARED widths: today an arm that ignores a wide arg floors,
+emits no twin, and a `$wf$`-keyed call would name a symbol that does not
+exist. Both halves land together, or each breaks the other's case. The
+alternative face — arms word-faced in signature with the body
+dereferencing at each use — is the same coupling read from the other
+end and costs a new deref path where the twin generator already exists;
+prefer the twin. Sequenced with the 5.5 lowering-column arc, whose one
+repeated move (put the per-handle fact in a column, write it at the one
+writer, migrate the readers, delete the side-structure) is exactly the
+shape here — the body scan IS the side-structure.
 
 `Hβ.ifc.flowlabel-inference-in-hm` — STAMPED 2026-08-08 (the C chain's
 second step; build-ready design, not yet built). TRACED, against the

@@ -253,6 +253,16 @@ fn ty_lo(ty) with GraphRead + Memory + Alloc = match ty {
   TRefined(base, pred) => lo_best(ty_lo(base), pred_lo(pred)),
   TReprPin(_, base) => // A width pin narrows representation, never value bounds.
   ty_lo(base),
+  TVar(h) => // A type-slot VAR carries the handle; the bound is the CELL's live
+  // fact, one chase away (Carried-Truth). The decl's own TFun carries
+  // its return as TVar(ret_handle), so the rec-call IH — callee_ret_lo
+  // reading the callee's return bound — was refused at exactly the slot
+  // that holds it (probe-measured 2026-08-12: the interval fixture's
+  // seek decide chased ret=TVar, answered None). ty_lo_at reads NBound
+  // and recurses; a
+  // free or chain-end cell still answers None, so the read only ever
+  // ADDS proofs the cell already carries.
+  ty_lo_at(h),
   _ => None,
 }
 

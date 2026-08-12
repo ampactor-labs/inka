@@ -2186,17 +2186,20 @@ for i in "${!compilers[@]}"; do
   fi
 
   # ─── The interval fragment's proof-and-honesty face ────────────────
-  # mn-verify-interval runs to 21 through the contract battery; HERE the
-  # stderr ledger is the assertion: exactly TWO pending comparisons —
-  # seek (the peel-window residue) and wild (honest Sub debt). Fewer =
-  # the licence laundered a computation again (the runtime -1 class);
-  # more = an interval leg (if-join / len / Add / opaque type read)
-  # stopped discharging.
+  # mn-verify-interval runs to 28 through the contract battery; HERE the
+  # stderr ledger is the assertion: exactly ONE pending comparison —
+  # wild (honest Sub debt, the never-launders control). seek DISCHARGES
+  # since 2026-08-12: the authored `-> Nat` rides the decl's TFun slot
+  # as a value bound before the body (the assumed-signature IH), and
+  # ty_lo chases a var slot to its cell, so the rec-call's callee read
+  # proves the join. Zero = the licence laundered a computation again
+  # (the runtime -1 class); more = an interval leg (if-join / len /
+  # Add / opaque type read / the IH slot) stopped discharging.
   iv_err=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-verify-interval.mn" 2>&1 >/dev/null | grep -c 'pending comparison')
-  if [ "$iv_err" = "2" ]; then
-    pass "interval fragment: discharges hold and the licence never launders (2 honest pendings)"
+  if [ "$iv_err" = "1" ]; then
+    pass "interval fragment: the rec-call IH discharges and the licence never launders (1 honest pending)"
   else
-    fail "interval fragment (pending comparisons: $iv_err, want 2)"
+    fail "interval fragment (pending comparisons: $iv_err, want 1)"
   fi
 
   # ─── The directional fn-arg edge (quiet-under-cap admits) ──────────

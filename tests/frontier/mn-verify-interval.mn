@@ -9,13 +9,17 @@
 // `wrap` proves the CALLEE leg: an authored return rides the
 // pre-registered TFun as a Ty VALUE, so a call's bound reads the
 // callee's own annotation verbatim — uncontaminatable by class
-// merging. `seek` is the named self-call residue: the recursion's IH
-// needs the decl-class discriminator (a self-call's callee cell shares
-// the decl's union-find class; a tail-called OTHER fn must never be
-// granted the IH — the g-launder), so it pends honestly until
-// graph_root_of lands. The frontier leg asserts exactly TWO pending
-// comparisons survive this file (seek + wild), no more (the engine
-// discharges), no fewer (the licence never launders).
+// merging. `seek` proves the SELF-CALL leg (the recursion IH, real
+// since 2026-08-12): the decl's own TFun carries the authored `-> Nat`
+// in its ret slot as a value bound BEFORE the body — the assumed
+// signature — and the interval read chases a var slot to its cell, so
+// the rec-call's bound is the annotation and the if-join discharges.
+// The g-launder stays closed by the ledger's layering, not a
+// discriminator: callee_ret_lo reads the CALLEE's own slot, and a
+// tail-called OTHER fn's slot is that fn's own claim, owed at its own
+// decl. The frontier leg asserts exactly ONE pending comparison
+// survives this file (wild), no more (the engine discharges), no
+// fewer (the licence never launders a computation).
 type Nat = Int where 0 <= self
 
 fn cap(xs) -> Nat = if len(xs) < 16 { 16 } else { len(xs) }

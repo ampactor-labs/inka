@@ -2923,7 +2923,39 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan, pol
   // Resolve params to shared identities ONCE (binds the handles); reused below
   // for the ownership pass — never re-derived per consumer (Carried-Truth).
   let resolved_params = build_param_types(params, param_handles)
-  let fn_ty = TFun(resolved_params, TVar(ret_handle), mk_ef_open([], row_handle))
+  // THE ASSUMED SIGNATURE RIDES THE SLOT AS A VALUE — prereg's own law
+  // (pre_register_fn_sig: "a value inside the record cannot be
+  // class-contaminated ... a chased ret VAR reaches the obligation's own
+  // class through tail-call merging; the value never does"), applied at
+  // the decl's live pin. The decl's fn_ty was the ONE construction still
+  // carrying the var slot, and the rec-call is the one caller that reads
+  // it: probe-measured 2026-08-12 on the interval fixture's seek, whose
+  // own decide chased the slot to
+  // the body join's first-bound bare Int because the old post-body pin
+  // rebound the cell AFTER the body obligation had already decided — the
+  // assumed signature arrived one statement late. Resolving BEFORE the
+  // body makes the IH visible to the rec-call's callee read on time; the
+  // cell still binds (forward-ref grounding + quantification), exactly as
+  // at prereg. Absent annotation ⇒ the fresh var, inferred as before.
+  let authored_pin = match ret_ann {
+    N(pin_body, pin_span, _) => match pin_body {
+      NTypeAnn(pin_ty) => match quantify_ctor_ty(pin_ty, []) {
+        (resolved_pin, _pq) => {
+          graph_bind(ret_handle, resolved_pin, Located(pin_span, Declared(name)))
+          Some(resolved_pin)
+        },
+      },
+      _ => // The absent-annotation marker (the parser mints LitUnit when no
+      // `->` is authored): no pin.
+      None,
+    },
+  }
+  let pinned_ret = match authored_pin {
+    Some(resolved_pin) => resolved_pin,
+    None => // The return stays the fn's own minted cell — the inferred form.
+    TVar(ret_handle),
+  }
+  let fn_ty = TFun(resolved_params, pinned_ret, mk_ef_open([], row_handle))
   // Bind the name BEFORE body so recursive calls resolve.
   let existing = graph_chase(handle)
   match existing {
@@ -2988,44 +3020,23 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan, pol
   match body_node {
     N(_, _, body_handle) => {
       unify(body_handle, ret_handle, span, FnReturn(name, Inferred("body")))
-      // PIN the `-> RetTy` annotation (SYNTAX.md «Return type omission»): absent =
-      // inferred; PRESENT = a CONSTRAINT. The source's return type travels live in
-      // ret_ann as NTypeAnn(ty) — read it back and unify the authored Ty against
-      // the inferred return (which body_handle was just unified into). A body whose
-      // inferred return disagrees surfaces E_TypeMismatch through unify_types, with
-      // a Reason walking back to the annotation (the Why projection). No NTypeAnn ⇒ the
-      // annotation is absent ⇒ inferred, no pin (byte-identical to the old form).
+      // The `-> RetTy` annotation is PINNED BEFORE the body (the assumed-
+      // signature slot value above), so the return unify just ran the body
+      // against the bound cell — a disagreeing body surfaces E_TypeMismatch
+      // through that one edge. What remains here is value-proof R2: the
+      // refined annotation discharged against the judged body node (the
+      // let-annotation's twin — `fn choose() -> Positive = 1` proves 0 < 1
+      // on the literal; a non-constant body stays honest V_Pending), and it
+      // runs AFTER the body precisely so the decide reads judged cells —
+      // with the IH already visible through the pinned slot (the old
+      // post-body rebind landed after this decide and the decl's own
+      // obligation read the join's bare base; probe-measured 2026-08-12).
       match ret_ann {
         N(ret_body, ret_span, _) => {
           match ret_body {
-            NTypeAnn(ann_ty) => // Resolve through the alias edge FIRST — the pre-scheme bound the
-            // RESOLVED annotation, so pinning the raw syntactic TName here made
-            // the two anchors disagree with each other (Int vs Positive at the
-            // annotation's own span). One resolver, every reader.
-            match quantify_ctor_ty(ann_ty, []) {
-              (resolved_ann, _q) => {
-                unify_types(TVar(ret_handle), resolved_ann, ret_span, Declared(name))
-                // A refined return annotation is a CONSTRAINT on the body — discharge
-                // it against the body node exactly as a let-annotation discharges
-                // against its value (R2): `fn choose() -> Positive = 1` proves
-                // 0 < 1 on the literal; a non-constant body stays honest V_Pending.
-                match body_node {
-                  N(_, _, body_h) => {
-                    apply_refinement_constraint(resolved_ann, body_h, ret_span)
-                    // THE CLASS EXPOSES ITS MOST-REFINED MEMBER (the representative-
-                    // choice projection, written at the decl's own pin): the unify above
-                    // peels the wrapper into the class, so without this rebind the ret's
-                    // stored member is the bare base — generalize then publishes a
-                    // PEELED final, every caller's ann-pin meets bare Int where the
-                    // typed-identity admit needed the alias, and each call edge raises
-                    // an undischargeable copy of a proof this decl already carried
-                    // (measured: four spurious V_Pending on the capability fixture the
-                    // moment the order-independent judge resolved finals). Rebinding the
-                    // ret class to the resolved annotation makes the refined form the
-                    // representative every reader — generalize first — projects.
-                    graph_bind(ret_handle, resolved_ann, Located(ret_span, Declared(name)))
-                  },
-                }
+            NTypeAnn(ann_ty) => match quantify_ctor_ty(ann_ty, []) {
+              (resolved_ann, _q) => match body_node {
+                N(_, _, body_h) => apply_refinement_constraint(resolved_ann, body_h, ret_span),
               },
             },
             _ => (),
@@ -3055,7 +3066,11 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan, pol
           let inferred_params = infer_ownership(resolved_params, body_node)
           graph_bind(
             handle,
-            TFun(inferred_params, TVar(ret_handle), mk_ef_open([], row_handle)),
+            // The ret slot carries the SAME pinned value the pre-body signature
+            // rides — rewriting it as the bare var here would re-open the
+            // class-contamination channel the pin closed (this rewrite is the
+            // record's last writer; the slot's law is prereg's).
+            TFun(inferred_params, pinned_ret, mk_ef_open([], row_handle)),
             Located(span, Inferred("ownership-resolved params of '{name}'"))
           )
           // ─── Refinement narrowing (§4⑥, arm 6) — the verified cursor ────

@@ -35,6 +35,24 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-12 · ▶▶▶ THE THREE-WORKTREE UNION (pin d4242c5c733b — CLEAN
+  m2 == m3, census 0, battery green, crown 35/0, frontier 361/0,
+  proof-exactness 9/0; the orchestrator's own re-derivation after the
+  splice): the day's parallel fleet joined on one tree — the delay
+  line (pin 1a1f545f in its worktree), the peel fix (the rec-call IH
+  real, the late-rebind machinery deleted), and the relocation's four
+  pre-landings (the handler stack in every compile chain — six, not
+  four, measured; the emitfn index carrying coverage instead of a
+  latch; the decls column taking every declaration; main's arity from
+  its decl). Each landed CLEAN in its own worktree under the
+  owner-enforced heavy lease; each rebased onto the moved main; the
+  union pin is the merged tree's own fixpoint, re-derived by the
+  orchestrator — nothing blessed on a builder's word. The fifth
+  pre-landing refuted with its law banked (a module aggregation is
+  dual-runnable only if every node it visits exists before emit);
+  the flowlabel and repr briefs refuted-by-measurement in the same
+  fleet cycle, their kills and corrected designs banked in their
+  entries.
 - 2026-08-12 · ▶▶▶ THE DELAY LINE IS AS DEEP AS IT SAYS (pin 1a1f545f0e0b
   — CLEAN m2 == m3, 408963 lines, census 0, crown green,
   proof-exactness green, 22.35s wall · 2397MB peak RSS inside the

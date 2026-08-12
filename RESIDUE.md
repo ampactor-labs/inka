@@ -1986,6 +1986,74 @@ first firing (RED-first fixture), (b) the charge, (c) the Delay(0)
 refusal with its own DiagKind, (d) stays arena-gated. Gates as
 stamped; the wheel's 15 recurrence sites are the no-false-refusal
 control.
+BUILT 2026-08-12 — PARTLY, AND THE REST KILLED BY ITS OWN CONTROL (pins
+7260286fcd68, fc93f1957fb9; the LEDGER entry carries the arc). What
+LANDED: prerequisite (1), op_resume_discipline relocated to src/env.mn;
+and (c), `E_ZeroDelayFeedback` armed at birth — `<~ delay(0)` refuses,
+the eleventh refusing class, gate tests/micros/mn-refuse-zero-delay.mn
+seen RED (the identical program RAN, exit 30). What DIED:
+— **PREREQUISITE (2) HAD NO REFERENT.** `register_effect_ops`
+  (infer.mn) already env_extends the effect name with
+  `EffectDeclKind(op_names)`, at the same one writer that draws
+  op→effect, and `mentl where`'s handler-covers badge already reads it.
+  The banked smap would have been a second copy of a live edge — the
+  Carried-Truth violation the entry was written to avoid.
+— **THE MEMBERSHIP PREDICATE IS REFUTED ON THE ARTIFACT.** The
+  dissolved fork's answer ("the loop-driving resume grade IS the
+  class") classifies no clock: measured by badge,
+  `choose : Choice op — resume t ->* answer` is the only MultiShot
+  family on the wheel, while `tick` / `advance_sample` / `sample_rate` /
+  `current_sample` / `yield` / `result` / `iter_context` are every one
+  `->1`. The derivation's error is locatable: §4④ unifies search,
+  sampling, backtracking and the clock as one SUBSTRATE (a resumable
+  continuation), not as one CARDINALITY — a clock handler advances
+  state and resumes ONCE per tick, because the iteration is the
+  caller's loop. Under the predicate, E_FeedbackNoContext fires at all
+  thirteen wheel `<~` sites; the no-false-refusal control refuses the
+  build before a byte changes.
+— **(b) THE CHARGE DIES WITH IT, and independently on principle.**
+  With no membership test there is no effect to charge; and charging
+  `Sample` at the arm so that lowpass_iir's authored row matches would
+  be inference writing what the annotation asked for — the
+  annotation-as-input drift, against SYNTAX's own law that a declared
+  row is a CONSTRAINT verified against the inferred, never a contract.
+  lowpass_iir is honestly OVER-DECLARED today; `T_OverDeclared` is the
+  true narration.
+— **E_FeedbackNoContext STAYS AT ZERO CONSTRUCTION SITES, and that is
+  now a positive finding rather than a gap.** Its referent — an ambient
+  iterative context — is a Faust inheritance the emission never adopted:
+  a `<~` site is a per-site state register whose "previous iteration" is
+  the enclosing fn's next invocation (dsp/signal.mn's own comment says
+  so: "each with its own state global, all advanced once per sample as
+  bandpass_step runs down the per-sample bandpass_loop"), which is why
+  bandpass_step needs no row. Making the class fire before the clock is
+  a proven fact would canonize a false refusal on correct code. Its
+  honest home is `Hβ.dataflow.clock-calculus-sample-rate` (Phase 8's
+  DSP verify tier): when the clock is INFERRED, "no clock here" is a
+  measurement and the refusal is its projection. The `IterContext`
+  marker effect (lib/dsp/clock.mn — `iterate_context` / `no_iter_context`)
+  is the vocabulary already waiting for that landing.
+Phase 3.6 is therefore CLOSED at its causality face and REDIRECTED at
+its context face; the remaining `<~` work is the depth read below and
+the clock calculus above.
+
+`Hβ.dataflow.feedback-delay-depth-unread` — the `<~` state element's
+authored depth reaches NO reader. MEASURED 2026-08-12 by probe at pin
+7260286fcd68: the identical recurrence returned 30 under `delay(0)`,
+`delay(1)` and `delay(3)` alike, so `delay(N)` emits one slot for every
+N and a developer asking for a three-sample delay silently gets one.
+`FeedbackSpec = Delay(Int) | Accumulate(a) | FilterSpec(Int, [Float])`
+(lib/prelude.mn) declares the depth; lower's PFeedback arm never reads
+it. THE ULTIMATE FORM: the depth is read, `delay(N)` emits an N-slot
+ring of priors, and `delay(0)` refuses as it does today — the refusal
+becomes ONE ARM of the read rather than a standalone check.
+`FilterSpec`'s tap count is the same field at the same site. Sequenced
+with the DSP verify tier (Phase 8) beside
+`Hβ.dataflow.clock-calculus-sample-rate`, since a ring of priors and a
+clock are the same question asked at depth and at rate. The gate that
+lands with it: a fixture whose `delay(2)` recurrence differs
+observably from its `delay(1)` twin — impossible to write today, which
+is exactly the measurement.
 
 `Hβ.driver.per-module-env-overlay` — the design stamp for PLAN §11
 Phase 3.5 (banked 2026-08-07 with the first half LANDED: the solo

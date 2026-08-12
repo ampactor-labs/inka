@@ -1142,12 +1142,12 @@ not misled:
 - **Universal executable refusal** (§11 col 2) is PARTIAL, and this bullet
   said "only `E_MissingModule` is armed" while the paragraph above it listed
   six — a contradiction inside one section, both wrong against the artifact
-  (trued 2026-07-31 by reading `diag_refuses`' own arms; the tenth armed
-  2026-08-08): TEN classes refuse
+  (trued 2026-07-31 by reading `diag_refuses`' own arms; the eleventh
+  armed 2026-08-12): ELEVEN classes refuse
   — EMissingModule, EHandlerStateShadowsOp, EDuplicateFnName,
   EDuplicateTypeName, EEffectUnhandled, ERefinementRejected,
   EOwnershipViolation, EMissingVariable, EOccursCheck,
-  EDeclaredRowContradiction — plus the hole gate,
+  EDeclaredRowContradiction, EZeroDelayFeedback — plus the hole gate,
   which is the executable gate's own read rather than a `diag_refuses` arm.
   The remaining census classes (E_TypeMismatch and kin, name-dependent on
   partial-link paths) are the ratcheting work toward universal. Read the arms,
@@ -1738,20 +1738,34 @@ new DEP found; the map below is accurate at that pin.)*
   file-true query spans) is the stamped second half; the ceiling reaches
   0 when the seams close, and the per-module check then gates the
   drift-catalog retirement.
-- **3.6 · `<~` becomes whole** — STAMPED 2026-08-07; THE FORK DISSOLVED
-  2026-08-12 (`Hβ.dataflow.feedback-becomes-whole` in `RESIDUE.md`
-  carries the four measured faces, the traced design, and the
-  derivation): Iterate-class membership is the handler's proven drive
-  structure — the resume-discipline inference already joined at the
-  EffectOpScheme, read at the PFeedback arm; the declared-marker branch
-  dies by the body-is-the-contract law (the @resume= precedent), and
-  the earlier structural refutation was aimed at the wrong altitude
-  (op shapes, not handler arms). §4④'s one-primitive unification makes
-  the predicate exact: the loop-driving resume grade IS the class; the
-  clock is the DSP instance, not the definition. The build is
-  UNBLOCKED whole. `Hβ.dsp.state-element-install-once` rides
-  the arena (4.3); `Hβ.dataflow.clock-calculus-sample-rate` rides Phase
-  8's DSP verify tier.
+- **3.6 · `<~` becomes whole** — ✅ CLOSED AT ITS CAUSALITY FACE,
+  REDIRECTED AT ITS CONTEXT FACE (2026-08-12, pins 7260286fcd68 +
+  fc93f1957fb9; `Hβ.dataflow.feedback-becomes-whole` in `RESIDUE.md`
+  carries both, and the LEDGER entry the arc). LANDED:
+  op_resume_discipline at the env altitude, and `E_ZeroDelayFeedback` —
+  Faust's causality rule as the ELEVENTH armed class, `<~ delay(0)`
+  refusing at the arm, gate seen RED (the program ran, exit 30). KILLED
+  BY ITS OWN CONTROL, before a byte changed: the dissolved fork's
+  membership predicate — "the loop-driving resume grade IS the class" —
+  classifies NO clock, because every clock op is measured `->1`
+  (`choose` is the wheel's only `->*`) and a clock handler resumes ONCE
+  per tick with the iteration living in the caller's loop. §4④ unifies
+  those five as one SUBSTRATE, never one cardinality; the predicate
+  would have fired E_FeedbackNoContext at all thirteen wheel `<~` sites.
+  The reverse-edge prerequisite died too — `EffectDeclKind(op_names)` is
+  already that edge at the one writer. E_FeedbackNoContext therefore
+  KEEPS its zero construction sites on purpose: a `<~` site is a
+  per-site state register whose "previous iteration" is the enclosing
+  fn's next call (which is why bandpass_step needs no row), so the
+  ambient-context requirement is a Faust inheritance the emission never
+  adopted, and its honest home is the INFERRED clock —
+  `Hβ.dataflow.clock-calculus-sample-rate`, Phase 8's DSP verify tier,
+  where "no clock here" becomes a measurement instead of a guess. The
+  probe that killed the predicate opened one more:
+  `Hβ.dataflow.feedback-delay-depth-unread` (delay(0)/delay(1)/delay(3)
+  all returned 30 — the authored depth reaches no reader), which lands
+  with that same tier. `Hβ.dsp.state-element-install-once` rides the
+  arena (4.3).
 
 ### Phase 4 · Ownership has a real lifetime
 

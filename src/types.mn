@@ -2039,6 +2039,12 @@ type DiagKind
   // the label-resolution detail
   | EUnknownArgLabel(String, Span)
   | EFeedbackNoContext(Span)
+  // `<~ delay(0)` — the causality rule (Faust's, at Mentl's typed
+  // altitude). A cycle whose declared delay is ZERO is non-computable:
+  // the prior IS the current output, so the value depends on itself
+  // within one iteration. Decidable exactly when the depth is a
+  // literal; a computed depth rides the refinement tier.
+  | EZeroDelayFeedback(Span)
   // a `...name` rest element outside a destructuring parameter slot
   | ERestOutsideDestructure(Span)
   // a row alias referencing itself through its own expansion (name)
@@ -2244,6 +2250,7 @@ fn diag_span(d) with Pure = match d {
   EResumeWorldMismatch(_, _, s) => s,
   EUnknownArgLabel(_, s) => s,
   EFeedbackNoContext(s) => s,
+  EZeroDelayFeedback(s) => s,
   ERestOutsideDestructure(s) => s,
   ERowAliasCycle(_, s) => s,
   EDeclaredRowContradiction(_, s) => s,
@@ -2305,6 +2312,7 @@ fn diag_source(d) with Pure = match d {
   EResumeWorldMismatch(_, _, _) => "infer",
   EUnknownArgLabel(_, _) => "infer",
   EFeedbackNoContext(_) => "infer",
+  EZeroDelayFeedback(_) => "infer",
   ERestOutsideDestructure(_) => "infer",
   ERowAliasCycle(_, _) => "effects",
   EDeclaredRowContradiction(_, _) => "effects",
@@ -2366,6 +2374,7 @@ fn diag_code(d) with Pure = match d {
   EResumeWorldMismatch(_, _, _) => "E_ResumeWorldMismatch",
   EUnknownArgLabel(_, _) => "E_UnknownArgLabel",
   EFeedbackNoContext(_) => "E_FeedbackNoContext",
+  EZeroDelayFeedback(_) => "E_ZeroDelayFeedback",
   ERestOutsideDestructure(_) => "E_RestOutsideDestructure",
   ERowAliasCycle(_, _) => "E_RowAliasCycle",
   EDeclaredRowContradiction(_, _) => "E_DeclaredRowContradiction",
@@ -2510,6 +2519,15 @@ fn diag_refuses(d) with Pure = match d {
   // performing body check CLEAN under a declared !E; an unsatisfiable
   // clause must never reach an executable.
   True,
+  EZeroDelayFeedback(_) => // ARMED at birth (2026-08-12), the literal licence: the depth is read
+  // from the authored `delay(<int literal>)` at the `<~` site — no
+  // resolution dependency, so the blob-vs-user-path gap cannot apply.
+  // Census on the wheel at arming: 0 (all thirteen `<~` sites declare
+  // delay(1) or accumulate). A cycle with no delay has no computable
+  // value, and today it SILENTLY became a one-sample delay — the emit
+  // never read the depth at all, measured by probe (delay(0), delay(1)
+  // and delay(3) each returned 30).
+  True,
   _ => False,
 }
 
@@ -2589,6 +2607,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EResumeWorldMismatch(da, db, _) => "resume cardinality mismatch: {show_discipline(da)} vs {show_discipline(db)}",
   EUnknownArgLabel(detail, _) => detail,
   EFeedbackNoContext(_) => "`<~` used outside an iterative context",
+  EZeroDelayFeedback(_) => "`<~ delay(0)` closes a cycle with no delay — the prior would be the value being computed. Raise the delay to at least 1",
   ERestOutsideDestructure(_) => "`...` rest element outside a destructuring parameter — rest lives in patterns (`([h, ...t]) =>`, `let [h, ...t] =`), and `++` joins lists in expressions",
   ERowAliasCycle(nm, _) => "row alias `{nm}` expands through itself — a row is a finite signed set; name the effects directly",
   EDeclaredRowContradiction(nm, _) => "the clause asserts `{nm}` AND `!{nm}` — one row cannot both permit and forbid a name; drop one side",

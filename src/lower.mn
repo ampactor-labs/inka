@@ -2049,8 +2049,8 @@ fn lookup_parent_effect(op_name) = match env_lookup(op_name) {
 
 // op_resume_discipline — the op's resume cardinality — lives at the env
 // altitude now (src/env.mn), where the EffectOpScheme it projects lives.
-// Lower reads it through the import as one of two readers; infer's `<~`
-// arm is the other.
+// Lower reads it through the import; the dispatch tiers below are its
+// callers.
 //
 // Lower walk — exhaustive, live
 //

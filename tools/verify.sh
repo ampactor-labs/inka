@@ -83,16 +83,29 @@ done
 #     contract (run AND refuse grammars) in one process. A FAILC / FAILR /
 #     NOEXPECT line is a broken contract; the run-values above stay the
 #     exec-side check until the exec seam itself absorbs.
-if command -v mentl >/dev/null 2>&1; then
-  bat=$(cd "$ROOT" && mentl test tests/micros 2>/dev/null | grep -cE '^(FAILC|FAILR|NOEXPECT) ' || true)
+#
+#     THE COMPILER IS THE ONE THIS GATE OWNS, never the installed pointer.
+#     The shim resolves MENTL_HOME to the repo it was installed from, so in
+#     a worktree `mentl test` judged THIS tree's fixtures with MAIN's boot —
+#     a fixture gating a brand-new diagnostic reported FAILR while the
+#     worktree's own compiler judged it correctly (measured 2026-08-12, a
+#     full dig spent chasing a detector that was firing the whole time).
+#     Every sibling leg below already reads $C/m2.wasm; this one re-derived
+#     the compiler from an install pointer instead, which is the
+#     Carried-Truth Law at the scaffold. Read the wheel the gate just built.
+#     wt_m2_ensure is the ONE keyed artifact the census leg reads too, so
+#     asking for it here costs a cache hit, not a build.
+if C=$(wt_m2_ensure); then
+  bat=$(wt_run --dir . "$C/m2.wasm" test tests/micros 2>/dev/null | grep -cE '^(FAILC|FAILR|NOEXPECT) ' || true)
   if [[ "$bat" -eq 0 ]]; then
-    say "✓ contract battery: every fixture's own contract holds (mentl test)"
+    say "✓ contract battery: every fixture's own contract holds (this tree's wheel)"
   else
-    say "✗ contract battery: $bat broken contract(s) — run: mentl test tests/micros"
+    say "✗ contract battery: $bat broken contract(s) — the wheel this tree just built"
     fail=1
   fi
 else
-  say "· contract battery skipped (no installed mentl — tools/install.sh)"
+  say "✗ contract battery: the wheel did not build"
+  fail=1
 fi
 
 # 3. The census — the medium's own verdict on its own source, RATCHETED.

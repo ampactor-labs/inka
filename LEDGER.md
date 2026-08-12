@@ -35,6 +35,50 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-12 · ▶▶▶ THE CAUSALITY REFUSAL LANDS AND PHASE 3.6's MEMBERSHIP
+  DESIGN DIES TO ITS OWN CONTROL (pin fc93f1957fb9 — CLEAN m2 == m3,
+  408298 lines, census 0, frontier 361/0, crown green, peak 2359448KB
+  inside the ceiling). Two kills first, both pre-build, both from the
+  artifact:
+  **KILL 1 — the banked Iterate-class predicate.** `Hβ.dataflow.feedback-becomes-whole`
+  had membership = "any of the effect's ops has joined resume discipline
+  MultiShot", derived from §4④'s one-primitive unification. The badges
+  refute it: `choose : Choice op — resume t ->* answer` is the ONLY
+  MultiShot family on the wheel, while `tick`, `advance_sample`,
+  `sample_rate`, `current_sample`, `yield`, `result` and `iter_context`
+  are all `->1`. A clock handler advances state and resumes ONCE per
+  tick — the iteration is the CALLER's loop, not multi-resumption — so
+  cardinality cannot be the class discriminator, and the predicate would
+  have fired E_FeedbackNoContext at all thirteen wheel `<~` sites. Two
+  of those thirteen (bandpass_step's four, ic_compile_loop's one) declare
+  no row at all, so no ambient-row reading saves them either.
+  **KILL 2 — the reverse-edge prerequisite had no referent.**
+  `register_effect_ops` already env_extends the effect name with
+  `EffectDeclKind(op_names)` at the same one writer that draws op→effect;
+  `mentl where`'s handler-covers badge already reads it. The banked smap
+  would have been a second copy of an edge the graph draws.
+  **WHAT LANDED.** `E_ZeroDelayFeedback` — the causality rule at Mentl's
+  typed altitude, armed at birth (the literal licence: the depth is read
+  from the authored `delay(<int literal>)`, no resolution dependency,
+  wheel census 0). `feedback_declares_zero_delay` reads the RHS call's
+  callee name and first argument at the PFeedback arm, the same read
+  `predicate_flow_label` makes at the same altitude; both `delay(0)` and
+  `Delay(0)` convict, a computed depth answers false rather than guessing.
+  **THE PROBE THAT PAID FOR ITSELF.** `delay(0)`, `delay(1)` and
+  `delay(3)` all returned 30 — the authored depth reaches no reader at
+  all, so `delay(3)` silently gives a one-sample delay. Banked as
+  `Hβ.dataflow.feedback-delay-depth-unread`; the refusal becomes one arm
+  of that read when it lands.
+  **THE DIG'S REAL LESSON, closed in the same commit.** The detector
+  "would not fire" for an hour: it fired on the wheel (census 5 under a
+  deliberately over-firing probe build) and never through `mentl check`.
+  The installed shim hardcodes `MENTL_HOME` to the repo it was installed
+  from, so in a worktree every `mentl` verb judges with MAIN's boot —
+  and verify.sh's contract-battery leg shelled out to exactly that,
+  while every sibling leg reads `$C/m2.wasm`. The leg now reads the
+  wheel the gate just built. A gate that judges with someone else's
+  compiler is the Carried-Truth Law at the scaffold.
+
 - 2026-08-12 · ▶▶▶ op_resume_discipline MOVES TO THE ENV ALTITUDE — Phase
   3.6's first prerequisite (pin 7260286fcd68 — CLEAN m2 == m3, 407922
   lines, census 0, frontier 361/0, peak 2357356KB inside the ceiling).

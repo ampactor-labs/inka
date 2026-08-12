@@ -1,0 +1,25 @@
+// expect: refuse E_ZeroDelayFeedback
+// The causality rule, armed: a `<~` cycle whose declared delay is ZERO
+// has no computable value — the prior IS the output being computed — so
+// it refuses at the gate (nonzero verdict, zero WAT).
+//
+// Faust makes this unsayable by inserting the delay implicitly; Mentl
+// names the depth, so the depth can be wrong, so the medium refuses it.
+//
+// SEEN RED at pin 7260286fcd68: this exact program RAN, exit 30 — the
+// identical value `delay(1)` and `delay(3)` return, because the declared
+// depth reached no reader. The wider gap that measurement opened is
+// `Hβ.dataflow.feedback-delay-depth-unread`; this fixture pins the one
+// depth that is wrong at every reading.
+
+effect Sample { sample_rate() -> Int }
+effect IterContext { iter_context() -> Bool }
+
+handler iterate_context {
+  iter_context() => resume(True)
+}
+
+fn accum(input) -> Int with Sample + Memory + Alloc =
+  ((prev) => input + prev) <~ delay(0)
+
+fn main() -> Int = accum(10) ~> iterate_context

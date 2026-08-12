@@ -1911,7 +1911,24 @@ Iterate → E_FeedbackNoContext fires honestly (nothing anywhere gives
 "prior" meaning). SOTA note: Faust's ambient clock and Lustre's
 clock calculus become a typed, per-instance, INFERRED fact. The
 build unblocks whole: (a)-(d) above stand, with (a)'s membership
-test reading the EffectOpScheme's grade.
+test reading the EffectOpScheme's grade. TWO MECHANICAL
+PREREQUISITES traced at the build's opening (2026-08-12, both
+decision-free): (1) op_resume_discipline relocates from lower.mn:2054
+to the env altitude — its one home is where the EffectOpScheme lives;
+infer's PFeedback arm and lower's tier selection become its two
+readers through the import. (2) The effect→ops REVERSE EDGE lands at
+effect registration (the one writer that already draws op→effect):
+an smap ename → [op names], the reverse-edge precedent's third
+application — membership then enumerates the ambient effect's ops
+and asks each grade, O(ambient × ops). The PFeedback arm's own
+comment names the waiting peer (Hβ.effects.iterate-class-declaration)
+— it RESOLVES onto this read; the "declared fact" it awaited is the
+joined grade, already declared by every handler body. Build order:
+the two prerequisites, then (a) ambient resolution + E_FeedbackNoContext's
+first firing (RED-first fixture), (b) the charge, (c) the Delay(0)
+refusal with its own DiagKind, (d) stays arena-gated. Gates as
+stamped; the wheel's 15 recurrence sites are the no-false-refusal
+control.
 
 `Hβ.driver.per-module-env-overlay` — the design stamp for PLAN §11
 Phase 3.5 (banked 2026-08-07 with the first half LANDED: the solo

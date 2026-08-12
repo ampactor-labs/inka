@@ -1018,4 +1018,7 @@ env_frame_max: 0
 # dispatch-tier, state-slot-home, install-shape): each column costs one
 # word per spine slot — the arc's own §5.O price, "each page grows by
 # that many words per slot"; measured 2441448KB at the eleventh.
-selfcompile_peak_kb_max: 2470000
+# 2026-08-12 the delay-line + peel-fix landings combined: measured
+# 2471324KB, 1.3MB over the prior line — two wheel-growing landings'
+# additive footprint inside the day's observed run variance.
+selfcompile_peak_kb_max: 2500000

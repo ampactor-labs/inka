@@ -23,10 +23,24 @@ LOCK_DIR="${MENTL_HEAVY_LOCK:-/tmp/mentl-heavy-lock.d}"
 TTL_SECONDS="${MENTL_HEAVY_TTL:-1800}"              # 30 min — one skipped 20-min window worst case
 MEM_FLOOR_KB=$((6 * 1024 * 1024))                    # 6 GiB — the self-compile's ~3GB peak class, doubled
 
+# The lease's OWNER — the caller's repo root: stable across one agent's
+# short-lived shells (the reason a pid test was rejected), distinct per
+# worktree in a builder fleet. A 2026-08-12 measured kill: an owner-blind
+# `release` cleared a sibling builder's live lease mid-fleet — the exact
+# two-heavy-runs collision the lock exists to prevent. touch/release now
+# require ownership; a lease with no owner file (pre-owner era) stays
+# operable so a live fleet never strands mid-rollout.
+OWNER="${MENTL_LOCK_OWNER:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")}"
+
 mem_avail_kb() { awk '/MemAvailable/ {print $2}' /proc/meminfo; }
 lease_epoch()  { cat "$LOCK_DIR/epoch" 2>/dev/null || echo 0; }
 lease_age()    { echo $(( $(date +%s) - $(lease_epoch) )); }
 lease_live()   { [ -d "$LOCK_DIR" ] && [ "$(lease_age)" -lt "$TTL_SECONDS" ]; }
+lease_owner()  { cat "$LOCK_DIR/owner" 2>/dev/null || echo ""; }
+owner_may_act() {
+  o="$(lease_owner)"
+  [ -z "$o" ] || [ "$o" = "$OWNER" ]
+}
 
 case "${1:-status}" in
   acquire)
@@ -41,13 +55,19 @@ case "${1:-status}" in
     fi
     rm -rf "$LOCK_DIR"; mkdir "$LOCK_DIR" || { echo "heavy-lock: race lost"; exit 1; }
     date +%s > "$LOCK_DIR/epoch"
+    printf '%s\n' "$OWNER" > "$LOCK_DIR/owner"
     echo "heavy-lock: acquired (lease ${TTL_SECONDS}s)"; exit 0
     ;;
   touch)
-    [ -d "$LOCK_DIR" ] && date +%s > "$LOCK_DIR/epoch" && echo "heavy-lock: lease renewed" && exit 0
-    echo "heavy-lock: no lease to renew"; exit 1
+    if [ ! -d "$LOCK_DIR" ]; then echo "heavy-lock: no lease to renew"; exit 1; fi
+    if ! owner_may_act; then echo "heavy-lock: NOT THE HOLDER — lease kept ($(lease_owner))"; exit 1; fi
+    date +%s > "$LOCK_DIR/epoch" && echo "heavy-lock: lease renewed" && exit 0
     ;;
   release)
+    if [ ! -d "$LOCK_DIR" ]; then echo "heavy-lock: released (no lease)"; exit 0; fi
+    if lease_live && ! owner_may_act; then
+      echo "heavy-lock: NOT THE HOLDER — live lease kept ($(lease_owner))"; exit 1
+    fi
     rm -rf "$LOCK_DIR"; echo "heavy-lock: released"; exit 0
     ;;
   status)

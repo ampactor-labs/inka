@@ -204,9 +204,12 @@ the interpolation's bound type carries the joined fragment label
 above Public), so the built string IS classified downstream; (c) the
 sink edge then needs its own judgment — an argument position whose
 callee performs the observation class, refusing when arg-label ⊑
-sink-clearance fails — and SINK CLEARANCE is the open sub-question
-(what marks a callee as an observation, at what level, declared how);
-refinement subtyping alone cannot refuse there (TRefined(String) ⊑
+sink-clearance fails — and SINK CLEARANCE was the open sub-question
+(what marks a callee as an observation, at what level, declared how),
+now ANSWERED by measurement in THE SINK DERIVATION below, which kills
+every clearance-carrier the artifact can read today and leaves the row
+charge as the one surviving form; refinement subtyping alone cannot
+refuse there (TRefined(String) ⊑
 String unifies — refinements narrow, never block). With the
 propagation half + the clearance question, the build is
 DEDICATED-ARC, not loop-lease; the substrate probes (a) stand; (d) no
@@ -224,6 +227,72 @@ in unify/generalize/instantiate) and unnecessary if the row carries
 the flow; it wins only if per-value label POLYMORPHISM (a fn generic
 over its argument's label) is needed before declared labels exist —
 measure at build, burden on the challenger.
+THE SINK DERIVATION — four kills, one survivor, two DEPs (2026-08-12,
+probed at pin c10ad6ef through the installed shim; the build opened on
+the brief's named form and the artifact refused it four ways, so the
+kills ARE the landing). What the probes killed, each by measurement:
+(1) THE EFFECT-OP PARAMETER IS NOT THE CLEARANCE. The reading was that
+an op's parameter type declares what it may observe, so the charge
+reads it at the op call. lib/runtime/io.mn:45 refutes it — every WASI
+op takes Int (`fd_write(Int, Int, Int, Int)`): the value crossing into
+the host is already a buffer pointer, so a String's label is gone
+before the op boundary exists. No labelled argument ever reaches a
+real sink's parameter. (2) THE CALLEE'S ROW CANNOT CARRY THE
+CLEARANCE EITHER. row_flow_label reads the tail — EtAll (the
+universe-minus stance) is Secret, every other tail Public — so
+`with Alloc + !WASI` should have read confined. It reads Public:
+`flow confined_alloc` and `flow bare_alloc` answer identically on
+bodies that genuinely allocate, because the PUBLISHED row is the
+INFERRED one and a declared negation never reaches the scheme
+row_flow_label reads. The EtAll arm has no live producer at a fn
+scheme; whether it has one anywhere is the open half of this kill.
+(3) THE PARAMETER-TYPE READING, GENERALIZED, IS VACUOUS OR
+OVER-REFUSING — no measurement needed, the lattice decides it: a
+concrete `String` parameter labels Public, so constraining against it
+refuses every pure helper that touches a secret; treating a concrete
+parameter as label-polymorphic instead leaves only Secret-typed
+parameters constraining, and those accept everything. Neither is a
+check. (4) THE ROW CHARGE SURVIVES THE DESIGN AND DIES ON INSTANCE
+PRECISION. `Flow(Src, Sink)` charged where a labelled value crosses,
+`!Flow(Secret, WASI)` as the policy, declassification as a handler
+that absorbs the charge — that form needs no allowlist, inherits
+transitivity from the row, and is §4⑥'s own sentence. It does not
+work today: a fn declaring `!Flow(Sec, Wasi)` calling a fn declaring
+`Flow(Sec, Store)` REFUSES with `!Flow(Sec, Wasi) + Any vs
+Flow(Sec, Store)` — the two instances differ only in the second arg
+and eff_args_provably_distinct's `EANode(_) => false` (effects.mn:1128)
+cannot see it, because a bare-ident ADT constructor parses as EANode.
+The conservative arm that makes bare `!E` sound makes instance-precise
+`!Flow` useless, and sink-sensitivity is exactly the instance
+distinction. THE SURVIVOR AND ITS DEPS, in build order: (D1) the
+nullary-constructor constant fold at effect-arg registration — a
+nullary ctor IS a constant (its tag), so folding it to a value-distinct
+EffArg is the SAME move EAInt already gets, and it is the ADT-ctor face
+of the reach `Hβ.syntax.effarg-node-in-with-clause` already names for
+compound constants; it LOOSENS a conservative crown arm, so it lands
+with its own RED-first crucible pair (a provably-distinct sibling
+accepts, a same-instance still refuses) before anything reads it.
+(D2) naming an EFFECT at an instance-argument position — `Flow(Secret,
+WASI)` needs WASI as an argument value, and there is no banked
+representation for that; the probe that measured (4) had to mirror the
+effect namespace in a user ADT (`type Sink = Wasi | Store`), which is
+the parallel-namespace drift and cannot be the shipped form. This is
+the one genuinely unbanked question in the chain and it is a
+representation question, not a surface convenience: either EffArg
+grows an effect-name arm carrying the intern handle the row already
+uses, or the sink dimension is the LABEL and the effect identity rides
+elsewhere. Settle D2 before D1 — D1's crucibles are written against
+whichever shape D2 picks. ONE MORE KILL, adjacent and separately
+banked: E_DeclaredRowContradiction is NOT instance-precise for two
+parameterized instances in one clause — `with Flow(Sec, Store) +
+!Flow(Sec, Wasi)` refuses as a name contradiction, though the entry's
+own law says an instance absent beside a differing present is a
+refinement. WHY THE TWO HALVES DID NOT LAND SEPARATELY (the stamp's
+own coupling warning, now measured): the propagation half alone is
+invisible while the construction check stands (the splice already
+refuses), and retiring the construction check without a sink edge lets
+every classified splice through — a regression the leak fixture would
+catch. Coupled means coupled; neither half is a landing on its own.
 
 `Hβ.ifc.dcc-noninterference-gate` — FIRST FACE LANDED 2026-08-08 (pin
 a025c3523a84; the C chain's head, banked here at its stamp). TRACED: the
@@ -240,14 +309,25 @@ own property is sink-sensitive (a Secret splice bound for a
 Secret-labeled sink is legal and today over-refuses) — that sensitivity
 is `.flowlabel-inference-in-hm`'s buy (labels riding the union-find,
 the constraint moving from the splice to the sink edge), NOT a patch
-here. (2) The classifier stays a predicate-NAME heuristic until that
-same landing. (3) PC-labels (implicit flow through branching), the
+here. The over-refusal is CONFIRMED LIVE at pin c10ad6ef (2026-08-12):
+a `Vault` value spliced into a string and handed to an effect op whose
+parameter is declared `Vault` refuses at the CONSTRUCTION site with
+`E_RefinementRejected: Secret ⊑ Public`, never reaching the sink that
+would have cleared it. That refusal is the RED the sink-sensitivity
+fixture inherits when the chain's next step lands; the step is blocked
+on two DEPs the sibling entry now names. (2) The classifier stays a
+predicate-NAME heuristic until that same landing. (3) PC-labels
+(implicit flow through branching), the
 integrity dual, robust declassification, and the TCont flow-world
 follow in the banked band-C order. PRICED: the first face was one
 infer read-through + two fixtures + one leg; each following chain step
 is its own stamped landing.
+
+`Hβ.syntax.effarg-node-in-with-clause` — RESOLVED 2026-08-08 by
 measurement (the peer was PLAN-named at 6.2 but never banked here; this
-entry is its one home, written at resolution). 6.2's "unconstructible
+entry is its one home, written at resolution; the header line was
+absent until 2026-08-12, so the name PLAN §6.2 points at could not be
+found in this file at all — restored with the ADT-ctor face below). 6.2's "unconstructible
 from the surface" ruling generalized from the wrong probe shape: a
 BARE-IDENT effect arg (`fn stage() with Sample(the_rate)`) parses as
 EANode(handle) at the with-clause (parser's eff-arg atom), resolves
@@ -263,7 +343,22 @@ to compound CONSTANT expressions — a parse change (the arg atom
 becomes a bracketed expression) plus the fold at registration, priced
 small and sequenced with band-A instance work; a general runtime
 expression as an instance stays out (the row algebra compares
-instances at the decl).
+instances at the decl). THE ADT-CTOR FACE, measured 2026-08-12 and the
+reason this entry is load-bearing beyond compound constants: a BARE
+NULLARY CONSTRUCTOR argument (`Flow(Sec, Store)`) is EANode too, so two
+instances differing only in a constructor argument are not provably
+distinct and `eff_args_provably_distinct` (effects.mn:1128,
+`EANode(_) => false`) refuses the sibling — measured as
+`!Flow(Sec, Wasi) + Any vs Flow(Sec, Store)`. A nullary ctor IS a
+constant (its tag), so the same registration-time fold that W23 names
+for compound constants gives it a value-distinct EffArg. This is D1 of
+`Hβ.ifc.flowlabel-inference-in-hm`'s sink chain, and because it
+LOOSENS a conservative crown arm it lands RED-first with its own
+crucible pair: a provably-distinct sibling accepts, a same-instance
+still refuses.
+
+`Hβ.query.unreadable-source-refusal` — RESOLVED 2026-08-09, the verb
+refused the empty weave; the missing-source question the mode-7 dig
 named (pin 76e85e00696e), and the fix's RED sharpened the decode twice:
 the diagnostic was never missing (E_MissingModule fires at the DAG walk;
 the naming probe's 2>/dev/null ate it), and the confident answer was

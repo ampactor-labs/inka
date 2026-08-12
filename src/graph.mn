@@ -260,7 +260,7 @@ fn poly_teach_line(owner: String, reason) with Memory + Alloc =
 // over the SHARED spine with a private planned range — the root install is
 // bare and the defaults are the empty graph. Handler state records live in
 // shared heap; the install chain stays per-instance, correctly private.
-handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, high_limit0) with spine = spine0, spine_open = spine_open0, trail = [], trail_len = 0, epoch = 0, next = next0, mint_limit = limit0, mint_high = high0, high_limit = high_limit0, span_index = span_index0, checkpoint_stack = [], comment_refs = [], refs_col = smap_new(), decls_col = [], emitfns_col = [], emitfns_idx = [], emitfns_idx_built = false, holes_pend = [], holes_col = [] {
+handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, high_limit0) with spine = spine0, spine_open = spine_open0, trail = [], trail_len = 0, epoch = 0, next = next0, mint_limit = limit0, mint_high = high0, high_limit = high_limit0, span_index = span_index0, checkpoint_stack = [], comment_refs = [], refs_col = smap_new(), decls_col = [], emitfns_col = [], emitfns_idx = [], emitfns_idx_covers = 0, holes_pend = [], holes_col = [] {
   graph_chase(handle) => // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
   // graph_rollback pops. When the stack is empty, writes are at the
@@ -727,19 +727,34 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   // the decls contract; the step-iii reader filters by the reach set.
   resume() with emitfns_col = push(emitfns_col, (kind, origin, fn_name, fence, caps)),
   graph_emitfn_at(fn_name) => // The enumeration's by-name O(1) read — the identity projection of the
-  // ordered column, MATERIALIZED AT FIRST DEMAND (the note path stays
-  // one push; piggybacking the index there measured +94MB of hot-arm
-  // state rebinds). One O(N) build at the first read, O(1) after; the
-  // synthesized-family repr read and the enumeration reader resolve
-  // entries without the quadratic column scan (the 106s m3 leg the
-  // floor dig measured).
-  if emitfns_idx_built {
-    resume(smap_get_all(emitfns_idx, fn_name))
-  } else if len(emitfns_col) > 0 {
-    let built = emitfns_index_build(emitfns_col, smap_new(), 0)
-    resume(smap_get_all(built, fn_name)) with emitfns_idx = built, emitfns_idx_built = true
-  } else {
+  // ordered column, MATERIALIZED ON DEMAND (the note path stays one push;
+  // piggybacking the index there measured +94MB of hot-arm state
+  // rebinds). The coverage is the COLUMN LENGTH the index was folded
+  // from, not a boolean: an equal length means the projection is whole,
+  // a shorter one names exactly the suffix to fold in, so interleaved
+  // notes and reads cost O(new entries) total across a run and never a
+  // rebuild. A latched flag went stale the moment a note followed a read
+  // — which is precisely what the emit-time worklist does
+  // (Hβ.lower.lowering-is-a-column). The arm has NO call sites yet: the
+  // enumeration is step (i) vocabulary, dual-written and zero-read, and
+  // this read is what the relocation's worklist will resolve entries
+  // through — without the quadratic column scan the floor dig measured
+  // at a 106s m3 leg.
+  //
+  // The table stays UNALLOCATED until a read demands it, and that is not
+  // hygiene: `graph_handler` installs once per judged decl (the layer
+  // sweep's spawn, infer.mn), so a `smap_new()` in its state init is a
+  // per-decl 4096-word table — measured at +100MB on the m3 leg's peak,
+  // caught by the cost ratchet. Zero coverage means the field is still
+  // the empty `[]` that costs nothing.
+  if len(emitfns_col) == 0 {
     resume([])
+  } else if emitfns_idx_covers == len(emitfns_col) {
+    resume(smap_get_all(emitfns_idx, fn_name))
+  } else {
+    let seed = if emitfns_idx_covers == 0 { smap_new() } else { emitfns_idx }
+    let grown = emitfns_index_build(emitfns_col, seed, emitfns_idx_covers)
+    resume(smap_get_all(grown, fn_name)) with emitfns_idx = grown, emitfns_idx_covers = len(emitfns_col)
   },
   graph_branch_seed() => resume((spine, spine_open, span_index)),
   graph_rollback(target_idx) => {
@@ -841,8 +856,10 @@ fn chase_node(ref spine, mint_bound, handle, depth) with !Mutate = if depth > 10
 // draining entry's name, appended onto the column.
 fn hole_pairs_into(hs, name: String, acc) = fold(acc, (a, h) => push(a, (h, name)), hs)
 
-// The emitfn index's one-time build — the ordered column folded into the
-// by-name smap at the first graph_emitfn_at read.
+// The emitfn index's extension — the column's UNCOVERED SUFFIX folded
+// into the by-name smap. `i` is the coverage the caller already holds,
+// so the first read folds the whole column and a read after later notes
+// folds only what those notes added.
 fn emitfns_index_build(col, idx, i) = if i >= len(col) {
   idx
 } else {

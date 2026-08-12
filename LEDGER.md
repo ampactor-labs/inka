@@ -97,6 +97,42 @@
   (`Hβ.emit.partial-application-arity`). Either landing retires both
   convictions without renaming a lambda. The third callback took the
   tier's own remedy: the shift step is the named `emit_shift_pair`.
+- 2026-08-12 · ▶▶▶ THE EMITFN INDEX CARRIES ITS COVERAGE, NOT A
+  FLAG (pin 6b9b08724830 — CLEAN m2 == m3, 408395 lines, census 0,
+  frontier 361/0, peak 2359396KB inside the ceiling; every other ratchet
+  unmoved). The relocation arc's second pre-landing. `graph_emitfn_at`
+  built its by-name index at first demand and latched `emitfns_idx_built`;
+  `graph_emitfn_note` kept appending without touching it, so every note
+  after the first read was invisible. Today that is unreachable — and the
+  measurement proves it rather than assuming it: `graph_emitfn_at` has
+  ZERO call sites, in the medium's own refs answer and in the raw text
+  both, because the enumeration is step (i) vocabulary, dual-written and
+  zero-read. Under the emit-time worklist the interleave is the normal
+  case, so the latch had to go before the first reader arrives.
+  **THE FIX IS A COUNT, NOT A BOOLEAN.** `emitfns_idx_covers` is the
+  column length the index was folded from. Equal means whole; shorter
+  names exactly the suffix to fold in, and `emitfns_index_build` already
+  took a start offset, so the one-time build became an extension with no
+  new machinery. Rebuild-on-miss was refused as the alternative: a miss
+  cannot distinguish absent from stale, so it re-derives on every absent
+  name — Law 1 violated at the read.
+  **THE BUILD REFUTED ITS OWN FIRST FORM, and the ratchet is what caught
+  it.** Seeding the state with `emitfns_idx = smap_new()` read as free —
+  `list_filled(4096, [])` is one 16KB table. The peak ratchet refused the
+  repin at 2551504KB and again at 2470668KB against a 2470000 ceiling,
+  both above the prior tree's whole band (2358596/2446768). The root:
+  `graph_handler` installs ONCE PER JUDGED DECL (the layer sweep's
+  `spawn_task(... ~> graph_handler(...))`, infer.mn:2263), so anything
+  eager in its state init multiplies by the decl count — ~+100MB
+  measured. The table now stays the empty `[]` until a read demands it,
+  and the peak returned to 2446668/2359396, inside the prior band.
+  Banked as a standing law for this file: state-init cost in
+  `graph_handler` is per-decl cost.
+  **A COMMENT CORRECTED IN THE SAME PASS.** The arm's prose claimed "the
+  synthesized-family repr read and the enumeration reader resolve entries
+  without the quadratic column scan" in the present tense against zero
+  readers. It now says what the read is FOR.
+
 - 2026-08-12 · ▶▶▶ THE LOWER-HANDLER STACK MOVES TO THE COMPILE
   CHAIN (pin db7d3d360883 — CLEAN m2 == m3, 408373 lines, census 0, peak
   2446768KB inside the 2470000 ceiling; every ratchet unmoved, movers 476). The first

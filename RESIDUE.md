@@ -1087,10 +1087,22 @@ references live in lower.mn and none sits in a chain handler's arm,
 and the arms perform only substrate Memory/Alloc, which
 `emit_memory_bump` — an `EmitMemory` handler — never catches. The
 predicted row cascade measured ZERO: nothing between the install and
-the performs declares a row); the emitfns_idx staleness decision (the
-demand-built index latches at first read; the worklist interleaves
-note/read — insert-on-note-when-built or rebuild-on-miss, re-measured
-against the peak); decls_col grows HandlerDeclStmt + LetStmt notes
+the performs declares a row); ✅ the emitfns_idx staleness fix (pin
+6b9b08724830, CLEAN — NEITHER banked option: insert-on-note pays the
+hot-arm rebind the +94MB measurement already refused, and
+rebuild-on-miss cannot tell absent from stale so it re-derives on every
+absent name. The landed form is a COVERAGE COUNT — `emitfns_idx_covers`
+is the column length the index was folded from, so a read extends by
+the uncovered suffix and `emitfns_index_build`'s existing start offset
+does the work unchanged. `graph_emitfn_at` measured ZERO call sites,
+refs and raw text agreeing, so the arm is provably behaviour-free
+today. THE BUILD'S OWN KILL, caught by the peak ratchet at
+2551504/2470668KB against a 2470000 ceiling: an eager `smap_new()` in
+`graph_handler`'s state init is NOT a one-off 16KB — `graph_handler`
+installs once per JUDGED DECL (infer.mn:2263, the layer sweep's
+spawn), so state-init cost there is per-decl cost, ~+100MB measured.
+The table stays unallocated until a read demands it and the peak
+returned inside the prior band); decls_col grows HandlerDeclStmt + LetStmt notes
 (arm and value-let references have no origin home; arm names are not
 parseable back to (hname, op)); main_param_count and the value-let
 set re-root on env/program (collect_top_value_lets is a FOURTH tree

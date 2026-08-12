@@ -5182,39 +5182,60 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = match left {
           span,
           InferredPipeResult("<~", Inferred("the RHS is a state element"))
         )
-        // THE CAUSALITY RULE — Faust's, at Mentl's typed altitude. A cycle
-        // whose declared delay is ZERO has no computable value: the prior
-        // is the very output being computed. Productive (report, keep
-        // typing) and ARMED, so it never reaches an executable.
-        if feedback_declares_zero_delay(right) { report(EZeroDelayFeedback(span)) } else { () }
+        // What the site's declared depth has to answer for, both arms of
+        // the one read that also SIZES the line at lower.
+        //
+        // THE CAUSALITY RULE — Faust's, at Mentl's typed altitude: a cycle
+        // whose declared delay is ZERO has no computable value, the prior
+        // being the very output being computed. (Negative reads the same
+        // way, and cannot size a line either.)
+        //
+        // THE SAYABILITY RULE: a line is a fixed set of declared slots, so
+        // a depth known only at runtime is a depth the medium cannot hold
+        // — and handing that site one slot is the silent wrong this whole
+        // read exists to end.
+        //
+        // Both productive (report, keep typing) and both ARMED, so neither
+        // reaches an executable.
+        match feedback_depth(right) {
+          DepthLiteral(n) => if n <= 0 { report(EZeroDelayFeedback(span)) } else { () },
+          DepthComputed => report(EComputedDelayDepth(span)),
+          DepthUnstated => (),
+        }
       },
     },
   },
 }
 
-// Does this `<~` RHS declare a zero delay? The depth is DECIDABLE exactly
-// when it is written as a literal — `delay(0)` through the prelude fn or
-// `Delay(0)` through the constructor, the two spellings of one
-// FeedbackSpec variant. A computed depth (`delay(n - 1)`) is the
-// refinement tier's question, not this arm's, so it answers false here
-// rather than guessing.
+// What depth does this `<~` RHS DECLARE? One read, and every judgment
+// about a feedback site's delay line is an arm of it: the causality
+// refusal above, and lower's slot count for the line itself.
 //
-// The callee name IS the authored intent, and reading it is reading the
-// graph (predicate_flow_label's PBoolNode arm, the same read at the same
-// altitude). Depth ZERO is the only value this arm judges: the wider
-// truth that NO depth is honored — `delay(3)` emits the same one-slot
-// register `delay(1)` does, measured by probe — is
-// `Hβ.dataflow.feedback-delay-depth-unread`, whose fix is to READ the
-// depth, at which point this refusal becomes one arm of that read.
-fn feedback_declares_zero_delay(spec) = match spec {
+// The depth is decidable exactly when it is written as a literal —
+// `delay(3)` through the prelude fn or `Delay(3)` through the
+// constructor, the two spellings of one FeedbackSpec variant. The callee
+// name IS the authored intent, and reading it is reading the graph
+// (predicate_flow_label's PBoolNode arm, the same read at the same
+// altitude).
+type FeedbackDepth
+  // an authored literal — the line is exactly this many priors deep
+  = DepthLiteral(Int)
+  // `delay(n - 1)` — the depth is a runtime value, so no static line
+  // can hold it; refused at the arm rather than silently given one slot
+  | DepthComputed
+  // a state element that names no depth (accumulate / filter_spec): its
+  // prior is the previous tick's value, one slot, nothing to read
+  | DepthUnstated
+
+fn feedback_depth(spec) = match spec {
   N(body, _, _) => match body {
     NExpr(CallExpr(callee, args)) => match callee {
       N(cbody, _, _) => match cbody {
-        NExpr(VarRef(fname)) => is_delay_spec_name(fname) && first_arg_is_literal_zero(args),
-        _ => false,
+        NExpr(VarRef(fname)) => if is_delay_spec_name(fname) { delay_arg_depth(args) } else { DepthUnstated },
+        _ => DepthUnstated,
       },
     },
-    _ => false,
+    _ => DepthUnstated,
   },
 }
 
@@ -5222,13 +5243,13 @@ fn feedback_declares_zero_delay(spec) = match spec {
 // wrapper and the `Delay` constructor it builds.
 fn is_delay_spec_name(fname: String) = fname == "delay" || fname == "Delay"
 
-fn first_arg_is_literal_zero(args) = if len(args) == 0 {
-  false
+fn delay_arg_depth(args) = if len(args) == 0 {
+  DepthUnstated
 } else {
   match list_index(args, 0) {
     N(body, _, _) => match body {
-      NExpr(LitInt(n)) => n == 0,
-      _ => false,
+      NExpr(LitInt(n)) => DepthLiteral(n),
+      _ => DepthComputed,
     },
   }
 }

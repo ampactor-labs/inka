@@ -556,7 +556,18 @@ comment_refs_max: 0
 # once between trial and final (the standing channel; dies at rung 3/D8).
 # +1 at the slot-home column: resume_upd_pair's scheme moves once (the
 # standing trial/final channel; dies at rung 3/D8).
-movers_max: 476
+# Re-based 476 → 478 at the delay-depth read (2026-08-12): none of the
+# landing's own fns move — measured by building BOTH trees this turn, and
+# the named mover set is BYTE-IDENTICAL across them (same sixteen names,
+# same A/B fingerprints: process_lowpass's `buffer:rlf`→`buffer:olf` and
+# its family). Two EXISTING schemes' divergences relocated under the
+# source restructure (infer.mn gains the depth read, so decl order
+# shifts), which is the condemned pass's documented artifact — the
+# 480 → 481 entry above, measured the same way, and 5.2's ruling that
+# two builds refuted one-sided patching because the divergence relocates
+# rather than resolves. Zero trial/final machinery in the diff; the next
+# legal move stays DOWN; rung 3 dissolves the class.
+movers_max: 478
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.
@@ -614,7 +625,21 @@ solo_violations_max: 0
 eta_max: 28
 # 2026-08-11 holes-column landing: +2 — hole_pairs_into/holes_pend_without's
 # pairing folds perform Alloc; the tier's conviction is correct vocabulary.
-effectful_lambda_max: 385
+# Re-based 385 → 387 at the delay-depth read (2026-08-12). The landing's
+# emit added three convicted lambdas and the tier's remedy took one back:
+# the shift step became the NAMED emit_shift_pair, so its row has a decl
+# home and zip_with carries it. The remaining two are the delay line's
+# own map/flat_map callbacks, and BOTH remedies are blocked by measured
+# lathe-lag, not by taste — a named fn cannot take the tuple-pattern
+# parameter SYNTAX §Pattern syntax promises it ("patterns appear in ...
+# function parameters"; the parser refused it this landing), and
+# partial application, which SYNTAX §«Partial application» declares a
+# first-class value, checks clean and then emits a return_call whose
+# arity mismatches (expected [i32, i32], got [i32] — wat2wasm refuses).
+# Both are named: Hβ.parser.named-fn-tuple-param and
+# Hβ.emit.partial-application-arity. Either one landing retires both
+# convictions without a lambda being renamed. The next legal move is DOWN.
+effectful_lambda_max: 387
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own

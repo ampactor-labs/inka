@@ -1143,11 +1143,12 @@ not misled:
   said "only `E_MissingModule` is armed" while the paragraph above it listed
   six — a contradiction inside one section, both wrong against the artifact
   (trued 2026-07-31 by reading `diag_refuses`' own arms; the eleventh
-  armed 2026-08-12): ELEVEN classes refuse
+  and twelfth armed 2026-08-12): TWELVE classes refuse
   — EMissingModule, EHandlerStateShadowsOp, EDuplicateFnName,
   EDuplicateTypeName, EEffectUnhandled, ERefinementRejected,
   EOwnershipViolation, EMissingVariable, EOccursCheck,
-  EDeclaredRowContradiction, EZeroDelayFeedback — plus the hole gate,
+  EDeclaredRowContradiction, EZeroDelayFeedback,
+  EComputedDelayDepth — plus the hole gate,
   which is the executable gate's own read rather than a `diag_refuses` arm.
   The remaining census classes (E_TypeMismatch and kin, name-dependent on
   partial-link paths) are the ratcheting work toward universal. Read the arms,
@@ -1767,11 +1768,19 @@ new DEP found; the map below is accurate at that pin.)*
   adopted, and its honest home is the INFERRED clock —
   `Hβ.dataflow.clock-calculus-sample-rate`, Phase 8's DSP verify tier,
   where "no clock here" becomes a measurement instead of a guess. The
-  probe that killed the predicate opened one more:
+  probe that killed the predicate opened one more —
   `Hβ.dataflow.feedback-delay-depth-unread` (delay(0)/delay(1)/delay(3)
-  all returned 30 — the authored depth reaches no reader), which lands
-  with that same tier. `Hβ.dsp.state-element-install-once` rides the
-  arena (4.3).
+  all returned 30 — the authored depth reached no reader) — and THAT
+  ONE CLOSED THE SAME DAY: the depth is read once and every judgment
+  about a line is an arm of that read, `delay(N)` carries N priors as N
+  declared globals shifted one per tick, and a depth no literal states
+  is `E_ComputedDelayDepth`, the TWELFTH armed class, because handing a
+  site one slot when it asked for n is the same silent wrong wearing a
+  new costume. `delay(1)` stayed byte-identical, so the wheel's own
+  sixteen `<~` sites crossed untouched. The remainder is
+  `Hβ.dataflow.delay-line-runtime-depth` (a runtime-sized line is the
+  image-backed sequence, riding 5.4/4.3).
+  `Hβ.dsp.state-element-install-once` rides the arena (4.3).
 
 ### Phase 4 · Ownership has a real lifetime
 

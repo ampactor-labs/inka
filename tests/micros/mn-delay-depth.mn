@@ -1,0 +1,30 @@
+// expect: 62
+// The authored delay depth reaches the emit: `delay(3)` is a THREE-deep
+// line, not a one-deep one wearing a 3.
+//
+// Two sites, identical recurrence y[n] = 1 + y[n-N], differing only in the
+// declared depth, each driven six times. Every slot starts at 0 (the "no
+// prior iteration yet" convention), so the two answers are hand-derivable:
+//
+//   delay(1)   y[n] = 1 + y[n-1]      y = 1, 2, 3, 4, 5, 6   → 6
+//   delay(3)   y[n] = 1 + y[n-3]      y = 1, 1, 1, 2, 2, 2   → 2
+//
+//   the first three ticks of the 3-deep line read the zeroed slots, so
+//   y0..y2 are each 1; y3 reads y0, y4 reads y1, y5 reads y2 — each 2.
+//
+// Packed as r1 * 10 + r3 = 62, so one exit code pins both.
+//
+// SEEN RED at pin c10ad6ef: this exact program exits 66 — the 3-deep site
+// answers 6, identical to the 1-deep one, because the emit declared a
+// single `$s<h>` global for every declared depth and the authored 3
+// reached no reader (Hβ.dataflow.feedback-delay-depth-unread).
+
+fn step1(x: Int) -> Int = ((prev) => x + prev) <~ delay(1)
+
+fn step3(x: Int) -> Int = ((prev) => x + prev) <~ delay(3)
+
+fn main() -> Int = {
+  let r1 = fold(0, (_, _) => step1(1), range(0, 6))
+  let r3 = fold(0, (_, _) => step3(1), range(0, 6))
+  r1 * 10 + r3
+}

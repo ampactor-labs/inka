@@ -2045,6 +2045,11 @@ type DiagKind
   // within one iteration. Decidable exactly when the depth is a
   // literal; a computed depth rides the refinement tier.
   | EZeroDelayFeedback(Span)
+  // `<~ delay(n)` where n is a runtime value. The line is a fixed set of
+  // slots declared at emit, so a depth the medium cannot read is a depth
+  // it cannot hold — and giving one prior to a site that asked for n is
+  // the silent wrong the depth read exists to end.
+  | EComputedDelayDepth(Span)
   // a `...name` rest element outside a destructuring parameter slot
   | ERestOutsideDestructure(Span)
   // a row alias referencing itself through its own expansion (name)
@@ -2251,6 +2256,7 @@ fn diag_span(d) with Pure = match d {
   EUnknownArgLabel(_, s) => s,
   EFeedbackNoContext(s) => s,
   EZeroDelayFeedback(s) => s,
+  EComputedDelayDepth(s) => s,
   ERestOutsideDestructure(s) => s,
   ERowAliasCycle(_, s) => s,
   EDeclaredRowContradiction(_, s) => s,
@@ -2313,6 +2319,7 @@ fn diag_source(d) with Pure = match d {
   EUnknownArgLabel(_, _) => "infer",
   EFeedbackNoContext(_) => "infer",
   EZeroDelayFeedback(_) => "infer",
+  EComputedDelayDepth(_) => "infer",
   ERestOutsideDestructure(_) => "infer",
   ERowAliasCycle(_, _) => "effects",
   EDeclaredRowContradiction(_, _) => "effects",
@@ -2375,6 +2382,7 @@ fn diag_code(d) with Pure = match d {
   EUnknownArgLabel(_, _) => "E_UnknownArgLabel",
   EFeedbackNoContext(_) => "E_FeedbackNoContext",
   EZeroDelayFeedback(_) => "E_ZeroDelayFeedback",
+  EComputedDelayDepth(_) => "E_ComputedDelayDepth",
   ERestOutsideDestructure(_) => "E_RestOutsideDestructure",
   ERowAliasCycle(_, _) => "E_RowAliasCycle",
   EDeclaredRowContradiction(_, _) => "E_DeclaredRowContradiction",
@@ -2528,6 +2536,15 @@ fn diag_refuses(d) with Pure = match d {
   // never read the depth at all, measured by probe (delay(0), delay(1)
   // and delay(3) each returned 30).
   True,
+  EComputedDelayDepth(_) => // ARMED at birth (2026-08-12), the same literal licence its sibling
+  // rides: the judgment is "was a literal written here", read from the
+  // authored RHS with no resolution dependency. Census on the wheel at
+  // arming: 0 — every `delay(...)` in src/ and lib/ is `delay(1)`, and
+  // the other feedback sites are `accumulate`. A line is a fixed set of
+  // globals, so an unreadable depth cannot be held; refusing is what
+  // keeps the depth read honest, because the alternative is handing a
+  // site that asked for n the one slot it did not ask for.
+  True,
   _ => False,
 }
 
@@ -2608,6 +2625,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EUnknownArgLabel(detail, _) => detail,
   EFeedbackNoContext(_) => "`<~` used outside an iterative context",
   EZeroDelayFeedback(_) => "`<~ delay(0)` closes a cycle with no delay — the prior would be the value being computed. Raise the delay to at least 1",
+  EComputedDelayDepth(_) => "the delay depth must be a literal — a feedback line is a fixed set of slots, and a depth read at runtime would silently get one. Write the depth, or hold the history yourself",
   ERestOutsideDestructure(_) => "`...` rest element outside a destructuring parameter — rest lives in patterns (`([h, ...t]) =>`, `let [h, ...t] =`), and `++` joins lists in expressions",
   ERowAliasCycle(nm, _) => "row alias `{nm}` expands through itself — a row is a finite signed set; name the effects directly",
   EDeclaredRowContradiction(nm, _) => "the clause asserts `{nm}` AND `!{nm}` — one row cannot both permit and forbid a name; drop one side",

@@ -2299,6 +2299,61 @@ clock are the same question asked at depth and at rate. The gate that
 lands with it: a fixture whose `delay(2)` recurrence differs
 observably from its `delay(1)` twin — impossible to write today, which
 is exactly the measurement.
+RESOLVED 2026-08-12 — the depth is read, and the read is ONE projection
+with three arms. `feedback_depth` (infer.mn) answers `DepthLiteral(n)` /
+`DepthComputed` / `DepthUnstated` off the authored RHS, and every
+judgment about a line is an arm of it: the causality refusal became one
+(`n <= 0`, widened from `n == 0` so a negative literal cannot size a
+line either), lower's `feedback_line_depth` takes the slot count from
+the same read and carries it on `LFeedback(h, DEPTH, body, spec)`, and
+the emit declares the line from that number and shifts it by the same.
+One number, two readers, so a line can never be emitted deeper or
+shallower than it is declared.
+THE LINE IS A REGISTER FILE, not a ring: `$s<h>` (newest) through
+`$s<h>_<N-1>` (oldest), globals declared at module init, the prior read
+from the OLDEST and each tick advancing every slot by one — oldest
+first, so each read precedes its own overwrite. Zero allocation, so
+`!Alloc` survives at any N, and the shift pairs come from zipping the
+line against its own tail rather than an index countdown. A depth-1
+line has no pairs and no `_i` slots, so it emits byte-for-byte what it
+emitted before the depth was read — which is why eleven `delay(1)`
+sites and five `accumulate` sites crossed the landing untouched.
+THE SILENT-WRONG IS CLOSED AT BOTH ENDS. A computed depth cannot size a
+static line, and giving it one slot is the same betrayal in a new
+costume, so `E_ComputedDelayDepth` is ARMED at birth (the twelfth
+refusing class) on the same literal licence its sibling rides. Wheel
+census at arming: 0 — every `delay(...)` in src/ and lib/ is
+`delay(1)`. Gate: tests/micros/mn-delay-depth.mn, SEEN RED at pin
+c10ad6ef (exit 66 — the 3-deep site answered 6, identical to the
+1-deep) and green at 62 after.
+TWO LATHE-LAGS SURFACED BY THE BUILD, both measured, both oracle-blind
+classes the wheel never writes (§11's tripwire 3 exactly):
+`Hβ.parser.named-fn-tuple-param` — SYNTAX §Pattern syntax says patterns
+appear in "`let`, `match`, function parameters, and lambda parameters",
+and the lambda half is real, but a NAMED fn refuses one:
+`fn delay_line_globals((h, depth)) = …` drew P_UnexpectedToken at the
+`)` and the `=`. The projection had to fold into its one call site as a
+lambda, which is also why the anonymity ratchet moved. The parser is the
+lathe; SYNTAX is the wheel.
+`Hβ.emit.partial-application-arity` — SYNTAX §«Partial application»
+declares a hole-product a first-class value, so `map(delay_slot_name(h),
+range(0, depth))` should BE the callback. It parses, it checks clean,
+and then the emit writes a `return_call` whose arity does not match its
+target: `type mismatch in return_call, expected [i32, i32] but got
+[i32]` — wat2wasm refuses, so the failure lands at assembly rather than
+at the claim. A form the docs call first-class and `check` calls fine
+must not die at the assembler; the diagnostic belongs at the site, and
+the emit belongs at the arity the product proves. Measured 2026-08-12
+with a two-param named fn under `map`.
+THE NAMED REMAINDER is `Hβ.dataflow.delay-line-runtime-depth` — a line
+whose depth is a runtime value, which wants the image-backed sequence
+(a view whose start advances IS the ring) rather than a register file,
+and therefore rides the value ontology's view/slice work (5.4) and the
+arena (4.3). Until it lands the refusal is the honest surface: the
+medium says it cannot hold that line instead of quietly holding a
+different one. `Hβ.fold.show-leaf`'s sibling shape applies to LF.2/LF.3
+(Accumulate's typed carrier, FilterSpec's taps), which are the same
+read growing arms, not new machinery.
 
 `Hβ.driver.per-module-env-overlay` — the design stamp for PLAN §11
 Phase 3.5 (banked 2026-08-07 with the first half LANDED: the solo

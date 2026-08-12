@@ -35,6 +35,69 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-12 · ▶▶▶ THE DELAY LINE IS AS DEEP AS IT SAYS (pin 1a1f545f0e0b
+  — CLEAN m2 == m3, 408963 lines, census 0, crown green,
+  proof-exactness green, 22.35s wall · 2397MB peak RSS inside the
+  ceiling). `delay(3)` had been emitting the one-slot register `delay(1)`
+  emits — the authored depth reached no reader at all, so a developer
+  asking for a three-sample delay silently got one. The probe that opened
+  this at the causality landing said it plainly: `delay(0)`, `delay(1)`
+  and `delay(3)` each returned 30.
+  **THE READ IS ONE PROJECTION WITH THREE ARMS.** `feedback_depth`
+  (infer.mn) answers `DepthLiteral(n)` / `DepthComputed` / `DepthUnstated`
+  off the authored RHS — the same read `feedback_declares_zero_delay`
+  was doing for one value, generalized to the value itself. The causality
+  refusal became one arm (`n <= 0`, widened from `n == 0` so a negative
+  literal cannot size a line either); lower's `feedback_line_depth` takes
+  the slot count from it and carries it on `LFeedback(h, DEPTH, body,
+  spec)`; the emit declares the line from that number and shifts it by the
+  same. One number, two readers, so a line can never be emitted deeper or
+  shallower than it is declared — which is the whole bug, stated as a
+  structure that cannot hold it.
+  **THE LINE IS A REGISTER FILE, NOT A RING.** `$s<h>` (newest) through
+  `$s<h>_<N-1>` (oldest), globals declared at module init; the prior is
+  the OLDEST slot — y[n−N] — and each tick advances every slot by one,
+  deep end first so each read precedes its own overwrite. The shift pairs
+  come from reversing the line and zipping it against its own tail: the
+  walk is the line's shape, not an index countdown. Zero allocation, so
+  `!Alloc` survives at any N, and `state_slot_globals` is the ONE
+  projection both the plain module path and the image substrate read, so
+  the two can no longer disagree about which slots exist or how wide they
+  are (a persisted image now carries the whole line, not its newest slot).
+  **DEPTH-1 IS BYTE-IDENTICAL BY CONSTRUCTION** — a one-slot line has no
+  `_i` names and no pairs to shift, so eleven `delay(1)` sites and five
+  `accumulate` sites crossed untouched and the march ruled CLEAN rather
+  than TRANSITION. Predicted before the run from the emit's own shape,
+  then measured.
+  **THE SILENT WRONG IS CLOSED AT BOTH ENDS.** A computed depth cannot
+  size a static line, and quietly giving it one slot is the same betrayal
+  in a new costume, so `E_ComputedDelayDepth` is ARMED at birth — the
+  TWELFTH refusing class, on the same literal licence its sibling rides.
+  Census at arming: 0, measured across src/, lib/, tests/ and examples/
+  (every `delay(...)` in the tree is a literal).
+  **BOTH GATES SEEN RED FIRST.** mn-delay-depth exits 66 at the parent pin
+  — the 3-deep site answering 6, identical to the 1-deep — and 62 after,
+  the value derived by hand from the recurrence before the build (y = 1,
+  1, 1, 2, 2, 2 under `delay(3)`; 1..6 under `delay(1)`) and confirmed
+  independently by a hand-written WAT probe of the shift before a byte of
+  the emit was trusted. mn-refuse-computed-delay ran clean at exit 10 with
+  zero diagnostics before, refuses after.
+  **THE RATCHETS, MEASURED ON BOTH TREES.** movers 476 → 478 and
+  effectful lambdas 385 → 387, each re-based in verify-baseline with its
+  reason. The movers rise is the condemned pass's documented relocation,
+  established here by building the pre-change tree in the same session:
+  the named mover set and its A/B fingerprints are BYTE-IDENTICAL across
+  the two builds, so nothing new diverges — two existing schemes joined
+  the tail when infer.mn's decl order shifted. The anonymity rise is two
+  emit callbacks whose remedy is blocked by measured lathe-lag, now
+  named: a NAMED fn cannot take the tuple-pattern parameter SYNTAX
+  promises (`Hβ.parser.named-fn-tuple-param`), and partial application —
+  which SYNTAX calls a first-class value — checks clean then emits a
+  `return_call` with mismatched arity that wat2wasm refuses
+  (`Hβ.emit.partial-application-arity`). Either landing retires both
+  convictions without renaming a lambda. The third callback took the
+  tier's own remedy: the shift step is the named `emit_shift_pair`.
+
 - 2026-08-12 · ▶▶▶ THE CAUSALITY REFUSAL LANDS AND PHASE 3.6's MEMBERSHIP
   DESIGN DIES TO ITS OWN CONTROL (pin fc93f1957fb9 — CLEAN m2 == m3,
   408298 lines, census 0, frontier 361/0, crown green, peak 2359448KB

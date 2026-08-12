@@ -1,0 +1,22 @@
+// expect: refuse E_ComputedDelayDepth
+// The sayability rule, armed: a feedback line is a fixed set of declared
+// slots, so a depth known only at runtime is a depth the medium cannot
+// hold. It refuses (nonzero verdict, zero WAT) rather than quietly
+// handing this site the one slot it did not ask for.
+//
+// The sibling of E_ZeroDelayFeedback and the other arm of the same read:
+// one projection answers what depth the RHS declares, and the two ways
+// that answer can be unusable — zero, and unreadable — are its two
+// refusals.
+//
+// SEEN RED at pin c10ad6ef: this exact program ran, exit 10 — every
+// depth silently became one slot, so a computed one looked fine.
+//
+// A runtime-sized line wants the image-backed sequence rather than a
+// register file: Hβ.dataflow.delay-line-runtime-depth. Until it lands,
+// saying so is the honest surface.
+
+fn accum(input: Int, n: Int) -> Int =
+  ((prev) => input + prev) <~ delay(n - 1)
+
+fn main() -> Int = accum(10, 2)

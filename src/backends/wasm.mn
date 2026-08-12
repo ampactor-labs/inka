@@ -907,9 +907,12 @@ effect EmitStringLiteralOp {
   drain_string_literals() -> [(String, Int)]
 }
 
+// A feedback site and the DEPTH of the line it carries — the site's whole
+// state requirement in one fact, so the globals are declared from the same
+// number the cycle shifts.
 effect EmitStateSlotOp {
-  visit_state_slot(Int)
-  drain_state_slots() -> [Int]
+  visit_state_slot(Int, Int)
+  drain_state_slots() -> [(Int, Int)]
 }
 
 effect EmitWasiOp {
@@ -987,12 +990,15 @@ handler string_literal_collector with buf = make_list(16), count = 0, next_offse
   drain_string_literals() => resume(slice(buf, 0, count)),
 }
 
+// The HANDLE is the identity — one site, one line — so the depth rides
+// along without joining the key; a site walked twice (a twin's second
+// emission) registers once, with the depth its own node carries.
 handler state_slots_collector with buf = make_list(8), count = 0 {
-  visit_state_slot(slot) => if handle_recorded(buf, slot, 0, count) {
+  visit_state_slot(slot, depth) => if any(((s, _)) => s == slot, slice(buf, 0, count)) {
     resume()
   } else {
     let extended = list_extend_to(buf, count + 1)
-    let written = list_set(extended, count, slot)
+    let written = list_set(extended, count, (slot, depth))
     resume() with buf = written, count = count + 1
   },
   drain_state_slots() => resume(slice(buf, 0, count)),
@@ -1296,8 +1302,8 @@ fn walk_lemit_expr(expr) = match expr {
       multishot_ops_of(hname)
     )
   },
-  LFeedback(h, b, s) => {
-    visit_state_slot(h)
+  LFeedback(h, d, b, s) => {
+    visit_state_slot(h, d)
     walk_lemit_expr(b)
     walk_lemit_expr(s)
   },
@@ -1386,27 +1392,68 @@ fn walk_lemit_pat(pat) = match pat {
   _ => (),
 }
 
-// Emit `(global $s<n> (mut <repr>) (<repr>.const 0))` for each unique
-// state slot. The global holds the `<~` prior-iteration output, so its
-// repr is the feedback node's own — repr_of(lookup_ty(slot)), read LIVE —
-// matching the $__fb_prev/$__fb locals. A float `<~` recurrence declares an
-// f64 global inited to 0.0; an integer IIR stays byte-identical (repr_wat =
-// "i32"). Carried-Truth: the graph proved the feedback's type; the emit reads
-// it, never fabricates i32. Globals initialize to 0 — the "no prior iteration"
-// convention at LFeedback's first entry. v1 single-threaded scope; LF.M
-// migrates to per-handler-state offsets.
+// A feedback site's delay LINE, named slot by slot, NEWEST FIRST. `$s<h>`
+// holds the previous tick's output and `$s<h>_i` the i-th older, so the
+// line's LAST name is y[n-depth] — the prior the cycle reads. A depth-1
+// line is exactly the single `$s<h>` every site declared before the depth
+// was read, which is why honoring the depth changed no existing byte.
+fn delay_slot_name(h: Int, i: Int) =
+  if i == 0 { "s{int_to_str(h)}" } else { "s{int_to_str(h)}_{int_to_str(i)}" }
+
+fn delay_slot_names(h: Int, depth: Int) = map((i) => delay_slot_name(h, i), range(0, depth))
+
+// One slot of the line takes another's value — the whole shift is this
+// step repeated down the line. A balanced push/pop, so it leaves the
+// stack exactly as it found it.
+fn emit_shift_pair(tgt, src) = {
+  wat_emit("    (global.get $")
+  wat_emit(src)
+  wat_emit(")(global.set $")
+  wat_emit(tgt)
+  wat_emit(")\n")
+}
+
+// Advance the line one tick: every slot takes its predecessor's value,
+// walked DEEP END FIRST because each read must happen before its own
+// source is overwritten. Reversing the line puts the oldest slot first,
+// and zipping that against its own tail IS the (target, source) sequence
+// — the walk is the line's own shape, not an index countdown. Slot 0 is
+// absent from the pairs by construction: the cycle's own `global.set`
+// gives it the current output, which is why the teed value survives this
+// walk untouched. A depth-1 line reverses to one name whose tail is
+// empty, so the zip yields nothing and the emit is byte-identical.
+fn emit_delay_shift(line) = {
+  let deep_first = reverse(line)
+  zip_with(emit_shift_pair, deep_first, rest(deep_first))
+}
+
+// Every global the module's feedback lines need, as (name, repr) — the ONE
+// projection both the plain module path and the image substrate read, so
+// the two can never disagree about which slots exist or how wide they are.
+// The repr is the feedback node's own, read LIVE at each slot: every slot
+// in a line holds the same value, so a float `<~` recurrence declares f64
+// slots inited to 0.0 while an integer IIR stays "i32". Carried-Truth: the
+// graph proved the feedback's type; the emit reads it, never fabricates.
+fn state_slot_globals(slots) = flat_map(
+  ((h, depth)) => map((name) => (name, repr_wat(repr_of(lookup_ty(h)))), delay_slot_names(h, depth)),
+  slots
+)
+
+// Emit `(global $<name> (mut <repr>) (<repr>.const 0))` for each. Globals
+// initialize to 0 — the "no prior iteration" convention, which for a
+// depth-N line means its first N ticks read zeros. v1 single-threaded
+// scope; LF.M migrates to per-handler-state offsets.
 fn emit_state_globals(slots) = each(
-  (slot) => {
-    let rw = repr_wat(repr_of(lookup_ty(slot)))
-    wat_emit("  (global $s")
-    wat_emit(int_to_str(slot))
+  ((name, rw)) => {
+    wat_emit("  (global $")
+    wat_emit(name)
     wat_emit(" (mut ")
     wat_emit(rw)
     wat_emit(") (")
     wat_emit(rw)
     wat_emit(".const 0))\n")
   },
-  slots
+  state_slot_globals(slots)
 )
 
 // The yield triple (band B k1) — the out-of-band MultiShot unwind protocol,
@@ -1883,7 +1930,7 @@ fn image_global_slots(state_slots, value_lets, yield_seen) = {
   } else {
     []
   }
-  [("heap_ptr", "i32"), ("arena_ptr", "i32"), ("world_g", "i32"), ("tid_g", "i32")] ++ yq ++ map((slot) => ("s" ++ int_to_str(slot), repr_wat(repr_of(lookup_ty(slot)))), state_slots) ++ map(((name, _)) => (name, "i32"), value_lets)
+  [("heap_ptr", "i32"), ("arena_ptr", "i32"), ("world_g", "i32"), ("tid_g", "i32")] ++ yq ++ state_slot_globals(state_slots) ++ map(((name, _)) => (name, "i32"), value_lets)
 }
 
 fn emit_globals_pair(slots) = {
@@ -2155,7 +2202,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LMakeVariant(_h, _t, fs) => collect_call_vectors_list(fs, acc),
   LMatch(_h, s, arms) => collect_call_vectors_arms(arms, collect_call_vectors_expr(s, acc)),
   LHandleWith(_h, b, hn, _hn2, inits, _arms) => collect_call_vectors_expr(b, collect_call_vectors_expr(hn, collect_call_vectors_list(inits, acc))),
-  LFeedback(_h, b, s) => collect_call_vectors_expr(s, collect_call_vectors_expr(b, acc)),
+  LFeedback(_h, _d, b, s) => collect_call_vectors_expr(s, collect_call_vectors_expr(b, acc)),
   LPerform(_h, _n, args, _) => collect_call_vectors_list(args, acc),
   LDirectPerform(h, hn, op, st, args) => collect_call_vectors_expr(singleton_perform_block(h, hn, op, st, args), acc),
   LWasiCall(_h, _n, args) => collect_call_vectors_list(args, acc),
@@ -2707,7 +2754,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LMatch(_h, s, arms) => collect_fn_emit_records_expr(s) ++ fn_emit_records_arms(arms, 0),
   LResumeK(_h, k, v) => collect_fn_emit_records_expr(k) ++ collect_fn_emit_records_expr(v),
   LHandleWith(_h, b, hn, _hname, inits, _arm_names) => collect_fn_emit_records_expr(b) ++ collect_fn_emit_records_expr(hn) ++ collect_fn_emit_records(inits),
-  LFeedback(_h, b, s) => collect_fn_emit_records_expr(b) ++ collect_fn_emit_records_expr(s),
+  LFeedback(_h, _d, b, s) => collect_fn_emit_records_expr(b) ++ collect_fn_emit_records_expr(s),
   LPerform(_h, _n, args, _) => collect_fn_emit_records(args),
   LDirectPerform(_h, _hn, _op, _st, args) => collect_fn_emit_records(args),
   LWasiCall(_h, _n, args) => collect_fn_emit_records(args),
@@ -2944,7 +2991,7 @@ fn walk_locals_expr(expr, acc) = match expr {
     }
     walk_locals_list(inits, walk_locals_expr(hn, walk_locals_expr(b, with_ms)))
   },
-  LFeedback(h, b, s) => {
+  LFeedback(h, _d, b, s) => {
     // LF walkthrough §4.5: both per-site locals for the load-tee-store
     // state-machine at the LFeedback arm. $__fb_prev_<h> holds the prior
     // iteration's output; $__fb_<h> holds the current. Both declare at the
@@ -3397,7 +3444,7 @@ fn find_local_handle_expr(name: String, expr) = match expr {
       if hh != 0 { hh } else { find_local_handle_list(name, inits) }
     }
   },
-  LFeedback(_h, b, s) => {
+  LFeedback(_h, _d, b, s) => {
     let bh = find_local_handle_expr(name, b)
     if bh != 0 { bh } else { find_local_handle_expr(name, s) }
   },
@@ -4249,26 +4296,27 @@ fn emit_expr(expr) = match expr {
     wat_emit(local_name)
     wat_emit("_wprev)(global.set $world_g)\n")
   },
-  LFeedback(h, body, _spec) => {
-    // <~ feedback — state-machine lowering, v1 scope: Delay(1).
+  LFeedback(h, depth, body, _spec) => {
+    // <~ feedback — the site's DELAY LINE, `depth` priors deep.
     //
-    // Per LF walkthrough §1.5: the iteration cycle is load-prior →
-    // emit body → tee-current → store-current → reload-current.
-    // The body's lowering may reference `$__fb_prev_<h>` to consume
-    // the prior iteration's output (post-first-light source-binding
-    // surfaces a name for it; pre-first-light the local is in scope
-    // and unused unless body's LIR explicitly reads it).
+    // Per LF walkthrough §1.5 the cycle is load-prior → emit body →
+    // tee-current → advance the line → reload-current, and the prior is
+    // the line's OLDEST slot: y[n-depth], which is what `delay(depth)`
+    // asked for. The body's lowering may reference `$__fb_prev_<h>` to
+    // consume it (the `(prev) =>` recurrence form binds a name to it).
     //
-    // State-global substrate uses the `$s<slot>` global
-    // convention; collect_state_slots harvests every LFeedback handle
-    // and emit_state_globals declares each as `(global $s<n> (mut
-    // i32) (i32.const 0))` at module init. The handle `h` ensures
-    // per-site uniqueness; the global persists across iterative-
-    // context handler re-invocations (Sample / Tick / Clock).
+    // The line is `$s<h>` (newest) through `$s<h>_<depth-1>` (oldest),
+    // declared by state_slot_globals from the same depth this arm shifts
+    // — one number, two readers, so a line can never be emitted deeper or
+    // shallower than it is declared. The globals persist across
+    // iterative-context handler re-invocations (Sample / Tick / Clock);
+    // the handle `h` makes the line per-site.
+    //
+    // A depth-1 line has nothing to shift, so this emits exactly what it
+    // emitted before the depth was read — byte for byte.
     //
     // Sub-handles named as peers in PLAN.md's bands (each lands in its own
     // commit when its substrate motive surfaces):
-    //   LF.1 — Delay(N>1) ring buffer
     //   LF.2 — Accumulate(init) with typed carrier
     //   LF.3 — FilterSpec(N, coeffs) N-tap filter
     //   LF.M — handler-state-offset migration (replaces module
@@ -4276,8 +4324,9 @@ fn emit_expr(expr) = match expr {
     //          threading × multi-shot composition correctness).
     //
     // Walkthrough: docs/specs/simulations/LF-feedback-lowering.md.
-    wat_emit("    (global.get $s")
-    wat_emit(int_to_str(h))
+    let line = delay_slot_names(h, depth)
+    wat_emit("    (global.get $")
+    wat_emit(last(line))
     wat_emit(")\n")
     wat_emit("    (local.set $__fb_prev_")
     wat_emit(int_to_str(h))
@@ -4286,6 +4335,7 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (local.tee $__fb_")
     wat_emit(int_to_str(h))
     wat_emit(")\n")
+    emit_delay_shift(line)
     wat_emit("    (global.set $s")
     wat_emit(int_to_str(h))
     wat_emit(")\n")
@@ -5083,7 +5133,7 @@ fn collect_fold_tys_expr(expr, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]
   LMakeVariant(_h, _t, fs) => collect_fold_tys_list(fs, acc),
   LMatch(_h, s, arms) => collect_fold_tys_arms(arms, collect_fold_tys_expr(s, acc)),
   LHandleWith(_h, b, hn, _hn2, inits, _arms) => collect_fold_tys_expr(b, collect_fold_tys_expr(hn, collect_fold_tys_list(inits, acc))),
-  LFeedback(_h, b, s) => collect_fold_tys_expr(s, collect_fold_tys_expr(b, acc)),
+  LFeedback(_h, _d, b, s) => collect_fold_tys_expr(s, collect_fold_tys_expr(b, acc)),
   LPerform(_h, _n, args, _) => collect_fold_tys_list(args, acc),
   LDirectPerform(_h, _hn, _op, _st, args) => collect_fold_tys_list(args, acc),
   LWasiCall(_h, _n, args) => collect_fold_tys_list(args, acc),

@@ -97,6 +97,38 @@
   (`Hβ.emit.partial-application-arity`). Either landing retires both
   convictions without renaming a lambda. The third callback took the
   tier's own remedy: the shift step is the named `emit_shift_pair`.
+- 2026-08-12 · ▶▶▶ MAIN'S ARITY COMES FROM ITS
+  DECL (pin f5b8548875ad — CLEAN m2 == m3, 408296 lines (125 fewer, the
+  deleted fold), census 0, frontier 361/0, peak 2358676KB inside the
+  ceiling). The relocation arc's fourth pre-landing: three tree-reading
+  seeds were listed for re-rooting; ONE re-roots, and the other two are
+  banked with the measurement that refuses them.
+  **RE-ROOTED — `main_param_count`.** It folded the lowered tree matching
+  TWO decl shapes, a plain `LDeclareFn` and the `LLet`-wrapped closure the
+  wheel's own main takes; matching only the first once dropped _start's
+  argv arg and broke the m3 assemble. The whole hazard is a tree-shape
+  hazard, so the fix is to stop reading shapes: fold the DECLS COLUMN,
+  read main's authored `params` off its FnStmt node. Both call sites drop
+  the `lowered` argument, and the read is the relocation's own reader
+  shape — a column, no tree.
+  **THE MEDIUM'S OWN RATCHET FORCED THE BETTER FORM.** The first attempt
+  read main's TFun from the env and needed a `_ => 0` arm for a `main`
+  bound to a non-function. Verify's drift-shape tier convicted it —
+  wildcard-zero 9 → 10 — and refused. The column form needs no wildcard
+  at all (`_ => acc` is the fold's identity), so the ratchet did not
+  merely block a regression; it named a form that was strictly better,
+  and it depends on the decls column the previous landing grew.
+  **BANKED, NOT FORCED — the other two fail the tree-free test, each for
+  its own reason.** `collect_top_value_lets` returns `(name, init)` and
+  the init is a LOWERED expression `emit_init_lets` emits; the SET could
+  re-root on the program, but the PAYLOAD cannot while the tree is the
+  emission source, so splitting them today buys a lookup the relocation
+  deletes — the (β)-class machinery this arc's own stamp warns against.
+  `spec_reach_seed` deep-walks `spec_scan_expr` for WIDE instantiation
+  sites, which are repr-keyed lowering facts and not program facts at
+  all; its honest form is a per-entry accumulator (the next pre-landing's
+  class), never a seed re-root.
+
 - 2026-08-12 · ▶▶▶ THE DECLS COLUMN TAKES EVERY
   DECLARATION (pin 18ce91606de8 — CLEAN m2 == m3, 408421 lines, census 0,
   frontier 361/0, peak 2359364KB inside the ceiling). The relocation

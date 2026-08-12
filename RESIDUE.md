@@ -1116,9 +1116,23 @@ prior tree with the change stashed gave identical classification counts
 and the same single CHANGED skeleton — a PRE-EXISTING drift
 (s02_float_arith, expected edit-trap, got refuse-unfilled) now named,
 since the self-test runs outside verify and march and nothing was
-watching it); main_param_count and the value-let
-set re-root on env/program (collect_top_value_lets is a FOURTH tree
-reader the stamp never listed); per-entry accumulators dual-run
+watching it); ✅ main_param_count re-roots on the DECLS COLUMN (pin
+f5b8548875ad, CLEAN — folds graph_decls_at() and reads main's authored
+params off its FnStmt node, so the recorded two-shape trap dissolves by
+construction: a program node cannot be misled by a lowering shape it
+never sees. The env/TFun form was built FIRST and refused by verify's
+own drift-shape ratchet — its `_ => 0` for a non-function `main` moved
+wildcard-zero 9 → 10 — and the column form needs no wildcard at all, so
+the ratchet named the better form rather than merely blocking one. THE OTHER
+TWO SEEDS ARE BANKED, tree-free test FAILED and measured:
+collect_top_value_lets returns (name, init) where init is the LOWERED
+expression emit_init_lets emits — the set could re-root on the program,
+the payload cannot while the tree is the emission source, so splitting
+them today builds a lookup the relocation deletes; spec_reach_seed
+deep-walks spec_scan_expr for WIDE instantiation sites, which are
+repr-keyed lowering facts rather than program facts, so its honest form
+is a per-entry accumulator, not a seed re-root. Both land WITH the
+worklist); per-entry accumulators dual-run
 beside collect_* with set-equality gates, one family per landing.
 DECISIONS WRITTEN (derived, none open): container-keep is REPRODUCED
 in the driver and the no-main library path seeds all decls — the

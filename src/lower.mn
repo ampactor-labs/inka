@@ -6215,7 +6215,7 @@ fn reachable_from_main(lowered) = {
     // (Hβ.emit.wasi-argv-in-start); root it just then, so a 0-param main()
     // (the micros, which don't link io.mn) never pulls an undefined $wasi_args.
     let index = build_reach_index(lowered)
-    let argv_root = if main_param_count(lowered) > 0 { ["wasi_args"] } else { [] }
+    let argv_root = if main_param_count() > 0 { ["wasi_args"] } else { [] }
     // The wide runtime family (the f64 leaves + float renderer) is contributed
     // by reach_names_expr AT its mint sites (the ==/ordering LBinOp, the
     // show/hash call), so it flows through the index like every other edge — no
@@ -6311,26 +6311,29 @@ fn emit_runtime_contract() =
 fn ls_find_str_local(lst: [String], target: String, i) =
   ls_find_str_local_loop(lst, target, i, len(lst))
 
-// main's declared param count, read from the same records emit walks —
-// _start must supply every declared param or the call's type mismatches
-// (mn-ev2's `fn main(q)`: the hardwired $ft1 met a two-param main). A
-// parameterized main runs with zeroed args (the battery convention).
+// main's declared param count — _start must supply every declared param
+// or the call's type mismatches (mn-ev2's `fn main(q)`: the hardwired
+// $ft1 met a two-param main). A parameterized main runs with zeroed args
+// (the battery convention).
 //
-// Reads main's OWN decl directly — the fn-record collector was a
-// whole-tree walk answering a one-decl question (and a wasm-layer dep
-// this module cannot import). BOTH named-fn decl shapes, exactly the
-// set reach_decl_name enumerates: a plain LDeclareFn AND the
-// LLet-wrapped closure form (an evidence-carrying fn — the wheel's
-// own main is this shape; matching only the first dropped _start's
-// argv arg and broke the m3 assemble, caught by the march).
-fn main_param_count(lowered) = fold(
+// Read from main's own DECL, through the decls column. The earlier form
+// folded the lowered tree over two decl shapes — a plain LDeclareFn and
+// the LLet-wrapped closure the wheel's own main takes — and matching
+// only the first once dropped _start's argv arg and broke the m3
+// assemble. That whole hazard is a tree-shape hazard: the authored
+// params are a PROGRAM fact, and a program node does not know which
+// shape lowering chose, so a shape it has never seen cannot mislead it.
+// A library with no main folds to zero, which is the truth — _start
+// calls nothing and has no params to supply. This is also the
+// relocation's own reader shape: a column read, no tree
+// (Hβ.lower.lowering-is-a-column).
+fn main_param_count() = fold(
   0,
-  (acc, d) => match d {
-    LDeclareFn(LFn(name, _arity, param_names, _body, _row, _fence)) => if name == "main" { len(param_names) } else { acc },
-    LLet(_h, name, LMakeClosure(_h2, LFn(_n2, _a2, param_names, _b2, _r2, _f2), _caps)) => if name == "main" { len(param_names) } else { acc },
+  (acc, h) => match graph_node_body(h) {
+    NStmt(FnStmt(name, params, _ret, _effs, _body)) => if name == "main" { len(params) } else { acc },
     _ => acc,
   },
-  lowered
+  graph_decls_at()
 )
 
 // Insert the runtime-helper state argument UNDER [a, b] on the stack

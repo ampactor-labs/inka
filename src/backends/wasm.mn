@@ -858,7 +858,7 @@ fn emit_module(lowered) = {
       // and every resume flag-arm call the same fn).
       if yield_seen > 0 { emit_redrive_fns(table_fn_names) }
       emit_init_lets(value_lets)
-      emit_start(top_fn_names, value_lets, main_param_count(lowered), yield_seen, threaded)
+      emit_start(top_fn_names, value_lets, main_param_count(), yield_seen, threaded)
       emit_footer()
     },
   }

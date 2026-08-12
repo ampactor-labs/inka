@@ -176,8 +176,11 @@ effect ImageAlloc {
   image_enter()
   image_exit()
   // The census read — the accumulated image-classified bytes (2a-ii's
-  // measurement; the driver prints it beside the movers line so 2b's
-  // image/scratch boundary is fixed from a measured number).
+  // measurement). ZERO performers today: the driver's print beside the
+  // movers line is the NAMED NEXT LANDING of the arena chain
+  // (Hβ.perf.per-decl-arena's corrected DEP chain, step 1), not a live
+  // mechanism — 2b's image/scratch boundary is fixed from that measured
+  // number once the print exists.
   image_bytes() -> Int
 }
 

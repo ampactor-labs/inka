@@ -1512,15 +1512,21 @@ written was false, the gate had merely gone quiet. Closed mechanically by Phase
 measured board) — the work selector reads this block FIRST, then the
 phase order.** The dig (`Hβ.infer.forward-hof-row-underpublish`) CLOSED
 at pin c6eb188e1d37 — three loop iterations, the LEDGER entry carries
-the arc. THE DEDICATED-ARC QUEUE, each sized by its own entry and
-awaiting a fresh session, in order: (1) the enumeration-reader
-RELOCATION (the column arc's heart — step (i)'s five columns are ALL
-LANDED and zero-read; the phase-boundary stamp is the build contract);
-(2) the arena's 2b (4.3) as the relocation completes the image-set
-precondition; (3) the value ontology (5.4); beside them the flowlabel
-build (Phase 7, its own stamp's sizing), the synthesized-family repr
-floor deletion (its O(1) read landed at fe4b88b2), and the peel/rung-3
-root that holds the last two `0 <= self` pendings. THE LOOP-SIZED
+the arc. THE DEDICATED-ARC QUEUE (re-cut 2026-08-12 by the arena refutation —
+the "relocation completes the arena's precondition" chain is REFUTED;
+the publish-channel law and the corrected DEP chain live in the arena
+entry): (1) the enumeration-reader RELOCATION (twice-hardened stamp;
+pre-landings in flight), WITH its cons-state re-homed to bracketed
+flat buffers as named pre-landings; (2) the per-fn EMISSION region +
+the image_bytes census print (the arena chain's smallest sound
+landing — the per-twin mark/stream/reset shape generalized; a reset
+is sound exactly where the publish channel is a byte copy or empty,
+never a pointer-write) and brackets on flat-buffer families 3/5/6;
+(3) rung 3 WHOLE (movers → 0; the peel root rides it); (4) the
+pointee representation arc (`Hβ.graph.column-pointees-are-words`, the
+banked keystone) — only then 2b's fork/reset at the grain that then
+exists; (5) the value ontology (5.4); beside them the flowlabel
+build and the repr floor deletion (both in flight 2026-08-12). THE LOOP-SIZED
 RESIDUE the selector serves between dedicated sessions: the 6.3 modal
 sweep rule-by-rule (eleven pinned, crown 33/0), doc-truth true-ups,
 and gates for oracle-blind classes as digs surface them. "It will

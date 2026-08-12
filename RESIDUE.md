@@ -1705,6 +1705,51 @@ construction. §11 4.3's entry carries the same correction; the
 reachability audit leg survives as 2b's tripwire unchanged; (3) the
 dormant emit_memory_arena resolves at 2b — its real body or its
 deletion, one strategy read from the module's own proof.
+THE COLUMNS-FIRST CHAIN ITSELF REFUTED (2026-08-12, the independent
+adversarial pass, four blocking receipts — this supersedes (ii)'s
+"by construction" clause in place): the spine's columns are POINTER
+columns (nine of eleven store heap records; only canon/narrowing are
+words), and their POINTEES — GNode/NodeBody/Ty-under-NBound/Span/
+DispatchTier/InstallShape/StateSlotHome records — are allocated
+through plain alloc interleaved with scratch, then published by
+pointer-write: the column arc relocates where the pointer is STORED,
+never where the pointee is ALLOCATED, so a per-decl reset dangles
+every cell into virgin zeros. Three more independent breaks: the
+relocation's OWN apparatus (decls_col/emitfns_col/refs_col/holes_col
+cons-state plus the demand-latched emitfns_idx) is unbracketed heap
+state its pre-landings GROW; the judgment side's unit is the PASS,
+not the decl (trial+final movers apparatus, cross-group parked
+gates, prereg live links — each load-bearing by design); and the
+relocation DISSOLVES the per-decl boundary the reset was specified
+against (construction extents nest inside other entries' emission
+extents — the surviving grain is per-ENTRY). THE LAW THE ARTIFACT
+ALREADY TEACHES, extracted from its three production resets (mcp's
+guarded message region, the per-micro region, the per-twin
+mark/stream/reset): A RESET IS SOUND EXACTLY WHERE THE EXTENT'S
+PUBLISH CHANNEL IS A BYTE COPY INTO A FLAT BUFFER OR PROVABLY EMPTY
+— NEVER A POINTER-WRITE. A representation property, not a
+sequencing property. THE MISSING KEYSTONE, banked here as its own
+peer: `Hβ.graph.column-pointees-are-words` — column values become
+words/pool-indices (packed repr per column, an explicit answer for
+Ty trees that rides instantiate-shares-never-clones or Ty-as-node),
+the representation arc without which no judgment-side reset is ever
+sound. THE CORRECTED DEP CHAIN: (1) the image_bytes census print +
+brackets on flat-buffer families 3/5/6 (family 2 excluded —
+condemned toward D6), decidable NOW, relocation-independent; (2)
+rung 3 WHOLE (movers → 0 deletes family 4, collapses the judgment
+boundary pass → group); (3) the relocation WITH its cons-state
+re-homed to bracketed flat buffers as named pre-landings; (4) the
+pointee representation arc; (5) only then 2b's fork/reset at the
+grain that exists then (per-entry for lower/emit; per-group-drain at
+best for judgment); (6) the ~> absorb spelling rides the
+evidence-seam peer independently. SMALLEST SOUND FIRST LANDING: the
+per-fn EMISSION region — generalize the proven per-twin
+mark/stream/reset shape to the general per-record emit path (probe
+first: any post-mark registry/table allocation on that path), landed
+with the census print. D5's honesty note: image_bytes has ZERO
+performers and memory.mn's comment states the census print in
+present tense — mechanism prose ahead of the artifact, trued
+2026-08-12 in the same commit as this fold.
 
 `Hβ.own.use-after-move` — BUILT (2026-08-07, pin 8ba768c810c4, before
 the arena exactly as prescribed). The mechanism was one leg's ORDER:

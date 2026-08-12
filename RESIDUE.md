@@ -1133,7 +1133,23 @@ deep-walks spec_scan_expr for WIDE instantiation sites, which are
 repr-keyed lowering facts rather than program facts, so its honest form
 is a per-entry accumulator, not a seed re-root. Both land WITH the
 worklist); per-entry accumulators dual-run
-beside collect_* with set-equality gates, one family per landing.
+beside collect_* with set-equality gates, one family per landing —
+NOT collect_call_vectors, the stamp's own suggestion, REFUTED against
+the artifact 2026-08-12 before a line was built: its walk EXPANDS
+emit-minted nodes (`LShow(h, x) => collect_call_vectors_expr(
+show_node_of(h, x), acc)`, and show_node_of MINTS
+`LCall(h, LGlobal(h, "int_to_str"), [x])` inside wasm.mn), so part of
+the module's repr-vector set is created DURING the emit walk and exists
+nowhere at lower time. A lower-fed accumulator would miss every
+interpolation's show call — the wheel's own source is full of them — so
+the set-equality gate would go RED by construction, and making it green
+means feeding the accumulator from emit too, which IS the relocation
+rather than a pre-landing. The viable first family is
+`collect_fold_tys`: its LShow/LHash arms accumulate the fold TYPE and
+walk the operand, reading only nodes the lowered tree already holds.
+The general law this names, and the one the remaining families must each
+be tested against: a module aggregation is dual-runnable only if every
+node it visits exists before emit.
 DECISIONS WRITTEN (derived, none open): container-keep is REPRODUCED
 in the driver and the no-main library path seeds all decls — the
 narrowing alternative silently changes the installed-effect census

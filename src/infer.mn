@@ -2520,6 +2520,12 @@ fn infer_stmt_list(stmts) = each(infer_stmt, stmts)
 fn infer_stmt(ref node) = match node {
   N(body, span, handle) => match body {
     NStmt(LetStmt(pat, expr, ann)) => {
+      // The decls column, second writer: a value binding IS a declaration,
+      // and a MODULE-level one is an emittable entry (__init_lets runs
+      // every module value let), so the relocation's reader resolves its
+      // origin here. Nested fns already note through infer_fn, so the
+      // column's contract was never top-level-only.
+      graph_decl_note(handle)
       infer_expr(expr)
       match expr {
         N(_, val_span, eh) => {
@@ -2555,7 +2561,14 @@ fn infer_stmt(ref node) = match node {
     },
     NStmt(TypeDefStmt(_, _)) => (),
     NStmt(EffectDeclStmt(_, _, _)) => (),
-    NStmt(HandlerDeclStmt(hname, ename, config, state, arms)) => register_handler(hname, ename, config, state, arms, span),
+    NStmt(HandlerDeclStmt(hname, ename, config, state, arms)) => {
+      // The decls column, third writer. An ARM is an emittable entry whose
+      // name is composed at lower and cannot be parsed back to (handler,
+      // op), so the arm's origin is its handler decl's node — noted here,
+      // where the decl is judged.
+      graph_decl_note(handle)
+      register_handler(hname, ename, config, state, arms, span)
+    },
     NStmt(ExprStmt(expr)) => infer_expr(expr),
     NStmt(ImportStmt(_)) => (),
     NStmt(RefineStmt(_, _, _)) => // Registered at pre_register_stmt (the one home — TAlias(name,
@@ -2913,8 +2926,11 @@ fn infer_fn_speculative(name, params, body_node, ret_ann, effs, handle, span: Va
 }
 
 fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan, poly_hint) = {
-  // The decls column's one writer: the FnStmt node handle, noted per
-  // judgment (rounds re-note; readers dedup by handle).
+  // The decls column, first writer: the FnStmt node handle, noted per
+  // judgment (rounds re-note; readers dedup by handle). The let and
+  // handler-decl arms of infer_stmt are the other two — a column of
+  // every judged DECLARATION, which is what the relocation's reader
+  // needs an origin from.
   graph_decl_note(handle)
   env_scope_enter()
   let param_handles = mint_params(params, name)

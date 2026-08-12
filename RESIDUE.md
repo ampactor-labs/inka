@@ -1102,9 +1102,21 @@ today. THE BUILD'S OWN KILL, caught by the peak ratchet at
 installs once per JUDGED DECL (infer.mn:2263, the layer sweep's
 spawn), so state-init cost there is per-decl cost, ~+100MB measured.
 The table stays unallocated until a read demands it and the peak
-returned inside the prior band); decls_col grows HandlerDeclStmt + LetStmt notes
-(arm and value-let references have no origin home; arm names are not
-parseable back to (hname, op)); main_param_count and the value-let
+returned inside the prior band); ✅ decls_col grows HandlerDeclStmt +
+LetStmt notes (pin 18ce91606de8, CLEAN — and the "zero new readers,
+Law-7 vocabulary" scoping was REFUTED by the artifact: `decl_handles()`
+feeds the `decls` facet AND `project_queue()`'s seed, so every write to
+this column is a proposal position. It landed because "fn-only" was
+never the contract — `graph_decl_note` fires from `infer_fn`, which
+NESTED fn decls reach — so the let and handler-decl arms of `infer_stmt`
+note at the same altitude. Both reader surfaces measured: the decls
+fixture carries no handler or let so the facet leg is untouched
+(frontier 361/0), and the oracle self-test run on this tree and on the
+prior tree with the change stashed gave identical classification counts
+and the same single CHANGED skeleton — a PRE-EXISTING drift
+(s02_float_arith, expected edit-trap, got refuse-unfilled) now named,
+since the self-test runs outside verify and march and nothing was
+watching it); main_param_count and the value-let
 set re-root on env/program (collect_top_value_lets is a FOURTH tree
 reader the stamp never listed); per-entry accumulators dual-run
 beside collect_* with set-equality gates, one family per landing.

@@ -389,10 +389,11 @@ fn span_in(ref acc, ref sp, i) with Memory + Alloc =
 
 // ─── The decls column's projection — one home, two readers ──────────
 //
-// decl_handles — the judged fn-decl handles, read from the graph's
-// decls column and deduped by handle (judgment rounds re-note the same
-// decl). The oracle queue seeds from this read; the "decls" facet
-// renders it located.
+// decl_handles — the judged DECLARATION handles (fn, value binding,
+// handler decl), read from the graph's decls column and deduped by
+// handle (judgment rounds re-note the same decl). The oracle queue
+// seeds from this read; the "decls" facet renders it located — so a
+// column write is a proposal position, not vocabulary.
 fn decl_handles() with GraphRead + Alloc + Memory = {
   let hs = graph_decls_at()
   dedup_handles(hs, 0, make_list(0))

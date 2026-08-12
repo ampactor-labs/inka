@@ -97,6 +97,37 @@
   (`Hβ.emit.partial-application-arity`). Either landing retires both
   convictions without renaming a lambda. The third callback took the
   tier's own remedy: the shift step is the named `emit_shift_pair`.
+- 2026-08-12 · ▶▶▶ THE DECLS COLUMN TAKES EVERY
+  DECLARATION (pin 18ce91606de8 — CLEAN m2 == m3, 408421 lines, census 0,
+  frontier 361/0, peak 2359364KB inside the ceiling). The relocation
+  arc's third pre-landing, and the first whose stamped premise was
+  wrong.
+  **THE PREMISE REFUTED.** The pre-landing was scoped as "zero new
+  readers — Law-7 vocabulary". `decls_col` has a live reader:
+  `decl_handles()` (query.mn), and it feeds TWO surfaces — the `decls`
+  query facet the frontier pins, and `project_queue()` (oracle.mn:197),
+  which maps `candidates_at` over exactly those handles. Every write to
+  this column is a PROPOSAL POSITION. The dual-write pattern the other
+  step-(i) columns use does not apply here.
+  **WHAT LANDED ANYWAY, and why it is the honest form.** `graph_decl_note`
+  fires from `infer_fn`, which nested `fn` declarations reach too — so
+  the column was never top-level-only, and "fn-only" was the incomplete
+  state rather than the contract. The let and handler-decl arms of
+  `infer_stmt` now note at the same altitude: an arm is an emittable
+  entry whose lower-composed name cannot be parsed back to (handler, op),
+  so its origin is its handler decl's node; a module value binding is an
+  entry through `__init_lets`. `decl_handles()`'s own comment carried
+  "the judged fn-decl handles" and is corrected.
+  **BOTH READER SURFACES MEASURED, not argued.** The decls fixture holds
+  three fn decls and no handler or let, so the facet leg is untouched —
+  frontier 361/0. The oracle self-test was run on this tree AND on the
+  landing-2 tree with the change stashed: identical classification counts
+  (assemble-fail 1, clean-run 2, refuse-unfilled 2, runtime-trap 1) and
+  the same single CHANGED skeleton (s02_float_arith, expected edit-trap,
+  got refuse-unfilled) on both. That drift is PRE-EXISTING and is named
+  here rather than absorbed — the self-test is outside verify and march,
+  so nothing was watching it.
+
 - 2026-08-12 · ▶▶▶ THE EMITFN INDEX CARRIES ITS COVERAGE, NOT A
   FLAG (pin 6b9b08724830 — CLEAN m2 == m3, 408395 lines, census 0,
   frontier 361/0, peak 2359396KB inside the ceiling; every other ratchet

@@ -1,0 +1,110 @@
+// The peel ladder — the graduated probe corpus of the 2026-08-12 dig
+// (RESIDUE `Hβ.verify.interval-fragment`, pin bceed184). Each rung
+// isolates one flow step between a refined mint and a call-boundary
+// obligation; the instrument is the pending ledger on stderr, read on
+// a COLD compile (the warm image suppresses re-derived obligations —
+// `Hβ.verify.warm-image-pending-suppression`). Measured map: a rung
+// whose flow carries a refined fact var-connected to the boundary is
+// SILENT (S1-S7, S11 — the echo-stop reads the alias off the chased
+// class); a bare-first flow accrues its honest first claim (S8, S12,
+// S13, S14); a free-arg forward relocates the obligation to its own
+// published boundary (S9 — the call site's unify-then-discharge order,
+// the precondition any class-upgrade mechanism must invert first); a
+// GROUNDING interior breaks propagation at its published-ground scheme
+// (S10 — rung 3's domain). Not wired to a gate; a corpus for the next
+// flow dig.
+
+type Nat = Int where 0 <= self
+
+fn mk(x) -> Nat = 7
+
+fn consume(v: Nat) = v + 1
+
+// S1 — direct call-arg: producer's published ret feeds the arg node.
+fn s1(x) = consume(mk(x))
+
+// S2 — through a let: one var between producer and obligation.
+fn s2(x) = {
+  let p = mk(x)
+  consume(p)
+}
+
+// S3 — a comparison touches the var BEFORE the consume.
+fn s3(x) = {
+  let p = mk(x)
+  if p < 9 { consume(p) } else { 0 }
+}
+
+// S4 — annotated param, straight flow.
+fn s4(i: Nat) = consume(i)
+
+// S5 — annotated param, comparison first (the banked re-peel shape —
+// measured NOT re-peeling: bound-meets are check-only, the alias
+// survives).
+fn s5(i: Nat) = if i < 9 { consume(i) } else { 0 }
+
+// S6 — tuple destructure between producer and obligation.
+fn mkp(x) -> (Int, Nat) = (x, 7)
+
+fn s6(x) = match mkp(x) {
+  (_a, ph) => consume(ph),
+}
+
+// S7 — the render_at shape: Option payload, then tuple destructure.
+fn find2(i) -> Option((Int, Nat)) = if i > 0 { Some((i, 7)) } else { None }
+
+fn s7(i) = match find2(i) {
+  None => 0,
+  Some(pick) => match pick {
+    (_a, ph) => consume(ph),
+  },
+}
+
+// S8 — unannotated producer: the ret assembles from the body join.
+fn mk_raw(x) = 7
+
+fn s8(x) = {
+  let p = mk_raw(x)
+  consume(p)
+}
+
+// S9 — the relocation probe: an UNANNOTATED fn forwards its raw param
+// into the refined boundary. No pending surfaces at the consume — the
+// call unify plants the alias into the free param BEFORE the echo-stop
+// reads it (unify-then-discharge order), and the obligation relocates
+// to s9's own published boundary.
+fn s9(x) = consume(x)
+
+// S10 — the GROUNDING interior: judged at its own decl, the comparison
+// first-binds p to bare Int, so the published scheme carries ground
+// Int with no var for a refined fact to ride through.
+fn interior2(p) = if p > 0 { p } else { 0 }
+
+fn s10(x) = consume(interior2(mk(x)))
+
+// S11 — the var-connected interior: identity keeps the param free at
+// its own decl; the caller's refined class flows through by var union.
+fn interior3(p) = p
+
+fn s11(x) = consume(interior3(mk(x)))
+
+// S12 — the bare-Int producer, direct: no refined fact anywhere.
+fn ret_int(x) = 42
+
+fn s12(x) = consume(ret_int(x))
+
+// S13 — a computation arg: value_flows_class refuses the echo-stop,
+// and BMul has no interval leg — accrues and pends.
+fn s13(x) = {
+  let w = x * 2
+  consume(w)
+}
+
+// S14 — the bare-Int producer through a let (S8's twin with a direct
+// literal body; discriminates producer-annotation from producer-body).
+fn s14(x) = {
+  let r = ret_int(x)
+  consume(r)
+}
+
+fn main() = s1(1) + s2(1) + s3(1) + s4(7) + s5(7) + s6(1) + s7(1) + s8(1) + s9(7) + s10(1) + s11(1) + s12(1) + s13(1) + s14(1)

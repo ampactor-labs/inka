@@ -615,38 +615,78 @@ THE CALLEE LEG LANDED same day (pin 5e34f710 — an authored return
 rides the pre-registered TFun as a Ty VALUE, so a call's bound reads
 the callee's annotation verbatim, uncontaminatable by class merging;
 the wrap/base fixture faces prove it; TRANSITION m3 == m4). THE
-SELF-CALL IH IS BLOCKED BY THE PEEL, measured (2026-07-30 probe
-census, disposable build): at decide time the rec-callee's chased
-TFun ret is the PEELED TInt or a TVar (8 tint + 4 tvar across the
-fixture's callee/operand reads; the 5 callee reads all reach the
-TFun arm) — the value-ret survives the pre-registration but the
-class the rec-call actually resolves carries the peeled base, and
-the peel reaches PARAM classes too (a comparison's ground unify
-re-peels `i: Nat` to TInt), so any class-based IH read fights
-nondeterministic representative choice. Two prior discriminator
-specs REFUTED in the same dig: class-vs-DECL identity (a top-level
-rec-call instantiates a copy — never the decl's class) and the
-peel-window reorder (the rebind-first form re-opens the flow-echo
-launder). The arc REDIRECTS: the IH lands either on the peel's own
-fix (the most-refined representative surviving comparison unifies
-and the publish fold — the rebind law completed at every unify, not
-just the decl pin) or on Hβ.infer.schemes-are-edges (whose deletion
-of the publish/peel/rebind tower dissolves the question). Until
-then seek-shaped recursion pends honestly — visible debt, the
-system's contract. THE OTHER HALF is down to TWO (re-measured 2026-08-11 off the
-march's own stderr — the 08-08 discharge trio retired cursor:297,
-one main ph flow, and voice:1097): scan_for_span's return
-(cursor:544 — the recursion-shaped one, honestly waiting on the IH)
-and the render_at ph flow (main:1163). THE MINT-SITE ROUTE KILLED
-for the second (2026-08-11, march-measured vacuous and reverted
-whole): re-typing the span-index chain — Graph's payload,
-graph_index_span, the branch seed — to Handle marched CLEAN and
-byte-identical with BOTH pendings unmoved; the refinement peels in
-the flow before the obligation (the IH dig's own peel, met from the
-other side). The discharge waits on the peel fix or rung 3's
-dissolution, exactly like its recursion sibling — both pendings are
-honest debt with one shared root. TagId's 0..255 and the float
-intervals stay the SMT tier's.
+SELF-CALL IH LANDED 2026-08-12 (pin bceed184 — the peel root dug,
+named, and DELETED; march m2 == m3, census 0, movers 476 unchanged,
+frontier 361/0, crown 35/0, proof-exactness 9/0): the "peel" was
+never a unify arm replacing a refined representative — it was the
+decl pin's ORDER plus a reader refusal, probe-named exactly. Each
+judgment mints a fresh ret cell; the body-return unify links it into
+the join's first-bound bare class; the decl's own obligation decides
+at the constraint site and READS that bare class; the old post-body
+rebind landed one statement later. The rec-call was the one caller
+reading the decl's live fn_ty, whose ret slot was the one
+construction still carrying the bare var (prereg's own comment names
+the law: a value inside the record cannot be class-contaminated).
+Fix = the assumed signature bound BEFORE the body (the authored
+`-> RetTy` resolved into the decl TFun's ret slot as a VALUE, cell
+still bound for grounding; the post-body pin keeps only the body's
+refinement constraint; the ownership rewrite carries the same slot)
++ ty_lo chasing a TVar slot to its cell (the reader had refused
+exactly the slot that held the fact). The fixture falls 2 → 1
+(seek discharges via the IH; wild, the never-launders control,
+still pends); the frontier interval leg seen RED at want-2 and
+re-derived to want-1. EIGHT KILLS this dig, each one probe: (1) my
+"the decide never type-reads a var arg" — refuted by the echo-stop
+read at the accrual (apply_refinement_constraint's TAlias arm);
+(2) "a let-var breaks the flow" — refuted, S2 silent; (3) "a
+comparison's ground unify re-peels a BOUND refined class" — refuted
+at specimen scale (S3/S5: bound-meets are check-only, the alias
+survives; the 07-30 `i: Nat` re-peel was the free-var FIRST-BIND
+order, not a rebind of a bound class); (4) "destructure peels" —
+refuted, S6/S7 silent through tuple and Option payloads; (5) the
+WARM INSTRUMENT ITSELF — the shim's warm image SUPPRESSES
+re-derived obligations (ladder warm: 1 pending line; cold: 8 — S10/
+S12/S13/S14's warm silence was the instrument lying; peel probes
+run COLD, always); (6) my "prereg + ret pin leave the rec-chase
+refined" — refuted by the probe compiler (the fresh final ret cell
+read unbound then NBound(TInt) at the two decides, with the pin's
+own print proving the rebind ran after both); (7) the banked fix
+direction "most-refined representative at EVERY unify" — SUPERSEDED
+by the sharper root: the representative law was already written at
+both pins, the defect was order + reader, and an every-unify
+upgrade WITHOUT inverting the call site's unify-then-discharge
+order (infer_call_saturated unifies at the top, discharges after)
+would let the upgrade plant the annotation the echo-stop then reads
+— S9 measures that order accident today as silent obligation
+RELOCATION on free args; any future class-upgrade mechanism must
+land the discharge-before-unify inversion FIRST; (8) the cold
+ladder's trial+final DOUBLE-ACCRUAL (three sites printed twice) —
+the ledger holds both passes' copies, a dedup question for the
+debt projection. THE FLOW MAP the specimen ladder measured
+(graduated to tests/repro-wf/peel-ladder.mn, 14 rungs): a refined fact ANYWHERE in a
+var-connected flow reaches the boundary (annotated producer or
+param, through lets, comparisons, destructures, identity
+interiors); a bare-first flow accrues its honest first claim at
+the boundary; a GROUNDING interior (its own decl judgment
+first-binds params/ret bare, publishing ground types with no var
+for the fact to ride) breaks propagation — that break is
+published-schemes-are-VALUES, rung 3's domain, not a unify arm.
+THE OTHER HALF is still TWO on the wheel (march m3.err, unchanged
+by design): scan_for_span's return (cursor:544) now needs only the
+PARAM-ASSUMPTION LEG — its `i` is an unannotated param whose VarRef
+the transparent face rightly refuses; the named next build is
+node_lo_tr reading a binder's AUTHORED param annotation (an input,
+uncontaminatable — the IH's param dual), after which `i: Handle`
+discharges it; and the render_at ph flow (main:999) has NO refined
+fact upstream since the mint-route revert — its discharge = the
+mint annotation restored PLUS propagation across the chain's
+grounding interiors, i.e. rung 3, or per-fn annotations down the
+chain (each honest, each measured by the ladder's map). NEW PEER
+banked from kill 5: `Hβ.verify.warm-image-pending-suppression` —
+the warm path restores the analyzed image but re-derivation does
+not re-surface unchanged-decl obligations, so the daily loop's
+pending projection under-reports (cold = truth; the march is cold).
+TagId's 0..255 and the float intervals stay the SMT tier's.
 
 `Hβ.lower.lowering-is-a-column` — LowIR is the second graph (2026-07-30,
 the Fable novelty audit's first proposal; report at

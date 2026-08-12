@@ -3161,6 +3161,13 @@ fn lower_stmt_list_loop(stmts, i, n, buf, count) = if i >= n {
   // by an inner arm construction pairs with this stmt's reach name — a
   // nested lambda/thunk/partial hole shares its container's reachability
   // class, and "" (a module value let) is always live via __init_lets.
+  // The block-depth pairing question is MOOT under container-keep: a
+  // zero-nested container is unconditionally emitted, so its name is in
+  // the reach universe under any pairing — a block-let hole in an
+  // unreached fn refuses because the fn IS in the emitted tree (SYNTAX's
+  // "pruned dead code" means NOT-EMITTED); the seam dissolves at the
+  // relocation, where dead entries never construct (the 2026-08-12
+  // refutation's corrected defect 3).
   graph_hole_drain(reach_decl_name(lo))
   let extended = list_extend_to(buf, count + 1)
   let written = list_set(extended, count, lo)

@@ -806,6 +806,63 @@ per ⟳: the `type NAME` query facet answers the name, not the
 variant/field ROSTER (the ADT-roster facet); the address form lacks
 an enclosing-DECL facet (node → its decl — the walker census needed
 an awk scan for it).
+THE STAMP REFUTED AND RE-CUT (2026-08-12, the independent adversarial
+pass before the dedicated session — nine defects, every one receipted
+against the artifact; the corrections supersede the stamp's claims in
+place). BLOCKING corrections: (1) construction-before-assembly IS the
+landing shape — zero-byte refusal + the evidence census + the
+global-facts-before-first-byte assembly order (type section, fn
+table, string offsets baked via the collected intern table) force ALL
+construction to complete before emission; the PRICED residency claim
+restates honestly as O(reachable), and per-entry emit-to-string with
+incremental interning is the 9.2 parallel-emit arc's, not this one's.
+(2) "the projectors are callable from emit BY CONSTRUCTION" was
+FALSE: lower_handler_stack_ctx installs around lower_stmt_list INSIDE
+lower_program, not in the compile-remainder chains (there are FOUR
+plus the battery/mcp routes, not one) — the stack install joins every
+chain as a marchable Law-7 pre-landing (state empty at decl
+boundaries, behaviorally identical); lower_scope's registered state
+genuinely survives, verified. (3) RE-CLASSIFIED by the fix
+attempt's own probe (the retraction law, same hour): the block-hole
+refusal is NOT an over-refusal — a zero-nested container is
+unconditionally EMITTED under container-keep, so the fn is in the
+emitted tree and SYNTAX's law ("pruned dead code" = NOT-EMITTED)
+refuses its hole by the letter; the frame-aware pairing fix was
+built, probed vacuous (the fn's name is in the reach universe under
+any pairing), and reverted whole. The TRUE finding is twofold: the
+three green dead-hole fixtures pass via NOTE-PATH ASYMMETRY (their
+hole shapes never reach lower_expr's note arm), not via reachability
+— their comments over-claim; and the block-vs-plain asymmetry is a
+semantics seam the RELOCATION dissolves (dead entries never
+construct, so never note — emission and reachability finally agree).
+The seam is named here, not patched. PRE-LANDINGS, each marchable
+while the tree stands: the emitfns_idx staleness decision (the
+demand-built index latches at first read; the worklist interleaves
+note/read — insert-on-note-when-built or rebuild-on-miss, re-measured
+against the peak); decls_col grows HandlerDeclStmt + LetStmt notes
+(arm and value-let references have no origin home; arm names are not
+parseable back to (hname, op)); main_param_count and the value-let
+set re-root on env/program (collect_top_value_lets is a FOURTH tree
+reader the stamp never listed); per-entry accumulators dual-run
+beside collect_* with set-equality gates, one family per landing.
+DECISIONS WRITTEN (derived, none open): container-keep is REPRODUCED
+in the driver and the no-main library path seeds all decls — the
+narrowing alternative silently changes the installed-effect census
+(E_EffectUnhandled refusals on programs that compile today, the
+oracle blind to it) and is refused; EMISSION ORDER is source-order
+from decls_col on the first landing (smallest diff; the
+enumeration's tree-order claim re-scopes to the dual-write era;
+demand-order becomes 9.2's option); twin/duplicate notes get
+(kind, origin, enc)-keyed idempotence with first-wins (the
+state-init duplicate exists TODAY); the k2-floor claim survives
+(per-fn-body inside the projectors — the refuter killed its own
+candidate there). SIZING verdict: NOT one big-bang — ONE TRANSITION
+(the worklist itself, bodies retained, source-order emission)
+flanked by marchable landings, in the refuter's order: the
+handler-stack chain installs; the idx staleness fix; the decls_col
+growth; the seed re-roots; the accumulator dual-runs; the
+container-keep/library/order fixtures banked RED; the TRANSITION;
+the tree + walker + collect deletion; twins re-keyed.
 THE FIRST (ii) SWAP STAMPED — THE HOLE GATE READS THE PROGRAM
 (2026-08-11, the loop's sizing pass; build next). collect_value_holes
 (lower.mn, the 60-line four-fn family matching all 39 constructors to

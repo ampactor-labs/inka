@@ -1887,19 +1887,31 @@ census-fixture site TRUED to a real spec (`x <~ delay(1)` under a
 declared context; the census's `<~` pin moves with it), a DSP row
 fixture asserting lowpass_iir publishes Sample, a Delay(0) refusal
 fixture RED-first, and E_FeedbackNoContext's first firing gated.
-THE FORK (Morgan's, both branches priced): HOW does an effect join
-the Iterate class? SYNTAX says "Sample/Tick/Clock are *instances* of
-that class, not a hardcoded name-allowlist" — but declares NO surface
-for the membership. (A) STRUCTURAL: no honest structural signature
-exists (any op shape can be coincidental); every candidate read is
-name-keyed drift in costume — REFUTED at trace. (B) DECLARED: the
-effect decl carries the class (`effect Sample(rate: Int) iterates
-{ … }` or an equivalent marker) — one keyword-adjacent surface
-addition, the class fact then an env read at the arm; honest,
-teaches at the decl, and the SYNTAX section that promised
-no-allowlist gets its mechanism. The build blocks on (B)-or-better;
-until chosen, the arm cannot name its class membership without the
-allowlist SYNTAX forbids.
+THE FORK DISSOLVED (2026-08-12, derived from the kernel per the
+no-deferrals charge — the thesis answered it): Iterate-class
+membership is the HANDLER'S PROVEN DRIVE STRUCTURE — the
+resume-discipline inference the medium already runs. The refuted
+branch (A) was structural at the wrong altitude: it read the effect
+DECL's op shapes, where any shape is coincidental; the structure that
+proves iteration is the handler's ARMS, and that classification is
+already load-bearing (dispatch tiers ride it) and already JOINED at
+the EffectOpScheme (draw_op_edges folds every declared handler's
+resume_grade), so membership is an env READ at the PFeedback arm —
+no install needed in scope, no new surface, no allowlist. Branch (B)
+dies by the body-is-the-contract law verbatim (the @resume=
+precedent: authoring a marker would declare what the arms already
+prove). The class predicate: the op's joined resume grade is the
+LOOP-DRIVING shape (resume under loop/recursion ancestry — the
+MultiShot driver classification), which §4④ makes exactly right:
+search, sampling, backtracking, and the clock are ONE primitive, so
+a `<~` prior under ANY loop-driving handler means "the value from
+the previous resumption" — the clock is the DSP instance, not the
+definition. An effect no declared handler drives is ungraded → not
+Iterate → E_FeedbackNoContext fires honestly (nothing anywhere gives
+"prior" meaning). SOTA note: Faust's ambient clock and Lustre's
+clock calculus become a typed, per-instance, INFERRED fact. The
+build unblocks whole: (a)-(d) above stand, with (a)'s membership
+test reading the EffectOpScheme's grade.
 
 `Hβ.driver.per-module-env-overlay` — the design stamp for PLAN §11
 Phase 3.5 (banked 2026-08-07 with the first half LANDED: the solo

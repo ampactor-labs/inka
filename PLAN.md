@@ -1738,17 +1738,18 @@ new DEP found; the map below is accurate at that pin.)*
   file-true query spans) is the stamped second half; the ceiling reaches
   0 when the seams close, and the per-module check then gates the
   drift-catalog retirement.
-- **3.6 · `<~` becomes whole** — STAMPED 2026-08-07 with ONE FORK FOR
-  MORGAN (`Hβ.dataflow.feedback-becomes-whole` in `RESIDUE.md` carries
-  four measured faces: fb types Pure, lowpass_iir's authored Sample
-  vanishes, E_FeedbackNoContext has zero construction sites, Delay(0)
-  types like Delay(1) — plus the traced design: the PFeedback arm
-  resolves the context via the enclosing-tee walk, charges the effect,
-  refuses the zero delay). THE FORK: how an effect joins the Iterate
-  class — SYNTAX promises no-allowlist but declares no membership
-  surface; the structural read refuted at trace (name-keyed drift in
-  costume), the declared marker (B) priced as one surface addition. The
-  build blocks on the choice. `Hβ.dsp.state-element-install-once` rides
+- **3.6 · `<~` becomes whole** — STAMPED 2026-08-07; THE FORK DISSOLVED
+  2026-08-12 (`Hβ.dataflow.feedback-becomes-whole` in `RESIDUE.md`
+  carries the four measured faces, the traced design, and the
+  derivation): Iterate-class membership is the handler's proven drive
+  structure — the resume-discipline inference already joined at the
+  EffectOpScheme, read at the PFeedback arm; the declared-marker branch
+  dies by the body-is-the-contract law (the @resume= precedent), and
+  the earlier structural refutation was aimed at the wrong altitude
+  (op shapes, not handler arms). §4④'s one-primitive unification makes
+  the predicate exact: the loop-driving resume grade IS the class; the
+  clock is the DSP instance, not the definition. The build is
+  UNBLOCKED whole. `Hβ.dsp.state-element-install-once` rides
   the arena (4.3); `Hβ.dataflow.clock-calculus-sample-rate` rides Phase
   8's DSP verify tier.
 
@@ -2103,8 +2104,9 @@ The spine root finishes. Order inside the phase is the dependency order.
   rides the index (leak-list-latent / sound-list-transport), the
   tuple element's rides the position (leak-tuple-latent /
   sound-tuple-transport) — refusal at the call, acceptance at pure
-  transport, crown 35/0; the feedback-under-negation rule waits on
-  3.6's Iterate-membership fork (Morgan's); the
+  transport, crown 35/0; the feedback-under-negation rule now waits only on
+  3.6's BUILD (its fork dissolved 2026-08-12 — membership is the
+  joined resume grade); the
   sweep continues rule-by-rule), and the
   capability-at-tee PROJECTION — ✅ LANDED 2026-08-08 (pin
   2dcd736eb4e6): `mentl where` renders every install as

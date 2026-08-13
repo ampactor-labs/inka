@@ -1,0 +1,6 @@
+// The library pin (the relocation's written decision): a module with no
+// main seeds ALL decls — every declaration constructs and emits, source
+// order, so an importer's link set is never a demand guess. beta is
+// unreferenced by alpha on purpose: the whole module emits anyway.
+fn alpha(x) = x + 1
+fn beta(y) = y * 2

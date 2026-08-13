@@ -1,0 +1,7 @@
+// The emission-order pin (the relocation's written decision): emission
+// iterates the decls' SOURCE order — zeta before alpha before main —
+// never the demand order the worklist constructs in (main -> alpha ->
+// zeta). Demand-order emission is 9.2's option, taken there or not at all.
+fn zeta() = 7
+fn alpha() = zeta() + 1
+fn main() = alpha()

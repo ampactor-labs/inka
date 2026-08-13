@@ -1,0 +1,14 @@
+// expect: 42
+// The block-vs-plain dead-hole seam, DISSOLVED (the relocation): a
+// block-let hole in a dead fn is the same absence as a plain body hole
+// in a dead fn — the dead entry never constructs, so it never notes,
+// and SYNTAX's law ("a hole in pruned dead code never over-refuses")
+// holds by one mechanism for both spellings. Born RED on the
+// pre-relocation boot (E_UnresolvedHole at the let init — the hole
+// noted under an always-live pairing while its plain sibling passed
+// via note-path asymmetry, two verdicts for one deadness).
+fn dead_helper(x) = {
+  let y = ??
+  y
+}
+fn main() = 42

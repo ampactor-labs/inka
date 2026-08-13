@@ -35,6 +35,38 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-12 · ▶▶▶ CONSTRUCTION IS REACHABILITY (pin 73d3a124ce —
+  TRANSITION, m2 ≠ m3 by 26 diff lines and m3 == m4, census 0, crown
+  39/0, frontier 364/0, proof-exactness 9/0; m3 leg 16.47s wall ·
+  2395MB peak RSS): the enumeration-reader relocation,
+  `Hβ.lower.lowering-is-a-column`. The deleted `build_reach_index`
+  answered "what does NAME reference?" by walking trees that had ALL
+  been constructed up front — every decl lowered, then a second pass
+  asked which ones mattered. The demand worklist inverts it: a name
+  popping from the frontier CONSTRUCTS its decl, and the constructed
+  body IS the edge list, read once. A lower-minted reference exists
+  exactly when its parent constructs; a dead decl never constructs at
+  all, so emission and reachability agree by construction instead of by
+  two passes kept in sync. `lower_program` becomes its pre-passes and
+  the program flows on. The written decisions held: container-keep is
+  reproduced at the name map (every arm name keys its WHOLE container
+  stmt), emission is source order from the stmt list — never the demand
+  order the worklist drains in — and a no-main library seeds ALL decls
+  rather than narrowing (narrowing would shift the installed-effect
+  census on programs that compile today). The build's own find, caught
+  as an undefined-`$int_to_str` assembly break in the interp micros:
+  `show_subtys` collected a `[Byte]` leaf no render surface can call, so
+  the minted body's interior dangled once the worklist stopped flowing
+  dead-decl seeds — the collector now reads the same fact the dispatch
+  reads. Four fixtures pin the decisions (library-whole, emission-order,
+  container-keep, hole-dead-block). THE GATE'S OWN BUG, measured at
+  absorption: the library leg reported RED while printing alpha=1
+  beta=1 — `printf` piping 800KB into `grep -q` lets grep exit at its
+  first match, the writer takes SIGPIPE, and under `set -o pipefail` the
+  condition reads false. The leg now writes the wat to a file and greps
+  the file, which is the idiom every other wat-scale leg in that gate
+  already used; the class has exactly one other member: none.
+
 - 2026-08-12 · THE GATE AGREES WITH ITS PARSER (pin d149cd6976 — CLEAN
   m2 == m3 in one generation, census 0, battery green with the new micro
   at 44): `Hβ.parser.named-fn-tuple-param` RESOLVED. SYNTAX §Pattern

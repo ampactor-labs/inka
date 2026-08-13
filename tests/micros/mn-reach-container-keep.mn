@@ -1,0 +1,15 @@
+// expect: 10
+// Container-keep, pinned (the relocation's written decision): only ping
+// is performed, and pong's arm still emits — reaching one arm keeps
+// every nested decl of its container, so the install's arm groups always
+// find their fns at assembly. Narrowing to per-arm emission would shift
+// the installed-effect census on programs that compile today; refused.
+effect Duo {
+  ping() -> Int
+  pong() -> Int
+}
+handler duo_h {
+  ping() => resume(10),
+  pong() => resume(20),
+}
+fn main() = (ping()) ~> duo_h

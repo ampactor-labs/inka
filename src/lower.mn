@@ -5058,7 +5058,12 @@ fn lower_program(stmts) = {
   // resolves its handler's decl live (handler_decl_of) regardless of source
   // order. The lower-handler-stack is installed by the compile chain, not
   // here — its extent is the whole remainder (see the effect's own decl).
-  lower_stmt_list(stmts)
+  //
+  // Construction is RELOCATED to the demand worklist (reachable_from_main —
+  // Hβ.lower.lowering-is-a-column): lower_program IS its pre-passes, the
+  // four cross-decl facts every per-decl lower_stmt call reads. The program
+  // flows on; each decl constructs when reachability demands it.
+  stmts
 }
 
 // Ω.3 — top-level name collection uses the buffer substrate. The number
@@ -5414,80 +5419,197 @@ fn reach_has_loop(buf, count, target: String, i) = if i >= count {
   reach_has_loop(buf, count, target, i + 1)
 }
 
-fn reach_grow(index, rbuf, rn, fbuf, fcount) = if fcount == 0 {
+// ─── The demand worklist (Hβ.lower.lowering-is-a-column — the
+// enumeration-reader relocation): construction IS reachability. The
+// deleted name→edges index (build_reach_index and its nested walkers)
+// answered "what does NAME reference?" by walking trees that had ALL
+// been constructed up front; the worklist inverts it — a name popping
+// from the frontier CONSTRUCTS its decl, and the constructed body is
+// the edge list, read once. A lower-minted reference (a synthesized
+// thunk's callee, a twin's wide leaf) exists exactly when its parent
+// constructs; a dead decl never constructs at all — its holes never
+// note, and emission and reachability agree by construction. The
+// container-keep truth the index carried (reaching one arm reaches
+// every sibling — no fn-value edge dangles) lives in the map below:
+// every arm name keys its WHOLE container stmt. The deletion-ultimate
+// stays Hβ.lower.reach-edge-on-node (a reach edge on the node),
+// generalized by Hβ.perf.name-is-handle (§5.O); reach_has's linear
+// membership stays Hβ.lower.reach-membership-o1.
+//
+// An executable is a module whose top level declares `fn main` — the
+// program's own read (main_param_count's precedent: the FnStmt is the
+// canonical main). A library folds false and emits whole.
+fn stmt_is_main_fn(node) = match node {
+  N(body, _, _) => match body {
+    NStmt(FnStmt(name, _, _, _, _)) => name == "main",
+    _ => // not a fn decl — cannot be the entry
+    false,
+  },
+}
+
+// A stmt DEFERS to the demand frontier when its construction is
+// name-keyed: a named fn constructs when its name pops; a container
+// with arms constructs when any arm name pops (container-keep — the
+// whole stmt constructs). Everything else is the always-live set:
+// module value lets (__init_lets runs them), zero-arm containers, the
+// trivial type/effect/import decls, bare exprs — phase A constructs
+// them in source order.
+fn reach_stmt_defers(node) = match node {
+  N(body, _, _) => match body {
+    NStmt(s) => match s {
+      FnStmt(_, _, _, _, _) => true,
+      HandlerDeclStmt(_, _, _, _, arms) => len(arms) > 0,
+      LetStmt(_, _, _) => false,
+      TypeDefStmt(_, _) => false,
+      EffectDeclStmt(_, _, _) => false,
+      ImportStmt(_) => false,
+      RefineStmt(_, _, _) => false,
+      AliasStmt(_, _) => false,
+      RowAliasStmt(_, _) => false,
+      ExprStmt(_) => false,
+    },
+    NExpr(_) => false,
+    NPat(_) => false,
+    NHole(_) => false,
+    NModule(_) => false,
+    NTypeAnn(_) => false,
+  },
+}
+
+// name → the source stmt index that constructs under it: every
+// top-level fn and let name keys its own stmt; every arm name
+// (op_<handler>_<op>, the program-derivable arm_fn_name) keys its
+// CONTAINER's stmt — container-keep reproduced at the map. The handler
+// NAME itself deliberately keys nothing (the deleted index answered []
+// for it: an install reaches the arms through its own arm-name groups,
+// never through the handler's value name).
+fn reach_name_map(stmts, i, n, map) = if i >= n {
+  map
+} else {
+  let m2 = match list_index(stmts, i) {
+    N(body, _, _) => match body {
+      NStmt(FnStmt(name, _, _, _, _)) => smap_add(map, name, i),
+      NStmt(LetStmt(PVar(name), _, _)) => smap_add(map, name, i),
+      NStmt(HandlerDeclStmt(hname, _, _, _, arms)) => fold(map, (m, arm) => smap_add(m, arm_fn_name(hname, arm.op_name), i), arms),
+      _ => // no name keys this stmt — phase A owns it
+      map,
+    },
+  }
+  reach_name_map(stmts, i + 1, n, m2)
+}
+
+// The wide-twin seed, PER ENTRY (the banked accumulator form): each
+// constructed body scanned once at its own construction — the
+// whole-list pre-filter scan is deleted with it. A dead decl's wide
+// sites no longer seed (nothing will twin for them); reach_enqueue's
+// set discipline absorbs the family's re-arrivals.
+fn spec_entry_seed(d) with Alloc + Memory + LookupTy + EnvRead + GraphRead = match spec_scan_expr(d, ([], [])) {
+  (sites, _ophs) => if any(spec_site_is_wide, sites) { spec_wide_family() } else { [] },
+}
+
+// Phase A — the always-live set constructs in source order. A module
+// value let ROOTS its init's references (it RUNS before main in
+// __init_lets, so its callees are live by construction); a
+// closure-valued let leaves its references keyed on its name instead
+// (the enq flag stays 0 — the name's own pop enqueues, the by-name
+// edge the deleted index held); every other always-live entry roots
+// nothing by name (a bare expr / trivial decl draws no reach edge —
+// the emitted-set law unchanged). Every constructed entry contributes
+// its per-entry wide seed.
+fn reach_seed_stmts(stmts, i, n, outs, enq, r0, fbuf, fc) = if i >= n {
+  (fbuf, fc)
+} else if reach_stmt_defers(list_index(stmts, i)) {
+  reach_seed_stmts(stmts, i + 1, n, outs, enq, r0, fbuf, fc)
+} else {
+  let lo = lower_stmt(list_index(stmts, i))
+  graph_hole_drain(reach_decl_name(lo))
+  let outs2 = list_set(outs, i, lo)
+  match lo {
+    LLet(_, _, LMakeClosure(_, _, _)) => reach_seed_stmts(stmts, i + 1, n, outs2, enq, r0, fbuf, fc),
+    LLet(_, _, LMakeContinuation(_, _, _, _, _)) => reach_seed_stmts(stmts, i + 1, n, outs2, enq, r0, fbuf, fc),
+    LLet(_, _, init) => match reach_enqueue(reach_names_expr(init, []) ++ spec_entry_seed(lo), r0, 0, fbuf, fc) {
+      (fbuf2, fc2) => reach_seed_stmts(stmts, i + 1, n, outs2, list_set(enq, i, 1), r0, fbuf2, fc2),
+    },
+    _ => match reach_enqueue(spec_entry_seed(lo), r0, 0, fbuf, fc) {
+      (fbuf2, fc2) => reach_seed_stmts(stmts, i + 1, n, outs2, list_set(enq, i, 1), r0, fbuf2, fc2),
+    },
+  }
+}
+
+// The frontier drain — the deleted reach_grow with construction fused
+// in: pop a name (LIFO, the same deterministic discipline), record it
+// reached, and when the name keys a decl, construct that decl on first
+// touch and enqueue its constructed body's references + per-entry wide
+// seed exactly once (the enq flag — a closure-let constructed in phase
+// A enqueues here, on its name's pop). An unmapped name (a
+// runtime-contract fn from lib, an uninstalled arm target, a value-let
+// name whose roots already flowed) moves on — the deleted index
+// answered [] for exactly these. The worklist order is a pure function
+// of the program; the reach SET is its order-invariant fixpoint.
+fn reach_construct_loop(stmts, map, outs, enq, rbuf, rn, fbuf, fc) = if fc == 0 {
   (rbuf, rn)
 } else {
-  let name = list_index(fbuf, fcount - 1)
-  let refs = match smap_get(index, name) {
-    Some(r) => r,
-    None => [],
-  }
+  let name = list_index(fbuf, fc - 1)
   let rbuf2 = list_set(list_extend_to(rbuf, rn + 1), rn, name)
-  match reach_enqueue(refs, rbuf2, rn + 1, fbuf, fcount - 1) {
-    (fbuf2, fcount2) => reach_grow(index, rbuf2, rn + 1, fbuf2, fcount2),
+  match smap_get(map, name) {
+    None => reach_construct_loop(stmts, map, outs, enq, rbuf2, rn + 1, fbuf, fc - 1),
+    Some(i) => {
+      let outs2 = if slot_present(list_index(outs, i)) {
+        outs
+      } else {
+        let lo = lower_stmt(list_index(stmts, i))
+        graph_hole_drain(reach_decl_name(lo))
+        list_set(outs, i, lo)
+      }
+      if list_index(enq, i) == 0 {
+        let d = list_index(outs2, i)
+        match reach_enqueue(reach_names_expr(d, []) ++ spec_entry_seed(d), rbuf2, rn + 1, fbuf, fc - 1) {
+          (fbuf2, fc2) => reach_construct_loop(stmts, map, outs2, list_set(enq, i, 1), rbuf2, rn + 1, fbuf2, fc2),
+        }
+      } else {
+        reach_construct_loop(stmts, map, outs2, enq, rbuf2, rn + 1, fbuf, fc - 1)
+      }
+    },
   }
 }
 
-// name → its outgoing edges, built ONCE over lowered (build_reach_index), read
-// O(1) per frontier name (reach_index_get). The old reach_decl_refs LINEAR-
-// SCANNED the whole lowered list per name AND re-walked each decl's nested
-// bodies — O(N² × body), perf-pinned at 58.66% of the compile (2026-07-14).
-// The container-keep truth it carried (reaching one arm reaches every sibling,
-// so no fn-value edge dangles — emission == reachability) lives here: each arm
-// name maps to its own refs ++ the container's full nested-name set. Unknown
-// name → [] (the old len==0 fallthrough). The esc-proven build-then-read
-// str_hash index; the deletion-ultimate is Hβ.lower.esc-row-on-node (a reach
-// edge on the node), generalized by Hβ.perf.name-is-handle (§5.O).
-// The name → outgoing-edges index is the shared smap (lib/runtime/imap.mn);
-// a miss is [] (the old len==0 fallthrough), unwrapped from smap's Option.
-// The tree-walk builders below keep their reach-specific shape (each arm name
-// maps to its refs ++ the container's nested-name set), calling smap_new/add.
-//
-// ONE pass over lowered: each top-level decl's name → its refs, then every
-// nested arm name → its refs ++ the container's nested-name set. Mirrors the
-// exact structure reach_nested_refs/reach_nested_names walked per-lookup.
-fn build_reach_index(lowered) with LookupTy + EnvRead + Memory + Alloc =
-  build_reach_index_from(lowered, 0, smap_new())
-
-fn build_reach_index_from(lowered, i, idx) with LookupTy + EnvRead + Memory + Alloc = if i >= len(lowered) {
-  idx
+// EMISSION is source order from the decls' own order (the written
+// decision; demand order is 9.2's option): walk the slots 0..n, keep
+// each constructed decl by the same filter the tree-handoff form
+// applied — a named decl by its reached name (a closure-valued let
+// constructed in phase A but never popped drops here, exactly as the
+// filtered tree dropped it), a name-less decl by its nested set
+// (empty = unconditionally live: the value let, the zero-arm
+// container; else any-reached — an armed container constructs only
+// via a reached arm, so its check holds by construction).
+fn reach_collect(outs, rbuf, rn, i, n, buf, count) = if i >= n {
+  slice(buf, 0, count)
 } else {
-  let d = list_index(lowered, i)
-  let nm = reach_decl_name(d)
-  let idx1 = if nm == "" { idx } else { smap_add(idx, nm, reach_names_expr(d, [])) }
-  build_reach_index_from(lowered, i + 1, reach_index_add_children(d, reach_nested_names(d, []), idx1))
-}
-
-// Walk INTO a decl (skipping its own top-level name — the top-level pass
-// already added it without cnames) recording every nested arm fn.
-fn reach_index_add_children(d, cnames, idx) with LookupTy + EnvRead + Memory + Alloc = match d {
-  LDeclareFn(LFn(_n, _, _, body, _, _)) => reach_index_add_nested_list(body, cnames, idx),
-  LBlock(_h, stmts) => reach_index_add_nested_list(stmts, cnames, idx),
-  LLet(_h, _n, inner) => reach_index_add_children(inner, cnames, idx),
-  LIf(_h, _c, t, e) => reach_index_add_nested_list(e, cnames, reach_index_add_nested_list(t, cnames, idx)),
-  LHandleWith(_h, b, _hn, _hname, _inits, _an) => reach_index_add_children(b, cnames, idx),
-  _ => idx,
-}
-
-// A nested statement that may BE an arm fn: add it (body refs ++ cnames), then
-// recurse into its body for deeper nesting.
-fn reach_index_add_nested(stmt, cnames, idx) with LookupTy + EnvRead + Memory + Alloc = match stmt {
-  LDeclareFn(LFn(n, _, _, body, _, _)) => reach_index_add_nested_list(body, cnames, smap_add(idx, n, reach_names_list(body, []) ++ cnames)),
-  LBlock(_h, stmts) => reach_index_add_nested_list(stmts, cnames, idx),
-  LLet(_h, _n, inner) => reach_index_add_nested(inner, cnames, idx),
-  LIf(_h, _c, t, e) => reach_index_add_nested_list(e, cnames, reach_index_add_nested_list(t, cnames, idx)),
-  LHandleWith(_h, b, _hn, _hname, _inits, _an) => reach_index_add_nested(b, cnames, idx),
-  _ => idx,
-}
-
-fn reach_index_add_nested_list(stmts, cnames, idx) with LookupTy + EnvRead + Memory + Alloc = if len(stmts) == 0 {
-  idx
-} else {
-  reach_index_add_nested_list(
-    drop_last(stmts),
-    cnames,
-    reach_index_add_nested(last(stmts), cnames, idx)
-  )
+  let slot = list_index(outs, i)
+  if !slot_present(slot) {
+    reach_collect(outs, rbuf, rn, i + 1, n, buf, count)
+  } else {
+    let nm = reach_decl_name(slot)
+    let keep = if nm == "" {
+      let nested = reach_nested_names(slot, [])
+      len(nested) == 0 || reach_any_reached(nested, rbuf, rn)
+    } else {
+      reach_has(rbuf, rn, nm)
+    }
+    if keep {
+      reach_collect(
+        outs,
+        rbuf,
+        rn,
+        i + 1,
+        n,
+        list_set(list_extend_to(buf, count + 1), count, slot),
+        count + 1
+      )
+    } else {
+      reach_collect(outs, rbuf, rn, i + 1, n, buf, count)
+    }
+  }
 }
 
 // Every nested decl name a container holds — the container LIVES iff
@@ -6188,66 +6310,42 @@ fn spec_site_is_wide(site) with EnvRead + LookupTy + GraphRead + Memory + Alloc 
   },
 }
 
-fn spec_reach_seed(lowered) with Alloc + Memory + LookupTy + EnvRead + GraphRead = match fold(([], []), (a, d) => spec_scan_expr(d, a), lowered) {
-  (sites, _ophs) => if any(spec_site_is_wide, sites) { spec_wide_family() } else { [] },
-}
-
-fn reachable_from_main(lowered) = {
-  let has_main = any((d) => reach_decl_name(d) == "main", lowered)
-  // a library emits whole
+// The demand worklist's driver — reachable_from_main takes the PROGRAM
+// (lower_program is its pre-passes) and constructs exactly what emission
+// keeps. Phase A builds the always-live set in source order; the frontier
+// then drains — "main" first — constructing each popped name's decl and
+// enqueuing the CONSTRUCTED body's references, so construction IS
+// reachability and every entry constructs at most once, before any
+// assembly byte (construction-before-assembly, the landing shape).
+// _start reads live argv via wasi_args ONLY when main takes it
+// (Hβ.emit.wasi-argv-in-start); root it just then, so a 0-param main()
+// (the micros, which don't link io.mn) never pulls an undefined
+// $wasi_args. The runtime contract roots as before (emit mints those
+// calls after construction). The wide-twin family seeds per entry at
+// each construction (spec_entry_seed).
+fn reachable_from_main(stmts) = {
+  let has_main = any(stmt_is_main_fn, stmts)
+  // THE LIBRARY PATH seeds ALL decls: every stmt constructs, source
+  // order — the whole module emits (narrowing would shift the
+  // installed-effect census on programs that compile today; refused,
+  // the written decision).
   if !has_main {
-    lowered
+    lower_stmt_list(stmts)
   } else {
-    // Roots: main + every value-let init's references (they RUN before
-    // main in __init_lets, so their callees are live by construction).
-    let init_refs = fold(
-      [],
-      (acc, d) => match d {
-        LLet(_, _, LMakeClosure(_, _, _)) => acc,
-        LLet(_, _, LMakeContinuation(_, _, _, _, _)) => acc,
-        LLet(_, _, init) => reach_names_expr(init, acc),
-        _ => acc,
-      },
-      lowered
-    )
-    // name → edges, ONE pass, O(1) read
-    // _start reads live argv via wasi_args ONLY when main takes it
-    // (Hβ.emit.wasi-argv-in-start); root it just then, so a 0-param main()
-    // (the micros, which don't link io.mn) never pulls an undefined $wasi_args.
-    let index = build_reach_index(lowered)
+    let n = len(stmts)
+    let map = reach_name_map(stmts, 0, n, smap_new())
+    // The slots + enq-flags columns, stmt-indexed (the spine's
+    // parallel-buffer discipline; an unwritten slot reads 0 — the
+    // slot_present niche, types.mn's precedent).
+    let outs = make_list(n)
+    let enq = make_list(n)
+    let fbuf0 = list_set(list_extend_to(make_list(16), 1), 0, "main")
     let argv_root = if main_param_count() > 0 { ["wasi_args"] } else { [] }
-    // The wide runtime family (the f64 leaves + float renderer) is contributed
-    // by reach_names_expr AT its mint sites (the ==/ordering LBinOp, the
-    // show/hash call), so it flows through the index like every other edge — no
-    // separate root, and a float-free program adds nothing.
-    // A wide-keyed generic site means emit may mint twins whose bodies mint
-    // the f64 structural family the floor never referenced — seed it here so
-    // the prune keeps what the twins will call (spec_reach_seed: [] when no
-    // wide instantiation exists anywhere).
-    match reach_enqueue(
-      init_refs ++ emit_runtime_contract() ++ argv_root ++ spec_reach_seed(lowered),
-      make_list(16),
-      0,
-      list_set(list_extend_to(make_list(16), 1), 0, "main"),
-      1
-    ) {
-      (fbuf0, fc0) => match reach_grow(index, make_list(16), 0, fbuf0, fc0) {
-        (rbuf, rn) => filter(
-          (d) => {
-            let n = reach_decl_name(d)
-            if n == "" {
-              // A name-less statement is a value let (always runs) or a
-              // handler-decl container: the container lives iff any nested
-              // arm was reached; with no nested decls it is unconditionally
-              // live (its init executes).
-              let nested = reach_nested_names(d, [])
-              len(nested) == 0 || reach_any_reached(nested, rbuf, rn)
-            } else {
-              reach_has(rbuf, rn, n)
-            }
-          },
-          lowered
-        ),
+    match reach_enqueue(emit_runtime_contract() ++ argv_root, make_list(4), 0, fbuf0, 1) {
+      (fbuf1, fc1) => match reach_seed_stmts(stmts, 0, n, outs, enq, make_list(4), fbuf1, fc1) {
+        (fbuf2, fc2) => match reach_construct_loop(stmts, map, outs, enq, make_list(16), 0, fbuf2, fc2) {
+          (rbuf, rn) => reach_collect(outs, rbuf, rn, 0, n, make_list(n), 0),
+        },
       },
     }
   }

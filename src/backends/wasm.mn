@@ -6372,6 +6372,16 @@ fn show_subtys(ty, seen, acc) = match fold_strip(ty) {
   TRecord(fields) => show_subtys_fields(fields, 0, len(fields), seen, [ty] ++ acc),
   TRecordOpen(fields, _) => show_subtys_fields(fields, 0, len(fields), seen, [ty] ++ acc),
   TTuple(elems) => show_subtys_list(elems, 0, len(elems), seen, [ty] ++ acc),
+  TList(TByte) => // text view (§4①): every render surface — the dispatch
+  // (spec_is_agg), the product field, the list element, the variant
+  // payload — treats a byte sequence AS-IS, so no $show_lb leaf is
+  // callable from anywhere. Collecting one minted an UNCALLED body
+  // whose int_to_str interior dangled unless an unrelated seed
+  // happened to keep the renderer emitted — the accident the demand
+  // worklist ended (its dead-decl wide seeds no longer flow), caught
+  // as the interp micros' undefined-$int_to_str assembly break. The
+  // collector reads the same fact the dispatch reads.
+  acc,
   TList(elem) => show_subtys(elem, seen, [ty] ++ acc),
   TName(name, _) => if ls_find_str_local(seen, name, 0) >= 0 {
     acc

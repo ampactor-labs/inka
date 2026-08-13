@@ -1186,6 +1186,9 @@ fn occurs_in_eff_args_loop(spine, mint_bound, handle, ref args, i, n) with !Muta
     EAString(_) => false,
     EAType(ty) => occurs_in(spine, mint_bound, handle, ty),
     EANode(_) => false,
+    EAEffect(_) => // interned identities — no embedded Ty, nothing to occur in
+    false,
+    EACon(_) => false,
   }
   if occ { true } else { occurs_in_eff_args_loop(spine, mint_bound, handle, args, i + 1, n) }
 }

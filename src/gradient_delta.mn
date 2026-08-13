@@ -290,6 +290,10 @@ fn eff_args_all_literal(args) with Memory + Alloc = all(
     EAString(_) => true,
     EAType(_) => false,
     EANode(_) => false,
+    EAEffect(_) => // constants, but their spelling is an Intern read — they render the
+    // bare name through the same path the node arm takes
+    false,
+    EACon(_) => false,
   },
   args
 )
@@ -303,6 +307,8 @@ fn show_eff_arg_literal(arg) with Memory + Alloc = match arg {
   EAString(s) => "\"{s}\"",
   EAType(_) => "",
   EANode(_) => "",
+  EAEffect(_) => "",
+  EACon(_) => "",
 }
 
 // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying

@@ -1,0 +1,11 @@
+// CROWN instance (RESIDUE effarg-node D2) — an EFFECT NAME standing at an
+// instance-argument position (the Flow(Secret, WASI) shape): EAEffect
+// carries the effect's interned name handle, and handle inequality IS
+// value distinctness. !Flow(1, Log) ADMITS Flow(1, Store). Expect NO
+// E_EffectMismatch.
+effect Store { put(x: Int) -> Int }
+effect Log { note(x: Int) -> Int }
+effect Flow(src: Int, sink: Int) { move(x: Int) -> Int }
+fn inner() with Flow(1, Store) = move(1)
+fn ok() with !Flow(1, Log) = inner()
+fn main() = ok()

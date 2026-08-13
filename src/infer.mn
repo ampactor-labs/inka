@@ -3112,8 +3112,14 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan, pol
             // single warning surfaces them precisely in the contradiction
             // diagnostic).
             let has_pure = has_pure_declared(declared_effs)
-            check_instance_args(declared_effs, span)
-            let declared_row = build_declared_row(declared_effs)
+            // The registration fold runs FIRST, so the instance typing,
+            // the signed fold's meet (absent_contradicted_by), and the
+            // pin all judge the value-distinct forms — resolution
+            // happens once, at the one env-whole point, never inside
+            // the row algebra's compares.
+            let resolved_effs = resolve_declared_instances(declared_effs)
+            check_instance_args(resolved_effs, span)
+            let declared_row = build_declared_row(resolved_effs)
             // THE GATE RUNS ON THE RESOLVED ROW — and the deferral is
             // GROUP-GATED, the same parse-truth fact the charge reads. A
             // cycle member's open tail resolves when the cycle's last
@@ -3178,6 +3184,58 @@ fn edges_any_free(ref vs: [Int]) = match vs {
 // resolved; the pass-tail drain for parked mid-cycle gates). The row is
 // re-read LIVE at fire time — never carried as a value — so the drain
 // judges the closed truth the cycle's cut produced.
+// ─── The instance-argument REGISTRATION FOLD (RESIDUE effarg-node D1/D2) ──
+// A bare ident at an effect-arg position parses as EANode — the parser
+// cannot resolve it (the env is infer's). HERE, at registration — the one
+// deterministic point where the env is whole — the ident's env kind folds
+// the constant cases to their value-distinct forms: an EFFECT name becomes
+// EAEffect (its intern handle), a NULLARY ctor becomes EACon (its intern
+// handle — a nullary ctor is a constant, its tag). Everything else keeps
+// the conservative EANode arm: a let/param-bound name is a genuine runtime
+// operand (leak-instance-node's contract), and a fielded ctor used bare is
+// a function value, never a constant. The fold lives here and not in
+// build_row_seen because the parser also calls that fold (fn-TYPE rows, at
+// parse time, env part-built) — an env-dependent leaf there would make the
+// row a function of parse ORDER, the decl-order disease 4.2 paid to kill.
+fn resolve_declared_instances(effs) = map(resolve_instance_triple, effs)
+
+fn resolve_instance_triple(eff) = match eff {
+  (name, negated, conn) => (resolve_instance_name(name), negated, conn),
+}
+
+fn resolve_instance_name(name) = match name {
+  EParameterized(h, args) => EParameterized(h, map(resolve_one_eff_arg, args)),
+  ENamed(_) => name,
+  EPure => name,
+}
+
+fn resolve_one_eff_arg(arg) = match arg {
+  EANode(nh) => match graph_node_body(nh) {
+    NExpr(VarRef(nm)) => match env_lookup(nm) {
+      Some(entry) => match entry {
+        (Forall(_, sty), _, kind) => match kind {
+          EffectDeclKind(_) => EAEffect(intern_str(nm)),
+          ConstructorScheme(_, _) => match sty {
+            TName(_, _) => // nullary ctor: the scheme's result IS the TName (fielded
+            // ctors carry TFun — scheme_result_is' own reading)
+            EACon(intern_str(nm)),
+            _ => arg,
+          },
+          _ => arg,
+        },
+      },
+      None => arg,
+    },
+    _ => arg,
+  },
+  EAInt(_) => arg,
+  EAFloat(_) => arg,
+  EAString(_) => arg,
+  EAType(_) => arg,
+  EAEffect(_) => arg,
+  EACon(_) => arg,
+}
+
 // The declared row's INSTANCE PIN — the constraint half the publish law
 // keeps: the declaration publishes NOTHING, but it is still a CONSTRAINT
 // the inferred is verified against (the Intent-Boundary law), and for a
@@ -3228,6 +3286,10 @@ fn pin_arg_position(barg, darg) = match barg {
   EAInt(_) => barg,
   EAFloat(_) => barg,
   EAString(_) => barg,
+  EAEffect(_) => // registration-fold constants: concrete, they keep their own truth
+  // exactly as the scalar literals do (the subsumes read judges them)
+  barg,
+  EACon(_) => barg,
 }
 
 fn pin_scalar_or_keep(barg, darg) = match darg {
@@ -3235,6 +3297,11 @@ fn pin_scalar_or_keep(barg, darg) = match darg {
   EAFloat(_) => darg,
   EAString(_) => darg,
   EAType(_) => barg,
+  EAEffect(_) => // the registration fold's constants pin the charge's unknowable value
+  // dim exactly as the scalar literals do — the declared instance IS the
+  // decl's own truth
+  darg,
+  EACon(_) => darg,
   EANode(_) => // The declared NON-LITERAL instance pins exactly as a scalar does:
   // the charge's value dim is the entry's unknowable placeholder, and
   // the declared operand NODE is the decl's own instance truth — same
@@ -3510,6 +3577,11 @@ fn instance_arg_scalar_ty(arg) = match arg {
   EAString(_) => Some(ty_string),
   EAType(_) => None,
   EANode(_) => None,
+  EAEffect(_) => // interned identities: an effect name has no ground value type, and a
+  // ctor's result rides the instance-unification flow — both pass the
+  // ground check the way the node arm does
+  None,
+  EACon(_) => None,
 }
 
 // is_pure_eff_name / apply_connective / has_pure_declared /
@@ -7443,6 +7515,9 @@ fn free_in_eff_arg(arg) = match arg {
   EANode(_) => // an opaque operand-node handle, not an
   // embedded Ty — carries no free type vars
   [],
+  EAEffect(_) => // interned identities — no embedded Ty, no free vars
+  [],
+  EACon(_) => [],
 }
 
 // The decl's signature frees, read at exit time THROUGH the live cells —

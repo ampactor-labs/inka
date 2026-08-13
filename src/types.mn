@@ -689,6 +689,24 @@ type EffArg
   // precedent). Row equality compares the resolved
   // node bodies, not a flattened literal; emit erases.
   | EANode(Int)
+  // an EFFECT standing at an instance-argument position
+  // (`Flow(Secret, WASI)`) — the effect's interned name
+  // handle, the same word ENamed carries (identity is a
+  // contract, 6.1): handle inequality IS value
+  // distinctness, one namespace. Folded from EANode at
+  // infer's registration, where the env answers; emit
+  // erases.
+  | EAEffect(Int)
+  // a NULLARY ADT constructor at an instance-argument
+  // position (`Flow(Sec, Store)`) — the ctor's interned
+  // name handle. A nullary ctor is a CONSTANT (its tag):
+  // two distinct constructors are distinct VALUES
+  // unconditionally, so the fold gives the scalar
+  // literals' value-distinct row equality to the ctor
+  // vocabulary. A fielded ctor used bare is a function
+  // value, never a constant — it stays EANode. Folded at
+  // infer's registration; emit erases.
+  | EACon(Int)
 
 // The Boolean connective joining a surface effect term to the row
 // accumulated to its left — the topology the surface `+ - &` draws
@@ -3222,6 +3240,10 @@ fn show_eff_arg(ref arg) with GraphRead + !Mutate + Alloc + Memory + Intern = ma
     NExpr(VarRef(name)) => name,
     _ => "<operand #{int_to_str(h)}>",
   },
+  EAEffect(h) => // The bare spelling holds the fmt fixpoint: the render
+  // re-parses to EANode and re-resolves to the same folded form.
+  intern_name_of(h),
+  EACon(h) => intern_name_of(h),
 }
 
 fn show_predicate(ref pred) with GraphRead + Memory + Alloc = match pred {

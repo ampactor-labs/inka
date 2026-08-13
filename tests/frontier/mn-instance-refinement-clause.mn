@@ -1,0 +1,11 @@
+// The instance-refinement clause (RESIDUE effarg-node, the adjacent kill):
+// `with Flow(1, Store) + !Flow(1, Wasi)` names two PROVABLY DISTINCT
+// instances — an absent beside a differing present is a REFINEMENT
+// (absent_contradicted_by's own law), never a contradiction. The
+// same-instance pair below IS one. Exactly ONE E_DeclaredRowContradiction
+// from this file.
+type Sink = Wasi | Store
+effect Flow(src: Int, sink: Sink) { move(x: Int) -> Int }
+fn refined() with Flow(1, Store) + !Flow(1, Wasi) = move(1)
+fn contradicts() with Flow(1, Store) + !Flow(1, Store) = move(2)
+fn main() = 0

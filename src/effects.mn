@@ -580,6 +580,10 @@ fn frag_args_same_walk(ref a1, ref a2, i) with Memory + Alloc = if i >= len(a1) 
       _ => false,
     },
     (EANode(nx), EANode(ny)) => nx == ny,
+    (EAEffect(hx), EAEffect(hy)) => // The registration fold's constants: one interned identity each, so
+    // sameness is the word compare (eff_arg_scalar_unequal's dual).
+    hx == hy,
+    (EACon(hx), EACon(hy)) => hx == hy,
     _ => false,
   }
   if same { frag_args_same_walk(a1, a2, i + 1) } else { false }
@@ -1126,6 +1130,20 @@ fn eff_arg_scalar_unequal(fa, pa) with !Mutate = match fa {
   },
   EAType(_) => false,
   EANode(_) => false,
+  EAEffect(x) => // The registration fold's constants (types.mn EffArg): an effect name
+  // and a nullary ctor are GLOBAL identities — one namespace each, the
+  // intern handle the word — so handle inequality IS value inequality,
+  // unconditionally (two distinct constructors are distinct values
+  // whatever their types; ill-typed positions are instance typing's
+  // refusal, never a distinctness claim).
+  match pa {
+    EAEffect(y) => x != y,
+    _ => false,
+  },
+  EACon(x) => match pa {
+    EACon(y) => x != y,
+    _ => false,
+  },
 }
 
 // string_in_list — membership over a list of STRINGS (own.mn's ref-escape

@@ -2553,6 +2553,19 @@ for i in "${!compilers[@]}"; do
     fail "row contradiction (reports: $rc_n, want >=2)"
   fi
 
+  # ─── The contradiction is INSTANCE-PRECISE (RESIDUE effarg-node, the
+  # adjacent kill): `Flow(1, Store) + !Flow(1, Wasi)` names two provably
+  # distinct instances — the registration fold gives the nullary ctors
+  # value identity, so the absent survives as a REFINEMENT and only the
+  # same-instance decl reports. Born RED against the boot (2 reports:
+  # the refined clause falsely convicted beside the true contradiction).
+  ir_n=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-instance-refinement-clause.mn" 2>&1 >/dev/null | grep -c "E_DeclaredRowContradiction" || true)
+  if [ "$ir_n" -eq 1 ]; then
+    pass "instance refinement clause: the distinct absent survives, the same-instance reports ($ir_n report)"
+  else
+    fail "instance refinement clause (reports: $ir_n, want exactly 1)"
+  fi
+
   # ─── The debt facet (Phase 8.2's instrument): the verification query
   # renders each pending obligation LOCATED with its predicate — a count
   # alone is not an instrument. Born with the facet 2026-08-08 (the

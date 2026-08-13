@@ -35,6 +35,45 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-12 · ▶▶▶ AN INSTANCE ARGUMENT HAS AN IDENTITY
+  (pin 42aeaf0739 — CLEAN m2 == m3, re-pinned from m2 per march.sh;
+  census 0, crown 39/0, verify green, m3 leg 19.19s wall · 2310MB
+  peak RSS inside the ceiling; the fixpoint held one-generation
+  exactly as the wheel-clause census predicted). Effect-instance identity completed in three
+  pieces, one registration fold. EffArg grew `EAEffect(Int)` (an
+  EFFECT standing at an instance-argument position — the intern handle
+  ENamed carries; handle inequality IS value distinctness) and
+  `EACon(Int)` (a NULLARY ctor — its intern handle; two distinct
+  constructors are distinct values unconditionally, so the word needs
+  no type identity beside it). `resolve_declared_instances` folds each
+  authored bare-ident arg at infer's declared-row gate — the one
+  env-whole deterministic point; NOT build_row_seen, which the parser
+  calls at parse time where an env leaf would make the row a function
+  of parse order (4.2's disease) — EffectDeclKind → EAEffect, nullary
+  ConstructorScheme (TName scheme-result) → EACon, all else the
+  conservative EANode arm untouched (leak-instance-node holds). The
+  algebra's two halves each grew the word-compare arms
+  (eff_arg_scalar_unequal / frag_args_same_walk), the pin takes the
+  folded constants exactly as scalars, and the walks carry them as
+  the inert identities they are. RED-first: sound-instance-ctor-
+  distinct + sound-instance-effarg-distinct born RED at mismatch=1
+  (the conservative over-refusal RESIDUE measured as `!Flow(Sec,
+  Wasi) + Any vs Flow(Sec, Store)`), green under the fold; the two
+  leak-* guards never flipped. THE ADJACENT KILL fell out at zero
+  extra mechanism: absent_contradicted_by was always instance-aware —
+  EANode conservatism alone defeated it — so `Flow(1, Store) +
+  !Flow(1, Wasi)` keeps its severance as a refinement while the
+  same-instance clause still refuses
+  (mn-instance-refinement-clause, born RED at 2 reports, exactly 1
+  under the fold; the frontier's instance-refinement leg). One
+  ratchet catch mid-landing: the fold's map lambda judged effectful
+  (387→388) and the tier's own teaching named it
+  (resolve_instance_triple). The wheel authors no capitalized
+  bare-ident instance arg, so the fold is judgment-neutral on its own
+  source — the one-generation fixpoint is the prediction confirmed.
+  D1+D2 of the flowlabel sink chain are un-gated; the fn-TYPE
+  with-row's EANode conservatism and W23's compound-constant reach
+  stay the named remainder (RESIDUE effarg-node, the one home).
 - 2026-08-12 · ▶▶▶ THE THREE-WORKTREE UNION (pin d4242c5c733b — CLEAN
   m2 == m3, census 0, battery green, crown 35/0, frontier 361/0,
   proof-exactness 9/0; the orchestrator's own re-derivation after the

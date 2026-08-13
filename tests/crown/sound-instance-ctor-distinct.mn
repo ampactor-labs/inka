@@ -1,0 +1,9 @@
+// CROWN instance (RESIDUE effarg-node D1) — a NULLARY CTOR argument is a
+// CONSTANT (its tag), folded at registration the way scalar literals are:
+// two distinct constructors are distinct VALUES, so !Flow(1, Wasi) ADMITS
+// the provably distinct Flow(1, Store). Expect NO E_EffectMismatch.
+type Sink = Wasi | Store
+effect Flow(src: Int, sink: Sink) { move(x: Int) -> Int }
+fn inner() with Flow(1, Store) = move(1)
+fn ok() with !Flow(1, Wasi) = inner()
+fn main() = ok()

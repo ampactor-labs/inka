@@ -689,16 +689,25 @@ fn ident_or_kw_at(ref tokens, p) = match kind_at(tokens, p) {
   "",
 }
 
-// Does a real param start at p? TIdent → yes. `own`/`ref` → yes ONLY
-// when a param name follows (`own x`); a bare `own`/`ref` (next is
-// `)`/`,`/`:`/`with`) is NOT a param start — seed parity: seed
-// parse_one_param returns null there → parse_fn_params `br $done`,
-// the param-list terminates (verified empirically: `fn f(own)` → 0
-// params; `fn f(own,b)` → 0 params; `fn f(a,own)` → [a]).
+// Does a real param start at p? TIdent → yes. A pattern opener
+// `{` / `[` / `(` → yes — parse_one_param's destructure arm parses the
+// full Pat there (SYNTAX.md §Pattern syntax: patterns appear in
+// function parameters as in lambda parameters; the gate agrees with
+// the parser it gates). `own`/`ref` → yes ONLY when a param name
+// follows (`own x`); a bare `own`/`ref` (next is `)`/`,`/`:`/`with`)
+// is NOT a param start — seed parity: seed parse_one_param returned
+// null there → the param-list terminates (verified empirically:
+// `fn f(own)` → 0 params; `fn f(own,b)` → 0 params; `fn f(a,own)` →
+// [a]; an own/ref before a pattern opener terminates the same way and
+// the malformed tail refuses loudly — the recovery holes refuse the
+// executable, measured exit nonzero with zero WAT).
 fn param_starts_here(ref tokens, p) = match kind_at(tokens, p) {
   TIdent(_) => true,
   TOwn => is_param_name_tok(tokens, skip_ws(tokens, p + 1)),
   TRef => is_param_name_tok(tokens, skip_ws(tokens, p + 1)),
+  TLBrace => true,
+  TLBracket => true,
+  TLParen => true,
   _ => false,
 }
 

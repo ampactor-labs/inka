@@ -2439,13 +2439,30 @@ c10ad6ef (exit 66 — the 3-deep site answered 6, identical to the
 1-deep) and green at 62 after.
 TWO LATHE-LAGS SURFACED BY THE BUILD, both measured, both oracle-blind
 classes the wheel never writes (§11's tripwire 3 exactly):
-`Hβ.parser.named-fn-tuple-param` — SYNTAX §Pattern syntax says patterns
-appear in "`let`, `match`, function parameters, and lambda parameters",
-and the lambda half is real, but a NAMED fn refuses one:
-`fn delay_line_globals((h, depth)) = …` drew P_UnexpectedToken at the
-`)` and the `=`. The projection had to fold into its one call site as a
-lambda, which is also why the anonymity ratchet moved. The parser is the
-lathe; SYNTAX is the wheel.
+`Hβ.parser.named-fn-tuple-param` — RESOLVED 2026-08-12, pin d149cd6976.
+SYNTAX §Pattern syntax says patterns appear in "`let`, `match`, function
+parameters, and lambda parameters", and the lambda half was real while a
+NAMED fn refused one: `fn delay_line_globals((h, depth)) = …` drew
+P_UnexpectedToken at the `)` and the `=`. The dig found the machinery
+WHOLE and its gate strangling it: parse_one_param's destructure arm
+already parsed `{`/`[`/`(` via parse_pat and desugared to fresh-param +
+prepend-let (the same bind_param_destructures the lambda path folds
+through — no second mechanism), but param_starts_here admitted only
+TIdent/TOwn/TRef, so the pattern arm was dead code and `fn f((a,b))`
+fell into the bare-own/ref bail (skip_to_rparen ate to the INNER `)`).
+The fix is the gate agreeing with the parser it gates: three
+pattern-opener arms in param_starts_here (src/parser.mn), nothing else.
+Parity measured first through boot's lambda path (tuple 7 / record 30 /
+exact-length list 7), then pinned on named fns by
+tests/micros/mn-fn-tuple-param.mn (expect 44), SEEN RED against the
+unfixed boot (refusal, 6 undischarged claims, zero WAT) and green
+through the repinned wheel. The measured boundary: `own`/`ref` before a
+pattern opener still terminates the list (seed parity) and the malformed
+tail refuses loudly via recovery holes — never a silent mis-bind;
+ownership-marked destructure params are unprobed surface, admitted
+nowhere. The wasm.mn:1438 `((h, depth))` call-site lambda — the fold
+this refusal forced — unfolds back to a named projection as its own
+follow-up.
 `Hβ.emit.partial-application-arity` — SYNTAX §«Partial application»
 declares a hole-product a first-class value, so `map(delay_slot_name(h),
 range(0, depth))` should BE the callback. It parses, it checks clean,

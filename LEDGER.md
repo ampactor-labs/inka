@@ -35,6 +35,30 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-12 · THE GATE AGREES WITH ITS PARSER (pin d149cd6976 — CLEAN
+  m2 == m3 in one generation, census 0, battery green with the new micro
+  at 44): `Hβ.parser.named-fn-tuple-param` RESOLVED. SYNTAX §Pattern
+  syntax has always said patterns appear in function parameters; the
+  lambda half ran while `fn f((a, b))` refused at the `)` and the `=`.
+  The dig's one find: the machinery was WHOLE and its own gate strangled
+  it — parse_one_param's destructure arm (parse_pat → fresh param +
+  prepend-let → bind_param_destructures, the identical projection the
+  lambda path folds through) was dead code, because param_starts_here
+  admitted only TIdent/TOwn/TRef, so a pattern opener fell into the
+  bare-own/ref bail and skip_to_rparen ate to the INNER `)`. The fix is
+  three arms in one predicate (src/parser.mn param_starts_here:
+  TLBrace/TLBracket/TLParen → true) — no second mechanism, no infer
+  change, the desugar shared with lambdas by construction. Parity
+  measured BEFORE the fix through boot's lambda path (tuple 7 / record 30
+  / exact-length list 7); tests/micros/mn-fn-tuple-param.mn (expect 44 =
+  7+30+7) SEEN RED against the unfixed boot (refusal, six undischarged
+  claims, zero WAT), green through the repinned wheel. Boundary measured:
+  own/ref before a pattern opener still terminates the list (seed parity)
+  and refuses loudly via recovery holes — zero-WAT, never a silent
+  mis-bind. Banked follow-up: the wasm.mn:1438 `((h, depth))` call-site
+  lambda — the fold this refusal once forced — unfolds back to a named
+  projection; the anonymity ratchet holds meanwhile.
+
 - 2026-08-12 · ▶▶▶ AN INSTANCE ARGUMENT HAS AN IDENTITY
   (pin 42aeaf0739 — CLEAN m2 == m3, re-pinned from m2 per march.sh;
   census 0, crown 39/0, verify green, m3 leg 19.19s wall · 2310MB

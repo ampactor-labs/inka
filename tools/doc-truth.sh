@@ -172,6 +172,25 @@ elif [ "$declared_tokens" != "$graph_tokens" ]; then
   fail=1
 fi
 
+# THE STANDING CURSOR IS READ AS CURRENT, so it may carry no board count.
+# §7's own header states the law — "THE BOARD'S NUMBERS LIVE IN state.sh, NOT
+# HERE" — and it states it because §7 paid for the bug itself: a `frontier
+# 71/0` sat in that header against a live 332/0. §11's selector then grew the
+# same disease one section down, where it is worse: every loop iteration reads
+# the STANDING CURSOR as the current state before choosing work, and it said
+# `crown 33/0` against a measured 39/0. A LANDING RECORD may carry the numbers
+# it measured — that is history, the LEDGER's own convention, and the records
+# at Phase 1 / 6.2 / 6.3 are legitimate. The live selector may not.
+cursor_block=$(awk '/^\*\*THE STANDING CURSOR/{f=1} f{print} f && /^---$/{exit}' PLAN.md)
+if [ -z "$cursor_block" ]; then
+  echo "doc-truth: PLAN §11's STANDING CURSOR block did not parse — the check cannot fail, so it fails"
+  fail=1
+elif printf '%s' "$cursor_block" | grep -qE '(crown|frontier|proof-exactness|micros|census) [0-9]+/[0-9]+'; then
+  echo "doc-truth: PLAN §11's STANDING CURSOR carries a hard-coded board count —"
+  echo "  the selector is read as CURRENT every iteration; the numbers live in state.sh (§7's law)"
+  fail=1
+fi
+
 if [ $fail -eq 0 ]; then
   echo "doc-truth: the docs' checkable claims verify against the artifact"
 fi

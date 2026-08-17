@@ -1529,7 +1529,9 @@ banked keystone) — only then 2b's fork/reset at the grain that then
 exists; (5) the value ontology (5.4); beside them the flowlabel
 build and the repr floor deletion (both in flight 2026-08-12). THE LOOP-SIZED
 RESIDUE the selector serves between dedicated sessions: the 6.3 modal
-sweep rule-by-rule (eleven pinned, crown 33/0), doc-truth true-ups,
+sweep rule-by-rule (the pinned-rule count and the crown's verdict are
+state.sh's to report, never this block's — §7's law, now enforced by
+doc-truth because this line had drifted), doc-truth true-ups,
 and gates for oracle-blind classes as digs surface them. "It will
 surely land" is never a selection reason — the completion-gradient is
 a named drift; the iteration's report opens by naming the priority

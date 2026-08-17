@@ -1390,6 +1390,18 @@ fn render_at(view, h, pspan, ranges) = match view {
 // A declaration node's own graph cell is a free var (the scheme lives in
 // the env — read it there, never render the raw t-var); every other node
 // shows its inferred type.
+//
+// EVERY declaration kind, not just the fn (2026-08-16). The law above was
+// written for FnStmt and the other six fell to the catch-all, which is
+// exactly the raw t-var the law forbids: a cursor on `handler counter`
+// answered `counter : t24295@e21654`, and one on `type Gain = Float where
+// self >= 0.0` or `type Coeff = Float repr f64` answered nothing at all.
+// Those are the authoring sites of arms 2, 6 and 7, so three of the eight
+// could not be read where a developer writes them (PLAN §2 says the eight
+// ARE the aspects of one read; PLAN §0 pt 5 says systems explain
+// themselves). Each arm below reads the declaration's OWN node — the
+// refinement's base and predicate, the alias's target, the handler's
+// effect and arm count — never a re-derivation.
 fn node_query_line(h, kind) with GraphRead + EnvRead + Memory + Alloc + Intern = match graph_node_body(h) {
   NStmt(FnStmt(name, _, _, _, _)) => match env_lookup(name) {
     Some(entry) => match entry {
@@ -1399,6 +1411,12 @@ fn node_query_line(h, kind) with GraphRead + EnvRead + Memory + Alloc + Intern =
     },
     None => show_type(ty_of_kind(h, kind)),
   },
+  NStmt(RefineStmt(name, base, pred)) => "{name} = {show_type(base)} where {show_predicate(pred)}",
+  NStmt(AliasStmt(name, ty)) => "{name} = {show_type(ty)}",
+  NStmt(TypeDefStmt(name, variants)) => "{name} — {int_to_str(len(variants))} variant(s)",
+  NStmt(EffectDeclStmt(name, _, ops)) => "effect {name} — {int_to_str(len(ops))} op(s)",
+  NStmt(HandlerDeclStmt(name, _, _, state, arms)) => "handler {name} — {int_to_str(len(arms))} arm(s), {int_to_str(len(state))} state field(s)",
+  NStmt(RowAliasStmt(name, _)) => "{name} — a named effect row",
   NHole(_) => // An UNDETERMINED hole never leaks the raw var — substrate
   // vocabulary at the exact moment the medium should ASK (§1's law: the
   // question beats the guess; the fan cannot enumerate an open type, so

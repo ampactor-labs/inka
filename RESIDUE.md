@@ -558,7 +558,23 @@ handler-dense site there is; at `type Gain = Float where self >= 0.0
 NOTHING but `placeholder at 3533:0-3576:0`. So arm 2 (handler + typed
 resume), arm 6 (refinement) and arm 7 (gradient) cannot be read where a
 developer authors them, which is PLAN §0 pt 5 — systems explain
-themselves — failing at three of eight. Two sub-findings ride it: the
+themselves — failing at three of eight.
+THE TWO HALVES ARE DIFFERENT DEPTHS, measured by building the first
+half and re-probing (the fix is only half a fix, and saying so is the
+point). The HANDLER half was a RENDERING gap and is CLOSED: only
+`NStmt(FnStmt)` read its scheme from the env and every other
+declaration kind fell to `show_type(ty_of_kind(...))`, which is the raw
+t-var the fn's own header comment forbids; arms for Refine / Alias /
+TypeDef / EffectDecl / HandlerDecl / RowAlias now read each
+declaration's own node, and a cursor on `handler counter` answers
+`handler counter — 1 arm(s), 1 state field(s)` instead of
+`t24295@e21654`. The TYPE-DECL half is NOT a rendering gap and stayed
+byte-identical through that fix: an address on a `type` line never
+resolves to the RefineStmt/AliasStmt node at all — it lands on a
+placeholder — so the miss is in the address→node resolution (the range
+map or the decl node's registered span), one layer above
+node_query_line, and arms 6 and 7 stay unreadable until that resolves.
+Two sub-findings ride it: the
 placeholder spans are LINK coordinates, not file coordinates
 (`Hβ.query.decl-site-file-coordinates` confirmed live a third time),
 and `mentl where` answers empty for any name outside its three badge

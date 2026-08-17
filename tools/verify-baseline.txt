@@ -662,6 +662,25 @@ effectful_lambda_max: 384
 # layer 3's arena makes Consume reclaim.
 use_after_move_max: 0
 
+# 2026-08-17: THE SCAFFOLD RATCHET (CLAUDE.md ⟳). tools/loop-prompt.md is
+# imperative prose telling an agent how to behave — the one thing PLAN §0
+# proves cannot enforce itself, which is the whole argument for `mentl audit`.
+# So the loop is a scaffold, and what is ratcheted is how much of it is still
+# NOT the medium's: the distinct tools/*.sh scripts the prompt must name to run
+# one iteration. Seeded from this turn's read: heavy-lock.sh (the resource
+# lease, retired by a `~> Schedule` handler), state.sh (retired by
+# state-as-projection), march.sh (retired by `mentl march` growing the ladder
+# and repin verdict — Hβ.tools.march-transition-native; the verb already
+# exists, so this one is genuinely reducible now).
+#
+# It falls ONLY when a verb actually replaces a script. Rewording cannot move
+# it, which is exactly why this is the metric and a line count is not — a line
+# count would reward compressing the prose instead of absorbing the work. At
+# ZERO the medium runs its own loop and tools/loop-prompt.md is DELETED, not
+# archived. The obsolescence list it enforces includes the bash scaffolds, the
+# loop prompt, and the assistant.
+loop_scaffold_refs_max: 3
+
 # 2026-08-07: the QUIET gate (§4⑤'s Hylo bar as a banked ceiling, PLAN
 # §11 4.4 — Hβ.ownership.quiet-empirical-gate). Authored own/ref markers
 # in src/, param-position-anchored text count, monotone DOWN — a rising

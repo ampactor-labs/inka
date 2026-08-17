@@ -190,6 +190,25 @@ if C=$(wt_m2_ensure); then
     say "  restructure the site (the arena makes this a use-after-free)."
     fail=1
   fi
+  # THE SCAFFOLD RATCHET (CLAUDE.md ⟳ — every scaffold's destiny is ABSORPTION
+  # into a verb, never permanence). The loop prompt is imperative prose telling
+  # an agent how to behave, which is the one thing PLAN §0 proves cannot
+  # enforce itself; so what is measured is how much of the loop is still NOT
+  # the medium's: the count of distinct tools/*.sh scripts the prompt must name
+  # to run one iteration. Monotone DOWN, and it falls only when a VERB actually
+  # replaces a script — rewording cannot move it, which is why this is the
+  # metric and a line count is not. At zero the medium runs its own loop and
+  # tools/loop-prompt.md is deleted rather than archived.
+  csref=$(grep -ohE 'tools/[a-z0-9_-]+\.(sh|py)' tools/loop-prompt.md | sort -u | wc -l)
+  srmax=$(grep -E '^loop_scaffold_refs_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  say "· loop scaffolds: $csref script(s) the loop still needs — the medium's un-absorbed remainder"
+  if [[ -n "$srmax" && "$csref" -gt "$srmax" ]]; then
+    say "✗ scaffold RATCHET: rose $srmax -> $csref — the loop leans on MORE shell, not less;"
+    say "  absorb the step into a verb or drop the reference."
+    fail=1
+  elif [[ -n "$srmax" && "$csref" -lt "$srmax" ]]; then
+    say "  ↓ loop scaffolds FELL $srmax -> $csref — lower loop_scaffold_refs_max in $BASELINE to hold it."
+  fi
   # The QUIET gate (§4⑤'s Hylo bar, PLAN §11 4.4 — Hβ.ownership.quiet-
   # empirical-gate): authored own/ref markers in src/, monotone DOWN. The
   # measured invariant is "if the developer has to think about it, the

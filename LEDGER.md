@@ -35,6 +35,46 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · ▶▶▶ ONE LEX PER COMPILE, AND TWO KILLS THAT COST MORE
+  THAN IT (pin d74ba9612f — CLEAN m2 == m3, re-pinned from m2 per
+  march.sh, 411335 lines, census 0; m3 leg 17.10s wall · 2135MB peak
+  RSS). `infer_program_converged` ran `src |> frontend` twice and
+  `frontend` is `source |> lex |> parse_program`, so every compile lexed
+  the entire concatenated program twice — 57,881 lines of it on the
+  wheel's own self-compile. The two PARSES are load-bearing and stay:
+  the final walks a FRESH generation of nodes, which is exactly what
+  `pstart = graph_next()` reads as its lower bound, so parsing once and
+  judging one tree twice would collapse the boundary the tower is built
+  on. The two LEXES never were — a token is a value, it mints nothing.
+  This is NOT an improvement to the condemned tower (Anchor 2): its
+  judgment, its cadence and its two generations are untouched, and when
+  rung 3 deletes the second pass this seam loses a caller rather than
+  needing unpicking.
+  ▶ KILL ONE: lex is not the floor. Deleting a whole-program lex moved
+  the fixture 0.00s — seven settled reads at 0.78s median, the same as
+  the pin before it. The deletion is kept because it is one, not because
+  it paid.
+  ▶ KILL TWO, and it kills the previous pin's own conclusion: the 0.28s
+  discovery floor is TRAVERSING the module's tokens, and not the shape
+  that traverses them. A probe replacing `import_edges`' body with a
+  literal list measured 0.50s against 0.78s — the whole floor. So the
+  fold was rewritten as a position recursion, allocating on the four
+  import hits instead of a product per token, and it measured
+  IDENTICAL. The cost is the walk itself, roughly 11µs per token over
+  ~25k tokens, which is a substrate signal about traversal rather than
+  anything to do with imports. The position form was REVERTED: its only
+  justification was a speedup that did not exist, and §11's own test
+  says a change justified by a number the number refutes is the wrong
+  change. The fold stands because the law prefers it.
+  ▶ WHAT THE THREE PINS TOGETHER NOW SAY, since each killed the next
+  one's premise: it is not the parse (pin b50cdd0c), not the second
+  read (pin ef57c6e6), not the lex, and not the fold. It is per-token
+  traversal cost, and `mentl check` additionally runs
+  `infer_program_converged` once per module through `driver_check_module`
+  on top of the entry's own — two parses and two judgments of the whole
+  prelude per module. RESIDUE names both and the next probe measures
+  traversal directly before anything else is built on a guess.
+
 - 2026-08-17 · ▶▶▶ THE DAG CARRIES WHAT THE WALK RESOLVED — AND THE
   MEASUREMENT REFUSES TO CONGRATULATE IT (pin ef57c6e6a6 — CLEAN
   m2 == m3, re-pinned from m2 per march.sh, 411331 lines, census 0; m3

@@ -1197,44 +1197,56 @@ handler poly_capture with held = [] {
 // The tax is measured — PLAN §5.O's cost law carries the curve.
 // Broken judgment → diagnostic, never a crawl; the fixpoint oracle
 // arbitrates behind it.
-fn infer_program_converged(src) = match {
-  src |> frontend |> infer_program_trial
-} ~> diag_quiet {
-  (rows, layers, summ) => {
-    let flat_rows = list_to_flat(rows)
-    let prints = round_prints(flat_rows)
-    // The final's parse START, captured before its own frontend: the
-    // crc walk's lower bound, so the backtick judge reads only THIS
-    // pass's comment cells.
-    let pstart = graph_next()
-    let out = src |> frontend |> infer_program_final(flat_rows, layers, pstart, summ)
-    // The divergence read: the final's publishes are the env's latest
-    // entries, so re-rendering the same names compares the two passes.
-    // Nothing refuses on a mismatch — the final's answer already
-    // shipped — which is why this is a count driven to zero, not a
-    // gate.
-    let prints2 = round_prints(flat_rows)
-    if prints_equal(prints, prints2) {
-      ()
-    } else {
-      // The movers report is the MAINTAINER'S instrument — it rides the
-      // register's scope read, so the march / census / battery (never
-      // scoped) keep every line, and a user-target verb's ScopeAt
-      // quiets the ~21-line block that opened every hello-world's
-      // stderr (six audit reports converged on the channel). The block
-      // is never about the user's file, so it has no per-span case; a
-      // divergence a user must see surfaces as a diagnostic through
-      // diag_report, never through this channel.
-      match diag_scope_of() {
-        ScopeAll => {
-          eprint_string("judgment: {int_to_str(movers_count(flat_rows, prints, prints2, 0))} scheme(s) moved between the trial and the final — movers:{movers_line(flat_rows, prints, prints2, 0, 0)}\n")
-          movers_diff(flat_rows, prints, prints2, 0, 0)
-        },
-        _ => (),
+// ONE LEX PER COMPILE. The two PARSES are load-bearing and stay: the final
+// walks a FRESH generation of nodes, which is exactly what `pstart` below
+// reads as its lower bound, so parsing once and judging the same tree twice
+// would collapse the boundary the tower is built on. The two LEXES were never
+// load-bearing — a token is a value, it mints nothing, and lexing the same
+// bytes twice is the Carried-Truth violation with no compensating structure.
+// This is not an improvement to the condemned tower (Anchor 2): its judgment,
+// its cadence and its two generations are untouched, and when rung 3 deletes
+// the second pass this seam simply loses a caller.
+fn infer_program_converged(src) = {
+  let toks = lex(src)
+  match {
+    toks |> parse_program |> infer_program_trial
+  } ~> diag_quiet {
+    (rows, layers, summ) => {
+      let flat_rows = list_to_flat(rows)
+      let prints = round_prints(flat_rows)
+      // The final's parse START, captured before its own parse: the
+      // crc walk's lower bound, so the backtick judge reads only THIS
+      // pass's comment cells.
+      let pstart = graph_next()
+      let out = toks |> parse_program |> infer_program_final(flat_rows, layers, pstart, summ)
+      // The divergence read: the final's publishes are the env's latest
+      // entries, so re-rendering the same names compares the two passes.
+      // Nothing refuses on a mismatch — the final's answer already
+      // shipped — which is why this is a count driven to zero, not a
+      // gate.
+      let prints2 = round_prints(flat_rows)
+      if prints_equal(prints, prints2) {
+        ()
+      } else {
+        // The movers report is the MAINTAINER'S instrument — it rides the
+        // register's scope read, so the march / census / battery (never
+        // scoped) keep every line, and a user-target verb's ScopeAt
+        // quiets the ~21-line block that opened every hello-world's
+        // stderr (six audit reports converged on the channel). The block
+        // is never about the user's file, so it has no per-span case; a
+        // divergence a user must see surfaces as a diagnostic through
+        // diag_report, never through this channel.
+        match diag_scope_of() {
+          ScopeAll => {
+            eprint_string("judgment: {int_to_str(movers_count(flat_rows, prints, prints2, 0))} scheme(s) moved between the trial and the final — movers:{movers_line(flat_rows, prints, prints2, 0, 0)}\n")
+            movers_diff(flat_rows, prints, prints2, 0, 0)
+          },
+          _ => (),
+        }
       }
-    }
-    out
-  },
+      out
+    },
+  }
 }
 
 // The TOTAL, beside the capped display: the sixteen-slot line names the

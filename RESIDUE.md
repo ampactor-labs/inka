@@ -647,18 +647,38 @@ five settled reads. The deleted read was warm in page cache; the probe's
 operation while keeping the expensive one buys nothing and costs
 whatever the new carrier costs. The regression is not isolated to a
 cause and is not claimed to be understood.
-THE BUILD, now named by measurement rather than theory: carry TOKENS,
-not source. The walk lexes each module once; the judging pass takes
-those streams instead of concatenating source and lexing again. The
-element `(name, path, source, imports)` is already in place to carry
-them. THE DEP is the span coordinate space and it is real: per-module
-token streams carry FILE-LOCAL spans while the weave is
-concatenation-relative, so the streams must be re-based as they join —
-which is the mapping `driver_entry_with_ranges` already computes for
-exactly these modules. Build that re-basing first, against the ranges
-the fold already produces, and the token carry is a swap behind it.
-Expected saving is the 0.28s the probe measured; a landing that does not
-show it has not done this.
+THE TOKEN-CARRY DESIGN IS KILLED TOO (2026-08-17, pin d74ba9612f), by
+the cheapest test available: `infer_program_converged` lexed the whole
+concatenated program TWICE (`src |> frontend` at both the trial and the
+final), so one lex was deletable with no span re-basing and no DAG
+change at all. It was deleted — the two parses stay, the final's fresh
+generation being what `pstart` reads — and the fixture moved 0.00s.
+Seven settled reads, 0.78s median, unchanged. LEX IS NOT THE FLOOR, so
+carrying tokens to avoid a lex would have bought nothing and paid the
+whole span-re-basing DEP for it.
+WHAT THE FLOOR ACTUALLY IS, measured the same day: TRAVERSING the
+tokens. A probe replacing `import_edges`' body with a literal list
+measured 0.50s against 0.78s — the entire 0.28s. Rewriting the
+traversal as a position recursion, which allocates on the four import
+hits instead of a product per token, measured IDENTICAL, so it is not
+the fold, the tuple, or the indirect call. It is roughly 11µs per token
+over ~25k tokens, and at that rate the cost belongs to the substrate's
+per-element traversal, not to imports — which would make it a tax on
+the PARSER too, since the parser walks the same stream the same way.
+NAMED NEXT PROBE, and nothing gets built on this until it runs: price
+per-token traversal DIRECTLY. A micro that walks N tokens doing nothing
+but reading each kind, timed at two sizes, answers whether the cost is
+linear-but-expensive or quadratic-and-hiding. Linear says the constant
+is the target (`Hβ.perf.name-is-handle` reaches it: a token carrying an
+interned handle compares by word). Quadratic says a list op in the walk
+is not O(1) despite `len` being `load_i32`, and THAT is the find, in
+the class §5.O already names — `iterate_from`'s snoc-list `list_index`.
+SECOND MEASUREMENT OWED at the same time, because it may dwarf both:
+`mentl check` runs `driver_check_entry`, which after the DAG walk calls
+`driver_check_module` per module — each one a full
+`infer_program_converged`, so two parses and two judgments of every
+prelude module, and then the entry again. Count the compiles per
+invocation before optimising any single one of them.
 ISOLATED TO ONE LINE, single-variable (2026-08-17). Same wheel, same
 harness, same program, same path form; the only thing varied is whether
 `driver_collect_dag`'s prelude seed can resolve. With the mentl-home

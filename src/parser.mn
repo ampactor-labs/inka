@@ -1619,6 +1619,15 @@ fn parse_import_path(ref tokens, pos, own acc) = {
 // parsed AGAIN by the pass that actually judges it. That is the carried truth
 // discarded and re-derived, and the throwaway graph instance the discovery
 // parse required existed only to contain mints this read never makes.
+// THE WALK ITSELF IS THE COST, and it is not this fold's shape. A probe that
+// replaced this body with a literal list took `fn main() = 7` from 0.78s to
+// 0.50s — the entire 0.28s discovery floor is traversing the module's tokens
+// once. Rewriting it as a position recursion, which allocates on the four hits
+// instead of a product per token, measured IDENTICAL, so the per-token cost is
+// the traversal and not the carrier. The fold stays because the law prefers it
+// (iteration is topology) and no measurement bought the index-threaded form.
+// What that 0.28s over ~25k tokens actually prices is named in RESIDUE: at
+// ~11µs a token it is a substrate signal about traversal, not about imports.
 fn import_edges(tokens) = match fold(
   (0, []),
   (acc, t) => match acc {

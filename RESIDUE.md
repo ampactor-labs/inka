@@ -609,6 +609,39 @@ leg waits on the repin that `Hβ.march.boot-drifts-behind-clean-landings`
 now gates. The ADD half (a `<~` cycle refusing under `!Alloc` because
 `Delay(N)` is an ordinary constructor call) is untouched and still
 named above.
+THE ADD IS A FALSE CHARGE — probed 2026-08-17 and the probe VINDICATED
+the doc. Emit's `LFeedback` arm destructures the lowered spec as `_spec`
+and discards it; the compiled WAT for a `Delay(N)` recurrence contains
+ZERO construction of it across 1553 lines, and the prior rides a
+declared global `$__fb_prev_<h>`. So the slots are declared and never
+allocated exactly as SYNTAX said, the earlier "untested rather than
+refuted" hedge resolves in the doc's favour, and what charges `Alloc` is
+`infer_expr` walking the RHS as an ordinary constructor call at a site
+whose only load-bearing content — the depth — is read statically by
+`feedback_line_depth`. The value is lowered, walked by the pre-passes,
+and dropped at emit: dead machinery by the loop's own definition.
+A GENUINE FORK, AND IT IS MORGAN'S (step 3: bank both branches priced,
+take the next independent item, never answer above the loop's station).
+The surface and the emit disagree about what a `<~` RHS IS.
+  A · IT STAYS A VALUE, as SYNTAX §«`<~`» says ("The RHS names WHAT
+  flows back — a FeedbackSpec value — and is checked as one"). The fix
+  is then narrow: the `<~` arm stops charging the RHS's construction,
+  and `!Alloc` survives a cycle. Price: one infer site; the surface is
+  unchanged; the lowering and its dead emit stay, so the machinery that
+  builds a value nobody reads remains, and `accumulate`/`filter_spec`
+  keep a uniform value-shaped grammar.
+  B · IT BECOMES A STATIC DEPTH ANNOTATION, which is what emit already
+  treats it as. Price: SYNTAX changes (the RHS is not an expression),
+  `lower_expr(right)` and the four pre-pass walks over `s` delete, the
+  charge disappears with the construction rather than by suppression,
+  and the depth read has one home instead of a value plus a static
+  peek. Cost: the grammar gains a non-expression slot — the thing
+  §«Governing principles» spends effort avoiding — and every
+  state-element form (`delay`, `accumulate`, `filter_spec`, any
+  user-defined register) has to fit it.
+B is the smaller artifact and the larger surface change; A is the
+reverse. The measurement cannot choose between them, which is why it is
+a fork and not a finding.
 
 `Hβ.effects.feedback-row-substitutes` — NAMED 2026-08-17 by the loop
 iteration that set out to PIN the feedback-under-negation modal rule

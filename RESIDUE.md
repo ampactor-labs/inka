@@ -575,6 +575,48 @@ round. The rule cannot be pinned until the row at the `<~` edge is the
 JOIN of the body's row with the site's own, which is where the fix
 belongs — one edge, one writer.
 
+STAMP (2026-08-17, the following iteration). SEMANTICS TRACED: the one
+writer is the `PFeedback` arm of `infer_pipe` in infer.mn. It binds the
+site's TYPE — the recurrence result, or the LHS var for the
+feed-forward form — unifies the RHS with `FeedbackSpec`, and reads the
+declared depth for the two armed refusals. It composes NO ROW anywhere.
+The drop has a single visible cause: the arm destructures the LHS
+lambda as `GNode(NBound(TFun(params, ret_ty, _row)), _)` and the row
+goes to `_row`. The graph proves the body performs E and the edge
+discards it — the Carried-Truth Law in one underscore.
+WRITERS ENUMERATED: that arm alone. `infer_expr(left)` and
+`infer_expr(right)` run first and charge ambiently, which is why the
+enclosing row still shows `Memory + Alloc` and not the lambda's E.
+THE ADD IS A DIFFERENT MECHANISM, and it does not refute SYNTAX's
+declared-slots half: lower.mn's `PFeedback` arm lowers the RHS through
+`lower_expr` as an ORDINARY EXPRESSION while taking the depth
+STATICALLY via `feedback_line_depth`, so `Delay(3)` is a real
+constructor call that really allocates, and its only load-bearing
+content is read at compile time. Whether the constructed value is then
+dead at emit is UNVERIFIED here — the emit's `LFeedback` arm decides
+it, and that read is the next probe.
+COSTS PRICED: the fix is joining the lambda's row where `_row` is
+discarded. Rows are a judgment fact, not emitted, so the expected
+verdict is CLEAN `m2 == m3` — but the price that matters is not the
+emit. The wheel's own sixteen `<~` sites currently pass under rows
+computed WITHOUT their bodies' effects; joining will widen them, so the
+honest expectation is new `T_OverDeclared` narrations and possibly
+`E_EffectMismatch` against declared clauses in lib/dsp. That is a
+census/ratchet risk to MEASURE before the fix, not assume — build the
+join, run the census, and let the count decide whether the landing is
+the join alone or the join plus the widenings it forces.
+TWO SECONDARY FINDINGS, both from the trace. (1) `Hβ.query.destructure-
+sites` — the `refs of` facet projects constructor APPLICATIONS only, so
+`refs of PFeedback` answered "1 reference" (the parser's mint) while
+infer and lower both destructure it. The trace nearly banked "infer
+never sees PFeedback" on that reading; "who pattern-matches this
+constructor" has no projection, and the raw text channel is the only
+answer today. (2) The underscore-retain census shape sits at a ratcheted
+ZERO on the wheel link while this `_row` discards a load-bearing proven
+fact — so the detector does not reach destructure-position underscores
+in a `match` pattern. An oracle-blind class in a shape that reports
+itself clean.
+
 `Hβ.parser.statement-span-at-dispatch` — NAMED 2026-08-16 at Morgan's
 question, "is a helper a band-aid or ultimate design at the foundational
 level?" It was a band-aid. `nstmt(stmt, span)` takes the extent as an

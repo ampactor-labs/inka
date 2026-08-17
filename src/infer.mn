@@ -5266,16 +5266,27 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = match left {
         // with the FLOW (the arrow~spec unify that stood here mismatched all
         // 15 recurrence sites, SYNTAX's own canonical lowpass included).
         match graph_chase(lh) {
-          GNode(NBound(TFun(params, ret_ty, _row)), _) => if len(params) == 1 {
-            unify_types(
-              param_ty(list_index(params, 0)),
-              ret_ty,
-              span,
-              InferredPipeResult("<~", Inferred("the prior is the prior output"))
-            )
-            graph_bind(handle, ret_ty, Located(span, InferredPipeResult("<~", Inferred("recurrence result"))))
-          } else {
-            graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("feedback"))))
+          GNode(NBound(TFun(params, ret_ty, lam_row)), _) => // THE BODY'S ROW IS THE SITE'S ROW. This destructure sent the
+          // recurrence lambda's row to `_row` and dropped it, so a forbidden
+          // effect performed inside the cycle never reached the enclosing
+          // fn: `fn cycle() with !E` around `((prev) => prev + bump()) <~
+          // Delay(1)` CHECKED CLEAN. The verb is pure topology, but what the
+          // body performs is still performed — the edge JOINS, it does not
+          // substitute (Hβ.effects.feedback-row-substitutes; repros at
+          // tests/frontier/mn-feedback-negation.mn and -transport.mn).
+          {
+            inf_add_row(lam_row)
+            if len(params) == 1 {
+              unify_types(
+                param_ty(list_index(params, 0)),
+                ret_ty,
+                span,
+                InferredPipeResult("<~", Inferred("the prior is the prior output"))
+              )
+              graph_bind(handle, ret_ty, Located(span, InferredPipeResult("<~", Inferred("recurrence result"))))
+            } else {
+              graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("feedback"))))
+            }
           },
           _ => graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("feedback")))),
         }

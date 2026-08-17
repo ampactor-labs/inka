@@ -540,6 +540,56 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.march.boot-drifts-behind-clean-landings` — NAMED 2026-08-17, found by
+a repin rather than by a gate, which is the whole point. Every gate in
+the frontier's boot suite reads the PINNED BOOT. A landing whose march
+verdict is CLEAN (`m2 == m3`) needs no repin to be correct, so several
+landed without one — the statement-span/dispatcher-mint arc, the cursor
+declaration projection, the skip_ws_back dissolution — and boot sat at
+`5fe06c92` while source moved past it. The boot suite went on reporting
+`frontier 367/0` about a wheel four landings old. When the feedback-row
+fix finally forced a repin, FOUR legs fell over at once: own-unconsumed,
+and three MCP/session legs. Reverting the pin restored 367/0 with the
+old boot, which is the proof the reds were the accumulated arc arriving,
+not the row join.
+ONE IS ALREADY DERIVED. own-unconsumed asserts `T_OwnUnconsumed … at
+10:4`; the narration now reports `10:1-10:23`, the whole `fn drops(own
+buf) = 42`. The cause is the dispatcher mint: `parse_fn` was called with
+`pos + 1` and started a declaration's span at its NAME, while
+`parse_stmt` mints from `pos` and starts it at the `fn` KEYWORD. The new
+span is the more truthful one — a declaration's span is the declaration
+— so the banked `10:4` is the old era's narrower value and re-banks to
+`10:1`, per §9.11's law that a banked expectation is a hypothesis about
+the era that banked it. THE OTHER THREE ARE NOT DERIVED and must not be
+re-banked by analogy: `mcp refusal verdict`, `resident session
+(resident-lines=1)` and `living session (moved=1)` are session/transport
+legs, not span assertions, and nothing yet says the span change is even
+their cause.
+THE SHAPE IS §11 TRIPWIRE 4 IN A NEW COSTUME — there, a gate stopped
+being reported and so stopped being run; here a gate kept being reported
+GREEN while measuring a stale artifact, which is worse because it reads
+as evidence. The standing counter-measure to design: a CLEAN verdict
+must not license leaving boot behind, or the boot suite's green means
+only "the old wheel still passes".
+NEXT PROBE: repin, then derive each of the four by hand before
+re-banking any — the three session legs first, since they are the ones
+with no explanation yet.
+
+`Hβ.effects.feedback-row-substitutes` — THE DROP HALF IS FIXED
+(2026-08-17, unpinned): `inf_add_row(lam_row)` at the `PFeedback` arm of
+`infer_pipe`, where the recurrence lambda's row went to `_row` and was
+discarded. Measured through a fresh m2: the negation crucible refuses
+where it laundered, `m2 == m3` holds, census 0, and the census the stamp
+told me to measure rather than assume came back ZERO — the wheel's own
+sixteen `<~` sites absorbed the join without one new diagnostic, so that
+prediction was wrong in the cheap direction. THE GATE IS NOT WIRED YET:
+tests/frontier/mn-feedback-negation.mn passes only against a wheel
+carrying the fix, and the frontier suite reads the pinned boot, so the
+leg waits on the repin that `Hβ.march.boot-drifts-behind-clean-landings`
+now gates. The ADD half (a `<~` cycle refusing under `!Alloc` because
+`Delay(N)` is an ordinary constructor call) is untouched and still
+named above.
+
 `Hβ.effects.feedback-row-substitutes` — NAMED 2026-08-17 by the loop
 iteration that set out to PIN the feedback-under-negation modal rule
 (§11 6.3's own named next rule, unblocked when 3.6 built) and instead

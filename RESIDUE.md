@@ -540,6 +540,41 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.effects.feedback-row-substitutes` — NAMED 2026-08-17 by the loop
+iteration that set out to PIN the feedback-under-negation modal rule
+(§11 6.3's own named next rule, unblocked when 3.6 built) and instead
+measured the rule UNSOUND. The `<~` site does not JOIN the recurrence
+body's row; it substitutes its own, and the substitution errs in both
+directions at once. Repros stand at
+tests/frontier/mn-feedback-negation.mn and
+tests/frontier/mn-feedback-transport.mn — written as the crucible pair,
+kept as evidence, and deliberately NOT wired to a frontier leg, because
+a leg asserting either measured behaviour would canonize the bug.
+DROPPED: a forbidden effect performed inside the recurrence body does
+not reach the enclosing row, so `fn cycle() with !E` containing
+`((prev) => prev + bump()) <~ Delay(1)` CHECKS CLEAN and reports only
+`T_OverDeclared … body only uses Memory + Alloc`. That is an `!E`
+soundness hole at the feedback carrier — the crown's own class. The
+control isolates it to `<~` alone: the same op called directly refuses,
+and the same lambda passed through `fn apply(f) = f(1.0)` and called
+refuses, both with E_EffectMismatch, so lambda-row propagation is
+healthy everywhere else.
+ADDED: `<~ Delay(3)` reaches `Memory + Alloc`, so `fn cycle() with
+!Alloc` around it REFUSES. Isolated by a second control — the identical
+lambda and comparison with the `<~` removed judges `Pure`, so the
+allocation is the feedback site's, not the closure's.
+THE DOC CLAIM IS REFUTED and trued in the same landing: SYNTAX §«`<~` —
+feedback» stated that a delay line's slots are "declared, never
+allocated, so depth costs nothing per tick and the `!Alloc` row survives
+at any N". The artifact denies it at N=3.
+THE KILL: this iteration's leading theory was that `<~` is pure topology
+whose negation survives the cycle while the body's own effects still
+charge — the shape every other carrier in the 6.3 sweep holds (field,
+list element, tuple position). Both halves measured the opposite way
+round. The rule cannot be pinned until the row at the `<~` edge is the
+JOIN of the body's row with the site's own, which is where the fix
+belongs — one edge, one writer.
+
 `Hβ.parser.statement-span-at-dispatch` — NAMED 2026-08-16 at Morgan's
 question, "is a helper a band-aid or ultimate design at the foundational
 level?" It was a band-aid. `nstmt(stmt, span)` takes the extent as an

@@ -1,0 +1,23 @@
+// CROWN (real vocabulary) — `<~` IS PURE TOPOLOGY, so a negation survives the
+// cycle. The feedback site performs nothing itself: SYNTAX §«`<~` — feedback»
+// states that a delay line's slots are DECLARED, never allocated, so "depth
+// costs nothing per tick and the `!Alloc` row survives at any N". This pins
+// that claim at depth 3, where a per-tick allocation would be easiest to hide.
+//
+// Lives here and not in tests/crown/ because the crown's stdin harness links no
+// lib and FeedbackSpec's constructors are prelude vocabulary — the same reason
+// mn-thread-negation.mn is a frontier leg (PLAN §11 6.5).
+//
+// Must ACCEPT: zero E_EffectMismatch.
+fn ramp(prev: Float) -> Float with Pure = prev + 0.25
+
+fn cycle() with !Alloc = {
+  let looped = ((prev) => ramp(prev)) <~ Delay(3)
+  if looped > 0.0 {
+    1
+  } else {
+    0
+  }
+}
+
+fn main() = cycle()

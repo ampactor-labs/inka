@@ -1,0 +1,25 @@
+// CROWN (real vocabulary) — the negation reaches INTO the recurrence body. The
+// `<~` verb is pure topology, but what the body performs is still performed, so
+// a cycle must not launder a forbidden effect. This is the leak dual of
+// mn-feedback-transport.mn: same verb, same depth vocabulary, and the only
+// difference is that the recurrence calls the forbidden op.
+//
+// Lives here and not in tests/crown/ for the same reason as its dual — the
+// crown's stdin harness links no lib and FeedbackSpec's constructors are
+// prelude vocabulary (PLAN §11 6.5's precedent).
+//
+// Must REFUSE: at least one E_EffectMismatch.
+effect E {
+  bump() -> Float
+}
+
+fn cycle() with !E = {
+  let looped = ((prev) => prev + bump()) <~ Delay(1)
+  if looped > 0.0 {
+    1
+  } else {
+    0
+  }
+}
+
+fn main() = cycle()

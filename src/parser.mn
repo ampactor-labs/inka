@@ -545,7 +545,17 @@ fn parse_stmt_list(ref tokens, pos, own buf, count) = {
 fn parse_stmt(ref tokens, pos) = match kind_at(tokens, pos) {
   TFn => parse_fn(tokens, pos + 1),
   TLet => parse_let(tokens, pos + 1),
-  TType => parse_type_decl(tokens, pos + 1),
+  TType => // A STATEMENT'S EXTENT IS THE DISPATCHER'S TO KNOW. parse_stmt holds the
+  // opening token and receives the closing index, so parse_stmt mints; the decl
+  // parser returns its Stmt and never a span. That argument was the defect: it
+  // let eight sites inside parse_type_decl each remember an extent, and all
+  // eight passed the `type` keyword's own token instead of the declaration's,
+  // so a `type` node could never be the widest on its line and lost the address
+  // to its own predicate. The remaining statement kinds still mint inside their
+  // parsers and inherit the same hazard — Hβ.parser.statement-span-at-dispatch.
+  match parse_type_decl(tokens, pos + 1) {
+    (stmt, p) => (nstmt(stmt, span_through(tokens, span_at(tokens, pos), p)), p),
+  },
   TEffect => parse_effect_decl(tokens, pos + 1),
   THandler => parse_handler_decl(tokens, pos + 1),
   TImport => parse_import(tokens, pos + 1),
@@ -1009,6 +1019,37 @@ fn parse_let(ref tokens, pos) = {
   }
 }
 
+// A DECLARATION'S SPAN IS THE DECLARATION, not its opening keyword — the
+// definition, applied once per statement kind at the dispatcher that knows
+// both ends (2026-08-16). The address resolver's line-mode rule is "the
+// WIDEST node starting on this line", so a keyword-wide decl node can never
+// win its own line: `type Gain = Float where self >= 0.0 && self <= 1.0`
+// resolved to its own PREDICATE sub-expression and rendered that node's
+// unjudged t-var, while `type Bounded = Int where self > 0` (no wider
+// constituent) resolved correctly — which is why the class hid. Case A keys
+// on the START line, so a multi-line declaration still competes only on its
+// opening line; the blast radius is one line by construction.
+// The closing index is one PAST the declaration, and what sits there is often
+// layout: the predicate / variant / row paths all return past a TNewline, so a
+// naive `p - 1` joined the span to the NEXT line and source_slice rendered a
+// single `t`. Walk back to the last token that is actually part of the
+// declaration — layout is never semantics here either.
+fn span_last(ref tokens, i) with Memory + Alloc = if i <= 0 {
+  0
+} else {
+  match kind_at(tokens, i) {
+    TNewline => span_last(tokens, i - 1),
+    TComment(_) => span_last(tokens, i - 1),
+    _ => i,
+  }
+}
+
+fn span_through(ref tokens, start, p) with Memory + Alloc = if p <= 0 {
+  start
+} else {
+  span_join(start, token_span(list_index(tokens, span_last(tokens, p - 1))))
+}
+
 // Parse `type X = V1 | V2(fields) | ...` or `type X = T where P`.
 fn parse_type_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
@@ -1027,7 +1068,7 @@ fn parse_type_decl(ref tokens, pos) = {
         // so an open rest is meaningless here; the closed TRecord is the body.
         let body = TRecord(sorted)
         let variant = (name, [body], mint_node(NTypeAnn(body), start))
-        (nstmt(TypeDefStmt(name, [variant]), start), p3)
+        (TypeDefStmt(name, [variant]), p3)
       },
     }
   } else {
@@ -1045,7 +1086,7 @@ fn parse_type_decl(ref tokens, pos) = {
       // A leading `!` never starts a type — `type NoIO = !IO` is the
       // named-row grammar from its first token.
       match parse_effect_list(tokens, p2) {
-        (effs, p3) => (nstmt(RowAliasStmt(name, effs), start), p3),
+        (effs, p3) => (RowAliasStmt(name, effs), p3),
       }
     } else {
       match parse_type_ty(tokens, p2) {
@@ -1054,11 +1095,11 @@ fn parse_type_decl(ref tokens, pos) = {
             let term = skip_ws(tokens, p_alias)
             if at(tokens, term, TWhere) {
               match parse_predicate(tokens, skip_ws(tokens, term + 1)) {
-                (pred, p4) => (nstmt(RefineStmt(name, alias_ty, pred), start), p4),
+                (pred, p4) => (RefineStmt(name, alias_ty, pred), p4),
               }
             } else if at(tokens, term, TPipe) {
               match parse_variants(tokens, p2) {
-                (variants, p3) => (nstmt(TypeDefStmt(name, variants), start), p3),
+                (variants, p3) => (TypeDefStmt(name, variants), p3),
               }
             } else if at(tokens, term, TPlus) || at(tokens, term, TMinus) || at(tokens, term, TAmp) {
               // Named effect row (SYNTAX §«Named effect rows»): the RHS is
@@ -1066,16 +1107,16 @@ fn parse_type_decl(ref tokens, pos) = {
               // the RHS start through parse_effect_list, one grammar and one
               // representation (Hβ.types.named-effect-rows).
               match parse_effect_list(tokens, p2) {
-                (effs, p3) => (nstmt(RowAliasStmt(name, effs), start), p3),
+                (effs, p3) => (RowAliasStmt(name, effs), p3),
               }
             } else {
               match alias_ty {
                 TName(vname, fields) => if len(fields) > 0 {
-                  (nstmt(TypeDefStmt(name, [(vname, fields, mint_node(NTypeAnn(TTuple(fields)), start))]), start), p_alias)
+                  (TypeDefStmt(name, [(vname, fields, mint_node(NTypeAnn(TTuple(fields)), start))]), p_alias)
                 } else {
-                  (nstmt(AliasStmt(name, alias_ty), start), p_alias)
+                  (AliasStmt(name, alias_ty), p_alias)
                 },
-                _ => (nstmt(AliasStmt(name, alias_ty), start), p_alias),
+                _ => (AliasStmt(name, alias_ty), p_alias),
               }
             }
           },

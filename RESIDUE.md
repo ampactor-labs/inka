@@ -540,6 +540,30 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.parser.statement-span-at-dispatch` — NAMED 2026-08-16 at Morgan's
+question, "is a helper a band-aid or ultimate design at the foundational
+level?" It was a band-aid. `nstmt(stmt, span)` takes the extent as an
+ARGUMENT, so all nineteen mint sites in the parser each get to remember
+it, and the `type` family's eight all passed the `type` keyword's own
+token instead of the declaration's — which is why a `type` node could
+never be the widest on its own line. A helper that makes the right span
+easier to pass leaves the wrong one sayable; the fix is that no site
+passes one. THE TYPE FAMILY IS CONVERTED: `parse_type_decl` returns its
+`Stmt` and `parse_stmt` mints, because the dispatcher is the only thing
+holding both ends — it has the opening token and receives the closing
+index. Eight span arguments deleted, one gained. THE REMAINDER is every
+other statement kind (fn, let, effect, handler, import, expr), which
+still mints inside its own parser and inherits the same hazard; FnStmt
+happens to be correct because someone remembered `span_join(start,
+body_span)`, which is exactly the fragility being removed. The end form
+is the whole `parse_stmt` match stamping uniformly, at which point
+`nstmt`'s span parameter can go. The DEEPER form still gated: derive the
+extent from the statement's own constituents rather than from token
+indices at all — blocked because `Ty` carries no span, so
+`AliasStmt(name, TInt)` has no spanned constituent to join through. That
+is the AST-in-graph fabric stopping at the type level, and it is the
+real root under both.
+
 `Hβ.cursor.eight-arms-at-every-site` — NAMED 2026-08-16, measured with
 a probe carrying one site per arm (the eight-arm fixture: refinement
 alias, repr pin, effect + handler + resume, own/ref params, a declared
@@ -559,22 +583,34 @@ NOTHING but `placeholder at 3533:0-3576:0`. So arm 2 (handler + typed
 resume), arm 6 (refinement) and arm 7 (gradient) cannot be read where a
 developer authors them, which is PLAN §0 pt 5 — systems explain
 themselves — failing at three of eight.
-THE TWO HALVES ARE DIFFERENT DEPTHS, measured by building the first
-half and re-probing (the fix is only half a fix, and saying so is the
-point). The HANDLER half was a RENDERING gap and is CLOSED: only
-`NStmt(FnStmt)` read its scheme from the env and every other
-declaration kind fell to `show_type(ty_of_kind(...))`, which is the raw
-t-var the fn's own header comment forbids; arms for Refine / Alias /
-TypeDef / EffectDecl / HandlerDecl / RowAlias now read each
-declaration's own node, and a cursor on `handler counter` answers
-`handler counter — 1 arm(s), 1 state field(s)` instead of
-`t24295@e21654`. The TYPE-DECL half is NOT a rendering gap and stayed
-byte-identical through that fix: an address on a `type` line never
-resolves to the RefineStmt/AliasStmt node at all — it lands on a
-placeholder — so the miss is in the address→node resolution (the range
-map or the decl node's registered span), one layer above
-node_query_line, and arms 6 and 7 stay unreadable until that resolves.
-Two sub-findings ride it: the
+RESOLVED 2026-08-16, two roots, and the dig cost two retracted decodes
+worth recording. Root one, RENDERING: only `NStmt(FnStmt)` read its
+scheme from the env and every other declaration kind fell to
+`show_type(ty_of_kind(...))` — the raw t-var the fn's own header
+comment forbids. Arms for Refine / Alias / TypeDef / EffectDecl /
+HandlerDecl / RowAlias now read each declaration's own node. Root two,
+THE SPAN: every `type` form minted with the bare `start` span (the
+`type` token alone) while FnStmt has always minted `span_join(start,
+body_span)`, and the address resolver's line-mode rule is "the WIDEST
+node starting on this line" — so a keyword-wide decl node could never
+win its own line, and `type Gain = Float where self >= 0.0 && self <=
+1.0` resolved to its own PREDICATE sub-expression. `span_through` joins
+each declaration through its last consumed token; case A keys on the
+START line, so a multi-line declaration still competes only on its
+opening line. Measured after: `Gain = Float where 0.0 <= self && self
+<= 1.0`, `Coeff = Float repr f64`, `effect Tick — 1 op(s)`, `handler
+counter — 1 arm(s), 1 state field(s)`. Arms 2, 6 and 7 read at their
+own authoring sites.
+TWO KILLS, both mine, both from mis-located coordinates: "the type
+declarations project NOTHING" was probing lines 14 and 16 of the
+fixture, which are the BLANK LINES between the declarations (the module
+placeholder is the correct answer for a blank line), and the
+"address→node resolution gap" banked on top of it was a hypothesis
+built on that mis-read, refuted by a four-form control probe in which
+every `type` kind resolved. The rule the session paid for twice: read
+the line numbers off the artifact before the claim, not off the
+arithmetic.
+One sub-finding rides it: the
 placeholder spans are LINK coordinates, not file coordinates
 (`Hβ.query.decl-site-file-coordinates` confirmed live a third time),
 and `mentl where` answers empty for any name outside its three badge

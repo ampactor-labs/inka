@@ -67,6 +67,22 @@ design fork the three docs do not answer is Morgan's: bank the fork with both
 branches priced, surface it in the report, and take the arc's next
 INDEPENDENT item — the loop never stalls on a question and never answers one
 above its station.
+A STAMP IS A DEBT AND THE NEXT ITERATION PAYS IT. If the previous
+iteration's output was a design stamp, THIS iteration builds that design —
+not a new item, not another measurement of it, not a refinement of the
+stamp. The "output is the stamp" clause above exists so nothing is built
+blind; it is not a place to live. Measuring is an iteration's output only
+when the measurement CHANGES what gets built; a measurement that confirms
+the plan is the build's first step, not a substitute for it. The
+independent-item escape (when a fork is Morgan's) releases the FORK, never
+the debt — a stamped, unforked design outranks any independent item.
+AND COUNT THE DRY ITERATIONS: if two consecutive iterations land no change
+to src/ or lib/, the third either builds or opens its report with the one
+sentence naming what structurally prevents it. Docs, stamps, retractions
+and measurements are real work and this loop has produced good ones — but
+a run of them with nothing built is the medium standing still while the
+prose about it improves, which is the exact inversion this project exists
+to refuse.
 → RETIRED BY: the Why chain walked at the cursor, and `mentl audit` naming
 the next constraint instead of a human-read stamp.
 

@@ -1440,7 +1440,7 @@ fn node_query_line(h, kind) with GraphRead + EnvRead + Memory + Alloc + Intern =
 // line the user pointed at, sliced to the node's span. The file is the one
 // authority on its own text.
 fn source_slice(ref span, ref ranges) with Filesystem + Memory + Alloc = match span {
-  Span(sl, sc, _, ec) => match find(
+  Span(sl, sc, el, ec) => match find(
     (r) => match r {
       (_, _, start, nlines) => sl >= start && sl < start + nlines,
     },
@@ -1453,7 +1453,12 @@ fn source_slice(ref span, ref ranges) with Filesystem + Memory + Alloc = match s
         let lstart = nth_line_offset(text, sl - start, 0, 0)
         let lend = line_end_from(text, lstart)
         let a = lstart + sc - 1
-        let b = lstart + ec
+        // A MULTI-LINE span ends on a DIFFERENT line, so its end column is not
+        // an offset into this one — slice to the end of the addressed line
+        // instead. The end line was discarded here until 2026-08-16, and once
+        // declarations carried their true extent a multi-line handler
+        // declaration rendered a two-character fragment of its own keyword.
+        let b = if el > sl { lend } else { lstart + ec }
         let lo = if a < lend { a } else { lstart }
         let hi = if b <= lend { b } else { lend }
         if hi > lo { "{str_slice(text, lo, hi)} : " } else { "" }

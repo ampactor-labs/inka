@@ -542,23 +542,16 @@ fn parse_stmt_list(ref tokens, pos, own buf, count) = {
 }
 
 // Statements
+//
+// DISPATCH and MINT are separate, because only the dispatcher knows a
+// statement's EXTENT: it holds the opening token and receives the closing
+// index. Every form parser returns its Stmt and never a span, so the argument
+// nineteen mint sites each had to remember has no call site left to get wrong.
+// The whole `type` family got it wrong — all eight passed the `type` keyword's
+// own token, so a declaration could never be the widest node on its own line
+// and lost its address to its own predicate — and FnStmt was right only
+// because someone remembered span_join. Remembering is what this deletes.
 fn parse_stmt(ref tokens, pos) = match kind_at(tokens, pos) {
-  TFn => parse_fn(tokens, pos + 1),
-  TLet => parse_let(tokens, pos + 1),
-  TType => // A STATEMENT'S EXTENT IS THE DISPATCHER'S TO KNOW. parse_stmt holds the
-  // opening token and receives the closing index, so parse_stmt mints; the decl
-  // parser returns its Stmt and never a span. That argument was the defect: it
-  // let eight sites inside parse_type_decl each remember an extent, and all
-  // eight passed the `type` keyword's own token instead of the declaration's,
-  // so a `type` node could never be the widest on its line and lost the address
-  // to its own predicate. The remaining statement kinds still mint inside their
-  // parsers and inherit the same hazard — Hβ.parser.statement-span-at-dispatch.
-  match parse_type_decl(tokens, pos + 1) {
-    (stmt, p) => (nstmt(stmt, span_through(tokens, span_at(tokens, pos), p)), p),
-  },
-  TEffect => parse_effect_decl(tokens, pos + 1),
-  THandler => parse_handler_decl(tokens, pos + 1),
-  TImport => parse_import(tokens, pos + 1),
   TComment(first_line) => // A comment is graph content (SYNTAX.md Comments): collect the contiguous
   // // run, parse the following declaration, and attach the joined prose to
   // that decl's handle in the comment weave (graph_attach_comment) — the Why
@@ -588,11 +581,23 @@ fn parse_stmt(ref tokens, pos) = match kind_at(tokens, pos) {
       },
     }
   },
-  _ => {
-    let start_span = span_at(tokens, pos)
-    match parse_expr(tokens, pos) {
-      (expr, next) => (nstmt(ExprStmt(expr), start_span), next),
-    }
+  _ => match parse_stmt_form(tokens, pos) {
+    (stmt, p) => (nstmt(stmt, span_through(tokens, span_at(tokens, pos), p)), p),
+  },
+}
+
+// The forms themselves: each returns its Stmt and the index one past it. A
+// comment is not among them — it is graph content the dispatcher attaches to
+// the declaration that follows, never a statement form of its own.
+fn parse_stmt_form(ref tokens, pos) = match kind_at(tokens, pos) {
+  TFn => parse_fn(tokens, pos + 1),
+  TLet => parse_let(tokens, pos + 1),
+  TType => parse_type_decl(tokens, pos + 1),
+  TEffect => parse_effect_decl(tokens, pos + 1),
+  THandler => parse_handler_decl(tokens, pos + 1),
+  TImport => parse_import(tokens, pos + 1),
+  _ => match parse_expr(tokens, pos) {
+    (expr, next) => (ExprStmt(expr), next),
   },
 }
 
@@ -652,12 +657,7 @@ fn parse_fn(ref tokens, pos) = {
                   // tokens) — a start-point span made the decl invisible to span
                   // containment, so enclosing_fn_decl_at found no enclosing declaration
                   // and the synth gate read the wrong allowed row.
-                  match body {
-                    N(_, body_span, _) => {
-                      let stmt_node = nstmt(FnStmt(name, params, ret_node, effs, body), span_join(start, body_span))
-                      (stmt_node, p9)
-                    },
-                  }
+                  (FnStmt(name, params, ret_node, effs, body), p9)
                 },
               }
             },
@@ -1010,7 +1010,7 @@ fn parse_let(ref tokens, pos) = {
                 Some(a) => a,
                 None => val,
               }
-              (nstmt(LetStmt(pat, val, ann_node), start), p5)
+              (LetStmt(pat, val, ann_node), p5)
             },
           }
         },
@@ -1034,7 +1034,7 @@ fn parse_let(ref tokens, pos) = {
 // naive `p - 1` joined the span to the NEXT line and source_slice rendered a
 // single `t`. Walk back to the last token that is actually part of the
 // declaration — layout is never semantics here either.
-fn span_last(ref tokens, i) with Memory + Alloc = if i <= 0 {
+fn span_last(tokens, i) with Memory + Alloc = if i <= 0 {
   0
 } else {
   match kind_at(tokens, i) {
@@ -1044,7 +1044,7 @@ fn span_last(ref tokens, i) with Memory + Alloc = if i <= 0 {
   }
 }
 
-fn span_through(ref tokens, start, p) with Memory + Alloc = if p <= 0 {
+fn span_through(tokens, start, p) with Memory + Alloc = if p <= 0 {
   start
 } else {
   span_join(start, token_span(list_index(tokens, span_last(tokens, p - 1))))
@@ -1245,7 +1245,7 @@ fn parse_effect_decl(ref tokens, pos) = {
     (params, p_after_params) => {
       let p = expect(tokens, skip_ws(tokens, p_after_params), TLBrace)
       match parse_effect_ops(tokens, skip_ws(tokens, p)) {
-        (ops, p2) => (nstmt(EffectDeclStmt(name, params, ops), start), p2),
+        (ops, p2) => (EffectDeclStmt(name, params, ops), p2),
       }
     },
   }
@@ -1389,7 +1389,7 @@ fn parse_handler_decl(ref tokens, pos) = {
       (state, p_after_state) => {
         let p_open = expect(tokens, skip_ws(tokens, p_after_state), TLBrace)
         match parse_handler_arms(tokens, skip_ws(tokens, p_open)) {
-          (arms, p_close) => (nstmt(HandlerDeclStmt(name, "", config, state, arms), start), p_close),
+          (arms, p_close) => (HandlerDeclStmt(name, "", config, state, arms), p_close),
         }
       },
     },
@@ -1614,11 +1614,8 @@ fn import_segment_at(ref tokens, pos) = if at(tokens, pos, TOwn) {
   ident_at(tokens, pos)
 }
 
-fn parse_import(ref tokens, pos) = {
-  let start = span_at(tokens, pos)
-  match parse_import_path(tokens, pos, "") {
-    (path, p) => (nstmt(ImportStmt(path), start), p),
-  }
+fn parse_import(ref tokens, pos) = match parse_import_path(tokens, pos, "") {
+  (path, p) => (ImportStmt(path), p),
 }
 
 fn parse_import_path(ref tokens, pos, own acc) = {

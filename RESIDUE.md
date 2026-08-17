@@ -551,13 +551,25 @@ easier to pass leaves the wrong one sayable; the fix is that no site
 passes one. THE TYPE FAMILY IS CONVERTED: `parse_type_decl` returns its
 `Stmt` and `parse_stmt` mints, because the dispatcher is the only thing
 holding both ends — it has the opening token and receives the closing
-index. Eight span arguments deleted, one gained. THE REMAINDER is every
-other statement kind (fn, let, effect, handler, import, expr), which
-still mints inside its own parser and inherits the same hazard; FnStmt
-happens to be correct because someone remembered `span_join(start,
-body_span)`, which is exactly the fragility being removed. The end form
-is the whole `parse_stmt` match stamping uniformly, at which point
-`nstmt`'s span parameter can go. The DEEPER form still gated: derive the
+index. Eight span arguments deleted, one gained. RESOLVED THE SAME DAY
+for EVERY statement kind: `parse_stmt` split into DISPATCH
+(`parse_stmt_form`, returning a `Stmt` per kind and never a span) and
+MINT (one site, stamping `span_through` from the opening token to the
+closing index). Fn, let, effect, handler, import and the bare-expression
+form all converted; the four `LetStmt` mints that are DESUGAR sites
+(nested fn, destructure prepend-let) keep their own spans, since they are
+not statements the dispatcher opened. One mint site now, where there were
+nineteen chances to remember, and FnStmt's `span_join(start, body_span)`
+— right only because someone remembered — is gone with the rest. Two
+bugs surfaced and closed on the way: the closing index sits one PAST the
+declaration and the predicate / variant / row paths all return past a
+`TNewline`, so the join reached the next line and `source_slice` rendered
+a single `t` (`span_last` walks back over layout); and `source_slice`
+itself destructured `Span(sl, sc, _, ec)`, discarding the END LINE and
+using `ec` as an offset into the START line, so a multi-line `handler
+counter { … }` rendered its closing brace's column as a two-character
+`ha` — pre-existing, and invisible for as long as every declaration span
+was one token wide. The DEEPER form still gated: derive the
 extent from the statement's own constituents rather than from token
 indices at all — blocked because `Ty` carries no span, so
 `AliasStmt(name, TInt)` has no spanned constituent to join through. That

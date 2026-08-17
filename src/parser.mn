@@ -1609,6 +1609,32 @@ fn parse_import_path(ref tokens, pos, own acc) = {
   if at(tokens, p, TSlash) { parse_import_path(tokens, p + 1, "{joined}/") } else { (joined, p) }
 }
 
+// A module's import edges, read from the token stream alone.
+//
+// An import is a LEXICAL fact: `import a/b` is TImport followed by the path's
+// segments, and TImport appears nowhere else — the word inside a string lexes
+// as that string, inside a comment as that comment. So the driver's dep walk
+// never needed an AST. It built a full second tree per module, read the four
+// strings it wanted off the top, and dropped the rest; the module was then
+// parsed AGAIN by the pass that actually judges it. That is the carried truth
+// discarded and re-derived, and the throwaway graph instance the discovery
+// parse required existed only to contain mints this read never makes.
+fn import_edges(tokens) = match fold(
+  (0, []),
+  (acc, t) => match acc {
+    (i, out) => (i + 1, if kind_eq(token_kind(t), TImport) {
+      match parse_import_path(tokens, i + 1, "") {
+        (path, _) => out ++ [path],
+      }
+    } else {
+      out
+    }),
+  },
+  tokens
+) {
+  (_, paths) => paths,
+}
+
 // Expressions — precedence-climbing
 //
 // The two expression slots the grammar distinguishes (SYNTAX §Nominal

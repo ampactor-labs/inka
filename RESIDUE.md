@@ -540,6 +540,19 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.query.cost-facet` — a verb reports no cost, so every timing of one is
+a scaffold read. Found 2026-08-17 by the mentl-first hook refusing a
+`/usr/bin/time mentl check` and having no projection to offer instead,
+which is the hook working: the absence IS the finding. The march already
+proves the shape — its m3 leg prints `cost: 15.78s wall · 2249MB peak
+RSS`, read from the artifact at the moment it ran — so this is that line
+generalized to any invocation, not a new mechanism. It belongs with the
+gradient (arm 7): a cost is a fact the medium holds about its own run and
+currently discards, which is why `Hβ.gate.sweep-rederives-the-prelude`
+above is measured entirely in `/usr/bin/time` numbers this file has to
+transcribe by hand — the exact hand-copy the census law forbids
+everywhere else. Retires the last external timer in the loop's tooling.
+
 `Hβ.gate.sweep-rederives-the-prelude` — MEASURED 2026-08-17, after Morgan
 asked why a frontier sweep does not take two minutes. It takes 4:57.64
 for 368 legs over 149 compiler spawns, at 99% CPU on ONE core, 257s of
@@ -596,6 +609,33 @@ way to memoise work that should never happen.
 The peer's name stays `Hβ.persist.module-image-cache` for the caching
 half; this half is `Hβ.driver.link-is-reachability` and it is the one to
 build first.
+THE HEADER-SCAN PREREQUISITE IS KILLED, AND THE PEER SURVIVES IT
+(2026-08-17, pin b50cdd0c55). This design named "a name-to-decl index
+over the prelude that does not parse bodies — a header scan" as what
+demand-linking wants, on the theory that parsing the prelude was the
+cost. The dep walk's own discovery parse was the cheapest place to test
+that theory, because it built a full AST per module and dropped it — the
+carried truth re-derived — so deleting it was owed regardless. It was
+deleted (`import_edges` reads the import edges from the token stream;
+LEDGER carries the mechanics). THE TIME DID NOT MOVE: 0.74s against the
+0.71s baseline, three reads, flat. So the floor is not parse-dominated.
+Read with the fmt measurement above — floor is pre-inference — the
+remaining candidates are the LEX and the file read of the five seeded
+modules, and neither has been isolated yet.
+What this kills is only the PREREQUISITE, not the peer. A header scan
+existed to learn names without paying for a parse; parse is not what is
+being paid, so nothing is owed to avoid it, and decl-level demand can
+sit at the JUDGE stage where every decl name is already in hand from a
+parse that happens anyway. What the peer still promises is untouched and
+is now the whole of it: a demanded module is READ, LEXED, PARSED and
+JUDGED, and an undemanded one is none of those — which is exactly the
+cost the seed pays five times for `fn main() = 7`.
+NAMED NEXT PROBE: split lex from file-read on the seed path. Make the
+discovery pass return nothing at all (a throwaway probe — it breaks the
+DAG and is not a landing), rebuild m2, and read the delta: that prices
+the discovery lex whole. What remains after subtracting it is the real
+pass plus I/O, and the first of those two numbers to dominate names the
+build. Do not design the demand link further until one of them does.
 ISOLATED TO ONE LINE, single-variable (2026-08-17). Same wheel, same
 harness, same program, same path form; the only thing varied is whether
 `driver_collect_dag`'s prelude seed can resolve. With the mentl-home

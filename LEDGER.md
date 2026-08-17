@@ -35,6 +35,52 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · ▶▶▶ THE DEP WALK STOPS PARSING, AND THE THEORY THAT SENT
+  IT THERE DIES (pin b50cdd0c55 — CLEAN m2 == m3, re-pinned from m2 per
+  march.sh, 410658 lines, census 0; m3 leg 15.78s wall · 2249MB peak
+  RSS). `driver_collect_visit` ran a full `lex |> parse_program` on every
+  module in the DAG, read its four import strings off the top, and
+  dropped the tree — which the pass that actually judges the module then
+  built again. That is the carried truth discarded and re-derived, and
+  the private graph instance the discovery parse needed existed only to
+  contain mints from a tree nobody kept (unbracketed they entered the
+  live weave as a second generation and the duplicate holes reached the
+  position enumerators). An import is a LEXICAL fact — `import a/b` is
+  TImport followed by its segments, and TImport appears nowhere else,
+  the word inside a string lexing as that string — so `import_edges`
+  (parser.mn, beside the `parse_import_path` it reuses) reads the edges
+  from the token stream. No tree, no mints, no instance to bracket; the
+  isolation went with the parse it isolated, and
+  `driver_extract_imports_from_ast` was deleted rather than left.
+  THE MEDIUM THEN PRICED THE CONSEQUENCE ITSELF: six dep-walk rows
+  measured over-declared and tightened to exactly what their bodies use
+  — `driver_collect_dag`, `_visit`, `_visit_list`, `driver_tree_scan`,
+  `_dag_with_deps`, `driver_module_in_dag_deps` all dropping
+  ImageAlloc + EnvRead + GraphWrite + Mutate + Cast + WASI — and two of
+  them now PROVE `!Diagnostic`, which is the absence their own comment
+  had claimed in prose since the walk was written ("the per-module check
+  will surface E_MissingModule"). The row states it now, so a future
+  report there is a refusal instead of a surprise. Six schemes stopped
+  diverging trial-to-final as a result (movers 475 → 469): the
+  divergence did not relocate the way the entries above it measure, it
+  WAS the over-declaration. The quiet gate then caught the one marker
+  this landing tried to author — `ref` on import_edges, where the
+  use-count already derives the borrow — and refused it, which is the
+  ratchet doing precisely its job on the hand that set it.
+  ▶ THE KILL, banked because it is worth more than the landing: the
+  theory that sent this dig — that the discarded parse was the prelude
+  seed's 0.68s cost floor — is REFUTED. Same bare program, three reads:
+  0.74s against the 0.71s baseline. FLAT. Removing one of two parses
+  moved nothing, so the floor is not parse-dominated, and the header
+  index the banked `Hβ.driver.link-is-reachability` design called its
+  prerequisite is NOT one. Decl-level demand belongs at the JUDGE stage,
+  where every decl name is already in hand from a parse that has to
+  happen anyway. The deletion stands on its own terms — a tree and its
+  mints per module, gone, and the rows exact — but it bought no time and
+  this entry does not pretend otherwise. Next probe named in RESIDUE:
+  split lex from infer on the seed path, because "not parse" is not yet
+  "which".
+
 - 2026-08-17 · ▶▶▶ THE PIN CATCHES UP, AND FOUR EXPECTATIONS CATCH UP
   WITH IT (pin 011f0eefbf — CLEAN m2 == m3, re-pinned from m2 per
   march.sh, 410798 lines, census 0; m3 leg 17.83s wall · 2301MB peak

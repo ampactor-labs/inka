@@ -572,7 +572,17 @@ comment_refs_max: 0
 # so decl order shifts and one existing scheme's divergence goes with
 # them. No trial/final machinery in the diff — the same relocation
 # artifact the entries above measure, moving DOWN this time.
-movers_max: 475
+# 475 → 469 at the dep walk's parse deletion (2026-08-17): six dep-walk
+# rows tightened to their measured bodies, so six schemes the trial
+# published wider than the final no longer diverge — the divergence did
+# not relocate here, it was the over-declaration itself. No trial/final
+# machinery in the diff; rung 3 still dissolves the class.
+# The first read of this said 468, measured on a tree that carried an
+# authored `ref` on import_edges; the quiet gate refused that marker
+# (inference derives the borrow), and dropping it moved one scheme back.
+# 469 is the count of the tree that shipped — §9.11, a banked expectation
+# is a hypothesis about the era that banked it.
+movers_max: 469
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

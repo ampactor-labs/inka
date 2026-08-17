@@ -1,19 +1,17 @@
 // cursor.mn — Mentl's projection of the graph for a human at a position
 //
 // Hμ.cursor handle. Phase μ — Mentl active-surface composition. The
-// opening handle of the kernel-closure follow-on (per
-// `protocol_kernel_closure.md`); composes the now-closed kernel,
-// invents nothing.
+// opening handle of the kernel-closure follow-on; composes the closed
+// kernel, invents nothing.
 //
 // Cursor is attention, not position. The text-caret is one weighted
 // input to argmax; the gradient's global argmax over the live graph
 // is the cursor proper. `??` is the developer's override that pins
 // cursor to a chosen slot.
 //
-// See `docs/specs/simulations/Hμ-cursor.md` for the walkthrough,
-// `protocol_cursor_is_argmax.md` for the discipline, and
-// SUBSTRATE.md §VI "Cursor: The Gradient's Global Argmax" for the
-// authority.
+// The authority is PLAN §2: every subsystem is the one cursor-read in
+// a different mode, and the felt surface is that read projected for a
+// human.
 //
 // Composition tally — every `perform` resolves to substrate that
 // already exists at handle landing time:
@@ -31,7 +29,7 @@
 //   row_of_kind           — kind projection (this file)
 //   verify_pending_at     — ledger projection (this file)
 //
-// Drift-mode audit per Hμ-cursor.md §11: all nine PASS.
+// Drift-mode audit per the cursor walkthrough §11: all nine PASS.
 // Drift 1 (vtable):   no dispatch table; named perform calls only.
 // Drift 4 (MTL):      one handler, eight reads, one composed record.
 // Drift 5 (split state): caret + argmax fold into one Cursor value.
@@ -68,7 +66,7 @@ import infer
 //
 // `with !Mutate` on cursor_default proves at compile time that the
 // projection cannot corrupt oracle state — exactly the constraint
-// `protocol_oracle_is_ic.md` locks for "surfaces query, never write."
+// PLAN §2's cached cursor locks for "surfaces query, never write."
 effect CursorRead {
   cursor_at(Span) -> CursorView
   // the by-HANDLE projection — a caller that already resolved the node reads it directly; re-resolving a handle it holds is the re-derivation (the cursor-address transport resolves once, then projects)
@@ -79,7 +77,7 @@ effect CursorRead {
 
 // ─── The handler ────────────────────────────────────────────────────
 //
-// Per Hμ-cursor.md §4: cursor_default composes the eight tentacle
+// Per the cursor walkthrough §4: cursor_default composes the eight tentacle
 // reads into one CursorView per arm. mentl_default surfaces the
 // individual Teach ops; cursor_default is the same projection at a
 // higher abstraction — "give me everything Mentl knows about this
@@ -93,8 +91,8 @@ handler cursor_default {
   // borrowed (read-only) to eight branches, each branch projects one
   // tentacle's lens, output is the 8-tuple in primitive-order. The
   // shape on the page IS the cursor's read-tensor at this handle;
-  // per SUBSTRATE.md §VI ("Cursor: The Gradient's Global Argmax")
-  // and `protocol_cursor_is_argmax.md`, each tentacle is the same
+  // per PLAN §2's cursor table
+  // and PLAN §2, each tentacle is the same
   // graph projected through one kernel primitive.
   //
   // Ownership: `<|` borrows `(handle, kind)` to all branches — none
@@ -128,7 +126,7 @@ handler cursor_default {
 // ─── Multi-cursor projection — map over a span list ─────────────────
 //
 // The DELETED cursor_pair_at (binary special-case) was erased per
-// `feedback_fully_as_early.md`: pair-forms ARE the tell that an N-arity
+// CLAUDE.md Anchor 6: pair-forms ARE the tell that an N-arity
 // peer is missing. Multi-cursor projection IS
 // `spans |> map((s) => cursor_at(s))` directly at the call site, the
 // op invoked as a BARE call (`perform` dissolved, SYNTAX.md). The
@@ -141,17 +139,24 @@ handler cursor_default {
 // ─── IC fixpoint — `<~` feedback closure on the cursor ────────────────
 //
 // Build IS the `<~` loop closing on stability per
-// `protocol_oracle_is_ic.md`. The cursor projects; accepted candidates
+// PLAN §2's cached cursor. The cursor projects; accepted candidates
 // fold back into the graph (GraphWrite under the IC handler);
 // re-projection triggers per IC's broader-input invalidation; the
 // loop converges when no Reason changes between cycles.
 //
-// Per SUBSTRATE.md §II + SYNTAX.md §473-489: `<~` requires iterative
-// context (Sample, Tick, Clock, or IC handler installed upstream).
 // The RHS is a FeedbackSpec — accumulate(initial_caret) starts at the
 // caret and IC-narrows toward the gradient's argmax. Convergence test:
-// reason-equality between cycles. Without iterative context: parser
-// rejects with E_FeedbackNoContext.
+// reason-equality between cycles.
+//
+// `<~` does NOT require an ambient iterative context, and this comment
+// claimed it did until 2026-08-16. The clock is INFERRED, never
+// demanded: a `<~` site is a per-site register whose previous iteration
+// is the enclosing fn's NEXT CALL, so requiring an upstream Sample /
+// Tick / Clock would refuse correct code — the wheel's own sixteen
+// `<~` sites among it. E_FeedbackNoContext therefore has zero
+// construction sites by design (SYNTAX §feedback, measured
+// 2026-08-12). The causality rule that IS armed is
+// E_ZeroDelayFeedback: `<~ delay(0)` has no prior to read.
 //
 // The eight-aspect projection runs per cycle — `<|` IS what's repeated
 // inside the `<~` loop. Multi-cursor mode threads through `><` per
@@ -194,7 +199,7 @@ handler ic_fixpoint_handler with last_epoch = 0 - 1 {
 
 // ─── Argmax computation — pure transform on the live graph ──────────
 //
-// Per Hμ-cursor.md §3: enumerate gradient positions; score each by
+// Per the cursor walkthrough §3: enumerate gradient positions; score each by
 // `gates_unlocked × proximity`; argmax. No state; no learning; no
 // tuning. The proximity decay table is a literal scope-distance
 // classification.
@@ -300,7 +305,7 @@ fn score_one_position(handle: Handle, caret) with GraphRead + Memory + Teach + !
 
 // ─── Caret proximity weighting ──────────────────────────────────────
 //
-// Per Hμ-cursor.md §5.1: the weights are literal floats encoding the
+// Per the cursor walkthrough §5.1: the weights are literal floats encoding the
 // design assumption "the developer's attention has a gradient, but
 // the gradient never reaches zero, because cross-module impact still
 // matters."
@@ -336,7 +341,7 @@ fn scope_distance_decay(caret_span, target_span) -> Float with GraphRead + !Muta
 }
 
 // Proximity decay constants — literal floats, not learned. Per
-// Hμ-cursor.md §5.1 design assumption: cross-module weight floors at
+// the cursor walkthrough §5.1 design assumption: cross-module weight floors at
 // 0.2 because cross-module impact still matters; same-handle weight
 // is 1.0 because the developer's attention IS at the position.
 fn same_handle_weight() -> Float with Pure = 1.0
@@ -351,7 +356,7 @@ fn cross_module_weight() -> Float with Pure = 0.2
 
 // same_enclosing_decl / same_module / transitive_dep — these read the
 // graph's existing scope structure. Inline residue; the eight-
-// interrogation discipline at Hμ-cursor.md §1 confirms each is a
+// interrogation discipline at the cursor walkthrough §1 confirms each is a
 // pure read on substrate the graph already encodes (Graph + Env
 // primitive).
 //
@@ -445,7 +450,7 @@ fn contains_path(paths, target) with Memory + Alloc = if len(paths) == 0 {
 
 // ─── Argmax with default ────────────────────────────────────────────
 //
-// Per Hμ-cursor.md §3: the no-candidates case is "fully annotated";
+// Per the cursor walkthrough §3: the no-candidates case is "fully annotated";
 // returns a CursorRead with impact=0 co-located with the caret. Same
 // shape, same record, same code path — drift 6 closure (no
 // primitive-type-special-case).
@@ -485,8 +490,8 @@ fn reduce_max_by_score(scored) with Alloc + Memory = reduce(
 // ─── Local pure helpers — one read each from the graph ──────────────
 //
 // Each helper extracts one of the eight aspects from a graph node.
-// Pure transforms (per SUBSTRATE.md §V "Pure Transforms for
-// Structure, Effects for Context"). The structure is the GNode; the
+// Pure transforms for structure, effects for context (PLAN §2 — only
+// inference writes). The structure is the GNode; the
 // extraction is reproducible.
 //
 // The eight-arm fan — ONE projection body serving both cursor_at (span,

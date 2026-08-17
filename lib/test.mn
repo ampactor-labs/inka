@@ -1,7 +1,9 @@
-// Lux Test Framework — Testing IS a Handler Swap
+import runtime/io
+
+// test.mn — testing IS a handler swap
 //
-// From DESIGN.md: "Testing Without a Framework — Effects make
-// traditional testing frameworks obsolete."
+// Effects make a testing framework unnecessary: there is nothing to
+// install, only a handler to choose.
 //
 // check() is an effect. The handler decides what happens.
 // Same test code → test handler (pass/fail) → benchmark handler

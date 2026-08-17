@@ -25,6 +25,8 @@
 // runtime stride carrier); the annotation monomorphizes the body to f64.
 import runtime/math
 
+import runtime/io
+
 // ─── Hann window — the taper that tames spectral leakage ────────────
 //
 // 0.5·(1 − cos(2πi/(n−1))): zero at the ends, unity at the centre, so a

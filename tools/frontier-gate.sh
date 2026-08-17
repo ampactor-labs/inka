@@ -2631,12 +2631,26 @@ for i in "${!compilers[@]}"; do
   fi
 
   # ─── The per-module solo sweep (PLAN §11 Phase 3.5, ratcheted) ──────
-  # E_MissingVariable across every src module's SOLO check, ceiling in
+  # E_MissingVariable across every SHIPPED module's SOLO check, ceiling in
   # verify-baseline (solo_violations_max — monotone DOWN; 0 retires the
   # drift catalog per §11). One judgment per module.
+  #
+  # lib/** JOINED THE SWEEP 2026-08-16, and the extension is the reason it
+  # had to: src/** was at the 0 ceiling and green while lib/** carried 20
+  # unresolved names — `mentl check lib/dsp/signal.mn` named four of them
+  # on its first run. The wheel's own link resolves every name whether or
+  # not the module declared the dep (concatenation hides it), and no
+  # oracle judged a lib-rooted link at all, so the count was invisible to
+  # census, fixpoint, and micros alike. That is §11 tripwire (3) — the
+  # board is blind to what the wheel never does — and the standing
+  # counter-measure is a gate that exercises it. Four import lines took
+  # lib/** to 0: runtime/io into dsp/cfc, test and net; runtime/math into
+  # ml/tensor.
   sv_max=$(grep -E '^solo_violations_max:' "$ROOT/tools/verify-baseline.txt" | head -1 | cut -d: -f2 | tr -d ' ')
   sv_total=0
-  for svf in "$ROOT"/src/*.mn "$ROOT"/src/backends/*.mn; do
+  for svf in "$ROOT"/src/*.mn "$ROOT"/src/backends/*.mn \
+             "$ROOT"/lib/*.mn "$ROOT"/lib/runtime/*.mn "$ROOT"/lib/dsp/*.mn \
+             "$ROOT"/lib/ml/*.mn "$ROOT"/lib/tutorial/*.mn; do
     sv_n=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$svf" 2>&1 | grep -cE 'E_MissingVariable')
     sv_total=$((sv_total + sv_n))
   done

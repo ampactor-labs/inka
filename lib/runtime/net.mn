@@ -1,3 +1,5 @@
+import runtime/io
+
 // net.mn — the socket substrate (WASI preview1, proven by the sockprobe
 // contract 2026-07-10). The host preopens a LISTENING TCP socket
 // (wasmtime -S tcplisten=ADDR); sock_accept yields a connection fd that

@@ -2674,7 +2674,7 @@ fn parse_pat_alt_branches(ref tokens, pos, own buf, count) = {
 // parse_stmt_list's TEof is NOT routed here — top-level EOF is
 // the natural terminator, not an unclosed construct.
 //
-// Per protocol_no_silent_fallback.md: the diagnostic IS the
+// Per CLAUDE.md Anchor 2: the diagnostic IS the
 // substrate-honest projection of "unexpected EOF inside <construct>",
 // with span at EOF and applicability MaybeIncorrect (the developer's
 // intent is unrecoverable without more input).

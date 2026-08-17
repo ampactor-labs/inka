@@ -89,8 +89,9 @@ type Register = RTerse | RPlayful | RExplain
 // existing shape (per types.mn SchemeKind).
 type EnvEntry = EnvEntry(String, Scheme, Reason, SchemeKind)
 
-// The ~> chain is a capability stack (SUBSTRATE.md "The Handler Chain
-// Is a Capability Stack"). HandlerEntry captures one position in it:
+// The ~> chain is a capability stack (PLAN §4⑥ — the handler chain IS
+// the capability stack, proven not audited). HandlerEntry captures one
+// position in it:
 // handler name, the effects it absorbs, and the Reason that placed
 // it here. Mentl's Unlock tentacle reads this to surface "this
 // handler is why `Alloc` is absorbed here."

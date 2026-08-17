@@ -1,6 +1,6 @@
-// Lux DSP Framework — Handler-Based Processors
+// processors.mn — handler-based DSP processors
 //
-// Stateful DSP processors built on the DSP effect from signal.lux.
+// Stateful DSP processors over the DSP effect the import below names.
 // Named handlers enable composition: warm_filter |> peak_tracker.
 // Handler-local state tracks filter memory, envelopes, peak levels.
 import dsp/signal

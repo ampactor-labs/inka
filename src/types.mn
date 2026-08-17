@@ -422,7 +422,7 @@ fn mk_param(name, ty) = TParam(name, ty, Unmarked, Unmarked, None)
 // PROJECTS it at the resume site (OneShot → the ~85% direct-return
 // floor, MultiShot → the reified heap continuation). There is no
 // @resume= annotation; the body IS the contract per
-// protocol_cursor_is_the_substrate.md. The write is inference's (the
+// PLAN §2. The write is inference's (the
 // one writer), read live by lower — never a second hand-walk at lower.
 type ResumeDiscipline
   = OneShot
@@ -1019,10 +1019,10 @@ type Reason
 // keys). The caret biases the gradient argmax via proximity weighting;
 // it does NOT define the cursor.
 //
-// (Renamed from MV-mentl-voice.md:373's `Cursor(Handle, Reason)` per
-// Hμ-cursor.md §2.2 — the previous name conflated the user's text
+// (Renamed from the mentl-voice walkthrough:373's `Cursor(Handle, Reason)` per
+// the cursor walkthrough §2.2 — the previous name conflated the user's text
 // position with the gradient's argmax, which is drift mode 5 by
-// SUBSTRATE.md §I "The Heap Has One Story" applied to handler-state
+// PLAN §5.U's one heap record applied to handler-state
 // shape.)
 type Caret = Caret(Handle, Reason)
 
@@ -1036,16 +1036,16 @@ type Caret = Caret(Handle, Reason)
 // (reason_is_pinned) and followed as an override edge BEFORE the
 // auto-scored reduce — never a magic-float impact magnitude.
 //
-// See SUBSTRATE.md §VI "Cursor: The Gradient's Global Argmax" and
-// `protocol_cursor_is_argmax.md`.
+// See PLAN §2's cursor table and
+// PLAN §2.
 type Cursor = Cursor(Handle, Reason, Float)
 
 // SuggestionKind — exhaustive ADT for the axis of an annotation
 // suggestion. Drift 8 closure: never a string flag; always tagged
-// dispatch. Per GR-gradient-delta.md §3.2 promotion to live.
+// dispatch. Per the gradient-delta walkthrough §3.2 promotion to live.
 type SuggestionKind = SuggestEffectRow | SuggestOwnership | SuggestRefinement | SuggestReturnType
 
-// AnnotationSuggestion — promoted from GR-gradient-delta.md §3.2
+// AnnotationSuggestion — promoted from the gradient-delta walkthrough §3.2
 // (was shape-only) to live ADT. teach_gradient (mentl.mn) returns
 // Option(AnnotationSuggestion); CursorView.teach reads the suggestion.
 //
@@ -1058,7 +1058,7 @@ type AnnotationSuggestion = AnnotationSuggestion(SuggestionKind, String, [String
 
 // PipeContext — surrounding pipe topology at a position.
 // CursorView.topology reads the context. Reuses existing PipeKind for
-// the InsidePipe variant. Per Hμ-cursor.md §2.1 + §4.
+// the InsidePipe variant. Per the cursor walkthrough §2.1 + §4.
 type PipeContext = NoPipe | InsidePipe(PipeKind) | StartingPipe | EndingPipe
 
 // CursorView — what cursor_default projects at the cursor's handle.

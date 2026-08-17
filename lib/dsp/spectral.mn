@@ -1,9 +1,9 @@
-// Lux DSP Framework — Spectral Flux Distortion
+// spectral.mn — spectral-flux distortion
 //
 // A novel distortion algorithm where the waveshaping transfer function
 // MUTATES PER-SAMPLE based on the signal's spectral energy flux.
 //
-// This is uniquely enabled by Lux's algebraic effect system:
+// This is uniquely enabled by Mentl's algebraic effect system:
 //   - The distortion is an EFFECT (what to process)
 //   - The handler decides HOW to process (which physics to apply)
 //   - Handler-local state tracks spectral analysis across samples

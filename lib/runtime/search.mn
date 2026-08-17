@@ -37,7 +37,7 @@
 // the existing substrate — does NOT redeclare Abort or catch_abort.
 //
 // Authority:
-// - CE-choice-effect.md walkthrough §1.1 (Choice declaration), §1.2
+// - the choice-effect walkthrough §1.1 (Choice declaration), §1.2
 //   (pick_first), §1.3 (backtrack), §4.0.2 (halt-signal on
 //   try_with_abort_catch), QA Q-B.3.1 (bare Choice — A flows; not
 //   parameterized) + QA Q-B.3.2 (handler decides empty-list semantics)
@@ -47,9 +47,8 @@
 // - src/lower.mn + src/backends/wasm.mn (commits 4236b96 + ad78384 +
 //   bafd63a — LMakeContinuation runtime substrate that this file's
 //   MultiShot handlers depend on)
-// - SUBSTRATE.md §"Inference IS the Light" (L50-66), §"The Continuous
-//   Oracle IS Incremental Compilation Plus One Cached Value" (commit
-//   636c365)
+// - PLAN §2 (inference is the one writer; the oracle IS the cached
+//   cursor — incremental compilation plus one cached value)
 import types
 
 // own supplies the catch_abort handler.

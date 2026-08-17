@@ -22,7 +22,7 @@
 //
 // Anchor 4 — build the wheel; never wrap the axle. The eight
 // interrogations are CLAUDE.md's authoring discipline AND
-// SUBSTRATE.md §I's eight-fold lock AND Mentl's eight tentacles AND
+// PLAN §2's eight-fold lock AND Mentl's eight tentacles AND
 // (now) the medium's automated read at every graph node. Same eight,
 // four roles, one method.
 //
@@ -77,7 +77,7 @@ import runtime/math
 // ─── The eight interrogations as a tagged ADT ───────────────────────
 //
 // Each tag corresponds 1:1 to one of the eight kernel primitives
-// (DESIGN.md §0.5) and Mentl's eight tentacles (09-mentl.md §The
+// (PLAN §2) and Mentl's eight tentacles (PLAN §2 §The
 // architecture). The numbering is canonical per CLAUDE.md ⌁ Mentl's
 // anchor — Graph(1) / Handler(2) / Verb(3) / Row(4) / Ownership(5)
 // / Refinement(6) / Gradient(7) / Reason(8).
@@ -156,7 +156,7 @@ effect Interrogate {
 // ─── interrogate_default — the canonical handler ───────────────────
 //
 // `with !Mutate` — read-only over graph + env; same constraint as
-// cursor_default per protocol_oracle_is_ic.md.
+// cursor_default per PLAN §2's cached cursor.
 //
 // Composition: each interrogation runs through the existing tentacle
 // substrate (query_default for Query, mentl_default for Teach + Why,
@@ -465,8 +465,8 @@ fn all_eight_clear(report) with Pure = match report {
 //
 // CLAUDE.md authoring discipline = humans run the eight before each
 // line.
-// SUBSTRATE.md §I = the eight ARE the kernel primitives.
-// 09-mentl.md = the eight ARE Mentl's tentacles.
+// PLAN §2 = the eight ARE the kernel primitives.
+// PLAN §2 = the eight ARE Mentl's tentacles.
 // Hμ.cursor's CursorView = the eight aspects of one read.
 // Hμ.eight-interrogation-loop (this file) = the eight as automated
 //   substrate at every graph node.

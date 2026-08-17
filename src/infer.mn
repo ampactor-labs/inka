@@ -106,7 +106,7 @@ handler infer_ctx with stack = [], arm_stack = [], install_marks = [], pending_g
   //   declared = [(EffName, negated)] — the fn's authored annotation, born
   //   with the frame and returned by inf_exit_fn (nested fns get their own)
   // arm_stack = [the continuation handle, ...] — the typed-resume
-  //   context (SUBSTRATE.md primitive #2): inside `op(args) => body` for
+  //   context (SYNTAX §Effect declarations): inside `op(args) => body` for
   //   `op : (P...) -> R` under a handler whose handle-result is S,
   //   `resume : R -> S`. ResumeExpr reads the top frame; a stack because
   //   handler decls nest inside arm bodies.
@@ -3903,7 +3903,7 @@ fn infer_expr(ref node) = match node {
       tag_alloc_join(handle, record_field_handles(fields))
     },
     NExpr(ResumeExpr(val, state_updates)) => {
-      // Typed-resume law (SUBSTRATE.md primitive #2): inside
+      // Typed-resume law (SYNTAX §Effect declarations): inside
       // `op(args) => body` for `op : (P...) -> R` under a handler
       // whose handle-result is S, `resume : R -> S`. The value flows
       // to the perform site (v unifies with R); the expression's own
@@ -6589,7 +6589,7 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
   PAlt(branches) => {
     // Every branch constrains the SAME scrutinee handle — branch
     // pattern types unify through it by construction. The binding
-    // law (pattern-alternation-substrate.md §3): branches bind the
+    // law (the pattern-alternation walkthrough §3): branches bind the
     // same names with unifiable types; the body sees the unified
     // type. Each branch's binder types are read back IMMEDIATELY
     // after its walk (env entries shadow across branches; the law
@@ -6898,7 +6898,7 @@ fn pat_has_wildcard(pat) = match pat {
   _ => false,
 }
 
-// One arm under the typed-resume law (SUBSTRATE.md primitive #2).
+// One arm under the typed-resume law (SYNTAX §Effect declarations).
 // `op(args) => body` for `op : (P...) -> R` under handle-result S:
 // args bind to the op's DECLARED params (the graph already knows
 // them — fresh vars would discard that); resume reads (R, S) from
@@ -8511,7 +8511,7 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
   // scheme is the op's type home, the one graph. STEP 5's TCont carries the same
   // disc for cross-context unification (E_ResumeWorldMismatch) — peer
   // Hβ.types.tcont-carries-cardinality-and-world.
-  // Typed-resume arm typing (SUBSTRATE.md primitive #2): every arm
+  // Typed-resume arm typing (SYNTAX §Effect declarations): every arm
   // body walks under the law with one per-decl handle-result S.
   // Config params bind through the SAME TParam handles the scheme
   // carries (install-site args constrain arm-body usage through them);
@@ -9072,7 +9072,7 @@ fn grade_fields(fields) = if len(fields) == 0 {
 
 // The inference primitive — every emergent property is cursor-
 // projected from body structure, never authored as annotation. Per
-// protocol_cursor_is_the_substrate.md: "annotations declare INPUTS
+// PLAN §2: "annotations declare INPUTS
 // to the cursor; never the emergent property itself."
 //
 // Three companion substrates land alongside Phase B's resume-

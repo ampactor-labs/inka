@@ -89,7 +89,7 @@ effect Delta {
 // as gradient_next's pick_highest_leverage.
 //
 // `with !Mutate` — read-only over graph + env; same constraint as
-// cursor_default's projection per protocol_oracle_is_ic.md.
+// cursor_default's projection per PLAN §2's cached cursor.
 handler delta_default {
   delta_pick(handle) => {
     let row_delta = delta_effect_row(handle)

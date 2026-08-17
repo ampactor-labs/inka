@@ -1,4 +1,6 @@
-// Pure tensor operations for Lux ML framework.
+import runtime/math
+
+// tensor.mn — pure tensor operations.
 // All functions are pure — no effects, no mutation.
 // Vectors are [Float], matrices are List<[Float]>.
 //

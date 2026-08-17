@@ -25,7 +25,7 @@
 //   multi-core determinism per Q-B.7.3.
 //
 // Authority:
-// - HC2-handler-combinators.md walkthrough §6.1 (substrate touch
+// - the handler-combinators walkthrough §6.1 (substrate touch
 //   sites — literal tokens for race + first_verified_wins)
 // - QA Q-B.4.1 (deterministic tiebreak chain) + Q-B.4.2 (shared
 //   checkpoint at install)

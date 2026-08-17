@@ -2,13 +2,13 @@
 //
 // Routes `cursor_default`'s `CursorView` projection through a
 // transport handler to a human-facing surface. The kernel-projection-
-// to-human loop closes here. Per Hμ-cursor.md §10: surfacing cadence
+// to-human loop closes here. Per the cursor walkthrough §10: surfacing cadence
 // (real-time / idle-debounced / on-save / on-explicit-ask) is a
 // transport handler choice; the kernel substrate is invariant.
 //
 // Anchor 0 dream code. The wheel is the canonical; the seed
 // transcribes after first-light-L1 per Tier 3 growth pattern
-// (Hβ-bootstrap.md §12.5). Verification is by simulation, walkthrough,
+// (the bootstrap walkthrough §12.5). Verification is by simulation, walkthrough,
 // and audit, not compilation.
 //
 // Anchor 4 — build the wheel; never wrap the axle. This file IS the
@@ -98,7 +98,7 @@ effect Surface {
 // ─── ADTs the transport reads + writes ──────────────────────────────
 //
 // What the human can do at a Cursor's surfaced proposal. The four
-// arms are exhaustive per Hμ-cursor.md §5.3:
+// arms are exhaustive per the cursor walkthrough §5.3:
 //
 //   Accept  — apply the gradient_next suggestion; commit the patch
 //   Defer  — skip; cursor advances to next argmax
@@ -118,7 +118,7 @@ type Cadence
   // user invokes "what's next?"
   | CadOnAsk
 
-// Default cadence per Hμ-cursor.md §10.4: ~250ms idle-debounced.
+// Default cadence per the cursor walkthrough §10.4: ~250ms idle-debounced.
 fn default_cadence() with Memory + Alloc = CadDebounced(250)
 
 // ─── TransportState — one record-shape carried by all handlers ──────
@@ -195,7 +195,7 @@ fn render_cursor_block(cursor, view) with GraphRead + Alloc + Memory + !Mutate +
 //
 // ─── The bus-compressor loop — `<~` at the human boundary ───────────
 //
-// Per Hμ-cursor.md §3.4 + ULTIMATE_MEDIUM.md §3.4: the kernel's
+// Per the cursor walkthrough §3.4 + PLAN §1: the kernel's
 // primitive #3 (five verbs) describes the medium's own editing
 // model. The cursor-transport loop IS `<~` applied at the human-
 // medium boundary. Pipe verbs are visible on the page; the loop

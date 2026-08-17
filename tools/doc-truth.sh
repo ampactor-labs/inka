@@ -126,6 +126,52 @@ else
   done
 fi
 
+# THE SWEEP TURNED AROUND (2026-08-16): the docs' claims about the artifact
+# were checked from the start; the SOURCE's claims about the docs never were.
+# Measured on this check's first run: 62 comment lines across 15 modules cite
+# SUBSTRATE.md, DESIGN.md, ULTIMATE_MEDIUM.md, the docs/specs/simulations
+# corpus and a dozen protocol_*.md — every one of them consolidated away into
+# the three-document contract on 2026-06-18 and DELETED. A comment is a Reason
+# edge (SYNTAX §Comments); an edge to a file that does not exist carries
+# nothing, and the comment-ref ratchet could not see it because that ratchet
+# resolves backticked NAMES, never document citations. Same law as the two
+# sweeps above, read in the other direction.
+for c in $(grep -rhoE '[A-Za-z0-9_/-]+\.md' --include='*.mn' src lib 2>/dev/null | sort -u); do
+  [ -f "$c" ] && continue
+  [ -f "docs/$(basename -- "$c")" ] && continue
+  [ -f "$(basename -- "$c")" ] && continue
+  echo "doc-truth: source cites $c, which resolves nowhere — the three docs are the read-path"
+  fail=1
+done
+
+# THE PROJECT'S OWN NAME, for the same reason and at Morgan's catch: `Lux`
+# survived in five module headers ("Lux DSP Framework", "Lux ML framework",
+# and a `signal.lux` that named an extension three renames dead) long after
+# Inka -> Mentl. A dead name in a header is the identity equivalent of a
+# dangling citation. `Inka-era` stays sayable — naming a deleted era is
+# history, not a live referent.
+for dead in $(grep -rnoE '\b(Lux|Inka)\b(-era)?' --include='*.mn' src lib 2>/dev/null | grep -v -- '-era' | head -20); do
+  echo "doc-truth: source names a retired project identity at $dead — the project is Mentl"
+  fail=1
+done
+
+# SYNTAX's TokenKind checksum, asserted against the graph's OWN roster.
+# SYNTAX calls that number "the hand-maintained stand-in for `mentl audit`
+# until the cursor projects it from the graph" — the variants facet IS that
+# projection, so the stand-in is discharged here: the number is CHECKED, not
+# trusted. Measured on this check's first run (2026-08-16): SYNTAX said 63,
+# the graph held 63, and src/lexer.mn carried a THIRD copy saying 64. The
+# third copy is deleted; a count has one home and this check keeps it honest.
+declared_tokens=$(grep -oE 'Checksum: [0-9]+ variants' docs/SYNTAX.md | grep -oE '[0-9]+' | head -1)
+graph_tokens=$(mentl query src/types.mn "variants of TokenKind" 2>/dev/null | grep -cE '^(→|[[:space:]])[[:space:]]*T[A-Za-z]+/[0-9]+$')
+if [ -z "$declared_tokens" ] || [ "$graph_tokens" -eq 0 ]; then
+  echo "doc-truth: the TokenKind checksum could not be read from both homes — the check cannot fail, so it fails"
+  fail=1
+elif [ "$declared_tokens" != "$graph_tokens" ]; then
+  echo "doc-truth: SYNTAX's checksum claims $declared_tokens TokenKind variants; the graph holds $graph_tokens"
+  fail=1
+fi
+
 if [ $fail -eq 0 ]; then
   echo "doc-truth: the docs' checkable claims verify against the artifact"
 fi

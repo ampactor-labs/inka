@@ -6,7 +6,7 @@
 // the mascot is an octopus because the architecture IS octopus
 // neurology — local reasoning, shared nervous system.
 //
-// The oracle loop (DESIGN.md Ch 8 · spec 09):
+// The oracle loop (PLAN §1 · spec 09):
 //   graph_push_checkpoint()
 //     → apply tentative annotation via graph_bind / graph_bind_row
 //     → run inference, run Verify
@@ -102,7 +102,7 @@ type Candidate = Candidate(Node, Reason)
 
 // AST fragment + why it was proposed
 //
-// Teach effect — the five tentacle entry points (DESIGN.md Ch 8). `mentl_default`
+// Teach effect — the five tentacle entry points (PLAN §1). `mentl_default`
 // projects the substrate for the developer: hover, gradient, why-chain, error catalog,
 // unlock preview.
 effect Teach {
@@ -839,7 +839,7 @@ fn annotation_inferred_for(ty) with Memory + Alloc = match ty {
 // ─── Multi-position teach — map over a handle list ───────────────────
 //
 // The DELETED teach_pair (binary special-case) was erased per
-// `feedback_fully_as_early.md`: callers compose
+// CLAUDE.md Anchor 6: callers compose
 // `map(teach_session, handles)` directly; teaching each handle on its
 // own core is a `><` fanout under its own `~> Thread` at the call site
 // (Hβ.lower.schedule-specialized-callee). Drift 6 erasure: small-arity
@@ -850,7 +850,7 @@ fn annotation_inferred_for(ty) with Memory + Alloc = match ty {
 // Teach loops until the project's knowledge base stops changing.
 // Every accepted gradient suggestion mutates the graph; IC invalidates;
 // teach re-projects; the loop converges when no Reason chain changes.
-// Per protocol_oracle_is_ic.md: build IS the <~ loop closing on
+// Per PLAN §2's cached cursor: build IS the <~ loop closing on
 // stability.
 //
 // `<~` requires iterative context — IC handler installed upstream.

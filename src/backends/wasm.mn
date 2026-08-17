@@ -468,14 +468,14 @@ fn spec_candidates_fix(work, acc, recs) with EnvRead + LookupTy + GraphRead + Me
         match spec_find_rec(recs, base) {
           None => spec_candidates_fix(w2, spec_demand_accept(acc, d), recs),
           Some(rec) => // THE POLYMORPHIC-RECURSION CAP (the 5.1c guard, resurrected the
-        // day sig'd poly recursion reached the emit): a self-instantiating
-        // demand chain mints a fresh mangle per nesting level
-        // (depth@[w], depth@[[w]], …), so one base's demand count is the
-        // divergence meter. At the cap the candidate registers
-        // unspecialized — its sites emit the uniform word-protocol floor,
-        // which is CORRECT for every vector (containers are words); the
-        // deep tail pays indirection, never divergence. The teaching
-        // narration for this floor rides the 5.3 proposed-signature step.
+          // day sig'd poly recursion reached the emit): a self-instantiating
+          // demand chain mints a fresh mangle per nesting level
+          // (depth@[w], depth@[[w]], …), so one base's demand count is the
+          // divergence meter. At the cap the candidate registers
+          // unspecialized — its sites emit the uniform word-protocol floor,
+          // which is CORRECT for every vector (containers are words); the
+          // deep tail pays indirection, never divergence. The teaching
+          // narration for this floor rides the 5.3 proposed-signature step.
           if spec_buf_base_count(dbuf, dn, base, 0, 0) >= 8 {
             spec_candidates_fix(w2, spec_demand_accept(acc, d), recs)
           } else {
@@ -794,7 +794,7 @@ fn emit_module(lowered) = {
 }
 
 // ─── Single-walk multi-projection emit pre-pass ─────────────────────
-// Per protocol_cursor_is_the_substrate.md + Hβ.emit.consolidate-pre-pass-walks
+// Per PLAN §2 + Hβ.emit.consolidate-pre-pass-walks
 // (2026-05-11): the four DELETED collect passes (fn_names, top_fn_names,
 // string_literals, state_slots) over the SAME LowExpr tree were the
 // canonical "imperative subsystem" drift (#102) at the emit layer — each
@@ -2721,7 +2721,7 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   // Hβ.emit.reason-chain-comments: SourceMap-style annotation at fn
   // boundary. Why-engine consumers (`mentl query --why`, browser
   // inspector, terminal trace) read these to walk from WAT back to
-  // source. Per protocol_emit_is_graph_projection.md: emit's per-
+  // source. Per PLAN §2: emit's per-
   // handle output IS the graph's Reason projected as bytes; the
   // SourceMap comment makes the projection observable downstream.
   emit_reason_comment_for_fn(name, body)
@@ -3530,7 +3530,7 @@ fn emit_wasi_thread_start(has_lets) = {
 // Emit a sequence of `(local.get $<state_local>) <init_emit> (i32.store
 // offset=<8+i*4>)` for each init in source order. Used by LHandleWith's
 // emit arm to populate the freshly-allocated state record before the
-// global-set. Per protocol_handler_is_state_is_closure_is_evidence.md
+// global-set. Per PLAN §5.U
 // (ONE record, FOUR roles) — state slots live at 8+i*4, matching
 // resolve_state_slot_offset in lower.mn:1195 so arm-body reads match.
 //
@@ -4252,7 +4252,7 @@ fn emit_expr(expr) = match expr {
     //          globals with per-handler-state slots; required for
     //          threading × multi-shot composition correctness).
     //
-    // Walkthrough: docs/specs/simulations/LF-feedback-lowering.md.
+    // Walkthrough: the feedback-lowering walkthrough.
     let line = delay_slot_names(h, depth)
     wat_emit("    (global.get $")
     wat_emit(last(line))
@@ -4310,7 +4310,7 @@ fn emit_expr(expr) = match expr {
     // law holds. Everything else is a WASM-level import call: NO
     // __state push (imports don't take a closure record), NO $op_
     // prefix (the import IS the bridge). Per
-    // protocol_bootstrap_wasi_threads_substrate.md.
+    // PLAN §5.R band E.
     // A preview1 import's args emit at their DECLARED ABI widths — the
     // same wasi_import_reprs home the import decl projects from, so a
     // word arg filling an i64 param (path_open's rights, fd_readdir's
@@ -6807,7 +6807,7 @@ fn product_byte_size(fields) = product_byte_size_acc(fields, 0, len(fields), 0)
 // Pattern algebra — predicate ⊕ projection.
 //
 // A pattern is the Boolean algebra of value space — the row algebra's
-// mirror (SUBSTRATE.md §IV): nesting is intersection (short-circuit
+// mirror (PLAN §4③): nesting is intersection (short-circuit
 // AND), alternation is union (short-circuit OR), tags and literals are
 // atomic predicates, wildcards and vars are `true`. A match is an
 // ordered OR-ELSE fold over arms; each arm is

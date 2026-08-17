@@ -54,7 +54,7 @@ import egraph
 // never re-derived from a side-ledger (the deleted resume_kinds ledger, Anchor 1).
 // Config-param-only handler (no state-fields), so it works regardless of
 // resume-with-state-update lowering — bootstrap-safe per
-// protocol_resume_state_mutation_substrate.md.
+// SYNTAX §State updates via with on resume.
 effect ArmStateContext {
   current_state_fields() -> [String]
   current_resume_discipline() -> ResumeDiscipline
@@ -89,7 +89,7 @@ handler arm_state_ctx(fields, disc, hname) {
 // scan ran inside a handler arm — re-triggering
 // the nested-arm evidence gap it was a workaround for. The LHandleWith emit
 // arm stores each state-init at offset 8+i*4 of the freshly-allocated state
-// record per protocol_handler_is_state_is_closure_is_evidence.md.
+// record per PLAN §5.U.
 fn handler_decl_of(hname) = match env_lookup(hname) {
   Some(entry) => match entry {
     (_, _, kind) => match kind {
@@ -362,7 +362,7 @@ type LowExpr
   //         order within each effect; emit lays each group contiguously and
   //         builds a thin [record, base] evidence-entry per effect (the world
   //         chain node's entry — the perform's ev_perform_node dispatch).
-  // Per protocol_handler_is_state_is_closure_is_evidence.md.
+  // Per PLAN §5.U.
   | LResumeK(Int, LowExpr, LowExpr)
   | LHandleWith(Int, LowExpr, LowExpr, String, [LowExpr], [{arms: [String], ename: String}])
   // <~ desugaring (iterative ctx required)
@@ -426,11 +426,11 @@ type LowExpr
   //
   // handle, direction, operand
   // Hβ.first-light.resume-with-state-mutation: `resume(val) with field =
-  // expr` per SUBSTRATE.md L660-694 lowers each (field, value) update to
-  // an LStateSlotStore preceding the LReturn. slot_offset is field source-
-  // order * 4 per §IX "Records Are The Handler-State Shape" L1282; the
+  // expr` per SYNTAX §State updates via with on resume lowers each
+  // (field, value) update to an LStateSlotStore preceding the LReturn.
+  // slot_offset is field source-order * 4 per PLAN §5.U's one record; the
   // arm fn's __state IS the handler's state record per
-  // protocol_handler_is_state_is_closure_is_evidence.md, so the store
+  // PLAN §5.U, so the store
   // mutates handler state across resume calls.
   | LConvert(Int, ConvertKind, LowExpr)
   // handle, slot_offset, value, record READ — resolved at lower through the __hrec ladder (arm frame: the LLet alias of the arm's own $__state; lambda: the seeded capture; resume-bound fn: the trailing param after __k). The record is a value the frame was born holding — the retired $<hname>_state_g singleton was a bracket-scoped CACHE of it, and a closure's own $__state is its closure record (the measured 32-not-46 / 20-not-25 silent state loss, both disciplines)
@@ -741,8 +741,8 @@ fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
         // zero-arg call (already reported there) lowers to the empty
         // record, never a garbage read past an empty args list.
         if len(lo_args) == 0 { LMakeRecord(handle, []) } else { list_index(lo_args, 0) },
-        Some(EffectOpScheme(_, _, _, _)) => // Row-guided dispatch per SUBSTRATE.md §"Three Tiers of
-        // Effect Compilation". The row IS the evidence contract:
+        Some(EffectOpScheme(_, _, _, _)) => // Row-guided dispatch per PLAN §6's handler-elimination
+        // tiers. The row IS the evidence contract:
         //   - Effect in declared row → Tier 2: LEvPerform (handler
         //     comes from caller via evidence slot on __state)
         //   - Effect NOT in row → Tier 1: LPerform (handler is
@@ -1315,7 +1315,7 @@ fn clamp_index(i) = if i < 0 { 0 } else { i }
 // is recovered by reading the effect off the CALL-EDGES live, not off the
 // frozen generalized scheme. can_yield (the multishot-absence gate) reads
 // THIS projection
-// (docs/specs/simulations/polymorphism-as-flow-edges.md §8).
+// (the polymorphism-as-flow-edges walkthrough §8).
 //
 //   escaping(name) = ( own_dispatched(name)
 //                      ∪ ⋃ { escaping(c) | c ∈ static_callees(name) } )
@@ -2367,7 +2367,7 @@ fn lower_expr_body(e, handle, span) = match e {
   //
   // OneShot (~85%): the zero-cost stack return — BYTE-IDENTICAL to the
   // pre-producer floor. Hβ.first-light.resume-with-state-mutation
-  // (SUBSTRATE.md L660-694): the resume value AND every `with field = NEW`
+  // (SYNTAX §State updates via with on resume): the resume value AND every `with field = NEW`
   // RHS read the PRE-update state; lower_resume_snapshot commits the stores
   // after evaluating all RHS into scratch locals in source order.
   match current_resume_discipline() {
@@ -3767,7 +3767,7 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
   let fn_name = arm_fn_name(discriminator, arm.op_name)
   // Hβ.first-light.arm-body-fresh-frame: each handler-arm body is
   // its own WASM function with __state IS the handler state record
-  // (per protocol_handler_is_state_is_closure_is_evidence.md). The
+  // (per PLAN §5.U). The
   // arm body needs a FRESH frame so state-field references (e.g.
   // frames, globals) resolve to LUpval(0..N-1), emitting
   // `(local.get $__state)(i32.load offset=8 + idx*4)` — the
@@ -3863,7 +3863,7 @@ fn state_field_names_of(state: [{init: Node, name: String}]) = map(state_field_n
 // The returned list[i] is the LowExpr for the i-th state field's init.
 // emit_lhandlewith stores list[i] at offset 8 + i*4 of the freshly-
 // allocated state record at handler-install per
-// protocol_handler_is_state_is_closure_is_evidence.md.
+// PLAN §5.U.
 //
 // `with field = init` is written in the scope of the handler's config
 // params. When the init IS exactly a config-arg reference, the state slot
@@ -4694,7 +4694,7 @@ fn k2_floor_dummy(h) = match repr_of(lookup_ty(h)) {
 // enclosing arm's state-fields (resolved via the ArmStateContext
 // handler). Updates whose field name is not in scope lower to
 // LStateSlotStore(handle, -1, value) — emit time skips negative
-// offsets per protocol_resume_state_mutation_substrate.md
+// offsets per SYNTAX §State updates via with on resume
 // productive-under-error.
 fn lower_resume_snapshot(handle, val, updates, fields) = match resume_commit_prefix(handle, val, updates, fields, resolve_hrec(handle)) {
   (prefix, val_name) => LBlock(
@@ -4756,7 +4756,7 @@ fn resume_upd_pair(upd, fields) =
 // record. `fields` is the slot-order NAME list — config ++ state in
 // declaration order, the SAME list captures_names lays slots out by
 // and install writes inits to (one heap record, four roles, per
-// protocol_handler_is_state_is_closure_is_evidence.md:
+// PLAN §5.U:
 // [fn_ptr@0, count@4, slot_0@8, slot_1@12, ...]). A state-only list
 // here was a parallel half-truth: the buffer name resolved to slot 0 — the
 // config param's slot — and the next dispatch called the buffer as
@@ -4806,7 +4806,7 @@ fn lower_param_handles(params) = map((p) => ty_handle_of(param_ty(p)), params)
 // Stage 4a: WASI import-name predicate. Recognized op names bridge
 // to the WASM-level import via LWasiCall instead of LPerform's
 // $op_<name> handler-arm dispatch. Per
-// protocol_bootstrap_wasi_threads_substrate.md — the import IS the
+// PLAN §5.R band E — the import IS the
 // bridge; no wrapper function required.
 // The substrate ops memory.mn declares — the boundary where the
 // language meets the instruction set (the wasi-import list's sibling;

@@ -1,14 +1,21 @@
-// lexer.mn — typed Token stream with full spans (spec 03 + SYNTAX.md)
+// lexer.mn — typed Token stream with full spans (SYNTAX §Token enumeration)
 //
 // The tokenizer. Emits `[Token]` where `Token = Tok(TokenKind, Span)`.
 // Mirrors the AST Node wrapper pattern: structured value + positional
-// metadata. Per SYNTAX.md, the parser dispatches via exhaustive
-// `match Tok(kind, _) { … }` over the 64 TokenKind variants — H6's
-// substrate-discipline applied at the lexical layer.
+// metadata. Per SYNTAX, the parser dispatches via exhaustive
+// `match Tok(kind, _) { … }` over every TokenKind variant — H6's
+// substrate-discipline applied at the lexical layer. The variant COUNT
+// lives in SYNTAX's checksum alone, which doc-truth now asserts against
+// the graph's own roster; this header carried a second copy of it and
+// the copy had drifted by one, which is the whole argument against it.
 //
-// Layout-sensitive `~>` disambiguation (DESIGN Ch 2) reads start
-// columns; TNewline is a first-class token because line breaks are
-// semantic in pipe chains (spec 10).
+// LAYOUT IS NEVER READ HERE. This header claimed "layout-sensitive `~>`
+// disambiguation reads start columns" until 2026-08-16, and the artifact
+// refutes it: `~>` is two bytes (126, 62) in the same two-character
+// operator ladder as every other verb, and `~>` has ONE precedence, the
+// loosest (SYNTAX §tee). TNewline is a token because it SEPARATES
+// STATEMENTS, and it is transparent around binops — whitespace is never
+// semantically load-bearing in Mentl (SYNTAX §Governing principles 1).
 //
 // Pure transformation over strings. Errors are structural (unknown
 // chars are skipped — parser routes diagnostics via the position

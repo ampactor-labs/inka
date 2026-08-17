@@ -33,8 +33,8 @@
 // SYNTAX.md §1185 governs the canonical layout. Authority:
 // - SYNTAX.md §342-389 (per-verb layout rules)
 // - SYNTAX.md §1142-1186 (layout enforcement)
-// - protocol_cursor_is_argmax.md
-// - protocol_parse_is_eager_graph_projection.md
+// - PLAN §2 (the cursor as the gradient's argmax)
+// - CLAUDE.md Anchor 2 (parse structurally; never a form-special-case)
 import types
 
 import effects
@@ -314,7 +314,7 @@ fn render_feedback_chain(input, spec) with Format + Memory + GraphRead + !Mutate
 // ─── Multi-source format — map over an AST list ─────────────────────
 //
 // The DELETED format_pair (binary special-case) was erased per
-// `feedback_fully_as_early.md`: callers compose
+// CLAUDE.md Anchor 6: callers compose
 // `map(format_program, asts)` directly. `format_program` itself
 // already maps over top-level statements (line 93); the same stage
 // composes at the multi-source level. Drift 6 erasure.
@@ -323,7 +323,7 @@ fn render_feedback_chain(input, spec) with Format + Memory + GraphRead + !Mutate
 //
 // The formatter's idempotency: format(format(x)) == format(x). The IC
 // loop closes when the rendered form stabilizes (one iteration after
-// initial — canonical IS the fixpoint). Per protocol_oracle_is_ic.md:
+// initial — canonical IS the fixpoint). Per PLAN §2's cached cursor:
 // build IS the <~ loop. Composing format with IC means save-time
 // auto-formatting is just one iteration of this loop.
 fn format_ic_loop(initial_ast) with Format + IC + !Mutate + Memory + Alloc =

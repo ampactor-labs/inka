@@ -46,8 +46,8 @@
 //   first-light.
 //
 // Authority:
-// - DM-dsp-ml-rewrite.md §1.4 (Feedback as `<~`)
-// - LF-feedback-lowering.md §1.4 (state-slot allocation) + §1.5
+// - the dsp/ml walkthrough §1.4 (Feedback as `<~`)
+// - the feedback-lowering walkthrough §1.4 (state-slot allocation) + §1.5
 //   (WAT emission) + §1.6 (body's $fb_prior in scope)
 // - INSIGHTS §"Feedback Is Mentl's Genuine Novelty" (L2092+)
 // - INSIGHTS §"Kernel Closure: All Eight Primitives Structurally

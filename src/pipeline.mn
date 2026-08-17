@@ -663,7 +663,7 @@ fn audit(entry_module) = analyze_fns(entry_module, audit_project)
 // ─── Multi-module compilation — map over a module list ──────────────
 //
 // compile_pair_modules (binary special-case) was erased per
-// `feedback_fully_as_early.md`: the driver's topological-layer walk
+// CLAUDE.md Anchor 6: the driver's topological-layer walk
 // (`Hβ.driver.level-set-par-walk`, layer partition live in driver.mn)
 // composes each dep-independent layer as `map(compile, layer)`; the
 // multi-core half is a `><` fanout under `~> Thread` at the layer
@@ -727,7 +727,7 @@ handler body_context with captures = 0, evidence = [] {
 // Audit implications: a function that doesn't reach fs_* ops proves
 // `with !Filesystem`; audit-driven linker severance drops path_open
 // / fd_close / path_create_directory / path_filestat_get imports
-// from that binary. DESIGN.md 10.3 capability severance realized.
+// from that binary. PLAN §0's capability severance, realized.
 handler wasi_filesystem {
   fs_exists(path) => resume(fs_exists_impl(path)),
   fs_read_file(path) => resume(fs_read_file_impl(path)),

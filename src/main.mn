@@ -1,5 +1,5 @@
-// main.mn — the executable manifest (per EH-entry-handlers.md §1.4
-// + CLI-canonical-vocabulary.md). One file. One function. The `~>`
+// main.mn — the executable manifest (per the entry-handlers walkthrough §1.4
+// + the CLI vocabulary walkthrough). One file. One function. The `~>`
 // chain IS the manifest. What the program has access to is visible
 // on the page. No JSON config. No TOML lockfile. The type system
 // IS the package manager.
@@ -10,7 +10,7 @@
 // module skip is the §4④ image-persist peer
 // (Hβ.persist.module-image-cache), never a side-file serializer.
 //
-// CLI canonical vocabulary (per docs/specs/simulations/CLI-canonical-vocabulary.md):
+// CLI canonical vocabulary (per the CLI vocabulary walkthrough):
 //
 //   mentl                       → bare: the directory PROJECTION on a tty;
 //                                 a pipe/file on fd 0 compiles stdin
@@ -33,7 +33,7 @@
 // subcommand prefix is structural like `git commit` / `cargo build`).
 // Tentacle-named verbs (Trace / Why / Propose / Unlock / Verify /
 // Topology) that shadow at-cursor projections would be drift 38 —
-// see tools/drift-patterns.tsv mode 38 + CLI-canonical-vocabulary.md
+// see tools/drift-patterns.tsv mode 38 + the CLI vocabulary walkthrough
 // §3.3 for the line. `teach` and `query` are project-action peer
 // transports (canonical) for terminal users — those tentacle names
 // have legitimate CLI semantics that the per-cursor projection
@@ -774,7 +774,7 @@ fn line_end_offset(ref text, ls) = {
 //
 // vim / helix / VSCode (with Mentl extension) consume this. The
 // kernel is identical to edit_run; the surface adapter (lsp_adapter)
-// is OUTERMOST. Per MV-LSP-adapter.md substrate.
+// is OUTERMOST. Per the LSP-adapter walkthrough substrate.
 fn serve_run() = {
   // The transport reads a LIVE graph: handle_did_open runs driver_check, whose
   // inference performs Consume / Region / Verify / LookupTy (the analysis ops
@@ -797,7 +797,7 @@ fn mentl_lsp_session() = lsp_session()
 
 // ─── doc_run — documentation projection (F.1 substrate)
 //
-// Per F.1-mentl-doc.md: doc_handler reads the same graph the compile
+// Per the doc-handler walkthrough: doc_handler reads the same graph the compile
 // handler proves on; render handlers (md / html / llms / terminal)
 // project per --target flag; transport handlers emit per stdout /
 // file_io / http_serve.

@@ -3,12 +3,13 @@
 // The oracle's exploration substrate. Replaces the DELETED OneShot
 // enumeration stub (it returned []) with real MultiShot
 // candidate enumeration over the constraint space. This is what
-// makes `??` THE developer's primary write-mode verb per SUBSTRATE.md
-// §VI: with this handler installed, every `??` position invokes
+// makes `??` THE developer's primary write-mode verb (SYNTAX §Partial
+// application — one absence marker across space and time): with this
+// handler installed, every `??` position invokes
 // the proposer chain; the gradient narrows the candidate space; the
 // surviving candidate IS the synthesized residue.
 //
-// Per protocol_oracle_is_ic.md: the oracle's runtime IS IC + Pure-
+// Per PLAN §2's cached cursor: the oracle's runtime IS IC + Pure-
 // over-broader-input + the multi-shot resume primitive composed.
 // This file is that composition; the kernel does the work.
 //
@@ -29,7 +30,7 @@
 //   graph_push_checkpoint / graph_rollback        — src/graph.mn + types.mn
 //   verify_after_apply (the proof gate)           — src/mentl.mn:277-286
 //   Reason chain (per-candidate provenance)       — src/types.mn Reason ADT
-//   MultiShot resume discipline                   — protocol_oracle_is_ic.md
+//   MultiShot resume discipline                   — PLAN §2's cached cursor
 //   Pure-over-broader-input enumeration           — primitive #4 row algebra
 //
 // Drift modes refused per edit site:
@@ -121,7 +122,7 @@ type EnrichedCandidate = EnrichedCandidate({node: Node, origin: ProposerKind, re
 // only proven candidates reach the parent. The chain composes via
 // `~>` per primitive #2 (handlers); same kernel; one effect.
 //
-// Per protocol_mentl_is_not_an_llm.md: dead variants WIDEN the
+// Per PLAN §1: dead variants WIDEN the
 // constraint space at proof-search time, NOT teach Mentl wrong
 // vocabulary. Each proposer emits CANDIDATES; the kernel's
 // verify_after_apply is the proof gate.
@@ -194,7 +195,7 @@ handler synth_default {
 // ─── enumerate_typed — type-directed candidate enumeration ──────────
 //
 // The core of the enumerative proposer. Per the gradient discipline
-// (protocol_oracle_is_ic.md): the candidate space is bounded by the
+// (PLAN §2's cached cursor): the candidate space is bounded by the
 // target type + allowed-effects constraint. Each candidate is one
 // way to inhabit `target_ty` under `allowed_effects`.
 //
@@ -895,7 +896,7 @@ fn synth_holes_for_scheme(scheme) with GraphRead + GraphWrite + Memory + Alloc +
 // constraint addition into a smaller candidate space until the
 // surviving candidate IS the synthesized residue.
 //
-// Per protocol_oracle_is_ic.md: Mentl IS what falls out of IC plus
+// Per PLAN §2's cached cursor: Mentl IS what falls out of IC plus
 // Pure-over-broader-input applied to the speculative-inference loop.
 // The substrate is the residue of composing what was already there.
 //

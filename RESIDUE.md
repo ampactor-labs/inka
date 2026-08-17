@@ -540,6 +540,36 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.gate.sweep-rederives-the-prelude` — MEASURED 2026-08-17, after Morgan
+asked why a frontier sweep does not take two minutes. It takes 4:57.64
+for 368 legs over 149 compiler spawns, at 99% CPU on ONE core, 257s of
+it user time — so it is real work, uniformly spread, not a few legs
+waiting on something.
+THE COST IS NOT INSTANTIATION AND IT IS NOT CONCURRENCY. Two timings
+decide it: the same wheel on a bare stdin fixture with NO lib linked
+runs in 0.040s; on a manifest-linked fixture it runs in 0.754s. Module
+instantiation plus a genuine compile is 40ms. The other ~715ms — 95% —
+is RE-DERIVING THE PRELUDE, and the sweep pays it 149 times before
+looking at a five-line fixture. §8's measurement that the JIT is ~20ms
+already said instantiation was not the cost; this says what is.
+THE PARALLELISM PLAN IS RETRACTED, and it was mine, given to Morgan one
+turn before this measurement. Running 149 redundant derivations eight at
+a time hides the waste behind cores instead of deleting it — the fix
+direction the Carried-Truth Law forbids. It also carried a real hazard:
+`pass()`/`fail()` increment shell counters in the CURRENT shell across
+2707 inline lines, so backgrounding a leg loses its increment and the
+gate reports fewer legs while still printing 0 red. An arbiter that
+silently under-reports is worse than a slow one.
+THE NAMED FIX ALREADY EXISTS: `Hβ.persist.module-image-cache` (band O) —
+the derived graph image persisted and reloaded, keyed by source hash
+plus transitive dep hashes, which is §4④'s persist-as-memcpy applied to
+exactly this. One derivation, 149 loads. The resident session
+(`mentl session`) is the same fact at session scope, and this gate has
+legs TESTING that capability while not using it, which is the sharpest
+form of the finding.
+WHAT NOT TO DO: narrow the sweep. Gating legs on which directory changed
+was proposed and refused the same day (the loop's speed clause); the
+sweep's coverage is not the problem, its re-derivation is.
 `Hβ.march.boot-drifts-behind-clean-landings` — NAMED 2026-08-17, found by
 a repin rather than by a gate, which is the whole point. Every gate in
 the frontier's boot suite reads the PINNED BOOT. A landing whose march

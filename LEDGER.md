@@ -35,6 +35,52 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · ▶▶▶ THE DAG CARRIES WHAT THE WALK RESOLVED — AND THE
+  MEASUREMENT REFUSES TO CONGRATULATE IT (pin ef57c6e6a6 — CLEAN
+  m2 == m3, re-pinned from m2 per march.sh, 411331 lines, census 0; m3
+  leg 17.25s wall · 2236MB peak RSS). The DAG element was the module
+  NAME, so four consumers re-derived everything else BY NAME — the
+  canonical sort key re-resolved the path, the compile fold re-resolved
+  it and re-read the file, the tree scan did both and re-lexed for its
+  imports, and `driver_module_in_dag_deps` did all three a third time.
+  Path resolution is up to five `fs_exists` probes, so a five-module
+  prelude paid dozens of stat calls and read and lexed every file twice
+  in one compile: the canonical re-derivation, a name followed where the
+  walk had already drawn the edge. The element is now
+  `(name, path, source, imports)` behind four projections,
+  `driver_module_in_dag_deps` is deleted whole, `driver_module_order_key`
+  takes the carried path and loses `Filesystem`, and a missing module
+  carries `None` rather than a `""` sentinel a consumer has to recognize.
+  ▶ THE PROBE THAT NAMED IT, and what it actually said. Banked as the
+  next probe last pin: hold the DAG identical and remove only the
+  discovery read+lex. Measured 0.46s against 0.74s — the discovery pass
+  is 0.28s, 38% of the floor. But that pass reads COLD, and the read this
+  landing deleted is the SECOND one, warm in page cache. Deleting the
+  cheap copy while keeping the expensive one, plus whatever the new
+  element costs, measures 0.74s → 0.78s: a 5% REGRESSION, five settled
+  reads, NOT isolated to a cause. Sweep wall unchanged at 297.64s, 368/0.
+  ▶ THE FORM STAYS, per CLAUDE.md ⟐ — a just-built ultimate form that
+  fails is the instrument finding the next non-ultimate fundamental, and
+  retreating from it because a stopwatch disagreed with a law is the
+  hedge the anchors forbid. §11's own test is the arbiter and it cuts
+  this way: a change justified by a NUMBER that the number refutes is
+  wrong, but this one is justified by the Carried-Truth Law and deletes a
+  whole function to obey it. What the numbers now name precisely is the
+  next build: the floor is the LEX, performed twice on every module in
+  one compile, and ~0.28s of the 0.74s is the copy nobody needs. The
+  walk lexes; the judging pass concatenates the sources and lexes the
+  same bytes again. Carrying TOKENS instead of source deletes that, and
+  the element this pin built is what carries them — its DEP is the span
+  coordinate space, because per-module token streams are file-local
+  while the weave is concatenation-relative (`driver_entry_with_ranges`
+  already computes exactly that mapping).
+  ▶ THE QUIET GATE REFUSED ALL FIVE `ref` MARKERS this landing authored,
+  and dropping them left the emit BYTE-IDENTICAL — same sha, same 411331
+  lines — so the inference held every borrow already and the annotations
+  were noise. That is twice in two pins, and it is §4⑤'s bar measured
+  rather than hoped: if the developer has to think about ownership the
+  inference failed, and it has not.
+
 - 2026-08-17 · ▶▶▶ THE DEP WALK STOPS PARSING, AND THE THEORY THAT SENT
   IT THERE DIES (pin b50cdd0c55 — CLEAN m2 == m3, re-pinned from m2 per
   march.sh, 410658 lines, census 0; m3 leg 15.78s wall · 2249MB peak

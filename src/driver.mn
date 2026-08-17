@@ -115,6 +115,19 @@ fn driver_collect_dag(ref entry_module) with Memory + Alloc + Filesystem + Inter
 
 // collected is a (buf, count) pair threaded through DAG traversal.
 // Post-order: append self AFTER visiting deps.
+//
+// THE ELEMENT CARRIES WHAT THE WALK RESOLVED — (name, path, source, imports).
+// It used to be the name alone, so every consumer downstream re-derived the
+// rest BY NAME: driver_canonical_order re-resolved the path for its sort key,
+// the compile fold re-resolved it and re-read the file, the tree scan did both
+// and re-lexed for the imports, and driver_module_in_dag_deps did all three
+// again. Path resolution is up to five fs_exists probes, so a five-module
+// prelude paid dozens of stat calls and read and lexed every file twice in one
+// compile — the canonical re-derivation, following a name instead of the edge
+// the walk had already drawn. Measured at the probe that named this: removing
+// the second read+lex alone took `fn main() = 7` from 0.74s to 0.46s.
+// A missing module carries None, not "" — the absence is the ADT's, never a
+// sentinel the consumer has to recognize.
 // `!Diagnostic` is MEASURED, not asserted: the walk's only reporting reach was
 // the discovery parse, and the header scan absorbs lex's own under diag_quiet.
 // The absence is what the comment below already claimed in prose — the walk
@@ -132,7 +145,7 @@ fn driver_collect_visit(ref module_name, own collected, own visited) with Memory
     match collected {
       (buf, count) => {
         let extended = list_extend_to(buf, count + 1)
-        let written = list_set(extended, count, module_name)
+        let written = list_set(extended, count, (module_name, path, None, []))
         ((written, count + 1), visited2)
       },
     }
@@ -144,12 +157,30 @@ fn driver_collect_visit(ref module_name, own collected, own visited) with Memory
       (after_deps_collected, after_deps_visited) => match after_deps_collected {
         (buf, count) => {
           let extended = list_extend_to(buf, count + 1)
-          let written = list_set(extended, count, module_name)
+          let written = list_set(extended, count, (module_name, path, Some(source), imports))
           ((written, count + 1), after_deps_visited)
         },
       },
     }
   }
+}
+
+// The DAG element's four projections — one home each, so a consumer reads the
+// field instead of destructuring a positional quad at nine sites.
+fn module_name_of(entry) with Pure = match entry {
+  (n, _p, _s, _i) => n,
+}
+
+fn module_path_of(entry) with Pure = match entry {
+  (_n, p, _s, _i) => p,
+}
+
+fn module_source_of(entry) with Pure = match entry {
+  (_n, _p, s, _i) => s,
+}
+
+fn module_imports_of(entry) with Pure = match entry {
+  (_n, _p, _s, i) => i,
 }
 
 fn driver_collect_visit_list(ref modules, own collected, own visited) with Memory + Alloc + Filesystem + Intern + GraphRead + !Diagnostic = fold(
@@ -258,8 +289,8 @@ fn driver_check(ref entry_module) with Memory + Alloc + ImageAlloc + Filesystem 
 // Hβ.infer.order-independent-verdicts). One canon, one truth: the DAG
 // discovers the SET; the sort fixes the WEAVE to the blob's own order, so
 // the two build paths read one input.
-fn driver_canonical_order(modules) with Memory + Alloc + Filesystem = {
-  let keyed = map((m) => (driver_module_order_key(m), m), modules)
+fn driver_canonical_order(modules) with Memory + Alloc = {
+  let keyed = map((m) => (driver_module_order_key(module_path_of(m)), m), modules)
   map(
     (pair) => match pair {
       (_, m) => m,
@@ -273,10 +304,8 @@ fn driver_canonical_order(modules) with Memory + Alloc + Filesystem = {
 // The rank reads the src/ SEGMENT, not a position-0 prefix: under an
 // installed mount the resolver returns /mentl-home/src/..., and a prefix
 // test would re-rank every src module as lib (a mount-dependent weave).
-fn driver_module_order_key(m) with Memory + Alloc + Filesystem = {
-  let p = driver_module_path(m)
+fn driver_module_order_key(p) with Memory + Alloc =
   if str_contains(p, "src/") { "0{p}" } else { "1{p}" }
-}
 
 fn driver_sort_keyed(pairs) with Memory + Alloc =
   fold([], (acc, p) => driver_insert_keyed(p, acc), pairs)
@@ -367,20 +396,24 @@ fn driver_entry_with_ranges(ref entry_module) with Memory + Alloc + ImageAlloc +
   let modules = driver_canonical_order(driver_collect_dag(entry_module))
   match fold(
     ("", 1, []),
-    (acc, m) => match acc {
+    (acc, entry) => match acc {
       (src_acc, line_acc, r_acc) => {
-        let p = driver_module_path(m)
+        let m = module_name_of(entry)
+        let p = module_path_of(entry)
         // A module the resolver cannot find is REPORTED, never skipped. The
         // `else` that once dropped it silently made `mentl check` say
         // E_MissingModule while `mentl compile` on the same source said
         // nothing and shipped WAT — two verbs, two answers, one truth.
-        if fs_exists(p) {
-          let text = fs_read_file(p)
-          let nlines = count_lines(text) + 1
-          ("{src_acc}{text}\n", line_acc + nlines, push(r_acc, (m, p, line_acc, nlines)))
-        } else {
-          report(EMissingModule(m, p, span_zero()))
-          acc
+        // The absence is the walk's own None, not a second fs_exists probe.
+        match module_source_of(entry) {
+          Some(text) => {
+            let nlines = count_lines(text) + 1
+            ("{src_acc}{text}\n", line_acc + nlines, push(r_acc, (m, p, line_acc, nlines)))
+          },
+          None => {
+            report(EMissingModule(m, p, span_zero()))
+            acc
+          },
         }
       },
     },
@@ -546,15 +579,11 @@ fn warm_program() with Memory + Alloc = list_index(warm_asts, 0) |> map((pr) => 
 // were three passes over the same files — the eight-interrogations cut).
 fn driver_tree_scan(ref entry_module) with Memory + Alloc + Filesystem + Intern + GraphRead = {
   let modules = driver_canonical_order(driver_collect_dag(entry_module))
+  let names = map(module_name_of, modules)
   map(
-    (m) => {
-      let p = driver_module_path(m)
-      if fs_exists(p) {
-        let text = fs_read_file(p)
-        (m, str_hash(text), filter((d) => contains_module(modules, d), driver_extract_imports(text)))
-      } else {
-        (m, 0, [])
-      }
+    (entry) => match module_source_of(entry) {
+      Some(text) => (module_name_of(entry), str_hash(text), filter((d) => contains_module(names, d), module_imports_of(entry))),
+      None => (module_name_of(entry), 0, []),
     },
     modules
   )
@@ -807,22 +836,18 @@ fn driver_check_entry(ref entry_module) with Memory + Alloc + ImageAlloc + Files
 // In-DAG: dep names that appear among the collected modules (filters
 // out missing-module fallbacks that have no source). Returns
 // `[(module_name, [dep_name])]` in post-order.
+// Each module's imports come from the walk that already read them; the
+// in-DAG filter drops out-of-DAG names (missing modules, vocabulary aliases
+// the driver doesn't process), which contribute nothing to the layer
+// partition's wait condition. A missing module carries no imports, which is
+// the same empty list its own fs_exists test used to produce.
 fn driver_collect_dag_with_deps(ref entry_module) with Memory + Alloc + Filesystem + Intern + GraphRead = {
   let modules = driver_collect_dag(entry_module)
-  map((m) => (m, driver_module_in_dag_deps(m, modules)), modules)
-}
-
-// Extract the imports of one module, then filter to the in-DAG set.
-// Out-of-DAG names (missing modules, vocabulary aliases the driver doesn't
-// process) contribute nothing to the layer-partition's wait condition.
-fn driver_module_in_dag_deps(ref module_name, ref dag_modules) with Memory + Alloc + Filesystem + Intern + GraphRead = {
-  let path = driver_module_path(module_name)
-  if !fs_exists(path) {
-    []
-  } else {
-    let source = fs_read_file(path)
-    source |> driver_extract_imports |> filter((dep) => contains_module(dag_modules, dep))
-  }
+  let names = map(module_name_of, modules)
+  map(
+    (entry) => (module_name_of(entry), filter((dep) => contains_module(names, dep), module_imports_of(entry))),
+    modules
+  )
 }
 
 fn contains_module(ref modules: [String], ref target: String) with Memory + Alloc =

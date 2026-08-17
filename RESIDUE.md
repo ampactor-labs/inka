@@ -630,12 +630,35 @@ parse that happens anyway. What the peer still promises is untouched and
 is now the whole of it: a demanded module is READ, LEXED, PARSED and
 JUDGED, and an undemanded one is none of those — which is exactly the
 cost the seed pays five times for `fn main() = 7`.
-NAMED NEXT PROBE: split lex from file-read on the seed path. Make the
-discovery pass return nothing at all (a throwaway probe — it breaks the
-DAG and is not a landing), rebuild m2, and read the delta: that prices
-the discovery lex whole. What remains after subtracting it is the real
-pass plus I/O, and the first of those two numbers to dominate names the
-build. Do not design the demand link further until one of them does.
+THE PROBE RAN (2026-08-17, pin ef57c6e6a6) and the floor is the LEX.
+Sharpened from its banked form, which would have collapsed the DAG
+instead of isolating anything: the DAG was held IDENTICAL (the prelude's
+four runtime imports supplied as a literal) and only the discovery
+read+lex removed. 0.46s against 0.74s — the discovery pass is 0.28s,
+38% of the floor. Five small files cannot be 0.28s of I/O, so that is
+lex, and the judging pass lexes the same bytes AGAIN after concatenating
+the sources. THE FLOOR IS ONE LEX PERFORMED TWICE.
+WHAT THE FIRST FIX GOT WRONG, recorded because the shape recurs: the
+landing that followed carried the SOURCE through the DAG element, which
+deletes the second READ, three path re-resolutions and one re-lex — all
+real re-derivations — and measured 0.74s → 0.78s, a 5% REGRESSION over
+five settled reads. The deleted read was warm in page cache; the probe's
+0.28s was the COLD first pass. Deleting the cheap copy of a doubled
+operation while keeping the expensive one buys nothing and costs
+whatever the new carrier costs. The regression is not isolated to a
+cause and is not claimed to be understood.
+THE BUILD, now named by measurement rather than theory: carry TOKENS,
+not source. The walk lexes each module once; the judging pass takes
+those streams instead of concatenating source and lexing again. The
+element `(name, path, source, imports)` is already in place to carry
+them. THE DEP is the span coordinate space and it is real: per-module
+token streams carry FILE-LOCAL spans while the weave is
+concatenation-relative, so the streams must be re-based as they join —
+which is the mapping `driver_entry_with_ranges` already computes for
+exactly these modules. Build that re-basing first, against the ranges
+the fold already produces, and the token carry is a swap behind it.
+Expected saving is the 0.28s the probe measured; a landing that does not
+show it has not done this.
 ISOLATED TO ONE LINE, single-variable (2026-08-17). Same wheel, same
 harness, same program, same path form; the only thing varied is whether
 `driver_collect_dag`'s prelude seed can resolve. With the mentl-home

@@ -714,11 +714,26 @@ sites` — the `refs of` facet projects constructor APPLICATIONS only, so
 infer and lower both destructure it. The trace nearly banked "infer
 never sees PFeedback" on that reading; "who pattern-matches this
 constructor" has no projection, and the raw text channel is the only
-answer today. (2) The underscore-retain census shape sits at a ratcheted
-ZERO on the wheel link while this `_row` discards a load-bearing proven
-fact — so the detector does not reach destructure-position underscores
-in a `match` pattern. An oracle-blind class in a shape that reports
-itself clean.
+answer today. (2) RETRACTED 2026-08-17, by reading the detector it accused. The claim
+here was that the underscore-retain census shape is blind, sitting at a
+ratcheted ZERO while `_row` discarded a proven fact. It is not blind:
+`CsUnderscoreRetain` IS drift mode 15 with a precise definition — a LET
+whose binder keeps a leading underscore, an unused value renamed instead
+of deleted — and it correctly reports zero because the wheel has no such
+let. A destructure-position `_name` is a DIFFERENT shape, and the
+extension that suggested itself is dead too: 293 underscore-named
+binders sit in destructure position across src/ (722 underscore-named
+identifiers overall), and they are overwhelmingly correct — naming a
+field `_spec` or `_h` documents what is being skipped and reads BETTER
+than a bare `_`. A shape firing 293 times on good code is a convention,
+not a drift.
+WHAT THE `_row` BUG ACTUALLY WAS: not "an underscore appeared" but "this
+consumer needed that fact and dropped it" — semantic, undecidable by any
+name-shape detector, and provably so by those 293. The class belongs to
+`Hβ.audit.carried-truth-projection`, which decides it the only way it
+can be decided: by reading whether the GRAPH PROVES a fact the consumer
+then failed to use. That is the audit's whole reason to exist, and this
+is a worked instance of why a text detector cannot stand in for it.
 
 `Hβ.parser.statement-span-at-dispatch` — NAMED 2026-08-16 at Morgan's
 question, "is a helper a band-aid or ultimate design at the foundational

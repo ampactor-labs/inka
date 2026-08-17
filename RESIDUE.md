@@ -596,6 +596,37 @@ way to memoise work that should never happen.
 The peer's name stays `Hβ.persist.module-image-cache` for the caching
 half; this half is `Hβ.driver.link-is-reachability` and it is the one to
 build first.
+ISOLATED TO ONE LINE, single-variable (2026-08-17). Same wheel, same
+harness, same program, same path form; the only thing varied is whether
+`driver_collect_dag`'s prelude seed can resolve. With the mentl-home
+mapping: 0.71s. Without it: 0.03s. THE SEED IS THE WHOLE FLOOR — 0.68 of
+0.71s — and 149 × 0.68 ≈ 101s of the sweep's 257s CPU.
+TWO EARLIER READINGS WERE CONFOUNDED and are corrected here. The first
+compared a DIRECT wasmtime invocation (stdin, 0.03s) against the SHIM
+(path, 0.71s) — two harnesses, not two link paths. Re-measured on one
+harness, the shim costs nothing (direct-path 0.72s, shim-path 0.72s), so
+the conclusion survived the confound but the reasoning had not earned it.
+The second ran from a lib-less directory expecting the seed to skip; it
+did not, because MENTL_HOME still resolved, and the flat 0.75s there
+proved nothing either way. Removing the resolution ROOT is what isolates
+it.
+WRITERS ENUMERATED: one — `driver_collect_dag` (driver.mn:97), which
+seeds `"prelude"` before the entry whenever `fs_exists` finds it, and the
+DAG then collects and parses prelude plus its whole transitive runtime
+floor. The seed is load-bearing for CORRECTNESS and its comment says why:
+every module speaks the prelude's vocabulary (map / fold / Option /
+FeedbackSpec) with no import line, and without the seed a compile emits a
+module that cannot assemble. So the fix may not delete the seed; it must
+make it demand-driven.
+THE DESIGN, and it is the arc the wheel already ran one layer down: parse
+the ENTRY first (0.03s buys it), take its free-name set, and pull only
+the prelude decls that provide those names, transitively. That needs a
+name→decl index over the prelude that does NOT require parsing bodies —
+a header-only scan — which is the same shape as lower's demand worklist
+where a name popping from the frontier constructs its decl. The retry-on-
+miss alternative (link bare, re-link on E_MissingVariable) is rejected:
+it would halve the cost for programs using nothing and DOUBLE it for
+every program that touches the prelude, which is most of the sweep.
 `Hβ.march.boot-drifts-behind-clean-landings` — NAMED 2026-08-17, found by
 a repin rather than by a gate, which is the whole point. Every gate in
 the frontier's boot suite reads the PINNED BOOT. A landing whose march

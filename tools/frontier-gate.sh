@@ -2619,6 +2619,27 @@ for i in "${!compilers[@]}"; do
     fail "modules facet (got: $(printf '%s' "$md_out" | head -1))"
   fi
 
+  # ─── The cost facet, AND the prelude-floor ratchet it makes possible
+  # (`cost` — modules linked, source lines processed, nodes minted, all
+  # graph reads). A wall clock is a host fact that varies per run and can
+  # never be ratcheted; these three are identical every time, so the
+  # floor a TRIVIAL program pays becomes a contract. The fixture is a
+  # bare `fn main() = 7`-class module: whatever it costs is the prelude
+  # vocabulary the medium processes to answer nothing, and that number
+  # may only FALL — Hβ.driver.link-is-reachability is what lowers it.
+  # A RISE means the medium started processing more source to answer the
+  # same trivial question. Born RED 2026-08-17 (unknown-query on the
+  # prior boot); the ceiling was seen RED by setting it under the
+  # measured 6307.
+  cost_ceiling=6400
+  ct_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-bare-floor.mn" "cost" 2>/dev/null)
+  ct_lines=$(printf '%s' "$ct_out" | grep -o '[0-9]* source line' | grep -o '[0-9]*' | head -1)
+  if [ -n "$ct_lines" ] && [ "$ct_lines" -le "$cost_ceiling" ]; then
+    pass "cost facet + prelude floor: $ct_lines source line(s) within the $cost_ceiling ceiling (monotone DOWN)"
+  else
+    fail "prelude floor (got: $(printf '%s' "$ct_out" | head -1), ceiling $cost_ceiling)"
+  fi
+
   # ─── The relocation pins (Hβ.lower.lowering-is-a-column, the demand
   # worklist's written decisions — each seen red by inverting its own
   # assertion against the base wat before the leg landed):

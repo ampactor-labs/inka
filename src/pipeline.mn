@@ -1175,6 +1175,7 @@ fn render_query_result(result) = match result {
   // rendered located so the seed is inspectable at the CLI.
   "→ {int_to_str(len(spans))} judged decl(s){render_ref_spans(spans)}",
   QRModules(paths) => "→ {int_to_str(len(paths))} module(s) in the weave\n  {str_join_lines(paths)}",
+  QRCost(mods, lines, nodes) => "→ {int_to_str(mods)} module(s) · {int_to_str(lines)} source line(s) · {int_to_str(nodes)} node(s) minted",
   QRWhere(lines, sites) => "→ {str_join_lines(lines)}{render_where_sites(sites)}",
   QRError(msg) => "error: {msg}",
 }
@@ -1220,6 +1221,7 @@ type QueryVerb
   | QVDecls
   | QVVariants
   | QVModules
+  | QVCost
   | QVUnknownVerb
 
 fn classify_query_verb(w: String) with Pure = if w == "type" {
@@ -1250,6 +1252,8 @@ fn classify_query_verb(w: String) with Pure = if w == "type" {
   QVVariants
 } else if w == "modules" {
   QVModules
+} else if w == "cost" {
+  QVCost
 } else {
   QVUnknownVerb
 }
@@ -1288,6 +1292,7 @@ fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
   QVDecls => QDecls,
   QVVariants => QVariants(arg),
   QVModules => QModules,
+  QVCost => QCost,
   QVUnknownVerb => QUnknown(raw),
 }
 

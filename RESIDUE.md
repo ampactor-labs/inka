@@ -540,9 +540,45 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.perf.compile-is-quadratic-in-modules` — MEASURED 2026-08-17, pin
-86ddf00ac4, and it supersedes the four-pin hunt for a 0.28s constant in
-the five-module prelude. Cost tracks MODULE COUNT, not entry size:
+`Hβ.perf.compile-is-linear-in-source` — the corrected law, 2026-08-17.
+▶ RETRACTION FIRST. This entry was written the same day as
+`Hβ.perf.compile-is-quadratic-in-modules`, asserting a fitted `0.062·N +
+0.0064·N²` and convicting the env. THAT IS REFUTED and the name is
+retired. The fit had four points spanning N=7..22 and it OVERFIT: it
+predicts `mentl check src/main.mn` (N=54) at 22.0s, and the measurement
+is 12.05s. The banked probe that killed it is the one that entry itself
+named — separate module COUNT from total DAG LINES — run with the
+`modules` facet supplying each entry's set.
+▶ THE MEASUREMENT, eight entries, N=6..54, DAG lines 6.3k..58k:
+canon N=7 6,299 lines 0.77s · types N=6 6,282 0.78s · effects N=7 7,708
+1.00s · parser N=13 14,156 1.91s · infer N=18 25,534 3.67s · driver N=20
+26,566 4.00s · lower N=22 32,766 4.78s · main N=54 57,968 12.05s.
+Across a 9× size range cost-per-LINE moves 122 → 208 µs (1.7×) while
+cost-per-MODULE moves 0.110 → 0.223 s (2.0×). Lines is the better
+predictor and the residual drift is ~O(n^1.06). THE COMPILE IS LINEAR IN
+THE SOURCE IT PROCESSES, at roughly 150µs a line. There is no pathology
+here, and four pins of floor-hunting were looking for one.
+▶ WHAT THAT ACTUALLY INDICTS, which is not the constant: a bare
+`fn main() = 7` costs 0.77s because the prelude plus runtime floor is
+6,299 LINES, and the medium processes all of them to compile one. The
+frontier sweep pays that 149 times — ~940k lines of vocabulary
+re-derived for fixtures that reference a handful of names. So the levers
+are the two already named, in this order: `Hβ.driver.link-is-reachability`
+(don't judge prelude decls nothing demands — at decl granularity a bare
+program needs tens of lines, not 6,299) and
+`Hβ.persist.module-image-cache` / the resident session (don't re-derive
+the identical vocabulary across 149 processes). The per-line constant is
+the THIRD lever and it is where `Hβ.perf.name-is-handle` lives; it is
+worth the least of the three and must not be taken first.
+▶ THE METHOD LESSON, recorded because it recurs: four points over a
+3× range fitted a curve that a 7.7× range destroyed. §5.O already says
+measure rather than read code; this adds that a fit is a hypothesis
+until it predicts a point OUTSIDE the range it was fitted on. The
+superseded entry's own text below is kept as the refuted claim.
+
+`Hβ.perf.compile-is-quadratic-in-modules` — REFUTED 2026-08-17 by the
+probe it named; see the corrected entry above. Retained as the record of
+what was claimed: cost tracks MODULE COUNT, not entry size:
 17-line canon (7 modules) 0.75s · 3594-line parser (13) 1.82s · 890-line
 driver (20) 3.47s · 6559-line lower (22) 4.48s — driver costs nearly
 twice parser on a quarter of the lines. Per-module cost RISES with the
@@ -573,7 +609,19 @@ refusing a hand read, the answer was hand-rolled in shell that session,
 and the verb replaced it the same day with its count verified against
 that walk (canon 7, lower 22, both matching).
 
-`Hβ.query.cost-facet` — a verb reports no cost, so every timing of one is
+`Hβ.query.cost-facet` — RESOLVED 2026-08-17, pin 42a4cc445d, and it
+landed DETERMINISTIC rather than as the wall-clock report this entry
+originally asked for. `mentl query <file> "cost"` reports modules linked,
+source lines processed and nodes minted, all graph reads. The correction
+is the useful part and it generalises: a host measurement can only ever
+be REPORTED, because it varies per run; a graph fact can be RATCHETED.
+So the facet immediately bought a contract a timer never could — the
+frontier's prelude-floor leg, holding a bare program's 6,304 source
+lines under a ceiling that may only fall. The wall-clock half stays
+unbuilt and unmissed; if a run-time report is ever wanted it is a
+separate, unratchetable thing and should be named as such.
+
+`Hβ.query.cost-facet` (original text) — a verb reports no cost, so every timing of one is
 a scaffold read. Found 2026-08-17 by the mentl-first hook refusing a
 `/usr/bin/time mentl check` and having no projection to offer instead,
 which is the hook working: the absence IS the finding. The march already

@@ -96,6 +96,13 @@ type Question
   // shell closure loop over `grep '^import'`, re-deriving by name what the
   // graph holds by edge.
   | QModules
+  // "cost" — what this question cost the medium, in the medium's own
+  // facts: modules linked, source lines processed, nodes minted. A wall
+  // clock is a HOST fact and varies per run, so it can be reported and
+  // never ratcheted; these three are graph reads and are identical every
+  // time, so a gate can refuse a landing that makes the medium process
+  // more source to answer the same question.
+  | QCost
   | QUnknown(String)
 
 type QueryResult
@@ -119,6 +126,8 @@ type QueryResult
   | QRDecls([Span])
   // the weave's module paths, in weave order (count = len)
   | QRModules([String])
+  // modules linked, source lines processed, nodes minted
+  | QRCost(Int, Int, Int)
   // the derived badges (plain lines) + fanout sites as (schedule, span)
   | QRWhere([String], [(String, Span)])
   | QRError(String)
@@ -249,6 +258,7 @@ handler query_default {
     QWhere(name) => resume(where_badges(name)),
     QVariants(tname) => resume(variants_of(tname)),
     QModules => resume(QRModules(module_paths())),
+    QCost => resume(QRCost(len(module_cells()), weave_line_extent(), graph_next())),
     QUnknown(q) => resume(QRError("unknown query: {q}")),
   },
 }

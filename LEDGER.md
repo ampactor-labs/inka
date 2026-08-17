@@ -35,6 +35,54 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · ▶▶▶ COST IS A GRAPH READ, SO IT CAN BE RATCHETED — AND
+  THE PREVIOUS PIN'S LAW IS RETRACTED (pin 42a4cc445d — CLEAN m2 == m3,
+  re-pinned from m2 per march.sh, 412024 lines, census 0; m3 leg 18.68s
+  wall · 2238MB peak RSS).
+  ▶ THE RETRACTION FIRST, because the previous entry asserts it. That
+  pin claimed THE COMPILE IS QUADRATIC IN MODULE COUNT, with a fitted
+  `0.062·N + 0.0064·N²` and the env convicted. Its own named probe
+  refuted it. Eight entries, N=6..54, DAG lines 6.3k..58k: canon 7 /
+  6,299 / 0.77s · types 6 / 6,282 / 0.78s · effects 7 / 7,708 / 1.00s ·
+  parser 13 / 14,156 / 1.91s · infer 18 / 25,534 / 3.67s · driver 20 /
+  26,566 / 4.00s · lower 22 / 32,766 / 4.78s · main 54 / 57,968 /
+  12.05s. Cost-per-LINE moves 122 → 208 µs (1.7×) where cost-per-MODULE
+  moves 0.110 → 0.223 s (2.0×), so lines is the better predictor and the
+  residual is ~O(n^1.06). The quadratic predicted `main` at 22.0s. THE
+  COMPILE IS LINEAR IN THE SOURCE IT PROCESSES, ~150µs a line. The
+  method lesson is the durable half: four points over a 3× range fitted
+  a curve a 7.7× range destroyed — a fit is a hypothesis until it
+  predicts a point OUTSIDE the range it was fitted on, and §5.O's
+  measure-don't-read-code law now carries that corollary.
+  ▶ THE BUILD. `mentl query <file> "cost"` reports modules linked,
+  source lines processed, and nodes minted — the weave's own NModule
+  cells and `graph_next()`, never a clock. That distinction is the
+  point: a wall time is a HOST fact that varies per run, so it can be
+  reported and never ratcheted, while these three are identical every
+  run. `module_paths` from the previous pin became `module_cells`
+  (path + span) with paths and the line extent as two projections of
+  ONE walk, rather than a second walk for the second fact.
+  ▶ WHAT IT MAKES POSSIBLE, which is why it was worth building: the
+  frontier now holds the PRELUDE FLOOR as a contract.
+  tests/frontier/mn-bare-floor.mn is a bare `fn main() = 7` whose whole
+  cost — 7 modules, 6,304 source lines — is vocabulary the medium
+  processes to answer nothing, and the leg refuses a RISE. Monotone
+  down; what lowers it is `Hβ.driver.link-is-reachability`. Both halves
+  seen RED: unknown-query against the prior boot, and the real 6,304
+  against a deliberately under-set ceiling.
+  ▶ THE FACET CONFIRMS THE CORRECTED LAW from an independent channel:
+  10.7 · 11.7 · 11.7 · 12.2 nodes minted per source line across the same
+  9× range. Node minting is linear in source, measured deterministically
+  rather than through a clock.
+  ▶ AND IT REFRAMES THE FLOOR HUNT'S TARGET. Five pins chased a constant
+  inside the prelude. The number that matters is that a program of ONE
+  DECLARATION costs 6,304 lines of vocabulary, and the sweep pays it 149
+  times — ~940k lines re-derived for fixtures naming a handful of names.
+  The levers, in order: demand-link the decls a program actually uses,
+  then stop re-deriving identical vocabulary across processes
+  (`Hβ.persist.module-image-cache` / the resident session). The per-line
+  constant is third and worth least.
+
 - 2026-08-17 · ▶▶▶ THE MEDIUM CAN SHOW ITS OWN DAG, AND THE HAND WALK IT
   RETIRED FOUND THE REAL LAW (pin 86ddf00ac4 — CLEAN m2 == m3, re-pinned
   from m2 per march.sh, 411660 lines, census 0; m3 leg 17.76s wall ·

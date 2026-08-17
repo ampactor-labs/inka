@@ -2602,6 +2602,23 @@ for i in "${!compilers[@]}"; do
     fail "variants facet (got: $(printf '%s' "$vr_out" | head -1))"
   fi
 
+  # ─── The module-set facet (`modules` — the DAG the driver proves on
+  # every invocation and could show nobody; answering "which modules does
+  # this entry pull" meant a shell transitive-closure loop over grep
+  # '^import'). It reads the weave's own NModule cells, so the count is
+  # the judged set, not a re-walk of the filesystem. Born RED 2026-08-17
+  # (the prior boot answered unknown-query). The fixture imports nothing
+  # of its own, so the answer is the prelude floor plus itself, and the
+  # named members pin that it is the real set and not a bare number.
+  md_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-usage-grade.mn" "modules" 2>/dev/null)
+  if printf '%s' "$md_out" | grep -q "module(s) in the weave" \
+     && printf '%s' "$md_out" | grep -q "prelude" \
+     && printf '%s' "$md_out" | grep -q "runtime/threading"; then
+    pass "modules facet: the weave's module set projects ($(printf '%s' "$md_out" | grep -o '[0-9]* module(s)' | head -1))"
+  else
+    fail "modules facet (got: $(printf '%s' "$md_out" | head -1))"
+  fi
+
   # ─── The relocation pins (Hβ.lower.lowering-is-a-column, the demand
   # worklist's written decisions — each seen red by inverting its own
   # assertion against the base wat before the leg landed):

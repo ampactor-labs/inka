@@ -1304,6 +1304,30 @@ fn scan_for_enclosing_module(target, i, n) with GraphRead + !Mutate = if i >= n 
   }
 }
 
+// Every module in this weave, in weave order — the same NModule cells
+// module_path_of_span narrows by containment, read whole instead.
+//
+// The DAG is a fact the driver PROVES on every invocation and then could not
+// show anyone: answering "which modules does this entry pull?" meant a shell
+// transitive-closure loop over `grep '^import'`, re-deriving by name what the
+// graph holds by edge. That hand walk is what this projection retires, and it
+// is a read of the weave, never a second walk of the filesystem.
+fn module_paths() with Memory + Alloc + GraphRead + !Mutate = {
+  let snapshot = graph_snapshot()
+  match snapshot {
+    Graph(next, _spans) => collect_module_paths(0, next),
+  }
+}
+
+fn collect_module_paths(i, n) with Memory + Alloc + GraphRead + !Mutate = if i >= n {
+  []
+} else {
+  match graph_node_body(i) {
+    NModule(m) => [m.path] ++ collect_module_paths(i + 1, n),
+    _ => collect_module_paths(i + 1, n),
+  }
+}
+
 // The birth-span read is O(1) BY HANDLE — the spans spine column
 // (§5.O layer 2 landed at this read). The scan it replaces rode the
 // generic find, whose iterate FLATTENS the whole (span, handle) log per

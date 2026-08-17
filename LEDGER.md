@@ -35,6 +35,45 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · ▶▶▶ THE MEDIUM CAN SHOW ITS OWN DAG, AND THE HAND WALK IT
+  RETIRED FOUND THE REAL LAW (pin 86ddf00ac4 — CLEAN m2 == m3, re-pinned
+  from m2 per march.sh, 411660 lines, census 0; m3 leg 17.76s wall ·
+  2225MB peak RSS). `mentl query <file> "modules"` projects the weave's
+  module set from the NModule cells `driver_entry_with_ranges` already
+  mints per range — the same cells `module_path_of_span` narrows by
+  containment, read whole instead. A graph read, not a second walk of
+  the filesystem. It was built because this iteration NEEDED the answer
+  and could not get it: the driver proves the DAG on every invocation
+  and could show it to nobody, so the question "which modules does this
+  entry pull" was answered by a hand-written shell transitive-closure
+  loop over `grep '^import'` — the confession the self-build ratchet
+  exists to convert. Facet born RED against the prior pin (`error:
+  unknown query: modules`); the frontier leg pins the count AND two
+  named members, so it cannot pass on a number alone.
+  ▶ WHAT THE HAND WALK MEASURED, which is worth more than the verb: cost
+  tracks MODULE COUNT, not entry size, and not linearly. 17-line canon
+  (7 modules) 0.75s · 3594-line parser (13) 1.82s · 890-line driver (20)
+  3.47s · 6559-line lower (22) 4.48s — note driver costs nearly twice
+  parser on a quarter of the lines. Per-module cost RISES with the
+  count: 0.107 · 0.140 · 0.174 · 0.204 s/module. Fitting `a·N + b·N²` on
+  the endpoints gives ≈ `0.062·N + 0.0064·N²`, which predicts parser at
+  1.89s against 1.82s measured. THE COMPILE IS QUADRATIC IN MODULE
+  COUNT, and at 22 modules the N² term is ~69% of the total.
+  ▶ THE MECHANISM IS STRUCTURAL AND ALREADY NAMED: `driver_check_entry`
+  runs `infer_program_converged` once per module, each against the
+  shared env every prior module installed into. Env grows with N, so N
+  lookups over an O(env) read is N². That is §5.O's `env_find_flat`
+  class exactly, whose fix is `Hβ.perf.name-is-handle` (Phase 9.3) — a
+  name interned once at lex, every compare an `i32.eq`, every table
+  handle-keyed. This measurement is the first time the wheel's own
+  per-invocation cost has been tied to that peer with a fitted curve
+  rather than a code reading, which is the §5.O lesson (the 8-agent
+  code-reading diagnosis missed the real dominant cost; perf found it).
+  ▶ THE FLOOR HUNT ENDS HERE AND IS SUPERSEDED. Four pins chased 0.28s
+  in a five-module prelude — not the parse, not the second read, not the
+  lex, not the fold. The quadratic is the larger fact and it subsumes
+  the search: the constant per module stops mattering once N² dominates.
+
 - 2026-08-17 · ▶▶▶ ONE LEX PER COMPILE, AND TWO KILLS THAT COST MORE
   THAN IT (pin d74ba9612f — CLEAN m2 == m3, re-pinned from m2 per
   march.sh, 411335 lines, census 0; m3 leg 17.10s wall · 2135MB peak

@@ -90,6 +90,12 @@ type Question
   // arities, read from the env's ConstructorScheme registry — the same
   // channel synth's enumeration and the eq sum-leaf read.
   | QVariants(String)
+  // "modules" — the weave's own module set, read from the NModule cells
+  // the driver mints per range. The DAG is proved on every invocation and
+  // was projectable by nobody: asking which modules an entry pulls meant a
+  // shell closure loop over `grep '^import'`, re-deriving by name what the
+  // graph holds by edge.
+  | QModules
   | QUnknown(String)
 
 type QueryResult
@@ -111,6 +117,8 @@ type QueryResult
   | QRCensus(String, [Span])
   // the judged decl sites (count = len)
   | QRDecls([Span])
+  // the weave's module paths, in weave order (count = len)
+  | QRModules([String])
   // the derived badges (plain lines) + fanout sites as (schedule, span)
   | QRWhere([String], [(String, Span)])
   | QRError(String)
@@ -240,6 +248,7 @@ handler query_default {
     QCensus(shape) => resume(QRCensus(census_label(shape), census_sites(shape))),
     QWhere(name) => resume(where_badges(name)),
     QVariants(tname) => resume(variants_of(tname)),
+    QModules => resume(QRModules(module_paths())),
     QUnknown(q) => resume(QRError("unknown query: {q}")),
   },
 }

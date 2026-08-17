@@ -540,6 +540,39 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.perf.compile-is-quadratic-in-modules` — MEASURED 2026-08-17, pin
+86ddf00ac4, and it supersedes the four-pin hunt for a 0.28s constant in
+the five-module prelude. Cost tracks MODULE COUNT, not entry size:
+17-line canon (7 modules) 0.75s · 3594-line parser (13) 1.82s · 890-line
+driver (20) 3.47s · 6559-line lower (22) 4.48s — driver costs nearly
+twice parser on a quarter of the lines. Per-module cost RISES with the
+count (0.107 · 0.140 · 0.174 · 0.204 s/module), and `a·N + b·N²` fitted
+on the endpoints gives ≈ `0.062·N + 0.0064·N²`, predicting parser at
+1.89s against 1.82s measured. At 22 modules the N² term is ~69%.
+THE MECHANISM, structural and already named: `driver_check_entry` runs
+`infer_program_converged` once per module, each against the shared env
+every prior module installed into — N lookups over an env that grows
+with N. That is §5.O's `env_find_flat` class, and its fix is
+`Hβ.perf.name-is-handle` (Phase 9.3): a name interned once at lex, every
+compare an `i32.eq`, every table handle-keyed. What is new here is the
+TIE: the wheel's own per-invocation cost is now bound to that peer by a
+fitted curve rather than a code reading, which is the §5.O lesson
+itself — the 8-agent code-reading diagnosis missed the dominant cost and
+measurement found it.
+NAMED NEXT PROBE before any build: confirm the env is the N² term rather
+than another per-module scan, by timing an entry whose modules are large
+but few against one whose modules are small but many at equal total
+lines. If cost tracks N and not lines, the env is convicted and 9.3 is
+the build. Do NOT optimise the per-module constant first — it is the
+term that stops mattering.
+
+`Hβ.query.module-dag-facet` — RESOLVED 2026-08-17 at the same pin.
+`mentl query <file> "modules"` projects the weave's NModule cells. Kept
+as a record of the shape: the absence was found by the mentl-first hook
+refusing a hand read, the answer was hand-rolled in shell that session,
+and the verb replaced it the same day with its count verified against
+that walk (canon 7, lower 22, both matching).
+
 `Hβ.query.cost-facet` — a verb reports no cost, so every timing of one is
 a scaffold read. Found 2026-08-17 by the mentl-first hook refusing a
 `/usr/bin/time mentl check` and having no projection to offer instead,

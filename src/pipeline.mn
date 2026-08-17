@@ -1174,6 +1174,7 @@ fn render_query_result(result) = match result {
   QRDecls(spans) => // The decls column's projection — the oracle queue's own seed set,
   // rendered located so the seed is inspectable at the CLI.
   "→ {int_to_str(len(spans))} judged decl(s){render_ref_spans(spans)}",
+  QRModules(paths) => "→ {int_to_str(len(paths))} module(s) in the weave\n  {str_join_lines(paths)}",
   QRWhere(lines, sites) => "→ {str_join_lines(lines)}{render_where_sites(sites)}",
   QRError(msg) => "error: {msg}",
 }
@@ -1218,6 +1219,7 @@ type QueryVerb
   | QVWhere
   | QVDecls
   | QVVariants
+  | QVModules
   | QVUnknownVerb
 
 fn classify_query_verb(w: String) with Pure = if w == "type" {
@@ -1246,6 +1248,8 @@ fn classify_query_verb(w: String) with Pure = if w == "type" {
   QVDecls
 } else if w == "variants" {
   QVVariants
+} else if w == "modules" {
+  QVModules
 } else {
   QVUnknownVerb
 }
@@ -1283,6 +1287,7 @@ fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
   QVWhere => QWhere(arg),
   QVDecls => QDecls,
   QVVariants => QVariants(arg),
+  QVModules => QModules,
   QVUnknownVerb => QUnknown(raw),
 }
 

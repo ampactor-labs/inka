@@ -570,6 +570,32 @@ form of the finding.
 WHAT NOT TO DO: narrow the sweep. Gating legs on which directory changed
 was proposed and refused the same day (the loop's speed clause); the
 sweep's coverage is not the problem, its re-derivation is.
+NARROWED TWICE MORE, and the fix got much smaller than an image cache.
+FIRST: the cost is a FIXED FLOOR, not a function of the program.
+`fn main() = 7` with NO imports costs 0.71s; adding runtime/math makes it
+0.78s; adding io + math + dsp/signal makes it 0.95s. So ~0.71s is paid by
+every invocation regardless of what the program references, and
+149 × 0.71 ≈ 106s of the sweep's 257s CPU is one prelude derived 149
+times.
+SECOND: it is not inference. `mentl fmt` parses and renders WITHOUT
+inferring and costs 0.74s on the same fixture — indistinguishable from
+`check`'s 0.72s. The floor is entirely pre-inference, and the same wheel
+on the same program through STDIN (no lib linked) is 0.040s. The
+difference is one thing: the path form auto-links and PARSES THE PRELUDE.
+SO THE FIX IS NOT AN IMAGE CACHE FIRST — it is the law the wheel already
+landed, applied one layer up. `Hβ.lower.lowering-is-a-column`'s
+construction-is-reachability arc made emission demand-driven: a name
+popping from the frontier CONSTRUCTS its decl, and a dead decl never
+constructs at all. THE LINK NEVER GOT THAT LAW. It parses the whole
+prelude eagerly and then discovers the program wanted none of it, which
+is the same two-pass shape that arc deleted from lower — every decl
+built up front, then a second pass asking which mattered. Demand-load
+the link and `fn main() = 7` parses nothing; the image cache becomes an
+optimisation on top of a floor that is already near zero, rather than a
+way to memoise work that should never happen.
+The peer's name stays `Hβ.persist.module-image-cache` for the caching
+half; this half is `Hβ.driver.link-is-reachability` and it is the one to
+build first.
 `Hβ.march.boot-drifts-behind-clean-landings` — NAMED 2026-08-17, found by
 a repin rather than by a gate, which is the whole point. Every gate in
 the frontier's boot suite reads the PINNED BOOT. A landing whose march

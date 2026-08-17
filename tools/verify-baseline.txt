@@ -699,8 +699,13 @@ loop_scaffold_refs_max: 3
 # already banked), 817 ref. Mostly compensation for the pre-4.2 grade;
 # each marker the honest grade retires lowers these. The census-shape
 # count (a graph fact, not a text pattern) is the named refinement.
+# 816 → 814 at the carried-DAG landing (2026-08-17): deleting
+# driver_module_in_dag_deps took its two authored `ref` params with it.
+# The same landing tried to author five NEW markers and the gate refused
+# all five; dropping them left the emit byte-identical, so the inference
+# held every borrow already — the ceiling falls and nothing replaced it.
 authored_own_max: 83
-authored_ref_max: 816
+authored_ref_max: 814
 
 # 2026-08-08: the DRIFT-SHAPE ratchet (PLAN §11 5.6's absorption,
 # enforcement half) — the three absorbed drift modes counted by the

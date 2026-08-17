@@ -448,18 +448,26 @@ fn spec_candidate_of_site(site, acc) with EnvRead + LookupTy + GraphRead + Memor
 fn spec_candidates_from_sites(sites, acc) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
   fold(acc, (a, s) => spec_candidate_of_site(s, a), sites)
 
-fn spec_candidates_fix(work, done, facts, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = if len(work) == 0 {
-  (done, facts)
+// The accepted set is a FLAT BUFFER with its count, not a `[d] ++ done`
+// concat spine. Both reads the fix makes of it — membership by mangled
+// name, and the per-base count the cap meters — index it, and indexing a
+// concat spine is O(depth), so the two linear reads were quadratic in the
+// accepted count. The buffer-counter is this codebase's own answer to that
+// bug class (reach_grow's shape). Measured before: spec_base_count alone
+// was 7.95% of the entire self-compile.
+fn spec_candidates_fix(work, acc, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = if len(work) == 0 {
+  acc
 } else {
   let d = work[0]
   let w2 = rest(work)
-  match d {
-    (m, base, pairs, enc) => if spec_demand_named(done, m) {
-      spec_candidates_fix(w2, done, facts, recs)
-    } else {
-      match spec_find_rec(recs, base) {
-        None => spec_candidates_fix(w2, [d] ++ done, [(m, false, [])] ++ facts, recs),
-        Some(rec) => // THE POLYMORPHIC-RECURSION CAP (the 5.1c guard, resurrected the
+  match acc {
+    (dbuf, dn) => match d {
+      (m, base, pairs, enc) => if spec_buf_demanded(dbuf, dn, m, 0) {
+        spec_candidates_fix(w2, acc, recs)
+      } else {
+        match spec_find_rec(recs, base) {
+          None => spec_candidates_fix(w2, spec_demand_accept(acc, d), recs),
+          Some(rec) => // THE POLYMORPHIC-RECURSION CAP (the 5.1c guard, resurrected the
         // day sig'd poly recursion reached the emit): a self-instantiating
         // demand chain mints a fresh mangle per nesting level
         // (depth@[w], depth@[[w]], …), so one base's demand count is the
@@ -468,116 +476,56 @@ fn spec_candidates_fix(work, done, facts, recs) with EnvRead + LookupTy + GraphR
         // which is CORRECT for every vector (containers are words); the
         // deep tail pays indirection, never divergence. The teaching
         // narration for this floor rides the 5.3 proposed-signature step.
-        if spec_base_count(done, base, 0, 0) >= 8 {
-          spec_candidates_fix(w2, [d] ++ done, [(m, false, [])] ++ facts, recs)
-        } else {
-          match rec {
-            (_n, _ps, body, _f) => {
-              // ONE structural scan; TWO lookup contexts. Interior keys and
-              // inner candidates project UNDER the instantiation (a twin's
-              // interior site keys against the specialized truth); the
-              // sensitivity witness reads CTX-CLEAR — "at the floor, no
-              // substitution: the var-ness is exactly what the floor emission
-              // sees" (spec_oph_wide_pair's own law). Running it under ctx
-              // masked every var, under-emitted 17k lines of twins, and
-              // re-opened the address-comparison class — caught by the float
-              // frontier leg (exit 1) before the pin was blessed.
-              spec_ctx_set(pairs, enc)
-              match spec_scan_list(body, ([], [])) {
-                (sites, ophs) => {
-                  let inner = spec_candidates_from_sites(sites, [])
-                  let interior = spec_interior_names(sites, 0, [])
-                  spec_ctx_clear()
-                  let fact = (m, spec_ophs_sensitive(ophs, pairs, 0), interior)
-                  spec_candidates_fix(inner ++ w2, [d] ++ done, [fact] ++ facts, recs)
-                },
-              }
-            },
-          }
-        },
-      }
+          if spec_buf_base_count(dbuf, dn, base, 0, 0) >= 8 {
+            spec_candidates_fix(w2, spec_demand_accept(acc, d), recs)
+          } else {
+            match rec {
+              (_n, _ps, body, _f) => {
+                // ONE structural scan, taken UNDER the instantiation: the inner
+                // candidates a twin's body demands key against the specialized
+                // truth, so the ctx brackets the scan and its candidate read
+                // together.
+                spec_ctx_set(pairs, enc)
+                match spec_scan_list(body, ([], [])) {
+                  (sites, _ophs) => {
+                    let inner = spec_candidates_from_sites(sites, [])
+                    spec_ctx_clear()
+                    spec_candidates_fix(inner ++ w2, spec_demand_accept(acc, d), recs)
+                  },
+                }
+              },
+            }
+          },
+        }
+      },
     },
   }
 }
 
-// The cap's meter: how many of BASE's specializations the fix has
-// already accepted (done entries share the (m, base, pairs, enc) shape).
-fn spec_base_count(done, base: String, i, acc) with Memory + Alloc = if i >= len(done) {
-  acc
-} else {
-  match done[i] {
-    (_, b, _, _) => spec_base_count(done, base, i + 1, if b == base { acc + 1 } else { acc }),
-  }
+// The accepted set's three operations, one home: append at the count, and
+// the two reads the fix makes, each walking the flat slots directly.
+fn spec_demand_accept(acc, d) with Memory + Alloc = match acc {
+  (dbuf, dn) => (list_set(list_extend_to(dbuf, dn + 1), dn, d), dn + 1),
 }
 
-// The two round-invariant facts, read off the fix's own scan. Raw loops
-// (the battery law): the sensitivity witness over the operand handles, and
-// the interior twin-name edges — a site whose emission-time key mangles is
-// a redirect edge for the worthiness closure.
-fn spec_ophs_sensitive(ref ophs, ref pairs, i) with EnvRead + LookupTy + GraphRead + Memory + Alloc = if i >= len(ophs) {
-  false
-} else if spec_oph_wide_pair(ophs[i], pairs) {
-  true
-} else {
-  spec_ophs_sensitive(ophs, pairs, i + 1)
-}
-
-fn spec_interior_names(ref sites, i, acc) with EnvRead + LookupTy + GraphRead + Memory + Alloc = if i >= len(sites) {
-  acc
-} else {
-  match sites[i] {
-    (h, n) => {
-      let m2 = spec_global_name(h, n)
-      if m2 == n {
-        spec_interior_names(sites, i + 1, acc)
-      } else {
-        spec_interior_names(sites, i + 1, [m2] ++ acc)
-      }
-    },
-  }
-}
-
-// The floor-is-wrong witness: an arith/compare/eq operand whose FLOOR type is
-// a pair var bound wide at this candidate's key. Read at the floor (no
-// substitution) — the var-ness is exactly what the floor emission sees.
-// An arith/compare/eq operand whose floor type is a free var bound WIDE by
-// this site's instantiation pairs — the address-comparison witness, root-
-// keyed (sound post-fracture-fix: the operand's root IS the scheme var's).
-fn spec_oph_wide_pair(oh, pairs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = if oh == 0 {
+fn spec_buf_demanded(ref dbuf, dn, m: String, i) with Memory + Alloc = if i >= dn {
   false
 } else {
-  match lookup_ty(oh) {
-    TVar(u) => match spec_pairs_find(pairs, graph_chase_handle(u)) {
-      Some(c) => spec_ty_needs_structure(c),
-      None => false,
-    },
-    TTuple(es) => // A tuple floor lies when a VAR element lands WIDE at this key: the
-    // word layout misreads the 8-byte slot (a destructure reads the f64's
-    // high word as the next field; a field-load offsets past it). A
-    // pointer-valued instantiation keeps the word slot — offsets stand,
-    // no twin minted.
-    any((e) => spec_tuple_elem_wide_pair(e, pairs), es),
-    _ => false,
+  match list_index(dbuf, i) {
+    (dm, _b, _p, _e) => if dm == m { true } else { spec_buf_demanded(dbuf, dn, m, i + 1) },
   }
 }
 
-fn spec_tuple_elem_wide_pair(e, pairs) with GraphRead + Memory + Alloc = match e {
-  TVar(u) => match spec_pairs_find(pairs, graph_chase_handle(u)) {
-    Some(c) => match repr_of_resolved(c) {
-      RI32 => false,
-      _ => true,
-    },
-    None => false,
-  },
-  _ => false,
+// The cap's meter: how many of BASE's specializations the fix has already
+// accepted (entries share the (m, base, pairs, enc) shape).
+fn spec_buf_base_count(ref dbuf, dn, base: String, i, acc) with Memory + Alloc = if i >= dn {
+  acc
+} else {
+  match list_index(dbuf, i) {
+    (_, b, _, _) => spec_buf_base_count(dbuf, dn, base, i + 1, if b == base { acc + 1 } else { acc }),
+  }
 }
 
-// The floor lies about any operand whose semantics exceed the raw word:
-// wide scalars (arith/compare at the wrong width), strings and lists
-// (structural eq/ordering, not pointer-eq), records and tuples (field
-// offsets), payload-carrying sums (tag+payload eq). Only the true word
-// scalars are floor-honest. A worthiness witness bound to anything else
-// demands the twin.
 // The ONE selector→offset projection for the field-load emitter: a name
 // resolves through the receiver's record type (resolve_field_offset —
 // TRecord / TRecordOpen / the env's RecordSchemeKind); an index through the
@@ -591,48 +539,29 @@ fn field_sel_offset(ref rec, sel) with EnvRead + LookupTy + GraphRead + Memory +
   },
 }
 
-fn spec_ty_needs_structure(c) with EnvRead + Memory + Alloc = match fold_strip(c) {
-  TInt => false,
-  TByte => false,
-  TUnit => false,
-  TName(n, _) => // A nullary-only sum (Bool included — a DERIVED ADT, not a primitive) is
-  // word-honest: its values ARE tag words. Any payload makes structure.
-  sum_has_payload(variant_specs_of(n), 0),
-  _ => true,
-}
-
-fn sum_has_payload(ref specs, i) with Memory = if i >= len(specs) {
-  false
-} else {
-  match list_index(specs, i) {
-    (_, ptys) => if len(ptys) > 0 { true } else { sum_has_payload(specs, i + 1) },
-  }
-}
-
 fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = match spec_scan_list(lowered, ([], [])) {
   (sites, _o) => {
     let seed = spec_candidates_from_sites(sites, [])
-    // ONE body scan per candidate, total: the fix's transitive-closure scan
-    // also yields the two ROUND-INVARIANT worthiness facts — the body's own
-    // wide-operand sensitivity and the interior twin-name edges — so the
-    // worthiness fixpoint below is a pure name-set closure over facts
-    // (closure_fix's species), never a re-scan. The old two-fn fixpoint
-    // re-scanned every candidate's body and re-minted every interior site's
-    // mangled name PER ROUND (measured 2026-07-25: +274MB of the
-    // self-compile image — the demand analysis' true monster).
-    match spec_candidates_fix(seed, [], [], recs) {
-      (cands, _facts) => // TOTAL BY CANDIDACY (5.1a lands): every candidate twins. The
-      // worthiness gate guarded two named classes and both are CLOSED —
-      // the ambient stack cliff died with zip_with's buffer-counter tail
-      // form (mn-zip-deep pins 200,000 elements), and the width blindness
-      // died at the twin edges (Hβ.emit.twin-state-width: args word-faced,
-      // results deref'd, inits boxed — the total-twin m3 assembles, the
-      // acceptance probe's own verdict). The uniform-representation seam
-      // the gate preserved is where every measured silent-wrong lived;
-      // deleting it is the erasure boundary telling the truth. Cost is
-      // the march's to arbitrate (the ratchets; the banked expectation:
-      // emit +17%, RSS inside the raised ceiling).
-      cands,
+    // ONE body scan per candidate, total, and the accumulator enters with
+    // its own indexes: the fix reads membership and the per-base cap from
+    // them, never from the entry list, so the transitive closure costs one
+    // scan per accepted candidate and nothing per query. The old two-fn
+    // fixpoint re-scanned every candidate's body and re-minted every
+    // interior site's mangled name PER ROUND (measured 2026-07-25: +274MB
+    // of the self-compile image — the demand analysis' true monster).
+    // TOTAL BY CANDIDACY (5.1a lands): every candidate twins. The
+    // worthiness gate guarded two named classes and both are CLOSED —
+    // the ambient stack cliff died with zip_with's buffer-counter tail
+    // form (mn-zip-deep pins 200,000 elements), and the width blindness
+    // died at the twin edges (Hβ.emit.twin-state-width: args word-faced,
+    // results deref'd, inits boxed — the total-twin m3 assembles, the
+    // acceptance probe's own verdict). The uniform-representation seam
+    // the gate preserved is where every measured silent-wrong lived;
+    // deleting it is the erasure boundary telling the truth. Cost is
+    // the march's to arbitrate (the ratchets; the banked expectation:
+    // emit +17%, RSS inside the raised ceiling).
+    match spec_candidates_fix(seed, (make_list(64), 0), recs) {
+      (dbuf, dn) => slice(dbuf, 0, dn),
     }
   },
 }

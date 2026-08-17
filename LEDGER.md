@@ -35,6 +35,40 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-16 · ▶▶▶ THE DEMAND ANALYSIS LOSES ITS CONCAT SPINE
+  (pin 5fe06c927b — TRANSITION, m3 == m4, re-pinned from m3 per
+  march.sh, 410181 lines, census 0, crown 39/0, frontier 364/0,
+  proof-exactness 9/0, effect-identity green; m3 leg 17.91s wall ·
+  2401MB peak RSS):
+  `spec_candidates_fix` accumulated its accepted set onto `[d] ++ done`,
+  and both reads it makes of that set index it: membership by mangled
+  name, and the per-base count the polymorphic-recursion cap meters.
+  `list_index` on a concat spine is O(depth), so each read walked a
+  structure whose indexing was itself linear, and the transitive closure
+  paid that once per accepted candidate. `spec_base_count` alone
+  measured 7.95% of the self-compile; `spec_rec_name_seen` 5.41%. The
+  buffer-counter replaces the spine (`make_list(64)` plus a count, which
+  is `reach_grow`'s own shape and this codebase's standing answer to the
+  class), and the accepted set's three operations get one home:
+  `spec_demand_accept` appends at the count, `spec_buf_demanded` and
+  `spec_buf_base_count` walk the flat slots directly. Seven
+  worthiness-gate fns went with it, dead since 5.1a made twinning total
+  by candidacy: `spec_ophs_sensitive`, `spec_interior_names`,
+  `spec_oph_wide_pair`, `spec_tuple_elem_wide_pair`,
+  `spec_ty_needs_structure`, `sum_has_payload`, `spec_base_count`. The
+  round-invariant facts channel they fed went with them, so the fix now
+  returns the accepted buffer sliced to its count and nothing else. Net
+  −47 lines. Two ratchets fell and were held: movers 476 → 475, and
+  effectful-lambda 385 → 384, because the deleted witness carried
+  `any((e) => spec_tuple_elem_wide_pair(e, pairs), es)` and the
+  conviction died with the code rather than by a rename. THE PIN'S OWN
+  LESSON, paid at this entry: the board block was written with crown,
+  frontier, proof-exactness and effect-identity all reading NOT RUN, and
+  doc-truth refused the tree until this line existed. All four were then
+  run at this same sha and are green above. The coupling caught an
+  unblessed pin exactly where Phase 0.1 said a gate that stops being
+  reported stops being run.
+
 - 2026-08-12 · ▶▶▶ CONSTRUCTION IS REACHABILITY (pin 73d3a124ce —
   TRANSITION, m2 ≠ m3 by 26 diff lines and m3 == m4, census 0, crown
   39/0, frontier 364/0, proof-exactness 9/0; m3 leg 16.47s wall ·

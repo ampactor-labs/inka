@@ -567,7 +567,12 @@ comment_refs_max: 0
 # two builds refuted one-sided patching because the divergence relocates
 # rather than resolves. Zero trial/final machinery in the diff; the next
 # legal move stays DOWN; rung 3 dissolves the class.
-movers_max: 476
+# 476 → 475 at the concat-spine deletion (2026-08-16): the demand
+# analysis lost seven worthiness fns and its accumulator changed shape,
+# so decl order shifts and one existing scheme's divergence goes with
+# them. No trial/final machinery in the diff — the same relocation
+# artifact the entries above measure, moving DOWN this time.
+movers_max: 475
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.
@@ -639,7 +644,12 @@ eta_max: 28
 # Both are named: Hβ.parser.named-fn-tuple-param and
 # Hβ.emit.partial-application-arity. Either one landing retires both
 # convictions without a lambda being renamed. The next legal move is DOWN.
-effectful_lambda_max: 385
+# 385 → 384 at the concat-spine deletion (2026-08-16): the worthiness
+# witness carried `any((e) => spec_tuple_elem_wide_pair(e, pairs), es)`,
+# and the fn it called went with the gate, so the conviction died with
+# the code rather than by a rename. The two delay-line callbacks above
+# are still the standing pair.
+effectful_lambda_max: 384
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own

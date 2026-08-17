@@ -110,14 +110,35 @@ refuses the placeholder, by design, so write them before verify.
 → RETIRED BY: `mentl march` growing the ladder and the repin verdict the
 script still owns (`Hβ.tools.march-transition-native`).
 
-**6 · LAND.** One marched step per iteration. At a FULL-GREEN board — verify,
-march, crown, frontier (--compiler fresh when the wheel changed), census,
-doc-truth, every ratchet within its baseline — COMMIT, with the docs' true-up
-(§7 / §11 / RESIDUE / LEDGER / PROVENANCE) in the same commit or an
-immediately following docs commit; the pre-commit gate is the second arbiter
-and its refusal is final. Anything short of full green lands nothing: bank the
-state, leave the tree marchable, release the lease. Pushes and anything
-leaving the machine wait for Morgan's explicit word — always, no exceptions.
+**6 · LAND.** One marched step per iteration. THE PRE-COMMIT HOOK IS THE
+ARBITER — not a list of gates you run by hand and then re-run. Prepare the
+tree, commit, and let the hook decide; its refusal is final and IS the
+iteration's finding. This step used to enumerate verify / march / crown /
+frontier / census / doc-truth for the assistant to run, which produced the
+two failures it now forbids: the board run two and three times per iteration
+(the hook runs verify again anyway), and then, when that felt slow, a
+proposal to check LESS. Run only what the hook cannot: a march when the wheel
+changed (the hook reads a stamp, it does not march), and the frontier sweep
+that produces the stamp the hook then checks. Everything else is the hook's.
+Land with the docs' true-up (§7 / §11 / RESIDUE / LEDGER / PROVENANCE) in the
+same commit or an immediately following one. Anything the hook refuses lands
+nothing: bank the state, leave the tree marchable, release the lease. Pushes
+and anything leaving the machine wait for Morgan's explicit word — always, no
+exceptions.
+
+**SPEED COMES FROM NOT REPEATING WORK, NEVER FROM CHECKING LESS.** An
+iteration that feels slow is an iteration doing something twice — re-running
+a stamped-green gate, forcing `FORCE_VERIFY` when no ratchet input moved,
+marching before a run that marches. Find the duplicate and delete it.
+NEVER propose, and never take, a faster path that narrows what is verified:
+not gating a sweep on which directory changed, not skipping a leg that
+"cannot" be affected, not trusting a stamp the change invalidated. This
+session paid for that law twice over — the boot suite printed
+`frontier 367/0` about a wheel four landings old, and four legs that
+"could not" be affected by a row join were all affected by a span. If the
+honest cost is genuinely too high, that is Morgan's call to make with the
+number in front of him, and the iteration's job is to MEASURE and report it,
+never to quietly buy speed with coverage.
 
 THE SELF-BUILD RATCHET (CLAUDE.md ⟳): the iteration ENDS with the medium doing
 strictly MORE of its own construction than it began with — a new verb, a new

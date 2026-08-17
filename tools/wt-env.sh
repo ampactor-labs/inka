@@ -33,6 +33,19 @@ if "$WT" run -W shared-memory=y /nonexistent.wasm 2>&1 | grep -q "unknown -W"; t
 else
   WT_RUN_FLAGS=(-W threads=y -W shared-memory=y -W tail-call=y -S threads=y)
 fi
+# MENTL_WT_EXTRA — extra runner flags, word-split, appended to every wt_run and
+# every shim invocation. It exists for ONE thing the canonical flags cannot
+# express and the shim therefore could not reach: attaching a profiler.
+# PLAN §8 names host `perf` with --profile=perfmap as THE instrument for the
+# self-compile, and getting it required hand-assembling the wasmtime command
+# the shim already builds — the "ceremony one layer down" CLAUDE.md ⟳ calls a
+# confession. Now:
+#   MENTL_WT_EXTRA=--profile=perfmap perf record -g -- mentl check <file>
+# Empty by default, so every gate and every march runs byte-identical flags.
+# shellcheck disable=SC2206 — the split is the point; this file is sourced by bash.
+if [ -n "${MENTL_WT_EXTRA:-}" ]; then
+  WT_RUN_FLAGS+=($MENTL_WT_EXTRA)
+fi
 WABT_FEATURE_FLAGS=(--enable-threads --enable-tail-call)
 W2W=(wat2wasm --debug-names "${WABT_FEATURE_FLAGS[@]}")
 

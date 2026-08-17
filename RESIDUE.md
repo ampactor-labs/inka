@@ -728,6 +728,53 @@ five settled reads. The deleted read was warm in page cache; the probe's
 operation while keeping the expensive one buys nothing and costs
 whatever the new carrier costs. The regression is not isolated to a
 cause and is not claimed to be understood.
+THE STAMP, priced by the first PROFILE of this arc (2026-08-17, pin
+42a4cc445d). Five elimination probes each indicted and then cleared a
+suspect — the discovery parse, the second read, a whole-program lex, the
+import fold's shape, and inference (`fmt` 0.833s ≈ `check` 0.780s on the
+floor fixture, re-confirming the older reading). Elimination failed
+because THERE IS NO HOT SPOT, which only the instrument PLAN §8 names
+could show. `perf` with `--profile=perfmap`, 1,778 samples on the floor
+fixture: 77.9% guest, and the guest profile is FLAT — the top fourteen
+functions sum to ~22%. What composes it is the finding:
+`list_index_unchecked` 7.05% · `list_filled_from` 3.34% · `alloc` 2.49% ·
+`list_set` 2.20% · `list_index` 1.34% — 16.4% in LIST ACCESS AND
+ALLOCATION, spread across lexing, parsing and judging alike, with the
+hottest function's own callers split between `crc_scan` (1.73%),
+`lex_from` (1.18%) and `scan_to_eol` (1.06%). String comparison — the
+`Hβ.perf.name-is-handle` target — is only 2.0% (`str_eq_loop` 0.78,
+`str_eq` 0.69, `str_hash_loop` 0.52), which prices that peer far lower
+than the §5.O text assumes and is worth knowing before it is built.
+SEMANTICS TRACED: today `driver_collect_dag` collects every module, the
+compile fold concatenates their whole sources, and the result is parsed
+and judged entire. The target seeds reachability from the ENTRY's free
+names and takes the transitive decl closure, so an undemanded prelude
+decl is never parsed or judged. A missed name is LOUD, not silent —
+E_MissingVariable is an armed class — which is what makes the change
+safe to attempt at all.
+COSTS PRICED: the floor is 6,304 source lines and 67,453 nodes for a
+ONE-DECLARATION program, cost is linear in lines (~150µs, eight entries,
+N=6..54), and the profile is flat. Those three together say the saving
+is PROPORTIONAL to lines skipped and there is no pass to special-case:
+skip 90% of the prelude and ~90% of 0.78s goes. Nothing else in the
+profile offers that, which is why this peer outranks the representation
+work and the handle interning both.
+WRITERS ENUMERATED: `driver_collect_visit` (the DAG element),
+`driver_entry_with_ranges`'s compile fold (the concatenation),
+`driver_check_entry`'s per-module loop, and `driver_tree_scan`.
+THE ONE UNENUMERATED RISK, and the next thing to establish before a byte
+changes: the SUGAR SET — prelude names the desugar introduces that the
+source never writes (`++` → seq_concat, `xs[i]` → list_index, `<~` →
+FeedbackSpec, interpolation → to_string, and every `fold_sig`-generated
+leaf). Reachability seeded from written names alone would miss them.
+They are finite and enumerable from lower's own dispatch sites, and each
+miss is a loud refusal rather than a silent wrong, but the set must be
+READ OFF THE ARTIFACT and not guessed. That enumeration is the next
+step, and it is a measurement, not a design choice.
+THE RATCHET THAT WILL MEASURE THE LANDING ALREADY EXISTS: the frontier's
+prelude-floor leg, holding tests/frontier/mn-bare-floor.mn at 6,304
+lines under a 6,400 ceiling, monotone down.
+
 THE TOKEN-CARRY DESIGN IS KILLED TOO (2026-08-17, pin d74ba9612f), by
 the cheapest test available: `infer_program_converged` lexed the whole
 concatenated program TWICE (`src |> frontend` at both the trial and the

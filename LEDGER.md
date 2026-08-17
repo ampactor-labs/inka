@@ -35,6 +35,55 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE PROFILER REACHES THE SHIM, AND THE FLOOR HAS NO HOT
+  SPOT (no pin — tools and docs only; boot unchanged at 42a4cc445d, src
+  untouched, so the fixpoint stands and pin freshness holds).
+  ▶ WHY A PROFILE AT ALL. Five probes across four pins each indicted a
+  suspect and then cleared it: the discovery parse, the second read, a
+  whole-program lex, the import fold's shape, and now inference (`fmt`
+  0.833s ≈ `check` 0.780s on the floor fixture, re-confirming a reading
+  from an earlier era). Elimination kept failing for one reason, and it
+  took the instrument PLAN §8 names to see it: THERE IS NO HOT SPOT.
+  ▶ THE PROFILE, 1,778 samples on tests/frontier/mn-bare-floor.mn:
+  77.9% guest, and the guest side is FLAT — the top fourteen functions
+  sum to ~22%, the largest single one being 7%. The composition is what
+  matters: `list_index_unchecked` 7.05% · `list_filled_from` 3.34% ·
+  `alloc` 2.49% · `list_set` 2.20% · `list_index` 1.34%, so 16.4% sits
+  in LIST ACCESS AND ALLOCATION, spread evenly across lexing, parsing
+  and judging — the hottest function's callers split three ways between
+  `crc_scan` (1.73%), `lex_from` (1.18%) and `scan_to_eol` (1.06%).
+  This is the mechanism behind the linear-in-source law the previous pin
+  measured: per-line work is a fixed quantity of list operations, so the
+  cost tracks lines and no pass can be blamed.
+  ▶ TWO NUMBERS WORTH CARRYING FORWARD. String comparison — the
+  `Hβ.perf.name-is-handle` target — is only 2.0% of the run
+  (`str_eq_loop` 0.78, `str_eq` 0.69, `str_hash_loop` 0.52), which
+  prices that peer far below what §5.O's text assumes; it should be
+  built for the correctness and O(1) reasons it also carries, not for
+  this. And `comment_refs_check` is 3.87% INCLUSIVE — the backtick judge,
+  a prose gate, running inside `infer_program_final` on every compile.
+  Named, not touched: it is user-facing (W_CommentRefUnresolved is their
+  warning), so moving it is a diagnostics design decision, not a perf
+  edit.
+  ▶ THE SELF-BUILD HALF. Getting that profile meant hand-assembling the
+  wasmtime command the shim already builds, because the canonical flags
+  cannot express `--profile=perfmap` — the "ceremony one layer down"
+  CLAUDE.md ⟳ calls a confession. `MENTL_WT_EXTRA` now appends
+  word-split extra runner flags in wt-env.sh, so
+  `MENTL_WT_EXTRA=--profile=perfmap perf record -g -- mentl check <f>`
+  resolves guest symbols through the installed verb. Empty by default,
+  so every gate and march runs byte-identical flags — verified both
+  ways at this pin.
+  ▶ THE STAMP IT PRICES lands in RESIDUE against
+  `Hβ.driver.link-is-reachability`: semantics traced, costs priced
+  (proportional saving, no pass to special-case), writers enumerated,
+  and ONE unenumerated risk named as the next step — the SUGAR SET of
+  prelude names the desugar introduces that source never writes
+  (`++` → seq_concat, `xs[i]` → list_index, `<~` → FeedbackSpec,
+  interpolation → to_string). Finite, enumerable from lower's dispatch
+  sites, loud on a miss, and to be READ OFF THE ARTIFACT rather than
+  guessed — which is a measurement, not a design choice.
+
 - 2026-08-17 · ▶▶▶ COST IS A GRAPH READ, SO IT CAN BE RATCHETED — AND
   THE PREVIOUS PIN'S LAW IS RETRACTED (pin 42a4cc445d — CLEAN m2 == m3,
   re-pinned from m2 per march.sh, 412024 lines, census 0; m3 leg 18.68s

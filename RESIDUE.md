@@ -571,9 +571,29 @@ GREEN while measuring a stale artifact, which is worse because it reads
 as evidence. The standing counter-measure to design: a CLEAN verdict
 must not license leaving boot behind, or the boot suite's green means
 only "the old wheel still passes".
-NEXT PROBE: repin, then derive each of the four by hand before
-re-banking any — the three session legs first, since they are the ones
-with no explanation yet.
+RESOLVED 2026-08-17, both halves. The four were derived and re-banked
+under §9.11 (all one cause — the dispatcher mint moving a declaration's
+span start from its NAME to its `fn` KEYWORD; the mcp fixtures contain
+no `<~`, which exonerated the row join in one read), and the standing
+COUNTER-MEASURE is now armed in verify: PIN FRESHNESS. boot IS the
+pinned fixpoint, so when it matches current source
+`sha256(boot(wheel)) == sha256(boot)` — the m2 the gate just built is
+the boot binary again. Divergence IS the drift, exactly, and a
+comment-only change correctly reports none because it emits identically.
+IT REPORTS AND DOES NOT REFUSE, deliberately: a CLEAN `m2 == m3`
+landing is correct and genuinely needs no repin, so drift is legitimate
+and hard-failing it would force a 2.4MB boot binary into git per
+emit-changing landing. What was never legitimate was drift staying
+INVISIBLE. The one line makes the boot suite's verdict say which wheel
+it is a verdict about. Both branches seen: FRESH on the caught-up pin,
+and BEHIND when forced against another artifact — and the real
+divergence was already measured the iteration before, boot `5fe06c92`
+against an m2 that produced `011f0eefbf`.
+THE PROBE THIS ENTRY BANKED WAS ITSELF WRONG, worth recording: it said
+"repin, then derive". `frontier-gate.sh --compiler fresh` shows the same
+reds against current source without touching boot, so the previous
+iteration's pin-revert was unnecessary work. The instrument existed; the
+probe did not know it.
 
 `Hβ.effects.feedback-row-substitutes` — THE DROP HALF IS FIXED
 (2026-08-17, unpinned): `inf_add_row(lam_row)` at the `PFeedback` arm of

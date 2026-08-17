@@ -190,6 +190,30 @@ if C=$(wt_m2_ensure); then
     say "  restructure the site (the arena makes this a use-after-free)."
     fail=1
   fi
+  # PIN FRESHNESS (Hβ.march.boot-drifts-behind-clean-landings, 2026-08-17).
+  # boot IS the pinned fixpoint, so when it matches current source
+  # sha256(boot(wheel)) == sha256(boot) — the m2 this gate just built is the
+  # boot binary again. When source moves ahead the two diverge, and that
+  # divergence IS "boot is behind".
+  #
+  # This REPORTS, it does not refuse. A CLEAN m2 == m3 landing is correct and
+  # genuinely needs no repin, so drift is legitimate; what was not legitimate
+  # was that it stayed INVISIBLE. Boot sat four landings behind while every
+  # gate in the frontier's BOOT suite printed green about a wheel that no
+  # longer existed in source — §11 tripwire 4's worse sibling, since a green
+  # reading of a stale artifact reads as evidence rather than as silence. One
+  # line here is the whole counter-measure: the boot suite's verdict now says
+  # which wheel it is a verdict ABOUT.
+  if [ -f "$C/m2.wasm" ]; then
+    pin_boot=$(sha256sum boot/mentl.wasm | cut -d' ' -f1)
+    pin_m2=$(sha256sum "$C/m2.wasm" | cut -d' ' -f1)
+    if [ "$pin_boot" = "$pin_m2" ]; then
+      say "· pin freshness: boot IS the fixpoint of current source — boot-suite gates measure this wheel"
+    else
+      say "· pin freshness: boot is BEHIND current source (${pin_boot:0:8} vs m2 ${pin_m2:0:8})"
+      say "  every boot-suite gate below is a verdict on the OLD wheel; repin to measure this one"
+    fi
+  fi
   # THE SCAFFOLD RATCHET (CLAUDE.md ⟳ — every scaffold's destiny is ABSORPTION
   # into a verb, never permanence). The loop prompt is imperative prose telling
   # an agent how to behave, which is the one thing PLAN §0 proves cannot

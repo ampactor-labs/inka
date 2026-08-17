@@ -1,0 +1,62 @@
+// mn-eight-arms.mn — one authoring site per kernel arm, in one module.
+//
+// PLAN §2 says the eight ARE the aspects of a single cursor-read. This
+// fixture pins the half that is a SURFACE contract: every arm must be
+// sayable, and saying all eight at once must check and run. It is the
+// standing measurement behind `Hβ.cursor.eight-arms-at-every-site`,
+// which records the other half — that the cursor projects five arms at
+// a fn declaration and none at a type declaration.
+//
+//   arm 1 graph       every node resolves
+//   arm 2 handler     Tick + counter + resume-with-state
+//   arm 3 verb        |>  <|  ><  ~>  <~ , all five
+//   arm 4 row         a declared !Alloc, and Pure
+//   arm 5 ownership   own / ref parameter markers
+//   arm 6 refinement  type Gain = Float where ...
+//   arm 7 gradient    type Coeff = Float repr f64
+//   arm 8 reason      every edge carries one
+//
+// Exit 42 = every arm parsed, typed, lowered and ran together.
+
+type Gain = Float where self >= 0.0 && self <= 1.0
+
+type Coeff = Float repr f64
+
+effect Tick {
+  tick() -> Int
+}
+
+handler counter with n = 0 {
+  tick() => resume(n) with n = n + 1,
+}
+
+fn amplify(own x: Float, k: Coeff) -> Float with Pure = x * k
+
+fn attenuate(ref y: Float) -> Float with Pure = y * 0.5
+
+fn stage(x: Float) -> Float with Pure = x + 1.0
+
+fn ramp(prev: Float) -> Float with Pure = prev + 0.25
+
+fn main() = {
+  let g: Gain = 0.5
+  let a = amplify(2.0, g)
+  let b = attenuate(a)
+  let piped = b |> stage |> stage
+  let fanned = (stage(1.0)) >< (stage(2.0))
+  let shared = piped <| (stage, stage)
+  let looped = ((prev) => ramp(prev)) <~ Delay(1)
+  let counted = tick() ~> counter
+  match fanned {
+    (p, q) => match shared {
+      (r, s) => {
+        let arms = if p < q && r == s && looped > 0.0 && piped > 2.0 {
+          42
+        } else {
+          0
+        }
+        counted + arms
+      },
+    },
+  }
+}

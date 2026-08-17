@@ -2630,6 +2630,19 @@ for i in "${!compilers[@]}"; do
     fail "relocation order pin (elem order: $eo_elem)"
   fi
 
+  # ─── THE EIGHT ARMS, SAYABLE TOGETHER (PLAN §2) ─────────────────────
+  # One authoring site per kernel arm in one module: a refinement alias,
+  # a repr pin, an effect with a handler resuming with state, own/ref
+  # markers, a declared row, and all five verbs. PLAN §2 calls the eight
+  # the aspects of ONE cursor-read, and the surface half of that claim
+  # had no gate — every arm was exercised somewhere in the battery, none
+  # of them together. Exit 42 means all eight parsed, typed, lowered and
+  # ran as one program. The read half is the open peer
+  # Hβ.cursor.eight-arms-at-every-site: measured 2026-08-16, the cursor
+  # projects five arms at a fn declaration and none at a type
+  # declaration, so this leg holds the surface while that one is built.
+  run_program "$compiler" eight-arms "$ROOT/tests/frontier/mn-eight-arms.mn" 42 yes "$dir"
+
   # ─── The per-module solo sweep (PLAN §11 Phase 3.5, ratcheted) ──────
   # E_MissingVariable across every SHIPPED module's SOLO check, ceiling in
   # verify-baseline (solo_violations_max — monotone DOWN; 0 retires the

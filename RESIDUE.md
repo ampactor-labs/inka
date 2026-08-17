@@ -540,6 +540,38 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.cursor.eight-arms-at-every-site` — NAMED 2026-08-16, measured with
+a probe carrying one site per arm (the eight-arm fixture: refinement
+alias, repr pin, effect + handler + resume, own/ref params, a declared
+row, and all five verbs; it checks clean, so the SURFACE carries all
+eight). PLAN §2's claim is that the eight ARE the aspects of one
+cursor-read. The read is rich at a FUNCTION declaration and silent at
+three of the arms' own authoring sites. Measured verbatim: at
+`fn amplify(own x: Float, k: Coeff) -> Float with !Alloc` the cursor
+projects five arms (type, `Effects:`, `Ownership:`, `Teach:`, `Why:`);
+at `handler counter with n = 0 {` it projects `counter : t24295@e21654`
+with `Why: placeholder`, and at the arm `tick() => resume(n) with n =
+n + 1` it projects `resume( : t24294@e3` — an unresolved type variable,
+no row, and no resume-cardinality badge, at the single most
+handler-dense site there is; at `type Gain = Float where self >= 0.0
+&& self <= 1.0` and at `type Coeff = Float repr f64` it projects
+NOTHING but `placeholder at 3533:0-3576:0`. So arm 2 (handler + typed
+resume), arm 6 (refinement) and arm 7 (gradient) cannot be read where a
+developer authors them, which is PLAN §0 pt 5 — systems explain
+themselves — failing at three of eight. Two sub-findings ride it: the
+placeholder spans are LINK coordinates, not file coordinates
+(`Hβ.query.decl-site-file-coordinates` confirmed live a third time),
+and `mentl where` answers empty for any name outside its three badge
+families (repr width, resume cardinality, fanout schedule), which is
+correct for `where` and is why the ADDRESS form is the one that must
+carry all eight. The fix direction is the type-decl and handler-decl
+nodes reaching the same projection the fn-decl node already reaches;
+the aspects exist (audit projects rows, teach projects the gradient,
+proof-exactness projects obligations) and are simply not joined at
+those two node kinds. Sequenced with Phase 11.2's `mentl edit` polish,
+and it is the cheapest real gain in the felt band: three arms, one
+projection each.
+
 `Hβ.emit.under-application-suspension` — NAMED 2026-08-09 (found live
 by the trio-deletion landing). SYNTAX §«Partial application» promises
 that under-application IS the hole-product ("when exactly one field is

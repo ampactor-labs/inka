@@ -35,6 +35,43 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · ▶▶▶ THE PIN CATCHES UP, AND FOUR EXPECTATIONS CATCH UP
+  WITH IT (pin 011f0eefbf — CLEAN m2 == m3, re-pinned from m2 per
+  march.sh, 410798 lines, census 0; m3 leg 17.83s wall · 2301MB peak
+  RSS): `Hβ.march.boot-drifts-behind-clean-landings`, and the shape is
+  worth more than the fix. A CLEAN verdict (`m2 == m3`) means a landing
+  is correct and needs no repin — so several in a row correctly took
+  none, and boot sat at `5fe06c92` while source moved four landings
+  past it: the statement-span/dispatcher mint, the cursor declaration
+  projection, the skip_ws_back dissolution, the feedback row join.
+  Every gate in the frontier's BOOT suite reads that artifact, so the
+  board went on printing `frontier 367/0` about a wheel that no longer
+  existed in source. §11 tripwire 4 says a gate that stops being
+  reported stops being run; this is the worse sibling — a gate that
+  keeps being reported GREEN while measuring something stale, which
+  reads as evidence rather than as silence.
+  THE INSTRUMENT WAS ALREADY THERE, which is its own small lesson: the
+  previous iteration reverted a pin to observe the reds, when
+  `frontier-gate.sh --compiler fresh` shows them against current source
+  without touching boot at all. The banked probe said "repin, then
+  derive"; the repin was never needed to derive.
+  ALL FOUR REDS HAD ONE CAUSE, AND IT WAS NOT THE ROW JOIN. The
+  dispatcher mint starts a declaration's span at its `fn` KEYWORD, where
+  `parse_fn(tokens, pos + 1)` used to start it at the NAME. Measured
+  side by side on the same fixture: boot `at 3:4-3:24`, fresh `at
+  3:1-3:24`. The mcp propose fixtures contain no `<~` at all, which is
+  what exonerated the row join in one cheap read rather than a rebuild.
+  Re-banked under §9.11 — a banked expectation is a hypothesis about the
+  era that banked it — after deriving each by hand: `at 3:4` → `at 3:1`
+  (mcp refusal), `at 10:4` → `at 10:1` (own-unconsumed), `Query: double`
+  → `Query: fn double` and `Query: main(` → `Query: fn main(` (the
+  resident and living session legs, whose Query line now carries the
+  whole declaration — `Query: fn double(x) = x * 2 : (x: Int own —
+  inferred) -> Int` — where it used to carry the bare name).
+  With the pin caught up, the feedback-negation leg is wired: the `!E`
+  crucible that laundered a forbidden effect through a `<~` cycle now
+  refuses, on the pinned boot, permanently.
+
 - 2026-08-16 · ▶▶▶ THE DEMAND ANALYSIS LOSES ITS CONCAT SPINE
   (pin 5fe06c927b — TRANSITION, m3 == m4, re-pinned from m3 per
   march.sh, 410181 lines, census 0, crown 39/0, frontier 364/0,

@@ -1853,7 +1853,7 @@ for i in "${!compilers[@]}"; do
   fi
   if grep -q 'REFUSED — 1 claim' "$mcp_dir/out.jsonl" \
      && grep -q 'E_EffectMismatch' "$mcp_dir/out.jsonl" \
-     && grep -q 'at 3:4' "$mcp_dir/out.jsonl" \
+     && grep -q 'at 3:1' "$mcp_dir/out.jsonl" \
      && grep -q 'E_EffectUnhandled' "$mcp_dir/out.jsonl"; then
     pass "mcp propose REFUSES with file-local teaching spans"
   else
@@ -1903,7 +1903,7 @@ for i in "${!compilers[@]}"; do
      && grep -q '"name":"teach"' "$ses_dir/out.jsonl" \
      && grep -q 'x: Int own' "$ses_dir/out.jsonl" \
      && grep -q 'declared as main' "$ses_dir/out.jsonl" \
-     && grep -q 'Query: double' "$ses_dir/out.jsonl" \
+     && grep -q 'Query: fn double' "$ses_dir/out.jsonl" \
      && grep -q 'double : Pure' "$ses_dir/out.jsonl" \
      && grep -q 'severable:' "$ses_dir/out.jsonl" \
      && grep -qE 'annotation density|→ add' "$ses_dir/out.jsonl" \
@@ -2015,7 +2015,7 @@ for i in "${!compilers[@]}"; do
      && grep -q 'declared as double' "$liv_dir/out.jsonl" \
      && grep -q 'declared as triple' "$liv_dir/out.jsonl" \
      && grep -q 'triple : Pure' "$liv_dir/out.jsonl" \
-     && grep -q 'Query: main(' "$liv_dir/out.jsonl"; then
+     && grep -q 'Query: fn main(' "$liv_dir/out.jsonl"; then
     pass "living session: the graph tracks the tree — one re-derivation, post-edit reads answer the new truth"
   else
     fail "living session (moved=$(grep -c 'session: tree moved' "$liv_dir/err.log"); see $liv_dir/out.jsonl)"
@@ -2309,7 +2309,7 @@ for i in "${!compilers[@]}"; do
   # is the consume). Both faces + the fixture still runs.
   ou_chk=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-own-unconsumed.mn" 2>&1)
   ou_n=$(printf '%s' "$ou_chk" | grep -c 'T_OwnUnconsumed')
-  if [ "$ou_n" = "1" ] && printf '%s' "$ou_chk" | grep -q "at 10:4"; then
+  if [ "$ou_n" = "1" ] && printf '%s' "$ou_chk" | grep -q "at 10:1"; then
     pass "own-unconsumed: the dropped own narrates, the transferred own stays silent"
   else
     fail "own-unconsumed (fired=$ou_n, want exactly 1 at drops' decl)"
@@ -2628,6 +2628,22 @@ for i in "${!compilers[@]}"; do
     pass "relocation order pin: emission is source order (zeta alpha main)"
   else
     fail "relocation order pin (elem order: $eo_elem)"
+  fi
+
+  # ─── THE NEGATION REACHES INTO A `<~` RECURRENCE (PLAN §11 6.3) ─────
+  # The feedback-under-negation modal rule. `<~` is pure topology, but what
+  # the recurrence BODY performs is still performed, so a cycle must not
+  # launder a forbidden effect. Born RED against the pre-fix boot: the infer
+  # arm destructured the LHS lambda's row into `_row` and dropped it, so
+  # `fn cycle() with !E` around `((prev) => prev + bump()) <~ Delay(1)`
+  # checked CLEAN. Lives here rather than tests/crown/ because the crown's
+  # stdin harness links no lib and FeedbackSpec's constructors are prelude
+  # vocabulary — mn-thread-negation.mn's precedent.
+  fb_n=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$ROOT/tests/frontier/mn-feedback-negation.mn" 2>&1 | grep -cE 'E_EffectMismatch')
+  if [ "$fb_n" -ge 1 ]; then
+    pass "feedback negation: !E refuses the effect performed inside the recurrence"
+  else
+    fail "feedback negation (mismatch=$fb_n — the cycle laundered a forbidden effect)"
   fi
 
   # ─── THE EIGHT ARMS, SAYABLE TOGETHER (PLAN §2) ─────────────────────

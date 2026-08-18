@@ -35,6 +35,41 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE CAPTURE-FRAME FIX IS REFUTED, AND THE ITERATION STOPS
+  GUESSING (no pin — experiment reverted whole per step 5; boot unchanged
+  at 5a61fc4eba, src and lib byte-identical to the previous pin).
+  ▶ THE BUILD THE STAMP OWED. The design was to give the lowering scope a
+  way to declare a config slot, so a nested config ref in a handler state
+  init would resolve like any captured name. Reading the artifact
+  improved it before a byte changed: NO new op is needed, because
+  `ls_enter_frame(fn, locals, local_h, captures, capture_h, lambda_h)`
+  already resolves a name in CAPTURES to `RUpval(slot)`. Wrapping the
+  init lowering in a frame whose captures are the config names should
+  have given the nested case the identical lowering the top-level case
+  hand-builds — same slot numbering, same handle — while DELETING
+  `lower_state_init`'s special case into the general resolver.
+  ▶ IT MEASURED WORSE. m3 trapped. Probing the candidate wheel directly:
+  the bare program compiled fine (exit 7), the nested case was unchanged
+  (still 134), and the DIRECT case — which worked before at exit 10 —
+  had regressed to 134. So the frame was never consulted for these
+  lowerings, and deleting the special case removed the only mechanism
+  that worked. Reverted whole; `direct.mn` answers 10 again.
+  ▶ WHAT IS PROVEN SOUND IN ISOLATION, banked so the next attempt does
+  not re-read it: `ls_resolve` searches `frame.captures` and returns
+  `RUpval(cap_idx)`; `ls_enter_frame` is a plain push; and the install
+  path does reach the changed function, since
+  `lookup_handler_state_inits_of` calls `lower_state_field_inits`
+  directly. Every link checks out and the chain still fails.
+  ▶ THE HONEST LESSON OF THE DAY, and it is the second time it has been
+  written since morning: I guessed FOUR times in this iteration — the
+  capture-read class, the value 1024, "state inits are never judged", and
+  now the frame — and the artifact refused each one. A chain whose links
+  each verify and whose whole still fails is the signature of a wrong
+  MODEL, not a wrong link, and the answer to that is an instrument, not
+  another reading. The next probe is one print of `config_names` and the
+  resolution verdict at the init's VarRef; no third design before it
+  exists.
+
 - 2026-08-17 · RETRACTION: STATE INITS *ARE* JUDGED — THE GAP IS AT
   LOWER, WHERE ITS OWN COMMENT SAID (no pin — a correction and a design;
   boot unchanged at 5a61fc4eba, src and lib untouched).

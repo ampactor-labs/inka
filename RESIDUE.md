@@ -572,17 +572,32 @@ larger expression is a peer."
 ▶ THE REMAINING HONEST DEFECT is narrower but real: the failure is a
 runtime FLOOR, not a refusal. The program checks clean and traps at exit
 134, where a lowering that cannot lower a construct should refuse it.
-▶ THE FIX, designed against the artifact and NOT yet built: the lowering
-scope already has an `RUpval(slot)` verdict — `ls_resolve` returns it and
-line 2162 lowers it — so the config ref needs no "config-capture frame"
-at all, only a way to DECLARE one. Add `ls_bind_upval(name, slot)` beside
-the existing `ls_bind_local`, push a scope in
-`lower_state_field_inits`, bind each config name to its slot, lower the
-inits inside it, pop. Then a config ref resolves to `RUpval` at ANY
-depth, and `lower_state_init`'s top-level special case DISSOLVES into the
-general mechanism — the Carried-Truth payoff is that the fix deletes the
-special case rather than adding a second one. Marched, because it touches
-the scope resolver every lowered name goes through.
+▶ THE FIRST FIX ATTEMPT IS REFUTED (2026-08-17, reverted whole). No new
+op was needed: `ls_enter_frame(fn, locals, local_h, captures, capture_h,
+lambda_h)` already resolves a name in CAPTURES to `RUpval(slot)`, so
+wrapping the init lowering in a frame whose captures are the config
+names should have made a nested ref resolve exactly like the hand-built
+top-level case — same slot numbering (`capture_order` index ==
+`index_of_name`), same handle 0 — with `lower_state_init`'s special case
+dissolving into the resolver. It measured WORSE: m3 trapped, and probing
+the candidate wheel showed the DIRECT case (`with n = start`) had
+regressed to a trap too, while the nested case was unchanged. So the
+frame was not being consulted at all for these lowerings; deleting the
+special case simply removed the only thing that worked.
+WHAT IS PROVEN SOUND IN ISOLATION, so the next attempt need not re-check
+it: `ls_resolve` searches `frame.captures` and returns
+`RUpval(cap_idx)` with the capture's handle (lower.mn's handler body);
+`ls_enter_frame` is a plain push of a frame record; and the install path
+does reach this code — `lookup_handler_state_inits_of` calls
+`lower_state_field_inits` directly. Each link checks out and the chain
+still fails, which is precisely the shape that wants instrumentation
+rather than more reading: I guessed four times in this iteration and the
+artifact refused each guess.
+NAMED NEXT PROBE: instrument `lower_state_field_inits` to print
+`config_names` and the resolution verdict for each init's VarRef, then
+compile the two-line repro. One run says whether the frame is present
+and the name simply missing from it, or the frame is absent when the
+init lowers. Do not attempt a third design before that print exists.
 THE MINIMAL REPRO, seconds instead of a march
 (tests/frontier/mn-handler-state-from-config.mn, plus two scratch
 variants): `handler h(start) with n = start` runs and answers 10 —

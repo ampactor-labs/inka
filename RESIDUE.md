@@ -540,6 +540,42 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.own.region-index-per-install` — MEASURED and its first fix REFUTED,
+2026-08-17, pin 5a61fc4eba. With the branch spawn deleted the profile is
+unambiguous: `branch_bracket` 55.95% inclusive, `list_filled_from`
+specialised on Span 25.91% SELF, and 24.04% of the whole run reached
+from branch_bracket alone. The cause is `region_tracker`'s state
+initializer. `region_index_new()` builds a 65536-slot bucket list one
+`list_set` at a time, the initializer runs on EVERY install, and
+`branch_bracket` installs the handler per judged branch — so `fn main()
+= 7` writes ~28 million slots to hold a few dozen entries. The index
+itself is right and its comment says why (it replaced a linear find that
+was ~93% of a 2026-07-13 self-compile); the SIZING is what a branch
+should not inherit from the root.
+LANDED: the bucket count is read live from the index (`len` is
+`load_i32`), deleting the 65536/65535/65535 triplicate. Behaviour-neutral
+by itself, and the precondition for any sizing.
+THE KILL: making the count a handler CONFIG PARAM — `region_tracker(n)`,
+the root and trial installs passing 65536 and branch_bracket 1024 —
+TRAPPED m3 at exit 134 with zero bytes emitted. Probed twice: a top-level
+`let` and a bare literal trap identically, so it is NOT the
+capture-referencing-config-arg class `branch_bracket`'s own comment names
+(`Hβ.lower.install-config-capture-read`). Isolated by reverting the param
+alone and re-marching: mask-only is CLEAN, m2 == m3, census 0. So the
+defect is in giving THIS handler a config parameter at all, at one of
+these three install sites, and it is unexplained.
+NAMED NEXT PROBE, and nothing gets built on this until it runs: bisect
+the three installs. Give `region_tracker` a config param and pass it at
+the ROOT install only, leaving the trial and branch installs bare (they
+would take the hole, which typechecks — that is itself worth confirming
+against the trap). A clean march says the branch install is the problem;
+a trap says the handler's parameterisation is. Either answer names a real
+substrate gap, and the 24% is worth the probe.
+ALTERNATIVE ROUTE IF THE PARAM STAYS BROKEN: the region fact is a
+per-handle fact, which is exactly §11 5.5's column test — put it in a
+spine column, written at the one writer, and the per-install fill has
+nothing left to fill.
+
 `Hβ.infer.serialized-judge-still-spawns` — RESOLVED 2026-08-17, pin
 3fc233421e, the same day it was found. A block of ONE now runs its branch
 as a direct call (`BranchRec = BrDirect | BrSpawned`, decided by block

@@ -35,6 +35,44 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE BUCKET COUNT IS THE INDEX'S OWN — AND THE FIX IT WAS
+  FOR IS REFUTED (pin 5a61fc4eba — CLEAN m2 == m3, re-pinned from m2 per
+  march.sh, 412135 lines, census 0; m3 leg 16.55s wall · 2124MB peak
+  RSS).
+  ▶ THE PROFILE, RE-PRICED because the last landing invalidated it. With
+  the branch spawn deleted, `branch_bracket` is STILL 55.95% inclusive —
+  so the thread was never the cost, the BRACKET is — and
+  `list_filled_from` specialised on Span is 25.91% SELF, 24.04% of the
+  whole run reached from branch_bracket alone. The cause is
+  `region_tracker`'s state initializer: `region_index_new()` fills 65536
+  slots one `list_set` at a time, the initializer runs on EVERY install,
+  and branch_bracket installs it per judged branch. `fn main() = 7`
+  writes ~28 million slots to hold a few dozen entries.
+  ▶ WHAT LANDED. The bucket count was the literal 65536 in the
+  constructor and 65535 in both accessors' masks — one fact written three
+  times. `len` is `load_i32`, so the mask reads it from the list that
+  already knows it. Behaviour-neutral alone, and the precondition for any
+  sizing.
+  ▶ THE KILL. Making the count a handler CONFIG PARAM, so a branch could
+  size to its own statement instead of inheriting the root's, TRAPPED m3
+  at exit 134 with zero bytes. Probed twice — a top-level `let` and a
+  bare literal trap identically — so it is NOT the
+  capture-referencing-config-arg class branch_bracket's own comment
+  names. Reverting the param alone and re-marching gives CLEAN, which
+  isolates it exactly: the defect is in parameterising THIS handler at
+  one of its three install sites, and it is unexplained. The next probe
+  bisects the installs; RESIDUE carries it, with the spine-column route
+  as the alternative if the parameter stays broken.
+  ▶ A RATCHET CORRECTION, and the lesson is about ratchets not memory.
+  The peak ceiling was cut to 2250000 at the previous pin from ONE
+  reading of 2174492. Three pins of materially the same wheel read
+  2298592, 2174492 and 2256804KB, and this pin read 2175392 — ~120MB of
+  run-to-run variance. The tighter line was measuring noise, and it
+  REFUSED a clean fixpoint on its next run. Raised to 2310000, above the
+  highest of the three. A ratchet set inside its own measurement's
+  variance is not a ratchet; it is a coin flip that blocks good work, and
+  the rule that follows is to set a ceiling from a SPREAD, never a point.
+
 - 2026-08-17 · ▶▶▶ THE SINGLETON JUDGE BLOCK STOPS SPAWNING — 433
   THREADS TO ZERO, THE SWEEP 297.64s → 239.38s (pin 3fc233421e — CLEAN
   m2 == m3, re-pinned from m2 per march.sh, 412058 lines, census 0; m3

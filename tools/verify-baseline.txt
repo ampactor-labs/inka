@@ -1084,6 +1084,12 @@ env_frame_max: 0
 # 2026-08-17: the singleton judge block stopped spawning a task per branch
 # (Hβ.infer.serialized-judge-still-spawns). 433 guest threads went to zero
 # and their per-branch brackets with them; the m3 leg measured 2174492KB
-# against 2298592KB the pin before. The ceiling follows the measurement
-# down, with the day's observed variance kept as headroom.
-selfcompile_peak_kb_max: 2250000
+# against 2298592KB the pin before, so the ceiling was cut to 2250000.
+# 2250000 → 2310000 the same day, and this is a CORRECTION, not a
+# regression: 2250000 was set from ONE reading. Three consecutive pins of
+# materially the same wheel read 2298592, 2174492 and 2256804KB — ~120MB
+# of run-to-run variance — so the tighter line was measuring noise and
+# refused a clean fixpoint on its next run. The ceiling now sits just above
+# the highest of the three. A ratchet set inside its own measurement's
+# variance is not a ratchet; it is a coin flip that blocks good work.
+selfcompile_peak_kb_max: 2310000

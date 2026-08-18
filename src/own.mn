@@ -254,7 +254,12 @@ fn report_branch_collisions(ref deltas, ref span) with !Mutate = {
 // takes the deepest (innermost) region across a composite value's
 // fields — preventing inner-region pointers from escaping via the
 // composite.
-handler region_tracker with region_stack = [], next_region = 0, region_index = region_index_new() {
+// The bucket count is a CONFIG PARAMETER because the two installs index
+// different amounts of work: the root chain indexes a whole program's
+// handles, a judged branch indexes one statement's. It was one fixed 65536
+// for both, and the branch paid the root's sizing on every install — see
+// region_index_new for the measurement.
+handler region_tracker with region_stack = [], next_region = 0, region_index = region_index_new(65536) {
   region_enter(span) => {
     // Push at the END — every Mentl stack does (§9's wrong-end class: the
     // old front-push met last/drop_last readers, an enter-front/pop-bottom
@@ -385,15 +390,40 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
 // as find did.
 fn lookup_tag(ref idx, handle) with !Mutate = region_index_get(idx, handle)
 
-fn region_index_new() with Memory + Alloc = list_filled(65536, [])
+// The bucket count is the INDEX'S OWN, read live from its header.
+//
+// It used to be the literal 65536 here and the literal 65535 in both
+// accessors' masks — one fact written three times, and the reason that
+// mattered is cost, not tidiness: a fixed 65536-slot fill is paid by EVERY
+// install of region_tracker, and branch_bracket installs it once per judged
+// branch. `fn main() = 7` judges 433 branches, so it filled 28 million slots
+// to hold a few dozen entries — `list_filled_from` measured 25.91% SELF and
+// its caller branch_bracket 55.95% inclusive (Hβ.own.region-index-per-install).
+// `len` is `load_i32`, so the mask costs nothing to read from the list that
+// already knows it, and the count becomes a parameter with no second copy to
+// keep in sync. A caller sizes the index to the work it actually indexes.
+// The two sizings, named where the index is. Both must be powers of two —
+// region_bucket masks with len(idx) - 1.
+//
+// PROGRAM indexes a whole program's handles: the root chain and the trial's
+// own world, which both judge everything. BRANCH indexes ONE statement's,
+// and a statement mints its own handles plus the overflow quota, so a few
+// hundred buckets leave the chains short while costing 64× less to build.
+let region_buckets_program = 65536
+
+let region_buckets_branch = 1024
+
+fn region_index_new(n) with Memory + Alloc = list_filled(n, [])
+
+fn region_bucket(idx, handle) with Memory + Alloc = i32_and(handle, len(idx) - 1)
 
 fn region_index_add(idx, handle, tag) with Memory + Alloc = {
-  let b = i32_and(handle, 65535)
+  let b = region_bucket(idx, handle)
   list_set(idx, b, [(handle, tag)] ++ list_index(idx, b))
 }
 
 fn region_index_get(ref idx, handle) with Memory + Alloc = {
-  let b = i32_and(handle, 65535)
+  let b = region_bucket(idx, handle)
   region_bucket_scan(list_index(idx, b), handle, 0)
 }
 

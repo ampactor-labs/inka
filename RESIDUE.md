@@ -1551,10 +1551,39 @@ surface shape, the same distinction the fold's four leaf generators
 record. Each lands the way this one did: one variant, one label, one
 name in the grammar, one fixture line, one frontier spec.
 
+`Hβ.emit.invariant-failure-refuses-instead-of-trapping` — A COMPILE-TIME
+IMPOSSIBILITY IS EMITTED AS A RUNTIME TRAP, 1014 TIMES IN THE WHEEL'S OWN
+OUTPUT. Named 2026-08-18 when the census design below was refuted and the
+floor's own marker read out what lower had known all along.
+▶ `LInvariantFailure` is emitted where the compiler has PROVEN a path
+cannot run — the self-init repro's is `singleton op call with no live
+install: hf — the state global is 0 in this extent; install the handler
+(~> hf) around the calling walk`. The op, the handler, the extent and the
+fix, all present, all at compile time, delivered as `(unreachable)` with
+a WAT comment.
+▶ The emit arm's comment states the policy deliberately: "Compiler-created
+executable boundaries have no productive-under-error value. Preserve the
+typed invariant in the WAT diagnostic and terminate; no backend is
+permitted to guess a handle, row, representation, or edge." The
+no-guessing half is right and stays. The TERMINATE half is what §11
+column 2 drives to universal refusal — a program the medium has proven
+cannot run should not compile.
+▶ SCALE, measured: 1014 markers in a 13962716-byte m3.wat, all one class.
+▶ NOT MEASURED, and it is the next probe rather than a claim: whether
+those 1014 are unreachable-in-practice or the extent read is conservative
+at sites that do run. The wheel self-compiles, so they do not fire; which
+of the two reasons holds decides whether this is a refusal to arm or an
+extent analysis to sharpen, and the two want different builds.
+▶ DEP: none on band A. This is a diagnostics-and-gate question at the
+emit boundary, independent of the modal install-identity frontier that
+the entry below is blocked on.
+
 `Hβ.effects.root-gate-credits-an-install-that-had-not-opened` — AN OP
 BEFORE THE EXTENT OPENS IS THE MIRROR OF THE ONE AFTER IT CLOSES, and only
 one of them is caught. Measured 2026-08-18 at pin c3410610ce41: four runs,
-three projections.
+three projections. SUPERSEDED IN AIM by the entry above — the shape it
+chased is an `LInvariantFailure`, not an effect demand, so the gate was
+never the site.
 ▶ THE SHAPE. A handler whose state init performs the effect that handler
 itself handles compiles and TRAPS:
 
@@ -1619,6 +1648,34 @@ body's — which is exactly the distinction the narrow fix needs. The
 demands come from `walk_lemit(lowered)` + `drain_effect_census()`, so the
 change is at the CENSUS, not the gate: a demand would have to carry where
 it was performed.
+▶ THE CENSUS DESIGN WAS BUILT AND IS REFUTED (2026-08-18, reverted
+whole). `EmitEffectCensus` grew a pre-install demand channel, the
+`LHandleWith` walk installed a `~>` scope over its own `inits` carrying
+that install's absorbed enames, and the gate joined the pre-install set
+into `strict`. It MARCHED CLEAN — m2 == m3, census 0, battery green — and
+CHANGED NOTHING: the repro still compiled and still trapped, its emit
+byte-identical at 38467 bytes both sides.
+▶ BECAUSE THE PERFORM NEVER BECOMES A DEMAND. The trap is an
+`unreachable` in `main`, and the floor-naming landed earlier this session
+reads it out: `executable-boundary invariant: singleton op call with no
+live install: hf — the state global is 0 in this extent; install the
+handler (~> hf) around the calling walk`. Lower already DIAGNOSES this
+exactly — the op, the handler, the extent, the fix — and emits it as an
+`LInvariantFailure`, which the census walk does not visit as a demand at
+all. Three iterations of this arc aimed at the effect census; the fact
+was sitting in the emit under its own name.
+▶ SO THE FINDING RE-AIMS, AND UPWARD. This is not a gate that credits the
+wrong install; it is a compile-time-KNOWN impossibility emitted as a
+runtime trap. The emit arm's own comment states the policy — "Compiler-
+created executable boundaries have no productive-under-error value.
+Preserve the typed invariant in the WAT diagnostic and terminate" — which
+is exactly the shape §11 column 2 is driving to universal refusal.
+▶ AND IT IS NOT RARE. The wheel's own m3.wat (13962716 bytes) carries
+**1014** of this marker, every one the same class, `singleton op call
+with no live install`. What that number means is NOT measured: the wheel
+self-compiles, so those sites are unreached or the extent read is
+conservative, and which of the two is the next probe rather than a claim
+made here.
 ▶ WHICH MAKES THE SPLIT SMALLER THAN BAND A'S, NOT EQUAL TO IT. The
 comment defends a genuinely undecidable case (a dead extent versus live
 dynamic coverage). A state init is not that: it provably runs before any

@@ -704,6 +704,15 @@ loop_scaffold_refs_max: 3
 # The same landing tried to author five NEW markers and the gate refused
 # all five; dropping them left the emit byte-identical, so the inference
 # held every borrow already — the ceiling falls and nothing replaced it.
+# 2026-08-17: the SUGAR VOCABULARY contract — the prelude names the five
+# desugar-capable modules mint as literals, which is the seed set
+# Hβ.driver.link-is-reachability needs and a name-keyed contract nothing
+# else checks. EXACT, not a ceiling: a drop is a prelude rename breaking a
+# desugar path, a rise is a new mint nobody reviewed. Measured 44 with
+# str_literal_5 (an identity relic) already deleted out of it; the spliced
+# names were shown compiler-synthesized, so the literal scan sees all of it.
+desugar_vocabulary: 43
+
 authored_own_max: 83
 authored_ref_max: 814
 

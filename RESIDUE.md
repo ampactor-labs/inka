@@ -768,13 +768,27 @@ backend, the parser, infer and pipeline, intersected against what lib
 publishes. The lowering and backend hold 28; parser and infer add 16
 more, including `delay`, `not`, `concat`, `last`, `drop_last`,
 `byte_at`/`byte_len`, `str_of_buf`, `str_payload` and the float-render
-family. IT IS A LOWER BOUND AND NOT A PROOF: a name assembled by
-splicing a fold_sig never appears as a literal, so a scan cannot see it.
-The proof demand-linking needs is the lowering's own dispatch answering
-for itself, which is the named facet
-`Hβ.query.desugar-introduced-names` — until that exists the seed set
-must be over-approximated, and an over-approximation is SAFE here (it
-links more than needed, never less). The enumeration's first find was
+family. THE LOWER BOUND IS NOW A COMPLETE SET (2026-08-17, same day). The
+worry was that a name assembled by splicing a fold_sig would never
+appear as a literal. The splices were enumerated instead of assumed —
+55 across the lowering, the backend and infer — and every one is
+compiler-SYNTHESIZED: `__hstate_{h}`, `__fb_prev_{h}`,
+`__fanout_spawn_{i}_{h}`, `lambda_{n}`, `compose_{side}_{h}`,
+`hash_{fold_sig}`, `tuple_{int_to_str(h)}`, naming WASM locals, globals
+and generated functions the compiler emits itself, never a call into
+lib/. Of forty distinct spliced prefixes only `tuple_` shares a
+namespace with a prelude decl (tuple_get / tuple_set), and its splice is
+`tuple_{handle}`, which produces `tuple_1234` and never `tuple_get`. So
+the literal scan sees the whole vocabulary and the seed is COMPLETE.
+`Hβ.query.desugar-introduced-names` survives as the projection that
+would make this a graph read rather than a scan — worth building for the
+self-build ratchet, no longer load-bearing for the demand-link.
+THE SET IS NOW A GATE: verify holds `desugar_vocabulary: 43` exact, so a
+name entering or leaving the vocabulary refuses until the seed is
+reconsidered (seen RED at 43 → 44). Its limits are measured and stated
+at the check itself: set membership cannot see one corrupted mint among
+several of a name, and an outright prelude rename breaks the wheel's own
+compile first. The enumeration's first find was
 `str_literal_5`, an identity function carrying a name-keyed type-checker
 special case and a comment naming the deleted bootstrap; it is gone.
 THE SUPERSEDED TEXT, kept because it states the risk correctly: the

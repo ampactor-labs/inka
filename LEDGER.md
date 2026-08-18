@@ -35,6 +35,46 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE SPLICED-NAME GAP IS CLOSED, AND THE SEED SET IS A
+  CONTRACT (no pin — tools only; boot unchanged at e7c2da624b, src and
+  lib untouched, so the fixpoint stands).
+  ▶ THE STAMP'S LAST RISK, DISCHARGED BY MEASUREMENT. The sugar set was
+  measured at 44 names by scanning quoted literals, and banked honestly
+  as a LOWER BOUND: a name assembled by splicing a fold_sig would be
+  invisible to that scan. So the splices were enumerated — 55 of them
+  across the lowering, the backend and infer — and every one is
+  compiler-SYNTHESIZED: `__hstate_{h}`, `__fb_prev_{h}`,
+  `__fanout_spawn_{i}_{h}`, `lambda_{n}`, `compose_{side}_{h}`,
+  `hash_{fold_sig}`, `tuple_{int_to_str(h)}`. These name WASM locals,
+  globals and generated functions the compiler emits itself; none is a
+  call into lib/. Checked rather than eyeballed: of forty distinct
+  spliced prefixes, only `tuple_` shares a namespace with any prelude
+  decl (tuple_get / tuple_set), and its splice is `tuple_{handle}` —
+  `tuple_1234`, never `tuple_get`. THE LITERAL SCAN SEES THE WHOLE SET,
+  so demand-linking's seed vocabulary is complete and the peer is
+  unblocked on that count.
+  ▶ THE CONTRACT. verify now holds `desugar_vocabulary: 43` EXACT (44
+  minus the `str_literal_5` relic deleted at the previous pin). The
+  reason it is worth a gate is not hygiene: when that set changes, the
+  demand-link's SEED must change with it, and nothing else in the repo
+  would say so.
+  ▶ WHAT THE RED TESTS TAUGHT, and this is the honest half. The first
+  draft of the gate's comment claimed it catches a prelude rename
+  breaking a desugar path. Two RED tests refuted its own author.
+  Renaming `list_to_flat` in lib/ aborted verify long before the check
+  ran — the wheel's own source calls it, so that break is loud already.
+  Corrupting ONE `"list_to_flat"` literal in the lowering left the count
+  at 43, because this is SET MEMBERSHIP and the name appears more than
+  once. What it does catch was then seen RED properly: a new prelude
+  name entering the vocabulary moved 43 → 44 and refused. The comment
+  and the failure message were rewritten to claim exactly that and no
+  more — a gate that oversells what it proves is the Carried-Truth Law
+  violated at the prose layer, and the artifact caught it here.
+  ▶ ONE PROCESS SLIP, recorded because the law is explicit: the baseline
+  value 43 was written by arithmetic (44 minus the deleted relic) and
+  only then measured. It agreed, but the order was wrong — the number
+  goes in AFTER the read, never before.
+
 - 2026-08-17 · ▶▶▶ THE SUGAR SET IS 44 NAMES, AND ONE OF THEM WAS A
   RELIC (pin e7c2da624b — CLEAN m2 == m3, re-pinned from m2 per
   march.sh, 411950 lines, census 0; m3 leg 19.52s wall · 2239MB peak

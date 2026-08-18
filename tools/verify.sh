@@ -252,6 +252,37 @@ if C=$(wt_m2_ensure); then
     say "✗ quiet-gate RATCHET: authored ref rose $refmax -> $cref — the inference failed somewhere; teach it, do not annotate around it."
     fail=1
   fi
+  # The SUGAR VOCABULARY contract (Hβ.driver.link-is-reachability's seed).
+  # The prelude names the compiler MINTS as literals are the seed set a
+  # demand-link must carry: reachability from written names alone would miss
+  # them, so the day that set changes is the day the seed must change with
+  # it. This is the SIZE of the intersection between what lib/ publishes and
+  # what the five desugar-capable modules quote, held EXACT.
+  # WHAT IT CATCHES, stated precisely because the first draft of this comment
+  # oversold it and the RED tests said so: a name ENTERING or LEAVING the
+  # vocabulary — a new name-keyed dependency on the prelude that nobody
+  # reviewed (seen RED: 43 -> 44), or the last mint of a name going away.
+  # WHAT IT DOES NOT CATCH: one broken mint among several of the same name,
+  # because this is set membership, not occurrence counting (measured — a
+  # deliberately corrupted "list_to_flat" left the count at 43). And a
+  # prelude decl RENAMED outright breaks the wheel's own compile long before
+  # this line runs, so that case never reaches here either.
+  # The set is complete as a literal scan: all 55 SPLICED names were measured
+  # compiler-synthesized (__hstate_, __fb_, lambda_, tuple_{handle} …), none
+  # able to collide with prelude vocabulary.
+  sv_pre=$(mktemp); sv_min=$(mktemp)
+  { grep -hoE '^fn [a-z_][A-Za-z0-9_]*' lib/prelude.mn lib/runtime/*.mn | sed 's/^fn //'
+    grep -hoE '^type [A-Z][A-Za-z0-9_]*|^  = [A-Z][A-Za-z0-9_]*|^  \| [A-Z][A-Za-z0-9_]*' lib/prelude.mn lib/runtime/*.mn | sed -E 's/^(type|  = |  \| )//'
+  } | sort -u > "$sv_pre"
+  grep -hoE '"[A-Za-z_][A-Za-z0-9_]*"' src/lower.mn src/backends/wasm.mn src/parser.mn src/infer.mn src/pipeline.mn | tr -d '"' | sort -u > "$sv_min"
+  csugar=$(comm -12 "$sv_pre" "$sv_min" | wc -l)
+  rm -f "$sv_pre" "$sv_min"
+  svmax=$(grep -E '^desugar_vocabulary:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  say "· sugar vocabulary: $csugar prelude name(s) minted by the desugar — the lowering's name-keyed contract with lib/"
+  if [[ -n "$svmax" && "$csugar" != "$svmax" ]]; then
+    say "✗ sugar-vocabulary CONTRACT: $svmax -> $csugar — the demand-link's seed set changed. A prelude name entered or left the desugar vocabulary; re-derive the set, decide whether the seed follows it, and move the baseline in the same commit."
+    fail=1
+  fi
   # The ANONYMITY ratchet — the census tier's convictions (PLAN §11 Phase
   # 2.5): the whole-link counts of CsEta (an anonymous fn whose name
   # already exists) and CsEffectfulLambda (a row without a decl home).

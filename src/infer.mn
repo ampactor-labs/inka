@@ -2254,6 +2254,25 @@ fn judge_blocks(ref rows, ref bases, ref stmts, summ, ceil, gseed, iseed, base, 
   )
 }
 
+// A block member is either a task to join or a branch already judged.
+//
+// The SPAWN IS THE CONCURRENCY, NEVER THE SEMANTICS, and the artifact says so
+// at three places: branch_bracket (installed inside branch_judge, spawned or
+// not) carries the private env overlay and the deferred diagnostics; graph,
+// intern, the ledgers and the summaries "stay the root's live instances"; and
+// the `~> graph_handler` wrapper below exists ONLY because a spawned
+// instance's world is empty where the sequential form's render reads the
+// dispatch chain's own instance. So a block of ONE has nothing to gain from a
+// thread — it runs alone by definition — and it was paying a full OS thread
+// plus its bracket for that nothing, which measured as roughly half the
+// compile of `fn main() = 7` (433 threads, wasi_thread_start 48.45%
+// inclusive; Hβ.infer.serialized-judge-still-spawns).
+// The decision is by BLOCK SIZE, not by reading judge_window: at 1 every
+// block is a singleton and goes direct, and when Phase 9.2 restores K=8 the
+// full blocks spawn again with no edit here — a trailing singleton block
+// still going direct, which is correct and free.
+type BranchRec = BrDirect(a) | BrSpawned(b)
+
 fn spawn_block(ref rows, ref bases, ref stmts, summ, ceil, gseed, iseed, base, seed, top0, ref idxs, j, hi, own recs) = if j >= hi {
   recs
 } else {
@@ -2261,6 +2280,7 @@ fn spawn_block(ref rows, ref bases, ref stmts, summ, ceil, gseed, iseed, base, s
   match rows[i] {
     (_, count) => {
       let range = (bases[i], bases[i] + count, top0 + i * mint_overflow_quota)
+      let solo = hi - j == 1 && len(recs) == 0
       // The task body mirrors the root's OUTER shape: an arm's performs
       // resolve outer to its install (R2), so diag_branch's renders
       // chase OUTSIDE the bracket — sequentially they land on the
@@ -2271,8 +2291,11 @@ fn spawn_block(ref rows, ref bases, ref stmts, summ, ceil, gseed, iseed, base, s
       // repro). The wrapper reproduces the root's answers byte-for-byte;
       // the render-reads-the-guard's-fabrication class is named for its
       // own landing (Hβ.diag.render-chases-wrong-instance).
-      let rec =
-        spawn_task(() => branch_judge(stmts[i], base, seed, summ, ceil, gseed, iseed, range) ~> graph_handler([], 0, 0, 0, [], 0, 0))
+      let rec = if solo {
+        BrDirect(branch_judge(stmts[i], base, seed, summ, ceil, gseed, iseed, range))
+      } else {
+        BrSpawned(spawn_task(() => branch_judge(stmts[i], base, seed, summ, ceil, gseed, iseed, range) ~> graph_handler([], 0, 0, 0, [], 0, 0)))
+      }
       spawn_block(
         rows,
         bases,
@@ -2293,8 +2316,21 @@ fn spawn_block(ref rows, ref bases, ref stmts, summ, ceil, gseed, iseed, base, s
   }
 }
 
-fn join_block(ref recs, j, own acc) =
-  if j >= len(recs) { acc } else { join_block(recs, j + 1, push(acc, join_task(recs[j]))) }
+fn join_block(ref recs, j, own acc) = if j >= len(recs) {
+  acc
+} else {
+  join_block(
+    recs,
+    j + 1,
+    push(
+      acc,
+      match recs[j] {
+        BrDirect(facts) => facts,
+        BrSpawned(t) => join_task(t),
+      }
+    )
+  )
+}
 
 fn layer_join_walk(ref facts, j) = if j >= len(facts) {
   ()

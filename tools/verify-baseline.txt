@@ -582,7 +582,14 @@ comment_refs_max: 0
 # (inference derives the borrow), and dropping it moved one scheme back.
 # 469 is the count of the tree that shipped — §9.11, a banked expectation
 # is a hypothesis about the era that banked it.
-movers_max: 469
+# 469 → 470 at the singleton-block direct call (2026-08-17): a block of one
+# judges in the ROOT's instance now instead of a spawned one, so one scheme's
+# trial/final divergence relocated with it. Zero trial/final machinery in the
+# diff — the same relocation artifact the 480 → 481 entry above measures, and
+# the same ruling applies: the divergence relocates rather than resolves, and
+# rung 3 deletes the class. Fixed inputs: same wheel source, same fixture set,
+# the only variable being whether a singleton branch spawns.
+movers_max: 470
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.
@@ -1074,4 +1081,9 @@ env_frame_max: 0
 # 2026-08-12 the delay-line + peel-fix landings combined: measured
 # 2471324KB, 1.3MB over the prior line — two wheel-growing landings'
 # additive footprint inside the day's observed run variance.
-selfcompile_peak_kb_max: 2500000
+# 2026-08-17: the singleton judge block stopped spawning a task per branch
+# (Hβ.infer.serialized-judge-still-spawns). 433 guest threads went to zero
+# and their per-branch brackets with them; the m3 leg measured 2174492KB
+# against 2298592KB the pin before. The ceiling follows the measurement
+# down, with the day's observed variance kept as headroom.
+selfcompile_peak_kb_max: 2250000

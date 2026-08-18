@@ -35,6 +35,47 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · ▶▶▶ THE SINGLETON JUDGE BLOCK STOPS SPAWNING — 433
+  THREADS TO ZERO, THE SWEEP 297.64s → 239.38s (pin 3fc233421e — CLEAN
+  m2 == m3, re-pinned from m2 per march.sh, 412058 lines, census 0; m3
+  leg 15.23s wall · 2123MB peak RSS).
+  ▶ THE STAMP, ANSWERED AGAINST THE ARTIFACT before a byte changed. The
+  question was whether a branch's isolation is load-bearing at K=1 or
+  inherited from the K=8 design. Three readings say inherited:
+  `branch_bracket` — installed inside `branch_judge`, spawned or not —
+  carries the private env overlay and the deferred diagnostics; the
+  bracket's own comment says graph, intern, the ledgers and the
+  summaries "stay the root's live instances"; and the `~> graph_handler`
+  wrapper on the spawn exists ONLY because a spawned instance's world is
+  empty where the sequential render reads the dispatch chain's own
+  instance — it was added to reproduce the sequential form, which is the
+  form a direct call simply IS. The spawn is the concurrency, never the
+  semantics.
+  ▶ THE BUILD. `BranchRec = BrDirect | BrSpawned`, and a block of ONE
+  runs its branch as a direct call. The decision is by BLOCK SIZE, not by
+  reading `judge_window`, so Phase 9.2's K=8 restores spawning with no
+  edit here and a trailing singleton block still goes direct — correct
+  and free.
+  ▶ MEASURED, and this is the arc's first real win after six probes that
+  each cleared a suspect: guest threads 433 → 0 (peak 10, exactly the
+  runner's own baseline, so the guest now spawns none); the floor fixture
+  0.78s → 0.58s over seven settled reads; the frontier sweep 297.64s →
+  239.38s at 371/0; the m3 leg 2298592KB → 2174492KB with its ceiling
+  lowered to 2250000 to hold it.
+  ▶ THE CROWN CAUGHT THE ONE REAL CONSEQUENCE, which is the part worth
+  keeping. The first march came back CLEAN on the fixpoint with 139/139
+  micros and census 2 — two E_EffectMismatch, both on ImageAlloc. A
+  task's body row never reached its spawner, so the thread boundary had
+  been HIDING the branch's allocation from every caller's row; the direct
+  call makes it visible. `driver_check_module` and `rederive_cone` now
+  declare what they always performed. That is a row widened by DELETION,
+  not by a new effect, and nothing but the effect system would have said
+  so.
+  ▶ WHAT IT MEANS FOR THE ARC. `Hβ.driver.link-is-reachability` is still
+  the named build and its pricing stands, but the floor it attacks is now
+  0.58s rather than 0.78s, and the phases it can skip (lex 4.17%, parse
+  4.02%, the judge's ~15%) are a larger share of what remains.
+
 - 2026-08-17 · HALF THE COMPILE IS SPAWNING BRANCHES THAT RUN ONE AT A
   TIME (no pin — the finding and its stamp; boot unchanged at
   e7c2da624b, src and lib untouched).

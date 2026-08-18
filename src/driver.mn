@@ -216,7 +216,11 @@ fn driver_extract_imports(ref source) with Memory + Alloc + Intern + GraphRead =
 // the §4④ image-persist peer (Hβ.persist.module-image-cache): the
 // graph image memcpy'd whole, keyed by source + transitive dep
 // hashes — never a second serializer.
-fn driver_check_module(ref module_name) with Memory + Alloc + Filesystem + WASI + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern + Cast + Mutate + BranchEnv + Consume + WasiThreads = {
+// ImageAlloc is honest, and it arrived by DELETION: a singleton judge block
+// now runs its branch as a direct call instead of a spawned task, and a task's
+// body row never reached its spawner. The allocation was always performed —
+// the thread boundary was hiding it from the row.
+fn driver_check_module(ref module_name) with Memory + Alloc + ImageAlloc + Filesystem + WASI + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + DiagRegister + LookupTy + Verify + InferCtx + Intern + Cast + Mutate + BranchEnv + Consume + WasiThreads = {
   let path = driver_module_path(module_name)
   if !fs_exists(path) {
     report(EMissingModule(module_name, path, span_zero()))
@@ -805,7 +809,9 @@ fn names_join(ref xs) with Memory + Alloc =
 // closure's own projection): each module parses fresh and infers into
 // the restored world — re-registration shadows its stale entries — and
 // keeps its statement bucket for the reassembly.
-fn rederive_cone(ref cone) with Memory + Alloc + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern + Cast + BranchEnv + Consume + WasiThreads + DiagRegister = map(
+// ImageAlloc: the same deletion as driver_check_module above — the branch's
+// allocation stopped hiding behind a thread boundary.
+fn rederive_cone(ref cone) with Memory + Alloc + ImageAlloc + WASI + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx + Intern + Cast + BranchEnv + Consume + WasiThreads + DiagRegister = map(
   (m) => {
     let ast = infer_program_converged(fs_read_file(driver_module_path(m)))
     (m, ast)

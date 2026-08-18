@@ -540,7 +540,24 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.infer.serialized-judge-still-spawns` — MEASURED 2026-08-17 by the
+`Hβ.infer.serialized-judge-still-spawns` — RESOLVED 2026-08-17, pin
+3fc233421e, the same day it was found. A block of ONE now runs its branch
+as a direct call (`BranchRec = BrDirect | BrSpawned`, decided by block
+size so Phase 9.2's K=8 restores spawning untouched). The stamp's
+question — is the isolation load-bearing at K=1 — was answered NO by
+three readings of the artifact: `branch_bracket` carries the env overlay
+and deferred diagnostics whether spawned or not; graph, intern, ledgers
+and summaries are the root's live instances by the bracket's own comment;
+and the `~> graph_handler` wrapper existed only to reproduce the
+sequential form a spawned instance's empty world had broken. MEASURED:
+guest threads 433 → 0, floor 0.78s → 0.58s, sweep 297.64s → 239.38s, m3
+peak 2298592KB → 2174492KB. ONE CONSEQUENCE the crown caught and nothing
+else would have: a task's body row never reached its spawner, so the
+thread boundary was hiding the branch's ImageAlloc from every caller —
+`driver_check_module` and `rederive_cone` now declare what they always
+performed. The record of the find follows.
+
+`Hβ.infer.serialized-judge-still-spawns` (the finding) — MEASURED 2026-08-17 by the
 first aggregate profile of a trivial compile, and it is the dominator six
 prior probes missed. §11 5.2 SERIALIZED the parallel final on 2026-08-07
 (`judge_window = 1`, infer.mn) because the K=8 fan's correctness rested

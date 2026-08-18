@@ -1551,10 +1551,75 @@ surface shape, the same distinction the fold's four leaf generators
 record. Each lands the way this one did: one variant, one label, one
 name in the grammar, one fixture line, one frontier spec.
 
-`Hβ.emit.invariant-failure-refuses-instead-of-trapping` — A COMPILE-TIME
-IMPOSSIBILITY IS EMITTED AS A RUNTIME TRAP, 1014 TIMES IN THE WHEEL'S OWN
-OUTPUT. Named 2026-08-18 when the census design below was refuted and the
-floor's own marker read out what lower had known all along.
+`Hβ.emit.invariant-failure-refuses-instead-of-trapping` — REFUTED
+2026-08-18, one iteration after it was banked, by reading the marker's own
+instruction context instead of its text.
+▶ THE 1016 ARE NOT IMPOSSIBILITIES. Every one sits in the `(else` arm of
+an `(if (result i32)` guarded on `world_find`:
+
+    (call $world_find <hkey>)
+    (if (result i32)
+      (then  … call the op …)
+      (else  (unreachable) ;; singleton op call with no live install …))
+
+That is a runtime BELT under a live world lookup — the install chain read
+live, exactly as Carried-Truth demands, with a loud precise refusal when
+nothing is there. The count at the current pin is 1016 in a 13953554-byte
+m2.wat (the 1014 banked before came from the reverted build's artifact
+and is struck), across 497 enclosing fns and 30 handlers, the top being
+the wheel's own bracket: graph_handler 501, env_handler 164,
+lookup_ty_graph 88. Those are the handlers `infer_context` installs, so
+the sites run under a live install every time — the guard is simply not
+statically discharged that far up the call chain.
+▶ AND THE REPRO'S TRAP IS THE SAME BELT FIRING CORRECTLY. Its marker has
+the identical guarded shape. The init genuinely runs before its handler's
+`world_push`, `world_find` genuinely returns 0, and the medium genuinely
+says so, naming the op, the handler, the extent and the fix. Nothing is
+wrong at runtime.
+▶ SO THE ENTRY'S OWN HEADLINE WAS WRONG ON BOTH HALVES — not a
+compile-time impossibility, and not a trap where a diagnostic belongs.
+The previous iteration read the marker's TEXT, counted it, and inferred a
+policy; one read of the surrounding instructions dissolved it. Recorded
+rather than quietly edited, because the tell is worth keeping: a
+marker's message describes the branch it sits in, never the branch's
+guard.
+▶ WHAT SURVIVES, narrower and still real: for the self-init shape the
+zero is STATICALLY PROVABLE. The perform lowers inside `LHandleWith`'s
+own `inits` field, before that install's `world_push`, so
+`world_find` at that site cannot answer. Refusing there is possible where
+refusing at the 1016 general sites is not, and that distinction is the
+whole remaining peer — see below.
+
+`Hβ.emit.self-init-singleton-call-is-statically-uninstalled` — THE ONE
+SITE WHERE THE BELT'S GUARD IS DECIDABLE. A singleton op call lexically
+inside the `inits` of the very install whose handler it names has a
+`world_find` that provably returns 0: the install's `world_push` has not
+run, by construction, for every install of that handler.
+STAMP. TRACED: `walk_lemit`'s `LHandleWith(_, b, hn, hname, inits,
+arm_names)` already separates `inits` as its own field, and
+`install_group_enames` over `arm_names` is the set that install absorbs —
+both read at the node, both O(1) in the walk. The emit's singleton arm
+already knows the handler name it is looking up. The pair of facts is
+present; nothing needs deriving.
+PRICED: NOT MEASURED. The emit is a streaming projection (wat_stdout
+emits as it walks), and the executable gate runs BETWEEN reachability and
+emit, so a refusal discovered during emit is discovered too late to leave
+stdout with zero WAT — which is the gate's own contract. Whether the
+decidable case can be lifted to the gate's pre-emit pass, or whether the
+gate needs a second read, is the pricing question and it is what the next
+step measures.
+WRITERS: the emit's singleton-call arm (backends/wasm.mn) decides the
+shape; a pre-emit refusal would instead land in the executable gate
+(pipeline.mn). Which of the two is the site depends on the pricing above,
+so the writer set is NOT settled.
+NOT COMPLETE: the config-default sibling is unmeasured — a default
+performing the handler's own effect presumably reaches the same belt, and
+"presumably" is the word this loop has been punished for, so it is a
+probe and not a claim.
+
+▶ THE ORIGINAL OBSERVATION, kept for the arc: named 2026-08-18 when the
+census design below was refuted and the floor's own marker read out what
+lower had known all along.
 ▶ `LInvariantFailure` is emitted where the compiler has PROVEN a path
 cannot run — the self-init repro's is `singleton op call with no live
 install: hf — the state global is 0 in this extent; install the handler

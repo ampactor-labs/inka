@@ -989,12 +989,29 @@ same fact, derived twice, and the two derivations disagree.
 fn's name qualify drops its closure binding; the row arc merely happened
 to trip it. This is the first mechanism in the sub-arc that actually
 explains the trap, after six explanations that did not.
-▶ NEXT STEP, and it is a BUILD with a precise target: find the emit site
-that writes the `local.set` for a nested fn's closure binding and make it
-read the SAME name the index global reads. The allocator arms
-(`emit_memory_bump` / `emit_memory_arena`) are not it — they emit
-`(local.set $<target> (call $alloc …))`; the dropped line binds an
-already-allocated record, so the site is the let-binding path.
+▶ PROVEN BY POSITION (2026-08-17), which is what makes it a mechanism
+rather than a story. `$go` is bound TWICE in m2 and ONCE in m3, and the
+order is the whole point: m2 sets at body line 19 and first reads at 21;
+m3 has NO set before its first read at line 20, its only set landing at
+32. The local is zero at that read, and that zero is the closure the tail
+call dispatches on — use-before-def, ending in `indirect call type
+mismatch`. The full n=0 diff of the body is seven lines: two index-global
+renames, one comment rename, and one PURE DELETION with no counterpart.
+▶ A NEAR-RETRACTION, recorded because the recovery is the lesson. A
+census of `local.set` lines appeared to show the binding present in BOTH
+generations, which would have refuted the whole finding — but that census
+filtered out any line containing `state_tmp`, and the dropped line is
+`(local.set $go (local.get $state_tmp))`. The filter excluded exactly the
+evidence. The positional read settled it; a windowed diff and a filtered
+count each lied in opposite directions, and only the unfiltered,
+unwindowed measurement was true.
+▶ NEXT STEP, a BUILD with a precise target: find what drops the FIRST
+binding when the nested fn's name qualifies. The `LLet` emit itself
+always writes its `local.set` (wasm.mn's `LLet(h, name, val)` arm), so
+the loss is upstream — a lowering or dedup decision that treats the
+binding as redundant once the name changes. The allocator arms are not
+it; they emit `(local.set $<target> (call $alloc …))`, and the dropped
+line binds an already-allocated record.
 ▶ AN AMBIENT FIND, banked because the instruction was stale where the
 docs stated it: WABT 1.0.39's `wasm-objdump` accepts NO feature flags at
 all — no `--enable-tail-call`, no `--enable-threads` — and disassembles

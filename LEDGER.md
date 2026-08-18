@@ -35,6 +35,38 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · USE-BEFORE-DEF, PROVEN BY POSITION — AND A NEAR-RETRACTION
+  THAT WAS ITSELF THE ERROR (no pin — probe only; boot unchanged at
+  6e05bd9404ed).
+  ▶ THE MECHANISM IS COMPLETE. `$go` is bound TWICE in m2's `parse_int`
+  and ONCE in m3, and the ORDER carries the fault: m2 sets at body line
+  19 and first reads at 21; m3 has no set before its first read at line
+  20, its only set landing at 32. The local is zero at that read, and
+  that zero is the closure the tail call dispatches on — use-before-def
+  ending in `indirect call type mismatch`. The full unwindowed diff of
+  the body is seven lines: two index-global renames, one comment rename,
+  and one PURE DELETION with no counterpart.
+  ▶ THE NEAR-RETRACTION, recorded because the recovery is the lesson.
+  Mid-iteration a census of `local.set` lines appeared to show the
+  binding present in BOTH generations, which would have refuted the whole
+  finding, and I began writing the retraction. That census filtered out
+  any line containing `state_tmp` — and the dropped line is `(local.set
+  $go (local.get $state_tmp))`. The filter excluded exactly the evidence.
+  ▶ THREE INSTRUMENTS, TWO OF THEM LYING IN OPPOSITE DIRECTIONS: a
+  windowed diff (n=2) showed a deletion and could not prove the absence
+  of a counterpart elsewhere; a filtered census showed presence and had
+  silently dropped the line; only the unwindowed diff plus the positional
+  read were true. The law says measure rather than reason, and this
+  iteration adds the corollary — a measurement's FILTER is part of the
+  claim, and an instrument that excludes the evidence reads exactly like
+  a refutation.
+  ▶ NEXT STEP, a BUILD with a precise target: find what drops the FIRST
+  binding when a nested fn's name qualifies. The `LLet` emit always
+  writes its `local.set`, so the loss is upstream — a lowering or dedup
+  decision that treats the binding as redundant once the name changes.
+  The allocator arms are not it: they emit `(local.set $<target> (call
+  $alloc …))`, and the dropped line binds an already-allocated record.
+
 - 2026-08-17 · THE MECHANISM IS COMPLETE: A DROPPED `local.set`, AND IT IS
   A NAME-KEYED RE-DERIVATION (no pin — probe only; boot unchanged at
   6e05bd9404ed).

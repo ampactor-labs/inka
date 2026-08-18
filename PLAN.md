@@ -1618,9 +1618,10 @@ type mismatch` at `parse_int_go`, through `lex_from` → `lex`. The NAMES are ex
 corpus are identical across generations, and wasm names are advisory — so
 the fault is the read-past half of the same diff: three PARENT fns
 (`index_of`, `parse_int`, `op_synth_default_enumerate_inhabitants`)
-differ STRUCTURALLY. That divergence is now READ and the mechanism is complete: m3 drops
-`(local.set $go (local.get $state_tmp))` while keeping its reader, so the
-closure is null and the tail call mismatches. One nested fn, two name
+differ STRUCTURALLY. That divergence is now READ and PROVEN BY POSITION: m2 binds `$go` at
+body line 19 and first reads at 21, while m3 drops that binding and its
+first read at line 20 precedes any write, so the local is zero and the
+closure the tail call dispatches on is null. One nested fn, two name
 derivations — the index global qualifies, the local binding does not.
 Carried-Truth at the emitter, latent and independent of rows. The arc is
 three steps: fix that emit site, then the discriminator, then the writer

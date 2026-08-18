@@ -1,0 +1,15 @@
+// CROWN — the sound dual at the HANDLER STATE carrier: the same
+// effectful closure sits in the handler's state and is never called, so
+// the install transports it under `with !E` and performs nothing.
+// Must accept.
+effect E { op() -> Int }
+
+effect Feed { tick() -> Int }
+
+handler quiet with s = () => op() {
+  tick() => resume(1),
+}
+
+fn good() with !E = (tick()) ~> quiet
+
+fn main() = good()

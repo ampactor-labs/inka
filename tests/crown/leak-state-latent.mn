@@ -1,0 +1,19 @@
+// CROWN — latency rides HANDLER STATE: a closure performing E held in a
+// handler's own state field, CALLED from an arm, with the install under
+// `with !E`. The row must ride the state slot to the arm's call.
+// Expect E_EffectMismatch.
+//
+// Distinct from leak-handler-residual, which rides a CONFIG fn. §5.U calls
+// config and state one unified record (handler IS state IS closure), so the
+// rule has to hold at both slots, and only the config slot was pinned.
+effect E { op() -> Int }
+
+effect Feed { tick() -> Int }
+
+handler holder with s = () => op() {
+  tick() => resume(s()),
+}
+
+fn bad() with !E = (tick()) ~> holder
+
+fn main() = bad()

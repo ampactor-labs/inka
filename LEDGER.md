@@ -35,6 +35,29 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · HANDLER STATE JOINS THE LATENCY RULE — CROWN 41 → 43 (no
+  pin — crucibles only; boot unchanged at 5a61fc4eba, wheel source
+  untouched).
+  ▶ PRIORITY SERVED: the 6.3 modal sweep, continuing from the sum
+  carrier landed at the previous tick.
+  ▶ THE GAP. `leak-handler-residual` pins a CONFIG fn's row reaching the
+  residual, and nothing pinned the STATE slot. §5.U calls config and
+  state ONE unified record — handler IS state IS closure IS evidence — so
+  the latency rule has to hold at both, and only one was covered.
+  `leak-state-latent` holds `() => op()` in a handler's own state field,
+  calls it from an arm, and installs under `with !E`: refused
+  (mismatch=1). `sound-state-transport` stores the identical closure and
+  never calls it: accepted. The crown already held the rule at this slot;
+  the sweep pins it so the board can see it regress.
+  ▶ SEEN RED: inverting the leak so the arm resumes a constant instead of
+  calling the state closure takes the gate to `✗ want reject,
+  mismatch=0`, crown 42/1, and back to 43/0 on restore.
+  ▶ THE STORAGE-CARRIER FAMILY IS NOW COMPLETE against §5.U's five
+  node-kinds: sequence (list element), product (record field, tuple
+  position), sum (variant payload), and the handler record's own two
+  slots (config, state). A word cannot carry a closure, and the function
+  kind is the escape case already pinned by leak-escape-negation.
+
 - 2026-08-17 · THE SUM CARRIER JOINS THE LATENCY RULE — CROWN 39 → 41
   (no pin — crucibles only; boot unchanged at 5a61fc4eba, wheel source
   untouched).

@@ -35,6 +35,48 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE SITE IS FOUND, AND IT ALREADY CARRIES A FIX FOR THIS
+  EXACT TRAP (no pin — the output is a design stamp; boot unchanged at
+  6e05bd9404ed).
+  ▶ wasm.mn's `LMakeClosure` arm binds a self-recursive closure's own
+  local to the record BEFORE filling captures, guarded on
+  `captures_self(captures_exprs, fn_name)`. Its comment names this
+  iteration's symptom verbatim — "a null fn_ptr, the parse_int nested-go
+  indirect-call-type-mismatch that trapped m3 in the lexer". Someone met
+  this before and wrote the guard; the guard is what fails now.
+  ▶ THE DEFECT IS TWO NAMESPACES IN ONE FIELD. `LFn` carries a single
+  `name`, and the emit spends it on two incompatible things: the
+  table-index global, deliberately qualified through
+  `spec_closure_name(fn_name)`, and the LOCAL binding, which must match
+  the source-level name the capture reads. `captures_self` compares a
+  capture's `LLocal(_, nm)` against `fn_name` with `field_name_eq`, so
+  once lower qualifies, "go" versus "parse_int_go" answers false, the
+  early bind is skipped, and the self-capture reads a zero local. The
+  guard is not the only casualty: even firing, `local_wat_name(fn_name,
+  RI32)` would bind `$parse_int_go` while the reader reads `$go`.
+  ▶ THE STAMP, and its incompleteness is stated rather than papered.
+  TRACED: one `name` field read at two sites with opposite requirements,
+  diverging exactly when the discriminator starts working. PRICED: a
+  representation change — `LFn` carries binding name and emitted symbol
+  as separate facts, or qualification moves to emit where both consumers
+  already sit — touching every `LFn` construction and destructure.
+  WRITERS: lower mints the names; wasm.mn reads them at the closure emit,
+  the index global, and `captures_self`. NOT ENUMERATED: the full `LFn`
+  site set, which is the next iteration's first move and the reason this
+  iteration stops at the stamp rather than building.
+  ▶ THE ULTIMATE FORM IS AN IDENTITY COMPARISON. "Is this capture the
+  closure being built" is a handle question the graph can answer, and it
+  is being answered by comparing two strings drawn from different naming
+  schemes — the string-keyed drift the catalog names. `LMakeClosure`'s own
+  handle is in scope at the site (destructured as `_h`) and each capture
+  carries one; whether those two are comparable is unmeasured, and that
+  measurement decides whether the fix is a representation change or a
+  one-line read.
+  ▶ EIGHT ITERATIONS WITHOUT A src LANDING, named plainly: the row work
+  is blocked behind this, and this is now stamped rather than open. The
+  loop's own rule applies — never build unstamped — and the stamp is this
+  iteration's whole output.
+
 - 2026-08-17 · USE-BEFORE-DEF, PROVEN BY POSITION — AND A NEAR-RETRACTION
   THAT WAS ITSELF THE ERROR (no pin — probe only; boot unchanged at
   6e05bd9404ed).

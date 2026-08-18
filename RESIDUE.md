@@ -1005,13 +1005,40 @@ filtered out any line containing `state_tmp`, and the dropped line is
 evidence. The positional read settled it; a windowed diff and a filtered
 count each lied in opposite directions, and only the unfiltered,
 unwindowed measurement was true.
-▶ NEXT STEP, a BUILD with a precise target: find what drops the FIRST
-binding when the nested fn's name qualifies. The `LLet` emit itself
-always writes its `local.set` (wasm.mn's `LLet(h, name, val)` arm), so
-the loss is upstream — a lowering or dedup decision that treats the
-binding as redundant once the name changes. The allocator arms are not
-it; they emit `(local.set $<target> (call $alloc …))`, and the dropped
-line binds an already-allocated record.
+▶ THE SITE IS FOUND, AND IT ALREADY CARRIES A FIX FOR THIS EXACT TRAP.
+wasm.mn's `LMakeClosure` arm binds a self-recursive closure's own local
+to the record BEFORE filling captures, guarded on
+`captures_self(captures_exprs, fn_name)`, and its comment names the
+symptom verbatim: "a null fn_ptr, the parse_int nested-go
+indirect-call-type-mismatch that trapped m3 in the lexer". The guard is
+what fails.
+▶ THE DEFECT IS TWO NAMESPACES IN ONE FIELD. `LFn` carries a single
+`name`, and the emit spends it on two different things: the table-index
+global, deliberately qualified through `spec_closure_name(fn_name)`, and
+the LOCAL binding, which must match the source-level name the capture
+reads. `captures_self` compares a capture's `LLocal(_, nm)` name against
+`fn_name` by string (`field_name_eq`), so once lower qualifies, `"go"`
+versus `"parse_int_go"` answers false, the early bind is skipped, and the
+self-capture reads a zero local. And the guard is not the only casualty:
+even firing, `local_wat_name(fn_name, RI32)` would bind `$parse_int_go`
+while the reader reads `$go`.
+▶ THE STAMP. TRACED: one `name` field on `LFn`, read at two sites with
+incompatible requirements (emitted symbol wants qualification, local
+binding must not have it); the capture side never qualifies, so the two
+diverge exactly when the discriminator starts working. PRICED: the fix is
+a representation change — `LFn` carries the binding name and the emitted
+symbol as separate facts, or qualification moves to emit where the two
+consumers already sit — and it touches every `LFn` construction and
+destructure. WRITERS: lower mints `LFn` names (the nested-fn
+discriminator path); wasm.mn reads them at the closure emit, the index
+global and `captures_self`. NOT COMPLETE: the full `LFn` site set is not
+enumerated yet, and that enumeration is the next iteration's first move.
+▶ AN IDENTITY COMPARISON IS THE ULTIMATE FORM — "is this capture the
+closure being built" is a handle question the graph can answer, and it is
+being answered by comparing two strings drawn from different naming
+schemes, which is the string-keyed drift the catalog names. The site has
+`LMakeClosure`'s own handle in scope (destructured as `_h`) and each
+capture carries one; whether those two are comparable is unmeasured.
 ▶ AN AMBIENT FIND, banked because the instruction was stale where the
 docs stated it: WABT 1.0.39's `wasm-objdump` accepts NO feature flags at
 all — no `--enable-tail-call`, no `--enable-threads` — and disassembles

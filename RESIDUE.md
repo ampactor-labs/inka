@@ -1551,6 +1551,69 @@ surface shape, the same distinction the fold's four leaf generators
 record. Each lands the way this one did: one variant, one label, one
 name in the grammar, one fixture line, one frontier spec.
 
+`Hβ.effects.handler-state-init-row-never-installed` — A HANDLER'S STATE
+INIT PERFORMS IN THE INSTALLER'S WORLD AND CHARGES NOBODY. Measured
+2026-08-18 at pin c968f690567b, on the 6.3 modal sweep; three runs, one
+projection.
+▶ THE LEAK. `handler hf with s = op() { g() => resume(s) }` installed by
+`fn bad() with !E = (g()) ~> hf` checks CLEAN, and `T_OverDeclared`
+volunteers that the body "only uses Pure". Repro:
+
+    effect E { op() -> Int }
+    effect F { g() -> Int }
+    handler hf with s = op() {
+      g() => resume(s),
+    }
+    fn bad() with !E = (g()) ~> hf
+    fn main() = bad()
+
+▶ THE INIT REALLY PERFORMS, which is what makes it a leak rather than a
+dead expression. Give `op` a handler returning 7 and install both —
+`((g()) ~> hf) ~> he` — and the program exits **7**. The value reached
+`s` through an install-time performance of E resolved by the outer
+handler.
+▶ THE CONTROL REFUSES, so the POSITION is the variable: the identical
+`op()` written in `bad()`'s body is
+`E_EffectMismatch: !E + Any vs E`. Body charges, init does not.
+▶ ARMS ALREADY CHARGE. `tests/crown/leak-arm-adds-row` refuses on the
+same shape one layer over, so this is not "the tee never adds" — it is
+the init specifically sitting off whatever channel the arms ride.
+▶ AND THE HANDLER'S TYPE HAS NOWHERE TO PUT IT: `mentl query "type hf"`
+projects `Handler(F)` — the effect HANDLED, with no row for what the
+handler performs. SYNTAX's tee rule is
+`row(expr ~> h) = row(expr) - handled(h) + row(h)`, and the `+ row(h)`
+half has no carrier in that type. infer.mn's own PTee comment says so in
+as many words — "we don't have handler-value typing so arm_row can't be
+extracted from RHS" — a comment measured TRUE this turn and pointing at
+the same hole.
+
+STAMP — `Hβ.effects.handler-state-init-row-never-installed`.
+TRACED: `infer_handler_state_inits` walks each init with `infer_expr` at
+HANDLER-DECLARATION time, so whatever row the init performs is charged
+against the frame current when the DECL is judged, not against any
+install site. At runtime the init evaluates once per install, in the
+installer's world — measured above. The two disagree, and the honest
+reading is SYNTAX's: an init is part of the handler, so its row belongs
+in `row(h)` and the tee's existing `+ row(h)` carries it to every
+installer. That is not a new concept and not a fork; it is the rule
+already written, with a carrier that does not exist yet.
+PRICED: unmeasured, and deliberately so — the cost turns on where the
+arm channel puts its row, and reading code to guess that is the error
+this loop has paid for five times. The read is O(1) per install either
+way (a row already computed, joined at an edge already drawn); what is
+unpriced is whether a carrier on `Handler(F)` is an arity change at the
+handler type's own sites.
+WRITERS: NOT ENUMERATED. `infer_handler_state_inits` is where the init's
+row is produced; where the ARM row reaches an installer is the unfound
+half, and finding it is the build's first move — the arm channel is the
+existing, working precedent this fix should join rather than duplicate.
+NOT COMPLETE: three questions stay open and each is a measurement, not an
+opinion. Does a config PARAMETER's default expression perform in the same
+position? Does an init performing an effect the handler ITSELF handles
+resolve to its own arms (a self-install) or to the enclosing world? And
+does the wheel contain any effectful init today — measured indirectly as
+NO, since every gate is green and this leak would hide one, but not
+measured directly.
 `Hβ.tools.green-stamp-under-included-three-batteries` — RESOLVED
 2026-08-18, and the finding is that the loop's own law was being broken by
 the loop. `wt_state_key` hashed `tests/micros/*.mn` and not

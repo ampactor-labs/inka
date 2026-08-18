@@ -44,6 +44,19 @@ type CensusShape
   | CsParallelArrays
   | CsVtableRecord
   | CsEnvFrame
+  // The first DECLARED-SURFACE shape, distinct in kind from every shape
+  // above it: those ask what the source DOES (a drift silhouette, a
+  // judged row, a verb glyph), this asks whether a form SYNTAX declares
+  // is written here at all. The selector needs it — §11 tripwire 3 says
+  // the board is green on what the wheel does and silent on everything
+  // else, so every oracle-blind probe opens by asking which declared
+  // surfaces the wheel never writes, and until now that question could
+  // only be answered by a grep from outside the medium
+  // (`Hβ.query.default-param-census`). Labeled arguments, as-patterns,
+  // record rest and named row aliases are the siblings this arm's shape
+  // fits; each is one more variant reading its own carrier, not a
+  // generalized surface parameter, because their carriers differ.
+  | CsDefaultParam
 
 // Sum type covering every forensic question `mentl query` can pose.
 // Each variant corresponds to one `ask(Q)` arm in `query_default`.
@@ -456,6 +469,7 @@ fn census_label(shape) with Pure = match shape {
   CsParallelArrays => "parallel-arrays site(s)",
   CsEnvFrame => "env-frame site(s)",
   CsVtableRecord => "vtable-record literal(s)",
+  CsDefaultParam => "default-valued parameter(s)",
 }
 
 fn census_sites(shape) with GraphRead + !Mutate + Alloc + Memory = match graph_snapshot() {
@@ -646,6 +660,23 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
       PVar(name) => env_frame_name(name),
       _ => false,
     },
+    _ => false,
+  },
+  CsDefaultParam => // The declared surface read from the carrier that already holds it:
+  // a default is TParam slot 4, an Option(Node) the parser fills at the
+  // declaration, so this is a chase to a fact the graph proves and never
+  // a re-derivation from source text. SYNTAX makes the slot load-bearing
+  // rather than decorative — the default is a callee-scoped fill, so its
+  // row is the callee's row, which is why the crown pins it as a carrier
+  // (leak-default-latent / sound-default-transport).
+  match body {
+    NStmt(FnStmt(_, params, _, _, _)) => any(
+      (p) => match param_default(p) {
+        Some(_) => true,
+        None => false,
+      },
+      params
+    ),
     _ => false,
   },
 }

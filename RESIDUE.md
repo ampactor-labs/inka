@@ -666,23 +666,24 @@ SYNTAX §«Named effect rows» is not wrong here and must not be edited to
 match the artifact: the identity `E - F = E & !F` is the intended
 semantics and the lathe has not been turned to it.
 
-`Hβ.query.default-param-census` — THE MEDIUM CANNOT BE ASKED WHETHER THE
-WHEEL EXERCISES A SURFACE. The census projects judgment shapes (eta
-wrappers, effectful lambdas, the absorbed drift modes) and structural
-ones (`anonymous`, the verb glyphs), but nothing answers "where does this
-DECLARED SURFACE appear in the link" — so establishing that the wheel
-writes no default-valued parameter took a grep with a `# mentl-skip`
-confession, twice (once for the count, once to prove the file set
-non-empty so the zero was a verdict). That question is the selector's
-own: §11 tripwire 3 says the board is green on what the wheel does and
-silent on everything else, and every oracle-blind probe begins by asking
-exactly this. The shape is a `CensusShape` over declared forms, reading
-the weave the same way `CsEta` and `CsParallelArrays` do; the surfaces
-worth it are the ones SYNTAX declares and the wheel may never write —
-default values, labeled arguments, as-patterns, record rest, named row
-aliases. It lands with the census roster it joins, one entry and one
-label, the way mode 1's absorption left that tier a single fold over
-`drift_roster()`.
+`Hβ.query.default-param-census` — ✅ RESOLVED 2026-08-17, pin
+a6e900f35888. `CsDefaultParam` is the census's first DECLARED-SURFACE
+shape: where every shape before it asks what the source DOES, this asks
+whether a form SYNTAX declares is written here at all — the question
+every oracle-blind probe opens with, which a day earlier took two greps
+behind two `# mentl-skip` confessions. It reads `TParam`'s own default
+slot (`Option(Node)`, filled by the parser at the declaration), so the
+count is a chase to a fact the graph proves; the medium now answers
+`0 default-valued parameter(s)` about its own weave, confirming the
+grep's verdict by a different channel. Seen RED first — the frontier leg
+failed against the standing boot before the shape existed.
+▶ THE SIBLINGS REMAIN, each its own arm reading its own carrier:
+labeled arguments (the call's product fields), as-patterns (the pattern
+binder), record rest (the residual slot), named row aliases (the row
+decl). They are real leaves of one walk rather than one parameterized
+surface shape, the same distinction the fold's four leaf generators
+record. Each lands the way this one did: one variant, one label, one
+name in the grammar, one fixture line, one frontier spec.
 
 `Hβ.diag.row-polymorphic-body` — WHAT THE CURSOR SHOULD SAY AT A FREE ROW
 CELL. `enforce_row_gate`'s unbound arm now teaches nothing there (pin

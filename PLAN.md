@@ -1563,6 +1563,12 @@ namespace against `mentl help` (five true findings on its first run).
 `anonymous` + the verb glyphs, count + located sites over the judged weave;
 the frontier leg pins each shape counting its own site; its one blind shape
 is Phase 2.0's opening measurement, `Hβ.eq.pipekind-match-eq-divergence`).
+The roster grew its first DECLARED-SURFACE shape 2026-08-17 —
+`default-param` asks not what the source does but whether a form SYNTAX
+declares appears at all, which is what an oracle-blind probe (tripwire 3)
+needs and what a grep from outside the medium had been answering; its
+siblings are labeled arguments, as-patterns, record rest and named row
+aliases, each reading its own carrier.
 **0.4** the SYNTAX conformance battery (`tests/syntax/`, one fixture per
 declared form, green-or-named). The full mechanics: `LEDGER.md`.
 

@@ -35,6 +35,44 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · pin a6e900f35888 · THE CENSUS GROWS ITS FIRST
+  DECLARED-SURFACE SHAPE. CLEAN, m2 == m3, census 0, frontier 371/0,
+  16.66s wall · 2277312 KB peak.
+  ▶ WHAT IT IS, and why it is a different KIND of shape. The fourteen
+  shapes before it ask what the source DOES — a drift silhouette, a
+  judged row, a verb glyph. `default-param` asks whether a form SYNTAX
+  DECLARES is written here at all. That is the question every
+  oracle-blind probe opens with (§11 tripwire 3: the board is green on
+  what the wheel does and silent on everything else), and yesterday it
+  could only be answered from outside the medium — the previous entry's
+  own measurement took two greps behind two `# mentl-skip` confessions,
+  one for the count and one to prove the file set non-empty so the zero
+  was a verdict.
+  ▶ IT READS THE CARRIER THE GRAPH ALREADY HOLDS. A default is `TParam`
+  slot 4, an `Option(Node)` the parser fills at the declaration, so the
+  detector is `NStmt(FnStmt(_, params, _, _, _))` with `param_default`
+  read per param — a chase to a proven fact, never a re-derivation from
+  source text. No new graph state and no writer added; the census stays
+  a read, and the walk was already O(nodes).
+  ▶ MEASURED, and it CONFIRMS yesterday's grep independently: the census
+  facet run against the wheel's own entry answers `0 default-valued
+  parameter(s)` over the judged weave. The wheel writes no
+  default-valued parameter, now established by the medium about itself
+  rather than by a regex about its text.
+  ▶ SEEN RED FIRST, properly: the frontier leg was added before the
+  shape existed and failed against the standing boot — "census
+  'default-param' misses its own site (line 39)" — then passed against
+  the new pin, with the fixture line read back from the artifact rather
+  than counted.
+  ▶ THE SIBLINGS STAY SEPARATE ARMS ON PURPOSE. Labeled arguments,
+  as-patterns, record rest and named row aliases are the surfaces worth
+  the same treatment, and each reads its OWN carrier — so each is one
+  more variant, not a generalized surface parameter. They are real
+  leaves of one walk, the distinction the fold's four leaf generators
+  already record.
+  ▶ CLOSES `Hβ.query.default-param-census`, banked one iteration ago.
+  The confession named the missing projection; the projection exists.
+
 - 2026-08-17 · THE DEFAULT PARAMETER IS A CARRIER, AND IT WAS THE ONE THE
   BOARD COULD NOT SEE (no pin — tests only; boot unchanged at
   5446b82bddd4, wheel source untouched). Crown 48 → 50, both legs green.

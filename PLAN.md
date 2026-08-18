@@ -1594,11 +1594,14 @@ refusing, and the baked offset is call-site independent (one body,
 the fork's concrete face — one compiled body cannot carry a per-caller
 layout. The WRITER is `unify_two_open_records`, whose `va != vb` arm
 closes both tails to the other side's extras instead of linking them, and
-the textbook repair (one shared fresh tail) marched BROKEN: m4 trapped,
-because binding a row handle to a Ty re-opens the untagged row-slot union
-`graph_bind_record_row`'s own comment was written to prevent. The fix's
-shape survives — link, do not close — and its representation must stay in
-the row sort.
+the textbook repair (one shared fresh tail) marched BROKEN TWICE — once
+binding a row handle to a Ty, once entirely inside the row sort with the
+tail as `Option(Int)` on `NRecordRowBound`. Same signature both times
+(~131.5k diff lines, m3 clean, m4 trapping at exit 134), which refutes
+the sort-crossing explanation and leaves the SEMANTIC change as the
+cause: the linked form yields a compiler that mis-compiles the wheel one
+generation on. The tail vocabulary is landed and inert; which reader must
+follow the tail and does not is the open direction.
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
 NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
 found nothing: `tests/syntax/` had no history under any ref, no gate

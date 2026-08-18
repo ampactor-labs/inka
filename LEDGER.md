@@ -35,6 +35,39 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE LINKED TAIL BREAKS IN THE ROW SORT TOO — MY OWN CAUSE
+  REFUTED (no pin — experiment reverted whole; boot unchanged at
+  6e05bd9404ed, the vocabulary pin stands).
+  ▶ THE STAMP'S DEBT WAS PAID and the answer is a kill. Last iteration
+  landed the tail slot as vocabulary and named the writer flip as this
+  iteration's work. It went in exactly as designed: the op carries
+  `Option(Int)`, the terminating call site passes `None` where the other
+  side is CLOSED (the one case where None is a proof rather than an
+  assumption), the tail gets its own occurs guard at the row sort, and
+  `unify_two_open_records` mints one shared fresh tail for both vars.
+  ▶ BROKEN, WITH THE SAME SIGNATURE AS THE SORT-CROSSING ATTEMPT: 131497
+  diff lines against that attempt's 131477, m3 clean both times (exit 0,
+  census 0), m4 trapping both times at exit 134 with zero lines.
+  ▶ THAT REFUTES THE CAUSE I BANKED. The first break was recorded here as
+  the untagged-union hazard — `graph_bind` putting a Ty onto a row handle,
+  the thing `graph_bind_record_row`'s comment was written to prevent. This
+  attempt never left the row sort and failed identically, so the cause is
+  the SEMANTIC change (linking the tails), not how the link is stored. I
+  wrote that explanation with the artifact's own comment as support and it
+  was still wrong; the comment explained a DIFFERENT past failure, and
+  reading it as this one's cause was the fluency trap the loop names.
+  ▶ WHAT IS NOW MEASURED, and it is the useful residue: the linked form
+  produces a compiler that is itself clean and then mis-compiles the wheel
+  one generation on. A self-application failure, invisible before the m4
+  leg — which is why the previous entry's instruction to watch that leg
+  from the first run was right even though its reasoning was not.
+  ▶ THE NAMED NEXT PROBE, stated as a direction rather than a cause: every
+  reader except `open_record_full_fields` takes the tail as `_` — occurs,
+  resolve, subst, the renderers. CLAUDE.md's law is that the walks over
+  one structure must AGREE, and a chain one walk chases while another
+  ignores it is that disagreement. It is unmeasured. Two dead explanations
+  in this arc are what skipping that distinction costs.
+
 - 2026-08-17 · pin 6e05bd9404ed · THE ROW RESIDUAL GROWS ITS TAIL, AS
   VOCABULARY. CLEAN, m2 == m3, census 0, frontier 371/0, 16.91s wall ·
   2270116 KB peak.

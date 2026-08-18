@@ -867,17 +867,29 @@ the textbook row rule, and `open_record_full_fields` ALREADY chases
 `NBound(TRecordOpen(more, v2))`, so the reader anticipates the shape. The
 verdict was BROKEN: m2 ≠ m3 by 131477 lines and m4 trapped at exit 134
 with zero lines — the medium stopped reproducing itself.
-▶ AND THE ARTIFACT HAD ALREADY RECORDED WHY, in the op the change went
-around: `graph_bind_record_row`'s comment says the residual lives "under
-its OWN node kind (NRecordRowBound)" because "binding residuals under
-NRowBound made the row slot an untagged EffRow-or-Ty union every row
-walk's catch-all silently crossed." Binding a row handle to a Ty via
-`graph_bind` is that same untagged union by another door. The shape of
-the fix (LINK, do not close) survives; its REPRESENTATION must stay in
-the row sort — a linked tail wants vocabulary inside `NRecordRowBound`
-(residual fields plus an unknown-remainder marker) or its own node kind,
-never a Ty bound onto a row handle. That is the next attempt's
-constraint, and it was readable before the march rather than after.
+▶ THE SORT-CROSSING EXPLANATION IS REFUTED (2026-08-17, second attempt).
+That first break was attributed here to `graph_bind` putting a Ty on a
+row handle, re-opening the untagged union `graph_bind_record_row`'s
+comment warns about. The ROW-SORT-NATIVE form was then built — the tail
+as `Option(Int)` inside `NRecordRowBound`, its own occurs guard, the
+chase arm in `open_record_full_fields` — and it BROKE IDENTICALLY: 131497
+diff lines against the first attempt's 131477, m4 trapping at exit 134
+with zero lines both times. Same signature, different representation, so
+the cause is the SEMANTIC change (linking the tails) and not how the link
+is stored. The banked cause was wrong and is struck.
+▶ WHAT THE TWO ATTEMPTS TOGETHER MEASURE: m3 is clean at both (exit 0,
+census 0) and m4 traps at both, so the linked form produces a compiler
+that mis-compiles the wheel one generation on. That is a self-application
+failure, invisible until the m4 leg — which is why the leg is watched
+from the first run here.
+▶ THE NAMED NEXT PROBE: which READER must follow the tail and does not.
+Every reader outside `open_record_full_fields` takes the tail as `_` —
+occurs, resolve, subst, the renderers. CLAUDE.md's own law is that the
+walks over one structure must AGREE, and a linked chain that one walk
+chases and another ignores is exactly that disagreement. This is a
+DIRECTION, not a cause: it has not been measured, and the two dead
+explanations in this entry are what that distinction costs when it is
+skipped.
 ▶ THE VOCABULARY LANDED 2026-08-17, pin 6e05bd9404ed, CLEAN and
 behaviour-identical: `NRecordRowBound` carries `Option(Int)` as its tail —
 `None` terminates, `Some(v)` continues at another row var — and

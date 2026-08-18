@@ -567,16 +567,31 @@ completion prune is exonerated by bypass. So an OPEN row reaches the
 gate, and `T_OverDeclared`'s "body only uses Pure" is a DISPLAY artifact
 — the third time a display misled this arc.
 
-▶ THE GATE ADMITS IT DELIBERATELY, ON A PROMISE THAT IS NOT KEPT.
-`row_subsumes(body_row, declared_row)` (infer:3378) reaches an open body
-tail and returns true, and its own comment says why: "A body tail STILL
-EtOpen after resolve is GENUINELY free — empty after full inference ...
-the free tail is vacuous at the gate (THE REBIND AT THE GATE CLOSES IT TO
-THE DECLARED ROW). Rejecting it was the ~80% row-var slice of the
-self-compile's false effect-mismatches — measured at 646." The rebind
-does not happen. The assumption "still-open means genuinely empty" holds
-for a MONOMORPHIC fn and is false for a polymorphic HOF, where the tail
-is a parameter's row a CALLER instantiates with real effects.
+▶ THE GATE HAS TWO ARMS AND THE REPRO TAKES THE ONE NOBODY WAS READING
+(measured 2026-08-17, and it retracts this entry's own previous claim
+that `row_subsumes`' open-tail admission is the site). `enforce_row_gate`
+matches the chased cell: an `NRowBound` arm that reports the REAL body
+row, and an unbound arm that hardcodes `mk_ef_pure()`. The repro takes
+the UNBOUND one — `fn run(f) with A = f()` projects `run : r39693@e2`, a
+bare free var, while a genuinely chargeless body BINDS (`fn
+chargeless(x) with A = x + 1` projects `chargeless : Pure`). Both narrate
+"body only uses Pure" through different arms, which is why the display
+misled this arc three separate times.
+▶ THE DISCRIMINATOR, one variable at a time: `run`'s row var and its
+param's row var are DIFFERENT and unconnected (`r39693@e2` vs
+`r39695@e2`); add any concrete charge and they fuse (`A + r39713@e8` in
+the row, `r39713@e8` on the param); a block body alone changes nothing
+(`r39699` vs `r39701`). So the connection mechanism exists and works —
+it does not fire when the accumulated row would be ONLY the param's var.
+`union_row` is exonerated at its definition (`tail_join(EtClosed, tb) =
+tb` preserves the var), so the loss is downstream of the union and above
+the gate, and that step is NOT yet measured.
+▶ THE OTHER ADMISSION IS REAL TOO, and deliberate: when the cell IS
+bound with an open tail, `row_subsumes` admits it, its comment stating
+both the reason and a compensation that does not happen — "the free tail
+is vacuous at the gate (THE REBIND AT THE GATE CLOSES IT TO THE DECLARED
+ROW). Rejecting it was the ~80% row-var slice of the self-compile's
+false effect-mismatches — measured at 646."
 
 ▶ THE CONTRAST THAT PINS THE BOUNDARY: `fn direct() with OnlyA = opb()`
 REFUSES (`E_EffectMismatch: A vs B`), and a concrete local closure
@@ -599,17 +614,38 @@ not miscompiled, because the caller is charged through the scheme; the
 function's own contract is silently discarded, and anything reading it is
 misled.
 
-▶ WHERE THE FIX GOES, and why it is not a patch anyone should reach for
-mid-loop. It cannot live in `row_subsumes`: that function is a READ by
-explicit design ("a read that rebinds row vars would make every
-projection a writer"), which is precisely why the rebind is absent. It
-belongs at the declared-row gate, where a successful subsume over an open
-tail must CLOSE that tail to the declared row — the comment's own
-parenthesis, built. Rejecting open tails is the known-wrong alternative
-with a 646-false-mismatch precedent, so the fix BINDS rather than
-refuses. The gate site already keeps one declaration-write on open tails,
-the ABSENT refinement, which is why `!B` variants behave differently from
-`Pure` ones and why the two must be read together before an edit.
+▶ THIS IS A FORK, NOT A BUG, AND IT IS MORGAN'S. Both admission paths
+are deliberate and each has a measurement behind it: the bound-open-tail
+path costs 646 false mismatches if rejected, and the unbound path's
+eager-enforcement policy exists because parking such gates was measured
+to leave "a !WASI declaration over a println-performing body parked
+forever, the crown silently off." Neither is a slip to patch. Together
+they say one thing: A DECLARED ROW CANNOT CONSTRAIN A ROW THE BODY DOES
+NOT DETERMINE, and Mentl's surface has no way to write the
+effect-polymorphic declaration that would make the constraint sayable.
+The two branches, priced:
+  BRANCH A — THE DECLARATION CONSTRAINS ITS PARAMS' ROWS. `with Pure` on
+  an HOF closes the param's row var at the declaration, so the refusal
+  lands at the CALL SITE where the effectful callback is supplied. This
+  is what a developer writing `with Pure` means. Price: it carves an
+  exception into the settled publish law ("the cell keeps its PROVEN
+  row; the declaration publishes NOTHING"), whose three measured
+  fabrication modes are recorded at the gate's own unbound arm; blast
+  radius is every annotated HOF in src/ and lib/; it must not reawaken
+  the 646 class, which is the gate it has to be seen RED against.
+  BRANCH B — THE MODAL CAPABILITY-AT-TEE (Phase 6.3, already planned).
+  The free tail is legitimate polymorphism, and the modality separates a
+  function's OWN effects from effects threaded through its parameters.
+  Price: larger, sequenced behind the crown's remaining modal work, and
+  it leaves `with Pure` on an HOF meaning something narrower than
+  authors expect until the surface grows a way to say "and nothing
+  through my params" — so the leak stands until 6.3 lands.
+▶ WHAT LANDED MEANWHILE (pin 5446b82bddd4): the unbound arm's FABRICATED
+TEACHING is deleted. It taught over-declaration from `mk_ef_pure()`, a
+row the graph never proved, and `mentl tighten` authors the patch that
+teaching names — so the medium recommended narrowing a declaration to
+`Pure` on a body it had never judged. Enforcement is untouched. The true
+teaching for a free cell is banked as `Hβ.diag.row-polymorphic-body`.
 
 ▶ THE SIX KILLS, compressed: `row-difference-is-omission` (false —
 `diff_row` populates the absent set); `annotated-hof-loses-its-param-row`
@@ -629,6 +665,20 @@ higher-order included, and never depended on a retracted mechanism.
 SYNTAX §«Named effect rows» is not wrong here and must not be edited to
 match the artifact: the identity `E - F = E & !F` is the intended
 semantics and the lathe has not been turned to it.
+
+`Hβ.diag.row-polymorphic-body` — WHAT THE CURSOR SHOULD SAY AT A FREE ROW
+CELL. `enforce_row_gate`'s unbound arm now teaches nothing there (pin
+5446b82bddd4), which is correct and is not the whole answer: silence is
+the absence of a false claim, not the presence of a true one. The fact
+the graph holds is precise and worth speaking — this function's row is
+not determined by its body; it is its parameter's row, and it grounds at
+the call site. `fn run(f) with A = f()` should hear that, with the param
+named and the two row vars shown as the one edge they will become. The
+existing `T_OverDeclared` cannot carry it (it asserts a judged body), so
+this is a new `DiagKind` constructor and lands with band L's
+`Hβ.diag.catalog-as-projection` rather than as a hand-added string. It is
+the teaching half of the fork banked above, and it is useful under EITHER
+branch.
 
 `Hβ.lower.state-init-config-ref-nested` — THE ROOT, and this entry OPENS
 with the retraction of its own previous version.

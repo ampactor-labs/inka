@@ -1532,12 +1532,15 @@ ALL OF THEM, added 2026-08-17: the crown-tier leak
 `Hβ.infer.declared-row-vacuous-against-a-free-body-row` — a declared row
 is enforced against a concrete body row and VACUOUS against a free one,
 so `fn run(f) with Pure = f()` accepts an effectful callback. The
-mechanism is whole in RESIDUE (the gate admits an open body tail
-deliberately, on a rebind its own comment promises and does not perform);
-the fix binds the tail at the gate rather than rejecting it, because
-rejecting cost 646 false mismatches when it was tried. It outranks the
-queue because it is §0's negative-is-provable failing at the shape most
-likely to carry a real negation. THE LOOP-SIZED
+arc measured to a FORK rather than a bug (2026-08-17, pin 5446b82bddd4):
+both admission paths are deliberate and each carries the measurement that
+settled it, so the open question is whether a declared row may constrain
+its PARAMS' rows — moving the refusal to the call site — or whether the
+modal capability-at-tee owns it at 6.3. Both branches are priced in
+RESIDUE and the decision is Morgan's; the loop takes independent items
+until it is made. It outranks the queue because it is §0's
+negative-is-provable failing at the shape most likely to carry a real
+negation. THE LOOP-SIZED
 RESIDUE the selector serves between dedicated sessions: the 6.3 modal
 sweep rule-by-rule (the pinned-rule count and the crown's verdict are
 state.sh's to report, never this block's — §7's law, now enforced by

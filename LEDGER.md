@@ -35,43 +35,52 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
-- 2026-08-17 · THE MECHANISM IS WHOLE: A FREE TAIL IS VACUOUS AT THE GATE
-  ON THE PROMISE OF A REBIND THAT NEVER HAPPENS (no pin — the dig closes
-  as a dedicated arc; boot unchanged at 5a61fc4eba, wheel source
-  untouched).
-  ▶ THE CHAIN, every link now measured or read at its definition. The
-  charge runs (`inf_add_row_unified` → `inf_add_row`, whose arm is a
-  plain `union_row` — so the param's row var IS in the frame's
-  accumulated row). The prune is exonerated by bypass. `row_without_self`
-  strips the frame's OWN handle, not the param's var, and the two print
-  as distinct roots. So the accumulated row reaches the gate carrying an
-  open tail — and `T_OverDeclared`'s "body only uses Pure" is a DISPLAY
-  artifact, the third time this arc has been misled by one.
-  ▶ THE DECISION IS DELIBERATE AND ITS COMPENSATION IS MISSING.
-  `row_subsumes`' own comment: "A body tail STILL EtOpen after resolve is
-  GENUINELY free — empty after full inference ... the free tail is
-  vacuous at the gate (THE REBIND AT THE GATE CLOSES IT TO THE DECLARED
-  ROW). Rejecting it was the ~80% row-var slice of the self-compile's
-  false effect-mismatches — measured at 646." Rejecting open tails is
-  known-wrong at that scale; the soundness rests entirely on the
-  parenthesised rebind, and the rebind does not occur. The assumption
-  "still-open means genuinely empty" holds for a MONOMORPHIC fn and is
-  false for a polymorphic HOF, where the tail is a parameter's row that a
-  CALLER instantiates with real effects.
-  ▶ WHY THE FIX IS NOT A LOOP TICK. It cannot live in `row_subsumes` —
-  that function is a READ by explicit design ("a read that rebinds row
-  vars would make every projection a writer"), which is exactly why the
-  rebind is absent. It belongs at the declared-row gate, where a
-  successful subsume over an open tail must CLOSE that tail to the
-  declared row. That is crown-tier, touches every annotated fn with an
-  open tail, and has a 646-false-mismatch precedent for getting it wrong.
-  ▶ CLOSING THIS AS A DEDICATED ARC, which is the standing cursor's own
-  distinction between the dedicated queue and loop-sized residue. Seven
-  ticks took it from a subtraction crucible to a named mechanism with the
-  fix's location and its historical hazard both identified; the edit
-  wants a session that can hold the whole row algebra, not a tail-end
-  commit. The three-line gate and `leak-difference-negation` both wait
-  with it.
+- 2026-08-17 · pin 5446b82bddd4 · THE GATE STOPS TEACHING FROM A CELL IT
+  NEVER JUDGED — and the same measurement RETRACTS the entry that stood
+  here. CLEAN, m2 == m3, census 0, 14.11s wall · 2266360 KB peak.
+  ▶ WHAT THE PREVIOUS ENTRY GOT WRONG. It named `row_subsumes`' open-tail
+  admission as the leak's site. That admission is real and deliberate,
+  and it is NOT what fires on the repro: the gate has two arms, and the
+  `Pure` narration comes from the UNBOUND one, which hardcodes
+  `mk_ef_pure()` as the body row it reports. Reading one arm and
+  attributing the message to it was the same error this arc has now made
+  three times with the same display.
+  ▶ THE DISCRIMINATOR, isolated one variable at a time. `fn run(f) with
+  A = f()` projects `run : r39693@e2` against its param's own
+  `r39695@e2` — two DIFFERENT free vars, never unified. Add a concrete
+  charge and they fuse: `A + r39713@e8` in the row, `r39713@e8` on the
+  param, the same var. A block body alone changes nothing (`r39699` vs
+  `r39701`), so the discriminating variable is the concrete charge, not
+  the body form. And a genuinely chargeless body BINDS: `fn
+  chargeless(x) with A = x + 1` projects `chargeless : Pure`. So a cell
+  still FREE at the gate was never determined by its body at all.
+  ▶ WHAT LANDED, and it is a deletion. The gate's unbound arm treated
+  free as proven-empty — the graph draws that distinction (NRowFree vs
+  NRowBound(Pure)) and the arm erased it — then taught over-declaration
+  from the row it had fabricated. That teaching is not cosmetic: `mentl
+  tighten` authors the patch T_OverDeclared names, so the medium was
+  recommending that an author narrow a declaration to `Pure` on a body it
+  had never judged. The free-cell arm now teaches nothing. Measured both
+  directions through the new pin: `run` loses the warning AND the
+  `tighten: with A — body proves Pure` line; `chargeless` keeps both.
+  ▶ ENFORCEMENT IS UNTOUCHED, deliberately. Eager enforcement on a free
+  tail is this gate's settled policy and its own comment carries the
+  measurement that settled it — parking such a gate left "a !WASI
+  declaration over a println-performing body parked forever, the crown
+  silently off." The teaching went; the verdict did not move.
+  ▶ THE LEAK ITSELF IS NOW A FORK, NOT A BUG, and it is Morgan's. Both
+  admission paths are deliberate: a BOUND row with a free tail is
+  admitted by `row_subsumes` (rejecting it cost a measured 646 false
+  mismatches), and an UNBOUND cell is admitted by the arm above. Neither
+  is a slip. What they add up to is that a declared row cannot constrain
+  a row the body does not determine — and Mentl's surface has no way to
+  write the effect-polymorphic declaration that would. The two branches
+  are priced in RESIDUE under
+  `Hβ.infer.declared-row-vacuous-against-a-free-body-row`.
+  ▶ BANKED: `Hβ.diag.row-polymorphic-body` — what the cursor should say
+  at a free cell instead of nothing ("this row is polymorphic in f's
+  row; it grounds at the call site"). Suppressing a false teaching is
+  correct and is not yet the true one.
 
 - 2026-08-17 · THE LEAK'S BOUNDARY IS EXACT: CONCRETE ROWS ARE ENFORCED,
   A FREE VAR IS NOT (no pin — three probes, all reverted; boot unchanged

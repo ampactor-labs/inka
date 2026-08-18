@@ -3419,6 +3419,26 @@ fn enforce_row_gate(name: String, declared_row, has_pure, row_handle, span: Vali
         }
       }
     },
+    GNode(NRowFree(_), _) => // A FREE cell is UNJUDGED, and unjudged is not proven-empty — the
+    // graph draws that distinction and this arm used to erase it. A
+    // genuinely chargeless body binds its cell to Pure and takes the
+    // NRowBound arm above (measured: `fn chargeless(x) with A = x + 1`
+    // projects `chargeless : Pure`), so a cell still FREE here was never
+    // determined by its body at all: the shape that reaches it is the
+    // effect-polymorphic HOF, whose row is its param's row and grounds
+    // only at a call site (`fn run(f) with A = f()` projects
+    // `run : r39693@e2`, a bare var, against f's own `r39695@e2`).
+    // Teaching over-declaration from that cell fabricated the body row
+    // it claimed to have read, and the fabrication reached the author:
+    // `mentl tighten` authors the patch T_OverDeclared names, so the
+    // medium recommended narrowing a declaration to `Pure` on a body it
+    // had never judged. ENFORCEMENT is unchanged — a free tail enforces
+    // eagerly and holds, which is this gate's settled policy (parking it
+    // was measured to switch the crown silently off) — only the
+    // unearned teaching goes. What the cursor SHOULD say here is that
+    // the row is polymorphic in a param's row, which is a diagnostic
+    // this catalog does not carry yet: `Hβ.diag.row-polymorphic-body`.
+    (),
     _ => // THE UNBOUND CELL IS THE PURE BODY — no charge ever landed,
     // so the gate holds trivially (a pure row fits every declaration)
     // and the declaration binds NOTHING. The PIN that stood here died

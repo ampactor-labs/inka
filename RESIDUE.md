@@ -593,6 +593,32 @@ does reach this code — `lookup_handler_state_inits_of` calls
 still fails, which is precisely the shape that wants instrumentation
 rather than more reading: I guessed four times in this iteration and the
 artifact refused each guess.
+THE STRUCTURAL BLOCKER, MEASURED 2026-08-17: THE GRAPH DOES NOT RECORD
+WHICH CONFIG SLOT A VARREF RESOLVES TO. `bind_handler_config_params`
+records the Reason `LetBinding(name, Declared(hname))` at env-extend
+time, which suggested a one-site fix — lower reads the node's Reason,
+sees the handler, emits `LUpval(0, slot)`, no walker and no frame, the
+Carried-Truth move. The projection refuses it. At the init's config USE
+the address answers `start : Int` with `Why: resume carries the
+continuation input`, and at the config DECLARATION it answers
+`start) : _ — still free`, `Why: placeholder`. The env scope that held
+the binding is gone by lower time and the Reason at the node is a
+different reason entirely, so there is no live fact to read.
+WHAT THAT LEAVES, and why nothing is built: every remaining route needs
+either NEW WALK MACHINERY over the init (39 LowExpr arms, which §11 5.5's
+column arc plans to delete) or CONTEXT threaded into `lower_expr`'s
+shared VarRef arm (the frame, whose failure in the demand walk is still
+unmeasured). Neither is a small correct change today.
+THE ULTIMATE FORM IS THE ONE 5.5 ALREADY PRESCRIBES: the config-slot
+resolution belongs in the graph as a per-handle fact — written at the one
+writer where infer binds the param, read live at lower. Then lower needs
+no scope, no frame and no walker, the nested case works by construction,
+and `lower_state_init`'s special case DISSOLVES rather than being
+extended. That is the same "put the per-handle fact in a column, dual-write
+at the one writer, migrate the readers, delete the side-structure" move
+the subsystem table's remaining 40% is made of, and it sequences with
+that arc rather than ahead of it.
+
 RESOLVED TO A MECHANISM 2026-08-17, by reading the emit's own
 construction and then the full backtrace. Three facts, each measured:
   (1) THE FLOOR IS A RUNTIME ELSE-BRANCH, NOT AN EMIT-TIME PROOF.

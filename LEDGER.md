@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · NOTHING BUILT, AND THE SENTENCE NAMING WHY: THE GRAPH DOES
+  NOT RECORD THE CONFIG SLOT (no pin — third iteration without a src
+  change, so the dry-iteration rule owes this sentence; boot unchanged at
+  5a61fc4eba, src and lib byte-identical).
+  ▶ THE DESIGN THAT LOOKED RIGHT AND DIED TO ONE PROJECTION.
+  `bind_handler_config_params` records the Reason
+  `LetBinding(name, Declared(hname))` when it env-extends each config
+  param, which promised a one-site fix: lower reads the VarRef node's
+  Reason, sees the handler, emits `LUpval(0, slot)`. No walker, no frame,
+  one site, and Carried-Truth exactly. The medium refused it. At the
+  init's config USE the address answers `start : Int` with `Why: resume
+  carries the continuation input`; at the config DECLARATION it answers
+  `start) : _ — still free`, `Why: placeholder`. The env scope holding
+  that binding is gone by lower time and the node's Reason is a different
+  reason, so there is no live fact to read. Killed before a byte changed,
+  which is what the acting-gate is for.
+  ▶ WHAT STRUCTURALLY PREVENTS THE BUILD, in one sentence as owed: the
+  config-slot resolution is not a graph fact, so every remaining route
+  needs either new walk machinery over the init (39 LowExpr arms that
+  §11 5.5's column arc plans to delete) or context threaded into
+  `lower_expr`'s shared VarRef arm (the frame, whose failure in the
+  demand walk is still unmeasured) — and neither is a small correct
+  change today.
+  ▶ THE ULTIMATE FORM IS 5.5's OWN MOVE, which is why this sequences
+  rather than stalls: put the config-slot resolution in a column, written
+  where infer binds the param, read live at lower. Then lower needs no
+  scope, no frame and no walker; the nested case works by construction;
+  and `lower_state_init`'s special case dissolves instead of being
+  extended. Four designs died in this arc because they tried to reach a
+  fact the graph never wrote down. Writing it down is the fix.
+
 - 2026-08-17 · THE FLOOR COUNT WAS NEVER EVIDENCE, AND THE FRAME CALL
   WORKS (no pin — instrument run, variant reverted whole; boot unchanged
   at 5a61fc4eba, src and lib byte-identical).

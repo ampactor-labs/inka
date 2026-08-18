@@ -1033,7 +1033,23 @@ destructure. WRITERS: lower mints `LFn` names (the nested-fn
 discriminator path); wasm.mn reads them at the closure emit, the index
 global and `captures_self`. NOT COMPLETE: the full `LFn` site set is not
 enumerated yet, and that enumeration is the next iteration's first move.
-▶ HALF OF IT LANDED 2026-08-17, pin 3967d236b294, byte-identical. The
+▶ THAT LANDING IS REVERTED (pin 6e05bd9404ed) AND BOTH ITS CLAIMS FAILED.
+DIRECTION: the local namespace is source-named end to end —
+`ls_bind_local(name, handle)`, `collect_free_vars`, and the emitted
+`(local.get $go)` — so binding the LLet to the qualified name points it at
+the emitted namespace and leaves the source-named local unbound, the same
+use-before-def one layer over. BYTE-IDENTITY: reverting returns the pin to
+exactly 6e05bd9404ed, so the forward change's own pin would have been that
+sha had it been a no-op, and it was 3967d236b294 — SOME NESTED FN ALREADY
+QUALIFIES, `outer` is not empty everywhere, and equal line counts (412781
+both sides) are what made the wrong claim look measured. A CLEAN march
+says the medium reproduces itself, not that the emit is unchanged; the pin
+sha is the identity oracle.
+▶ SO NEITHER SINGLE-NAME DIRECTION WORKS, which sharpens the stamp rather
+than replacing it: the binding needs the source name and the symbol needs
+the qualified one, and `LFn` has one field for both. The fix is `LFn`
+carrying BOTH facts. Sites enumerated: 29 across lower.mn and wasm.mn.
+▶ THE ORIGINAL LANDING TEXT, superseded: The
 divergence's construction site is one expression in lower.mn: `fn_name =
 if outer == "" { name } else { "{outer}_{name}" }`, and then
 `LLet(handle, name, LMakeClosure(handle, fn_ir, …))` — the binding taking

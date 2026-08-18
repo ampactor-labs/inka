@@ -35,6 +35,66 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · pin 6e05bd9404ed · THE PREVIOUS LANDING IS REVERTED, AND
+  ITS OWN CLAIM IS REFUTED BY THE SHA. CLEAN, m2 == m3, census 0, 412781
+  lines, 16.43s wall · 2177112 KB peak.
+  ▶ THE NEXT STEP WAS THE CAPTURE SIDE, and reading it killed the previous
+  step's DIRECTION. The local namespace is source-named end to end:
+  `ls_bind_local(name, handle)` binds the source name in the enclosing
+  frame, `collect_free_vars` collects source names, and the emitted WAT
+  reads `(local.get $go)`. Binding the LLet to the QUALIFIED name
+  therefore points it at the emitted namespace and leaves the source-named
+  local unbound — the same use-before-def one layer over, not a fix.
+  ▶ THE SHA REFUTES THE OTHER HALF OF THAT ENTRY. It claimed
+  byte-identical output on the ground that `fn_name == name` wherever
+  `outer` is empty. Reverting returns the pin to exactly 6e05bd9404ed, the
+  tail-vocabulary pin — so if the forward change had been a no-op its own
+  pin would have been this sha, and it was 3967d236b294 instead. SOME
+  NESTED FN ALREADY QUALIFIES: `outer` is not empty everywhere, the
+  discriminator is not uniformly broken, and the change altered real
+  output while marching clean. The line count being equal on both sides
+  (412781) is what made the wrong claim look measured. Re-marching after a
+  comment-only edit returned the SAME sha again, which proves comments do
+  not reach emit and leaves the fn_name substitution as the sole cause.
+  ▶ WHAT THAT ADDS TO THE LAW: equal line counts are not identity, and a
+  march verdict of CLEAN says the medium reproduces itself, not that the
+  emit is unchanged. The pin sha is the identity oracle and it was sitting
+  in the same output I quoted the line count from.
+  ▶ THE STAMP STANDS AND IS NOW SHARPER. `LFn` carries one name spent on
+  two namespaces; neither namespace can be made to serve the other, which
+  is precisely why both single-name directions fail. The fix is `LFn`
+  carrying BOTH the binding name and the emitted symbol, and the sites are
+  enumerated (29 across lower.mn and wasm.mn).
+
+- 2026-08-17 · pin 6e05bd9404ed · THE PREVIOUS LANDING IS REVERTED, AND
+  ITS OWN CLAIM IS REFUTED BY THE SHA. CLEAN, m2 == m3, census 0, 412781
+  lines, 16.43s wall · 2177112 KB peak.
+  ▶ THE NEXT STEP WAS THE CAPTURE SIDE, and reading it killed the previous
+  step's DIRECTION. The local namespace is source-named end to end:
+  `ls_bind_local(name, handle)` binds the source name in the enclosing
+  frame, `collect_free_vars` collects source names, and the emitted WAT
+  reads `(local.get $go)`. Binding the LLet to the QUALIFIED name
+  therefore points it at the emitted namespace and leaves the source-named
+  local unbound — the same use-before-def one layer over, not a fix.
+  ▶ THE SHA REFUTES THE OTHER HALF OF THAT ENTRY. It claimed
+  byte-identical output on the ground that `fn_name == name` wherever
+  `outer` is empty. Reverting returns the pin to exactly 6e05bd9404ed, the
+  tail-vocabulary pin — so if the forward change had been a no-op its own
+  pin would have been this sha, and it was 3967d236b294 instead. SOME
+  NESTED FN ALREADY QUALIFIES: `outer` is not empty everywhere, the
+  discriminator is not uniformly broken, and the change altered real
+  output while marching clean. The line count being equal on both sides
+  (412781) is what made the wrong claim look measured.
+  ▶ WHAT THAT ADDS TO THE LAW: equal line counts are not identity, and a
+  march verdict of CLEAN says the medium reproduces itself, not that the
+  emit is unchanged. The pin sha is the identity oracle and it was sitting
+  in the same output I quoted the line count from.
+  ▶ THE STAMP STANDS AND IS NOW SHARPER. `LFn` carries one name spent on
+  two namespaces; neither namespace can be made to serve the other, which
+  is precisely why both single-name directions fail. The fix is `LFn`
+  carrying BOTH the binding name and the emitted symbol, and the sites are
+  enumerated (29 across lower.mn and wasm.mn).
+
 - 2026-08-17 · pin 3967d236b294 · ONE NAME FOR ONE FUNCTION. CLEAN,
   m2 == m3, census 0, frontier 371/0, 16.32s wall · 2271368 KB peak,
   412781 lines both generations — byte-identical by construction.

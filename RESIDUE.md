@@ -572,11 +572,32 @@ negative-is-provable failing at the shape most likely to carry a real
 negation, a function taking a callback and promising `!Alloc`, `!IO` or
 `Pure`. The caller is charged correctly, so programs are not
 miscompiled; the function's own contract is silently discarded.
-▶ WHAT IS NOT YET MEASURED, and must not be guessed: the SITE. Whether
-the declaration is dropped at publication (generalize/env_extend) or the
-check simply admits a free var, and which of those to change, needs the
-declared-vs-inferred comparison instrumented. That is the next probe,
-and no edit precedes it.
+▶ THE SITE IS NOW BRACKETED, and the publication half is RULED OUT.
+Publication carries the INFERRED row by design: `fn wide() with A + B =
+opb()` publishes `with B`, and the check's own neighbouring comment
+states the law — "the cell keeps its PROVEN row; the declaration
+publishes NOTHING". Nothing is dropped at publication; that framing was
+wrong too.
+THE CHECK IS `row_subsumes(body_row, declared_row)` (infer:3378), and
+the measured INPUT is what matters: `T_OverDeclared` on the repro reads
+"declares !B + Any but BODY ONLY USES PURE". body_row is PURE, not an
+open var. So the subsumption passes trivially, and the one
+declaration-write the design keeps — the absent refinement — is gated on
+an OPEN tail by that same comment ("closed bodies entail their absences
+and take no write"), so a Pure body takes no write either. Both halves
+are the design working as written on an input that is wrong.
+▶ THE LOSS IS BETWEEN THE CALL AND THE DECL EXIT. The charge provably
+happens (`inf_add_row_unified(crow)`, and `main` receives B) while the
+frame's accumulated row is Pure by the time the check reads it. The
+completion prune at `inf_exit_fn` is the CANDIDATE, since its signature
+keep-set is exactly what Phase 1 added to stop this and
+`signature_free_roots(param_handles ++ [ret_handle])` should reach the
+param's row through its TFun. THAT IS NOT MEASURED and is not acted on.
+▶ NEXT PROBE: read the frame's accumulated row immediately before and
+after the prune, on the three-line repro. One read says whether the var
+is present before and gone after. Four causes in this arc were asserted
+from reading code and refuted by running something; this one waits for
+the run.
 ▶ THE GATE IS THE THREE LINES, red today, landing with the fix. Two
 retracted framings precede this one — row-difference-is-omission (false:
 `diff_row` populates the absent set) and annotated-hof-loses-its-param-row

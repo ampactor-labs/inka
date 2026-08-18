@@ -35,6 +35,33 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE BODY ROW IS *PURE* AT THE CHECK, AND PUBLICATION IS
+  EXONERATED (no pin — the leak's fifth narrowing, site bracketed; boot
+  unchanged at 5a61fc4eba, wheel source untouched).
+  ▶ PUBLICATION IS RULED OUT BY MEASUREMENT, and the previous entry's
+  framing with it: `fn wide() with A + B = opb()` publishes `with B`, so
+  publication carries the INFERRED row by design. The check's own
+  neighbouring comment says the same law outright — "the cell keeps its
+  PROVEN row; the declaration publishes NOTHING".
+  ▶ THE CHECK IS `row_subsumes(body_row, declared_row)` (infer:3378) and
+  the INPUT is the finding: `T_OverDeclared` on the repro reads "declares
+  !B + Any but BODY ONLY USES PURE". body_row is PURE, not an open var,
+  so the subsumption passes trivially — and the one declaration-write the
+  design keeps, the absent refinement, is gated on an OPEN tail by that
+  same comment ("closed bodies entail their absences and take no write").
+  A Pure body takes no write. Both halves are the design working exactly
+  as written, on an input that is wrong.
+  ▶ SO THE LOSS SITS BETWEEN THE CALL AND THE DECL EXIT. The charge
+  provably happens — `inf_add_row_unified(crow)`, and `main` receives
+  B — while the frame's accumulated row is Pure by the time the check
+  reads it. The completion prune at `inf_exit_fn` is the CANDIDATE, since
+  its signature keep-set is what Phase 1 added to stop precisely this,
+  but that is not measured and is not acted on.
+  ▶ NEXT PROBE: read the frame's accumulated row immediately before and
+  after the prune on the three-line repro. Four causes in this arc were
+  asserted from reading code and refuted by running something; this one
+  waits for the run.
+
 - 2026-08-17 · THE DECLARED ROW IS VACUOUS AGAINST A FREE BODY ROW (no
   pin — the leak's fourth and measured narrowing; boot unchanged at
   5a61fc4eba, wheel source untouched).

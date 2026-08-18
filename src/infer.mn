@@ -6131,9 +6131,45 @@ fn unify_two_open_records(fa, va, fb, vb, span: ValidSpan, reason) = {
     // shape said
     // "nothing" in the same breath it said the fields. The mark separates
     // the two halves so a reader can tell a carried fact from a guess.
-    graph_bind_record_row(va, extra_b, RowAssumed, Located(span, reason))
-    graph_bind_record_row(vb, extra_a, RowAssumed, Located(span, reason))
+    absorb_into_residual(va, extra_b, span, reason)
+    absorb_into_residual(vb, extra_a, span, reason)
   }
+}
+
+// A DEMAND IS CHECKED AGAINST THE GRAPH, NEVER INSTALLED OVER IT. A field
+// access builds an EXPECTED receiver `{field: <fresh> | <fresh row>}` and
+// unifies the real one against it, so the incoming fields here are often a
+// question, not an answer. When the var already carries a residual, the
+// fields it shares with the question get UNIFIED — the graph's proof
+// constrains the fresh variable, which is the direction that keeps a fact
+// — and only genuinely new fields widen it. Writing the incoming set over
+// the residual turned `run : () -> Int with E` into a free variable and
+// took its row with it, so a closure called under `!E` through a record
+// rest checked clean (`Hβ.infer.field-access-overwrites-a-proven-residual`).
+// The unbound case is unchanged: nothing is known, so the union IS the
+// reading, and it is marked assumed.
+fn absorb_into_residual(v, incoming, span: ValidSpan, reason) = match graph_chase(v) {
+  GNode(NRecordRowBound(known, tail), _) => {
+    unify_record_fields_loop_shared(
+      known,
+      incoming,
+      intersect_record_fields(known, incoming),
+      span,
+      reason
+    )
+    let added = record_fields_diff(incoming, known)
+    if len(added) == 0 {
+      ()
+    } else {
+      // The residual grows and KEEPS its own tail: what the writer knew
+      // about the remainder did not change because a demand named one
+      // more field. A field added to a RowClosed residual is the record
+      // provably lacking it, which today widens rather than refusing —
+      // `Hβ.infer.demand-widens-a-closed-residual` carries that.
+      graph_bind_record_row(v, known ++ added, tail, Located(span, reason))
+    }
+  },
+  _ => graph_bind_record_row(v, incoming, RowAssumed, Located(span, reason)),
 }
 
 fn unify_record_fields_loop_shared(fa, fb, names, span: ValidSpan, reason) = if len(names) == 0 {

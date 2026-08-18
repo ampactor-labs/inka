@@ -1,0 +1,11 @@
+// expect: 12
+// A record REST binding carries its fields' TYPES, so a field reached
+// through `rest` reads exactly as one reached through the record itself
+// (SYNTAX §«Pattern syntax for records»). The field access used to write a
+// fresh variable over the residual the pattern had proved, which cost the
+// type and, with it, the effect row.
+fn make() = ({extra: 7, keep: 5})
+fn main(q) = {
+  let {keep, ...rest} = make()
+  keep + rest.extra
+}

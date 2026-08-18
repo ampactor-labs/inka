@@ -1,0 +1,10 @@
+// CROWN — the sound dual: a record REST that CARRIES an effectful closure
+// transports under `with !E`. Latency is not performance; the residual
+// holding the field is not the call. Must accept.
+effect E { op() -> Int }
+fn make() = ({keep: 1, run: () => op()})
+fn good() with !E = {
+  let {keep, ...rest} = make()
+  keep
+}
+fn main() = good()

@@ -1188,9 +1188,32 @@ narrowing exists and does not reach the instantiated use. That is this
 entry's own per-call-site paragraph, now measured as operative for
 findtag and not only for zeta, and it is where the next step goes.
 
-`Hβ.infer.field-access-overwrites-a-proven-residual` — A FIELD ACCESS
-DISCARDS WHAT THE GRAPH ALREADY PROVED, and it costs a crown-tier `!E`
-leak. Measured 2026-08-18 at pin b8eff49b7252, every step run rather than
+`Hβ.infer.field-access-overwrites-a-proven-residual` — RESOLVED
+2026-08-18, pin bc516cf945bb, CLEAN. `absorb_into_residual` makes the
+incoming fields a CHECK against a bound residual rather than a write over
+it: shared fields unify (the proof constrains the demand's fresh
+variable), new fields widen, and the unbound case is unchanged. All three
+measured faces closed — the leak refuses, `rest.run + 1` is a type error,
+and the residual survives an access without downgrading to `assumed`.
+Crown grew leak-rest-latent and sound-rest-transport; the type half runs
+at tests/syntax/record-rest-field. THE ENUMERATION THE STAMP OWED ran
+first and narrowed the target: an annotated open row's KNOWN field was
+never affected (those go through `unify_record_fields_loop_shared`), an
+unannotated record param defers to the call site and belongs to the
+free-body-row fork, and only a field living in a bound residual was
+destroyed. The record below is the measurement that found it.
+
+`Hβ.infer.demand-widens-a-closed-residual` — a field access demanding a
+name a `RowClosed` residual does not carry still WIDENS the residual
+instead of refusing, and since the landing above the tail proves the
+record cannot have that field. The honest verdict is a mismatch at the
+access, and it is not taken yet because a new refusal class needs its own
+march and its own RED-first fixture. Sits directly on
+`Hβ.infer.field-access-overwrites-a-proven-residual`'s landing;
+independent of the open-row layout fork.
+
+▶ THE MEASUREMENT THAT FOUND IT, kept because the arc is the value.
+Measured 2026-08-18 at pin b8eff49b7252, every step run rather than
 read.
 ▶ THE LEAK. A closure performing `E`, stored in a record field, reached
 through a record-REST binding and CALLED under `with !E`, checks CLEAN —

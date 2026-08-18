@@ -1,0 +1,15 @@
+// CROWN — latency rides the record REST: a closure performing E sits in a
+// field that a `{keep, ...rest}` pattern moves into the residual, and the
+// call comes through THAT binding. The row must survive the residual.
+// Expect E_EffectMismatch.
+//
+// Measured leaking at pin b8eff49b7252 — this checked CLEAN, and
+// T_OverDeclared volunteered that the body "only uses Memory + Alloc".
+// The field access was overwriting the residual the pattern had proved.
+effect E { op() -> Int }
+fn make() = ({keep: 1, run: () => op()})
+fn bad() with !E = {
+  let {keep, ...rest} = make()
+  rest.run()
+}
+fn main() = bad()

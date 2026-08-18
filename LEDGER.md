@@ -35,6 +35,43 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin bc516cf945bb · A DEMAND IS CHECKED, NOT INSTALLED.
+  CLEAN — m2 == m3 at 413349 lines, census 0, battery green, crown 52/0,
+  16.05s wall, peak 2279344 KB against a 2310000 ceiling.
+  ▶ WHAT LANDED: `absorb_into_residual` replaces the raw bind in
+  `unify_two_open_records`. A field access builds an EXPECTED receiver
+  `{field: <fresh> | <fresh row>}` and unifies the real one against it, so
+  the incoming fields are a QUESTION. When the var already carries a
+  residual, the shared fields now UNIFY — the graph's proof constrains the
+  fresh variable, the direction that keeps a fact — and only genuinely new
+  fields widen it. The unbound case is untouched: nothing is known, the
+  union IS the reading, and it stays marked assumed.
+  ▶ WHAT IT CLOSED, all three faces measured before and after. The `!E`
+  leak: a closure performing E, reached through `{keep, ...rest}` and
+  called under `with !E`, checked CLEAN at the previous pin and now
+  refuses with `!E + Any vs Memory + Alloc + E`. The type hole:
+  `rest.run + 1` checked clean and is now
+  `E_TypeMismatch: () -> Int with E vs Int`. The downgrade: inserting one
+  read before returning the binding used to turn
+  `{ | { run: () -> Int with E } }` into `{ | { run: t35152@e11 } assumed }`
+  and now leaves it unchanged.
+  ▶ THE ENUMERATION THE STAMP OWED, run first and it moved the target.
+  Three receiver shapes measured: an ANNOTATED open row keeps its known
+  field's type (`E_TypeMismatch: Int vs List(Byte)` inside the callee), an
+  UNANNOTATED record param defers to the call site (the callee judges Pure
+  — that is the free-body-row fork, a different peer), and only a field
+  living in a bound RESIDUAL was destroyed. Known fields went through
+  `unify_record_fields_loop_shared` all along; the residual path was the
+  one that wrote instead of checking.
+  ▶ GATES: crown grew leak-rest-latent and sound-rest-transport (52/0),
+  and tests/syntax/record-rest-field pins the type half as a running value
+  at 12. The leak fixture was measured RED at pin b8eff49b7252 this same
+  session, which is its falsification.
+  ▶ A NEW PEER FELL OUT: a demand naming a field a RowClosed residual
+  lacks still widens rather than refusing, though the mark now proves the
+  record cannot have it — `Hβ.infer.demand-widens-a-closed-residual`.
+  ▶ ONE VARIABLE: the residual bind becoming a check.
+
 - 2026-08-18 · pin b8eff49b7252 · A PROOF AND A GUESS STOP LOOKING THE
   SAME. CLEAN — m2 == m3 at 413243 lines, census 0, battery green,
   frontier 371/0, 14.27s wall, peak 2281976 KB against a 2310000 ceiling.

@@ -35,6 +35,46 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE FLOOR IS BYPASSED, NOT MISSING — AN EMPTY RESIDUAL
+  BIND (no pin — docs; boot unchanged at 4ce9914b7360).
+  ▶ THE BANKED PROBE asked which branch the annotated-open case takes,
+  since the inferred-open case floors. The answer inverts the framing: the
+  refusal machinery is already correct and is being BYPASSED.
+  `resolve_field_offset`'s `TRecordOpen(fields, v)` arm asks
+  `open_record_full_fields(fields, v)` for the receiver's full sorted set
+  and returns -1 when the chase cannot answer — its comment naming this
+  exact class, "an offset prefix-summed over the partial demanded set is
+  the wrong-slot class ... must floor loudly, never return a partial sum."
+  The chase SUCCEEDS: `v` resolves to an EMPTY residual, so the full set
+  is the known set alone and a real offset comes back. A genuinely free
+  var would hit `_ => None` and trap; the empty bind is what turns a loud
+  refusal into a silent wrong.
+  ▶ CALL-SITE INDEPENDENT, which is the fork's concrete face.
+  `fn pick(u: {zeta: Int, ...}) = u.zeta` called twice in one program —
+  `pick({alpha: 1, zeta: 3}) * 10 + pick({zeta: 5})` — answers 15: the
+  first call reads slot 0 and gets `alpha`, the second reads slot 0 and
+  gets `zeta`. One compiled body, one baked offset, right only for callers
+  whose record carries exactly the known fields. The arithmetic pins with
+  a third shape: `{beta: Int, zeta: Int, ...}` over `{alpha: 1, beta: 2,
+  zeta: 3}` answers 2 — `zeta` at index 1 of the KNOWN pair.
+  ▶ THE PER-CALL-SITE BIND EXISTS AND MISSES THE BODY.
+  `unify_record_open_against_closed` computes `record_fields_diff(closed,
+  open)` and binds the open var to it — `[alpha]` for the first call
+  above, the right residual. The body's var is not that one. Which writer
+  leaves the body's var bound to EMPTY is the last unmeasured link and the
+  named next probe.
+  ▶ NO SRC CHANGE, fourth in a row, and the blocker is now demonstrated
+  rather than argued: one compiled body cannot carry a per-caller layout,
+  so the repair is per-call-site specialization or a runtime layout
+  carrier — the standing fork — and the floor route was refuted by the
+  march two iterations back.
+  ▶ SELF-BUILD RATCHET, banked as `Hβ.query.field-offset-badge`: every
+  probe in this arc inferred a resolved offset from an exit code, because
+  `mentl where` renders repr width, resume cardinality and fanout schedule
+  but not the offset a field access resolved to nor whether the full field
+  set was provable. Both are facts `resolve_field_offset` already
+  computes. Under that badge this entire arc is one query.
+
 - 2026-08-17 · THE ROOT, AND IT LANDS ON SYNTAX'S OWN WORKED EXAMPLE (no
   pin — tests and docs; boot unchanged at 4ce9914b7360).
   ▶ THE BANKED SEPARATING PROBE RAN FIRST and killed the name it was

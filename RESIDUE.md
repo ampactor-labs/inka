@@ -800,6 +800,20 @@ that and `fn g({x, y})` is invisible to the medium, which is exactly why
 a blanket floor cannot separate them and exactly why the fix must close
 the row rather than police the pattern.
 
+`Hβ.query.field-offset-badge` — THE PROJECTION THIS WHOLE ARC WENT
+WITHOUT. Six iterations of this class were traced by writing a fixture,
+running it, and reading an exit code to infer which slot a field access
+resolved to — `mentl where` renders repr width, resume cardinality and
+fanout schedule as derived badges, but not the OFFSET a field access
+resolved to, nor whether the receiver's full field set was provable. Both
+are facts the graph holds at the site (`resolve_field_offset` computes
+exactly them), so this is a read, not a new analysis: at a field access,
+`u.zeta @ +8 (full set proven)` or `u.zeta @ +0 (known set only — the
+receiver's row is open)`. Every probe in this arc collapses to one query
+under it, and the wrong-slot class becomes visible at the cursor instead
+of via an exit code. It joins the `where` facets, beside the schedule
+badge that already walks the enclosing tee chain.
+
 `Hβ.lower.open-row-field-offset-from-known-set` — THE ROOT UNDER ALL OF
 IT, and it lands on SYNTAX's own worked example. Measured 2026-08-17 at
 pin 4ce9914b7360.
@@ -816,6 +830,32 @@ worked form. The same shape measured: `fn width(u: {name: Int, ...}) =
 u.name + 1` over `{name: 5, age: 9}` returns 10 — `age`'s value — because
 `age` sorts first in the real record while `name` is index 0 of the known
 set. A headline documented surface reads the wrong field.
+▶ THE MECHANISM IS AN EMPTY RESIDUAL BIND, measured end to end
+2026-08-17, and it means the floor that should catch this is BYPASSED
+rather than missing. `resolve_field_offset`'s `TRecordOpen(fields, v)` arm
+is correct as written: it asks `open_record_full_fields(fields, v)` for
+the receiver's full sorted set and returns -1 when the chase cannot
+answer, its comment naming this very class ("an offset prefix-summed over
+the partial demanded set is the wrong-slot class ... must floor loudly,
+never return a partial sum"). The chase SUCCEEDS: `v` resolves to an
+empty residual, so `full` is the known set alone and a real offset comes
+back.
+▶ AND IT IS CALL-SITE INDEPENDENT, which is what makes it the fork's
+concrete face. `fn pick(u: {zeta: Int, ...}) = u.zeta` called twice in one
+program — `pick({alpha: 1, zeta: 3}) * 10 + pick({zeta: 5})` — answers
+15: the first call reads slot 0 and gets `alpha`, the second reads slot 0
+and gets `zeta`. One compiled body, one baked offset, correct only for
+callers whose record carries exactly the known fields. A third shape
+pins the arithmetic: `{beta: Int, zeta: Int, ...}` over `{alpha: 1,
+beta: 2, zeta: 3}` answers 2, `zeta` at index 1 of the KNOWN pair.
+▶ THE PER-CALL-SITE BIND EXISTS AND DOES NOT REACH THE BODY.
+`unify_record_open_against_closed` computes `record_fields_diff(closed,
+open)` and binds the open var to it, which for the first call above is
+`[alpha]` — the right residual. The body's own var is not that one. WHICH
+WRITER LEAVES THE BODY'S VAR BOUND TO EMPTY is the named next probe, and
+it is the last unmeasured link: a genuinely FREE var would hit
+`open_record_full_fields`' `_ => None` and floor, so the empty bind is
+what converts a loud refusal into a silent wrong.
 ▶ THIS IS THE ROOT the other three consumers inherit. The record PATTERN
 takes offsets from the pattern's own index; `==` walks the known field
 list; field ACCESS takes the known set's index — one rule, three

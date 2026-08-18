@@ -1586,7 +1586,13 @@ record's, so `fn pick(u: {zeta: Int, ...}) = u.zeta` over `{alpha: 7,
 zeta: 9}` returns 7 — and SYNTAX's own row-polymorphism example is that
 shape. Four consumers inherit one rule: patterns bind the wrong slot,
 `==` compares only known fields, field access reads a foreign one, and
-`LFieldLoad` floors loudly only where offset resolution returns -1.
+`LFieldLoad` floors loudly only where offset resolution returns -1. The
+floor is BYPASSED rather than missing: the body's row var resolves to an
+EMPTY residual, so the chase answers with the known set instead of
+refusing, and the baked offset is call-site independent (one body,
+`pick({alpha: 1, zeta: 3}) * 10 + pick({zeta: 5})` answers 15). That is
+the fork's concrete face — one compiled body cannot carry a per-caller
+layout.
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
 NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
 found nothing: `tests/syntax/` had no history under any ref, no gate

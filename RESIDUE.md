@@ -1551,6 +1551,20 @@ surface shape, the same distinction the fold's four leaf generators
 record. Each lands the way this one did: one variant, one label, one
 name in the grammar, one fixture line, one frontier spec.
 
+`Hβ.tools.exit-channel-caps-at-125` — RESOLVED 2026-08-18 in the harness,
+banked because the ceiling is a fact about the substrate and not about the
+fix. MEASURED against the pinned boot: a `main` returning 124 or 125 exits
+with that number; 126, 127, 128, 200, 255 and 256 ALL exit **1**. So a
+fixture cannot encode a value above 125, and an author who writes one reads
+`exit=1` — which says the program computed 1, and it did not. The battery
+was audited at the same time: 157 fixtures carry a numeric expectation, 9
+sit above the ceiling and every one of them is 134, a wasm trap through
+SIGABRT rather than a value, so nothing landed was broken. run-micro.sh now
+REFUSES 126 and 127 before running (neither a reachable value nor a signal)
+and, on a failure where the expectation exceeds 125 and the run returned 1,
+says that the 1 is the channel and not the program. The hazard was
+prospective and silent; it is now loud at the only place an author looks.
+
 `Hβ.query.type-of-a-lambda-parameter` — `mentl query <file> "type NAME"`
 reaches top-level names and fn parameters and answers `not found: tag`
 for a lambda's parameter (measured 2026-08-18 on

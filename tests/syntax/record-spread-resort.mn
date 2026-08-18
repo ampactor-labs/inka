@@ -1,0 +1,17 @@
+// expect: 49
+// Record spread ADDING fields, where the additions re-sort the layout:
+// `{b, d}` spread with `a` and `c` puts two new names ahead of and between
+// the originals, so every field's offset moves. Weights are distinct powers
+// of two, so any slot confusion changes the answer rather than hiding in it.
+//
+// The constructive dual of the record REST, probed the same day the rest's
+// residual was found losing types and rows. Spread came back sound on all of
+// it — the value, each field read alone, the field TYPE surviving
+// (`s.a ++ "x"` is E_TypeMismatch) and the effect ROW surviving (an
+// effectful closure spread and then called under `!E` refuses). This pins
+// the layout half, which is the one with slots to get wrong.
+fn main(q) = {
+  let r = {b: 2, d: 4}
+  let s = {...r, a: 1, c: 3}
+  s.a + s.b * 2 + s.c * 4 + s.d * 8
+}

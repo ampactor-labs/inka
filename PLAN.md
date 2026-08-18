@@ -1527,7 +1527,17 @@ never a pointer-write) and brackets on flat-buffer families 3/5/6;
 pointee representation arc (`Hβ.graph.column-pointees-are-words`, the
 banked keystone) — only then 2b's fork/reset at the grain that then
 exists; (5) the value ontology (5.4); beside them the flowlabel
-build and the repr floor deletion (both in flight 2026-08-12). THE LOOP-SIZED
+build and the repr floor deletion (both in flight 2026-08-12). AHEAD OF
+ALL OF THEM, added 2026-08-17: the crown-tier leak
+`Hβ.infer.declared-row-vacuous-against-a-free-body-row` — a declared row
+is enforced against a concrete body row and VACUOUS against a free one,
+so `fn run(f) with Pure = f()` accepts an effectful callback. The
+mechanism is whole in RESIDUE (the gate admits an open body tail
+deliberately, on a rebind its own comment promises and does not perform);
+the fix binds the tail at the gate rather than rejecting it, because
+rejecting cost 646 false mismatches when it was tried. It outranks the
+queue because it is §0's negative-is-provable failing at the shape most
+likely to carry a real negation. THE LOOP-SIZED
 RESIDUE the selector serves between dedicated sessions: the 6.3 modal
 sweep rule-by-rule (the pinned-rule count and the crown's verdict are
 state.sh's to report, never this block's — §7's law, now enforced by

@@ -35,6 +35,44 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE MECHANISM IS WHOLE: A FREE TAIL IS VACUOUS AT THE GATE
+  ON THE PROMISE OF A REBIND THAT NEVER HAPPENS (no pin — the dig closes
+  as a dedicated arc; boot unchanged at 5a61fc4eba, wheel source
+  untouched).
+  ▶ THE CHAIN, every link now measured or read at its definition. The
+  charge runs (`inf_add_row_unified` → `inf_add_row`, whose arm is a
+  plain `union_row` — so the param's row var IS in the frame's
+  accumulated row). The prune is exonerated by bypass. `row_without_self`
+  strips the frame's OWN handle, not the param's var, and the two print
+  as distinct roots. So the accumulated row reaches the gate carrying an
+  open tail — and `T_OverDeclared`'s "body only uses Pure" is a DISPLAY
+  artifact, the third time this arc has been misled by one.
+  ▶ THE DECISION IS DELIBERATE AND ITS COMPENSATION IS MISSING.
+  `row_subsumes`' own comment: "A body tail STILL EtOpen after resolve is
+  GENUINELY free — empty after full inference ... the free tail is
+  vacuous at the gate (THE REBIND AT THE GATE CLOSES IT TO THE DECLARED
+  ROW). Rejecting it was the ~80% row-var slice of the self-compile's
+  false effect-mismatches — measured at 646." Rejecting open tails is
+  known-wrong at that scale; the soundness rests entirely on the
+  parenthesised rebind, and the rebind does not occur. The assumption
+  "still-open means genuinely empty" holds for a MONOMORPHIC fn and is
+  false for a polymorphic HOF, where the tail is a parameter's row that a
+  CALLER instantiates with real effects.
+  ▶ WHY THE FIX IS NOT A LOOP TICK. It cannot live in `row_subsumes` —
+  that function is a READ by explicit design ("a read that rebinds row
+  vars would make every projection a writer"), which is exactly why the
+  rebind is absent. It belongs at the declared-row gate, where a
+  successful subsume over an open tail must CLOSE that tail to the
+  declared row. That is crown-tier, touches every annotated fn with an
+  open tail, and has a 646-false-mismatch precedent for getting it wrong.
+  ▶ CLOSING THIS AS A DEDICATED ARC, which is the standing cursor's own
+  distinction between the dedicated queue and loop-sized residue. Seven
+  ticks took it from a subtraction crucible to a named mechanism with the
+  fix's location and its historical hazard both identified; the edit
+  wants a session that can hold the whole row algebra, not a tail-end
+  commit. The three-line gate and `leak-difference-negation` both wait
+  with it.
+
 - 2026-08-17 · THE LEAK'S BOUNDARY IS EXACT: CONCRETE ROWS ARE ENFORCED,
   A FREE VAR IS NOT (no pin — three probes, all reverted; boot unchanged
   at 5a61fc4eba, wheel source untouched).

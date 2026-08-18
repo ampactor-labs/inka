@@ -541,179 +541,94 @@ rule attributed to it must be read out of the paper first.
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
 `Hβ.infer.declared-row-vacuous-against-a-free-body-row` — A MEASURED
-CROWN-TIER LEAK, narrowed across four ticks, each narrowing measured and
-each correcting the one before.
-▶ THE NAME AND THE PREVIOUS FRAMING ARE BOTH CORRECTED. This was filed
-as `param-call-never-charges-the-declared-row`, claiming the call edge
-charges nothing. IT CHARGES. `infer_call_saturated` runs
-`inf_add_row_unified(crow)` on the chased callee, and its own comment
-covers the case: "for a pre-free callee (an effect-polymorphic param, a
-local closure, a loose forward) ... crow IS the fresh row cell". The
-proof it works: `main`'s row on the repro reads `() -> Int with B` — the
-callback's effect DOES reach the caller.
-▶ WHAT IS ACTUALLY BROKEN, from two projections of the same file:
-`run`'s published type is `(f: () -> t with r34983) -> t with r34981`.
-The authored `with Pure` IS NOT THERE. The body's inferred row is a free
-VAR (the param's), the declared row neither refuses against it nor binds
-it, and the declaration is dropped from the published scheme. So the
-three-line repro compiles because there is no Pure left to violate:
-```
-effect B { opb() -> Int }
-fn run(f) with Pure = f()
-fn main() = run(() => opb())
-```
-▶ THE CONTRAST THAT PINS IT: `fn direct() with OnlyA = opb()` DOES
-refuse (`E_EffectMismatch: A vs B`). Same declaration machinery, same
-check — the only difference is that the body's row there is a CONCRETE
-effect rather than a free var. A declared row is enforced against
-concrete rows and is vacuous against a free one.
-▶ SEVERITY unchanged and worth restating: this is §0's
-negative-is-provable failing at the shape most likely to carry a real
-negation, a function taking a callback and promising `!Alloc`, `!IO` or
-`Pure`. The caller is charged correctly, so programs are not
-miscompiled; the function's own contract is silently discarded.
-▶ THE SITE IS NOW BRACKETED, and the publication half is RULED OUT.
-Publication carries the INFERRED row by design: `fn wide() with A + B =
-opb()` publishes `with B`, and the check's own neighbouring comment
-states the law — "the cell keeps its PROVEN row; the declaration
-publishes NOTHING". Nothing is dropped at publication; that framing was
-wrong too.
-THE CHECK IS `row_subsumes(body_row, declared_row)` (infer:3378), and
-the measured INPUT is what matters: `T_OverDeclared` on the repro reads
-"declares !B + Any but BODY ONLY USES PURE". body_row is PURE, not an
-open var. So the subsumption passes trivially, and the one
-declaration-write the design keeps — the absent refinement — is gated on
-an OPEN tail by that same comment ("closed bodies entail their absences
-and take no write"), so a Pure body takes no write either. Both halves
-are the design working as written on an input that is wrong.
-▶ THE LOSS IS BETWEEN THE CALL AND THE DECL EXIT. The charge provably
-happens (`inf_add_row_unified(crow)`, and `main` receives B) while the
-frame's accumulated row is Pure by the time the check reads it. The
-completion prune at `inf_exit_fn` is the CANDIDATE, since its signature
-keep-set is exactly what Phase 1 added to stop this and
-`signature_free_roots(param_handles ++ [ret_handle])` should reach the
-param's row through its TFun. THAT IS NOT MEASURED and is not acted on.
-▶ NEXT PROBE: read the frame's accumulated row immediately before and
-after the prune, on the three-line repro. One read says whether the var
-is present before and gone after. Four causes in this arc were asserted
-from reading code and refuted by running something; this one waits for
-the run.
-▶ THE GATE IS THE THREE LINES, red today, landing with the fix. Two
-retracted framings precede this one — row-difference-is-omission (false:
-`diff_row` populates the absent set) and annotated-hof-loses-its-param-row
-(true but narrow, and the annotation is not required).
+CROWN-TIER LEAK whose mechanism is now WHOLE, and a DEDICATED ARC rather
+than loop-sized residue. Seven ticks narrowed it; six framings died on
+the way, each killed by running something after being asserted from a
+read. This entry is the current truth, rewritten in place — the kills
+are counted below rather than stacked above.
 
-▶ THE REPRO, and it needs no negation, no subtraction and no callback
-gymnastics:
+▶ THE REPRO needs no negation, no subtraction, no callback gymnastics:
 ```
 effect B { opb() -> Int }
 fn run(f) with Pure = f()
 fn main() = run(() => opb())
 ```
-ACCEPTED. `Pure` is the empty row — the strongest claim the surface
-has — and a body that calls an effectful callback satisfies it.
-▶ WHAT IS ACTUALLY BROKEN: a call to a function-typed PARAMETER does not
-charge that parameter's row to the enclosing function's inferred row, so
-the DECLARED row is never checked against it. The medium says so in its
-own narration on the negation variant — `T_OverDeclared: function 'run'
-declares A + !B but body only uses Pure`.
-▶ WHY IT LOOKS CLOSED. For an UNANNOTATED fn the hole is invisible: the
-param's row var is quantified into the scheme, the caller instantiates
-it, and the callback's row reaches the CALLER, which is where every
-existing HOF crucible puts its negation — so `leak-higher-order`,
-`leak-hof-annotated` and `leak-hof-named-arg` all refuse correctly and
-the battery reads green. Phase 1's record says the signature keep-set
-"publishes its param's row var in row and scheme coherently". The SCHEME
-half is real and is what those crucibles measure. The ROW half is not:
-the enclosing fn's own row stays Pure, so any declared row on that fn is
-a claim nothing verifies.
+ACCEPTED. `Pure` is the empty row, the strongest claim the surface has,
+and a body that calls an effectful callback satisfies it.
+
+▶ THE CHAIN, every link measured or read at its definition. The call
+edge CHARGES: `infer_call_saturated` runs `inf_add_row_unified(crow)` on
+the chased callee, and `main` receives `with B`, so the callback's effect
+does reach the caller. `inf_add_row`'s arm is a plain
+`union_row(frame.accumulated_row, row)`, so the param's row var IS in the
+frame's accumulated row. `row_without_self` strips the frame's OWN
+handle, not the param's var; the two print as distinct roots. The
+completion prune is exonerated by bypass. So an OPEN row reaches the
+gate, and `T_OverDeclared`'s "body only uses Pure" is a DISPLAY artifact
+— the third time a display misled this arc.
+
+▶ THE GATE ADMITS IT DELIBERATELY, ON A PROMISE THAT IS NOT KEPT.
+`row_subsumes(body_row, declared_row)` (infer:3378) reaches an open body
+tail and returns true, and its own comment says why: "A body tail STILL
+EtOpen after resolve is GENUINELY free — empty after full inference ...
+the free tail is vacuous at the gate (THE REBIND AT THE GATE CLOSES IT TO
+THE DECLARED ROW). Rejecting it was the ~80% row-var slice of the
+self-compile's false effect-mismatches — measured at 646." The rebind
+does not happen. The assumption "still-open means genuinely empty" holds
+for a MONOMORPHIC fn and is false for a polymorphic HOF, where the tail
+is a parameter's row a CALLER instantiates with real effects.
+
+▶ THE CONTRAST THAT PINS THE BOUNDARY: `fn direct() with OnlyA = opb()`
+REFUSES (`E_EffectMismatch: A vs B`), and a concrete local closure
+declared `Pure` refuses with `E_PurityViolated`. Same machinery, same
+check. A declared row is enforced against a concrete row and is vacuous
+against a free one, exactly and only.
+
+▶ WHY THE BATTERY READS GREEN. Every existing HOF crucible —
+`leak-higher-order`, `leak-hof-annotated`, `leak-hof-named-arg` — puts
+the negation on the CALLER, where the scheme half works: the param's row
+var is quantified, the caller instantiates it, the callback's row
+arrives. Phase 1 closed `Hβ.infer.hof-param-row-never-reaches-enclosing`
+for that shape and its record is accurate about the scheme. The ROW half
+at the declaring function is what this peer names.
+
 ▶ SEVERITY. This is §0's second property — the negative is provable —
 failing at the shape most likely to carry a real negation: a function
-that takes a callback and promises `!Alloc`, `!IO`, `Pure`. The promise
-compiles and means nothing. It is not end-to-end unsoundness in the
-simple case, because the caller still gets charged through the scheme,
-but the local claim is false and anything reading it is misled.
-▶ THE FIX DIRECTION, stated without asserting a mechanism not yet read:
-the call edge at a function-typed param must join the param's row into
-the enclosing fn's inferred row, so `with Pure` on that body REFUSES.
-The three-line repro is the gate, and it lands with the fix rather than
-sitting red in the battery.
-▶ SUPERSEDES the two framings this arc filed and retracted —
-row-difference-is-omission (false: `diff_row` populates the absent set)
-and annotated-hof-loses-its-param-row (true but narrow: the annotation
-is not required, `Pure` shows it plainly).
+taking a callback and promising `!Alloc`, `!IO` or `Pure`. Programs are
+not miscompiled, because the caller is charged through the scheme; the
+function's own contract is silently discarded, and anything reading it is
+misled.
 
-▶ RETRACTED: the leak was banked as
-`Hβ.effects.row-difference-is-omission-not-negation`, claiming `E - F`
-drops F instead of forbidding it. THAT IS FALSE. `diff_row` (effects.mn)
-does exactly what SYNTAX's identity says — `ef_make(name_set_diff(pa,
-pb), name_set_union(aa, pb), ta)` removes the name from the PRESENT set
-and adds it to the ABSENT set, and the open-tail arm builds the same
-masked triple. The "E - F = E" claim came from reading an error
-message's DISPLAY (`effect row mismatch: A vs B`) as if it were the row.
-A display is not a measurement.
-▶ THE LEAK IS REAL — the crown measured the acceptance — and its actual
-mechanism needs no subtraction at all. Minimal repro, six lines:
-```
-effect A { opa() -> Int }
-effect B { opb() -> Int }
-fn run(f) with A + !B = f()
-fn bad() = run(() => opb())
-```
-ACCEPTED. And the medium says why, unprompted: `T_OverDeclared:
-function 'run' declares A + !B but body only uses Pure`. THE CALLBACK'S
-ROW NEVER REACHES THE ENCLOSING FN'S ROW when that fn carries its own
-declared row, so the `!B` has nothing to check and the caller is
-unannotated so nothing else catches it.
-▶ WHY THE BATTERY MISSES IT. `leak-hof-annotated` refuses the same
-shape, and the difference is exactly one clause: there `fn run(f: () ->
-Int) = f()` has NO with-clause, so run's row is inferred, carries f's
-row, and the caller's `!E` catches it. §11 Phase 1 closed
-`Hβ.infer.hof-param-row-never-reaches-enclosing` for that UNANNOTATED
-form — the signature keep-set publishes the param's row var in row and
-scheme coherently. The ANNOTATED form was not closed with it, and no
-crucible covers it because every existing HOF crucible puts the
-negation on the caller.
-▶ SEVERITY: this is the crown's own subject. A developer who writes the
-negation on the function that takes the callback — the natural place to
-write it — gets silence. Every carrier crucible landed this week assumes
-the row reaches the enclosing fn; this is the case where it does not.
-▶ THE CRUCIBLE IS HELD BACK, red today, and lands with the fix. The
-sound half landed as `sound-difference-admits`, which is still valid: it
-pins that subtraction leaves A admitted, and that half never depended on
-the retracted mechanism.
+▶ WHERE THE FIX GOES, and why it is not a patch anyone should reach for
+mid-loop. It cannot live in `row_subsumes`: that function is a READ by
+explicit design ("a read that rebinds row vars would make every
+projection a writer"), which is precisely why the rebind is absent. It
+belongs at the declared-row gate, where a successful subsume over an open
+tail must CLOSE that tail to the declared row — the comment's own
+parenthesis, built. Rejecting open tails is the known-wrong alternative
+with a 646-false-mismatch precedent, so the fix BINDS rather than
+refuses. The gate site already keeps one declaration-write on open tails,
+the ABSENT refinement, which is why `!B` variants behave differently from
+`Pure` ones and why the two must be read together before an edit.
 
-SYNTAX §«Named effect rows» gives `type ReadOnly = File - write` and
-states the identity `E - F = E & !F`, so a subtracted member should be
-FORBIDDEN. The artifact subtracts it instead: for `type Both = A + B` and
-`type OnlyA = Both - B`, the medium reports the declared row of a fn
-`with OnlyA` as the POSITIVE row `A`, with no absent member. `E - F = E`.
-WHY IT LOOKS SOUND AND IS NOT. A DIRECT perform refuses —
-`fn direct() with OnlyA = opb()` gives `E_EffectMismatch: A vs B` —
-because a positive row simply does not admit B, so the everyday case is
-caught and nothing in the wheel notices. The HIGHER-ORDER case leaks:
-```
-fn run(f) with OnlyA = f()
-fn bad() = run(() => opb())
-```
-is ACCEPTED. A callback's row unifies into the open tail a positive row
-carries, and only a real `!B` refuses there. That is the textbook
-higher-order failure §4③ names as the reason Koka omitted negation, met
-here through the subtraction operator rather than through `!` itself.
-THE CRUCIBLE EXISTS AND IS HELD BACK: `leak-difference-negation` is the
-repro above, RED today, and it lands WITH the fix rather than sitting red
-in the battery. Its sound twin DID land as `sound-difference-admits`,
-which pins only the half that holds — subtraction leaves A admitted,
-higher-order included.
-THE FIX IS THE IDENTITY THE DOC ALREADY STATES: `-` must lower to
-`inter_row` against the negation (`E & !F`), so the subtracted name
-enters the ABSENT field of the canonical triple rather than being dropped
-from the present one. `eff_forbids` then refuses the callback exactly as
-it does for an authored `!B`. Marched, because it changes what every
-declared row carrying a `-` means.
-SYNTAX IS NOT WRONG HERE and must not be edited to match: it is the
-authority, the identity is the intended semantics, and the artifact is
-the lathe that has not been turned to it.
+▶ THE SIX KILLS, compressed: `row-difference-is-omission` (false —
+`diff_row` populates the absent set); `annotated-hof-loses-its-param-row`
+(true but narrow — the annotation is not required, `Pure` shows it
+plainly); `param-call-never-charges-the-declared-row` (false — it
+charges); "the declaration is dropped from the published scheme" (false —
+publication carries the INFERRED row by design, "the cell keeps its
+PROVEN row; the declaration publishes NOTHING"); "the body row is Pure at
+the check" (false — a display artifact); the completion prune as the
+site (exonerated by bypass).
+
+▶ THE GATES WAIT WITH THE FIX. The three-line repro is red today and
+lands as a crucible with the change; `leak-difference-negation` is held
+back the same way. `sound-difference-admits` DID land and stays valid —
+it pins that subtraction leaves the unsubtracted member admitted,
+higher-order included, and never depended on a retracted mechanism.
+SYNTAX §«Named effect rows» is not wrong here and must not be edited to
+match the artifact: the identity `E - F = E & !F` is the intended
+semantics and the lathe has not been turned to it.
 
 `Hβ.lower.state-init-config-ref-nested` — THE ROOT, and this entry OPENS
 with the retraction of its own previous version.

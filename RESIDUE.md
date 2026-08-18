@@ -593,6 +593,35 @@ does reach this code — `lookup_handler_state_inits_of` calls
 still fails, which is precisely the shape that wants instrumentation
 rather than more reading: I guessed four times in this iteration and the
 artifact refused each guess.
+ANSWERED 2026-08-17, BY MEASUREMENT, AND THE SITE'S ORIGINAL COMMENT WAS
+RIGHT ALL ALONG. `lower_state_field_inits` runs where the `lower_scope`
+handler is NOT INSTALLED. The candidate wheel built with the frame
+variant carries 52 `singleton op call with no live install: lower_scope`
+floors, read out of `.build/m2cache/m2.wat` — so every `ls_enter_frame` /
+`ls_resolve` / `ls_exit_frame` in that variant lowered to an
+`unreachable`, and the compile TRAPPED (exit 134, zero WAT, backtrace
+pinning `map$spr_initnNode_nLowExpr` under `lower_stmt_body` — the very
+map added by the change).
+THE COMMENT THIS ARC DISMISSED SAID EXACTLY THIS: the config slot is
+"resolved STRUCTURALLY (the config slot is known by name — carried
+truth, not re-derived) rather than via a frame the install must thread
+evidence for." The frame is unavailable BECAUSE the install does not
+thread LowerScope evidence to this site. The special case is therefore
+the CORRECT design, not a shortcut, and three iterations of treating it
+as one were three iterations of arguing with a true comment.
+WHAT THAT MAKES THE REAL FIX: the nested case must be resolved
+STRUCTURALLY too — config refs substituted for `LUpval(0, slot)` inside
+the init's lowering without any scope handler. That is a lowering pass
+parameterised by `config_names` (thread them into the init's own walk,
+or rewrite the lowered tree), and it is the only shape the evidence at
+this site permits.
+▶ RETRACTED FROM THE ENTRY BELOW: "THE FRAME IS CONSULTED … ZERO
+`unbound name` markers". The file grepped for those markers was ZERO
+BYTES — the compile had trapped and emitted nothing, so zero matches
+meant nothing. A conclusion drawn from an empty artifact, which is the
+same "no verdict from empties" the march's own SIZE-GUARD refuses.
+Check the byte count before grepping an artifact.
+
 THE PROBE RAN (2026-08-17) AND REFUTED ITS OWN QUESTION. Two facts, both
 from the artifact:
   (1) The special case works exactly as documented. Encoding the branch

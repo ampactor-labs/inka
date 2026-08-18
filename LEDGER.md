@@ -35,6 +35,39 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · ANSWERED: THE SCOPE HANDLER IS NOT INSTALLED THERE, AND
+  THE COMMENT SAID SO (no pin — probe reverted whole; boot unchanged at
+  5a61fc4eba, src and lib byte-identical to the previous pin).
+  ▶ THE ANSWER, MEASURED. The candidate wheel built with the frame
+  variant carries 52 `singleton op call with no live install:
+  lower_scope` floors, read straight out of `.build/m2cache/m2.wat`. So
+  `lower_state_field_inits` runs where `lower_scope` is NOT installed,
+  every `ls_*` call in the variant lowered to an `unreachable`, and the
+  compile trapped — exit 134, zero WAT, the backtrace pinning
+  `map$spr_initnNode_nLowExpr` under `lower_stmt_body`, which is the map
+  the change itself added.
+  ▶ THE SITE'S OWN COMMENT WAS RIGHT, and this arc spent three
+  iterations arguing with it. It says the config slot is "resolved
+  STRUCTURALLY (the config slot is known by name — carried truth, not
+  re-derived) rather than via a frame the install must thread evidence
+  for." The frame is unavailable precisely BECAUSE the install threads no
+  LowerScope evidence here. The special case is the correct design given
+  that, not the shortcut I kept calling it.
+  ▶ AND A RETRACTION OF THE PREVIOUS ENTRY'S CENTRAL CLAIM. It reported
+  "THE FRAME IS CONSULTED … ZERO `unbound name` markers" in the variant's
+  WAT. That file was ZERO BYTES — the compile had already trapped and
+  emitted nothing, so zero matches meant nothing at all. It is the same
+  "no verdict from empties" the march's own SIZE-GUARD refuses, made by
+  hand. The rule is one line: check an artifact's byte count before
+  grepping it.
+  ▶ WHAT THE REAL FIX MUST BE, now constrained by evidence rather than
+  taste: the nested case has to be resolved STRUCTURALLY too — config
+  refs substituted for `LUpval(0, slot)` within the init's own lowering,
+  with no scope handler involved. A lowering parameterised by
+  `config_names`, or a rewrite of the lowered tree. That is the only
+  shape the evidence at this site permits, and it is the first design in
+  this arc that the artifact has not refused.
+
 - 2026-08-17 · THE INSTRUMENT REFUTES THE PREVIOUS ITERATION'S OWN
   DIAGNOSIS (no pin — probes reverted whole; boot unchanged at
   5a61fc4eba, src and lib byte-identical to the previous pin).

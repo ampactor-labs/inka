@@ -87,7 +87,16 @@ to refuse.
 the next constraint instead of a human-read stamp.
 
 **4 · BUILD DISCIPLINE.** Source edits through the Edit tool only. The
-mentl-first perimeter stands: the medium's projections before shell reads;
+mentl-first perimeter stands, and since 2026-08-18 it GUARDS THE WRITE TOO:
+an edit to `src/**.mn` or `lib/**.mn` is REFUSED until a medium verb has
+been asked about that path this session — `check`, `audit`, `query`,
+`tighten`, a cursor address, any of them, and one that answers with errors
+still counts because the requirement is that the question was put. This
+paragraph used to carry the rule and the pre-edit hook used to print it;
+ten iterations of editing wheel files without once asking the medium what
+it already knew is what proved §0's own point about prose at the scaffold
+layer. Priced before imposed: the consult costs 0.65–2.53s per file per
+session. The medium's projections still come before shell reads;
 `# mentl-skip: <reason>` confessions only for artifact/git operations, each
 naming the missing projection. Every new capability lands with its gate seen
 RED first. Ratchets move only DOWN; raising any ceiling requires a

@@ -1605,6 +1605,36 @@ build put the guard inside `patch_with_clause`, which made `None` carry
 two reasons and the skip line lie about which; moving it to the caller
 restored one verdict per meaning.
 
+`Hβ.tools.consult-before-write` — RESOLVED 2026-08-18, and it is the
+affordable half of the entry below. The pre-edit hook stops printing the
+interrogations and REFUSES: no write to `src/**.mn` or `lib/**.mn` until a
+medium verb has named that path this session. The pre-bash hook records
+the consult at the exact branch where it already identifies a command as
+a medium verb, so the ledger costs nothing and cannot be bypassed by
+phrasing. A session starts with the ledger empty, because what the medium
+said last session is about a tree that has since moved.
+▶ WHY IT EXISTS: ten iterations edited wheel files without once asking
+`mentl audit` what it knew about them; the first run answered in one
+command what hand-reading had not, and the first `mentl tighten` exposed
+a fabricating verb. The hook's own header used to read "never blocks —
+audit is POST-edit", which is PLAN §0's argument about prose, written
+into the scaffold that was supposed to enforce it.
+▶ WHAT IT IS NOT: it does not run the audit (that is the entry below,
+priced at 4.91s/777MB and image-gated). It requires that the question was
+PUT. A verb answering with errors satisfies it — demanding a clean answer
+would deadlock a mid-refactor file that does not yet compile.
+▶ PRICED BEFORE IMPOSED: `mentl check` costs 0.65s/208MB on types.mn,
+0.73s/227MB on lexer.mn, 2.53s/725MB on infer.mn — once per file per
+session, not per edit.
+▶ FALSIFIED FIVE WAYS through the hooks' own stdin contract: an
+unconsulted wheel edit exits 2, a consult writes the marker, the same edit
+then exits 0, a DIFFERENT wheel file stays refused, and a cursor address
+counts as a consult. The first attempt failed and the failure was the
+find — the ledger sat below the hook's `mentl`-led early exit and never
+ran, so it moved to that branch.
+▶ SCOPE: wheel source only. tests/, docs and the seed keep the reminder
+alone; the law is about editing the medium without asking it.
+
 `Hβ.audit.at-the-edit-is-image-gated` — THE SELF-BUILD RATCHET'S OWN NEXT
 STEP, PRICED AND REFUSED. Measured 2026-08-18 at pin 567a96659693.
 ▶ THE CASE FOR IT is the strongest this loop has: over ten iterations the

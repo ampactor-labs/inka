@@ -35,6 +35,45 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 88050b76596d · THE FLOOR SAYS WHICH. TRANSITION first
+  (m2 ≠ m3 by 8 lines, m4 exit 0 at 412987 lines, m3 == m4), then CLEAN
+  (m2 == m3) after the quiet gate sent one line back — and the sha is the
+  SAME BINARY across both, 88050b76596d. census 0, battery green, frontier
+  371/0, peak 2177904 KB against a 2310000 ceiling.
+  ▶ THE RATCHET WAS RIGHT AND THE ARTIFACT SAID SO. The new fn declared
+  `ref rec`, copying its sibling, and the pre-commit quiet gate refused at
+  authored ref 814 → 815 — a marker is inference failing, not a fix.
+  Dropping it re-marched to a byte-identical pin, so the ownership
+  inference had already reached that grade and the annotation was pure
+  decoration. Precedent is not authority; the ceiling measured it in one
+  commit attempt.
+  ▶ WHAT LANDED: the emit's `field offset unprovable` marker carries the
+  selector and the receiver's live type. `field_offset_unprovable_why` is
+  the sibling of `field_sel_offset` over the same two operands — one
+  answers the offset, the other answers why there was none — and the
+  floor writes its answer. Measured on a fixture whose unannotated record
+  param is read through a list pattern: before, `;; field offset
+  unprovable`; after, `;; field offset unprovable: field 'slot' on
+  { slot: Int | r24989@e5 }`. The RED half was read off the same file
+  before the build.
+  ▶ WHY IT IS A PROJECTION AND NOT A MESSAGE: the two facts printed are
+  ones the graph already holds at that instruction, and the marker was
+  standing in for them in prose. This arc re-derived the blocking row by
+  hand four times across as many iterations; the emit knew it each time.
+  It also DISTINGUISHES the two shapes the wrong-slot class turns on — a
+  free tail prints as `r24989@e5`, an assumed-empty remainder as `{ }` —
+  which is the difference between a remainder unknown and one fabricated.
+  ▶ THE ROW WIDENED HONESTLY, AND THE MEDIUM ENUMERATED THE SITES.
+  `show_type` performs `Intern`, so the first march refused at census 9:
+  one error at the new fn and eight at the show-helper emit chain that
+  reaches `emit_expr`, each with its own span. `+ Intern` on those eight,
+  and the new fn dropped an `EnvRead` its body never performs. The
+  compiler named every site; no grep was involved.
+  ▶ THE FIRST MARCH ALSO FAILED ONE MICRO AND THE SECOND DID NOT. One
+  variable moved between them — the corrected row — and the battery went
+  green. Recorded as the sequence measured, not as a mechanism, because
+  the mechanism was not probed.
+
 - 2026-08-17 · pin 6cacd339350c · THE DISCRIMINATOR WORKS, AND THE ARC'S
   BLOCKER IS CLEARED. TRANSITION — m2 ≠ m3 by 36 lines, m4 exit 0 at
   412788 lines, m3 == m4, repinned from m3. census 0, frontier 371/0,

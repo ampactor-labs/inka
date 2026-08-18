@@ -130,7 +130,10 @@ if C=$(wt_m2_ensure); then
     if [[ -z "$swant" ]]; then
       say "✗ syntax $s: no '// expect: N' header"; syn_bad=$((syn_bad+1)); continue
     fi
-    sout=$(tools/run-micro.sh "$sf" "$swant" "${RTLIBS[@]}" 2>/dev/null | tail -1)
+    # The VERDICT line, not the last line: run-micro.sh prints FAIL(...) and
+    # then tails the run's stderr, so `tail -1` on a failure hands back a
+    # backtrace frame and the leg reports "no output" for a real breakage.
+    sout=$(tools/run-micro.sh "$sf" "$swant" "${RTLIBS[@]}" 2>/dev/null | grep -E '^(PASS|FAIL)' | tail -1)
     [[ "$sout" == PASS* ]] || { say "✗ syntax $s: ${sout:-no output}"; syn_bad=$((syn_bad+1)); }
   done
   if [[ "$syn_n" -eq 0 ]]; then
@@ -140,6 +143,40 @@ if C=$(wt_m2_ensure); then
     say "✓ syntax battery: $syn_n declared-form fixture(s) run true (surfaces the wheel never writes)"
   else
     say "✗ syntax battery: $syn_bad of $syn_n fixture(s) broke their contract"
+    fail=1
+  fi
+
+  # 2c. THE FLOOR CONTRACT — an unprovable field offset REFUSES, and says
+  #     which. Two halves, because either alone is a gate that cannot fail:
+  #     the trap (never a guessed offset 0 reading a foreign field) and the
+  #     marker's TEXT (the selector and the receiver's live row). The text
+  #     half is what turns a floor census from a count into an inventory,
+  #     and this arc re-derived the blocking row by hand four times before
+  #     the emit was asked to speak it.
+  flr_n=0; flr_bad=0
+  for ff in tests/floors/*.mn; do
+    [[ -e "$ff" ]] || continue
+    flr_n=$((flr_n+1))
+    f=$(basename "$ff" .mn)
+    fwant=$(sed -n '1s|^// expect: \([0-9]\+\)$|\1|p' "$ff")
+    fout=$(tools/run-micro.sh "$ff" "$fwant" "${RTLIBS[@]}" 2>/dev/null | grep -E '^(PASS|FAIL)' | tail -1)
+    if [[ "$fout" != PASS* ]]; then
+      say "✗ floor $f: ${fout:-no output}"; flr_bad=$((flr_bad+1)); continue
+    fi
+    fwat="${TMPDIR:-/tmp}/$f.wat"
+    if ! grep -q "field offset unprovable: field '" "$fwat"; then
+      say "✗ floor $f: the marker does not name its selector"; flr_bad=$((flr_bad+1)); continue
+    fi
+    grep -q "field offset unprovable: field '[^']*' on " "$fwat" \
+      || { say "✗ floor $f: the marker does not name the receiver's row"; flr_bad=$((flr_bad+1)); }
+  done
+  if [[ "$flr_n" -eq 0 ]]; then
+    say "✗ floor contract: no fixtures — an emit floor with no gate is a marker nobody reads"
+    fail=1
+  elif [[ "$flr_bad" -eq 0 ]]; then
+    say "✓ floor contract: $flr_n unprovable-offset fixture(s) refuse and name what blocked them"
+  else
+    say "✗ floor contract: $flr_bad of $flr_n fixture(s) broke their contract"
     fail=1
   fi
 else

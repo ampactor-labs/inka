@@ -1164,6 +1164,24 @@ this shape and any future fix that breaks it is caught before the march
 instead of by it. Falsified two ways before trusting: it fails against the
 flip build (the same trap) and fails against a deliberately wrong
 expectation.
+▶ THE BANKED PROBE RAN AND ANSWERED (2026-08-18), through the medium's
+own projection rather than an eprint. `mentl query "type pick"` on the
+two repros: findtag reads
+`-> Option({ handle: Int | { region_id: Int } })` — the residual is
+LEARNED and non-empty, so the layout is proven and both `t.handle` and
+`t.region_id` are right for the reason they look right. zeta reads
+`(u: { zeta: Int | { } } ref) -> Int` — the residual is EMPTY, so `zeta`
+takes index 0 and the caller's `alpha` sits there. The class is one
+rendered character wide: `| { region_id: Int }` versus `| { }`.
+▶ SO THE MEDIUM ALREADY SAYS IT, at the query. What it did NOT say was
+at the floor, and that is what landed instead of the flip (pin
+88050b76596d): `field_offset_unprovable_why` puts the selector and the
+receiver's live type on the marker, so the third shape is legible too —
+a still-free tail renders `{ slot: Int | r24989@e5 }`, which is a
+remainder UNKNOWN rather than one assumed. Unknown, assumed-empty and
+proven are now three distinguishable readings at the site where the
+offset was needed, and this arc re-derived that fact by hand four times
+before the emit was asked to speak it.
 ▶ WHAT THIS COSTS THE PREMISE. The flip's justification was that the
 empty bind is a fabrication driving the wrong-slot class. That is TRUE at
 zeta and NOT SUFFICIENT as a landing: the same honest floor also refuses a
@@ -1315,6 +1333,34 @@ decl). They are real leaves of one walk rather than one parameterized
 surface shape, the same distinction the fold's four leaf generators
 record. Each lands the way this one did: one variant, one label, one
 name in the grammar, one fixture line, one frontier spec.
+
+`Hβ.query.type-of-a-lambda-parameter` — `mentl query <file> "type NAME"`
+reaches top-level names and fn parameters and answers `not found: tag`
+for a lambda's parameter (measured 2026-08-18 on
+tests/micros/mn-findtag.mn, whose `find((tag) => tag.handle == h, tags)`
+is exactly the shape a row dig wants to interrogate). The line
+projection `mentl <file>:<line>` answers with the whole expression, so
+the only way to the inner binder today is a column, and a column
+arrived at by counting characters is the fabricated coordinate the loop
+forbids. The graph holds the binder — lower binds it, infer judges it —
+so this is a lookup that stops at the env's own edge rather than a fact
+the medium lacks. Lands with the per-module overlay's link sets
+(`Hβ.driver.per-module-env-overlay`), whose scoped views are what let a
+query name a binder inside a scope.
+
+`Hβ.at.emit-floor-facet` — THE FLOOR IS LEGIBLE IN THE WAT AND INVISIBLE
+AT THE SOURCE. Since pin 88050b76596d the marker names its selector and
+the receiver's row, which is the fact a dig needs — but reading it means
+compiling to a `.wat` and grepping an artifact, which is a hand tool
+where a projection belongs, and this arc confessed it four times in one
+iteration. `mentl <file>:<line>` at a field access should carry the
+emit's own verdict as an aspect: offset resolved at N, or unprovable
+with the row that blocked it. It is the eighth arm (Reason) read at the
+emit altitude, and it composes with `mentl where`'s derived badges
+rather than adding a surface. DEP: nothing structural — the emit already
+computes both halves; what is missing is a channel from the backend's
+per-site verdict back to a source position, which the span already on
+the LowExpr supplies.
 
 `Hβ.diag.row-polymorphic-body` — WHAT THE CURSOR SHOULD SAY AT A FREE ROW
 CELL. `enforce_row_gate`'s unbound arm now teaches nothing there (pin

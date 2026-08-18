@@ -1,0 +1,11 @@
+// expect: 134
+// An unannotated record parameter, read for a field through a list pattern.
+// The receiver's row never closes, so the layout is unprovable and the emit
+// must REFUSE it — a trap, never a guessed offset 0 that reads `other`.
+// The gate's other half is the marker's TEXT: it names the selector and the
+// receiver's live row, so a floor census is an inventory and not a count.
+fn peek(frames) = match frames {
+  [f, ..._] => f.slot,
+  [] => 0,
+}
+fn main(q) = peek([{other: 1, slot: 5}])

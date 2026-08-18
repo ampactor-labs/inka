@@ -539,6 +539,20 @@ fn field_sel_offset(ref rec, sel) with EnvRead + LookupTy + GraphRead + Memory +
   },
 }
 
+// WHAT THE OFFSET READ COULD NOT PROVE, said at the site — the sibling of
+// field_sel_offset over the same two operands: one answers the offset, this
+// one answers why there was none. The floor used to write a bare marker, so
+// every occurrence was countable and anonymous, and the row that blocked it
+// had to be re-derived by hand at each dig (this arc did it four times). The
+// selector and the receiver's own live type ARE the reason; reading them
+// here is the projection the marker stood in for. An open row renders with
+// its residual — `{ zeta: Int | { } }` is an empty remainder assumed rather
+// than proven, which is the wrong-slot class stated in one line.
+fn field_offset_unprovable_why(rec, sel) with LookupTy + GraphRead + Memory + Alloc + Intern = match sel {
+  FByName(fname) => "field '{fname}' on {show_type(lookup_ty(lexpr_handle(rec)))}",
+  FByIndex(i) => "element {int_to_str(i)} on {show_type(lookup_ty(lexpr_handle(rec)))}",
+}
+
 fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = match spec_scan_list(lowered, ([], [])) {
   (sites, _o) => {
     let seed = spec_candidates_from_sites(sites, [])
@@ -4527,8 +4541,12 @@ fn emit_expr(expr) = match expr {
       // NO SILENT FALLBACK (resolve_field_offset returned -1): the field's
       // offset was not provable from the graph. Emit (unreachable) — the
       // named wrong — not a fabricated offset-0 load that reads a foreign
-      // field. The medium makes the wrong move unsayable (PLAN §0).
-      wat_emit("    (unreachable)  ;; field offset unprovable\n")
+      // field. The medium makes the wrong move unsayable (PLAN §0). And it
+      // SAYS WHICH: the selector and the receiver's live type ride the
+      // marker, so the census reads an inventory instead of a count.
+      wat_emit("    (unreachable)  ;; field offset unprovable: ")
+      wat_emit(field_offset_unprovable_why(rec, sel))
+      wat_emit("\n")
     } else {
       emit_expr(rec)
       wat_emit("    (")
@@ -5088,7 +5106,7 @@ fn collect_fold_tys_expr(expr, acc: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]
 
 // The one dedup walk: emit each distinct fold_sig's helper ONCE, the leaf
 // generator selected by the op.
-fn emit_distinct_fold_leaves(op, tys, seen) with EnvRead + Alloc + Memory + WasmOut + EmitMemory + GraphRead + LookupTy + SpecTwins + StringTable + WASI = if len(tys) == 0 {
+fn emit_distinct_fold_leaves(op, tys, seen) with EnvRead + Alloc + Memory + WasmOut + EmitMemory + GraphRead + LookupTy + SpecTwins + StringTable + WASI + Intern = if len(tys) == 0 {
   ()
 } else {
   let ty = last(tys)
@@ -5108,7 +5126,7 @@ fn emit_distinct_fold_leaves(op, tys, seen) with EnvRead + Alloc + Memory + Wasm
 
 // The four leaves behind the one walk. Emission order (eq, compare, hash,
 // show) preserves the module layout the four separate entry fns produced.
-fn emit_fold_leaf_helpers(closures: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) with EnvRead + Memory + Alloc + WasmOut + EmitMemory + GraphRead + LookupTy + SpecTwins + StringTable + WASI = {
+fn emit_fold_leaf_helpers(closures: {cmp: [Ty], eq: [Ty], hash: [Ty], show: [Ty]}) with EnvRead + Memory + Alloc + WasmOut + EmitMemory + GraphRead + LookupTy + SpecTwins + StringTable + WASI + Intern = {
   // One region over the four leaf families: the closures record lives
   // outside the mark; every generated helper streams as it is built.
   //
@@ -5937,7 +5955,7 @@ fn eq_subtys_variants(specs, i, n, seen, acc) = if i >= n {
 // each assembling via FOLDED `(call $str_concat (local.get $__state) <l> <r>)`
 // s-expressions — the value, the field-loads, and the recursive show calls are
 // sub-expressions of the concat tree (correct stack discipline, no interleave).
-fn emit_one_show_helper(sig, ty) with EmitMemory + StringTable + Alloc + Memory + GraphRead + EnvRead + SpecTwins + LookupTy + WasmOut + WASI = match fold_strip(ty) {
+fn emit_one_show_helper(sig, ty) with EmitMemory + StringTable + Alloc + Memory + GraphRead + EnvRead + SpecTwins + LookupTy + WasmOut + WASI + Intern = match fold_strip(ty) {
   TName(name, _) => emit_one_show_sum_helper(sig, name),
   TList(elem) => emit_one_show_list_helper(sig, elem),
   _ => emit_one_show_product_helper(sig, ty),
@@ -5958,7 +5976,7 @@ fn emit_show_header(sig) = {
 // structural projection. The fold runs over the canonically-sorted fields at
 // their width-summed offsets (the SAME align_for + repr_width the eq leaf and
 // the store side run — Carried-Truth).
-fn emit_one_show_product_helper(sig, ty) with EnvRead + WasmOut + Memory + Alloc + EmitMemory + GraphRead + LookupTy + SpecTwins + StringTable + WASI = {
+fn emit_one_show_product_helper(sig, ty) with EnvRead + WasmOut + Memory + Alloc + EmitMemory + GraphRead + LookupTy + SpecTwins + StringTable + WASI + Intern = {
   emit_show_header(sig)
   let is_record = ty_is_record(fold_strip(ty))
   let open = if is_record { "\{" } else { "(" }
@@ -6000,7 +6018,7 @@ fn name_positional(elems, i, n) with Alloc + Memory =
 // concat( <name-prefix + ", " sep>, concat( show(field), <rest> ) ). The first
 // field has no leading ", "; a record field is prefixed "name: ". The byte
 // offset is width-summed (align_for + repr_width). Terminates with "" at the end.
-fn emit_show_product_fields(fields, i, off, is_record) with EmitMemory + StringTable + Alloc + Memory + GraphRead + EnvRead + SpecTwins + LookupTy + WasmOut + WASI = if i >= len(fields) {
+fn emit_show_product_fields(fields, i, off, is_record) with EmitMemory + StringTable + Alloc + Memory + GraphRead + EnvRead + SpecTwins + LookupTy + WasmOut + WASI + Intern = if i >= len(fields) {
   emit_show_str_literal("")
 } else {
   match list_index(fields, i) {
@@ -6075,7 +6093,7 @@ fn emit_show_field_load(off, r) = {
 // "Ctor(" ++ f0 ++ ", " ++ f1 ++ ")". The variant names + payload types are read
 // LIVE from the env (variant_named_specs_of). A recursive ADT re-enters
 // $show_n<Name> (finite on the value). Mirrors emit_eq_leaf_sum's guard.
-fn emit_one_show_sum_helper(sig, type_name) with EmitMemory + StringTable + Alloc + Memory + GraphRead + EnvRead + SpecTwins + LookupTy + WasmOut + WASI = {
+fn emit_one_show_sum_helper(sig, type_name) with EmitMemory + StringTable + Alloc + Memory + GraphRead + EnvRead + SpecTwins + LookupTy + WasmOut + WASI + Intern = {
   let specs = variant_named_specs_of(type_name)
   wat_emit("  (func $show_")
   wat_emit(sig)
@@ -6101,7 +6119,7 @@ fn emit_one_show_sum_helper(sig, type_name) with EmitMemory + StringTable + Allo
 // ($a in the nullary arm, $ta in the heap arm). A nullary variant renders its
 // bare name; a fielded variant renders "Ctor(" ++ payloads ++ ")". The cascade
 // terminal is "" (the env enumerates every variant; control lands on one arm).
-fn emit_show_sum_tag_dispatch(specs, i, n, scrutinee) with EmitMemory + StringTable + Alloc + Memory + GraphRead + EnvRead + SpecTwins + LookupTy + WasmOut + WASI = if i >= n {
+fn emit_show_sum_tag_dispatch(specs, i, n, scrutinee) with EmitMemory + StringTable + Alloc + Memory + GraphRead + EnvRead + SpecTwins + LookupTy + WasmOut + WASI + Intern = if i >= n {
   emit_show_str_literal("")
 } else {
   match list_index(specs, i) {
@@ -6193,7 +6211,7 @@ fn emit_show_variant_load(off, pty) = {
 // LIST show: "[" ++ <element loop, joined by ", "> ++ "]". The element count is
 // runtime (len); $show_listbody_<sig> folds str_concat over list_index(a, i),
 // joining ", ". The element leaf is read from the proven element type.
-fn emit_one_show_list_helper(sig, elem) with EmitMemory + StringTable + Alloc + Memory + GraphRead + EnvRead + SpecTwins + LookupTy + WasmOut + WASI = {
+fn emit_one_show_list_helper(sig, elem) with EmitMemory + StringTable + Alloc + Memory + GraphRead + EnvRead + SpecTwins + LookupTy + WasmOut + WASI + Intern = {
   emit_show_header(sig)
   emit_show_concat_open()
   emit_show_str_literal("[")

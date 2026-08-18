@@ -1634,6 +1634,13 @@ find — the ledger sat below the hook's `mentl`-led early exit and never
 ran, so it moved to that branch.
 ▶ SCOPE: wheel source only. tests/, docs and the seed keep the reminder
 alone; the law is about editing the medium without asking it.
+▶ AND THE LOGIC IS TRACKED. The first landing put it in `.claude/hooks/`,
+which `.gitignore` line 2 excludes — an enforcement living in one working
+copy is not an enforcement, and the commit would have shipped only the
+prose describing it. `tools/consult-gate.sh` owns the three entry points
+(record / require / reset) and the hooks are one-line wiring, which is the
+pattern the drift-audit hook already used. Re-falsified six ways after the
+move, including a lib/ file and a tests/ fixture.
 
 `Hβ.audit.at-the-edit-is-image-gated` — THE SELF-BUILD RATCHET'S OWN NEXT
 STEP, PRICED AND REFUSED. Measured 2026-08-18 at pin 567a96659693.

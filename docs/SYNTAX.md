@@ -771,6 +771,25 @@ fn extend(base: {name: String, ...R}, age: Int) -> {name: String, age: Int, ...R
   ...
 ```
 
+**The lathe has not been turned to this section, and the gap is a SILENT
+WRONG — measured 2026-08-17, recorded here because a reader would
+otherwise trust the example above.** A record's fields sort alphabetically
+and its offsets follow that order, but an OPEN row's offsets are computed
+from the KNOWN field set's own ordering instead of the runtime record's.
+So `greet` above, called with a record whose other fields sort before
+`name`, reads one of those fields: the same shape measured as `fn width(u:
+{name: Int, ...}) = u.name + 1` over `{name: 5, age: 9}` returns 10, which
+is `age + 1`. No diagnostic, no trap; `mentl check` passes. The closed
+annotation is correct and is the landed control
+(`tests/syntax/record-field-param-closed`). Every consumer that needs a
+layout inherits the rule — patterns bind the wrong slot, `==` compares
+only the known fields — and the repair is not a refusal (the march
+measured that turning it into a floor breaks `fn g({x, y})`, whose
+destructuring parameter is the same open row). SYNTAX is not wrong here
+and must not be edited to match the artifact: the section states the
+intended semantics, and `Hβ.lower.open-row-field-offset-from-known-set`
+carries the class.
+
 ### Nominal record types
 
 When a brand is wanted (distinct identity, not just shape):

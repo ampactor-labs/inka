@@ -1579,11 +1579,14 @@ the class stays open as
 REFUTED the obvious interim — flooring on "offset unprovable" the way
 `LFieldLoad` does turns `fn g({x, y})` into a trap, because a
 destructuring parameter IS the open-row case and SYNTAX gives it as its
-own example. The offsets must be resolved, not policed. A THIRD consumer
-then measured worse than either: `==` over an open row under-compares and
-reports two differing records EQUAL, silently, checking clean
-(`Hβ.fold.open-record-shares-closed-signature`). One question — the
-layout is unknown — and three behaviours, only the field load's honest.
+own example. The offsets must be resolved, not policed. The ROOT then measured under all of it
+(`Hβ.lower.open-row-field-offset-from-known-set`): an open row's field
+offsets come from the KNOWN set's own ordering rather than the runtime
+record's, so `fn pick(u: {zeta: Int, ...}) = u.zeta` over `{alpha: 7,
+zeta: 9}` returns 7 — and SYNTAX's own row-polymorphism example is that
+shape. Four consumers inherit one rule: patterns bind the wrong slot,
+`==` compares only known fields, field access reads a foreign one, and
+`LFieldLoad` floors loudly only where offset resolution returns -1.
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
 NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
 found nothing: `tests/syntax/` had no history under any ref, no gate

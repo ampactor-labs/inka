@@ -800,8 +800,54 @@ that and `fn g({x, y})` is invisible to the medium, which is exactly why
 a blanket floor cannot separate them and exactly why the fix must close
 the row rather than police the pattern.
 
-`Hβ.fold.open-record-shares-closed-signature` — ✅ CONFIRMED 2026-08-17 by
-the re-aimed probe, and it is a SILENT WRONG on a documented surface.
+`Hβ.lower.open-row-field-offset-from-known-set` — THE ROOT UNDER ALL OF
+IT, and it lands on SYNTAX's own worked example. Measured 2026-08-17 at
+pin 4ce9914b7360.
+▶ AN OPEN ROW'S FIELD OFFSETS COME FROM THE KNOWN SET'S OWN ORDERING, not
+the runtime record's. `fn pick(u: {zeta: Int, ...}) = u.zeta` called with
+`{alpha: 7, zeta: 9}` returns 7 — `zeta` is the only known field, so it
+takes index 0, which the actual record uses for `alpha`. Silent: no
+diagnostic, no trap, and `mentl check` passes. The closed twin
+(`{alpha: Int, zeta: Int}`) returns 9 and is the landed control
+`tests/syntax/record-field-param-closed`.
+▶ IT IS SYNTAX'S OWN EXAMPLE. §«Row polymorphism» offers `fn greet(u:
+{name: String, ...}) -> String = "Hello, " ++ u.name` as the feature's
+worked form. The same shape measured: `fn width(u: {name: Int, ...}) =
+u.name + 1` over `{name: 5, age: 9}` returns 10 — `age`'s value — because
+`age` sorts first in the real record while `name` is index 0 of the known
+set. A headline documented surface reads the wrong field.
+▶ THIS IS THE ROOT the other three consumers inherit. The record PATTERN
+takes offsets from the pattern's own index; `==` walks the known field
+list; field ACCESS takes the known set's index — one rule, three
+consumers, all of them computing a position in a set that is not the
+record's. `LFieldLoad`'s loud floor is the fourth behaviour and fires only
+where the offset resolution returns -1, which is why the inferred-open
+case traps while the ANNOTATED-open case silently misreads. That split is
+measured, not explained: the annotation supplies known fields where
+inference left none, and which of the two paths a site takes has not been
+traced to its branch.
+▶ WHY IT CANNOT BE FLOORED, already paid for: the march refuted the
+blanket floor one iteration earlier (`fn g({x, y})` became a trap). The
+offsets must be RESOLVED — the receiver's real layout has to reach the
+consumer — which is the standing fork.
+▶ SEVERITY. Row polymorphism is not a corner: it is a §4-level feature
+with its own SYNTAX section, and every use of it that names a field not
+sorted first reads a foreign slot. The wheel is unexposed only because
+its own record receivers are now annotated closed.
+
+`Hβ.fold.open-record-shares-closed-signature` — SEPARATED 2026-08-17, and
+the NAME IS NOW WRONG: the signature collision is NOT the mechanism. The
+banked separating probe — one program holding both a closed and an open
+record with the same known fields — answers `closed correct, open wrong`
+side by side (exit 1 on the combined encoding, where a shared helper
+would have forced one answer for both). So two distinct comparisons are
+in play and `fold_sig`'s TRecord/TRecordOpen collapse is not what fires
+here; the eq leaf simply walks the KNOWN field list. That makes this
+entry a face of `Hβ.lower.open-row-field-offset-from-known-set` above
+rather than a peer of its own, and the original confirmation stands as
+measured.
+▶ CONFIRMED 2026-08-17 by the re-aimed probe, a SILENT WRONG on a
+documented surface.
 ▶ THE MEASUREMENT, one variable. `fn same(a: {x: Int, ...}, b: {x: Int,
 ...}) = a == b` called with `{x: 1, y: 2}` and `{x: 1, y: 3}` answers
 TRUE — the records differ in `y` and the comparison never looks at it,

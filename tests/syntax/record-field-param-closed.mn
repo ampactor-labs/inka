@@ -1,0 +1,15 @@
+// expect: 9
+// SYNTAX §«Field access» through a PARAMETER whose record type is closed:
+// the offset resolves from the receiver's full sorted field set, so
+// `u.zeta` reads zeta even though alpha sorts first.
+//
+// This is the control for a measured silent wrong in its OPEN twin. Change
+// `alpha: Int` below to `...` and the same call returns 7 — alpha's value —
+// because an open row's offsets are computed from the KNOWN field set's own
+// ordering rather than the runtime record's
+// (`Hβ.lower.open-row-field-offset-from-known-set`). SYNTAX's own worked
+// example of row polymorphism is that shape, so the defect sits on a
+// documented surface; the red twin lands with the fix.
+fn pick(u: {alpha: Int, zeta: Int}) = u.zeta
+
+fn main() = pick({alpha: 7, zeta: 9})

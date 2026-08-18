@@ -35,6 +35,44 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE ROOT, AND IT LANDS ON SYNTAX'S OWN WORKED EXAMPLE (no
+  pin — tests and docs; boot unchanged at 4ce9914b7360).
+  ▶ THE BANKED SEPARATING PROBE RAN FIRST and killed the name it was
+  banked under. One program holding both a closed and an open record with
+  the same known fields answers `closed correct, open wrong` side by side
+  — a shared generated helper would have forced ONE answer for both, so
+  `fold_sig`'s TRecord/TRecordOpen collapse is not the mechanism. The eq
+  leaf simply walks the KNOWN field list.
+  ▶ THAT POINTED AT THE ROOT, and it is worse than the eq face. An open
+  row's field OFFSETS are computed from the known set's own ordering
+  rather than the runtime record's. `fn pick(u: {zeta: Int, ...}) =
+  u.zeta` over `{alpha: 7, zeta: 9}` returns 7: `zeta` is the only known
+  field, so it takes index 0, which the real record uses for `alpha`.
+  Silent — no diagnostic, no trap, check passes at exit 0. The closed twin
+  returns 9.
+  ▶ IT IS SYNTAX'S OWN EXAMPLE. §«Row polymorphism» offers `fn greet(u:
+  {name: String, ...}) = "Hello, " ++ u.name` as the feature's worked
+  form. Measured in that exact shape: `fn width(u: {name: Int, ...}) =
+  u.name + 1` over `{name: 5, age: 9}` returns 10, which is `age + 1`,
+  because `age` sorts first in the record while `name` is index 0 of the
+  known set. A headline documented surface reads a foreign field.
+  ▶ ONE RULE, FOUR CONSUMERS. The pattern takes offsets from the pattern's
+  own index; `==` walks the known field list; field access takes the known
+  set's index; `LFieldLoad` floors loudly, but only where offset
+  resolution returns -1, which is why the INFERRED-open case traps and the
+  ANNOTATED-open case silently misreads. That split is measured, not
+  explained — the annotation supplies known fields where inference left
+  none — and tracing which branch each site takes is the next probe.
+  ▶ NO SRC CHANGE, and the blocker is structural rather than scheduling:
+  the offsets must be RESOLVED, since the march already refuted the
+  blanket floor (`fn g({x, y})` became a trap), and resolving requires the
+  receiver's real layout to reach the consumer — the standing fork.
+  ▶ LANDED: `tests/syntax/record-field-param-closed` (contract 9, the
+  control that made the finding precise), battery at five; SYNTAX's
+  row-polymorphism section now records the measured gap beneath its
+  example, because a reader would otherwise trust it. SYNTAX stays the
+  authority — the lathe has not been turned to it.
+
 - 2026-08-17 · THE OPEN ROW'S THIRD CONSUMER, AND IT ANSWERS WRONG
   SILENTLY (no pin — tests and docs; boot unchanged at 4ce9914b7360).
   ▶ THE BANKED PROBE, re-aimed as its entry prescribed — a comparison

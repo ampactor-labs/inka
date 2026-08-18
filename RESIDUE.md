@@ -704,15 +704,29 @@ rest half says "I do not know" and traps. The field half invents an index
 and returns a wrong value silently. The design already decided that
 unresolved means unknown; only one of its halves acts on that decision,
 and the silent half is the one the docs rank worst.
-▶ THE WHEEL IS EXPOSED AND CORRECT BY ACCIDENT. The census counts 2
-record patterns on the wheel's own link (`backends/wasm:1096`,
-`pipeline:424`), and pipeline's receiver projects as `{ args: …, body: …,
-op_name: String | r367192@e17 }` — open. Its three sorted names occupy
-slots 0 through 2, so the fabricated indices land right. Forensic law 5:
-an invariant held by accident is a bug the first new capability exposes.
-That is also why every gate stayed green, and why the existing frontier
-leg "record-pattern rest: the residual record builds and reads" passes —
-its receiver resolves, so it never enters this branch.
+▶ THE WHEEL WAS EXPOSED — NOT BY ACCIDENT, BY AN UNCHECKABLE PROMISE
+(the "accident" wording is RETRACTED, 2026-08-17). Both of the wheel's
+record-pattern sites destructured ALL their receiver's fields on purpose,
+and pipeline's carried a comment saying why: "CLOSED destructure — an
+open-receiver field read computes offsets over the partial field set (the
+trecordopen-wrong-field class); the full pattern pins the record's real
+layout." The class already had the wheel's own name.
+▶ THE PRACTICE DOES NOT HOLD, and that is the sharper defect. A COMPLETE
+pattern over an open row and a PARTIAL one are structurally IDENTICAL to
+the medium — in both, the receiver's judged type is exactly the pattern's
+own fields plus an open tail. The repro projects `{ zeta: t39682@e0 |
+r39684@e2 }`; pipeline's site projected `{ args: …, body: …, op_name:
+String | r367192@e17 }`. Nothing distinguishes safe from unsafe, so the
+discipline was a promise the graph could not check, and a caller passing
+one extra field sorting before `args` would have read the wrong slot.
+▶ THE WHEEL'S OWN EXPOSURE IS CLOSED (pin f0b63b15a5d6): both receivers
+are annotated with the record types types.mn already declared, the rows
+close (`{ args: List(String), body: Node, op_name: String }` now), and
+the offsets resolve from the full sorted set. Emit fell 175 lines. The
+CLASS is untouched — any unannotated record parameter still guesses.
+▶ It is also why the existing frontier leg "record-pattern rest: the
+residual record builds and reads" passes: its receiver resolves, so it
+never enters this branch.
 ▶ THE FIX IS A FORK ALREADY OPEN ELSEWHERE, not a patch. Either record
 twinning becomes TYPE-keyed so each call site specializes its receiver's
 layout — 5.1's monomorphization is repr-keyed and every record is one

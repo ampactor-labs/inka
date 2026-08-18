@@ -35,6 +35,48 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · pin f0b63b15a5d6 · THE WHEEL'S RECORD DESTRUCTURES STOP
+  RESTING ON A PROMISE — and the previous entry's "accident" is RETRACTED
+  as the wrong word for a sharper defect. CLEAN, m2 == m3, census 0,
+  frontier 371/0, 17.30s wall · 2257136 KB peak; emit 412596 → 412421
+  lines.
+  ▶ THE RETRACTION FIRST. Yesterday's entry called pipeline:424 "correct
+  by accident." The site's own comment refutes that: it destructures ALL
+  three fields deliberately, and says why — "CLOSED destructure — an
+  open-receiver field read computes offsets over the partial field set
+  (the trecordopen-wrong-field class); the full pattern pins the record's
+  real layout." The second site (`{arms: _, ename: en}`) follows the same
+  discipline. Neither was an accident; both were a documented practice,
+  and the class already had the wheel's own name for it.
+  ▶ BUT THE PRACTICE DOES NOT HOLD, which is the sharper finding. A
+  complete pattern over an open row and a PARTIAL one are structurally
+  IDENTICAL to the medium: in both cases the receiver's judged type is
+  exactly the pattern's own fields plus an open tail. The failing repro
+  projects `{ zeta: t39682@e0 | r39684@e2 }`; pipeline's site projected
+  `{ args: …, body: …, op_name: String | r367192@e17 }`. Same shape. So
+  "the full pattern pins the layout" was an author's promise the graph
+  could not check, and nothing distinguished a safe site from an unsafe
+  one. A caller passing a record with one extra field sorting before
+  `args` would have read the wrong slot, silently.
+  ▶ WHAT LANDED: both receivers are ANNOTATED with the record types
+  types.mn already declares — `[{args: [String], body: Node, op_name:
+  String}]` and `[{arms: [String], ename: String}]`. The rows close, and
+  the medium says so: the same projection that showed the open tail now
+  reads `{ args: List(String), body: Node, op_name: String }`. Offsets
+  resolve from the receiver's full sorted field set, so they are a proof.
+  The types existed all along at their declarations; only the parameters
+  were unannotated, which is exactly the Intent Boundary SYNTAX reserves
+  annotations for.
+  ▶ MEASURED CONSEQUENCE: emit fell 175 lines and peak RSS fell ~17MB.
+  Resolving real offsets is not only sounder, it is less code — the shape
+  a Carried-Truth fix is supposed to have.
+  ▶ WHAT REMAINS is the class, not these two sites:
+  `Hβ.lower.record-pattern-param-receiver`. Any unannotated record
+  parameter still guesses, and the guess is still silent while its rest
+  half traps. The fix's ultimate form stays the open fork — type-keyed
+  twinning versus a runtime layout carrier — but the wheel no longer
+  depends on the answer.
+
 - 2026-08-17 · pin e06c6658fc20 · THE BANKED PROBE RAN, AND IT FOUND THE
   WHEEL STANDING ON AN ACCIDENT. CLEAN, m2 == m3, census 0, frontier
   371/0, 16.18s wall · 2274684 KB peak.

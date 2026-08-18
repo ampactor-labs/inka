@@ -415,12 +415,21 @@ fn absorb_scan(ref bindings, i, n, ename: String, own acc) = if i >= n {
   }
 }
 
-fn handler_arms_touch(ref arms, i, n, ename: String) = if i >= n {
+fn handler_arms_touch(ref arms: [{args: [String], body: Node, op_name: String}], i, n, ename: String) = if i >= n {
   false
 } else {
-  // CLOSED destructure — an open-receiver field read computes offsets
-  // over the partial field set (the trecordopen-wrong-field class); the
-  // full pattern pins the record's real layout.
+  // The receiver is ANNOTATED, which is what makes the destructure below
+  // provable rather than promised. Field offsets resolve from the
+  // receiver's full sorted field set; an OPEN row has no such set, so
+  // lowering falls back to the pattern's own index — right only if the
+  // pattern happens to name every field of the record that actually
+  // arrives. The comment here used to say a full pattern "pins the
+  // record's real layout", and it does not: a complete pattern over an
+  // open row and a partial one are structurally IDENTICAL to the medium
+  // (both leave known-fields = the pattern's fields, plus an open tail),
+  // so the discipline was an author's promise the graph could not check.
+  // The annotation closes the row, and the offsets become a proof.
+  // `Hβ.lower.record-pattern-param-receiver` carries the class.
   match list_index(arms, i) {
     {args: _, body: _, op_name: opn} => {
       let touches = match env_lookup(opn) {

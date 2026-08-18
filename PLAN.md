@@ -1570,9 +1570,11 @@ needs and what a grep from outside the medium had been answering; its
 siblings are labeled arguments, as-patterns, record rest and named row
 aliases, each reading its own carrier. `record-pattern` followed the same
 day and earned its keep immediately: its located count found the wheel
-destructuring an OPEN-ROW receiver at pipeline:424, where the offsets are
-guessed and land right only because the pattern's sorted names occupy the
-first slots — the accident behind
+destructuring OPEN-ROW receivers at both its sites, where offsets come
+from the pattern's own index and a complete pattern is indistinguishable
+from a partial one — an uncheckable promise, not the accident the first
+reading called it. Both receivers are annotated now and their rows close;
+the class stays open as
 `Hβ.lower.record-pattern-param-receiver`.
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
 NEVER BUILT, corrected 2026-08-17 when the selector reached for it and

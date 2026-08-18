@@ -1093,7 +1093,11 @@ fn register_show_sum_literals(specs, i) with EmitStringLiteralOp + Memory = if i
 // descent via walk_lemit_expr collects the per-node projections.
 fn walk_lemit(exprs) = walk_lemit_top(exprs, 0)
 
-fn walk_install_groups(ref groups, i) = if i >= len(groups) {
+// The receiver is ANNOTATED so the destructure below is provable: field
+// offsets resolve from the receiver's full sorted field set, and an open
+// row leaves lowering guessing from the pattern's own index
+// (`Hβ.lower.record-pattern-param-receiver`).
+fn walk_install_groups(ref groups: [{arms: [String], ename: String}], i) = if i >= len(groups) {
   ()
 } else {
   match list_index(groups, i) {

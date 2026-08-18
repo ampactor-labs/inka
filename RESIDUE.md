@@ -540,9 +540,48 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.infer.param-call-never-charges-the-declared-row` — A MEASURED
-CROWN-TIER LEAK, narrowed across three ticks to a THREE-LINE repro, and
-it corrects a peer PLAN §11 Phase 1 records as CLOSED.
+`Hβ.infer.declared-row-vacuous-against-a-free-body-row` — A MEASURED
+CROWN-TIER LEAK, narrowed across four ticks, each narrowing measured and
+each correcting the one before.
+▶ THE NAME AND THE PREVIOUS FRAMING ARE BOTH CORRECTED. This was filed
+as `param-call-never-charges-the-declared-row`, claiming the call edge
+charges nothing. IT CHARGES. `infer_call_saturated` runs
+`inf_add_row_unified(crow)` on the chased callee, and its own comment
+covers the case: "for a pre-free callee (an effect-polymorphic param, a
+local closure, a loose forward) ... crow IS the fresh row cell". The
+proof it works: `main`'s row on the repro reads `() -> Int with B` — the
+callback's effect DOES reach the caller.
+▶ WHAT IS ACTUALLY BROKEN, from two projections of the same file:
+`run`'s published type is `(f: () -> t with r34983) -> t with r34981`.
+The authored `with Pure` IS NOT THERE. The body's inferred row is a free
+VAR (the param's), the declared row neither refuses against it nor binds
+it, and the declaration is dropped from the published scheme. So the
+three-line repro compiles because there is no Pure left to violate:
+```
+effect B { opb() -> Int }
+fn run(f) with Pure = f()
+fn main() = run(() => opb())
+```
+▶ THE CONTRAST THAT PINS IT: `fn direct() with OnlyA = opb()` DOES
+refuse (`E_EffectMismatch: A vs B`). Same declaration machinery, same
+check — the only difference is that the body's row there is a CONCRETE
+effect rather than a free var. A declared row is enforced against
+concrete rows and is vacuous against a free one.
+▶ SEVERITY unchanged and worth restating: this is §0's
+negative-is-provable failing at the shape most likely to carry a real
+negation, a function taking a callback and promising `!Alloc`, `!IO` or
+`Pure`. The caller is charged correctly, so programs are not
+miscompiled; the function's own contract is silently discarded.
+▶ WHAT IS NOT YET MEASURED, and must not be guessed: the SITE. Whether
+the declaration is dropped at publication (generalize/env_extend) or the
+check simply admits a free var, and which of those to change, needs the
+declared-vs-inferred comparison instrumented. That is the next probe,
+and no edit precedes it.
+▶ THE GATE IS THE THREE LINES, red today, landing with the fix. Two
+retracted framings precede this one — row-difference-is-omission (false:
+`diff_row` populates the absent set) and annotated-hof-loses-its-param-row
+(true but narrow, and the annotation is not required).
+
 ▶ THE REPRO, and it needs no negation, no subtraction and no callback
 gymnastics:
 ```

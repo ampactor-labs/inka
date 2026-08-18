@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE DECLARED ROW IS VACUOUS AGAINST A FREE BODY ROW (no
+  pin — the leak's fourth and measured narrowing; boot unchanged at
+  5a61fc4eba, wheel source untouched).
+  ▶ THE PREVIOUS ENTRY IS CORRECTED. It said a call to a function-typed
+  param "charges nothing". IT CHARGES: `infer_call_saturated` runs
+  `inf_add_row_unified(crow)`, its comment covers exactly this case
+  ("a pre-free callee ... crow IS the fresh row cell"), and the proof is
+  in the artifact — `main`'s row on the repro reads `() -> Int with B`,
+  so the callback's effect reaches the caller.
+  ▶ WHAT IS BROKEN, from two projections of one file: `run`'s published
+  type is `(f: () -> t with r34983) -> t with r34981`. The authored
+  `with Pure` IS NOT IN IT. The body's inferred row is a free VAR, the
+  declared row neither refuses against it nor binds it, and the
+  declaration is dropped from the published scheme. The repro compiles
+  because there is no Pure left to violate.
+  ▶ THE CONTRAST THAT PINS IT: `fn direct() with OnlyA = opb()` refuses
+  with `E_EffectMismatch: A vs B`. Same machinery, same check; the only
+  difference is a CONCRETE body row instead of a free one. A declared row
+  is enforced against concrete rows and vacuous against a free var.
+  ▶ NOT BUILT, and the sentence the dry-iteration rule owes: the SITE is
+  unmeasured — whether the declaration is dropped at publication
+  (generalize / env_extend) or the check admits a free var — and the two
+  call for different edits. Reading either one and guessing which is what
+  produced the three retractions this arc has already paid for. The next
+  probe instruments the declared-vs-inferred comparison; no edit precedes
+  it.
+  ▶ FOUR NARROWINGS, each measured, each correcting the last: row
+  subtraction (false), the annotation (true but not required), "charges
+  nothing" (false), and now the free-var vacuity. The repro went from
+  seven lines to three and the mechanism from a guess to a projection.
+
 - 2026-08-17 · `fn run(f) with Pure = f()` IS ACCEPTED (no pin — the leak
   narrowed to three lines; boot unchanged at 5a61fc4eba, wheel source
   untouched).

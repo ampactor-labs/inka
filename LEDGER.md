@@ -35,6 +35,43 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE OPEN ROW'S THIRD CONSUMER, AND IT ANSWERS WRONG
+  SILENTLY (no pin — tests and docs; boot unchanged at 4ce9914b7360).
+  ▶ THE BANKED PROBE, re-aimed as its entry prescribed — a comparison
+  reached without any field access — and it CONFIRMS the hypothesis the
+  first attempt could not reach. `fn same(a: {x: Int, ...}, b: {x: Int,
+  ...}) = a == b` over `{x: 1, y: 2}` and `{x: 1, y: 3}` answers TRUE. The
+  records differ in `y`; the comparison walks only the fields the type
+  knows. Replace the two `...` with `y: Int`, change nothing else, and the
+  same call answers FALSE. `mentl check` passes the open form at exit 0.
+  ▶ THREE CONSUMERS, THREE ANSWERS, ONE QUESTION. The medium does not know
+  a `TRecordOpen` value's layout, and its consumers disagree about what to
+  do: `LFieldLoad` floors loudly with `;; field offset unprovable`; the
+  record PATTERN fabricates offsets from its own index and reads a foreign
+  slot; `==` under-compares and reports equal. Only the first is honest.
+  That spread is the case for one pass over layout-unknown values instead
+  of per-consumer repair — and yesterday's march already proved the
+  per-consumer floor cannot be that pass, because it turns `fn g({x, y})`
+  into a trap.
+  ▶ IT BREAKS EQ'S CONTRACT, not merely a corner: two distinguishable
+  records comparing equal is the eq/hash divergence §5.U says the total
+  structural derivation exists to make unsayable, and SYNTAX's equality
+  table says "field-wise recursion over the sorted field set".
+  ▶ WHAT IS STILL UNSEPARATED, stated so it is not later read as settled:
+  a shared `fold_sig` between `TRecord` and `TRecordOpen` would produce
+  this, and so would an eq leaf that walks the known field list. This
+  probe cannot distinguish them. The separating probe holds both a closed
+  and an open record with the same known fields and asks whether one
+  generated helper serves both.
+  ▶ LANDED: `tests/syntax/record-eq-closed`, the green half, contract 7 so
+  a wrong answer exits 1 and a right one exits 7. The battery is four
+  fixtures. The open twin waits with the fix rather than banking a wrong
+  value as an expectation.
+  ▶ NO SRC CHANGE, and the reason is structural: every repair here needs
+  the receiver's layout to reach the consumer, which is the standing fork
+  (specialize per call site, or carry the layout at runtime) — and the
+  third option, refusing, was measured dead one iteration ago.
+
 - 2026-08-17 · THE MARCH REFUTED THE FLOOR, AND THE REFUTATION REMOVES AN
   OPTION FROM THE FORK (no pin — experiment reverted whole; boot unchanged
   at 4ce9914b7360, wheel source restored).

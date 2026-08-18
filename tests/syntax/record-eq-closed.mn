@@ -1,0 +1,21 @@
+// expect: 7
+// SYNTAX §«Equality operator» — a product compares "field-wise recursion
+// over the sorted field set", so two records differing in ANY field are
+// unequal. Both fields are named in the annotation here, which closes the
+// row and makes the full set knowable.
+//
+// The contract is discriminating on purpose: a correct comparison answers
+// false and exits 7, a comparison that found them equal exits 1.
+//
+// Its open-row twin is a MEASURED SILENT WRONG and is held back with its
+// fix: replace `y: Int` below with `...` and the same call answers TRUE,
+// because the comparison walks only the fields the type knows
+// (`Hβ.fold.open-record-shares-closed-signature`). Both readings were
+// taken before this fixture was written.
+fn same(a: {x: Int, y: Int}, b: {x: Int, y: Int}) = a == b
+
+fn main() = if same({x: 1, y: 2}, {x: 1, y: 3}) {
+  1
+} else {
+  7
+}

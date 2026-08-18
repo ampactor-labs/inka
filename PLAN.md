@@ -1579,7 +1579,11 @@ the class stays open as
 REFUTED the obvious interim — flooring on "offset unprovable" the way
 `LFieldLoad` does turns `fn g({x, y})` into a trap, because a
 destructuring parameter IS the open-row case and SYNTAX gives it as its
-own example. The offsets must be resolved, not policed.
+own example. The offsets must be resolved, not policed. A THIRD consumer
+then measured worse than either: `==` over an open row under-compares and
+reports two differing records EQUAL, silently, checking clean
+(`Hβ.fold.open-record-shares-closed-signature`). One question — the
+layout is unknown — and three behaviours, only the field load's honest.
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
 NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
 found nothing: `tests/syntax/` had no history under any ref, no gate

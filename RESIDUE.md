@@ -800,8 +800,41 @@ that and `fn g({x, y})` is invisible to the medium, which is exactly why
 a blanket floor cannot separate them and exactly why the fix must close
 the row rather than police the pattern.
 
-`Hβ.fold.open-record-shares-closed-signature` — RE-AIMED 2026-08-17 by
-its own probe, which fired a different floor than predicted. The banked
+`Hβ.fold.open-record-shares-closed-signature` — ✅ CONFIRMED 2026-08-17 by
+the re-aimed probe, and it is a SILENT WRONG on a documented surface.
+▶ THE MEASUREMENT, one variable. `fn same(a: {x: Int, ...}, b: {x: Int,
+...}) = a == b` called with `{x: 1, y: 2}` and `{x: 1, y: 3}` answers
+TRUE — the records differ in `y` and the comparison never looks at it,
+because the walk enumerates the fields the TYPE knows. Replace the two
+`...` with `y: Int` and nothing else, and the same call answers FALSE.
+`mentl check` passes the open form at exit 0. No diagnostic, no trap, the
+wrong answer.
+▶ WHY IT MATTERS BEYOND ITS OWN SITE: this is the THIRD consumer of one
+class, and the three answer differently. `LFieldLoad` floors loudly with
+`;; field offset unprovable`; the record PATTERN fabricates offsets from
+its own index and reads a foreign slot; `==` under-compares and reports
+equal. One question — the medium does not know this value's layout —
+three behaviours, only one of them honest. That spread is the argument
+for a single pass over layout-unknown values rather than per-consumer
+repair, and it is the census law's constructive half.
+▶ IT ALSO BREAKS EQ'S OWN CONTRACT. Two distinguishable records comparing
+equal is the eq/hash divergence footgun §5.U says the total structural
+derivation exists to make unsayable. "Equal on the visible interface" may
+be a defensible row-polymorphic semantics, but it is not what SYNTAX's
+equality table states ("field-wise recursion over the sorted field set")
+and not what a developer reads `==` to mean.
+▶ THE SIGNATURE HALF IS STILL UNSEPARATED. `fold_sig` mapping `TRecord`
+and `TRecordOpen` to one string would produce this, and so would an eq
+leaf that simply walks the known field list; the probe cannot tell them
+apart, and the fix's shape may differ between them. The separating probe
+is a program holding BOTH a closed and an open record with the same known
+fields, checking whether they share one generated helper.
+▶ GREEN HALF LANDED as `tests/syntax/record-eq-closed`, contract 7 so a
+wrong answer exits 1 and a right one exits 7. The open twin is held back
+with the fix, per the convention that a fixture never banks a wrong value
+as an expectation.
+▶ ORIGINAL RE-AIMING, kept: the first probe fired a different floor than
+predicted. The banked
 probe (a pair of records differing only in a field the pattern never
 names, compared through the generated helper) TRAPS before reaching any
 comparison: the fixture's `a.x` on an open-row parameter floors at

@@ -103,6 +103,45 @@ if C=$(wt_m2_ensure); then
     say "✗ contract battery: $bat broken contract(s) — the wheel this tree just built"
     fail=1
   fi
+  # 2c. The SYNTAX conformance battery (PLAN §11 Phase 0.4) — fixtures for
+  #     forms SYNTAX declares and the WHEEL NEVER WRITES. That is the whole
+  #     point: every other leg on this board measures what the wheel does, so
+  #     a declared form the wheel avoids is invisible to all of them (§11
+  #     tripwire 3, whose standing counter-measure this is). The seed set is
+  #     what has been measured, never a claim of coverage; it grows as
+  #     surfaces are probed, and a surface found BROKEN banks a named peer
+  #     with its repro rather than a fixture canonizing the wrong answer
+  #     (§9.11's nine payload micros did exactly that).
+  #
+  #     It RUNS each fixture rather than asking `mentl test` alone. Measured
+  #     the day this leg landed: `mentl test` reports each fixture's DECLARED
+  #     expectation beside its WAT and judges the compile side (FAILC on
+  #     errors, holes, armed refusals) — it does not execute, so a wrong
+  #     `// expect: N` passes it silently. The first draft of this leg read
+  #     only that verb, went green against a deliberately wrong expectation,
+  #     and was a gate that could not fail (Law 11). run-micro.sh is the
+  #     execution the micro loop above already uses.
+  syn_n=0; syn_bad=0
+  for sf in tests/syntax/*.mn; do
+    [[ -e "$sf" ]] || continue
+    syn_n=$((syn_n+1))
+    s=$(basename "$sf" .mn)
+    swant=$(sed -n '1s|^// expect: \([0-9]\+\)$|\1|p' "$sf")
+    if [[ -z "$swant" ]]; then
+      say "✗ syntax $s: no '// expect: N' header"; syn_bad=$((syn_bad+1)); continue
+    fi
+    sout=$(tools/run-micro.sh "$sf" "$swant" "${RTLIBS[@]}" 2>/dev/null | tail -1)
+    [[ "$sout" == PASS* ]] || { say "✗ syntax $s: ${sout:-no output}"; syn_bad=$((syn_bad+1)); }
+  done
+  if [[ "$syn_n" -eq 0 ]]; then
+    say "✗ syntax battery: no fixtures — the directory PLAN §11 0.4 names is empty"
+    fail=1
+  elif [[ "$syn_bad" -eq 0 ]]; then
+    say "✓ syntax battery: $syn_n declared-form fixture(s) run true (surfaces the wheel never writes)"
+  else
+    say "✗ syntax battery: $syn_bad of $syn_n fixture(s) broke their contract"
+    fail=1
+  fi
 else
   say "✗ contract battery: the wheel did not build"
   fail=1

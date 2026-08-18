@@ -35,6 +35,52 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · PHASE 0.4 WAS NEVER BUILT, AND ITS FIRST SWEEP FOUND TWO
+  DEFECTS NOTHING ELSE CAN SEE (no pin — tools, tests and docs; boot
+  unchanged at a6e900f35888).
+  ▶ THE FIND, measured three ways before it was written down: `tests/syntax/`
+  had no history under any ref (`--diff-filter=A` across all refs is
+  empty), no gate in tools/ named it, and exactly one doc line mentioned
+  it — inside a phase marked ✅ COMPLETE, pointing at a LEDGER that has no
+  entry for it. The 27-fixture SYNTAX run behind §11 tripwire 3 was a
+  one-off whose fixtures never landed. That is why its eight findings had
+  to be rediscovered by hand, and why the plan's named counter-measure
+  for the oracle-blind class did not exist while three iterations probed
+  that class manually.
+  ▶ THE BATTERY IS THE MEDIUM'S OWN VERB. `mentl test <dir>` already reads
+  each fixture's `// expect:` header, so 0.4 needed fixtures and a verify
+  leg, not a new script.
+  ▶ THE LEG WAS BUILT WRONG FIRST AND THE RED CHECK CAUGHT IT. Its first
+  draft read `mentl test` alone, and passed against a deliberately
+  falsified expectation — because that verb reports the DECLARED value
+  beside the WAT and judges the compile side only; it does not execute.
+  A gate that cannot fail is the exact class Law 11 exists for, and this
+  one was caught by the falsification rather than by review. It runs each
+  fixture through run-micro.sh now, and the falsified contract fails with
+  `exit=12 expected=11`.
+  ▶ TWO DEFECTS, each isolated to one variable, both on surfaces the wheel
+  never writes: a record pattern whose receiver is a FUNCTION PARAMETER
+  reads the wrong field SILENTLY (`{zeta}` over `{alpha: 7, zeta: 9}`
+  answers 7; the same pattern over a local receiver answers 9), and the
+  rest binding TRAPS through a parameter even when the residual is never
+  read while the same body over a local receiver answers 12. Separately,
+  an as-pattern defeats exhaustiveness — a match covering both variants
+  of a two-variant ADT is refused `E_PatternInexhaustive`, and deleting
+  the binder alone runs clean.
+  ▶ A THEORY DIED ON THE WAY. The first reading of the field defect was
+  "record patterns bind by position," which the very next probe refuted:
+  `{zeta}` over `{alpha: 7, zeta: 9}` answers 9 as a local, and a
+  positional read would have answered 7. The parameter receiver is the
+  real variable, and the wrong theory would have sent a fix into the
+  record layout instead.
+  ▶ WHAT LANDED GREEN: three fixtures whose contracts are measured —
+  labeled arguments fully labeled (14), the record pattern over a local
+  receiver (9), field access through a parameter (12). The last two are
+  the controls that made the finding precise, kept as contracts. The red
+  repros are held back with their peers, per the convention this session
+  has used all along: a fixture never banks a wrong value as an
+  expectation (§9.11's nine payload micros).
+
 - 2026-08-17 · pin a6e900f35888 · THE CENSUS GROWS ITS FIRST
   DECLARED-SURFACE SHAPE. CLEAN, m2 == m3, census 0, frontier 371/0,
   16.66s wall · 2277312 KB peak.

@@ -1,0 +1,17 @@
+// expect: 9
+// SYNTAX §«Pattern syntax for records» — `let {zeta} = r` binds by the
+// field's NAME, never its slot: "Identity, not position — the field's
+// NAME is the key; the order is a projection." Source order is
+// irrelevant (fields sort alphabetically at parse), so a pattern naming
+// the alphabetically-later field must still read that field's value.
+//
+// The receiver here is a LOCAL binding, which is the half that holds.
+// The same pattern against a FUNCTION-PARAMETER receiver reads the wrong
+// field silently — `Hβ.lower.record-pattern-param-receiver-slot`, whose
+// repro lands with its fix rather than banking a wrong value here (§9.11:
+// nine micros once canonized a wrong-slot read as their expectation).
+fn main() = {
+  let r = {alpha: 7, zeta: 9}
+  let {zeta} = r
+  zeta
+}

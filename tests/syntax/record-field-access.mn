@@ -1,0 +1,13 @@
+// expect: 12
+// SYNTAX §«Field access» — `u.name` lowers to a field load whose offset
+// the receiver's type resolves at compile time. Named `name` against a
+// record whose other field sorts EARLIER, so a slot-keyed read would
+// answer 30 and a name-keyed read answers 12.
+//
+// This is the control that made the pattern finding precise: field
+// access through the same record is correct, which is why the
+// param-receiver defect is the PATTERN's and not the record's.
+fn main() = {
+  let u = {age: 30, name: 12}
+  u.name
+}

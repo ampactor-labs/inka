@@ -1569,8 +1569,21 @@ declares appears at all, which is what an oracle-blind probe (tripwire 3)
 needs and what a grep from outside the medium had been answering; its
 siblings are labeled arguments, as-patterns, record rest and named row
 aliases, each reading its own carrier.
-**0.4** the SYNTAX conformance battery (`tests/syntax/`, one fixture per
-declared form, green-or-named). The full mechanics: `LEDGER.md`.
+**0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
+NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
+found nothing: `tests/syntax/` had no history under any ref, no gate
+named it, and the LEDGER this phase points at for "full mechanics" had no
+entry for it. The 27-fixture run behind tripwire 3 was a one-off whose
+fixtures never landed, which is why its findings had to be rediscovered
+by hand. The directory is real now, run by the medium's own `test` verb
+through a verify leg, seeded with the declared forms MEASURED so far —
+labeled arguments, the record pattern over a local receiver, field
+access. Seeded, not complete: it grows one probed surface at a time, and
+a surface found BROKEN banks a named peer with its repro instead of a
+fixture canonizing the wrong answer. Its first sweep found two, both
+invisible to every other gate: `Hβ.lower.record-pattern-param-receiver`
+and `Hβ.infer.as-pattern-defeats-exhaustiveness`. The full mechanics:
+`LEDGER.md`.
 
 ### Phase 1 · The row crosses the function boundary — ✅ WHOLE 2026-08-06
 

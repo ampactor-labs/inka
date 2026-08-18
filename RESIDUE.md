@@ -666,6 +666,59 @@ SYNTAX §«Named effect rows» is not wrong here and must not be edited to
 match the artifact: the identity `E - F = E & !F` is the intended
 semantics and the lathe has not been turned to it.
 
+`Hβ.lower.record-pattern-param-receiver` — A SILENT WRONG AND A TRAP,
+BOTH GATED ON ONE VARIABLE: whether the destructured record arrived as a
+FUNCTION PARAMETER. Measured 2026-08-17 at pin a6e900f35888, each half
+against its own control.
+▶ FACE ONE — THE WRONG FIELD, SILENTLY. `fn pick(u) = { let {zeta} = u
+zeta }` called with `{alpha: 7, zeta: 9}` answers 7. No diagnostic, no
+trap, the wrong value. The same pattern over a LOCAL receiver (`let r =
+{alpha: 7, zeta: 9}` then `let {zeta} = r`) answers 9, and direct field
+access through a parameter is fine, so this is the PATTERN's read and not
+the record's layout. A second shape agrees: `{name}` over `{age: 30,
+name: 12}` answers 30 through a parameter.
+▶ FACE TWO — THE REST BINDING TRAPS. `fn widen(u) = { let {name,
+...rest} = u  name }` traps `unreachable` inside `widen`, and it traps
+even when `rest` is never read, so the trap is the BINDING rather than
+the residual's field access. The identical body over a local receiver
+answers 12.
+▶ WHAT IS MEASURED AND WHAT IS NOT. The shared discriminator is measured
+four ways: both faces fail through a parameter, both are correct with a
+local binding. That they are ONE root is NOT measured, and SYNTAX's own
+sentence is the reason to suspect it — the record rest is "resolved
+through the RECEIVER'S TYPE at lower," which is exactly the read the
+parameter path changes. The next probe reads how the pattern resolves its
+field offset when the receiver's type is a parameter's rather than a
+let's; a fix lands with both repros as fixtures, never before.
+▶ SEVERITY: face one is the silent-wrong class the docs rank worst — a
+declared surface answering the wrong value with the whole board green.
+The wheel never destructures a record parameter by pattern, which is why
+nothing here has ever gone red; `tests/syntax/` exists as of this pin so
+the fixed forms stay fixed.
+▶ THE REPROS ARE HELD BACK, red today, landing with the fix. The GREEN
+halves landed as `tests/syntax/record-pattern-local` and
+`record-field-access` — the controls that made the finding precise, kept
+as the contracts they proved.
+
+`Hβ.infer.as-pattern-defeats-exhaustiveness` — A FALSE REFUSAL ON A FORM
+SYNTAX CALLS REAL. Measured 2026-08-17 at pin a6e900f35888.
+`match e { whole @ Click(x) => …, Key(k) => … }` over a two-variant ADT
+raises `E_PatternInexhaustive: match misses 1 of 2 variants`, though both
+arms are present. Deleting the binder — `Click(x) => …` — and changing
+nothing else runs clean, so the as-pattern is the isolated variable.
+▶ SYNTAX ALREADY STATES THE RULE the checker is missing: "the binder
+carries the scrutinee's own type, and the match predicate is the inner
+pattern's alone" (§«As-patterns», landed 2026-07-30). Coverage must
+therefore read THROUGH `name @ pat` to `pat`; today the exhaustiveness
+walk evidently does not, and the arm counts as covering nothing.
+▶ THE COST OF THE SHAPE IT BLOCKS is exactly the shape SYNTAX gives as
+the motivating example — "need the whole value AND some pieces": event
+forwarding, logging, pass-through. Every such match must currently
+either drop the binder or add a wildcard, and a wildcard on a
+load-bearing ADT is the masking the docs forbid.
+▶ REPRO HELD BACK, red today, landing with the fix; its control (the
+same match without the binder) is the green half.
+
 `Hβ.query.default-param-census` — ✅ RESOLVED 2026-08-17, pin
 a6e900f35888. `CsDefaultParam` is the census's first DECLARED-SURFACE
 shape: where every shape before it asks what the source DOES, this asks

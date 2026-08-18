@@ -1,0 +1,12 @@
+// expect: 14
+// SYNTAX §«Labeled call arguments» — a parameter list is a positional
+// product, so it may be constructed by FIELD as well as by position, and
+// the labels resolve against the declared parameter names. Fully labeled
+// here, with a defaulted trailing parameter overridden by label.
+//
+// This battery exists because the wheel never writes these forms: the
+// fixpoint, census and micro battery are all green on what the wheel
+// does and silent on everything else (§11 tripwire 3).
+fn spawn_task(priority, config, timeout_ms = 1000) = priority + config + timeout_ms
+
+fn main() = spawn_task(priority = 5, config = 2, timeout_ms = 7)

@@ -1563,10 +1563,17 @@ same repro before and after: clean-with-"only uses Pure", then
 `leak-state-init-performs` and `sound-state-init-pure`. The `Handler(F)`
 observation below stands and is now a smaller gap — the type still carries
 no row, and the fix routed around it rather than through it, which is the
-open half if handler VALUES ever need one. Two of the stamp's three open
-questions remain unmeasured (a config parameter's default expression, and
-an init performing an effect the handler itself handles). The measurement
-that found the leak follows.
+open half if handler VALUES ever need one. THE CONFIG-DEFAULT QUESTION IS ANSWERED AND CLOSED
+(2026-08-18, pin c3410610ce41, CLEAN, crown 56/0): the same leak one
+field over — `handler hf(k: Int = op())` checked clean while the default
+genuinely performed (exit 7 through an outer handler) — and the same
+move fixes it, the default `each` joining the inits inside r_handle's
+scope. One rule, two carriers: everything a handler install EVALUATES
+belongs in row(h). Gates `leak-config-default-performs` and
+`sound-config-default-pure`. ONE open question remains, unmeasured: an
+init performing an effect the handler ITSELF handles — does it resolve to
+its own arms (a self-install) or to the enclosing world? The measurement
+that found the first leak follows.
 
 ▶ A HANDLER'S STATE INIT PERFORMED IN THE INSTALLER'S WORLD AND CHARGED
 NOBODY. Measured 2026-08-18 at pin c968f690567b, on the 6.3 modal sweep;

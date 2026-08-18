@@ -2257,7 +2257,10 @@ The spine root finishes. Order inside the phase is the dependency order.
   judged two lines above `r_handle`'s scope while the ARMS were judged
   inside it. They are inside it now
   (`Hβ.effects.handler-state-init-row-never-installed`, pin
-  b9733815b54d, crown 54/0); the
+  b9733815b54d, crown 54/0), and the CONFIG DEFAULTS followed one pin
+  later on the same measurement — the same leak one field over, the same
+  move, one rule with two carriers: everything a handler install
+  EVALUATES belongs in row(h) (pin c3410610ce41, crown 56/0); the
   sweep continues rule-by-rule), and the
   capability-at-tee PROJECTION — ✅ LANDED 2026-08-08 (pin
   2dcd736eb4e6): `mentl where` renders every install as

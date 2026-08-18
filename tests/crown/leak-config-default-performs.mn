@@ -1,0 +1,19 @@
+// CROWN — a handler's config DEFAULT performs where the arms perform: at
+// the install, in the installer's world. So a default that performs E must
+// reach the installer's row and meet its `!E`. Expect E_EffectMismatch.
+//
+// SEEN RED at pin b9733815b54d — the pin that closed the same leak one
+// field over, for state inits. The defaults were still judged before
+// r_handle's scope opened, so this checked CLEAN with T_OverDeclared
+// reporting the body "only uses Pure" while the default genuinely
+// performed: give `op` a handler returning 7 and the value arrives at `k`.
+//
+// One rule, two carriers: everything the install EVALUATES belongs in
+// row(h), which the tee already adds to every installer.
+effect E { op() -> Int }
+effect F { g() -> Int }
+handler hf(k: Int = op()) with s = 1 {
+  g() => resume(s + k),
+}
+fn bad() with !E = (g()) ~> hf
+fn main() = bad()

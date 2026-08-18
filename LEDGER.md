@@ -35,6 +35,35 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin c3410610ce41 · WHAT THE INSTALL EVALUATES, THE INSTALL
+  PAYS. CLEAN — m2 == m3 at 413442 lines, census 0, battery green, crown
+  56/0, frontier 371/0, 17.09s wall, peak 2274404 KB against a 2310000
+  ceiling.
+  ▶ WHAT LANDED: the config-DEFAULT `each` moves inside
+  `inf_enter_fn(r_handle, …)` to sit beside the state inits the previous
+  pin moved. One rule, two carriers — everything a handler install
+  EVALUATES belongs in row(h), which the tee already adds to every
+  installer.
+  ▶ IT WAS THE PREVIOUS STAMP'S OWN OPEN QUESTION, and the answer was the
+  same leak one field over. At pin b9733815b54d
+  `handler hf(k: Int = op())` installed by
+  `fn bad() with !E = (g()) ~> hf` checked CLEAN with T_OverDeclared
+  reporting the body "only uses Pure"; the default genuinely performed
+  (give `op` a handler returning 7 and the value arrives at `k`, exit 7).
+  After: `!E + Any vs E`, with the run still answering 7.
+  ▶ MEASURED BEFORE BUILT, in that order: the check-clean, then the
+  install-time performance, then the edit. The confirmation was the
+  build's first step rather than a substitute for it.
+  ▶ THE COMMENT MOVED WITH THE CODE and lost nothing: a config default is
+  still typed at its one home, the handler's own parameter scope, and an
+  omitting explicit install still re-infers through resolve_call_args.
+  What is new is where its ROW goes.
+  ▶ GATES: `leak-config-default-performs` and `sound-config-default-pure`.
+  The sound half matters as much here — the default still fires and still
+  binds `k`, so charging what an install evaluates must not charge what it
+  does not.
+  ▶ ONE VARIABLE: the default `each`'s position relative to the row scope.
+
 - 2026-08-18 · pin b9733815b54d · AN INIT PERFORMS WHERE THE ARMS PERFORM.
   CLEAN — m2 == m3 at 413442 lines, census 0, battery green, crown 54/0,
   frontier 371/0, 18.09s wall, peak 2282872 KB against a 2310000 ceiling.

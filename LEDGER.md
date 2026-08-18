@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE SWEEP FINDS A REAL LEAK: ROW SUBTRACTION IS OMISSION,
+  NOT NEGATION (no pin — one crucible landed, one held back; boot
+  unchanged at 5a61fc4eba, wheel source untouched; crown 47 → 48).
+  ▶ PRIORITY SERVED: the 6.3 modal sweep, fifth tick — and the first that
+  found a hole instead of pinning a rule that already held.
+  ▶ THE MEASUREMENT. SYNTAX §«Named effect rows» gives
+  `type ReadOnly = File - write` and states `E - F = E & !F`, so a
+  subtracted member is FORBIDDEN. The artifact drops it instead: with
+  `type Both = A + B` and `type OnlyA = Both - B`, the medium reports a
+  fn declared `with OnlyA` as carrying the POSITIVE row `A`, no absent
+  member. `E - F = E`.
+  ▶ WHY NOTHING NOTICED. A DIRECT perform still refuses —
+  `fn direct() with OnlyA = opb()` gives `E_EffectMismatch: A vs B` —
+  because a positive row does not admit B, so the everyday case is caught
+  and the wheel, which never writes a subtracted row in a higher-order
+  position, stays green. The HIGHER-ORDER case leaks: `fn run(f) with
+  OnlyA = f()` applied to `() => opb()` is ACCEPTED, the callback's row
+  unifying into the open tail a positive row carries. That is the exact
+  failure §4③ names as the reason Koka omitted negation, reached here
+  through `-` rather than through `!`.
+  ▶ WHAT LANDED AND WHAT DID NOT. `sound-difference-admits` pins the half
+  that holds: subtraction leaves A admitted, higher-order included. The
+  leak crucible is held back rather than sitting red in the battery, and
+  lands with the fix — the same call the state-init fixture got.
+  `Hβ.effects.row-difference-is-omission-not-negation` carries the repro.
+  ▶ THE FIX IS THE DOC'S OWN IDENTITY: `-` lowers to `inter_row` against
+  the negation, so the subtracted name enters the ABSENT field of the
+  canonical triple instead of leaving the present one. SYNTAX is the
+  authority and is not edited to match the artifact; the lathe is what
+  gets turned.
+
 - 2026-08-17 · NEGATION DISTRIBUTES OVER A NAMED ROW — CROWN 45 → 47 (no
   pin — crucibles only; boot unchanged at 5a61fc4eba, wheel source
   untouched).

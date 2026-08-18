@@ -540,6 +540,41 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.effects.row-difference-is-omission-not-negation` — A MEASURED
+SOUNDNESS HOLE, found 2026-08-17 by the 6.3 modal sweep's fifth tick, and
+the first thing that sweep has found rather than pinned.
+SYNTAX §«Named effect rows» gives `type ReadOnly = File - write` and
+states the identity `E - F = E & !F`, so a subtracted member should be
+FORBIDDEN. The artifact subtracts it instead: for `type Both = A + B` and
+`type OnlyA = Both - B`, the medium reports the declared row of a fn
+`with OnlyA` as the POSITIVE row `A`, with no absent member. `E - F = E`.
+WHY IT LOOKS SOUND AND IS NOT. A DIRECT perform refuses —
+`fn direct() with OnlyA = opb()` gives `E_EffectMismatch: A vs B` —
+because a positive row simply does not admit B, so the everyday case is
+caught and nothing in the wheel notices. The HIGHER-ORDER case leaks:
+```
+fn run(f) with OnlyA = f()
+fn bad() = run(() => opb())
+```
+is ACCEPTED. A callback's row unifies into the open tail a positive row
+carries, and only a real `!B` refuses there. That is the textbook
+higher-order failure §4③ names as the reason Koka omitted negation, met
+here through the subtraction operator rather than through `!` itself.
+THE CRUCIBLE EXISTS AND IS HELD BACK: `leak-difference-negation` is the
+repro above, RED today, and it lands WITH the fix rather than sitting red
+in the battery. Its sound twin DID land as `sound-difference-admits`,
+which pins only the half that holds — subtraction leaves A admitted,
+higher-order included.
+THE FIX IS THE IDENTITY THE DOC ALREADY STATES: `-` must lower to
+`inter_row` against the negation (`E & !F`), so the subtracted name
+enters the ABSENT field of the canonical triple rather than being dropped
+from the present one. `eff_forbids` then refuses the callback exactly as
+it does for an authored `!B`. Marched, because it changes what every
+declared row carrying a `-` means.
+SYNTAX IS NOT WRONG HERE and must not be edited to match: it is the
+authority, the identity is the intended semantics, and the artifact is
+the lathe that has not been turned to it.
+
 `Hβ.lower.state-init-config-ref-nested` — THE ROOT, and this entry OPENS
 with the retraction of its own previous version.
 ▶ RETRACTED: the entry here claimed "decl-side handler state-init

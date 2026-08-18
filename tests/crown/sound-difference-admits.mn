@@ -1,0 +1,22 @@
+// CROWN — row SUBTRACTION leaves the unsubtracted members ADMITTED.
+// `type OnlyA = Both - B` still permits A, higher-order included, or `-`
+// would silently drop capabilities the row names.
+//
+// This pins only the ADMITS half on purpose. The forbids half is a
+// measured hole: `Both - B` resolves to the positive row `A`, not
+// `A + !B`, so a callback performing B passes through the open tail
+// (Hβ.effects.row-difference-is-omission-not-negation). Its crucible
+// lands with that fix rather than sitting red here.
+effect A { opa() -> Int }
+
+effect B { opb() -> Int }
+
+type Both = A + B
+
+type OnlyA = Both - B
+
+fn run(f) with OnlyA = f()
+
+fn good() = run(() => opa())
+
+fn main() = good()

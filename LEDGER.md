@@ -35,6 +35,40 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE FLOOR COUNT WAS NEVER EVIDENCE, AND THE FRAME CALL
+  WORKS (no pin — instrument run, variant reverted whole; boot unchanged
+  at 5a61fc4eba, src and lib byte-identical).
+  ▶ THE BANKED PROBE ASKED whether the emit's singleton-install proof is
+  per call site. It is NEITHER per-site nor per-handler: there is no
+  emit-time proof at all. `singleton_perform_block` emits, for every
+  STATEFUL singleton op call site, `LWorldResolve` into a local and then
+  an `LIf` whose null arm is `LInvariantFailure(SingletonUninstalled)`.
+  The `unreachable` is a RUNTIME else-branch. So a floor count is simply
+  the number of stateful singleton call sites in a build — 50 baseline,
+  52 in the variant because the variant adds two — and it says nothing
+  about what is installed. Two iterations of design rested on that count.
+  Both were wrong, and reading the emit's own construction cost one grep.
+  ▶ THE FULL BACKTRACE, read whole rather than grepped, corrects the
+  other half. The trap is in `lambda_329309` under
+  `op_map_collector_yield` / `iterate_from` /
+  `map$spr_initnNode_nLowExpr` — INSIDE the map's lambda, which is
+  `lower_expr(field.init)`. Had `ls_enter_frame` floored it would sit
+  directly under `lower_state_field_inits`. IT DOES NOT: the frame call
+  succeeds. And the context is the demand walk, not ordinary lowering —
+  `lower_pipe` ← `project_nested_fn` ← `lower_stmt_body` ←
+  `reach_construct_loop` ← `reachable_from_main`.
+  ▶ SO THE SPECIAL CASE IS A SHORTCUT AROUND `lower_expr`'s VARREF PATH,
+  not around a missing frame. The bare config ref works because it never
+  enters that path; the nested case fails because it must. The fix that
+  follows — and it follows from a measurement, not a preference — is to
+  resolve config refs structurally AT EVERY DEPTH without entering the
+  general VarRef lowering. The frame was never the mechanism, and
+  `lower_state_init` was right to resolve by name all along.
+  ▶ WHAT REMAINS UNMEASURED is named rather than assumed: which op inside
+  the VarRef arm floors in this walk. The design does not depend on the
+  answer, so it is not a blocker — it is the probe to run if the
+  structural rewrite meets a second wall.
+
 - 2026-08-17 · THE NEW LAW'S FIRST RUN CATCHES ITS AUTHOR (no pin —
   a verified correction; boot unchanged at 5a61fc4eba, src and lib
   untouched, m2 == m3 re-confirmed by the baseline build this used).

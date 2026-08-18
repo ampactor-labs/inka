@@ -593,7 +593,42 @@ does reach this code — `lookup_handler_state_inits_of` calls
 still fails, which is precisely the shape that wants instrumentation
 rather than more reading: I guessed four times in this iteration and the
 artifact refused each guess.
-CORRECTED 2026-08-17 BEFORE ANYTHING WAS BUILT ON IT. The entry below
+RESOLVED TO A MECHANISM 2026-08-17, by reading the emit's own
+construction and then the full backtrace. Three facts, each measured:
+  (1) THE FLOOR IS A RUNTIME ELSE-BRANCH, NOT AN EMIT-TIME PROOF.
+      `singleton_perform_block` emits, for every STATEFUL singleton op
+      call site, `LLet(rec, LWorldResolve(hname))` then
+      `LIf(rec, [perform], [LInvariantFailure(SingletonUninstalled)])`.
+      The `unreachable` is the null-record arm. So a floor COUNT is just
+      the number of such call sites in the build — 50 in baseline, 52 in
+      the frame variant because the variant adds two — and it is evidence
+      of NOTHING about installs. Both prior readings of that count were
+      wrong, and so was every design that rested on them.
+  (2) THE FRAME CALL SUCCEEDS. The variant's trap sits in
+      `lambda_329309` under `op_map_collector_yield` / `iterate_from` /
+      `map$spr_initnNode_nLowExpr`, i.e. INSIDE the map's lambda, which
+      is `lower_expr(field.init)`. Had `ls_enter_frame` floored it would
+      appear directly under `lower_state_field_inits`. It does not.
+  (3) THE CONTEXT IS THE DEMAND WALK, not ordinary lowering:
+      `lower_state_field_inits` ← `lower_pipe` ← `project_nested_fn` ←
+      `lower_stmt_body` ← `reach_construct_loop` ← `reachable_from_main`
+      ← `compile_remainder`.
+WHAT THAT MAKES THE SPECIAL CASE: not a shortcut around a missing frame,
+but a shortcut around `lower_expr`'s VARREF PATH, which cannot run in the
+reachability-construction walk. The bare-config-ref case works precisely
+because it never enters that path; the nested case fails because it must.
+SO THE FIX, grounded in (2) rather than guessed: config refs must be
+resolved structurally AT EVERY DEPTH without entering the general VarRef
+lowering — the init's own walk substituting `LUpval(0, slot)` for a
+config name wherever it appears. The frame is not the mechanism and was
+never needed; `lower_state_init` was right to resolve by name.
+WHAT IS STILL UNMEASURED, and must not be assumed: WHICH op inside
+`lower_expr`'s VarRef arm floors in this walk (`ls_resolve`'s own
+dispatch, `graph_bind_note`, or `env_kind_of` on the RGlobal branch).
+The design above does not depend on the answer, so it is not a blocker;
+it is the probe to run if the structural rewrite meets a second wall.
+
+SUPERSEDED, kept for the record — CORRECTED 2026-08-17 BEFORE ANYTHING WAS BUILT ON IT. The entry below
 read 52 `singleton op call with no live install: lower_scope` floors in
 the frame variant's wheel and concluded the change caused them. THE
 BASELINE WHEEL HAS 50. The delta is +2, which is exactly the number of

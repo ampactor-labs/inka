@@ -35,6 +35,38 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE NAMES ARE EXONERATED, AND THE READ-PAST HALF OF THE
+  DIFF IS THE ONE THAT MATTERS (no pin — probe only; boot unchanged at
+  6e05bd9404ed).
+  ▶ THE BANKED PROBE HAD TWO BRANCHES AND BOTH DIED. Collision: each
+  qualified name is defined exactly once, and the corpus is identical
+  across generations — 4832 definitions, 514 names defined more than once,
+  both sides. Stale index or reordering: the function table carries 5876
+  entries in both and exactly FOUR positions differ (54, 57, 58, 3219),
+  each the same function under its old versus new name, with one elem
+  segment and 8736 baked `_idx` globals on both sides. Identity did not
+  move.
+  ▶ THAT REFRAMES THE SUB-ARC. Wasm function names are advisory, so four
+  renames cannot by themselves change execution — which means the naming
+  I have been chasing for two iterations was never the mechanism. The
+  fault has to live in the other half of emit-diff's report, and that half
+  was in the output all along: THREE NAMED FNS DIFFER STRUCTURALLY —
+  `index_of`, `parse_int` and `op_synth_default_enumerate_inhabitants`,
+  the three PARENTS of the renamed children. Their bodies changed.
+  ▶ I READ PAST IT because the rename list was the vivid part of the same
+  report. Three explanations died this iteration (collision, stale index,
+  reordering) and all three were about names; the line naming structural
+  divergence sat above them in the output that opened this chain.
+  ▶ NEXT PROBE, the last unread piece of a 39-line diff: read those three
+  parents' bodies against each other. The trap is a
+  `return_call_indirect` inside `parse_int`'s child, so the divergence
+  that matters is how the parent builds or passes the closure it
+  tail-calls.
+  ▶ NO src CHANGE, fifth in a row, same blocker as named last iteration
+  and now narrower: the row work waits on an emit divergence in three
+  parent functions, and the arc will not build until that divergence is
+  read rather than inferred.
+
 - 2026-08-17 · THE TRAP IS PINNED TO ITS INSTRUCTION, AND THE TYPE TABLE
   CLEARS THE SIGNATURES (no pin — probe only; boot unchanged at
   6e05bd9404ed).

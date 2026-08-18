@@ -955,10 +955,26 @@ generations carry the same 36-entry type table, `ft2 = (i32,i32)->i32`
 and `ft3 = (i32,i32,i32)->i32`. So the mismatch is not a changed
 SIGNATURE — it is a changed TARGET. After the rename, the closure's
 stored fn index resolves to a function of different arity.
-▶ NEXT PROBE: read which fn index that closure stores and what occupies
-it in each generation. The `$fns` table plus the closure's construction
-site answer it, and the answer either names a collision (two nested fns
-qualifying to one name, the documented silent-pick) or a stale index.
+▶ BOTH BRANCHES OF THAT PROBE ARE NOW DEAD (2026-08-17). COLLISION: each
+qualified name is defined exactly once, with 4832 total definitions and
+514 multi-defined names IDENTICAL in both generations — the rename
+introduced none. STALE INDEX / REORDERING: the function table carries
+5876 entries in both and exactly FOUR positions differ (54, 57, 58,
+3219), each the same function under its old versus new name. Same order,
+same types, same table shape (one elem segment, 8736 baked `_idx`
+globals both sides). Nothing about identity moved.
+▶ SO THE NAMES ARE NOT THE MECHANISM, and that reframes the whole
+sub-arc: wasm function names are advisory, so four renames cannot
+themselves change execution. What CAN is the other half of emit-diff's
+report, which was read past: THREE NAMED FNS DIFFER STRUCTURALLY —
+`index_of`, `parse_int`, `op_synth_default_enumerate_inhabitants`, the
+three PARENTS of the renamed nested fns. Their bodies changed, not just
+their children's labels.
+▶ NEXT PROBE, and it is the last unread piece of a 39-line diff: read
+those three parents' bodies against each other. The trap is a
+`return_call_indirect` inside one of them (`parse_int_go` is `parse_int`'s
+child), so the divergence that matters is in how the parent builds or
+passes the closure it tail-calls.
 ▶ AN AMBIENT FIND, banked because the instruction was stale where the
 docs stated it: WABT 1.0.39's `wasm-objdump` accepts NO feature flags at
 all — no `--enable-tail-call`, no `--enable-threads` — and disassembles

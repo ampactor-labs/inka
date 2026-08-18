@@ -1614,10 +1614,12 @@ lines, all of them nested-function NAMING: the annotation fixes
 `ls_outer_fn_name_loop`, which has been reading a foreign slot and
 leaving nested fns unqualified, a second silent wrong independent of the
 tail. The trap is now PINNED by running the artifact: `wasm trap: indirect call
-type mismatch` at `parse_int_go`, through `lex_from` → `lex`. A nested
-fn's NAME reaches its `call_indirect` identity, so the arc is three steps
-— fix indirect dispatch under rename, then the discriminator, then the
-writer flip. The symbol-collision and dangling-symbol suspicions are both
+type mismatch` at `parse_int_go`, through `lex_from` → `lex`. The NAMES are exonerated — table, types, and definition
+corpus are identical across generations, and wasm names are advisory — so
+the fault is the read-past half of the same diff: three PARENT fns
+(`index_of`, `parse_int`, `op_synth_default_enumerate_inhabitants`)
+differ STRUCTURALLY. The arc is three steps — read that divergence, then
+the discriminator, then the writer flip. The symbol-collision and dangling-symbol suspicions are both
 dead (514 duplicate names on both sides; both generations define both
 naming forms).
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND

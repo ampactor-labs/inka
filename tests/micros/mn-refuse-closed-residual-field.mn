@@ -1,0 +1,19 @@
+// expect: refuse E_TypeMismatch
+// A record REST binds a residual its writer PROVED whole — the closed
+// partner's fields are the entire set — so a field name outside it is
+// provably absent, exactly as it is on the record itself. Demanding one
+// must refuse, not widen.
+//
+// SEEN RED at pin bc516cf945bb, twice and in the worst way: `rest.nosuch`
+// checked clean and ran to exit 0, and the name below — chosen to sort
+// BEFORE the real field — ran to exit 2, which is `b`'s value. A field
+// that does not exist returned a field that does.
+//
+// The control was already correct: the same unknown name on a plain
+// closed record is E_TypeMismatch at the access. This fixture holds the
+// residual path to the verdict the record path always gave.
+fn make() = ({a: 1, b: 2})
+fn main(q) = {
+  let {a, ...rest} = make()
+  rest.aa
+}

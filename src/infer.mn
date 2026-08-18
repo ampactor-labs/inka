@@ -6161,12 +6161,22 @@ fn absorb_into_residual(v, incoming, span: ValidSpan, reason) = match graph_chas
     if len(added) == 0 {
       ()
     } else {
-      // The residual grows and KEEPS its own tail: what the writer knew
-      // about the remainder did not change because a demand named one
-      // more field. A field added to a RowClosed residual is the record
-      // provably lacking it, which today widens rather than refusing —
-      // `Hβ.infer.demand-widens-a-closed-residual` carries that.
-      graph_bind_record_row(v, known ++ added, tail, Located(span, reason))
+      match tail {
+        RowClosed => // PROVEN WHOLE: the writer saw a closed partner, so this residual
+        // IS the remainder and a name outside it is provably absent. That
+        // is the same verdict a closed record already gives for an unknown
+        // field, and it has to be given here too: widening put the missing
+        // name at its sorted offset and the read came back with a
+        // NEIGHBOUR's value (`{a: 1, b: 2}` destructured, `rest.aa`
+        // answered 2 — b's).
+        type_mismatch(TRecord(known), TRecord(known ++ added), span, reason),
+        RowAssumed => // The remainder is a union of partial sets or continues at another
+        // var: more may genuinely exist, so a new name widens. The residual
+        // KEEPS its own tail — what the writer knew about the rest did not
+        // change because a demand named one more field.
+        graph_bind_record_row(v, known ++ added, tail, Located(span, reason)),
+        RowContinues(_) => graph_bind_record_row(v, known ++ added, tail, Located(span, reason)),
+      }
     }
   },
   _ => graph_bind_record_row(v, incoming, RowAssumed, Located(span, reason)),

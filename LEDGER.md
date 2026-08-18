@@ -35,6 +35,42 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin c968f690567b · A FIELD THAT DOES NOT EXIST STOPS
+  ANSWERING WITH ONE THAT DOES. CLEAN — m2 == m3 at 413442 lines, census
+  0, battery green, frontier 371/0, 16.72s wall, peak 2283876 KB against a
+  2310000 ceiling.
+  ▶ WHAT LANDED: `absorb_into_residual`'s widening arm reads the tail.
+  Under `RowAssumed` or `RowContinues` a new field still widens — more may
+  genuinely exist. Under `RowClosed` the writer proved the residual IS the
+  remainder, so a name outside it is provably absent and the access is a
+  `type_mismatch`, the same verdict a closed record already gave. The tail
+  landed at pin b8eff49b7252 as a projection; this is its first
+  ENFORCEMENT.
+  ▶ WHAT IT WAS DOING, measured before the edit and the worst version of
+  the class. `let {a, ...rest} = ({a: 1, b: 2})` gives `rest` a residual of
+  exactly `{b: Int}`. `rest.nosuch` checked clean and ran to exit 0. Then
+  `rest.aa` — the name chosen to sort BEFORE the real field — ran to exit
+  **2**, which is `b`'s value: the widened layout put `aa` at offset 0 and
+  the real residual keeps `b` there. Not a missing refusal; an aliased
+  read.
+  ▶ THE CONTROL WAS ALWAYS RIGHT, which is what made the fix a
+  restoration rather than a new policy: the same unknown name on a plain
+  closed record is `E_TypeMismatch: { aa: … } vs { a: Int, b: Int }` at the
+  access. The residual path simply was not giving the verdict the record
+  path gave.
+  ▶ THE MARCH SETTLED THE STAMP'S OPEN LINE. Whether any wheel or lib site
+  leaned on the widening was unmeasured; a new refusal class earns its keep
+  by surviving the self-compile, and it did — CLEAN at census 0 with the
+  whole battery green.
+  ▶ GATE: `tests/micros/mn-refuse-closed-residual-field` as a refuse
+  contract, judged by `mentl test`. Falsified in a scratch directory rather
+  than the battery: the same fixture with its expected class mutated
+  reports `FAILR … wanted E_OccursCheck`, so the judge distinguishes
+  classes and the contract is not a rubber stamp.
+  ▶ THE SOUND PATHS ARE UNTOUCHED, each re-run: the legit rest field still
+  answers 12, and the assumed-residual fixture still checks clean.
+  ▶ ONE VARIABLE: the widening arm gaining its match on the tail.
+
 - 2026-08-18 · pin bc516cf945bb · A DEMAND IS CHECKED, NOT INSTALLED.
   CLEAN — m2 == m3 at 413349 lines, census 0, battery green, crown 52/0,
   16.05s wall, peak 2279344 KB against a 2310000 ceiling.

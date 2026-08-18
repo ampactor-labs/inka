@@ -1203,14 +1203,56 @@ unannotated record param defers to the call site and belongs to the
 free-body-row fork, and only a field living in a bound residual was
 destroyed. The record below is the measurement that found it.
 
-`Hβ.infer.demand-widens-a-closed-residual` — a field access demanding a
-name a `RowClosed` residual does not carry still WIDENS the residual
-instead of refusing, and since the landing above the tail proves the
-record cannot have that field. The honest verdict is a mismatch at the
-access, and it is not taken yet because a new refusal class needs its own
-march and its own RED-first fixture. Sits directly on
-`Hβ.infer.field-access-overwrites-a-proven-residual`'s landing;
-independent of the open-row layout fork.
+`Hβ.infer.demand-widens-a-closed-residual` — RESOLVED 2026-08-18, pin
+c968f690567b, CLEAN. The widening arm reads the tail: `RowAssumed` and
+`RowContinues` still widen, `RowClosed` refuses with the `type_mismatch`
+the closed-record path always gave. The march settled the stamp's open
+line — nothing in the wheel or lib leaned on the widening, census 0 and
+the battery green. Gate: `tests/micros/mn-refuse-closed-residual-field`, a
+refuse contract falsified in a scratch directory so the battery was never
+polluted. The tail landed two pins earlier as a projection; this is its
+first enforcement. The measurement that found it follows.
+
+▶ A FIELD THE RECORD PROVABLY LACKS READ ITS NEIGHBOUR'S SLOT. Measured
+2026-08-18 at pin bc516cf945bb, three runs.
+▶ `let {a, ...rest} = ({a: 1, b: 2})` gives `rest` a residual of exactly
+`{b: Int}` under `RowClosed` — the tail proves nothing else exists. Then
+`rest.nosuch` checks CLEAN and runs to exit 0, with no diagnostic and no
+emit floor.
+▶ AND IT IS AN ALIASED READ, not a zero. Name the missing field so it
+sorts BEFORE the real one — `rest.aa` — and the program answers **2**,
+which is `b`'s value: the widened layout puts `aa` at offset 0 and the
+real residual keeps `b` there. A field that does not exist returns a
+field that does.
+▶ THE CONTROL REFUSES, so the residual path is the variable. The same
+unknown name on a plain closed record is
+`E_TypeMismatch: { aa: t35097@e6 } vs { a: Int, b: Int }` at the access.
+The closed-record path already produces exactly the verdict the residual
+path owes.
+▶ ORACLE-BLIND: the wheel never writes a field name its own records lack,
+so census, fixpoint and micros are all silent on this.
+
+STAMP — `Hβ.infer.demand-widens-a-closed-residual`.
+TRACED: `absorb_into_residual`'s `added` branch widens unconditionally.
+Widening is CORRECT under `RowAssumed` (a union of partial sets — more may
+exist) and under `RowContinues` (the chain has not ended), and WRONG under
+`RowClosed`, where the writer proved the residual is the whole remainder,
+so a name outside it is provably absent. The distinction is exactly what
+the tail landed at pin b8eff49b7252 records, and this is its first
+enforcement rather than its first projection.
+PRICED: one match on a value already in hand — the tail comes back from
+the `graph_chase` `absorb_into_residual` already performs, so there is no
+new read, no new walk, and freshness is the same read's. The refusal
+routes through `type_mismatch`, the channel the closed-record path uses.
+WRITERS: `absorb_into_residual` (infer.mn), the single site. READERS:
+unchanged; a refusal at the access never reaches lower.
+NOT COMPLETE: whether any wheel or lib site relies on the widening is
+UNMEASURED until the march runs, and the march is what settles it — a
+new refusal class earns its keep by surviving the self-compile. The
+diagnostic's teaching FORM is also unsettled: mirroring the closed-record
+message names the two record shapes, which reads well for a small record
+and may not for a wide one; band L's `Hβ.diag.catalog-as-projection` is
+where that becomes a projection rather than a string.
 
 ▶ THE MEASUREMENT THAT FOUND IT, kept because the arc is the value.
 Measured 2026-08-18 at pin b8eff49b7252, every step run rather than

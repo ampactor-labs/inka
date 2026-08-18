@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE NEW LAW'S FIRST RUN CATCHES ITS AUTHOR (no pin —
+  a verified correction; boot unchanged at 5a61fc4eba, src and lib
+  untouched, m2 == m3 re-confirmed by the baseline build this used).
+  ▶ WHAT THE ITERATION WAS FOR. `CLAUDE.md ⊕` and the loop's step 4 now
+  gate ACTING, not only asserting: no edit builds on a cause the artifact
+  has not shown this turn. The next build depended on one such cause —
+  "52 `no live install: lower_scope` floors prove the handler is absent
+  at `lower_state_field_inits`" — so the law required counting the
+  baseline before designing against it.
+  ▶ THE BASELINE HAS 50. The delta is +2, exactly the number of new `ls_`
+  call sites the frame variant added. The mechanism survives; the
+  evidence as written did not. An absolute count proves nothing without
+  its baseline, and the baseline cost one march. Had this gone unchecked
+  it would have been the sixth refuted cause in this arc, and the first
+  one to steer a build.
+  ▶ AND IT SHARPENS THE QUESTION, because a second measured fact does not
+  fit "the handler is not installed": the BASELINE compiles the nested
+  repro to a NON-EMPTY 38,568-byte WAT carrying the `MissingName` marker
+  for `start`, and reaching that marker requires `ls_resolve` to have
+  returned `RGlobal` at this very site. `lower_scope` is therefore
+  reachable here at RUNTIME, and the two added sites floored at EMIT
+  time. Two different mechanisms; only the second is measured, so no
+  design rests on either yet.
+  ▶ THE NEXT INSTRUMENT, which is this iteration's output rather than an
+  explanation: is the emit's singleton-install proof per CALL SITE?
+  `ls_resolve` in `lower_expr`'s shared VarRef arm does not floor; the
+  added `ls_enter_frame` does. Per-site means the frame route is alive
+  and needs the install proven where the floor's own message says to put
+  it; per-handler means it is dead and the structural rewrite is the only
+  road. One measurement decides, and nothing is built before it.
+
 - 2026-08-17 · ANSWERED: THE SCOPE HANDLER IS NOT INSTALLED THERE, AND
   THE COMMENT SAID SO (no pin — probe reverted whole; boot unchanged at
   5a61fc4eba, src and lib byte-identical to the previous pin).

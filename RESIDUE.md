@@ -593,11 +593,33 @@ does reach this code — `lookup_handler_state_inits_of` calls
 still fails, which is precisely the shape that wants instrumentation
 rather than more reading: I guessed four times in this iteration and the
 artifact refused each guess.
-ANSWERED 2026-08-17, BY MEASUREMENT, AND THE SITE'S ORIGINAL COMMENT WAS
-RIGHT ALL ALONG. `lower_state_field_inits` runs where the `lower_scope`
-handler is NOT INSTALLED. The candidate wheel built with the frame
-variant carries 52 `singleton op call with no live install: lower_scope`
-floors, read out of `.build/m2cache/m2.wat` — so every `ls_enter_frame` /
+CORRECTED 2026-08-17 BEFORE ANYTHING WAS BUILT ON IT. The entry below
+read 52 `singleton op call with no live install: lower_scope` floors in
+the frame variant's wheel and concluded the change caused them. THE
+BASELINE WHEEL HAS 50. The delta is +2, which is exactly the number of
+new `ls_` call sites the variant added (`ls_enter_frame`,
+`ls_exit_frame`), so the mechanism survives but the evidence as stated
+did not: an absolute count proves nothing without its baseline, and
+counting the baseline cost one march.
+AND THE CORRECTION SHARPENS THE QUESTION, because a second measured fact
+does not fit "the handler is not installed": the BASELINE compiles the
+nested repro to a NON-EMPTY 38,568-byte WAT carrying the `MissingName`
+marker for `start`, and reaching that marker requires `ls_resolve` to
+have returned `RGlobal` at this very site. So `lower_scope` IS reachable
+here at runtime, and the two added sites floored at EMIT time. Those are
+different mechanisms and only the second is measured.
+NAMED NEXT PROBE, and no design until it runs: determine whether the
+emit's singleton-install proof is per CALL SITE. `ls_resolve` is called
+from `lower_expr`'s shared VarRef arm and does not floor; the added
+`ls_enter_frame` in `lower_state_field_inits` does. If the proof is
+per-site, the frame approach is not dead — it needs the install proven at
+the new site, which the floor's own message spells out ("install the
+handler around the calling walk"). If the proof is per-handler, it is
+dead and the structural rewrite is the only route.
+SUPERSEDED TEXT, kept for the record: `lower_state_field_inits` runs
+where the `lower_scope` handler is NOT INSTALLED. The candidate wheel
+built with the frame variant carries 52 floors, read out of
+`.build/m2cache/m2.wat` — so every `ls_enter_frame` /
 `ls_resolve` / `ls_exit_frame` in that variant lowered to an
 `unreachable`, and the compile TRAPPED (exit 134, zero WAT, backtrace
 pinning `map$spr_initnNode_nLowExpr` under `lower_stmt_body` — the very

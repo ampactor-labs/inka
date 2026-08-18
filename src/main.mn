@@ -712,24 +712,71 @@ fn tighten_fold(items: [(String, Int, String, EffRow, EffRow)], i, cur_path, cur
         if byte_len(cur_path) > 0 { fs_write_file(cur_path, cur_text) }
         fs_read_file(path)
       }
-      match patch_with_clause(text0, line1, used) {
-        Some(t2) => {
-          print_string("tighten: {name} ({path}:{int_to_str(line1)})  with {show_effrow(declared)}  →  with {show_effrow(used)}\n")
-          tighten_fold(items, i + 1, path, t2, applied + 1)
-        },
-        None => {
-          eprint_string("mentl tighten: {name} at {path}:{int_to_str(line1)} — no single-line with-clause; skipped\n")
-          tighten_fold(items, i + 1, path, text0, applied)
-        },
+      if !effrow_writable(used) {
+        // The row is TRUE and unwritable: an argument of it has no source
+        // spelling, so the render that serves a reader would enter the file
+        // as a debug handle. Decline the site and say which reason it is.
+        eprint_string("mentl tighten: {name} at {path}:{int_to_str(line1)} — the proven row has an argument with no source spelling; skipped\n")
+        tighten_fold(items, i + 1, path, text0, applied)
+      } else {
+        match patch_with_clause(text0, line1, used) {
+          Some(t2) => {
+            print_string("tighten: {name} ({path}:{int_to_str(line1)})  with {show_effrow(declared)}  →  with {show_effrow(used)}\n")
+            tighten_fold(items, i + 1, path, t2, applied + 1)
+          },
+          None => {
+            eprint_string("mentl tighten: {name} at {path}:{int_to_str(line1)} — no single-line with-clause; skipped\n")
+            tighten_fold(items, i + 1, path, text0, applied)
+          },
+        }
       }
     },
   }
 }
 
+// CAN THIS ROW BE WRITTEN AS SOURCE? One render serves two consumers whose
+// contracts differ: a PROJECTION for a reader may say "unresolved at epoch
+// e", because that is the honest answer to a human's question, and an
+// AUTHORED PATCH may not, because source is not a place to say "I don't
+// know". Measured 2026-08-18 — `mentl tighten` spliced
+// `Iterate(t42546@e1, t42548@e1)` into lib/prelude.mn and the wheel refused
+// itself with fifteen unresolved-hole errors on those very columns.
+//
+// EANode already learned this discipline AT THE RENDERER (a bare VarRef
+// writes its own name; any other shape takes the honest placeholder, and
+// its comment records the fmt re-parse fixpoint that taught it). EAType
+// never did: a free type variable renders as its debug handle. This is the
+// authoring half — the display half is the sibling peer.
+fn effarg_writable(a) with GraphRead + Memory + Alloc + !Mutate = match a {
+  EAInt(_) => True,
+  EAFloat(_) => True,
+  EAString(_) => True,
+  EAType(t) => len(free_in_ty(t)) == 0,
+  EANode(h) => match graph_node_body(h) {
+    NExpr(VarRef(_)) => True,
+    _ => False,
+  },
+  EAEffect(_) => True,
+  EACon(_) => True,
+}
+
+fn effname_writable(en) with GraphRead + Memory + Alloc + !Mutate = match en {
+  ENamed(_) => True,
+  EPure => True,
+  EParameterized(_, args) => all(effarg_writable, args),
+}
+
+fn effrow_writable(r) with GraphRead + Memory + Alloc + !Mutate = match r {
+  EfRow(present, absent, _) => all(effname_writable, present) && all(effname_writable, absent),
+}
+
 // Rewrite one decl line's with-clause to the proven row. The terminator
 // is the first " = " after the clause — the row text itself contains no
 // " = ", so the match is the head's binder. None = the decl shape is not
-// a single-line with-clause head (never mangle; skip and say so).
+// a single-line with-clause head (never mangle; skip and say so). ONE
+// verdict, one meaning: the row's own writability is the caller's check,
+// because the caller is where the reason is spoken and a `None` carrying
+// two reasons would make the skip line lie about which.
 fn patch_with_clause(ref text, line1, ref used) = {
   let ls = line_start_offset(text, line1)
   let le = line_end_offset(text, ls)

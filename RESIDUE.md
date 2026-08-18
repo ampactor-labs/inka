@@ -1590,9 +1590,47 @@ own `inits` field, before that install's `world_push`, so
 refusing at the 1016 general sites is not, and that distinction is the
 whole remaining peer — see below.
 
-`Hβ.tighten.authors-an-unresolved-handle-as-source` — THE MEDIUM'S OWN
-AUTHORING VERB FABRICATES. Measured 2026-08-18 at pin 4dc2ac881254, the
-first time `mentl tighten` was run for real in this loop.
+`Hβ.tighten.authors-an-unresolved-handle-as-source` — RESOLVED 2026-08-18,
+pin 567a96659693, CLEAN. `effrow_writable` and its two companions answer
+"can this row be written as source", and `tighten_fold` consults it before
+authoring: a row that is TRUE but carries an argument with no source
+spelling is declined with its own reason. Measured verb to verb — before,
+`Iterate(t42546@e1, t42548@e1)` went into lib/prelude.mn and the wheel
+refused itself; after, both sites are declined by name and prelude is
+untouched. The enumeration moved the target twice: `show_effrow` is the
+SHARED renderer (diagnostics, `where`, audit) so the fix could not live
+there, and `EANode` was innocent — it learned display totality in August
+and the debug handle came from `EAType` through `show_type`. The first
+build put the guard inside `patch_with_clause`, which made `None` carry
+two reasons and the skip line lie about which; moving it to the caller
+restored one verdict per meaning.
+
+`Hβ.tools.authoring-verb-writes-only-proven` — THE GATE THE LANDING ABOVE
+COULD NOT WRITE. A verify leg that exercises a WRITING verb needs a
+scratch copy of the tree, because running it in place either mutates
+during the gate or asserts nothing when the tree is already tight. The
+contract to gate is stable and was measured at the landing: on a tight
+tree `mentl tighten` reports `0 of N authorable applied` and every
+declined site names its own reason. The shape is a copy-run-compare leg;
+the reason it is not built is machinery, not doubt. Sibling, unmeasured:
+whether `fmt` or any other authoring verb splices a rendered row the same
+way — the same class if so.
+
+`Hβ.types.eatype-render-lacks-display-totality` — THE DISPLAY HALF of the
+same finding, with a landed precedent one arm away. `show_effarg`'s
+`EANode` arm renders a bare VarRef as its name and anything else as
+`<operand #N>`, its comment recording the fmt re-parse fixpoint that
+taught it. The `EAType` arm renders through `show_type` unconditionally,
+so a free type variable prints as its debug handle — which is what a
+reader saw before the authoring guard stopped it entering files. The
+authoring path is safe now; the PROJECTION still shows a handle where an
+honest placeholder belongs, and the fix is the EANode arm's own
+discipline applied one line over.
+
+▶ THE MEASUREMENT THAT FOUND IT, kept because the arc is the value. THE
+MEDIUM'S OWN AUTHORING VERB FABRICATED. Measured 2026-08-18 at pin
+4dc2ac881254, the first time `mentl tighten` was run for real in this
+loop.
 ▶ WHAT IT WROTE. Asked to tighten `src/lexer.mn`, the verb authored 33
 row narrowings across the transitive link — and two of them were:
 

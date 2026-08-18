@@ -35,6 +35,48 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 567a96659693 · SOURCE IS NOT A PLACE TO SAY I DO NOT
+  KNOW. CLEAN — m2 == m3 at 414196 lines, census 0, battery green,
+  frontier 371/0, 16.66s wall, peak 2271636 KB against a 2310000 ceiling.
+  ▶ WHAT LANDED: `effrow_writable` / `effname_writable` / `effarg_writable`,
+  and `tighten_fold` consults the first before authoring. A row that is
+  TRUE but carries an argument with no source spelling is declined, and
+  the skip line says which reason it is.
+  ▶ THE ENUMERATION THE STAMP OWED CHANGED THE TARGET TWICE. First: the
+  splice is `show_effrow(used)` inside `patch_with_clause`, and
+  `show_effrow` is the SHARED renderer — diagnostics, `mentl where` and
+  the audit report all read it — so the fix could not live there without
+  rewriting every diagnostic. Second: `EANode` was innocent. Its renderer
+  learned display totality in August (a bare VarRef writes its name, any
+  other shape takes an honest placeholder, its comment recording the fmt
+  re-parse fixpoint that taught it). The debug handle came from `EAType`
+  through `show_type` on a free variable — an arm one line away that never
+  learned the same discipline.
+  ▶ AND THE FIRST BUILD PUT THE GUARD IN THE WRONG PLACE. Inside
+  `patch_with_clause` it worked — the verb declined and wrote nothing —
+  but `None` then carried two reasons and the caller printed one, so the
+  skip line said "no single-line with-clause" about a line that had one.
+  That is the same class corrected two pins ago at a diagnostic's message.
+  Moved to `tighten_fold`, where the reason is spoken: one verdict, one
+  meaning, two distinct refusals.
+  ▶ MEASURED, verb to verb: before, `mentl tighten src/lexer.mn` wrote
+  `Iterate(t42546@e1, t42548@e1)` into lib/prelude.mn and the wheel
+  refused itself with fifteen unresolved-hole errors. After: `iterate` and
+  `iterate_from` are declined by name with the row reason, `list_filled_from`
+  still declined with the clause reason, `0 of 3 authorable applied`, and
+  lib/prelude.mn is untouched.
+  ▶ THE MEDIUM CAUGHT MY OWN ERROR IN PASSING: `E_PatternInexhaustive` on
+  `effname_writable` — EffName has three variants and a filtered grep had
+  shown me two. The filter-is-part-of-the-claim law, paid for again.
+  ▶ NOT GATED, named instead: a leg that runs a WRITING verb during verify
+  needs a scratch-copy harness. `Hβ.tools.authoring-verb-writes-only-proven`
+  carries the shape.
+  ▶ AND THE ANONYMITY RATCHET CAUGHT THE FIRST DRAFT: eta 28 → 31, three
+  `(a) => f(a)` wrappers I had just written where the name itself is the
+  argument. The tier's own MachineApplicable fix — pass the name — and the
+  gate refused the commit until it was taken.
+  ▶ ONE VARIABLE: the writability check and where its refusal is spoken.
+
 - 2026-08-18 · pin 4dc2ac881254 (unchanged) · THE VERB WROTE A HANDLE
   WHERE A VALUE BELONGED. CLEAN — m2 == m3 at 413773 lines, census 0,
   battery green, and the sha IDENTICAL to the prior pin, because row

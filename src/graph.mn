@@ -645,7 +645,11 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
       resume()
     } else {
       let old_node = graph_node_at(spine, next, handle)
-      spine_put_node(spine, handle, GNode(NRecordRowBound(fields), reason))
+      // `None` — this op writes a TERMINATING residual, which is every
+      // residual today. The linked form (Some(v)) is the tail vocabulary
+      // this slot exists for, and its writer lands as its own marched
+      // step (`Hβ.lower.open-row-field-offset-from-known-set`).
+      spine_put_node(spine, handle, GNode(NRecordRowBound(fields, None), reason))
       let new_trail = trail_append(trail, trail_len, MSetRow(handle, old_node))
       let new_epoch = epoch + 1
       if len(checkpoint_stack) == 0 { graph_mutated(new_epoch, MSetRow(handle, old_node)) }
@@ -1023,7 +1027,7 @@ fn occurs_in(spine, mint_bound, handle, ref ty) with !Mutate = match ty {
     } else {
       match chase_node(spine, mint_bound, root, 0) {
         GNode(NBound(inner), _) => occurs_in(spine, mint_bound, handle, inner),
-        GNode(NRecordRowBound(fields), _) => occurs_in_fields(spine, mint_bound, handle, fields),
+        GNode(NRecordRowBound(fields, _), _) => occurs_in_fields(spine, mint_bound, handle, fields),
         _ => false,
       }
     }
@@ -1041,7 +1045,7 @@ fn occurs_in(spine, mint_bound, handle, ref ty) with !Mutate = match ty {
       true
     } else {
       match chase_node(spine, mint_bound, vroot, 0) {
-        GNode(NRecordRowBound(rest), _) => occurs_in_fields(spine, mint_bound, handle, rest),
+        GNode(NRecordRowBound(rest, _), _) => occurs_in_fields(spine, mint_bound, handle, rest),
         _ => false,
       }
     }
@@ -1416,7 +1420,7 @@ fn spec_subst_pairs(t, pairs) with GraphRead + Memory + Alloc = match t {
       NFree(_) => spec_pair_or_var(u, pairs),
       NErrorHole(_) => spec_pair_or_var(u, pairs),
       NRowBound(_) => t,
-      NRecordRowBound(_) => t,
+      NRecordRowBound(_, _) => t,
       NRowFree(_) => t,
     },
   },
@@ -1474,7 +1478,7 @@ handler lookup_ty_graph with spec_pairs = [], spec_enc = "" {
         NFree(_) => resume(spec_pair_or_var(h, spec_pairs)),
         NErrorHole(_) => resume(spec_pair_or_var(h, spec_pairs)),
         NRowBound(_) => resume(TUnit),
-        NRecordRowBound(_) => resume(TUnit),
+        NRecordRowBound(_, _) => resume(TUnit),
         NRowFree(_) => resume(TUnit),
       }
     } else {
@@ -1506,7 +1510,7 @@ handler lookup_ty_graph with spec_pairs = [], spec_enc = "" {
         // consumer owns the refusal, never the read.
         resume(TVar(h)),
         NRowBound(_) => resume(TUnit),
-        NRecordRowBound(_) => resume(TUnit),
+        NRecordRowBound(_, _) => resume(TUnit),
         NRowFree(_) => resume(TUnit),
       }
     },

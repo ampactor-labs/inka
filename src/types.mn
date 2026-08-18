@@ -742,7 +742,18 @@ type NodeKind
   // untagged EffRow-or-Ty union, and every row walk's
   // catch-all silently crossed sorts (the census's
   // EffRow-vs-Ty at occurs_in_row's delegation).
-  | NRecordRowBound([(String, Ty)])
+  // The second slot is the residual's own TAIL: `None` terminates the
+  // chain (these fields and no more), `Some(v)` continues it at another
+  // row var whose residual is not yet known. Two open records unifying
+  // learn that their known fields agree and that their remainders are the
+  // SAME unknown — a fact `unify_two_open_records` currently discards by
+  // binding both vars to the other's exclusive fields alone, which reads
+  // as "and nothing further" and bakes a field offset over a partial set
+  // (`Hβ.lower.open-row-field-offset-from-known-set`). The tail is the
+  // vocabulary that fact needs, and it lives in the ROW SORT rather than
+  // as a Ty bound onto a row handle: that shortcut was tried and the
+  // march broke on it, for the reason this kind exists at all.
+  | NRecordRowBound([(String, Ty)], Option(Int))
   // inference observed failure (Hazel marked hole)
   // IFC (§4⑥): no separate NFlowBound/NFlowFree dimension needed. The existing
   // graph already encodes information-flow constraints through two mechanisms:
@@ -2976,7 +2987,7 @@ fn show_handle(h) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   match node {
     GNode(NBound(ty), _) => show_type(ty),
     GNode(NRowBound(row), _) => show_effrow(row),
-    GNode(NRecordRowBound(fields), _) => show_type(TRecord(fields)),
+    GNode(NRecordRowBound(fields, _), _) => show_type(TRecord(fields)),
     GNode(NFree(epoch), _) => "t{int_to_str(h)}@e{int_to_str(epoch)}",
     GNode(NRowFree(epoch), _) => "r{int_to_str(h)}@e{int_to_str(epoch)}",
     GNode(NErrorHole(reason), _) => "!hole[{show_reason(reason)}]",

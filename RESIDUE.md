@@ -878,6 +878,20 @@ the row sort — a linked tail wants vocabulary inside `NRecordRowBound`
 (residual fields plus an unknown-remainder marker) or its own node kind,
 never a Ty bound onto a row handle. That is the next attempt's
 constraint, and it was readable before the march rather than after.
+▶ THE VOCABULARY LANDED 2026-08-17, pin 6e05bd9404ed, CLEAN and
+behaviour-identical: `NRecordRowBound` carries `Option(Int)` as its tail —
+`None` terminates, `Some(v)` continues at another row var — and
+`open_record_full_fields` gained the chase arm, so a linked chain reaching
+a still-free tail floors. Every writer passes `None` today; the repro
+still answers 7. The ARITY change was the point: it is a compile error at
+every one of the twenty-one sites across eight files, including any behind
+a catch-all, so the enumeration belongs to the compiler rather than to a
+grep — the precise failure mode of the sort-crossing attempt.
+▶ THE REMAINING STEP is the writer flip: `unify_two_open_records`'s
+`va != vb` arm mints one shared tail and writes `Some` on both sides. It
+is a TRANSITION by construction — the refuted attempt measured 131477 diff
+lines for the same semantic change — so the m4 leg is watched from the
+first run rather than after a repin.
 ▶ THE PER-CALL-SITE BIND EXISTS AND DOES NOT REACH THE BODY.
 `unify_record_open_against_closed` computes `record_fields_diff(closed,
 open)` and binds the open var to it, which for the first call above is

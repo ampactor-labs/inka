@@ -35,6 +35,38 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · pin 6e05bd9404ed · THE ROW RESIDUAL GROWS ITS TAIL, AS
+  VOCABULARY. CLEAN, m2 == m3, census 0, frontier 371/0, 16.91s wall ·
+  2270116 KB peak.
+  ▶ WHAT LANDED. `NRecordRowBound([(String, Ty)])` becomes
+  `NRecordRowBound([(String, Ty)], Option(Int))`: `None` terminates the
+  chain — these fields and no more — and `Some(v)` continues it at another
+  row var whose residual is not yet known. Every writer passes `None`
+  today, so the pin is behaviour-identical, confirmed by re-running the
+  arc's repro unchanged at 7. `open_record_full_fields` gained its chase
+  arm for the linked case, which reaches a still-free tail and floors, so
+  the reader is ready before the writer exists.
+  ▶ WHY AN ARITY CHANGE AND NOT A NEW NODE KIND. The previous attempt died
+  because a row walk's catch-all silently crossed a sort boundary; a new
+  kind would be found only where matches are exhaustive, and a catch-all
+  is exactly where it would not. An arity change is a compile error at
+  EVERY site — twenty-one of them, across eight files — so the enumeration
+  is the compiler's rather than mine. That property is the whole reason
+  this shape was chosen over the one the reader's existing
+  `NBound(TRecordOpen(...))` arm seemed to invite.
+  ▶ THE STAMP THIS PAYS. `unify_two_open_records` closes both tails to the
+  other side's exclusive fields, which reads as "and nothing further" and
+  is what bakes a field offset over a partial set. The repair is to LINK
+  the tails, and the constraint the march imposed last iteration is that
+  the link must live in the ROW SORT. This slot is that vocabulary. The
+  writer flip is the next step and is a TRANSITION by construction — the
+  refuted attempt measured 131477 diff lines for the same semantic change,
+  so the m4 leg matters from the first run.
+  ▶ WHAT IS NOT YET TRUE, said plainly: nothing reads `Some` yet, so the
+  silent wrong is untouched. `fn pick(u: {zeta: Int, ...}) = u.zeta` over
+  `{alpha: 7, zeta: 9}` still answers 7. The vocabulary is the floor the
+  fix stands on, not the fix.
+
 - 2026-08-17 · THE WRITER IS FOUND, AND THE OBVIOUS REPAIR IS BROKEN (no
   pin — experiment reverted whole; boot unchanged at 4ce9914b7360).
   ▶ THE BANKED PROBE ASKED which writer leaves the body's row var bound to

@@ -185,7 +185,7 @@ handler interrogate_default {
         ((_, k, r)) => match k {
           NBound(_) => VerdictClears(r),
           NRowBound(_) => VerdictClears(r),
-          NRecordRowBound(_) => VerdictClears(r),
+          NRecordRowBound(_, _) => VerdictClears(r),
           NFree(_) => VerdictInvites(graph_invite_for(0, r)),
           NRowFree(_) => VerdictInvites(graph_invite_for(0, r)),
           NErrorHole(_) => VerdictInvites(graph_invite_for(0, r)),

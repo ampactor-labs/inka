@@ -1063,7 +1063,7 @@ fn render_type_fields(ref fields: [(String, Ty)], i) with GraphRead + Memory + A
 // never silently absorbed.
 fn render_type_handle(h) with GraphRead + Memory + Alloc + !Mutate + Intern = match graph_chase(h) {
   GNode(NBound(ty), _) => render_type_tokens(ty),
-  GNode(NRecordRowBound(fields), _) => render_type_tokens(TRecord(fields)),
+  GNode(NRecordRowBound(fields, _), _) => render_type_tokens(TRecord(fields)),
   GNode(NFree(_), _) => show_handle(h),
   GNode(NRowBound(_), _) => show_handle(h),
   GNode(NRowFree(_), _) => show_handle(h),

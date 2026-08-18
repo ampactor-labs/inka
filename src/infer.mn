@@ -7202,7 +7202,7 @@ fn generalize(handle) = {
       Forall([handle], TVar(handle)),
       NRowBound(_) => // row handle — BOUND content; shared reads only
       Forall([], TVar(handle)),
-      NRecordRowBound(_) => // record-row residual — bound; row sort
+      NRecordRowBound(_, _) => // record-row residual — bound; row sort
       Forall([], TVar(handle)),
       NRowFree(_) => // unresolved row — quantified like NFree; instantiate's row-sort mint freshens
       Forall([handle], TVar(handle)),
@@ -7275,7 +7275,7 @@ fn chase_changes(ty, d) = if d > 200 {
         NBound(_) => true,
         NFree(_) => graph_chase_handle(h) != h,
         NRowBound(_) => false,
-        NRecordRowBound(_) => false,
+        NRecordRowBound(_, _) => false,
         NRowFree(_) => false,
         NErrorHole(_) => false,
       },
@@ -7390,7 +7390,7 @@ fn chase_deep_build(ty, d) = if d > 200 {
         TVar(graph_chase_handle(h)),
         NRowBound(_) => // row handle used as Ty — stays
         ty,
-        NRecordRowBound(_) => // record-row residual — row sort; stays
+        NRecordRowBound(_, _) => // record-row residual — row sort; stays
         ty,
         NRowFree(_) => // unresolved row handle — stays
         ty,
@@ -7665,7 +7665,7 @@ fn build_inst_mapping(qs) = map(
 fn is_row_handle(h) = match graph_chase(h) {
   GNode(NRowFree(_), _) => true,
   GNode(NRowBound(_), _) => true,
-  GNode(NRecordRowBound(_), _) => true,
+  GNode(NRecordRowBound(_, _), _) => true,
   _ => false,
 }
 

@@ -3078,7 +3078,11 @@ fn synthesize_branch_thunk(parent_handle, side_label: String, branch_node, bound
 // first sorted field), and the unprovable case must floor loudly, never
 // return a partial sum.
 fn open_record_full_fields(fields, v) = match graph_chase(v) {
-  GNode(NRecordRowBound(residual), _) => Some(sort_record_type_fields(fields ++ residual)),
+  GNode(NRecordRowBound(residual, None), _) => Some(sort_record_type_fields(fields ++ residual)),
+  GNode(NRecordRowBound(residual, Some(next_v)), _) => // The chain CONTINUES at another row var: these residual fields are
+  // known, the rest is not yet. Chasing on keeps the answer honest —
+  // a still-free tail reaches the None arm below and floors.
+  open_record_full_fields(fields ++ residual, next_v),
   GNode(NBound(TRecordOpen(more, v2)), _) => open_record_full_fields(fields ++ more, v2),
   GNode(NBound(TRecord(more)), _) => Some(sort_record_type_fields(fields ++ more)),
   _ => None,

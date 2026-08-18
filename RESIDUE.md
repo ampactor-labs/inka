@@ -903,9 +903,39 @@ of this.
 No reader needed to follow the tail; the readers were fine. The third
 dead explanation in this arc, and the one that would have sent a fix into
 occurs/subst.
-▶ THE PATH IS NOW CONCRETE AND SMALL: give those two receivers a
-provable type, exactly as the two record-PATTERN receivers were closed at
-pin f0b63b15a5d6, then re-attempt the writer flip. The frame record has
+▶ THE ANNOTATION WAS BUILT AND THE MARCH REFUSED IT (2026-08-17,
+reverted whole) — AND ITS 39-LINE DIVERGENCE NAMES A SEPARATE SILENT
+WRONG. Both receivers were annotated with the frame record's whole
+eight-field set, measured field by field off `ls_enter_frame`'s declared
+signature rather than guessed, and the row closes (the projection shows
+no tail). Emit moved by 39 lines TOTAL, and emit-diff pins every one of
+them to NESTED-FUNCTION NAMING: m2 emits `digit`, `go`, `search`,
+`yield_from` bare, m3 emits `parse_int_digit`, `parse_int_go`,
+`index_of_search`,
+`op_synth_default_enumerate_inhabitants_yield_from` qualified, and the
+three structurally-differing named fns are exactly those four's parents.
+▶ SO `ls_outer_fn_name_loop` HAS BEEN RETURNING THE WRONG VALUE ALL
+ALONG. Its own comment calls it the named-fn discriminator for nested-fn
+naming; reading `frame.fn_name` through an open row gave it a foreign
+slot, so nested fns have never been qualified and the qualification path
+has been dormant. That is a defect in its own right, independent of the
+tail arc, and the annotation is what surfaced it.
+▶ THE TRAP'S CAUSE IS NOT MEASURED. m4 died in 0.97s at 128MB — a far
+faster death than the linked-tail attempts' ~10s. The obvious suspicion,
+that qualified names collide with existing symbols, is DEAD before it
+was banked: duplicate-symbol counts are identical between the
+generations (514 and 514), so qualification introduced none. What
+remains unmeasured is why a module whose only change is four qualified
+nested-fn names fails at startup.
+▶ NEXT PROBE, and it is cheap because the diff is 39 lines: read those
+four functions' call sites in m3 against their definitions. A definition
+renamed while a caller still names the old symbol would assemble (the
+name section is advisory) and fail at the first call — which matches a
+0.97s death better than anything about rows. Measure it; do not assume
+it.
+▶ THE ORIGINAL PATH STANDS but now has two steps, not one: fix the
+discriminator's own defect first (it is real, small, and separately
+gated), then re-attempt the writer flip. The frame record has
 eight fields (capture_handles, capture_order, captures, fn_name,
 lambda_h, local_handles, local_order, locals) and is constructed at three
 sites, so the honest close is ONE named type both params share rather

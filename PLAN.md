@@ -1605,8 +1605,14 @@ generation on. The tail vocabulary is landed and inert. The BREAK IS MEASURED
 `field offset unprovable` 4 → 9, the whole +5 of the unreachable delta.
 The linked form is HONEST and the wheel cannot afford it yet — five of
 its own field accesses become unprovable, in `ls_current_lambda_handle_loop`
-and `ls_outer_fn_name_loop`, both reading an unannotated `frames`. Close
-those receivers with one named frame type, then re-attempt the flip.
+and `ls_outer_fn_name_loop`, both reading an unannotated `frames`. Closing
+those receivers was built and REFUSED too — but its divergence is 39
+lines, all of them nested-function NAMING: the annotation fixes
+`ls_outer_fn_name_loop`, which has been reading a foreign slot and
+leaving nested fns unqualified, a second silent wrong independent of the
+tail. The trap's cause is unmeasured; the symbol-collision suspicion is
+dead (514 duplicate names on both sides). Fix the discriminator on its
+own first, then re-attempt the flip.
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
 NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
 found nothing: `tests/syntax/` had no history under any ref, no gate

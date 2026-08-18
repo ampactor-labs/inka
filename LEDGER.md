@@ -35,6 +35,45 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE ANNOTATION SURFACES A SECOND SILENT WRONG, AND THE
+  MARCH STILL REFUSES (no pin — experiment reverted whole; boot unchanged
+  at 6e05bd9404ed).
+  ▶ THE NAMED STEP WAS BUILT. Both exposed receivers took the frame
+  record's whole eight-field annotation, every field type measured off
+  `ls_enter_frame`'s declared signature rather than guessed, and the
+  projection confirms the row closes with no tail.
+  ▶ BROKEN, BUT WITH A NEW SIGNATURE: 39 diff lines against the linked
+  tail's 131497, and m4 dead in 0.97s at 128MB against its ~10s. A
+  39-line divergence is small enough to READ, which is the first time
+  this arc could pin one exactly.
+  ▶ EVERY ONE OF THE 39 IS NESTED-FUNCTION NAMING. m2 emits `digit`,
+  `go`, `search`, `yield_from` bare; m3 emits `parse_int_digit`,
+  `parse_int_go`, `index_of_search` and
+  `op_synth_default_enumerate_inhabitants_yield_from` qualified; the three
+  structurally-differing named fns are exactly those four's parents.
+  Nothing else in 4835 functions moved.
+  ▶ SO THE DISCRIMINATOR HAS BEEN WRONG ALL ALONG.
+  `ls_outer_fn_name_loop`'s own comment calls it the named-fn
+  discriminator for nested-fn naming; reading `frame.fn_name` through an
+  open row handed it a foreign slot, so nested fns have never been
+  qualified and the qualification path has been dormant. A defect in its
+  own right, surfaced by the annotation, independent of the tail arc.
+  ▶ ONE HYPOTHESIS DIED BEFORE IT WAS BANKED: that qualified names
+  collide with existing symbols. Duplicate-symbol counts are identical
+  between generations — 514 and 514 — so qualification introduced none.
+  Checking it cost one grep over artifacts already on disk, and it is the
+  fourth explanation this arc has killed by measuring instead of
+  reasoning.
+  ▶ THE TRAP'S CAUSE REMAINS UNMEASURED, said plainly. Why a module whose
+  only change is four qualified nested-fn names fails at startup is not
+  known. The next probe is cheap because the diff is 39 lines: read those
+  four functions' call sites against their definitions, since a renamed
+  definition with a stale caller assembles and fails at the first call,
+  which fits a 0.97s death better than anything about rows.
+  ▶ THE PATH NOW HAS TWO STEPS instead of one: fix the discriminator's own
+  defect first — it is real, small and separately gated — then re-attempt
+  the writer flip.
+
 - 2026-08-17 · THE BREAK IS MEASURED: THE LINKED TAIL IS HONEST AND THE
   WHEEL CANNOT AFFORD IT YET (no pin — measurement on the reverted run's
   own artifacts; boot unchanged at 6e05bd9404ed).

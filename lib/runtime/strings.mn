@@ -453,11 +453,11 @@ fn int_write_digits(buf, pos, n) with Memory + Alloc = if n == 0 {
 // NOT an alias of int_to_str. Float and Int are distinct types with
 // distinct bit representations and distinct printing requirements.
 fn float_to_str(f) with Memory + Alloc = if float_is_nan(f) {
-  str_literal_5("NaN")
+  "NaN"
 } else if float_is_inf(f) {
-  if float_is_negative(f) { str_literal_5("-Inf") } else { str_literal_5("Inf") }
+  if float_is_negative(f) { "-Inf" } else { "Inf" }
 } else if float_is_zero(f) {
-  if float_is_negative(f) { str_literal_5("-0.0") } else { str_literal_5("0.0") }
+  if float_is_negative(f) { "-0.0" } else { "0.0" }
 } else {
   let sign = float_is_negative(f)
   let abs_f = if sign == 1 { 0.0 - f } else { f }
@@ -469,15 +469,6 @@ fn float_to_str(f) with Memory + Alloc = if float_is_nan(f) {
     rendered
   }
 }
-
-// str_literal_5: allocate a small constant string from bytes.
-// Caller encodes the string as individual byte arguments.
-// Used only for the handful of float sentinels above.
-//
-// s is already an Mentl string literal — return it directly.
-// In the final form the compiler interns literals at compile time;
-// at bootstrap this is a heap-allocated flat string via the parser.
-fn str_literal_5(s) with Pure = s
 
 // float_render_positive: render a positive non-special float as a decimal
 // string using the Grisu2-family strategy:

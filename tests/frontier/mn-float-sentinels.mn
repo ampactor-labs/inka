@@ -1,0 +1,24 @@
+// The float sentinels' own fixture: NaN, ±Inf and -0.0 are the four
+// values float_to_str renders through a separate branch from the digit
+// path, so they are the ones a change to that path can silently lose.
+// Each match contributes a bit, so the exit code names WHICH branch
+// broke rather than only that one did — 15 is all four.
+//
+// It exists because `str_literal_5` — an IDENTITY function whose comment
+// claimed it allocated a string from byte arguments, and which named the
+// bootstrap deleted on 2026-07-10 — carried those four branches and a
+// name-keyed entry in infer's substrate tables. Deleting a relic is only
+// safe with the behaviour it guarded pinned first.
+fn main() = {
+  let zero = 0.0
+  let one = 1.0
+  let inf = one / zero
+  let ninf = (0.0 - one) / zero
+  let nan = zero / zero
+  let nzero = 0.0 - 0.0
+  let a = if float_to_str(inf) == "Inf" { 1 } else { 0 }
+  let b = if float_to_str(ninf) == "-Inf" { 2 } else { 0 }
+  let c = if float_to_str(nan) == "NaN" { 4 } else { 0 }
+  let d = if float_to_str(nzero) == "0.0" { 8 } else { 0 }
+  a + b + c + d
+}

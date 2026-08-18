@@ -4272,7 +4272,7 @@ cname == "byte_len" || cname == "byte_at" ||
 // raw buffer word. str_payload is the reader that resolves a String to its
 // contiguous stride-1 payload pointer — String in, word out (the WASI
 // materialization boundary; the seq-addr down-cast in table form).
-cname == "str_slice" || cname == "str_concat" || cname == "str_of_single_byte" || cname == "str_literal_5" || cname == "str_payload" || cname == "str_of_buf" || cname == "float_to_str" || cname == "float_zero_pad" || cname == "float_format_fixed" || cname == "float_format_scientific" || cname == "float_render_positive" || cname == "float_digits_to_str"
+cname == "str_slice" || cname == "str_concat" || cname == "str_of_single_byte" || cname == "str_payload" || cname == "str_of_buf" || cname == "float_to_str" || cname == "float_zero_pad" || cname == "float_format_fixed" || cname == "float_format_scientific" || cname == "float_render_positive" || cname == "float_digits_to_str"
 
 // seq_force — bind the i-th argument's type to `ty` (a no-op past the end).
 // `graph_bind` on a VarRef handle propagates to the bound variable (the same
@@ -4324,7 +4324,6 @@ fn seq_op_sig(cname: String, elem) = match cname {
   "str_slice" => Some(([ty_string, TInt, TInt], ty_string)),
   "str_concat" => Some(([ty_string, ty_string], ty_string)),
   "str_of_single_byte" => Some(([TInt], ty_string)),
-  "str_literal_5" => Some(([ty_string], ty_string)),
   "str_payload" => // str_payload resolves a String to its contiguous stride-1 payload pointer.
   Some(([ty_string], TInt)),
   "str_of_buf" => Some(([seq_unconstrained()], ty_string)),

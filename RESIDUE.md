@@ -762,8 +762,23 @@ work and the handle interning both.
 WRITERS ENUMERATED: `driver_collect_visit` (the DAG element),
 `driver_entry_with_ranges`'s compile fold (the concatenation),
 `driver_check_entry`'s per-module loop, and `driver_tree_scan`.
-THE ONE UNENUMERATED RISK, and the next thing to establish before a byte
-changes: the SUGAR SET — prelude names the desugar introduces that the
+THE SUGAR SET IS MEASURED (2026-08-17, pin e7c2da624b): 44 names, read
+off the artifact as the quoted literals in the lowering, the wasm
+backend, the parser, infer and pipeline, intersected against what lib
+publishes. The lowering and backend hold 28; parser and infer add 16
+more, including `delay`, `not`, `concat`, `last`, `drop_last`,
+`byte_at`/`byte_len`, `str_of_buf`, `str_payload` and the float-render
+family. IT IS A LOWER BOUND AND NOT A PROOF: a name assembled by
+splicing a fold_sig never appears as a literal, so a scan cannot see it.
+The proof demand-linking needs is the lowering's own dispatch answering
+for itself, which is the named facet
+`Hβ.query.desugar-introduced-names` — until that exists the seed set
+must be over-approximated, and an over-approximation is SAFE here (it
+links more than needed, never less). The enumeration's first find was
+`str_literal_5`, an identity function carrying a name-keyed type-checker
+special case and a comment naming the deleted bootstrap; it is gone.
+THE SUPERSEDED TEXT, kept because it states the risk correctly: the
+SUGAR SET — prelude names the desugar introduces that the
 source never writes (`++` → seq_concat, `xs[i]` → list_index, `<~` →
 FeedbackSpec, interpolation → to_string, and every `fold_sig`-generated
 leaf). Reachability seeded from written names alone would miss them.

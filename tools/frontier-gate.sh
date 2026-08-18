@@ -2619,6 +2619,26 @@ for i in "${!compilers[@]}"; do
     fail "modules facet (got: $(printf '%s' "$md_out" | head -1))"
   fi
 
+  # ─── The float sentinels (NaN, ±Inf, -0.0) — the four values
+  # float_to_str renders through a branch the digit path never touches,
+  # so a change to that path loses them silently. Each match is a bit, so
+  # the exit code names WHICH branch broke: 15 is all four. Pinned at 15
+  # BEFORE `str_literal_5` was deleted (an identity fn whose comment
+  # claimed it built strings from byte arguments and which named the
+  # bootstrap deleted 2026-07-10), and re-measured 15 after.
+  wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/mn-float-sentinels.mn" > "$dir/fsent.wat" 2>/dev/null
+  if wt_asm "$dir/fsent.wat" "$dir/fsent.wasm" >/dev/null 2>&1; then
+    wt_run --dir "$dir" "$dir/fsent.wasm" >/dev/null 2>&1
+    fs_code=$?
+    if [ "$fs_code" = "15" ]; then
+      pass "float sentinels: NaN, ±Inf and -0.0 all render (exit=15)"
+    else
+      fail "float sentinels (exit=$fs_code, want 15 — the bits name the branch)"
+    fi
+  else
+    fail "float sentinels: assemble"
+  fi
+
   # ─── The cost facet, AND the prelude-floor ratchet it makes possible
   # (`cost` — modules linked, source lines processed, nodes minted, all
   # graph reads). A wall clock is a host fact that varies per run and can

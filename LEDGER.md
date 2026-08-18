@@ -35,6 +35,57 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · ▶▶▶ THE SUGAR SET IS 44 NAMES, AND ONE OF THEM WAS A
+  RELIC (pin e7c2da624b — CLEAN m2 == m3, re-pinned from m2 per
+  march.sh, 411950 lines, census 0; m3 leg 19.52s wall · 2239MB peak
+  RSS).
+  ▶ THE MEASUREMENT THE STAMP OWED. `Hβ.driver.link-is-reachability`
+  banked one unenumerated risk and called it a measurement rather than a
+  design choice: which prelude names does the compiler MINT that source
+  never writes? Reachability seeded from written names alone would miss
+  them, and demand-linking is unsafe until they are known. Read off the
+  artifact — quoted literals in the lowering, the wasm backend, the
+  parser, infer and pipeline, intersected against what lib publishes —
+  the answer is 44. The lowering and backend contribute 28 (list_index,
+  list_set, str_concat, to_string, make_list, slice, hash, the
+  eq/compare/hash families, world_find_from, ev_perform_node); parser
+  and infer add 16 more, including `delay` (the `<~` vocabulary), `not`,
+  `concat`, `last`, `drop_last`, `byte_at`/`byte_len`, `str_of_buf`,
+  `str_payload`, and the float-render family. STATED AS WHAT IT IS: a
+  measured LOWER BOUND. A name assembled by splicing a fold_sig is
+  invisible to a literal scan, so this is a floor, not a proof, and the
+  completeness demand-linking needs must come from the lowering's own
+  dispatch rather than from a grep.
+  ▶ WHAT THE ENUMERATION CAUGHT. `str_literal_5` sat in the sugar set —
+  and it is `fn str_literal_5(s) with Pure = s`, the IDENTITY function.
+  Its comment claimed it allocates a small constant string from bytes
+  with the caller encoding the string as individual byte arguments,
+  which is false twice over (callers pass whole literals), and its own
+  text named the bootstrap DELETED ON 2026-07-10. It survived because it
+  was load-bearing in the wrong sense: a name-keyed entry in
+  `is_seq_op`'s cname chain and a hand-written signature in infer's
+  substrate table, so the type checker special-cased an identity.
+  Deleted whole — four call sites inlined to their literals, the fn
+  gone, both table entries gone. A name-keyed special case retired
+  rather than renamed, which is one fewer name in the very table band
+  D's `Hβ.infer.seq-op-signature-driven` exists to dissolve.
+  ▶ THE GATE ORDER, because this was a refactor and not a feature. The
+  behaviour was PINNED FIRST: the float-sentinel fixture exercises NaN,
+  ±Inf and -0.0 — the four values float_to_str renders through a branch
+  the digit path never touches — and measured exit=15 BEFORE the
+  deletion, 15 after. Each sentinel is a BIT, so the exit code names
+  WHICH branch broke rather than only that one did; the RED test
+  (breaking the NaN literal) returned exit=11, naming that branch by
+  arithmetic. Its first draft used `print`, which the armed
+  E_MissingVariable refused — the medium correcting the fixture before
+  the fixture could check the medium.
+  ▶ THE SELF-BUILD CONFESSION, named not absorbed: no projection
+  enumerates the names the lowering introduces, so this was a grep.
+  `Hβ.query.desugar-introduced-names` is the missing facet, and it is
+  the one that would make the sugar set a graph read rather than a
+  literal scan — exactly the gap between the lower bound above and the
+  proof demand-linking needs.
+
 - 2026-08-17 · THE PROFILER REACHES THE SHIM, AND THE FLOOR HAS NO HOT
   SPOT (no pin — tools and docs only; boot unchanged at 42a4cc445d, src
   untouched, so the fixpoint stands and pin freshness holds).

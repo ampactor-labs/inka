@@ -35,6 +35,47 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE WRITER IS FOUND, AND THE OBVIOUS REPAIR IS BROKEN (no
+  pin — experiment reverted whole; boot unchanged at 4ce9914b7360).
+  ▶ THE BANKED PROBE ASKED which writer leaves the body's row var bound to
+  empty. It is `unify_two_open_records`. When two open records with
+  DISTINCT row vars unify, it computes each side's exclusive fields and
+  binds each var to the OTHER's — so when both sides know the same fields,
+  both extras are empty and both tails close to `[]`. Two open rows
+  unifying learn that their known fields agree and that their remainders
+  are the same unknown; they never learn there is no remainder. The
+  function's own comment says tails "collapse to one when they're already
+  linked", and its `va == vb` arm does exactly that — the `va != vb` arm
+  closes instead. It predicts every number this arc measured: 7, 2, and
+  15, including the two-known-field case where the annotation's var takes
+  `diff(body, annotation) = []`.
+  ▶ THE TEXTBOOK REPAIR WENT IN AND THE MARCH REFUSED IT. One shared fresh
+  tail, `va := TRecordOpen(extra_b, tail)` and `vb := TRecordOpen(extra_a,
+  tail)` — and `open_record_full_fields` already chases `NBound(
+  TRecordOpen(more, v2))`, so the reader was written for this shape.
+  Verdict BROKEN: m2 ≠ m3 by 131477 lines, then m4 trapped at exit 134
+  with zero lines. The medium stopped reproducing itself. Reverted whole.
+  ▶ THE ARTIFACT HAD ALREADY RECORDED WHY, in the very op the change went
+  around. `graph_bind_record_row`'s comment: the residual lives "under its
+  OWN node kind (NRecordRowBound)" because "binding residuals under
+  NRowBound made the row slot an untagged EffRow-or-Ty union every row
+  walk's catch-all silently crossed." Binding a row handle to a Ty through
+  `graph_bind` is that untagged union by another door. I read that comment
+  this turn while locating the op and did not weigh it against the edit —
+  the ambient charge names exactly this, and the march charged for it.
+  ▶ WHAT SURVIVES, and it is the useful half: the fix's SHAPE is right —
+  link the tails, do not close them — and its REPRESENTATION is now
+  constrained. A linked tail wants vocabulary inside the row sort:
+  residual fields plus an unknown-remainder marker in `NRecordRowBound`,
+  or its own node kind. Never a Ty bound onto a row handle. The reader's
+  existing `NBound(TRecordOpen(...))` arm is not the invitation it looks
+  like; it is a shape some other path produces, and using it from here
+  crosses the sort boundary that comment was written to defend.
+  ▶ 131477 DIFF LINES is its own measurement: open-record unification with
+  distinct vars is not a corner of the wheel. Whatever lands here changes
+  a great deal of emit, so it is a TRANSITION by construction and wants
+  the m4 leg watched from the first attempt.
+
 - 2026-08-17 · THE FLOOR IS BYPASSED, NOT MISSING — AN EMPTY RESIDUAL
   BIND (no pin — docs; boot unchanged at 4ce9914b7360).
   ▶ THE BANKED PROBE asked which branch the annotated-open case takes,

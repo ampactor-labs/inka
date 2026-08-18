@@ -1592,7 +1592,13 @@ EMPTY residual, so the chase answers with the known set instead of
 refusing, and the baked offset is call-site independent (one body,
 `pick({alpha: 1, zeta: 3}) * 10 + pick({zeta: 5})` answers 15). That is
 the fork's concrete face — one compiled body cannot carry a per-caller
-layout.
+layout. The WRITER is `unify_two_open_records`, whose `va != vb` arm
+closes both tails to the other side's extras instead of linking them, and
+the textbook repair (one shared fresh tail) marched BROKEN: m4 trapped,
+because binding a row handle to a Ty re-opens the untagged row-slot union
+`graph_bind_record_row`'s own comment was written to prevent. The fix's
+shape survives — link, do not close — and its representation must stay in
+the row sort.
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
 NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
 found nothing: `tests/syntax/` had no history under any ref, no gate

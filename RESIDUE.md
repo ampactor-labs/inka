@@ -848,6 +848,36 @@ and gets `zeta`. One compiled body, one baked offset, correct only for
 callers whose record carries exactly the known fields. A third shape
 pins the arithmetic: `{beta: Int, zeta: Int, ...}` over `{alpha: 1,
 beta: 2, zeta: 3}` answers 2, `zeta` at index 1 of the KNOWN pair.
+▶ THE WRITER IS FOUND: `unify_two_open_records` (infer.mn). When two open
+records with DISTINCT row vars unify it computes each side's exclusive
+fields and binds each var to the other's — `graph_bind_record_row(va,
+extra_b)` and `(vb, extra_a)`. With the same known fields on both sides
+both extras are EMPTY, so both tails close to `[]`. That is a fabrication:
+two open rows unifying learn that their known fields agree and that their
+REMAINDERS are the same unknown, never that there is no remainder. The
+function's own comment says tails "collapse to one when they're already
+linked" and its `va == vb` arm does exactly that; the `va != vb` arm
+closes instead of linking. It predicts all three measured numbers — 7, 2
+and 15 — including the two-known-field case where the annotation's var
+takes `diff(body_fields, annotation_fields) = []`.
+▶ THE OBVIOUS REPAIR IS REFUTED BY THE MARCH (2026-08-17, reverted
+whole). Minting one shared fresh tail and binding `va` to
+`TRecordOpen(extra_b, tail)` and `vb` to `TRecordOpen(extra_a, tail)` is
+the textbook row rule, and `open_record_full_fields` ALREADY chases
+`NBound(TRecordOpen(more, v2))`, so the reader anticipates the shape. The
+verdict was BROKEN: m2 ≠ m3 by 131477 lines and m4 trapped at exit 134
+with zero lines — the medium stopped reproducing itself.
+▶ AND THE ARTIFACT HAD ALREADY RECORDED WHY, in the op the change went
+around: `graph_bind_record_row`'s comment says the residual lives "under
+its OWN node kind (NRecordRowBound)" because "binding residuals under
+NRowBound made the row slot an untagged EffRow-or-Ty union every row
+walk's catch-all silently crossed." Binding a row handle to a Ty via
+`graph_bind` is that same untagged union by another door. The shape of
+the fix (LINK, do not close) survives; its REPRESENTATION must stay in
+the row sort — a linked tail wants vocabulary inside `NRecordRowBound`
+(residual fields plus an unknown-remainder marker) or its own node kind,
+never a Ty bound onto a row handle. That is the next attempt's
+constraint, and it was readable before the march rather than after.
 ▶ THE PER-CALL-SITE BIND EXISTS AND DOES NOT REACH THE BODY.
 `unify_record_open_against_closed` computes `record_fields_diff(closed,
 open)` and binds the open var to it, which for the first call above is

@@ -980,7 +980,7 @@ fn binop_kind(op) with Pure = match op {
   BConcat => BKConcat,
 }
 
-fn binop_to_str(op) with Memory + Alloc = match op {
+fn binop_to_str(op) with Pure = match op {
   BAdd => "+",
   BSub => "-",
   BMul => "*",
@@ -1133,7 +1133,7 @@ fn span_eq(a, b) with Pure = match a {
 // Closed-interval overlap on line numbers. Sufficient for the
 // proximity-tier classification; column-precise comparison is
 // peer-handle territory.
-fn span_overlaps(a, b) with Memory + Alloc = match a {
+fn span_overlaps(a, b) with Pure = match a {
   Span(asl, _asc, ael, _aec) => match b {
     Span(bsl, _bsc, bel, _bec) => ael >= bsl && bel >= asl,
   },
@@ -3102,7 +3102,7 @@ fn unwrap_labeled_arg(arg) with Pure = match arg {
 // labeled args claim their named slot first (skip-over); positional args then
 // fill the remaining unfilled slots left-to-right. Then collect each slot to
 // its placed value or its param default.
-fn fill_arg_slots(params, args, cname) with EnvRead + GraphRead + Memory + Alloc + Diagnostic + Intern = {
+fn fill_arg_slots(params, args, cname) with Memory + Alloc + GraphRead + Intern + Diagnostic = {
   let n = len(params)
   let claimed = place_labeled(params, args, 0, make_list(n), cname)
   let filled = place_positional(args, 0, 0, claimed, n)
@@ -3138,7 +3138,7 @@ fn place_labeled(params, args, i, slots, cname: String) with GraphRead + Memory 
 // Pass 2 — fill positional (non-labeled) args into the next unfilled slot,
 // left-to-right, skipping slots a label already claimed. `cur` is the arg
 // cursor; `slot` advances past filled slots.
-fn place_positional(args, cur, slot, slots, n) with GraphRead + Memory = if cur >= len(args) {
+fn place_positional(args, cur, slot, slots, n) with Memory = if cur >= len(args) {
   slots
 } else {
   let arg = list_index(args, cur)
@@ -3267,7 +3267,7 @@ fn show_effrow(ref row) with GraphRead + Memory + !Mutate + Alloc + Intern = mat
   },
 }
 
-fn show_eff_name(ref name) with !Mutate = match name {
+fn show_eff_name(ref name) with Intern + Memory + Alloc + GraphRead + !Mutate = match name {
   ENamed(h) => intern_name_of(h),
   EParameterized(h, args) => "{intern_name_of(h)}({show_list(args, show_eff_arg, ", ")})",
   EPure => // drift-audit: ignore — variant→surface-label render, not a name key
@@ -3581,7 +3581,7 @@ fn predicate_flow_label(ref pred) with GraphRead + Memory + Alloc = match pred {
 // proved-absence form (masked universe); EtClosed/EtOpen rows are observably
 // Public (their absent set records proofs but the row itself flows). H6:
 // exhaustive over the three tails.
-fn row_flow_label(ref row) with Memory + Alloc = match row {
+fn row_flow_label(ref row) with Pure = match row {
   EfRow(_, _, EtAll) => // A universal tail is the proved-absence stance (!E) — Secret; every
   // other form is observably Public (subtraction/openness conservative).
   Secret,

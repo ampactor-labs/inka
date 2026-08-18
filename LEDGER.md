@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 4dc2ac881254 (unchanged) · THE VERB WROTE A HANDLE
+  WHERE A VALUE BELONGED. CLEAN — m2 == m3 at 413773 lines, census 0,
+  battery green, and the sha IDENTICAL to the prior pin, because row
+  narrowings are judgment and not emit.
+  ▶ MEDIUM-AUTHORED, which is the point. `mentl tighten src/lexer.mn`
+  wrote 33 row narrowings across the transitive link — 31 of them sound,
+  every one narrowing a declared row to what its body proves, and none of
+  them typed by hand. That is the preferred form the self-build ratchet
+  names, exercised for the first time in this loop.
+  ▶ AND THE VERB FABRICATED TWICE. Two rewrites carried
+  `Iterate(t42532@e10, t42533@e5)` — `show_handle`'s free-variable
+  rendering, a projection meant for a reader, spliced into source as an
+  effect instance's arguments. The wheel refused itself: m2 generation
+  trapped with 15 `E_UnresolvedHole` errors on those columns.
+  ▶ THE PROVEN-GOOD SUBSET SHIPPED, per the verdict law: revert
+  lib/prelude.mn alone, march the other four files, CLEAN at the same sha.
+  ▶ THE FINDING IS BANKED as
+  `Hβ.tighten.authors-an-unresolved-handle-as-source` with its stamp. One
+  read serves two consumers whose contracts differ — a projection may say
+  "unresolved at epoch e", an authored patch may not — and the verb uses
+  the projection for both. Its decline path already exists (the same run
+  skipped a site with no single-line with-clause and said so); what is
+  missing is the resolution check.
+  ▶ HOW IT WAS FOUND: by asking the medium instead of reading its source.
+  `mentl audit src/lexer.mn` named the tightenable site and offered the
+  patch; running the verb produced the defect. Nine iterations of this
+  loop used `check`, `query` and `test` and never `audit` or `tighten`,
+  which is why a fabricating authoring verb sat unmeasured.
+  ▶ ONE VARIABLE: the medium's own tightening batch, minus the two lines
+  it could not write honestly.
+
 - 2026-08-18 · pin 4dc2ac881254 · THE MESSAGE CATCHES UP TO THE CLASS.
   CLEAN — m2 == m3 at 413773 lines, census 0, battery green, frontier
   371/0, 15.95s wall, peak 2269028 KB against a 2310000 ceiling.

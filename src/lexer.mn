@@ -44,7 +44,7 @@ fn is_hex_digit(b) with Pure = is_digit(b) || b >= 65 && b <= 70 || b >= 97 && b
 fn is_bin_digit(b) with Pure = b == 48 || b == 49
 
 // 0 or 1
-fn is_oct_digit(b) with Memory + Alloc = b >= 48 && b <= 55
+fn is_oct_digit(b) with Pure = b >= 48 && b <= 55
 
 // 0-7
 //

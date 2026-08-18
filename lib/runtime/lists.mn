@@ -179,7 +179,7 @@ fn list_extend_to(list, min_size) with Memory + Alloc = {
 // through list_index so src may be any tag; dst must be tag=0.
 // Callers should keep src tag=0 for O(count) cost; non-flat sources
 // pay list_index dispatch per element.
-fn list_copy_into(src, dst, i, count) with Memory + Alloc = if i >= count {
+fn list_copy_into(src, dst, i, count) with Memory = if i >= count {
   dst
 } else {
   list_copy_into(src, list_set(dst, i, list_index(src, i)), i + 1, count)
@@ -584,7 +584,7 @@ fn flat_fill(flat, tree, i, n) with Memory + Alloc = if i >= n {
 // stride is uniform through a fill by construction: flat_raw allocates the
 // destination with the tree's own sc, and every sub-node carries its parent's
 // sc — so one mem_copy is byte-exact for word, byte, and wide elements alike.
-fn flat_fill_flat_src(flat, src, i, n) with Memory + Alloc = if i >= n {
+fn flat_fill_flat_src(flat, src, i, n) with Memory = if i >= n {
   ()
 } else {
   let st = decode_stride(load_i32(flat + 4) / 16)
@@ -658,7 +658,7 @@ fn flat_fill_at_offset(flat, src, offset, n) with Memory + Alloc = if n == 0 {
   }
 }
 
-fn flat_fill_flat_src_offset(flat, src, offset, n) with Memory + Alloc = if n == 0 {
+fn flat_fill_flat_src_offset(flat, src, offset, n) with Memory = if n == 0 {
   ()
 } else {
   let src_len = load_i32(src)
@@ -667,7 +667,7 @@ fn flat_fill_flat_src_offset(flat, src, offset, n) with Memory + Alloc = if n ==
 
 // Flat-to-flat at distinct offsets: the same one-mem_copy collapse as
 // flat_fill_flat_src (uniform stride through the fill by construction).
-fn copy_range(flat, src, dest_off, src_off, n) with Memory + Alloc = if n == 0 {
+fn copy_range(flat, src, dest_off, src_off, n) with Memory = if n == 0 {
   ()
 } else {
   let st = decode_stride(load_i32(flat + 4) / 16)
@@ -689,14 +689,14 @@ fn flat_fill_snoc_offset(flat, src, offset, n) with Memory + Alloc = {
   flat_fill_at_offset(flat, left, offset, count - 1)
 }
 
-fn flat_fill_slice_offset(flat, src, offset, n) with Memory + Alloc = {
+fn flat_fill_slice_offset(flat, src, offset, n) with Memory = {
   let base = load_i32(src + 8)
   let slice_start = load_i32(src + 12)
   let slice_len = load_i32(src)
   flat_fill_slice_range(flat, base, offset, slice_start, slice_len)
 }
 
-fn flat_fill_slice_range(flat, base, dest_off, src_start, n) with Memory + Alloc = if n == 0 {
+fn flat_fill_slice_range(flat, base, dest_off, src_start, n) with Memory = if n == 0 {
   ()
 } else {
   // A slice over a FLAT base — the dominant shape — is one contiguous
@@ -722,7 +722,7 @@ fn flat_fill_slice_walk(flat, base, dest_off, src_start, n, st) with Memory = if
   flat_fill_slice_walk(flat, base, dest_off + 1, src_start + 1, n - 1, st)
 }
 
-fn flat_fill_slice(flat, tree, i, n) with Memory + Alloc = {
+fn flat_fill_slice(flat, tree, i, n) with Memory = {
   let base = load_i32(tree + 8)
   let slice_start = load_i32(tree + 12)
   let slice_len = load_i32(tree)

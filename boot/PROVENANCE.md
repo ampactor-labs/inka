@@ -24,12 +24,12 @@ unblessed pin is mechanically visible instead of remembered.
 
 Provenance, self-confirmed at pin time:
 
-- source: the config-default carrier was already covered and the message
-  was not — one class, two carriers, and the diagnostic now names both
-  (THE MESSAGE CATCHES UP TO THE CLASS)
+- source: the medium tightened 31 of its own declarations, and the two it
+  could not tighten honestly exposed a fabricating verb (THE VERB WROTE A
+  HANDLE WHERE A VALUE BELONGED)
 - boot/mentl.wasm  sha256 4dc2ac88125462275804f9a540df90fd62a20cbe90a1b702740b907cae005692
   (CLEAN m2 == m3; re-pinned from m2 per march.sh — 413773 lines, census 0)
-- cost: m3 leg 15.49s wall · 2128MB peak RSS (2179524 KB)
+- cost: m3 leg 15.11s wall · 2128MB peak RSS (2179980 KB)
 - the board at this pin:
   - crown: green
   - proof-exactness: green

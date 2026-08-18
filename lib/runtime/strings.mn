@@ -211,7 +211,7 @@ fn str_repack_stride1(flat, stride) with Memory + Alloc = {
   dest
 }
 
-fn str_repack_loop(flat, dest, stride, i, n) with Memory + Alloc = if i >= n {
+fn str_repack_loop(flat, dest, stride, i, n) with Memory = if i >= n {
   ()
 } else {
   store_i8(dest + 8 + i, load_strided(flat + 8, i, stride))
@@ -298,7 +298,7 @@ fn str_unescape_count(s, i, n, acc) with Memory = if i >= n {
   str_unescape_count(s, i + 1, n, acc + 1)
 }
 
-fn str_unescape_into(s, i, n, dest, w) with Memory + Alloc = if i >= n {
+fn str_unescape_into(s, i, n, dest, w) with Memory = if i >= n {
   ()
 } else if is_hex_escape(s, i, n) {
   let decoded = hex_val(byte_at(s, i + 2)) * 16 + hex_val(byte_at(s, i + 3))
@@ -436,7 +436,7 @@ fn int_to_str_positive(n) with Memory + Alloc = {
 
 // int_write_digits — write decimal digits right-to-left into buf[0..10).
 // Returns the start offset of the first written digit (so length = 10 - start).
-fn int_write_digits(buf, pos, n) with Memory + Alloc = if n == 0 {
+fn int_write_digits(buf, pos, n) with Memory = if n == 0 {
   pos
 } else {
   let digit = n - n / 10 * 10
@@ -541,7 +541,7 @@ fn float_render_shortest(f: Float, scaled: Float, exp, nd) with Memory + Alloc =
 // Iterative: multiply or divide by 10 until 1 <= f < 10.
 // Accurate for the full f64 range (subnormals may take many steps
 // but the loop terminates because f is finite and positive).
-fn float_floor_log10(f) with Memory + Alloc = if f >= 1.0 && f < 10.0 {
+fn float_floor_log10(f) with Pure = if f >= 1.0 && f < 10.0 {
   0
 }
 // The recurrence is floor_log10(f) = floor_log10(f·10) − 1; the prior
@@ -567,7 +567,7 @@ else if f < 1.0 {
 // bump list_set into the snoc chain, whose headers sit where flat
 // elements would, so the bump never took effect and every ascent fell
 // to the 17-digit tail.
-fn float_extract_digits(scaled: Float, count, max_digits, acc) with Memory + Alloc = if count >= max_digits {
+fn float_extract_digits(scaled: Float, count, max_digits, acc) with Memory = if count >= max_digits {
   acc
 } else {
   let digit = float_to_int(scaled)
@@ -650,7 +650,7 @@ fn float_digits_to_str(digits, start, end) with Memory + Alloc = if start >= end
   str_of_buf(dest)
 }
 
-fn float_fill_digit_bytes(buf, digits, start, end, i) with Memory + Alloc = if i >= end {
+fn float_fill_digit_bytes(buf, digits, start, end, i) with Memory = if i >= end {
   ()
 } else {
   // digits[i], NOT digits[i - start]: i already walks [start, end) over
@@ -682,7 +682,7 @@ fn float_fill_digit_bytes(buf, digits, start, end, i) with Memory + Alloc = if i
 // IEEE-754 NaN/Inf is the correct total semantics, and float_to_str renders
 // them (float_is_nan/float_is_inf below). The boxed-float indirection the
 // gradient dissolved is gone.
-fn float_pow10(exp) with Memory + Alloc = if exp == 0 {
+fn float_pow10(exp) with Pure = if exp == 0 {
   1.0
 } else if exp > 0 {
   10.0 * float_pow10(exp - 1)
@@ -726,7 +726,7 @@ fn parse_int_digits(s, slen, i, acc) with Memory = if i >= slen {
 
 // digits and at most one '.' — the dot contributes nothing; any other
 // byte (the exponent marker included) ends the mantissa
-fn parse_mantissa_f64(s, slen, i, acc: Float) -> Float with Memory + Alloc = if i >= slen {
+fn parse_mantissa_f64(s, slen, i, acc: Float) -> Float with Memory = if i >= slen {
   acc
 } else {
   let ch = byte_at(s, i)
@@ -739,7 +739,7 @@ fn parse_mantissa_f64(s, slen, i, acc: Float) -> Float with Memory + Alloc = if 
   }
 }
 
-fn count_mantissa_digits(s, slen, i) with Memory + Alloc = if i >= slen {
+fn count_mantissa_digits(s, slen, i) with Memory = if i >= slen {
   0
 } else {
   let ch = byte_at(s, i)
@@ -750,7 +750,7 @@ fn count_mantissa_digits(s, slen, i) with Memory + Alloc = if i >= slen {
 // multiply or divide inside that range is one correctly-rounded step;
 // a wider exponent splits at the boundary and pays one extra rounding
 // only past every authored spelling
-fn float_scale10(m: Float, k) -> Float with Memory + Alloc = if k == 0 {
+fn float_scale10(m: Float, k) -> Float with Pure = if k == 0 {
   m
 } else if k > 0 {
   if k > 22 { float_scale10(m * float_pow10(22), k - 22) } else { m * float_pow10(k) }
@@ -792,7 +792,7 @@ fn find_char_either(s, slen, start, ch1, ch2) with Memory = if start >= slen {
 // family (callee-first in-file order): the DAG judgment is single-pass, so
 // a forward reference reads the loose pre-registered scheme and floors the
 // f64 mantissa to a word — measured as an assembly refusal in mentl run.
-fn parse_float(s) -> Float with Memory + Alloc = {
+fn parse_float(s) -> Float with Memory = {
   let slen = byte_len(s)
   if slen == 0 {
     0.0
@@ -805,7 +805,7 @@ fn parse_float(s) -> Float with Memory + Alloc = {
   }
 }
 
-fn parse_float_body(s, slen, i) -> Float with Memory + Alloc = {
+fn parse_float_body(s, slen, i) -> Float with Memory = {
   // The mantissa accumulates as ONE f64 integer — exact through 2^53,
   // which covers every authored literal — and the decimal point only
   // COUNTS digits, so the single scale by the exact power of ten is the
@@ -857,7 +857,7 @@ fn set_union(a, b) with Memory + Alloc = {
   set_trim(buf, final_len)
 }
 
-fn set_union_merge(a, b, buf, ai, bi, oi, len_a, len_b) with Memory + Alloc = if ai >= len_a {
+fn set_union_merge(a, b, buf, ai, bi, oi, len_a, len_b) with Memory = if ai >= len_a {
   if bi >= len_b {
     oi
   } else {
@@ -886,7 +886,7 @@ fn set_diff(a, b) with Memory + Alloc = {
   set_trim(buf, final_len)
 }
 
-fn set_diff_merge(a, b, buf, ai, bi, oi, len_a, len_b) with Memory + Alloc = if ai >= len_a {
+fn set_diff_merge(a, b, buf, ai, bi, oi, len_a, len_b) with Memory = if ai >= len_a {
   oi
 } else if bi >= len_b {
   set_diff_merge(a, b, list_set(buf, oi, list_index(a, ai)), ai + 1, bi, oi + 1, len_a, len_b)
@@ -963,7 +963,7 @@ fn set_insert_at(set, name, pos, n) with Memory + Alloc = {
 }
 
 // Copy src[src_idx..n) into dst[src_idx+1..n+1) — shift suffix by 1.
-fn copy_suffix_shifted(src, dst, src_idx, dst_idx, n) with Memory + Alloc = if src_idx >= n {
+fn copy_suffix_shifted(src, dst, src_idx, dst_idx, n) with Memory = if src_idx >= n {
   dst
 } else {
   copy_suffix_shifted(
@@ -990,7 +990,7 @@ fn set_intersect(a, b) with Memory + Alloc = {
   set_trim(buf, final_len)
 }
 
-fn set_intersect_merge(a, b, buf, ai, bi, oi, len_a, len_b) with Memory + Alloc = if ai >= len_a || bi >= len_b {
+fn set_intersect_merge(a, b, buf, ai, bi, oi, len_a, len_b) with Memory = if ai >= len_a || bi >= len_b {
   oi
 } else {
   let xa = list_index(a, ai)
@@ -1057,7 +1057,7 @@ fn str_slice_from_list(ref lst, n) with Memory + Alloc = {
   str_of_buf(dest)
 }
 
-fn str_slice_from_list_loop(ref lst, dest, i, n) with Memory + Alloc = if i >= n {
+fn str_slice_from_list_loop(ref lst, dest, i, n) with Memory = if i >= n {
   ()
 } else {
   store_i8(dest + 8 + i, list_index(lst, i))

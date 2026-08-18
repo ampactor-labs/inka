@@ -1590,6 +1590,55 @@ own `inits` field, before that install's `world_push`, so
 refusing at the 1016 general sites is not, and that distinction is the
 whole remaining peer — see below.
 
+`Hβ.tighten.authors-an-unresolved-handle-as-source` — THE MEDIUM'S OWN
+AUTHORING VERB FABRICATES. Measured 2026-08-18 at pin 4dc2ac881254, the
+first time `mentl tighten` was run for real in this loop.
+▶ WHAT IT WROTE. Asked to tighten `src/lexer.mn`, the verb authored 33
+row narrowings across the transitive link — and two of them were:
+
+    fn iterate_from(xs, i, n) with Memory + Iterate(t42532@e10, t42533@e5) = …
+    fn iterate(xs) with Memory + Alloc + Iterate(t42546@e1, t42548@e1) = …
+
+`t42532@e10` is `show_handle`'s rendering of a FREE type variable — a
+projection for a human reader — written into source as an effect
+instance's argument. The wheel then refused itself: m2 generation
+TRAPPED with 15 `E_UnresolvedHole` errors, the columns falling on those
+very arguments.
+▶ THE OTHER 31 WERE SOUND. Reverting only `lib/prelude.mn` and marching
+the rest came back CLEAN at the IDENTICAL sha (4dc2ac881254) — row
+narrowings are judgment, not emit — so the batch minus its two
+fabrications is a real landing and is what shipped.
+▶ THE DEFECT IS A CONFLATED OUTPUT, not a missing guard. One read serves
+two consumers with different contracts: a PROJECTION for a reader may
+show an unresolved var, because "unresolved at epoch e" is the honest
+answer to a human question; an AUTHORED PATCH may contain nothing the
+graph has not proven, because source is not a place to say "I don't
+know". `tighten` uses the projection for both.
+▶ AND THE DECLINE PATH ALREADY EXISTS. The same run printed
+`mentl tighten: list_filled_from at lib/runtime/lists.mn:119 — no
+single-line with-clause; skipped`, so the verb already knows how to
+refuse a site it cannot rewrite and say why. What is missing is the
+resolution check, not the machinery.
+
+STAMP — `Hβ.tighten.authors-an-unresolved-handle-as-source`.
+TRACED: the tighten site renders the inferred row and splices it into the
+declaration text. A row carrying `EParameterized` with unresolved
+argument dims renders those dims through the free-var projection, which
+is legible and unparseable. The rule the fix states: an authoring verb
+emits only what the graph has PROVEN, and declines the site otherwise
+with the same skip line the no-single-line-clause case already uses.
+PRICED: NOT MEASURED. The check is per rewritten declaration and reads a
+row the verb already holds, so it adds no walk — but WHERE the
+resolution test belongs is unmeasured: at the row renderer (making an
+unresolved dim unrenderable in authoring mode) or at the tighten site
+(inspecting before splicing). The first is the one-home form and the
+second is local; which is sound depends on whether any other authoring
+consumer shares that renderer, and that enumeration has not run.
+WRITERS: the tighten verb's rewrite site; possibly the row renderer they
+share. NOT ENUMERATED — that enumeration is the build's first move.
+NOT COMPLETE: whether `fmt` or any other authoring verb splices a
+rendered row the same way is unmeasured, and it is the same class if so.
+
 `Hβ.emit.self-init-singleton-call-is-statically-uninstalled` — RESOLVED
 2026-08-18, pin 362ac8b1eeae, CLEAN. `E_InitPerformsOwnOp` is the
 thirteenth armed class: the emit pre-pass draws the inits as their own

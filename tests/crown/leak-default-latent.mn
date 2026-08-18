@@ -1,0 +1,20 @@
+// CROWN — latency rides the DEFAULT PARAMETER VALUE. A default is not a
+// call-site convenience: SYNTAX desugars it once at the declaration to a
+// callee-scoped fill, evaluated in the CALLEE's parameter scope. So the
+// default's row is the callee's row, and a caller under `with !E` must
+// meet it even though the call site mentions neither the parameter nor
+// the effect. Expect E_EffectMismatch.
+//
+// This carrier is ORACLE-BLIND: the wheel writes no default-valued
+// parameter anywhere (measured — 0 across 29 src modules and 2079 fn
+// declarations), so the fixpoint, the census and the micro battery are
+// all structurally silent here. Its sound twin is the RED evidence —
+// sound-default-transport is this file with the call removed, and it
+// accepts.
+effect E { op() -> Int }
+
+fn takes(a, b = () => op()) = b()
+
+fn bad() with !E = takes(1)
+
+fn main() = bad()

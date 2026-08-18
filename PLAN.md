@@ -2148,7 +2148,13 @@ The spine root finishes. Order inside the phase is the dependency order.
   rides the index (leak-list-latent / sound-list-transport), the
   tuple element's rides the position (leak-tuple-latent /
   sound-tuple-transport) — refusal at the call, acceptance at pure
-  transport, crown 35/0; the feedback-under-negation rule now waits only on
+  transport, crown 35/0; the DEFAULT PARAMETER carrier 2026-08-17
+  (leak-default-latent / sound-default-transport — a default is a
+  callee-scoped fill, so its row is the callee's row and a caller's
+  `!E` meets it though the call site names neither; the carrier is
+  ORACLE-BLIND, the wheel writing no default-valued parameter at all,
+  so its own pair is the only RED evidence available); the
+  feedback-under-negation rule now waits only on
   3.6's BUILD (its fork dissolved 2026-08-12 — membership is the
   joined resume grade); the
   sweep continues rule-by-rule), and the

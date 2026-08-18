@@ -666,6 +666,24 @@ SYNTAX §«Named effect rows» is not wrong here and must not be edited to
 match the artifact: the identity `E - F = E & !F` is the intended
 semantics and the lathe has not been turned to it.
 
+`Hβ.query.default-param-census` — THE MEDIUM CANNOT BE ASKED WHETHER THE
+WHEEL EXERCISES A SURFACE. The census projects judgment shapes (eta
+wrappers, effectful lambdas, the absorbed drift modes) and structural
+ones (`anonymous`, the verb glyphs), but nothing answers "where does this
+DECLARED SURFACE appear in the link" — so establishing that the wheel
+writes no default-valued parameter took a grep with a `# mentl-skip`
+confession, twice (once for the count, once to prove the file set
+non-empty so the zero was a verdict). That question is the selector's
+own: §11 tripwire 3 says the board is green on what the wheel does and
+silent on everything else, and every oracle-blind probe begins by asking
+exactly this. The shape is a `CensusShape` over declared forms, reading
+the weave the same way `CsEta` and `CsParallelArrays` do; the surfaces
+worth it are the ones SYNTAX declares and the wheel may never write —
+default values, labeled arguments, as-patterns, record rest, named row
+aliases. It lands with the census roster it joins, one entry and one
+label, the way mode 1's absorption left that tier a single fold over
+`drift_roster()`.
+
 `Hβ.diag.row-polymorphic-body` — WHAT THE CURSOR SHOULD SAY AT A FREE ROW
 CELL. `enforce_row_gate`'s unbound arm now teaches nothing there (pin
 5446b82bddd4), which is correct and is not the whole answer: silence is

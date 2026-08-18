@@ -35,6 +35,39 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE DEFAULT PARAMETER IS A CARRIER, AND IT WAS THE ONE THE
+  BOARD COULD NOT SEE (no pin — tests only; boot unchanged at
+  5446b82bddd4, wheel source untouched). Crown 48 → 50, both legs green.
+  ▶ THE RULE. A default is not a call-site convenience. SYNTAX desugars
+  it once at the declaration into a callee-scoped fill evaluated in the
+  CALLEE's parameter scope, so the default's row IS the callee's row —
+  and a caller under `with !E` must meet it even though the call site
+  mentions neither the parameter nor the effect. Measured in all three
+  shapes before either fixture landed: a direct effectful default
+  refuses (`!E + Any vs E`), a closure default that is CALLED refuses,
+  and a closure default never called ACCEPTS. That is the same
+  latent-versus-performed split the field, list, tuple, variant, state
+  and partial carriers already pin, now at the carrier none of them
+  reached.
+  ▶ WHY IT IS WORTH A CRUCIBLE: the wheel writes no default-valued
+  parameter at all — 0 across 29 src modules against 2079 fn
+  declarations by the same grep engine, so the zero is a verdict and not
+  an empty read. Fixpoint, census, micros and march are therefore
+  structurally silent here, which is §11 tripwire 3 exactly: the board is
+  green on what the wheel does and says nothing about what it does not.
+  ▶ THE RED EVIDENCE IS THE PAIR. Each fixture is the other with one
+  edit: add `b()` to sound-default-transport and it becomes
+  leak-default-latent, which rejects; remove it and the leak becomes the
+  sound twin, which accepts. Both readings were taken before either file
+  was written, which is the only honest form of "seen RED" for a pin of
+  behaviour that is already correct.
+  ▶ BANKED: `Hβ.query.default-param-census` — the measurement above was a
+  grep, and a hand tool is a confession. The medium has census shapes for
+  eta-wrappers, effectful lambdas and the drift modes; it has none for a
+  declared surface like a default-valued parameter, so "does the wheel
+  exercise this?" cannot be asked of the medium. That question is the
+  selector's own, every time it owes an oracle-blind probe.
+
 - 2026-08-17 · pin 5446b82bddd4 · THE GATE STOPS TEACHING FROM A CELL IT
   NEVER JUDGED — and the same measurement RETRACTS the entry that stood
   here. CLEAN, m2 == m3, census 0, 14.11s wall · 2266360 KB peak.

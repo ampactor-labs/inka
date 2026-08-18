@@ -1,0 +1,16 @@
+// CROWN — the latent half at the DEFAULT PARAMETER carrier: a default
+// whose value is an effectful closure TRANSPORTS under `with !E` as long
+// as nothing calls it. The effect rides the value; only performing it is
+// a performance, and the gate must not over-reject the carrier itself.
+//
+// The pair is each other's evidence: add `b()` to this body and it
+// becomes leak-default-latent, which rejects. Both were measured before
+// either landed, because the wheel writes no default-valued parameter at
+// all and no other gate here can go red.
+effect E { op() -> Int }
+
+fn takes(a, b = () => op()) = a
+
+fn good() with !E = takes(1)
+
+fn main() = good()

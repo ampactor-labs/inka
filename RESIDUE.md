@@ -1551,10 +1551,26 @@ surface shape, the same distinction the fold's four leaf generators
 record. Each lands the way this one did: one variant, one label, one
 name in the grammar, one fixture line, one frontier spec.
 
-`Hβ.effects.handler-state-init-row-never-installed` — A HANDLER'S STATE
-INIT PERFORMS IN THE INSTALLER'S WORLD AND CHARGES NOBODY. Measured
-2026-08-18 at pin c968f690567b, on the 6.3 modal sweep; three runs, one
-projection.
+`Hβ.effects.handler-state-init-row-never-installed` — RESOLVED
+2026-08-18, pin b9733815b54d, CLEAN, crown 54/0. The stamp's own first
+move found it: the ARMS ride `r_handle`, and the inits sat two lines above
+that scope. Moving `infer_handler_state_inits` and
+`bind_handler_state_names` inside `inf_enter_fn(r_handle, …)` puts an
+init's row on the accumulator the tee already carries to every installer —
+no new carrier, since `+ row(h)` was written all along. Measured at the
+same repro before and after: clean-with-"only uses Pure", then
+`!E + Any vs E`, with the init still performing (exit 7 re-run). Gates:
+`leak-state-init-performs` and `sound-state-init-pure`. The `Handler(F)`
+observation below stands and is now a smaller gap — the type still carries
+no row, and the fix routed around it rather than through it, which is the
+open half if handler VALUES ever need one. Two of the stamp's three open
+questions remain unmeasured (a config parameter's default expression, and
+an init performing an effect the handler itself handles). The measurement
+that found the leak follows.
+
+▶ A HANDLER'S STATE INIT PERFORMED IN THE INSTALLER'S WORLD AND CHARGED
+NOBODY. Measured 2026-08-18 at pin c968f690567b, on the 6.3 modal sweep;
+three runs, one projection.
 ▶ THE LEAK. `handler hf with s = op() { g() => resume(s) }` installed by
 `fn bad() with !E = (g()) ~> hf` checks CLEAN, and `T_OverDeclared`
 volunteers that the body "only uses Pure". Repro:

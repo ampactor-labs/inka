@@ -1,0 +1,19 @@
+// CROWN — a handler's STATE INIT performs where the arms perform: at the
+// install, in the installer's world. So an init that performs E must reach
+// the installer's row and meet its `!E`. Expect E_EffectMismatch.
+//
+// SEEN RED at pin c968f690567b: this checked CLEAN and T_OverDeclared
+// volunteered that the body "only uses Pure", while the init genuinely
+// performed — give `op` a handler returning 7 and the value reaches `s`
+// through it. The inits were judged before r_handle's scope opened, so
+// their row landed on the frame judging the DECL and reached no installer.
+//
+// Distinct from leak-state-latent, which is a closure STORED in state and
+// called later. This one performs at install time and never stores.
+effect E { op() -> Int }
+effect F { g() -> Int }
+handler hf with s = op() {
+  g() => resume(s),
+}
+fn bad() with !E = (g()) ~> hf
+fn main() = bad()

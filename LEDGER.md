@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin b9733815b54d · AN INIT PERFORMS WHERE THE ARMS PERFORM.
+  CLEAN — m2 == m3 at 413442 lines, census 0, battery green, crown 54/0,
+  frontier 371/0, 18.09s wall, peak 2282872 KB against a 2310000 ceiling.
+  ▶ WHAT LANDED: two lines moved. `infer_handler_state_inits` and
+  `bind_handler_state_names` now run INSIDE `inf_enter_fn(r_handle, …)`
+  rather than before it, so an init's row joins the same accumulator the
+  arms use — the one whose own comment says "r_handle binds to R, the row
+  `~> h` adds to the caller". No new carrier, no new concept: SYNTAX's tee
+  rule already reads `+ row(h)`, and an init is part of the handler.
+  ▶ THE BUILD'S FIRST MOVE WAS THE STAMP'S OWN: find the channel the ARMS
+  ride, because arms already charge (`leak-arm-adds-row` refuses) and the
+  fix should join that channel rather than duplicate it. It is `r_handle`,
+  and the inits sat two lines above its scope.
+  ▶ MEASURED BEFORE AND AFTER at the same repro. Before, at pin
+  c968f690567b: `handler hf with s = op()` installed by
+  `fn bad() with !E = (g()) ~> hf` checked CLEAN with T_OverDeclared
+  reporting the body "only uses Pure". After: `!E + Any vs E`. The init
+  still performs — `((g()) ~> hf) ~> he` with `op` handled to 7 exits 7,
+  re-run after the landing — so the row was added without changing when
+  the init evaluates.
+  ▶ WHY THE WHEEL DID NOT NOTICE: every handler in it has a pure init,
+  which is why census, fixpoint and the whole battery stayed green through
+  a leak this wide, and why `sound-state-init-pure` is the half worth
+  gating beside the leak.
+  ▶ THE ENV HAZARD DID NOT FIRE. The site's own comment warns that an
+  `env_extend` inside `inf_enter_fn` can vanish before lower, and
+  `bind_handler_state_names` extends the env; the arms read those names
+  and the march came back CLEAN at census 0, so the warning's scope is
+  narrower than the move. Recorded because the next reader will ask.
+  ▶ ONE VARIABLE: the two lines' position relative to the row scope.
+
 - 2026-08-18 · pin c968f690567b · A FIELD THAT DOES NOT EXIST STOPS
   ANSWERING WITH ONE THAT DOES. CLEAN — m2 == m3 at 413442 lines, census
   0, battery green, frontier 371/0, 16.72s wall, peak 2283876 KB against a

@@ -1,0 +1,12 @@
+// CROWN — the sound dual: a handler whose state init performs NOTHING
+// installs freely under `with !E`. Charging the init's row must not charge
+// an init that has none, which is what keeps every handler in the wheel
+// installable — all of theirs are pure, which is exactly why no gate saw
+// the leak until one was written.
+effect E { op() -> Int }
+effect F { g() -> Int }
+handler hf with s = 1 {
+  g() => resume(s),
+}
+fn good() with !E = (g()) ~> hf
+fn main() = good()

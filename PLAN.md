@@ -2251,12 +2251,13 @@ The spine root finishes. Order inside the phase is the dependency order.
   feedback-under-negation rule now waits only on
   3.6's BUILD (its fork dissolved 2026-08-12 — membership is the
   joined resume grade); the 2026-08-18 rule found a LEAK rather than a
-  crucible — a handler's STATE INIT performs in the installer's world
-  (measured: the value reaches `s` through the outer handler, exit 7)
-  and charges nobody, while the identical op in the body refuses and an
-  ARM already charges; `Handler(F)` carries no row, so the tee's own
-  `+ row(h)` has no carrier, and it is stamped as
-  `Hβ.effects.handler-state-init-row-never-installed`; the
+  crucible and CLOSED it one pin later — a handler's STATE INIT performs
+  in the installer's world (measured: the value reaches `s` through the
+  outer handler, exit 7) and charged nobody, because the inits were
+  judged two lines above `r_handle`'s scope while the ARMS were judged
+  inside it. They are inside it now
+  (`Hβ.effects.handler-state-init-row-never-installed`, pin
+  b9733815b54d, crown 54/0); the
   sweep continues rule-by-rule), and the
   capability-at-tee PROJECTION — ✅ LANDED 2026-08-08 (pin
   2dcd736eb4e6): `mentl where` renders every install as

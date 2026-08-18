@@ -8680,14 +8680,23 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
     },
     config_tparams
   )
-  let state_binds = infer_handler_state_inits(state)
-  bind_handler_state_names(state_binds, hname, span)
   let s_h = mint(Inferred("handler result of '{hname}'"))
   // Accumulate the arms' residual row R into r_handle: inferring each arm
   // body under this row scope routes every effect it performs (incl. a call
   // to a config arg `f`) into r_handle via inf_add_effect/inf_add_row. On
   // exit, r_handle binds to R — the row `~> h` adds to the caller.
   inf_enter_fn(r_handle, s_h, span, [])
+  // THE STATE INITS BELONG INSIDE THIS SCOPE, because they run where the
+  // ARMS' effects run — at the install, in the installer's world. Judged
+  // outside it their row landed on whatever frame was judging the DECL and
+  // reached no installer at all: `handler hf with s = op()` installed by
+  // `fn bad() with !E = (g()) ~> hf` checked clean while the init genuinely
+  // performed E (measured — the value reaches `s` through an outer handler
+  // and the program exits 7). SYNTAX's tee rule already carries this: the
+  // init is part of the handler, so its row is part of row(h), and r_handle
+  // is where row(h) is accumulated (`Hβ.effects.handler-state-init-row-never-installed`).
+  let state_binds = infer_handler_state_inits(state)
+  bind_handler_state_names(state_binds, hname, span)
   each(
     (arm) => {
       env_scope_enter()

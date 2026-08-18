@@ -766,9 +766,55 @@ load-bearing ADT is the masking the docs forbid.
 ▶ REPRO HELD BACK, red today, landing with the fix; its control (the
 same match without the binder) is the green half.
 
-`Hβ.fold.open-record-shares-closed-signature` — AN AMBIENT FIND, BANKED
-NOT ASSERTED (2026-08-17, read while tracing the record type's
-representation). `fold_sig` in types.mn maps `TRecord(fs)` and
+`Hβ.lower.record-pattern-unprovable-floor` — REFUTED BY THE MARCH,
+2026-08-17, and the refutation is the useful part: IT REMOVES "JUST
+REFUSE" FROM THE FORK'S OPTION SET.
+▶ THE EXPERIMENT. `LFieldLoad` and the record-pattern lowering face the
+same question — the receiver's field offset is not provable — and answer
+it differently. `LFieldLoad` floors with `(unreachable) ;; field offset
+unprovable`, and its comment states the law: "NO SILENT FALLBACK ... the
+named wrong — not a fabricated offset-0 load that reads a foreign field."
+The pattern path fabricates `(base + i) * 4` from the pattern's own
+index. Making the pattern answer as its sibling does looked unambiguous:
+Anchor 2, the wheel's own precedent, and zero blast radius because the
+open-receiver ratchet already holds the wheel at 0.
+▶ THE MARCH REFUSED IT. Fixed point held (m2 == m3, census 0) and the
+micro battery caught `mn-fn-tuple-param`: RUN exit=134 want=44. The
+fixture is `fn g({x, y}) = x * y` called with `{x: 5, y: 6}` — a
+destructuring PARAMETER, which is an open-row receiver by construction,
+and 7 + 30 + 7 = 44 re-derived by hand. The expectation is right and the
+program is right; the floor turned working, idiomatic code into a trap.
+Reverted whole.
+▶ WHAT IT PROVES. A destructuring parameter is THE common case of the
+open-row receiver, and SYNTAX endorses it directly (`({name, age}) =>
+greet(name)` is one of its own examples). So refusing on "offset
+unprovable" is not a conservative interim — it deletes a documented
+surface. The offsets must be RESOLVED, which means the receiver's layout
+has to reach the pattern: specialization per call site, or a layout the
+value carries. The fork is unchanged in shape and sharper in force,
+because the third option everyone reaches for first is now measured dead.
+▶ WHAT STAYS TRUE: the silent half is still silent. A partial pattern
+over an open receiver still reads the wrong field with no diagnostic
+(`{zeta}` over `{alpha: 7, zeta: 9}` answers 7). The difference between
+that and `fn g({x, y})` is invisible to the medium, which is exactly why
+a blanket floor cannot separate them and exactly why the fix must close
+the row rather than police the pattern.
+
+`Hβ.fold.open-record-shares-closed-signature` — RE-AIMED 2026-08-17 by
+its own probe, which fired a different floor than predicted. The banked
+probe (a pair of records differing only in a field the pattern never
+names, compared through the generated helper) TRAPS before reaching any
+comparison: the fixture's `a.x` on an open-row parameter floors at
+`field offset unprovable`, so the field LOAD answers before the eq leaf
+does. The shared-signature question is therefore still open and still
+unmeasured — its probe needs a receiver whose row is CLOSED at the field
+access but open at the comparison, or a comparison reached without any
+field access at all. What the probe DID establish is banked above and in
+the LEDGER: the trap is reachable from source that `mentl check` passes
+at exit 0, which is a marked emit floor in reachable code not refusing
+the executable.
+Original entry, unchanged (2026-08-17, read while tracing the record
+type's representation). `fold_sig` in types.mn maps `TRecord(fs)` and
 `TRecordOpen(fs, _)` to the same signature string, so an open record and
 a closed one with the same KNOWN fields share their generated eq / hash /
 show helpers. Whether that is wrong turns on what the shared helper does

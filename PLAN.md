@@ -1575,7 +1575,11 @@ from the pattern's own index and a complete pattern is indistinguishable
 from a partial one — an uncheckable promise, not the accident the first
 reading called it. Both receivers are annotated now and their rows close;
 the class stays open as
-`Hβ.lower.record-pattern-param-receiver`.
+`Hβ.lower.record-pattern-param-receiver`, and the march has since
+REFUTED the obvious interim — flooring on "offset unprovable" the way
+`LFieldLoad` does turns `fn g({x, y})` into a trap, because a
+destructuring parameter IS the open-row case and SYNTAX gives it as its
+own example. The offsets must be resolved, not policed.
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
 NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
 found nothing: `tests/syntax/` had no history under any ref, no gate

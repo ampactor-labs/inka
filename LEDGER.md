@@ -35,6 +35,50 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE MARCH REFUTED THE FLOOR, AND THE REFUTATION REMOVES AN
+  OPTION FROM THE FORK (no pin — experiment reverted whole; boot unchanged
+  at 4ce9914b7360, wheel source restored).
+  ▶ THE BANKED PROBE RAN FIRST and killed its own hypothesis. The
+  `fold_sig` entry predicted that an open and a closed record sharing a
+  signature would make `==` compare only the known fields. The fixture
+  never reaches the comparison: `a.x` on an open-row parameter floors at
+  `(unreachable) ;; field offset unprovable`, the field LOAD answering
+  before the eq leaf. Read from the emitted WAT (4132 bytes, two
+  unreachables, one marked). The shared-signature question is still open
+  and needs a probe that reaches a comparison without a field access.
+  ▶ WHAT THE PROBE DID ESTABLISH: `mentl check` passes that fixture at
+  exit 0 and the executable traps. A MARKED emit floor in reachable code
+  does not refuse the executable — the gate reads errors, holes and armed
+  classes, and an emit floor is none of those.
+  ▶ THE EXPERIMENT the finding suggested. `LFieldLoad` and the
+  record-pattern lowering face one question — the offset is not provable —
+  and answer differently. The load floors with the marker and its comment
+  states the law ("NO SILENT FALLBACK ... the named wrong — not a
+  fabricated offset-0 load that reads a foreign field"); the pattern
+  fabricates `(base + i) * 4` from its own index. Making the pattern
+  answer as its sibling does looked unambiguous, with zero blast radius
+  since the open-receiver ratchet holds the wheel at 0.
+  ▶ THE MARCH REFUSED THE REPIN. Fixed point held (m2 == m3, census 0,
+  412873 lines) and the battery caught `mn-fn-tuple-param`: RUN exit=134
+  want=44. Its `fn g({x, y}) = x * y` over `{x: 5, y: 6}` is a
+  DESTRUCTURING PARAMETER — an open-row receiver by construction — and
+  7 + 30 + 7 = 44 re-derived by hand before touching anything. The
+  expectation is right and the program is right; the floor turned working
+  idiomatic code into a trap. §9.11 asks whether an old gate going red
+  canonized a bug, and here it did not: SYNTAX gives `({name, age}) =>
+  greet(name)` as one of its own examples.
+  ▶ WHAT IT PROVES, and it is worth more than the change would have been:
+  a destructuring parameter is THE common case of the open-row receiver,
+  so refusing on "offset unprovable" is not a conservative interim — it
+  deletes a documented surface. The offsets must be RESOLVED, which means
+  the receiver's layout must reach the pattern: specialization per call
+  site, or a layout the value carries. The third option everyone reaches
+  for first is now measured dead, and the fork is sharper for it.
+  ▶ THE SILENT HALF IS UNCHANGED: a partial pattern over an open receiver
+  still reads the wrong field with no diagnostic, and the medium cannot
+  tell it from `fn g({x, y})`. That indistinguishability is precisely why
+  a blanket floor cannot separate them.
+
 - 2026-08-17 · pin 4ce9914b7360 · THE OPEN-RECEIVER RATCHET, AND A SECOND
   GATE THAT COULD NOT FAIL CAUGHT BEFORE IT LANDED. CLEAN, m2 == m3,
   census 0, 16.56s wall · 2271808 KB peak.

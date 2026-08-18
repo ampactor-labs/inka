@@ -540,9 +540,51 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.lower.handler-state-init-reads-config` — BISECTED 2026-08-17 to an
-exact, four-variant repro, and it is a live silent-wrong the wheel has
-never exercised. A handler's STATE INITIALIZER cannot read that
+`Hβ.infer.handler-state-inits-are-never-judged` — THE ROOT, located at
+the artifact 2026-08-17, and it is larger than the peer it explains.
+DECL-SIDE HANDLER STATE-INIT EXPRESSIONS ARE NEVER INFERRED. Both
+`HandlerDeclStmt` sites reach `register_handler` (infer.mn), which checks
+state-field NAMES against op names for the shadow refusal, mints the
+config tparams, and env_extends the handler — and never walks a single
+`init` expression. The only `infer_expr` over a state init in the file is
+for `resume() with x = …` UPDATES, not decl inits.
+WHAT THAT COSTS: everything in a `with field = init` clause is unjudged —
+no types, no name resolution, no diagnostics. It survives because every
+init the wheel writes is a literal, a nullary call, or a bare config ref
+that `lower_state_init` special-cases STRUCTURALLY into `LUpval(0, slot)`
+without needing a binding at all.
+THE MINIMAL REPRO, seconds instead of a march
+(tests/frontier/mn-handler-state-from-config.mn, plus two scratch
+variants): `handler h(start) with n = start` runs and answers 10 —
+lower's structural case. `handler h(start) with n = start + 1` TRAPS,
+because the config name is unbound the moment it sits inside a larger
+expression. The emitted WAT names it exactly:
+`(unreachable) ;; executable-boundary invariant: unbound name start —
+infer proved it missing; the lowering will not guess it into a global`.
+THE SILENT-WRONG, which is the part that matters: `mentl check` reports
+NOTHING on that program. Zero diagnostics, then a runtime trap at exit
+134. The MissingName floor is a deliberate belt-and-braces whose own
+comment expects infer to have already fired a precise, spanned
+E_MissingVariable — and for ordinary code it does. Here infer never
+walked the expression, so nothing fired, and the executable gate had
+nothing to refuse. A program that type-checks and traps is the class §0
+exists to make unsayable.
+THE FIX, one build for both halves: infer judges decl-side state inits
+with the handler's config params in scope. Then the unbound name is an
+ordinary E_MissingVariable (armed → refuses the executable), the floor
+returns to being belt-and-braces, and `n = start + 1` simply WORKS —
+which is what unblocks `Hβ.own.region-index-per-install` and its 24%.
+Blast radius is real and must be marched, not assumed: expressions the
+wheel has never judged become judged, so new diagnostics are possible;
+every wheel init is a literal or a simple call, so the census is the
+arbiter.
+THE GATE LANDS WITH THE FIX. The fixture is RED today by construction,
+and gating today's behaviour GREEN would canonize the bug — §9.11's own
+warning that a banked expectation can be the bug canonized.
+
+`Hβ.lower.handler-state-init-reads-config` — the SYMPTOM of the root
+above, bisected 2026-08-17 to an exact four-variant repro before the
+root was found. A handler's STATE INITIALIZER cannot read that
 handler's own CONFIG PARAMETER. Four marches, one variable each, on
 `region_tracker`:
   no config param                                    → CLEAN

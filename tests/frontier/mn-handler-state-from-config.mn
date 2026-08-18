@@ -1,0 +1,35 @@
+// A handler's state initializer reading its own config parameter.
+//
+// DIRECT assignment (`n = start`) is the shape the wheel already uses —
+// graph_handler does `spine = spine0` and works. DERIVED (`n = start + 1`)
+// is the untested one, and it is what miscompiles: the config reads 0, so
+// the derived state is 1 instead of 11. In the wheel the same zero made
+// list_filled(0, []) an empty index whose mask went negative and whose
+// list_set ran off the end — a trap at exit 134
+// (Hβ.lower.handler-state-init-reads-config).
+//
+// Each half is a bit, so the exit code names which shape broke: 1 direct,
+// 2 derived, 3 both correct.
+effect Direct {
+  read_direct() -> Int
+}
+
+effect Derived {
+  read_derived() -> Int
+}
+
+handler hold_direct(start) with n = start {
+  read_direct() => resume(n),
+}
+
+handler hold_derived(start) with n = start + 1 {
+  read_derived() => resume(n),
+}
+
+fn main() = {
+  let d = (read_direct()) ~> hold_direct(10)
+  let v = (read_derived()) ~> hold_derived(10)
+  let a = if d == 10 { 1 } else { 0 }
+  let b = if v == 11 { 2 } else { 0 }
+  a + b
+}

@@ -35,6 +35,46 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · HANDLER STATE INITS ARE NEVER JUDGED — A PROGRAM THAT
+  CHECKS CLEAN AND TRAPS (no pin — the root located and banked with its
+  repro; boot unchanged at 5a61fc4eba, src and lib untouched).
+  ▶ FROM SYMPTOM TO ROOT IN ONE ITERATION, because the repro got small.
+  The previous pin bisected the trap to "a state initializer cannot read
+  its config" across four wheel-scale marches at ~60s each. A 30-line
+  fixture reproduces it in two seconds, and splitting it pins the
+  boundary exactly: `handler h(start) with n = start` runs and answers
+  10; `with n = start + 1` traps. Direct assignment survives only because
+  `lower_state_init` special-cases a bare config VarRef STRUCTURALLY into
+  `LUpval(0, slot)` — no binding required. Anything larger needs the name
+  to actually resolve, and it does not.
+  ▶ THE ARTIFACT NAMES ITS OWN ROOT. The emitted WAT carries
+  `(unreachable) ;; executable-boundary invariant: unbound name start —
+  infer proved it missing; the lowering will not guess it into a global`.
+  The lowering is behaving correctly and refusing to fabricate. Reading
+  infer for the other half: BOTH `HandlerDeclStmt` sites reach
+  `register_handler`, which checks state-field NAMES against op names,
+  mints config tparams, env_extends the handler — and never walks a
+  single init EXPRESSION. The only `infer_expr` over a state init in the
+  file is for `resume() with x = …` updates.
+  ▶ SO THE CLASS IS BIGGER THAN THE PEER IT EXPLAINS: everything in a
+  `with field = init` clause is unjudged — no types, no name resolution,
+  no diagnostics. It has never bitten because every init the wheel writes
+  is a literal, a nullary call, or a bare config ref.
+  ▶ AND IT IS A SILENT WRONG, which is why it is banked loudly.
+  `mentl check` reports NOTHING on the trapping program — zero
+  diagnostics, then exit 134. The MissingName floor's own comment expects
+  infer to have already fired a precise, spanned E_MissingVariable, and
+  for ordinary code it does; here infer never walked the expression, so
+  nothing fired and the executable gate had nothing to refuse. A program
+  that type-checks and traps is exactly what §0 exists to make unsayable.
+  ▶ NOT BUILT, DELIBERATELY. The fix is one change for both halves —
+  infer judges decl-side state inits with config params in scope — and
+  its blast radius is real: expressions the wheel has never judged become
+  judged. That is a marched build, not a tired end-of-iteration edit, and
+  it is now fully specified. The fixture stays as the repro rather than
+  becoming a gate: it is RED by construction, and gating today's
+  behaviour green would canonize the bug (§9.11's own warning).
+
 - 2026-08-17 · A HANDLER'S STATE INIT CANNOT READ ITS OWN CONFIG (no pin
   — the experiment reverted whole per the loop's step 5; boot unchanged
   at 5a61fc4eba, src and lib identical to the previous pin).

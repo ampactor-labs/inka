@@ -645,6 +645,17 @@ solo_violations_max: 0
 # `(pos) => candidates_at(pos)` eta-wrapper became the ??-suspension
 # `candidates_at(performed, ??)` — the Stage-Law form, no wrapper at all.
 eta_max: 28
+
+# record_pattern_open_max — record patterns whose RECEIVER row is open, so
+# their field offsets come from the pattern's own index rather than the
+# receiver's full sorted field set. Born at ZERO (pin 4ce9914b7360), which
+# is a contract rather than a tolerance: the wheel's two sites were open
+# until their receivers were annotated one pin earlier, and they were
+# correct only by an author's promise the graph could not check — a
+# complete pattern over an open row is structurally identical to a partial
+# one. Seen RED by falsification: removing one annotation moves the count
+# 0 → 1 with the site located. Class: Hβ.lower.record-pattern-param-receiver.
+record_pattern_open_max: 0
 # 2026-08-11 holes-column landing: +2 — hole_pairs_into/holes_pend_without's
 # pairing folds perform Alloc; the tier's conviction is correct vocabulary.
 # Re-based 385 → 387 at the delay-depth read (2026-08-12). The landing's

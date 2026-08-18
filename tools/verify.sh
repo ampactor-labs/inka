@@ -354,6 +354,27 @@ if C=$(wt_m2_ensure); then
       say "  ↓ effectful-lambda FELL $rmax -> $crow — lower effectful_lambda_max in $BASELINE to hold it."
     fi
   fi
+  # The OPEN-RECEIVER ratchet — the wheel keeps its record destructures
+  # PROVABLE. A record pattern takes its field offsets from the receiver's
+  # full sorted field set; a TRecordOpen receiver has none, so lowering
+  # falls back to the pattern's own index and the read is a guess. The
+  # trap is that a COMPLETE pattern over an open row is structurally
+  # identical to a partial one, so no discipline at the site can tell them
+  # apart and only this count can — which is why the wheel's own two sites
+  # sat on an uncheckable promise until their receivers were annotated.
+  # Held at ZERO, and the ceiling is the contract, not a tolerance.
+  cro=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "census record-pattern-open" 2>/dev/null | grep -oE '[0-9]+ record pattern' | grep -oE '[0-9]+' | head -1)
+  romax=$(grep -E '^record_pattern_open_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  if [[ -z "$cro" ]]; then
+    say "✗ open-receiver RATCHET: the census query answered nothing — the projection is broken, not clean."
+    fail=1
+  else
+    say "· open-receiver: $cro record pattern(s) whose receiver row is open — offsets guessed, not proven"
+    if [[ -n "$romax" && "$cro" -gt "$romax" ]]; then
+      say "✗ open-receiver RATCHET: rose $romax -> $cro — annotate the receiver so its row closes."
+      fail=1
+    fi
+  fi
   # The DRIFT-SHAPE ratchet — the 5.6 absorption's enforcement half (PLAN
   # §11): the whole-link counts of the three absorbed drift modes, read
   # from the weave by the census shapes that replaced their bash rows.

@@ -766,8 +766,37 @@ load-bearing ADT is the masking the docs forbid.
 ▶ REPRO HELD BACK, red today, landing with the fix; its control (the
 same match without the binder) is the green half.
 
-`Hβ.query.record-pattern-open-receiver` — THE JUDGED HALF OF
-`CsRecordPattern`. The shape counts every record-pattern site
+`Hβ.fold.open-record-shares-closed-signature` — AN AMBIENT FIND, BANKED
+NOT ASSERTED (2026-08-17, read while tracing the record type's
+representation). `fold_sig` in types.mn maps `TRecord(fs)` and
+`TRecordOpen(fs, _)` to the same signature string, so an open record and
+a closed one with the same KNOWN fields share their generated eq / hash /
+show helpers. Whether that is wrong turns on what the shared helper does
+with the fields an open record carries beyond the known set — a
+structural `==` that compares only the known ones would be the
+silent-wrong shape, and a runtime record that genuinely has no extra
+fields would make it harmless. NOT MEASURED, so it is a question and not
+a claim. The probe is a pair of records differing only in a field the
+pattern never names, compared through the generated helper. This is the
+`fold_sig` distinguishability question §11 5.4 already settles for the
+byte leaf ("a NEW NOMINAL Ty fold_strip does NOT strip, OR fold_sig must
+READ repr"), met at the record.
+
+`Hβ.query.record-pattern-open-receiver` — ✅ RESOLVED 2026-08-17, pin
+4ce9914b7360, as `CsRecordPatternOpen` with the ratchet
+`record_pattern_open_max: 0`. Its build is worth keeping for the KILL:
+the first draft filtered only let bindings, marched, and answered 0 for
+the wheel — which read as confirmation that the previous pin's
+annotations had worked. Falsification refused that reading, because
+removing an annotation left the count at 0: both wheel sites are MATCH
+arms, so the shape was blind to exactly what it was built to count. The
+comment justifying the omission was wrong too — `MatchExpr` carries the
+scrutinee node. Corrected, the shape measures 0 annotated and 1 located
+at `backends/wasm:1100` un-annotated. The remaining text below is the
+design as banked.
+
+`Hβ.query.record-pattern-open-receiver` (design, as banked) — THE JUDGED
+HALF OF `CsRecordPattern`. The shape counts every record-pattern site
 syntactically (landed 2026-08-17, pin e06c6658fc20, and it found the
 wheel's own two); what prices the fix is which of them face an OPEN ROW
 receiver, since those are exactly the sites whose offsets are guessed.

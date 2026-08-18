@@ -35,6 +35,48 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · pin 4ce9914b7360 · THE OPEN-RECEIVER RATCHET, AND A SECOND
+  GATE THAT COULD NOT FAIL CAUGHT BEFORE IT LANDED. CLEAN, m2 == m3,
+  census 0, 16.56s wall · 2271808 KB peak.
+  ▶ WHAT IT MEASURES. `CsRecordPatternOpen` filters the record-pattern
+  sites by the receiver's JUDGED type: open (`TRecordOpen`) means
+  lowering has no full sorted field set and takes offsets from the
+  pattern's own index. The read composes two existing homes and invents
+  nothing — `graph_chase` resolves the receiver handle through the
+  union-find, so a TVar needs no separate walk, and `fold_strip` is
+  types.mn's own alias / refinement / repr-pin peel, the file's declared
+  Carried-Truth home for a property OF THE TYPE.
+  ▶ THE KILL, and it is the iteration's most useful output. The shape's
+  first draft filtered only `LetStmt` sites. It marched, and answered 0
+  for the wheel — which read as confirmation that the previous pin's
+  annotations had worked. The falsification refused that: removing one
+  annotation left the count at 0. Both of the wheel's record-pattern
+  sites are MATCH arms, not let bindings, so the shape was blind to
+  exactly what it was built to count, and its zero meant nothing. The
+  comment justifying the omission — that an arm's scrutinee is out of
+  reach — was also wrong: `MatchExpr` carries the scrutinee node, handle
+  and all. This is the second toothless gate this session caught by
+  falsifying rather than by review, after the syntax battery's first
+  draft.
+  ▶ THE CORRECTED SHAPE IS DISCRIMINATING, measured both ways: 0 with
+  both receivers annotated, and 1 with `backends/wasm:1100` LOCATED when
+  one annotation is removed. `record_pattern_open_max: 0` in
+  verify-baseline holds it, and the ceiling is a contract rather than a
+  tolerance — a rise means a receiver whose offsets are guessed.
+  ▶ WHY ZERO IS THE RIGHT CEILING. A complete pattern over an open row
+  and a partial one are structurally identical to the medium, so no
+  discipline at the site distinguishes safe from unsafe. Annotating the
+  receiver is the only move that turns the offsets into a proof, and the
+  ratchet is what keeps the wheel from silently reacquiring the exposure
+  the previous pin closed.
+  ▶ AMBIENT FIND, banked not asserted: `fold_sig` (types.mn) maps
+  `TRecord` and `TRecordOpen` to the SAME signature string, so an open
+  and a closed record with the same known fields share generated
+  eq/hash/show helpers. Whether that is wrong depends on what the shared
+  helper does with the fields an open record carries beyond the known
+  set, which is not measured. Named as
+  `Hβ.fold.open-record-shares-closed-signature`.
+
 - 2026-08-17 · pin f0b63b15a5d6 · THE WHEEL'S RECORD DESTRUCTURES STOP
   RESTING ON A PROMISE — and the previous entry's "accident" is RETRACTED
   as the wrong word for a sharper defect. CLEAN, m2 == m3, census 0,

@@ -1605,6 +1605,38 @@ build put the guard inside `patch_with_clause`, which made `None` carry
 two reasons and the skip line lie about which; moving it to the caller
 restored one verdict per meaning.
 
+`Hβ.audit.at-the-edit-is-image-gated` — THE SELF-BUILD RATCHET'S OWN NEXT
+STEP, PRICED AND REFUSED. Measured 2026-08-18 at pin 567a96659693.
+▶ THE CASE FOR IT is the strongest this loop has: over ten iterations the
+assistant hand-read source to find what `mentl audit <file>` says in one
+command — tightenables, iteration-shapes, drift shapes, unresolved
+comment refs, per-fn rows — and ran the verb once, late, by accident.
+Every hand-read was a confession. The obvious absorption is the
+PostToolUse drift-audit calling the medium's own verb, so the finding
+arrives at the EDIT rather than at the commit.
+▶ THE PRICE REFUTES IT, on the largest module: `mentl audit src/infer.mn`
+costs **4.91 s and 776964 KB**; `tools/drift-audit.sh src/infer.mn` costs
+**0.07 s and 3780 KB**. Seventy times the wall, two hundred times the
+memory, per edit — and the memory floor is the same one the concurrency
+gate guards, so a hook that spends 777 MB per keystroke-scale action is
+not a hook.
+▶ THE COST IS NOT INHERENT, WHICH IS THE FINDING. The verb re-infers a
+9,616-line module and its link from scratch every invocation; the bash
+scan reads text. Nothing about auditing requires re-judging what was
+judged a second ago — that is the IC cursor's own domain, and the
+cross-run half is `Hβ.persist.module-image-cache`.
+▶ SO THAT PEER IS RE-MOTIVATED, and its docs undersell it. Band O carries
+it as cross-run compile skip, a performance nicety. It is the GATE on the
+medium auditing its own construction at the moment of construction —
+which is `Hβ.audit.carried-truth-projection`'s whole point and §0's
+"unsayable before a line is written". Until the image persists, the wrong
+move can only be caught at the commit, by a bash proxy, which is where
+this session's drift was in fact caught.
+▶ NOT BUILT, and the middle ground was checked: a per-SPAN audit
+(`mentl <file>:<line>`) still infers the module, so there is no cheaper
+question to ask. The affordable channel today is the 0.07 s text scan,
+and its rows stay until the image lands.
+
 `Hβ.tools.authoring-verb-writes-only-proven` — THE GATE THE LANDING ABOVE
 COULD NOT WRITE. A verify leg that exercises a WRITING verb needs a
 scratch copy of the tree, because running it in place either mutates

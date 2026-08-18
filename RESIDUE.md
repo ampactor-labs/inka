@@ -943,9 +943,29 @@ renamed nested fn — not rows, not symbols, not readers.
 its indirect-call identity. The emitter's known hazard is exactly this
 family ("dup top-level fn names — emitter picks one silently"), and a
 rename that changes which definition a `call_indirect` resolves to is
-that hazard with a different trigger. The next probe is the prescribed
-one: `wasm-objdump -d` at the trapping address to read the
-`call_indirect` and the type it expected against the one it got.
+that hazard with a different trigger.
+▶ PINNED TO THE INSTRUCTION (2026-08-17, wasm-objdump at the address the
+backtrace named). Inside `parse_int_go`:
+`01225e: call_indirect 0 <fns> (type 2 <ft2>)` then
+`012267: return_call_indirect 3 0` — the TAIL call, through `ft3`, and
+that is the one that traps. Its callee is a closure record's fn pointer
+(`local 12`, `i32.load offset 0`).
+▶ THE TYPE VOCABULARY IS UNCHANGED, which narrows it hard: both
+generations carry the same 36-entry type table, `ft2 = (i32,i32)->i32`
+and `ft3 = (i32,i32,i32)->i32`. So the mismatch is not a changed
+SIGNATURE — it is a changed TARGET. After the rename, the closure's
+stored fn index resolves to a function of different arity.
+▶ NEXT PROBE: read which fn index that closure stores and what occupies
+it in each generation. The `$fns` table plus the closure's construction
+site answer it, and the answer either names a collision (two nested fns
+qualifying to one name, the documented silent-pick) or a stale index.
+▶ AN AMBIENT FIND, banked because the instruction was stale where the
+docs stated it: WABT 1.0.39's `wasm-objdump` accepts NO feature flags at
+all — no `--enable-tail-call`, no `--enable-threads` — and disassembles
+tail-call bearing modules fine without them. CLAUDE.md §8's "EVERY tool
+needs --enable-tail-call --enable-threads" holds for the assembler and
+validator, not for objdump at this version; the sentence sent this probe
+into an error before it read anything.
 ▶ THE ARC'S SHAPE IS NOW THREE STEPS, not two: the indirect-dispatch
 fault is upstream of the discriminator fix, which is upstream of the
 writer flip. Nothing about the row tail can land until a nested fn can be

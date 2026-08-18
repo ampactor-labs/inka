@@ -35,6 +35,41 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE TRAP IS PINNED TO ITS INSTRUCTION, AND THE TYPE TABLE
+  CLEARS THE SIGNATURES (no pin — probe only; boot unchanged at
+  6e05bd9404ed).
+  ▶ THE BANKED PROBE RAN: wasm-objdump at the address the backtrace named.
+  Inside `parse_int_go`, two indirect calls sit three instructions apart —
+  `01225e: call_indirect 0 <fns> (type 2 <ft2>)` and `012267:
+  return_call_indirect 3 0`. The TAIL call, through `ft3`, is the one that
+  traps, and its callee is a closure record's fn pointer (`local 12`,
+  `i32.load offset 0`).
+  ▶ THE TYPE VOCABULARY IS IDENTICAL ACROSS GENERATIONS — both carry the
+  same 36-entry table, `ft2 = (i32,i32)->i32`, `ft3 = (i32,i32,i32)->i32`.
+  That narrows the fault hard: the mismatch is not a changed SIGNATURE but
+  a changed TARGET. After the rename, the closure's stored fn index
+  resolves to a function of different arity.
+  ▶ AN AMBIENT FIND, and the docs paid for it in this very probe: WABT
+  1.0.39's `wasm-objdump` accepts NO feature flags — no
+  `--enable-tail-call`, no `--enable-threads` — and disassembles
+  tail-call-bearing modules fine without them. §8's "EVERY tool needs" is
+  true of the assembler and validator and false of objdump at this
+  version; the flag turned the first attempt into a two-line "unknown
+  option" before it read a single instruction. §8 is trued in place.
+  ▶ WHY NO src CHANGE, fourth in a row and named plainly: the row arc is
+  BLOCKED BEHIND AN EMITTER DEFECT THAT HAS NOTHING TO DO WITH ROWS. A
+  nested function cannot currently be renamed without an indirect call
+  resolving to the wrong arity, and every step toward the open-row fix
+  passes through such a rename. Each iteration's probe has been the
+  loop's mandated first move and each has advanced the pin one layer —
+  startup failure, then naming, then instruction, now target-versus-
+  signature — but none of them is the fix, and pretending otherwise would
+  be the theory-defence the loop forbids.
+  ▶ NEXT PROBE: read which fn index that closure stores and what occupies
+  it in each generation. The `$fns` table plus the closure's construction
+  site answer it, and the answer either names a collision — two nested fns
+  qualifying to one name, the documented silent-pick — or a stale index.
+
 - 2026-08-17 · THE TRAP IS PINNED: INDIRECT CALL TYPE MISMATCH AT A
   RENAMED NESTED FN (no pin — probe only; boot unchanged at
   6e05bd9404ed).

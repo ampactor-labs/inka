@@ -1249,8 +1249,11 @@ python3 tools/emit-diff.py m2.wat m3.wat        # the divergence pinner — run 
 python3 tools/emit-diff.py m2.wat m3.wat --trap # m3-side unreachable bodies m2 lacks (filter to comment-marked floors — bare else-unreachable is benign, SYNTAX §exhaustiveness)
 grep -B3 '(unreachable)' m3.wat | grep ';;' | sort | uniq -c   # the floor CENSUS in one measurement (concat / field-offset markers)
 wat2wasm m2.wat -o m2.wasm --debug-names --enable-threads --enable-tail-call
-# WABT (per task) — EVERY tool needs --enable-tail-call --enable-threads or it chokes on
-# opcode 0x13 (return_call_indirect); with the flags ALL work on m2:  objdump -d (disasm,
+# WABT (per task) — the tools that PARSE need --enable-tail-call --enable-threads or they
+# choke on opcode 0x13 (return_call_indirect). NOT objdump: at WABT 1.0.39 it accepts no
+# feature flags at all and disassembles tail-call modules fine bare — passing them is an
+# immediate "unknown option" error (measured 2026-08-17, the flag sent a trap-pin probe
+# into a two-line failure before it read anything). With the flags where they apply:  objdump -d (disasm,
 # the trap-pin workhorse) · -h (section sizes — the runaway-emit diagnostic;
 # read the live Code-section size, never a hard-coded number) · wasm-stats
 # (opcode distribution — fat/runaway-emit diagnosis) · wasm2wat

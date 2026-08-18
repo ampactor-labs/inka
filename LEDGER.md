@@ -35,6 +35,41 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE LEAK IS REAL, THE MECHANISM WAS NOT: AN ANNOTATED HOF
+  LOSES ITS PARAM'S ROW (no pin — a retraction and a sharper repro; boot
+  unchanged at 5a61fc4eba, wheel source untouched).
+  ▶ THE BUILD THIS TICK OWED was "make `-` populate the absent set".
+  Pricing it first showed the wheel declares no subtracted row, so the
+  change was contained — and then reading `diff_row` showed there was
+  nothing to change: it already does
+  `ef_make(name_set_diff(pa, pb), name_set_union(aa, pb), ta)`, removing
+  the name from the PRESENT set and adding it to the ABSENT set, exactly
+  as SYNTAX's `E - F = E & !F` says. The open-tail arm builds the same
+  masked triple.
+  ▶ SO THE PREVIOUS ENTRY'S MECHANISM IS RETRACTED. "The artifact
+  subtracts it instead, E - F = E" came from reading an error message's
+  DISPLAY — `effect row mismatch: A vs B` — as though it were the row. A
+  display is not a measurement, and that is the second time this arc has
+  billed me for the difference.
+  ▶ THE LEAK IS REAL AND SHARPER THAN THE FRAMING. It needs no
+  subtraction: `fn run(f) with A + !B = f()` accepts
+  `run(() => opb())`, and the medium volunteers the reason —
+  `T_OverDeclared: function 'run' declares A + !B but body only uses
+  Pure`. The callback's row never reaches the enclosing fn's row when
+  that fn carries its OWN declared row, so the `!B` has nothing to check.
+  ▶ WHY THE BATTERY MISSES IT, in one clause: `leak-hof-annotated`
+  refuses the same shape because `fn run(f: () -> Int) = f()` has NO
+  with-clause — run's row is inferred, carries f's row, and the CALLER's
+  `!E` catches it. §11 Phase 1 closed the unannotated form via the
+  signature keep-set; the annotated form was not closed with it, and
+  every existing HOF crucible puts the negation on the caller, so nothing
+  covers the case where a developer writes it on the function that takes
+  the callback — the natural place to write it.
+  ▶ Banked as `Hβ.infer.annotated-hof-loses-its-param-row` with the
+  six-line repro. The crucible stays held back until the fix; the sound
+  half that landed (`sound-difference-admits`) never depended on the
+  retracted mechanism and stands.
+
 - 2026-08-17 · THE SWEEP FINDS A REAL LEAK: ROW SUBTRACTION IS OMISSION,
   NOT NEGATION (no pin — one crucible landed, one held back; boot
   unchanged at 5a61fc4eba, wheel source untouched; crown 47 → 48).

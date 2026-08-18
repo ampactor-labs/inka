@@ -540,9 +540,49 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.effects.row-difference-is-omission-not-negation` — A MEASURED
-SOUNDNESS HOLE, found 2026-08-17 by the 6.3 modal sweep's fifth tick, and
-the first thing that sweep has found rather than pinned.
+`Hβ.infer.annotated-hof-loses-its-param-row` — A MEASURED CROWN-TIER
+LEAK, and this entry OPENS by retracting the mechanism it was filed under
+one tick ago.
+▶ RETRACTED: the leak was banked as
+`Hβ.effects.row-difference-is-omission-not-negation`, claiming `E - F`
+drops F instead of forbidding it. THAT IS FALSE. `diff_row` (effects.mn)
+does exactly what SYNTAX's identity says — `ef_make(name_set_diff(pa,
+pb), name_set_union(aa, pb), ta)` removes the name from the PRESENT set
+and adds it to the ABSENT set, and the open-tail arm builds the same
+masked triple. The "E - F = E" claim came from reading an error
+message's DISPLAY (`effect row mismatch: A vs B`) as if it were the row.
+A display is not a measurement.
+▶ THE LEAK IS REAL — the crown measured the acceptance — and its actual
+mechanism needs no subtraction at all. Minimal repro, six lines:
+```
+effect A { opa() -> Int }
+effect B { opb() -> Int }
+fn run(f) with A + !B = f()
+fn bad() = run(() => opb())
+```
+ACCEPTED. And the medium says why, unprompted: `T_OverDeclared:
+function 'run' declares A + !B but body only uses Pure`. THE CALLBACK'S
+ROW NEVER REACHES THE ENCLOSING FN'S ROW when that fn carries its own
+declared row, so the `!B` has nothing to check and the caller is
+unannotated so nothing else catches it.
+▶ WHY THE BATTERY MISSES IT. `leak-hof-annotated` refuses the same
+shape, and the difference is exactly one clause: there `fn run(f: () ->
+Int) = f()` has NO with-clause, so run's row is inferred, carries f's
+row, and the caller's `!E` catches it. §11 Phase 1 closed
+`Hβ.infer.hof-param-row-never-reaches-enclosing` for that UNANNOTATED
+form — the signature keep-set publishes the param's row var in row and
+scheme coherently. The ANNOTATED form was not closed with it, and no
+crucible covers it because every existing HOF crucible puts the
+negation on the caller.
+▶ SEVERITY: this is the crown's own subject. A developer who writes the
+negation on the function that takes the callback — the natural place to
+write it — gets silence. Every carrier crucible landed this week assumes
+the row reaches the enclosing fn; this is the case where it does not.
+▶ THE CRUCIBLE IS HELD BACK, red today, and lands with the fix. The
+sound half landed as `sound-difference-admits`, which is still valid: it
+pins that subtraction leaves A admitted, and that half never depended on
+the retracted mechanism.
+
 SYNTAX §«Named effect rows» gives `type ReadOnly = File - write` and
 states the identity `E - F = E & !F`, so a subtracted member should be
 FORBIDDEN. The artifact subtracts it instead: for `type Both = A + B` and

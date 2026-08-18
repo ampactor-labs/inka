@@ -1,0 +1,13 @@
+// CROWN — the sound dual at the PARAMETER PRODUCT carrier: the same
+// partial application is BUILT under `with !E` and its hole is never
+// filled, so nothing performs. Must accept.
+effect E { op() -> Int }
+
+fn add_e(a, b) = a + b + op()
+
+fn good() with !E = {
+  let p = add_e(1)
+  7
+}
+
+fn main() = good()

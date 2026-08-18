@@ -1,0 +1,19 @@
+// CROWN — latency rides the PARAMETER PRODUCT: a fn performing E,
+// PARTIALLY APPLIED so its remaining hole is unfilled, then completed
+// under `with !E`. The row must ride the hole-product to the filling
+// call. Expect E_EffectMismatch.
+//
+// SYNTAX calls partial application "the product with a hole" — a
+// first-class value carrying its supplied fields — so it is a storage
+// carrier like the record field and the tuple position, and it was the
+// one the previous tick's "family is complete" claim missed.
+effect E { op() -> Int }
+
+fn add_e(a, b) = a + b + op()
+
+fn bad() with !E = {
+  let p = add_e(1)
+  p(2)
+}
+
+fn main() = bad()

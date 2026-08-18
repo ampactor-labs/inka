@@ -35,6 +35,31 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE HOLE-PRODUCT JOINS THE LATENCY RULE, AND CORRECTS THE
+  LAST ENTRY — CROWN 43 → 45 (no pin — crucibles only; boot unchanged at
+  5a61fc4eba, wheel source untouched).
+  ▶ PRIORITY SERVED: the 6.3 modal sweep, third tick.
+  ▶ THE PREVIOUS ENTRY CALLED THE STORAGE-CARRIER FAMILY COMPLETE against
+  §5.U's five node-kinds. It was not. SYNTAX calls partial application
+  "the product with a hole" — a first-class VALUE carrying its supplied
+  fields — so the PARAMETER PRODUCT is a storage carrier exactly like the
+  record field and the tuple position, and nothing pinned it. The roster
+  check that found it took one `ls`.
+  ▶ `leak-partial-latent` partially applies a fn that performs E, leaves
+  the hole open, and fills it under `with !E`: refused (mismatch=1).
+  `sound-partial-transport` builds the identical partial application
+  under the same negation and never fills the hole: accepted. That pair
+  is the surface's own claim measured — a hole-product performs nothing
+  until its field arrives, and the row rides the product until it does.
+  ▶ SEEN RED: dropping the filling call takes the gate to `✗ want reject,
+  mismatch=0`, crown 44/1, and back to 45/0 on restore.
+  ▶ THE CARRIER SET, stated without the word complete this time: list
+  element, record field, tuple position, variant payload, handler config
+  slot, handler state slot, and the parameter product's hole. Six
+  crucible pairs across three ticks, none of which touched wheel source —
+  the rules all held; what was missing was the board's ability to see
+  them break.
+
 - 2026-08-17 · HANDLER STATE JOINS THE LATENCY RULE — CROWN 41 → 43 (no
   pin — crucibles only; boot unchanged at 5a61fc4eba, wheel source
   untouched).

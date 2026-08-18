@@ -593,11 +593,36 @@ does reach this code — `lookup_handler_state_inits_of` calls
 still fails, which is precisely the shape that wants instrumentation
 rather than more reading: I guessed four times in this iteration and the
 artifact refused each guess.
-NAMED NEXT PROBE: instrument `lower_state_field_inits` to print
-`config_names` and the resolution verdict for each init's VarRef, then
-compile the two-line repro. One run says whether the frame is present
-and the name simply missing from it, or the frame is absent when the
-init lowers. Do not attempt a third design before that print exists.
+THE PROBE RAN (2026-08-17) AND REFUTED ITS OWN QUESTION. Two facts, both
+from the artifact:
+  (1) The special case works exactly as documented. Encoding the branch
+      taken in the exit code — 777 for an empty `config_names`, 888 for a
+      name not found — the repro answers 10, so the list is populated and
+      the name resolves at its slot.
+  (2) THE FRAME IS CONSULTED. Rebuilding the frame variant and reading
+      the EMITTED WAT for the repro shows ZERO `unbound name` markers.
+      The name resolves through `ls_resolve` and no MissingName floor is
+      emitted. So "the frame was never consulted", written here one
+      iteration ago, is WRONG — that was a third guess, refuted like the
+      others.
+WHAT IS ACTUALLY OPEN: the frame variant lowers CLEANLY and still traps
+at RUN. One difference is visible in the code and is the first thing to
+test: the special case emits `LUpval(0, slot)` with handle 0, while the
+resolver path takes `LUpval(if local_h == 0 { handle } else { local_h },
+slot)` and, since the capture handles are zeros, lands on the VarRef's
+OWN handle. Same slot, different handle — and emit reads the handle for
+type-directed decisions.
+INSTRUMENT LESSON, paid for with two broken wheels: `lower_state_field_inits`
+is shared by EVERY handler in the wheel, so any behavioural probe there
+is a whole-wheel change — a constant substituted for state inits stripped
+the wheel's own handlers of their state and produced m3 ≠ m4 twice, once
+even when gated on a fixture-only name. The instrument that works here
+needs no behaviour change at all: build the candidate m2, compile the
+repro, and READ THE WAT.
+NAMED NEXT PROBE: diff the emitted state-init region of the repro between
+the baseline and the frame variant. Both lower without a floor, so the
+divergence is visible in the emitted code, and the handle difference above
+is the hypothesis to confirm or kill first.
 THE MINIMAL REPRO, seconds instead of a march
 (tests/frontier/mn-handler-state-from-config.mn, plus two scratch
 variants): `handler h(start) with n = start` runs and answers 10 —

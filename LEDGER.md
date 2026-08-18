@@ -35,6 +35,42 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE INSTRUMENT REFUTES THE PREVIOUS ITERATION'S OWN
+  DIAGNOSIS (no pin — probes reverted whole; boot unchanged at
+  5a61fc4eba, src and lib byte-identical to the previous pin).
+  ▶ THE MANDATED PROBE, run before any third design as the last entry
+  required. Two facts, both from the artifact. The special case works
+  exactly as documented: encoding which branch it takes in the exit code
+  — 777 for an empty `config_names`, 888 for a name not found — the repro
+  answers 10, so the list is populated and the name resolves at its slot.
+  And THE FRAME IS CONSULTED: rebuilding the frame variant and reading
+  the EMITTED WAT shows ZERO `unbound name` markers, so the name resolves
+  through `ls_resolve` and no MissingName floor is emitted. "The frame was
+  never consulted", written one iteration ago, is WRONG — a third guess,
+  refuted like the two before it.
+  ▶ WHAT IS ACTUALLY OPEN is now well posed: the frame variant lowers
+  CLEANLY and still traps at RUN. One visible difference is the first
+  hypothesis to kill — the special case emits `LUpval(0, slot)` with
+  handle 0, while the resolver path takes
+  `LUpval(if local_h == 0 { handle } else { local_h }, slot)` and, the
+  capture handles being zeros, lands on the VarRef's OWN handle. Same
+  slot, different handle, and emit reads the handle for type-directed
+  decisions.
+  ▶ THE INSTRUMENT LESSON, paid for with two broken wheels.
+  `lower_state_field_inits` is shared by EVERY handler in the wheel, so a
+  behavioural probe there is a whole-wheel change: substituting a constant
+  for state inits stripped the wheel's own handlers of their state and
+  produced m3 ≠ m4 twice — the second time even gated on a fixture-only
+  name. The instrument that works needs no behaviour change at all: build
+  the candidate m2, compile the repro, read the WAT. That is what finally
+  answered the question, and it is what the next probe uses — diff the
+  state-init region between baseline and variant.
+  ▶ FIVE GUESSES REFUTED IN TWO ITERATIONS on one defect. The pattern is
+  consistent enough to name: every one came from reading code and
+  reasoning forward, and every refutation came from running something.
+  The rule this earns is narrower than "measure first" — when a chain's
+  links each verify and the whole still fails, stop reading the links.
+
 - 2026-08-17 · THE CAPTURE-FRAME FIX IS REFUTED, AND THE ITERATION STOPS
   GUESSING (no pin — experiment reverted whole per step 5; boot unchanged
   at 5a61fc4eba, src and lib byte-identical to the previous pin).

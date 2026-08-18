@@ -35,6 +35,40 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE LEAK'S BOUNDARY IS EXACT: CONCRETE ROWS ARE ENFORCED,
+  A FREE VAR IS NOT (no pin — three probes, all reverted; boot unchanged
+  at 5a61fc4eba, wheel source untouched).
+  ▶ FOUR MEASUREMENTS, and two candidates died before a fix was built on
+  either.
+  1. THE COMPLETION PRUNE IS EXONERATED. Bypassing `row_keep_completion`
+     entirely leaves the repro accepting. The param's row var was never
+     in the frame's accumulated row at exit, so the keep-set was never
+     the question. (Census went 0 → 12 with the prune off, which is the
+     prune doing its actual job and unrelated.)
+  2. THE CHARGE RUNS. Replacing the call edge's silent `_ => ()` arm with
+     a visible probe effect produced nothing, so the `NBound(TFun…)` arm
+     is the one taken and `inf_add_row_unified(crow)` fires.
+  3. `row_without_self` IS LOAD-BEARING: removing it makes the wheel trap
+     outright, which is evidence the frame's accumulated row contains the
+     frame's OWN row handle. Inconclusive as a probe, informative as a
+     fact.
+  4. THE CLINCHER, and it needs no wheel change: a LOCAL closure with a
+     CONCRETE row, declared Pure, REFUSES —
+     `E_PurityViolated: expected Pure but found effects: B`. Same call
+     machinery, same declaration; the only difference from the leaking
+     repro is concrete-row versus free-var.
+  ▶ SO THE BOUNDARY IS: a declared row is enforced against a concrete
+  body row and silently vacuous against a body row that is a free var
+  flowing from a called parameter. The strongest remaining candidate is
+  that the param's row var unifies with the enclosing fn's own row var —
+  it must, since the body IS `f()` — and `row_without_self` then strips
+  it as a self-reference. Measurement 3 is consistent with that and does
+  not prove it, so it stays a candidate.
+  ▶ NEXT PROBE: determine whether the param's row root equals the frame's
+  own row handle at exit. If it does, the fix is that self-stripping must
+  distinguish the frame's own row from a var merely unified INTO it, and
+  the three-line gate lands with it.
+
 - 2026-08-17 · THE BODY ROW IS *PURE* AT THE CHECK, AND PUBLICATION IS
   EXONERATED (no pin — the leak's fifth narrowing, site bracketed; boot
   unchanged at 5a61fc4eba, wheel source untouched).

@@ -540,9 +540,49 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.infer.annotated-hof-loses-its-param-row` — A MEASURED CROWN-TIER
-LEAK, and this entry OPENS by retracting the mechanism it was filed under
-one tick ago.
+`Hβ.infer.param-call-never-charges-the-declared-row` — A MEASURED
+CROWN-TIER LEAK, narrowed across three ticks to a THREE-LINE repro, and
+it corrects a peer PLAN §11 Phase 1 records as CLOSED.
+▶ THE REPRO, and it needs no negation, no subtraction and no callback
+gymnastics:
+```
+effect B { opb() -> Int }
+fn run(f) with Pure = f()
+fn main() = run(() => opb())
+```
+ACCEPTED. `Pure` is the empty row — the strongest claim the surface
+has — and a body that calls an effectful callback satisfies it.
+▶ WHAT IS ACTUALLY BROKEN: a call to a function-typed PARAMETER does not
+charge that parameter's row to the enclosing function's inferred row, so
+the DECLARED row is never checked against it. The medium says so in its
+own narration on the negation variant — `T_OverDeclared: function 'run'
+declares A + !B but body only uses Pure`.
+▶ WHY IT LOOKS CLOSED. For an UNANNOTATED fn the hole is invisible: the
+param's row var is quantified into the scheme, the caller instantiates
+it, and the callback's row reaches the CALLER, which is where every
+existing HOF crucible puts its negation — so `leak-higher-order`,
+`leak-hof-annotated` and `leak-hof-named-arg` all refuse correctly and
+the battery reads green. Phase 1's record says the signature keep-set
+"publishes its param's row var in row and scheme coherently". The SCHEME
+half is real and is what those crucibles measure. The ROW half is not:
+the enclosing fn's own row stays Pure, so any declared row on that fn is
+a claim nothing verifies.
+▶ SEVERITY. This is §0's second property — the negative is provable —
+failing at the shape most likely to carry a real negation: a function
+that takes a callback and promises `!Alloc`, `!IO`, `Pure`. The promise
+compiles and means nothing. It is not end-to-end unsoundness in the
+simple case, because the caller still gets charged through the scheme,
+but the local claim is false and anything reading it is misled.
+▶ THE FIX DIRECTION, stated without asserting a mechanism not yet read:
+the call edge at a function-typed param must join the param's row into
+the enclosing fn's inferred row, so `with Pure` on that body REFUSES.
+The three-line repro is the gate, and it lands with the fix rather than
+sitting red in the battery.
+▶ SUPERSEDES the two framings this arc filed and retracted —
+row-difference-is-omission (false: `diff_row` populates the absent set)
+and annotated-hof-loses-its-param-row (true but narrow: the annotation
+is not required, `Pure` shows it plainly).
+
 ▶ RETRACTED: the leak was banked as
 `Hβ.effects.row-difference-is-omission-not-negation`, claiming `E - F`
 drops F instead of forbidding it. THAT IS FALSE. `diff_row` (effects.mn)

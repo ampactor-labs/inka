@@ -35,6 +35,43 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · `fn run(f) with Pure = f()` IS ACCEPTED (no pin — the leak
+  narrowed to three lines; boot unchanged at 5a61fc4eba, wheel source
+  untouched).
+  ▶ THE NARROWING, three ticks from a seven-line subtraction crucible to
+  this:
+  ```
+  effect B { opb() -> Int }
+  fn run(f) with Pure = f()
+  fn main() = run(() => opb())
+  ```
+  `Pure` is the empty row and the body calls an effectful callback. It
+  compiles.
+  ▶ WHAT IS BROKEN: a call to a function-typed PARAMETER charges nothing
+  to the enclosing fn's inferred row, so the DECLARED row is never
+  checked against it. No negation is involved, which is why the earlier
+  framings kept sliding — subtraction was a red herring
+  (`diff_row` provably populates the absent set) and so was the
+  annotation (`Pure` shows it without one).
+  ▶ IT CORRECTS A "CLOSED" PEER. §11 Phase 1 records
+  `Hβ.infer.hof-param-row-never-reaches-enclosing` closed by the
+  signature keep-set, "publishes its param's row var in row and scheme
+  coherently". The SCHEME half is real and is exactly what
+  `leak-higher-order`, `leak-hof-annotated` and `leak-hof-named-arg`
+  measure — each puts its negation on the CALLER, where the instantiated
+  scheme delivers the callback's row. The ROW half is not: the enclosing
+  fn's own row stays Pure. Every HOF crucible in the battery tests the
+  half that works.
+  ▶ SEVERITY, plainly: this is §0's "the negative is provable" failing at
+  the shape most likely to carry a real negation — a function taking a
+  callback and promising `!Alloc`, `!IO` or `Pure`. The promise compiles
+  and verifies nothing. The caller is still charged through the scheme,
+  so simple programs are not miscompiled; the local claim is simply
+  false.
+  ▶ Banked as `Hβ.infer.param-call-never-charges-the-declared-row`,
+  superseding the two framings this arc filed and retracted. The
+  three-line gate lands with the fix.
+
 - 2026-08-17 · THE LEAK IS REAL, THE MECHANISM WAS NOT: AN ANNOTATED HOF
   LOSES ITS PARAM'S ROW (no pin — a retraction and a sharper repro; boot
   unchanged at 5a61fc4eba, wheel source untouched).

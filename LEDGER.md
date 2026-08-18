@@ -35,6 +35,54 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · pin e06c6658fc20 · THE BANKED PROBE RAN, AND IT FOUND THE
+  WHEEL STANDING ON AN ACCIDENT. CLEAN, m2 == m3, census 0, frontier
+  371/0, 16.18s wall · 2274684 KB peak.
+  ▶ THE PROBE the previous entry banked — how a record pattern resolves
+  its field offset through a parameter receiver — answered at the
+  definition and then at the artifact. `lower_pat_typed`'s PRecord arm
+  asks `record_pat_full_fields(ty)` for the receiver's FULL sorted field
+  set. Resolved, each named field takes its true offset. Unresolved, the
+  fallback is `lower_pat_record_fields(flds, 0)`, which computes
+  `(base + i) * 4` from the PATTERN's own enumeration index — correct
+  only when the pattern names the first k fields of the full set in
+  sorted order.
+  ▶ THE RECEIVER IS GENUINELY POLYMORPHIC, so this is not a fact read too
+  late. The medium projects the parameter as `{ zeta: t39682@e0 |
+  r39684@e2 }` — an open row, whose remaining fields the CALLER decides.
+  With an open row those extra fields may sort before or after the named
+  one, so the offsets are unknowable at lowering and any value they take
+  is a guess. `record_pat_full_fields` returns None correctly; the
+  fallback is what invents.
+  ▶ ONE BRANCH, TWO HONESTIES. The rest half of that same fallback
+  (`lower_rest_unresolved`) carries empty specs so emit fires its loud
+  floor — the trap measured yesterday. The field half fabricates an
+  index and returns a wrong value with no diagnostic. That asymmetry is
+  the finding: the design already decided unresolved means unknown, and
+  only one of its two halves says so.
+  ▶ THE WHEEL IS EXPOSED, and correct by accident. The new census counts
+  2 record patterns on its own link (`backends/wasm:1096`,
+  `pipeline:424`), and the site projects its receiver as `{ args: …,
+  body: …, op_name: String | r367192@e17 }` — open. Its three sorted
+  names are slots 0 through 2, so the fabricated indices land right. That
+  is forensic law 5 exactly: an invariant held by accident is a bug the
+  first new capability exposes, and naming the accident is the first half
+  of making it a contract.
+  ▶ WHAT LANDED: `CsRecordPattern`, the census's second declared-surface
+  shape, reading both spellings where the pattern lives — a let binding's
+  own pattern and a match arm's. It replaces the grep that priced this
+  fix and answers with LOCATED sites, which is how the exposure above was
+  found at all. Seen RED first against the standing boot.
+  ▶ WHY NO FIX YET, stated plainly: the ultimate form is a fork already
+  open elsewhere. Either record twinning becomes TYPE-keyed so each call
+  site specializes its receiver's layout (5.1's repr-keyed monomorphization
+  cannot, since every record is one word), or the layout travels with the
+  value at runtime. That is the same shape as
+  `Hβ.value.seq-element-stride-carrier`, where a generic body compiles
+  once with a TVar element and reads at the wrong stride; this is that
+  class at the RECORD, and naming the second instance is what the census
+  law asks for before designing the pass.
+
 - 2026-08-17 · PHASE 0.4 WAS NEVER BUILT, AND ITS FIRST SWEEP FOUND TWO
   DEFECTS NOTHING ELSE CAN SEE (no pin — tools, tests and docs; boot
   unchanged at a6e900f35888).

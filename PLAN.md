@@ -1568,7 +1568,12 @@ The roster grew its first DECLARED-SURFACE shape 2026-08-17 —
 declares appears at all, which is what an oracle-blind probe (tripwire 3)
 needs and what a grep from outside the medium had been answering; its
 siblings are labeled arguments, as-patterns, record rest and named row
-aliases, each reading its own carrier.
+aliases, each reading its own carrier. `record-pattern` followed the same
+day and earned its keep immediately: its located count found the wheel
+destructuring an OPEN-ROW receiver at pipeline:424, where the offsets are
+guessed and land right only because the pattern's sorted names occupy the
+first slots — the accident behind
+`Hβ.lower.record-pattern-param-receiver`.
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
 NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
 found nothing: `tests/syntax/` had no history under any ref, no gate

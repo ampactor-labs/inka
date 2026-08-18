@@ -682,14 +682,47 @@ name: 12}` answers 30 through a parameter.
 even when `rest` is never read, so the trap is the BINDING rather than
 the residual's field access. The identical body over a local receiver
 answers 12.
-▶ WHAT IS MEASURED AND WHAT IS NOT. The shared discriminator is measured
-four ways: both faces fail through a parameter, both are correct with a
-local binding. That they are ONE root is NOT measured, and SYNTAX's own
-sentence is the reason to suspect it — the record rest is "resolved
-through the RECEIVER'S TYPE at lower," which is exactly the read the
-parameter path changes. The next probe reads how the pattern resolves its
-field offset when the receiver's type is a parameter's rather than a
-let's; a fix lands with both repros as fixtures, never before.
+▶ THE ROOT IS ONE, AND THE PROBE FOUND IT (2026-08-17, pin
+e06c6658fc20). `lower_pat_typed`'s PRecord arm asks
+`record_pat_full_fields(ty)` for the receiver's FULL sorted field set.
+Resolved, each named field takes its true offset and the rest gets real
+residual specs. Unresolved, ONE branch serves both faces:
+`lower_pat_record_fields(flds, 0)` computes `(base + i) * 4` from the
+PATTERN's own enumeration index, and `lower_rest_unresolved` hands the
+rest empty specs. Both measured faces are that single branch — the wrong
+slot is the fabricated index, the trap is emit's floor on the empty
+specs.
+▶ THE RECEIVER IS GENUINELY POLYMORPHIC, so this is not a fact read too
+late and no amount of reading harder fixes it. The medium projects the
+parameter as `{ zeta: t39682@e0 | r39684@e2 }`: an open row whose
+remaining fields the CALLER decides, which may sort before or after the
+named one. The offsets are therefore unknowable at lowering, any value
+they take is a guess, and `record_pat_full_fields` answers None
+correctly.
+▶ ONE BRANCH, TWO HONESTIES — the sharpest statement of the defect. The
+rest half says "I do not know" and traps. The field half invents an index
+and returns a wrong value silently. The design already decided that
+unresolved means unknown; only one of its halves acts on that decision,
+and the silent half is the one the docs rank worst.
+▶ THE WHEEL IS EXPOSED AND CORRECT BY ACCIDENT. The census counts 2
+record patterns on the wheel's own link (`backends/wasm:1096`,
+`pipeline:424`), and pipeline's receiver projects as `{ args: …, body: …,
+op_name: String | r367192@e17 }` — open. Its three sorted names occupy
+slots 0 through 2, so the fabricated indices land right. Forensic law 5:
+an invariant held by accident is a bug the first new capability exposes.
+That is also why every gate stayed green, and why the existing frontier
+leg "record-pattern rest: the residual record builds and reads" passes —
+its receiver resolves, so it never enters this branch.
+▶ THE FIX IS A FORK ALREADY OPEN ELSEWHERE, not a patch. Either record
+twinning becomes TYPE-keyed so each call site specializes its receiver's
+layout — 5.1's monomorphization is repr-keyed and every record is one
+word, so it collapses all record shapes into one twin — or the layout
+travels with the value at runtime. That is the same shape as
+`Hβ.value.seq-element-stride-carrier`, where a generic body compiles once
+with a TVar element and reads at the wrong stride. This is that class at
+the RECORD, and the census law asks for the pass covering both instances
+rather than a per-site pin. A fix lands with both repros as fixtures,
+never before.
 ▶ SEVERITY: face one is the silent-wrong class the docs rank worst — a
 declared surface answering the wrong value with the whole board green.
 The wheel never destructures a record parameter by pattern, which is why
@@ -718,6 +751,20 @@ either drop the binder or add a wildcard, and a wildcard on a
 load-bearing ADT is the masking the docs forbid.
 ▶ REPRO HELD BACK, red today, landing with the fix; its control (the
 same match without the binder) is the green half.
+
+`Hβ.query.record-pattern-open-receiver` — THE JUDGED HALF OF
+`CsRecordPattern`. The shape counts every record-pattern site
+syntactically (landed 2026-08-17, pin e06c6658fc20, and it found the
+wheel's own two); what prices the fix is which of them face an OPEN ROW
+receiver, since those are exactly the sites whose offsets are guessed.
+The read is the receiver's judged type at the pattern — the same channel
+`CsEffectfulLambda` already uses when it reads a lambda's judged row, so
+this is a refinement of an existing shape rather than a new mechanism.
+Today the open-row half is answered one site at a time by projecting the
+node (`mentl <file>:<line>` renders the receiver's row), which is how the
+pipeline:424 accident was found; the shape should answer it for the whole
+link at once, and its count is the honest denominator for
+`Hβ.lower.record-pattern-param-receiver`.
 
 `Hβ.query.default-param-census` — ✅ RESOLVED 2026-08-17, pin
 a6e900f35888. `CsDefaultParam` is the census's first DECLARED-SURFACE

@@ -1329,6 +1329,8 @@ fn census_shape_of(arg) with Memory + Alloc = if arg == "anonymous" {
   Some(CsEnvFrame)
 } else if arg == "default-param" {
   Some(CsDefaultParam)
+} else if arg == "record-pattern" {
+  Some(CsRecordPattern)
 } else {
   match find(
     (k) => show_pipe_kind(k) == arg,

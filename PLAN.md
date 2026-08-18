@@ -1621,14 +1621,16 @@ the fault is the read-past half of the same diff: three PARENT fns
 differ STRUCTURALLY. That divergence is now READ and PROVEN BY POSITION: m2 binds `$go` at
 body line 19 and first reads at 21, while m3 drops that binding and its
 first read at line 20 precedes any write, so the local is zero and the
-closure the tail call dispatches on is null. The site is `LMakeClosure`'s self-capture early-bind, whose own comment
-names this trap — its guard `captures_self` compares a capture's name
-against `fn_name` by string, so qualification breaks the match. The
-defect is TWO NAMESPACES IN ONE FIELD: `LFn.name` is spent on both the
-qualified emitted symbol and the local binding, which must stay
-source-level. STAMPED, not built — the `LFn` site set is not enumerated.
-The arc is three steps: that representation, then the discriminator, then
-the writer flip. The symbol-collision and dangling-symbol suspicions are both
+closure the tail call dispatches on is null. RESOLVED 2026-08-17 across two pins. The site was `LMakeClosure`'s
+self-capture early-bind, whose guard compared a capture's NAME against
+the LowFn's — two namespaces once qualification starts. The repair is an
+IDENTITY read (the capture's handle IS the closure's), which also answers
+which local to bind, so the second name field the stamp priced dissolved.
+With that in place the discriminator's receivers were annotated and
+nested fns QUALIFY for the first time (pin 6cacd339350c, TRANSITION,
+m3 == m4). The open-row CLASS is untouched — an unannotated receiver
+still takes offsets from the known set — and the row arc resumes from
+there. The symbol-collision and dangling-symbol suspicions are both
 dead (514 duplicate names on both sides; both generations define both
 naming forms).
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND

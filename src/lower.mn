@@ -5264,7 +5264,17 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = s
 // only named-fn frames contribute. Returns empty string when no
 // named-fn frame exists (top-level). Drift refused: 7 (frames is one
 // list; we read it sequentially, not as parallel arrays).
-fn ls_outer_fn_name_loop(frames) = if len(frames) == 0 {
+// The receiver is ANNOTATED with the frame record's WHOLE field set, and
+// that is what makes the field read below a proof. A field's offset
+// resolves from the receiver's full sorted set; an unannotated `frames`
+// leaves the row OPEN, and the offsets then come from whatever subset this
+// body happens to name — right only by accident of sort order. This fn is
+// the nested-fn name discriminator, so getting it wrong is not a local
+// matter: reading a foreign slot here returned the empty string, nested
+// fns were never qualified, and the whole qualification path sat dormant.
+// Field types read from the ls_enter_frame op's own declared signature,
+// not inferred by eye.
+fn ls_outer_fn_name_loop(frames: [{capture_handles: [Int], capture_order: [String], captures: [String], fn_name: String, lambda_h: Int, local_handles: [Int], local_order: [String], locals: [String]}]) = if len(frames) == 0 {
   ""
 } else {
   let frame = last(frames)
@@ -5278,7 +5288,7 @@ fn ls_outer_fn_name_loop(frames) = if len(frames) == 0 {
 // enclosing lambda. Peer of ls_outer_fn_name_loop; one list, read sequentially
 // (drift 7 refused). The handle indexes the lambda's own row at the ev READ —
 // the SAME effects_of(lookup_ty) projection PLACE used (read==place by build).
-fn ls_current_lambda_handle_loop(frames) = if len(frames) == 0 {
+fn ls_current_lambda_handle_loop(frames: [{capture_handles: [Int], capture_order: [String], captures: [String], fn_name: String, lambda_h: Int, local_handles: [Int], local_order: [String], locals: [String]}]) = if len(frames) == 0 {
   -1
 } else {
   let frame = last(frames)

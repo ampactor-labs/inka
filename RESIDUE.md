@@ -1058,9 +1058,19 @@ so the early bind targets what the emitted body loads. Both halves closed
 with fewer fields, not more. `m2 == m3` proves the new emit reproduces
 the old exactly on the wheel's own source, so nothing was being missed
 today and the fix is dormant until qualification starts.
-▶ THE ONLY KNOWN BLOCKER LEFT between here and the row arc is the
-discriminator itself, which still reads a foreign slot through an open
-row. Re-attempting the receiver annotation is the next step.
+▶ THE BLOCKER IS CLEARED (2026-08-17, pin 6cacd339350c, TRANSITION). The
+two receivers are annotated, the discriminator's offsets resolve from the
+full sorted set, and nested fns qualify for the first time — bare `go`,
+`digit`, `search` gone from the emit, `parse_int_go`, `parse_int_digit`,
+`index_of_search` in their place. m2 ≠ m3 by 36 lines and m3 == m4: the
+new wheel reproduces itself. The same two annotations marched BROKEN
+three times with m4 trapping; what changed is the previous pin's identity
+read, which makes the self-capture early-bind fire under qualification.
+▶ THE CLASS IS UNTOUCHED, measured at that pin: `fn pick(u: {zeta: Int,
+...}) = u.zeta` over `{alpha: 7, zeta: 9}` still answers 7. The WHEEL's
+own exposure is closed; any unannotated record receiver still takes its
+offsets from the known set. The row arc resumes from here, with the
+emitter defect that blocked it fixed rather than avoided.
 ▶ THE ORIGINAL LANDING TEXT, superseded: The
 divergence's construction site is one expression in lower.mn: `fn_name =
 if outer == "" { name } else { "{outer}_{name}" }`, and then

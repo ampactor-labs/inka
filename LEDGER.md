@@ -35,6 +35,40 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · pin 6cacd339350c · THE DISCRIMINATOR WORKS, AND THE ARC'S
+  BLOCKER IS CLEARED. TRANSITION — m2 ≠ m3 by 36 lines, m4 exit 0 at
+  412788 lines, m3 == m4, repinned from m3. census 0, frontier 371/0,
+  16.39s and 16.70s wall on the two legs.
+  ▶ WHAT LANDED: the two receivers of the nested-fn name discriminator are
+  annotated with the frame record's whole field set, so their offsets
+  resolve from the full sorted set instead of a foreign slot. Nested fns
+  are QUALIFIED for the first time — bare `go`, `digit` and `search` are
+  gone from the emit, and `parse_int_go`, `parse_int_digit` and
+  `index_of_search` stand in their place, each once.
+  ▶ THIS EXACT CHANGE BROKE THE MEDIUM THREE TIMES. It is the same two
+  annotations that marched BROKEN with m4 trapping at exit 134, and what
+  makes it land now is the previous pin's identity read: with the
+  self-capture found by handle rather than by name, the early bind fires
+  under qualification and targets the local the body actually reads. The
+  fix and its prerequisite were separated by five iterations of measuring,
+  and the separation is why this one is a TRANSITION rather than a fourth
+  revert.
+  ▶ THE M4 LEG IS THE WHOLE VERDICT. m3 alone was clean at every failed
+  attempt too; only running the generation after it distinguishes "emits
+  something" from "reproduces itself". The banked instruction to watch
+  that leg from the first run was earned by three failures and paid off
+  here.
+  ▶ WHAT IS NOT FIXED, measured this turn: the open-row class itself.
+  `fn pick(u: {zeta: Int, ...}) = u.zeta` over `{alpha: 7, zeta: 9}` still
+  answers 7. The wheel's OWN exposure is closed — its discriminator no
+  longer reads a foreign slot — but any unannotated record receiver still
+  takes its offsets from the known set. That is the arc's actual target
+  and it is untouched.
+  ▶ THE ARC IS BACK WHERE IT WAS BEFORE THE DETOUR, with the detour's
+  defect fixed rather than worked around: the emitter no longer breaks
+  when a nested fn's name qualifies, so the row work can proceed without
+  tripping it.
+
 - 2026-08-17 · pin ec2f629f11e8 · THE SELF-CAPTURE IS READ BY IDENTITY.
   CLEAN, m2 == m3, census 0, frontier 371/0, 16.27s wall · 2280528 KB
   peak, 412788 lines, module 2421155 bytes.

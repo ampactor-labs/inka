@@ -35,6 +35,39 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 362ac8b1eeae · AN INIT CANNOT CALL THE HANDLER IT IS
+  BUILDING. CLEAN — m2 == m3 at 413738 lines, census 0, battery green,
+  frontier 371/0, 14.99s wall, peak 2259388 KB against a 2310000 ceiling.
+  ▶ WHAT LANDED: `E_InitPerformsOwnOp`, the THIRTEENTH armed class. A
+  direct perform lexically inside `LHandleWith`'s own `inits`, naming that
+  install's own handler, refuses at compile time. The emit pre-pass draws
+  the scope as an install rather than threading a flag —
+  `{ walk_lemit_list(inits) } ~> preinstall_init_scope(hname, span)` — and
+  the arm compares the perform's handler name to the install's own.
+  ▶ WHY ONLY THERE: the 1016 sibling guards in the wheel's own emit are
+  belts under a LIVE `world_find`, and no static extent discharges them
+  (measured the previous iteration, and the reason that framing was
+  retracted). This site is the one where the zero is provable: the
+  install's `world_push` is emitted below its inits, for every install of
+  it, so the lookup cannot answer.
+  ▶ THE SPAN IS READ, NOT FABRICATED. The backend had no span vocabulary
+  at all — measured, the new lines are its only mentions — and the fix was
+  not to invent one: `reason_span_or_zero(graph_reason_at(ih))` reads the
+  install node's own Reason through the GraphRead row the backend already
+  declares and the types.mn projection it already imports. The diagnostic
+  lands at 2616:15-2616:22 rather than at zero.
+  ▶ MEASURED BEFORE AND AFTER on the same program. At pin c3410610ce41 it
+  compiled to 38467 bytes and trapped at exit 134, the belt naming the op,
+  the handler, the extent and the fix — correct, and after emitting a
+  module. Now: `E_InitPerformsOwnOp … at 2616:15-2616:22`, exit 1, nothing
+  emitted.
+  ▶ GATES, both halves: `mn-refuse-init-performs-own-op` as a refuse
+  contract, and `mn-init-performs-outer-op` running at 42 — an init
+  performing an op ANOTHER handler answers is ordinary and must stay so.
+  Falsified in a scratch directory first: the same fixture with its
+  expected class mutated reports `FAILR … wanted E_OccursCheck`.
+  ▶ ONE VARIABLE: the inits scope and the class it reports.
+
 - 2026-08-18 · pin c3410610ce41 · WHAT THE INSTALL EVALUATES, THE INSTALL
   PAYS. CLEAN — m2 == m3 at 413442 lines, census 0, battery green, crown
   56/0, frontier 371/0, 17.09s wall, peak 2274404 KB against a 2310000

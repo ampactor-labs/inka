@@ -2091,6 +2091,14 @@ type DiagKind
   // within one iteration. Decidable exactly when the depth is a
   // literal; a computed depth rides the refinement tier.
   | EZeroDelayFeedback(Span)
+  // A handler's own state init performs an op THIS handler answers. The
+  // install's world_push has not run while its inits run — by
+  // construction, for every install of it — so the singleton dispatch's
+  // world_find provably returns 0 and the belt beneath it is the only
+  // outcome. The runtime already says this precisely; saying it at compile
+  // time is the difference between a program that traps and one that never
+  // ships (handler name, op name).
+  | EInitPerformsOwnOp(String, String, Span)
   // `<~ delay(n)` where n is a runtime value. The line is a fixed set of
   // slots declared at emit, so a depth the medium cannot read is a depth
   // it cannot hold — and giving one prior to a site that asked for n is
@@ -2302,6 +2310,7 @@ fn diag_span(d) with Pure = match d {
   EUnknownArgLabel(_, s) => s,
   EFeedbackNoContext(s) => s,
   EZeroDelayFeedback(s) => s,
+  EInitPerformsOwnOp(_, _, s) => s,
   EComputedDelayDepth(s) => s,
   ERestOutsideDestructure(s) => s,
   ERowAliasCycle(_, s) => s,
@@ -2365,6 +2374,7 @@ fn diag_source(d) with Pure = match d {
   EUnknownArgLabel(_, _) => "infer",
   EFeedbackNoContext(_) => "infer",
   EZeroDelayFeedback(_) => "infer",
+  EInitPerformsOwnOp(_, _, _) => "effects",
   EComputedDelayDepth(_) => "infer",
   ERestOutsideDestructure(_) => "infer",
   ERowAliasCycle(_, _) => "effects",
@@ -2428,6 +2438,7 @@ fn diag_code(d) with Pure = match d {
   EUnknownArgLabel(_, _) => "E_UnknownArgLabel",
   EFeedbackNoContext(_) => "E_FeedbackNoContext",
   EZeroDelayFeedback(_) => "E_ZeroDelayFeedback",
+  EInitPerformsOwnOp(_, _, _) => "E_InitPerformsOwnOp",
   EComputedDelayDepth(_) => "E_ComputedDelayDepth",
   ERestOutsideDestructure(_) => "E_RestOutsideDestructure",
   ERowAliasCycle(_, _) => "E_RowAliasCycle",
@@ -2582,6 +2593,17 @@ fn diag_refuses(d) with Pure = match d {
   // never read the depth at all, measured by probe (delay(0), delay(1)
   // and delay(3) each returned 30).
   True,
+  EInitPerformsOwnOp(_, _, _) => // ARMED at birth (2026-08-18): the judgment is STRUCTURAL, read from
+  // the lowered install itself — a direct-perform inside `LHandleWith`'s
+  // own `inits`, naming that same install's handler. No resolution
+  // dependency and no extent guess: the install's world_push has not run
+  // while its inits run, for every install, so the singleton dispatch's
+  // world_find provably answers 0. The runtime already refuses precisely
+  // there (the belt under the guard); arming moves the same verdict to a
+  // point where nothing has been emitted. Census on the wheel at arming:
+  // 0 — every handler in it has a pure init, which is why no gate saw the
+  // shape until one was written for it.
+  True,
   EComputedDelayDepth(_) => // ARMED at birth (2026-08-12), the same literal licence its sibling
   // rides: the judgment is "was a literal written here", read from the
   // authored RHS with no resolution dependency. Census on the wheel at
@@ -2671,6 +2693,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EUnknownArgLabel(detail, _) => detail,
   EFeedbackNoContext(_) => "`<~` used outside an iterative context",
   EZeroDelayFeedback(_) => "`<~ delay(0)` closes a cycle with no delay — the prior would be the value being computed. Raise the delay to at least 1",
+  EInitPerformsOwnOp(hname, op, _) => "handler {hname}'s state init performs {op}, which {hname} itself answers — but the install does not exist yet while its inits run, so nothing can absorb it. Move the perform into an arm, or compute the init from a handler installed around this one",
   EComputedDelayDepth(_) => "the delay depth must be a literal — a feedback line is a fixed set of slots, and a depth read at runtime would silently get one. Write the depth, or hold the history yourself",
   ERestOutsideDestructure(_) => "`...` rest element outside a destructuring parameter — rest lives in patterns (`([h, ...t]) =>`, `let [h, ...t] =`), and `++` joins lists in expressions",
   ERowAliasCycle(nm, _) => "row alias `{nm}` expands through itself — a row is a finite signed set; name the effects directly",

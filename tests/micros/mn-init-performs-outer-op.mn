@@ -1,0 +1,12 @@
+// expect: 42
+// The sound dual: an init that performs an op ANOTHER handler answers is
+// ordinary — the outer install covers it, and nothing is provably absent.
+effect E { op() -> Int }
+effect F { g() -> Int }
+handler he {
+  op() => resume(42),
+}
+handler hf with s = op() {
+  g() => resume(s),
+}
+fn main(q) = ((g()) ~> hf) ~> he

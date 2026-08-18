@@ -890,6 +890,10 @@ effect EmitEffectCensus {
   visit_effect_demand(String)
   // an ename an install's arm groups absorb
   visit_effect_install(String)
+  // a singleton direct perform, with the handler name its dispatch will
+  // look up. Ignored everywhere except inside an install's own inits,
+  // where preinstall_init_scope compares it to that install's handler.
+  visit_direct_perform(String, String)
   // (demands, installs)
   drain_effect_census() -> ([String], [String])
 }
@@ -897,7 +901,26 @@ effect EmitEffectCensus {
 handler effect_census_collector with demands = [], installs = [] {
   visit_effect_demand(n) => if string_in_list(demands, n) { resume() } else { resume() with demands = push(demands, n) },
   visit_effect_install(n) => if string_in_list(installs, n) { resume() } else { resume() with installs = push(installs, n) },
+  visit_direct_perform(_, _) => // Outside an inits walk a direct perform says nothing about extent —
+  // the world lookup is a live runtime read and the belt beneath it is
+  // the honest answer (1016 such guards in the wheel's own emit, every
+  // one under a live install at runtime).
+  resume(),
   drain_effect_census() => resume((demands, installs)),
+}
+
+// THE INITS' OWN SCOPE, drawn as an install rather than threaded as a flag.
+// Walking an install's `inits` is the one place the lowered tree already
+// proves a perform precedes its handler's existence, so a `~>` over that
+// sub-walk is the whole mechanism. A direct perform naming THIS handler has
+// a `world_find` that cannot answer — the install's `world_push` has not
+// run — so it refuses here instead of trapping there
+// (`Hβ.emit.self-init-singleton-call-is-statically-uninstalled`).
+handler preinstall_init_scope(own_handler, init_span) {
+  visit_direct_perform(hn, op) => {
+    if hn == own_handler { report(EInitPerformsOwnOp(hn, op, init_span)) } else { () }
+    resume()
+  },
 }
 
 handler fn_names_collector with buf = make_list(64), count = 0 {
@@ -1227,7 +1250,7 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_expr(s)
     walk_lemit_arms(arms)
   },
-  LHandleWith(_, b, hn, hname, inits, arm_names) => {
+  LHandleWith(ih, b, hn, hname, inits, arm_names) => {
     walk_install_groups(arm_names, 0)
     // The install's world_push carries the interned HANDLER name as the
     // singleton tier's find key (hkey@16) — register it through the same
@@ -1236,7 +1259,13 @@ fn walk_lemit_expr(expr) = match expr {
     if hname != "" { visit_string(hname) }
     walk_lemit_expr(b)
     walk_lemit_expr(hn)
-    walk_lemit_list(inits)
+    // The inits walk under this install's own name. A direct perform of an
+    // op THIS handler answers cannot reach it: the world_push is below.
+    // The span comes off the install's own node — the reason the graph
+    // already carries, never a coordinate re-derived here.
+    {
+      walk_lemit_list(inits)
+    } ~> preinstall_init_scope(hname, reason_span_or_zero(graph_reason_at(ih)))
     // band B k1: a MultiShot-armed install carries the driver loop, which
     // reads the yield globals and compares the interned op keys — register
     // both through the same channels (the one decider multishot_ops_of;
@@ -1257,6 +1286,10 @@ fn walk_lemit_expr(expr) = match expr {
   LPerform(_, _, args, _) => walk_lemit_list(args),
   LDirectPerform(h, hn, op, st, args) => {
     visit_effect_demand(op)
+    // The one decidable extent: this direct perform names a handler, and
+    // the inits scope below knows whose inits it is walking. Same name
+    // means the world_find at this site answers 0 for certain.
+    visit_direct_perform(hn, op)
     walk_lemit_expr(singleton_perform_block(h, hn, op, st, args))
   },
   LWorldResolve(_, hkey) => // The chain find compares the interned HANDLER name — register it

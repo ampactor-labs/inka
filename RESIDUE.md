@@ -1590,8 +1590,20 @@ own `inits` field, before that install's `world_push`, so
 refusing at the 1016 general sites is not, and that distinction is the
 whole remaining peer — see below.
 
-`Hβ.emit.self-init-singleton-call-is-statically-uninstalled` — THE ONE
-SITE WHERE THE BELT'S GUARD IS DECIDABLE. A singleton op call lexically
+`Hβ.emit.self-init-singleton-call-is-statically-uninstalled` — RESOLVED
+2026-08-18, pin 362ac8b1eeae, CLEAN. `E_InitPerformsOwnOp` is the
+thirteenth armed class: the emit pre-pass draws the inits as their own
+scope (`{ walk_lemit_list(inits) } ~> preinstall_init_scope(hname, span)`)
+and a direct perform naming that install's own handler refuses. The
+pricing question answered itself by measurement — the backend had NO span
+vocabulary, and the fix was not to invent one but to read the install
+node's own Reason through the GraphRead row it already declares, so the
+diagnostic lands at real coordinates. Gates both halves:
+`mn-refuse-init-performs-own-op` and `mn-init-performs-outer-op` at 42.
+The 1016 sibling belts are untouched and stay belts. The config-default
+sibling named below is STILL unmeasured. The stamp follows.
+
+▶ THE STAMP AS BANKED — THE ONE SITE WHERE THE BELT'S GUARD IS DECIDABLE. A singleton op call lexically
 inside the `inits` of the very install whose handler it names has a
 `world_find` that provably returns 0: the install's `world_push` has not
 run, by construction, for every install of that handler.

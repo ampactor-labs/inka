@@ -540,6 +540,43 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.lower.handler-state-init-reads-config` — BISECTED 2026-08-17 to an
+exact, four-variant repro, and it is a live silent-wrong the wheel has
+never exercised. A handler's STATE INITIALIZER cannot read that
+handler's own CONFIG PARAMETER. Four marches, one variable each, on
+`region_tracker`:
+  no config param                                    → CLEAN
+  param present, UNREAD by the initializer           → CLEAN
+  param read inline, `list_filled(buckets, [])`      → TRAP, exit 134
+  param read via a call, `region_index_new(buckets)` → TRAP, exit 134
+So it is neither the parameter's presence, nor a nested call, nor the
+value passed (65536 at every site — behaviour-identical to the working
+form — traps exactly as 1024 did), nor the capture-vs-literal
+distinction (a top-level `let` and a bare literal trap the same). It is
+the READ, in the initializer, of the config the install supplied.
+THE SYMPTOM FITS THE DOCUMENTED CLASS AT A NEW SITE: `branch_bracket`'s
+own comment names `Hβ.lower.install-config-capture-read` — "a
+capture-referencing config arg reads 0; params read true" — for ARM
+bodies. This is the same zero arriving in the STATE INIT, and the trap
+follows mechanically: `list_filled(0, [])` gives an empty index, whose
+`len(idx) - 1` mask is `-1`, whose `i32_and(handle, -1)` is the raw
+handle, whose `list_set` runs off the end.
+WHY IT HAS NEVER FIRED: no handler in the wheel derives state from its
+config. `graph_handler(spine0, …) with spine = spine0` ASSIGNS a config
+straight through, which works; `intern_table with buckets =
+list_filled(4096, [])` uses a literal. Deriving is the untested shape,
+so the medium accepts such a handler and miscompiles it — a program that
+type-checks and traps, which is the class §0 exists to make impossible.
+THE GATE LANDS WITH THE FIX, not before: a frontier fixture whose
+handler sizes its own state from its config and asserts the value
+arrived. It is RED today by construction, so it would be a red gate, and
+those do not land — the fixture and the fix are one landing.
+WHAT IT BLOCKS: `Hβ.own.region-index-per-install`, the 24%-of-a-compile
+region-index fill, whose only clean fix is exactly this shape. The
+alternative route stands if the substrate fix proves deep — put the
+region fact in a spine column (§11 5.5's test) and the per-install fill
+has nothing left to fill.
+
 `Hβ.own.region-index-per-install` — MEASURED and its first fix REFUTED,
 2026-08-17, pin 5a61fc4eba. With the branch spawn deleted the profile is
 unambiguous: `branch_bracket` 55.95% inclusive, `list_filled_from`

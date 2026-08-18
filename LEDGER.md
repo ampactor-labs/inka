@@ -35,6 +35,40 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · A HANDLER'S STATE INIT CANNOT READ ITS OWN CONFIG (no pin
+  — the experiment reverted whole per the loop's step 5; boot unchanged
+  at 5a61fc4eba, src and lib identical to the previous pin).
+  ▶ THE PROBE THE LAST PIN BANKED, run and answered. The question was
+  which of `region_tracker`'s three install sites broke when the handler
+  gained a config parameter. The answer is none of them: it is the
+  handler's own state initializer READING the config, and four marches
+  with one variable each pin it exactly —
+  no param → CLEAN · param present but UNREAD → CLEAN · param read
+  inline as `list_filled(buckets, [])` → TRAP 134 · param read through a
+  call as `region_index_new(buckets)` → TRAP 134.
+  Not the presence, not the nested call, not the value (65536 at every
+  site, behaviour-identical to the working form, traps exactly as 1024
+  did), not capture-vs-literal (both trap). The READ is the defect.
+  ▶ WHY THE SYMPTOM IS EXACTLY WHAT IT SHOULD BE. `branch_bracket`'s own
+  comment names `Hβ.lower.install-config-capture-read` — "a
+  capture-referencing config arg reads 0" — for ARM bodies. The same zero
+  arriving in a STATE INIT explains the trap mechanically:
+  `list_filled(0, [])` is an empty index, `len(idx) - 1` is `-1`,
+  `i32_and(handle, -1)` is the raw handle, and `list_set` runs off the
+  end. Banked as `Hβ.lower.handler-state-init-reads-config`.
+  ▶ WHY IT HAS NEVER FIRED, which is the part that matters beyond this
+  arc: no handler in the wheel derives state from its config.
+  `graph_handler(spine0, …) with spine = spine0` assigns one straight
+  through and works; `intern_table` uses a literal. DERIVING is the
+  untested shape, so the medium accepts such a handler and miscompiles
+  it — a program that type-checks and traps, which is the class §0 exists
+  to make unsayable. It is tripwire 3 again: the board is green on what
+  the wheel does and silent on what it does not.
+  ▶ NOTHING LANDED, DELIBERATELY. A gate for this is RED by construction
+  today, and red gates do not land; the fixture and the substrate fix are
+  one landing. The experiment reverted whole and the tree is byte-identical
+  to the previous pin.
+
 - 2026-08-17 · THE BUCKET COUNT IS THE INDEX'S OWN — AND THE FIX IT WAS
   FOR IS REFUTED (pin 5a61fc4eba — CLEAN m2 == m3, re-pinned from m2 per
   march.sh, 412135 lines, census 0; m3 leg 16.55s wall · 2124MB peak

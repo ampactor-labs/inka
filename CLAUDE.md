@@ -127,7 +127,20 @@
 >   The number form of this law: NEVER write a digest, count, or measurement you
 >   did not read from the artifact THIS turn — a sha tail completed from memory is
 >   a fabrication (caught live 2026-07-25 at the mandatory re-read, before it
->   reached PROVENANCE).
+>   reached PROVENANCE). **THE GATE IS ON ACTING, NOT ONLY ON ASSERTING**
+>   (Morgan, 2026-08-17, after five causes were asserted and refuted across two
+>   iterations of ONE defect): the sentence above was already written and did not
+>   hold, because "do not assert" leaves the guess free to steer the next edit.
+>   So: no edit, no doc entry, no commit message acts on a cause the artifact has
+>   not shown this turn, and marking it a hypothesis is NOT the fix — labelling
+>   is decoration (Anchor 2) and the guess lands in the record either way.
+>   The incentive is the other half, and it is why the law failed rather than
+>   why it was forgotten: **when the reason is unmeasured, the output is the next
+>   INSTRUMENT, and that is a FULL result, not a failed one.** Treating "I do not
+>   know yet" as failure is exactly what manufactures the explanation. Every one
+>   of those five came from reading code and reasoning forward; every refutation
+>   came from running something; the cheapest run was a two-second fixture that
+>   already existed.
 > - **A "choice" between the ultimate form and a safer/lower-risk hedge is the
 >   drift.** The ultimate form wins; risk is paid by doing it right; you never
 >   hedge the wheel against the seed (that is shaping the wheel around its

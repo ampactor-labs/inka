@@ -95,7 +95,22 @@ fixed-input justification recorded in the baseline comment, in the same
 commit. Never write a sha, digest, count, OR COORDINATE — line, column,
 span, offset, address — you did not read from the artifact this turn; a probe
 located by arithmetic is a fabrication, and a claim built on one is worse than
-no claim. THERE ARE NO HELPERS IN MENTL: the word is foreign-ontology and
+no claim. NEVER ACT ON AN UNVERIFIED CAUSE; the number rule is one case of this
+wider one. A mechanism you have not run is not a finding, and the move is NOT
+to label it a hypothesis: labelling is decoration (Anchor 2), and the guess
+still steers the next edit and still lands in the record. No edit, no doc
+entry, and no commit message asserts a cause the artifact has not shown THIS
+TURN. When a build fails and the reason is unmeasured, the iteration's honest
+output is the next INSTRUMENT, never an explanation. That output is a full
+iteration, not a failed one, and treating it as failure is precisely what
+manufactures the explanation. Two corollaries, each paid for: ONE VARIABLE PER
+MARCH, named in the report, or a failure cannot be attributed; and an artifact
+answers nothing until its SIZE is read, because a grep over a zero-byte file
+returns zero matches and means nothing, which is the march's own "no verdict
+from empties" committed by hand. Five causes were asserted and refuted across
+two iterations of ONE defect: every one came from reading code and reasoning
+forward, every refutation came from running something, and the cheapest of
+those runs was a two-second fixture that already existed. THERE ARE NO HELPERS IN MENTL: the word is foreign-ontology and
 reaching for it is the tell that the work is in the wrong vocabulary. Mentl
 has projections, handlers, verbs, stages, arms and primitives, so when a
 computation repeats the question is never "extract a helper" but WHICH

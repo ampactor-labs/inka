@@ -35,6 +35,40 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE BREAK IS MEASURED: THE LINKED TAIL IS HONEST AND THE
+  WHEEL CANNOT AFFORD IT YET (no pin — measurement on the reverted run's
+  own artifacts; boot unchanged at 6e05bd9404ed).
+  ▶ THE INSTRUMENT THE ARC HAD NEVER USED. CLAUDE.md prescribes
+  `emit-diff` FIRST on any trap, and the broken run's artifacts survived
+  it: m2 13937263 bytes, m3 13937259, m4 ZERO — the empty that proves the
+  trap. `--trap` was noise, as the docs warn (bare exhaustive-match elses
+  are benign), so the marked-floor census answered instead.
+  ▶ ONE CLASS DIFFERS, AND IT IS THE WHOLE DELTA. `field offset
+  unprovable`: 4 in m2, 9 in m3. Total unreachables 4286 → 4291. Every
+  other floor class is identical between the generations.
+  ▶ SO THE LINKED FORM WORKS AS DESIGNED — that is what breaks the wheel.
+  The chase reaches a free tail and floors honestly at five more sites,
+  and those sites are the WHEEL's own, so the compiler m3 emits traps when
+  it compiles the wheel. The empty-bind was papering them over with a
+  guessed offset that happened to be right for the wheel's own shapes,
+  which is exactly why the wheel self-hosted while user code read foreign
+  fields.
+  ▶ THE FIVE ARE NAMED: `ls_current_lambda_handle_loop` (3) and
+  `ls_outer_fn_name_loop` (2), both lower.mn, both taking an unannotated
+  `frames` and reading `frame.fn_name` / `frame.lambda_h`. m2's four
+  pre-existing floors are unchanged and unrelated.
+  ▶ THAT REFUTES THE DIRECTION I BANKED LAST ITERATION — that some reader
+  must follow the tail and does not. No reader needed to; they were fine.
+  Third dead explanation in this arc, and the one that would have sent a
+  fix into occurs and subst. The measurement cost one grep over artifacts
+  that were already on disk.
+  ▶ THE PATH IS CONCRETE AND SMALL: give those two receivers a provable
+  type, exactly as the two record-PATTERN receivers were closed at pin
+  f0b63b15a5d6, then re-attempt the writer flip. The frame record has
+  eight fields and three construction sites, so the honest close is ONE
+  named type both params share — the structural record already exists, it
+  simply has no name.
+
 - 2026-08-17 · THE LINKED TAIL BREAKS IN THE ROW SORT TOO — MY OWN CAUSE
   REFUTED (no pin — experiment reverted whole; boot unchanged at
   6e05bd9404ed, the vocabulary pin stands).

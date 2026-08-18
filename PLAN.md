@@ -1600,8 +1600,13 @@ tail as `Option(Int)` on `NRecordRowBound`. Same signature both times
 (~131.5k diff lines, m3 clean, m4 trapping at exit 134), which refutes
 the sort-crossing explanation and leaves the SEMANTIC change as the
 cause: the linked form yields a compiler that mis-compiles the wheel one
-generation on. The tail vocabulary is landed and inert; which reader must
-follow the tail and does not is the open direction.
+generation on. The tail vocabulary is landed and inert. The BREAK IS MEASURED
+(emit-diff on the broken run's artifacts): one floor class differs,
+`field offset unprovable` 4 → 9, the whole +5 of the unreachable delta.
+The linked form is HONEST and the wheel cannot afford it yet — five of
+its own field accesses become unprovable, in `ls_current_lambda_handle_loop`
+and `ls_outer_fn_name_loop`, both reading an unannotated `frames`. Close
+those receivers with one named frame type, then re-attempt the flip.
 **0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
 NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
 found nothing: `tests/syntax/` had no history under any ref, no gate

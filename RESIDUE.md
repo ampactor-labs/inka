@@ -882,14 +882,35 @@ census 0) and m4 traps at both, so the linked form produces a compiler
 that mis-compiles the wheel one generation on. That is a self-application
 failure, invisible until the m4 leg — which is why the leg is watched
 from the first run here.
-▶ THE NAMED NEXT PROBE: which READER must follow the tail and does not.
-Every reader outside `open_record_full_fields` takes the tail as `_` —
-occurs, resolve, subst, the renderers. CLAUDE.md's own law is that the
-walks over one structure must AGREE, and a linked chain that one walk
-chases and another ignores is exactly that disagreement. This is a
-DIRECTION, not a cause: it has not been measured, and the two dead
-explanations in this entry are what that distinction costs when it is
-skipped.
+▶ THE CAUSE IS MEASURED (2026-08-17, emit-diff on the broken run's own
+artifacts — m2 13937263 bytes, m3 13937259, m4 ZERO). The floor census
+differs in exactly ONE class: `field offset unprovable`, 4 in m2 and 9 in
+m3, which is the whole +5 of the unreachable delta (4286 → 4291). Every
+other class is identical.
+▶ SO THE LINKED FORM WORKS AS DESIGNED, and that is what breaks the
+wheel. The chase reaches a free tail and floors HONESTLY at five more
+sites — and those sites are in the WHEEL's own source, so the compiler
+m3 emits traps when it compiles the wheel. The old empty-bind was
+papering them over with a guessed offset that happened to be right for
+the wheel's own shapes, which is precisely why it self-hosted.
+▶ THE FIVE ARE NAMED: `ls_current_lambda_handle_loop` (3) and
+`ls_outer_fn_name_loop` (2), both in lower.mn, both taking an
+unannotated `frames` and reading `frame.fn_name` / `frame.lambda_h`.
+m2's four pre-existing floors (`arms_include_op` ×2,
+`record_field_handle`, `arm_body_handle`) are unchanged and are not part
+of this.
+▶ THIS REFUTES THE WALK-DISAGREEMENT DIRECTION banked one iteration ago.
+No reader needed to follow the tail; the readers were fine. The third
+dead explanation in this arc, and the one that would have sent a fix into
+occurs/subst.
+▶ THE PATH IS NOW CONCRETE AND SMALL: give those two receivers a
+provable type, exactly as the two record-PATTERN receivers were closed at
+pin f0b63b15a5d6, then re-attempt the writer flip. The frame record has
+eight fields (capture_handles, capture_order, captures, fn_name,
+lambda_h, local_handles, local_order, locals) and is constructed at three
+sites, so the honest close is ONE named type both params share rather
+than a hand-copied annotation twice — the structural record already
+exists, it simply has no name.
 ▶ THE VOCABULARY LANDED 2026-08-17, pin 6e05bd9404ed, CLEAN and
 behaviour-identical: `NRecordRowBound` carries `Option(Int)` as its tail —
 `None` terminates, `Some(v)` continues at another row var — and

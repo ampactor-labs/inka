@@ -1551,6 +1551,27 @@ surface shape, the same distinction the fold's four leaf generators
 record. Each lands the way this one did: one variant, one label, one
 name in the grammar, one fixture line, one frontier spec.
 
+`Hβ.tools.green-stamp-under-included-three-batteries` — RESOLVED
+2026-08-18, and the finding is that the loop's own law was being broken by
+the loop. `wt_state_key` hashed `tests/micros/*.mn` and not
+`tests/syntax`, `tests/rows` or `tests/floors` — three directories whose
+fixtures a verify leg reads and whose contents can change its verdict.
+Each arrived WITH its leg and none extended the key; two of the three were
+added by this loop, three and two iterations before the find.
+▶ MEASURED, not read: mutate a syntax fixture, re-derive the key, and the
+hash comes back identical (a461fe963731…), so the stamp answers green for
+a tree whose battery has grown. `wt_state_key`'s own comment had already
+written the verdict — "under-inclusion is the bug".
+▶ IT FIRED THE SAME DAY. The commit that added
+`tests/syntax/record-spread-resort.mn` was let through by the pre-commit
+hook WITHOUT the thesis gate, because the stamp still matched. The fixture
+happened to be green (verified by hand, both directions), so nothing
+landed broken — but a red one would have landed silently, which is the
+"trusting a stamp the change invalidated" hazard named in the loop prompt
+and paid for here rather than argued.
+▶ Falsified per directory after the fix: a mutation in micros, syntax,
+rows and floors each moves the key.
+
 `Hβ.tools.exit-channel-caps-at-125` — RESOLVED 2026-08-18 in the harness,
 banked because the ceiling is a fact about the substrate and not about the
 fix. MEASURED against the pinned boot: a `main` returning 124 or 125 exits

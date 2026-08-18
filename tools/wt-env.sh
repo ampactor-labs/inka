@@ -122,8 +122,16 @@ wt_wheel() {
 wt_state_key() {  # the gate-relevant tree state, hashed. Over-inclusion is a
                   # spurious re-run; under-inclusion is the bug — include every
                   # file whose change can change the verdict.
+  # EVERY fixture directory a verify leg reads belongs here, and three were
+  # missing: tests/syntax (the declared-form battery), tests/rows (the
+  # residual mark) and tests/floors (the unprovable-offset contract). Each
+  # arrived with its leg and none extended this key, so the stamp answered
+  # green for a tree whose battery had grown — measured 2026-08-18 by
+  # mutating a syntax fixture and reading the same hash back. The comment
+  # above already named it: under-inclusion is the bug.
   { wt_wheel lib src
-    cat boot/mentl.wasm tests/micros/*.mn tools/verify.sh tools/run-micro.sh \
+    cat boot/mentl.wasm tests/micros/*.mn tests/syntax/*.mn tests/rows/*.mn \
+        tests/floors/*.mn tools/verify.sh tools/run-micro.sh \
         tools/wt-env.sh tools/verify-baseline.txt 2>/dev/null
     printf '%s' "${WT_RUN_FLAGS[*]}"
   } | sha256sum | cut -d' ' -f1

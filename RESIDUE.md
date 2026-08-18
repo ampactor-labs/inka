@@ -540,19 +540,49 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.infer.handler-state-inits-are-never-judged` — THE ROOT, located at
-the artifact 2026-08-17, and it is larger than the peer it explains.
-DECL-SIDE HANDLER STATE-INIT EXPRESSIONS ARE NEVER INFERRED. Both
-`HandlerDeclStmt` sites reach `register_handler` (infer.mn), which checks
-state-field NAMES against op names for the shadow refusal, mints the
-config tparams, and env_extends the handler — and never walks a single
-`init` expression. The only `infer_expr` over a state init in the file is
-for `resume() with x = …` UPDATES, not decl inits.
-WHAT THAT COSTS: everything in a `with field = init` clause is unjudged —
-no types, no name resolution, no diagnostics. It survives because every
-init the wheel writes is a literal, a nullary call, or a bare config ref
-that `lower_state_init` special-cases STRUCTURALLY into `LUpval(0, slot)`
-without needing a binding at all.
+`Hβ.lower.state-init-config-ref-nested` — THE ROOT, and this entry OPENS
+with the retraction of its own previous version.
+▶ RETRACTED: the entry here claimed "decl-side handler state-init
+expressions are never inferred", named it
+`Hβ.infer.handler-state-inits-are-never-judged`, and reasoned from
+`register_handler` doing only the op-shadow check. THAT IS FALSE. The
+judging happens elsewhere in the same file:
+`infer_handler_state_inits(state)`, whose neighbouring comment states the
+contract exactly — "Config params bound FIRST — before the state inits
+are inferred — so a state init that references a config param READS the
+live config" — and records the bug that motivated it (fold's accumulator
+splitting into four vars). The claim was refuted in two seconds by the
+probe that should have run first: `handler h(start) with n = nosuchname
++ 1` reports `E_MissingVariable at 5:30-5:40` and `mentl run` REFUSES at
+exit 1. Inits are judged; unbound names in them refuse correctly. I read
+one site, found it insufficient, and generalised to "never" without
+grepping for the other reader — the exact code-reading-over-measurement
+error §5.O's own history warns about, made twice in one day.
+▶ WHAT IS ACTUALLY TRUE: infer resolves a config ref in a state init
+fine, which is why a clean `mentl check` is CORRECT rather than a missed
+diagnostic. LOWER cannot lower it. `lower_state_init` matches only a
+TOP-LEVEL `VarRef` against the config names, turning it into
+`LUpval(0, slot)` — a structural read of the config slot of the same
+record, config being written first — and sends everything else through
+`lower_expr`, where the config name is not in the lowering scope,
+resolves `RGlobal`, misses `env_kind_of`, and becomes the MissingName
+floor. So `with n = start` runs and `with n = start + 1` traps, and the
+site's own comment has said so all along: "A config ref nested inside a
+larger expression is a peer."
+▶ THE REMAINING HONEST DEFECT is narrower but real: the failure is a
+runtime FLOOR, not a refusal. The program checks clean and traps at exit
+134, where a lowering that cannot lower a construct should refuse it.
+▶ THE FIX, designed against the artifact and NOT yet built: the lowering
+scope already has an `RUpval(slot)` verdict — `ls_resolve` returns it and
+line 2162 lowers it — so the config ref needs no "config-capture frame"
+at all, only a way to DECLARE one. Add `ls_bind_upval(name, slot)` beside
+the existing `ls_bind_local`, push a scope in
+`lower_state_field_inits`, bind each config name to its slot, lower the
+inits inside it, pop. Then a config ref resolves to `RUpval` at ANY
+depth, and `lower_state_init`'s top-level special case DISSOLVES into the
+general mechanism — the Carried-Truth payoff is that the fix deletes the
+special case rather than adding a second one. Marched, because it touches
+the scope resolver every lowered name goes through.
 THE MINIMAL REPRO, seconds instead of a march
 (tests/frontier/mn-handler-state-from-config.mn, plus two scratch
 variants): `handler h(start) with n = start` runs and answers 10 —

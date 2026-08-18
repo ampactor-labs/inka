@@ -35,6 +35,47 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · RETRACTION: STATE INITS *ARE* JUDGED — THE GAP IS AT
+  LOWER, WHERE ITS OWN COMMENT SAID (no pin — a correction and a design;
+  boot unchanged at 5a61fc4eba, src and lib untouched).
+  ▶ THE PREVIOUS ENTRY IS WRONG AND THIS ONE RETRACTS IT. It claimed
+  "decl-side handler state-init expressions are never inferred", banked
+  it as `Hβ.infer.handler-state-inits-are-never-judged`, and reasoned
+  from `register_handler` performing only the op-shadow check. The
+  judging lives elsewhere in the same file:
+  `infer_handler_state_inits(state)`, whose neighbouring comment states
+  the contract outright — config params bound FIRST so a state init
+  referencing one reads the live config — and records the bug that
+  motivated it. Two seconds of probe refute the claim: `handler h(start)
+  with n = nosuchname + 1` reports `E_MissingVariable at 5:30-5:40` and
+  `mentl run` REFUSES at exit 1.
+  ▶ HOW THE ERROR WAS MADE, recorded because it is the same one twice in
+  one day: I read ONE site, found it insufficient, and generalised to
+  "never" without grepping for a second reader. §5.O's own history is
+  that code-reading loses to measurement, and the measurement here cost
+  one fixture and two seconds. The rule earns its own line — before
+  writing "never" about a compiler, run the program that would prove it.
+  ▶ WHAT IS ACTUALLY TRUE. Infer resolves a config ref in a state init
+  correctly, so a clean `mentl check` is the RIGHT answer rather than a
+  missed diagnostic. LOWER is the gap: `lower_state_init` matches only a
+  TOP-LEVEL `VarRef` against config names and turns it into
+  `LUpval(0, slot)`; everything else goes through `lower_expr`, where the
+  config name is not in the lowering scope, resolves RGlobal, misses
+  `env_kind_of`, and becomes the MissingName floor. `with n = start` runs;
+  `with n = start + 1` traps. The site's comment has said this all along.
+  ▶ THE DEFECT THAT SURVIVES the retraction is narrower and still real: a
+  construct the lowering cannot lower produces a runtime FLOOR rather
+  than a refusal, so the program checks clean and traps at 134.
+  ▶ AND THE FIX IS SMALLER THAN EITHER STORY SUGGESTED. The lowering
+  scope already carries an `RUpval(slot)` verdict; the config ref needs
+  no "config-capture frame", only a way to declare one. `ls_bind_upval`
+  beside `ls_bind_local`, a scope pushed in `lower_state_field_inits`
+  binding each config name to its slot — and then `lower_state_init`'s
+  top-level special case DISSOLVES into the general resolver. The fix
+  deletes a special case instead of adding one. Banked at
+  `Hβ.lower.state-init-config-ref-nested`; marched next iteration,
+  because it touches the resolver every lowered name goes through.
+
 - 2026-08-17 · HANDLER STATE INITS ARE NEVER JUDGED — A PROGRAM THAT
   CHECKS CLEAN AND TRAPS (no pin — the root located and banked with its
   repro; boot unchanged at 5a61fc4eba, src and lib untouched).

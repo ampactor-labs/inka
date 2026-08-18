@@ -35,6 +35,27 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE SUM CARRIER JOINS THE LATENCY RULE — CROWN 39 → 41
+  (no pin — crucibles only; boot unchanged at 5a61fc4eba, wheel source
+  untouched).
+  ▶ PRIORITY SERVED: §11's standing cursor names the 6.3 modal sweep
+  rule-by-rule as the loop-sized residue, and the state-init defect is
+  parked behind the column arc, so continuing to bash at it would have
+  been the completion-gradient the block forbids as a selection reason.
+  ▶ THE GAP THE ROSTER SHOWED. Latency-rides-STORAGE was pinned at three
+  carriers — the list element, the record field, the tuple position —
+  which are the SEQUENCE and PRODUCT node-kinds. §5.U names five, and the
+  SUM was unpinned: a closure performing E carried as an ADT variant's
+  payload, matched out and called. `leak-variant-latent` refuses at the
+  call (mismatch=1) and `sound-variant-transport` accepts the same
+  variant matched without calling. Both pass, so the crown already held
+  this rule; the sweep's job is to PIN it, and an unpinned rule is a rule
+  the board cannot see regress.
+  ▶ SEEN RED, because a coverage crucible that cannot fail is decoration.
+  Inverting the leak case to not call its payload takes the gate to
+  `✗ want reject, mismatch=0`, crown 40/1, then back to 41/0 on restore.
+  The pair discriminates.
+
 - 2026-08-17 · NOTHING BUILT, AND THE SENTENCE NAMING WHY: THE GRAPH DOES
   NOT RECORD THE CONFIG SLOT (no pin — third iteration without a src
   change, so the dry-iteration rule owes this sentence; boot unchanged at

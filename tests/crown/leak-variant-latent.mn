@@ -1,0 +1,20 @@
+// CROWN — latency rides the SUM carrier: a closure performing E, carried
+// as an ADT variant's PAYLOAD, matched out and CALLED under `with !E` —
+// the row must ride the payload through the match to the call.
+// Expect E_EffectMismatch.
+//
+// The fourth storage carrier. Sequence (list element), product (record
+// field, tuple position) are pinned; sum is the node-kind §5.U names that
+// the battery did not reach.
+effect E { op() -> Int }
+
+type Box = Empty | Holds(a)
+
+fn make() = Holds(() => op())
+
+fn bad() with !E = match make() {
+  Holds(f) => f(),
+  Empty => 0,
+}
+
+fn main() = bad()

@@ -1045,10 +1045,22 @@ QUALIFIES, `outer` is not empty everywhere, and equal line counts (412781
 both sides) are what made the wrong claim look measured. A CLEAN march
 says the medium reproduces itself, not that the emit is unchanged; the pin
 sha is the identity oracle.
-▶ SO NEITHER SINGLE-NAME DIRECTION WORKS, which sharpens the stamp rather
-than replacing it: the binding needs the source name and the symbol needs
-the qualified one, and `LFn` has one field for both. The fix is `LFn`
-carrying BOTH facts. Sites enumerated: 29 across lower.mn and wasm.mn.
+▶ SO NEITHER SINGLE-NAME DIRECTION WORKS: the binding needs the source
+name and the symbol needs the qualified one, and `LFn` has one field for
+both. The stamp priced a second field — and the interrogation DISSOLVED
+it (2026-08-17, pin ec2f629f11e8). A nested fn binds its own name to its
+own handle, a self-reference resolves through that bind, and the capture
+keeps the handle it resolved to, while lower builds the closure with that
+same handle. "Is this capture the closure being built" is therefore ONE
+comparison of two handles. `self_capture_name` replaces `captures_self`:
+identity finds the capture, and it returns THE NAME THAT CAPTURE READS,
+so the early bind targets what the emitted body loads. Both halves closed
+with fewer fields, not more. `m2 == m3` proves the new emit reproduces
+the old exactly on the wheel's own source, so nothing was being missed
+today and the fix is dormant until qualification starts.
+▶ THE ONLY KNOWN BLOCKER LEFT between here and the row arc is the
+discriminator itself, which still reads a foreign slot through an open
+row. Re-attempting the receiver annotation is the next step.
 ▶ THE ORIGINAL LANDING TEXT, superseded: The
 divergence's construction site is one expression in lower.mn: `fn_name =
 if outer == "" { name } else { "{outer}_{name}" }`, and then

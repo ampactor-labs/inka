@@ -35,6 +35,41 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · pin ec2f629f11e8 · THE SELF-CAPTURE IS READ BY IDENTITY.
+  CLEAN, m2 == m3, census 0, frontier 371/0, 16.27s wall · 2280528 KB
+  peak, 412788 lines, module 2421155 bytes.
+  ▶ THE STAMP SAID "LFn CARRIES BOTH NAMES" AND THE INTERROGATION FOUND
+  BETTER. A nested fn binds its own name to its own handle
+  (`ls_bind_local`), a self-reference resolves through that bind, and the
+  capture keeps the handle it resolved to (`LLocal(local_h, name)`) — while
+  lower builds the closure with that same handle. So "is this capture the
+  closure being built" is ONE comparison of two handles, needing no names
+  at all, and the second name field the stamp priced is not needed.
+  ▶ IT CLOSES BOTH HALVES OF THE DEFECT. `self_capture_name` replaces
+  `captures_self`: it finds the capture by identity and returns THE NAME
+  THAT CAPTURE READS, so the early bind targets what the emitted body
+  actually loads. The predecessor compared the capture's name against the
+  LowFn's name — two namespaces the moment the discriminator qualifies —
+  and got the guard wrong AND would have bound the wrong local even had it
+  fired.
+  ▶ MEASURED, and no byte-identity is claimed this time. The pin moved to
+  ec2f629f11e8 and the emit grew 7 lines against a smaller module,
+  because the SOURCE changed; `m2 == m3` is the load-bearing reading —
+  the new emit reproduces the old one exactly on the wheel's own source,
+  so no self-capture in the wheel was being missed today. The fix is
+  correct-for-the-future and neutral-for-the-present, which is what the
+  fixpoint holding at a changed pin means.
+  ▶ THIS IS THE THIRD DIRECTION TRIED at this defect and the first that
+  did not have to be reverted. One name for the fn failed (the local
+  namespace is source-named); keeping the source name failed (the symbol
+  must qualify); carrying both was priced and then dissolved by reading
+  what the graph already connects. Fewer fields, not more — the shape a
+  Carried-Truth fix is supposed to have.
+  ▶ WHAT REMAINS: the discriminator itself is still wrong (it reads a
+  foreign slot through an open row), so nothing qualifies yet and this fix
+  is dormant. Re-attempting the receiver annotation is the next step, and
+  it is now the only known blocker between here and the row arc.
+
 - 2026-08-17 · pin 6e05bd9404ed · THE PREVIOUS LANDING IS REVERTED, AND
   ITS OWN CLAIM IS REFUTED BY THE SHA. CLEAN, m2 == m3, census 0, 412781
   lines, 16.43s wall · 2177112 KB peak.

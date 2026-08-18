@@ -3848,7 +3848,7 @@ fn emit_expr(expr) = match expr {
     // drift-audit: ignore
     wat_emit("    (return)\n")
   },
-  LMakeClosure(_h, LFn(fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs) => {
+  LMakeClosure(h, LFn(fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs) => {
     // H1 closure-record layout (the unified handler state):
     //   offset 0: fn_ptr (i32) — table index into $fns
     //   offset 4: capture_count (i32)
@@ -3878,18 +3878,23 @@ fn emit_expr(expr) = match expr {
     wat_emit(int_to_str(nc))
     wat_emit(") (i32.store offset=4)\n")
     // A self-recursive closure binds its OWN local to the record BEFORE
-    // filling captures, so the self-capture (an LLocal on fn_name) reads the
-    // record, not the LLet's not-yet-set local — which is a null fn_ptr, the
-    // parse_int nested-go indirect-call-type-mismatch that trapped m3 in the lexer.
-    // Guarded on captures_self so $fn_name is a declared in-scope local
-    // exactly when we bind it; the LLet's own local.set re-binds harmlessly.
+    // filling captures, so the self-capture reads the record, not the LLet's
+    // not-yet-set local — which is a null fn_ptr, the parse_int nested-go
+    // indirect-call-type-mismatch that trapped m3 in the lexer.
+    // The self-capture is found by IDENTITY (its handle IS this closure's)
+    // and the bind targets THE NAME IT READS: those are the two halves the
+    // name-matched predecessor got wrong once the nested-fn discriminator
+    // qualifies the emitted symbol, since the local namespace stays
+    // source-named. $<that name> is a declared in-scope local exactly when
+    // a self-capture exists; the LLet's own local.set re-binds harmlessly.
     // Mirrors the seed, which binds every let-bound closure's local early.
-    if captures_self(captures_exprs, fn_name) {
-      wat_emit("    (local.set $")
-      wat_emit(local_wat_name(fn_name, RI32))
-      wat_emit(" (local.get $state_tmp))\n")
-    } else {
-      ()
+    match self_capture_name(captures_exprs, h) {
+      "" => (),
+      selfnm => {
+        wat_emit("    (local.set $")
+        wat_emit(local_wat_name(selfnm, RI32))
+        wat_emit(" (local.get $state_tmp))\n")
+      },
     }
     // Store each capture at offset 8 + 4*i.
     emit_capture_stores(captures_exprs, 0)
@@ -6686,13 +6691,27 @@ fn emit_capture_stores(captures, base_i) = each(
 // self-capture must be bound to the record early or it reads a null fn_ptr
 // (the parse_int nested-go indirect-call-type-mismatch). field_name_eq carries the
 // String proof (a bare `==` would pointer-eq the names — this session's class).
-fn captures_self(captures, fn_name) = any(
-  (c) => match c {
-    LLocal(_, nm) => field_name_eq(nm, fn_name),
-    _ => false,
+// The self-capture, read by IDENTITY and answered with the name the
+// EMITTED BODY uses for it. A nested fn binds its own name to its own
+// handle in the enclosing frame, and a self-reference resolves through
+// that bind, so the capture's handle IS the closure's handle — one
+// comparison, no strings, immune to whether the fn's emitted symbol has
+// been qualified. The predecessor compared the capture's name against
+// the LowFn's name, which are drawn from two different namespaces the
+// moment the nested-fn discriminator qualifies: the local one stays
+// source-named while the symbol becomes outer_inner, so the match went
+// false, the early bind below was skipped, and the closure's fn_ptr read
+// an unset local (the trap: indirect call type mismatch in the lexer).
+// Returning the NAME rather than a Bool closes the second half of the
+// same defect — the bind targets what the body actually reads.
+// "" = no self-capture.
+fn self_capture_name(captures, closure_h) = match captures {
+  [] => "",
+  [c, ...rest] => match c {
+    LLocal(ch, nm) => if ch == closure_h { nm } else { self_capture_name(rest, closure_h) },
+    _ => self_capture_name(rest, closure_h),
   },
-  captures
-)
+}
 
 // Emit the stores for each field in an ADT variant record.
 // Fields are indexed from 0; each stored at offset 4 + 4*i (offset 0

@@ -1551,6 +1551,72 @@ surface shape, the same distinction the fold's four leaf generators
 record. Each lands the way this one did: one variant, one label, one
 name in the grammar, one fixture line, one frontier spec.
 
+`Hβ.effects.root-gate-credits-an-install-that-had-not-opened` — AN OP
+BEFORE THE EXTENT OPENS IS THE MIRROR OF THE ONE AFTER IT CLOSES, and only
+one of them is caught. Measured 2026-08-18 at pin c3410610ce41: four runs,
+three projections.
+▶ THE SHAPE. A handler whose state init performs the effect that handler
+itself handles compiles and TRAPS:
+
+    effect F { g() -> Int }
+    handler hf with s = g() {
+      g() => resume(42),
+    }
+    fn main(q) = (g()) ~> hf
+
+`mentl check` is silent, 38467 bytes of WAT are emitted, and the program
+exits 134. A trap where a diagnostic belongs.
+▶ THE ROW IS RIGHT, which is the first thing to rule out and the thing
+that makes this a gate finding rather than a row one. `fn m() with !F =
+(g()) ~> hf` REFUSES with `!F + Any vs F`, so the init's F genuinely
+escapes its own handler — correct, since the tee adds row(h) AFTER
+subtracting handled(h), and an init runs before its install exists.
+▶ FOUR CASES, ONE INCONSISTENCY, each read rather than reasoned:
+
+    pure init + install        main : -> Int            gate passes   runs, exit 1
+    init performs foreign E    main : -> Int with E     gate REFUSES  —
+    init performs its own F    main : -> Int with F     gate passes   traps 134
+    no install at all          main : -> Int with F     gate REFUSES  —
+
+Rows two and three carry the same shape of fact and differ only in
+whether a handler for that effect exists in scope. The row is sufficient
+in all four; the gate is what varies.
+▶ THE CONDITION IS FOUND AND IS DELIBERATE.
+`report_unhandled_names` (pipeline.mn) clears a name when
+`!string_in_list(strict, ename) && string_in_list(installed, ename)`, and
+its own comment states the trade: "dynamic installs cover it at runtime
+and the SingletonUninstalled guard is the loud belt beneath — the row
+alone cannot split a dead extent from live dynamic coverage (the modal
+install-identity frontier, band A, owns that split)."
+▶ SO IT IS A NEW FACE OF A RULE THE CROWN ALREADY PINS. §11 6.3's
+install-extent exactness says an op AFTER the install closed is
+unabsorbed, and that crucible passes. An op BEFORE the extent OPENS is
+the mirror, and the state init is the shape that reaches it — which is
+why the previous two landings, having put the init's row on r_handle,
+are what made this visible at all.
+
+STAMP — `Hβ.effects.root-gate-credits-an-install-that-had-not-opened`.
+TRACED: the clearing conjunct is install-NAME membership, not extent. For
+a state init the extent question is not dynamic at all — the init is
+lexically part of the handler declaration and provably runs before any
+install of it exists — so this instance is decidable where the general
+case the comment defends is not.
+PRICED: NOT MEASURED, and the fork inside it is why. A narrow fix marks
+the init's contribution so the root gate refuses to credit an install
+against it; the general fix is the extent as a graph fact, which is band
+A's `Hβ.effects.modal-world-index` and is not this loop's to pull
+forward. Whether the narrow one is sound without the general one is
+exactly what is unpriced — the comment's defence (dynamic installs, the
+stateful-singleton demand) has to be shown untouched by it, and that is a
+measurement against the wheel's own singleton handlers, not an argument.
+WRITERS: `report_unhandled_names` (pipeline.mn), the single site; the row
+producers need no change, having been measured correct above.
+NOT COMPLETE: no fixture landed, because the surface is broken and a
+crucible here would canonize the trap. The repro above is the bank. Also
+unmeasured: whether the same credit clears an op performed in a config
+DEFAULT of a handler that handles it — the sibling shape the last two
+pins closed on the row side.
+
 `Hβ.effects.handler-state-init-row-never-installed` — RESOLVED
 2026-08-18, pin b9733815b54d, CLEAN, crown 54/0. The stamp's own first
 move found it: the ARMS ride `r_handle`, and the inits sat two lines above

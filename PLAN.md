@@ -2260,7 +2260,16 @@ The spine root finishes. Order inside the phase is the dependency order.
   b9733815b54d, crown 54/0), and the CONFIG DEFAULTS followed one pin
   later on the same measurement — the same leak one field over, the same
   move, one rule with two carriers: everything a handler install
-  EVALUATES belongs in row(h) (pin c3410610ce41, crown 56/0); the
+  EVALUATES belongs in row(h) (pin c3410610ce41, crown 56/0); the third
+  question those two left — an init performing the effect its OWN handler
+  handles — measured to a GATE finding rather than a row one: the row is
+  correct (a declared `!F` catches it) and the executable-root gate
+  clears the name because a handler for it is installed SOMEWHERE, so the
+  program compiles and traps. It is the mirror of the install-extent rule
+  this sweep already pins — an op before the extent OPENS rather than
+  after it closes — stamped as
+  `Hβ.effects.root-gate-credits-an-install-that-had-not-opened`, with its
+  general fix DEP-named on band A's modal install-identity; the
   sweep continues rule-by-rule), and the
   capability-at-tee PROJECTION — ✅ LANDED 2026-08-08 (pin
   2dcd736eb4e6): `mentl where` renders every install as

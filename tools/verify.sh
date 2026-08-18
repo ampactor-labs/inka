@@ -179,6 +179,43 @@ if C=$(wt_m2_ensure); then
     say "✗ floor contract: $flr_bad of $flr_n fixture(s) broke their contract"
     fail=1
   fi
+
+  # 2d. THE RESIDUAL MARK — a proven remainder and an assumed one must not
+  #     project alike. Both halves, because either alone passes on a
+  #     projection that says "assumed" everywhere or nowhere: the declared
+  #     `...` with no closed partner MUST carry the mark, and findtag's
+  #     residual — written by the closed-side writer — must NOT. The
+  #     fixtures also RUN, so the wrong-slot answer the class still gives
+  #     is pinned as a value rather than described.
+  rm_n=0; rm_bad=0
+  for rf in tests/rows/*.mn; do
+    [[ -e "$rf" ]] || continue
+    rm_n=$((rm_n+1))
+    r=$(basename "$rf" .mn)
+    rwant=$(sed -n '1s|^// expect: \([0-9]\+\)$|\1|p' "$rf")
+    rout=$(tools/run-micro.sh "$rf" "$rwant" "${RTLIBS[@]}" 2>/dev/null | grep -E '^(PASS|FAIL)' | tail -1)
+    [[ "$rout" == PASS* ]] || { say "✗ row $r: ${rout:-no output}"; rm_bad=$((rm_bad+1)); continue; }
+    rproj=$(wt_run --dir . "$C/m2.wasm" query "$rf" "type pick" 2>/dev/null)
+    case "$rproj" in
+      *assumed*) ;;
+      *) say "✗ row $r: the projection does not mark the assumed remainder"; rm_bad=$((rm_bad+1)) ;;
+    esac
+  done
+  ctl=$(wt_run --dir . "$C/m2.wasm" query tests/micros/mn-findtag.mn "type pick" 2>/dev/null)
+  case "$ctl" in
+    *assumed*) say "✗ row control: findtag's proven residual is marked assumed"; rm_bad=$((rm_bad+1)) ;;
+    *region_id*) ;;
+    *) say "✗ row control: findtag's residual did not project at all"; rm_bad=$((rm_bad+1)) ;;
+  esac
+  if [[ "$rm_n" -eq 0 ]]; then
+    say "✗ residual mark: no fixtures — proven and assumed remainders need both sides"
+    fail=1
+  elif [[ "$rm_bad" -eq 0 ]]; then
+    say "✓ residual mark: $rm_n assumed remainder(s) project as assumed; the proven control does not"
+  else
+    say "✗ residual mark: $rm_bad check(s) failed"
+    fail=1
+  fi
 else
   say "✗ contract battery: the wheel did not build"
   fail=1

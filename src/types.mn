@@ -742,18 +742,11 @@ type NodeKind
   // untagged EffRow-or-Ty union, and every row walk's
   // catch-all silently crossed sorts (the census's
   // EffRow-vs-Ty at occurs_in_row's delegation).
-  // The second slot is the residual's own TAIL: `None` terminates the
-  // chain (these fields and no more), `Some(v)` continues it at another
-  // row var whose residual is not yet known. Two open records unifying
-  // learn that their known fields agree and that their remainders are the
-  // SAME unknown — a fact `unify_two_open_records` currently discards by
-  // binding both vars to the other's exclusive fields alone, which reads
-  // as "and nothing further" and bakes a field offset over a partial set
-  // (`Hβ.lower.open-row-field-offset-from-known-set`). The tail is the
-  // vocabulary that fact needs, and it lives in the ROW SORT rather than
-  // as a Ty bound onto a row handle: that shortcut was tried and the
-  // march broke on it, for the reason this kind exists at all.
-  | NRecordRowBound([(String, Ty)], Option(Int))
+  // The second slot is the residual's own TAIL, a RecordRowTail: what the
+  // writer KNEW about everything past these fields. It lives in the ROW
+  // SORT rather than as a Ty bound onto a row handle — that shortcut was
+  // tried and the march broke on it, for the reason this kind exists.
+  | NRecordRowBound([(String, Ty)], RecordRowTail)
   // inference observed failure (Hazel marked hole)
   // IFC (§4⑥): no separate NFlowBound/NFlowFree dimension needed. The existing
   // graph already encodes information-flow constraints through two mechanisms:
@@ -767,6 +760,30 @@ type NodeKind
   // mentl-voice projection (`mentl query flow name`) — a read over the type the graph
   // already holds, not a new graph dimension.
   | NErrorHole(Reason)
+
+// WHAT A RESIDUAL BIND KNEW ABOUT EVERYTHING PAST ITS FIELDS. The old
+// `Option(Int)` said only whether the chain continued, and that folded two
+// different writes into one shape: the open-CLOSED writer PROVES its
+// remainder (the other side is closed, so the residual is exactly what is
+// left), while the open-OPEN writer only ASSUMES one — it has seen two
+// partial sets and their union, never the whole. `open_record_full_fields`
+// read both as "the full set is fields ++ residual", so a proof and a guess
+// produced the same field offset, and the guess is where the wrong-slot
+// class lives (`Hβ.lower.open-row-field-offset-from-known-set`).
+//
+// Measured, both repros on the shipping rule: findtag's open-open bind
+// carries nothing (both sides know `{handle}`) and its offset is right only
+// because `handle` sorts first; the second-field micro's carries one field
+// each way and is right by proof. Same writer, different inputs — so the
+// mark belongs on the WRITE, where the writer knows which it made, never
+// re-derived later from the fields alone.
+type RecordRowTail
+  // proven: these fields and no more
+  = RowClosed
+  // the remainder is another row var's residual
+  | RowContinues(Int)
+  // a union of partial sets; the rest is unseen
+  | RowAssumed
 
 type GNode = GNode(NodeKind, Reason)
 
@@ -1901,7 +1918,7 @@ effect GraphWrite {
   graph_finalize_row(Int, EffRow, Reason)
   // union-find path compression at the row sort — an OPTIMIZATION write, distinct from the judgment bind: a BRANCH cursor's arm skips it (a branch writing shared chain cells makes sibling chases schedule-dependent — the measured k2 yield-floor flips; the root's sequential walks re-compress), the root's arm rebinds the chain link to its resolved terminal
   graph_compress_row(Int, EffRow)
-  graph_bind_record_row(Int, [(String, Ty)], Reason)
+  graph_bind_record_row(Int, [(String, Ty)], RecordRowTail, Reason)
   graph_rollback(Int)
   // The speculation's ACCEPT: pop the newest checkpoint WITHOUT
   // restoring — every write since it stands, and mutation events
@@ -2978,6 +2995,17 @@ fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory + Intern = match 
   TReprPin(r, base) => "{show_type(base)} repr {repr_wat(r)}",
 }
 
+// A residual bind, rendered with WHAT ITS WRITER KNEW. The fields alone
+// cannot say whether a remainder was proven or merely unseen, and reading
+// them as though they could is the wrong-slot class at the projection
+// layer — `{ }` from a closed partner is a proof, `{ }` from two partial
+// sets is a guess, and they used to print identically.
+fn show_record_row_residual(fields, tail) with GraphRead + Memory + Alloc + !Mutate + Intern = match tail {
+  RowClosed => show_type(TRecord(fields)),
+  RowAssumed => "{show_type(TRecord(fields))} assumed",
+  RowContinues(v) => "{show_type(TRecord(fields))} | {show_handle(v)}",
+}
+
 // show_handle — the live-chase projection. Resolved handles show the
 // bound type; free handles show the raw handle with allocation epoch
 // so query can surface "unresolved at epoch e"; error holes show the
@@ -2987,7 +3015,7 @@ fn show_handle(h) with GraphRead + Memory + Alloc + !Mutate + Intern = {
   match node {
     GNode(NBound(ty), _) => show_type(ty),
     GNode(NRowBound(row), _) => show_effrow(row),
-    GNode(NRecordRowBound(fields, _), _) => show_type(TRecord(fields)),
+    GNode(NRecordRowBound(fields, tail), _) => show_record_row_residual(fields, tail),
     GNode(NFree(epoch), _) => "t{int_to_str(h)}@e{int_to_str(epoch)}",
     GNode(NRowFree(epoch), _) => "r{int_to_str(h)}@e{int_to_str(epoch)}",
     GNode(NErrorHole(reason), _) => "!hole[{show_reason(reason)}]",

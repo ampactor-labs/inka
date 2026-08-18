@@ -3078,8 +3078,17 @@ fn synthesize_branch_thunk(parent_handle, side_label: String, branch_node, bound
 // first sorted field), and the unprovable case must floor loudly, never
 // return a partial sum.
 fn open_record_full_fields(fields, v) = match graph_chase(v) {
-  GNode(NRecordRowBound(residual, None), _) => Some(sort_record_type_fields(fields ++ residual)),
-  GNode(NRecordRowBound(residual, Some(next_v)), _) => // The chain CONTINUES at another row var: these residual fields are
+  GNode(NRecordRowBound(residual, RowClosed), _) => Some(sort_record_type_fields(fields ++ residual)),
+  GNode(NRecordRowBound(residual, RowAssumed), _) => // The residual was CARRIED, not proven: a union of two partial sets,
+  // with nothing known about what lies past it. This arm answers exactly
+  // as RowClosed does, which is today's measured behaviour and is what
+  // keeps a correct program correct — refusing here turns mn-findtag into
+  // a trap, measured twice. The mark makes the difference legible at the
+  // query and the floor while that stays true; what an assumed remainder
+  // should DO is the open half of
+  // `Hβ.infer.record-row-residual-is-learned-or-assumed`.
+  Some(sort_record_type_fields(fields ++ residual)),
+  GNode(NRecordRowBound(residual, RowContinues(next_v)), _) => // The chain CONTINUES at another row var: these residual fields are
   // known, the rest is not yet. Chasing on keeps the answer honest —
   // a still-free tail reaches the None arm below and floors.
   open_record_full_fields(fields ++ residual, next_v),

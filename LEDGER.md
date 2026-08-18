@@ -35,6 +35,44 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin b8eff49b7252 · A PROOF AND A GUESS STOP LOOKING THE
+  SAME. CLEAN — m2 == m3 at 413243 lines, census 0, battery green,
+  frontier 371/0, 14.27s wall, peak 2281976 KB against a 2310000 ceiling.
+  ▶ WHAT LANDED: `NRecordRowBound`'s tail stops being `Option(Int)` and
+  becomes `RecordRowTail = RowClosed | RowContinues(Int) | RowAssumed` —
+  what the WRITER knew about everything past the fields. The open-CLOSED
+  writer proves its remainder and marks `RowClosed`; the open-OPEN writer
+  has seen two partial sets and their union, never the whole, and marks
+  `RowAssumed`. The mark rides the write, because the fields alone cannot
+  say which of the two produced them.
+  ▶ WHY A THIRD ARM RATHER THAN A BOOLEAN: `Option(Int)` already answered
+  "does the chain continue", and the missing question is a different one.
+  Folding both into one shape is what made a proof and a guess return the
+  same field offset, which is where the wrong-slot class lives.
+  ▶ THE READER IS DELIBERATELY UNCHANGED. `open_record_full_fields`
+  answers RowAssumed exactly as RowClosed, because refusing there turns
+  mn-findtag into a trap — measured twice, once through the linked tail
+  and once through a bind that recorded nothing. What an assumed remainder
+  should DO is the open half of the stamp and the fork is Morgan's; the
+  arm is written out rather than merged so the day that changes is a day
+  someone chose.
+  ▶ THE MARK IS OBSERVABLE, which is what makes this more than vocabulary.
+  `mentl query "type pick"` reads `{ zeta: Int | {  } assumed }` on a
+  declared `...` with no closed partner and `{ handle: Int | { region_id:
+  Int } }` unmarked on findtag, whose residual comes from the closed-side
+  writer. Both were read off the same two commands before the build, where
+  they projected identically.
+  ▶ THE GATE: tests/rows/ plus a verify leg with both halves — the assumed
+  fixture must carry the mark AND the proven control must not, since a
+  projection that says "assumed" everywhere or nowhere passes either half
+  alone. Falsified three ways first: each check pointed at the other's
+  file, and a wrong expected exit. The fixture also RUNS, pinning the
+  wrong-slot answer 7 as a value rather than a description.
+  ▶ ONE VARIABLE: the tail's representation and its projection. The
+  reader's behaviour, the writers' field computation, and every other
+  `NRecordRowBound` match are untouched, which is why a representation
+  change at this depth came back CLEAN rather than as a transition.
+
 - 2026-08-18 · pin 88050b76596d · THE FLOOR SAYS WHICH. TRANSITION first
   (m2 ≠ m3 by 8 lines, m4 exit 0 at 412987 lines, m3 == m4), then CLEAN
   (m2 == m3) after the quiet gate sent one line back — and the sha is the

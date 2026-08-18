@@ -1,0 +1,15 @@
+// expect: 7
+// A DECLARED anonymous rest with no closed partner in the body. The only
+// thing that ever narrows `u` is another open row, so the residual `pick`
+// carries is a union of two partial sets and nothing is known past it.
+// The projection must say so: an empty remainder from a closed partner is
+// a proof, an empty remainder from two partial sets is a guess, and they
+// rendered identically before the tail carried what its writer knew.
+//
+// The 7 is the wrong-slot class itself, measured and pinned rather than
+// asserted: `zeta` is index 0 of the KNOWN set and index 1 of the real
+// record, so this answers `alpha`. The fixture holds the CURRENT answer so
+// the day it changes is a day someone chose
+// (`Hβ.lower.open-row-field-offset-from-known-set`).
+fn pick(u: {zeta: Int, ...}) = u.zeta
+fn main(q) = pick({alpha: 7, zeta: 9})

@@ -1188,6 +1188,17 @@ narrowing exists and does not reach the instantiated use. That is this
 entry's own per-call-site paragraph, now measured as operative for
 findtag and not only for zeta, and it is where the next step goes.
 
+STAMP PAID (2026-08-18, pin b8eff49b7252, CLEAN) — the tail is
+`RecordRowTail = RowClosed | RowContinues(Int) | RowAssumed`, the two
+writers mark what they knew, and `mentl query` now reads
+`{ zeta: Int | {  } assumed }` where it used to read `{ zeta: Int | {  } }`
+identically to a proven one. The reader is deliberately unchanged —
+RowAssumed answers as RowClosed — because refusing there is measured to
+trap mn-findtag, so the arm exists to make the fork's answer a choice
+rather than a default. Gate: tests/rows/ plus a verify leg carrying both
+halves (the assumed fixture marked, the proven control not), falsified
+three ways. The stamp's own NOT COMPLETE line is what remains, unchanged.
+
 STAMP — `Hβ.infer.record-row-residual-is-learned-or-assumed`.
 TRACED: `NRecordRowBound(fields, tail)` carries two different writes under
 one shape. The open-CLOSED writer PROVES its remainder (the other side is

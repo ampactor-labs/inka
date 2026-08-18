@@ -6083,7 +6083,9 @@ fn unify_record_open_against_closed(closed_fields, open_fields, open_var, span: 
   // matched fields' types; bind the row variable to the remainder.
   unify_record_open_subset(open_fields, closed_fields, span, reason)
   let residual = record_fields_diff(closed_fields, open_fields)
-  graph_bind_record_row(open_var, residual, Located(span, reason))
+  // PROVEN. The other side is CLOSED, so its fields are the whole set and
+  // the residual is exactly what remains — nothing further can arrive.
+  graph_bind_record_row(open_var, residual, RowClosed, Located(span, reason))
 }
 
 fn unify_record_open_subset(needed, available, span: ValidSpan, reason) = if len(needed) == 0 {
@@ -6122,8 +6124,15 @@ fn unify_two_open_records(fa, va, fb, vb, span: ValidSpan, reason) = {
       type_mismatch(TRecordOpen(fa, va), TRecordOpen(fb, vb), span, reason)
     }
   } else {
-    graph_bind_record_row(va, extra_b, Located(span, reason))
-    graph_bind_record_row(vb, extra_a, Located(span, reason))
+    // ASSUMED. Each var takes the fields the other side knows and it does
+    // not — a real carrying, measured: the second-field micro's offsets are
+    // right because this bind moves the far side's field across. What it
+    // does NOT know is whether anything lies past the union, and the old
+    // shape said
+    // "nothing" in the same breath it said the fields. The mark separates
+    // the two halves so a reader can tell a carried fact from a guess.
+    graph_bind_record_row(va, extra_b, RowAssumed, Located(span, reason))
+    graph_bind_record_row(vb, extra_a, RowAssumed, Located(span, reason))
   }
 }
 

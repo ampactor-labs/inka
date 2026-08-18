@@ -1601,16 +1601,35 @@ a state init the extent question is not dynamic at all — the init is
 lexically part of the handler declaration and provably runs before any
 install of it exists — so this instance is decidable where the general
 case the comment defends is not.
-PRICED: NOT MEASURED, and the fork inside it is why. A narrow fix marks
-the init's contribution so the root gate refuses to credit an install
-against it; the general fix is the extent as a graph fact, which is band
-A's `Hβ.effects.modal-world-index` and is not this loop's to pull
-forward. Whether the narrow one is sound without the general one is
-exactly what is unpriced — the comment's defence (dynamic installs, the
-stateful-singleton demand) has to be shown untouched by it, and that is a
-measurement against the wheel's own singleton handlers, not an argument.
-WRITERS: `report_unhandled_names` (pipeline.mn), the single site; the row
-producers need no change, having been measured correct above.
+PRICED 2026-08-18, and the pricing KILLED the simple branch and MEASURED
+the blocker on the narrow one.
+▶ DELETING THE CREDIT IS REFUTED. With the clearing conjunct disabled, a
+probe m2 built and then REFUSED THE WHEEL: m3 exit 1, pm3.wat ZERO bytes,
+one diagnostic — `effect GraphRead reaches the executable root with no
+absorbing handler … Install one over the performing chain: ~>
+graph_handler`. The comment's defence is exercised, once, by the wheel
+itself, so the credit stays. One effect, named, rather than an argument
+about dynamic installs in general.
+▶ AND THE NARROW BRANCH CANNOT BE WRITTEN AT THIS GATE. A drained demand
+is a bare NAME: `demands_to_enames` does `env_lookup(d)` and decides
+strictness from the op's own `EffectOpScheme(op_effect, default_handler,
+…)` plus `handler_stateful(default_handler)`. No span, no position, no
+origin reaches the gate, so it cannot tell an init's perform from a
+body's — which is exactly the distinction the narrow fix needs. The
+demands come from `walk_lemit(lowered)` + `drain_effect_census()`, so the
+change is at the CENSUS, not the gate: a demand would have to carry where
+it was performed.
+▶ WHICH MAKES THE SPLIT SMALLER THAN BAND A'S, NOT EQUAL TO IT. The
+comment defends a genuinely undecidable case (a dead extent versus live
+dynamic coverage). A state init is not that: it provably runs before any
+install of its own handler, for every install, statically. So a
+census-level origin is sound where the general extent question is not —
+and that is the design the next step owes, priced as a representation
+change to the demand rather than a conjunct at the gate.
+WRITERS: `report_unhandled_names` READS the verdict; `demands_to_enames`
+computes it from the op's env entry; `drain_effect_census` /
+`walk_lemit` mint the demands. The change lands at the mint, and the row
+producers need none, having been measured correct above.
 NOT COMPLETE: no fixture landed, because the surface is broken and a
 crucible here would canonize the trap. The repro above is the bank. Also
 unmeasured: whether the same credit clears an op performed in a config

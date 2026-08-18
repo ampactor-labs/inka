@@ -1600,8 +1600,15 @@ vocabulary, and the fix was not to invent one but to read the install
 node's own Reason through the GraphRead row it already declares, so the
 diagnostic lands at real coordinates. Gates both halves:
 `mn-refuse-init-performs-own-op` and `mn-init-performs-outer-op` at 42.
-The 1016 sibling belts are untouched and stay belts. The config-default
-sibling named below is STILL unmeasured. The stamp follows.
+The 1016 sibling belts are untouched and stay belts. THE CONFIG-DEFAULT
+SIBLING IS MEASURED AND COVERED (2026-08-18, pin 4dc2ac881254): defaults
+and state inits lower into one `inits` list, so the same scope catches
+both — it refused on the first probe. What was wrong was the MESSAGE,
+which said "state init" for both carriers until the sibling fixture made
+that visible; it now names the perform-while-building without guessing
+which carrier, because the class cannot distinguish them at that point.
+Gates `mn-refuse-config-default-own-op` and `mn-config-default-outer-op`
+at 7. The stamp follows.
 
 ▶ THE STAMP AS BANKED — THE ONE SITE WHERE THE BELT'S GUARD IS DECIDABLE. A singleton op call lexically
 inside the `inits` of the very install whose handler it names has a

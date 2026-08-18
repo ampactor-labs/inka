@@ -910,7 +910,7 @@ handler effect_census_collector with demands = [], installs = [] {
 }
 
 // THE INITS' OWN SCOPE, drawn as an install rather than threaded as a flag.
-// Walking an install's `inits` is the one place the lowered tree already
+// Walking an install's inits is the one place the lowered tree already
 // proves a perform precedes its handler's existence, so a `~>` over that
 // sub-walk is the whole mechanism. A direct perform naming THIS handler has
 // a `world_find` that cannot answer — the install's `world_push` has not

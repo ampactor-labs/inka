@@ -2091,13 +2091,15 @@ type DiagKind
   // within one iteration. Decidable exactly when the depth is a
   // literal; a computed depth rides the refinement tier.
   | EZeroDelayFeedback(Span)
-  // A handler's own state init performs an op THIS handler answers. The
-  // install's world_push has not run while its inits run — by
-  // construction, for every install of it — so the singleton dispatch's
-  // world_find provably returns 0 and the belt beneath it is the only
-  // outcome. The runtime already says this precisely; saying it at compile
-  // time is the difference between a program that traps and one that never
-  // ships (handler name, op name).
+  // A handler performs an op it itself answers WHILE BUILDING ITSELF —
+  // from a state init or a config default, which lower into one inits
+  // list and so reach this one class (measured: both refuse). The
+  // install's world_push has not run while they run — by construction,
+  // for every install of it — so the singleton dispatch's world_find
+  // provably returns 0 and the belt beneath it is the only outcome. The
+  // runtime already says this precisely; saying it at compile time is the
+  // difference between a program that traps and one that never ships
+  // (handler name, op name).
   | EInitPerformsOwnOp(String, String, Span)
   // `<~ delay(n)` where n is a runtime value. The line is a fixed set of
   // slots declared at emit, so a depth the medium cannot read is a depth
@@ -2595,7 +2597,7 @@ fn diag_refuses(d) with Pure = match d {
   True,
   EInitPerformsOwnOp(_, _, _) => // ARMED at birth (2026-08-18): the judgment is STRUCTURAL, read from
   // the lowered install itself — a direct-perform inside `LHandleWith`'s
-  // own `inits`, naming that same install's handler. No resolution
+  // own inits list, naming that same install's handler. No resolution
   // dependency and no extent guess: the install's world_push has not run
   // while its inits run, for every install, so the singleton dispatch's
   // world_find provably answers 0. The runtime already refuses precisely
@@ -2693,7 +2695,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EUnknownArgLabel(detail, _) => detail,
   EFeedbackNoContext(_) => "`<~` used outside an iterative context",
   EZeroDelayFeedback(_) => "`<~ delay(0)` closes a cycle with no delay — the prior would be the value being computed. Raise the delay to at least 1",
-  EInitPerformsOwnOp(hname, op, _) => "handler {hname}'s state init performs {op}, which {hname} itself answers — but the install does not exist yet while its inits run, so nothing can absorb it. Move the perform into an arm, or compute the init from a handler installed around this one",
+  EInitPerformsOwnOp(hname, op, _) => "handler {hname} performs {op} while building itself — in a state init or a config default, both of which run before the install exists — and {hname} is what answers {op}, so nothing can absorb it. Move the perform into an arm, or compute the value from a handler installed around this one",
   EComputedDelayDepth(_) => "the delay depth must be a literal — a feedback line is a fixed set of slots, and a depth read at runtime would silently get one. Write the depth, or hold the history yourself",
   ERestOutsideDestructure(_) => "`...` rest element outside a destructuring parameter — rest lives in patterns (`([h, ...t]) =>`, `let [h, ...t] =`), and `++` joins lists in expressions",
   ERowAliasCycle(nm, _) => "row alias `{nm}` expands through itself — a row is a finite signed set; name the effects directly",

@@ -35,6 +35,26 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 4dc2ac881254 · THE MESSAGE CATCHES UP TO THE CLASS.
+  CLEAN — m2 == m3 at 413773 lines, census 0, battery green, frontier
+  371/0, 15.95s wall, peak 2269028 KB against a 2310000 ceiling.
+  ▶ THE BANKED PROBE ANSWERED ON ITS FIRST RUN: a config DEFAULT
+  performing the handler's own op already refuses with
+  `E_InitPerformsOwnOp`. Defaults and state inits lower into one `inits`
+  list, so the scope armed at the previous pin covers both — measured, and
+  now held there by a fixture rather than by that coincidence.
+  ▶ WHAT WAS ACTUALLY WRONG was the message. It said "state init" for both
+  carriers, which is false for a default, and only writing the sibling
+  fixture made the imprecision visible. The diagnostic now names what is
+  known — a perform while the handler builds itself, from either carrier —
+  instead of guessing which one it was. The class cannot distinguish them
+  at that point and the message no longer pretends to.
+  ▶ GATES: `mn-refuse-config-default-own-op` as a refuse contract, and
+  `mn-config-default-outer-op` running at 7 — a default performing ANOTHER
+  handler's op stays ordinary, the default still fires, `k` still binds.
+  Both falsified before landing.
+  ▶ ONE VARIABLE: the diagnostic's text.
+
 - 2026-08-18 · pin 362ac8b1eeae · AN INIT CANNOT CALL THE HANDLER IT IS
   BUILDING. CLEAN — m2 == m3 at 413738 lines, census 0, battery green,
   frontier 371/0, 14.99s wall, peak 2259388 KB against a 2310000 ceiling.

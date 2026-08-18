@@ -1,0 +1,14 @@
+// expect: 7
+// The sound dual for the config-default carrier: a default performing an op
+// ANOTHER handler answers is ordinary. The outer install covers it, the
+// default still fires, and `k` still binds — charging what an install
+// evaluates must not charge what it does not.
+effect E { op() -> Int }
+effect F { g() -> Int }
+handler he {
+  op() => resume(7),
+}
+handler hf(k: Int = op()) with s = 1 {
+  g() => resume(k),
+}
+fn main(q) = ((g()) ~> hf) ~> he

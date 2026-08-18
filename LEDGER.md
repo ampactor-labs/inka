@@ -35,6 +35,26 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · NEGATION DISTRIBUTES OVER A NAMED ROW — CROWN 45 → 47 (no
+  pin — crucibles only; boot unchanged at 5a61fc4eba, wheel source
+  untouched).
+  ▶ PRIORITY SERVED: the 6.3 modal sweep, fourth tick, and this one
+  leaves the storage-carrier family for a different rule rather than
+  hunting an eighth carrier. Three ticks of carriers is where that vein
+  ran out, and continuing it would have been the completion-gradient
+  rather than the sweep.
+  ▶ THE RULE. `type Both = A + B` is a transparent alias (SYNTAX §Named
+  effect rows, landed 2026-08-07), so `with !Both` has to forbid BOTH
+  members — otherwise a named capability set is a hole in the negation,
+  and a developer naming a set is exactly when the medium should keep
+  proving absence. `leak-alias-negation` performs A under `!Both`:
+  refused (mismatch=1). `sound-alias-negation` performs C, which the
+  alias does not name, under `!Both + C`: accepted. The pair pins BOTH
+  failure directions — a negation that under-refuses leaks, and one that
+  over-refuses makes named rows unusable.
+  ▶ SEEN RED: a leak body that performs nothing takes the gate to
+  `✗ want reject, mismatch=0`, crown 46/1, and back to 47/0 on restore.
+
 - 2026-08-17 · THE HOLE-PRODUCT JOINS THE LATENCY RULE, AND CORRECTS THE
   LAST ENTRY — CROWN 43 → 45 (no pin — crucibles only; boot unchanged at
   5a61fc4eba, wheel source untouched).

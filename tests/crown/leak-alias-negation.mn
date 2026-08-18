@@ -1,0 +1,16 @@
+// CROWN — negation distributes over a NAMED EFFECT ROW. `type Both =
+// A + B` is a transparent alias (SYNTAX §Named effect rows, landed
+// 2026-08-07), so `with !Both` must forbid BOTH members. A body
+// performing A under `!Both` has to refuse, or the alias would be a hole
+// in the negation: a developer names a capability set and the medium
+// stops proving its absence.
+// Expect E_EffectMismatch.
+effect A { opa() -> Int }
+
+effect B { opb() -> Int }
+
+type Both = A + B
+
+fn bad() with !Both = opa()
+
+fn main() = bad()

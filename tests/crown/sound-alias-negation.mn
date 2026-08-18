@@ -1,0 +1,15 @@
+// CROWN — the sound dual: `!Both` forbids its members and NOTHING more.
+// A body performing C, which the alias does not name, must be accepted
+// under `with !Both` — a negation that over-refused would make named
+// rows unusable, which is the opposite failure from the leak case.
+effect A { opa() -> Int }
+
+effect B { opb() -> Int }
+
+effect C { opc() -> Int }
+
+type Both = A + B
+
+fn good() with !Both + C = opc()
+
+fn main() = good()

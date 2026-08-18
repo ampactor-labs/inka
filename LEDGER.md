@@ -35,6 +35,38 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE TRAP IS PINNED: INDIRECT CALL TYPE MISMATCH AT A
+  RENAMED NESTED FN (no pin — probe only; boot unchanged at
+  6e05bd9404ed).
+  ▶ THE BANKED PROBE RAN AND KILLED ITSELF FIRST. It asked whether a
+  definition was renamed while a caller kept the old symbol. It was not:
+  both generations DEFINE both naming forms, and the annotation shifts
+  exactly one fn from bare to qualified — m2 carries two `digit*`
+  definitions and one `parse_int_digit*`, m3 the mirror. The earlier
+  "defs=0, callrefs=1" was an artifact of a trailing-space pattern, and
+  the dangling-symbol reading died with it. Fifth explanation this arc has
+  killed by measuring rather than reasoning.
+  ▶ THEN THE INSTRUMENT CHANGED KIND, which is what finally answered.
+  Reading the WAT had reached its limit, so the artifact was RUN: m3.wasm
+  fed the wheel's own source (2645362 bytes in, zero out, exit 134)
+  reproduces the failure by hand, with a backtrace. `wasm trap: indirect
+  call type mismatch`, innermost frame `parse_int_go`, reached through
+  `lex_from` → `lex` → `infer_program_converged` → `compile_stdin_run`.
+  ▶ SO THE FAULT IS INDIRECT DISPATCH AT THE RENAMED NESTED FN — not
+  rows, not symbols, not readers. A nested function's NAME is reaching its
+  `call_indirect` identity, which is the emitter's known hazard family
+  ("dup top-level fn names — the emitter picks one silently") with a new
+  trigger: a rename changing which definition an indirect call resolves
+  to.
+  ▶ THE ARC IS NOW THREE STEPS, not two. The indirect-dispatch fault sits
+  upstream of the discriminator fix, which sits upstream of the writer
+  flip. Nothing about the row tail can land until a nested fn can be
+  renamed without breaking dispatch — and that ordering was invisible
+  until the artifact was run instead of read.
+  ▶ NEXT PROBE is the prescribed one: `wasm-objdump -d` at the trapping
+  address, reading the `call_indirect` and the type it expected against
+  the type it got. The address is in the captured backtrace.
+
 - 2026-08-17 · THE ANNOTATION SURFACES A SECOND SILENT WRONG, AND THE
   MARCH STILL REFUSES (no pin — experiment reverted whole; boot unchanged
   at 6e05bd9404ed).

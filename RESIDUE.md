@@ -927,12 +927,29 @@ was banked: duplicate-symbol counts are identical between the
 generations (514 and 514), so qualification introduced none. What
 remains unmeasured is why a module whose only change is four qualified
 nested-fn names fails at startup.
-▶ NEXT PROBE, and it is cheap because the diff is 39 lines: read those
-four functions' call sites in m3 against their definitions. A definition
-renamed while a caller still names the old symbol would assemble (the
-name section is advisory) and fail at the first call — which matches a
-0.97s death better than anything about rows. Measure it; do not assume
-it.
+▶ THE DANGLING-SYMBOL PROBE RAN AND KILLED ITSELF. Both generations
+DEFINE both naming forms; the annotation shifts exactly one fn from bare
+to qualified (m2 carries two `digit*` definitions and one
+`parse_int_digit*`, m3 the mirror). No dangling symbol, and the earlier
+"defs=0" was an artifact of a trailing-space pattern. Fifth explanation
+this arc has killed by measuring.
+▶ THE TRAP IS NOW PINNED, by running the artifact rather than reading it.
+Feeding m3.wasm the wheel source (2645362 bytes in, zero out, exit 134)
+reproduces it with a backtrace: `wasm trap: indirect call type mismatch`,
+innermost frame `parse_int_go`, reached through `lex_from` → `lex` →
+`infer_program_converged`. So the fault is INDIRECT DISPATCH at the
+renamed nested fn — not rows, not symbols, not readers.
+▶ WHY THAT MATTERS BEYOND THIS ARC: a nested function's NAME is reaching
+its indirect-call identity. The emitter's known hazard is exactly this
+family ("dup top-level fn names — emitter picks one silently"), and a
+rename that changes which definition a `call_indirect` resolves to is
+that hazard with a different trigger. The next probe is the prescribed
+one: `wasm-objdump -d` at the trapping address to read the
+`call_indirect` and the type it expected against the one it got.
+▶ THE ARC'S SHAPE IS NOW THREE STEPS, not two: the indirect-dispatch
+fault is upstream of the discriminator fix, which is upstream of the
+writer flip. Nothing about the row tail can land until a nested fn can be
+renamed without breaking dispatch.
 ▶ THE ORIGINAL PATH STANDS but now has two steps, not one: fix the
 discriminator's own defect first (it is real, small, and separately
 gated), then re-attempt the writer flip. The frame record has

@@ -1155,6 +1155,71 @@ today, while zeta answers 7 WRONGLY. Both close an empty residual; only
 one is wrong. Why findtag's receiver resolves correctly through the same
 fabrication is the next probe, and it is now a single sharp question
 rather than the specialize-versus-runtime-layout fork.
+▶ THAT PROBE RAN (2026-08-18) AND ANSWERED, and its first job was killing
+a claim this entry had just made without measuring it: that the
+second-field micro takes the same `xa=0 xb=0` bind findtag takes. It does
+not. On the SHIPPING rule the counting eprint reads `xa=0 xb=0` for
+findtag and `xa=1 xb=1` for the second-field micro — same writer, same
+two row handles, different inputs. One side knows `{handle}` and the
+other `{region_id}`, and each carries the other's field across, so the
+full set really is `{handle, region_id}` and `region_id` really is at
+offset 4. The control passes for a reason; findtag passes because
+`handle` sorts first in both the partial set and the true one.
+▶ AND THE FLOOR NAMED THE RECEIVER, which is what the previous landing
+built it for. With the open-open bind recording NOTHING (one edit — the
+read-side effect of a linked tail when the extra is empty), both micros
+trap in `main` at a single floor: `field 'handle' on { handle: Int |
+r25043@e1 }` and `field 'region_id' on { handle: Int | r25043@e1 }`. The
+enclosing fn is `main` in both, read off the emit rather than assumed.
+Note the KNOWN set in the second: `{ handle }`, not `{ region_id }` — so
+`main`'s receiver learns `handle` through `pick`'s scheme and everything
+else from that one bind.
+▶ SO THE BIND IS A CARRIER, NOT ONLY A LIE, and that is the reframe this
+arc was missing. `unify_two_open_records` records the union of what the
+two sides know; deleting it or free-tailing it discards a fact the graph
+had proved, which is why the flip broke a correct program rather than
+merely refusing an incorrect one. The defect is the SECOND half of the
+same write — asserting that nothing further exists — and the two halves
+have to be separated rather than removed together.
+▶ WHAT IS STILL MISSING IN findtag, stated as the gap and not a fix:
+`unify_record_open_against_closed` binds the call site's residual to a
+var (measured `v=13013 nres=1`) that `main`'s receiver does not read. The
+narrowing exists and does not reach the instantiated use. That is this
+entry's own per-call-site paragraph, now measured as operative for
+findtag and not only for zeta, and it is where the next step goes.
+
+STAMP — `Hβ.infer.record-row-residual-is-learned-or-assumed`.
+TRACED: `NRecordRowBound(fields, tail)` carries two different writes under
+one shape. The open-CLOSED writer PROVES its remainder (the other side is
+closed, so the residual is exactly what remains) and the open-OPEN writer
+ASSUMES one (it knows only the union of two partial sets).
+`open_record_full_fields` reads both as "the full set is fields ++
+residual" because the node carries no mark separating them, so a
+prefix-summed offset comes back where a refusal belongs. The `Option(Int)`
+tail landed at pin 6e05bd9404ed is the vocabulary for CONTINUES; what has
+no vocabulary is PROVEN versus ASSUMED, and the three readings the floor
+now prints — a free tail, `{ }`, and real fields — are exactly the three
+the reader must tell apart.
+PRICED: the tail becomes a three-arm ADT (`RowClosed | RowContinues(Int) |
+RowAssumed`) rather than an `Option`, which is an arity-equivalent change
+at the same twenty-one sites across eight files the previous tail change
+enumerated — the compiler performs the enumeration, including behind any
+catch-all, which is the precise failure mode the sort-crossing attempt
+paid for. Every read stays O(1) on the existing chase: no new walk, no new
+pass, no second ledger. Freshness is answered by construction, since the
+mark is written in the same instant as the fields by the writer that knows
+which it is.
+WRITERS: two, both in infer.mn — `unify_record_open_against_closed`
+(proven) and `unify_two_open_records` (assumed). READERS:
+`open_record_full_fields` in lower.mn is the one that must diverge; the
+remaining `NRecordRowBound` matches destructure without consulting the
+tail.
+NOT COMPLETE: what an ASSUMED residual should DO at the read is the open
+half, and this stamp does not pretend to have it — refusing turns findtag
+into a trap, which is measured, so the answer is not "floor on assumed".
+The two candidates are narrowing the assumed row at the call site so the
+question never arises, and specializing the receiver's layout per call
+site. Both are the standing fork, and the fork is Morgan's.
 ▶ A GREEN GATE LANDED FOR THE ADJACENT SHAPE, because the class needs
 oracles on both sides of the line. `tests/micros/mn-open-row-second-field`
 runs findtag's exact flow but reads `region_id`, the SECOND-sorting field,

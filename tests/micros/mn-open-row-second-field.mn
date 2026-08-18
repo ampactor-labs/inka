@@ -1,0 +1,12 @@
+// expect: 2
+// The findtag shape, reading the SECOND-sorting field. findtag itself reads
+// `handle`, which sorts first, so a layout computed over a PARTIAL field set
+// lands on offset 0 and is right by accident. `region_id` sorts second, so the
+// same partial set puts it at offset 0 too — and offset 0 holds `handle`.
+// Answering 9 here instead of 2 is the wrong-slot class stated as a value.
+fn pick(ref tags: [{handle: Int, region_id: Int}], h) with !Mutate =
+  find((tag) => tag.handle == h, tags)
+fn main(q) = match pick([{handle: 7, region_id: 1}, {handle: 9, region_id: 2}], 9) {
+  Some(t) => t.region_id,
+  None    => 0
+}

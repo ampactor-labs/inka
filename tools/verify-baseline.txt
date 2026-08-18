@@ -589,7 +589,7 @@ comment_refs_max: 0
 # the same ruling applies: the divergence relocates rather than resolves, and
 # rung 3 deletes the class. Fixed inputs: same wheel source, same fixture set,
 # the only variable being whether a singleton branch spawns.
-movers_max: 470
+movers_max: 469
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

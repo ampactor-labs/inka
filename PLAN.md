@@ -1601,9 +1601,14 @@ the textbook repair (one shared fresh tail) marched BROKEN TWICE — once
 binding a row handle to a Ty, once entirely inside the row sort with the
 tail as `Option(Int)` on `NRecordRowBound`. Same signature both times
 (~131.5k diff lines, m3 clean, m4 trapping at exit 134), which refutes
-the sort-crossing explanation and leaves the SEMANTIC change as the
-cause: the linked form yields a compiler that mis-compiles the wheel one
-generation on. The tail vocabulary is landed and inert. The BREAK IS MEASURED
+the sort-crossing explanation. It was read here as the SEMANTIC change
+being the cause; a third attempt (2026-08-18, after the receivers below
+were annotated) marched the identical semantics **CLEAN, m2 == m3**, so
+the linking is EXONERATED and the five receivers were the whole break.
+That third attempt was still refused, by the micro battery alone — one
+micro, `mn-findtag`, floors at `field offset unprovable` — so the class
+stays open on a narrowed question, not on a fork (`RESIDUE.md`).
+The tail vocabulary is landed and inert. The BREAK IS MEASURED
 (emit-diff on the broken run's artifacts): one floor class differs,
 `field offset unprovable` 4 → 9, the whole +5 of the unreachable delta.
 The linked form is HONEST and the wheel cannot afford it yet — five of

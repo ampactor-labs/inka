@@ -887,8 +887,10 @@ artifacts — m2 13937263 bytes, m3 13937259, m4 ZERO). The floor census
 differs in exactly ONE class: `field offset unprovable`, 4 in m2 and 9 in
 m3, which is the whole +5 of the unreachable delta (4286 → 4291). Every
 other class is identical.
-▶ SO THE LINKED FORM WORKS AS DESIGNED, and that is what breaks the
-wheel. The chase reaches a free tail and floors HONESTLY at five more
+▶ SO THE LINKED FORM WORKS AS DESIGNED, and at this pin that is what
+broke the wheel — five unannotated receivers, not the linking, as the
+third attempt below later proved by marching the same semantics CLEAN.
+The chase reaches a free tail and floors HONESTLY at five more
 sites — and those sites are in the WHEEL's own source, so the compiler
 m3 emits traps when it compiles the wheel. The old empty-bind was
 papering them over with a guessed offset that happened to be right for
@@ -1119,11 +1121,56 @@ still answers 7. The ARITY change was the point: it is a compile error at
 every one of the twenty-one sites across eight files, including any behind
 a catch-all, so the enumeration belongs to the compiler rather than to a
 grep — the precise failure mode of the sort-crossing attempt.
-▶ THE REMAINING STEP is the writer flip: `unify_two_open_records`'s
-`va != vb` arm mints one shared tail and writes `Some` on both sides. It
-is a TRANSITION by construction — the refuted attempt measured 131477 diff
-lines for the same semantic change — so the m4 leg is watched from the
-first run rather than after a repin.
+▶ THE WRITER FLIP RAN A THIRD TIME (2026-08-18, blocker cleared) AND THE
+SEMANTICS ARE EXONERATED. `unify_two_open_records`'s `va != vb` arm mints
+one shared tail and writes `Some` on both sides; the march came back
+**CLEAN, m2 == m3**, at 2280480 KB peak against a 2310000 ceiling. The two
+earlier attempts measured 131477 and 131497 diff lines with m4 trapping,
+and this entry read that as the linked form breaking the wheel. It was
+the discriminator defect the whole time. The same semantic change, after
+`Hβ.lower.record-pattern-param-receiver`'s two annotations and the
+self-capture identity read, reproduces the medium exactly. That prediction
+— "a TRANSITION by construction" — was wrong in the good direction.
+▶ AND THE REPIN WAS STILL REFUSED, by the micro battery alone: 138 pass /
+1 fail, `mn-findtag` trapping at exit 134. The emitted wat carries one
+marked floor, `(unreachable)  ;; field offset unprovable`, reached from
+`main`. So the flip is not a self-hosting question at all; it is a
+question about one micro's receiver.
+▶ THE WRITER IS CONFIRMED BY PROBE, not by prediction. Two eprints — one
+per writer, printing both row handles and the four field counts — were
+built into a probe m2 and run on the repro. On `fn pick(u: {zeta: Int,
+...}) = u.zeta` over `{alpha: 7, zeta: 9}`, per compile pass:
+`open-open va=7320 vb=12989 nfa=1 nfb=1 xa=0 xb=0` fires FIRST, then
+`open-closed v=12995 nclosed=2 nopen=1 nres=1`. The body's row and the
+annotation's row meet each other knowing one field apiece with NO extras,
+so both close to `[]`; the call site's closed record then narrows a THIRD
+var that the body never reads. That is this entry's per-call-site
+paragraph and its writer paragraph, both measured rather than inferred.
+▶ AND THE FLIP DOES EXACTLY WHAT IT WAS BUILT FOR, at the intended site:
+under it the zeta repro stops answering 7 and TRAPS at the floor. A body
+that genuinely cannot know its layout refuses instead of guessing.
+▶ SO THE OPEN QUESTION NARROWED TO ONE MICRO. `mn-findtag` shows the same
+`xa=0 xb=0` open-open event (va=13022 vb=13030) and answers 7 CORRECTLY
+today, while zeta answers 7 WRONGLY. Both close an empty residual; only
+one is wrong. Why findtag's receiver resolves correctly through the same
+fabrication is the next probe, and it is now a single sharp question
+rather than the specialize-versus-runtime-layout fork.
+▶ A GREEN GATE LANDED FOR THE ADJACENT SHAPE, because the class needs
+oracles on both sides of the line. `tests/micros/mn-open-row-second-field`
+runs findtag's exact flow but reads `region_id`, the SECOND-sorting field,
+where a layout over a partial set would land on `handle`. The pinned boot
+answers 2 — correct — so the unification-minted-open channel is sound for
+this shape and any future fix that breaks it is caught before the march
+instead of by it. Falsified two ways before trusting: it fails against the
+flip build (the same trap) and fails against a deliberately wrong
+expectation.
+▶ WHAT THIS COSTS THE PREMISE. The flip's justification was that the
+empty bind is a fabrication driving the wrong-slot class. That is TRUE at
+zeta and NOT SUFFICIENT as a landing: the same honest floor also refuses a
+program the medium answers correctly today, and refusing correct programs
+is not the fix, it is the measured dead end of "just refuse" one layer
+deeper. The flip stays reverted; what it bought is the exoneration above
+and the narrowed question.
 ▶ THE PER-CALL-SITE BIND EXISTS AND DOES NOT REACH THE BODY.
 `unify_record_open_against_closed` computes `record_fields_diff(closed,
 open)` and binds the open var to it, which for the first call above is

@@ -540,6 +540,48 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
+`Hβ.infer.serialized-judge-still-spawns` — MEASURED 2026-08-17 by the
+first aggregate profile of a trivial compile, and it is the dominator six
+prior probes missed. §11 5.2 SERIALIZED the parallel final on 2026-08-07
+(`judge_window = 1`, infer.mn) because the K=8 fan's correctness rested
+on published schemes being live-var-free — exactly the property rung 3
+deletes — and live cells raced its branches. The window went to 1. THE
+SPAWN DID NOT. `layer_judge_walk`'s own comment states the shape without
+flinching: "every layer branch runs as a REAL task — a spawned instance
+of the whole module over the shared image", and `judge_blocks` spawns a
+block of `judge_window`, joins it, and spawns the next. At window 1 that
+is one OS thread per layer branch, created and joined, with no
+parallelism bought.
+THE MEASUREMENT, on `fn main() = 7`: 433 distinct threads over the run,
+20 concurrent at peak against a 10-thread wasmtime baseline (measured by
+polling the process task table for `help`, which loads the same 2.4MB
+module and does no compiling, versus `check`). In the profile
+`wasi_thread_start` carries 48.45% inclusive, `branch_bracket` 46.80%,
+and the two list primitives the brackets run — `list_filled_from`
+specialised on Span at 25.59% SELF and `list_set` at 23.17% SELF —
+account for roughly half the entire run. HALF THE COMPILE IS SPAWNING
+AND BRACKETING BRANCHES THAT RUN ONE AT A TIME.
+WHY IT HID: an earlier `--no-children` read of a smaller capture showed a
+flat profile with a 7% top entry, and that reading was recorded as "there
+is no hot spot". Aggregating inclusive shares per symbol shows two
+functions owning half the run. The lesson belongs beside §5.O's
+measure-don't-read-code law: a flat SELF profile over specialised twins
+hides a dominator that only the CHILDREN view names.
+THE QUESTION TO STAMP, not yet answered: at window 1, can the branch be
+a DIRECT CALL? The comment claims the join stream is "byte-identical to
+the sequential walk by construction", which argues yes — but the spawn
+also buys each branch a fresh instance with branch-local ledgers,
+disjoint mint ranges and a read-only intern view, and whether those are
+load-bearing at K=1 or merely inherited from the K=8 design is the
+open question. Answer it against the artifact before building: the
+prize is roughly half the floor, and the risk is that isolation is
+doing quiet correctness work the comment credits to the window.
+NOT A LICENCE TO TUNE THE CONDEMNED: the parallel form returns at Phase
+9.2 with the deterministic handle partition. This is not an improvement
+to that machinery — it is the observation that the SERIALIZED path pays
+the PARALLEL path's full price for none of its benefit, which is a cost
+5.2's own landing did not intend and did not measure.
+
 `Hβ.perf.compile-is-linear-in-source` — the corrected law, 2026-08-17.
 ▶ RETRACTION FIRST. This entry was written the same day as
 `Hβ.perf.compile-is-quadratic-in-modules`, asserting a fitted `0.062·N +

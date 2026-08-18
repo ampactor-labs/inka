@@ -35,6 +35,52 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · HALF THE COMPILE IS SPAWNING BRANCHES THAT RUN ONE AT A
+  TIME (no pin — the finding and its stamp; boot unchanged at
+  e7c2da624b, src and lib untouched).
+  ▶ WHAT THE AGGREGATE PROFILE FOUND, after six probes each cleared
+  their suspect. `fn main() = 7` compiles in 0.78s, and the inclusive
+  per-symbol view says where it goes: `wasi_thread_start` 48.45%,
+  `branch_bracket` 46.80%, and the two list primitives those brackets
+  run — `list_filled_from` specialised on Span at 25.59% SELF, `list_set`
+  at 23.17% SELF — roughly HALF the run. At the OS level the same
+  fixture creates 433 distinct threads, 20 concurrent at peak against a
+  10-thread wasmtime baseline (measured by polling the task table for
+  `help`, which loads the identical 2.4MB module and compiles nothing).
+  ▶ THE CAUSE, read from the artifact. §11 5.2 serialized the parallel
+  final on 2026-08-07 — `judge_window = 1` — because the K=8 fan's
+  correctness rested on published schemes being live-var-free and live
+  cells raced its branches. The window went to 1; THE SPAWN DID NOT.
+  `layer_judge_walk`'s comment states it plainly: "every layer branch
+  runs as a REAL task — a spawned instance of the whole module over the
+  shared image", and `judge_blocks` spawns a block of `judge_window`,
+  joins it, spawns the next. At window 1 that is one OS thread per layer
+  branch with no parallelism bought. The serialized path pays the
+  parallel path's full price for none of its benefit — a cost 5.2's
+  landing did not intend and did not measure.
+  ▶ WHY IT HID FOR SIX PROBES, which is the method lesson. An earlier
+  `--no-children` read of a smaller capture showed a flat profile topping
+  out at 7%, and that reading was banked as "there is no hot spot" —
+  which then justified concluding the cost was diffuse substrate work.
+  The CHILDREN view aggregated per symbol shows two functions owning half
+  the run. A flat SELF profile over monomorphized twins hides a dominator;
+  §5.O's measure-don't-read-code law needs the corollary that HOW you
+  read the profile is itself a measurement choice that can be wrong.
+  ▶ THE STAMP, banked at `Hβ.infer.serialized-judge-still-spawns` and
+  deliberately NOT built this iteration: at window 1, can the branch be a
+  direct call? The comment claims the join stream is "byte-identical to
+  the sequential walk by construction", which argues yes — but the spawn
+  also buys each branch a fresh instance with branch-local ledgers,
+  disjoint mint ranges and a read-only intern view, and whether those are
+  load-bearing at K=1 or merely inherited from the K=8 design has to be
+  answered against the artifact first. The prize is about half the floor;
+  the risk is that the isolation is doing quiet correctness work.
+  ▶ IT ALSO RE-RANKS THE ARC. `Hβ.driver.link-is-reachability` was the
+  named next build, priced at the phases it could skip. Those phases —
+  lex 4.17%, parse_program 4.02%, the judge's own 15% — sit beside a
+  spawn overhead of comparable size that no amount of demand-linking
+  removes, because it is paid per BRANCH, not per line.
+
 - 2026-08-17 · THE SPLICED-NAME GAP IS CLOSED, AND THE SEED SET IS A
   CONTRACT (no pin — tools only; boot unchanged at e7c2da624b, src and
   lib untouched, so the fixpoint stands).

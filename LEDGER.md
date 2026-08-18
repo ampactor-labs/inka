@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · pin 3967d236b294 · ONE NAME FOR ONE FUNCTION. CLEAN,
+  m2 == m3, census 0, frontier 371/0, 16.32s wall · 2271368 KB peak,
+  412781 lines both generations — byte-identical by construction.
+  ▶ THE STAMP'S DEBT IS PAID, and its first move was the enumeration it
+  said it owed: 29 `LFn` sites across lower.mn and wasm.mn, and
+  `spec_closure_name` measured ORTHOGONAL — it mangles monomorphization
+  twins, not nested-fn qualification. That cleared the way to the
+  construction site itself.
+  ▶ THE DIVERGENCE IS ONE EXPRESSION. lower.mn computes
+  `fn_name = if outer == "" { name } else { "{outer}_{name}" }` and then
+  built `LLet(handle, name, LMakeClosure(handle, fn_ir, …))` — the
+  binding taking the SOURCE name while the `LFn` inside carried the
+  QUALIFIED one. Two names for one function, agreeing only because
+  `outer` is empty at every site until the discriminator works. They take
+  the same name now.
+  ▶ WHY IT IS BYTE-IDENTICAL AND STILL WORTH LANDING: `fn_name == name`
+  wherever `outer` is empty, which is everywhere today, so the emit could
+  not move — the march confirms 412781 lines on both sides. What changed
+  is the INVARIANT the closure emit depends on: its self-capture
+  early-bind is guarded by `captures_self(captures_exprs, fn_name)`, a
+  string compare that answers false the moment the two names diverge,
+  skipping the bind and leaving the closure's fn_ptr a zero local. Same
+  vocabulary-first shape as the row tail slot: put the invariant in place
+  while it costs nothing, so the behaviour change lands alone.
+  ▶ WHAT REMAINS, stated so the landing is not read as the fix: the
+  CAPTURES still reference the fn by its source name, so a self-capture
+  under qualification is not yet consistent end to end. This closes one
+  of the two divergences at the construction site; the capture side is
+  the next, and only then does the annotation that started this arc
+  become marchable.
+
 - 2026-08-17 · THE SITE IS FOUND, AND IT ALREADY CARRIES A FIX FOR THIS
   EXACT TRAP (no pin — the output is a design stamp; boot unchanged at
   6e05bd9404ed).

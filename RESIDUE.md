@@ -1033,6 +1033,20 @@ destructure. WRITERS: lower mints `LFn` names (the nested-fn
 discriminator path); wasm.mn reads them at the closure emit, the index
 global and `captures_self`. NOT COMPLETE: the full `LFn` site set is not
 enumerated yet, and that enumeration is the next iteration's first move.
+▶ HALF OF IT LANDED 2026-08-17, pin 3967d236b294, byte-identical. The
+divergence's construction site is one expression in lower.mn: `fn_name =
+if outer == "" { name } else { "{outer}_{name}" }`, and then
+`LLet(handle, name, LMakeClosure(handle, fn_ir, …))` — the binding taking
+the SOURCE name while the LFn inside carried the QUALIFIED one. They take
+the same name now. Byte-identical because `fn_name == name` wherever
+`outer` is empty, which is everywhere today; the INVARIANT is what moved.
+The enumeration the stamp owed also ran: 29 `LFn` sites across lower.mn
+and wasm.mn, and `spec_closure_name` is ORTHOGONAL (it mangles
+monomorphization twins, not nested-fn names).
+▶ THE CAPTURE SIDE REMAINS. A self-capture still references the fn by its
+source name, so consistency under qualification is not end to end. That
+is the next step, and only after it does the annotation that opened this
+arc become marchable.
 ▶ AN IDENTITY COMPARISON IS THE ULTIMATE FORM — "is this capture the
 closure being built" is a handle question the graph can answer, and it is
 being answered by comparing two strings drawn from different naming

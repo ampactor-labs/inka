@@ -3289,7 +3289,20 @@ fn lower_stmt_body(s, handle, span) = match s {
         // appended __k/__hrec params) lives in project_nested_fn; the
         // site keeps what feeds the columns.
         match project_nested_fn(handle, fn_name, bind_h, zip(captures_names, captures_handles)) {
-          Some(fn_ir) => LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs)),
+          Some(fn_ir) => // ONE NAME FOR ONE FN. The binding and the LFn inside it are the
+          // same function, so they take the same name: binding `name` while
+          // the LFn carried `fn_name` was two names for one thing, agreeing
+          // only while `outer` is empty. The moment the nested-fn
+          // discriminator works, they diverge — and the emit spends the LFn's
+          // name on BOTH the qualified table-index global and the local
+          // binding, so `captures_self` compares "go" against "parse_int_go",
+          // the self-capture early-bind is skipped, and the closure's fn_ptr
+          // is a zero local (`Hβ.lower.open-row-field-offset-from-known-set`
+          // carries the arc; the trap is `indirect call type mismatch` in the
+          // lexer). Byte-identical today because `fn_name == name` whenever
+          // `outer` is empty, which is every site until the discriminator
+          // lands; the invariant is what changes.
+          LLet(handle, fn_name, LMakeClosure(handle, fn_ir, captures_exprs)),
           None => LInvariantFailure(handle, ProjectionOriginShape(handle)),
         }
       },

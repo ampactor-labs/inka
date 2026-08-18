@@ -970,11 +970,31 @@ report, which was read past: THREE NAMED FNS DIFFER STRUCTURALLY —
 `index_of`, `parse_int`, `op_synth_default_enumerate_inhabitants`, the
 three PARENTS of the renamed nested fns. Their bodies changed, not just
 their children's labels.
-▶ NEXT PROBE, and it is the last unread piece of a 39-line diff: read
-those three parents' bodies against each other. The trap is a
-`return_call_indirect` inside one of them (`parse_int_go` is `parse_int`'s
-child), so the divergence that matters is in how the parent builds or
-passes the closure it tail-calls.
+▶ THE MECHANISM IS COMPLETE (2026-08-17, `parse_int`'s body diffed across
+generations — 72 lines in m2, 71 in m3). m3 DROPS ONE LINE:
+`(local.set $go (local.get $state_tmp))`, the binding of the freshly
+allocated closure record to the local named after the nested fn — while
+`(local.get $go)` two instructions later SURVIVES. A wasm local defaults
+to zero, so the closure passed to the tail call is a null pointer, its
+fn index is garbage, and `return_call_indirect (type ft3)` mismatches.
+That is the trap, end to end.
+▶ THE DEFECT IS A NAME-KEYED RE-DERIVATION, which is the Carried-Truth
+Law at the emitter. One nested fn is reached through TWO name
+computations: the closure's table index global is emitted qualified
+(`$parse_int_go_idx`), and the local binding is emitted bare (`$go`).
+When the discriminator starts qualifying, the global follows and the
+`local.set` disappears — while the reader of that local does not. The
+same fact, derived twice, and the two derivations disagree.
+▶ IT IS LATENT AND INDEPENDENT OF ROWS. Any change that makes a nested
+fn's name qualify drops its closure binding; the row arc merely happened
+to trip it. This is the first mechanism in the sub-arc that actually
+explains the trap, after six explanations that did not.
+▶ NEXT STEP, and it is a BUILD with a precise target: find the emit site
+that writes the `local.set` for a nested fn's closure binding and make it
+read the SAME name the index global reads. The allocator arms
+(`emit_memory_bump` / `emit_memory_arena`) are not it — they emit
+`(local.set $<target> (call $alloc …))`; the dropped line binds an
+already-allocated record, so the site is the let-binding path.
 ▶ AN AMBIENT FIND, banked because the instruction was stale where the
 docs stated it: WABT 1.0.39's `wasm-objdump` accepts NO feature flags at
 all — no `--enable-tail-call`, no `--enable-threads` — and disassembles

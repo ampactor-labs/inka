@@ -35,6 +35,39 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-17 · THE MECHANISM IS COMPLETE: A DROPPED `local.set`, AND IT IS
+  A NAME-KEYED RE-DERIVATION (no pin — probe only; boot unchanged at
+  6e05bd9404ed).
+  ▶ THE BANKED PROBE READ THE LAST UNREAD PIECE of the 39-line diff:
+  `parse_int`'s own body, 72 lines in m2 and 71 in m3. The missing line is
+  `(local.set $go (local.get $state_tmp))` — the binding of the freshly
+  allocated closure record to the local named after the nested fn — while
+  `(local.get $go)` two instructions later SURVIVES. A wasm local defaults
+  to zero, so the closure handed to the tail call is a null pointer, its
+  fn index is garbage, and `return_call_indirect (type ft3)` mismatches.
+  That is the trap, end to end, and it is the first account in this
+  sub-arc that actually explains it.
+  ▶ THE DEFECT IS THE CARRIED-TRUTH LAW AT THE EMITTER. One nested fn is
+  reached through TWO name computations: the table-index global emits
+  qualified (`$parse_int_go_idx`), the local binding emits bare (`$go`).
+  When the discriminator starts qualifying, the global follows and the
+  `local.set` vanishes while its reader does not. The same fact derived
+  twice, and the derivations disagree.
+  ▶ IT IS LATENT AND HAS NOTHING TO DO WITH ROWS. Any change that makes a
+  nested fn's name qualify drops that fn's closure binding. The row arc
+  merely tripped it, which is why six explanations about rows, sorts,
+  readers, symbols, indices and tables all died first.
+  ▶ WHAT THIS COST, stated so the shape is legible: seven probes to reach
+  a one-line diff that was inside the first emit-diff report. The report
+  said "named wheel fns differing (structural, 3)" on its second line and
+  I read the rename list beneath it instead. The instrument was right the
+  first time; the reading was not.
+  ▶ NEXT STEP IS A BUILD with a precise target: the emit site that writes
+  a nested fn's closure `local.set` must read the SAME name the index
+  global reads. The allocator arms are not it — they emit `(local.set
+  $<target> (call $alloc …))`, and the dropped line binds an
+  already-allocated record, so the site is the let-binding path.
+
 - 2026-08-17 · THE NAMES ARE EXONERATED, AND THE READ-PAST HALF OF THE
   DIFF IS THE ONE THAT MATTERS (no pin — probe only; boot unchanged at
   6e05bd9404ed).

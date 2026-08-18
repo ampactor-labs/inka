@@ -1188,6 +1188,82 @@ narrowing exists and does not reach the instantiated use. That is this
 entry's own per-call-site paragraph, now measured as operative for
 findtag and not only for zeta, and it is where the next step goes.
 
+`Hβ.infer.field-access-overwrites-a-proven-residual` — A FIELD ACCESS
+DISCARDS WHAT THE GRAPH ALREADY PROVED, and it costs a crown-tier `!E`
+leak. Measured 2026-08-18 at pin b8eff49b7252, every step run rather than
+read.
+▶ THE LEAK. A closure performing `E`, stored in a record field, reached
+through a record-REST binding and CALLED under `with !E`, checks CLEAN —
+and `T_OverDeclared` volunteers that the body "only uses Memory + Alloc",
+which is a false absence proof at the shape §0 rests on. Repro:
+
+    effect E { op() -> Int }
+    fn make() = ({keep: 1, run: () => op()})
+    fn bad() with !E = {
+      let {keep, ...rest} = make()
+      rest.run()
+    }
+    fn main() = bad()
+
+▶ CONTROLLED THREE WAYS on the same pin. Direct field access
+(`r.run()`) REFUSES with E_EffectMismatch; a record pattern binding the
+field by name (`let {keep, run} = …; run()`) REFUSES; only the rest
+binding leaks. The variable is the `...rest`, not the record and not the
+pattern.
+▶ AND THE TYPE GOES WITH THE ROW. `rest.run + 1` checks clean, where the
+same misuse on a direct field is `E_TypeMismatch: () -> Int with E vs
+Int`. So the field reached through a rest has NO type at all, and the
+missing row is one consequence of the missing type rather than a separate
+effect-system gap.
+▶ THE PATTERN IS INNOCENT, measured by projection.
+`fn peel() = { let {keep, ...rest} = make(); rest }` projects
+`() -> {  | { run: () -> Int with E } }` — the residual is bound, its
+field is typed, and the row is on it. `infer_pat`'s PRecord arm does
+exactly what its comment claims.
+▶ THE ACCESS IS THE WRITER, and the mark landed one pin earlier is what
+shows it. Insert one read before returning the same binding —
+`let x = rest.run` — and `peel` projects
+`() -> {  | { run: t35152@e11 } assumed }`. A proven residual carrying a
+typed, effectful field became a fresh free variable under an ASSUMED
+tail. The access overwrote a proof with a guess, and the guess is
+labelled as one only because the tail now records which writer wrote it.
+▶ WHY IT IS ANCHOR 1 AND NOT AN EFFECT BUG: the graph proved
+`run : () -> Int with E`; a consumer re-derived it as a fresh variable
+instead of reading it live. The `!E` leak, the silent type hole, and the
+`assumed` downgrade are three faces of that one discard.
+
+STAMP — `Hβ.infer.field-access-overwrites-a-proven-residual`.
+TRACED: `infer_field_access_record` mints a fresh `field_h` and a fresh
+row var, builds `{field: TVar(field_h) | fresh_row}` as the EXPECTED
+receiver, and unifies the actual receiver against it. When the actual's
+row var is already bound to a residual, `unify_two_open_records` computes
+`extra_b` from the expected side — whose field type is the fresh
+variable — and writes it over the bound residual. The expected side is a
+DEMAND ("this record has at least this field"), and a demand must be
+CHECKED against what is known, never installed over it. What the fix must
+preserve is the case the demand is genuinely new: a field the residual
+does not carry is still a legitimate widening, which is why the arm
+cannot simply refuse to write.
+PRICED: one arm of `unify_two_open_records`, on the path already taken;
+the added work is a lookup of each incoming field in the existing
+residual and a unify where both sides have it, which is bounded by the
+residual's own length and touches no new structure. Freshness is not at
+issue — the residual is read through `graph_chase` at the moment of the
+bind, the same read the writer already performs.
+WRITERS: `unify_two_open_records` (infer.mn), the single site.
+`infer_field_access_record` is the caller that exposes it and needs no
+change; the record-rest pattern arm is measured innocent.
+READERS: every consumer of the residual — `open_record_full_fields` in
+lower.mn, the show projection in types.mn, and the row's own algebra.
+NOT COMPLETE: whether the same overwrite reaches shapes other than the
+rest binding is UNMEASURED. Direct field access and by-name record
+patterns are measured sound, but they are two shapes, not an enumeration,
+and the general case is any receiver whose row var is already bound when
+an access demands a field. That enumeration is the first move of the
+build, not a claim made here. This peer sits UNDER
+`Hβ.lower.open-row-field-offset-from-known-set` and is independent of its
+fork: restoring a proven type is right under either branch.
+
 STAMP PAID (2026-08-18, pin b8eff49b7252, CLEAN) — the tail is
 `RecordRowTail = RowClosed | RowContinues(Int) | RowAssumed`, the two
 writers mark what they knew, and `mentl query` now reads

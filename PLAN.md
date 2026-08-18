@@ -1543,7 +1543,16 @@ modal capability-at-tee owns it at 6.3. Both branches are priced in
 RESIDUE and the decision is Morgan's; the loop takes independent items
 until it is made. It outranks the queue because it is §0's
 negative-is-provable failing at the shape most likely to carry a real
-negation. THE LOOP-SIZED
+negation. BESIDE IT AND UNFORKED, added 2026-08-18:
+`Hβ.infer.field-access-overwrites-a-proven-residual` — a field reached
+through a record REST binding has no type and carries no row, so a
+closure performing E, called under `with !E`, checks clean. Measured to
+its writer: the pattern binds the residual correctly (`{ | { run: () ->
+Int with E } }` projected), one field access overwrites it (`{ | { run:
+t35152@e11 } assumed }`), and the demand's fresh variable lands on top of
+the proof. It is Anchor 1 rather than an effect-system gap, it is stamped
+in RESIDUE, and unlike the fork above it needs no decision — restoring a
+proven type is right under either branch. THE LOOP-SIZED
 RESIDUE the selector serves between dedicated sessions: the 6.3 modal
 sweep rule-by-rule (the pinned-rule count and the crown's verdict are
 state.sh's to report, never this block's — §7's law, now enforced by

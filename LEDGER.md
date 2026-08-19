@@ -35,6 +35,33 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 0be798f9af1a7859 · THE RESULT'S CAP IS STRUCTURAL.
+  CLEAN — m2 == m3 at 415225 lines, census 0, crown 61/0, frontier 372/0.
+  ▶ THE ARC NAMED LAST LANDING DOES NOT EXIST. That entry called a plain
+  fn's declared fn-typed return and a record field's declared fn type the
+  remaining work. All three shapes already refuse — declared fn return,
+  INFERRED fn return, declared record field — and the reason is
+  structural: a fn HAS A BODY, so its result row is inferred from what the
+  body performs and genuinely carries `+E`. An op has no body, so its
+  declared type is the only source and a free var there had nothing to
+  constrain it. That is what made the op result the single special case,
+  and why a population sweep found zero of all three in src+lib while only
+  one leaked.
+  ▶ THE REAL REMAINDER, from the same probe: the first cut matched only a
+  TOP-LEVEL TFun, so `give() -> [() -> Int]` and `give() -> (Int, () ->
+  Int)` checked clean and ran at 7 while the bare `give() -> (() -> Int)`
+  refused. A closure hides in any container the result carries.
+  ▶ WHAT LANDED: `cap_result_fn_row` recurses — TList, TTuple, TRecord,
+  and a returned fn's own result. Its PARAMS keep their vars, because a
+  param of a returned fn is a demand on whoever calls it: the
+  contravariant half of the one rule.
+  ▶ THE HOOK REFUSED TWICE and both were right. Drift mode 9 fired on the
+  word "until" in a fixture comment — history reading as deferral, rewritten
+  positively rather than suppressed. Then the anonymity ratchet convicted
+  the inline record-field lambda, 384 → 385, "a row newly denied its decl
+  home"; it is `cap_result_field` now, a named fn.
+  ▶ GATES: leak-resume-latent-in-list and -in-tuple, both seen RED.
+
 - 2026-08-18 · pin 016e00f38745aa79 · A RESULT IS NOT A FLOW CHANNEL.
   CLEAN — m2 == m3 at 415107 lines, census 0, crown 59/0, frontier 372/0,
   16.26s wall, peak 2274164 KB.

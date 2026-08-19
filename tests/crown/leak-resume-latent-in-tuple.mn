@@ -1,0 +1,20 @@
+// CROWN — the list sibling's other half: a closure performing E resumed
+// out inside a TUPLE, destructured and called under `with !E`. The
+// result's cap is structural, so the tuple's element carries it.
+// Expect E_EffectMismatch.
+effect E { op() -> Int }
+
+effect G { give() -> (Int, () -> Int) }
+
+handler eh { op() => resume(7) }
+
+handler gh { give() => resume((1, () => op())) }
+
+fn body() with !E = {
+  let t = (give()) ~> gh
+  match t {
+    (_, f) => f(),
+  }
+}
+
+fn main() = (body()) ~> eh

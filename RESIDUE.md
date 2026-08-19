@@ -63,15 +63,27 @@ oracle, m3 == m4 being blind to a form the wheel never writes (tripwire
 3, which is why the pair was written first). The bare form now reports
 `E vs Pure` and crown is 59/0. It still RUNS: E_EffectMismatch is not
 armed, the name-dependent class §7 tracks toward universal refusal.
-THE REMAINING POSITIONS are the arc, and each needs its own blast-radius
-measurement because the wheel writes these in quantity where it writes
-no fn-typed op result: a plain fn's declared fn-typed RETURN, and a
-record field's declared fn type. Both are covariant by the same
-argument. Neither is measured. Do not generalise the cap across them on
-the strength of this landing — the parser mints all three rows at ONE
-site (parser.mn's arrow-type arm, `mk_ef_open` when `with` is absent)
-precisely because it cannot see the position, so each consumer has to
-cap for itself and each has its own population.
+**KILL (2026-08-18) — "the other covariant positions are the arc."** The
+entry above named a plain fn's declared fn-typed RETURN and a record
+field's declared fn type as the remaining work. Measured the next
+iteration: all three shapes ALREADY REFUSE — declared fn return,
+inferred fn return, and a declared record field holding a performing
+closure. There is no arc, and the reason is structural rather than
+lucky: a fn HAS A BODY, so its result row is inferred from what the body
+actually performs and genuinely carries `+E`. An op has no body, so its
+declared type is the only source, and a free var there had nothing to
+constrain it. That is what made the op result the single special case,
+and it is why the population sweep found zero of all three in src+lib
+yet only one of them leaked.
+WHAT THE SAME PROBE FOUND INSTEAD, and it was real: the first cut of the
+cap matched only a TOP-LEVEL TFun, so `give() -> [() -> Int]` and
+`give() -> (Int, () -> Int)` both checked clean and ran at 7 while the
+bare `give() -> (() -> Int)` refused. A closure hides in any container
+the result carries. `cap_result_fn_row` is structural now — TList,
+TTuple and TRecord recurse, a returned fn's own result recurses, and its
+PARAMS keep their vars because a param of a returned fn is a demand on
+whoever calls it, the contravariant half of the same rule. Crown 61/0
+with leak-resume-latent-in-list and -in-tuple, both seen RED.
 
 `Hβ.tools.micro-battery-link-is-the-blob` — NAMED 2026-08-18, the
 remaining half of a hole whose other half closed the same day. Every

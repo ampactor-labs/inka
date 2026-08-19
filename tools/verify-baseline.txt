@@ -589,7 +589,19 @@ comment_refs_max: 0
 # the same ruling applies: the divergence relocates rather than resolves, and
 # rung 3 deletes the class. Fixed inputs: same wheel source, same fixture set,
 # the only variable being whether a singleton branch spawns.
-movers_max: 469
+# 469 → 470 at the result cap's record arm (2026-08-18), and this one is TWO
+# RATCHETS IN OPPOSITION, measured both ways on the same landing. The arm maps
+# over a record's fields; written as an inline lambda the counts are movers 469
+# / anonymity 385, and the anonymity tier convicts it — "a row newly denied its
+# decl home", correctly, because the mapped work carries a row. Written as the
+# named `cap_result_field` the counts are movers 470 / anonymity 384. A new
+# top-level fn is a new scheme and one more trial/final divergence; there is no
+# third form. The named one wins because it is the structurally right answer
+# and the anonymity conviction is about the code, where this is the same
+# relocation artifact the two entries above already rule on — the divergence
+# relocates rather than resolves, and rung 3 deletes the class. Fixed inputs:
+# same wheel source and fixture set, the only variable being lambda vs named fn.
+movers_max: 470
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

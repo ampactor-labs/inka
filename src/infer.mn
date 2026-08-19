@@ -8540,9 +8540,25 @@ fn effect_type_vars(ops) = ops |> map((op) => match op {
 // ran; writing `with Pure` on the same return made it refuse. Capping the
 // result's own row closes that by construction. No op in src or lib returns
 // a fn type, so the crucible pair is this rule's only oracle.
+// STRUCTURAL, because the whole result is covariant and a closure hides in
+// any of its containers: `give() -> [() -> Int]` and `give() -> (Int, () ->
+// Int)` both leaked while the bare `give() -> (() -> Int)` refused
+// (measured 2026-08-18 — the first cut matched only a top-level TFun).
+// A returned fn's own RESULT is covariant too and recurses; its PARAMS are
+// contravariant — a demand on whoever calls it — and keep their vars.
 fn cap_result_fn_row(t) = match t {
-  TFun(ps, r, row) => if row_cap_form(row) { t } else { TFun(ps, r, mk_ef_pure()) },
+  TFun(ps, r, row) => {
+    let capped = if row_cap_form(row) { row } else { mk_ef_pure() }
+    TFun(ps, cap_result_fn_row(r), capped)
+  },
+  TList(e) => TList(cap_result_fn_row(e)),
+  TTuple(es) => TTuple(map(cap_result_fn_row, es)),
+  TRecord(fs) => TRecord(map(cap_result_field, fs)),
   _ => t,
+}
+
+fn cap_result_field(f) = match f {
+  (n, ft) => (n, cap_result_fn_row(ft)),
 }
 
 fn register_one_op(effect_name, eff_name, op) = match op {

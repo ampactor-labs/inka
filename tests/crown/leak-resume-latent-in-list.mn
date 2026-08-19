@@ -1,0 +1,20 @@
+// CROWN — the result's cap must be STRUCTURAL. A closure performing E,
+// resumed out inside a LIST, indexed and called under `with !E`. The bare
+// `give() -> (() -> Int)` refused from the first cut of this rule; this
+// one and its tuple sibling ran at 7, because the cap matched only a
+// top-level TFun and a closure hides in any container the result carries.
+// Expect E_EffectMismatch.
+effect E { op() -> Int }
+
+effect G { give() -> [() -> Int] }
+
+handler eh { op() => resume(7) }
+
+handler gh { give() => resume([() => op()]) }
+
+fn body() with !E = {
+  let fs = (give()) ~> gh
+  fs[0]()
+}
+
+fn main() = (body()) ~> eh

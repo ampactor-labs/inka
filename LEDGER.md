@@ -35,6 +35,47 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 62718b6e8cb3126f · ONE NAME, TWO KINDS. CLEAN — m2 ==
+  m3 at 415042 lines, census 0, battery green, frontier 372/0, 15.52s
+  wall, peak 2184164 KB against a 2310000 ceiling.
+  ▶ WHAT LANDED: E_FnShadowsOp, the fifteenth armed class, reported at
+  `register_one_op`'s env write. A fn whose name is an op of a linked
+  effect is UNREACHABLE — every call performs the op — and the body is
+  judged against the op's signature, so the only symptom was
+  `Int vs () -> t...` at the author's own call, naming a shape they never
+  wrote. The span is the losing fn's, read from the prior env entry's own
+  Reason.
+  ▶ THE ROOT, measured: the env is append-only and read last-write-wins,
+  and an effect decl re-registers its ops AFTER the entry module's
+  declarations. The write order for `spawn` through the manifest is
+  op / fn / fn / fn / op / op. The op lands last; the fn loses.
+  ▶ WHY THREE ITERATIONS. Every reading site is structurally blind here:
+  at the decl judgment the env answers FnScheme, at the call it answers
+  the op, and by the time a reader looks one kind has already won. Two
+  checks were built at reading sites and reverted whole (a six-arm class
+  with an env read at pre_register_stmt, then the same read by kind) —
+  both marched CLEAN with census 0 and neither fired.
+  ▶ THE KILL THAT COST THE MOST: both earlier probes ran through the
+  MICRO harness, whose blob link has no lib/runtime/threading, so `spawn`
+  was only ever a user fn there. `PROBE3 spawn -> FnScheme` and
+  `225 of 225 NOT FOUND` were true and were about a program that did not
+  have the defect. Pointing the same probe at the manifest link printed
+  the write order in one run.
+  ▶ THE GATE INHERITED THE SAME TRAP and went RED against a working fix:
+  `run_refusal` pipes its fixture in on stdin — that same blob path. The
+  leg drives `compile <path>` now, the way a person does. GENERAL FORM: a
+  probe measures the LINK it was run in, and a defect that exists only
+  through the manifest is invisible to every stdin-fed harness here.
+  ▶ CEILING RAISED, recorded: the prelude floor 6360 → 6366. The class is
+  six arms in src/types.mn, which is 57% of that floor, and a class is
+  permanent content, not prose — trimming its comments recovered half the
+  cost. Second ceiling event in three iterations, both types.mn
+  additions, which is evidence FOR `Hβ.driver.link-is-reachability`: a
+  program that asks for nothing should not link the diagnostic catalog.
+  ▶ GATE: tests/frontier/mn-fn-shadows-op.mn + its manifest-path leg,
+  seen RED at the pinned boot (0 reports) and RED again on its first
+  wiring.
+
 - 2026-08-18 · pin 9244d5d002fc0932 · AN ARGUMENT WITH NO SLOT IS THE
   REFUSAL. CLEAN — m2 == m3 at 414650 lines, census 0, battery green,
   14.39s wall, peak 2183688 KB against a 2310000 ceiling.

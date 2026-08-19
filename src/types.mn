@@ -2169,6 +2169,8 @@ type DiagKind
   | EMissingModule(String, String, Span)
   // handler name, state field that names an op of the handled effect — ambiguous by construction (the arm body cannot distinguish a state read from an op re-perform; measured: the collision compiles clean and returns the WRONG value)
   | EHandlerStateShadowsOp(String, String, Span)
+  // fn name, the effect whose op it collides with
+  | EFnShadowsOp(String, String, Span)
   // a second `fn name` in one namespace — the emitter would pick one silently (invalid WAT today; silent under a native path)
   | EDuplicateFnName(String, Span)
   // a second `type name` in one namespace — the decls silently MERGE: disjoint ctor sets share tag ids and a cross-tag match returns the wrong arm (measured: exit 13 where 99 was meant, zero diagnostics)
@@ -2340,6 +2342,7 @@ fn diag_span(d) with Pure = match d {
   ERegionEscape(_, s) => s,
   EMissingModule(_, _, s) => s,
   EHandlerStateShadowsOp(_, _, s) => s,
+  EFnShadowsOp(_, _, s) => s,
   EDuplicateFnName(_, s) => s,
   EDuplicateTypeName(_, s) => s,
   EUnresolvedType(_, _, s) => s,
@@ -2405,6 +2408,7 @@ fn diag_source(d) with Pure = match d {
   ERegionEscape(_, _) => "region",
   EMissingModule(_, _, _) => "driver",
   EHandlerStateShadowsOp(_, _, _) => "infer",
+  EFnShadowsOp(_, _, _) => "infer",
   EDuplicateFnName(_, _) => "infer",
   EDuplicateTypeName(_, _) => "infer",
   EUnresolvedType(_, _, _) => "lower",
@@ -2470,6 +2474,7 @@ fn diag_code(d) with Pure = match d {
   ERegionEscape(_, _) => "E_RegionEscape",
   EMissingModule(_, _, _) => "E_MissingModule",
   EHandlerStateShadowsOp(_, _, _) => "E_HandlerStateShadowsOp",
+  EFnShadowsOp(_, _, _) => "E_FnShadowsOp",
   EDuplicateFnName(_, _) => "E_DuplicateFnName",
   EDuplicateTypeName(_, _) => "E_DuplicateTypeName",
   EUnresolvedType(_, _, _) => "E_UnresolvedType",
@@ -2543,6 +2548,9 @@ fn diag_refuses(d) with Pure = match d {
   // no duplicate fn names, measured).
   True,
   EDuplicateFnName(_, _) => True,
+  EFnShadowsOp(_, _, _) => // ARMED at birth (2026-08-18), read at the op's env write — the one
+  // place both claims on the name are present. Wheel census 0.
+  True,
   EDuplicateTypeName(_, _) => // ARMED at birth (2026-07-25), same licence as the two above: a DECL-SITE
   // fact read from parsed structure — no resolution dependency. Census on
   // the wheel blob at arming: 0 (the one Level pair lives in two tutorial
@@ -2739,6 +2747,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   ERegionEscape(detail, _) => detail,
   EMissingModule(name, path, _) => "module source not found: {name} (expected at {path})",
   EHandlerStateShadowsOp(hname, field, _) => "handler '{hname}' state field '{field}' names an op of the handled effect — a state read and an op call become indistinguishable in the arm bodies; rename the field",
+  EFnShadowsOp(name, ename, _) => "`fn {name}` collides with an op of effect `{ename}` that this program links — so this declaration is not a second definition, it is an unreachable one: every call to `{name}` performs the op, and the body is judged against the op's signature. Rename the function",
   EDuplicateFnName(name, _) => "a second `fn {name}` in one namespace — the first declaration already binds it; rename one",
   EDuplicateTypeName(name, _) => "a second `type {name}` in one namespace — the declarations would merge and their constructor sets share tag ids; rename one",
   EUnresolvedType(h, epoch, _) => "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",

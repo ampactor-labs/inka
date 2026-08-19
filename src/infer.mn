@@ -8539,6 +8539,25 @@ fn register_one_op(effect_name, eff_name, op) = match op {
     // fresh effect instance the handle reconciles to the handler's.
     let row = mk_ef_closed([eff_name])
     let qvars = unique(free_in_params(params) ++ free_in_ty(ret_type) ++ free_in_row(row))
+    // ONE NAME, TWO KINDS. The env is append-only and read last-write-wins,
+    // and the op re-registers after the entry module's own declarations, so
+    // a user fn of the same name loses silently. This write is the one place
+    // both claims are present; no reading site can see it, because by the
+    // time a reader looks one kind has already won.
+    // The span is the LOSING declaration's own, read from the Reason the
+    // env stored when it was registered — the fn is the thing to rename.
+    match env_lookup(op_name) {
+      Some(prior) => match prior {
+        (_, prior_reason, prior_kind) => match prior_kind {
+          FnScheme => match prior_reason {
+            Located(fn_span, _) => report(EFnShadowsOp(op_name, effect_name, fn_span)),
+            _ => (),
+          },
+          _ => (),
+        },
+      },
+      None => (),
+    }
     env_extend(
       op_name,
       Forall(qvars, TFun(params, ret_type, row)),

@@ -3195,7 +3195,32 @@ form has never been broken. The original probe used `fn spawn(...)` and
 the diagnostic was true — about a DIFFERENT `spawn`. Retracted per the
 verified-only law; what it was actually seeing is the entry below.
 
-`Hβ.infer.fn-shadows-a-linked-effect-op` — NAMED 2026-08-18, measured
+`Hβ.infer.fn-shadows-a-linked-effect-op` — **RESOLVED 2026-08-18**, pin
+62718b6e8cb3, on the third iteration and only after the probe was pointed
+at a link that actually contained the collision. THE ROOT, measured: the
+env is an append-only log read last-write-wins, and an effect decl
+re-registers its ops AFTER the entry module's own declarations. The write
+order for `spawn` under the manifest is op / fn / fn / fn / op / op — the
+op last, so the user's fn loses. That is also why every reading site
+failed: at the decl judgment the env still says FnScheme, at the call it
+says the op, and by the time any reader looks one kind has already won.
+THE SITE is `register_one_op`'s env write, where the losing fn's entry is
+still present — the one place both claims on the name meet. The span comes
+from the prior entry's own Reason, so the diagnostic points at the fn to
+rename rather than at the library. E_FnShadowsOp is armed; wheel census 0.
+THE THIRD KILL, and the one that cost the most: both earlier probes ran
+through the MICRO harness, whose blob link has no lib/runtime/threading —
+so `spawn` was only ever a user fn there and the collision was never in
+view. `PROBE3 spawn -> FnScheme` and `225 of 225 NOT FOUND` were both
+true and both about a program that did not have the defect. The gate
+inherited the same trap on its first run: `run_refusal` pipes its fixture
+in on stdin, which is that same blob path, so the leg went RED against a
+working fix. It drives `compile <path>` now, the way a person does.
+GENERAL FORM, worth more than the fix: a probe measures the LINK it was
+run in, and a defect that only exists through the manifest is invisible to
+every stdin-fed harness the repo owns.
+
+`Hβ.infer.fn-shadows-a-linked-effect-op` (original text) — NAMED 2026-08-18, measured
 and then twice failed to build. A user program declaring `fn spawn(a) =
 42` beside lib/runtime/threading's `Thread` effect — whose ops include
 `spawn`, and which a bare program links — gets NO diagnostic about the

@@ -1305,6 +1305,26 @@ for i in "${!compilers[@]}"; do
   fi
   run_refusal "$compiler" effect-unhandled \
     "$ROOT/tests/frontier/mn-effect-unhandled.mn" E_EffectUnhandled "$dir"
+  # ARMED 2026-08-18 (wheel census 0 at birth): a fn whose name is an op of
+  # a LINKED effect is unreachable — the env is append-only, read
+  # last-write-wins, and the effect decl re-registers its ops after the
+  # entry module's declarations.
+  #
+  # It CANNOT use run_refusal, and finding out why cost this leg its first
+  # red: run_refusal pipes the fixture in on stdin, which is the BLOB path,
+  # whose link has no lib/runtime/threading and therefore no collision to
+  # find. The defect only exists through the MANIFEST, so the leg drives
+  # the compiler the way a person does — a verb and a path.
+  fso_err="$dir/fn-shadows-op.err"
+  fso_wat=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" \
+    "$compiler" compile "$ROOT/tests/frontier/mn-fn-shadows-op.mn" 2> "$fso_err")
+  fso_rc=$?
+  fso_count=$(printf '%s' "$fso_err" >/dev/null; grep -c 'E_FnShadowsOp error:' "$fso_err" 2>/dev/null || true)
+  if [ "$fso_rc" -ne 0 ] && [ "$fso_count" -gt 0 ] && [ -z "$fso_wat" ]; then
+    pass "fn-shadows-op refusal (E_FnShadowsOp=$fso_count exit=$fso_rc wat=0B, through the manifest)"
+  else
+    fail "fn-shadows-op refusal (exit=$fso_rc E_FnShadowsOp=$fso_count wat=${#fso_wat}B; see $fso_err)"
+  fi
   run_refusal "$compiler" effect-stateful-uninstalled \
     "$ROOT/tests/frontier/mn-effect-stateful-uninstalled.mn" E_EffectUnhandled "$dir"
   # ARMED 2026-08-08 (the decl-site licence, wheel census 0 at birth): an
@@ -2651,13 +2671,23 @@ for i in "${!compilers[@]}"; do
   # same trivial question. Born RED 2026-08-17 (unknown-query on the
   # prior boot); the ceiling was seen RED by setting it under the
   # measured 6307.
-  # 6360 (2026-08-18, down from 6400): the floor measured 6352 after the
-  # numeric-scanner landing, seven lines below the 6359 that session
-  # started from. The old ceiling carried 41 lines of slack and that slack
-  # is exactly what let ~40 lines of lexical ADT land in src/types.mn —
-  # 57% of this floor — and only surface as RED after the fact. Held tight
-  # on purpose: a floor with room to grow is not a floor.
-  cost_ceiling=6360
+  # 6366 (2026-08-18): RAISED by 6, and the reason is recorded because the
+  # direction is otherwise forbidden. E_FnShadowsOp landed as a real
+  # diagnostic class — six arms in src/types.mn, which is 57% of this
+  # floor — and a class is permanent content, not prose. Trimming its
+  # comments to the constraint recovered 6 of the 12 lines it first cost;
+  # the rest is the class itself.
+  #
+  # This is the SECOND ceiling event in three iterations and both were
+  # types.mn additions, which is evidence FOR
+  # `Hβ.driver.link-is-reachability` rather than against the ratchet: a
+  # program that asks for nothing should not link the whole diagnostic
+  # catalog. When the link is reachability-judged this number falls hard
+  # and the ceiling follows it down.
+  #
+  # Prior: 6360 (down from 6400) after the numeric-scanner landing measured
+  # 6352. Held tight on purpose — a floor with room to grow is not a floor.
+  cost_ceiling=6366
   ct_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-bare-floor.mn" "cost" 2>/dev/null)
   ct_lines=$(printf '%s' "$ct_out" | grep -o '[0-9]* source line' | grep -o '[0-9]*' | head -1)
   if [ -n "$ct_lines" ] && [ "$ct_lines" -le "$cost_ceiling" ]; then

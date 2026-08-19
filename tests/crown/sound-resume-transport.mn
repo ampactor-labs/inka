@@ -1,0 +1,17 @@
+// CROWN — the sound control for leak-resume-latent: a PURE closure handed
+// back out of an arm through `resume` and called under `with !E` is
+// transport, not performance, and must be admitted. Expect exit 7.
+effect E { op() -> Int }
+
+effect G { give() -> (() -> Int with Pure) }
+
+handler eh { op() => resume(1) }
+
+handler gh { give() => resume(() => 7) }
+
+fn body() with !E = {
+  let f = (give()) ~> gh
+  f()
+}
+
+fn main() = (body()) ~> eh

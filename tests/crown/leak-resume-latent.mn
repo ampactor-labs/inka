@@ -1,0 +1,26 @@
+// CROWN — latency rides the RESUME VALUE. A closure performing E, handed
+// back out of an arm through `resume`, extracted and CALLED under `with
+// !E`: the row must ride the continuation's answer to the call site.
+// Expect E_EffectMismatch.
+//
+// The declared `with Pure` on the returned fn type is load-bearing and is
+// the whole finding here. WITHOUT it the same program checks clean and
+// RUNS (measured 2026-08-18, exit 7 with the outer handler answering),
+// because an unannotated fn type in a return position mints a free row
+// VAR, and a var is the effect-polymorphic flow channel rather than a cap
+// to subsume under — so the arm teaches the declaration its row instead of
+// meeting it. That gap is `Hβ.effects.return-position-fn-row-is-a-var`.
+effect E { op() -> Int }
+
+effect G { give() -> (() -> Int with Pure) }
+
+handler eh { op() => resume(7) }
+
+handler gh { give() => resume(() => op()) }
+
+fn body() with !E = {
+  let f = (give()) ~> gh
+  f()
+}
+
+fn main() = (body()) ~> eh

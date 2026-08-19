@@ -28,6 +28,43 @@
 
 ---
 
+`Hβ.effects.return-position-fn-row-is-a-var` — NAMED 2026-08-18 by the
+6.3 modal sweep, crown-tier. THE MEASUREMENT, three programs: a closure
+performing E, handed OUT of an arm through `resume`, called under `with
+!E`. (1) Without a declared row on the op's returned fn type it checks
+CLEAN and RUNS — exit 7, the outer handler answering, so the perform is
+real and the negation is simply not enforced. (2) With `with Pure`
+written on that returned fn type the identical program REFUSES,
+E_EffectMismatch. (3) The same closure written inline rather than passed
+through resume is caught either way. So the subsumption machinery is
+reached at the resume site and works; what is missing is anything to
+subsume UNDER.
+THE ROOT: an unannotated fn type in a RETURN position mints a free row
+VAR, and `fn_arg_directional_positions` fires only when the declared row
+is a concrete cap (`row_cap_form`) — deliberately, because a var-tailed
+param row is the effect-polymorphic FLOW channel `map`'s `f` needs, and
+masking it once convicted 297 wheel sites in one march. A var in a
+return position is not a flow channel though; it is a promise about a
+value the callee PRODUCES, so the arm teaches the declaration its row
+instead of meeting it.
+THE DESIGN is variance, and it is why the two positions differ: a
+CONTRAVARIANT position (a param) is a demand the caller fills, so its
+unannotated row stays a var; a COVARIANT position (a return, an op's
+result, a field's declared fn type) is a promise about what the produced
+value may do, so its unannotated row should CAP at Pure. Every other
+latency carrier already behaves that way — field, list element, tuple,
+variant, default param, handler state all refuse — and resume is the
+one that does not.
+THE NEXT PROBE, which decides whether this is one landing or an arc:
+the blast radius. How many fn types in return position across src+lib are
+unannotated, and how many gain a row they cannot satisfy when the
+position caps? The census is the instrument (a declared-surface shape
+over return-position fn types), and the march's census is the arbiter.
+PINNED MEANWHILE: tests/crown/leak-resume-latent.mn and
+sound-resume-transport.mn, crown 58/0 — they hold the rule that DOES
+work (explicit cap → refusal, pure transport → admitted) so the corpus
+records it while the default remains open.
+
 `Hβ.tools.micro-battery-link-is-the-blob` — NAMED 2026-08-18, the
 remaining half of a hole whose other half closed the same day. Every
 battery here except the frontier feeds its fixture in on stdin after

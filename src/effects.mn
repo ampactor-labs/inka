@@ -840,10 +840,22 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
     EfRow(pb, ab, tb) => match g {
       EfRow(pg, ag, tg) => match tg {
         EtAll => // The `!B` gate: nothing present may touch the forbidden set. A
-        // closed or free-tailed body passes on disjointness alone (the free
-        // tail is vacuous; a var that LATER grows is caught at unify, where
-        // Open~All binds the var to the mask — bind_open_to_neg's move). An
-        // EtAll body must carry at least the gate's mask: ¬A ⊆ ¬B iff B ⊆ A.
+        // closed or free-tailed body passes on disjointness alone.
+        //
+        // THE FREE TAIL IS ADMITTED HERE AND NOTHING CLOSES IT LATER. This
+        // clause used to promise that "a var that LATER grows is caught at
+        // unify, where Open~All binds the var to the mask"; measured
+        // 2026-08-18, it is not: `fn run(f) with !E = f()` accepts
+        // `run(() => op())`, and so does the `with Pure` gate below, and so
+        // does an unrelated `!WASI`. A PARAM's row var reaching the gate
+        // through a call is never bound by the declaration it passed.
+        // Rejecting it here is the twice-measured dead end (the ~80% row-var
+        // slice, 646 false mismatches); the constraint belongs at the
+        // DECLARATION, where inference owns the write —
+        // `Hβ.infer.declared-row-vacuous-against-a-free-body-row` carries the
+        // design. This read stays a read.
+        //
+        // An EtAll body must carry at least the gate's mask: ¬A ⊆ ¬B iff B ⊆ A.
         if forbidden_names_disjoint(pb, ag) {
           match tb {
             EtClosed => true,

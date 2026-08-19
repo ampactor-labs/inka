@@ -708,7 +708,54 @@ rule attributed to it must be read out of the paper first.
 
 ### Named-residue index (entry-born peers not yet in a §5.R band — one home each)
 
-`Hβ.infer.declared-row-vacuous-against-a-free-body-row` — A MEASURED
+`Hβ.infer.declared-row-vacuous-against-a-free-body-row` — **STAMPED
+2026-08-18, and the fork it was banked as is ANSWERED.** Morgan's
+criterion (SOTA-surpassing, most empowering to Mentl's own parts, most
+empowering to developers, exemplary of the ultimate form) resolves it to
+branch A — a declared row constrains its params' rows — and A turns out
+not to be a design choice at all but the Carried-Truth Law: the graph
+ALREADY holds `row(run) ⊇ row(f)`, the declaration constrains
+`row(run)`, and solving gives `row(f) ⊆ declared`. The vacuity is a
+DISCARDED constraint, not a missing feature, so the fix is less
+machinery rather than more. Branch B (the modal capability-at-tee) is
+not the alternative — it answers escape and persisted worlds, the TIME
+half — and doing A spends none of its budget.
+THE MEASUREMENTS, all this turn:
+  · `fn run(f) with Pure = f()` + `run(() => op())` → 0 errors, runs 7.
+  · The same with `with !E` → 0 errors, runs 7. **The negation leaks
+    identically**, which the entry below never recorded — this is
+    §0's second property failing at the shape most likely to carry a
+    real negation, not merely an over-permissive `Pure`.
+  · The same with an unrelated `with !WASI` → 0 errors, runs 7.
+  · ANNOTATING THE PARAM — `fn run(f: () -> Int with Pure) with Pure`
+    — REFUSES. The constraint machinery works; only the propagation
+    from the fn's own declaration is missing. Same shape as the result
+    cap two landings ago: the mechanism is reached, and nothing tells
+    it to fire.
+  · `fn run(f) = f()` (undeclared) → 0 errors, correct. No declaration
+    means effect polymorphism, which is the gradient: the annotation is
+    the INPUT that unlocks the proof.
+THE SITE is infer.mn's declared-row arm (`if row_subsumes(body_row,
+declared_row)`), where inference owns the write. NOT `row_subsumes` —
+that is a READ by contract ("a read that rebinds row vars would make
+every projection a writer"), and rejecting a free tail there is the
+TWICE-MEASURED DEAD END: the ~80% row-var slice, 646 false mismatches
+on the self-compile. The comment promising that unify closes the var
+later is FALSE and was corrected in place this turn.
+THE MECHANISM already exists one function over: `diff_row`'s mask edge
+— mint a fresh row cell BOUND to a masked triple over the original
+tail vars, so the constraint rides every union as one opaque edge
+instead of vanishing at the first frame union. The declaration does the
+same move with the declared row's absent set, and a later call
+unifying an effectful row into the now-capped var refuses AT THE CALL
+SITE, which is where the mistake is and where the Reason chain can name
+both spans.
+WHAT IS NOT MEASURED, and it is the whole remaining risk: the
+population. Every declared-row fn in the wheel that calls a param
+becomes a real constraint, and some may refuse. The march's census is
+the instrument and BROKEN reverts whole. Do not build this without
+reading that number first — the 646 history is what happens when this
+seam is touched on reasoning.
 CROWN-TIER LEAK whose mechanism is now WHOLE, and a DEDICATED ARC rather
 than loop-sized residue. Seven ticks narrowed it; six framings died on
 the way, each killed by running something after being asserted from a

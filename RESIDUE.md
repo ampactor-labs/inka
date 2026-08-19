@@ -85,6 +85,19 @@ PARAMS keep their vars because a param of a returned fn is a demand on
 whoever calls it, the contravariant half of the same rule. Crown 61/0
 with leak-resume-latent-in-list and -in-tuple, both seen RED.
 
+`Hβ.effects.variant-payload-fn-row` — NAMED 2026-08-18, the one covariant
+carrier the result cap deliberately does not reach. `type Box = Wrap(() ->
+Int)` declared as an op's result leaks: a closure performing E, resumed out
+inside `Wrap`, called under `with !E`, checks clean and runs at 7. The
+payload's row is declared at the TYPE declaration and lives on the
+constructor's scheme, registered by `register_type_constructors` — a
+different writer from `register_one_op`, and capping `TName`'s ARGS would
+cap type arguments, which is the wrong altitude. The rule is the same
+variance the result cap applies: a constructor payload is covariant at
+construction, so its unannotated fn-type row should cap at Pure where the
+type is declared. Unmeasured: the population of constructor payloads with
+fn types in src+lib, which decides whether this is one arm or an arc.
+
 `Hβ.tools.micro-battery-link-is-the-blob` — NAMED 2026-08-18, the
 remaining half of a hole whose other half closed the same day. Every
 battery here except the frontier feeds its fixture in on stdin after

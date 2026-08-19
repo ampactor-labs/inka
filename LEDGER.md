@@ -35,6 +35,29 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 97b8475ebc27c34c · THE RESULT CAP IS TOTAL OVER Ty.
+  CLEAN — m2 == m3 at 415522 lines, census 0, crown 62/0, frontier 372/0.
+  ▶ THREE CUTS, THREE HOLES, ONE CAUSE. The cap matched a top-level TFun
+  (a list and a tuple leaked), then three containers (an alias and a
+  variant payload leaked). Each hole was found by a probe rather than by
+  reading, and each had the same cause: a `_ => t` arm over a load-bearing
+  ADT answers "nothing to cap" for every shape nobody has thought of yet.
+  That is the forbidden residue the audit names, sitting in a function
+  written to close a soundness leak.
+  ▶ WHAT LANDED: the walk enumerates all fifteen Ty constructors with no
+  catch-all, so a new one cannot compile until someone decides what it
+  means for a result. TAlias, TRefined, TReprPin and TRecordOpen recurse;
+  TCont is left alone (its R and S are the resume boundary, typed by the
+  typed-resume law at the arm); TName is left alone deliberately.
+  ▶ THE CENSUS LAW'S CONSTRUCTIVE HALF is the point: after the second
+  container the answer stopped being another arm and became the pass that
+  makes the whole class impossible.
+  ▶ OPEN, named: `Hβ.effects.variant-payload-fn-row`. A constructor's
+  payload row is declared at the type declaration and lives on the
+  constructor's scheme — a different writer — so it wants the same
+  variance rule at that site, with its own population measured first.
+  ▶ GATE: leak-resume-latent-via-alias, seen RED.
+
 - 2026-08-18 · pin 0be798f9af1a7859 · THE RESULT'S CAP IS STRUCTURAL.
   CLEAN — m2 == m3 at 415225 lines, census 0, crown 61/0, frontier 372/0.
   ▶ THE ARC NAMED LAST LANDING DOES NOT EXIST. That entry called a plain

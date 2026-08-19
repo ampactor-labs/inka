@@ -8546,6 +8546,19 @@ fn effect_type_vars(ops) = ops |> map((op) => match op {
 // (measured 2026-08-18 — the first cut matched only a top-level TFun).
 // A returned fn's own RESULT is covariant too and recurses; its PARAMS are
 // contravariant — a demand on whoever calls it — and keep their vars.
+// TOTAL over Ty, with no catch-all, and that totality is the fix rather
+// than a style. Three cuts of this walk each shipped a hole a probe then
+// found: first only a top-level TFun (a list and a tuple leaked), then the
+// three containers (an alias and a variant payload leaked). A `_ => t` arm
+// over a load-bearing ADT is exactly the residue the audit names, and here
+// it silently answered "nothing to cap" for every shape nobody had thought
+// of yet. Enumerated, a new Ty constructor cannot compile until someone
+// decides what it means for a result.
+//
+// TName is a NOMINAL type and its payloads live on the constructors'
+// schemes, registered elsewhere — capping its args would cap type
+// ARGUMENTS, which is the wrong altitude. The variant-payload leak is real
+// and belongs at the type declaration: `Hβ.effects.variant-payload-fn-row`.
 fn cap_result_fn_row(t) = match t {
   TFun(ps, r, row) => {
     let capped = if row_cap_form(row) { row } else { mk_ef_pure() }
@@ -8554,7 +8567,20 @@ fn cap_result_fn_row(t) = match t {
   TList(e) => TList(cap_result_fn_row(e)),
   TTuple(es) => TTuple(map(cap_result_fn_row, es)),
   TRecord(fs) => TRecord(map(cap_result_field, fs)),
-  _ => t,
+  TRecordOpen(fs, v) => TRecordOpen(map(cap_result_field, fs), v),
+  TAlias(n, inner) => TAlias(n, cap_result_fn_row(inner)),
+  TRefined(inner, p) => TRefined(cap_result_fn_row(inner), p),
+  TReprPin(r, inner) => TReprPin(r, cap_result_fn_row(inner)),
+  TCont(a, b, d, w) => // A continuation's own R and S are the resume boundary, typed by the
+  // typed-resume law at the arm; the result cap has no business rewriting
+  // them.
+  TCont(a, b, d, w),
+  TName(n, args) => TName(n, args),
+  TVar(h) => TVar(h),
+  TInt => TInt,
+  TFloat => TFloat,
+  TUnit => TUnit,
+  TByte => TByte,
 }
 
 fn cap_result_field(f) = match f {

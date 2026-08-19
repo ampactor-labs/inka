@@ -1,0 +1,22 @@
+// CROWN — the result's cap peels a type ALIAS. `type Thunk = () -> Int`
+// names a fn type, and an op declaring `give() -> Thunk` carries the same
+// covariant promise as declaring the arrow inline. The alias arm is one of
+// the two holes the third cut of this walk still had; the walk is total
+// over Ty now, so the next Ty constructor cannot be forgotten silently.
+// Expect E_EffectMismatch.
+effect E { op() -> Int }
+
+type Thunk = () -> Int
+
+effect G { give() -> Thunk }
+
+handler eh { op() => resume(7) }
+
+handler gh { give() => resume(() => op()) }
+
+fn body() with !E = {
+  let f = (give()) ~> gh
+  f()
+}
+
+fn main() = (body()) ~> eh

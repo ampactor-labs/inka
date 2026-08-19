@@ -35,6 +35,55 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin bb317fe4ec6a7ce6 · UNDER-APPLICATION IS THE
+  HOLE-PRODUCT. CLEAN — m2 == m3 at 414629 lines, census 0, battery
+  green, 15.07s wall, peak 2281768 KB against a 2310000 ceiling.
+  ▶ FOUND by probing the `??` family as an oracle-blind surface — SYNTAX
+  §«Partial application» declares five spellings of one primitive and the
+  wheel's own source writes none of them. Three of five failed, every one
+  CHECKING CLEAN first: `add(1)(41)` and `let inc = add(1); inc(41)`
+  emitted `(call $add)` with two operands where three were expected
+  (wat2wasm refused — an oracle outside the medium); `let g = (a,b) =>
+  a+b; g(1)` produced a module that assembled and trapped at 134; and
+  `add(1, 2, 3)` on a two-param fn ran, returning 3, the surplus
+  evaluated and dropped. The two that worked — `add(??, 41)(1)` and
+  `5 |> add(37)` — are what made the gap legible.
+  ▶ THE ROOT was one redundant guard. `partial_unfilled` required an
+  AUTHORED `??` before treating a call as a hole-product, so the bare
+  positional prefix fell through to the direct-call emit. But
+  `partial_split` has always turned a slot past the supplied args into a
+  param — its own comment reads "or a hole-adjacent short tail" — so the
+  entire mint the prefix form needed was sitting behind a decider that
+  would not reach it. The decider now reads ARITY: short of the declared
+  params → partial; saturated by count with an authored hole → partial;
+  over-applied → unchanged.
+  ▶ THE MARKER'S STATED REASON DISSOLVED RATHER THAN BEING OVERRIDDEN.
+  The comment said a recovered callee's TFun arity is a guess under
+  productive-under-error and flooring every mismatch would collapse the
+  module. True, and already answered ONE LAYER DOWN: `partial_callee_form`
+  admits only a resolved FnScheme or ConstructorScheme, and
+  `lower_call_partial` floors everything else typed
+  (LInvariantFailure/PartialCalleeShape), so a guessed arity reaches a
+  floor and never a wrong call. Measured beside it: an unresolvable callee
+  raises E_MissingVariable, an armed class, and `mentl compile` writes a
+  ZERO-BYTE wat for that program — there is no module to collapse. Two
+  guards for one property, and the outer one was the defect.
+  ▶ MEASURED AFTER: `add(1)(41)` → 42, `let inc = add(1); inc(41)` → 42,
+  `c3(10)` then `f(30, 2)` → 42, `c3(10, 30)` then `f(2)` → 42, the
+  constructor partial `Pair(42)` then `mk(7)` → 42. Controls held at 42.
+  ▶ CLOSED: `Hβ.emit.under-application-suspension` and
+  `Hβ.emit.partial-application-arity` — the same defect at two arities,
+  named nine days apart.
+  ▶ OPEN, one face: the LOCAL callee (`let g = (a,b) => a+b; g(1)`) still
+  exits 134, which is the typed floor firing by contract —
+  `Hβ.lower.partial-local-callee`. Its honest gap is that a floor is a
+  bare trap where a diagnostic belongs. NAMED:
+  `Hβ.lower.over-application-drops-surplus`, measured this landing and
+  left unbuilt on the one-variable law — the arity is proven at the same
+  read the prefix case now uses, one arm over.
+  ▶ GATE: tests/syntax/partial-prefix-application.mn, seen RED as the
+  operand-count mismatch before the change.
+
 - 2026-08-18 · pin f95ce4c642134d2b · THE SCANNER RETURNS ITS VALUE, NOT A
   POSITION. CLEAN — m2 == m3 at 414608 lines, census 0, battery green,
   frontier 371/0, 17.59s wall, peak 2273604 KB against a 2310000 ceiling.

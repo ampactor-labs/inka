@@ -771,26 +771,45 @@ fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
 // The partial fork's ONE decider — the lower mirror of infer_call's dispatch
 // (the same call_hole_index read, the same is_seq_op precedence, the same
 // fn-typed-callee gate): Some(n) = the callee declares n params and the
-// resolved args carry an authored `??` slot; None = saturated, or not a
-// fn-typed callee (infer's own saturated fallback, mirrored). The decider's
-// proof — the declared arity — travels to the mint; it is never re-derived
-// there. The AUTHORED hole is the one reliable signal: the bare positional
-// prefix k<n also types as a partial at infer, but under productive-under-
-// error a recovered callee's TFun arity is a guess, and flooring every
-// arity-mismatched recovered call collapses the module — the prefix form
-// mints only from proven arity (Hβ.lower.partial-prefix-arity, gated on the
-// recovered-inference population).
+// call does not fill them all; None = saturated, or not a fn-typed callee
+// (infer's own saturated fallback, mirrored). The decider's proof — the
+// declared arity — travels to the mint; it is never re-derived there.
+//
+// THE ARITY IS THE SIGNAL, and it used to be the authored `??`. Requiring
+// the marker made SYNTAX's own headline spelling miscompile: `add(1)`
+// against a 2-param fn typed clean, fell through to the direct-call emit,
+// and produced `(call $add)` with two operands where three were expected —
+// caught by wat2wasm, an oracle outside the medium, and by nothing inside
+// it. The `??`-marked twin ran correctly throughout, so the mint was built
+// and only this decider refused; `partial_split` has always turned a slot
+// past the supplied args into a param (its own comment says "or a
+// hole-adjacent short tail").
+//
+// The reason the marker was there — a recovered callee's TFun arity is a
+// guess under productive-under-error — is real, and it is already answered
+// one layer down rather than here: `partial_callee_form` admits only a
+// resolved FnScheme or ConstructorScheme, and `lower_call_partial` floors
+// everything else typed (LInvariantFailure/PartialCalleeShape). A guessed
+// arity therefore reaches a floor, never a wrong call. Measured beside it:
+// a callee that failed to resolve raises E_MissingVariable, an armed class,
+// so that program emits zero bytes and has no module to collapse.
 fn partial_unfilled(cname, fh, r_args) = if is_seq_op(cname) {
-  None
-} else if call_hole_index(r_args, 0) < 0 {
   None
 } else {
   match lookup_ty(fh) {
-    TFun(ps, _, _) => // Over-application (more args than params — a recovered arity error)
-    // dispatches as before: the mint's slot walk stops at the param count
-    // and would silently drop the surplus args' evaluation, so it never
-    // fires there.
-    if len(r_args) <= len(ps) { Some(len(ps)) } else { None },
+    TFun(ps, _, _) => if len(r_args) < len(ps) {
+      Some(len(ps))
+    } else if len(r_args) == len(ps) && call_hole_index(r_args, 0) >= 0 {
+      // Saturated by COUNT but a slot is an authored hole — `add(??, 41)`,
+      // the form that always worked.
+      Some(len(ps))
+    } else {
+      // Over-application (more args than params — a recovered arity error)
+      // dispatches as before: the mint's slot walk stops at the param count
+      // and would silently drop the surplus args' evaluation, so it never
+      // fires there.
+      None
+    },
     _ => None,
   }
 }

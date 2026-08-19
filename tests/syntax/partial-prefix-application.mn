@@ -1,0 +1,18 @@
+// expect: 42
+// SYNTAX §«Partial application — the product with a hole»: a parameter
+// product constructed with a field left unsupplied IS a value, and the
+// spec's own headline example writes no `??` at all —
+// `let adults = filter(.age > 18)`, reused twice. The bare positional
+// prefix is that spelling.
+//
+// It did not compile. `add(1)` typed clean and emitted `(call $add)` with
+// two operands where three were expected, so wat2wasm — an oracle outside
+// the medium — was what caught it. The `??`-marked twin
+// (`add(??, 41)`) ran correctly the whole time, which is what made the
+// gap legible: the mint was built and only the decider refused.
+fn add(a, b) = a + b
+
+fn main() = {
+  let inc = add(1)
+  inc(41)
+}

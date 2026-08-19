@@ -3150,7 +3150,58 @@ those two node kinds. Sequenced with Phase 11.2's `mentl edit` polish,
 and it is the cheapest real gain in the felt band: three arms, one
 projection each.
 
-`Hβ.emit.under-application-suspension` — NAMED 2026-08-09 (found live
+`Hβ.emit.under-application-suspension` — **RESOLVED 2026-08-18**, pin
+bb317fe4ec6a, and the fix was one condition because the whole mint was
+already built. `partial_unfilled` required an AUTHORED `??` before it
+would treat a call as a hole-product; a bare positional prefix fell
+through to the direct-call emit. Meanwhile `partial_split` had always
+turned a slot past the supplied args into a param — its own comment says
+"or a hole-adjacent short tail" — so the machinery the prefix form needed
+was sitting behind a decider that refused to reach it. The decider now
+reads ARITY: short of the declared params → partial, saturated with an
+authored hole → partial (the `add(??, 41)` form, correct throughout),
+over-applied → unchanged.
+THE STATED REASON FOR THE MARKER dissolved on inspection rather than
+being overridden. It was that a recovered callee's TFun arity is a guess
+under productive-under-error — true, and already answered ONE LAYER
+DOWN: `partial_callee_form` admits only a resolved FnScheme or
+ConstructorScheme and `lower_call_partial` floors everything else typed
+(LInvariantFailure/PartialCalleeShape), so a guessed arity reaches a
+floor, never a wrong call. Measured beside it: an unresolvable callee
+raises E_MissingVariable, an armed class, and `mentl compile` on that
+program writes a ZERO-BYTE wat — there is no module to collapse. The
+`??` requirement was a second, redundant guard, and the redundancy was
+the defect.
+MEASURED AFTER, all previously broken or absent: `add(1)(41)` → 42,
+`let inc = add(1); inc(41)` → 42, `c3(10)` then `f(30, 2)` → 42,
+`c3(10, 30)` then `f(2)` → 42, `Pair(42)` then `mk(7)` → 42. The
+controls held: `add(??, 41)(1)` → 42 and `5 |> add(37)` → 42. CLEAN,
+m2 == m3, census 0. Gate: tests/syntax/partial-prefix-application.mn,
+seen RED as `type mismatch in call, expected [i32, i32, i32] but got
+[i32, i32]`.
+THE ONE OPEN FACE is the LOCAL callee — `let g = (a, b) => a + b; g(1)`
+still exits 134, which is `partial_callee_form` returning None and the
+typed floor firing, loudly and by contract. That is
+`Hβ.lower.partial-local-callee`, unchanged by this landing except that
+it is now the only unlit face of the family. Its honest gap is that a
+floor is a bare trap where a diagnostic belongs: the medium knows the
+callee is a local closure and can say so.
+
+`Hβ.lower.over-application-drops-surplus` — NAMED 2026-08-18, measured
+while proving its opposite. `fn add(a, b) = a + b` called as
+`add(1, 2, 3)` checks CLEAN with zero diagnostics and runs, returning 3:
+the surplus argument is evaluated and dropped. `partial_unfilled`'s own
+comment has described this since it was written — "the mint's slot walk
+stops at the param count and would silently drop the surplus args'
+evaluation" — as the reason over-application does not take the partial
+fork, which is correct, but nothing then refuses it either. A parameter
+product with more fields supplied than it has is not a product; SYNTAX's
+`E_UnknownArgLabel` is the labeled twin of exactly this and it refuses.
+The arity is proven at the same read the prefix case now uses, one arm
+over, so the refusal is available where the decider already looks. Left
+unbuilt in the same landing on the one-variable law, not on difficulty.
+
+`Hβ.emit.under-application-suspension` (original text) — NAMED 2026-08-09 (found live
 by the trio-deletion landing). SYNTAX §«Partial application» promises
 that under-application IS the hole-product ("when exactly one field is
 a hole, it is unambiguous" — `filter(.age > 18)` is the spec's own
@@ -5073,7 +5124,16 @@ ownership-marked destructure params are unprobed surface, admitted
 nowhere. The wasm.mn:1438 `((h, depth))` call-site lambda — the fold
 this refusal forced — unfolds back to a named projection as its own
 follow-up.
-`Hβ.emit.partial-application-arity` — SYNTAX §«Partial application»
+`Hβ.emit.partial-application-arity` — **RESOLVED 2026-08-18**, pin
+bb317fe4ec6a, by the same one-condition change as
+`Hβ.emit.under-application-suspension`: this entry's
+`map(delay_slot_name(h), range(0, depth))` is the same defect one arity
+over, and its `return_call` arity mismatch had the same root — the
+decider refusing a prefix the mint could already build. The remainder
+this entry names below (`Hβ.dataflow.delay-line-runtime-depth`) is
+untouched and stays open on its own terms.
+
+`Hβ.emit.partial-application-arity` (original text) — SYNTAX §«Partial application»
 declares a hole-product a first-class value, so `map(delay_slot_name(h),
 range(0, depth))` should BE the callback. It parses, it checks clean,
 and then the emit writes a `return_call` whose arity does not match its

@@ -750,12 +750,20 @@ same move with the declared row's absent set, and a later call
 unifying an effectful row into the now-capped var refuses AT THE CALL
 SITE, which is where the mistake is and where the Reason chain can name
 both spans.
-WHAT IS NOT MEASURED, and it is the whole remaining risk: the
-population. Every declared-row fn in the wheel that calls a param
-becomes a real constraint, and some may refuse. The march's census is
-the instrument and BROKEN reverts whole. Do not build this without
-reading that number first — the 646 history is what happens when this
-seam is touched on reasoning.
+THE POPULATION IS MEASURED, 2026-08-18, and it makes this ONE LANDING
+rather than an arc: **11 sites across the eight largest modules**
+(infer 2, lower 3, effects 1, parser 1, types 1, query 1, prelude 1,
+lists 1). Every one is a fn that declares a row and calls one of its own
+parameters — the complete set whose judgment changes when the
+declaration stops being vacuous. Fewer will actually refuse, since a
+callback already within the declared cap stays admitted.
+The instrument is the medium's own: `mentl query <file> "census
+declared-row-hof"`, the twenty-second census shape, which reads both
+facts where the graph holds them — the signed clauses are FnStmt's own
+field, the call is the weave's tree edge walked to the callee's VarRef.
+A grep could not have answered it (a param MENTIONED is transport; only
+a param CALLED puts its row into the body's row), and the shape stays as
+the ratchet for whoever builds the fix.
 CROWN-TIER LEAK whose mechanism is now WHOLE, and a DEDICATED ARC rather
 than loop-sized residue. Seven ticks narrowed it; six framings died on
 the way, each killed by running something after being asserted from a

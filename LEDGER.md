@@ -35,6 +35,32 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 000fee7f6ada9c90 · THE MEDIUM COUNTS ITS OWN
+  POPULATION. CLEAN — m2 == m3 at 415834 lines, census 0, frontier 372/0
+  with twenty-two census shapes.
+  ▶ WHY: `Hβ.infer.declared-row-vacuous-against-a-free-body-row` is
+  stamped and its build was blocked on one number — how many wheel fns
+  declare a row AND call a parameter, since each is a site whose judgment
+  changes when the declaration stops being vacuous. That seam has a
+  history (646 false mismatches, twice) and the stamp forbids building it
+  on reasoning.
+  ▶ NO GREP COULD ANSWER IT. A param MENTIONED is transport; only a param
+  CALLED puts its row into the enclosing body's row, so the question is
+  structural — the callee's own VarRef — not textual.
+  ▶ WHAT LANDED: `CsDeclaredRowHof`, the twenty-second census shape, four
+  sites like every other (the ADT, the label, the detector, the CLI name)
+  plus a fuel-bounded subtree walk mirroring CsPrintInReport's. Both facts
+  are read where the graph holds them: the signed clauses are FnStmt's own
+  field, the call is the weave's tree edge.
+  ▶ THE ANSWER: 11 across the eight largest modules — infer 2, lower 3,
+  effects 1, parser 1, types 1, query 1, prelude 1, lists 1. That makes
+  the crown fix ONE LANDING rather than an arc, and fewer than 11 will
+  actually refuse since a callback already inside the declared cap stays
+  admitted.
+  ▶ THE SELF-BUILD RATCHET in its plainest form: the instrument the
+  medium lacked is now a verb facet it owns, pinned by the frontier
+  roster, and it stays as the ratchet for whoever builds the fix.
+
 - 2026-08-18 · pin 97b8475ebc27c34c · THE RESULT CAP IS TOTAL OVER Ty.
   CLEAN — m2 == m3 at 415522 lines, census 0, crown 62/0, frontier 372/0.
   ▶ THREE CUTS, THREE HOLES, ONE CAUSE. The cap matched a top-level TFun

@@ -57,6 +57,7 @@ type CensusShape
   // fits; each is one more variant reading its own carrier, not a
   // generalized surface parameter, because their carriers differ.
   | CsDefaultParam
+  | CsDeclaredRowHof
   // The second declared-surface shape, and it counts EXPOSURE rather than
   // style: a record pattern's field offsets are resolvable only when the
   // receiver's full sorted field set is known, and a row-polymorphic
@@ -489,6 +490,7 @@ fn census_label(shape) with Pure = match shape {
   CsEnvFrame => "env-frame site(s)",
   CsVtableRecord => "vtable-record literal(s)",
   CsDefaultParam => "default-valued parameter(s)",
+  CsDeclaredRowHof => "fn(s) with a declared row that call a parameter",
   CsRecordPattern => "record pattern(s)",
   CsRecordPatternOpen => "record pattern(s) over an open-row receiver",
 }
@@ -700,6 +702,23 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
     ),
     _ => false,
   },
+  CsDeclaredRowHof => // The population `Hβ.infer.declared-row-vacuous-against-a-free-body-row`
+  // needs priced before its fix is built: a fn that DECLARES a row and
+  // CALLS one of its own parameters. Today the declaration is vacuous
+  // against the param's free row var — `fn run(f) with !E = f()` accepts
+  // an effectful callback and runs — and the fix makes the declaration a
+  // real constraint on that var, so every fn counted here is a site whose
+  // judgment changes. Both facts are read where the graph holds them: the
+  // signed clauses are FnStmt's own field, and the call is the weave's
+  // tree edge walked to the callee's VarRef.
+  match body {
+    NStmt(FnStmt(_, params, _, effs, fbody)) => if len(effs) == 0 {
+      false
+    } else {
+      subtree_calls_param(node_handle(fbody), map(param_name, params), 64)
+    },
+    _ => false,
+  },
   CsRecordPattern => // Both spellings of one shape, read where the pattern lives: a
   // let-binding's own pattern and a match arm's. Lowering resolves a
   // record pattern's field offsets from the RECEIVER's full sorted field
@@ -843,6 +862,33 @@ fn subtree_prints(h, fuel) with GraphRead + !Mutate + Alloc + Memory = if fuel <
 fn subtree_prints_children(hs, fuel) with GraphRead + !Mutate + Alloc + Memory = match hs {
   [] => false,
   [ch, ...rest] => if subtree_prints(ch, fuel) { true } else { subtree_prints_children(rest, fuel) },
+}
+
+// Does this subtree CALL one of the names in `pnames`? The callee's own
+// VarRef is the read — a param mentioned as an argument is transport and
+// does not constrain anything, only a call puts the param's row into the
+// enclosing body's row.
+fn subtree_calls_param(h, pnames, fuel) with GraphRead + !Mutate + Alloc + Memory = if fuel <= 0 {
+  false
+} else {
+  let body = graph_node_body(h)
+  let here = match body {
+    NExpr(CallExpr(callee, _)) => match graph_node_body(node_handle(callee)) {
+      NExpr(VarRef(cn)) => set_contains(pnames, cn),
+      _ => false,
+    },
+    _ => false,
+  }
+  if here { true } else { subtree_calls_param_children(body_child_handles(body), pnames, fuel - 1) }
+}
+
+fn subtree_calls_param_children(hs, pnames, fuel) with GraphRead + !Mutate + Alloc + Memory = match hs {
+  [] => false,
+  [ch, ...rest] => if subtree_calls_param(ch, pnames, fuel) {
+    true
+  } else {
+    subtree_calls_param_children(rest, pnames, fuel)
+  },
 }
 
 // The per-fn drift read (the audit's absorbed-mode tier): the absorbed

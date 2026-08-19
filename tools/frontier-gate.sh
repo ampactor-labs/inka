@@ -931,14 +931,14 @@ run_census() {
   local compiler="$1" dir="$2"
   local doc="$ROOT/tests/frontier/mn-census-verbs.mn"
   local ok=1 spec q line
-  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26' 'wildcard-zero:27' 'failure-mask:28' 'print-in-report:31' 'wildcard-fabricates:32' 'underscore-retain:33' 'flag-as-int:34' 'parallel-arrays:35' 'parallel-arrays:37' 'vtable-record:36' 'env-frame:38' 'default-param:39' 'record-pattern:40' 'record-pattern-open:40'; do
+  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26' 'wildcard-zero:27' 'failure-mask:28' 'print-in-report:31' 'wildcard-fabricates:32' 'underscore-retain:33' 'flag-as-int:34' 'parallel-arrays:35' 'parallel-arrays:37' 'vtable-record:36' 'env-frame:38' 'default-param:39' 'record-pattern:40' 'record-pattern-open:40' 'declared-row-hof:41'; do
     q="${spec%%:*}"; line="${spec##*:}"
     wt_run --dir "$ROOT" "$compiler" query "$doc" "census $q" > "$dir/census-$line.out" 2>/dev/null
     if ! grep -q "mn-census-verbs:$line" "$dir/census-$line.out"; then
       ok=0; fail "census '$q' misses its own site (line $line; see $dir/census-$line.out)"
     fi
   done
-  [ "$ok" = 1 ] && pass "structural census: all twenty-one shapes count their own site (|> <| >< ~> <~ anonymous eta effectful-lambda iteration wildcard-zero failure-mask print-in-report wildcard-fabricates underscore-retain flag-as-int parallel-arrays-both-faces vtable-record env-frame default-param record-pattern record-pattern-open)"
+  [ "$ok" = 1 ] && pass "structural census: all twenty-two shapes count their own site (|> <| >< ~> <~ anonymous eta effectful-lambda iteration wildcard-zero failure-mask print-in-report wildcard-fabricates underscore-retain flag-as-int parallel-arrays-both-faces vtable-record env-frame default-param record-pattern record-pattern-open declared-row-hof)"
   # The audit's drift tier (5.6's absorbed modes read per fn): the eight
   # specimen fns each carry their shape line. Born with the tier.
   ad_n=$(wt_run --dir "$ROOT" "$compiler" audit "$doc" 2>/dev/null | grep -c "drift-shape:")

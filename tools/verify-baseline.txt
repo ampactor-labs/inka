@@ -732,7 +732,7 @@ loop_scaffold_refs_max: 3
 desugar_vocabulary: 43
 
 authored_own_max: 83
-authored_ref_max: 814
+authored_ref_max: 813
 
 # 2026-08-08: the DRIFT-SHAPE ratchet (PLAN §11 5.6's absorption,
 # enforcement half) — the three absorbed drift modes counted by the

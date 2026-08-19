@@ -2115,6 +2115,8 @@ type DiagKind
   // by silently dropping a side (the pre-diagnostic meet licensed a
   // perform under a declared negation, measured 2026-08-08).
   | EDeclaredRowContradiction(String, Span)
+  // the literal as written, then what the scanner could not read of it
+  | EMalformedNumericLiteral(String, String, Span)
   // `!Alias` where the alias's row is not positive-closed (name)
   | ERowAliasNegation(String, Span)
   // field, type_name
@@ -2317,6 +2319,7 @@ fn diag_span(d) with Pure = match d {
   ERestOutsideDestructure(s) => s,
   ERowAliasCycle(_, s) => s,
   EDeclaredRowContradiction(_, s) => s,
+  EMalformedNumericLiteral(_, _, s) => s,
   ERowAliasNegation(_, s) => s,
   ERecordFieldExtra(_, _, s) => s,
   ERecordFieldMissing(_, _, s) => s,
@@ -2381,6 +2384,7 @@ fn diag_source(d) with Pure = match d {
   ERestOutsideDestructure(_) => "infer",
   ERowAliasCycle(_, _) => "effects",
   EDeclaredRowContradiction(_, _) => "effects",
+  EMalformedNumericLiteral(_, _, _) => "parser",
   ERowAliasNegation(_, _) => "effects",
   ERecordFieldExtra(_, _, _) => "infer",
   ERecordFieldMissing(_, _, _) => "infer",
@@ -2445,6 +2449,7 @@ fn diag_code(d) with Pure = match d {
   ERestOutsideDestructure(_) => "E_RestOutsideDestructure",
   ERowAliasCycle(_, _) => "E_RowAliasCycle",
   EDeclaredRowContradiction(_, _) => "E_DeclaredRowContradiction",
+  EMalformedNumericLiteral(_, _, _) => "E_MalformedNumericLiteral",
   ERowAliasNegation(_, _) => "E_RowAliasNegation",
   ERecordFieldExtra(_, _, _) => "E_RecordFieldExtra",
   ERecordFieldMissing(_, _, _) => "E_RecordFieldMissing",
@@ -2586,6 +2591,16 @@ fn diag_refuses(d) with Pure = match d {
   // performing body check CLEAN under a declared !E; an unsatisfiable
   // clause must never reach an executable.
   True,
+  EMalformedNumericLiteral(_, _, _) => // ARMED at birth (2026-08-18), the lexical licence: the judgment is
+  // read from the source bytes themselves at the scan, so it has no
+  // resolution dependency and cannot differ between the blob link and a
+  // user path. Census on the wheel at arming: 0 — every literal the
+  // medium's own source writes is well-formed, and the march is the
+  // proof. This is the class the armed contract exists for: 0b1012 read
+  // 5 and ran, 0o1238 read 83 and ran, a bare 0x read 0 and ran. A
+  // value the medium cannot read is not a proven value, and nothing
+  // executes unproven.
+  True,
   EZeroDelayFeedback(_) => // ARMED at birth (2026-08-12), the literal licence: the depth is read
   // from the authored `delay(<int literal>)` at the `<~` site — no
   // resolution dependency, so the blob-vs-user-path gap cannot apply.
@@ -2700,6 +2715,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   ERestOutsideDestructure(_) => "`...` rest element outside a destructuring parameter — rest lives in patterns (`([h, ...t]) =>`, `let [h, ...t] =`), and `++` joins lists in expressions",
   ERowAliasCycle(nm, _) => "row alias `{nm}` expands through itself — a row is a finite signed set; name the effects directly",
   EDeclaredRowContradiction(nm, _) => "the clause asserts `{nm}` AND `!{nm}` — one row cannot both permit and forbid a name; drop one side",
+  EMalformedNumericLiteral(text, why, _) => "`{text}` is not a number the medium can read: {why}. A literal whose value cannot be read is not a proven value, and the old scanner answered one anyway — it stopped at the offending byte and let the rest become a second token",
   ERowAliasNegation(nm, _) => "`!{nm}` negates a row alias whose row is not positive-closed — the shorthand is sound only over plain unions; name the forbidden effects directly",
   ERecordFieldExtra(field, tn, _) => // drift-audit: ignore — diagnostic message string, not a control keyword
   "record literal has unknown field '{field}' for type {tn}",

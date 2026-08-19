@@ -1,0 +1,6 @@
+// expect: refuse E_MalformedNumericLiteral
+// A base prefix promises digits. With none following, the old scanner
+// consumed the prefix, sliced "0x", and the accumulator answered 0 — a
+// literal the author never finished, silently given a value. The prefix
+// with nothing behind it is now its own refusal (NumNoDigits).
+fn main() = 0x

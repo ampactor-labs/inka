@@ -1,0 +1,10 @@
+// expect: 91
+// SYNTAX §«Token enumeration» — TIntLit's four spellings, each read by the
+// ONE scanner that proves it. 0b1011 = 11, 0o17 = 15, 0x2A = 42, 23 = 23,
+// and the underscore separators are visual only: 11 + 15 + 42 + 23 = 91.
+//
+// The control for the malformed twins in tests/micros. Before the scanner
+// returned its own value, a second walk re-derived these from the source
+// slice with a different digit classifier, and where the two disagreed the
+// second one answered 0.
+fn main() = 0b1_011 + 0o17 + 0x2A + 2_3

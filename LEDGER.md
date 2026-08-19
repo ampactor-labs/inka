@@ -35,6 +35,74 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin f95ce4c642134d2b · THE SCANNER RETURNS ITS VALUE, NOT A
+  POSITION. CLEAN — m2 == m3 at 414608 lines, census 0, battery green,
+  frontier 371/0, 17.59s wall, peak 2273604 KB against a 2310000 ceiling.
+  ▶ WHAT WAS WRONG, measured before anything was written: `0b1012` ran and
+  exited 5, `0o1238` exited 83, `0b12` exited 1, a bare `0x` and a bare
+  `0b` and `0o9` all exited 0, and `123abc` reported `E_MissingVariable:
+  abc` — the medium naming a fragment the author never wrote. Every one
+  compiled clean and ran.
+  ▶ THE ROOT is the Carried-Truth Law at the lexer. `scan_number` walked
+  the literal, proved its base, and proved byte by byte which bytes were
+  digits of it — then returned a POSITION and an Int base in {2,8,10,16}.
+  The caller re-sliced the source and walked it AGAIN through
+  `parse_int_base_loop`, whose three hand-written byte ranges accepted any
+  hex digit whatever the base and answered `0` for everything else. Two
+  walks, two classifiers, and a fabricated value wherever they disagreed —
+  which is precisely what a digit outside its base is. The loop's own
+  comment named the fabrication and deferred it to "peer sub-handle
+  B.12.4.R", a naming scheme three eras dead.
+  ▶ WHAT LANDED: `NumBase = BBin | BOct | BDec | BHex` (drift 8 deleted —
+  the base was a flag-as-int matched by `base == 10`), and `base_digit`,
+  which answers IS-a-digit and WHICH-digit as ONE `Option(Int)` so the two
+  can no longer drift apart. `scan_number` returns `NumScan` — `NumInt`
+  carrying the accumulated value, `NumFloat` carrying only the extent
+  (parse_float still owns the mantissa walk), `NumNoDigits` for a prefix
+  that promised digits and met none. `parse_int_base` and
+  `parse_int_base_loop` lost their only caller and are deleted:
+  lib/runtime/strings.mn is 39 lines lighter.
+  ▶ E_MalformedNumericLiteral is the FOURTEENTH armed class, and the
+  abutting-alnum test lives at the ONE call site because it is the same
+  rule for all four bases: a literal that ends against a letter or digit
+  was never one literal. Armed at birth on the lexical licence — the
+  judgment reads source bytes, so it has no resolution dependency and
+  cannot differ between the blob link and a user path. Wheel census 0 at
+  arming.
+  ▶ THE FLOOR CAUGHT ME, AND THE FIRST STORY ABOUT IT WAS WRONG. The
+  frontier came back 370/1: the prelude floor (source lines a program
+  that asks for nothing must still process) read 6413 against a 6400
+  ceiling. Six pins of `frontier: NOT RUN` and a per-module-import
+  landing in lib/ made a complete story where the red predated this
+  session. Stashing the three source edits and re-running against the
+  previous boot measured 6359 — GREEN. The red was mine: src/types.mn is
+  3672 of the floor's 6352 lines, 57% of it, so ~40 lines of lexical ADT
+  landing there cleared a ceiling that had 41 lines of slack. The ADTs
+  moved to src/lexer.mn, which is where their only readers are and which
+  a bare program does not link; the floor now reads 6352, seven below
+  where the session found it, and the ceiling falls 6400 → 6360 to hold
+  it. The kill is banked in RESIDUE with the stash that produced it.
+  ▶ THE GATE LIED ABOUT THE FIXTURES IT WAS REFUSING. Both new refusal
+  micros reported `m2 COMPILE trap=!6+25+-.` — no trap existed; the
+  harness greps `!\S+` out of stderr and printed an effect row mined from
+  the movers report. It now names a trap only when stderr shows one, and
+  otherwise prints the first real error line plus the `// expect: refuse
+  E_Class` header the fixture was missing, which is what the failure
+  actually was. PLAN §9's "a diagnostic's NAME can lie", inside the gate.
+  ▶ GATES, RED FIRST: tests/syntax/numeric-base-literals.mn (the control —
+  0b1_011 + 0o17 + 0x2A + 2_3 = 91, already green at the old pin, because
+  well-formed literals always worked); mn-refuse-malformed-base-literal
+  and mn-refuse-base-prefix-no-digits, both measured running with
+  fabricated values (5 and 0) against the pinned boot before the fix.
+  ▶ NAMED: `Hβ.repr.option-of-word-niche` (base_digit allocates per digit
+  byte — a representation cost, and splitting the answer back to dodge it
+  would restore the bug), `Hβ.query.cost-per-module` (the facet reports a
+  sum; which module carries the floor was answered by hand),
+  `Hβ.verify.comment-ref-ratchet-is-dark` (the solo checks emit
+  W_CommentRefUnresolved freely, the census stderr the ratchet reads
+  carries zero, and the reference in question resolves nowhere in either
+  link — one fact, no cause, next probe named).
+
 - 2026-08-18 · pin 567a96659693 · SOURCE IS NOT A PLACE TO SAY I DO NOT
   KNOW. CLEAN — m2 == m3 at 414196 lines, census 0, battery green,
   frontier 371/0, 16.66s wall, peak 2271636 KB against a 2310000 ceiling.

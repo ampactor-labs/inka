@@ -307,15 +307,42 @@ fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, co
       (new_pos, new_line, new_col, b1, c1) => lex_from(source, n, new_pos, new_line, new_col, b1, c1, term_byte, depth),
     }
   } else if is_digit(b) {
-    match scan_number(source, n, pos, col, false) {
-      (new_pos, new_col, base, is_float) => {
-        let num_val = str_slice(source, pos, new_pos)
-        let kind = if is_float {
-          TFloatLit(parse_float(strip_underscores(num_val)))
-        } else {
-          TIntLit(parse_int_base(strip_underscores(num_val), base))
+    // The scanner returns its verdict; this site reads it and reports.
+    // The abutting-alnum test lives HERE, once, because it is the same
+    // rule for all four bases: a literal that ends against a letter or
+    // digit was never one literal. Before it, 0b1012 scanned as 0b101
+    // and left 2 to lex as a second literal, 0o9 scanned as 0o and left
+    // 9, and 123abc left a bare identifier to be reported as a missing
+    // variable — the medium naming the wrong thing.
+    match scan_number(source, n, pos, col) {
+      NumInt(new_pos, new_col, value) => {
+        if new_pos < n && is_alnum(byte_at(source, new_pos)) {
+          report(EMalformedNumericLiteral(
+            str_slice(source, pos, num_lit_end(source, n, new_pos)),
+            "a letter or digit runs on from the end of it",
+            Span(line, col, line, new_col)
+          ))
         }
+        // Productive under error: the literal terminates here either
+        // way and the rest of the file lexes true (scan_string's own
+        // precedent). The refusal is what stops the executable.
+        match push_tok(buf, count, mk_tok(TIntLit(value), line, col, line, new_col)) {
+          (b1, c1) => lex_from(source, n, new_pos, line, new_col, b1, c1, term_byte, depth),
+        }
+      },
+      NumFloat(new_pos, new_col) => {
+        let kind = TFloatLit(parse_float(strip_underscores(str_slice(source, pos, new_pos))))
         match push_tok(buf, count, mk_tok(kind, line, col, line, new_col)) {
+          (b1, c1) => lex_from(source, n, new_pos, line, new_col, b1, c1, term_byte, depth),
+        }
+      },
+      NumNoDigits(new_pos, new_col, base) => {
+        report(EMalformedNumericLiteral(
+          str_slice(source, pos, num_lit_end(source, n, new_pos)),
+          "the prefix promises {base_name(base)} digits and none follow",
+          Span(line, col, line, new_col)
+        ))
+        match push_tok(buf, count, mk_tok(TIntLit(0), line, col, line, new_col)) {
           (b1, c1) => lex_from(source, n, new_pos, line, new_col, b1, c1, term_byte, depth),
         }
       },
@@ -633,59 +660,147 @@ fn scan_triple_after_splice(ref source, n: ValidOffset, pos: ValidOffset, line, 
   (new_pos, new_line, new_col, b1, c1) => scan_triple_chunk(source, n, new_pos, new_pos, new_line, new_col, strip, b1, c1),
 }
 
-// Advance position over digits with optional base-prefix
-// (`0x` hex, `0b` binary, `0o` octal) and optional underscore separators.
-// Returns `(new_pos, new_col, base, is_float)`; `base` in `{2, 8, 10, 16}`.
-// Underscore is a visual separator — skipped during accumulation, never
-// counted as a digit. Amendments P + Q.
-fn scan_number(ref source, n: ValidOffset, pos: ValidOffset, col, is_float) = if pos + 1 < n && byte_at(source, pos) == 48 {
+// ── The numeric literal's own vocabulary ────────────────────────────────
+// These live HERE, not in types.mn, and the reason is measured rather than
+// stylistic: the frontier's prelude floor counts the source a program that
+// asks for nothing must still process, and types.mn is 3672 of its 6359
+// lines because every module pulls it. Putting lexical ADTs there made a
+// bare `fn main() = 7` pay for the scanner — the leg went RED at 6413 the
+// moment they landed there, which is the ratchet doing exactly its job
+// (`Hβ.driver.link-is-reachability` is what finally lowers that floor).
+// One home per truth means the home where the readers are, and every
+// reader of these is in this file.
+//
+// The base of a numeric literal. It was an Int in {2, 8, 10, 16} threaded
+// from the scanner to a second walk that re-derived, from three
+// hand-written byte ranges, what counts as a digit — and the two
+// classifiers disagreed. The scanner stopped at the first byte outside the
+// base while the accumulator accepted any hex digit and answered 0 for
+// everything else, so 0b1012 read 5 and the trailing 2 became a separate
+// token nobody complained about, 0o1238 read 83, and a bare 0x read 0.
+// The ADT makes the disagreement unconstructible: the radix and the digit
+// set are arms of one value.
+type NumBase = BBin | BOct | BDec | BHex
+
+// What the scanner PROVED, not a position for the caller to re-read.
+// NumInt carries the accumulated value; NumFloat carries only the extent,
+// because a float's mantissa/exponent walk is a different algorithm and
+// parse_float still owns it. NumNoDigits is the prefix that promised
+// digits and met none.
+type NumScan = NumInt(Int, Int, Int) | NumFloat(Int, Int) | NumNoDigits(Int, Int, NumBase)
+
+fn base_radix(b) with Pure = match b {
+  BBin => 2,
+  BOct => 8,
+  BDec => 10,
+  BHex => 16,
+}
+
+fn base_name(b) with Pure = match b {
+  BBin => "binary",
+  BOct => "octal",
+  BDec => "decimal",
+  BHex => "hexadecimal",
+}
+
+// IS this byte a digit of this base, and WHICH digit — one answer, so the
+// two cannot disagree. Every predicate-plus-value pair the old form kept
+// apart was a place they could drift.
+//
+// The row is Memory + Alloc, not Pure, because the answer is constructed:
+// the constructor charge bills Some(d), once per scanned digit byte. That
+// is the honest row for the shape, and the shape is right — a predicate
+// beside a value is exactly the split this deletes. What should cost
+// nothing is the Option itself, which a niche-encoded word would carry in
+// a register (Hβ.repr.option-of-word-niche); until the gradient cashes
+// that out, the charge is real and named rather than declared away.
+fn base_digit(b, byte) = match b {
+  BBin => if byte >= 48 && byte <= 49 { Some(byte - 48) } else { None },
+  BOct => if byte >= 48 && byte <= 55 { Some(byte - 48) } else { None },
+  BDec => if byte >= 48 && byte <= 57 { Some(byte - 48) } else { None },
+  BHex => if byte >= 48 && byte <= 57 {
+    Some(byte - 48)
+  } else if byte >= 65 && byte <= 70 {
+    Some(byte - 55)
+  } else if byte >= 97 && byte <= 102 {
+    Some(byte - 87)
+  } else {
+    None
+  },
+}
+
+// Scan one numeric literal and return WHAT IT IS, never a position for
+// the caller to re-read. The old form returned (pos, col, base, is_float)
+// and the caller re-sliced the source and walked it a second time with a
+// different digit classifier; where the two disagreed, the second one
+// answered 0. The value is accumulated here, in the walk that already
+// proved every byte, so there is one walk and one classifier and nothing
+// left to disagree about.
+//
+// Underscore is a visual separator — skipped during accumulation, never a
+// digit, never the byte a literal may end on.
+fn scan_number(ref source, n: ValidOffset, pos: ValidOffset, col) = if pos + 1 < n && byte_at(source, pos) == 48 {
   let prefix = byte_at(source, pos + 1)
   if prefix == 120 {
-    // 0x — hex
-    match scan_digits_pred(source, n, pos + 2, col + 2, is_hex_digit) {
-      (p2, c2) => (p2, c2, 16, false),
-    }
+    scan_prefixed(source, n, pos + 2, col + 2, BHex)
   } else if prefix == 98 {
-    // 0b — binary
-    match scan_digits_pred(source, n, pos + 2, col + 2, is_bin_digit) {
-      (p2, c2) => (p2, c2, 2, false),
-    }
+    scan_prefixed(source, n, pos + 2, col + 2, BBin)
   } else if prefix == 111 {
-    // 0o — octal
-    match scan_digits_pred(source, n, pos + 2, col + 2, is_oct_digit) {
-      (p2, c2) => (p2, c2, 8, false),
+    scan_prefixed(source, n, pos + 2, col + 2, BOct)
+  } else {
+    scan_decimal(source, n, pos, col, 0, false)
+  }
+} else {
+  scan_decimal(source, n, pos, col, 0, false)
+}
+
+// How far the author's literal actually runs, so the diagnostic can quote
+// what was written rather than the prefix the scanner could read. `0b1012`
+// names itself, not `0b101`.
+fn num_lit_end(source, n: ValidOffset, pos: ValidOffset) =
+  if pos < n && is_alnum(byte_at(source, pos)) { num_lit_end(source, n, pos + 1) } else { pos }
+
+// A base prefix promises at least one digit. Zero digits is NumNoDigits —
+// the case that used to read as the value 0, silently, for `0x` and `0b`
+// alike.
+fn scan_prefixed(source, n: ValidOffset, pos: ValidOffset, col, base) = match scan_base_digits(source, n, pos, col, base, 0, 0) {
+  (p2, c2, value, digits) => if digits == 0 { NumNoDigits(p2, c2, base) } else { NumInt(p2, c2, value) },
+}
+
+// The one accumulator: base_digit answers IS-a-digit and WHICH-digit
+// together, so the extent and the value come from the same read.
+fn scan_base_digits(source, n: ValidOffset, pos: ValidOffset, col, base, acc, digits) = if pos >= n {
+  (pos, col, acc, digits)
+} else {
+  let b = byte_at(source, pos)
+  if b == 95 {
+    scan_base_digits(source, n, pos + 1, col + 1, base, acc, digits)
+  } else {
+    match base_digit(base, b) {
+      Some(d) => scan_base_digits(source, n, pos + 1, col + 1, base, acc * base_radix(base) + d, digits + 1),
+      None => (pos, col, acc, digits),
     }
-  } else {
-    scan_decimal(source, n, pos, col, is_float)
   }
-} else {
-  scan_decimal(source, n, pos, col, is_float)
 }
 
-// Decimal path — handles underscore separators and optional decimal
-// point. Float when one `.` is followed by at least one digit.
-fn scan_decimal(ref source, n: ValidOffset, pos: ValidOffset, col, is_float) = if pos >= n {
-  (pos, col, 10, is_float)
+// Decimal path — the same accumulation, plus the one `.` that makes a
+// float. A float's value is not accumulated here: parse_float owns the
+// mantissa/exponent walk and this scanner returns only its extent.
+fn scan_decimal(ref source, n: ValidOffset, pos: ValidOffset, col, acc, is_float) = if pos >= n {
+  if is_float { NumFloat(pos, col) } else { NumInt(pos, col, acc) }
 } else {
   let b = byte_at(source, pos)
-  if is_digit(b) || b == 95 {
-    // digit OR underscore separator
-    scan_decimal(source, n, pos + 1, col + 1, is_float)
+  if b == 95 {
+    scan_decimal(source, n, pos + 1, col + 1, acc, is_float)
+  } else if is_digit(b) {
+    scan_decimal(source, n, pos + 1, col + 1, acc * 10 + (b - 48), is_float)
   } else if b == 46 && !is_float && pos + 1 < n && is_digit(byte_at(source, pos + 1)) {
-    scan_decimal(source, n, pos + 1, col + 1, true)
+    scan_decimal(source, n, pos + 1, col + 1, acc, true)
+  } else if is_float {
+    NumFloat(pos, col)
   } else {
-    (pos, col, 10, is_float)
+    NumInt(pos, col, acc)
   }
-}
-
-// General hex/bin/oct digit accumulator. Accepts any byte passing
-// `pred(b)`, plus underscore separators. Terminates at the first byte
-// that is neither a pred-digit nor an underscore.
-fn scan_digits_pred(ref source, n: ValidOffset, pos: ValidOffset, col, pred) = if pos >= n {
-  (pos, col)
-} else {
-  let b = byte_at(source, pos)
-  if pred(b) || b == 95 { scan_digits_pred(source, n, pos + 1, col + 1, pred) } else { (pos, col) }
 }
 
 // Advance position over identifier characters. Returns `(pos, col)`.

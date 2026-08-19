@@ -28,6 +28,70 @@
 
 ---
 
+`Hβ.repr.option-of-word-niche` — NAMED 2026-08-18, by the landing that
+made the cost real. `base_digit(base, byte)` answers IS-this-a-digit and
+WHICH-digit together, which is the whole point of it — the split it
+replaced is where the lexer's two classifiers drifted apart and read
+0b1012 as 5. The honest shape is `Option(Int)`, and the constructor
+charge bills `Some(d)` once per scanned digit byte, so the row is
+Memory + Alloc and the scan allocates per digit. That is a
+REPRESENTATION cost, not a design one: an Option over a word has a free
+niche (a word-sized payload cannot use every bit pattern, and the
+absent case needs exactly one), so the gradient should carry it in a
+register with no record at all. Until it does, the charge is named here
+rather than declared away — the alternative, splitting the answer back
+into a predicate and a value to dodge the alloc, is the deleted bug
+returning to save an allocation. Rides the repr gradient (PLAN §5.U
+step 0/1); the measurement that would price it is the alloc count on a
+literal-dense compile, which nothing measures yet.
+
+`Hβ.query.cost-per-module` — NAMED 2026-08-18. The cost facet reports
+one SUM (`7 module(s) · 6352 source line(s) · 67301 node(s)`), so when
+the prelude-floor leg went RED this session the next question — WHICH
+module carries the lines — had no projection and was answered with
+`wc -l` over the seven names the modules facet had just printed. The
+answer mattered: src/types.mn alone is 3672 of the 6352, 57% of what a
+program that asks for nothing must process, which is the evidence
+`Hβ.driver.link-is-reachability` needs and the reason lexical ADTs
+belong in the lexer. The facet already walks the weave's NModule cells
+to count them; reporting the per-module split is the same walk not
+throwing its intermediate away. Sequenced with the reachability link
+work, whose progress it is the natural way to read.
+
+`Hβ.verify.comment-ref-ratchet-is-dark` — MEASURED 2026-08-18, one
+fact and no cause. `mentl check src/lexer.mn` reported
+`W_CommentRefUnresolved` on `scan_number`'s comment (backticked
+`base`), and `mentl query src/main.mn "type base"` answered *not
+found* — so the reference resolves nowhere in the whole-wheel link
+either. Yet `comment_refs_max: 0` holds and the census stderr the
+ratchet reads (`.build/m2cache/m2.err`, 60,989 bytes) carries **zero**
+`W_CommentRefUnresolved` lines. A ratchet pinned at 0 that reads 0
+from a leg emitting none is not holding anything. The solo checks emit
+them freely — types.mn alone showed seven — so the warning is real and
+the wheel-link path is where it goes missing. NEXT PROBE, and it must
+run before any fix: instrument or diff the two entry paths on ONE file
+with a known-unresolved reference, because the difference between them
+is the whole finding and every explanation for it so far (link-set
+size, reachability pruning, blob concatenation) is forward reasoning
+from code. Contrast: `catch_abort` warns solo and correctly does not
+warn in the link, because it genuinely resolves there — so the leg is
+not simply off.
+
+**KILL (2026-08-18) — "the prelude-floor red predates this iteration."**
+The frontier came back `370 pass / 1 red`, the leg six pins deep in
+`frontier: NOT RUN` blanks, and lib/ commits since the leg's birth
+showed added `import` lines from the per-module sweep. That is a
+complete, plausible story and it is wrong. Stashing the session's three
+source edits and re-running the leg against the previous boot measured
+**6359 — green**. The red was 6413 and it was mine: src/types.mn is 57%
+of the prelude floor, so ~40 lines of lexical ADT landing there pushed a
+bare program over a ceiling it had 41 lines of room under. Every step of
+the refuted story came from reading code and git history; the refutation
+took one stash and one leg. The floor now measures 6352, seven lines
+BELOW where the session found it, and the ceiling falls to 6360 to hold
+that. Recorded because the shape recurs: a rise adjacent to someone
+else's landing reads as theirs, and the stash is cheap.
+
 `Hβ.teach.severance-vocabulary-from-link` — STAMPED 2026-08-08 (found
 by asking the medium its own next move: `mentl teach src/main.mn`
 narrated the IDENTICAL suggestion — "add with !IO" — for every fn

@@ -2651,7 +2651,13 @@ for i in "${!compilers[@]}"; do
   # same trivial question. Born RED 2026-08-17 (unknown-query on the
   # prior boot); the ceiling was seen RED by setting it under the
   # measured 6307.
-  cost_ceiling=6400
+  # 6360 (2026-08-18, down from 6400): the floor measured 6352 after the
+  # numeric-scanner landing, seven lines below the 6359 that session
+  # started from. The old ceiling carried 41 lines of slack and that slack
+  # is exactly what let ~40 lines of lexical ADT land in src/types.mn —
+  # 57% of this floor — and only surface as RED after the fact. Held tight
+  # on purpose: a floor with room to grow is not a floor.
+  cost_ceiling=6360
   ct_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-bare-floor.mn" "cost" 2>/dev/null)
   ct_lines=$(printf '%s' "$ct_out" | grep -o '[0-9]* source line' | grep -o '[0-9]*' | head -1)
   if [ -n "$ct_lines" ] && [ "$ct_lines" -le "$cost_ceiling" ]; then

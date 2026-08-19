@@ -1143,13 +1143,14 @@ not misled:
   said "only `E_MissingModule` is armed" while the paragraph above it listed
   six — a contradiction inside one section, both wrong against the artifact
   (trued 2026-07-31 by reading `diag_refuses`' own arms; the eleventh
-  and twelfth armed 2026-08-12, the thirteenth 2026-08-18): THIRTEEN
-  classes refuse
+  and twelfth armed 2026-08-12, the thirteenth and fourteenth
+  2026-08-18): FOURTEEN classes refuse
   — EMissingModule, EHandlerStateShadowsOp, EDuplicateFnName,
   EDuplicateTypeName, EEffectUnhandled, ERefinementRejected,
   EOwnershipViolation, EMissingVariable, EOccursCheck,
   EDeclaredRowContradiction, EZeroDelayFeedback,
-  EComputedDelayDepth, EInitPerformsOwnOp — plus the hole gate,
+  EComputedDelayDepth, EInitPerformsOwnOp,
+  EMalformedNumericLiteral — plus the hole gate,
   which is the executable gate's own read rather than a `diag_refuses` arm.
   The remaining census classes (E_TypeMismatch and kin, name-dependent on
   partial-link paths) are the ratcheting work toward universal. Read the arms,

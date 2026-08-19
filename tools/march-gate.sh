@@ -239,7 +239,24 @@ if [ "$DO_MICROS" = 1 ]; then
       continue
     fi
     if [ $rc -ne 0 ]; then
-      echo "✗ micro $m: m2 COMPILE trap=$(grep -m1 -oE '!\S+' "$G/micro-$m.err" | head -1)"
+      # Say what happened, not what it looked like. This line used to
+      # print `trap=` plus whatever `!\S+` it could mine out of stderr,
+      # so a fixture that compiled to a clean DIAGNOSTIC was reported as
+      # "m2 COMPILE trap=!6+25+-." — the `!` mined from an effect row in
+      # the movers report. A diagnostic's name can lie (PLAN §9's own bug
+      # class) and here the gate was the one lying, about the two
+      # fixtures written to prove a new refusal class. A trap is named
+      # only when the stderr shows one; otherwise the first error line
+      # is the answer, and it usually names the fix.
+      first_err=$(grep -m1 -E ' error: ' "$G/micro-$m.err" | cut -c1-140)
+      if grep -q 'wasm trap' "$G/micro-$m.err"; then
+        echo "✗ micro $m: m2 COMPILE trapped (rc=$rc) — backtrace: $G/micro-$m.err"
+      elif [ -n "$first_err" ]; then
+        echo "✗ micro $m: m2 refused it (rc=$rc) — $first_err"
+        echo "    (a fixture that SHOULD be refused declares '// expect: refuse E_Class')"
+      else
+        echo "✗ micro $m: m2 COMPILE exit=$rc, no diagnostic — $G/micro-$m.err"
+      fi
       fail_m=$((fail_m+1)); continue
     fi
     if ! wt_asm "$G/micro-$m.wat" "$G/micro-$m.wasm" 2> "$G/micro-$m.w2e"; then

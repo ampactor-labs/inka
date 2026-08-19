@@ -1,0 +1,7 @@
+// expect: refuse E_MalformedNumericLiteral
+// A digit outside the literal's own base ENDED the literal and let the
+// rest lex as a second token: 0b1012 read 5 and ran, 0o1238 read 83 and
+// ran, 123abc reported a missing variable named after a fragment the
+// author never wrote. E_MalformedNumericLiteral refuses the executable —
+// a value the medium cannot read is not a proven value.
+fn main() = 0b1012

@@ -35,6 +35,44 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 016e00f38745aa79 · A RESULT IS NOT A FLOW CHANNEL.
+  CLEAN — m2 == m3 at 415107 lines, census 0, crown 59/0, frontier 372/0,
+  16.26s wall, peak 2274164 KB.
+  ▶ THE LEAK, found by the 6.3 sweep's untested carriers: a closure
+  performing E, handed OUT of an arm through `resume` and called under
+  `with !E`, checked clean and RAN (exit 7, the outer handler answering —
+  so the perform was real and the negation simply unenforced). The same
+  closure written inline was caught. The fanout branch, the other
+  untested carrier, refuses correctly.
+  ▶ THE ROOT was not the resume site. Writing `with Pure` on the op's
+  returned fn type made the identical program refuse, which proved the
+  subsumption machinery is reached there and works — there was nothing to
+  subsume UNDER. An unannotated fn type mints a free row VAR, and
+  `fn_arg_directional_positions` fires only on a concrete cap
+  (`row_cap_form`), deliberately: a var-tailed PARAM row is the
+  effect-polymorphic flow channel `map`'s `f` needs, and masking it once
+  convicted 297 wheel sites in one march.
+  ▶ THE RULE IS VARIANCE. A parameter is a demand the caller fills, so its
+  unannotated row stays a var. A result is a promise about what the
+  produced value may do — nothing flows in — so its unannotated row caps
+  at Pure. Every other latency carrier already behaved that way: field,
+  list element, tuple, variant, default param, handler state all refuse.
+  ▶ WHAT LANDED: `cap_result_fn_row` at `register_one_op`. Blast radius
+  measured FIRST and empty — no op in src or lib declares a fn-typed
+  return — which is why this was one landing and not an arc, and also why
+  the crucibles are its only oracle: m3 == m4 cannot see a form the wheel
+  never writes.
+  ▶ GATES: three crown crucibles, all seen RED first —
+  leak-resume-latent (explicit cap), sound-resume-transport (pure closure
+  admitted), leak-resume-latent-bare (the form a person actually types,
+  which ran at 7 before this and reports `E vs Pure` after).
+  ▶ REMAINDER: the other covariant positions — a plain fn's declared
+  fn-typed return, a record field's declared fn type — are the arc, each
+  needing its own blast-radius measurement. The parser mints all three
+  rows at ONE site because it cannot see the position, so each consumer
+  caps for itself. E_EffectMismatch remains unarmed, so the bare form
+  reports and still runs.
+
 - 2026-08-18 · no pin (tests + tools) · THE BATTERY FOR BLIND SPOTS HAD
   ONE. The syntax battery exists because the fixpoint, census and micros
   are green on what the wheel does and silent on everything else — and it

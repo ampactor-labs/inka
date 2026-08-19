@@ -8530,8 +8530,24 @@ fn effect_type_vars(ops) = ops |> map((op) => match op {
   (_, ptys, rty, _) => flatten(map(free_in_ty, ptys)) ++ free_in_ty(rty),
 }) |> flatten
 
+// VARIANCE at the op's result. A parameter's unannotated fn-type row is a
+// VAR on purpose — the effect-polymorphic flow channel `map`'s `f` needs,
+// and masking it convicted 297 wheel sites in one march. A RESULT is the
+// other direction: nothing flows in, so a var there is not a channel but an
+// unstated promise, and the arm that produces the value teaches the
+// declaration its row instead of meeting it. Measured 2026-08-18: a closure
+// performing E, resumed out and called under `with !E`, checked clean and
+// ran; writing `with Pure` on the same return made it refuse. Capping the
+// result's own row closes that by construction. No op in src or lib returns
+// a fn type, so the crucible pair is this rule's only oracle.
+fn cap_result_fn_row(t) = match t {
+  TFun(ps, r, row) => if row_cap_form(row) { t } else { TFun(ps, r, mk_ef_pure()) },
+  _ => t,
+}
+
 fn register_one_op(effect_name, eff_name, op) = match op {
-  (op_name, param_types, ret_type, _) => {
+  (op_name, param_types, raw_ret_type, _) => {
+    let ret_type = cap_result_fn_row(raw_ret_type)
     let params = build_ctor_params(param_types, 0)
     // Every op of the effect carries the SAME instance row (eff_name), so the
     // payload flows performer→handler at the install. Generalize over the

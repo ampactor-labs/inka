@@ -55,15 +55,23 @@ value may do, so its unannotated row should CAP at Pure. Every other
 latency carrier already behaves that way — field, list element, tuple,
 variant, default param, handler state all refuse — and resume is the
 one that does not.
-THE NEXT PROBE, which decides whether this is one landing or an arc:
-the blast radius. How many fn types in return position across src+lib are
-unannotated, and how many gain a row they cannot satisfy when the
-position caps? The census is the instrument (a declared-surface shape
-over return-position fn types), and the march's census is the arbiter.
-PINNED MEANWHILE: tests/crown/leak-resume-latent.mn and
-sound-resume-transport.mn, crown 58/0 — they hold the rule that DOES
-work (explicit cap → refusal, pure transport → admitted) so the corpus
-records it while the default remains open.
+THE OP-RESULT HALF LANDED 2026-08-18, pin 016e00f38745. The blast radius
+was measured first and is EMPTY: no op in src or lib declares a fn-typed
+return, so `cap_result_fn_row` at `register_one_op` risks nothing in the
+wheel — and that emptiness means the crucible pair is the rule's ONLY
+oracle, m3 == m4 being blind to a form the wheel never writes (tripwire
+3, which is why the pair was written first). The bare form now reports
+`E vs Pure` and crown is 59/0. It still RUNS: E_EffectMismatch is not
+armed, the name-dependent class §7 tracks toward universal refusal.
+THE REMAINING POSITIONS are the arc, and each needs its own blast-radius
+measurement because the wheel writes these in quantity where it writes
+no fn-typed op result: a plain fn's declared fn-typed RETURN, and a
+record field's declared fn type. Both are covariant by the same
+argument. Neither is measured. Do not generalise the cap across them on
+the strength of this landing — the parser mints all three rows at ONE
+site (parser.mn's arrow-type arm, `mk_ef_open` when `with` is absent)
+precisely because it cannot see the position, so each consumer has to
+cap for itself and each has its own population.
 
 `Hβ.tools.micro-battery-link-is-the-blob` — NAMED 2026-08-18, the
 remaining half of a hole whose other half closed the same day. Every

@@ -1,0 +1,23 @@
+// CROWN — the same leak as leak-resume-latent, with the row UNWRITTEN.
+// This is the form a person actually types: `give() -> (() -> Int)`, no
+// `with` clause. It checked clean and RAN (exit 7) until 2026-08-18,
+// because an unannotated fn-type row is a free VAR and the arm taught the
+// declaration its row rather than meeting it.
+//
+// A result is not a flow channel — nothing flows IN to a return position —
+// so its unannotated row caps at Pure and the closure's `+E` must subsume
+// under it. Expect E_EffectMismatch.
+effect E { op() -> Int }
+
+effect G { give() -> (() -> Int) }
+
+handler eh { op() => resume(7) }
+
+handler gh { give() => resume(() => op()) }
+
+fn body() with !E = {
+  let f = (give()) ~> gh
+  f()
+}
+
+fn main() = (body()) ~> eh

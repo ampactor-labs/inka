@@ -3222,14 +3222,34 @@ went in before the probe: a class with six arms and an env read, then
 the same read with the ops looked up by kind. Both marched CLEAN with
 census 0 and neither fired; both were reverted whole rather than left
 as a DiagKind nothing constructs.
-THE NEXT PROBE, and it decides the design: find the phase at which the
-effect ops ARE in the env, and whether that phase still has the fn's
-decl span. If it does, the check is one read there. If it does not, the
-honest form reads the STATEMENT LIST the way `pre_register_effect`
-does — but that only covers the blob path, and a manifest-linked
-program keeps lib's effect decls in a different module's AST, which is
-the blob-vs-user-path licence gap the arming comments already name.
-Until one of those is measured, no site is known to work.
+THE BANKED PROBE RAN 2026-08-18 AND CHANGED THE DESIGN: this is not a
+missing check, it is TWO RESOLUTIONS OF ONE NAME DISAGREEING. Measured,
+three readings on one program (`fn spawn(a) = 42` / `fn main() =
+spawn(7)`):
+  · at the DECL JUDGMENT (infer.mn's FnStmt arm, where every decl
+    passes) `env_lookup("spawn")` answers **FnScheme** — the user's own.
+    450 FnScheme / 12 NOT FOUND across the micro corpus, so the env is
+    fully readable at this phase, unlike pre-register.
+  · at the CALL the same name types against `() -> t with r` — the OP's
+    parameter, which is where `Int vs () -> t...` comes from.
+  · in the FINAL env, `mentl query <the user's own file> "type spawn"`
+    answers `(_0: () -> t with r) -> ThreadHandle with Thread(...)`.
+    The projection reports the library op's signature for a name the
+    file itself declares.
+So the user's registration is displaced — the env ends up holding the
+op, while the phase that judges the declaration still sees the fn. A
+diagnostic bolted to either reading would be describing half of an
+incoherence rather than the incoherence.
+THE NEXT PROBE, one build: instrument `env_extend` to print whenever a
+name's SchemeKind changes for an already-present name. That names the
+writer and the phase exactly, and the fix goes there — either the
+displacement is refused, or it is ordered and the loser is reported.
+Do not add a check at a reading site before that probe runs; two such
+checks have already been built and reverted on this entry (a six-arm
+EFnShadowsOp class with an env read at pre_register_stmt, then the same
+read by kind — both marched CLEAN with census 0, neither fired).
+`group_final_publish` is NOT the site either: it handles cycle groups
+only, 17 hits and `spawn` not among them.
 
 **KILL (2026-08-18) — "the arity check belongs at infer's proven-TFun
 read."** `infer_call_saturated` chases the callee to a bound TFun with

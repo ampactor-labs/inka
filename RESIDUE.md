@@ -28,6 +28,24 @@
 
 ---
 
+`Hβ.tools.micro-battery-link-is-the-blob` — NAMED 2026-08-18, the
+remaining half of a hole whose other half closed the same day. Every
+battery here except the frontier feeds its fixture in on stdin after
+concatenating RTLIBS — `memory, strings, lists, prelude`, four modules —
+while a real program links seven through its import DAG. The syntax
+battery's divergence is now gated (verify runs each fixture through the
+manifest too, and caught tests/syntax/labeled-args.mn declaring a name
+that WasiThreads owns, unreachable through the manifest since it was
+written). The MICRO battery has the same link and no such leg, and the
+reason is real rather than laziness: micros are wheel-shaped, many are
+`// expect: refuse` fixtures, and a blanket check-clean contract does not
+fit them. What WOULD fit is a per-fixture declaration of which link it
+means — the default being the manifest, since that is what a person runs.
+Measured while naming it: a manifest sweep of every fixture in
+tests/{frontier,micros,crown,rows,floors} finds exactly one
+E_FnShadowsOp, the deliberate one, so nothing else in the corpus is
+silently unreachable today. The peer is about the next one.
+
 `Hβ.tools.gate-stamp-is-uniform` — NAMED 2026-08-18. The frontier keeps a
 stamp (`.build/frontier-stamp`, the boot sha256 written on a 0-red run),
 so the board can say whether it measured THIS boot and the pre-commit

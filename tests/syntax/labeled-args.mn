@@ -7,6 +7,14 @@
 // This battery exists because the wheel never writes these forms: the
 // fixpoint, census and micro battery are all green on what the wheel
 // does and silent on everything else (§11 tripwire 3).
-fn spawn_task(priority, config, timeout_ms = 1000) = priority + config + timeout_ms
+//
+// The fn was called `spawn_task` until 2026-08-18, which is an op of the
+// WasiThreads effect — so through the MANIFEST this declaration was
+// unreachable and every call performed the op instead. It passed anyway,
+// because the battery concatenates four lib modules and threading is not
+// among them. E_FnShadowsOp caught it on the day it armed, and the
+// manifest leg beside this battery exists so the next one is caught by a
+// gate rather than by luck.
+fn queue_task(priority, config, timeout_ms = 1000) = priority + config + timeout_ms
 
-fn main() = spawn_task(priority = 5, config = 2, timeout_ms = 7)
+fn main() = queue_task(priority = 5, config = 2, timeout_ms = 7)

@@ -35,6 +35,33 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · no pin (tests + tools) · THE BATTERY FOR BLIND SPOTS HAD
+  ONE. The syntax battery exists because the fixpoint, census and micros
+  are green on what the wheel does and silent on everything else — and it
+  runs its fixtures through a four-module blob (RTLIBS: memory, strings,
+  lists, prelude) while a real program links seven through its import DAG.
+  ▶ FOUND by running all nine fixtures through the manifest and comparing
+  against their declared expectations: eight agreed, `labeled-args` wanted
+  14 and exited 1. Its fn was named `spawn_task`, which is an op of the
+  WasiThreads effect, so through the manifest the declaration was
+  unreachable and every call performed the op. It had passed since it was
+  written because threading is not in the blob.
+  ▶ E_FnShadowsOp, armed hours earlier in the same session, is what named
+  it — the class's first outing on a program nobody wrote to test it.
+  ▶ WHAT LANDED: a manifest leg beside the syntax battery. Every fixture
+  must also CHECK CLEAN through the real link; a form that behaves
+  differently in the two links is a finding either way. Seen RED against
+  the unfixed fixture, naming it exactly. The fixture's fn is `queue_task`
+  now, and it runs 14 in both links.
+  ▶ SWEPT while there: every fixture in tests/{frontier,micros,crown,rows,
+  floors} through the manifest — exactly one E_FnShadowsOp, the deliberate
+  one. Nothing else in the corpus is silently unreachable.
+  ▶ NAMED: `Hβ.tools.micro-battery-link-is-the-blob` — the micro battery
+  has the same link and no such leg, and a blanket check-clean contract
+  does not fit fixtures that are meant to refuse. The shape that fits is a
+  per-fixture declaration of which link it means, defaulting to the
+  manifest, because that is what a person runs.
+
 - 2026-08-18 · pin 62718b6e8cb3126f · ONE NAME, TWO KINDS. CLEAN — m2 ==
   m3 at 415042 lines, census 0, battery green, frontier 372/0, 15.52s
   wall, peak 2184164 KB against a 2310000 ceiling.

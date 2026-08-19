@@ -136,6 +136,36 @@ if C=$(wt_m2_ensure); then
     sout=$(tools/run-micro.sh "$sf" "$swant" "${RTLIBS[@]}" 2>/dev/null | grep -E '^(PASS|FAIL)' | tail -1)
     [[ "$sout" == PASS* ]] || { say "✗ syntax $s: ${sout:-no output}"; syn_bad=$((syn_bad+1)); }
   done
+  # THE SAME FIXTURES THROUGH THE MANIFEST. The battery above concatenates
+  # RTLIBS — four modules — and pipes the result in; a real program links
+  # seven through its import DAG, threading among them. So the battery built
+  # for surfaces the wheel never writes had a blind spot of its own, and it
+  # was hiding a broken fixture: tests/syntax/labeled-args.mn declared
+  # `fn spawn_task`, which is an op of WasiThreads, so through the manifest
+  # its function was unreachable and the op ran instead. It passed here for
+  # months because the blob omits threading (found 2026-08-18, the day
+  # E_FnShadowsOp armed — the class's first outing).
+  #
+  # The contract is agreement: a declared form that behaves differently in
+  # the two links is a finding either way. This leg can only CHECK (the raw
+  # wheel has no `run` verb — that is the shim), which is enough: a
+  # diagnostic through the manifest on a fixture that runs clean in the blob
+  # is exactly the divergence.
+  man_bad=0
+  for sf in tests/syntax/*.mn; do
+    [[ -e "$sf" ]] || continue
+    mout=$(wt_run --dir . "$C/m2.wasm" check "$sf" 2>&1 | grep -cE ' error: ' || true)
+    if [[ "$mout" -gt 0 ]]; then
+      say "✗ syntax(manifest) $(basename "$sf" .mn): $mout diagnostic(s) the blob link never sees"
+      man_bad=$((man_bad+1))
+    fi
+  done
+  if [[ "$man_bad" -gt 0 ]]; then
+    say "✗ syntax battery through the MANIFEST: $man_bad fixture(s) diverge between the two links"
+    fail=1
+  else
+    say "✓ syntax battery through the manifest: $syn_n fixture(s) check clean in the real link too"
+  fi
   if [[ "$syn_n" -eq 0 ]]; then
     say "✗ syntax battery: no fixtures — the directory PLAN §11 0.4 names is empty"
     fail=1

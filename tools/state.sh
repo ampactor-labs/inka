@@ -34,6 +34,34 @@ git log --oneline -3 | sed 's/^/    /'
 sc=$(git status --short); echo "    uncommitted: $([ -z "$sc" ] && echo none || echo "$(echo "$sc" | wc -l) file(s)")"
 [ -n "$sc" ] && echo "$sc" | sed 's/^/      /'
 
+# ─── WHICH BOOT-SUITE GATES HAVE MEASURED THIS BOOT ───────────────────
+# Runs in BOTH modes, before verify, because it is the cheapest true thing
+# the board can say and --quick used to say nothing at all. Paid for
+# 2026-08-18: an iteration grounded on `state.sh --quick`, read "verify
+# green" as "the board is green", built, marched twice, and only then
+# learned from the frontier that the prelude floor had gone RED — its own
+# doing. Six pins in a row had recorded `frontier: NOT RUN` in
+# PROVENANCE, a visible blank nobody was looking at, and the first thing
+# an iteration runs was the right place to look.
+#
+# A stamp is the gate's word that it ran against THIS boot. Only the
+# frontier keeps one today; the rest are named unstamped rather than
+# silently omitted, because an unreported gate stops being run (PLAN §11
+# tripwire 4 — the crown went eleven ledger entries unmentioned while a
+# leak rode the whole arc).
+echo "▸ STAMPS (which boot-suite gates have measured THIS boot)"
+boot_sha=$(sha256sum boot/mentl.wasm 2>/dev/null | cut -d' ' -f1)
+stamp=$(cat .build/frontier-stamp 2>/dev/null)
+if [ -n "$boot_sha" ] && [ "$stamp" = "$boot_sha" ]; then
+  echo "    frontier: green at this boot (${boot_sha:0:12})"
+else
+  echo "    frontier: NOT RUN at this boot — boot ${boot_sha:0:12}, stamp ${stamp:0:12}${stamp:+ (stale)}"
+  echo "              bash tools/frontier-gate.sh  ·  the pre-commit perimeter refuses a"
+  echo "              wheel commit without it, so this blank is a landing you cannot make"
+fi
+echo "    crown · proof-exactness · effect-identity · instrument: no stamp kept —"
+echo "              running them is the only way to know (Hβ.tools.gate-stamp-is-uniform)"
+
 echo "▸ VERIFY (micros + census — stamped)"
 bash tools/verify.sh || exit 1
 

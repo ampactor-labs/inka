@@ -28,6 +28,22 @@
 
 ---
 
+`Hβ.tools.gate-stamp-is-uniform` — NAMED 2026-08-18. The frontier keeps a
+stamp (`.build/frontier-stamp`, the boot sha256 written on a 0-red run),
+so the board can say whether it measured THIS boot and the pre-commit
+perimeter can refuse a wheel commit without it. Crown, proof-exactness,
+effect-identity and instrument keep none, so nothing — not the board, not
+the hook, not PROVENANCE — can distinguish "green" from "not run since
+the pin moved" for four of the six boot-suite gates. That is the exact
+shape §11 tripwire 4 records: the crown went eleven ledger entries
+unmentioned while a leak rode the arc, and nothing written was false. The
+stamp is six lines in frontier-gate.sh; the work is making it one thing
+every gate does rather than four copies, which is why it is named rather
+than pasted. Its own destiny is `mentl verify` owning the suite and the
+stamp being a graph fact about the pin instead of a file. Until then
+`state.sh` prints the four as explicitly unstamped, because a blank you
+can see is worth more than a silence.
+
 `Hβ.repr.option-of-word-niche` — NAMED 2026-08-18, by the landing that
 made the cost real. `base_digit(base, byte)` answers IS-this-a-digit and
 WHICH-digit together, which is the whole point of it — the split it

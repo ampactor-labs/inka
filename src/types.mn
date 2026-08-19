@@ -3154,18 +3154,21 @@ fn place_labeled(params, args, i, slots, cname: String) with GraphRead + Memory 
 // Pass 2 — fill positional (non-labeled) args into the next unfilled slot,
 // left-to-right, skipping slots a label already claimed. `cur` is the arg
 // cursor; `slot` advances past filled slots.
-fn place_positional(args, cur, slot, slots, n) with Memory = if cur >= len(args) {
+fn place_positional(args, cur, slot, slots, n) = if cur >= len(args) {
   slots
 } else {
   let arg = list_index(args, cur)
   match arg {
-    N(body, _, _) => match body {
+    N(body, aspan, _) => match body {
       NExpr(LabeledArg(_, _)) => place_positional(args, cur + 1, slot, slots, n),
       _ => {
         let free = next_free_slot(slots, slot, n)
         if free >= n {
-          // More positional args than params — arity is infer's concern; drop
-          // the overflow here (the prefix is already placed) and stop.
+          // An argument with no slot is the refusal, and it must be
+          // spoken HERE: dropping it is what makes every downstream count
+          // equal, so no later judgment can see the mismatch. The span is
+          // the surplus argument's own — the thing with no home.
+          report(EFnArityMismatch(n, len(args), aspan))
           slots
         } else {
           place_positional(args, cur + 1, free + 1, list_set(slots, free, arg), n)

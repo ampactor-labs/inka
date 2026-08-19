@@ -3187,7 +3187,51 @@ it is now the only unlit face of the family. Its honest gap is that a
 floor is a bare trap where a diagnostic belongs: the medium knows the
 callee is a local closure and can say so.
 
-`Hβ.lower.over-application-drops-surplus` — NAMED 2026-08-18, measured
+`Hβ.infer.mixed-positional-labeled-call` — NAMED 2026-08-18, found
+while controlling another fix. SYNTAX §«Labeled call arguments» declares
+the mixed form with a worked example — `spawn_task(5, config,
+timeout_ms = 5000)`, "positional + labeled override" — and it reports
+`E_UnknownArgLabel: no parameter named 'timeout' on 'spawn'` for a label
+that IS a declared parameter. The FULLY labeled form is correct
+(tests/syntax/labeled-args.mn runs 14), so the defect is in the mixed
+walk, not in label resolution generally: `place_labeled` claims named
+slots before `place_positional` fills the rest, and the mixed case is
+where the two passes meet. Measured PRE-EXISTING by swapping boots —
+identical output on the pin before the over-application landing and the
+pin after — rather than argued from adjacency, because this session
+punished that twice. Another wheel-invisible surface: the wheel writes
+no mixed call.
+
+**KILL (2026-08-18) — "the arity check belongs at infer's proven-TFun
+read."** `infer_call_saturated` chases the callee to a bound TFun with
+the args in hand, so both counts are present and the site looks
+correct by inspection. The check was written there, marched CLEAN, and
+changed nothing. An eprint at that read printed 1052 hits over the
+micro corpus, eight distinct shapes, and `len(args)` never once
+differed from `len(dps0)` — including for a call written with three
+arguments to a two-param fn, which arrived as `cname=add args=2
+dps0=2`. The surplus is dropped upstream in `fill_arg_slots`, whose
+slot buffer is sized by the parameter product, so the counts are equal
+by construction everywhere downstream and no judgment CAN see the
+mismatch. Two sites were read and reasoned about before the probe; the
+probe took one m2 build and ended it. Recorded because the shape is
+general: when a check cannot fire at a site where both facts appear to
+be present, the facts were reconciled earlier and the question is who
+reconciled them.
+
+`Hβ.lower.over-application-drops-surplus` — **RESOLVED 2026-08-18**, pin
+9244d5d002fc, and the home was wrong in this entry's own name: the drop
+is in `fill_arg_slots`/`place_positional` (src/types.mn), not in lower.
+`place_positional` now reports at the overflow, at the surplus
+argument's own span. Its old comment — "arity is infer's concern; drop
+the overflow here" — was the whole defect written down: infer could
+never make it its concern, because the drop is what made the counts
+equal. The remainder is ARMING, not detection: it reports as
+E_TypeMismatch, the declared code, which does not yet refuse the
+executable — the name-dependent class §7 already tracks toward universal
+refusal.
+
+`Hβ.lower.over-application-drops-surplus` (original text) — NAMED 2026-08-18, measured
 while proving its opposite. `fn add(a, b) = a + b` called as
 `add(1, 2, 3)` checks CLEAN with zero diagnostics and runs, returning 3:
 the surplus argument is evaluated and dropped. `partial_unfilled`'s own

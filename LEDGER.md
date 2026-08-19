@@ -35,6 +35,57 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-18 · pin 9244d5d002fc0932 · AN ARGUMENT WITH NO SLOT IS THE
+  REFUSAL. CLEAN — m2 == m3 at 414650 lines, census 0, battery green,
+  14.39s wall, peak 2183688 KB against a 2310000 ceiling.
+  ▶ THE DEFECT, measured: `add(1, 2, 3)` against a two-param fn checked
+  clean and ran, returning 3. `idf(41, 2)` returned 41. Four shapes, no
+  diagnostic anywhere.
+  ▶ TWO WRONG SITES BEFORE THE RIGHT ONE, and the record matters more
+  than the fix. FIRST I read `infer_call_arg_list`, whose `else` arm
+  judges a surplus arg against no param — plausible, and not the drop.
+  THEN I added the check at `infer_call_saturated`'s proven-TFun read,
+  where the callee is BOUND and the args are in hand: the perfect site by
+  inspection. It marched CLEAN and changed nothing. The probe is what
+  ended it — an eprint at that read printed 1052 hits across the whole
+  micro corpus, eight distinct shapes, and `len(args)` NEVER differed
+  from `len(dps0)`. Adding the callee name to the probe finished it:
+  `cname=add args=2 dps0=2` for a call written with three arguments.
+  ▶ THE ROOT is `fill_arg_slots` in src/types.mn: the slot buffer is
+  `make_list(len(params))`, so `place_positional` has nowhere to put a
+  surplus argument and its own comment said so — "More positional args
+  than params — arity is infer's concern; drop the overflow here". Infer
+  could never make it its concern, because the drop is precisely what
+  makes the counts equal downstream. Two subsystems each deferring to the
+  other, and the argument fell between them. Every judgment after that
+  point sees a saturated call, which is why a LIVE diagnostic class
+  (EFnArityMismatch, correct and firing for TFun-vs-TFun since long
+  before this) plus five probe shapes plus my own added check were all
+  silent together.
+  ▶ WHAT LANDED: `place_positional` reports at the overflow, at the
+  SURPLUS ARGUMENT's own span rather than the call's — the argument with
+  no home is the thing to point at. The class is unchanged; only the
+  reachability is new. Reports as E_TypeMismatch, which is the declared
+  code (SYNTAX names E_TypeMismatch and not E_FnArityMismatch; the
+  constructor is an internal refinement carrying the better message, and
+  `diag_code` maps it deliberately — the fixture header, not the arm, was
+  the wrong half).
+  ▶ MEASURED AFTER: all four over-application shapes report; the
+  saturated and prefix controls hold at 42. Wheel census 0 — the medium's
+  own source over-applies nothing.
+  ▶ THE REMAINDER is ARMING: E_TypeMismatch reports but does not refuse,
+  so `add(1, 2, 3)` still produces a runnable module. That is the
+  name-dependent class §7 already tracks toward universal refusal, not a
+  new gap.
+  ▶ FOUND ALONGSIDE, pre-existing (measured by swapping boots, identical
+  on both): the MIXED positional-then-labeled call form SYNTAX declares
+  with a worked example — `spawn(2, timeout = 40)` — reports
+  E_UnknownArgLabel for a label that IS a declared parameter. The fully
+  labeled form runs correctly (tests/syntax/labeled-args.mn, 14). Banked
+  as `Hβ.infer.mixed-positional-labeled-call`.
+  ▶ GATE: tests/micros/mn-refuse-over-application.mn, seen RED as a
+  clean-checking program that ran.
+
 - 2026-08-18 · pin bb317fe4ec6a7ce6 · UNDER-APPLICATION IS THE
   HOLE-PRODUCT. CLEAN — m2 == m3 at 414629 lines, census 0, battery
   green, 15.07s wall, peak 2281768 KB against a 2310000 ceiling.

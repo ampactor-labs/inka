@@ -4824,6 +4824,16 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
   let chased_f = graph_chase(fh)
   let masked = match chased_f {
     GNode(NBound(TFun(dps0, _, _)), _) => {
+      // AN ARITY CHECK CANNOT LIVE HERE, and the attempt is worth recording
+      // because the site looks perfect: the callee is BOUND to a TFun and
+      // the args are in hand, so both counts are right there. A probe over
+      // the whole micro corpus printed 1052 hits across eight distinct
+      // shapes and `len(args)` NEVER differed from `len(dps0)` — not even
+      // for `add(1, 2, 3)`, which arrived as `cname=add args=2 dps0=2`.
+      // The surplus is dropped upstream, in fill_arg_slots, whose slot
+      // buffer is sized by the parameter product; by the time any judgment
+      // runs the counts are equal by construction and the evidence is gone.
+      // The refusal lives at that drop (src/types.mn place_positional).
       replay_barrier_gate(dps0, args, span, 0)
       fn_arg_directional_positions(dps0, arg_handles, span, 0)
     },

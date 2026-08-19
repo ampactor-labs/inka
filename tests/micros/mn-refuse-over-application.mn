@@ -1,0 +1,10 @@
+// expect: refuse E_TypeMismatch
+// A call supplying more arguments than the parameter product has fields.
+// Measured silent 2026-08-18: this ran and exited 3 — the surplus argument
+// judged, then dropped, with no diagnostic anywhere. `idf(41, 2)` returned
+// 41 the same way. A parameter list is a product (SYNTAX §«Labeled call
+// arguments»), and a field that does not exist is the positional twin of
+// E_UnknownArgLabel, which refuses.
+fn add(a, b) = a + b
+
+fn main() = add(1, 2, 3)

@@ -3187,20 +3187,49 @@ it is now the only unlit face of the family. Its honest gap is that a
 floor is a bare trap where a diagnostic belongs: the medium knows the
 callee is a local closure and can say so.
 
-`Hβ.infer.mixed-positional-labeled-call` — NAMED 2026-08-18, found
-while controlling another fix. SYNTAX §«Labeled call arguments» declares
-the mixed form with a worked example — `spawn_task(5, config,
-timeout_ms = 5000)`, "positional + labeled override" — and it reports
-`E_UnknownArgLabel: no parameter named 'timeout' on 'spawn'` for a label
-that IS a declared parameter. The FULLY labeled form is correct
-(tests/syntax/labeled-args.mn runs 14), so the defect is in the mixed
-walk, not in label resolution generally: `place_labeled` claims named
-slots before `place_positional` fills the rest, and the mixed case is
-where the two passes meet. Measured PRE-EXISTING by swapping boots —
-identical output on the pin before the over-application landing and the
-pin after — rather than argued from adjacency, because this session
-punished that twice. Another wheel-invisible surface: the wheel writes
-no mixed call.
+`Hβ.infer.mixed-positional-labeled-call` — **RETRACTED 2026-08-18, the
+day after it was named.** Six shapes measured clean the next iteration:
+two-param all-labeled, mixed, all-positional; three-param mixed (SYNTAX's
+own worked example), defaulted-trailing, and label-skips-over. The mixed
+form has never been broken. The original probe used `fn spawn(...)` and
+the diagnostic was true — about a DIFFERENT `spawn`. Retracted per the
+verified-only law; what it was actually seeing is the entry below.
+
+`Hβ.infer.fn-shadows-a-linked-effect-op` — NAMED 2026-08-18, measured
+and then twice failed to build. A user program declaring `fn spawn(a) =
+42` beside lib/runtime/threading's `Thread` effect — whose ops include
+`spawn`, and which a bare program links — gets NO diagnostic about the
+collision. The declaration is unreachable: `spawn(7)` performs the op,
+and the user's body is judged against the OP's signature, so the only
+sign is `E_TypeMismatch: Int vs () -> t... with r...` pointing at their
+own call. Coverage is otherwise correct and was mapped: `map`, `fold`,
+`len`, `byte_at`, `str_slice`, `report`, `hash` all raise the armed
+E_DuplicateFnName; `eprint_string`, `mint`, `intern_str` are simply not
+in a user program's link, which is why they are silent. `spawn` is the
+one that IS linked and IS silent, because it is an effect OP and the
+duplicate-FN check correctly does not cover it. The class it wants is
+`EHandlerStateShadowsOp` one scope out — that class exists, is armed,
+and says the same thing about a handler's state field.
+WHERE IT CANNOT GO, measured: `pre_register_stmt`. The obvious site —
+its `None` arm, right where the fn is registered — reads
+`env_lookup(name)` and gets **NOT FOUND for every name**: a probe
+printed 225 lookups on one micro and not one resolved, so the env is
+not a readable source of truth at that phase. The walk's own comment
+says as much for a different reason ("keyed by THIS WALK's own
+seen-set, never by the env" — an existing FnScheme entry may be a prior
+judgment of the same tree under the incremental cursor). Two builds
+went in before the probe: a class with six arms and an env read, then
+the same read with the ops looked up by kind. Both marched CLEAN with
+census 0 and neither fired; both were reverted whole rather than left
+as a DiagKind nothing constructs.
+THE NEXT PROBE, and it decides the design: find the phase at which the
+effect ops ARE in the env, and whether that phase still has the fn's
+decl span. If it does, the check is one read there. If it does not, the
+honest form reads the STATEMENT LIST the way `pre_register_effect`
+does — but that only covers the blob path, and a manifest-linked
+program keeps lib's effect decls in a different module's AST, which is
+the blob-vs-user-path licence gap the arming comments already name.
+Until one of those is measured, no site is known to work.
 
 **KILL (2026-08-18) — "the arity check belongs at infer's proven-TFun
 read."** `infer_call_saturated` chases the callee to a bound TFun with

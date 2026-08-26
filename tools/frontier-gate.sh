@@ -70,10 +70,10 @@ case "$selection" in
 esac
 
 RTLIBS=(
-  "$ROOT/lib/runtime/memory.mn"
-  "$ROOT/lib/runtime/strings.mn"
-  "$ROOT/lib/runtime/lists.mn"
-  "$ROOT/lib/runtime/threading.mn"
+  "$ROOT/lib/memory.mn"
+  "$ROOT/lib/strings.mn"
+  "$ROOT/lib/lists.mn"
+  "$ROOT/lib/threading.mn"
   "$ROOT/lib/prelude.mn"
 )
 
@@ -81,8 +81,8 @@ RTLIBS=(
 # handler itself; its runs preopen /tmp for the checkpoint files.
 PERSIST_RTLIBS=(
   "${RTLIBS[@]}"
-  "$ROOT/lib/runtime/io.mn"
-  "$ROOT/lib/runtime/persist.mn"
+  "$ROOT/lib/io.mn"
+  "$ROOT/lib/persist.mn"
 )
 
 # The CFC pipeline links the DSP math substrate (math.mn), the comodulogram
@@ -91,8 +91,8 @@ PERSIST_RTLIBS=(
 # signal inline, so its run preopens nothing.
 CFC_RTLIBS=(
   "${RTLIBS[@]}"
-  "$ROOT/lib/runtime/io.mn"
-  "$ROOT/lib/runtime/math.mn"
+  "$ROOT/lib/io.mn"
+  "$ROOT/lib/math.mn"
   "$ROOT/lib/dsp/cfc.mn"
   "$ROOT/tests/frontier/cfc-demo/gen.mn"
 )
@@ -104,8 +104,8 @@ CFC_RTLIBS=(
 # bandpass sit on top. The run preopens /tmp for the recording.
 SIGNAL_RTLIBS=(
   "${RTLIBS[@]}"
-  "$ROOT/lib/runtime/io.mn"
-  "$ROOT/lib/runtime/math.mn"
+  "$ROOT/lib/io.mn"
+  "$ROOT/lib/math.mn"
   "$ROOT/lib/dsp/cfc.mn"
   "$ROOT/lib/dsp/signal.mn"
 )
@@ -115,7 +115,7 @@ SIGNAL_RTLIBS=(
 # runs preopen /tmp for the fixture.
 IO_RTLIBS=(
   "${RTLIBS[@]}"
-  "$ROOT/lib/runtime/io.mn"
+  "$ROOT/lib/io.mn"
 )
 
 # The real-workload crucible lib set: the base runtime plus the transcendental
@@ -124,7 +124,7 @@ IO_RTLIBS=(
 # nothing.
 MATH_RTLIBS=(
   "${RTLIBS[@]}"
-  "$ROOT/lib/runtime/math.mn"
+  "$ROOT/lib/math.mn"
 )
 
 total_pass=0
@@ -894,7 +894,7 @@ run_capability_workflow() {
 # surfaces both with their admission Reasons and refuses to guess — the
 # authored ?? survives the accepted edit action untouched.
 # lsp_frame — one Content-Length-framed JSON-RPC message (LSP wire format, per
-# lib/runtime/lsp_frame.mn). The length is the BYTE count of the body.
+# lib/lsp_frame.mn). The length is the BYTE count of the body.
 lsp_frame() {
   local body="$1"
   printf 'Content-Length: %d\r\n\r\n%s' "$(printf '%s' "$body" | wc -c)" "$body"
@@ -931,10 +931,19 @@ run_census() {
   local compiler="$1" dir="$2"
   local doc="$ROOT/tests/frontier/mn-census-verbs.mn"
   local ok=1 spec q line
+  # Spawn phase: the census queries fly concurrently into per-writer files;
+  # the judge below stays serial. Files carry the child pid so duplicate
+  # line numbers (record-pattern / -open both at 40) never clobber each other.
+  for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26' 'wildcard-zero:27' 'failure-mask:28' 'print-in-report:31' 'wildcard-fabricates:32' 'underscore-retain:33' 'flag-as-int:34' 'parallel-arrays:35' 'parallel-arrays:37' 'vtable-record:36' 'env-frame:38' 'default-param:39' 'record-pattern:40' 'record-pattern-open:40' 'declared-row-hof:41'; do
+    printf '%s\0' "$spec"
+  done | DOC="$doc" CENSUS_ART="$compiler" CENSUS_DIR="$dir" CENSUS_ROOT="$ROOT" \
+        xargs -0 -n 1 -P "${FRONTIER_POOL:-$(nproc)}" bash -c '
+          source "$CENSUS_ROOT/tools/wt-env.sh" >/dev/null 2>&1
+          q="${1%%:*}"; ln="${1##*:}"
+          wt_run --dir "$CENSUS_ROOT" "$CENSUS_ART" query "$DOC" "census $q" > "$CENSUS_DIR/census-$ln-$$.out" 2>/dev/null' census-child
   for spec in '|>:10' '<|:11' '><:12' '~>:13' 'anonymous:14' '<~:15' 'eta:24' 'effectful-lambda:25' 'iteration:26' 'wildcard-zero:27' 'failure-mask:28' 'print-in-report:31' 'wildcard-fabricates:32' 'underscore-retain:33' 'flag-as-int:34' 'parallel-arrays:35' 'parallel-arrays:37' 'vtable-record:36' 'env-frame:38' 'default-param:39' 'record-pattern:40' 'record-pattern-open:40' 'declared-row-hof:41'; do
     q="${spec%%:*}"; line="${spec##*:}"
-    wt_run --dir "$ROOT" "$compiler" query "$doc" "census $q" > "$dir/census-$line.out" 2>/dev/null
-    if ! grep -q "mn-census-verbs:$line" "$dir/census-$line.out"; then
+    if ! cat "$dir"/census-"$line"*.out 2>/dev/null | grep -q "mn-census-verbs:$line"; then
       ok=0; fail "census '$q' misses its own site (line $line; see $dir/census-$line.out)"
     fi
   done
@@ -1312,7 +1321,7 @@ for i in "${!compilers[@]}"; do
   #
   # It CANNOT use run_refusal, and finding out why cost this leg its first
   # red: run_refusal pipes the fixture in on stdin, which is the BLOB path,
-  # whose link has no lib/runtime/threading and therefore no collision to
+  # whose link has no lib/threading and therefore no collision to
   # find. The defect only exists through the MANIFEST, so the leg drives
   # the compiler the way a person does — a verb and a path.
   fso_err="$dir/fn-shadows-op.err"
@@ -2125,7 +2134,7 @@ for i in "${!compilers[@]}"; do
   # every closed-row argument. Seen RED on the prior boot: the quiet
   # thunk reported a second mismatch (hof 2, clean 1); here the quiet
   # face admits and runs while the noisy edge alone reports.
-  cat "${RTLIBS[@]}" "$ROOT/lib/runtime/io.mn" "$ROOT/tests/frontier/mn-hof-row-gate.mn" | wt_run "$compiler" > "$dir/hof-gate.wat" 2> "$dir/hof-gate.err" \
+  cat "${RTLIBS[@]}" "$ROOT/lib/io.mn" "$ROOT/tests/frontier/mn-hof-row-gate.mn" | wt_run "$compiler" > "$dir/hof-gate.wat" 2> "$dir/hof-gate.err" \
     && wt_asm "$dir/hof-gate.wat" "$dir/hof-gate.wasm" 2>/dev/null \
     && "$WT" run "${WT_RUN_FLAGS[@]}" "$dir/hof-gate.wasm" > /dev/null
   hof_rc=$?
@@ -2633,7 +2642,7 @@ for i in "${!compilers[@]}"; do
   md_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-usage-grade.mn" "modules" 2>/dev/null)
   if printf '%s' "$md_out" | grep -q "module(s) in the weave" \
      && printf '%s' "$md_out" | grep -q "prelude" \
-     && printf '%s' "$md_out" | grep -q "runtime/threading"; then
+     && printf '%s' "$md_out" | grep -q "threading"; then
     pass "modules facet: the weave's module set projects ($(printf '%s' "$md_out" | grep -o '[0-9]* module(s)' | head -1))"
   else
     fail "modules facet (got: $(printf '%s' "$md_out" | head -1))"
@@ -2767,16 +2776,36 @@ for i in "${!compilers[@]}"; do
   # census, fixpoint, and micros alike. That is §11 tripwire (3) — the
   # board is blind to what the wheel never does — and the standing
   # counter-measure is a gate that exercises it. Four import lines took
-  # lib/** to 0: runtime/io into dsp/cfc, test and net; runtime/math into
+  # lib/** to 0: io into dsp/cfc, test and net; math into
   # ml/tensor.
   sv_max=$(grep -E '^solo_violations_max:' "$ROOT/tools/verify-baseline.txt" | head -1 | cut -d: -f2 | tr -d ' ')
   sv_total=0
+  # One cursor per module, concurrently: each solo-check is process-isolated
+  # and judged by artifact, so flight parallelizes while the judge stays
+  # serial (bash counters cannot cross children). Roots travel as env vars,
+  # never positional args — xargs owns those.
+  sv_specs=()
   for svf in "$ROOT"/src/*.mn "$ROOT"/src/backends/*.mn \
-             "$ROOT"/lib/*.mn "$ROOT"/lib/runtime/*.mn "$ROOT"/lib/dsp/*.mn \
+             "$ROOT"/lib/*.mn "$ROOT"/lib/dsp/*.mn \
              "$ROOT"/lib/ml/*.mn "$ROOT"/lib/tutorial/*.mn; do
-    sv_n=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" check "$svf" 2>&1 | grep -cE 'E_MissingVariable')
-    sv_total=$((sv_total + sv_n))
+    sv_specs+=("$svf")
   done
+  sv_pool_dir=$(mktemp -d)
+  printf '%s\0' "${sv_specs[@]}" | SEED_ART="$compiler" SV_POOL_DIR="$sv_pool_dir" \
+        SV_ROOT="$ROOT" xargs -0 -n 1 -P "${FRONTIER_POOL:-$(nproc)}" bash -c '
+          source "$SV_ROOT/tools/wt-env.sh" >/dev/null 2>&1
+          h=$(printf %s "$1" | cksum | cut -d" " -f1)
+          n=$(wt_run --dir "$SV_ROOT" --dir /tmp --dir "$SV_ROOT::/mentl-home" "$SEED_ART" check "$1" 2>&1 | grep -cE "E_MissingVariable")
+          printf "%s\n" "$n" > "$SV_POOL_DIR/$h"' sv-child
+  sv_landed=$(find "$sv_pool_dir" -type f 2>/dev/null | wc -l)
+  if [ "$sv_landed" != "${#sv_specs[@]}" ]; then
+    rm -rf "$sv_pool_dir"
+    fail "per-module solo sweep: the flight dropped results ($sv_landed/${#sv_specs[@]} landed)"
+    sv_total=-1
+  else
+    sv_total=$(awk '{s+=$1} END{print s+0}' "$sv_pool_dir"/*)
+    rm -rf "$sv_pool_dir"
+  fi
   if [ -n "$sv_max" ] && [ "$sv_total" -le "$sv_max" ]; then
     pass "per-module solo sweep: $sv_total violation(s) within the $sv_max ceiling (0 retires the drift catalog)"
   else

@@ -49,6 +49,11 @@ fi
 WABT_FEATURE_FLAGS=(--enable-threads --enable-tail-call)
 W2W=(wat2wasm --debug-names "${WABT_FEATURE_FLAGS[@]}")
 
+# MENTL_RT_LIBS — the runtime-link set every battery fixture concatenates.
+# One home: verify.sh and march-gate.sh both linked the same four modules
+# from their own definitions, the parallel-arrays drift at gate scale.
+MENTL_RT_LIBS=(lib/memory.mn lib/strings.mn lib/lists.mn lib/prelude.mn)
+
 # wt_run <wasm> [args…] — run a wasm module under the canonical flags. Stdin/
 # stdout/stderr pass through untouched, so callers pipe the wheel in and capture
 # the WAT out exactly as before.

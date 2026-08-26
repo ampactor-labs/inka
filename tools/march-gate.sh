@@ -100,8 +100,9 @@ fi
 # parse_int, so the honest link set includes it — m2 emits the whole
 # input (no reachability-from-main yet, unlike the seed), so an
 # under-linked dependency surfaces as an undefined global at assemble.
-RT="lib/memory.mn lib/strings.mn lib/lists.mn lib/prelude.mn"
+RT="${MENTL_RT_LIBS[*]}"
 pass=0; fail=0
+fail_m=0
 # fail_m is the MICRO tier's counter and must exist outside the micros
 # block (set -u) because the exit sums BOTH tiers — the 2026-07-31 leash
 # proof caught the old `exit $fail` reading every all-rungs-green run as
@@ -209,66 +210,12 @@ if [ $fail = 0 ]; then
 fi
 
 # ── micros-through-m2 — the promoted stress tier (--micros only) ──────────
-# Same harness shape as rung()/rungrt() above: compile through m2.wasm,
-# assemble, run, compare exit. A named dig site per ✗ — not fixed here.
+# ONE battery, one home: the loop lives in tools/micro-battery.sh (full
+# expectation grammar, run-micro.sh harness). This gate contributes the
+# compiler under test — the candidate m2, not the pinned boot.
 if [ "$DO_MICROS" = 1 ]; then
   echo "── micros-through-m2 (each: m2-compile → wat2wasm → run → exit, +rt) ──"
-  pass_m=0; fail_m=0
-  for mf in tests/micros/mn-*.mn; do
-    m=$(basename "$mf" .mn); m=${m#mn-}
-    # The fixture's first line is the ONE expectation home (the Expect ADT the
-    # in-process battery reads): `// expect: N` runs to exit N; `// expect:
-    # refuse E_Class` passes iff the compile REPORTS the named class as an
-    # error. This reader honors the full grammar — a second reader knowing
-    # only half the contract failed four refuse fixtures as headerless.
-    want=$(sed -n '1s|^// expect: \([0-9]\+\)$|\1|p' "$mf")
-    refuse=$(sed -n '1s|^// expect: refuse \([A-Za-z_]\+\)$|\1|p' "$mf")
-    if [ -z "$want" ] && [ -z "$refuse" ]; then
-      echo "✗ micro $m: no '// expect: N' or '// expect: refuse E_*' header"; fail_m=$((fail_m+1)); continue
-    fi
-    src="$G/micro-$m.mn"
-    { cat $RT; cat "$mf"; } > "$src"
-    "$WT" run "${WT_RUN_FLAGS[@]}" "$GATE_WASM" < "$src" > "$G/micro-$m.wat" 2> "$G/micro-$m.err"
-    rc=$?
-    if [ -n "$refuse" ]; then
-      if grep -q "$refuse.*error:" "$G/micro-$m.err"; then
-        echo "✓ micro $m refuses $refuse"; pass_m=$((pass_m+1))
-      else
-        echo "✗ micro $m: expected $refuse to report (rc=$rc)"; fail_m=$((fail_m+1))
-      fi
-      continue
-    fi
-    if [ $rc -ne 0 ]; then
-      # Say what happened, not what it looked like. This line used to
-      # print `trap=` plus whatever `!\S+` it could mine out of stderr,
-      # so a fixture that compiled to a clean DIAGNOSTIC was reported as
-      # "m2 COMPILE trap=!6+25+-." — the `!` mined from an effect row in
-      # the movers report. A diagnostic's name can lie (PLAN §9's own bug
-      # class) and here the gate was the one lying, about the two
-      # fixtures written to prove a new refusal class. A trap is named
-      # only when the stderr shows one; otherwise the first error line
-      # is the answer, and it usually names the fix.
-      first_err=$(grep -m1 -E ' error: ' "$G/micro-$m.err" | cut -c1-140)
-      if grep -q 'wasm trap' "$G/micro-$m.err"; then
-        echo "✗ micro $m: m2 COMPILE trapped (rc=$rc) — backtrace: $G/micro-$m.err"
-      elif [ -n "$first_err" ]; then
-        echo "✗ micro $m: m2 refused it (rc=$rc) — $first_err"
-        echo "    (a fixture that SHOULD be refused declares '// expect: refuse E_Class')"
-      else
-        echo "✗ micro $m: m2 COMPILE exit=$rc, no diagnostic — $G/micro-$m.err"
-      fi
-      fail_m=$((fail_m+1)); continue
-    fi
-    if ! wt_asm "$G/micro-$m.wat" "$G/micro-$m.wasm" 2> "$G/micro-$m.w2e"; then
-      echo "✗ micro $m: ASSEMBLE — $(head -1 "$G/micro-$m.w2e" | sed 's/.*error/error/')"
-      fail_m=$((fail_m+1)); continue
-    fi
-    "$WT" run "${WT_RUN_FLAGS[@]}" "$G/micro-$m.wasm" > /dev/null 2> "$G/micro-$m.run.err"
-    got=$?
-    if [ "$got" = "$want" ]; then echo "✓ micro $m = $got"; pass_m=$((pass_m+1))
-    else echo "✗ micro $m: RUN exit=$got want=$want"; fail_m=$((fail_m+1)); fi
-  done
-  echo "── micros-through-m2: $pass_m pass / $fail_m fail ──"
+  tools/micro-battery.sh "$GATE_WASM" "micros-through-m2" || fail_m=1
 fi
 
 exit $((fail + fail_m))

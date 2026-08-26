@@ -21,7 +21,7 @@ source "$ROOT/tools/wt-env.sh"   # WT, WT_RUN_FLAGS, W2W — the one home
 # keyed-evidence dispatch scan, memory.mn) gets its def; one that uses
 # neither pays nothing (reachability-from-main drops the unused). A micro failing
 # only because the vocabulary was withheld is the harness lying, not a regression.
-RTLIBS=(lib/memory.mn lib/strings.mn lib/lists.mn lib/prelude.mn)
+RTLIBS=("${MENTL_RT_LIBS[@]}")
 
 say() { printf '%s\n' "$*"; }
 fail=0
@@ -58,26 +58,13 @@ BOOT="boot/mentl.wasm"
 export MENTL_BOOT="$BOOT"
 say "✓ compiler: $BOOT"
 
-# 2. Micro battery — each micro DECLARES its own expected exit as its first
-#    comment (`// expect: N`): the expectation lives ON the artifact it gates
-#    (a comment is graph content, SYNTAX §Comments — the medium reads its own
-#    gate), never in a side-table. A micro without the header is skipped
-#    loudly (a gate that cannot fail is no gate).
-for mf in tests/micros/mn-*.mn; do
-  m=$(basename "$mf" .mn); m=${m#mn-}
-  # A refuse contract (`// expect: refuse E_Class`) is the MEDIUM's to
-  # judge — `mentl test tests/micros` asserts it in-process (the Expect
-  # ADT); this bash loop keeps only the run-value executions, and its
-  # responsibility SHRINKS as contracts absorb (the dissolution ratchet).
-  if sed -n '1p' "$mf" | grep -q '^// expect: refuse '; then
-    say "· micro $m: refuse contract — judged by mentl test"
-    continue
-  fi
-  want=$(sed -n '1s|^// expect: \([0-9]\+\)$|\1|p' "$mf")
-  if [[ -z "$want" ]]; then say "✗ micro $m: no '// expect: N' header"; fail=1; continue; fi
-  out=$(tools/run-micro.sh "$mf" "$want" "${RTLIBS[@]}" 2>/dev/null | tail -1)
-  if [[ "$out" == PASS* ]]; then say "✓ micro $m=$want"; else say "✗ micro $m: ${out:-no output}"; fail=1; fi
-done
+# 2. Micro battery — ONE loop, one home (tools/micro-battery.sh): the full
+#    expectation grammar (run values AND refuse contracts, the medium reads
+#    its own gate) against the pinned boot. The refuse contracts this gate's
+#    old loop skipped loudly are judged exec-side now; the in-process
+#    contract battery in 2b is the second channel, not the only one.
+say "· micro battery (tests/micros through the pinned boot)..."
+if ! tools/micro-battery.sh "$BOOT" "micros-through-boot"; then fail=1; fi
 
 # 2b. The contract battery — the medium enforcing every fixture's own
 #     contract (run AND refuse grammars) in one process. A FAILC / FAILR /

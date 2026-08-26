@@ -6,6 +6,9 @@
 # Usage: tools/run-micro.sh <micro.mn> [expected_exit] [lib...]
 #   tools/run-micro.sh tests/micros/mn-ev4.mn 57
 #   tools/run-micro.sh tests/micros/mn-eq.mn 73 lib/memory.mn lib/strings.mn lib/lists.mn
+#   tools/run-micro.sh tests/micros/mn-hole.mn refuse:E_Hole
+# The expectation grammar has ONE home, this arg: `N` runs to exit N;
+# `refuse:E_Class` passes iff the compile REFUSES with that class named.
 set -u
 MICRO="$1"; EXPECT="${2:-}"
 shift 2 2>/dev/null || shift 1
@@ -36,6 +39,21 @@ esac
 cat "${LIBS[@]}" "$MICRO" 2>/dev/null | wt_run "$BOOT" > "$base.wat" 2> "$base.err"
 compile_exit=$?
 diags=$(grep -c '^[EW]_' "$base.err" || true)
+# The refuse contract: the diagnostic channel must NAME the class as an
+# error. (The raw stdin-compile's exit policy — it reports E_ errors and
+# still exits 0 — is the wheel seam named at LEDGER; the contract both
+# prior channels judged is class-reported, so this reader matches that.)
+case "$EXPECT" in
+  refuse:E_*)
+    cls="${EXPECT#refuse:}"
+    if grep -q "$cls.*error:" "$base.err"; then
+      echo "PASS $MICRO: refuses $cls"; exit 0
+    fi
+    if [ "$compile_exit" -eq 0 ]; then
+      echo "FAIL(refuse) $MICRO: compiled clean — $cls never fired"; exit 1
+    fi
+    echo "FAIL(refuse) $MICRO: refused, but $cls not named:"; tail -4 "$base.err"; exit 1 ;;
+esac
 if [ $compile_exit -ne 0 ]; then
   echo "FAIL(compile) $MICRO: compiler exit=$compile_exit diags=$diags"
   tail -4 "$base.err"; exit 1

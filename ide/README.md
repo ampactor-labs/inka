@@ -33,7 +33,7 @@ Run it:
 
 THE SERVER IS THE WHEEL. `mentl space` is the compiler's own verb — an
 HTTP/1.1 file server in src/main.mn (the space arms), speaking WASI
-preview1 sockets (lib/runtime/net.mn: sock_accept + poll_oneoff over a
+preview1 sockets (lib/net.mn: sock_accept + poll_oneoff over a
 listener the install shim preopens with -S tcplisten; connections are
 plain fds). The serve.mn/serve.sh scaffold this absorbed is git
 archaeology. By hand, from the repo root:
@@ -44,7 +44,7 @@ The isolation headers exist for one reason: the compiler's memory is
 SHARED (the threading substrate), and browsers require cross-origin
 isolation (COOP/COEP) for shared WebAssembly memory. Every response the
 Mentl server writes carries the pair; the page also fetches
-lib/runtime/*.mn + lib/prelude.mn from the repo to link the runtime the
+lib/*.mn + lib/prelude.mn from the repo to link the runtime the
 way tools/run-micro.sh does.
 
 The page is `mentl edit` (`docs/MENTL_EDIT.md`) in its first real form,

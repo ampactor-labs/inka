@@ -29,11 +29,11 @@
 // preopens per process; a spawning (shared-memory) module's heap line lives
 // in the image at cell 64 and restores consistently, but persisting one
 // mid-spawn is Phase C's fusion work, not claimed here.
-import runtime/memory
+import memory
 
-import runtime/strings
+import strings
 
-import runtime/io
+import io
 
 // A durable-branch ticket is opaque to its consumer. The handler owns the
 // current in-image index representation; the effect surface preserves only the

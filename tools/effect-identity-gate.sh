@@ -31,9 +31,9 @@ expect_count 'DSP alloc_buffer residue' 0 '\balloc_buffer\b'
 
 M="${GATE_WASM:-${MENTL_BOOT:-boot/mentl.wasm}}"
 RTLIBS=(
-  lib/runtime/memory.mn
-  lib/runtime/strings.mn
-  lib/runtime/lists.mn
+  lib/memory.mn
+  lib/strings.mn
+  lib/lists.mn
   lib/prelude.mn
 )
 out=$(MENTL_BOOT="$M" tools/run-micro.sh \

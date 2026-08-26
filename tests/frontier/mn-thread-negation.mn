@@ -1,6 +1,6 @@
 // !Thread transitivity: worker performs Thread's spawn; f declares
 // !Thread and reaches it through a call — the refusal is transitive.
-import runtime/threading
+import threading
 
 fn worker() = spawn(() => 1)
 fn f() with !Thread = match worker() {

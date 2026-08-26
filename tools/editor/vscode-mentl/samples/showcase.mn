@@ -10,17 +10,17 @@
 
 // ─── Imports (Primitive #1: Graph + Env) ───────────────────────────
 import types
-import runtime/strings
+import strings
 import dsp/spectral {fft, ifft, window}
 
 // ─── Algebraic Data Types ──────────────────────────────────────────
-type Option<A>
-  = Some(A)
+type Option(a)
+  = Some(a)
   | None
 
-type Tree<A>
+type Tree(a)
   = Leaf
-  | Branch(Tree<A>, A, Tree<A>)
+  | Branch(Tree(a), a, Tree(a))
 
 type Color
   = Red
@@ -30,7 +30,7 @@ type Color
 
 // ─── Refinement Types (Primitive #6: Verify) ───────────────────────
 type Sample = Float where -1.0 <= self <= 1.0
-type NonEmpty<A> = List<A> where len(self) > 0
+type NonEmpty(a) = List(a) where len(self) > 0
 type Even = Int where self % 2 == 0
 type ValidPort = Int where self >= 1024 && self <= 65535
 
@@ -45,7 +45,7 @@ fn greet(u: {name: String, ...}) -> String =
   "Hello, " ++ u.name
 
 /// Row polymorphism with bound rest variable `R`.
-fn extend(base: {name: String, ...R}, age: Int) -> {name: String, age: Int, ...R} =
+fn extend(base: {name: String, ...r}, age: Int) -> {name: String, age: Int, ...r} =
   {...base, age: age}
 
 /// Nominal record type.
@@ -69,10 +69,10 @@ effect Sample(rate: Int) {
   current_sample() -> Float       @resume=OneShot
 }
 
-/// Generic effect — `State<Int>` and `State<String>` are distinct.
-effect State<S> {
-  get() -> S                      @resume=Either
-  put(s: S)                       @resume=OneShot
+/// Generic effect — `State(Int)` and `State(String)` are distinct.
+effect State(s) {
+  get() -> s                      @resume=Either
+  put(s: s)                       @resume=OneShot
 }
 
 /// Effect with budget semantics.
@@ -84,27 +84,27 @@ effect Budget(limit: Int) {
 
 /// Pure handler — no config, no state.
 handler log_to_stderr {
-  log(msg) => perform write_stderr(msg); resume(()),
+  log(msg) => { write_stderr(msg); resume() },
 }
 
 /// Handler with config (URL captured at install site).
 handler websocket_sink(url: String) {
-  emit(ev) => perform ws_send(url, encode(ev)); resume(()),
+  emit(ev) => { ws_send(url, encode(ev)); resume() },
 }
 
 /// Handler with state (counter evolves via `with` on resume).
 handler counter with n = 0 {
-  inc() => resume(()) with n = n + 1,
+  inc() => resume() with n = n + 1,
   get() => resume(n),
 }
 
 /// Handler with both config AND state.
 handler bounded_log(prefix: String) with count = 0, max = 100 {
   log(msg) => {
-    if count >= max { resume(()) }
+    if count >= max { resume() }
     else {
-      perform write_stderr(prefix ++ ": " ++ msg)
-      resume(()) with count = count + 1
+      write_stderr(prefix ++ ": " ++ msg)
+      resume() with count = count + 1
     }
   },
 }
@@ -112,8 +112,8 @@ handler bounded_log(prefix: String) with count = 0, max = 100 {
 /// Handler with negation guard — arms cannot recurse through `consume`.
 handler affine_ledger with !Consume {
   consume(name, span) => {
-    perform record_consumption(name, span)
-    resume(())
+    record_consumption(name, span)
+    resume()
   },
 }
 
@@ -146,13 +146,13 @@ fn borrow(ref data: Buffer) -> Summary =
   data |> summarize
 
 /// Generic function with type parameters.
-fn map<A, B>(f: A -> B, xs: List<A>) -> List<B> = ?
+fn map(f: a -> b, xs: List(a)) -> List(b) = ?
 
 /// Identity with explicit Pure declaration.
-fn identity<A>(x: A) with Pure = x
+fn identity(x: a) -> a with Pure = x
 
 /// Effect negation — proves ABSENCE of IO and Alloc.
-fn safe_divide(a: Int, b: Int) with !IO, !Alloc -> Option<Int> =
+fn safe_divide(a: Int, b: Int) -> Option(Int) with !IO + !Alloc =
   if b == 0 { None }
   else { Some(a / b) }
 
@@ -178,11 +178,11 @@ fn demo_labeled() = {
 }
 
 /// Higher-rank parameter — polymorphism that crosses scopes.
-fn run_with<E>(f: fn() -> () with E) = f()
+fn run_with(f: () -> () with e) = f()
 
 /// Parameterized effect in with-clause.
 fn audio_loop() with Sample(44100) + IO + !Alloc =
-  perform Sample.tick()
+  Sample.tick()
 
 // ─── Anonymous Functions / Lambdas ────────────────────────────────
 fn demo_lambdas() = {
@@ -307,7 +307,7 @@ fn capability_stack(source) =
     ~> diagnostics_handler
 
 // ─── Match Expressions ───────────────────────────────────────────
-fn demo_match(opt: Option<Int>, list: List<String>, user, tree) = {
+fn demo_match(opt: Option(Int), list: List(String), user, tree) = {
   // Basic ADT match
   let result = match opt {
     Some(v) => v,
@@ -374,7 +374,7 @@ fn classify(x: Int) -> String =
 /// Unit-returning if (no else) — legal when body type is ().
 fn maybe_log(verbose: Bool, msg: String) with Console =
   if verbose {
-    perform Console.print(msg)
+    Console.print(msg)
   }
 
 // ─── Handle Expression ──────────────────────────────────────────
@@ -382,8 +382,8 @@ fn maybe_log(verbose: Bool, msg: String) with Console =
 /// Block form: handle { body } with handler.
 fn demo_handle_block() = {
   let result = handle {
-    perform Console.print("hello")
-    let line = perform Console.read_line()
+    Console.print("hello")
+    let line = Console.read_line()
     line ++ " world"
   } with websocket_sink("wss://example.com")
 
@@ -483,7 +483,7 @@ fn demo_numbers() = {
 }
 
 // ─── Indexing ────────────────────────────────────────────────────
-fn demo_indexing(argv: List<String>, matrix: List<List<Int>>) = {
+fn demo_indexing(argv: List(String), matrix: List(List(Int))) = {
   let first = argv[0]
   let cell = matrix[1][2]
   let tup = (10, 20, 30)[1]
@@ -494,12 +494,12 @@ fn demo_indexing(argv: List<String>, matrix: List<List<Int>>) = {
 fn pure_fn(x: Int) with Pure = x + 1
 fn no_io(x: Int) with !IO = x * 2
 fn pure_no_alloc(x) with !Alloc + !IO = x
-fn multi_effect(x: Int) with Console + State<Int> + !IO =
-  perform Console.print(int_to_str(x))
+fn multi_effect(x: Int) with Console + State(Int) + !IO =
+  Console.print(int_to_str(x))
 
 /// Parameterized effects in with-clauses.
 fn audio_stage(samples) with Sample(44100) + !Alloc + IO =
-  perform Sample.tick()
+  Sample.tick()
 
 // ─── Holes (Primitive #8: Productive Under Error) ────────────────
 
@@ -515,7 +515,7 @@ fn unfinished_pipeline(data) =
     |> emit
 
 /// Holes in match arms — productive under error.
-fn partial_handler(x: Option<Int>) -> Int =
+fn partial_handler(x: Option(Int)) -> Int =
   match x {
     Some(n) => n * 2,
     None => ??,

@@ -23,6 +23,6 @@ That is why `lib/dsp/signal.mn`'s bandpass is a single-instance conditioner and
 the comodulogram's per-bin analysis is the windowed DFT, not a `<~` bank.
 
 Run one through the pinned boot: source `tools/wt-env.sh`, then
-`cat lib/runtime/{memory,strings,lists,threading}.mn lib/prelude.mn
-lib/runtime/math.mn tests/repro-wf/wf-15fn-fails.mn | wt_run boot/mentl.wasm`,
+`cat lib/{memory,strings,lists,threading}.mn lib/prelude.mn
+lib/math.mn tests/repro-wf/wf-15fn-fails.mn | wt_run boot/mentl.wasm`,
 assemble with `wt_asm`, and run.

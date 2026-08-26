@@ -2,7 +2,7 @@
 //
 // Per MV-LSP-adapter walkthrough §1.1 (commit 4d0fce1). Layer A of
 // the LSP transport stack: byte ↔ frame conversion. Layer B (JSON
-// parse/serialize) lives in lib/runtime/json.mn; Layer C
+// parse/serialize) lives in lib/json.mn; Layer C
 // (lsp_adapter handler + dispatch) lives in src/lsp.mn.
 //
 // LSP wire format (per Microsoft LSP spec):
@@ -11,16 +11,16 @@
 //   \r\n
 //   <N bytes of JSON body>
 //
-// Substrate composes on read_chunk (lib/runtime/io.mn) for byte-at-a-
+// Substrate composes on read_chunk (lib/io.mn) for byte-at-a-
 // time stdin reading. Honest scope: LSP messages are typically <16 KB;
 // per-byte reads are O(N) but not a perf bottleneck for editor traffic.
 // Buffered framing (BatchedFrame peer sub-handle) lands when high-
 // throughput surfaces (web playground push-streams) need it.
 import types
 
-import runtime/io
+import io
 
-import runtime/strings
+import strings
 
 // LspFrame — one parsed JSON-RPC message body. EOF distinguishes
 // stdin-closed (clean session termination) from empty body. Per
@@ -32,7 +32,7 @@ type LspFrame
   | LspFrameEof
 
 // ─── Header parsing — accumulate bytes into a String until \r\n\r\n ───
-// Byte-at-a-time reads compose on read_one_byte (lib/runtime/io.mn).
+// Byte-at-a-time reads compose on read_one_byte (lib/io.mn).
 //
 // read_lsp_frame — entry point. Read header section (until \r\n\r\n),
 // parse Content-Length, read body bytes. Returns LspFrameEof if stdin

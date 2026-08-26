@@ -1,4 +1,4 @@
-import runtime/io
+import io
 
 // test.mn — testing IS a handler swap
 //

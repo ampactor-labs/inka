@@ -6,7 +6,7 @@
 // path rides the same capture-resolution ladder ordinary exprs use).
 // The let-local control shape is wat_to_file's documented caveat; this
 // fixture graduates to a registered leg with the root fix.
-import runtime/io
+import io
 
 effect Out {
   put(s: String)

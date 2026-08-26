@@ -237,8 +237,70 @@ function makeFan(q, tids, pool) {
   return { spawn, drain };
 }
 
+let residentSession = null;
+
 HOST.listen(async (msg) => {
-  if (msg.role === "run") {
+  if (msg.role === "session-init") {
+    const { module, memPages, vfs, stubSpawn, dbg } = msg;
+    DEBUG = !!dbg;
+    let memory = null, lastE = null;
+    try {
+      for (const p of [memPages || 16384, 8192]) {
+        try { memory = new WebAssembly.Memory({ initial: p, maximum: 65536, shared: true }); break; }
+        catch (e) { lastE = e; }
+      }
+      if (!memory) throw (lastE || new Error("Failed to allocate shared WebAssembly.Memory"));
+      const tids = new Int32Array(new SharedArrayBuffer(4));
+      Atomics.store(tids, 0, 1);
+      const sessionVfs = Object.assign({}, vfs || {});
+      let q = null, pool = null, fan = null;
+      if (!stubSpawn) {
+        q = qMake();
+        pool = makePool(POOL_N, { role: "arm", module, memory, tids, q, vfs: sessionVfs, dbg: DEBUG });
+        await pool.ready;
+        fan = makeFan(q, tids, pool);
+      }
+      residentSession = { module, memory, tids, q, pool, fan, vfs: sessionVfs, stubSpawn: !!stubSpawn };
+      HOST.post({ k: "session-ready" });
+    } catch (e) {
+      HOST.post({ k: "session-error", error: String((e && e.message) || e) });
+    }
+  } else if (msg.role === "session-call") {
+    if (!residentSession) {
+      HOST.post({ k: "session-reply", id: msg.id, exit: 1, out: "", err: "no resident session active\n", trapped: "no session", tasks: 0 });
+      return;
+    }
+    const { id, argv, stdin, vfsDelta } = msg;
+    if (vfsDelta) {
+      Object.assign(residentSession.vfs, vfsDelta);
+    }
+    let trapped = null, exit = 0;
+    new Uint8Array(residentSession.memory.buffer).fill(0);
+    Atomics.store(residentSession.tids, 0, 1);
+    const shim = makeShim({
+      memory: residentSession.memory,
+      argv: argv || [],
+      stdin: stdin || null,
+      vfs: residentSession.vfs,
+      spawnFn: residentSession.stubSpawn ? (() => -1) : ((a) => { const t = residentSession.fan.spawn(a); return t; }),
+    });
+    try {
+      const inst = await WebAssembly.instantiate(residentSession.module, shim.imports);
+      inst.exports._start();
+    } catch (e) {
+      if (e && e.exitCode !== undefined) exit = e.exitCode;
+      else trapped = String((e && e.message) || e);
+    }
+    const out = td.decode(cat(shim.out));
+    const err = td.decode(cat(shim.err));
+    HOST.post({ k: "session-reply", id, exit, out, err, trapped, tasks: 0 });
+  } else if (msg.role === "session-close") {
+    if (residentSession && residentSession.pool) {
+      residentSession.pool.killAll();
+    }
+    residentSession = null;
+    HOST.post({ k: "session-closed" });
+  } else if (msg.role === "run") {
     const { module, memPages, argv, stdin, vfs, stubSpawn } = msg;
     DEBUG = !!msg.dbg;
     let memory = null, trapped = null, exit = 0, fan = null, shim = null;

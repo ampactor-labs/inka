@@ -18,7 +18,7 @@
 // of this compile-time unify check: the continuation record's LAST word is
 // its FROZEN WORLD (the live chain head at reify — the world-as-value
 // arc's R4), resume rebinds through it (LResumeK), and the Persist handler
-// (lib/runtime/persist.mn) gates the file boundary by a name-level chain
+// (lib/persist.mn) gates the file boundary by a name-level chain
 // fingerprint, refusing a divergent world and patching an equivalent one
 // to the live chain. Law 7 — this OneShot micro stays byte-identical.
 //

@@ -29,13 +29,13 @@ import query
 
 import driver
 
-import runtime/json
+import json
 
-import runtime/lsp_frame
+import lsp_frame
 
-import runtime/strings
+import strings
 
-import runtime/io
+import io
 
 import oracle
 

@@ -33,7 +33,7 @@
 //   FS_OFLAGS_TRUNC       = 0x8 — truncate to zero on open
 import types
 
-import runtime/strings
+import strings
 
 // ─── The WASI effect — the host boundary IS an effect ─────────
 //
@@ -58,7 +58,7 @@ effect WASI {
   // The socket pair (2026-07-10, mentl serves natively): the host preopens
   // the LISTENER (wasmtime -S tcplisten); sock_accept yields a connection fd
   // the fd_* ops above already speak; poll_oneoff is the honest blocking
-  // wait both nonblocking ends demand (lib/runtime/net.mn wraps them).
+  // wait both nonblocking ends demand (lib/net.mn wraps them).
   sock_accept(Int, Int, Int) -> Int
   poll_oneoff(Int, Int, Int, Int) -> Int
   args_sizes_get(Int, Int) -> Int

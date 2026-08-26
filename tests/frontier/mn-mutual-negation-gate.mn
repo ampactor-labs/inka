@@ -27,7 +27,7 @@
 // predicts this fixture green under it). A D9 banked gate; it goes
 // green when the swap lands, and building any cut from this comment
 // is the condemned-forms clause violated.
-import runtime/memory
+import memory
 
 fn ping(n) with !Mutate = if n <= 0 { 0 } else { pong(n - 1) }
 

@@ -41,13 +41,13 @@ import canon
 
 import own
 
-import runtime/imap
+import imap
 
-import runtime/io
+import io
 
 import parser
 
-import runtime/io
+import io
 
 import verify
 
@@ -6575,8 +6575,8 @@ fn infer_binop(handle, op, lh, rh, span: ValidSpan) = {
 
 // The concat primitive's row, read LIVE from its own scheme. Never a
 // fabricated `Memory + Alloc` here: the vocabulary declares that row at
-// str_concat (lib/runtime/strings.mn:183) and list_concat
-// (lib/runtime/lists.mn:234), and a second home for it in infer is the
+// str_concat (lib/strings.mn:183) and list_concat
+// (lib/lists.mn:234), and a second home for it in infer is the
 // re-derivation this fix exists to delete.
 //
 // No element-type dispatch: the row is INVARIANT under the representation
@@ -8993,7 +8993,7 @@ fn usage_summary_lookup(entries, name: String, i) = if i >= len(entries) {
 // by name, and re-scanning it linearly per lookup is the Carried-Truth violation
 // at the performance scale (§5.O — the same str_hash index the env resolution
 // uses). The index is built once per round (O(N)); every summary_of is O(1).
-// The name → resume-grade index is the shared smap (lib/runtime/imap.mn);
+// The name → resume-grade index is the shared smap (lib/imap.mn);
 // a miss is UZero (the identity grade), unwrapped from smap's Option. Reverse
 // insertion keeps the first-match grade byte-identical to the old linear scan
 // when a nested fn shadows a top-level name.

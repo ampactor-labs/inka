@@ -18,10 +18,10 @@ source "$ROOT/tools/wt-env.sh"   # WT, WT_RUN_FLAGS, W2W — the one home
 # The runtime trio IS the vocabulary every real .mn program reaches for, so
 # a micro compiled WITHOUT it is the abnormal case, not the default. Link it for
 # every micro: a micro that calls str_concat/str_eq (strings) or ev_lookup (the
-# keyed-evidence dispatch scan, runtime/memory.mn) gets its def; one that uses
+# keyed-evidence dispatch scan, memory.mn) gets its def; one that uses
 # neither pays nothing (reachability-from-main drops the unused). A micro failing
 # only because the vocabulary was withheld is the harness lying, not a regression.
-RTLIBS=(lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn lib/prelude.mn)
+RTLIBS=(lib/memory.mn lib/strings.mn lib/lists.mn lib/prelude.mn)
 
 say() { printf '%s\n' "$*"; }
 fail=0
@@ -414,8 +414,8 @@ if C=$(wt_m2_ensure); then
   # compiler-synthesized (__hstate_, __fb_, lambda_, tuple_{handle} …), none
   # able to collide with prelude vocabulary.
   sv_pre=$(mktemp); sv_min=$(mktemp)
-  { grep -hoE '^fn [a-z_][A-Za-z0-9_]*' lib/prelude.mn lib/runtime/*.mn | sed 's/^fn //'
-    grep -hoE '^type [A-Z][A-Za-z0-9_]*|^  = [A-Z][A-Za-z0-9_]*|^  \| [A-Z][A-Za-z0-9_]*' lib/prelude.mn lib/runtime/*.mn | sed -E 's/^(type|  = |  \| )//'
+  { grep -hoE '^fn [a-z_][A-Za-z0-9_]*' lib/prelude.mn lib/*.mn | sed 's/^fn //'
+    grep -hoE '^type [A-Z][A-Za-z0-9_]*|^  = [A-Z][A-Za-z0-9_]*|^  \| [A-Z][A-Za-z0-9_]*' lib/prelude.mn lib/*.mn | sed -E 's/^(type|  = |  \| )//'
   } | sort -u > "$sv_pre"
   grep -hoE '"[A-Za-z_][A-Za-z0-9_]*"' src/lower.mn src/backends/wasm.mn src/parser.mn src/infer.mn src/pipeline.mn | tr -d '"' | sort -u > "$sv_min"
   csugar=$(comm -12 "$sv_pre" "$sv_min" | wc -l)

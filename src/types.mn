@@ -212,7 +212,7 @@ fn stride_of(elem_ty) with Pure = match elem_ty {
 // world is byte-identical; only a byte (sc 1) or a packed float (sc 2/3) writes a
 // nonzero code. Mirrors repr_of (RI32 the free floor; RI64/RF64/RF32/RV128 the
 // gradient triggers) one axis down: the element SLOT stride, not the VALUE repr.
-// The RUNTIME inverse (`decode_stride`, sc => stride) lives in lib/runtime/
+// The RUNTIME inverse (`decode_stride`, sc => stride) lives in lib/
 // lists.mn beside the readers that consume it — the RTLIBS blob has no src/.
 fn stride_class(stride) with Pure = match stride {
   4 => 0,

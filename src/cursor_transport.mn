@@ -24,7 +24,7 @@
 //
 //   cursor_at / cursor_argmax / cursor_pinned  — src/cursor.mn Cursor effect
 //   CursorView fields (8 aspects of one read)  — src/types.mn
-//   fd_write / fd_read                         — lib/runtime/io.mn
+//   fd_write / fd_read                         — lib/io.mn
 //   Iterate effect for streamed updates        — lib/prelude.mn
 //   <~ feedback at the human boundary           — primitive #3 (Five verbs)
 //
@@ -67,9 +67,9 @@ import query
 
 import verify
 
-import runtime/strings
+import strings
 
-import runtime/io
+import io
 
 import oracle
 

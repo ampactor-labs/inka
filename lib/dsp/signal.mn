@@ -36,7 +36,7 @@
 // (lib/dsp/feedback.mn's LF.M per-handler-state-slots migration).
 import dsp/processors
 
-import runtime/math
+import math
 
 import dsp/cfc
 
@@ -46,7 +46,7 @@ effect DSP {
 }
 
 // Domain capability effects — exist primarily to be NEGATED. Allocation
-// uses the one substrate Alloc declaration in runtime/memory.mn.
+// uses the one substrate Alloc declaration in memory.mn.
 effect Network {
   fetch_param(String) -> String
 }

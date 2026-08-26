@@ -12,8 +12,7 @@
 //
 // Run it:   mentl run  lib/tutorial/09-all.mn
 // Edit it:  mentl space   →   http://localhost:7378/ide/
-
-import runtime/io
+import io
 
 // #6 refinement — Level is an Int proven to sit in 0..100 wherever one is built.
 type Level = Int where 0 <= self && self <= 100
@@ -21,10 +20,12 @@ type Level = Int where 0 <= self && self <= 100
 // #2 handlers + #1 the graph — the Bump effect and the handler that counts it.
 // Every binding here is a live handle the graph chases; there is no symbol
 // table beside it.
-effect Bump { bump() -> Int }
+effect Bump {
+  bump() -> Int
+}
 
 handler counter with n = 0 {
-  bump() => resume(n) with n = n + 1
+  bump() => resume(n) with n = n + 1,
 }
 
 // #4 the row + #7 the gradient — `with Pure` states, and the medium proves,
@@ -39,11 +40,12 @@ fn keep(ref x) = x
 // handler with ~> and pipes the result out with |>, too.
 fn raise(base) with Bump = base + bump() + bump() + bump()
 
-fn run() with Bump =
-  seed() |> raise |> keep
+fn run() with Bump = seed() |> raise |> keep
 
 fn main() = {
-  let total = { run() } ~> counter
+  let total = {
+    run()
+  } ~> counter
   total |> int_to_str |> print_string
 }
 
@@ -67,3 +69,4 @@ fn main() = {
 // the socket surfaces a proven survivor, but a `??` makes the program
 // non-executable, so this running file leaves it out. The eighth aspect is the
 // one that lives in an unfinished program.
+

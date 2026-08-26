@@ -28,11 +28,11 @@ import graph
 
 import types
 
-import runtime/imap
+import imap
 
-import runtime/persist
+import persist
 
-import runtime/search
+import search
 
 import effects
 
@@ -719,7 +719,7 @@ fn lower_call_dispatch(handle, f, fh, fbody, r_args) = {
       LConvert(handle, FloatToInt, last(lo_args))
     } else if is_substrate_mem_op(name) {
       // Memory / Alloc ops ARE the instruction set — "the WASM runtime
-      // IS the handler" (lib/runtime/memory.mn). They project to raw
+      // IS the handler" (lib/memory.mn). They project to raw
       // instructions, never through evidence: routing them Tier-2 made
       // the evidence walk's own loads dispatch through the evidence
       // walk (the scan recursing into itself — the handler rung's
@@ -1583,7 +1583,7 @@ fn collect_fn_bases(stmts) = flatten(map(
 ))
 
 // The flow-closure map (name → escaping row) is the shared smap indexed-map
-// (lib/runtime/imap.mn): esc_rows = smap_build(map) at ls_register_escaping,
+// (lib/imap.mn): esc_rows = smap_build(map) at ls_register_escaping,
 // smap_get(esc_rows, name) per call site. None = "not a top-level fn" (→ the
 // leaf); Some [] = "a fn with empty flow-closure". The old esc_index_* family
 // (a linear-scan read-side that was 72% of the post-esc-setup self-compile,
@@ -1603,7 +1603,7 @@ fn collect_fn_bases(stmts) = flatten(map(
 // over every base → O(N² × callees) — 85% of the post-region self-compile (perf,
 // 2026-07-14; the esc_assoc O(n²) §5.O named). Reverse-inserted so a name's FIRST
 // base position (lowest index) is returned, byte-identical to the old scan.
-// The callee-name → base-position index: the shared smap (lib/runtime/imap.mn).
+// The callee-name → base-position index: the shared smap (lib/imap.mn).
 // Keeps its own build (the position IS the list index i, extracted from each
 // base's 4-tuple — not a field), calling smap_new/smap_add; the primitive is
 // smap. base names are unique, so first-match is byte-identical.
@@ -2901,7 +2901,7 @@ fn run_fanout_thunks(handle, branches) = match lower_fanout_schedule() {
   // §4④): each branch thunk is a continuation record (handler = state = closure
   // = evidence = continuation, §6), so a Persist scheduler spawns each branch
   // AND checkpoints its thunk to disk — a crashed/forked branch re-runs from its
-  // memcpy'd record. The catch is the Persist handler (lib/runtime/persist.mn,
+  // memcpy'd record. The catch is the Persist handler (lib/persist.mn,
   // B3): each thunk is dispatched via `persist_branch` (spawn + checkpoint),
   // joined via `join_persist` (resume from disk if the live result is absent).
   // The thunks are the same strategy-neutral closures — only the CATCHER differs

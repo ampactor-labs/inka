@@ -79,7 +79,7 @@ import test
 
 import mcp
 
-import runtime/io
+import io
 
 // The shipped surface — the stdlib the medium's binary carries whether or
 // not the compiler's own body reaches it: format's verb substrate, the DSP
@@ -95,11 +95,11 @@ import dsp/spectral
 
 import ml/tensor
 
-import runtime/math
+import math
 
-import runtime/net
+import net
 
-import runtime/tuples
+import tuples
 
 import cli
 
@@ -261,7 +261,7 @@ fn entry_start_caret(entry_module, ranges) = match find(
 //
 // The HTTP/1.1 file server that lived as ide/serve.mn, absorbed whole:
 // the accept loop is an evidence-threading tail call over the socket
-// substrate (lib/runtime/net.mn); every response carries the
+// substrate (lib/net.mn); every response carries the
 // cross-origin-isolation pair the IDE's shared-memory compiler requires.
 // The host preopens the repo dir and the listener
 // (-S tcplisten=127.0.0.1:7378 — the install shim's space seam);
@@ -1700,7 +1700,7 @@ fn test_check_run(entry_module) =
 // errors-holes-refusals read executable_gate makes; here the boundary is the
 // batch, so the verdict is a manifest line instead of proc_exit).
 fn battery_libs() -> String with Memory + Alloc + WASI =
-  fs_read_file_impl("lib/runtime/memory.mn") ++ fs_read_file_impl("lib/runtime/strings.mn") ++ fs_read_file_impl("lib/runtime/lists.mn") ++ fs_read_file_impl("lib/prelude.mn")
+  fs_read_file_impl("lib/memory.mn") ++ fs_read_file_impl("lib/strings.mn") ++ fs_read_file_impl("lib/lists.mn") ++ fs_read_file_impl("lib/prelude.mn")
 
 // The fixture's own contract, first line — the expectation lives ON the
 // artifact (SYNTAX §Comments), and the grammar mirrors the medium's own
@@ -2025,7 +2025,7 @@ fn scaffold_project(name: String) = {
 // The `\{who\}` escapes emit literal braces, so the FILE gets a live
 // interpolation the user's own compile reads.
 fn new_seed() =
-  "// this file is the whole project — the imports are the manifest.\n//\n// the comment you are reading is not a remark the lexer discards: it is\n// a Reason edge in the graph. ask the medium about this file:\n//   mentl audit   — what it is allowed to do\n//   mentl edit    — the cursor, and what it proposes\n\nimport runtime/io\n\n// `|>` is the sequential verb — the string flows into print_string.\n// the topology is on the page; there is no hidden control flow.\nfn greet(who) = \"hello, \{who\} — the medium is reading you back\\n\" |> print_string\n\nfn main() = \{\n  greet(\"world\")\n  0\n\}\n"
+  "// this file is the whole project — the imports are the manifest.\n//\n// the comment you are reading is not a remark the lexer discards: it is\n// a Reason edge in the graph. ask the medium about this file:\n//   mentl audit   — what it is allowed to do\n//   mentl edit    — the cursor, and what it proposes\n\nimport io\n\n// `|>` is the sequential verb — the string flows into print_string.\n// the topology is on the page; there is no hidden control flow.\nfn greet(who) = \"hello, \{who\} — the medium is reading you back\\n\" |> print_string\n\nfn main() = \{\n  greet(\"world\")\n  0\n\}\n"
 
 // ─── help + error surface ─────────────────────────────────────────
 fn print_error_and_help(msg) = {

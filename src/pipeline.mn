@@ -60,7 +60,7 @@ import dsp/clock
 
 import driver
 
-import runtime/io
+import io
 
 import egraph
 
@@ -150,7 +150,7 @@ body_context ~> mentl_default ~> lower_scope ~> lower_handler_stack_ctx ~> arm_s
 // stdin-source compile path. Per Unix vocabulary `mentl compile -`
 // reads source from stdin. Skips driver_check + fs_read_file (no
 // module-graph; no path); reads the entire stdin via read_stdin
-// (lib/runtime/io.mn:83 — fd_read loop with grow-on-headroom buffer);
+// (lib/io.mn:83 — fd_read loop with grow-on-headroom buffer);
 // pipes through frontend → lower_program → emit_module. Same handler
 // chain as compile() — emission to stdout via wat_stdout, all the
 // substrate handlers attached.
@@ -727,7 +727,7 @@ handler body_context with captures = 0, evidence = [] {
 }
 
 // wasi_filesystem — FS substrate (IC prerequisite)
-// Four-arm stateless handler delegating to runtime/io.mn primitives.
+// Four-arm stateless handler delegating to io.mn primitives.
 // Grants Filesystem capability to the driver's module reads. Installed in
 // `compile`'s ~> chain between wat_stdout and the compiler-internal
 // handlers — fs stays a driver-level capability, not something the

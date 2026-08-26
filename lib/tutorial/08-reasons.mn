@@ -22,8 +22,7 @@
 // Or open the IDE, click any fact in the aspect ring, and the Reason draws.
 //
 // Run it:   mentl run  lib/tutorial/08-reasons.mn   ← prints 9
-
-import runtime/io
+import io
 
 // A clean binding. Its type and its row each carry a Reason edge, and the Why
 // walk at this line reads them back to the literal and the unification that set
@@ -35,5 +34,4 @@ fn base(x) = x + 1
 // still emits WAT for everything sound while reporting what is not.
 fn caller(x) = base(x) + 1
 
-fn main() =
-  caller(7) |> int_to_str |> print_string
+fn main() = caller(7) |> int_to_str |> print_string

@@ -13,8 +13,7 @@
 //
 // Run it:   mentl run  lib/tutorial/06-refinement.mn   ← prints 51
 // Read it:  mentl lib/tutorial/06-refinement.mn:22     ← the cursor on Level; the refinement in the ring
-
-import runtime/io
+import io
 
 // Level — an Int narrowed by a predicate. `self` is the value being refined.
 type Level = Int where 0 <= self && self <= 100
@@ -27,10 +26,9 @@ fn half() -> Level = 50
 // this line never compiles — E_RefinementRejected at the value, not a warning
 // downstream. The illegal value has no way to exist.
 // fn over() -> Level = 250
-
+//
 // brighten takes a Level and needs no `if lvl < 0` guard: the bound is part of
 // the type, already proven before lvl arrives. The compiler erased the check.
 fn brighten(lvl: Level) = lvl + 1
 
-fn main() =
-  brighten(half()) |> int_to_str |> print_string
+fn main() = brighten(half()) |> int_to_str |> print_string

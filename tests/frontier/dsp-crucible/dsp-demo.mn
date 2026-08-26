@@ -18,7 +18,7 @@
 // re/im, the loop counters carry Int) — the representation pin the gradient
 // needs at a polymorphic boundary (§4①, the CFC discipline).
 //
-// The signal uses `sin`/`cos` (lib/runtime/math.mn's Taylor series). oracle.py
+// The signal uses `sin`/`cos` (lib/math.mn's Taylor series). oracle.py
 // ports that EXACT series, so the boundary-sensitive zero-crossing and clip
 // counts agree with Mentl to f64 epsilon (the argmax is robust regardless — the
 // filtered low component dominates the DFT by ~4x). Cross-validated by

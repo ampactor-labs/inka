@@ -24,7 +24,7 @@ import types
 
 import graph
 
-import runtime/io
+import io
 
 // Discharges the decidable subset compile-time; defers the rest to
 // the ledger. The simplest demonstration that the handler-swap

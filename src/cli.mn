@@ -4,7 +4,7 @@
 // MCP session parses its wire lines with the SAME parse_cli_args — so
 // the grammar lives in a module both import; the entry keeps only the
 // dispatch (running the proven verb is the entry's own job).
-import runtime/strings
+import strings
 
 // ─── EntryVerb ADT — the verb carries its target where required ───────
 //

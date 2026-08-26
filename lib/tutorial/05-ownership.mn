@@ -13,8 +13,7 @@
 //
 // Run it:   mentl run  lib/tutorial/05-ownership.mn   ← prints 14 (byte length, twice)
 // Read it:  mentl lib/tutorial/05-ownership.mn:24     ← the cursor on a param; own/ref in the ring
-
-import runtime/io
+import io
 
 // ref — borrow. `length` reads its argument and gives it back; the caller can
 // use the string again afterward. Inference would reach `ref` here on its own;
@@ -38,9 +37,6 @@ fn archive(own data) = byte_len(data)
 // if is sound: exactly one arm runs, so `x` is consumed exactly once. The
 // affine ledger scopes per branch and knows this. (Consume it twice in the same
 // path — `archive(x)` then `archive(x)` — and that is the error it catches.)
-fn choose(own x) =
-  if byte_len("flag") > 3 { archive(x) }
-  else { archive(x) }
+fn choose(own x) = if byte_len("flag") > 3 { archive(x) } else { archive(x) }
 
-fn main() =
-  measure() |> int_to_str |> print_string
+fn main() = measure() |> int_to_str |> print_string

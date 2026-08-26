@@ -10,7 +10,7 @@
 #
 #   python3 tests/frontier/dsp-crucible/oracle.py
 #
-# The signal uses sines, and Mentl's sin is a Taylor series (lib/runtime/
+# The signal uses sines, and Mentl's sin is a Taylor series (lib/
 # math.mn), NOT libm's — so this oracle PORTS that exact series (msin/mcos
 # below) rather than calling math.sin. With the identical transcendental the
 # two implementations agree to f64 epsilon, so even the boundary-sensitive

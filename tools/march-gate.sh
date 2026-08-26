@@ -100,7 +100,7 @@ fi
 # parse_int, so the honest link set includes it — m2 emits the whole
 # input (no reachability-from-main yet, unlike the seed), so an
 # under-linked dependency surfaces as an undefined global at assemble.
-RT="lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn lib/prelude.mn"
+RT="lib/memory.mn lib/strings.mn lib/lists.mn lib/prelude.mn"
 pass=0; fail=0
 # fail_m is the MICRO tier's counter and must exist outside the micros
 # block (set -u) because the exit sums BOTH tiers — the 2026-07-31 leash

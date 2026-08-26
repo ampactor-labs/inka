@@ -158,7 +158,7 @@ fn audio_chain(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Memor
 // allocation-free stereo region needs the caller to hold the pair unboxed —
 // the topology argument (schedule as a live `~>` edge, vs Faust's global
 // precision and JAX's trace-baked schedule) stands unchanged. Install
-// `~> parallel_compose` (lib/runtime/threading.mn) at the call site for
+// `~> parallel_compose` (lib/threading.mn) at the call site for
 // true-parallel stereo.
 fn stereo_chain(left: Sample, right: Sample, cutoff: Hz, sr: Int) -> (Sample, Sample) with Sample + Memory + Alloc =
   left |> dc_blocker |> ((x) => audio_chain(x, cutoff, sr)) >< right |> dc_blocker |> ((x) => audio_chain(x, cutoff, sr))

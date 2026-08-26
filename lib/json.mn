@@ -18,7 +18,7 @@
 // sub-handle (rare in LSP traffic; ASCII covers the common path).
 import types
 
-import runtime/strings
+import strings
 
 // JsonValue — the canonical typed JSON representation. Six variants
 // matching the JSON spec; H6 exhaustive at every match site. JObj's

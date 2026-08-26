@@ -9,7 +9,7 @@
 // naming which pair won instead. (6, 40) is low index 1, high index 1 =
 // flat 5, so a correct run returns 42, never 5.
 //
-// Links the wheel runtime + lib/runtime/math.mn + lib/dsp/cfc.mn +
+// Links the wheel runtime + lib/math.mn + lib/dsp/cfc.mn +
 // this dir's gen.mn (the gate cats them in dependency order).
 
 fn main() = {

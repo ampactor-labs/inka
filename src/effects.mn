@@ -14,7 +14,7 @@
 // The artifact is that one row_subsumes call services every gate.
 import types
 
-import runtime/strings
+import strings
 
 // Smart constructors — sort invariant by construction
 // Every row value in the system passes through these
@@ -1197,7 +1197,7 @@ else if str_eq(list_index(lst, i), s) {
 // equality is order-free (name_set_eq) and ev-slots are key-addressed, not
 // positional (lower.mn derive_ev_slots). So the sorted insert (make_list(n+1)
 // + copy + shift + eff_name_lt — the null's trap site) is DISSOLVED: the
-// drift-7 twin of runtime/strings.mn's string-set collapses to one membership,
+// drift-7 twin of strings.mn's string-set collapses to one membership,
 // and the sort — a canonical order no reader consumes — is the re-derivation
 // the Carried-Truth Law deletes (§4①: one ordered-keyed-set operation).
 //

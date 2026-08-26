@@ -20,20 +20,19 @@
 // Run it:   mentl run  lib/tutorial/02-handlers.mn   ← prints 3 (three incs, then read)
 // Swap the handler in main to counter_logged and run again — same source, a
 // second reality, each tick narrated.
-
-import runtime/io
+import io
 
 // Counter — a two-op effect. `inc` bumps the count; `read` returns it.
 effect Counter {
-  inc() -> ()
+  inc()
   read() -> Int
 }
 
 // Handler one: keep the count in handler state, do nothing else. Each arm
 // resumes exactly once with no surrounding loop, so both ops infer OneShot.
 handler counter_in_memory with count = 0 {
-  inc()  => resume() with count = count + 1,
-  read() => resume(count)
+  inc() => resume() with count = count + 1,
+  read() => resume(count),
 }
 
 // Handler two: the SAME effect, a different surface. Every `inc` also prints a
@@ -44,7 +43,7 @@ handler counter_logged with count = 0 {
     "tick " ++ int_to_str(count) ++ "\n" |> print_string
     resume() with count = count + 1
   },
-  read() => resume(count)
+  read() => resume(count),
 }
 
 // User code. It performs against Counter and never mentions a handler; `with
@@ -59,6 +58,8 @@ fn triple_inc() with Counter = {
 // main installs the in-memory handler with `~>`. Change it to `~> counter_logged`
 // to get the narrated reality — nothing else moves.
 fn main() = {
-  let total = { triple_inc() } ~> counter_in_memory
+  let total = {
+    triple_inc()
+  } ~> counter_in_memory
   total |> int_to_str |> print_string
 }

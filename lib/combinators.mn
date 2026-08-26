@@ -34,11 +34,20 @@
 // - src/lower.mn + src/backends/wasm.mn (commits 4236b96 + ad78384 +
 //   bafd63a — H7 LMakeContinuation runtime substrate that race's
 //   per-fork MultiShot resume depends on)
-// - lib/runtime/search.mn (commit 55553ad — Choice + backtrack;
+// - lib/search.mn (commit 55553ad — Choice + backtrack;
 //   race compositions in HC2 §7.1)
 import types
 
-import graph
+import effects
+
+// The Branch effect — speculative fork/rollback and spatial orientation.
+// This decouples the library's combinators from the compiler's internal
+// graph substrate. The compiler provides the handler at the root.
+effect Branch {
+  checkpoint() -> Int
+  rollback(Int)
+  cursor() -> Int
+}
 
 // race installs one shared checkpoint, forks each input handler's
 // MultiShot resume, collects verified survivors, picks one via the
@@ -50,7 +59,7 @@ import graph
 //
 // Per HC2 §0: race is library-level — no new primitive. Composes
 // graph + handlers + row + MS + Reason from existing substrate.
-fn race(handlers) with GraphRead + GraphWrite + Memory + Alloc = race_internal(handlers)
+fn race(handlers) with Branch + Memory + Alloc = race_internal(handlers)
 
 // ─── Tiebreak chain (per QA Q-B.4.1 — deterministic) ─────────────────
 //
@@ -75,8 +84,8 @@ fn tiebreak_row_minimality(survivors) with Memory + Alloc =
 fn tiebreak_reason_depth(survivors) with Memory + Alloc =
   min_by_key(survivors, (s) => reason_chain_length(handler_reason(s)))
 
-fn tiebreak_declared_intent(survivors, cursor) with GraphRead + Memory + Alloc = {
-  let aligned = filter_list(survivors, (s) => intent_matches(s, cursor))
+fn tiebreak_declared_intent(survivors, cur) with Branch + Memory + Alloc = {
+  let aligned = filter_list(survivors, (s) => intent_matches(s, cur))
   if len(aligned) > 0 { aligned } else { survivors }
 }
 
@@ -87,8 +96,8 @@ fn tiebreak_lex(survivors) with Memory + Alloc = min_by_key(survivors, (s) => ha
 
 // first_verified_wins — applies the five tiebreak steps in order;
 // each step narrows. Returns the unique winner.
-fn first_verified_wins(survivors, cursor) with GraphRead + Memory + Alloc =
-  survivors |> tiebreak_row_minimality |> tiebreak_reason_depth |> ((ss) => tiebreak_declared_intent(ss, cursor)) |> tiebreak_source_span |> tiebreak_lex |> list_head_or_default
+fn first_verified_wins(survivors, cur) with Branch + Memory + Alloc =
+  survivors |> tiebreak_row_minimality |> tiebreak_reason_depth |> ((ss) => tiebreak_declared_intent(ss, cur)) |> tiebreak_source_span |> tiebreak_lex |> list_head_or_default
 
 // ─── Race internal (the handler factory) ─────────────────────────────
 //
@@ -97,15 +106,15 @@ fn first_verified_wins(survivors, cursor) with GraphRead + Memory + Alloc =
 // the winner's mutations (rolling losers back). Per Q-B.4.2 the
 // shared checkpoint at install is the substrate's anchor for
 // rollback discipline.
-fn race_internal(handlers) with GraphRead + GraphWrite + Memory + Alloc = {
-  let race_checkpoint = graph_push_checkpoint()
+fn race_internal(handlers) with Branch + Memory + Alloc = {
+  let race_checkpoint = checkpoint()
   let survivors = collect_verified_survivors(handlers, race_checkpoint)
-  let cursor = graph_cursor()
-  let winner = first_verified_wins(survivors, cursor)
+  let cur = cursor()
+  let winner = first_verified_wins(survivors, cur)
   // Roll back ALL forks' trails to shared checkpoint; replay
   // winner's mutations. Per Q-B.4.2 — shared rollback ensures
   // determinism + no fork's intermediate state leaks.
-  graph_rollback(race_checkpoint)
+  rollback(race_checkpoint)
   replay_winner(winner)
 }
 
@@ -113,8 +122,8 @@ fn race_internal(handlers) with GraphRead + GraphWrite + Memory + Alloc = {
 // MultiShot resume, accumulates those whose Verify discharge
 // succeeded. Cap at 8 per MO §2 (one fork per Mentl tentacle as
 // the natural concurrency budget).
-fn collect_verified_survivors(handlers, checkpoint) with GraphRead + GraphWrite + Memory + Alloc =
-  handlers |> take(8) |> map_list(??, (h) => try_handler_with_rollback(h, checkpoint)) |> filter_list(??, (outcome) => outcome_verified(outcome))
+fn collect_verified_survivors(handlers, cp) with Branch + Memory + Alloc =
+  handlers |> take(8) |> map_list(??, (h) => try_handler_with_rollback(h, cp)) |> filter_list(??, (outcome) => outcome_verified(outcome))
 
 // ─── Helper interfaces (subordinate; bodies inline or stubbed) ───────
 //

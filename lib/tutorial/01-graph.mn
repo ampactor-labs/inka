@@ -15,8 +15,7 @@
 //
 // Run it:   mentl run  lib/tutorial/01-graph.mn
 // Read it:  mentl lib/tutorial/01-graph.mn:26   ← the cursor on add; its inferred type
-
-import runtime/io
+import io
 
 // add — the smallest binding. Inference writes several edges here: a node for
 // `add` itself (typed `(Int, Int) -> Int`), one for `a`, one for `b`, one for
@@ -35,10 +34,7 @@ fn triple(x) = {
 }
 
 // The same graph holds this module's bindings alongside the imported ones:
-// `int_to_str` and `print_string` come from runtime/io, and composing with
+// `int_to_str` and `print_string` come from io, and composing with
 // them is the same edge-following as composing with `add`. The graph spans
 // the whole program.
-fn main() =
-  triple(7)
-    |> int_to_str
-    |> print_string
+fn main() = triple(7) |> int_to_str |> print_string

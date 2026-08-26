@@ -23,9 +23,9 @@
 // f64 arguments as words — silent-wrong. That is the generic-over-wide keystone
 // Hβ.value.seq-element-stride-carrier (the ultimate is monomorphization or a
 // runtime stride carrier); the annotation monomorphizes the body to f64.
-import runtime/math
+import math
 
-import runtime/io
+import io
 
 // ─── Hann window — the taper that tames spectral leakage ────────────
 //

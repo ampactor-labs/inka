@@ -22,7 +22,7 @@ import pipeline
 
 import driver
 
-import runtime/strings
+import strings
 
 import oracle
 

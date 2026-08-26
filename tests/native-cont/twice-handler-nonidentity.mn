@@ -27,7 +27,7 @@
 // Run (through a fixed m2):
 //   MENTL_BOOT=.build/m2cache/m2.wasm tools/run-micro.sh \
 //     tests/native-cont/twice-handler-nonidentity.mn 36 \
-//     lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn lib/prelude.mn
+//     lib/memory.mn lib/strings.mn lib/lists.mn lib/prelude.mn
 
 effect Pick { pick() -> Int }
 

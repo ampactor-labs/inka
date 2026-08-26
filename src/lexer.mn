@@ -22,7 +22,7 @@
 // where parse fails, not at lex time).
 import types
 
-import runtime/strings
+import strings
 
 // Character classification
 //

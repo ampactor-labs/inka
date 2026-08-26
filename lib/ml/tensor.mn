@@ -1,4 +1,4 @@
-import runtime/math
+import math
 
 // tensor.mn — pure tensor operations.
 // All functions are pure — no effects, no mutation.

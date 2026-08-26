@@ -119,7 +119,7 @@ $ mentl lib/tutorial/00-hello.mn:32
 Query: print_string : (s: String) -> () with WASI + Alloc + Memory + r36338@e21797
 Effects: WASI + Alloc + Memory + r36338@e21797
 Why: print_string flows in here, at lib/tutorial/00-hello.mn:32
-     declared print_string, at lib/runtime/io.mn:173
+     declared print_string, at lib/io.mn:173
 ```
 
 **Break it.** The lesson's comment dares you: greet joins text, and joining

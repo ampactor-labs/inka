@@ -3,7 +3,7 @@
 // WASM f64 has no transcendental instructions (only sqrt/abs/ceil/
 // floor/trunc/nearest/min/max/copysign), and WASI has no math host
 // calls — so exp/log/sin/tanh are Mentl-native series over the
-// float_* arithmetic family (lib/runtime/strings.mn). Every float
+// float_* arithmetic family (lib/strings.mn). Every float
 // operation routes through float_add/float_mul/... so the post-L1
 // f64 handler swap (#110 Hβ.emit.float-substrate-handler) emits
 // typed f64 ops here without a second pass.
@@ -24,7 +24,7 @@
 // reason it isn't this commit: strings.mn's formatting internals
 // consume the family throughout; the relocation is an orthogonal
 // dependency-graph move with no diagnostic payoff.
-import runtime/strings
+import strings
 
 // Float parameters are annotated `: Float` throughout. This is a
 // representation PIN, not inference laziness: today the emit reads an

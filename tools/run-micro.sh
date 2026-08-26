@@ -5,7 +5,7 @@
 #
 # Usage: tools/run-micro.sh <micro.mn> [expected_exit] [lib...]
 #   tools/run-micro.sh tests/micros/mn-ev4.mn 57
-#   tools/run-micro.sh tests/micros/mn-eq.mn 73 lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn
+#   tools/run-micro.sh tests/micros/mn-eq.mn 73 lib/memory.mn lib/strings.mn lib/lists.mn
 set -u
 MICRO="$1"; EXPECT="${2:-}"
 shift 2 2>/dev/null || shift 1

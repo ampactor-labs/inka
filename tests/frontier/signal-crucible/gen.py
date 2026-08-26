@@ -17,7 +17,7 @@
 #
 # gen.py OWNS the signal and the exact math.mn transcendental ports (msin/mcos);
 # oracle.py imports them, so the planted signal and the cross-validator share one
-# home. The ports match lib/runtime/math.mn's Taylor series so the recording is
+# home. The ports match lib/math.mn's Taylor series so the recording is
 # what Mentl's own math would produce, and Mentl's later reading agrees to f64
 # epsilon (the argmax and the ratio-floor threshold clear their margins by a wide
 # gap regardless).
@@ -34,13 +34,13 @@ PI = 3.141592653589793
 
 
 def ffloor(f):
-    # lib/runtime/math.mn float_floor: truncate toward zero, step down if below.
+    # lib/math.mn float_floor: truncate toward zero, step down if below.
     t = float(int(f))
     return t - 1.0 if f < t else t
 
 
 def msin(x):
-    # lib/runtime/math.mn sin: range-reduce to [-pi, pi), 8-term alternating series.
+    # lib/math.mn sin: range-reduce to [-pi, pi), 8-term alternating series.
     r0 = x - TWO_PI * ffloor(x / TWO_PI)
     r = r0 - TWO_PI if r0 >= PI else r0
     r2 = r * r

@@ -28,11 +28,11 @@ import lexer
 
 import infer
 
-import runtime/strings
+import strings
 
-import runtime/io
+import io
 
-import runtime/persist
+import persist
 
 import verify
 

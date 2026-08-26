@@ -52,7 +52,7 @@ let bad = 0;
   if (!ok) { bad++; console.log('    err: ' + r.err.trim().split('\n').slice(0, 6).join('\n    ') + (r.trapped ? '\n    trap: ' + r.trapped : '')); }
 }
 // ── Leg 2: address mode projects the REAL CursorView (the ring wire) ────────
-const libs = ['lib/runtime/memory.mn', 'lib/runtime/strings.mn', 'lib/runtime/lists.mn', 'lib/runtime/threading.mn', 'lib/runtime/io.mn', 'lib/prelude.mn', 'src/types.mn'];
+const libs = ['lib/memory.mn', 'lib/strings.mn', 'lib/lists.mn', 'lib/threading.mn', 'lib/io.mn', 'lib/prelude.mn', 'src/types.mn'];
 const VFS = {};
 for (const p of libs) VFS[p] = new Uint8Array(await readFile(new URL(p, REPO)));
 {
@@ -74,5 +74,85 @@ for (const p of libs) VFS[p] = new Uint8Array(await readFile(new URL(p, REPO)));
   console.log('    ' + r.out.trim().split('\n').join('\n    '));
   if (!ok) { bad++; console.log('    err: ' + r.err.trim().split('\n').slice(0, 6).join('\n    ')); }
 }
-console.log(bad ? `\n${bad} FAILED` : '\nall surfaces green — the spawning wheel runs on the worker shim');
+// ── Leg 4: Resident Session Initiation & Multi-Caret Navigation ─────────────
+class ResidentWorkerSession {
+  constructor(workerPath, module, vfs, memPages = 16384) {
+    this.worker = new Worker(workerPath);
+    this.module = module;
+    this.vfs = vfs;
+    this.memPages = memPages;
+    this.nextId = 1;
+    this.pending = new Map();
+    this.worker.on('message', (m) => {
+      if (m.k === 'session-ready') {
+        if (this.onReady) this.onReady();
+      } else if (m.k === 'session-reply') {
+        const p = this.pending.get(m.id);
+        if (p) {
+          this.pending.delete(m.id);
+          p(m);
+        }
+      }
+    });
+  }
+
+  init() {
+    return new Promise((resolve) => {
+      this.onReady = resolve;
+      this.worker.postMessage({
+        role: 'session-init',
+        module: this.module,
+        memPages: this.memPages,
+        vfs: this.vfs,
+      });
+    });
+  }
+
+  call(argv, stdin = null, vfsDelta = null) {
+    const id = this.nextId++;
+    return new Promise((resolve) => {
+      this.pending.set(id, resolve);
+      this.worker.postMessage({
+        role: 'session-call',
+        id,
+        argv,
+        stdin,
+        vfsDelta,
+      });
+    });
+  }
+
+  close() {
+    this.worker.postMessage({ role: 'session-close' });
+    this.worker.terminate();
+  }
+}
+
+{
+  const sess = new ResidentWorkerSession(WORKER, MODULE, VFS);
+  await sess.init();
+  const vfsDelta = {
+    'main.mn': te.encode('fn double(x) = x * 2\n\nfn main() with Memory + Alloc =\n  [1, 2, 3]\n    |> map(double)\n    |> fold(0, (acc, x) => acc + x)\n'),
+  };
+  const r1 = await sess.call(['mentl', 'main.mn:1:4'], null, vfsDelta);
+  const ok1 = r1.exit === 0 && !r1.trapped && r1.out.includes('Query: double(');
+  const r2 = await sess.call(['mentl', 'main.mn:5:8']);
+  const ok2 = r2.exit === 0 && !r2.trapped && r2.out.includes('Query: map(');
+  const ok = ok1 && ok2;
+  console.log(`[4] resident session navigation: r1.exit ${r1.exit} · r2.exit ${r2.exit} -> ${ok ? 'PASS' : 'FAIL'}`);
+  if (!ok) { bad++; console.log('    err: ' + (r1.err || r2.err).trim()); }
+
+  // ── Leg 5: resident session delta update ──────────────────────────────────
+  const updatedProg = 'type Positive = Int where 0 < self\n\nfn choose() -> Positive with Pure = ??\n\nfn main() = choose()\n';
+  const r3 = await sess.call(['mentl', 'main.mn:3:37'], null, { 'main.mn': te.encode(updatedProg) });
+  const ok3 = r3.exit === 0 && !r3.trapped && r3.out.includes('Query: ?? :') && /Propose: \S/.test(r3.out);
+  console.log(`[5] resident session delta + propose: exit ${r3.exit} -> ${ok3 ? 'PASS' : 'FAIL'}`);
+  console.log('    ' + r3.out.trim().split('\n').join('\n    '));
+  if (!ok3) { bad++; console.log('    err: ' + r3.err.trim()); }
+
+  sess.close();
+}
+
+console.log(bad ? `\n${bad} FAILED` : '\nall surfaces green — the spawning wheel runs on the worker shim with resident session support');
 process.exit(bad ? 1 : 0);
+

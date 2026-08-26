@@ -34,7 +34,7 @@ import graph
 
 import effects
 
-import runtime/io
+import io
 
 // Follow the equivalence edge to the canonical (cheapest) node — the union-find
 // `find`, now a single live graph read. Depth-bounded so a malformed rule set

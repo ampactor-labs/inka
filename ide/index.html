@@ -655,6 +655,62 @@ function runWheel(req, timeoutMs = 90000){
     w.postMessage(Object.assign({ role: "run", module: MODULE, memPages: 16384, dbg: location.search.includes("dbg") }, req));
   });
 }
+
+/* ── The Resident Space Session — live graph transport in Web Worker ────── */
+let RESIDENT_WORKER = null, sessReadyPromise = null, sessCallId = 1;
+const sessPending = new Map();
+
+function ensureResidentSession(){
+  if (RESIDENT_WORKER) return sessReadyPromise;
+  RESIDENT_WORKER = new Worker("wheel-worker.js");
+  sessReadyPromise = new Promise(resolve => {
+    RESIDENT_WORKER.onmessage = e => {
+      if (e.data.k === "session-ready") {
+        resolve();
+      } else if (e.data.k === "session-reply") {
+        const p = sessPending.get(e.data.id);
+        if (p) {
+          sessPending.delete(e.data.id);
+          p(e.data);
+        }
+      }
+    };
+    RESIDENT_WORKER.onerror = e => {
+      console.error("Resident worker error:", e);
+    };
+    RESIDENT_WORKER.postMessage({
+      role: "session-init",
+      module: MODULE,
+      memPages: 16384,
+      vfs: VFS,
+      dbg: location.search.includes("dbg")
+    });
+  });
+  return sessReadyPromise;
+}
+
+function callResidentSession(argv, stdin = null, vfsDelta = null, timeoutMs = 30000){
+  return ensureResidentSession().then(() => {
+    return new Promise(resolve => {
+      const id = sessCallId++;
+      const t = setTimeout(() => {
+        sessPending.delete(id);
+        resolve({ exit: 1, out: "", err: "timeout", trapped: "timeout", tasks: 0 });
+      }, timeoutMs);
+      sessPending.set(id, res => {
+        clearTimeout(t);
+        resolve(res);
+      });
+      RESIDENT_WORKER.postMessage({
+        role: "session-call",
+        id,
+        argv,
+        stdin,
+        vfsDelta
+      });
+    });
+  });
+}
 // the facet lines render_at emits (src/main.mn) → the ring's aspect keys. Propose
 // is aspect 2 (handler/propose): at a ?? hole render_at surfaces the proven
 // survivor (`Propose: 1`), the same candidate the edit accept path applies.
@@ -756,16 +812,16 @@ function octopus(_state){ /* the mascot layer is removed; state calls are no-ops
 // (`mentl main.mn:L:C`, src/main.mn at_run → cursor_at_handle), so the Aspect
 // ring reads the live graph, not the page's surface parse.
 const VFS_LIBS = [
-  ["lib/runtime/memory.mn",    "../lib/runtime/memory.mn"],
-  ["lib/runtime/strings.mn",   "../lib/runtime/strings.mn"],
-  ["lib/runtime/lists.mn",     "../lib/runtime/lists.mn"],
-  ["lib/runtime/threading.mn", "../lib/runtime/threading.mn"],
-  ["lib/runtime/io.mn",        "../lib/runtime/io.mn"],
-  ["lib/prelude.mn",           "../lib/prelude.mn"],
-  ["src/types.mn",             "../src/types.mn"],
+  ["lib/memory.mn",    "../lib/memory.mn"],
+  ["lib/strings.mn",   "../lib/strings.mn"],
+  ["lib/lists.mn",     "../lib/lists.mn"],
+  ["lib/threading.mn", "../lib/threading.mn"],
+  ["lib/io.mn",        "../lib/io.mn"],
+  ["lib/prelude.mn",   "../lib/prelude.mn"],
+  ["src/types.mn",     "../src/types.mn"],
 ];
 // compile-stdin prepends these four, in this order, exactly as before.
-const RT_KEYS = ["lib/runtime/memory.mn","lib/runtime/strings.mn","lib/runtime/lists.mn","lib/prelude.mn"];
+const RT_KEYS = ["lib/memory.mn","lib/strings.mn","lib/lists.mn","lib/prelude.mn"];
 let MODULE = null, RT = "", RESULT = null, PARSE = null, VFS = {};
 async function boot(){
   try {
@@ -1071,8 +1127,8 @@ async function projectReal(off){
   if (!MODULE || realBusy) return;
   const { line, col } = lineColAt(off);
   realBusy = true; $("dot").className = "busy";
-  const vfs = Object.assign({ "main.mn": te.encode($("src").value) }, VFS);
-  const r = await runWheel({ argv: ["mentl", `main.mn:${line}:${col}`], vfs });
+  const vfsDelta = { "main.mn": te.encode($("src").value) };
+  const r = await callResidentSession(["mentl", `main.mn:${line}:${col}`], null, vfsDelta);
   realBusy = false; $("dot").className = RESULT?.trapped ? "bad" : "ok";
   const real = (r.exit === 0 && !r.trapped) ? parseFacets(r.out) : {};
   REAL = real; REAL_AT = off;
@@ -1115,8 +1171,8 @@ function projectCursor(){
   $("facets").querySelectorAll(".facet.door").forEach(el => el.onclick = () => openTab(el.dataset.door));
   // the cursor line's standing proposal — the felt tab-accept loop
   PROPOSAL = proposalAt(off); renderProposal();
-  // read the live graph for this caret (debounced; a full compile, so not per keystroke)
-  if (!haveReal){ clearTimeout(realDeb); realDeb = setTimeout(() => projectReal(off), 260); }
+  // read the live graph for this caret (fast resident session)
+  if (!haveReal){ clearTimeout(realDeb); realDeb = setTimeout(() => projectReal(off), 40); }
 }
 
 /* ── wiring ──────────────────────────────────────────────────────────────── */

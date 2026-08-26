@@ -16,8 +16,7 @@
 // Run it:   mentl run  lib/tutorial/00-hello.mn
 // Edit it:  mentl space   →   http://localhost:7378/ide/
 // Read it:  mentl lib/tutorial/00-hello.mn:32   ← ask at the pipe into print_string; the medium answers
-
-import runtime/io
+import io
 
 // greet builds a line and flows it into print_string with `|>`, the
 // sequential verb: the value on the left becomes the argument on the right.
@@ -27,9 +26,7 @@ import runtime/io
 // lines — it proves the join allocates. Substrate rows like Alloc report and
 // the program still runs; a user effect's broken claim refuses outright —
 // the subject of 04-row.)
-fn greet(name) =
-  "Hello, " ++ name ++ ". The medium is reading you back.\n"
-    |> print_string
+fn greet(name) = "Hello, " ++ name ++ ". The medium is reading you back.\n" |> print_string
 
 fn main() = {
   greet("kernel")

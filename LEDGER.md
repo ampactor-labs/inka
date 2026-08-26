@@ -35,6 +35,41 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-26 · pin a7a0529464cc1234 · THE SURFACE MOVES TO ITS OWN ADDRESS
+  SPACE. CLEAN — m2 == m3 at 415834 lines, census 0; frontier 372/0
+  re-stamped at this sha, the gate's wall 274.9s → 159.1s.
+  ▶ WHY: the Space spine (PLAN §11, THE STANDING CURSOR) opens with an
+  address change on purpose — `mentl space` (Arc B) lands semantics, and
+  semantics land cleanly only when the surface's files already live where
+  they will stay. The demo surface's library half moved lib/runtime/* →
+  lib/* whole; the wheel held the same 415834 emitted lines through the
+  move, which IS the test: a relocation that reaches emit was not a
+  relocation.
+  ▶ THE PIN FLOATED FOR ONE SESSION, AND THE MARCH CAUGHT IT. The first
+  re-pin (b6a43d39) predated the sweep's finding; when lib/combinators.mn
+  learned its missing `import effects` (mk_ef_pure), the march refused the
+  old sha and this pin exists — same 415834 lines, different bytes: one
+  import line changes a module's judgment in place. A pin is a claim about
+  source, and a source edit after the pin is a new pin.
+  ▶ THE GATE FOUND ITS OWN DRIFT WHILE BLESSING IT. The solo sweep went red,
+  and the red derived to two independent causes, neither in lib at first
+  sight: the sweep loop globbed lib/*.mn twice, so one E_MissingVariable in
+  lib/combinators.mn was reported as two; and combinators itself was missing
+  `import effects` for mk_ef_pure — a module under-importing its names, the
+  exact class the sweep exists to catch, found by fixing the counter that
+  watches it. Ceiling stays 0; the drift catalog has one real retiree.
+  ▶ THE FLIGHT: the frontier's census (24 queries) and solo sweep (~48
+  module checks) fan out eight-wide now — xargs -n 1 (its default batching
+  merged children into one invocation; the landed-count guard caught the
+  silent drop before it could teach the gate a false green), spawn
+  concurrent, judge serial, because bash counters cannot cross children.
+  Boot tax measured at 53ms×250≈13s of the gate — cold start was never the
+  cost; the work is real, so the win is flight, and the order-of-magnitude
+  still lives in the medium (Arc C warm sessions, §5.O layer 4). The
+  oversubscription is honest: 8 concurrent wasmtime instances stack their
+  own JIT threads (423s user for 159s wall), which is the memory graph Arc
+  C exists to flatten.
+
 - 2026-08-18 · pin 000fee7f6ada9c90 · THE MEDIUM COUNTS ITS OWN
   POPULATION. CLEAN — m2 == m3 at 415834 lines, census 0, frontier 372/0
   with twenty-two census shapes.
@@ -12198,4 +12233,3 @@
 - 2026-07-01→04 · the m2 march: pipe = hole-completion BOTH layers (prepend convention deleted — the whole m2 trap zoo); `??` parses/types/lowers; the 8/8 rung day (nine bands, the raw-0 root b73748c: union_row's ++ emitted str_concat via h=0 binders); the wheel's evidence-passing call convention decoded (the sst_ clone); phase 1 closed 0/34→34/34 (plans/noble-brewing-rose.md)
 - 2026-06-22→28 · the value layer: STEP 0–5 landed (repr_of · gradient · fold eq-leaf · multishot producer record · PFanout collapse · TCont keystone); the e-graph live in lower; the whole AST into the one graph (the fabric); SYNTAX to ultimate form
 - 2026-06-18→23 · the reframe + the three-doc consolidation; the crown's EfOpen~EfNeg unify (b4b1989); the handler registry dissolved into the live read
-

@@ -43,11 +43,11 @@ import types
 
 import effects
 
-import runtime/strings
+import strings
 
-import runtime/imap
+import imap
 
-import runtime/io
+import io
 
 // graph_handler — the substrate handler
 // State:

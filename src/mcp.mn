@@ -35,7 +35,7 @@ import driver
 
 import infer
 
-import runtime/net
+import net
 
 import query
 
@@ -49,15 +49,15 @@ import mentl
 
 import backends/wasm
 
-import runtime/json
+import json
 
-import runtime/io
+import io
 
-import runtime/strings
+import strings
 
-import runtime/lists
+import lists
 
-import runtime/memory
+import memory
 
 // GateLedger — the mcp face's own ledger read: the collector's banked
 // verdict lines, read once after the judge populates them (the Tighten

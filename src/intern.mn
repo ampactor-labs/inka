@@ -9,7 +9,7 @@ import types
 
 import lexer
 
-import runtime/strings
+import strings
 
 fn intern_probe(ref bucket, ref src, s, e, i, n) with Memory + Alloc = if i >= n {
   None

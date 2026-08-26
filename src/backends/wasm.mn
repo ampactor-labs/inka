@@ -4686,7 +4686,7 @@ fn emit_const(v, h) = match v {
 // literal is an upstream type error — loud floor, never a fabricated zero.
 // f: Float — the Intent Boundary pin (the float_render_positive precedent).
 // f's only unpinned grounding flows through float_to_str, defined in
-// lib/runtime/strings.mn, which sorts AFTER this file in the wheel — a
+// lib/strings.mn, which sorts AFTER this file in the wheel — a
 // forward reference whose pre-scheme carries fresh param vars, so at wheel
 // scale the definition floored f to i32 while emit_const's callsite read the
 // literal's proven Float ($ft_idi_i): m4 generation's first-fn-body ft
@@ -7615,7 +7615,7 @@ fn emit_list_literal(h, elems) = {
   // type via lookup_ty on each elem's handle; knows the allocation
   // context from the enclosing row. Literals never need cons — cons
   // is for lists the graph doesn't yet know (push / ++ / slice
-  // materialize snoc / concat / view tags; runtime/lists.mn's
+  // materialize snoc / concat / view tags; lists.mn's
   // list_index dispatches on the tag). A literal is all-flat, all-
   // known.
   //

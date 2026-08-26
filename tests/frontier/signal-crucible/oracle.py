@@ -13,7 +13,7 @@
 #
 # The signal and the sin/cos ports live in gen.py (one home); the sqrt/atan2/exp
 # ports and the analysis live here. Every transcendental is a faithful port of
-# lib/runtime/math.mn's Taylor series (NOT libm), so the two implementations
+# lib/math.mn's Taylor series (NOT libm), so the two implementations
 # agree to f64 epsilon and the discrete verdicts are exact.
 #
 # THE ALGORITHM (matches lib/dsp/signal.mn's pac_comodulogram):
@@ -52,7 +52,7 @@ def ffloor(f):
 
 
 def fpow2(k):
-    # lib/runtime/math.mn float_pow2.
+    # lib/math.mn float_pow2.
     if k == 0:
         return 1.0
     if k > 0:
@@ -61,7 +61,7 @@ def fpow2(k):
 
 
 def mexp(x):
-    # lib/runtime/math.mn exp: range-reduce x = k*ln2 + r, then 2^k * series(r).
+    # lib/math.mn exp: range-reduce x = k*ln2 + r, then 2^k * series(r).
     k = int(ffloor(x / LN2))
     r = x - float(k) * LN2
     term = 1.0

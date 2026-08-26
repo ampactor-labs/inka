@@ -15,8 +15,7 @@
 //
 // Edit it:  mentl space   →   http://localhost:7378/ide/   (paste this in)
 // Read it:  mentl lib/tutorial/07-gradient.mn:31   ← the Teach facet names the next move
-
-import runtime/io
+import io
 
 // add carries no annotation. Inference still proves its row is Pure; the
 // gradient here would offer `with Pure` — same body, and now the medium may
@@ -33,5 +32,4 @@ fn add_pure(a, b) with Pure = a + b
 // a promise the medium could already prove, and unlocked the callers that need it.
 fn step(x) with !Alloc = x * 2 - 1
 
-fn main() =
-  add_pure(step(20), 3) |> int_to_str |> print_string
+fn main() = add_pure(step(20), 3) |> int_to_str |> print_string

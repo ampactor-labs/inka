@@ -72,7 +72,7 @@ import mentl
 
 import cursor
 
-import runtime/math
+import math
 
 // ─── The eight interrogations as a tagged ADT ───────────────────────
 //

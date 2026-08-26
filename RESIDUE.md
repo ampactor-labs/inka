@@ -506,7 +506,7 @@ the brief's named form and the artifact refused it four ways, so the
 kills ARE the landing). What the probes killed, each by measurement:
 (1) THE EFFECT-OP PARAMETER IS NOT THE CLEARANCE. The reading was that
 an op's parameter type declares what it may observe, so the charge
-reads it at the op call. lib/runtime/io.mn:45 refutes it — every WASI
+reads it at the op call. lib/io.mn:45 refutes it — every WASI
 op takes Int (`fd_write(Int, Int, Int, Int)`): the value crossing into
 the host is already a buffer pointer, so a String's label is gone
 before the op boundary exists. No labelled argument ever reaches a
@@ -1945,7 +1945,7 @@ answer to a human question; an AUTHORED PATCH may contain nothing the
 graph has not proven, because source is not a place to say "I don't
 know". `tighten` uses the projection for both.
 ▶ AND THE DECLINE PATH ALREADY EXISTS. The same run printed
-`mentl tighten: list_filled_from at lib/runtime/lists.mn:119 — no
+`mentl tighten: list_filled_from at lib/lists.mn:119 — no
 single-line with-clause; skipped`, so the verb already knows how to
 refuse a site it cannot rewrite and say why. What is missing is the
 resolution check, not the machinery.
@@ -2801,7 +2801,7 @@ was proposed and refused the same day (the loop's speed clause); the
 sweep's coverage is not the problem, its re-derivation is.
 NARROWED TWICE MORE, and the fix got much smaller than an image cache.
 FIRST: the cost is a FIXED FLOOR, not a function of the program.
-`fn main() = 7` with NO imports costs 0.71s; adding runtime/math makes it
+`fn main() = 7` with NO imports costs 0.71s; adding math makes it
 0.78s; adding io + math + dsp/signal makes it 0.95s. So ~0.71s is paid by
 every invocation regardless of what the program references, and
 149 × 0.71 ≈ 106s of the sweep's 257s CPU is one prelude derived 149
@@ -3352,7 +3352,7 @@ still present — the one place both claims on the name meet. The span comes
 from the prior entry's own Reason, so the diagnostic points at the fn to
 rename rather than at the library. E_FnShadowsOp is armed; wheel census 0.
 THE THIRD KILL, and the one that cost the most: both earlier probes ran
-through the MICRO harness, whose blob link has no lib/runtime/threading —
+through the MICRO harness, whose blob link has no lib/threading —
 so `spawn` was only ever a user fn there and the collision was never in
 view. `PROBE3 spawn -> FnScheme` and `225 of 225 NOT FOUND` were both
 true and both about a program that did not have the defect. The gate
@@ -3365,7 +3365,7 @@ every stdin-fed harness the repo owns.
 
 `Hβ.infer.fn-shadows-a-linked-effect-op` (original text) — NAMED 2026-08-18, measured
 and then twice failed to build. A user program declaring `fn spawn(a) =
-42` beside lib/runtime/threading's `Thread` effect — whose ops include
+42` beside lib/threading's `Thread` effect — whose ops include
 `spawn`, and which a bare program links — gets NO diagnostic about the
 collision. The declaration is unreachable: `spawn(7)` performs the op,
 and the user's body is judged against the OP's signature, so the only
@@ -5417,7 +5417,7 @@ read growing arms, not new machinery.
 `Hβ.driver.per-module-env-overlay` — the design stamp for PLAN §11
 Phase 3.5 (banked 2026-08-07 with the first half LANDED: the solo
 sweep measured 53 violations across 13 modules at pin 7d8e91e499a1,
-two one-line imports killed 17 — verify→graph+runtime/io,
+two one-line imports killed 17 — verify→graph+io,
 format→parser — and solo_violations_max: 36 is the banked ceiling the
 frontier's sweep leg enforces). THE RESIDUAL 36 IS TWO ARCHITECTURAL
 SEAMS, measured and directioned, not under-imports: (1) THE
@@ -6376,7 +6376,7 @@ FRESHENED row copy above the mint ceiling; the charge chains the
 copy; row_keep_completion drops it as an unconstrained judgment
 copy; the caller's trial tail CLOSES without the callee's effects.
 Specimen: join_loop (lib/prelude) calls `++` → str_concat
-(lib/runtime/strings, `with Memory + Alloc`); prelude sorts before
+(lib/strings, `with Memory + Alloc`); prelude sorts before
 runtime in the weave, so the trial publishes `!Memory+-.` and the
 final `!Memory+Alloc+-.` — the probe's exact fingerprints. THE FIX
 IS A DELETION: publish `generalize(handle)` at pre_register_fn_sig

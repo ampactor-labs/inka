@@ -28,107 +28,48 @@
 code.** Any intelligence may *propose*; nothing *executes* unproven; intent is
 never lost; capability is always bounded.
 
-This reframe is load-bearing and was earned, not assumed (round-table + SOTA
-deliberation, 2026-06-18). The received wisdom — "AI writes the code, so the
-language stops mattering" — is **backwards**. The more code machines generate,
-the more the bottleneck moves from *writing* to *trusting*. A world drowning in
-machine-authored code does not need better generation; it needs a substrate
-where:
+The received wisdom — "AI writes the code, so the language stops mattering" — is
+**backwards**. The more code machines generate, the more the bottleneck moves
+from *writing* to *trusting*. Five properties define the substrate:
 
 1. **Proof beats review** — when no human authored it, "looks right" is
    worthless. Proof has no ceiling; approximation asymptotes.
-2. **The negative is provable** — autonomous, *acting* software makes "can it
-   prove it *won't* leak data / allocate unboundedly / reach the network" the
-   existential question. Name-keyed `!E` under polymorphism is shared ground
-   with the Flix line (ICFP'23 effect exclusion — a user-facing "no excluded
-   effect is ever performed" theorem, complete inference; OOPSLA'25 Boolean
-   qualifiers); Mentl's own seat is the CONJUNCTION nobody holds: absence
-   under handler/install IDENTITY, under modality, under TIME (a persisted
-   continuation's world), and per-INSTANCE (`!Sample(44100)`) — each measured
-   empty as of 2026-07. **This is Mentl's most underrated arm and the
-   future's deepest need.**
-3. **Intent is lossless** — code modified by non-authors (AI, future-selves) is
-   archaeology instantly. The Reason chain carries the *why*, walkable to root.
-4. **Computation is durable** — long-running agents, cross-machine workflows,
-   failure-surviving computation. Multi-shot continuation, persisted.
-5. **Systems explain themselves** — when systems exceed any human's grasp,
-   oversight requires the system to project its live truth at any point (the
-   cursor, the Why chain). A survival requirement, not a nicety.
+2. **The negative is provable** — `!E` under polymorphism: absence under
+   handler/install IDENTITY, under modality, under TIME, and per-INSTANCE
+   (`!Sample(44100)`). **Mentl's most underrated arm and the future's deepest
+   need.**
+3. **Intent is lossless** — the Reason chain carries the *why*, walkable to root.
+4. **Computation is durable** — multi-shot continuation, persisted.
+5. **Systems explain themselves** — the cursor projects live truth at any point.
 
 **Mentl's value is *inversely* correlated with human authorship — antifragile to
-AI progress.** Every leap in generation makes the verification substrate more
-necessary. The 2026 founding thesis ("close the gap between intent and what
-you're forced to write") matured into exactly the thing the machine-code age
-needs.
+AI progress.** The convergence: the same choices return from three independent
+directions — what makes Mentl *ultimate*, what *humanity* will need, and what's
+best for *the makers*. The Carried-Truth Law is one law at three scales: Mentl's
+kernel never fabricates a fact it can read live; software for humanity must never
+hallucinate intent; Claude must carry real reasoning, never perform confidence.
 
-**The convergence (why these are the right decisions).** When the same choices
-return from three independent directions — what makes Mentl *ultimate*, what
-*humanity* will need, and what's best for *the makers* — that alignment is the
-signal of truth, not preference. The Carried-Truth Law turns out to be one law
-at three scales: Mentl's kernel never fabricates a fact it can read live;
-software for humanity must never hallucinate intent; and Claude must carry the
-real reasoning, never perform unearned confidence.
+**Arche and telos** (crystallized 2026-07-13, adversarial refutation held). The
+**generative root is the kernel**: one graph, two operations, `!Outside`. The
+**developer is the telos** — proof wins whenever it meets convenience because
+proof *serves* the developer better than an ergonomic lie. **The developer's
+intent→expression gap and civilization's machine-authored-code trust gap are the
+SAME invariant — the Carried-Truth Law — read at two scales.** Guardrail: keep
+the framing tethered to the actual developer at the keyboard.
 
-**The deepest scale of that same law — the medium is its own builder's
-safeguard.** This session proved, pointedly, that *discipline written down cannot
-enforce itself*: with the most rigorous docs that could be written (the
-Carried-Truth Law as the first anchor, the Universal Audit as the first
-interrogation), Claude still drifted repeatedly — debugging the symptom before
-auditing the structure, trusting memory over the artifact, offering a risk-hedge
-as if it were a decision — until the human caught it. Discipline-as-prose fails
-exactly the way a language fails its developers: it *asks* for correctness
-instead of *enforcing* it (`// please don't allocate here` has never saved
-anyone). The only real safeguard is the medium making the wrong move *unsayable* —
-which is precisely what `mentl audit` will do: flag a Carried-Truth violation
-(the §7 registry) *before a line is written*. **So first-light is not merely
-self-compilation — it is the medium becoming able to enforce its own discipline
-on its own construction.** Until it is real, the human is `mentl audit` by hand
-and these docs are the *spec, not the guarantee* — the discipline is an ACTION
-taken first, every time, never a paragraph trusted-as-absorbed. The convergence
-completes: **docs : Claude :: language : developer :: human : `mentl audit`** —
-when Mentl is real, all three collapse into one (the graph, projected, keeping
-its own truth). This is the deepest reason to get the medium real (§5): so it
-keeps every builder — Claude included — honest, the way it will keep developers
-honest.
-
-**Arche and telos — which is the root, and which is the point** (crystallized
-2026-07-13, an eight-agent adversarial pass refuting the founder's own
-DX-first framing; the refutation held). The **generative root — the arche — is
-the kernel**: one graph, two operations, and its closure `!Outside`. From those,
-*both* the felt developer experience (L6, projected bottom-up per §3 — each
-layer forced by the one below) *and* the five machine-age properties project;
-neither generates the other. The **developer is the telos** — what the medium
-is *for* ("the developer they become is the end") — and that is exactly *why
-proof wins whenever it meets convenience*: proof serves the developer better
-than an ergonomic lie, so a proof-first root is the DX-*honoring* one, and an
-ergonomics-first root would betray the developer at the first
-soundness/convenience trade (TypeScript's `any`, Scala's implicits, unchecked
-exceptions — the paved road to unsound languages, all "developer-friendly"
-first). So the DX-is-the-root reframe is a telos-as-arche error; the truer
-statement extends the one-law-at-three-scales convergence: **the developer's
-intent→expression gap and civilization's machine-authored-code trust gap are
-the SAME invariant — the Carried-Truth Law — read at two scales**, and the
-convergence of independent directions onto one answer *is* the truth signal
-(re-rooting on either scale makes that convergence tautological and dissolves
-the argument the north star rests on). The one true residue of the DX critique
-is a **guardrail, not a re-rooting**: keep the machine-age framing tethered to
-the actual developer at the keyboard, so it never inflates into grandiose
-detachment.
-
-And scope `!Outside` exactly where §1 places it, no wider: it is **toolchain
-reflexivity** — every lever to improve the medium (compiler, IDE, oracle,
-formatter, prover) is already a move *inside* it. It does NOT close the **intent
-space** — specs are born in the human's head, a genuine Outside where meaning
-originates, and a proof is always relative to a spec (proof-passing but
-intent-wrong code is a failure proof *launders*, not one it removes) — nor the
-**capability space** (Rice bounds a Turing-complete self-hosting verifier to
-sound *or* complete, never both; Mentl chooses sound-and-incomplete, accruing
-honest `V_Pending` debt over fabrication). Two Outsides the medium is still
-closing, both already named: the external-SMT residual
+**`!Outside` scope** (§1): **toolchain reflexivity** — every lever to improve the
+medium is already inside it. Does NOT close the **intent space** (specs are born
+in the human's head) nor the **capability space** (Rice: sound-and-incomplete,
+accruing honest `V_Pending` debt). Two named residual Outsides: the external-SMT
 (`Hβ.verify.smt-handler-swap`) and the internal correctness oracle
-(`Hβ.closure.correctness-oracle-internal` — first-light proves *reproduction*,
-not *correctness*, so today the micro-battery is itself an external oracle).
-Naming them is what buys the skeptic's trust and costs the thesis nothing.
+(`Hβ.closure.correctness-oracle-internal`).
+
+`!Outside` is not a new runtime effect beside `Alloc`, `Thread`, or `Flow`. It is
+the closure verdict projected over the existing medium: if improving Mentl still
+requires a tool, server, verifier, proposer, transport, memory model, or build
+step outside Mentl, that edge remains open. Closing it means absorbing that lever
+into the graph, rows, `~>` handlers, `TCont` worlds, image columns, or `mentl
+space` — never minting a parallel feature named Outside.
 
 Mentl is not a programming language with good features. It is a **medium** — a
 lens so clear the developer looks through it and sees their program, not the
@@ -142,94 +83,36 @@ A tool you can surpass has its means of improvement *outside* it (to beat X you
 write Y). **The ultimate medium has no outside.** The compiler is a handler on
 its own graph (self-hosting); the IDE is a projection; the proof system is the
 kernel; the oracle is incremental-computation plus one cached value; even
-*designing* the medium is a `<~` loop folding back into its docs. Every lever
-that could build a better medium is already a move *inside* this one.
+*designing* the medium is a `<~` loop folding back into its docs.
 
 - **Unsurpassability is `!Outside`** — the medium's own negation primitive at
   topology altitude. As `!E` proves the absence of a capability, the fixed point
   proves the absence of an outside.
-- **Closed over proposers — the medium is a verification-gated proposal
-  substrate.** Any external intelligence — the graph's own vocabulary,
-  type-directed enumeration, SMT, a model, whatever follows — plugs in as a
-  `Synth` handler whose candidates must survive checkpoint → infer → Verify →
-  rollback over the trail-backed shared image before any human trusts one. This
-  is **Oracle-Guided Inductive Synthesis / Synthesis-Modulo-Oracles** (Jha–Seshia
-  2017; Polgreen–Reynolds–Seshia, VMCAI 2022) instantiated on the memory model —
-  a published architecture Mentl realizes cleanly, not invents. A stronger
-  proposer strictly strengthens the medium and can never surpass it, because its
-  only path to execution runs through the kernel; the unit of conversation with a
-  model is the token (lossy, decaying), with the medium it is the **constraint**
-  (lossless, monotone, compounding). But be exact about what proof does, because
-  the equivocation is seductive: **proof is a MONOTONE FILTER, not a
-  generator.** "The proof becomes the dispatch" is TRUE and TOTAL at
-  instruction-selection (an f64 operand admits exactly one add opcode — a finite,
-  decidable set the type fully determines) and only a FILTER at authorship (a
-  type + refinement is a *partial* spec admitting infinitely many well-typed
-  inhabitants — `(xs) => 0`, `(xs) => sum(abs(xs))` both "prove" under
-  `[Int] -> Int where result >= 0`), so the dispatch *among the survivors* — which
-  proven program the developer actually MEANT — is **exogenous**: carried by the
-  human, or by an inductive/learned ranker that is itself a legitimate `Synth`
-  handler behind the gate, never a projection of the graph's truth at P. But be
-  equally exact about the PROPOSER, because "so keep a model as the proposer" is
-  the refuter's own equivocation (corrected 2026-07-13, Morgan): at the cursor the
-  medium does NOT enumerate token space against a bare type — it proposes by
-  GUIDED search over the whole typed graph (every in-scope row, the Reason chains
-  carrying upstream intent, the live refinements, ownership, proximity), pruned at
-  every step by the proof. That graph IS a prior — a STRUCTURAL one, richer at the
-  cursor than a model's token-window, not poorer — and the pruning is the move a
-  sampler structurally cannot make (no proof to prune with, so it samples the
-  whole distribution and hands one draw to audit). So for the NEXT MOVE — the next
-  function, the next annotation, the next fill — the medium is the best proposer
-  and the learned model is **UNNECESSARY, not merely filtered**: when two
-  survivors satisfy every EXPRESSED constraint, the medium does not guess — it
-  surfaces the ONE missing constraint (a refinement, a type, an example) that
-  collapses the tie, then proposes the proven code. The gradient reading local
-  intent is the ranker; the disambiguating question is the tie-break; that IS the
-  teaching compiler, and what Mentl's voice speaks when it proposes. A learned
-  ranker survives only as an OPTIONAL last-resort `Synth` handler behind the same
-  gate — never necessary, because naming the missing bit is one keystroke, cheaper
-  than guessing it. **"Cut the model out" holds at next-move scope** — not by
-  out-guessing it but by never needing a guess. The honest boundary is SCOPE, and
-  it is the correct scope, not a weakness: a 500-line algorithm from one sentence
-  IS underdetermined for guided search and a model alike, but that was never a
-  hole-fill — the medium builds a program as a SEQUENCE of proven next-moves, each
-  accepted or refined, trustworthy by construction where whole-cloth generation
-  can never be. Even in that underdetermined tail a partially-sound Mentl gate
-  beats a fluent generator categorically: a verifier with a known, characterizable,
-  lintable hole emits a *checkable derivation*, fails *systematically*, and accrues
-  *monotone* constraints — three properties a token-sampler cannot have. The moat
-  is the gate; the PROPOSER over the typed graph is the second moat the refuter
-  missed, and the crown (`!E`-sound-under-poly) is what makes both trustworthy.
-  **THE CLOSED LOOP (Morgan, 2026-07-28 — the vision's terminal form): the
-  loop closes to the HUMAN and MENTL, and no LLM offers an advantage at ANY
-  scope — obsolete for coding.** Not a hedge softened, a target named: the
-  Synth port stays universal by construction (closure over proposers IS the
-  thesis — anything may propose, nothing executes unproven), and the design
-  target is that nothing ever needs to arrive through it. Three legs carry
-  the claim, each a build item this plan already sequences: (1) NEXT-MOVE
-  SUPREMACY — guided search over the live typed graph (rows, Reasons,
-  refinements, ownership, proximity), extraction-optimal per §5's optimality
-  half, beats any token prior at the move scale; (2) THE QUESTION BEATS THE
-  GUESS — where intent genuinely underdetermines, the medium asks the
-  minimal-entropy question (the teaching tie-break; Choose-Don't-Label /
-  OGIS selection math), so the human's one keystroke replaces the model's
-  whole sample, and the underdetermined tail dissolves into a conversation
-  of proven next-moves — intent is the one genuine Outside (§0) and the
-  HUMAN is its only source, so the machinery that turns intent into
-  constraint fastest wins by construction; (3) THE LOOP IS FELT — the
-  multithreaded multi-cursor multi-shot time-traveling oracle (the fused
-  judgment+fan substrate, landed) makes the propose-verify-teach cycle
-  instant enough to live in, and the five verbs used EXEMPLARY THROUGHOUT
-  make the surface state intent as topology directly, shrinking what needs
-  proposing at all. An LLM behind the gate is then not forbidden — it is
-  UNEMPLOYED.
-- **The proof, validated from six directions.** Every domain spent a decade
-  building *one of Mentl's arms* in isolation and stopped where it lacked the
-  others: Faust has the verbs and no effects; JAX has the handlers and no real
-  graph; Temporal has the continuation and no types; Rust has the ownership and
-  no effect row; Effect-TS has the effects and a hostile host; Solid has the
-  feedback and no proof. **Mentl is the convergence point they were all reaching
-  toward — the body none of them had, only a tentacle.** (SOTA detail: §4.)
+- **Closed over proposers** — any intelligence plugs in as a `Synth` handler
+  whose candidates must survive checkpoint → infer → Verify → rollback before
+  any human trusts one (OGIS/Synth-Modulo-Oracles). A stronger proposer strictly
+  strengthens the medium and can never surpass it. The unit of conversation with
+  the medium is the **constraint** (lossless, monotone, compounding), not the
+  token (lossy, decaying). **Proof is a MONOTONE FILTER, not a generator** —
+  total at instruction-selection, partial at authorship. The dispatch among
+  survivors is exogenous (human intent or a `Synth` ranker behind the gate).
+- **The medium is the best next-move proposer.** At cursor scope, the medium
+  proposes by GUIDED search over the typed graph (rows, Reasons, refinements,
+  ownership, proximity), pruned by proof at every step — a structural prior
+  richer than a token-window. When survivors tie, the medium surfaces the ONE
+  missing constraint (the teaching tie-break), never guesses. **"Cut the model
+  out" holds at next-move scope.**
+- **THE CLOSED LOOP (Morgan, 2026-07-28):** the loop closes to the HUMAN and
+  MENTL, no LLM advantageous at any scope. Three legs: (1) next-move supremacy —
+  guided search extraction-optimal per §5; (2) the question beats the guess — the
+  teaching tie-break dissolves the underdetermined tail into proven next-moves;
+  (3) the loop is felt — the fused oracle makes the cycle instant enough to live
+  in. The Synth port stays universal by construction; the target is that nothing
+  ever needs to arrive through it.
+- **Validated from six directions.** Faust: verbs, no effects. JAX: handlers, no
+  graph. Temporal: continuations, no types. Rust: ownership, no effect row.
+  Effect-TS: effects, hostile host. Solid: feedback, no proof. **Mentl is the
+  convergence point — the body none of them had.**
 
 ---
 
@@ -358,292 +241,110 @@ L2). Each layer is the cursor-read in a mode.
 
 ## §4 · The resolved decisions — the kernel, not questions
 
-*Decided 2026-06-18 through domain role-play + SOTA research. Resolved as kernel
-with reasoning preserved, so they are never re-litigated. Interrogate them still
-(CLAUDE.md) — but the burden of proof is now on the challenger.*
+*Decided 2026-06-18. Resolved as kernel — interrogate them still (CLAUDE.md) but
+the burden of proof is now on the challenger.*
 
-**① Value ontology — five node-kinds, everything else derived.** `Bool` already
-proves the pattern (`type Bool = False | True`, a derived ADT — not a
-primitive). `Int`/`Float` = *word* + a representation-gradient (i32 is the floor;
-i64/f64 are gradient cash-outs, annotations not types). `String` = *sequence of
-byte* + a text/interpolation view. The four §IX "ordered-keyed-set"
-implementations (string-set, name-set, field-set, tagged-values) unify into one
-operation over sequence/product. *SOTA:* Arrow/Polars/DuckDB all converged on
-"one sequence type, many element types." *Consequence:* the `str_concat`-vs-
+**① Value ontology — five node-kinds, everything else derived.** `Bool` =
+`False | True` (a derived ADT). `Int`/`Float` = *word* + representation-gradient.
+`String` = *sequence of byte* + text/interpolation view. The `str_concat`-vs-
 `list_concat` split does not exist at the bottom — there is sequence-concat, and
-the read picks the representation ("the proof becomes the dispatch"). The trap
-that ate this session was the bottom signalling the ontology wasn't ultimate.
+the read picks the representation ("the proof becomes the dispatch").
 
-**② The verbs — five, validated from outside by Faust.** Faust's DSP block-
-diagram algebra independently arrived at four of the five: split `<:` ≡ `<|`
-(same glyph), recursive `~` ≡ `<~`, sequential `:` ≡ `|>`, parallel `,` ≡ `><`.
-*Resolution of the merge question:* Faust needs a merge `:>` because it is
-point-free; Mentl folds merge into `|> merge_fn` because it has named values +
-tuple-unification — **not a missing verb, a consequence of not being point-
-free.** `~>` (handler/effects) is the arm Faust lacks: **Mentl = Faust's
+**② The verbs — five, validated from outside by Faust.** Faust independently
+arrived at four: split `<:` ≡ `<|`, recursive `~` ≡ `<~`, sequential `:` ≡ `|>`,
+parallel `,` ≡ `><`. Merge folds into `|> merge_fn` (named values + tuple-
+unification). `~>` (handler/effects) is the arm Faust lacks: **Mentl = Faust's
 topology + handlers.** Five verbs, settled.
 
 **③ THE CROWN — the effect system: rows-with-negation; modal is the TARGET, the
-graph is the ROUTE.** Three forms exist (current PL research): **rows** (Koka —
-parametric row variables: the row FORM Mentl adopts. Koka itself OMITS Boolean
-negation — its scoped duplicate-labeled rows were chosen *to avoid* absence/lacks
-constraints — so `!E` is Mentl-NATIVE, not inherited from Koka; the form *leaks*
-through higher-order functions, this session's L1 trap, the textbook failure mode
-not a bug); **capabilities** (Effekt — lexical/second-class, no effect variables,
-so the leak *cannot occur*, but negation isn't native AND effects can't escape —
-fatal to first-class continuations); **modal** (*Modal Effect Types*, the Tang–Lindley
-line, OOPSLA 2025 — rows *and* capabilities unified by a modality that re-admits first-class
-escape *under proof*; the follow-up *Rows and Capabilities as Modal Effects* (POPL
-2026, arXiv 2507.10301) PROVES both macro-encode into the one modal frame, types
-and semantics preserved; cited live at `src/effects.mn:12`). **Decision: keep
-rows-with-negation — never trade away `!E`** (Mentl's unique power and humanity's
-proving-the-negative need) — and hold the **modal synthesis as the
-unsurpassable-tier TARGET** (the strongest published candidate); the defining
-question — *can capabilities' no-leak threading coexist with rows' Boolean
-negation?* — now has its rows≡capabilities HALF discharged in the literature (POPL
-2026), leaving the **NEGATION half** the open burden — **its, any rival's, and
-Mentl's own graph-native route's** (interrogate, don't absorb: name the frontier,
-don't crown a destination). Two artifact-grounded reasons it was correctly targeted
-(adversarially verified 2026-06-21) — and the STATE of each, trued 2026-07-02
-against the lines they cite: **(a) `!E` under polymorphism** — the one unify_row
-punt (`EfOpen ~ EfNeg` errored instead of unifying) is CLOSED (b4b1989,
-2026-06-23): `bind_open_to_neg` binds the open var to the NEGATION itself so the
-var carries the forbidden set forward through generalize/instantiate, and
-`free_in_row`/`subst_row` cross the negation — the mechanism Koka omitted
-negation to avoid, realized through the row representation. (REPRESENTATION
-NOTE, 2026-07-22: the six-form row tree named in this paragraph's history —
-EfPure/EfClosed/EfOpen/EfNeg/EfSub/EfInter — is superseded by the canonical
-triple `EfRow(present, absent, tail)` with `EffTail = EtClosed | EtVar | EtAll`;
-negation IS the absent field, subtraction/intersection are eager fieldwise ops,
-and bind_open_to_neg's move is unify's Open~All arm binding the var to the
-masked triple. The landing record keeps the era's vocabulary; the `LEDGER.md`
-entry carries the ruling.) The adversarial soundness GATE
-LANDED (2026-07-13, effects.mn `row_subsumes` EfNeg arm): the negation membership
-matches BY NAME (`forbidden_names_disjoint` / `eff_name_str`) — `!E` proves the
-ABSENCE of the effect NAMED E (SYNTAX §Negation), every instance — because the old
-check compared names with pointer `i32.eq` and a byte-equal `ENamed("E")` from an
-effect decl and from a `with !E` clause are distinct heap objects, so a forbidden
-effect passed straight through the gate (direct, transitive `a→b→bad`, and
-higher-order `run(() => op())` all leaked at baseline). By-name is robust to the
-`ENamed`/`EParameterized` split a structural `==` would itself leak through (a bare
-`!Sample` is `ENamed` while a performed `Sample` is `EParameterized`) and leaves the
-row-algebra hot path untouched — a broad structural fix timed the wheel compile out.
-The five crucibles (tests/crown/, tools/crown-gate.sh) reject direct/transitive/
-higher-order and accept the sound controls; the gate FAILS at pre-fix boot and
-PASSES against the fix; 66/66 micros hold and the fixpoint is byte-identical
-(m2 == m3), so it is Law-7-additive — the wheel's own `!` fns never violate their
-declarations, so the gate returns the same verdict there. What REMAINS open in band
-A: the full modal world-index, and two follow-ups the working gate exposed —
-`Hβ.effects.positive-row-pointer-eq` (the positive path's pointer-eq
-false-positive — 598 false mismatches on the self-compile, healed to 146 by the
-by-name membership fix, cc487f8 §7; the residual dissolves with
-EffName-is-a-handle) and `Hβ.effects.parameterized-negation-instance`
-(instance-precise `!Sample(44100)` admitting `Sample(48000)`; bare `!E` by-name is
-sound and conservative).
-**(b) the TIME axis** — `TCont(R, S, ResumeDiscipline, EffRow)`, landed in two
-steps exactly as §5.U records them: 27edc30 added the effect-WORLD index; the
-executable-boundary landing (2026-07-16, §7) split resume-input `R` from
-remainder-answer `S` and captures the world on the ContinuationEdge at
-inference. The unify-time gates are LIVE (discipline mismatch raises
-`E_ResumeWorldMismatch`; the world half unifies as a row); band B's open work
-is the runtime VALUE gate on a genuinely divergent world (the declared
-`E_ResumeWorldMismatchWorld` raise is unwired — persist's rehydrate now
-REFUSES via Fail). **The graph is the ROUTE, never the replacement:** Mentl's
-first-class unified-evidence substrate — dispatch decoupled from the type-row
-(413bdc2) — is a degree of freedom Koka/Effekt/the modal calculus lack; it lets
-the modality be **inferred and cursor-projected** (a graph fact, §4⑤ quiet, never
-authored). The flow-edge representation soundly fixes the *positive* higher-order
-leak; it does NOT alone make `!E`-under-polymorphism or cross-context resume sound
-— that is the modal synthesis's work, realized *through* the substrate. **Real
-before perfect (§5):** kill the positive leak *enough to self-host* now (the
-flow-edge completion); land the modal world-index as the long game. Do NOT stall
-the medium's existence on unshipped research — and do NOT crown the unproven route
-as the destination (the 2026-06-21 fluency trap: a session-built flow-edge form
-rationalized as "already modal" while pass-2 still trapped; the five-lens
-adversarial panel refuted it 4/4 on verified soundness grounds).
+graph is the ROUTE.** Decision: keep rows-with-negation — **never trade away
+`!E`**. Hold the **modal synthesis** (Tang–Lindley line, POPL 2026 arXiv
+2507.10301 — rows≡capabilities proven) as the unsurpassable-tier TARGET. The
+defining question: *can capabilities' no-leak threading coexist with rows'
+Boolean negation?* The rows≡capabilities half is discharged in the literature;
+the **NEGATION half** is the open burden. Row representation: `EfRow(present,
+absent, tail)` with `EffTail = EtClosed | EtVar | EtAll`; negation IS the absent
+field. The adversarial soundness GATE LANDED (2026-07-13, `row_subsumes` EfNeg
+by-name membership; tests/crown/, crown-gate.sh; m2==m3 byte-identical).
+Open in band A: the modal world-index, `Hβ.effects.parameterized-negation-
+instance`. **(b) TIME axis**: `TCont(R, S, ResumeDiscipline, EffRow)` LANDED —
+the effect-WORLD on the continuation, unify-time gates LIVE (discipline mismatch
+raises `E_ResumeWorldMismatch`; the world unifies as a row). Band B's open work:
+the runtime value gate. **The graph is the ROUTE:** Mentl's unified-evidence
+substrate lets the modality be **inferred and cursor-projected** (a graph fact,
+never authored). Real before perfect: the modal world-index is the long game.
 
-**④ Multi-shot is ONE substrate for five things.** Search (the oracle),
-sampling (ML), backtracking, *and durable execution* (the entire 2025 cloud
-field — Temporal/Restate/DBOS) are the same primitive: a resumable continuation,
-distinguished only by which handler catches the resume and whether it is
-persisted. **Persistence is a handler swap.** Mentl's oracle and the workflow
-engine are *literally the same arm*. (SOTA: durable execution = "a function that
-resumes exactly where it left off after a crash" = persisted multi-shot; Effekt
-ICFP-2025 "multiple resumptions + local state, directly" is the live frontier
-for Mentl's multi-shot-with-handler-state.) Claim this unification explicitly.
+**④ Multi-shot is ONE substrate for five things.** Search (oracle), sampling
+(ML), backtracking, *and durable execution* (Temporal/Restate/DBOS) are the same
+primitive: a resumable continuation, distinguished only by which handler catches
+the resume. **Persistence is a handler swap.** Mentl's oracle and the workflow
+engine are *literally the same arm*.
 
-**⑤ Ownership — inferred `own`/`ref`, held to the Hylo-quiet bar.** Hylo's
-mutable-value-semantics experiment proved the hard lesson: *moves metastasize* —
-add a move anywhere and you need borrows everywhere; you can't escape borrows,
-only escape *annotating* them. So ownership-as-inferred-effect (`own` performs
-`Consume`; `ref` is a row constraint; filled from use-count 0/1/2+) is the right
-shape. **The measured invariant: if the developer has to think about it, the
-inference failed.** Quietness is a bar, not a hope.
+**⑤ Ownership — inferred `own`/`ref`, held to the Hylo-quiet bar.** Ownership-
+as-inferred-effect (`own` performs `Consume`; `ref` is a row constraint; filled
+from use-count). **The measured invariant: if the developer has to think about
+it, the inference failed.**
 
-**⑥ The IFC frontier — the row should carry information *flow*, not only
-capability presence.** Capability-security (ocap: E, Pony, seL4-proven-by-hand)
-is already subsumed by `!E` + the `~>` trust hierarchy ("the handler chain IS
-the capability stack, proven not audited"). The open extension: can a row
-express "this `Secret` may not flow to `Log`," proving non-interference the way
-`!Alloc` is proven? If yes, Mentl absorbs information-flow control into the same
-Boolean algebra. *In scope for ultimate; sequenced as a post-real handler (§5).*
+**⑥ The IFC frontier — the row carries information *flow*, not only capability
+presence.** `!E` + `~>` already subsumes capability-security. The extension: a
+row expressing "this `Secret` may not flow to `Log`" — non-interference proven
+like `!Alloc`. Sequenced as Phase 7 (§11).
 
-**⑦ The felt experience is co-equal — reactivity IS the cursor's `<~`.** Fine-
-grained reactivity (Solid/Svelte signals; Effect-TS bolting effects onto a
-hostile host) is the cursor re-projecting on graph delta at the human boundary —
-the *same machinery* as incremental compilation (cached cursor) and collab
-(shared cursor). Legibility is a survival need for human oversight of autonomous
-systems, so L6 is not Stage-3 garnish.
+**⑦ The felt experience is co-equal — reactivity IS the cursor's `<~`.** The
+cursor re-projecting on graph delta at the human boundary IS fine-grained
+reactivity, incremental compilation, and collab. L6 is not Stage-3 garnish.
 
 ---
 
 ## §5 · real · felt · unsurpassable — three aspects of one ultimate form
 
 **Apply Mentl's own gradient to Mentl's own development.** These are NOT a
-sequence to march through — they are three ASPECTS of the one ultimate form,
-written in FULL. The discredited reading ("do real first, then felt, then
-unsurpassable; close first-light before anything above it") is the phasing the
-makers rejected. You write the ultimate `.mn` answering ONLY to "what is the
-ultimate form?"; the disposable seed's weaker inference catches up afterward
-("write the ultimate form, THEN we make it work"). first-light is not a phase to
-*close first* — it ARRIVES when the complete wheel meets a caught-up seed.
+sequence — they are three ASPECTS of the one ultimate form, written in FULL. You
+write the ultimate `.mn` answering only to "what is the ultimate form?"; the
+disposable seed catches up afterward. first-light ARRIVES when the complete wheel
+meets a caught-up seed; it is not a gate chased ahead of the form.
 
-1. **REAL — it WORKS.** The substrate compiles real programs end-to-end; the
-   micros run; the wheel emits correct WAT. first-light (the wheel compiling
-   ITSELF to a fixed point) is the smallest instance of `!Outside` — a milestone
-   that arrives when the wheel is complete, never a gate chased ahead of the form.
-2. **FELT — the human surface (L6).** The felt experience *falls out as
-   projections*: `mentl where/why/edit`, the gradient, the Why button,
-   reactivity. The founding's payoff and the point. (Working brand/IDE design
-   brief: `docs/DESIGN_SYSTEM.md`; the interaction architecture: `docs/MENTL_EDIT.md` — draft ARTIFACTS of this aspect, not
-   read-path; the three-doc contract stands.)
-3. **UNSURPASSABLE — the frontier.** The modal effect synthesis (§4③), the IFC
-   frontier (§4⑥), durable-execution-as-handler (§4④), the value-ontology
-   derivation (§4①), Verify→SMT, native/GPU backends (handler swaps), the
-   e-graph (effect-aware equality saturation, live in lower). Each a move
-   *within* the medium.
+1. **REAL — it WORKS.** End-to-end compilation, micros green, wheel emits correct WAT.
+2. **FELT — the human surface (L6).** `mentl where/why/edit`, the gradient, the
+   Why button, reactivity — these *fall out as projections*, not added on top.
+3. **UNSURPASSABLE — the frontier.** Modal effect synthesis (§4③), IFC (§4⑥),
+   durable-execution-as-handler (§4④), value-ontology (§4①), Verify→SMT, native/
+   GPU backends, e-graph. Each a move *within* the medium.
 
-   **The felt endpoint — verification-gated proposal at the `??` (§1's proposer
-   closure, made the surface).** As you type, a `??` is a typed CONSTRAINT (the
-   graph knows its type, effect-row, ownership, refinement); the cursor forks a
-   **finite, latency-budgeted set** of candidate fillings (the graph's
-   vocabulary, enumeration, an installed learned proposer), each run
-   checkpoint → infer → Verify → rollback on its own trail, and only the proven
-   survivors surface. This is **sample-then-filter, asynchronous and
-   best-effort — it may return nothing** — NOT an exhaustive multiverse per
-   keystroke: enumeration hits the synthesis exponential wall (FlashFill:
-   ~10²⁰ programs for a few examples), the cheap trail-fork lowers the
-   per-*visit* constant never the candidate *count*, and the IC cursor memoizes
-   the context AROUND the hole, not the search WITHIN it (each candidate is a
-   different query graph). Multi-shot is continuation-*reification* (resume one
-   computation with different values) — the substrate that makes each fork
-   cheap, not the search engine (a distinct operation from enumerating
-   subtrees; the vocabulary must not be borrowed for generate-and-test). The
-   **honest gaps, positive-form:** the ranker among survivors is `gates ×
-   proximity` today — sound only over the finite ANNOTATION lattice (effect-row
-   / ownership tightenings on already-written code); the ULTIMATE next-move
-   ranker is **the gradient reading LOCAL intent** — the Reason chains carrying
-   upstream why, proximity, the in-scope vocabulary — with the **teaching
-   TIE-BREAK** when two survivors satisfy every expressed constraint (surface the
-   one disambiguating refinement / type / example, never guess); a learned
-   code-body prior is then an OPTIONAL last-resort `Synth` handler for the
-   underdetermined tail, **never the seat** (§1's 2026-07-13 correction —
-   `Hβ.felt.intent-ranker-gradient-plus-teaching`, superseding the earlier
-   "learned prior behind the gate" framing; the medium is the best next-move
-   proposer, the model unnecessary at that scope). And Verify
-   must **commit to a decidable refinement fragment** (Liquid/Flux-style) or the
-   per-keystroke filter is vaporware past `len(self) > 0`; the undecidable
-   residue is honest `V_Pending` debt (the sound-incomplete choice — never a
-   silent assume-true; the Dafny `{:axiom}` cautionary, `Hβ.verify.ledger-soundness`)
-   or a NAMED external-SMT `!Outside` (`Hβ.verify.smt-handler-swap`).
-   **Trustworthiness is a CONJUNCTION with a dependency order, not the crown
-   alone:** compiler-correctness *beneath* (a miscompiled wheel voids any
-   on-paper `!E`; first-light proved reproduction, not correctness) → Verify-
-   discharge-soundness *alongside* → `!E`-sound-under-poly (the crown, root of
-   the negative-capability BRANCH every differentiating guarantee inherits — its
-   soundness gate LANDED 2026-07-13, 29df478, the by-name negation gate,
-   m2==m3 byte-identical; the modal world-index is the open remainder, uniquely
-   Mentl's) → spec-faithfulness *above*
-   (the crown does not touch it; proof-passing-but-intent-wrong code is a failure
-   proof LAUNDERS, band K's Lahiri worked-example). The genuinely novel residue,
-   on the FILTER/substrate side AND on GUIDED next-move search — never on the
-   UNGUIDED whole-program enumeration that explodes (that tail is where a learned
-   ranker earns its keep): the **effect-and-ownership-typed hole** prunes classes
-   no simply-typed (Hazel) or refinement-but-effect-blind (Synquid) hole can —
-   type-directed search over the FINITE in-scope vocabulary, pruned by the row at
-   every step, IS the proposer for the next move, the structural prior the
-   token-sampler lacks; **trail-fork + memcpy-persist** unifies backtrack with
-   durable execution (persist = memcpy) in one loop; **`??` is one absence
-   marker across SPACE (partial application) and TIME (the resumable
-   continuation)**; and **`!E`-gated speculation** — proving an effect's ABSENCE
-   is the license to *live-run* a candidate (only `!IO` runs freely; the rest
-   caught by a virtualizing handler), a correct answer to live programming's
-   "don't run the dangerous candidate," contingent on the crown landing.
+   **The felt endpoint:** a `??` is a typed CONSTRAINT; the cursor forks a finite,
+   latency-budgeted set of candidates, each run checkpoint → infer → Verify →
+   rollback on its own trail, only proven survivors surface. The ranker reads
+   **local intent** (Reason chains, proximity, in-scope vocabulary); the
+   tie-break TEACHES (surfaces the one missing constraint, never guesses).
+   Verify commits to a decidable refinement fragment or emits honest `V_Pending`
+   debt — never a silent assume-true.
 
-   **THE OPTIMALITY HALF (Morgan's charge, 2026-07-28): the space between
-   a developer's intent-plus-constraints and the BEST implementation of it
-   as machine instruction is the medium's to EVAPORATE — a proposal is not
-   merely proven, it is extraction-OPTIMAL.** A survivor is an equality
-   CLASS, not one program: the e-graph saturates the proven fill under the
-   effect-aware rewrites, extraction picks the cost-minimal member, the
-   repr gradient pins its widths, and the native projection (band N) makes
-   "best machine instruction" literal — superoptimization as the default
-   authoring experience, never a pass you opt into. This is what obsoletes
-   the generative copilot at next-move scope, stated as channels: the
-   copilot's channel — intent → tokens → plausible text → human audit — is
-   lossy at every arrow and its enforcement is behavioral (the 2026
-   spec-driven wave concedes it in its own docs: intent captured in
-   markdown, "no automated validation that generated code matches
-   specifications"); the medium's channel — intent → CONSTRAINT (typed,
-   monotone, compounding) → guided search pruned by proof at every step →
-   survivors ranked by local intent → the tie TEACHES → the accepted move
-   proven AND optimal — has no unverified middle, because every
-   intermediate is a graph fact. What a generative assistant retains is
-   the underdetermined tail, and the medium converts that tail into a
-   sequence of proven next-moves; a learned proposer survives only as an
-   optional `Synth` handler behind the gate, never the seat (§1's
-   correction, now with its optimality face) — and the CLOSED-LOOP target
-   (§1, Morgan 2026-07-28) is that the port stays EMPTY: the loop closed to
-   the human and the medium, no LLM advantageous at any scope.
+   **THE OPTIMALITY HALF (Morgan 2026-07-28):** a proposal is not merely proven,
+   it is extraction-OPTIMAL. A survivor is an equality CLASS: the e-graph
+   saturates the proven fill under effect-aware rewrites, extraction picks cost-
+   minimal, repr gradient pins widths, native projection makes "best instruction"
+   literal. Superoptimization as the default authoring experience.
 
-   **THE FORK/MERGE DUALITY — why the two halves compose, and where the
-   human is irreducible (crystallized 2026-07-30, the words Morgan had
-   been reaching for).** The fan and the e-graph are not one mechanism
-   and not two features: they are DUALS over two different spaces, and
-   the composition's direction is forced.
-   - **MEANING-space is explored by FORKING; FORM-space by MERGING.** The
-     fan's candidates MEAN different things (`0` and `sum(abs(xs))` are
-     rivals), so each needs isolation — checkpoint, per-branch world,
-     rollback — because candidates CONFLICT. The e-graph's members mean
-     the SAME thing by construction, so merging needs no isolation at
-     all: equals compose, saturation is monotone, nothing is ever undone.
-     That asymmetry IS why one required the whole trail-and-spawn
-     substrate and the other runs free inside lower — not an
-     implementation accident.
-   - **Proof is a FILTER over meaning (binary: admit / refuse); cost is
-     an ORDER over form (total: take the minimum).**
-   - **A TIE IN FORM-SPACE IS FREE; A TIE IN MEANING-SPACE IS A
-     QUESTION.** Two cost-minimal members are EQUAL — pick either, it
-     cannot matter. Two proven survivors MEAN different things and the
-     graph does not contain the answer, so the medium cannot pick and
-     must ASK. This is where the human is irreplaceable, and it is
-     DERIVED here rather than asserted: §1's teaching tie-break is not a
-     nicety bolted onto the fan — it is what the fork side IS when it
-     terminates with more than one survivor, and §0's "intent is the one
-     genuine Outside" is the same fact read at the thesis altitude.
-   - **The order is FORCED.** Extract-then-prove would optimize a
-     program that may be inadmissible; prove-then-extract is the only
-     composition that holds. "Proven AND optimal" is therefore one
-     pipeline with a mandatory direction, never two features stapled.
-   - **The effect row plays BOTH halves, differently:** it gates which
-     REWRITES are legal (a dropping rewrite fires only when the dropped
-     operand's row subsumes pure) and which CANDIDATES are legal (no
-     survivor violates its `!E`). Form-legality and meaning-legality,
-     one algebra at two altitudes — the crown paying for both.
-   STATE, honestly: the fan rides real spawned branch cursors and the
-   e-graph is live and effect-aware in lower, and they are NOT yet
-   fused — the composition above is designed, not built. Building it is
+   **THE FORK/MERGE DUALITY** (crystallized 2026-07-30):
+   - **MEANING-space is explored by FORKING; FORM-space by MERGING.** Fan
+     candidates MEAN different things (each needs isolation — checkpoint, per-
+     branch world, rollback — because candidates CONFLICT). E-graph members mean
+     the SAME thing (merging needs no isolation; saturation is monotone).
+   - **Proof is a FILTER over meaning (binary); cost is an ORDER over form (total).**
+   - **A TIE IN FORM-SPACE IS FREE; A TIE IN MEANING-SPACE IS A QUESTION.** Two
+     cost-minimal members are equal — pick either. Two proven survivors MEAN
+     different things — the medium must ASK. This is where the human is
+     irreplaceable, derived here rather than asserted.
+   - **The order is FORCED:** extract-then-prove optimizes a program that may be
+     inadmissible; prove-then-extract is the only sound composition.
+   - **The effect row plays BOTH halves:** gates which REWRITES are legal (a
+     dropping rewrite fires only when the dropped operand's row subsumes pure)
+     AND which CANDIDATES are legal. One algebra, two altitudes.
+   STATE: the fan rides real spawned branch cursors; the e-graph is live and
+   effect-aware in lower. They are NOT yet fused — building the composition is
    what makes a proposal extraction-optimal rather than merely proven.
+
+
 
 ### §5.U · The value layer — four projections of one cursor on one heap record
 
@@ -768,15 +469,17 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 ### §5.O · The O(1) architecture — performance IS the Carried-Truth Law
 
-**The only acceptable complexity for any operation in Mentl is O(1)** (Morgan,
-2026-07-13). Not an aspiration — the Carried-Truth Law read at the performance
-scale. The kernel is one graph whose ONLY native access is the O(1) flat-array
-handle chase (§2), so a super-constant operation is by definition NOT reading the
-graph — it is RE-DERIVING what the graph already holds (a scan, a re-filter, a
-re-clone). **"O(1) only" ≡ "read the edge, never re-scan" ≡ Law 1.** Every scanner
-in the compiler is a place we forgot the graph already knew. (Derived by running
-the eight interrogations on the hot paths, 2026-07-13; the record is in the arc
-below.)
+**O(1) means no re-deriving an already-addressed fact** (Morgan, 2026-07-13,
+trued 2026-08-25). Not an aspiration — the Carried-Truth Law read at the
+performance scale. The kernel is one graph whose native access is the flat-array
+handle chase (§2), so a super-constant lookup for a fact already connected by a
+handle is not "work"; it is a discarded edge. **"O(1) only" means: follow the
+edge, never re-scan by name, shape, list position, or side ledger.** Whole
+program actions keep their honest bounds: compile is O(reachable image), edit is
+O(changed cone), structural equality/show/hash are O(value shape), proof is
+O(obligation fragment), and persistence is O(image bytes) until dirty-page image
+tracking lands. The law bans accidental super-constant lookup; it does not ban
+the structural walks whose output is the requested value.
 
 **The diagnosis (8-agent adversarial workflow, 2026-07-13 — the 22-min
 self-compile).** The cost is 100% guest ALGORITHM: JIT is ~20ms, AOT marginal,
@@ -874,7 +577,7 @@ session's reports under .build/research are its first corpus
    set as EDGE-following from main (`Hβ.lower.reach-edge-on-node`), the name scan
    gone (the `reach_has` membership's remaining O(n²) is `Hβ.lower.reach-membership-o1`).
    The str_hash WAYPOINTS largely converged already (trued 2026-07-24): smap
-   (lib/runtime/imap.mn, the one String-keyed primitive) carries the infer/lower
+   (lib/imap.mn, the one String-keyed primitive) carries the infer/lower
    indexes; the two hand-rolled survivors are the env index (pipeline.mn
    env_index_new/env_bucket_pos family) and the emit string table (wasm.mn's own
    buckets). `Hβ.runtime.indexed-map-primitive` finishes as: those two re-key by
@@ -901,106 +604,28 @@ risk, well-precedented). Each layer marched + gated before the next. The whole
 becomes O(n) total (n = program size, O(1) per operation) on N cores — the
 substrate-honest floor of "unsurpassed speed."
 
-### §5.R · The post-first-light roadmap — the named remainder (so first-light's focus cannot erase it)
+### §5.R · The post-first-light roadmap — the named remainder
 
-> Every unsurpassable item NAMED in positive form and SEQUENCED, so the work
-> survives first-light's all-consuming focus (gathered 2026-06-28: the SOTA fleet +
-> the three docs + the codebase `Hβ.*` peers + an adversarial completeness critic;
-> 95 items / 15 bands; **full detail with SOTA refs + file:line anchors in
-> git history: docs/research/post-first-light-roadmap.md**, the SOTA map in
-> git history: docs/research/sota-convergence.md). Each is a positive-form named peer — a
-> hidden gap is drift (the bug IS the non-ultimate form, `CLAUDE.md ⟐`). Sequenced
-> AFTER first-light unless marked NOW; the gate that unblocks dependents leads each
-> band. **THE SPINE:** `Hβ.effects.sound-neg-under-poly` is the dependency ROOT —
-> ownership-as-effect, `!Thread`/`!Alloc` transitivity, and IFC non-interference — its
-> soundness GATE LANDED (29df478), so dependents can now be verified against it; the
-> modal world-index and the `TCont` world-index remain the open crown work. ALL
-> inherit the EfNeg-under-instantiation unsoundness, so none can be VERIFIED (only
-> built) until the crown closes; the `TCont` world-index is the second spine (TIME).
-> STEP 0–5 + W31 + the CROWN soundness gate (29df478) + the M1–M4 multi-shot arc + S0
-> compare/hash fold leaves are LANDED — this is the remainder (the O(1) architecture,
-> §5.O, is the current build-ordered layer set).
+> 95 items / 15 bands, gathered 2026-06-28. **Full peer catalog with SOTA refs
+> and file:line anchors: `RESIDUE.md`** (the one home; a hidden gap is drift).
 >
-> **THE DESTINY AUDIT (2026-07-14, 8-subsystem adversarial ultracode workflow,
-> artifact-grounded; full record in git history: docs/research/destiny-audit-2026-07-14.md)
-> reframes this whole band.** The 95-peer list OBSCURES the real shape every
-> auditor found independently: **machinery real, performance absent** — Mentl
-> built its capabilities correctly as handlers-on-the-graph and then left the ops
-> UNPERFORMED and the handlers UNINSTALLED (synth, Why, persist, Verify, IFC, the
-> modal world, the LSP/IDE transports, the `repr` gradient — each a real engine no
-> live loop calls). Scored against the artifact the five destiny pillars land
-> ~35–40%; the gap is WIRING, not substrate. So the work is **wiring-dominated**
-> (perform the ops already built — largest, cheapest), **deletion-heavy** (the
-> four fold generators → one `fold(ty, leaf)` ~1200 lines; the inert kernel
-> overlay drift-7; the by-name effect family), a **focused proving spine** (R2
-> bind `self` live → R3 a decidable fragment → R5 gate the elision — the one new
-> engine), and **one deferred big build** (native / the execution-layer
-> `!Outside`). **THE CRITICAL PATH, dependency-ordered: R1** `EffName`-is-a-handle
-> → the positive effect gate becomes SOUND (594 self-compile false-mismatches →
-> ~0, the convergent non-negotiable root — a CORRECTNESS site the perf loop never
-> reaches; §5.O layer-1 applied to correctness) → **R2** bind `self`/args to the
-> live node (the value-proof pillar is zero today) → **R3** a decidable arithmetic
-> fragment → **R4** wire the live felt loop (transports infer, `QWhy`→`why_expand`,
-> synth-on-`NHole`-and-APPLY — highest destiny-per-line) → **R5** gate the
-> narrowing elision on real discharge (latent-OOB landmine) → **R6** extract the
-> `~> Backend` emit seam + fix the doc-truth debt. The single truest line of the
-> audit: `synth_proposer.mn:570` says "the loop is closed"; the artifact says it
-> is open.
+> **THE SPINE:** `Hβ.effects.sound-neg-under-poly` is the dependency ROOT —
+> its soundness GATE LANDED (29df478); the modal world-index and `TCont`
+> world-index remain open. **THE DESTINY AUDIT** (2026-07-14) reframes the
+> whole band: **machinery real, performance absent** — the gap is WIRING
+> (perform the ops already built), not substrate. ~35–40% scored.
+>
+> **CRITICAL PATH:** R1 `EffName`-is-a-handle (✅ LANDED) → R2 bind
+> `self`/args live → R3 decidable fragment → R4 wire the felt loop → R5
+> gate narrowing elision → R6 `~> Backend` emit seam.
 
-**A · Effects & the modal crown (arm 4) — gates ownership, !Thread, IFC negation.** `Hβ.effects.sound-neg-under-poly` (the soundness GATE LANDED 2026-07-13 — `row_subsumes` EfNeg by-name membership; tests/crown/ + tools/crown-gate.sh; m2==m3 byte-identical, 66/66 micros; the open tier is the modal world-index below plus the two exposed follow-ups `Hβ.effects.positive-row-pointer-eq` and `Hβ.effects.parameterized-negation-instance`) · `Hβ.effects.modal-world-index` (rows+capabilities+negation sound simultaneously, as a graph fact; POPL-2026 cite at effects.mn:12) · `Hβ.infer.modal-capability-at-tee` (the modal rule: a row var becomes a lexical capability handle at the `~>` edge, no new surface form) · `Hβ.syntax.perform-dissolution`.
-
-**B · Continuations & TIME (arm 2, §4④) — the binding keystone. LANDED: `Hβ.lower.continuation-reification-codegen` (the k1→M4 arc self-hosted through the fixpoint, §7); `Hβ.continuations.multishot-reexecution-driver` is SUPERSEDED (the 2026-07-11 pivot — re-execution restarts, the felt spec demands resume), `Hβ.lower.arm-internal-perform-scope` closed by the M3 lexical-evidence fence.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (at the multi-shot producer's reify site) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed; the standardized multiple-memories proposal is this peer's substrate cash-out — a dedicated IMAGE memory snapshots whole while scratch lives apart, the memcpy boundary drawn by the module format itself) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` *(substrate PROBED 2026-07-10: wasmtime 43 `-W stack-switching` + wasm-tools 1.252 assemble native typed-continuations — single suspend/resume runs (fx1→10) — but the cont is LINEAR: resuming one twice PANICS the engine (`ptr::eq(head, self)`). So native gives ONE-shot free (already fast-pathed by direct-call) and does NOT solve MULTI-shot; the multi-shot keystone is RE-EXECUTION — `cont.new(body)` fresh per resume, replaying prior performs, the trail/rollback substrate the driver — not native cloning. `perform`→`suspend`, `resume(v)`→fresh-cont resume; the emit path switches to wasm-tools for continuation modules (WABT can't assemble `cont`). This IS the producer-invocation keystone the cardinality fix unblocked — see §7)* · `Hβ.continuations.multishot-reexecution-driver` *(the re-execution driver — PROVEN END-TO-END 2026-07-11, crucibles in tests/native-cont/: native-cont `twice` → 3 (identity) and 13 (non-identity `pick()+5`, the continuation after the perform captured natively), and the same model in Mentl source → 30 through boot. A multi-shot handler is a DRIVER over re-runs: `resume(v)` = fresh `cont.new(body)` resumed to the `suspend`, then resumed with v; `suspend` unwinds the perform to the driver so the arm runs OUTSIDE the body's stack (no re-entrancy — the trap the pure-Mentl outer-install form hit). Correct for identity / non-identity / no-perform. **BUT native conts are BLOCKED under WASI `_start` (wasmtime 43, verified 2026-07-11): a single `cont.new`+`resume` under `_start` panics `ptr::eq(head, self)` — the command entry runs on wasmtime's own fiber and a user continuation violates its stack invariant; `--invoke` works, `_start` (every real program) does not, and no flag avoids it.** So native conts are the O(1) future (an `!Outside` dependency until wasmtime carries them under `_start`), NOT the shipping substrate. THE SHIPPING PATH is the PURE-MENTL re-execution driver — `resume(v)` re-runs the body thunk under a one-shot replay handler, all ordinary handlers, works under `_start`: the DIRECT form (arm logic as a driver fn, no outer install) is proven (reexec-model.mn → 30) and correct when the body performs the op unconditionally (mn-multishot). The general form (conditional / no-perform bodies) needs the ARM-INTERNAL-PERFORM GAP closed — the re-run's perform must resolve to the inner replay, not re-enter the outer handler (the pure-Mentl outer-install driver's 134 trap). THAT is the real keystone dig, `!Outside`-clean. Each rerun is a stateless fork → trivially parallel + durable, the SPACE=TIME fork §5.U scheduled by `~> Schedule`)* · `Hβ.lower.arm-internal-perform-scope` *(new — the gate under multi-shot: a handler installed INSIDE an arm body (`bt() ~> replay(v)`) must shadow the enclosing handler for performs in the re-run; today the re-run's perform re-enters the outer handler (evidence threads to the wrong install). Closing it makes the pure-Mentl re-execution driver fully correct AND fixes arm-internal effectful installs generally — core handler correctness, not just multi-shot)* · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:5023) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
-
-**C · `!Flow` — the crown applied to data flow (arm 4/6, §4⑥; W31 scaffold landed).**
-IFC is `!E` on the data-flow lattice: prove transitively, like `!Alloc`, that a
-value cannot reach a sink — `!Flow(Untrusted -> Sink)`. ONE mechanism, TWO
-CO-EQUAL first-class regimes, neither a footnote to the other (crystallized
-2026-07-13; the adversarial pass INVERTED the earlier instinct to demote the
-agentic one): (1) **developer confidentiality/integrity in trusted code** — this
-`Secret` never reaches `Log`, this request body never reaches a query string
-unsanitized (the everyday superpower — the compiler discharging a data-flow
-invariant like a type); (2) **integrity of untrusted inputs in agentic
-systems** — an untrusted-integrity source reaching a privileged sink. Regime (2)
-is not a buzzword; it is the **integrity specification** that FORCES the
-mechanism's hardest, non-free requirements — the integrity dual-lattice,
-PC-labels for implicit flow, robust declassification — that the benign-developer
-framing silently under-specifies, and it is Mentl's actual adoption pull out of
-IFC's 50-year confidentiality-for-trusted-authors zero-adoption graveyard (JIF /
-FlowCaml / Paragon / LIO; Zdancewic–Myers on the confidentiality/integrity
-duals). The medium states the property substrate-native — an untrusted-integrity
-source reaching a privileged sink — as a data-flow-lattice fact (`!Flow`), never
-as a named threat category; the vocabulary is the lattice, not the risk of the
-week. Honest disclaimer a flow
-lattice does NOT discharge: it cannot make a model separate data from
-instructions inside its own context window — "the untrusted text reached the
-model" is not itself the breach; `!Flow` proves where the OUTPUT may go, not
-what the model does with its input. Peers: `Hβ.verify.ifc-noninterference`
-(umbrella; code `Hβ.types.ifc-flow-constraint`, types.mn:1029) ← `Hβ.ifc.dcc-noninterference-gate` → `.flowlabel-inference-in-hm` → `.pc-label-implicit-flow` → `.integrity-dual-lattice` → `.declassify-robust` → `.flow-world-on-tcont` → `.agentic-fides-target`. DEP-rooted on `sound-neg-under-poly` (the crown — `!Flow` inherits its soundness).
-
-**D · The value layer — fold & repr (arms 1/7, §5.U; STEP 0/1/2 landed).** `Hβ.fold.show-leaf` (synthesize as a lowered LFn, not raw WAT; lower.mn:481) · `.compare-hash-leaf` · gate `Hβ.eq.fold-seed-value-gate` · `Hβ.repr.arrow-layout-interop` · `Hβ.emit.variant-payload-repr-width` (wasm.mn:4913) · `.plit-handle-repr` (wasm.mn:5537) · `Hβ.value.ontology-derivation-complete` *(LANDED 2026-07-21 — the `LEDGER.md` head carries the arc; the residue is the named narrowing/wide-stride/alias-edge tier. History of the derivation: DETAILED 2026-07-20 by a 13-agent adversarial ultracode pass — map + 4-design panel + per-design refutation; all four designs REFUTED, converging on ONE attractor, the truth signal. String = [byte] IS the §4① ultimate and is SOTA-validated (Rust's `str` = `[u8]` behind a fat-pointer view; Arrow's one-array-over-many-element-types with zero-copy slices; Harper–Morrisett intensional type analysis / TIL and Crary–Weirich type-erasure = "the proof becomes the dispatch"; and Haskell's `String = [Char]` cons-list disaster PROVES the representation must stay PACKED, element-projected, never the uniform list layout). BUT it is NOT a single landable change, and — the load-bearing catch — the NAÏVE type-first form SHIPS A SILENT-CORRUPTION REGRESSION THE SELF-HOSTING ORACLE IS STRUCTURALLY BLIND TO. Mechanism: `String → TAlias("String", TList(TByte))` types cheaply via the existing TAlias-peel (unify_types infer.mn:2337-2342), but then String unifies with `[a]` EVERYWHERE (today `same_ground` infer.mn:2381 makes TString unify with nothing but TString, so `map(f, "hi")` / `list_index(s,i)` is a CLEAN E_TypeMismatch — the merge removes that barrier); meanwhile the runtime keeps strings 1-byte-packed with a sign-bit view whose length relocates to +12, and lists 4-byte-strided behind a tag word — so any [Byte]-typed value that is physically a String, meeting any generic `[a]` consumer, lowers to `list_*` and reads packed bytes / the −1 view sentinel as count+tag → SILENT MEMORY CORRUPTION, no diagnostic, over an UNBOUNDED surface (every map/fold/user helper, not the ~10 enumerated dispatch sites). And `m3==m4` cannot distinguish correct from corrupt: a wheel disciplined to string-named ops on strings is emit-identical while user code corrupts — the oracle's blind spot. THE CORRECT SEQUENCE inverts every proposed design (representation FIRST, type-merge LAST): (0) add RI8 to the Repr ADT + a byte marker as zero-reader vocabulary (Law-7 no-op), and VALIDATE the repr-width-polymorphic flat leaf on WIDE elements first ([Float]/[i64] lists, RF64/RI64) where there is a clean consumer and NO header/view/discriminant collision — byte-packing is the NARROWEST, HARDEST end, not the place to start; (1) the emit consolidation DEFENSIVELY — the ~10 ==/++/show/hash/compare OUTER TString-vs-TList forks (emit_binop_for BConcat wasm.mn:3830, emit_eq_for_ty:3920, emit_cmp_for_ty:4523, the field-eq/cmp/hash + show pairs) collapse into ONE `match repr_of(elem)` nested dispatch, KEEPING the nominal TString arm so H6 still NAMES it (deleting it lets a bare `TList(_)` wildcard SILENTLY absorb former strings into `$list_eq` at 4-byte stride — H6 forces the deletion, never the sub-dispatch); (2) the runtime representation reconciliation as its own perf-measured TRANSITION — the stride-polymorphic flat leaf (load_i8 vs load_i32 by element repr: the NAMED-CALL STRIDE HAS NO RUNTIME MECHANISM today — one non-polymorphic WASM body cannot serve both strides; needs a per-repr `$index_i8`/`$index_i32` family or a runtime width carrier, the load-bearing gap `Hβ.value.seq-element-stride-carrier` — SHARPENED 2026-07-20, a SECOND adversarial pass (wf_b7ba2a2e-22c, survives=False on the type-first shortcut) proving the per-repr call-site family is INSUFFICIENT: a generic body (`iterate_from`/`map`, prelude.mn:53/63) compiles ONCE with its element a TVar (repr RI32), and emit-selection specializes only at CONCRETE sites, NEVER a type-variable element — so `map(f, aString)` typechecks under the merge then reads packed bytes at 4-byte stride (the killer, and the oracle is BLIND to it because the wheel never maps a string, so m3==m4 stays byte-identical while user code corrupts). Generic-over-packed traversal REQUIRES a runtime stride carrier (a fat sequence header read at access; word-sized elements pass by value, wide elements by reference-into-the-buffer) OR whole-program monomorphization — the TRUE keystone DEP, DEEPER than the arena, and it must be PROVEN on WIDE elements ([Float]/[i64], RF64/RI64) BEFORE String is ever minted TList(TByte). The type-merge's OWN OOM is a DISTINCT mechanism from the seq-op-row ev-slot revert — TString is a nullary sentinel (0 heap) while TAlias("String",TList(TByte)) is 2 heap records ×instantiate-clone (type-node bloat) — so the arena stance is build-and-measure PER-MECHANISM, never inherited by analogy), the view/slice unification (String's sign-bit O(1)-collapse-via-view_base vs List's tag-4 O(depth) chain), the [len][bytes] data-section literal the interner + self-compile depend on, and the concat-persistence decision (String eager materialize O(la+lb) vs List lazy rope O(1)); (3) ONLY THEN the type merge, when the runtime agrees. TWO settled truths: (a) THE fold_sig COLLISION — `fold_sig` reads `fold_strip` which strips alias/refine, so a byte-as-`Int repr i8` strips to TInt and `fold_sig(TList(byte)) == fold_sig(TList(Int)) == 'li'`, sharing generated `$eq_li`/`$hash_li`/`$show_li` helpers → silent wrong-width; the byte leaf must be a NEW NOMINAL Ty `fold_strip` does NOT strip, OR `fold_sig` must READ repr (diverging from `fold_strip` — an explicit structural decision), and §4①'s "a byte is an Int, not a new primitive" is in direct tension with fold-distinguishability — SETTLE THIS FIRST; (b) `handle_recorded` does NOT dissolve here (handle-IDENTITY i32.eq vs structural str_eq — a real split merged only by `Hβ.runtime.indexed-map-primitive`; corrects the 0fa3649b commit/PROVENANCE claim). THE KEYSTONE DEP is `Hβ.perf.per-decl-arena` (§5.O): the honest-row Alloc attribution + the ontology's self-compile allocation shift both hit the MEASURED 4GB never-free bump-image OOM (the 2026-07-17 seq-op-row-from-callee revert, infer.mn:1320-1333) — the whole dissolution waits on the arena. is_seq_op is therefore a LEGITIMATE "self-consistent raw body, typed calls" substrate boundary, NOT shameful drift-8, until (i) the arena lands and (ii) the ONE genuinely-new increment the panel converged on exists: `Hβ.infer.seq-addr-downcast` — `addr : ∀a. a -> Int`, a sound structure-forgetting DOWN-cast (negative position, concrete Int result) that lets an authored-signature runtime body typecheck (`load_i32(addr(xs))` keeps BKArith `Int+Int`), capability-gated (`with Cast` / provable `!Cast`), confined to handle-repr; the UP-cast (`str_of_buf : Int -> String`) stays the SINGLE localized identity coercion, never proliferated to a `from_addr : ∀a. Int -> a` unsafeCoerce. Retiring is_seq_op is the separate DEP-blocked `Hβ.infer.seq-op-signature-driven`, sequenced AFTER the arena AND the representation work, never as a substitute for the ontology. Full transcripts: the session workflow dir wf_79a821ca-ccc)* · `Hβ.runtime.zero-copy-string-view` (DISSOLVED 2026-07-21 — the list slice node IS the zero-copy view; the sign-bit shape is deleted) · `Hβ.emit.image-map-fold` *(new 2026-07-10 — the module's static layout as ONE fold in the emit: each region's base IS the previous region's limit (sentinel space | records | thread records | interned data | bump heap), overlap unconstructible; born from the ev_scan record clobber (a closure record at 264 sat inside io.mn's fs path scratch — two files claiming one page in prose). The fold IS band B's persist substrate: it defines what a memcpy snapshot means)* · `Hβ.io.scratch-dissolves-into-alloc` *(LANDED 2026-07-10, f0089a3 — page 0 carries no runtime scratch: every syscall record (iov / nread / prestat / filestat / fd-out) allocs per use; fs paths cross the boundary as (ptr, len) views straight into the string payload (`fs_path_view` — the old copy-into-scratch re-derived bytes the image already holds; WASI paths are explicit-length); `read_stdin_loop` + `fs_read_loop` unified into one `fd_read_loop` (stdin and opened files are the same stream); ten io fns re-rowed +Alloc; net −8 lines. The march measured the prediction WRONG in the good direction: a lib-source-only change holds m2 == m3 in ONE generation (both generations compile the same source with the same emit) — the transition form is for EMIT changes only. Gates: 52/52 boot, 8/8 + 52/52 through m2, fixpoint byte-exact, serve battle green)* · `Hβ.tools.march-transition-native` *(new 2026-07-10 — on m2 ≠ m3 march.sh runs the m4 leg itself and reports TRANSITION (m3 == m4, re-pin from m3) vs BROKEN (m3 ≠ m4); removes the bless-the-wrong-generation human-error surface — bash scaffold tier)*.
-
-**E · Parallelism & accelerators (arm 3, §4④; STEP 4 collapse landed).** `Hβ.lower.fanout-simd-lane-cashout` (RV128) · `.fanout-gpu-backend-handler` (lower.mn:1475) · `.fanout-durable-persist-handler` (SPACE=TIME) · `Hβ.parallel.thread-alloc-transitive-proof` (verify ONLY after the leak closes) · `.race-freedom-ownership-proof` · `Hβ.infer.fanout-ownership-from-use-count` (infer.mn:1288) · `Hβ.runtime.wasi-thread-spawn-seed` (LANDED 2026-07-24 — the task-record
-spawn substrate, `LEDGER.md`; real host threads over the shared image) · `Hβ.driver.level-set-par-walk` *(the topological layer-partition is LIVE in driver.mn — 7165bbb; the open half is the multi-core `>< ~> Thread` at the layer site)* · `Hβ.cursor.speculative-compile` · `Hβ.cursor.work-stealing-via-gradient` *(idle cores ask the cursor "what next?"; the gradient's argmax IS the priority queue — no scheduler module)* · `Hβ.lower.schedule-specialized-callee` *(new — the parallel_map dissolution's open remainder: whether a reusable fn's internal `><`/`<|` should EVER inherit a caller-installed `Schedule` across a call boundary. The only sound route is compile-time specialization of the callee per install-context, preserving `Seq`'s zero-cost/`!Thread`-provable property — the §5.3 dispatch gradient's sibling on the INSTALLED-HANDLER axis (vs the known-argument axis; shares callee-specialization infra). The ambient/evidence-passed-runtime `Schedule` alternative is the wrong direction — it taxes every `Seq` fanout to buy portability only a rare `Thread` caller needs. Scoped skeptically: direct `>< + ~> Thread` at the use site is sufficient and simpler; build only when a real consumer needs one fanout helper serving callers wanting different schedules. Sequenced behind `Hβ.driver.level-set-par-walk`, DEP-gated on band-A `sound-neg-under-poly`)*.
-
-**F · Verification & proof (arm 6/8).** `Hβ.types.predicate-is-expr` (dissolve PExpr) → `Hβ.verify.smt-handler-swap` (Z3+CVC5; NAME the external-SMT residual !Outside if it persists) → `.higher-order-refinement` · `Hβ.verify.ledger-soundness` (no silent assume-true; the Dafny `{:axiom}` cautionary) · `.proof-incrementality-cached-cursor` · `.reason-edge-pcc-certificate` · `Hβ.dsp.hz-ceiling-ambient-sample-rate` · `Hβ.refine.buffer-invariant` · `Hβ.infer.predicate-from-bool-expression`.
-
-**G · Graph & e-graph (arm 1) — highest-leverage incompleteness first.** `Hβ.egraph.per-expr-effect-row` (egraph.mn:70 — reduces is_pure to effs_at alone, generalizing the effect-gate to every rewrite) · `Hβ.lower.egraph-saturation-deepen` · `.typed-rulecyclic` (the depth-1000 cap → a typed E_RuleSetCyclic via the Why chain, unreachable-by-construction) · `.rule-as-query` · `.extraction-cost-composes-repr` · `.const-fold-minted-node-full-edges`.
-
-**H · Ownership (arm 5, §4⑤).** `Hβ.ownership.fractional-uniqueness-ref-borrow` (Granule OOPSLA 2024) · `.quiet-empirical-gate` (the Hylo bar — a corpus test counting authored own/ref markers; a rising count IS inference failing §4⑤).
-
-**I · Dataflow & DSP (arm 3/6).** `Hβ.dataflow.causality-compile-error` (a zero-delay `<~` cycle is a compile error, Faust's causality rule; no code anchor yet — the peer is named here, not in a comment) · `.clock-calculus-sample-rate` · `.point-free-fusion-via-egraph`.
-
-**J · Self-hosting & !Outside hardening (L7, §1).** `Hβ.closure.diverse-double-compilation` (Thompson/Wheeler 2009 — a second disposable seed converging to identical m3 closes trusting-trust, which the byte-fixpoint alone cannot; DEP native backend) · `.correctness-oracle-internal` (the external micro-battery → the wheel's own Verify; until then first-light's correctness half is itself an !Outside) · `.reflexive-over-proposers` (code `Hβ.synth.proposer-gauntlet`).
-
-**K · AI-proposer / Synth (arm 2, §0/§1).** `Hβ.proposer.constraint-not-token-worked-example` (Lahiri 2026 — answer the spec-oracle problem with a worked example, not a claim) · `.synth-handler-error-fed-back` (the lossless constraint, not the lossy token).
-
-**L · The Why-engine & `mentl audit` (arm 8/1, §0 — the medium enforcing its own discipline).** `Hβ.audit.carried-truth-projection` *(new — the §0 keystone: project a Carried-Truth violation BEFORE a line is written, making the wrong move unsayable)* · `Hβ.diag.minimal-inconsistent-core` (= `.why.minimal-cause-set`) · `Hβ.infer.marked-lambda-totality-invariant` (POPL 2024) · `Hβ.diag.catalog-as-projection` (report takes a DiagKind ADT) · `Hβ.diag.duplicate-type-name` *(new — two `type X` decls in one namespace shadow silently today (the Handle collision, 2026-07-05); the decl site deserves the refusal, per the E_ImportNameCollision precedent)* · `Hβ.diag.declared-row-contradiction` *(LANDED + ARMED 2026-08-08, pins d06486727bbb/bfc68f441f996e — and the landing probe REFUTED this entry's own claim: the performing body checked CLEAN, not loud, because the fold's meet dropped the negation and the kept positive licensed the perform; E_DeclaredRowContradiction now reports at the signed fold and refuses the executable, the tenth armed class)* · `Hβ.query.graph-projection-surface` *(new)* · `Hβ.emit.trap-as-exception-postmortem` *(new 2026-07-05 — wasm exception-handling (exnref, standardized) lets a BUG-trap unwind with a payload instead of `unreachable`+stderr: the payload is the graph state at death, projected — the coredump autopsy face 7 needed, as a structured projection instead of a heap read; zero steady-state cost, diagnostics-tier only)*.
-
-**M · The felt surface / `mentl edit` (L6, §4⑦, §0 pt 5 — oversight is survival, NOT garnish; the thinnest-swept band, most at risk of erasure).** `Hβ.felt.mentl-edit-runtime` *(new — the canonical IDE as a running keystroke→parse→format→render loop)* · `.reactivity-typed-demand-driven` · `.lsp-transport-projection` *(new)* · `.collab-grove-cmrdt-semantic` (Grove POPL 2025, over the TYPED graph) · `.legibility-derived-not-molded` · `.verification-dashboard` *(new — live V_Pending / transitive-!E / Why-chain for oversight)* · `.hole-is-dormant-continuation` (Hazel fill-and-resume = the multishot record).
-
-**N · Backends — the handler IS the backend (§5 stage 3). FULL PLAN: docs/NATIVE.md (the graph-is-the-machine native backend, designed + 24-agent-refuted 2026-07-11; the build spine S0–S18, WASM-peer-verifiable through S12, native first-light at S13).** The two keystones: `Hβ.native.frame-rep-from-cardinality-trail` *(new — KEYSTONE 1: frame representation IS the resume-cardinality/ownership grade — OneShot activations are trail-reclaimed image frames (graph.mn's graph_rollback is the activation spine, NOT %rsp which demotes to a bounded CPU-mandated trap scratch), MultiShot captures the delimited frame segment as a memcpy-able image record; "continuation = memcpy" becomes true because every frame is in the image; the "no stack" thesis was SML/NJ heap-CPS without its GC — the trail is the GC-free reclaimer, !Outside-clean)* · `Hβ.native.deterministic-handle-partition` *(new — KEYSTONE 2: fixed per-core (arena_id, offset) partition so handle assignment / code layout / rel-offsets are a pure function of the graph → native_m3==native_m4; work-stealing a value-reproducible-only ~> Schedule handler never on the self-hosting path; kills the two-modes header flag, drift-8)* · `Hβ.native.repr-regclass` *(repr_regclass(Repr)→GPR|FP|VEC, the third terminal projection beside repr_wat/repr_width; S1, Law-7 no-op for WASM)* · `Hβ.infer.use-profile` *(S2 — count_uses→(grade, use-positions, escape-bit), the ONE liveness analysis five native layers each deferred; escape set from lower's capture set, zero new analysis)* · `Hβ.native.reg-residency-egraph-remat` *(register allocation = use-count residency; eviction = e-graph rematerialization at extraction cost, NOT Belady/linear-scan)* · `Hβ.backend.native-codegen-handler` (native.mn as ~> NativeOut peer on the same LowIR; retire wasmtime/WABT) · `Hβ.native.fp-simd-determinism` *(new — S10 THE fixpoint-killer: pin SSE-only/no-FMA/RNE so native float bytes match WASM's strict IEEE-754, else native_m3≠native_m4 on the first float the wheel computes)* · `Hβ.native.foreign-handler` *(new — ~> Foreign, maximal-unknown !Pure row, copy-at-boundary; the one !Outside seam for the un-Mentl world)* · `Hβ.native.effect-state-parallel-safety` *(new — S12: a stateful effect in >< ~> Thread is a compile-time refusal unless replicated-and-merged or !<effect>; the native face of band-A sound-neg-under-poly; native codegen SHIPS before band A but its safety story is only PROVEN after)* · `Hβ.native.wasm64-backend-handler` · `Hβ.emit.memory-gc-handler`. **The WASM multi-shot (S3/S4 in the peer, proven this session, tests/native-cont/): `Hβ.lower.multishot-uzero-abort` *(a multi-shot driver arm is UZero-grade — never resumes its own op — so it must ABORT the triggering continuation, not tail-resume; Mentl currently tail-resumes a zero-resume arm; the fix is cardinality-driven)* · `Hβ.lower.config-fn-evidence-in-arm` *(a handler-config-param function called in an arm carries the wrong evidence — a re-performed effect re-enters the arm's own handler; the body thunk must be a direct-named global, not a config lambda).**
-
-**O · Self-hosting infra (resolves AT/around first-light; captured so it is not forgotten — NOT post-first-light work).** `Hβ.seed.float-gradient` · `Hβ.seed.multishot-producer` (both dissolve at first-light) · `Hβ.persist.module-image-cache` *(cross-run module skip as §4④ image-persist: the graph image memcpy'd whole — env entries, oracle queue, Reason chains intact — keyed by source hash + transitive dep hashes, the invalidation design the deleted .kai layer proved; rides band B's persist-equals-memcpy substrate; supersedes the deleted `Hβ.cache.cross-file-resolved-row`. **AND IT GATES THE AUDIT AT THE EDIT**, which is the larger motive: measured 2026-08-18, `mentl audit src/infer.mn` costs 4.91s / 776964 KB against the bash proto-audit's 0.07s / 3780 KB, because the verb re-judges a 9,616-line module and its link every invocation. Until the image persists, the medium cannot audit its own construction at the moment of construction — §0's "unsayable before a line is written" stays a commit-time bash proxy. `Hβ.audit.at-the-edit-is-image-gated` carries the measurement)* · `Hβ.driver.per-module-env-overlay` · `Hβ.f1.handler-substrates`.
+**The 15 bands** (each named here, detail in `RESIDUE.md`):
+**A** Effects & modal crown · **B** Continuations & TIME · **C** Flow rows (IFC)
+· **D** Value layer (fold & repr) · **E** Parallelism & accelerators ·
+**F** Verification & proof · **G** Graph & e-graph · **H** Ownership ·
+**I** Dataflow & DSP · **J** Self-hosting & `!Outside` · **K** AI-proposer /
+Synth · **L** Why-engine & `mentl audit` · **M** Felt surface / `mentl space` ·
+**N** Backends (full plan: `docs/NATIVE.md`) · **O** Self-hosting infra.
 
 ---
 
@@ -1066,173 +691,77 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ## §7 · Current state — the honest audit
 
-**THE BOARD'S NUMBERS LIVE IN `state.sh`, NOT HERE** (trued 2026-07-31: this
-header had carried `frontier 71/0` against a live 332/0 and a phantom ratchet
-of 287 against a class that reached ZERO on 2026-07-22 — a snapshot of facts
-the artifact holds live, which is §7's own destiny sentence violated by §7's
-own opening paragraph, and the Carried-Truth Law at the doc layer). The
-standing claim is structural, and it is the one worth reading: **every gate
-the repo owns is green through the pinned boot** — the march's fixed point,
-the frontier contracts, proof-exactness, the `!E` crucibles, the micro
-battery, the census ratchet — and a rising census is a refusal to merge. Run
-`bash tools/state.sh` for the counts; the pin chain is boot/PROVENANCE.md,
-newest first. **`mentl voice.mn:9` ANSWERS** (the
-cursor-address transport, tests/frontier/voice-demo the executable gate).
-**The census is ZERO** (2026-07-18 end-of-day; 2,266 three days prior) —
-the medium compiles its own source with NO error diagnostics, and the
-ratchet holds it there: a rising census is a refusal to merge. The last
-three roots fell as: the seq-op fast path staging its continuation
-boundary like every application (E_UnresolvedType extinct); the
-record-row residual under its OWN node kind (NRecordRowBound — NRowBound
-is EffRow-only, occurs_in_row total, no cross-sort catch-all); and
-slot_present, the Option-of-handle niche's READ half (the arg-slot
-presence test typed `a -> Bool` at the substrate table). NINE classes reached
-zero on 2026-07-18 alone: IfMissingElse, FeedbackNoContext,
-EffectMismatch, PurityViolated, PatternInexhaustive, ConstructorArity,
-ResumeOutsideArm, MissingVariable, OccursCheck — the forward-ref
-roots are extinct (E_MissingVariable 0, E_OccursCheck 0 on the wheel — an
-env miss binds NErrorHole, one miss one diagnostic), and **six diagnostic
-classes are ARMED** (E_UnresolvedHole, E_MissingModule,
-E_HandlerStateShadowsOp, E_DuplicateFnName, E_RefinementRejected,
-E_OwnershipViolation — the armed-class contract: nonzero exit, zero WAT;
-run_refusal in the frontier gate). The arming immediately paid twice: the
-state-shadow check caught the wheel's own `caret` field at the m3 leg, and
-the refinement class + UNeg fold caught the wheel fabricating tag -1 into
-TagId's refinement (now LPUnresolvedCon). Both `??` authoring workflows are
-green end to end; value-proof discharges at all three sites; every fn body
-is a region and the return is a transfer. **The current cursor is §11 — the
-production bar**, informed by the 2026-07-18 exhaustive harvest (23 readers
-over the 113 post-first-light commits + the Codex/fleet/Opus corpus) and
-the 5-lens adversarial panel that corrected the finish-line design
-(scratchpad archaeology: the harvest + panel transcripts in the session
-workflow dirs).
+**THE BOARD'S NUMBERS LIVE IN `state.sh`, NOT HERE.** A gate is green only for the
+boot/source pair it actually measured. When `state.sh` reports boot behind
+current source, every boot-suite verdict below that line is a verdict on the OLD
+wheel, not a blessing of the checkout. Finish the batch, re-pin once, then let
+doc-truth bless the narrative; do not launder a mid-landing through prose.
+The 2026-08-25 resume measured exactly that mid-landing state: boot at
+`06e7fef1...`, current source ahead of it, and the slow board intentionally
+stopped after the needed freshness fact. The current cursor is therefore not
+"Phase 11 polish"; it is Arc A of THE SPACE SPINE (§11), and the spine's
+terminal bar is the WASM Resident Space session.
 
-Ground FIRST: `bash tools/state.sh` (the whole board). This ledger is
-prose until the medium projects repo state itself — state-as-PROJECTION is
-§7's own destiny (the docs-as-projection endpoint); each line is a POINTER
-(git log + boot/PROVENANCE.md hold the mechanics; the lessons live in
-CLAUDE.md ⟲/§9 and the code's own comments).
+Ground FIRST: `bash tools/state.sh` (the whole board). State-as-PROJECTION is
+§7's own destiny; each line here is a POINTER.
 
-### The honest audit — the ultimate form (§4/§5) vs what the artifact reaches
+### The honest audit — what the artifact has NOT reached
 
-§4 and §5 write the ULTIMATE FORM under dream-code discipline (Anchor 0):
-present tense is the *design*, never a claim the seed has caught up. This audit
-is the arbiter of how-real each mechanism is, so the doc never reads as
-present-tense-done (a hidden gap is drift, `CLAUDE.md ⟐`). Where a design
-section and this audit seem to disagree, §4/§5 is the TARGET and this is the
-STATE. (Distilled from an adversarial PLAN re-audit, 2026-07-17 —
-git history: docs/research/finish-plan-codex-2026-07-17.md; its honest de-hyping salvaged
-here, its wholesale rewrite and invented vocabulary rejected.)
+§4/§5 write the ULTIMATE FORM (present tense = design). This audit is the
+arbiter. Where a design section and this audit disagree, §4/§5 is the TARGET
+and this is the STATE.
 
-The design present-tense the artifact has NOT reached — named so the reader is
-not misled:
-- **Regions** are compile-time root-tagging + the return-transfer, Hylo-quiet
-  on the wheel — NOT a runtime arena and NOT an O(1) drop. The arena is §5.O's
-  open work; the `emit_memory_arena` swap is dormant.
-- **`persist = memcpy`** (§4④/§5.U) is the design. Today a continuation is a
-  bump-allocated record, not a closed / relocatable / versioned image; durable
-  execution is ABSENT as a shipping claim (bands B/O).
-- **The effect-WORLD on `TCont`** (§4③b/§5.U) is INERT on the OneShot path — a
-  tag carried, not an enforced exact world; the runtime value gate
-  (`E_ResumeWorldMismatchWorld`) is declared and unwired (band B).
-- **"O(1) is the only acceptable complexity"** (§5.O/§9.1) is the DIRECTION,
-  not a built fact. The honest contract: O(1) identity chase, O(changed cone)
-  incremental, O(reachable) image, O(1) reclaim-after-proof. The never-free
-  bump image is the SEED's simplicity, not a law of determinism.
-- **Universal executable refusal** (§11 col 2) is PARTIAL, and this bullet
-  said "only `E_MissingModule` is armed" while the paragraph above it listed
-  six — a contradiction inside one section, both wrong against the artifact
-  (trued 2026-07-31 by reading `diag_refuses`' own arms; the eleventh
-  and twelfth armed 2026-08-12, the thirteenth through fifteenth
-  2026-08-18): FIFTEEN classes refuse
-  — EMissingModule, EHandlerStateShadowsOp, EDuplicateFnName,
-  EDuplicateTypeName, EEffectUnhandled, ERefinementRejected,
-  EOwnershipViolation, EMissingVariable, EOccursCheck,
-  EDeclaredRowContradiction, EZeroDelayFeedback,
-  EComputedDelayDepth, EInitPerformsOwnOp,
-  EMalformedNumericLiteral, EFnShadowsOp — plus the hole gate,
-  which is the executable gate's own read rather than a `diag_refuses` arm.
-  The remaining census classes (E_TypeMismatch and kin, name-dependent on
-  partial-link paths) are the ratcheting work toward universal. Read the arms,
-  never this list: the ONE home is `diag_refuses`.
-- **`mentl compile main` self-serves at the ENTRY and not per MODULE.** The
-  entry half CLOSED 2026-07-18 (the manifest landing — the whole wheel emits
-  from the import DAG with zero diagnostics, assembles, and compiles
-  programs), and this bullet had carried the pre-landing text for thirteen
-  days. The open half is per-module: 29 solo-check violations across 18 src
-  modules (measured 2026-07-31 — verify 12, format 5, six files at 2, ten
-  clean), invisible to the blob-fed march because concatenation resolves every
-  name whether its module declared the dep or not. `Hβ.driver.wheel-imports-are-the-manifest`
-  is therefore CLOSED-at-entry / OPEN-per-module, and the per-module check
-  ratchet is what drives it to zero (§11 col 2 — it gates the drift-catalog
-  retirement).
-- **The Thread schedule is REAL** (2026-07-24: host threads over the one
-  shared image, gated by the three real-spawn frontier legs); its SAFETY
-  story (stateful-effect-in-fanout refusal) stays gated on band A, and a
-  spawned branch's evidence-tier performs meet an empty per-instance
-  world (loud, never silent). **SIMD / GPU schedules + the persist
-  handler** remain scaffold / proxy — lane and device and disk are not
-  yet real (bands E/O).
+- **Regions** are compile-time root-tagging + return-transfer, NOT a runtime
+  arena. The `emit_memory_arena` swap is dormant (§5.O open work).
+- **`persist = memcpy`** is the design. Today: bump-allocated, not closed /
+  relocatable / versioned. Durable execution ABSENT (bands B/O).
+- **`TCont` effect-WORLD** is INERT on OneShot — tag carried, not enforced.
+  "Inert" means the stack-only path never becomes a rehydratable continuation
+  value, so no changed-world comparison can fire there. The fix is not a special
+  OneShot patch; it is the single continuation/image value model: capture the
+  world at reify, persist/fork it as an image record, and refuse mismatched
+  resume through the same row check every `~>` edge already uses.
+- **O(1) complexity** is the DIRECTION, not built. Honest contract: O(1) chase,
+  O(changed cone) incremental, O(reachable) image, O(1) reclaim-after-proof.
+- **Executable refusal** is PARTIAL — fifteen classes refuse (read `diag_refuses`
+  for the live list, never this doc). Remaining census classes are the
+  ratcheting work toward universal.
+- **Per-module manifest** — CLOSED at entry, OPEN per-module
+  (`solo_violations_max: 0`). The overlay is the stamped second half.
+- **Thread schedule** is REAL (host threads over shared image). Safety gated on
+  band A. SIMD/GPU/persist remain scaffold (bands E/O).
+- **Subsystem-as-cursor** (§2) is ~60% earned. Gap ranked: LOWERING (39
+  constructors → columns), ENV (dissolves with schemes-are-edges), REVERSE EDGE
+  (landed 2026-08-07), verify/tighten BANKS. The move: put the fact in a column,
+  dual-write, migrate readers, delete the side-structure.
+- **Schemes are VALUES, not edges** — the root the judgment tower compensates
+  for. Row half LANDED (5.2); forward-HOF under-publish CLOSED (pin c6eb188e1d37).
+  Rung 3 whole is the dissolution.
+- **Layer sweep SERIALIZED** (judge_window 1) since 2026-08-07. Parallel returns
+  at Phase 9.2 with deterministic handle partition.
+- **Resident Space** is not yet the shipping medium. `mentl space` serves the
+  browser surface, and cursor/query/propose pieces exist, but the browser still
+  needs the resident graph session: one WASM instance, a durable image boundary,
+  incremental edit actions, per-caret eight-aspect projections, and an IDE gate
+  proving the instance stays alive across actions.
+- **Demand linking / prelude caching** must be graph reachability, not a token
+  allowlist. The demanded set is read from import edges, free-name binding edges,
+  desugar-introduced names, and row/handler/type obligations; the prelude should
+  become a frozen image slice, not a reparsed text prefix. A bare program's line
+  floor is useful only when this reachability law is true.
 
-- **"Every subsystem is the cursor in a traversal mode"** (§2) is ~60%
-  EARNED, with a mechanical test for the rest (2026-07-31, the architecture
-  audit): does the subsystem's per-handle fact live in a spine COLUMN? Seven
-  do — the type graph, the AST, the comment weave, the e-graph's canon,
-  narrowing, executable boundaries, spans — and the e-graph is the strongest
-  case (a column write and a live read, no side-ledger anywhere). Still
-  bespoke, ranked by the size of the gap: LOWERING (a whole second tree — 39
-  handle-first constructors and sixteen walkers, whose own file header denies
-  a GraphWrite the medium's audit reports it performing), the ENV (a flat
-  buffer + a 4096-bucket index + a per-generation dedup walk, all three
-  downstream of the scheme being a name-keyed snapshot), the REVERSE EDGE
-  (absent entirely — three subsystems re-derive it), and the affine / verify /
-  tighten LEDGERS. The remaining 40% is ONE repeated move, four-for-four so
-  far: put the per-handle fact in a column, dual-write at the one writer,
-  migrate the readers, delete the side-structure.
-- **Published schemes are VALUES, not edges** — the root the whole judgment
-  tower compensates for, and the one the honest audit was missing until it
-  had an artifact (2026-07-31): a cycle member's row is published at its own
-  decl exit, before its co-members are judged, so their effects never reach
-  it (930 measured trial/final divergences on the wheel; fifteen-line
-  reproduction at tests/frontier/mn-cycle-charge-freeze.mn). Three measured
-  `!E` blindness faces inherit it. `Hβ.infer.schemes-are-edges` rung 3 is the
-  dissolution, and it is a SOUNDNESS closure, not a perf arc. THE ROW HALF
-  LANDED 2026-08-07 (§11 5.2 carries the arc; movers 678 → 453 with the
-  remaining classes measured and named); the forward-HOF under-publish
-  seam CLOSED 2026-08-11 (`Hβ.infer.forward-hof-row-underpublish`
-  RESOLVED, pin c6eb188e1d37 — merge_chased_row's catch-all discarded
-  the reading at cross-sort terminals; the uniform preservation arm
-  ends the false-absence channel; the LEDGER entry carries the arc).
-- **The planned layer sweep runs SERIALIZED (judge_window 1)** since
-  2026-08-07: the K=8 parallel final's correctness rested on published
-  schemes being live-var-free — exactly the property rung 3 deletes — and
-  live cells raced its branches (the trap-on-spawn conviction). The
-  parallel form returns at Phase 9.2 with the deterministic handle
-  partition and ATOMIC join writes; until then the ~3s wall delta is the
-  serialization's honest price.
-
-Everything else on the board above is measured green; this list is the seam
-between the wheel and its ultimate form, held open on purpose.
+Everything else requires the board that measured it. A skipped, stale, or
+interrupted gate is UNKNOWN, never green.
 
 ### The landing record → `LEDGER.md`
 
-Every landing since first light, newest first, with its mechanics and its
-measurements. **It left this file on 2026-08-05** — 7,002 of PLAN's 10,809
-lines were a hand-written prose copy of 448 commits, which is the Carried-Truth
-Law violated at the doc layer and precisely what §7's own destiny sentence had
-been saying for months. Nothing was deleted or edited; it is reference now, not
-read-path. Consult it for *what happened at pin X and why*; consult `git log`
-for the diff. `tools/doc-truth.sh` reads its head pin and asserts it against the
-boot sha, so the chain stays mechanical.
+Every landing since first light, newest first. Consult for *what happened at pin
+X and why*; `tools/doc-truth.sh` asserts its head pin against the boot sha.
 
 ### The named peers → `RESIDUE.md`
 
-Every named positive-form gap, one home each. **It left this file on
-2026-08-05** — 1,474 lines of catalog against the program §11 actually runs.
-The law is untouched: a hidden gap is drift, and a gap that lives only in a
-comment or only in a session's memory is not named. It lands in `RESIDUE.md` or
-it does not exist. §11 names the peers each phase touches; the catalog holds the
-rest.
+Every named positive-form gap, one home each. A hidden gap is drift; a gap not
+in `RESIDUE.md` does not exist. §11 names the peers each phase touches.
 
 ## §8 · Verification surface
 
@@ -1514,384 +1043,118 @@ eleven consecutive ledger entries while the leak rode the whole arc; nothing
 written was false, the gate had merely gone quiet. Closed mechanically by Phase
 0.1: a gate not run is a visible blank, and a red one refuses the pin.
 
-**THE STANDING CURSOR (Morgan 2026-08-11; trued end-of-day against the
-measured board) — the work selector reads this block FIRST, then the
-phase order.** The dig (`Hβ.infer.forward-hof-row-underpublish`) CLOSED
-at pin c6eb188e1d37 — three loop iterations, the LEDGER entry carries
-the arc. THE DEDICATED-ARC QUEUE (re-cut 2026-08-12 by the arena refutation —
-the "relocation completes the arena's precondition" chain is REFUTED;
-the publish-channel law and the corrected DEP chain live in the arena
-entry): (1) the enumeration-reader RELOCATION (twice-hardened stamp;
-pre-landings in flight), WITH its cons-state re-homed to bracketed
-flat buffers as named pre-landings; (2) the per-fn EMISSION region +
-the image_bytes census print (the arena chain's smallest sound
-landing — the per-twin mark/stream/reset shape generalized; a reset
-is sound exactly where the publish channel is a byte copy or empty,
-never a pointer-write) and brackets on flat-buffer families 3/5/6;
-(3) rung 3 WHOLE (movers → 0; the peel root rides it); (4) the
-pointee representation arc (`Hβ.graph.column-pointees-are-words`, the
-banked keystone) — only then 2b's fork/reset at the grain that then
-exists; (5) the value ontology (5.4); beside them the flowlabel
-build and the repr floor deletion (both in flight 2026-08-12). AHEAD OF
-ALL OF THEM, added 2026-08-17: the crown-tier leak
-`Hβ.infer.declared-row-vacuous-against-a-free-body-row` — a declared row
-is enforced against a concrete body row and VACUOUS against a free one,
-so `fn run(f) with Pure = f()` accepts an effectful callback. The
-arc measured to a FORK rather than a bug (2026-08-17, pin 5446b82bddd4):
-both admission paths are deliberate and each carries the measurement that
-settled it, so the open question is whether a declared row may constrain
-its PARAMS' rows — moving the refusal to the call site — or whether the
-modal capability-at-tee owns it at 6.3. Both branches are priced in
-RESIDUE and the decision is Morgan's; the loop takes independent items
-until it is made. It outranks the queue because it is §0's
-negative-is-provable failing at the shape most likely to carry a real
-negation. BESIDE IT, `Hβ.infer.field-access-overwrites-a-proven-residual`
-RESOLVED 2026-08-18 at pin bc516cf945bb: a field reached through a record
-REST binding had no type and carried no row, so a closure performing E,
-called under `with !E`, checked clean. The access was writing its DEMAND
-over the residual the pattern had proved; it CHECKS against it now, and
-the leak, the type hole and the `assumed` downgrade closed together. Its
-own residue is `Hβ.infer.demand-widens-a-closed-residual`. THE LOOP-SIZED
-RESIDUE the selector serves between dedicated sessions: the 6.3 modal
-sweep rule-by-rule (the pinned-rule count and the crown's verdict are
-state.sh's to report, never this block's — §7's law, now enforced by
-doc-truth because this line had drifted), doc-truth true-ups,
-and gates for oracle-blind classes as digs surface them. "It will
-surely land" is never a selection reason — the completion-gradient is
-a named drift; the iteration's report opens by naming the priority
-served.
+**THE STANDING CURSOR (Morgan 2026-08-26 — the Space spine; supersedes the
+2026-08-11/12 selectors, whose corrected DEP chain it absorbs).** The
+production target until Morgan stands it down: the medium complete and
+all-powerful in WASM form, used in full through `mentl space` — live caret
+authoring AND proof faces (`!Flow` refusals, Why chains) on ONE page, for a
+client audience. Native (Phase 10) waits behind that bar, named in positive
+form the whole time. The arcs, in order:
+
+- **Arc A · Artifact integrity.** verify+march the current tree RED-forward;
+  commit the staged relocation arc (`lib/runtime/*` → `lib/*`, CLI, docs) in
+  logical pieces gated by verify (march gates the REPIN and the narrative,
+  never the commits); rebuild boot; repin from m3; run the FULL board ONCE
+  (frontier + SYNTAX battery included). No doc-truth narrative blesses prose
+  before that repin.
+- **Arc B′ · Columns, the artifact's own corrected chain** (naive
+  columns-first died 2026-08-12 — pointer columns relocate WHERE A POINTER
+  IS STORED, never where the POINTEE is allocated, so a per-decl reset would
+  dangle cells into virgin zeros; `Hβ.graph.column-pointees-are-words`
+  carries the record): (i) the image_bytes census print + flat-buffer-family
+  brackets + the per-fn emission region — decidable NOW,
+  relocation-independent, the smallest sound landing; (ii) rung 3 WHOLE
+  (`Hβ.infer.schemes-are-edges`, movers → 0); (iii) the enumeration-reader
+  relocation with cons-state re-homed; (iv) `Hβ.lower.lowering-is-a-column`,
+  ABSORBING `Hβ.lower.open-row-field-offset-from-known-set` as its keystone
+  consumer — the open-row field-offset silent wrong (SYNTAX's own section
+  records it) is the lower-time-bake family's last live member, invisible to
+  check/match/micros, and no client-facing page ships it; (v) env re-key
+  onto the smap primitive; (vi) pointees-are-words.
+- **Arc C · Image lifetime v1.** With pointees-as-words, 4.3's fork/reset
+  resumes soundly; persist = memcpy v0 under its black-box contract
+  (requested path honored, versioned image, resume restores, incompatible
+  images refuse diagnostically); TCont: capture-at-reify is LANDED — this
+  arc graduates rehydrate's Fail refusal into the typed located diagnostic
+  AT the v0 persist surface (`world-widening-resume`, `.branch-world-tag`
+  stay band-B residue). Lifetime vocabulary everywhere: extents owned by a
+  judgment die at scope exit; compaction is a `~>` handler over the
+  image-map fold; there is no runtime allocation/reclamation subsystem —
+  monotone image pages ARE the graph ARE the heap ARE the continuation store.
+- **Arc D · Reachability link** (parallel-capable; roots on the IMAGE
+  family, not columns): `Hβ.driver.link-is-reachability` — the demanded set
+  read from import edges, free-name binding edges, desugar-introduced names,
+  and row/handler/type obligations; the frozen prelude slice via
+  `Hβ.persist.module-image-cache`. A token allowlist is the Drift-8 disease
+  wearing a linking costume and is refused wherever offered.
+- **Arc E · Space session end-to-end.** The substrate largely exists
+  (`cursor_session`, ide/wheel-worker.js session roles, tools/ide-gate.sh):
+  finish residency across actions, verb merge (`edit`/`session`/`serve`
+  absorbed BY `space`; doc-truth retires the old names in the same landing),
+  and the DEMO GUARD pulled forward from 5.1/5.4: an unannotated generic fn
+  reached at a wide type currently floors at RI32 and sums to ~0 with ZERO
+  diagnostics (tests/repro/mn-unannotated-float-accumulator.mn) — it gains
+  an honest intermediate refusal or inferred narrowing BEFORE strangers type
+  into the page. Terminal: ide-gate green Node + headless Chrome, session
+  alive across actions, eight-aspect projections at the caret.
+- **Arc F · Proof faces on the page, repriced.** `!Flow` sink-sensitivity
+  (`.flowlabel-inference-in-hm` — labels as ROW facts at observation edges,
+  the predicate-name heuristic dies) + Why-chain/refusal badges riding the
+  transport. Struck as ALREADY LANDED: stride carrier (pin 7db29195),
+  monomorphization face, uniform twinning with the f64-state guard,
+  annotated-[Float] breadth end to end.
+
+**CADENCE LAW (paid for twice):** one landing = build the WHOLE arc → verify
+once → board once → repin once. A march sweep per micro-edit spends the
+session on ceremony; a gate that was skipped is UNKNOWN, never green.
+
+**Preemption exception:** `Hβ.infer.declared-row-vacuous-against-a-free-body-row`
+stands ABOVE the spine — §0's negative-is-provable failing at the shape most
+likely to carry a real negation; between arcs the loop may take it or the
+6.3 modal sweep rule-by-rule as loop-sized residue, their verdicts reported
+by state.sh, never this block. Nothing else jumps the queue without a
+MEASURED demo-blocking fault. "It will surely land" is never a selection
+reason — the completion-gradient is a named drift; the iteration's report
+opens by naming the priority served.
 
 ---
 
 ### Phase 0 · The medium can see itself and its board — ✅ COMPLETE 2026-08-06
 
-Every item is an oracle, and oracles came first because a fix without one is
-a hypothesis. All four landed: **0.1** the march captures the whole board
-(`board_verdicts()` at pin time; `NOT RUN` is a visible blank; a red stamps
-`‹BOARD RED›` and doc-truth refuses). **0.2** doc-truth checks the verb
-namespace against `mentl help` (five true findings on its first run).
-**0.3** the structural census (`mentl query <file> "census <shape>"` —
-`anonymous` + the verb glyphs, count + located sites over the judged weave;
-the frontier leg pins each shape counting its own site; its one blind shape
-is Phase 2.0's opening measurement, `Hβ.eq.pipekind-match-eq-divergence`).
-The roster grew its first DECLARED-SURFACE shape 2026-08-17 —
-`default-param` asks not what the source does but whether a form SYNTAX
-declares appears at all, which is what an oracle-blind probe (tripwire 3)
-needs and what a grep from outside the medium had been answering; its
-siblings are labeled arguments, as-patterns, record rest and named row
-aliases, each reading its own carrier. `record-pattern` followed the same
-day and earned its keep immediately: its located count found the wheel
-destructuring OPEN-ROW receivers at both its sites, where offsets come
-from the pattern's own index and a complete pattern is indistinguishable
-from a partial one — an uncheckable promise, not the accident the first
-reading called it. Both receivers are annotated now and their rows close;
-the class stays open as
-`Hβ.lower.record-pattern-param-receiver`, and the march has since
-REFUTED the obvious interim — flooring on "offset unprovable" the way
-`LFieldLoad` does turns `fn g({x, y})` into a trap, because a
-destructuring parameter IS the open-row case and SYNTAX gives it as its
-own example. The offsets must be resolved, not policed. The ROOT then measured under all of it
-(`Hβ.lower.open-row-field-offset-from-known-set`): an open row's field
-offsets come from the KNOWN set's own ordering rather than the runtime
-record's, so `fn pick(u: {zeta: Int, ...}) = u.zeta` over `{alpha: 7,
-zeta: 9}` returns 7 — and SYNTAX's own row-polymorphism example is that
-shape. Four consumers inherit one rule: patterns bind the wrong slot,
-`==` compares only known fields, field access reads a foreign one, and
-`LFieldLoad` floors loudly only where offset resolution returns -1. The
-floor is BYPASSED rather than missing: the body's row var resolves to an
-EMPTY residual, so the chase answers with the known set instead of
-refusing, and the baked offset is call-site independent (one body,
-`pick({alpha: 1, zeta: 3}) * 10 + pick({zeta: 5})` answers 15). That is
-the fork's concrete face — one compiled body cannot carry a per-caller
-layout. The WRITER is `unify_two_open_records`, whose `va != vb` arm
-closes both tails to the other side's extras instead of linking them, and
-the textbook repair (one shared fresh tail) marched BROKEN TWICE — once
-binding a row handle to a Ty, once entirely inside the row sort with the
-tail as `Option(Int)` on `NRecordRowBound`. Same signature both times
-(~131.5k diff lines, m3 clean, m4 trapping at exit 134), which refutes
-the sort-crossing explanation. It was read here as the SEMANTIC change
-being the cause; a third attempt (2026-08-18, after the receivers below
-were annotated) marched the identical semantics **CLEAN, m2 == m3**, so
-the linking is EXONERATED and the five receivers were the whole break.
-That third attempt was still refused, by the micro battery alone — one
-micro, `mn-findtag`, floors at `field offset unprovable` — so the class
-stays open on a narrowed question, not on a fork (`RESIDUE.md`).
-The tail vocabulary is landed and inert. The BREAK IS MEASURED
-(emit-diff on the broken run's artifacts): one floor class differs,
-`field offset unprovable` 4 → 9, the whole +5 of the unreachable delta.
-The linked form is HONEST and the wheel cannot afford it yet — five of
-its own field accesses become unprovable, in `ls_current_lambda_handle_loop`
-and `ls_outer_fn_name_loop`, both reading an unannotated `frames`. Closing
-those receivers was built and REFUSED too — but its divergence is 39
-lines, all of them nested-function NAMING: the annotation fixes
-`ls_outer_fn_name_loop`, which has been reading a foreign slot and
-leaving nested fns unqualified, a second silent wrong independent of the
-tail. The trap is now PINNED by running the artifact: `wasm trap: indirect call
-type mismatch` at `parse_int_go`, through `lex_from` → `lex`. The NAMES are exonerated — table, types, and definition
-corpus are identical across generations, and wasm names are advisory — so
-the fault is the read-past half of the same diff: three PARENT fns
-(`index_of`, `parse_int`, `op_synth_default_enumerate_inhabitants`)
-differ STRUCTURALLY. That divergence is now READ and PROVEN BY POSITION: m2 binds `$go` at
-body line 19 and first reads at 21, while m3 drops that binding and its
-first read at line 20 precedes any write, so the local is zero and the
-closure the tail call dispatches on is null. RESOLVED 2026-08-17 across two pins. The site was `LMakeClosure`'s
-self-capture early-bind, whose guard compared a capture's NAME against
-the LowFn's — two namespaces once qualification starts. The repair is an
-IDENTITY read (the capture's handle IS the closure's), which also answers
-which local to bind, so the second name field the stamp priced dissolved.
-With that in place the discriminator's receivers were annotated and
-nested fns QUALIFY for the first time (pin 6cacd339350c, TRANSITION,
-m3 == m4). The open-row CLASS is untouched — an unannotated receiver
-still takes offsets from the known set — and the row arc resumes from
-there. The symbol-collision and dangling-symbol suspicions are both
-dead (514 duplicate names on both sides; both generations define both
-naming forms).
-**0.4** the SYNTAX conformance battery — CLAIMED COMPLETE 2026-08-06 AND
-NEVER BUILT, corrected 2026-08-17 when the selector reached for it and
-found nothing: `tests/syntax/` had no history under any ref, no gate
-named it, and the LEDGER this phase points at for "full mechanics" had no
-entry for it. The 27-fixture run behind tripwire 3 was a one-off whose
-fixtures never landed, which is why its findings had to be rediscovered
-by hand. The directory is real now, run by the medium's own `test` verb
-through a verify leg, seeded with the declared forms MEASURED so far —
-labeled arguments, the record pattern over a local receiver, field
-access. Seeded, not complete: it grows one probed surface at a time, and
-a surface found BROKEN banks a named peer with its repro instead of a
-fixture canonizing the wrong answer. Its first sweep found two, both
-invisible to every other gate: `Hβ.lower.record-pattern-param-receiver`
-and `Hβ.infer.as-pattern-defeats-exhaustiveness`. The full mechanics:
-`LEDGER.md`.
+All four oracles landed: **0.1** board_verdicts() at pin time (`NOT RUN` visible,
+red refuses). **0.2** doc-truth checks verb namespace against `mentl help`.
+**0.3** structural census (`mentl query <file> "census <shape>"` — anonymous +
+verb glyphs + declared-surface shapes; roster at seventeen shapes). **0.4** the
+SYNTAX conformance battery (`tests/syntax/`, run by the medium's `test` verb
+through verify). Full mechanics: `LEDGER.md`.
 
 ### Phase 1 · The row crosses the function boundary — ✅ WHOLE 2026-08-06
 
-Three faces, three landings, one day (pins 806c7df4 → e606a650 →
-04e20d2482fc): the completion prune's SIGNATURE KEEP-SET closed the crown's
-higher-order leak (`run(f) = f()` publishes its param's row var in row and
-scheme coherently; the keep adds no quantification, so the prune's blowup
-bound stands); the instance-erasure root closed at effect registration
-(declared params ride as EANode value dims, the gate pins authored scalars,
-subsumption's present legs read `eff_admits` — the instance law's positive
-dual); and the handler-residual seam closed at the install read (the
-residual as the cell-as-an-edge, each CALLED config arg's row joined —
-`fn f(xs) with !WASI = each(...)` refuses, the vocabulary face every user
-touches). Harvest: 19 falsely-passing wheel sites trued; the quantification
-floor became exhaustive Ty arms with TCont's world protected. Terminal gate
-met: crown 8/8, frontier 332/0, census 0, fixpoint at every pin. Records:
-`Hβ.infer.hof-param-row-never-reaches-enclosing` and the two residual peers
-in `RESIDUE.md`; the LEDGER's THE SIGNATURE KEEPS ITS ROW. Rung 3's
-dissolution of the publish tower remains the deeper form (Phase 5.2).
+Three landings, one day (pins 806c7df4 → e606a650 → 04e20d2482fc): completion
+prune's signature keep-set, instance-erasure at effect registration, handler-
+residual at install read. Terminal: crown 8/8, frontier 332/0, census 0. Records:
+`Hβ.infer.hof-param-row-never-reaches-enclosing` + peers in `RESIDUE.md`.
 
-### Phase 2 · Every judgment reads the graph, never a proxy
+### Phase 2 · Every judgment reads the graph, never a proxy — ✅ WHOLE 2026-08-07
 
-Rides Phase 0.3. Three instances of one law: *parsing is necessarily shape;
-every judgment must be type-keyed; nothing downstream of the parser may
-re-read syntactic form to decide what the graph already answers.*
+All items landed: **2.0** `==` coherent with match (span_of_node_raw — no chase).
+**2.1** extraction-is-the-emit-cursor (e-graph born in prescribed form; synth's
+stored rank deleted into rank_of). **2.2** shape-keyed judgment tier (334 lines
+lighter; `check_branch_is_stage` deleted). **2.3** anonymity tier (eta-wrapper,
+effectful-lambda convictions ratcheted). **2.4** diverge-shared-memory-row
+recovered into RESIDUE. **2.5** census shapes + ratchet (`eta_max: 29`,
+`effectful_lambda_max: 394`). Full mechanics: `LEDGER.md`.
 
-- **2.0 · The one `==` is coherent with match** — ✅ LANDED 2026-08-07, and
-  the banked probe's one run REFUTED the phase head's own framing: there
-  was no divergence. The raw-word census showed the `<~` pair as `a=3 b=3`,
-  the eq TRUE; the census's zero came from `span_of_handle` CHASING to the
-  union-find root, where a `<~` node lands on the continuation-boundary
-  cell's bare `Inferred` — span zero, site skipped as synthetic. The landed
-  law: a weave walk reads a node's OWN raw facts (`span_of_node_raw` —
-  graph_reason_at, no chase), because chasing conflates identity with the
-  type-class representative. All six shapes count their own sites; the
-  frontier roster gained `<~`; six kills banked
-  (`Hβ.eq.pipekind-match-eq-divergence`, RESOLVED — the sixth kill is the
-  divergence hypothesis itself). What SURVIVES for downstream phases: the
-  eq is measured coherent (rung 3, `fold_sig`, the IFC lattice proceed),
-  the pointer-eq floor's Intent-Boundary fix stands, the reverted guard
-  experiment's record stands (load-bearing eq semantics change only under
-  march arbitration), and one sibling residue is named — `refs_of_name`
-  shares the chased-span read and is green by accident-invariant.
-- **2.1 · `Hβ.egraph.extraction-is-the-emit-cursor`** — ✅ LANDED 2026-08-07,
-  half by discovering it already true: the stamp check against the artifact
-  showed the engine BORN in the prescribed form (canon edges in the graph,
-  extraction = the chase, congruence by live re-read, the fan/e-graph range
-  composition with its forced order — the deleted side-ledger's epitaph is
-  in the file header), so "delete the pass" had no referent. The live half
-  was synth's stored rank: `cost` left EnrichedCandidate, thirteen
-  enumerator constants left their sites, and rank is `rank_of` — a
-  projection of the live candidate at sort entry (proximity via the env's
-  decl reason + the refs walk; a ctor call ranks by the same one arm; a
-  nameless candidate carries the bare base) — killing both measured faces
-  (measurement-vs-invented-constant ordering; the extraction-swap stale
-  ride). The rule-growth contract is banked at
-  `Hβ.egraph.extraction-cost-composes-repr`: a future non-shrinking rule's
-  "cheaper" composes repr/rows/use-counts as a projection, never a
-  term-shape fn — gated where band G's rules grow (5.5).
-- **2.2 · The shape-keyed judgment tier** — ✅ LANDED 2026-08-07 (pin
-  e1ef0bd41417, 334 lines lighter). The law: a *partial* match on
-  `ast_kind_of` outside the parser convicts; a *total* structural fold does
-  not, because exhaustiveness makes a missed case a compile refusal. The
-  tier's census found one live member: `check_branch_is_stage`, judging `><`
-  branches by spelling against its own organ's semantics (the value boundary
-  evaluates every branch as a value; `<|`'s stage requirement is the
-  application unification and never needed a special case). Deleted whole
-  with the `EBranchNotStage` class; the quartet gate
-  (`tests/frontier/mn-pcompose-value-branches.mn`, seen RED at four
-  diagnostics) asserts one verdict for four spellings; SYNTAX §«`><` branch
-  typing» rewritten to the value-branch law. The formatter's five chain arms
-  were confirmed history (fixed 2026-07-25), and `ast_kind_of`'s sixteen
-  remaining consumers all live in the formatter, whose *output* is shape —
-  the one legitimate shape-reader outside the parser.
-- **2.3 · The anonymity tier** — ✅ LANDED 2026-08-07 (pin eb827fae186d;
-  stamped one iteration, built the next — `Hβ.audit.anonymity-tier` is the
-  design's home and carries the build-time correction). The audit convicts
-  the eta-wrapper (body ≡ a named call over its own params —
-  MachineApplicable, pass the name) and the effectful lambda (the judged
-  TFun row read through resolve_row, which sees effects the `~>` foot
-  already absorbed from the fn row), and stays silent on the pure-local
-  vocabulary — the stamp's quantified-row-param class collapsed into the
-  row class at build time, because a pure lambda on a quantified param IS
-  `map((x) => x + 1, xs)`. Escape stays DEP-named on
-  `Hβ.infer.use-profile`. Measured: 555 anonymous fns on the weave census,
-  ~136 eta-wrappers by text shape; the ratchet that watches those numbers
-  is 2.5's. Gate: tests/frontier/mn-anonymity-tier.mn, three faces, seen
-  RED first.
-- **2.4 · Recover `Hβ.infer.diverge-shared-memory-row`** — ✅ RECOVERED
-  2026-08-07 into `RESIDUE.md`, restated from the 2026-05-05 archaeology
-  (b139622b, peer G.1) into today's substrate: one PFanout, schedule read
-  live at the `~>` edge; under `~> Thread` the ownership aspect IS the row
-  fact — FanShare's cross-core borrow charges `+ SharedMemory`,
-  FanDistribute proves `+ !SharedMemory`. The proof verdict inherits the
-  crown (Phase 6) and lands with band E's verification tier (Phase 9.2);
-  the G.2 sibling survives as `mentl where`'s schedule badge facet (3.2),
-  G.3 dissolved at STEP 4's PFanout collapse.
-- **2.5 · The census grows its judgment shapes** — shapes ✅ LANDED
-  2026-08-07 (pin 62542a59bf94): CsEta / CsEffectfulLambda /
-  CsIterationCostume in `CensusShape`, the detector families and the one
-  total child projection moved oracle→query (the census is the detectors'
-  home; the audit reads through the import), census_matches carrying the
-  handle so judgment shapes read the graph at the site; fixture + roster
-  pin each shape counting its own line, seen RED first. The RATCHET ✅
-  LANDED 2026-08-07 (same day, the second half): verify runs the two
-  census queries per gate pass and refuses a rise against
-  `eta_max: 29` / `effectful_lambda_max: 394` in
-  `tools/verify-baseline.txt` (the tier's CONVICTIONS on the wheel link —
-  423 of 555 anonymous; raw CsAnonymous is not ratcheted, its pure-local
-  majority being vocabulary the tier declares silent). Both arms seen RED
-  at under-set ceilings; an empty census answer refuses loudly rather
-  than reading as zero. Phase 2 is WHOLE. The whole-link/per-file cut and
-  the decl-site file-coordinates facet
-  (`Hβ.query.decl-site-file-coordinates`) land together when 3.5's
-  overlay gives solo queries their real link sets.
+### Phase 3 · The surface IS SYNTAX — ✅ WHOLE 2026-08-07
 
-### Phase 3 · The surface IS SYNTAX
-
-*(The phase's felt walk ran 2026-08-07 at pin 62542a59bf94 — five probes
-through the installed shim; every 3.3 drift confirmed live, the N-ary fold
-measured at the destructure site, one 3.4 claim confirmed in the right
-direction: `-> !` checks clean, the lathe-lag note is the stale half. No
-new DEP found; the map below is accurate at that pin.)*
-
-- **3.1 · The N-ary law** — ✅ LANDED 2026-08-07 (pin 05fd2307ff43,
-  built against `Hβ.parser.pcompose-nary`). *An operator whose result is
-  a PRODUCT has semantic arity and must parse N-ary; a COMPOSITION or
-  SET operator may fold, because folding is meaning-preserving there.*
-  `><` now parses through the dedicated FanoutExpr carrier — the binop
-  loop accretes a chain into one node whose branches are a LIST, so
-  `(a) >< (b) >< (c)` meets a three-way destructure and runs
-  (mn-fanout-nary, seen RED as a garbage exit on the prior pin). Infer
-  walks N value boundaries into TTuple(N); lower enumerates N thunks
-  into the arity-carrying record (STEP 4 meant zero emit change); fmt
-  renders the N-ary canon. The m3 trap was the census instrument:
-  nested full enumerations hide from the exhaustiveness checker, and
-  the ExprPlaceholder tell found all five walkers in one measurement
-  (the LEDGER entry carries the mechanics). `<|` keeps input ×
-  branch-tuple — different operand structure by nature, one PFanout
-  node at lower.
-- **3.2 · `mentl where`** — ✅ LANDED 2026-08-07 (pin 0d3a196299d1, built
-  against `Hβ.cli.where-verb`). The derived-badge projection is live on
-  the query spine: `gain : Float @ f64 (inferred)`, `tick : Tick op —
-  resume Int ->1 answer`, `>< [Thread]` / `>< [Seq]` — each a pure read
-  of a fact the graph proves, the schedule badge's static enclosing-tee
-  walk exact by the never-crosses-a-call-boundary law. SYNTAX's lag list
-  shrank by its first name; the frontier grew the four-badge leg; two
-  dig lessons banked in the LEDGER (index walks over env-stored lists,
-  the typed accessor over the raw field read). The cure for what the
-  two-verb reframe cost — the fact returned to the site as OUTPUT.
-- **3.3 · The remaining measured drifts.** The lambda parameter path ✅
-  LANDED 2026-08-07 (pin 8031eaf123ec — the cover-grammar RestExpr;
-  `([h, ...t]) =>` checks clean, the parse-half leg gates it, and the
-  unmasked rest-binding runtime gap is banked as
-  `Hβ.lower.list-rest-binding-runtime` with its fix direction). Named
-  effect rows ✅ LANDED 2026-08-07 (pin 6768ffac9dfa, built against
-  `Hβ.types.named-effect-rows`): `type Both = A + B` through the
-  with-clause's own grammar, expansion at the signed fold building each
-  alias's row whole (the fixture's `Both - B` alias-of-alias grouping
-  case runs 3), cycles and the negation shorthand refusing loudly, the
-  +EnvRead cascade through the parser's fn-type rows widening eleven
-  declared clauses. The `xs |> len` false diagnostic ✅ LANDED 2026-08-07
-  (pin 7d8e91e499a1, the loop's first TRANSITION — seq_face_ty binds
-  every seq-op MENTION to its face, closing the last raw-scheme leak;
-  pipes, HOF args, and stored seq-ops type honestly; the wheel's own
-  mentions judging differently under the face is exactly why the emit
-  crossed one generation). 3.3 IS WHOLE — the remaining names were
-  always 3.6's (`<~`) and 3.5's (the fmt scope register).
-- **3.4 · SYNTAX's own defects** — ✅ TRUED 2026-08-07 (docs-only, each
-  claim probed before edit). The canon's two fanout-foot-pipe examples now
-  parenthesize with the precedence stated (`(1) >< (2) |> inc` probed to
-  run as `(1, inc(2))` — exit 4, the pipe entering the last branch); the
-  `-> !` lathe-lag note deleted (zero diagnostics at the felt walk); the
-  format-liftable section carries the honest state (StatementSemicolon
-  silent as designed, RedundantBraces and RedundantPerform surfacing as
-  warnings until the fmt canonical projection retires them — measured,
-  never asserted).
-- **3.5 · The per-module half of the manifest** — first half ✅ LANDED
-  2026-08-07, second half STAMPED (`Hβ.driver.per-module-env-overlay` in
-  `RESIDUE.md` carries both). The sweep re-measured 53 violations across
-  13 modules (the 29/18 figure had aged); two one-line imports killed 17
-  (verify→graph+io, format→parser), and `solo_violations_max: 36` is the
-  banked ceiling the frontier's sweep leg enforces. THE SWEEP REACHED
-  ZERO 2026-08-07 (pin c46691d75a57, four iterations: 53 measured → 17
-  killed by two import lines → the handler seam closed at src/env.mn +
-  src/intern.mn → the verb grammar relocated to src/cli.mn) —
-  `solo_violations_max: 0` is the floor and the contract, every module
-  resolving every name through its own declared imports, enforced per
-  landing. The zero gates the drift-catalog retirement (its own step).
-  The OVERLAY proper (per-module env views: tagged entries, closure
-  bitmasks, O(1) lookup filters — real link sets without re-judging,
-  scoped diagnostics healing the fmt register, the per-file census cut,
-  file-true query spans) is the stamped second half; the ceiling reaches
-  0 when the seams close, and the per-module check then gates the
-  drift-catalog retirement.
-- **3.6 · `<~` becomes whole** — ✅ CLOSED AT ITS CAUSALITY FACE,
-  REDIRECTED AT ITS CONTEXT FACE (2026-08-12, pins 7260286fcd68 +
-  fc93f1957fb9; `Hβ.dataflow.feedback-becomes-whole` in `RESIDUE.md`
-  carries both, and the LEDGER entry the arc). LANDED:
-  op_resume_discipline at the env altitude, and `E_ZeroDelayFeedback` —
-  Faust's causality rule as the ELEVENTH armed class, `<~ delay(0)`
-  refusing at the arm, gate seen RED (the program ran, exit 30). KILLED
-  BY ITS OWN CONTROL, before a byte changed: the dissolved fork's
-  membership predicate — "the loop-driving resume grade IS the class" —
-  classifies NO clock, because every clock op is measured `->1`
-  (`choose` is the wheel's only `->*`) and a clock handler resumes ONCE
-  per tick with the iteration living in the caller's loop. §4④ unifies
-  those five as one SUBSTRATE, never one cardinality; the predicate
-  would have fired E_FeedbackNoContext at all thirteen wheel `<~` sites.
-  The reverse-edge prerequisite died too — `EffectDeclKind(op_names)` is
-  already that edge at the one writer. E_FeedbackNoContext therefore
-  KEEPS its zero construction sites on purpose: a `<~` site is a
-  per-site state register whose "previous iteration" is the enclosing
-  fn's next call (which is why bandpass_step needs no row), so the
-  ambient-context requirement is a Faust inheritance the emission never
-  adopted, and its honest home is the INFERRED clock —
-  `Hβ.dataflow.clock-calculus-sample-rate`, Phase 8's DSP verify tier,
-  where "no clock here" becomes a measurement instead of a guess. The
-  probe that killed the predicate opened one more —
-  `Hβ.dataflow.feedback-delay-depth-unread` (delay(0)/delay(1)/delay(3)
-  all returned 30 — the authored depth reached no reader) — and THAT
-  ONE CLOSED THE SAME DAY: the depth is read once and every judgment
-  about a line is an arm of that read, `delay(N)` carries N priors as N
-  declared globals shifted one per tick, and a depth no literal states
-  is `E_ComputedDelayDepth`, the TWELFTH armed class, because handing a
-  site one slot when it asked for n is the same silent wrong wearing a
-  new costume. `delay(1)` stayed byte-identical, so the wheel's own
-  sixteen `<~` sites crossed untouched. The remainder is
-  `Hβ.dataflow.delay-line-runtime-depth` (a runtime-sized line is the
-  image-backed sequence, riding 5.4/4.3).
-  `Hβ.dsp.state-element-install-once` rides the arena (4.3).
+All items landed: **3.1** N-ary law (FanoutExpr carrier; `><` parses N-ary).
+**3.2** `mentl where` (derived-badge projection live). **3.3** remaining drifts
+(lambda parameter path, named effect rows, `xs |> len` false diagnostic — all
+fixed). **3.4** SYNTAX's own defects trued. **3.5** per-module manifest (sweep
+reached zero, `solo_violations_max: 0`; overlay proper stamped in RESIDUE).
+**3.6** `<~` becomes whole (causality face closed — `E_ZeroDelayFeedback` +
+`E_ComputedDelayDepth` armed; context face redirected to Phase 8's clock
+calculus). Full mechanics: `LEDGER.md`.
 
 ### Phase 4 · Ownership has a real lifetime
 
@@ -1940,7 +1203,13 @@ new DEP found; the map below is accurate at that pin.)*
   flat buffers by construction — so 4.3 PAUSES at 2a and 2b's fork/reset
   DEP-GATES on that arc (the DEP-gate is the next thing to build, not a
   stop: the arc is §11's own next phase). 4.3 and 9.1 still converge on one
-  boundary; the fleet's 2026-07-17 "output-invariant" refutation stands.
+   boundary; the fleet's 2026-07-17 "output-invariant" refutation stands.
+   LIFETIME VOCABULARY (2026-08-26): the target has no runtime
+   allocation/reclamation subsystem — monotone image pages ARE the graph ARE
+   the heap ARE the continuation store; lifetime is ownership proving extents
+   droppable, compaction a `~>` handler over the image-map fold. The arena,
+   GC, and snapshot questions are that ONE question, resumed at Arc C of §11's
+   Space spine.
 - **4.4 · Ownership's frontier faces.** The quiet gate ✅ LANDED 2026-08-07
   (verify's quiet-gate ratchet: 83 authored own / 817 authored ref in src/,
   param-position text count seen RED at ceiling 1, monotone DOWN — each
@@ -2471,11 +1740,15 @@ landed in 5–10; this phase is the finish that makes it FELT.
   ranker (Reason chains + proximity + in-scope vocabulary) seats; the
   teaching TIE-BREAK asks the minimal-entropy question when meaning-space
   ties; `!E`-gated speculation live-runs only what the crown proves inert.
-- **11.2 · `mentl edit` polished.** The keystroke→parse→format→render loop
+- **11.2 · `mentl edit` / `mentl space` polished.** The keystroke→parse→format→render loop
   continuous (`Hβ.felt.mentl-edit-runtime`), reactivity typed and
   demand-driven, the verification dashboard (live V_Pending / transitive
   `!E` / Why chains), collab as Grove-CRDT over the TYPED graph,
-  legibility derived. Every reader-facing page leads with the person at
+  legibility derived. The Resident Space Session (`ide/wheel-worker.js`,
+  `ide/test-shim.mjs`, `ide/index.html`) hosts the living graph over shared
+  WebAssembly memory with sub-50ms address projections and delta updates,
+  verified green across Node and headless Chrome (`tools/ide-gate.sh`).
+  Every reader-facing page leads with the person at
   the keyboard; the docs themselves pass the source standard.
 - **11.3 · DONE, measured.** The seven statements run as gates, each
   already owned by a phase above — (1) Phase 8, (2) Phases 6–7, (3)

@@ -1554,6 +1554,25 @@ for i in "${!compilers[@]}"; do
     fail "arena census: no image line on the compile's stderr — the census print is prose, not mechanism"
   fi
 
+  # The movers ratchet (rung 3's instrument, Hβ.infer.schemes-are-edges):
+  # the trial/final divergence on a polymorphic fixture, ceiling falling
+  # only. lib/lists.mn diverges at 6 today; the stage contract's landing
+  # (env carries cells — nothing left to diverge) drives it to 0 and the
+  # ceiling retires like solo_violations_max did.
+  mv_max=$(grep -E '^lists_movers_max:' "$ROOT/tools/verify-baseline.txt" | head -1 | cut -d: -f2 | tr -d ' ')
+  wt_run "$compiler" < "$ROOT/lib/lists.mn" > "$dir/mv.wat" 2> "$dir/mv.compile.err"
+  mv_n=$(grep -oE '^judgment: [0-9]+' "$dir/mv.compile.err" | grep -oE '[0-9]+' | head -1)
+  mv_n=${mv_n:-0}
+  if [ -n "$mv_max" ] && [ "$mv_n" -le "$mv_max" ]; then
+    if [ "$mv_n" -eq 0 ]; then
+      pass "movers ratchet: the trial/final divergence reads 0 (ceiling $mv_max retires)"
+    else
+      pass "movers ratchet: $mv_n mover(s) within the $mv_max ceiling (0 retires it at rung 3)"
+    fi
+  else
+    fail "movers ratchet: $mv_n mover(s) against ceiling ${mv_max:-unset} — the judgment diverged more, not less"
+  fi
+
   # Severance honesty (audit): a fn whose row carries Alloc is never
   # offered "proven zero allocation"; a pure fn still earns the offer.
   # The reached set reads the CHASED row (row_names was a top-link read

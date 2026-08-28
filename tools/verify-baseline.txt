@@ -1116,3 +1116,4 @@ env_frame_max: 0
 # the highest of the three. A ratchet set inside its own measurement's
 # variance is not a ratchet; it is a coin flip that blocks good work.
 selfcompile_peak_kb_max: 2310000
+lists_movers_max: 6

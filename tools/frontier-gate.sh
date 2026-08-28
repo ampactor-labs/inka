@@ -1537,6 +1537,23 @@ for i in "${!compilers[@]}"; do
     pass "under-application crucible: loud at assemble (invalid WAT refused; the banked peer names the suspension fix)"
   fi
 
+  # The arena census print (Hβ.perf.per-decl-arena 2a-ii, the DEP chain's
+  # named next landing): the compile's stderr carries the accumulated
+  # image-classified byte count — the extent-delta account the
+  # image_enter/exit brackets feed — beside the judgment channel. RED
+  # first: image_bytes had zero performers when this leg was written.
+  wt_run "$compiler" < "$ROOT/tests/frontier/mn-census-verbs.mn" > "$dir/arena.wat" 2> "$dir/arena.compile.err"
+  if grep -qE '^image: [0-9]+ image-classified byte' "$dir/arena.compile.err"; then
+    img_n=$(grep -oE '^image: [0-9]+' "$dir/arena.compile.err" | grep -oE '[0-9]+')
+    if [ "$img_n" -gt 0 ]; then
+      pass "arena census: the compile reports its image-classified bytes ($img_n)"
+    else
+      fail "arena census: the image line reads 0 — the brackets classify nothing"
+    fi
+  else
+    fail "arena census: no image line on the compile's stderr — the census print is prose, not mechanism"
+  fi
+
   # Severance honesty (audit): a fn whose row carries Alloc is never
   # offered "proven zero allocation"; a pure fn still earns the offer.
   # The reached set reads the CHASED row (row_names was a top-link read

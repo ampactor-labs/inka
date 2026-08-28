@@ -27,9 +27,18 @@ handler intern_table with buckets = list_filled(4096, []), entries = make_list(1
     match intern_probe(bucket, src, s, e, 0, len(bucket)) {
       Some(row) => resume(row),
       None => {
+        // IMAGE family (3) of six (arena 2a-ii): the canonical flat, its
+        // entries slot and bucket cons all outlive every per-decl reset —
+        // the bracket classifies the whole miss extent and feeds the
+        // census delta. State computes inside the bracket so the resume's
+        // with-values allocate under the same extent.
+        image_enter()
         let canonical = list_to_flat(str_slice(src, s, e))
         let row = (canonical, count, keyword_kind(canonical))
-        resume(row) with buckets = list_set(buckets, b, [row] ++ bucket), entries = list_set(list_extend_to(entries, count + 1), count, canonical), count = count + 1
+        let nbuckets = list_set(buckets, b, [row] ++ bucket)
+        let nentries = list_set(list_extend_to(entries, count + 1), count, canonical)
+        image_exit()
+        resume(row) with buckets = nbuckets, entries = nentries, count = count + 1
       },
     }
   },
@@ -42,9 +51,14 @@ handler intern_table with buckets = list_filled(4096, []), entries = make_list(1
         (_canonical, h, _kw) => resume(h),
       },
       None => {
+        // IMAGE family (3): the str-form miss, same extent rule.
+        image_enter()
         let canonical = list_to_flat(s)
         let row = (canonical, count, keyword_kind(canonical))
-        resume(count) with buckets = list_set(buckets, b, [row] ++ bucket), entries = list_set(list_extend_to(entries, count + 1), count, canonical), count = count + 1
+        let nbuckets = list_set(buckets, b, [row] ++ bucket)
+        let nentries = list_set(list_extend_to(entries, count + 1), count, canonical)
+        image_exit()
+        resume(count) with buckets = nbuckets, entries = nentries, count = count + 1
       },
     }
   },

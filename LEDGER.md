@@ -35,6 +35,42 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-08-26 · pin 8cb23d6eabf53e2a · THE CENSUS PRINT EXISTS, AND ITS
+  FIRST READING CAUGHT THE MACHINE LYING. TRANSITION m3 == m4 at 415923
+  lines, census 0; frontier 373/0 (the arena census leg born RED, green
+  here), verify green.
+  ▶ WHAT LANDED: image_bytes's census print beside the movers line (the
+  arena chain's named next landing), image_enter/exit brackets on three
+  more families (intern's miss arms, the WAT buffer's yield and collect
+  extents, the branch diagnostic bank), and the arena census leg in the
+  frontier. The per-fn emission region's probe receipt banked at its
+  site: landed 2026-07-25, its overwrite-before-read contract is the
+  bracket's standing law.
+  ▶ THE CATCH: the first measurement read 721192 where every prior day
+  read nothing at all — the image arms hardcoded $heap_ptr, a global
+  the threaded wheel never moves; the live heap line is the shared cell
+  at 64, so every extent delta was heap_ptr − heap_ptr from the day
+  family 1 landed. Silent zero for nineteen days, invisible because
+  nothing could print the number. The arms read $heap_mark_impl now —
+  the strategy-invariant read the neighboring heap_mark op always had,
+  violated in the very next arm over.
+  ▶ THE TRANSITION: the emit fix crosses one generation — m2's arms are
+  boot's genetic material, m3's are the source's — so the march
+  arbitrated m3 == m4 and re-pinned from m3, the trusting-trust anchor
+  doing exactly its job.
+  ▶ THE REFUSAL: schemes-are-edges's first stage-1 attempt (a Live
+  variant in Scheme, a projection boundary, a wrapper ADT, twenty-five
+  pattern edits) was REFUTED by the medium three ways — H6 totality
+  taxed every read site, generalize's reach smuggled WASI through every
+  resolve row, and the whole surface is throwaway at the terminal form.
+  Reverted whole. The terminal contract (env carries cells, quantifier
+  a caller-side projection, instantiation the correspondence-edge mint,
+  trial/final collapse following) is written to RESIDUE as the entry's
+  stage contract. Not a lesser design made to work.
+  ▶ RIDER: the 63fad408 commit message called the space verb merge
+  "Arc B"; the spine's own text makes it Arc E. PLAN is the authority;
+  commit messages are prose shadows.
+
 - 2026-08-26 · pin a7a0529464cc1234 · THE SURFACE MOVES TO ITS OWN ADDRESS
   SPACE. CLEAN — m2 == m3 at 415834 lines, census 0; frontier 372/0
   re-stamped at this sha, the gate's wall 274.9s → 159.1s.

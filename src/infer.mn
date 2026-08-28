@@ -1225,6 +1225,17 @@ fn infer_program_converged(src) = {
       // shipped — which is why this is a count driven to zero, not a
       // gate.
       let prints2 = round_prints(flat_rows)
+      // The arena census (Hβ.perf.per-decl-arena 2a-ii, the corrected DEP
+      // chain's named next landing): the accumulated image-classified byte
+      // count, read from the extent-delta account the image_enter/exit
+      // brackets feed. Same maintainer channel and scope law as the movers
+      // line — unscoped compiles (march / census / battery) keep it, a
+      // user-target verb's ScopeAt quiets it. 2b's image/scratch boundary
+      // fixes itself from this measured number, never from a claim.
+      match diag_scope_of() {
+        ScopeAll => eprint_string("image: {int_to_str(image_bytes())} image-classified byte(s)\n"),
+        _ => (),
+      }
       if prints_equal(prints, prints2) {
         ()
       } else {

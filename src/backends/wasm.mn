@@ -101,11 +101,24 @@ handler wat_to_file(fd) {
 // to O(B+N) — millions-times speedup at wheel-scale.
 handler wat_to_string with buf = make_list(64), count = 0 {
   wat_emit(s) => {
+    // IMAGE family (5) of six (arena 2a-ii): the buffer's growth extent —
+    // the segment slots outlive every per-decl reset (they die at this
+    // record's own region, which is 2b's boundary to fix from the measured
+    // number, not this bracket's). The extend computes inside the bracket.
+    image_enter()
     let extended = list_extend_to(buf, count + 1)
     let written = list_set(extended, count, s)
+    image_exit()
     resume() with buf = written, count = count + 1
   },
-  wat_collect() => resume(str_concat_all(slice(buf, 0, count))),
+  wat_collect() => {
+    // Family (5)'s materialization: the one-shot str_concat_all is the
+    // extent's largest single allocation.
+    image_enter()
+    let all = str_concat_all(slice(buf, 0, count))
+    image_exit()
+    resume(all)
+  },
 }
 
 // heap_base is the threshold separating sentinel ADT values from heap
@@ -4414,10 +4427,15 @@ fn emit_expr(expr) = match expr {
       // the matching exit accumulates (bump - mark) into $image_bytes.
       // The trailing const closes the unit result slot (the heap_reset
       // idiom). The three globals emit demand-gated beside the memory
-      // decl.
-      wat_emit("    (if (i32.eqz (global.get $image_depth))(then (global.set $image_mark (global.get $heap_ptr))))(global.get $image_depth)(i32.const 1)(i32.add)(global.set $image_depth)(i32.const 0)\n")
+      // decl. The heap line reads through $heap_mark_impl — the call site
+      // is STRATEGY-INVARIANT: the first census print measured 0 on the
+      // wheel because these arms hardcoded $heap_ptr, a global the
+      // threaded module never moves (the live line is the shared cell at
+      // 64), so every delta read heap_ptr − heap_ptr. The neighbor op
+      // (heap_mark) had the right shape the whole time.
+      wat_emit("    (if (i32.eqz (global.get $image_depth))(then (global.set $image_mark (call $heap_mark_impl))))(global.get $image_depth)(i32.const 1)(i32.add)(global.set $image_depth)(i32.const 0)\n")
     } else if import_name == "image_exit" {
-      wat_emit("    (global.get $image_depth)(i32.const 1)(i32.sub)(global.set $image_depth)(if (i32.eqz (global.get $image_depth))(then (global.set $image_bytes (i32.add (global.get $image_bytes)(i32.sub (global.get $heap_ptr)(global.get $image_mark))))))(i32.const 0)\n")
+      wat_emit("    (global.get $image_depth)(i32.const 1)(i32.sub)(global.set $image_depth)(if (i32.eqz (global.get $image_depth))(then (global.set $image_bytes (i32.add (global.get $image_bytes)(i32.sub (call $heap_mark_impl)(global.get $image_mark))))))(i32.const 0)\n")
     } else if import_name == "image_bytes" {
       wat_emit("    (global.get $image_bytes)\n")
     } else if import_name == "heap_mark" {

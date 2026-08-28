@@ -7881,3 +7881,43 @@ and a NEWER boot restoring an OLDER boot's image traps in alloc
 (measured during this dig; images cleared by hand). The key must
 include the compiler build (the boot sha) so a repin invalidates
 the warm set by construction.
+
+`Hβ.infer.schemes-are-edges` — THE STAGE CONTRACT, WRITTEN FROM THE
+REFUTED HYBRID (2026-08-26, the Space spine's B′.ii re-entry). The first
+stage-1 attempt built a Live(Int) variant inside Scheme, a scheme_live
+projection boundary, a ResolvedForall wrapper ADT, and twenty-five
+pattern edits across eight files — and the medium refused it three
+ways at once: H6 totality demanded the Live arm at every read site
+(static exhaustiveness does not shrink because a boundary projects);
+generalize's reach smuggled WASI + GraphRead through every env resolve
+row (26 E_EffectMismatch — the read boundary had become a graph walk);
+and the whole surface is throwaway at the terminal form. THE LESSON,
+Morgan's law applied: do not make a lesser design work. THE TERMINAL
+CONTRACT (already written in the artifact's own condemned-carrier
+comments — Scheme's and instantiate's — now assembled):
+(1) THE ENV CARRIES NO SCHEME OBJECT. Entries become
+    (name, Binding, reason, kind) with `type Binding = BStatic(Ty) |
+    BCell(Int)` — BStatic for the trees that do not move (aliases,
+    ctor variants, effect decls), BCell(h) for judgment-published
+    decls. The Scheme ADT dissolves from the env layer entirely.
+(2) QUANTIFICATION IS A PROJECTION THE CALLER RUNS: a decl's type IS
+    chase(h); the quantifier (generalize's free-in-params walk) is
+    computed where polymorphism is consumed, never stored. generalize
+    deletes; the chase/free-in walks stay (graph reads the readers'
+    rows already carry — no boundary tax, no row smuggling).
+(3) INSTANTIATION IS THE CORRESPONDENCE-EDGE MINT instantiate's own
+    condemned comment specifies: mint fresh cells for the decl's
+    parameter cells, draw one one-way edge per pair, teaching
+    propagates decl→site as joins, the clone-the-type walk (subst_ty
+    family, 43 sites) deletes.
+(4) THE TRIAL/FINAL COLLAPSE FOLLOWS, not precedes: live cells leave
+    nothing to diverge; the final's residual duty (the poly-rec
+    Mycroft recheck, 5.3's decidable-fragment guard) survives at group
+    grain behind tests/micros' depth-unannotated fixture.
+(5) lower's ~365-line second effect-analysis engine dissolves in the
+    same landing — its reads become cell chases (the subsumption
+    RESIDUE already records).
+GUARDS, RED-first: the movers line (466 at this writing) reads ZERO or
+names only the under-publish class; mn-depth-unannotated stays runs-3;
+the crown's 39 crucibles stay green; the wheel self-compiles through
+the correspondence edges (m3 == m4, the trusting-trust anchor).

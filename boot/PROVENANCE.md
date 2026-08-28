@@ -24,26 +24,25 @@ unblessed pin is mechanically visible instead of remembered.
 
 Provenance, self-confirmed at pin time:
 
-- source: the census print exists, and its first reading caught the machine
-  lying — image_bytes (arena 2a-ii's named next landing: the print beside
-  the movers line, same channel, same scope law) reads a real number
-  because three more families learned to bracket (the intern table's miss
-  arms, the WAT buffer's yield + collect extents, the branch diagnostic
-  bank) AND because the print's first measurement exposed the arena's
-  silent zero: the image arms hardcoded $heap_ptr, a global the threaded
-  wheel never moves (the live heap line is the shared cell at 64), so
-  every extent delta read heap_ptr − heap_ptr from the day family 1
-  landed — invisible because nothing could print the number. The arms
-  read $heap_mark_impl now, the strategy-invariant read their neighbor
-  op always had. TRANSITION m3 == m4: the emit fix crosses one
-  generation (m2's arms are boot's genetic material; m3's are the
-  source's). frontier 373 pass / 0 red — the arena census leg born RED
-  against the prior boot, green here (725,472 image-classified bytes on
-  the gate's fixture); verify green end to end. Landed alongside: the
-  per-fn emission region's probe receipt (landed 2026-07-25; the
+- source: the arena census reads, so the silent zero could not stand —
+  image_bytes (arena 2a-ii's named next landing: the print beside the
+  movers line, same channel, same scope law) reports a real number now
+  that three more families bracket their extents (the intern table's
+  miss arms, the WAT buffer's yield and collect extents, the branch
+  diagnostic bank), and the print's FIRST read was 0: the image arms
+  hardcoded $heap_ptr, a global the threaded wheel never moves (the
+  live heap line is the shared cell at 64), so every extent delta read
+  heap_ptr − heap_ptr from the day family 1 landed. The arms read
+  $heap_mark_impl now, the strategy-invariant read their neighbor op
+  always had. TRANSITION m3 == m4: the emit fix crosses one generation
+  (m2's arms are boot's genetic material; m3's are the source's).
+  frontier 373 pass / 0 red — the arena census leg born RED against the
+  prior boot, green here (725472 image-classified bytes on the gate's
+  fixture); verify green end to end. Landed alongside: the per-fn
+  emission region's probe receipt (landed 2026-07-25; the
   overwrite-before-read contract named at the site), and the
   schemes-are-edges stage contract written to RESIDUE after the first
-  hybrid attempt was REFUTED by the medium's own three refusals (H6
+  hybrid attempt was refuted by the medium's own three refusals (H6
   totality, the row-smuggling boundary tax, throwaway surface) — the
   terminal form is the env carrying cells, not a wrapped scheme.
 - boot/mentl.wasm  sha256 8cb23d6eabf53e2ade697142b642442344f7a9e4d055546b5d96fd099e9d28c1

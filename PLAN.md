@@ -1051,26 +1051,36 @@ authoring AND proof faces (`!Flow` refusals, Why chains) on ONE page, for a
 client audience. Native (Phase 10) waits behind that bar, named in positive
 form the whole time. The arcs, in order:
 
-- **Arc A · Artifact integrity.** verify+march the current tree RED-forward;
-  commit the staged relocation arc (`lib/runtime/*` → `lib/*`, CLI, docs) in
-  logical pieces gated by verify (march gates the REPIN and the narrative,
-  never the commits); rebuild boot; repin from m3; run the FULL board ONCE
-  (frontier + SYNTAX battery included). No doc-truth narrative blesses prose
-  before that repin.
+- **Arc A · Artifact integrity — LANDED 2026-08-26** (commits a9309bc8,
+  63fad408, d59dbfca; the relocation arc, the space-spine selector, the
+  gate's deduped sweep and pooled flights; boot re-pinned a7a05294, then
+  8cb23d6e). The cadence law held: whole arc, verify once, board once,
+  repin once, then the commit series.
 - **Arc B′ · Columns, the artifact's own corrected chain** (naive
   columns-first died 2026-08-12 — pointer columns relocate WHERE A POINTER
   IS STORED, never where the POINTEE is allocated, so a per-decl reset would
   dangle cells into virgin zeros; `Hβ.graph.column-pointees-are-words`
   carries the record): (i) the image_bytes census print + flat-buffer-family
-  brackets + the per-fn emission region — decidable NOW,
-  relocation-independent, the smallest sound landing; (ii) rung 3 WHOLE
-  (`Hβ.infer.schemes-are-edges`, movers → 0); (iii) the enumeration-reader
+  brackets + the per-fn emission region — **LANDED 2026-08-26, pin 8cb23d6e
+  (TRANSITION m3 == m4)**, and the print's first reading caught the arena's
+  silent zero: the image arms read $heap_ptr, a global the threaded wheel
+  never moves, so every extent delta was heap_ptr − heap_ptr from the day
+  family 1 landed; the arms read $heap_mark_impl now, and the frontier's
+  arena census leg was born RED against the prior boot and went green here;
+  (ii) rung 3 WHOLE (`Hβ.infer.schemes-are-edges`, movers → 0) — **the next
+  landing, executed from the stage contract RESIDUE banks**: the first
+  attempt (a Live variant in Scheme, a projection boundary, a wrapper ADT)
+  was refuted by the medium three ways and reverted whole; the terminal
+  form is the env carrying cells (Binding = BStatic | BCell), the quantifier
+  a projection the caller runs, instantiation the correspondence-edge mint,
+  the trial/final collapse following; (iii) the enumeration-reader
   relocation with cons-state re-homed; (iv) `Hβ.lower.lowering-is-a-column`,
   ABSORBING `Hβ.lower.open-row-field-offset-from-known-set` as its keystone
   consumer — the open-row field-offset silent wrong (SYNTAX's own section
   records it) is the lower-time-bake family's last live member, invisible to
   check/match/micros, and no client-facing page ships it; (v) env re-key
-  onto the smap primitive; (vi) pointees-are-words.
+  onto the smap primitive — folds into (ii)'s env rework, one landing;
+  (vi) pointees-are-words.
 - **Arc C · Image lifetime v1.** With pointees-as-words, 4.3's fork/reset
   resumes soundly; persist = memcpy v0 under its black-box contract
   (requested path honored, versioned image, resume restores, incompatible

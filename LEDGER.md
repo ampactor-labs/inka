@@ -35,6 +35,22 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-01 · pin 9214b85c910b0d40 · THE ENV'S JUDGMENTS BIND AS FROZEN
+  OR LIVE. CLEAN m2 == m3 at 415597 lines, census 0; rungs 8/8 and
+  micros 148/148 through the new wheel, frontier 374/0, verify green
+  end to end.
+  ▶ WHAT LANDED: the schemes-are-edges stage contract's terminal form —
+  Binding = Frozen([Int], Ty) | Live(Int): a publisher's decision
+  carried verbatim, or the graph's cell, read at consumption.
+  generalize_pair derives (qs, ty) from the cell; judgment_ty and
+  judgment_pair are the one reader-side read, and twenty-four reader
+  sites flow through them instead of re-deriving the projection. The
+  manifest link caught the kernel vocabulary calling upward into the
+  judgment layer: the ctor-membership predicates moved beside their
+  only reader in query (import infer declares the edge the blob link
+  hid), and query_flow_label's env arm reads a live cell through its
+  own graph op. Movers fell 470 → 468, ratchet lowered to hold.
+
 - 2026-08-26 · pin 8cb23d6eabf53e2a · THE ARENA CENSUS READS, SO THE
   SILENT ZERO COULD NOT STAND. TRANSITION m3 == m4 at 415923 lines,
   census 0; frontier 373/0 (the arena census leg born RED, green here),

@@ -86,7 +86,7 @@ type Explanation = Explanation(String, String, String, Option(Patch), Reason)
 type Proposals = Proposals([(Node, Reason)], [(String, Reason)])
 
 // survivors, rejected
-type Context = Context([(String, Scheme, Reason, SchemeKind)], EffRow, String, Span)
+type Context = Context([(String, Binding, Reason, SchemeKind)], EffRow, String, Span)
 
 // scope bindings (the Env's own entries), the LIVE active-effect row, the enclosing decl's name ("" at top level — the vocabulary excludes candidates whose free-name closure reaches it: proposing the hole's own enclosing fn, or anything that transitively calls it, is nontermination by construction), and the HOLE'S OWN SPAN — the position the proposals are for, the ranker's nearness anchor (candidate_rank reads decl and use nearness against it).
 // The full Boolean row reaches synth — not a
@@ -202,11 +202,9 @@ fn entries_row_names(entries, acc) = match entries {
 }
 
 fn entry_row_names(e) = match e {
-  (_, scheme, _, _) => match scheme {
-    Forall(_, ty) => match ty {
-      TFun(_, _, row) => row_names(row),
-      _ => [],
-    },
+  (_, scheme, _, _) => match judgment_ty(scheme) {
+    TFun(_, _, row) => row_names(row),
+    _ => [],
   },
 }
 

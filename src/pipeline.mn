@@ -239,31 +239,29 @@ fn executable_gate(lowered) = match gate_reads(lowered) {
 // executable — this is the same law at the evidence altitude).
 fn report_unhandled_effects(lowered) = match env_lookup("main") {
   Some(entry) => match entry {
-    (scheme, reason, _) => match scheme {
-      Forall(_, ty) => match ty {
-        TFun(_, _, row) => match resolve_row(row) {
-          EfRow(p, _, _) => {
-            // The evidence census — the emit's OWN single-walk projection
-            // (the seventh: visit_effect_demand/install), run over the
-            // post-reach tree the gate already holds. The artifact is the
-            // truth source: dead-code performs never appear (reach pruned
-            // them from this tree), a resolved install's LPerform fires no
-            // demand, and the floor's LEvPerform carries its ename on the
-            // node. The full collector bracket rides along because the one
-            // walk fires every projection's ops.
-            let census = {
-              walk_lemit(lowered)
-              drain_effect_census()
-            } ~> effect_census_collector ~> fn_names_collector ~> top_fn_names_collector ~> string_literal_collector ~> state_slots_collector ~> yield_seen_collector ~> wasi_ops_collector
-            match census {
-              (demands, installed) => match demands_to_enames(demands, 0, [], []) {
-                (performed, strict) => report_unhandled_names(p, 0, len(p), performed, strict, installed, reason_span_or_zero(reason)),
-              },
-            }
-          },
+    (scheme, reason, _) => match judgment_ty(scheme) {
+      TFun(_, _, row) => match resolve_row(row) {
+        EfRow(p, _, _) => {
+          // The evidence census — the emit's OWN single-walk projection
+          // (the seventh: visit_effect_demand/install), run over the
+          // post-reach tree the gate already holds. The artifact is the
+          // truth source: dead-code performs never appear (reach pruned
+          // them from this tree), a resolved install's LPerform fires no
+          // demand, and the floor's LEvPerform carries its ename on the
+          // node. The full collector bracket rides along because the one
+          // walk fires every projection's ops.
+          let census = {
+            walk_lemit(lowered)
+            drain_effect_census()
+          } ~> effect_census_collector ~> fn_names_collector ~> top_fn_names_collector ~> string_literal_collector ~> state_slots_collector ~> yield_seen_collector ~> wasi_ops_collector
+          match census {
+            (demands, installed) => match demands_to_enames(demands, 0, [], []) {
+              (performed, strict) => report_unhandled_names(p, 0, len(p), performed, strict, installed, reason_span_or_zero(reason)),
+            },
+          }
         },
-        _ => (),
       },
+      _ => (),
     },
   },
   None => (),

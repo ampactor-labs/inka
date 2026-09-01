@@ -87,7 +87,7 @@ type Register = RTerse | RPlayful | RExplain
 // Env-entries reach Mentl as snapshots so a turn is stateless w.r.t.
 // env updates. Name + Scheme + Reason + SchemeKind mirrors Env's
 // existing shape (per types.mn SchemeKind).
-type EnvEntry = EnvEntry(String, Scheme, Reason, SchemeKind)
+type EnvEntry = EnvEntry(String, Binding, Reason, SchemeKind)
 
 // The ~> chain is a capability stack (PLAN §4⑥ — the handler chain IS
 // the capability stack, proven not audited). HandlerEntry captures one

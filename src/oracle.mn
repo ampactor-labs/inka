@@ -190,7 +190,7 @@ handler project_queue_merger with last_epoch = -1, projected = [] {
 // No separate search, no separate cache: the proposer IS the search,
 // the graph epoch IS the cache. The e-graph supplies the TStyle-tier
 // equivalences (topology nudges) effect-awarely via egraph.mn.
-fn project_queue() with Verify + GraphRead + GraphWrite + Intern + Memory + Alloc + EnvRead = {
+fn project_queue() with Verify + GraphRead + WASI + GraphWrite + Intern + Memory + Alloc + EnvRead = {
   // The performed-name union is a LINK fact — read once here, threaded
   // to every position (the same vocabulary the Teach install memoizes).
   let performed = performed_names_of_link()

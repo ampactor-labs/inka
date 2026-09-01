@@ -209,7 +209,7 @@ handler synth_default {
 // Each strategy yields a small set; verify_each_enriched discards
 // candidates whose tentative apply doesn't unify under the
 // allowed_effects row.
-fn enumerate_typed(target_ty, allowed_effects, context) with EnvRead + GraphRead + GraphWrite + LookupTy + Synth + !Mutate + Memory + Alloc = match target_ty {
+fn enumerate_typed(target_ty, allowed_effects, context) with EnvRead + GraphRead + WASI + GraphWrite + LookupTy + Synth + !Mutate + Memory + Alloc = match target_ty {
   TName(name, args) => enumerate_constructors(name, args, context),
   TFun(params, ret, row) => enumerate_lambdas(params, ret, row, context),
   TInt => enumerate_int_literals(context),
@@ -261,7 +261,7 @@ fn enumerate_vocabulary_calls(target_ty, allowed_row, context) with GraphRead + 
       (accepted, rejected) => match entry {
         (name, scheme, reason, kind) => match kind {
           FnScheme => match scheme {
-            Forall(_, TFun(params, ret, row)) => if len(params) == 0 && vocabulary_ret_matches(ret, target_ty) && !reaches_decl(name, enclosing, []) {
+            Frozen(_, TFun(params, ret, row)) => if len(params) == 0 && vocabulary_ret_matches(ret, target_ty) && !reaches_decl(name, enclosing, []) {
               if row_subsumes(row, allowed_row) {
                 // drift-audit: ignore — bounded by the in-scope zero-arg vocabulary, not a loop accumulator
                 (accepted ++ [vocabulary_call_candidate(name, row, allowed_row)], rejected)
@@ -417,7 +417,7 @@ fn fn_body_scan(name: String, i, n) with GraphRead + !Mutate + Memory + Alloc = 
 // ConstructorScheme entries whose scheme result type is
 // TName(type_name, _). Read the live env snapshot and filter — never
 // a second env-access effect (the EnvLookup re-derivation is dissolved).
-fn enumerate_constructors(type_name, args, context) with EnvRead + GraphRead + GraphWrite + Alloc + !Mutate + Memory = match env_snapshot() {
+fn enumerate_constructors(type_name, args, context) with EnvRead + GraphRead + WASI + GraphWrite + Alloc + !Mutate + Memory = match env_snapshot() {
   Env(entries) => ctors_of_type(entries, type_name, context),
 }
 
@@ -429,12 +429,12 @@ fn enumerate_constructors(type_name, args, context) with EnvRead + GraphRead + G
 // Forward walk preserves the enrichment's effect order (oldest entry
 // enriched first, exactly as the rest-before-head recursion ran);
 // reverse restores the newest-first result order consumers saw.
-fn ctors_of_type(entries, type_name, context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
+fn ctors_of_type(entries, type_name, context) with GraphRead + WASI + GraphWrite + Memory + Alloc + !Mutate = {
   let n = len(entries)
   reverse(ctors_of_type_from(entries, type_name, 0, n, make_list(n), 0))
 }
 
-fn ctors_of_type_from(entries, type_name, i, n, own buf, count) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = if i >= n {
+fn ctors_of_type_from(entries, type_name, i, n, own buf, count) with GraphRead + WASI + GraphWrite + Memory + Alloc + !Mutate = if i >= n {
   slice(buf, 0, count)
 } else {
   match list_index(entries, i) {
@@ -453,7 +453,7 @@ fn ctors_of_type_from(entries, type_name, i, n, own buf, count) with GraphRead +
   }
 }
 
-fn ctor_to_enriched_candidate(name, scheme, reason) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
+fn ctor_to_enriched_candidate(name, scheme, reason) with GraphRead + WASI + GraphWrite + !Mutate + Memory + Alloc =
   EnrichedCandidate({node: synthesize_ctor_call_node(name, scheme), origin: ProposerEnumerative, reason: VarLookup(name, reason)})
 
 fn enumerate_lambdas(params, ret, row, context) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = {
@@ -664,7 +664,7 @@ fn fan_join(ref recs, j, own acc) = if j >= len(recs) {
 fn candidate_judge(node, target_ty, base, seed, gseed, iseed, range) = {
   let body = () => {
     consume_seed(seed)
-    let tcopy = instantiate(Forall(free_in_ty(target_ty), target_ty))
+    let tcopy = instantiate(Frozen(free_in_ty(target_ty), target_ty))
     {
       infer_expr(node)
     } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
@@ -809,7 +809,7 @@ fn synthesize_tuple_node(elems) with GraphRead + GraphWrite + !Mutate + Memory +
 fn synthesize_record_node(fields) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
   synth_node(MakeRecordExpr(synth_record_holes_for(fields)))
 
-fn synthesize_ctor_call_node(name, scheme) with GraphRead + GraphWrite + !Mutate + Memory + Alloc =
+fn synthesize_ctor_call_node(name, scheme) with GraphRead + WASI + GraphWrite + !Mutate + Memory + Alloc =
   synth_node(CallExpr(synth_node(VarRef(name)), synth_holes_for_scheme(scheme)))
 
 // params arrive as the scheme's own [TParam] — LambdaExpr's exact
@@ -861,11 +861,9 @@ fn synth_record_holes_for(fields) with GraphRead + GraphWrite + Memory + Alloc +
   fields
 )
 
-fn synth_holes_for_scheme(scheme) with GraphRead + GraphWrite + Memory + Alloc + !Mutate = match scheme {
-  Forall(_, ty) => match ty {
-    TFun(params, _, _) => synth_holes_for(params),
-    _ => [],
-  },
+fn synth_holes_for_scheme(scheme) with GraphRead + WASI + GraphWrite + Memory + Alloc + !Mutate = match judgment_ty(scheme) {
+  TFun(params, _, _) => synth_holes_for(params),
+  _ => [],
 }
 
 // ─── Composition with cursor_default + delta_default ────────────────

@@ -601,7 +601,7 @@ comment_refs_max: 0
 # relocation artifact the two entries above already rule on — the divergence
 # relocates rather than resolves, and rung 3 deletes the class. Fixed inputs:
 # same wheel source and fixture set, the only variable being lambda vs named fn.
-movers_max: 470
+movers_max: 468
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

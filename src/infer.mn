@@ -717,13 +717,13 @@ fn cl_op_names(ref ops, i, acc) = if i >= len(ops) {
 fn register_primitives() = {
   env_extend(
     "float_of_int",
-    Forall([], TFun([mk_param("_", TInt)], TFloat, mk_ef_pure())),
+    Frozen([], TFun([mk_param("_", TInt)], TFloat, mk_ef_pure())),
     Declared("float_of_int"),
     FnScheme
   )
   env_extend(
     "float_to_int",
-    Forall([], TFun([mk_param("_", TFloat)], TInt, mk_ef_pure())),
+    Frozen([], TFun([mk_param("_", TFloat)], TInt, mk_ef_pure())),
     Declared("float_to_int"),
     FnScheme
   )
@@ -797,13 +797,13 @@ fn type_decl_claim(seen, name, span) = match smap_get(seen, name) {
 // RefineStmt's predicate Verify obligation.
 fn pre_register_alias(ref node) = match node {
   N(body, _, _) => match body {
-    NStmt(RefineStmt(name, base_ty, pred)) => env_extend(name, Forall([], TAlias(name, TRefined(base_ty, pred))), Declared(name), FnScheme),
-    NStmt(AliasStmt(name, ty)) => env_extend(name, Forall([], TAlias(name, ty)), Declared(name), FnScheme),
+    NStmt(RefineStmt(name, base_ty, pred)) => env_extend(name, Frozen([], TAlias(name, TRefined(base_ty, pred))), Declared(name), FnScheme),
+    NStmt(AliasStmt(name, ty)) => env_extend(name, Frozen([], TAlias(name, ty)), Declared(name), FnScheme),
     NStmt(RowAliasStmt(name, effs)) => // A named effect row is an ENV fact: the triples stored verbatim,
     // expansion at build_declared_row (Hβ.types.named-effect-rows).
     // The scheme's Ty is nominal only so the entry has a shape; the
     // row alias never participates in type unification.
-    env_extend(name, Forall([], TName(name, [])), Declared(name), RowAliasKind(effs)),
+    env_extend(name, Frozen([], TName(name, [])), Declared(name), RowAliasKind(effs)),
     _ => (),
   },
 }
@@ -907,7 +907,7 @@ fn pre_register_handler_sig(hname, config, state, arms) = {
   // cells to the config fns' row roots, and a placeholder chases nowhere.
   env_extend(
     hname,
-    Forall(inst_vars, scheme_body),
+    Frozen(inst_vars, scheme_body),
     Declared(hname),
     HandlerKind(r_handle, config_tparams, state, arms)
   )
@@ -975,7 +975,7 @@ fn pre_register_fn_sig(name, params, ret_ann, handle, span: ValidSpan) = {
       // Quantify the fresh param/return/row vars so a FORWARD reference — a fn used
       // before its own body is inferred (e.g. src/ inferred before lib/prelude, so
       // lower.mn's map/fold calls precede the prelude bodies that generalize them) —
-      // is POLYMORPHIC, not a shared monotype. Forall([]) here made every forward
+      // is POLYMORPHIC, not a shared monotype. Frozen([]) here made every forward
       // call site reuse ONE set of param vars, so their argument record types all
       // unified into one (the handler-arm type {args,body,op_name} absorbing the
       // placement {ename,name,slot} + group {ename,arms} fields → the 7-field bloat
@@ -984,7 +984,7 @@ fn pre_register_fn_sig(name, params, ret_ann, handle, span: ValidSpan) = {
       // handle (graph_bind above + the unify branch) so the vars are bound by the
       // time the body's self-calls instantiate this scheme.
       // The quantifier is generalize's own floor, ONE home: a hand-rolled
-      // Forall(free_in_ty(fn_ty), ...) here quantified the TOP-row cell —
+      // Frozen(free_in_ty(fn_ty), ...) here quantified the TOP-row cell —
       // free_in_ty(TFun) collects the row's free tail — so every forward
       // call site freshened its row copy above the mint ceiling, the
       // charge chained the copy, the completion prune dropped it as pure,
@@ -1076,7 +1076,7 @@ fn row_print(name) = if name == "" {
   ""
 } else {
   match env_lookup(name) {
-    Some((Forall(_, ty), _, _)) => ty_fingerprint(ty),
+    Some((Frozen(_, ty), _, _)) => ty_fingerprint(ty),
     None => "",
   }
 }
@@ -1325,17 +1325,15 @@ fn movers_diff(ref rows, ref prev_prints, ref cur_prints, i, shown) = if i >= le
 // flips were a monotone front) and named the SCC-chain remainder.
 fn probe_tail_why(ref name) = match env_lookup(name) {
   None => "  why: no env entry\n",
-  Some((sch, _, _)) => match sch {
-    Forall(_, t) => match t {
-      TFun(_, _, row) => match row {
-        EfRow(_, _, tail) => match tail {
-          EtOpen(vs) => "  tail v{int_to_str(last(vs))} ({int_to_str(len(vs))} edge(s)): {show_reason(graph_reason_at(last(vs)))}\n",
-          EtClosed => "  tail closed on the scheme face\n",
-          EtAll => "  tail all on the scheme face\n",
-        },
+  Some((sch, _, _)) => match judgment_ty(sch) {
+    TFun(_, _, row) => match row {
+      EfRow(_, _, tail) => match tail {
+        EtOpen(vs) => "  tail v{int_to_str(last(vs))} ({int_to_str(len(vs))} edge(s)): {show_reason(graph_reason_at(last(vs)))}\n",
+        EtClosed => "  tail closed on the scheme face\n",
+        EtAll => "  tail all on the scheme face\n",
       },
-      _ => "  scheme not TFun-rooted\n",
     },
+    _ => "  scheme not TFun-rooted\n",
   },
 }
 
@@ -1361,17 +1359,15 @@ fn entry_hist_line(ref entries, ref name, i, count, acc) = if i >= len(entries) 
   }
 }
 
-fn tail_letter(ref sch) = match sch {
-  Forall(_, t) => match t {
-    TFun(_, _, row) => match row {
-      EfRow(_, _, tail) => match tail {
-        EtOpen(_) => "o",
-        EtClosed => "c",
-        EtAll => "a",
-      },
+fn tail_letter(ref sch) = match judgment_ty(sch) {
+  TFun(_, _, row) => match row {
+    EfRow(_, _, tail) => match tail {
+      EtOpen(_) => "o",
+      EtClosed => "c",
+      EtAll => "a",
     },
-    _ => "?",
   },
+  _ => "?",
 }
 
 // Every stmt's free-name list, collected once from the parse tree.
@@ -1761,7 +1757,7 @@ fn trial_group_walk(ref stmts, ref groups, own rows, g) = if g >= len(groups) {
 // same day as the mono-group kill): per-SCC LOCAL MYCROFT ITERATION —
 // probe passes over rollback-refreshed parse nodes (rollback as the
 // fresh-node supply), finals frozen to fully-quantified values
-// (Forall(free_in_ty(chase_deep(t)), ·) — the rollback-safe form,
+// (Frozen(free_in_ty(chase_deep(t)), ·) — the rollback-safe form,
 // itself paid for: a carried quantifier set left probe-minted leaves
 // unquantified, and the restored mint counter made the next probe
 // REUSE their handle numbers) — was built whole and REFUTED by its own
@@ -1793,7 +1789,7 @@ fn trial_judge_group(ref stmts, members, own rows) = {
   // the refuted iteration direction whole — the vet's redirect executed):
   // monomorphic recursion by default, the signature price for polymorphic
   // recursion. At group entry an UNSIG'D member's env view goes MONO —
-  // Forall([], fn_ty) over the SAME pre-registered skeleton — so an
+  // Frozen([], fn_ty) over the SAME pre-registered skeleton — so an
   // intra-cycle forward use TEACHES the callee's actual param/ret cells
   // (instantiate of an empty-q scheme returns the live record) instead of
   // discarding its demand into a fresh copy (the disconnected-vars class:
@@ -1846,15 +1842,15 @@ fn group_mono_views(ref stmts, ref members, j) = if j >= len(members) {
         ()
       } else {
         match env_lookup(name) {
-          Some((sch, reason, FnScheme)) => match sch {
-            Forall(q, fn_ty) => // TYPE cells share (mono — the intra-cycle demand teaches the
+          Some((sch, reason, FnScheme)) => match judgment_pair(sch) {
+            (q, fn_ty) => // TYPE cells share (mono — the intra-cycle demand teaches the
             // callee's actual param/ret cells); ROW handles stay QUANTIFIED,
             // freshening per use — a shared row cell would let every
             // application site's symmetric row unify contaminate the callee's
             // own row (measured: five declared-row mismatches the moment the
             // full-mono view landed — the directional-edge law's class, the
             // row channel is a FLOW, never a shared cap).
-            env_extend(name, Forall(row_handles_only(q, 0), fn_ty), reason, FnScheme),
+            env_extend(name, Frozen(row_handles_only(q, 0), fn_ty), reason, FnScheme),
           },
           _ => (),
         }
@@ -2506,7 +2502,13 @@ fn branch_replay_pubs(ref pubs, i) = if i >= len(pubs) {
 // bound in four of six runs, free in two — the k2 wrap flipping the
 // whole float-format family).
 fn branch_replay_one(name, scheme, reason, kind) = match scheme {
-  Forall(q, sty) => {
+  Live(h) => // A live cell replays AS a live cell: the branch's judgment wrote the
+  // decl's graph cell in place (one graph, one truth), so the root's
+  // readers resolve it live. Freezing here would publish a snapshot the
+  // cell has already moved past — the two-generations disease this
+  // landing deletes.
+  env_extend(name, Live(h), reason, kind),
+  Frozen(q, sty) => {
     let fty = chase_deep(sty)
     // The quantifier RE-DERIVES from the frozen type: chase_deep folds
     // bound structure to values and canonicalizes free leaves to their
@@ -2518,7 +2520,7 @@ fn branch_replay_one(name, scheme, reason, kind) = match scheme {
     // the union of all fourteen chains' contexts — with stale-band and
     // duplicated qvars as the two-era tell). An EMPTY q is the
     // deliberate mono/two-phase share and stays empty.
-    let frozen = if len(q) == 0 { Forall([], fty) } else { Forall(free_in_ty(fty), fty) }
+    let frozen = if len(q) == 0 { Frozen([], fty) } else { Frozen(free_in_ty(fty), fty) }
     match kind {
       EffectOpScheme(ename, bd, ba, bdisc) => {
         let joined = match env_lookup(name) {
@@ -2692,7 +2694,7 @@ fn mycroft_prebind(name: String, params, span: ValidSpan) = {
     TVar(mint(FnReturn(name, Inferred("mycroft assumed return")))),
     mk_ef_open([], graph_fresh_row(Inferred("mycroft assumed row of '{name}'")))
   )
-  env_extend(name, Forall(free_in_ty(fn_ty), fn_ty), Located(span, Declared(name)), FnScheme)
+  env_extend(name, Frozen(free_in_ty(fn_ty), fn_ty), Located(span, Declared(name)), FnScheme)
 }
 
 // Alpha-equality over detached Ty values — the Mycroft accept's
@@ -2886,7 +2888,7 @@ fn rebind_recheck(name: String, q, ty0, span: ValidSpan) = {
   }
   env_extend(
     name,
-    Forall(
+    Frozen(
       map(
         (pr) => match pr {
           (_, fresh) => fresh,
@@ -2930,8 +2932,8 @@ fn infer_fn_speculative(name, params, body_node, ret_ann, effs, handle, span: Va
     } else {
       match env_lookup(name) {
         Some(entry) => match entry {
-          (sch, _, _) => match sch {
-            Forall(q, ty) => {
+          (sch, _, _) => match judgment_pair(sch) {
+            (q, ty) => {
               let detached = chase_deep(ty)
               graph_rollback(cp2)
               let cp3 = graph_push_checkpoint()
@@ -2953,10 +2955,8 @@ fn infer_fn_speculative(name, params, body_node, ret_ann, effs, handle, span: Va
                 // is what makes the comparison rollback-safe.
                 let stable = match env_lookup(name) {
                   Some(e3) => match e3 {
-                    (sch3, _, _) => match sch3 {
-                      Forall(_, ty3) => match ty_alpha_eq(chase_deep(ty3), detached, []) {
-                        (ok, _) => ok,
-                      },
+                    (sch3, _, _) => match ty_alpha_eq(chase_deep(judgment_ty(sch3)), detached, []) {
+                      (ok, _) => ok,
                     },
                   },
                   None => false,
@@ -3056,9 +3056,9 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan, pol
         } else if fn_fully_sigd(params, ret_ann) {
           ()
         } else {
-          env_extend(name, Forall([], fn_ty), Located(span, Declared(name)), FnScheme)
+          env_extend(name, Frozen([], fn_ty), Located(span, Declared(name)), FnScheme)
         },
-        None => env_extend(name, Forall([], fn_ty), Located(span, Declared(name)), FnScheme),
+        None => env_extend(name, Frozen([], fn_ty), Located(span, Declared(name)), FnScheme),
       }
       graph_bind(handle, fn_ty, Located(span, Declared(name)))
     },
@@ -3272,7 +3272,7 @@ fn resolve_one_eff_arg(arg) = match arg {
   EANode(nh) => match graph_node_body(nh) {
     NExpr(VarRef(nm)) => match env_lookup(nm) {
       Some(entry) => match entry {
-        (Forall(_, sty), _, kind) => match kind {
+        (Frozen(_, sty), _, kind) => match kind {
           EffectDeclKind(_) => EAEffect(intern_str(nm)),
           ConstructorScheme(_, _) => match sty {
             TName(_, _) => // nullary ctor: the scheme's result IS the TName (fielded
@@ -3625,7 +3625,7 @@ fn check_instance_args(effs, span: ValidSpan) = each(
     (ename, _negated, _conn) => match ename {
       EParameterized(h, args) => match env_lookup(intern_name_of(h)) {
         Some(entry) => match entry {
-          (Forall(_, TTuple(ptys)), _, EffectDeclKind(_)) => if len(args) != len(ptys) {
+          (Frozen(_, TTuple(ptys)), _, EffectDeclKind(_)) => if len(args) != len(ptys) {
             report(EConstructorArity(intern_name_of(h), len(ptys), len(args), span))
           } else {
             each(
@@ -4539,10 +4539,10 @@ fn infer_call(func, args, handle, span: ValidSpan) = match func {
 fn record_ctor_arrow_view(cname: String, span: ValidSpan) = match env_lookup(cname) {
   Some(entry) => match entry {
     (scheme, reason, kind) => match kind {
-      RecordSchemeKind(declared_fields) => match scheme {
-        Forall(q, body) => {
+      RecordSchemeKind(declared_fields) => match judgment_pair(scheme) {
+        (q, body) => {
           let view =
-            instantiate(Forall(q, TFun(build_ctor_params([TRecord(declared_fields)], 0), body, mk_ef_pure())))
+            instantiate(Frozen(q, TFun(build_ctor_params([TRecord(declared_fields)], 0), body, mk_ef_pure())))
           let vh = mint(Inferred("record-ctor arrow view of '{cname}'"))
           graph_bind(vh, view, Located(span, VarLookup(cname, reason)))
           Some(vh)
@@ -6510,7 +6510,7 @@ fn infer_index_force(rh, handle, span: ValidSpan) with FreshHandle + GraphWrite 
   // probe, 2026-08-01). The tuple-const route stays chargeless: its
   // extraction is compile-time.
   match env_lookup("list_index") {
-    Some((Forall(_, TFun(_, _, lrow)), _, _)) => inf_add_row(lrow),
+    Some((Frozen(_, TFun(_, _, lrow)), _, _)) => inf_add_row(lrow),
     _ => (),
   }
 }
@@ -6657,7 +6657,7 @@ fn constrain_scrutinee(scrutinee_h, ty, span: ValidSpan, reason) = {
 fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
   PVar(name) => env_extend(
     name,
-    Forall([], TVar(handle)),
+    Frozen([], TVar(handle)),
     Located(span, LetBinding(name, Inferred("pattern"))),
     FnScheme
   ),
@@ -6691,8 +6691,8 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
     match entry {
       (scheme, reason, kind) => {
         let ty = match kind {
-          RecordSchemeKind(declared_fields) => match scheme {
-            Forall(q, body) => instantiate(Forall(q, TFun(build_ctor_params([TRecord(declared_fields)], 0), body, mk_ef_pure()))),
+          RecordSchemeKind(declared_fields) => match judgment_pair(scheme) {
+            (q, body) => instantiate(Frozen(q, TFun(build_ctor_params([TRecord(declared_fields)], 0), body, mk_ef_pure()))),
           },
           _ => instantiate(scheme),
         }
@@ -6732,7 +6732,7 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
         graph_bind(rest_h, mk_record_open([], row_h), Located(span, Inferred("record pattern rest")))
         env_extend(
           rn,
-          Forall([], TVar(rest_h)),
+          Frozen([], TVar(rest_h)),
           Located(span, LetBinding(rn, Inferred("record pattern rest"))),
           FnScheme
         )
@@ -6760,7 +6760,7 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
     graph_bind(as_h, TVar(handle), Located(span, LetBinding(name, Inferred("as-pattern"))))
     env_extend(
       name,
-      Forall([], TVar(as_h)),
+      Frozen([], TVar(as_h)),
       Located(span, LetBinding(name, Inferred("as-pattern"))),
       FnScheme
     )
@@ -6907,7 +6907,7 @@ fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
     } else {
       env_extend(
         name,
-        Forall([], list_ty),
+        Frozen([], list_ty),
         Located(span, LetBinding(name, Inferred("list rest pattern"))),
         FnScheme
       )
@@ -7107,7 +7107,7 @@ fn bind_arm_args(args, params, op_name, span: ValidSpan) = {
       (name, param) => {
         let h = mint(Located(span, LetBinding(name, Declared(op_name))))
         graph_bind(h, param_ty(param), Located(span, Declared(op_name)))
-        env_extend(name, Forall([], TVar(h)), Located(span, LetBinding(name, Declared(op_name))), FnScheme)
+        env_extend(name, Frozen([], TVar(h)), Located(span, LetBinding(name, Declared(op_name))), FnScheme)
       },
     },
     zip(args, params)
@@ -7177,7 +7177,7 @@ fn effect_instance_arity(ename) = {
 }
 
 fn op_scheme_arity(sch) = match sch {
-  Forall(_, TFun(_, _, row)) => match op_instance_ty(row) {
+  Frozen(_, TFun(_, _, row)) => match op_instance_ty(row) {
     Some(TName(_, args)) => len(args),
     _ => // drift-audit: ignore — a bare/non-instance row HAS arity 0; the read's honest answer, not a fabricated default
     0,
@@ -7204,13 +7204,13 @@ fn mint_instance_vars(ename: String, n, i) = if i >= n {
 // clause).
 //
 // H6: exhaustive NodeKind enumeration. Fabricated-value danger:
-// a wildcard arm returning Forall([], TVar(handle)) silently
+// a wildcard arm returning Frozen([], TVar(handle)) silently
 // fabricates a monotype for every non-NBound kind — CLAUDE.md
 // Session Zero names this as a dangerous wildcard. Each non-bound
 // kind gets its own arm with the same fallback spelled out; if a
 // new NodeKind is added, this function fails to compile until its
 // generalization semantic is decided.
-fn generalize(handle) = {
+fn generalize_pair(handle) = {
   let node = graph_chase(handle)
   match node {
     GNode(kind, _) => match kind {
@@ -7238,10 +7238,7 @@ fn generalize(handle) = {
         // ran). Only ROW-sort cells reachable solely through the top row
         // stay unquantified-and-shared.
         match body_ty {
-          TFun(dps, ret, frow) => Forall(
-            unique(free_in_params(dps) ++ free_in_ty(ret) ++ filter((h) => if is_row_handle(h) { false } else { true }, free_in_row(frow))),
-            body_ty
-          ),
+          TFun(dps, ret, frow) => (unique(free_in_params(dps) ++ free_in_ty(ret) ++ filter((h) => if is_row_handle(h) { false } else { true }, free_in_row(frow))), body_ty),
           TCont(input, answer, _, world) => // The continuation's world is a row POSITION exactly as a fn's
           // top row is (TCont carries an EffRow): its row-sort roots are
           // live links instantiation must SHARE, its EAType payload vars
@@ -7249,23 +7246,20 @@ fn generalize(handle) = {
           // split at the TIME altitude. H6: exhaustive Ty arms below —
           // the former wildcard quantified a continuation's world rows
           // and silently absorbed every future variant.
-          Forall(
-            unique(free_in_ty(input) ++ free_in_ty(answer) ++ filter((h) => if is_row_handle(h) { false } else { true }, free_in_row(world))),
-            body_ty
-          ),
-          TInt => Forall([], body_ty),
-          TFloat => Forall([], body_ty),
-          TUnit => Forall([], body_ty),
-          TByte => Forall([], body_ty),
-          TVar(v) => Forall([v], body_ty),
-          TList(_) => Forall(free_in_ty(body_ty), body_ty),
-          TTuple(_) => Forall(free_in_ty(body_ty), body_ty),
-          TName(_, _) => Forall(free_in_ty(body_ty), body_ty),
-          TRecord(_) => Forall(free_in_ty(body_ty), body_ty),
-          TRecordOpen(_, _) => Forall(free_in_ty(body_ty), body_ty),
-          TRefined(_, _) => Forall(free_in_ty(body_ty), body_ty),
-          TAlias(_, _) => Forall(free_in_ty(body_ty), body_ty),
-          TReprPin(_, _) => Forall(free_in_ty(body_ty), body_ty),
+          (unique(free_in_ty(input) ++ free_in_ty(answer) ++ filter((h) => if is_row_handle(h) { false } else { true }, free_in_row(world))), body_ty),
+          TInt => ([], body_ty),
+          TFloat => ([], body_ty),
+          TUnit => ([], body_ty),
+          TByte => ([], body_ty),
+          TVar(v) => ([v], body_ty),
+          TList(_) => (free_in_ty(body_ty), body_ty),
+          TTuple(_) => (free_in_ty(body_ty), body_ty),
+          TName(_, _) => (free_in_ty(body_ty), body_ty),
+          TRecord(_) => (free_in_ty(body_ty), body_ty),
+          TRecordOpen(_, _) => (free_in_ty(body_ty), body_ty),
+          TRefined(_, _) => (free_in_ty(body_ty), body_ty),
+          TAlias(_, _) => (free_in_ty(body_ty), body_ty),
+          TReprPin(_, _) => (free_in_ty(body_ty), body_ty),
         }
       },
       NFree(_) => // An unresolved publish QUANTIFIES its own cell: sharing the live cell
@@ -7275,17 +7269,39 @@ fn generalize(handle) = {
       // and the parallel fan's branches must never bind a shared cell). Each
       // instantiation freshens into its own band; the decl's cell stays the
       // decl's own verdict.
-      Forall([handle], TVar(handle)),
+      ([handle], TVar(handle)),
       NRowBound(_) => // row handle — BOUND content; shared reads only
-      Forall([], TVar(handle)),
+      ([], TVar(handle)),
       NRecordRowBound(_, _) => // record-row residual — bound; row sort
-      Forall([], TVar(handle)),
+      ([], TVar(handle)),
       NRowFree(_) => // unresolved row — quantified like NFree; instantiate's row-sort mint freshens
-      Forall([handle], TVar(handle)),
+      ([handle], TVar(handle)),
       NErrorHole(_) => // error — preserve handle for diagnostics
-      Forall([], TVar(handle)),
+      ([], TVar(handle)),
     },
   }
+}
+
+// The cell→scheme projection: generalize_pair's verdict wrapped as the env's
+// currency. Publishers freeze through it; instantiate clones through it.
+fn generalize(handle) = match generalize_pair(handle) {
+  (qs, ty) => Frozen(qs, ty),
+}
+
+// The one reader-side read of an env judgment: a frozen decl reads straight
+// through; a live one rides the decl's own split rule at THIS read — the
+// projection is never stored. A new posture arms here, not at every reader.
+fn judgment_ty(b) = match b {
+  Frozen(_, ty) => ty,
+  Live(h) => match generalize_pair(h) {
+    (_, ty) => ty,
+  },
+}
+
+// The pair form, for readers that re-quantify or alpha-compare the set.
+fn judgment_pair(b) = match b {
+  Frozen(qs, ty) => (qs, ty),
+  Live(h) => generalize_pair(h),
 }
 
 // H6: exhaustive Ty enumeration. Scalars terminate; aggregates
@@ -7709,12 +7725,17 @@ fn row_var_is_free(v) = match graph_chase(v) {
 // one-way CORRESPONDENCE EDGE per pair — teaching then propagates
 // decl→site as joins, and the clone-the-type walk deletes.
 fn instantiate(scheme) = match scheme {
-  Forall(qs, ty) => if len(qs) == 0 {
+  Frozen(qs, ty) => if len(qs) == 0 {
     ty
   } else {
     let mapping = build_inst_mapping(qs)
     subst_ty(ty, mapping)
   },
+  Live(h) => // A judgment-published decl: the quantifier is a projection the caller
+  // runs — generalize's split rule reads the LIVE cell at this moment of
+  // consumption (never a stored materialization), and the clone rides the
+  // mapped spine as before.
+  instantiate(generalize(h)),
 }
 
 // A quantified var's domain is carried in the graph — NRowFree means a row
@@ -8048,7 +8069,7 @@ fn mint_params(params, owner_name) = map(
       // concrete annotation) is bound ONCE by build_param_types, read live here —
       // never re-derived per consumer. A body read through the env's TVar(h) then
       // chases to the resolved param type (the eq/binop/++ dispatch, the emit width).
-      env_extend(name, Forall([], TVar(h)), Declared(name), ParamScheme(param_authored(p)))
+      env_extend(name, Frozen([], TVar(h)), Declared(name), ParamScheme(param_authored(p)))
       h
     },
   },
@@ -8203,7 +8224,7 @@ fn register_type_constructors(type_name, variants) = {
         // reader that reaches past the shadow (the KIND IS THE NAMESPACE).
         env_extend(
           type_name,
-          Forall(qhandles, result_ty),
+          Frozen(qhandles, result_ty),
           Declared(type_name),
           TypeVariants(map(
             (ix) => match ix {
@@ -8304,7 +8325,7 @@ fn quantify_ctor_ty(ty, qmap) = match ty {
     match env_lookup_type(name) {
       Some(entry) => match entry {
         (scheme, _, _) => match scheme {
-          Forall(_, TAlias(an, inner)) => (TAlias(an, inner), qmap),
+          Frozen(_, TAlias(an, inner)) => (TAlias(an, inner), qmap),
           _ => (TName(name, []), qmap),
         },
       },
@@ -8411,7 +8432,7 @@ fn register_one_variant(type_name: String, result_ty, qhandles, field_types, var
       match list_index(field_types, 0) {
         TRecord(declared_fields) => env_extend(
           ctor_name,
-          Forall(qhandles, result_ty),
+          Frozen(qhandles, result_ty),
           Declared(ctor_name),
           RecordSchemeKind(declared_fields)
         ),
@@ -8423,7 +8444,7 @@ fn register_one_variant(type_name: String, result_ty, qhandles, field_types, var
     } else {
       let kind = ConstructorScheme(tag_id, total)
       if len(field_types) == 0 {
-        env_extend(ctor_name, Forall(qhandles, result_ty), Declared(ctor_name), kind)
+        env_extend(ctor_name, Frozen(qhandles, result_ty), Declared(ctor_name), kind)
       } else {
         let params = build_ctor_params(field_types, 0)
         // A payload ctor's arrow carries the construction row — the
@@ -8432,7 +8453,7 @@ fn register_one_variant(type_name: String, result_ty, qhandles, field_types, var
         // face: payload_ctor published Pure under the mk_ef_pure arrow).
         env_extend(
           ctor_name,
-          Forall(qhandles, TFun(params, result_ty, construction_row())),
+          Frozen(qhandles, TFun(params, result_ty, construction_row())),
           Declared(ctor_name),
           kind
         )
@@ -8466,7 +8487,7 @@ fn register_effect_ops(effect_name, params, ops) = {
   let op_names = map(((n, _, _, _)) => n, ops)
   env_extend(
     effect_name,
-    Forall([], TTuple(map(param_ty, params))),
+    Frozen([], TTuple(map(param_ty, params))),
     Declared(effect_name),
     EffectDeclKind(op_names)
   )
@@ -8629,7 +8650,7 @@ fn register_one_op(effect_name, eff_name, op) = match op {
     }
     env_extend(
       op_name,
-      Forall(qvars, TFun(params, ret_type, row)),
+      Frozen(qvars, TFun(params, ret_type, row)),
       Declared(op_name),
       // OneShot is the join identity (grade UZero → OneShot): an op with no
       // handler stays the fast path; each handler's arm joins its grade in.
@@ -8704,7 +8725,7 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
   // Bind the scheme body to a handle so it can be RE-GENERALIZED after the arms
   // run: the arms unify the instance's result position with the state and the
   // config (fold_handler's `acc = init` and `resume(acc)` join r_h ~ acc ~
-  // init). A scheme quantified BEFORE the arms (Forall(inst_vars, ...)) misses
+  // init). A scheme quantified BEFORE the arms (Frozen(inst_vars, ...)) misses
   // the config tparams and predates those unifications, so `fold`'s init / f-arg
   // / return never share a var — the accumulator floors at `acc ++ xs`. generalize
   // chase_deeps to roots and quantifies EVERY free var, so post-arms it collapses
@@ -8726,7 +8747,7 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
   }
   env_extend(
     hname,
-    Forall(inst_vars, scheme_body),
+    Frozen(inst_vars, scheme_body),
     Declared(hname),
     HandlerKind(r_handle, config_tparams, state, arms)
   )
@@ -8820,7 +8841,7 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
   // chase_deeps scheme_body to its roots and quantifies every free var, so the
   // config tparams and instance positions the arms joined collapse to shared
   // vars — a caller's `~> h(args)` freshens them consistently and the accumulator
-  // threads. The Forall(inst_vars, ...) bound before the arms is the pre-arms
+  // threads. The Frozen(inst_vars, ...) bound before the arms is the pre-arms
   // scheme a recursive arm reference resolves against; this re-store carries the
   // arms' unifications the caller reads (Carried-Truth: read the grounded roots).
   env_extend(
@@ -8927,7 +8948,7 @@ fn bind_handler_config_params(config_tparams, hname) = each(
     let ty = param_ty(tp)
     env_extend(
       name,
-      Forall([], ty),
+      Frozen([], ty),
       Located(span_zero(), LetBinding(name, Declared(hname))),
       ParamScheme(param_authored(tp))
     )
@@ -8937,7 +8958,7 @@ fn bind_handler_config_params(config_tparams, hname) = each(
 
 fn bind_handler_state_names(state_binds, hname, span: ValidSpan) = each(
   (p) => match p {
-    (name, ih) => env_extend(name, Forall([], TVar(ih)), Located(span, LetBinding(name, Declared(hname))), FnScheme),
+    (name, ih) => env_extend(name, Frozen([], TVar(ih)), Located(span, LetBinding(name, Declared(hname))), FnScheme),
   },
   state_binds
 )
@@ -9195,7 +9216,7 @@ fn arm_disc_of(grade, ret) = match grade {
 // the one place the op's signature lives (Carried-Truth: read it live,
 // never re-derive). A non-arrow scheme (never a real op) floors to TUnit.
 fn scheme_ret_ty(scheme) = match scheme {
-  Forall(_, TFun(_, ret, _)) => ret,
+  Frozen(_, TFun(_, ret, _)) => ret,
   _ => TUnit,
 }
 

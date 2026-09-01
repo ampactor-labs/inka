@@ -693,7 +693,7 @@ fn callee_borrow_params(ref f) with !Mutate = match f {
     NExpr(VarRef(cn)) => match env_lookup(cn) {
       Some(entry) => match entry {
         (scheme, _, _) => match scheme {
-          Forall(_, TFun(ps, _, _)) => Some(ps),
+          Frozen(_, TFun(ps, _, _)) => Some(ps),
           _ => None,
         },
       },

@@ -1352,9 +1352,7 @@ fn clamp_index(i) = if i < 0 { 0 } else { i }
 // read the old seam used — never deleted; it is the flow-closure's base case.
 fn own_dispatched_row(name: String) = match env_lookup(name) {
   Some(entry) => match entry {
-    (scheme, _, _) => match scheme {
-      Forall(_, ty) => effects_of(ty),
-    },
+    (scheme, _, _) => effects_of(judgment_ty(scheme)),
   },
   None => [],
 }
@@ -5558,7 +5556,7 @@ fn reach_name_map(stmts, i, n, map) = if i >= n {
 // whole-list pre-filter scan is deleted with it. A dead decl's wide
 // sites no longer seed (nothing will twin for them); reach_enqueue's
 // set discipline absorbs the family's re-arrivals.
-fn spec_entry_seed(d) with Alloc + Memory + LookupTy + EnvRead + GraphRead = match spec_scan_expr(d, ([], [])) {
+fn spec_entry_seed(d) with Alloc + Memory + LookupTy + EnvRead + GraphRead + WASI = match spec_scan_expr(d, ([], [])) {
   (sites, _ophs) => if any(spec_site_is_wide, sites) { spec_wide_family() } else { [] },
 }
 
@@ -6200,12 +6198,12 @@ fn arm_fn_name(hname: String, op: String) with Pure = "op_{hname}_{op}"
 // The site's instantiation pairs — [] when the name is not generic: a value
 // let, a monomorphic fn, or an internal synthesized name. The scheme's
 // quantified vars are the roots; the site's chased type carries the bindings.
-fn spec_site_pairs_resolved(name: String, rt) with EnvRead + LookupTy + GraphRead + Memory + Alloc = match env_lookup(name) {
+fn spec_site_pairs_resolved(name: String, rt) with EnvRead + LookupTy + GraphRead + WASI + Memory + Alloc = match env_lookup(name) {
   None => [],
   Some(entry) => match entry {
     (scheme, _r, kind) => match kind {
-      FnScheme => match scheme {
-        Forall(qs, sty) => if len(qs) == 0 { [] } else { spec_pairs_sort(spec_pairs_walk(sty, rt, [])) },
+      FnScheme => match judgment_pair(scheme) {
+        (qs, sty) => if len(qs) == 0 { [] } else { spec_pairs_sort(spec_pairs_walk(sty, rt, [])) },
       },
       _ => // ctor / record / effect-op / value schemes never specialize
       [],
@@ -6213,12 +6211,12 @@ fn spec_site_pairs_resolved(name: String, rt) with EnvRead + LookupTy + GraphRea
   },
 }
 
-fn spec_site_pairs(h, name: String) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
+fn spec_site_pairs(h, name: String) with EnvRead + LookupTy + GraphRead + WASI + Memory + Alloc =
   spec_site_pairs_resolved(name, spec_resolve(lookup_ty(h)))
 
 // The ONE naming projection every reference-emitting arm reads: the site's
 // key, mangled when any var lands wide, the plain name at the floor.
-fn spec_global_name(h, name: String) with EnvRead + LookupTy + GraphRead + Memory + Alloc = {
+fn spec_global_name(h, name: String) with EnvRead + LookupTy + GraphRead + WASI + Memory + Alloc = {
   let pairs = spec_site_pairs(h, name)
   if len(pairs) == 0 {
     name
@@ -6358,7 +6356,7 @@ fn spec_scan_arms(arms, acc) with Memory + Alloc = fold(
 fn spec_wide_family() with Memory + Alloc =
   ["float_to_str", "list_compare_f64", "list_eq_f64", "list_hash_f64"]
 
-fn spec_site_is_wide(site) with EnvRead + LookupTy + GraphRead + Memory + Alloc = match site {
+fn spec_site_is_wide(site) with EnvRead + LookupTy + GraphRead + WASI + Memory + Alloc = match site {
   (h, n) => {
     let pairs = spec_site_pairs(h, n)
     if len(pairs) == 0 { false } else { !spec_enc_is_floor(spec_enc(pairs)) }

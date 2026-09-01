@@ -472,16 +472,21 @@ fn usage_join(a, b) = match a {
   },
 }
 
-// ─── Scheme (spec 04) — let-generalization ─────────────────────────
-// Forall(the quantified handles, the body type). A monomorphic binding is
-// Forall([], ty). env_lookup returns Option<(Scheme, Reason)>.
-// CONDEMNED CARRIER (the resolved design D1/D2): the stored Forall IS the
-// scheme snapshot the judgment tower compensates for — the terminal form
-// has NO scheme object (a decl's live cell + the completion-bit column;
-// quantification is a projection). Dies at rung 3 with generalize and
-// instantiate-as-clone; survives until then as the boundary FORM the
-// query/display handlers read.
-type Scheme = Forall([Int], Ty)
+// ─── Binding (spec 04) — what the env holds (rung 3 landing A) ──────
+// The env's slot carries a BINDING, no longer a scheme snapshot.
+// `Frozen(qs, ty)` is a publisher's OWN decision carried verbatim — the
+// quantifier lists are per-site judgment law (the SCC re-extend
+// quantifies rows only; generalize's split shared row-sort cells; a
+// single projection rule cannot serve both), so the site that made the
+// decision keeps writing it. `Live(h)` is a judgment-published decl's
+// graph CELL: the judgment writes the cell in place, a re-publish is a
+// pointer write, and there is no materialized view to diverge — the
+// trial/final movers' own source. What DELETED with this type is
+// generalize's publication-time chase-materialization: the env no
+// longer freezes a past view of a decl; consumers who need the
+// quantifier of a cell project it at consumption (instantiate folds
+// generalize's split rule for exactly that).
+type Binding = Frozen([Int], Ty) | Live(Int)
 
 // SchemeKind discriminates env entries by their CONSTRUCTION ORIGIN.
 // Same Scheme shape, three different downstream stories: lower
@@ -1765,29 +1770,29 @@ fn show_flow_label(label) with Pure = match label {
 //
 // Scoped bindings via push/pop mark. Env is never passed as argument.
 // Every read performs env_lookup; every write performs env_extend.
-// Entries are 4-tuples (name, Scheme, Reason, SchemeKind) — SchemeKind
+// Entries are 4-tuples (name, Binding, Reason, SchemeKind) — SchemeKind
 // carries construction-origin metadata that lower dispatches on.
 // Scoped bindings via push/pop mark. Env is never passed as argument.
 // Every read performs env_lookup; every write performs env_extend.
-// Entries are 4-tuples (name, Scheme, Reason, SchemeKind) — SchemeKind
+// Entries are 4-tuples (name, Binding, Reason, SchemeKind) — SchemeKind
 // carries construction-origin metadata that lower dispatches on.
 // The OP VOCABULARY declares HERE — the lowest module every performer
 // imports — while the handlers live at their subsystem (pipeline.mn);
 // the effects prepass phase (pre_register_effect) makes the pair
 // order-independent regardless of the split.
-type Env = Env([(String, Scheme, Reason, SchemeKind)])
+type Env = Env([(String, Binding, Reason, SchemeKind)])
 
-// [(name, Scheme, Reason, SchemeKind)]
+// [(name, Binding, Reason, SchemeKind)]
 effect EnvRead {
-  env_lookup(String) -> Option((Scheme, Reason, SchemeKind))
-  env_lookup_type(String) -> Option((Scheme, Reason, SchemeKind))
-  env_lookup_ctor(String) -> Option((Scheme, Reason, SchemeKind))
-  env_lookup_variants(String) -> Option((Scheme, Reason, SchemeKind))
+  env_lookup(String) -> Option((Binding, Reason, SchemeKind))
+  env_lookup_type(String) -> Option((Binding, Reason, SchemeKind))
+  env_lookup_ctor(String) -> Option((Binding, Reason, SchemeKind))
+  env_lookup_variants(String) -> Option((Binding, Reason, SchemeKind))
   env_snapshot() -> Env
 }
 
 effect EnvWrite {
-  env_extend(String, Scheme, Reason, SchemeKind)
+  env_extend(String, Binding, Reason, SchemeKind)
   env_scope_enter()
   env_scope_exit()
 }
@@ -1804,8 +1809,8 @@ effect BranchEnv {
   // PARAMETERIZE the effect and the handler-arm binding refuses a
   // parameterized/bare mix on one handler (measured: BranchEnv(t) vs
   // EnvWrite at both arm sites).
-  env_base_view() -> ([(String, Scheme, Reason, SchemeKind)], Int, [[(String, Int)]])
-  env_publishes() -> [(String, Scheme, Reason, SchemeKind)]
+  env_base_view() -> ([(String, Binding, Reason, SchemeKind)], Int, [[(String, Int)]])
+  env_publishes() -> [(String, Binding, Reason, SchemeKind)]
 }
 
 // The lex-name intern (§5.O layer 1) — an identifier's canonical String
@@ -3007,25 +3012,6 @@ fn report(diag) with Diagnostic + GraphRead + Memory + Alloc + Intern =
 // A raw handle only appears when chase terminates on NFree/NRowFree —
 // the query layer reads that as "unresolved at epoch e." No cached
 // display. Same discipline as lowering: live observer, never mirror.
-// The ctor-membership predicates (scheme vocabulary — moved here from
-// synth so query's variants facet reads them without importing the
-// proposer): an env entry is a constructor of `type_name` when its
-// kind is ConstructorScheme and its scheme's RESULT is
-// TName(type_name, _) — nullary ctors carry TName directly, fielded
-// ctors carry TFun(_, TName, _).
-fn is_ctor_of(kind, scheme, type_name) with Pure = match kind {
-  ConstructorScheme(_, _) => match scheme {
-    Forall(_, ty) => scheme_result_is(ty, type_name),
-  },
-  _ => false,
-}
-
-fn scheme_result_is(ty, type_name) with Pure = match ty {
-  TName(n, _) => n == type_name,
-  TFun(_, ret, _) => scheme_result_is(ret, type_name),
-  _ => false,
-}
-
 fn show_type(ref ty) with GraphRead + !Mutate + Alloc + Memory + Intern = match ty {
   TInt => "Int",
   TFloat => "Float",
@@ -3089,11 +3075,11 @@ fn show_handle(h) with GraphRead + Memory + Alloc + !Mutate + Intern = {
 fn callee_params(name) with EnvRead + GraphRead + Memory + Alloc = match env_lookup(name) {
   Some(entry) => match entry {
     (scheme, _, _) => match scheme {
-      Forall(_, TVar(h)) => match graph_chase(h) {
+      Frozen(_, TVar(h)) => match graph_chase(h) {
         GNode(NBound(TFun(params, _, _)), _) => params,
         _ => [],
       },
-      Forall(_, TFun(params, _, _)) => params,
+      Frozen(_, TFun(params, _, _)) => params,
       _ => [],
     },
   },
@@ -3521,7 +3507,7 @@ fn show_list_from(ref items, ref render, ref sep, i, n) with !Mutate = if i >= n
 // H6: exhaustive over all 15 Ty constructors.
 // GraphRead + EnvRead: predicate_flow_label follows PBoolNode handles into graph;
 // TName arm follows the type's env entry to read its predicate.
-fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty {
+fn query_flow_label(ref ty) with GraphRead + WASI + EnvRead + Alloc + Memory = match ty {
   TRefined(base, pred) => flow_label_join(pred |> predicate_flow_label, query_flow_label(base)),
   TName(name, _) => // Follow the type's env entry to its TypeDecl predicate — graph-native.
   // A nominal type with a refinement predicate (e.g. `type SecretKey = Bytes
@@ -3532,11 +3518,18 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead + Alloc + Memory = match ty
     Public,
     Some(entry) => match entry {
       (scheme, _, _) => match scheme {
-        Forall(_, ty) => match ty {
+        Frozen(_, ty) => match ty {
           TAlias(_, TRefined(_, pred)) => predicate_flow_label(pred),
           TRefined(_, pred) => predicate_flow_label(pred),
           _ => // non-refined nominal: Public
           Public,
+        },
+        Live(h) => match graph_chase(h) {
+          GNode(kind, _) => match kind {
+            NBound(ty) => query_flow_label(ty),
+            _ => // a type decl's cell is NBound; row and error kinds carry no nominal label
+            Public,
+          },
         },
       },
     },

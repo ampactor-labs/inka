@@ -1449,12 +1449,10 @@ fn render_at(view, h, pspan, ranges) = match view {
 // themselves). Each arm below reads the declaration's OWN node — the
 // refinement's base and predicate, the alias's target, the handler's
 // effect and arm count — never a re-derivation.
-fn node_query_line(h, kind) with GraphRead + EnvRead + Memory + Alloc + Intern = match graph_node_body(h) {
+fn node_query_line(h, kind) with GraphRead + WASI + EnvRead + Memory + Alloc + Intern = match graph_node_body(h) {
   NStmt(FnStmt(name, _, _, _, _)) => match env_lookup(name) {
     Some(entry) => match entry {
-      (scheme, _, _) => match scheme {
-        Forall(_, ty) => show_type(ty),
-      },
+      (scheme, _, _) => show_type(judgment_ty(scheme)),
     },
     None => show_type(ty_of_kind(h, kind)),
   },

@@ -17,6 +17,8 @@ import effects
 
 import parser
 
+import infer
+
 // The structural census (Hβ.query.structural-census — PLAN §11 Phase 0.3):
 // ONE projection taking a structural shape, answering count + located
 // sites over the program weave — the question the medium could not ask of
@@ -181,9 +183,7 @@ handler query_default {
     QTypeOf(name) => match env_lookup(name) {
       None => resume(QRError("not found: {name}")),
       Some(entry) => match entry {
-        (scheme, reason, _kind) => match scheme {
-          Forall(_, ty) => resume(QRType(chase_type_deep(ty), reason)),
-        },
+        (scheme, reason, _kind) => resume(QRType(scheme |> judgment_ty |> chase_type_deep, reason)),
       },
     },
     QTypeAt(span) => // One live cursor read: tightest enclosing span → handle → the node's
@@ -222,22 +222,18 @@ handler query_default {
     QEffects(name) => match env_lookup(name) {
       None => resume(QRError("not found: {name}")),
       Some(entry) => match entry {
-        (scheme, _, _) => match scheme {
-          Forall(_, ty) => match chase_type_deep(ty) {
-            TFun(_, _, row) => resume(QREffects(row)),
-            _ => resume(QRError("{name} is not a function")),
-          },
+        (scheme, _, _) => match chase_type_deep(judgment_ty(scheme)) {
+          TFun(_, _, row) => resume(QREffects(row)),
+          _ => resume(QRError("{name} is not a function")),
         },
       },
     },
     QOwnership(name) => match env_lookup(name) {
       None => resume(QRError("not found: {name}")),
       Some(entry) => match entry {
-        (scheme, _, _) => match scheme {
-          Forall(_, ty) => match chase_type_deep(ty) {
-            TFun(params, _, _) => resume(QROwnership(params)),
-            _ => resume(QRError("{name} is not a function")),
-          },
+        (scheme, _, _) => match chase_type_deep(judgment_ty(scheme)) {
+          TFun(params, _, _) => resume(QROwnership(params)),
+          _ => resume(QRError("{name} is not a function")),
         },
       },
     },
@@ -279,12 +275,7 @@ handler query_default {
     match env_lookup(name) {
       None => resume(QRError("not found: {name}")),
       Some(entry) => match entry {
-        (scheme, reason, _kind) => match scheme {
-          Forall(_, ty) => {
-            let label = query_flow_label(chase_type_deep(ty))
-            resume(QRFlowLabel(label, reason))
-          },
-        },
+        (scheme, reason, _kind) => resume(QRFlowLabel(scheme |> judgment_ty |> chase_type_deep |> query_flow_label, reason)),
       },
     },
     QCensus(shape) => resume(QRCensus(census_label(shape), census_sites(shape))),
@@ -338,14 +329,10 @@ fn chase_fields_deep(ref fields) with !Mutate = map(
 // Returned by `QUnresolved` — the set of names with incomplete types
 // after inference, in env order (the reversing walk was the
 // param-render-reversed class's fourth face).
-fn find_unresolved(ref entries) with !Mutate = entries |> filter((entry) => match entry {
-  (_, scheme, _, _) => match scheme {
-    Forall(_, ty) => has_free_tvar(ty),
-  },
+fn find_unresolved(ref entries) with GraphRead + WASI + Memory + Alloc + !Mutate = entries |> filter((entry) => match entry {
+  (_, scheme, _, _) => has_free_tvar(judgment_ty(scheme)),
 }) |> map((entry) => match entry {
-  (name, scheme, _, _) => match scheme {
-    Forall(_, ty) => (name, ty, []),
-  },
+  (name, scheme, _, _) => (name, judgment_ty(scheme), []),
 })
 
 fn has_free_tvar(ref ty) with !Mutate = match ty {
@@ -1167,19 +1154,20 @@ fn lambda_carries_row(h) with GraphRead + !Mutate + Alloc + Memory = match graph
 // ambient-stack read and this static walk answer identically by
 // construction — a lambda or nested fn resets the chain, the frame
 // fence's static mirror.
-fn where_badges(name: String) with GraphRead + EnvRead + Intern + !Mutate + Alloc + Memory = match env_lookup(name) {
+fn where_badges(name: String) with GraphRead + WASI + EnvRead + Intern + !Mutate + Alloc + Memory = match env_lookup(name) {
   None => QRError("not found: {name}"),
   Some(entry) => match entry {
     (scheme, _, kind) => match kind {
       EffectOpScheme(ename, _, _, disc) => QRWhere(["{name} : {ename} op — resume {op_resume_ty(scheme)} {disc_glyph(disc)} answer"], []),
-      _ => match scheme {
-        Forall(_, ty) => match chase_type_deep(ty) {
+      _ => {
+        let ty = judgment_ty(scheme)
+        match chase_type_deep(ty) {
           TFun(_, _, _) => QRWhere(fn_tee_lines(name), fn_fanout_sites(name)),
           chased => QRWhere(
             ["{name} : {show_type(chased)} @ {repr_name(repr_of(chased))} ({pin_word(ty_has_repr_pin(ty))})"],
             []
           ),
-        },
+        }
       },
     },
   },
@@ -1190,6 +1178,25 @@ fn where_badges(name: String) with GraphRead + EnvRead + Intern + !Mutate + Allo
 // — the env-read the synth enumeration and the eq sum-leaf already
 // trust, projected as lines through the where channel (a roster IS a
 // badge list). An empty roster is the honest not-found.
+// The ctor-membership predicates: an env entry is a constructor of
+// `type_name` when its kind is ConstructorScheme and its judgment's
+// RESULT is TName(type_name, _) — nullary ctors carry TName directly,
+// fielded ctors carry TFun(_, TName, _). They live beside their only
+// reader (the variants facet); the manifest link refuses the kernel
+// vocabulary module calling upward into the judgment layer.
+fn is_ctor_of(kind, scheme, type_name) with GraphRead + WASI + Memory + Alloc = match kind {
+  ConstructorScheme(_, _) => scheme_result_is(type_name, judgment_ty(scheme)),
+  _ => false,
+}
+
+// Stage Law: the type name is configuration, the candidate result type is
+// the flowing datum.
+fn scheme_result_is(type_name, ty) with Pure = match ty {
+  TName(n, _) => n == type_name,
+  TFun(_, ret, _) => scheme_result_is(type_name, ret),
+  _ => false,
+}
+
 fn variants_of(tname: String) = match env_snapshot() {
   Env(entries) => {
     let lines = variant_lines(entries, tname, 0, len(entries), [])
@@ -1210,19 +1217,15 @@ fn variant_lines(entries, tname: String, i, n, acc) = if i >= n {
   }
 }
 
-fn ctor_arity(scheme) = match scheme {
-  Forall(_, ty) => match ty {
-    TFun(params, _, _) => len(params),
-    _ => // drift-audit: ignore — the arity of any non-TFun scheme IS zero (a value takes no params); a true total answer, not a masked case
-    0,
-  },
+fn ctor_arity(scheme) = match judgment_ty(scheme) {
+  TFun(params, _, _) => len(params),
+  _ => // drift-audit: ignore — the arity of any non-TFun scheme IS zero (a value takes no params); a true total answer, not a masked case
+  0,
 }
 
-fn op_resume_ty(scheme) with GraphRead + Intern + !Mutate + Memory + Alloc = match scheme {
-  Forall(_, ty) => match chase_type_deep(ty) {
-    TFun(_, ret, _) => show_type(ret),
-    other => show_type(other),
-  },
+fn op_resume_ty(scheme) with GraphRead + WASI + Intern + !Mutate + Memory + Alloc = match chase_type_deep(judgment_ty(scheme)) {
+  TFun(_, ret, _) => show_type(ret),
+  other => show_type(other),
 }
 
 // SYNTAX §«Resume discipline»: ->1 one-shot, ->* multi-shot, ->? either;

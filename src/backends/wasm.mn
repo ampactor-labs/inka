@@ -355,7 +355,7 @@ fn spec_closure_name(name: String) with SpecTwins + LookupTy + Memory + Alloc = 
   }
 }
 
-fn spec_target_name(h, name: String) with SpecTwins + EnvRead + LookupTy + GraphRead + Memory + Alloc = if !spec_twins_exist() {
+fn spec_target_name(h, name: String) with SpecTwins + EnvRead + LookupTy + GraphRead + WASI + Memory + Alloc = if !spec_twins_exist() {
   name
 } else {
   let m = spec_global_name(h, name)
@@ -440,7 +440,7 @@ fn spec_demand_named(ds, m: String) with Memory + Alloc = any(
 // vars included), so mixed instantiations (a := Float, b := Int) twin
 // correctly. The former one-wide-type guard was the free-leaf rule's
 // requirement; the fracture fix retired both.
-fn spec_candidate_of_site(site, acc) with EnvRead + LookupTy + GraphRead + Memory + Alloc = match site {
+fn spec_candidate_of_site(site, acc) with EnvRead + LookupTy + GraphRead + WASI + Memory + Alloc = match site {
   (h, n) => {
     let rt = spec_resolve(lookup_ty(h))
     let pairs = spec_site_pairs_resolved(n, rt)
@@ -458,7 +458,7 @@ fn spec_candidate_of_site(site, acc) with EnvRead + LookupTy + GraphRead + Memor
   },
 }
 
-fn spec_candidates_from_sites(sites, acc) with EnvRead + LookupTy + GraphRead + Memory + Alloc =
+fn spec_candidates_from_sites(sites, acc) with EnvRead + LookupTy + GraphRead + WASI + Memory + Alloc =
   fold(acc, (a, s) => spec_candidate_of_site(s, a), sites)
 
 // The accepted set is a FLAT BUFFER with its count, not a `[d] ++ done`
@@ -468,7 +468,7 @@ fn spec_candidates_from_sites(sites, acc) with EnvRead + LookupTy + GraphRead + 
 // accepted count. The buffer-counter is this codebase's own answer to that
 // bug class (reach_grow's shape). Measured before: spec_base_count alone
 // was 7.95% of the entire self-compile.
-fn spec_candidates_fix(work, acc, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = if len(work) == 0 {
+fn spec_candidates_fix(work, acc, recs) with EnvRead + LookupTy + GraphRead + WASI + Memory + Alloc = if len(work) == 0 {
   acc
 } else {
   let d = work[0]
@@ -566,7 +566,7 @@ fn field_offset_unprovable_why(rec, sel) with LookupTy + GraphRead + Memory + Al
   FByIndex(i) => "element {int_to_str(i)} on {show_type(lookup_ty(lexpr_handle(rec)))}",
 }
 
-fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + Memory + Alloc = match spec_scan_list(lowered, ([], [])) {
+fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + WASI + Memory + Alloc = match spec_scan_list(lowered, ([], [])) {
   (sites, _o) => {
     let seed = spec_candidates_from_sites(sites, [])
     // ONE body scan per candidate, total, and the accumulator enters with
@@ -644,7 +644,7 @@ fn spec_rec_names(spec_recs) -> [String] with Memory + Alloc = map(
   spec_recs
 )
 
-fn spec_wide_twin_names(spec_recs) -> [String] with LookupTy + GraphRead + EnvRead + Memory + Alloc = fold(
+fn spec_wide_twin_names(spec_recs) -> [String] with LookupTy + GraphRead + WASI + EnvRead + Memory + Alloc = fold(
   [],
   (acc, rp) => match rp {
     (rec2, pairs, enc) => {
@@ -3315,11 +3315,9 @@ fn param_repr_of(fn_name: String, name, body) = {
 
 fn param_ty_repr(fn_name: String, name: String) = match env_lookup(fn_name) {
   Some(entry) => match entry {
-    (scheme, _, _) => match scheme {
-      Forall(_, ty) => match resolved_fn_ty(ty) {
-        TFun(tparams, _, _) => tparam_repr_by_name(tparams, name),
-        _ => RI32,
-      },
+    (scheme, _, _) => match resolved_fn_ty(judgment_ty(scheme)) {
+      TFun(tparams, _, _) => tparam_repr_by_name(tparams, name),
+      _ => RI32,
     },
   },
   None => // Not env-registered — the synthesized family (lambda_N, thunks,
@@ -4864,9 +4862,7 @@ fn repr_is_wide(r) with Pure = match r {
 fn direct_callee_widths(fh, cname: String, cname2: String, n) = {
   let declared = match env_lookup(cname) {
     Some(entry) => match entry {
-      (scheme, _, _) => match scheme {
-        Forall(_, t) => t,
-      },
+      (scheme, _, _) => judgment_ty(scheme),
     },
     None => lookup_ty(fh),
   }
@@ -5024,10 +5020,8 @@ fn emit_eq_sum_call(sig, neg) = {
 // walk compares under the String proof. No constructor entry → [] (a
 // nullary or unresolved ctor — the uniform-stride fallback is then
 // byte-identical).
-fn ctor_payload_tys_of(ctor_name) with EnvRead + Memory + Alloc = match env_lookup_ctor(ctor_name) {
-  Some((scheme, _reason, _kind)) => match scheme {
-    Forall(_, ty) => ctor_payload_tys(ty),
-  },
+fn ctor_payload_tys_of(ctor_name) with EnvRead + Memory + Alloc + GraphRead + WASI = match env_lookup_ctor(ctor_name) {
+  Some((scheme, _reason, _kind)) => ctor_payload_tys(judgment_ty(scheme)),
   None => [],
 }
 

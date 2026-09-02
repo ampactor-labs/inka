@@ -1,15 +1,15 @@
-// expect: 7
-// A DECLARED anonymous rest with no closed partner in the body. The only
-// thing that ever narrows `u` is another open row, so the residual `pick`
-// carries is a union of two partial sets and nothing is known past it.
-// The projection must say so: an empty remainder from a closed partner is
-// a proof, an empty remainder from two partial sets is a guess, and they
-// rendered identically before the tail carried what its writer knew.
+// expect: 9
+// A DECLARED anonymous rest. The residual `pick` carries on its own decl is
+// a guess — an empty remainder from no closed partner — and the projection
+// still says so; that half of this fixture stands and the mark is why the
+// difference is legible at the query and the floor.
 //
-// The 7 is the wrong-slot class itself, measured and pinned rather than
-// asserted: `zeta` is index 0 of the KNOWN set and index 1 of the real
-// record, so this answers `alpha`. The fixture holds the CURRENT answer so
-// the day it changes is a day someone chose
-// (`Hβ.lower.open-row-field-offset-from-known-set`).
+// What changed is which row the EMIT reads. This fixture was banked at 7 —
+// `alpha`, the wrong slot — with its own instruction: "the fixture holds the
+// CURRENT answer so the day it changes is a day someone chose". Today is
+// that day and the choice was `Hβ.lower.open-row-field-offset-from-known-set`.
+// The call proves the whole set at the site; the specialization walk keys the
+// row var on it now, so the twin's receiver is closed and `u.zeta` reads
+// zeta. 9, not 7 — the neighbouring value it used to return.
 fn pick(u: {zeta: Int, ...}) = u.zeta
 fn main(q) = pick({alpha: 7, zeta: 9})

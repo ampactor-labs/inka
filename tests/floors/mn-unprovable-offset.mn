@@ -1,11 +1,22 @@
 // expect: 134
-// An unannotated record parameter, read for a field through a list pattern.
-// The receiver's row never closes, so the layout is unprovable and the emit
-// must REFUSE it — a trap, never a guessed offset 0 that reads `other`.
-// The gate's other half is the marker's TEXT: it names the selector and the
-// receiver's live row, so a floor census is an inventory and not a count.
-fn peek(frames) = match frames {
-  [f, ..._] => f.slot,
-  [] => 0,
-}
-fn main(q) = peek([{other: 1, slot: 5}])
+// A field read whose receiver's row NOTHING closes: it is main's own
+// parameter, so no literal anywhere in the program proves the shape. The
+// layout is genuinely unknowable and the emit must REFUSE it — a trap, never
+// a guessed offset 0. The gate's other half is the marker's TEXT: it names
+// the selector and the receiver's live row, so a floor census is an
+// inventory and not a count.
+//
+// This fixture used to carry the list-pattern shape below, which floored for
+// a different reason — the twin key dropped the row var, so a body compiled
+// against the decl's own unlearned row:
+//
+//     fn peek(frames) = match frames { [f, ..._] => f.slot, [] => 0 }
+//     fn main(q) = peek([{other: 1, slot: 5}])
+//
+// That shape PROVES now and answers 5 (tests/rows/mn-proven-row-through-list).
+// Its 134 was the limitation canonized, not the contract: the receiver's row
+// did close, at the call, and the emit could not see it. The contract is what
+// survives here — a row nothing closes still refuses.
+fn peek(f) = f.slot
+
+fn main(q) = peek(q)

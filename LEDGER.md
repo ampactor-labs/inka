@@ -35,6 +35,51 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-01 · pin 7740ac9492c0f2ec · THE ROW VAR KEYS THE TWIN, SO THE
+  OFFSET IS THE RECORD'S. TRANSITION m3 == m4 at 415700 lines, census 0;
+  syntax battery 12/12 through both links, floor contract green, residual
+  mark green, micros 148/148, frontier 374/0, verb parity green.
+  ▶ THE SILENT WRONG, reproduced first: `fn width(u: {name: Int, ...}) =
+  u.name + 1` over `{name: 5, age: 9}` answered 10 — `age + 1` — with zero
+  diagnostics. SYNTAX's own worked example of row polymorphism is that
+  shape, so the defect sat on a documented surface, and §11 Arc B′ (iv)
+  had already ruled that no client-facing page ships it.
+  ▶ THE MECHANISM, measured not reasoned: two call sites at two record
+  shapes through one open-row callee answered 10 and 6 where both are 6.
+  The shapes DISAGREEING is what named the root — one body, one baked
+  offset. `unify_record_open_against_closed` was correct all along; it
+  binds each instantiation's row var to the proven residual, RowClosed.
+  What discarded that proof was two sites dropping the same handle: the
+  specialization walk's `TRecordOpen(fs, _)` never paired the row var, so
+  every shape shared a key and a body; and `spec_subst_pairs` substituted
+  the known fields' types while keeping the row var verbatim, so even a
+  paired row could not close the receiver. The offset then came from the
+  decl's own row, which never learned a residual and reads as empty.
+  ▶ THE FIX: pair the row var on a PROVEN whole set, and let the pair
+  resolve the open row to the closed record it was proven to be.
+  `open_record_proven_fields` is the offset read's walk held to the key's
+  stricter standard — an assumed remainder is tolerable for an offset
+  (refusing there turns a correct program into a trap, measured twice) but
+  not for a key, because two sites keyed on a guess mint two bodies that
+  disagree. A TRANSITION: 383 diff lines, the twins arriving.
+  ▶ TWO BANKED EXPECTATIONS FLIPPED, re-derived by hand (§9.11 — the old
+  value may be the bug canonized). `tests/rows/mn-assumed-residual` was
+  banked at 7, the wrong slot, carrying its own instruction that "the day
+  it changes is a day someone chose"; it reads 9 now. Its assumed-remainder
+  MARK stands — that half was always right. `tests/floors/mn-unprovable-
+  offset` expected a trap on a list-pattern shape whose row does close, at
+  the call, where the emit could not see it; that was a limitation
+  canonized, and the shape moved to the syntax battery answering 5. The
+  floor keeps its contract with a receiver nothing closes — main's own
+  parameter — which still refuses at 134.
+  ▶ THE GATE'S OWN GATE, twice wrong and twice self-reported: the verb
+  parity leg added one pin earlier compared the verb against the m3 leg,
+  so it called this honest TRANSITION a verb failure; moved after the
+  repin it ran a different binary than the one that wrote m2.wat. It sits
+  after the m2 leg now and compares against m2, because the verb runs
+  BOOT. A gate that has been seen red for its own reasons is worth more
+  than one that has only been seen green.
+
 - 2026-09-01 · pin f56db33328545399 · THE ENV CARRIES CELLS, AND THE MOVERS
   DID NOT MOVE. CLEAN m2 == m3 at 415201 lines, census 0; verb parity byte
   for byte; micros 148/148, frontier 374/0, verify green.

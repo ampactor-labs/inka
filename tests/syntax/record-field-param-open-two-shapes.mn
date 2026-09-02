@@ -1,0 +1,14 @@
+// expect: 66
+// The same open-row callee reached at TWO different record shapes — the
+// measurement that named the mechanism rather than the symptom.
+//
+// Fields sort alphabetically, so {name, age} lays out age@0 name@4 and
+// {name, zip} lays out name@0 zip@4. Both calls must answer 6, reading 66.
+// One body with the offset baked at 0 answers 10 and 6 instead, reading 106:
+// the two shapes DISAGREEING is the proof that the body read the decl's own
+// unlearned row rather than each call's proven one. The specialization walk
+// pairs the row var now, so the shapes mint distinct twins and each twin's
+// receiver closes under its own bracket.
+fn width(u: {name: Int, ...}) = u.name + 1
+
+fn main() = width({name: 5, age: 9}) * 10 + width({name: 5, zip: 7})

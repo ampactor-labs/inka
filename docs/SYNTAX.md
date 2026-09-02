@@ -771,24 +771,28 @@ fn extend(base: {name: String, ...R}, age: Int) -> {name: String, age: Int, ...R
   ...
 ```
 
-**The lathe has not been turned to this section, and the gap is a SILENT
-WRONG — measured 2026-08-17, recorded here because a reader would
-otherwise trust the example above.** A record's fields sort alphabetically
-and its offsets follow that order, but an OPEN row's offsets are computed
-from the KNOWN field set's own ordering instead of the runtime record's.
-So `greet` above, called with a record whose other fields sort before
-`name`, reads one of those fields: the same shape measured as `fn width(u:
-{name: Int, ...}) = u.name + 1` over `{name: 5, age: 9}` returns 10, which
-is `age + 1`. No diagnostic, no trap; `mentl check` passes. The closed
-annotation is correct and is the landed control
-(`tests/syntax/record-field-param-closed`). Every consumer that needs a
-layout inherits the rule — patterns bind the wrong slot, `==` compares
-only the known fields — and the repair is not a refusal (the march
-measured that turning it into a floor breaks `fn g({x, y})`, whose
-destructuring parameter is the same open row). SYNTAX is not wrong here
-and must not be edited to match the artifact: the section states the
-intended semantics, and `Hβ.lower.open-row-field-offset-from-known-set`
-carries the class.
+**The lathe is turned to this section as of 2026-09-01.** It carried a
+SILENT WRONG for two weeks and the record is kept because the shape is
+instructive: an OPEN row's offsets were computed from the KNOWN field
+set's own ordering instead of the runtime record's, so `greet` above,
+called with a record whose other fields sort before `name`, read one of
+those fields. `fn width(u: {name: Int, ...}) = u.name + 1` over
+`{name: 5, age: 9}` returned 10 — `age + 1` — with no diagnostic and no
+trap; `mentl check` passed.
+
+The repair was never a refusal. Turning it into a floor breaks
+`fn g({x, y})`, whose destructuring parameter is the same open row, and
+the march measured exactly that. The row var is a quantified var like any
+other, and it keys the twin: the call site proves the whole field set, so
+each record shape mints its own specialization and reads its own layout.
+Two sites had dropped the same handle — the specialization walk discarded
+the row var, and the substitution kept it unresolved. Gates:
+`tests/syntax/record-field-param-open` (the red twin of the closed
+control), `record-field-param-open-two-shapes` (two shapes through one
+callee, which is the measurement that named the mechanism rather than the
+symptom), and `record-field-through-list`. A row that nothing closes still
+refuses — `tests/floors/mn-unprovable-offset`, where the receiver is
+main's own parameter.
 
 ### Nominal record types
 

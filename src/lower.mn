@@ -3114,6 +3114,22 @@ fn open_record_full_fields(fields, v) = match graph_chase(v) {
   _ => None,
 }
 
+// The same walk held to the TWIN KEY's standard, which is stricter than the
+// offset read's. An assumed remainder is a carried union with nothing known
+// past it; the offset read tolerates it because refusing there turns a
+// correct program into a trap (measured twice), but a key has no such excuse
+// — two sites keyed on a guess mint two bodies that disagree, which is the
+// wrong-slot class with extra steps. Unproven, it declines and the site keeps
+// the floor.
+fn open_record_proven_fields(fields, v) = match graph_chase(v) {
+  GNode(NRecordRowBound(residual, RowClosed), _) => Some(sort_record_type_fields(fields ++ residual)),
+  GNode(NRecordRowBound(_, RowAssumed), _) => None,
+  GNode(NRecordRowBound(residual, RowContinues(next_v)), _) => open_record_proven_fields(fields ++ residual, next_v),
+  GNode(NBound(TRecordOpen(more, v2)), _) => open_record_proven_fields(fields ++ more, v2),
+  GNode(NBound(TRecord(more)), _) => Some(sort_record_type_fields(fields ++ more)),
+  _ => None,
+}
+
 fn resolve_field_offset(rec_handle, field_name) = match lookup_ty(rec_handle) {
   TRecord(fields) => field_byte_offset(fields, field_name, 0, len(fields)),
   TRecordOpen(fields, v) => match open_record_full_fields(fields, v) {
@@ -6077,9 +6093,23 @@ fn spec_pairs_walk(st0, it0, acc) with LookupTy + GraphRead + Memory + Alloc = {
       TRecordOpen(ifs, _) => spec_pairs_walk_fields(fs, ifs, acc),
       _ => acc,
     },
-    TRecordOpen(fs, _) => match fold_strip(it0) {
-      TRecord(ifs) => spec_pairs_walk_fields(fs, ifs, acc),
-      TRecordOpen(ifs, _) => spec_pairs_walk_fields(fs, ifs, acc),
+    TRecordOpen(fs, v) => // The ROW VAR is a quantified var like any other, and it keys the twin.
+    // Dropping it made every record shape share one body, so the offset came
+    // from the decl's own row — which never learned a residual — instead of
+    // the call's proven set: two shapes through one open-row callee answered
+    // 10 and 6 where both are 6, silently. It pairs only against a CLOSED
+    // site, because only there is the remainder proven; an open-against-open
+    // site has nothing to key on and keeps the floor.
+    match fold_strip(it0) {
+      TRecord(ifs) => spec_pairs_add(spec_pairs_walk_fields(fs, ifs, acc), graph_chase_handle(v), TRecord(ifs)),
+      TRecordOpen(ifs, iv) => // The site stays TRecordOpen even when its row is BOUND — the residual
+      // lives on the row var, which is why the offset read reconstructs the
+      // set rather than matching TRecord. Read it the same way and key on the
+      // proven whole; unproven, nothing is keyed.
+      match open_record_proven_fields(ifs, iv) {
+        Some(full) => spec_pairs_add(spec_pairs_walk_fields(fs, full, acc), graph_chase_handle(v), TRecord(full)),
+        None => spec_pairs_walk_fields(fs, ifs, acc),
+      },
       _ => acc,
     },
     TCont(i1, a1, _, _) => match fold_strip(it0) {

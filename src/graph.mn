@@ -1448,15 +1448,25 @@ fn spec_subst_pairs(t, pairs) with GraphRead + Memory + Alloc = match t {
     },
     fs
   )),
-  TRecordOpen(fs, v) => mk_record_open(
-    map(
-      (f) => match f {
-        (n, ft) => (n, spec_subst_pairs(ft, pairs)),
-      },
-      fs
+  TRecordOpen(fs, v) => // A row var is a var, and the site that closed it proved the WHOLE field
+  // set. Substituting the known fields' types while keeping `v` verbatim
+  // discarded that proof, and the discard is what the wrong-slot class was
+  // made of: the receiver stayed open in the twin, so the offset came from
+  // the known set's own ordering instead of the record's. Paired, the open
+  // row resolves to the closed record it was proven to be, and every offset
+  // downstream reads the full sorted set.
+  match spec_pairs_find(pairs, graph_chase_handle(v)) {
+    Some(closed) => closed,
+    None => mk_record_open(
+      map(
+        (f) => match f {
+          (n, ft) => (n, spec_subst_pairs(ft, pairs)),
+        },
+        fs
+      ),
+      v
     ),
-    v
-  ),
+  },
   TRefined(b, p) => TRefined(spec_subst_pairs(b, pairs), p),
   TAlias(n, i) => TAlias(n, spec_subst_pairs(i, pairs)),
   TCont(i, a, d, w) => TCont(spec_subst_pairs(i, pairs), spec_subst_pairs(a, pairs), d, w),

@@ -1,0 +1,16 @@
+// expect: 5
+// An unannotated record parameter read for a field through a list pattern —
+// the shape tests/floors/mn-unprovable-offset carried while it floored.
+//
+// The row DOES close: the call passes a literal, so the element's field set
+// is proven at the site. What could not see it was the specialization walk,
+// which dropped the row var and compiled one body against the decl's own
+// unlearned row. Keyed on the proven set, this twins and reads `slot` — 5.
+// The neighbouring wrong answer is 1, `other`'s value at slot 0, which is
+// what a guessed offset returns and what the floor existed to prevent.
+fn peek(frames) = match frames {
+  [f, ..._] => f.slot,
+  [] => 0,
+}
+
+fn main(q) = peek([{other: 1, slot: 5}])

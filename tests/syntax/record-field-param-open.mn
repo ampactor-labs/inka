@@ -1,0 +1,14 @@
+// expect: 9
+// SYNTAX §«Row polymorphism» through a PARAMETER whose record type is OPEN —
+// the red twin of record-field-param-closed, landing with its fix.
+//
+// The offset must come from the receiver's full sorted field set, exactly as
+// the closed control's does. It did not: an open row's row var is dropped by
+// the specialization walk, so both call shapes share one body, and that body
+// bakes the offset from the DECL's own row, which never learned a residual
+// and reads as empty. `u.zeta` then took slot 0 and answered 7 — alpha's
+// value — with no diagnostic anywhere
+// (`Hβ.lower.open-row-field-offset-from-known-set`).
+fn pick(u: {zeta: Int, ...}) = u.zeta
+
+fn main() = pick({alpha: 7, zeta: 9})

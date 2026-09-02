@@ -166,6 +166,40 @@ else
   echo "✗ m2 generation TRAPPED (see $WT_M2CACHE/m2.err):"; trap_lines "$WT_M2CACHE/m2.err" | head -6; exit 1
 fi
 echo "✓ m2 assembles ($(stat -c%s "$OUT/m2.wasm") bytes)"
+m2lines=$(wc -l < "$OUT/m2.wat" 2>/dev/null | tr -d ' ')
+
+# VERB PARITY — this script's own successor has to be able to run.
+#
+# `mentl march` is what this file absorbs into (PLAN §11 10.3), and it was
+# DEAD: its hand-copied handler chain had lost lower_handler_stack_ctx, so the
+# frame fence's perform hit the unhandled floor on every march the verb ran.
+# Nothing caught it for as long as it was broken, because the board calls this
+# script and never the verb — a gate that stops being reported stops being run
+# (§11 tripwire 4), one layer up, where the scaffold's own existence was the
+# cover. The wheel is judged by its ability to judge itself.
+#
+# It runs HERE, right after the m2 leg and before any repin, because the verb
+# runs BOOT: what it reproduces is boot's own output, which is the m2 leg. Two
+# earlier placements were wrong and the leg said so both times — against m3 it
+# called an honest TRANSITION a verb failure, and after the repin it ran a
+# different binary than the one that wrote m2.wat. The line count is captured
+# above rather than re-read, because the verb WRITES $OUT/m2.wat itself.
+if [ "$m2rc" = 0 ]; then
+  vm=$(timeout 9000 "$WT" run "${WT_RUN_FLAGS[@]}" --dir . boot/mentl.wasm march 2> "$OUT/verb.err")
+  vrc=$?
+  vlines=$(printf '%s\n' "$vm" | sed -n 's/^march: .* · \([0-9]*\) wat lines · census.*/\1/p')
+  if [ "$vrc" != 0 ]; then
+    echo "✗ VERB PARITY: \`mentl march\` exits $vrc — the medium cannot judge its own generation:"
+    printf '%s\n' "$vm" | tail -3
+    trap_lines "$OUT/verb.err" | head -6
+    fixok=0
+  elif [ "$vlines" != "$m2lines" ]; then
+    echo "✗ VERB PARITY: \`mentl march\` emits ${vlines:-no} wat lines, the m2 leg $m2lines — the verb and the scaffold judge the same wheel differently"
+    fixok=0
+  else
+    echo "✓ verb parity: \`mentl march\` reproduces the m2 leg ($m2lines wat lines)"
+  fi
+fi
 
 if [ -n "${PROBE:-}" ]; then
   # closure record = [fn_ptr@0][nc@4][caps..][evs..], alloc = 8 + 4*(nc+ne).
@@ -329,28 +363,4 @@ fi
 # (§11 tripwire 4), one layer up, where the scaffold's own existence was the
 # cover. The wheel is judged by its ability to judge itself, so the verb runs
 # here on the same generation and must agree with the m3 leg's line count.
-# The verb writes the same $OUT/m2.wat this script just wrote, so its own
-# "reproduces the last generation" verdict IS the byte comparison — the verb's
-# emission against the scaffold's. The line count is the coarse second read.
-if [ "$m3rc" = 0 ] && [ -s "$OUT/m3.wat" ]; then
-  vm=$(timeout 9000 "$WT" run "${WT_RUN_FLAGS[@]}" --dir . boot/mentl.wasm march 2> "$OUT/verb.err")
-  vrc=$?
-  vlines=$(printf '%s\n' "$vm" | sed -n 's/^march: .* · \([0-9]*\) wat lines · census.*/\1/p')
-  m3lines=$(wc -l < "$OUT/m3.wat" 2>/dev/null | tr -d ' ')
-  if [ "$vrc" != 0 ]; then
-    echo "✗ VERB PARITY: \`mentl march\` exits $vrc — the medium cannot judge its own generation:"
-    printf '%s\n' "$vm" | tail -3
-    trap_lines "$OUT/verb.err" | head -6
-    fixok=0
-  elif [ "$vlines" != "$m3lines" ]; then
-    echo "✗ VERB PARITY: \`mentl march\` emits ${vlines:-no} wat lines, the m3 leg $m3lines — the verb and the scaffold judge differently"
-    fixok=0
-  elif ! printf '%s\n' "$vm" | grep -q 'reproduces the last generation'; then
-    echo "✗ VERB PARITY: \`mentl march\` diverges from the generation this script just wrote:"
-    printf '%s\n' "$vm" | tail -2
-    fixok=0
-  else
-    echo "✓ verb parity: \`mentl march\` reproduces the m3 leg byte for byte ($m3lines wat lines)"
-  fi
-fi
 [ -z "$TRAP" ] && [ "$m3rc" = 0 ] && [ "$fixok" = 1 ] && [ "$costok" = 1 ] && [ "$censusok" = 1 ]

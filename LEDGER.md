@@ -35,6 +35,45 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-01 · pin f56db33328545399 · THE ENV CARRIES CELLS, AND THE MOVERS
+  DID NOT MOVE. CLEAN m2 == m3 at 415201 lines, census 0; verb parity byte
+  for byte; micros 148/148, frontier 374/0, verify green.
+  ▶ WHAT LANDED: the Live posture stopped being dormant. Both publish sites
+  bind `Live(handle)` — the env carries the decl's cell, and the quantifier
+  is a projection each reader runs at its own moment of consumption. The
+  thirteen readers that matched only the frozen shape were made total, in
+  two forms by layer: inside infer, through judgment_ty (row_print,
+  resolve_one_eff_arg, check_instance_args, the list_index charge,
+  op_scheme_arity, the type-position alias read, scheme_ret_ty, and synth's
+  vocabulary enumeration); below it, through the shallow chase to the bound
+  node, which is that layer's live read (types.mn's callee_params, own.mn's
+  callee_borrow_params). env.mn's env_entry_is_type was left alone by
+  measurement rather than oversight: aliases publish Frozen, and a Live
+  entry falls through to the kind check, which answers correctly.
+  ▶ THE SURRENDER DELETED: own.mn's `_ => None`. A callee whose env entry
+  was not yet an arrow meant "every bare arg reads", which is the whole
+  printed flip set — grade `r` in the trial, `o` in the final. It now
+  chases the cell, and the frozen-TVar case, which was the same read one
+  moment earlier, shares the chase.
+  ▶ THE KILL: this was supposed to drive the movers to zero. It did not.
+  470 before, 470 after, the same four flips. The claim at infer.mn — that
+  snapshot publishes under-resolve and live join-cells close the gap — is
+  MEASURED FALSE and has been rewritten in place. The snapshot was never
+  stale within a pass, because the trial walks callee-first and a decl is
+  finished when it publishes; the divergence is between the two PARSES, and
+  a trial cell and a final cell are different nodes in different
+  generations. So the retirement condition written for the second pass —
+  movers 0 licensing the deletion — is a gate the walk cannot pass. PLAN
+  §11 5.2 had it right: the class dies WITH the pass. The honest condition
+  is order-independence closing structurally, decl→site propagation so one
+  generation suffices, and then the pass and its counter go together.
+  ▶ WHY IT STAYS: the fix is correct by the law even though it did not
+  clear the symptom (CLAUDE.md ⊕, the stack-don't-revert clause). The env
+  carrying cells is what the stage contract prescribes, thirteen readers
+  are total where they were partial, and a surrender fallback is gone. What
+  it bought is knowledge: the next attempt aims at the second parse, not at
+  the publish.
+
 - 2026-09-01 · pin 5b7ddb96c9c5b030 · THE MEDIUM CAN MARCH ITSELF AGAIN.
   CLEAN m2 == m3 at 415103 lines (494 fewer than the pin before it),
   census 0; verb parity green — `mentl march` reproduces the m3 leg byte

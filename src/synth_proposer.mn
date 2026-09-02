@@ -254,14 +254,14 @@ fn concat_candidates(a: [EnrichedCandidate], b: [EnrichedCandidate]) -> [Enriche
 // Arg-bearing fns are the recursive-hole general form
 // (Hβ.synth.vocabulary-arg-holes); the reach walk's O(1) form is the
 // call-edge index (Hβ.synth.vocabulary-reach-index).
-fn enumerate_vocabulary_calls(target_ty, allowed_row, context) with GraphRead + GraphWrite + Intern + Alloc + Memory + !Mutate = match context {
+fn enumerate_vocabulary_calls(target_ty, allowed_row, context) with GraphRead + WASI + GraphWrite + Intern + Alloc + Memory + !Mutate = match context {
   Context(scope_bindings, _active, enclosing, hole_span) => fold(
     ([], []),
     (acc, entry) => match acc {
       (accepted, rejected) => match entry {
         (name, scheme, reason, kind) => match kind {
-          FnScheme => match scheme {
-            Frozen(_, TFun(params, ret, row)) => if len(params) == 0 && vocabulary_ret_matches(ret, target_ty) && !reaches_decl(name, enclosing, []) {
+          FnScheme => match judgment_ty(scheme) {
+            TFun(params, ret, row) => if len(params) == 0 && vocabulary_ret_matches(ret, target_ty) && !reaches_decl(name, enclosing, []) {
               if row_subsumes(row, allowed_row) {
                 // drift-audit: ignore — bounded by the in-scope zero-arg vocabulary, not a loop accumulator
                 (accepted ++ [vocabulary_call_candidate(name, row, allowed_row)], rejected)

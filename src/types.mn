@@ -3075,6 +3075,15 @@ fn show_handle(h) with GraphRead + Memory + Alloc + !Mutate + Intern = {
 fn callee_params(name) with EnvRead + GraphRead + Memory + Alloc = match env_lookup(name) {
   Some(entry) => match entry {
     (scheme, _, _) => match scheme {
+      Live(h) => // A live cell and a frozen TVar are the same read one hop apart: chase
+      // to the bound node and take the arrow. judgment_ty is the infer-layer
+      // form of this and would also run the quantifier split, which a label
+      // resolver has no use for — and types.mn sits below infer, so the
+      // chase IS the layer's live read.
+      match graph_chase(h) {
+        GNode(NBound(TFun(params, _, _)), _) => params,
+        _ => [],
+      },
       Frozen(_, TVar(h)) => match graph_chase(h) {
         GNode(NBound(TFun(params, _, _)), _) => params,
         _ => [],

@@ -995,7 +995,12 @@ fn pre_register_fn_sig(name, params, ret_ann, handle, span: ValidSpan) = {
       // is designed to keep — and the callee's own judgment fills it.
       // Located so every reader of this entry's reason (the Why chain, the
       // executable gate's unhandled-effect diagnostic) projects the DECL's span.
-      env_extend(name, generalize(handle), Located(span, Declared(name)), FnScheme)
+      // The publish carries the CELL, not a snapshot of it: the quantifier is
+      // a projection every reader runs at ITS moment of consumption
+      // (judgment_ty / judgment_pair / instantiate, or the shallow chase below
+      // the infer layer), so a decl the rest of the walk refines is read
+      // refined instead of frozen at whatever it was when it finished.
+      env_extend(name, Live(handle), Located(span, Declared(name)), FnScheme)
     },
   }
 }
@@ -1036,10 +1041,19 @@ fn infer_program_trial(stmts) = {
   // decl names give the Tarjan BINDING GROUPS, so the trial itself
   // walks callee-first with each cycle judged as one unit under the
   // cycle discipline. Its finals are MEANT to be the fixpoint on
-  // arrival; the movers count is the measured distance from that claim
-  // (snapshot publishes under-resolve — rung 3's root), and it reaches
-  // zero when schemes become live join-cells, never by tuning this
-  // walk. The layers ride out to order the final's planned sweep (one
+  // arrival; the movers count is the measured distance from that claim.
+  // This comment used to name the distance's cause as snapshot publishes
+  // under-resolving, and to promise that live join-cells would drive it
+  // to zero. MEASURED FALSE, 2026-09-01: both publishes became Live(handle)
+  // and every reader was made total over the posture, and the count did not
+  // move — 470 before, 470 after, the same four flips. The snapshot was
+  // never stale WITHIN a pass, because this walk is callee-first and a decl
+  // is finished when it publishes. The divergence is BETWEEN GENERATIONS: a
+  // trial cell and a final cell are different nodes in different parses, and
+  // no amount of liveness inside one pass can make two of them agree. So the
+  // count cannot reach zero while both passes exist, and the retirement
+  // condition below is not a gate the walk can pass — the pass is what has
+  // to go. The layers ride out to order the final's planned sweep (one
   // collection, two readers).
   let frees_all = stmt_frees(stmts)
   let name_idx = layer_name_index(map(stmt_decl_name, stmts), 0, smap_new())
@@ -1076,7 +1090,7 @@ fn row_print(name) = if name == "" {
   ""
 } else {
   match env_lookup(name) {
-    Some((Frozen(_, ty), _, _)) => ty_fingerprint(ty),
+    Some((sch, _, _)) => sch |> judgment_ty |> ty_fingerprint,
     None => "",
   }
 }
@@ -1188,10 +1202,17 @@ handler poly_capture with held = [] {
 // verification — on a mover it narrates the divergence and proceeds
 // with ITS OWN answer, override wearing verification's name; a verifier
 // refuses, or the divergence is impossible by construction. The second
-// pass is the snapshot-publish tower at cadence two, and it takes NO
-// improvements (Anchor 2's condemned-forms clause) — its retirement
-// condition is rung 3, schemes as live join-cells: movers 0 makes this
-// pass VACUOUS and it DELETES, the judge returning to ONE pass.
+// pass is the TWO-GENERATION tower at cadence two, and it takes NO
+// improvements (Anchor 2's condemned-forms clause). Its retirement
+// condition was written as "movers 0 makes this pass VACUOUS and it
+// DELETES" — a gate the walk cannot pass, measured 2026-09-01: schemes
+// ARE live join-cells now and the count did not move, because the
+// divergence is between the two PARSES, not between a snapshot and a
+// cell (the trial-walk comment carries the measurement). The honest
+// condition is order-independence closing structurally — decl→site
+// propagation, so ONE generation suffices — and then the pass deletes
+// and the count goes with it, rather than the count falling first and
+// licensing the deletion.
 // Per-compile correctness is structural; whole-program verification
 // lives at the march, once per landing, never as a standing cadence.
 // The tax is measured — PLAN §5.O's cost law carries the curve.
@@ -1947,7 +1968,7 @@ fn group_final_publish(ref stmts, ref members, j) = if j >= len(members) {
 } else {
   match stmts[members[j]] {
     N(sbody, span, handle) => match sbody {
-      NStmt(FnStmt(name, _, _, _, _)) => env_extend(name, generalize(handle), Located(span, Declared(name)), FnScheme),
+      NStmt(FnStmt(name, _, _, _, _)) => env_extend(name, Live(handle), Located(span, Declared(name)), FnScheme),
       _ => (),
     },
   }
@@ -3272,9 +3293,9 @@ fn resolve_one_eff_arg(arg) = match arg {
   EANode(nh) => match graph_node_body(nh) {
     NExpr(VarRef(nm)) => match env_lookup(nm) {
       Some(entry) => match entry {
-        (Frozen(_, sty), _, kind) => match kind {
+        (sch, _, kind) => match kind {
           EffectDeclKind(_) => EAEffect(intern_str(nm)),
-          ConstructorScheme(_, _) => match sty {
+          ConstructorScheme(_, _) => match judgment_ty(sch) {
             TName(_, _) => // nullary ctor: the scheme's result IS the TName (fielded
             // ctors carry TFun — scheme_result_is' own reading)
             EACon(intern_str(nm)),
@@ -3625,13 +3646,16 @@ fn check_instance_args(effs, span: ValidSpan) = each(
     (ename, _negated, _conn) => match ename {
       EParameterized(h, args) => match env_lookup(intern_name_of(h)) {
         Some(entry) => match entry {
-          (Frozen(_, TTuple(ptys)), _, EffectDeclKind(_)) => if len(args) != len(ptys) {
-            report(EConstructorArity(intern_name_of(h), len(ptys), len(args), span))
-          } else {
-            each(
-              (i) => check_one_instance_arg(list_index(args, i), list_index(ptys, i), span),
-              range(0, len(args))
-            )
+          (sch, _, EffectDeclKind(_)) => match judgment_ty(sch) {
+            TTuple(ptys) => if len(args) != len(ptys) {
+              report(EConstructorArity(intern_name_of(h), len(ptys), len(args), span))
+            } else {
+              each(
+                (i) => check_one_instance_arg(list_index(args, i), list_index(ptys, i), span),
+                range(0, len(args))
+              )
+            },
+            _ => (),
           },
           _ => (),
         },
@@ -6495,7 +6519,7 @@ fn index_receiver_shallow(rh) with GraphRead + Memory = match graph_chase(rh) {
   _ => TUnit,
 }
 
-fn infer_index_force(rh, handle, span: ValidSpan) with FreshHandle + GraphWrite + GraphRead + Memory + Alloc + Cast + Diagnostic + Intern + EnvRead + InferCtx = {
+fn infer_index_force(rh, handle, span: ValidSpan) with FreshHandle + GraphWrite + GraphRead + Memory + Alloc + Cast + Diagnostic + Intern + EnvRead + WASI + InferCtx = {
   let elem_h = mint(Inferred("subscript element"))
   let exp_r = mint(Inferred("subscript receiver"))
   graph_bind(exp_r, TList(TVar(elem_h)), Located(span, Inferred("subscript receiver")))
@@ -6510,8 +6534,11 @@ fn infer_index_force(rh, handle, span: ValidSpan) with FreshHandle + GraphWrite 
   // probe, 2026-08-01). The tuple-const route stays chargeless: its
   // extraction is compile-time.
   match env_lookup("list_index") {
-    Some((Frozen(_, TFun(_, _, lrow)), _, _)) => inf_add_row(lrow),
-    _ => (),
+    Some((sch, _, _)) => match judgment_ty(sch) {
+      TFun(_, _, lrow) => inf_add_row(lrow),
+      _ => (),
+    },
+    None => (),
   }
 }
 
@@ -7176,8 +7203,8 @@ fn effect_instance_arity(ename) = {
   }
 }
 
-fn op_scheme_arity(sch) = match sch {
-  Frozen(_, TFun(_, _, row)) => match op_instance_ty(row) {
+fn op_scheme_arity(sch) = match judgment_ty(sch) {
+  TFun(_, _, row) => match op_instance_ty(row) {
     Some(TName(_, args)) => len(args),
     _ => // drift-audit: ignore — a bare/non-instance row HAS arity 0; the read's honest answer, not a fabricated default
     0,
@@ -8324,8 +8351,8 @@ fn quantify_ctor_ty(ty, qmap) = match ty {
     // the effect shadow the alias — the kind is the namespace.
     match env_lookup_type(name) {
       Some(entry) => match entry {
-        (scheme, _, _) => match scheme {
-          Frozen(_, TAlias(an, inner)) => (TAlias(an, inner), qmap),
+        (scheme, _, _) => match judgment_ty(scheme) {
+          TAlias(an, inner) => (TAlias(an, inner), qmap),
           _ => (TName(name, []), qmap),
         },
       },
@@ -9215,8 +9242,8 @@ fn arm_disc_of(grade, ret) = match grade {
 // The op's declared return type, read from its EffectOpScheme's TFun —
 // the one place the op's signature lives (Carried-Truth: read it live,
 // never re-derive). A non-arrow scheme (never a real op) floors to TUnit.
-fn scheme_ret_ty(scheme) = match scheme {
-  Frozen(_, TFun(_, ret, _)) => ret,
+fn scheme_ret_ty(scheme) = match judgment_ty(scheme) {
+  TFun(_, ret, _) => ret,
   _ => TUnit,
 }
 

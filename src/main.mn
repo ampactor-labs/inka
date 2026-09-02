@@ -450,7 +450,7 @@ fn march_run() = {
 // The canonical stdin chain with the streaming sink; the census count
 // reads INSIDE the same install (the count and the counter are one
 // handler — pipeline_check's own law).
-fn march_emit(source, fd) = infer_context(() => {
+fn march_emit(source, fd) = compile_context(() => {
   // The outer thunk captures fd; the install-config caveat at
   // wat_to_file's decl means a capture-referencing config arg reads 0 —
   // the local bind is the sound shape until the init path resolves
@@ -460,7 +460,7 @@ fn march_emit(source, fd) = infer_context(() => {
     source |> infer_program_converged |> compile_remainder
     diag_errors()
   }
-  body() ~> wat_to_file(sink_fd) ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> arm_state_ctx([], OneShot, "") ~> spec_registry
+  body() ~> wat_to_file(sink_fd) ~> wasi_filesystem
 })
 
 // The wheel's canonical file set: every .mn under lib then src (tutorials
@@ -1754,7 +1754,7 @@ fn battery_expect_digits(src, i, acc) with Memory = if i >= byte_len(src) {
 // segments — the scope law at wat_to_string's decl). Verdict: 0 on an
 // emitted module, 1 on a ledger-refused compile (no file written) or an
 // unopenable destination.
-fn battery_compile(src, wat_path) = infer_context(() => {
+fn battery_compile(src, wat_path) = compile_context(() => {
   let lowered =
     src |> infer_program_converged |> saturate_pass |> lower_program |> reachable_from_main
   // THE SAME law executable_gate applies, batch-shaped: refusal = holes +
@@ -1787,7 +1787,7 @@ fn battery_compile(src, wat_path) = infer_context(() => {
       (failed, nerr, lines)
     },
   }
-} ~> mcp_diag_collector ~> wasi_filesystem ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> lower_handler_stack_ctx ~> arm_state_ctx([], OneShot, "") ~> spec_registry)
+} ~> mcp_diag_collector ~> wasi_filesystem)
 
 fn battery_run(dir, names) = {
   fs_mkdir(".build")

@@ -35,6 +35,62 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-01 · pin 5b7ddb96c9c5b030 · THE MEDIUM CAN MARCH ITSELF AGAIN.
+  CLEAN m2 == m3 at 415103 lines (494 fewer than the pin before it),
+  census 0; verb parity green — `mentl march` reproduces the m3 leg byte
+  for byte; verify green with two ceilings raised in-commit.
+  ▶ WHAT WAS FOUND: `mentl march` was DEAD, and had been for as long as
+  nobody looked. Its chain omitted `lower_handler_stack_ctx`, so
+  `lower_frame_fence_push`'s perform reached no handler and the verb
+  trapped inside `project_nested_fn` on every run. The board never saw
+  it: every gate calls `tools/march.sh`, so the scaffold stayed green
+  while its own successor could not judge a generation. §11's tripwire
+  (4) one layer up — a gate that stops being reported stops being run,
+  and here the scaffold's existence was the cover.
+  ▶ WHAT LANDED: the missing home. Seven lowering routes each
+  hand-copied `string_table ~> emit_memory_bump ~> body_context ~>
+  mentl_default ~> lower_scope ~> lower_handler_stack_ctx ~>
+  arm_state_ctx ~> spec_registry`; march's copy is where a handler fell
+  out. `emit_context` is that chain's one home — infer_context's peer on
+  the far side of the cursor — and `compile_context` is the second fact
+  the copies were re-deriving: that a lowering route installs emit
+  inside analysis. A caller now supplies only its sink and its
+  filesystem prefix, which is the only part that ever differed. The
+  emission fell 415597 → 415103 lines.
+  ▶ THE GATE, SEEN RED: `tools/march.sh` grew a verb-parity leg — the
+  verb runs on the generation the script just judged, and must exit 0,
+  match the m3 leg's line count, and report that it reproduces it. Run
+  against the pre-fix boot it exits 1; against this pin it is green.
+  ▶ THE RATCHETS, RAISED IN-COMMIT: movers 468 → 470 and effectful
+  lambdas 384 → 385, both this change's own arithmetic. The two new
+  context fns are effect-polymorphic HOFs, which is precisely the shape
+  the movers class is made of — two HOFs in, two movers out, a 100% rate
+  against a ~0.8% baseline, the mechanism showing itself. The lambda is
+  the one `() => emit_context(body)` that composing two thunk-taking
+  stacks costs; the first shape of this landing cost seven and the tier
+  convicted it, correctly, before the collapse paid six back.
+  ▶ WHAT THE DIG ALSO MEASURED, banked for the next landing: the movers
+  are a read-ordering surrender, not a judgment disagreement.
+  `callee_borrow_params` (own.mn) matches `Frozen(_, TFun(ps, _, _))`
+  and answers `_ => None` otherwise — so when a callee's env entry is
+  not yet an arrow, every bare arg reads and the grade lands `r`, where
+  the final's re-judgment lands `o`. That is the whole printed flip set
+  (`buffer:rlf → buffer:olf`, `list:ri → list:oi`). A census of readers
+  still matching Frozen-only found thirteen sites, invisible to the
+  checker because they hide inside nested patterns or behind that
+  surrender: env.mn:94, own.mn:696, synth_proposer.mn:264,
+  types.mn:3078/3082/3521, infer.mn:1082/2514/3278/3631/6516/7183/8331/
+  9222. A probe publishing `Live(handle)` at both publish sites built
+  m2 clean and died at infer.mn:1082 — `row_print`, the movers
+  instrument's own reader — which is what named the census.
+  ▶ AND A CONTRADICTION TO SETTLE: infer.mn:1193 gates the final pass's
+  deletion on movers reaching 0; PLAN §11 5.2 records the grade class as
+  refuted for one-sided patching, dying only WITH the pass. Both cannot
+  hold. Deleting the pass today ships the trial's under-resolved answer
+  on 470 schemes, so the real gate is the sentence at infer.mn:1010-1012:
+  order-independence closes structurally — live cells plus decl→site
+  propagation — and the pass deletes then.
+
 - 2026-09-01 · pin 9214b85c910b0d40 · THE ENV'S JUDGMENTS BIND AS FROZEN
   OR LIVE. CLEAN m2 == m3 at 415597 lines, census 0; rungs 8/8 and
   micros 148/148 through the new wheel, frontier 374/0, verify green

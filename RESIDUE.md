@@ -1037,9 +1037,43 @@ under it, and the wrong-slot class becomes visible at the cursor instead
 of via an exit code. It joins the `where` facets, beside the schedule
 badge that already walks the enclosing tee chain.
 
-`Hβ.lower.open-row-field-offset-from-known-set` — THE ROOT UNDER ALL OF
-IT, and it lands on SYNTAX's own worked example. Measured 2026-08-17 at
-pin 4ce9914b7360.
+`Hβ.infer.record-row-vars-are-not-unioned` — RECORD ROW VARS ARE SECOND
+CLASS IN THE UNION-FIND, and that is what survives the offset fix below.
+Measured 2026-09-02 at pin 7740ac94; standing repro
+`tests/repro-wf/open-row-interior-site.mn`.
+▶ THE DIRECT CALL IS FIXED AND THE INTERIOR ONE IS NOT. `fn inner(u:
+{zeta: Int, ...}) = u.zeta` reached from inside `fn outer(u: {zeta: Int,
+...}) = inner(u)` exits 7 where 9 is correct. The emit says it plainly:
+two `$outer` bodies (`$outer$spr_alphai_zetai_` among them, its receiver
+closed) and exactly ONE `$inner`, whose body loads `i32.load offset=0` —
+alpha's slot.
+▶ THE ROOT IS IN unify, one level under the twin machinery.
+`unify_two_open_records` proves two open rows are the same row and keeps
+them as TWO nodes: it cross-absorbs each side's exclusive fields into the
+other's residual (`absorb_into_residual(va, extra_b)` / `(vb, extra_a)`)
+and marks both RowAssumed, never unioning va and vb. Its own comment says
+"two row variables collapse to one when they're already linked", which is
+a CHECK on `va == vb`, never a link. Unify unions the roots for type vars
+— the codebase's own stated law — and does not for record row vars.
+▶ SO THE PAIRS CANNOT ANSWER. The interior site's row-var root is not the
+outer twin's pair key, no interior twin is demanded, and the base body
+bakes the known set's ordering. Two edits at pin ‹the interior landing›
+made `spec_subst_pairs` and `spec_resolve` able to answer for a row var at
+all — both marched clean, both necessary, and MEASURED not sufficient
+while the roots stay apart. They stay (Anchor: stack correct fixes).
+▶ THE FIX IS THE REPRESENTATION, NOT A PATCH (the unpatchability theorem
+names unify explicitly): a record row var becomes an ordinary union-find
+citizen, so two rows proven equal ARE one node and the assumed residual
+this bind manufactures has nothing left to manufacture. That also retires
+`open_record_proven_fields`' RowAssumed decline, since an assumed
+remainder from two partial sets is exactly what the union removes.
+
+`Hβ.lower.open-row-field-offset-from-known-set` — RESOLVED 2026-09-01 at
+pin 7740ac94 for the DIRECT call (the row var keys the twin; gates
+`tests/syntax/record-field-param-open`, `-two-shapes`,
+`record-field-through-list`). The interior call is the peer above. The
+original record follows, because the shape is the instructive part.
+Measured 2026-08-17 at pin 4ce9914b7360.
 ▶ AN OPEN ROW'S FIELD OFFSETS COME FROM THE KNOWN SET'S OWN ORDERING, not
 the runtime record's. `fn pick(u: {zeta: Int, ...}) = u.zeta` called with
 `{alpha: 7, zeta: 9}` returns 7 — `zeta` is the only known field, so it

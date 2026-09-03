@@ -1101,12 +1101,20 @@ form the whole time. The arcs, in order:
   (`cursor_session`, ide/wheel-worker.js session roles, tools/ide-gate.sh):
   finish residency across actions, verb merge (`edit`/`session`/`serve`
   absorbed BY `space`; doc-truth retires the old names in the same landing),
-  and the DEMO GUARD pulled forward from 5.1/5.4: an unannotated generic fn
-  reached at a wide type currently floors at RI32 and sums to ~0 with ZERO
-  diagnostics (tests/repro/mn-unannotated-float-accumulator.mn) — it gains
-  an honest intermediate refusal or inferred narrowing BEFORE strangers type
-  into the page. Terminal: ide-gate green Node + headless Chrome, session
-  alive across actions, eight-aspect projections at the caret.
+  and the DEMO GUARD, RETIRED BY MEASUREMENT 2026-09-02. It read: an
+  unannotated generic fn reached at a wide type floors at RI32 and sums to
+  ~0 with ZERO diagnostics, citing tests/repro/mn-unannotated-float-
+  accumulator.mn. Two things were wrong with that clause. There is no
+  tests/repro/ directory and no such file anywhere in the tree, so the guard
+  named a witness it did not have; and the defect measures FIXED — `fn
+  total(xs) = fold(0.0, (a, x) => a + x, xs)` over [1.5, 2.5] compares
+  correctly against 3.0 with zero diagnostics, which is 5.1a's total
+  monomorphization doing exactly what it landed to do. The guard the page
+  still needs is the OPEN-ROW one:
+  `Hβ.infer.record-row-vars-are-not-unioned` is live, silent, and reads a
+  neighbouring field (tests/repro-wf/open-row-interior-site.mn). Terminal:
+  ide-gate green Node + headless Chrome, session alive across actions,
+  eight-aspect projections at the caret.
 - **Arc F · Proof faces on the page, repriced.** `!Flow` sink-sensitivity
   (`.flowlabel-inference-in-hm` — labels as ROW facts at observation edges,
   the predicate-name heuristic dies) + Why-chain/refusal badges riding the

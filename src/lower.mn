@@ -5978,7 +5978,15 @@ fn spec_resolve_changes(t) with LookupTy + Memory = match t {
   TFun(ps, r, _) => spec_resolve_changes_params(ps, 0) || spec_resolve_changes(r),
   TName(_, args) => spec_resolve_changes_list(args, 0),
   TRecord(fs) => spec_resolve_changes_fields(fs, 0),
-  TRecordOpen(fs, _) => spec_resolve_changes_fields(fs, 0),
+  TRecordOpen(fs, v) => // The row var resolves like any other var — this arm read only the field
+  // TYPES, so a site whose ONLY change was the row closing reported
+  // "unchanged" and kept the open form. That is what left an INTERIOR site (a
+  // call inside another twin's body) reading the decl's unlearned row after
+  // the outer site had already been keyed on the proven set.
+  match lookup_ty(v) {
+    TVar(h2) => h2 != v || spec_resolve_changes_fields(fs, 0),
+    _ => true,
+  },
   TRefined(b, _) => spec_resolve_changes(b),
   TAlias(_, i) => spec_resolve_changes(i),
   TCont(i, a, _, _) => spec_resolve_changes(i) || spec_resolve_changes(a),
@@ -6041,15 +6049,21 @@ fn spec_resolve_build(t) with LookupTy + Memory + Alloc + GraphRead = match t {
     },
     fs
   )),
-  TRecordOpen(fs, v) => mk_record_open(
-    map(
-      (f) => match f {
-        (n, ft) => (n, spec_resolve(ft)),
-      },
-      fs
+  TRecordOpen(fs, v) => // The row var read through the same live channel as every other var: when
+  // the site closed it, that record IS the resolved receiver and the open
+  // form is gone. Anything else keeps the open form with resolved fields.
+  match lookup_ty(v) {
+    TRecord(full) => TRecord(full),
+    _ => mk_record_open(
+      map(
+        (f) => match f {
+          (n, ft) => (n, spec_resolve(ft)),
+        },
+        fs
+      ),
+      v
     ),
-    v
-  ),
+  },
   TRefined(b, p) => TRefined(spec_resolve(b), p),
   TAlias(n, i) => TAlias(n, spec_resolve(i)),
   TCont(i, a, d, w) => TCont(spec_resolve(i), spec_resolve(a), d, w),

@@ -35,6 +35,56 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-02 · pin 8b4e09ca3c2e47f5 · A ROW VAR RESOLVES LIKE ANY OTHER
+  VAR, AND THE SYMPTOM SURVIVED IT. CLEAN m2 == m3 at 415790 lines, census
+  0; verb parity green, micros 148/148, frontier 374/0, syntax 12/12.
+  ▶ WHY: an audit of what else discards a proof, run against the artifact
+  rather than the docs. Eight of SYNTAX's worked examples measured TRUE
+  (short-circuit guarding its own read, spread resorting slots, rest-field
+  layout, a label skipping a default, the `??` pipe hole, alternation
+  binding, as-patterns, `==` looser than comparison), and `==` over an
+  open row compares the whole record. The ledgers PLAN calls deleted are
+  genuinely gone. What did not hold is below.
+  ▶ THE OFFSET FIX WAS INCOMPLETE ONE HOP DEEPER. An open-row callee
+  reached from INSIDE another twin's body still read the decl's unlearned
+  row: `outer` mints `$outer$spr_alphai_zetai_` with its receiver closed,
+  and the single `$inner` it calls loads offset 0 — alpha's slot — for a
+  program that must answer 9. Two sites could not answer for a row var at
+  all: spec_subst_pairs returned a record row var verbatim where a type
+  var consults the pairs, and spec_resolve's change-walk read only field
+  types, so a site whose ONLY change was the row closing reported
+  unchanged. Both answer now.
+  ▶ AND NEITHER CLEARED IT, which is what named the root. The fixes are
+  correct by the law, marched clean, and measured insufficient — the
+  conjunction the law describes. `unify_two_open_records` proves two open
+  rows are the same row and keeps them as TWO nodes: it cross-absorbs each
+  side's exclusive fields and marks both RowAssumed, never unioning va and
+  vb. Its own comment says they "collapse to one when they're already
+  linked", which is a check on `va == vb` and never a link. Unify unions
+  the roots for type vars — this codebase's own stated law — and does not
+  for record row vars, so the interior site's root is not the twin's pair
+  key and no interior twin is demanded.
+  `Hβ.infer.record-row-vars-are-not-unioned` carries it; the standing
+  repro is tests/repro-wf/open-row-interior-site.mn. The fix is the
+  representation, which the unpatchability theorem already names for
+  unify.
+  ▶ THE AUDIT'S OTHER FINDINGS, banked not built: the crown's own verdicts
+  do not refuse. `fn claims_pure(n) with Pure = shout(n)` reports
+  E_PurityViolated and then emits 38,750 bytes and runs to exit 9; the
+  same holds for E_EffectMismatch. Fifteen of fifty error classes refuse.
+  diag_refuses' stated licence — "a class is ARMED when the wheel's own
+  census of it is ZERO" — is satisfied today (census 0), and the
+  refutation recorded against arming reads "the wheel reports 2,266 errors
+  about its own source", which is an era-stale number. The measured
+  blocker is one documented false positive:
+  `Hβ.effects.feedback-row-substitutes` charges Alloc for `<~` slots that
+  are declared and never allocated, so `fn cycle() with !Alloc` REFUSES a
+  correct real-time program. Fix that, and §0's first property reaches the
+  crown. Also: PLAN §11 Arc E cites tests/repro/mn-unannotated-float-
+  accumulator.mn as the demo guard's witness — there is no tests/repro/
+  directory, and the defect it describes measures FIXED (exit 9, zero
+  diagnostics) since total monomorphization landed.
+
 - 2026-09-01 · pin 7740ac9492c0f2ec · THE ROW VAR KEYS THE TWIN, SO THE
   OFFSET IS THE RECORD'S. TRANSITION m3 == m4 at 415700 lines, census 0;
   syntax battery 12/12 through both links, floor contract green, residual

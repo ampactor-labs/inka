@@ -603,16 +603,6 @@ fn mark_tail_arms(arms) with Memory + Alloc = map(
   arms
 )
 
-// When the callee's effect row is ground AND pure (the empty closed
-// triple), emit `LCall` (direct). A ground non-empty row like
-// `EfRow([Iterate], [], EtClosed)` still needs evidence — the callee performs
-// effects whose handler comes from the caller. The row IS the
-// evidence contract: non-empty row → evidence threading required.
-fn monomorphic_at(h) with LookupTy + Memory = match lookup_ty(h) {
-  TFun(_, _, row) => row_is_ground(row) && row_is_effectless(row),
-  _ => true,
-}
-
 // True when the row carries no effect names — the callee performs
 // nothing, so no handler evidence is needed at the call site.
 fn row_is_effectless(row) = match row {

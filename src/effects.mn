@@ -1289,15 +1289,6 @@ else if eff_name_handle(list_index(buf, i)) == eff_name_handle(name) {
   name_set_prefix_contains_loop(buf, name, i + 1, n)
 }
 
-// Insert = dedup-then-append; the one remaining single-element write (the
-// bulk paths below build whole sets in one buffer).
-fn name_set_insert(ref sorted, ref name) with !Mutate = if name_set_contains(sorted, name) {
-  sorted
-} else {
-  let n = len(sorted)
-  list_set(list_copy_into(sorted, make_list(n + 1), 0, n), n, name)
-}
-
 fn name_set_union(ref a, ref b) with !Mutate = {
   let na = len(a)
   let nb = len(b)
@@ -1431,8 +1422,3 @@ else if eff_name_handle(list_index(set, i)) == eff_name_handle(name) {
 } else {
   name_set_contains_loop(set, name, i + 1, n)
 }
-
-// Statically proves FV.1.γ (Lone Effect Negation). Declares `with !Mutate`; the
-// compiler's own type inference infers its row as the negative capability
-// EfRow([], [Mutate], EtAll) rather than collapsing to the pure row. The compiler type-checking itself is the test.
-fn test_mutate_freeze(buffer: ValidSpan) with Pure = buffer

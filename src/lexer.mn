@@ -38,15 +38,6 @@ fn is_alnum(b) with Pure = is_alpha(b) || is_digit(b)
 
 fn is_whitespace(b) with Pure = b == 32 || b == 9 || b == 13
 
-fn is_hex_digit(b) with Pure = is_digit(b) || b >= 65 && b <= 70 || b >= 97 && b <= 102
-
-// 0-9, A-F, a-f
-fn is_bin_digit(b) with Pure = b == 48 || b == 49
-
-// 0 or 1
-fn is_oct_digit(b) with Pure = b >= 48 && b <= 55
-
-// 0-7
 //
 // Keyword classification — returns `Some(TokenKind)` if `word` is a
 // reserved keyword; `None` otherwise (caller emits `TIdent(word)`).

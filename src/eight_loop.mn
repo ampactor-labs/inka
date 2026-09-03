@@ -253,8 +253,6 @@ handler interrogate_default {
 //   <~  feedback closing on gradient density stability
 //
 // The Hμ.eight-interrogation-loop's ULTIMATE FORM realized by topology.
-fn empty_density() with Memory + Alloc = []
-
 fn enumerate_handles(i, n) with Alloc + Memory =
   if i >= n { [] } else { [i] ++ enumerate_handles(i + 1, n) }
 
@@ -436,9 +434,6 @@ fn verdict_is_clear(v) with Pure = match v {
 // The audit's structured surface. Each metric is a pure transform
 // over a [InterrogationReport]. Cursor uses these to surface
 // project-wide gradient-density at various granularities.
-fn count_invites_by_kind(reports, kind) with Memory + Alloc =
-  count((report) => verdict_is_invite(extract_verdict(report, kind)), reports)
-
 // Total-clear count: positions where ALL EIGHT clear. Reading
 // ULTIMATE FORM as the limit.
 fn total_clear_positions(reports) with Memory + Alloc = count(all_eight_clear, reports)

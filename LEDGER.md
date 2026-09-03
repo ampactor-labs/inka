@@ -35,6 +35,33 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-03 · pin b60ea6ed67ed214b · NINE FNS NOTHING CALLED. CLEAN
+  m2 == m3 at 416159 lines — byte-identical to the pin before it, which is
+  the proof: reachability had already pruned every one, so the deletion is
+  source-only.
+  ▶ THE CENSUS: every declared fn (2897) against every reference in the
+  tree. 38 have no caller. 29 of those are lib — prelude vocabulary and the
+  dsp/CFC workload — where no internal caller means API, not death. Nine
+  were compiler dead weight, and six of them carried a comment describing a
+  world that had already ended: three per-base digit predicates superseded
+  by base_digit, whose own comment calls itself "the one accumulator";
+  name_set_insert calling itself "the one remaining single-element write"
+  that nothing writes; a self-test declaring `with Pure` under a comment
+  claiming it declares `with !Mutate` and proves lone negation, which the
+  crown battery covers in 50+ crucibles; and publish_with_instances, whose
+  comment had already passed sentence — "DIES WITH THE DECLARED PUBLISH".
+  The declared publish died; the fn stayed.
+  ▶ WHAT THE CENSUS SAYS ABOUT THE PROSE: a stale comment outlives the code
+  it lies about, because nothing reads it. comment-refs gates backticked
+  NAMES resolving; it cannot gate a sentence whose subject no longer runs.
+  The deletion test SYNTAX states for comments has no mechanical form yet.
+  ▶ AND WHAT IT COULD NOT ANSWER: `mentl query "refs of NAME"` answers one
+  name at a time and there is no all-names facet, so the census ran as a
+  shell loop over grep. That absence is the finding — a dead-code
+  projection is the medium's own `refs` verb folded over its decls column,
+  which the reverse-edge landing already built.
+
+
 - 2026-09-03 · pin 39f26832c0b8858c · A BOUND ROW IS NOT FREE, AND TWO
   PROVEN-EQUAL ROWS ARE ONE CELL. CLEAN m2 == m3 at 416159 lines, census 0;
   micros 148/148, syntax 12/12, floor and residual contracts green.

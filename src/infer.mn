@@ -3549,41 +3549,6 @@ fn assert_gates_walk(gs) = if len(gs) == 0 {
   assert_gates_walk(drop_last(gs))
 }
 
-// The publish carries the body's INSTANCE for each name the declaration
-// spells bare: `with Iterate` declares the NAME (a constraint, SYNTAX's
-// verified-against law), while the body's inferred EParameterized(Iterate,
-// args) carries the effect's type params. Publishing the bare name ERASED
-// the element/answer args at every declared boundary — iterate's callers
-// saw a bare Iterate, instances_in_row found nothing, and the install
-// collapse had nothing to unify (measured n_insts=0 at fold's install —
-// the element severance of every fold-family scheme). DIES WITH THE
-// DECLARED PUBLISH under the publish law (the gate's own record): a
-// proven row carries its instances by construction.
-fn publish_with_instances(declared_row, body_row) = match declared_row {
-  EfRow(dp, da, dt) => match body_row {
-    EfRow(bp, _, _) => ef_make(
-      map(
-        (e) => match e {
-          ENamed(n) => match find(
-            (b) => match b {
-              EParameterized(bn, _) => bn == n,
-              _ => false,
-            },
-            bp
-          ) {
-            Some(inst) => inst,
-            None => e,
-          },
-          _ => e,
-        },
-        dp
-      ),
-      da,
-      dt
-    ),
-  },
-}
-
 // H4 helper — does a CallExpr's callee resolve to an alloc-returning
 // scheme? Constructors (ConstructorScheme) emit LMakeVariant which
 // heap-allocates; nominal records (RecordSchemeKind, H2.3) reach

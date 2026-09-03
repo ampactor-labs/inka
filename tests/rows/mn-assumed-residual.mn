@@ -1,15 +1,21 @@
 // expect: 9
-// A DECLARED anonymous rest. The residual `pick` carries on its own decl is
-// a guess — an empty remainder from no closed partner — and the projection
-// still says so; that half of this fixture stands and the mark is why the
-// difference is legible at the query and the floor.
+// residual: free
+// A DECLARED anonymous rest, reached by a call that proves the whole set at
+// the SITE while the decl's own row stays honestly unknown.
 //
-// What changed is which row the EMIT reads. This fixture was banked at 7 —
-// `alpha`, the wrong slot — with its own instruction: "the fixture holds the
-// CURRENT answer so the day it changes is a day someone chose". Today is
-// that day and the choice was `Hβ.lower.open-row-field-offset-from-known-set`.
-// The call proves the whole set at the site; the specialization walk keys the
-// row var on it now, so the twin's receiver is closed and `u.zeta` reads
-// zeta. 9, not 7 — the neighbouring value it used to return.
+// This fixture was banked at 7 — the wrong slot — then at 9-with-an-assumed
+// mark, and both readings were era artifacts. The 7 was the offset taken from
+// the known set's own ordering. The "assumed" mark was manufactured:
+// absorb_into_residual wrote `[] assumed` onto cells that knew nothing, so
+// pick's own decl row rendered as a guess because a guess had been written on
+// it. With that write gone and free_in_ty no longer calling a BOUND row free,
+// the call's proof reaches pick and the residual projects as what it is.
+//
+// Its assumed twin is not banked beside it, and that absence is measured
+// rather than assumed: two shapes were built to produce a genuine union of
+// partial sets — an open callee reached from a differently-known open caller,
+// and a receiver nothing closes — and neither renders an assumed remainder at
+// a decl's projection now. The first floors, the second stays free. If a
+// shape that does turns up, it lands here with `// residual: assumed`.
 fn pick(u: {zeta: Int, ...}) = u.zeta
 fn main(q) = pick({alpha: 7, zeta: 9})

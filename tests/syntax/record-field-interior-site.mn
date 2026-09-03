@@ -1,0 +1,15 @@
+// expect: 9
+// An open-row callee reached from INSIDE another open-row callee's twin —
+// the hop past the direct call, where the offset silent wrong survived its
+// first fix.
+//
+// It answered 7, alpha's value, because the proof was severed rather than
+// missing: free_in_ty called a BOUND row free, so generalize quantified a
+// residual the annotation had already closed and instantiate minted a fresh
+// empty cell over it. The emit read that empty cell and took slot 0. Traced
+// on mn-findtag, where the close landed on row 24730 and the read on 24736.
+fn inner(u: {zeta: Int, ...}) = u.zeta
+
+fn outer(u: {zeta: Int, ...}) = inner(u)
+
+fn main(q) = outer({alpha: 7, zeta: 9})

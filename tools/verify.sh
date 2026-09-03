@@ -197,25 +197,48 @@ if C=$(wt_m2_ensure); then
     fail=1
   fi
 
-  # 2d. THE RESIDUAL MARK — a proven remainder and an assumed one must not
-  #     project alike. Both halves, because either alone passes on a
-  #     projection that says "assumed" everywhere or nowhere: the declared
-  #     `...` with no closed partner MUST carry the mark, and findtag's
-  #     residual — written by the closed-side writer — must NOT. The
-  #     fixtures also RUN, so the wrong-slot answer the class still gives
-  #     is pinned as a value rather than described.
+  # 2d. THE RESIDUAL MARK — the projection must say which KIND of remainder
+  #     it holds, and each fixture declares the kind it expects on a
+  #     `// residual: proven|assumed` header. Both readings are gated,
+  #     because a projection saying "assumed" everywhere or nowhere passes a
+  #     one-sided check.
+  #
+  #     The header replaced a bare "must contain assumed" on 2026-09-03, and
+  #     the reason is the finding rather than a convenience: the mark that
+  #     check asserted was itself manufactured. absorb_into_residual bound
+  #     `[] assumed` onto cells that knew nothing, so a decl's own row
+  #     rendered "assumed" because a guess had been written on it. With that
+  #     write gone a decl's unclosed row projects FREE — honestly — and a
+  #     residual the call proves projects its fields. The gate now tests the
+  #     projection's honesty in whichever state the graph is actually in.
   rm_n=0; rm_bad=0
   for rf in tests/rows/*.mn; do
     [[ -e "$rf" ]] || continue
     rm_n=$((rm_n+1))
     r=$(basename "$rf" .mn)
     rwant=$(sed -n '1s|^// expect: \([0-9]\+\)$|\1|p' "$rf")
+    rkind=$(sed -nE 's#^// residual: (proven|assumed|free)$#\1#p' "$rf" | head -1)
+    if [[ -z "$rkind" ]]; then
+      say "✗ row $r: no '// residual: proven|assumed|free' header — the expected mark is the gate"
+      rm_bad=$((rm_bad+1)); continue
+    fi
     rout=$(tools/run-micro.sh "$rf" "$rwant" "${RTLIBS[@]}" 2>/dev/null | grep -E '^(PASS|FAIL)' | tail -1)
     [[ "$rout" == PASS* ]] || { say "✗ row $r: ${rout:-no output}"; rm_bad=$((rm_bad+1)); continue; }
     rproj=$(wt_run --dir . "$C/m2.wasm" query "$rf" "type pick" 2>/dev/null)
-    case "$rproj" in
-      *assumed*) ;;
-      *) say "✗ row $r: the projection does not mark the assumed remainder"; rm_bad=$((rm_bad+1)) ;;
+    # Three states, not two. A remainder is PROVEN (rendered as its fields),
+    # ASSUMED (rendered with the mark), or genuinely FREE — and the third was
+    # invisible while absorb_into_residual stamped `[] assumed` onto cells that
+    # knew nothing, which is what made "assumed" look like the only unproven
+    # state there was.
+    case "$rkind:$rproj" in
+      assumed:*assumed*) ;;
+      assumed:*) say "✗ row $r: declares an assumed remainder, projection does not mark one"; rm_bad=$((rm_bad+1)) ;;
+      proven:*assumed*) say "✗ row $r: declares a proven remainder, projection marks it assumed"; rm_bad=$((rm_bad+1)) ;;
+      proven:*'|'*) say "✗ row $r: declares a proven remainder, projection still shows an open row"; rm_bad=$((rm_bad+1)) ;;
+      proven:*) ;;
+      free:*assumed*) say "✗ row $r: declares a free remainder, projection marks it assumed — a guess was written on it"; rm_bad=$((rm_bad+1)) ;;
+      free:*'|'*) ;;
+      free:*) say "✗ row $r: declares a free remainder, projection shows it resolved"; rm_bad=$((rm_bad+1)) ;;
     esac
   done
   ctl=$(wt_run --dir . "$C/m2.wasm" query tests/micros/mn-findtag.mn "type pick" 2>/dev/null)

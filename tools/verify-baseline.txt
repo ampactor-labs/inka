@@ -614,7 +614,15 @@ comment_refs_max: 0
 # grades it own. Two HOFs in, two movers out — the 100% rate against a ~0.8%
 # baseline is the mechanism showing itself, not noise. Fixed inputs: same wheel
 # source and fixture set, the only variable being six chain copies or one.
-movers_max: 470
+# 470 → 471 at the severed-proof fix (2026-09-03). free_in_ty's TRecordOpen arm
+# collected its row var unconditionally, so a BOUND row — one already carrying a
+# residual the graph had proven — was reported free, generalize quantified it,
+# and instantiate minted a fresh empty one in its place. Measured on mn-findtag:
+# the annotation closed row 24730 and the field access read 24736, six cells
+# later, offset unprovable in between. free_in_record_row and its tail walk are
+# the two new fns and the one new mover; they apply the rule free_in_row states
+# six lines below and this sort had never applied.
+movers_max: 471
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

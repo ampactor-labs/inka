@@ -6168,6 +6168,25 @@ fn unify_two_open_records(fa, va, fb, vb, span: ValidSpan, reason) = {
     } else {
       type_mismatch(TRecordOpen(fa, va), TRecordOpen(fb, vb), span, reason)
     }
+  } else if len(extra_a) == 0 && len(extra_b) == 0 && row_var_is_free(vb) {
+    // THE UNION. Identical known sets and nothing yet written on vb: these
+    // are not two rows that happen to agree, they ARE one row, and the graph
+    // says so by making vb an alias of va — the same NBound(TVar) edge
+    // chase_handle already follows for a type var, whose own comment states
+    // the law this arm was missing: unify unions the ROOTS.
+    //
+    // Left unlinked, the two stayed separate nodes forever, so nothing that
+    // keys on a row var could see them as one: an open-row callee reached
+    // from inside another twin's body projected its key against a handle the
+    // twin's pairs had never heard of, no interior twin was demanded, and the
+    // body read the decl's own unlearned row (7 where 9 was asked for —
+    // tests/repro-wf/open-row-interior-site.mn).
+    //
+    // Only the unwritten side aliases, and only when the known sets agree. A
+    // row carrying its own residual is a DIFFERENT remainder of the same
+    // record — `{zeta | Ra}` beside `{alpha | Rb}` have Ra ≠ Rb by
+    // construction — so those cross-absorb below, which was right all along.
+    graph_bind(vb, TVar(va), Located(span, reason))
   } else {
     // ASSUMED. Each var takes the fields the other side knows and it does
     // not — a real carrying, measured: the second-field micro's offsets are
@@ -6224,7 +6243,20 @@ fn absorb_into_residual(v, incoming, span: ValidSpan, reason) = match graph_chas
       }
     }
   },
-  _ => graph_bind_record_row(v, incoming, RowAssumed, Located(span, reason)),
+  _ => // An EMPTY incoming set carries nothing, so it writes nothing. The bound
+  // arm above already says this — `if len(added) == 0 { () }` — and the
+  // unbound arm said the opposite, stamping `[] assumed` onto a cell that
+  // knew nothing at all. That write is a fabrication in the Law's exact
+  // sense: "the remainder is empty, and I am guessing" is a claim the graph
+  // never made, and every reader downstream believed it. It is what made an
+  // open row's offset come back provable-and-wrong, and what kept two
+  // identical rows from ever unioning, since the cell was no longer free.
+  // A cell that knows nothing stays free, and a free cell floors honestly.
+  if len(incoming) == 0 {
+    ()
+  } else {
+    graph_bind_record_row(v, incoming, RowAssumed, Located(span, reason))
+  },
 }
 
 fn unify_record_fields_loop_shared(fa, fb, names, span: ValidSpan, reason) = if len(names) == 0 {
@@ -7634,11 +7666,42 @@ fn free_in_ty(ty) = match ty {
   TFun(params, ret, eff) => free_in_params(params) ++ free_in_ty(ret) ++ free_in_row(eff),
   TName(_, args) => free_in_list(args),
   TRecord(fields) => free_in_fields(fields),
-  TRecordOpen(fields, v) => [v] ++ free_in_fields(fields),
+  TRecordOpen(fields, v) => free_in_record_row(v) ++ free_in_fields(fields),
   TRefined(base, _) => free_in_ty(base),
   TCont(input, answer, _, world) => free_in_ty(input) ++ free_in_ty(answer) ++ free_in_row(world),
   TAlias(_, inner) => free_in_ty(inner),
   TReprPin(_, base) => free_in_ty(base),
+}
+
+// A record row's free variable is what its residual still leaves unknown —
+// the identical rule free_in_row states for an effect row six lines below,
+// which this sort never applied. Collecting the cell unconditionally called
+// a BOUND row free, so generalize quantified a proven residual and
+// instantiate minted a fresh empty one in its place: measured on
+// mn-findtag, the annotation closed row 24730 and the field access read
+// 24736, six cells later, with the offset unprovable in between. The proof
+// was severed by the collector, not lost by the unifier.
+//
+// A cell that is neither free nor a record row contributes no record-row
+// frees. That is a true reading, not a floor.
+fn free_in_record_row(v) = {
+  let r = graph_chase_handle(v)
+  if row_var_is_free(r) {
+    [r]
+  } else {
+    match graph_chase(r) {
+      GNode(NRecordRowBound(residual, tail), _) => free_in_fields(residual) ++ free_in_record_tail(tail),
+      GNode(NBound(TRecordOpen(more, v2)), _) => free_in_fields(more) ++ free_in_record_row(v2),
+      GNode(NBound(TRecord(more)), _) => free_in_fields(more),
+      _ => [],
+    }
+  }
+}
+
+fn free_in_record_tail(tail) = match tail {
+  RowClosed => [],
+  RowAssumed => [],
+  RowContinues(next) => free_in_record_row(next),
 }
 
 fn free_in_list(tys) = tys |> map(free_in_ty) |> flatten

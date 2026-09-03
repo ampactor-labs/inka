@@ -35,6 +35,45 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-03 · pin 39f26832c0b8858c · A BOUND ROW IS NOT FREE, AND TWO
+  PROVEN-EQUAL ROWS ARE ONE CELL. CLEAN m2 == m3 at 416159 lines, census 0;
+  micros 148/148, syntax 12/12, floor and residual contracts green.
+  ▶ THE SILENT WRONG WENT ONE HOP DEEPER than the twin key. An open-row
+  callee reached from inside another twin's body read a neighbouring field
+  (7 where 9 was asked), and the trace named a severed proof rather than a
+  bad unifier: the annotation closed row 24730 and the field access read
+  24736, six cells later, offset unprovable in between.
+  ▶ THREE WRITES CLOSE IT, each the same law at a different site.
+  free_in_ty's TRecordOpen arm collected its row var unconditionally, so a
+  BOUND row — one already carrying a proven residual — was reported free,
+  generalize quantified it, and instantiate minted a fresh empty one over
+  the proof. free_in_row states that exact rule six lines below and this
+  sort had never applied it. unify_two_open_records now UNIONS two rows it
+  has proven identical, the NBound(TVar) edge chase_handle already follows,
+  whose own comment carries the law the arm was missing: unify unions the
+  ROOTS. And absorb_into_residual stops writing `[] assumed` onto cells that
+  know nothing — the bound arm already said `if len(added) == 0 { () }` and
+  the unbound arm said the opposite.
+  ▶ THE FABRICATION HAD BEEN PAYING A COIN FLIP. mn-findtag passed for years
+  because its manufactured empty residual gave offset 0 and `handle` sorts
+  first in {handle, region_id}. Removing the guess trapped it — exactly as
+  the code comment warned it would, "measured twice" — and the collector fix
+  made it pass for the real reason. That comment had recorded the symptom
+  and blessed the guess; the guess was the bug.
+  ▶ A THIRD STATE BECAME VISIBLE, and the gate grew to see it. A remainder
+  is proven, assumed, or genuinely FREE, and the third was invisible while
+  every unknown cell got stamped assumed. tests/rows fixtures now declare
+  which they expect on a `// residual:` header, and all three readings are
+  checked — where the old gate asserted "assumed" and was, it turns out,
+  gating a fabrication.
+  ▶ WHAT THIS COST AND WHAT IT DID NOT. The movers ceiling rose 470 → 471,
+  the two collector fns. Two fixtures were re-derived by hand rather than
+  re-banked (§9.11), and one probe that answered — the demand walk's own
+  pairs decision, which no verb projects — was removed rather than
+  graduated; its projection is unbuilt and named here rather than
+  pretended.
+
+
 - 2026-09-02 · pin 8b4e09ca3c2e47f5 · A ROW VAR RESOLVES LIKE ANY OTHER
   VAR, AND THE SYMPTOM SURVIVED IT. CLEAN m2 == m3 at 415790 lines, census
   0; verb parity green, micros 148/148, frontier 374/0, syntax 12/12.

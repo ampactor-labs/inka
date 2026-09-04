@@ -1337,14 +1337,18 @@ fn collect_module_cells(i, n) with Memory + Alloc + GraphRead + !Mutate = if i >
   []
 } else {
   match graph_node_body(i) {
-    NModule(m) => [(m.path, m.span)] ++ collect_module_cells(i + 1, n),
+    NModule(m) => // The cell's DECLS ride out with its path and span. Dropping them made
+    // every consumer that wanted a module's own content re-derive it from
+    // text — which is how 52 dead imports sat unseen: a grep cannot tell a
+    // used name from one named in a comment, and the graph can.
+    [(m.path, m.span, m.decls)] ++ collect_module_cells(i + 1, n),
     _ => collect_module_cells(i + 1, n),
   }
 }
 
 fn module_paths() with Memory + Alloc + GraphRead + !Mutate = map(
   (c) => match c {
-    (p, _s) => p,
+    (p, _s, _d) => p,
   },
   module_cells()
 )
@@ -1357,7 +1361,7 @@ fn module_paths() with Memory + Alloc + GraphRead + !Mutate = map(
 fn weave_line_extent() with Memory + Alloc + GraphRead + !Mutate = fold(
   0,
   (acc, c) => match c {
-    (_p, s) => match s {
+    (_p, s, _d) => match s {
       Span(_sl, _sc, el, _ec) => if el > acc { el } else { acc },
     },
   },

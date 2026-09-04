@@ -1160,6 +1160,25 @@ fn render_debt_line(seams, ob) = match ob {
   (s, pred, _) => "\n  {show_predicate(pred)} at {span_render_local(seams, s)}",
 }
 
+// The import edges rendered as a verdict per edge. DEAD means the imported
+// module brings no name this one references — measured off the refs column,
+// not guessed from text, which is the whole reason the facet exists: a grep
+// cannot tell a used name from one mentioned in a comment, and 52 of these
+// sat unseen behind exactly that.
+fn render_import_row(row) with Memory + Alloc = match row {
+  (m, imported, used) => {
+    let mark = if used { "used" } else { "DEAD" }
+    "  {mark}  {m} -> import {imported}"
+  },
+}
+
+fn import_row_is_dead(row) with Pure = match row {
+  (_, _, used) => !used,
+}
+
+fn render_import_rows(rows) with Memory + Alloc =
+  "→ {int_to_str(len(rows))} import edge(s); {int_to_str(count(import_row_is_dead, rows))} bring nothing the importing module references\n{str_join_lines(map(render_import_row, rows))}"
+
 fn render_query_result(result) = match result {
   QRType(ty, reason) => "→ {show_type(ty)}\n  Reason: {show_reason(reason)}",
   QRIntent(effs) => {
@@ -1201,6 +1220,7 @@ fn render_query_result(result) = match result {
   // rendered located so the seed is inspectable at the CLI.
   "→ {int_to_str(len(spans))} judged decl(s){render_ref_spans(spans)}",
   QRModules(paths) => "→ {int_to_str(len(paths))} module(s) in the weave\n  {str_join_lines(paths)}",
+  QRImports(rows) => render_import_rows(rows),
   QRCost(mods, lines, nodes) => "→ {int_to_str(mods)} module(s) · {int_to_str(lines)} source line(s) · {int_to_str(nodes)} node(s) minted",
   QRWhere(lines, sites) => "→ {str_join_lines(lines)}{render_where_sites(sites)}",
   QRError(msg) => "error: {msg}",
@@ -1247,6 +1267,7 @@ type QueryVerb
   | QVDecls
   | QVVariants
   | QVModules
+  | QVImports
   | QVCost
   | QVUnknownVerb
 
@@ -1278,6 +1299,8 @@ fn classify_query_verb(w: String) with Pure = if w == "type" {
   QVVariants
 } else if w == "modules" {
   QVModules
+} else if w == "imports" {
+  QVImports
 } else if w == "cost" {
   QVCost
 } else {
@@ -1318,6 +1341,7 @@ fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
   QVDecls => QDecls,
   QVVariants => QVariants(arg),
   QVModules => QModules,
+  QVImports => QImports,
   QVCost => QCost,
   QVUnknownVerb => QUnknown(raw),
 }

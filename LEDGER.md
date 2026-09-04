@@ -35,6 +35,37 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 9109e063bf2b1726 · THE MEDIUM FINDS ITS OWN DEAD IMPORTS.
+  CLEAN m2 == m3 at 417769 lines, census 0; micros 148/148, frontier 374/0.
+  ▶ THE VERB: `mentl query <file> "imports"` answers every import edge in the
+  weave with whether the imported module brings any name the importing one
+  references. Every term was already in the graph — module_cells gives each
+  module its path, span and decls; an ImportStmt among those decls IS the
+  edge; graph_refs_at answers each declared name's sites in O(refs) — so the
+  read is a fold over edges, not a scan of text.
+  ▶ WHY IT HAD TO BE THE GRAPH: it reports 63 dead of 256 on the wheel, where
+  the shell census of the same question found 52. A grep cannot tell a used
+  name from one written in a comment, and that gap is exactly how three dead
+  `import types` lines sat unseen long enough to put the compiler's whole op
+  vocabulary into every user program.
+  ▶ ONE MORE DISCARD FIXED ON THE WAY: module_cells returned (path, span) and
+  dropped the cell's own decls, so every consumer that wanted a module's
+  content re-derived it from text. It carries (path, span, decls) now.
+  ▶ THE HONEST LIMIT, at the site: imports are TRANSITIVE, so an edge
+  bringing no referenced name of its own may still be the conduit by which a
+  third module arrives. The facet reports the direct reference it measured
+  and says nothing about the conduit; `Hβ.driver.link-is-reachability` is the
+  judgment that decides those. So the 63 are a reading, not a delete list.
+  ▶ FOUR RATCHETS TRIPPED AND THREE WERE FIXED RATHER THAN RAISED. The ref
+  markers came off the new fns — the quiet gate is right that annotating
+  around inference IS the inference failing, and they were written by copying
+  surrounding style. The two returned lambdas became hole-products under the
+  Stage Law (configuration first, datum last), which is the language's own
+  answer and left the anonymity tier nothing to convict. The backticked names
+  that resolved nowhere became prose. Only movers rose, +1, the arithmetic
+  any added fn pays in a tower that shifts ~0.8% of schemes.
+
+
 - 2026-09-04 · pin 5b828fd0b1602670 · THREE DEAD IMPORTS PUT THE COMPILER IN
   EVERY USER PROGRAM. CLEAN m2 == m3 at 415869 lines, census 0; micros
   148/148, frontier 374/0, prelude floor 6385 → 2737 source lines, a bare

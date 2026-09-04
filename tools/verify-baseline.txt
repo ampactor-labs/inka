@@ -624,7 +624,14 @@ comment_refs_max: 0
 # six lines below and this sort had never applied.
 # 471 → 470 at the dead-import deletion (2026-09-04): `types` leaving every
 # user weave takes one scheme out of the trial/final population with it.
-movers_max: 470
+# 470 → 471 at the imports facet (2026-09-04). Its readers are new top-level
+# fns and one of them moves, the same arithmetic every added fn pays in a
+# tower that shifts ~0.8% of schemes. The other three ratchets this landing
+# tripped were FIXED rather than raised: the ref markers came off (the quiet
+# gate is right that annotating around inference is the failure), the two
+# returned lambdas became hole-products under the Stage Law, and the
+# backticked names that resolved nowhere became prose.
+movers_max: 471
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

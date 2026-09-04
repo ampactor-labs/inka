@@ -131,6 +131,7 @@ type Question
   // shell closure loop over `grep '^import'`, re-deriving by name what the
   // graph holds by edge.
   | QModules
+  | QImports
   // "cost" — what this question cost the medium, in the medium's own
   // facts: modules linked, source lines processed, nodes minted. A wall
   // clock is a HOST fact and varies per run, so it can be reported and
@@ -161,6 +162,8 @@ type QueryResult
   | QRDecls([Span])
   // the weave's module paths, in weave order (count = len)
   | QRModules([String])
+  // (importing module, imported path, is any name it brings referenced here)
+  | QRImports([(String, String, Bool)])
   // modules linked, source lines processed, nodes minted
   | QRCost(Int, Int, Int)
   // the derived badges (plain lines) + fanout sites as (schedule, span)
@@ -282,6 +285,7 @@ handler query_default {
     QWhere(name) => resume(where_badges(name)),
     QVariants(tname) => resume(variants_of(tname)),
     QModules => resume(QRModules(module_paths())),
+    QImports => resume(QRImports(import_report(module_cells()))),
     QCost => resume(QRCost(len(module_cells()), weave_line_extent(), graph_next())),
     QUnknown(q) => resume(QRError("unknown query: {q}")),
   },
@@ -425,6 +429,133 @@ fn collect_ref_spans(ref hs, i, acc) with GraphRead + Memory + Alloc + !Mutate =
 
 fn span_in(ref acc, ref sp, i) with Memory + Alloc =
   if i >= len(acc) { false } else { if acc[i] == sp { true } else { span_in(acc, sp, i + 1) } }
+
+// ─── The import edges, read for what they actually carry ────────────
+//
+// An import is DEAD when nothing the imported module declares is
+// referenced from inside the importing one. Every term of that is already
+// in the graph: module_cells gives each module its path, its span and its
+// decls; an ImportStmt among those decls IS the edge; and graph_refs_at
+// answers each declared name's reference sites in O(refs). So the read is
+// a fold over edges, never a scan of text — which matters, because the
+// text answer cannot tell a used name from one mentioned in a comment,
+// and every dead import found on 2026-09-04 hid behind exactly that.
+//
+// What those three lines cost while nobody could see them: lib/lists,
+// lib/strings and lib/threading each imported the compiler's own types
+// module and used nothing
+// from it, which put the compiler's own ~170 op names into the namespace
+// of every program that touches a list. A user's `effect Backtrack {
+// abort() }` lost silently to the compiler's Abort. Deleting them took
+// that module out of a bare weave and more than halved the prelude floor.
+//
+// The honest limit, stated because a reader will otherwise trust this
+// further than it goes: imports are TRANSITIVE, so an edge carrying no
+// referenced name of its own may still be the conduit by which a third
+// module arrives. This facet reports what it measured — the direct
+// reference — and says nothing about the conduit; `Hβ.driver.link-is-
+// reachability` is the judgment that decides those.
+// The whole report: every module's every import, paired with whether this
+// module references anything that import brings. One pass over the cells,
+// one O(1) refs probe per declared name.
+// Both stages take their configuration FIRST and the flowing datum last, so
+// `import_rows_join(cells)` and `import_verdict(path, extent, cells)` are
+// products with their remaining fields as holes — the fold and the map fill
+// them. The Stage Law's own payoff: no lambda to write, and none for the
+// anonymity tier to convict.
+fn import_report(cells) with GraphRead + Memory + Alloc + !Mutate =
+  fold([], import_rows_join(cells), cells)
+
+fn import_rows_join(cells, acc, cell) with GraphRead + Memory + Alloc + !Mutate =
+  acc ++ import_rows_for(cell, cells)
+
+fn import_rows_for(cell, cells) with GraphRead + Memory + Alloc + !Mutate = match cell {
+  (path, extent, _) => map(import_verdict(path, extent, cells), import_edges_of(cell)),
+}
+
+// The per-edge verdict: the importing module, the path it names, and whether
+// anything that path brings is referenced here.
+fn import_verdict(path: String, extent, cells, imported) with GraphRead + Memory + Alloc + !Mutate =
+  (path, imported, import_is_used(imported, extent, cells, 0))
+
+// Does the named module bring any name this extent references? A module the
+// weave does not carry answers False for its edge — never a fabricated True
+// that would hide a real dead import.
+fn import_is_used(imported: String, extent, cells, i) with GraphRead + Memory + Alloc + !Mutate = if i >= len(cells) {
+  false
+} else {
+  match cells[i] {
+    (p, _, _) => if module_tail_eq(p, imported) {
+      any_name_referenced_in(module_declared_names(cells[i]), extent, 0)
+    } else {
+      import_is_used(imported, extent, cells, i + 1)
+    },
+  }
+}
+
+// An import names a PATH (`dsp/clock`); a module cell names its resolved
+// file. They agree on the last segment, which is the module's identity.
+fn module_tail_eq(a: String, b: String) with Memory + Alloc = last_segment(a) == last_segment(b)
+
+fn last_segment(s: String) with Memory + Alloc = match split("/", s) {
+  segs => if len(segs) == 0 { s } else { last(list_to_flat(segs)) },
+}
+
+fn import_edges_of(cell) with Memory + Alloc = match cell {
+  (_, _, decls) => fold([], import_edge_join, decls),
+}
+
+fn import_edge_join(acc, d) with Memory + Alloc = match d {
+  N(NStmt(ImportStmt(p)), _, _) => push(acc, p),
+  _ => acc,
+}
+
+// The names a module DECLARES, read from its own decl list — the same
+// four claim kinds register_one_op weighs: fns, types with their ctors,
+// effects with their ops, handlers.
+fn module_declared_names(cell) with Memory + Alloc = match cell {
+  (_, _, decls) => fold([], decl_names_join, decls),
+}
+
+fn decl_names_join(acc, d) with Memory + Alloc = acc ++ decl_names_of(d)
+
+fn decl_names_of(d) with Memory + Alloc = match d {
+  N(NStmt(s), _, _) => match s {
+    FnStmt(n, _, _, _, _) => [n],
+    TypeDefStmt(n, ctors) => [n] ++ map(
+      (c) => match c {
+        (cn, _, _) => cn,
+      },
+      ctors
+    ),
+    EffectDeclStmt(n, _, ops) => [n] ++ map(
+      (o) => match o {
+        (on, _, _, _) => on,
+      },
+      ops
+    ),
+    HandlerDeclStmt(n, _, _, _, _) => [n],
+    _ => [],
+  },
+  _ => [],
+}
+
+// Is any of `names` referenced from within `extent`? The refs column is
+// name-keyed, so this is one O(1) probe per name plus its own sites.
+fn any_name_referenced_in(names, extent, i) with GraphRead + Memory + Alloc + !Mutate = if i >= len(names) {
+  false
+} else if refs_inside(graph_refs_at(names[i]), extent, 0) {
+  true
+} else {
+  any_name_referenced_in(names, extent, i + 1)
+}
+
+fn refs_inside(hs, extent, i) with GraphRead + Memory + Alloc + !Mutate = if i >= len(hs) {
+  false
+} else {
+  let sp = span_of_node_raw(hs[i])
+  if sp != span_zero() && span_overlaps(extent, sp) { true } else { refs_inside(hs, extent, i + 1) }
+}
 
 // ─── The decls column's projection — one home, two readers ──────────
 //

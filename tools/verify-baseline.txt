@@ -622,7 +622,9 @@ comment_refs_max: 0
 # later, offset unprovable in between. free_in_record_row and its tail walk are
 # the two new fns and the one new mover; they apply the rule free_in_row states
 # six lines below and this sort had never applied.
-movers_max: 471
+# 471 → 470 at the dead-import deletion (2026-09-04): `types` leaving every
+# user weave takes one scheme out of the trial/final population with it.
+movers_max: 470
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.
@@ -718,7 +720,9 @@ record_pattern_open_max: 0
 # tier convicted it at +7, correctly; collapsing to one context fn paid six of
 # those back. What the +1 buys is six deleted copies of an eight-handler chain
 # and 494 fewer emitted wat lines.
-effectful_lambda_max: 385
+# 385 → 384 at the dead-import deletion (2026-09-04), the same cause: one
+# fewer module in the link is one fewer effectful lambda on it.
+effectful_lambda_max: 384
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own

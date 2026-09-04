@@ -35,6 +35,39 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 899a4b571112f58e · THE HAND CLASSIFICATION BECAME A
+  VERB. CLEAN m2 == m3, census 0; micros 149/149; frontier 374/0.
+  ▶ THE PATTERN THAT EARNED IT. Three landings running, the find was one
+  shape — an effect whose ops nothing performs. BodyContext: four ops, zero
+  readers, installed in every lowering route. The Filesystem bypass: the
+  ops existed and eleven callers reached past them. Interact: 22 ops, 14
+  never performed. Every one cost a hand read, because `unreferenced`
+  reports bare NAMES and telling an op from a fn from a type meant opening
+  each site. That reading is the part of the loop that was still me.
+  ▶ THE VERB: `mentl query <file> "performs"` groups declared ops by the
+  effect that declares them and answers k/n per roster. Same two columns as
+  the two facets before it — the decls the weave carries, the refs column —
+  restricted to EffectDeclStmt and counted per op.
+  ▶ A HANDLER ARM IS NOT A PERFORM, and that is the design rather than an
+  accident of the measurement: an arm is the promise's other half, never
+  its consumer. So k/n reads as how much of a surface is actually reached,
+  which is the question all three finds were really asking.
+  ▶ WHAT IT REPORTS: 78 effects, 23 with ops nothing performs. Its
+  independent read of Interact says 8/22 — the same split measured by hand
+  at the previous pin, which is the check that the verb agrees with the
+  method it retires. The compiler's own rosters sit mostly at n−1
+  (GraphRead 20/21, GraphWrite 28/29, InferCtx 16/17, Delta 3/4), which is
+  the dormant-vocabulary class already carrying named peers; the wide gaps
+  are Interact at 8/22, Synth 1/3, OracleQuery 2/4, Interrogate 1/3, and
+  the library rosters (threading 0/3, ml/autodiff 0/5, dsp/clock's four)
+  that no wheel code performs because publishing them IS their job.
+  ▶ THE PEAK CEILING, NOT RAISED AGAIN. The first march after the edit read
+  2,316,080KB against a 2,310,000 ceiling; two further reads of the
+  identical tree read 2,210,700 and 2,210,532. The outlier is the first run
+  after a source change, the same shape as the previous pin's 816KB breach.
+  Two consecutive landings have now measured this: the ceiling holds and
+  the first-run reading is not evidence.
+
 - 2026-09-04 · pin 055b396f7fadab87 · A HANDLER'S EXTENT SURVIVES TAIL
   RECURSION, MEASURED. CLEAN m2 == m3 at 418677 lines, census 0; micros
   149/149; frontier 374/0. Seam 11 → 8.

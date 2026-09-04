@@ -636,7 +636,17 @@ comment_refs_max: 0
 # the arithmetic any added declaration pays here — the same +1 the imports
 # facet paid one pin earlier for the same reason. No condemned machinery was
 # touched or improved; rung 3 is what takes this to zero.
-movers_max: 472
+#
+# 472 → 476 at the performs facet (same day). Nine added declarations — six
+# in query.mn, three in pipeline.mn. The per-fn cost is not a constant: the
+# imports facet paid +1 for two fns and the unreferenced facet +1 for eight,
+# where this pays +4 for nine, because what moves a scheme is whether the
+# trial pass judges a fn before its final and that turns on forward
+# reference, not on count. Recorded rather than smoothed over. Again no
+# condemned machinery was touched; the tower's deletion at rung 3 is what
+# takes this to zero, and every facet landing that adds fns will keep
+# nudging it until then.
+movers_max: 476
 
 # The effect seam: filesystem impl calls outside the handler that owns them.
 # MEASURED 24 before this landing and 13 after (both read from the artifact,

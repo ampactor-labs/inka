@@ -133,6 +133,7 @@ type Question
   | QModules
   | QImports
   | QUnreferenced
+  | QPerforms
   // "cost" — what this question cost the medium, in the medium's own
   // facts: modules linked, source lines processed, nodes minted. A wall
   // clock is a HOST fact and varies per run, so it can be reported and
@@ -166,6 +167,7 @@ type QueryResult
   // (importing module, imported path, is any name it brings referenced here)
   | QRImports([(String, String, Bool)])
   | QRUnreferenced([(String, String, Int)])
+  | QRPerforms([(String, String, Int, Int)])
   // modules linked, source lines processed, nodes minted
   | QRCost(Int, Int, Int)
   // the derived badges (plain lines) + fanout sites as (schedule, span)
@@ -289,6 +291,7 @@ handler query_default {
     QModules => resume(QRModules(module_paths())),
     QImports => resume(QRImports(import_report(module_cells()))),
     QUnreferenced => resume(QRUnreferenced(unreferenced_report(module_cells()))),
+    QPerforms => resume(QRPerforms(effect_report(module_cells()))),
     QCost => resume(QRCost(len(module_cells()), weave_line_extent(), graph_next())),
     QUnknown(q) => resume(QRError("unknown query: {q}")),
   },
@@ -605,6 +608,50 @@ fn decl_ref_verdict(path: String, extent, name: String) with GraphRead + Memory 
 
 fn decl_extent(d) with Pure = match d {
   N(_, sp, _) => sp,
+}
+
+// ─── The effect rosters, read for what anything actually performs ────
+//
+// An effect is a promise that a handler can intercept an operation. An op
+// nobody performs is that promise unkept — either the surface is half
+// built, or the callers reached past it, or the whole effect died and its
+// handler is still installed.
+//
+// This exists because the unreferenced read above kept surfacing that
+// class and could not name it: its rows are names, so telling an op from
+// a fn from a type meant reading each one by hand, three landings running.
+// BodyContext (four ops, zero readers, installed in every lowering route),
+// Interact (22 ops, 14 never performed), and the Filesystem bypass were
+// all found that way. Grouping by the effect that declares them makes the
+// shape visible in one read: k/n says at a glance whether a surface is
+// whole, half-wired, or dead.
+//
+// The count is per-op and the same one `unreferenced` uses — reference
+// sites outside the declaration's own extent — so a handler ARM does not
+// count as a perform, which is exactly right: an arm is the promise's
+// other half, not its consumer.
+fn effect_report(cells) with GraphRead + Memory + Alloc + !Mutate =
+  fold([], effect_rows_join, cells)
+
+fn effect_rows_join(acc, cell) with GraphRead + Memory + Alloc + !Mutate =
+  acc ++ effect_rows_for(cell)
+
+fn effect_rows_for(cell) with GraphRead + Memory + Alloc + !Mutate = match cell {
+  (path, _, decls) => fold([], effect_row_join(path), decls),
+}
+
+fn effect_row_join(path: String, acc, d) with GraphRead + Memory + Alloc + !Mutate = match d {
+  N(body, sp, _) => match body {
+    NStmt(s) => match s {
+      EffectDeclStmt(n, _, ops) => push(acc, (path, n, len(ops), count(op_is_performed(sp), ops))),
+      _ => acc,
+    },
+    _ => acc,
+  },
+}
+
+fn op_is_performed(extent, op) with GraphRead + Memory + Alloc + !Mutate = match op {
+  (on, _, _, _) => count(ref_is_outside(extent), graph_refs_at(on)) > 0,
 }
 
 // A ref site counts when it has a real span and that span does not fall

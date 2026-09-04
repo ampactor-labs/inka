@@ -646,26 +646,42 @@ movers_max: 472
 # `~> wasi_filesystem` install, so the ops were always reachable and the
 # impls were reached past.
 #
-# 13 → 11 at the next pin: mcp_run's two mkdirs moved INSIDE its own
-# `~> wasi_filesystem` bracket, where the op is reachable. They had sat two
-# lines above the install, so the bypass was the only spelling available.
+# 13 → 11: mcp_run's two mkdirs moved INSIDE its own `~> wasi_filesystem`
+# bracket, where the op is reachable. They had sat two lines above the
+# install, so the bypass was the only spelling available.
 #
-# The remaining 11 read the same way and stop at the same wall: space's file
-# server, battery_libs, persist, driver's warm cache, dsp/cfc. Every one of
-# them sits in a fn that DECLARES `with ... WASI` inside a chain with no
-# Filesystem handler anywhere — so the op is genuinely unreachable there and
-# the impl is not a shortcut, it is the only thing that resolves. Converting
-# them means ADDING an install, and for space that install goes over an
-# infinite tail-recursive accept loop, which is a substrate question (does a
-# handler's extent survive tail recursion?) that wants its own measurement
-# rather than a guess inside a sweep.
+# 11 → 8: the substrate question got measured instead of guessed.
+# tests/micros/mn-handler-extent-tail-loop.mn asks whether a handler's
+# extent survives a self-tail-calling loop, and it does — the state
+# accumulates across iterations too (1+2+3+4 = 10). So space_run installs
+# wasi_filesystem over its infinite accept loop and the file server performs
+# the ops. Two more converted where the row ALREADY declared Filesystem and
+# only the call site had not caught up: driver_warm_persist's mkdir and
+# persist_write, whose declared row said Filesystem while its inferred row
+# said WASI. That one reverted (see below); driver_warm_persist stayed.
+#
+# persist_write was converted and REVERTED, and the revert is the finding.
+# The frontier's persist shadow leg refused it: `fs_write_file` answered
+# E_MissingVariable in the subset link, because the Filesystem effect is
+# declared in src/types.mn and lib/persist.mn must compile standalone. So a
+# lib/ module cannot perform this effect at all — the impl there is forced,
+# not lazy. That is a floor under this ratchet, not a site awaiting work.
+#
+# The remaining 8: battery_libs' four reads, main's battery loop read,
+# dsp/cfc's read, image_resume's, and persist_write's structural one. All
+# but the last sit in a fn declaring `with ... WASI` with no Filesystem
+# handler in its chain, so the op is unreachable and the impl is the only
+# thing that resolves; they convert when their callers install, a per-route
+# reading rather than a sweep. Whether the lib/ floor can fall at all is the
+# effect's own home question — moving Filesystem out of src/types.mn is a
+# different landing than converting call sites.
 #
 # Monotone DOWN. A rise means a caller reached past the op, which keeps the
 # behaviour and drops the effect from the row INVISIBLY: the impls charge
 # WASI while the capability the handler names is Filesystem, so
 # `with !Filesystem` went on holding over routes that created, wrote,
 # renamed and unlinked files.
-fs_impl_bypass_max: 11
+fs_impl_bypass_max: 8
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

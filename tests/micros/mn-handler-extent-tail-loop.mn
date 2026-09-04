@@ -1,0 +1,37 @@
+// expect: 10
+//
+// Does a handler's extent survive tail recursion? The install sits OUTSIDE
+// a self-tail-calling loop and the op is performed from inside every
+// iteration — the exact shape `mentl space` needs, where an infinite accept
+// loop must run under one `~> wasi_filesystem` install.
+//
+// It matters because five bypass sites turn on the answer: space's file
+// server, battery_libs, persist, driver's warm cache and dsp/cfc all reach
+// past the Filesystem ops to the impls, and every one sits in a chain with
+// no handler installed. Adding the install is the fix, and for space that
+// install goes over a loop that never returns.
+//
+// If the extent survives, all four iterations resolve through count_h and
+// its state accumulates across them: bump answers 1, 2, 3, 4 and the sum is
+// 10. An extent ending at the first tail call would floor on iteration two.
+// MEASURED 10 — the extent survives, and the handler's STATE survives with
+// it, which is the half a server actually depends on.
+
+effect Tally {
+  bump(Int) -> Int
+}
+
+handler count_h with n = 0 {
+  bump(k) => resume(n + k) with n = n + k,
+}
+
+// The loop's self-call is in tail position and the perform happens before
+// it, so an install whose extent ended at the first tail call would floor
+// on iteration two.
+fn spin(k, acc) = if k == 0 {
+  acc
+} else {
+  spin(k - 1, acc + bump(1))
+}
+
+fn main() = spin(4, 0) ~> count_h

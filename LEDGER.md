@@ -35,6 +35,54 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 055b396f7fadab87 · A HANDLER'S EXTENT SURVIVES TAIL
+  RECURSION, MEASURED. CLEAN m2 == m3 at 418677 lines, census 0; micros
+  149/149; frontier 374/0. Seam 11 → 8.
+  ▶ THE QUESTION, and why it was worth a fixture instead of a guess. Seven
+  filesystem bypasses were blocked behind one unknown: `mentl space`'s
+  accept loop never returns, so installing a handler over it only works if
+  the extent outlives a self-tail-call. Reasoning it out would have been
+  cheap and unverified, and the project has paid for that before.
+  tests/micros/mn-handler-extent-tail-loop.mn puts the install outside and
+  the perform inside every iteration. It answers 10 — meaning not only does
+  the extent survive, the handler's STATE accumulates across iterations
+  (bump answers 1, 2, 3, 4), which is the half a server actually depends
+  on.
+  ▶ WHAT IT UNBLOCKED: space_run installs `~> wasi_filesystem` over
+  space_loop, and the file server performs fs_exists / fs_read_file instead
+  of reaching past them to the impls. The install immediately made the
+  medium REFUSE space_conn and space_loop for declaring `Memory + Alloc +
+  WASI` while performing Filesystem. That refusal is the proof the bypass
+  had been suppressing — the row finally naming what those fns do — and
+  both signatures carry `+ Filesystem` now.
+  ▶ ONE MORE WHERE THE ROW WAS ALREADY RIGHT AND THE CALL SITE LAGGED:
+  driver_warm_persist's mkdir — its signature has declared Filesystem all
+  along.
+  ▶ AND ONE CONVERTED, THEN REVERTED BY THE BOARD, the sharper of the two.
+  persist_write DECLARES `Memory + Alloc + Filesystem + WASI` while `mentl
+  query "type persist_write"` reported its inferred row as `Alloc + Memory
+  + WASI` — the bypass had made that signature false in the OTHER
+  direction, over-declaring a capability the body never reached. Converting
+  it looked obviously right, and the frontier's persist shadow leg refused
+  it: `fs_write_file` answers E_MissingVariable at 3405 in that subset
+  link, because the Filesystem effect is declared in src/types.mn and
+  lib/persist.mn must compile standalone. A lib/ module cannot perform this
+  effect at all, so the impl there is FORCED, not lazy — a floor under the
+  ratchet rather than a site awaiting work. Whether that floor can fall is
+  the effect's own home question, a different landing from converting call
+  sites. The comment at the site says so now.
+  ▶ A RATCHET NOT RAISED. The first march breached the peak-RSS ceiling by
+  816KB (0.035%). A second read of the identical tree measured 2,206,204KB
+  against the first's 2,310,816KB — a 104MB swing, which is exactly the
+  run-to-run variance that ceiling's own comment documents ("a ratchet set
+  inside its own measurement's variance is not a ratchet; it is a coin flip
+  that blocks good work"). Noise, not a regression; the ceiling stands.
+  ▶ THE REMAINING 8: battery_libs' four reads, main's battery loop read,
+  dsp/cfc's read, image_resume's, and persist_write's structural one. All
+  but the last sit in a fn declaring `with ... WASI` with no Filesystem
+  handler in its chain, so the op is unreachable there; they convert when
+  their callers install — a per-route reading, not a sweep.
+
 - 2026-09-04 · pin 777418b1df461548 · THE LARGEST UNWIRED SURFACE WAS A
   HIDDEN GAP. CLEAN m2 == m3 at 418643 lines, census 0; micros 148/148;
   frontier 374/0.

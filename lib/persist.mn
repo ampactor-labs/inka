@@ -115,6 +115,14 @@ fn image_pack(k) with Memory + Alloc = {
 // handler's RESIDUAL — every install then honestly carried Persist to
 // the root and the row gate refused programs whose only Persist handler
 // was this very install. The policy is a direct write, never a re-entry.
+// The write is the IMPL, not the op, and that is forced rather than lazy:
+// the Filesystem effect is declared in src/types.mn, so a lib/ module
+// cannot perform it and still compile standalone. The frontier's persist
+// shadow leg proved it — `fs_write_file` answered E_MissingVariable at
+// 3405 in the subset link the moment the op was substituted here. The
+// declared `Filesystem` row above stays honest about what a caller must
+// grant; the effect's own home is what keeps the op out of reach.
+// Hβ.io.filesystem-impl-bypasses-the-effect carries the boundary.
 fn persist_write(k, ref path) with Memory + Alloc + Filesystem + WASI =
   fs_write_file_impl(path, image_pack(k))
 

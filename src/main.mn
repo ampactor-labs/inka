@@ -349,7 +349,7 @@ fn space_respond(conn, code_line: String, mime: String, body: String) with Memor
   ()
 }
 
-fn space_conn(conn) with Memory + Alloc + WASI = {
+fn space_conn(conn) with Memory + Alloc + WASI + Filesystem = {
   let req = space_read_request(conn)
   let path = space_request_path(req)
   if byte_len(path) == 0 {
@@ -358,8 +358,8 @@ fn space_conn(conn) with Memory + Alloc + WASI = {
     space_respond(conn, "403 Forbidden", "text/plain", "no traversal\n")
   } else {
     let file = space_route(path)
-    if fs_exists_impl(file) {
-      space_respond(conn, "200 OK", space_mime_for(file), fs_read_file_impl(file))
+    if fs_exists(file) {
+      space_respond(conn, "200 OK", space_mime_for(file), fs_read_file(file))
       print_string("200 {file}\n")
     } else {
       space_respond(conn, "404 Not Found", "text/plain", "not found: {file}\n")
@@ -372,7 +372,7 @@ fn space_conn(conn) with Memory + Alloc + WASI = {
 
 // The accept loop — constant stack forever (the tail form carrying its
 // own server).
-fn space_loop(lfd) with Memory + Alloc + WASI = {
+fn space_loop(lfd) with Memory + Alloc + WASI + Filesystem = {
   space_conn(sock_accept_blocking(lfd))
   space_loop(lfd)
 }
@@ -385,7 +385,13 @@ fn space_run() with Memory + Alloc + WASI = {
     1
   } else {
     print_string("mentl space -> http://localhost:7378/ide/\n")
-    space_loop(lfd)
+    // The accept loop runs UNDER the Filesystem handler, so the file server
+    // performs the ops instead of reaching past them to the impls. The loop
+    // never returns, which is exactly why this was left un-installed and the
+    // reads went to fs_*_impl; tests/micros/mn-handler-extent-tail-loop.mn
+    // measures the property it turns on — a handler's extent, and its state,
+    // survive a self-tail-calling loop.
+    space_loop(lfd) ~> wasi_filesystem
     0
   }
 }

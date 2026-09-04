@@ -664,7 +664,7 @@ fn driver_warm_persist(ref entry_module, ref asts, ref pairs) with Memory + Allo
   // non-negative conjunct is the signed word's own honest bound.
   let line = heap_mark()
   if line >= 0 && line < 960 * 1048576 {
-    fs_mkdir_impl(".build")
+    fs_mkdir(".build")
     list_set(warm_asts, 0, asts)
     list_set(warm_manifest, 0, pairs)
     list_set(warm_entry, 0, entry_module)

@@ -1055,31 +1055,37 @@ with no new code. That is the fix; this entry exists so the facet's
 over-report at `span_valid` reads as a known gap rather than a candidate
 for deletion.
 
-`Hβ.perf.first-march-after-a-source-change-reads-100mb-high` — THE PEAK
-RATCHET FALSELY REFUSES EVERY FIRST RUN. Measured three landings running,
-2026-09-04, and recorded because the third repetition makes it a defect in
-the instrument rather than variance in the thing measured.
-▶ THE THREE READINGS, each first-run-then-settled on an unchanged tree:
-pin 055b396f read 2,310,816KB then 2,206,204 (Δ104,612). Pin 899a4b57 read
-2,316,080 then 2,210,700 and 2,210,532 (Δ~105,400). The candidate_proven
-landing read 2,311,408 then 2,210,984 (Δ100,424). The settled value sits
-at ~2,210,000 every time, a hundred megabytes under the 2,310,000 ceiling;
-the first run after a source edit clears it.
-▶ WHY IT MATTERS MORE THAN THE 0.05%: the ceiling refuses the repin on
-that first run, so every landing that touches source pays a re-march to
-disprove a number the instrument invented. Worse, it trains the reader to
-re-run until green, which is exactly the reflex a ratchet exists to
-prevent — three times now the correct response has been "measure again and
-ignore the first," and a rule like that is one session away from being
-applied to a real regression.
-▶ THE LIKELY MECHANISM, unproven and named as such: the first march after
-an edit rebuilds the m2 cache in the same process tree the cost read
-brackets, so the peak includes work that is not the self-compile. That is
-a hypothesis; the fix is to make the cost leg measure a run that is not
-also a cache build, or to take the minimum of two runs rather than the
-first. Neither is written, and the ceiling stays where it is until one is:
-raising it to 2,320,000 would hide the defect rather than fix it, and the
-settled measurement genuinely holds at 2,210,000.
+`Hβ.gradient.delta-re-derives-what-the-diagnostic-already-proposed` — THE
+Delta EFFECT IS A SECOND, UNREACHED IMPLEMENTATION OF TIGHTENING.
+Measured 2026-09-04 at pin 8c7e4746 via the performs facet's `Delta 3/4`.
+▶ THE CLUSTER, measured end to end. `delta_pick` has ZERO references.
+Its three siblings — delta_effect_row, delta_ownership, delta_refinement
+— have exactly one reference each, and all three are inside delta_pick's
+own arm (gradient_delta.mn:95, 99, 102). So the four ops form a closed
+ring nothing outside enters. `delta_default` is nonetheless INSTALLED at
+three sites in main.mn, which is BodyContext's shape one for one: a
+handler in real chains whose ops nobody performs.
+▶ THE COMMENT NAMES A READER THAT DOES NOT EXIST: "The Cursor handler's
+CursorView.teach field reads through delta_pick when the inverse-direction
+gradient should fire." There is no `teach:` field in cursor.mn.
+▶ WHY IT IS A DELETION AND NOT A WIRING JOB, which is the part that took
+the reading: the shipping answer already exists and is better.
+main.mn:633 states it — "T_OverDeclared already IS a proposal — the
+diagnostic" — and `mentl tighten` reads the T_OverDeclared warnings the
+judgment banked, authoring 174 of them at pin 1aca4868. Delta walks the
+graph per handle to RE-DERIVE the same verdict the judgment already
+proved and wrote down. That is the Carried-Truth Law at the exact shape
+the law names, and the fix is toward less code.
+▶ THE FACET UNDERSTATED IT, worth recording as a limit of the
+instrument: `performs` counts references outside the effect DECLARATION's
+extent, and delta_pick's arm lives in the handler, a different
+declaration — so the three siblings counted as performed and the roster
+read 3/4 rather than 0/4. The facet measures direct reference honestly
+and says so; reachability is `Hβ.driver.link-is-reachability`'s question.
+Reading the roster AND the zero on delta_pick together is what found it,
+which is how the two facets are meant to be used.
+▶ THE DELETION: the Delta effect, delta_default and its four arms, the
+three implementing bodies, and the three install sites in main.mn.
 
 `Hβ.voice.interact-write-half-is-unwired` — THE Interact SURFACE READS
 BUT DOES NOT WRITE: 14 of its 22 ops have never been performed, and until

@@ -65,14 +65,12 @@
   fn is not a bypass — the arm IS the handler, so no seam is skipped, which
   is what distinguishes this from the Filesystem case two pins back.
   ▶ AND A GATE THAT LIES, banked as
-  `Hβ.perf.first-march-after-a-source-change-reads-100mb-high`. The peak
-  ratchet has now falsely refused the first march of three consecutive
-  landings: 2,310,816 / 2,316,080 / 2,311,408 on the first run against a
-  2,310,000 ceiling, and ~2,210,000 on every re-read of the identical tree.
-  The ceiling is NOT raised — 2,320,000 would hide the defect and the
-  settled measurement genuinely holds — but the pattern is recorded,
-  because "run it again and ignore the first" is one session away from
-  being applied to a real regression.
+  `Hβ.perf.first-march-after-a-source-change-reads-100mb-high` — RETRACTED
+  ONE PIN LATER, see the entry above. The peak ratchet had refused the
+  first march of three consecutive landings (2,310,816 / 2,316,080 /
+  2,311,408 against a 2,310,000 ceiling, ~2,210,000 on every re-read), and
+  the next session's controlled test refuted the mechanism this entry
+  guessed at. The observations stand; the explanation did not.
 
 - 2026-09-04 · pin 899a4b571112f58e · THE HAND CLASSIFICATION BECAME A
   VERB. CLEAN m2 == m3, census 0; micros 149/149; frontier 374/0.

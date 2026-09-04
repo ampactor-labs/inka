@@ -646,18 +646,26 @@ movers_max: 472
 # `~> wasi_filesystem` install, so the ops were always reachable and the
 # impls were reached past.
 #
-# The remaining 13 are the honest class, not an accepted floor: space's file
-# server, battery_libs (which DECLARES `with WASI`, so its row is at least
-# truthful about the substrate), persist and dsp/cfc. Each needs its own
-# install-coverage reading before it converts — the same per-site discipline
-# that kept four dormant declarations alive at the previous pin.
+# 13 → 11 at the next pin: mcp_run's two mkdirs moved INSIDE its own
+# `~> wasi_filesystem` bracket, where the op is reachable. They had sat two
+# lines above the install, so the bypass was the only spelling available.
+#
+# The remaining 11 read the same way and stop at the same wall: space's file
+# server, battery_libs, persist, driver's warm cache, dsp/cfc. Every one of
+# them sits in a fn that DECLARES `with ... WASI` inside a chain with no
+# Filesystem handler anywhere — so the op is genuinely unreachable there and
+# the impl is not a shortcut, it is the only thing that resolves. Converting
+# them means ADDING an install, and for space that install goes over an
+# infinite tail-recursive accept loop, which is a substrate question (does a
+# handler's extent survive tail recursion?) that wants its own measurement
+# rather than a guess inside a sweep.
 #
 # Monotone DOWN. A rise means a caller reached past the op, which keeps the
 # behaviour and drops the effect from the row INVISIBLY: the impls charge
 # WASI while the capability the handler names is Filesystem, so
 # `with !Filesystem` went on holding over routes that created, wrote,
 # renamed and unlinked files.
-fs_impl_bypass_max: 13
+fs_impl_bypass_max: 11
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

@@ -1055,6 +1055,39 @@ with no new code. That is the fix; this entry exists so the facet's
 over-report at `span_valid` reads as a known gap rather than a candidate
 for deletion.
 
+`Hβ.voice.interact-write-half-is-unwired` — THE Interact SURFACE READS
+BUT DOES NOT WRITE: 14 of its 22 ops have never been performed, and until
+now the gap was not written down anywhere. Measured 2026-09-04 at pin
+9347479e by the `unreferenced` facet, which reported 51 names in voice.mn
+and made this visible for the first time.
+▶ THE ENTRY EXISTS BECAUSE OF A LAW, not a preference. PLAN §7 says every
+named positive-form gap has one home and "a gap not in `RESIDUE.md` does
+not exist." A grep of this file for `Interact`, `mentl-voice` and
+`mentl_voice` returned nothing, so the largest unwired surface in the
+wheel was a hidden gap — drift by the project's own definition, sitting
+directly on §11 Arc E's critical path.
+▶ THE SPLIT, measured op by op. LIVE (8): project_root, open_file,
+save_file, file_text, focus, caret (9 references), consult, propose.
+UNWIRED (14): tree_list, create_file, rename_path, delete_path, edit,
+speak, run_compile, run_check, run_audit, run_query, declare_intent,
+retract_intent, history, cancel_pending. The pattern is not random — the
+READING half of the surface is wired and the WRITING and SESSION halves
+are not. `mentl_voice_default` handles all 22 and is installed at three
+sites, so every arm exists and waits; nothing performs them.
+▶ WHAT IT MEANS FOR ARC E: `edit(FileHandle, Patch) -> EditOutcome` is
+the op the whole felt surface turns on, and it has zero performs. The
+Space session can open a file, read its text, set and read the caret,
+consult and propose — and cannot apply a change, speak a VoiceLine, run a
+check, or record a turn. Arc E's terminal bar ("session alive across
+actions, eight-aspect projections at the caret") is reachable on the read
+half alone; the write half is what makes the page an editor rather than a
+viewer.
+▶ NOT A DELETION, and the distinction is the one the previous pin's
+harvest turned on: an op nobody performs is dead vocabulary only when
+nothing is coming for it. Here a handler implements all 22 arms and the
+standing cursor is the surface they serve. The close condition is the
+transport performing them, not the roster shrinking.
+
 `Hβ.io.filesystem-impl-bypasses-the-effect` — CALLERS REACH PAST THE
 Filesystem OPS TO THEIR IMPLEMENTATIONS, AND THE ROW DOES NOT SAY SO.
 Opened 2026-09-04 at pin 46ad0838 as `.fs-close-op-is-bypassed`; renamed

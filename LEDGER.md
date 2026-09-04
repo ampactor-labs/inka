@@ -35,6 +35,45 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 777418b1df461548 · THE LARGEST UNWIRED SURFACE WAS A
+  HIDDEN GAP. CLEAN m2 == m3 at 418643 lines, census 0; micros 148/148;
+  frontier 374/0.
+  ▶ WHAT THE FACET SURFACED: 51 unreferenced names in voice.mn. Reading
+  them found `Interact` — 22 ops, `mentl_voice_default` implementing every
+  arm, installed at three sites, and 14 ops nothing has ever performed.
+  ▶ THE SPLIT IS THE FINDING, not the count. LIVE (8): project_root,
+  open_file, save_file, file_text, focus, caret (nine references), consult,
+  propose. UNWIRED (14): tree_list, create_file, rename_path, delete_path,
+  edit, speak, run_compile, run_check, run_audit, run_query,
+  declare_intent, retract_intent, history, cancel_pending. The reading half
+  of the surface is wired; the writing and session halves are not. `edit`
+  is the op the felt surface turns on and it has zero performs — the Space
+  session can open a file, read its text, set and read the caret, consult
+  and propose, and cannot apply a change, speak a line, run a check, or
+  record a turn.
+  ▶ WHY IT IS A LANDING AND NOT A NOTE: PLAN §7 says every named gap has
+  one home and "a gap not in `RESIDUE.md` does not exist." Grepping that
+  file for `Interact`, `mentl-voice` and `mentl_voice` returned nothing. So
+  the largest unwired surface in the wheel was a hidden gap sitting on §11
+  Arc E's own critical path — drift by the project's definition, and
+  invisible until a facet counted declarations against references. Named as
+  `Hβ.voice.interact-write-half-is-unwired`.
+  ▶ NOT A DELETION. Fourteen unperformed ops look exactly like the dead
+  vocabulary the previous pin harvested, and are the opposite: a handler
+  implements all of them and the standing cursor is the surface they serve.
+  The close condition is the transport performing them, never the roster
+  shrinking.
+  ▶ THE SEAM TIGHTENED 13 → 11. mcp_run's two mkdirs sat two lines ABOVE
+  its own `~> wasi_filesystem` bracket, so the op was unreachable there and
+  the impl was the only spelling that resolved; they moved inside. The
+  remaining 11 stop at the same wall and it is recorded at the ratchet:
+  space's file server, battery_libs, persist, driver's warm cache and
+  dsp/cfc each sit in a fn declaring `with ... WASI` inside a chain with no
+  Filesystem handler at all. Converting them means ADDING an install, and
+  for space that install goes over an infinite tail-recursive accept loop —
+  whether a handler's extent survives tail recursion is a substrate
+  question that wants its own measurement, not a guess inside a sweep.
+
 - 2026-09-04 · pin 9347479ebf108d99 · ELEVEN CALLERS REACHED PAST THE
   FILESYSTEM EFFECT. CLEAN m2 == m3 at 418643 lines, census 0; micros
   148/148; frontier 374/0.

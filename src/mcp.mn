@@ -578,8 +578,6 @@ fn session_answer(line, ast, ranges, at_read) = match parse_cli_args(session_arg
 }
 
 fn mcp_run(at_read) = {
-  fs_mkdir_impl(".build")
-  fs_mkdir_impl(".build/mcp")
   eprint_string("mentl mcp: the gate on stdio — nothing executes unproven\n")
   // ONE bracket, BOTH paths: the no-project session's tool arms carry
   // the same static rows (audit's Verify + Tighten, query's ask) even
@@ -589,6 +587,13 @@ fn mcp_run(at_read) = {
   // conditional lives inside the bracket; the installs cost nothing on
   // the empty path.
   infer_context(() => {
+    // The artifact directory is made INSIDE the bracket, because that is
+    // where the Filesystem handler is. Outside it these were fs_mkdir_impl
+    // calls reaching past the effect — the op is unreachable there, so the
+    // bypass was the only spelling available and the row said this server
+    // touched no filesystem while it created directories.
+    fs_mkdir(".build")
+    fs_mkdir(".build/mcp")
     if fs_exists(driver_module_path("main")) {
       match driver_entry_with_ranges("main") {
         (ast, ranges) => {

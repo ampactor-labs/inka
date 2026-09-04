@@ -129,11 +129,10 @@ fn infer_context(body) =
 // The LOWERING/EMIT stack's one home — infer_context's peer on the far side
 // of the cursor. Every route that lowers installs exactly this: string_table
 // (compile-time interned string offsets), emit_memory_bump (the swap point
-// for emit_memory_arena), body_context (per-fn-body emit metadata),
-// mentl_default, lower_scope, lower_handler_stack_ctx (the lexical evidence
-// fence's own stack), arm_state_ctx, spec_registry. A caller supplies only
-// its SINK and its filesystem/persist prefix, because that is the only part
-// that ever differs.
+// for emit_memory_arena), mentl_default, lower_scope,
+// lower_handler_stack_ctx (the lexical evidence fence's own stack),
+// arm_state_ctx, spec_registry. A caller supplies only its SINK and its
+// filesystem/persist prefix, because that is the only part that ever differs.
 //
 // It exists because its absence was already paid for: seven routes
 // hand-copied this chain, `mentl march`'s copy omitted
@@ -142,7 +141,7 @@ fn infer_context(body) =
 // its own generation while tools/march.sh, which the board actually calls,
 // stayed green. A chain with one home cannot lose a handler to a copy.
 fn emit_context(body) =
-  body() ~> string_table ~> emit_memory_bump ~> body_context ~> mentl_default ~> lower_scope ~> lower_handler_stack_ctx ~> arm_state_ctx([], OneShot, "") ~> spec_registry
+  body() ~> string_table ~> emit_memory_bump ~> mentl_default ~> lower_scope ~> lower_handler_stack_ctx ~> arm_state_ctx([], OneShot, "") ~> spec_registry
 
 // A route that LOWERS installs both stacks, emit inside analysis, and that
 // nesting order is itself a fact — so it has one home too rather than being
@@ -730,19 +729,6 @@ fn ic_compile_loop(initial_entry) =
 // src/intern.mn the same day for the same seam. This module imports
 // both; the compile chains install them exactly as before.
 // ── (relocated) O(1) env resolution — the str_hash-bucket index ─────────────
-//
-// body_context — H1 emit-time per-fn-body metadata
-// Set at emit_fn_body entry; read by LEvPerform's offset arithmetic
-// (offset = 8 + 4*captures + 4*slot_idx within __state) and by any
-// future evidence-aware emit site. Each fn-body emission resets the
-// state via set_*; reads return the most recent set.
-handler body_context with captures = 0, evidence = [] {
-  current_body_captures() => resume(captures),
-  set_body_captures(n) => resume() with captures = n,
-  current_body_evidence() => resume(evidence),
-  set_body_evidence(ev) => resume() with evidence = ev,
-}
-
 // wasi_filesystem — FS substrate (IC prerequisite)
 // Four-arm stateless handler delegating to io.mn primitives.
 // Grants Filesystem capability to the driver's module reads. Installed in

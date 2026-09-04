@@ -271,13 +271,6 @@ handler region_tracker with region_stack = [], next_region = 0, region_index = r
     resume(rid) with region_stack = region_stack ++ [Region(rid, span)], next_region = rid
   },
   region_exit(_rid) => if len(region_stack) == 0 { resume() } else { resume() with region_stack = drop_last(region_stack) },
-  current_region() => if len(region_stack) == 0 {
-    resume(0)
-  } else {
-    match last(region_stack) {
-      Region(rid, _) => resume(rid),
-    }
-  },
   tag_alloc(value_handle) => {
     // Stamp the value with the current-top region (or 0 = no
     // region active = global lifetime). A tag is the TUPLE

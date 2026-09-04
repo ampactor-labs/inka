@@ -890,14 +890,7 @@ fn project_lambda_fn(origin, cap_pairs) = match graph_node_body(origin) {
     let cap_names = map(((n, _)) => n, cap_pairs)
     let cap_handles = map(((_, h)) => h, cap_pairs)
     let param_names_list = lower_param_names(params)
-    ls_enter_frame(
-      "",
-      param_names_list,
-      param_handles_of(origin, params),
-      cap_names,
-      cap_handles,
-      origin
-    )
+    ls_enter_frame("", param_names_list, param_handles_of(origin, params), cap_names, cap_handles)
     lower_frame_fence_push()
     let lo_body = k2_guard(mark_tail(lower_body_reified(body_node)))
     lower_frame_fence_pop()
@@ -931,7 +924,7 @@ fn project_nested_fn(origin, fn_name, bind_h, cap_pairs) = match graph_node_body
     let base_param_handles = param_handles_of(origin, params)
     let param_handles_list =
       if bind_h == "" { base_param_handles } else { base_param_handles ++ [0, 0] }
-    ls_enter_frame(fn_name, param_names_list, param_handles_list, cap_names, cap_handles, -1)
+    ls_enter_frame(fn_name, param_names_list, param_handles_list, cap_names, cap_handles)
     lower_frame_fence_push()
     let bind_fields = if bind_h == "" {
       []
@@ -964,7 +957,7 @@ fn project_nested_fn(origin, fn_name, bind_h, cap_pairs) = match graph_node_body
 fn project_thunk_fn(thunk_name, thunk_row, cap_pairs, branch_node, result_h, carrier_h, shared_input) = {
   let cap_names = map(((n, _)) => n, cap_pairs)
   let cap_handles = map(((_, h)) => h, cap_pairs)
-  ls_enter_frame("", [], [], cap_names, cap_handles, -1)
+  ls_enter_frame("", [], [], cap_names, cap_handles)
   lower_frame_fence_push()
   let inner = match shared_input {
     Some(input_h) => lower_call_default(result_h, branch_node, node_handle(branch_node), [LUpval(input_h, 0)]),
@@ -3849,15 +3842,7 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
   // during body lowering below) — the tree order every projected kind
   // shares, so the future enumeration reader walks parents first.
   graph_emitfn_note(EfkArm, node_handle(arm.body), fn_name, fence, [])
-  ls_enter_frame(
-    fn_name,
-    arm_params,
-    locals_handles,
-    captures_names,
-    captures_handles,
-    // handler arm — not a lambda; the ev READ uses the arm's captured set / escaping_row
-    -1
-  )
+  ls_enter_frame(fn_name, arm_params, locals_handles, captures_names, captures_handles)
   lower_frame_fence_push()
   // A STATEFUL arm binds `__hrec` to its own $__state — the install
   // record the driver passed — so commits at every depth reach it
@@ -4434,7 +4419,7 @@ fn reify_frame_k_at(body_node, ph, outer_holes, edge) = match edge {
           len(captures_exprs),
           zip(captures_names, captures_handles)
         )
-        ls_enter_frame("", [hole], [resume_input_h], captures_names, captures_handles, continuation_h)
+        ls_enter_frame("", [hole], [resume_input_h], captures_names, captures_handles)
         lower_frame_fence_push()
         let subs = map(((p, n)) => (p, k_hole_read(p, n)), outer_holes) ++
         // drift-audit: ignore — one-shot env build, no loop
@@ -5199,17 +5184,15 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = s
   // handler whose MultiShot arm's call graph reaches it.
   resume() with resume_binds = bs,
   ls_resume_bind_of(name) => resume(resume_bind_assoc(resume_binds, name, 0)),
-  ls_enter_frame(fn_name, locals_in, locals_h, captures_in, captures_h, lambda_h) => // drift-audit: ignore — pre-existing frame-record paired-arrays (locals_h/captures_h); same restructure tracked for 11.C.2
+  ls_enter_frame(fn_name, locals_in, locals_h, captures_in, captures_h) => // drift-audit: ignore — pre-existing frame-record paired-arrays (locals_h/captures_h); same restructure tracked for 11.C.2
   // Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):
   // fn_name carries the named-fn discriminator for nested-fn naming
-  // (lambda + synthetic frames pass ""). lambda_h carries the LambdaExpr's
-  // own handle for an anonymous-lambda frame (-1 otherwise) — the
-  // lambda-identity read ls_current_lambda_handle projects.
+  // (lambda + synthetic frames pass "").
   // Field-sort discipline keeps the frame record alphabetical: capture_handles,
-  // capture_order, captures, fn_name, lambda_h, local_handles, local_order, locals.
+  // capture_order, captures, fn_name, local_handles, local_order, locals.
   {
     let frame =
-      {capture_handles: captures_h, capture_order: captures_in, captures: set_canonicalize(captures_in), fn_name: fn_name, lambda_h: lambda_h, local_handles: locals_h, local_order: locals_in, locals: set_canonicalize(locals_in)}
+      {capture_handles: captures_h, capture_order: captures_in, captures: set_canonicalize(captures_in), fn_name: fn_name, local_handles: locals_h, local_order: locals_in, locals: set_canonicalize(locals_in)}
     // drift-audit: ignore — O(1) push at the end last/drop_last read
     resume() with frames = frames ++ [frame]
   },
@@ -5227,7 +5210,7 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = s
     let truncated_order = take(checkpoint, frame.local_order)
     let truncated_handles = take(checkpoint, frame.local_handles)
     let updated =
-      {capture_handles: frame.capture_handles, capture_order: frame.capture_order, captures: frame.captures, fn_name: frame.fn_name, lambda_h: frame.lambda_h, local_handles: truncated_handles, local_order: truncated_order, locals: set_canonicalize(truncated_order)}
+      {capture_handles: frame.capture_handles, capture_order: frame.capture_order, captures: frame.captures, fn_name: frame.fn_name, local_handles: truncated_handles, local_order: truncated_order, locals: set_canonicalize(truncated_order)}
     // drift-audit: ignore — replace the END frame last() read
     resume() with frames = drop_last(frames) ++ [updated]
   },
@@ -5237,7 +5220,7 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = s
     let frame = last(frames)
     let slot = len(frame.local_order)
     let updated =
-      {capture_handles: frame.capture_handles, capture_order: frame.capture_order, captures: frame.captures, fn_name: frame.fn_name, lambda_h: frame.lambda_h, local_handles: handle_list_append(frame.local_handles, h), local_order: name_list_append(frame.local_order, name), locals: set_insert(frame.locals, name)}
+      {capture_handles: frame.capture_handles, capture_order: frame.capture_order, captures: frame.captures, fn_name: frame.fn_name, local_handles: handle_list_append(frame.local_handles, h), local_order: name_list_append(frame.local_order, name), locals: set_insert(frame.locals, name)}
     // drift-audit: ignore — replace the END frame last() read
     resume(slot) with frames = drop_last(frames) ++ [updated]
   },
@@ -5285,10 +5268,6 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = s
   // peer alongside the handler-arm fn-name-discriminator's
   // third-instance abstraction-earned shape).
   resume(ls_outer_fn_name_loop(frames)),
-  ls_current_lambda_handle() => // The innermost enclosing lambda frame's own handle (-1 if a named-fn
-  // frame is hit first, or none) — the lambda-identity read.
-  // Peer of ls_outer_fn_name; ls_outer_fn_name itself stays untouched.
-  resume(ls_current_lambda_handle_loop(frames)),
 }
 
 // Walk frames innermost-first; return first non-empty fn_name.
@@ -5306,31 +5285,11 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = s
 // fns were never qualified, and the whole qualification path sat dormant.
 // Field types read from the ls_enter_frame op's own declared signature,
 // not inferred by eye.
-fn ls_outer_fn_name_loop(frames: [{capture_handles: [Int], capture_order: [String], captures: [String], fn_name: String, lambda_h: Int, local_handles: [Int], local_order: [String], locals: [String]}]) = if len(frames) == 0 {
+fn ls_outer_fn_name_loop(frames: [{capture_handles: [Int], capture_order: [String], captures: [String], fn_name: String, local_handles: [Int], local_order: [String], locals: [String]}]) = if len(frames) == 0 {
   ""
 } else {
   let frame = last(frames)
   if frame.fn_name == "" { ls_outer_fn_name_loop(drop_last(frames)) } else { frame.fn_name }
-}
-
-// Walk frames innermost-first; return the first lambda frame's own handle.
-// A named-fn frame hit before any lambda stops the walk at -1 (named fns read
-// escaping_row(fn_name), not their own lookup_ty row). Block / synthetic-thunk
-// frames are transparent (lambda_h = -1, fn_name = "") and recurse. -1 when no
-// enclosing lambda. Peer of ls_outer_fn_name_loop; one list, read sequentially
-// (drift 7 refused). The handle indexes the lambda's own row at the ev READ —
-// the SAME effects_of(lookup_ty) projection PLACE used (read==place by build).
-fn ls_current_lambda_handle_loop(frames: [{capture_handles: [Int], capture_order: [String], captures: [String], fn_name: String, lambda_h: Int, local_handles: [Int], local_order: [String], locals: [String]}]) = if len(frames) == 0 {
-  -1
-} else {
-  let frame = last(frames)
-  if frame.lambda_h >= 0 {
-    frame.lambda_h
-  } else if frame.fn_name != "" {
-    -1
-  } else {
-    ls_current_lambda_handle_loop(drop_last(frames))
-  }
 }
 
 // (LF.B) Resolve a name to its feedback-prior handle, innermost-first.

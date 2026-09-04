@@ -1513,7 +1513,6 @@ effect RegionTrack {
   // region across (current, fields).
   // Used by record/variant construction.
   check_escape(Int, Span)
-  current_region() -> Int
 }
 
 // StringTable (spec W5) — compile-time interned string literals.
@@ -1561,19 +1560,6 @@ type Evidence = Ev(String, Int)
 // op_name, slot_idx — the slot in __state where
 // the arm's fn_idx was written by the caller.
 //
-// ─── BodyContext (H1) ──────────────────────────────────────────────
-// Per-fn-body emit-time metadata: how many captures the body's
-// closure has (the fence between captures and evidence in __state)
-// and the body's evidence shape (which ops resolve through which
-// slots). Set at emit_fn_body entry; read by LEvPerform's offset
-// arithmetic and any future evidence-aware emit site.
-effect BodyContext {
-  current_body_captures() -> Int
-  set_body_captures(Int)
-  current_body_evidence() -> [Int]
-  set_body_evidence([Int])
-}
-
 // ─── Stmt (spec 03) ────────────────────────────────────────────────
 type Stmt
   // pat, value, annotation node — NTypeAnn(ty) when present; ABSENT
@@ -1851,7 +1837,6 @@ effect GraphRead {
   graph_epoch() -> Int
   // the fresh-handle counter — the node-space bound for saturation
   graph_next() -> Int
-  graph_reason_edge(Int, Int) -> Reason
   // the handle's OWN reason cell, unchased — a bind's VarLookup survives here even when the bound type is a var the chase would follow; the stmt-layer projection reads reference edges through it
   graph_reason_at(Int) -> Reason
   graph_snapshot() -> Graph
@@ -2001,7 +1986,6 @@ effect GraphWrite {
   // finishes deterministically above the plan); seal() resumes sequential
   // minting at the high-water mark.
   graph_mint_plan(Int)
-  graph_mint_at(Int, Int)
   // seal takes the WALK's threaded ending frontier: branch instances'
   // overflow mints land above the plan in THEIR state, invisible to the
   // root's own mint_high — sealing at the root's view alone parked
@@ -2893,7 +2877,7 @@ type Resolution
 // fallback). This is the W7 + A1 capture-handle correctness fix.
 effect LowerScope {
   // fn_name, locals_names, locals_handles, captures_names, captures_handles, lambda_h (-1 = not a lambda frame)
-  ls_enter_frame(String, [String], [Int], [String], [Int], Int)
+  ls_enter_frame(String, [String], [Int], [String], [Int])
   ls_exit_frame()
   // append (name, handle); returns slot
   ls_bind_local(String, Int) -> Int
@@ -2905,8 +2889,6 @@ effect LowerScope {
   ls_register_globals([String])
   // closest enclosing named-fn frame; "" for top-level
   ls_outer_fn_name() -> String
-  // innermost-first: the enclosing lambda frame's handle, or -1 if a named-fn frame is hit first / none
-  ls_current_lambda_handle() -> Int
   // checkpoint = current frame's local count
   ls_push_scope() -> Int
   // truncate frame locals back to checkpoint

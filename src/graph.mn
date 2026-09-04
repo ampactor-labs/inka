@@ -278,11 +278,6 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   graph_chase_handle(handle) => resume(chase_handle(spine, next, handle, 0)),
   graph_epoch() => resume(epoch),
   graph_next() => resume(next),
-  graph_reason_edge(h1, h2) => match chase_node(spine, next, h1, 0) {
-    GNode(_, r1) => match chase_node(spine, next, h2, 0) {
-      GNode(_, r2) => resume(Unified(r1, r2)),
-    },
-  },
   graph_reason_at(handle) => match graph_node_at(spine, next, handle) {
     GNode(_, r) => resume(r),
   },
@@ -368,7 +363,6 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
   match spine_ensure(spine, spine_open, spine_band(top - 1)) {
     (sp, so) => resume() with spine = sp, spine_open = so, mint_high = if top > mint_high { top } else { mint_high },
   },
-  graph_mint_at(base, limit) => resume() with next = base, mint_limit = limit, mint_high = if next > mint_high { next } else { mint_high },
   graph_mint_seal(walk_high) => {
     // The walk's threaded frontier joins the max: branch instances'
     // overflow mints live above the plan in THEIR state — invisible

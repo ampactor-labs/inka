@@ -5698,8 +5698,8 @@ fn infer_fanout_apply_one(branch, input_h, span: ValidSpan) = match branch {
 // Unification — graph-direct, Hazel-productive.
 // Every unification carries the span of the AST site that triggered
 // it. `span` threads through the recursive walk; `graph_bind` writes
-// store `Located(span, reason)` so `graph_reason_edge` naturally
-// returns `Unified(Located, Located)` per DESIGN Ch 8.
+// store `Located(span, reason)`, which is what `graph_reason_at` reads
+// back at any handle the walk touched.
 fn unify(h_a, h_b, span: ValidSpan, reason) = {
   // Union-find: find both ROOTS (graph_chase_handle follows the TVar
   // chain to the canonical handle), then union the ROOTS — never the

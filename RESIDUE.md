@@ -1037,37 +1037,87 @@ under it, and the wrong-slot class becomes visible at the cursor instead
 of via an exit code. It joins the `where` facets, beside the schedule
 badge that already walks the enclosing tee chain.
 
-`Hβ.infer.type-name-in-annotation-never-resolves` — AN ANNOTATION'S TYPE
-NAME IS A REFERENCE THE MEDIUM NEVER LOOKS UP. Measured 2026-09-04 at pin
-‹the unreferenced landing›, found by the medium's own `unreferenced` facet
-over-reporting every type name in types.mn.
-▶ THE MEASUREMENT: `fn takes_ghost(y: Nonexistent) = y + 1` compiles the
-annotation into an opaque `TName("Nonexistent", [])` and reports
-`E_TypeMismatch: Nonexistent vs Int` at the body. There is no resolution
-step, so there is no failure to resolve — a typo'd type gives three
-mismatch errors pointing at arithmetic instead of one diagnostic naming
-the type that does not exist. `E_MissingVariable` is the value-altitude
-peer this has no counterpart of.
-▶ WHY IT SURFACED HERE: the `unreferenced` facet reads the refs column,
-and an annotation writes nothing to it. So `Ty`, `EffRow`, `NodeKind`,
-`SchemeKind` and ~78 more read as declared-and-never-reached in the one
-module that defines the compiler's whole vocabulary. The over-report is
-not the facet being wrong; it is the facet naming this gap, which is what
-its own comment says an over-report does.
-▶ THE SHAPE OF THE FIX: a capitalized name in type position resolves
-against the type environment exactly as a capitalized name in expression
-position resolves against the value environment, notes its ref, and
-refuses with a located diagnostic when nothing answers. The case rule is
-the discriminator that already exists (SYNTAX §«Generic type parameters» —
-lowercase in type position is a parameter and must NOT resolve), so no new
-surface form is involved. The risk to measure RED first: the wheel's own
-annotations may name types the resolution cannot see across module
-boundaries, and that measurement is the gate.
-▶ NOT A CARRIED-TRUTH VIOLATION, and the distinction is load-bearing: the
-pattern-position edge landed in the same arc WAS one — inference resolved
-the constructor to check arity and dropped the edge. This one has no
-proven edge to carry, because the resolution never happens. It is a
-missing capability, priced as one.
+`Hβ.infer.predicate-position-refs-are-not-noted` — A NAME CALLED INSIDE A
+REFINEMENT PREDICATE MAKES NO REFERENCE EDGE. Measured 2026-09-04 at pin
+46ad0838, the third missing edge the `unreferenced` facet found in one
+sitting.
+▶ THE MEASUREMENT: `span_valid` (types.mn:1172) reads unreferenced. Its
+one reference is four lines below its own declaration —
+`type ValidSpan = Span where span_valid(self)` — and it is real: the
+refinement is discharged against that fn at every ValidSpan construction
+site in the wheel. The predicate is not walked as an ordinary expression,
+so the call inside it notes nothing.
+▶ THE COMPANY IT KEEPS: `Hβ.types.predicate-is-expr` (band F) is this
+gap's root, and it already carries the other half — the comparison-chain
+degradation. When PExpr dissolves and predicates become ordinary
+expressions, `infer_var_ref` runs inside them and the edge draws itself
+with no new code. That is the fix; this entry exists so the facet's
+over-report at `span_valid` reads as a known gap rather than a candidate
+for deletion.
+
+`Hβ.io.fs-close-op-is-bypassed` — THE Filesystem EFFECT'S CLOSE OP IS
+DEAD BECAUSE THREE CALLERS REACH PAST IT TO THE IMPLEMENTATION. Measured
+2026-09-04 at pin 46ad0838.
+▶ WHAT THE FACET SHOWED: `fs_close` (types.mn) has zero references, while
+`fs_close_impl` (lib/io.mn) is called directly at main.mn:425,
+main.mn:1826 and mcp.mn:128. The handler arm in pipeline.mn:770 exists and
+does nothing but forward to that same impl, so every close in the wheel
+happens outside the effect that was declared to carry it.
+▶ WHY IT IS NOT A DELETION: an op nobody performs looks like dead
+vocabulary and is the opposite here. `fs_close` exists so that closing is
+an EFFECT a handler can intercept — which is what makes a persist or
+sandbox handler able to see it. Deleting the op would canonize the bypass
+and lose the seam; the fix is the three call sites performing the op, and
+the gate is a handler that counts closes and a fixture proving it sees all
+of them. Its sibling `fs_open` wants the same audit in the same landing.
+
+`Hβ.types.type-expressions-are-not-graph-content` — A TYPE IN AN
+ANNOTATION HAS NO HANDLE AND NO SPAN, so the reference it makes cannot be
+noted and the refusal it earns cannot be located. Measured 2026-09-04 at
+pin 1ff3393b, found by the `unreferenced` facet over-reporting every type
+name in types.mn.
+▶ THIS ENTRY CORRECTS ITS OWN FIRST DRAFT, written an hour earlier at the
+same pin under the name `.type-name-in-annotation-never-resolves`. That
+draft said the medium never resolves an annotation's type name. The
+artifact refutes it: `quantify_ctor_ty` (infer.mn:8389) calls
+`env_lookup_type(name)` on every capitalized nullary name, resolves a
+TAlias-bodied entry to its live alias, and the probe that produced the
+draft had already shown it — `type Real = Int` with `fn f(x: Real)`
+type-checks against an Int argument, which only happens if the name
+resolved. The draft was reasoning from a symptom (`Nonexistent` produces
+`E_TypeMismatch` rather than a not-found) to a mechanism, without reading
+the site. Retracted per the corpus's verified-only law.
+▶ WHAT IS ACTUALLY TRUE, at infer.mn:8389-8397. The lookup happens; the
+`None` arm returns `(TName(name, []), qmap)`, and its own comment blesses
+the fallback — "a nominal record / ADT / not-yet-declared name stays
+TName." So a typo'd annotation becomes an opaque nominal type and surfaces
+three mismatch errors pointing at arithmetic instead of one naming the
+type that does not exist.
+▶ AND THE FALLBACK IS FORCED BY SOMETHING DEEPER, which is why this entry
+is named for that instead. `quantify_ctor_ty` is a pure Ty-tree rewrite:
+it has no handle for the name it just resolved and no span for the token
+it read. Values are graph content — every expression a node with a handle
+and a span, which is what makes `graph_ref_note(name, handle)` and a
+located diagnostic possible at the value altitude. Type expressions are a
+parallel tree of strings and tuples beside the graph. So the resolution
+CANNOT note its edge (no handle to note), and the miss CANNOT refuse
+(nothing to point at) — the AST-in-graph fabric, whose own claim is that
+every node is a resolvable handle, stops at the type annotation.
+▶ WHAT IT COSTS TODAY, measured: 80 names in types.mn — `Ty`, `EffRow`,
+`NodeKind`, `SchemeKind` and the rest of the compiler's vocabulary — read
+as declared-and-never-reached in the `unreferenced` facet, because the
+only sites that reference them are annotations. That is the facet naming
+this gap, exactly as its comment says an over-report does.
+▶ THE FIX IS THE REPRESENTATION: a type expression becomes graph content,
+each name a node carrying its span, resolved through the env edge it
+already consults. Then the ref note is the same one line the value and
+pattern altitudes already have, and `E_UnknownTypeName` is an ordinary
+located refusal — the peer `E_MissingVariable` has had since the start.
+The risk to measure RED first is the fallback's own stated reason: whether
+the `None` arm ever fires for a name that IS declared (a forward reference
+across the concatenated weave). If it does, ordering is a second problem
+and the refusal waits on it; if it never does, the refusal is free. That
+measurement is the gate and it has not been taken.
 
 `Hβ.infer.record-row-vars-are-not-unioned` — RECORD ROW VARS ARE SECOND
 CLASS IN THE UNION-FIND, and that is what survives the offset fix below.

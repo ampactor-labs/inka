@@ -35,6 +35,65 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 46ad0838189effcc · A WRITE-ONLY HANDLER IN THE EMIT
+  CHAIN OF EVERY ROUTE. CLEAN m2 == m3 at 418607 lines, census 0; micros
+  148/148. Wheel 59378 → 59296 lines.
+  ▶ THE HARVEST, and how it was read. `mentl query "unreferenced"` named
+  eleven lowercase declarations in the compiler's own modules. Each was
+  read AT ITS SITE before anything was touched — a report is a reading, not
+  a delete list, which is the caveat the imports facet earned one pin back
+  and it paid again here: four of the eleven are not dead.
+  ▶ THE FIND: BodyContext. Four ops, one handler, one install in
+  `emit_context` — so it rode all seven lowering routes. Its writers are
+  `set_body_captures` and `set_body_evidence` at backends/wasm.mn:2783-2784,
+  one call each. Its readers are nobody: `current_body_captures` measures
+  ZERO references. The comment above the writes says "LEvPerform inside
+  this body reads it to compute its offset arithmetic," and the artifact
+  says otherwise; the second write passes a literal `[]`. This is the
+  write-only side-ledger PLAN §5.U names as the textbook Carried-Truth
+  violation, using `resume_kinds` as its example — the same shape, still
+  installed, in the emit stack of every route that lowers. Deleted whole.
+  The one-home `emit_context` from pin 1aca4868 is what made that a
+  single-line removal instead of seven.
+  ▶ ALSO DELETED, each an op whose only arm nothing performs:
+  `current_region` (own.mn), `graph_reason_edge` and `graph_mint_at`
+  (graph.mn — infer.mn's own comment records that mint_at's caller
+  "dissolved into this config" and the op stayed), and
+  `ls_current_lambda_handle`. The last one is the instructive case: it
+  drags the `lambda_h` field on the lower frame record, written at five
+  `ls_enter_frame` call sites and read by nothing else. Deleting the op
+  alone would have MANUFACTURED a write-only ledger in the same landing
+  that cured one, so the field, the op's arity, its loop, and all five
+  call sites went together.
+  ▶ FOUR STAYED, and the reasons are the point. `graph_emitfn_at` and
+  `graph_narrow_set` say in their OWN comments that they are dormant
+  vocabulary under named peers (`Hβ.lower.lowering-is-a-column`,
+  `Hβ.infer.narrowing-write-requires-discharge`) — "defined but uncalled"
+  is the slot for what is about to be built. `diag_applicability` is the
+  unread half of the catalog projection `Hβ.diag.catalog-as-projection`
+  will read. And `fs_close` is dead only because main.mn:425, main.mn:1826
+  and mcp.mn:128 call `fs_close_impl` directly, reaching past the effect
+  declared to carry it — deleting the op would canonize the bypass and lose
+  the handler seam, so it is banked as `Hβ.io.fs-close-op-is-bypassed`.
+  ▶ A THIRD MISSING REF EDGE, found the same way: `span_valid` is
+  referenced only from `type ValidSpan = Span where span_valid(self)`, and
+  a predicate is not walked as an ordinary expression, so the call notes
+  nothing. Banked as `Hβ.infer.predicate-position-refs-are-not-noted`; it
+  dissolves for free when `Hβ.types.predicate-is-expr` lands.
+  ▶ AND A RETRACTION, one hour old.
+  `Hβ.infer.type-name-in-annotation-never-resolves`, banked at the previous
+  pin, said the medium never looks up an annotation's type name. The
+  artifact refutes it: `quantify_ctor_ty` (infer.mn:8389) calls
+  `env_lookup_type` on every capitalized nullary name, and the probe that
+  produced the claim had already shown it — `type Real = Int` with
+  `fn f(x: Real)` type-checks against an Int. That draft reasoned from a
+  symptom to a mechanism without reading the site. Replaced by
+  `Hβ.types.type-expressions-are-not-graph-content`, which names the real
+  root: `quantify_ctor_ty` is a pure Ty-tree rewrite with no handle for the
+  name it resolved and no span for the token it read, so it CANNOT note the
+  edge and the miss CANNOT refuse. The AST-in-graph fabric stops at the
+  type annotation.
+
 - 2026-09-04 · pin 1ff3393b59c62018 · THE MEDIUM FINDS ITS OWN DEAD
   DECLARATIONS. CLEAN m2 == m3 at 419046 lines, census 0; micros 148/148.
   ▶ THE VERB: `mentl query <file> "unreferenced"` answers, for every name

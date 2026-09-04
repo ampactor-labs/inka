@@ -2774,14 +2774,6 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   // saving the callee closure pointer before argument evaluation.
   // Every LLet in the body declares a function-level local so
   // (local.set $<name>) / (local.get $<name>) validate.
-  //
-  // H1: set body_context's captures count BEFORE emitting the body.
-  // LEvPerform inside this body reads it to compute its offset
-  // arithmetic. On the monomorphic path (>95% per H1) the evidence
-  // list is empty by construction. Per-op ev_shape synthesis on the
-  // polymorphic path lands as a peer handle tracked in PLAN.md's bands.
-  set_body_captures(captures_count)
-  set_body_evidence([])
   // Hβ.emit.reason-chain-comments: SourceMap-style annotation at fn
   // boundary. Why-engine consumers (`mentl query --why`, browser
   // inspector, terminal trace) read these to walk from WAT back to

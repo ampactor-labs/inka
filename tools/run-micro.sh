@@ -38,15 +38,28 @@ esac
 
 cat "${LIBS[@]}" "$MICRO" 2>/dev/null | wt_run "$BOOT" > "$base.wat" 2> "$base.err"
 compile_exit=$?
-diags=$(grep -c '^[EW]_' "$base.err" || true)
+# Every diagnostic is PHASE-PREFIXED — `effects: E_EffectMismatch error: …`,
+# `parser: E_RedundantBraces Warning: …` — so the old anchored `^[EW]_` could
+# never match one, and this field printed 0 for all 148 micros on every gate
+# run since it was written. It was a number that could not be nonzero.
+# Measured on mn-payload, which reported diags=0 beside an err file carrying
+# thirteen diagnostic lines and a live E_EffectMismatch.
+diags=$(grep -c ' error: ' "$base.err" || true)
 # The refuse contract: the diagnostic channel must NAME the class as an
 # error. (The raw stdin-compile's exit policy — it reports E_ errors and
 # still exits 0 — is the wheel seam named at LEDGER; the contract both
 # prior channels judged is class-reported, so this reader matches that.)
+# EVERY class, not just E_. The arm read `refuse:E_*`, so a fixture expecting
+# a P_ / W_ / T_ / V_ refusal fell straight through it to the value path, where
+# its exit was compared against the string "refuse:P_UnclosedConstruct" — not an
+# integer comparison at all, so the FAIL branch never taken and the fixture
+# PASSED while asserting nothing. mn-string-newline had been doing exactly that:
+# it expects refuse P_UnclosedConstruct and reported exit=42, green, for as long
+# as it has existed.
 case "$EXPECT" in
-  refuse:E_*)
+  refuse:*)
     cls="${EXPECT#refuse:}"
-    if grep -q "$cls.*error:" "$base.err"; then
+    if grep -q "$cls.*[Ee]rror:" "$base.err" || grep -q "$cls.*Warning:" "$base.err"; then
       echo "PASS $MICRO: refuses $cls"; exit 0
     fi
     if [ "$compile_exit" -eq 0 ]; then

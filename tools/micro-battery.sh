@@ -13,7 +13,7 @@ set -u
 COMPILER="$1"; LABEL="${2:-micros}"
 source "$(dirname "$0")/wt-env.sh"
 
-pass=0; fail=0
+pass=0; fail=0; dtot=0; dfix=""
 for mf in tests/micros/mn-*.mn; do
   m=$(basename "$mf" .mn); m=${m#mn-}
   # The fixture's first line is the ONE expectation home. Full grammar:
@@ -31,6 +31,13 @@ for mf in tests/micros/mn-*.mn; do
     PASS*) echo "✓ micro $m: ${out#PASS }"; pass=$((pass+1)) ;;
     *)     echo "✗ micro $m: ${out:-no verdict}"; fail=$((fail+1)) ;;
   esac
+  d=$(printf '%s' "$out" | sed -nE 's/.*diags=([0-9]+).*/\1/p')
+  [ -n "$d" ] && { dtot=$((dtot + d)); [ "$d" -gt 0 ] && dfix="$dfix $m"; }
 done
-echo "── $LABEL: $pass pass / $fail fail ──"
+# The per-micro count is printed on every line and summed here, because a
+# number nobody totals is a number nobody reads. It was structurally zero
+# until 2026-09-03 (run-micro's anchor could not match a phase-prefixed
+# diagnostic), so these errors are not new — they are newly VISIBLE, and the
+# summary names which fixtures carry them rather than leaving a bare total.
+echo "── $LABEL: $pass pass / $fail fail · $dtot error(s) reported across${dfix:- none} ──"
 [ "$fail" -eq 0 ]

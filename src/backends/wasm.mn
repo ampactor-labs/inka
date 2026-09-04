@@ -343,7 +343,7 @@ fn emit_hash(h, x) = {
 // its table index redirected — captures, self-binding, and local naming keep
 // the ORIGINAL name (the record local is the closure value; only the offset-0
 // index points at the twin body). Outside a bracket enc is "" — floor.
-fn spec_closure_name(name: String) with SpecTwins + LookupTy + Memory + Alloc = if !spec_twins_exist() {
+fn spec_closure_name(name: String) with SpecTwins + LookupTy + Memory = if !spec_twins_exist() {
   name
 } else {
   let e = spec_enc_active()
@@ -521,7 +521,7 @@ fn spec_demand_accept(acc, d) with Memory + Alloc = match acc {
   (dbuf, dn) => (list_set(list_extend_to(dbuf, dn + 1), dn, d), dn + 1),
 }
 
-fn spec_buf_demanded(ref dbuf, dn, m: String, i) with Memory + Alloc = if i >= dn {
+fn spec_buf_demanded(ref dbuf, dn, m: String, i) with Memory = if i >= dn {
   false
 } else {
   match list_index(dbuf, i) {
@@ -531,7 +531,7 @@ fn spec_buf_demanded(ref dbuf, dn, m: String, i) with Memory + Alloc = if i >= d
 
 // The cap's meter: how many of BASE's specializations the fix has already
 // accepted (entries share the (m, base, pairs, enc) shape).
-fn spec_buf_base_count(ref dbuf, dn, base: String, i, acc) with Memory + Alloc = if i >= dn {
+fn spec_buf_base_count(ref dbuf, dn, base: String, i, acc) with Memory = if i >= dn {
   acc
 } else {
   match list_index(dbuf, i) {
@@ -2840,7 +2840,7 @@ fn emit_reason_comment_for_fn(name, body) = if len(body) == 0 {
 // Render a Reason chain as a one-line comment string. The full
 // structured walk lives in show_reason (types.mn); emit's variant
 // truncates to a single line so WAT stays readable.
-fn emit_reason_summary(handle) with !Mutate = match graph_chase(handle) {
+fn emit_reason_summary(handle) with GraphRead + Alloc + Memory = match graph_chase(handle) {
   GNode(_, reason) => emit_render_reason_oneline(reason),
 }
 
@@ -2853,7 +2853,7 @@ fn emit_reason_summary(handle) with !Mutate = match graph_chase(handle) {
 // phantoms) while missing nine that do — the seed compiled the phantom
 // patterns without membership checking and the sentinel guard trapped
 // the first LetBinding-reasoned node (a match inside a handler arm).
-fn emit_render_reason_oneline(reason) with !Mutate = match reason {
+fn emit_render_reason_oneline(reason) with Alloc + Memory = match reason {
   Declared(n) => "declared as {n}",
   Inferred(ctx) => "inferred from {ctx}",
   Located(_, inner) => emit_render_reason_oneline(inner),

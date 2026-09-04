@@ -84,7 +84,7 @@ fn tiebreak_row_minimality(survivors) with Memory + Alloc =
 fn tiebreak_reason_depth(survivors) with Memory + Alloc =
   min_by_key(survivors, (s) => reason_chain_length(handler_reason(s)))
 
-fn tiebreak_declared_intent(survivors, cur) with Branch + Memory + Alloc = {
+fn tiebreak_declared_intent(survivors, cur) with Memory + Alloc = {
   let aligned = filter_list(survivors, (s) => intent_matches(s, cur))
   if len(aligned) > 0 { aligned } else { survivors }
 }

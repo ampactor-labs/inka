@@ -486,7 +486,7 @@ fn rehome_seam_comments(ref mods) with GraphRead + GraphWrite + Memory + Alloc =
   Graph(_x, sp) => rehome_walk(list_to_flat(sp), mods, 0),
 }
 
-fn rehome_walk(ref spans, ref mods, i) with GraphRead + GraphWrite + Memory + Alloc = if i >= len(spans) {
+fn rehome_walk(ref spans, ref mods, i) with Memory + GraphRead + GraphWrite = if i >= len(spans) {
   ()
 } else {
   match spans[i] {
@@ -497,7 +497,7 @@ fn rehome_walk(ref spans, ref mods, i) with GraphRead + GraphWrite + Memory + Al
   }
 }
 
-fn rehome_one(ref s, h, ref mods) with GraphRead + GraphWrite + Memory + Alloc = {
+fn rehome_one(ref s, h, ref mods) with GraphRead + Memory + GraphWrite = {
   let text = graph_comment_at(h)
   if byte_len(text) > 0 {
     let cspan = graph_comment_span_at(h)

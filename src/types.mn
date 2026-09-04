@@ -3575,7 +3575,7 @@ fn show_list_from(ref items, ref render, ref sep, i, n) with !Mutate = if i >= n
 // H6: exhaustive over all 15 Ty constructors.
 // GraphRead + EnvRead: predicate_flow_label follows PBoolNode handles into graph;
 // TName arm follows the type's env entry to read its predicate.
-fn query_flow_label(ref ty) with GraphRead + WASI + EnvRead + Alloc + Memory = match ty {
+fn query_flow_label(ref ty) with GraphRead + Memory + Alloc + EnvRead = match ty {
   TRefined(base, pred) => flow_label_join(pred |> predicate_flow_label, query_flow_label(base)),
   TName(name, _) => // Follow the type's env entry to its TypeDecl predicate — graph-native.
   // A nominal type with a refinement predicate (e.g. `type SecretKey = Bytes

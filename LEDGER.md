@@ -35,6 +35,42 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 1aca486868b92bc4 · THE MEDIUM WRITES ITS OWN SOURCE.
+  CLEAN m2 == m3 at 417952 lines, census 0; micros 148/148.
+  ▶ WHAT LANDED: `mentl tighten main` authored 174 of 223 row narrowings
+  across 27 files — the largest medium-authored diff the wheel has taken,
+  and the first one the verb is provably allowed to make.
+  ▶ THE BUG THE RUN BEFORE IT FOUND: `mentl tighten src/cursor.mn` authored
+  132 changes and the march answered with census 40 — twenty
+  `E_ConstructorArity` ("constructor Cast takes 0 fields; the pattern binds
+  1") and twenty `E_EffectMismatch` whose two sides printed identically as
+  `Memory + Alloc + Cast(GNode)`. The identical print is the tell: the rows
+  really were equal as VALUES and unequal as TEXT, because tighten had
+  written the row it inferred rather than a row the grammar can read. Source
+  said `Cast`; inference proved `Cast(GNode)`, the type-parameterized
+  instance; the with-clause grammar takes value arguments alone, so the
+  re-parse turned the type application into a constructor pattern.
+  ▶ THE PROPERTY, stated once: a self-authoring verb has exactly ONE
+  soundness obligation — author nothing you cannot re-parse. Everything else
+  it does is a proposal the board judges. `row_is_authorable` already
+  refused open tails (`EtOpen`, `EtAll`) and had no arm at all for an effect
+  ARGUMENT that carries a type. `every_eff_arg_authorable` refuses `EAType`
+  and admits the rest; `eff_name_authorable` routes every `EParameterized`
+  through it. That is the whole fix, and it is at the one site that decides
+  what tighten may write.
+  ▶ WHY THE BOARD NEVER SAW IT: tighten's output is read by nothing until
+  someone marches it. The guard makes the refusal structural instead —
+  the verb now declines to author the un-re-parseable row rather than
+  emitting it and waiting for a compile to disagree.
+  ▶ THE RATCHET RAISED, WITH ITS REASON: anonymity 384 → 385 under the
+  medium's own 174 changes. The quiet gate's ref count (813 → 814) and the
+  first anonymity read were MINE, from `ref` markers written into the guard
+  fns by the same copy-the-surrounding-style reflex that gate exists to
+  catch — those came off. What remains is one lambda whose row became
+  visible to the tier because the medium narrowed the tree around it. The
+  tier is telling the truth about a tree it wrote; the count moves with the
+  measurement in verify-baseline, not with a fix.
+
 - 2026-09-04 · pin 9109e063bf2b1726 · THE MEDIUM FINDS ITS OWN DEAD IMPORTS.
   CLEAN m2 == m3 at 417769 lines, census 0; micros 148/148, frontier 374/0.
   ▶ THE VERB: `mentl query <file> "imports"` answers every import edge in the

@@ -729,7 +729,14 @@ record_pattern_open_max: 0
 # and 494 fewer emitted wat lines.
 # 385 → 384 at the dead-import deletion (2026-09-04), the same cause: one
 # fewer module in the link is one fewer effectful lambda on it.
-effectful_lambda_max: 384
+# 384 → 385 at the medium's own tightening run (2026-09-04). `mentl tighten
+# main` authored 174 row narrowings across 27 files and one lambda's row
+# became visible to the tier as a result — the count is the tier telling the
+# truth about a tree the medium wrote, not a lambda anyone typed. The other
+# two ratchets this run tripped were fixed rather than raised: the ref
+# markers came off the guard's own fns, written by the same copy-the-
+# surrounding-style reflex the quiet gate exists to catch.
+effectful_lambda_max: 385
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own

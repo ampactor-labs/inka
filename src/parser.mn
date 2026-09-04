@@ -222,7 +222,7 @@ fn ident_at(ref tokens, pos) = match kind_at(tokens, pos) {
 // at the foot of a chain governs everything to its left; parenthesize
 // `(stage ~> h)` to narrow. Layout is NEVER semantics — block vs
 // inline on the page is the formatter's projection.
-fn op_prec(k) with Memory + Alloc = match k {
+fn op_prec(k) with Pure = match k {
   TTildeGt => 1,
   TLtPipe => 2,
   TGtLt => 2,
@@ -404,7 +404,7 @@ fn cw_seed_slots(n, buf, i) with Memory + Alloc =
 // The one walk over the span index: each entry competes for the run it
 // could serve — trailing runs keyed by their start line, leading runs by
 // nearest-preceding-run bsearch. O(N log C).
-fn cw_scan_index(ref idx, i, h_from, ref runs: [CwRun], leads, trails) with GraphRead + Memory + Alloc = if i >= len(idx) {
+fn cw_scan_index(ref idx, i, h_from, ref runs: [CwRun], leads, trails) with Memory + Alloc = if i >= len(idx) {
   ()
 } else {
   match idx[i] {
@@ -426,7 +426,7 @@ fn cw_scan_index(ref idx, i, h_from, ref runs: [CwRun], leads, trails) with Grap
 
 // bsearch: the run whose start_line == line (runs are token-ordered, so
 // start lines are strictly increasing).
-fn cw_find_run_on_line(ref runs: [CwRun], lo, hi, line) with Memory + Alloc = if lo > hi {
+fn cw_find_run_on_line(ref runs: [CwRun], lo, hi, line) with Memory = if lo > hi {
   0 - 1
 } else {
   let mid = (lo + hi) / 2
@@ -443,7 +443,7 @@ fn cw_find_run_on_line(ref runs: [CwRun], lo, hi, line) with Memory + Alloc = if
 // bsearch: the run with the largest end_line strictly below the node's
 // start line — the nearest preceding run this node could be the leading
 // target of.
-fn cw_find_run_before(ref runs: [CwRun], lo, hi, line, best) with Memory + Alloc = if lo > hi {
+fn cw_find_run_before(ref runs: [CwRun], lo, hi, line, best) with Memory = if lo > hi {
   best
 } else {
   let mid = (lo + hi) / 2
@@ -505,7 +505,7 @@ fn cw_compete_lead(leads, k, sl, sc, el, ec, h) with Memory + Alloc = match lead
   },
 }
 
-fn cw_attach_all(ref runs: [CwRun], ref leads, ref trails, k, next_target) with GraphRead + GraphWrite + Memory + Alloc = if k < 0 {
+fn cw_attach_all(ref runs: [CwRun], ref leads, ref trails, k, next_target) with Memory + GraphWrite = if k < 0 {
   ()
 } else {
   let r = runs[k]

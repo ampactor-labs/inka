@@ -154,7 +154,7 @@ fn columns(xs, sr: Int, freqs, win: Int, hop: Int, num_frames: Int, is_phase) wi
 // then cell (li, hi) = MVL(low_phase[li], high_amp[hi]). Returns [[Float]]
 // (rows = low frequencies, cols = high). num_frames is
 // (len(xs) − win)/hop + 1.
-fn fill_row(low_cols, high_cols, li: Int, num_high: Int, out, hi: Int) with Memory + Alloc = if hi >= num_high {
+fn fill_row(low_cols, high_cols, li: Int, num_high: Int, out, hi: Int) with Memory = if hi >= num_high {
   out
 } else {
   let phases = list_index(low_cols, li)

@@ -6069,7 +6069,7 @@ fn spec_resolve_build(t) with LookupTy + Memory + Alloc + GraphRead = match t {
 // are the quantified ones — pairing the outer var coarse ({e -> (F, I)})
 // leaves the twin's pattern reads keyless (pat_elem_repr found no pair for
 // u/v and floored the destructure to offset 4 inside a minted twin).
-fn spec_pairs_walk(st0, it0, acc) with LookupTy + GraphRead + Memory + Alloc = {
+fn spec_pairs_walk(st0, it0, acc) with GraphRead + Memory + Alloc = {
   let st = fold_strip(st0)
   match st {
     TVar(v) => match graph_chase(v) {
@@ -6125,13 +6125,13 @@ fn spec_pairs_walk(st0, it0, acc) with LookupTy + GraphRead + Memory + Alloc = {
   }
 }
 
-fn spec_pairs_walk_list(sts, its, acc) with LookupTy + GraphRead + Memory + Alloc = if len(sts) == 0 || len(its) == 0 {
+fn spec_pairs_walk_list(sts, its, acc) with Memory + Alloc + GraphRead = if len(sts) == 0 || len(its) == 0 {
   acc
 } else {
   spec_pairs_walk_list(rest(sts), rest(its), spec_pairs_walk(sts[0], its[0], acc))
 }
 
-fn spec_pairs_walk_params(ps, ips, acc) with LookupTy + GraphRead + Memory + Alloc = if len(ps) == 0 || len(ips) == 0 {
+fn spec_pairs_walk_params(ps, ips, acc) with Memory + Alloc + GraphRead = if len(ps) == 0 || len(ips) == 0 {
   acc
 } else {
   spec_pairs_walk_params(rest(ps), rest(ips), spec_pairs_walk(param_ty(ps[0]), param_ty(ips[0]), acc))
@@ -6139,7 +6139,7 @@ fn spec_pairs_walk_params(ps, ips, acc) with LookupTy + GraphRead + Memory + All
 
 // Fields pair by NAME (both sides parse-sorted); a missing partner is an
 // error path — skip, never fabricate.
-fn spec_pairs_walk_fields(fs, ifs, acc) with LookupTy + GraphRead + Memory + Alloc = if len(fs) == 0 {
+fn spec_pairs_walk_fields(fs, ifs, acc) with Memory + Alloc + GraphRead = if len(fs) == 0 {
   acc
 } else {
   match fs[0] {
@@ -6174,7 +6174,7 @@ fn spec_pairs_sorted_insert(sorted, p) with Memory + Alloc = if len(sorted) == 0
 fn spec_pairs_sort(pairs) with Memory + Alloc =
   fold([], (acc, p) => spec_pairs_sorted_insert(acc, p), pairs)
 
-fn spec_repr_digit(t) with Memory = match repr_of(t) {
+fn spec_repr_digit(t) with Pure = match repr_of(t) {
   RI32 => "0",
   RI64 => "1",
   RF64 => "2",
@@ -6188,7 +6188,7 @@ fn spec_repr_digit(t) with Memory = match repr_of(t) {
 // name-safe type signature. A repr digit cannot say WHICH record closed
 // the var, and the all-'0' floor test was silently ejecting every
 // structure-bound site from candidacy (the field-heal gate).
-fn spec_pair_code(t) with Memory + Alloc = match fold_strip(t) {
+fn spec_pair_code(t) with Memory = match fold_strip(t) {
   TInt => spec_repr_digit(t),
   TByte => spec_repr_digit(t),
   TUnit => spec_repr_digit(t),
@@ -6232,7 +6232,7 @@ fn arm_fn_name(hname: String, op: String) with Pure = "op_{hname}_{op}"
 // The site's instantiation pairs — [] when the name is not generic: a value
 // let, a monomorphic fn, or an internal synthesized name. The scheme's
 // quantified vars are the roots; the site's chased type carries the bindings.
-fn spec_site_pairs_resolved(name: String, rt) with EnvRead + LookupTy + GraphRead + WASI + Memory + Alloc = match env_lookup(name) {
+fn spec_site_pairs_resolved(name: String, rt) with EnvRead + Memory + Alloc + GraphRead + WASI = match env_lookup(name) {
   None => [],
   Some(entry) => match entry {
     (scheme, _r, kind) => match kind {

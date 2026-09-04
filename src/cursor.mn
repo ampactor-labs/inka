@@ -266,7 +266,7 @@ fn enumerate_gradient_positions() with GraphRead + Teach + Alloc + Memory + !Mut
   Graph(next, _spans) => filter((i) => gradient_position(i), range(0, next)),
 }
 
-fn gradient_position(i) with GraphRead + Teach + Alloc + Memory + !Mutate = match graph_node_body(i) {
+fn gradient_position(i) with GraphRead + Teach = match graph_node_body(i) {
   NStmt(s) => match s {
     FnStmt(_, _, _, _, _) => match teach_gradient(i) {
       None => false,
@@ -570,7 +570,7 @@ fn scan_for_span(target, i, n) -> Handle with GraphRead + !Mutate + Memory + All
 // last-bind reason carried the enclosing binop's span — both measured).
 // Only the birth index never moves. Miss answers span_zero — the
 // authored_hole guard's own sentinel.
-fn caret_span_of_handle(handle) with GraphRead + Memory + Alloc + !Mutate = parse_span_of(handle)
+fn caret_span_of_handle(handle) with GraphRead = parse_span_of(handle)
 
 // An unbound node's type IS its own type variable — the chase
 // terminated at this handle, so TVar(handle) is what HM proves.
@@ -583,13 +583,13 @@ fn ty_of_kind(handle, kind) with Memory + Alloc = match kind {
   NErrorHole(_) => TVar(handle),
 }
 
-fn row_of_kind(kind) with Memory = match kind {
+fn row_of_kind(kind) with Pure = match kind {
   NBound(ty) => extract_row_local(ty),
   NRowBound(r) => r,
   _ => mk_ef_pure(),
 }
 
-fn extract_row_local(ty) with Memory = match ty {
+fn extract_row_local(ty) with Pure = match ty {
   TFun(_, _, row) => row,
   _ => mk_ef_pure(),
 }
@@ -605,7 +605,7 @@ fn ownership_of_kind(kind) with Memory = match kind {
   _ => Unmarked,
 }
 
-fn ownership_of_ty(ty) with Memory + Alloc = match ty {
+fn ownership_of_ty(ty) with Memory = match ty {
   TFun(params, _, _) => if len(params) == 0 { Unmarked } else { param_resolved(list_index(params, 0)) },
   _ => Unmarked,
 }

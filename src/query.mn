@@ -291,7 +291,7 @@ handler query_default {
   },
 }
 
-fn chase_type_deep(ref ty) with !Mutate = match ty {
+fn chase_type_deep(ref ty) with GraphRead + Memory + Alloc = match ty {
   TVar(h) => match graph_chase(h) {
     GNode(kind, _) => match kind {
       NBound(inner) => chase_type_deep(inner),
@@ -317,12 +317,12 @@ fn chase_type_deep(ref ty) with !Mutate = match ty {
 // reading the source. map preserves; declaration order is the truth. This
 // private deep-chase family is one of the nineteen Ty descents the
 // traversal-is-a-handler peer consolidates; its one home arrives there.
-fn chase_list_deep(ref tys) with !Mutate = map(chase_type_deep, tys)
+fn chase_list_deep(ref tys) with Memory + Alloc + GraphRead = map(chase_type_deep, tys)
 
 fn chase_params_deep(ref params) with !Mutate =
   map((p) => param_with_ty(p, chase_type_deep(param_ty(p))), params)
 
-fn chase_fields_deep(ref fields) with !Mutate = map(
+fn chase_fields_deep(ref fields) with Memory + Alloc + GraphRead = map(
   (field) => match field {
     (name, ty) => (name, chase_type_deep(ty)),
   },
@@ -339,7 +339,7 @@ fn find_unresolved(ref entries) with GraphRead + WASI + Memory + Alloc + !Mutate
   (name, scheme, _, _) => (name, judgment_ty(scheme), []),
 })
 
-fn has_free_tvar(ref ty) with !Mutate = match ty {
+fn has_free_tvar(ref ty) with GraphRead + Memory + Alloc = match ty {
   TVar(h) => match graph_chase(h) {
     GNode(kind, _) => match kind {
       NFree(_) => true,
@@ -362,13 +362,13 @@ fn has_free_tvar(ref ty) with !Mutate = match ty {
 fn has_free_tvar_list(ref tys) with !Mutate =
   if len(tys) == 0 { false } else { has_free_tvar(last(tys)) || has_free_tvar_list(drop_last(tys)) }
 
-fn has_free_tvar_params(ref params) with !Mutate = if len(params) == 0 {
+fn has_free_tvar_params(ref params) with Memory + GraphRead + Alloc = if len(params) == 0 {
   false
 } else {
   has_free_tvar(param_ty(last(params))) || has_free_tvar_params(drop_last(params))
 }
 
-fn has_free_tvar_fields(ref fields) with !Mutate = if len(fields) == 0 {
+fn has_free_tvar_fields(ref fields) with Memory + GraphRead + Alloc = if len(fields) == 0 {
   false
 } else {
   match last(fields) {
@@ -379,7 +379,7 @@ fn has_free_tvar_fields(ref fields) with !Mutate = if len(fields) == 0 {
 // Walk every substitution hop from a starting handle to its terminal.
 // Returned by `QSubstChain` — useful for tracing cross-module `TVar`
 // resolution.
-fn walk_chain(handle, depth) with !Mutate = if depth > 50 || handle < 0 {
+fn walk_chain(handle, depth) with Memory + Alloc + GraphRead = if depth > 50 || handle < 0 {
   []
 } else {
   let node = graph_chase(handle)
@@ -580,7 +580,7 @@ fn dedup_handles(hs, i, acc) with Memory + Alloc = if i >= len(hs) {
   }
 }
 
-fn handle_in(acc, target, i) with Memory + Alloc = if i >= len(acc) {
+fn handle_in(acc, target, i) with Memory = if i >= len(acc) {
   false
 } else {
   if acc[i] == target { true } else { handle_in(acc, target, i + 1) }
@@ -880,7 +880,7 @@ fn census_matches(shape: CensusShape, h, body: NodeBody) with GraphRead + !Mutat
 // The receiver's judged type at a record-pattern site: open when it
 // resolves to `TRecordOpen`, which is exactly when lowering has no full
 // sorted field set to take offsets from.
-fn receiver_row_open(rhs) with GraphRead + !Mutate + Alloc + Memory = match rhs {
+fn receiver_row_open(rhs) with GraphRead = match rhs {
   N(_, _, rh) => match graph_chase(rh) {
     GNode(NBound(ty), _) => match fold_strip(ty) {
       TRecordOpen(_, _) => true,
@@ -892,7 +892,7 @@ fn receiver_row_open(rhs) with GraphRead + !Mutate + Alloc + Memory = match rhs 
 
 // The match half of CsRecordPattern, walked by index the way this file's
 // sibling arm-walkers are.
-fn any_record_arm(arms, i, n) with GraphRead + !Mutate + Alloc + Memory = if i >= n {
+fn any_record_arm(arms, i, n) with Memory = if i >= n {
   false
 } else {
   match list_index(arms, i) {
@@ -941,7 +941,7 @@ fn adjacent_handle_params(names) with Memory + Alloc = match names {
   _ => false,
 }
 
-fn flag_int_compare(a, b) with GraphRead + !Mutate + Alloc + Memory = match graph_node_body(node_handle(a)) {
+fn flag_int_compare(a, b) with GraphRead = match graph_node_body(node_handle(a)) {
   NExpr(VarRef(n)) => if n == "mode" || n == "token_kind" || n == "scheme_kind" {
     match graph_node_body(node_handle(b)) {
       NExpr(LitInt(_)) => true,
@@ -1053,7 +1053,7 @@ fn subtree_drift_children(hs, roster, counts, fuel) with GraphRead + !Mutate + A
   [ch, ...rest] => subtree_drift_children(rest, roster, subtree_drift_counts(ch, roster, counts, fuel), fuel),
 }
 
-fn any_wildcard_zero(arms, i, n) with Memory + Alloc = if i >= n {
+fn any_wildcard_zero(arms, i, n) with Memory = if i >= n {
   false
 } else {
   match list_index(arms, i) {
@@ -1069,7 +1069,7 @@ fn any_wildcard_zero(arms, i, n) with Memory + Alloc = if i >= n {
   }
 }
 
-fn any_wildcard_fabricates(arms, i, n) with GraphRead + !Mutate + Alloc + Memory = if i >= n {
+fn any_wildcard_fabricates(arms, i, n) with Memory + GraphRead = if i >= n {
   false
 } else {
   match list_index(arms, i) {
@@ -1080,7 +1080,7 @@ fn any_wildcard_fabricates(arms, i, n) with GraphRead + !Mutate + Alloc + Memory
   }
 }
 
-fn wildcard_body_fabricates(b) with GraphRead + !Mutate + Alloc + Memory = match b {
+fn wildcard_body_fabricates(b) with GraphRead = match b {
   N(nb, _, _) => match nb {
     NExpr(LitString(s)) => // drift-audit: ignore — the census DETECTOR reading the drifted literal from the weave, not an effect-name dispatch
     s == "" || s == "Pure",
@@ -1221,12 +1221,12 @@ fn callee_names(callee, name: String) with GraphRead = match graph_node_body(nod
   _ => false,
 }
 
-fn arg_is_increment(arg, pnames) with GraphRead + Alloc + Memory = match graph_node_body(node_handle(arg)) {
+fn arg_is_increment(arg, pnames) with GraphRead = match graph_node_body(node_handle(arg)) {
   NExpr(BinOpExpr(BAdd, l, r)) => param_plus_one(l, r, pnames) || param_plus_one(r, l, pnames),
   _ => false,
 }
 
-fn param_plus_one(a, b, pnames) with GraphRead + Alloc + Memory = match graph_node_body(node_handle(a)) {
+fn param_plus_one(a, b, pnames) with GraphRead = match graph_node_body(node_handle(a)) {
   NExpr(VarRef(n)) => list_contains_str(pnames, n) && match graph_node_body(node_handle(b)) {
     NExpr(LitInt(1)) => true,
     _ => false,
@@ -1234,7 +1234,7 @@ fn param_plus_one(a, b, pnames) with GraphRead + Alloc + Memory = match graph_no
   _ => false,
 }
 
-fn list_contains_str(xs, target: String) with Memory = match xs {
+fn list_contains_str(xs, target: String) with Pure = match xs {
   [] => false,
   [h, ...t] => if h == target { true } else { list_contains_str(t, target) },
 }
@@ -1381,7 +1381,7 @@ fn pin_word(pinned) with Pure = if pinned { "pinned" } else { "inferred" }
 // The pin sits in the scheme's OWN type chain — an authored TReprPin
 // survives inside the alias/refinement wrappers; the chased projection
 // answers the WIDTH, this walk answers WHO chose it.
-fn ty_has_repr_pin(ty) with Memory = match ty {
+fn ty_has_repr_pin(ty) with Pure = match ty {
   TReprPin(_, _) => true,
   TAlias(_, base) => ty_has_repr_pin(base),
   TRefined(base, _) => ty_has_repr_pin(base),
@@ -1492,7 +1492,7 @@ fn absorbs_join(arms, i, n, seen) with EnvRead + Memory + Alloc = if i >= n {
 fn name_in(xs, x: String, i, n) with Memory =
   if i >= n { false } else { if list_index(xs, i) == x { true } else { name_in(xs, x, i + 1, n) } }
 
-fn join_names(xs, i, n, acc: String) with Memory + Alloc = if i >= n {
+fn join_names(xs, i, n, acc: String) with Memory = if i >= n {
   acc
 } else {
   join_names(
@@ -1508,7 +1508,7 @@ fn join_names(xs, i, n, acc: String) with Memory + Alloc = if i >= n {
 // reads (lower.mn: a "" stack entry answers Seq), not a fabrication:
 // schedule_word env-lookups it to None and walks past, exactly as the
 // lower-side twin fences the unnameable frame.
-fn tee_handler_name(r) with GraphRead + Memory = match graph_node_body(node_handle(r)) {
+fn tee_handler_name(r) with GraphRead = match graph_node_body(node_handle(r)) {
   NExpr(VarRef(n)) => n,
   NExpr(CallExpr(callee, _)) => match graph_node_body(node_handle(callee)) {
     NExpr(VarRef(n)) => n,
@@ -1521,7 +1521,7 @@ fn tee_handler_name(r) with GraphRead + Memory = match graph_node_body(node_hand
 
 // Nearest install first, exactly schedule_in_stack's order: the first
 // handler covering a schedule effect names the strategy; none → Seq.
-fn schedule_word(tees) with EnvRead + Memory + Alloc = match tees {
+fn schedule_word(tees) with EnvRead + Memory = match tees {
   [] => "Seq",
   [h, ...rest] => if handler_covers(h, "Thread") {
     "Thread"
@@ -1541,7 +1541,7 @@ fn schedule_word(tees) with EnvRead + Memory + Alloc = match tees {
 // lists are env-stored (snoc/slice representations), so the walks are
 // index-based — a list PATTERN on a non-flat list is the flat-protocol
 // trap (the parse_query_string lesson, §7 face 13).
-fn handler_covers(hname: String, ename: String) with EnvRead + Memory + Alloc = match env_lookup(hname) {
+fn handler_covers(hname: String, ename: String) with EnvRead + Memory = match env_lookup(hname) {
   Some(entry) => match entry {
     (_, _, HandlerKind(_, _, _, arms)) => match env_lookup(ename) {
       Some(eentry) => match eentry {
@@ -1555,7 +1555,7 @@ fn handler_covers(hname: String, ename: String) with EnvRead + Memory + Alloc = 
   None => false,
 }
 
-fn arms_cover_ops(arms, ops, i, n) with Memory + Alloc = if i >= n {
+fn arms_cover_ops(arms, ops, i, n) with Memory = if i >= n {
   false
 } else {
   if ops_contain(ops, handler_arm_op_name(list_index(arms, i)), 0, len(ops)) {
@@ -1565,7 +1565,7 @@ fn arms_cover_ops(arms, ops, i, n) with Memory + Alloc = if i >= n {
   }
 }
 
-fn ops_contain(ops, target: String, i, n) with Memory + Alloc = if i >= n {
+fn ops_contain(ops, target: String, i, n) with Memory = if i >= n {
   false
 } else {
   if list_index(ops, i) == target { true } else { ops_contain(ops, target, i + 1, n) }

@@ -199,7 +199,7 @@ let fanout_distribute_kind = PFanout(FanDistribute)
 fn render_chain_pos(node) with Format + Memory + GraphRead + !Mutate =
   if expr_prec_of(node) < 1 { parenthesize(format_chain(node)) } else { format_chain(node) }
 
-fn render_converge_chain(left, right) with Format + GraphRead + Memory + Alloc + !Mutate = {
+fn render_converge_chain(left, right) with Format = {
   let left_str = render_chain_pos(left)
   let right_str = render_chain_pos(right)
   "{left_str}\n{spaces(left_edge_indent())}|> {right_str}"
@@ -281,7 +281,7 @@ fn render_fanout_inline(branches) = match branches {
 // A single-stage body renders inline — same tree, same scope:
 //
 //   (try_fn()) ~> catch_abort
-fn render_tee(body, handler_expr) with Format + GraphRead + Memory + Alloc + !Mutate = {
+fn render_tee(body, handler_expr) with Format + GraphRead = {
   let body_str = render_chain_pos(body)
   let handler_str = render_chain_pos(handler_expr)
   let hc = graph_comment_at(node_handle(handler_expr))
@@ -305,7 +305,7 @@ fn render_tee(body, handler_expr) with Format + GraphRead + Memory + Alloc + !Mu
 // <~ at indented center (4-space) with the FeedbackSpec on the same
 // line. Requires iterative context (Sample / Tick / Clock / IC handler
 // installed upstream); without it, parser rejects with E_FeedbackNoContext.
-fn render_feedback_chain(input, spec) with Format + Memory + GraphRead + !Mutate + Alloc = {
+fn render_feedback_chain(input, spec) with Format = {
   let input_str = render_chain_pos(input)
   let spec_str = render_chain_pos(spec)
   "{input_str}\n{spaces(indented_center())}<~ {spec_str}"
@@ -527,7 +527,7 @@ fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate + Intern = ma
   RefineStmt(name, ty, pred) => "type {name} = {render_type_tokens(ty)} where {render_predicate_tokens(pred)}",
 }
 
-fn render_pat_tokens(p) with GraphRead + Memory + Alloc + !Mutate = match p {
+fn render_pat_tokens(p) with Memory + Alloc = match p {
   PVar(name) => name,
   PWild => "_",
   PCon(name, ps) => if len(ps) == 0 { name } else { "{name}({render_pat_list(ps, ", ")})" },
@@ -548,7 +548,7 @@ fn render_pat_tokens(p) with GraphRead + Memory + Alloc + !Mutate = match p {
 // The broken-call form: one argument per line, each argument's attached
 // prose above its line (a prose-carrying argument FORCES this form —
 // the inline join has nowhere to put a comment).
-fn args_carry_prose(ref args, i) with GraphRead + Memory + Alloc + !Mutate = if i >= len(args) {
+fn args_carry_prose(ref args, i) with Memory + GraphRead = if i >= len(args) {
   false
 } else if graph_comment_at(node_handle(args[i])) == "" {
   args_carry_prose(args, i + 1)
@@ -577,7 +577,7 @@ fn render_node_list_from(ref nodes, i, sep: String) with GraphRead + Memory + Al
 fn render_pat_list(ref pats, sep) with GraphRead + Memory + Alloc + !Mutate =
   render_pat_list_from(pats, 0, sep)
 
-fn render_pat_list_from(ref pats, i, sep: String) with GraphRead + Memory + Alloc + !Mutate = if i >= len(pats) {
+fn render_pat_list_from(ref pats, i, sep: String) with Memory + Alloc = if i >= len(pats) {
   ""
 } else if i == len(pats) - 1 {
   render_pat_tokens(pats[i])
@@ -652,7 +652,7 @@ fn resugar_walk(ref params, i, body, acc) with GraphRead + Memory + Alloc + !Mut
 }
 
 // The one-arm match the desugar minted: the scrutinee IS the __dp name.
-fn dp_match_arm(body, nm) with GraphRead + Memory + Alloc + !Mutate = match ast_kind_of(body) {
+fn dp_match_arm(body, nm) with Memory + Alloc = match ast_kind_of(body) {
   NExpr(MatchExpr(scrut, arms)) => if len(arms) == 1 {
     match ast_kind_of(scrut) {
       NExpr(VarRef(snm)) => if snm == nm { Some(arms[0]) } else { None },
@@ -681,7 +681,7 @@ fn render_operand(child, parent_prec, is_right) with GraphRead + Memory + Alloc 
   }
 }
 
-fn expr_prec_of(node) with GraphRead + Memory + !Mutate = match ast_kind_of(node) {
+fn expr_prec_of(node) with Pure = match ast_kind_of(node) {
   NExpr(BinOpExpr(op, _, _)) => binop_prec(op),
   NExpr(PipeExpr(k, _, _)) => pipe_prec(k),
   NExpr(FanoutExpr(_)) => pipe_prec(fanout_distribute_kind),
@@ -915,7 +915,7 @@ fn render_variants(ref variants, i) with GraphRead + Memory + Alloc + !Mutate + 
   if fits_inline(inline) { inline } else { "\n{indent_block(render_variants_vertical(variants, 0))}" }
 }
 
-fn variants_carry_prose(ref variants, i) with GraphRead + Memory + Alloc + !Mutate = if i >= len(variants) {
+fn variants_carry_prose(ref variants, i) with Memory + GraphRead = if i >= len(variants) {
   false
 } else {
   match variants[i] {
@@ -1139,7 +1139,7 @@ fn render_config_list(ref config, i) with GraphRead + Memory + Alloc + Intern + 
   if i == len(config) - 1 { one } else { "{one}, {render_config_list(config, i + 1)}" }
 }
 
-fn render_name_list(ref names, i) with Memory + Alloc = if i >= len(names) {
+fn render_name_list(ref names, i) with Memory = if i >= len(names) {
   ""
 } else if i == len(names) - 1 {
   names[i]
@@ -1175,7 +1175,7 @@ fn render_lit_value(lv) with Memory + Alloc = match lv {
   LVBool(b) => if b { "true" } else { "false" },
 }
 
-fn render_plist_inner(ref ps, rest: Option(String)) with GraphRead + Memory + Alloc + !Mutate = {
+fn render_plist_inner(ref ps, rest: Option(String)) with Memory + Alloc = {
   let prefix = render_pat_list(ps, ", ")
   match rest {
     Some(rname) => if len(ps) == 0 { "...{rname}" } else { "{prefix}, ...{rname}" },
@@ -1183,7 +1183,7 @@ fn render_plist_inner(ref ps, rest: Option(String)) with GraphRead + Memory + Al
   }
 }
 
-fn render_pat_fields(ref fields, i) with GraphRead + Memory + Alloc + !Mutate = if i >= len(fields) {
+fn render_pat_fields(ref fields, i) with Memory + Alloc = if i >= len(fields) {
   ""
 } else {
   match fields[i] {
@@ -1405,7 +1405,7 @@ type RenderContext
   | RenderContextTuple(Int)
 
 // The unary operator glyph per SYNTAX.md — `-` negate, `!` logical-not.
-fn unary_op_glyph(op) with Memory + Alloc = match op {
+fn unary_op_glyph(op) with Pure = match op {
   UNeg => "-",
   UNot => "!",
 }

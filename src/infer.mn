@@ -6511,7 +6511,7 @@ fn arity_mismatch(la, lb, span: ValidSpan) = report(EFnArityMismatch(la, lb, spa
 // for value-boundary folds, not a mid-judgment probe). An unbound or
 // non-tuple root answers TUnit here, which no tuple arm matches — the
 // caller falls to the generic force.
-fn index_receiver_shallow(rh) with GraphRead + Memory = match graph_chase(rh) {
+fn index_receiver_shallow(rh) with GraphRead = match graph_chase(rh) {
   GNode(NBound(rty), _) => fold_strip(rty),
   _ => TUnit,
 }
@@ -9495,7 +9495,7 @@ fn grade_fields(fields) = if len(fields) == 0 {
 fn infer_refinement_narrowing(body) with GraphRead + GraphWrite + Memory + Alloc =
   walk_refinement(body, PTrue)
 
-fn walk_refinement(node, path_pred) with GraphRead + GraphWrite + Memory + Alloc = match node {
+fn walk_refinement(node, path_pred) with Memory + Alloc = match node {
   N(body, _, _) => match body {
     NExpr(IfExpr(c, t, e)) => {
       let cond_pred = predicate_of_bool_expr(c)
@@ -9591,7 +9591,7 @@ fn walk_refinement(node, path_pred) with GraphRead + GraphWrite + Memory + Alloc
 // before walking the arm body. The narrowing is per-arm-scope; once
 // the arm body is walked, its refinement contributions don't leak
 // to other arms (they're branch-disjoint; map-per-arm semantics).
-fn walk_refinement_arms(scrut, arms, path_pred) with GraphRead + GraphWrite + Memory + Alloc = if len(arms) == 0 {
+fn walk_refinement_arms(scrut, arms, path_pred) with Memory + Alloc = if len(arms) == 0 {
   ()
 } else {
   // A match arm is a (pat, body) TUPLE (parser push_node (pat, body); the
@@ -9611,7 +9611,7 @@ fn walk_refinement_arms(scrut, arms, path_pred) with GraphRead + GraphWrite + Me
 // rest of the block. Threads path_pred through; each assert
 // A fanout's branches walk under the SAME path predicate — parallel
 // peers, no sequential strengthening between them.
-fn walk_refinement_branches(branches, path_pred) with GraphRead + GraphWrite + Memory + Alloc = if len(branches) == 0 {
+fn walk_refinement_branches(branches, path_pred) with Memory + Alloc = if len(branches) == 0 {
   ()
 } else {
   walk_refinement(last(branches), path_pred)
@@ -9619,7 +9619,7 @@ fn walk_refinement_branches(branches, path_pred) with GraphRead + GraphWrite + M
 }
 
 // strengthens the predicate for subsequent stmts + final expression.
-fn walk_refinement_block(stmts, final, path_pred) with GraphRead + GraphWrite + Memory + Alloc = if len(stmts) == 0 {
+fn walk_refinement_block(stmts, final, path_pred) with Memory + Alloc = if len(stmts) == 0 {
   walk_refinement(final, path_pred)
 } else {
   let stmt = last(stmts)
@@ -9628,7 +9628,7 @@ fn walk_refinement_block(stmts, final, path_pred) with GraphRead + GraphWrite + 
   walk_refinement_block(drop_last(stmts), final, strengthened)
 }
 
-fn strengthen_path_pred(path_pred, stmt) with GraphRead + Memory + Alloc = match stmt {
+fn strengthen_path_pred(path_pred, stmt) with Memory + Alloc = match stmt {
   N(body, _, _) => match body {
     NStmt(ExprStmt(e)) => match e {
       N(ebody, _, _) => match ebody {
@@ -9652,14 +9652,14 @@ fn strengthen_path_pred(path_pred, stmt) with GraphRead + Memory + Alloc = match
 fn walk_refinement_args_with_param_preds(f, args, path_pred) with GraphRead + GraphWrite + Memory + Alloc =
   walk_refinement_list(args, path_pred)
 
-fn walk_refinement_list(nodes, path_pred) with GraphRead + GraphWrite + Memory + Alloc = if len(nodes) == 0 {
+fn walk_refinement_list(nodes, path_pred) with Memory + Alloc = if len(nodes) == 0 {
   ()
 } else {
   walk_refinement(last(nodes), path_pred)
   walk_refinement_list(drop_last(nodes), path_pred)
 }
 
-fn walk_refinement_fields(fields, path_pred) with GraphRead + GraphWrite + Memory + Alloc = if len(fields) == 0 {
+fn walk_refinement_fields(fields, path_pred) with Memory + Alloc = if len(fields) == 0 {
   ()
 } else {
   // A record-literal field is a (name, value) TUPLE (types.mn
@@ -9693,7 +9693,7 @@ fn conjunction(p, q) = PAnd(p, q)
 
 fn pattern_predicate_for(pat, scrut) = PPatternMatch(pat, node_handle(scrut))
 
-fn is_assert_call(callee) with Memory + Alloc = match callee {
+fn is_assert_call(callee) with Pure = match callee {
   N(body, _, _) => match body {
     NExpr(VarRef(name)) => name == "assert",
     _ => false,

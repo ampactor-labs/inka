@@ -299,7 +299,7 @@ fn scan_for_tee_governing(target, i, n) with GraphRead + !Mutate = if i >= n {
   }
 }
 
-fn is_pure_row(row) with Memory + Alloc = match row {
+fn is_pure_row(row) with Pure = match row {
   EfRow([], [], EtClosed) => true,
   EfRow([], _, EtClosed) => true,
   _ => false,

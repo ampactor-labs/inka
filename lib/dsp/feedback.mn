@@ -103,7 +103,7 @@ fn compute_alpha(cutoff: Hz, sr: Int) -> Float with Pure + !Alloc = {
 //
 // Primitive #3 (`<~`) drawn; primitive #5 (own input consumed);
 // primitive #6 (Sample / Hz refinements discharged at boundaries).
-fn lowpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Memory + Alloc = {
+fn lowpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Memory + Alloc = {
   let alpha = compute_alpha(cutoff, sr)
   ((prev) => input * alpha + (1.0 - alpha) * prev) <~ delay(1)
 }
@@ -111,7 +111,7 @@ fn lowpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Memor
 // One-pole high-pass IIR filter — HP = signal - LP. The prior output
 // y[n-1] is the smoothed (low-pass) component; subtracting it from the
 // input leaves the high-frequency residue. Same `<~ delay(1)` substrate.
-fn highpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Sample + Memory + Alloc = {
+fn highpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample with Memory + Alloc = {
   let alpha = compute_alpha(cutoff, sr)
   ((prev) => input - (alpha * input + (1.0 - alpha) * prev)) <~ delay(1)
 }
@@ -127,7 +127,7 @@ fn dc_blocker(input: Sample) -> Sample with Sample + Memory + Alloc =
 // across ticks via `<~ delay(1)`; each sample relaxes the prior
 // envelope toward the current magnitude: env[n] = α·|x[n]| + (1-α)·env[n-1].
 // Refinement keeps attack + release as positive Hz values.
-fn envelope_follower(input: Sample, attack: Hz, release: Hz, sr: Int) -> Sample with Sample + Memory + Alloc = {
+fn envelope_follower(input: Sample, attack: Hz, release: Hz, sr: Int) -> Sample with Memory + Alloc = {
   let abs_input = if input >= 0.0 { input } else { 0.0 - input }
   let alpha = compute_alpha(attack, sr)
   ((prev) => abs_input * alpha + (1.0 - alpha) * prev) <~ delay(1)

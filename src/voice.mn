@@ -417,7 +417,7 @@ fn silence_predicate(situation) with OracleQuery = {
 // Topology→FOffering, Unlock→FCapability, Trace→FRefutation,
 // Verify→FRefinement, Teach→FGradient, Why→FTrace. H6 discipline:
 // no wildcard arm; every Tentacle variant's mapping is named.
-fn tentacle_to_form_kind(tentacle) with Memory + Alloc = match tentacle {
+fn tentacle_to_form_kind(tentacle) with Pure = match tentacle {
   TentQuery => FFactual,
   TentPropose => FOffering,
   TentTopology => FOffering,
@@ -480,7 +480,7 @@ fn topic_discriminant(topic) with Pure = match topic {
 // primitive needed at this scale (modulo'd by applicable-subset
 // length, which is at most 6 per §2.7.4). Prime multipliers
 // minimize collision over the small index space we modulo into.
-fn situation_hash(situation) with Memory + Alloc = match situation {
+fn situation_hash(situation) with Pure = match situation {
   Situation(s) => tentacle_tag(s.tentacle) * 31 + topic_discriminant(s.topic) * 17,
 }
 
@@ -522,7 +522,7 @@ fn with_tentacle(situation, tentacle) with Memory + Alloc = match situation {
 // yields the code; other variants yield empty string. Used by render
 // arms to populate SIdent slots without re-routing through graph.
 // H6 exhaustive over Topic.
-fn topic_ident_or_empty(topic) with Memory + Alloc = match topic {
+fn topic_ident_or_empty(topic) with Pure = match topic {
   TopicIdent(name) => name,
   TopicHandle(_) => "",
   TopicSpan(_) => "",
@@ -755,7 +755,7 @@ fn voice_queue_walk(situation_seed) with OracleQuery + Memory + Alloc = match si
 // mapping) and call the per-tentacle render arm. Tail-recursive
 // accumulator pattern; flat-buffer-plus-counter substrate (Ω.3 —
 // list_extend_to + list_set + counter + slice).
-fn fold_queue_items(situation, items, i, n, acc, count) with OracleQuery + Alloc + Memory = if i >= n {
+fn fold_queue_items(situation, items, i, n, acc, count) with Memory + Alloc = if i >= n {
   slice(acc, 0, count)
 } else {
   let item = list_index(items, i)
@@ -860,7 +860,7 @@ fn focus_reason(target) with Memory + Alloc = match target {
 // QOwnership is Trace-tentacle (ownership trail); QVerifyDebt is
 // Verify-tentacle (refinement obligations). H6 exhaustive over
 // Question's 15 variants via pattern alternation per SYNTAX.md L956.
-fn tentacle_for_question(question) with Memory + Alloc = match question {
+fn tentacle_for_question(question) with Pure = match question {
   QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QDecls | QWhere(_) | QVariants(_) | QModules | QImports | QCost | QUnknown(_) => TentQuery,
   QOwnership(_) => TentTrace,
   QWhy(_) | QSubstChain(_) => TentWhy,

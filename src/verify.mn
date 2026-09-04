@@ -353,7 +353,7 @@ fn value_flows_class(value_handle) with GraphRead = match graph_node_body(value_
 
 // The alias NAME of a value node's inferred type ("" when unaliased) —
 // read live through the chase after the candidate's infer pass.
-fn inferred_alias_name(value_handle) with GraphRead + Memory + Alloc = match graph_chase(value_handle) {
+fn inferred_alias_name(value_handle) with GraphRead = match graph_chase(value_handle) {
   GNode(kind, _) => match kind {
     NBound(TAlias(aname, _)) => aname,
     _ => // drift-audit: ignore — "" IS the documented no-alias sentinel this projection's one caller compares against (an alias name is never empty)

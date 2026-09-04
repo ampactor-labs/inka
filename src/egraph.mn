@@ -192,7 +192,7 @@ fn is_zero(handle) with GraphRead = match graph_node_body(handle) {
   _ => false,
 }
 
-fn is_one(handle) with GraphRead + Memory + Alloc = match graph_node_body(handle) {
+fn is_one(handle) with GraphRead = match graph_node_body(handle) {
   NExpr(LitInt(n)) => n == 1,
   _ => false,
 }

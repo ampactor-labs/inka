@@ -653,7 +653,7 @@ fn teach_synthesize(hole_handle, context) = match graph_chase(hole_handle) {
 // row; every other Ty is treated as the pure row (it has no effect
 // behavior by itself). Named explicitly so a future Ty whose row
 // semantics aren't pure surfaces as a compile error.
-fn extract_row(ty) with Memory = match ty {
+fn extract_row(ty) with Pure = match ty {
   TFun(_, _, row) => row,
   TInt => mk_ef_pure(),
   TFloat => mk_ef_pure(),

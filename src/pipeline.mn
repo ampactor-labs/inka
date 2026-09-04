@@ -1165,7 +1165,7 @@ fn render_debt_line(seams, ob) = match ob {
 // not guessed from text, which is the whole reason the facet exists: a grep
 // cannot tell a used name from one mentioned in a comment, and 52 of these
 // sat unseen behind exactly that.
-fn render_import_row(row) with Memory + Alloc = match row {
+fn render_import_row(row) with Pure = match row {
   (m, imported, used) => {
     let mark = if used { "used" } else { "DEAD" }
     "  {mark}  {m} -> import {imported}"
@@ -1226,7 +1226,7 @@ fn render_query_result(result) = match result {
   QRError(msg) => "error: {msg}",
 }
 
-fn str_join_lines(lines) with Memory + Alloc = match lines {
+fn str_join_lines(lines) with Pure = match lines {
   [] => "",
   [one] => one,
   [h, ...t] => "{h}\n  {str_join_lines(t)}",
@@ -1238,7 +1238,7 @@ fn str_join_lines(lines) with Memory + Alloc = match lines {
 fn render_where_sites(sites) with GraphRead + Memory + Alloc =
   render_where_sites_from(sites, module_seams())
 
-fn render_where_sites_from(sites, seams) with GraphRead + Memory + Alloc = match sites {
+fn render_where_sites_from(sites, seams) with Memory + Alloc = match sites {
   [] => "",
   [(word, s), ...t] => "\n  >< [{word}] at {span_render_local(seams, s)}{render_where_sites_from(t, seams)}",
 }

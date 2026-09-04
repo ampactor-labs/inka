@@ -186,7 +186,7 @@ fn spine_put_install(spine, h, ish) with Memory = {
   ()
 }
 
-fn spine_put_span(ref spine, h, own span) with Memory + Alloc = {
+fn spine_put_span(ref spine, h, own span) with Memory = {
   let _ = list_set(spine_page(spine, h).spans, spine_slot(h), span)
   ()
 }
@@ -903,7 +903,7 @@ fn chase_handle(ref spine, mint_bound, handle, depth) with !Mutate = if depth > 
 // fold the known names forward through the chain. free_handle is the
 // handle we chased INTO — needed to reconstruct the var-tailed triple
 // when the chain terminates at NRowFree (the free variable).
-fn merge_chased_row(ref chased, ref names, ref absents, free_handle) with !Mutate = match chased {
+fn merge_chased_row(ref chased, ref names, ref absents, free_handle) with Memory + Alloc = match chased {
   GNode(ck, cr) => match ck {
     NRowBound(inner) => GNode(NRowBound(merge_row(names, absents, inner)), cr),
     _ => // EVERY non-bound terminal preserves the accumulated reading — the
@@ -927,7 +927,7 @@ fn merge_chased_row(ref chased, ref names, ref absents, free_handle) with !Mutat
 // former EtAll special case (return the deeper row whole) was
 // reading-equal only when this level carried no absents — with the
 // masks riding, the uniform arm is the truth for it too.
-fn merge_row(ref names, ref absents, ref row) with !Mutate = match row {
+fn merge_row(ref names, ref absents, ref row) with Memory + Alloc = match row {
   EfRow(p, a, t) => ef_make(name_set_union(names, name_set_diff(p, absents)), name_set_union(absents, a), t),
 }
 

@@ -184,7 +184,7 @@ fn classify_method(method) with Memory + Alloc = if method == "initialize" {
 // dispatch_request — request methods (require response). H6
 // exhaustive over LspMethodKind. Notification-shaped methods that
 // arrive as requests get LspNullResp (graceful protocol tolerance).
-fn dispatch_request(kind, params) with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate + EnvRead + Intern = match kind {
+fn dispatch_request(kind, params) with Interact + Memory + Alloc + Intern + GraphRead + EnvRead = match kind {
   LspInitialize => handle_initialize(params),
   LspShutdown => LspNullResp,
   LspTextDocHover => handle_hover(params),
@@ -336,7 +336,7 @@ fn handle_code_action(params) with Interact + Alloc + Memory = {
 // obligations the graph holds; project each (span, predicate, reason)
 // to an LSP LspDiagnostic. The verify-debt IS the diagnostic set (the
 // graph proved it) — read live, never an empty []-fabrication.
-fn handle_diagnostic(params) with Memory + Alloc + Interact + GraphRead + EnvRead + Intern = {
+fn handle_diagnostic(params) with Memory + Alloc + Interact + GraphRead + Intern = {
   let uri = lsp_extract_uri(params)
   ensure_doc_open(uri)
   match consult(QVerifyDebt) {

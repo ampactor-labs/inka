@@ -601,7 +601,7 @@ fn print_lost_comments(ref src_toks, ref out_toks, i, shown) with WASI + Memory 
   }
 }
 
-fn comment_text_present(ref toks, t: String, i) -> Bool with Memory + Alloc = if i >= len(toks) {
+fn comment_text_present(ref toks, t: String, i) -> Bool with Memory = if i >= len(toks) {
   false
 } else {
   match token_kind(toks[i]) {
@@ -612,7 +612,7 @@ fn comment_text_present(ref toks, t: String, i) -> Bool with Memory + Alloc = if
 
 // One TComment token per authored prose line — the lexical census the
 // fmt conservation gate reads on both sides of the round trip.
-fn count_comment_tokens(ref tokens, i, acc) with Memory + Alloc = if i >= len(tokens) {
+fn count_comment_tokens(ref tokens, i, acc) with Memory = if i >= len(tokens) {
   acc
 } else {
   match token_kind(tokens[i]) {
@@ -668,14 +668,59 @@ fn tighten_run(target_opt) = {
   } ~> tighten_collector ~> wasi_filesystem ~> mentl_default)
 }
 
-// Authorable = the proven row renders as source: a closed tail. An open
-// tail renders as edge handles — never authored into a signature.
+// Authorable = the proven row RENDERS AS SOURCE THE PARSER READS BACK. A
+// self-authoring verb has exactly one soundness property, and this is it:
+// author nothing you cannot re-parse.
+//
+// Two ways a proven row fails that. An OPEN tail renders as edge handles,
+// which no signature can name. And a TYPE-PARAMETERIZED instance —
+// `Cast(GNode)`, `Iterate(a)` — renders an effect argument the with-clause
+// grammar does not accept: SYNTAX §«Parameterized effect» takes a VALUE arg
+// (`Sample(44100)`), so a type there re-parses as a constructor pattern.
+//
+// Measured 2026-09-04, and the shape of the failure is worth keeping: a run
+// authored 132 tightenings, of which the type-instance ones turned
+// `with … + Cast` into `with … + Cast(GNode)`, and the wheel then reported
+// 20 × E_ConstructorArity ("constructor Cast takes 0 fields; the pattern
+// binds 1") beside 20 × E_EffectMismatch whose two sides PRINT IDENTICALLY
+// — `Memory + Alloc + Cast(GNode)` against itself. Rows that render the same
+// and compare unequal is exactly what a broken round-trip looks like. The
+// census gate caught it and refused the pin.
+//
+// The instance survives in the graph either way; what is refused is writing
+// it down. Making the surface able to say it is
+// `Hβ.syntax.type-instance-in-with-clause`.
 fn row_is_authorable(ref used) = match used {
-  EfRow(_, _, t) => match t {
-    EtClosed => true,
+  EfRow(present, absent, t) => match t {
+    EtClosed => every_eff_authorable(present, 0) && every_eff_authorable(absent, 0),
     EtOpen(_) => false,
     EtAll => false,
   },
+}
+
+fn every_eff_authorable(effs, i) = if i >= len(effs) {
+  true
+} else if eff_name_authorable(effs[i]) {
+  every_eff_authorable(effs, i + 1)
+} else {
+  false
+}
+
+// A bare name always writes, and so does Pure (the identity `with Pure`).
+// An instance writes only when every argument does — and a type does not.
+fn eff_name_authorable(name) = match name {
+  ENamed(_) => true,
+  EPure => true,
+  EParameterized(_, args) => every_eff_arg_authorable(args, 0),
+}
+
+fn every_eff_arg_authorable(args, i) = if i >= len(args) {
+  true
+} else {
+  match args[i] {
+    EAType(_) => false,
+    _ => every_eff_arg_authorable(args, i + 1),
+  }
 }
 
 // The batch applier: locate every candidate (drop unmappable spans),
@@ -1009,7 +1054,7 @@ fn field_dedup_spans(handles) with GraphRead + Memory + Alloc + !Mutate = filter
   handles
 )
 
-fn span_start_eq(ref a, ref b) with Memory = match a {
+fn span_start_eq(ref a, ref b) with Pure = match a {
   Span(asl, asc, _, _) => match b {
     Span(bsl, bsc, _, _) => asl == bsl && asc == bsc,
   },

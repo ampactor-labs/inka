@@ -652,7 +652,12 @@ comment_refs_max: 0
 # is deterministic, so this is the value and not a sample — tightened rather
 # than left slack, because a ceiling above the measurement is exactly the
 # room a regrowth hides in.
-movers_max: 472
+#
+# 472 → 474 at the orphan-claims facet (same day): eight added fns across
+# query.mn and pipeline.mn. Same family as the three facet landings before
+# it, and the same non-constant per-fn cost — what moves a scheme is
+# forward reference, not count. No condemned machinery touched.
+movers_max: 474
 
 # The effect seam: filesystem impl calls outside the handler that owns them.
 # MEASURED 24 before this landing and 13 after (both read from the artifact,

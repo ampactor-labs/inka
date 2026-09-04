@@ -35,6 +35,49 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin cfb97e95594f703b · THE PATTERN BEHIND THREE FINDS BECAME
+  A VERB. CLEAN m2 == m3 at 418650 lines, census 0; micros 149/149;
+  frontier 374/0.
+  ▶ THE PATTERN: BodyContext ("read by LEvPerform's offset arithmetic" —
+  zero readers), Delta ("the Cursor handler's CursorView.teach field reads
+  through delta_pick" — no such field), and the drifted verify_candidate
+  copy ("mirrors the sequential arm exactly" — it did not). Three finds,
+  one shape: a declaration nothing references, carrying prose that explains
+  how it is used. The prose is the evidence — someone wrote down a belief
+  the graph disagrees with — and every one cost a hand read.
+  ▶ THE VERB: `mentl query <file> "orphan-claims"` reports the structural
+  conjunction, zero outside references AND 240+ bytes of attached comment,
+  read live through graph_comment_at (a comment is graph content, so this
+  needed no new column).
+  ▶ WHAT IT DELIBERATELY DOES NOT DO, because the limit is the design: it
+  does not read English. Deciding that "read by LEvPerform" is a CLAIM
+  would mean parsing meaning, and a checker that guesses at meaning would
+  be a second, worse comment-ref tier. It names the sites; a person reads
+  the prose. The existing comment-ref ratchet covers the other half at the
+  name layer — a BACKTICKED name that resolves nowhere — and it stayed at
+  ZERO through all three finds, because every phantom reader was named
+  without backticks. That is the gap this fills, and why it is a separate
+  tier rather than a widening of that one.
+  ▶ FIRST RUN: 216 declarations. That is not 216 bugs and the entry says so
+  — type names dominate because an annotation makes no reference edge
+  (`Hβ.types.type-expressions-are-not-graph-content`), and a library's
+  public vocabulary is unreferenced by the wheel by design, lib/threading
+  alone contributing 25 rows.
+  ▶ THE STANDOUT, found in one read: `cursor -> ic_fixpoint_handler` at
+  3,245 bytes of prose and zero references — the largest single claim in
+  the wheel, a handler nothing installs ANYWHERE. One step past Delta,
+  which at least sat in three chains. Banked as
+  `Hβ.cursor.ic-fixpoint-handler-is-never-installed` rather than deleted:
+  Delta was decidable because the T_OverDeclared diagnostic was
+  demonstrably the better shipping answer, and here nothing else memoizes
+  cursor projections by epoch, so deleting might remove the only
+  implementation of a capability §2 names. Built-ahead and abandoned look
+  identical from the reference count alone.
+  ▶ MY OWN PRECEDENCE BUG, caught by the medium in one check and worth the
+  line: `acc ++ filter(…) |> map(…)` maps over the ACCUMULATOR, because
+  `++` binds tighter than `|>`. The error read `List(Byte) vs (String,
+  String, Int)`. Written explicitly now with the reason at the site.
+
 - 2026-09-04 · pin d5e6f594f3bfa9ef · THE GRADIENT'S INVERSE DIRECTION HAD
   TWO IMPLEMENTATIONS. CLEAN m2 == m3 at 417799 lines, census 0; micros
   149/149; frontier 374/0. Wheel 59,296 → 58,983 lines.

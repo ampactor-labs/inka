@@ -1203,6 +1203,17 @@ fn perform_row_is_partial(row) with Pure = match row {
 fn render_perform_rows(rows) with Memory + Alloc =
   "→ {int_to_str(len(rows))} effect(s); {int_to_str(count(perform_row_is_partial, rows))} with ops nothing performs\n{str_join_lines(map(render_perform_row, filter(perform_row_is_partial, rows)))}"
 
+// A declaration nothing references, carrying prose that explains how it is
+// used. The bytes are the weight of the belief; the zero is the graph
+// disagreeing with it. Read the prose to decide — this names the sites, it
+// does not judge them.
+fn render_orphan_row(row) with Memory + Alloc = match row {
+  (m, name, bytes) => "  CLAIMED  {m} -> {name}  ({int_to_str(bytes)} bytes of prose, 0 references)",
+}
+
+fn render_orphan_rows(rows) with Memory + Alloc =
+  "→ {int_to_str(len(rows))} declaration(s) explained at length and referenced by nothing\n{str_join_lines(map(render_orphan_row, rows))}"
+
 fn render_query_result(result) = match result {
   QRType(ty, reason) => "→ {show_type(ty)}\n  Reason: {show_reason(reason)}",
   QRIntent(effs) => {
@@ -1247,6 +1258,7 @@ fn render_query_result(result) = match result {
   QRImports(rows) => render_import_rows(rows),
   QRUnreferenced(rows) => render_unref_rows(rows),
   QRPerforms(rows) => render_perform_rows(rows),
+  QROrphanClaims(rows) => render_orphan_rows(rows),
   QRCost(mods, lines, nodes) => "→ {int_to_str(mods)} module(s) · {int_to_str(lines)} source line(s) · {int_to_str(nodes)} node(s) minted",
   QRWhere(lines, sites) => "→ {str_join_lines(lines)}{render_where_sites(sites)}",
   QRError(msg) => "error: {msg}",
@@ -1296,6 +1308,7 @@ type QueryVerb
   | QVImports
   | QVUnreferenced
   | QVPerforms
+  | QVOrphanClaims
   | QVCost
   | QVUnknownVerb
 
@@ -1333,6 +1346,8 @@ fn classify_query_verb(w: String) with Pure = if w == "type" {
   QVUnreferenced
 } else if w == "performs" {
   QVPerforms
+} else if w == "orphan-claims" {
+  QVOrphanClaims
 } else if w == "cost" {
   QVCost
 } else {
@@ -1376,6 +1391,7 @@ fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
   QVImports => QImports,
   QVUnreferenced => QUnreferenced,
   QVPerforms => QPerforms,
+  QVOrphanClaims => QOrphanClaims,
   QVCost => QCost,
   QVUnknownVerb => QUnknown(raw),
 }

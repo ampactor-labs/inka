@@ -1055,6 +1055,35 @@ with no new code. That is the fix; this entry exists so the facet's
 over-report at `span_valid` reads as a known gap rather than a candidate
 for deletion.
 
+`Hβ.cursor.ic-fixpoint-handler-is-never-installed` — 3,245 BYTES OF PROSE
+ON A HANDLER NOTHING INSTALLS. Found 2026-09-04 at pin cfb97e95 by the
+orphan-claims facet on its first run, as the largest single claim in the
+wheel.
+▶ THE MEASUREMENT: `ic_fixpoint_handler` (cursor.mn:184) handles
+cursor_argmax with an epoch-comparison fixpoint — the IC semantics PLAN §2
+names ("the cached cursor memoizes live reads by epoch, so 'read live' is
+the semantics and 'cached' is the mechanism"). `refs of` answers ZERO. It
+is not installed anywhere, which is a step past Delta: that one at least
+sat in three real chains.
+▶ WHY IT IS NOT OBVIOUSLY A DELETION, and why this entry exists instead of
+a commit: the IC cursor is load-bearing in the design — §2's cached-cursor
+row, the oracle's incremental half, and `Hβ.query.generation-operand` all
+lean on it — so an unwired implementation here is as likely to be "built
+ahead of its consumer" as "abandoned". Delta was decidable because the
+shipping alternative (the T_OverDeclared diagnostic) was demonstrably
+better. Here the alternative is unclear: nothing else memoizes cursor
+projections by epoch, so deleting may remove the only implementation of a
+named capability. The reading needed is whether cursor_argmax has any
+caller that SHOULD run under it.
+▶ THE FACET'S OWN LIMITS, stated so 216 is not read as 216 bugs: it
+reports declarations with zero outside references and 240+ bytes of
+attached prose. Type names dominate the count because an annotation makes
+no reference edge (`Hβ.types.type-expressions-are-not-graph-content`), and
+a library's public vocabulary is unreferenced by the wheel BY DESIGN —
+lib/threading contributes 25 rows for exactly that reason. The signal is
+in the compiler's own modules, and even there the prose may be describing
+something dormant on purpose.
+
 `Hβ.gradient.delta-re-derives-what-the-diagnostic-already-proposed` —
 RESOLVED 2026-09-04 at pin d5e6f594: gradient_delta.mn deleted whole (the
 Delta effect, delta_default, its four arms and nineteen supporting fns —

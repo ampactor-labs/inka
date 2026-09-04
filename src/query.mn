@@ -134,6 +134,7 @@ type Question
   | QImports
   | QUnreferenced
   | QPerforms
+  | QOrphanClaims
   // "cost" — what this question cost the medium, in the medium's own
   // facts: modules linked, source lines processed, nodes minted. A wall
   // clock is a HOST fact and varies per run, so it can be reported and
@@ -168,6 +169,7 @@ type QueryResult
   | QRImports([(String, String, Bool)])
   | QRUnreferenced([(String, String, Int)])
   | QRPerforms([(String, String, Int, Int)])
+  | QROrphanClaims([(String, String, Int)])
   // modules linked, source lines processed, nodes minted
   | QRCost(Int, Int, Int)
   // the derived badges (plain lines) + fanout sites as (schedule, span)
@@ -292,6 +294,7 @@ handler query_default {
     QImports => resume(QRImports(import_report(module_cells()))),
     QUnreferenced => resume(QRUnreferenced(unreferenced_report(module_cells()))),
     QPerforms => resume(QRPerforms(effect_report(module_cells()))),
+    QOrphanClaims => resume(QROrphanClaims(orphan_claim_report(module_cells()))),
     QCost => resume(QRCost(len(module_cells()), weave_line_extent(), graph_next())),
     QUnknown(q) => resume(QRError("unknown query: {q}")),
   },
@@ -609,6 +612,75 @@ fn decl_ref_verdict(path: String, extent, name: String) with GraphRead + Memory 
 fn decl_extent(d) with Pure = match d {
   N(_, sp, _) => sp,
 }
+
+fn decl_handle(d) with Pure = match d {
+  N(_, _, h) => h,
+}
+
+// ─── The claims prose makes that the refs column refutes ─────────────
+//
+// A declaration nothing references, carrying a paragraph that explains how
+// it is used, is the strongest dead-code signal in the wheel — stronger
+// than the bare zero, because someone WROTE DOWN a belief the graph
+// disagrees with. Three finds in one session were exactly this shape and
+// each cost a hand read:
+//
+//   BodyContext   "read by LEvPerform's offset arithmetic" — zero readers,
+//                 installed in every lowering route.
+//   Delta         "the Cursor handler's CursorView.teach field reads
+//                 through delta_pick" — no such field, 407 lines deleted.
+//   verify_candidate  its sibling's comment said the fan "mirrors the
+//                 sequential arm exactly"; it did not, and the unreached
+//                 copy was the drifted one.
+//
+// WHAT THIS DOES NOT DO, stated because the honest limit is the whole
+// design: it does not read English. Deciding that "read by LEvPerform" is
+// a CLAIM would need to parse prose, and a checker that guesses at meaning
+// would be a second, worse comment-ref tier. It reports the structural
+// conjunction — zero outside references AND attached prose past a length
+// no incidental note reaches — and leaves the reading to a person. The
+// comment-ref ratchet already covers the other half at the name layer:
+// a BACKTICKED name that resolves nowhere. All three finds above named
+// their phantom readers WITHOUT backticks, which is exactly why that
+// ratchet stayed at zero through every one of them.
+fn orphan_claim_report(cells) with GraphRead + Memory + Alloc + !Mutate =
+  fold([], orphan_rows_join, cells)
+
+fn orphan_rows_join(acc, cell) with GraphRead + Memory + Alloc + !Mutate =
+  acc ++ orphan_rows_for(cell)
+
+fn orphan_rows_for(cell) with GraphRead + Memory + Alloc + !Mutate = match cell {
+  (path, _, decls) => fold([], orphan_row_join(path), decls),
+}
+
+fn orphan_row_join(path: String, acc, d) with GraphRead + Memory + Alloc + !Mutate = {
+  let prose = graph_comment_at(decl_handle(d))
+  if byte_len(prose) < orphan_prose_floor() {
+    acc
+  } else {
+    // Parenthesised deliberately: `++` binds tighter than `|>` (§Precedence),
+    // so `acc ++ filter(…) |> map(…)` maps over the ACCUMULATOR. Written as
+    // a pipe first and caught by the medium in one check.
+    acc ++ map(
+      orphan_verdict(path, byte_len(prose)),
+      filter(name_is_orphaned(decl_extent(d)), decl_names_of(d))
+    )
+  }
+}
+
+fn name_is_orphaned(extent, name: String) with GraphRead + Memory + Alloc + !Mutate =
+  count(ref_is_outside(extent), graph_refs_at(name)) == 0
+
+fn orphan_verdict(path: String, prose_bytes, name: String) with Memory + Alloc =
+  (path, name, prose_bytes)
+
+// The floor is a length, not a judgment: below it a comment is a label
+// ("// the fd", "// see above") and its absence of readers says nothing.
+// 240 bytes is roughly three full lines of prose — the point at which
+// someone was explaining rather than labelling. Every one of the three
+// finds carried far more; the number is a threshold to tune against
+// measurements, never a claim about what a comment means.
+fn orphan_prose_floor() with Pure = 240
 
 // ─── The effect rosters, read for what anything actually performs ────
 //

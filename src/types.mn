@@ -3020,6 +3020,11 @@ effect Filesystem {
   // fs_list_dir lands separately as FX.A.dirent (dirent record parsing
   // is its own focused sub-handle).
   fs_open(String) -> Int
+  // create+truncate for writing, returning the fd — distinct from fs_open's
+  // read/write open (WASI oflags CREAT|TRUNC, write rights). It was missing
+  // while three routes wrote files, which is the whole reason those routes
+  // reached past this effect to fs_create_impl.
+  fs_create(String) -> Int
   fs_close(Int)
   fs_unlink(String) -> Bool
   fs_rename(String, String) -> Bool

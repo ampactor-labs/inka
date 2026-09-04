@@ -413,24 +413,24 @@ fn march_run() = {
     let source = str_concat_all(texts)
     let gen_path = ".build/march/m2.wat"
     let new_path = ".build/march/m2.new"
-    let prev = if fs_exists_impl(gen_path) { fs_read_file(gen_path) } else { "" }
-    fs_mkdir_impl(".build")
-    fs_mkdir_impl(".build/march")
-    let fd = fs_create_impl(new_path)
+    let prev = if fs_exists(gen_path) { fs_read_file(gen_path) } else { "" }
+    fs_mkdir(".build")
+    fs_mkdir(".build/march")
+    let fd = fs_create(new_path)
     if fd == 0 {
       print_string("march: cannot open {new_path} — no fresh generation written\n")
       1
     } else {
       let errors = march_emit(source, fd)
-      fs_close_impl(fd)
+      fs_close(fd)
       if errors > 0 {
-        fs_unlink_impl(new_path)
+        fs_unlink(new_path)
         print_string("march: {int_to_str(len(files))} files · {int_to_str(count_newlines(source))} source lines · census {int_to_str(errors)}\n")
         print_string("march: the judgment REFUSES — no verdict from a refused wheel\n")
         1
       } else {
         let emission = fs_read_file(new_path)
-        fs_rename_impl(new_path, gen_path)
+        fs_rename(new_path, gen_path)
         print_string("march: {int_to_str(len(files))} files · {int_to_str(count_newlines(source))} source lines · {int_to_str(count_newlines(emission))} wat lines · census 0\n")
         if byte_len(prev) == 0 {
           print_string("march: baseline written ({gen_path}) — the next march compares against it\n")
@@ -1816,14 +1816,14 @@ fn battery_compile(src, wat_path) = compile_context(() => {
       let failed = if nholes > 0 || refused > 0 {
         1
       } else {
-        let fd = fs_create_impl(wat_path)
+        let fd = fs_create(wat_path)
         if fd == 0 {
           1
         } else {
           {
             emit_module(lowered)
           } ~> wat_to_file(fd)
-          fs_close_impl(fd)
+          fs_close(fd)
           0
         }
       }

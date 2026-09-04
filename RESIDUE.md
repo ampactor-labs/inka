@@ -1055,21 +1055,38 @@ with no new code. That is the fix; this entry exists so the facet's
 over-report at `span_valid` reads as a known gap rather than a candidate
 for deletion.
 
-`Hβ.io.fs-close-op-is-bypassed` — THE Filesystem EFFECT'S CLOSE OP IS
-DEAD BECAUSE THREE CALLERS REACH PAST IT TO THE IMPLEMENTATION. Measured
-2026-09-04 at pin 46ad0838.
-▶ WHAT THE FACET SHOWED: `fs_close` (types.mn) has zero references, while
-`fs_close_impl` (lib/io.mn) is called directly at main.mn:425,
-main.mn:1826 and mcp.mn:128. The handler arm in pipeline.mn:770 exists and
-does nothing but forward to that same impl, so every close in the wheel
-happens outside the effect that was declared to carry it.
-▶ WHY IT IS NOT A DELETION: an op nobody performs looks like dead
-vocabulary and is the opposite here. `fs_close` exists so that closing is
-an EFFECT a handler can intercept — which is what makes a persist or
-sandbox handler able to see it. Deleting the op would canonize the bypass
-and lose the seam; the fix is the three call sites performing the op, and
-the gate is a handler that counts closes and a fixture proving it sees all
-of them. Its sibling `fs_open` wants the same audit in the same landing.
+`Hβ.io.filesystem-impl-bypasses-the-effect` — CALLERS REACH PAST THE
+Filesystem OPS TO THEIR IMPLEMENTATIONS, AND THE ROW DOES NOT SAY SO.
+Opened 2026-09-04 at pin 46ad0838 as `.fs-close-op-is-bypassed`; renamed
+and re-scoped at pin 9347479e when the gate measured the real extent.
+▶ THE FIRST DRAFT WAS TOO NARROW. It named `fs_close` alone, off the
+`unreferenced` facet's report. The class is every op: measured 24 impl
+call sites outside the handler that owns them, across all nine impls.
+`fs_close` was merely the one whose op count reached zero, which is why it
+surfaced first.
+▶ WHY IT IS INVISIBLE: the impls carry `WASI`; the capability the handler
+names is `Filesystem`. A bypass keeps the behaviour and drops the effect
+from the row, so `with !Filesystem` holds over a route that writes files —
+and `wasi_filesystem`'s own comment promises severance on exactly that
+row ("drops path_open / fd_close from that binary"). The proof is sound
+about the substrate and wrong about the capability.
+▶ ELEVEN CLOSED AT 9347479e: march_run's whole file sequence, main's emit
+route, mcp's gate — each provably inside a `~> wasi_filesystem` install,
+so the ops were always reachable. `fs_create(String) -> Int` was declared
+and armed in the same landing; its absence was why writing a file had no
+op to perform. 24 → 13, ratcheted in verify-baseline as
+`fs_impl_bypass_max`, monotone down.
+▶ THE REMAINING 13, each wanting its own install-coverage reading before
+it converts: space's file server (main), `battery_libs` (which DECLARES
+`with WASI`, so its row is at least honest about the substrate and the
+conversion is a signature change), `persist`, and `dsp/cfc`. Driving them
+to zero is the entry's close condition.
+▶ THE GATE CANNOT BE A FIXTURE, and the probe is recorded so nobody
+retries it: `Filesystem` is the compiler's own effect, declared in
+types.mn, so a checked user program has no access to the vocabulary —
+`fn f() with !Filesystem` calling `fs_create` answers `E_MissingVariable`,
+not a refusal. The property lives on the wheel's own link and the verify
+tier reads it there, through the medium's `refs of` answer.
 
 `Hβ.types.type-expressions-are-not-graph-content` — A TYPE IN AN
 ANNOTATION HAS NO HANDLE AND NO SPAN, so the reference it makes cannot be

@@ -118,14 +118,14 @@ fn mcp_judge(source, wat_path) = compile_context(() => {
   match gate_reads(lowered) {
     (nholes, refused) => {
       let emitted = if nholes == 0 && refused == 0 {
-        let fd = fs_create_impl(wat_path)
+        let fd = fs_create(wat_path)
         if fd == 0 {
           0
         } else {
           {
             emit_module(lowered)
           } ~> wat_to_file(fd)
-          fs_close_impl(fd)
+          fs_close(fd)
           1
         }
       } else {

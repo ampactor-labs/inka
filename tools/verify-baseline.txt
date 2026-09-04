@@ -638,6 +638,27 @@ comment_refs_max: 0
 # touched or improved; rung 3 is what takes this to zero.
 movers_max: 472
 
+# The effect seam: filesystem impl calls outside the handler that owns them.
+# MEASURED 24 before this landing and 13 after (both read from the artifact,
+# the pre-number taken by stashing the fix and re-running the tier — not
+# derived from counting edits). Eleven conversions: march_run's whole file
+# sequence, main's emit route, and mcp's gate, each provably under a
+# `~> wasi_filesystem` install, so the ops were always reachable and the
+# impls were reached past.
+#
+# The remaining 13 are the honest class, not an accepted floor: space's file
+# server, battery_libs (which DECLARES `with WASI`, so its row is at least
+# truthful about the substrate), persist and dsp/cfc. Each needs its own
+# install-coverage reading before it converts — the same per-site discipline
+# that kept four dormant declarations alive at the previous pin.
+#
+# Monotone DOWN. A rise means a caller reached past the op, which keeps the
+# behaviour and drops the effect from the row INVISIBLY: the impls charge
+# WASI while the capability the handler names is Filesystem, so
+# `with !Filesystem` went on holding over routes that created, wrote,
+# renamed and unlinked files.
+fs_impl_bypass_max: 13
+
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.
 # Seeded 36 after the two one-line import fixes (verify→graph+io killed

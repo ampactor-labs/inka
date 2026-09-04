@@ -35,6 +35,54 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 9347479ebf108d99 · ELEVEN CALLERS REACHED PAST THE
+  FILESYSTEM EFFECT. CLEAN m2 == m3 at 418643 lines, census 0; micros
+  148/148; frontier 374/0.
+  ▶ WHAT WAS WRONG: `wasi_filesystem`'s own comment promises that "a
+  function that doesn't reach fs_* ops proves `with !Filesystem`," and that
+  audit-driven severance then drops path_open / fd_close from the binary.
+  march_run, main's emit route and mcp's gate created, wrote, renamed,
+  closed and unlinked files through the `_impl` fns instead. All three sit
+  inside a `~> wasi_filesystem` install — march_run's entire body has the
+  chain at its foot — so the ops were reachable the whole time and the
+  bypass bought nothing.
+  ▶ WHY NOBODY SAW IT: the impls carry `WASI`, not `Filesystem`. The row
+  stayed truthful about the substrate and silent about the capability, so
+  `with !Filesystem` kept holding over routes that were writing files, and
+  the severance the handler promises would have qualified a file-writing
+  binary to drop the very imports it uses. One line of main.mn had both
+  spellings in one expression: `fs_exists_impl(gen_path)` beside
+  `fs_read_file(gen_path)`.
+  ▶ THE DEP, BUILT RATHER THAN NAMED: the effect had no op for what two of
+  those routes do most. `fs_create_impl` is genuinely distinct from
+  `fs_open_impl` — WASI oflags CREAT|TRUNC and write-only rights against
+  CREAT and read/write — and no `fs_create` op existed, so reaching for the
+  impl was the only way to write a file. `fs_create(String) -> Int` is
+  declared and armed now.
+  ▶ THE GATE, and it immediately corrected me. A new verify tier asks the
+  medium `refs of <impl>` for each of the nine and counts sites outside the
+  handler that owns them (pipeline) or the definition (io) — the verb's
+  answer, never a grep, because a grep cannot tell a call from a name in a
+  comment. My hand census had found three bypasses; the tier found
+  THIRTEEN remaining after I fixed those three. The pre-fix number was then
+  measured properly rather than derived — the fix stashed, the tier re-run
+  — and read 24. Eleven conversions, 24 → 13.
+  ▶ THE 13 ARE NAMED, NOT ACCEPTED. space's file server, battery_libs
+  (which at least DECLARES `with WASI`, so its row is honest about the
+  substrate), persist, and dsp/cfc. Each needs its own install-coverage
+  reading before it converts, which is the same per-site discipline that
+  kept four dormant declarations alive at the previous pin. The ratchet is
+  monotone down and the entry `Hβ.io.fs-close-op-is-bypassed` — banked one
+  pin ago naming only fs_close — is corrected in RESIDUE to the real
+  extent.
+  ▶ A FIXTURE THAT COULD NOT EXIST, recorded because it cost a probe: the
+  natural gate would be `fn f() with !Filesystem` calling the ops, refusing
+  transitively, in the frontier battery. It cannot be written. `Filesystem`
+  is the COMPILER's own effect, declared in types.mn, and a checked user
+  program has no access to that vocabulary — `mentl check` on the fixture
+  answered `E_MissingVariable: fs_create`. The property lives on the
+  wheel's own link, which is where the tier put it.
+
 - 2026-09-04 · pin 46ad0838189effcc · A WRITE-ONLY HANDLER IN THE EMIT
   CHAIN OF EVERY ROUTE. CLEAN m2 == m3 at 418607 lines, census 0; micros
   148/148. Wheel 59378 → 59296 lines.

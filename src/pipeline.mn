@@ -753,6 +753,7 @@ handler wasi_filesystem {
   },
   fs_open(path) => // FX.A.basics arms (per FX walkthrough §2.2)
   resume(fs_open_impl(path)),
+  fs_create(path) => resume(fs_create_impl(path)),
   fs_close(fd) => {
     fs_close_impl(fd)
     resume()

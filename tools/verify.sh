@@ -405,6 +405,36 @@ if C=$(wt_m2_ensure); then
     say "✗ quiet-gate RATCHET: authored ref rose $refmax -> $cref — the inference failed somewhere; teach it, do not annotate around it."
     fail=1
   fi
+  # The EFFECT-SEAM gate (Hβ.io.fs-close-op-is-bypassed, closed 2026-09-04).
+  # An effect exists so a handler can intercept the operation. A caller that
+  # reaches past the op to the implementation keeps the behaviour and loses
+  # the seam — and loses it INVISIBLY, because the impls charge WASI while
+  # the capability the handler names is Filesystem. So `with !Filesystem`
+  # held over routes that created, wrote, renamed and unlinked files, and
+  # the severance the handler's own comment promises ("drops path_open /
+  # fd_close from that binary") would have qualified a file-writing binary.
+  # Every fs_*_impl reference must be inside the handler that owns it
+  # (pipeline) or its own definition (io). Anything else is a bypass.
+  # SEEN RED at 3 before the fix: fs_close_impl answered main:425,
+  # main:1826, mcp:128 beside its one legitimate site at pipeline:757.
+  # The count is the medium's own refs answer, never a grep — a grep cannot
+  # tell a call from a name written in a comment, which is the lesson the
+  # imports facet already paid for.
+  fsbp=0
+  for impl in fs_exists_impl fs_read_file_impl fs_write_file_impl fs_mkdir_impl \
+              fs_open_impl fs_create_impl fs_close_impl fs_unlink_impl fs_rename_impl; do
+    n=$(wt_run --dir . "$C/m2.wasm" query src/main.mn "refs of $impl" 2>/dev/null \
+        | grep -oE '^  at [a-z_/]+:' | grep -vcE '^  at (pipeline|io):' || true)
+    fsbp=$((fsbp + n))
+  done
+  fsmax=$(grep -E '^fs_impl_bypass_max:' "$BASELINE" | head -1 | cut -d: -f2 | tr -d ' ')
+  say "· effect seam: $fsbp filesystem impl call(s) outside the handler that owns them"
+  if [[ -n "$fsmax" && "$fsbp" -gt "$fsmax" ]]; then
+    say "✗ effect-seam RATCHET: impl bypasses rose $fsmax -> $fsbp — a caller reached past the op; the handler can no longer see the operation and the row stops naming it."
+    fail=1
+  elif [[ -n "$fsmax" && "$fsbp" -lt "$fsmax" ]]; then
+    say "  ↓ effect seam TIGHTENED $fsmax -> $fsbp — lower fs_impl_bypass_max in $BASELINE to hold it."
+  fi
   # The SUGAR VOCABULARY contract (Hβ.driver.link-is-reachability's seed).
   # The prelude names the compiler MINTS as literals are the seed set a
   # demand-link must carry: reachability from written names alone would miss

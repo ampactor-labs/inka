@@ -861,7 +861,7 @@ fn focus_reason(target) with Memory + Alloc = match target {
 // Verify-tentacle (refinement obligations). H6 exhaustive over
 // Question's 15 variants via pattern alternation per SYNTAX.md L956.
 fn tentacle_for_question(question) with Pure = match question {
-  QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QDecls | QWhere(_) | QVariants(_) | QModules | QImports | QCost | QUnknown(_) => TentQuery,
+  QTypeOf(_) | QTypeAt(_) | QIntentOf(_) | QUnresolved | QEffects(_) | QRefsOf(_) | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QDecls | QWhere(_) | QVariants(_) | QModules | QImports | QUnreferenced | QCost | QUnknown(_) => TentQuery,
   QOwnership(_) => TentTrace,
   QWhy(_) | QSubstChain(_) => TentWhy,
   QVerifyDebt => TentVerify,
@@ -873,7 +873,7 @@ fn tentacle_for_question(question) with Pure = match question {
 // exhaustive over Question via pattern alternation.
 fn question_span(question) with Memory + Alloc = match question {
   QTypeAt(s) => s,
-  QTypeOf(_) | QIntentOf(_) | QUnresolved | QSubstChain(_) | QEffects(_) | QOwnership(_) | QWhy(_) | QRefsOf(_) | QVerifyDebt | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QDecls | QWhere(_) | QVariants(_) | QModules | QImports | QCost | QUnknown(_) => span_zero(),
+  QTypeOf(_) | QIntentOf(_) | QUnresolved | QSubstChain(_) | QEffects(_) | QOwnership(_) | QWhy(_) | QRefsOf(_) | QVerifyDebt | QHandlerProvider(_) | QFlowOf(_) | QCensus(_) | QDecls | QWhere(_) | QVariants(_) | QModules | QImports | QUnreferenced | QCost | QUnknown(_) => span_zero(),
 }
 
 // compose_propose_situation — sparse Situation for a propose gesture.
@@ -946,6 +946,9 @@ fn query_result_to_answer(result) with Memory + Alloc = match result {
   QRImports(rows) => // The import verdicts render at the CLI. Each row names two modules,
   // not a caret site, so the answer carries the count and no span.
   AnsRefs([], Inferred("imports: {int_to_str(len(rows))} edge(s)")),
+  QRUnreferenced(rows) => // The declaration verdicts render at the CLI. A row names a module and
+  // a name, not a caret site, so the answer carries the count alone.
+  AnsRefs([], Inferred("unreferenced: {int_to_str(len(rows))} declared name(s)")),
   QREffects(_) => AnsSilence,
   QRUnresolved(_) => AnsSilence,
   QRChain(_) => AnsSilence,

@@ -631,7 +631,12 @@ comment_refs_max: 0
 # gate is right that annotating around inference is the failure), the two
 # returned lambdas became hole-products under the Stage Law, and the
 # backticked names that resolved nowhere became prose.
-movers_max: 471
+# 471 → 472 at the unreferenced facet (2026-09-04). Eight new fns across
+# query.mn and pipeline.mn, and the tower shifts ~0.8% of schemes, so +1 is
+# the arithmetic any added declaration pays here — the same +1 the imports
+# facet paid one pin earlier for the same reason. No condemned machinery was
+# touched or improved; rung 3 is what takes this to zero.
+movers_max: 472
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.

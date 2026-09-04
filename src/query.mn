@@ -132,6 +132,7 @@ type Question
   // graph holds by edge.
   | QModules
   | QImports
+  | QUnreferenced
   // "cost" — what this question cost the medium, in the medium's own
   // facts: modules linked, source lines processed, nodes minted. A wall
   // clock is a HOST fact and varies per run, so it can be reported and
@@ -164,6 +165,7 @@ type QueryResult
   | QRModules([String])
   // (importing module, imported path, is any name it brings referenced here)
   | QRImports([(String, String, Bool)])
+  | QRUnreferenced([(String, String, Int)])
   // modules linked, source lines processed, nodes minted
   | QRCost(Int, Int, Int)
   // the derived badges (plain lines) + fanout sites as (schedule, span)
@@ -286,6 +288,7 @@ handler query_default {
     QVariants(tname) => resume(variants_of(tname)),
     QModules => resume(QRModules(module_paths())),
     QImports => resume(QRImports(import_report(module_cells()))),
+    QUnreferenced => resume(QRUnreferenced(unreferenced_report(module_cells()))),
     QCost => resume(QRCost(len(module_cells()), weave_line_extent(), graph_next())),
     QUnknown(q) => resume(QRError("unknown query: {q}")),
   },
@@ -555,6 +558,61 @@ fn refs_inside(hs, extent, i) with GraphRead + Memory + Alloc + !Mutate = if i >
 } else {
   let sp = span_of_node_raw(hs[i])
   if sp != span_zero() && span_overlaps(extent, sp) { true } else { refs_inside(hs, extent, i + 1) }
+}
+
+// ─── The declarations, read for what actually reaches them ──────────
+//
+// A declaration is UNREFERENCED when every reference to its name falls
+// inside its own declaration — a fn only its own recursion calls, a
+// constructor nothing builds, an effect op no arm performs. This is the
+// import read one altitude down and turned around: that one asks whether
+// any name an edge BRINGS is referenced INSIDE the importing extent; this
+// one asks whether any site referencing a declared name lies OUTSIDE the
+// declaring one. Same two columns, same O(1) probe, opposite direction.
+//
+// Nine dead fns came out of src/ on 2026-09-04, found by grepping each
+// name and reading the hits by hand. That method costs one pass per name
+// and cannot tell a call from a mention in a comment — the same blindness
+// that hid three dead imports for weeks. This is one pass over the decls
+// the weave already carries.
+//
+// The honest limits, stated because a reader will otherwise take this
+// further than it goes:
+//   · `main` is the entry. Nothing references it; it is not dead.
+//   · UNREFERENCED is not unreachable. It measures the direct reference,
+//     exactly as the import read does, and says nothing about what the
+//     program needs — `Hβ.driver.link-is-reachability` is that judgment.
+//   · A name reached through some edge the graph does not draw as a
+//     reference reads unreferenced here. That over-report is not noise to
+//     tune away; it NAMES the edge the graph is not drawing.
+fn unreferenced_report(cells) with GraphRead + Memory + Alloc + !Mutate =
+  fold([], decl_ref_rows_join, cells)
+
+fn decl_ref_rows_join(acc, cell) with GraphRead + Memory + Alloc + !Mutate =
+  acc ++ decl_ref_rows_for(cell)
+
+fn decl_ref_rows_for(cell) with GraphRead + Memory + Alloc + !Mutate = match cell {
+  (path, _, decls) => fold([], decl_ref_row_join(path), decls),
+}
+
+fn decl_ref_row_join(path: String, acc, d) with GraphRead + Memory + Alloc + !Mutate =
+  acc ++ map(decl_ref_verdict(path, decl_extent(d)), decl_names_of(d))
+
+// The per-name verdict: the declaring module, the name, and how many of its
+// reference sites lie outside its own declaration. Zero is the finding.
+fn decl_ref_verdict(path: String, extent, name: String) with GraphRead + Memory + Alloc + !Mutate =
+  (path, name, count(ref_is_outside(extent), graph_refs_at(name)))
+
+fn decl_extent(d) with Pure = match d {
+  N(_, sp, _) => sp,
+}
+
+// A ref site counts when it has a real span and that span does not fall
+// within the declaration's own extent. A spanless site proves nothing about
+// where it is, so it never counts as an outside reader.
+fn ref_is_outside(extent, site) with GraphRead + Memory + Alloc + !Mutate = {
+  let sp = span_of_node_raw(site)
+  sp != span_zero() && !span_overlaps(extent, sp)
 }
 
 // ─── The decls column's projection — one home, two readers ──────────

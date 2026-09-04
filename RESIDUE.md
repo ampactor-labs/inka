@@ -1037,6 +1037,38 @@ under it, and the wrong-slot class becomes visible at the cursor instead
 of via an exit code. It joins the `where` facets, beside the schedule
 badge that already walks the enclosing tee chain.
 
+`Hβ.infer.type-name-in-annotation-never-resolves` — AN ANNOTATION'S TYPE
+NAME IS A REFERENCE THE MEDIUM NEVER LOOKS UP. Measured 2026-09-04 at pin
+‹the unreferenced landing›, found by the medium's own `unreferenced` facet
+over-reporting every type name in types.mn.
+▶ THE MEASUREMENT: `fn takes_ghost(y: Nonexistent) = y + 1` compiles the
+annotation into an opaque `TName("Nonexistent", [])` and reports
+`E_TypeMismatch: Nonexistent vs Int` at the body. There is no resolution
+step, so there is no failure to resolve — a typo'd type gives three
+mismatch errors pointing at arithmetic instead of one diagnostic naming
+the type that does not exist. `E_MissingVariable` is the value-altitude
+peer this has no counterpart of.
+▶ WHY IT SURFACED HERE: the `unreferenced` facet reads the refs column,
+and an annotation writes nothing to it. So `Ty`, `EffRow`, `NodeKind`,
+`SchemeKind` and ~78 more read as declared-and-never-reached in the one
+module that defines the compiler's whole vocabulary. The over-report is
+not the facet being wrong; it is the facet naming this gap, which is what
+its own comment says an over-report does.
+▶ THE SHAPE OF THE FIX: a capitalized name in type position resolves
+against the type environment exactly as a capitalized name in expression
+position resolves against the value environment, notes its ref, and
+refuses with a located diagnostic when nothing answers. The case rule is
+the discriminator that already exists (SYNTAX §«Generic type parameters» —
+lowercase in type position is a parameter and must NOT resolve), so no new
+surface form is involved. The risk to measure RED first: the wheel's own
+annotations may name types the resolution cannot see across module
+boundaries, and that measurement is the gate.
+▶ NOT A CARRIED-TRUTH VIOLATION, and the distinction is load-bearing: the
+pattern-position edge landed in the same arc WAS one — inference resolved
+the constructor to check arity and dropped the edge. This one has no
+proven edge to carry, because the resolution never happens. It is a
+missing capability, priced as one.
+
 `Hβ.infer.record-row-vars-are-not-unioned` — RECORD ROW VARS ARE SECOND
 CLASS IN THE UNION-FIND, and that is what survives the offset fix below.
 Measured 2026-09-02 at pin 7740ac94; standing repro

@@ -35,6 +35,49 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 1ff3393b59c62018 · THE MEDIUM FINDS ITS OWN DEAD
+  DECLARATIONS. CLEAN m2 == m3 at 419046 lines, census 0; micros 148/148.
+  ▶ THE VERB: `mentl query <file> "unreferenced"` answers, for every name
+  the weave declares, how many of its reference sites lie outside its own
+  declaration. Zero is the finding. It is the import read one altitude
+  down and turned around: that one asks whether any name an edge BRINGS is
+  referenced INSIDE the importing extent; this asks whether any site
+  referencing a declared name lies OUTSIDE the declaring one. Same two
+  columns, same O(1) probe, opposite direction — decl_names_of over the
+  decls the weave already carries, graph_refs_at per name, span_overlaps
+  against the declaration's own extent.
+  ▶ WHY IT HAD TO EXIST: nine dead fns came out of src/ by hand at pin
+  9109e063 — one grep per name, then reading each hit to tell a call from
+  a mention in a comment. That is the same blindness that hid three dead
+  imports for weeks, and it costs a pass per name.
+  ▶ WHAT ITS FIRST RUN FOUND WAS A BUG IN THE GRAPH, NOT A LIST OF DEAD
+  CODE. 461 of 4,388 read unreferenced, and the roster was implausible —
+  `TStringLit` at zero refs, `TIntLit` at exactly two, both of them its
+  construction sites in the lexer. Every `match` on a constructor was
+  registering nothing. The resolution HAS to happen there (arity and
+  exhaustiveness are checked against the scheme it finds), so the edge was
+  proven and dropped: the Carried-Truth Law, at the reverse-edge column.
+  graph_ref_note now fires at the PCon site above its env match, for
+  infer_var_ref's own stated reason — a missing constructor is still a
+  reference. Measured: 461 → 415, forty-six names the graph knew about.
+  ▶ THE REMAINDER IS A DIFFERENT FINDING AT A DIFFERENT PRICE. What is
+  left in types.mn is almost all type NAMES — `Ty`, `EffRow`, `NodeKind`,
+  `SchemeKind` — whose constructors are everywhere and whose names appear
+  only in declarations and annotations. Probed: `fn f(y: Nonexistent)`
+  yields `E_TypeMismatch: Nonexistent vs Int` at the body. The name is
+  never resolved, so nothing was dropped; there is no edge to carry. That
+  is a missing capability, banked as
+  `Hβ.infer.type-name-in-annotation-never-resolves` with the repro and the
+  gate to see RED first. Keeping the two apart is the point: one was a
+  deletion, the other is a build.
+  ▶ THE FACET STATES ITS OWN LIMITS AT THE SITE, because a reader will
+  otherwise take the number further than it goes. `main` is the entry and
+  is not dead. A library's public vocabulary (lib/threading, lib/test) is
+  unreferenced BY the compiler and correctly so. And UNREFERENCED is not
+  unreachable — it measures the direct reference, exactly as the import
+  read does; `Hβ.driver.link-is-reachability` is the judgment that decides
+  what the program needs.
+
 - 2026-09-04 · pin 1aca486868b92bc4 · THE MEDIUM WRITES ITS OWN SOURCE.
   CLEAN m2 == m3 at 417952 lines, census 0; micros 148/148.
   ▶ WHAT LANDED: `mentl tighten main` authored 174 of 223 row narrowings

@@ -6695,40 +6695,49 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
     }
     constrain_scrutinee(handle, ty, span, Inferred("literal pattern"))
   },
-  PCon(name, sub_pats) => match env_lookup(name) {
-    None => report(EMissingVariable("constructor: {name}", span)),
-    Some(entry) => // ConstructorScheme bindings carry one of two ty shapes:
-    //   nullary  → TName(type_name, args)         — bind scrutinee to it
-    //   fielded  → TFun(params, TName(...), Pure) — bind scrutinee to RETURN,
-    //                                                 sub_pats to PARAMS.
-    // A nominal record's entry (RecordSchemeKind) binds the bare TName —
-    // the construction view for `Pri{...}` literals, no arrow. Its
-    // ctor-PATTERN view is the single-field arrow
-    // `Pri : TRecord(declared) → TName`: rebuild the arrow AROUND the
-    // scheme's body so ONE instantiate substitutes both halves, and the
-    // shared TFun path below binds scrutinee + the sub-pattern. (The
-    // seed's kind-132 arm has read this view since the m2 march; the
-    // wheel lagged its own seed — every `let Pri(pa) = a` lost pa.)
-    // FnScheme bindings reaching here are user-level matches on a
-    // plain function value — degenerate but harmless; bind the
-    // scrutinee to the looked-up type and skip sub-pat plumbing.
-    match entry {
-      (scheme, reason, kind) => {
-        let ty = match kind {
-          RecordSchemeKind(declared_fields) => match judgment_pair(scheme) {
-            (q, body) => instantiate(Frozen(q, TFun(build_ctor_params([TRecord(declared_fields)], 0), body, mk_ef_pure()))),
-          },
-          _ => instantiate(scheme),
-        }
-        match ty {
-          TFun(params, ret_ty, _row) => {
-            constrain_scrutinee(handle, ret_ty, span, VarLookup(name, reason))
-            bind_pcon_subpats(params, sub_pats, span, reason, name)
-          },
-          _ => constrain_scrutinee(handle, ty, span, VarLookup(name, reason)),
-        }
+  PCon(name, sub_pats) => {
+    // A pattern IS a reference. This resolution has to happen — arity and
+    // exhaustiveness are checked against the very scheme it finds — so the
+    // edge is proven here and was being dropped on the floor, which made
+    // every match-only constructor read as declared-and-never-reached.
+    // Noted above the match for infer_var_ref's reason: a missing
+    // constructor is still a reference to the name that is missing.
+    graph_ref_note(name, handle)
+    match env_lookup(name) {
+      None => report(EMissingVariable("constructor: {name}", span)),
+      Some(entry) => // ConstructorScheme bindings carry one of two ty shapes:
+      //   nullary  → TName(type_name, args)         — bind scrutinee to it
+      //   fielded  → TFun(params, TName(...), Pure) — bind scrutinee to RETURN,
+      //                                                 sub_pats to PARAMS.
+      // A nominal record's entry (RecordSchemeKind) binds the bare TName —
+      // the construction view for `Pri{...}` literals, no arrow. Its
+      // ctor-PATTERN view is the single-field arrow
+      // `Pri : TRecord(declared) → TName`: rebuild the arrow AROUND the
+      // scheme's body so ONE instantiate substitutes both halves, and the
+      // shared TFun path below binds scrutinee + the sub-pattern. (The
+      // seed's kind-132 arm has read this view since the m2 march; the
+      // wheel lagged its own seed — every `let Pri(pa) = a` lost pa.)
+      // FnScheme bindings reaching here are user-level matches on a
+      // plain function value — degenerate but harmless; bind the
+      // scrutinee to the looked-up type and skip sub-pat plumbing.
+      match entry {
+        (scheme, reason, kind) => {
+          let ty = match kind {
+            RecordSchemeKind(declared_fields) => match judgment_pair(scheme) {
+              (q, body) => instantiate(Frozen(q, TFun(build_ctor_params([TRecord(declared_fields)], 0), body, mk_ef_pure()))),
+            },
+            _ => instantiate(scheme),
+          }
+          match ty {
+            TFun(params, ret_ty, _row) => {
+              constrain_scrutinee(handle, ret_ty, span, VarLookup(name, reason))
+              bind_pcon_subpats(params, sub_pats, span, reason, name)
+            },
+            _ => constrain_scrutinee(handle, ty, span, VarLookup(name, reason)),
+          }
+        },
       },
-    },
+    }
   },
   PTuple(pats) => infer_pat_tuple(pats, handle, span),
   PList(pats, rest) => infer_pat_list(pats, rest, handle, span),

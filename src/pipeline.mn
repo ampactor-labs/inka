@@ -1179,6 +1179,23 @@ fn import_row_is_dead(row) with Pure = match row {
 fn render_import_rows(rows) with Memory + Alloc =
   "→ {int_to_str(len(rows))} import edge(s); {int_to_str(count(import_row_is_dead, rows))} bring nothing the importing module references\n{str_join_lines(map(render_import_row, rows))}"
 
+// The declared names rendered as the roster's dead half. The header states
+// the whole roster so the count reads against it; the body names only what
+// nothing outside its own declaration reaches. UNREFERENCED is not
+// unreachable — it is the direct reference, measured, and a name reached
+// through an edge the graph does not draw surfaces here as exactly that
+// finding, never as noise to tune away.
+fn render_unref_row(row) with Pure = match row {
+  (m, name, _) => "  UNREFERENCED  {m} -> {name}",
+}
+
+fn unref_row_is_dead(row) with Pure = match row {
+  (_, _, outside) => outside == 0,
+}
+
+fn render_unref_rows(rows) with Memory + Alloc =
+  "→ {int_to_str(len(rows))} declared name(s); {int_to_str(count(unref_row_is_dead, rows))} that nothing outside their own declaration references\n{str_join_lines(map(render_unref_row, filter(unref_row_is_dead, rows)))}"
+
 fn render_query_result(result) = match result {
   QRType(ty, reason) => "→ {show_type(ty)}\n  Reason: {show_reason(reason)}",
   QRIntent(effs) => {
@@ -1221,6 +1238,7 @@ fn render_query_result(result) = match result {
   "→ {int_to_str(len(spans))} judged decl(s){render_ref_spans(spans)}",
   QRModules(paths) => "→ {int_to_str(len(paths))} module(s) in the weave\n  {str_join_lines(paths)}",
   QRImports(rows) => render_import_rows(rows),
+  QRUnreferenced(rows) => render_unref_rows(rows),
   QRCost(mods, lines, nodes) => "→ {int_to_str(mods)} module(s) · {int_to_str(lines)} source line(s) · {int_to_str(nodes)} node(s) minted",
   QRWhere(lines, sites) => "→ {str_join_lines(lines)}{render_where_sites(sites)}",
   QRError(msg) => "error: {msg}",
@@ -1268,6 +1286,7 @@ type QueryVerb
   | QVVariants
   | QVModules
   | QVImports
+  | QVUnreferenced
   | QVCost
   | QVUnknownVerb
 
@@ -1301,6 +1320,8 @@ fn classify_query_verb(w: String) with Pure = if w == "type" {
   QVModules
 } else if w == "imports" {
   QVImports
+} else if w == "unreferenced" {
+  QVUnreferenced
 } else if w == "cost" {
   QVCost
 } else {
@@ -1342,6 +1363,7 @@ fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
   QVVariants => QVariants(arg),
   QVModules => QModules,
   QVImports => QImports,
+  QVUnreferenced => QUnreferenced,
   QVCost => QCost,
   QVUnknownVerb => QUnknown(raw),
 }

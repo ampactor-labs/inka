@@ -153,19 +153,12 @@ handler synth_default {
   // seed survived a `0 < self` target. The caller's checkpoint
   // isolates this; rollback reverts the binds.
   match candidate {
-    Candidate(node, _) => {
-      // The re-infer runs under its OWN inference session (the same chain
-      // the judgment passes install): a CALL candidate's inference stages
-      // continuation boundaries and reads the InferCtx frame — ops that need
-      // their handlers live. The scoped-singleton brackets make the nested
-      // session safe; the caller's checkpoint still isolates the binds.
-      {
-        infer_expr(node)
-      } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
-      match node {
-        N(_, _, h) => resume(verify_after_apply(h) && refinement_admits(target_ty, h)),
-      }
-    },
+    Candidate(node, _) => // Through candidate_proven — the ONE definition, shared with the fan.
+    // This arm used to carry its own copy of the conjunction, and the copy
+    // had drifted: it passed the live target where the fan instantiates a
+    // fresh one, so a proof here could bind the hole's own frontier. The
+    // caller's checkpoint still isolates the binds.
+    resume(candidate_proven(node, target_ty)),
   },
   enumerate_inhabitants(target_ty, allowed_effects, context) => {
     let enriched = enumerate_typed(target_ty, allowed_effects, context)
@@ -661,16 +654,30 @@ fn fan_join(ref recs, j, own acc) = if j >= len(recs) {
 // the sequential verify_candidate arm exactly (its own fresh session);
 // the target instantiates FRESH into this band, so the proof never
 // binds the hole's live frontier.
+// THE PROOF GATE, one home. §1's law is that any intelligence may propose
+// and nothing executes unproven, so what "proven" MEANS has to have exactly
+// one definition — and it had two. This body lived here and again in the
+// sequential verify_candidate arm, whose own comment said it "mirrors" this
+// one. It did not: this one instantiates the target FRESH so the proof never
+// binds the hole's live frontier, and the arm passed the live target
+// straight in. The dead copy was also the wrong copy, which is what a second
+// home always eventually becomes.
+fn candidate_proven(node, target_ty) = {
+  let tcopy = instantiate(Frozen(free_in_ty(target_ty), target_ty))
+  {
+    infer_expr(node)
+  } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
+  match node {
+    N(_, _, h) => verify_after_apply(h) && refinement_admits(tcopy, h),
+  }
+}
+
 fn candidate_judge(node, target_ty, base, seed, gseed, iseed, range) = {
   let body = () => {
     consume_seed(seed)
-    let tcopy = instantiate(Frozen(free_in_ty(target_ty), target_ty))
-    {
-      infer_expr(node)
-    } ~> infer_ctx ~> fresh_for_inference ~> resume_summaries_ctx
     match node {
-      N(_, _, h) => {
-        let proven = verify_after_apply(h) && refinement_admits(tcopy, h)
+      N(_, _, _) => {
+        let proven = candidate_proven(node, target_ty)
         let vdebt = verify_debt()
         let clog = consume_log()
         let pubs = env_publishes()

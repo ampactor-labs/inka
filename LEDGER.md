@@ -35,6 +35,45 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 17790803376704d8 · THE PROOF GATE HAD TWO HOMES. CLEAN
+  m2 == m3 at 420007 lines, census 0; micros 149/149; frontier 374/0.
+  ▶ HOW IT SURFACED: the performs facet, one pin old, reported `mentl ->
+  Synth 1/3`. Reading the two unperformed ops at their sites is what the
+  facet is for, and verify_candidate's arm held a second copy of what
+  "proven" means.
+  ▶ THE TWO COPIES. The arm (synth_proposer.mn): `verify_after_apply(h) &&
+  refinement_admits(target_ty, h)`. The fan's candidate_judge:
+  `verify_after_apply(h) && refinement_admits(tcopy, h)`, where tcopy is
+  `instantiate(Frozen(free_in_ty(target_ty), target_ty))`. candidate_judge's
+  own comment claims "the nested trio mirrors the sequential
+  verify_candidate arm exactly." It does not. The fan instantiates the
+  target FRESH — its comment two lines later says why, "so the proof never
+  binds the hole's live frontier" — and the arm passed the live target in.
+  ▶ SO THE DEAD COPY WAS THE WRONG COPY, which is what a second home
+  eventually becomes. Nothing performed verify_candidate, so nothing had
+  been hurt; anything that started performing it would have taken the path
+  with the defect the fan had already fixed. This is §1's own gate — the
+  one that makes "any intelligence may propose, nothing executes unproven"
+  a mechanism rather than a sentence — so a drifted duplicate of it is the
+  Carried-Truth Law violated at the thesis's sharpest seam.
+  ▶ THE FIX IS ONE HOME: candidate_proven holds the definition; the fan
+  calls it and the arm calls it. Less code, and the arm's fresh-instantiate
+  behaviour arrives by construction rather than by a second edit.
+  ▶ THE FACET STILL REPORTS 1/3, and that is correct. The duplication is
+  gone; the op still has no performers, which is the honest state of a
+  contract op an external Synth handler would implement. An arm calling a
+  fn is not a bypass — the arm IS the handler, so no seam is skipped, which
+  is what distinguishes this from the Filesystem case two pins back.
+  ▶ AND A GATE THAT LIES, banked as
+  `Hβ.perf.first-march-after-a-source-change-reads-100mb-high`. The peak
+  ratchet has now falsely refused the first march of three consecutive
+  landings: 2,310,816 / 2,316,080 / 2,311,408 on the first run against a
+  2,310,000 ceiling, and ~2,210,000 on every re-read of the identical tree.
+  The ceiling is NOT raised — 2,320,000 would hide the defect and the
+  settled measurement genuinely holds — but the pattern is recorded,
+  because "run it again and ignore the first" is one session away from
+  being applied to a real regression.
+
 - 2026-09-04 · pin 899a4b571112f58e · THE HAND CLASSIFICATION BECAME A
   VERB. CLEAN m2 == m3, census 0; micros 149/149; frontier 374/0.
   ▶ THE PATTERN THAT EARNED IT. Three landings running, the find was one

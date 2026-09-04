@@ -1055,6 +1055,32 @@ with no new code. That is the fix; this entry exists so the facet's
 over-report at `span_valid` reads as a known gap rather than a candidate
 for deletion.
 
+`Hβ.perf.first-march-after-a-source-change-reads-100mb-high` — THE PEAK
+RATCHET FALSELY REFUSES EVERY FIRST RUN. Measured three landings running,
+2026-09-04, and recorded because the third repetition makes it a defect in
+the instrument rather than variance in the thing measured.
+▶ THE THREE READINGS, each first-run-then-settled on an unchanged tree:
+pin 055b396f read 2,310,816KB then 2,206,204 (Δ104,612). Pin 899a4b57 read
+2,316,080 then 2,210,700 and 2,210,532 (Δ~105,400). The candidate_proven
+landing read 2,311,408 then 2,210,984 (Δ100,424). The settled value sits
+at ~2,210,000 every time, a hundred megabytes under the 2,310,000 ceiling;
+the first run after a source edit clears it.
+▶ WHY IT MATTERS MORE THAN THE 0.05%: the ceiling refuses the repin on
+that first run, so every landing that touches source pays a re-march to
+disprove a number the instrument invented. Worse, it trains the reader to
+re-run until green, which is exactly the reflex a ratchet exists to
+prevent — three times now the correct response has been "measure again and
+ignore the first," and a rule like that is one session away from being
+applied to a real regression.
+▶ THE LIKELY MECHANISM, unproven and named as such: the first march after
+an edit rebuilds the m2 cache in the same process tree the cost read
+brackets, so the peak includes work that is not the self-compile. That is
+a hypothesis; the fix is to make the cost leg measure a run that is not
+also a cache build, or to take the minimum of two runs rather than the
+first. Neither is written, and the ceiling stays where it is until one is:
+raising it to 2,320,000 would hide the defect rather than fix it, and the
+settled measurement genuinely holds at 2,210,000.
+
 `Hβ.voice.interact-write-half-is-unwired` — THE Interact SURFACE READS
 BUT DOES NOT WRITE: 14 of its 22 ops have never been performed, and until
 now the gap was not written down anywhere. Measured 2026-09-04 at pin

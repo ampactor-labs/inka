@@ -162,7 +162,7 @@ handler cursor_default {
 // inside the `<~` loop. Multi-cursor mode threads through `><` per
 // cycle. The full composition exhibits ALL FIVE verbs:
 //   `|>` sequential through cursor_argmax_compute
-//   `~>` handler-attach for IC + ic_fixpoint_handler
+//   `~>` handler-attach for the CursorRead mode in force
 //   `<~` feedback closing on stability
 //   `><` parallel multi-cursor (a span-list fanout under ~> Thread)
 //   `<|` divergence into the eight aspects (inside cursor_at)
@@ -170,33 +170,25 @@ handler cursor_default {
 // This IS what mentl does. Not "compile" as a separate phase — the
 // edit IS the compile IS the projection IS the loop.
 //
-// `ic_fixpoint_handler` — the `<~` feedback closure's handler-attach
-// point. Installed via `~>` above. Each cycle reads the cursor argmax
-// LIVE off the graph and decides continue-vs-terminate by the GRAPH
-// EPOCH: the revision IS the epoch (no separate counter — surpassing
-// Salsa/rust-analyzer red-green, where convergence is a framework
-// dirty-bit). cursor_argmax_compute is `!Mutate`, so a cycle that folds
-// no accepted candidate back into the graph leaves the epoch unchanged
-// — that stable epoch IS the fixpoint, read live, never a hand-rolled
-// reason-compare. The handler carries `last_epoch` as state; on a stable
-// epoch it resumes the terminal cursor and STOPS re-projecting (the
-// argmax is idempotent over an unchanged graph, protocol_oracle_is_ic).
-handler ic_fixpoint_handler with last_epoch = 0 - 1 {
-  cursor_argmax(caret) => {
-    // drift-audit: ignore — epoch reused twice (compare + state carry); a `<|` reuse, not a `|>` chain
-    let epoch = graph_epoch()
-    if epoch == last_epoch {
-      // Epoch stable since the previous cycle ⇒ the fixpoint. Resume the
-      // terminal cursor (re-projection would reproduce it) and stop.
-      resume(cursor_argmax_compute(caret))
-    } else {
-      // Graph advanced (a candidate folded back) ⇒ re-project and carry
-      // the new epoch into the next `<~` cycle.
-      resume(cursor_argmax_compute(caret)) with last_epoch = epoch
-    }
-  },
-}
-
+// THE CACHED CURSOR IS NOT BUILT HERE, and the removed sketch is why.
+// A handler named ic_fixpoint_handler stood at this spot: a second CursorRead
+// carrying a last_epoch state, whose prose said it "resumes the terminal cursor
+// and STOPS re-projecting" on a stable epoch, and which was "installed via
+// `~>` above". Both claims were false. It was installed nowhere, and BOTH
+// of its branches called cursor_argmax_compute — so the state it carried
+// changed no result and the memoization it named did not exist. Anything
+// that installed it believing the prose would have got zero caching and
+// thought IC was live, which is worse than an absence.
+// Deleted 2026-09-04 at the orphan-claims facet's first run.
+//
+// The design fault it hides is the part worth keeping: an epoch alone
+// cannot key this read. cursor_argmax takes a CARET, and moving the caret
+// without editing leaves the graph epoch unchanged while the correct
+// cursor differs — so a stable-epoch cache returns the wrong position the
+// first time a human moves without typing. The key is (epoch, caret), and
+// the build is the residue entry
+// Hβ.cursor.cached-argmax-keyed-by-epoch-and-caret.
+//
 // ─── Argmax computation — pure transform on the live graph ──────────
 //
 // Per the cursor walkthrough §3: enumerate gradient positions; score each by

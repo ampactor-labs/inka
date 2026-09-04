@@ -1055,26 +1055,38 @@ with no new code. That is the fix; this entry exists so the facet's
 over-report at `span_valid` reads as a known gap rather than a candidate
 for deletion.
 
-`Hβ.cursor.ic-fixpoint-handler-is-never-installed` — 3,245 BYTES OF PROSE
-ON A HANDLER NOTHING INSTALLS. Found 2026-09-04 at pin cfb97e95 by the
-orphan-claims facet on its first run, as the largest single claim in the
-wheel.
-▶ THE MEASUREMENT: `ic_fixpoint_handler` (cursor.mn:184) handles
-cursor_argmax with an epoch-comparison fixpoint — the IC semantics PLAN §2
-names ("the cached cursor memoizes live reads by epoch, so 'read live' is
-the semantics and 'cached' is the mechanism"). `refs of` answers ZERO. It
-is not installed anywhere, which is a step past Delta: that one at least
-sat in three real chains.
-▶ WHY IT IS NOT OBVIOUSLY A DELETION, and why this entry exists instead of
-a commit: the IC cursor is load-bearing in the design — §2's cached-cursor
-row, the oracle's incremental half, and `Hβ.query.generation-operand` all
-lean on it — so an unwired implementation here is as likely to be "built
-ahead of its consumer" as "abandoned". Delta was decidable because the
-shipping alternative (the T_OverDeclared diagnostic) was demonstrably
-better. Here the alternative is unclear: nothing else memoizes cursor
-projections by epoch, so deleting may remove the only implementation of a
-named capability. The reading needed is whether cursor_argmax has any
-caller that SHOULD run under it.
+`Hβ.cursor.cached-argmax-keyed-by-epoch-and-caret` — THE CACHED CURSOR IS
+UNBUILT, and the sketch that stood in for it was inert. Opened
+2026-09-04 at pin cfb97e95 as `.ic-fixpoint-handler-is-never-installed`;
+RE-SCOPED at pin ff7e079b when the reading finished and the sketch was
+deleted.
+▶ WHAT THE FIRST DRAFT ASKED: whether `ic_fixpoint_handler` (3,245 bytes
+of prose, zero references) was built-ahead or abandoned, since deleting
+might remove the only implementation of §2's cached cursor. The answer is
+NEITHER, and it took reading the arm rather than the count.
+▶ THE ARM DID NOTHING. Both branches called `cursor_argmax_compute(caret)`
+— identically. The `last_epoch` state was written and never affected a
+result, so the memoization its prose described ("resumes the terminal
+cursor and STOPS re-projecting") did not exist, and neither did the
+install its prose claimed ("installed via `~>` above"). Two false claims
+in one comment block, which is exactly what the orphan-claims facet was
+built to surface. Deleting it removed no capability; leaving it was the
+real risk, because anything that installed it believing the prose would
+have got zero caching and thought IC was live.
+▶ WHY IT WAS NEVER FINISHED, which is the design knowledge worth keeping:
+an epoch alone cannot key this read. `cursor_argmax` takes a CARET, and
+moving the caret without editing leaves the graph epoch unchanged while
+the correct cursor differs — so a stable-epoch cache answers the wrong
+position the first time a human moves without typing. The key is (epoch,
+caret). The comment at the deletion site carries this so the next attempt
+does not re-derive it.
+▶ THE BUILD, when it comes: a CursorRead handler carrying (last_epoch,
+last_caret, cached_cursor), resuming the cached cursor only when BOTH the
+epoch and the caret match, recomputing otherwise. It is a handler swap on
+the effect `cursor_default` already serves — the architecture's own shape
+(§2: incrementality IS the cached cursor) — so nothing new is needed
+beyond the correct key. The gate is a fixture that moves the caret at a
+stable epoch and proves the answer changes.
 ▶ THE FACET'S OWN LIMITS, stated so 216 is not read as 216 bugs: it
 reports declarations with zero outside references and 240+ bytes of
 attached prose. Type names dominate the count because an annotation makes

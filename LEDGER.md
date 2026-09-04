@@ -35,6 +35,38 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin ff7e079b49ca0e4e · THE LARGEST CLAIM IN THE WHEEL WAS
+  INERT. CLEAN m2 == m3 at 418641 lines, census 0; micros 149/149;
+  frontier 374/0. Orphan-claims 216 → 215.
+  ▶ THE FACET NAMED IT, one pin old, on its first run:
+  `ic_fixpoint_handler`, 3,245 bytes of prose and zero references. The
+  question banked with it was built-ahead or abandoned, because deleting
+  might have removed the only implementation of §2's cached cursor.
+  ▶ THE ANSWER IS NEITHER, and only reading the arm gives it. Both
+  branches called `cursor_argmax_compute(caret)` — identically. The
+  `last_epoch` state was written and never affected a result. So the
+  memoization the prose described did not exist, and the handler was a
+  no-op wrapper around what `cursor_default` already does.
+  ▶ TWO FALSE CLAIMS IN ONE COMMENT BLOCK: "Installed via `~>` above" (it
+  is installed nowhere) and "on a stable epoch it resumes the terminal
+  cursor and STOPS re-projecting" (it re-projected in both branches). This
+  is the fourth comment this session asserting a consumer or behaviour the
+  artifact refutes, and the first one a VERB found rather than a hand read.
+  ▶ DELETED, and the reasoning matters more than the diff: removing it
+  costs no capability, while KEEPING it was the actual risk. An unbuilt
+  thing is honest; a built-looking thing that silently does nothing is
+  worse than an absence, because the next person installs it on the
+  strength of 3,245 bytes of prose and believes IC is live.
+  ▶ WHY IT WAS NEVER FINISHED — the design knowledge, kept at the deletion
+  site and in RESIDUE so the next attempt does not re-derive it: an epoch
+  alone cannot key this read. `cursor_argmax` takes a CARET, and moving the
+  caret without editing leaves the graph epoch unchanged while the correct
+  cursor differs, so a stable-epoch cache answers the wrong position the
+  first time a human moves without typing. The key is (epoch, caret), the
+  peer is `Hβ.cursor.cached-argmax-keyed-by-epoch-and-caret`, and its gate
+  is a fixture that moves the caret at a stable epoch and proves the answer
+  changes.
+
 - 2026-09-04 · pin cfb97e95594f703b · THE PATTERN BEHIND THREE FINDS BECAME
   A VERB. CLEAN m2 == m3 at 418650 lines, census 0; micros 149/149;
   frontier 374/0.

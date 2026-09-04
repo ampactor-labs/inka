@@ -2176,6 +2176,15 @@ type DiagKind
   | EHandlerStateShadowsOp(String, String, Span)
   // fn name, the effect whose op it collides with
   | EFnShadowsOp(String, String, Span)
+  // op name, the effect that already claimed it, the effect claiming it now.
+  // The env is name-keyed and read last-write-wins, so the second declaration
+  // does not coexist with the first — it REPLACES it, and every prior use
+  // retypes against a signature its author never wrote. Measured on
+  // tests/crown/leak-handler-residual, whose `effect Feed { yield(x: Int) }`
+  // collided with prelude's `Iterate.yield` and turned a 16-line crucible into
+  // 44 spurious E_TypeMismatch inside lib, burying the one refusal it exists
+  // to prove. Renaming the op left exactly that one.
+  | EOpShadowsOp(String, String, String, Span)
   // a second `fn name` in one namespace — the emitter would pick one silently (invalid WAT today; silent under a native path)
   | EDuplicateFnName(String, Span)
   // a second `type name` in one namespace — the decls silently MERGE: disjoint ctor sets share tag ids and a cross-tag match returns the wrong arm (measured: exit 13 where 99 was meant, zero diagnostics)
@@ -2348,6 +2357,7 @@ fn diag_span(d) with Pure = match d {
   EMissingModule(_, _, s) => s,
   EHandlerStateShadowsOp(_, _, s) => s,
   EFnShadowsOp(_, _, s) => s,
+  EOpShadowsOp(_, _, _, s) => s,
   EDuplicateFnName(_, s) => s,
   EDuplicateTypeName(_, s) => s,
   EUnresolvedType(_, _, s) => s,
@@ -2414,6 +2424,7 @@ fn diag_source(d) with Pure = match d {
   EMissingModule(_, _, _) => "driver",
   EHandlerStateShadowsOp(_, _, _) => "infer",
   EFnShadowsOp(_, _, _) => "infer",
+  EOpShadowsOp(_, _, _, _) => "infer",
   EDuplicateFnName(_, _) => "infer",
   EDuplicateTypeName(_, _) => "infer",
   EUnresolvedType(_, _, _) => "lower",
@@ -2480,6 +2491,7 @@ fn diag_code(d) with Pure = match d {
   EMissingModule(_, _, _) => "E_MissingModule",
   EHandlerStateShadowsOp(_, _, _) => "E_HandlerStateShadowsOp",
   EFnShadowsOp(_, _, _) => "E_FnShadowsOp",
+  EOpShadowsOp(_, _, _, _) => "E_OpShadowsOp",
   EDuplicateFnName(_, _) => "E_DuplicateFnName",
   EDuplicateTypeName(_, _) => "E_DuplicateTypeName",
   EUnresolvedType(_, _, _) => "E_UnresolvedType",
@@ -2553,6 +2565,29 @@ fn diag_refuses(d) with Pure = match d {
   // no duplicate fn names, measured).
   True,
   EDuplicateFnName(_, _) => True,
+  EOpShadowsOp(_, _, _, _) => // ARMED at birth (2026-09-04), and the arming is the whole point: a
+  // reported-but-emitted collision is the corruption plus a note about it.
+  // The env holds ONE entry per name, so two effects declaring the same op
+  // are not both representable — the second write REPLACES the first and
+  // every prior call retypes against a signature its author never wrote.
+  // Measured: tests/crown/leak-handler-residual declared `Feed.yield` beside
+  // prelude's `Iterate.yield` and compiled to 42 spurious E_TypeMismatch
+  // INSIDE lib, burying the one refusal the crucible exists to prove.
+  // Renaming the op left exactly that one.
+  //
+  // Licence, both halves measured: the wheel declares 325 ops across its
+  // effects with ZERO cross-effect name reuse, so this cannot refuse the
+  // medium; and the corpus fixtures that collide are being renamed in the
+  // same landing.
+  //
+  // WHAT THE REFUSAL COSTS, stated rather than hidden: two effects sharing
+  // an op name is ordinary in effect systems (`Reader.get` beside
+  // `State.get`), and Mentl cannot express it TODAY because op identity is
+  // the bare name. The capability arrives when the env keys an op by
+  // (effect, name) — the entry already carries its effect, so the key is
+  // what throws it away. `Hβ.env.op-identity-is-effect-and-name` carries it,
+  // and this refusal is what makes the limit sayable instead of silent.
+  True,
   EPurityViolated(_, _) => // ARMED 2026-09-03, the first of the CROWN's own two verdicts to reach
   // the refusal law. §0's first property is "nothing executes unproven",
   // and a violated `with Pure` was proven, printed, and then emitted: the
@@ -2776,6 +2811,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate + Intern = match d 
   EMissingModule(name, path, _) => "module source not found: {name} (expected at {path})",
   EHandlerStateShadowsOp(hname, field, _) => "handler '{hname}' state field '{field}' names an op of the handled effect — a state read and an op call become indistinguishable in the arm bodies; rename the field",
   EFnShadowsOp(name, ename, _) => "`fn {name}` collides with an op of effect `{ename}` that this program links — so this declaration is not a second definition, it is an unreachable one: every call to `{name}` performs the op, and the body is judged against the op's signature. Rename the function",
+  EOpShadowsOp(name, prior, now, _) => "effect `{now}` declares an op `{name}` that effect `{prior}` already declares, and this program links both. The env holds one entry per name, so the second declaration REPLACES the first rather than joining it: every existing call to `{name}` is now judged against `{now}`'s signature, and the errors surface wherever those calls are — inside the library, at spans your program never wrote. Rename this op",
   EDuplicateFnName(name, _) => "a second `fn {name}` in one namespace — the first declaration already binds it; rename one",
   EDuplicateTypeName(name, _) => "a second `type {name}` in one namespace — the declarations would merge and their constructor sets share tag ids; rename one",
   EUnresolvedType(h, epoch, _) => "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",

@@ -30,8 +30,7 @@
 // Effects declared in std/compiler/types.mn:
 //   Memory: load_i32, store_i32, load_i8, store_i8, mem_copy, byte_at, byte_len
 //   Alloc:  alloc(size) -> Int
-import types
-
+//
 // A String IS [byte] (§4①): its byte face is the sequence face. byte_len IS
 // len (the count at +0, shape-invariant across flat/slice/concat); byte_at IS
 // list_index — the carrier reads the byte at stride 1 (load_i8(s + 8 + i)),

@@ -35,6 +35,54 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 5b828fd0b1602670 · THREE DEAD IMPORTS PUT THE COMPILER IN
+  EVERY USER PROGRAM. CLEAN m2 == m3 at 415869 lines, census 0; micros
+  148/148, frontier 374/0, prelude floor 6385 → 2737 source lines, a bare
+  weave 7 modules → 6.
+  ▶ THE DIG STARTED SOMEWHERE ELSE. A per-class corpus census turned up 57
+  E_TypeMismatch across eight fixtures that all pass their gates, 42 of them
+  in one 16-line crown crucible. The errors pointed INSIDE lib, so the first
+  reading was that the weave was dirty; a trivial program reported zero,
+  which killed that. The crucible declared `effect Feed { yield(x: Int) }`
+  beside prelude's `Iterate.yield`, the env holds one entry per name, and the
+  second declaration replaced the first — every prior call retyped and the
+  cascade surfaced at spans the author never wrote. Renaming the op left
+  exactly 1 error: `!E + Any vs E`, the refusal the crucible exists to prove.
+  It had been passing on 44 wrong reasons.
+  ▶ THE ROOT WAS NOT THE COLLISION. Eight fixture op names collided with
+  wheel ops, and the reason a user program can collide with `abort` or `mint`
+  at all is that lib/lists, lib/strings and lib/threading each declared
+  `import types` while referencing not one name from it. Three dead lines put
+  the compiler's own module — Abort, FreshHandle, Consume, GraphRead/Write,
+  Diagnostic, EnvRead/Write, Verify, ~170 ops — into the namespace of every
+  program that touches a list. Deleting them removed `types` from the weave
+  and the abort/mint collisions with it (mn-ev8: 1 error → 0).
+  ▶ THE CEILING THE GATE HAD BEEN RAISING FELL. frontier's prelude floor was
+  raised three times in four iterations, every raise a types.mn addition, and
+  its own comment called that evidence FOR `Hβ.driver.link-is-reachability`
+  and predicted "this number falls hard and the ceiling follows it down". It
+  fell 57% on three deleted imports. Dead imports are the crudest possible
+  unreachability, so the real judgment is still ahead of this.
+  ▶ E_OpShadowsOp, ARMED. register_one_op's claim check read the FnScheme
+  pair and dropped the other eight kinds into `_ => ()`, at the one site
+  whose own comment says "this write is the one place both claims are
+  present". The arm is exhaustive now: fn reports (as before), cross-effect
+  op reports and REFUSES, handler-name is measured harmless (ops and handlers
+  resolve in disjoint positions), and the five uppercase kinds cannot collide
+  by the case rule. Licence measured both halves: 325 wheel ops with zero
+  cross-effect reuse, and the corpus clean after the crucible's rename.
+  ▶ WHAT THE REFUSAL COSTS, and it is real: two effects sharing an op name is
+  ordinary elsewhere (`Reader.get` beside `State.get`) and Mentl cannot say
+  it, because op identity is the bare name while the env entry already
+  carries its effect. `Hβ.env.op-identity-is-effect-and-name`.
+  ▶ THE CORRECTION THAT MATTERS MOST: the first build of this landing was a
+  diagnostic that reported the collision and let the program compile anyway —
+  the corruption plus a note about it. That is the residue pattern in a
+  compiler's costume, and 35 of the previous 100 commits are `residue:`
+  entries. Morgan named it mid-turn. The arming, and then the three
+  deletions, are what closing it looks like.
+
+
 - 2026-09-03 · pin 7e2f8deba2a9d6d4 · THE CROWN REFUSES. CLEAN m2 == m3 at
   416176 lines, census 0; micros 148/148, verify and frontier green.
   E_PurityViolated is ARMED — the first of the effect system's own two

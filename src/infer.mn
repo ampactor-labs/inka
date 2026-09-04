@@ -8675,7 +8675,10 @@ fn cap_result_field(f) = match f {
 }
 
 fn register_one_op(effect_name, eff_name, op) = match op {
-  (op_name, param_types, raw_ret_type, _) => {
+  (op_name, param_types, raw_ret_type, op_node) => // The fourth field is the op's own NTypeAnn node, minted at its span by
+  // parse_effect_ops — so the site that must be renamed has a real span here
+  // and a diagnostic never has to reach for span_zero.
+  {
     let ret_type = cap_result_fn_row(raw_ret_type)
     let params = build_ctor_params(param_types, 0)
     // Every op of the effect carries the SAME instance row (eff_name), so the
@@ -8691,6 +8694,11 @@ fn register_one_op(effect_name, eff_name, op) = match op {
     // time a reader looks one kind has already won.
     // The span is the LOSING declaration's own, read from the Reason the
     // env stored when it was registered — the fn is the thing to rename.
+    // EXHAUSTIVE over SchemeKind, because `_ => ()` here is the silent skip
+    // that let the op-vs-op collision through: this arm read the FnScheme pair
+    // and dropped the other eight, at the one site whose own comment says both
+    // claims are present. Every kind is decided below, and the ones that
+    // report nothing say why rather than falling into a wildcard.
     match env_lookup(op_name) {
       Some(prior) => match prior {
         (_, prior_reason, prior_kind) => match prior_kind {
@@ -8698,7 +8706,32 @@ fn register_one_op(effect_name, eff_name, op) = match op {
             Located(fn_span, _) => report(EFnShadowsOp(op_name, effect_name, fn_span)),
             _ => (),
           },
-          _ => (),
+          EffectOpScheme(prior_effect, _, _, _) => // A DIFFERENT effect already claims this name. The env holds one
+          // entry per name, so this write replaces rather than joins, and
+          // every prior call retypes. Same effect re-registering (the final
+          // pass walks the decls again) is the same op and says nothing.
+          if prior_effect == effect_name {
+            ()
+          } else {
+            match op_node {
+              N(_, op_span, _) => report(EOpShadowsOp(op_name, prior_effect, effect_name, op_span)),
+            }
+          },
+          HandlerKind(_, _, _, _) => // A handler NAME beside an op name is measured harmless: they
+          // resolve in disjoint positions (`~> h` installs, `h()` performs),
+          // so both entries are reachable and neither shadows the other.
+          (),
+          ConstructorScheme(_, _) => // Uppercase by the case rule (SYNTAX §«Generic type parameters» —
+          // nominal types and constructors are capitalized, ops are not), so
+          // an op name can never collide with one of these.
+          (),
+          RecordSchemeKind(_) => (),
+          EffectDeclKind(_) => (),
+          TypeVariants(_) => (),
+          RowAliasKind(_) => (),
+          ParamScheme(_) => // A parameter binding is scoped to its own fn and cannot stand as
+          // the prior claim on a top-level op registration.
+          (),
         },
       },
       None => (),

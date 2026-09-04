@@ -17,9 +17,12 @@
 // when the list is tag=0 and the ref-count proves uniqueness. Functions
 // receiving a borrowed List always allocate a new node.
 //
-// Effects declared in std/compiler/types.mn — not re-declared here.
-import types
-
+// Effects declared in std/compiler/types.mn — not re-declared here, and not
+// IMPORTED either: this module references no name from types, so the import
+// was pure link mass. It put the compiler's whole effect vocabulary — Abort,
+// FreshHandle, Consume, GraphRead/Write, Diagnostic, EnvRead/Write, Verify,
+// 100-odd ops — into the namespace of every program that touches a list.
+//
 // The stride carrier. A sequence's element byte-stride rides the HIGH bits of
 // its tag word (which holds sc*16 + tag): the structural tag is that word masked
 // to its low 4 bits, the stride-code sc is that word / 16 (exact, since the tag

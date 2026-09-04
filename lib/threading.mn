@@ -9,8 +9,7 @@
 // (`<|` ref-borrows one shared input; `><` own-consumes independent
 // inputs), never serial-vs-parallel. Output tuple order is source order
 // regardless of completion order — determinism is the verb's.
-import types
-
+//
 // ThreadHandle — the spawn's task record, banked whole. Under
 // parallel_compose the payload is the record the substrate allocated at
 // spawn ([task closure][completion][result] — $spawn_task_impl in the

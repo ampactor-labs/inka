@@ -2744,7 +2744,20 @@ for i in "${!compilers[@]}"; do
   # enters a bare program's floor. Shrinking the justification to fit the
   # ceiling would be shaping the wheel around the gate; the ceiling follows
   # the link when the link is reachability-judged.
-  cost_ceiling=6385
+  # 2737 (2026-09-04): FELL 6385 → 2737, and this is the ceiling event the
+  # three raises above were evidence for. lib/lists, lib/strings and
+  # lib/threading each carried `import types` and referenced not one name from
+  # it — every apparent use was a comment mention. Those three lines put the
+  # compiler's own module, and with it ~170 op names (Abort, FreshHandle,
+  # Consume, GraphRead/Write, Diagnostic, EnvRead/Write, Verify), into the
+  # namespace of every program that touches a list or a string. Deleting them
+  # takes `types` out of a bare weave entirely: 7 modules to 6.
+  #
+  # The comment above called the repeated types.mn raises evidence FOR
+  # `Hβ.driver.link-is-reachability` and predicted the number would fall hard
+  # once the link was judged. It was not the whole judgment — dead imports are
+  # the crudest possible unreachability — and it still more than halved.
+  cost_ceiling=2737
   ct_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-bare-floor.mn" "cost" 2>/dev/null)
   ct_lines=$(printf '%s' "$ct_out" | grep -o '[0-9]* source line' | grep -o '[0-9]*' | head -1)
   if [ -n "$ct_lines" ] && [ "$ct_lines" -le "$cost_ceiling" ]; then

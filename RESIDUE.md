@@ -1055,9 +1055,14 @@ with no new code. That is the fix; this entry exists so the facet's
 over-report at `span_valid` reads as a known gap rather than a candidate
 for deletion.
 
-`Hβ.gradient.delta-re-derives-what-the-diagnostic-already-proposed` — THE
-Delta EFFECT IS A SECOND, UNREACHED IMPLEMENTATION OF TIGHTENING.
-Measured 2026-09-04 at pin 8c7e4746 via the performs facet's `Delta 3/4`.
+`Hβ.gradient.delta-re-derives-what-the-diagnostic-already-proposed` —
+RESOLVED 2026-09-04 at pin d5e6f594: gradient_delta.mn deleted whole (the
+Delta effect, delta_default, its four arms and nineteen supporting fns —
+407 lines) with its import and three installs. The record below is kept
+because the JUDGMENT is the reusable part: an unreached second
+implementation is deleted when the shipping one is better, wired when it
+is not, and the diagnostic was better. Measured at pin 8c7e4746 via the
+performs facet's `Delta 3/4`.
 ▶ THE CLUSTER, measured end to end. `delta_pick` has ZERO references.
 Its three siblings — delta_effect_row, delta_ownership, delta_refinement
 — have exactly one reference each, and all three are inside delta_pick's

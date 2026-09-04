@@ -35,6 +35,44 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin d5e6f594f3bfa9ef · THE GRADIENT'S INVERSE DIRECTION HAD
+  TWO IMPLEMENTATIONS. CLEAN m2 == m3 at 417799 lines, census 0; micros
+  149/149; frontier 374/0. Wheel 59,296 → 58,983 lines.
+  ▶ DELETED WHOLE: src/gradient_delta.mn — the Delta effect, delta_default,
+  its four arms and nineteen supporting fns, 407 lines; the import in
+  main.mn and the three `~> delta_default` installs.
+  ▶ THE MEASUREMENT that made it certain, taken at the previous pin.
+  delta_pick: zero references. delta_effect_row, delta_ownership,
+  delta_refinement: exactly one each, all three inside delta_pick's own arm
+  (gradient_delta.mn:95, 99, 102). Four ops in a closed ring nothing enters
+  — while delta_default sat installed in three real chains, which is
+  BodyContext's shape again. The imports facet confirmed the module's only
+  external consumer was that install, and row_to_with_clause /
+  capabilities_unlocked_by, the two fns that looked shareable, answered
+  only from inside the module.
+  ▶ THE COMMENT NAMED A READER THAT DOES NOT EXIST: "The Cursor handler's
+  CursorView.teach field reads through delta_pick when the inverse-
+  direction gradient should fire." There is no `teach:` field in cursor.mn.
+  Third time this session a comment claimed a consumer the artifact
+  refutes, after BodyContext's "read by LEvPerform" and the fan's "mirrors
+  the sequential arm exactly."
+  ▶ WHY DELETE RATHER THAN WIRE, which is the whole judgment: the shipping
+  answer already exists and is better. main.mn:633 states it — "T_Over-
+  Declared already IS a proposal — the diagnostic" — and `mentl tighten`
+  reads those banked warnings, authoring 174 of them at pin 1aca4868. Delta
+  walked the graph per handle to re-derive the verdict the judgment had
+  already proved and written down. That is the Carried-Truth Law at the
+  exact shape the law names, so the fix is toward less code and the
+  question "should the cursor perform these?" answers itself: the cursor
+  should read the diagnostic.
+  ▶ THE FACET'S OWN LIMIT, recorded at the RESIDUE entry and worth
+  repeating: `performs` read this roster as 3/4, not 0/4, because it counts
+  references outside the effect DECLARATION's extent and delta_pick's arm
+  lives in the handler — a different declaration. The facet measures direct
+  reference honestly; reachability is a different question and belongs to
+  `Hβ.driver.link-is-reachability`. Reading the roster together with
+  delta_pick's zero is what found this, which is how the two facets compose.
+
 - 2026-09-04 · pin 17790803376704d8 · THE PROOF GATE HAD TWO HOMES. CLEAN
   m2 == m3 at 420007 lines, census 0; micros 149/149; frontier 374/0.
   ▶ HOW IT SURFACED: the performs facet, one pin old, reported `mentl ->

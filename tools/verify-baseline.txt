@@ -646,7 +646,13 @@ comment_refs_max: 0
 # condemned machinery was touched; the tower's deletion at rung 3 is what
 # takes this to zero, and every facet landing that adds fns will keep
 # nudging it until then.
-movers_max: 476
+#
+# 476 → 472 at the Delta deletion (same day): gradient_delta.mn's 407 lines
+# left the weave, and the tower has that much less to override. The number
+# is deterministic, so this is the value and not a sample — tightened rather
+# than left slack, because a ceiling above the measurement is exactly the
+# room a regrowth hides in.
+movers_max: 472
 
 # The effect seam: filesystem impl calls outside the handler that owns them.
 # MEASURED 24 before this landing and 13 after (both read from the artifact,

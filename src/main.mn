@@ -67,8 +67,6 @@ import cursor
 
 import cursor_transport
 
-import gradient_delta
-
 import synth_proposer
 
 import eight_loop
@@ -219,7 +217,7 @@ fn edit_run(target_opt) = {
   // have no evidence on the session route — cursor_argmax is AMBIGUOUS
   // (ic_fixpoint_handler carries an arm too), so the singleton tier
   // cannot pick, and the first perform met the strict ev-scan miss.
-  cursor_default ~> delta_default ~> synth_default ~> interrogate_default ~> mentl_default ~> wasi_filesystem)
+  cursor_default ~> synth_default ~> interrogate_default ~> mentl_default ~> wasi_filesystem)
   0
 }
 
@@ -1207,7 +1205,7 @@ fn tighten_line(name: String, declared, used) =
 // once, never a second ledger).
 fn at_run(target, line, col) = infer_context(() => match driver_entry_with_ranges(target) {
   (_ast, ranges) => address_project(ranges, target, line, col),
-} ~> patch_to_file ~> terminal_transport ~> cursor_default ~> delta_default ~> synth_default ~> interrogate_default ~> mentl_default ~> stdout_console ~> wasi_filesystem ~> tighten_collector)
+} ~> patch_to_file ~> terminal_transport ~> cursor_default ~> synth_default ~> interrogate_default ~> mentl_default ~> stdout_console ~> wasi_filesystem ~> tighten_collector)
 
 // session_at_read — the resident session's at transport, built HERE
 // where the address renders live (imports flow main → mcp, never back)
@@ -1219,7 +1217,7 @@ fn at_run(target, line, col) = infer_context(() => match driver_entry_with_range
 fn session_at_read(ranges, line, col) = {
   address_project(ranges, "main", line, col)
   console_taken()
-} ~> console_bank ~> cursor_default ~> delta_default ~> synth_default ~> interrogate_default ~> mentl_default
+} ~> console_bank ~> cursor_default ~> synth_default ~> interrogate_default ~> mentl_default
 
 // address_project — the ONE address core, shared by the CLI transport
 // (at_run above, the projection landing on stdout_console) and the

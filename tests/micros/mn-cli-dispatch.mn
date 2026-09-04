@@ -34,7 +34,11 @@ type Invocation
   = Invoke(EntryVerb)
   | ParseError
 
-fn parse_verb(mode, has_target, target_id) with Pure =
+// Constructing a payload-carrying variant allocates, so the row carries
+// Memory + Alloc. This said `with Pure` and the medium said so; nothing was
+// listening, because E_PurityViolated did not refuse and the battery's own
+// diagnostic counter could not report a nonzero number.
+fn parse_verb(mode, has_target, target_id) with Memory + Alloc =
   if mode == 1 {
     if has_target == 1 { Invoke(VCompile(target_id)) }
     else { ParseError }
@@ -78,7 +82,7 @@ fn classify_verb(w) with Pure =
   else if w == 1 { QVUnresolved }
   else { QVUnknownVerb }
 
-fn build_question(verb, arg, raw) with Pure = match verb {
+fn build_question(verb, arg, raw) with Memory + Alloc = match verb {
   QVUnresolved  => QUnresolved,
   QVType        => QTypeOf(arg),
   QVUnknownVerb => QUnknown(raw)

@@ -2732,7 +2732,19 @@ for i in "${!compilers[@]}"; do
   #
   # Prior: 6360 (down from 6400) after the numeric-scanner landing measured
   # 6352. Held tight on purpose — a floor with room to grow is not a floor.
-  cost_ceiling=6366
+  # 6385 (2026-09-03): RAISED by 19, the THIRD ceiling event in four
+  # iterations and the third caused by a types.mn addition — here the
+  # licence recorded at diag_refuses' new EPurityViolated arm, which states
+  # at the site why the class could arm (wheel census zero, 372 corpus
+  # fixtures clean but the two expecting the refusal). The comment above
+  # already called this pattern evidence FOR
+  # `Hβ.driver.link-is-reachability`, and a third instance is the
+  # measurement it asked for: a fixture importing nothing links the whole
+  # diagnostic catalog, so prose justifying one arm of one projection
+  # enters a bare program's floor. Shrinking the justification to fit the
+  # ceiling would be shaping the wheel around the gate; the ceiling follows
+  # the link when the link is reachability-judged.
+  cost_ceiling=6385
   ct_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" query "$ROOT/tests/frontier/mn-bare-floor.mn" "cost" 2>/dev/null)
   ct_lines=$(printf '%s' "$ct_out" | grep -o '[0-9]* source line' | grep -o '[0-9]*' | head -1)
   if [ -n "$ct_lines" ] && [ "$ct_lines" -le "$cost_ceiling" ]; then

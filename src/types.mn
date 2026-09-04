@@ -2553,6 +2553,29 @@ fn diag_refuses(d) with Pure = match d {
   // no duplicate fn names, measured).
   True,
   EDuplicateFnName(_, _) => True,
+  EPurityViolated(_, _) => // ARMED 2026-09-03, the first of the CROWN's own two verdicts to reach
+  // the refusal law. §0's first property is "nothing executes unproven",
+  // and a violated `with Pure` was proven, printed, and then emitted: the
+  // probe was `fn claims_pure(n) with Pure = shout(n)`, which reported the
+  // violation and shipped 38,750 bytes.
+  //
+  // Both halves of the licence above, measured rather than assumed. The
+  // wheel's own census of this class is ZERO (verify's census line), so
+  // arming cannot refuse the medium. And the user-path channel was checked
+  // across all 372 corpus fixtures: the only carriers left are the two that
+  // EXPECT the refusal (mn-constructor-row-charge, mn-index-sugar-row). The
+  // one true blocker was mn-cli-dispatch, whose parse_verb and
+  // build_question declared `with Pure` while constructing payload-carrying
+  // variants — an honestly wrong signature, widened in the same landing,
+  // and it had gone unnoticed because this class did not refuse and the
+  // micro battery's diagnostic counter could not report a nonzero number.
+  //
+  // The recorded refutation against the all-at-once form — "the wheel
+  // reports 2,266 errors about its own source" — is era-stale; that count
+  // is 0 today. It refuted arming EVERY class at once, which is still the
+  // right refusal; classes arm one at a time as their census falls, and
+  // this one has.
+  True,
   EFnShadowsOp(_, _, _) => // ARMED at birth (2026-08-18), read at the op's env write — the one
   // place both claims on the name are present. Wheel census 0.
   True,

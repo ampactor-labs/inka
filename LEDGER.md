@@ -35,6 +35,46 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-03 · pin 7e2f8deba2a9d6d4 · THE CROWN REFUSES. CLEAN m2 == m3 at
+  416176 lines, census 0; micros 148/148, verify and frontier green.
+  E_PurityViolated is ARMED — the first of the effect system's own two
+  verdicts to reach the refusal law.
+  ▶ §0's FIRST PROPERTY WAS FALSE. "Any intelligence may propose; nothing
+  executes unproven" — and `fn claims_pure(n) with Pure = shout(n)` reported
+  E_PurityViolated, then emitted 38,750 bytes and ran to exit 9. It exits 1
+  with zero WAT now.
+  ▶ THE LICENCE WAS ALREADY SATISFIED, and measured rather than assumed.
+  diag_refuses states its own rule — a class arms when the wheel's census of
+  it is zero — and the wheel's census is 0. The user-path half was checked
+  across all 372 corpus fixtures: the only carriers left are the two that
+  EXPECT the refusal. The recorded refutation against arming, "the wheel
+  reports 2,266 errors about its own source," is era-stale; it refuted the
+  ALL-AT-ONCE form, which is still the right refusal, and classes arm one at
+  a time as their census falls.
+  ▶ THE ONE TRUE BLOCKER was a fixture, not the compiler. mn-cli-dispatch's
+  parse_verb and build_question declared `with Pure` while constructing
+  payload-carrying variants; construction allocates, which this project
+  settled at the constructor-charge landing, and the signatures had been
+  wrong since they were written. Nothing caught them because the class did
+  not refuse and the battery's diagnostic counter could not report a nonzero
+  number.
+  ▶ A CORRECTION TO THE DIG THAT FOUND IT: an earlier reading of this
+  session claimed E_TypeMismatch and E_ResumeOutsideArm were armed classes
+  that were failing to fire. They are not armed at all — that list was
+  scraped from a line range overlapping three other projection tables in
+  types.mn (span, applicability, message), so constructor names were read
+  from the wrong functions. diag_refuses spans 2542-2651 and holds fifteen
+  True arms; the machinery fires correctly, and E_DuplicateFnName proved it
+  by refusing a probe in the same session.
+  ▶ WHAT REMAINS FOR THE SECOND VERDICT: E_EffectMismatch carries 15 corpus
+  reports across 12 micros plus the feedback-row false charge, whose fix is
+  a fork RESIDUE reserves for Morgan. E_ResumeOutsideArm has one documented
+  false positive (mn-resume-in-called-fn, whose own comment names it "the
+  recovered diagnostic"), and E_TypeMismatch one report in
+  mn-uzero-through-frames. Each is a class-sized arc, and each ends with an
+  arm in diag_refuses.
+
+
 - 2026-09-03 · pin b60ea6ed67ed214b · NINE FNS NOTHING CALLED. CLEAN
   m2 == m3 at 416159 lines — byte-identical to the pin before it, which is
   the proof: reachability had already pruned every one, so the deletion is

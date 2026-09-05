@@ -58,13 +58,21 @@
   the emitter's heap-dump." A two-file probe (annotated vs unannotated op
   arg) isolated the variable and the site's own prose refuted the
   conclusion.
-  ▶ WHAT REMAINS IS FIVE REPORTS IN TWO FIXTURES, both named rather than
-  guessed. mn-feedback-iir's two are plausibly
-  `Hβ.effects.feedback-row-substitutes` — the `<~` site over-charging
-  Alloc — and widening them would canonize an over-charge as a fixture's
-  declared truth, trading a visible diagnostic for a silent lie.
-  mn-backtrack-full's three are unread. Arming is licensed when those
-  five resolve, and the path is now arithmetic rather than unknown.
+  ▶ WHAT REMAINS IS TWO REPORTS IN ONE FIXTURE (finished 2026-09-05).
+  mn-backtrack-full's three were the same shape and widened the same way —
+  `Choice vs Memory + Alloc + Choice(List(Int))` and its two siblings. 5 →
+  2, battery errors 19 → 6, carriers down to three files.
+  ▶ THE LAST TWO ARE A REFUSAL TO WIDEN, not an omission. mn-feedback-iir
+  declares `fn accum(input) -> Int with Sample` and the medium infers
+  `Memory + Alloc` — note the body row contains no Sample at all, which is
+  what separates it from every other carrier. That is
+  `Hβ.effects.feedback-row-substitutes`, and SYNTAX already records the
+  measurement: the compiled WAT for a `Delay(N)` recurrence contains ZERO
+  construction of the spec, so the `Alloc` is `infer_expr` walking the RHS
+  as an ordinary constructor call at a site whose only load-bearing content
+  is read statically. Widening would declare Alloc for a site that provably
+  allocates nothing — trading a visible diagnostic for a silent lie in a
+  fixture's own signature. E_EffectMismatch arms when that peer lands.
   ▶ THE REAL SURFACE BUG, smaller than the one the previous entry claimed
   and still real: T_OverDeclared ADVISES an unwriteable row. Over a
   polymorphic op it narrates "declares Probe but body only uses

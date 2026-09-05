@@ -1097,7 +1097,12 @@ form the whole time. The arcs, in order:
   and row/handler/type obligations; the frozen prelude slice via
   `Hβ.persist.module-image-cache`. A token allowlist is the Drift-8 disease
   wearing a linking costume and is refused wherever offered.
-- **Arc E · Space session end-to-end.** The substrate largely exists
+- **Arc E · Space session end-to-end.** ITS DESIGN DOCS ARE
+  `docs/DESIGN_SYSTEM.md` (brand, tokens, visual language — read first) and
+  `docs/MENTL_EDIT.md` (the interaction architecture, which assumes it).
+  They are LIVE, not archaeology, and were reachable from nothing until
+  2026-09-05 — a session working this arc would not have found them.
+  The substrate largely exists
   (`cursor_session`, ide/wheel-worker.js session roles, tools/ide-gate.sh):
   finish residency across actions, verb merge (`edit`/`session`/`serve`
   absorbed BY `space`; doc-truth retires the old names in the same landing),

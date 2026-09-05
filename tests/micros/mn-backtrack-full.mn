@@ -52,10 +52,10 @@ handler bt {
   }
 }
 
-fn pick_one() with Choice = choose([10, 20, 30])
+fn pick_one() with Choice + Memory + Alloc = choose([10, 20, 30])
 
-fn attempt(v) with Abort = if v > 25 { Some(v) } else { abort() }
+fn attempt(v) with Abort + Memory + Alloc = if v > 25 { Some(v) } else { abort() }
 
-fn body() with Choice + Abort = pick_one() |> attempt
+fn body() with Choice + Abort + Memory + Alloc = pick_one() |> attempt
 
 fn main() = { body() } ~> bt

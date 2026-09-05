@@ -66,7 +66,15 @@ fi
 # An entry's pin sits on a CONTINUATION line, so the scan anchors at the first
 # entry and reads onward — matching per-entry-line found an older inline pin
 # and reported a false mismatch on this check's first run after the move.
-headpin=$(awk '/^- 2026/{f=1} f && match($0, /pin [0-9a-f]{8}/){print substr($0, RSTART+4, 8); exit}' LEDGER.md)
+#
+# It reads the `· pin` MARKER, never a bare `pin <sha>`: an entry's body
+# legitimately cites older pins in prose ("the guard at pin 1aca4868"), and a
+# bare match grabbed the first such citation and called it the head — a false
+# mismatch measured 2026-09-05, two entries after fixture-only landings that
+# carry no pin of their own. The marker is the structure; the citation is
+# text. Entries WITHOUT a pin (fixtures only, no repin) are skipped, so the
+# check walks to the most recent entry that actually claims one.
+headpin=$(grep -oE '· pin [0-9a-f]{8}' LEDGER.md | head -1 | grep -oE '[0-9a-f]{8}')
 if [ -z "$headpin" ]; then
   echo "doc-truth: no pin found in LEDGER.md's head entry — the chain cannot be checked, so it fails"
   fail=1

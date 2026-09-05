@@ -1087,12 +1087,18 @@ rule. Deleting that would re-break the class its own comment names — "the
 payload type never flows performer→handler... the root of both the
 list-as-Int erasure and the emitter's heap-dump." The declaration is
 right; I misread a bare name as a bare effect.
-▶ WHAT ACTUALLY REMAINS: five reports, in two fixtures, both named rather
-than guessed. mn-feedback-iir's two are plausibly
-`Hβ.effects.feedback-row-substitutes` — the `<~` site over-charging Alloc
-— and widening them would canonize an over-charge as a fixture's declared
-truth. mn-backtrack-full's three are unread. Arming is licensed when
-those five resolve.
+▶ WHAT ACTUALLY REMAINS IS TWO, in one fixture (finished 2026-09-05).
+mn-backtrack-full's three were the same widenable shape. The last two are
+mn-feedback-iir, and they are a REFUSAL to widen rather than work left
+undone: `fn accum(input) -> Int with Sample` infers `Memory + Alloc`, and
+the body row contains no Sample at all — the shape that separates it from
+every other carrier. It is `Hβ.effects.feedback-row-substitutes`, whose
+measurement SYNTAX already carries: the compiled WAT for a `Delay(N)`
+recurrence contains ZERO construction of the spec, so the Alloc is
+infer_expr walking the RHS as an ordinary constructor call at a site whose
+only load-bearing content is read statically. Widening would declare Alloc
+for a site that provably allocates nothing. E_EffectMismatch is armable
+the day that peer lands, and not before.
 ▶ THE REAL SURFACE BUG, which survives all of the above and is smaller
 than the one this entry first claimed: T_OverDeclared ADVISES an
 unwriteable form. `fn run() with Probe` over a polymorphic op narrates

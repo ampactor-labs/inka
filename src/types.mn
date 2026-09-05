@@ -77,11 +77,11 @@ type Ty
 // It is a PROJECTION of the type the graph already proved — never a
 // re-derivation from arity (the i32-from-arg-count floor is the
 // Carried-Truth violation STEP 1 deletes). `repr_of` is structurally a
-// peer of `ty_to_wasm_type` (the floor of representation), but it is the
-// FULL gradient: a handle IS a 32-bit word, so every pointer-kind AND
-// the unresolved floor share RI32 (the pointer-representation and the
-// productive-under-error floor are ONE fact). RF64 is TFloat's inferred
-// default (the live decider `ty_to_wasm_type` currently leaves unreached).
+// peer of the WAT value-type rendering, but it is the FULL gradient: a
+// handle IS a 32-bit word, so every pointer-kind AND the unresolved floor
+// share RI32 (the pointer-representation and the productive-under-error
+// floor are ONE fact). RF64 is TFloat's inferred default, read through
+// `repr_wat` at the emit sites that need a width.
 // The pinned classes (RI64 / RF32 / RV128) are reachable once STEP 1
 // lands their gradient-INPUT surface (the `repr <width>` pin, a
 // fixed-point refinement, a homogeneous lane-sequence) — present here as

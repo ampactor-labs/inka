@@ -35,6 +35,38 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · pin 40b1c7148281d298 · THREE DEAD FNS, AND THE FACET'S
+  OVER-REPORT CONFIRMED AS STATED. CLEAN m2 == m3 at 418641 lines, census
+  0; micros 149/149; frontier 374/0.
+  ▶ DELETED from backends/wasm, each read at its site first:
+  `ty_to_wasm_type` — the composition `repr_of |> repr_wat` with no
+  consumer, while repr_wat itself answers 19 references, so callers reach
+  the projection directly. `handle_recorded` — a membership walk whose ONE
+  reference is its own recursive call; the facet counts references outside
+  the declaration's extent, which is precisely the distinction that makes
+  a self-recursive orphan visible where a raw ref-count would read 1 and
+  look alive. `emit_load_chain` — a one-line wrapper defaulting leaf_repr
+  to RI32, while all four callers use emit_load_chain_repr; its comment
+  moved onto the surviving fn.
+  ▶ THE EMIT LINE COUNT DID NOT MOVE — 418641 before and after. That is
+  the independent confirmation that all three were unreachable:
+  reachability had already pruned them from the emitted tree, so this is
+  source hygiene and not a behaviour change. A deletion that changes the
+  artifact would have meant the measurement was wrong.
+  ▶ THE OVER-REPORT IS WHAT THE ENTRY SAYS, measured rather than assumed.
+  The remaining backends/wasm rows are TYPE names, and cursor_transport's
+  three — Surface, Action, PatchWrite — are EFFECT names carried in
+  cursor_step's declared row. Type position draws no reference edge
+  (`Hβ.types.type-expressions-are-not-graph-content`), so they read as
+  orphans and are not. Two probes settled it; the facet's limit held
+  exactly as written.
+  ▶ THE READING DISCIPLINE, five landings in: the facet names candidates
+  and a person reads each at its site. That has now sorted BodyContext,
+  Delta and ic_fixpoint_handler (deleted), graph_emitfn_at,
+  graph_narrow_set, diag_applicability and interrogate_all (dormant under
+  named peers), fs_close (a bypass to fix, not vocabulary to remove), and
+  these three. The count is never the verdict.
+
 - 2026-09-04 · pin ff7e079b49ca0e4e · THE LARGEST CLAIM IN THE WHEEL WAS
   INERT. CLEAN m2 == m3 at 418641 lines, census 0; micros 149/149;
   frontier 374/0. Orphan-claims 216 → 215.

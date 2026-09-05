@@ -400,14 +400,7 @@ fn string_bucket_scan(ref bucket, s: String, i) with Memory = if i >= len(bucket
 
 // Reads through LookupTy; refinements transparent (erased at runtime).
 //
-// ty_to_wasm_type is a PROJECTION of repr_of (types.mn) — the WAT value
-// type IS the representation class rendered. The formerly-unreached
-// `TFloat => "f64"` now lives through repr_of's RF64 arm (the live decider).
-// Carried-Truth: one decision home (repr_of), this is a reader — never a
-// parallel per-Ty width table. STEP 1's emit slots read the same projection
-// for param/local/result widths, so the gradient has ONE source.
-fn ty_to_wasm_type(ty) with Pure = ty |> repr_of |> repr_wat
-
+//
 // ─── The specialization demand analysis (monomorphization, §5.U scalar half) ──
 //
 // Which named-generic twins exist. Three passes over projections the graph
@@ -1014,20 +1007,6 @@ fn slot_already_recorded(entries, target: String, i, n) = if i >= n {
   true
 } else {
   slot_already_recorded(entries, target, i + 1, n)
-}
-
-// handle_recorded — the Int-handle membership: a state slot is a graph-node
-// HANDLE, not a name, so it dedups by handle identity (== on Int → i32.eq),
-// never str_eq. slot_already_recorded's String proof is right for op NAMES
-// (the sibling collector below), wrong for handles — the two equalities are
-// distinct, so the two typed checks are, until a generated membership fold
-// projects the element type live (Hβ.runtime.indexed-map-primitive).
-fn handle_recorded(entries, target, i, n) = if i >= n {
-  false
-} else if list_index(entries, i) == target {
-  true
-} else {
-  handle_recorded(entries, target, i + 1, n)
 }
 
 // project_emit_state — single-tree-walk; six projections drained at end.
@@ -7513,14 +7492,13 @@ fn emit_pat_alt_binds_dispatch(branches, path, path_len) = if len(branches) == 0
   }
 }
 
-// emit_load_chain — chain the field-traversal loads to reach the pattern's
-// position. Every INTERMEDIATE step is a pointer chase (i32.load — the value at
-// a path step is a handle into a deeper aggregate); the FINAL step (k ==
-// path_len - 1) loads the matched value at its proven leaf_repr, so an f64
-// leaf binds f64-wide (the same width the store wrote — Carried-Truth across
-// store/load). Caller has already emitted (local.get $scrut_tmp).
-fn emit_load_chain(path, k, path_len) = emit_load_chain_repr(path, k, path_len, RI32)
-
+// emit_load_chain_repr — chain the field-traversal loads to reach the
+// pattern's position. Every INTERMEDIATE step is a pointer chase (i32.load —
+// the value at a path step is a handle into a deeper aggregate); the FINAL
+// step (k == path_len - 1) loads the matched value at its proven leaf_repr,
+// so an f64 leaf binds f64-wide (the same width the store wrote —
+// Carried-Truth across store/load). Caller has already emitted
+// (local.get $scrut_tmp).
 fn emit_load_chain_repr(path, k, path_len, leaf_repr) = if k == path_len {
   ()
 } else {

@@ -18,8 +18,8 @@ handler collect {
   emit(v) => resume(v.beta)
 }
 
-fn helper() with Probe = emit({alpha: 1, beta: 2, gamma: 3})
+fn helper() with Probe + Memory + Alloc = emit({alpha: 1, beta: 2, gamma: 3})
 
-fn run() with Probe = helper()
+fn run() with Probe + Memory + Alloc = helper()
 
 fn main(q) = run() ~> collect

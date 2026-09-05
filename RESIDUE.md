@@ -1068,23 +1068,42 @@ mn-ev2 and mn-ev4 both declared `fn outer(x) with G + D` while calling a
 `mid` declared `G + D + Memory`. The author widened the callee and not the
 caller. Same shape as mn-cli-dispatch at the E_PurityViolated arming;
 same one-line fix. 15 → 13.
-▶ THE REMAINING 13 ARE NOT SLOPPINESS. mn-payload declares `fn run() with
-Probe` and the medium infers `Memory + Alloc + Probe({alpha: Int, beta:
-Int, gamma: Int})` — a TYPE-PARAMETERIZED INSTANCE. No widening can fix
-it, because a with-clause takes value arguments and cannot say
-`Probe({record})` at all. The payload family carries most of the 13 for
-this one reason.
-▶ SO THE BLOCKER IS THE SURFACE, not the crown. `Hβ.syntax.type-instance-
-in-with-clause` is the dependency, and it is the same gap that made
-`mentl tighten` author un-re-parseable rows at pin 1aca4868 — the guard
-there refuses to WRITE what cannot be read back, which is the same
-sentence from the other side. E_EffectMismatch arms when a declared row
-can express what inference proves.
-▶ WHAT REMAINS TO CHECK, named so the next reading does not restart: the
-two mn-feedback-iir reports are plausibly
-`Hβ.effects.feedback-row-substitutes` (the `<~` site over-charging Alloc)
-rather than a wrong signature, and mn-backtrack-full's three are unread.
-Neither was assumed either way.
+▶ THE CLAIM THAT THE REMAINING 13 WERE UNFIXABLE IS RETRACTED. This entry
+said "no widening can fix it, because a with-clause cannot say
+`Probe({record})`", and the next session's measurement refuted it:
+widening `fn run() with Probe` to `with Probe + Memory + Alloc` clears the
+ERROR outright, leaving only a T_OverDeclared narration. The instance args
+never blocked anything, because `eff_admits` (effects.mn:1105) already
+answers TRUE for a bare gate name against any instantiated body name — a
+bare `Probe` admits `Probe(τ)` by design. Ten more fixtures widened on
+that measurement: the whole payload family plus mn-ev2/mn-ev4. 15 → 5.
+▶ AND A SECOND WRONG TURN, recorded because the probe is what stopped it.
+Reading `effect Probe { emit(x) -> Int }` — declared with NO parameter
+list — I concluded inference was manufacturing a type argument, and was
+about to treat that as the bug. infer.mn:8558 says otherwise, explicitly:
+an effect's type params ARE the free type vars across all its ops'
+signatures, so `emit(x)` with a lowercase `x` declares one by the case
+rule. Deleting that would re-break the class its own comment names — "the
+payload type never flows performer→handler... the root of both the
+list-as-Int erasure and the emitter's heap-dump." The declaration is
+right; I misread a bare name as a bare effect.
+▶ WHAT ACTUALLY REMAINS: five reports, in two fixtures, both named rather
+than guessed. mn-feedback-iir's two are plausibly
+`Hβ.effects.feedback-row-substitutes` — the `<~` site over-charging Alloc
+— and widening them would canonize an over-charge as a fixture's declared
+truth. mn-backtrack-full's three are unread. Arming is licensed when
+those five resolve.
+▶ THE REAL SURFACE BUG, which survives all of the above and is smaller
+than the one this entry first claimed: T_OverDeclared ADVISES an
+unwriteable form. `fn run() with Probe` over a polymorphic op narrates
+"declares Probe but body only uses Probe(Int) — tighten the signature",
+and `with Probe(Int)` does not parse. `mentl tighten` consumes exactly
+these narrations, which is why the round-trip guard at pin 1aca4868 was
+needed; the guard declines silently while the ADVICE is still wrong. The
+fix is that the narration must not propose a row the grammar cannot
+express — either by rendering the writeable prefix or by staying silent
+when the only difference is inferred instance args. Banked as
+`Hβ.diag.over-declared-advises-an-unwriteable-row`.
 
 `Hβ.infer.resume-in-a-called-fn-has-no-arm-types` — E_ResumeOutsideArm
 CANNOT ARM, and the follow-up its own fixture cites was named NOWHERE

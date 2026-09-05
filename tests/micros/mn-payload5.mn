@@ -22,7 +22,7 @@ handler h with s = {alpha: 0, beta: 0, gamma: 0} {
   zrd() => resume(s)
 }
 
-fn run() with P = {
+fn run() with P + Memory + Alloc = {
   aset({alpha: 1, beta: 2, gamma: 3})
   zrd()
 }

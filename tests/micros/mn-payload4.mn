@@ -20,7 +20,7 @@ handler h with s = {alpha: 0, beta: 0, gamma: 0} {
   rd() => resume(s)
 }
 
-fn run() with P = {
+fn run() with P + Memory + Alloc = {
   set({alpha: 1, beta: 2, gamma: 3})
   rd()
 }

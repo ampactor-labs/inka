@@ -23,5 +23,5 @@
 // instrumentation to pin). Expected value when fixed: 2.
 effect Probe { emit(x) -> Int }
 handler collect(f) { emit(v) => resume(f(v)) }
-fn run() with Probe = emit({alpha: 1, beta: 2, gamma: 3})
+fn run() with Probe + Memory + Alloc = emit({alpha: 1, beta: 2, gamma: 3})
 fn main(q) = run() ~> collect((r) => r.beta)

@@ -22,7 +22,7 @@ handler hold with slot = make_list(2) {
   get() => resume(last(slot))
 }
 
-fn run() with Probe = {
+fn run() with Probe + Memory + Alloc = {
   put({alpha: 1, beta: 2, gamma: 3})
   get()
 }

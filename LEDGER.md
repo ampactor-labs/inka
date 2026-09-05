@@ -35,6 +35,45 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · (no repin — fixtures only) · E_EffectMismatch 15 → 5, AND
+  TWO OF MY OWN CLAIMS RETRACTED. Battery errors 19 → 9; carriers eleven
+  files → four; micros 149/149; verify green.
+  ▶ THE PREVIOUS ENTRY WAS WRONG. It said the remaining 13 could not be
+  fixed by widening, because a with-clause cannot say `Probe({record})`.
+  Measurement: widening `fn run() with Probe` to `with Probe + Memory +
+  Alloc` clears the ERROR outright, leaving a T_OverDeclared narration.
+  The instance args never blocked anything — `eff_admits`
+  (effects.mn:1105) answers TRUE for a bare gate name against any
+  instantiated body name, so a bare `Probe` admits `Probe(τ)` by design,
+  and has all along. Ten fixtures widened on that reading: the payload
+  family plus mn-ev2/mn-ev4.
+  ▶ AND A SECOND WRONG TURN THE PROBE CAUGHT BEFORE IT LANDED. `effect
+  Probe { emit(x) -> Int }` declares no parameter list, so I read
+  `Probe(Int)` as inference manufacturing an argument, and was one edit
+  from treating that as the bug. infer.mn:8558 says the opposite in its
+  own words: an effect's type params ARE the free type vars across all its
+  ops' signatures, so a lowercase `x` declares one under the case rule.
+  Removing it re-breaks what that comment names — "the payload type never
+  flows performer→handler... the root of both the list-as-Int erasure and
+  the emitter's heap-dump." A two-file probe (annotated vs unannotated op
+  arg) isolated the variable and the site's own prose refuted the
+  conclusion.
+  ▶ WHAT REMAINS IS FIVE REPORTS IN TWO FIXTURES, both named rather than
+  guessed. mn-feedback-iir's two are plausibly
+  `Hβ.effects.feedback-row-substitutes` — the `<~` site over-charging
+  Alloc — and widening them would canonize an over-charge as a fixture's
+  declared truth, trading a visible diagnostic for a silent lie.
+  mn-backtrack-full's three are unread. Arming is licensed when those
+  five resolve, and the path is now arithmetic rather than unknown.
+  ▶ THE REAL SURFACE BUG, smaller than the one the previous entry claimed
+  and still real: T_OverDeclared ADVISES an unwriteable row. Over a
+  polymorphic op it narrates "declares Probe but body only uses
+  Probe(Int) — tighten the signature", and `with Probe(Int)` does not
+  parse. `mentl tighten` consumes exactly these narrations, which is why
+  the round-trip guard at pin 1aca4868 exists — the guard declines
+  silently while the advice stays wrong. Banked as
+  `Hβ.diag.over-declared-advises-an-unwriteable-row`.
+
 - 2026-09-04 · (no repin — fixtures only) · THE LAST CROWN CLASS IS BLOCKED
   BY THE SURFACE, NOT BY THE CROWN. Battery errors 19 → 17; micros
   149/149; verify green.

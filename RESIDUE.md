@@ -1055,6 +1055,59 @@ with no new code. That is the fix; this entry exists so the facet's
 over-report at `span_valid` reads as a known gap rather than a candidate
 for deletion.
 
+`Hβ.crown.effect-mismatch-arming-blocked-by-the-surface` — THE LAST CROWN
+CLASS CANNOT REFUSE BECAUSE THE ROW IT PROVES IS UNWRITEABLE. Measured
+2026-09-04 at pin 5e780c0e, and the finding is not what it looked like.
+▶ THE ARMING LICENCE, from the classes already armed: a class arms when
+the wheel's census of it is ZERO and the corpus channel carries only
+fixtures that EXPECT the refusal. The wheel's census is 0 errors of every
+class, so the corpus is the only gate. E_EffectMismatch carried 15 reports
+across the micro battery.
+▶ TWO OF THE 15 WERE HONESTLY-WRONG SIGNATURES and are fixed here:
+mn-ev2 and mn-ev4 both declared `fn outer(x) with G + D` while calling a
+`mid` declared `G + D + Memory`. The author widened the callee and not the
+caller. Same shape as mn-cli-dispatch at the E_PurityViolated arming;
+same one-line fix. 15 → 13.
+▶ THE REMAINING 13 ARE NOT SLOPPINESS. mn-payload declares `fn run() with
+Probe` and the medium infers `Memory + Alloc + Probe({alpha: Int, beta:
+Int, gamma: Int})` — a TYPE-PARAMETERIZED INSTANCE. No widening can fix
+it, because a with-clause takes value arguments and cannot say
+`Probe({record})` at all. The payload family carries most of the 13 for
+this one reason.
+▶ SO THE BLOCKER IS THE SURFACE, not the crown. `Hβ.syntax.type-instance-
+in-with-clause` is the dependency, and it is the same gap that made
+`mentl tighten` author un-re-parseable rows at pin 1aca4868 — the guard
+there refuses to WRITE what cannot be read back, which is the same
+sentence from the other side. E_EffectMismatch arms when a declared row
+can express what inference proves.
+▶ WHAT REMAINS TO CHECK, named so the next reading does not restart: the
+two mn-feedback-iir reports are plausibly
+`Hβ.effects.feedback-row-substitutes` (the `<~` site over-charging Alloc)
+rather than a wrong signature, and mn-backtrack-full's three are unread.
+Neither was assumed either way.
+
+`Hβ.infer.resume-in-a-called-fn-has-no-arm-types` — E_ResumeOutsideArm
+CANNOT ARM, and the follow-up its own fixture cites was named NOWHERE
+until now. Measured 2026-09-04 at pin 5e780c0e.
+▶ THE MEASUREMENT: `tests/micros/mn-resume-in-called-fn.mn` runs CORRECTLY
+— exit 9, the contract it declares — while inference reports
+E_ResumeOutsideArm twice. `drive()` is a top-level fn called from a
+handler arm; its `resume` resolves through the evidence tier at runtime
+and works. The fixture's own comment says "the typed R→S binding is the
+named follow-up," and a grep of this file for that follow-up returned
+nothing. PLAN §7's law is that a gap not in RESIDUE does not exist, so it
+did not.
+▶ WHY THE DIAGNOSTIC IS NOT SIMPLY WRONG, which is the part that took the
+reading: `resume : R -> S` needs the arm's continuation types, and
+`inf_arm_tys()` answers None when `drive` is judged standalone — because
+it IS judged standalone. The report is honest about the typing and wrong
+about the program. Arming it would refuse a correct fixture.
+▶ THE BUILD: judge a fn reached from an arm under that arm's continuation
+types, so the resume in a called fn types against the R and S its caller
+proves. That is continuation-polymorphism at the fn boundary, not a patch
+to the check. Until then the class stays behind the wildcard and the
+fixture keeps carrying two honest false reports.
+
 `Hβ.cursor.cached-argmax-keyed-by-epoch-and-caret` — THE CACHED CURSOR IS
 UNBUILT, and the sketch that stood in for it was inert. Opened
 2026-09-04 at pin cfb97e95 as `.ic-fixpoint-handler-is-never-installed`;

@@ -35,6 +35,49 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-04 · (no repin — fixtures only) · THE LAST CROWN CLASS IS BLOCKED
+  BY THE SURFACE, NOT BY THE CROWN. Battery errors 19 → 17; micros
+  149/149; verify green.
+  ▶ THE QUESTION THIS ANSWERS is Morgan's: every armed diagnostic deletes
+  a category of guessing permanently, so the arming path IS the path out of
+  the loop. E_EffectMismatch is the last crown class unarmed, and the
+  licence is measured, not argued: the wheel's census of every error class
+  is 0, so the corpus channel is the only gate. It carried 15 reports.
+  ▶ TWO WERE HONESTLY-WRONG SIGNATURES, fixed here. mn-ev2 and mn-ev4 both
+  declared `fn outer(x) with G + D` while calling a `mid` declared
+  `G + D + Memory` — the author widened the callee and not the caller.
+  Exactly the mn-cli-dispatch shape that unblocked E_PurityViolated. 15 →
+  13, and both files left the battery's carrier list.
+  ▶ THE OTHER 13 ARE NOT FIXABLE BY WIDENING, and that is the finding.
+  mn-payload declares `with Probe` and the medium infers `Memory + Alloc +
+  Probe({alpha: Int, beta: Int, gamma: Int})` — a type-parameterized
+  INSTANCE. A with-clause takes value arguments; it cannot say
+  `Probe({record})` at all. So no signature exists that matches what
+  inference proved, and the payload family carries most of the 13 for that
+  one reason.
+  ▶ THE BLOCKER IS `Hβ.syntax.type-instance-in-with-clause`, which is the
+  SAME gap that made `mentl tighten` author un-re-parseable rows at pin
+  1aca4868. The guard there refuses to write what cannot be read back;
+  this is that sentence from the other side — the medium cannot declare
+  what it can prove. Banked as
+  `Hβ.crown.effect-mismatch-arming-blocked-by-the-surface`.
+  ▶ AND A SECOND CLASS MEASURED UNARMABLE, its follow-up named nowhere
+  until now. `tests/micros/mn-resume-in-called-fn.mn` runs correctly —
+  exit 9 — while reporting E_ResumeOutsideArm twice, and its own comment
+  calls the fix "the named follow-up". A grep of RESIDUE for it returned
+  nothing, so by PLAN §7's law it did not exist. The report is honest
+  about the TYPING (`resume : R -> S` needs the arm's continuation types,
+  and inf_arm_tys answers None for a standalone `drive`) and wrong about
+  the PROGRAM. Arming would refuse a correct fixture. Banked as
+  `Hβ.infer.resume-in-a-called-fn-has-no-arm-types`; the build is
+  continuation-polymorphism at the fn boundary, not a patch to the check.
+  ▶ WHAT WAS DELIBERATELY NOT DONE: mn-feedback-iir's two reports are
+  plausibly `Hβ.effects.feedback-row-substitutes` — the `<~` site
+  over-charging Alloc — rather than wrong signatures, and blanket-widening
+  them would canonize an over-charge as a fixture's declared truth.
+  mn-backtrack-full's three are unread. Both are named rather than
+  guessed.
+
 - 2026-09-04 · pin 40b1c7148281d298 · THREE DEAD FNS, AND THE FACET'S
   OVER-REPORT CONFIRMED AS STATED. CLEAN m2 == m3 at 418641 lines, census
   0; micros 149/149; frontier 374/0.

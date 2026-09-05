@@ -19,7 +19,7 @@ fn mid(e) with G + D + Memory = {
   store_i32(0, 0)
   deep(e)
 }
-fn outer(x) with G + D = mid(x)
+fn outer(x) with G + D + Memory = mid(x)
 fn main(q) = {
   outer(7)
 }

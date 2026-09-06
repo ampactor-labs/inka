@@ -35,6 +35,104 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-06 · pin f58dfc1070f5c7a5 · A MODULE'S IDENTITY WAS THE SPELLING
+  THAT REACHED IT. Board whole (verify green, march CLEAN m2 == m3, frontier
+  374/0, crown 62/0, proof-exactness 9/0, effect-identity PASS, instrument
+  reads); census 0; cost 11.19s / 2148MB.
+  ▶ THE FIND, from a wrong turn. Building a positive control for an
+  unrelated gate, a concatenated lib blob was fed to `mentl compile <file>`
+  and refused with E_DuplicateTypeName on `type Bool`. The blob was
+  malformed — the file path resolves imports, so prelude arrived twice —
+  but the interesting half was that the SAME BYTES through stdin compiled
+  and ran. Two transports, two meanings. Probing that split found the root
+  one layer down and much worse: `import lists` checks clean at 0
+  diagnostics, `import lib/lists` refuses with 58. One file. Two spellings.
+  Two module identities.
+  ▶ THE ROOT. driver_collect_visit keyed its visited set by the module NAME
+  and called driver_module_path on the very next line. So both spellings
+  passed the check, the same source was collected twice, and every
+  declaration in it collided with itself. An import is an EDGE; drawing an
+  edge that already exists is a no-op, which is what an edge IS. The walk
+  was drawing a second one.
+  ▶ WHY NO GATE SAW IT — tripwire 3, whole. The wheel's own build is the
+  cat-blob through stdin, which never resolves an import at all, and every
+  lib spells its siblings bare (`import lists`, no prefix). So the wheel
+  never once resolved a path-prefixed import, and a user's first one is red
+  on line one. The board was green in the same minute `mentl check` refused
+  a four-line program.
+  ▶ THE FIX IS ONE KEY AT FIVE SITES, and the fifth is why it is not
+  smaller: the visited set, the dep edges, the layer partition's wait
+  condition, the tree scan's downstream closure, the entry filter. Fixing
+  only the visited set would have been WORSE than the bug — a name-matched
+  dep edge against a path-keyed DAG is DROPPED, and the partition then runs
+  an importer before its dep. A half-keyed graph is the same defect wearing
+  an ordering costume.
+  ▶ IT DELETES, three times, and each deletion was already named in this
+  file's own header as fixed for every OTHER consumer of the walk:
+  driver_check_module was re-resolving a path the walk had resolved (up to
+  five fs_exists probes per module) and re-reading a file the walk had read;
+  rederive_cone was resolving a name that was already a path. The per-module
+  check was the last consumer still following a name. Net code +8 lines —
+  the additions are the ModuleEntry alias and the path-keying, and the
+  commit says so rather than claiming a deletion it did not make (Law 11).
+  ▶ THE PERSISTED MANIFEST keys on the same identity, so the first warm run
+  after this sees every hash as new, re-derives once, and re-persists with
+  paths. Self-healing, one cold run.
+  ▶ GATE, born RED: tests/syntax/import-path-spelling.mn — 58 errors through
+  the manifest link while the identical source is silent through the blob
+  link. That divergence is precisely what the syntax battery's manifest leg
+  was built to catch, so the gate needed no new harness; it needed a fixture
+  nobody had thought to write. 58 → 0.
+  ▶ THE MEDIUM CONVICTED THE AUTHOR. The first draft wrote
+  `map((dep) => driver_module_path(dep), …)` out of caution about passing a
+  `ref`-param fn point-free. verify's anonymity ratchet went red — "eta rose
+  28 → 30 — a named fn newly hidden behind a lambda." Point-free checks
+  clean; the caution was superstition. That is `mentl audit`'s larval form
+  doing its job on someone editing the wheel, which is the whole point of
+  ratcheting a shape rather than reviewing for it. effectful_lambda_max
+  385 → 384, holding the gain the same leg measured.
+  ▶ A SECOND DEFECT, found because the board could not run. tools/wt-env.sh
+  is SOURCED, so its wasmtime flag probe inherited the caller's shell
+  options. Under `set -o pipefail` — which verify.sh sets and an interactive
+  source does not — wasmtime's nonzero exit masked grep's MATCH, so the
+  probe took the wrong branch and added the `-W shared-memory=y` that 36 LTS
+  rejects; every gate run trapped with "unknown -W option". Invisible on 43,
+  which wants the flag regardless, so there the wrong branch and the right
+  behaviour coincided: the defect could only fire on the version this repo
+  pins. A captured string matched with `case` has no exit status to inherit.
+  The deeper reading is that the version fork itself is the liability, which
+  is what Hβ.ops.wasmtime-runner-migration steps (5)-(6) already say.
+  ▶ AND THE GATE THAT STARTED IT ALL: tools/thread-gate.sh, wired into
+  state.sh. Nothing on the board counted a thread, which is why
+  judge_window = 1 sat beside a spawn-per-branch for ten days with every
+  gate green (433 threads on `fn main() = 7`). Three legs — a positive
+  control that requires a really-spawning fixture to read above the floor
+  (the first draft of it was VACUOUS: the fixture failed to compile,
+  wat2wasm assembled the empty output, the run exited 0, and it "passed"
+  having measured nothing); a DELTA ratchet between a 61-decl and a 1-decl
+  program, so wasmtime's own host threads cancel and the gate measures us
+  rather than the runner; and a two-draw byte compare, the leg that survives
+  Phase 9.2 unchanged because a race's only symptom is the run-to-run
+  variance that hid the 2026-08-07 garbled cell. judge_spawn_delta_max: 0,
+  seen RED at ceiling -1. Retirement named:
+  Hβ.march.concurrency-is-a-projection — the medium performs
+  wasi_thread_spawn through its own effect and already holds the number this
+  script rebuilds from syscalls.
+  ▶ TWO STALE CLAIMS RETRACTED against the artifact. RESIDUE said a
+  thread-free module "(boot included)" ships no thread-spawn import;
+  wasm-objdump reads func[17] wasi.thread-spawn and a shared env.memory in
+  the pinned boot, so boot is a spawning module by that taxonomy. And
+  wt-env.sh's "it costs ~13 minutes" for the wheel compile measured 20s
+  here — the perf arc's own win, never re-read into the prose that motivated
+  it.
+  ▶ THE SHAPE ALL FOUR SHARE, worth more than any one of them: a fact that
+  was true when written, silently stopped being true, and no gate read it.
+  judge_window beside a spawn-per-branch; "(boot included)" beside a boot
+  that imports thread-spawn; a probe whose answer depended on its caller; a
+  cost claim off by 40×. None were bad reasoning. All were unread
+  measurements — which is the argument for projections over prose at exactly
+  the altitude PLAN §0's fifth property makes the point.
+
 - 2026-09-04 · (no repin — fixtures only) · E_EffectMismatch 15 → 5, AND
   TWO OF MY OWN CLAIMS RETRACTED. Battery errors 19 → 9; carriers eleven
   files → four; micros 149/149; verify green.

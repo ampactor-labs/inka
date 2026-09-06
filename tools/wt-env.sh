@@ -28,11 +28,22 @@
 # byte-identical and battery 113/113 through BOTH binaries —
 # Hβ.ops.wasmtime-runner-migration step 1).
 WT="${WASMTIME_BIN:-$HOME/.wasmtime/bin/wasmtime}"
-if "$WT" run -W shared-memory=y /nonexistent.wasm 2>&1 | grep -q "unknown -W"; then
-  WT_RUN_FLAGS=(-W threads=y -W tail-call=y -S threads=y)
-else
-  WT_RUN_FLAGS=(-W threads=y -W shared-memory=y -W tail-call=y -S threads=y)
-fi
+# The probe reads the runner's OWN WORDS, never a pipeline's exit status. This
+# file is SOURCED, so it inherits the caller's shell options, and the former
+# `… 2>&1 | grep -q` form asked a question whose answer changed with them:
+# wasmtime exits nonzero on the probe either way, so under `set -o pipefail`
+# (which tools/verify.sh sets, and an interactive source does not) the pipeline
+# reported failure though grep had MATCHED — the probe then added the very flag
+# 36 LTS rejects and every run under that gate trapped with "unknown -W option:
+# shared-memory". It was invisible on 43, which wants the flag regardless, so
+# the wrong branch and the right behaviour coincided there: the defect could
+# only fire on the version this repo pins. Captured string + `case` has no exit
+# status to inherit, so the verdict is the same from every caller.
+WT_SHM_PROBE="$("$WT" run -W shared-memory=y /nonexistent.wasm 2>&1 || true)"
+case "$WT_SHM_PROBE" in
+  *"unknown -W"*) WT_RUN_FLAGS=(-W threads=y -W tail-call=y -S threads=y) ;;
+  *)              WT_RUN_FLAGS=(-W threads=y -W shared-memory=y -W tail-call=y -S threads=y) ;;
+esac
 # MENTL_WT_EXTRA — extra runner flags, word-split, appended to every wt_run and
 # every shim invocation. It exists for ONE thing the canonical flags cannot
 # express and the shim therefore could not reach: attaching a profiler.

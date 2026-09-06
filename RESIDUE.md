@@ -7891,6 +7891,33 @@ ide/wheel-worker.js is the runner pattern at the browser host — a
 pre-armed worker pool consuming a SharedArrayBuffer task ring, the
 stub-spawn shim retired to the gate's RED control
 (tools/ide-gate.sh).
+STEP (5) IS TWO HALVES AND ONLY ONE IS A SWAP (MEASURED 2026-09-06).
+The pin is a CEILING, not a preference: the same spawning module
+answers exit 60 through 36's CLI and `Error: the -Sthreads flag is no
+longer supported`, exit 1, through 47's — the CLI cannot execute
+Mentl's own output past 36, so every later release is unreachable
+while the CLI is the runner. That makes (5)-(6) the only exit rather
+than hygiene. The GATE half is a swap: nothing in verify / march /
+frontier / crown listens on a socket, so pointing wt-env.sh's WT at
+tools/runner lifts the ceiling for the whole board and the compile
+path. The SHIM half is BLOCKED ON A BUILD, and the blocker is not the
+runner's — it is the crate's: wasmtime-wasi 47's p1 adapter does not
+implement sockets AT ALL (`p1.rs` sock_accept logs "p1 sock_accept is
+not implemented" and returns Notsock; sock_recv/sock_send likewise),
+and 47's CLI refuses the flag outright with "components do not
+support --tcplisten". Both measured against the pinned boot, whose
+`space` verb serves HTTP 200 on /ide/ through 36 and answers nothing
+through 47. So `mentl space` and `mentl session` — Arc E's own
+surface, the standing cursor's terminal bar — cannot leave 36 by
+swapping a binary. Moving them means the runner OWNS the p1 socket
+surface the way it already owns thread-spawn: bind the listener as a
+host resource, seat it as a descriptor, and implement sock_accept
+against the p1 table. That is the honest shape of it and it is the
+same shape as the spawn glue that already landed here — one more host
+resource the guest cannot create — filed as
+`Hβ.ops.runner-owns-the-p1-socket`. Until it lands the split is
+NAMED, never silent: the board runs on the runner, the two listening
+verbs run on 36, and the LTS pin retires at (6) only when both do.
 
 `Hβ.query.comment-prose-search` (2026-07-24, the ⟳ self-build law's
 first named confession): the vocabulary sweep ran on grep while

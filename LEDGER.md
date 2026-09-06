@@ -35,6 +35,61 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-06 · pin 41aec80bddfe2ce2 · THE WARM PATH WAS HALF-KEYED, AND THE
+  GATE THAT KNEW IT STOPPED ONE LINE SHORT. frontier 374/0, verify green,
+  march CLEAN m2 == m3, census 0, cost 15.16s / 2148MB.
+  ▶ THE PRIOR ENTRY IS CORRECTED, not amended. It said "board whole, every
+  gate green," and that was true AS MEASURED and wrong. The pin it blessed
+  shipped a broken incremental compile.
+  ▶ THE BUG. f58dfc10 moved module identity onto the resolved path and took
+  the tree scan and the manifest with it — but split_weave_by_module still
+  bucketed the analyzed statements by NAME. assoc_stmts then answered EMPTY
+  for every cached module, so the warm path emitted the cone alone: 2933
+  bytes where the cold compile of the same tree is 37644, `a` and the entire
+  prelude gone. That is the SAME half-keying the prior entry warned about in
+  its own prose — "a half-keyed graph is the same defect wearing an ordering
+  costume" — written by someone who had just missed a fifth site. Knowing the
+  shape of a class does not find its members; only a measurement does.
+  ▶ WHY IT RODE A PIN. tests/frontier's warm-inc leg has exactly the check
+  that catches this: incremental output vs a cold compile of the patched
+  tree, byte-compared. It did not run. The cone-line check above it went red
+  on a RENDERING change — the cone prints `b.mn main.mn` now, because it
+  carries the identity — and the leg `return`ed. So a cosmetic red masked a
+  correctness red sitting one line below it, and the board reported the leg
+  as a single failure that looked like mine to re-bank.
+  ▶ THE FIX IS TWO LINES AND ONE OF THEM ISN'T THE BUG. split_weave_by_module
+  keys the bucket by the range tuple's PATH (the tuple already carried both;
+  range_of_module keeps matching the NAME, because that is what a user types
+  at an address). And the leg no longer returns on an independent failure.
+  The second is the one that matters: a leg that halts at its first red hides
+  the rest of its own coverage, and only a genuine precondition — no artifact
+  to read — earns an early return. Two legs in this file still return; both
+  are real preconditions (a failed compile has no wat to diff).
+  ▶ A DIAGNOSTIC THAT COULD LIE, in the gate built to catch those. The census
+  leg fans its queries through xargs and threw away every child's stderr and
+  exit code, so a query that DIED was indistinguishable from a shape that is
+  genuinely absent — and the judge blamed the shape. It records the exit now
+  and says QUERY DIED, and the failure message names the pid-suffixed files
+  that exist instead of an unsuffixed path nothing ever wrote.
+  ▶ ONE UNRESOLVED, NAMED RATHER THAN GUESSED. The board's census-40 red did
+  not reproduce on a clean dir (372/1, then 374/0). A SIGPIPE-under-pipefail
+  hypothesis — grep -q short-circuiting the cat feeding it — was TESTED at
+  200 iterations and did NOT reproduce; the outputs are ~100 bytes, too small
+  to race. No cause is banked. What landed instead is the instrument that
+  will name the failure if it returns, which is the honest move when a probe
+  disproves you: do not crown the next thing you see.
+  ▶ THE MEASUREMENT THAT ANSWERED THE LTS QUESTION, banked here because it
+  reframes a named peer. The same spawning module through two runners:
+  wasmtime 47's CLI answers `Error: the -Sthreads flag is no longer
+  supported` and exits 1; 36's runs it to 60. The CLI cannot execute Mentl's
+  own output past 36, so the LTS pin is a CEILING, not a preference, and
+  every release after it is unreachable while the CLI is the runner.
+  Hβ.ops.wasmtime-runner-migration steps (5)-(6) are therefore not hygiene;
+  they are the only exit. tools/runner builds clean here against wasmtime 47.
+  Its own next_tid counter is the projection tools/thread-gate.sh currently
+  rebuilds from strace, which is Hβ.march.concurrency-is-a-projection with
+  the substrate already written.
+
 - 2026-09-06 · pin f58dfc1070f5c7a5 · A MODULE'S IDENTITY WAS THE SPELLING
   THAT REACHED IT. Board whole (verify green, march CLEAN m2 == m3, frontier
   374/0, crown 62/0, proof-exactness 9/0, effect-identity PASS, instrument

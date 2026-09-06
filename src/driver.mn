@@ -712,9 +712,17 @@ fn driver_warm_persist(ref entry_module, ref asts, ref pairs) with Memory + Allo
 // Attribute each weave statement to its module by the range map's line
 // spans — the split runs once at persist and its buckets ARE the
 // incremental cursor's reuse units.
+// The bucket is keyed by the module's PATH, the same identity the tree scan
+// and the manifest use — these pairs are read back by assoc_stmts on the warm
+// path, and a name key here against a path key there silently returns EMPTY
+// for every cached module: the incremental compile then emits the cone alone
+// and drops the whole restored program (measured — 2933 bytes against the
+// cold compile's 37644, the frontier's warm-inc divergence leg). The range
+// tuple carries name AND path; range_of_module keeps matching the NAME,
+// because that one is addressed by what a user typed.
 fn split_weave_by_module(ref ast, ref ranges) with Memory + Alloc = map(
   (r) => match r {
-    (m, _, start, nlines) => (m, filter(
+    (_m, p, start, nlines) => (p, filter(
       (stmt) => match stmt {
         N(_, sp, _) => match sp {
           Span(sl, _, _, _) => sl >= start && sl < start + nlines,

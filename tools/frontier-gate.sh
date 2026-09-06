@@ -2457,6 +2457,15 @@ for i in "${!compilers[@]}"; do
   # boot answered unknown-verb).
   wy_out=$(wt_run --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" why "$wdoc" gain 2>/dev/null)
   printf '%s' "$wy_out" | grep -q 'let gain' || { w_ok=0; fail "why verb (got: $wy_out)"; }
+  # AT THE DEVELOPER'S COORDINATES. `gain` is line 8 of a 24-line fixture,
+  # so a weave coordinate is unmistakable here — born RED 2026-09-06, when
+  # this answered `at 2729:1-2729:15` because show_reason rendered the raw
+  # span from the one-namespace concatenation. Every felt surface goes
+  # through that renderer (LSP hover, the cursor view's Why line, the type
+  # facet's Reason), and the refs facet three lines away had been answering
+  # local coordinates the whole time. §0's intent-is-walkable property is
+  # only true if the chain walks somewhere a developer can open.
+  printf '%s' "$wy_out" | grep -q 'mn-where-badges:8' || { w_ok=0; fail "why coordinates are the developer's (got: $wy_out)"; }
   # The capability-at-tee badge (§11 6.3's felt face): the install line
   # names the handler and the effect set its arms absorb, from the
   # graph's own facts. Born RED 2026-08-08 (the boot lacked the facet).

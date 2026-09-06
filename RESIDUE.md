@@ -7919,6 +7919,62 @@ resource the guest cannot create — filed as
 NAMED, never silent: the board runs on the runner, the two listening
 verbs run on 36, and the LTS pin retires at (6) only when both do.
 
+`Hβ.parser.module-blind-parse` — ONE ROOT, FIVE COMPENSATIONS (found
+2026-09-06 by walking the felt path with the CLI, as the felt-path-first
+law prescribes). THE PARSER DOES NOT KNOW WHICH MODULE IT IS IN. The
+driver concatenates the dep DAG into one text and parses it whole, so
+every node is born in the WEAVE's coordinate space with no module
+attribution, and five separate machines exist to put back what that one
+blindness threw away:
+(1) the range map, carried out-of-band beside the graph;
+(2) NModule nodes minted AFTER the parse, reconstructed from that map
+    (driver.mn's own comment records the era when they had ZERO writers
+    and every span resolved to the "" module);
+(3) `rehome_seam_comments`, a post-pass moving comments that attached
+    across a module seam — its comment states the cause outright, "the
+    parser cannot see seams";
+(4) `module_path_of_span`'s `scan_for_enclosing_module`, an O(next)
+    containment search per call, whose own comment names its "O(1)
+    destiny";
+(5) the seam-render family — module_seams + seams_walk (O(nodes) per
+    call), seam_of_line, span_render_local — four ways to answer "which
+    module is this line in?" about a value that should never have lost
+    the answer.
+MEASURED SYMPTOM, the one that surfaced it: on a SEVEN-LINE file
+`mentl why addr.mn double` answers `at 2726:1-2726:21`, because
+show_reason renders the raw weave span while the refs facet three lines
+away answers `addr:7`. Every felt surface goes through show_reason — LSP
+hover, the cursor view's Why line, the type facet's Reason — so §0's
+intent-is-walkable property walks to a line no developer can open. A
+translation layer every reader must remember to call is one some reader
+will not call.
+TWO NON-ULTIMATE FORMS WERE BUILT AND REJECTED HERE, both recorded
+because each is instructive. (a) Threading the seams into show_reason:
+fixes the symptom, entrenches the compensation — a bolt, Anchor 8, and
+named as such in the same session that named the family. (b) `Span`
+carrying its module (`Span(m, sl, sc, el, ec)`, 96 sites, the whole-wheel
+census answering 100): SUFFICIENT, not ultimate — a span inside a Reason
+is a COPIED PROJECTION of where a node is, the same disease as a Frozen
+scheme one layer over, and copied coordinates ROT UNDER EDITING, which
+the resident session and incremental edit depend on them not doing.
+THE ULTIMATE FORM: parse PER MODULE. `lex(source_m)` gives module-local
+spans, the NModule node is minted BEFORE its parse, and
+`parse_program(toks, nmh)` attributes every node at birth — the module a
+spine COLUMN (5.5's mechanical test), O(1). One-namespace judgment never
+required one TEXT, only one ENV: parse each module, concatenate the DECL
+LISTS, judge as one program (infer_program_converged already separates
+`lex |> parse_program |> infer_program_*`, so the seam is where it needs
+to be). All five compensations delete, plus driver_module_ast's
+span-containment filter. And the Reason layer follows: `Located(span, r)`
+is a coordinate copied beside the very handle it describes — the
+dominant call shape is literally
+`graph_bind(handle, ty, Located(span, …))`, the node and a copy of the
+node's own position passed to one call. Located carries a HANDLE, and
+where the position IS its own node's it dissolves outright.
+GUARDS, RED-first: the why-coordinate assertion in tools/frontier-gate.sh
+(`mn-where-badges:8` — born RED against the pre-fix boot, which answers
+`2729:1-2729:15`); census 0; m3 == m4.
+
 `Hβ.query.comment-prose-search` (2026-07-24, the ⟳ self-build law's
 first named confession): the vocabulary sweep ran on grep while
 comments are already graph content — the medium's form is a query

@@ -8297,3 +8297,64 @@ GUARDS, RED-first: the movers line (466 at this writing) reads ZERO or
 names only the under-publish class; mn-depth-unannotated stays runs-3;
 the crown's 39 crucibles stay green; the wheel self-compiles through
 the correspondence edges (m3 == m4, the trusting-trust anchor).
+
+THE STAGE CONTRACT IS PARTLY STALE AND THE BLOCKER IS MEASURED
+(2026-09-06). Two corrections and one located wall, all against the
+artifact:
+— STAGE (1) IS LANDED. types.mn already carries
+`type Binding = Frozen([Int], Ty) | Live(Int)` under the header "rung 3
+landing A"; the contract above still describes it as future work under
+the names BStatic/BCell. What did NOT land is the PRACTICE: 45 Frozen
+construction sites against 9 Live, so the env holds snapshots through a
+type that can hold cells.
+— THE TWO-ARM BINDING IS ITSELF RESIDUE, and the contract's BStatic
+should not be built. A static tree (alias, ctor variant, effect decl) is
+a cell that is already bound and will not move; giving it a distinct
+BINDING KIND is drift mode 6, the primitive-special-case, at the env
+layer. The terminal env maps name → HANDLE, boundness read live — which
+is `name-is-handle` (§5.O layer 1) and schemes-are-edges turning out to
+be one law at two altitudes. Binding's discriminator dies when the Live
+arm becomes universal, not by a second arm being designed.
+— THE MOVERS ARE CLASSIFIED, all 474 (tools/movers-hist.py over an
+uncapped movers_diff): grade 261, row+type 107, type 88, row 15,
+row+grade 3; row direction add-only 19 with ZERO removals; grade
+directions r->o 282, o->r 13. So the type-sort residue is 195 of 474 and
+decision (2)'s pre-committed branch is the FRESH DESIGN PASS, not the
+D1/D2/D6 no-go.
+— THE TYPE-HALF JOIN QUESTION IS NOT A BLOCKER, and the record above
+mis-states it. "Rows have their join; TYPE-scheme generality does not"
+is true of the ITERATING design and only of it: a join reconciles a
+RECOMPUTED value with a provisional one, and the probe passes recompute
+from rollback-refreshed nodes, which is why "concreteness learned in
+probe k evaporates in k+1". A live cell is monotonically REFINED, never
+recomputed, so there is no second value and no join is required. The
+tower compensates for the snapshot; the snapshot is the bug.
+— THE WALL, MEASURED TWICE. Publishing the cell at the decl's own exit
+(infer.mn's `env_extend(name, generalize(handle), …)` → `Live(handle)`)
+compiles clean, census 0 — and the resulting m2 TRAPS compiling the
+wheel: exit 134, OOM through
+`chase_row_deep ⇄ chase_edges_deep → edge_content_into → tail_set_union
+→ alloc_list_sc → alloc`. Cause, localized: `instantiate`'s Live arm is
+`instantiate(generalize(h))`, so generalize's chase_deep — one fold per
+DECL under Frozen publication — becomes one fold per USE. The flat-cell
+law's WRITE half is real and in place (graph_bind_row stores
+flatten_row_stored, depth-1 by invariant); it is the materializing READ
+that has no compression.
+— THE TYPE-SIDE HALF OF THE CURE IS BUILT AND MEASURED (parked, not
+landed): subst_ty_build's TVar miss SHARES the edge instead of inlining
+the bound cell's content, and subst_changes stops answering true for
+every bound var. The old arm's own comment is the confession — "the
+freeze exists so readers never read live" — Carried-Truth inverted and
+stamped as a law; the inlining was never a fact about substitution, it
+was a consequence of the RESULT being a snapshot that must not carry
+live pointers. With that pair the trap MOVES but does not clear: still
+chase_row_deep, now through map$spnEffNamenEffName. The row side folds
+the same way and needs the same ruling.
+— THE NEXT THING TO BUILD, forced by both traps: generalize must not
+chase_deep AT ALL. Under live publication a decl's type IS its cell, so
+the quantifier wants a free-var VISITOR over live cells — walking, never
+building — and the deep chase deletes rather than being compressed. The
+allocation is the BUILD (map over eff names, tail_set_union), not the
+visit. Land order, both halves together or neither (the half-step law,
+paid for twice more here): visitor-quantifier + publish-Live +
+subst-shares-the-edge, judged by census 0, the movers line, and m3 == m4.

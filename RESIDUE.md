@@ -2938,6 +2938,26 @@ per-handle fact, which is exactly §11 5.5's column test — put it in a
 spine column, written at the one writer, and the per-install fill has
 nothing left to fill.
 
+`Hβ.march.concurrency-is-a-projection` — the thread gate's own retirement,
+banked 2026-09-06 the hour the gate landed. `tools/thread-gate.sh` counts
+the compile's guest OS threads from OUTSIDE, at clone/clone3 under strace,
+as a delta between a 61-declaration program and a 1-declaration one. Every
+line of it is a hand tool standing where a projection belongs: the medium
+performs `wasi_thread_spawn` through its own WasiThreads effect, so it
+already holds the number the script reconstructs from syscalls, and the
+honest form is `mentl march` printing concurrency beside the cost line it
+prints today — the row made visible, one more fact the self-compile reports
+about itself. Until then the gate is the scaffold tier and says so in its
+own header. The DEP is small and named: a spawn counter on the WasiThreads
+handler, read at march time; it rides Phase 9.2, where the number stops
+being 0 and starts being the width the parallel walk is supposed to have.
+WHY IT IS WORTH BUILDING RATHER THAN LEAVING TO BASH: the class it guards
+(`Hβ.infer.serialized-judge-still-spawns`, below) was invisible for ten days
+to a wholly green board, and the reason is exactly that nothing on the board
+counted a thread. A projection is not a nicety here — it is the difference
+between a fact the medium states about itself and a fact that has to be
+excavated by someone who happened to profile.
+
 `Hβ.infer.serialized-judge-still-spawns` — RESOLVED 2026-08-17, pin
 3fc233421e, the same day it was found. A block of ONE now runs its branch
 as a direct call (`BranchRec = BrDirect | BrSpawned`, decided by block
@@ -7851,9 +7871,16 @@ the join on both engines) is RESOLVED by the task-record landing (pin
 8891428f): the four glue links died into the task record +
 proof-driven memory ownership — a spawning module imports the shared
 image and allocates through the shared cell; a thread-free module
-(boot included) defines its memory and ships NO thread-spawn import,
-so the must-satisfy-thread-spawn instantiation constraint is dissolved
-everywhere it was inert. The three real-spawn frontier legs (int /
+defines its memory and ships NO thread-spawn import, so the
+must-satisfy-thread-spawn instantiation constraint is dissolved
+everywhere it was inert. THE PARENTHETICAL HERE READ "(boot included)"
+until 2026-09-06, and the artifact refutes it: `wasm-objdump -j Import
+-x boot/mentl.wasm` shows func[17] `wasi.thread-spawn` and a shared
+`env.memory`, so the pinned boot is a SPAWNING module by this very
+taxonomy — as it must be, carrying lib/threading and the judge's own
+fan. It was true of the boot that stood when the line was written and
+went stale without anyone re-reading it; the class it describes is
+unaffected, only the example. The three real-spawn frontier legs (int /
 float-carrier / identity) run 60 through BOTH engines. REMAINING
 scope, host-path only: (5) swap wt-env.sh/install.sh (+ hosted CI when
 it returns, §11 col 5) to the runner, drop `-S threads=y`; (6) retire

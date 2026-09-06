@@ -7919,6 +7919,42 @@ resource the guest cannot create — filed as
 NAMED, never silent: the board runs on the runner, the two listening
 verbs run on 36, and the LTS pin retires at (6) only when both do.
 
+`Hβ.reason.provenance-is-a-value-tree` — THE PROVENANCE FACE OF THE ONE LAW
+(measured 2026-09-06; PLAN §11's ONE LAW, FOUR FACES block is the home for
+the synthesis, this entry for the mechanism). `GNode(NodeKind, Reason)` puts
+a RECURSIVE VALUE TREE on every node. Classified against the artifact, the 24
+constructors carry: a copied EDGE (`Declared`, `VarLookup`, `FnReturn`,
+`FnParam`, `LetBinding`, `Instantiation`, `InferredCallReturn`,
+`DefaultReason` — each naming a node that exists); copied STRUCTURE
+(`OpConstraint`, `MatchBranch`, `Unified`, `ListElement`, `IfBranch`,
+`InferredPipeResult` — antecedents duplicated into every node that unified,
+which the Why render admits as "the DAG rendered as the tree it is"); copied
+VALUES the graph holds live (`UnifyFailed(Ty, Ty)`, `Refinement(Pred, Pred)`
+— snapshots, so a Why chain can render types that later resolved
+differently, a correctness defect and not only redundancy); copied POSITIONS
+(`Located`, `Placeholder`); and genuinely irreducible content in exactly
+three places — a label, a `BinOp`, an SMT witness. The labels measure 208
+distinct `Inferred("…")` strings, 171 fixed and 37 templated: a FIXED
+COMPILER VOCABULARY carried as String, drift mode 8 in the middle of the
+provenance layer, and the 37 templates are edges (the name interpolated into
+"return of '{name}'" is the fn NODE).
+THE ULTIMATE FORM: a Reason is a FLAT TAG PLUS HANDLES — `R(RTag, [Int])`,
+no recursion, no Span, no copied Ty, no String names. "Walk to root" becomes
+follow a handle and read THAT node's reason: the tree structure becomes the
+graph it was always describing, provenance is SHARED rather than duplicated
+(an allocation win on the OOM channel), positions come from nodes so they
+survive editing, and `UnifyFailed`'s operands read live. `show_reason`'s
+24-arm string builder collapses to a tag render plus projections; `Located`
+dissolves wherever the position is its own node's, which is the dominant
+`graph_bind(handle, ty, Located(span, …))` shape. WHAT IT EMPOWERS, and the
+reason it is not cosmetic: the teaching tie-break asks "what distinguishes
+these survivors", which is a provenance DIFF — a graph diff over edges, an
+absurdity over duplicated trees — so PLAN §11 11.1's minimal-entropy
+question is gated on this. Band L's `.reason-edge-pcc-certificate` (a
+discharged proof carrying a walkable certificate) is the same edge set read
+by the prover. SURFACE: 698 Reason construction sites, 104 graph_bind, 126
+report — the largest in the compiler, and H6 enumerates every one.
+
 `Hβ.parser.module-blind-parse` — ONE ROOT, FIVE COMPENSATIONS (found
 2026-09-06 by walking the felt path with the CLI, as the felt-path-first
 law prescribes). THE PARSER DOES NOT KNOW WHICH MODULE IT IS IN. The

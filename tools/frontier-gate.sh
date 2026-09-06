@@ -1868,7 +1868,7 @@ for i in "${!compilers[@]}"; do
   # to /mentl-home (the space verb's own mount convention).
   pkill -f "tcplisten=127.0.0.1:${sess_port}" 2>/dev/null
   sleep 1
-  (cd "$sessdir" && "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$sessdir::." --dir /tmp --dir "$ROOT::/mentl-home" -S "tcplisten=127.0.0.1:${sess_port}" "$compiler" session >"$dir/session.log" 2>&1) &
+  (cd "$sessdir" && "$WT_CLI" run "${WT_CLI_FLAGS[@]}" --dir "$sessdir::." --dir /tmp --dir "$ROOT::/mentl-home" -S "tcplisten=127.0.0.1:${sess_port}" "$compiler" session >"$dir/session.log" 2>&1) &
   sess_pid=$!
   : > "$dir/session-resident.txt"
   for _ in $(seq 1 60); do
@@ -1911,7 +1911,7 @@ for i in "${!compilers[@]}"; do
     fail "space no-listener refusal (see $dir/space-refuse.out)"
   fi
   space_port=7379
-  "$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT::." -S "tcplisten=127.0.0.1:${space_port}" "$compiler" space >"$dir/space-serve.log" 2>&1 &
+  "$WT_CLI" run "${WT_CLI_FLAGS[@]}" --dir "$ROOT::." -S "tcplisten=127.0.0.1:${space_port}" "$compiler" space >"$dir/space-serve.log" 2>&1 &
   space_pid=$!
   space_hdr=""
   for _ in $(seq 1 20); do

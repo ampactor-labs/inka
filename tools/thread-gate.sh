@@ -94,12 +94,36 @@ if [ "$spawn_bytes" -lt 1000 ]; then
   exit 1
 fi
 wt_asm "$T/spawn.wat" "$T/spawn.wasm" 2>/dev/null || { say "✗ control: spawn fixture will not assemble"; exit 1; }
-base_c=$(clones "$WT" run "${WT_RUN_FLAGS[@]}" "$BOOT" help)
+
+# THE CONTROL IS A TWIN, NOT A FLOOR. It compared the spawn fixture against
+# `boot help` until 2026-09-06, and that is two DIFFERENT modules — 2.4MB
+# against ~11KB — so the engine's own per-module compile threads rode in the
+# baseline. Under the CLI the confound happened to point the right way (8 vs
+# 15) and the leg passed; the moment the gates moved to the embedded runner it
+# inverted (8 vs 6) and the control correctly declared the counter blind. It
+# was right to fail, and it was right for the wrong reason: an absolute floor
+# read off a different module is not a control at all.
+# mn-scheduled-fanout-int is the SAME source one schedule apart — the `><`
+# thesis twin, sequential_compose against parallel_compose, identical link set
+# and near-identical size. Its delta is guest threads and nothing else, which
+# is the property the ratchet below already relies on and the control had not
+# been holding itself to.
+cat "$ROOT/lib/memory.mn" "$ROOT/lib/strings.mn" "$ROOT/lib/lists.mn" \
+    "$ROOT/lib/threading.mn" "$ROOT/lib/prelude.mn" \
+    "$ROOT/tests/frontier/mn-scheduled-fanout-int.mn" > "$T/seq.mn"
+wt_run "$BOOT" < "$T/seq.mn" > "$T/seq.wat" 2>"$T/seq.err"
+seq_bytes=$(wc -c < "$T/seq.wat")
+if [ "$seq_bytes" -lt 1000 ]; then
+  say "✗ control: the sequential twin emitted $seq_bytes bytes — nothing was measured"
+  exit 1
+fi
+wt_asm "$T/seq.wat" "$T/seq.wasm" 2>/dev/null || { say "✗ control: sequential twin will not assemble"; exit 1; }
+seq_c=$(clones "$WT" run "${WT_RUN_FLAGS[@]}" "$T/seq.wasm")
 spawn_c=$(clones "$WT" run "${WT_RUN_FLAGS[@]}" "$T/spawn.wasm")
-if [ "$spawn_c" -gt "$base_c" ]; then
-  say "  ✓ control: a really-spawning program reads $spawn_c vs $base_c — the counter sees guest threads"
+if [ "$spawn_c" -gt "$seq_c" ]; then
+  say "  ✓ control: one source, two schedules — parallel reads $spawn_c vs sequential $seq_c; the counter sees guest threads"
 else
-  say "  ✗ control: spawning program reads $spawn_c, floor $base_c — THE COUNTER IS BLIND, every leg below is vacuous"
+  say "  ✗ control: parallel reads $spawn_c, sequential twin $seq_c — THE COUNTER IS BLIND, every leg below is vacuous"
   exit 1
 fi
 

@@ -4100,13 +4100,38 @@ comment names the blast radius: every felt surface goes through that renderer
 (LSP hover, the cursor view's Why line, the type facet's Reason), while the
 refs facet three lines away had been answering local coordinates the whole
 time — because refs read the graph and Reasons read a copy.
-THE FIX IS `Located(Handle, Reason)`, the ~157-site change: a handle resolves
-to its node, the node knows its module, and the file identity comes for free
-rather than being reconstructed. This is the same law as D0 one layer over —
-a materialized value where an edge belonged — and copied coordinates have a
-second failure mode the resident session depends on their not having: they
-ROT UNDER EDITING, since an edit above line 8 moves every span below it while
-the handles stay put.
+`Located(Handle, Reason)` IS NOT THE FIX, and this entry said it was for
+about an hour — the correction is the useful half. A handle resolves to its
+node, but the NODE'S OWN SPAN IS ALSO A WEAVE COORDINATE, so the conversion
+survives the change untouched; it only moves. Measured: the parser
+(src/parser.mn) has NO module concept at all — one grep for NModule /
+module_path / current_module answers with a single unrelated hit — because
+the link CONCATENATES every module into one blob and parses that. Modules
+are a DRIVER fact applied afterward from line ranges
+(driver_module_ast(ast_all, ranges, entry_module)).
+THE ROOT IS THAT A SPAN DISCARDS ITS MODULE AT BIRTH. `Span(Int, Int, Int,
+Int)` is four numbers with no module edge, minted against the blob, so the
+module — a fact the driver HAD when it built the weave — is thrown away and
+then re-derived by RANGE SCAN at every reader. module_seams() walks the whole
+span index per call (O(nodes)), and there are already three callers paying
+it: the refs facet, the debt lines, and the pending list. show_reason is not
+a fourth caller waiting to be wired; it is the site that reveals the scan
+should not exist.
+THE ULTIMATE FORM IS A SPAN THAT IS LOCAL FROM BIRTH — the module carried on
+the coordinate the parser mints, which DELETES module_seams, span_render_local
+and seam_of_line rather than giving them a fourth consumer. That requires the
+parse to be per-module instead of per-blob, which is a link-path change and
+is exactly where Arc D's `Hβ.driver.link-is-reachability` already points (the
+demanded set read from import edges, the prelude a frozen image slice rather
+than a reparsed text prefix). So this peer is DEP-gated on that arc, and the
+gate stays RED in the meantime rather than being closed by threading seams
+through show_reason — which would add a fourth O(nodes) scan per rendered
+Reason node and call the re-derivation fixed.
+THE SECOND FAILURE MODE, independent of the render: weave coordinates ROT
+UNDER EDITING. An edit above line 8 moves every span below it, while handles
+stay put — so the resident session (§11 Arc E) inherits this the moment a
+caret starts editing, and it is a correctness problem there rather than a
+cosmetic one.
 §0's third property is the stake: "intent is lossless… the Reason chain
 carries the why, walkable to root" is only true if the chain walks somewhere
 a developer can OPEN. Today it walks to an offset in a file that does not

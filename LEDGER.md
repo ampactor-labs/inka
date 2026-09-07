@@ -35,6 +35,44 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-07 · pin c1481440808d43ce · A RATCHET SET INSIDE ITS OWN VARIANCE
+  IS A COIN FLIP — the cost gate's estimator, and the pin it had been
+  refusing. NO WHEEL SOURCE CHANGED at this pin; the only code is six lines
+  of tools/march.sh. march CLEAN m2 == m3, cost 15.86s / 2320048 KB, census
+  0, battery green.
+  ▶ THE REFUSAL. The board opened saying `boot is BEHIND current source`
+  (8aeca3c8 against a tree whose m2 reads c1481440), which makes every
+  boot-suite line on it a verdict on the OLD wheel — the exact condition
+  §7's own preamble warns not to launder through prose. The repin was then
+  refused by the peak ratchet at 2326460KB against a 2326000KB ceiling.
+  0.02% over.
+  ▶ THE MEASUREMENT. Six m3 legs over BYTE-IDENTICAL input read 2320048 /
+  2321280 / 2323680 / 2323932 / 2325080 / 2326460 KB — a 6412KB spread,
+  0.28%, against the 2.4MB band the peer had on record. The ceiling was
+  therefore sitting INSIDE the noise, which means it had been refusing clean
+  repins at random and would hide a real two-megabyte regrowth. Both failure
+  modes at once, exactly as `Hβ.tools.cost-ratchet-reads-one-sample` said
+  when it was named this morning.
+  ▶ THE FIX IS THE READING, NOT THE LINE — the peer's own prescription,
+  built. `read_cost` no longer convicts on one sample: a breach re-runs the
+  m3 leg twice and the ratchet rules on the MINIMUM of three. The estimator
+  is not a smoothing choice, it is the shape of the measurement — peak RSS
+  is ONE-SIDED, since allocator and OS jitter can only push an observed peak
+  ABOVE the true requirement and never below it, so a lone sample is biased
+  high and the minimum converges on the truth from above. A genuine
+  regression survives the minimum undiminished; only the jitter dies. The
+  extra legs are paid ONLY on a breach, so the green path costs nothing.
+  Raising the ceiling instead would have laundered jitter as headroom, and
+  the peer records that being done three times already (2250000, 2310000,
+  2320000) — each time for variance rather than growth.
+  ▶ SEEN FIRE AND SEEN RULE. At the real ceiling the run passed on its first
+  sample and the new path never executed — an unexercised gate is not a
+  gate — so the ceiling was temporarily dropped to 2000000: the path fired,
+  printed re-reads 2323680 / 2323932 against a first sample of 2321280, took
+  the minimum, and STILL refused. Both halves proven, baseline restored.
+  ▶ THE CEILING IS UNCHANGED. Nothing here buys headroom; it buys a gate
+  that means what it says.
+
 - 2026-09-07 · pin 8aeca3c83401fdb6 · AN ABI IS ONE FACT, SO IT GETS ONE
   HOME — the emitted-signature column, and the enumeration entry that feeds
   it. verify green (micros 149/0, census 0), march CLEAN m2 == m3 at every

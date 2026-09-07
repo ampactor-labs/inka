@@ -138,7 +138,29 @@ bytes, which is the better k anyway) and did not paper it: this entry is the
 record, band A owns the fix, and the repro is two `addr` calls at different
 types in one body.
 
-`Hβ.tools.cost-ratchet-reads-one-sample` — NAMED 2026-09-07. The peak-RSS
+`Hβ.tools.cost-ratchet-reads-one-sample` — RESOLVED 2026-09-07, the banked
+fix built as prescribed. `read_cost` (tools/march.sh) no longer convicts on
+one reading: a sample over the ceiling triggers two more m3 legs and the
+ratchet rules on the MINIMUM of three. Peak RSS is a one-sided measurement —
+allocator and OS jitter can only push an OBSERVED peak ABOVE the true
+requirement, never below — so the lone sample is biased HIGH and the minimum
+is the honest estimator; a genuine regression survives it undiminished. The
+extra legs are paid ONLY on a breach, so the green path is untouched. Seen
+FIRE and seen RULE, both halves, before it was trusted: at the real ceiling
+the run passed on its first sample and the path never ran (an unexercised
+gate is not a gate), so the ceiling was temporarily dropped to 2000000 and
+the path fired, printed re-reads 2323680 / 2323932 against a first sample of
+2321280, took the minimum, and still refused — a real breach is not
+survivable by re-measurement.
+THE SPREAD WAS UNDERSTATED, and this entry is the correction: the number
+carried below was 2.4MB, and a session working from it re-set the ceiling to
+2326000 believing that band. Six readings of BYTE-IDENTICAL input now span
+2320048 / 2321280 / 2323680 / 2323932 / 2325080 / 2326460 KB — 6412 KB, or
+0.28%, nearly three times the recorded band. The 2326000 ceiling therefore
+sat INSIDE the noise and refused a clean repin at 2326460 (0.02% over), which
+is the reading that forced the fix. The ceiling is left where it is: it is
+now a real ratchet rather than a coin flip, so it does not need raising.
+The original naming follows, kept for the three-times-over record. The peak-RSS
 ratchet compares ONE m3 leg against a fixed ceiling, and that measurement is
 not deterministic: three back-to-back legs on the SAME m2 binary over the
 SAME wheel.mn read 2321788 / 2323980 / 2324148 KB — a 2.4MB spread with every
@@ -4061,6 +4083,38 @@ entry's prescribed method executed once: swap the representation behind the
 projection, then the tree-walk that only re-derived it deletes. Marched
 m2 == m3 byte-identical, twice.
 
+`Hβ.why.reason-span-is-a-weave-coordinate` — NAMED 2026-09-07, and it was
+carrying the board's ONLY frontier red UNBANKED, which is the naming law
+violated: a gap not in this file does not exist, and this one has been red
+since 2026-09-06. Measured both ways today — frontier reads 373 pass / 1 red
+on the NEW boot (c1481440) and 373/1 on the OLD (8aeca3c8), same red, so it
+is standing, not a repin regression; and `mentl why
+tests/frontier/mn-where-badges.mn gain` answers `at 2729:1-2729:15` for a
+name on line 8 of a 24-line file.
+THE DEFECT IS THE REPRESENTATION, not the renderer. `Located(Span, Reason)`
+stores a COORDINATE beside the very handle that could answer it, and a bare
+Span knows a line and a column but not a FILE — so when the link concatenates
+modules into one namespace, show_reason renders the weave offset, because the
+weave offset is the only thing the copied value ever held. The gate's own
+comment names the blast radius: every felt surface goes through that renderer
+(LSP hover, the cursor view's Why line, the type facet's Reason), while the
+refs facet three lines away had been answering local coordinates the whole
+time — because refs read the graph and Reasons read a copy.
+THE FIX IS `Located(Handle, Reason)`, the ~157-site change: a handle resolves
+to its node, the node knows its module, and the file identity comes for free
+rather than being reconstructed. This is the same law as D0 one layer over —
+a materialized value where an edge belonged — and copied coordinates have a
+second failure mode the resident session depends on their not having: they
+ROT UNDER EDITING, since an edit above line 8 moves every span below it while
+the handles stay put.
+§0's third property is the stake: "intent is lossless… the Reason chain
+carries the why, walkable to root" is only true if the chain walks somewhere
+a developer can OPEN. Today it walks to an offset in a file that does not
+exist on disk. THE GATE ALREADY EXISTS AND IS ALREADY RED
+(tools/frontier-gate.sh, `why coordinates are the developer's`, asserting
+`mn-where-badges:8`), so this peer needs no new instrument — the RED-first
+half is banked and standing.
+
 `Hβ.where.emitted-signature-is-a-badge` — THE ABI HAS A HOME AND NO FACE.
 `sigs_col` makes every emitted symbol's param repr-vector and result repr a
 settled, addressable fact, and nothing projects it: `mentl where` renders the
@@ -6522,6 +6576,56 @@ undecidability of inferred polymorphic recursion (the signature price
 is math). The unforced remainder is byte layout alone — record
 offsets private to their accessors, march-absorbed TRANSITIONs,
 load-bearing nowhere; layout is not semantics.)
+
+D0 EVERY Ty POSITION IS A HANDLE — D1's UNSTATED PRECONDITION, measured
+2026-09-07 and added here because a session building D1 from this contract
+alone will not reach it. D1 says "Substitution IS the union-find chase; both
+subst builds die," and that sentence is only true when the positions being
+substituted ARE edges. Today they are not: `TList(Ty)`, `TTuple([Ty])`,
+`TFun([TParam], Ty, EffRow)`, `TName(String, [Ty])`, `TRecord([(String,
+Ty)])`, `TRefined(Ty, _)`, `TCont(Ty, Ty, _, _)`, `TAlias(String, Ty)` and
+`TReprPin(Repr, Ty)` all carry INLINE VALUES; only `TVar(Int)` and
+`TRecordOpen`'s row var are handles. So `Ty` is a materialized value tree
+with handle leaves, standing beside a graph whose whole premise is that
+nodes are handles — and with inline positions, instantiate must REBUILD the
+tree to place fresh vars however the edges are drawn, so the clone survives
+D1 intact.
+THE ROW HALF IS THE PRECEDENT, NOT AN INVENTION. Stage (1) already did this
+to the row: `ENamed(Int)` is an interned handle (R1, pin 91e35f1e) and
+`EtOpen([Int])` is a SET OF EDGES read live ("row = present ∪ each edge's
+content ∖ absent"). The effect row is handles and edges end to end; the type
+layer is the half that never got the treatment, and D0 is finishing it.
+THE COMPENSATION FAMILY IS THE MEASURE OF THE DEFECT — every one of these
+exists to service the copy, and each dies or collapses to a one-hop chase:
+subst_ty/_build/subst_changes (27 refs), free_in_ty (36), chase_deep (30),
+occurs_in (16), free_in_row (14), free_in_params (4).
+THE SITE CENSUS, so the work is not mistaken for mechanical: 816 Ty-ctor
+sites, attributed to their enclosing fn. ~230 sit INSIDE walkers/rebuilders
+that delete (subst_ty_build 19 · spec_subst_pairs 19 · spec_resolve_build 19
+· chase_deep_build 19 · spec_pairs_walk 18 · chase_type_deep 17 ·
+chase_probe_tag 12 · occurs_in 11 · subst_changes 10 · free_in_ty 10) or
+collapse to handle equality (ty_alpha_eq 20 · same_ground 10). unify_types
+(36) is the one this census must NOT overclaim — read 2026-09-07, it is
+SHAPE DISPATCH and it SURVIVES: its `TVar(ha)/TVar(hb) => unify(ha, hb)` arm
+is already the union-find, and its wrapper arms recurse structurally. What
+D0 changes there is that the recursion follows EDGES instead of a copied
+tree — so no arm ever rebuilds — and that it gains an O(1) short-circuit
+(equal handles ⇒ equal types) which is unconstructible today, because two
+structurally-equal trees are distinct values. ~100 are GENUINE construction
+sites (cap_result_fn_row 20 · seq_op_sig 18 · infer_expr 16 ·
+quantify_ctor_ty 14 · parse_type_atom 14 · synth_holes_for_scheme 13 ·
+ty_handle_of 10). The rest are projections that read one level and stay
+(repr_of · show_type · fold_sig · extract_row · render_type_tokens).
+NO `ty_cell(ty) -> Int` HELPER — the loophole this design invites and must
+refuse. Boxing a value you already built into a fresh cell moves the copy
+behind a helper and adds ~800 unshared mints per compile while LOOKING like
+the representation changed; it is "move a problem and call it solved" with a
+migration's costume, and it would paper over exactly the ~100 sites that
+deserve the audit while doing nothing for the ~230 that carry the payoff.
+The construction sites answer "where did the graph already prove this type?"
+one at a time, and a site with no such handle is the FINDING — something
+computed a type without judging it at a node. Only 5 of 265 arity-1 wrapper
+sites pass a `TVar(...)` today, so that audit is the bulk of D0's real work.
 
 D1 THERE IS NO SCHEME OBJECT. A decl's identity is its pre-registered
 type cell; "the scheme" is a PROJECTION of that subgraph. generalize

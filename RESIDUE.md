@@ -7919,6 +7919,27 @@ resource the guest cannot create — filed as
 NAMED, never silent: the board runs on the runner, the two listening
 verbs run on 36, and the LTS pin retires at (6) only when both do.
 
+`Hβ.infer.movers-is-the-wrong-ratchet-under-live-cells` — THE ACCEPTANCE
+CRITERION IS WRONG, MEASURED 2026-09-07. The movers line counts "schemes the
+final judges DIFFERENTLY than the trial published", and rung 3's acceptance
+has been stated as movers → 0. Under LIVE publication that number does not
+fall, it RISES: measured 474 → 1594 with the decl's cell published instead of
+a Frozen snapshot (the branch band raised to 4096 so the run reached far
+enough to report). That is not a regression. With a snapshot, divergence
+between the passes is HIDDEN INSIDE the snapshot — the trial's frozen view
+simply stops tracking, and the count sees only what the comparison happens to
+catch. With a live cell there is nothing to hide it: the cell IS current
+truth, so every decl the final touches reads as a mover. The metric measures
+snapshot disagreement, and live cells have no snapshots to disagree.
+So the stage contract's own sequencing is right and its ratchet is not:
+movers → 0 arrives from DELETING THE SECOND PASS (contract step 4, "the
+trial/final collapse FOLLOWS, not precedes"), never from making two passes
+agree. Reading the ratchet as a gate ON the live-cell step inverts the order
+and would refuse the landing that makes it reachable. THE HONEST GATE for the
+live-cell step is the fixpoint plus the census (m3 == m4, census 0), with
+movers re-derived AFTER the trial pass is gone; until then a movers RISE at a
+publish-Live landing is expected and must be read, not ratcheted.
+
 `Hβ.reason.provenance-is-a-value-tree` — THE PROVENANCE FACE OF THE ONE LAW
 (measured 2026-09-06; PLAN §11's ONE LAW, FOUR FACES block is the home for
 the synthesis, this entry for the mechanism). `GNode(NodeKind, Reason)` puts

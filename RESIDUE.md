@@ -7919,6 +7919,47 @@ resource the guest cannot create — filed as
 NAMED, never silent: the board runs on the runner, the two listening
 verbs run on 36, and the LTS pin retires at (6) only when both do.
 
+`Hβ.infer.live-cells-need-one-settled-signature` — RUNG 3'S REAL DEP,
+MEASURED TO A MISCOMPILE 2026-09-07. Publishing the decl's CELL (Live) in
+place of a Frozen snapshot now gets ALL THE WAY THROUGH inference and emit —
+m2 clean at census 0, m3 exit 0 at 532,547 lines, census 0 — and produces
+WAT THAT DOES NOT ASSEMBLE:
+    m3.wat: type mismatch in f64.load, expected [i32] but got [f64]
+    m3.wat: type mismatch in call, expected [i32,i32,i32,i32,f64]
+                                   but got [i32,i32,i32,i32,i32]
+At the site: `(call $number_from_substring) (f64.load)` — the caller unboxes
+a result the callee returned WIDE. Caller and callee disagree about the f64
+ABI, which is the twin-edge conversion pair (`Hβ.emit.twin-state-width`:
+args word-faced, results deref'd, inits boxed).
+THE ROOT IS NAMED IN THE EMIT'S OWN COMMENT, and it is not a walk
+disagreement, a mint band, or a resource limit: "an untwinned callee emits
+per its DECLARED scheme ... the same emit_wide_ref/emit_wide_deref pair,
+applied per THE ONE SIGNATURE BOTH SIDES AGREE ON". The ABI is a CONTRACT
+and a contract is a FIXED fact. A live cell is time-varying, so "the one
+signature both sides agree on" stops existing: the callee's body and the
+call site can read the decl at different moments and choose different
+widths. Frozen publication hid this by giving both sides the same snapshot —
+it was not correct, it was COINCIDENTALLY AGREED.
+THE ULTIMATE FORM IS NOT "KEEP THE SNAPSHOT". There is a legitimate settling
+point and it is not the decl's exit (where generalize freezes today, the
+moment the cell is LEAST finished): it is the infer→lower/emit PHASE
+BOUNDARY, which graph_bind_row's own comment already names — "the freeze
+that makes lattice reads sound is the infer→lower phase boundary, already
+structural". Reading a settled fact after inference completes is not a
+snapshot; it is a read. So the ABI must be read ONCE at that boundary rather
+than baked per-decl during lower, which is `Hβ.lower.lowering-is-a-column`
+(§11 5.5) — the lower-time-bake family the ledger has declared dead three
+times. RUNG 3'S LIVE CELLS ARE DEP-GATED ON THAT DELETION, and this
+miscompile is the evidence; the DEP is the next thing to build, not a stop.
+WHAT IS ALREADY PROVEN ON THE WAY: substitution sharing landed alone (pin
+8fb668de); the walks now agree on both axes measured here (a visited set as
+the exact guard where chase_deep tripwires at d>200, and free leaves
+canonicalizing to their union-find ROOT); generalize needs no deep chase (a
+shallow head plus a chasing free-var walk reads the same quantifier without
+materializing the tree); and the branch overflow band needs re-measuring for
+the live regime (64 was measured 2026-07-26 against Frozen; 128 still
+exhausts, 256 completes).
+
 `Hβ.infer.movers-is-the-wrong-ratchet-under-live-cells` — THE ACCEPTANCE
 CRITERION IS WRONG, MEASURED 2026-09-07. The movers line counts "schemes the
 final judges DIFFERENTLY than the trial published", and rung 3's acceptance

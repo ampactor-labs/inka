@@ -35,6 +35,67 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-07 · pin 8fb668de4613c1a2 · THE CHECK CHASES, SO THE BUILD CAN
+  SHARE — and three configurations measured where rung 3's real wall is.
+  verify green, march CLEAN m2 == m3, census 0, cost 17.85s / 2252MB.
+  ▶ WHAT LANDED. subst_changes answered TRUE for every bound var, and in a
+  judged decl most vars ARE bound, so check-then-build was present and never
+  got to answer no: every polymorphic reference rebuilt the callee's whole
+  type tree (`Hβ.infer.instantiate-shares-never-clones`, whose cost the docs
+  place on the allocation channel). The check follows the edge now and asks
+  whether the CONTENT changes — a bound cell holding no mapped var answers
+  false and its subtree shares; only a path reaching a quantified var
+  rebuilds. The opposite error was BUILT and measured first: answering by the
+  mapping alone leaves a quantified var behind a binding unseen, and
+  polymorphism severs silently.
+  ▶ THE WALL IS THE READ PATH, and three configurations name it. Publishing
+  the decl's CELL instead of a Frozen snapshot compiles clean at census 0
+  every time, and the resulting m2 fails to compile the wheel three
+  different ways: (a) with generalize's chase_deep intact — OOM through
+  chase_row_deep / chase_edges_deep / tail_set_union / alloc, because a fold
+  that ran once per DECL now runs once per USE; (b) with a shallow head and a
+  non-chasing free_in_ty — the quantifier reads the param CELLS themselves,
+  over-quantifies, and a judge branch exhausts its planned mint band
+  (graph_fresh_ty's loud `load_i32(0 - 1)`); (c) with a shallow head and a
+  CHASING free_in_ty — still the mint band, because chase_deep is bounded at
+  d > 200 and an unbounded walk is not. That last one is CLAUDE.md's own law
+  arriving as a bug: the three "vars of a type" walks must AGREE.
+  ▶ THE ROOT UNDER ALL THREE, and Morgan's question named it before the
+  measurement did — "the word chase makes me feel like work that doesn't
+  need to be done is being done; isn't everything a record, and don't
+  records carry all the information needed?" They do, and a stored LINK is
+  precisely a record failing to carry it. graph_compress_row's own comment
+  is the proof: path compression is "an OPTIMIZATION WRITE", and "a BRANCH
+  cursor SKIPS it, because a branch rebinding shared chain cells makes
+  sibling chases schedule-dependent — the measured k2 yield-floor flips at
+  window 8 traced to exactly these writes (1,463 foreign row binds)".
+  So: chase-with-compression is a READ THAT WRITES; parallel readers cannot
+  write; compression is therefore disabled in branches; branches re-walk
+  uncompressed chains; and under live publication that re-walk is the
+  re-fold that OOMs. The chase is not merely wasted work — IT IS WHAT MAKES
+  READ-ONLY PARALLELISM UNSOUND, and it is why the multi-cursor fan cannot
+  simply be turned up.
+  ▶ WHERE SOTA SITS AND WHY MENTL LEAVES IT. Union-find with path
+  compression is O(α(n)) amortized and e-graphs (egg's deferred rebuild) are
+  its batch form — both optimal FOR A SINGLE-THREADED MUTATOR, and both
+  depend on read-side mutation. Mentl's setting breaks that assumption four
+  ways: ONE writer (inference), MONOTONE refinement, a flat handle-addressed
+  image where a chase is a pointer walk across the cache-hostile working set
+  §5.O names as the constant-factor amplifier, and N parallel readers
+  WANTED. There, canonical-on-write dominates: the writer pays once at the
+  bind, every reader does a direct load, reads are PURE, and N cursors read
+  lock-free with no atomics and no branch guard. The law is already in the
+  artifact at half strength — graph_bind_row stores flatten_row_stored,
+  depth-1 by invariant at the WRITE — while reads still re-fold and the TYPE
+  sort does not do it at all.
+  ▶ NEXT, forced: move compression to the WRITE path and delete it from the
+  read. resolve_row calls graph_compress_row today (a reader writing);
+  graph_bind_row is where it belongs (the writer compressing what it just
+  walked). Then branch reads are pure, the branch guard disappears, the
+  re-walk disappears, and publish-Live becomes affordable — which is rung 3,
+  the fan's shared context, and the parallel cursor, all unblocked by one
+  relocation.
+
 - 2026-09-06 · pin 41aec80bddfe2ce2 · THE WARM PATH WAS HALF-KEYED, AND THE
   GATE THAT KNEW IT STOPPED ONE LINE SHORT. frontier 374/0, verify green,
   march CLEAN m2 == m3, census 0, cost 15.16s / 2148MB.

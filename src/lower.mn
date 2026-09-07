@@ -975,7 +975,20 @@ fn lower_call_partial(handle, fbody, fh, r_args, n_ps) = match partial_callee_fo
     let flat_args = list_to_flat(r_args)
     match partial_split(flat_args, len(flat_args), n_ps, handle, 0, 0) {
       (captures, param_names, body_args) => {
-        graph_emitfn_note(EfkPartial, handle, "partial_{int_to_str(handle)}", len(captures), [])
+        // The hole-product's remaining fields: their types are the CALLEE's
+        // trailing params, and the partial's own handle types the applied
+        // result. The callee's TFun is read at fh — the callee-ref handle
+        // the redirect already routes through — and the split's own count
+        // says which tail of it survives as parameters.
+        graph_emitfn_note(EmitFnEntry{
+          caps: [],
+          fence: len(captures),
+          kind: EfkPartial,
+          name: "partial_{int_to_str(handle)}",
+          origin: handle,
+          params: zip(param_names, partial_param_tys(fh, len(param_names))),
+          ret: Some(lookup_ty(handle)),
+        })
         let fn_ir = LFn(
           "partial_{int_to_str(handle)}",
           len(param_names),
@@ -2334,13 +2347,15 @@ fn lower_expr_body(e, handle, span) = match e {
         // Lambda is anonymous — empty fn_name; ls_outer_fn_name skips it.
         // lambda_h = THIS lambda's own handle (the handle LMakeClosure uses
         // below).
-        graph_emitfn_note(
-          EfkLambda,
-          handle,
-          lambda_name,
-          len(captures_exprs),
-          zip(captures_names, captures_handles)
-        )
+        graph_emitfn_note(EmitFnEntry{
+          caps: zip(captures_names, captures_handles),
+          fence: len(captures_exprs),
+          kind: EfkLambda,
+          name: lambda_name,
+          origin: handle,
+          params: zip(param_names_list, entry_param_tys(handle, params)),
+          ret: ret_ty_of(handle),
+        })
         // THE DIRECT SWAP (landing shape α): the LowFn is built by the
         // COLUMN-SEEDED projector — the one construction, program+
         // columns in, LowFn out. The site keeps what FEEDS the columns
@@ -2959,13 +2974,18 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
                 let captures_handles = [input_h] ++ b_handles
                 match executable_boundary_row(thunk_h) {
                   Ok(thunk_row) => {
-                    graph_emitfn_note(
-                      EfkThunk,
-                      thunk_h,
-                      thunk_name,
-                      len(captures_exprs),
-                      zip(captures_names, captures_handles)
-                    )
+                    // A branch thunk takes nothing — its input rides capture
+                    // slot 0 — so the param vector is empty by construction
+                    // and the result is the thunk node's own judged type.
+                    graph_emitfn_note(EmitFnEntry{
+                      caps: zip(captures_names, captures_handles),
+                      fence: len(captures_exprs),
+                      kind: EfkThunk,
+                      name: thunk_name,
+                      origin: thunk_h,
+                      params: [],
+                      ret: Some(lookup_ty(thunk_h)),
+                    })
                     // THE DIRECT SWAP (α, the fanout pair's one projector):
                     // Some(input_h) = the `<|` share — the branch applied to
                     // the input riding capture slot 0 through the normal call
@@ -3021,13 +3041,15 @@ fn synthesize_branch_thunk(parent_handle, side_label: String, branch_node, bound
         match resolve_captures_outer(free_names, parent_handle) {
           (captures_names, captures_exprs, captures_handles) => match executable_boundary_row(thunk_h) {
             Ok(thunk_row) => {
-              graph_emitfn_note(
-                EfkThunk,
-                thunk_h,
-                thunk_name,
-                len(captures_exprs),
-                zip(captures_names, captures_handles)
-              )
+              graph_emitfn_note(EmitFnEntry{
+                caps: zip(captures_names, captures_handles),
+                fence: len(captures_exprs),
+                kind: EfkThunk,
+                name: thunk_name,
+                origin: thunk_h,
+                params: [],
+                ret: Some(lookup_ty(thunk_h)),
+              })
               // THE DIRECT SWAP (α, the fanout pair's one projector):
               // None = the `><` distribute — the branch evaluated as its
               // own value. Synthetic parallel-thunk: empty fn_name, not a
@@ -3276,9 +3298,14 @@ fn lower_stmt_body(s, handle, span) = match s {
     let base_param_names = lower_param_names(params)
     let param_names_list =
       if bind_h == "" { base_param_names } else { base_param_names ++ ["__k", "__hrec"] }
-    let base_param_handles = param_handles_of(handle, params)
-    let param_handles_list =
-      if bind_h == "" { base_param_handles } else { base_param_handles ++ [0, 0] }
+    // The param TYPES the enumeration entry carries — the resume-binding
+    // appendage floors, because __k and __hrec are the machinery's own
+    // words and the graph judged no type for them. (The handle-valued
+    // twin of this line was dead: project_nested_fn computes its own for
+    // the frame, and nothing here read it.)
+    let base_param_tys = entry_param_tys(handle, params)
+    let param_tys_list =
+      if bind_h == "" { base_param_tys } else { base_param_tys ++ floor_tys(2) }
     // The same "__k" seeding the lambda mint applies (an UNBOUND nested
     // fn inside an arm may still call a bound sibling); a bound fn's own
     // __k param shadows the seed harmlessly.
@@ -3301,13 +3328,15 @@ fn lower_stmt_body(s, handle, span) = match s {
         //
         let outer = ls_outer_fn_name()
         let fn_name = if outer == "" { name } else { "{outer}_{name}" }
-        graph_emitfn_note(
-          EfkNested,
-          handle,
-          fn_name,
-          len(captures_exprs),
-          zip(captures_names, captures_handles)
-        )
+        graph_emitfn_note(EmitFnEntry{
+          caps: zip(captures_names, captures_handles),
+          fence: len(captures_exprs),
+          kind: EfkNested,
+          name: fn_name,
+          origin: handle,
+          params: zip(param_names_list, param_tys_list),
+          ret: ret_ty_of(handle),
+        })
         // THE DIRECT SWAP (landing shape α, second kind): the LowFn is
         // built by the column-seeded projector. The resume-binding
         // context (THE CUT, bank A3 — the arm_state_ctx install, the
@@ -3838,10 +3867,33 @@ fn lower_one_arm_decl(arm: {args: [String], body: Node, op_name: String}, discri
     _ => arm.args,
   }
   let locals_handles = zeros_of_len(len(arm_params))
+  // The arm's param edges are the OP's declared arg types, read from the
+  // same EffectOpScheme entry the discipline came from one line up; the
+  // leading __k a MultiShot/Abandon arm carries is the driver's own word
+  // and floors. The arm's RESULT needs no lookup at all — its origin IS
+  // the body node, so the result edge is that node's judged type.
+  let arm_arg_tys = op_param_tys(arm.op_name)
+  let arm_param_tys = if len(arm_arg_tys) == len(arm.args) {
+    match disc {
+      MultiShot => floor_tys(1) ++ arm_arg_tys,
+      Abandon => floor_tys(1) ++ arm_arg_tys,
+      _ => arm_arg_tys,
+    }
+  } else {
+    floor_tys(len(arm_params))
+  }
   // The enumeration note fires PARENT-BEFORE-CHILD (nested mints note
   // during body lowering below) — the tree order every projected kind
   // shares, so the future enumeration reader walks parents first.
-  graph_emitfn_note(EfkArm, node_handle(arm.body), fn_name, fence, [])
+  graph_emitfn_note(EmitFnEntry{
+    caps: [],
+    fence: fence,
+    kind: EfkArm,
+    name: fn_name,
+    origin: node_handle(arm.body),
+    params: zip(arm_params, arm_param_tys),
+    ret: Some(lookup_ty(node_handle(arm.body))),
+  })
   ls_enter_frame(fn_name, arm_params, locals_handles, captures_names, captures_handles)
   lower_frame_fence_push()
   // A STATEFUL arm binds `__hrec` to its own $__state — the install
@@ -4412,13 +4464,19 @@ fn reify_frame_k_at(body_node, ph, outer_holes, edge) = match edge {
         // Parent-before-child note order — the tree order every
         // projected kind shares (nested k reifications note during the
         // spine walk below).
-        graph_emitfn_note(
-          EfkK,
-          ph,
-          "__k_{int_to_str(ph)}",
-          len(captures_exprs),
-          zip(captures_names, captures_handles)
-        )
+        // The reified k's ONE param is the resume input and its result is
+        // the captured remainder's answer — the R and S of the boundary's
+        // own TCont, which the edge already carries. No walk finds this;
+        // the edge states it.
+        graph_emitfn_note(EmitFnEntry{
+          caps: zip(captures_names, captures_handles),
+          fence: len(captures_exprs),
+          kind: EfkK,
+          name: "__k_{int_to_str(ph)}",
+          origin: ph,
+          params: [(hole, Some(lookup_ty(resume_input_h)))],
+          ret: Some(lookup_ty(answer_h)),
+        })
         ls_enter_frame("", [hole], [resume_input_h], captures_names, captures_handles)
         lower_frame_fence_push()
         let subs = map(((p, n)) => (p, k_hole_read(p, n)), outer_holes) ++
@@ -4831,6 +4889,52 @@ fn param_handles_of(fn_handle, params) = match lookup_ty(fn_handle) {
 }
 
 fn tparam_handle(tp) = ty_handle_of(param_ty(tp))
+
+// The enumeration entry's param/result EDGES — the fn's own inferred TFun,
+// component by component. Its handle-valued sibling above cannot serve the
+// signature: ty_handle_of is 0 for every GROUND type, so a `x: Float` param
+// would arrive at emit as "no judged type" and sign at the word floor — the
+// exact silent-wrong the twin edges kept billing. A Ty carries both cases,
+// and the width projection resolves vars through lookup_ty at read time so a
+// twin's bracket answers with its own instantiation.
+//
+// A slot the graph never judged (the resume appendage's __k/__hrec, an arm's
+// op args, a callee whose type is not a readable TFun) is ABSENT, not a
+// sentinel Ty. The first form of this wrote TVar(0) and the census convicted
+// it on sight — a wildcard arm minting a TVar is drift mode 10, and it was
+// right: "handle zero means no node" is a convention every reader has to
+// learn, where None is a fact the type states. The reader floors on None.
+fn entry_param_tys(fn_handle, params) = match lookup_ty(fn_handle) {
+  TFun(tparams, _, _) => if len(tparams) == len(params) {
+    map(some_param_ty, tparams)
+  } else {
+    map(some_param_ty, params)
+  },
+  _ => map(some_param_ty, params),
+}
+
+fn ret_ty_of(fn_handle) = match lookup_ty(fn_handle) {
+  TFun(_, r, _) => Some(r),
+  _ => None,
+}
+
+fn floor_tys(n) = map(none_of, range(0, n))
+
+fn none_of(_i) = None
+
+// A partial's surviving fields are the LAST n of the callee's params — the
+// hole-product's unfilled tail (SYNTAX §«Partial application»: the hole is
+// keyed by identity and the positional form fills in declaration order, so
+// the tail is exactly what remains). A callee whose type is not a readable
+// TFun floors: no judged params, no fabricated widths.
+fn partial_param_tys(callee_h, n) = match lookup_ty(callee_h) {
+  TFun(tparams, _, _) => if len(tparams) >= n {
+    map(some_param_ty, drop(len(tparams) - n, tparams))
+  } else {
+    floor_tys(n)
+  },
+  _ => floor_tys(n),
+}
 
 // Fallback when the fn's type isn't a resolved TFun: reads each param's parsed
 // type through the one ty_handle_of projection (TVar → handle; ground → 0).

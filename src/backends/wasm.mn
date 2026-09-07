@@ -590,10 +590,26 @@ fn spec_demands_of(lowered, recs) with EnvRead + LookupTy + GraphRead + WASI + M
 // The declared [String] is the Intent Boundary the ++ sites read — without it
 // the filter-with-handler-block chain left the element open and the concat
 // emitted its unresolved-element floor (the 00c0b6 trap that caught this).
+// A twin carries four facts, and the fourth is new: the BASE symbol it is a
+// copy of, which is the name lower's enumeration entry was written under and
+// therefore where its signature edges live.
+//
+// IT SHOULD BE A RECORD — {base, enc, pairs, rec} — and it is a positional
+// quadruple instead, under protest and with the reason measured this turn.
+// Written as a record, these helpers read `rp.rec` through an UNANNOTATED
+// parameter, which is an interior open-row field access, and the wheel
+// compiles that to `(unreachable) ;; field offset unprovable` — three of
+// them, and the twin loop executes one, so the m3 leg traps. The defect is
+// `Hβ.infer.record-row-vars-are-not-unioned`, live and on the board: an open
+// row reached from inside another function demands no twin, so the callee
+// bakes an offset it cannot know. Four such floors already sit in the
+// shipping wheel on other fields (op_name / name / init / body), which is
+// what makes this the next thing to build rather than a curiosity. The
+// record form is the gate that fix has to pass, and it goes back in there.
 fn spec_fold_collect(spec_recs, acc0) with LookupTy + EnvRead + Memory + Alloc + GraphRead + WASI = fold(
   acc0,
   (acc, rp) => match rp {
-    (rec2, pairs, enc) => match rec2 {
+    (rec2, pairs, enc, _base) => match rec2 {
       (_m, _ps, body, _f) => {
         spec_ctx_set(pairs, enc)
         let acc2 = collect_fold_tys_list(body, acc)
@@ -611,7 +627,7 @@ fn spec_fold_collect(spec_recs, acc0) with LookupTy + EnvRead + Memory + Alloc +
 fn spec_recs_dedup(recs) with Memory + Alloc = fold(
   [],
   (acc, rp) => match rp {
-    (rec2, _p, _e) => match rec2 {
+    (rec2, _p, _e, _base) => match rec2 {
       (m, _ps, _b, _f) => if spec_rec_name_seen(acc, m, 0) { acc } else { acc ++ [rp] },
     },
   },
@@ -622,7 +638,7 @@ fn spec_rec_name_seen(ref recs, ref m: String, i) with Memory = if i >= len(recs
   false
 } else {
   match list_index(recs, i) {
-    (rec2, _p, _e) => match rec2 {
+    (rec2, _p, _e, _base) => match rec2 {
       (n, _ps, _b, _f) => if n == m { true } else { spec_rec_name_seen(recs, m, i + 1) },
     },
   }
@@ -630,31 +646,139 @@ fn spec_rec_name_seen(ref recs, ref m: String, i) with Memory = if i >= len(recs
 
 fn spec_rec_names(spec_recs) -> [String] with Memory + Alloc = map(
   (rp) => match rp {
-    (rec2, _p, _e) => match rec2 {
+    (rec2, _p, _e, _base) => match rec2 {
       (m, _ps, _b, _f) => m,
     },
   },
   spec_recs
 )
 
-fn spec_wide_twin_names(spec_recs) -> [String] with LookupTy + GraphRead + WASI + EnvRead + Memory + Alloc = fold(
-  [],
-  (acc, rp) => match rp {
-    (rec2, pairs, enc) => {
+// ─── THE SIGNATURE COLUMN's one write (lowering-is-a-column (ii)) ─────
+//
+// THE ONE DERIVATION of an emitted symbol's ABI. Every width in the module
+// is decided HERE, once per symbol, and nowhere else: the header, the call
+// sites, the word-face wrapper, and the local decls all READ the answer
+// through graph_sig_at. Six derivations retired onto this one — and their
+// six comments each already claimed the readers agreed ("one truth, two
+// readers", "the one decider, two readers", "THE ONE SIGNATURE BOTH SIDES
+// AGREE ON"). They were CONFESSIONS: the readers ran the same code, which
+// is not the same as reading the same fact, and the difference is a real
+// bug the march billed four times (three assembly REDs, then an f64.load
+// on a caller that unboxed a result its callee returned wide). A fact
+// derived twice is two facts that happen to match; a fact derived once is
+// an ABI.
+//
+// The derivation itself reads the graph LIVE — a param's width is the repr
+// of its proven type, the result's is the repr of the body's tail — and it
+// runs at the SETTLING POINT, after inference is complete and inside each
+// record's own twin bracket. That ordering is the whole content of the fix:
+// the same live read at an unsettled moment (rung 3's live cells) or under
+// the wrong bracket (module scope, for a body emitted under a twin's pairs)
+// answers differently, and a contract may not be time-varying.
+// The width of ONE signature slot: the enumeration's edge, projected. An
+// ABSENT edge is the slot the graph never judged and takes the word floor
+// honestly — a fabricated width here is the whole bug class. A var resolves
+// through lookup_ty, the bracket-aware chase, so a twin's body reads its OWN
+// instantiation where the raw graph chase would floor it; a ground type
+// answers directly, which is the case a handle could never carry.
+fn sig_repr_of_ty(slot) = match slot {
+  None => RI32,
+  Some(ty) => sig_repr_of_present(ty),
+}
+
+fn sig_repr_of_present(ty) = match ty {
+  TVar(h) => repr_of(lookup_ty(h)),
+  TAlias(_, inner) => sig_repr_of_present(inner),
+  TRefined(base, _) => sig_repr_of_present(base),
+  TReprPin(r, _) => r,
+  _ => repr_of(ty),
+}
+
+fn sig_slot_repr(slot) = match slot {
+  (_n, t) => sig_repr_of_ty(t),
+}
+
+// The symbol's signature from the enumeration entry lower wrote — the fn's
+// own inferred TFun, component by component. What this replaced was a body
+// walk per parameter looking for a use-site, a name-search of the declared
+// scheme when the walk missed, and a structural re-walk of the lowered tail
+// for the result: three reconstructions of a vector the graph had stated and
+// lower had already read.
+fn emitted_sig_of_entry(e) = ESig(map(sig_slot_repr, e.params), sig_repr_of_ty(e.ret))
+
+// An emitted symbol with no enumeration entry has no judged face — the
+// all-word floor, at the arity the record itself declares. The column is a
+// multi-map (a name re-noted across judgment rounds keeps every entry), and
+// `last` is the FIRST-noted of them: smap_add prepends, so the bucket runs
+// newest-first and the oldest entry is the construction the emission walks.
+fn emitted_sig_of_symbol(name: String, arity) = match graph_emitfn_at(name) {
+  [] => ESig(map((_) => RI32, range(0, arity)), RI32),
+  entries => emitted_sig_of_entry(last(entries)),
+}
+
+fn emitted_sig_of_record(record) = match record {
+  (name, param_names, _b, _f) => emitted_sig_of_symbol(name, len(param_names)),
+}
+
+// A symbol whose native face carries any wide slot reaches the fn table
+// through its $wf$ word wrapper. Wideness is a PROJECTION of the signature,
+// never a second walk of the body.
+fn sig_is_wide(s) = match s {
+  ESig(ps, r) => repr_is_wide(r) || any(repr_is_wide, ps),
+}
+
+// The emitted symbol's settled face, read at any of the four reader sites.
+// A miss is the word floor — the pre-direct protocol, sound by the word
+// contract and now taken at ONE key, so caller and callee floor together
+// or not at all.
+fn sig_of_symbol(name: String, arity) = match graph_sig_at(name) {
+  Some(s) => match s {
+    ESig(ps, r) => if len(ps) == arity { (ps, r) } else { sig_floor(arity) },
+  },
+  None => sig_floor(arity),
+}
+
+fn sig_floor(arity) = (map((_) => RI32, range(0, arity)), RI32)
+
+// The base records' pairs — derived at the floor bracket, which is the
+// bracket their bodies emit under.
+fn emit_sig_pairs_base(fn_records) = map(emit_sig_pair_of_record, fn_records)
+
+fn emit_sig_pair_of_record(r) = match r {
+  (name, _ps, _b, _f) => (name, emitted_sig_of_record(r)),
+}
+
+// A twin's pairs — derived INSIDE the instantiation bracket its body will
+// be emitted under, so the stored face is the one the body actually signs.
+// The caller's `spec_subst_pairs(declared, spec_site_pairs(fh, cname))`
+// re-derivation of this exact substitution is what the column deletes.
+fn emit_sig_pairs_spec(spec_recs) = map(emit_sig_pair_of_twin, spec_recs)
+
+// A twin is the BASE's body renamed, so its edges are the BASE's enumeration
+// entry — read under the twin's own bracket, which is what makes its
+// `a := Float` a native f64 slot where the floor copy signs a word. Keyed
+// under the MANGLED name, because that is the symbol the header writes and
+// the call sites name.
+fn emit_sig_pair_of_twin(rp) = match rp {
+  (rec2, pairs, enc, base) => match rec2 {
+    (m, ps, _b, _f) => {
       spec_ctx_set(pairs, enc)
-      let w = fn_record_is_wide(rec2)
+      let s = emitted_sig_of_symbol(base, len(ps))
       spec_ctx_clear()
-      if w {
-        match rec2 {
-          (m, _ps, _b, _f) => [m] ++ acc,
-        }
-      } else {
-        acc
-      }
+      (m, s)
     },
   },
-  spec_recs
-)
+}
+
+// The wideness predicate's ONE spelling — the column read, projected. An
+// unpublished or hand-written symbol is not wide: the word floor has no
+// wide slot to wrap.
+fn symbol_is_wide(name: String) = match graph_sig_at(name) {
+  Some(s) => sig_is_wide(s),
+  None => false,
+}
+
+fn sig_wide_names(names) = filter(symbol_is_wide, names)
 
 fn emit_module(lowered) = {
   // The fn emit records, collected ONCE (emit_functions and the wrapper/table
@@ -662,9 +786,6 @@ fn emit_module(lowered) = {
   // native signature carries a wide slot reaches the table through its $wf$
   // word wrapper; the elem substitution below is that law's one write.
   let fn_records = collect_fn_emit_records(lowered) |> dedup_fn_records
-  let wide_fn_names = fn_records |> filter(fn_record_is_wide) |> map((r) => match r {
-    (nm, _, _, _) => nm,
-  })
   // Named-generic twins (the demand analysis above): each demand's record is
   // the BASE record renamed — the same body, emitted under the spec_pairs state so
   // every repr read resolves through the site's instantiation. Registered
@@ -681,9 +802,9 @@ fn emit_module(lowered) = {
     (d) => match d {
       (m, base, pairs, enc) => match spec_find_rec(fn_records, base) {
         Some(rec) => match rec {
-          (_n, ps, body, f) => [((m, ps, body, f), pairs, enc)] ++ map(
+          (_n, ps, body, f) => [((m, ps, body, f), pairs, enc, base)] ++ map(
             (nr) => match nr {
-              (nn, nps, nbody, nf) => ((spec_mangle(nn, enc), nps, nbody, nf), pairs, enc),
+              (nn, nps, nbody, nf) => ((spec_mangle(nn, enc), nps, nbody, nf), pairs, enc, nn),
             },
             collect_fn_emit_records(body)
           ),
@@ -695,8 +816,34 @@ fn emit_module(lowered) = {
     spec_demands
   )) |> spec_recs_dedup
   let spec_names = spec_rec_names(spec_recs)
-  let spec_wide = spec_wide_twin_names(spec_recs)
   set_spec_twins(spec_names)
+  // THE SETTLING POINT. Every symbol the module will emit is known here —
+  // the base records and every twin with the bracket it emits under — and
+  // inference is complete, so a width read now cannot move again. One
+  // derivation per symbol, one write of the whole table; from this line on
+  // the ABI is a fact to READ, and the emitter has no second opinion to
+  // offer. This is the infer->lower/emit boundary graph_bind_row's own
+  // comment names as "the freeze that makes lattice reads sound", reached
+  // at the emit altitude: reading a settled fact after inference completes
+  // is a read, not a snapshot.
+  // THE COLUMN IS COMPLETE — every emitted symbol gets a stated face, not
+  // only the ones departing from the word floor. A sparse form was BUILT on
+  // the reasoning that a miss and an all-word entry answer identically, so
+  // storing the second stores the default; its measured cost came back
+  // INSIDE THE NOISE (three m3 legs on one fixed binary and one fixed input
+  // span 2321788..2324148 KB, and the sparse/complete gap was smaller than
+  // that), so the bytes decide nothing here and the first reading of them
+  // that said otherwise is retracted. The contract decides: ONE rule, "read
+  // the symbol's face", with no second rule about what absence means for
+  // every reader to learn.
+  graph_sigs_publish(emit_sig_pairs_base(fn_records) ++ emit_sig_pairs_spec(spec_recs))
+  let wide_fn_names = sig_wide_names(map(
+    (r) => match r {
+      (nm, _, _, _) => nm,
+    },
+    fn_records
+  ))
+  let spec_wide = sig_wide_names(spec_names)
   // The fold-leaf collection — the base tree once, then each twin's body
   // under its own bracket, so a twin's show/hash on substituted types
   // collects the sigs its emission will name (the float-element leaf beside
@@ -777,7 +924,7 @@ fn emit_module(lowered) = {
       // word-arity face like every other wide fn).
       each(
         (rp) => match rp {
-          (rec2, pairs, enc) => {
+          (rec2, pairs, enc, _base) => {
             // The twin's emission is a region too: pairs/enc live OUTSIDE the
             // mark (allocated with spec_recs above), the registry commit stores
             // pre-mark pointers, and both strings stream before the reset.
@@ -2570,13 +2717,12 @@ fn emit_functions(fn_records) = each(
 // A fn whose NATIVE signature carries a wide slot cannot sit in the table
 // as itself — every call_indirect speaks the word-arity face. Its $wf$
 // twin derefs each wide argument's reference, direct-calls the native body
-// (full native speed inside), and spills a wide result back to a cell. The
-// record's own projections (param_repr_of / body_result_repr) are
-// the SAME reads emit_fn_body's signature makes — one truth, two readers.
-fn fn_record_is_wide(r) = match r {
-  (name, param_names, body, _) => repr_is_wide(body_result_repr(body)) || any((p) => repr_is_wide(param_repr_of(name, p, body)), param_names),
-}
-
+// (full native speed inside), and spills a wide result back to a cell. It
+// READS the wrapped symbol's settled signature — the same column read the
+// native header signed with. It used to re-derive both halves at module
+// scope, OUTSIDE the twin bracket the body was emitted under, which is the
+// divergence shape in miniature: a wrapper deref'ing at a width its callee
+// never signed.
 fn emit_wide_wrappers(fn_records) = each(
   (r) => {
     let m = heap_mark()
@@ -2586,13 +2732,18 @@ fn emit_wide_wrappers(fn_records) = each(
   fn_records |> filter(fn_record_is_wide)
 )
 
+fn fn_record_is_wide(r) = match r {
+  (nm, _ps, _b, _f) => symbol_is_wide(nm),
+}
+
 fn emit_one_wrapper_to_string(record) = {
   emit_wide_wrapper(record)
   wat_collect()
 } ~> emit_memory_bump ~> wat_to_string
 
 fn emit_wide_wrapper(record) = match record {
-  (name, param_names, body, _) => {
+  (name, param_names, body, _) => match sig_of_symbol(name, len(param_names)) {
+    (preprs, sig_ret) => {
     wat_emit("  (func $wf$")
     wat_emit(name)
     wat_emit(" (param $__state i32)")
@@ -2610,16 +2761,16 @@ fn emit_wide_wrapper(record) = match record {
     wat_emit("    (local.get $__state)\n")
     each(
       (indexed) => match indexed {
-        (i, p) => {
+        (i, _p) => {
           wat_emit("    (local.get $wp")
           wat_emit(int_to_str(i))
           wat_emit(")\n")
-          emit_wide_deref(param_repr_of(name, p, body))
+          emit_wide_deref(list_index(preprs, i))
         },
       },
       enumerate(param_names)
     )
-    match body_result_repr(body) {
+    match sig_ret {
       RI32 => {
         wat_emit("    (return_call $")
         wat_emit(name)
@@ -2657,6 +2808,7 @@ fn emit_wide_wrapper(record) = match record {
       },
     }
     wat_emit("  )\n")
+    },
   },
 }
 
@@ -2760,18 +2912,23 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   // handle output IS the graph's Reason projected as bytes; the
   // SourceMap comment makes the projection observable downstream.
   emit_reason_comment_for_fn(name, body)
+  // The header STATES the settled signature; it does not decide one. Both
+  // halves come from the same column read every call site takes, so the
+  // bytes a caller pushes and the bytes this header accepts are literally
+  // one fact — i32 byte-identical at the floor (Law 7), f64 where the
+  // gradient cashed out.
+  let sig = sig_of_symbol(name, len(param_names))
   wat_emit("  (func $")
   wat_emit(name)
   wat_emit(" (param $__state i32)")
-  emit_params(name, param_names, body)
-  // The result WIDTH is the body's tail-expression repr (read live), the
-  // value the fn actually returns — i32 byte-identical for the floor (Law 7),
-  // f64 when the body computes a float. The result is part of the function's
-  // structural signature (the repr-vector), so call_indirect sites that
-  // dispatch to a float-returning fn carry the matching result width.
-  wat_emit(" (result ")
-  wat_emit(repr_wat(body_result_repr(body)))
-  wat_emit(")")
+  match sig {
+    (preprs, ret) => {
+      emit_params(param_names, preprs)
+      wat_emit(" (result ")
+      wat_emit(repr_wat(ret))
+      wat_emit(")")
+    },
+  }
   wat_emit(" (local $state_tmp i32)")
   wat_emit(" (local $f64_tmp f64)")
   wat_emit(" (local $wide_cell i32)")
@@ -2781,7 +2938,9 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   wat_emit(" (local $callee_closure i32)")
   wat_emit(" (local $alloc_size i32)")
   wat_emit(" (local $loop_i i32)")
-  emit_named_locals(walk_locals_list(body, []), param_local_entries(name, param_names, body, []))
+  emit_named_locals(walk_locals_list(body, []), match sig {
+    (preprs, _) => param_local_entries(param_names, preprs, []),
+  })
   wat_emit("\n")
   emit_body(body)
   wat_emit("  )\n")
@@ -3015,16 +3174,16 @@ fn emit_named_locals(entries, seen: [String]) = if len(entries) == 0 {
 }
 
 // The fn's param entries in the same "name width" spelling the walk
-// collects — the seed set for emit_named_locals, widths read from the
-// same live projection emit_params renders.
-fn param_local_entries(fn_name: String, names, body, acc) = if len(names) == 0 {
+// collects — the seed set for emit_named_locals, rendered from the SAME
+// repr-vector the header signed, so a binder's declared width and its
+// param slot are one fact and not two agreeing ones.
+fn param_local_entries(names, preprs, acc) = if len(names) == 0 {
   acc
 } else {
   param_local_entries(
-    fn_name,
     drop_last(names),
-    body,
-    [last(names) ++ " " ++ repr_wat(param_repr_of(fn_name, last(names), body))] ++ acc
+    drop_last(preprs),
+    [last(names) ++ " " ++ repr_wat(last(preprs))] ++ acc
   )
 }
 
@@ -3231,14 +3390,11 @@ fn tail_expr_repr(expr) = match expr {
   },
 }
 
-// A parameter's WAT width is the repr of its PROVEN type — read live from a
-// body use-site `LLocal(h, name)`, the same edge the graph already drew when
-// it typed the reference. No LowFn shape change: the param's type is recovered
-// from the graph through its use, or — when the body never reads it — through
-// the fn's OWN TYPE PRODUCT via the columns (an unread param is NOT an
-// unconstrained slot: the unused-f64 probe pair proved an i32-floor signature
-// under an f64-pushing caller is invalid WAT). All-i32 fns stay byte-identical.
-fn emit_params(fn_name: String, names, body) = each(
+// The param slots RENDERED from the settled repr-vector. This fn used to
+// decide the widths as it wrote them; it now only writes them, which is why
+// the header and the call sites cannot differ — there is one vector and both
+// read it (the deciding lives in emitted_sig_of_record, once).
+fn emit_params(names, preprs) = each(
   (indexed) => match indexed {
     (i, name) => {
       // `_` is not a name — it is the absence of one. A wildcard param binds
@@ -3252,7 +3408,7 @@ fn emit_params(fn_name: String, names, body) = each(
       // the interned literal never match), so the rename would silently never
       // fire and the collision would stand.
       let wat_name = if field_name_eq(name, "_") { "_{int_to_str(i)}" } else { name }
-      let r = param_repr_of(fn_name, name, body)
+      let r = list_index(preprs, i)
       wat_emit(" (param $")
       wat_emit(local_wat_name(wat_name, r))
       wat_emit(" ")
@@ -3263,166 +3419,22 @@ fn emit_params(fn_name: String, names, body) = each(
   enumerate(names)
 )
 
-// The repr of param `name`: the body's first `LLocal(h, name)` read when the
-// body uses it, else the fn's OWN TYPE PRODUCT through the graph columns —
-// an UNUSED wide param must still sign at its real width (the unused-f64
-// probe pair: an i32-floor signature under an f64-pushing caller is invalid
-// WAT). The columns are the road back: emitfns_col carries the synthesized
-// family's origin; decls_col the judged FnStmt handles. A fn in neither
-// column (a machine-made helper with no graph origin) floors honestly —
-// its params never carried a judged type to begin with.
-fn param_repr_of(fn_name: String, name, body) = {
-  let h = find_local_handle_list(name, body)
-  if h == 0 {
-    // A wildcard param IS unconstrained (it binds nothing, no reader can
-    // exist) — the floor is its truth, and skipping the column walk for
-    // the `_` legion is what keeps the emit's wall flat (measured: the
-    // un-skipped walk cost 91s of m3 leg on the wheel's lambda wildcards).
-    if field_name_eq(name, "_") { RI32 } else { param_ty_repr(fn_name, name) }
-  } else {
-    repr_of(lookup_ty(h))
-  }
-}
+// The param-width ladder that stood here is DELETED — it was three routes to
+// one fact the enumeration entry now states: the body's first LLocal use-site
+// (a whole-body walk per param), the declared scheme searched BY NAME when
+// the walk missed, and the word floor when the name search missed, which for
+// the entire synthesized family was always. Its own comment named this column
+// as the answer and priced the walk that would have reached it; the O(1) form
+// exists, so the ladder goes. Hβ.emit.unused-wide-param-floor closes here: an
+// unused wide param signs at its real width because the entry carries the
+// param's TYPE, and being unread was never evidence of being a word.
 
-fn param_ty_repr(fn_name: String, name: String) = match env_lookup(fn_name) {
-  Some(entry) => match entry {
-    (scheme, _, _) => match resolved_fn_ty(judgment_ty(scheme)) {
-      TFun(tparams, _, _) => tparam_repr_by_name(tparams, name),
-      _ => RI32,
-    },
-  },
-  None => // Not env-registered — the synthesized family (lambda_N, thunks,
-  // arms). Its unused params keep the word floor they always had: the
-  // family's call protocol is the indirect/wrapper machinery, and no
-  // probe has shown the floor incoherent there. The column walk that
-  // WOULD answer it (emitfns_col's origin) measured 3x the whole m3
-  // leg on snoc-list indexing — the O(1) form is the column as an smap,
-  // named in Hβ.emit.unused-wide-param-floor's residue. The PROVEN
-  // class (decl fns, direct calls) is healed by the env bucket above.
-  RI32,
-}
-
-fn tparam_repr_by_name(tparams, name: String) = match find((tp) => field_name_eq(param_name(tp), name), tparams) {
-  Some(tp) => repr_of_resolved(param_ty(tp)),
-  None => RI32,
-}
-
-// A scheme's body straight, or chased one TVar hop to its bound TFun —
-// the emitter's own minimal read (query's deep chase is the forensic
-// layer's; the scheme body of a generalized decl is structural, and one
-// hop covers the var-bodied residue).
-fn resolved_fn_ty(ty) = match ty {
-  TVar(h) => match graph_chase(h) {
-    GNode(NBound(inner), _) => inner,
-    _ => ty,
-  },
-  _ => ty,
-}
-
-fn find_local_handle_list(name, stmts) = if len(stmts) == 0 {
-  0
-} else {
-  let h = find_local_handle_expr(name, last(stmts))
-  if h != 0 { h } else { find_local_handle_list(name, drop_last(stmts)) }
-}
-
-// Walk a LowExpr for the first `LLocal(h, name)` matching `name`. Stops at
-// nested fn boundaries (LMakeClosure/LMakeContinuation/LDeclareFn) — an inner
-// fn's `name` is its own binding, not this param. Returns 0 if absent.
-fn find_local_handle_arms(name, arms, i) = if i >= len(arms) {
-  0
-} else {
-  match list_index(arms, i) {
-    (_, body) => {
-      let h = find_local_handle_expr(name, body)
-      if h != 0 { h } else { find_local_handle_arms(name, arms, i + 1) }
-    },
-  }
-}
-
-fn find_local_handle_expr(name: String, expr) = match expr {
-  LWorldResolve(_, _) => 0,
-  LLocal(h, n) => if n == name { h } else { 0 },
-  LShow(_h, x) => find_local_handle_expr(name, x),
-  LHash(_h, x) => find_local_handle_expr(name, x),
-  LMakeClosure(_h, _fn, caps) => // A closure's BODY is its own scope (an inner `name` is its own binding) —
-  // but its CAPTURES and EVS are PARENT-frame expressions: a param used ONLY
-  // inside a nested lambda still has a live read here, and the param decl
-  // must see the SAME handle the capture-store emits, or the two disagree on
-  // width ($k i32 declared, $k.f64 read — the twin-assembly break this fixed).
-  find_local_handle_list(name, caps),
-  LMakeContinuation(_h, _fn, caps, _, _) => find_local_handle_list(name, caps),
-  LResumeK(_h, k, v) => {
-    let kh = find_local_handle_expr(name, k)
-    if kh != 0 { kh } else { find_local_handle_expr(name, v) }
-  },
-  LYield(_h, _op, args, k) => {
-    let ah = find_local_handle_list(name, args)
-    if ah != 0 { ah } else { find_local_handle_expr(name, k) }
-  },
-  LKExtend(_h, k) => find_local_handle_expr(name, k),
-  LDeclareFn(_) => 0,
-  LLet(_h, _n, inner) => find_local_handle_expr(name, inner),
-  LBinOp(_h, _op, l, r) => {
-    let lh = find_local_handle_expr(name, l)
-    if lh != 0 { lh } else { find_local_handle_expr(name, r) }
-  },
-  LUnaryOp(_h, _op, inner) => find_local_handle_expr(name, inner),
-  LDirectCall(_h2, _fh, _n2, _t, args) => find_local_handle_list(name, args),
-  LCall(_h, f, args) => {
-    let fh = find_local_handle_expr(name, f)
-    if fh != 0 { fh } else { find_local_handle_list(name, args) }
-  },
-  LTailCall(_h, f, args) => {
-    let fh = find_local_handle_expr(name, f)
-    if fh != 0 { fh } else { find_local_handle_list(name, args) }
-  },
-  LReturn(_h, inner) => find_local_handle_expr(name, inner),
-  LIf(_h, c, t, e) => {
-    let ch = find_local_handle_expr(name, c)
-    if ch != 0 {
-      ch
-    } else {
-      let th = find_local_handle_list(name, t)
-      if th != 0 { th } else { find_local_handle_list(name, e) }
-    }
-  },
-  LBlock(_h, stmts) => find_local_handle_list(name, stmts),
-  LMakeList(_h, elems) => find_local_handle_list(name, elems),
-  LMakeTuple(_h, elems) => find_local_handle_list(name, elems),
-  LSimdLanes(_h, lanes) => find_local_handle_list(name, lanes),
-  LMakeRecord(_h, fs) => find_local_handle_list(name, fs),
-  LMakeVariant(_h, _t, fs) => find_local_handle_list(name, fs),
-  LMatch(_h, s, arms) => {
-    let sh = find_local_handle_expr(name, s)
-    if sh != 0 { sh } else { find_local_handle_arms(name, arms, 0) }
-  },
-  LHandleWith(_h, b, hn, _hn2, inits, _arms) => {
-    let bh = find_local_handle_expr(name, b)
-    if bh != 0 {
-      bh
-    } else {
-      let hh = find_local_handle_expr(name, hn)
-      if hh != 0 { hh } else { find_local_handle_list(name, inits) }
-    }
-  },
-  LFeedback(_h, _d, b, s) => {
-    let bh = find_local_handle_expr(name, b)
-    if bh != 0 { bh } else { find_local_handle_expr(name, s) }
-  },
-  LPerform(_h, _n, args, _) => find_local_handle_list(name, args),
-  LDirectPerform(h, hn, op, st, args) => find_local_handle_expr(name, singleton_perform_block(h, hn, op, st, args)),
-  LWasiCall(_h, _n, args) => find_local_handle_list(name, args),
-  LEvPerform(_h, _n, _e, _s, a) => find_local_handle_list(name, a),
-  LFieldLoad(_h, rec, _off) => find_local_handle_expr(name, rec),
-  LConvert(_h, _, operand) => find_local_handle_expr(name, operand),
-  LStateSlotStore(_h, _o, v, _) => find_local_handle_expr(name, v),
-  LConst(_, _) => 0,
-  LFeedbackPrior(_) => 0,
-  LGlobal(_, _) => 0,
-  LUpval(_, _) => 0,
-  LInvariantFailure(_, _) => 0,
-}
+// (The 30-arm LowExpr walk that hunted a param's first use-site went with the
+// ladder above — a whole traversal of the lowered tree, per parameter, per
+// function, run three times over from three readers, to recover a type the
+// fn's own TFun states. Nothing reads it now. This is what a Carried-Truth
+// fix is supposed to look like from the outside: the column arrives and a
+// subsystem leaves.)
 
 // A statement is a value used ZERO times — the kernel-uniform word
 // every expression yields is DROPPED between statements; only the
@@ -3752,18 +3764,14 @@ fn emit_expr(expr) = match expr {
     // routes through (the callee-ref handle carries the site's
     // instantiated TFun, so a wide-keyed generic call lands on its twin).
     let cname2 = spec_target_name(fh, cname)
-    // The callee's EMITTED widths: a twin's signature is the site's
-    // instantiation (native wide); an untwinned callee emits per its
-    // DECLARED scheme — a param declared Float is a native f64 slot, a
-    // generic/Int param is the word floor (the seq-op raw bodies and every
-    // generic body live there). The call site follows those widths arg by
-    // arg: native where the slot is wide, the word spill (address of a
-    // fresh cell) where the slot is a word but the value is wide. The
-    // result mirrors it: a declared-word result whose site type is wide is
-    // an ADDRESS the caller derefs — the same emit_wide_ref/emit_wide_deref
-    // pair the closure convention uses, applied per the one signature both
-    // sides agree on.
-    let widths = direct_callee_widths(fh, cname, cname2, len(args))
+    // The callee's EMITTED widths, read from the column at the symbol this
+    // call names. The site follows them arg by arg: native where the slot is
+    // wide, the word spill (address of a fresh cell) where the slot is a
+    // word but the value is wide. The result mirrors it: a word result whose
+    // site type is wide is an ADDRESS the caller derefs — the same
+    // emit_wide_ref/emit_wide_deref pair the closure convention uses,
+    // applied per the signature the callee's own header signed.
+    let widths = direct_callee_widths(cname2, len(args))
     match widths {
       (param_reprs, ret_repr) => {
         wat_emit("    (global.get $")
@@ -4823,36 +4831,19 @@ fn repr_is_wide(r) with Pure = match r {
   _ => true,
 }
 
-// The direct call's ONE signature source (both sides agree by reading it):
-// a TWINNED callee's emitted widths are the site's instantiation (the twin
-// was emitted under that bracket), read from the callee-ref handle's live
-// TFun; an untwinned callee emits per its DECLARED scheme, read from the
-// env — a generic or Int param is the word floor, a declared-Float param a
-// native f64 slot. A callee whose type cannot be read floors to all-word:
-// the pre-direct protocol, sound by the word contract.
-fn direct_callee_widths(fh, cname: String, cname2: String, n) = {
-  let declared = match env_lookup(cname) {
-    Some(entry) => match entry {
-      (scheme, _, _) => judgment_ty(scheme),
-    },
-    None => lookup_ty(fh),
-  }
-  // A twin's emitted signature is the declared scheme UNDER THE SITE'S
-  // instantiation pairs — the SAME projection that minted the redirect
-  // (spec_site_pairs / spec_subst_pairs), so the call site and the twin
-  // body cannot disagree on a width. Raw lookup_ty(fh) floors free vars
-  // and lied against the twin's native f64 slots (three assembly REDs).
-  let src_ty =
-    if cname2 == cname { declared } else { spec_subst_pairs(declared, spec_site_pairs(fh, cname)) }
-  match src_ty {
-    TFun(ps, ret, _) => if len(ps) == n {
-      (map((p) => repr_of(param_ty(p)), ps), repr_of(ret))
-    } else {
-      (map((_) => RI32, range(0, n)), RI32)
-    },
-    _ => (map((_) => RI32, range(0, n)), RI32),
-  }
-}
+// The direct call's signature: THE CALLEE'S OWN, read from the column under
+// the symbol the call actually names (cname2 — the twin's mangled name at a
+// specialized site, the plain name otherwise). Not "the same derivation the
+// callee runs" — the SAME FACT the callee's header signed, which is the only
+// form of agreement an ABI can have.
+//
+// What this deletes is a whole parallel derivation: the declared scheme via
+// env_lookup, a lookup_ty(fh) fallback, and — at a twinned site — the site's
+// instantiation re-applied by hand (spec_site_pairs / spec_subst_pairs) to
+// reconstruct the bracket the twin's body had been emitted under. Every one
+// of those was a second opinion about a fact the callee had already stated,
+// and the last one billed the f64.load miscompile that named this column.
+fn direct_callee_widths(cname2: String, n) = sig_of_symbol(cname2, n)
 
 fn emit_fold_state_insert() = {
   wat_emit("    (local.set $callee_closure)\n")

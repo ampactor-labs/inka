@@ -113,6 +113,21 @@ type Repr
   //   lane-sequence (STEP 1 / STEP 4 SIMD cashout)
   | RV128
 
+// A SYMBOL'S EMITTED SIGNATURE — the param repr-vector and the result repr,
+// the two facts a `(func $name (param ...) (result ...))` header states and
+// every call to it must speak. It is ONE fact about ONE symbol, and its home
+// is the sigs column (graph_sig_at): decided once at the emit settling point,
+// read by the header, the call sites, the word-face wrapper, and the local
+// decls. An ABI is a contract, and a contract with two derivations is two
+// contracts — which is what the six re-derivations this type retires were:
+// each carried a comment asserting the readers "agree", and the agreement was
+// coincidence (the caller read the declared scheme, the callee read its body's
+// use-sites, the wrapper read both again at module scope, outside the twin
+// bracket the header was emitted under). The repr-vector is also the
+// call_indirect type key (§5.U STEP 1 — a function type IS a product), so
+// this is the interned signature the $ftN fork dissolved into.
+type EmitSig = ESig([Repr], Repr)
+
 // repr_of — the SHARED READ (STEP 0). The cursor projects a Ty to its
 // machine-representation class. H6-exhaustive over all 14 Ty constructors.
 // Alias-strip / refinement-unwrap FIRST (TAlias -> inner, TRefined -> base):
@@ -369,6 +384,11 @@ fn param_name(p) = match p {
 fn param_ty(p) = match p {
   TParam(_, t, _, _, _) => t,
 }
+
+// The same read as a PRESENT signature slot (EmitFnEntry above): a declared
+// parameter always has a type, so lifting it is a fact, never a guess — the
+// absent form belongs to the slots that carry no parameter at all.
+fn some_param_ty(p) = Some(param_ty(p))
 
 fn param_authored(p) = match p {
   TParam(_, _, a, _, _) => a,
@@ -886,6 +906,43 @@ type InstallShape = InstallOf(String, [Int], [{arms: [String], ename: String}])
 // (the pass carries LowFn interiors through untouched — each body is
 // floored at its own construction).
 type EmitFnKind = EfkPartial | EfkLambda | EfkThunk | EfkNested | EfkArm | EfkK
+
+// THE ENUMERATION'S ENTRY — one record per emittable symbol, written by
+// lower's seven LFn writers at construction. A record, not a widening
+// tuple: the fields have identity (the parameter product's own law,
+// SYNTAX §«Labeled call arguments»), and a seventh positional slot would
+// have been the parallel-arrays drift arriving one field at a time.
+//
+// `params` pairs each emitted parameter with its TYPE — the fn's own
+// inferred TFun, component by component, read at the one site that knows
+// it. Lower computes this vector today (param_handles_of, off the origin's
+// live TFun) and hands it to ls_enter_frame, where it dies at frame exit.
+// Emit then rebuilt it: a walk of the whole body per param looking for a
+// use-site, and failing that a search of the declared scheme BY NAME — a
+// scan for a fact the graph had already connected, and for the synthesized
+// family a scan that always missed, so an unused wide param signed at the
+// floor under a caller pushing it wide.
+//
+// A Ty and not a handle, because ty_handle_of is 0 for every GROUND type:
+// a `x: Float` param has no handle to carry, and carrying its absence is
+// how a real f64 slot becomes a word. A Ty and not a Repr, because storing
+// the width would materialize the projection and a twin's body — emitted
+// under an instantiation bracket — must project its OWN. And an OPTION,
+// because a slot the graph never judged is ABSENT: the first form wrote a
+// TVar(0) sentinel and the census convicted it as drift mode 10 on sight,
+// correctly — "handle zero means no node" is a convention every reader must
+// learn, where None is a fact the type states and the reader floors on. The
+// ONE projection that must not vary by reader (the ABI) is settled once into
+// the sigs column at the emit boundary.
+type EmitFnEntry = {
+  caps: [(String, Int)],
+  fence: Int,
+  kind: EmitFnKind,
+  name: String,
+  origin: Int,
+  params: [(String, Option(Ty))],
+  ret: Option(Ty),
+}
 
 // The snapshot carries exactly what its consumers read: the mint bound
 // and the span index. The node cells are NOT here — they live in the
@@ -1882,7 +1939,13 @@ effect GraphRead {
   // NAME (the identity projection beside the ordered column). The
   // synthesized-family repr read and the enumeration reader take this
   // instead of scanning the column.
-  graph_emitfn_at(String) -> [(EmitFnKind, Int, String, Int, [(String, Int)])]
+  graph_emitfn_at(String) -> [EmitFnEntry]
+  // THE SIGNATURE COLUMN's read (lowering-is-a-column (ii)): the emitted
+  // symbol's settled ABI. None means no record minted that symbol — a
+  // hand-written runtime fn, whose face is the word floor. The floor is
+  // still a floor, but it is now ONE floor at ONE key, so a caller and a
+  // callee cannot floor differently: that difference was the miscompile.
+  graph_sig_at(String) -> Option(EmitSig)
 }
 
 effect GraphWrite {
@@ -1975,7 +2038,14 @@ effect GraphWrite {
   // lands with step iii's enumeration-walking emit; its read-side
   // contract filters by the reach set — lower runs on every decl,
   // emit does not.
-  graph_emitfn_note(EmitFnKind, Int, String, Int, [(String, Int)])
+  graph_emitfn_note(EmitFnEntry)
+  // THE SIGNATURE COLUMN's write — ONE call per compile, carrying the whole
+  // table. Not a note-per-symbol: the settling point is a MOMENT (the
+  // infer->lower/emit boundary, after every record and every twin bracket is
+  // known), and a fact that settles at a moment is written at that moment,
+  // whole. N notes would re-open the window a reader could observe half a
+  // table through, which is the time-varying read this column exists to end.
+  graph_sigs_publish([(String, EmitSig)])
   // The deterministic handle partition (the planned mint): the final pass
   // pre-assigns each stmt a dense range of handles sized by the trial's
   // measured mint counts, so numbering is a pure function of the source —

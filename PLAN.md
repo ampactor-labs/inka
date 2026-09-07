@@ -733,7 +733,12 @@ and this is the STATE.
 - **Subsystem-as-cursor** (§2) is ~60% earned. Gap ranked: LOWERING (39
   constructors → columns), ENV (dissolves with schemes-are-edges), REVERSE EDGE
   (landed 2026-08-07), verify/tighten BANKS. The move: put the fact in a column,
-  dual-write, migrate readers, delete the side-structure.
+  dual-write, migrate readers, delete the side-structure — and its full cycle
+  ran once at pin 8aeca3c8: the emittable-fn enumeration went from dual-written
+  and zero-read to carrying each symbol's signature edges, emit's six
+  re-derivations of the emitted ABI became one settled read, and the walker
+  that only re-derived it (`find_local_handle_expr`, 30 arms) deleted. Eleven
+  walker families remain of the twelve that entry enumerates.
 - **Schemes are VALUES, not edges** — the root the judgment tower compensates
   for. Row half LANDED (5.2); forward-HOF under-publish CLOSED (pin c6eb188e1d37).
   Rung 3 whole is the dissolution.
@@ -1107,12 +1112,20 @@ form the whole time. The arcs, in order:
   a projection the caller runs, instantiation the correspondence-edge mint,
   the trial/final collapse following; (iii) the enumeration-reader
   relocation with cons-state re-homed; (iv) `Hβ.lower.lowering-is-a-column`,
-  ABSORBING `Hβ.lower.open-row-field-offset-from-known-set` as its keystone
-  consumer — the open-row field-offset silent wrong (SYNTAX's own section
-  records it) is the lower-time-bake family's last live member, invisible to
-  check/match/micros, and no client-facing page ships it; (v) env re-key
-  onto the smap primitive — folds into (ii)'s env rework, one landing;
-  (vi) pointees-are-words.
+  whose STEP (ii) OPENED 2026-09-07 — the emittable-fn enumeration got its
+  first reader (each symbol's param and result types, read through the
+  settled `sigs_col` ABI column) and `find_local_handle_expr` deleted whole,
+  taking the walker census from twelve to eleven — and which ABSORBS
+  `Hβ.lower.open-row-field-offset-from-known-set` as its keystone consumer.
+  ONE CORRECTION, MEASURED at that landing: the surviving open-row case is
+  not a silent wrong. The DIRECT call's neighbour-read was fixed 2026-09-01;
+  what remains is the INTERIOR one, and it emits `(unreachable) ;; field
+  offset unprovable` — a refusal the executable trips, with no twin demanded
+  at the site at all. The wheel ships four such floors today (`op_name`,
+  `name`, `init`, `body`), so it is live, and `mentl check` still passes,
+  so it is invisible where the sentence said. No client-facing page ships
+  either shape; (v) env re-key onto the smap primitive — folds into (ii)'s
+  env rework, one landing; (vi) pointees-are-words.
 - **Arc C · Image lifetime v1.** With pointees-as-words, 4.3's fork/reset
   resumes soundly; persist = memcpy v0 under its black-box contract
   (requested path honored, versioned image, resume restores, incompatible

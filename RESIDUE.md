@@ -116,6 +116,25 @@ tests/{frontier,micros,crown,rows,floors} finds exactly one
 E_FnShadowsOp, the deliberate one, so nothing else in the corpus is
 silently unreachable today. The peer is about the next one.
 
+`Hβ.tools.cost-ratchet-reads-one-sample` — NAMED 2026-09-07. The peak-RSS
+ratchet compares ONE m3 leg against a fixed ceiling, and that measurement is
+not deterministic: three back-to-back legs on the SAME m2 binary over the
+SAME wheel.mn read 2321788 / 2323980 / 2324148 KB — a 2.4MB spread with every
+input held fixed, and an earlier leg of the same tree read 2318112, which is
+5MB below the top of that band. The consequence is on the record three times
+over: the ceiling has been re-set for VARIANCE rather than growth at 2250000
+(one reading, corrected the same day), at 2310000 (two of four readings fell
+each side of it), and now at 2320000. verify-baseline's own sentence already
+says why — "a ratchet set inside its own measurement's variance is not a
+ratchet; it is a coin flip that blocks good work" — and the answer it implies
+has never been built. THE FIX IS THE READING, NOT THE LINE: take the MINIMUM
+of N legs (the minimum is the honest floor of a peak, and noise only ever
+pushes a peak up), or compare against a band and fail only outside it. Until
+then a landing can be refused by a coin flip and a real regrowth of a couple
+of megabytes is invisible, which is both failure modes at once. It also makes
+one measured fact hard to use: comments are GRAPH CONTENT in Mentl, so prose
+has a real footprint, and today it cannot be separated from the noise.
+
 `Hβ.tools.gate-stamp-is-uniform` — NAMED 2026-08-18. The frontier keeps a
 stamp (`.build/frontier-stamp`, the boot sha256 written on a 0-red run),
 so the board can say whether it measured THIS boot and the pre-commit
@@ -266,6 +285,27 @@ then E_TypeMismatch with a Reason at the decl) — sequenced with the
 verify-reads-canon proposal it DEP-feeds, since a judged predicate
 node is exactly what canon saturation needs. The probe's side-find is
 its own entry: `Hβ.emit.unused-wide-param-floor`.
+
+`Hβ.emit.unused-wide-param-floor` — RESOLVED WHOLE 2026-09-07, and THIS
+ENTRY'S OWN BANKED FIX DIRECTION WAS WRONG. It read "the param's HANDLE is
+read from the GRAPH's own columns ... → the param's handle →
+repr_of(lookup_ty(h))". ty_handle_of is 0 for every GROUND type, so a
+`s: Gain` param — the Float case this entry exists for, the one its own
+minimal pair `fn accept_g(s: Gain) = 1` names — would have arrived at emit
+as "no judged type" and floored again, reproducing the bug through the fix.
+The edge that carries both cases is the TY. It is also not a Repr: storing
+the width would materialize the projection, and a twin's body must project
+its own instantiation. So the enumeration entry carries `params:
+[(String, Option(Ty))]` and `ret: Option(Ty)`, lower's seven LFn writers
+note them off the fn's own inferred TFun, and emit projects the width
+through lookup_ty at read time. The three-route ladder (body use-site walk →
+declared-scheme name search → floor) and the 30-arm find_local_handle_expr
+walker family are DELETED. An unused wide param signs at its real width
+because the entry states the type, and being unread was never evidence of
+being a word. The floor survives only where it is true — a slot the graph
+never judged — and says so as `None`, not as a sentinel: the first form
+wrote TVar(0) and the census convicted it as drift mode 10 on sight.
+Marched m2 == m3 byte-identical. The two entries below are the dig's record.
 
 `Hβ.emit.unused-wide-param-floor` — RESOLVED FOR THE PROVEN CLASS
 2026-08-08 (pin cfa58fdd5479, same day as pinned): decl fns read their
@@ -1328,7 +1368,32 @@ measurement is the gate and it has not been taken.
 `Hβ.infer.record-row-vars-are-not-unioned` — RECORD ROW VARS ARE SECOND
 CLASS IN THE UNION-FIND, and that is what survives the offset fix below.
 Measured 2026-09-02 at pin 7740ac94; standing repro
-`tests/repro-wf/open-row-interior-site.mn`.
+`tests/repro-wf/open-row-interior-site.mn` — WHICH DOES NOT EXIST. The path
+was named here and in PLAN §11 Arc E and there is no tests/repro-wf entry
+by that name; the shape is reproduced in three lines from stdin and that is
+what the fixture should be.
+▶ IT IS NOT SILENT, IT IS A FLOOR, AND IT IS ON THE HOT PATH (measured
+2026-09-07 at the signature-column landing). `fn outer(u) = inner(u)` over
+`fn inner(u) = u.rec` emits `(unreachable) ;; field offset unprovable: field
+'rec' on { rec: t | r }` — a REFUSAL the executable trips, not a neighbour
+read — and emits NO TWIN OF ANY KIND: one $inner, one $outer, zero $sp
+mangles. So the demand analysis does not merely key against the wrong root
+at an interior site; it never runs there at all, and the callee compiles
+once against a field set it cannot know. The union arm added since this
+entry (identical known sets, free vb) is real and does not reach this case.
+▶ THE WHEEL ALREADY SHIPS FOUR OF THESE. A census of the emitted m3 finds
+`field offset unprovable` on `op_name`, `name`, `init` and `body` — four
+latent `unreachable`s in the shipping compiler, live today, each one an
+interior open-row read that happens not to be reached. That is the argument
+for building this now rather than filing it: the class is not hypothetical
+and it is not confined to new code.
+▶ IT GATES A SHAPE ALREADY WANTED. The twin record in emit_module
+(`{base, enc, pairs, rec}`) is the natural form for a fourth fact and it is
+a positional quadruple instead, because written as a record its three reads
+go through unannotated helpers — interior open rows — and the twin emission
+loop executes one, trapping the m3 leg at op_each_handler_yield. The record
+form is this fix's gate: restore it, and the landing that makes it compile
+is the landing that closes this entry.
 ▶ THE DIRECT CALL IS FIXED AND THE INTERIOR ONE IS NOT. `fn inner(u:
 {zeta: Int, ...}) = u.zeta` reached from inside `fn outer(u: {zeta: Int,
 ...}) = inner(u)` exits 7 where 9 is correct. The emit says it plainly:
@@ -3957,6 +4022,37 @@ the warm path restores the analyzed image but re-derivation does
 not re-surface unchanged-decl obligations, so the daily loop's
 pending projection under-reports (cold = truth; the march is cold).
 TagId's 0..255 and the float intervals stay the SMT tier's.
+
+`Hβ.lower.lowering-is-a-column` — STEP (ii) OPENED 2026-09-07: THE
+ENUMERATION GOT ITS FIRST READER, and a walker family left with it. The
+emittable-fn enumeration had been dual-written and zero-read since
+2026-08-08 ("step (i) vocabulary"); it now carries each symbol's param and
+result TYPES — an `EmitFnEntry` record rather than the widening 5-tuple,
+converted while it still had no readers to break — and emit reads them
+through the settled `sigs_col`. What that retired: emit's own reconstruction
+of the same vector, which walked the WHOLE lowered body once per parameter
+hunting an `LLocal` use-site, then searched the declared scheme by name,
+then floored. `find_local_handle_expr` (wasm.mn) — one of the TWELVE walker
+families this entry's own census enumerates — is DELETED whole with its 30
+arms and its two list/arm siblings, so the census reads ELEVEN. This is the
+entry's prescribed method executed once: swap the representation behind the
+projection, then the tree-walk that only re-derived it deletes. Marched
+m2 == m3 byte-identical, twice.
+
+`Hβ.where.emitted-signature-is-a-badge` — THE ABI HAS A HOME AND NO FACE.
+`sigs_col` makes every emitted symbol's param repr-vector and result repr a
+settled, addressable fact, and nothing projects it: `mentl where` renders the
+repr gradient at the TYPE altitude (`s : Float @ f32 (pinned)`) but stops
+short of the machine face the emitter actually signed. The badge is the same
+derived-output discipline — never an input — read from the column rather than
+recomputed: `total : ([Float]) -> Float @ (f64, i32) -> f64`, with the twin's
+mangled symbol named where a site routes to one. It is claimed here as UNBUILT
+rather than banked as a benefit of the column, because the column's value is
+what it deleted, and a projection nobody wrote is not a projection. Two
+consumers already want it: the repr gradient's own felt face (§5.U), and the
+`call_indirect` type key, which IS the interned repr-vector this column stores
+(§5.U STEP 1 — the `$ftN` fork's dissolution said so and reads the vector by
+recomputing it).
 
 `Hβ.lower.lowering-is-a-column` — LowIR is the second graph (2026-07-30,
 the Fable novelty audit's first proposal; report at
@@ -7919,7 +8015,22 @@ resource the guest cannot create — filed as
 NAMED, never silent: the board runs on the runner, the two listening
 verbs run on 36, and the LTS pin retires at (6) only when both do.
 
-`Hβ.infer.live-cells-need-one-settled-signature` — RUNG 3'S REAL DEP,
+`Hβ.infer.live-cells-need-one-settled-signature` — RUNG 3'S REAL DEP.
+▶ THE DEP IS BUILT (2026-09-07, the same day it was measured). The ABI now
+has ONE home: `sigs_col` on the spine, written once at the emit settling
+point in emit_module — the moment every symbol is known (base records plus
+each twin with the bracket it emits under) and inference is complete. Six
+derivations retired onto that read; the entry lower writes carries the
+param and result TYPES so even the derivation is a graph read rather than a
+body walk. Both landings marched m2 == m3 BYTE-IDENTICAL at census 0, which
+is the strongest statement available that the six were computing one answer
+and now do so once. What remains for rung 3 is to RE-RUN the live-cell
+configuration against this settled ABI: the miscompile below turned on the
+callee's body and the call site reading the decl at different moments, and
+there is no longer a moment at which either reads it. That measurement is
+the next step and is not yet taken — this entry says the wall was removed,
+never that the far side has been walked.
+▶ THE ORIGINAL MEASUREMENT, kept as the dig's record.
 MEASURED TO A MISCOMPILE 2026-09-07. Publishing the decl's CELL (Live) in
 place of a Frozen snapshot now gets ALL THE WAY THROUGH inference and emit —
 m2 clean at census 0, m3 exit 0 at 532,547 lines, census 0 — and produces

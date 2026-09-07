@@ -657,7 +657,19 @@ comment_refs_max: 0
 # query.mn and pipeline.mn. Same family as the three facet landings before
 # it, and the same non-constant per-fn cost — what moves a scheme is
 # forward reference, not count. No condemned machinery touched.
-movers_max: 474
+#
+# 474 → 476 at the signature-column landing (2026-09-07): the same family
+# again, and the same per-fn cost. The arc added ~15 fns across types.mn,
+# env.mn, lower.mn and wasm.mn (the enumeration entry's edge producers, the
+# settled-ABI readers, and the lambdas the anonymity tier asked be given decl
+# homes) while DELETING the param-width ladder and the 30-arm
+# find_local_handle_expr family. What moves a scheme is forward reference,
+# not count, so a net line-count fall does not imply a mover fall. NO
+# CONDEMNED MACHINERY WAS TOUCHED — the two-pass tower is untouched by this
+# landing, which only changed where emit reads a width from. The number goes
+# to zero at rung 3's dissolution, whose real DEP this landing was built to
+# remove (`Hβ.infer.live-cells-need-one-settled-signature`).
+movers_max: 476
 
 # The effect seam: filesystem impl calls outside the handler that owns them.
 # MEASURED 24 before this landing and 13 after (both read from the artifact,
@@ -807,7 +819,15 @@ record_pattern_open_max: 0
 # two ratchets this run tripped were fixed rather than raised: the ref
 # markers came off the guard's own fns, written by the same copy-the-
 # surrounding-style reflex the quiet gate exists to catch.
-effectful_lambda_max: 384
+# 384 → 382 at the signature-column landing (2026-09-07), and it FELL by
+# doing what this ratchet asks. The tier convicted two new rows on the first
+# run of that arc; the fix is the one its own message names — "a row newly
+# denied its decl home" — so the sig-pair builders, the slot projection and
+# the wideness predicate became named fns (emit_sig_pair_of_record,
+# emit_sig_pair_of_twin, sig_slot_repr, symbol_is_wide, fn_record_is_wide)
+# instead of inline lambdas. Two MORE came back than went out, because the
+# deleted param-width ladder took its own `find` and `any` lambdas with it.
+effectful_lambda_max: 382
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own
@@ -1248,7 +1268,31 @@ env_frame_max: 0
 # by a different road. The new line sits just above the highest observed
 # reading, and the +109MB is the engine's, to be re-derived (not inherited)
 # if the runner's memory config is ever tuned.
-selfcompile_peak_kb_max: 2320000
+# 2320000 → 2326000 (2026-09-07, the signature-column landing): THE WHEEL
+# GREW, and the old line had come to sit inside the measurement's own
+# variance again — the coin flip the 2250000 paragraph names, arriving a
+# third time. Measured, not assumed: FOUR readings of this landing's tree
+# came in at 2321788 / 2323120 / 2323980 / 2324148 KB, and three of those
+# are the SAME m2 binary on the SAME wheel.mn re-run back to back — a
+# 2.4MB spread with the input held fixed, so the cost line is a band and
+# not a point, and any ceiling within ~0.1% of it flaps. An earlier reading
+# of this same tree at 2318112 sat UNDER the old line, which is exactly how
+# a coin flip looks from the winning side; it is not evidence the landing
+# fit. THE GROWTH IS REAL TOO and it is the arc's own: the emitted-signature
+# column stores one ESig per emitted symbol where nothing was stored, the
+# enumeration entry carries an Option-wrapped Ty per parameter slot, and
+# Mentl comments are GRAPH CONTENT, so this landing's prose is interned
+# weave with a footprint of its own. Against that it DELETED the per-param
+# body walk at three readers and the 30-arm find_local_handle_expr family.
+# Net ~+8MB over the pre-arc 2315808. The new line sits just above the
+# highest observed reading, per this file's own standing rule.
+#
+# THE INSTRUMENT ITSELF IS NAMED BY THIS: the ratchet compares ONE sample
+# of a measurement whose fixed-input spread is megabytes, which is why it
+# has now been re-set three times for variance rather than for growth. The
+# fix is the reading, not the line — `Hβ.tools.cost-ratchet-reads-one-sample`
+# in RESIDUE: take the minimum of N legs, or compare against a band.
+selfcompile_peak_kb_max: 2326000
 
 # ── the compile's CONCURRENCY WIDTH (tools/thread-gate.sh) ────────────────
 # Guest OS threads the compile creates, counted at clone/clone3, as the

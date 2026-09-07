@@ -260,7 +260,7 @@ fn poly_teach_line(owner: String, reason) with Memory + Alloc =
 // over the SHARED spine with a private planned range — the root install is
 // bare and the defaults are the empty graph. Handler state records live in
 // shared heap; the install chain stays per-instance, correctly private.
-handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, high_limit0) with spine = spine0, spine_open = spine_open0, trail = [], trail_len = 0, epoch = 0, next = next0, mint_limit = limit0, mint_high = high0, high_limit = high_limit0, span_index = span_index0, checkpoint_stack = [], comment_refs = [], refs_col = smap_new(), decls_col = [], emitfns_col = [], emitfns_idx = [], emitfns_idx_covers = 0, holes_pend = [], holes_col = [] {
+handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, high_limit0) with spine = spine0, spine_open = spine_open0, trail = [], trail_len = 0, epoch = 0, next = next0, mint_limit = limit0, mint_high = high0, high_limit = high_limit0, span_index = span_index0, checkpoint_stack = [], comment_refs = [], refs_col = smap_new(), decls_col = [], emitfns_col = [], emitfns_idx = [], emitfns_idx_covers = 0, sigs_col = [], holes_pend = [], holes_col = [] {
   graph_chase(handle) => // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
   // graph_rollback pops. When the stack is empty, writes are at the
@@ -719,11 +719,11 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
     spine_put_install(spine, h, ish)
     resume()
   },
-  graph_emitfn_note(kind, origin, fn_name, fence, caps) => // The emittable-fn
+  graph_emitfn_note(entry) => // The emittable-fn
   // enumeration (the no-mint resolution): one append per synthesized-fn
   // construction, in lower's deterministic walk order. Non-trailed by
   // the decls contract; the step-iii reader filters by the reach set.
-  resume() with emitfns_col = push(emitfns_col, (kind, origin, fn_name, fence, caps)),
+  resume() with emitfns_col = push(emitfns_col, entry),
   graph_emitfn_at(fn_name) => // The enumeration's by-name O(1) read — the identity projection of the
   // ordered column, MATERIALIZED ON DEMAND (the note path stays one push;
   // piggybacking the index there measured +94MB of hot-arm state
@@ -754,6 +754,16 @@ handler graph_handler(spine0, spine_open0, next0, limit0, span_index0, high0, hi
     let grown = emitfns_index_build(emitfns_col, seed, emitfns_idx_covers)
     resume(smap_get_all(grown, fn_name)) with emitfns_idx = grown, emitfns_idx_covers = len(emitfns_col)
   },
+  graph_sigs_publish(pairs) => // THE SIGNATURE COLUMN's one write. The whole table lands in a single
+  // rebind at the emit settling point, so no reader can observe a partial
+  // one — the property N per-symbol notes could not give.
+  resume() with sigs_col = smap_build(pairs),
+  graph_sig_at(name) => // Unpublished is the empty `[]` that costs nothing (the emitfns_idx
+  // discipline: graph_handler installs per speculative branch, so a
+  // smap_new() in the state init would be a 4096-word table per branch).
+  // Every read before the publish — every non-emit route, `check`,
+  // `query`, the judgment's own — answers None and takes the word floor.
+  if len(sigs_col) == 0 { resume(None) } else { resume(smap_get(sigs_col, name)) },
   graph_branch_seed() => resume((spine, spine_open, span_index)),
   graph_rollback(target_idx) => {
     let n = len(checkpoint_stack)
@@ -861,8 +871,9 @@ fn hole_pairs_into(hs, name: String, acc) = fold(acc, (a, h) => push(a, (h, name
 fn emitfns_index_build(col, idx, i) = if i >= len(col) {
   idx
 } else {
-  match list_index(col, i) {
-    (k, o, nm, f, c) => emitfns_index_build(col, smap_add(idx, nm, (k, o, nm, f, c)), i + 1),
+  {
+    let e = list_index(col, i)
+    emitfns_index_build(col, smap_add(idx, e.name, e), i + 1)
   }
 }
 

@@ -35,6 +35,81 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-07 · pin 8aeca3c83401fdb6 · AN ABI IS ONE FACT, SO IT GETS ONE
+  HOME — the emitted-signature column, and the enumeration entry that feeds
+  it. verify green (micros 149/0, census 0), march CLEAN m2 == m3 at every
+  step, cost 19.16s / 2323984 KB; crown · proof-exactness · effect-identity
+  green at the pin; ratchets re-derived (movers 476, effectful lambdas 382
+  — a FALL, wildcard-fabricates back to 21).
+  ▶ THE CENSUS. A function's WAT signature — its param repr-vector and its
+  result repr — had SIX derivations: emit_params via param_repr_of (the
+  header's params), body_result_repr (the header's result),
+  direct_callee_widths (every call site), fn_record_is_wide (the table's
+  wideness test), emit_wide_wrapper (the word-face deref widths), and
+  param_local_entries (the local decls). Every one carried a comment
+  asserting the readers agree — "one truth, two readers", "the one decider,
+  two readers", "applied per THE ONE SIGNATURE BOTH SIDES AGREE ON". Read
+  them as CONFESSIONS: they ran the same CODE, which is not the same as
+  reading the same FACT, and the difference had already billed three
+  assembly REDs and the f64.load miscompile that blocked rung 3. Two of the
+  six ran at module scope, OUTSIDE the twin bracket the body they described
+  was emitted under.
+  ▶ THE COLUMN. sigs_col joins the spine's column family, written ONCE per
+  compile at the emit settling point: the moment where every symbol is known
+  (base records plus each twin with the bracket it emits under) and inference
+  is complete, so a width read there cannot move again. Not N notes — a fact
+  that settles at a MOMENT is written whole at that moment, because N notes
+  re-open the window a reader could observe half a table through, which is
+  the time-varying read the column exists to end. All six sites became
+  readers. m2 == m3 BYTE-IDENTICAL: six derivations collapsed to one and not
+  a byte moved, which is the strongest available statement that they had
+  been computing one answer.
+  ▶ THE ENTRY CARRIES THE EDGES. The derivation was itself a re-derivation:
+  param_repr_of walked the WHOLE BODY per parameter hunting a use-site, fell
+  to a name-search of the declared scheme, and floored when that missed —
+  which for the synthesized family was always. Lower computes that vector
+  already (off the origin's live TFun) and hands it to ls_enter_frame, where
+  it dies at frame exit. All seven LFn writers now note the param and result
+  types onto the enumeration entry, converted to a record while it still had
+  no readers to break. DELETED: the three-route ladder, param_ty_repr,
+  tparam_repr_by_name, resolved_fn_ty, and the entire 30-arm
+  find_local_handle_expr walker family — one of the twelve families
+  `Hβ.lower.lowering-is-a-column` enumerates, so its census reads eleven.
+  ▶ A TY, NOT A HANDLE — and the banked fix direction had it wrong.
+  RESIDUE's plan for `Hβ.emit.unused-wide-param-floor` read "the param's
+  handle → repr_of(lookup_ty(h))". ty_handle_of is 0 for every GROUND type,
+  so a `s: Gain` param — the exact Float case that entry exists for — would
+  have arrived as "no judged type" and floored again, reproducing the bug
+  through the fix. Not a Repr either: the width is projected through
+  lookup_ty at read time so a twin's body resolves its OWN instantiation.
+  ▶ AND NOT A SENTINEL. The first form wrote TVar(0) for "no judged type"
+  and the census convicted it on sight as drift mode 10 — a wildcard arm
+  minting a TVar. It was right: "handle zero means no node" is a convention
+  every reader must learn, where Option(Ty) is a fact the type states. The
+  medium caught this, not a human and not a march.
+  ▶ THE WALL THE FORM HIT BELONGS TO SOMETHING ELSE. Written as a record,
+  the twin's four facts read through unannotated helpers — an INTERIOR
+  open-row field access — and the wheel compiles that to `(unreachable) ;;
+  field offset unprovable`, three of them, one on the twin loop's own path,
+  so an m3 leg trapped at op_each_handler_yield. Measured at the repro:
+  `fn outer(u) = inner(u)` over `fn inner(u) = u.rec` emits ONE $inner, NO
+  twin of any kind, and an offset baked from a set it cannot know. The wheel
+  ALREADY SHIPS FOUR such floors (op_name, name, init, body). The twin shape
+  is a positional quadruple under protest with that reason in the source,
+  and `Hβ.infer.record-row-vars-are-not-unioned` is the next build with the
+  record form as the gate it has to pass.
+  ▶ TWO OF THIS SESSION'S OWN READINGS RETRACTED, both by re-measurement.
+  A sparse column (store only the wide symbols; a miss floors identically)
+  was built and read as costing 7.4MB more — then three m3 legs on ONE fixed
+  binary over ONE fixed wheel.mn spanned 2321788..2324148 KB, so the gap was
+  inside the noise and the reading said nothing. The complete column stands
+  on its contract instead: one rule, with no absence-semantics for a reader
+  to learn. The same spread put the cost ceiling INSIDE its own measurement's
+  variance for the third recorded time, so it is raised as an explicit
+  in-commit act and the instrument is named —
+  `Hβ.tools.cost-ratchet-reads-one-sample`: read the MINIMUM of N legs,
+  because noise only ever pushes a peak up.
+
 - 2026-09-07 · pin 8fb668de4613c1a2 · THE CHECK CHASES, SO THE BUILD CAN
   SHARE — and three configurations measured where rung 3's real wall is.
   verify green, march CLEAN m2 == m3, census 0, cost 17.85s / 2252MB.

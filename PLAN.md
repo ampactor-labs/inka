@@ -474,12 +474,53 @@ trued 2026-08-25). Not an aspiration — the Carried-Truth Law read at the
 performance scale. The kernel is one graph whose native access is the flat-array
 handle chase (§2), so a super-constant lookup for a fact already connected by a
 handle is not "work"; it is a discarded edge. **"O(1) only" means: follow the
-edge, never re-scan by name, shape, list position, or side ledger.** Whole
-program actions keep their honest bounds: compile is O(reachable image), edit is
-O(changed cone), structural equality/show/hash are O(value shape), proof is
-O(obligation fragment), and persistence is O(image bytes) until dirty-page image
-tracking lands. The law bans accidental super-constant lookup; it does not ban
-the structural walks whose output is the requested value.
+edge, never re-scan by name, shape, list position, or side ledger.**
+
+**THE LAW, IN ITS ULTIMATE FORM — and the excuse it replaces (Morgan,
+2026-09-07).** This paragraph used to read: *"Whole program actions keep their
+honest bounds: compile is O(reachable image) … the law bans accidental
+super-constant lookup; it does not ban the structural walks whose output is the
+requested value."* That sentence was not an accounting. It was an ALIBI, and it
+was written by an intelligence excusing a compiler that throws its own work
+away — the exact thing this document's own §9.9 warns about, a permanent cost
+called "honest" by the builder who did not want to pay it. It licensed
+re-deriving, on every run, a result that could not have changed.
+
+**Measured 2026-09-07, which is why the sentence is gone.** The compiler
+persists its analyzed image and restores it (`persist = memcpy` is REAL —
+`image_pack` is one `mem_copy(dst, 0, size)`), then re-ran saturate, lower,
+reachability, the gate and emit over the restored graph **every single run**. A
+five-line two-module program compiled warm in 5.75s against a ~2.0s process
+floor: ~3.8s spent re-deriving bytes the previous run had already produced —
+while the driver printed *"warm: image current — nothing re-derived."* The
+message was true of INFERENCE and false of the compile. A scoped claim rendered
+as an absolute is the same move as the paragraph it lived under.
+
+**THE TWO COSTS ARE DIFFERENT AND THE OLD SENTENCE CONFLATED THEM:**
+- **DERIVATION — computing a fact. O(1) amortized, no exceptions.** A fact is
+  computed ONCE and read forever after. If the inputs did not change, the
+  derivation cost is ZERO. This is the Carried-Truth Law extended over TIME:
+  re-deriving across runs is the same violation as re-deriving across call
+  sites, and the image is what makes "forever" reachable — one `mem_copy`
+  carries every fact the last run proved.
+- **DELIVERY — handing over a value. O(what was asked for).** You cannot
+  produce N bytes in fewer than N operations. That is information, not
+  overhead, and it is the ONLY irreducible cost in the medium.
+
+**So the whole law is: the cost of an operation is the size of the answer it
+was asked for, and nothing else.** Two corollaries, both enforceable: nothing
+is re-derived (time), and nothing is derived that was not demanded (scope —
+Arc D's `link-is-reachability` is this half). An operation whose cost grows
+with the program while its ANSWER did not change is the law violated, whatever
+bound it claims. **The test is falsifiable and it is a gate: change nothing,
+compile again, and measure. A compiler that re-reads its own conclusions has
+not earned the word "incremental."**
+
+Everything the old sentence listed as a floor is one of the two above or it is
+a defect: structural equality is O(1) when the graph already proved the two
+handles equal and O(shape) only when it must look; proof re-discharges in the
+changed cone alone; persistence is O(image bytes) once and O(dirty pages)
+after. None of them licenses a re-derivation.
 
 **The diagnosis (8-agent adversarial workflow, 2026-07-13 — the 22-min
 self-compile).** The cost is 100% guest ALGORITHM: JIT is ~20ms, AOT marginal,
@@ -713,8 +754,19 @@ and this is the STATE.
 
 - **Regions** are compile-time root-tagging + return-transfer, NOT a runtime
   arena. The `emit_memory_arena` swap is dormant (§5.O open work).
-- **`persist = memcpy`** is the design. Today: bump-allocated, not closed /
-  relocatable / versioned. Durable execution ABSENT (bands B/O).
+- **`persist = memcpy` IS BUILT, and this line said it was absent** — the doc
+  rot named as violation #1, measured 2026-09-07. `lib/persist.mn`'s
+  `image_pack` is literally one `mem_copy(dst, 0, size)` over `[0, heap-line)`
+  plus the globals record; `image_resume` gates on the build key and swaps it
+  in; `mentl resume <image>` re-enters a persisted image with the source not
+  required to exist; and the driver's warm start restores an analyzed image
+  rather than re-inferring. The honest remainder is NOT the mechanism: host
+  resources (fds, stdin position, sockets) are outside the image and do not
+  restore, and persisting mid-spawn is band E's fusion work. Durable
+  execution's *substrate* is here; its cross-machine face
+  (`Hβ.persist.cross-machine-resume`) is not.
+  **The cost of this sentence being wrong was real**: a session reading it
+  would have built the memcpy that already existed.
 - **`TCont` effect-WORLD** is INERT on OneShot — tag carried, not enforced.
   "Inert" means the stack-only path never becomes a rehydratable continuation
   value, so no changed-world comparison can fire there. The fix is not a special

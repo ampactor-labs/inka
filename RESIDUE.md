@@ -116,6 +116,28 @@ tests/{frontier,micros,crown,rows,floors} finds exactly one
 E_FnShadowsOp, the deliberate one, so nothing else in the corpus is
 silently unreachable today. The peer is about the next one.
 
+`Hβ.effects.two-instances-of-one-effect-do-not-join` — NAMED 2026-09-07,
+measured at the warm-projection landing. `Cast { addr(a) -> Int }` is GENERIC
+in its operand, and the row records the INSTANCE. A body that already casts
+`GNode` and then addresses a `List` does not get a row carrying both: the two
+instantiations UNIFY and the link refuses with `GNode vs List(t)` and no span.
+▶ THE SHAPE IS LEGAL AND THE ALGEBRA SHOULD ADMIT IT. A program that casts two
+types, or samples at two rates (`Sample(44100)` beside `Sample(48000)` in one
+caller's row — §4③'s own worked example), is ordinary. Instance-PRECISION is
+the crown's win — `eff_forbids` refusing same-instance and admitting provably
+distinct — but precision at the negation edge became unification at the
+PRESENT edge, where distinct instances should sit side by side as distinct
+row members.
+▶ WHY IT HID: the wheel's only `addr` callers agreed on one operand type, so
+the collision was unconstructible until a second one appeared. The span-less
+diagnostic is its own finding — an instance clash reports at the link with no
+located reason, so the first thing a reader learns is that something,
+somewhere, disagreed.
+▶ THE LANDING WORKED AROUND IT HONESTLY (`str_payload(wat)` names the emitted
+bytes, which is the better k anyway) and did not paper it: this entry is the
+record, band A owns the fix, and the repro is two `addr` calls at different
+types in one body.
+
 `Hβ.tools.cost-ratchet-reads-one-sample` — NAMED 2026-09-07. The peak-RSS
 ratchet compares ONE m3 leg against a fixed ceiling, and that measurement is
 not deterministic: three back-to-back legs on the SAME m2 binary over the

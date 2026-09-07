@@ -761,7 +761,21 @@ fn driver_incremental() with Memory + Alloc + ImageAlloc + Cast + Persist + Fail
   let cur_pairs = scan_pairs(scan)
   let changed = changed_modules(list_index(warm_manifest, 0), cur_pairs)
   if len(changed) == 0 {
-    eprint_string("warm: image current — nothing re-derived\n")
+    // WHAT WAS ACTUALLY SKIPPED, not what the skip was hoped to be. This
+    // line read "nothing re-derived" and that was a fabrication: inference
+    // is restored, and then saturate, lower, reachability, the gate and
+    // emit all re-run over the restored graph — measured at 3.8s of a 5.75s
+    // warm compile for a five-line program whose whole output is 78KB, so
+    // it is derivation and not delivery. A message that overstates its own
+    // skip is the Carried-Truth Law broken at the voice: the graph knew
+    // what it re-derived and the projection said otherwise.
+    //
+    // The remaining derivation cannot be cached away — a stored projection
+    // beside the image is a materialized view, and the drift guard it would
+    // need is the confession. It goes to zero when the lowered form stops
+    // being a SECOND TREE and becomes graph columns: then one mem_copy
+    // carries it with everything else and emit is a pure read of the image.
+    eprint_string("warm: inference restored — lowering and emit re-derive\n")
     warm_program()
   } else {
     let cone = downstream_closure(scan, changed)

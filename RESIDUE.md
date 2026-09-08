@@ -6641,6 +6641,25 @@ sites (cap_result_fn_row 20 · seq_op_sig 18 · infer_expr 16 ·
 quantify_ctor_ty 14 · parse_type_atom 14 · synth_holes_for_scheme 13 ·
 ty_handle_of 10). The rest are projections that read one level and stay
 (repr_of · show_type · fold_sig · extract_row · render_type_tokens).
+TYPES ARE SECOND-CLASS IN THE GRAPH, and that is the whole of D0 — measured
+2026-09-08, and it REPLACES the site-audit framing above. The parser mints a
+node per EXPRESSION position (nexpr / nstmt: every subexpression gets a
+handle) and collapses an entire TYPE expression into ONE node holding a value
+tree — `NTypeAnn(Ty)`, types.mn:1433. So a source type's interior positions
+have no handles to read, which is why the first reading of this entry said
+~100 construction sites needed a per-site audit of "where did the graph
+already prove this type?". The answer is that it did not prove it anywhere,
+because nothing ever minted it.
+THE FORM IS THEREFORE ONE CHANGE, NOT AN AUDIT: parse_type_atom mints a node
+per type position and returns a handle, exactly as parse_expr already does.
+The construction sites dissolve — the parser mints them where the type is
+WRITTEN — and the inference-side constructions already mint cells through
+`mint(reason)`. The parser's type surface is seven functions
+(parse_type_ty / _atom / _ty_tail / _args / _expr / parse_type_decl).
+It is also the same asymmetry the module-blind parse had one layer down:
+spans were second-class until the parse entered the module. Types are the
+next one.
+
 NO `ty_cell(ty) -> Int` HELPER — the loophole this design invites and must
 refuse. Boxing a value you already built into a fresh cell moves the copy
 behind a helper and adds ~800 unshared mints per compile while LOOKING like

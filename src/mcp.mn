@@ -93,12 +93,12 @@ handler console_bank with lines = [] {
 // the first walk: the E_EffectMismatch line reached stderr but not the
 // verdict).
 handler mcp_diag_collector with lines = [] {
-  diag_report(diag, line) => {
+  diag_report(diag, line, dmod) => {
     // Forward outward with the SAME rendered line; the bank keeps it too.
     // Branch-fired reports arrive HERE as live re-performs (the join
     // replays each banked diag through the root chain), so no separate
     // absorb arm exists to fold them.
-    diag_report(diag, line)
+    diag_report(diag, line, dmod)
     resume() with lines = push(lines, line)
   },
   diag_errors() => resume(diag_errors()),

@@ -749,4 +749,4 @@ fn verify_pending_at(handle) with Verify + GraphRead + Memory + Alloc + !Mutate 
 }
 
 fn filter_by_span(target, debt) with Memory + Alloc =
-  filter(((debt_span, _, _)) => span_overlaps(target, debt_span), debt)
+  filter(((_m, debt_span, _, _)) => span_overlaps(target, debt_span), debt)

@@ -669,7 +669,10 @@ comment_refs_max: 0
 # landing, which only changed where emit reads a width from. The number goes
 # to zero at rung 3's dissolution, whose real DEP this landing was built to
 # remove (`Hβ.infer.live-cells-need-one-settled-signature`).
-movers_max: 476
+# 2026-09-07: 476 -> 435 at the module-blind-parse landing. Not a movers fix;
+# the per-module parse changes what the trial and final each see, and the
+# class fell out. The condemned pass still owns the rest (0 deletes it).
+movers_max: 435
 
 # The effect seam: filesystem impl calls outside the handler that owns them.
 # MEASURED 24 before this landing and 13 after (both read from the artifact,
@@ -714,7 +717,10 @@ movers_max: 476
 # WASI while the capability the handler names is Filesystem, so
 # `with !Filesystem` went on holding over routes that created, wrote,
 # renamed and unlinked files.
-fs_impl_bypass_max: 8
+# 2026-09-07: 8 -> 0. driver_manifest hashed each module by RE-READING its
+# file; the text rides the entry now, so it hashes what it was handed and the
+# last filesystem calls outside the handler that owns them are gone.
+fs_impl_bypass_max: 0
 
 # 2026-08-07: the PER-MODULE ratchet (PLAN §11 Phase 3.5's first half) —
 # E_MissingVariable across every src module's SOLO check, monotone DOWN.
@@ -827,7 +833,9 @@ record_pattern_open_max: 0
 # emit_sig_pair_of_twin, sig_slot_repr, symbol_is_wide, fn_record_is_wide)
 # instead of inline lambdas. Two MORE came back than went out, because the
 # deleted param-width ladder took its own `find` and `any` lambdas with it.
-effectful_lambda_max: 382
+# 2026-09-07: 382 -> 379 at the module-blind-parse landing — the deleted seam
+# and rehome families took their lambdas with them.
+effectful_lambda_max: 379
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own
@@ -1292,7 +1300,32 @@ env_frame_max: 0
 # has now been re-set three times for variance rather than for growth. The
 # fix is the reading, not the line — `Hβ.tools.cost-ratchet-reads-one-sample`
 # in RESIDUE: take the minimum of N legs, or compare against a band.
-selfcompile_peak_kb_max: 2326000
+#
+# 2026-09-07 · 2326000 -> 2350000 · THE MODULE COLUMN, and the FIRST raise
+# this file records that is provably GROWTH rather than variance — because
+# the estimator was fixed in the same session it fired. read_cost now
+# re-runs the m3 leg twice on a breach and rules on the MINIMUM of three,
+# since peak RSS is one-sided (jitter can only push an observed peak ABOVE
+# the true requirement). The minima across two full marches read 2340292 and
+# 2343036 KB against a 2326000 line: +0.61%, where the measured fixed-input
+# jitter band is 0.28%. A single sample could not have told those apart, and
+# the three previous entries in this file are what that looks like.
+#
+# THE COST IS STRUCTURAL AND IT IS ACCOUNTED, not absorbed: the per-module
+# parse adds a twelfth column to SpinePage, so every open band now allocates
+# one more 16384-slot flat array — 64KB per band, and the self-compile's
+# handle space is a few hundred bands. That is the whole delta, and it is
+# the price of every node knowing which file it was born in without a
+# containment scan re-deriving it.
+#
+# AGAINST IT, DELETED WHOLE: module_seams / seams_walk / span_render_local /
+# seam_of_line (an O(nodes) walk per call, three callers), scope_localize's
+# per-diagnostic weave-offset subtraction, rehome_seam_comments / rehome_walk
+# / rehome_one / module_slot_of, split_weave_by_module's per-stmt containment
+# test, driver_module_ast's re-filter, entry_start_caret's range search,
+# file_line_of, and the range map itself. m3 emits 416371 WAT lines against
+# 420099 at the previous pin — 3728 fewer.
+selfcompile_peak_kb_max: 2350000
 
 # ── the compile's CONCURRENCY WIDTH (tools/thread-gate.sh) ────────────────
 # Guest OS threads the compile creates, counted at clone/clone3, as the

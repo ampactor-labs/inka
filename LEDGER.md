@@ -35,6 +35,73 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-07 · pin 4f6c3a35b33f67c3 · THE PARSE ENTERS THE MODULE — the
+  module-blind parse closed, five machines deleted with it. TRANSITION m3 ==
+  m4, census 0, 416464 lines against 420099.
+  ▶ THE ROOT, named yesterday and unbuilt: the driver concatenated the dep
+  DAG into ONE text and parsed it whole, so every node was born in the
+  weave's coordinate space unattributed. `mentl why` answered a name on line
+  8 with `at 2729:1-2729:15` while the refs facet three lines away answered
+  `addr:7` — because refs read the graph and Reasons read a copy.
+  ▶ THE FORM, from that entry's own sentence: one-namespace judgment never
+  required one TEXT, only one ENV. Each module is parsed on its own and the
+  DECL LISTS concatenate. Spans are the developer's from birth; the module
+  is on the node because the parse runs inside it — a twelfth SpinePage
+  column, written at the mint from the handler's live cur_module.
+  ▶ THE BIAS, and why it is not decoration. The cell holds the module handle
+  PLUS ONE. A fresh graph's first mint is handle 0, so the first module node
+  IS handle 0, and an unbiased column cannot tell "born in module 0" from
+  "never stamped". Measured, not reasoned: the first march trapped on handle
+  1 whose module really was 0. The Option-niche word this file already uses
+  for mint_high.
+  ▶ TOTAL, WITH NO SENTINEL. Every compile enters the LINK's own module
+  before discovery, because discovery both mints and reports; each per-file
+  parse enters its own inside that. So no reader carries a "which file, if
+  any" arm, and the two that briefly answered "" were convicted by the
+  census as wildcard-fabrications (21 -> 23) and became refusals instead.
+  ▶ DELETED WHOLE: module_seams / seams_walk / span_render_local /
+  seam_of_line (an O(nodes) walk per call, three callers) · scope_localize's
+  per-diagnostic weave-offset subtraction · rehome_seam_comments /
+  rehome_walk / rehome_one / module_slot_of (a comment could only cross a
+  seam because "the parser cannot see seams") · split_weave_by_module's
+  per-stmt containment test · driver_module_ast's re-filter, replaced by the
+  read its own comment prescribed · entry_start_caret's range search, which
+  had no information left to compute · file_line_of · and the range map.
+  ▶ THE REGISTER SCOPES BY MODULE. ScopeAt(start, nlines) named a file only
+  because spans were offsets into one text; every file starts at line 1 now.
+  The report carries the module it is about, read where GraphRead already
+  lives, because the register's arm is deliberately graph-free.
+  ▶ RATCHETS: movers 476 -> 435. Effect seam 8 -> 0 (driver_manifest hashes
+  the text it was handed instead of re-reading the file). Effectful lambdas
+  382 -> 379. Peak ceiling 2326000 -> 2350000 — the first raise in that file
+  provably measuring GROWTH, because the estimator was fixed the same
+  session: min-of-three read 2340292 and 2343036 against a 0.28% jitter
+  band, which one sample could not have distinguished. The cost is one more
+  16384-slot column per open band, and it is the price of every node knowing
+  its file without a scan re-deriving it.
+  ▶ WHAT THE GATES CAUGHT, each a real regression this arc introduced and
+  then fixed, recorded because the shapes recur: the census dedup keyed on a
+  SPAN, unique only because spans used to be weave offsets — two modules now
+  share a line 10 and the second site was silently DROPPED (it is keyed on
+  (module, span) now, which says the invariant instead of relying on it);
+  the census and decls facets rendered a line with no file once
+  span_render_local was gone, which the module column answers directly;
+  W_CommentRefUnresolved reported against whichever module the whole-weave
+  walk had left in force rather than the one the comment lives in; and
+  rederive_cone judged every warm-path module under the name "<stdin>",
+  because it called the single-source entry point. Frontier went 30 red at
+  the first full run to 5.
+  ▶ WHAT IS STILL OPEN, and it is this landing's: warm-start and warm-inc
+  emit ONE differing constant — a handle baked into a trap payload, cold
+  13558 against warm 539 — which is the lower-time-bake class meeting a
+  changed numbering; and the two MCP session legs. Frontier 368 pass / 5 red
+  against 373 / 1 before the arc.
+  ▶ WHAT THIS DOES NOT CLOSE: the Reason layer. Located still carries a
+  SPAN, so show_reason still cannot name a file and the frontier's
+  `why coordinates are the developer's` — the fifth red, and the one that is
+  NOT this landing's — stays RED. The remaining work is Located carrying a
+  handle: where the position is its own node's, it dissolves.
+
 - 2026-09-07 · pin c1481440808d43ce · A RATCHET SET INSIDE ITS OWN VARIANCE
   IS A COIN FLIP — the cost gate's estimator, and the pin it had been
   refusing. NO WHEEL SOURCE CHANGED at this pin; the only code is six lines

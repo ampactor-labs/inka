@@ -1132,8 +1132,8 @@ fn ref_span_line(ref s) with Memory + Alloc = "\n  at {show_span(s)}"
 fn render_census_sites(ref sites) with GraphRead + Memory + Alloc =
   sites |> map(census_site_line) |> str_concat_all
 
-fn census_site_line(site) with GraphRead + Memory + Alloc = match site {
-  (m, s) => "\n  at {module_name_of_handle(m)}:{show_span(s)}",
+fn census_site_line(site) with Memory + Alloc = match site {
+  (path, s) => "\n  at {path}:{show_span(s)}",
 }
 
 // One line per undischarged obligation: the predicate the graph holds,

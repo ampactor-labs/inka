@@ -381,12 +381,11 @@ fn range_of_module(ref ranges, ref target) with Memory + Alloc = find(
 // file the fold already read — it hashes what it was handed. A missing module
 // carries no text at all, so its absence is the walk's own None rather than a
 // second fs_exists probe answering a question already answered.
-fn driver_manifest(ref ranges) with Memory + Alloc = map(
-  (r) => match r {
-    (_m, p, text) => (str_hash(p), byte_len(text), str_hash(text)),
-  },
-  ranges
-)
+fn driver_manifest(ref ranges) with Memory + Alloc = map(module_identity, ranges)
+
+fn module_identity(r) with Memory + Alloc = match r {
+  (_m, p, text) => (str_hash(p), byte_len(text), str_hash(text)),
+}
 
 // One module's top-level nodes cut from the weave ast by its range —
 // the resident session's scoping read (audit/teach over the entry
@@ -620,12 +619,14 @@ fn driver_warm_persist(ref entry_module, ref asts, ref pairs) with Memory + Allo
 // could be exact rather than inferred from coordinates.
 fn split_weave_by_module(ref ast, ref ranges) with Memory + Alloc + GraphRead + !Mutate = {
   let cells = collect_module_cells(0, graph_next())
-  map(
-    (r) => match r {
-      (m, p, _text) => (p, module_decls_of(cells, m, [])),
-    },
-    ranges
-  )
+  map(module_bucket(cells), ranges)
+}
+
+// The stage law's own shape: the cells are CONFIG, the module the flowing
+// datum, so the caller passes a hole-product rather than an anonymous fn
+// carrying a row nobody can read at the call site.
+fn module_bucket(ref cells, r) with Memory + Alloc = match r {
+  (m, p, _text) => (p, module_decls_of(cells, m, [])),
 }
 
 fn assoc_stmts(ref pairs, name: String) with Memory + Alloc = match find(

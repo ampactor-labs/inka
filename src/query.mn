@@ -163,10 +163,10 @@ type QueryResult
   // the sites as (module, span) PAIRS: a local span names a line, and the
   // module names whose line it is — the two halves the weave used to fuse
   // into one global coordinate and three readers had to take apart again.
-  | QRCensus(String, [(Int, Span)])
+  | QRCensus(String, [(String, Span)])
   // the judged decl sites (count = len)
   // (module, span) pairs, for the same reason the census carries them.
-  | QRDecls([(Int, Span)])
+  | QRDecls([(String, Span)])
   // the weave's module paths, in weave order (count = len)
   | QRModules([String])
   // (importing module, imported path, is any name it brings referenced here)
@@ -821,7 +821,12 @@ fn census_walk(shape, i, n, acc) with GraphRead + Memory + Alloc + !Mutate = if 
 } else {
   if census_matches(shape, i, graph_node_body(i)) {
     let sp = span_of_node_raw(i)
-    let m = graph_module_of(i)
+    // A MODULE'S IDENTITY IS ITS PATH, never the node that represents it —
+    // the same law driver_collect_visit's visited set already keys on. The
+    // trial and the final each parse, so each mints its OWN NModule node for
+    // the same file: keying the dedup on the HANDLE made one site read as two
+    // (measured: every census count exactly DOUBLED, types:3748 four times).
+    let m = module_name_of_handle(graph_module_of(i))
     if sp == span_zero() || site_in(acc, m, sp, 0) {
       census_walk(shape, i + 1, n, acc)
     } else {
@@ -832,7 +837,7 @@ fn census_walk(shape, i, n, acc) with GraphRead + Memory + Alloc + !Mutate = if 
   }
 }
 
-fn site_in(ref acc, m, ref sp, i) with Memory + Alloc = if i >= len(acc) {
+fn site_in(ref acc, ref m: String, ref sp, i) with Memory + Alloc = if i >= len(acc) {
   false
 } else {
   match acc[i] {
@@ -1774,7 +1779,7 @@ fn ops_contain(ops, target: String, i, n) with Memory = if i >= n {
 // span peeled from the located reason — no parallel span-index re-lookup.
 // A decl's site: its own module beside its own span, both read from the
 // graph rather than reconstructed from a coordinate.
-fn decl_site_of(handle) with GraphRead + !Mutate + Memory + Alloc = (graph_module_of(handle), span_of_handle(handle))
+fn decl_site_of(handle) with GraphRead + !Mutate + Memory + Alloc = (module_name_of_handle(graph_module_of(handle)), span_of_handle(handle))
 
 fn span_of_handle(handle) with GraphRead + !Mutate + Memory + Alloc = match graph_chase(handle) {
   GNode(_, reason) => span_of_reason(reason),

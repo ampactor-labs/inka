@@ -5188,7 +5188,7 @@ fn any_arg_labeled(ref args) = any(
 // collection the keep-set uses (signature_free_roots — one walk, the
 // trio discipline), filtered to the row sort the membership compares.
 fn config_row_roots(p) = match param_ty(p) {
-  TVar(h) => filter((r) => is_row_handle(r), signature_free_roots([h])),
+  TVar(h) => filter(is_row_handle, signature_free_roots([h])),
   _ => [],
 }
 

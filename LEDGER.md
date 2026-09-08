@@ -35,7 +35,7 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
-- 2026-09-07 · pin 1b8709e9aa99a191 · THE PARSE ENTERS THE MODULE — the
+- 2026-09-07 · pin dfc22c8c4de7fa85 · THE PARSE ENTERS THE MODULE — the
   module-blind parse closed, five machines deleted with it. TRANSITION m3 ==
   m4, census 0, 416464 lines against 420099.
   ▶ THE ROOT, named yesterday and unbuilt: the driver concatenated the dep

@@ -1,0 +1,19 @@
+// A CONSTRUCTOR IS A FUNCTION VALUE, or it refuses — never both compiling
+// clean and trapping. Born RED 2026-09-08 while ratcheting the eta-wrapper
+// census to zero: six of the wheel's twenty-eight eta-wrappers exist ONLY
+// because `map((v) => TVar(v), vs)` cannot be written `map(TVar, vs)`, and
+// the reason it cannot is not a type error — it is that the bare form
+// compiles with ZERO diagnostics, emits, and faults at the first read of
+// what it built.
+//
+// The control below (the lambda form) runs and answers 6, so the fixture
+// isolates the constructor-as-value path alone. Expected when fixed: 6.
+// (Hβ.emit.constructor-as-function-value.)
+type Box = Box(Int) | Empty
+
+fn unbox(b) = match b {
+  Box(n) => n,
+  Empty => 0,
+}
+
+fn main() = map(Box, [1, 2, 3]) |> map(unbox) |> fold(0, (a, b) => a + b)

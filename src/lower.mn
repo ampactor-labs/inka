@@ -6093,9 +6093,9 @@ fn spec_resolve_build(t) with LookupTy + Memory + Alloc + GraphRead = match t {
     },
   },
   TList(e) => TList(spec_resolve(e)),
-  TTuple(es) => TTuple(map((x) => spec_resolve(x), es)),
+  TTuple(es) => TTuple(map(spec_resolve, es)),
   TFun(ps, r, eff) => TFun(map((p) => param_with_ty(p, spec_resolve(param_ty(p))), ps), spec_resolve(r), eff),
-  TName(n, args) => TName(n, map((x) => spec_resolve(x), args)),
+  TName(n, args) => TName(n, map(spec_resolve, args)),
   TRecord(fs) => TRecord(map(
     (f) => match f {
       (n, ft) => (n, spec_resolve(ft)),
@@ -6235,7 +6235,7 @@ fn spec_pairs_sorted_insert(sorted, p) with Memory + Alloc = if len(sorted) == 0
 }
 
 fn spec_pairs_sort(pairs) with Memory + Alloc =
-  fold([], (acc, p) => spec_pairs_sorted_insert(acc, p), pairs)
+  fold([], spec_pairs_sorted_insert, pairs)
 
 fn spec_repr_digit(t) with Pure = match repr_of(t) {
   RI32 => "0",

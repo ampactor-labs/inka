@@ -3745,13 +3745,13 @@ fn query_flow_label(ref ty) with GraphRead + Memory + Alloc + EnvRead = match ty
   TAlias(_, inner) => inner |> query_flow_label,
   TReprPin(_, base) => base |> query_flow_label,
   TList(elem) => elem |> query_flow_label,
-  TTuple(elems) => elems |> map((e) => query_flow_label(e)) |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  TTuple(elems) => elems |> map(query_flow_label) |> fold(Public, flow_label_join),
   TRecord(fields) => fields |> map((f) => match f {
     (_, fty) => query_flow_label(fty),
-  }) |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  }) |> fold(Public, flow_label_join),
   TRecordOpen(fields, _) => fields |> map((f) => match f {
     (_, fty) => query_flow_label(fty),
-  }) |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  }) |> fold(Public, flow_label_join),
   TCont(input, answer, _, _) => flow_label_join(query_flow_label(input), query_flow_label(answer)),
   TInt => Public,
   TFloat => Public,

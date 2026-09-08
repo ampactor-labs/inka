@@ -775,7 +775,19 @@ solo_violations_max: 0
 # Ratcheted 29 → 28 at the trio deletion (pin 54c97b0f7220): oracle's
 # `(pos) => candidates_at(pos)` eta-wrapper became the ??-suspension
 # `candidates_at(performed, ??)` — the Stage-Law form, no wrapper at all.
-eta_max: 28
+# 2026-09-08: 28 -> 11. Seventeen eta-wrappers deleted — each was
+# `(x) => f(x)` around a plain top-level fn, so the name was passed bare.
+# The remaining ELEVEN are not style: they are BLOCKED. Seven wrap a
+# CONSTRUCTOR and four wrap an effect OP, and a bare non-fn binding used as a
+# function value compiles with ZERO diagnostics and then either traps or
+# emits `(global.get $<name>)` for a global that does not exist — the
+# assembler is the first thing that objects. Measured both ways:
+# tests/frontier/mn-ctor-as-value.mn (check 0 errors, run exit 134) and an m2
+# that failed at wat:99266 on `map(interrogate_at)`. This ceiling reaches 0
+# when Hβ.emit.constructor-as-function-value lands, and NOT by rewriting the
+# eleven as named wrappers, which would launder the same redundancy past this
+# very count.
+eta_max: 11
 
 # record_pattern_open_max — record patterns whose RECEIVER row is open, so
 # their field offsets come from the pattern's own index rather than the
@@ -1325,7 +1337,24 @@ env_frame_max: 0
 # test, driver_module_ast's re-filter, entry_start_caret's range search,
 # file_line_of, and the range map itself. m3 emits 416371 WAT lines against
 # 420099 at the previous pin — 3728 fewer.
-selfcompile_peak_kb_max: 2350000
+# 2026-09-08 · 2350000 -> 2358000 · MIN-OF-THREE STILL FLAPS, and this entry
+# exists to say so rather than to buy room. Four min-of-three readings across
+# four marches of near-identical trees: 2340292, 2343036, 2344996, 2352324 —
+# a 12MB spread IN THE ESTIMATOR. One of those refused a repin and the next
+# march passed the same tree, with the gate printing "the lone sample was
+# jitter" about a reading that was itself a minimum. The estimator fix was
+# right and it is not enough: it narrowed the band, it did not close it.
+#
+# THE PROXY IS THE PROBLEM. Peak RSS is an OS high-water mark — page reclaim,
+# allocator behaviour and whatever else the machine is doing all move it —
+# while the thing the ratchet is FOR is the wheel's own footprint, which is
+# deterministic per input. The wheel already measures that and prints it:
+# `image: N image-classified byte(s)`, the arena census's extent-delta
+# account. Ratcheting THAT is a deterministic gate with no band at all, and
+# it makes this key's whole history of variance-driven re-sets unrepeatable.
+# Named as Hβ.tools.cost-ratchet-reads-the-os-not-the-wheel; until it is
+# built, the line clears the measured min-of-three band.
+selfcompile_peak_kb_max: 2358000
 
 # ── the compile's CONCURRENCY WIDTH (tools/thread-gate.sh) ────────────────
 # Guest OS threads the compile creates, counted at clone/clone3, as the

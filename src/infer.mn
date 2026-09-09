@@ -900,7 +900,7 @@ fn pre_register_handler_sig(hname, config, state, arms) = {
     state
   )
   let inst_vars = mint_instance_vars(ename, effect_instance_arity(ename), 0)
-  let inst_ty = TName(ename, map((v) => TVar(v), inst_vars))
+  let inst_ty = TName(ename, map(TVar, inst_vars))
   let inst_h = mint(Inferred("effect '{ename}' instance"))
   graph_bind(inst_h, inst_ty, Inferred("effect '{ename}' instance"))
   let handler_ty = TName("Handler", [inst_ty])
@@ -8354,7 +8354,7 @@ fn register_type_constructors(type_name, variants) = {
         qmap
       )
       let param_handles = filter((h) => !is_row_handle(h), all_handles)
-      let result_ty = TName(type_name, map((h) => TVar(h), param_handles))
+      let result_ty = TName(type_name, map(TVar, param_handles))
       let qhandles = all_handles
       // THE GROUPING IS CARRIED, NEVER RE-DERIVED: the type's own env entry
       // holds its variant specs — minted here where the list is already in
@@ -8907,7 +8907,7 @@ fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) =
   // and again at re-generalization after the arms.
   let ename = derive_handler_ename(arms, hname)
   let inst_vars = mint_instance_vars(ename, effect_instance_arity(ename), 0)
-  let inst_ty = TName(ename, map((v) => TVar(v), inst_vars))
+  let inst_ty = TName(ename, map(TVar, inst_vars))
   let inst_h = mint(Inferred("effect '{ename}' instance"))
   graph_bind(inst_h, inst_ty, Inferred("effect '{ename}' instance"))
   let handler_ty = TName("Handler", [inst_ty])

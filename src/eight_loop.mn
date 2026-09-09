@@ -229,11 +229,7 @@ handler interrogate_default {
     match snapshot {
       Graph(next, _spans) => {
         let positions = enumerate_handles(0, next)
-        let reports = positions |> // NOT `map(interrogate_at)`: interrogate_at is an effect OP, and a bare op
-  // as a function value emits `(global.get $<op>)` for a global that does not
-  // exist — check is clean, the ASSEMBLER refuses (measured: m2 failed at
-  // wat:99266). Hβ.emit.nonfn-binding-as-function-value covers the family.
-  map((h) => interrogate_at(h))
+        let reports = positions |> map(interrogate_at)
         resume(reports)
       },
     }

@@ -35,6 +35,36 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-09 · pin 74b628ac3c0b6d99 · ETA 11 -> 3. FIXED POINT m2 == m3,
+  census 0, frontier 375 pass / 1 red.
+  ▶ THE SECOND HALF OF ONE ARC, split by a measurement rather than by taste.
+  The previous pin taught lower that a bare constructor or op name reifies;
+  this one deletes the eight hand-written eta-wrappers that existed only
+  because it could not. Four in cli.mn (`(t) => VRun(t)` → `VRun`, and the
+  same for VCheck / VCompile / VAudit), three `map((v) => TVar(v), …)` in
+  infer.mn, one `map((h) => interrogate_at(h))` in eight_loop.mn. They could
+  not land together: boot compiles m2, so a wheel written against a
+  capability the boot lacks fails at the assembler — measured at wat:99217
+  on `(global.get $interrogate_at)` when the first attempt bundled them.
+  ▶ THE THREE THAT REMAIN ARE ONE SHAPE AND A DIFFERENT BLOCKER, which is
+  why the ceiling is 3 and not 0. All three are `map((x) => process(x),
+  buffer)` in lib/dsp/processors.mn, where `process` is declared by lowpass,
+  biquad AND envelope. The reified body resolves its handler record from the
+  live world chain by HANDLER name (`$world_find` keys on one interned
+  name), which is exact for a singleton and has nothing to key on when
+  several handlers declare the op. Their comments name that now — they had
+  been naming the family that just closed, which would have read as a
+  standing cost rather than as a peer with a design.
+  ▶ ONE GATE FINDING, and it is the same law as the last landing's: the new
+  comments backticked `eta_max`, a verify-baseline key rather than a Mentl
+  name, and the comment-ref ratchet convicted all three (0 -> 3). A
+  backticked name is a reference; prose drops the backticks.
+  ▶ THE COUNTS: eta 11 -> 3, effectful lambdas held at 376, movers 435,
+  drift shapes at their ceilings, census 0. The eta ceiling's justification
+  in verify-baseline was rewritten rather than just lowered — a ceiling
+  whose reason is stale is the ratchet going blind, which §11 tripwire 4
+  already paid for once.
+
 - 2026-09-09 · pin e17d872b5df570db · A BARE NAME IS THE PRODUCT WITH EVERY
   FIELD A HOLE. FIXED POINT m2 == m3, census 0, frontier 375 pass / 1 red.
   ▶ THE DEFECT, two faces of one missing read. A constructor or an effect op

@@ -32,11 +32,14 @@ handler lowpass(alpha) with state = 0.0 {
 }
 
 fn process_lowpass(alpha, buffer) = {
-  // NOT `map(process, buffer)`: an effect OP passed as a function value emits
-  // `(global.get $<op>)` for a global that does not exist — `mentl check` is
-  // clean and the ASSEMBLER refuses. Same family as constructor-as-value
-  // (Hβ.emit.nonfn-binding-as-function-value); these three eta-wrappers stay
-  // until a non-fn binding lowers to a callable.
+  // NOT `map(process, buffer)`. A bare op reifies now — but only when ONE
+  // handler declares it, because the reified body resolves its record from
+  // the live world chain by HANDLER name, at call time. `process` is
+  // declared by lowpass, biquad AND envelope, so there is no single name to
+  // resolve and no single arm to call, and the reference floors typed.
+  // Hβ.emit.reified-op-needs-a-declaring-set-walk banks the general form:
+  // walk the chain against the DECLARING SET and reach the arm through the
+  // record. These three wrappers are the whole of the eta-wrapper ceiling.
   map((x) => process(x), buffer)
 } ~> lowpass(alpha)
 
@@ -51,11 +54,14 @@ handler biquad(b0, b1, b2, a1, a2) with y1 = 0.0, y2 = 0.0, x1 = 0.0, x2 = 0.0 {
 }
 
 fn process_biquad(b0, b1, b2, a1, a2, buffer) = {
-  // NOT `map(process, buffer)`: an effect OP passed as a function value emits
-  // `(global.get $<op>)` for a global that does not exist — `mentl check` is
-  // clean and the ASSEMBLER refuses. Same family as constructor-as-value
-  // (Hβ.emit.nonfn-binding-as-function-value); these three eta-wrappers stay
-  // until a non-fn binding lowers to a callable.
+  // NOT `map(process, buffer)`. A bare op reifies now — but only when ONE
+  // handler declares it, because the reified body resolves its record from
+  // the live world chain by HANDLER name, at call time. `process` is
+  // declared by lowpass, biquad AND envelope, so there is no single name to
+  // resolve and no single arm to call, and the reference floors typed.
+  // Hβ.emit.reified-op-needs-a-declaring-set-walk banks the general form:
+  // walk the chain against the DECLARING SET and reach the arm through the
+  // record. These three wrappers are the whole of the eta-wrapper ceiling.
   map((x) => process(x), buffer)
 } ~> biquad(b0, b1, b2, a1, a2)
 
@@ -72,11 +78,14 @@ handler envelope(attack, release) with state = 0.0 {
 }
 
 fn process_envelope(attack, release, buffer) = {
-  // NOT `map(process, buffer)`: an effect OP passed as a function value emits
-  // `(global.get $<op>)` for a global that does not exist — `mentl check` is
-  // clean and the ASSEMBLER refuses. Same family as constructor-as-value
-  // (Hβ.emit.nonfn-binding-as-function-value); these three eta-wrappers stay
-  // until a non-fn binding lowers to a callable.
+  // NOT `map(process, buffer)`. A bare op reifies now — but only when ONE
+  // handler declares it, because the reified body resolves its record from
+  // the live world chain by HANDLER name, at call time. `process` is
+  // declared by lowpass, biquad AND envelope, so there is no single name to
+  // resolve and no single arm to call, and the reference floors typed.
+  // Hβ.emit.reified-op-needs-a-declaring-set-walk banks the general form:
+  // walk the chain against the DECLARING SET and reach the arm through the
+  // record. These three wrappers are the whole of the eta-wrapper ceiling.
   map((x) => process(x), buffer)
 } ~> envelope(attack, release)
 

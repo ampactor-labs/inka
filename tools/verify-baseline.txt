@@ -847,7 +847,7 @@ record_pattern_open_max: 0
 # deleted param-width ladder took its own `find` and `any` lambdas with it.
 # 2026-09-07: 382 -> 379 at the module-blind-parse landing — the deleted seam
 # and rehome families took their lambdas with them.
-effectful_lambda_max: 378
+effectful_lambda_max: 376
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own

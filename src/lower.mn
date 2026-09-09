@@ -842,6 +842,15 @@ fn partial_split(r_args, n_args, n_ps, handle, i, ci) = if i >= n_ps {
   }
 }
 
+// The callee shapes a partial can synthesize a body for, as a VALUE rather
+// than as a returned closure: fn name · variant tag · the singleton-tier
+// perform's (handler, op, stateful) triple. Each carries exactly what
+// apply_callee_form needs and nothing the site could re-derive.
+type PartialCalleeForm
+  = PcfCall(String)
+  | PcfVariant(TagId)
+  | PcfPerform(String, String, Bool)
+
 // The callee shapes a partial can synthesize a body for: a top-level fn
 // (direct LCall) and ADT construction (LMakeVariant) — for both, infer's
 // dispatch provably took the partial fork too (their schemes pre-register
@@ -859,12 +868,68 @@ fn partial_callee_form(handle, fbody, fh) = match fbody {
     None
   } else {
     match env_kind_of(name) {
-      Some(FnScheme) => Some((bargs) => LCall(handle, LGlobal(fh, name), bargs)),
-      Some(ConstructorScheme(tag_id, _)) => Some((bargs) => LMakeVariant(handle, tag_id, bargs)),
+      Some(FnScheme) => Some(PcfCall(name)),
+      Some(ConstructorScheme(tag_id, _)) => Some(PcfVariant(tag_id)),
+      Some(EffectOpScheme(_, _, _, _)) => // An OP reified as a value. The dispatch tier is not free here: the
+      // LEXICAL tier names a __hstate local of the ENCLOSING frame, and
+      // this body becomes a lifted LFn where that local does not exist, so
+      // baking the reification site's lexical choice into an escaping
+      // closure would read a frame that is gone. The SINGLETON tier is the
+      // sound one by construction — it resolves the handler's record from
+      // the LIVE world chain inside the synthesized body, at CALL time,
+      // which is where an escaped closure's handler actually is (the same
+      // read-the-schedule-live law `><` obeys). So the op→handler edge
+      // decides: a unique declaring handler reifies, ambiguous or unhandled
+      // floors typed through lower_call_partial's None. The site facts are
+      // settled HERE, at the reference, because the note is a fact about
+      // the site and the args only arrive when the body is built.
+      match lower_op_default_handler(name) {
+        Some(hname) => Some(PcfPerform(hname, name, singleton_perform_note(handle, hname))),
+        None => None,
+      },
       _ => None,
     }
   },
   _ => None,
+}
+
+// The callee form APPLIED — the one place a settled form meets its args.
+// This used to be three returned CLOSURES, which is drift mode 1 with the
+// serial numbers filed off: a closure carrying a dispatch decision IS the
+// vtable, the word never appears in correct Mentl, and the anonymity tier
+// counted all three as effectful lambdas. The form is an ADT and the
+// dispatch is a match, so the decision is a VALUE the caller can read,
+// name and test — and the three lambdas are gone rather than relocated.
+fn apply_callee_form(form, handle, fh, bargs) = match form {
+  PcfCall(name) => LCall(handle, LGlobal(fh, name), bargs),
+  PcfVariant(tag_id) => LMakeVariant(handle, tag_id, bargs),
+  PcfPerform(hname, op_name, stateful) => LDirectPerform(handle, hname, op_name, stateful, bargs),
+}
+
+// A bare CONSTRUCTOR or OP name in value position is the parameter product
+// with EVERY field a hole (SYNTAX §«Partial application» — the bare name IS
+// the name applied to nothing), so its arity is the declaration's own param
+// count, read from the env scheme rather than from the use site: a nullary
+// reference types as the ADT itself, not as a TFun, so the use site cannot
+// tell "no parameters" from "type not yet resolved" and only the
+// declaration can.
+//
+// NONE, NEVER ZERO. The first form answered `_ => 0` and the census
+// convicted it as a wildcard-zero — correctly, because zero is a real
+// arity and the arm was not measuring one: it was saying "this name is not
+// a function", which is what None says and what the caller actually
+// branches on. The two readings differ at exactly the case that matters,
+// a non-nullary constructor whose type has not resolved, where a
+// fabricated 0 would have rebuilt the payload-less-variant bug this whole
+// landing exists to delete.
+fn scheme_ref_fun_arity(name) = match env_lookup(name) {
+  Some(entry) => match entry {
+    (scheme, _, _) => match judgment_ty(scheme) {
+      TFun(ps, _, _) => Some(len(ps)),
+      _ => None,
+    },
+  },
+  None => None,
 }
 
 // PARTIAL APPLICATION AS A VALUE — the mint. The record is LambdaExpr's
@@ -987,13 +1052,22 @@ fn lower_call_partial(handle, fbody, fh, r_args, n_ps) = match partial_callee_fo
           name: "partial_{int_to_str(handle)}",
           origin: handle,
           params: zip(param_names, partial_param_tys(fh, len(param_names))),
-          ret: Some(lookup_ty(handle)),
+          // The synthesized fn returns the CALLEE's return, so read it where
+          // the params are already read — the callee's own TFun at fh — not
+          // off the partial node. The two agreed while every partial was a
+          // CallExpr (the call node's type IS the applied result), and they
+          // part the moment a BARE name reifies: there the node's own type is
+          // the function type, and `Some(lookup_ty(handle))` would have
+          // published the whole arrow as the ABI's return where the arrow's
+          // RESULT is meant.
+          // One home for the fact, both shapes correct.
+          ret: ret_ty_of(fh),
         })
         let fn_ir = LFn(
           "partial_{int_to_str(handle)}",
           len(param_names),
           param_names,
-          [form(body_args)],
+          [apply_callee_form(form, handle, fh, body_args)],
           mk_ef_pure(),
           len(captures)
         )
@@ -2009,10 +2083,21 @@ fn lower_op_default_handler(op_name) = match env_lookup(op_name) {
 // edge is per-op — hname is already in hand); emit interns it and compares the
 // interned pointer against the chain nodes' hkey@16. Reuses LPerform's Tier-1
 // emit with the chain find standing in for the lexical __hstate local.
-fn lower_singleton_perform(handle, op_name, hname, lo_args) = {
+fn lower_singleton_perform(handle, op_name, hname, lo_args) =
+  LDirectPerform(handle, hname, op_name, singleton_perform_note(handle, hname), lo_args)
+
+// The singleton tier's SITE facts — the handler's stateful bit and the
+// dispatch note — read and written once at the node, returning the bit the
+// construction needs. Split out because the reified-op form (a bare op name
+// as a value, partial_callee_form) has to settle the tier at the reference
+// while the args only arrive when the synthesized body is built: the note is
+// a fact about the SITE, not about the call, and a deferred note would also
+// have widened the callee-form lambda's row past its siblings' — three arms
+// of one match must agree on a closure type, and a closure carries its row.
+fn singleton_perform_note(handle, hname) = {
   let stateful = handler_stateful(hname)
   graph_dispatch_note(handle, DtSingleton(hname, stateful))
-  LDirectPerform(handle, hname, op_name, stateful, lo_args)
+  stateful
 }
 
 // The singleton perform's emission SHAPE — the block every walk and the
@@ -2176,15 +2261,46 @@ fn lower_expr_body(e, handle, span) = match e {
         RFbPrior(fb_h) => // (LF.B) a `<~` lambda param resolves to the feedback site's prior local,
         // read LIVE — the recurrence's y[n-1] term IS this node.
         LFeedbackPrior(fb_h),
+        // A NON-FN BINDING IN VALUE POSITION IS A REIFICATION, and until
+        // 2026-09-09 it was two silent wrongs. A constructor lowered to
+        // LMakeVariant(handle, tag, []) whatever its arity, so mapping a
+        // one-field constructor over a list checked with zero diagnostics
+        // and built payload-less variants that trapped `unreachable` in the
+        // match reading them; an op fell to the catch-all's LGlobal and emitted
+        // `(global.get $note)` for a global that never exists, so the
+        // ASSEMBLER was the first thing in the chain to object, hundreds of
+        // thousands of WAT lines from the name the developer wrote.
+        //
+        // The env proves the answer AT the reference — ConstructorScheme and
+        // EffectOpScheme are distinct tags written at the declaration — and
+        // the reification the developer was writing by hand is the medium's
+        // own hole-product: a bare name IS the parameter product with every
+        // field unsupplied (SYNTAX §«Partial application»), so it lowers
+        // through the SAME partial mint an authored hole already used, with
+        // no supplied args and no new mechanism. The callee shape is read live from the
+        // node's own program cell, never rebuilt from the matched Expr.
         RGlobal => match env_kind_of(name) {
-          Some(ConstructorScheme(tag_id, _)) => LMakeVariant(handle, tag_id, []),
+          Some(ConstructorScheme(tag_id, _)) => match scheme_ref_fun_arity(name) {
+            // Not a function type: the reference IS the value — a nullary
+            // variant, the sentinel form emit already knows.
+            None => LMakeVariant(handle, tag_id, []),
+            Some(arity) => lower_call_partial(handle, graph_node_body(handle), handle, [], arity),
+          },
+          Some(EffectOpScheme(_, _, _, _)) => match scheme_ref_fun_arity(name) {
+            // An op's declared scheme is always a signature, zero-arg
+            // included, so a miss here is an unresolved judgment and the
+            // typed floor is the honest answer — lower_call_partial's own
+            // None path, reached with the arity the graph actually proved.
+            None => LInvariantFailure(handle, PartialCalleeShape(handle)),
+            Some(arity) => lower_call_partial(handle, graph_node_body(handle), handle, [], arity),
+          },
           Some(FnScheme) => // A named-fn VALUE reference (FnScheme tag-0 — excludes HandlerKind,
           // the PTee guard). ALWAYS the bare LGlobal — emit resolves it to the
           // fn's static closure record; the fn's performs dispatch through the
           // live world chain when the consumer (`each(f, xs)`) calls it.
           LGlobal(handle, name),
-          Some(_) => // Found, some other kind (a value binding, an op, a record) — the
-          // global read is the right projection.
+          Some(_) => // Found, some other kind (a value binding, a record) — the global read
+          // is the right projection.
           LGlobal(handle, name),
           None => // NOT FOUND. `_ => LGlobal(handle, name)` stood here and conflated
           // these two: it guessed an unbound name into `(global.get $name)`,

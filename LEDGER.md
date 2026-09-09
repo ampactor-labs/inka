@@ -35,6 +35,76 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-09 · pin e17d872b5df570db · A BARE NAME IS THE PRODUCT WITH EVERY
+  FIELD A HOLE. FIXED POINT m2 == m3, census 0, frontier 375 pass / 1 red.
+  ▶ THE DEFECT, two faces of one missing read. A constructor or an effect op
+  used as a VALUE compiled with ZERO diagnostics and then failed somewhere
+  else. `map(Box, [1,2,3])` exited 134 with `wasm trap: unreachable` at
+  `<unknown>!unbox` under `iterate_from$spnBox` — the twin layer BELIEVED the
+  nominal and specialized on it, while lower had emitted
+  `LMakeVariant(handle, tag, [])` whatever the arity, so what `map` produced
+  was not a variant and the match reading it fell to its exhaustive floor.
+  `each(note, [1,2,3]) ~> counter` emitted `(global.get $note)` for a global
+  that never existed, so the ASSEMBLER was the first thing in the chain to
+  object, about a symbol the developer never wrote.
+  ▶ THE ENV PROVED THE ANSWER AT THE REFERENCE the whole time.
+  `ConstructorScheme(tag, total)` and `EffectOpScheme(effect, handler,
+  ambiguous, discipline)` are distinct SchemeKind tags written at the
+  declaration; lower re-derived "a bare name in argument position is a fn
+  reference" instead of reading them. Carried-Truth at the value-of-a-name
+  boundary.
+  ▶ AND THE FIX IS NOT A NEW MECHANISM. A bare name is the parameter product
+  with every field unsupplied (SYNTAX §«Partial application»), so the VarRef
+  arm routes through the SAME `lower_call_partial` mint an authored hole
+  already used, with zero supplied args. What changed around it: the arity
+  comes from the DECLARATION (`scheme_ref_fun_arity`), because a nullary
+  reference types as the ADT rather than as a TFun and the use site cannot
+  tell "no parameters" from "not yet resolved"; and the emitfn `ret` reads
+  `ret_ty_of(fh)`, the callee's own TFun where the params were already read,
+  since the old `Some(lookup_ty(handle))` agreed with it only while every
+  partial was a CallExpr and would have published the whole arrow as the
+  ABI's return where the arrow's RESULT is meant.
+  ▶ THE OP FACE TAKES THE SINGLETON TIER, AND THE OBVIOUS SHORTCUT IS
+  REFUSED BY A GREEN FIXTURE. The lexical tier names a `__hstate` local of
+  the enclosing frame and the synthesized body is a LIFTED fn where that
+  frame is gone. The tempting alternative — capture the lexically resolved
+  record at the reification site, which the partial mint could do, since it
+  already captures supplied args — would make the closure mean "the handler
+  I was born under", and the crown's `mn-escape-innermost` pins the
+  opposite: an escaped closure dispatches to the DYNAMIC innermost install
+  (20). So the world-chain resolve inside the body, at call time, is the
+  only honest form.
+  ▶ THE FIRST BUILD WAS ALSO WRONG, AND THE MEDIUM SAID SO — three findings
+  in one verify. (1) `partial_callee_form` returned three CLOSURES carrying
+  the dispatch decision. That is drift mode 1 with the serial numbers filed
+  off — a closure holding a dispatch IS the vtable — and the anonymity tier
+  counted it, 378 -> 379. The form is a `PartialCalleeForm` ADT now and the
+  dispatch is a match at the one construction site, so the count FELL to
+  376: the restructure deleted two lambdas that predate this landing.
+  (2) The census convicted `_ => 0` in the arity read as a wildcard-zero,
+  9 -> 10, and it was right: zero is a real arity, and the arm was saying
+  "this name is not a function", which is what `None` says. The two readings
+  differ at exactly the case that matters — a non-nullary constructor whose
+  type has not resolved, where a fabricated 0 rebuilds the payload-less
+  variant this landing exists to delete. (3) Two comments backticked a
+  fixture's type name; a backticked name is a reference, and the ratchet
+  said so, 0 -> 2. All three found by gates, none by review.
+  ▶ TWO LANDINGS, BECAUSE THE BOOT COMPILES M2. The wheel cannot WRITE the
+  new form until boot carries it — measured, not reasoned: the first attempt
+  bundled the eta-wrapper deletions with the fix and m2 failed to assemble at
+  wat:99217 on `(global.get $interrogate_at)`, because boot still held the
+  old lower. The wrappers come out against THIS boot, next.
+  ▶ WHAT STAYS OPEN. Ambiguous ops cannot reify: `process` in
+  `lib/dsp/processors.mn` is declared by `lowpass`, `biquad` and `envelope`,
+  so `$world_find` has no single handler key and there is no single
+  `$op_<hname>_process` to call. `Hβ.emit.reified-op-needs-a-declaring-set-walk`
+  carries it with the build-ready form — the chain walk keys on the DECLARING
+  SET (static, already read by `lower_op_default_handler`, which only gives
+  up because it wants exactly one) and reaches the arm through the record,
+  which is the evidence tier's `call_indirect` sourced from the CHAIN rather
+  than from a frame-threaded ev slot. That re-homing is a Carried-Truth
+  deletion and it subsumes the singleton tier as its one-element case.
+
 - 2026-09-09 · pin e67380fee7f6959d · AN IDENTITY READ CANNOT BE SERVED FROM
   MEMORY. FIXED POINT m2 == m3, census 0, frontier 373 pass / 1 red.
   ▶ THE TWO MCP LEGS HAD ONE ROOT AND IT WAS MINE. `session_current`

@@ -2399,6 +2399,36 @@ for i in "${!compilers[@]}"; do
     fail "pcompose quartet (diagnostics on a correct fanout: $pq_diags; see $pq_err)"
   fi
 
+  # ─── A NON-FN BINDING IN VALUE POSITION (Hβ.emit.nonfn-binding-as-
+  # function-value) ──────────────────────────────────────────────────
+  # Both faces of one class, and the ASSEMBLE step is the load-bearing
+  # one: before the fix each face compiled with ZERO diagnostics, so a
+  # check-only leg would have called both green. The constructor face
+  # built payload-less variants and trapped `unreachable` in the match
+  # that read them; the op face emitted `(global.get $<op>)` for a
+  # global that never existed and the ASSEMBLER was the first thing in
+  # the chain to object. Both born RED against the prior boot; both
+  # answer 6 through the reified hole-product.
+  for nb in "ctor-as-value:mn-ctor-as-value:the constructor" \
+            "op-as-value:mn-op-as-value:the effect op"; do
+    nb_tag=${nb%%:*}; nb_rest=${nb#*:}; nb_fix=${nb_rest%%:*}; nb_what=${nb_rest#*:}
+    nb_err="$dir/$nb_tag.err"
+    nb_wat=$("$WT" run "${WT_RUN_FLAGS[@]}" --dir "$ROOT" --dir /tmp --dir "$ROOT::/mentl-home" "$compiler" compile "$ROOT/tests/frontier/$nb_fix.mn" 2> "$nb_err")
+    nb_diags=$(grep -c 'E_' "$nb_err" 2>/dev/null || true)
+    if [ -z "$nb_wat" ] || [ "$nb_diags" != "0" ]; then
+      fail "$nb_what as a value (compile: $nb_diags diagnostic(s); see $nb_err)"
+    else
+      printf '%s' "$nb_wat" > "$dir/$nb_tag.wat"
+      if ! wt_asm "$dir/$nb_tag.wat" "$dir/$nb_tag.wasm" 2>"$dir/$nb_tag.asm.err"; then
+        fail "$nb_what as a value (ASSEMBLER refused what check passed: $(head -1 "$dir/$nb_tag.asm.err"))"
+      elif [ "$(wt_run "$dir/$nb_tag.wasm" > /dev/null 2>&1; echo $?)" = "6" ]; then
+        pass "$nb_what as a value: the bare name reifies through the hole-product and runs (6)"
+      else
+        fail "$nb_what as a value (ran, wrong answer — want 6)"
+      fi
+    fi
+  done
+
   # ─── The relevant tier (affine gains exactly-once) ──────────────────
   # T_OwnUnconsumed fires on an authored `own` the body never consumes
   # (drops) and stays SILENT on a transfer-out (hands_back — the return

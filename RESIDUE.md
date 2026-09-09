@@ -28,9 +28,65 @@
 
 ---
 
-`Hβ.emit.nonfn-binding-as-function-value` — NAMED 2026-09-08 while
-ratcheting the eta-wrapper census, BANKED 2026-09-09 (the naming and the
-home were a day apart, and that day is itself the finding: the peer was
+`Hβ.emit.reified-op-needs-a-declaring-set-walk` — NAMED 2026-09-09 by the
+build below, which closed everything EXCEPT this. A reified op resolves its
+handler from the live world chain at CALL time, and `$world_find` keys on
+one interned HANDLER name. That is exact when a unique handler declares the
+op (the singleton tier) and has nothing to key on when several do:
+`lib/dsp/processors.mn`'s `process` is declared by `lowpass`, `biquad` and
+`envelope`, so `map(process, buffer)` has no single hname to resolve and no
+single `$op_<hname>_process` to call. Those three eta-wrappers are the
+measured cost, and they are the whole of `eta_max: 3`.
+
+WHY THE OBVIOUS SHORTCUT IS WRONG, measured against a pinned crucible. The
+tempting fix is to capture the LEXICALLY resolved record at the reification
+site — `map(process, buffer)` sits inside `~> lowpass(alpha)`, so the answer
+is right there, and the partial mint already captures values as upvals. It
+is refused: capture-at-birth makes the closure mean "the handler I was born
+under", and the crown's own escape crucible pins the opposite —
+`mn-escape-innermost` measures a closure performing E, escaping its install,
+and dispatching to the DYNAMIC innermost handler (pinned 20). A reified op
+that captured its birth handler would contradict a green crown fixture.
+
+THE BUILD-READY FORM: the walk keys on the DECLARING SET, not on one name.
+The set of handlers declaring an op is static (the op→handler edges drawn at
+register_handler — `lower_op_default_handler` already reads them and only
+gives up because it wants exactly one). So `$world_find`'s sibling walks the
+chain and stops at the first node whose hkey is in that set, and the arm is
+reached through the record itself rather than through a name baked at emit —
+which is the evidence tier's `call_indirect` (PLAN §6's third tier) sourced
+from the CHAIN instead of from a frame-threaded ev slot. That re-homing is
+the point and the reason this is its own peer rather than a paragraph: the
+ev slot is a copy of a fact the chain already holds, so the general form is
+a Carried-Truth deletion, and it subsumes the singleton tier as the
+one-element case.
+
+`Hβ.emit.nonfn-binding-as-function-value` — RESOLVED 2026-09-09 for every
+non-ambiguous shape, with `.reified-op-needs-a-declaring-set-walk` above
+carrying the remainder. THE FIX WAS NOT A NEW MECHANISM: a bare name is the
+parameter product with every field unsupplied (SYNTAX §«Partial
+application» — `Box` IS `Box(??)`), so the VarRef arm routes it through the
+SAME `lower_call_partial` mint that `Box(??)` already used, with zero
+supplied args. Three edits: `partial_callee_form` gained an
+`EffectOpScheme` arm (singleton tier only, for the reason above);
+`lower_call_partial`'s emitfn `ret` now reads `ret_ty_of(fh)` — the
+callee's own TFun, where the params were already read — because the old
+`Some(lookup_ty(handle))` agreed with it only while every partial was a
+CallExpr, and would have published `Int -> Box` as the ABI's return where
+`Box` is meant; and the arity comes from `scheme_ref_arity`, the
+DECLARATION's own param count, because a nullary reference types as the ADT
+rather than as a TFun and the use site therefore cannot tell "no
+parameters" from "not yet resolved". Gates: `tests/frontier/mn-ctor-as-value.mn`
+and `mn-op-as-value.mn`, both answering 6, both with the ASSEMBLE step in
+the leg — a check-only gate would have called both faces green before the
+fix, since both compiled with zero diagnostics.
+
+Below is the entry as it was banked, kept because the measurement is the
+record and the naming lag is its own lesson.
+
+`Hβ.emit.nonfn-binding-as-function-value` (original text) — NAMED 2026-09-08
+while ratcheting the eta-wrapper census, BANKED 2026-09-09 (the naming and
+the home were a day apart, and that day is itself the finding: the peer was
 cited in a commit message and in a fixture comment while RESIDUE had no
 entry, which is precisely the "a gap that lives only in a comment is not
 named" law this file opens with — the ratchet ceiling `eta_max: 11` was

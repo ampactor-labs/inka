@@ -1,16 +1,17 @@
-// A CONSTRUCTOR IS A FUNCTION VALUE, or it refuses — never both compiling
-// clean and trapping. Born RED 2026-09-08 while ratcheting the eta-wrapper
-// census to zero: six of the wheel's twenty-eight eta-wrappers exist ONLY
-// because `map((v) => TVar(v), vs)` cannot be written `map(TVar, vs)`, and
-// the reason it cannot is not a type error — it is that the bare form
-// compiles with ZERO diagnostics, emits, and faults at the first read of
-// what it built.
+// A CONSTRUCTOR IS A FUNCTION VALUE. Born RED 2026-09-08 while ratcheting
+// the eta-wrapper census: seven of the wheel's eta-wrappers existed ONLY
+// because `map((v) => TVar(v), vs)` could not be written `map(TVar, vs)`,
+// and the reason was not a type error — the bare form compiled with ZERO
+// diagnostics, lowered to a payload-less variant whatever the arity, and
+// faulted `unreachable` at the first match that read what it built.
 //
-// The control below (the lambda form) runs and answers 6, so the fixture
-// isolates the constructor-as-value path alone. Expected when fixed: 6.
-// (Hβ.emit.nonfn-binding-as-function-value — the effect-op face is the
-// same peer one scheme over: `each(note, xs)` emits `(global.get $note)`
-// for a global that never existed, and the assembler objects first.)
+// GREEN 2026-09-09: a bare name is the parameter product with every field
+// a hole (SYNTAX §«Partial application» — `Box` IS `Box(??)`), so it
+// reifies through the same partial mint, with no supplied args and no new
+// mechanism. The arity is the declaration's own, read from the env scheme:
+// a nullary reference types as the ADT rather than as a TFun, so the use
+// site cannot tell "no parameters" from "not yet resolved" and only the
+// declaration can. Answers 6. The op face is mn-op-as-value.mn.
 type Box = Box(Int) | Empty
 
 fn unbox(b) = match b {

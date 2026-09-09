@@ -28,6 +28,117 @@
 
 ---
 
+`Hβ.emit.reified-op-needs-a-declaring-set-walk` — NAMED 2026-09-09 by the
+build below, which closed everything EXCEPT this. A reified op resolves its
+handler from the live world chain at CALL time, and `$world_find` keys on
+one interned HANDLER name. That is exact when a unique handler declares the
+op (the singleton tier) and has nothing to key on when several do:
+`lib/dsp/processors.mn`'s `process` is declared by `lowpass`, `biquad` and
+`envelope`, so `map(process, buffer)` has no single hname to resolve and no
+single `$op_<hname>_process` to call. Those three eta-wrappers are the
+measured cost, and they are the whole of `eta_max: 3`.
+
+WHY THE OBVIOUS SHORTCUT IS WRONG, measured against a pinned crucible. The
+tempting fix is to capture the LEXICALLY resolved record at the reification
+site — `map(process, buffer)` sits inside `~> lowpass(alpha)`, so the answer
+is right there, and the partial mint already captures values as upvals. It
+is refused: capture-at-birth makes the closure mean "the handler I was born
+under", and the crown's own escape crucible pins the opposite —
+`mn-escape-innermost` measures a closure performing E, escaping its install,
+and dispatching to the DYNAMIC innermost handler (pinned 20). A reified op
+that captured its birth handler would contradict a green crown fixture.
+
+THE BUILD-READY FORM: the walk keys on the DECLARING SET, not on one name.
+The set of handlers declaring an op is static (the op→handler edges drawn at
+register_handler — `lower_op_default_handler` already reads them and only
+gives up because it wants exactly one). So `$world_find`'s sibling walks the
+chain and stops at the first node whose hkey is in that set, and the arm is
+reached through the record itself rather than through a name baked at emit —
+which is the evidence tier's `call_indirect` (PLAN §6's third tier) sourced
+from the CHAIN instead of from a frame-threaded ev slot. That re-homing is
+the point and the reason this is its own peer rather than a paragraph: the
+ev slot is a copy of a fact the chain already holds, so the general form is
+a Carried-Truth deletion, and it subsumes the singleton tier as the
+one-element case.
+
+`Hβ.emit.nonfn-binding-as-function-value` — RESOLVED 2026-09-09 for every
+non-ambiguous shape, with `.reified-op-needs-a-declaring-set-walk` above
+carrying the remainder. THE FIX WAS NOT A NEW MECHANISM: a bare name is the
+parameter product with every field unsupplied (SYNTAX §«Partial
+application» — `Box` IS `Box(??)`), so the VarRef arm routes it through the
+SAME `lower_call_partial` mint that `Box(??)` already used, with zero
+supplied args. Three edits: `partial_callee_form` gained an
+`EffectOpScheme` arm (singleton tier only, for the reason above);
+`lower_call_partial`'s emitfn `ret` now reads `ret_ty_of(fh)` — the
+callee's own TFun, where the params were already read — because the old
+`Some(lookup_ty(handle))` agreed with it only while every partial was a
+CallExpr, and would have published `Int -> Box` as the ABI's return where
+`Box` is meant; and the arity comes from `scheme_ref_arity`, the
+DECLARATION's own param count, because a nullary reference types as the ADT
+rather than as a TFun and the use site therefore cannot tell "no
+parameters" from "not yet resolved". Gates: `tests/frontier/mn-ctor-as-value.mn`
+and `mn-op-as-value.mn`, both answering 6, both with the ASSEMBLE step in
+the leg — a check-only gate would have called both faces green before the
+fix, since both compiled with zero diagnostics.
+
+Below is the entry as it was banked, kept because the measurement is the
+record and the naming lag is its own lesson.
+
+`Hβ.emit.nonfn-binding-as-function-value` (original text) — NAMED 2026-09-08
+while ratcheting the eta-wrapper census, BANKED 2026-09-09 (the naming and
+the home were a day apart, and that day is itself the finding: the peer was
+cited in a commit message and in a fixture comment while RESIDUE had no
+entry, which is precisely the "a gap that lives only in a comment is not
+named" law this file opens with — the ratchet ceiling `eta_max: 11` was
+resting on a peer that did not exist).
+
+THE CLASS: a NON-FN env binding used as a function value compiles with
+ZERO diagnostics and then fails somewhere downstream. The env knows
+exactly what the name is — `ConstructorScheme(tag, arity)` and
+`EffectOpScheme(effect, handler, ambiguous, discipline)` are distinct
+`SchemeKind` tags, written at the declaration — and the emit re-derives
+"a bare name in argument position is a fn reference" instead of reading
+that proof. Carried-Truth at the value-of-a-name boundary.
+
+TWO FACES, both measured against pin e67380fe (the current boot), not
+recalled:
+- **Constructor.** `tests/frontier/mn-ctor-as-value.mn` —
+  `map(Box, [1,2,3]) |> map(unbox) |> fold(0, +)`. `mentl check` exits 0
+  with no diagnostic; `mentl run` exits 134, `wasm trap: unreachable` at
+  `<unknown>!unbox` under `op_map_collector_yield` /
+  `iterate_from$spnBox` / `map$spnBox0`. So the fanout SPECIALIZED on the
+  nominal (`$spnBox` is in the mangled name — the twin layer believed it),
+  and what `map` produced was not a variant, so `unbox`'s match fell
+  through to its exhaustive floor. The lambda control answers 6.
+- **Effect op.** `each(note, [1,2,3]) ~> counter` over
+  `effect Log { note(n: Int) }`. `mentl check` exits 0 with no
+  diagnostic; the emit writes `(global.get $note)` and the ASSEMBLER is
+  the first thing in the chain to object — `undefined global variable
+  "$note"`. An op has no global because an op is not a value; it is a
+  perform whose evidence resolves at the install chain.
+
+WHY IT IS ONE PEER, NOT TWO: both are the same missing read at the same
+site. A constructor and an op each need a REIFICATION — the eta-expansion
+the developer is currently forced to write by hand — and the medium
+already holds everything needed to synthesize it (the ctor's tag and
+arity; the op's parameter types and its `TCont`). The ultimate form is
+that the emit reads the `SchemeKind` at the reference and lowers the
+reification itself, so `map(Box, vs)` and `map((v) => Box(v), vs)` are
+the same graph. The hand-written wrapper is the confession.
+
+THE COST, MEASURED: eleven of the wheel's own eta-wrappers survive for
+exactly this reason — seven wrap a constructor, four wrap an op — which
+is the whole of `eta_max: 11` in `tools/verify-baseline.txt`. The
+ceiling falls to ZERO with this peer and not before; a lower ceiling
+today would be a refusal to compile the wheel, not a tightening.
+
+REFUSAL FIRST, WHATEVER ELSE: "compiles clean and then traps" is the
+silent-wrong shape §0 exists to make unsayable. Even before the
+reification lands, a bare non-fn binding in a value position must
+REFUSE at the reference with the scheme's own name in the diagnostic —
+the env proves the answer at the site, so productive-under-error has
+nothing to recover from here.
+
 `Hβ.effects.return-position-fn-row-is-a-var` — NAMED 2026-08-18 by the
 6.3 modal sweep, crown-tier. THE MEASUREMENT, three programs: a closure
 performing E, handed OUT of an arm through `resume`, called under `with
@@ -115,6 +226,69 @@ Measured while naming it: a manifest sweep of every fixture in
 tests/{frontier,micros,crown,rows,floors} finds exactly one
 E_FnShadowsOp, the deliberate one, so nothing else in the corpus is
 silently unreachable today. The peer is about the next one.
+
+`Hβ.effects.two-instances-of-one-effect-do-not-join` — NAMED 2026-09-07,
+measured at the warm-projection landing. `Cast { addr(a) -> Int }` is GENERIC
+in its operand, and the row records the INSTANCE. A body that already casts
+`GNode` and then addresses a `List` does not get a row carrying both: the two
+instantiations UNIFY and the link refuses with `GNode vs List(t)` and no span.
+▶ THE SHAPE IS LEGAL AND THE ALGEBRA SHOULD ADMIT IT. A program that casts two
+types, or samples at two rates (`Sample(44100)` beside `Sample(48000)` in one
+caller's row — §4③'s own worked example), is ordinary. Instance-PRECISION is
+the crown's win — `eff_forbids` refusing same-instance and admitting provably
+distinct — but precision at the negation edge became unification at the
+PRESENT edge, where distinct instances should sit side by side as distinct
+row members.
+▶ WHY IT HID: the wheel's only `addr` callers agreed on one operand type, so
+the collision was unconstructible until a second one appeared. The span-less
+diagnostic is its own finding — an instance clash reports at the link with no
+located reason, so the first thing a reader learns is that something,
+somewhere, disagreed.
+▶ THE LANDING WORKED AROUND IT HONESTLY (`str_payload(wat)` names the emitted
+bytes, which is the better k anyway) and did not paper it: this entry is the
+record, band A owns the fix, and the repro is two `addr` calls at different
+types in one body.
+
+`Hβ.tools.cost-ratchet-reads-one-sample` — RESOLVED 2026-09-07, the banked
+fix built as prescribed. `read_cost` (tools/march.sh) no longer convicts on
+one reading: a sample over the ceiling triggers two more m3 legs and the
+ratchet rules on the MINIMUM of three. Peak RSS is a one-sided measurement —
+allocator and OS jitter can only push an OBSERVED peak ABOVE the true
+requirement, never below — so the lone sample is biased HIGH and the minimum
+is the honest estimator; a genuine regression survives it undiminished. The
+extra legs are paid ONLY on a breach, so the green path is untouched. Seen
+FIRE and seen RULE, both halves, before it was trusted: at the real ceiling
+the run passed on its first sample and the path never ran (an unexercised
+gate is not a gate), so the ceiling was temporarily dropped to 2000000 and
+the path fired, printed re-reads 2323680 / 2323932 against a first sample of
+2321280, took the minimum, and still refused — a real breach is not
+survivable by re-measurement.
+THE SPREAD WAS UNDERSTATED, and this entry is the correction: the number
+carried below was 2.4MB, and a session working from it re-set the ceiling to
+2326000 believing that band. Six readings of BYTE-IDENTICAL input now span
+2320048 / 2321280 / 2323680 / 2323932 / 2325080 / 2326460 KB — 6412 KB, or
+0.28%, nearly three times the recorded band. The 2326000 ceiling therefore
+sat INSIDE the noise and refused a clean repin at 2326460 (0.02% over), which
+is the reading that forced the fix. The ceiling is left where it is: it is
+now a real ratchet rather than a coin flip, so it does not need raising.
+The original naming follows, kept for the three-times-over record. The peak-RSS
+ratchet compares ONE m3 leg against a fixed ceiling, and that measurement is
+not deterministic: three back-to-back legs on the SAME m2 binary over the
+SAME wheel.mn read 2321788 / 2323980 / 2324148 KB — a 2.4MB spread with every
+input held fixed, and an earlier leg of the same tree read 2318112, which is
+5MB below the top of that band. The consequence is on the record three times
+over: the ceiling has been re-set for VARIANCE rather than growth at 2250000
+(one reading, corrected the same day), at 2310000 (two of four readings fell
+each side of it), and now at 2320000. verify-baseline's own sentence already
+says why — "a ratchet set inside its own measurement's variance is not a
+ratchet; it is a coin flip that blocks good work" — and the answer it implies
+has never been built. THE FIX IS THE READING, NOT THE LINE: take the MINIMUM
+of N legs (the minimum is the honest floor of a peak, and noise only ever
+pushes a peak up), or compare against a band and fail only outside it. Until
+then a landing can be refused by a coin flip and a real regrowth of a couple
+of megabytes is invisible, which is both failure modes at once. It also makes
+one measured fact hard to use: comments are GRAPH CONTENT in Mentl, so prose
+has a real footprint, and today it cannot be separated from the noise.
 
 `Hβ.tools.gate-stamp-is-uniform` — NAMED 2026-08-18. The frontier keeps a
 stamp (`.build/frontier-stamp`, the boot sha256 written on a 0-red run),
@@ -266,6 +440,27 @@ then E_TypeMismatch with a Reason at the decl) — sequenced with the
 verify-reads-canon proposal it DEP-feeds, since a judged predicate
 node is exactly what canon saturation needs. The probe's side-find is
 its own entry: `Hβ.emit.unused-wide-param-floor`.
+
+`Hβ.emit.unused-wide-param-floor` — RESOLVED WHOLE 2026-09-07, and THIS
+ENTRY'S OWN BANKED FIX DIRECTION WAS WRONG. It read "the param's HANDLE is
+read from the GRAPH's own columns ... → the param's handle →
+repr_of(lookup_ty(h))". ty_handle_of is 0 for every GROUND type, so a
+`s: Gain` param — the Float case this entry exists for, the one its own
+minimal pair `fn accept_g(s: Gain) = 1` names — would have arrived at emit
+as "no judged type" and floored again, reproducing the bug through the fix.
+The edge that carries both cases is the TY. It is also not a Repr: storing
+the width would materialize the projection, and a twin's body must project
+its own instantiation. So the enumeration entry carries `params:
+[(String, Option(Ty))]` and `ret: Option(Ty)`, lower's seven LFn writers
+note them off the fn's own inferred TFun, and emit projects the width
+through lookup_ty at read time. The three-route ladder (body use-site walk →
+declared-scheme name search → floor) and the 30-arm find_local_handle_expr
+walker family are DELETED. An unused wide param signs at its real width
+because the entry states the type, and being unread was never evidence of
+being a word. The floor survives only where it is true — a slot the graph
+never judged — and says so as `None`, not as a sentinel: the first form
+wrote TVar(0) and the census convicted it as drift mode 10 on sight.
+Marched m2 == m3 byte-identical. The two entries below are the dig's record.
 
 `Hβ.emit.unused-wide-param-floor` — RESOLVED FOR THE PROVEN CLASS
 2026-08-08 (pin cfa58fdd5479, same day as pinned): decl fns read their
@@ -1328,7 +1523,32 @@ measurement is the gate and it has not been taken.
 `Hβ.infer.record-row-vars-are-not-unioned` — RECORD ROW VARS ARE SECOND
 CLASS IN THE UNION-FIND, and that is what survives the offset fix below.
 Measured 2026-09-02 at pin 7740ac94; standing repro
-`tests/repro-wf/open-row-interior-site.mn`.
+`tests/repro-wf/open-row-interior-site.mn` — WHICH DOES NOT EXIST. The path
+was named here and in PLAN §11 Arc E and there is no tests/repro-wf entry
+by that name; the shape is reproduced in three lines from stdin and that is
+what the fixture should be.
+▶ IT IS NOT SILENT, IT IS A FLOOR, AND IT IS ON THE HOT PATH (measured
+2026-09-07 at the signature-column landing). `fn outer(u) = inner(u)` over
+`fn inner(u) = u.rec` emits `(unreachable) ;; field offset unprovable: field
+'rec' on { rec: t | r }` — a REFUSAL the executable trips, not a neighbour
+read — and emits NO TWIN OF ANY KIND: one $inner, one $outer, zero $sp
+mangles. So the demand analysis does not merely key against the wrong root
+at an interior site; it never runs there at all, and the callee compiles
+once against a field set it cannot know. The union arm added since this
+entry (identical known sets, free vb) is real and does not reach this case.
+▶ THE WHEEL ALREADY SHIPS FOUR OF THESE. A census of the emitted m3 finds
+`field offset unprovable` on `op_name`, `name`, `init` and `body` — four
+latent `unreachable`s in the shipping compiler, live today, each one an
+interior open-row read that happens not to be reached. That is the argument
+for building this now rather than filing it: the class is not hypothetical
+and it is not confined to new code.
+▶ IT GATES A SHAPE ALREADY WANTED. The twin record in emit_module
+(`{base, enc, pairs, rec}`) is the natural form for a fourth fact and it is
+a positional quadruple instead, because written as a record its three reads
+go through unannotated helpers — interior open rows — and the twin emission
+loop executes one, trapping the m3 leg at op_each_handler_yield. The record
+form is this fix's gate: restore it, and the landing that makes it compile
+is the landing that closes this entry.
 ▶ THE DIRECT CALL IS FIXED AND THE INTERIOR ONE IS NOT. `fn inner(u:
 {zeta: Int, ...}) = u.zeta` reached from inside `fn outer(u: {zeta: Int,
 ...}) = inner(u)` exits 7 where 9 is correct. The emit says it plainly:
@@ -2938,6 +3158,26 @@ per-handle fact, which is exactly §11 5.5's column test — put it in a
 spine column, written at the one writer, and the per-install fill has
 nothing left to fill.
 
+`Hβ.march.concurrency-is-a-projection` — the thread gate's own retirement,
+banked 2026-09-06 the hour the gate landed. `tools/thread-gate.sh` counts
+the compile's guest OS threads from OUTSIDE, at clone/clone3 under strace,
+as a delta between a 61-declaration program and a 1-declaration one. Every
+line of it is a hand tool standing where a projection belongs: the medium
+performs `wasi_thread_spawn` through its own WasiThreads effect, so it
+already holds the number the script reconstructs from syscalls, and the
+honest form is `mentl march` printing concurrency beside the cost line it
+prints today — the row made visible, one more fact the self-compile reports
+about itself. Until then the gate is the scaffold tier and says so in its
+own header. The DEP is small and named: a spawn counter on the WasiThreads
+handler, read at march time; it rides Phase 9.2, where the number stops
+being 0 and starts being the width the parallel walk is supposed to have.
+WHY IT IS WORTH BUILDING RATHER THAN LEAVING TO BASH: the class it guards
+(`Hβ.infer.serialized-judge-still-spawns`, below) was invisible for ten days
+to a wholly green board, and the reason is exactly that nothing on the board
+counted a thread. A projection is not a nicety here — it is the difference
+between a fact the medium states about itself and a fact that has to be
+excavated by someone who happened to profile.
+
 `Hβ.infer.serialized-judge-still-spawns` — RESOLVED 2026-08-17, pin
 3fc233421e, the same day it was found. A block of ONE now runs its branch
 as a direct call (`BranchRec = BrDirect | BrSpawned`, decided by block
@@ -3937,6 +4177,94 @@ the warm path restores the analyzed image but re-derivation does
 not re-surface unchanged-decl obligations, so the daily loop's
 pending projection under-reports (cold = truth; the march is cold).
 TagId's 0..255 and the float intervals stay the SMT tier's.
+
+`Hβ.lower.lowering-is-a-column` — STEP (ii) OPENED 2026-09-07: THE
+ENUMERATION GOT ITS FIRST READER, and a walker family left with it. The
+emittable-fn enumeration had been dual-written and zero-read since
+2026-08-08 ("step (i) vocabulary"); it now carries each symbol's param and
+result TYPES — an `EmitFnEntry` record rather than the widening 5-tuple,
+converted while it still had no readers to break — and emit reads them
+through the settled `sigs_col`. What that retired: emit's own reconstruction
+of the same vector, which walked the WHOLE lowered body once per parameter
+hunting an `LLocal` use-site, then searched the declared scheme by name,
+then floored. `find_local_handle_expr` (wasm.mn) — one of the TWELVE walker
+families this entry's own census enumerates — is DELETED whole with its 30
+arms and its two list/arm siblings, so the census reads ELEVEN. This is the
+entry's prescribed method executed once: swap the representation behind the
+projection, then the tree-walk that only re-derived it deletes. Marched
+m2 == m3 byte-identical, twice.
+
+`Hβ.why.reason-span-is-a-weave-coordinate` — NAMED 2026-09-07, and it was
+carrying the board's ONLY frontier red UNBANKED, which is the naming law
+violated: a gap not in this file does not exist, and this one has been red
+since 2026-09-06. Measured both ways today — frontier reads 373 pass / 1 red
+on the NEW boot (c1481440) and 373/1 on the OLD (8aeca3c8), same red, so it
+is standing, not a repin regression; and `mentl why
+tests/frontier/mn-where-badges.mn gain` answers `at 2729:1-2729:15` for a
+name on line 8 of a 24-line file.
+THE DEFECT IS THE REPRESENTATION, not the renderer. `Located(Span, Reason)`
+stores a COORDINATE beside the very handle that could answer it, and a bare
+Span knows a line and a column but not a FILE — so when the link concatenates
+modules into one namespace, show_reason renders the weave offset, because the
+weave offset is the only thing the copied value ever held. The gate's own
+comment names the blast radius: every felt surface goes through that renderer
+(LSP hover, the cursor view's Why line, the type facet's Reason), while the
+refs facet three lines away had been answering local coordinates the whole
+time — because refs read the graph and Reasons read a copy.
+`Located(Handle, Reason)` IS NOT THE FIX, and this entry said it was for
+about an hour — the correction is the useful half. A handle resolves to its
+node, but the NODE'S OWN SPAN IS ALSO A WEAVE COORDINATE, so the conversion
+survives the change untouched; it only moves. Measured: the parser
+(src/parser.mn) has NO module concept at all — one grep for NModule /
+module_path / current_module answers with a single unrelated hit — because
+the link CONCATENATES every module into one blob and parses that. Modules
+are a DRIVER fact applied afterward from line ranges
+(driver_module_ast(ast_all, ranges, entry_module)).
+THE ROOT IS THAT A SPAN DISCARDS ITS MODULE AT BIRTH. `Span(Int, Int, Int,
+Int)` is four numbers with no module edge, minted against the blob, so the
+module — a fact the driver HAD when it built the weave — is thrown away and
+then re-derived by RANGE SCAN at every reader. module_seams() walks the whole
+span index per call (O(nodes)), and there are already three callers paying
+it: the refs facet, the debt lines, and the pending list. show_reason is not
+a fourth caller waiting to be wired; it is the site that reveals the scan
+should not exist.
+THE ULTIMATE FORM IS A SPAN THAT IS LOCAL FROM BIRTH — the module carried on
+the coordinate the parser mints, which DELETES module_seams, span_render_local
+and seam_of_line rather than giving them a fourth consumer. That requires the
+parse to be per-module instead of per-blob, which is a link-path change and
+is exactly where Arc D's `Hβ.driver.link-is-reachability` already points (the
+demanded set read from import edges, the prelude a frozen image slice rather
+than a reparsed text prefix). So this peer is DEP-gated on that arc, and the
+gate stays RED in the meantime rather than being closed by threading seams
+through show_reason — which would add a fourth O(nodes) scan per rendered
+Reason node and call the re-derivation fixed.
+THE SECOND FAILURE MODE, independent of the render: weave coordinates ROT
+UNDER EDITING. An edit above line 8 moves every span below it, while handles
+stay put — so the resident session (§11 Arc E) inherits this the moment a
+caret starts editing, and it is a correctness problem there rather than a
+cosmetic one.
+§0's third property is the stake: "intent is lossless… the Reason chain
+carries the why, walkable to root" is only true if the chain walks somewhere
+a developer can OPEN. Today it walks to an offset in a file that does not
+exist on disk. THE GATE ALREADY EXISTS AND IS ALREADY RED
+(tools/frontier-gate.sh, `why coordinates are the developer's`, asserting
+`mn-where-badges:8`), so this peer needs no new instrument — the RED-first
+half is banked and standing.
+
+`Hβ.where.emitted-signature-is-a-badge` — THE ABI HAS A HOME AND NO FACE.
+`sigs_col` makes every emitted symbol's param repr-vector and result repr a
+settled, addressable fact, and nothing projects it: `mentl where` renders the
+repr gradient at the TYPE altitude (`s : Float @ f32 (pinned)`) but stops
+short of the machine face the emitter actually signed. The badge is the same
+derived-output discipline — never an input — read from the column rather than
+recomputed: `total : ([Float]) -> Float @ (f64, i32) -> f64`, with the twin's
+mangled symbol named where a site routes to one. It is claimed here as UNBUILT
+rather than banked as a benefit of the column, because the column's value is
+what it deleted, and a projection nobody wrote is not a projection. Two
+consumers already want it: the repr gradient's own felt face (§5.U), and the
+`call_indirect` type key, which IS the interned repr-vector this column stores
+(§5.U STEP 1 — the `$ftN` fork's dissolution said so and reads the vector by
+recomputing it).
 
 `Hβ.lower.lowering-is-a-column` — LowIR is the second graph (2026-07-30,
 the Fable novelty audit's first proposal; report at
@@ -6385,6 +6713,75 @@ is math). The unforced remainder is byte layout alone — record
 offsets private to their accessors, march-absorbed TRANSITIONs,
 load-bearing nowhere; layout is not semantics.)
 
+D0 EVERY Ty POSITION IS A HANDLE — D1's UNSTATED PRECONDITION, measured
+2026-09-07 and added here because a session building D1 from this contract
+alone will not reach it. D1 says "Substitution IS the union-find chase; both
+subst builds die," and that sentence is only true when the positions being
+substituted ARE edges. Today they are not: `TList(Ty)`, `TTuple([Ty])`,
+`TFun([TParam], Ty, EffRow)`, `TName(String, [Ty])`, `TRecord([(String,
+Ty)])`, `TRefined(Ty, _)`, `TCont(Ty, Ty, _, _)`, `TAlias(String, Ty)` and
+`TReprPin(Repr, Ty)` all carry INLINE VALUES; only `TVar(Int)` and
+`TRecordOpen`'s row var are handles. So `Ty` is a materialized value tree
+with handle leaves, standing beside a graph whose whole premise is that
+nodes are handles — and with inline positions, instantiate must REBUILD the
+tree to place fresh vars however the edges are drawn, so the clone survives
+D1 intact.
+THE ROW HALF IS THE PRECEDENT, NOT AN INVENTION. Stage (1) already did this
+to the row: `ENamed(Int)` is an interned handle (R1, pin 91e35f1e) and
+`EtOpen([Int])` is a SET OF EDGES read live ("row = present ∪ each edge's
+content ∖ absent"). The effect row is handles and edges end to end; the type
+layer is the half that never got the treatment, and D0 is finishing it.
+THE COMPENSATION FAMILY IS THE MEASURE OF THE DEFECT — every one of these
+exists to service the copy, and each dies or collapses to a one-hop chase:
+subst_ty/_build/subst_changes (27 refs), free_in_ty (36), chase_deep (30),
+occurs_in (16), free_in_row (14), free_in_params (4).
+THE SITE CENSUS, so the work is not mistaken for mechanical: 816 Ty-ctor
+sites, attributed to their enclosing fn. ~230 sit INSIDE walkers/rebuilders
+that delete (subst_ty_build 19 · spec_subst_pairs 19 · spec_resolve_build 19
+· chase_deep_build 19 · spec_pairs_walk 18 · chase_type_deep 17 ·
+chase_probe_tag 12 · occurs_in 11 · subst_changes 10 · free_in_ty 10) or
+collapse to handle equality (ty_alpha_eq 20 · same_ground 10). unify_types
+(36) is the one this census must NOT overclaim — read 2026-09-07, it is
+SHAPE DISPATCH and it SURVIVES: its `TVar(ha)/TVar(hb) => unify(ha, hb)` arm
+is already the union-find, and its wrapper arms recurse structurally. What
+D0 changes there is that the recursion follows EDGES instead of a copied
+tree — so no arm ever rebuilds — and that it gains an O(1) short-circuit
+(equal handles ⇒ equal types) which is unconstructible today, because two
+structurally-equal trees are distinct values. ~100 are GENUINE construction
+sites (cap_result_fn_row 20 · seq_op_sig 18 · infer_expr 16 ·
+quantify_ctor_ty 14 · parse_type_atom 14 · synth_holes_for_scheme 13 ·
+ty_handle_of 10). The rest are projections that read one level and stay
+(repr_of · show_type · fold_sig · extract_row · render_type_tokens).
+TYPES ARE SECOND-CLASS IN THE GRAPH, and that is the whole of D0 — measured
+2026-09-08, and it REPLACES the site-audit framing above. The parser mints a
+node per EXPRESSION position (nexpr / nstmt: every subexpression gets a
+handle) and collapses an entire TYPE expression into ONE node holding a value
+tree — `NTypeAnn(Ty)`, types.mn:1433. So a source type's interior positions
+have no handles to read, which is why the first reading of this entry said
+~100 construction sites needed a per-site audit of "where did the graph
+already prove this type?". The answer is that it did not prove it anywhere,
+because nothing ever minted it.
+THE FORM IS THEREFORE ONE CHANGE, NOT AN AUDIT: parse_type_atom mints a node
+per type position and returns a handle, exactly as parse_expr already does.
+The construction sites dissolve — the parser mints them where the type is
+WRITTEN — and the inference-side constructions already mint cells through
+`mint(reason)`. The parser's type surface is seven functions
+(parse_type_ty / _atom / _ty_tail / _args / _expr / parse_type_decl).
+It is also the same asymmetry the module-blind parse had one layer down:
+spans were second-class until the parse entered the module. Types are the
+next one.
+
+NO `ty_cell(ty) -> Int` HELPER — the loophole this design invites and must
+refuse. Boxing a value you already built into a fresh cell moves the copy
+behind a helper and adds ~800 unshared mints per compile while LOOKING like
+the representation changed; it is "move a problem and call it solved" with a
+migration's costume, and it would paper over exactly the ~100 sites that
+deserve the audit while doing nothing for the ~230 that carry the payoff.
+The construction sites answer "where did the graph already prove this type?"
+one at a time, and a site with no such handle is the FINDING — something
+computed a type without judging it at a node. Only 5 of 265 arity-1 wrapper
+sites pass a `TVar(...)` today, so that audit is the bulk of D0's real work.
+
 D1 THERE IS NO SCHEME OBJECT. A decl's identity is its pre-registered
 type cell; "the scheme" is a PROJECTION of that subgraph. generalize
 writes nothing. instantiate at a site mints fresh cells for exactly
@@ -7851,9 +8248,16 @@ the join on both engines) is RESOLVED by the task-record landing (pin
 8891428f): the four glue links died into the task record +
 proof-driven memory ownership — a spawning module imports the shared
 image and allocates through the shared cell; a thread-free module
-(boot included) defines its memory and ships NO thread-spawn import,
-so the must-satisfy-thread-spawn instantiation constraint is dissolved
-everywhere it was inert. The three real-spawn frontier legs (int /
+defines its memory and ships NO thread-spawn import, so the
+must-satisfy-thread-spawn instantiation constraint is dissolved
+everywhere it was inert. THE PARENTHETICAL HERE READ "(boot included)"
+until 2026-09-06, and the artifact refutes it: `wasm-objdump -j Import
+-x boot/mentl.wasm` shows func[17] `wasi.thread-spawn` and a shared
+`env.memory`, so the pinned boot is a SPAWNING module by this very
+taxonomy — as it must be, carrying lib/threading and the judge's own
+fan. It was true of the boot that stood when the line was written and
+went stale without anyone re-reading it; the class it describes is
+unaffected, only the example. The three real-spawn frontier legs (int /
 float-carrier / identity) run 60 through BOTH engines. REMAINING
 scope, host-path only: (5) swap wt-env.sh/install.sh (+ hosted CI when
 it returns, §11 col 5) to the runner, drop `-S threads=y`; (6) retire
@@ -7864,6 +8268,202 @@ ide/wheel-worker.js is the runner pattern at the browser host — a
 pre-armed worker pool consuming a SharedArrayBuffer task ring, the
 stub-spawn shim retired to the gate's RED control
 (tools/ide-gate.sh).
+STEP (5) IS TWO HALVES AND ONLY ONE IS A SWAP (MEASURED 2026-09-06).
+The pin is a CEILING, not a preference: the same spawning module
+answers exit 60 through 36's CLI and `Error: the -Sthreads flag is no
+longer supported`, exit 1, through 47's — the CLI cannot execute
+Mentl's own output past 36, so every later release is unreachable
+while the CLI is the runner. That makes (5)-(6) the only exit rather
+than hygiene. The GATE half is a swap: nothing in verify / march /
+frontier / crown listens on a socket, so pointing wt-env.sh's WT at
+tools/runner lifts the ceiling for the whole board and the compile
+path. The SHIM half is BLOCKED ON A BUILD, and the blocker is not the
+runner's — it is the crate's: wasmtime-wasi 47's p1 adapter does not
+implement sockets AT ALL (`p1.rs` sock_accept logs "p1 sock_accept is
+not implemented" and returns Notsock; sock_recv/sock_send likewise),
+and 47's CLI refuses the flag outright with "components do not
+support --tcplisten". Both measured against the pinned boot, whose
+`space` verb serves HTTP 200 on /ide/ through 36 and answers nothing
+through 47. So `mentl space` and `mentl session` — Arc E's own
+surface, the standing cursor's terminal bar — cannot leave 36 by
+swapping a binary. Moving them means the runner OWNS the p1 socket
+surface the way it already owns thread-spawn: bind the listener as a
+host resource, seat it as a descriptor, and implement sock_accept
+against the p1 table. That is the honest shape of it and it is the
+same shape as the spawn glue that already landed here — one more host
+resource the guest cannot create — filed as
+`Hβ.ops.runner-owns-the-p1-socket`. Until it lands the split is
+NAMED, never silent: the board runs on the runner, the two listening
+verbs run on 36, and the LTS pin retires at (6) only when both do.
+
+`Hβ.infer.live-cells-need-one-settled-signature` — RUNG 3'S REAL DEP.
+▶ THE DEP IS BUILT (2026-09-07, the same day it was measured). The ABI now
+has ONE home: `sigs_col` on the spine, written once at the emit settling
+point in emit_module — the moment every symbol is known (base records plus
+each twin with the bracket it emits under) and inference is complete. Six
+derivations retired onto that read; the entry lower writes carries the
+param and result TYPES so even the derivation is a graph read rather than a
+body walk. Both landings marched m2 == m3 BYTE-IDENTICAL at census 0, which
+is the strongest statement available that the six were computing one answer
+and now do so once. What remains for rung 3 is to RE-RUN the live-cell
+configuration against this settled ABI: the miscompile below turned on the
+callee's body and the call site reading the decl at different moments, and
+there is no longer a moment at which either reads it. That measurement is
+the next step and is not yet taken — this entry says the wall was removed,
+never that the far side has been walked.
+▶ THE ORIGINAL MEASUREMENT, kept as the dig's record.
+MEASURED TO A MISCOMPILE 2026-09-07. Publishing the decl's CELL (Live) in
+place of a Frozen snapshot now gets ALL THE WAY THROUGH inference and emit —
+m2 clean at census 0, m3 exit 0 at 532,547 lines, census 0 — and produces
+WAT THAT DOES NOT ASSEMBLE:
+    m3.wat: type mismatch in f64.load, expected [i32] but got [f64]
+    m3.wat: type mismatch in call, expected [i32,i32,i32,i32,f64]
+                                   but got [i32,i32,i32,i32,i32]
+At the site: `(call $number_from_substring) (f64.load)` — the caller unboxes
+a result the callee returned WIDE. Caller and callee disagree about the f64
+ABI, which is the twin-edge conversion pair (`Hβ.emit.twin-state-width`:
+args word-faced, results deref'd, inits boxed).
+THE ROOT IS NAMED IN THE EMIT'S OWN COMMENT, and it is not a walk
+disagreement, a mint band, or a resource limit: "an untwinned callee emits
+per its DECLARED scheme ... the same emit_wide_ref/emit_wide_deref pair,
+applied per THE ONE SIGNATURE BOTH SIDES AGREE ON". The ABI is a CONTRACT
+and a contract is a FIXED fact. A live cell is time-varying, so "the one
+signature both sides agree on" stops existing: the callee's body and the
+call site can read the decl at different moments and choose different
+widths. Frozen publication hid this by giving both sides the same snapshot —
+it was not correct, it was COINCIDENTALLY AGREED.
+THE ULTIMATE FORM IS NOT "KEEP THE SNAPSHOT". There is a legitimate settling
+point and it is not the decl's exit (where generalize freezes today, the
+moment the cell is LEAST finished): it is the infer→lower/emit PHASE
+BOUNDARY, which graph_bind_row's own comment already names — "the freeze
+that makes lattice reads sound is the infer→lower phase boundary, already
+structural". Reading a settled fact after inference completes is not a
+snapshot; it is a read. So the ABI must be read ONCE at that boundary rather
+than baked per-decl during lower, which is `Hβ.lower.lowering-is-a-column`
+(§11 5.5) — the lower-time-bake family the ledger has declared dead three
+times. RUNG 3'S LIVE CELLS ARE DEP-GATED ON THAT DELETION, and this
+miscompile is the evidence; the DEP is the next thing to build, not a stop.
+WHAT IS ALREADY PROVEN ON THE WAY: substitution sharing landed alone (pin
+8fb668de); the walks now agree on both axes measured here (a visited set as
+the exact guard where chase_deep tripwires at d>200, and free leaves
+canonicalizing to their union-find ROOT); generalize needs no deep chase (a
+shallow head plus a chasing free-var walk reads the same quantifier without
+materializing the tree); and the branch overflow band needs re-measuring for
+the live regime (64 was measured 2026-07-26 against Frozen; 128 still
+exhausts, 256 completes).
+
+`Hβ.infer.movers-is-the-wrong-ratchet-under-live-cells` — THE ACCEPTANCE
+CRITERION IS WRONG, MEASURED 2026-09-07. The movers line counts "schemes the
+final judges DIFFERENTLY than the trial published", and rung 3's acceptance
+has been stated as movers → 0. Under LIVE publication that number does not
+fall, it RISES: measured 474 → 1594 with the decl's cell published instead of
+a Frozen snapshot (the branch band raised to 4096 so the run reached far
+enough to report). That is not a regression. With a snapshot, divergence
+between the passes is HIDDEN INSIDE the snapshot — the trial's frozen view
+simply stops tracking, and the count sees only what the comparison happens to
+catch. With a live cell there is nothing to hide it: the cell IS current
+truth, so every decl the final touches reads as a mover. The metric measures
+snapshot disagreement, and live cells have no snapshots to disagree.
+So the stage contract's own sequencing is right and its ratchet is not:
+movers → 0 arrives from DELETING THE SECOND PASS (contract step 4, "the
+trial/final collapse FOLLOWS, not precedes"), never from making two passes
+agree. Reading the ratchet as a gate ON the live-cell step inverts the order
+and would refuse the landing that makes it reachable. THE HONEST GATE for the
+live-cell step is the fixpoint plus the census (m3 == m4, census 0), with
+movers re-derived AFTER the trial pass is gone; until then a movers RISE at a
+publish-Live landing is expected and must be read, not ratcheted.
+
+`Hβ.reason.provenance-is-a-value-tree` — THE PROVENANCE FACE OF THE ONE LAW
+(measured 2026-09-06; PLAN §11's ONE LAW, FOUR FACES block is the home for
+the synthesis, this entry for the mechanism). `GNode(NodeKind, Reason)` puts
+a RECURSIVE VALUE TREE on every node. Classified against the artifact, the 24
+constructors carry: a copied EDGE (`Declared`, `VarLookup`, `FnReturn`,
+`FnParam`, `LetBinding`, `Instantiation`, `InferredCallReturn`,
+`DefaultReason` — each naming a node that exists); copied STRUCTURE
+(`OpConstraint`, `MatchBranch`, `Unified`, `ListElement`, `IfBranch`,
+`InferredPipeResult` — antecedents duplicated into every node that unified,
+which the Why render admits as "the DAG rendered as the tree it is"); copied
+VALUES the graph holds live (`UnifyFailed(Ty, Ty)`, `Refinement(Pred, Pred)`
+— snapshots, so a Why chain can render types that later resolved
+differently, a correctness defect and not only redundancy); copied POSITIONS
+(`Located`, `Placeholder`); and genuinely irreducible content in exactly
+three places — a label, a `BinOp`, an SMT witness. The labels measure 208
+distinct `Inferred("…")` strings, 171 fixed and 37 templated: a FIXED
+COMPILER VOCABULARY carried as String, drift mode 8 in the middle of the
+provenance layer, and the 37 templates are edges (the name interpolated into
+"return of '{name}'" is the fn NODE).
+THE ULTIMATE FORM: a Reason is a FLAT TAG PLUS HANDLES — `R(RTag, [Int])`,
+no recursion, no Span, no copied Ty, no String names. "Walk to root" becomes
+follow a handle and read THAT node's reason: the tree structure becomes the
+graph it was always describing, provenance is SHARED rather than duplicated
+(an allocation win on the OOM channel), positions come from nodes so they
+survive editing, and `UnifyFailed`'s operands read live. `show_reason`'s
+24-arm string builder collapses to a tag render plus projections; `Located`
+dissolves wherever the position is its own node's, which is the dominant
+`graph_bind(handle, ty, Located(span, …))` shape. WHAT IT EMPOWERS, and the
+reason it is not cosmetic: the teaching tie-break asks "what distinguishes
+these survivors", which is a provenance DIFF — a graph diff over edges, an
+absurdity over duplicated trees — so PLAN §11 11.1's minimal-entropy
+question is gated on this. Band L's `.reason-edge-pcc-certificate` (a
+discharged proof carrying a walkable certificate) is the same edge set read
+by the prover. SURFACE: 698 Reason construction sites, 104 graph_bind, 126
+report — the largest in the compiler, and H6 enumerates every one.
+
+`Hβ.parser.module-blind-parse` — ONE ROOT, FIVE COMPENSATIONS (found
+2026-09-06 by walking the felt path with the CLI, as the felt-path-first
+law prescribes). THE PARSER DOES NOT KNOW WHICH MODULE IT IS IN. The
+driver concatenates the dep DAG into one text and parses it whole, so
+every node is born in the WEAVE's coordinate space with no module
+attribution, and five separate machines exist to put back what that one
+blindness threw away:
+(1) the range map, carried out-of-band beside the graph;
+(2) NModule nodes minted AFTER the parse, reconstructed from that map
+    (driver.mn's own comment records the era when they had ZERO writers
+    and every span resolved to the "" module);
+(3) `rehome_seam_comments`, a post-pass moving comments that attached
+    across a module seam — its comment states the cause outright, "the
+    parser cannot see seams";
+(4) `module_path_of_span`'s `scan_for_enclosing_module`, an O(next)
+    containment search per call, whose own comment names its "O(1)
+    destiny";
+(5) the seam-render family — module_seams + seams_walk (O(nodes) per
+    call), seam_of_line, span_render_local — four ways to answer "which
+    module is this line in?" about a value that should never have lost
+    the answer.
+MEASURED SYMPTOM, the one that surfaced it: on a SEVEN-LINE file
+`mentl why addr.mn double` answers `at 2726:1-2726:21`, because
+show_reason renders the raw weave span while the refs facet three lines
+away answers `addr:7`. Every felt surface goes through show_reason — LSP
+hover, the cursor view's Why line, the type facet's Reason — so §0's
+intent-is-walkable property walks to a line no developer can open. A
+translation layer every reader must remember to call is one some reader
+will not call.
+TWO NON-ULTIMATE FORMS WERE BUILT AND REJECTED HERE, both recorded
+because each is instructive. (a) Threading the seams into show_reason:
+fixes the symptom, entrenches the compensation — a bolt, Anchor 8, and
+named as such in the same session that named the family. (b) `Span`
+carrying its module (`Span(m, sl, sc, el, ec)`, 96 sites, the whole-wheel
+census answering 100): SUFFICIENT, not ultimate — a span inside a Reason
+is a COPIED PROJECTION of where a node is, the same disease as a Frozen
+scheme one layer over, and copied coordinates ROT UNDER EDITING, which
+the resident session and incremental edit depend on them not doing.
+THE ULTIMATE FORM: parse PER MODULE. `lex(source_m)` gives module-local
+spans, the NModule node is minted BEFORE its parse, and
+`parse_program(toks, nmh)` attributes every node at birth — the module a
+spine COLUMN (5.5's mechanical test), O(1). One-namespace judgment never
+required one TEXT, only one ENV: parse each module, concatenate the DECL
+LISTS, judge as one program (infer_program_converged already separates
+`lex |> parse_program |> infer_program_*`, so the seam is where it needs
+to be). All five compensations delete, plus driver_module_ast's
+span-containment filter. And the Reason layer follows: `Located(span, r)`
+is a coordinate copied beside the very handle it describes — the
+dominant call shape is literally
+`graph_bind(handle, ty, Located(span, …))`, the node and a copy of the
+node's own position passed to one call. Located carries a HANDLE, and
+where the position IS its own node's it dissolves outright.
+GUARDS, RED-first: the why-coordinate assertion in tools/frontier-gate.sh
+(`mn-where-badges:8` — born RED against the pre-fix boot, which answers
+`2729:1-2729:15`); census 0; m3 == m4.
 
 `Hβ.query.comment-prose-search` (2026-07-24, the ⟳ self-build law's
 first named confession): the vocabulary sweep ran on grep while
@@ -8243,3 +8843,64 @@ GUARDS, RED-first: the movers line (466 at this writing) reads ZERO or
 names only the under-publish class; mn-depth-unannotated stays runs-3;
 the crown's 39 crucibles stay green; the wheel self-compiles through
 the correspondence edges (m3 == m4, the trusting-trust anchor).
+
+THE STAGE CONTRACT IS PARTLY STALE AND THE BLOCKER IS MEASURED
+(2026-09-06). Two corrections and one located wall, all against the
+artifact:
+— STAGE (1) IS LANDED. types.mn already carries
+`type Binding = Frozen([Int], Ty) | Live(Int)` under the header "rung 3
+landing A"; the contract above still describes it as future work under
+the names BStatic/BCell. What did NOT land is the PRACTICE: 45 Frozen
+construction sites against 9 Live, so the env holds snapshots through a
+type that can hold cells.
+— THE TWO-ARM BINDING IS ITSELF RESIDUE, and the contract's BStatic
+should not be built. A static tree (alias, ctor variant, effect decl) is
+a cell that is already bound and will not move; giving it a distinct
+BINDING KIND is drift mode 6, the primitive-special-case, at the env
+layer. The terminal env maps name → HANDLE, boundness read live — which
+is `name-is-handle` (§5.O layer 1) and schemes-are-edges turning out to
+be one law at two altitudes. Binding's discriminator dies when the Live
+arm becomes universal, not by a second arm being designed.
+— THE MOVERS ARE CLASSIFIED, all 474 (tools/movers-hist.py over an
+uncapped movers_diff): grade 261, row+type 107, type 88, row 15,
+row+grade 3; row direction add-only 19 with ZERO removals; grade
+directions r->o 282, o->r 13. So the type-sort residue is 195 of 474 and
+decision (2)'s pre-committed branch is the FRESH DESIGN PASS, not the
+D1/D2/D6 no-go.
+— THE TYPE-HALF JOIN QUESTION IS NOT A BLOCKER, and the record above
+mis-states it. "Rows have their join; TYPE-scheme generality does not"
+is true of the ITERATING design and only of it: a join reconciles a
+RECOMPUTED value with a provisional one, and the probe passes recompute
+from rollback-refreshed nodes, which is why "concreteness learned in
+probe k evaporates in k+1". A live cell is monotonically REFINED, never
+recomputed, so there is no second value and no join is required. The
+tower compensates for the snapshot; the snapshot is the bug.
+— THE WALL, MEASURED TWICE. Publishing the cell at the decl's own exit
+(infer.mn's `env_extend(name, generalize(handle), …)` → `Live(handle)`)
+compiles clean, census 0 — and the resulting m2 TRAPS compiling the
+wheel: exit 134, OOM through
+`chase_row_deep ⇄ chase_edges_deep → edge_content_into → tail_set_union
+→ alloc_list_sc → alloc`. Cause, localized: `instantiate`'s Live arm is
+`instantiate(generalize(h))`, so generalize's chase_deep — one fold per
+DECL under Frozen publication — becomes one fold per USE. The flat-cell
+law's WRITE half is real and in place (graph_bind_row stores
+flatten_row_stored, depth-1 by invariant); it is the materializing READ
+that has no compression.
+— THE TYPE-SIDE HALF OF THE CURE IS BUILT AND MEASURED (parked, not
+landed): subst_ty_build's TVar miss SHARES the edge instead of inlining
+the bound cell's content, and subst_changes stops answering true for
+every bound var. The old arm's own comment is the confession — "the
+freeze exists so readers never read live" — Carried-Truth inverted and
+stamped as a law; the inlining was never a fact about substitution, it
+was a consequence of the RESULT being a snapshot that must not carry
+live pointers. With that pair the trap MOVES but does not clear: still
+chase_row_deep, now through map$spnEffNamenEffName. The row side folds
+the same way and needs the same ruling.
+— THE NEXT THING TO BUILD, forced by both traps: generalize must not
+chase_deep AT ALL. Under live publication a decl's type IS its cell, so
+the quantifier wants a free-var VISITOR over live cells — walking, never
+building — and the deep chase deletes rather than being compressed. The
+allocation is the BUILD (map over eff names, tail_set_union), not the
+visit. Land order, both halves together or neither (the half-step law,
+paid for twice more here): visitor-quantifier + publish-Live +
+subst-shares-the-edge, judged by census 0, the movers line, and m3 == m4.

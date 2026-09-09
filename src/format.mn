@@ -87,7 +87,7 @@ handler format_default {
   // graph mutation, no side effects beyond the output String.
   {
     let stmts = ast_top_level_stmts(ast)
-    let rendered = stmts |> map((s) => format_one_stmt(s))
+    let rendered = stmts |> map(format_one_stmt)
     resume(join_lines(rendered))
   },
   format_at_handle(handle) => // ─── format_at_handle — render one node ───────────────────────────

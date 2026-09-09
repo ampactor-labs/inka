@@ -113,6 +113,21 @@ type Repr
   //   lane-sequence (STEP 1 / STEP 4 SIMD cashout)
   | RV128
 
+// A SYMBOL'S EMITTED SIGNATURE — the param repr-vector and the result repr,
+// the two facts a `(func $name (param ...) (result ...))` header states and
+// every call to it must speak. It is ONE fact about ONE symbol, and its home
+// is the sigs column (graph_sig_at): decided once at the emit settling point,
+// read by the header, the call sites, the word-face wrapper, and the local
+// decls. An ABI is a contract, and a contract with two derivations is two
+// contracts — which is what the six re-derivations this type retires were:
+// each carried a comment asserting the readers "agree", and the agreement was
+// coincidence (the caller read the declared scheme, the callee read its body's
+// use-sites, the wrapper read both again at module scope, outside the twin
+// bracket the header was emitted under). The repr-vector is also the
+// call_indirect type key (§5.U STEP 1 — a function type IS a product), so
+// this is the interned signature the $ftN fork dissolved into.
+type EmitSig = ESig([Repr], Repr)
+
 // repr_of — the SHARED READ (STEP 0). The cursor projects a Ty to its
 // machine-representation class. H6-exhaustive over all 14 Ty constructors.
 // Alias-strip / refinement-unwrap FIRST (TAlias -> inner, TRefined -> base):
@@ -369,6 +384,11 @@ fn param_name(p) = match p {
 fn param_ty(p) = match p {
   TParam(_, t, _, _, _) => t,
 }
+
+// The same read as a PRESENT signature slot (EmitFnEntry above): a declared
+// parameter always has a type, so lifting it is a fact, never a guess — the
+// absent form belongs to the slots that carry no parameter at all.
+fn some_param_ty(p) = Some(param_ty(p))
 
 fn param_authored(p) = match p {
   TParam(_, _, a, _, _) => a,
@@ -887,6 +907,43 @@ type InstallShape = InstallOf(String, [Int], [{arms: [String], ename: String}])
 // floored at its own construction).
 type EmitFnKind = EfkPartial | EfkLambda | EfkThunk | EfkNested | EfkArm | EfkK
 
+// THE ENUMERATION'S ENTRY — one record per emittable symbol, written by
+// lower's seven LFn writers at construction. A record, not a widening
+// tuple: the fields have identity (the parameter product's own law,
+// SYNTAX §«Labeled call arguments»), and a seventh positional slot would
+// have been the parallel-arrays drift arriving one field at a time.
+//
+// `params` pairs each emitted parameter with its TYPE — the fn's own
+// inferred TFun, component by component, read at the one site that knows
+// it. Lower computes this vector today (param_handles_of, off the origin's
+// live TFun) and hands it to ls_enter_frame, where it dies at frame exit.
+// Emit then rebuilt it: a walk of the whole body per param looking for a
+// use-site, and failing that a search of the declared scheme BY NAME — a
+// scan for a fact the graph had already connected, and for the synthesized
+// family a scan that always missed, so an unused wide param signed at the
+// floor under a caller pushing it wide.
+//
+// A Ty and not a handle, because ty_handle_of is 0 for every GROUND type:
+// a `x: Float` param has no handle to carry, and carrying its absence is
+// how a real f64 slot becomes a word. A Ty and not a Repr, because storing
+// the width would materialize the projection and a twin's body — emitted
+// under an instantiation bracket — must project its OWN. And an OPTION,
+// because a slot the graph never judged is ABSENT: the first form wrote a
+// TVar(0) sentinel and the census convicted it as drift mode 10 on sight,
+// correctly — "handle zero means no node" is a convention every reader must
+// learn, where None is a fact the type states and the reader floors on. The
+// ONE projection that must not vary by reader (the ABI) is settled once into
+// the sigs column at the emit boundary.
+type EmitFnEntry = {
+  caps: [(String, Int)],
+  fence: Int,
+  kind: EmitFnKind,
+  name: String,
+  origin: Int,
+  params: [(String, Option(Ty))],
+  ret: Option(Ty),
+}
+
 // The snapshot carries exactly what its consumers read: the mint bound
 // and the span index. The node cells are NOT here — they live in the
 // handler's paged spine and are read through graph_chase/graph_node_body
@@ -1110,9 +1167,50 @@ type PipeContext = NoPipe | InsidePipe(PipeKind) | StartingPipe | EndingPipe
 // Annotation is mentl.mn's existing ADT (APure/ANotEffect/AOwn/...).
 // Predicate is at types.mn:568.
 type CursorView
-  = CursorView(NodeKind, Proposals, PipeContext, EffRow, Ownership, [(Span, Predicate, Reason)], Option(AnnotationSuggestion), Reason)
+  = CursorView(NodeKind, Proposals, PipeContext, EffRow, Ownership, [(Int, Span, Predicate, Reason)], Option(AnnotationSuggestion), Reason)
 
 // query   propose  topology     row     trace      verify  teach    why
+// ─── SpinePage — the graph's columns, named ONCE ─────────────────────────
+// One band's worth of every per-handle fact, each column a flat array the
+// handle indexes directly. Pages allocate whole at band-open and NEVER move,
+// so a column read is the O(1) chase and a write is one in-place cell store.
+//
+// This is a COLUMN STORE, not the parallel-arrays drift (CLAUDE.md mode 7):
+// mode 7 convicts N lists keyed by POSITION as a fragile proxy for identity,
+// and here the index IS the identity — the handle is the key, so the columns
+// cannot desynchronize any more than a record's fields can.
+//
+// It is declared here because the shape was written out THREE times — the
+// spine_page annotation, the spine_open_loop literal, and graph_branch_seed's
+// op type — so adding a column meant editing a twelve-field record in three
+// files and finding out at the type error which one you missed. Three hand
+// copies of one type is the Carried-Truth Law at the declaration layer; the
+// name is its one home, and the next column is one line.
+type SpinePage = {
+  bind: [BindHome],
+  boundaries: [ExecutableBoundary],
+  canon: [Int],
+  comments: [(String, Span)],
+  dispatch: [DispatchTier],
+  installs: [InstallShape],
+  module: [Int],
+  narrowing: [Int],
+  nodes: [GNode],
+  program: [NodeBody],
+  slots: [StateSlotHome],
+  spans: [Span],
+}
+
+// Newlines in a flat string — a module's own extent, sized at its parse.
+fn count_lines(ref s) with Memory = count_lines_from(s, byte_len(s), 0, 0)
+
+fn count_lines_from(ref s, n, i, acc) with Memory = if i >= n {
+  acc
+} else {
+  let step = if byte_at(s, i) == 10 { 1 } else { 0 }
+  count_lines_from(s, n, i + 1, acc + step)
+}
+
 type Span = Span(Int, Int, Int, Int)
 
 // start_line, start_col, end_line, end_col
@@ -1847,6 +1945,16 @@ effect GraphRead {
   // ordered (span, handle) log stays for containment scans; this is the
   // by-handle projection of the same one write)
   graph_span_of(Int) -> Span
+  // the module a node was BORN IN — read from the spine's own column, never
+  // re-derived by scanning weave ranges for one that contains the node's
+  // line. TOTAL: every node is born inside a module, stdin's included, so
+  // there is no absent case and no reader needs a "which file, if any" arm.
+  graph_module_of(Int) -> Int
+  // the module currently in force — what the next mint will be attributed to.
+  // Read by the diagnostics register to stamp a report with the file it is
+  // about, which is how narration scopes to the module the user named now
+  // that spans are local and a line range no longer distinguishes files.
+  graph_module_current() -> Int
   // resolve a node's parse-attached comment prose from the parallel comment weave (empty string if absent); the Why engine / formatter / cursor project it
   graph_comment_at(Int) -> String
   // the comment's own source span, carried from parse (zero span if absent) — the reference diagnostics anchor here
@@ -1867,7 +1975,7 @@ effect GraphRead {
   // no branch ever appends). A branch graph_handler installs over
   // these with its stmt's planned range as (next0, limit0).
   graph_boundary_at(Int) -> ExecutableBoundary
-  graph_branch_seed() -> ([{bind: [BindHome], boundaries: [ExecutableBoundary], canon: [Int], comments: [(String, Span)], dispatch: [DispatchTier], installs: [InstallShape], narrowing: [Int], nodes: [GNode], program: [NodeBody], slots: [StateSlotHome], spans: [Span]}], Int, [(ValidSpan, Int)])
+  graph_branch_seed() -> ([SpinePage], Int, [(ValidSpan, Int)])
   // The REVERSE-EDGE column's read: every reference handle noted under
   // NAME (newest first — the column prepends). refs_of_name's whole-
   // graph VarRef scan and the oracle's quadratic count_dependents both
@@ -1882,7 +1990,13 @@ effect GraphRead {
   // NAME (the identity projection beside the ordered column). The
   // synthesized-family repr read and the enumeration reader take this
   // instead of scanning the column.
-  graph_emitfn_at(String) -> [(EmitFnKind, Int, String, Int, [(String, Int)])]
+  graph_emitfn_at(String) -> [EmitFnEntry]
+  // THE SIGNATURE COLUMN's read (lowering-is-a-column (ii)): the emitted
+  // symbol's settled ABI. None means no record minted that symbol — a
+  // hand-written runtime fn, whose face is the word floor. The floor is
+  // still a floor, but it is now ONE floor at ONE key, so a caller and a
+  // callee cannot floor differently: that difference was the miscompile.
+  graph_sig_at(String) -> Option(EmitSig)
 }
 
 effect GraphWrite {
@@ -1900,6 +2014,13 @@ effect GraphWrite {
   graph_narrow_set(Int, Int)
   // draw/replace one fanout's executable edges; trail-backed because inference runs under speculative checkpoints
   graph_boundary_set(Int, ExecutableBoundary)
+  // set the module in force for every SUBSEQUENT mint — the parser's own
+  // "which file am I in", carried at birth instead of reconstructed. The
+  // driver mints a module's NModule node, enters it, and parses that module;
+  // every node born under it is attributed by construction. The module node
+  // attributes ITSELF, so the column is total with no sentinel: entering a
+  // module is what parsing a file is, and there is no parse outside one.
+  graph_module_enter(Int)
   graph_bind(Int, Ty, Reason)
   // mark a node an OBSERVED FAILURE (NErrorHole) — the productive-under-error poison. An env miss binds this, never TVar(self): the self-var tripped graph_bind's own occurs check (a spurious 0:0 E_OccursCheck per missing name) and read downstream as a normal free var (the ownership move-default cascade). A hole is the fact itself: unify no-ops on it, generalize preserves the handle, consumers stay silent.
   graph_bind_hole(Int, Reason)
@@ -1975,7 +2096,14 @@ effect GraphWrite {
   // lands with step iii's enumeration-walking emit; its read-side
   // contract filters by the reach set — lower runs on every decl,
   // emit does not.
-  graph_emitfn_note(EmitFnKind, Int, String, Int, [(String, Int)])
+  graph_emitfn_note(EmitFnEntry)
+  // THE SIGNATURE COLUMN's write — ONE call per compile, carrying the whole
+  // table. Not a note-per-symbol: the settling point is a MOMENT (the
+  // infer->lower/emit boundary, after every record and every twin bracket is
+  // known), and a fact that settles at a moment is written at that moment,
+  // whole. N notes would re-open the window a reader could observe half a
+  // table through, which is the time-varying read this column exists to end.
+  graph_sigs_publish([(String, EmitSig)])
   // The deterministic handle partition (the planned mint): the final pass
   // pre-assigns each stmt a dense range of handles sized by the trial's
   // measured mint counts, so numbering is a pure function of the source —
@@ -2203,7 +2331,12 @@ effect Diagnostic {
   // handler residual carrying GraphRead + Intern past every bracket to
   // main's root) is what the root-row gate refused. Arms buffer, tally,
   // and print; the line arrives made.
-  diag_report(DiagKind, String)
+  // (kind, rendered line, the MODULE it is about). The module rides the
+  // report because the register's arm is deliberately graph-free — its row
+  // rides every install — so it cannot look the module up itself, and a
+  // local span cannot name a file (two modules both have a line 8). The
+  // reporter has GraphRead and reads it live; the register just compares.
+  diag_report(DiagKind, String, String)
   // The two live reads of the ledger the handler already keeps. The exit code
   // and the emit gate were both RE-DERIVING this as 0 — the handler saw every
   // diagnostic, printed it, and threw the severity away, so `mentl check` on a
@@ -2234,7 +2367,14 @@ effect Diagnostic {
 // warning printed TWICE: once per parse, the discovery copy in
 // file-local coordinates no range can place). Errors still render in
 // every scope, discovery included.
-type DiagScope = ScopeAll | ScopeNone | ScopeAt(Int, Int)
+// ScopeModule(name) is the target MODULE, not a line range. It was
+// ScopeAt(start, nlines) — the module's range in the concatenated weave —
+// and that only ever worked because every file's spans were offsets into one
+// text. With the per-module parse each file's spans start at line 1, so a
+// range names nothing; the module does. The register stamps each report with
+// the module in force when it fired (graph_module_current), and the filter
+// compares that, which is one read instead of a containment test.
+type DiagScope = ScopeAll | ScopeNone | ScopeModule(String)
 
 // Armed on the root diagnostics_handler only (the register lives where
 // the render lives); a separate effect so the quiet trial, the branch
@@ -2277,7 +2417,7 @@ effect DiagRegister {
 // carrying its arm, so a branch-fired T_OverDeclared bypassed the
 // tighten bank).
 effect BranchDiag {
-  diag_lines_taken() -> [(DiagKind, String)]
+  diag_lines_taken() -> [(DiagKind, String, String)]
 }
 
 // ─── The catalog AS projections of the DiagKind constructors ───────────
@@ -2911,8 +3051,12 @@ effect LowerScope {
 // verify_ledger accumulates (V_Pending); verify_smt discharges (E_RefinementRejected on
 // reject). Handler swap; source code unchanged.
 effect Verify {
-  verify(Span, Predicate, Reason)
-  verify_debt() -> [(Span, Predicate, Reason)]
+  // the module the obligation was raised in rides the perform: the ledger arm
+  // is graph-free (its row rides every install), so it cannot read the module
+  // itself, and a local span alone cannot name a file — two modules both have
+  // a line 8. Captured where it is live, carried, never re-derived.
+  verify(Int, Span, Predicate, Reason)
+  verify_debt() -> [(Int, Span, Predicate, Reason)]
   // The generation boundary's clear: the living session re-derives on a
   // moved tree and stale generations' obligations must not shadow the
   // current judgment's re-accrual (the tighten_reset law at the proof
@@ -3051,8 +3195,35 @@ fn diag_line(diag) with GraphRead + Memory + Alloc + !Mutate + Intern = {
 // what dissolves the diagnostics/graph arm-dependency cycle the install
 // ORDER could only half-satisfy (diagnostics-outer-of-graph served the
 // occurs report and starved the render; the reverse starved the report).
+// The report carries the MODULE it is about, read live where GraphRead
+// already is. The register's arm stays graph-free (its row rides every
+// install), which is why the old filter could only compare LINE NUMBERS and
+// had to carry scope_localize to subtract a weave offset back off every
+// rendered span. Spans are local from birth now, so there is nothing to
+// subtract and nothing to localize — the only question left is which file a
+// report is about, and that is one cell read, carried here rather than
+// re-derived by scanning ranges for one that contains the line.
 fn report(diag) with Diagnostic + GraphRead + Memory + Alloc + Intern =
-  diag_report(diag, diag_line(diag))
+  diag_report(diag, diag_line(diag), current_module_name())
+
+// The name of the module in force — the file a report fired inside. One cell
+// read plus one body read, where the range map's containment scan used to be.
+fn current_module_name() with GraphRead + Memory + Alloc = module_name_of_handle(graph_module_current())
+
+// A module handle's own name, read from its node. The non-NModule arm REFUSES
+// rather than answering "": every value in the module column was written by
+// graph_module_enter with an NModule handle, and every compile enters its link
+// root before anything can report, so a miss here is a node minted outside any
+// module — a defect in the caller. Answering with an empty name would hand
+// every downstream reader a file called nothing and make the defect invisible,
+// which is the wildcard-fabrication the census convicts.
+fn module_name_of_handle(h) with GraphRead + Memory + Alloc = match graph_node_body(h) {
+  NModule(m) => m.path,
+  _ => {
+    load_i32(0 - 1)
+    ""
+  },
+}
 
 // Every show_* that renders a Ty chases TVars through graph_chase.
 // A raw handle only appears when chase terminates on NFree/NRowFree —
@@ -3486,38 +3657,14 @@ fn show_span(ref span) with Memory + Alloc = match span {
 // march) yields an empty seam list and every span renders raw — the
 // census's own coordinates, by construction. One home; the verify debt
 // lines and the query refs facet both project through it.
-fn module_seams() with GraphRead + Memory + Alloc = match graph_snapshot() {
-  Graph(_, sp) => seams_walk(list_to_flat(sp), 0, []),
-}
-
-fn seams_walk(ref spans, i, acc) with GraphRead + Memory + Alloc = if i >= len(spans) {
-  acc
-} else {
-  match spans[i] {
-    (_, h) => match graph_node_body(h) {
-      NModule(m) => match m.span {
-        Span(ls, _, le, _) => seams_walk(spans, i + 1, push(acc, (ls, le, m.path))),
-      },
-      _ => seams_walk(spans, i + 1, acc),
-    },
-  }
-}
-
-fn span_render_local(ref seams, ref dspan) with Memory + Alloc = match dspan {
-  Span(sl, _, _, _) => seam_of_line(seams, sl, 0, dspan),
-}
-
-fn seam_of_line(ref seams, line, i, ref dspan) with Memory + Alloc = if i >= len(seams) {
-  show_span(dspan)
-} else {
-  match seams[i] {
-    (ls, le, path) => if line >= ls && line < le {
-      "{path}:{int_to_str(line - ls + 1)}"
-    } else {
-      seam_of_line(seams, line, i + 1, dspan)
-    },
-  }
-}
+// module_seams / seams_walk / span_render_local / seam_of_line DELETED with
+// the weave. They existed to answer "which file is this weave line in" by
+// scanning every module's range for one that contained it — O(nodes) per
+// call, three callers. Spans are the developer's own coordinates now, so the
+// question has no content: every module starts at line 1, which also makes
+// the scan actively WRONG rather than merely slow (it would resolve any line
+// to the first module). A span that still needs its file needs a HANDLE, not
+// a range table — Hβ.why.reason-span-is-a-weave-coordinate.
 
 fn show_pipe_kind(pk) with Pure = match pk {
   PForward => "|>",
@@ -3598,13 +3745,13 @@ fn query_flow_label(ref ty) with GraphRead + Memory + Alloc + EnvRead = match ty
   TAlias(_, inner) => inner |> query_flow_label,
   TReprPin(_, base) => base |> query_flow_label,
   TList(elem) => elem |> query_flow_label,
-  TTuple(elems) => elems |> map((e) => query_flow_label(e)) |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  TTuple(elems) => elems |> map(query_flow_label) |> fold(Public, flow_label_join),
   TRecord(fields) => fields |> map((f) => match f {
     (_, fty) => query_flow_label(fty),
-  }) |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  }) |> fold(Public, flow_label_join),
   TRecordOpen(fields, _) => fields |> map((f) => match f {
     (_, fty) => query_flow_label(fty),
-  }) |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
+  }) |> fold(Public, flow_label_join),
   TCont(input, answer, _, _) => flow_label_join(query_flow_label(input), query_flow_label(answer)),
   TInt => Public,
   TFloat => Public,

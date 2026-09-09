@@ -1393,10 +1393,42 @@ fn scan_for_enclosing_module(target, i, n) with GraphRead + !Mutate = if i >= n 
 // transitive-closure loop over `grep '^import'`, re-deriving by name what the
 // graph holds by edge. That hand walk is what this projection retires, and it
 // is a read of the weave, never a second walk of the filesystem.
+// ONE CELL PER MODULE, keyed by PATH. The trial and the final each parse, so
+// each mints its own NModule node for the same file — two cells, one module.
+// Every consumer of this projection was therefore double-counting: the cost
+// facet reported 107 modules and 119,128 source lines for a 53-module,
+// 59,501-line wheel, exactly 2n+1 (the link root is minted once). A module's
+// identity is what it RESOLVES TO, never the node that happens to represent
+// it — the same law driver_collect_visit's visited set keys on, and the same
+// one the census dedup needed. LAST wins, matching env_snapshot's dedup-to-
+// latest for the same reason: the final generation is the judged one.
 fn module_cells() with Memory + Alloc + GraphRead + !Mutate = {
   let snapshot = graph_snapshot()
   match snapshot {
-    Graph(next, _spans) => collect_module_cells(0, next),
+    Graph(next, _spans) => dedup_module_cells(collect_module_cells(0, next), []),
+  }
+}
+
+// Keep the LAST cell for a path by skipping any that a later one supersedes.
+// The walk is handle-ascending, so the last cell is the FINAL generation's —
+// the judged one, whose decls are the nodes the returned ast actually holds.
+// Keeping the first would hand every consumer the trial's shadow tree.
+fn dedup_module_cells(ref cells, acc) with Memory + Alloc = if len(cells) == 0 {
+  acc
+} else {
+  match cells[0] {
+    (path, _s, _d) => dedup_module_cells(
+      rest(cells),
+      if cell_path_in(rest(cells), path, 0) { acc } else { push(acc, cells[0]) }
+    ),
+  }
+}
+
+fn cell_path_in(ref acc, ref path: String, i) with Memory + Alloc = if i >= len(acc) {
+  false
+} else {
+  match acc[i] {
+    (p, _s, _d) => if p == path { true } else { cell_path_in(acc, path, i + 1) },
   }
 }
 
@@ -1420,16 +1452,26 @@ fn module_paths() with Memory + Alloc + GraphRead + !Mutate = map(
   module_cells()
 )
 
-// The weave's line extent — the last line any module's range reaches, which
-// IS the total source the medium processed for this entry. A graph read, so
-// it is DETERMINISTIC: unlike a wall clock it can be ratcheted, and a landing
-// that makes the medium process more source to answer the same question is a
-// refusal rather than a number somebody notices later.
+// The total source the medium processed for this entry — the SUM of every
+// module's own extent. A graph read, so it is DETERMINISTIC: unlike a wall
+// clock it can be ratcheted, and a landing that makes the medium process more
+// source to answer the same question is a refusal rather than a number
+// somebody notices later.
+//
+// IT WAS A MAX, and the max was right exactly as long as spans were offsets
+// into ONE concatenated weave: the last line any module reached WAS the total,
+// because the modules were laid end to end. The per-module parse makes every
+// file start at line 1, so the max became the LONGEST MODULE — this answered
+// 9929 (infer.mn's own length) for the whole 59,501-line wheel, and for two
+// different entries whose only shared module was that one. A ratchet reading
+// too small does not go red; it goes BLIND, and accepts every rise beneath the
+// number it now reports (§11 tripwire 4). Summing the per-module extents is
+// what "total source" meant all along; it is only now that the two differ.
 fn weave_line_extent() with Memory + Alloc + GraphRead + !Mutate = fold(
   0,
   (acc, c) => match c {
     (_p, s, _d) => match s {
-      Span(_sl, _sc, el, _ec) => if el > acc { el } else { acc },
+      Span(sl, _sc, el, _ec) => acc + (el - sl),
     },
   },
   module_cells()

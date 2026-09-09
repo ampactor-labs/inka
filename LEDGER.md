@@ -35,7 +35,47 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
-- 2026-09-07 · pin dfc22c8c4de7fa85 · THE PARSE ENTERS THE MODULE — the
+- 2026-09-09 · pin d935b01dbf0af2aa · TWO BLIND MEASURES — the cost facet
+  counted every module twice and called the longest file the whole program.
+  FIXED POINT m2 == m3, census 0, every ratchet held.
+  ▶ FOUND BY USING THEM. A design exploration reached for `mentl query … cost`
+  as evidence and read 72 nodes per source line, which would have meant 4–7×
+  structural duplication and would have set a whole arc's premise. The number
+  was an artifact of this session's own per-module parse. The real ratio is
+  12.0. The lesson is not "check your numbers" — it is that a measurement
+  taken from a facet nobody had re-derived since the representation moved is
+  not evidence, and the fastest way to find that out is to try to build on it.
+  ▶ BLINDNESS ONE: `weave_line_extent` (graph.mn) folded a MAX over module
+  spans. That was right while spans were offsets into ONE concatenated weave —
+  the last line any module reached WAS the total, because they were laid end
+  to end. Per-module parse makes every file start at line 1, so the max became
+  the LONGEST MODULE: 9929 (infer.mn's own length) reported for the whole
+  59,501-line wheel, and the same 9929 for a different entry whose only shared
+  module was that one. It is a SUM now, which is what "total source processed"
+  meant all along; it is only since the parse moved that the two differ.
+  ▶ BLINDNESS TWO: `module_cells` returned the trial's NModule node AND the
+  final's for every file, because each pass parses. 107 cells for 53 modules —
+  exactly 2n+1, the link root being minted once. It dedups by PATH now,
+  keeping the LAST: a module's identity is what it RESOLVES TO, never the node
+  that represents it (driver_collect_visit's visited set already keys on this,
+  and the census dedup needed the same correction days earlier — this is the
+  third time one law has been applied at a third site, so the source is fixed
+  rather than the symptom).
+  ▶ AND A REAL BUG UNDER IT: `module_decls_of` took the FIRST match on the
+  raw undeduped list, so `driver_module_ast` and `split_weave_by_module` were
+  reading the TRIAL generation's decls — a shadow tree, structurally
+  equivalent but judged in the pass that gets thrown away. Both read the
+  deduped projection now.
+  ▶ A RATCHET READING TOO SMALL DOES NOT GO RED, IT GOES BLIND — it accepts
+  every rise beneath the number it reports. That is §11 tripwire 4 in a form
+  the tripwire does not cover: the gate ran, it passed, and it was measuring
+  the wrong thing.
+  ▶ THE CEILING NEEDED NO RE-BASELINE, which is the confirmation the repair is
+  a repair: the bare-floor fixture reads 2736 against its untouched 2737 — the
+  value it read before the regression. 54 modules / 59,599 lines for the
+  wheel, against the march's own 59,501-line input.
+
+- 2026-09-07 · pin d935b01dbf0af2aa · THE PARSE ENTERS THE MODULE — the
   module-blind parse closed, five machines deleted with it. TRANSITION m3 ==
   m4, census 0, 416464 lines against 420099.
   ▶ THE ROOT, named yesterday and unbuilt: the driver concatenated the dep

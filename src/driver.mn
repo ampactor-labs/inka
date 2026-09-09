@@ -393,7 +393,7 @@ fn module_identity(r) with Memory + Alloc = match r {
 // computes this same filter and holds it in its decls field, but
 // discards the minted handle — reading the node instead of
 // re-filtering is the O(1) form once the mint keeps an edge to it.
-fn driver_module_ast(ref ast, ref ranges, ref target) with Memory + Alloc + GraphRead + !Mutate = module_decls_of(collect_module_cells(0, graph_next()), target, ast)
+fn driver_module_ast(ref ast, ref ranges, ref target) with Memory + Alloc + GraphRead + !Mutate = module_decls_of(module_cells(), target, ast)
 
 // A module's own top-level nodes, READ from its NModule node — which holds
 // exactly what its own parse returned, because the parse runs inside it.
@@ -618,7 +618,10 @@ fn driver_warm_persist(ref entry_module, ref asts, ref pairs) with Memory + Allo
 // node holds them, so the cut has already happened — at the only moment it
 // could be exact rather than inferred from coordinates.
 fn split_weave_by_module(ref ast, ref ranges) with Memory + Alloc + GraphRead + !Mutate = {
-  let cells = collect_module_cells(0, graph_next())
+  // module_cells, not the raw collect: the trial and the final each mint an
+  // NModule per file, and the raw walk's FIRST match is the trial's shadow
+  // tree. The deduped projection keeps the judged generation.
+  let cells = module_cells()
   map(module_bucket(cells), ranges)
 }
 

@@ -35,6 +35,60 @@
 
 ### The landing ledger (newest first; · pin = boot re-pinned)
 
+- 2026-09-09 · pin e67380fee7f6959d · AN IDENTITY READ CANNOT BE SERVED FROM
+  MEMORY. FIXED POINT m2 == m3, census 0, frontier 373 pass / 1 red.
+  ▶ THE TWO MCP LEGS HAD ONE ROOT AND IT WAS MINE. `session_current`
+  (mcp.mn) decides whether the resident tree moved by recomputing
+  `driver_manifest(ranges)` and comparing it against the banked copy. The
+  per-module-parse landing "optimized" driver_manifest into hashing the TEXT
+  CARRIED IN `ranges` — the bytes captured when that entry was compiled —
+  and reported it as an effect-seam win. It compares a value against itself:
+  the candidate can never differ, so the check can never fire. Measured
+  before the fix: the living-session leg answered `main has 4 lines; 5 is
+  past the end` for a line the edit had just created, `session: tree moved`
+  fired 0 times against a required 1, and `declared as triple` was absent
+  from every face while `declared as double` stood. Both legs pass now.
+  ▶ THE LESSON IS NOT "DON'T CACHE" — it is that a read whose whole job is
+  to notice the world changed has no in-memory form. The function's comment
+  says so now, at the function, with the measurement in it.
+  ▶ THE RATCHET THAT COULD ONLY BE BREACHED. verify.sh's quiet gate (the
+  Hylo bar's own/ref counts) had a rise arm and no fall arm, alone among the
+  file's ratchets. So a marker the inference retired left the ceiling
+  standing and the slack accumulated invisibly — §11 tripwire 4's shape, one
+  gate over: nothing written was false, the number had simply stopped
+  meaning anything between breaches. Both arms now, both seen fire at all
+  three states (rose / held / fell) before the ceilings moved: authored ref
+  813 -> 812, effectful lambda 379 -> 378.
+  ▶ A CEILING RESTING ON A PEER THAT DID NOT EXIST. `eta_max: 11` is held
+  by eleven eta-wrappers that are blocked, not stylistic — seven wrap a
+  constructor, four wrap an effect op — and the blocker was cited by name in
+  a commit message, in a fixture comment, in three lib/dsp comments and in
+  the baseline's own justification, while RESIDUE had NO entry for it. That
+  is the "a gap that lives only in a comment is not named" law failing on
+  the file that states it. Banked as
+  `Hβ.emit.nonfn-binding-as-function-value` — one peer, not two, because
+  both faces are the same missing read: the env holds
+  `ConstructorScheme(tag, arity)` and `EffectOpScheme(...)` as distinct
+  tags at the declaration, and the emit re-derives "a bare name in argument
+  position is a fn reference" instead of reading that proof. Re-measured
+  against this pin, not recalled: `map(Box, [1,2,3])` checks with zero
+  diagnostics and exits 134 with `wasm trap: unreachable` at
+  `<unknown>!unbox` under `iterate_from$spnBox` — the twin layer BELIEVED
+  the nominal and specialized on it, and what map produced was not a
+  variant; `each(note, [1,2,3]) ~> counter` checks with zero diagnostics and
+  emits `(global.get $note)` for a global that never existed, the assembler
+  objecting first. The old name (`constructor-as-function-value`) described
+  one of the two faces and is corrected at all four tracked sites plus the
+  prior PROVENANCE entry, which had claimed "Banked as" when nothing was.
+  ▶ THE ONE RED STAYS RED AND IS NOT THIS LANDING'S. `why coordinates are
+  the developer's` wants `mn-where-badges:8`; the line is right now (the
+  per-module parse fixed that), the FILE is missing, and it is missing
+  because `Located(Span, Reason)` carries a coordinate rather than the
+  handle whose module column would name the file. Every located facet that
+  answers a path — census, decls, debt — carries the module beside the span.
+  The Reason cannot, so the renderer has nothing to read. That is Arc C
+  (`Reason` positions are handles), and the gate stays RED until it lands.
+
 - 2026-09-09 · pin d935b01dbf0af2aa · TWO BLIND MEASURES — the cost facet
   counted every module twice and called the longest file the whole program.
   FIXED POINT m2 == m3, census 0, every ratchet held.

@@ -28,6 +28,61 @@
 
 ---
 
+`Hβ.emit.nonfn-binding-as-function-value` — NAMED 2026-09-08 while
+ratcheting the eta-wrapper census, BANKED 2026-09-09 (the naming and the
+home were a day apart, and that day is itself the finding: the peer was
+cited in a commit message and in a fixture comment while RESIDUE had no
+entry, which is precisely the "a gap that lives only in a comment is not
+named" law this file opens with — the ratchet ceiling `eta_max: 11` was
+resting on a peer that did not exist).
+
+THE CLASS: a NON-FN env binding used as a function value compiles with
+ZERO diagnostics and then fails somewhere downstream. The env knows
+exactly what the name is — `ConstructorScheme(tag, arity)` and
+`EffectOpScheme(effect, handler, ambiguous, discipline)` are distinct
+`SchemeKind` tags, written at the declaration — and the emit re-derives
+"a bare name in argument position is a fn reference" instead of reading
+that proof. Carried-Truth at the value-of-a-name boundary.
+
+TWO FACES, both measured against pin e67380fe (the current boot), not
+recalled:
+- **Constructor.** `tests/frontier/mn-ctor-as-value.mn` —
+  `map(Box, [1,2,3]) |> map(unbox) |> fold(0, +)`. `mentl check` exits 0
+  with no diagnostic; `mentl run` exits 134, `wasm trap: unreachable` at
+  `<unknown>!unbox` under `op_map_collector_yield` /
+  `iterate_from$spnBox` / `map$spnBox0`. So the fanout SPECIALIZED on the
+  nominal (`$spnBox` is in the mangled name — the twin layer believed it),
+  and what `map` produced was not a variant, so `unbox`'s match fell
+  through to its exhaustive floor. The lambda control answers 6.
+- **Effect op.** `each(note, [1,2,3]) ~> counter` over
+  `effect Log { note(n: Int) }`. `mentl check` exits 0 with no
+  diagnostic; the emit writes `(global.get $note)` and the ASSEMBLER is
+  the first thing in the chain to object — `undefined global variable
+  "$note"`. An op has no global because an op is not a value; it is a
+  perform whose evidence resolves at the install chain.
+
+WHY IT IS ONE PEER, NOT TWO: both are the same missing read at the same
+site. A constructor and an op each need a REIFICATION — the eta-expansion
+the developer is currently forced to write by hand — and the medium
+already holds everything needed to synthesize it (the ctor's tag and
+arity; the op's parameter types and its `TCont`). The ultimate form is
+that the emit reads the `SchemeKind` at the reference and lowers the
+reification itself, so `map(Box, vs)` and `map((v) => Box(v), vs)` are
+the same graph. The hand-written wrapper is the confession.
+
+THE COST, MEASURED: eleven of the wheel's own eta-wrappers survive for
+exactly this reason — seven wrap a constructor, four wrap an op — which
+is the whole of `eta_max: 11` in `tools/verify-baseline.txt`. The
+ceiling falls to ZERO with this peer and not before; a lower ceiling
+today would be a refusal to compile the wheel, not a tightening.
+
+REFUSAL FIRST, WHATEVER ELSE: "compiles clean and then traps" is the
+silent-wrong shape §0 exists to make unsayable. Even before the
+reification lands, a bare non-fn binding in a value position must
+REFUSE at the reference with the scheme's own name in the diagnostic —
+the env proves the answer at the site, so productive-under-error has
+nothing to recover from here.
+
 `Hβ.effects.return-position-fn-row-is-a-var` — NAMED 2026-08-18 by the
 6.3 modal sweep, crown-tier. THE MEASUREMENT, three programs: a closure
 performing E, handed OUT of an arm through `resume`, called under `with

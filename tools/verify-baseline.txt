@@ -784,7 +784,7 @@ solo_violations_max: 0
 # assembler is the first thing that objects. Measured both ways:
 # tests/frontier/mn-ctor-as-value.mn (check 0 errors, run exit 134) and an m2
 # that failed at wat:99266 on `map(interrogate_at)`. This ceiling reaches 0
-# when Hβ.emit.constructor-as-function-value lands, and NOT by rewriting the
+# when Hβ.emit.nonfn-binding-as-function-value lands, and NOT by rewriting the
 # eleven as named wrappers, which would launder the same redundancy past this
 # very count.
 eta_max: 11
@@ -847,7 +847,7 @@ record_pattern_open_max: 0
 # deleted param-width ladder took its own `find` and `any` lambdas with it.
 # 2026-09-07: 382 -> 379 at the module-blind-parse landing — the deleted seam
 # and rehome families took their lambdas with them.
-effectful_lambda_max: 379
+effectful_lambda_max: 378
 
 # 2026-08-07: the USE-AFTER-MOVE ratchet (PLAN §11 Phase 4.1,
 # Hβ.own.use-after-move) — T_UseAfterMove narrations on the wheel's own
@@ -902,7 +902,7 @@ loop_scaffold_refs_max: 3
 desugar_vocabulary: 43
 
 authored_own_max: 83
-authored_ref_max: 813
+authored_ref_max: 812
 
 # 2026-08-08: the DRIFT-SHAPE ratchet (PLAN §11 5.6's absorption,
 # enforcement half) — the three absorbed drift modes counted by the

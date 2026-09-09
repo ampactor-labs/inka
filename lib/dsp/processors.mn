@@ -35,7 +35,7 @@ fn process_lowpass(alpha, buffer) = {
   // NOT `map(process, buffer)`: an effect OP passed as a function value emits
   // `(global.get $<op>)` for a global that does not exist — `mentl check` is
   // clean and the ASSEMBLER refuses. Same family as constructor-as-value
-  // (Hβ.emit.constructor-as-function-value); these three eta-wrappers stay
+  // (Hβ.emit.nonfn-binding-as-function-value); these three eta-wrappers stay
   // until a non-fn binding lowers to a callable.
   map((x) => process(x), buffer)
 } ~> lowpass(alpha)
@@ -54,7 +54,7 @@ fn process_biquad(b0, b1, b2, a1, a2, buffer) = {
   // NOT `map(process, buffer)`: an effect OP passed as a function value emits
   // `(global.get $<op>)` for a global that does not exist — `mentl check` is
   // clean and the ASSEMBLER refuses. Same family as constructor-as-value
-  // (Hβ.emit.constructor-as-function-value); these three eta-wrappers stay
+  // (Hβ.emit.nonfn-binding-as-function-value); these three eta-wrappers stay
   // until a non-fn binding lowers to a callable.
   map((x) => process(x), buffer)
 } ~> biquad(b0, b1, b2, a1, a2)
@@ -75,7 +75,7 @@ fn process_envelope(attack, release, buffer) = {
   // NOT `map(process, buffer)`: an effect OP passed as a function value emits
   // `(global.get $<op>)` for a global that does not exist — `mentl check` is
   // clean and the ASSEMBLER refuses. Same family as constructor-as-value
-  // (Hβ.emit.constructor-as-function-value); these three eta-wrappers stay
+  // (Hβ.emit.nonfn-binding-as-function-value); these three eta-wrappers stay
   // until a non-fn binding lowers to a callable.
   map((x) => process(x), buffer)
 } ~> envelope(attack, release)

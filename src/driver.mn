@@ -377,14 +377,25 @@ fn range_of_module(ref ranges, ref target) with Memory + Alloc = find(
 // created on disk moves nothing banked — banking reported-missing
 // paths is the named single. An mtime probe (once io carries
 // fd_filestat) is the cheaper read; content re-hash is the floor.
-// The TEXT rides the entry now, so this no longer re-reads and re-hashes a
-// file the fold already read — it hashes what it was handed. A missing module
-// carries no text at all, so its absence is the walk's own None rather than a
-// second fs_exists probe answering a question already answered.
-fn driver_manifest(ref ranges) with Memory + Alloc = map(module_identity, ranges)
+// THE READ IS THE POINT — it must come from DISK, every time. This is the
+// staleness baseline: session_current (mcp.mn:395) recomputes it and compares
+// against the banked copy to decide whether the tree moved. A pass that
+// "optimized" it into hashing the text CARRIED IN `ranges` — the bytes
+// captured when the entry was compiled — made it compare a value against
+// itself, so the candidate could never differ and the resident session held a
+// dead tree across every edit (measured: the living-session leg answered
+// "main has 4 lines" after the edit that made it longer, and `tree moved`
+// fired zero times). An identity read whose whole job is to notice the world
+// changed cannot be served from memory.
+fn driver_manifest(ref ranges) with Memory + Alloc + Filesystem = map(module_identity, ranges)
 
-fn module_identity(r) with Memory + Alloc = match r {
-  (_m, p, text) => (str_hash(p), byte_len(text), str_hash(text)),
+fn module_identity(r) with Memory + Alloc + Filesystem = match r {
+  (_m, p, _text) => if fs_exists(p) {
+    let text = fs_read_file(p)
+    (str_hash(p), byte_len(text), str_hash(text))
+  } else {
+    (str_hash(p), -1, 0)
+  },
 }
 
 // One module's top-level nodes cut from the weave ast by its range —
